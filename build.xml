@@ -53,30 +53,79 @@
     <fail if="hasFailingTests" />
   </target>
 
-  <target name="release" depends="compile" description="build a release">
+  <target name="externs">
     <mkdir dir="${build.dir}" />
-    <zip destfile="${build.dir}/externs.zip" basedir="${closure-compiler.dir}/externs" />
-    <zip destfile="${build.dir}/library.zip">
-      <zipfileset dir="${closure-library.dir}/closure/goog"
+    <exec executable="sh"
+          output="${build.dir}/externs_manifest.txt"
+          failonerror="true">
+      <arg value="${basedir}/listfiles.sh" />
+      <arg value="${closure-compiler.dir}/externs" />
+    </exec>
+  </target>
+
+  <target name="library">
+    <mkdir dir="${build.dir}" />
+    <exec executable="sh"
+          output="${build.dir}/library_manifest.txt"
+          failonerror="true">
+      <arg value="${basedir}/listfiles.sh" />
+      <arg value="${closure-library.dir}/closure/goog" />
+    </exec>
+  </target>
+
+  <target name="third_party">
+    <mkdir dir="${build.dir}" />
+    <exec executable="sh"
+          output="${build.dir}/third_party_manifest.txt"
+          failonerror="true">
+      <arg value="${basedir}/listfiles.sh" />
+      <arg value="${closure-library.dir}/third_party/closure/goog" />
+    </exec>
+  </target>
+
+  <target name="release"
+          depends="compile, externs, library, third_party"
+          description="build a release">
+    <mkdir dir="${build.dir}" />
+    <jar destfile="${build.dir}/plovr.jar">
+      <zipfileset dir="${closure-compiler.dir}/externs/"
+                  includes="**/*.js"
+                  prefix="externs"
+                  />
+      <zipfileset dir="${closure-library.dir}/closure/goog/"
                   includes="**/*.js"
                   excludes="deps.js"
-                  prefix="closure/goog" />
-      <zipfileset dir="${closure-library.dir}/third_party/closure/goog"
+                  prefix="closure/goog"
+                  />
+      <zipfileset dir="${closure-library.dir}/third_party/closure/goog/"
                   includes="**/*.js"
                   excludes="deps.js"
-                  prefix="third_party/closure/goog" />
+                  prefix="third_party/closure/goog"
+                  />
       <zipfileset dir="${closure-templates.dir}/javascript/"
                   includes="soyutils_usegoog.js"
                   prefix="soy" />
-    </zip>
-    <jar destfile="${build.dir}/plovr.jar">
+      <fileset dir="${build.dir}" includes="externs_manifest.txt,
+                                            library_manifest.txt,
+                                            third_party_manifest.txt"
+                                            />
+
       <zipgroupfileset dir="${lib.dir}" includes="*.jar" />
       <fileset dir="${classes.dir}" />
-      <fileset dir="${build.dir}" includes="externs.zip, library.zip" />
       <manifest>
-          <attribute name="Main-Class" value="org.plovr.Main" />
+        <attribute name="Main-Class" value="org.plovr.Main" />
       </manifest>
     </jar>
+  </target>
+
+  <target name="integration-test"
+          depends="release"
+          description="builds the jar and runs it on localhost:9810">
+    <java jar="${build.dir}/plovr.jar" fork="true">
+      <arg value="${test.dir}/org/plovr/integration-test-config.js" />
+      <jvmarg value="-Xdebug" />
+      <jvmarg value="-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=8000"/>
+    </java>
   </target>
 
   <target name="build" depends="release" />

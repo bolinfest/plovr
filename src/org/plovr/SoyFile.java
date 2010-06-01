@@ -37,7 +37,7 @@ class SoyFile extends LocalFileJsInput {
     SoyFileSet fileSet = builder.build();
     final SoyMsgBundle msgBundle = null;
     String code = fileSet.compileToJsSrc(SOY_OPTIONS, msgBundle).get(0);
-    logger.info(code);
+    logger.fine(code);
     return code;
   }
 

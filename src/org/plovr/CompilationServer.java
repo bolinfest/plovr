@@ -10,6 +10,7 @@ import java.net.URLDecoder;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
+import java.util.logging.Logger;
 
 import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.Maps;
@@ -26,6 +27,8 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
 class CompilationServer implements Runnable {
+
+  private static final Logger logger = Logger.getLogger("org.plovr.CompilationServer");
 
   private final Map<String, Config> configMap;
 
@@ -112,8 +115,14 @@ class CompilationServer implements Runnable {
       CompilerOptions options = new CompilerOptions();
       level.setOptionsForCompilationLevel(options);
       
-      Result result = compiler.compile(compilerArguments.getExterns(),
-          compilerArguments.getInputs(), options);
+      Result result;
+      try {
+        result = compiler.compile(compilerArguments.getExterns(),
+            compilerArguments.getInputs(), options);
+      } catch (Throwable t) {
+        logger.severe(t.getMessage());
+        result = null;
+      }
 
       if (result.success) {
         builder.append(compiler.toSource());

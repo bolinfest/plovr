@@ -2,6 +2,8 @@ package org.plovr;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * {@link Main} kicks off the plovr buildr.
@@ -10,6 +12,8 @@ import java.io.IOException;
  */
 public class Main {
 
+  private Main() {}
+  
   /**
    * Runs on port 9810 by default. (Eventually there will be a real flags
    * architecture behind this.)
@@ -21,6 +25,9 @@ public class Main {
       System.exit(1);
       return;
     }
+    
+    // The Compiler logging statements produce too much output.
+    Logger.getLogger("com.google.javascript.jscomp").setLevel(Level.OFF);
 
     // Register all of the configs.
     CompilationServer server = new CompilationServer(9810);

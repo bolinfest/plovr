@@ -21,7 +21,8 @@ import com.google.javascript.jscomp.JSSourceFile;
 
 /**
  * {@link Manifest} represents an ordered list of JavaScript inputs to the
- * Closure Compiler, along with a set of externs.
+ * Closure Compiler, along with a set of externs. This list is derived from the
+ * transitive closure of the dependencies from a set of input files.
  *
  * @author bolinfest@gmail.com (Michael Bolin)
  */
@@ -88,9 +89,8 @@ public final class Manifest {
   }
 
   private List<JSSourceFile> getDefaultExterns() {
-    // TODO(bolinfest): Implement this.
-    logger.info("Returning default externs");
-    return null;
+    logger.fine("Using default externs");
+    return ResourceReader.getDefaultExterns();
   }
 
   private List<JsInput> getInputsInCompilationOrder() {
@@ -111,10 +111,12 @@ public final class Manifest {
     }
 
     LinkedHashSet<JsInput> compilerInputs = new LinkedHashSet<JsInput>();
-    if (closureLibraryDirectory != null) {
+    if (closureLibraryDirectory == null) {
+      compilerInputs.add(ResourceReader.getBaseJs());
+    } else {
       String path = "base.js";
       JsInput base = new JsSourceFile(path, new File(closureLibraryDirectory, path));
-      compilerInputs.add(base);
+      compilerInputs.add(base);      
     }
     for (JsInput requiredInput : requiredInputs) {
       buildDependencies(provideToSource, compilerInputs, requiredInput);
@@ -138,8 +140,10 @@ public final class Manifest {
   private Set<JsInput> getAllDependencies() {
     Set<JsInput> allDependencies = Sets.newHashSet();
     final boolean includeSoy = true;
-    if (closureLibraryDirectory != null) {
-      allDependencies.addAll(getFiles(closureLibraryDirectory, includeSoy));
+    if (closureLibraryDirectory == null) {
+      allDependencies.addAll(ResourceReader.getClosureLibrarySources());
+    } else {
+      allDependencies.addAll(getFiles(closureLibraryDirectory, includeSoy));      
     }
     allDependencies.addAll(getFiles(dependencies, includeSoy));
     allDependencies.addAll(requiredInputs);

@@ -51,7 +51,7 @@ final class ConfigParser {
     List<String> deps = getAsStringList(map, "deps");
     List<String> inputs = getAsStringList(map, "inputs");    
     JsonElement externsEl = map.get("externs");
-    List<File> externs = externsEl.isJsonNull()
+    List<File> externs = externsEl == null || externsEl.isJsonNull()
         ? null
         : Lists.transform(getAsStringList(map, "externs"), STRING_TO_FILE);
     Manifest manifest = new Manifest(closureLibraryDirectory,
@@ -62,7 +62,7 @@ final class ConfigParser {
     // Extract the Compiler options.
     CompilationLevel level = CompilationLevel.SIMPLE_OPTIMIZATIONS;
     JsonElement optionsEl = map.get("options");
-    if (optionsEl.isJsonObject()) {
+    if (optionsEl != null && optionsEl.isJsonObject()) {
 //      JsonObject options = optionsEl.getAsJsonObject();
 //      JsonElement levelEl = options.get("level");
 //      if (levelEl.isJsonPrimitive() && levelEl.getAsJsonPrimitive().isString()) {

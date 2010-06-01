@@ -7,6 +7,12 @@ import java.util.regex.Pattern;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
+/**
+ * {@link AbstractJsInput} provides the default logic for extracting
+ * {@code goog.provide()} and {@code goog.require()} information.
+ *
+ * @author bolinfest@gmail.com (Michael Bolin)
+ */
 abstract class AbstractJsInput implements JsInput {
 
   private static final Pattern GOOG_PROVIDE_OR_REQUIRE =
