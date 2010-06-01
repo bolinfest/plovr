@@ -1,0 +1,50 @@
+<project name="plovr" basedir="." default="build">
+
+  <property name="src.dir" value="${basedir}/src" />
+  <property name="test.dir" value="${basedir}/test" />
+  <property name="lib.dir" value="${basedir}/lib" />
+  <property name="build.dir" value="${basedir}/build" />
+  <property name="classes.dir" value="${build.dir}/classes" />
+  
+  <path id="plovr.classpath">
+    <fileset dir="${lib.dir}" includes="*.jar" />
+    <pathelement location="${classes.dir}" />
+  </path>
+
+  <target name="clean">
+    <delete dir="${build.dir}" />
+  </target>
+
+  <target name="compile">
+    <mkdir dir="${classes.dir}" />
+    <javac srcdir="${src.dir}"
+           destdir="${classes.dir}"
+           classpathref="plovr.classpath"
+           >
+    </javac>
+    <javac srcdir="${test.dir}"
+           destdir="${classes.dir}"
+           classpathref="plovr.classpath"
+           >
+    </javac>
+  </target>
+
+  <target name="test" depends="compile">
+    <junit failureproperty="hasFailingTests"
+           showoutput="true">
+      
+      <formatter type="plain" usefile="false" />
+      
+      <batchtest fork="yes">
+        <fileset dir="${test.dir}">
+          <include name="**/*Test*.java" />
+        </fileset>
+      </batchtest>
+      <classpath refid="plovr.classpath"></classpath>
+    </junit>
+    <fail if="hasFailingTests" />
+  </target>
+
+  <target name="build" depends="clean" />
+
+</project>
