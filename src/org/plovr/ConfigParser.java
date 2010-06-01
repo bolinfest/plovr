@@ -63,16 +63,16 @@ final class ConfigParser {
     CompilationLevel level = CompilationLevel.SIMPLE_OPTIMIZATIONS;
     JsonElement optionsEl = map.get("options");
     if (optionsEl.isJsonObject()) {
-      JsonObject options = optionsEl.getAsJsonObject();
-      JsonElement levelEl = options.get("level");
-      if (levelEl.isJsonPrimitive() && levelEl.getAsJsonPrimitive().isString()) {
-        String levelValue = levelEl.getAsString();
-        try {
-          level = CompilationLevel.valueOf(levelValue);
-        } catch (IllegalArgumentException e) {
-          throw new RuntimeException("Not a valid compilation level: " + levelValue);
-        }
-      }
+//      JsonObject options = optionsEl.getAsJsonObject();
+//      JsonElement levelEl = options.get("level");
+//      if (levelEl.isJsonPrimitive() && levelEl.getAsJsonPrimitive().isString()) {
+//        String levelValue = levelEl.getAsString();
+//        try {
+//          level = CompilationLevel.valueOf(levelValue);
+//        } catch (IllegalArgumentException e) {
+//          throw new RuntimeException("Not a valid compilation level: " + levelValue);
+//        }
+//      }
     }
 
     return new Config(id, manifest, level);

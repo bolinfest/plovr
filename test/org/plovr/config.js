@@ -21,7 +21,12 @@
   "externs": "../closure-compiler/externs/",
 
   "options": {
-    "level": "ADVANCED_OPTIMIZATIONS"
+    "basic": {
+      "level": "SIMPLE_OPTIMIZATIONS"
+    },
+    "optimized": {
+      "level": "ADVANCED_OPTIMIZATIONS"
+    }
   }
 
 }
