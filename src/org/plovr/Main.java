@@ -16,16 +16,19 @@ public class Main {
    * @throws IOException 
    */
   public static void main(String[] args) throws IOException {
-    if (args.length != 1) {
-      System.err.println("Must supply exactly one argument: the config file");
+    if (args.length == 0) {
+      System.err.println("Must specify at least one config file");
       System.exit(1);
       return;
     }
 
-    File configFile = new File(args[0]);
-    Config config = ConfigParser.parseFile(configFile);
+    // Register all of the configs.
     CompilationServer server = new CompilationServer(9810);
-    server.registerConfig(config);
+    for (String arg : args) {
+      File configFile = new File(arg);
+      Config config = ConfigParser.parseFile(configFile);
+      server.registerConfig(config);
+    }
     
     server.run();
   }
