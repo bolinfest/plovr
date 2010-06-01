@@ -1,20 +1,24 @@
 {
   "comment": [
     "Because // was dropped from the JSON specification, this is the best way ",
-    "to comment a JSON config file."
+    "to comment a JSON config file while maintaining 80 column lines.",
+    
+    "This config file is used to test the main() method of ConfigParser.java.",
+    "It assumes that each of the Closure Tools is checked out in a parallel ",
+    "directory. (This is not a requirement when using the full binary.)"
   ],
 
   "version": "1.0",
 
   "id": "testdata",
 
-  "closure-library": "../workspace/closure-library/closure/goog",
+  "closure-library": "../closure-library/closure/goog",
   "deps": [
     "testdata",
-    "../workspace/closure-templates/javascript/soyutils_usegoog.js"
+    "../closure-templates/javascript/soyutils_usegoog.js"
   ],
   "inputs": "testdata/example/main.js",
-  "externs": "../workspace/closure-compiler/externs/",
+  "externs": "../closure-compiler/externs/",
 
   "options": {
     "level": "ADVANCED_OPTIMIZATIONS"
