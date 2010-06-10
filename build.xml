@@ -87,6 +87,8 @@
           depends="compile, externs, library, third_party"
           description="build a release">
     <mkdir dir="${build.dir}" />
+    <copy file="${src.dir}/org/plovr/raw.soy"
+          tofile="${classes.dir}/org/plovr/raw.soy" />
     <jar destfile="${build.dir}/plovr.jar">
       <zipfileset dir="${closure-compiler.dir}/externs/"
                   includes="**/*.js"
@@ -121,6 +123,7 @@
   <target name="integration-test"
           depends="release"
           description="builds the jar and runs it on localhost:9810">
+    <echo>Visit http://localhost:9810/config?id=integration-test</echo>
     <java jar="${build.dir}/plovr.jar" fork="true">
       <arg value="${test.dir}/org/plovr/integration-test-config.js" />
       <jvmarg value="-Xdebug" />

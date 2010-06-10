@@ -27,7 +27,7 @@ public class ManifestTest extends TestCase {
   };
 
   public void testSimpleManifest() {
-    File closureLibraryDirectory = new File("../workspace/closure-library/closure/goog/");
+    File closureLibraryDirectory = new File("../closure-library/closure/goog/");
 
     final List<File> dependencies = ImmutableList.of();
     

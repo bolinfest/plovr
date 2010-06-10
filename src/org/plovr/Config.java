@@ -12,8 +12,10 @@ public class Config {
   private final String id;
 
   private final Manifest manifest;
-  
-  private final CompilationLevel compilationLevel;
+
+  private final boolean useExplicitQueryParameters;
+
+  private CompilationMode compilationMode;
 
   /**
    * @param id Unique identifier for the configuration. This is used as an
@@ -21,10 +23,21 @@ public class Config {
    * @param manifest
    * @param compilationLevel
    */
-  public Config(String id, Manifest manifest, CompilationLevel compilationLevel) {
+  public Config(
+      String id,
+      Manifest manifest,
+      boolean useExplicitQueryParameters) {
     this.id = id;
     this.manifest = manifest;
-    this.compilationLevel = compilationLevel;
+    this.useExplicitQueryParameters = useExplicitQueryParameters;
+    this.compilationMode = CompilationMode.SIMPLE;
+  }
+
+  public Config(Config config) {
+    this.id = config.id;
+    this.manifest = config.manifest;
+    this.useExplicitQueryParameters = config.useExplicitQueryParameters;
+    this.compilationMode = config.compilationMode;
   }
 
   public String getId() {
@@ -35,10 +48,23 @@ public class Config {
     return manifest;
   }
 
+  public boolean isUseExplicitQueryParameters() {
+    return useExplicitQueryParameters;
+  }
+
+  public CompilationMode getCompilationMode() {
+    return compilationMode;
+  }
+
+  public void setCompilationMode(CompilationMode compilationMode) {
+    this.compilationMode = compilationMode;
+  }
+
   public CompilerOptions getCompilerOptions() {
-    logger.info("Compiling with level: " + compilationLevel);
+    CompilationLevel level = compilationMode.getCompilationLevel();
+    logger.info("Compiling with level: " + level);
     CompilerOptions options = new CompilerOptions();
-    compilationLevel.setOptionsForCompilationLevel(options);
+    level.setOptionsForCompilationLevel(options);
     return options;
   }
 

@@ -45,6 +45,13 @@ public final class Manifest {
   private final Set<File> dependencies;
   private final List<JsInput> requiredInputs;
   private final Set<File> externs;
+  
+  /**
+   * When RAW mode is used, each input will need to be accessed by name. To make
+   * the lookup efficient, populate this map when getInputsInCompilationOrder()
+   * is called to prepare for the requests that are about to occur. 
+   */
+  private Map<String, JsInput> lastOrdering;
 
   /**
    * 
@@ -93,7 +100,7 @@ public final class Manifest {
     return ResourceReader.getDefaultExterns();
   }
 
-  private List<JsInput> getInputsInCompilationOrder() {
+  List<JsInput> getInputsInCompilationOrder() {
     Set<JsInput> allDependencies = getAllDependencies();
 
     // Build up the dependency graph.
@@ -111,18 +118,30 @@ public final class Manifest {
     }
 
     LinkedHashSet<JsInput> compilerInputs = new LinkedHashSet<JsInput>();
+    JsInput inputToAdd;
     if (closureLibraryDirectory == null) {
-      compilerInputs.add(ResourceReader.getBaseJs());
+      inputToAdd = ResourceReader.getBaseJs();
     } else {
       String path = "base.js";
-      JsInput base = new JsSourceFile(path, new File(closureLibraryDirectory, path));
-      compilerInputs.add(base);      
+      inputToAdd = new JsSourceFile(path, new File(closureLibraryDirectory, path));
     }
+    compilerInputs.add(inputToAdd);
     for (JsInput requiredInput : requiredInputs) {
       buildDependencies(provideToSource, compilerInputs, requiredInput);
     }
-    
+
+    // Update lastOrdering before returning.
+    Map<String, JsInput> lastOrdering = Maps.newHashMap();
+    for (JsInput input : compilerInputs) {
+      lastOrdering.put(input.getName(), input);      
+    }
+    this.lastOrdering = lastOrdering;
+
     return ImmutableList.copyOf(compilerInputs);
+  }
+
+  JsInput getJsInputByName(String name) {
+    return lastOrdering.get(name);
   }
 
   private void buildDependencies(Map<String, JsInput> provideToSource,

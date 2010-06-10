@@ -1,0 +1,36 @@
+{namespace org.plovr}
+
+/**
+ * @param filesAsJsonArray
+ * @param path
+ */
+{template .raw}
+{literal}
+CLOSURE_NO_DEPS = true;
+(function() {
+{/literal}
+{sp}{sp}var files = {$filesAsJsonArray|noAutoescape};{\n}
+{sp}{sp}var path = '{$path|noAutoescape}';{\n}
+{literal}
+  var scriptEl;
+  var doc = document;
+  var scripts = doc.getElementsByTagName('script');
+  for (var i = scripts.length - 1; i >= 0; --i) {
+    var candidateScriptEl = scripts[i];
+    var src = candidateScriptEl.src;
+    if (src.indexOf(path) >= 0) {
+      scriptEl = candidateScriptEl;
+      break;
+    }
+  }
+  
+  if (!scriptEl) {
+    return;
+  }
+  
+  for (var i = 0; i < files.length; i++) {
+    doc.write('<script type="text/javascript" src="' + files[i] + '"><\/script>');
+  }
+})();
+{/literal}
+{/template}

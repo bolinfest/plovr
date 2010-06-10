@@ -2,21 +2,17 @@ package org.plovr;
 
 import java.io.IOException;
 import java.io.OutputStreamWriter;
-import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 import java.net.InetSocketAddress;
 import java.net.URI;
-import java.net.URLDecoder;
-import java.util.List;
+import java.net.URISyntaxException;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 
-import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.Maps;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonPrimitive;
-import com.google.javascript.jscomp.CompilationLevel;
 import com.google.javascript.jscomp.Compiler;
 import com.google.javascript.jscomp.CompilerOptions;
 import com.google.javascript.jscomp.JSError;
@@ -28,7 +24,8 @@ import com.sun.net.httpserver.HttpServer;
 
 class CompilationServer implements Runnable {
 
-  private static final Logger logger = Logger.getLogger("org.plovr.CompilationServer");
+  private static final Logger logger =
+      Logger.getLogger("org.plovr.CompilationServer");
 
   private final Map<String, Config> configMap;
 
@@ -59,8 +56,13 @@ class CompilationServer implements Runnable {
     }
 
     server.createContext("/config", new ConfigRequestHandler());
+    server.createContext("/input", new InputFileHandler(this));
     server.setExecutor(Executors.newCachedThreadPool());
     server.start();
+  }
+
+  Config getConfigById(String id) {
+    return configMap.get(id);
   }
 
   private class ConfigRequestHandler implements HttpHandler {
@@ -78,43 +80,64 @@ class CompilationServer implements Runnable {
       String id = data.getParam("id");
       
       StringBuilder builder = new StringBuilder();
+      String contentType;
       int responseCode;
       if (id != null && configMap.containsKey(id)) {
+        Config config = new Config(configMap.get(id));
+        
+        // First, use query parameters from the script tag to update the config.
+        update(config, data);
+        
+        // If supported, modify query parameters based on the referrer. This is
+        // more convenient for the developer, so it should be used to override.
+        URI referrer = null;
+        if (!config.isUseExplicitQueryParameters()) {
+          referrer = getReferrer(exchange);
+          if (referrer != null) {
+            QueryData referrerData = QueryData.createFromUri(referrer);
+            update(config, referrerData);
+          }
+        }
+
+        if (config.getCompilationMode() == CompilationMode.RAW) {
+          String prefix;
+          URI requestUri = exchange.getRequestURI();
+          if (referrer == null) {
+            prefix = "http://localhost:9810/";
+          } else {
+            prefix = referrer.getScheme() + "//" + referrer.getHost() + "/";
+          }
+          Manifest manifest = config.getManifest();
+          String js = InputFileHandler.getJsToLoadManifest(config.getId(), manifest, prefix,
+              requestUri.getPath());
+          builder.append(js);
+        } else {
+          compile(config, data, builder);
+        }
+        contentType = "text/javascript";
         responseCode = 200;
-        Config config = configMap.get(id);
-        compile(config, data, builder);
       } else {
-        responseCode = 400;
         builder.append("Failed to specify a valid config id.");
+        contentType = "text/plain";
+        responseCode = 400;
       }
       
       Headers responseHeaders = exchange.getResponseHeaders();
-      responseHeaders.set("Content-Type", "text/plain");
+      responseHeaders.set("Content-Type", contentType);
       exchange.sendResponseHeaders(responseCode, builder.length());
       
       Writer responseBody = new OutputStreamWriter(exchange.getResponseBody());
       responseBody.write(builder.toString());
       responseBody.close();
     }
-    
-    private void compile(Config config, QueryData data, Appendable builder) throws IOException {
-      CompilerArguments compilerArguments = config.getManifest().getCompilerArguments();
+
+    private void compile(Config config, QueryData data, Appendable builder)
+        throws IOException {
+      CompilerArguments compilerArguments =
+          config.getManifest().getCompilerArguments();
       Compiler compiler = new Compiler();
-      
-      // TODO(bolinfest): Allow user to specify more detailed CompilerOptions
-      // via the Config.
-      CompilationLevel level = CompilationLevel.SIMPLE_OPTIMIZATIONS;
-      String levelValue = data.getParam("level");
-      if (levelValue != null) {
-        try {
-          level = CompilationLevel.valueOf(levelValue);
-        } catch (IllegalArgumentException e) {
-          // Ignore, use default value.
-        }
-      }
-      CompilerOptions options = new CompilerOptions();
-      level.setOptionsForCompilationLevel(options);
-      
+
+      CompilerOptions options = config.getCompilerOptions();
       Result result;
       try {
         result = compiler.compile(compilerArguments.getExterns(),
@@ -139,38 +162,31 @@ class CompilationServer implements Runnable {
     }
   }
 
-  private static class QueryData {
+  private static void update(Config config, QueryData queryData) {
+    // TODO(bolinfest): Allow user to specify more detailed CompilerOptions
+    // via the Config.
     
-    LinkedListMultimap<String, String> params;
-
-    private QueryData(LinkedListMultimap<String, String> params) {
-      this.params = params;
-    }
-    
-    String getParam(String key) {
-      List<String> values = params.get(key);
-      return values.size() > 0 ? values.get(0) : null;
-    }
-
-    static QueryData createFromUri(URI uri) {
-      String rawQuery = uri.getRawQuery();
-      LinkedListMultimap<String, String> params = LinkedListMultimap.create();
-      String[] pairs = rawQuery.split("&");
-      for (String pair : pairs) {
-        String[] keyValuePair = pair.split("=");
-        String key = keyValuePair[0];
-        String value = keyValuePair.length == 2 ? keyValuePair[1] : "";
-        params.put(decode(key), decode(value));
-      }
-      return new QueryData(params);
-    }
-
-    private static String decode(String str) {
+    String mode = queryData.getParam("mode");
+    if (mode != null) {
       try {
-        return URLDecoder.decode(str, "UTF-8");
-      } catch (UnsupportedEncodingException e) {
-        throw new RuntimeException(e);
+        CompilationMode compilationMode = CompilationMode.valueOf(mode);
+        config.setCompilationMode(compilationMode);
+      } catch (IllegalArgumentException e) {
+        // OK
       }
     }
+  }
+  
+  private static URI getReferrer(HttpExchange exchange) {
+    Headers headers = exchange.getRequestHeaders();
+    String referrer = headers.getFirst("Referer");
+    if (referrer != null) {
+      try {
+        return new URI(referrer);
+      } catch (URISyntaxException e) {
+        // OK
+      }
+    }
+    return null;
   }
 }

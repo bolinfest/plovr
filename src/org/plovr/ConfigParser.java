@@ -1,7 +1,6 @@
 package org.plovr;
 
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.util.List;
 import java.util.logging.Level;
@@ -15,28 +14,30 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.google.javascript.jscomp.CompilationLevel;
 import com.google.javascript.jscomp.Compiler;
 import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.Result;
 
 /**
  * {@link ConfigParser} extracts a {@link Config} from a JSON config file.
- *
+ * 
  * @author bolinfest@gmail.com (Michael Bolin)
  */
 final class ConfigParser {
-  
+
   /** Utility class; do not instantiate. */
-  private ConfigParser() {}
+  private ConfigParser() {
+  }
 
   public static Config parseFile(File file) throws IOException {
+    String jsonWithoutComments =
+        JsonCommentStripper.stripCommentsFromJson(file);
     JsonParser jsonParser = new JsonParser();
-    JsonElement root = jsonParser.parse(new FileReader(file));
-    
+    JsonElement root = jsonParser.parse(jsonWithoutComments);
+
     Preconditions.checkNotNull(root);
     Preconditions.checkArgument(root.isJsonObject());
-    
+
     // Get the id for the config.
     JsonObject map = root.getAsJsonObject();
     String id = map.get("id").getAsString();
@@ -49,33 +50,37 @@ final class ConfigParser {
     }
 
     List<String> deps = getAsStringList(map, "deps");
-    List<String> inputs = getAsStringList(map, "inputs");    
+    List<String> inputs = getAsStringList(map, "inputs");
     JsonElement externsEl = map.get("externs");
-    List<File> externs = externsEl == null || externsEl.isJsonNull()
-        ? null
-        : Lists.transform(getAsStringList(map, "externs"), STRING_TO_FILE);
-    Manifest manifest = new Manifest(closureLibraryDirectory,
-        Lists.transform(deps, STRING_TO_FILE),
-        Lists.transform(inputs, STRING_TO_JS_INPUT),
-        externs);
+    List<File> externs =
+        externsEl == null || externsEl.isJsonNull() ? null : Lists.transform(
+            getAsStringList(map, "externs"), STRING_TO_FILE);
+    Manifest manifest =
+        new Manifest(closureLibraryDirectory, Lists.transform(deps,
+            STRING_TO_FILE), Lists.transform(inputs, STRING_TO_JS_INPUT),
+            externs);
 
     // Extract the Compiler options.
-    CompilationLevel level = CompilationLevel.SIMPLE_OPTIMIZATIONS;
     JsonElement optionsEl = map.get("options");
     if (optionsEl != null && optionsEl.isJsonObject()) {
-//      JsonObject options = optionsEl.getAsJsonObject();
-//      JsonElement levelEl = options.get("level");
-//      if (levelEl.isJsonPrimitive() && levelEl.getAsJsonPrimitive().isString()) {
-//        String levelValue = levelEl.getAsString();
-//        try {
-//          level = CompilationLevel.valueOf(levelValue);
-//        } catch (IllegalArgumentException e) {
-//          throw new RuntimeException("Not a valid compilation level: " + levelValue);
-//        }
-//      }
+      // JsonObject options = optionsEl.getAsJsonObject();
+      // JsonElement levelEl = options.get("level");
+      // if (levelEl.isJsonPrimitive() &&
+      // levelEl.getAsJsonPrimitive().isString()) {
+      // String levelValue = levelEl.getAsString();
+      // try {
+      // level = CompilationLevel.valueOf(levelValue);
+      // } catch (IllegalArgumentException e) {
+      // throw new RuntimeException("Not a valid compilation level: " +
+      // levelValue);
+      // }
+      // }
     }
 
-    return new Config(id, manifest, level);
+    boolean useExplicitQueryParameters = maybeGetBoolean(map,
+        "useExplicitQueryParameters", false);
+
+    return new Config(id, manifest, useExplicitQueryParameters);
   }
 
   /**
@@ -86,12 +91,26 @@ final class ConfigParser {
     if (!map.has(key)) {
       return null;
     }
-    
+
     JsonElement element = map.get(key);
     if (element.isJsonPrimitive() && element.getAsJsonPrimitive().isString()) {
       return element.getAsString();
     } else {
       return null;
+    }
+  }
+
+  private static boolean maybeGetBoolean(JsonObject map, String key,
+      boolean defaultValue) {
+    if (!map.has(key)) {
+      return defaultValue;
+    }
+    
+    JsonElement element = map.get(key);
+    if (element.isJsonPrimitive() && element.getAsJsonPrimitive().isBoolean()) {
+      return element.getAsBoolean();
+    } else {
+      throw new IllegalArgumentException("Illegal value for key: " + key);
     }
   }
 
@@ -111,17 +130,21 @@ final class ConfigParser {
     }
   }
 
-  private static Function<String, File> STRING_TO_FILE = new Function<String, File>() {
-    @Override
-    public File apply(String s) { return new File(s); }
-  };
+  private static Function<String, File> STRING_TO_FILE =
+      new Function<String, File>() {
+        @Override
+        public File apply(String s) {
+          return new File(s);
+        }
+      };
 
-  private static Function<String, JsInput> STRING_TO_JS_INPUT = new Function<String, JsInput>() {
-    @Override
-    public JsInput apply(String fileName) {
-      return LocalFileJsInput.createForName(fileName);
-    }
-  };
+  private static Function<String, JsInput> STRING_TO_JS_INPUT =
+      new Function<String, JsInput>() {
+        @Override
+        public JsInput apply(String fileName) {
+          return LocalFileJsInput.createForName(fileName);
+        }
+      };
 
   /**
    * Takes a config file, performs the compilation, and prints the results to
@@ -138,13 +161,15 @@ final class ConfigParser {
     compilerLogger.setLevel(Level.OFF);
     Logger soyFileLogger = Logger.getLogger("org.plovr.SoyFile");
     soyFileLogger.setLevel(Level.OFF);
-    
+
     File configFile = new File(args[0]);
     Config config = ConfigParser.parseFile(configFile);
-    CompilerArguments compilerArguments = config.getManifest().getCompilerArguments();
+    CompilerArguments compilerArguments =
+        config.getManifest().getCompilerArguments();
     Compiler compiler = new Compiler();
-    Result result = compiler.compile(compilerArguments.getExterns(),
-        compilerArguments.getInputs(), config.getCompilerOptions());
+    Result result =
+        compiler.compile(compilerArguments.getExterns(), compilerArguments
+            .getInputs(), config.getCompilerOptions());
 
     if (result.success) {
       System.out.println(compiler.toSource());
