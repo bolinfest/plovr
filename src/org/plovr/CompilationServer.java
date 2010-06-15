@@ -105,7 +105,7 @@ class CompilationServer implements Runnable {
           if (referrer == null) {
             prefix = "http://localhost:9810/";
           } else {
-            prefix = referrer.getScheme() + "//" + referrer.getHost() + "/";
+            prefix = referrer.getScheme() + "://" + referrer.getHost() + ":9810/";
           }
           Manifest manifest = config.getManifest();
           String js = InputFileHandler.getJsToLoadManifest(config.getId(), manifest, prefix,
