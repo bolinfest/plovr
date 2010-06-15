@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+  <title>RAW demo page</title>
+  <link href="demo.css" rel="STYLESHEET" type="text/css">
+</head>
+<body>
+
+This page includes the following <code>&lt;script></code> tag:
+<pre>
+&lt;script src="@PLOVR_HOST@config?id=demo&mode=RAW">&lt;/script>
+</pre>
+
+If you view the DOM of this page after the single plovr <code>&lt;script></code>
+tag is evaluated, you will see that it adds an additional 22
+<code>&lt;script></code> tags to the page.
+This is because <a href="example/main.js">example/main.js</a> depends on
+Closure Templates, so its set of transitive dependencies is large.
+
+<div id="content"></div>
+
+<script src="@PLOVR_HOST@config?id=demo&mode=RAW"></script>
+
+</body>
+</html>

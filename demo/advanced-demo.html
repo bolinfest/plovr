@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head>
+  <title>ADVANCED demo page</title>
+  <link href="demo.css" rel="STYLESHEET" type="text/css">
+</head>
+<body>
+
+This page includes the following <code>&lt;script></code> tag:
+<pre>
+&lt;script src="@PLOVR_HOST@config?id=demo&mode=ADVANCED">&lt;/script>
+</pre>
+
+If you view the content of the <code>&lt;script></code> tag included in this page,
+you will see that it contains far less JavaScript than the
+tags on the other pages.
+This is because the Closure Compiler has removed unused Closure Library
+functions, and has aggressively renamed the remaining functions and
+variables.
+
+<div id="content"></div>
+
+<script src="@PLOVR_HOST@config?id=demo&mode=ADVANCED"></script>
+
+</body>
+</html>

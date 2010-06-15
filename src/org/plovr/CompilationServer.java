@@ -148,6 +148,9 @@ class CompilationServer implements Runnable {
       }
 
       if (result.success) {
+        if (config.getCompilationMode() == CompilationMode.WHITESPACE) {
+          builder.append("CLOSURE_NO_DEPS = true;\n");
+        }
         builder.append(compiler.toSource());
       } else {
         JsonArray array = new JsonArray();

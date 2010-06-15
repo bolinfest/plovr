@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+  <title>plover demo page</title>
+  <link href="index.css" rel="STYLESHEET" href="text/css">
+</head>
+<body>
+
+<div id="info-column">
+  <div id="inner-info-column">
+    Learn more about Closure via
+    <i>Closure: The Definitive Guide</i>.
+    <a href="http://oreilly.com/catalog/9781449381875/">
+    <img src="http://plovr.org/rough_cuts_cover.png" class="rough-cuts-cover">
+    </a>
+    The final version will be available in Fall 2010,
+    but the complete draft is
+    <a href="http://oreilly.com/catalog/9781449381875/" class="sidebar-anchor">available right now</a>
+    via O'Reilly's Rough Cuts program!
+  </div>
+</div>
+
+<div id="content">
+
+<h1>plovr demo page</h1>
+
+This is a demo for
+<a href="http://code.google.com/p/plovr/">plovr</a>, a
+<a href="http://code.google.com/closure/">Closure</a> build tool.
+
+<h2>About plovr</h2>
+
+<p>
+plovr is a bulid tool that dynamically recompiles JavaScript and
+Closure Template code. Once you create a
+<a href="http://code.google.com/p/plovr/source/browse/test/org/plovr/integration-test-config.js">simple
+configuration file</a> to tell plovr where the JS and Soy files to
+compile are on your local machine, simply run the plovr jar with the
+config file to start compiling your code. The output of
+plovr can be included via a <code>&lt;script></code> tag.
+</p>
+
+<p>
+Visit the <a href="http://code.google.com/p/plovr/downloads/list">downloads
+page on code.google.com</a> to get the latest plovr binary, or
+<a href="http://code.google.com/p/plovr/source/checkout">check out the
+source</a> and build it yourself.
+</p>
+
+<h2>Live Examples</h2>
+
+plovr is running live on plovr.org, so take a look at the config file
+it uses and the web pages that load its output. This instance of plovr
+was started by running:
+
+<pre>
+java -jar plovr.jar <a href="demo-config.js">demo-config.js</a>
+</pre>
+
+<p>
+Using plovr eliminates the need to run <code>calcdeps.py</code> and
+<code>java -jar SoyToJsSrcCompiler.jar</code> as separate build steps.
+More importantly, when changes are made to the input files, there is no
+need to restart plovr&mdash;just refresh the web page that loads its output
+and plovr will recompile the inputs!
+</p>
+
+<ul>
+  <li>
+    <span class="example-title">Example of using plovr in <code>RAW</code> mode.</span>
+    <a href="raw-demo.html">[test page]</a>
+    <br>
+    In <code>RAW</code> mode,
+    each input file is loaded via its own <code>&lt;script></code> tag
+    as a result of loading the plovr <code>&lt;script></code> tag
+    Each input <code>.soy</code> file is converted to a JavaScript file,
+    and is also loaded in its own <code>&lt;script></code> tag.
+    The order of the <code>&lt;script></code> tags is determined by
+    topologically sorting the inputs based on their calls to
+    <code>goog.provide()</code> and <code>goog.require()</code>, just as
+    <code>calcdeps.py</code> would do.
+  </li>
+  <li>
+    <span class="example-title">Example of using plovr in <code>WHITESPACE</code> mode.</span>
+    <a href="whitespace-demo.html">[test page]</a>
+    <br>
+    In <code>WHITESPACE</code> mode, after being topologically sorted,
+    all input files are concatenated together into a single JavaScript
+    file with all whitespace and comments removed.
+    This corresponds to the <a href="http://code.google.com/closure/compiler/docs/compilation_levels.html">
+    WHIESPACE_ONLY</a> compilation level of the Closure Compiler.
+  </li>
+  <li>
+    <span class="example-title">Example of using plovr in <code>SIMPLE</code> mode.</span>
+    <a href="simple-demo.html">[test page]</a>
+    <br>
+    In <code>SIMPLE</code> mode,
+    the <code>SIMPLE_OPTIMIZATIONS</code> setting of the Closure Compiler is used
+    to compile the input.
+    This corresponds to the <a href="http://code.google.com/closure/compiler/docs/compilation_levels.html">
+    SIMPLE_OPTIMIZATIONS</a> compilation level of the Closure Compiler.
+  </li>
+  <li>
+    <span class="example-title">Example of using plovr in <code>ADVANCED</code> mode.</span>
+    <a href="advanced-demo.html">[test page]</a>
+    <br>
+    In <code>ADVANCED</code> mode,
+    the <code>ADVANCED_OPTIMIZATIONS</code> setting of the Closure Compiler is used
+    to compile the input.
+    This corresponds to the <a href="http://code.google.com/closure/compiler/docs/compilation_levels.html">
+    ADVANCED_OPTIMIZATIONS</a> compilation level of the Closure Compiler.
+  </li>
+</ul>
+
+</div>
+
+</body>
+</html>

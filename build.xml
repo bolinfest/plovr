@@ -1,10 +1,15 @@
 <project name="plovr" basedir="." default="build">
+  
+  <property file="${basedir}/build.properties" />
+  <property file="${basedir}/default.build.properties" />
 
   <property name="src.dir" value="${basedir}/src" />
   <property name="test.dir" value="${basedir}/test" />
+  <property name="demo.dir" value="${basedir}/demo" />
   <property name="lib.dir" value="${basedir}/lib" />
   <property name="build.dir" value="${basedir}/build" />
   <property name="classes.dir" value="${build.dir}/classes" />
+  <property name="demo.build.dir" value="${build.dir}/demo" />
 
   <!-- In order to build the jar, each of the Closure Tools must be          -->
   <!-- checked out in a parallel directory.                                  --> 
@@ -129,6 +134,48 @@
       <jvmarg value="-Xdebug" />
       <jvmarg value="-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=8000"/>
     </java>
+  </target>
+
+  <target name="demo-www"
+          description="create the web content for the demo">
+    <mkdir dir="${demo.build.dir}" />
+    <copy todir="${demo.build.dir}">
+      <fileset dir="${demo.dir}" />
+    </copy>
+    <replace dir="${demo.build.dir}" value="${PLOVR_HOST}">
+      <include name="*.html" />
+      <replacetoken>@PLOVR_HOST@</replacetoken>
+    </replace>
+  </target>
+
+  <target name="run-demo" description="runs the demo">
+    <!--
+    The <available> and <fail> tasks are used rather than depends because it is
+    expensive to rebuild the jar and web site every time the demo is restarted
+    when developing it iteratively.
+    -->
+    <available file="${demo.build.dir}"
+               type="dir"
+               property="demo.build.dir.present"
+               />
+    <fail unless="demo.build.dir.present">
+      The demo web site has not been built. Run "ant demo-www" to build it.
+    </fail>
+    <available file="${build.dir}/plovr.jar"
+               type="file"
+               property="jar.present"
+               />
+    <fail unless="jar.present">
+      The plovr jar has not been built. Run "ant jar" to build it.
+    </fail>
+
+    <copy file="${build.dir}/plovr.jar" tofile="${demo.build.dir}/plovr.jar" />
+    <java jar="${demo.build.dir}/plovr.jar"
+          dir="${demo.build.dir}"
+          fork="true">
+      <arg value="${demo.build.dir}/demo-config.js" />
+    </java>
+
   </target>
 
   <target name="build" depends="jar" />
