@@ -23,12 +23,14 @@ class QueryData {
   static QueryData createFromUri(URI uri) {
     String rawQuery = uri.getRawQuery();
     LinkedListMultimap<String, String> params = LinkedListMultimap.create();
-    String[] pairs = rawQuery.split("&");
-    for (String pair : pairs) {
-      String[] keyValuePair = pair.split("=");
-      String key = keyValuePair[0];
-      String value = keyValuePair.length == 2 ? keyValuePair[1] : "";
-      params.put(decode(key), decode(value));
+    if (rawQuery != null) {
+      String[] pairs = rawQuery.split("&");
+      for (String pair : pairs) {
+        String[] keyValuePair = pair.split("=");
+        String key = keyValuePair[0];
+        String value = keyValuePair.length == 2 ? keyValuePair[1] : "";
+        params.put(decode(key), decode(value));
+      }
     }
     return new QueryData(params);
   }
