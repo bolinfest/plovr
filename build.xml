@@ -6,7 +6,7 @@
   <property name="build.dir" value="${basedir}/build" />
   <property name="classes.dir" value="${build.dir}/classes" />
 
-  <!-- In order to build a release, each of the Closure Tools must be        -->
+  <!-- In order to build the jar, each of the Closure Tools must be          -->
   <!-- checked out in a parallel directory.                                  --> 
   <property name="closure-compiler.dir" value="${basedir}/../closure-compiler" />
   <property name="closure-library.dir" value="${basedir}/../closure-library" />
@@ -83,9 +83,9 @@
     </exec>
   </target>
 
-  <target name="release"
+  <target name="jar"
           depends="compile, externs, library, third_party"
-          description="build a release">
+          description="build plovr.jar">
     <mkdir dir="${build.dir}" />
     <copy file="${src.dir}/org/plovr/raw.soy"
           tofile="${classes.dir}/org/plovr/raw.soy" />
@@ -121,7 +121,7 @@
   </target>
 
   <target name="integration-test"
-          depends="release"
+          depends="jar"
           description="builds the jar and runs it on localhost:9810">
     <echo>Visit http://localhost:9810/config?id=integration-test</echo>
     <java jar="${build.dir}/plovr.jar" fork="true">
@@ -131,6 +131,6 @@
     </java>
   </target>
 
-  <target name="build" depends="release" />
+  <target name="build" depends="jar" />
 
 </project>
