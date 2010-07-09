@@ -9,15 +9,20 @@ import java.io.File;
  * @author bolinfest@gmail.com (Michael Bolin)
  */
 abstract class LocalFileJsInput extends AbstractJsInput {
-
+  
   private final File source;
+  
+  private long lastModified;
 
   LocalFileJsInput(String name, File source) {
     super(name);
 
     // TODO(bolinfest): Use java.nio to listen for updates to the underlying
-    // file and invoke markDirty() if it changes.
+    // file and invoke markDirty() if it changes. Upon doing so, remove the
+    // hasInputChanged() method from the superclass.
     this.source = source;
+
+    this.lastModified = source.lastModified();
   }
   
   static JsInput createForName(String name) {
@@ -34,6 +39,16 @@ abstract class LocalFileJsInput extends AbstractJsInput {
 
   final protected File getSource() {
     return source;
+  }
+
+  @Override
+  protected boolean hasInputChanged() {
+    long currentlastModified = source.lastModified();
+    if (currentlastModified != lastModified) {
+      this.lastModified = currentlastModified;
+      return true;
+    }
+    return false;
   }
 
   /**

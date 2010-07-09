@@ -38,7 +38,7 @@ abstract class AbstractJsInput implements JsInput {
 
   @Override
   public List<String> getProvides() {
-    if (provides == null) {
+    if (provides == null || hasInputChanged()) {
       processProvidesAndRequires();
     }
     return provides;
@@ -46,10 +46,14 @@ abstract class AbstractJsInput implements JsInput {
   
   @Override
   public List<String> getRequires() {
-    if (requires == null) {
+    if (requires == null || hasInputChanged()) {
       processProvidesAndRequires();
     }
     return requires;
+  }
+
+  protected boolean hasInputChanged() {
+    return false;
   }
 
   protected void processProvidesAndRequires() {
