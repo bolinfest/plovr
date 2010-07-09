@@ -21,7 +21,7 @@ import com.sun.net.httpserver.HttpHandler;
  * @author bolinfest@gmail.com (Michael Bolin)
  */
 final class InputFileHandler implements HttpHandler {
-  
+
   private static final SoyTofu TOFU;
 
   static {
@@ -38,7 +38,7 @@ final class InputFileHandler implements HttpHandler {
   }
 
   static String getJsToLoadManifest(String configId, Manifest manifest,
-      String prefix, String path) {
+      String prefix, String path) throws MissingProvideException {
     JsonArray inputs = new JsonArray();
     for (JsInput input : manifest.getInputsInCompilationOrder()) {
       inputs.add(new JsonPrimitive(prefix + "input?config_id=" + configId +
@@ -48,7 +48,7 @@ final class InputFileHandler implements HttpHandler {
     SoyMapData mapData = new SoyMapData(
         "filesAsJsonArray", inputs.toString(),
         "path", path);
-    
+
     final SoyMsgBundle messageBundle = null;
     return TOFU.render("org.plovr.raw", mapData, messageBundle);
   }
@@ -65,42 +65,32 @@ final class InputFileHandler implements HttpHandler {
     QueryData data = QueryData.createFromUri(exchange.getRequestURI());
     String id = data.getParam("config_id");
     if (id == null) {
-      writeNullResponse(exchange);
+      HttpUtil.writeNullResponse(exchange);
       return;
     }
-    
+
     Config config = server.getConfigById(id);
     if (config == null) {
-      writeNullResponse(exchange);
+      HttpUtil.writeNullResponse(exchange);
       return;
     }
-    
+
     Manifest manifest = config.getManifest();
     String name = data.getParam("name");
     JsInput requestedInput = manifest.getJsInputByName(name);
-    
+
     if (requestedInput == null) {
-      writeNullResponse(exchange);
+      HttpUtil.writeNullResponse(exchange);
       return;
     }
-    
+
     String code = requestedInput.getCode();
     Headers responseHeaders = exchange.getResponseHeaders();
     responseHeaders.set("Content-Type", "text/javascript");
     exchange.sendResponseHeaders(200, code.length());
-    
+
     Writer responseBody = new OutputStreamWriter(exchange.getResponseBody());
     responseBody.write(code);
-    responseBody.close();
-  }
-
-  private void writeNullResponse(HttpExchange exchange) throws IOException {
-    Headers responseHeaders = exchange.getResponseHeaders();
-    responseHeaders.set("Content-Type", "text/plain");
-    exchange.sendResponseHeaders(400, 0);
-
-    Writer responseBody = new OutputStreamWriter(exchange.getResponseBody());
-    responseBody.write("");
     responseBody.close();
   }
 }

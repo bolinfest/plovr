@@ -45,22 +45,22 @@ public final class Manifest {
   private final Set<File> dependencies;
   private final List<JsInput> requiredInputs;
   private final Set<File> externs;
-  
+
   /**
    * When RAW mode is used, each input will need to be accessed by name. To make
    * the lookup efficient, populate this map when getInputsInCompilationOrder()
-   * is called to prepare for the requests that are about to occur. 
+   * is called to prepare for the requests that are about to occur.
    */
   private Map<String, JsInput> lastOrdering;
 
   /**
-   * 
+   *
    * @param closureLibraryDirectory Directory that is the root of the Closure
    *        Library (must contain base.js)
    * @param dependencies files (or directories) that contain JS inputs that
    *        may be included in the compilation
    * @param requiredInputs files (or directories) that contain JS inputs that
-   *        must be included in the compilation 
+   *        must be included in the compilation
    * @param externs files (or directories) that contain JS externs
    */
   Manifest(
@@ -82,8 +82,9 @@ public final class Manifest {
   /**
    * @return a new {@link CompilerArguments} that reflects the configuration for
    *         this {@link Manifest}.
+   * @throws MissingProvideException
    */
-  public CompilerArguments getCompilerArguments() {
+  public CompilerArguments getCompilerArguments() throws MissingProvideException {
     List<JSSourceFile> externs = (this.externs == null)
         ? getDefaultExterns()
         : Lists.transform(getExternInputs(), inputToSourceFile);
@@ -100,7 +101,7 @@ public final class Manifest {
     return ResourceReader.getDefaultExterns();
   }
 
-  List<JsInput> getInputsInCompilationOrder() {
+  List<JsInput> getInputsInCompilationOrder() throws MissingProvideException {
     Set<JsInput> allDependencies = getAllDependencies();
 
     // Build up the dependency graph.
@@ -133,7 +134,7 @@ public final class Manifest {
     // Update lastOrdering before returning.
     Map<String, JsInput> lastOrdering = Maps.newHashMap();
     for (JsInput input : compilerInputs) {
-      lastOrdering.put(input.getName(), input);      
+      lastOrdering.put(input.getName(), input);
     }
     this.lastOrdering = lastOrdering;
 
@@ -145,11 +146,12 @@ public final class Manifest {
   }
 
   private void buildDependencies(Map<String, JsInput> provideToSource,
-      LinkedHashSet<JsInput> transitiveDependencies, JsInput input) {
+      LinkedHashSet<JsInput> transitiveDependencies, JsInput input)
+      throws MissingProvideException {
     for (String require : input.getRequires()) {
       JsInput provide = provideToSource.get(require);
       if (provide == null) {
-        throw new IllegalStateException("No provider for: " + require);
+        throw new MissingProvideException(input, require);
       }
       buildDependencies(provideToSource, transitiveDependencies, provide);
     }
@@ -162,13 +164,13 @@ public final class Manifest {
     if (closureLibraryDirectory == null) {
       allDependencies.addAll(ResourceReader.getClosureLibrarySources());
     } else {
-      allDependencies.addAll(getFiles(closureLibraryDirectory, includeSoy));      
+      allDependencies.addAll(getFiles(closureLibraryDirectory, includeSoy));
     }
     allDependencies.addAll(getFiles(dependencies, includeSoy));
     allDependencies.addAll(requiredInputs);
     return allDependencies;
   }
-  
+
   private List<JsInput> getExternInputs() {
     final boolean includeSoy = false;
     List<JsInput> externInputs = Lists.newArrayList(getFiles(externs,

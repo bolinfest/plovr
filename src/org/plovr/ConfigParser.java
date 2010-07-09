@@ -20,7 +20,7 @@ import com.google.javascript.jscomp.Result;
 
 /**
  * {@link ConfigParser} extracts a {@link Config} from a JSON config file.
- * 
+ *
  * @author bolinfest@gmail.com (Michael Bolin)
  */
 final class ConfigParser {
@@ -105,7 +105,7 @@ final class ConfigParser {
     if (!map.has(key)) {
       return defaultValue;
     }
-    
+
     JsonElement element = map.get(key);
     if (element.isJsonPrimitive() && element.getAsJsonPrimitive().isBoolean()) {
       return element.getAsBoolean();
@@ -146,11 +146,28 @@ final class ConfigParser {
         }
       };
 
+  static void update(Config config, QueryData queryData) {
+    // TODO(bolinfest): Allow user to specify more detailed CompilerOptions
+    // via the Config.
+
+    String mode = queryData.getParam("mode");
+    if (mode != null) {
+      try {
+        CompilationMode compilationMode =
+            CompilationMode.valueOf(mode.toUpperCase());
+        config.setCompilationMode(compilationMode);
+      } catch (IllegalArgumentException e) {
+        // OK, continue to use current CompilationMode set on the Config.
+      }
+    }
+  }
+
   /**
    * Takes a config file, performs the compilation, and prints the results to
    * standard out.
+   * @throws MissingProvideException
    */
-  public static void main(String[] args) throws IOException {
+  public static void main(String[] args) throws IOException, MissingProvideException {
     if (args.length != 1) {
       System.err.println("Must supply exactly one argument: the config file");
       System.exit(1);

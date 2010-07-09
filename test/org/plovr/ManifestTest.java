@@ -26,17 +26,17 @@ public class ManifestTest extends TestCase {
       }
   };
 
-  public void testSimpleManifest() {
+  public void testSimpleManifest() throws MissingProvideException {
     File closureLibraryDirectory = new File("../closure-library/closure/goog/");
 
     final List<File> dependencies = ImmutableList.of();
-    
+
     String path = "test/org/plovr/example.js";
     File testFile = new File(path);
     JsSourceFile requiredInput = new JsSourceFile(path, testFile);
 
     final List<File> externs = ImmutableList.of();
-    
+
     Manifest manifest = new Manifest(
         closureLibraryDirectory,
         dependencies,
