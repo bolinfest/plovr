@@ -1,6 +1,10 @@
 package org.plovr;
 
 import java.io.File;
+import java.util.Map;
+
+import com.google.common.base.Pair;
+import com.google.common.collect.Maps;
 
 /**
  * {@link LocalFileJsInput} represents a JavaScript input to the Closure
@@ -9,10 +13,12 @@ import java.io.File;
  * @author bolinfest@gmail.com (Michael Bolin)
  */
 abstract class LocalFileJsInput extends AbstractJsInput {
-  
+
   private final File source;
-  
+
   private long lastModified;
+
+  private static Map<Pair<File,String>, JsInput> jsInputCache = Maps.newHashMap();
 
   LocalFileJsInput(String name, File source) {
     super(name);
@@ -24,17 +30,29 @@ abstract class LocalFileJsInput extends AbstractJsInput {
 
     this.lastModified = source.lastModified();
   }
-  
+
   static JsInput createForName(String name) {
     return createForFileWithName(new File(name), name);
   }
 
   static JsInput createForFileWithName(File file, String name) {
-    if (file.getName().endsWith(".soy")) {
-      return new SoyFile(name, file);
-    } else {
-      return new JsSourceFile(name, file);        
+    // Cache requests for existing inputs to minimize how often files are
+    // re-parsed.
+    Pair<File,String> pair = Pair.of(file, name);
+    JsInput existingInput = jsInputCache.get(pair);
+    if (existingInput != null) {
+      return existingInput;
     }
+
+    JsInput newInput;
+    if (file.getName().endsWith(".soy")) {
+      newInput = new SoyFile(name, file);
+    } else {
+      newInput = new JsSourceFile(name, file);
+    }
+    Pair<File,String> newPair = Pair.of(file, name);
+    jsInputCache.put(newPair, newInput);
+    return newInput;
   }
 
   final protected File getSource() {
