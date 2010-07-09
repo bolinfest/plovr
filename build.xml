@@ -94,6 +94,8 @@
     <mkdir dir="${build.dir}" />
     <copy file="${src.dir}/org/plovr/raw.soy"
           tofile="${classes.dir}/org/plovr/raw.soy" />
+    <copy file="${src.dir}/org/plovr/plovr.js"
+          tofile="${classes.dir}/org/plovr/plovr.js" />
     <jar destfile="${build.dir}/plovr.jar">
       <zipfileset dir="${closure-compiler.dir}/externs/"
                   includes="**/*.js"
