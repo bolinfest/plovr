@@ -102,9 +102,8 @@ class CompileRequestHandler implements HttpHandler {
                 referrer.getScheme() + "://" + referrer.getHost() + ":9810/";
           }
           Manifest manifest = config.getManifest();
-          String js =
-              InputFileHandler.getJsToLoadManifest(config.getId(), manifest,
-                  prefix, requestUri.getPath());
+          String js = InputFileHandler.getJsToLoadManifest(config.getId(),
+              manifest, prefix, requestUri.getPath());
           builder.append(js);
         } else {
           compile(config, data, builder);
@@ -112,7 +111,8 @@ class CompileRequestHandler implements HttpHandler {
       } catch (MissingProvideException e) {
         Preconditions.checkState(builder.length() == 0,
             "Should not write errors to builder if output has already been written");
-        writeErrors(ImmutableList.of(e.createCompilationError()), builder);
+        writeErrors(config, ImmutableList.of(e.createCompilationError()),
+            builder);
       }
       contentType = "text/javascript";
       responseCode = 200;
@@ -141,23 +141,25 @@ class CompileRequestHandler implements HttpHandler {
     CompilerOptions options = config.getCompilerOptions();
     Result result;
     try {
-      result =
-          compiler.compile(compilerArguments.getExterns(), compilerArguments
-              .getInputs(), options);
+      result = compiler.compile(compilerArguments.getExterns(),
+          compilerArguments.getInputs(), options);
     } catch (Throwable t) {
       logger.severe(t.getMessage());
       result = null;
     }
 
+    // Write out the plovr library, even if there are no warnings.
+    // It is small, and it exports some symbols that may be of use to
+    // developers.
+    writeErrorsAndWarnings(config, normalizeErrors(result.errors, compiler),
+        normalizeErrors(result.warnings, compiler), builder);
+    logger.info("content: " + builder.toString());
+
     if (result.success) {
-      // TODO(bolinfest): Still need to write out warnings, if they exist.
       if (config.getCompilationMode() == CompilationMode.WHITESPACE) {
         builder.append("CLOSURE_NO_DEPS = true;\n");
       }
       builder.append(compiler.toSource());
-    } else {
-      writeErrors(normalizeErrors(result.errors, compiler),
-          normalizeErrors(result.warnings, compiler), builder);
     }
   }
 
@@ -170,22 +172,24 @@ class CompileRequestHandler implements HttpHandler {
     return compilationErrors;
   }
 
-  private void writeErrors(List<CompilationError> errors,
+  private void writeErrors(Config config, List<CompilationError> errors,
       Appendable builder) throws IOException {
-    writeErrors(errors,
+    writeErrorsAndWarnings(config, errors,
         ImmutableList.<CompilationError>of(),
         builder);
   }
 
-  private void writeErrors(List<CompilationError> errors,
-      List<CompilationError> warnings,
+  private void writeErrorsAndWarnings(Config config,
+      List<CompilationError> errors, List<CompilationError> warnings,
       Appendable builder) throws IOException {
     Preconditions.checkNotNull(errors);
     Preconditions.checkNotNull(builder);
 
+    String configIdJsString = gson.toJson(config.getId());
     builder.append(plovrJsLib)
         .append("plovr.addErrors(").append(gson.toJson(errors)).append(");\n")
         .append("plovr.addWarnings(").append(gson.toJson(warnings)).append(");\n")
+        .append("plovr.setConfigId(").append(configIdJsString).append(");\n")
         .append("plovr.writeErrorsOnLoad();\n");
   }
 }

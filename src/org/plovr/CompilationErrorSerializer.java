@@ -16,6 +16,7 @@ final class CompilationErrorSerializer implements JsonSerializer<CompilationErro
     record.addProperty("input", error.getSourceName());
     record.addProperty("message", error.getMessage());
     record.addProperty("isError", error.isError());
+    record.addProperty("lineNumber", error.getLineNumber());
     return record;
   }
 

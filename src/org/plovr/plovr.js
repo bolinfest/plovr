@@ -46,24 +46,74 @@ plovr.addWarnings = function(warnings) {
   for (var i = 0; i < warnings.length; i++) plovr.warnings_.push(warnings[i]);
 };
 
+/** @return {number} */
+plovr.getPort = function() {
+  return 9810;
+}
+
+/** @type {string} */
+plovr.configId_ = '';
+
+/** @return {string} */
+plovr.getConfigId = function() {
+  return plovr.configId_;  
+};
+
+/** @param {string} */
+plovr.setConfigId = function(configId) {
+  plovr.configId_ = configId;  
+};
+
+plovr.getViewSourceUrl = function() {
+  return 'http://localhost:' + plovr.getPort() + '/view';  
+};
+
+/**
+ * @param {Array} errors
+ * @param {Array.<string>} html
+ * @param {string} style
+ */
+plovr.writeErrors_ = function(errors, html, style) {
+  for (var i = 0, len = errors.length; i < len; i++) {
+    var error = errors[i];
+    var message = error['message'];
+
+    // Check whether the message starts with the name followed by a line number,
+    // and if so, hyperlink it.
+    var prefix = error['input'] + ':' + error['lineNumber'] + ':';
+    var anchor;
+    if (message.indexOf(prefix) == 0) {
+      message = message.substring(prefix.length);
+      anchor = '<a href="' + plovr.getViewSourceUrl() +
+          '?id=' + encodeURIComponent(plovr.getConfigId()) +
+          '&name=' + encodeURIComponent(error['input']) +
+          '&lineNumber=' + error['lineNumber'] + '">' +
+          plovr.htmlEscape(prefix) +
+          '</a>';
+    }
+
+    var htmlMessage = plovr.htmlEscape(message);
+    htmlMessage = htmlMessage.replace(/\n/g, '<br>');
+
+    if (anchor) {
+      htmlMessage = anchor + htmlMessage;
+    }
+    html.push('<div style="', style, '">', htmlMessage, '</div>');
+  }
+};
+
 /**
  * Writes the errors into a DIV as the first child of the BODY, so the BODY must
  * be available when this is run.
  */
 plovr.writeErrors = function() {
+  // TODO(bolinfest): Make it possible to expand and collapse errors.
+
   var div = document.createElement('div');
   var html = [];
-
-  for (var i = 0, len = plovr.errors_.length; i < len; i++) {
-    var error = plovr.errors_[i];
-    html.push('<div style="', plovr.ERROR_STYLE, '">',
-        plovr.htmlEscape(error['message']), '</div>');
-  }
-
-  for (var i = 0, len = plovr.warnings_.length; i < len; i++) {
-    var error = plovr.warnings_[i];
-    html.push('<div>', plovr.htmlEscape(error['message']), '</div>');
-  }
+  
+  plovr.writeErrors_(plovr.errors_, html, plovr.ERROR_STYLE);
+  plovr.writeErrors_(plovr.warnings_, html, plovr.WARNING_STYLE);
 
   div.innerHTML = html.join('');
   document.body.insertBefore(div, document.body.firstChild);

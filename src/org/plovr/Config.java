@@ -5,6 +5,7 @@ import java.util.logging.Logger;
 import com.google.javascript.jscomp.ClosureCodingConvention;
 import com.google.javascript.jscomp.CompilationLevel;
 import com.google.javascript.jscomp.CompilerOptions;
+import com.google.javascript.jscomp.WarningLevel;
 
 public class Config {
 
@@ -67,6 +68,10 @@ public class Config {
     CompilerOptions options = new CompilerOptions();
     level.setOptionsForCompilationLevel(options);
     options.setCodingConvention(new ClosureCodingConvention());
+
+    // TODO(bolinfest): Make this configurable
+    WarningLevel.VERBOSE.setOptionsForWarningLevel(options);
+
     return options;
   }
 

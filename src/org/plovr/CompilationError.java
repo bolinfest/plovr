@@ -40,4 +40,8 @@ final class CompilationError {
   boolean isError() {
     return jsError.level == CheckLevel.ERROR;
   }
+
+  int getLineNumber() {
+    return jsError.lineNumber;
+  }
 }
