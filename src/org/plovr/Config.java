@@ -2,6 +2,7 @@ package org.plovr;
 
 import java.util.logging.Logger;
 
+import com.google.javascript.jscomp.ClosureCodingConvention;
 import com.google.javascript.jscomp.CompilationLevel;
 import com.google.javascript.jscomp.CompilerOptions;
 
@@ -65,6 +66,7 @@ public class Config {
     logger.info("Compiling with level: " + level);
     CompilerOptions options = new CompilerOptions();
     level.setOptionsForCompilationLevel(options);
+    options.setCodingConvention(new ClosureCodingConvention());
     return options;
   }
 
