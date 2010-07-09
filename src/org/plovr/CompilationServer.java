@@ -78,16 +78,16 @@ class CompilationServer implements Runnable {
     private void doGet(HttpExchange exchange) throws IOException {
       QueryData data = QueryData.createFromUri(exchange.getRequestURI());
       String id = data.getParam("id");
-      
+
       StringBuilder builder = new StringBuilder();
       String contentType;
       int responseCode;
       if (id != null && configMap.containsKey(id)) {
         Config config = new Config(configMap.get(id));
-        
+
         // First, use query parameters from the script tag to update the config.
         update(config, data);
-        
+
         // If supported, modify query parameters based on the referrer. This is
         // more convenient for the developer, so it should be used to override.
         URI referrer = null;
@@ -121,11 +121,11 @@ class CompilationServer implements Runnable {
         contentType = "text/plain";
         responseCode = 400;
       }
-      
+
       Headers responseHeaders = exchange.getResponseHeaders();
       responseHeaders.set("Content-Type", contentType);
       exchange.sendResponseHeaders(responseCode, builder.length());
-      
+
       Writer responseBody = new OutputStreamWriter(exchange.getResponseBody());
       responseBody.write(builder.toString());
       responseBody.close();
@@ -168,18 +168,19 @@ class CompilationServer implements Runnable {
   private static void update(Config config, QueryData queryData) {
     // TODO(bolinfest): Allow user to specify more detailed CompilerOptions
     // via the Config.
-    
+
     String mode = queryData.getParam("mode");
     if (mode != null) {
       try {
-        CompilationMode compilationMode = CompilationMode.valueOf(mode);
+        CompilationMode compilationMode = CompilationMode.valueOf(mode.
+            toUpperCase());
         config.setCompilationMode(compilationMode);
       } catch (IllegalArgumentException e) {
         // OK
       }
     }
   }
-  
+
   private static URI getReferrer(HttpExchange exchange) {
     Headers headers = exchange.getRequestHeaders();
     String referrer = headers.getFirst("Referer");
