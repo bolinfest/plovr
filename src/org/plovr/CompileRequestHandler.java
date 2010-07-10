@@ -23,20 +23,17 @@ import com.google.javascript.jscomp.Result;
 import com.google.javascript.jscomp.SourceExcerptProvider;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
 
-class CompileRequestHandler implements HttpHandler {
+class CompileRequestHandler extends AbstractGetHandler {
 
   private static final Logger logger = Logger.getLogger("org.plovr.CompileRequestHandler");
-
-  private final CompilationServer server;
 
   private final Gson gson;
 
   private final String plovrJsLib;
 
   public CompileRequestHandler(CompilationServer server) {
-    this.server = server;
+    super(server);
 
     GsonBuilder gsonBuilder = new GsonBuilder();
     gsonBuilder.registerTypeAdapter(CompilationError.class,
@@ -55,18 +52,7 @@ class CompileRequestHandler implements HttpHandler {
   }
 
   @Override
-  public void handle(HttpExchange exchange) throws IOException {
-    String requestMethod = exchange.getRequestMethod();
-    if (requestMethod.equalsIgnoreCase("GET")) {
-      try {
-        doGet(exchange);
-      } catch (Throwable t) {
-        logger.log(Level.SEVERE, "Error during GET request", t);
-      }
-    }
-  }
-
-  private void doGet(HttpExchange exchange) throws IOException {
+  protected void doGet(HttpExchange exchange) throws IOException {
     QueryData data = QueryData.createFromUri(exchange.getRequestURI());
     String id = data.getParam("id");
 

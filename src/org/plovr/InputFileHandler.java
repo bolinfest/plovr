@@ -13,14 +13,13 @@ import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.tofu.SoyTofu;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
 
 /**
  * {@link InputFileHandler} serves the content of input files to a compilation.
  *
  * @author bolinfest@gmail.com (Michael Bolin)
  */
-final class InputFileHandler implements HttpHandler {
+final class InputFileHandler extends AbstractGetHandler {
 
   private static final SoyTofu TOFU;
 
@@ -31,10 +30,8 @@ final class InputFileHandler implements HttpHandler {
     TOFU = fileSet.compileToJavaObj();
   }
 
-  private final CompilationServer server;
-
   public InputFileHandler(CompilationServer server) {
-    this.server = server;
+    super(server);
   }
 
   static String getJsToLoadManifest(String configId, Manifest manifest,
@@ -54,14 +51,7 @@ final class InputFileHandler implements HttpHandler {
   }
 
   @Override
-  public void handle(HttpExchange exchange) throws IOException {
-    String requestMethod = exchange.getRequestMethod();
-    if (requestMethod.equalsIgnoreCase("GET")) {
-      doGet(exchange);
-    }
-  }
-
-  private void doGet(HttpExchange exchange) throws IOException {
+  protected void doGet(HttpExchange exchange) throws IOException {
     QueryData data = QueryData.createFromUri(exchange.getRequestURI());
     String id = data.getParam("config_id");
     if (id == null) {

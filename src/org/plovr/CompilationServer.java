@@ -4,15 +4,11 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.concurrent.Executors;
-import java.util.logging.Logger;
 
 import com.google.common.collect.Maps;
 import com.sun.net.httpserver.HttpServer;
 
 class CompilationServer implements Runnable {
-
-  private static final Logger logger =
-      Logger.getLogger("org.plovr.CompilationServer");
 
   private final Map<String, Config> configMap;
 
@@ -44,6 +40,7 @@ class CompilationServer implements Runnable {
 
     server.createContext("/compile", new CompileRequestHandler(this));
     server.createContext("/input", new InputFileHandler(this));
+    server.createContext("/view", new ViewFileHandler(this));
     server.setExecutor(Executors.newCachedThreadPool());
     server.start();
   }
