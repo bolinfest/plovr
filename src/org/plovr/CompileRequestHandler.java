@@ -53,24 +53,24 @@ class CompileRequestHandler extends AbstractGetHandler {
 
   @Override
   protected void doGet(HttpExchange exchange, QueryData data, Config config) throws IOException {
+    // First, use query parameters from the script tag to update the config.
+    config = ConfigParser.update(config, data);
 
+    // If supported, modify query parameters based on the referrer. This is
+    // more convenient for the developer, so it should be used to override
+    // the default settings.
+    URI referrer = null;
+    referrer = HttpUtil.getReferrer(exchange);
+    if (referrer != null) {
+      QueryData referrerData = QueryData.createFromUri(referrer);
+      config = ConfigParser.update(config, referrerData);
+    }
+
+    // Update these fields as they are responsible for the response that will be
+    // written.
     StringBuilder builder = new StringBuilder();
     String contentType;
     int responseCode;
-
-    // First, use query parameters from the script tag to update the config.
-    ConfigParser.update(config, data);
-
-    // If supported, modify query parameters based on the referrer. This is
-    // more convenient for the developer, so it should be used to override.
-    URI referrer = null;
-    if (!config.isUseExplicitQueryParameters()) {
-      referrer = HttpUtil.getReferrer(exchange);
-      if (referrer != null) {
-        QueryData referrerData = QueryData.createFromUri(referrer);
-        ConfigParser.update(config, referrerData);
-      }
-    }
 
     try {
       if (config.getCompilationMode() == CompilationMode.RAW) {
@@ -144,7 +144,6 @@ class CompileRequestHandler extends AbstractGetHandler {
     // developers.
     writeErrorsAndWarnings(config, normalizeErrors(result.errors, compiler),
         normalizeErrors(result.warnings, compiler), builder);
-    logger.info("content: " + builder.toString());
   }
 
   private static List<CompilationError> normalizeErrors(JSError[] errors,

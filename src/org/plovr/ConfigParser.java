@@ -2,15 +2,10 @@ package org.plovr;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -26,8 +21,7 @@ import com.google.javascript.jscomp.Result;
 final class ConfigParser {
 
   /** Utility class; do not instantiate. */
-  private ConfigParser() {
-  }
+  private ConfigParser() {}
 
   public static Config parseFile(File file) throws IOException {
     String jsonWithoutComments =
@@ -38,128 +32,26 @@ final class ConfigParser {
     Preconditions.checkNotNull(root);
     Preconditions.checkArgument(root.isJsonObject());
 
+    Config.Builder builder = Config.builder();
+
     // Get the id for the config.
     JsonObject map = root.getAsJsonObject();
-    String id = map.get("id").getAsString();
-
-    // Create the manifest.
-    File closureLibraryDirectory = null;
-    String closureLibraryValue = maybeGetString(map, "closure-library");
-    if (closureLibraryValue != null) {
-      closureLibraryDirectory = new File(closureLibraryValue);
-    }
-
-    List<String> deps = getAsStringList(map, "deps");
-    List<String> inputs = getAsStringList(map, "inputs");
-    JsonElement externsEl = map.get("externs");
-    List<File> externs =
-        externsEl == null || externsEl.isJsonNull() ? null : Lists.transform(
-            getAsStringList(map, "externs"), STRING_TO_FILE);
-    Manifest manifest =
-        new Manifest(closureLibraryDirectory, Lists.transform(deps,
-            STRING_TO_FILE), Lists.transform(inputs, STRING_TO_JS_INPUT),
-            externs);
-
-    // Extract the Compiler options.
-    JsonElement optionsEl = map.get("options");
-    if (optionsEl != null && optionsEl.isJsonObject()) {
-      // JsonObject options = optionsEl.getAsJsonObject();
-      // JsonElement levelEl = options.get("level");
-      // if (levelEl.isJsonPrimitive() &&
-      // levelEl.getAsJsonPrimitive().isString()) {
-      // String levelValue = levelEl.getAsString();
-      // try {
-      // level = CompilationLevel.valueOf(levelValue);
-      // } catch (IllegalArgumentException e) {
-      // throw new RuntimeException("Not a valid compilation level: " +
-      // levelValue);
-      // }
-      // }
-    }
-
-    boolean useExplicitQueryParameters = maybeGetBoolean(map,
-        "useExplicitQueryParameters", false);
-
-    return new Config(id, manifest, useExplicitQueryParameters);
-  }
-
-  /**
-   * If the key is defined in the map and its corresponding value is a string,
-   * return it.
-   */
-  private static String maybeGetString(JsonObject map, String key) {
-    if (!map.has(key)) {
-      return null;
-    }
-
-    JsonElement element = map.get(key);
-    if (element.isJsonPrimitive() && element.getAsJsonPrimitive().isString()) {
-      return element.getAsString();
-    } else {
-      return null;
-    }
-  }
-
-  private static boolean maybeGetBoolean(JsonObject map, String key,
-      boolean defaultValue) {
-    if (!map.has(key)) {
-      return defaultValue;
-    }
-
-    JsonElement element = map.get(key);
-    if (element.isJsonPrimitive() && element.getAsJsonPrimitive().isBoolean()) {
-      return element.getAsBoolean();
-    } else {
-      throw new IllegalArgumentException("Illegal value for key: " + key);
-    }
-  }
-
-  private static List<String> getAsStringList(JsonObject map, String key) {
-    JsonElement value = map.get(key);
-    if (value.isJsonArray()) {
-      JsonArray array = value.getAsJsonArray();
-      List<String> values = Lists.newLinkedList();
-      for (JsonElement item : array) {
-        values.add(item.getAsString());
-      }
-      return values;
-    } else if (value.isJsonNull()) {
-      return ImmutableList.of();
-    } else {
-      return ImmutableList.of(value.getAsString());
-    }
-  }
-
-  private static Function<String, File> STRING_TO_FILE =
-      new Function<String, File>() {
-        @Override
-        public File apply(String s) {
-          return new File(s);
-        }
-      };
-
-  private static Function<String, JsInput> STRING_TO_JS_INPUT =
-      new Function<String, JsInput>() {
-        @Override
-        public JsInput apply(String fileName) {
-          return LocalFileJsInput.createForName(fileName);
-        }
-      };
-
-  static void update(Config config, QueryData queryData) {
-    // TODO(bolinfest): Allow user to specify more detailed CompilerOptions
-    // via the Config.
-
-    String mode = queryData.getParam("mode");
-    if (mode != null) {
-      try {
-        CompilationMode compilationMode =
-            CompilationMode.valueOf(mode.toUpperCase());
-        config.setCompilationMode(compilationMode);
-      } catch (IllegalArgumentException e) {
-        // OK, continue to use current CompilationMode set on the Config.
+    for (ConfigOption option : ConfigOption.values()) {
+      JsonElement element = map.get(option.getName());
+      if (element != null) {
+        option.update(builder, element);
       }
     }
+
+    return builder.build();
+  }
+
+  public static Config update(Config config, QueryData queryData) {
+    Config.Builder builder = Config.builder(config);
+    for (ConfigOption option : ConfigOption.values()) {
+      option.update(builder, queryData);
+    }
+    return builder.build();
   }
 
   /**
