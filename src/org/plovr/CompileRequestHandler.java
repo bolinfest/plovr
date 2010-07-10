@@ -122,6 +122,7 @@ class CompileRequestHandler extends AbstractGetHandler {
 
       // TODO(bolinfest): Clean up this spaghetti code.
       config.setSourceMapFromLastCompilation(result.sourceMap);
+      config.setExportsAsExterns(result.externExport);
     } catch (Throwable t) {
       logger.severe(t.getMessage());
       result = null;

@@ -24,6 +24,8 @@ final class Config {
 
   private SourceMap sourceMap;
 
+  private String exportsAsExterns;
+
   /**
    * @param id Unique identifier for the configuration. This is used as an
    *        argument to the &lt;script> tag that loads the compiled code.
@@ -87,6 +89,8 @@ final class Config {
       logger.severe("A temp file for the Source Map could not be created");
     }
 
+    options.enableExternExports(true);
+
     return options;
   }
 
@@ -96,6 +100,14 @@ final class Config {
 
   public void setSourceMapFromLastCompilation(SourceMap sourceMap) {
     this.sourceMap = sourceMap;
+  }
+
+  public String getExportsAsExterns() {
+    return exportsAsExterns;
+  }
+
+  public void setExportsAsExterns(String exportsAsExterns) {
+    this.exportsAsExterns = exportsAsExterns;
   }
 
   @Override
