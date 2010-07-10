@@ -40,6 +40,7 @@ class CompilationServer implements Runnable {
 
     server.createContext("/compile", new CompileRequestHandler(this));
     server.createContext("/input", new InputFileHandler(this));
+    server.createContext("/sourcemap", new SourceMapHandler(this));
     server.createContext("/view", new ViewFileHandler(this));
     server.setExecutor(Executors.newCachedThreadPool());
     server.start();

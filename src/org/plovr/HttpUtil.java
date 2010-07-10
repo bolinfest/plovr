@@ -27,12 +27,16 @@ final class HttpUtil {
   }
 
   public static void writeNullResponse(HttpExchange exchange) throws IOException {
+    writeShortResponse(exchange, "");
+  }
+
+  public static void writeShortResponse(HttpExchange exchange, String message) throws IOException {
     Headers responseHeaders = exchange.getResponseHeaders();
     responseHeaders.set("Content-Type", "text/plain");
-    exchange.sendResponseHeaders(400, 0);
+    exchange.sendResponseHeaders(400, message.length());
 
     Writer responseBody = new OutputStreamWriter(exchange.getResponseBody());
-    responseBody.write("");
+    responseBody.write(message);
     responseBody.close();
   }
 

@@ -22,7 +22,19 @@ abstract class AbstractGetHandler implements HttpHandler {
     String requestMethod = exchange.getRequestMethod();
     if (requestMethod.equalsIgnoreCase("GET")) {
       try {
-        doGet(exchange);
+        QueryData queryData = QueryData.createFromUri(exchange.getRequestURI());
+        String id = queryData.getParam("id");
+        if (id == null) {
+          HttpUtil.writeNullResponse(exchange);
+        } else {
+          Config config = server.getConfigById(id);
+          if (config == null) {
+            HttpUtil.writeShortResponse(exchange,
+                "Unknown configuration id: " + id);
+          } else {
+            doGet(exchange, queryData, config);
+          }
+        }
       } catch (Throwable t) {
         logger.log(Level.SEVERE, "Error during GET request to " + exchange.getRequestURI(), t);
         // TODO(bolinfest): Write/flush response.
@@ -30,6 +42,13 @@ abstract class AbstractGetHandler implements HttpHandler {
     }
   }
 
-  protected abstract void doGet(HttpExchange exchange) throws IOException;
-
+  /**
+   * All parameters are guaranteed to be non-null.
+   * @param exchange
+   * @param data
+   * @param config
+   * @throws IOException
+   */
+  protected abstract void doGet(HttpExchange exchange, QueryData data,
+      Config config) throws IOException;
 }

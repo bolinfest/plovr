@@ -33,13 +33,10 @@ final class ViewFileHandler extends AbstractGetHandler {
   }
 
   @Override
-  protected void doGet(HttpExchange exchange) throws IOException {
+  protected void doGet(HttpExchange exchange, QueryData data, Config config) throws IOException {
     // Extract the parameters from the query data.
-    QueryData data = QueryData.createFromUri(exchange.getRequestURI());
-    String id = data.getParam("id");
     String name = data.getParam("name");
 
-    Config config = server.getConfigById(id);
     Manifest manifest = config.getManifest();
     JsInput input = manifest.getJsInputByName(name);
 

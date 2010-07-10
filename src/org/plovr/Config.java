@@ -1,13 +1,16 @@
 package org.plovr;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.logging.Logger;
 
 import com.google.javascript.jscomp.ClosureCodingConvention;
 import com.google.javascript.jscomp.CompilationLevel;
 import com.google.javascript.jscomp.CompilerOptions;
+import com.google.javascript.jscomp.SourceMap;
 import com.google.javascript.jscomp.WarningLevel;
 
-public class Config {
+final class Config {
 
   private static final Logger logger = Logger.getLogger("org.plovr.Config");
 
@@ -18,6 +21,8 @@ public class Config {
   private final boolean useExplicitQueryParameters;
 
   private CompilationMode compilationMode;
+
+  private SourceMap sourceMap;
 
   /**
    * @param id Unique identifier for the configuration. This is used as an
@@ -72,7 +77,25 @@ public class Config {
     // TODO(bolinfest): Make this configurable
     WarningLevel.VERBOSE.setOptionsForWarningLevel(options);
 
+    // TODO(bolinfest): This is a hack to work around the fact that a SourceMap
+    // will not be created unless a file is specified to which the SourceMap
+    // should be written.
+    try {
+      File tempFile = File.createTempFile("source", "map");
+      options.sourceMapOutputPath = tempFile.getAbsolutePath();
+    } catch (IOException e) {
+      logger.severe("A temp file for the Source Map could not be created");
+    }
+
     return options;
+  }
+
+  public SourceMap getSourceMapFromLastCompilation() {
+    return sourceMap;
+  }
+
+  public void setSourceMapFromLastCompilation(SourceMap sourceMap) {
+    this.sourceMap = sourceMap;
   }
 
   @Override

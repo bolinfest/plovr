@@ -52,60 +52,51 @@ class CompileRequestHandler extends AbstractGetHandler {
   }
 
   @Override
-  protected void doGet(HttpExchange exchange) throws IOException {
-    QueryData data = QueryData.createFromUri(exchange.getRequestURI());
-    String id = data.getParam("id");
+  protected void doGet(HttpExchange exchange, QueryData data, Config config) throws IOException {
 
     StringBuilder builder = new StringBuilder();
     String contentType;
     int responseCode;
-    if (server.containsConfigWithId(id)) {
-      Config config = new Config(server.getConfigById(id));
 
-      // First, use query parameters from the script tag to update the config.
-      ConfigParser.update(config, data);
+    // First, use query parameters from the script tag to update the config.
+    ConfigParser.update(config, data);
 
-      // If supported, modify query parameters based on the referrer. This is
-      // more convenient for the developer, so it should be used to override.
-      URI referrer = null;
-      if (!config.isUseExplicitQueryParameters()) {
-        referrer = HttpUtil.getReferrer(exchange);
-        if (referrer != null) {
-          QueryData referrerData = QueryData.createFromUri(referrer);
-          ConfigParser.update(config, referrerData);
-        }
+    // If supported, modify query parameters based on the referrer. This is
+    // more convenient for the developer, so it should be used to override.
+    URI referrer = null;
+    if (!config.isUseExplicitQueryParameters()) {
+      referrer = HttpUtil.getReferrer(exchange);
+      if (referrer != null) {
+        QueryData referrerData = QueryData.createFromUri(referrer);
+        ConfigParser.update(config, referrerData);
       }
-
-      try {
-        if (config.getCompilationMode() == CompilationMode.RAW) {
-          String prefix;
-          URI requestUri = exchange.getRequestURI();
-          if (referrer == null) {
-            prefix = "http://localhost:9810/";
-          } else {
-            prefix =
-                referrer.getScheme() + "://" + referrer.getHost() + ":9810/";
-          }
-          Manifest manifest = config.getManifest();
-          String js = InputFileHandler.getJsToLoadManifest(config.getId(),
-              manifest, prefix, requestUri.getPath());
-          builder.append(js);
-        } else {
-          compile(config, data, builder);
-        }
-      } catch (MissingProvideException e) {
-        Preconditions.checkState(builder.length() == 0,
-            "Should not write errors to builder if output has already been written");
-        writeErrors(config, ImmutableList.of(e.createCompilationError()),
-            builder);
-      }
-      contentType = "text/javascript";
-      responseCode = 200;
-    } else {
-      builder.append("Failed to specify a valid config id.");
-      contentType = "text/plain";
-      responseCode = 400;
     }
+
+    try {
+      if (config.getCompilationMode() == CompilationMode.RAW) {
+        String prefix;
+        URI requestUri = exchange.getRequestURI();
+        if (referrer == null) {
+          prefix = "http://localhost:9810/";
+        } else {
+          prefix =
+              referrer.getScheme() + "://" + referrer.getHost() + ":9810/";
+        }
+        Manifest manifest = config.getManifest();
+        String js = InputFileHandler.getJsToLoadManifest(config.getId(),
+            manifest, prefix, requestUri.getPath());
+        builder.append(js);
+      } else {
+        compile(config, data, builder);
+      }
+    } catch (MissingProvideException e) {
+      Preconditions.checkState(builder.length() == 0,
+          "Should not write errors to builder if output has already been written");
+      writeErrors(config, ImmutableList.of(e.createCompilationError()),
+          builder);
+    }
+    contentType = "text/javascript";
+    responseCode = 200;
 
     Headers responseHeaders = exchange.getResponseHeaders();
     responseHeaders.set("Content-Type", contentType);
@@ -128,17 +119,13 @@ class CompileRequestHandler extends AbstractGetHandler {
     try {
       result = compiler.compile(compilerArguments.getExterns(),
           compilerArguments.getInputs(), options);
+
+      // TODO(bolinfest): Clean up this spaghetti code.
+      config.setSourceMapFromLastCompilation(result.sourceMap);
     } catch (Throwable t) {
       logger.severe(t.getMessage());
       result = null;
     }
-
-    // Write out the plovr library, even if there are no warnings.
-    // It is small, and it exports some symbols that may be of use to
-    // developers.
-    writeErrorsAndWarnings(config, normalizeErrors(result.errors, compiler),
-        normalizeErrors(result.warnings, compiler), builder);
-    logger.info("content: " + builder.toString());
 
     if (result.success) {
       if (config.getCompilationMode() == CompilationMode.WHITESPACE) {
@@ -146,6 +133,17 @@ class CompileRequestHandler extends AbstractGetHandler {
       }
       builder.append(compiler.toSource());
     }
+
+    // TODO(bolinfest): Check whether writing out the plovr library confuses the
+    // source map. Hopefully adding it after the compiled code will prevent it
+    // from messing with the line numbers.
+
+    // Write out the plovr library, even if there are no warnings.
+    // It is small, and it exports some symbols that may be of use to
+    // developers.
+    writeErrorsAndWarnings(config, normalizeErrors(result.errors, compiler),
+        normalizeErrors(result.warnings, compiler), builder);
+    logger.info("content: " + builder.toString());
   }
 
   private static List<CompilationError> normalizeErrors(JSError[] errors,

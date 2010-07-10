@@ -38,7 +38,7 @@ final class InputFileHandler extends AbstractGetHandler {
       String prefix, String path) throws MissingProvideException {
     JsonArray inputs = new JsonArray();
     for (JsInput input : manifest.getInputsInCompilationOrder()) {
-      inputs.add(new JsonPrimitive(prefix + "input?config_id=" + configId +
+      inputs.add(new JsonPrimitive(prefix + "input?id=" + configId +
           "&name=" + input.getName()));
     }
 
@@ -51,20 +51,8 @@ final class InputFileHandler extends AbstractGetHandler {
   }
 
   @Override
-  protected void doGet(HttpExchange exchange) throws IOException {
-    QueryData data = QueryData.createFromUri(exchange.getRequestURI());
-    String id = data.getParam("config_id");
-    if (id == null) {
-      HttpUtil.writeNullResponse(exchange);
-      return;
-    }
-
-    Config config = server.getConfigById(id);
-    if (config == null) {
-      HttpUtil.writeNullResponse(exchange);
-      return;
-    }
-
+  protected void doGet(HttpExchange exchange, QueryData data, Config config)
+      throws IOException {
     Manifest manifest = config.getManifest();
     String name = data.getParam("name");
     JsInput requestedInput = manifest.getJsInputByName(name);
