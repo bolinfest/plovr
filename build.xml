@@ -92,10 +92,12 @@
           depends="compile, externs, library, third_party"
           description="build plovr.jar">
     <mkdir dir="${build.dir}" />
-    <copy file="${src.dir}/org/plovr/raw.soy"
-          tofile="${classes.dir}/org/plovr/raw.soy" />
-    <copy file="${src.dir}/org/plovr/plovr.js"
-          tofile="${classes.dir}/org/plovr/plovr.js" />
+    <copy todir="${classes.dir}/org/plovr">
+      <fileset dir="${src.dir}/org/plovr">
+        <include name="*.js" />
+        <include name="*.soy" />
+      </fileset>
+    </copy>
     <jar destfile="${build.dir}/plovr.jar">
       <zipfileset dir="${closure-compiler.dir}/externs/"
                   includes="**/*.js"

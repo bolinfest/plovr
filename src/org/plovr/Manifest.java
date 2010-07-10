@@ -142,6 +142,21 @@ public final class Manifest {
   }
 
   JsInput getJsInputByName(String name) {
+    if (lastOrdering == null) {
+      // It is possible that a file could be requested from the manifest before
+      // a compilation is done, such as when a user navigates directly to /view.
+      // In that case, lastOrdering will be null, so invoke
+      // getInputsInCompilationOrder() so that it gets initialized.
+      try {
+        // TODO(bolinfest): Create a utility method that just traverses the list
+        // of inputs and dependencies as the ordering is not actually needed at
+        // this point. Such a utility method would not throw a
+        // MissingProvideException.
+        getInputsInCompilationOrder();
+      } catch (MissingProvideException e) {
+        return null;
+      }
+    }
     return lastOrdering.get(name);
   }
 

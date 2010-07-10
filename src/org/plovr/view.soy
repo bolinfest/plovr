@@ -1,0 +1,62 @@
+{namespace org.plovr}
+
+/**
+ * @param name The name of the input being displayed.
+ * @param lines The lines of the file.
+ */
+{template .view}
+<!doctype html>
+<html>
+<head>
+  <title>{$name}</title>
+  <style>{call .css /}</style>
+</head>
+<body>
+
+<h1>{$name}</h1>
+
+<table cellspacing="0">
+{foreach $line in $lines}
+<tr id="{index($line) + 1}"
+    class="{if index($line) % 2 == 0}{css odd-line}{else}{css even-line}{/if}">
+  <td class="{css line-number}">{index($line) + 1}</td>
+  <td>{$line}</td>
+</tr>
+{/foreach}
+</table>
+
+</body>
+</html>
+{/template}
+
+/***/
+{template .css}
+{literal}
+body {
+  margin: 0;
+}
+
+h1 {
+  font: bold 15px arial, sans-serif;
+  margin: 6px;
+}
+
+td {
+  font: 12px monospace;
+}
+
+.odd-line {
+  background-color: #9FC;
+}
+
+.even-line {
+  background-color: #FFF;
+}
+
+.line-number {
+  color: #777;
+  text-align: right;
+  padding-right: 10px;
+}
+{/literal}
+{/template}

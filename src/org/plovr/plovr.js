@@ -2,6 +2,9 @@
 
 var plovr = plovr || {};
 
+/** @typedef {input:string,message:string,isError:boolean,lineNumber:number} */
+plovr.CompilationError;
+
 plovr.htmlEscape = function(str) {
   return str.replace(/[&<"]/g, function(ch) {
     switch (ch) {
@@ -11,11 +14,6 @@ plovr.htmlEscape = function(str) {
     }
   });
 };
-
-/**
- * @type {Array.<Object>}
- */
-plovr.errors_ = [];
 
 plovr.ERROR_STYLE =
   'color: #A00;' +
@@ -33,15 +31,26 @@ plovr.WARNING_STYLE =
   'border: 1px solid #F29000;' +
   'padding: 1px 3px;'
 
+/**
+ * @type {Array.<plovr.CompilationError>}
+ */
+plovr.errors_ = [];
+
+/**
+ * @param {Array.<plovr.CompilationError>} errors
+ */
 plovr.addErrors = function(errors) {
   for (var i = 0; i < errors.length; i++) plovr.errors_.push(errors[i]);
 };
 
 /**
- * @type {Array.<Object>}
+ * @type {Array.<plovr.CompilationError>}
  */
 plovr.warnings_ = [];
 
+/**
+ * @param {Array.<plovr.CompilationError>} errors
+ */
 plovr.addWarnings = function(warnings) {
   for (var i = 0; i < warnings.length; i++) plovr.warnings_.push(warnings[i]);
 };
@@ -64,12 +73,13 @@ plovr.setConfigId = function(configId) {
   plovr.configId_ = configId;  
 };
 
+/** @return {string} */
 plovr.getViewSourceUrl = function() {
   return 'http://localhost:' + plovr.getPort() + '/view';  
 };
 
 /**
- * @param {Array} errors
+ * @param {Array.<plovr.CompilationError>} errors
  * @param {Array.<string>} html
  * @param {string} style
  */
@@ -84,10 +94,11 @@ plovr.writeErrors_ = function(errors, html, style) {
     var anchor;
     if (message.indexOf(prefix) == 0) {
       message = message.substring(prefix.length);
-      anchor = '<a href="' + plovr.getViewSourceUrl() +
+      anchor = '<a target="_blank" ' +
+          'href="' + plovr.getViewSourceUrl() +
           '?id=' + encodeURIComponent(plovr.getConfigId()) +
           '&name=' + encodeURIComponent(error['input']) +
-          '&lineNumber=' + error['lineNumber'] + '">' +
+          '#' + error['lineNumber'] + '">' +
           plovr.htmlEscape(prefix) +
           '</a>';
     }

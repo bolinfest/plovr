@@ -1,7 +1,16 @@
 package org.plovr;
 
 import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 
+import com.google.common.io.Resources;
+import com.google.template.soy.SoyFileSet;
+import com.google.template.soy.data.SoyListData;
+import com.google.template.soy.data.SoyMapData;
+import com.google.template.soy.msgs.SoyMsgBundle;
+import com.google.template.soy.tofu.SoyTofu;
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 
 /**
@@ -12,8 +21,15 @@ import com.sun.net.httpserver.HttpExchange;
  */
 final class ViewFileHandler extends AbstractGetHandler {
 
+  private final SoyTofu viewTemplate;
+
   ViewFileHandler(CompilationServer server) {
     super(server);
+
+    SoyFileSet.Builder builder = new SoyFileSet.Builder();
+    builder.add(Resources.getResource(InputFileHandler.class, "view.soy"));
+    SoyFileSet fileSet = builder.build();
+    viewTemplate = fileSet.compileToJavaObj();
   }
 
   @Override
@@ -21,14 +37,31 @@ final class ViewFileHandler extends AbstractGetHandler {
     // Extract the parameters from the query data.
     QueryData data = QueryData.createFromUri(exchange.getRequestURI());
     String id = data.getParam("id");
-    String name = data.getParam("line");
-    int lineNumer = Integer.parseInt(data.getParam("lineNumber"), 10);
+    String name = data.getParam("name");
 
     Config config = server.getConfigById(id);
     Manifest manifest = config.getManifest();
     JsInput input = manifest.getJsInputByName(name);
 
-    // TODO(bolinfest): Write out each line in the input, giving each line an
-    // id so the fragment can be used to navigate to it.
+    // Write out each line in the input, giving each line an id so the fragment
+    // can be used to navigate to it.
+    String[] lines = input.getCode().split("\\n");
+    SoyMapData mapData = new SoyMapData(
+        "name", input.getName(),
+        "lines", new SoyListData((Object[])lines)
+        );
+    final SoyMsgBundle messageBundle = null;
+    String html = viewTemplate.render("org.plovr.view", mapData, messageBundle);
+
+    // TODO(bolinfest): Add syntax highlighting in the HTML.
+    // TODO(bolinfest): Support ctrl+L to prompt for a line number to navigate to.
+
+    Headers responseHeaders = exchange.getResponseHeaders();
+    responseHeaders.set("Content-Type", "text/html");
+    exchange.sendResponseHeaders(200, html.length());
+
+    Writer responseBody = new OutputStreamWriter(exchange.getResponseBody());
+    responseBody.write(html);
+    responseBody.close();
   }
 }

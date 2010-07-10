@@ -24,7 +24,8 @@ abstract class AbstractGetHandler implements HttpHandler {
       try {
         doGet(exchange);
       } catch (Throwable t) {
-        logger.log(Level.SEVERE, "Error during GET request", t);
+        logger.log(Level.SEVERE, "Error during GET request to " + exchange.getRequestURI(), t);
+        // TODO(bolinfest): Write/flush response.
       }
     }
   }
