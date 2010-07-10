@@ -78,7 +78,6 @@ class CompileRequestHandler extends AbstractGetHandler {
 
       try {
         if (config.getCompilationMode() == CompilationMode.RAW) {
-          logger.severe("logging raw omg");
           String prefix;
           URI requestUri = exchange.getRequestURI();
           if (referrer == null) {
