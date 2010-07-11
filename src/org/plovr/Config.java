@@ -68,6 +68,8 @@ public final class Config {
   }
 
   public CompilerOptions getCompilerOptions() {
+    Preconditions.checkArgument(compilationMode != CompilationMode.RAW,
+        "Cannot compile using RAW mode");
     CompilationLevel level = compilationMode.getCompilationLevel();
     logger.info("Compiling with level: " + level);
     CompilerOptions options = new CompilerOptions();
