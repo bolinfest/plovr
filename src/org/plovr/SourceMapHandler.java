@@ -16,9 +16,9 @@ final class SourceMapHandler extends AbstractGetHandler {
 
   @Override
   protected void doGet(HttpExchange exchange, QueryData data, Config config) throws IOException {
-    SourceMap sourceMap = config.getSourceMapFromLastCompilation();
+    SourceMap sourceMap = server.getSourceMapFor(config);
     if (sourceMap == null) {
-      HttpUtil.writeShortResponse(exchange,
+      HttpUtil.writeErrorMessageResponse(exchange,
           "No source map found -- perhaps you have not compiled yet?");
     } else {
       StringBuilder builder = new StringBuilder();

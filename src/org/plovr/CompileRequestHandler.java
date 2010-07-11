@@ -26,7 +26,8 @@ import com.sun.net.httpserver.HttpExchange;
 
 class CompileRequestHandler extends AbstractGetHandler {
 
-  private static final Logger logger = Logger.getLogger("org.plovr.CompileRequestHandler");
+  private static final Logger logger = Logger.getLogger(
+      CompileRequestHandler.class.getName());
 
   private final Gson gson;
 
@@ -53,19 +54,6 @@ class CompileRequestHandler extends AbstractGetHandler {
 
   @Override
   protected void doGet(HttpExchange exchange, QueryData data, Config config) throws IOException {
-    // First, use query parameters from the script tag to update the config.
-    config = ConfigParser.update(config, data);
-
-    // If supported, modify query parameters based on the referrer. This is
-    // more convenient for the developer, so it should be used to override
-    // the default settings.
-    URI referrer = null;
-    referrer = HttpUtil.getReferrer(exchange);
-    if (referrer != null) {
-      QueryData referrerData = QueryData.createFromUri(referrer);
-      config = ConfigParser.update(config, referrerData);
-    }
-
     // Update these fields as they are responsible for the response that will be
     // written.
     StringBuilder builder = new StringBuilder();
@@ -75,7 +63,7 @@ class CompileRequestHandler extends AbstractGetHandler {
     try {
       if (config.getCompilationMode() == CompilationMode.RAW) {
         String prefix;
-        URI requestUri = exchange.getRequestURI();
+        URI referrer = HttpUtil.getReferrer(exchange);
         if (referrer == null) {
           prefix = "http://localhost:9810/";
         } else {
@@ -83,11 +71,12 @@ class CompileRequestHandler extends AbstractGetHandler {
               referrer.getScheme() + "://" + referrer.getHost() + ":9810/";
         }
         Manifest manifest = config.getManifest();
+        URI requestUri = exchange.getRequestURI();
         String js = InputFileHandler.getJsToLoadManifest(config.getId(),
             manifest, prefix, requestUri.getPath());
         builder.append(js);
       } else {
-        compile(config, data, builder);
+        compile(config, builder);
       }
     } catch (MissingProvideException e) {
       Preconditions.checkState(builder.length() == 0,
@@ -107,24 +96,25 @@ class CompileRequestHandler extends AbstractGetHandler {
     responseBody.close();
   }
 
-  private void compile(Config config, QueryData data, Appendable builder)
-      throws IOException, MissingProvideException {
+  public static Result compile(Compiler compiler, Config config)
+      throws MissingProvideException {
     CompilerArguments compilerArguments;
     compilerArguments = config.getManifest().getCompilerArguments();
-
-    Compiler compiler = new Compiler();
-
     CompilerOptions options = config.getCompilerOptions();
+    return compiler.compile(compilerArguments.getExterns(),
+        compilerArguments.getInputs(), options);
+  }
+
+  private void compile(Config config, Appendable builder)
+      throws IOException, MissingProvideException {
+    Compiler compiler = new Compiler();
     Result result;
     try {
-      result = compiler.compile(compilerArguments.getExterns(),
-          compilerArguments.getInputs(), options);
-
-      // TODO(bolinfest): Clean up this spaghetti code.
-      config.setSourceMapFromLastCompilation(result.sourceMap);
-      config.setExportsAsExterns(result.externExport);
+      result = compile(compiler, config);
+      server.recordSourceMap(config, result.sourceMap);
+      server.recordExportsAsExterns(config, result.externExport);
     } catch (Throwable t) {
-      logger.severe(t.getMessage());
+      logger.log(Level.SEVERE, "Error during compilation", t);
       result = null;
     }
 

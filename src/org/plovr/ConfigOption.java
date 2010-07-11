@@ -67,46 +67,49 @@ public enum ConfigOption {
   }),
 
   COMPILATION_MODE("mode", new ConfigUpdater() {
-    private CompilationMode deserializeCompilationMode(String mode) {
-      try {
-        return CompilationMode.valueOf(mode.toUpperCase());
-      } catch (IllegalArgumentException e) {
-        return null;
-      }
-    }
-
     @Override
     public void apply(String mode, Config.Builder builder) {
-      CompilationMode compilationMode = deserializeCompilationMode(mode);
-      builder.setCompilationMode(compilationMode);
+      try {
+        CompilationMode compilationMode = CompilationMode.valueOf(mode.toUpperCase());
+        builder.setCompilationMode(compilationMode);
+      } catch (IllegalArgumentException e) {
+        // OK
+      }
     }
 
     @Override
     public void update(String mode, Config.Builder builder) {
-      CompilationMode compilationMode = deserializeCompilationMode(mode);
-      builder.setCompilationMode(compilationMode);
+      apply(mode, builder);
     }
   }),
 
   WARNING_LEVEL("level", new ConfigUpdater() {
-    private WarningLevel deserializeCompilationMode(String mode) {
+    @Override
+    public void apply(String level, Config.Builder builder) {
       try {
-        return WarningLevel.valueOf(mode.toUpperCase());
+        WarningLevel warningLevel = WarningLevel.valueOf(level.toUpperCase());
+        builder.setWarningLevel(warningLevel);
       } catch (IllegalArgumentException e) {
-        return null;
+        // OK
       }
     }
 
     @Override
-    public void apply(String level, Config.Builder builder) {
-      WarningLevel warningLevel = deserializeCompilationMode(level);
-      builder.setWarningLevel(warningLevel);
+    public void update(String level, Config.Builder builder) {
+      apply(level, builder);
+    }
+  }),
+
+  PRINT_INPUT_DELIMITER("print-input-delimiter", new ConfigUpdater() {
+    @Override
+    public void apply(boolean printInputDelimiter, Config.Builder builder) {
+      builder.setPrintInputDelimiter(printInputDelimiter);
     }
 
     @Override
-    public void update(String level, Config.Builder builder) {
-      WarningLevel warningLevel = deserializeCompilationMode(level);
-      builder.setWarningLevel(warningLevel);
+    public void update(String printInputDelimiterParam, Config.Builder builder) {
+      boolean printInputDelimiter = Boolean.valueOf(printInputDelimiterParam);
+      builder.setPrintInputDelimiter(printInputDelimiter);
     }
   }),
 

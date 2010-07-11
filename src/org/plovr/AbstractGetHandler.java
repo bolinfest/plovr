@@ -1,5 +1,6 @@
 package org.plovr;
 import java.io.IOException;
+import java.net.URI;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -29,11 +30,24 @@ abstract class AbstractGetHandler implements HttpHandler {
         } else {
           Config config = server.getConfigById(id);
           if (config == null) {
-            HttpUtil.writeShortResponse(exchange,
+            HttpUtil.writeErrorMessageResponse(exchange,
                 "Unknown configuration id: " + id);
-          } else {
-            doGet(exchange, queryData, config);
+            return;
           }
+
+          // First, use query parameters from the script tag to update the config.
+          config = ConfigParser.update(config, queryData);
+
+          // Modify query parameters based on the referrer. This is more
+          // convenient for the developer, so it should be used to override
+          // the default settings.
+          URI referrer = HttpUtil.getReferrer(exchange);
+          if (referrer != null) {
+            QueryData referrerData = QueryData.createFromUri(referrer);
+            config = ConfigParser.update(config, referrerData);
+          }
+
+          doGet(exchange, queryData, config);
         }
       } catch (Throwable t) {
         logger.log(Level.SEVERE, "Error during GET request to " + exchange.getRequestURI(), t);

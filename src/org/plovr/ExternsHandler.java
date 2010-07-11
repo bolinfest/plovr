@@ -16,9 +16,9 @@ final class ExternsHandler extends AbstractGetHandler {
   @Override
   protected void doGet(HttpExchange exchange, QueryData data, Config config)
       throws IOException {
-    String externs = config.getExportsAsExterns();
+    String externs = server.getExportsAsExternsFor(config);
     if (externs == null) {
-      HttpUtil.writeShortResponse(exchange,
+      HttpUtil.writeErrorMessageResponse(exchange,
           "No externs found -- perhaps you have not compiled yet?");
     } else {
       Headers responseHeaders = exchange.getResponseHeaders();

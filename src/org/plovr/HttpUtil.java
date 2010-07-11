@@ -26,11 +26,18 @@ final class HttpUtil {
     return null;
   }
 
+  /**
+   * Returns a 400 with no message.
+   */
   public static void writeNullResponse(HttpExchange exchange) throws IOException {
-    writeShortResponse(exchange, "");
+    writeErrorMessageResponse(exchange, "");
   }
 
-  public static void writeShortResponse(HttpExchange exchange, String message) throws IOException {
+  /**
+   * Returns a 400 with the specified message.
+   */
+  public static void writeErrorMessageResponse(HttpExchange exchange,
+      String message) throws IOException {
     Headers responseHeaders = exchange.getResponseHeaders();
     responseHeaders.set("Content-Type", "text/plain");
     exchange.sendResponseHeaders(400, message.length());

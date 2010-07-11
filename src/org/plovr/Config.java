@@ -12,7 +12,6 @@ import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.ClosureCodingConvention;
 import com.google.javascript.jscomp.CompilationLevel;
 import com.google.javascript.jscomp.CompilerOptions;
-import com.google.javascript.jscomp.SourceMap;
 import com.google.javascript.jscomp.WarningLevel;
 
 final class Config {
@@ -27,9 +26,7 @@ final class Config {
 
   private final WarningLevel warningLevel;
 
-  private SourceMap sourceMap;
-
-  private String exportsAsExterns;
+  private final boolean printInputDelimiter;
 
   /**
    * @param id Unique identifier for the configuration. This is used as an
@@ -37,15 +34,17 @@ final class Config {
    * @param manifest
    * @param compilationMode
    */
-  public Config(
+  private Config(
       String id,
       Manifest manifest,
       CompilationMode compilationMode,
-      WarningLevel warningLevel) {
+      WarningLevel warningLevel,
+      boolean printInputDelimiter) {
     this.id = id;
     this.manifest = manifest;
     this.compilationMode = compilationMode;
     this.warningLevel = warningLevel;
+    this.printInputDelimiter = printInputDelimiter;
   }
 
   public static Builder builder() {
@@ -75,6 +74,10 @@ final class Config {
     level.setOptionsForCompilationLevel(options);
     options.setCodingConvention(new ClosureCodingConvention());
     warningLevel.setOptionsForWarningLevel(options);
+    options.printInputDelimiter = printInputDelimiter;
+    if (printInputDelimiter) {
+      options.inputDelimiter = "// Input %num%: %name%";
+    }
 
     // TODO(bolinfest): This is a hack to work around the fact that a SourceMap
     // will not be created unless a file is specified to which the SourceMap
@@ -89,22 +92,6 @@ final class Config {
     options.enableExternExports(true);
 
     return options;
-  }
-
-  public SourceMap getSourceMapFromLastCompilation() {
-    return sourceMap;
-  }
-
-  public void setSourceMapFromLastCompilation(SourceMap sourceMap) {
-    this.sourceMap = sourceMap;
-  }
-
-  public String getExportsAsExterns() {
-    return exportsAsExterns;
-  }
-
-  public void setExportsAsExterns(String exportsAsExterns) {
-    this.exportsAsExterns = exportsAsExterns;
   }
 
   @Override
@@ -130,6 +117,8 @@ final class Config {
 
     private WarningLevel warningLevel = WarningLevel.DEFAULT;
 
+    private boolean printInputDelimiter = false;
+
     private Builder() {
       manifest = null;
     }
@@ -140,6 +129,7 @@ final class Config {
       this.manifest = config.manifest;
       this.compilationMode = config.compilationMode;
       this.warningLevel = config.warningLevel;
+      this.printInputDelimiter = config.printInputDelimiter;
     }
 
     public void setId(String id) {
@@ -177,6 +167,10 @@ final class Config {
       this.warningLevel = level;
     }
 
+    public void setPrintInputDelimiter(boolean printInputDelimiter) {
+      this.printInputDelimiter = printInputDelimiter;
+    }
+
     public Config build() {
       File closureLibraryDirectory = pathToClosureLibrary != null
           ? new File(pathToClosureLibrary)
@@ -195,7 +189,12 @@ final class Config {
         manifest = this.manifest;
       }
 
-      Config config = new Config(id, manifest, compilationMode, warningLevel);
+      Config config = new Config(
+          id,
+          manifest,
+          compilationMode,
+          warningLevel,
+          printInputDelimiter);
 
       return config;
     }
