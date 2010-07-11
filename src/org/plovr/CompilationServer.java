@@ -9,7 +9,7 @@ import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.SourceMap;
 import com.sun.net.httpserver.HttpServer;
 
-class CompilationServer implements Runnable {
+public final class CompilationServer implements Runnable {
 
   private final int port;
 
@@ -32,7 +32,7 @@ class CompilationServer implements Runnable {
    */
   private final Map<String, String> exports;
 
-  CompilationServer(int port) {
+  public CompilationServer(int port) {
     this.port = port;
     this.configs = Maps.newHashMap();
     this.sourceMaps = Maps.newHashMap();

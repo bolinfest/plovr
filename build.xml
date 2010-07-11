@@ -124,7 +124,7 @@
       <zipgroupfileset dir="${lib.dir}" includes="*.jar" />
       <fileset dir="${classes.dir}" />
       <manifest>
-        <attribute name="Main-Class" value="org.plovr.Main" />
+        <attribute name="Main-Class" value="org.plovr.cli.Main" />
       </manifest>
     </jar>
   </target>

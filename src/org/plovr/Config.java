@@ -14,7 +14,7 @@ import com.google.javascript.jscomp.CompilationLevel;
 import com.google.javascript.jscomp.CompilerOptions;
 import com.google.javascript.jscomp.WarningLevel;
 
-final class Config {
+public final class Config {
 
   private static final Logger logger = Logger.getLogger("org.plovr.Config");
 

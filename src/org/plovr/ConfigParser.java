@@ -18,7 +18,7 @@ import com.google.javascript.jscomp.Result;
  *
  * @author bolinfest@gmail.com (Michael Bolin)
  */
-final class ConfigParser {
+public final class ConfigParser {
 
   /** Utility class; do not instantiate. */
   private ConfigParser() {}

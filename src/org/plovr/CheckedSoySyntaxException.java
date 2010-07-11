@@ -5,7 +5,7 @@ import com.google.javascript.jscomp.DiagnosticType;
 import com.google.javascript.jscomp.JSError;
 import com.google.template.soy.base.SoySyntaxException;
 
-final class CheckedSoySyntaxException extends Exception {
+public final class CheckedSoySyntaxException extends Exception {
 
   private static final DiagnosticType SOY_SYNTAX_EXCEPTION =
     DiagnosticType.error("PLOVR_SOY_SYNTAX_EXCEPTION", "{0}");

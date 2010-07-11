@@ -25,7 +25,7 @@ import com.google.template.soy.base.SoySyntaxException;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 
-class CompileRequestHandler extends AbstractGetHandler {
+public final class CompileRequestHandler extends AbstractGetHandler {
 
   private static final Logger logger = Logger.getLogger(
       CompileRequestHandler.class.getName());

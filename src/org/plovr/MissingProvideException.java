@@ -4,7 +4,7 @@ import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.DiagnosticType;
 import com.google.javascript.jscomp.JSError;
 
-final class MissingProvideException extends Exception {
+public final class MissingProvideException extends Exception {
 
   private static final DiagnosticType MISSING_PROVIDE =
     DiagnosticType.error("PLOVR_MISSING_PROVIDE", "Missing provide for {0} in {1}");
