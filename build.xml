@@ -132,8 +132,9 @@
   <target name="integration-test"
           depends="jar"
           description="builds the jar and runs it on localhost:9810">
-    <echo>Visit http://localhost:9810/config?id=integration-test</echo>
+    <echo>Visit http://localhost:9810/compile?id=integration-test</echo>
     <java jar="${build.dir}/plovr.jar" fork="true">
+      <arg value="serve" />
       <arg value="${test.dir}/org/plovr/integration-test-config.js" />
       <jvmarg value="-Xdebug" />
       <jvmarg value="-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=8000"/>
@@ -177,6 +178,7 @@
     <java jar="${demo.build.dir}/plovr.jar"
           dir="${demo.build.dir}"
           fork="true">
+      <arg value="serve" />
       <arg value="${demo.build.dir}/demo-config.js" />
     </java>
 
