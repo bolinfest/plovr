@@ -4,8 +4,6 @@ import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.google.common.base.Joiner;
-
 /**
  * {@link Main} kicks off the plovr buildr.
  *
@@ -16,16 +14,14 @@ public final class Main {
   private Main() {}
 
   private static void usage() {
-    System.err.println("Must specify at least one of: " +
-        Joiner.on(',').join(Command.values()));
+    // TODO(bolinfest): Make this a data-driven list from the Command enum.
+    System.err.println("plovr build tool\n");
+    System.err.println("basic commands:\n");
+    System.err.println(" build    compile the input specified in a config file");
+    System.err.println(" serve    start the plovr web server");
     System.exit(1);
   }
 
-  /**
-   * Runs on port 9810 by default. (Eventually there will be a real flags
-   * architecture behind this.)
-   * @throws IOException
-   */
   public static void main(String[] args) throws IOException {
     // The Compiler logging statements produce too much output.
     Logger.getLogger("com.google.javascript.jscomp").setLevel(Level.OFF);
