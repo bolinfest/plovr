@@ -13,7 +13,7 @@
   "id": "testdata",
 
   "closure-library": "../closure-library/closure/goog",
-  "deps": [
+  "paths": [
     "testdata",
     "../closure-templates/javascript/soyutils_usegoog.js"
   ],
