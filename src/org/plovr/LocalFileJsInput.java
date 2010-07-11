@@ -1,7 +1,10 @@
 package org.plovr;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import com.google.common.base.Pair;
 import com.google.common.collect.Maps;
@@ -13,6 +16,9 @@ import com.google.common.collect.Maps;
  * @author bolinfest@gmail.com (Michael Bolin)
  */
 abstract class LocalFileJsInput extends AbstractJsInput {
+
+  private static final Logger logger = Logger.getLogger(
+      LocalFileJsInput.class.getName());
 
   private final File source;
 
@@ -77,6 +83,23 @@ abstract class LocalFileJsInput extends AbstractJsInput {
     this.requires = null;
   }
 
+  /**
+   * Gets a normalized path name for the source. This is important because the
+   * same file may be both an "input" and a "path" for a config, but it may
+   * be referenced via different File names because of how relative paths
+   * are resolved.
+   * @return
+   */
+  private String getCanonicalPath() {
+    try {
+      return source.getCanonicalPath();
+    } catch (IOException e) {
+      logger.log(Level.SEVERE, "Cannot get the canonical path for <" +
+          source.getAbsolutePath() + "> what kind of file is this? ", e);
+      return source.getAbsolutePath();
+    }
+  }
+
   @Override
   public boolean equals(Object obj) {
     if (obj == this) {
@@ -86,12 +109,12 @@ abstract class LocalFileJsInput extends AbstractJsInput {
       return false;
     }
     LocalFileJsInput otherInput = (LocalFileJsInput)obj;
-    return source.equals(otherInput.source);
+    return getCanonicalPath().equals(otherInput.getCanonicalPath());
   }
 
   @Override
   public int hashCode() {
-    return source.hashCode();
+    return getCanonicalPath().hashCode();
   }
 
 }

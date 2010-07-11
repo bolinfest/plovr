@@ -181,8 +181,11 @@ public final class Manifest {
     } else {
       allDependencies.addAll(getFiles(closureLibraryDirectory, includeSoy));
     }
-    allDependencies.addAll(getFiles(dependencies, includeSoy));
+    // Add the requiredInputs first so that if a file is both an "input" and a
+    // "path" under different names (such as "hello.js" and "/./hello.js"), the
+    // name used to specify the input is preferred.
     allDependencies.addAll(requiredInputs);
+    allDependencies.addAll(getFiles(dependencies, includeSoy));
     return allDependencies;
   }
 
