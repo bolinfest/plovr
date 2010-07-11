@@ -61,6 +61,9 @@ final class SizeHandler extends AbstractGetHandler {
     } catch (MissingProvideException e) {
       logger.log(Level.SEVERE, "Error during compilation", e);
       result = null;
+    } catch (CheckedSoySyntaxException e) {
+      logger.log(Level.SEVERE, "Error during compilation", e);
+      result = null;
     }
 
     if (result != null && result.success) {

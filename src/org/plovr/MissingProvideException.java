@@ -7,7 +7,7 @@ import com.google.javascript.jscomp.JSError;
 final class MissingProvideException extends Exception {
 
   private static final DiagnosticType MISSING_PROVIDE =
-    DiagnosticType.error("PLOVR_MISSING_PROVIDE", "Missing provide for {0}");
+    DiagnosticType.error("PLOVR_MISSING_PROVIDE", "Missing provide for {0} in {1}");
 
   private final JsInput input;
 
@@ -31,7 +31,8 @@ final class MissingProvideException extends Exception {
     final int lineno = -1;
     final int charno = -1;
     JSError jsError = JSError.make(getInput().getName(), lineno, charno,
-        CheckLevel.ERROR, MISSING_PROVIDE, getMissingProvide());
+        CheckLevel.ERROR, MISSING_PROVIDE, getMissingProvide(),
+        getInput().getName());
     return new CompilationError(jsError);
   }
 

@@ -21,6 +21,7 @@ import com.google.javascript.jscomp.CompilerOptions;
 import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.Result;
 import com.google.javascript.jscomp.SourceExcerptProvider;
+import com.google.template.soy.base.SoySyntaxException;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 
@@ -97,25 +98,34 @@ class CompileRequestHandler extends AbstractGetHandler {
   }
 
   public static Result compile(Compiler compiler, Config config)
-      throws MissingProvideException {
-    CompilerArguments compilerArguments;
-    compilerArguments = config.getManifest().getCompilerArguments();
-    CompilerOptions options = config.getCompilerOptions();
-    return compiler.compile(compilerArguments.getExterns(),
-        compilerArguments.getInputs(), options);
+      throws MissingProvideException, CheckedSoySyntaxException {
+    try {
+      CompilerArguments compilerArguments;
+      compilerArguments = config.getManifest().getCompilerArguments();
+      CompilerOptions options = config.getCompilerOptions();
+      return compiler.compile(compilerArguments.getExterns(),
+          compilerArguments.getInputs(), options);
+    } catch (SoySyntaxException e) {
+      throw new CheckedSoySyntaxException(e);
+    }
   }
 
   private void compile(Config config, Appendable builder)
       throws IOException, MissingProvideException {
     Compiler compiler = new Compiler();
-    Result result;
+    Result result = null;
     try {
       result = compile(compiler, config);
       server.recordSourceMap(config, result.sourceMap);
       server.recordExportsAsExterns(config, result.externExport);
-    } catch (Throwable t) {
-      logger.log(Level.SEVERE, "Error during compilation", t);
-      result = null;
+    } catch (MissingProvideException e) {
+      writeErrors(config, ImmutableList.of(e.createCompilationError()),
+          builder);
+      return;
+    } catch (CheckedSoySyntaxException e) {
+      writeErrors(config, ImmutableList.of(e.createCompilationError()),
+          builder);
+      return;
     }
 
     if (result.success) {
