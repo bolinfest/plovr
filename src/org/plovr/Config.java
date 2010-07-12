@@ -67,6 +67,10 @@ public final class Config {
     return compilationMode;
   }
 
+  public WarningLevel getWarningLevel() {
+    return warningLevel;
+  }
+
   public CompilerOptions getCompilerOptions() {
     Preconditions.checkArgument(compilationMode != CompilationMode.RAW,
         "Cannot compile using RAW mode");
