@@ -16,12 +16,12 @@ import com.google.common.collect.Lists;
 abstract class AbstractJsInput implements JsInput {
 
   private static final Pattern GOOG_PROVIDE_OR_REQUIRE =
-      Pattern.compile("\\s*goog\\.(provide|require)\\(['\"]([\\w\\.]+)['\"]\\);?\\s*");
+      Pattern.compile("\\s*goog\\.(provide|require)\\(['\"]([\\w\\.]+)['\"]\\);?.*");
 
   private final String name;
 
   protected List<String> provides;
-  
+
   protected List<String> requires;
 
   AbstractJsInput(String name) {
@@ -43,7 +43,7 @@ abstract class AbstractJsInput implements JsInput {
     }
     return provides;
   }
-  
+
   @Override
   public List<String> getRequires() {
     if (requires == null || hasInputChanged()) {
@@ -64,7 +64,7 @@ abstract class AbstractJsInput implements JsInput {
       if (matcher.matches()) {
         String type = matcher.group(1);
         String namespace = matcher.group(2);
-        (("provide".equals(type)) ? provides : requires).add(namespace); 
+        (("provide".equals(type)) ? provides : requires).add(namespace);
       }
     }
     this.provides = ImmutableList.copyOf(provides);
