@@ -58,24 +58,24 @@ plovr.addWarnings = function(warnings) {
 /** @return {number} */
 plovr.getPort = function() {
   return 9810;
-}
+};
 
 /** @type {string} */
 plovr.configId_ = '';
 
 /** @return {string} */
 plovr.getConfigId = function() {
-  return plovr.configId_;  
+  return plovr.configId_;
 };
 
 /** @param {string} */
 plovr.setConfigId = function(configId) {
-  plovr.configId_ = configId;  
+  plovr.configId_ = configId;
 };
 
 /** @return {string} */
 plovr.getViewSourceUrl = function() {
-  return 'http://localhost:' + plovr.getPort() + '/view';  
+  return 'http://localhost:' + plovr.getPort() + '/view';
 };
 
 /**
@@ -122,7 +122,7 @@ plovr.writeErrors = function() {
 
   var div = document.createElement('div');
   var html = [];
-  
+
   plovr.writeErrors_(plovr.errors_, html, plovr.ERROR_STYLE);
   plovr.writeErrors_(plovr.warnings_, html, plovr.WARNING_STYLE);
 
