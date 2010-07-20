@@ -6,6 +6,8 @@ import com.google.javascript.jscomp.JSError;
 
 public final class MissingProvideException extends Exception {
 
+  private static final long serialVersionUID = 1L;
+
   private static final DiagnosticType MISSING_PROVIDE =
     DiagnosticType.error("PLOVR_MISSING_PROVIDE", "Missing provide for {0} in {1}");
 
@@ -14,7 +16,7 @@ public final class MissingProvideException extends Exception {
   private final String missingProvide;
 
   // TODO(bolinfest): Get the line number and character offset where the
-  // error occured so it is possible to link to it.
+  // error occurred so it is possible to link to it.
 
   /**
    * @param input the file that contains the goog.require() call.
