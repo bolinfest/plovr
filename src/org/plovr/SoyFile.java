@@ -5,6 +5,7 @@ import java.util.logging.Logger;
 
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.jssrc.SoyJsSrcOptions;
+import com.google.template.soy.jssrc.SoyJsSrcOptions.CodeStyle;
 import com.google.template.soy.msgs.SoyMsgBundle;
 
 /**
@@ -17,12 +18,19 @@ class SoyFile extends LocalFileJsInput {
   private static final Logger logger = Logger.getLogger("org.plovr.SoyFile");
 
   private static final SoyJsSrcOptions SOY_OPTIONS;
-  
+
   static {
     SoyJsSrcOptions jsSrcOptions = new SoyJsSrcOptions();
     jsSrcOptions.setShouldGenerateJsdoc(true);
     jsSrcOptions.setShouldProvideRequireSoyNamespaces(true);
     jsSrcOptions.setShouldDeclareTopLevelNamespaces(true);
+
+    // TODO(mbolin): Make this configurable, though for now, prefer CONCAT
+    // because the return type in STRINGBUILDER mode is {string|undefined}
+    // whereas in CONCAT mode, it is simply {string}, which is much simplier to
+    // deal with in the context of the Closure Compiler's type system.
+    jsSrcOptions.setCodeStyle(CodeStyle.CONCAT);
+
     SOY_OPTIONS = jsSrcOptions;
   }
 
