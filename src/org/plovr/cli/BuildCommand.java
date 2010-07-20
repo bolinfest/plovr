@@ -12,7 +12,9 @@ import org.plovr.Config;
 import org.plovr.ConfigParser;
 import org.plovr.MissingProvideException;
 
+import com.google.common.base.Preconditions;
 import com.google.javascript.jscomp.Compiler;
+import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.Result;
 
 public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
@@ -47,8 +49,23 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       e.printStackTrace();
       result = null;
     }
-    if (result != null && result.success) {
+
+    processResult(compiler, result);
+  }
+
+  private void processResult(Compiler compiler, Result result) {
+    Preconditions.checkNotNull(compiler);
+    Preconditions.checkNotNull(result);
+    if (result.success) {
       System.out.println(compiler.toSource());
+    } else {
+      for (JSError error : result.errors) {
+        System.err.println(error);
+      }
+      for (JSError warning : result.warnings) {
+        System.err.println(warning);
+      }
+      System.exit(1);
     }
   }
 
