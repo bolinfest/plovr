@@ -32,4 +32,15 @@ public class AbstractJsInputTest {
     assertEquals("Call to goog.require() may be followed by a comment",
         ImmutableList.of("example.test.Config"), jsInputWithTrailingComments.getRequires());
   }
+
+  @Test
+  public void testWindowsLineEndings() {
+    AbstractJsInput jsInputWithWindowsLineEndings = new DummyAbstractJsInput("dummy.js",
+        "goog.provide('example.test.Control');\r\n" +
+        "goog.require('example.test.Config');\r\n");
+    assertEquals("Regex should tolerate lines that end in \\r\\n",
+        ImmutableList.of("example.test.Control"), jsInputWithWindowsLineEndings.getProvides());
+    assertEquals("Regex should tolerate lines that end in \\r\\n",
+        ImmutableList.of("example.test.Config"), jsInputWithWindowsLineEndings.getRequires());
+  }
 }

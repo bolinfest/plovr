@@ -1,11 +1,14 @@
 package org.plovr;
 
+import java.io.IOException;
+import java.io.StringReader;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.common.io.LineReader;
 
 /**
  * {@link AbstractJsInput} provides the default logic for extracting
@@ -59,7 +62,9 @@ abstract class AbstractJsInput implements JsInput {
   protected void processProvidesAndRequires() {
     List<String> provides = Lists.newLinkedList();
     List<String> requires = Lists.newLinkedList();
-    for (String line : getCode().split("\n")) {
+    StringLineReader lineReader = new StringLineReader(getCode());
+    String line;
+    while ((line = lineReader.readLine()) != null) {
       Matcher matcher = GOOG_PROVIDE_OR_REQUIRE.matcher(line);
       if (matcher.matches()) {
         String type = matcher.group(1);
@@ -69,6 +74,29 @@ abstract class AbstractJsInput implements JsInput {
     }
     this.provides = ImmutableList.copyOf(provides);
     this.requires = ImmutableList.copyOf(requires);
+  }
+
+  /**
+   * {@link StringLineReader} works like {@link com.google.common.io.LineReader}
+   * except that it rethrows an {@link IOException} as a {@link RuntimeException}
+   * as reading from a string should never cause one, so declaring a checked
+   * exception for readLine() creates an unnecessary burden for the client.
+   */
+  private static class StringLineReader {
+
+    private final LineReader lineReader;
+
+    StringLineReader(String str) {
+      lineReader = new LineReader(new StringReader(str));
+    }
+
+    String readLine() {
+      try {
+        return this.lineReader.readLine();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
   }
 
   @Override
