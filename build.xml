@@ -1,5 +1,5 @@
 <project name="plovr" basedir="." default="build">
-  
+
   <property file="${basedir}/build.properties" />
   <property file="${basedir}/default.build.properties" />
 
@@ -12,11 +12,11 @@
   <property name="demo.build.dir" value="${build.dir}/demo" />
 
   <!-- In order to build the jar, each of the Closure Tools must be          -->
-  <!-- checked out in a parallel directory.                                  --> 
+  <!-- checked out in a parallel directory.                                  -->
   <property name="closure-compiler.dir" value="${basedir}/../closure-compiler" />
   <property name="closure-library.dir" value="${basedir}/../closure-library" />
   <property name="closure-templates.dir" value="${basedir}/../closure-templates" />
-  
+
   <path id="plovr.classpath">
     <fileset dir="${lib.dir}" includes="*.jar" />
     <pathelement location="${classes.dir}" />
@@ -45,9 +45,9 @@
   <target name="test" depends="compile" description="run the unit tests">
     <junit failureproperty="hasFailingTests"
            showoutput="true">
-      
+
       <formatter type="plain" usefile="false" />
-      
+
       <batchtest fork="yes">
         <fileset dir="${test.dir}">
           <include name="**/*Test*.java" />
@@ -120,7 +120,9 @@
                                             library_manifest.txt,
                                             third_party_manifest.txt"
                                             />
-
+      <!-- Use r258 of the Compiler until the following issue is resolved:
+      http://groups.google.com/group/closure-compiler-discuss/browse_thread/thread/972ee691e5c2c882
+      -->
       <zipgroupfileset dir="${lib.dir}" includes="*.jar" />
       <fileset dir="${classes.dir}" />
       <manifest>
