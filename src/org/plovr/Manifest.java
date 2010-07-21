@@ -211,6 +211,14 @@ public final class Manifest {
   private void getInputs(File file, String path, Set<JsInput> output,
       boolean includeSoy) {
     Preconditions.checkArgument(file.exists());
+
+    // Some editors, such as Emacs, may write backup files whose names start
+    // with a dot. Such files should be ignored. (If this turns out to be an
+    // issue, this could be changed so it is configurable.)
+    if (file.getName().startsWith(".")) {
+      return;
+    }
+
     if (file.isFile()) {
       String fileName = file.getName();
       if (fileName.endsWith(".js") || (includeSoy && fileName.endsWith(".soy"))) {
