@@ -1,6 +1,7 @@
 package org.plovr.cli;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.List;
 import java.util.logging.Level;
@@ -27,7 +28,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
   @Override
   void runCommandWithOptions(BuildCommandOptions options) throws IOException {
     // Even though logging would get printed to stderr and not stdout, it is
-    // still distracting and feels wrong.
+    // still distracting and feels wrong. May revisit this at some point.
     Logger.getLogger("org.plovr").setLevel(Level.OFF);
 
     List<String> arguments = options.getArguments();
@@ -50,14 +51,23 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       result = null;
     }
 
-    processResult(compiler, result);
+    processResult(compiler, result, options.getSourceMapPath(), config.getId());
   }
 
-  private void processResult(Compiler compiler, Result result) {
+  private void processResult(Compiler compiler, Result result,
+      String sourceMapPath, String sourceMapName) throws IOException {
     Preconditions.checkNotNull(compiler);
     Preconditions.checkNotNull(result);
-    if (result.success) {
+    if (result.success && result.errors.length == 0 && result.warnings.length == 0) {
       System.out.println(compiler.toSource());
+
+      // It turns out that the SourceMap will not be populated until after the
+      // Compiler's internal representation has been output as source code, so
+      // it should only be written out to a file after the compiled code has
+      // been generated.
+      if (sourceMapPath != null) {
+        result.sourceMap.appendTo(new FileWriter(sourceMapPath), sourceMapName);
+      }
     } else {
       for (JSError error : result.errors) {
         System.err.println(error);
@@ -65,6 +75,9 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       for (JSError warning : result.warnings) {
         System.err.println(warning);
       }
+      System.err.printf("BUILD FAILED: %d Errors, %d Warnings\n",
+          result.errors.length,
+          result.warnings.length);
       System.exit(1);
     }
   }
