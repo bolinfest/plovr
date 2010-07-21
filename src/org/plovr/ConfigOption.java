@@ -1,5 +1,7 @@
 package org.plovr;
 
+import java.io.File;
+
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
@@ -17,14 +19,16 @@ public enum ConfigOption {
   PATHS("paths", new ConfigUpdater() {
     @Override
     public void apply(String path, Config.Builder builder) {
-      builder.addPath(path);
+      String resolvedPath = maybeResolvePath(path, builder);
+      builder.addPath(resolvedPath);
     }
 
     @Override
     public void apply(JsonArray paths, Config.Builder builder) {
       for (JsonElement item : paths) {
         String path = getAsString(item);
-        builder.addPath(path);
+        String resolvedPath = maybeResolvePath(path, builder);
+        builder.addPath(resolvedPath);
       }
     }
   }),
@@ -32,14 +36,16 @@ public enum ConfigOption {
   INPUTS("inputs" , new ConfigUpdater() {
     @Override
     public void apply(String input, Config.Builder builder) {
-      builder.addInput(input);
+      String resolvedPath = maybeResolvePath(input, builder);
+      builder.addInput(resolvedPath);
     }
 
     @Override
     public void apply(JsonArray inputs, Config.Builder builder) {
       for (JsonElement item : inputs) {
         String path = getAsString(item);
-        builder.addInput(path);
+        String resolvedPath = maybeResolvePath(path, builder);
+        builder.addInput(resolvedPath);
       }
     }
   }),
@@ -201,6 +207,26 @@ public enum ConfigOption {
       throw new IllegalArgumentException(element + " is not a JSON string");
     } else {
       return element.getAsJsonPrimitive().getAsString();
+    }
+  }
+
+  /**
+   * Config files often contain relative paths, so it is important to resolve
+   * them against the directory that contains the config file when that is the
+   * case.
+   *
+   * @param path
+   * @param builder
+   * @return
+   */
+  private static String maybeResolvePath(String path, Config.Builder builder) {
+    // Unfortunately, a File object must be constructed in order to determine
+    // whether the path is absolute.
+    File file = new File(path);
+    if (file.isAbsolute()) {
+      return path;
+    } else {
+      return (new File(builder.getRelativePathBase(), path)).getAbsolutePath();
     }
   }
 }

@@ -47,8 +47,8 @@ public final class Config {
     this.printInputDelimiter = printInputDelimiter;
   }
 
-  public static Builder builder() {
-    return new Builder();
+  public static Builder builder(File relativePathBase) {
+    return new Builder(relativePathBase);
   }
 
   public static Builder builder(Config config) {
@@ -107,6 +107,8 @@ public final class Config {
 
   final static class Builder {
 
+    private final File relativePathBase;
+
     private String id = null;
 
     private final Manifest manifest;
@@ -125,17 +127,27 @@ public final class Config {
 
     private boolean printInputDelimiter = false;
 
-    private Builder() {
+    private Builder(File relativePathBase) {
+      Preconditions.checkNotNull(relativePathBase);
+      Preconditions.checkArgument(relativePathBase.isDirectory(),
+          relativePathBase + " is not a directory");
+      this.relativePathBase = relativePathBase;
       manifest = null;
     }
 
     private Builder(Config config) {
       Preconditions.checkNotNull(config);
+      this.relativePathBase = null;
       this.id = config.id;
       this.manifest = config.manifest;
       this.compilationMode = config.compilationMode;
       this.warningLevel = config.warningLevel;
       this.printInputDelimiter = config.printInputDelimiter;
+    }
+
+    /** Directory against which relative paths should be resolved. */
+    public File getRelativePathBase() {
+      return this.relativePathBase;
     }
 
     public void setId(String id) {
