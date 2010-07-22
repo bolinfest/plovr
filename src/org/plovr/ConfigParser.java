@@ -32,7 +32,8 @@ public final class ConfigParser {
     Preconditions.checkNotNull(root);
     Preconditions.checkArgument(root.isJsonObject());
 
-    Config.Builder builder = Config.builder(file.getParentFile());
+    File parentDirectory = file.getAbsoluteFile().getParentFile();
+    Config.Builder builder = Config.builder(parentDirectory);
 
     // Get the id for the config.
     JsonObject map = root.getAsJsonObject();
