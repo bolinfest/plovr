@@ -29,7 +29,7 @@ import com.google.javascript.jscomp.JSSourceFile;
  */
 public final class Manifest {
 
-  private static final Logger logger = Logger.getLogger("org.plovr.Manifest");
+  private static final Logger logger = Logger.getLogger(Manifest.class.getName());
 
   /**
    * Converts a plovr JsInput to a Closure Compiler JSSourceFile.
@@ -222,17 +222,23 @@ public final class Manifest {
 
     // Some editors, such as Emacs, may write backup files whose names start
     // with a dot. Such files should be ignored. (If this turns out to be an
-    // issue, this could be changed so it is configurable.)
-    if (file.getName().startsWith(".")) {
+    // issue, this could be changed so it is configurable.) One common
+    // exception is when the name is simply ".", referring to the current
+    // directory.
+    if (file.getName().startsWith(".") && !".".equals(file.getName())) {
+      logger.info("Ignoring: " + file);
       return;
     }
 
     if (file.isFile()) {
       String fileName = file.getName();
       if (fileName.endsWith(".js") || (includeSoy && fileName.endsWith(".soy"))) {
-        output.add(LocalFileJsInput.createForFileWithName(file, path + "/" + fileName));
+        JsInput input = LocalFileJsInput.createForFileWithName(file, path + "/" + fileName);
+        logger.config("Dependency: " + input);
+        output.add(input);
       }
     } else if (file.isDirectory()) {
+      logger.config("Directory to explore: " + file);
       path += "/" + file.getName();
       for (File entry : file.listFiles()) {
         getInputs(entry, path, output, includeSoy);
