@@ -6,7 +6,7 @@
     "api_init.js",
     "settings_init.js"
   ],
-  "mode": "SIMPLE",
+  "mode": "ADVANCED",
   "modules": {
     "deps": {
       "app": [],
