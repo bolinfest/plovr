@@ -29,6 +29,8 @@ public final class ModuleConfig {
   private static final Logger logger = Logger.getLogger(
       ModuleConfig.class.getName());
 
+  // TODO(bolinfest): Get the name from the config rather than mandating the
+  // _init.js naming convention.
   private static Pattern MODULE_INIT_FILE = Pattern.compile(
       "([^/\\\\]*)_init\\.js$");
 
