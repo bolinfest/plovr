@@ -3,6 +3,7 @@ package org.plovr;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.util.List;
 
 import com.google.common.collect.LinkedListMultimap;
@@ -33,6 +34,14 @@ class QueryData {
       }
     }
     return new QueryData(params);
+  }
+
+  static String encode(String str) {
+    try {
+      return URLEncoder.encode(str, "UTF-8");
+    } catch (UnsupportedEncodingException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   private static String decode(String str) {

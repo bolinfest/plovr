@@ -38,6 +38,9 @@ final class InputFileHandler extends AbstractGetHandler {
     super(server);
   }
 
+  /**
+   * Returns the JavaScript code that bootstraps loading the application code.
+   */
   static String getJsToLoadManifest(final Config config, Manifest manifest,
       final String prefix, String path) throws MissingProvideException {
     // Function that converts a JsInput to the URI where its raw content can be
@@ -46,8 +49,9 @@ final class InputFileHandler extends AbstractGetHandler {
         new Function<JsInput, JsonPrimitive>() {
       @Override
       public JsonPrimitive apply(JsInput input) {
-        return new JsonPrimitive(prefix + "input?id=" + config.getId() +
-            "&name=" + input.getName());
+        return new JsonPrimitive(prefix + "input" +
+            "?id=" + QueryData.encode(config.getId()) +
+            "&name=" + QueryData.encode(input.getName()));
       }
     };
 
@@ -103,17 +107,41 @@ final class InputFileHandler extends AbstractGetHandler {
       throws IOException {
     Manifest manifest = config.getManifest();
 
-    // TODO(bolinfest): May be requesting module instead.
+    // Find the code for the requested input.
+    String code = null;
 
+    // Exactly one of module or name should be specified in the QueryData.
+    String moduleName = data.getParam("module");
     String name = data.getParam("name");
-    JsInput requestedInput = manifest.getJsInputByName(name);
 
-    if (requestedInput == null) {
+    if (moduleName != null) {
+      Compilation compilation = server.getLastCompilation(config);
+      if (compilation == null) {
+        String compileUrl = server.getServerForExchange(exchange) +
+            "compile?id=" + QueryData.encode(config.getId());
+        // TODO(bolinfest): HTML escape inputs (using Soy?)
+        HttpUtil.writeHtmlErrorMessageResponse(exchange,
+            "No compilation found for config: " + config.getId() + "<br>" +
+            "Try visiting: <a href='" + compileUrl + "'>" + compileUrl + "</a>");
+        return;
+      }
+
+      final boolean isDebugMode = false;
+      Function<String, String> moduleNameToUri = createModuleNameToUriConverter(
+          server, exchange, config.getId());
+      code = compilation.getCodeForModule(moduleName, isDebugMode, moduleNameToUri);
+    } else if (name != null) {
+      JsInput requestedInput = manifest.getJsInputByName(name);
+      if (requestedInput != null) {
+        code = requestedInput.getCode();
+      }
+    }
+
+    if (code == null) {
       HttpUtil.writeNullResponse(exchange);
       return;
     }
 
-    String code = requestedInput.getCode();
     Headers responseHeaders = exchange.getResponseHeaders();
     responseHeaders.set("Content-Type", "text/javascript");
     exchange.sendResponseHeaders(200, code.length());
@@ -121,5 +149,18 @@ final class InputFileHandler extends AbstractGetHandler {
     Writer responseBody = new OutputStreamWriter(exchange.getResponseBody());
     responseBody.write(code);
     responseBody.close();
+  }
+
+  static Function<String,String> createModuleNameToUriConverter(
+      CompilationServer server, HttpExchange exchange, final String configId) {
+    final String moduleUriBase = server.getServerForExchange(exchange);
+    return new Function<String, String>() {
+      @Override
+      public String apply(String moduleName) {
+        return moduleUriBase + "input" +
+          "?id=" + QueryData.encode(configId) +
+          "&module=" + QueryData.encode(moduleName);
+      }
+    };
   }
 }

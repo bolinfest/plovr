@@ -2,11 +2,13 @@ package org.plovr;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.URI;
 import java.util.Map;
 import java.util.concurrent.Executors;
 
 import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.SourceMap;
+import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
 public final class CompilationServer implements Runnable {
@@ -77,7 +79,7 @@ public final class CompilationServer implements Runnable {
 
   /** @return the last recorded compilation for the specified config */
   public Compilation getLastCompilation(Config config) {
-    return compilations.get(config);
+    return compilations.get(config.getId());
   }
 
   public SourceMap getSourceMapFor(Config config) {
@@ -88,5 +90,29 @@ public final class CompilationServer implements Runnable {
   public String getExportsAsExternsFor(Config config) {
     Compilation compilation = getLastCompilation(config);
     return compilation.getResult().externExport;
+  }
+
+  /**
+   * Returns the server name using an incoming request to this CompilationServer.
+   *
+   * Unfortunately, HttpExchange does not appear to have a getServerName()
+   * method like ServletRequest does, so this method must use a heuristic.
+   * If the hostname is not specified in the config file, and it cannot be
+   * determined from the referrer, then it is assumed to be localhost.
+   * @param exchange
+   * @return the server scheme, name, and port, such as "http://localhost:9810/"
+   */
+  public String getServerForExchange(HttpExchange exchange) {
+    URI referrer = HttpUtil.getReferrer(exchange);
+    String scheme;
+    String host;
+    if (referrer == null) {
+      scheme = "http";
+      host = "localhost";
+    } else {
+      scheme = referrer.getScheme();
+      host = referrer.getHost();
+    }
+    return String.format("%s://%s:%d/", scheme, host, this.port);
   }
 }

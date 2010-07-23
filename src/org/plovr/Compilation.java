@@ -7,7 +7,9 @@ import java.util.Map;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
+import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.google.common.io.Files;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -15,9 +17,11 @@ import com.google.gson.JsonPrimitive;
 import com.google.inject.internal.ImmutableMap;
 import com.google.javascript.jscomp.Compiler;
 import com.google.javascript.jscomp.CompilerOptions;
+import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.JSModule;
 import com.google.javascript.jscomp.JSSourceFile;
 import com.google.javascript.jscomp.Result;
+import com.google.javascript.jscomp.SourceExcerptProvider;
 
 /**
  * {@link Compilation} represents a compilation performed by the Closure
@@ -36,7 +40,7 @@ public final class Compilation {
   private Compiler compiler;
   private Result result;
 
-  public Compilation(List<JSSourceFile> externs,
+  private Compilation(List<JSSourceFile> externs,
       List<JSSourceFile> inputs, List<JSModule> modules) {
     this.externs = ImmutableList.copyOf(externs);
     this.inputs = inputs == null ? null : ImmutableList.copyOf(inputs);
@@ -87,6 +91,10 @@ public final class Compilation {
     }
   }
 
+  public boolean usesModules() {
+    return modules != null;
+  }
+
   public boolean hasResult() {
     return getResult() != null;
   }
@@ -102,7 +110,12 @@ public final class Compilation {
     return compiler.toSource();
   }
 
-  public String getCodeForModule(String moduleName, boolean isDebugMode) {
+  public String getRootModuleName() {
+    return config.getModuleConfig().getRootModule();
+  }
+
+  public String getCodeForModule(String moduleName, boolean isDebugMode,
+      Function<String, String> moduleNameToUri) {
     if (modules == null) {
       throw new IllegalStateException("This compilation does not use modules");
     }
@@ -130,7 +143,8 @@ public final class Compilation {
       JsonObject plovrModuleInfo = createModuleInfo(moduleConfig);
       builder.append("PLOVR_MODULE_INFO=").
           append(plovrModuleInfo.toString()).append(";\n");
-      JsonObject plovrModuleUris = createModuleUris(moduleConfig);
+      JsonObject plovrModuleUris = createModuleUris(moduleConfig,
+          moduleNameToUri);
       builder.append("PLOVR_MODULE_URIS=").
           append(plovrModuleUris.toString()).append(";\n");
       builder.append("PLOVR_MODULE_USE_DEBUG_MODE=" + isDebugMode + ";\n");
@@ -142,12 +156,18 @@ public final class Compilation {
     return builder.toString();
   }
 
+  public String getCodeForRootModule(boolean isDebugMode,
+      Function<String, String> moduleNameToUri) {
+    return getCodeForModule(getRootModuleName(), isDebugMode, moduleNameToUri);
+  }
+
   /**
    * Writes out all of the module files. This method is only applicable when
    * modules are used.
    * @throws IOException
    */
-  public void writeCompiledCodeToFiles() throws IOException {
+  public void writeCompiledCodeToFiles(Function<String, String> moduleNameToUri)
+      throws IOException {
     if (modules == null) {
       throw new IllegalStateException("This compilation does not use modules");
     }
@@ -159,7 +179,7 @@ public final class Compilation {
       String moduleName = module.getName();
       File outputFile = moduleToOutputPath.get(moduleName);
       createParentDirs(outputFile);
-      String moduleCode = getCodeForModule(moduleName, isDebugMode);
+      String moduleCode = getCodeForModule(moduleName, isDebugMode, moduleNameToUri);
       Files.write(moduleCode, outputFile, Charsets.UTF_8);
     }
   }
@@ -209,18 +229,40 @@ public final class Compilation {
 
   /**
    * Creates the JSON needed to define the PLOVR_MODULE_URIS variable.
-   * @param moduleConfig
    */
-  static JsonObject createModuleUris(ModuleConfig moduleConfig) {
+  static JsonObject createModuleUris(ModuleConfig moduleConfig,
+      Function<String, String> moduleNameToUri) {
     Map<String, List<String>> invertedDependencyTree = moduleConfig.
         getInvertedDependencyTree();
     JsonObject obj = new JsonObject();
     for (Map.Entry<String, List<String>> entry : invertedDependencyTree.entrySet()) {
       String moduleName = entry.getKey();
-      // TODO(bolinfest): Let the user customize this from the config file.
-      obj.addProperty(moduleName, "/apps/module_" + moduleName + ".js");
+      obj.addProperty(moduleName, moduleNameToUri.apply(moduleName));
     }
     return obj;
+  }
+
+  public List<CompilationError> getCompilationErrors() {
+    if (this.result == null) {
+      throw new IllegalStateException("Compilation has not occurred yet");
+    }
+    return normalizeErrors(result.errors, compiler);
+  }
+
+  public List<CompilationError> getCompilationWarnings() {
+    if (this.result == null) {
+      throw new IllegalStateException("Compilation has not occurred yet");
+    }
+    return normalizeErrors(result.warnings, compiler);
+  }
+
+  private static List<CompilationError> normalizeErrors(JSError[] errors,
+      SourceExcerptProvider sourceExcerptProvider) {
+    List<CompilationError> compilationErrors = Lists.newLinkedList();
+    for (JSError error : errors) {
+      compilationErrors.add(new CompilationError(error, sourceExcerptProvider));
+    }
+    return compilationErrors;
   }
 
   @VisibleForTesting

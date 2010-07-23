@@ -8,13 +8,14 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.plovr.CheckedSoySyntaxException;
-import org.plovr.CompileRequestHandler;
 import org.plovr.Compilation;
+import org.plovr.CompileRequestHandler;
 import org.plovr.Config;
 import org.plovr.ConfigParser;
 import org.plovr.MissingProvideException;
 import org.plovr.ModuleConfig;
 
+import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.Result;
@@ -63,7 +64,15 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       if (moduleConfig == null) {
         System.out.println(compilation.getCompiledCode());
       } else {
-        compilation.writeCompiledCodeToFiles();
+        // TODO(bolinfest): This function should be defined based on information
+        // from the config file.
+        Function<String, String> moduleNameToUri = new Function<String, String>() {
+          @Override
+          public String apply(String moduleName) {
+            return "/apps/module_" + moduleName + ".js";
+          }
+        };
+        compilation.writeCompiledCodeToFiles(moduleNameToUri);
       }
 
       // It turns out that the SourceMap will not be populated until after the
