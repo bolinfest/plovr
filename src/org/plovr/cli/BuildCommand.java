@@ -63,7 +63,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       if (moduleConfig == null) {
         System.out.println(compilation.getCompiledCode());
       } else {
-        compilation.writeCompiledCodeToFiles(config);
+        compilation.writeCompiledCodeToFiles();
       }
 
       // It turns out that the SourceMap will not be populated until after the

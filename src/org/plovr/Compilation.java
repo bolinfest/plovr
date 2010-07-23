@@ -12,6 +12,7 @@ import com.google.common.io.Files;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+import com.google.inject.internal.ImmutableMap;
 import com.google.javascript.jscomp.Compiler;
 import com.google.javascript.jscomp.CompilerOptions;
 import com.google.javascript.jscomp.JSModule;
@@ -29,7 +30,9 @@ public final class Compilation {
   private final List<JSSourceFile> externs;
   private final List<JSSourceFile> inputs;
   private final List<JSModule> modules;
+  private final Map<String, JSModule> nameToModule;
 
+  private Config config;
   private Compiler compiler;
   private Result result;
 
@@ -38,6 +41,18 @@ public final class Compilation {
     this.externs = ImmutableList.copyOf(externs);
     this.inputs = inputs == null ? null : ImmutableList.copyOf(inputs);
     this.modules = modules == null ? null : ImmutableList.copyOf(modules);
+
+    ImmutableMap.Builder<String, JSModule> nameToModuleBuilder;
+    if (modules == null) {
+      nameToModuleBuilder = null;
+    } else {
+      nameToModuleBuilder = ImmutableMap.builder();
+      for (JSModule module : modules) {
+        nameToModuleBuilder.put(module.getName(), module);
+      }
+    }
+    this.nameToModule = (nameToModuleBuilder == null) ? null :
+        nameToModuleBuilder.build();
   }
 
   public static Compilation create(List<JSSourceFile> externs,
@@ -50,18 +65,19 @@ public final class Compilation {
     return new Compilation(externs, null, modules);
   }
 
-  public void compile(CompilerOptions options) {
-    compile(new Compiler(), options);
+  public void compile(Config config) {
+    compile(config, new Compiler(), config.getCompilerOptions());
   }
 
   /**
    * For now, this method is private so that the client does not get access to
    * the Compiler that was used.
    */
-  private void compile(Compiler compiler, CompilerOptions options) {
+  private void compile(Config config, Compiler compiler, CompilerOptions options) {
     if (this.result != null) {
       throw new IllegalStateException("Compilation already occurred");
     }
+    this.config = config;
     this.compiler = compiler;
 
     if (modules == null) {
@@ -86,41 +102,64 @@ public final class Compilation {
     return compiler.toSource();
   }
 
+  public String getCodeForModule(String moduleName, boolean isDebugMode) {
+    if (modules == null) {
+      throw new IllegalStateException("This compilation does not use modules");
+    }
+
+    StringBuilder builder = new StringBuilder();
+    ModuleConfig moduleConfig = config.getModuleConfig();
+    String rootModule = moduleConfig.getRootModule();
+
+    if (rootModule.equals(moduleName)) {
+      // For the root module, prepend the following global variables:
+      //
+      // PLOVR_MODULE_INFO
+      // PLOVR_MODULE_URIS
+      // PLOVR_MODULE_USE_DEBUG_MODE
+      //
+      // Because the standard way to read these variables in the application is:
+      //
+      // moduleLoader.setDebugMode(!!goog.global['PLOVR_MODULE_USE_DEBUG_MODE']);
+      // moduleManager.setLoader(moduleLoader);
+      // moduleManager.setAllModuleInfo(goog.global['PLOVR_MODULE_INFO']);
+      // moduleManager.setModuleUris(goog.global['PLOVR_MODULE_URIS']);
+      //
+      // It is important that the PLOVR variables are guaranteed to be global,
+      // which (as much as it pains me) is why "var" is omitted.
+      JsonObject plovrModuleInfo = createModuleInfo(moduleConfig);
+      builder.append("PLOVR_MODULE_INFO=").
+          append(plovrModuleInfo.toString()).append(";\n");
+      JsonObject plovrModuleUris = createModuleUris(moduleConfig);
+      builder.append("PLOVR_MODULE_URIS=").
+          append(plovrModuleUris.toString()).append(";\n");
+      builder.append("PLOVR_MODULE_USE_DEBUG_MODE=" + isDebugMode + ";\n");
+    }
+
+    JSModule module = nameToModule.get(moduleName);
+    String moduleCode = compiler.toSource(module);
+    builder.append(moduleCode);
+    return builder.toString();
+  }
+
   /**
    * Writes out all of the module files. This method is only applicable when
    * modules are used.
-   * @param config
    * @throws IOException
    */
-  public void writeCompiledCodeToFiles(Config config) throws IOException {
+  public void writeCompiledCodeToFiles() throws IOException {
     if (modules == null) {
       throw new IllegalStateException("This compilation does not use modules");
     }
 
     ModuleConfig moduleConfig = config.getModuleConfig();
-    String rootModule = moduleConfig.getRootModule();
     Map<String, File> moduleToOutputPath = moduleConfig.getModuleToOutputPath();
+    final boolean isDebugMode = false;
     for (JSModule module : modules) {
-      String moduleCode = compiler.toSource(module);
       String moduleName = module.getName();
-      if (rootModule.equals(moduleName)) {
-        // For root module, prepend the following global variables:
-        // var PLOVR_MODULE_INFO;
-        // var PLOVR_MODULE_URIS;
-        // These should be passed to the goog.module.ModuleManager.
-        StringBuilder moduleInfo = new StringBuilder();
-        JsonObject plovrModuleInfo = createModuleInfo(moduleConfig);
-        moduleInfo.append("var PLOVR_MODULE_INFO=").
-            append(plovrModuleInfo.toString()).append(";\n");
-        JsonObject plovrModuleUris = createModuleUris(moduleConfig);
-        moduleInfo.append("var PLOVR_MODULE_URIS=").
-            append(plovrModuleUris.toString()).append(";\n");
-
-        moduleInfo.append(moduleCode);
-        moduleCode = moduleInfo.toString();
-      }
       File outputFile = moduleToOutputPath.get(moduleName);
       createParentDirs(outputFile);
+      String moduleCode = getCodeForModule(moduleName, isDebugMode);
       Files.write(moduleCode, outputFile, Charsets.UTF_8);
     }
   }

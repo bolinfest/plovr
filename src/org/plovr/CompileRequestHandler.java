@@ -102,8 +102,7 @@ public final class CompileRequestHandler extends AbstractGetHandler {
     try {
       Compilation compilation = config.getManifest().getCompilerArguments(
           config.getModuleConfig());
-      CompilerOptions options = config.getCompilerOptions();
-      compilation.compile(options);
+      compilation.compile(config);
       return compilation;
     } catch (SoySyntaxException e) {
       throw new CheckedSoySyntaxException(e);

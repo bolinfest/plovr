@@ -76,7 +76,7 @@ public final class ConfigParser {
     final ModuleConfig moduleConfig = null;
     Compilation compilation =
         config.getManifest().getCompilerArguments(moduleConfig);
-    compilation.compile(config.getCompilerOptions());
+    compilation.compile(config);
     Result result = compilation.getResult();
     if (result.success) {
       System.out.println(compilation.getCompiledCode());

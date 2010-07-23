@@ -121,7 +121,9 @@ public final class ModuleConfig {
       visitedModules.add(module);
     }
 
-    Map<String, List<JsInput>> moduleToInputList = Maps.newHashMap();
+    // It is imperative to use a LinkedHashMap so that the iteration order of
+    // the map matches module order.
+    Map<String, List<JsInput>> moduleToInputList = Maps.newLinkedHashMap();
     Iterator<JsInput> inputIterator = inputs.iterator();
     for (String moduleName : modulesInInputOrder) {
       List<JsInput> inputList = Lists.newLinkedList();
