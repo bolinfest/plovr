@@ -98,9 +98,12 @@ public final class Config {
       options.crossModuleMethodMotion = true;
     }
 
-    // TODO(bolinfest): This is a hack to work around the fact that a SourceMap
+    // This is a hack to work around the fact that a SourceMap
     // will not be created unless a file is specified to which the SourceMap
     // should be written.
+    // TODO(bolinfest): Change com.google.javascript.jscomp.CompilerOptions so
+    // that this is configured by a boolean, just like enableExternExports() was
+    // added to support generating externs without writing them to a file.
     try {
       File tempFile = File.createTempFile("source", "map");
       options.sourceMapOutputPath = tempFile.getAbsolutePath();
