@@ -74,15 +74,13 @@ public final class ConfigParser {
 
     File configFile = new File(args[0]);
     Config config = ConfigParser.parseFile(configFile);
-    CompilerArguments compilerArguments =
-        config.getManifest().getCompilerArguments();
-    Compiler compiler = new Compiler();
-    Result result =
-        compiler.compile(compilerArguments.getExterns(), compilerArguments
-            .getInputs(), config.getCompilerOptions());
-
+    final ModuleConfig moduleConfig = null;
+    Compilation compilation =
+        config.getManifest().getCompilerArguments(moduleConfig);
+    compilation.compile(config.getCompilerOptions());
+    Result result = compilation.getResult();
     if (result.success) {
-      System.out.println(compiler.toSource());
+      System.out.println(compilation.getCompiledCode());
     } else {
       for (JSError warning : result.warnings) {
         System.err.println(warning);

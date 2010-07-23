@@ -9,12 +9,13 @@ import java.util.logging.Logger;
 
 import org.plovr.CheckedSoySyntaxException;
 import org.plovr.CompileRequestHandler;
+import org.plovr.Compilation;
 import org.plovr.Config;
 import org.plovr.ConfigParser;
 import org.plovr.MissingProvideException;
+import org.plovr.ModuleConfig;
 
 import com.google.common.base.Preconditions;
-import com.google.javascript.jscomp.Compiler;
 import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.Result;
 
@@ -39,27 +40,31 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
 
     String configFile = arguments.get(0);
     Config config = ConfigParser.parseFile(new File(configFile));
-    Compiler compiler = new Compiler();
-    Result result;
+    Compilation compilation;
     try {
-      result = CompileRequestHandler.compile(compiler, config);
+      compilation = CompileRequestHandler.compile(config);
     } catch (MissingProvideException e) {
       e.printStackTrace();
-      result = null;
+      compilation = null;
     } catch (CheckedSoySyntaxException e) {
       e.printStackTrace();
-      result = null;
+      compilation = null;
     }
 
-    processResult(compiler, result, options.getSourceMapPath(), config.getId());
+    processResult(compilation, config, options.getSourceMapPath(), config.getId());
   }
 
-  private void processResult(Compiler compiler, Result result,
+  private void processResult(Compilation compilation, Config config,
       String sourceMapPath, String sourceMapName) throws IOException {
-    Preconditions.checkNotNull(compiler);
-    Preconditions.checkNotNull(result);
+    Preconditions.checkNotNull(compilation);
+    Result result = compilation.getResult();
     if (result.success && result.errors.length == 0 && result.warnings.length == 0) {
-      System.out.println(compiler.toSource());
+      ModuleConfig moduleConfig = config.getModuleConfig();
+      if (moduleConfig == null) {
+        System.out.println(compilation.getCompiledCode());
+      } else {
+        compilation.writeCompiledCodeToFiles(config);
+      }
 
       // It turns out that the SourceMap will not be populated until after the
       // Compiler's internal representation has been output as source code, so

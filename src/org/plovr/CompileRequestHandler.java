@@ -73,7 +73,7 @@ public final class CompileRequestHandler extends AbstractGetHandler {
         }
         Manifest manifest = config.getManifest();
         URI requestUri = exchange.getRequestURI();
-        String js = InputFileHandler.getJsToLoadManifest(config.getId(),
+        String js = InputFileHandler.getJsToLoadManifest(config,
             manifest, prefix, requestUri.getPath());
         builder.append(js);
       } else {
@@ -97,14 +97,14 @@ public final class CompileRequestHandler extends AbstractGetHandler {
     responseBody.close();
   }
 
-  public static Result compile(Compiler compiler, Config config)
+  public static Compilation compile(Config config)
       throws MissingProvideException, CheckedSoySyntaxException {
     try {
-      CompilerArguments compilerArguments;
-      compilerArguments = config.getManifest().getCompilerArguments();
+      Compilation compilation = config.getManifest().getCompilerArguments(
+          config.getModuleConfig());
       CompilerOptions options = config.getCompilerOptions();
-      return compiler.compile(compilerArguments.getExterns(),
-          compilerArguments.getInputs(), options);
+      compilation.compile(options);
+      return compilation;
     } catch (SoySyntaxException e) {
       throw new CheckedSoySyntaxException(e);
     }
@@ -115,7 +115,7 @@ public final class CompileRequestHandler extends AbstractGetHandler {
     Compiler compiler = new Compiler();
     Result result = null;
     try {
-      result = compile(compiler, config);
+      result = compile(config).getResult();
       server.recordSourceMap(config, result.sourceMap);
       server.recordExportsAsExterns(config, result.externExport);
     } catch (MissingProvideException e) {

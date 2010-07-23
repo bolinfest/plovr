@@ -54,20 +54,22 @@ final class SizeHandler extends AbstractGetHandler {
       return;
     }
 
-    Compiler compiler = new Compiler();
-    Result result;
+    Compilation compilation;
     try {
-      result = CompileRequestHandler.compile(compiler, config);
+      compilation = CompileRequestHandler.compile(config);
     } catch (MissingProvideException e) {
       logger.log(Level.SEVERE, "Error during compilation", e);
-      result = null;
+      HttpUtil.writeNullResponse(exchange);
+      return;
     } catch (CheckedSoySyntaxException e) {
       logger.log(Level.SEVERE, "Error during compilation", e);
-      result = null;
+      HttpUtil.writeNullResponse(exchange);
+      return;
     }
 
+    Result result = compilation.getResult();
     if (result != null && result.success) {
-      processCompiledCode(compiler.toSource(), config, exchange);
+      processCompiledCode(compilation.getCompiledCode(), config, exchange);
     } else {
       HttpUtil.writeNullResponse(exchange);
     }

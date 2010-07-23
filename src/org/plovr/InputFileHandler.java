@@ -34,15 +34,28 @@ final class InputFileHandler extends AbstractGetHandler {
     super(server);
   }
 
-  static String getJsToLoadManifest(String configId, Manifest manifest,
+  static String getJsToLoadManifest(Config config, Manifest manifest,
       String prefix, String path) throws MissingProvideException {
     JsonArray inputs = new JsonArray();
     for (JsInput input : manifest.getInputsInCompilationOrder()) {
-      inputs.add(new JsonPrimitive(prefix + "input?id=" + configId +
+      inputs.add(new JsonPrimitive(prefix + "input?id=" + config.getId() +
           "&name=" + input.getName()));
     }
 
+    String moduleInfo;
+    String moduleUris;
+    ModuleConfig moduleConfig = config.getModuleConfig();
+    if (moduleConfig == null) {
+      moduleInfo = null;
+      moduleUris = null;
+    } else {
+      moduleInfo = Compilation.createModuleInfo(moduleConfig).toString();
+      moduleUris = Compilation.createModuleUris(moduleConfig).toString();
+    }
+
     SoyMapData mapData = new SoyMapData(
+        "moduleInfo", moduleInfo,
+        "moduleUris", moduleUris,
         "filesAsJsonArray", inputs.toString(),
         "path", path);
 

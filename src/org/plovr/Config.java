@@ -22,6 +22,8 @@ public final class Config {
 
   private final Manifest manifest;
 
+  private final ModuleConfig moduleConfig;
+
   private final CompilationMode compilationMode;
 
   private final WarningLevel warningLevel;
@@ -37,11 +39,13 @@ public final class Config {
   private Config(
       String id,
       Manifest manifest,
+      ModuleConfig moduleConfig,
       CompilationMode compilationMode,
       WarningLevel warningLevel,
       boolean printInputDelimiter) {
     this.id = id;
     this.manifest = manifest;
+    this.moduleConfig = moduleConfig;
     this.compilationMode = compilationMode;
     this.warningLevel = warningLevel;
     this.printInputDelimiter = printInputDelimiter;
@@ -61,6 +65,10 @@ public final class Config {
 
   public Manifest getManifest() {
     return manifest;
+  }
+
+  public ModuleConfig getModuleConfig() {
+    return moduleConfig;
   }
 
   public CompilationMode getCompilationMode() {
@@ -83,6 +91,11 @@ public final class Config {
     options.printInputDelimiter = printInputDelimiter;
     if (printInputDelimiter) {
       options.inputDelimiter = "// Input %num%: %name%";
+    }
+
+    if (moduleConfig != null) {
+      options.crossModuleCodeMotion = true;
+      options.crossModuleMethodMotion = true;
     }
 
     // TODO(bolinfest): This is a hack to work around the fact that a SourceMap
@@ -121,6 +134,8 @@ public final class Config {
 
     private ImmutableList.Builder<String> externs = null;
 
+    private ModuleConfig moduleConfig = null;
+
     private CompilationMode compilationMode = CompilationMode.SIMPLE;
 
     private WarningLevel warningLevel = WarningLevel.DEFAULT;
@@ -140,6 +155,7 @@ public final class Config {
       this.relativePathBase = null;
       this.id = config.id;
       this.manifest = config.manifest;
+      this.moduleConfig = config.moduleConfig;
       this.compilationMode = config.compilationMode;
       this.warningLevel = config.warningLevel;
       this.printInputDelimiter = config.printInputDelimiter;
@@ -171,8 +187,13 @@ public final class Config {
       }
       externs.add(extern);
     }
+
     public void setPathToClosureLibrary(String pathToClosureLibrary) {
       this.pathToClosureLibrary = pathToClosureLibrary;
+    }
+
+    public void setModuleConfig(ModuleConfig moduleConfig) {
+      this.moduleConfig = moduleConfig;
     }
 
     public void setCompilationMode(CompilationMode mode) {
@@ -210,14 +231,15 @@ public final class Config {
       Config config = new Config(
           id,
           manifest,
+          moduleConfig,
           compilationMode,
           warningLevel,
           printInputDelimiter);
 
       return config;
     }
-
   }
+
   private static Function<String, File> STRING_TO_FILE =
     new Function<String, File>() {
       @Override

@@ -1,9 +1,14 @@
 package org.plovr;
 
 import java.io.File;
+import java.util.Map;
 
+import org.plovr.ModuleConfig.BadDependencyTreeException;
+
+import com.google.common.collect.Maps;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.google.javascript.jscomp.WarningLevel;
 
@@ -119,6 +124,38 @@ public enum ConfigOption {
     }
   }),
 
+  MODULES("modules", new ConfigUpdater() {
+    @Override
+    public void apply(JsonObject modules, Config.Builder builder) {
+      try {
+        ModuleConfig moduleConfig = ModuleConfig.create(modules);
+
+        // Extract the output_path_prefix property, if it is available.
+        String outputPathPrefix = "";
+        JsonElement outputPathPrefixEl = modules.get("output_path_prefix");
+        if (outputPathPrefixEl != null && outputPathPrefixEl.isJsonPrimitive()) {
+          JsonPrimitive primitive = outputPathPrefixEl.getAsJsonPrimitive();
+          if (primitive.isString()) {
+            outputPathPrefix = primitive.getAsString();
+          }
+        }
+
+        // Set the paths to write the compiled module files to.
+        Map<String, File> moduleToOutputPath = Maps.newHashMap();
+        for (String moduleName : moduleConfig.getModuleNames()) {
+          String partialPath = outputPathPrefix + moduleName + ".js";
+          File moduleFile = new File(maybeResolvePath(partialPath, builder));
+          moduleToOutputPath.put(moduleName, moduleFile);
+        }
+        moduleConfig.setModuleToOutputPath(moduleToOutputPath);
+
+        builder.setModuleConfig(moduleConfig);
+      } catch (BadDependencyTreeException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  })
+
   ;
 
   private static class ConfigUpdater {
@@ -139,6 +176,10 @@ public enum ConfigOption {
       throw new UnsupportedOperationException();
     }
 
+    public void apply(JsonObject value, Config.Builder builder) {
+      throw new UnsupportedOperationException();
+    }
+
     public void apply(JsonElement json, Config.Builder builder) {
       if (json.isJsonPrimitive()) {
         JsonPrimitive primitive = json.getAsJsonPrimitive();
@@ -151,6 +192,8 @@ public enum ConfigOption {
         }
       } else if (json.isJsonArray()) {
         apply(json.getAsJsonArray(), builder);
+      } else if (json.isJsonObject()) {
+        apply(json.getAsJsonObject(), builder);
       }
     }
 

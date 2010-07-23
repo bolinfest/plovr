@@ -1,14 +1,20 @@
 {namespace org.plovr}
 
 /**
+ * @param? moduleInfo
+ * @param? moduleUris
  * @param filesAsJsonArray
  * @param path
  */
 {template .raw}
-{literal}
 CLOSURE_NO_DEPS = true;
-(function() {
-{/literal}
+{if $moduleInfo}
+PLOVR_MODULE_INFO={$moduleInfo|noAutoescape};
+{/if}
+{if $moduleUris}
+PLOVR_MODULE_URIS={$moduleUris|noAutoescape};
+{/if}
+(function() {lb}
 {sp}{sp}var files = {$filesAsJsonArray|noAutoescape};{\n}
 {sp}{sp}var path = '{$path|noAutoescape}';{\n}
 {literal}
@@ -23,11 +29,11 @@ CLOSURE_NO_DEPS = true;
       break;
     }
   }
-  
+
   if (!scriptEl) {
     return;
   }
-  
+
   for (var i = 0; i < files.length; i++) {
     doc.write('<script type="text/javascript" src="' + files[i] + '"><\/script>');
   }
