@@ -75,7 +75,8 @@ public final class ModuleConfig {
    *     {@link Manifest#getInputsInCompilationOrder()}.
    * @return
    */
-  public List<JSModule> getModules(List<JsInput> inputs) {
+  Map<String, List<JsInput>> partitionInputsIntoModules(List<JsInput> inputs) {
+
     // Pick out the _init.js files that correspond to modules.
     Map<String, JsInput> moduleToInitInputMap = Maps.newHashMap();
     List<String> modulesInInputOrder = Lists.newLinkedList();
@@ -120,19 +121,43 @@ public final class ModuleConfig {
       visitedModules.add(module);
     }
 
-    // Create modules and add the source files that make up the module.
-    List<JSModule> modules = Lists.newLinkedList();
-    Map<String, JSModule> modulesByName = Maps.newHashMap();
+    Map<String, List<JsInput>> moduleToInputList = Maps.newHashMap();
     Iterator<JsInput> inputIterator = inputs.iterator();
     for (String moduleName : modulesInInputOrder) {
-      JSModule module = new JSModule(moduleName);
+      List<JsInput> inputList = Lists.newLinkedList();
       JsInput lastInputInModule = moduleToInitInputMap.get(moduleName);
       while (inputIterator.hasNext()) {
         JsInput input = inputIterator.next();
-        module.add(Manifest.inputToSourceFile.apply(input));
+        inputList.add(input);
         if (input == lastInputInModule) {
           break;
         }
+      }
+      moduleToInputList.put(moduleName, inputList);
+    }
+
+    return moduleToInputList;
+  }
+
+  /**
+   *
+   * @param inputs This list is most likely to be produced by
+   *     {@link Manifest#getInputsInCompilationOrder()}.
+   * @return
+   */
+  List<JSModule> getModules(List<JsInput> inputs) {
+    Map<String, List<JsInput>> moduleToInputList = partitionInputsIntoModules(
+        inputs);
+
+    // Create modules and add the source files that make up the module.
+    List<JSModule> modules = Lists.newLinkedList();
+    Map<String, JSModule> modulesByName = Maps.newHashMap();
+    for (Map.Entry<String, List<JsInput>> entry : moduleToInputList.entrySet()) {
+      String moduleName = entry.getKey();
+      List<JsInput> inputList = entry.getValue();
+      JSModule module = new JSModule(moduleName);
+      for (JsInput moduleInput : inputList) {
+        module.add(Manifest.inputToSourceFile.apply(moduleInput));
       }
       modules.add(module);
       modulesByName.put(moduleName, module);

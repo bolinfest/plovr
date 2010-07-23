@@ -115,9 +115,9 @@ public final class CompileRequestHandler extends AbstractGetHandler {
     Compiler compiler = new Compiler();
     Result result = null;
     try {
-      result = compile(config).getResult();
-      server.recordSourceMap(config, result.sourceMap);
-      server.recordExportsAsExterns(config, result.externExport);
+      Compilation compilation = compile(config);
+      server.recordCompilation(config, compilation);
+      result = compilation.getResult();
     } catch (MissingProvideException e) {
       writeErrors(config, ImmutableList.of(e.createCompilationError()),
           builder);

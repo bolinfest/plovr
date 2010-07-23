@@ -9,7 +9,6 @@ import com.google.common.base.Preconditions;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.google.javascript.jscomp.Compiler;
 import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.Result;
 

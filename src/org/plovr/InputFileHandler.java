@@ -3,9 +3,13 @@ package org.plovr;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
+import java.util.List;
+import java.util.Map;
 
+import com.google.common.base.Function;
 import com.google.common.io.Resources;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.data.SoyMapData;
@@ -34,29 +38,60 @@ final class InputFileHandler extends AbstractGetHandler {
     super(server);
   }
 
-  static String getJsToLoadManifest(Config config, Manifest manifest,
-      String prefix, String path) throws MissingProvideException {
-    JsonArray inputs = new JsonArray();
-    for (JsInput input : manifest.getInputsInCompilationOrder()) {
-      inputs.add(new JsonPrimitive(prefix + "input?id=" + config.getId() +
-          "&name=" + input.getName()));
-    }
+  static String getJsToLoadManifest(final Config config, Manifest manifest,
+      final String prefix, String path) throws MissingProvideException {
+    // Function that converts a JsInput to the URI where its raw content can be
+    // loaded.
+    Function<JsInput, JsonPrimitive> inputToUri =
+        new Function<JsInput, JsonPrimitive>() {
+      @Override
+      public JsonPrimitive apply(JsInput input) {
+        return new JsonPrimitive(prefix + "input?id=" + config.getId() +
+            "&name=" + input.getName());
+      }
+    };
 
     String moduleInfo;
     String moduleUris;
     ModuleConfig moduleConfig = config.getModuleConfig();
+    List<JsInput> inputs;
     if (moduleConfig == null) {
       moduleInfo = null;
       moduleUris = null;
+      inputs = manifest.getInputsInCompilationOrder();
     } else {
       moduleInfo = Compilation.createModuleInfo(moduleConfig).toString();
-      moduleUris = Compilation.createModuleUris(moduleConfig).toString();
+
+      // Get the list of JsInputs for each module and use that to construct
+      // the JsonObject that will be used for the PLOVR_MODULE_URIS variable.
+      List<JsInput> unpartitionedInputs = manifest.getInputsInCompilationOrder();
+      Map<String, List<JsInput>> moduleToInputList = moduleConfig.
+          partitionInputsIntoModules(unpartitionedInputs);
+      JsonObject obj = new JsonObject();
+      for (Map.Entry<String, List<JsInput>> entry : moduleToInputList.entrySet()) {
+        String moduleName = entry.getKey();
+        JsonArray uris = new JsonArray();
+        for (JsInput input : entry.getValue()) {
+          uris.add(inputToUri.apply(input));
+        }
+        obj.add(moduleName, uris);
+      }
+      moduleUris = obj.toString();
+
+      // Have the initial JS load the list of files that correspond to the root
+      // module. The root module is responsible for loading the other modules.
+      inputs = moduleToInputList.get(moduleConfig.getRootModule());
+    }
+
+    JsonArray inputUrls = new JsonArray();
+    for (JsInput input : inputs) {
+      inputUrls.add(inputToUri.apply(input));
     }
 
     SoyMapData mapData = new SoyMapData(
         "moduleInfo", moduleInfo,
         "moduleUris", moduleUris,
-        "filesAsJsonArray", inputs.toString(),
+        "filesAsJsonArray", inputUrls.toString(),
         "path", path);
 
     final SoyMsgBundle messageBundle = null;
@@ -67,6 +102,9 @@ final class InputFileHandler extends AbstractGetHandler {
   protected void doGet(HttpExchange exchange, QueryData data, Config config)
       throws IOException {
     Manifest manifest = config.getManifest();
+
+    // TODO(bolinfest): May be requesting module instead.
+
     String name = data.getParam("name");
     JsInput requestedInput = manifest.getJsInputByName(name);
 

@@ -12,6 +12,7 @@ example.App.install('content');
 
 var moduleManager = goog.module.ModuleManager.getInstance();
 var moduleLoader = new goog.module.ModuleLoader();
+moduleLoader.setDebugMode(!!goog.global['PLOVR_MODULE_USE_DEBUG_MODE']);
 moduleManager.setLoader(moduleLoader);
 moduleManager.setAllModuleInfo(goog.global['PLOVR_MODULE_INFO']);
 moduleManager.setModuleUris(goog.global['PLOVR_MODULE_URIS']);

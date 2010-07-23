@@ -13,8 +13,8 @@ public final class CompilationServer implements Runnable {
 
   private final int port;
 
-  // All maps are keyed a Config id rather than a Config because there could be
-  // multiple, different Config objects with the same id because of how query
+  // All maps are keyed on a Config id rather than a Config because there could
+  // be multiple, different Config objects with the same id because of how query
   // data can be used to redefine a Config for an individual request.
 
   /**
@@ -23,20 +23,14 @@ public final class CompilationServer implements Runnable {
   private final Map<String, Config> configs;
 
   /**
-   * Map of config ids to the SourceMap from the last compilation.
+   * Maps a config id to the last Compilation performed for that config.
    */
-  private final Map<String, SourceMap> sourceMaps;
-
-  /**
-   * Map of config ids to the exports from the last compilation.
-   */
-  private final Map<String, String> exports;
+  private final Map<String, Compilation> compilations;
 
   public CompilationServer(int port) {
     this.port = port;
     this.configs = Maps.newHashMap();
-    this.sourceMaps = Maps.newHashMap();
-    this.exports = Maps.newHashMap();
+    this.compilations = Maps.newHashMap();
   }
 
   public void registerConfig(Config config) {
@@ -76,21 +70,23 @@ public final class CompilationServer implements Runnable {
     return configs.get(id);
   }
 
-  /** Records the SourceMap from the last compilation for the config. */
-  public void recordSourceMap(Config config, SourceMap sourceMap) {
-    sourceMaps.put(config.getId(), sourceMap);
+  /** Records the last compilation for the config. */
+  public void recordCompilation(Config config, Compilation compilation) {
+    compilations.put(config.getId(), compilation);
+  }
+
+  /** @return the last recorded compilation for the specified config */
+  public Compilation getLastCompilation(Config config) {
+    return compilations.get(config);
   }
 
   public SourceMap getSourceMapFor(Config config) {
-    return sourceMaps.get(config.getId());
-  }
-
-  /** Records the exported externs from the last compilation for the config. */
-  public void recordExportsAsExterns(Config config, String exportJs) {
-    exports.put(config.getId(), exportJs);
+    Compilation compilation = getLastCompilation(config);
+    return compilation.getResult().sourceMap;
   }
 
   public String getExportsAsExternsFor(Config config) {
-    return exports.get(config.getId());
+    Compilation compilation = getLastCompilation(config);
+    return compilation.getResult().externExport;
   }
 }

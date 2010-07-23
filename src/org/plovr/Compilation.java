@@ -174,7 +174,7 @@ public final class Compilation {
    */
   static JsonObject createModuleUris(ModuleConfig moduleConfig) {
     Map<String, List<String>> invertedDependencyTree = moduleConfig.
-      getInvertedDependencyTree();
+        getInvertedDependencyTree();
     JsonObject obj = new JsonObject();
     for (Map.Entry<String, List<String>> entry : invertedDependencyTree.entrySet()) {
       String moduleName = entry.getKey();
