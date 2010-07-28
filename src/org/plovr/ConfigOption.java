@@ -5,11 +5,15 @@ import java.util.Map;
 
 import org.plovr.ModuleConfig.BadDependencyTreeException;
 
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Multimap;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+import com.google.javascript.jscomp.CheckLevel;
+import com.google.javascript.jscomp.DiagnosticGroup;
 import com.google.javascript.jscomp.WarningLevel;
 
 public enum ConfigOption {
@@ -154,7 +158,29 @@ public enum ConfigOption {
         throw new RuntimeException(e);
       }
     }
-  })
+  }),
+
+  DIAGNOSTIC_GROUPS("checks", new ConfigUpdater() {
+    @Override
+    public void apply(JsonObject obj, Config.Builder builder) {
+      Map<DiagnosticGroup, CheckLevel> groups = Maps.newHashMap();
+      for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
+        DiagnosticGroup group = DiagnosticGroupUtil.forName(entry.getKey());
+        if (group == null) {
+          continue;
+        }
+
+        String checkLevelString = GsonUtil.stringOrNull(entry.getValue());
+        if (checkLevelString == null) {
+          continue;
+        }
+        CheckLevel checkLevel = CheckLevel.valueOf(checkLevelString.toUpperCase());
+
+        groups.put(group, checkLevel);
+      }
+      builder.setDiagnosticGroups(groups);
+    }
+  }),
 
   ;
 

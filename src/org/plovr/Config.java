@@ -3,15 +3,18 @@ package org.plovr;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.ClosureCodingConvention;
 import com.google.javascript.jscomp.CompilationLevel;
 import com.google.javascript.jscomp.CompilerOptions;
+import com.google.javascript.jscomp.DiagnosticGroup;
 import com.google.javascript.jscomp.WarningLevel;
 
 public final class Config {
@@ -30,6 +33,8 @@ public final class Config {
 
   private final boolean printInputDelimiter;
 
+  private final Map<DiagnosticGroup, CheckLevel> diagnosticGroups;
+
   /**
    * @param id Unique identifier for the configuration. This is used as an
    *        argument to the &lt;script> tag that loads the compiled code.
@@ -42,13 +47,15 @@ public final class Config {
       ModuleConfig moduleConfig,
       CompilationMode compilationMode,
       WarningLevel warningLevel,
-      boolean printInputDelimiter) {
+      boolean printInputDelimiter,
+      Map<DiagnosticGroup, CheckLevel> diagnosticGroups) {
     this.id = id;
     this.manifest = manifest;
     this.moduleConfig = moduleConfig;
     this.compilationMode = compilationMode;
     this.warningLevel = warningLevel;
     this.printInputDelimiter = printInputDelimiter;
+    this.diagnosticGroups = diagnosticGroups;
   }
 
   public static Builder builder(File relativePathBase) {
@@ -98,6 +105,15 @@ public final class Config {
       options.crossModuleMethodMotion = true;
     }
 
+    if (diagnosticGroups != null) {
+      for (Map.Entry<DiagnosticGroup, CheckLevel> entry :
+          diagnosticGroups.entrySet()) {
+        DiagnosticGroup group = entry.getKey();
+        CheckLevel checkLevel = entry.getValue();
+        options.setWarningLevel(group, checkLevel);
+      }
+    }
+
     // This is a hack to work around the fact that a SourceMap
     // will not be created unless a file is specified to which the SourceMap
     // should be written.
@@ -145,6 +161,8 @@ public final class Config {
 
     private boolean printInputDelimiter = false;
 
+    private Map<DiagnosticGroup, CheckLevel> diagnosticGroups = null;
+
     private Builder(File relativePathBase) {
       Preconditions.checkNotNull(relativePathBase);
       Preconditions.checkArgument(relativePathBase.isDirectory(),
@@ -162,6 +180,7 @@ public final class Config {
       this.compilationMode = config.compilationMode;
       this.warningLevel = config.warningLevel;
       this.printInputDelimiter = config.printInputDelimiter;
+      this.diagnosticGroups = config.diagnosticGroups;
     }
 
     /** Directory against which relative paths should be resolved. */
@@ -213,6 +232,10 @@ public final class Config {
       this.printInputDelimiter = printInputDelimiter;
     }
 
+    public void setDiagnosticGroups(Map<DiagnosticGroup, CheckLevel> groups) {
+      this.diagnosticGroups = groups;
+    }
+
     public Config build() {
       File closureLibraryDirectory = pathToClosureLibrary != null
           ? new File(pathToClosureLibrary)
@@ -237,7 +260,8 @@ public final class Config {
           moduleConfig,
           compilationMode,
           warningLevel,
-          printInputDelimiter);
+          printInputDelimiter,
+          diagnosticGroups);
 
       return config;
     }
