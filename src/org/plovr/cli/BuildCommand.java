@@ -1,8 +1,10 @@
 package org.plovr.cli;
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.Writer;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -17,6 +19,7 @@ import org.plovr.ModuleConfig;
 
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
+import com.google.common.io.Closeables;
 import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.Result;
 
@@ -80,7 +83,9 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       // it should only be written out to a file after the compiled code has
       // been generated.
       if (sourceMapPath != null) {
-        result.sourceMap.appendTo(new FileWriter(sourceMapPath), sourceMapName);
+        Writer writer = new BufferedWriter(new FileWriter(sourceMapPath));
+        result.sourceMap.appendTo(writer, sourceMapName);
+        Closeables.closeQuietly(writer);
       }
     } else {
       for (JSError error : result.errors) {
