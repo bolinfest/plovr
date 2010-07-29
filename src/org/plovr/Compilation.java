@@ -1,7 +1,10 @@
 package org.plovr;
 
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.Writer;
 import java.util.List;
 import java.util.Map;
 
@@ -10,6 +13,7 @@ import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.common.io.Closeables;
 import com.google.common.io.Files;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -153,6 +157,14 @@ public final class Compilation {
     JSModule module = nameToModule.get(moduleName);
     String moduleCode = compiler.toSource(module);
     builder.append(moduleCode);
+
+    // http://code.google.com/p/closure-library/issues/detail?id=196
+    // http://blog.getfirebug.com/2009/08/11/give-your-eval-a-name-with-sourceurl/
+    // non-root modules are loaded with eval, give it a sourceURL for better debugging
+    if (!rootModule.equals(moduleName)) {
+        builder.append("\n//@ sourceURL=" + moduleNameToUri.apply(moduleName));
+    }
+
     return builder.toString();
   }
 
@@ -166,7 +178,7 @@ public final class Compilation {
    * modules are used.
    * @throws IOException
    */
-  public void writeCompiledCodeToFiles(Function<String, String> moduleNameToUri)
+  public void writeCompiledCodeToFiles(Function<String, String> moduleNameToUri, String sourceMapPath)
       throws IOException {
     if (modules == null) {
       throw new IllegalStateException("This compilation does not use modules");
@@ -181,6 +193,16 @@ public final class Compilation {
       createParentDirs(outputFile);
       String moduleCode = getCodeForModule(moduleName, isDebugMode, moduleNameToUri);
       Files.write(moduleCode, outputFile, Charsets.UTF_8);
+
+      // It turns out that the SourceMap will not be populated until after the
+      // Compiler's internal representation has been output as source code, so
+      // it should only be written out to a file after the compiled code has
+      // been generated.
+      if (sourceMapPath != null) {
+        Writer writer = new BufferedWriter(new FileWriter(sourceMapPath + "_" + moduleName));
+        this.result.sourceMap.appendTo(writer, moduleName);
+        Closeables.closeQuietly(writer);
+      }
     }
   }
 

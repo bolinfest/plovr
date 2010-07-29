@@ -66,6 +66,16 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       ModuleConfig moduleConfig = config.getModuleConfig();
       if (moduleConfig == null) {
         System.out.println(compilation.getCompiledCode());
+
+        // It turns out that the SourceMap will not be populated until after the
+        // Compiler's internal representation has been output as source code, so
+        // it should only be written out to a file after the compiled code has
+        // been generated.
+        if (sourceMapPath != null) {
+          Writer writer = new BufferedWriter(new FileWriter(sourceMapPath));
+          result.sourceMap.appendTo(writer, sourceMapName);
+          Closeables.closeQuietly(writer);
+        }
       } else {
         // TODO(bolinfest): This function should be defined based on information
         // from the config file.
@@ -75,17 +85,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
             return "/apps/module_" + moduleName + ".js";
           }
         };
-        compilation.writeCompiledCodeToFiles(moduleNameToUri);
-      }
-
-      // It turns out that the SourceMap will not be populated until after the
-      // Compiler's internal representation has been output as source code, so
-      // it should only be written out to a file after the compiled code has
-      // been generated.
-      if (sourceMapPath != null) {
-        Writer writer = new BufferedWriter(new FileWriter(sourceMapPath));
-        result.sourceMap.appendTo(writer, sourceMapName);
-        Closeables.closeQuietly(writer);
+        compilation.writeCompiledCodeToFiles(moduleNameToUri, sourceMapPath);
       }
     } else {
       for (JSError error : result.errors) {
