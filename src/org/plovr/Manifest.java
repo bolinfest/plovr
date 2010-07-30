@@ -88,9 +88,13 @@ public final class Manifest {
    */
   public Compilation getCompilerArguments(
       @Nullable ModuleConfig moduleConfig) throws MissingProvideException {
-    List<JSSourceFile> externs = (this.externs == null)
-        ? getDefaultExterns()
-        : Lists.transform(getExternInputs(), inputToSourceFile);
+    List<JSSourceFile> externs = getDefaultExterns();
+    if (this.externs != null) {
+      ImmutableList.Builder<JSSourceFile> builder = ImmutableList.builder();
+      builder.addAll(externs);
+      builder.addAll(Lists.transform(getExternInputs(), inputToSourceFile));
+      externs = builder.build();
+    }
 
     List<JsInput> jsInputs = getInputsInCompilationOrder();
     if (moduleConfig == null) {
