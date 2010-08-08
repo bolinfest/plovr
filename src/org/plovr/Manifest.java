@@ -237,7 +237,15 @@ public final class Manifest {
     if (file.isFile()) {
       String fileName = file.getName();
       if (fileName.endsWith(".js") || (includeSoy && fileName.endsWith(".soy"))) {
-        JsInput input = LocalFileJsInput.createForFileWithName(file, path + "/" + fileName);
+        // Using "." as the value for "paths" in the config file results in ugly
+        // names for JsInputs because of the way the relative path is resolved,
+        // so strip the leading "/./" from the JsInput name in this case.
+        String name = path + "/" + fileName;
+        final String uglyPrefix = "/./";
+        if (name.startsWith(uglyPrefix)) {
+          name = name.substring(uglyPrefix.length());
+        }
+        JsInput input = LocalFileJsInput.createForFileWithName(file, name);
         logger.config("Dependency: " + input);
         output.add(input);
       }
