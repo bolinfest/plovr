@@ -153,8 +153,6 @@ public final class Config {
 
     private ImmutableList.Builder<String> externs = null;
 
-    private ModuleConfig moduleConfig = null;
-
     private CompilationMode compilationMode = CompilationMode.SIMPLE;
 
     private WarningLevel warningLevel = WarningLevel.DEFAULT;
@@ -162,6 +160,8 @@ public final class Config {
     private boolean printInputDelimiter = false;
 
     private Map<DiagnosticGroup, CheckLevel> diagnosticGroups = null;
+    
+    private ModuleConfig.Builder moduleConfigBuilder = null;
 
     private Builder(File relativePathBase) {
       Preconditions.checkNotNull(relativePathBase);
@@ -176,7 +176,9 @@ public final class Config {
       this.relativePathBase = null;
       this.id = config.id;
       this.manifest = config.manifest;
-      this.moduleConfig = config.moduleConfig;
+      this.moduleConfigBuilder = (config.moduleConfig == null)
+          ? null
+          : ModuleConfig.builder(config.moduleConfig);
       this.compilationMode = config.compilationMode;
       this.warningLevel = config.warningLevel;
       this.printInputDelimiter = config.printInputDelimiter;
@@ -214,8 +216,11 @@ public final class Config {
       this.pathToClosureLibrary = pathToClosureLibrary;
     }
 
-    public void setModuleConfig(ModuleConfig moduleConfig) {
-      this.moduleConfig = moduleConfig;
+    public ModuleConfig.Builder getModuleConfigBuilder() {
+      if (moduleConfigBuilder == null) {
+        moduleConfigBuilder = ModuleConfig.builder(relativePathBase);
+      }
+      return moduleConfigBuilder;
     }
 
     public void setCompilationMode(CompilationMode mode) {
@@ -254,6 +259,10 @@ public final class Config {
         manifest = this.manifest;
       }
 
+      ModuleConfig moduleConfig = (moduleConfigBuilder == null)
+          ? null
+          : moduleConfigBuilder.build(); 
+      
       Config config = new Config(
           id,
           manifest,

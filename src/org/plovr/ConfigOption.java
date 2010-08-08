@@ -130,29 +130,27 @@ public enum ConfigOption {
     @Override
     public void apply(JsonObject modules, Config.Builder builder) {
       try {
-        ModuleConfig moduleConfig = ModuleConfig.create(modules);
-
-        // Extract the output_path_prefix property, if it is available.
-        String outputPath = GsonUtil.stringOrNull(modules.get("output_path"));
-        if (outputPath == null) {
-          outputPath = "module_%s.js";
-        } else {
-          assertContainsModuleNamePlaceholder(outputPath);
-        }
-
-        // Set the paths to write the compiled module files to.
-        Map<String, File> moduleToOutputPath = Maps.newHashMap();
-        for (String moduleName : moduleConfig.getModuleNames()) {
-          String partialPath = outputPath.replace("%s", moduleName);
-          File moduleFile = new File(maybeResolvePath(partialPath, builder));
-          moduleToOutputPath.put(moduleName, moduleFile);
-        }
-        moduleConfig.setModuleToOutputPath(moduleToOutputPath);
-
-        builder.setModuleConfig(moduleConfig);
+        ModuleConfig.Builder moduleConfigBuilder = builder.getModuleConfigBuilder();
+        moduleConfigBuilder.setModuleInfo(modules);
       } catch (BadDependencyTreeException e) {
         throw new RuntimeException(e);
       }
+    }
+  }),
+  
+  MODULE_OUTPUT_PATH("module_output_path", new ConfigUpdater() {
+    @Override
+    public void apply(String outputPath, Config.Builder builder) {
+      ModuleConfig.Builder moduleConfigBuilder = builder.getModuleConfigBuilder();
+      moduleConfigBuilder.setOutputPath(outputPath);
+    }
+  }),
+
+  MODULE_PRODUCTION_URI("module_production_uri", new ConfigUpdater() {
+    @Override
+    public void apply(String productionUri, Config.Builder builder) {
+      ModuleConfig.Builder moduleConfigBuilder = builder.getModuleConfigBuilder();
+      moduleConfigBuilder.setProductionUri(productionUri);
     }
   }),
 
@@ -285,18 +283,22 @@ public enum ConfigOption {
    * @return
    */
   private static String maybeResolvePath(String path, Config.Builder builder) {
+    return maybeResolvePath(path, builder.getRelativePathBase());
+  }
+
+  static String maybeResolvePath(String path, File relativePathBase) {
     // Unfortunately, a File object must be constructed in order to determine
     // whether the path is absolute.
     File file = new File(path);
     if (file.isAbsolute()) {
       return path;
     } else {
-      return (new File(builder.getRelativePathBase(), path)).getAbsolutePath();
-    }
+      return (new File(relativePathBase, path)).getAbsolutePath();
+    }    
   }
-  
+
   static void assertContainsModuleNamePlaceholder(String path) {
-    if (!path.contains("%s")) {
+    if (path == null || !path.contains("%s")) {
       throw new IllegalArgumentException("Does not contain %s: " + path); 
     }    
   }

@@ -13,15 +13,13 @@ import java.util.regex.Pattern;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.gson.JsonArray;
+import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonPrimitive;
 import com.google.javascript.jscomp.JSModule;
 
 public final class ModuleConfig {
@@ -35,23 +33,25 @@ public final class ModuleConfig {
       "([^/\\\\]*)_init\\.js$");
 
   private final String rootModule;
-  
+
   private final String productionUri;
 
   private final Map<String, List<String>> dependencyTree;
 
   private final Map<String, List<String>> invertedDependencyTree;
 
-  private Map<String, File> moduleToOutputPath;
+  private final Map<String, File> moduleToOutputPath;
 
   private ModuleConfig(
       String rootModule,
       Map<String, List<String>> dependencyTree,
       Map<String, List<String>> invertedDependencyTree,
+      Map<String, File> moduleToOutputPath,
       String productionUri) {
     this.rootModule = rootModule;
     this.dependencyTree = dependencyTree;
     this.invertedDependencyTree = invertedDependencyTree;
+    this.moduleToOutputPath = moduleToOutputPath;
     this.productionUri = productionUri;
   }
 
@@ -61,10 +61,6 @@ public final class ModuleConfig {
 
   public Iterable<String> getModuleNames() {
     return Iterables.unmodifiableIterable(dependencyTree.keySet());
-  }
-
-  public void setModuleToOutputPath(Map<String, File> moduleToOutputPath) {
-    this.moduleToOutputPath = ImmutableMap.copyOf(moduleToOutputPath);
   }
 
   public Map<String, File> getModuleToOutputPath() {
@@ -186,78 +182,12 @@ public final class ModuleConfig {
     return modules;
   }
 
-  /**
-   *
-   * @param json
-   * @return
-   * @throws BadDependencyTreeException
-   */
-  public static ModuleConfig create(JsonObject json) throws
-      BadDependencyTreeException {
-    JsonElement deps = json.get("deps");
-    Preconditions.checkNotNull(deps, "modules must have a property named deps");
-    Preconditions.checkArgument(deps.isJsonObject(), "deps must be a map");
 
-    // The dependency tree is "inverted" because children point to their
-    // parents instead of the other way around.
-    final Map<String, List<String>> invertedDependencyTree = extractDependencies(
-        deps.getAsJsonObject());
-
-    // In dependencyTree, modules point to the modules that depend on them.
-    final Map<String, List<String>> dependencyTree = invertDependencyTree(
-        invertedDependencyTree);
-
-    String rootModule = findRootModule(invertedDependencyTree);
-    // Calling buildDependencies() confirms that the module dependencies are
-    // well-formed by producing a topological sort of the modules.
-    // For example, if the config file contained:
-    //
-    // "deps" : {
-    //   "A": [],                          A
-    //   "B": ["A"],                     /   \
-    //   "C": ["A"],                   B       C
-    //   "D": ["B","C"],                 \   /   \
-    //   "E": ["C"]                        D       E
-    // }
-    //
-    // Then the iteration of transitiveDependencies would produce either:
-    //
-    // ["A", "B", "C", "D", "E"] OR ["A", "B", "C", "E", "D"]
-    //
-    // Both are valid results because the topological sort of the dependency
-    // graph is not unique.
-    List<String> topologicalSort = buildDependencies(dependencyTree, rootModule);
-    logger.info(topologicalSort.toString());
-    
-    String productionUri = GsonUtil.stringOrNull(json.get("production_uri"));
-    if (productionUri == null) {
-      productionUri = "module_%s.js";
-    } else {
-      ConfigOption.assertContainsModuleNamePlaceholder(productionUri);
-    }
-
-    ModuleConfig moduleConfig = new ModuleConfig(rootModule, dependencyTree,
-        invertedDependencyTree, productionUri);
-    return moduleConfig;
-  }
-
-  private static Map<String, List<String>> extractDependencies(JsonObject deps) {
+  private static Map<String, List<String>> extractDependencies(
+      List<ModuleEntry> moduleEntries) {
     Map<String, List<String>> dependencies = Maps.newHashMap();
-    for (Map.Entry<String,JsonElement> entry : deps.entrySet()) {
-      JsonElement element = entry.getValue();
-      if (element.isJsonArray()) {
-        List<String> depList = Lists.newLinkedList();
-        JsonArray array = element.getAsJsonArray();
-        for (JsonElement dependency : array) {
-          if (dependency.isJsonPrimitive()) {
-            JsonPrimitive primitive = dependency.getAsJsonPrimitive();
-            if (primitive.isString()) {
-              depList.add(primitive.getAsString());
-            }
-          }
-        }
-        dependencies.put(entry.getKey(), depList);
-      }
+    for (ModuleEntry moduleEntry : moduleEntries) {
+      dependencies.put(moduleEntry.getName(), moduleEntry.getDeps());
     }
     return dependencies;
   }
@@ -351,6 +281,175 @@ public final class ModuleConfig {
           dependency);
     }
     transitiveDependencies.add(dependency);
+  }
+
+  public static Builder builder(File relativePathBase) {
+    Preconditions.checkNotNull(relativePathBase);
+    return new Builder(relativePathBase);
+  }
+
+  public static Builder builder(ModuleConfig moduleConfig) {
+    Preconditions.checkNotNull(moduleConfig);
+    return new Builder(moduleConfig);
+  }
+
+  final static class Builder {
+
+    private final File relativePathBase;
+
+    // Either moduleToOutputPath will be assigned in the constructor, or
+    // outputPath will be defined later and will be used to create a
+    // moduleToOutputPath map when build() is invoked.
+
+    private final Map<String, File> moduleToOutputPath;
+
+    private String outputPath = "module_%s.js";
+
+    private String rootModule;
+
+    private String productionUri = "module_%s.js";
+
+    private Map<String, List<String>> dependencyTree;
+
+    private Map<String, List<String>> invertedDependencyTree;
+
+    private Builder(File relativePathBase) {
+      Preconditions.checkNotNull(relativePathBase);
+      Preconditions.checkArgument(relativePathBase.isDirectory(),
+          relativePathBase + " is not a directory");
+      this.relativePathBase = relativePathBase;
+      this.moduleToOutputPath = null;
+    }
+
+    private Builder(ModuleConfig moduleConfig) {
+      this.relativePathBase = null;
+      this.rootModule = moduleConfig.rootModule;
+      this.productionUri = moduleConfig.productionUri;
+
+      // An outputPath set on this builder will be ignored as the inherited
+      // moduleToOutputPath will be used instead.
+      this.moduleToOutputPath = moduleConfig.moduleToOutputPath;
+      this.outputPath = null;
+
+      this.dependencyTree = moduleConfig.dependencyTree;
+      this.invertedDependencyTree = moduleConfig.invertedDependencyTree;
+    }
+
+   /**
+    *
+    * @param json
+    * @return
+    * @throws BadDependencyTreeException
+    */
+   public void setModuleInfo(JsonObject json) throws
+       BadDependencyTreeException {
+
+     // Convert the JSON into a list of module entries.
+     List<ModuleEntry> moduleEntries = Lists.newArrayList();
+     for (Map.Entry<String, JsonElement> entry : json.entrySet()) {
+       Gson gson = new Gson();
+       ModuleEntry moduleEntry = gson.fromJson(entry.getValue(),
+           ModuleEntry.class);
+       moduleEntry.setName(entry.getKey());
+       moduleEntries.add(moduleEntry);
+     }
+
+     // The dependency tree is "inverted" because children point to their
+     // parents instead of the other way around.
+     final Map<String, List<String>> invertedDependencyTree =
+         extractDependencies(moduleEntries);
+
+     // In dependencyTree, modules point to the modules that depend on them.
+     final Map<String, List<String>> dependencyTree = invertDependencyTree(
+         invertedDependencyTree);
+
+     String rootModule = findRootModule(invertedDependencyTree);
+     // Calling buildDependencies() confirms that the module dependencies are
+     // well-formed by producing a topological sort of the modules.
+     // For example, if the config file contained:
+     //
+     // "deps" : {
+     //   "A": [],                          A
+     //   "B": ["A"],                     /   \
+     //   "C": ["A"],                   B       C
+     //   "D": ["B","C"],                 \   /   \
+     //   "E": ["C"]                        D       E
+     // }
+     //
+     // Then the iteration of transitiveDependencies would produce either:
+     //
+     // ["A", "B", "C", "D", "E"] OR ["A", "B", "C", "E", "D"]
+     //
+     // Both are valid results because the topological sort of the dependency
+     // graph is not unique.
+     List<String> topologicalSort = buildDependencies(dependencyTree, rootModule);
+     logger.info(topologicalSort.toString());
+
+     this.rootModule = rootModule;
+     this.dependencyTree = dependencyTree;
+     this.invertedDependencyTree = invertedDependencyTree;
+   }
+
+    public void setProductionUri(String productionUri) {
+      ConfigOption.assertContainsModuleNamePlaceholder(productionUri);
+      this.productionUri = productionUri;
+    }
+
+    public void setOutputPath(String outputPath) {
+      Preconditions.checkState(moduleToOutputPath == null,
+          "The output paths of this config cannot be redefined.");
+      ConfigOption.assertContainsModuleNamePlaceholder(outputPath);
+      this.outputPath = outputPath;
+    }
+
+    public ModuleConfig build() {
+      Preconditions.checkState(dependencyTree != null, "No modules were set");
+
+      // Set the paths to write the compiled module files to.
+      Map<String, File> moduleToOutputPath;
+      if (this.moduleToOutputPath == null) {
+        moduleToOutputPath = Maps.newHashMap();
+        for (String moduleName : dependencyTree.keySet()) {
+          String partialPath = outputPath.replace("%s", moduleName);
+          File moduleFile = new File(ConfigOption.maybeResolvePath(
+              partialPath, relativePathBase));
+          moduleToOutputPath.put(moduleName, moduleFile);
+        }
+      } else {
+        moduleToOutputPath = this.moduleToOutputPath;
+      }
+
+      return new ModuleConfig(
+          rootModule,
+          dependencyTree,
+          invertedDependencyTree,
+          moduleToOutputPath,
+          productionUri);
+    }
+  }
+
+  public static class ModuleEntry {
+    private transient String name;
+    private String input;
+    private List<String> deps;
+
+    public ModuleEntry() {}
+
+    public void setName(String name) {
+      this.name = name;
+    }
+
+    public String getName() {
+      return name;
+    }
+
+    public String getInput() {
+      return input;
+    }
+
+    public List<String> getDeps() {
+      return deps;
+    }
   }
 
   public static class BadDependencyTreeException extends Exception {
