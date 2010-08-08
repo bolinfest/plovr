@@ -8,6 +8,8 @@ import java.io.Writer;
 import java.util.List;
 import java.util.Map;
 
+import org.plovr.ModuleConfig.ModuleInfo;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
 import com.google.common.base.Function;
@@ -235,13 +237,13 @@ public final class Compilation {
    * @param moduleConfig
    */
   static JsonObject createModuleInfo(ModuleConfig moduleConfig) {
-    Map<String, List<String>> invertedDependencyTree = moduleConfig.
+    Map<String, ModuleInfo> invertedDependencyTree = moduleConfig.
       getInvertedDependencyTree();
     JsonObject obj = new JsonObject();
-    for (Map.Entry<String, List<String>> entry : invertedDependencyTree.entrySet()) {
+    for (Map.Entry<String, ModuleInfo> entry : invertedDependencyTree.entrySet()) {
       String moduleName = entry.getKey();
       JsonArray modulesThatMustBeLoadedFirst = new JsonArray();
-      for (String module : entry.getValue()) {
+      for (String module : entry.getValue().getDeps()) {
         modulesThatMustBeLoadedFirst.add(new JsonPrimitive(module));
       }
       obj.add(moduleName, modulesThatMustBeLoadedFirst);
@@ -254,10 +256,10 @@ public final class Compilation {
    */
   static JsonObject createModuleUris(ModuleConfig moduleConfig,
       Function<String, String> moduleNameToUri) {
-    Map<String, List<String>> invertedDependencyTree = moduleConfig.
+    Map<String, ModuleInfo> invertedDependencyTree = moduleConfig.
         getInvertedDependencyTree();
     JsonObject obj = new JsonObject();
-    for (Map.Entry<String, List<String>> entry : invertedDependencyTree.entrySet()) {
+    for (Map.Entry<String, ModuleInfo> entry : invertedDependencyTree.entrySet()) {
       String moduleName = entry.getKey();
       obj.addProperty(moduleName, moduleNameToUri.apply(moduleName));
     }

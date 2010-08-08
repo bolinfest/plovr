@@ -149,7 +149,7 @@ public final class Config {
 
     private ImmutableList.Builder<String> paths = ImmutableList.builder();
 
-    private ImmutableList.Builder<String> inputs = ImmutableList.builder();
+    private ImmutableList.Builder<JsInput> inputs = ImmutableList.builder();
 
     private ImmutableList.Builder<String> externs = null;
 
@@ -160,7 +160,7 @@ public final class Config {
     private boolean printInputDelimiter = false;
 
     private Map<DiagnosticGroup, CheckLevel> diagnosticGroups = null;
-    
+
     private ModuleConfig.Builder moduleConfigBuilder = null;
 
     private Builder(File relativePathBase) {
@@ -200,9 +200,10 @@ public final class Config {
       paths.add(path);
     }
 
-    public void addInput(String input) {
-      Preconditions.checkNotNull(input);
-      inputs.add(input);
+    public void addInput(File file, String name) {
+      Preconditions.checkNotNull(file);
+      Preconditions.checkNotNull(name);
+      inputs.add(LocalFileJsInput.createForFileWithName(file, name));
     }
 
     public void addExtern(String extern) {
@@ -253,7 +254,7 @@ public final class Config {
 
         manifest = new Manifest(closureLibraryDirectory,
           Lists.transform(paths.build(), STRING_TO_FILE),
-          Lists.transform(inputs.build(), STRING_TO_JS_INPUT),
+          inputs.build(),
           externs);
       } else {
         manifest = this.manifest;
@@ -261,8 +262,8 @@ public final class Config {
 
       ModuleConfig moduleConfig = (moduleConfigBuilder == null)
           ? null
-          : moduleConfigBuilder.build(); 
-      
+          : moduleConfigBuilder.build();
+
       Config config = new Config(
           id,
           manifest,
@@ -281,14 +282,6 @@ public final class Config {
       @Override
       public File apply(String s) {
         return new File(s);
-      }
-    };
-
-  private static Function<String, JsInput> STRING_TO_JS_INPUT =
-    new Function<String, JsInput>() {
-      @Override
-      public JsInput apply(String fileName) {
-        return LocalFileJsInput.createForName(fileName);
       }
     };
 

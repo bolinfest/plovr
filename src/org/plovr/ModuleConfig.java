@@ -1,6 +1,7 @@
 package org.plovr;
 
 import java.io.File;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
@@ -8,8 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -27,30 +26,25 @@ public final class ModuleConfig {
   private static final Logger logger = Logger.getLogger(
       ModuleConfig.class.getName());
 
-  // TODO(bolinfest): Get the name from the config rather than mandating the
-  // _init.js naming convention.
-  private static Pattern MODULE_INIT_FILE = Pattern.compile(
-      "([^/\\\\]*)_init\\.js$");
-
   private final String rootModule;
 
   private final String productionUri;
 
   private final Map<String, List<String>> dependencyTree;
 
-  private final Map<String, List<String>> invertedDependencyTree;
+  private final Map<String, ModuleInfo> moduleInfo;
 
   private final Map<String, File> moduleToOutputPath;
 
   private ModuleConfig(
       String rootModule,
       Map<String, List<String>> dependencyTree,
-      Map<String, List<String>> invertedDependencyTree,
+      Map<String, ModuleInfo> moduleInfo,
       Map<String, File> moduleToOutputPath,
       String productionUri) {
     this.rootModule = rootModule;
     this.dependencyTree = dependencyTree;
-    this.invertedDependencyTree = invertedDependencyTree;
+    this.moduleInfo = moduleInfo;
     this.moduleToOutputPath = moduleToOutputPath;
     this.productionUri = productionUri;
   }
@@ -67,8 +61,8 @@ public final class ModuleConfig {
     return this.moduleToOutputPath;
   }
 
-  public Map<String, List<String>> getInvertedDependencyTree() {
-    return invertedDependencyTree;
+  public Map<String, ModuleInfo> getInvertedDependencyTree() {
+    return moduleInfo;
   }
 
   public String getProductionUri() {
@@ -82,21 +76,26 @@ public final class ModuleConfig {
    * @return
    */
   Map<String, List<JsInput>> partitionInputsIntoModules(List<JsInput> inputs) {
+    // Map of module inputs to module names.
+    Map<String, String> moduleInputToName = Maps.newHashMap();
+    for (ModuleInfo info : moduleInfo.values()) {
+      moduleInputToName.put(info.getInput(), info.getName());
+    }
 
-    // Pick out the _init.js files that correspond to modules.
-    Map<String, JsInput> moduleToInitInputMap = Maps.newHashMap();
+    // Pick out the JS files that correspond to modules.
+    Map<String, JsInput> moduleToInputMap = Maps.newHashMap();
     List<String> modulesInInputOrder = Lists.newLinkedList();
     for (JsInput input : inputs) {
-      String name = input.getName();
-      Matcher matcher = MODULE_INIT_FILE.matcher(name);
-      if (!matcher.find()) {
+      String inputName = input.getName();
+      if (!moduleInputToName.containsKey(inputName)) {
         continue;
       }
-      String moduleName = matcher.group(1);
+
+      String moduleName = moduleInputToName.get(inputName);
       if (dependencyTree.containsKey(moduleName)) {
-        JsInput previousInput = moduleToInitInputMap.put(moduleName, input);
+        JsInput previousInput = moduleToInputMap.put(moduleName, input);
         if (previousInput != null) {
-          throw new IllegalArgumentException("More than one init file for " +
+          throw new IllegalArgumentException("More than one input file for " +
               moduleName + " module: " + input.getName() + ", " +
               previousInput.getName());
         }
@@ -104,21 +103,27 @@ public final class ModuleConfig {
       }
     }
 
-    // TODO(bolinfest): Make sure that the last input is an _init.js file.
-
-    // Ensure that every module has a corresponding _init.js file.
-    Sets.SetView<String> missingModules = Sets.difference(dependencyTree.keySet(),
-        moduleToInitInputMap.keySet());
-    if (!missingModules.isEmpty()) {
-      throw new IllegalArgumentException("The following modules did not have " +
-          "init files: " + missingModules);
+    // Make sure that the last JsInput is an input file for a module.
+    JsInput lastInput = inputs.get(inputs.size() - 1);
+    if (!moduleInputToName.containsKey(lastInput.getName())) {
+      throw new IllegalArgumentException(
+          "The last JS file in the compilation must be a module input but was" +
+          ": " + lastInput.getName());
     }
 
-    // Ensure that the order of the _init.js files is a valid topological sort
+    // Ensure that every module has a corresponding input file.
+    Sets.SetView<String> missingModules = Sets.difference(dependencyTree.keySet(),
+        moduleToInputMap.keySet());
+    if (!missingModules.isEmpty()) {
+      throw new IllegalArgumentException("The following modules did not have " +
+          "input files: " + missingModules);
+    }
+
+    // Ensure that the order of the input files is a valid topological sort
     // of the module dependency graph.
     Set<String> visitedModules = Sets.newHashSet();
     for (String module : modulesInInputOrder) {
-      for (String parent : invertedDependencyTree.get(module)) {
+      for (String parent : moduleInfo.get(module).getDeps()) {
         if (!visitedModules.contains(parent)) {
           throw new IllegalArgumentException(parent + " should appear before " +
               module + " in " + Joiner.on("\n").join(inputs));
@@ -133,7 +138,7 @@ public final class ModuleConfig {
     Iterator<JsInput> inputIterator = inputs.iterator();
     for (String moduleName : modulesInInputOrder) {
       List<JsInput> inputList = Lists.newLinkedList();
-      JsInput lastInputInModule = moduleToInitInputMap.get(moduleName);
+      JsInput lastInputInModule = moduleToInputMap.get(moduleName);
       while (inputIterator.hasNext()) {
         JsInput input = inputIterator.next();
         inputList.add(input);
@@ -174,7 +179,7 @@ public final class ModuleConfig {
     // Add the dependencies for each module.
     for (JSModule module : modules) {
       String moduleName = module.getName();
-      for (String parent : invertedDependencyTree.get(moduleName)) {
+      for (String parent : moduleInfo.get(moduleName).getDeps()) {
         module.addDependency(modulesByName.get(parent));
       }
     }
@@ -182,32 +187,22 @@ public final class ModuleConfig {
     return modules;
   }
 
-
-  private static Map<String, List<String>> extractDependencies(
-      List<ModuleEntry> moduleEntries) {
-    Map<String, List<String>> dependencies = Maps.newHashMap();
-    for (ModuleEntry moduleEntry : moduleEntries) {
-      dependencies.put(moduleEntry.getName(), moduleEntry.getDeps());
-    }
-    return dependencies;
-  }
-
   /**
    * @param dependencies
    * @return the name of the root module
    * @throws BadDependencyTreeException if the dependencies are not well-formed.
    */
-  private static String findRootModule(Map<String, List<String>> dependencies)
+  private static String findRootModule(Collection<ModuleInfo> dependencies)
       throws BadDependencyTreeException {
     String moduleWithNoDependencies = null;
-    for (Map.Entry<String, List<String>> entry : dependencies.entrySet()) {
-      List<String> moduleDeps = entry.getValue();
+    for (ModuleInfo info : dependencies) {
+      List<String> moduleDeps = info.getDeps();
       if (moduleDeps.size() == 0) {
         if (moduleWithNoDependencies == null) {
-          moduleWithNoDependencies = entry.getKey();
+          moduleWithNoDependencies = info.getName();
         } else {
           throw new BadDependencyTreeException("Both " + moduleWithNoDependencies +
-              " and " + entry.getKey() + " have no dependencies, so this" +
+              " and " + info.getName() + " have no dependencies, so this" +
               " dependency graph does not form a tree");
         }
       }
@@ -222,7 +217,7 @@ public final class ModuleConfig {
   }
 
   private static Map<String, List<String>> invertDependencyTree(
-      Map<String, List<String>> invertedDependencyTree)
+      Collection<ModuleInfo> moduleInfo)
       throws BadDependencyTreeException {
     // dependencies maps a module to the modules that depend on it. A module
     // must be loaded before any of its dependencies.
@@ -230,13 +225,13 @@ public final class ModuleConfig {
 
     // Populate the keys of dependencies with the keys of the "deps" object
     // literal from the config file.
-    for (String module : invertedDependencyTree.keySet()) {
-      dependencies.put(module, Lists.<String>newLinkedList());
+    for (ModuleInfo info : moduleInfo) {
+      dependencies.put(info.getName(), Lists.<String>newLinkedList());
     }
 
-    for (Map.Entry<String, List<String>> entry : invertedDependencyTree.entrySet()) {
-      String dependentModule = entry.getKey();
-      for (String ancestorModule : entry.getValue()) {
+    for (ModuleInfo info : moduleInfo) {
+      String dependentModule = info.getName();
+      for (String ancestorModule : info.getDeps()) {
         List<String> moduleDeps = dependencies.get(ancestorModule);
         if (moduleDeps != null) {
           moduleDeps.add(dependentModule);
@@ -295,14 +290,13 @@ public final class ModuleConfig {
 
   final static class Builder {
 
+    /** Directory against which relative path names will be resolved. */
     private final File relativePathBase;
 
     // Either moduleToOutputPath will be assigned in the constructor, or
     // outputPath will be defined later and will be used to create a
     // moduleToOutputPath map when build() is invoked.
-
     private final Map<String, File> moduleToOutputPath;
-
     private String outputPath = "module_%s.js";
 
     private String rootModule;
@@ -311,7 +305,7 @@ public final class ModuleConfig {
 
     private Map<String, List<String>> dependencyTree;
 
-    private Map<String, List<String>> invertedDependencyTree;
+    private Map<String, ModuleInfo> moduleInfo;
 
     private Builder(File relativePathBase) {
       Preconditions.checkNotNull(relativePathBase);
@@ -332,7 +326,7 @@ public final class ModuleConfig {
       this.outputPath = null;
 
       this.dependencyTree = moduleConfig.dependencyTree;
-      this.invertedDependencyTree = moduleConfig.invertedDependencyTree;
+      this.moduleInfo = moduleConfig.moduleInfo;
     }
 
    /**
@@ -345,25 +339,21 @@ public final class ModuleConfig {
        BadDependencyTreeException {
 
      // Convert the JSON into a list of module entries.
-     List<ModuleEntry> moduleEntries = Lists.newArrayList();
+     Map<String, ModuleInfo> moduleInfo = Maps.newHashMap();
      for (Map.Entry<String, JsonElement> entry : json.entrySet()) {
        Gson gson = new Gson();
-       ModuleEntry moduleEntry = gson.fromJson(entry.getValue(),
-           ModuleEntry.class);
-       moduleEntry.setName(entry.getKey());
-       moduleEntries.add(moduleEntry);
+       ModuleInfo moduleEntry = gson.fromJson(entry.getValue(),
+           ModuleInfo.class);
+       String name = entry.getKey();
+       moduleEntry.setName(name);
+       moduleInfo.put(name, moduleEntry);
      }
-
-     // The dependency tree is "inverted" because children point to their
-     // parents instead of the other way around.
-     final Map<String, List<String>> invertedDependencyTree =
-         extractDependencies(moduleEntries);
 
      // In dependencyTree, modules point to the modules that depend on them.
      final Map<String, List<String>> dependencyTree = invertDependencyTree(
-         invertedDependencyTree);
+         moduleInfo.values());
 
-     String rootModule = findRootModule(invertedDependencyTree);
+     String rootModule = findRootModule(moduleInfo.values());
      // Calling buildDependencies() confirms that the module dependencies are
      // well-formed by producing a topological sort of the modules.
      // For example, if the config file contained:
@@ -387,7 +377,7 @@ public final class ModuleConfig {
 
      this.rootModule = rootModule;
      this.dependencyTree = dependencyTree;
-     this.invertedDependencyTree = invertedDependencyTree;
+     this.moduleInfo = moduleInfo;
    }
 
     public void setProductionUri(String productionUri) {
@@ -422,20 +412,20 @@ public final class ModuleConfig {
       return new ModuleConfig(
           rootModule,
           dependencyTree,
-          invertedDependencyTree,
+          moduleInfo,
           moduleToOutputPath,
           productionUri);
     }
   }
 
-  public static class ModuleEntry {
+  public static class ModuleInfo {
     private transient String name;
     private String input;
     private List<String> deps;
 
-    public ModuleEntry() {}
+    public ModuleInfo() {}
 
-    public void setName(String name) {
+    private void setName(String name) {
       this.name = name;
     }
 

@@ -33,9 +33,10 @@ public enum ConfigOption {
     @Override
     public void apply(JsonArray paths, Config.Builder builder) {
       for (JsonElement item : paths) {
-        String path = getAsString(item);
-        String resolvedPath = maybeResolvePath(path, builder);
-        builder.addPath(resolvedPath);
+        String path = GsonUtil.stringOrNull(item);
+        if (path != null) {
+          apply(path, builder);
+        }
       }
     }
   }),
@@ -44,15 +45,16 @@ public enum ConfigOption {
     @Override
     public void apply(String input, Config.Builder builder) {
       String resolvedPath = maybeResolvePath(input, builder);
-      builder.addInput(resolvedPath);
+      builder.addInput(new File(resolvedPath), input);
     }
 
     @Override
     public void apply(JsonArray inputs, Config.Builder builder) {
       for (JsonElement item : inputs) {
-        String path = getAsString(item);
-        String resolvedPath = maybeResolvePath(path, builder);
-        builder.addInput(resolvedPath);
+        String input = GsonUtil.stringOrNull(item);
+        if (input != null) {
+          apply(input, builder);
+        }
       }
     }
   }),
@@ -60,14 +62,17 @@ public enum ConfigOption {
   EXTERNS("externs", new ConfigUpdater() {
     @Override
     public void apply(String extern, Config.Builder builder) {
-      builder.addExtern(extern);
+      String resolvedPath = maybeResolvePath(extern, builder);
+      builder.addExtern(resolvedPath);
     }
 
     @Override
     public void apply(JsonArray externs, Config.Builder builder) {
       for (JsonElement item : externs) {
-        String extern = getAsString(item);
-        builder.addInput(extern);
+        String extern = GsonUtil.stringOrNull(item);
+        if (extern != null) {
+          apply(extern, builder);
+        }
       }
     }
   }),
@@ -137,7 +142,7 @@ public enum ConfigOption {
       }
     }
   }),
-  
+
   MODULE_OUTPUT_PATH("module_output_path", new ConfigUpdater() {
     @Override
     public void apply(String outputPath, Config.Builder builder) {
@@ -258,22 +263,6 @@ public enum ConfigOption {
   }
 
   /**
-   *
-   * @param element
-   * @return the string value of the JsonElement
-   * @throws IllegalArgumentException if element does not correspond to a JSON
-   *     string primitive
-   */
-  private static String getAsString(JsonElement element) {
-    if (element == null || !element.isJsonPrimitive() ||
-        !element.getAsJsonPrimitive().isString()) {
-      throw new IllegalArgumentException(element + " is not a JSON string");
-    } else {
-      return element.getAsJsonPrimitive().getAsString();
-    }
-  }
-
-  /**
    * Config files often contain relative paths, so it is important to resolve
    * them against the directory that contains the config file when that is the
    * case.
@@ -294,12 +283,12 @@ public enum ConfigOption {
       return path;
     } else {
       return (new File(relativePathBase, path)).getAbsolutePath();
-    }    
+    }
   }
 
   static void assertContainsModuleNamePlaceholder(String path) {
     if (path == null || !path.contains("%s")) {
-      throw new IllegalArgumentException("Does not contain %s: " + path); 
-    }    
+      throw new IllegalArgumentException("Does not contain %s: " + path);
+    }
   }
 }
