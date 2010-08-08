@@ -35,6 +35,8 @@ public final class ModuleConfig {
       "([^/\\\\]*)_init\\.js$");
 
   private final String rootModule;
+  
+  private final String productionUri;
 
   private final Map<String, List<String>> dependencyTree;
 
@@ -45,10 +47,12 @@ public final class ModuleConfig {
   private ModuleConfig(
       String rootModule,
       Map<String, List<String>> dependencyTree,
-      Map<String, List<String>> invertedDependencyTree) {
+      Map<String, List<String>> invertedDependencyTree,
+      String productionUri) {
     this.rootModule = rootModule;
     this.dependencyTree = dependencyTree;
     this.invertedDependencyTree = invertedDependencyTree;
+    this.productionUri = productionUri;
   }
 
   public String getRootModule() {
@@ -69,6 +73,10 @@ public final class ModuleConfig {
 
   public Map<String, List<String>> getInvertedDependencyTree() {
     return invertedDependencyTree;
+  }
+
+  public String getProductionUri() {
+    return productionUri;
   }
 
   /**
@@ -220,9 +228,16 @@ public final class ModuleConfig {
     // graph is not unique.
     List<String> topologicalSort = buildDependencies(dependencyTree, rootModule);
     logger.info(topologicalSort.toString());
+    
+    String productionUri = GsonUtil.stringOrNull(json.get("production_uri"));
+    if (productionUri == null) {
+      productionUri = "module_%s.js";
+    } else {
+      ConfigOption.assertContainsModuleNamePlaceholder(productionUri);
+    }
 
     ModuleConfig moduleConfig = new ModuleConfig(rootModule, dependencyTree,
-        invertedDependencyTree);
+        invertedDependencyTree, productionUri);
     return moduleConfig;
   }
 

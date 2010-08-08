@@ -77,12 +77,11 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
           Closeables.closeQuietly(writer);
         }
       } else {
-        // TODO(bolinfest): This function should be defined based on information
-        // from the config file.
+        final String productionUri = moduleConfig.getProductionUri();
         Function<String, String> moduleNameToUri = new Function<String, String>() {
           @Override
           public String apply(String moduleName) {
-            return "/apps/module_" + moduleName + ".js";
+            return productionUri.replace("%s", moduleName);
           }
         };
         compilation.writeCompiledCodeToFiles(moduleNameToUri, sourceMapPath);

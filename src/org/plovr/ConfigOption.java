@@ -5,9 +5,7 @@ import java.util.Map;
 
 import org.plovr.ModuleConfig.BadDependencyTreeException;
 
-import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Multimap;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -135,19 +133,17 @@ public enum ConfigOption {
         ModuleConfig moduleConfig = ModuleConfig.create(modules);
 
         // Extract the output_path_prefix property, if it is available.
-        String outputPathPrefix = "";
-        JsonElement outputPathPrefixEl = modules.get("output_path_prefix");
-        if (outputPathPrefixEl != null && outputPathPrefixEl.isJsonPrimitive()) {
-          JsonPrimitive primitive = outputPathPrefixEl.getAsJsonPrimitive();
-          if (primitive.isString()) {
-            outputPathPrefix = primitive.getAsString();
-          }
+        String outputPath = GsonUtil.stringOrNull(modules.get("output_path"));
+        if (outputPath == null) {
+          outputPath = "module_%s.js";
+        } else {
+          assertContainsModuleNamePlaceholder(outputPath);
         }
 
         // Set the paths to write the compiled module files to.
         Map<String, File> moduleToOutputPath = Maps.newHashMap();
         for (String moduleName : moduleConfig.getModuleNames()) {
-          String partialPath = outputPathPrefix + moduleName + ".js";
+          String partialPath = outputPath.replace("%s", moduleName);
           File moduleFile = new File(maybeResolvePath(partialPath, builder));
           moduleToOutputPath.put(moduleName, moduleFile);
         }
@@ -297,5 +293,11 @@ public enum ConfigOption {
     } else {
       return (new File(builder.getRelativePathBase(), path)).getAbsolutePath();
     }
+  }
+  
+  static void assertContainsModuleNamePlaceholder(String path) {
+    if (!path.contains("%s")) {
+      throw new IllegalArgumentException("Does not contain %s: " + path); 
+    }    
   }
 }

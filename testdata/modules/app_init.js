@@ -12,7 +12,13 @@ example.App.install('content');
 
 var moduleManager = goog.module.ModuleManager.getInstance();
 var moduleLoader = new goog.module.ModuleLoader();
-moduleLoader.setDebugMode(!!goog.global['PLOVR_MODULE_USE_DEBUG_MODE']);
+
+// Normally, this would be:
+// moduleLoader.setDebugMode(!!goog.global['PLOVR_MODULE_USE_DEBUG_MODE']);
+// But because this is still used with local files in "production," debug mode
+// should always be used.
+moduleLoader.setDebugMode(true);
+
 moduleManager.setLoader(moduleLoader);
 moduleManager.setAllModuleInfo(goog.global['PLOVR_MODULE_INFO']);
 moduleManager.setModuleUris(goog.global['PLOVR_MODULE_URIS']);

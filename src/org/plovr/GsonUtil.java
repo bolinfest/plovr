@@ -17,6 +17,9 @@ public final class GsonUtil {
    * return the value of that string; otherwise, return null.
    */
   public static String stringOrNull(JsonElement element) {
+    if (element == null) {
+      return null;
+    }
     if (element.isJsonPrimitive()) {
       JsonPrimitive primitive = element.getAsJsonPrimitive();
       if (primitive.isString()) {
