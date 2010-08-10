@@ -5,6 +5,7 @@
 
   <property name="src.dir" value="${basedir}/src" />
   <property name="test.dir" value="${basedir}/test" />
+	<property name="testdata.dir" value="${basedir}/testdata" />
   <property name="demo.dir" value="${basedir}/demo" />
   <property name="lib.dir" value="${basedir}/lib" />
   <property name="build.dir" value="${basedir}/build" />
@@ -137,7 +138,8 @@
     <echo>Visit http://localhost:9810/compile?id=integration-test</echo>
     <java jar="${build.dir}/plovr.jar" fork="true">
       <arg value="serve" />
-      <arg value="${test.dir}/org/plovr/integration-test-config.js" />
+      <arg value="${testdata.dir}/example/integration-test-config.js" />
+    	<arg value="${testdata.dir}/modules/plovr-config.js" />
       <jvmarg value="-Xdebug" />
       <jvmarg value="-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=8000"/>
     </java>

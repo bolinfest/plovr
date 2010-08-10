@@ -1,0 +1,72 @@
+body {
+  margin: 0 auto 20px;
+  width: 800px;
+  font: 13px Arial, sans-serif;
+}
+
+code, pre {
+  color: green;
+}
+
+h1 {
+  float: left;
+  font-size: 24px;
+  text-shadow: 1px 1px 1px #FFF;
+  margin: 0;
+}
+
+h2 {
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+a {
+  color: #3A5FCD;
+}
+
+blockquote {
+  font: 20px Georgia, Times new roman, times, serif;
+  color: #AAA;
+}
+
+.heading {
+  margin: 0 0 8px;
+  padding: 6px 8px 6px;
+  background: -webkit-gradient(linear, left top, left bottom, from(#EEE), to(#CCC));
+  background: -moz-linear-gradient(top,  #EEE,  #CCC);
+
+  -moz-border-radius-bottomleft: 6px;
+  -webkit-border-bottom-left-radius: 5px;
+
+  -moz-border-radius-bottomright: 6px;
+  -webkit-border-bottom-right-radius: 5px;  
+}
+
+.navigation-links {
+  font-size: 14px;
+  font-color: black;
+  line-height: 14px;
+  text-align: right;
+  list-style: none outside none;
+  margin: 0;
+  line-height: 30px;
+}
+
+.navigation-links li {
+  display: inline;
+  padding: 0 8px;
+  font-size: 16px;
+}
+
+.selected-link {
+  font-weight: bold;
+}
+
+.caption {
+  margin: 0;
+  font-style: italic;  
+}
+
+.book-title {
+  font-style: italic;
+}

@@ -1,0 +1,228 @@
+<!doctype html>
+<html>
+<head>
+  <title>plovr Documentation</title>
+  <link href="style.css" rel="STYLESHEET" type="text/css">
+</head>
+<body>
+
+<div class="heading">
+  <h1>
+    plovr: a Closure build tool
+  </h1>
+  <ul class="navigation-links">
+    <li><a href=".">Home</a></li>
+    <li><span class="selected-link">Docs</span></li>
+    <li><a href="download.html">Download</a></li>
+    <li><a href="about.html">About</a></li>
+  </ul>
+  <div style="clear: both"></div>
+</div>
+
+<a href="http://oreilly.com/catalog/9781449381875/">
+  <img src="cover.png"
+       width="252px"
+       height="330px"
+       style="float: right; border: none; margin-left: 10px">
+</a>
+
+Currently, documentation on plovr is spread across several sources:
+
+<ul>
+  <li>Appendix C of
+    <span class="book-title">Closure: The Definitive Guide</span>.
+  </li>
+  <li>
+    The <a href="http://plovr.org/demo/">demo on plovr.org</a>.
+  </li>
+  <li>
+    The wiki for plovr on
+    <a href="http://code.google.com/p/plovr/w/list">code.google.com</a>.
+  </li>
+</ul>
+
+Ultimately, information from the various online sources will be conslidated.
+Until then, this page contains a summary of how to use the most
+important features of plovr.
+
+<h2>Using plovr During Development</h2>
+
+<p>
+The general idea behind plovr is that all of the configuration for your Closure
+build should be stored in a single file of JSON. (Ultimately, config files will
+be able to inherit from other config files, but that feature does not exist
+today.) The following is an example of a minimal (but functional) plovr config file:
+
+<pre><span style="color: #A00">// File: config.js</span>
+{
+  "id": "sample",
+  "paths": ".",
+  "inputs": "main.js"
+}</pre>
+
+An example of a more complex config file (that leverages the modules
+feature of the Compiler)
+<a href="http://code.google.com/p/plovr/source/browse/testdata/modules/plovr-config.js">
+can be seen in the plovr repository</a>.
+A config file declares which files should be compiled,
+where its dependencies can be found, and which compilation options should be
+used. (Many of these settings have appropriate default values and need not be
+specified.)
+
+<p>
+When plovr is started in <em>server mode</em>, it takes the path to one or more
+config files as input:
+
+<pre>java -jar plovr.jar serve config.js</pre>
+
+Once the plovr web server is started, it should not need to
+be restarted unless one of the config files is edited.
+(Some settings can be changed via query parameters, avoiding the need to restart
+plovr.)
+The primary way to access
+the output of plovr is by making a GET request. By default, plovr runs on port
+9810, so loading the following URL in a browser will return the compiled code
+for the configuration with the specified id:
+
+<pre>http://localhost:9810/compile?id=sample</pre>
+
+This means that when developing your web application, you will need a
+<code>&lt;script></code> tag whose <code>src</code> attribute refers to the
+plovr URL that is shown above.
+This means that you will need to add logic to your web server to load JavaScript
+from plovr in development mode, but to load JavaScript from wherever your other
+static content is hosted in production mode. Hopefully your build system already
+has conditional logic for development and production modes that you can leverage
+in integrating plovr to your development process.
+
+<p>
+Once plovr is up and running, it will discover new JavaScript and Soy files that
+are added under directories specified by <code>paths</code> in the config file.
+For this reason, it is often easiest to declare a single file for
+<code>inputs</code>, such as <code>main.js</code>, and add or remove
+<code>goog.require()</code> and <code>goog.provide()</code> statements as
+appropriate to transitively include the desired libraries. This avoids the need
+to restart plovr and makes the insertion point for your application unambiguous.
+
+<h2>Using plovr For Production</h2>
+
+As explained in the <a href=".">overview</a>, plovr is designed to produce a
+static JavaScript file that can be served in production. Running plovr as
+follows will print the compiled JavaScript to standard out, so it can be
+redirected to a file using ordinary shell commands:
+
+<pre>java -jar plovr.jar build config.js > sample-compiled.js</pre>
+
+It is up to you to upload <code>sample-compiled.js</code> to your static content
+server and to make sure that in production, the <code>src</code> attribute of
+your <code>&lt;script></code> tag points to <code>sample-compiled.js</code>.
+
+<p>
+(It is quite possible that future work for plovr will include better integration
+with popular web frameworks, such as <a href="http://www.djangoproject.com/">Django</a>,
+that will facilitate this process.)
+
+<h2>More on Config Files</h2>
+
+One significant limitation of JSON is that it does not have any support for
+comments. plovr config files relax this constraint slightly by supporting
+<code>//</code>-style comments at the beginning of a line. (Eventually, parsing
+logic will be used to allow all forms of JavaScript comments in config files, in
+whichever way they would normally be supported in JavaScript code.)
+
+<p>
+Config options are enumerated in the Java source code in
+<a href="http://code.google.com/p/plovr/source/browse/src/org/plovr/ConfigOption.java">ConfigOption.java</a>.
+As plovr is evaluated by Closure developers, the names and JSON data types for
+these options may change, so until the API is frozen, the source code is the
+source of truth for what is expected.
+
+<p>
+The primary options of interest are likely the compilation mode and the warning
+level. The names of these properties in the plovr config are <code>mode</code>
+and <code>level</code>, respectively. The possible string values for
+<code>mode</code> are:
+<ul>
+  <li><code>RAW</code> Loads each input via its own <code>&lt;script></code> tag:
+      does <b>NOT</b> run the Compiler, so no checks are performed.
+  <li><code>WHITESPACE</code> Loads all of the JavaScript code concatenated
+      together with all whitespace and comments removed.
+  <li><code>SIMPLE</code> Loads the JavaScript as compiled with
+      <code>SIMPLE_OPTIMIZATIONS</code> enabled.
+  <li><code>ADVANCED</code> Loads the JavaScript as compiled with
+      <code>ADVANCED_OPTIMIZATIONS</code> enabled.
+</ul>
+The possible string values for <code>level</code> are
+<code>QUIET</code>, <code>DEFAULT</code>, and <code>VERBOSE</code>,
+which correspond exactly to the warning levels supported by the
+Closure Compiler. Therefore, to change <code>config.js</code> to use the most
+aggressive compilation settings, set <code>mode</code> and <code>level</code> as
+follows:
+
+<pre>{
+  "id": "sample",
+  "paths": ".",
+  "inputs": "main.js",
+  "mode": "ADVANCED",
+  "level": "VERBOSE"
+}</pre>
+
+It is also possible to set the level for various types of Compiler checks with the
+<code>checks</code> property. Many of these checks are explained on the
+<a href="http://code.google.com/p/closure-compiler/wiki/Warnings">Closure
+Compiler wiki</a>, though the <code>DIAGNOSTIC_GROUP_NAMES</code> variable in
+<a href="http://code.google.com/p/closure-compiler/source/browse/trunk/src/com/google/javascript/jscomp/DiagnosticGroups.java">DiagnosticGroups.java</a>
+is the real source of truth:
+
+<pre>{
+  "id": "sample",
+  "paths": ".",
+  "inputs": "main.js",
+  "mode": "ADVANCED",
+  "level": "VERBOSE",
+  "checks": {
+    <span style="color: #A00">// acceptable values are "ERROR", "WARNING", and "OFF"</span> 
+    "deprecated": "ERROR",
+    "checkTypes": "ERROR",
+    "nonStandardJsDocs": "WARNING"
+  }
+}</pre>
+
+Remember, the names and values of the config file have not been finalized, so
+it may be necessary to monitor the plovr source code as new versions are
+released.   
+
+<h2>Using plovr With Compiler Modules</h2>
+
+Currently, the best way to learn how to use the modules feature of plovr is to
+examine the <a href="http://code.google.com/p/plovr/source/browse/#hg/testdata/modules">
+modules example in the plovr codebase</a>.
+It is based off of the example in the "Partitioning Compiled Code into Modules"
+section in Chapter 12 of <span class="book-title">Closure: The Definitive Guide</span>.
+
+<p>
+One important thing to note when using modules is that you will probably have
+to add code like the following to configure the <code>goog.module.ModuleManager</code>:
+
+<pre>var moduleManager = goog.module.ModuleManager.getInstance();
+moduleLoader.setDebugMode(true);
+moduleManager.setAllModuleInfo(goog.global['PLOVR_MODULE_INFO']);
+moduleManager.setModuleUris(goog.global['PLOVR_MODULE_URIS']);</pre>
+
+When plovr generates the JavaScript for the modules, it includes some module
+data in global variables that are used for initialization, as shown above.
+
+<h2>Special URLs</h2>
+
+In addition to the <code>/compile</code> URL introduced in the first section,
+there are other URLs that plovr serves to provide additional information.
+Some of these are listed on the
+<a href="http://code.google.com/p/plovr/wiki/GettingStarted">plovr wiki page
+on Google Code</a>, though the best way to get the complete list is by
+<a href="http://code.google.com/p/plovr/source/browse/src/org/plovr/CompilationServer.java">
+exploring the plovr source code</a>.
+There is also more information on these features of plovr in Appendix C of
+<span class="book-title">Closure: The Definitive Guide</span>.
+
+</body>
+</html>
