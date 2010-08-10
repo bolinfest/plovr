@@ -6,10 +6,12 @@
   <property name="src.dir" value="${basedir}/src" />
   <property name="test.dir" value="${basedir}/test" />
 	<property name="testdata.dir" value="${basedir}/testdata" />
+  <property name="www.dir" value="${basedir}/www" />
   <property name="demo.dir" value="${basedir}/demo" />
   <property name="lib.dir" value="${basedir}/lib" />
   <property name="build.dir" value="${basedir}/build" />
   <property name="classes.dir" value="${build.dir}/classes" />
+  <property name="www.build.dir" value="${build.dir}/www" />
   <property name="demo.build.dir" value="${build.dir}/demo" />
 
   <!-- In order to build the jar, each of the Closure Tools must be          -->
@@ -143,6 +145,13 @@
       <jvmarg value="-Xdebug" />
       <jvmarg value="-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=8000"/>
     </java>
+  </target>
+
+  <target name="www">
+    <mkdir dir="${www.build.dir}" />
+    <copy todir="${www.build.dir}">
+      <fileset dir="${www.dir}" />
+    </copy>
   </target>
 
   <target name="demo-www"
