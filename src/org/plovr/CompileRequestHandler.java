@@ -10,17 +10,13 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import com.google.common.base.Charsets;
+import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 import com.google.common.io.Resources;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.javascript.jscomp.Compiler;
-import com.google.javascript.jscomp.CompilerOptions;
-import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.Result;
-import com.google.javascript.jscomp.SourceExcerptProvider;
 import com.google.template.soy.base.SoySyntaxException;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
@@ -63,21 +59,14 @@ public final class CompileRequestHandler extends AbstractGetHandler {
 
     try {
       if (config.getCompilationMode() == CompilationMode.RAW) {
-        String prefix;
-        URI referrer = HttpUtil.getReferrer(exchange);
-        if (referrer == null) {
-          prefix = "http://localhost:9810/";
-        } else {
-          prefix =
-              referrer.getScheme() + "://" + referrer.getHost() + ":9810/";
-        }
         Manifest manifest = config.getManifest();
         URI requestUri = exchange.getRequestURI();
-        String js = InputFileHandler.getJsToLoadManifest(config.getId(),
+        String prefix = server.getServerForExchange(exchange);
+        String js = InputFileHandler.getJsToLoadManifest(config,
             manifest, prefix, requestUri.getPath());
         builder.append(js);
       } else {
-        compile(config, builder);
+        compile(config, exchange, builder);
       }
     } catch (MissingProvideException e) {
       Preconditions.checkState(builder.length() == 0,
@@ -97,27 +86,29 @@ public final class CompileRequestHandler extends AbstractGetHandler {
     responseBody.close();
   }
 
-  public static Result compile(Compiler compiler, Config config)
+  public static Compilation compile(Config config)
       throws MissingProvideException, CheckedSoySyntaxException {
     try {
-      CompilerArguments compilerArguments;
-      compilerArguments = config.getManifest().getCompilerArguments();
-      CompilerOptions options = config.getCompilerOptions();
-      return compiler.compile(compilerArguments.getExterns(),
-          compilerArguments.getInputs(), options);
+      Compilation compilation = config.getManifest().getCompilerArguments(
+          config.getModuleConfig());
+      compilation.compile(config);
+      return compilation;
     } catch (SoySyntaxException e) {
       throw new CheckedSoySyntaxException(e);
     }
   }
 
-  private void compile(Config config, Appendable builder)
-      throws IOException, MissingProvideException {
-    Compiler compiler = new Compiler();
-    Result result = null;
+  /**
+   * For modes other than RAW, compile the code and write the result to builder.
+   * When modules are used, only the code for the initial module will be written,
+   * along with the requisite bootstrapping code for the remaining modules.
+   */
+  private void compile(Config config,
+      HttpExchange exchange,
+      Appendable builder) throws IOException, MissingProvideException {
+    Compilation compilation;
     try {
-      result = compile(compiler, config);
-      server.recordSourceMap(config, result.sourceMap);
-      server.recordExportsAsExterns(config, result.externExport);
+      compilation = compile(config);
     } catch (MissingProvideException e) {
       writeErrors(config, ImmutableList.of(e.createCompilationError()),
           builder);
@@ -128,11 +119,22 @@ public final class CompileRequestHandler extends AbstractGetHandler {
       return;
     }
 
+    server.recordCompilation(config, compilation);
+    Result result = compilation.getResult();
+
     if (result.success) {
       if (config.getCompilationMode() == CompilationMode.WHITESPACE) {
         builder.append("CLOSURE_NO_DEPS = true;\n");
       }
-      builder.append(compiler.toSource());
+
+      if (compilation.usesModules()) {
+        final boolean isDebugMode = true;
+        Function<String, String> moduleNameToUri = InputFileHandler.
+            createModuleNameToUriConverter(server, exchange, config.getId());
+        builder.append(compilation.getCodeForRootModule(isDebugMode, moduleNameToUri));
+      } else {
+        builder.append(compilation.getCompiledCode());
+      }
     }
 
     // TODO(bolinfest): Check whether writing out the plovr library confuses the
@@ -142,17 +144,8 @@ public final class CompileRequestHandler extends AbstractGetHandler {
     // Write out the plovr library, even if there are no warnings.
     // It is small, and it exports some symbols that may be of use to
     // developers.
-    writeErrorsAndWarnings(config, normalizeErrors(result.errors, compiler),
-        normalizeErrors(result.warnings, compiler), builder);
-  }
-
-  private static List<CompilationError> normalizeErrors(JSError[] errors,
-      SourceExcerptProvider sourceExcerptProvider) {
-    List<CompilationError> compilationErrors = Lists.newLinkedList();
-    for (JSError error : errors) {
-      compilationErrors.add(new CompilationError(error, sourceExcerptProvider));
-    }
-    return compilationErrors;
+    writeErrorsAndWarnings(config, compilation.getCompilationErrors(),
+        compilation.getCompilationWarnings(), builder);
   }
 
   private void writeErrors(Config config, List<CompilationError> errors,

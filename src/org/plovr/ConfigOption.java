@@ -1,8 +1,17 @@
 package org.plovr;
 
+import java.io.File;
+import java.util.Map;
+
+import org.plovr.ModuleConfig.BadDependencyTreeException;
+
+import com.google.common.collect.Maps;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+import com.google.javascript.jscomp.CheckLevel;
+import com.google.javascript.jscomp.DiagnosticGroup;
 import com.google.javascript.jscomp.WarningLevel;
 
 public enum ConfigOption {
@@ -17,14 +26,17 @@ public enum ConfigOption {
   PATHS("paths", new ConfigUpdater() {
     @Override
     public void apply(String path, Config.Builder builder) {
-      builder.addPath(path);
+      String resolvedPath = maybeResolvePath(path, builder);
+      builder.addPath(resolvedPath);
     }
 
     @Override
     public void apply(JsonArray paths, Config.Builder builder) {
       for (JsonElement item : paths) {
-        String path = getAsString(item);
-        builder.addPath(path);
+        String path = GsonUtil.stringOrNull(item);
+        if (path != null) {
+          apply(path, builder);
+        }
       }
     }
   }),
@@ -32,14 +44,17 @@ public enum ConfigOption {
   INPUTS("inputs" , new ConfigUpdater() {
     @Override
     public void apply(String input, Config.Builder builder) {
-      builder.addInput(input);
+      String resolvedPath = maybeResolvePath(input, builder);
+      builder.addInput(new File(resolvedPath), input);
     }
 
     @Override
     public void apply(JsonArray inputs, Config.Builder builder) {
       for (JsonElement item : inputs) {
-        String path = getAsString(item);
-        builder.addInput(path);
+        String input = GsonUtil.stringOrNull(item);
+        if (input != null) {
+          apply(input, builder);
+        }
       }
     }
   }),
@@ -47,14 +62,17 @@ public enum ConfigOption {
   EXTERNS("externs", new ConfigUpdater() {
     @Override
     public void apply(String extern, Config.Builder builder) {
-      builder.addExtern(extern);
+      String resolvedPath = maybeResolvePath(extern, builder);
+      builder.addExtern(resolvedPath);
     }
 
     @Override
     public void apply(JsonArray externs, Config.Builder builder) {
       for (JsonElement item : externs) {
-        String extern = getAsString(item);
-        builder.addInput(extern);
+        String extern = GsonUtil.stringOrNull(item);
+        if (extern != null) {
+          apply(extern, builder);
+        }
       }
     }
   }),
@@ -113,6 +131,56 @@ public enum ConfigOption {
     }
   }),
 
+  MODULES("modules", new ConfigUpdater() {
+    @Override
+    public void apply(JsonObject modules, Config.Builder builder) {
+      try {
+        ModuleConfig.Builder moduleConfigBuilder = builder.getModuleConfigBuilder();
+        moduleConfigBuilder.setModuleInfo(modules);
+      } catch (BadDependencyTreeException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }),
+
+  MODULE_OUTPUT_PATH("module_output_path", new ConfigUpdater() {
+    @Override
+    public void apply(String outputPath, Config.Builder builder) {
+      ModuleConfig.Builder moduleConfigBuilder = builder.getModuleConfigBuilder();
+      moduleConfigBuilder.setOutputPath(outputPath);
+    }
+  }),
+
+  MODULE_PRODUCTION_URI("module_production_uri", new ConfigUpdater() {
+    @Override
+    public void apply(String productionUri, Config.Builder builder) {
+      ModuleConfig.Builder moduleConfigBuilder = builder.getModuleConfigBuilder();
+      moduleConfigBuilder.setProductionUri(productionUri);
+    }
+  }),
+
+  DIAGNOSTIC_GROUPS("checks", new ConfigUpdater() {
+    @Override
+    public void apply(JsonObject obj, Config.Builder builder) {
+      Map<DiagnosticGroup, CheckLevel> groups = Maps.newHashMap();
+      for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
+        DiagnosticGroup group = DiagnosticGroupUtil.forName(entry.getKey());
+        if (group == null) {
+          continue;
+        }
+
+        String checkLevelString = GsonUtil.stringOrNull(entry.getValue());
+        if (checkLevelString == null) {
+          continue;
+        }
+        CheckLevel checkLevel = CheckLevel.valueOf(checkLevelString.toUpperCase());
+
+        groups.put(group, checkLevel);
+      }
+      builder.setDiagnosticGroups(groups);
+    }
+  }),
+
   ;
 
   private static class ConfigUpdater {
@@ -133,6 +201,10 @@ public enum ConfigOption {
       throw new UnsupportedOperationException();
     }
 
+    public void apply(JsonObject value, Config.Builder builder) {
+      throw new UnsupportedOperationException();
+    }
+
     public void apply(JsonElement json, Config.Builder builder) {
       if (json.isJsonPrimitive()) {
         JsonPrimitive primitive = json.getAsJsonPrimitive();
@@ -145,6 +217,8 @@ public enum ConfigOption {
         }
       } else if (json.isJsonArray()) {
         apply(json.getAsJsonArray(), builder);
+      } else if (json.isJsonObject()) {
+        apply(json.getAsJsonObject(), builder);
       }
     }
 
@@ -189,18 +263,32 @@ public enum ConfigOption {
   }
 
   /**
+   * Config files often contain relative paths, so it is important to resolve
+   * them against the directory that contains the config file when that is the
+   * case.
    *
-   * @param element
-   * @return the string value of the JsonElement
-   * @throws IllegalArgumentException if element does not correspond to a JSON
-   *     string primitive
+   * @param path
+   * @param builder
+   * @return
    */
-  private static String getAsString(JsonElement element) {
-    if (element == null || !element.isJsonPrimitive() ||
-        !element.getAsJsonPrimitive().isString()) {
-      throw new IllegalArgumentException(element + " is not a JSON string");
+  private static String maybeResolvePath(String path, Config.Builder builder) {
+    return maybeResolvePath(path, builder.getRelativePathBase());
+  }
+
+  static String maybeResolvePath(String path, File relativePathBase) {
+    // Unfortunately, a File object must be constructed in order to determine
+    // whether the path is absolute.
+    File file = new File(path);
+    if (file.isAbsolute()) {
+      return path;
     } else {
-      return element.getAsJsonPrimitive().getAsString();
+      return (new File(relativePathBase, path)).getAbsolutePath();
+    }
+  }
+
+  static void assertContainsModuleNamePlaceholder(String path) {
+    if (path == null || !path.contains("%s")) {
+      throw new IllegalArgumentException("Does not contain %s: " + path);
     }
   }
 }

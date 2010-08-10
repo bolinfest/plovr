@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+<head>
+  <title>plovr</title>
+  <link href="style.css" rel="STYLESHEET" type="text/css">
+  <style>
+.show-warning {
+  display: block;
+  margin: 10px auto;
+  width: 679px;
+}
+  </style>
+</head>
+<body>
+
+<div class="heading">
+  <h1>
+    plovr: a Closure build tool
+  </h1>
+  <ul class="navigation-links">
+    <li><span class="selected-link">Home</span></li>
+    <li><a href="docs.html">Docs</a></li>
+    <li><a href="download.html">Download</a></li>
+    <li><a href="about.html">About</a></li>
+  </ul>
+  <div style="clear: both"></div>
+</div>
+
+plovr is a build tool that dynamically recompiles JavaScript and Closure
+Template code. It is designed to simplify
+<a href="http://code.google.com/closure/">Closure</a> development,
+and to make it more enjoyable.
+
+<p>The intended usage of plovr is as follows:</p>
+
+<ul>
+  <li>
+    <em>During development</em>, you should be able to edit JavaScript and Soy
+    files in your favorite text editor, refresh your web application in the
+    browser, and have
+    it load a newly compiled version of your code. Any errors or warnings
+    resulting from compilation by the Closure Compiler should appear at the top
+    of your web application so you can identify and fix them quickly.
+  </li>
+  <li>
+    <em>During production</em>, you should serve precompiled versions of your
+    JavaScript that behave exactly as they did during development.
+  </li>
+</ul>
+
+<div class="show-warning">
+  <img src="show-warning.png" width="679px" height="251px">
+  <p class="caption">
+  plovr displaying a Compiler warning inside the web page that loads the
+  JavaScript code that contains the type checking warning. 
+  </p>
+</div>
+
+<p>
+In providing a build tool to assist in iterative JavaScript development,
+plovr also achieves the following:
+</p>
+
+<ul>
+  <li>
+    Replaces the set of unrelated scripts that are usually required to build
+    Closure code with a single JSON configuration file.
+  </li>
+  <li>
+    Exposes features of the Closure Compiler through the configuration file that
+    were previously accessible only by writing Java code against the Compiler's
+    API.
+  </li>
+  <li>
+    Facilitates the process of splitting JavaScript code into modules that can
+    be downloaded separately, thereby reducing start-up time for web
+    applications.
+  </li>
+</ul> 
+
+<a href="http://oreilly.com/catalog/9781449381875/">
+  <img src="cover.png" width="252px" height="330px"
+       style="float: right; border: none; margin-left: 10px">
+</a>
+
+You can learn more about both Closure and plovr in
+<span class="book-title">Closure: The Definitive Guide</span> (O'Reilly).
+Although it is not available in stores yet, it is possible to
+<a href="http://www.amazon.com/Closure-Definitive-Guide-Michael-Bolin/dp/1449381871">pre-order
+the book on Amazon</a> (it is expected to be available in September 2010),
+or you can <a href="http://oreilly.com/catalog/9781449381875/">purchase the
+complete draft today</a> via O'Reilly's
+<a href="http://oreilly.com/roughcuts/faq.csp">Rough Cuts</a> program.
+
+</body>
+</html>

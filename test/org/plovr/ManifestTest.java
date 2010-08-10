@@ -43,7 +43,8 @@ public class ManifestTest extends TestCase {
         ImmutableList.<JsInput>of(requiredInput),
         externs);
 
-    CompilerArguments compilerArguments = manifest.getCompilerArguments();
+    final ModuleConfig moduleConfig = null;
+    Compilation compilerArguments = manifest.getCompilerArguments(moduleConfig);
     List<JSSourceFile> inputs = compilerArguments.getInputs();
 
     List<String> expectedNames = ImmutableList.copyOf(

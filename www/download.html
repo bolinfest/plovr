@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+  <title>Download plovr</title>
+  <link href="style.css" rel="STYLESHEET" type="text/css">
+</head>
+<body>
+
+<div class="heading">
+  <h1>
+    plovr: a Closure build tool
+  </h1>
+  <ul class="navigation-links">
+    <li><a href=".">Home</a></li>
+    <li><a href="docs.html">Docs</a></li>
+    <li><span class="selected-link">Download</span></li>
+    <li><a href="about.html">About</a></li>
+  </ul>
+  <div style="clear: both"></div>
+</div>
+
+<p>
+You can <a href="http://code.google.com/p/plovr/downloads/list">download a
+pre-built binary of plovr from Google Code</a>.
+As you will see, binaries that are available for download are named with
+revision numbers from version control rather than with formal version numbers.
+This is because plovr is still in the alpha stage, as it merits more feedback
+from developers before the names of the configuration file properties,
+URLs, and query parameters can be frozen. Once developers have provided
+feedback and names have stabilized, an official beta will be released.
+</p>
+
+<p>
+plovr is open-sourced under the Apache 2.0 license.
+Its <a href="http://code.google.com/p/plovr/source/checkout">
+source code is available on Google Code</a> via a Mercurial repository.
+Currently, building plovr requires that the following projects be checked out
+in sibling directories that match the name of their respective Google Code
+project (the
+<a href="http://code.google.com/p/plovr/source/browse/build.xml">build.xml file
+for plovr</a> relies on this):
+
+<ul>
+  <li><a href="http://code.google.com/p/closure-compiler/">closure-compiler</a></li>
+  <li><a href="http://code.google.com/p/closure-library/">closure-library</a></li>
+  <li><a href="http://code.google.com/p/closure-templates/">closure-templates</a></li>
+</ul>
+
+Ultimately, the plovr build script will be extended so that it checks out these
+projects automatically. Further, the build script will expect the Closure
+projects to be checked out at a specific revision number that has been tested to
+work with plovr.
+(Admittedly, the current process for building a release of plovr is rather
+ad hoc.)
+</p>
+
+<h2>Contribute to plovr by fixing bugs in other projects</h2>
+
+One important way that you can help with plovr development is by fixing bugs in other
+projects:
+
+<ul>
+  <li>
+    google-gson: <a href="http://code.google.com/p/google-gson/issues/detail?id=212">
+    Make it possible to allow comments in JSON</a>
+  </li>
+  <li>
+    Firefox: <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=583083">
+    Let the eval //@sourceURL trick work for stack traces</a>
+  </li>
+  <li>
+    v8: <a href="http://code.google.com/p/v8/issues/detail?id=672">
+    Let the eval //@sourceURL trick work for stack traces.</a>
+  </li>
+</ul>
+
+If you know someone working on these projects, a gentle nudge to get these bugs
+noticed and assigned to developers on the project would be a big help!
+
+</body>
+</html>

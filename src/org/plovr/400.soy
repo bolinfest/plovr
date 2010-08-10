@@ -1,0 +1,16 @@
+{namespace org.plovr}
+
+/**
+ * @param htmlMessage
+ */
+{template .errorPage}
+<!doctype html>
+<html>
+<head>
+  <title>400 - Server Error</title>
+</head>
+<body>
+{$htmlMessage|noAutoescape}
+</body>
+</html>
+{/template}

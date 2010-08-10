@@ -16,6 +16,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.javascript.jscomp.JSModule;
 import com.google.javascript.jscomp.JSSourceFile;
 
 
@@ -28,12 +29,12 @@ import com.google.javascript.jscomp.JSSourceFile;
  */
 public final class Manifest {
 
-  private static final Logger logger = Logger.getLogger("org.plovr.Manifest");
+  private static final Logger logger = Logger.getLogger(Manifest.class.getName());
 
   /**
    * Converts a plovr JsInput to a Closure Compiler JSSourceFile.
    */
-  private static Function<JsInput, JSSourceFile> inputToSourceFile =
+  static Function<JsInput, JSSourceFile> inputToSourceFile =
       new Function<JsInput, JSSourceFile>() {
     @Override
     public JSSourceFile apply(JsInput jsInput) {
@@ -80,20 +81,30 @@ public final class Manifest {
   }
 
   /**
-   * @return a new {@link CompilerArguments} that reflects the configuration for
+   * @param moduleConfig
+   * @return a new {@link Compilation} that reflects the configuration for
    *         this {@link Manifest}.
    * @throws MissingProvideException
    */
-  public CompilerArguments getCompilerArguments() throws MissingProvideException {
-    List<JSSourceFile> externs = (this.externs == null)
-        ? getDefaultExterns()
-        : Lists.transform(getExternInputs(), inputToSourceFile);
+  public Compilation getCompilerArguments(
+      @Nullable ModuleConfig moduleConfig) throws MissingProvideException {
+    List<JSSourceFile> externs = getDefaultExterns();
+    if (this.externs != null) {
+      ImmutableList.Builder<JSSourceFile> builder = ImmutableList.builder();
+      builder.addAll(externs);
+      builder.addAll(Lists.transform(getExternInputs(), inputToSourceFile));
+      externs = builder.build();
+    }
 
     List<JsInput> jsInputs = getInputsInCompilationOrder();
-    List<JSSourceFile> inputs = Lists.transform(jsInputs, inputToSourceFile);
-    logger.info("Inputs: " + jsInputs.toString());
-
-    return new CompilerArguments(externs, inputs);
+    if (moduleConfig == null) {
+      List<JSSourceFile> inputs = Lists.transform(jsInputs, inputToSourceFile);
+      logger.info("Inputs: " + jsInputs.toString());
+      return Compilation.create(externs, inputs);
+    } else {
+      List<JSModule> modules = moduleConfig.getModules(jsInputs);
+      return Compilation.createForModules(externs, modules);
+    }
   }
 
   private List<JSSourceFile> getDefaultExterns() {
@@ -181,8 +192,11 @@ public final class Manifest {
     } else {
       allDependencies.addAll(getFiles(closureLibraryDirectory, includeSoy));
     }
-    allDependencies.addAll(getFiles(dependencies, includeSoy));
+    // Add the requiredInputs first so that if a file is both an "input" and a
+    // "path" under different names (such as "hello.js" and "/./hello.js"), the
+    // name used to specify the input is preferred.
     allDependencies.addAll(requiredInputs);
+    allDependencies.addAll(getFiles(dependencies, includeSoy));
     return allDependencies;
   }
 
@@ -207,13 +221,36 @@ public final class Manifest {
 
   private void getInputs(File file, String path, Set<JsInput> output,
       boolean includeSoy) {
-    Preconditions.checkArgument(file.exists());
+    Preconditions.checkArgument(file.exists(), "File not found at: " +
+        file.getAbsolutePath());
+
+    // Some editors, such as Emacs, may write backup files whose names start
+    // with a dot. Such files should be ignored. (If this turns out to be an
+    // issue, this could be changed so it is configurable.) One common
+    // exception is when the name is simply ".", referring to the current
+    // directory.
+    if (file.getName().startsWith(".") && !".".equals(file.getName())) {
+      logger.info("Ignoring: " + file);
+      return;
+    }
+
     if (file.isFile()) {
       String fileName = file.getName();
       if (fileName.endsWith(".js") || (includeSoy && fileName.endsWith(".soy"))) {
-        output.add(LocalFileJsInput.createForFileWithName(file, path + "/" + fileName));
+        // Using "." as the value for "paths" in the config file results in ugly
+        // names for JsInputs because of the way the relative path is resolved,
+        // so strip the leading "/./" from the JsInput name in this case.
+        String name = path + "/" + fileName;
+        final String uglyPrefix = "/./";
+        if (name.startsWith(uglyPrefix)) {
+          name = name.substring(uglyPrefix.length());
+        }
+        JsInput input = LocalFileJsInput.createForFileWithName(file, name);
+        logger.config("Dependency: " + input);
+        output.add(input);
       }
     } else if (file.isDirectory()) {
+      logger.config("Directory to explore: " + file);
       path += "/" + file.getName();
       for (File entry : file.listFiles()) {
         getInputs(entry, path, output, includeSoy);

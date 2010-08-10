@@ -9,7 +9,6 @@ import com.google.common.base.Preconditions;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.google.javascript.jscomp.Compiler;
 import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.Result;
 
@@ -32,7 +31,8 @@ public final class ConfigParser {
     Preconditions.checkNotNull(root);
     Preconditions.checkArgument(root.isJsonObject());
 
-    Config.Builder builder = Config.builder();
+    File parentDirectory = file.getAbsoluteFile().getParentFile();
+    Config.Builder builder = Config.builder(parentDirectory);
 
     // Get the id for the config.
     JsonObject map = root.getAsJsonObject();
@@ -73,15 +73,13 @@ public final class ConfigParser {
 
     File configFile = new File(args[0]);
     Config config = ConfigParser.parseFile(configFile);
-    CompilerArguments compilerArguments =
-        config.getManifest().getCompilerArguments();
-    Compiler compiler = new Compiler();
-    Result result =
-        compiler.compile(compilerArguments.getExterns(), compilerArguments
-            .getInputs(), config.getCompilerOptions());
-
+    final ModuleConfig moduleConfig = null;
+    Compilation compilation =
+        config.getManifest().getCompilerArguments(moduleConfig);
+    compilation.compile(config);
+    Result result = compilation.getResult();
     if (result.success) {
-      System.out.println(compiler.toSource());
+      System.out.println(compilation.getCompiledCode());
     } else {
       for (JSError warning : result.warnings) {
         System.err.println(warning);

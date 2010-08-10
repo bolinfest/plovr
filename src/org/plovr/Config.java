@@ -3,15 +3,18 @@ package org.plovr;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.ClosureCodingConvention;
 import com.google.javascript.jscomp.CompilationLevel;
 import com.google.javascript.jscomp.CompilerOptions;
+import com.google.javascript.jscomp.DiagnosticGroup;
 import com.google.javascript.jscomp.WarningLevel;
 
 public final class Config {
@@ -22,11 +25,15 @@ public final class Config {
 
   private final Manifest manifest;
 
+  private final ModuleConfig moduleConfig;
+
   private final CompilationMode compilationMode;
 
   private final WarningLevel warningLevel;
 
   private final boolean printInputDelimiter;
+
+  private final Map<DiagnosticGroup, CheckLevel> diagnosticGroups;
 
   /**
    * @param id Unique identifier for the configuration. This is used as an
@@ -37,18 +44,22 @@ public final class Config {
   private Config(
       String id,
       Manifest manifest,
+      ModuleConfig moduleConfig,
       CompilationMode compilationMode,
       WarningLevel warningLevel,
-      boolean printInputDelimiter) {
+      boolean printInputDelimiter,
+      Map<DiagnosticGroup, CheckLevel> diagnosticGroups) {
     this.id = id;
     this.manifest = manifest;
+    this.moduleConfig = moduleConfig;
     this.compilationMode = compilationMode;
     this.warningLevel = warningLevel;
     this.printInputDelimiter = printInputDelimiter;
+    this.diagnosticGroups = diagnosticGroups;
   }
 
-  public static Builder builder() {
-    return new Builder();
+  public static Builder builder(File relativePathBase) {
+    return new Builder(relativePathBase);
   }
 
   public static Builder builder(Config config) {
@@ -63,11 +74,21 @@ public final class Config {
     return manifest;
   }
 
+  public ModuleConfig getModuleConfig() {
+    return moduleConfig;
+  }
+
   public CompilationMode getCompilationMode() {
     return compilationMode;
   }
 
+  public WarningLevel getWarningLevel() {
+    return warningLevel;
+  }
+
   public CompilerOptions getCompilerOptions() {
+    Preconditions.checkArgument(compilationMode != CompilationMode.RAW,
+        "Cannot compile using RAW mode");
     CompilationLevel level = compilationMode.getCompilationLevel();
     logger.info("Compiling with level: " + level);
     CompilerOptions options = new CompilerOptions();
@@ -79,9 +100,26 @@ public final class Config {
       options.inputDelimiter = "// Input %num%: %name%";
     }
 
-    // TODO(bolinfest): This is a hack to work around the fact that a SourceMap
+    if (moduleConfig != null) {
+      options.crossModuleCodeMotion = true;
+      options.crossModuleMethodMotion = true;
+    }
+
+    if (diagnosticGroups != null) {
+      for (Map.Entry<DiagnosticGroup, CheckLevel> entry :
+          diagnosticGroups.entrySet()) {
+        DiagnosticGroup group = entry.getKey();
+        CheckLevel checkLevel = entry.getValue();
+        options.setWarningLevel(group, checkLevel);
+      }
+    }
+
+    // This is a hack to work around the fact that a SourceMap
     // will not be created unless a file is specified to which the SourceMap
     // should be written.
+    // TODO(bolinfest): Change com.google.javascript.jscomp.CompilerOptions so
+    // that this is configured by a boolean, just like enableExternExports() was
+    // added to support generating externs without writing them to a file.
     try {
       File tempFile = File.createTempFile("source", "map");
       options.sourceMapOutputPath = tempFile.getAbsolutePath();
@@ -101,6 +139,8 @@ public final class Config {
 
   final static class Builder {
 
+    private final File relativePathBase;
+
     private String id = null;
 
     private final Manifest manifest;
@@ -109,7 +149,7 @@ public final class Config {
 
     private ImmutableList.Builder<String> paths = ImmutableList.builder();
 
-    private ImmutableList.Builder<String> inputs = ImmutableList.builder();
+    private ImmutableList.Builder<JsInput> inputs = ImmutableList.builder();
 
     private ImmutableList.Builder<String> externs = null;
 
@@ -119,17 +159,35 @@ public final class Config {
 
     private boolean printInputDelimiter = false;
 
-    private Builder() {
+    private Map<DiagnosticGroup, CheckLevel> diagnosticGroups = null;
+
+    private ModuleConfig.Builder moduleConfigBuilder = null;
+
+    private Builder(File relativePathBase) {
+      Preconditions.checkNotNull(relativePathBase);
+      Preconditions.checkArgument(relativePathBase.isDirectory(),
+          relativePathBase + " is not a directory");
+      this.relativePathBase = relativePathBase;
       manifest = null;
     }
 
     private Builder(Config config) {
       Preconditions.checkNotNull(config);
+      this.relativePathBase = null;
       this.id = config.id;
       this.manifest = config.manifest;
+      this.moduleConfigBuilder = (config.moduleConfig == null)
+          ? null
+          : ModuleConfig.builder(config.moduleConfig);
       this.compilationMode = config.compilationMode;
       this.warningLevel = config.warningLevel;
       this.printInputDelimiter = config.printInputDelimiter;
+      this.diagnosticGroups = config.diagnosticGroups;
+    }
+
+    /** Directory against which relative paths should be resolved. */
+    public File getRelativePathBase() {
+      return this.relativePathBase;
     }
 
     public void setId(String id) {
@@ -142,9 +200,10 @@ public final class Config {
       paths.add(path);
     }
 
-    public void addInput(String input) {
-      Preconditions.checkNotNull(input);
-      inputs.add(input);
+    public void addInput(File file, String name) {
+      Preconditions.checkNotNull(file);
+      Preconditions.checkNotNull(name);
+      inputs.add(LocalFileJsInput.createForFileWithName(file, name));
     }
 
     public void addExtern(String extern) {
@@ -153,8 +212,16 @@ public final class Config {
       }
       externs.add(extern);
     }
+
     public void setPathToClosureLibrary(String pathToClosureLibrary) {
       this.pathToClosureLibrary = pathToClosureLibrary;
+    }
+
+    public ModuleConfig.Builder getModuleConfigBuilder() {
+      if (moduleConfigBuilder == null) {
+        moduleConfigBuilder = ModuleConfig.builder(relativePathBase);
+      }
+      return moduleConfigBuilder;
     }
 
     public void setCompilationMode(CompilationMode mode) {
@@ -171,6 +238,10 @@ public final class Config {
       this.printInputDelimiter = printInputDelimiter;
     }
 
+    public void setDiagnosticGroups(Map<DiagnosticGroup, CheckLevel> groups) {
+      this.diagnosticGroups = groups;
+    }
+
     public Config build() {
       File closureLibraryDirectory = pathToClosureLibrary != null
           ? new File(pathToClosureLibrary)
@@ -183,36 +254,34 @@ public final class Config {
 
         manifest = new Manifest(closureLibraryDirectory,
           Lists.transform(paths.build(), STRING_TO_FILE),
-          Lists.transform(inputs.build(), STRING_TO_JS_INPUT),
+          inputs.build(),
           externs);
       } else {
         manifest = this.manifest;
       }
 
+      ModuleConfig moduleConfig = (moduleConfigBuilder == null)
+          ? null
+          : moduleConfigBuilder.build();
+
       Config config = new Config(
           id,
           manifest,
+          moduleConfig,
           compilationMode,
           warningLevel,
-          printInputDelimiter);
+          printInputDelimiter,
+          diagnosticGroups);
 
       return config;
     }
-
   }
+
   private static Function<String, File> STRING_TO_FILE =
     new Function<String, File>() {
       @Override
       public File apply(String s) {
         return new File(s);
-      }
-    };
-
-  private static Function<String, JsInput> STRING_TO_JS_INPUT =
-    new Function<String, JsInput>() {
-      @Override
-      public JsInput apply(String fileName) {
-        return LocalFileJsInput.createForName(fileName);
       }
     };
 

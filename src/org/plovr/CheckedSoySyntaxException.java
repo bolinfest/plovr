@@ -7,6 +7,8 @@ import com.google.template.soy.base.SoySyntaxException;
 
 public final class CheckedSoySyntaxException extends Exception {
 
+  private static final long serialVersionUID = 1L;
+
   private static final DiagnosticType SOY_SYNTAX_EXCEPTION =
     DiagnosticType.error("PLOVR_SOY_SYNTAX_EXCEPTION", "{0}");
 
