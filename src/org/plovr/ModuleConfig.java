@@ -247,12 +247,19 @@ public final class ModuleConfig {
     return dependencies;
   }
 
+  /**
+   *
+   * @param dependencyTree map of module to modules that depend on it
+   * @param rootModule the root module of the tree
+   * @return
+   * @throws BadDependencyTreeException
+   */
   private static List<String> buildDependencies(
       Map<String, List<String>> dependencyTree,
-      String dependency)
+      String rootModule)
       throws BadDependencyTreeException {
     LinkedHashSet<String> transitiveDependencies = new LinkedHashSet<String>();
-    buildDependencies(dependencyTree, transitiveDependencies, dependency);
+    buildDependencies(dependencyTree, transitiveDependencies, rootModule);
 
     // Because the dependencies were built up in reverse order, add the
     // results of the iterator in reverse order to create a new list.
@@ -263,6 +270,14 @@ public final class ModuleConfig {
     return dependencies;
   }
 
+  /**
+   *
+   * @param dependencies
+   * @param transitiveDependencies the Iterator of this set returns the
+   *     dependencies in reverse order
+   * @param dependency
+   * @throws BadDependencyTreeException
+   */
   private static void buildDependencies(
       Map<String, List<String>> dependencies,
       LinkedHashSet<String> transitiveDependencies,
@@ -273,7 +288,7 @@ public final class ModuleConfig {
     }
     if (transitiveDependencies.contains(dependency)) {
       throw new BadDependencyTreeException("Circular dependency involving: " +
-          dependency);
+          dependency + " depends on: " + transitiveDependencies);
     }
     transitiveDependencies.add(dependency);
   }
@@ -439,6 +454,11 @@ public final class ModuleConfig {
 
     public List<String> getDeps() {
       return deps;
+    }
+
+    @Override
+    public String toString() {
+      return name + ":" + getDeps();
     }
   }
 
