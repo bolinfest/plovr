@@ -17,7 +17,11 @@ import com.google.common.io.Resources;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.javascript.jscomp.Result;
+import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.base.SoySyntaxException;
+import com.google.template.soy.data.SoyMapData;
+import com.google.template.soy.msgs.SoyMsgBundle;
+import com.google.template.soy.tofu.SoyTofu;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 
@@ -25,6 +29,15 @@ public final class CompileRequestHandler extends AbstractGetHandler {
 
   private static final Logger logger = Logger.getLogger(
       CompileRequestHandler.class.getName());
+
+  private static final SoyTofu TOFU;
+
+  static {
+    SoyFileSet.Builder builder = new SoyFileSet.Builder();
+    builder.add(Resources.getResource(InputFileHandler.class, "raw.soy"));
+    SoyFileSet fileSet = builder.build();
+    TOFU = fileSet.compileToJavaObj();
+  }
 
   private final Gson gson;
 
@@ -138,7 +151,12 @@ public final class CompileRequestHandler extends AbstractGetHandler {
           // dynamically load the root module.
           compilation.appendRootModuleInfo(appendable, isDebugMode,
               moduleNameToUri);
-          // TODO(bolinfest): Insert JS to dynamically load the root module.
+
+          String src = moduleNameToUri.apply(moduleConfig.getRootModule());
+          SoyMapData mapData = new SoyMapData("src", src);
+          final SoyMsgBundle messageBundle = null;
+          String js = TOFU.render("org.plovr.loadRootModule", mapData, messageBundle);
+          appendable.append(js);
         } else {
           appendable.append(compilation.getCodeForRootModule(isDebugMode,
               moduleNameToUri));

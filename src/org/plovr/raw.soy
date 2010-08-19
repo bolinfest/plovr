@@ -41,3 +41,10 @@ PLOVR_MODULE_USE_DEBUG_MODE=true;
 })();
 {/literal}
 {/template}
+
+/**
+ * @param src
+ */
+{template .loadRootModule}
+document.write('<script type="text/javascript" src="{$src|noAutoescape}"><\/script>');
+{/template}
