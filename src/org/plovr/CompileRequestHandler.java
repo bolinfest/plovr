@@ -105,17 +105,17 @@ public final class CompileRequestHandler extends AbstractGetHandler {
    */
   private void compile(Config config,
       HttpExchange exchange,
-      Appendable builder) throws IOException, MissingProvideException {
+      Appendable appendable) throws IOException, MissingProvideException {
     Compilation compilation;
     try {
       compilation = compile(config);
     } catch (MissingProvideException e) {
       writeErrors(config, ImmutableList.of(e.createCompilationError()),
-          builder);
+          appendable);
       return;
     } catch (CheckedSoySyntaxException e) {
       writeErrors(config, ImmutableList.of(e.createCompilationError()),
-          builder);
+          appendable);
       return;
     }
 
@@ -124,16 +124,27 @@ public final class CompileRequestHandler extends AbstractGetHandler {
 
     if (result.success) {
       if (config.getCompilationMode() == CompilationMode.WHITESPACE) {
-        builder.append("CLOSURE_NO_DEPS = true;\n");
+        appendable.append("CLOSURE_NO_DEPS = true;\n");
       }
 
       if (compilation.usesModules()) {
         final boolean isDebugMode = true;
         Function<String, String> moduleNameToUri = InputFileHandler.
             createModuleNameToUriConverter(server, exchange, config.getId());
-        builder.append(compilation.getCodeForRootModule(isDebugMode, moduleNameToUri));
+        ModuleConfig moduleConfig = config.getModuleConfig();
+        if (moduleConfig.excludeModuleInfoFromRootModule()) {
+          // If the module info is excluded from the root module, then the
+          // module info should be written out now, followed by JS that will
+          // dynamically load the root module.
+          compilation.appendRootModuleInfo(appendable, isDebugMode,
+              moduleNameToUri);
+          // TODO(bolinfest): Insert JS to dynamically load the root module.
+        } else {
+          appendable.append(compilation.getCodeForRootModule(isDebugMode,
+              moduleNameToUri));
+        }
       } else {
-        builder.append(compilation.getCompiledCode());
+        appendable.append(compilation.getCompiledCode());
       }
     }
 
@@ -145,7 +156,7 @@ public final class CompileRequestHandler extends AbstractGetHandler {
     // It is small, and it exports some symbols that may be of use to
     // developers.
     writeErrorsAndWarnings(config, compilation.getCompilationErrors(),
-        compilation.getCompilationWarnings(), builder);
+        compilation.getCompilationWarnings(), appendable);
   }
 
   private void writeErrors(Config config, List<CompilationError> errors,

@@ -159,6 +159,23 @@ public enum ConfigOption {
     }
   }),
 
+  /**
+   * This option is used to write the plovr module info JS into a separate file
+   * instead of prepending it to the root module. Prepending the JS causes the
+   * source map to be several lines off in the root module, so doing this avoids
+   * that issue.
+   */
+  // TODO(bolinfest): A better approach may be to fix the source map, in which
+  // case this option could be eliminated.
+  MODULE_INFO_PATH("module_info_path",
+      new ConfigUpdater() {
+    @Override
+    public void apply(String moduleInfoPath, Config.Builder builder) {
+      ModuleConfig.Builder moduleConfigBuilder = builder.getModuleConfigBuilder();
+      moduleConfigBuilder.setModuleInfoPath(moduleInfoPath);
+    }
+  }),
+
   DIAGNOSTIC_GROUPS("checks", new ConfigUpdater() {
     @Override
     public void apply(JsonObject obj, Config.Builder builder) {

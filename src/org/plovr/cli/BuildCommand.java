@@ -77,13 +77,8 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
           Closeables.closeQuietly(writer);
         }
       } else {
-        final String productionUri = moduleConfig.getProductionUri();
-        Function<String, String> moduleNameToUri = new Function<String, String>() {
-          @Override
-          public String apply(String moduleName) {
-            return productionUri.replace("%s", moduleName);
-          }
-        };
+        Function<String, String> moduleNameToUri = moduleConfig.
+            createModuleNameToUriFunction();
         compilation.writeCompiledCodeToFiles(moduleNameToUri, sourceMapPath);
       }
     } else {

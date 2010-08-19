@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
+import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
@@ -36,16 +37,20 @@ public final class ModuleConfig {
 
   private final Map<String, File> moduleToOutputPath;
 
+  private final File moduleInfoPath;
+
   private ModuleConfig(
       String rootModule,
       Map<String, List<String>> dependencyTree,
       Map<String, ModuleInfo> moduleInfo,
       Map<String, File> moduleToOutputPath,
+      File moduleInfoPath,
       String productionUri) {
     this.rootModule = rootModule;
     this.dependencyTree = dependencyTree;
     this.moduleInfo = moduleInfo;
     this.moduleToOutputPath = moduleToOutputPath;
+    this.moduleInfoPath = moduleInfoPath;
     this.productionUri = productionUri;
   }
 
@@ -67,6 +72,25 @@ public final class ModuleConfig {
 
   public String getProductionUri() {
     return productionUri;
+  }
+
+  public File getModuleInfoPath() {
+    return moduleInfoPath;
+  }
+
+  public boolean excludeModuleInfoFromRootModule() {
+    return moduleInfoPath != null;
+  }
+
+  public Function<String,String> createModuleNameToUriFunction() {
+    final String productionUri = getProductionUri();
+    Function<String, String> moduleNameToUri = new Function<String, String>() {
+      @Override
+      public String apply(String moduleName) {
+        return productionUri.replace("%s", moduleName);
+      }
+    };
+    return moduleNameToUri;
   }
 
   /**
@@ -322,12 +346,19 @@ public final class ModuleConfig {
 
     private Map<String, ModuleInfo> moduleInfo;
 
+    // Either moduleInfoPath will be assigned in the constructor, or
+    // infoPath will be defined later and will be used to create a
+    // moduleInfoPath when build() is invoked.
+    private final File moduleInfoPath;
+    private String infoPath;
+
     private Builder(File relativePathBase) {
       Preconditions.checkNotNull(relativePathBase);
       Preconditions.checkArgument(relativePathBase.isDirectory(),
           relativePathBase + " is not a directory");
       this.relativePathBase = relativePathBase;
       this.moduleToOutputPath = null;
+      this.moduleInfoPath = null;
     }
 
     private Builder(ModuleConfig moduleConfig) {
@@ -339,6 +370,9 @@ public final class ModuleConfig {
       // moduleToOutputPath will be used instead.
       this.moduleToOutputPath = moduleConfig.moduleToOutputPath;
       this.outputPath = null;
+
+      this.moduleInfoPath = moduleConfig.moduleInfoPath;
+      this.infoPath = null;
 
       this.dependencyTree = moduleConfig.dependencyTree;
       this.moduleInfo = moduleConfig.moduleInfo;
@@ -407,6 +441,10 @@ public final class ModuleConfig {
       this.outputPath = outputPath;
     }
 
+    public void setModuleInfoPath(String moduleInfoPath) {
+      this.infoPath = moduleInfoPath;
+    }
+
     public ModuleConfig build() {
       Preconditions.checkState(dependencyTree != null, "No modules were set");
 
@@ -424,11 +462,25 @@ public final class ModuleConfig {
         moduleToOutputPath = this.moduleToOutputPath;
       }
 
+      // Set the path to write the module info to.
+      File moduleInfoPath;
+      if (this.moduleInfoPath == null) {
+        if (infoPath == null) {
+          moduleInfoPath = null;
+        } else {
+          moduleInfoPath = new File(
+              ConfigOption.maybeResolvePath(infoPath, relativePathBase));
+        }
+      } else {
+        moduleInfoPath = this.moduleInfoPath;
+      }
+
       return new ModuleConfig(
           rootModule,
           dependencyTree,
           moduleInfo,
           moduleToOutputPath,
+          moduleInfoPath,
           productionUri);
     }
   }

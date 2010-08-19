@@ -92,6 +92,8 @@ final class InputFileHandler extends AbstractGetHandler {
       inputUrls.add(inputToUri.apply(input));
     }
 
+    // TODO(bolinfest): Figure out how to reuse Compilation#appendRootModuleInfo
+    // May require moving the method to ModuleConfig.
     SoyMapData mapData = new SoyMapData(
         "moduleInfo", moduleInfo,
         "moduleUris", moduleUris,

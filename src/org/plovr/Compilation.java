@@ -146,14 +146,15 @@ public final class Compilation {
       //
       // It is important that the PLOVR variables are guaranteed to be global,
       // which (as much as it pains me) is why "var" is omitted.
-      JsonObject plovrModuleInfo = createModuleInfo(moduleConfig);
-      builder.append("PLOVR_MODULE_INFO=").
-          append(plovrModuleInfo.toString()).append(";\n");
-      JsonObject plovrModuleUris = createModuleUris(moduleConfig,
-          moduleNameToUri);
-      builder.append("PLOVR_MODULE_URIS=").
-          append(plovrModuleUris.toString()).append(";\n");
-      builder.append("PLOVR_MODULE_USE_DEBUG_MODE=" + isDebugMode + ";\n");
+      if (!moduleConfig.excludeModuleInfoFromRootModule()) {
+        try {
+          appendRootModuleInfo(builder, isDebugMode, moduleNameToUri);
+        } catch (IOException e) {
+          // This should not occur because data is being appended to an
+          // in-memory StringBuilder rather than a file.
+          throw new RuntimeException(e);
+        }
+      }
     }
 
     JSModule module = nameToModule.get(moduleName);
@@ -168,6 +169,19 @@ public final class Compilation {
     }
 
     return builder.toString();
+  }
+
+  public void appendRootModuleInfo(Appendable appendable, boolean isDebugMode,
+      Function<String, String> moduleNameToUri) throws IOException {
+    ModuleConfig moduleConfig = config.getModuleConfig();
+    JsonObject plovrModuleInfo = createModuleInfo(moduleConfig);
+    appendable.append("PLOVR_MODULE_INFO=").
+        append(plovrModuleInfo.toString()).append(";\n");
+    JsonObject plovrModuleUris = createModuleUris(moduleConfig,
+        moduleNameToUri);
+    appendable.append("PLOVR_MODULE_URIS=").
+        append(plovrModuleUris.toString()).append(";\n");
+    appendable.append("PLOVR_MODULE_USE_DEBUG_MODE=" + isDebugMode + ";\n");
   }
 
   public String getCodeForRootModule(boolean isDebugMode,
@@ -203,8 +217,15 @@ public final class Compilation {
       if (sourceMapPath != null) {
         Writer writer = new BufferedWriter(new FileWriter(sourceMapPath + "_" + moduleName));
         this.result.sourceMap.appendTo(writer, moduleName);
-        Closeables.closeQuietly(writer);
+        Closeables.close(writer, false);
       }
+    }
+
+    if (moduleConfig.excludeModuleInfoFromRootModule()) {
+      Writer writer = new BufferedWriter(new FileWriter(
+          moduleConfig.getModuleInfoPath()));
+      appendRootModuleInfo(writer, isDebugMode, moduleNameToUri);
+      Closeables.close(writer, false);
     }
   }
 
