@@ -54,6 +54,7 @@ public class ManifestTest extends TestCase {
             "/goog/string/string.js",
             "/goog/asserts/asserts.js",
             "/goog/array/array.js",
+            "/goog/debug/entrypointregistry.js",
             "/goog/debug/errorhandlerweakdep.js",
             "/goog/disposable/disposable.js",
             "/goog/events/event.js",

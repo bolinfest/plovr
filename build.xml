@@ -62,9 +62,9 @@
   </target>
 
   <target name="externs">
-    <mkdir dir="${build.dir}" />
+    <mkdir dir="${classes.dir}" />
     <exec executable="sh"
-          output="${build.dir}/externs_manifest.txt"
+          output="${classes.dir}/externs_manifest.txt"
           failonerror="true">
       <arg value="${basedir}/listfiles.sh" />
       <arg value="${closure-compiler.dir}/externs" />
@@ -72,9 +72,9 @@
   </target>
 
   <target name="library">
-    <mkdir dir="${build.dir}" />
+    <mkdir dir="${classes.dir}" />
     <exec executable="sh"
-          output="${build.dir}/library_manifest.txt"
+          output="${classes.dir}/library_manifest.txt"
           failonerror="true">
       <arg value="${basedir}/listfiles.sh" />
       <arg value="${closure-library.dir}/closure/goog" />
@@ -82,9 +82,9 @@
   </target>
 
   <target name="third_party">
-    <mkdir dir="${build.dir}" />
+    <mkdir dir="${classes.dir}" />
     <exec executable="sh"
-          output="${build.dir}/third_party_manifest.txt"
+          output="${classes.dir}/third_party_manifest.txt"
           failonerror="true">
       <arg value="${basedir}/listfiles.sh" />
       <arg value="${closure-library.dir}/third_party/closure/goog" />
@@ -119,10 +119,6 @@
       <zipfileset dir="${closure-templates.dir}/javascript/"
                   includes="soyutils_usegoog.js"
                   prefix="soy" />
-      <fileset dir="${build.dir}" includes="externs_manifest.txt,
-                                            library_manifest.txt,
-                                            third_party_manifest.txt"
-                                            />
       <!-- Use r258 of the Compiler until the following issue is resolved:
       http://groups.google.com/group/closure-compiler-discuss/browse_thread/thread/972ee691e5c2c882
       -->
