@@ -119,9 +119,6 @@
       <zipfileset dir="${closure-templates.dir}/javascript/"
                   includes="soyutils_usegoog.js"
                   prefix="soy" />
-      <!-- Use r258 of the Compiler until the following issue is resolved:
-      http://groups.google.com/group/closure-compiler-discuss/browse_thread/thread/972ee691e5c2c882
-      -->
       <zipgroupfileset dir="${lib.dir}" includes="*.jar" />
       <fileset dir="${classes.dir}" />
       <manifest>
