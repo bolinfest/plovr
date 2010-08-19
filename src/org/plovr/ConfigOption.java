@@ -131,6 +131,13 @@ public enum ConfigOption {
     }
   }),
 
+  FINGERPRINT("fingerprint", new ConfigUpdater() {
+    @Override
+    public void apply(boolean fingerprint, Config.Builder builder) {
+      builder.setFingerprintJsFiles(fingerprint);
+    }
+  }),
+
   MODULES("modules", new ConfigUpdater() {
     @Override
     public void apply(JsonObject modules, Config.Builder builder) {

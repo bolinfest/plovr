@@ -13,8 +13,10 @@ import org.plovr.ModuleConfig.ModuleInfo;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.io.Closeables;
 import com.google.common.io.Files;
 import com.google.gson.JsonArray;
@@ -191,10 +193,11 @@ public final class Compilation {
 
   /**
    * Writes out all of the module files. This method is only applicable when
-   * modules are used.
+   * modules are used. This is expected to be used only with the build command.
    * @throws IOException
    */
-  public void writeCompiledCodeToFiles(Function<String, String> moduleNameToUri, String sourceMapPath)
+  public void writeCompiledCodeToFiles(
+      final Function<String, String> moduleNameToUri, String sourceMapPath)
       throws IOException {
     if (modules == null) {
       throw new IllegalStateException("This compilation does not use modules");
@@ -202,12 +205,24 @@ public final class Compilation {
 
     ModuleConfig moduleConfig = config.getModuleConfig();
     Map<String, File> moduleToOutputPath = moduleConfig.getModuleToOutputPath();
+    final Map<String, String> moduleNameToFingerprint = Maps.newHashMap();
     final boolean isDebugMode = false;
     for (JSModule module : modules) {
       String moduleName = module.getName();
       File outputFile = moduleToOutputPath.get(moduleName);
       createParentDirs(outputFile);
+
       String moduleCode = getCodeForModule(moduleName, isDebugMode, moduleNameToUri);
+
+      // Fingerprint the file, if appropriate.
+      if (config.shouldFingerprintJsFiles()) {
+        String fileName = outputFile.getName();
+        String fingerprint = Md5Util.hashJs(moduleCode);
+        moduleNameToFingerprint.put(moduleName, fingerprint);
+        fileName = insertFingerprintIntoName(fileName, fingerprint);
+        outputFile = new File(outputFile.getParentFile(), fileName);
+      }
+
       Files.write(moduleCode, outputFile, Charsets.UTF_8);
 
       // It turns out that the SourceMap will not be populated until after the
@@ -222,11 +237,57 @@ public final class Compilation {
     }
 
     if (moduleConfig.excludeModuleInfoFromRootModule()) {
-      Writer writer = new BufferedWriter(new FileWriter(
-          moduleConfig.getModuleInfoPath()));
-      appendRootModuleInfo(writer, isDebugMode, moduleNameToUri);
+      File outputFile = moduleConfig.getModuleInfoPath();
+      createParentDirs(outputFile);
+
+      final Function<String, String> fingerprintedModuleNameToUri =
+          new Function<String, String>() {
+            @Override
+            public String apply(String moduleName) {
+              String uri = moduleNameToUri.apply(moduleName);
+              String fingerprint = moduleNameToFingerprint.get(moduleName);
+              if (fingerprint != null) {
+                uri = insertFingerprintIntoName(uri, fingerprint);
+              }
+              return uri;
+            }
+      };
+
+      Writer writer = new BufferedWriter(new FileWriter(outputFile));
+      appendRootModuleInfo(writer, isDebugMode, fingerprintedModuleNameToUri);
       Closeables.close(writer, false);
     }
+  }
+
+  /**
+   * This takes a file path and inserts a fingerprint into its name. Currently,
+   * there is no support for including a token to indicate where the fingerprint
+   * should be inserted, so the fingerprint is inserted according to the
+   * following rule:
+   * <ul>
+   *   <li>If the path contains a dot, then the fingerprint is inserted before
+   *       the final dot. For example, if the path were "foo/bar_.js" and the
+   *       fingerprint were "2XBD4C", then the fingerprinted path would be
+   *       "foo/bar_2XBD4C.js".
+   *   <li>If the path does not contain a dot, then the fingerprint is appended
+   *       to the end of the path.
+   * </ul>
+   * @param filePath
+   * @param fingerprint
+   * @return
+   */
+  @VisibleForTesting
+  static String insertFingerprintIntoName(String filePath, String fingerprint) {
+    Preconditions.checkNotNull(filePath);
+    Preconditions.checkNotNull(fingerprint);
+    int index = filePath.lastIndexOf(".");
+    if (index >= 0) {
+      filePath = filePath.substring(0, index) + fingerprint +
+          filePath.substring(index);
+    } else {
+      filePath += fingerprint;
+    }
+    return filePath;
   }
 
   // TODO(bolinfest): Currently, this is copied from com.google.common.io.Files

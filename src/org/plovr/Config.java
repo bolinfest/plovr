@@ -33,6 +33,8 @@ public final class Config {
 
   private final boolean printInputDelimiter;
 
+  private final boolean fingerprintJsFiles;
+
   private final Map<DiagnosticGroup, CheckLevel> diagnosticGroups;
 
   /**
@@ -48,6 +50,7 @@ public final class Config {
       CompilationMode compilationMode,
       WarningLevel warningLevel,
       boolean printInputDelimiter,
+      boolean fingerprintJsFiles,
       Map<DiagnosticGroup, CheckLevel> diagnosticGroups) {
     this.id = id;
     this.manifest = manifest;
@@ -55,6 +58,7 @@ public final class Config {
     this.compilationMode = compilationMode;
     this.warningLevel = warningLevel;
     this.printInputDelimiter = printInputDelimiter;
+    this.fingerprintJsFiles = fingerprintJsFiles;
     this.diagnosticGroups = diagnosticGroups;
   }
 
@@ -84,6 +88,10 @@ public final class Config {
 
   public WarningLevel getWarningLevel() {
     return warningLevel;
+  }
+
+  public boolean shouldFingerprintJsFiles() {
+    return fingerprintJsFiles;
   }
 
   public CompilerOptions getCompilerOptions() {
@@ -159,6 +167,8 @@ public final class Config {
 
     private boolean printInputDelimiter = false;
 
+    private boolean fingerprintJsFiles = false;
+
     private Map<DiagnosticGroup, CheckLevel> diagnosticGroups = null;
 
     private ModuleConfig.Builder moduleConfigBuilder = null;
@@ -182,6 +192,7 @@ public final class Config {
       this.compilationMode = config.compilationMode;
       this.warningLevel = config.warningLevel;
       this.printInputDelimiter = config.printInputDelimiter;
+      this.fingerprintJsFiles = config.fingerprintJsFiles;
       this.diagnosticGroups = config.diagnosticGroups;
     }
 
@@ -238,6 +249,10 @@ public final class Config {
       this.printInputDelimiter = printInputDelimiter;
     }
 
+    public void setFingerprintJsFiles(boolean fingerprint) {
+      this.fingerprintJsFiles = fingerprint;
+    }
+
     public void setDiagnosticGroups(Map<DiagnosticGroup, CheckLevel> groups) {
       this.diagnosticGroups = groups;
     }
@@ -271,6 +286,7 @@ public final class Config {
           compilationMode,
           warningLevel,
           printInputDelimiter,
+          fingerprintJsFiles,
           diagnosticGroups);
 
       return config;

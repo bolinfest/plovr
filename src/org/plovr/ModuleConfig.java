@@ -87,10 +87,23 @@ public final class ModuleConfig {
     Function<String, String> moduleNameToUri = new Function<String, String>() {
       @Override
       public String apply(String moduleName) {
-        return productionUri.replace("%s", moduleName);
+        return populateModuleNameTemplate(productionUri, moduleName);
       }
     };
     return moduleNameToUri;
+  }
+
+  /**
+   *
+   * @param template
+   * @param moduleName
+   * @return
+   */
+  private static String populateModuleNameTemplate(String template,
+      String moduleName) {
+    String name = template.replace("%s", moduleName);
+
+    return name;
   }
 
   /**
@@ -453,7 +466,7 @@ public final class ModuleConfig {
       if (this.moduleToOutputPath == null) {
         moduleToOutputPath = Maps.newHashMap();
         for (String moduleName : dependencyTree.keySet()) {
-          String partialPath = outputPath.replace("%s", moduleName);
+          String partialPath = populateModuleNameTemplate(outputPath, moduleName);
           File moduleFile = new File(ConfigOption.maybeResolvePath(
               partialPath, relativePathBase));
           moduleToOutputPath.put(moduleName, moduleFile);
