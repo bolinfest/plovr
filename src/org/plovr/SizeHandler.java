@@ -11,7 +11,6 @@ import java.util.regex.Pattern;
 
 import com.google.common.io.LineReader;
 import com.google.common.io.Resources;
-import com.google.javascript.jscomp.Compiler;
 import com.google.javascript.jscomp.Result;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.data.SoyListData;
