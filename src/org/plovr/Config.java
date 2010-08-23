@@ -9,7 +9,10 @@ import java.util.logging.Logger;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.gson.JsonPrimitive;
 import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.ClosureCodingConvention;
 import com.google.javascript.jscomp.CompilationLevel;
@@ -37,6 +40,8 @@ public final class Config {
 
   private final Map<DiagnosticGroup, CheckLevel> diagnosticGroups;
 
+  private final Map<String, JsonPrimitive> defines;
+
   /**
    * @param id Unique identifier for the configuration. This is used as an
    *        argument to the &lt;script> tag that loads the compiled code.
@@ -51,7 +56,10 @@ public final class Config {
       WarningLevel warningLevel,
       boolean printInputDelimiter,
       boolean fingerprintJsFiles,
-      Map<DiagnosticGroup, CheckLevel> diagnosticGroups) {
+      Map<DiagnosticGroup, CheckLevel> diagnosticGroups,
+      Map<String, JsonPrimitive> defines) {
+    Preconditions.checkNotNull(defines);
+
     this.id = id;
     this.manifest = manifest;
     this.moduleConfig = moduleConfig;
@@ -60,6 +68,7 @@ public final class Config {
     this.printInputDelimiter = printInputDelimiter;
     this.fingerprintJsFiles = fingerprintJsFiles;
     this.diagnosticGroups = diagnosticGroups;
+    this.defines = ImmutableMap.copyOf(defines);
   }
 
   public static Builder builder(File relativePathBase) {
@@ -106,6 +115,26 @@ public final class Config {
     options.printInputDelimiter = printInputDelimiter;
     if (printInputDelimiter) {
       options.inputDelimiter = "// Input %num%: %name%";
+    }
+
+    // Apply this.defines.
+    for (Map.Entry<String, JsonPrimitive> entry : defines.entrySet()) {
+      String name = entry.getKey();
+      JsonPrimitive primitive = entry.getValue();
+      if (primitive.isBoolean()) {
+        options.setDefineToBooleanLiteral(name, primitive.getAsBoolean());
+      } else if (primitive.isString()) {
+        options.setDefineToStringLiteral(name, primitive.getAsString());
+      } else if (primitive.isNumber()) {
+        Number num = primitive.getAsNumber();
+        double value = num.doubleValue();
+        // Heuristic to determine whether the value is an int.
+        if (value == Math.floor(value)) {
+          options.setDefineToNumberLiteral(name, primitive.getAsInt());
+        } else {
+          options.setDefineToDoubleLiteral(name, primitive.getAsDouble());
+        }
+      }
     }
 
     if (moduleConfig != null) {
@@ -173,12 +202,15 @@ public final class Config {
 
     private ModuleConfig.Builder moduleConfigBuilder = null;
 
+    private final Map<String, JsonPrimitive> defines;
+
     private Builder(File relativePathBase) {
       Preconditions.checkNotNull(relativePathBase);
       Preconditions.checkArgument(relativePathBase.isDirectory(),
           relativePathBase + " is not a directory");
       this.relativePathBase = relativePathBase;
       manifest = null;
+      defines = Maps.newHashMap();
     }
 
     private Builder(Config config) {
@@ -194,6 +226,7 @@ public final class Config {
       this.printInputDelimiter = config.printInputDelimiter;
       this.fingerprintJsFiles = config.fingerprintJsFiles;
       this.diagnosticGroups = config.diagnosticGroups;
+      this.defines = Maps.newHashMap(config.defines);
     }
 
     /** Directory against which relative paths should be resolved. */
@@ -257,6 +290,10 @@ public final class Config {
       this.diagnosticGroups = groups;
     }
 
+    public void addDefine(String name, JsonPrimitive primitive) {
+      defines.put(name, primitive);
+    }
+
     public Config build() {
       File closureLibraryDirectory = pathToClosureLibrary != null
           ? new File(pathToClosureLibrary)
@@ -287,7 +324,8 @@ public final class Config {
           warningLevel,
           printInputDelimiter,
           fingerprintJsFiles,
-          diagnosticGroups);
+          diagnosticGroups,
+          defines);
 
       return config;
     }

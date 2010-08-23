@@ -183,6 +183,19 @@ public enum ConfigOption {
     }
   }),
 
+  DEFINE("define", new ConfigUpdater() {
+    @Override
+    public void apply(JsonObject obj, Config.Builder builder) {
+      for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
+        JsonElement element = entry.getValue();
+        if (element.isJsonPrimitive()) {
+          String name = entry.getKey();
+          builder.addDefine(name, element.getAsJsonPrimitive());
+        }
+      }
+    }
+  }),
+
   DIAGNOSTIC_GROUPS("checks", new ConfigUpdater() {
     @Override
     public void apply(JsonObject obj, Config.Builder builder) {
