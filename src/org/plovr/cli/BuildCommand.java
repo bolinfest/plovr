@@ -62,7 +62,14 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       String sourceMapPath, String sourceMapName) throws IOException {
     Preconditions.checkNotNull(compilation);
     Result result = compilation.getResult();
-    if (result.success && result.errors.length == 0 && result.warnings.length == 0) {
+    if (result.success && result.errors.length == 0) {
+
+      // Even if there were no errors, there may have been warnings, so print
+      // them to standard error, but do not declare a build failure.
+      for (JSError warning : result.warnings) {
+        System.err.println(warning);
+      }
+
       ModuleConfig moduleConfig = config.getModuleConfig();
       if (moduleConfig == null) {
         System.out.println(compilation.getCompiledCode());
