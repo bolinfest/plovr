@@ -171,6 +171,7 @@
     <java jar="${build.dir}/plovr.jar" fork="true">
       <arg value="soyweb" />
       <arg line="--dir ${www.dir}" />
+      <arg line="--static" />
       <arg line="--globals ${basedir}/prod-globals.js" />
     </java>
   </target>
