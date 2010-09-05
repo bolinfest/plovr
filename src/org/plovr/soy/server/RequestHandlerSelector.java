@@ -30,9 +30,10 @@ public class RequestHandlerSelector implements HttpHandler {
     this.config = config;
     ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
     // TODO(bolinfest): Read this out of a config file.
-    builder.put(".png", "image/png");
-    builder.put(".html", "text/html");
     builder.put(".css", "text/css");
+    builder.put(".html", "text/html");
+    builder.put(".js", "text/javascript");
+    builder.put(".png", "image/png");
     extensionToContentType = builder.build();
 
     soyRequestHandler = new SoyRequestHandler(config);
