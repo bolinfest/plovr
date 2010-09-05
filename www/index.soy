@@ -1,34 +1,16 @@
-<!doctype html>
-<html>
-<head>
-  <title>plovr</title>
-  <link href="style.css" rel="STYLESHEET" type="text/css">
-  <style>
-.show-warning {
-  display: block;
-  margin: 10px auto;
-  width: 679px;
-}
-  </style>
-</head>
-<body>
+{namespace plovr.index}
 
-<div class="heading">
-  <h1>
-    plovr: a Closure build tool
-  </h1>
-  <ul class="navigation-links">
-    <li><span class="selected-link">Home</span></li>
-    <li><a href="docs.html">Docs</a></li>
-    <li><a href="download.html">Download</a></li>
-    <li><a href="about.html">About</a></li>
-  </ul>
-  <div style="clear: both"></div>
-</div>
+/***/
+{template .base}
+
+{call plovr.header}
+  {param title: 'plovr' /}
+  {param selected: '.' /}
+{/call}
 
 plovr is a build tool that dynamically recompiles JavaScript and Closure
-Template code. It is designed to simplify
-<a href="http://code.google.com/closure/">Closure</a> development,
+Template code. It is designed to
+simplify <a href="http://code.google.com/closure/">Closure</a> development,
 and to make it more enjoyable.
 
 <p>The intended usage of plovr is as follows:</p>
@@ -83,14 +65,15 @@ plovr also achieves the following:
        style="float: right; border: none; margin-left: 10px">
 </a>
 
-You can learn more about both Closure and plovr in
+You can learn more about both Closure and plovr in{sp}
 <span class="book-title">Closure: The Definitive Guide</span> (O'Reilly).
-Although it is not available in stores yet, it is possible to
+Although it is not available in stores yet, it is possible to{sp}
 <a href="http://www.amazon.com/Closure-Definitive-Guide-Michael-Bolin/dp/1449381871">pre-order
 the book on Amazon</a> (it is expected to be available in September 2010),
 or you can <a href="http://oreilly.com/catalog/9781449381875/">purchase the
-complete draft today</a> via O'Reilly's
-<a href="http://oreilly.com/roughcuts/faq.csp">Rough Cuts</a> program.
+complete draft today</a> via O'Reilly's <a
+href="http://oreilly.com/roughcuts/faq.csp">Rough Cuts</a> program.
 
-</body>
-</html>
+{call plovr.footer /}
+
+{/template}

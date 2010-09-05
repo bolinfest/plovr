@@ -1,23 +1,12 @@
-<!doctype html>
-<html>
-<head>
-  <title>plovr Documentation</title>
-  <link href="style.css" rel="STYLESHEET" type="text/css">
-</head>
-<body>
+{namespace plovr.docs}
 
-<div class="heading">
-  <h1>
-    plovr: a Closure build tool
-  </h1>
-  <ul class="navigation-links">
-    <li><a href=".">Home</a></li>
-    <li><span class="selected-link">Docs</span></li>
-    <li><a href="download.html">Download</a></li>
-    <li><a href="about.html">About</a></li>
-  </ul>
-  <div style="clear: both"></div>
-</div>
+/***/
+{template .base}
+
+{call plovr.header}
+  {param title: 'plovr Documentation' /}
+  {param selected: 'docs' /}
+{/call}
 
 <a href="http://oreilly.com/catalog/9781449381875/">
   <img src="cover.png"
@@ -36,7 +25,7 @@ Currently, documentation on plovr is spread across several sources:
     The <a href="http://plovr.org/demo/">demo on plovr.org</a>.
   </li>
   <li>
-    The wiki for plovr on
+    The wiki for plovr on{sp}
     <a href="http://code.google.com/p/plovr/w/list">code.google.com</a>.
   </li>
 </ul>
@@ -53,15 +42,17 @@ build should be stored in a single file of JSON. (Ultimately, config files will
 be able to inherit from other config files, but that feature does not exist
 today.) The following is an example of a minimal (but functional) plovr config file:
 
+{literal}
 <pre><span style="color: #A00">// File: config.js</span>
 {
   "id": "sample",
   "paths": ".",
   "inputs": "main.js"
 }</pre>
+{/literal}
 
 An example of a more complex config file (that leverages the modules
-feature of the Compiler)
+feature of the Compiler){sp}
 <a href="http://code.google.com/p/plovr/source/browse/testdata/modules/plovr-config.js">
 can be seen in the plovr repository</a>.
 A config file declares which files should be compiled,
@@ -131,7 +122,7 @@ logic will be used to allow all forms of JavaScript comments in config files, in
 whichever way they would normally be supported in JavaScript code.)
 
 <p>
-Config options are enumerated in the Java source code in
+Config options are enumerated in the Java source code in{sp}
 <a href="http://code.google.com/p/plovr/source/browse/src/org/plovr/ConfigOption.java">ConfigOption.java</a>.
 As plovr is evaluated by Closure developers, the names and JSON data types for
 these options may change, so until the API is frozen, the source code is the
@@ -159,6 +150,7 @@ Closure Compiler. Therefore, to change <code>config.js</code> to use the most
 aggressive compilation settings, set <code>mode</code> and <code>level</code> as
 follows:
 
+{literal}
 <pre>{
   "id": "sample",
   "paths": ".",
@@ -166,14 +158,16 @@ follows:
   "mode": "ADVANCED",
   "level": "VERBOSE"
 }</pre>
+{/literal}
 
 It is also possible to set the level for various types of Compiler checks with the
-<code>checks</code> property. Many of these checks are explained on the
+<code>checks</code> property. Many of these checks are explained on the{sp}
 <a href="http://code.google.com/p/closure-compiler/wiki/Warnings">Closure
-Compiler wiki</a>, though the <code>DIAGNOSTIC_GROUP_NAMES</code> variable in
+Compiler wiki</a>, though the <code>DIAGNOSTIC_GROUP_NAMES</code> variable in{sp}
 <a href="http://code.google.com/p/closure-compiler/source/browse/trunk/src/com/google/javascript/jscomp/DiagnosticGroups.java">DiagnosticGroups.java</a>
-is the real source of truth:
+{sp}is the real source of truth:
 
+{literal}
 <pre>{
   "id": "sample",
   "paths": ".",
@@ -187,6 +181,7 @@ is the real source of truth:
     "nonStandardJsDocs": "WARNING"
   }
 }</pre>
+{/literal}
 
 Remember, the names and values of the config file have not been finalized, so
 it may be necessary to monitor the plovr source code as new versions are
@@ -204,10 +199,12 @@ section in Chapter 12 of <span class="book-title">Closure: The Definitive Guide<
 One important thing to note when using modules is that you will probably have
 to add code like the following to configure the <code>goog.module.ModuleManager</code>:
 
+{literal}
 <pre>var moduleManager = goog.module.ModuleManager.getInstance();
 moduleLoader.setDebugMode(true);
 moduleManager.setAllModuleInfo(goog.global['PLOVR_MODULE_INFO']);
 moduleManager.setModuleUris(goog.global['PLOVR_MODULE_URIS']);</pre>
+{/literal}
 
 When plovr generates the JavaScript for the modules, it includes some module
 data in global variables that are used for initialization, as shown above.
@@ -216,13 +213,14 @@ data in global variables that are used for initialization, as shown above.
 
 In addition to the <code>/compile</code> URL introduced in the first section,
 there are other URLs that plovr serves to provide additional information.
-Some of these are listed on the
+Some of these are listed on the{sp}
 <a href="http://code.google.com/p/plovr/wiki/GettingStarted">plovr wiki page
-on Google Code</a>, though the best way to get the complete list is by
+on Google Code</a>, though the best way to get the complete list is by{sp}
 <a href="http://code.google.com/p/plovr/source/browse/src/org/plovr/CompilationServer.java">
 exploring the plovr source code</a>.
 There is also more information on these features of plovr in Appendix C of
 <span class="book-title">Closure: The Definitive Guide</span>.
 
-</body>
-</html>
+{call plovr.footer /}
+
+{/template}

@@ -6,6 +6,10 @@ import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.net.URI;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import org.plovr.HttpUtil;
 
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMap;
@@ -31,20 +35,28 @@ import com.sun.net.httpserver.HttpHandler;
  */
 public class SoyRequestHandler implements HttpHandler {
 
+  private static final Logger logger = Logger.getLogger(SoyRequestHandler.class.getName());
+
   private final Config config;
+
+  private final SoyTofu tofu;
 
   public SoyRequestHandler(Config config) {
     this.config = config;
+    this.tofu = config.isStatic() ? getSoyTofu(config) : null;
   }
 
   @Override
   public void handle(HttpExchange exchange) throws IOException {
     try {
       doHandle(exchange);
-    } catch (SoyRequestHandlerException e) {
-      // No response should have been written yet if SoyRequestHandlerException
-      // is thrown.
-      String message = e.getMessage();
+    } catch (IOException e) {
+      logger.log(Level.SEVERE, "IO Error: response may not have been written", e);
+    } catch (Throwable t) {
+      logger.log(Level.SEVERE, "Error generating HTML from Soy", t);
+
+      // No response should have been written yet if a Throwable is thrown.
+      String message = t.getMessage();
 
       Headers responseHeaders = exchange.getResponseHeaders();
       responseHeaders.set("Content-Type", "text/plain");
@@ -57,31 +69,32 @@ public class SoyRequestHandler implements HttpHandler {
   }
 
   private void doHandle(HttpExchange exchange) throws IOException,
-      SoyRequestHandlerException {
+      SoySyntaxException, TokenMgrError, ParseException {
     URI uri = exchange.getRequestURI();
     String path = uri.getPath();
 
+    // If the request is to a Soy file whose name starts with a double
+    // underscore, then do not serve it as it should be considered private.
+    String name = path.substring(path.lastIndexOf("/") + 1);
+    if (name.startsWith("__")) {
+      HttpUtil.writeNotFound(exchange);
+      return;
+    }
+
+    // For a request to the root directory, use index.soy, if available.
+    if (path.endsWith("/")) {
+      path += "/index";
+    }
+
     File soyFile = new File(config.getContentDirectory(), path + ".soy");
     if (!soyFile.exists()) {
-      throw new SoyRequestHandlerException(path + ".soy does not exist");
+      throw new RuntimeException(path + ".soy does not exist");
     }
 
     SoyFileParser parser = new SoyFileParser(
         Files.newReader(soyFile, Charsets.UTF_8),
         new IntegerIdGenerator());
-    SoyFileNode node;
-    try {
-      node = parser.parseSoyFile();
-    } catch (SoySyntaxException e) {
-      throw new SoyRequestHandlerException(e);
-    } catch (TokenMgrError e) {
-      throw new SoyRequestHandlerException(e);
-    } catch (ParseException e) {
-      throw new SoyRequestHandlerException(e);
-    } catch (Throwable t) {
-      // For debugging purposes.
-      throw new SoyRequestHandlerException(t);
-    }
+    SoyFileNode node = parser.parseSoyFile();
 
     String namespace = node.getNamespace();
     String templateName = namespace + ".base";
@@ -100,16 +113,21 @@ public class SoyRequestHandler implements HttpHandler {
     writer.close();
   }
 
-  private SoyTofu getSoyTofu() throws SoyRequestHandlerException {
-    if (config.useDynamicRecompilation()) {
-      SoyFileSet.Builder builder = new SoyFileSet.Builder();
-      // Add all of the .soy files under config.getContentDirectory().
-      addToBuilder(config.getContentDirectory(), builder);
-      SoyFileSet soyFileSet = builder.build();
-      return soyFileSet.compileToJavaObj();
+  private SoyTofu getSoyTofu() {
+    // tofu is non-null when config.useDynamicRecompilation() is false.
+    if (tofu != null) {
+      return tofu;
     } else {
-      throw new SoyRequestHandlerException("dynamic recompilation is not supported yet");
+      return getSoyTofu(config);
     }
+  }
+
+  private static SoyTofu getSoyTofu(Config config) {
+    SoyFileSet.Builder builder = new SoyFileSet.Builder();
+    // Add all of the .soy files under config.getContentDirectory().
+    addToBuilder(config.getContentDirectory(), builder);
+    SoyFileSet soyFileSet = builder.build();
+    return soyFileSet.compileToJavaObj();
   }
 
   private static void addToBuilder(File file, SoyFileSet.Builder builder) {
@@ -121,15 +139,6 @@ public class SoyRequestHandler implements HttpHandler {
       if (file.isFile() && file.getName().endsWith(".soy")) {
         builder.add(file);
       }
-    }
-  }
-
-  private static final class SoyRequestHandlerException extends Exception {
-    private SoyRequestHandlerException(String message) {
-      super(message);
-    }
-    private SoyRequestHandlerException(Throwable t) {
-      super(t);
     }
   }
 }

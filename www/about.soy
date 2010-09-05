@@ -1,23 +1,12 @@
-<!doctype html>
-<html>
-<head>
-  <title>About plovr</title>
-  <link href="style.css" rel="STYLESHEET" type="text/css">
-</head>
-<body>
+{namespace plovr.about}
 
-<div class="heading">
-  <h1>
-    plovr: a Closure build tool
-  </h1>
-  <ul class="navigation-links">
-    <li><a href=".">Home</a></li>
-    <li><a href="docs.html">Docs</a></li>
-    <li><a href="download.html">Download</a></li>
-    <li><span class="selected-link">About</span></li>
-  </ul>
-  <div style="clear: both"></div>
-</div>
+/***/
+{template .base}
+
+{call plovr.header}
+  {param title: 'About plovr' /}
+  {param selected: 'about' /}
+{/call}
 
 <a href="http://oreilly.com/catalog/9781449381875/">
   <img src="cover.png"
@@ -28,7 +17,7 @@
 
 <p>
 I created plovr as a by-product of authoring
-<span class="book-title">Closure: The Definitive Guide</span>.
+{sp}<span class="book-title">Closure: The Definitive Guide</span>.
 In the introduction of the book, I explain how to get the
 Closure Compiler, Compiler Library, and Closure Templates to work together.
 This turned out to be a painful section to write because there are so many steps
@@ -63,9 +52,10 @@ Appendix C of <span class="book-title">Closure: The Definitive Guide</span>:
 Web 2.0 zeitgeist, and domain name availability.&#8221;
 </blockquote>
 
-Some may argue that I am starting to develop a track record for
-<a href="http://groups.csail.mit.edu/uid/chickenfoot/faq.html#name">poorly named
+Some may argue that I am starting to develop a track record
+for <a href="http://groups.csail.mit.edu/uid/chickenfoot/faq.html#name">poorly named
 software projects</a>.
 
-</body>
-</html>
+{call plovr.footer /}
+
+{/template}

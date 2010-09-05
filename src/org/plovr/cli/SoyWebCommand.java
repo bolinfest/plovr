@@ -15,11 +15,10 @@ public class SoyWebCommand extends AbstractCommandRunner<SoyWebCommandOptions> {
 
   @Override
   void runCommandWithOptions(SoyWebCommandOptions options) throws IOException {
-    final boolean useDynamicRecompilation = true;
     Config config = new Config(
         options.getPort(),
         new File(options.getDir()),
-        useDynamicRecompilation);
+        options.isStatic());
     Server server = new Server(config);
     server.run();
   }

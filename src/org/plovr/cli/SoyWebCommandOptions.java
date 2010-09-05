@@ -14,6 +14,11 @@ public class SoyWebCommandOptions extends AbstractCommandOptions {
       usage = "Directory that contains the Soy files")
   private String dir = null;
 
+  @Option(name = "--static",
+      aliases = {"-s"},
+      usage = "Parse the Soy files once on startup")
+  private boolean isStatic = false;
+
   public SoyWebCommandOptions() {}
 
   public int getPort() {
@@ -22,5 +27,9 @@ public class SoyWebCommandOptions extends AbstractCommandOptions {
 
   public String getDir() {
     return dir;
+  }
+
+  public boolean isStatic() {
+    return isStatic;
   }
 }

@@ -1,23 +1,12 @@
-<!doctype html>
-<html>
-<head>
-  <title>Download plovr</title>
-  <link href="style.css" rel="STYLESHEET" type="text/css">
-</head>
-<body>
+{namespace plovr.download}
 
-<div class="heading">
-  <h1>
-    plovr: a Closure build tool
-  </h1>
-  <ul class="navigation-links">
-    <li><a href=".">Home</a></li>
-    <li><a href="docs.html">Docs</a></li>
-    <li><span class="selected-link">Download</span></li>
-    <li><a href="about.html">About</a></li>
-  </ul>
-  <div style="clear: both"></div>
-</div>
+/***/
+{template .base}
+
+{call plovr.header}
+  {param title: 'Download plovr' /}
+  {param selected: 'download' /}
+{/call}
 
 <p>
 You can <a href="http://code.google.com/p/plovr/downloads/list">download a
@@ -36,7 +25,7 @@ Its <a href="http://code.google.com/p/plovr/source/checkout">
 source code is available on Google Code</a> via a Mercurial repository.
 Currently, building plovr requires that the following projects be checked out
 in sibling directories that match the name of their respective Google Code
-project (the
+project (the{sp}
 <a href="http://code.google.com/p/plovr/source/browse/build.xml">build.xml file
 for plovr</a> relies on this):
 
@@ -61,21 +50,18 @@ projects:
 
 <ul>
   <li>
-    google-gson: <a href="http://code.google.com/p/google-gson/issues/detail?id=212">
-    Make it possible to allow comments in JSON</a>
-  </li>
-  <li>
     Firefox: <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=583083">
-    Let the eval //@sourceURL trick work for stack traces</a>
+    Let the eval {literal}//@sourceURL{/literal} trick work for stack traces</a>
   </li>
   <li>
     v8: <a href="http://code.google.com/p/v8/issues/detail?id=672">
-    Let the eval //@sourceURL trick work for stack traces.</a>
+    Let the eval {literal}//@sourceURL{/literal} trick work for stack traces</a>
   </li>
 </ul>
 
 If you know someone working on these projects, a gentle nudge to get these bugs
 noticed and assigned to developers on the project would be a big help!
 
-</body>
-</html>
+{call plovr.footer /}
+
+{/template}

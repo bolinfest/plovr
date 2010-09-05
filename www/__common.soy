@@ -1,0 +1,68 @@
+{namespace plovr}
+
+/**
+ * @param title
+ * @param selected
+ */
+{template .header}
+<!doctype html>
+<html>
+<head>
+  <title>{$title}</title>
+  <link href="style.css" rel="STYLESHEET" type="text/css">
+</head>
+<body>
+
+<div class="heading">
+  <h1>
+    plovr: a Closure build tool
+  </h1>
+  <ul class="navigation-links">
+    {call .headerItem}
+      {param text: 'Home' /}
+      {param href: '.' /}
+      {param selected: $selected /}
+    {/call}
+    {call .headerItem}
+      {param text: 'Docs' /}
+      {param href: 'docs' /}
+      {param selected: $selected /}
+    {/call}
+    {call .headerItem}
+      {param text: 'Download' /}
+      {param href: 'download' /}
+      {param selected: $selected /}
+    {/call}
+    {call .headerItem}
+      {param text: 'About' /}
+      {param href: 'about' /}
+      {param selected: $selected /}
+    {/call}
+  </ul>
+  <div style="clear: both"></div>
+</div>
+
+{/template}
+
+/**
+ * @param text
+ * @param href
+ * @param selected 
+ */
+{template .headerItem}
+<li>
+  {if $href == $selected}
+    <span class="selected-link">{$text}</span>
+  {else}
+    <a href="{$href}">{$text}</a>
+  {/if}
+</li>
+{/template}
+
+/**
+ *
+ */
+{template .footer}
+</body>
+</html>
+{/template}

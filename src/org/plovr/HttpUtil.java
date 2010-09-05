@@ -14,7 +14,7 @@ import com.google.template.soy.tofu.SoyTofu;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 
-final class HttpUtil {
+public final class HttpUtil {
 
   private static final SoyTofu TOFU;
 
@@ -47,6 +47,10 @@ final class HttpUtil {
     writeErrorMessageResponse(exchange, "");
   }
 
+  public static void writeNotFound(HttpExchange exchange) throws IOException {
+    writeHtmlErrorMessageResponse(exchange, "<h1>Not Found</h1>", 404);
+  }
+
   /**
    * Returns a 400 with the specified message.
    */
@@ -61,11 +65,8 @@ final class HttpUtil {
     responseBody.close();
   }
 
-  /**
-   * Returns a 400 with the specified HTML message.
-   */
   public static void writeHtmlErrorMessageResponse(HttpExchange exchange,
-      String htmlMessage) throws IOException {
+      String htmlMessage, int errorCode) throws IOException {
     Headers responseHeaders = exchange.getResponseHeaders();
     responseHeaders.set("Content-Type", "text/html");
 
@@ -77,5 +78,13 @@ final class HttpUtil {
     Writer responseBody = new OutputStreamWriter(exchange.getResponseBody());
     responseBody.write(message);
     responseBody.close();
+  };
+
+  /**
+   * Returns a 400 with the specified HTML message.
+   */
+  public static void writeHtmlErrorMessageResponse(HttpExchange exchange,
+      String htmlMessage) throws IOException {
+    writeHtmlErrorMessageResponse(exchange, htmlMessage, 400);
   }
 }

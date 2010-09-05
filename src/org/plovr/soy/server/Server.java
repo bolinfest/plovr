@@ -30,7 +30,7 @@ public final class Server implements Runnable {
       throw new RuntimeException(e);
     }
 
-    server.createContext("/", new SoyRequestHandler(config));
+    server.createContext("/", new RequestHandlerSelector(config));
     server.start();
   }
 }

@@ -8,12 +8,12 @@ public final class Config {
 
   private final File contentDirectory;
 
-  private final boolean useDynamicRecompilation;
+  private final boolean isStatic;
 
-  public Config(int port, File contentDirectory, boolean useDynamicRecompilation) {
+  public Config(int port, File contentDirectory, boolean isStatic) {
     this.port = port;
     this.contentDirectory = contentDirectory;
-    this.useDynamicRecompilation = useDynamicRecompilation;
+    this.isStatic = isStatic;
   }
 
   public int getPort() {
@@ -24,7 +24,7 @@ public final class Config {
     return contentDirectory;
   }
 
-  public boolean useDynamicRecompilation() {
-    return useDynamicRecompilation;
+  public boolean isStatic() {
+    return isStatic;
   }
 }
