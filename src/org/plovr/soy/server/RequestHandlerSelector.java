@@ -43,13 +43,22 @@ public class RequestHandlerSelector implements HttpHandler {
   public void handle(HttpExchange exchange) throws IOException {
     URI uri = exchange.getRequestURI();
     String path = uri.getPath();
+
+    // Special case index.html.
+    File contentDir = config.getContentDirectory();
+    if (path.endsWith("/")) {
+      if ((new File(contentDir, path + "index.html")).exists()) {
+        path += "index.html";
+      }
+    }
+
     String extension = getFileExtension(path);
 
     // If this appears to be a file with static content, then serve the contents
     // of the file directly.
     if (extension != null) {
       String contentType = extensionToContentType.get(extension);
-      File staticContent = new File(config.getContentDirectory(), path);
+      File staticContent = new File(contentDir, path);
       if (contentType != null && staticContent.exists()) {
         Headers responseHeaders = exchange.getResponseHeaders();
         responseHeaders.set("Content-Type", contentType);
