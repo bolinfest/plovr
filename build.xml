@@ -12,7 +12,6 @@
   <property name="build.dir" value="${basedir}/build" />
   <property name="classes.dir" value="${build.dir}/classes" />
   <property name="www.build.dir" value="${build.dir}/www" />
-  <property name="demo.build.dir" value="${build.dir}/demo" />
 
   <!-- In order to build the jar, each of the Closure Tools must be          -->
   <!-- checked out in a parallel directory.                                  -->
