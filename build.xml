@@ -142,6 +142,17 @@
     </java>
   </target>
 
+  <target name="test-soyweb-server"
+          description="runs the soyweb server in debug mode on localhost:9811">
+    <echo>Visit http://localhost:9811/hello</echo>
+    <java jar="${build.dir}/plovr.jar" fork="true">
+      <arg value="soyweb" />
+      <arg line="--dir ${testdata.dir}/soy-server" />
+      <jvmarg value="-Xdebug" />
+      <jvmarg value="-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=8000"/>
+    </java>
+  </target>
+
   <target name="www">
     <mkdir dir="${www.build.dir}" />
     <copy todir="${www.build.dir}">
