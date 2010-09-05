@@ -86,6 +86,13 @@ public class SoyRequestHandler implements HttpHandler {
       path += "/index";
     }
 
+    // This was likely a redirect from RequestHandlerSelector where an existing
+    // HTML file is now backed by a Soy template.
+    if (path.endsWith(".html")) {
+      // Remove the HTML suffix here so ".soy" can be added to the path.
+      path = path.replaceFirst("\\.html$", "");
+    }
+
     File soyFile = new File(config.getContentDirectory(), path + ".soy");
     if (!soyFile.exists()) {
       throw new RuntimeException(path + ".soy does not exist");
@@ -124,6 +131,7 @@ public class SoyRequestHandler implements HttpHandler {
 
   private static SoyTofu getSoyTofu(Config config) {
     SoyFileSet.Builder builder = new SoyFileSet.Builder();
+    builder.setCompileTimeGlobals(config.getCompileTimeGlobals());
     // Add all of the .soy files under config.getContentDirectory().
     addToBuilder(config.getContentDirectory(), builder);
     SoyFileSet soyFileSet = builder.build();

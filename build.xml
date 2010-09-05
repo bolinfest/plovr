@@ -7,7 +7,7 @@
   <property name="test.dir" value="${basedir}/test" />
 	<property name="testdata.dir" value="${basedir}/testdata" />
   <property name="www.dir" value="${basedir}/www" />
-  <property name="demo.dir" value="${basedir}/demo" />
+  <property name="demo.dir" value="${www.dir}/demo" />
   <property name="lib.dir" value="${basedir}/lib" />
   <property name="build.dir" value="${basedir}/build" />
   <property name="classes.dir" value="${build.dir}/classes" />
@@ -161,41 +161,21 @@
       <jvmarg value="-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=8000"/>
       <arg value="soyweb" />
       <arg line="--dir ${www.dir}" />
+      <arg line="--globals ${basedir}/www-globals.js" />
     </java>
   </target>
 
-  <target name="www">
-    <mkdir dir="${www.build.dir}" />
-    <copy todir="${www.build.dir}">
-      <fileset dir="${www.dir}" />
-    </copy>
-  </target>
-
-  <target name="demo-www"
-          description="create the web content for the demo">
-    <mkdir dir="${demo.build.dir}" />
-    <copy todir="${demo.build.dir}">
-      <fileset dir="${demo.dir}" />
-    </copy>
-    <replace dir="${demo.build.dir}" value="${PLOVR_HOST}">
-      <include name="*.html" />
-      <replacetoken>@PLOVR_HOST@</replacetoken>
-    </replace>
+  <target name="serve-prod-documentation"
+          description="runs the soyweb server on plovr.com to serve the docs"
+          depends="jar">
+    <java jar="${build.dir}/plovr.jar" fork="true">
+      <arg value="soyweb" />
+      <arg line="--dir ${www.dir}" />
+      <arg line="--globals ${basedir}/prod-globals.js" />
+    </java>
   </target>
 
   <target name="run-demo" description="runs the demo">
-    <!--
-    The <available> and <fail> tasks are used rather than depends because it is
-    expensive to rebuild the jar and web site every time the demo is restarted
-    when developing it iteratively.
-    -->
-    <available file="${demo.build.dir}"
-               type="dir"
-               property="demo.build.dir.present"
-               />
-    <fail unless="demo.build.dir.present">
-      The demo web site has not been built. Run "ant demo-www" to build it.
-    </fail>
     <available file="${build.dir}/plovr.jar"
                type="file"
                property="jar.present"
@@ -204,12 +184,11 @@
       The plovr jar has not been built. Run "ant jar" to build it.
     </fail>
 
-    <copy file="${build.dir}/plovr.jar" tofile="${demo.build.dir}/plovr.jar" />
-    <java jar="${demo.build.dir}/plovr.jar"
-          dir="${demo.build.dir}"
+    <java jar="${build.dir}/plovr.jar"
+          dir="${demo.dir}"
           fork="true">
       <arg value="serve" />
-      <arg value="${demo.build.dir}/demo-config.js" />
+      <arg value="${demo.dir}/demo-config.js" />
     </java>
 
   </target>

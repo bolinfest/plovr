@@ -11,7 +11,7 @@
     Learn more about Closure via
     <i>Closure: The Definitive Guide</i>.
     <a href="http://oreilly.com/catalog/9781449381875/">
-    <img src="http://plovr.org/rough_cuts_cover.png" class="rough-cuts-cover">
+    <img src="http://plovr.com/cover.png" class="rough-cuts-cover">
     </a>
     The final version will be available in Fall 2010,
     but the complete draft is
@@ -33,7 +33,7 @@ This is a demo for
 <p>
 plovr is a bulid tool that dynamically recompiles JavaScript and
 Closure Template code. Once you create a
-<a href="http://code.google.com/p/plovr/source/browse/test/org/plovr/integration-test-config.js">simple
+<a href="http://code.google.com/p/plovr/source/browse/testdata/example/integration-test-config.js">simple
 configuration file</a> to tell plovr where the JS and Soy files to
 compile are on your local machine, simply run the plovr jar with the
 config file to start compiling your code. The output of
@@ -49,7 +49,7 @@ source</a> and build it yourself.
 
 <h2>Live Examples</h2>
 
-plovr is running live on plovr.org, so take a look at the <a href="demo-config.js">config file</a>
+plovr is running live on plovr.com, so take a look at the <a href="demo-config.js">config file</a>
 it uses and the test pages that load its output. This instance of plovr
 was started by running:
 
@@ -60,7 +60,7 @@ java -jar plovr.jar serve <a href="demo-config.js">demo-config.js</a>
 <p>
 The <a href="demo-config.js">config file</a> tells plovr to
 compile <a href="example/main.js">example/main.js</a> and to look in
-<a href="example">example</a> when searching for its JavaScript and Soy dependencies.
+<a href="example/">example</a> when searching for its JavaScript and Soy dependencies.
 By default, any JavaScript file in the Closure Library (as well as
 <a href="http://code.google.com/p/closure-templates/source/browse/trunk/javascript/soyutils_usegoog.js">soyutils_usegoog.js</a>)
 may also be transitively included as a dependency.

@@ -1,3 +1,7 @@
+{namespace plovr.demo.whitespace}
+
+/***/
+{template .base}
 <!doctype html>
 <html>
 <head>
@@ -8,19 +12,20 @@
 
 This page includes the following <code>&lt;script></code> tag:
 <pre>
-&lt;script src="@PLOVR_HOST@compile?id=demo&mode=WHITESPACE">&lt;/script>
+&lt;script src="{PLOVR_HOST}compile?id=demo&mode=WHITESPACE">&lt;/script>
 </pre>
 
 If you view the content of the <code>&lt;script></code> tag included in this page,
 you will see that it contains a sizable
 amount of JavaScript because it contains all of the code from the
-22 <code>&lt;script></code> tags loaded from the <a href="raw-demo.html">RAW</a>
-demo page.
+22 <code>&lt;script></code> tags loaded from
+the <a href="raw-demo.html">RAW</a> demo page.
 This includes many Closure Library functions that are never used by this page. 
 
 <div id="content"></div>
 
-<script src="@PLOVR_HOST@compile?id=demo&mode=WHITESPACE"></script>
+<script src="{PLOVR_HOST}compile?id=demo&mode=WHITESPACE"></script>
 
 </body>
 </html>
+{/template}

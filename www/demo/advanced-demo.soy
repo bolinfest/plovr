@@ -1,3 +1,7 @@
+{namespace plovr.demo.advanced}
+
+/***/
+{template .base}
 <!doctype html>
 <html>
 <head>
@@ -8,7 +12,7 @@
 
 This page includes the following <code>&lt;script></code> tag:
 <pre>
-&lt;script src="@PLOVR_HOST@compile?id=demo&mode=ADVANCED">&lt;/script>
+&lt;script src="{PLOVR_HOST}compile?id=demo&mode=ADVANCED">&lt;/script>
 </pre>
 
 If you view the content of the <code>&lt;script></code> tag included in this page,
@@ -20,7 +24,8 @@ variables.
 
 <div id="content"></div>
 
-<script src="@PLOVR_HOST@compile?id=demo&mode=ADVANCED"></script>
+<script src="{PLOVR_HOST}compile?id=demo&mode=ADVANCED"></script>
 
 </body>
 </html>
+{/template}

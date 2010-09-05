@@ -19,6 +19,11 @@ public class SoyWebCommandOptions extends AbstractCommandOptions {
       usage = "Parse the Soy files once on startup")
   private boolean isStatic = false;
 
+  @Option(name = "--globals",
+      aliases = {"-g"},
+      usage = "File where global variables for Soy are defined")
+  private String compileTimeGlobalsFile;
+
   public SoyWebCommandOptions() {}
 
   public int getPort() {
@@ -31,5 +36,9 @@ public class SoyWebCommandOptions extends AbstractCommandOptions {
 
   public boolean isStatic() {
     return isStatic;
+  }
+
+  public String getCompileTimeGlobalsFile() {
+    return compileTimeGlobalsFile;
   }
 }

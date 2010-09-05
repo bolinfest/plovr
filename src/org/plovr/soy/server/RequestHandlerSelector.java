@@ -50,15 +50,24 @@ public class RequestHandlerSelector implements HttpHandler {
       if ((new File(contentDir, path + "index.html")).exists()) {
         path += "index.html";
       }
+      // TODO(bolinfest): If there is no index.html or index.soy and
+      // directory listing is enabled, display a list of the files
+      // under the requested directory as HTML.
     }
 
     String extension = getFileExtension(path);
 
-    // If this appears to be a file with static content, then serve the contents
-    // of the file directly.
-    if (extension != null) {
+    // If the request is for an HTML file but no HTML file exists at that path,
+    // try to fall back on a Soy file with the same name. This feature makes it
+    // easier to convert an HTML file to a template without having to create a
+    // redirect.
+    File staticContent = new File(contentDir, path);
+    boolean trySoyInstead = !staticContent.exists() && ".html".equals(extension);
+
+    if (!trySoyInstead && extension != null) {
+      // If this appears to be a file with static content, then serve the
+      // contents of the file directly.
       String contentType = extensionToContentType.get(extension);
-      File staticContent = new File(contentDir, path);
       if (contentType != null && staticContent.exists()) {
         Headers responseHeaders = exchange.getResponseHeaders();
         responseHeaders.set("Content-Type", contentType);
