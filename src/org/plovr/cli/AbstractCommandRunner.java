@@ -4,8 +4,7 @@ import java.io.IOException;
 
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
-
-import com.google.common.base.Pair;
+import org.plovr.util.Pair;
 
 abstract class AbstractCommandRunner<T extends AbstractCommandOptions> implements CommandRunner {
 

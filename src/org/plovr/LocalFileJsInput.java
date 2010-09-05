@@ -6,7 +6,8 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.google.common.base.Pair;
+import org.plovr.util.Pair;
+
 import com.google.common.collect.Maps;
 
 /**

@@ -45,7 +45,9 @@
     </javac>
   </target>
 
-  <target name="test" depends="compile" description="run the unit tests">
+  <target name="test"
+          depends="compile,externs"
+          description="run the unit tests">
     <junit failureproperty="hasFailingTests"
            showoutput="true">
 

@@ -210,7 +210,7 @@ public final class Compilation {
     for (JSModule module : modules) {
       String moduleName = module.getName();
       File outputFile = moduleToOutputPath.get(moduleName);
-      createParentDirs(outputFile);
+      Files.createParentDirs(outputFile);
 
       String moduleCode = getCodeForModule(moduleName, isDebugMode, moduleNameToUri);
 
@@ -238,7 +238,7 @@ public final class Compilation {
 
     if (moduleConfig.excludeModuleInfoFromRootModule()) {
       File outputFile = moduleConfig.getModuleInfoPath();
-      createParentDirs(outputFile);
+      Files.createParentDirs(outputFile);
 
       final Function<String, String> fingerprintedModuleNameToUri =
           new Function<String, String>() {
@@ -288,30 +288,6 @@ public final class Compilation {
       filePath += fingerprint;
     }
     return filePath;
-  }
-
-  // TODO(bolinfest): Currently, this is copied from com.google.common.io.Files
-  // because plovr is built in such a way that it copies different versions of
-  // Guava from the Closure Compiler and Closure Templates projects. Once this
-  // is cleaned up, plovr will compile against the newest Guava, which provides
-  // this method.
-  /**
-   * Creates any necessary but nonexistent parent directories of the specified
-   * file. Note that if this operation fails it may have succeeded in creating
-   * some (but not all) of the necessary parent directories.
-   *
-   * @throws IOException if an I/O error occurs, or if any necessary but
-   *     nonexistent parent directories of the specified file could not be
-   *     created.
-   * @since 4
-   */
-  private static void createParentDirs(File file) throws IOException {
-    File parent = file.getCanonicalFile().getParentFile();
-    // TODO: return if parent is null
-    parent.mkdirs();
-    if (!parent.exists()) { // TODO: change to isDirectory
-      throw new IOException("Unable to create parent directories of " + file);
-    }
   }
 
   /**
