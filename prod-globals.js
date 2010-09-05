@@ -1,3 +1,3 @@
 {
-  "PLOVR_HOST": "http://plovr.com/"
+  "PLOVR_HOST": "http://plovr.com:9810/"
 }
