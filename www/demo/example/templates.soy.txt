@@ -1,0 +1,17 @@
+{namespace example.templates}
+
+/**
+ * @param heading
+ */
+{template .base}
+  {call .header}
+    {param heading: $heading /}
+  {/call}
+{/template}
+
+/**
+ * @param heading
+ */
+{template .header}
+<h1>{$heading}</h1>
+{/template}
