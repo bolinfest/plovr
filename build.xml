@@ -165,8 +165,7 @@
   </target>
 
   <target name="serve-prod-documentation"
-          description="runs the soyweb server on plovr.com to serve the docs"
-          depends="jar">
+          description="runs the soyweb server on plovr.com to serve the docs">
     <java jar="${build.dir}/plovr.jar" fork="true">
       <arg value="soyweb" />
       <arg line="--dir ${www.dir}" />
