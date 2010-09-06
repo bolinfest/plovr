@@ -75,21 +75,21 @@ public class PairTest {
   @Test
   public void testHashCode() {
     Pair<Integer, Object> p1 = Pair.of(Integer.valueOf(42), obj);
-    assertEquals("Should be 42 + 17 * 100 = 1742", 1742, p1.hashCode());
+    assertEquals(31*(31*1 + 42) + 100, p1.hashCode());
 
     Pair<Object, Integer> p2 = Pair.of(obj, Integer.valueOf(42));
-    assertEquals("Should be 100 + 17 * 42 = 814", 814, p2.hashCode());
+    assertEquals(31*(31*1 + 100) + 42, p2.hashCode());
   }
 
   @Test
   public void testHashCodeWithNull() {
     Pair<Integer, Object> p1 = Pair.of(null, null);
-    assertEquals(0, p1.hashCode());
+    assertEquals(31*(31*1 + 0) + 0, p1.hashCode());
 
     Pair<Integer, Object> p2 = Pair.of(42, null);
-    assertEquals(42, p2.hashCode());
+    assertEquals(31*(31*1 + 42) + 0, p2.hashCode());
 
     Pair<Integer, Object> p3 = Pair.of(null, obj);
-    assertEquals(1700, p3.hashCode());
+    assertEquals(31*(31*1 + 0) + 100, p3.hashCode());
   }
 }

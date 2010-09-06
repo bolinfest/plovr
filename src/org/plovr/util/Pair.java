@@ -1,7 +1,6 @@
 package org.plovr.util;
 
-import com.google.common.base.Equivalence;
-import com.google.common.base.Equivalences;
+import com.google.common.base.Objects;
 
 public final class Pair<F, S> {
 
@@ -35,17 +34,13 @@ public final class Pair<F, S> {
       return false;
     }
     Pair<?, ?> pair = (Pair<?, ?>) obj;
-    Equivalence<Object> eq = Equivalences.nullAwareEquals();
-    return eq.equivalent(getFirst(), pair.getFirst()) &&
-        eq.equivalent(getSecond(), pair.getSecond());
+    return Objects.equal(getFirst(), pair.getFirst()) &&
+        Objects.equal(getSecond(), pair.getSecond());
   }
 
   @Override
   public int hashCode() {
-    Equivalence<Object> eq = Equivalences.nullAwareEquals();
-    int h1 = getFirst() == null ? 0 : eq.hash(getFirst());
-    int h2 = getSecond() == null ? 0 : eq.hash(getSecond());
-    return h1 + 17 * h2;
+    return Objects.hashCode(getFirst(), getSecond());
   }
 
   @Override
