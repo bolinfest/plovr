@@ -29,16 +29,16 @@
 
 <h1>plovr demo page</h1>
 
-This is a demo for
-<a href="http://code.google.com/p/plovr/">plovr</a>, a
+This is a demo for{sp}
+<a href="http://code.google.com/p/plovr/">plovr</a>, a{sp}
 <a href="http://code.google.com/closure/">Closure</a> build tool.
 
 <h2>About plovr</h2>
 
 <p>
 plovr is a bulid tool that dynamically recompiles JavaScript and
-Closure Template code. Once you create a
-<a href="http://code.google.com/p/plovr/source/browse/testdata/example/integration-test-config.js">simple
+Closure Template code. Once you create a <a
+href="http://code.google.com/p/plovr/source/browse/testdata/example/integration-test-config.js">simple
 configuration file</a> to tell plovr where the JS and Soy files to
 compile are on your local machine, simply run the plovr jar with the
 config file to start compiling your code. The output of
@@ -47,15 +47,16 @@ plovr can be included via a <code>&lt;script></code> tag.
 
 <p>
 Visit the <a href="http://code.google.com/p/plovr/downloads/list">downloads
-page on code.google.com</a> to get the latest plovr binary, or
-<a href="http://code.google.com/p/plovr/source/checkout">check out the
+page on code.google.com</a> to get the latest plovr binary, or <a
+href="http://code.google.com/p/plovr/source/checkout">check out the
 source</a> and build it yourself.
 </p>
 
 <h2>Live Examples</h2>
 
-plovr is running live on plovr.com, so take a look at the <a href="demo-config.js">config file</a>
-it uses and the test pages that load its output. This instance of plovr
+plovr is running live on plovr.com, so take a look at
+the <a href="demo-config.js">config file</a> it
+uses and the test pages that load its output. This instance of plovr
 was started by running:
 
 <pre>
@@ -64,16 +65,16 @@ java -jar plovr.jar serve <a href="demo-config.js">demo-config.js</a>
 
 <p>
 The <a href="demo-config.js">config file</a> tells plovr to
-compile <a href="example/main.js">example/main.js</a> and to look in
+compile <a href="example/main.js">example/main.js</a> and to look in{sp}
 <a href="example/">example</a> when searching for its JavaScript and Soy dependencies.
-By default, any JavaScript file in the Closure Library (as well as
+By default, any JavaScript file in the Closure Library (as well as{sp}
 <a href="http://code.google.com/p/closure-templates/source/browse/trunk/javascript/soyutils_usegoog.js">soyutils_usegoog.js</a>)
 may also be transitively included as a dependency.
 
 </p>
 
 <p>
-Using plovr eliminates the need to run <code>calcdeps.py</code> and
+Using plovr eliminates the need to run <code>calcdeps.py</code> and{sp}
 <code>java -jar SoyToJsSrcCompiler.jar</code> as separate build steps.
 More importantly, when changes are made to the input files, there is no
 need to restart plovr&mdash;just refresh the web page that loads its output
@@ -82,7 +83,7 @@ and plovr will recompile the inputs!
 
 <ul>
   <li>
-    <span class="example-title">Example of using plovr in <code>RAW</code> mode.</span>
+    <span class="example-title">Example of using plovr in <code>RAW</code> mode.</span>{sp}
     <a href="raw-demo.html">[test page]</a>
     <br>
     In <code>RAW</code> mode,
@@ -91,33 +92,33 @@ and plovr will recompile the inputs!
     Each input <code>.soy</code> file is converted to a JavaScript file,
     and is also loaded in its own <code>&lt;script></code> tag.
     The order of the <code>&lt;script></code> tags is determined by
-    topologically sorting the inputs based on their calls to
-    <code>goog.provide()</code> and <code>goog.require()</code>, just as
+    topologically sorting the inputs based on their calls to{sp}
+    <code>goog.provide()</code> and <code>goog.require()</code>, just as{sp}
     <code>calcdeps.py</code> would do.
   </li>
   <li>
-    <span class="example-title">Example of using plovr in <code>WHITESPACE</code> mode.</span>
+    <span class="example-title">Example of using plovr in <code>WHITESPACE</code> mode.</span>{sp}
     <a href="whitespace-demo.html">[test page]</a>
     <br>
     In <code>WHITESPACE</code> mode, after being topologically sorted,
     all input files are concatenated together into a single JavaScript
-    file with all whitespace and comments removed using the
+    file with all whitespace and comments removed using the{sp}
     <a href="http://code.google.com/closure/compiler/docs/compilation_levels.html">
     WHITESPACE_ONLY</a> mode of the Closure Compiler.
   </li>
   <li>
-    <span class="example-title">Example of using plovr in <code>SIMPLE</code> mode.</span>
+    <span class="example-title">Example of using plovr in <code>SIMPLE</code> mode.</span>{sp}
     <a href="simple-demo.html">[test page]</a>
     <br>
-    In <code>SIMPLE</code> mode, the input is compiled using the Closure Compiler's
-    <code>SIMPLE_OPTIMIZATIONS</code> mode.
+    In <code>SIMPLE</code> mode, the input is compiled using the
+    Closure Compiler's <code>SIMPLE_OPTIMIZATIONS</code> mode.
   </li>
   <li>
-    <span class="example-title">Example of using plovr in <code>ADVANCED</code> mode.</span>
+    <span class="example-title">Example of using plovr in <code>ADVANCED</code> mode.</span>{sp}
     <a href="advanced-demo.html">[test page]</a>
     <br>
-    In <code>ADVANCED</code> mode, the input is compiled using the Closure Compiler's
-    <code>ADVANCED_OPTIMIZATIONS</code> mode.
+    In <code>ADVANCED</code> mode, the input is compiled using the
+    Closure Compiler's <code>ADVANCED_OPTIMIZATIONS</code> mode.
   </li>
 </ul>
 
