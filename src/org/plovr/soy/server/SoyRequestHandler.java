@@ -95,7 +95,8 @@ public class SoyRequestHandler implements HttpHandler {
 
     File soyFile = new File(config.getContentDirectory(), path + ".soy");
     if (!soyFile.exists()) {
-      throw new RuntimeException(path + ".soy does not exist");
+      HttpUtil.return404(exchange);
+      return;
     }
 
     SoyFileParser parser = new SoyFileParser(

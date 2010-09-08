@@ -65,6 +65,11 @@ public final class HttpUtil {
     responseBody.close();
   }
 
+  public static void return404(HttpExchange exchange) throws IOException {
+    HttpUtil.writeHtmlErrorMessageResponse(
+        exchange, "File Not Found", 404);
+  }
+
   public static void writeHtmlErrorMessageResponse(HttpExchange exchange,
       String htmlMessage, int errorCode) throws IOException {
     Headers responseHeaders = exchange.getResponseHeaders();
@@ -74,7 +79,7 @@ public final class HttpUtil {
     final SoyMsgBundle messageBundle = null;
     String message = TOFU.render("org.plovr.errorPage", mapData, messageBundle);
 
-    exchange.sendResponseHeaders(400, message.length());
+    exchange.sendResponseHeaders(errorCode, message.length());
     Writer responseBody = new OutputStreamWriter(exchange.getResponseBody());
     responseBody.write(message);
     responseBody.close();

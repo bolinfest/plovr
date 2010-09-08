@@ -6,6 +6,8 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.util.Map;
 
+import org.plovr.HttpUtil;
+
 import com.google.common.io.Files;
 import com.google.inject.internal.ImmutableMap;
 import com.sun.net.httpserver.Headers;
@@ -63,25 +65,36 @@ public class RequestHandlerSelector implements HttpHandler {
     // easier to convert an HTML file to a template without having to create a
     // redirect.
     File staticContent = new File(contentDir, path);
+
+    if (!FileUtil.contains(contentDir, staticContent)) {
+      // Someone is trying to pull a fast one! The request URI might be
+      // something like: "/../../../etc/passwd", so do not allow requests to
+      // files above the content directory.
+      HttpUtil.writeHtmlErrorMessageResponse(exchange,
+          "You do not have permission to access the requested file.",
+          403);
+      return;
+    }
+
     boolean trySoyInstead = !staticContent.exists() && ".html".equals(extension);
 
     if (!trySoyInstead && extension != null) {
       // If this appears to be a file with static content, then serve the
       // contents of the file directly.
       String contentType = extensionToContentType.get(extension);
-      if (contentType != null && staticContent.exists()) {
-        Headers responseHeaders = exchange.getResponseHeaders();
-        responseHeaders.set("Content-Type", contentType);
-        exchange.sendResponseHeaders(200, staticContent.length());
+      if (staticContent.exists()) {
+        if (contentType != null) {
+          Headers responseHeaders = exchange.getResponseHeaders();
+          responseHeaders.set("Content-Type", contentType);
+          exchange.sendResponseHeaders(200, staticContent.length());
+        }
 
         byte[] bytes = Files.toByteArray(staticContent);
         OutputStream output = exchange.getResponseBody();
         output.write(bytes);
         output.close();
       } else {
-        // Send empty response.
-        exchange.sendResponseHeaders(200, 0);
-        exchange.getRequestBody().close();
+        HttpUtil.return404(exchange);
       }
     } else {
       soyRequestHandler.handle(exchange);
