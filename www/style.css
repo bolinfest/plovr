@@ -70,3 +70,9 @@ blockquote {
 .book-title {
   font-style: italic;
 }
+
+.book-cover {
+  width: 252px;
+  height: 330px;
+  border: 1px solid #CCC;
+}
