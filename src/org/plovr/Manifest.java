@@ -46,6 +46,7 @@ public final class Manifest {
   private final Set<File> dependencies;
   private final List<JsInput> requiredInputs;
   private final Set<File> externs;
+  private final boolean customExternsOnly;
 
   /**
    * When RAW mode is used, each input will need to be accessed by name. To make
@@ -68,7 +69,8 @@ public final class Manifest {
       @Nullable File closureLibraryDirectory,
       List<File> dependencies,
       List<JsInput> requiredInputs,
-      @Nullable List<File> externs) {
+      @Nullable List<File> externs,
+      boolean customExternsOnly) {
     Preconditions.checkNotNull(dependencies);
     Preconditions.checkNotNull(requiredInputs);
 
@@ -78,6 +80,7 @@ public final class Manifest {
     this.dependencies = ImmutableSet.copyOf(dependencies);
     this.requiredInputs = ImmutableList.copyOf(requiredInputs);
     this.externs = externs == null ? null : ImmutableSet.copyOf(externs);
+    this.customExternsOnly = customExternsOnly;
   }
 
   /**
@@ -88,13 +91,15 @@ public final class Manifest {
    */
   public Compilation getCompilerArguments(
       @Nullable ModuleConfig moduleConfig) throws MissingProvideException {
-    List<JSSourceFile> externs = getDefaultExterns();
-    if (this.externs != null) {
-      ImmutableList.Builder<JSSourceFile> builder = ImmutableList.builder();
-      builder.addAll(externs);
-      builder.addAll(Lists.transform(getExternInputs(), inputToSourceFile));
-      externs = builder.build();
+    // Build up the list of externs to use in the compilation.
+    ImmutableList.Builder<JSSourceFile> builder = ImmutableList.builder();
+    if (!customExternsOnly) {
+      builder.addAll(getDefaultExterns());
     }
+    if (this.externs != null) {
+      builder.addAll(Lists.transform(getExternInputs(), inputToSourceFile));
+    }
+    List<JSSourceFile> externs = builder.build();
 
     List<JsInput> jsInputs = getInputsInCompilationOrder();
     if (moduleConfig == null) {

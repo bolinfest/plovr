@@ -30,6 +30,7 @@ import com.google.javascript.jscomp.JSModule;
 import com.google.javascript.jscomp.JSSourceFile;
 import com.google.javascript.jscomp.Result;
 import com.google.javascript.jscomp.SourceExcerptProvider;
+import com.google.javascript.jscomp.SourceMap;
 
 /**
  * {@link Compilation} represents a compilation performed by the Closure
@@ -86,9 +87,7 @@ public final class Compilation {
    * the Compiler that was used.
    */
   private void compile(Config config, Compiler compiler, CompilerOptions options) {
-    if (this.result != null) {
-      throw new IllegalStateException("Compilation already occurred");
-    }
+    Preconditions.checkState(!hasResult(), "Compilation already occurred");
     this.config = config;
     this.compiler = compiler;
 
@@ -112,9 +111,7 @@ public final class Compilation {
   }
 
   public String getCompiledCode() {
-    if (!hasResult()) {
-      throw new IllegalStateException("Code has not been compiled yet");
-    }
+    Preconditions.checkState(hasResult(), "Code has not been compiled yet");
     return compiler.toSource();
   }
 
@@ -124,9 +121,22 @@ public final class Compilation {
 
   public String getCodeForModule(String moduleName, boolean isDebugMode,
       Function<String, String> moduleNameToUri) {
-    if (modules == null) {
-      throw new IllegalStateException("This compilation does not use modules");
-    }
+    final boolean resetSourceMap = true;
+    return getCodeForModule(moduleName, isDebugMode, moduleNameToUri, resetSourceMap);
+  }
+
+  /**
+   * This method always calls compiler.toSource(module), which means that it can
+   * be followed by a call to compiler.getSourceMap().appendTo(writer, module),
+   * though compiler.getSourceMap().reset() should be called immediately after
+   * when that is the case.
+   */
+  private String getCodeForModule(String moduleName, boolean isDebugMode,
+      Function<String, String> moduleNameToUri, boolean resetSourceMap) {
+
+    Preconditions.checkState(hasResult(), "Code has not been compiled yet");
+    Preconditions.checkState(modules != null,
+        "This compilation does not use modules");
 
     StringBuilder builder = new StringBuilder();
     ModuleConfig moduleConfig = config.getModuleConfig();
@@ -162,6 +172,10 @@ public final class Compilation {
     JSModule module = nameToModule.get(moduleName);
     String moduleCode = compiler.toSource(module);
     builder.append(moduleCode);
+    if (resetSourceMap) {
+      SourceMap sourceMap = compiler.getSourceMap();
+      if (sourceMap != null) sourceMap.reset();
+    }
 
     // http://code.google.com/p/closure-library/issues/detail?id=196
     // http://blog.getfirebug.com/2009/08/11/give-your-eval-a-name-with-sourceurl/
@@ -212,7 +226,9 @@ public final class Compilation {
       File outputFile = moduleToOutputPath.get(moduleName);
       Files.createParentDirs(outputFile);
 
-      String moduleCode = getCodeForModule(moduleName, isDebugMode, moduleNameToUri);
+      final boolean resetSourceMap = false;
+      String moduleCode = getCodeForModule(
+          moduleName, isDebugMode, moduleNameToUri, resetSourceMap);
 
       // Fingerprint the file, if appropriate.
       if (config.shouldFingerprintJsFiles()) {
@@ -231,7 +247,11 @@ public final class Compilation {
       // been generated.
       if (sourceMapPath != null) {
         Writer writer = new BufferedWriter(new FileWriter(sourceMapPath + "_" + moduleName));
-        this.result.sourceMap.appendTo(writer, moduleName);
+        // This is safe because getCodeForModule() was just called, which has
+        // the side-effect of calling compiler.toSource(module).
+        SourceMap sourceMap = compiler.getSourceMap();
+        sourceMap.appendTo(writer, moduleName);
+        sourceMap.reset();
         Closeables.close(writer, false);
       }
     }

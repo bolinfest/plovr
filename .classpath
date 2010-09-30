@@ -6,7 +6,7 @@
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="lib" path="lib/junit-4.8.2.jar"/>
 	<classpathentry kind="lib" path="lib/guava-r06.jar" sourcepath="/guava/src"/>
-	<classpathentry kind="lib" path="lib/closure-compiler-r404.jar"/>
 	<classpathentry kind="lib" path="lib/soy-r17-modified.jar" sourcepath="/closure-templates/build/genfiles"/>
+	<classpathentry kind="lib" path="lib/closure-compiler-r468.jar"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>

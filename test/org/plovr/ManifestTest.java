@@ -36,12 +36,14 @@ public class ManifestTest extends TestCase {
     JsSourceFile requiredInput = new JsSourceFile(path, testFile);
 
     final List<File> externs = ImmutableList.of();
+    final boolean customExternsOnly = false;
 
     Manifest manifest = new Manifest(
         closureLibraryDirectory,
         dependencies,
         ImmutableList.<JsInput>of(requiredInput),
-        externs);
+        externs,
+        customExternsOnly);
 
     final ModuleConfig moduleConfig = null;
     Compilation compilerArguments = manifest.getCompilerArguments(moduleConfig);

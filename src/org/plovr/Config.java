@@ -190,6 +190,8 @@ public final class Config {
 
     private ImmutableList.Builder<String> externs = null;
 
+    private boolean customExternsOnly = false;
+
     private CompilationMode compilationMode = CompilationMode.SIMPLE;
 
     private WarningLevel warningLevel = WarningLevel.DEFAULT;
@@ -257,6 +259,10 @@ public final class Config {
       externs.add(extern);
     }
 
+    public void setCustomExternsOnly(boolean customExternsOnly) {
+      this.customExternsOnly = customExternsOnly;
+    }
+
     public void setPathToClosureLibrary(String pathToClosureLibrary) {
       this.pathToClosureLibrary = pathToClosureLibrary;
     }
@@ -307,7 +313,8 @@ public final class Config {
         manifest = new Manifest(closureLibraryDirectory,
           Lists.transform(paths.build(), STRING_TO_FILE),
           inputs.build(),
-          externs);
+          externs,
+          customExternsOnly);
       } else {
         manifest = this.manifest;
       }

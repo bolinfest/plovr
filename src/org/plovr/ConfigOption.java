@@ -77,6 +77,13 @@ public enum ConfigOption {
     }
   }),
 
+  CUSTOM_EXTERNS_ONLY("custom-externs-only", new ConfigUpdater() {
+    @Override
+    public void apply(boolean customExternsOnly, Config.Builder builder) {
+      builder.setCustomExternsOnly(customExternsOnly);
+    }
+  }),
+
   CLOSURE_LIBRARY("closure-library", new ConfigUpdater() {
     @Override
     public void apply(String path, Config.Builder builder) {
