@@ -33,4 +33,15 @@ public interface JsInput extends Generator {
    */
   public List<String> getRequires();
 
+  /**
+   * @return a boolean indicating whether this is a Soy file. If true, then
+   * {@link #getTemplateCode} must return the original Soy content.
+   */
+  public boolean isSoyFile();
+
+  /**
+   * @return the underlying template code if this is a Soy file
+   * @throws UnsupportedOperationException if this is not a Soy file
+   */
+  public String getTemplateCode();
 }

@@ -59,6 +59,16 @@ abstract class AbstractJsInput implements JsInput {
     return false;
   }
 
+  @Override
+  public boolean isSoyFile() {
+    return false;
+  }
+
+  @Override
+  public String getTemplateCode() {
+    throw new UnsupportedOperationException("This does not represent a Soy file");
+  }
+
   protected void processProvidesAndRequires() {
     List<String> provides = Lists.newLinkedList();
     List<String> requires = Lists.newLinkedList();

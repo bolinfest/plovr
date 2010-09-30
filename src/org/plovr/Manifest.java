@@ -112,7 +112,7 @@ public final class Manifest {
     return ResourceReader.getDefaultExterns();
   }
 
-  List<JsInput> getInputsInCompilationOrder() throws MissingProvideException {
+  public List<JsInput> getInputsInCompilationOrder() throws MissingProvideException {
     Set<JsInput> allDependencies = getAllDependencies();
 
     // Build up the dependency graph.

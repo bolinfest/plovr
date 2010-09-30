@@ -1,8 +1,11 @@
 package org.plovr;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.logging.Logger;
 
+import com.google.common.base.Charsets;
+import com.google.common.io.Files;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.jssrc.SoyJsSrcOptions;
 import com.google.template.soy.jssrc.SoyJsSrcOptions.CodeStyle;
@@ -13,7 +16,7 @@ import com.google.template.soy.msgs.SoyMsgBundle;
  *
  * @author bolinfest@gmail.com (Michael Bolin)
  */
-class SoyFile extends LocalFileJsInput {
+public class SoyFile extends LocalFileJsInput {
 
   private static final Logger logger = Logger.getLogger("org.plovr.SoyFile");
 
@@ -47,6 +50,20 @@ class SoyFile extends LocalFileJsInput {
     String code = fileSet.compileToJsSrc(SOY_OPTIONS, msgBundle).get(0);
     logger.fine(code);
     return code;
+  }
+
+  @Override
+  public boolean isSoyFile() {
+    return true;
+  }
+
+  @Override
+  public String getTemplateCode() {
+    try {
+      return Files.toString(getSource(), Charsets.UTF_8);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 
 }
