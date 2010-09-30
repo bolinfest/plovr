@@ -226,7 +226,9 @@ public final class Compilation {
       File outputFile = moduleToOutputPath.get(moduleName);
       Files.createParentDirs(outputFile);
 
-      final boolean resetSourceMap = false;
+      // Reset the source map if it is not going to be reset later in this loop
+      // when the source map is written to disk.
+      final boolean resetSourceMap = (sourceMapPath == null);
       String moduleCode = getCodeForModule(
           moduleName, isDebugMode, moduleNameToUri, resetSourceMap);
 
