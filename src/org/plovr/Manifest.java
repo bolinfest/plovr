@@ -125,7 +125,6 @@ public final class Manifest {
     LinkedHashSet<JsInput> compilerInputs = new LinkedHashSet<JsInput>();
     compilerInputs.add(getBaseJs());
     for (JsInput requiredInput : requiredInputs) {
-      System.out.println("REQUIRED INPUT: " + requiredInput);
       buildDependencies(provideToSource, compilerInputs, requiredInput);
     }
 
@@ -139,15 +138,10 @@ public final class Manifest {
     return ImmutableList.copyOf(compilerInputs);
   }
 
-  Map<String, JsInput> getProvideToSource() {
-    return getProvideToSource(getAllDependencies());
-  }
-
-  private Map<String, JsInput> getProvideToSource(Set<JsInput> allDependencies) {
+  Map<String, JsInput> getProvideToSource(Set<JsInput> allDependencies) {
     // Build up the dependency graph.
     Map<String, JsInput> provideToSource = Maps.newHashMap();
     for (JsInput input : allDependencies) {
-      System.out.println("Dependency: " + input);
       List<String> provides = input.getProvides();
       for (String provide : provides) {
         JsInput existingProvider = provideToSource.get(provide);
@@ -193,7 +187,6 @@ public final class Manifest {
   void buildDependencies(Map<String, JsInput> provideToSource,
       LinkedHashSet<JsInput> transitiveDependencies, JsInput input)
       throws MissingProvideException {
-    System.out.println("Building dependencies for: " + input);
     for (String require : input.getRequires()) {
       JsInput provide = provideToSource.get(require);
       if (provide == null) {

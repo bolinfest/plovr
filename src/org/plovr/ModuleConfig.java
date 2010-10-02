@@ -10,13 +10,18 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
+import org.plovr.util.Pair;
+
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.common.collect.Sets.SetView;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -244,9 +249,9 @@ public final class ModuleConfig {
     // then that dependency should appear in the least common ancestor module
     // of those two modules. For example, consider the following scenario:
     //
-    // A A contains base.js
-    // / \ B contains useragent.js which depends on string.js
-    // B C C contains asserts.js which depends on string.js
+    //    A     A contains base.js
+    //   / \    B contains useragent.js which depends on string.js
+    //  B   C   C contains asserts.js which depends on string.js
     //
     // There are two reasonable options for how the inputs (and their transitive
     // dependencies) should be alloted to the modules:
@@ -259,11 +264,11 @@ public final class ModuleConfig {
     // Option 2: Create a "synthetic module" named D which results in a new
     // module dependency tree:
     //
-    // A A contains base.js
-    // |
-    // D D contains string.js
-    // / \ B contains useragent.js which depends on string.js
-    // B C C contains asserts.js which depends on string.js
+    //    A     A contains base.js
+    //    |
+    //    D     D contains string.js
+    //   / \    B contains useragent.js which depends on string.js
+    //  B   C   C contains asserts.js which depends on string.js
     //
     // The benefit of this solution is that the common dependencies of B and C
     // no longer bloat A. If a sophisticated module loader is used on the
@@ -288,6 +293,10 @@ public final class ModuleConfig {
 
   private List<JSModule> buildModulesUsingOption1(Manifest manifest)
       throws MissingProvideException {
+    List<JsInput> inputsInOrder = manifest.getInputsInCompilationOrder();
+    // Remove the first item, base.js, from the list.
+    inputsInOrder = inputsInOrder.subList(1, inputsInOrder.size());
+
     // 1. Find the set of transitive dependencies for each module using a
     // LinkedHashSet.
     // 2. For each module, iterate over its list of inputs and keep track of
@@ -302,7 +311,8 @@ public final class ModuleConfig {
     // Step 1: Build the set of transitive dependencies for each module.
     Map<String, LinkedHashSet<JsInput>> moduleToTransitiveDependencies = Maps
         .newHashMap();
-    Map<String, JsInput> provideToSource = manifest.getProvideToSource();
+    Map<String, JsInput> provideToSource = manifest.getProvideToSource(
+        ImmutableSet.copyOf(inputsInOrder));
     for (String module : topologicalSort) {
       ModuleInfo moduleInfo = moduleInfoMap.get(module);
       JsInput primaryInput = manifest.getJsInputByName(moduleInfo.getInput());
@@ -314,12 +324,19 @@ public final class ModuleConfig {
     // Step 2: Assign inputs to modules.
     Map<String, List<JsInput>> moduleToInputs = Maps.newHashMap();
     for (String module : topologicalSort) {
-
+      moduleToInputs.put(module, Lists.<JsInput>newLinkedList());
+    }
+    Searcher searcher = new Searcher();
+    for (JsInput input : inputsInOrder) {
+      Set<String> modulesWithInput = findModulesWithInput(
+          input, moduleToTransitiveDependencies);
+      String ancestor = findLeastCommonAncestor(modulesWithInput, searcher);
+      moduleToInputs.get(ancestor).add(input);
     }
 
     // Step 3: Convert each list of JsInput dependencies for each module into a
     // JSModule.
-    ImmutableList.Builder<JSModule> builder = ImmutableList.builder();
+    Map<String, JSModule> modulesByName = Maps.newHashMap();
     for (String module : topologicalSort) {
       // Create the module and add the dependencies in order.
       JSModule jsModule = new JSModule(module);
@@ -334,10 +351,198 @@ public final class ModuleConfig {
         jsModule.addFirst(Manifest.inputToSourceFile.apply(manifest.getBaseJs()));
       }
 
+      modulesByName.put(module, jsModule);
+    }
+
+    // Add the dependencies for each module.
+    ImmutableList.Builder<JSModule> builder = ImmutableList.builder();
+    for (String module : topologicalSort) {
+      JSModule jsModule = modulesByName.get(module);
+      for (String parent : moduleInfoMap.get(module).getDeps()) {
+        jsModule.addDependency(modulesByName.get(parent));
+      }
       builder.add(jsModule);
     }
 
     return builder.build();
+  }
+
+  /**
+   * Using the moduleToTransitiveDependencies map, returns the set of modules
+   * that contain the specified input as a transitive dependency.
+   */
+  private static Set<String> findModulesWithInput(
+      JsInput input,
+      Map<String, LinkedHashSet<JsInput>> moduleToTransitiveDependencies) {
+    Set<String> modules = Sets.newHashSet();
+    for (Map.Entry<String, LinkedHashSet<JsInput>> entry :
+        moduleToTransitiveDependencies.entrySet()) {
+      LinkedHashSet<JsInput> inputs = entry.getValue();
+      if (inputs.contains(input)) {
+        modules.add(entry.getKey());
+      }
+    }
+    return modules;
+  }
+
+  private String findLeastCommonAncestor(Set<String> modules, Searcher searcher) {
+    Preconditions.checkArgument(modules.size() > 0);
+
+    // If the set contains the root module, then the least common ancestor of
+    // the set must be the root module, so check for that first.
+    String rootModule = getRootModule();
+    if (modules.contains(rootModule)) {
+      return rootModule;
+    }
+
+    // If the set has exactly one element, then it must be its own least common
+    // ancestor.
+    Iterator<String> iter = modules.iterator();
+    String firstModule = iter.next();
+    if (modules.size() == 1) {
+      return firstModule;
+    }
+
+    // The input must satisfy one of the following cases:
+    // 1. One of the modules in the set is a common ancestor for all of the
+    // modules in the set, in which case it is must be the least common ancestor
+    // for all of the modules in the set.
+    // 2. A module that is not in the set is the least common ancestor for all
+    // of the modules.
+    // It cannot be the case that no least common module exists because the root
+    // module is a common ancestor for any set of modules in the graph.
+    String leastCommonAncestor = firstModule;
+    while (iter.hasNext()) {
+      String module = iter.next();
+      leastCommonAncestor = searcher.findCommonAncestor(
+          leastCommonAncestor, module);
+    }
+
+    return leastCommonAncestor;
+  }
+
+  private class Searcher {
+
+    private final Map<Pair<String,String>,String> cache = Maps.newHashMap();
+
+    private Searcher() {}
+
+    private Pair<String,String> createSortedPair(String module1, String module2) {
+      int comp = module1.compareTo(module2);
+      Preconditions.checkState(comp != 0, "Should not be the same");
+      if (comp < 0) {
+        return Pair.of(module1, module2);
+      } else {
+        return Pair.of(module2, module1);
+      }
+    }
+
+    /**
+     * Returns the module that is the least common ancestor of the two specified
+     * modules. Note that in a graph such as the following:
+     * <pre>
+     *       A
+     *     /   \
+     *    B     C
+     *    | \ / |   In this example, both D and E depend on both B and C.
+     *    | / \ |   Therefore, either B or C could be returned as the least
+     *    D     E   common ancestor of D and E.
+     * </pre>
+     * There may not be a unique solution.
+     */
+    public String findCommonAncestor(String module1, String module2) {
+      if (module1.equals(module2)) {
+        return module1;
+      }
+
+      Pair<String,String> p = createSortedPair(module1, module2);
+      String ancestor = cache.get(p);
+      if (ancestor != null) {
+        return ancestor;
+      }
+
+      // Progressively check ancestors of each node.
+      Map<String, Integer> modulesToVisitFrom1 = Maps.newHashMap();
+      modulesToVisitFrom1.put(module1, 0);
+      Map<String, Integer> modulesToVisitFrom2 = Maps.newHashMap();
+      modulesToVisitFrom2.put(module2, 0);
+      Map<String, Integer> expandedFromModule1 = Maps.newHashMap();
+      Map<String, Integer> expandedFromModule2 = Maps.newHashMap();
+      while (true) {
+        // See whether there is a common reachable module found between module1
+        // and module2. Make sure that the following case works correctly:
+        //
+        //       A
+        //     / |
+        //    |  B     Make sure that when searching for the least common
+        //    |  | \   ancestor of B and F that B is determined to be the least
+        //    C  D  E  common ancestor instead of another module, such as A.
+        //     \ |     That would preclude the ability to determine B as the
+        //       F     least common ancestor of {B,E,F}. In practice, that would
+        //       |     unnecessarily add code to A that could be contained in B.
+        //       G
+        //
+        SetView<String> intersection = Sets.intersection(
+            expandedFromModule1.keySet(), expandedFromModule2.keySet());
+        int size = intersection.size();
+        if (size > 0) {
+          if (size == 1) {
+            ancestor = intersection.iterator().next();
+          } else {
+            // TODO(bolinfest): Prove that this heuristic is optimal.
+
+            // This would happen in the {B,F} case where both B and A are
+            // reached in two iterations. In that case, the min cost for B would
+            // be 0 and the min cost for A would be 1, so B would be selected as
+            // the least common ancestor, as desired.
+            int minCostSeen = Integer.MAX_VALUE;
+            for (String candidateAncestor : intersection) {
+              int cost1 = modulesToVisitFrom1.get(candidateAncestor);
+              int cost2 = modulesToVisitFrom2.get(candidateAncestor);
+              int cost = Math.min(cost1, cost2);
+              if (cost < minCostSeen) {
+                minCostSeen = cost;
+                ancestor = candidateAncestor;
+              }
+            }
+          }
+          break;
+        } else {
+          expandModulesToVisit(modulesToVisitFrom1, expandedFromModule1);
+          expandModulesToVisit(modulesToVisitFrom2, expandedFromModule2);
+        }
+      }
+
+      cache.put(p, ancestor);
+      return ancestor;
+    }
+
+    private void expandModulesToVisit(Map<String, Integer> modulesToVisit,
+        Map<String, Integer> expandedModules) {
+      // Expand each module in the pending visitors list.
+      // Copy the visitors list because the underlying Map will be modified as
+      // part of this for loop:
+      Map<String,Integer> modules = ImmutableMap.copyOf(modulesToVisit);
+      for (Map.Entry<String,Integer> entry : modules.entrySet()) {
+        String module = entry.getKey();
+        // Check to see whether the module has already been expanded.
+        if (expandedModules.containsKey(module)) {
+          continue;
+        }
+
+        // Add to visited list.
+        Integer cost = entry.getValue() + 1;
+        for (String dep : moduleInfoMap.get(module).getDeps()) {
+          if (!modulesToVisit.containsKey(dep)) {
+            modulesToVisit.put(dep, cost);
+          }
+        }
+
+        // Remove from visited list and add to expanded list.
+        modulesToVisit.remove(module);
+        expandedModules.put(entry.getKey(), entry.getValue());
+      }
+    }
   }
 
   public static Builder builder(File relativePathBase) {
@@ -544,11 +749,11 @@ public final class ModuleConfig {
       // For example, if the config file contained:
       //
       // "deps" : {
-      // "A": [], A
-      // "B": ["A"], / \
-      // "C": ["A"], B C
-      // "D": ["B","C"], \ / \
-      // "E": ["C"] D E
+      //   "A": [],           A
+      //   "B": ["A"],       / \
+      //   "C": ["A"],      B   C
+      //   "D": ["B","C"],   \ / \
+      //   "E": ["C"]         D   E
       // }
       //
       // Then the iteration of transitiveDependencies would produce either:
