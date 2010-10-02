@@ -184,6 +184,12 @@ public final class Manifest {
       if (provide == null) {
         throw new MissingProvideException(input, require);
       }
+      // It is possible that this dependency has already been included in the
+      // set of transitive dependencies, in which case its dependencies should
+      // not be built again.
+      if (transitiveDependencies.contains(provide)) {
+        continue;
+      }
       buildDependencies(provideToSource, transitiveDependencies, provide);
     }
     transitiveDependencies.add(input);
