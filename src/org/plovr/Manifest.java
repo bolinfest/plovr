@@ -101,13 +101,13 @@ public final class Manifest {
     }
     List<JSSourceFile> externs = builder.build();
 
-    List<JsInput> jsInputs = getInputsInCompilationOrder();
     if (moduleConfig == null) {
+      List<JsInput> jsInputs = getInputsInCompilationOrder();
       List<JSSourceFile> inputs = Lists.transform(jsInputs, inputToSourceFile);
       logger.info("Inputs: " + jsInputs.toString());
       return Compilation.create(externs, inputs);
     } else {
-      List<JSModule> modules = moduleConfig.getModules(jsInputs);
+      List<JSModule> modules = moduleConfig.getModules(this);
       return Compilation.createForModules(externs, modules);
     }
   }
@@ -120,30 +120,12 @@ public final class Manifest {
   public List<JsInput> getInputsInCompilationOrder() throws MissingProvideException {
     Set<JsInput> allDependencies = getAllDependencies();
 
-    // Build up the dependency graph.
-    Map<String, JsInput> provideToSource = Maps.newHashMap();
-    for (JsInput input : allDependencies) {
-      List<String> provides = input.getProvides();
-      for (String provide : provides) {
-        JsInput existingProvider = provideToSource.get(provide);
-        if (existingProvider != null) {
-          throw new IllegalStateException(provide + " is provided by both " +
-              existingProvider + " and " + input);
-        }
-        provideToSource.put(provide, input);
-      }
-    }
+    Map<String, JsInput> provideToSource = getProvideToSource(allDependencies);
 
     LinkedHashSet<JsInput> compilerInputs = new LinkedHashSet<JsInput>();
-    JsInput inputToAdd;
-    if (closureLibraryDirectory == null) {
-      inputToAdd = ResourceReader.getBaseJs();
-    } else {
-      String path = "base.js";
-      inputToAdd = new JsSourceFile(path, new File(closureLibraryDirectory, path));
-    }
-    compilerInputs.add(inputToAdd);
+    compilerInputs.add(getBaseJs());
     for (JsInput requiredInput : requiredInputs) {
+      System.out.println("REQUIRED INPUT: " + requiredInput);
       buildDependencies(provideToSource, compilerInputs, requiredInput);
     }
 
@@ -155,6 +137,38 @@ public final class Manifest {
     this.lastOrdering = lastOrdering;
 
     return ImmutableList.copyOf(compilerInputs);
+  }
+
+  Map<String, JsInput> getProvideToSource() {
+    return getProvideToSource(getAllDependencies());
+  }
+
+  private Map<String, JsInput> getProvideToSource(Set<JsInput> allDependencies) {
+    // Build up the dependency graph.
+    Map<String, JsInput> provideToSource = Maps.newHashMap();
+    for (JsInput input : allDependencies) {
+      System.out.println("Dependency: " + input);
+      List<String> provides = input.getProvides();
+      for (String provide : provides) {
+        JsInput existingProvider = provideToSource.get(provide);
+        if (existingProvider != null) {
+          throw new IllegalStateException(provide + " is provided by both " +
+              existingProvider + " and " + input);
+        }
+        provideToSource.put(provide, input);
+      }
+    }
+    return provideToSource;
+  }
+
+  JsInput getBaseJs() {
+    if (closureLibraryDirectory == null) {
+      return ResourceReader.getBaseJs();
+    } else {
+      // TODO: Use a Supplier so that this is only done once.
+      String path = "base.js";
+      return new JsSourceFile(path, new File(closureLibraryDirectory, path));
+    }
   }
 
   JsInput getJsInputByName(String name) {
@@ -176,9 +190,10 @@ public final class Manifest {
     return lastOrdering.get(name);
   }
 
-  private void buildDependencies(Map<String, JsInput> provideToSource,
+  void buildDependencies(Map<String, JsInput> provideToSource,
       LinkedHashSet<JsInput> transitiveDependencies, JsInput input)
       throws MissingProvideException {
+    System.out.println("Building dependencies for: " + input);
     for (String require : input.getRequires()) {
       JsInput provide = provideToSource.get(require);
       if (provide == null) {

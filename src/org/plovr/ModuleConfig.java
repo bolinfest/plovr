@@ -20,12 +20,13 @@ import com.google.common.collect.Sets;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.inject.internal.ImmutableList;
 import com.google.javascript.jscomp.JSModule;
 
 public final class ModuleConfig {
 
-  private static final Logger logger = Logger.getLogger(
-      ModuleConfig.class.getName());
+  private static final Logger logger = Logger.getLogger(ModuleConfig.class
+      .getName());
 
   private final String rootModule;
 
@@ -33,22 +34,29 @@ public final class ModuleConfig {
 
   private final Map<String, List<String>> dependencyTree;
 
-  private final Map<String, ModuleInfo> moduleInfo;
+  private final Map<String, ModuleInfo> moduleInfoMap;
+
+  /**
+   * A topological sort of the modules. This provides a convenient way to
+   * iterate over the modules in a sensible order. Recall from
+   * {@link ModuleConfig.Builder#setModuleInfo(JsonObject)} that a topological
+   * sort of a module graph is not unique.
+   */
+  private final List<String> topologicalSort;
 
   private final Map<String, File> moduleToOutputPath;
 
   private final File moduleInfoPath;
 
-  private ModuleConfig(
-      String rootModule,
+  private ModuleConfig(String rootModule,
       Map<String, List<String>> dependencyTree,
-      Map<String, ModuleInfo> moduleInfo,
-      Map<String, File> moduleToOutputPath,
-      File moduleInfoPath,
+      Map<String, ModuleInfo> moduleInfo, List<String> topologicalSort,
+      Map<String, File> moduleToOutputPath, File moduleInfoPath,
       String productionUri) {
     this.rootModule = rootModule;
     this.dependencyTree = dependencyTree;
-    this.moduleInfo = moduleInfo;
+    this.moduleInfoMap = moduleInfo;
+    this.topologicalSort = topologicalSort;
     this.moduleToOutputPath = moduleToOutputPath;
     this.moduleInfoPath = moduleInfoPath;
     this.productionUri = productionUri;
@@ -67,7 +75,7 @@ public final class ModuleConfig {
   }
 
   public Map<String, ModuleInfo> getInvertedDependencyTree() {
-    return moduleInfo;
+    return moduleInfoMap;
   }
 
   public String getProductionUri() {
@@ -82,7 +90,7 @@ public final class ModuleConfig {
     return moduleInfoPath != null;
   }
 
-  public Function<String,String> createModuleNameToUriFunction() {
+  public Function<String, String> createModuleNameToUriFunction() {
     final String productionUri = getProductionUri();
     Function<String, String> moduleNameToUri = new Function<String, String>() {
       @Override
@@ -108,14 +116,15 @@ public final class ModuleConfig {
 
   /**
    *
-   * @param inputs This list is most likely to be produced by
-   *     {@link Manifest#getInputsInCompilationOrder()}.
+   * @param inputs
+   *          This list is most likely to be produced by
+   *          {@link Manifest#getInputsInCompilationOrder()}.
    * @return
    */
   Map<String, List<JsInput>> partitionInputsIntoModules(List<JsInput> inputs) {
     // Map of module inputs to module names.
     Map<String, String> moduleInputToName = Maps.newHashMap();
-    for (ModuleInfo info : moduleInfo.values()) {
+    for (ModuleInfo info : moduleInfoMap.values()) {
       moduleInputToName.put(info.getInput(), info.getName());
     }
 
@@ -132,9 +141,9 @@ public final class ModuleConfig {
       if (dependencyTree.containsKey(moduleName)) {
         JsInput previousInput = moduleToInputMap.put(moduleName, input);
         if (previousInput != null) {
-          throw new IllegalArgumentException("More than one input file for " +
-              moduleName + " module: " + input.getName() + ", " +
-              previousInput.getName());
+          throw new IllegalArgumentException("More than one input file for "
+              + moduleName + " module: " + input.getName() + ", "
+              + previousInput.getName());
         }
         modulesInInputOrder.add(moduleName);
       }
@@ -144,26 +153,26 @@ public final class ModuleConfig {
     JsInput lastInput = inputs.get(inputs.size() - 1);
     if (!moduleInputToName.containsKey(lastInput.getName())) {
       throw new IllegalArgumentException(
-          "The last JS file in the compilation must be a module input but was" +
-          ": " + lastInput.getName());
+          "The last JS file in the compilation must be a module input but was"
+              + ": " + lastInput.getName());
     }
 
     // Ensure that every module has a corresponding input file.
-    Sets.SetView<String> missingModules = Sets.difference(dependencyTree.keySet(),
-        moduleToInputMap.keySet());
+    Sets.SetView<String> missingModules = Sets.difference(dependencyTree
+        .keySet(), moduleToInputMap.keySet());
     if (!missingModules.isEmpty()) {
-      throw new IllegalArgumentException("The following modules did not have " +
-          "input files: " + missingModules);
+      throw new IllegalArgumentException("The following modules did not have "
+          + "input files: " + missingModules);
     }
 
     // Ensure that the order of the input files is a valid topological sort
     // of the module dependency graph.
     Set<String> visitedModules = Sets.newHashSet();
     for (String module : modulesInInputOrder) {
-      for (String parent : moduleInfo.get(module).getDeps()) {
+      for (String parent : moduleInfoMap.get(module).getDeps()) {
         if (!visitedModules.contains(parent)) {
-          throw new IllegalArgumentException(parent + " should appear before " +
-              module + " in " + Joiner.on("\n").join(inputs));
+          throw new IllegalArgumentException(parent + " should appear before "
+              + module + " in " + Joiner.on("\n").join(inputs));
         }
       }
       visitedModules.add(module);
@@ -189,15 +198,9 @@ public final class ModuleConfig {
     return moduleToInputList;
   }
 
-  /**
-   *
-   * @param inputs This list is most likely to be produced by
-   *     {@link Manifest#getInputsInCompilationOrder()}.
-   * @return
-   */
-  List<JSModule> getModules(List<JsInput> inputs) {
-    Map<String, List<JsInput>> moduleToInputList = partitionInputsIntoModules(
-        inputs);
+  private List<JSModule> oldGetModulesImpl(Manifest manifest) throws MissingProvideException {
+    List<JsInput> inputs = manifest.getInputsInCompilationOrder();
+    Map<String, List<JsInput>> moduleToInputList = partitionInputsIntoModules(inputs);
 
     // Create modules and add the source files that make up the module.
     List<JSModule> modules = Lists.newLinkedList();
@@ -216,7 +219,7 @@ public final class ModuleConfig {
     // Add the dependencies for each module.
     for (JSModule module : modules) {
       String moduleName = module.getName();
-      for (String parent : moduleInfo.get(moduleName).getDeps()) {
+      for (String parent : moduleInfoMap.get(moduleName).getDeps()) {
         module.addDependency(modulesByName.get(parent));
       }
     }
@@ -225,109 +228,116 @@ public final class ModuleConfig {
   }
 
   /**
-   * @param dependencies
-   * @return the name of the root module
-   * @throws BadDependencyTreeException if the dependencies are not well-formed.
-   */
-  private static String findRootModule(Collection<ModuleInfo> dependencies)
-      throws BadDependencyTreeException {
-    String moduleWithNoDependencies = null;
-    for (ModuleInfo info : dependencies) {
-      List<String> moduleDeps = info.getDeps();
-      if (moduleDeps.size() == 0) {
-        if (moduleWithNoDependencies == null) {
-          moduleWithNoDependencies = info.getName();
-        } else {
-          throw new BadDependencyTreeException("Both " + moduleWithNoDependencies +
-              " and " + info.getName() + " have no dependencies, so this" +
-              " dependency graph does not form a tree");
-        }
-      }
-    }
-
-    if (moduleWithNoDependencies == null) {
-      throw new BadDependencyTreeException("There was no module with zero" +
-          " dependencies, so this tree has no root.");
-    }
-
-    return moduleWithNoDependencies;
-  }
-
-  private static Map<String, List<String>> invertDependencyTree(
-      Collection<ModuleInfo> moduleInfo)
-      throws BadDependencyTreeException {
-    // dependencies maps a module to the modules that depend on it. A module
-    // must be loaded before any of its dependencies.
-    Map<String, List<String>> dependencies = Maps.newHashMap();
-
-    // Populate the keys of dependencies with the keys of the "deps" object
-    // literal from the config file.
-    for (ModuleInfo info : moduleInfo) {
-      dependencies.put(info.getName(), Lists.<String>newLinkedList());
-    }
-
-    for (ModuleInfo info : moduleInfo) {
-      String dependentModule = info.getName();
-      for (String ancestorModule : info.getDeps()) {
-        List<String> moduleDeps = dependencies.get(ancestorModule);
-        if (moduleDeps != null) {
-          moduleDeps.add(dependentModule);
-        } else {
-          // A dependent module must appear as a key in the "deps" object
-          // literal from the config file.
-          throw new BadDependencyTreeException(ancestorModule +
-              " is not a key in the \"deps\" map");
-        }
-      }
-    }
-
-    return dependencies;
-  }
-
-  /**
    *
-   * @param dependencyTree map of module to modules that depend on it
-   * @param rootModule the root module of the tree
+   * @param inputs
+   *          This list is most likely to be produced by
+   *          {@link Manifest#getInputsInCompilationOrder()}.
    * @return
-   * @throws BadDependencyTreeException
+   * @throws MissingProvideException
    */
-  private static List<String> buildDependencies(
-      Map<String, List<String>> dependencyTree,
-      String rootModule)
-      throws BadDependencyTreeException {
-    LinkedHashSet<String> transitiveDependencies = new LinkedHashSet<String>();
-    buildDependencies(dependencyTree, transitiveDependencies, rootModule);
+  List<JSModule> getModules(Manifest manifest) throws MissingProvideException {
+    // There are some important requirements when using modules:
+    // (1) Each input must appear in exactly one module.
+    // (2) For each input in a module, each of its transitive dependencies
+    // must either appear (i) before it in that module, or (ii) in an ancestor
+    // module. This means that if two sibling modules have the same dependency,
+    // then that dependency should appear in the least common ancestor module
+    // of those two modules. For example, consider the following scenario:
+    //
+    // A A contains base.js
+    // / \ B contains useragent.js which depends on string.js
+    // B C C contains asserts.js which depends on string.js
+    //
+    // There are two reasonable options for how the inputs (and their transitive
+    // dependencies) should be alloted to the modules:
+    //
+    // Option 1: Put string.js in A even though the only file initially assigned
+    // to A (base.js) does not depend on string.js. Because both B and C depend
+    // on A, this ensures that string.js will always be loaded before
+    // both useragent.js and asserts.js, as desired.
+    //
+    // Option 2: Create a "synthetic module" named D which results in a new
+    // module dependency tree:
+    //
+    // A A contains base.js
+    // |
+    // D D contains string.js
+    // / \ B contains useragent.js which depends on string.js
+    // B C C contains asserts.js which depends on string.js
+    //
+    // The benefit of this solution is that the common dependencies of B and C
+    // no longer bloat A. If a sophisticated module loader is used on the
+    // server and the client, it would be possible to request modules D and B
+    // in a single request, such that the server would be responsible for
+    // concatenating the contents of both modules and returning them in a single
+    // response.
+    //
+    // For now, only Option 1 is implemented for simplicity. Because the module
+    // graph is a rooted DAG, the root module is built up first, followed by its
+    // children. As child modules are created, inputs (and their transitive
+    // dependencies) may be promoted to ancestor modules to satisfy dependency
+    // constraints.
 
-    // Because the dependencies were built up in reverse order, add the
-    // results of the iterator in reverse order to create a new list.
-    LinkedList<String> dependencies = Lists.newLinkedList();
-    for (String module : transitiveDependencies) {
-      dependencies.addFirst(module);
+    if (Math.random() > -1 /* true */) {
+      return buildModulesUsingOption1(manifest);
+    } else {
+      // TODO(bolinfest): Remove this when Option 1 has been throughly tested.
+      return oldGetModulesImpl(manifest);
     }
-    return dependencies;
   }
 
-  /**
-   *
-   * @param dependencies
-   * @param transitiveDependencies the Iterator of this set returns the
-   *     dependencies in reverse order
-   * @param dependency
-   * @throws BadDependencyTreeException
-   */
-  private static void buildDependencies(
-      Map<String, List<String>> dependencies,
-      LinkedHashSet<String> transitiveDependencies,
-      String dependency)
-      throws BadDependencyTreeException {
-    for (String dependencyList : dependencies.get(dependency)) {
-      buildDependencies(dependencies, transitiveDependencies, dependencyList);
+  private List<JSModule> buildModulesUsingOption1(Manifest manifest)
+      throws MissingProvideException {
+    // 1. Find the set of transitive dependencies for each module using a
+    // LinkedHashSet.
+    // 2. For each module, iterate over its list of inputs and keep track of
+    // which inputs have already been seen. For an input that is seen for the
+    // first time, find the set of modules that contain that input in its set of
+    // transitive dependencies. Once that set is created, find the least common
+    // ancestor module for the members of the set, and add the input to that
+    // module.
+    // 3. Convert each list of JsInput dependencies for each module into a
+    // JSModule and return the JSModules as a topologically sorted list.
+
+    // Step 1: Build the set of transitive dependencies for each module.
+    Map<String, LinkedHashSet<JsInput>> moduleToTransitiveDependencies = Maps
+        .newHashMap();
+    Map<String, JsInput> provideToSource = manifest.getProvideToSource();
+    for (String module : topologicalSort) {
+      ModuleInfo moduleInfo = moduleInfoMap.get(module);
+      JsInput primaryInput = manifest.getJsInputByName(moduleInfo.getInput());
+      LinkedHashSet<JsInput> deps = new LinkedHashSet<JsInput>();
+      manifest.buildDependencies(provideToSource, deps, primaryInput);
+      moduleToTransitiveDependencies.put(module, deps);
     }
-    if (transitiveDependencies.contains(dependency)) {
-      throw new BadDependencyTreeException("Circular dependency involving: " +
-          dependency + " depends on: " + transitiveDependencies);
+
+    // Step 2: Assign inputs to modules.
+    Map<String, List<JsInput>> moduleToInputs = Maps.newHashMap();
+    for (String module : topologicalSort) {
+
     }
-    transitiveDependencies.add(dependency);
+
+    // Step 3: Convert each list of JsInput dependencies for each module into a
+    // JSModule.
+    ImmutableList.Builder<JSModule> builder = ImmutableList.builder();
+    for (String module : topologicalSort) {
+      // Create the module and add the dependencies in order.
+      JSModule jsModule = new JSModule(module);
+      List<JsInput> deps = moduleToInputs.get(module);
+      for (JsInput dep : deps) {
+        jsModule.add(Manifest.inputToSourceFile.apply(dep));
+      }
+
+      // Remember to special-case base.js so it is the first file in the root
+      // module.
+      if (module.equals(getRootModule())) {
+        jsModule.addFirst(Manifest.inputToSourceFile.apply(manifest.getBaseJs()));
+      }
+
+      builder.add(jsModule);
+    }
+
+    return builder.build();
   }
 
   public static Builder builder(File relativePathBase) {
@@ -359,6 +369,8 @@ public final class ModuleConfig {
 
     private Map<String, ModuleInfo> moduleInfo;
 
+    private List<String> topologicalSort;
+
     // Either moduleInfoPath will be assigned in the constructor, or
     // infoPath will be defined later and will be used to create a
     // moduleInfoPath when build() is invoked.
@@ -388,59 +400,172 @@ public final class ModuleConfig {
       this.infoPath = null;
 
       this.dependencyTree = moduleConfig.dependencyTree;
-      this.moduleInfo = moduleConfig.moduleInfo;
+      this.moduleInfo = moduleConfig.moduleInfoMap;
     }
 
-   /**
-    *
-    * @param json
-    * @return
-    * @throws BadDependencyTreeException
-    */
-   public void setModuleInfo(JsonObject json) throws
-       BadDependencyTreeException {
+    /**
+     * @return a mapping of a module to the modules that depend on it
+     */
+    private static Map<String, List<String>> invertDependencyTree(
+        Collection<ModuleInfo> moduleInfo) throws BadDependencyTreeException {
+      // dependencies maps a module to the modules that depend on it. A module
+      // must be loaded before any of its dependencies.
+      Map<String, List<String>> dependencies = Maps.newHashMap();
 
-     // Convert the JSON into a list of module entries.
-     Map<String, ModuleInfo> moduleInfo = Maps.newHashMap();
-     for (Map.Entry<String, JsonElement> entry : json.entrySet()) {
-       Gson gson = new Gson();
-       ModuleInfo moduleEntry = gson.fromJson(entry.getValue(),
-           ModuleInfo.class);
-       String name = entry.getKey();
-       moduleEntry.setName(name);
-       moduleInfo.put(name, moduleEntry);
-     }
+      // Populate the keys of dependencies with the keys of the "deps" object
+      // literal from the config file.
+      for (ModuleInfo info : moduleInfo) {
+        dependencies.put(info.getName(), Lists.<String> newLinkedList());
+      }
 
-     // In dependencyTree, modules point to the modules that depend on them.
-     final Map<String, List<String>> dependencyTree = invertDependencyTree(
-         moduleInfo.values());
+      for (ModuleInfo info : moduleInfo) {
+        String dependentModule = info.getName();
+        for (String ancestorModule : info.getDeps()) {
+          List<String> moduleDeps = dependencies.get(ancestorModule);
+          if (moduleDeps != null) {
+            moduleDeps.add(dependentModule);
+          } else {
+            // A dependent module must appear as a key in the "deps" object
+            // literal from the config file.
+            throw new BadDependencyTreeException(ancestorModule
+                + " is not a key in the \"deps\" map");
+          }
+        }
+      }
 
-     String rootModule = findRootModule(moduleInfo.values());
-     // Calling buildDependencies() confirms that the module dependencies are
-     // well-formed by producing a topological sort of the modules.
-     // For example, if the config file contained:
-     //
-     // "deps" : {
-     //   "A": [],                          A
-     //   "B": ["A"],                     /   \
-     //   "C": ["A"],                   B       C
-     //   "D": ["B","C"],                 \   /   \
-     //   "E": ["C"]                        D       E
-     // }
-     //
-     // Then the iteration of transitiveDependencies would produce either:
-     //
-     // ["A", "B", "C", "D", "E"] OR ["A", "B", "C", "E", "D"]
-     //
-     // Both are valid results because the topological sort of the dependency
-     // graph is not unique.
-     List<String> topologicalSort = buildDependencies(dependencyTree, rootModule);
-     logger.info(topologicalSort.toString());
+      return dependencies;
+    }
 
-     this.rootModule = rootModule;
-     this.dependencyTree = dependencyTree;
-     this.moduleInfo = moduleInfo;
-   }
+    /**
+     * @param dependencies
+     * @return the name of the root module
+     * @throws BadDependencyTreeException
+     *           if the dependencies are not well-formed.
+     */
+    private static String findRootModule(Collection<ModuleInfo> dependencies)
+        throws BadDependencyTreeException {
+      String moduleWithNoDependencies = null;
+      for (ModuleInfo info : dependencies) {
+        List<String> moduleDeps = info.getDeps();
+        if (moduleDeps.size() == 0) {
+          if (moduleWithNoDependencies == null) {
+            moduleWithNoDependencies = info.getName();
+          } else {
+            throw new BadDependencyTreeException("Both "
+                + moduleWithNoDependencies + " and " + info.getName()
+                + " have no dependencies, so this"
+                + " dependency graph does not form a tree");
+          }
+        }
+      }
+
+      if (moduleWithNoDependencies == null) {
+        throw new BadDependencyTreeException("There was no module with zero"
+            + " dependencies, so this tree has no root.");
+      }
+
+      return moduleWithNoDependencies;
+    }
+
+    /**
+     *
+     * @param dependencyTree
+     *          map of module to modules that depend on it
+     * @param rootModule
+     *          the root module of the tree
+     * @return
+     * @throws BadDependencyTreeException
+     */
+    private static List<String> buildDependencies(
+        Map<String, List<String>> dependencyTree, String rootModule)
+        throws BadDependencyTreeException {
+      LinkedHashSet<String> transitiveDependencies = new LinkedHashSet<String>();
+      buildDependencies(dependencyTree, transitiveDependencies, rootModule);
+
+      // Because the dependencies were built up in reverse order, add the
+      // results of the iterator in reverse order to create a new list.
+      LinkedList<String> dependencies = Lists.newLinkedList();
+      for (String module : transitiveDependencies) {
+        dependencies.addFirst(module);
+      }
+      return dependencies;
+    }
+
+    /**
+     *
+     * @param dependencies
+     * @param transitiveDependencies
+     *          the Iterator of this set returns the dependencies in reverse
+     *          order
+     * @param dependency
+     * @throws BadDependencyTreeException
+     */
+    private static void buildDependencies(
+        Map<String, List<String>> dependencies,
+        LinkedHashSet<String> transitiveDependencies, String dependency)
+        throws BadDependencyTreeException {
+      for (String dependencyList : dependencies.get(dependency)) {
+        buildDependencies(dependencies, transitiveDependencies, dependencyList);
+      }
+      if (transitiveDependencies.contains(dependency)) {
+        throw new BadDependencyTreeException("Circular dependency involving: "
+            + dependency + " depends on: " + transitiveDependencies);
+      }
+      transitiveDependencies.add(dependency);
+    }
+
+    /**
+     *
+     * @param json
+     * @return
+     * @throws BadDependencyTreeException
+     */
+    public void setModuleInfo(JsonObject json)
+        throws BadDependencyTreeException {
+
+      // Convert the JSON into a list of module entries.
+      Map<String, ModuleInfo> moduleInfo = Maps.newHashMap();
+      for (Map.Entry<String, JsonElement> entry : json.entrySet()) {
+        Gson gson = new Gson();
+        ModuleInfo moduleEntry = gson.fromJson(entry.getValue(),
+            ModuleInfo.class);
+        String name = entry.getKey();
+        moduleEntry.setName(name);
+        moduleInfo.put(name, moduleEntry);
+      }
+
+      // In dependencyTree, modules point to the modules that depend on them.
+      final Map<String, List<String>> dependencyTree = invertDependencyTree(moduleInfo
+          .values());
+
+      String rootModule = findRootModule(moduleInfo.values());
+      // Calling buildDependencies() confirms that the module dependencies are
+      // well-formed by producing a topological sort of the modules.
+      // For example, if the config file contained:
+      //
+      // "deps" : {
+      // "A": [], A
+      // "B": ["A"], / \
+      // "C": ["A"], B C
+      // "D": ["B","C"], \ / \
+      // "E": ["C"] D E
+      // }
+      //
+      // Then the iteration of transitiveDependencies would produce either:
+      //
+      // ["A", "B", "C", "D", "E"] OR ["A", "B", "C", "E", "D"]
+      //
+      // Both are valid results because the topological sort of the dependency
+      // graph is not unique.
+      List<String> topologicalSort = buildDependencies(dependencyTree,
+          rootModule);
+      logger.info(topologicalSort.toString());
+
+      this.rootModule = rootModule;
+      this.dependencyTree = dependencyTree;
+      this.moduleInfo = moduleInfo;
+      this.topologicalSort = topologicalSort;
+    }
 
     public void setProductionUri(String productionUri) {
       ConfigOption.assertContainsModuleNamePlaceholder(productionUri);
@@ -466,9 +591,10 @@ public final class ModuleConfig {
       if (this.moduleToOutputPath == null) {
         moduleToOutputPath = Maps.newHashMap();
         for (String moduleName : dependencyTree.keySet()) {
-          String partialPath = populateModuleNameTemplate(outputPath, moduleName);
-          File moduleFile = new File(ConfigOption.maybeResolvePath(
-              partialPath, relativePathBase));
+          String partialPath = populateModuleNameTemplate(outputPath,
+              moduleName);
+          File moduleFile = new File(ConfigOption.maybeResolvePath(partialPath,
+              relativePathBase));
           moduleToOutputPath.put(moduleName, moduleFile);
         }
       } else {
@@ -481,29 +607,26 @@ public final class ModuleConfig {
         if (infoPath == null) {
           moduleInfoPath = null;
         } else {
-          moduleInfoPath = new File(
-              ConfigOption.maybeResolvePath(infoPath, relativePathBase));
+          moduleInfoPath = new File(ConfigOption.maybeResolvePath(infoPath,
+              relativePathBase));
         }
       } else {
         moduleInfoPath = this.moduleInfoPath;
       }
 
-      return new ModuleConfig(
-          rootModule,
-          dependencyTree,
-          moduleInfo,
-          moduleToOutputPath,
-          moduleInfoPath,
-          productionUri);
+      return new ModuleConfig(rootModule, dependencyTree, moduleInfo,
+          topologicalSort, moduleToOutputPath, moduleInfoPath, productionUri);
     }
   }
 
   public static class ModuleInfo {
+    // This field is transient because it is used with Gson.
     private transient String name;
     private String input;
     private List<String> deps;
 
-    public ModuleInfo() {}
+    public ModuleInfo() {
+    }
 
     private void setName(String name) {
       this.name = name;
@@ -513,6 +636,7 @@ public final class ModuleConfig {
       return name;
     }
 
+    // TODO: It should be possible for a module to specify multiple inputs.
     public String getInput() {
       return input;
     }
