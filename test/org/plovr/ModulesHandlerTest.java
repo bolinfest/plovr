@@ -52,5 +52,8 @@ public class ModulesHandlerTest {
     assertEquals(ImmutableSet.of("D", "E"), depths.get(2));
     assertEquals(ImmutableSet.of("F"), depths.get(3));
     assertEquals(ImmutableSet.of("G"), depths.get(4));
+
+    // For now, just call this to make sure it does not throw an exception.
+    ModulesHandler.generateSvg(depths, graph);
   }
 }
