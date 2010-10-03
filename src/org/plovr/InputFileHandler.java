@@ -117,14 +117,9 @@ final class InputFileHandler extends AbstractGetHandler {
     String name = data.getParam("name");
 
     if (moduleName != null) {
-      Compilation compilation = server.getLastCompilation(config);
+      Compilation compilation = CompilationUtil.getLastCompilationOrFail(
+          server, config, exchange);
       if (compilation == null) {
-        String compileUrl = server.getServerForExchange(exchange) +
-            "compile?id=" + QueryData.encode(config.getId());
-        // TODO(bolinfest): HTML escape inputs (using Soy?)
-        HttpUtil.writeHtmlErrorMessageResponse(exchange,
-            "No compilation found for config: " + config.getId() + "<br>" +
-            "Try visiting: <a href='" + compileUrl + "'>" + compileUrl + "</a>");
         return;
       }
 

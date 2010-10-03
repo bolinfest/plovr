@@ -56,7 +56,8 @@ public final class ModuleConfig {
 
   private ModuleConfig(String rootModule,
       Map<String, List<String>> invertedDependencyTree,
-      Map<String, ModuleInfo> moduleInfo, List<String> topologicalSort,
+      Map<String, ModuleInfo> moduleInfo,
+      List<String> topologicalSort,
       Map<String, File> moduleToOutputPath, File moduleInfoPath,
       String productionUri) {
     this.rootModule = rootModule;
@@ -346,12 +347,10 @@ public final class ModuleConfig {
     // JSModule.
     Map<String, JSModule> modulesByName = Maps.newHashMap();
     for (String module : topologicalSort) {
-      System.out.println("MODULE: " + module);
       // Create the module and add the dependencies in order.
       JSModule jsModule = new JSModule(module);
       List<JsInput> deps = moduleToInputs.get(module);
       for (JsInput dep : deps) {
-        System.out.println("  DEP: " + dep);
         jsModule.add(Manifest.inputToSourceFile.apply(dep));
       }
 
@@ -616,6 +615,7 @@ public final class ModuleConfig {
 
       this.dependencyTree = moduleConfig.invertedDependencyTree;
       this.moduleInfo = moduleConfig.moduleInfoMap;
+      this.topologicalSort = moduleConfig.topologicalSort;
     }
 
     /**

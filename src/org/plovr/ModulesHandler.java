@@ -10,8 +10,10 @@ import java.util.Map;
 import java.util.Set;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.collect.HashMultimap;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.SetMultimap;
@@ -33,7 +35,7 @@ public final class ModulesHandler extends AbstractGetHandler {
   private static final int Y_BOX_SPACING = 75;
 
   private static final int BOX_HEIGHT = 100;
-  private static final int BOX_WIDTH = 150;
+  private static final int BOX_WIDTH = 170;
   private static final int LINE_HEIGHT = 20;
 
   private static final int TEXT_X_OFFSET = 10;
@@ -46,17 +48,42 @@ public final class ModulesHandler extends AbstractGetHandler {
   @Override
   protected void doGet(HttpExchange exchange, QueryData data, Config config)
       throws IOException {
+    // Make sure that this code has been compiled.
+    Compilation compilation = CompilationUtil.getLastCompilationOrFail(
+        server, config, exchange);
+    if (compilation == null) {
+      return;
+    } if (!compilation.usesModules()) {
+      HttpUtil.writeErrorMessageResponse(exchange,
+          "This configuration does not use modules");
+    }
+
+    // Get the size of each module.
     ModuleConfig moduleConfig = config.getModuleConfig();
+    Map<String, List<String>> invertedDependencyTree =
+        moduleConfig.getInvertedDependencyTree();
+    Function<String, String> moduleNameToUri = moduleConfig.
+        createModuleNameToUriFunction();
+    ImmutableMap.Builder<String, Integer> builder = ImmutableMap.builder();
+    final boolean isDebugMode = false;
+    for (String module : invertedDependencyTree.keySet()) {
+      int size = compilation.getCodeForModule(
+          module, isDebugMode, moduleNameToUri).length();
+      builder.put(module, size);
+    }
+    Map<String, Integer> moduleSizes = builder.build();
+
+    // Construct the SVG.
     SetMultimap<Integer, String> moduleDepths =
         calculateModuleDepths(moduleConfig.getRootModule(),
-            moduleConfig.getInvertedDependencyTree());
-    String svg = generateSvg(moduleDepths,
-        moduleConfig.getInvertedDependencyTree());
+            invertedDependencyTree);
+    String svg = generateSvg(moduleDepths, invertedDependencyTree,
+        moduleSizes);
 
+    // Write the response.
     Headers responseHeaders = exchange.getResponseHeaders();
     responseHeaders.set("Content-Type", "image/svg+xml");
     exchange.sendResponseHeaders(200, svg.length());
-
     Writer responseBody = new OutputStreamWriter(exchange.getResponseBody());
     responseBody.write(svg);
     responseBody.close();
@@ -116,8 +143,10 @@ public final class ModulesHandler extends AbstractGetHandler {
   }
 
   @VisibleForTesting
-  static String generateSvg(SetMultimap<Integer, String> moduleDepths,
-      Map<String, List<String>> invertedDependencyTree) {
+  static String generateSvg(
+      SetMultimap<Integer, String> moduleDepths,
+      Map<String, List<String>> invertedDependencyTree,
+      Map<String, Integer> moduleSizes) {
     // Calculate the maximum number of modules that should be displayed at the
     // same depth in the SVG.
     int maxModulesPerRow = -1;
@@ -137,13 +166,20 @@ public final class ModulesHandler extends AbstractGetHandler {
       int x = blankSpace + X_OFFSET;
 
       for (String module : entry.getValue()) {
+        int size = moduleSizes.get(module);
+        String formattedSize = formatSize(size);
         String rect = String.format(
             "  <rect id='%s' x='%d' y='%d'" +
             " stroke='#000' fill='#FFF'" +
             " width='%d' height='%d'/>\n" +
             "  <text style='font-family: Arial'" +
-            " x='%d' y='%d'>%s</text>",
-            module, x, y, BOX_WIDTH, BOX_HEIGHT, x + TEXT_X_OFFSET, y + TEXT_Y_OFFSET, module);
+            " x='%d' y='%d'>%s</text>" +
+            "  <text style='font-family: Arial'" +
+            " x='%d' y='%d'>%s uncompressed</text>",
+            module,
+            x, y, BOX_WIDTH, BOX_HEIGHT,
+            x + TEXT_X_OFFSET, y + TEXT_Y_OFFSET - LINE_HEIGHT, module,
+            x + TEXT_X_OFFSET, y + TEXT_Y_OFFSET, formattedSize);
         rects.add(rect);
 
         // Add the connection points for boxes.
@@ -177,5 +213,17 @@ public final class ModulesHandler extends AbstractGetHandler {
         "\n</svg>\n";
 
     return svg;
+  }
+
+  private static final String formatSize(int numBytes) {
+    if (numBytes < 1024) {
+      return String.valueOf(numBytes);
+    } else if (numBytes < 1024 * 1024) {
+      return String.format("%.1fK", numBytes / 1024f);
+    } else if (numBytes < 1024 * 1024 * 1024) {
+      return String.format("%.1fM", numBytes / (1024 * 1024));
+    } else {
+      return String.valueOf(numBytes);
+    }
   }
 }

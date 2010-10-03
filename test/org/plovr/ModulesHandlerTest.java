@@ -53,7 +53,18 @@ public class ModulesHandlerTest {
     assertEquals(ImmutableSet.of("F"), depths.get(3));
     assertEquals(ImmutableSet.of("G"), depths.get(4));
 
+    Map<String, Integer> moduleSizes = ImmutableMap.<String, Integer>builder()
+        .put("A", 10000)
+        .put("B", 20000)
+        .put("C", 20000)
+        .put("D", 30000)
+        .put("E", 30000)
+        .put("F", 40000)
+        .put("G", 40000)
+        .build();
+
     // For now, just call this to make sure it does not throw an exception.
-    ModulesHandler.generateSvg(depths, graph);
+    String svg = ModulesHandler.generateSvg(depths, graph, moduleSizes);
+    System.out.println(svg);
   }
 }
