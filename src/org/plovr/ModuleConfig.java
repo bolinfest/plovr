@@ -37,7 +37,8 @@ public final class ModuleConfig {
 
   private final String productionUri;
 
-  private final Map<String, List<String>> dependencyTree;
+  /** a map of modules to modules that depend on that module */
+  private final Map<String, List<String>> invertedDependencyTree;
 
   private final Map<String, ModuleInfo> moduleInfoMap;
 
@@ -54,12 +55,12 @@ public final class ModuleConfig {
   private final File moduleInfoPath;
 
   private ModuleConfig(String rootModule,
-      Map<String, List<String>> dependencyTree,
+      Map<String, List<String>> invertedDependencyTree,
       Map<String, ModuleInfo> moduleInfo, List<String> topologicalSort,
       Map<String, File> moduleToOutputPath, File moduleInfoPath,
       String productionUri) {
     this.rootModule = rootModule;
-    this.dependencyTree = dependencyTree;
+    this.invertedDependencyTree = invertedDependencyTree;
     this.moduleInfoMap = moduleInfo;
     this.topologicalSort = topologicalSort;
     this.moduleToOutputPath = moduleToOutputPath;
@@ -72,15 +73,22 @@ public final class ModuleConfig {
   }
 
   public Iterable<String> getModuleNames() {
-    return Iterables.unmodifiableIterable(dependencyTree.keySet());
+    return Iterables.unmodifiableIterable(invertedDependencyTree.keySet());
   }
 
   public Map<String, File> getModuleToOutputPath() {
     return this.moduleToOutputPath;
   }
 
-  public Map<String, ModuleInfo> getInvertedDependencyTree() {
-    return moduleInfoMap;
+  public ModuleInfo getModuleInfo(String module) {
+    return moduleInfoMap.get(module);
+  }
+
+  /**
+   * @return a map of modules to modules that depend on that module
+   */
+  public Map<String, List<String>> getInvertedDependencyTree() {
+    return invertedDependencyTree;
   }
 
   public String getProductionUri() {
@@ -143,7 +151,7 @@ public final class ModuleConfig {
       }
 
       String moduleName = moduleInputToName.get(inputName);
-      if (dependencyTree.containsKey(moduleName)) {
+      if (invertedDependencyTree.containsKey(moduleName)) {
         JsInput previousInput = moduleToInputMap.put(moduleName, input);
         if (previousInput != null) {
           throw new IllegalArgumentException("More than one input file for "
@@ -163,7 +171,7 @@ public final class ModuleConfig {
     }
 
     // Ensure that every module has a corresponding input file.
-    Sets.SetView<String> missingModules = Sets.difference(dependencyTree
+    Sets.SetView<String> missingModules = Sets.difference(invertedDependencyTree
         .keySet(), moduleToInputMap.keySet());
     if (!missingModules.isEmpty()) {
       throw new IllegalArgumentException("The following modules did not have "
@@ -338,10 +346,12 @@ public final class ModuleConfig {
     // JSModule.
     Map<String, JSModule> modulesByName = Maps.newHashMap();
     for (String module : topologicalSort) {
+      System.out.println("MODULE: " + module);
       // Create the module and add the dependencies in order.
       JSModule jsModule = new JSModule(module);
       List<JsInput> deps = moduleToInputs.get(module);
       for (JsInput dep : deps) {
+        System.out.println("  DEP: " + dep);
         jsModule.add(Manifest.inputToSourceFile.apply(dep));
       }
 
@@ -474,12 +484,12 @@ public final class ModuleConfig {
         //
         //       A
         //     / |
-        //    |  B     Make sure that when searching for the least common
-        //    |  | \   ancestor of B and F that B is determined to be the least
-        //    C  D  E  common ancestor instead of another module, such as A.
-        //     \ |     That would preclude the ability to determine B as the
-        //       F     least common ancestor of {B,E,F}. In practice, that would
-        //       |     unnecessarily add code to A that could be contained in B.
+        //    B  C     Make sure that when searching for the least common
+        //    |  | \   ancestor of C and F that C is determined to be the least
+        //    |  D  E  common ancestor instead of another module, such as A.
+        //     \ |     That would preclude the ability to determine C as the
+        //       F     least common ancestor of {C,E,F}. In practice, that would
+        //       |     unnecessarily add code to A that could be contained in C.
         //       G
         //
         SetView<String> intersection = Sets.intersection(
@@ -604,7 +614,7 @@ public final class ModuleConfig {
       this.moduleInfoPath = moduleConfig.moduleInfoPath;
       this.infoPath = null;
 
-      this.dependencyTree = moduleConfig.dependencyTree;
+      this.dependencyTree = moduleConfig.invertedDependencyTree;
       this.moduleInfo = moduleConfig.moduleInfoMap;
     }
 
