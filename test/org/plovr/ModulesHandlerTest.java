@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Test;
+import org.plovr.util.Pair;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -53,14 +54,15 @@ public class ModulesHandlerTest {
     assertEquals(ImmutableSet.of("F"), depths.get(3));
     assertEquals(ImmutableSet.of("G"), depths.get(4));
 
-    Map<String, Integer> moduleSizes = ImmutableMap.<String, Integer>builder()
-        .put("A", 10000)
-        .put("B", 20000)
-        .put("C", 20000)
-        .put("D", 30000)
-        .put("E", 30000)
-        .put("F", 40000)
-        .put("G", 40000)
+    Map<String, Pair<Integer,Integer>> moduleSizes =
+        ImmutableMap.<String, Pair<Integer,Integer>>builder()
+        .put("A", Pair.of(10000, 500))
+        .put("B", Pair.of(10000, 500))
+        .put("C", Pair.of(20000, 1000))
+        .put("D", Pair.of(20000, 1000))
+        .put("E", Pair.of(30000, 2500))
+        .put("F", Pair.of(40000, 3000))
+        .put("G", Pair.of(40000, 3000))
         .build();
 
     // For now, just call this to make sure it does not throw an exception.

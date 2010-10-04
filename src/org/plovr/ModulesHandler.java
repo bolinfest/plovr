@@ -9,7 +9,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.plovr.util.GzipUtil;
+import org.plovr.util.Pair;
+
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.collect.HashMultimap;
@@ -64,14 +68,17 @@ public final class ModulesHandler extends AbstractGetHandler {
         moduleConfig.getInvertedDependencyTree();
     Function<String, String> moduleNameToUri = moduleConfig.
         createModuleNameToUriFunction();
-    ImmutableMap.Builder<String, Integer> builder = ImmutableMap.builder();
+    ImmutableMap.Builder<String, Pair<Integer, Integer>> builder = ImmutableMap.builder();
     final boolean isDebugMode = false;
     for (String module : invertedDependencyTree.keySet()) {
-      int size = compilation.getCodeForModule(
-          module, isDebugMode, moduleNameToUri).length();
-      builder.put(module, size);
+      // The file size is in bytes, assuming UTF-8 input.
+      String compiledCode = compilation.getCodeForModule(
+          module, isDebugMode, moduleNameToUri);
+      int uncompressedSize = compiledCode.getBytes(Charsets.UTF_8).length;
+      int gzippedSize = GzipUtil.getGzipSize(compiledCode);
+      builder.put(module, Pair.of(uncompressedSize, gzippedSize));
     }
-    Map<String, Integer> moduleSizes = builder.build();
+    Map<String, Pair<Integer, Integer>> moduleSizes = builder.build();
 
     // Construct the SVG.
     SetMultimap<Integer, String> moduleDepths =
@@ -146,7 +153,7 @@ public final class ModulesHandler extends AbstractGetHandler {
   static String generateSvg(
       SetMultimap<Integer, String> moduleDepths,
       Map<String, List<String>> invertedDependencyTree,
-      Map<String, Integer> moduleSizes) {
+      Map<String, Pair<Integer, Integer>> moduleSizes) {
     // Calculate the maximum number of modules that should be displayed at the
     // same depth in the SVG.
     int maxModulesPerRow = -1;
@@ -166,8 +173,9 @@ public final class ModulesHandler extends AbstractGetHandler {
       int x = blankSpace + X_OFFSET;
 
       for (String module : entry.getValue()) {
-        int size = moduleSizes.get(module);
-        String formattedSize = formatSize(size);
+        Pair<Integer,Integer> sizes = moduleSizes.get(module);
+        String formattedRawSize = formatSize(sizes.getFirst());
+        String formattedGzipSize = formatSize(sizes.getSecond());
         String rect = String.format(
             "  <rect id='%s' x='%d' y='%d'" +
             " stroke='#000' fill='#FFF'" +
@@ -175,11 +183,11 @@ public final class ModulesHandler extends AbstractGetHandler {
             "  <text style='font-family: Arial'" +
             " x='%d' y='%d'>%s</text>" +
             "  <text style='font-family: Arial'" +
-            " x='%d' y='%d'>%s uncompressed</text>",
+            " x='%d' y='%d'>%s (%s gzip)</text>",
             module,
             x, y, BOX_WIDTH, BOX_HEIGHT,
             x + TEXT_X_OFFSET, y + TEXT_Y_OFFSET - LINE_HEIGHT, module,
-            x + TEXT_X_OFFSET, y + TEXT_Y_OFFSET, formattedSize);
+            x + TEXT_X_OFFSET, y + TEXT_Y_OFFSET, formattedRawSize, formattedGzipSize);
         rects.add(rect);
 
         // Add the connection points for boxes.
