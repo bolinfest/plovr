@@ -13,7 +13,6 @@ import java.util.logging.Logger;
 import org.plovr.util.Pair;
 
 import com.google.common.base.Function;
-import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -134,119 +133,6 @@ public final class ModuleConfig {
    *          This list is most likely to be produced by
    *          {@link Manifest#getInputsInCompilationOrder()}.
    * @return
-   */
-  Map<String, List<JsInput>> partitionInputsIntoModules(List<JsInput> inputs) {
-    // Map of module inputs to module names.
-    Map<String, String> moduleInputToName = Maps.newHashMap();
-    for (ModuleInfo info : moduleInfoMap.values()) {
-      moduleInputToName.put(info.getInput(), info.getName());
-    }
-
-    // Pick out the JS files that correspond to modules.
-    Map<String, JsInput> moduleToInputMap = Maps.newHashMap();
-    List<String> modulesInInputOrder = Lists.newLinkedList();
-    for (JsInput input : inputs) {
-      String inputName = input.getName();
-      if (!moduleInputToName.containsKey(inputName)) {
-        continue;
-      }
-
-      String moduleName = moduleInputToName.get(inputName);
-      if (invertedDependencyTree.containsKey(moduleName)) {
-        JsInput previousInput = moduleToInputMap.put(moduleName, input);
-        if (previousInput != null) {
-          throw new IllegalArgumentException("More than one input file for "
-              + moduleName + " module: " + input.getName() + ", "
-              + previousInput.getName());
-        }
-        modulesInInputOrder.add(moduleName);
-      }
-    }
-
-    // Make sure that the last JsInput is an input file for a module.
-    JsInput lastInput = inputs.get(inputs.size() - 1);
-    if (!moduleInputToName.containsKey(lastInput.getName())) {
-      throw new IllegalArgumentException(
-          "The last JS file in the compilation must be a module input but was"
-              + ": " + lastInput.getName());
-    }
-
-    // Ensure that every module has a corresponding input file.
-    Sets.SetView<String> missingModules = Sets.difference(invertedDependencyTree
-        .keySet(), moduleToInputMap.keySet());
-    if (!missingModules.isEmpty()) {
-      throw new IllegalArgumentException("The following modules did not have "
-          + "input files: " + missingModules);
-    }
-
-    // Ensure that the order of the input files is a valid topological sort
-    // of the module dependency graph.
-    Set<String> visitedModules = Sets.newHashSet();
-    for (String module : modulesInInputOrder) {
-      for (String parent : moduleInfoMap.get(module).getDeps()) {
-        if (!visitedModules.contains(parent)) {
-          throw new IllegalArgumentException(parent + " should appear before "
-              + module + " in " + Joiner.on("\n").join(inputs));
-        }
-      }
-      visitedModules.add(module);
-    }
-
-    // It is imperative to use a LinkedHashMap so that the iteration order of
-    // the map matches module order.
-    Map<String, List<JsInput>> moduleToInputList = Maps.newLinkedHashMap();
-    Iterator<JsInput> inputIterator = inputs.iterator();
-    for (String moduleName : modulesInInputOrder) {
-      List<JsInput> inputList = Lists.newLinkedList();
-      JsInput lastInputInModule = moduleToInputMap.get(moduleName);
-      while (inputIterator.hasNext()) {
-        JsInput input = inputIterator.next();
-        inputList.add(input);
-        if (input == lastInputInModule) {
-          break;
-        }
-      }
-      moduleToInputList.put(moduleName, inputList);
-    }
-
-    return moduleToInputList;
-  }
-
-  private List<JSModule> oldGetModulesImpl(Manifest manifest) throws MissingProvideException {
-    List<JsInput> inputs = manifest.getInputsInCompilationOrder();
-    Map<String, List<JsInput>> moduleToInputList = partitionInputsIntoModules(inputs);
-
-    // Create modules and add the source files that make up the module.
-    List<JSModule> modules = Lists.newLinkedList();
-    Map<String, JSModule> modulesByName = Maps.newHashMap();
-    for (Map.Entry<String, List<JsInput>> entry : moduleToInputList.entrySet()) {
-      String moduleName = entry.getKey();
-      List<JsInput> inputList = entry.getValue();
-      JSModule module = new JSModule(moduleName);
-      for (JsInput moduleInput : inputList) {
-        module.add(Manifest.inputToSourceFile.apply(moduleInput));
-      }
-      modules.add(module);
-      modulesByName.put(moduleName, module);
-    }
-
-    // Add the dependencies for each module.
-    for (JSModule module : modules) {
-      String moduleName = module.getName();
-      for (String parent : moduleInfoMap.get(moduleName).getDeps()) {
-        module.addDependency(modulesByName.get(parent));
-      }
-    }
-
-    return modules;
-  }
-
-  /**
-   *
-   * @param inputs
-   *          This list is most likely to be produced by
-   *          {@link Manifest#getInputsInCompilationOrder()}.
-   * @return
    * @throws MissingProvideException
    */
   List<JSModule> getModules(Manifest manifest) throws MissingProvideException {
@@ -291,16 +177,47 @@ public final class ModuleConfig {
     // children. As child modules are created, inputs (and their transitive
     // dependencies) may be promoted to ancestor modules to satisfy dependency
     // constraints.
-
-    if (Math.random() > -1 /* true */) {
-      return buildModulesUsingOption1(manifest);
-    } else {
-      // TODO(bolinfest): Remove this when Option 1 has been throughly tested.
-      return oldGetModulesImpl(manifest);
-    }
+    return buildModulesUsingOption1(manifest);
   }
 
   private List<JSModule> buildModulesUsingOption1(Manifest manifest)
+      throws MissingProvideException {
+    Map<String, List<JsInput>> moduleToInputs = partitionInputsIntoModules(manifest);
+
+    // Step 3: Convert each list of JsInput dependencies for each module into a
+    // JSModule.
+    Map<String, JSModule> modulesByName = Maps.newHashMap();
+    for (String module : topologicalSort) {
+      // Create the module and add the dependencies in order.
+      JSModule jsModule = new JSModule(module);
+      List<JsInput> deps = moduleToInputs.get(module);
+      for (JsInput dep : deps) {
+        jsModule.add(Manifest.inputToSourceFile.apply(dep));
+      }
+
+      // Remember to special-case base.js so it is the first file in the root
+      // module.
+      if (module.equals(getRootModule())) {
+        jsModule.addFirst(Manifest.inputToSourceFile.apply(manifest.getBaseJs()));
+      }
+
+      modulesByName.put(module, jsModule);
+    }
+
+    // Add the dependencies for each module.
+    ImmutableList.Builder<JSModule> builder = ImmutableList.builder();
+    for (String module : topologicalSort) {
+      JSModule jsModule = modulesByName.get(module);
+      for (String parent : moduleInfoMap.get(module).getDeps()) {
+        jsModule.addDependency(modulesByName.get(parent));
+      }
+      builder.add(jsModule);
+    }
+
+    return builder.build();
+  }
+
+  Map<String, List<JsInput>> partitionInputsIntoModules(Manifest manifest)
       throws MissingProvideException {
     List<JsInput> inputsInOrder = manifest.getInputsInCompilationOrder();
     // Remove the first item, base.js, from the list.
@@ -342,38 +259,7 @@ public final class ModuleConfig {
       String ancestor = findLeastCommonAncestor(modulesWithInput, searcher);
       moduleToInputs.get(ancestor).add(input);
     }
-
-    // Step 3: Convert each list of JsInput dependencies for each module into a
-    // JSModule.
-    Map<String, JSModule> modulesByName = Maps.newHashMap();
-    for (String module : topologicalSort) {
-      // Create the module and add the dependencies in order.
-      JSModule jsModule = new JSModule(module);
-      List<JsInput> deps = moduleToInputs.get(module);
-      for (JsInput dep : deps) {
-        jsModule.add(Manifest.inputToSourceFile.apply(dep));
-      }
-
-      // Remember to special-case base.js so it is the first file in the root
-      // module.
-      if (module.equals(getRootModule())) {
-        jsModule.addFirst(Manifest.inputToSourceFile.apply(manifest.getBaseJs()));
-      }
-
-      modulesByName.put(module, jsModule);
-    }
-
-    // Add the dependencies for each module.
-    ImmutableList.Builder<JSModule> builder = ImmutableList.builder();
-    for (String module : topologicalSort) {
-      JSModule jsModule = modulesByName.get(module);
-      for (String parent : moduleInfoMap.get(module).getDeps()) {
-        jsModule.addDependency(modulesByName.get(parent));
-      }
-      builder.add(jsModule);
-    }
-
-    return builder.build();
+    return moduleToInputs;
   }
 
   /**

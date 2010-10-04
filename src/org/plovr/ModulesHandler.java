@@ -43,7 +43,7 @@ public final class ModulesHandler extends AbstractGetHandler {
   private static final int LINE_HEIGHT = 20;
 
   private static final int TEXT_X_OFFSET = 10;
-  private static final int TEXT_Y_OFFSET = (BOX_HEIGHT + LINE_HEIGHT) / 2;
+  private static final int TEXT_Y_OFFSET = (BOX_HEIGHT + LINE_HEIGHT) / 2 - 5;
 
   public ModulesHandler(CompilationServer server) {
     super(server);
@@ -57,9 +57,10 @@ public final class ModulesHandler extends AbstractGetHandler {
         server, config, exchange);
     if (compilation == null) {
       return;
-    } if (!compilation.usesModules()) {
+    } else if (!compilation.usesModules()) {
       HttpUtil.writeErrorMessageResponse(exchange,
           "This configuration does not use modules");
+      return;
     }
 
     // Get the size of each module.
@@ -84,8 +85,15 @@ public final class ModulesHandler extends AbstractGetHandler {
     SetMultimap<Integer, String> moduleDepths =
         calculateModuleDepths(moduleConfig.getRootModule(),
             invertedDependencyTree);
+    Map<String, List<JsInput>> moduleToInputs;
+    try {
+      moduleToInputs = moduleConfig
+          .partitionInputsIntoModules(config.getManifest());
+    } catch (MissingProvideException e) {
+      throw new RuntimeException(e);
+    }
     String svg = generateSvg(moduleDepths, invertedDependencyTree,
-        moduleSizes);
+        moduleSizes, moduleToInputs);
 
     // Write the response.
     Headers responseHeaders = exchange.getResponseHeaders();
@@ -153,7 +161,8 @@ public final class ModulesHandler extends AbstractGetHandler {
   static String generateSvg(
       SetMultimap<Integer, String> moduleDepths,
       Map<String, List<String>> invertedDependencyTree,
-      Map<String, Pair<Integer, Integer>> moduleSizes) {
+      Map<String, Pair<Integer, Integer>> moduleSizes,
+      Map<String, List<JsInput>> moduleToInputs) {
     // Calculate the maximum number of modules that should be displayed at the
     // same depth in the SVG.
     int maxModulesPerRow = -1;
@@ -176,6 +185,11 @@ public final class ModulesHandler extends AbstractGetHandler {
         Pair<Integer,Integer> sizes = moduleSizes.get(module);
         String formattedRawSize = formatSize(sizes.getFirst());
         String formattedGzipSize = formatSize(sizes.getSecond());
+        int numFiles = moduleToInputs.get(module).size();
+        // TODO(bolinfest): Hyperlink file count to show the list of files in
+        // the module, in order. List should highlight which file is an "input"
+        // and which files were "promoted" due to how the modules were constructed.
+        String fileCount = (numFiles == 1) ? "1 file" : numFiles + " files";
         String rect = String.format(
             "  <rect id='%s' x='%d' y='%d'" +
             " stroke='#000' fill='#FFF'" +
@@ -183,11 +197,14 @@ public final class ModulesHandler extends AbstractGetHandler {
             "  <text style='font-family: Arial'" +
             " x='%d' y='%d'>%s</text>" +
             "  <text style='font-family: Arial'" +
-            " x='%d' y='%d'>%s (%s gzip)</text>",
+            " x='%d' y='%d'>%s (%s gzip)</text>" +
+            "  <text style='font-family: Arial'" +
+            " x='%d' y='%d'>%s</text>",
             module,
             x, y, BOX_WIDTH, BOX_HEIGHT,
             x + TEXT_X_OFFSET, y + TEXT_Y_OFFSET - LINE_HEIGHT, module,
-            x + TEXT_X_OFFSET, y + TEXT_Y_OFFSET, formattedRawSize, formattedGzipSize);
+            x + TEXT_X_OFFSET, y + TEXT_Y_OFFSET, formattedRawSize, formattedGzipSize,
+            x + TEXT_X_OFFSET, y + TEXT_Y_OFFSET + LINE_HEIGHT, fileCount);
         rects.add(rect);
 
         // Add the connection points for boxes.

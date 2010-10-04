@@ -65,8 +65,18 @@ public class ModulesHandlerTest {
         .put("G", Pair.of(40000, 3000))
         .build();
 
+    Map<String, List<JsInput>> moduleToInputs = ImmutableMap.<String, List<JsInput>>builder()
+        .put("A", ImmutableList.<JsInput>of())
+        .put("B", ImmutableList.<JsInput>of())
+        .put("C", ImmutableList.<JsInput>of())
+        .put("D", ImmutableList.<JsInput>of())
+        .put("E", ImmutableList.<JsInput>of())
+        .put("F", ImmutableList.<JsInput>of())
+        .put("G", ImmutableList.<JsInput>of())
+        .build();
+
     // For now, just call this to make sure it does not throw an exception.
-    String svg = ModulesHandler.generateSvg(depths, graph, moduleSizes);
+    String svg = ModulesHandler.generateSvg(depths, graph, moduleSizes, moduleToInputs);
     System.out.println(svg);
   }
 }

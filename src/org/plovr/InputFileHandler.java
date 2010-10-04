@@ -68,9 +68,8 @@ final class InputFileHandler extends AbstractGetHandler {
 
       // Get the list of JsInputs for each module and use that to construct
       // the JsonObject that will be used for the PLOVR_MODULE_URIS variable.
-      List<JsInput> unpartitionedInputs = manifest.getInputsInCompilationOrder();
       Map<String, List<JsInput>> moduleToInputList = moduleConfig.
-          partitionInputsIntoModules(unpartitionedInputs);
+          partitionInputsIntoModules(manifest);
       JsonObject obj = new JsonObject();
       for (Map.Entry<String, List<JsInput>> entry : moduleToInputList.entrySet()) {
         String moduleName = entry.getKey();
