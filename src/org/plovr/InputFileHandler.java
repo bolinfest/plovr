@@ -116,8 +116,8 @@ final class InputFileHandler extends AbstractGetHandler {
     String name = data.getParam("name");
 
     if (moduleName != null) {
-      Compilation compilation = CompilationUtil.getLastCompilationOrFail(
-          server, config, exchange);
+      Compilation compilation = CompilationUtil.getCompilationOrFail(
+          server, config);
       if (compilation == null) {
         return;
       }

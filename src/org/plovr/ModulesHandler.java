@@ -1,5 +1,6 @@
 package org.plovr;
 
+import java.awt.Dimension;
 import java.awt.Point;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
@@ -22,6 +23,11 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.SetMultimap;
 import com.google.common.collect.Sets;
+import com.google.common.io.Resources;
+import com.google.template.soy.SoyFileSet;
+import com.google.template.soy.data.SoyMapData;
+import com.google.template.soy.msgs.SoyMsgBundle;
+import com.google.template.soy.tofu.SoyTofu;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 
@@ -45,6 +51,15 @@ public final class ModulesHandler extends AbstractGetHandler {
   private static final int TEXT_X_OFFSET = 10;
   private static final int TEXT_Y_OFFSET = (BOX_HEIGHT + LINE_HEIGHT) / 2 - 5;
 
+  private static final SoyTofu TOFU;
+
+  static {
+    SoyFileSet.Builder builder = new SoyFileSet.Builder();
+    builder.add(Resources.getResource(ModulesHandler.class, "modules.soy"));
+    SoyFileSet fileSet = builder.build();
+    TOFU = fileSet.compileToJavaObj();
+  }
+
   public ModulesHandler(CompilationServer server) {
     super(server);
   }
@@ -53,11 +68,15 @@ public final class ModulesHandler extends AbstractGetHandler {
   protected void doGet(HttpExchange exchange, QueryData data, Config config)
       throws IOException {
     // Make sure that this code has been compiled.
-    Compilation compilation = CompilationUtil.getLastCompilationOrFail(
-        server, config, exchange);
-    if (compilation == null) {
+    Compilation compilation;
+    try {
+      compilation = CompilationUtil.getCompilationOrFail(server, config);
+    } catch (RuntimeException e) {
+      HttpUtil.writeErrorMessageResponse(exchange, e.getMessage());
       return;
-    } else if (!compilation.usesModules()) {
+    }
+
+    if (!compilation.usesModules()) {
       HttpUtil.writeErrorMessageResponse(exchange,
           "This configuration does not use modules");
       return;
@@ -92,15 +111,29 @@ public final class ModulesHandler extends AbstractGetHandler {
     } catch (MissingProvideException e) {
       throw new RuntimeException(e);
     }
-    String svg = generateSvg(moduleDepths, invertedDependencyTree,
-        moduleSizes, moduleToInputs);
+    Pair<String,Dimension> svg = generateSvg(
+        moduleDepths,
+        invertedDependencyTree,
+        moduleSizes,
+        moduleToInputs);
+
+    // Populate Soy template.
+    Dimension svgDimension = svg.getSecond();
+    SoyMapData mapData = new SoyMapData(ImmutableMap.<String, Object>builder()
+        .put("configId", config.getId())
+        .put("svg", svg.getFirst())
+        .put("svgWidth", svgDimension.width)
+        .put("svgHeight", svgDimension.height)
+        .build());
+    final SoyMsgBundle messageBundle = null;
+    String xhtml = TOFU.render("org.plovr.modules", mapData, messageBundle);
 
     // Write the response.
     Headers responseHeaders = exchange.getResponseHeaders();
-    responseHeaders.set("Content-Type", "image/svg+xml");
-    exchange.sendResponseHeaders(200, svg.length());
+    responseHeaders.set("Content-Type", "text/xml");
+    exchange.sendResponseHeaders(200, xhtml.length());
     Writer responseBody = new OutputStreamWriter(exchange.getResponseBody());
-    responseBody.write(svg);
+    responseBody.write(xhtml);
     responseBody.close();
   }
 
@@ -158,7 +191,7 @@ public final class ModulesHandler extends AbstractGetHandler {
   }
 
   @VisibleForTesting
-  static String generateSvg(
+  static Pair<String, Dimension> generateSvg(
       SetMultimap<Integer, String> moduleDepths,
       Map<String, List<String>> invertedDependencyTree,
       Map<String, Pair<Integer, Integer>> moduleSizes,
@@ -174,9 +207,11 @@ public final class ModulesHandler extends AbstractGetHandler {
     List<String> rects = Lists.newLinkedList();
     Map<String, Point> boxTops = Maps.newHashMap();
     Map<String, Point> boxBottoms = Maps.newHashMap();
+    int fullHeight = -1;
     for (Map.Entry<Integer, Collection<String>> entry : moduleDepths.asMap().entrySet()) {
       int depth = entry.getKey();
       int y = Y_OFFSET + depth * (BOX_HEIGHT + Y_BOX_SPACING);
+      fullHeight = Math.max(fullHeight, y + BOX_HEIGHT);
       int numModules = entry.getValue().size();
       int blankSpace = (maxModulesPerRow - numModules) * (BOX_WIDTH + X_BOX_SPACING) / 2;
       int x = blankSpace + X_OFFSET;
@@ -230,14 +265,14 @@ public final class ModulesHandler extends AbstractGetHandler {
       }
     }
 
-    String svg = "<svg xmlns='http://www.w3.org/2000/svg' " +
-        "xmlns:xlink='http://www.w3.org/1999/xlink'>\n" +
-        Joiner.on("\n").join(rects) +
+    String svg = Joiner.on("\n").join(rects) +
         "\n" +
         Joiner.on("\n").join(lines) +
-        "\n</svg>\n";
+        "\n";
 
-    return svg;
+    int fullWidth = X_OFFSET + maxModulesPerRow * (BOX_WIDTH + X_BOX_SPACING)
+        - X_BOX_SPACING;
+    return Pair.of(svg, new Dimension(fullWidth, fullHeight + 1));
   }
 
   private static final String formatSize(int numBytes) {

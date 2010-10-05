@@ -9,19 +9,28 @@ public final class CompilationUtil {
   /** Private class; do not instantiate. */
   private CompilationUtil() {}
 
-  public static Compilation getLastCompilationOrFail(CompilationServer server,
-      Config config, HttpExchange exchange) throws IOException {
+  /**
+   * Tries to return the most recent {@link Compilation} for the specified
+   * config. If that is not available, then this will compile the code using the
+   * config (but not any referrer information).
+   *
+   * If the config specifies RAW mode and there is no recent
+   * {@link Compilation}, then an exception will be thrown.
+   */
+  // TODO(bolinfest): Support RAW mode.
+  public static Compilation getCompilationOrFail(CompilationServer server,
+      Config config) throws IOException {
     Compilation compilation = server.getLastCompilation(config);
     if (compilation == null) {
-      String compileUrl = server.getServerForExchange(exchange) +
-          "compile?id=" + QueryData.encode(config.getId());
-      // TODO(bolinfest): HTML escape inputs (using Soy?)
-      HttpUtil.writeHtmlErrorMessageResponse(exchange,
-          "No compilation found for config: " + config.getId() + "<br>" +
-          "Try visiting: <a href='" + compileUrl + "'>" + compileUrl + "</a>");
-      return null;
-    } else {
-      return compilation;
+      try {
+        compilation = CompileRequestHandler.compile(config);
+      } catch (MissingProvideException e) {
+        throw new RuntimeException(e);
+      } catch (CheckedSoySyntaxException e) {
+        throw new RuntimeException(e);
+      }
+      server.recordCompilation(config, compilation);
     }
+    return compilation;
   }
 }

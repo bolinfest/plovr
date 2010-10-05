@@ -1,0 +1,27 @@
+{namespace org.plovr}
+
+/**
+ * @param configId
+ * @param svg
+ * @param svgWidth
+ * @param svgHeight
+ */
+{template .modules}
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <title>Modules for {$configId}</title>
+  <style>
+  </style>
+</head>
+<body>
+
+<svg xmlns="http://www.w3.org/2000/svg"
+     version="1.1"
+     width="{$svgWidth}"
+     height="{$svgHeight}">
+{$svg|noAutoescape}
+</svg>
+
+</body>
+</html>
+{/template}

@@ -2,6 +2,7 @@ package org.plovr;
 
 import static org.junit.Assert.assertEquals;
 
+import java.awt.Dimension;
 import java.util.List;
 import java.util.Map;
 
@@ -76,7 +77,8 @@ public class ModulesHandlerTest {
         .build();
 
     // For now, just call this to make sure it does not throw an exception.
-    String svg = ModulesHandler.generateSvg(depths, graph, moduleSizes, moduleToInputs);
-    System.out.println(svg);
+    Pair<String, Dimension> svg = ModulesHandler.generateSvg(
+        depths, graph, moduleSizes, moduleToInputs);
+    System.out.println(svg.getFirst());
   }
 }
