@@ -184,8 +184,8 @@ public final class ModuleConfig {
       throws MissingProvideException {
     Map<String, List<JsInput>> moduleToInputs = partitionInputsIntoModules(manifest);
 
-    // Step 3: Convert each list of JsInput dependencies for each module into a
-    // JSModule.
+    // Convert each list of JsInput dependencies for each module into a
+    // JSModule and return the JSModules as a topologically sorted list.
     Map<String, JSModule> modulesByName = Maps.newHashMap();
     for (String module : topologicalSort) {
       // Create the module and add the dependencies in order.
@@ -194,13 +194,6 @@ public final class ModuleConfig {
       for (JsInput dep : deps) {
         jsModule.add(Manifest.inputToSourceFile.apply(dep));
       }
-
-      // Remember to special-case base.js so it is the first file in the root
-      // module.
-      if (module.equals(getRootModule())) {
-        jsModule.addFirst(Manifest.inputToSourceFile.apply(manifest.getBaseJs()));
-      }
-
       modulesByName.put(module, jsModule);
     }
 
@@ -220,19 +213,12 @@ public final class ModuleConfig {
   Map<String, List<JsInput>> partitionInputsIntoModules(Manifest manifest)
       throws MissingProvideException {
     List<JsInput> inputsInOrder = manifest.getInputsInCompilationOrder();
+    JsInput baseJs = inputsInOrder.get(0);
+    Preconditions.checkArgument(baseJs.equals(manifest.getBaseJs()),
+        "base.js should be the first input");
+
     // Remove the first item, base.js, from the list.
     inputsInOrder = inputsInOrder.subList(1, inputsInOrder.size());
-
-    // 1. Find the set of transitive dependencies for each module using a
-    // LinkedHashSet.
-    // 2. For each module, iterate over its list of inputs and keep track of
-    // which inputs have already been seen. For an input that is seen for the
-    // first time, find the set of modules that contain that input in its set of
-    // transitive dependencies. Once that set is created, find the least common
-    // ancestor module for the members of the set, and add the input to that
-    // module.
-    // 3. Convert each list of JsInput dependencies for each module into a
-    // JSModule and return the JSModules as a topologically sorted list.
 
     // Step 1: Build the set of transitive dependencies for each module.
     Map<String, LinkedHashSet<JsInput>> moduleToTransitiveDependencies = Maps
@@ -247,7 +233,13 @@ public final class ModuleConfig {
       moduleToTransitiveDependencies.put(module, deps);
     }
 
-    // Step 2: Assign inputs to modules.
+    // Assign inputs to modules.
+    // For each module, iterate over its list of inputs and keep track of
+    // which inputs have already been seen. For an input that is seen for the
+    // first time, find the set of modules that contain that input in its set of
+    // transitive dependencies. Once that set is created, find the least common
+    // ancestor module for the members of the set, and add the input to that
+    // module.
     Map<String, List<JsInput>> moduleToInputs = Maps.newHashMap();
     for (String module : topologicalSort) {
       moduleToInputs.put(module, Lists.<JsInput>newLinkedList());
@@ -259,6 +251,11 @@ public final class ModuleConfig {
       String ancestor = findLeastCommonAncestor(modulesWithInput, searcher);
       moduleToInputs.get(ancestor).add(input);
     }
+
+    // Because it is a special case, add base.js as the first input in the root
+    // module.
+    moduleToInputs.get(rootModule).add(0, baseJs);
+
     return moduleToInputs;
   }
 
