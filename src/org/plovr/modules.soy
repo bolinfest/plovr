@@ -11,11 +11,26 @@
 <head>
   <title>Modules for {$configId}</title>
   <style>
+  rect {lb}
+    stroke: #000;
+    fill: #FFF;
+  {rb}
+  text {lb}
+    font-family: Arial;
+  {rb}
+  // Firefox 3.6 does not seem to support "Open link in new tab" from the
+  // context menu for an svg <a> tag.
+  .link {lb}
+    fill: #00F;
+    // underline not visible in Firefox 3.6
+    text-decoration: underline;
+  {rb}
   </style>
 </head>
 <body>
 
 <svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:xlink="http://www.w3.org/1999/xlink"
      version="1.1"
      width="{$svgWidth}"
      height="{$svgHeight}">

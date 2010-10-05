@@ -4,8 +4,6 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.StringReader;
 import java.io.Writer;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -22,9 +20,6 @@ import com.sun.net.httpserver.HttpExchange;
 
 final class SizeHandler extends AbstractGetHandler {
 
-  private static final Logger logger = Logger.getLogger(
-      SizeHandler.class.getName());
-
   private final Pattern inputDelimiterPattern = Pattern.compile(
       "// Input (\\d+): (\\S+).*");
 
@@ -40,29 +35,21 @@ final class SizeHandler extends AbstractGetHandler {
   }
 
   @Override
-  protected void doGet(HttpExchange exchange, QueryData data, Config config)
+  protected void doGet(
+      HttpExchange exchange,
+      QueryData data,
+      Config config)
       throws IOException {
     Config.Builder builder = Config.builder(config);
     builder.setPrintInputDelimiter(true);
     config = builder.build();
 
-    CompilationMode mode = config.getCompilationMode();
-    if (mode == CompilationMode.RAW) {
-      HttpUtil.writeErrorMessageResponse(exchange,
-          "Not applicable for RAW mode");
-      return;
-    }
-
-    Compilation compilation;
-    try {
-      compilation = CompileRequestHandler.compile(config);
-    } catch (MissingProvideException e) {
-      logger.log(Level.SEVERE, "Error during compilation", e);
-      HttpUtil.writeNullResponse(exchange);
-      return;
-    } catch (CheckedSoySyntaxException e) {
-      logger.log(Level.SEVERE, "Error during compilation", e);
-      HttpUtil.writeNullResponse(exchange);
+    // Do not associate the Compilation with the Config because it is modified
+    // to enable the printInputDelimiter option.
+    final boolean recordCompilation = false;
+    Compilation compilation = getCompilation(
+        exchange, data, config, recordCompilation);
+    if (compilation == null) {
       return;
     }
 

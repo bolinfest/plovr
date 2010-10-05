@@ -65,17 +65,15 @@ public final class ModulesHandler extends AbstractGetHandler {
   }
 
   @Override
-  protected void doGet(HttpExchange exchange, QueryData data, Config config)
+  protected void doGet(
+      HttpExchange exchange,
+      QueryData data,
+      Config config)
       throws IOException {
-    // Make sure that this code has been compiled.
-    Compilation compilation;
-    try {
-      compilation = CompilationUtil.getCompilationOrFail(server, config);
-    } catch (RuntimeException e) {
-      HttpUtil.writeErrorMessageResponse(exchange, e.getMessage());
+    Compilation compilation = getCompilation(exchange, data, config);
+    if (compilation == null) {
       return;
     }
-
     if (!compilation.usesModules()) {
       HttpUtil.writeErrorMessageResponse(exchange,
           "This configuration does not use modules");
@@ -112,6 +110,7 @@ public final class ModulesHandler extends AbstractGetHandler {
       throw new RuntimeException(e);
     }
     Pair<String,Dimension> svg = generateSvg(
+        config.getId(),
         moduleDepths,
         invertedDependencyTree,
         moduleSizes,
@@ -192,6 +191,7 @@ public final class ModulesHandler extends AbstractGetHandler {
 
   @VisibleForTesting
   static Pair<String, Dimension> generateSvg(
+      String configId,
       SetMultimap<Integer, String> moduleDepths,
       Map<String, List<String>> invertedDependencyTree,
       Map<String, Pair<Integer, Integer>> moduleSizes,
@@ -221,24 +221,21 @@ public final class ModulesHandler extends AbstractGetHandler {
         String formattedRawSize = formatSize(sizes.getFirst());
         String formattedGzipSize = formatSize(sizes.getSecond());
         int numFiles = moduleToInputs.get(module).size();
-        // TODO(bolinfest): Hyperlink file count to show the list of files in
-        // the module, in order. List should highlight which file is an "input"
-        // and which files were "promoted" due to how the modules were constructed.
         String fileCount = (numFiles == 1) ? "1 file" : numFiles + " files";
+        String moduleListUrl = String.format("/list?id=%s&amp;module=%s",
+            configId, module);
         String rect = String.format(
-            "  <rect id='%s' x='%d' y='%d'" +
-            " stroke='#000' fill='#FFF'" +
-            " width='%d' height='%d'/>\n" +
-            "  <text style='font-family: Arial'" +
-            " x='%d' y='%d'>%s</text>" +
-            "  <text style='font-family: Arial'" +
-            " x='%d' y='%d'>%s (%s gzip)</text>" +
-            "  <text style='font-family: Arial'" +
-            " x='%d' y='%d'>%s</text>",
+            "<rect id='%s' x='%d' y='%d' width='%d' height='%d'/>" +
+            "<text x='%d' y='%d'>%s</text>" +
+            "<text x='%d' y='%d'>%s (%s gzip)</text>" +
+            "<a xlink:href='%s'>" +
+            "<text class='link' x='%d' y='%d'>%s</text>" +
+            "</a>",
             module,
             x, y, BOX_WIDTH, BOX_HEIGHT,
             x + TEXT_X_OFFSET, y + TEXT_Y_OFFSET - LINE_HEIGHT, module,
             x + TEXT_X_OFFSET, y + TEXT_Y_OFFSET, formattedRawSize, formattedGzipSize,
+            moduleListUrl,
             x + TEXT_X_OFFSET, y + TEXT_Y_OFFSET + LINE_HEIGHT, fileCount);
         rects.add(rect);
 
@@ -260,7 +257,7 @@ public final class ModulesHandler extends AbstractGetHandler {
       for (String descendant : deps.getValue()) {
         Point source = boxTops.get(descendant);
         lines.add(String.format(
-            "  <line x1='%d' y1='%d' x2='%d' y2='%d' style='stroke:#006600;'/>",
+            "<line x1='%d' y1='%d' x2='%d' y2='%d' style='stroke:#006600;'/>",
             source.x, source.y, sink.x, sink.y));
       }
     }

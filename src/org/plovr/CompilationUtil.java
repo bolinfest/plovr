@@ -2,7 +2,7 @@ package org.plovr;
 
 import java.io.IOException;
 
-import com.sun.net.httpserver.HttpExchange;
+import com.google.common.base.Preconditions;
 
 public final class CompilationUtil {
 
@@ -16,20 +16,18 @@ public final class CompilationUtil {
    *
    * If the config specifies RAW mode and there is no recent
    * {@link Compilation}, then an exception will be thrown.
+   * @throws CheckedSoySyntaxException
+   * @throws MissingProvideException
    */
-  // TODO(bolinfest): Support RAW mode.
   public static Compilation getCompilationOrFail(CompilationServer server,
-      Config config) throws IOException {
+      Config config, boolean recordCompilation) throws IOException, MissingProvideException, CheckedSoySyntaxException {
+    Preconditions.checkState(config.getCompilationMode() != CompilationMode.RAW);
     Compilation compilation = server.getLastCompilation(config);
     if (compilation == null) {
-      try {
-        compilation = CompileRequestHandler.compile(config);
-      } catch (MissingProvideException e) {
-        throw new RuntimeException(e);
-      } catch (CheckedSoySyntaxException e) {
-        throw new RuntimeException(e);
+      compilation = CompileRequestHandler.compile(config);
+      if (recordCompilation) {
+        server.recordCompilation(config, compilation);
       }
-      server.recordCompilation(config, compilation);
     }
     return compilation;
   }

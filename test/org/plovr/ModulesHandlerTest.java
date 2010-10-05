@@ -78,7 +78,7 @@ public class ModulesHandlerTest {
 
     // For now, just call this to make sure it does not throw an exception.
     Pair<String, Dimension> svg = ModulesHandler.generateSvg(
-        depths, graph, moduleSizes, moduleToInputs);
+        "fakeConfigId", depths, graph, moduleSizes, moduleToInputs);
     System.out.println(svg.getFirst());
   }
 }
