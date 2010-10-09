@@ -22,6 +22,8 @@
   <path id="plovr.classpath">
     <fileset dir="${lib.dir}" includes="*.jar" />
     <pathelement location="${classes.dir}" />
+    <!-- Include src.dir to include resources, such as modules.soy -->
+    <pathelement location="${src.dir}" />
   </path>
 
   <target name="clean" description="remove all generated files">
