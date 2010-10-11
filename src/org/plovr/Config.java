@@ -5,7 +5,9 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -77,6 +79,16 @@ public final class Config {
 
   public static Builder builder(Config config) {
     return new Builder(config);
+  }
+
+  /**
+   * Create a builder that can be used for testing. Paths will be resolved
+   * against the root folder of the system.
+   */
+  @VisibleForTesting
+  public static Builder builderForTesting() {
+    File rootDirectory = File.listRoots()[0];
+    return new Builder(rootDirectory);
   }
 
   public String getId() {
@@ -206,6 +218,13 @@ public final class Config {
 
     private final Map<String, JsonPrimitive> defines;
 
+    /**
+     * Pattern to validate a config id. A config id may not contain funny
+     * characters, such as slashes, because ids are used in RESTful URLs, so
+     * such characters would make proper URL parsing difficult.
+     */
+    private static final Pattern ID_PATTERN = Pattern.compile("\\w+");
+
     private Builder(File relativePathBase) {
       Preconditions.checkNotNull(relativePathBase);
       Preconditions.checkArgument(relativePathBase.isDirectory(),
@@ -238,6 +257,8 @@ public final class Config {
 
     public void setId(String id) {
       Preconditions.checkNotNull(id);
+      Preconditions.checkArgument(ID_PATTERN.matcher(id).matches(),
+          String.format("Not a valid config id: %s", id));
       this.id = id;
     }
 
