@@ -3,7 +3,6 @@ package org.plovr;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
-import java.net.URI;
 import java.net.URL;
 import java.util.List;
 import java.util.logging.Level;
