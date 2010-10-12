@@ -6,6 +6,9 @@ import java.io.Writer;
 import java.util.List;
 import java.util.Map;
 
+import org.plovr.util.HtmlUtil;
+
+import com.google.common.base.Function;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 
@@ -41,10 +44,12 @@ public final class ListHandler extends AbstractGetHandler {
 
       // TODO(bolinfest): add <head>, <body>, etc.
 
+      Function<JsInput, String> converter = InputFileHandler
+          .createInputNameToUriConverter(server, exchange, configId);
       for (JsInput input : inputs) {
-        String name = input.getName();
-        builder.append(
-            String.format("<a href='/input?id=%s&amp;name=%s'>%s</a><br>", configId, name, name));
+        builder.append(String.format("<a href='%s'>%s</a><br>",
+            HtmlUtil.htmlEscape(converter.apply(input)),
+            HtmlUtil.htmlEscape(input.getName())));
       }
 
     } else {

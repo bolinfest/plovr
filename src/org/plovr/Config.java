@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
+import javax.annotation.Nullable;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
@@ -30,6 +32,7 @@ public final class Config {
 
   private final Manifest manifest;
 
+  @Nullable
   private final ModuleConfig moduleConfig;
 
   private final CompilationMode compilationMode;
@@ -53,7 +56,7 @@ public final class Config {
   private Config(
       String id,
       Manifest manifest,
-      ModuleConfig moduleConfig,
+      @Nullable ModuleConfig moduleConfig,
       CompilationMode compilationMode,
       WarningLevel warningLevel,
       boolean printInputDelimiter,
@@ -101,6 +104,10 @@ public final class Config {
 
   public ModuleConfig getModuleConfig() {
     return moduleConfig;
+  }
+
+  public boolean hasModules() {
+    return moduleConfig != null;
   }
 
   public CompilationMode getCompilationMode() {

@@ -3,9 +3,12 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
@@ -17,8 +20,23 @@ abstract class AbstractGetHandler implements HttpHandler {
 
   protected final CompilationServer server;
 
+  private final boolean usesRestfulPath;
+
   AbstractGetHandler(CompilationServer server) {
+    this(server, false /* usesRestfulPath */);
+  }
+
+  /**
+   * @param server
+   * @param usesRestfulPath If true, then the config id will be specified by a
+   *     query parameter named "id". If false, then the config id will be
+   *     embedded in the URL as follows:
+   *     http://localhost:9810/command_name/config_id/other/args?like=this
+   */
+  AbstractGetHandler(CompilationServer server, boolean usesRestfulPath) {
     this.server = server;
+    // TODO(bolinfest): Consider switching all handlers to use RESTful URLs.
+    this.usesRestfulPath = usesRestfulPath;
   }
 
   public final void handle(HttpExchange exchange) throws IOException {
@@ -26,7 +44,12 @@ abstract class AbstractGetHandler implements HttpHandler {
     if (requestMethod.equalsIgnoreCase("GET")) {
       try {
         QueryData queryData = QueryData.createFromUri(exchange.getRequestURI());
-        String id = queryData.getParam("id");
+        String id;
+        if (usesRestfulPath) {
+          id = parseConfigIdFromRestUri(exchange.getRequestURI());
+        } else {
+          id = queryData.getParam("id");
+        }
         if (id == null) {
           HttpUtil.writeNullResponse(exchange);
         } else {
@@ -55,6 +78,24 @@ abstract class AbstractGetHandler implements HttpHandler {
         logger.log(Level.SEVERE, "Error during GET request to " + exchange.getRequestURI(), t);
         // TODO(bolinfest): Write/flush response.
       }
+    }
+  }
+
+  /**
+   * Pattern used to select the handler name and config id from a plovr URI path.
+   * The first group is the handler name and the second group is the config id.
+   */
+  private static final Pattern URI_ID_PATTERN = Pattern.compile(
+      "/(\\w+)/(\\w+)/.*");
+
+  @VisibleForTesting
+  static String parseConfigIdFromRestUri(URI uri) {
+    String path = uri.getPath();
+    Matcher matcher = URI_ID_PATTERN.matcher(path);
+    if (matcher.matches()) {
+      return matcher.group(2);
+    } else {
+      return null;
     }
   }
 

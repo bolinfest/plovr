@@ -3,10 +3,14 @@ package org.plovr;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.google.common.base.Function;
+import com.google.common.base.Functions;
 import com.google.common.io.Resources;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -35,25 +39,21 @@ final class InputFileHandler extends AbstractGetHandler {
   }
 
   public InputFileHandler(CompilationServer server) {
-    super(server);
+    super(server, true /* usesRestfulPath */);
   }
 
   /**
    * Returns the JavaScript code that bootstraps loading the application code.
    */
-  static String getJsToLoadManifest(final Config config, Manifest manifest,
-      final String prefix, String path) throws MissingProvideException {
+  static String getJsToLoadManifest(CompilationServer server,
+      final Config config,
+      Manifest manifest,
+      HttpExchange exchange) throws MissingProvideException {
     // Function that converts a JsInput to the URI where its raw content can be
     // loaded.
-    Function<JsInput, JsonPrimitive> inputToUri =
-        new Function<JsInput, JsonPrimitive>() {
-      @Override
-      public JsonPrimitive apply(JsInput input) {
-        return new JsonPrimitive(prefix + "input" +
-            "?id=" + QueryData.encode(config.getId()) +
-            "&name=" + QueryData.encode(input.getName()));
-      }
-    };
+   Function<JsInput,JsonPrimitive> inputToUri = Functions.compose(
+       GsonUtil.STRING_TO_JSON_PRIMITIVE,
+       createInputNameToUriConverter(server, exchange, config.getId()));
 
     String moduleInfo;
     String moduleUris;
@@ -97,11 +97,19 @@ final class InputFileHandler extends AbstractGetHandler {
         "moduleInfo", moduleInfo,
         "moduleUris", moduleUris,
         "filesAsJsonArray", inputUrls.toString(),
-        "path", path);
+        "path", exchange.getRequestURI().getPath());
 
     final SoyMsgBundle messageBundle = null;
     return TOFU.render("org.plovr.raw", mapData, messageBundle);
   }
+
+  /**
+   * Pattern that matches the path to the REST URI for this handler.
+   * The \\w+ will match the config id and the (/.*) will match the
+   * input name.
+   */
+  private static final Pattern URI_INPUT_PATTERN = Pattern.compile(
+      "/input/\\w+(/.*)");
 
   @Override
   protected void doGet(HttpExchange exchange, QueryData data, Config config)
@@ -111,25 +119,16 @@ final class InputFileHandler extends AbstractGetHandler {
     // Find the code for the requested input.
     String code = null;
 
-    // Exactly one of module or name should be specified in the QueryData.
-    String moduleName = data.getParam("module");
-    String name = data.getParam("name");
+    URI uri = exchange.getRequestURI();
+    Matcher matcher = URI_INPUT_PATTERN.matcher(uri.getPath());
+    if (!matcher.matches()) {
+      throw new IllegalArgumentException("Input could not be extracted from URI");
+    }
+    String name = matcher.group(1);
 
-    if (moduleName != null) {
-      Compilation compilation = getCompilation(exchange, data, config);
-      if (compilation == null) {
-        return;
-      }
-
-      final boolean isDebugMode = false;
-      Function<String, String> moduleNameToUri = createModuleNameToUriConverter(
-          server, exchange, config.getId());
-      code = compilation.getCodeForModule(moduleName, isDebugMode, moduleNameToUri);
-    } else if (name != null) {
-      JsInput requestedInput = manifest.getJsInputByName(name);
-      if (requestedInput != null) {
-        code = requestedInput.getCode();
-      }
+    JsInput requestedInput = manifest.getJsInputByName(name);
+    if (requestedInput != null) {
+      code = requestedInput.getCode();
     }
 
     if (code == null) {
@@ -146,15 +145,18 @@ final class InputFileHandler extends AbstractGetHandler {
     responseBody.close();
   }
 
-  static Function<String,String> createModuleNameToUriConverter(
+  static Function<JsInput,String> createInputNameToUriConverter(
       CompilationServer server, HttpExchange exchange, final String configId) {
     final String moduleUriBase = server.getServerForExchange(exchange);
-    return new Function<String, String>() {
+    return new Function<JsInput, String>() {
       @Override
-      public String apply(String moduleName) {
-        return moduleUriBase + "input" +
-          "?id=" + QueryData.encode(configId) +
-          "&module=" + QueryData.encode(moduleName);
+      public String apply(JsInput input) {
+        // TODO(bolinfest): Should input.getName() be URI-escaped? Maybe all
+        // characters other than slashes?
+        return String.format("%sinput/%s%s",
+            moduleUriBase,
+            QueryData.encode(configId),
+            input.getName());
       }
     };
   }

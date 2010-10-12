@@ -1,5 +1,6 @@
 package org.plovr;
 
+import com.google.common.base.Function;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
@@ -28,4 +29,12 @@ public final class GsonUtil {
     }
     return null;
   }
+
+  public static final Function<String, JsonPrimitive>
+      STRING_TO_JSON_PRIMITIVE = new Function<String, JsonPrimitive>() {
+        @Override
+        public JsonPrimitive apply(String str) {
+          return new JsonPrimitive(str);
+        }
+  };
 }

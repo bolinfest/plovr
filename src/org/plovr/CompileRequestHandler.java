@@ -73,10 +73,8 @@ public final class CompileRequestHandler extends AbstractGetHandler {
     try {
       if (config.getCompilationMode() == CompilationMode.RAW) {
         Manifest manifest = config.getManifest();
-        URI requestUri = exchange.getRequestURI();
-        String prefix = server.getServerForExchange(exchange);
-        String js = InputFileHandler.getJsToLoadManifest(config,
-            manifest, prefix, requestUri.getPath());
+        String js = InputFileHandler.getJsToLoadManifest(
+            server, config, manifest, exchange);
         builder.append(js);
       } else {
         compile(config, exchange, builder);
@@ -142,7 +140,7 @@ public final class CompileRequestHandler extends AbstractGetHandler {
 
       if (compilation.usesModules()) {
         final boolean isDebugMode = true;
-        Function<String, String> moduleNameToUri = InputFileHandler.
+        Function<String, String> moduleNameToUri = ModuleHandler.
             createModuleNameToUriConverter(server, exchange, config.getId());
         ModuleConfig moduleConfig = config.getModuleConfig();
         if (moduleConfig.excludeModuleInfoFromRootModule()) {

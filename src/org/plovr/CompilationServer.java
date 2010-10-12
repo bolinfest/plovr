@@ -58,6 +58,7 @@ public final class CompilationServer implements Runnable {
     server.createContext("/externs", new ExternsHandler(this));
     server.createContext("/input", new InputFileHandler(this));
     server.createContext("/list", new ListHandler(this));
+    server.createContext("/module", new ModuleHandler(this));
     server.createContext("/modules", new ModulesHandler(this));
     server.createContext("/size", new SizeHandler(this));
     server.createContext("/sourcemap", new SourceMapHandler(this));
