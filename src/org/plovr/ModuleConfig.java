@@ -76,6 +76,17 @@ public final class ModuleConfig {
     return Iterables.unmodifiableIterable(invertedDependencyTree.keySet());
   }
 
+  /**
+   * @return the list of inputs specified under "modules" in the config
+   */
+  List<String> getInputNames() {
+    ImmutableList.Builder<String> inputs = ImmutableList.builder();
+    for (String module : topologicalSort) {
+      inputs.add(moduleInfoMap.get(module).getInput());
+    }
+    return inputs.build();
+  }
+
   public Map<String, File> getModuleToOutputPath() {
     return this.moduleToOutputPath;
   }

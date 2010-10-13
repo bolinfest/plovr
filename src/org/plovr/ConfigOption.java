@@ -44,8 +44,7 @@ public enum ConfigOption {
   INPUTS("inputs" , new ConfigUpdater() {
     @Override
     public void apply(String input, Config.Builder builder) {
-      String resolvedPath = maybeResolvePath(input, builder);
-      builder.addInput(new File(resolvedPath), input);
+      builder.addInputByName(input);
     }
 
     @Override
@@ -315,7 +314,7 @@ public enum ConfigOption {
    * @param builder
    * @return
    */
-  private static String maybeResolvePath(String path, Config.Builder builder) {
+  static String maybeResolvePath(String path, Config.Builder builder) {
     return maybeResolvePath(path, builder.getRelativePathBase());
   }
 

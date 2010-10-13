@@ -280,6 +280,11 @@ public final class Config {
       inputs.add(LocalFileJsInput.createForFileWithName(file, name));
     }
 
+    public void addInputByName(String name) {
+      String resolvedPath = ConfigOption.maybeResolvePath(name, this);
+      addInput(new File(resolvedPath), name);
+    }
+
     public void addExtern(String extern) {
       if (externs == null) {
         externs = ImmutableList.builder();
@@ -333,10 +338,24 @@ public final class Config {
           ? new File(pathToClosureLibrary)
           : null;
 
+      ModuleConfig moduleConfig = (moduleConfigBuilder == null)
+          ? null
+          : moduleConfigBuilder.build();
+
       Manifest manifest;
       if (this.manifest == null) {
         List<File> externs = this.externs == null ? null
             : Lists.transform(this.externs.build(), STRING_TO_FILE);
+
+        // If there is a module configuration, then add all of the
+        // inputs from that.
+        // TODO: Consider throwing an error if both "modules" and "inputs" are
+        // specified.
+        if (moduleConfig != null) {
+          for (String inputName : moduleConfig.getInputNames()) {
+            addInputByName(inputName);
+          }
+        }
 
         manifest = new Manifest(closureLibraryDirectory,
           Lists.transform(paths.build(), STRING_TO_FILE),
@@ -346,10 +365,6 @@ public final class Config {
       } else {
         manifest = this.manifest;
       }
-
-      ModuleConfig moduleConfig = (moduleConfigBuilder == null)
-          ? null
-          : moduleConfigBuilder.build();
 
       Config config = new Config(
           id,

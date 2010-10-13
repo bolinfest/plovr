@@ -73,6 +73,7 @@ public final class Manifest {
       boolean customExternsOnly) {
     Preconditions.checkNotNull(dependencies);
     Preconditions.checkNotNull(requiredInputs);
+    Preconditions.checkArgument(requiredInputs.size() > 0);
 
     // TODO(bolinfest): Monitor directories for changes and have the JsInput
     // mark itself dirty when there is a change.
@@ -178,7 +179,7 @@ public final class Manifest {
         // MissingProvideException.
         getInputsInCompilationOrder();
       } catch (MissingProvideException e) {
-        return null;
+        throw new RuntimeException(e);
       }
     }
     return lastOrdering.get(name);
