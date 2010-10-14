@@ -91,7 +91,8 @@ public enum ConfigOption {
   CLOSURE_LIBRARY("closure-library", new ConfigUpdater() {
     @Override
     public void apply(String path, Config.Builder builder) {
-      builder.setPathToClosureLibrary(path);
+      String resolvedPath = maybeResolvePath(path, builder);
+      builder.setPathToClosureLibrary(resolvedPath);
     }
   }),
 
