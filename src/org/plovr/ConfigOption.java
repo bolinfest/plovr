@@ -16,10 +16,32 @@ import com.google.javascript.jscomp.WarningLevel;
 
 public enum ConfigOption {
 
+  // DO NOT alpha-sort this list!
+  // The enum order is the order in which these options appear in the generated
+  // HTML documentation, so the most important options are deliberately listed
+  // first.
+
   ID("id", new ConfigUpdater() {
     @Override
     public void apply(String id, Config.Builder builder) {
       builder.setId(id);
+    }
+  }),
+
+  INPUTS("inputs" , new ConfigUpdater() {
+    @Override
+    public void apply(String input, Config.Builder builder) {
+      builder.addInputByName(input);
+    }
+
+    @Override
+    public void apply(JsonArray inputs, Config.Builder builder) {
+      for (JsonElement item : inputs) {
+        String input = GsonUtil.stringOrNull(item);
+        if (input != null) {
+          apply(input, builder);
+        }
+      }
     }
   }),
 
@@ -36,23 +58,6 @@ public enum ConfigOption {
         String path = GsonUtil.stringOrNull(item);
         if (path != null) {
           apply(path, builder);
-        }
-      }
-    }
-  }),
-
-  INPUTS("inputs" , new ConfigUpdater() {
-    @Override
-    public void apply(String input, Config.Builder builder) {
-      builder.addInputByName(input);
-    }
-
-    @Override
-    public void apply(JsonArray inputs, Config.Builder builder) {
-      for (JsonElement item : inputs) {
-        String input = GsonUtil.stringOrNull(item);
-        if (input != null) {
-          apply(input, builder);
         }
       }
     }
@@ -102,8 +107,9 @@ public enum ConfigOption {
     }
 
     @Override
-    public void update(String mode, Config.Builder builder) {
+    public boolean update(String mode, Config.Builder builder) {
       apply(mode, builder);
+      return true;
     }
   }),
 
@@ -119,8 +125,9 @@ public enum ConfigOption {
     }
 
     @Override
-    public void update(String level, Config.Builder builder) {
+    public boolean update(String level, Config.Builder builder) {
       apply(level, builder);
+      return true;
     }
   }),
 
@@ -131,9 +138,10 @@ public enum ConfigOption {
     }
 
     @Override
-    public void update(String debugParam, Config.Builder builder) {
+    public boolean update(String debugParam, Config.Builder builder) {
       boolean debug = Boolean.valueOf(debugParam);
       builder.setDebugOptions(debug);
+      return true;
     }
   }),
 
@@ -144,9 +152,10 @@ public enum ConfigOption {
     }
 
     @Override
-    public void update(String prettyPrintParam, Config.Builder builder) {
+    public boolean update(String prettyPrintParam, Config.Builder builder) {
       boolean prettyPrint = Boolean.valueOf(prettyPrintParam);
       builder.setPrettyPrint(prettyPrint);
+      return true;
     }
   }),
 
@@ -157,9 +166,10 @@ public enum ConfigOption {
     }
 
     @Override
-    public void update(String printInputDelimiterParam, Config.Builder builder) {
+    public boolean update(String printInputDelimiterParam, Config.Builder builder) {
       boolean printInputDelimiter = Boolean.valueOf(printInputDelimiterParam);
       builder.setPrintInputDelimiter(printInputDelimiter);
+      return true;
     }
   }),
   FINGERPRINT("fingerprint", new ConfigUpdater() {
@@ -273,7 +283,7 @@ public enum ConfigOption {
       throw new UnsupportedOperationException();
     }
 
-    public void apply(JsonElement json, Config.Builder builder) {
+    private void apply(JsonElement json, Config.Builder builder) {
       if (json.isJsonPrimitive()) {
         JsonPrimitive primitive = json.getAsJsonPrimitive();
         if (primitive.isString()) {
@@ -296,9 +306,10 @@ public enum ConfigOption {
      * @param queryDataValue
      * @param builder
      */
-    public void update(String queryDataValue, Config.Builder builder) {
+    public boolean update(String queryDataValue, Config.Builder builder) {
       // By default, does nothing. Only override if it is safe to update the
       // Config using a query data parameter, which anyone could pass in.
+      return false;
     }
   }
 
@@ -322,12 +333,15 @@ public enum ConfigOption {
     configUpdater.apply(json, builder);
   }
 
-  public void update(Config.Builder builder, QueryData data) {
+  /**
+   * @return true to indicate that the parameter was processed
+   */
+  public boolean update(Config.Builder builder, QueryData data) {
     String value = data.getParam(name);
     if (value == null) {
-      return;
+      return false;
     }
-    configUpdater.update(value, builder);
+    return configUpdater.update(value, builder);
   }
 
   /**

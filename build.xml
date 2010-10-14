@@ -153,6 +153,17 @@
       <arg line="--dir ${testdata.dir}/soy-server" />
     </java>
   </target>
+	
+	<target name="generate-options-documentation"
+	        description="generates the documentation for ConfigOption.java"
+		      depends="compile">
+    <java fork="true"
+    	    classname="org.plovr.ConfigOptionDocumentationGenerator"
+    	    output="${build.dir}/options.html"
+    	    >
+      <classpath refid="plovr.classpath"></classpath>
+   </java>
+	</target>
 
   <target name="develop-documentation"
           description="runs the soyweb server in debug mode to develop docs">

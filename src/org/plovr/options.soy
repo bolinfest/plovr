@@ -1,0 +1,159 @@
+{namespace org.plovr}
+
+/**
+ * @param allNames
+ * @param descriptors
+ */
+{template .options}
+<!doctype html>
+<html>
+<head>
+  <title>Config Options</title>
+  <style>
+{literal}
+body {
+  font: 13px Arial, sans-serif;
+}
+dd {
+  padding-bottom: 10px;
+}
+dt {
+  font-weight: bold;
+}
+pre, code, .yes {
+  color: #008000; /* green */
+}
+.no {
+  color: #A00; /* dark red */
+}
+.yes, .no {
+  font-weight: bold;
+}
+{/literal}
+  </style>
+</head>
+<body>
+
+This is a list of the options that can be specified in a config file.
+It is generated from the <a href="http://code.google.com/p/plovr/source/browse/src/org/plovr/ConfigOption.java">
+<code>ConfigOption</code> enum</a>.
+
+<p>
+{foreach $name in $allNames}
+<a href="#{$name}">{$name}</a>{if not isLast($name)}, {/if}
+{/foreach}
+</p>
+
+<dl>
+{foreach $descriptor in $descriptors}
+  <dt id="{$descriptor.name}">{$descriptor.name}</dt>
+  <dd>
+  Accepted values: <code>{$descriptor.acceptedValues}</code><br>
+  QueryData override:{sp}
+  {if $descriptor.supportsQueryDataOverride}
+    <span class="yes">yes</span>
+  {else}
+    <span class="no">no</span>
+  {/if}<br>
+  <p>
+  {call .description}{param name: $descriptor.name/}{/call}
+  </p>
+  </dd>
+{/foreach}
+</dl>
+
+</body>
+</html>
+{/template}
+
+/**
+ * @param name
+ */
+{template .description}
+{switch $name}
+  {case 'id'}
+    Every config must have an <code>id</code>. The id must be unique among the
+    configs being served by plovr because the id is a parameter to every
+    function in the plovr REST API.
+  {case 'inputs'}
+    Input files to be compiled. Each input file and its transitive dependencies
+    will be included in the compiled output.
+  {case 'paths'}
+    Files or directories where the transitive dependencies of the inputs can be
+    found.
+  {case 'externs'}
+    Files that contain <a href="http://code.google.com/closure/compiler/docs/api-tutorial3.html">externs</a>{sp}
+    that should be included in the compilation. By default, these will be used
+    in addition to the default externs bundled with the Closure Compiler.
+  {case 'custom-externs-only'}
+    Whether only the custom externs specified by <code>externs</code> should be
+    used (rather than in addition to the default externs bundled with the Closure Compiler).
+  {case 'closure-library'}
+    Path to the version of the Closure Library that should be used instead of
+    the version of the Closure Library that is bundled with plovr.
+    When specified, it should identify the root directory that contains
+    <code>base.js</code> for that instance of the library, so a sample value
+    might be <code>"../closure-library/closure/goog/"</code>.
+  {case 'mode'}
+    Compilation mode, which must be one of <code>"RAW"</code>,
+    <code>"WHITESPACE"</code>, <code>"SIMPLE"</code>, or <code>"ADVANCED"</code>.
+    The default value is <code>"SIMPLE"</code>.
+  {case 'level'}
+    Warning level, which must be one of <code>"QUIET"</code>,
+    <code>"DEFAULT"</code>, or <code>"VERBOSE"</code>.
+    The default value is <code>"DEFAULT"</code>.
+  {case 'debug'}
+    Equivalent to the command-line <code>--debug</code> flag for the Closure Compiler.
+    Defaults to <code>false</code>.
+  {case 'pretty-print'}
+    Equivalent to the command-line <code>--formatting=PRETTY_PRINT</code> flag for
+    the Closure Compiler.
+    Defaults to <code>false</code>.
+  {case 'print-input-delimiter'}
+    Equivalent to the command-line <code>--formatting=PRINT_INPUT_DELIMITER</code> flag for
+    the Closure Compiler.
+    Defaults to <code>false</code>.
+  {case 'fingerprint'}
+    Whether to fingerprint the JS files for modules when plovr is used in
+    build mode. The fingerprint is an md5 hash of the file content.
+    Defaults to <code>false</code>.
+  {case 'define'}
+    An object literal that contains a mapping of variables in the JavaScript code
+    that are annotated with <code>@define</code> (indicating that they can be
+    redefined at compile time) to the values that should be substituted.
+    The following should be specified to set <code>goog.DEBUG</code> to
+    <code>false</code> at compile time:
+{literal}<pre>"define": {
+  "goog.DEBUG": false
+}</pre>{/literal}
+  {case 'checks'}
+    An object literal that contains a mapping of Closure Compiler checks to the
+    desired check level, which must be one of <code>"OFF"</code>,
+    <code>"WARNING"</code>, or <code>"ERROR"</code>. The following is an example
+    of enabling a fairly strict set of checks:
+{literal}<pre>"checks": {
+  // Unfortunately, the Closure Library violates this in many places.
+  // "accessControls": "ERROR",
+  // "visibility": "ERROR"
+
+  "checkRegExp": "ERROR",
+  "checkTypes": "ERROR",
+  "checkVars": "ERROR",
+  "deprecated": "ERROR",
+  "fileoverviewTags": "ERROR",
+  "invalidCasts": "ERROR",
+  "missingProperties": "ERROR",
+  "nonStandardJsDocs": "ERROR",
+
+  // Need to figure out how to reorganize code to make this work.
+  // "strictModuleDepCheck": "ERROR",
+
+  "undefinedVars": "ERROR",
+  "unknownDefines": "ERROR"
+}</pre>{/literal}
+  These are analogous to the <code>--jscomp_off</code>,
+  <code>--jscomp_warning</code>, and <code>--jscomp_error</code> command-line
+  flags for the Closure Compiler.
+{/switch}
+
+{/template}
