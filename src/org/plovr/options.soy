@@ -118,15 +118,15 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
   {case 'closure-library'}
     Path to the version of the Closure Library that should be used instead of
     the version of the Closure Library that is bundled with plovr.
-    When specified, it should identify the root directory that contains
+    When specified, it should identify the root directory that contains{sp}
     <code>base.js</code> for that instance of the library, so a sample value
     might be <code>"../closure-library/closure/goog/"</code>.
   {case 'mode'}
-    Compilation mode, which must be one of <code>"RAW"</code>,
+    Compilation mode, which must be one of <code>"RAW"</code>,{sp}
     <code>"WHITESPACE"</code>, <code>"SIMPLE"</code>, or <code>"ADVANCED"</code>.
     The default value is <code>"SIMPLE"</code>.
   {case 'level'}
-    Warning level, which must be one of <code>"QUIET"</code>,
+    Warning level, which must be one of <code>"QUIET"</code>,{sp}
     <code>"DEFAULT"</code>, or <code>"VERBOSE"</code>.
     The default value is <code>"DEFAULT"</code>.
   {case 'debug'}
@@ -148,14 +148,14 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     An object literal that contains a mapping of variables in the JavaScript code
     that are annotated with <code>@define</code> (indicating that they can be
     redefined at compile time) to the values that should be substituted.
-    The following should be specified to set <code>goog.DEBUG</code> to
+    The following should be specified to set <code>goog.DEBUG</code> to{sp}
     <code>false</code> at compile time:
 {literal}<pre>"define": {
   "goog.DEBUG": false
 }</pre>{/literal}
   {case 'checks'}
     An object literal that contains a mapping of Closure Compiler checks to the
-    desired check level, which must be one of <code>"OFF"</code>,
+    desired check level, which must be one of <code>"OFF"</code>,{sp}
     <code>"WARNING"</code>, or <code>"ERROR"</code>. The following is an example
     of enabling a fairly strict set of checks:
 {literal}<pre>"checks": {
@@ -174,7 +174,7 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
   "undefinedVars": "ERROR",
   "unknownDefines": "ERROR"
 }</pre>{/literal}
-  These are analogous to the <code>--jscomp_off</code>,
+  These are analogous to the <code>--jscomp_off</code>,{sp}
   <code>--jscomp_warning</code>, and <code>--jscomp_error</code> command-line
   flags for the Closure Compiler.
 {/switch}
