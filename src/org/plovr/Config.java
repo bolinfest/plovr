@@ -39,6 +39,8 @@ public final class Config {
 
   private final WarningLevel warningLevel;
 
+  private final boolean debug;
+
   private final boolean printInputDelimiter;
 
   private final boolean fingerprintJsFiles;
@@ -59,6 +61,7 @@ public final class Config {
       @Nullable ModuleConfig moduleConfig,
       CompilationMode compilationMode,
       WarningLevel warningLevel,
+      boolean debug,
       boolean printInputDelimiter,
       boolean fingerprintJsFiles,
       Map<DiagnosticGroup, CheckLevel> diagnosticGroups,
@@ -70,6 +73,7 @@ public final class Config {
     this.moduleConfig = moduleConfig;
     this.compilationMode = compilationMode;
     this.warningLevel = warningLevel;
+    this.debug = debug;
     this.printInputDelimiter = printInputDelimiter;
     this.fingerprintJsFiles = fingerprintJsFiles;
     this.diagnosticGroups = diagnosticGroups;
@@ -129,6 +133,9 @@ public final class Config {
     logger.info("Compiling with level: " + level);
     CompilerOptions options = new CompilerOptions();
     level.setOptionsForCompilationLevel(options);
+    if (debug) {
+      level.setDebugOptionsForCompilationLevel(options);
+    }
     options.setCodingConvention(new ClosureCodingConvention());
     warningLevel.setOptionsForWarningLevel(options);
     options.printInputDelimiter = printInputDelimiter;
@@ -215,6 +222,8 @@ public final class Config {
 
     private WarningLevel warningLevel = WarningLevel.DEFAULT;
 
+    private boolean debug = false;
+
     private boolean printInputDelimiter = false;
 
     private boolean fingerprintJsFiles = false;
@@ -251,6 +260,7 @@ public final class Config {
           : ModuleConfig.builder(config.moduleConfig);
       this.compilationMode = config.compilationMode;
       this.warningLevel = config.warningLevel;
+      this.debug = config.debug;
       this.printInputDelimiter = config.printInputDelimiter;
       this.fingerprintJsFiles = config.fingerprintJsFiles;
       this.diagnosticGroups = config.diagnosticGroups;
@@ -317,6 +327,10 @@ public final class Config {
       this.warningLevel = level;
     }
 
+    public void setDebugOptions(boolean debug) {
+      this.debug = debug;
+    }
+
     public void setPrintInputDelimiter(boolean printInputDelimiter) {
       this.printInputDelimiter = printInputDelimiter;
     }
@@ -372,6 +386,7 @@ public final class Config {
           moduleConfig,
           compilationMode,
           warningLevel,
+          debug,
           printInputDelimiter,
           fingerprintJsFiles,
           diagnosticGroups,

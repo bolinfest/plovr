@@ -124,6 +124,19 @@ public enum ConfigOption {
     }
   }),
 
+  DEBUG("debug", new ConfigUpdater() {
+    @Override
+    public void apply(boolean debug, Config.Builder builder) {
+      builder.setDebugOptions(debug);
+    }
+
+    @Override
+    public void update(String debugParam, Config.Builder builder) {
+      boolean debug = Boolean.valueOf(debugParam);
+      builder.setDebugOptions(debug);
+    }
+  }),
+
   PRINT_INPUT_DELIMITER("print-input-delimiter", new ConfigUpdater() {
     @Override
     public void apply(boolean printInputDelimiter, Config.Builder builder) {
@@ -136,7 +149,6 @@ public enum ConfigOption {
       builder.setPrintInputDelimiter(printInputDelimiter);
     }
   }),
-
   FINGERPRINT("fingerprint", new ConfigUpdater() {
     @Override
     public void apply(boolean fingerprint, Config.Builder builder) {
