@@ -23,7 +23,7 @@ public class ModuleHandler extends AbstractGetHandler {
    * module name.
    */
   private static final Pattern URI_MODULE_PATTERN = Pattern.compile(
-      "/module/\\w+/(.*)");
+      "/module/" + AbstractGetHandler.CONFIG_ID_PATTERN + "/(.*)");
 
   @Override
   protected void doGet(HttpExchange exchange, QueryData data, Config config)

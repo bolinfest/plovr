@@ -109,7 +109,7 @@ final class InputFileHandler extends AbstractGetHandler {
    * input name.
    */
   private static final Pattern URI_INPUT_PATTERN = Pattern.compile(
-      "/input/\\w+(/.*)");
+      "/input/" + AbstractGetHandler.CONFIG_ID_PATTERN + "(/.*)");
 
   @Override
   protected void doGet(HttpExchange exchange, QueryData data, Config config)
@@ -127,6 +127,15 @@ final class InputFileHandler extends AbstractGetHandler {
     String name = matcher.group(1);
 
     JsInput requestedInput = manifest.getJsInputByName(name);
+
+    // TODO: eliminate this hack with the slash -- just make it an invariant of
+    // the system.
+    if (requestedInput == null) {
+      // Remove the leading slash and try again.
+      name = name.substring(1);
+      requestedInput = manifest.getJsInputByName(name);
+    }
+
     if (requestedInput != null) {
       code = requestedInput.getCode();
     }
@@ -153,10 +162,18 @@ final class InputFileHandler extends AbstractGetHandler {
       public String apply(JsInput input) {
         // TODO(bolinfest): Should input.getName() be URI-escaped? Maybe all
         // characters other than slashes?
+
+        // Hack: some input names do not have a leading slash, so add one when
+        // that is not the case and special case this in doGet().
+        String name = input.getName();
+        if (!name.startsWith("/")) {
+          name = "/" + name;
+        }
+
         return String.format("%sinput/%s%s",
             moduleUriBase,
             QueryData.encode(configId),
-            input.getName());
+            name);
       }
     };
   }

@@ -246,7 +246,8 @@ public final class Config {
      * characters, such as slashes, because ids are used in RESTful URLs, so
      * such characters would make proper URL parsing difficult.
      */
-    private static final Pattern ID_PATTERN = Pattern.compile("\\w+");
+    private static final Pattern ID_PATTERN = Pattern.compile(
+        AbstractGetHandler.CONFIG_ID_PATTERN);
 
     private Builder(File relativePathBase) {
       Preconditions.checkNotNull(relativePathBase);

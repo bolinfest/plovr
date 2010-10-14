@@ -82,11 +82,17 @@ abstract class AbstractGetHandler implements HttpHandler {
   }
 
   /**
+   * Regex (as text) to match a config id. Stored as a string so it can be
+   * included in other regexes.
+   */
+  static final String CONFIG_ID_PATTERN = "[\\w-]+";
+
+  /**
    * Pattern used to select the handler name and config id from a plovr URI path.
    * The first group is the handler name and the second group is the config id.
    */
   private static final Pattern URI_ID_PATTERN = Pattern.compile(
-      "/(\\w+)/(\\w+)/.*");
+      "/(\\w+)/(" + CONFIG_ID_PATTERN + ")/.*");
 
   @VisibleForTesting
   static String parseConfigIdFromRestUri(URI uri) {
