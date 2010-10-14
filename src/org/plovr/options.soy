@@ -1,15 +1,25 @@
 {namespace org.plovr}
 
+/***/
+{template .base}
+
+{call plovr.header}
+  {param title: 'plovr Documentation' /}
+  {param selected: 'docs.html' /}
+{/call}
+
+{call .options data="all" /}
+
+{call plovr.footer /}
+
+{/template}
+
 /**
  * @param allNames
  * @param descriptors
  */
 {template .options}
-<!doctype html>
-<html>
-<head>
-  <title>Config Options</title>
-  <style>
+<style>
 {literal}
 body {
   font: 13px Arial, sans-serif;
@@ -30,9 +40,7 @@ pre, code, .yes {
   font-weight: bold;
 }
 {/literal}
-  </style>
-</head>
-<body>
+</style>
 
 This is a list of the options that can be specified in a config file.
 It is generated from the <a href="http://code.google.com/p/plovr/source/browse/src/org/plovr/ConfigOption.java">
@@ -62,8 +70,6 @@ It is generated from the <a href="http://code.google.com/p/plovr/source/browse/s
 {/foreach}
 </dl>
 
-</body>
-</html>
 {/template}
 
 /**

@@ -157,9 +157,10 @@
 	<target name="generate-options-documentation"
 	        description="generates the documentation for ConfigOption.java"
 		      depends="compile">
+		<mkdir dir="${build.dir}/www" />
     <java fork="true"
     	    classname="org.plovr.ConfigOptionDocumentationGenerator"
-    	    output="${build.dir}/options.html"
+    	    output="${build.dir}/www/options.html"
     	    >
       <classpath refid="plovr.classpath"></classpath>
    </java>
@@ -178,10 +179,15 @@
   </target>
 
   <target name="serve-prod-documentation"
-          description="runs the soyweb server on plovr.com to serve the docs">
+          description="runs the soyweb server on plovr.com to serve the docs"
+  	      depends="generate-options-documentation">
+  	<mkdir dir="${build.dir}/www" />
+  	<copy todir="${build.dir}/www">
+  	  <fileset dir="${www.dir}" includes="**/*" />
+  	</copy>
     <java jar="${build.dir}/plovr.jar" fork="true">
       <arg value="soyweb" />
-      <arg line="--dir ${www.dir}" />
+      <arg line="--dir ${build.dir}/www" />
       <arg line="--static" />
       <arg line="--globals ${basedir}/prod-globals.js" />
     </java>

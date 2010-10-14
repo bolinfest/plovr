@@ -1,5 +1,6 @@
 package org.plovr;
 
+import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Collections;
@@ -36,6 +37,7 @@ public final class ConfigOptionDocumentationGenerator {
     SoyFileSet.Builder builder = new SoyFileSet.Builder();
     builder.add(Resources.getResource(ConfigOptionDocumentationGenerator.class,
         "options.soy"));
+    builder.add(new File("www/__common.soy"));
     SoyFileSet fileSet = builder.build();
     TOFU = fileSet.compileToJavaObj();
   }
@@ -161,7 +163,7 @@ public final class ConfigOptionDocumentationGenerator {
         .build();
 
     final SoyMsgBundle messageBundle = null;
-    return TOFU.render("org.plovr.options", soyData, messageBundle);
+    return TOFU.render("org.plovr.base", soyData, messageBundle);
   }
 
   public static void main(String[] args) {
