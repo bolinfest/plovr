@@ -16,7 +16,8 @@ public class ServeCommand extends AbstractCommandRunner<ServeCommandOptions> {
 
   @Override
   public void runCommandWithOptions(ServeCommandOptions options) throws IOException {
-    CompilationServer server = new CompilationServer(options.getPort());
+    CompilationServer server = new CompilationServer(options.getListenAddress(),
+        options.getPort());
     // Register all of the configs.
     for (String arg : options.getArguments()) {
       File configFile = new File(arg);

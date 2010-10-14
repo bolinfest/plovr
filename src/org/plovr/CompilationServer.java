@@ -13,6 +13,8 @@ import com.sun.net.httpserver.HttpServer;
 
 public final class CompilationServer implements Runnable {
 
+  private final String listenAddress;
+
   private final int port;
 
   // All maps are keyed on a Config id rather than a Config because there could
@@ -29,7 +31,8 @@ public final class CompilationServer implements Runnable {
    */
   private final Map<String, Compilation> compilations;
 
-  public CompilationServer(int port) {
+  public CompilationServer(String listenAddress, int port) {
+    this.listenAddress = listenAddress;
     this.port = port;
     this.configs = Maps.newHashMap();
     this.compilations = Maps.newHashMap();
@@ -46,7 +49,7 @@ public final class CompilationServer implements Runnable {
 
   @Override
   public void run() {
-    InetSocketAddress addr = new InetSocketAddress(port);
+    InetSocketAddress addr = new InetSocketAddress(listenAddress, port);
     HttpServer server;
     try {
       server = HttpServer.create(addr, 0);
