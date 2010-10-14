@@ -47,6 +47,27 @@ It is generated from the <a href="http://code.google.com/p/plovr/source/browse/s
 <code>ConfigOption</code> enum</a>.
 
 <p>
+Options that support a "query data override" can be specified in any of the
+following places:
+<ol>
+  <li>In the config file, like other config options.
+  <li>As a query parameter to the <code>/compile</code> servlet.
+  <li>As a query parameter to the page that loads the <code>/compile</code> URL
+      via a <code>&lt;script></code> tag, such that the URL of the page that
+      loads the URL will be sent via the <code>referer</code> header.
+      (Note that a user agent that loads a <code>file://</code> URL will not
+      send the <code>referer</code> for security reasons.) 
+</ol>
+This list is ordered by precdedence. For example, if the page{sp}
+<code>http://example.com/foo?mode=SIMPLE</code> loads{sp}
+<code>http://example.com:9810/compile?id=test&amp;mode=ADVANCED</code> via a{sp}
+<code>&lt;script></code> tag, then <code>mode=SIMPLE</code> will take precedence
+and the code returned by <code>http://example.com:9810/compile?id=test&amp;mode=ADVANCED</code>{sp}
+will be compiled in <code>SIMPLE</code> mode rather than in{sp}
+<code>ADVANCED</code> mode. This makes it easier to change compilation options
+without editing the config file or the URL in the <code>&lt;script></code> tag.
+
+<p>
 {foreach $name in $allNames}
 <a href="#{$name}">{$name}</a>{if not isLast($name)}, {/if}
 {/foreach}
@@ -57,7 +78,7 @@ It is generated from the <a href="http://code.google.com/p/plovr/source/browse/s
   <dt id="{$descriptor.name}">{$descriptor.name}</dt>
   <dd>
   Accepted values: <code>{$descriptor.acceptedValues}</code><br>
-  QueryData override:{sp}
+  Query data override?{sp}
   {if $descriptor.supportsQueryDataOverride}
     <span class="yes">yes</span>
   {else}
