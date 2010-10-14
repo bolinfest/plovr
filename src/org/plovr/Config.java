@@ -41,6 +41,8 @@ public final class Config {
 
   private final boolean debug;
 
+  private final boolean prettyPrint;
+
   private final boolean printInputDelimiter;
 
   private final boolean fingerprintJsFiles;
@@ -62,6 +64,7 @@ public final class Config {
       CompilationMode compilationMode,
       WarningLevel warningLevel,
       boolean debug,
+      boolean prettyPrint,
       boolean printInputDelimiter,
       boolean fingerprintJsFiles,
       Map<DiagnosticGroup, CheckLevel> diagnosticGroups,
@@ -74,6 +77,7 @@ public final class Config {
     this.compilationMode = compilationMode;
     this.warningLevel = warningLevel;
     this.debug = debug;
+    this.prettyPrint = prettyPrint;
     this.printInputDelimiter = printInputDelimiter;
     this.fingerprintJsFiles = fingerprintJsFiles;
     this.diagnosticGroups = diagnosticGroups;
@@ -138,6 +142,7 @@ public final class Config {
     }
     options.setCodingConvention(new ClosureCodingConvention());
     warningLevel.setOptionsForWarningLevel(options);
+    options.prettyPrint = prettyPrint;
     options.printInputDelimiter = printInputDelimiter;
     if (printInputDelimiter) {
       options.inputDelimiter = "// Input %num%: %name%";
@@ -224,6 +229,8 @@ public final class Config {
 
     private boolean debug = false;
 
+    private boolean prettyPrint = false;
+
     private boolean printInputDelimiter = false;
 
     private boolean fingerprintJsFiles = false;
@@ -261,6 +268,7 @@ public final class Config {
       this.compilationMode = config.compilationMode;
       this.warningLevel = config.warningLevel;
       this.debug = config.debug;
+      this.prettyPrint = config.prettyPrint;
       this.printInputDelimiter = config.printInputDelimiter;
       this.fingerprintJsFiles = config.fingerprintJsFiles;
       this.diagnosticGroups = config.diagnosticGroups;
@@ -331,6 +339,10 @@ public final class Config {
       this.debug = debug;
     }
 
+    public void setPrettyPrint(boolean prettyPrint) {
+      this.prettyPrint = prettyPrint;
+    }
+
     public void setPrintInputDelimiter(boolean printInputDelimiter) {
       this.printInputDelimiter = printInputDelimiter;
     }
@@ -387,6 +399,7 @@ public final class Config {
           compilationMode,
           warningLevel,
           debug,
+          prettyPrint,
           printInputDelimiter,
           fingerprintJsFiles,
           diagnosticGroups,

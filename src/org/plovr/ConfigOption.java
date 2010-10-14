@@ -137,6 +137,19 @@ public enum ConfigOption {
     }
   }),
 
+  PRETTY_PRINT("pretty-print", new ConfigUpdater() {
+    @Override
+    public void apply(boolean prettyPrint, Config.Builder builder) {
+      builder.setPrettyPrint(prettyPrint);
+    }
+
+    @Override
+    public void update(String prettyPrintParam, Config.Builder builder) {
+      boolean prettyPrint = Boolean.valueOf(prettyPrintParam);
+      builder.setPrettyPrint(prettyPrint);
+    }
+  }),
+
   PRINT_INPUT_DELIMITER("print-input-delimiter", new ConfigUpdater() {
     @Override
     public void apply(boolean printInputDelimiter, Config.Builder builder) {
