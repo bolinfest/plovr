@@ -1,11 +1,6 @@
 {
   "id": "module-example",
   "paths": ".",
-  "inputs": [
-    "app_init.js",
-    "api_init.js",
-    "settings_init.js"
-  ],
   "mode": "ADVANCED",
 
   "modules": {
