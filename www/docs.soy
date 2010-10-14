@@ -72,7 +72,7 @@ for the configuration with the specified id:
 
 <pre>http://localhost:9810/compile?id=sample</pre>
 
-This means that when developing your web application, you will need a
+This means that when developing your web application, you will need a{sp}
 <code>&lt;script></code> tag whose <code>src</code> attribute refers to the
 plovr URL that is shown above.
 This means that you will need to add logic to your web server to load JavaScript
@@ -84,8 +84,8 @@ in integrating plovr to your development process.
 <p>
 Once plovr is up and running, it will discover new JavaScript and Soy files that
 are added under directories specified by <code>paths</code> in the config file.
-For this reason, it is often easiest to declare a single file for
-<code>inputs</code>, such as <code>main.js</code>, and add or remove
+For this reason, it is often easiest to declare a single file for{sp}
+<code>inputs</code>, such as <code>main.js</code>, and add or remove{sp}
 <code>goog.require()</code> and <code>goog.provide()</code> statements as
 appropriate to transitively include the desired libraries. This avoids the need
 to restart plovr and makes the insertion point for your application unambiguous.
@@ -138,7 +138,7 @@ and <code>level</code>, respectively. The possible string values for
   <li><code>ADVANCED</code> Loads the JavaScript as compiled with
       <code>ADVANCED_OPTIMIZATIONS</code> enabled.
 </ul>
-The possible string values for <code>level</code> are
+The possible string values for <code>level</code> are{sp}
 <code>QUIET</code>, <code>DEFAULT</code>, and <code>VERBOSE</code>,
 which correspond exactly to the warning levels supported by the
 Closure Compiler. Therefore, to change <code>config.js</code> to use the most
@@ -155,7 +155,7 @@ follows:
 }</pre>
 {/literal}
 
-It is also possible to set the level for various types of Compiler checks with the
+It is also possible to set the level for various types of Compiler checks with the{sp}
 <code>checks</code> property. Many of these checks are explained on the{sp}
 <a href="http://code.google.com/p/closure-compiler/wiki/Warnings">Closure
 Compiler wiki</a>, though the <code>DIAGNOSTIC_GROUP_NAMES</code> variable in{sp}
