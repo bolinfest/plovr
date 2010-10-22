@@ -11,7 +11,7 @@ import com.google.common.io.Files;
  *
  * @author bolinfest@gmail.com (Michael Bolin)
  */
-class JsSourceFile extends LocalFileJsInput {
+public class JsSourceFile extends LocalFileJsInput {
 
   JsSourceFile(String name, File source) {
     super(name, source);

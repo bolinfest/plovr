@@ -16,7 +16,7 @@ import com.google.common.io.LineReader;
  *
  * @author bolinfest@gmail.com (Michael Bolin)
  */
-abstract class AbstractJsInput implements JsInput {
+public abstract class AbstractJsInput implements JsInput {
 
   private static final Pattern GOOG_PROVIDE_OR_REQUIRE =
       Pattern.compile("\\s*goog\\.(provide|require)\\(['\"]([\\w\\.]+)['\"]\\);?.*");

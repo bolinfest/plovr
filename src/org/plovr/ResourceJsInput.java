@@ -13,7 +13,7 @@ import com.google.common.io.LineReader;
  *
  * @author bolinfest@gmail.com (Michael Bolin)
  */
-class ResourceJsInput extends AbstractJsInput {
+public class ResourceJsInput extends AbstractJsInput {
 
   private static final Logger logger = Logger.getLogger("org.plovr.ResourceJsInput");
 

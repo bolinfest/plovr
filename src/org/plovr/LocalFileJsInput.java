@@ -16,7 +16,7 @@ import com.google.common.collect.Maps;
  *
  * @author bolinfest@gmail.com (Michael Bolin)
  */
-abstract class LocalFileJsInput extends AbstractJsInput {
+public abstract class LocalFileJsInput extends AbstractJsInput {
 
   private static final Logger logger = Logger.getLogger(
       LocalFileJsInput.class.getName());
