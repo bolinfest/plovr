@@ -77,6 +77,7 @@ blockquote {
 
 .secondary-heading {
   color: white;
+  padding: 3px 0;
   
   -moz-border-radius-bottomleft: 6px;
   -webkit-border-bottom-left-radius: 5px;
@@ -87,14 +88,13 @@ blockquote {
 
 .secondary-navigation-links {
   margin: 0;
-  padding-left: 10px;
-  padding-bottom: 4px;
+  padding: 0;
 }
 
 .secondary-navigation-links li {
   color: white;
   display: inline;
-  padding: 0 10px 0 0;
+  padding-left: 10px;
   font-size: 16px;
 }
 

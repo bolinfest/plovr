@@ -197,7 +197,7 @@
 
   <target name="serve-prod-documentation"
           description="runs the soyweb server on plovr.com to serve the docs"
-  	      depends="generate-options-documentation, javadoc">
+  	      depends="generate-options-documentation, javadoc, jar">
   	<mkdir dir="${build.dir.www}" />
   	<copy todir="${build.dir.www}">
   	  <fileset dir="${www.dir}" includes="**/*" />
