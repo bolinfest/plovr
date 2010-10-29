@@ -3,6 +3,8 @@
 /**
  * @param title
  * @param selected
+ * @param? secondaryHeading
+ * @param? secondarySelected
  */
 {template .header}
 <!doctype html>
@@ -14,6 +16,10 @@
 <body>
 
 <div class="heading">
+
+{if $secondaryHeading}<div class="heading-backdrop">{/if}
+
+<div class="main-heading">
   <h1>
     plovr: a Closure build tool
   </h1>
@@ -26,11 +32,6 @@
     {call .headerItem}
       {param text: 'Docs' /}
       {param href: 'docs.html' /}
-      {param selected: $selected /}
-    {/call}
-    {call .headerItem}
-      {param text: 'Options' /}
-      {param href: 'options.html' /}
       {param selected: $selected /}
     {/call}
     {call .headerItem}
@@ -47,12 +48,43 @@
   <div style="clear: both"></div>
 </div>
 
+{if $secondaryHeading}</div>{/if}
+
+{if $secondaryHeading}
+<div class="secondary-heading">
+  <ul class="secondary-navigation-links">
+    {call .headerItem}
+      {param text: 'Overview' /}
+      {param href: 'docs.html' /}
+      {param selected: $secondarySelected /}
+    {/call}
+    {call .headerItem}
+      {param text: 'Options' /}
+      {param href: 'options.html' /}
+      {param selected: $secondarySelected /}
+    {/call}
+    {call .headerItem}
+      {param text: 'Modules' /}
+      {param href: 'modules.html' /}
+      {param selected: $secondarySelected /}
+    {/call}
+    {call .headerItem}
+      {param text: 'API' /}
+      {param href: './javadoc/' /}
+      {param selected: false /}
+    {/call}
+  </ul>
+</div>
+{/if}
+
+</div>
+
 {/template}
 
 /**
  * @param text
  * @param href
- * @param selected 
+ * @param selected
  */
 {template .headerItem}
 <li>

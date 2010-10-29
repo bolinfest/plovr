@@ -11,8 +11,8 @@
   <property name="lib.dir" value="${basedir}/lib" />
   <property name="build.dir" value="${basedir}/build" />
   <property name="classes.dir" value="${build.dir}/classes" />
-  <property name="www.build.dir" value="${build.dir}/www" />
-	<property name="javadoc.dir" value="${www.build.dir}/javadoc" />
+  <property name="build.dir.www" value="${build.dir}/www" />
+	<property name="javadoc.dir" value="${build.dir.www}/javadoc" />
 
   <!-- In order to build the jar, each of the Closure Tools must be          -->
   <!-- checked out in a parallel directory.                                  -->
@@ -158,10 +158,10 @@
 	<target name="generate-options-documentation"
 	        description="generates the documentation for ConfigOption.java"
 		      depends="compile">
-		<mkdir dir="${build.dir}/www" />
+		<mkdir dir="${build.dir.www}" />
     <java fork="true"
     	    classname="org.plovr.ConfigOptionDocumentationGenerator"
-    	    output="${build.dir}/www/options.html"
+    	    output="${build.dir.www}/options.html"
     	    >
       <classpath refid="plovr.classpath"></classpath>
    </java>
@@ -197,14 +197,14 @@
 
   <target name="serve-prod-documentation"
           description="runs the soyweb server on plovr.com to serve the docs"
-  	      depends="generate-options-documentation">
-  	<mkdir dir="${build.dir}/www" />
-  	<copy todir="${build.dir}/www">
+  	      depends="generate-options-documentation, javadoc">
+  	<mkdir dir="${build.dir.www}" />
+  	<copy todir="${build.dir.www}">
   	  <fileset dir="${www.dir}" includes="**/*" />
   	</copy>
     <java jar="${build.dir}/plovr.jar" fork="true">
       <arg value="soyweb" />
-      <arg line="--dir ${build.dir}/www" />
+      <arg line="--dir ${build.dir.www}" />
       <arg line="--static" />
       <arg line="--globals ${basedir}/prod-globals.js" />
     </java>

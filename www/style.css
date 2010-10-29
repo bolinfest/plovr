@@ -1,3 +1,8 @@
+html {
+  /* Always show scrollbar to prevent the horizontal bouncing when navigating */
+  overflow: scroll;
+}
+
 body {
   margin: 0 auto 20px;
   width: 800px;
@@ -30,7 +35,11 @@ blockquote {
 }
 
 .heading {
-  margin: 0 0 8px;
+  margin-bottom: 8px;
+}
+
+.main-heading {
+  color: black;
   padding: 6px 8px 6px;
   background: -webkit-gradient(linear, left top, left bottom, from(#EEE), to(#CCC));
   background: -moz-linear-gradient(top,  #EEE,  #CCC);
@@ -62,6 +71,37 @@ blockquote {
   font-weight: bold;
 }
 
+.heading-backdrop, .secondary-heading {
+  background-color: #00A8A8;  
+}
+
+.secondary-heading {
+  color: white;
+  
+  -moz-border-radius-bottomleft: 6px;
+  -webkit-border-bottom-left-radius: 5px;
+
+  -moz-border-radius-bottomright: 6px;
+  -webkit-border-bottom-right-radius: 5px;  
+}
+
+.secondary-navigation-links {
+  margin: 0;
+  padding-left: 10px;
+  padding-bottom: 4px;
+}
+
+.secondary-navigation-links li {
+  color: white;
+  display: inline;
+  padding: 0 10px 0 0;
+  font-size: 16px;
+}
+
+.secondary-navigation-links li a {
+  color: white;
+}
+
 .caption {
   margin: 0;
   font-style: italic;  
@@ -79,4 +119,9 @@ blockquote {
 
 .term {
   font-style: italic;
+}
+
+.warning {
+  color: #A00;
+  font-weight: bold;
 }
