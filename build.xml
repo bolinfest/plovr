@@ -12,6 +12,7 @@
   <property name="build.dir" value="${basedir}/build" />
   <property name="classes.dir" value="${build.dir}/classes" />
   <property name="www.build.dir" value="${build.dir}/www" />
+	<property name="javadoc.dir" value="${www.build.dir}/javadoc" />
 
   <!-- In order to build the jar, each of the Closure Tools must be          -->
   <!-- checked out in a parallel directory.                                  -->
@@ -176,6 +177,22 @@
       <arg line="--dir ${www.dir}" />
       <arg line="--globals ${basedir}/www-globals.js" />
     </java>
+  </target>
+
+	<target name="javadoc">
+		<mkdir dir="${javadoc.dir}" />
+		<javadoc sourcepath="${src.dir}"
+		         destdir="${javadoc.dir}"
+             protected="true"
+             windowtitle="plovr"
+			       classpathref="plovr.classpath"
+             >
+      <link href="http://download.oracle.com/javase/6/docs/api/" />
+			<link href="http://guava-libraries.googlecode.com/svn/trunk/javadoc/" />
+			<link href="http://google-gson.googlecode.com/svn/tags/1.5/docs/javadocs/" />
+			<link href="http://closure-compiler.googlecode.com/svn/trunk/javadoc/" />
+			<link href="http://closure-templates.googlecode.com/svn/trunk/javadoc-complete/" />
+		</javadoc>
   </target>
 
   <target name="serve-prod-documentation"
