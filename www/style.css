@@ -76,3 +76,7 @@ blockquote {
   height: 330px;
   border: 1px solid #CCC;
 }
+
+.term {
+  font-style: italic;
+}

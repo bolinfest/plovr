@@ -1,0 +1,83 @@
+{namespace plovr.modules}
+
+/***/
+{template .base}
+
+{call plovr.header}
+  {param title: 'plovr Modules' /}
+  {param selected: 'modules.html' /}
+{/call}
+
+<h2>Why Use Modules?</h2>
+
+Ideally, when a user enters your webapp, it should only load the JavaScript
+the user needs to support the functionality that he is trying to access.
+Loading less JavaScript makes your application start up faster because it
+reduces the time it takes to download the code (though this is less of an issue
+if the code is loaded from the browser's cache) as well as the time it takes the
+browser's JavaScript engine to parse and execute the code.
+
+<p>
+
+For example, when logging into a web-based mail client, it is likely that the
+first thing the user would like to do is check whether he has new email, so
+it is important that any JavaScript code that is required to display the inbox
+is loaded as soon as possible. By comparison, it is far less likely that the
+first thing the user will do is change his email preferences, so the JavaScript
+code that is required to display the settings UI can be loaded sometime in the
+future.
+
+<p>
+
+One way to address this problem is to have a separate web page with its own URL
+for the settings UI. A user who wants to change his preferences will have to
+navigate to that page, and the page will contain a <code>&lt;script</code> tag
+that loads only the JavaScript needed to support the settings UI.
+Although that would load the minimal amount of JavaScript code for the settings
+page, it would likely require the user to re-download much of the JavaScript
+code that was already loaded for the inbox page. Further, each transition
+between the inbox and the settings pages would entail a full page reload, making
+such navigation slow.
+
+<p>
+
+In an Ajax application, it makes more sense to dynamically load the additional
+JavaScript needed for the settings UI and to draw the UI into the DOM of the
+current page. This is faster because it eliminates the overhead of a full page
+navigation and entails loading less new JavaScript code. Once the code for the
+settings UI has been loaded, it need not be loaded again during the lifetime of
+the webapp because it is already in memory (though the data displayed in the
+settings UI may be re-fetched when the user returns to the settings UI to
+ensure that the user is seeing an up-to-date view of his data).
+
+<p>
+
+The application may wait until the user tries to access the settings UI before
+trying to load the code for it. (This is often the simplest solution.) Another
+approach is to try to pre-fetch the code for the settings UI while the user is
+idle so that if he eventually decides to navigate to settings, his initial visit
+to the settings UI will be fast because he will not have to wait for the
+settings JavaScript to be downloaded and executed. Although this approach yields
+a better user experience, it introduces the complexity of trying to determine
+when the user is idle as well as potentially wasting network resources,
+downloading JavaScript code that is never used. Deciding whether lazy or eager
+loading is the right solution for your webapp depends on the behavior of your
+users, so it is prudent to collect data on your users' navigation activity to
+decide which solution to implement.
+
+// You may discover that some users would benefit more from lazy loading while
+// others would have the best experience with eager loading. In such cases, you
+// may want to go so far as to provide custom loading behavior for each user.
+
+<h2>Leveraging Modules in Closure</h2>
+
+In Closure, each chunk of dynamically loaded JavaScript code is called a
+{sp}<span class="term">module</span>. Modules are created as part of compilation
+with the Closure Compiler. Recall that the Compiler takes a list of
+JavaScript input files in order such that no input has any forward dependencies.
+This list can be partitioned into modules  
+
+
+{call plovr.footer /}
+
+{/template}
