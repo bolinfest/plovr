@@ -110,7 +110,18 @@ public final class Compilation {
 
   public String getCompiledCode() {
     Preconditions.checkState(hasResult(), "Code has not been compiled yet");
-    return compiler.toSource();
+    String compiledCode = compiler.toSource();
+    String outputWrapper = config.getOutputWrapper();
+    if (outputWrapper != null) {
+      String outputWrapperMarker = config.getOutputWrapperMarker();
+      int pos = outputWrapper.indexOf(outputWrapperMarker);
+      if (pos >= 0) {
+        compiledCode = outputWrapper.substring(0, pos) +
+            compiledCode +
+            outputWrapper.substring(pos + outputWrapperMarker.length());
+      }
+    }
+    return compiledCode;
   }
 
   public String getRootModuleName() {

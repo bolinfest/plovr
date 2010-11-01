@@ -173,6 +173,14 @@ public enum ConfigOption {
       return true;
     }
   }),
+
+  OUTPUT_WRAPPER("output-wrapper", new ConfigUpdater() {
+    @Override
+    public void apply(String outputWrapper, Config.Builder builder) {
+      builder.setOutputWrapper(outputWrapper);
+    }
+  }),
+
   FINGERPRINT("fingerprint", new ConfigUpdater() {
     @Override
     public void apply(boolean fingerprint, Config.Builder builder) {

@@ -45,6 +45,8 @@ public final class Config {
 
   private final boolean printInputDelimiter;
 
+  private final String outputWrapper;
+
   private final boolean fingerprintJsFiles;
 
   private final Map<DiagnosticGroup, CheckLevel> diagnosticGroups;
@@ -66,6 +68,7 @@ public final class Config {
       boolean debug,
       boolean prettyPrint,
       boolean printInputDelimiter,
+      @Nullable String outputWrapper,
       boolean fingerprintJsFiles,
       Map<DiagnosticGroup, CheckLevel> diagnosticGroups,
       Map<String, JsonPrimitive> defines) {
@@ -79,6 +82,7 @@ public final class Config {
     this.debug = debug;
     this.prettyPrint = prettyPrint;
     this.printInputDelimiter = printInputDelimiter;
+    this.outputWrapper = outputWrapper;
     this.fingerprintJsFiles = fingerprintJsFiles;
     this.diagnosticGroups = diagnosticGroups;
     this.defines = ImmutableMap.copyOf(defines);
@@ -124,6 +128,20 @@ public final class Config {
 
   public WarningLevel getWarningLevel() {
     return warningLevel;
+  }
+
+  /**
+   * @return null if no output wrapper has been set
+   */
+  public String getOutputWrapper() {
+    return outputWrapper;
+  }
+
+  /**
+   * @return null if no output wrapper has been set
+   */
+  public String getOutputWrapperMarker() {
+    return "%output%";
   }
 
   public boolean shouldFingerprintJsFiles() {
@@ -233,6 +251,8 @@ public final class Config {
 
     private boolean printInputDelimiter = false;
 
+    private String outputWrapper = null;
+
     private boolean fingerprintJsFiles = false;
 
     private Map<DiagnosticGroup, CheckLevel> diagnosticGroups = null;
@@ -271,6 +291,7 @@ public final class Config {
       this.debug = config.debug;
       this.prettyPrint = config.prettyPrint;
       this.printInputDelimiter = config.printInputDelimiter;
+      this.outputWrapper = config.outputWrapper;
       this.fingerprintJsFiles = config.fingerprintJsFiles;
       this.diagnosticGroups = config.diagnosticGroups;
       this.defines = Maps.newHashMap(config.defines);
@@ -348,6 +369,10 @@ public final class Config {
       this.printInputDelimiter = printInputDelimiter;
     }
 
+    public void setOutputWrapper(String outputWrapper) {
+      this.outputWrapper = outputWrapper;
+    }
+
     public void setFingerprintJsFiles(boolean fingerprint) {
       this.fingerprintJsFiles = fingerprint;
     }
@@ -402,6 +427,7 @@ public final class Config {
           debug,
           prettyPrint,
           printInputDelimiter,
+          outputWrapper,
           fingerprintJsFiles,
           diagnosticGroups,
           defines);
