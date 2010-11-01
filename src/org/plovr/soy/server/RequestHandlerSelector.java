@@ -33,6 +33,7 @@ public class RequestHandlerSelector implements HttpHandler {
     ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
     // TODO(bolinfest): Read this out of a config file.
     builder.put(".css", "text/css");
+    builder.put(".gif", "image/gif");
     builder.put(".html", "text/html");
     builder.put(".js", "text/javascript");
     builder.put(".png", "image/png");
