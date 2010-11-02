@@ -7,6 +7,6 @@
 	<classpathentry kind="lib" path="lib/junit-4.8.2.jar"/>
 	<classpathentry kind="lib" path="lib/guava-r06.jar" sourcepath="/guava/src"/>
 	<classpathentry kind="lib" path="lib/soy-r17-modified.jar" sourcepath="/closure-templates/build/genfiles"/>
-	<classpathentry kind="lib" path="lib/closure-compiler-r485.jar"/>
+	<classpathentry kind="lib" path="lib/closure-compiler-r530.jar"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>
