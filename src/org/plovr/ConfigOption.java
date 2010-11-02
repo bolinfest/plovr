@@ -292,7 +292,7 @@ public enum ConfigOption {
     }
   }),
 
-  TYPE_PREFIXES_TO_STRIP("types-prefixes-to-strip", new ConfigUpdater() {
+  TYPE_PREFIXES_TO_STRIP("type-prefixes-to-strip", new ConfigUpdater() {
     @Override
     public void apply(String type, Config.Builder builder) {
       JsonArray types = new JsonArray();
