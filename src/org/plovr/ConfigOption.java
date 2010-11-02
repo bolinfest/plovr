@@ -2,9 +2,11 @@ package org.plovr;
 
 import java.io.File;
 import java.util.Map;
+import java.util.Set;
 
 import org.plovr.ModuleConfig.BadDependencyTreeException;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -200,7 +202,7 @@ public enum ConfigOption {
     }
   }),
 
-  MODULE_OUTPUT_PATH("module_output_path", new ConfigUpdater() {
+  MODULE_OUTPUT_PATH("module-output-path", new ConfigUpdater() {
     @Override
     public void apply(String outputPath, Config.Builder builder) {
       ModuleConfig.Builder moduleConfigBuilder = builder.getModuleConfigBuilder();
@@ -208,7 +210,7 @@ public enum ConfigOption {
     }
   }),
 
-  MODULE_PRODUCTION_URI("module_production_uri", new ConfigUpdater() {
+  MODULE_PRODUCTION_URI("module-production-uri", new ConfigUpdater() {
     @Override
     public void apply(String productionUri, Config.Builder builder) {
       ModuleConfig.Builder moduleConfigBuilder = builder.getModuleConfigBuilder();
@@ -224,7 +226,7 @@ public enum ConfigOption {
    */
   // TODO(bolinfest): A better approach may be to fix the source map, in which
   // case this option could be eliminated.
-  MODULE_INFO_PATH("module_info_path",
+  MODULE_INFO_PATH("module-info-path",
       new ConfigUpdater() {
     @Override
     public void apply(String moduleInfoPath, Config.Builder builder) {
@@ -268,6 +270,71 @@ public enum ConfigOption {
     }
   }),
 
+  NAME_SUFFIXES_TO_STRIP("name-suffixes-to-strip", new ConfigUpdater() {
+    @Override
+    public void apply(String suffix, Config.Builder builder) {
+      JsonArray suffixes = new JsonArray();
+      suffixes.add(new JsonPrimitive(suffix));
+      apply(suffixes, builder);
+    }
+
+    @Override
+    public void apply(JsonArray suffixes, Config.Builder builder) {
+      ImmutableSet.Builder<String> suffixesBuilder = ImmutableSet.builder();
+      for (JsonElement item : suffixes) {
+        String suffix = GsonUtil.stringOrNull(item);
+        if (suffix != null) {
+          suffixesBuilder.add(suffix);
+        }
+      }
+
+      builder.setStripNameSuffixes(suffixesBuilder.build());
+    }
+  }),
+
+  TYPE_PREFIXES_TO_STRIP("types-prefixes-to-strip", new ConfigUpdater() {
+    @Override
+    public void apply(String type, Config.Builder builder) {
+      JsonArray types = new JsonArray();
+      types.add(new JsonPrimitive(type));
+      apply(types, builder);
+    }
+
+    @Override
+    public void apply(JsonArray types, Config.Builder builder) {
+      ImmutableSet.Builder<String> typesBuilder = ImmutableSet.builder();
+      for (JsonElement item : types) {
+        String type = GsonUtil.stringOrNull(item);
+        if (type != null) {
+          typesBuilder.add(type);
+        }
+      }
+
+      builder.setStripTypePrefixes(typesBuilder.build());
+    }
+  }),
+
+  ID_GENERATORS("id-generators", new ConfigUpdater() {
+    @Override
+    public void apply(String idGenerator, Config.Builder builder) {
+      JsonArray idGenerators = new JsonArray();
+      idGenerators.add(new JsonPrimitive(idGenerator));
+      apply(idGenerators, builder);
+    }
+
+    @Override
+    public void apply(JsonArray idGenerators, Config.Builder builder) {
+      ImmutableSet.Builder<String> idGeneratorsBuilder = ImmutableSet.builder();
+      for (JsonElement item : idGenerators) {
+        String idGenerator = GsonUtil.stringOrNull(item);
+        if (idGenerator != null) {
+          idGeneratorsBuilder.add(idGenerator);
+        }
+      }
+
+      builder.setIdGenerators(idGeneratorsBuilder.build());
+    }
+  }),
   ;
 
   private static class ConfigUpdater {

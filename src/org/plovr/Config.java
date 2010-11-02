@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
@@ -14,6 +15,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.gson.JsonPrimitive;
@@ -53,6 +55,12 @@ public final class Config {
 
   private final Map<String, JsonPrimitive> defines;
 
+  private final Set<String> stripNameSuffixes;
+
+  private final Set<String> stripTypePrefixes;
+
+  private final Set<String> idGenerators;
+
   /**
    * @param id Unique identifier for the configuration. This is used as an
    *        argument to the &lt;script> tag that loads the compiled code.
@@ -71,7 +79,10 @@ public final class Config {
       @Nullable String outputWrapper,
       boolean fingerprintJsFiles,
       Map<DiagnosticGroup, CheckLevel> diagnosticGroups,
-      Map<String, JsonPrimitive> defines) {
+      Map<String, JsonPrimitive> defines,
+      Set<String> stripNameSuffixes,
+      Set<String> stripTypePrefixes,
+      Set<String> idGenerators) {
     Preconditions.checkNotNull(defines);
 
     this.id = id;
@@ -86,6 +97,9 @@ public final class Config {
     this.fingerprintJsFiles = fingerprintJsFiles;
     this.diagnosticGroups = diagnosticGroups;
     this.defines = ImmutableMap.copyOf(defines);
+    this.stripNameSuffixes = ImmutableSet.copyOf(stripNameSuffixes);
+    this.stripTypePrefixes = ImmutableSet.copyOf(stripTypePrefixes);
+    this.idGenerators = ImmutableSet.copyOf(idGenerators);
   }
 
   public static Builder builder(File relativePathBase) {
@@ -186,6 +200,10 @@ public final class Config {
       }
     }
 
+    options.stripNameSuffixes = stripNameSuffixes;
+    options.stripTypePrefixes = stripTypePrefixes;
+    options.setIdGenerators(idGenerators);
+
     if (moduleConfig != null) {
       options.crossModuleCodeMotion = true;
       options.crossModuleMethodMotion = true;
@@ -259,6 +277,12 @@ public final class Config {
 
     private ModuleConfig.Builder moduleConfigBuilder = null;
 
+    private Set<String> stripNameSuffixes = ImmutableSet.of();
+
+    private Set<String> stripTypePrefixes = ImmutableSet.of();
+
+    private Set<String> idGenerators = ImmutableSet.of();
+
     private final Map<String, JsonPrimitive> defines;
 
     /**
@@ -278,6 +302,7 @@ public final class Config {
       defines = Maps.newHashMap();
     }
 
+    /** Effectively a copy constructor. */
     private Builder(Config config) {
       Preconditions.checkNotNull(config);
       this.relativePathBase = null;
@@ -294,6 +319,9 @@ public final class Config {
       this.outputWrapper = config.outputWrapper;
       this.fingerprintJsFiles = config.fingerprintJsFiles;
       this.diagnosticGroups = config.diagnosticGroups;
+      this.stripNameSuffixes = config.stripNameSuffixes;
+      this.stripTypePrefixes = config.stripTypePrefixes;
+      this.idGenerators = config.idGenerators;
       this.defines = Maps.newHashMap(config.defines);
     }
 
@@ -385,6 +413,18 @@ public final class Config {
       defines.put(name, primitive);
     }
 
+    public void setStripNameSuffixes(Set<String> stripNameSuffixes) {
+      this.stripNameSuffixes = ImmutableSet.copyOf(stripNameSuffixes);
+    }
+
+    public void setStripTypePrefixes(Set<String> stripTypePrefixes) {
+      this.stripTypePrefixes = ImmutableSet.copyOf(stripTypePrefixes);
+    }
+
+    public void setIdGenerators(Set<String> idGenerators) {
+      this.idGenerators = ImmutableSet.copyOf(idGenerators);
+    }
+
     public Config build() {
       File closureLibraryDirectory = pathToClosureLibrary != null
           ? new File(pathToClosureLibrary)
@@ -430,7 +470,10 @@ public final class Config {
           outputWrapper,
           fingerprintJsFiles,
           diagnosticGroups,
-          defines);
+          defines,
+          stripNameSuffixes,
+          stripTypePrefixes,
+          idGenerators);
 
       return config;
     }
