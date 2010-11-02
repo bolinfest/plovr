@@ -61,6 +61,10 @@ public final class Config {
 
   private final Set<String> idGenerators;
 
+  private final boolean ambiguateProperties;
+
+  private final boolean disambiguateProperties;
+
   /**
    * @param id Unique identifier for the configuration. This is used as an
    *        argument to the &lt;script> tag that loads the compiled code.
@@ -82,7 +86,9 @@ public final class Config {
       Map<String, JsonPrimitive> defines,
       Set<String> stripNameSuffixes,
       Set<String> stripTypePrefixes,
-      Set<String> idGenerators) {
+      Set<String> idGenerators,
+      boolean ambiguateProperties,
+      boolean disambiguateProperties) {
     Preconditions.checkNotNull(defines);
 
     this.id = id;
@@ -100,6 +106,8 @@ public final class Config {
     this.stripNameSuffixes = ImmutableSet.copyOf(stripNameSuffixes);
     this.stripTypePrefixes = ImmutableSet.copyOf(stripTypePrefixes);
     this.idGenerators = ImmutableSet.copyOf(idGenerators);
+    this.ambiguateProperties = ambiguateProperties;
+    this.disambiguateProperties = disambiguateProperties;
   }
 
   public static Builder builder(File relativePathBase) {
@@ -203,6 +211,8 @@ public final class Config {
     options.stripNameSuffixes = stripNameSuffixes;
     options.stripTypePrefixes = stripTypePrefixes;
     options.setIdGenerators(idGenerators);
+    options.ambiguateProperties = ambiguateProperties;
+    options.disambiguateProperties = disambiguateProperties;
 
     if (moduleConfig != null) {
       options.crossModuleCodeMotion = true;
@@ -283,6 +293,10 @@ public final class Config {
 
     private Set<String> idGenerators = ImmutableSet.of();
 
+    private boolean ambiguateProperties;
+
+    private boolean disambiguateProperties;
+
     private final Map<String, JsonPrimitive> defines;
 
     /**
@@ -322,6 +336,8 @@ public final class Config {
       this.stripNameSuffixes = config.stripNameSuffixes;
       this.stripTypePrefixes = config.stripTypePrefixes;
       this.idGenerators = config.idGenerators;
+      this.ambiguateProperties = config.ambiguateProperties;
+      this.disambiguateProperties = config.disambiguateProperties;
       this.defines = Maps.newHashMap(config.defines);
     }
 
@@ -425,6 +441,14 @@ public final class Config {
       this.idGenerators = ImmutableSet.copyOf(idGenerators);
     }
 
+    public void setAmbiguateProperties(boolean ambiguateProperties) {
+      this.ambiguateProperties = ambiguateProperties;
+    }
+
+    public void setDisambiguateProperties(boolean disambiguateProperties) {
+      this.disambiguateProperties = disambiguateProperties;
+    }
+
     public Config build() {
       File closureLibraryDirectory = pathToClosureLibrary != null
           ? new File(pathToClosureLibrary)
@@ -473,7 +497,9 @@ public final class Config {
           defines,
           stripNameSuffixes,
           stripTypePrefixes,
-          idGenerators);
+          idGenerators,
+          ambiguateProperties,
+          disambiguateProperties);
 
       return config;
     }

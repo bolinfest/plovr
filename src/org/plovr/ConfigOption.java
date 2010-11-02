@@ -335,6 +335,20 @@ public enum ConfigOption {
       builder.setIdGenerators(idGeneratorsBuilder.build());
     }
   }),
+
+  AMBIGUATE_PROPERTIES("ambiguate-properties", new ConfigUpdater() {
+    @Override
+    public void apply(boolean ambiguateProperties, Config.Builder builder) {
+      builder.setAmbiguateProperties(ambiguateProperties);
+    }
+  }),
+
+  DISAMBIGUATE_PROPERTIES("disambiguate-properties", new ConfigUpdater() {
+    @Override
+    public void apply(boolean disambiguateProperties, Config.Builder builder) {
+      builder.setDisambiguateProperties(disambiguateProperties);
+    }
+  }),
   ;
 
   private static class ConfigUpdater {
