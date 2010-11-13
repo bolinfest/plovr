@@ -106,7 +106,7 @@ public final class ModulesHandler extends AbstractGetHandler {
     try {
       moduleToInputs = moduleConfig
           .partitionInputsIntoModules(config.getManifest());
-    } catch (MissingProvideException e) {
+    } catch (CompilationException e) {
       throw new RuntimeException(e);
     }
     Pair<String,Dimension> svg = generateSvg(

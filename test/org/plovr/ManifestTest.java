@@ -1,6 +1,7 @@
 package org.plovr;
 
 import java.io.File;
+import java.util.Collection;
 import java.util.List;
 
 import junit.framework.TestCase;
@@ -26,7 +27,16 @@ public class ManifestTest extends TestCase {
       }
   };
 
-  public void testSimpleManifest() throws MissingProvideException {
+  /** Converts a {@link JsInput} to its name. */
+  private static Function<JsInput, String> JS_INPUT_TO_NAME =
+    new Function<JsInput, String>() {
+      @Override
+      public String apply(JsInput jsInput) {
+        return jsInput.getName();
+      }
+  };
+
+  public void testSimpleManifest() throws CompilationException {
     File closureLibraryDirectory = new File("../closure-library/closure/goog/");
 
     final List<File> dependencies = ImmutableList.of();
@@ -75,5 +85,53 @@ public class ManifestTest extends TestCase {
         }
         );
     assertEquals(expectedNames, Lists.transform(inputs, JS_SOURCE_FILE_TO_NAME));
+  }
+
+  public void testCompilationOrder() throws CompilationException {
+    File closureLibraryDirectory = new File("../closure-library/closure/goog/");
+
+    final List<File> dependencies = ImmutableList.of();
+    final List<File> externs = ImmutableList.of();
+    final boolean customExternsOnly = false;
+
+    // Set up a set of files so that there's a dependency loop of
+    // a -> b -> c -> a
+    DummyJsInput a, b, c;
+    a = new DummyJsInput("a", "", ImmutableList.of("a"), ImmutableList.of("b"));
+    b = new DummyJsInput("b", "", ImmutableList.of("b"), ImmutableList.of("c"));
+    c = new DummyJsInput("c", "", ImmutableList.of("c"), ImmutableList.of("a"));
+
+    Manifest manifest = new Manifest(
+        closureLibraryDirectory,
+        dependencies,
+        ImmutableList.<JsInput>of(a, b, c),
+        externs,
+        customExternsOnly);
+
+    List<JsInput> order;
+
+    try {
+      order = manifest.getInputsInCompilationOrder();
+      fail("Got order for unorderable inputs: " + order);
+    } catch (CircularDependencyException e) {
+      Collection<JsInput> circularDepdenency = e.getCircularDependency();
+      assertEquals(ImmutableList.copyOf(circularDepdenency),
+          ImmutableList.of(a, b, c));
+    }
+
+    // Now adjust c so that it no longer creates a loop
+    c = new DummyJsInput("c", "", ImmutableList.of("c"), null);
+
+    manifest = new Manifest(
+        closureLibraryDirectory,
+        dependencies,
+        ImmutableList.<JsInput>of(a, b, c),
+        externs,
+        customExternsOnly);
+
+    order = manifest.getInputsInCompilationOrder();
+
+    List<String> expectedNames = ImmutableList.of("base.js", "c", "b", "a");
+    assertEquals(expectedNames, Lists.transform(order, JS_INPUT_TO_NAME));
   }
 }

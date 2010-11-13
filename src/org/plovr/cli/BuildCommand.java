@@ -9,12 +9,11 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.plovr.CheckedSoySyntaxException;
 import org.plovr.Compilation;
 import org.plovr.CompileRequestHandler;
 import org.plovr.Config;
 import org.plovr.ConfigParser;
-import org.plovr.MissingProvideException;
+import org.plovr.CompilationException;
 import org.plovr.ModuleConfig;
 
 import com.google.common.base.Function;
@@ -47,10 +46,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
     Compilation compilation;
     try {
       compilation = CompileRequestHandler.compile(config);
-    } catch (MissingProvideException e) {
-      e.printStackTrace();
-      compilation = null;
-    } catch (CheckedSoySyntaxException e) {
+    } catch (CompilationException e) {
       e.printStackTrace();
       compilation = null;
     }

@@ -34,7 +34,7 @@ public final class ListHandler extends AbstractGetHandler {
       try {
         moduleToInputs = moduleConfig
             .partitionInputsIntoModules(config.getManifest());
-      } catch (MissingProvideException e) {
+      } catch (CompilationException e) {
         throw new RuntimeException(e);
       }
 

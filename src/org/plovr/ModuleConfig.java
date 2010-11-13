@@ -144,9 +144,9 @@ public final class ModuleConfig {
    *          This list is most likely to be produced by
    *          {@link Manifest#getInputsInCompilationOrder()}.
    * @return
-   * @throws MissingProvideException
+   * @throws CompilationException
    */
-  List<JSModule> getModules(Manifest manifest) throws MissingProvideException {
+  List<JSModule> getModules(Manifest manifest) throws CompilationException {
     // There are some important requirements when using modules:
     // (1) Each input must appear in exactly one module.
     // (2) For each input in a module, each of its transitive dependencies
@@ -192,7 +192,7 @@ public final class ModuleConfig {
   }
 
   private List<JSModule> buildModulesUsingOption1(Manifest manifest)
-      throws MissingProvideException {
+      throws CompilationException {
     Map<String, List<JsInput>> moduleToInputs = partitionInputsIntoModules(manifest);
 
     // Convert each list of JsInput dependencies for each module into a
@@ -222,7 +222,7 @@ public final class ModuleConfig {
   }
 
   Map<String, List<JsInput>> partitionInputsIntoModules(Manifest manifest)
-      throws MissingProvideException {
+      throws CompilationException {
     List<JsInput> inputsInOrder = manifest.getInputsInCompilationOrder();
     JsInput baseJs = inputsInOrder.get(0);
     Preconditions.checkArgument(baseJs.equals(manifest.getBaseJs()),

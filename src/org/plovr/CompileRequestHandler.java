@@ -78,7 +78,7 @@ public final class CompileRequestHandler extends AbstractGetHandler {
       } else {
         compile(config, exchange, builder);
       }
-    } catch (MissingProvideException e) {
+    } catch (CompilationException e) {
       Preconditions.checkState(builder.length() == 0,
           "Should not write errors to builder if output has already been written");
       writeErrors(config, ImmutableList.of(e.createCompilationError()),
@@ -97,7 +97,7 @@ public final class CompileRequestHandler extends AbstractGetHandler {
   }
 
   public static Compilation compile(Config config)
-      throws MissingProvideException, CheckedSoySyntaxException {
+      throws CompilationException {
     try {
       Compilation compilation = config.getManifest().getCompilerArguments(
           config.getModuleConfig());
@@ -115,15 +115,11 @@ public final class CompileRequestHandler extends AbstractGetHandler {
    */
   private void compile(Config config,
       HttpExchange exchange,
-      Appendable appendable) throws IOException, MissingProvideException {
+      Appendable appendable) throws IOException, CompilationException {
     Compilation compilation;
     try {
       compilation = compile(config);
-    } catch (MissingProvideException e) {
-      writeErrors(config, ImmutableList.of(e.createCompilationError()),
-          appendable);
-      return;
-    } catch (CheckedSoySyntaxException e) {
+    } catch (CompilationException e) {
       writeErrors(config, ImmutableList.of(e.createCompilationError()),
           appendable);
       return;

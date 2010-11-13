@@ -11,7 +11,7 @@ import org.plovr.Config;
 import org.plovr.ConfigParser;
 import org.plovr.JsInput;
 import org.plovr.Manifest;
-import org.plovr.MissingProvideException;
+import org.plovr.CompilationException;
 
 import com.google.common.io.CharStreams;
 import com.google.common.io.InputSupplier;
@@ -50,7 +50,7 @@ public class ExtractCommand extends AbstractCommandRunner<ExtractCommandOptions>
     List<JsInput> inputs;
     try {
       inputs = manifest.getInputsInCompilationOrder();
-    } catch (MissingProvideException e) {
+    } catch (CompilationException e) {
       System.err.println(e.getMessage());
       return;
     }

@@ -57,9 +57,9 @@ public final class ConfigParser {
   /**
    * Takes a config file, performs the compilation, and prints the results to
    * standard out.
-   * @throws MissingProvideException
+   * @throws CompilationException
    */
-  public static void main(String[] args) throws IOException, MissingProvideException {
+  public static void main(String[] args) throws IOException, CompilationException {
     if (args.length != 1) {
       System.err.println("Must supply exactly one argument: the config file");
       System.exit(1);

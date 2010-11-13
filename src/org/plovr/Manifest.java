@@ -88,10 +88,10 @@ public final class Manifest {
    * @param moduleConfig
    * @return a new {@link Compilation} that reflects the configuration for
    *         this {@link Manifest}.
-   * @throws MissingProvideException
+   * @throws CompilationException
    */
   public Compilation getCompilerArguments(
-      @Nullable ModuleConfig moduleConfig) throws MissingProvideException {
+      @Nullable ModuleConfig moduleConfig) throws CompilationException {
     // Build up the list of externs to use in the compilation.
     ImmutableList.Builder<JSSourceFile> builder = ImmutableList.builder();
     if (!customExternsOnly) {
@@ -118,7 +118,7 @@ public final class Manifest {
     return ResourceReader.getDefaultExterns();
   }
 
-  public List<JsInput> getInputsInCompilationOrder() throws MissingProvideException {
+  public List<JsInput> getInputsInCompilationOrder() throws CompilationException {
     Set<JsInput> allDependencies = getAllDependencies();
 
     Map<String, JsInput> provideToSource = getProvideToSource(allDependencies);
@@ -176,9 +176,9 @@ public final class Manifest {
         // TODO(bolinfest): Create a utility method that just traverses the list
         // of inputs and dependencies as the ordering is not actually needed at
         // this point. Such a utility method would not throw a
-        // MissingProvideException.
+        // CompilationException.
         getInputsInCompilationOrder();
-      } catch (MissingProvideException e) {
+      } catch (CompilationException e) {
         throw new RuntimeException(e);
       }
     }
@@ -187,7 +187,22 @@ public final class Manifest {
 
   void buildDependencies(Map<String, JsInput> provideToSource,
       LinkedHashSet<JsInput> transitiveDependencies, JsInput input)
-      throws MissingProvideException {
+      throws CompilationException {
+    buildDependenciesInternal(provideToSource, transitiveDependencies,
+        new LinkedHashSet<JsInput>(), input);
+  }
+
+  void buildDependenciesInternal(Map<String, JsInput> provideToSource,
+      LinkedHashSet<JsInput> transitiveDependencies,
+      LinkedHashSet<JsInput> currentDependencyChain,
+      JsInput input)
+      throws CompilationException {
+    // Avoid infinite by going depth-first and never revisiting a node.
+    if (currentDependencyChain.contains(input)) {
+      throw new CircularDependencyException(input, currentDependencyChain);
+    }
+    currentDependencyChain.add(input);
+
     for (String require : input.getRequires()) {
       JsInput provide = provideToSource.get(require);
       if (provide == null) {
@@ -199,9 +214,12 @@ public final class Manifest {
       if (transitiveDependencies.contains(provide)) {
         continue;
       }
-      buildDependencies(provideToSource, transitiveDependencies, provide);
+      buildDependenciesInternal(provideToSource, transitiveDependencies,
+          currentDependencyChain, provide);
     }
     transitiveDependencies.add(input);
+
+    currentDependencyChain.remove(input);
   }
 
   private Set<JsInput> getAllDependencies() {

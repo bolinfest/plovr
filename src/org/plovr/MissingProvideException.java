@@ -4,7 +4,7 @@ import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.DiagnosticType;
 import com.google.javascript.jscomp.JSError;
 
-public final class MissingProvideException extends Exception {
+public final class MissingProvideException extends CompilationException {
 
   private static final long serialVersionUID = 1L;
 
@@ -29,6 +29,7 @@ public final class MissingProvideException extends Exception {
     this.missingProvide = missingProvide;
   }
 
+  @Override
   public CompilationError createCompilationError() {
     final int lineno = -1;
     final int charno = -1;

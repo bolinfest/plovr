@@ -16,11 +16,10 @@ public final class CompilationUtil {
    *
    * If the config specifies RAW mode and there is no recent
    * {@link Compilation}, then an exception will be thrown.
-   * @throws CheckedSoySyntaxException
-   * @throws MissingProvideException
+   * @throws CompilationException
    */
   public static Compilation getCompilationOrFail(CompilationServer server,
-      Config config, boolean recordCompilation) throws IOException, MissingProvideException, CheckedSoySyntaxException {
+      Config config, boolean recordCompilation) throws IOException, CompilationException {
     Preconditions.checkState(config.getCompilationMode() != CompilationMode.RAW);
     Compilation compilation = server.getLastCompilation(config);
     if (compilation == null) {

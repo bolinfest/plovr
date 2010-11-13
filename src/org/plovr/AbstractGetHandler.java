@@ -133,11 +133,7 @@ abstract class AbstractGetHandler implements HttpHandler {
     // Make sure that this code has been compiled.
     try {
       return CompilationUtil.getCompilationOrFail(server, config, recordCompilation);
-    } catch (MissingProvideException e) {
-      logger.log(Level.SEVERE, "Error during compilation", e);
-      HttpUtil.writeNullResponse(exchange);
-      return null;
-    } catch (CheckedSoySyntaxException e) {
+    } catch (CompilationException e) {
       logger.log(Level.SEVERE, "Error during compilation", e);
       HttpUtil.writeNullResponse(exchange);
       return null;

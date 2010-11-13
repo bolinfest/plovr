@@ -48,7 +48,7 @@ final class InputFileHandler extends AbstractGetHandler {
   static String getJsToLoadManifest(CompilationServer server,
       final Config config,
       Manifest manifest,
-      HttpExchange exchange) throws MissingProvideException {
+      HttpExchange exchange) throws CompilationException {
     // Function that converts a JsInput to the URI where its raw content can be
     // loaded.
    Function<JsInput,JsonPrimitive> inputToUri = Functions.compose(
