@@ -14,6 +14,7 @@ import org.plovr.util.Pair;
 
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -24,7 +25,6 @@ import com.google.common.collect.Sets.SetView;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.inject.internal.ImmutableList;
 import com.google.javascript.jscomp.JSModule;
 
 public final class ModuleConfig {
@@ -390,7 +390,7 @@ public final class ModuleConfig {
         int size = intersection.size();
         if (size > 0) {
           if (size == 1) {
-            ancestor = intersection.iterator().next();
+            ancestor = Iterables.getOnlyElement(intersection);
           } else {
             // TODO(bolinfest): Prove that this heuristic is optimal.
 
@@ -400,8 +400,8 @@ public final class ModuleConfig {
             // the least common ancestor, as desired.
             int minCostSeen = Integer.MAX_VALUE;
             for (String candidateAncestor : intersection) {
-              int cost1 = modulesToVisitFrom1.get(candidateAncestor);
-              int cost2 = modulesToVisitFrom2.get(candidateAncestor);
+              int cost1 = expandedFromModule1.get(candidateAncestor);
+              int cost2 = expandedFromModule2.get(candidateAncestor);
               int cost = Math.min(cost1, cost2);
               if (cost < minCostSeen) {
                 minCostSeen = cost;
@@ -589,7 +589,8 @@ public final class ModuleConfig {
         Map<String, List<String>> dependencyTree, String rootModule)
         throws BadDependencyTreeException {
       LinkedHashSet<String> transitiveDependencies = new LinkedHashSet<String>();
-      buildDependencies(dependencyTree, transitiveDependencies, rootModule);
+      buildDependencies(dependencyTree, transitiveDependencies, rootModule,
+          new LinkedHashSet<String>());
 
       // Because the dependencies were built up in reverse order, add the
       // results of the iterator in reverse order to create a new list.
@@ -607,20 +608,32 @@ public final class ModuleConfig {
      *          the Iterator of this set returns the dependencies in reverse
      *          order
      * @param dependency
+     * @param currentChain Tracks what the current path down the tree is
      * @throws BadDependencyTreeException
      */
     private static void buildDependencies(
         Map<String, List<String>> dependencies,
-        LinkedHashSet<String> transitiveDependencies, String dependency)
+        LinkedHashSet<String> transitiveDependencies,
+        String dependency,
+        LinkedHashSet<String> currentChain)
         throws BadDependencyTreeException {
-      for (String dependencyList : dependencies.get(dependency)) {
-        buildDependencies(dependencies, transitiveDependencies, dependencyList);
+      if (currentChain.contains(dependency)) {
+        throw new BadDependencyTreeException("Circular module dependency: " +
+            currentChain + " -> " + dependency);
       }
       if (transitiveDependencies.contains(dependency)) {
-        throw new BadDependencyTreeException("Circular dependency involving: "
-            + dependency + " depends on: " + transitiveDependencies);
+        // We've already visited this node, so no need to go down the
+        // dependency list again. If there was a loop, we would have
+        // found it last time we had hit this node.
+        return;
+      }
+      currentChain.add(dependency);
+      for (String dependencyList : dependencies.get(dependency)) {
+        buildDependencies(dependencies, transitiveDependencies, dependencyList,
+            currentChain);
       }
       transitiveDependencies.add(dependency);
+      currentChain.remove(dependency);
     }
 
     /**
@@ -643,6 +656,11 @@ public final class ModuleConfig {
         moduleInfo.put(name, moduleEntry);
       }
 
+      setModuleInfo(moduleInfo);
+    }
+
+    void setModuleInfo(Map<String, ModuleInfo> moduleInfo)
+        throws BadDependencyTreeException {
       // In dependencyTree, modules point to the modules that depend on them.
       final Map<String, List<String>> dependencyTree = invertDependencyTree(moduleInfo
           .values());
@@ -737,7 +755,7 @@ public final class ModuleConfig {
     public ModuleInfo() {
     }
 
-    private void setName(String name) {
+    public void setName(String name) {
       this.name = name;
     }
 
@@ -750,8 +768,16 @@ public final class ModuleConfig {
       return input;
     }
 
+    public void setInput(String input) {
+      this.input = input;
+    }
+
     public List<String> getDeps() {
       return deps;
+    }
+
+    public void setDeps(Iterable<String> deps) {
+      this.deps = ImmutableList.copyOf(deps);
     }
 
     @Override
