@@ -3,8 +3,7 @@ package org.plovr;
 import java.io.File;
 import java.io.IOException;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Files;
+import plovr.io.Files;
 
 /**
  * {@link JsSourceFile} represents a JavaScript file.
@@ -20,7 +19,7 @@ public class JsSourceFile extends LocalFileJsInput {
   @Override
   public String getCode() {
     try {
-      return Files.toString(getSource(), Charsets.UTF_8);
+      return Files.toString(getSource());
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

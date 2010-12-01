@@ -4,8 +4,8 @@ import java.io.File;
 import java.io.IOException;
 import java.util.logging.Logger;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Files;
+import plovr.io.Files;
+
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.jssrc.SoyJsSrcOptions;
 import com.google.template.soy.jssrc.SoyJsSrcOptions.CodeStyle;
@@ -60,7 +60,7 @@ public class SoyFile extends LocalFileJsInput {
   @Override
   public String getTemplateCode() {
     try {
-      return Files.toString(getSource(), Charsets.UTF_8);
+      return Files.toString(getSource());
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
