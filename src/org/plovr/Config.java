@@ -10,6 +10,8 @@ import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
+import plovr.io.Settings;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
@@ -187,6 +189,7 @@ public final class Config {
     if (printInputDelimiter) {
       options.inputDelimiter = "// Input %num%: %name%";
     }
+    options.setOutputCharset(Settings.COMPILER_OUTPUT_CHARSET.name());
 
     // Apply this.defines.
     for (Map.Entry<String, JsonPrimitive> entry : defines.entrySet()) {

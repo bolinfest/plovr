@@ -3,7 +3,6 @@ package org.plovr.i18n;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Writer;
@@ -17,6 +16,8 @@ import javax.xml.parsers.SAXParserFactory;
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
+
+import plovr.io.Streams;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
@@ -109,7 +110,7 @@ public final class PseudoTranslator {
 
   public static void translateXlf(File input, File output) throws IOException, ParserConfigurationException, SAXException {
     InputStream istream = new FileInputStream(input);
-    Writer writer = new FileWriter(output);
+    Writer writer = Streams.createFileWriter(output);
     translateXlf(istream, writer);
     istream.close();
     writer.close();

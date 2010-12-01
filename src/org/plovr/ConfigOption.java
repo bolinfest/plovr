@@ -2,7 +2,6 @@ package org.plovr;
 
 import java.io.File;
 import java.util.Map;
-import java.util.Set;
 
 import org.plovr.ModuleConfig.BadDependencyTreeException;
 

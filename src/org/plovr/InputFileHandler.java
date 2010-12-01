@@ -1,18 +1,14 @@
 package org.plovr;
 
 import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
 import java.net.URI;
-import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import plovr.io.Settings;
+import plovr.io.Responses;
 
-import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 import com.google.common.base.Functions;
 import com.google.common.io.Resources;
@@ -23,7 +19,6 @@ import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.data.SoyMapData;
 import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.tofu.SoyTofu;
-import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 
 /**
@@ -149,15 +144,7 @@ final class InputFileHandler extends AbstractGetHandler {
       return;
     }
 
-    Headers responseHeaders = exchange.getResponseHeaders();
-    responseHeaders.set("Content-Type", "text/javascript; charset=utf8");
-    int responseLength = code.getBytes(Settings.CHARSET).length;
-    exchange.sendResponseHeaders(200, responseLength);
-
-    Writer responseBody = new OutputStreamWriter(exchange.getResponseBody(),
-        Settings.CHARSET);
-    responseBody.write(code);
-    responseBody.close();
+    Responses.writeJs(code, exchange);
   }
 
   static Function<JsInput,String> createInputNameToUriConverter(

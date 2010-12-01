@@ -1,12 +1,12 @@
 package org.plovr;
 
 import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
 import java.net.URL;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import plovr.io.Responses;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Function;
@@ -21,7 +21,6 @@ import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.data.SoyMapData;
 import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.tofu.SoyTofu;
-import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 
 public final class CompileRequestHandler extends AbstractGetHandler {
@@ -66,8 +65,6 @@ public final class CompileRequestHandler extends AbstractGetHandler {
     // Update these fields as they are responsible for the response that will be
     // written.
     StringBuilder builder = new StringBuilder();
-    String contentType;
-    int responseCode;
 
     try {
       if (config.getCompilationMode() == CompilationMode.RAW) {
@@ -84,16 +81,8 @@ public final class CompileRequestHandler extends AbstractGetHandler {
       writeErrors(config, ImmutableList.of(e.createCompilationError()),
           builder);
     }
-    contentType = "text/javascript";
-    responseCode = 200;
 
-    Headers responseHeaders = exchange.getResponseHeaders();
-    responseHeaders.set("Content-Type", contentType);
-    exchange.sendResponseHeaders(responseCode, builder.length());
-
-    Writer responseBody = new OutputStreamWriter(exchange.getResponseBody());
-    responseBody.write(builder.toString());
-    responseBody.close();
+    Responses.writeJs(builder.toString(), exchange);
   }
 
   public static Compilation compile(Config config)

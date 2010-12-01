@@ -1,8 +1,6 @@
 package org.plovr.cli;
 
-import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.List;
@@ -10,11 +8,13 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.plovr.Compilation;
+import org.plovr.CompilationException;
 import org.plovr.CompileRequestHandler;
 import org.plovr.Config;
 import org.plovr.ConfigParser;
-import org.plovr.CompilationException;
 import org.plovr.ModuleConfig;
+
+import plovr.io.Streams;
 
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
@@ -75,7 +75,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
         // it should only be written out to a file after the compiled code has
         // been generated.
         if (sourceMapPath != null) {
-          Writer writer = new BufferedWriter(new FileWriter(sourceMapPath));
+          Writer writer = Streams.createFileWriter(sourceMapPath);
           result.sourceMap.appendTo(writer, sourceMapName);
           Closeables.closeQuietly(writer);
         }

@@ -1,14 +1,13 @@
 package org.plovr;
 
 import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
 import java.net.URI;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import plovr.io.Responses;
+
 import com.google.common.base.Function;
-import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 
 public class ModuleHandler extends AbstractGetHandler {
@@ -44,14 +43,7 @@ public class ModuleHandler extends AbstractGetHandler {
     Function<String, String> moduleNameToUri = createModuleNameToUriConverter(
         server, exchange, config.getId());
     String code = compilation.getCodeForModule(moduleName, isDebugMode, moduleNameToUri);
-
-    Headers responseHeaders = exchange.getResponseHeaders();
-    responseHeaders.set("Content-Type", "text/javascript");
-    exchange.sendResponseHeaders(200, code.length());
-
-    Writer responseBody = new OutputStreamWriter(exchange.getResponseBody());
-    responseBody.write(code);
-    responseBody.close();
+    Responses.writeJs(code, exchange);
   }
 
   static Function<String,String> createModuleNameToUriConverter(

@@ -1,15 +1,15 @@
 package org.plovr;
 
-import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.List;
 import java.util.Map;
 
+import plovr.io.Files;
+import plovr.io.Streams;
+
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -17,7 +17,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.io.Closeables;
-import com.google.common.io.Files;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
@@ -233,7 +232,7 @@ public final class Compilation {
     for (JSModule module : modules) {
       String moduleName = module.getName();
       File outputFile = moduleToOutputPath.get(moduleName);
-      Files.createParentDirs(outputFile);
+      com.google.common.io.Files.createParentDirs(outputFile);
 
       // Reset the source map if it is not going to be reset later in this loop
       // when the source map is written to disk.
@@ -250,14 +249,14 @@ public final class Compilation {
         outputFile = new File(outputFile.getParentFile(), fileName);
       }
 
-      Files.write(moduleCode, outputFile, Charsets.UTF_8);
+      Files.write(moduleCode, outputFile);
 
       // It turns out that the SourceMap will not be populated until after the
       // Compiler's internal representation has been output as source code, so
       // it should only be written out to a file after the compiled code has
       // been generated.
       if (sourceMapPath != null) {
-        Writer writer = new BufferedWriter(new FileWriter(sourceMapPath + "_" + moduleName));
+        Writer writer = Streams.createFileWriter(sourceMapPath + "_" + moduleName);
         // This is safe because getCodeForModule() was just called, which has
         // the side-effect of calling compiler.toSource(module).
         SourceMap sourceMap = compiler.getSourceMap();
@@ -269,7 +268,7 @@ public final class Compilation {
 
     if (moduleConfig.excludeModuleInfoFromRootModule()) {
       File outputFile = moduleConfig.getModuleInfoPath();
-      Files.createParentDirs(outputFile);
+      com.google.common.io.Files.createParentDirs(outputFile);
 
       final Function<String, String> fingerprintedModuleNameToUri =
           new Function<String, String>() {
@@ -284,7 +283,7 @@ public final class Compilation {
             }
       };
 
-      Writer writer = new BufferedWriter(new FileWriter(outputFile));
+      Writer writer = Streams.createFileWriter(outputFile);
       appendRootModuleInfo(writer, isDebugMode, fingerprintedModuleNameToUri);
       Closeables.close(writer, false);
     }
