@@ -133,12 +133,13 @@
 
   <target name="integration-test"
           depends="jar"
-          description="builds the jar and runs it on localhost:9810">
-    <echo>Visit http://localhost:9810/compile?id=integration-test</echo>
+          description="builds the jar and runs it on localhost:9818">
+    <echo>Visit http://localhost:9818/compile?id=integration-test</echo>
     <java jar="${build.dir}/plovr.jar" fork="true">
       <arg value="serve" />
+      <arg line="--port 9818" />
       <arg value="${testdata.dir}/example/integration-test-config.js" />
-    	<arg value="${testdata.dir}/modules/plovr-config.js" />
+      <arg value="${testdata.dir}/modules/plovr-config.js" />
       <jvmarg value="-Xdebug" />
       <jvmarg value="-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=8000"/>
     </java>

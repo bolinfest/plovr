@@ -4,11 +4,13 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.net.URI;
+import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 import com.google.common.base.Functions;
 import com.google.common.io.Resources;
@@ -146,10 +148,13 @@ final class InputFileHandler extends AbstractGetHandler {
     }
 
     Headers responseHeaders = exchange.getResponseHeaders();
-    responseHeaders.set("Content-Type", "text/javascript");
-    exchange.sendResponseHeaders(200, code.length());
+    Charset UTF_8 = Charsets.UTF_8;
+    responseHeaders.set("Content-Type", "text/javascript; charset=utf8");
+    int responseLength = code.getBytes(UTF_8).length;
+    exchange.sendResponseHeaders(200, responseLength);
 
-    Writer responseBody = new OutputStreamWriter(exchange.getResponseBody());
+    Writer responseBody = new OutputStreamWriter(exchange.getResponseBody(),
+        UTF_8);
     responseBody.write(code);
     responseBody.close();
   }
