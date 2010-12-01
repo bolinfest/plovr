@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import plovr.io.Settings;
+
 import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 import com.google.common.base.Functions;
@@ -148,13 +150,12 @@ final class InputFileHandler extends AbstractGetHandler {
     }
 
     Headers responseHeaders = exchange.getResponseHeaders();
-    Charset UTF_8 = Charsets.UTF_8;
     responseHeaders.set("Content-Type", "text/javascript; charset=utf8");
-    int responseLength = code.getBytes(UTF_8).length;
+    int responseLength = code.getBytes(Settings.CHARSET).length;
     exchange.sendResponseHeaders(200, responseLength);
 
     Writer responseBody = new OutputStreamWriter(exchange.getResponseBody(),
-        UTF_8);
+        Settings.CHARSET);
     responseBody.write(code);
     responseBody.close();
   }

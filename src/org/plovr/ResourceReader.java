@@ -6,6 +6,8 @@ import java.io.InputStreamReader;
 import java.util.List;
 import java.util.logging.Logger;
 
+import plovr.io.Settings;
+
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
@@ -18,20 +20,20 @@ class ResourceReader {
   private static final Logger logger = Logger.getLogger("org.plovr.ResourceReader");
 
   private ResourceReader() {}
-  
+
   /**
    * @return the base.js file for the Closure Library
    */
   static JsInput getBaseJs() {
     return BaseJsHolder.instance.baseJs;
   }
-  
+
   /** Lazy-loaded singleton pattern for base.js in the Closure Library. */
   private static class BaseJsHolder {
     private static final BaseJsHolder instance = new BaseJsHolder();
-    
+
     final JsInput baseJs;
-    
+
     private BaseJsHolder() {
       this.baseJs = new ResourceJsInput("/closure/goog/base.js");
     }
@@ -54,7 +56,7 @@ class ResourceReader {
 
   private static class ClosureLibraryHolder {
     private static final ClosureLibraryHolder instance = new ClosureLibraryHolder();
-    
+
     private final List<JsInput> inputs;
 
     private ClosureLibraryHolder() {
@@ -89,12 +91,12 @@ class ResourceReader {
         return JSSourceFile.fromGenerator(path, generator);
       }
   };
-  
+
   private static class ExternsHolder {
     private static final ExternsHolder instance = new ExternsHolder();
-    
+
     final List<JSSourceFile> externs;
-    
+
     private ExternsHolder() {
       List<JSSourceFile> externs;
       try {
@@ -128,7 +130,7 @@ class ResourceReader {
       Function<String,T> f) throws IOException {
     InputStream input = ResourceReader.class.getResourceAsStream(
         manifestFile);
-    Readable readable = new InputStreamReader(input);
+    Readable readable = new InputStreamReader(input, Settings.CHARSET);
     LineReader lineReader = new LineReader(readable);
 
     List<T> results = Lists.newLinkedList();

@@ -5,6 +5,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.logging.Logger;
 
+import plovr.io.Settings;
+
 import com.google.common.io.LineReader;
 
 /**
@@ -29,7 +31,7 @@ public class ResourceJsInput extends AbstractJsInput {
     try {
       InputStream input = ResourceReader.class.getResourceAsStream(
           pathToResource);
-      Readable readable = new InputStreamReader(input);
+      Readable readable = new InputStreamReader(input, Settings.CHARSET);
       LineReader lineReader = new LineReader(readable);
       StringBuilder builder = new StringBuilder();
       String line;
