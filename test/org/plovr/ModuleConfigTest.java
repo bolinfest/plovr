@@ -50,7 +50,7 @@ public class ModuleConfigTest {
   }
 
   private void assertCorrectInputs(
-      String module, List<String> actual, List<String> expected) {
+      String module, List<String> expected, List<String> actual) {
     assertEquals("Incorrect inputs for module " + module,
         expected, actual);
   }
@@ -201,5 +201,75 @@ public class ModuleConfigTest {
     assertCorrectInputs("e", ImmutableList.of("e"), partition.get("e"));
     assertCorrectInputs("f", ImmutableList.of("f"), partition.get("f"));
     assertCorrectInputs("g", ImmutableList.of("g"), partition.get("g"));
+  }
+
+  @Test
+  public void testPartitionInputsIntoModules3()
+      throws CompilationException, ModuleConfig.BadDependencyTreeException {
+    // Test that input file migration works as expected. The tree of
+    // modules is as follows:
+    //
+    //       A
+    //     /   \
+    //    B     C
+    //    | \ / |
+    //    | / \ |
+    //    D     E
+    //
+    // An input file depended on by C, D, and E should migrate up to C.
+
+    File closureLibraryDirectory = new File("../closure-library/closure/goog/");
+
+    final List<File> dependencies = ImmutableList.of();
+    final List<File> externs = ImmutableList.of();
+    final boolean customExternsOnly = false;
+
+    // This input is used as the "floating" input described above
+    // that will end up getting "migrated" up the tree.
+    DummyJsInput dep1 =
+        new DummyJsInput("dep1", "", ImmutableList.of("dep1"), null);
+
+    // Set up a set of files so that the depenencies just go up the
+    // modules tree, one file per module, and additional dependencies
+    // on dep1 and dep2 as described in the block comment above.
+    DummyJsInput a, b, c, d, e;
+    a = new DummyJsInput("a", "", ImmutableList.of("a"), null);
+    b = new DummyJsInput("b", "", ImmutableList.of("b"), ImmutableList.of("a"));
+    c = new DummyJsInput("c", "", ImmutableList.of("c"),
+        ImmutableList.of("a", "dep1"));
+    d = new DummyJsInput("d", "", ImmutableList.of("d"),
+        ImmutableList.of("b", "c", "dep1"));
+    e = new DummyJsInput("e", "", ImmutableList.of("e"),
+        ImmutableList.of("b", "c", "dep1"));
+
+    Manifest manifest = new Manifest(
+        closureLibraryDirectory,
+        dependencies,
+        ImmutableList.<JsInput>of(a, b, c, d, e, dep1),
+        externs,
+        customExternsOnly);
+
+    ModuleConfig.Builder builder = ModuleConfig.builder(new File("."));
+    builder.setModuleInfo(
+        ImmutableMap.<String, ModuleConfig.ModuleInfo>builder()
+        .put("a", newModule("a", "a", new String[]{}))
+        .put("b", newModule("b", "b", new String[]{"a"}))
+        .put("c", newModule("c", "c", new String[]{"a"}))
+        .put("d", newModule("d", "d", new String[]{"b", "c"}))
+        .put("e", newModule("e", "e", new String[]{"b", "c"}))
+        .build());
+    ModuleConfig config = builder.build();
+
+    Map<String, List<String>> partition =
+        Maps.transformValues(config.partitionInputsIntoModules(manifest),
+            INPUT_TO_NAME_LIST);
+
+    assertEquals("Incorrect partition size", 5, partition.size());
+    assertCorrectInputs(
+        "a", ImmutableList.of("base.js", "a"), partition.get("a"));
+    assertCorrectInputs("b", ImmutableList.of("b"), partition.get("b"));
+    assertCorrectInputs("c", ImmutableList.of("dep1", "c"), partition.get("c"));
+    assertCorrectInputs("d", ImmutableList.of("d"), partition.get("d"));
+    assertCorrectInputs("e", ImmutableList.of("e"), partition.get("e"));
   }
 }

@@ -314,34 +314,53 @@ public final class ModuleConfig {
     // of the modules.
     // It cannot be the case that no least common module exists because the root
     // module is a common ancestor for any set of modules in the graph.
-    String leastCommonAncestor = firstModule;
-    while (iter.hasNext()) {
-      String module = iter.next();
-      leastCommonAncestor = searcher.findCommonAncestor(
-          leastCommonAncestor, module);
-    }
-
-    return leastCommonAncestor;
+    return searcher.findCommonAncestor(modules);
   }
 
   private class Searcher {
 
-    private final Map<Pair<String,String>,String> cache = Maps.newHashMap();
+    /**
+     * This is a map from Set of modules -> least common ancestor for
+     * these modules. Note that when inserting elements, the key must
+     * be an ImmutableSet, otherwise map invariants are not
+     * maintained.
+     */
+    private final Map<Set<String>,String> cache = Maps.newHashMap();
 
-    private Searcher() {}
+    /** The index of a module in the distanceMap. */
+    private final Map<String, Integer> moduleToIndex = Maps.newHashMap();
 
-    private Pair<String,String> createSortedPair(String module1, String module2) {
-      int comp = module1.compareTo(module2);
-      Preconditions.checkState(comp != 0, "Should not be the same");
-      if (comp < 0) {
-        return Pair.of(module1, module2);
-      } else {
-        return Pair.of(module2, module1);
+    /**
+     * This is a 2D array of minimum distances between modules along
+     * the DAG. The first index is the source module, and the second
+     * index is the ancestor module. The value is the minimum distance
+     * between the two. null means that there is no connection. The
+     * module -> integer index mapping is done by looking at
+     * moduleToIndex.
+     */
+    private final Integer[][] distanceMap;
+
+    private Searcher() {
+      // Compute moduleToIndex map
+      int i = 0;
+      for (String module : moduleInfoMap.keySet()) {
+        moduleToIndex.put(module, i);
+        i++;
+      }
+
+      distanceMap = new Integer[i][i];
+
+      for (Map.Entry<String, Integer> module : moduleToIndex.entrySet()) {
+        populateModuleDistances(
+            module.getKey(),
+            module.getValue(),
+            module.getValue(),
+            0);
       }
     }
 
     /**
-     * Returns the module that is the least common ancestor of the two specified
+     * Returns the module that is the least common ancestor of the specified
      * modules. Note that in a graph such as the following:
      * <pre>
      *       A
@@ -353,97 +372,74 @@ public final class ModuleConfig {
      * </pre>
      * There may not be a unique solution.
      */
-    public String findCommonAncestor(String module1, String module2) {
-      if (module1.equals(module2)) {
-        return module1;
-      }
-
-      Pair<String,String> p = createSortedPair(module1, module2);
-      String ancestor = cache.get(p);
+    public String findCommonAncestor(Set<String> modules) {
+      String ancestor = cache.get(modules);
       if (ancestor != null) {
         return ancestor;
       }
 
-      // Progressively check ancestors of each node.
-      Map<String, Integer> modulesToVisitFrom1 = Maps.newHashMap();
-      modulesToVisitFrom1.put(module1, 0);
-      Map<String, Integer> modulesToVisitFrom2 = Maps.newHashMap();
-      modulesToVisitFrom2.put(module2, 0);
-      Map<String, Integer> expandedFromModule1 = Maps.newHashMap();
-      Map<String, Integer> expandedFromModule2 = Maps.newHashMap();
-      while (true) {
-        // See whether there is a common reachable module found between module1
-        // and module2. Make sure that the following case works correctly:
-        //
-        //       A
-        //     / |
-        //    B  C     Make sure that when searching for the least common
-        //    |  | \   ancestor of C and F that C is determined to be the least
-        //    |  D  E  common ancestor instead of another module, such as A.
-        //     \ |     That would preclude the ability to determine C as the
-        //       F     least common ancestor of {C,E,F}. In practice, that would
-        //       |     unnecessarily add code to A that could be contained in C.
-        //       G
-        //
-        SetView<String> intersection = Sets.intersection(
-            expandedFromModule1.keySet(), expandedFromModule2.keySet());
-        int size = intersection.size();
-        if (size > 0) {
-          if (size == 1) {
-            ancestor = Iterables.getOnlyElement(intersection);
-          } else {
-            // TODO(bolinfest): Prove that this heuristic is optimal.
+      // For the source modules of interest (the ones in the input
+      // array) we need to find all the common ancestors (those are
+      // all the modules that have non-null values for each of the
+      // source modules). We consider an ancestor with the lowest
+      // distance to any of the source modules to be the least common
+      // ancestor.
 
-            // This would happen in the {B,F} case where both B and A are
-            // reached in two iterations. In that case, the min cost for B would
-            // be 0 and the min cost for A would be 1, so B would be selected as
-            // the least common ancestor, as desired.
-            int minCostSeen = Integer.MAX_VALUE;
-            for (String candidateAncestor : intersection) {
-              int cost1 = expandedFromModule1.get(candidateAncestor);
-              int cost2 = expandedFromModule2.get(candidateAncestor);
-              int cost = Math.min(cost1, cost2);
-              if (cost < minCostSeen) {
-                minCostSeen = cost;
-                ancestor = candidateAncestor;
-              }
-            }
+      String minModule = null;
+      int minDistance = Integer.MAX_VALUE;
+      for (Map.Entry<String, Integer> module : moduleToIndex.entrySet()) {
+        int moduleIndex = module.getValue();
+
+        int min = Integer.MAX_VALUE;
+        int nonNull = 0;
+        for (String sourceModule : modules) {
+          int sourceModuleIndex = moduleToIndex.get(sourceModule);
+
+          Integer distance = distanceMap[sourceModuleIndex][moduleIndex];
+          if (distance != null) {
+            nonNull++;
+            min = Math.min(min, distance);
           }
-          break;
-        } else {
-          expandModulesToVisit(modulesToVisitFrom1, expandedFromModule1);
-          expandModulesToVisit(modulesToVisitFrom2, expandedFromModule2);
+        }
+        if (nonNull != modules.size()) {
+          // Not every seed module reached this module.
+          continue;
+        }
+        if (min < minDistance) {
+          minDistance = min;
+          minModule = module.getKey();
         }
       }
 
-      cache.put(p, ancestor);
-      return ancestor;
+      Preconditions.checkNotNull("No common ancestor found", minModule);
+
+      cache.put(ImmutableSet.copyOf(modules), minModule);
+
+      return minModule;
     }
 
-    private void expandModulesToVisit(Map<String, Integer> modulesToVisit,
-        Map<String, Integer> expandedModules) {
-      // Expand each module in the pending visitors list.
-      // Copy the visitors list because the underlying Map will be modified as
-      // part of this for loop:
-      Map<String,Integer> modules = ImmutableMap.copyOf(modulesToVisit);
-      for (Map.Entry<String,Integer> entry : modules.entrySet()) {
-        String module = entry.getKey();
-        // Check to see whether the module has already been expanded.
-        if (expandedModules.containsKey(module)) {
-          continue;
-        }
+    /**
+     * Populates the distance map by recursing down a module's
+     * dependencies. This function call should be initiated with
+     * identical moduleIndex and sourceModuleIndex, and will populate
+     * the distanceMap for that sourceModuleIndex.
+     */
+    private void populateModuleDistances(
+        String module,
+        int moduleIndex,
+        int sourceModuleIndex,
+        int depth) {
+      Integer current = distanceMap[sourceModuleIndex][moduleIndex];
+      if (current == null || depth < current) {
+        distanceMap[sourceModuleIndex][moduleIndex] = depth;
+      }
 
-        // Add to visited list.
-        Integer cost = entry.getValue() + 1;
-        for (String dep : moduleInfoMap.get(module).getDeps()) {
-          if (!modulesToVisit.containsKey(dep)) {
-            modulesToVisit.put(dep, cost);
-          }
-        }
-
-        // Remove from visited list and add to expanded list.
-        modulesToVisit.remove(module);
-        expandedModules.put(entry.getKey(), entry.getValue());
+      for (String dep : moduleInfoMap.get(module).getDeps()) {
+        populateModuleDistances(
+            dep,
+            moduleToIndex.get(dep),
+            sourceModuleIndex,
+            depth + 1);
       }
     }
   }
