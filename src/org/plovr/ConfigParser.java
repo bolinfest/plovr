@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import plovr.io.Files;
+
 import com.google.common.base.Preconditions;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -23,10 +25,8 @@ public final class ConfigParser {
   private ConfigParser() {}
 
   public static Config parseFile(File file) throws IOException {
-    String jsonWithoutComments =
-        JsonCommentStripper.stripCommentsFromJson(file);
     JsonParser jsonParser = new JsonParser();
-    JsonElement root = jsonParser.parse(jsonWithoutComments);
+    JsonElement root = jsonParser.parse(Files.toString(file));
 
     Preconditions.checkNotNull(root);
     Preconditions.checkArgument(root.isJsonObject());
