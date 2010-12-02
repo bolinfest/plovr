@@ -27,7 +27,7 @@ public final class Responses {
   throws IOException {
     Headers responseHeaders = exchange.getResponseHeaders();
     responseHeaders.set("Content-Type", config.getJsContentType());
-    int responseLength = js.getBytes(Settings.CHARSET).length;
+    int responseLength = js.getBytes(config.getOutputCharset()).length;
     exchange.sendResponseHeaders(200, responseLength);
 
     Writer responseBody = Streams.createOutputStreamWriter(
