@@ -19,7 +19,6 @@
 /**
  * @param allNames
  * @param descriptors
- * @param year
  */
 {template .options}
 <style>
@@ -150,7 +149,7 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     If specified, a template into which compiled JavaScript will be written.
     The placeholder for compiled code is <code>%output%</code>, so to wrap the
     compiled output in an anonymous function preceded by a copyright comment, specify:
-<pre>"// Copyright {$year}\n{literal}(function(){%output%})();{/literal}"</pre>
+<pre>"// Copyright {YEAR}\n{literal}(function(){%output%})();{/literal}"</pre>
   {case 'output-charset'}
     Defaults to <code>"UTF-8"</code>.
     Does not default to <code>"US-ASCII"</code> because there are many characters

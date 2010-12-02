@@ -38,6 +38,12 @@ public final class ConfigOptionDocumentationGenerator {
     SoyFileSet.Builder builder = new SoyFileSet.Builder();
     builder.add(Resources.getResource(ConfigOptionDocumentationGenerator.class,
         "options.soy"));
+
+    Map<String, String> globals = ImmutableMap.<String, String>builder()
+        .put("YEAR", String.valueOf(Calendar.getInstance().get(Calendar.YEAR)))
+        .build();
+    builder.setCompileTimeGlobals(globals);
+
     builder.add(new File("www/__common.soy"));
     SoyFileSet fileSet = builder.build();
     TOFU = fileSet.compileToJavaObj();
@@ -161,7 +167,6 @@ public final class ConfigOptionDocumentationGenerator {
         ImmutableMap.<String, Object>builder()
         .put("allNames", allNames)
         .put("descriptors", descriptorData)
-        .put("year", Calendar.getInstance().get(Calendar.YEAR))
         .build();
 
     final SoyMsgBundle messageBundle = null;
