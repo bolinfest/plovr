@@ -57,6 +57,9 @@ public final class CompilationServer implements Runnable {
       throw new RuntimeException(e);
     }
 
+    // Feature request http://code.google.com/p/plovr/issues/detail?id=23
+    System.err.println("Listening on " + server.getAddress());
+
     server.createContext("/compile", new CompileRequestHandler(this));
     server.createContext("/externs", new ExternsHandler(this));
     server.createContext("/input", new InputFileHandler(this));
