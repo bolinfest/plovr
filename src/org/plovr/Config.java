@@ -254,7 +254,7 @@ public final class Config {
     return id;
   }
 
-  final static class Builder {
+  public final static class Builder {
 
     private final File relativePathBase;
 
