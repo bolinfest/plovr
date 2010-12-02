@@ -78,7 +78,11 @@ public final class CompileRequestHandler extends AbstractGetHandler {
     } catch (CompilationException e) {
       Preconditions.checkState(builder.length() == 0,
           "Should not write errors to builder if output has already been written");
-      writeErrors(config, ImmutableList.of(e.createCompilationError()),
+      String viewSourceUrl = getViewSourceUrlForExchange(exchange);
+      writeErrors(
+          config,
+          ImmutableList.of(e.createCompilationError()),
+          viewSourceUrl,
           builder);
     }
 
@@ -106,10 +110,14 @@ public final class CompileRequestHandler extends AbstractGetHandler {
       HttpExchange exchange,
       Appendable appendable) throws IOException, CompilationException {
     Compilation compilation;
+    String viewSourceUrl = getViewSourceUrlForExchange(exchange);
     try {
       compilation = compile(config);
     } catch (CompilationException e) {
-      writeErrors(config, ImmutableList.of(e.createCompilationError()),
+      writeErrors(
+          config,
+          ImmutableList.of(e.createCompilationError()),
+          viewSourceUrl,
           appendable);
       return;
     }
@@ -155,19 +163,33 @@ public final class CompileRequestHandler extends AbstractGetHandler {
     // Write out the plovr library, even if there are no warnings.
     // It is small, and it exports some symbols that may be of use to
     // developers.
-    writeErrorsAndWarnings(config, compilation.getCompilationErrors(),
-        compilation.getCompilationWarnings(), appendable);
+    writeErrorsAndWarnings(
+        config,
+        compilation.getCompilationErrors(),
+        compilation.getCompilationWarnings(),
+        viewSourceUrl,
+        appendable);
   }
 
-  private void writeErrors(Config config, List<CompilationError> errors,
-      Appendable builder) throws IOException {
-    writeErrorsAndWarnings(config, errors,
+  private void writeErrors(
+      Config config,
+      List<CompilationError> errors,
+      String viewSourceUrl,
+      Appendable builder)
+  throws IOException {
+    writeErrorsAndWarnings(
+        config,
+        errors,
         ImmutableList.<CompilationError>of(),
+        viewSourceUrl,
         builder);
   }
 
-  private void writeErrorsAndWarnings(Config config,
-      List<CompilationError> errors, List<CompilationError> warnings,
+  private void writeErrorsAndWarnings(
+      Config config,
+      List<CompilationError> errors,
+      List<CompilationError> warnings,
+      String viewSourceUrl,
       Appendable builder) throws IOException {
     Preconditions.checkNotNull(errors);
     Preconditions.checkNotNull(builder);
@@ -177,7 +199,11 @@ public final class CompileRequestHandler extends AbstractGetHandler {
         .append("plovr.addErrors(").append(gson.toJson(errors)).append(");\n")
         .append("plovr.addWarnings(").append(gson.toJson(warnings)).append(");\n")
         .append("plovr.setConfigId(").append(configIdJsString).append(");\n")
+        .append("plovr.setViewSourceUrl(\"").append(viewSourceUrl).append("\");\n")
         .append("plovr.writeErrorsOnLoad();\n");
   }
-}
 
+  private String getViewSourceUrlForExchange(HttpExchange exchange) {
+    return server.getServerForExchange(exchange) + "view";
+  }
+}

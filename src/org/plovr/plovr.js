@@ -55,11 +55,6 @@ plovr.addWarnings = function(warnings) {
   for (var i = 0; i < warnings.length; i++) plovr.warnings_.push(warnings[i]);
 };
 
-/** @return {number} */
-plovr.getPort = function() {
-  return 9810;
-};
-
 /** @type {string} */
 plovr.configId_ = '';
 
@@ -73,9 +68,17 @@ plovr.setConfigId = function(configId) {
   plovr.configId_ = configId;
 };
 
+/** @type {string} */
+plovr.viewSourceUrl_ = '';
+
+/** @param {string} viewSourceUrl */
+plovr.setViewSourceUrl = function(viewSourceUrl) {
+  plovr.viewSourceUrl_ = viewSourceUrl;
+};
+
 /** @return {string} */
 plovr.getViewSourceUrl = function() {
-  return 'http://localhost:' + plovr.getPort() + '/view';
+  return plovr.viewSourceUrl_;
 };
 
 /**

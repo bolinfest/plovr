@@ -15,7 +15,7 @@ public final class CompilationServer implements Runnable {
 
   private final String listenAddress;
 
-  private final int port;
+  private int port;
 
   // All maps are keyed on a Config id rather than a Config because there could
   // be multiple, different Config objects with the same id because of how query
@@ -57,8 +57,13 @@ public final class CompilationServer implements Runnable {
       throw new RuntimeException(e);
     }
 
+    InetSocketAddress serverAddress = server.getAddress();
+    // This will be different than the port passed to the constructor if the
+    // value passed to the constructor was 0.
+    port = serverAddress.getPort();
+
     // Feature request http://code.google.com/p/plovr/issues/detail?id=23
-    System.err.println("Listening on " + server.getAddress());
+    System.err.println("Listening on " + serverAddress);
 
     server.createContext("/compile", new CompileRequestHandler(this));
     server.createContext("/externs", new ExternsHandler(this));
