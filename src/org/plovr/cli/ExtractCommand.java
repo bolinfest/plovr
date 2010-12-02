@@ -7,11 +7,11 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.util.List;
 
+import org.plovr.CompilationException;
 import org.plovr.Config;
 import org.plovr.ConfigParser;
 import org.plovr.JsInput;
 import org.plovr.Manifest;
-import org.plovr.CompilationException;
 
 import com.google.common.io.CharStreams;
 import com.google.common.io.InputSupplier;

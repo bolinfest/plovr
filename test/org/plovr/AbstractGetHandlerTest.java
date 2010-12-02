@@ -1,9 +1,10 @@
 package org.plovr;
 
+import static org.junit.Assert.assertEquals;
+
 import java.net.URI;
 import java.net.URISyntaxException;
 
-import static org.junit.Assert.assertEquals;
 import org.junit.Test;
 
 public class AbstractGetHandlerTest {
