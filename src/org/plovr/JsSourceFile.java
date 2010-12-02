@@ -3,7 +3,7 @@ package org.plovr;
 import java.io.File;
 import java.io.IOException;
 
-import plovr.io.Files;
+import org.plovr.io.Files;
 
 /**
  * {@link JsSourceFile} represents a JavaScript file.

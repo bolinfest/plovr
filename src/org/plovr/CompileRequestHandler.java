@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import plovr.io.Responses;
+import org.plovr.io.Responses;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Function;

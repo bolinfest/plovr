@@ -1,4 +1,4 @@
-package plovr.io;
+package org.plovr.io;
 
 import java.nio.charset.Charset;
 

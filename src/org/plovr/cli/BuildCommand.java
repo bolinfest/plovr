@@ -14,7 +14,7 @@ import org.plovr.Config;
 import org.plovr.ConfigParser;
 import org.plovr.ModuleConfig;
 
-import plovr.io.Streams;
+import org.plovr.io.Streams;
 
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;

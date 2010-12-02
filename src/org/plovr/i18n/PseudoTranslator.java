@@ -17,7 +17,7 @@ import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
-import plovr.io.Streams;
+import org.plovr.io.Streams;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;

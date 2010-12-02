@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import plovr.io.Responses;
+import org.plovr.io.Responses;
 
 import com.google.common.base.Function;
 import com.google.common.base.Functions;

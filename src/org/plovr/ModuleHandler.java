@@ -5,7 +5,7 @@ import java.net.URI;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import plovr.io.Responses;
+import org.plovr.io.Responses;
 
 import com.google.common.base.Function;
 import com.sun.net.httpserver.HttpExchange;

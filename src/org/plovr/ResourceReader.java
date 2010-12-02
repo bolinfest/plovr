@@ -6,7 +6,7 @@ import java.io.InputStreamReader;
 import java.util.List;
 import java.util.logging.Logger;
 
-import plovr.io.Settings;
+import org.plovr.io.Settings;
 
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;

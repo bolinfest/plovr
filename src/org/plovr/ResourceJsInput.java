@@ -5,7 +5,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.logging.Logger;
 
-import plovr.io.Settings;
+import org.plovr.io.Settings;
 
 import com.google.common.io.LineReader;
 

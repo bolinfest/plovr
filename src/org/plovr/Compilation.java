@@ -6,8 +6,8 @@ import java.io.Writer;
 import java.util.List;
 import java.util.Map;
 
-import plovr.io.Files;
-import plovr.io.Streams;
+import org.plovr.io.Files;
+import org.plovr.io.Streams;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
