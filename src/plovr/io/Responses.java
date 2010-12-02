@@ -3,6 +3,8 @@ package plovr.io;
 import java.io.IOException;
 import java.io.Writer;
 
+import org.plovr.Config;
+
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 
@@ -20,14 +22,16 @@ public final class Responses {
    * @param exchange to which the response will be written -- no content may
    *     have been written to its response yet as this method sets headers
    */
-  public static void writeJs(String js, HttpExchange exchange) throws IOException {
+  public static void writeJs(
+      String js, Config config, HttpExchange exchange)
+  throws IOException {
     Headers responseHeaders = exchange.getResponseHeaders();
-    responseHeaders.set("Content-Type", Settings.JS_CONTENT_TYPE);
+    responseHeaders.set("Content-Type", config.getJsContentType());
     int responseLength = js.getBytes(Settings.CHARSET).length;
     exchange.sendResponseHeaders(200, responseLength);
 
     Writer responseBody = Streams.createOutputStreamWriter(
-        exchange.getResponseBody());
+        exchange.getResponseBody(), config);
     responseBody.write(js);
     responseBody.close();
   }

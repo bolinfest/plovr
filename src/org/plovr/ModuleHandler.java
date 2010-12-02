@@ -43,7 +43,7 @@ public class ModuleHandler extends AbstractGetHandler {
     Function<String, String> moduleNameToUri = createModuleNameToUriConverter(
         server, exchange, config.getId());
     String code = compilation.getCodeForModule(moduleName, isDebugMode, moduleNameToUri);
-    Responses.writeJs(code, exchange);
+    Responses.writeJs(code, config, exchange);
   }
 
   static Function<String,String> createModuleNameToUriConverter(

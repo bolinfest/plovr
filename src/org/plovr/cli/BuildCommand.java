@@ -75,7 +75,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
         // it should only be written out to a file after the compiled code has
         // been generated.
         if (sourceMapPath != null) {
-          Writer writer = Streams.createFileWriter(sourceMapPath);
+          Writer writer = Streams.createFileWriter(sourceMapPath, config);
           result.sourceMap.appendTo(writer, sourceMapName);
           Closeables.closeQuietly(writer);
         }

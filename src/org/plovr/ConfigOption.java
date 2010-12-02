@@ -1,6 +1,7 @@
 package org.plovr;
 
 import java.io.File;
+import java.nio.charset.Charset;
 import java.util.Map;
 
 import org.plovr.ModuleConfig.BadDependencyTreeException;
@@ -179,6 +180,13 @@ public enum ConfigOption {
     @Override
     public void apply(String outputWrapper, Config.Builder builder) {
       builder.setOutputWrapper(outputWrapper);
+    }
+  }),
+
+  OUTPUT_CHARSET("output-charset", new ConfigUpdater() {
+    @Override
+    public void apply(String outputCharset, Config.Builder builder) {
+      builder.setOutputCharset(Charset.forName(outputCharset));
     }
   }),
 

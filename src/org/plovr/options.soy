@@ -19,6 +19,7 @@
 /**
  * @param allNames
  * @param descriptors
+ * @param year
  */
 {template .options}
 <style>
@@ -145,6 +146,20 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     Equivalent to the command-line <code>--formatting=PRINT_INPUT_DELIMITER</code> flag for
     the Closure Compiler.
     Defaults to <code>false</code>.
+  {case 'output-wrapper'}
+    If specified, a template into which compiled JavaScript will be written.
+    The placeholder for compiled code is <code>%output%</code>, so to wrap the
+    compiled output in an anonymous function preceded by a copyright comment, specify:
+<pre>"// Copyright {$year}\n{literal}(function(){%output%})();{/literal}"</pre>
+  {case 'output-charset'}
+    Defaults to <code>"UTF-8"</code>.
+    Does not default to <code>"US-ASCII"</code> because there are many characters
+    in <code>datetimesymbols.js</code> in the Closure Library that cannot be
+    represented in ASCII.
+    In order to make sure that your JavaScript code is interpreted with the
+    correct character encoding, make sure to specify it in the <code>&lt;script></code>
+    tag as follows:
+<pre>&lt;script type="text/javascript" src="myscript.js" charset="utf-8">&lt;/script></pre>
   {case 'fingerprint'}
     Whether to fingerprint the JS files for modules when plovr is used in
     build mode. The fingerprint is an md5 hash of the file content.

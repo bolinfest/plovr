@@ -86,7 +86,7 @@ public final class CompileRequestHandler extends AbstractGetHandler {
           builder);
     }
 
-    Responses.writeJs(builder.toString(), exchange);
+    Responses.writeJs(builder.toString(), config, exchange);
   }
 
   public static Compilation compile(Config config)

@@ -144,7 +144,7 @@ final class InputFileHandler extends AbstractGetHandler {
       return;
     }
 
-    Responses.writeJs(code, exchange);
+    Responses.writeJs(code, config, exchange);
   }
 
   static Function<JsInput,String> createInputNameToUriConverter(

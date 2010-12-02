@@ -2,6 +2,7 @@ package org.plovr;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -10,9 +11,8 @@ import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
-import plovr.io.Settings;
-
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -51,6 +51,8 @@ public final class Config {
 
   private final String outputWrapper;
 
+  private final Charset outputCharset;
+
   private final boolean fingerprintJsFiles;
 
   private final Map<DiagnosticGroup, CheckLevel> diagnosticGroups;
@@ -83,6 +85,7 @@ public final class Config {
       boolean prettyPrint,
       boolean printInputDelimiter,
       @Nullable String outputWrapper,
+      Charset outputCharset,
       boolean fingerprintJsFiles,
       Map<DiagnosticGroup, CheckLevel> diagnosticGroups,
       Map<String, JsonPrimitive> defines,
@@ -102,6 +105,7 @@ public final class Config {
     this.prettyPrint = prettyPrint;
     this.printInputDelimiter = printInputDelimiter;
     this.outputWrapper = outputWrapper;
+    this.outputCharset = outputCharset;
     this.fingerprintJsFiles = fingerprintJsFiles;
     this.diagnosticGroups = diagnosticGroups;
     this.defines = ImmutableMap.copyOf(defines);
@@ -161,6 +165,18 @@ public final class Config {
     return outputWrapper;
   }
 
+  public Charset getOutputCharset() {
+    return outputCharset;
+  }
+
+  /**
+   * The value of the Content-Type header to use when writing JavaScript content
+   * in response to an HTTP request.
+   */
+  public String getJsContentType() {
+    return "text/javascript; charset=" + outputCharset.name();
+  }
+
   /**
    * @return null if no output wrapper has been set
    */
@@ -189,7 +205,7 @@ public final class Config {
     if (printInputDelimiter) {
       options.inputDelimiter = "// Input %num%: %name%";
     }
-    options.setOutputCharset(Settings.COMPILER_OUTPUT_CHARSET.name());
+    options.setOutputCharset(getOutputCharset().name());
 
     // Apply this.defines.
     for (Map.Entry<String, JsonPrimitive> entry : defines.entrySet()) {
@@ -284,6 +300,8 @@ public final class Config {
 
     private String outputWrapper = null;
 
+    private Charset outputCharset = Charsets.UTF_8;
+
     private boolean fingerprintJsFiles = false;
 
     private Map<DiagnosticGroup, CheckLevel> diagnosticGroups = null;
@@ -334,6 +352,7 @@ public final class Config {
       this.prettyPrint = config.prettyPrint;
       this.printInputDelimiter = config.printInputDelimiter;
       this.outputWrapper = config.outputWrapper;
+      this.outputCharset = config.outputCharset;
       this.fingerprintJsFiles = config.fingerprintJsFiles;
       this.diagnosticGroups = config.diagnosticGroups;
       this.stripNameSuffixes = config.stripNameSuffixes;
@@ -420,6 +439,10 @@ public final class Config {
       this.outputWrapper = outputWrapper;
     }
 
+    public void setOutputCharset(Charset outputCharset) {
+      this.outputCharset = outputCharset;
+    }
+
     public void setFingerprintJsFiles(boolean fingerprint) {
       this.fingerprintJsFiles = fingerprint;
     }
@@ -495,6 +518,7 @@ public final class Config {
           prettyPrint,
           printInputDelimiter,
           outputWrapper,
+          outputCharset,
           fingerprintJsFiles,
           diagnosticGroups,
           defines,

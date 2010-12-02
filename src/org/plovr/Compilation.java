@@ -256,7 +256,8 @@ public final class Compilation {
       // it should only be written out to a file after the compiled code has
       // been generated.
       if (sourceMapPath != null) {
-        Writer writer = Streams.createFileWriter(sourceMapPath + "_" + moduleName);
+        Writer writer = Streams.createFileWriter(
+            sourceMapPath + "_" + moduleName, config);
         // This is safe because getCodeForModule() was just called, which has
         // the side-effect of calling compiler.toSource(module).
         SourceMap sourceMap = compiler.getSourceMap();
@@ -283,7 +284,7 @@ public final class Compilation {
             }
       };
 
-      Writer writer = Streams.createFileWriter(outputFile);
+      Writer writer = Streams.createFileWriter(outputFile, config);
       appendRootModuleInfo(writer, isDebugMode, fingerprintedModuleNameToUri);
       Closeables.close(writer, false);
     }

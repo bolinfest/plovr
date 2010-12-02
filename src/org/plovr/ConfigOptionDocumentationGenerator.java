@@ -3,6 +3,7 @@ package org.plovr;
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -160,6 +161,7 @@ public final class ConfigOptionDocumentationGenerator {
         ImmutableMap.<String, Object>builder()
         .put("allNames", allNames)
         .put("descriptors", descriptorData)
+        .put("year", Calendar.getInstance().get(Calendar.YEAR))
         .build();
 
     final SoyMsgBundle messageBundle = null;

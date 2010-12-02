@@ -108,15 +108,17 @@ public final class PseudoTranslator {
     return builder.toString();
   }
 
-  public static void translateXlf(File input, File output) throws IOException, ParserConfigurationException, SAXException {
+  public static void translateXlf(File input, File output)
+  throws IOException, ParserConfigurationException, SAXException {
     InputStream istream = new FileInputStream(input);
-    Writer writer = Streams.createFileWriter(output);
+    Writer writer = Streams.createL10nFileWriter(output);
     translateXlf(istream, writer);
     istream.close();
     writer.close();
   }
 
-  public static void translateXlf(InputStream input, Writer output) throws IOException, ParserConfigurationException, SAXException {
+  public static void translateXlf(InputStream input, Writer output)
+  throws IOException, ParserConfigurationException, SAXException {
     SAXParser parser = SAXParserFactory.newInstance().newSAXParser();
     DefaultHandler handler = new TranslatingContentHandler(output);
     parser.parse(input, handler);
