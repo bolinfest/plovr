@@ -1,7 +1,8 @@
 package plovr.io;
 
+import java.io.BufferedOutputStream;
 import java.io.IOException;
-import java.io.Writer;
+import java.io.OutputStream;
 
 import org.plovr.Config;
 
@@ -25,14 +26,15 @@ public final class Responses {
   public static void writeJs(
       String js, Config config, HttpExchange exchange)
   throws IOException {
+    // Write the Content-Type and Content-Length headers.
     Headers responseHeaders = exchange.getResponseHeaders();
     responseHeaders.set("Content-Type", config.getJsContentType());
-    int responseLength = js.getBytes(config.getOutputCharset()).length;
-    exchange.sendResponseHeaders(200, responseLength);
+    byte[] bytes = js.getBytes(config.getOutputCharset());
+    exchange.sendResponseHeaders(200, bytes.length);
 
-    Writer responseBody = Streams.createOutputStreamWriter(
-        exchange.getResponseBody(), config);
-    responseBody.write(js);
-    responseBody.close();
+    // Write the JavaScript code to the response and close it.
+    OutputStream output = new BufferedOutputStream(exchange.getResponseBody());
+    output.write(bytes);
+    output.close();
   }
 }
