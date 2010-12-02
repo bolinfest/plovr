@@ -1,7 +1,6 @@
 package org.plovr;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
 
 import java.io.File;
 import java.util.List;
@@ -12,7 +11,6 @@ import org.junit.Test;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
@@ -44,7 +42,7 @@ public class ModuleConfigTest {
       String name, String input, String[] deps) {
     ModuleConfig.ModuleInfo moduleInfo = new ModuleConfig.ModuleInfo();
     moduleInfo.setName(name);
-    moduleInfo.setInput(input);
+    moduleInfo.setInputs(ImmutableList.of(input));
     moduleInfo.setDeps(ImmutableList.copyOf(deps));
     return moduleInfo;
   }

@@ -1,7 +1,11 @@
 package org.plovr;
 
+import java.util.List;
+
 import com.google.common.base.Function;
+import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
 
@@ -28,6 +32,46 @@ public final class GsonUtil {
       }
     }
     return null;
+  }
+
+  /**
+   * @param element must be one of:
+   * <ul>
+   *   <li>{@code null}, in which case this returns {@code null}
+   *   <li>a single string literal
+   *   <li>a list of non-null string literals
+   * </ul>
+   * @return null or a list of non-null strings
+   * @throws IllegalArgumentException if {@code element} does not meet any of
+   *     the above conditions
+   */
+  public static List<String> toListOfStrings(JsonElement element)
+  throws IllegalArgumentException {
+    if (element == null || element.isJsonNull()) {
+      return null;
+    }
+
+    String str = stringOrNull(element);
+    if (str != null) {
+      return ImmutableList.of(str);
+    }
+
+    if (!element.isJsonArray()) {
+      throw new IllegalArgumentException(
+          "Must be either null, a single string, or an array of strings, but was: " + element);
+    }
+
+    JsonArray array = element.getAsJsonArray();
+    ImmutableList.Builder<String> builder = ImmutableList.builder();
+    for (JsonElement el : array) {
+      str = stringOrNull(el);
+      if (str == null) {
+        throw new IllegalArgumentException(
+            "List contained an element that was not a string literal: " + el);
+      }
+      builder.add(str);
+    }
+    return builder.build();
   }
 
   public static final Function<String, JsonPrimitive>

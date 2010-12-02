@@ -10,19 +10,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
-import org.plovr.util.Pair;
-
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.common.collect.Sets.SetView;
-import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.javascript.jscomp.JSModule;
@@ -82,7 +77,7 @@ public final class ModuleConfig {
   List<String> getInputNames() {
     ImmutableList.Builder<String> inputs = ImmutableList.builder();
     for (String module : topologicalSort) {
-      inputs.add(moduleInfoMap.get(module).getInput());
+      inputs.addAll(moduleInfoMap.get(module).getInputs());
     }
     return inputs.build();
   }
@@ -238,9 +233,11 @@ public final class ModuleConfig {
         ImmutableSet.copyOf(inputsInOrder));
     for (String module : topologicalSort) {
       ModuleInfo moduleInfo = moduleInfoMap.get(module);
-      JsInput primaryInput = manifest.getJsInputByName(moduleInfo.getInput());
       LinkedHashSet<JsInput> deps = new LinkedHashSet<JsInput>();
-      manifest.buildDependencies(provideToSource, deps, primaryInput);
+      for (String inputName : moduleInfo.getInputs()) {
+        JsInput input = manifest.getJsInputByName(inputName);
+        manifest.buildDependencies(provideToSource, deps, input);
+      }
       moduleToTransitiveDependencies.put(module, deps);
     }
 
@@ -642,17 +639,36 @@ public final class ModuleConfig {
         throws BadDependencyTreeException {
 
       // Convert the JSON into a list of module entries.
-      Map<String, ModuleInfo> moduleInfo = Maps.newHashMap();
+      Map<String, ModuleInfo> moduleInfos = Maps.newHashMap();
       for (Map.Entry<String, JsonElement> entry : json.entrySet()) {
-        Gson gson = new Gson();
-        ModuleInfo moduleEntry = gson.fromJson(entry.getValue(),
-            ModuleInfo.class);
+        // Each JsonElement should be an object with "deps" and "inputs" fields.
         String name = entry.getKey();
-        moduleEntry.setName(name);
-        moduleInfo.put(name, moduleEntry);
+        JsonElement element = entry.getValue();
+        if (!element.isJsonObject()) {
+          throw new IllegalArgumentException("Value for " + name +
+              " must be a JSON object: " + element);
+        }
+        JsonObject obj = element.getAsJsonObject();
+
+        // Read the values out of the JSON object to populate the moduleInfo.
+        ModuleInfo moduleInfo = new ModuleInfo();
+        moduleInfo.setName(name);
+        List<String> deps = GsonUtil.toListOfStrings(obj.get("deps"));
+        moduleInfo.setDeps(deps);
+        List<String> inputs = GsonUtil.toListOfStrings(obj.get("inputs"));
+        if (inputs == null) {
+          throw new IllegalArgumentException("Module " + name +
+              " must specify inputs" +
+              // TODO(bolinfest): Remove after this change has been out for awhile
+              "\nMake sure you specify \"inputs\" in the config file rather " +
+              "than \"input\" as the name has changed to reflect that the " +
+              "value may be either a single string or a list of strings.");
+        }
+        moduleInfo.setInputs(inputs);
+        moduleInfos.put(name, moduleInfo);
       }
 
-      setModuleInfo(moduleInfo);
+      setModuleInfo(moduleInfos);
     }
 
     void setModuleInfo(Map<String, ModuleInfo> moduleInfo)
@@ -743,9 +759,8 @@ public final class ModuleConfig {
   }
 
   public static class ModuleInfo {
-    // This field is transient because it is used with Gson.
-    private transient String name;
-    private String input;
+    private String name;
+    private List<String> inputs;
     private List<String> deps;
 
     public ModuleInfo() {
@@ -759,20 +774,21 @@ public final class ModuleConfig {
       return name;
     }
 
-    // TODO: It should be possible for a module to specify multiple inputs.
-    public String getInput() {
-      return input;
+    public List<String> getInputs() {
+      return inputs;
     }
 
-    public void setInput(String input) {
-      this.input = input;
+    public void setInputs(List<String> inputs) {
+      Preconditions.checkNotNull(inputs);
+      this.inputs = ImmutableList.copyOf(inputs);
     }
 
     public List<String> getDeps() {
       return deps;
     }
 
-    public void setDeps(Iterable<String> deps) {
+    public void setDeps(List<String> deps) {
+      Preconditions.checkNotNull(deps);
       this.deps = ImmutableList.copyOf(deps);
     }
 

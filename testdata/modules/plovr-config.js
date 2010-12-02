@@ -5,16 +5,16 @@
 
   "modules": {
     "app": {
-      "input": "app_init.js",
+      "inputs": "app_init.js",
       "deps": []
-    }, 
+    },
     "api": {
-      "input": "api_init.js",
-      "deps": ["app"]
+      "inputs": "api_init.js",
+      "deps": "app"
     },
     "settings": {
-      "input": "settings_init.js",
-      "deps": ["app"]
+      "inputs": "settings_init.js",
+      "deps": "app"
     }
   },
   "module-output-path": "../../build/module-example/module_%s.js",

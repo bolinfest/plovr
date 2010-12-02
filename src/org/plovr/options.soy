@@ -41,6 +41,9 @@ pre, code, .yes {
 .yes, .no {
   font-weight: bold;
 }
+.comment {
+  color: #A00; /* dark red */
+}
 {/literal}
 </style>
 
@@ -58,7 +61,7 @@ following places:
       via a <code>&lt;script></code> tag, such that the URL of the page that
       loads the URL will be sent via the <code>referer</code> header.
       (Note that a user agent that loads a <code>file://</code> URL will not
-      send the <code>referer</code> for security reasons.) 
+      send the <code>referer</code> for security reasons.)
 </ol>
 This list is ordered by precdedence. For example, if the page{sp}
 <code>http://example.com/foo?mode=SIMPLE</code> loads{sp}
@@ -146,6 +149,31 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     Whether to fingerprint the JS files for modules when plovr is used in
     build mode. The fingerprint is an md5 hash of the file content.
     Defaults to <code>false</code>.
+  {case 'modules'}
+    An object literal that contains mappings from module names to module definitions.
+    Each module definition should have two properties: <code>inputs</code> and
+    {sp}<code>deps</code>. The <code>inputs</code> property specifies the
+    inputs that must be contained in that module. The <code>deps</code> property
+    specifies the modules that the specified module depends on.
+    The value of each property may be either a single string literal or an array
+    of string literals. Because the graph of modules must form a rooted DAG,
+    exactly one module may specify an empty array as its value for <code>deps</code>,
+    as that module must be the root module.
+{literal}<pre>
+"modules": {
+  "app": {
+    "inputs": "app_init.js",
+    "deps": [] <code class="comment">// This must be the root module.</code>
+  },
+  "api": {
+    "inputs": ["api.js", "api_init.js"],
+    "deps": "app"
+  },
+  "settings": {
+    "inputs": "settings_init.js",
+    "deps": "app"
+  }
+}</pre>{/literal}
   {case 'define'}
     An object literal that contains a mapping of variables in the JavaScript code
     that are annotated with <code>@define</code> (indicating that they can be
@@ -161,9 +189,9 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     <code>"WARNING"</code>, or <code>"ERROR"</code>. The following is an example
     of enabling a fairly strict set of checks:
 {literal}<pre>"checks": {
-  // Unfortunately, the Closure Library violates these in many places.
+  <code class="comment">// Unfortunately, the Closure Library violates these in many places.
   // "accessControls": "ERROR",
-  // "visibility": "ERROR"
+  // "visibility": "ERROR"</code>
 
   "checkRegExp": "ERROR",
   "checkTypes": "ERROR",
