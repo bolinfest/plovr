@@ -259,18 +259,20 @@ public final class Manifest {
 
   private void getInputs(File file, String path, Set<JsInput> output,
       boolean includeSoy) {
-    Preconditions.checkArgument(file.exists(), "File not found at: " +
-        file.getAbsolutePath());
-
-    // Some editors, such as Emacs, may write backup files whose names start
-    // with a dot. Such files should be ignored. (If this turns out to be an
-    // issue, this could be changed so it is configurable.) One common
-    // exception is when the name is simply ".", referring to the current
-    // directory.
+    // Some editors may write backup files whose names start with a
+    // dot. Furthermore, Emacs will create symlinks that start with a
+    // dot that don't point at actual files, causing file.exists() to
+    // not work. Such files should be ignored. (If this turns out to
+    // be an issue, this could be changed so it is configurable.) One
+    // common exception is when the name is simply ".", referring to
+    // the current directory.
     if (file.getName().startsWith(".") && !".".equals(file.getName())) {
       logger.info("Ignoring: " + file);
       return;
     }
+
+    Preconditions.checkArgument(file.exists(), "File not found at: " +
+        file.getAbsolutePath());
 
     if (file.isFile()) {
       String fileName = file.getName();
