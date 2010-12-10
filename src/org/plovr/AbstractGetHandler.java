@@ -1,6 +1,10 @@
 package org.plovr;
 import java.io.IOException;
 import java.net.URI;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.TimeZone;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -9,6 +13,7 @@ import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
@@ -72,6 +77,9 @@ abstract class AbstractGetHandler implements HttpHandler {
             config = ConfigParser.update(config, referrerData);
           }
 
+          // Set the cache headers
+          setCacheHeaders(exchange.getResponseHeaders());
+
           doGet(exchange, queryData, config);
         }
       } catch (Throwable t) {
@@ -79,6 +87,20 @@ abstract class AbstractGetHandler implements HttpHandler {
         // TODO(bolinfest): Write/flush response.
       }
     }
+  }
+  
+  /**
+   * Sets the cache headers to disable caching of resources.
+   * See http://code.google.com/p/doctype/wiki/ArticleHttpCaching
+   */
+  protected void setCacheHeaders(Headers headers) {
+    DateFormat format = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz");
+    format.setTimeZone(TimeZone.getTimeZone("GMT"));
+
+    headers.set("Date", format.format(new Date()));
+    headers.set("Expires", "Fri, 01 Jan 1990 00:00:00 GMT");
+    headers.set("Pragma", "no-cache");
+    headers.set("Cache-control", "no-cache, must-revalidate");
   }
 
   /**

@@ -19,6 +19,7 @@ import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.data.SoyMapData;
 import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.tofu.SoyTofu;
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 
 /**
@@ -145,6 +146,12 @@ final class InputFileHandler extends AbstractGetHandler {
     }
 
     Responses.writeJs(code, config, exchange);
+  }
+
+  @Override
+  protected void setCacheHeaders(Headers headers) {
+    // TODO: allow caching of JS files
+    super.setCacheHeaders(headers);
   }
 
   static Function<JsInput,String> createInputNameToUriConverter(
