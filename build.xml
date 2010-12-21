@@ -227,6 +227,7 @@
           fork="true">
       <arg value="serve" />
       <arg value="${demo.dir}/demo-config.js" />
+      <arg value="${testdata.dir}/modules/plovr-config.js" />
     </java>
 
   </target>

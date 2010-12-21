@@ -38,6 +38,7 @@ public class RequestHandlerSelector implements HttpHandler {
     builder.put(".js", "text/javascript");
     builder.put(".png", "image/png");
     builder.put(".txt", "text/plain");
+    builder.put(".sh", "text/plain");
     extensionToContentType = builder.build();
 
     soyRequestHandler = new SoyRequestHandler(config);
