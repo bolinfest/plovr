@@ -39,8 +39,10 @@ public final class ConfigOptionDocumentationGenerator {
     builder.add(Resources.getResource(ConfigOptionDocumentationGenerator.class,
         "options.soy"));
 
+    // TODO(mbolin): Find a better way to share globals.
     Map<String, String> globals = ImmutableMap.<String, String>builder()
         .put("YEAR", String.valueOf(Calendar.getInstance().get(Calendar.YEAR)))
+        .put("BOOK_URL", "http://www.amazon.com/gp/product/1449381871?ie=UTF8&tag=bolinfestcom-20&link_code=as3&camp=211189&creative=373489&creativeASIN=1449381871")
         .build();
     builder.setCompileTimeGlobals(globals);
 
