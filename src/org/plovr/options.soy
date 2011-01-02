@@ -197,6 +197,8 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
 {literal}<pre>"define": {
   "goog.DEBUG": false
 }</pre>{/literal}
+    Note that these compile-time defines will only take effect when the code is
+    compiled in either <code>SIMPLE</code> or <code>ADVANCED</code> modes.
   {case 'checks'}
     An object literal that contains a mapping of Closure Compiler checks to the
     desired check level, which must be one of <code>"OFF"</code>,{sp}
