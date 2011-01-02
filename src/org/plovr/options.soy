@@ -151,11 +151,18 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     compiled output in an anonymous function preceded by a copyright comment, specify:
 <pre>"// Copyright {YEAR}\n{literal}(function(){%output%})();{/literal}"</pre>
   {case 'output-charset'}
-    Defaults to <code>"UTF-8"</code>.
-    Does not default to <code>"US-ASCII"</code> because there are many characters
-    in <code>datetimesymbols.js</code> in the Closure Library that cannot be
-    represented in ASCII.
-    In order to make sure that your JavaScript code is interpreted with the
+    Defaults to <code>"US-ASCII"</code>.
+    Although <code>datetimesymbols.js</code> in the Closure Library contains
+    many non-ASCII characters, all of them are in string literals, so the
+    Closure Compiler is able to represent them using the ASCII charset by
+    escaping them. For example, the string <code>'sábado'</code> that contains
+    the non-ASCII character <code>'á'</code> will be output as{sp}
+    <code>'s\u00e1bado'</code>.
+    <p>
+    If you use a lot of international characters in your strings, then you
+    may want to consider setting this to <code>"UTF-8"</code>.
+    Though if you do so,
+    in order to make sure that your JavaScript code is interpreted with the
     correct character encoding, make sure to specify it in the <code>&lt;script></code>
     tag as follows:
 <pre>&lt;script type="text/javascript" src="myscript.js" charset="utf-8">&lt;/script></pre>

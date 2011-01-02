@@ -300,7 +300,7 @@ public final class Config {
 
     private String outputWrapper = null;
 
-    private Charset outputCharset = Charsets.UTF_8;
+    private Charset outputCharset = Charsets.US_ASCII;
 
     private boolean fingerprintJsFiles = false;
 
