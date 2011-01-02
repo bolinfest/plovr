@@ -5,23 +5,38 @@
 
   <property name="src.dir" value="${basedir}/src" />
   <property name="test.dir" value="${basedir}/test" />
-	<property name="testdata.dir" value="${basedir}/testdata" />
+  <property name="testdata.dir" value="${basedir}/testdata" />
   <property name="www.dir" value="${basedir}/www" />
   <property name="demo.dir" value="${www.dir}/demo" />
   <property name="lib.dir" value="${basedir}/lib" />
   <property name="build.dir" value="${basedir}/build" />
   <property name="classes.dir" value="${build.dir}/classes" />
   <property name="build.dir.www" value="${build.dir}/www" />
-	<property name="javadoc.dir" value="${build.dir.www}/javadoc" />
+  <property name="javadoc.dir" value="${build.dir.www}/javadoc" />
 
-  <!-- In order to build the jar, each of the Closure Tools must be          -->
-  <!-- checked out in a parallel directory.                                  -->
-  <property name="closure-compiler.dir" value="${basedir}/../closure-compiler" />
-  <property name="closure-library.dir" value="${basedir}/../closure-library" />
-  <property name="closure-templates.dir" value="${basedir}/../closure-templates" />
+  <property name="closure.dir" value="${basedir}/closure" />
+  <property name="closure-compiler.dir" value="${closure.dir}/closure-compiler" />
+  <property name="closure-library.dir" value="${closure.dir}/closure-library" />
+  <property name="closure-templates.dir" value="${closure.dir}/closure-templates" />
 
   <path id="plovr.classpath">
+    <!-- All jars listed here must also be included in plovr.jar -->
     <fileset dir="${lib.dir}" includes="*.jar" />
+    <fileset dir="${closure-compiler.dir}/lib"
+              includes="args4j.jar,
+                       json.jar,
+                       jsr305.jar,
+                       libtrunk_rhino_parser_jarjared.jar,
+                       protobuf-java.jar"
+             />
+    <fileset dir="${closure-templates.dir}/java/lib"
+             includes="aopalliance.jar,
+                       guice-assistedinject-snapshot.jar,
+                       guice-multibindings-snapshot.jar,
+                       guice-snapshot.jar,
+                       javax-inject.jar"
+             />
+
     <pathelement location="${classes.dir}" />
     <!-- Include src.dir to include resources, such as modules.soy -->
     <pathelement location="${src.dir}" />
@@ -33,18 +48,26 @@
 
   <target name="compile" description="compile Java source code">
     <mkdir dir="${classes.dir}" />
-    <javac srcdir="${src.dir}"
-           destdir="${classes.dir}"
+    <javac destdir="${classes.dir}"
            classpathref="plovr.classpath"
            debug="on"
            >
+      <src path="${src.dir}" />
+      <src path="${test.dir}" />
+      <src path="${closure-compiler.dir}/src" />
+      <src path="${closure-compiler.dir}/gen" />
+      <src path="${closure-templates.dir}/java/src" />
+      <src path="${closure-templates.dir}/build/genfiles" />
     </javac>
-    <javac srcdir="${test.dir}"
-           destdir="${classes.dir}"
-           classpathref="plovr.classpath"
-           debug="on"
-           >
-    </javac>
+
+    <!-- Move Messages.properties where ScriptRuntime.java expects it. -->
+    <mkdir dir="${classes.dir}/rhino_ast/java/com/google/javascript/rhino/" />
+    <copy file="${closure-compiler.dir}/src/com/google/javascript/rhino/Messages.properties"
+          todir="${classes.dir}/rhino_ast/java/com/google/javascript/rhino/" />
+
+    <!-- Move ParserConfig.properties where ParserRunner.java expects it. -->
+    <copy file="${closure-compiler.dir}/src/com/google/javascript/jscomp/parsing/ParserConfig.properties"
+          todir="${classes.dir}/com/google/javascript/jscomp/parsing" />
   </target>
 
   <target name="test"
@@ -124,6 +147,21 @@
                   includes="soyutils_usegoog.js"
                   prefix="soy" />
       <zipgroupfileset dir="${lib.dir}" includes="*.jar" />
+      <zipgroupfileset dir="${closure-compiler.dir}/lib"
+                       includes="args4j.jar,
+                                 json.jar,
+                                 jsr305.jar,
+                                 libtrunk_rhino_parser_jarjared.jar,
+                                 protobuf-java.jar"
+                        />
+       <zipgroupfileset dir="${closure-templates.dir}/java/lib"
+                        includes="aopalliance.jar,
+                                  guice-assistedinject-snapshot.jar,
+                                  guice-multibindings-snapshot.jar,
+                                  guice-snapshot.jar,
+                                  javax-inject.jar"
+                        />
+
       <fileset dir="${classes.dir}" />
       <manifest>
         <attribute name="Main-Class" value="org.plovr.cli.Main" />
@@ -156,19 +194,19 @@
     </java>
   </target>
 
-	<target name="generate-options-documentation"
-	        description="generates the documentation for ConfigOption.java"
-		      depends="compile">
-		<mkdir dir="${build.dir.www}" />
+  <target name="generate-options-documentation"
+          description="generates the documentation for ConfigOption.java"
+          depends="compile">
+    <mkdir dir="${build.dir.www}" />
     <java fork="true"
-    	    classname="org.plovr.ConfigOptionDocumentationGenerator"
-    	    output="${build.dir.www}/options.html"
+          classname="org.plovr.ConfigOptionDocumentationGenerator"
+          output="${build.dir.www}/options.html"
           failonerror="true"
           logerror="true"
-    	    >
+          >
       <classpath refid="plovr.classpath"></classpath>
    </java>
-	</target>
+  </target>
 
   <target name="develop-documentation"
           description="runs the soyweb server in debug mode to develop docs">
