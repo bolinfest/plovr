@@ -27,7 +27,7 @@ import com.sun.net.httpserver.HttpExchange;
  *
  * @author bolinfest@gmail.com (Michael Bolin)
  */
-final class InputFileHandler extends AbstractGetHandler {
+public class InputFileHandler extends AbstractGetHandler {
 
   private static final SoyTofu TOFU;
 

@@ -23,7 +23,7 @@ import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.tofu.SoyTofu;
 import com.sun.net.httpserver.HttpExchange;
 
-public final class CompileRequestHandler extends AbstractGetHandler {
+public class CompileRequestHandler extends AbstractGetHandler {
 
   private static final Logger logger = Logger.getLogger(
       CompileRequestHandler.class.getName());

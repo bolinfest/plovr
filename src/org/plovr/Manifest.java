@@ -85,6 +85,22 @@ public final class Manifest {
   }
 
   /**
+   * @param the set of files (or directories) that contain JS inputs that
+   *     may be included in the compilation
+   */
+  public Set<File> getDependencies() {
+    return ImmutableSet.copyOf(dependencies);
+  }
+
+  /**
+   * @return a list of files (or directories) that contain JS inputs that
+   *     must be included in the compilation
+   */
+  public List<JsInput> getRequiredInputs() {
+    return ImmutableList.copyOf(requiredInputs);
+  }
+
+  /**
    * @param moduleConfig
    * @return a new {@link Compilation} that reflects the configuration for
    *         this {@link Manifest}.
