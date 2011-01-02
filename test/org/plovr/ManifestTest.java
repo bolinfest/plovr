@@ -73,6 +73,7 @@ public class ManifestTest extends TestCase {
             "/goog/disposable/disposable.js",
             "/goog/events/event.js",
             "/goog/events/eventtype.js",
+            "/goog/reflect/reflect.js",
             "/goog/events/browserevent.js",
             "/goog/events/eventwrapper.js",
             "/goog/events/listener.js",
