@@ -73,7 +73,9 @@ public final class Manifest {
       boolean customExternsOnly) {
     Preconditions.checkNotNull(dependencies);
     Preconditions.checkNotNull(requiredInputs);
-    Preconditions.checkArgument(requiredInputs.size() > 0);
+    Preconditions.checkArgument(requiredInputs.size() > 0,
+        "No inputs were specified! " +
+        "Make sure there is an option named 'inputs' in the config file");
 
     // TODO(bolinfest): Monitor directories for changes and have the JsInput
     // mark itself dirty when there is a change.
