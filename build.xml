@@ -44,9 +44,15 @@
 
   <target name="clean" description="remove all generated files">
     <delete dir="${build.dir}" />
+
+    <!-- Clean Closure Templates genfiles. -->
+    <ant dir="${closure-templates.dir}" target="clean" inheritAll="false" />
   </target>
 
   <target name="compile" description="compile Java source code">
+    <!-- Build intermediate Closure Templates target for its genfiles. -->
+    <ant dir="${closure-templates.dir}" target="compile" inheritAll="false" />
+
     <mkdir dir="${classes.dir}" />
     <javac destdir="${classes.dir}"
            classpathref="plovr.classpath"
