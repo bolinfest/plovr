@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.io.Closeables;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -44,7 +45,9 @@ abstract class AbstractGetHandler implements HttpHandler {
     this.usesRestfulPath = usesRestfulPath;
   }
 
-  public final void handle(HttpExchange exchange) throws IOException {
+  @Override
+  public final void handle(HttpExchange ex) throws IOException {
+    HttpExchangeDelegate exchange = new HttpExchangeDelegate(ex);
     String requestMethod = exchange.getRequestMethod();
     if (requestMethod.equalsIgnoreCase("GET")) {
       try {
@@ -84,7 +87,16 @@ abstract class AbstractGetHandler implements HttpHandler {
         }
       } catch (Throwable t) {
         logger.log(Level.SEVERE, "Error during GET request to " + exchange.getRequestURI(), t);
-        // TODO(bolinfest): Write/flush response.
+        
+        // Even though there has been an error, it is important to write a
+        // response or else the client will hang.
+        if (exchange.haveResponseHeadersBeenSent()) {
+          // If the response headers have already been sent, then just close
+          // whatever has been writen to the response.
+          Closeables.closeQuietly(exchange.getResponseBody());
+        } else {
+          HttpUtil.writeErrorMessageResponse(exchange, t.getMessage());
+        }
       }
     }
   }
