@@ -276,6 +276,13 @@ public enum ConfigOption {
       builder.setDiagnosticGroups(groups);
     }
   }),
+  
+  TREAT_WARNINGS_AS_ERRORS("treat-warnings-as-errors", new ConfigUpdater() {
+    @Override
+    public void apply(boolean treatWarningsAsErrors, Config.Builder builder) {
+      builder.setTreatWarningsAsErrors(treatWarningsAsErrors);
+    }
+  }),
 
   NAME_SUFFIXES_TO_STRIP("name-suffixes-to-strip", new ConfigUpdater() {
     @Override

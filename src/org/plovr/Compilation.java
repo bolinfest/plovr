@@ -93,6 +93,39 @@ public final class Compilation {
     } else {
       this.result = compiler.compileModules(externs, modules, options);
     }
+    
+    if (config.getTreatWarningsAsErrors() && result.warnings.length > 0) {
+      // Combine the errors and warnings into a single array.
+      Result originalResult = this.result;      
+      JSError[] errors = new JSError[originalResult.errors.length +
+                                     originalResult.warnings.length];
+      System.arraycopy(
+          originalResult.errors,
+          0,
+          errors,
+          0,
+          originalResult.errors.length);
+      System.arraycopy(
+          originalResult.warnings,
+          0,
+          errors,
+          originalResult.errors.length,
+          originalResult.warnings.length);
+      
+      this.result = new Result(
+          errors,
+          new JSError[0], /* warnings */
+          originalResult.debugLog,
+          originalResult.variableMap,
+          originalResult.propertyMap,
+          originalResult.namedAnonFunctionMap,
+          originalResult.stringMap,
+          originalResult.functionInformationMap,
+          originalResult.sourceMap,
+          originalResult.externExport,
+          originalResult.cssNames,
+          originalResult.idGeneratorMap);
+    }
   }
 
   public boolean usesModules() {

@@ -56,6 +56,8 @@ public final class Config {
   private final boolean fingerprintJsFiles;
 
   private final Map<DiagnosticGroup, CheckLevel> diagnosticGroups;
+  
+  private final boolean treatWarningsAsErrors;
 
   private final Map<String, JsonPrimitive> defines;
 
@@ -88,6 +90,7 @@ public final class Config {
       Charset outputCharset,
       boolean fingerprintJsFiles,
       Map<DiagnosticGroup, CheckLevel> diagnosticGroups,
+      boolean treatWarningsAsErrors,
       Map<String, JsonPrimitive> defines,
       Set<String> stripNameSuffixes,
       Set<String> stripTypePrefixes,
@@ -108,6 +111,7 @@ public final class Config {
     this.outputCharset = outputCharset;
     this.fingerprintJsFiles = fingerprintJsFiles;
     this.diagnosticGroups = diagnosticGroups;
+    this.treatWarningsAsErrors = treatWarningsAsErrors;
     this.defines = ImmutableMap.copyOf(defines);
     this.stripNameSuffixes = ImmutableSet.copyOf(stripNameSuffixes);
     this.stripTypePrefixes = ImmutableSet.copyOf(stripTypePrefixes);
@@ -186,6 +190,10 @@ public final class Config {
 
   public boolean shouldFingerprintJsFiles() {
     return fingerprintJsFiles;
+  }
+  
+  public boolean getTreatWarningsAsErrors() {
+    return treatWarningsAsErrors;
   }
 
   public CompilerOptions getCompilerOptions() {
@@ -305,6 +313,8 @@ public final class Config {
     private boolean fingerprintJsFiles = false;
 
     private Map<DiagnosticGroup, CheckLevel> diagnosticGroups = null;
+    
+    private boolean treatWarningsAsErrors = false;
 
     private ModuleConfig.Builder moduleConfigBuilder = null;
 
@@ -355,6 +365,7 @@ public final class Config {
       this.outputCharset = config.outputCharset;
       this.fingerprintJsFiles = config.fingerprintJsFiles;
       this.diagnosticGroups = config.diagnosticGroups;
+      this.treatWarningsAsErrors = config.treatWarningsAsErrors;
       this.stripNameSuffixes = config.stripNameSuffixes;
       this.stripTypePrefixes = config.stripTypePrefixes;
       this.idGenerators = config.idGenerators;
@@ -450,6 +461,10 @@ public final class Config {
     public void setDiagnosticGroups(Map<DiagnosticGroup, CheckLevel> groups) {
       this.diagnosticGroups = groups;
     }
+    
+    public void setTreatWarningsAsErrors(boolean treatWarningsAsErrors) {
+      this.treatWarningsAsErrors = treatWarningsAsErrors;
+    }
 
     public void addDefine(String name, JsonPrimitive primitive) {
       defines.put(name, primitive);
@@ -521,6 +536,7 @@ public final class Config {
           outputCharset,
           fingerprintJsFiles,
           diagnosticGroups,
+          treatWarningsAsErrors,
           defines,
           stripNameSuffixes,
           stripTypePrefixes,
