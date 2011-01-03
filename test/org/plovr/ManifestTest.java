@@ -37,7 +37,7 @@ public class ManifestTest extends TestCase {
   };
 
   public void testSimpleManifest() throws CompilationException {
-    File closureLibraryDirectory = new File("../closure-library/closure/goog/");
+    File closureLibraryDirectory = new File("closure/closure-library/closure/goog/");
 
     final List<File> dependencies = ImmutableList.of();
 
