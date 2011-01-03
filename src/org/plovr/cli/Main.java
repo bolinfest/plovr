@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import com.google.javascript.jscomp.Compiler;
+
 /**
  * {@link Main} kicks off the plovr buildr.
  *
@@ -25,7 +27,7 @@ public final class Main {
 
   public static void main(String[] args) throws IOException {
     // The Compiler logging statements produce too much output.
-    Logger.getLogger("com.google.javascript.jscomp").setLevel(Level.OFF);
+    Compiler.setLoggingLevel(Level.OFF);
 
     if (args.length == 0) {
       usage();
