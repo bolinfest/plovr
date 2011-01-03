@@ -65,6 +65,9 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       for (JSError warning : result.warnings) {
         System.err.println(warning);
       }
+      if (result.warnings.length > 0) {
+        System.err.printf("ATTENTION: %d Warnings\n", result.warnings.length);
+      }
 
       ModuleConfig moduleConfig = config.getModuleConfig();
       if (moduleConfig == null) {
