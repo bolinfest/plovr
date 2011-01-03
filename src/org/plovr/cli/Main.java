@@ -2,7 +2,6 @@ package org.plovr.cli;
 
 import java.io.IOException;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import com.google.javascript.jscomp.Compiler;
 
