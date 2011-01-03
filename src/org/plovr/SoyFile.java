@@ -10,6 +10,7 @@ import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.jssrc.SoyJsSrcOptions;
 import com.google.template.soy.jssrc.SoyJsSrcOptions.CodeStyle;
 import com.google.template.soy.msgs.SoyMsgBundle;
+import com.google.template.soy.shared.SoyGeneralOptions.CssHandlingScheme;
 
 /**
  * {@link JsSourceFile} represents a Soy file.
@@ -45,6 +46,7 @@ public class SoyFile extends LocalFileJsInput {
   public String getCode() {
     SoyFileSet.Builder builder = new SoyFileSet.Builder();
     builder.add(getSource());
+    builder.setCssHandlingScheme(CssHandlingScheme.BACKEND_SPECIFIC);
     SoyFileSet fileSet = builder.build();
     final SoyMsgBundle msgBundle = null;
     String code = fileSet.compileToJsSrc(SOY_OPTIONS, msgBundle).get(0);
