@@ -2,17 +2,16 @@ package org.plovr;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.Map;
+import java.util.Set;
 
 import org.plovr.io.Files;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Sets;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.google.javascript.jscomp.JSError;
-import com.google.javascript.jscomp.Result;
 
 /**
  * {@link ConfigParser} extracts a {@link Config} from a JSON config file.
@@ -34,13 +33,32 @@ public final class ConfigParser {
     File parentDirectory = file.getAbsoluteFile().getParentFile();
     Config.Builder builder = Config.builder(parentDirectory);
 
-    // Get the id for the config.
+
+    // Keep track of the keys in the options object so that plovr can warn
+    // about unused values in the config file.
     JsonObject map = root.getAsJsonObject();
+    Set<String> options = Sets.newHashSet();
+    for (Map.Entry<String, JsonElement> entry : map.entrySet()) {
+      options.add(entry.getKey());
+    }
+
+    // Loop over the options in enum value order because it is helpful if some
+    // option values are guaranteed to be processed before others. 
     for (ConfigOption option : ConfigOption.values()) {
-      JsonElement element = map.get(option.getName());
-      if (element != null) {
-        option.update(builder, element);
-      }
+      String optionName = option.getName();
+      if (!map.has(option.getName())) continue;
+
+      JsonElement element = map.get(optionName);
+      option.update(builder, element);
+      options.remove(optionName);
+    }
+    
+    for (String unusedOption : options) {
+      System.err.printf("WARNING: UNUSED OPTION '%s' in %s. " +
+          "See %s for the complete list of options.\n",
+          unusedOption,
+          file.getAbsolutePath(),
+          "http://plovr.com/options.html");
     }
 
     return builder.build();
@@ -52,41 +70,5 @@ public final class ConfigParser {
       option.update(builder, queryData);
     }
     return builder.build();
-  }
-
-  /**
-   * Takes a config file, performs the compilation, and prints the results to
-   * standard out.
-   * @throws CompilationException
-   */
-  public static void main(String[] args) throws IOException, CompilationException {
-    if (args.length != 1) {
-      System.err.println("Must supply exactly one argument: the config file");
-      System.exit(1);
-      return;
-    }
-
-    Logger compilerLogger = Logger.getLogger("com.google.javascript.jscomp");
-    compilerLogger.setLevel(Level.OFF);
-    Logger soyFileLogger = Logger.getLogger("org.plovr.SoyFile");
-    soyFileLogger.setLevel(Level.OFF);
-
-    File configFile = new File(args[0]);
-    Config config = ConfigParser.parseFile(configFile);
-    final ModuleConfig moduleConfig = null;
-    Compilation compilation =
-        config.getManifest().getCompilerArguments(moduleConfig);
-    compilation.compile(config);
-    Result result = compilation.getResult();
-    if (result.success) {
-      System.out.println(compilation.getCompiledCode());
-    } else {
-      for (JSError warning : result.warnings) {
-        System.err.println(warning);
-      }
-      for (JSError error : result.errors) {
-        System.err.println(error);
-      }
-    }
   }
 }
