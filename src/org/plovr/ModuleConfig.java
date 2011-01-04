@@ -698,7 +698,7 @@ public final class ModuleConfig {
       // graph is not unique.
       List<String> topologicalSort = buildDependencies(dependencyTree,
           rootModule);
-      logger.info(topologicalSort.toString());
+      logger.config(topologicalSort.toString());
 
       this.rootModule = rootModule;
       this.dependencyTree = dependencyTree;
