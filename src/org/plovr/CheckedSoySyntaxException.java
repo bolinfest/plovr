@@ -13,24 +13,54 @@ public final class CheckedSoySyntaxException extends CompilationException {
     DiagnosticType.error("PLOVR_SOY_SYNTAX_EXCEPTION", "{0}");
 
   private final SoySyntaxException soySyntaxException;
+  private final PlovrSoySyntaxException plovrSoySyntaxException;
 
   public CheckedSoySyntaxException(SoySyntaxException e) {
     super(e);
     this.soySyntaxException = e;
+    this.plovrSoySyntaxException = null;
   }
 
-  public SoySyntaxException getSoySyntaxException() {
-    return soySyntaxException;
+  public CheckedSoySyntaxException(PlovrSoySyntaxException e) {
+    super(e);
+    this.soySyntaxException = null;
+    this.plovrSoySyntaxException = e;
+  }
+
+  private String getInputPath() {
+    if (soySyntaxException != null) {
+      return soySyntaxException.filePath;
+    } else {
+      return plovrSoySyntaxException.getInput().getName();
+    }
+  }
+
+  @Override
+  public String getMessage() {
+    if (soySyntaxException != null) {
+      return soySyntaxException.getMessage();
+    } else {
+      return plovrSoySyntaxException.getMessage();
+    }    
   }
 
   @Override
   public CompilationError createCompilationError() {
-    final int lineno = -1;
-    final int charno = -1;
-    // TODO(bolinfest): Get the name of the JsInput that caused the exception
-    // and use that instead of soySyntaxException.filePath.
-    JSError jsError = JSError.make(soySyntaxException.filePath, lineno, charno,
-        CheckLevel.ERROR, SOY_SYNTAX_EXCEPTION, soySyntaxException.getMessage());
+    int lineno;
+    int charno;
+    if (soySyntaxException != null) {
+      lineno = -1;
+      charno = -1;
+    } else {
+      lineno = plovrSoySyntaxException.getLineNumber();
+      charno = plovrSoySyntaxException.getCharNumber();
+    }
+    JSError jsError = JSError.make(
+        getInputPath(),
+        lineno,
+        charno,
+        CheckLevel.ERROR, SOY_SYNTAX_EXCEPTION,
+        getMessage());
     return new CompilationError(jsError);
   }
 }

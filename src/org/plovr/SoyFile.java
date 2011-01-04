@@ -7,6 +7,7 @@ import java.util.logging.Logger;
 import org.plovr.io.Files;
 
 import com.google.template.soy.SoyFileSet;
+import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.jssrc.SoyJsSrcOptions;
 import com.google.template.soy.jssrc.SoyJsSrcOptions.CodeStyle;
 import com.google.template.soy.msgs.SoyMsgBundle;
@@ -49,9 +50,13 @@ public class SoyFile extends LocalFileJsInput {
     builder.setCssHandlingScheme(CssHandlingScheme.BACKEND_SPECIFIC);
     SoyFileSet fileSet = builder.build();
     final SoyMsgBundle msgBundle = null;
-    String code = fileSet.compileToJsSrc(SOY_OPTIONS, msgBundle).get(0);
-    logger.fine(code);
-    return code;
+    try {
+      String code = fileSet.compileToJsSrc(SOY_OPTIONS, msgBundle).get(0);
+      logger.fine(code);
+      return code;
+    } catch (SoySyntaxException e) {
+      throw new PlovrSoySyntaxException(e, this);
+    }
   }
 
   @Override

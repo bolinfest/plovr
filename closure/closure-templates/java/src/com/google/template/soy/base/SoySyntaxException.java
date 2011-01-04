@@ -79,6 +79,13 @@ public class SoySyntaxException extends RuntimeException {
     return this;
   }
 
+  /**
+   * Get the original, unmodified error message returned by the Soy parser
+   * without any of the extra information added by {@link #getMessage()}.
+   */
+  public String getSoyParserErrorMessage() {
+    return super.getMessage();
+  }
 
   @Override public String getMessage() {
     if (filePath != null && templateName != null) {

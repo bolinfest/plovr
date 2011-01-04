@@ -240,7 +240,7 @@ public final class Manifest {
     currentDependencyChain.remove(input);
   }
 
-  private Set<JsInput> getAllDependencies() {
+  Set<JsInput> getAllDependencies() {
     Set<JsInput> allDependencies = Sets.newHashSet();
     final boolean includeSoy = true;
     if (closureLibraryDirectory == null) {

@@ -104,6 +104,17 @@ plovr.writeErrors_ = function(errors, html, style) {
           '#' + error['lineNumber'] + '">' +
           plovr.htmlEscape(prefix) +
           '</a>';
+    } else if (error['input']) {
+      // This is likely a Soy error, which is less likely to include line
+      // numbers or the clear ERROR/WARNING text provided by the Compiler.
+      anchor = '<a target="_blank" ' +
+          'href="' + plovr.getViewSourceUrl() +
+          '?id=' + encodeURIComponent(plovr.getConfigId()) +
+          '&name=' + encodeURIComponent(error['input']) + '">' +
+          plovr.htmlEscape(error['input']) +
+          ':</a> ' +
+          (style == plovr.ERROR_STYLE ? 'ERROR' : 'WARNING') +
+          ' - ';
     }
 
     var htmlMessage = plovr.htmlEscape(message);

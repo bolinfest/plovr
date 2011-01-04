@@ -3,6 +3,7 @@ package org.plovr;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
+import java.util.Set;
 
 import com.google.common.io.Resources;
 import com.google.template.soy.SoyFileSet;
@@ -38,11 +39,20 @@ final class ViewFileHandler extends AbstractGetHandler {
     String name = data.getParam("name");
 
     Manifest manifest = config.getManifest();
-    JsInput input = manifest.getJsInputByName(name);
 
     // Write out each line in the input, giving each line an id so the fragment
     // can be used to navigate to it.
-    String[] lines = input.getCode().split("\\n");
+    JsInput input;
+    String codeToDisplay;
+    try {
+      input = manifest.getJsInputByName(name);
+      codeToDisplay = input.getCode();
+    } catch (RuntimeException e) {
+      SoyFile soyFile = findSoyFile(name, manifest, e);
+      input = soyFile;
+      codeToDisplay = soyFile.getTemplateCode();
+    }
+    String[] lines = codeToDisplay.split("\\n");
     SoyMapData mapData = new SoyMapData(
         "name", input.getName(),
         "lines", new SoyListData((Object[])lines)
@@ -60,5 +70,18 @@ final class ViewFileHandler extends AbstractGetHandler {
     Writer responseBody = new OutputStreamWriter(exchange.getResponseBody());
     responseBody.write(html);
     responseBody.close();
+  }
+
+  /**
+   * Find the Soy file by name in the manifest or throw the specified exception.
+   */
+  private SoyFile findSoyFile(String name, Manifest manifest, RuntimeException e) {
+    Set<JsInput> allDeps = manifest.getAllDependencies();
+    for (JsInput input : allDeps) {
+      if (input.getName().equals(name) && input instanceof SoyFile) {
+        return (SoyFile)input;
+      }
+    }
+    throw e;
   }
 }

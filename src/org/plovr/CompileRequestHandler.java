@@ -98,6 +98,8 @@ public class CompileRequestHandler extends AbstractGetHandler {
       return compilation;
     } catch (SoySyntaxException e) {
       throw new CheckedSoySyntaxException(e);
+    } catch (PlovrSoySyntaxException e) {
+      throw new CheckedSoySyntaxException(e);
     }
   }
 
