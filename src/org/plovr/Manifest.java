@@ -123,7 +123,7 @@ public final class Manifest {
     if (moduleConfig == null) {
       List<JsInput> jsInputs = getInputsInCompilationOrder();
       List<JSSourceFile> inputs = Lists.transform(jsInputs, inputToSourceFile);
-      logger.info("Inputs: " + jsInputs.toString());
+      logger.config("Inputs: " + jsInputs.toString());
       return Compilation.create(externs, inputs);
     } else {
       List<JSModule> modules = moduleConfig.getModules(this);
