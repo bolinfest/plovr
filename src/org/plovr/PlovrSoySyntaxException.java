@@ -20,7 +20,7 @@ public final class PlovrSoySyntaxException extends RuntimeException {
 
   @VisibleForTesting
   static final Pattern LINE_AND_CHAR_NO =
-      Pattern.compile(".*\\[line (\\d+), column (\\d+)\\]\\.");
+      Pattern.compile(".*\\[?line (\\d+), column (\\d+)\\]?\\.");
 
   private final SoySyntaxException soySyntaxException;
   private final JsInput input;

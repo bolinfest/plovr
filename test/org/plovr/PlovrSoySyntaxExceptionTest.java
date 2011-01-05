@@ -28,7 +28,7 @@ public class PlovrSoySyntaxExceptionTest {
       "" /* templateCode */);
 
   @Test
-  public void testErrorMessageWithLineInformation() {
+  public void testErrorMessageWithLineInformationWithBrackets() {
     String errorMessage = "Left brace '{' not allowed within a Soy tag " +
     		"delimited by single braces (consider using double braces to delimit " +
     		"the Soy tag) [line 13, column 1].";
@@ -39,6 +39,17 @@ public class PlovrSoySyntaxExceptionTest {
     assertEquals("1", matcher.group(2));
   }
 
+  @Test
+  public void testErrorMessageWithLineInformationNoBrackets() {
+    String errorMessage = "template .base: Encountered \"<EOF>\" at line 55, " +
+    		"column 7.";
+    Matcher matcher = PlovrSoySyntaxException.LINE_AND_CHAR_NO.matcher(
+        errorMessage);
+    assertTrue(matcher.matches());
+    assertEquals("55", matcher.group(1));
+    assertEquals("7", matcher.group(2));
+  }
+  
   @Test
   public void testSoyExceptionWithLineNumber() {
     String errorMessage = "Left brace '{' not allowed within a Soy tag " +
