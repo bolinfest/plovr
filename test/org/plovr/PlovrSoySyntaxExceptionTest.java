@@ -34,7 +34,7 @@ public class PlovrSoySyntaxExceptionTest {
     		"the Soy tag) [line 13, column 1].";
     Matcher matcher = PlovrSoySyntaxException.LINE_AND_CHAR_NO.matcher(
         errorMessage);
-    assertTrue(matcher.matches());
+    assertTrue(matcher.find());
     assertEquals("13", matcher.group(1));
     assertEquals("1", matcher.group(2));
   }
@@ -42,10 +42,10 @@ public class PlovrSoySyntaxExceptionTest {
   @Test
   public void testErrorMessageWithLineInformationNoBrackets() {
     String errorMessage = "template .base: Encountered \"<EOF>\" at line 55, " +
-    		"column 7.";
+    		"column 7.\nWas expecting one of...";
     Matcher matcher = PlovrSoySyntaxException.LINE_AND_CHAR_NO.matcher(
         errorMessage);
-    assertTrue(matcher.matches());
+    assertTrue(matcher.find());
     assertEquals("55", matcher.group(1));
     assertEquals("7", matcher.group(2));
   }

@@ -20,7 +20,7 @@ public final class PlovrSoySyntaxException extends RuntimeException {
 
   @VisibleForTesting
   static final Pattern LINE_AND_CHAR_NO =
-      Pattern.compile(".*\\[?line (\\d+), column (\\d+)\\]?\\.");
+      Pattern.compile("\\[?line (\\d+), column (\\d+)\\]?");
 
   private final SoySyntaxException soySyntaxException;
   private final JsInput input;
@@ -35,7 +35,7 @@ public final class PlovrSoySyntaxException extends RuntimeException {
     String soyErrorMsg = soySyntaxException.getSoyParserErrorMessage();
     Matcher matcher = PlovrSoySyntaxException.LINE_AND_CHAR_NO.matcher(
         soyErrorMsg);
-    if (matcher.matches()) {
+    if (matcher.find()) {
       lineno = Integer.valueOf(matcher.group(1), 10);
       charno = Integer.valueOf(matcher.group(2), 10);
     } else {
