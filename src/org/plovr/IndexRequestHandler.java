@@ -3,9 +3,11 @@ package org.plovr;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
+import java.util.Set;
 
 import com.google.common.base.Function;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import com.google.common.io.Resources;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.data.SoyMapData;
@@ -39,7 +41,8 @@ final class IndexRequestHandler implements HttpHandler {
   }
 
   private void doGet(HttpExchange exchange) throws IOException {
-    Iterable<Config> configs = server.getAllConfigs();
+    Set<Config> configs = Sets.newTreeSet(server.getAllConfigs());
+
     SoyMapData mapData = new SoyMapData(
         "configs", Lists.transform(Lists.newArrayList(configs),
             configToSoyData)

@@ -28,7 +28,7 @@ import com.google.javascript.jscomp.CompilerOptions;
 import com.google.javascript.jscomp.DiagnosticGroup;
 import com.google.javascript.jscomp.WarningLevel;
 
-public final class Config {
+public final class Config implements Comparable<Config> {
 
   private static final Logger logger = Logger.getLogger("org.plovr.Config");
 
@@ -576,4 +576,11 @@ public final class Config {
       }
     };
 
+  /**
+   * Configs are compared by their id so they can be sorted alphabetically.
+   */
+  @Override
+  public int compareTo(Config otherConfig) {
+    return getId().compareTo(otherConfig.getId());
+  }
 }
