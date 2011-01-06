@@ -1,6 +1,6 @@
 html {
   /* Always show scrollbar to prevent the horizontal bouncing when navigating */
-  overflow: scroll;
+  overflow-y: scroll;
 }
 
 body {
