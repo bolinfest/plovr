@@ -27,7 +27,7 @@ public final class ListHandler extends AbstractGetHandler {
     }
 
     String configId = config.getId();
-    StringBuilder builder;
+    List<JsInput> inputs;
     if (compilation.usesModules()) {
       ModuleConfig moduleConfig = config.getModuleConfig();
       Map<String, List<JsInput>> moduleToInputs;
@@ -39,22 +39,24 @@ public final class ListHandler extends AbstractGetHandler {
       }
 
       String module = data.getParam("module");
-      List<JsInput> inputs = moduleToInputs.get(module);
-      builder = new StringBuilder();
-
-      // TODO(bolinfest): add <head>, <body>, etc.
-
-      Function<JsInput, String> converter = InputFileHandler
-          .createInputNameToUriConverter(server, exchange, configId);
-      for (JsInput input : inputs) {
-        builder.append(String.format("<a href='%s'>%s</a><br>",
-            HtmlUtil.htmlEscape(converter.apply(input)),
-            HtmlUtil.htmlEscape(input.getName())));
-      }
-
+      inputs = moduleToInputs.get(module);
     } else {
-      // TODO(bolinfest): implement
-      throw new RuntimeException("not implemented");
+      try {
+        inputs = config.getManifest().getInputsInCompilationOrder();
+      } catch (CompilationException e) {
+        HttpUtil.writeErrorMessageResponse(exchange, e.getMessage());
+        return;
+      }
+    }
+
+    // Build up the list of hyperlinks.
+    StringBuilder builder = new StringBuilder();
+    Function<JsInput, String> converter = InputFileHandler
+        .createInputNameToUriConverter(server, exchange, configId);
+    for (JsInput input : inputs) {
+      builder.append(String.format("<a href='%s'>%s</a><br>",
+          HtmlUtil.htmlEscape(converter.apply(input)),
+          HtmlUtil.htmlEscape(input.getName())));
     }
 
     // Write the response.

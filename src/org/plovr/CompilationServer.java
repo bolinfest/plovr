@@ -83,6 +83,10 @@ public final class CompilationServer implements Runnable {
     return configs.get(id);
   }
 
+  public Iterable<Config> getAllConfigs() {
+    return configs.values();
+  }
+
   /** Records the last compilation for the config. */
   public void recordCompilation(Config config, Compilation compilation) {
     compilations.put(config.getId(), compilation);

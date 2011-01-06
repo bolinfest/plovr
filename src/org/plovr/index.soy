@@ -1,0 +1,72 @@
+{namespace org.plovr}
+
+/**
+ * @param configs
+ */
+{template .index}
+<!doctype html>
+<html>
+<head>
+  <title>plovr</title>
+  <style>
+  {literal}
+  body {
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+  }
+
+  h1 {
+    font-size: 15px;
+  }
+
+  h2 {
+    font-size: 13px;
+  }
+  {/literal}
+  </style>
+</head>
+<body>
+
+<h1>List of configs loaded in plovr</h1>
+
+{foreach $config in $configs}
+<h2>{$config.id}</h2>
+<ul>
+  {if $config.hasModules}
+  <li><a href="/modules?id={$config.id}">Module dependency diagram</a></li>
+  {/if}
+
+  {if $config.rootModule}
+  <li>
+    <a href="/module/{$config.id}/{$config.rootModule}">
+      Compilation output for root module
+    </a>
+  </li>
+  {else}
+  <li>
+    <a href="/compile?id={$config.id}">
+      Compilation output
+    </a>
+  </li>
+  {/if}
+
+  {if $config.hasModules}
+  <li>
+    <a href="/list?id={$config.id}&module={$config.rootModule}">
+      List of files in root module
+    </a>
+  </li>
+  {else}
+  <li>
+    <a href="/list?id={$config.id}">List of files in compilation</a>
+  </li>
+  {/if}
+
+  // This is buggy: try accessing this running "ant integration-test" to reproduce.
+  // <li><a href="/size?id={$config.id}">List of file sizes</a>
+</ul>
+{/foreach}
+
+</body>
+</html>
+{/template}
