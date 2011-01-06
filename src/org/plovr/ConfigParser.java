@@ -25,14 +25,15 @@ public final class ConfigParser {
 
   public static Config parseFile(File file) throws IOException {
     JsonParser jsonParser = new JsonParser();
-    JsonElement root = jsonParser.parse(Files.toString(file));
+    String rootConfigFileContent = Files.toString(file);
+    JsonElement root = jsonParser.parse(rootConfigFileContent);
 
     Preconditions.checkNotNull(root);
     Preconditions.checkArgument(root.isJsonObject());
 
     File parentDirectory = file.getAbsoluteFile().getParentFile();
-    Config.Builder builder = Config.builder(parentDirectory);
-
+    Config.Builder builder = Config.builder(parentDirectory,
+        rootConfigFileContent);
 
     // Keep track of the keys in the options object so that plovr can warn
     // about unused values in the config file.
@@ -43,7 +44,7 @@ public final class ConfigParser {
     }
 
     // Loop over the options in enum value order because it is helpful if some
-    // option values are guaranteed to be processed before others. 
+    // option values are guaranteed to be processed before others.
     for (ConfigOption option : ConfigOption.values()) {
       String optionName = option.getName();
       if (!map.has(option.getName())) continue;
@@ -52,7 +53,7 @@ public final class ConfigParser {
       option.update(builder, element);
       options.remove(optionName);
     }
-    
+
     for (String unusedOption : options) {
       System.err.printf("WARNING: UNUSED OPTION '%s' in %s. " +
           "See %s for the complete list of options.\n",

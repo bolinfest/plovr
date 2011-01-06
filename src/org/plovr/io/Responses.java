@@ -3,6 +3,8 @@ package org.plovr.io;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 
 import org.plovr.Config;
 
@@ -36,5 +38,18 @@ public final class Responses {
     OutputStream output = new BufferedOutputStream(exchange.getResponseBody());
     output.write(bytes);
     output.close();
+  }
+
+  public static void writePlainText(String text, HttpExchange exchange)
+  throws IOException {
+    // Write the Content-Type and Content-Length headers.
+    Headers responseHeaders = exchange.getResponseHeaders();
+    responseHeaders.set("Content-Type", "text/plain");
+    exchange.sendResponseHeaders(200, text.length());
+
+    // Write the plain text to the response and close it.
+    Writer responseBody = new OutputStreamWriter(exchange.getResponseBody());
+    responseBody.write(text);
+    responseBody.close();
   }
 }

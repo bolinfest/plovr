@@ -18,6 +18,7 @@ public enum Handler {
   // documentation, as demonstrated by ConfigOption and
   // ConfigOptionDocumentationGenerator.
   INDEX("/", IndexRequestHandler.class),
+  CONFIG("/config", ConfigRequestHandler.class),
   COMPILE("/compile", CompileRequestHandler.class),
   EXTERNS("/externs", ExternsHandler.class),
   INPUT("/input", InputFileHandler.class),

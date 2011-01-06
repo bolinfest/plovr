@@ -34,6 +34,13 @@ public final class Config {
 
   private final String id;
 
+  /**
+   * The content of the config file used to create this {@link Config}.
+   * Once "config inheritance" is supported, this is going to be a little
+   * more complicated.
+   */
+  private final String rootConfigFileContent;
+
   private final Manifest manifest;
 
   @Nullable
@@ -56,7 +63,7 @@ public final class Config {
   private final boolean fingerprintJsFiles;
 
   private final Map<DiagnosticGroup, CheckLevel> diagnosticGroups;
-  
+
   private final boolean treatWarningsAsErrors;
 
   private final Map<String, JsonPrimitive> defines;
@@ -79,6 +86,7 @@ public final class Config {
    */
   private Config(
       String id,
+      String rootConfigFileContent,
       Manifest manifest,
       @Nullable ModuleConfig moduleConfig,
       CompilationMode compilationMode,
@@ -100,6 +108,7 @@ public final class Config {
     Preconditions.checkNotNull(defines);
 
     this.id = id;
+    this.rootConfigFileContent = rootConfigFileContent;
     this.manifest = manifest;
     this.moduleConfig = moduleConfig;
     this.compilationMode = compilationMode;
@@ -120,8 +129,9 @@ public final class Config {
     this.disambiguateProperties = disambiguateProperties;
   }
 
-  public static Builder builder(File relativePathBase) {
-    return new Builder(relativePathBase);
+  public static Builder builder(File relativePathBase,
+      String rootConfigFileContent) {
+    return new Builder(relativePathBase, rootConfigFileContent);
   }
 
   public static Builder builder(Config config) {
@@ -135,11 +145,15 @@ public final class Config {
   @VisibleForTesting
   public static Builder builderForTesting() {
     File rootDirectory = File.listRoots()[0];
-    return new Builder(rootDirectory);
+    return new Builder(rootDirectory, "");
   }
 
   public String getId() {
     return id;
+  }
+
+  public String getRootConfigFileContent() {
+    return rootConfigFileContent;
   }
 
   public Manifest getManifest() {
@@ -191,7 +205,7 @@ public final class Config {
   public boolean shouldFingerprintJsFiles() {
     return fingerprintJsFiles;
   }
-  
+
   public boolean getTreatWarningsAsErrors() {
     return treatWarningsAsErrors;
   }
@@ -282,6 +296,8 @@ public final class Config {
 
     private final File relativePathBase;
 
+    private final String rootConfigFileContent;
+
     private String id = null;
 
     private final Manifest manifest;
@@ -313,7 +329,7 @@ public final class Config {
     private boolean fingerprintJsFiles = false;
 
     private Map<DiagnosticGroup, CheckLevel> diagnosticGroups = null;
-    
+
     private boolean treatWarningsAsErrors = false;
 
     private ModuleConfig.Builder moduleConfigBuilder = null;
@@ -338,11 +354,13 @@ public final class Config {
     private static final Pattern ID_PATTERN = Pattern.compile(
         AbstractGetHandler.CONFIG_ID_PATTERN);
 
-    private Builder(File relativePathBase) {
+    private Builder(File relativePathBase, String rootConfigFileContent) {
       Preconditions.checkNotNull(relativePathBase);
       Preconditions.checkArgument(relativePathBase.isDirectory(),
           relativePathBase + " is not a directory");
+      Preconditions.checkNotNull(rootConfigFileContent);
       this.relativePathBase = relativePathBase;
+      this.rootConfigFileContent = rootConfigFileContent;
       manifest = null;
       defines = Maps.newHashMap();
     }
@@ -351,6 +369,7 @@ public final class Config {
     private Builder(Config config) {
       Preconditions.checkNotNull(config);
       this.relativePathBase = null;
+      this.rootConfigFileContent = config.rootConfigFileContent;
       this.id = config.id;
       this.manifest = config.manifest;
       this.moduleConfigBuilder = (config.moduleConfig == null)
@@ -461,7 +480,7 @@ public final class Config {
     public void setDiagnosticGroups(Map<DiagnosticGroup, CheckLevel> groups) {
       this.diagnosticGroups = groups;
     }
-    
+
     public void setTreatWarningsAsErrors(boolean treatWarningsAsErrors) {
       this.treatWarningsAsErrors = treatWarningsAsErrors;
     }
@@ -525,6 +544,7 @@ public final class Config {
 
       Config config = new Config(
           id,
+          rootConfigFileContent,
           manifest,
           moduleConfig,
           compilationMode,
