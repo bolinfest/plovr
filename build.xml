@@ -177,7 +177,7 @@
 
   <target name="integration-test"
           depends="jar"
-          description="builds the jar and runs it on localhost:9818">
+          description="build the jar and run it on localhost:9818">
     <echo>Visit http://localhost:9818/compile?id=integration-test</echo>
     <java jar="${build.dir}/plovr.jar" fork="true">
       <arg value="serve" />
@@ -190,7 +190,7 @@
   </target>
 
   <target name="test-soyweb-server"
-          description="runs the soyweb server in debug mode on localhost:9811">
+          description="run the soyweb server in debug mode on localhost:9811">
     <echo>Visit http://localhost:9811/hello</echo>
     <java jar="${build.dir}/plovr.jar" fork="true">
       <jvmarg value="-Xdebug" />
@@ -201,7 +201,7 @@
   </target>
 
   <target name="generate-options-documentation"
-          description="generates the documentation for ConfigOption.java"
+          description="generate the documentation for ConfigOption.java"
           depends="compile">
     <mkdir dir="${build.dir.www}" />
     <java fork="true"
@@ -215,7 +215,7 @@
   </target>
 
   <target name="develop-documentation"
-          description="runs the soyweb server in debug mode to develop docs">
+          description="run the soyweb server in debug mode to develop docs">
     <echo>Visit http://localhost:9811/</echo>
     <java jar="${build.dir}/plovr.jar" fork="true">
       <jvmarg value="-Xdebug" />
@@ -226,7 +226,9 @@
     </java>
   </target>
 
-  <target name="javadoc">
+  <target name="javadoc"
+          description="generate HTML Javadoc for the org.plovr Java code"
+          >
     <mkdir dir="${javadoc.dir}" />
     <javadoc sourcepath="${src.dir}"
              destdir="${javadoc.dir}"
@@ -243,7 +245,7 @@
   </target>
 
   <target name="serve-prod-documentation"
-          description="runs the soyweb server on plovr.com to serve the docs"
+          description="run the soyweb server on plovr.com to serve the docs"
           depends="generate-options-documentation, javadoc, jar">
     <mkdir dir="${build.dir.www}" />
     <copy todir="${build.dir.www}">
@@ -257,7 +259,7 @@
     </java>
   </target>
 
-  <target name="run-demo" description="runs the demo">
+  <target name="run-demo" description="run the demo">
     <available file="${build.dir}/plovr.jar"
                type="file"
                property="jar.present"
@@ -278,4 +280,11 @@
 
   <target name="build" depends="jar" />
 
+  <target name="all"
+          description="build all deliverables for the plovr project"
+          depends="jar,
+                   test,
+                   generate-options-documentation,
+                   javadoc"
+          />
 </project>
