@@ -282,7 +282,8 @@
 
   <target name="all"
           description="build all deliverables for the plovr project"
-          depends="jar,
+          depends="clean,
+                   jar,
                    test,
                    generate-options-documentation,
                    javadoc"
