@@ -65,15 +65,12 @@ public final class CompilationServer implements Runnable {
     // Feature request http://code.google.com/p/plovr/issues/detail?id=23
     System.err.println("Listening on " + serverAddress);
 
-    server.createContext("/compile", new CompileRequestHandler(this));
-    server.createContext("/externs", new ExternsHandler(this));
-    server.createContext("/input", new InputFileHandler(this));
-    server.createContext("/list", new ListHandler(this));
-    server.createContext("/module", new ModuleHandler(this));
-    server.createContext("/modules", new ModulesHandler(this));
-    server.createContext("/size", new SizeHandler(this));
-    server.createContext("/sourcemap", new SourceMapHandler(this));
-    server.createContext("/view", new ViewFileHandler(this));
+    // Register all of the handlers.
+    for (Handler handler : Handler.values()) {
+      server.createContext(handler.getContext(),
+          handler.createHandlerForCompilationServer(this));
+    }
+
     server.setExecutor(Executors.newCachedThreadPool());
     server.start();
   }

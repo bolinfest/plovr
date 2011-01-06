@@ -25,7 +25,7 @@ final class SizeHandler extends AbstractGetHandler {
 
   private final SoyTofu sizeTemplate;
 
-  SizeHandler(CompilationServer server) {
+  public SizeHandler(CompilationServer server) {
     super(server);
 
     SoyFileSet.Builder builder = new SoyFileSet.Builder();

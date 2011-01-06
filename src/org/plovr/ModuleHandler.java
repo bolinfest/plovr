@@ -12,7 +12,7 @@ import com.sun.net.httpserver.HttpExchange;
 
 public class ModuleHandler extends AbstractGetHandler {
 
-  ModuleHandler(CompilationServer server) {
+  public ModuleHandler(CompilationServer server) {
     super(server, true /* usesRestfulPath */);
   }
 

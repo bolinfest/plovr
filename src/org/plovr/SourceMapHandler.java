@@ -10,7 +10,7 @@ import com.sun.net.httpserver.HttpExchange;
 
 final class SourceMapHandler extends AbstractGetHandler {
 
-  SourceMapHandler(CompilationServer server) {
+  public SourceMapHandler(CompilationServer server) {
     super(server);
   }
 

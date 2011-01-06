@@ -24,7 +24,7 @@ final class ViewFileHandler extends AbstractGetHandler {
 
   private final SoyTofu viewTemplate;
 
-  ViewFileHandler(CompilationServer server) {
+  public ViewFileHandler(CompilationServer server) {
     super(server);
 
     SoyFileSet.Builder builder = new SoyFileSet.Builder();
