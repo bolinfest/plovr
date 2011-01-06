@@ -29,6 +29,14 @@ final class CompilationError {
   }
 
   String getMessage() {
+    if (jsError.level == CheckLevel.OFF) {
+      // This is probably related to
+      // http://code.google.com/p/closure-compiler/issues/detail?id=277
+      // Please help track it down!
+      System.err.println("Why is CheckLevel OFF???");
+      return jsError.description;
+    }
+
     if (sourceExcerptProvider == null) {
       return jsError.description;
     } else {
