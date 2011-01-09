@@ -7,6 +7,7 @@ ant jar
 # Extract all of the goog.provide() statements and
 # convert them to goog.require() statements.
 find closure/closure-library/closure -name '*.js' | \
+    grep -v demos | \
     xargs -I {} grep -e "goog.provide\(.*\);" '{}' | \
     sed -e 's/goog.provide/goog.require/' \
     > build/all-requires.js
