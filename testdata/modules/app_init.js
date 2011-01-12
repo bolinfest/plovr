@@ -54,3 +54,9 @@ goog.exportSymbol('example.api.isLoaded', function() {
   var moduleInfo = moduleManager.getModuleInfo('api');
   return moduleInfo ? moduleInfo.isLoaded() : false;
 });
+
+// TODO(bolinfest): Include deps.js by default to eliminate the need for this.
+goog.addDependency('', [
+  'goog.debug.ErrorHandler',
+  'goog.Uri'
+], []);

@@ -2,6 +2,7 @@
   "id": "module-example",
   "paths": ".",
   "mode": "ADVANCED",
+  "level": "VERBOSE",
 
   "modules": {
     "app": {
