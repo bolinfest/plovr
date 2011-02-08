@@ -112,13 +112,6 @@ that will facilitate this process.)
 
 <h2>More on Config Files</h2>
 
-One significant limitation of JSON is that it does not have any support for
-comments. plovr config files relax this constraint slightly by supporting
-{sp}<code>//</code>-style comments at the beginning of a line. (Eventually, parsing
-logic will be used to allow all forms of JavaScript comments in config files, in
-whichever way they would normally be supported in JavaScript code.)
-
-<p>
 Config options are enumerated in the Java source code in{sp}
 <a href="http://code.google.com/p/plovr/source/browse/src/org/plovr/ConfigOption.java">ConfigOption.java</a>.
 As plovr is evaluated by Closure developers, the names and JSON data types for
@@ -127,8 +120,8 @@ source of truth for what is expected.
 
 <p>
 The primary options of interest are likely the compilation mode and the warning
-level. The names of these properties in the plovr config are <code>mode</code>
-and <code>level</code>, respectively. The possible string values for
+level. The names of these properties in the plovr config are <code>mode</code>{sp}
+and <code>level</code>, respectively. The possible string values for{sp}
 <code>mode</code> are:
 <ul>
   <li><code>RAW</code> Loads each input via its own <code>&lt;script></code> tag:
@@ -179,6 +172,12 @@ Compiler wiki</a>, though the <code>DIAGNOSTIC_GROUP_NAMES</code> variable in{sp
   }
 }</pre>
 {/literal}
+
+(Strictly speaking, JSON does not support comments in either the{sp}
+{literal}<code>//</code> or <code>/* */</code>{/literal} form,
+but such comments <em>are</em> allowed in plovr config files.)
+
+<p>
 
 Remember, the names and values of the config file have not been finalized, so
 it may be necessary to monitor the plovr source code as new versions are
