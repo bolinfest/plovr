@@ -23,24 +23,24 @@ feedback and names have stabilized, an official beta will be released.
 plovr is open-sourced under the Apache 2.0 license.
 Its <a href="http://code.google.com/p/plovr/source/checkout">
 source code is available on Google Code</a> via a Mercurial repository.
-Currently, building plovr requires that the following projects be checked out
-in sibling directories that match the name of their respective Google Code
-project (the{sp}
-<a href="http://code.google.com/p/plovr/source/browse/build.xml">build.xml file
-for plovr</a> relies on this):
+The plovr repository includes branches which are copies of the Closure Library,
+Closure Compiler, and Closure Templates source code, so building plovr is
+entirely self-contained:
+</p>
 
-<ul>
-  <li><a href="http://code.google.com/p/closure-compiler/">closure-compiler</a></li>
-  <li><a href="http://code.google.com/p/closure-library/">closure-library</a></li>
-  <li><a href="http://code.google.com/p/closure-templates/">closure-templates</a></li>
-</ul>
+{literal}<pre>hg clone https://plovr.googlecode.com/hg/ plovr
+cd plovr
+ant jar</pre>{/literal}
 
-Ultimately, the plovr build script will be extended so that it checks out these
-projects automatically. Further, the build script will expect the Closure
-projects to be checked out at a specific revision number that has been tested to
-work with plovr.
-(Admittedly, the current process for building a release of plovr is rather
-ad hoc.)
+<p>
+The resulting plovr binary will be available at <code>build/plovr.jar</code>.
+</p>
+
+<p>
+The process by which the branches for the Closure Tools are maintained within
+the plovr repository is{sp}
+<a href="http://code.google.com/p/plovr/wiki/MaintainingMirrorsOfClosureCodeInHg">
+explained on the wiki</a>.
 </p>
 
 <h2>Contribute to plovr by fixing bugs in other projects</h2>
