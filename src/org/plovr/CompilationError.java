@@ -33,7 +33,7 @@ final class CompilationError {
       // This is probably related to
       // http://code.google.com/p/closure-compiler/issues/detail?id=277
       // Please help track it down!
-      System.err.println("Why is CheckLevel OFF???");
+      // System.err.println("Why is CheckLevel OFF???");
       return jsError.description;
     }
 
