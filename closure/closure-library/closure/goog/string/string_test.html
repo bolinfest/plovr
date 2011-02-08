@@ -11,13 +11,22 @@ See the COPYING file for details.
 <title>Closure Unit Tests - goog.string</title>
 <script src="../base.js"></script>
 <script>
+  goog.require('goog.functions');
   goog.require('goog.object');
   goog.require('goog.string');
+  goog.require('goog.testing.PropertyReplacer');
   goog.require('goog.testing.jsunit');
 </script>
 </head>
 <body>
 <script>
+
+var stubs = new goog.testing.PropertyReplacer();
+
+function tearDown() {
+  stubs.reset();
+}
+
 
 //=== tests for goog.string.collapseWhitespace ===
 
@@ -569,31 +578,14 @@ function testTruncateMiddle() {
 // === goog.string.quote ===
 function testQuote() {
   var str = allChars();
-  var a;
-  try {
-    a = eval(goog.string.quote(str));
-  } catch (e) {
-    fail('Quote failed: err ' + e.message);
-  }
-  assertEquals(str, a);
+  assertEquals(str, eval(goog.string.quote(str)));
 
   // empty string
-  str = '';
-  try {
-    a = eval(goog.string.quote(str));
-  } catch (e) {
-    fail('Quote failed: err ' + e.message);
-  }
-  assertEquals(str, a);
+  assertEquals('', eval(goog.string.quote('')));
 
   // unicode
   str = allChars(0, 10000);
-  try {
-    a = eval(goog.string.quote(str));
-  } catch (e) {
-    fail('Quote failed: err ' + e.message);
-  }
-  assertEquals(str, a);
+  assertEquals(str, eval(goog.string.quote(str)));
 }
 
 function testQuoteSpecialChars() {
@@ -856,6 +848,30 @@ function testToNumber() {
   assertEquals(0.123, goog.string.toNumber('12.3e-2'));
   assertNaN(goog.string.toNumber('abc'));
 }
+
+function testGetRandomString() {
+  stubs.set(goog, 'now', goog.functions.constant(1295726605874));
+  stubs.set(Math, 'random', goog.functions.constant(0.6679361383522245));
+  assertTrue('String must be alphanumeric',
+             goog.string.isAlphaNumeric(goog.string.getRandomString()));
+}
+
+function testToCamelCase() {
+  assertEquals('OneTwoThree', goog.string.toCamelCase('-one-two-three'));
+  assertEquals('oneTwoThree', goog.string.toCamelCase('one-two-three'));
+  assertEquals('oneTwo', goog.string.toCamelCase('one-two'));
+  assertEquals('one', goog.string.toCamelCase('one'));
+  assertEquals('oneTwo', goog.string.toCamelCase('oneTwo'));
+}
+
+function testToSelectorCase() {
+  assertEquals('-one-two-three', goog.string.toSelectorCase('OneTwoThree'));
+  assertEquals('one-two-three',goog.string.toSelectorCase('oneTwoThree'));
+  assertEquals('one-two', goog.string.toSelectorCase('oneTwo'));
+  assertEquals('one', goog.string.toSelectorCase('one'));
+  assertEquals('one-two', goog.string.toSelectorCase('one-two'));
+}
+
 </script>
 </body>
 </html>

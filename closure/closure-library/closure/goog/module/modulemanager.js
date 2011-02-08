@@ -438,7 +438,7 @@ goog.module.ModuleManager.prototype.
     d.callback(this.moduleContext_);
   } else {
     moduleInfo.registerCallback(d.callback, d);
-    moduleInfo.registerErrback(d.errback, d);
+    moduleInfo.registerErrback(function(err) { d.errback(Error(err)); });
     if (!this.isModuleLoading(id)) {
       this.loadModuleOrEnqueue_(id);
     }
@@ -644,7 +644,7 @@ goog.module.ModuleManager.prototype.execOnLoad = function(
     callbackWrapper = moduleInfo.registerCallback(fn, opt_handler);
     if (opt_userInitiated) {
       this.logger_.info('User initiated module already loading: ' + moduleId);
-      this.userInitiatedLoadingModuleIds_.push(moduleId);
+      this.addUserIntiatedLoadingModule_(moduleId);
       this.dispatchActiveIdleChangeIfNeeded_();
     }
   } else {
@@ -653,7 +653,7 @@ goog.module.ModuleManager.prototype.execOnLoad = function(
     if (!opt_noLoad) {
       if (opt_userInitiated) {
         this.logger_.info('User initiated module load: ' + moduleId);
-        this.userInitiatedLoadingModuleIds_.push(moduleId);
+        this.addUserIntiatedLoadingModule_(moduleId);
       }
       this.logger_.info('Initiating module load: ' + moduleId);
       this.loadModuleOrEnqueue_(moduleId);
@@ -683,20 +683,20 @@ goog.module.ModuleManager.prototype.load = function(
   } else if (this.isModuleLoading(moduleId)) {
     this.logger_.info(moduleId + ' module already loading');
     moduleInfo.registerCallback(d.callback, d);
-    moduleInfo.registerErrback(d.errback, d);
+    moduleInfo.registerErrback(function(err) { d.errback(Error(err)); });
     if (opt_userInitiated) {
       this.logger_.info('User initiated module already loading: ' + moduleId);
-      this.userInitiatedLoadingModuleIds_.push(moduleId);
+      this.addUserIntiatedLoadingModule_(moduleId);
       this.dispatchActiveIdleChangeIfNeeded_();
     }
 
   } else {
     this.logger_.info('Registering callback for module: ' + moduleId);
     moduleInfo.registerCallback(d.callback, d);
-    moduleInfo.registerErrback(d.errback, d);
+    moduleInfo.registerErrback(function(err) { d.errback(Error(err)); });
     if (opt_userInitiated) {
       this.logger_.info('User initiated module load: ' + moduleId);
-      this.userInitiatedLoadingModuleIds_.push(moduleId);
+      this.addUserIntiatedLoadingModule_(moduleId);
     } else {
       this.logger_.info('Initiating module load: ' + moduleId);
     }
@@ -704,6 +704,21 @@ goog.module.ModuleManager.prototype.load = function(
   }
 
   return d;
+};
+
+
+/**
+ * Ensures that the module with the given id is listed as a user-initiated
+ * module that is being loaded. This method guarantees that a module will never
+ * get listed more than once.
+ * @param {string} id Identifier of the module.
+ * @private
+ */
+goog.module.ModuleManager.prototype.addUserIntiatedLoadingModule_ = function(
+    id) {
+  if (!goog.array.contains(this.userInitiatedLoadingModuleIds_, id)) {
+    this.userInitiatedLoadingModuleIds_.push(id);
+  }
 };
 
 

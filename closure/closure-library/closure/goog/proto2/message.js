@@ -43,24 +43,22 @@ goog.proto2.Message = function() {
   // Therefore, we retrieve it via the constructor.
 
   /**
-   * Stores the information (i.e. metadata) about
-   * this message.
-   * @type {goog.proto2.Descriptor}
+   * Stores the information (i.e. metadata) about this message.
+   * @type {!goog.proto2.Descriptor}
    * @private
    */
   this.descriptor_ = this.constructor.descriptor_;
 
   /**
-   * Stores the field information (i.e. metadata)
-   * about this message.
-   * @type {Object}
+   * Stores the field information (i.e. metadata) about this message.
+   * @type {Object.<number, !goog.proto2.FieldDescriptor>}
    * @private
    */
   this.fields_ = this.descriptor_.getFieldsMap();
 
   /**
    * The lazy deserializer for this message instance, if any.
-   * @type {goog.proto2.LazyDeserializer?}
+   * @type {goog.proto2.LazyDeserializer}
    * @private
    */
   this.lazyDeserializer_ = null;
@@ -77,6 +75,13 @@ goog.proto2.Message = function() {
 /**
  * An enumeration defining the possible field types.
  * Should be a mirror of that defined in descriptor.h.
+ *
+ * TODO(user): Remove this alias.  The code generator generates code that
+ * references this enum, so it needs to exist until the code generator is
+ * changed.  The enum was moved to from Message to FieldDescriptor to avoid a
+ * dependency cycle.
+ *
+ * Use goog.proto2.FieldDescriptor.FieldType instead.
  *
  * @enum {number}
  */
@@ -124,7 +129,7 @@ goog.proto2.Message.prototype.initializeForLazyDeserializer = function(
  * Sets the value of an unknown field, by tag.
  *
  * @param {number} tag The tag of an unknown field (must be >= 1).
- * @param {Object} value The value for that unknown field.
+ * @param {*} value The value for that unknown field.
  */
 goog.proto2.Message.prototype.setUnknown = function(tag, value) {
   goog.proto2.Util.assert(!this.fields_[tag],
@@ -186,7 +191,7 @@ goog.proto2.Message.prototype.has = function(field) {
  * @param {goog.proto2.FieldDescriptor} field The field for which to
  *     return the values.
  *
- * @return {Array.<*>} The values found.
+ * @return {!Array} The values found.
  */
 goog.proto2.Message.prototype.arrayOf = function(field) {
   goog.proto2.Util.assert(
@@ -304,8 +309,9 @@ goog.proto2.Message.prototype.clear = function(field) {
 
 /**
  * Compares this message with another one ignoring the unknown fields.
- * @param {goog.proto2.Message|undefined} other The other message.
- * @return {boolean} Whether they are equal.
+ * @param {*} other The other message.
+ * @return {boolean} Whether they are equal. Returns false if the {@code other}
+ *     argument is a different type of message or not a message.
  */
 goog.proto2.Message.prototype.equals = function(other) {
   if (!other || this.constructor != other.constructor) {
@@ -351,29 +357,42 @@ goog.proto2.Message.prototype.equals = function(other) {
 
 
 /**
+ * Recursively copies the known fields from the given message to this message.
+ * Removes the fields which are not present in the source message.
+ * @param {!goog.proto2.Message} message The source message.
+ */
+goog.proto2.Message.prototype.copyFrom = function(message) {
+  goog.proto2.Util.assert(this.constructor == message.constructor,
+      'The source message must have the same type.');
+  var fields = this.getDescriptor().getFields();
+
+  for (var i = 0; i < fields.length; i++) {
+    var field = fields[i];
+    delete this.values_[field.getTag()];
+
+    if (message.has(field)) {
+      var isComposite = field.isCompositeType();
+      if (field.isRepeated()) {
+        var values = message.arrayOf(field);
+        for (var j = 0; j < values.length; j++) {
+          this.add(field, isComposite ? values[j].clone() : values[j]);
+        }
+      } else {
+        var value = message.get(field);
+        this.set(field, isComposite ? value.clone() : value);
+      }
+    }
+  }
+};
+
+
+/**
  * @return {!goog.proto2.Message} Recursive clone of the message only including
  *     the known fields.
  */
 goog.proto2.Message.prototype.clone = function() {
   var clone = new this.constructor;
-  var fields = this.getDescriptor().getFields();
-
-  for (var i = 0; i < fields.length; i++) {
-    var field = fields[i];
-    if (this.has(field)) {
-      var isComposite = field.isCompositeType();
-      if (field.isRepeated()) {
-        var values = this.arrayOf(field);
-        for (var j = 0; j < values.length; j++) {
-          clone.add(field, isComposite ? values[j].clone() : values[j]);
-        }
-      } else {
-        var value = this.get(field);
-        clone.set(field, isComposite ? value.clone() : value);
-      }
-    }
-  }
-
+  clone.copyFrom(this);
   return clone;
 };
 
@@ -420,7 +439,7 @@ goog.proto2.Message.prototype.initDefaults = function(simpleFieldsToo) {
  * such field exists, throws an exception.
  *
  * @param {number} tag The field's tag index.
- * @return {goog.proto2.FieldDescriptor} The descriptor for the field.
+ * @return {!goog.proto2.FieldDescriptor} The descriptor for the field.
  * @private
  */
 goog.proto2.Message.prototype.getFieldByTag_ = function(tag) {
@@ -489,9 +508,8 @@ goog.proto2.Message.prototype.get$Value = function(tag, opt_index) {
   // Ensure that the field is deserialized.
   this.lazyDeserialize_(field);
 
-  var index = opt_index || 0;
-
   if (field.isRepeated()) {
+    var index = opt_index || 0;
     goog.proto2.Util.assert(index < this.count$Values(tag),
                             'Field value count is less than index given');
 
@@ -534,7 +552,7 @@ goog.proto2.Message.prototype.get$ValueOrDefault = function(tag, opt_index) {
  *
  * @param {number} tag The field's tag index.
  *
- * @return {Array.<Object>} The values found. If none, returns an empty array.
+ * @return {!Array} The values found. If none, returns an empty array.
  */
 goog.proto2.Message.prototype.array$Values = function(tag) {
   goog.proto2.Util.assert(this.getFieldByTag_(tag).isRepeated(),
@@ -545,13 +563,7 @@ goog.proto2.Message.prototype.array$Values = function(tag) {
   // Ensure that the field is deserialized.
   this.lazyDeserialize_(field);
 
-  var valuesArray = this.values_[tag];
-
-  if (!valuesArray) {
-    return [];
-  }
-
-  return valuesArray;
+  return this.values_[tag] || [];
 };
 
 
@@ -631,30 +643,30 @@ goog.proto2.Message.prototype.add$Value = function(tag, value) {
  * Ensures that the value being assigned to the given field
  * is valid.
  *
- * @param {goog.proto2.FieldDescriptor} field The field being assigned.
+ * @param {!goog.proto2.FieldDescriptor} field The field being assigned.
  * @param {*} value The value being assigned.
  * @private
  */
 goog.proto2.Message.prototype.checkFieldType_ = function(field, value) {
   goog.proto2.Util.assert(value !== null);
 
-  if (field.getNativeType() == String) {
+  var nativeType = field.getNativeType();
+  if (nativeType === String) {
     goog.proto2.Util.assert(typeof value === 'string',
                             'Expected value of type string');
-  } else if (field.getNativeType() == Boolean) {
+  } else if (nativeType === Boolean) {
     goog.proto2.Util.assert(typeof value === 'boolean',
                             'Expected value of type boolean');
-  } else if (field.getNativeType() == Number) {
+  } else if (nativeType === Number) {
     goog.proto2.Util.assert(typeof value === 'number',
                             'Expected value of type number');
+  } else if (field.getFieldType() ==
+             goog.proto2.FieldDescriptor.FieldType.ENUM) {
+    goog.proto2.Util.assert(typeof value === 'number',
+                            'Expected an enum value, which is a number');
   } else {
-    if (field.getFieldType() == goog.proto2.Message.FieldType.ENUM) {
-      goog.proto2.Util.assert(typeof value === 'number',
-                              'Expected an enum value, which is a number');
-    } else {
-      goog.proto2.Util.assert(value instanceof field.getNativeType(),
-                              'Expected a matching message type');
-    }
+    goog.proto2.Util.assert(value instanceof nativeType,
+                            'Expected a matching message type');
   }
 };
 

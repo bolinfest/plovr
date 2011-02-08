@@ -75,12 +75,9 @@ function testConstant() {
 
 function testThrow() {
   var f = goog.functions.error('x');
-  try {
-    f();
-    fail('A function created by goog.functions.error must throw an error');
-  } catch (e) {
-    assertEquals('x', e.message);
-  }
+  var e = assertThrows(
+      'A function created by goog.functions.error must throw an error', f);
+  assertEquals('x', e.message);
 }
 
 function testCompose() {
@@ -171,6 +168,17 @@ function testCreate(expectedArray) {
   assert(instance instanceof tempConstructor);
   assertEquals(instance.foo, 'baz');
   assertEquals(instance.bar, 'qux');
+}
+
+function testWithReturnValue() {
+  var obj = {};
+  var f = function(a, b) {
+    assertEquals(obj, this);
+    assertEquals(1, a);
+    assertEquals(2, b);
+  };
+  assertTrue(goog.functions.withReturnValue(f, true).call(obj, 1, 2));
+  assertFalse(goog.functions.withReturnValue(f, false).call(obj, 1, 2));
 }
 
 function makeCallOrderLogger(name, returnValue) {

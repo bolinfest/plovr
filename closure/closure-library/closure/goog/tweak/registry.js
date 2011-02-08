@@ -26,19 +26,23 @@ goog.provide('goog.tweak.Registry');
 goog.require('goog.asserts');
 goog.require('goog.debug.Logger');
 goog.require('goog.object');
+goog.require('goog.string');
 goog.require('goog.tweak.BaseEntry');
 goog.require('goog.uri.utils');
 
 
 
 /**
- * Singleton that manages all tweaks.
- * @param {string=} opt_queryParams Value of window.location.search.
+ * Singleton that manages all tweaks. This should be instantiated only from
+ * goog.tweak.getRegistry().
+ * @param {string} queryParams Value of window.location.search.
+ * @param {!Object.<string|number|boolean>} compilerOverrides Default value
+ *     overrides set by the compiler.
  * @constructor
  */
-goog.tweak.Registry = function(opt_queryParams) {
+goog.tweak.Registry = function(queryParams, compilerOverrides) {
   /**
-   * A map of entry.key -> entry object
+   * A map of entry id -> entry object
    * @type {!Object.<!goog.tweak.BaseEntry>}
    * @private
    */
@@ -49,8 +53,7 @@ goog.tweak.Registry = function(opt_queryParams) {
    * @type {!Object.<string>}
    * @private
    */
-  this.parsedQueryParams_ =
-      goog.tweak.Registry.parseQueryParams(opt_queryParams);
+  this.parsedQueryParams_ = goog.tweak.Registry.parseQueryParams(queryParams);
 
   /**
    * List of callbacks to call when a new entry is registered.
@@ -58,6 +61,22 @@ goog.tweak.Registry = function(opt_queryParams) {
    * @private
    */
   this.onRegisterListeners_ = [];
+
+  /**
+   * A map of entry ID -> default value override for overrides set by the
+   * compiler.
+   * @type {!Object.<string|number|boolean>}
+   * @private
+   */
+  this.compilerDefaultValueOverrides_ = compilerOverrides;
+
+  /**
+   * A map of entry ID -> default value override for overrides set by
+   * goog.tweak.overrideDefaultValue().
+   * @type {!Object.<string|number|boolean>}
+   * @private
+   */
+  this.defaultValueOverrides_ = {};
 };
 
 
@@ -72,22 +91,19 @@ goog.tweak.Registry.prototype.logger_ =
 
 /**
  * Simple parser for query params. Makes all keys lower-case.
- * @param {string=} opt_queryParams The part of the url between the ? and the #.
- *     Uses window.location.search if not given.
+ * @param {string} queryParams The part of the url between the ? and the #.
  * @return {!Object.<string>} map of key->value.
  */
-goog.tweak.Registry.parseQueryParams = function(opt_queryParams) {
-  var queryParams = opt_queryParams || window.location.search;
-  // Convert + to a space.
-  queryParams = queryParams.replace(/\+/g, ' ');
+goog.tweak.Registry.parseQueryParams = function(queryParams) {
   // Strip off the leading ? and split on &.
-  queryParams = queryParams.substr(1).split('&');
+  var parts = queryParams.substr(1).split('&');
   var ret = {};
 
-  for (var i = 0, il = queryParams.length; i < il; ++i) {
-    var entry = queryParams[i].split('=');
+  for (var i = 0, il = parts.length; i < il; ++i) {
+    var entry = parts[i].split('=');
     if (entry[0]) {
-      ret[decodeURIComponent(entry[0]).toLowerCase()] = entry[1] || '';
+      ret[goog.string.urlDecode(entry[0]).toLowerCase()] =
+          goog.string.urlDecode(entry[1] || '');
     }
   }
   return ret;
@@ -99,15 +115,26 @@ goog.tweak.Registry.parseQueryParams = function(opt_queryParams) {
  * @param {goog.tweak.BaseEntry} entry The entry.
  */
 goog.tweak.Registry.prototype.register = function(entry) {
-  var key = entry.getKey();
-  var oldBaseEntry = this.entryMap_[key];
+  var id = entry.getId();
+  var oldBaseEntry = this.entryMap_[id];
   if (oldBaseEntry) {
     if (oldBaseEntry == entry) {
-      this.logger_.warning('Tweak entry registered twice: ' + key);
+      this.logger_.warning('Tweak entry registered twice: ' + id);
       return;
     }
     goog.asserts.fail(
-        'Tweak entry registered twice and with different types: ' + key);
+        'Tweak entry registered twice and with different types: ' + id);
+  }
+
+  // Check for a default value override, either from compiler flags or from a
+  // call to overrideDefaultValue().
+  var defaultValueOverride = (id in this.compilerDefaultValueOverrides_) ?
+      this.compilerDefaultValueOverrides_[id] : this.defaultValueOverrides_[id];
+  if (goog.isDef(defaultValueOverride)) {
+    goog.asserts.assertInstanceof(entry, goog.tweak.BasePrimitiveSetting,
+        'Cannot set the default value of non-primitive setting %s',
+        entry.label);
+    entry.setDefaultValue(defaultValueOverride);
   }
 
   // Set its value from the query params.
@@ -118,7 +145,7 @@ goog.tweak.Registry.prototype.register = function(entry) {
     }
   }
 
-  this.entryMap_[key] = entry;
+  this.entryMap_[id] = entry;
   // Call all listeners.
   for (var i = 0, callback; callback = this.onRegisterListeners_[i]; ++i) {
     callback(entry);
@@ -136,26 +163,34 @@ goog.tweak.Registry.prototype.addOnRegisterListener = function(func) {
 
 
 /**
- * Returns the BaseEntry with the given key. Asserts if it does not exists.
- * @param {string} key The unique string that identifies this entry.
- * @return {!goog.tweak.BaseEntry} The entry.
+ * @param {string} id The unique string that identifies this entry.
+ * @return {boolean} Whether a tweak with the given ID is registered.
  */
-goog.tweak.Registry.prototype.getEntry = function(key) {
-  key = key.toLowerCase();
-  var ret = this.entryMap_[key];
-  goog.asserts.assert(ret, 'Tweak not registered: ' + key);
-  return /** @type {!goog.tweak.BaseEntry} */ (ret);
+goog.tweak.Registry.prototype.hasEntry = function(id) {
+  return id in this.entryMap_;
 };
 
 
 /**
- * Returns the boolean setting with the given key. Asserts if the key does not
+ * Returns the BaseEntry with the given ID. Asserts if it does not exists.
+ * @param {string} id The unique string that identifies this entry.
+ * @return {!goog.tweak.BaseEntry} The entry.
+ */
+goog.tweak.Registry.prototype.getEntry = function(id) {
+  var ret = this.entryMap_[id];
+  goog.asserts.assert(ret, 'Tweak not registered: %s', id);
+  return ret;
+};
+
+
+/**
+ * Returns the boolean setting with the given ID. Asserts if the ID does not
  * refer to a registered entry or if it refers to one of the wrong type.
- * @param {string} key The unique string that identifies this entry.
+ * @param {string} id The unique string that identifies this entry.
  * @return {!goog.tweak.BooleanSetting} The entry.
  */
-goog.tweak.Registry.prototype.getBooleanSetting = function(key) {
-  var entry = this.getEntry(key);
+goog.tweak.Registry.prototype.getBooleanSetting = function(id) {
+  var entry = this.getEntry(id);
   goog.asserts.assertInstanceof(entry, goog.tweak.BooleanSetting,
       'getBooleanSetting called on wrong type of BaseSetting');
   return /** @type {!goog.tweak.BooleanSetting} */ (entry);
@@ -163,13 +198,13 @@ goog.tweak.Registry.prototype.getBooleanSetting = function(key) {
 
 
 /**
- * Returns the string setting with the given key. Asserts if the key does not
+ * Returns the string setting with the given ID. Asserts if the ID does not
  * refer to a registered entry or if it refers to one of the wrong type.
- * @param {string} key The unique string that identifies this entry.
+ * @param {string} id The unique string that identifies this entry.
  * @return {!goog.tweak.StringSetting} The entry.
  */
-goog.tweak.Registry.prototype.getStringSetting = function(key) {
-  var entry = this.getEntry(key);
+goog.tweak.Registry.prototype.getStringSetting = function(id) {
+  var entry = this.getEntry(id);
   goog.asserts.assertInstanceof(entry, goog.tweak.StringSetting,
       'getStringSetting called on wrong type of BaseSetting');
   return /** @type {!goog.tweak.StringSetting} */ (entry);
@@ -177,13 +212,13 @@ goog.tweak.Registry.prototype.getStringSetting = function(key) {
 
 
 /**
- * Returns the numeric setting with the given key. Asserts if the key does not
+ * Returns the numeric setting with the given ID. Asserts if the ID does not
  * refer to a registered entry or if it refers to one of the wrong type.
- * @param {string} key The unique string that identifies this entry.
+ * @param {string} id The unique string that identifies this entry.
  * @return {!goog.tweak.NumericSetting} The entry.
  */
-goog.tweak.Registry.prototype.getNumericSetting = function(key) {
-  var entry = this.getEntry(key);
+goog.tweak.Registry.prototype.getNumericSetting = function(id) {
+  var entry = this.getEntry(id);
   goog.asserts.assertInstanceof(entry, goog.tweak.NumericSetting,
       'getNumericSetting called on wrong type of BaseSetting');
   return /** @type {!goog.tweak.NumericSetting} */ (entry);
@@ -201,8 +236,8 @@ goog.tweak.Registry.prototype.getNumericSetting = function(key) {
 goog.tweak.Registry.prototype.extractEntries =
     function(excludeChildEntries, excludeNonSettings) {
   var entries = [];
-  for (var key in this.entryMap_) {
-    var entry = this.entryMap_[key];
+  for (var id in this.entryMap_) {
+    var entry = this.entryMap_[id];
     if (entry instanceof goog.tweak.BaseSetting) {
       if (excludeChildEntries && !entry.getParamName()) {
         continue;
@@ -255,5 +290,21 @@ goog.tweak.Registry.prototype.makeUrlQuery =
   return !tweakParams ? existingParams :
       existingParams ? existingParams + '&' + tweakParams :
       '?' + tweakParams;
+};
+
+
+/**
+ * Sets a default value to use for the given tweak instead of the one passed
+ * to the register* function. This function must be called before the tweak is
+ * registered.
+ * @param {string} id The unique string that identifies the entry.
+ * @param {string|number|boolean} value The replacement value to be used as the
+ *     default value for the setting.
+ */
+goog.tweak.Registry.prototype.overrideDefaultValue = function(id, value) {
+  goog.asserts.assert(!this.hasEntry(id),
+      'goog.tweak.overrideDefaultValue must be called before the tweak is ' +
+      'registered. Tweak: %s', id);
+  this.defaultValueOverrides_[id] = value;
 };
 

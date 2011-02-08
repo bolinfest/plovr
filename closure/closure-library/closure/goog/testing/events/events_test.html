@@ -35,6 +35,7 @@ See the COPYING file for details.
 <script type="text/javascript">
   var firedEventTypes;
   var firedEventCoordinates;
+  var firedScreenCoordinates;
   var firedShiftKeys;
   var firedKeyCodes;
   var root = goog.dom.getElement('root');
@@ -50,6 +51,7 @@ See the COPYING file for details.
     root.innerHTML = '';
     firedEventTypes = [];
     firedEventCoordinates = [];
+    firedScreenCoordinates = [];
     firedShiftKeys = [];
     firedKeyCodes = [];
 
@@ -58,6 +60,10 @@ See the COPYING file for details.
         firedEventTypes.push(e.type);
         var coord = new goog.math.Coordinate(e.clientX, e.clientY);
         firedEventCoordinates.push(coord);
+
+        firedScreenCoordinates.push(
+            new goog.math.Coordinate(e.screenX, e.screenY));
+
         firedShiftKeys.push(!!e.shiftKey);
         firedKeyCodes.push(e.keyCode);
       });
@@ -91,19 +97,21 @@ See the COPYING file for details.
     goog.testing.events.fireMouseOverEvent(root, null);
     goog.testing.events.fireMouseOverEvent(root, null, coordinate);
     assertEventTypes(['mouseover', 'mouseover']);
-    assertCoordinates([new goog.math.Coordinate(), coordinate]);
+    assertCoordinates([goog.style.getClientPosition(root), coordinate]);
   }
 
   function testMouseOut() {
     goog.testing.events.fireMouseOutEvent(root, null);
     goog.testing.events.fireMouseOutEvent(root, null, coordinate);
     assertEventTypes(['mouseout', 'mouseout']);
-    assertCoordinates([new goog.math.Coordinate(), coordinate]);
+    assertCoordinates([goog.style.getClientPosition(root), coordinate]);
   }
 
   function testClickSequence() {
     assertTrue(goog.testing.events.fireClickSequence(root));
     assertEventTypes(['mousedown', 'mouseup', 'click']);
+    var rootPosition = goog.style.getClientPosition(root);
+    assertCoordinates([rootPosition, rootPosition, rootPosition]);
   }
 
   function testClickSequenceWithCoordinate() {
@@ -357,7 +365,9 @@ See the COPYING file for details.
   var CONTEXTMENU_SEQ =
       goog.userAgent.WINDOWS ? ['mousedown', 'mouseup', 'contextmenu'] :
       goog.userAgent.GECKO ? ['mousedown', 'contextmenu', 'mouseup'] :
-      ['mousedown', 'contextmenu'];
+      goog.userAgent.WEBKIT && goog.userAgent.MAC ?
+          ['mousedown', 'contextmenu', 'mouseup', 'click'] :
+      ['mousedown', 'contextmenu', 'mouseup'];
 
   function testContextMenuSequence() {
     assertTrue(goog.testing.events.fireContextMenuSequence(root));
@@ -378,11 +388,7 @@ See the COPYING file for details.
 
   function testContextMenuSequenceCancellingMouseup() {
     preventDefaultEventType('mouseup');
-    if (goog.userAgent.WINDOWS || goog.userAgent.GECKO) {
-      assertFalse(goog.testing.events.fireContextMenuSequence(root));
-    } else {
-      assertTrue(goog.testing.events.fireContextMenuSequence(root));
-    }
+    assertFalse(goog.testing.events.fireContextMenuSequence(root));
     assertEventTypes(CONTEXTMENU_SEQ);
   }
 
@@ -390,6 +396,14 @@ See the COPYING file for details.
     preventDefaultEventType('contextmenu');
     assertFalse(goog.testing.events.fireContextMenuSequence(root));
     assertEventTypes(CONTEXTMENU_SEQ);
+  }
+
+  function testContextMenuSequenceFakeMacWebkit() {
+    stubs.set(goog.userAgent, 'WINDOWS', false);
+    stubs.set(goog.userAgent, 'MAC', true);
+    stubs.set(goog.userAgent, 'WEBKIT', true);
+    assertTrue(goog.testing.events.fireContextMenuSequence(root));
+    assertEventTypes(['mousedown', 'contextmenu', 'mouseup', 'click']);
   }
 
   /**
@@ -404,6 +418,7 @@ See the COPYING file for details.
    */
   function assertCoordinates(list) {
     assertArrayEquals(list, firedEventCoordinates);
+    assertArrayEquals(list, firedScreenCoordinates);
   }
 
   /** Prevent default the event of the given type on the root element. */
