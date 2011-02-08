@@ -68,8 +68,12 @@ public enum ConfigOption {
   EXTERNS("externs", new ConfigUpdater() {
     @Override
     public void apply(String extern, Config.Builder builder) {
-      String resolvedPath = maybeResolvePath(extern, builder);
-      builder.addExtern(resolvedPath);
+      if (extern.startsWith("//")) {
+        builder.addBuiltInExtern(extern);
+      } else {
+        String resolvedPath = maybeResolvePath(extern, builder);
+        builder.addExtern(resolvedPath);
+      }
     }
 
     @Override
@@ -276,7 +280,7 @@ public enum ConfigOption {
       builder.setDiagnosticGroups(groups);
     }
   }),
-  
+
   TREAT_WARNINGS_AS_ERRORS("treat-warnings-as-errors", new ConfigUpdater() {
     @Override
     public void apply(boolean treatWarningsAsErrors, Config.Builder builder) {

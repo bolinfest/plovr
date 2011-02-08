@@ -1,0 +1,29 @@
+<project name="testdata" default="build">
+
+  <dirname property="testdata.dir" file="${ant.file.testdata}"/>
+
+  <property name="plovr.jar" value="${testdata.dir}/../build/plovr.jar" />
+  <property name="chrome_extension.dir"
+            value="${testdata.dir}/chrome_extension" />
+
+  <available file="${plovr.jar}" property="plovr.jar.built" />
+  <fail unless="plovr.jar.built" />
+
+  <target name="chrome"
+          description="make sure a chrome extension compiles when built-in externs are used">
+    <java jar="${plovr.jar}"
+          fork="true"
+          failonerror="true"
+          logerror="true"
+          >
+      <arg value="build" />
+      <arg value="${chrome_extension.dir}/config.js" />
+    </java>
+  </target>
+
+  <target name="build"
+          description="make sure all the configs in this directory build cleanly"
+          depends="chrome"
+          />
+
+</project>

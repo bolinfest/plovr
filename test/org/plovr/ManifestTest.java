@@ -53,6 +53,7 @@ public class ManifestTest extends TestCase {
         dependencies,
         ImmutableList.<JsInput>of(requiredInput),
         externs,
+        null, // builtInExterns
         customExternsOnly);
 
     final ModuleConfig moduleConfig = null;
@@ -107,6 +108,7 @@ public class ManifestTest extends TestCase {
         dependencies,
         ImmutableList.<JsInput>of(a, b, c),
         externs,
+        null, // builtInExterns
         customExternsOnly);
 
     List<JsInput> order;
@@ -128,6 +130,7 @@ public class ManifestTest extends TestCase {
         dependencies,
         ImmutableList.<JsInput>of(a, b, c),
         externs,
+        null, // builtInExterns
         customExternsOnly);
 
     order = manifest.getInputsInCompilationOrder();

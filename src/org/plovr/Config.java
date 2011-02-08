@@ -310,6 +310,8 @@ public final class Config implements Comparable<Config> {
 
     private ImmutableList.Builder<String> externs = null;
 
+    private ImmutableList.Builder<JsInput> builtInExterns = null;
+
     private boolean customExternsOnly = false;
 
     private CompilationMode compilationMode = CompilationMode.SIMPLE;
@@ -428,6 +430,19 @@ public final class Config implements Comparable<Config> {
       externs.add(extern);
     }
 
+    /**
+     * @param builtInExtern should be of the form "//chrome_extensions.js"
+     */
+    public void addBuiltInExtern(String builtInExtern) {
+      Preconditions.checkArgument(builtInExtern.startsWith("//"));
+      if (builtInExterns == null) {
+        builtInExterns = ImmutableList.builder();
+      }
+      String path = builtInExtern.replace("//", "/contrib/");
+      JsInput extern = new ResourceJsInput(path);
+      builtInExterns.add(extern);
+    }
+
     public void setCustomExternsOnly(boolean customExternsOnly) {
       this.customExternsOnly = customExternsOnly;
     }
@@ -537,6 +552,7 @@ public final class Config implements Comparable<Config> {
           Lists.transform(paths.build(), STRING_TO_FILE),
           inputs.build(),
           externs,
+          builtInExterns != null ? builtInExterns.build() : null,
           customExternsOnly);
       } else {
         manifest = this.manifest;

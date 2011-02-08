@@ -77,7 +77,7 @@
   </target>
 
   <target name="test"
-          depends="compile,externs"
+          depends="jar"
           description="run the unit tests">
     <junit failureproperty="hasFailingTests"
            showoutput="true">
@@ -92,21 +92,32 @@
       <classpath refid="plovr.classpath"></classpath>
     </junit>
     <fail if="hasFailingTests" />
+
+    <ant dir="${testdata.dir}" target="build" />
   </target>
 
   <target name="externs">
     <mkdir dir="${classes.dir}" />
-    <exec executable="sh"
+    <exec executable="bash"
           output="${classes.dir}/externs_manifest.txt"
           failonerror="true">
       <arg value="${basedir}/listfiles.sh" />
       <arg value="${closure-compiler.dir}/externs" />
     </exec>
+    
+    <mkdir dir="${classes.dir}/contrib" />
+    <exec executable="bash"
+          output="${classes.dir}/contrib_externs.txt"
+          failonerror="true">
+      <arg value="${basedir}/tools/externs/listcontrib.sh" />
+      <arg value="${closure-compiler.dir}/contrib/externs" />
+      <arg value="${classes.dir}/contrib" />
+    </exec>
   </target>
 
   <target name="library">
     <mkdir dir="${classes.dir}" />
-    <exec executable="sh"
+    <exec executable="bash"
           output="${classes.dir}/library_manifest.txt"
           failonerror="true">
       <arg value="${basedir}/listfiles.sh" />
@@ -116,7 +127,7 @@
 
   <target name="third_party">
     <mkdir dir="${classes.dir}" />
-    <exec executable="sh"
+    <exec executable="bash"
           output="${classes.dir}/third_party_manifest.txt"
           failonerror="true">
       <arg value="${basedir}/listfiles.sh" />

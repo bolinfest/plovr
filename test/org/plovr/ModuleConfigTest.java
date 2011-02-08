@@ -90,6 +90,7 @@ public class ModuleConfigTest {
         dependencies,
         ImmutableList.<JsInput>of(a, b, c, d, e),
         externs,
+        null, // builtInExterns
         customExternsOnly);
 
     ModuleConfig.Builder builder = ModuleConfig.builder(new File("."));
@@ -171,6 +172,7 @@ public class ModuleConfigTest {
         dependencies,
         ImmutableList.<JsInput>of(a, b, c, d, e, f, g, dep1, dep2),
         externs,
+        null, // builtInExterns
         customExternsOnly);
 
     ModuleConfig.Builder builder = ModuleConfig.builder(new File("."));
@@ -245,6 +247,7 @@ public class ModuleConfigTest {
         dependencies,
         ImmutableList.<JsInput>of(a, b, c, d, e, dep1),
         externs,
+        null, // builtInExterns
         customExternsOnly);
 
     ModuleConfig.Builder builder = ModuleConfig.builder(new File("."));

@@ -13,6 +13,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -46,6 +47,7 @@ public final class Manifest {
   private final Set<File> dependencies;
   private final List<JsInput> requiredInputs;
   private final Set<File> externs;
+  private final Set<JsInput> builtInExterns;
   private final boolean customExternsOnly;
 
   /**
@@ -70,6 +72,7 @@ public final class Manifest {
       List<File> dependencies,
       List<JsInput> requiredInputs,
       @Nullable List<File> externs,
+      @Nullable List<JsInput> builtInExterns,
       boolean customExternsOnly) {
     Preconditions.checkNotNull(dependencies);
     Preconditions.checkNotNull(requiredInputs);
@@ -83,6 +86,8 @@ public final class Manifest {
     this.dependencies = ImmutableSet.copyOf(dependencies);
     this.requiredInputs = ImmutableList.copyOf(requiredInputs);
     this.externs = externs == null ? null : ImmutableSet.copyOf(externs);
+    this.builtInExterns = builtInExterns == null
+        ? null : ImmutableSet.copyOf(builtInExterns);
     this.customExternsOnly = customExternsOnly;
   }
 
@@ -117,6 +122,9 @@ public final class Manifest {
     }
     if (this.externs != null) {
       builder.addAll(Lists.transform(getExternInputs(), inputToSourceFile));
+    }
+    if (this.builtInExterns != null) {
+      builder.addAll(Iterables.transform(builtInExterns, inputToSourceFile));
     }
     List<JSSourceFile> externs = builder.build();
 
