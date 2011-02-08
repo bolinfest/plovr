@@ -117,6 +117,21 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     Files that contain <a href="http://code.google.com/closure/compiler/docs/api-tutorial3.html">externs</a>{sp}
     that should be included in the compilation. By default, these will be used
     in addition to the default externs bundled with the Closure Compiler.
+    <p>
+    There are also externs for third party libraries, such as jQuery and
+    Google Maps, that are bundled with the Closure Compiler but are not enabled
+    by default. (This <a href="http://closuretools.blogspot.com/2011/01/property-by-any-other-name-part-3.html">
+    article from the Closure Tools blog</a> explains why adding unneccessary
+    externs can inhibit the Compiler's ability to rename properties.)
+    These additional extern files can be seen in the Closure Compiler's{sp}
+    <a href="http://code.google.com/p/closure-compiler/source/browse/trunk/contrib/externs/">
+    contrib/externs</a> directory. Such externs can be included with a
+    {sp}<code>//</code> prefix as follows:
+{literal}<pre>
+"externs": [
+  "//jquery-1.5.js",
+  "//google_maps_api_v3.js"
+]</pre>{/literal}
   {case 'custom-externs-only'}
     Whether only the custom externs specified by <code>externs</code> should be
     used (rather than in addition to the default externs bundled with the Closure Compiler).
