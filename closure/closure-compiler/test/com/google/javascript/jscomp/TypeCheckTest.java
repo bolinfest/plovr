@@ -78,7 +78,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testTypeCheck2() throws Exception {
-    testTypes("/**@return {void}*/function foo(){ foo()--; }",
+    testTypes("/**@return {void}*/function foo(){ var x=foo(); x--; }",
         "increment/decrement\n" +
         "found   : undefined\n" +
         "required: number");
@@ -654,6 +654,166 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "/** @return {string} */ T.prototype.f = function() {\n" +
         "return goog.isString(this.a) ? this.a : 'a'; }", null);
   }
+
+  public void testQualifiedNameReduction5a() throws Exception {
+    testTypes("var x = {/** @type {string} */ a:'b' };\n" +
+        "/** @return {string} */ var f = function() {\n" +
+        "return x.a; }");
+  }
+
+  public void testQualifiedNameReduction5b() throws Exception {
+    testTypes(
+        "var x = {/** @type {number} */ a:12 };\n" +
+        "/** @return {string} */\n" +
+        "var f = function() {\n" +
+        "  return x.a;\n" +
+        "}");  // would like this to be an error.
+  }
+
+  public void testQualifiedNameReduction5c() throws Exception {
+    testTypes(
+        "/** @return {string} */ var f = function() {\n" +
+        "var x = {/** @type {number} */ a:0 };\n" +
+        "return (x.a) ? (x.a) : 'a'; }",
+        "inconsistent return type\n" +
+        "found   : (number|string)\n" +
+        "required: string");
+  }
+
+  public void testQualifiedNameReduction6() throws Exception {
+    testTypes(
+        "/** @return {string} */ var f = function() {\n" +
+        "var x = {/** @return {string?} */ get a() {return 'a'}};\n" +
+        "return x.a ? x.a : 'a'; }");
+  }
+
+  public void testQualifiedNameReduction7() throws Exception {
+    testTypes(
+        "/** @return {string} */ var f = function() {\n" +
+        "var x = {/** @return {number} */ get a() {return 12}};\n" +
+        "return x.a; }",
+        "inconsistent return type\n" +
+        "found   : number\n" +
+        "required: string");
+  }
+
+  public void testQualifiedNameReduction7a() throws Exception {
+    // It would be nice to find a way to make this an error.
+    testTypes(
+        "/** @return {string} */ var f = function() {\n" +
+        "var x = {get a() {return 12}};\n" +
+        "return x.a; }");
+  }
+
+  public void testQualifiedNameReduction8() throws Exception {
+    testTypes(
+        "/** @return {string} */ var f = function() {\n" +
+        "var x = {get a() {return 'a'}};\n" +
+        "return x.a ? x.a : 'a'; }");
+  }
+
+  public void testQualifiedNameReduction9() throws Exception {
+    testTypes(
+        "/** @return {string} */ var f = function() {\n" +
+        "var x = { /** @param {string} b */ set a(b) {}};\n" +
+        "return x.a ? x.a : 'a'; }");
+  }
+
+  public void testQualifiedNameReduction10() throws Exception {
+    // TODO(johnlenz): separate setter property types from getter property
+    // types.
+    testTypes(
+        "/** @return {string} */ var f = function() {\n" +
+        "var x = { /** @param {number} b */ set a(b) {}};\n" +
+        "return x.a ? x.a : 'a'; }",
+        "inconsistent return type\n" +
+        "found   : (number|string)\n" +
+        "required: string");
+  }
+
+  public void testObjLitDef1a() throws Exception {
+    testTypes(
+        "var x = {/** @type {number} */ a:12 };\n" +
+        "x.a = 'a';",
+        "assignment to property a of x\n" +
+        "found   : string\n" +
+        "required: number");
+  }
+
+  public void testObjLitDef1b() throws Exception {
+    testTypes(
+        "function f(){" +
+          "var x = {/** @type {number} */ a:12 };\n" +
+          "x.a = 'a';" +
+        "};\n" +
+        "f();",
+        "assignment to property a of x\n" +
+        "found   : string\n" +
+        "required: number");
+  }
+
+  public void testObjLitDef2a() throws Exception {
+    testTypes(
+        "var x = {/** @param {number} b */ set a(b){} };\n" +
+        "x.a = 'a';",
+        "assignment to property a of x\n" +
+        "found   : string\n" +
+        "required: number");
+  }
+
+  public void testObjLitDef2b() throws Exception {
+    testTypes(
+        "function f(){" +
+          "var x = {/** @param {number} b */ set a(b){} };\n" +
+          "x.a = 'a';" +
+        "};\n" +
+        "f();",
+        "assignment to property a of x\n" +
+        "found   : string\n" +
+        "required: number");
+  }
+
+  public void testObjLitDef3a() throws Exception {
+    testTypes(
+        "/** @type {string} */ var y;\n" +
+        "var x = {/** @return {number} */ get a(){} };\n" +
+        "y = x.a;",
+        "assignment\n" +
+        "found   : number\n" +
+        "required: string");
+  }
+
+  public void testObjLitDef3b() throws Exception {
+    testTypes(
+      "/** @type {string} */ var y;\n" +
+        "function f(){" +
+          "var x = {/** @return {number} */ get a(){} };\n" +
+          "y = x.a;" +
+        "};\n" +
+        "f();",
+        "assignment\n" +
+        "found   : number\n" +
+        "required: string");
+  }
+
+  public void testObjLitDef4() throws Exception {
+    testTypes(
+        "var x = {" +
+          "/** @return {number} */ a:12 };\n",
+          "assignment to property a of {a: function (): number}\n" +
+          "found   : number\n" +
+          "required: function (): number");
+  }
+
+  public void testObjLitDef5() throws Exception {
+    testTypes(
+        "var x = {};\n" +
+        "/** @return {number} */ x.a = 12;\n",
+        "assignment to property a of x\n" +
+        "found   : number\n" +
+        "required: function (): number");
+  }
+
 
   public void testInstanceOfReduction1() throws Exception {
     testTypes("/** @constructor */ var T = function() {};\n" +
@@ -3074,6 +3234,19 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "/** @implements {Disposable}\n * @interface */function f() {}");
   }
 
+  public void testGoodImplements4() throws Exception {
+    testTypes("var goog = {};" +
+        "/** @type {!Function} */" +
+        "goog.abstractMethod = function() {};" +
+        "/** @interface */\n" +
+        "goog.Disposable = goog.abstractMethod;" +
+        "goog.Disposable.prototype.dispose = goog.abstractMethod;" +
+        "/** @implements {goog.Disposable}\n * @constructor */" +
+        "goog.SubDisposable = function() {};" +
+        "/** @inheritDoc */ " +
+        "goog.SubDisposable.prototype.dispose = function() {};");
+  }
+
   public void testBadImplements1() throws Exception {
     testTypes("/** @interface */function Base1() {}\n" +
         "/** @interface */function Base2() {}\n" +
@@ -3284,6 +3457,23 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "undefined has no properties\n" +
         "found   : undefined\n" +
         "required: Object");
+  }
+
+  public void testGetprop2() throws Exception {
+    testTypes("var x = null; x.alert();",
+        "null has no properties\n" +
+        "found   : null\n" +
+        "required: Object");
+  }
+
+  public void testGetprop3() throws Exception {
+    testTypes(
+        "/** @constructor */ " +
+        "function Foo() { /** @type {?Object} */ this.x = null; }" +
+        "Foo.prototype.initX = function() { this.x = {foo: 1}; };" +
+        "Foo.prototype.bar = function() {" +
+        "  if (this.x == null) { this.initX(); alert(this.x.foo); }" +
+        "};");
   }
 
   public void testArrayAccess1() throws Exception {
@@ -5633,6 +5823,18 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testCast16() throws Exception {
+    // A type cast should not invalidate the checks on the members
+    testTypes(
+        "for (var i = 0; i < 10; i++) {" +
+          "var x = /** @type {Object|number} */ (" +
+          "  {/** @type {string} */ foo: 3});" +
+        "}",
+        "assignment to property foo of (Object|null|number)\n" +
+        "found   : number\n" +
+        "required: string");
+  }
+
+  public void testCast17() throws Exception {
     // Mostly verifying that rhino actually understands these JsDocs.
     testTypes("/** @constructor */ function Foo() {} \n" +
         "/** @type {Foo} */ var x = /** @type {Foo} */ ({})");
@@ -5771,6 +5973,40 @@ public class TypeCheckTest extends CompilerTypeTestCase {
     assertTrue(type instanceof FunctionType);
     FunctionType fType = (FunctionType) type;
     assertEquals("A", fType.getReferenceName());
+  }
+
+  public void testConstructorType8() throws Exception {
+    testTypes(
+        "var ns = {};" +
+        "ns.create = function() { return function() {}; };" +
+        "/** @constructor */ ns.Foo = ns.create();" +
+        "ns.Foo.prototype = {x: 0, y: 0};" +
+        "/**\n" +
+        " * @param {ns.Foo} foo\n" +
+        " * @return {string}\n" +
+        " */\n" +
+        "function f(foo) {" +
+        "  return foo.x;" +
+        "}",
+        "inconsistent return type\n" +
+        "found   : number\n" +
+        "required: string");
+  }
+
+  public void testConstructorType9() throws Exception {
+    testTypes(
+        "var ns = {};" +
+        "ns.create = function() { return function() {}; };" +
+        "ns.extend = function(x) { return x; };" +
+        "/** @constructor */ ns.Foo = ns.create();" +
+        "ns.Foo.prototype = ns.extend({x: 0, y: 0});" +
+        "/**\n" +
+        " * @param {ns.Foo} foo\n" +
+        " * @return {string}\n" +
+        " */\n" +
+        "function f(foo) {" +
+        "  return foo.x;" +
+        "}");
   }
 
   public void testAnonymousType1() throws Exception {
@@ -6519,6 +6755,23 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "};");
   }
 
+  public void testObjectLiteralDeclaration2() throws Exception {
+    testTypes(
+        "var x = {" +
+        "  /** @type {boolean} */ abc: true" +
+        "};" +
+        "x.abc = 0;",
+        "assignment to property abc of x\n" +
+        "found   : number\n" +
+        "required: boolean");
+  }
+
+  public void testObjectLiteralDeclaration3() throws Exception {
+    testTypes(
+        "/** @param {{foo: !Function}} x */ function f(x) {}" +
+        "f({foo: function() {}});");
+  }
+
   public void testCallDateConstructorAsFunction() throws Exception {
     // ECMA-262 15.9.2: When Date is called as a function rather than as a
     // constructor, it returns a string.
@@ -7087,10 +7340,13 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testForwardTypeDeclaration2() throws Exception {
-    testClosureTypes(
-        "goog.addDependency('zzz.js', ['MyType'], []);" +
-        "/** @param {MyType} x */ function f(x) { }" +
-        "f(3);", null);
+    String f = "goog.addDependency('zzz.js', ['MyType'], []);" +
+        "/** @param {MyType} x */ function f(x) { }";
+    testClosureTypes(f, null);
+    testClosureTypes(f + "f(3);",
+        "actual parameter 1 of f does not match formal parameter\n" +
+        "found   : number\n" +
+        "required: (MyType|null)");
   }
 
   public void testForwardTypeDeclaration3() throws Exception {
@@ -7135,6 +7391,38 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         Lists.newArrayList(
             "Could not resolve type in @implements tag of YourType",
             "property method not defined on any superclass of YourType"));
+  }
+
+  public void testForwardTypeDeclaration7() throws Exception {
+    testClosureTypes(
+        "goog.addDependency('zzz.js', ['MyType'], []);" +
+        "/** @param {MyType=} x */" +
+        "function f(x) { return x == undefined; }", null);
+  }
+
+  public void testForwardTypeDeclaration8() throws Exception {
+    testClosureTypes(
+        "goog.addDependency('zzz.js', ['MyType'], []);" +
+        "/** @param {MyType} x */" +
+        "function f(x) { return x.name == undefined; }", null);
+  }
+
+  public void testForwardTypeDeclaration9() throws Exception {
+    testClosureTypes(
+        "goog.addDependency('zzz.js', ['MyType'], []);" +
+        "/** @param {MyType} x */" +
+        "function f(x) { x.name = 'Bob'; }", null);
+  }
+
+  public void testForwardTypeDeclaration10() throws Exception {
+    String f = "goog.addDependency('zzz.js', ['MyType'], []);" +
+        "/** @param {MyType|number} x */ function f(x) { }";
+    testClosureTypes(f, null);
+    testClosureTypes(f + "f(3);", null);
+    testClosureTypes(f + "f('3');",
+        "actual parameter 1 of f does not match formal parameter\n" +
+        "found   : string\n" +
+        "required: (MyType|null|number)");
   }
 
   public void testMalformedOldTypeDef() throws Exception {
@@ -7661,6 +7949,27 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "function g(x) { return x.isVisible; }");
   }
 
+  public void testReflectObject1() throws Exception {
+    testClosureTypes(
+        "var goog = {}; goog.reflect = {}; " +
+        "goog.reflect.object = function(x, y){};" +
+        "/** @constructor */ function A() {}" +
+        "goog.reflect.object(A, {x: 3});",
+        null);
+  }
+
+  public void testReflectObject2() throws Exception {
+    testClosureTypes(
+        "var goog = {}; goog.reflect = {}; " +
+        "goog.reflect.object = function(x, y){};" +
+        "/** @param {string} x */ function f(x) {}" +
+        "/** @constructor */ function A() {}" +
+        "goog.reflect.object(A, {x: f(1 + 1)});",
+        "actual parameter 1 of f does not match formal parameter\n" +
+        "found   : number\n" +
+        "required: string");
+  }
+
   public void testLends1() throws Exception {
     testTypes(
         "function extend(x, y) {}" +
@@ -8017,7 +8326,10 @@ public class TypeCheckTest extends CompilerTypeTestCase {
           Joiner.on(", ").join(compiler.getWarnings()),
           0, compiler.getWarningCount());
     } else {
-      assertEquals(descriptions.size(), compiler.getWarningCount());
+      assertEquals(
+          "unexpected warning(s) : " +
+          Joiner.on(", ").join(compiler.getWarnings()),
+          descriptions.size(), compiler.getWarningCount());
       for (int i = 0; i < descriptions.size(); i++) {
         assertEquals(descriptions.get(i),
             compiler.getWarnings()[i].description);

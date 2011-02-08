@@ -36,6 +36,8 @@ public class NodeUtilTest extends TestCase {
 
   private static Node parse(String js) {
     Compiler compiler = new Compiler();
+    compiler.initCompilerOptionsIfTesting();
+    compiler.getOptions().languageIn = LanguageMode.ECMASCRIPT5;
     Node n = compiler.parseTestCode(js);
     assertEquals(0, compiler.getErrorCount());
     return n;
@@ -684,8 +686,6 @@ public class NodeUtilTest extends TestCase {
   }
 
   public void testIsControlStructureCodeBlock() {
-    Compiler compiler = new Compiler();
-
     Node root = parse("if (x) foo(); else boo();");
     Node ifNode = root.getFirstChild();
 
@@ -699,8 +699,6 @@ public class NodeUtilTest extends TestCase {
   }
 
   public void testIsFunctionExpression1() {
-    Compiler compiler = new Compiler();
-
     Node root = parse("(function foo() {})");
     Node StatementNode = root.getFirstChild();
     assertTrue(NodeUtil.isExpressionNode(StatementNode));
@@ -710,21 +708,31 @@ public class NodeUtilTest extends TestCase {
   }
 
   public void testIsFunctionExpression2() {
-    Compiler compiler = new Compiler();
-
     Node root = parse("function foo() {}");
     Node functionNode = root.getFirstChild();
     assertTrue(NodeUtil.isFunction(functionNode));
     assertFalse(NodeUtil.isFunctionExpression(functionNode));
   }
 
-  public void testRemoveTryChild() {
-    Compiler compiler = new Compiler();
+  public void testRemoveChildBlock() {
+    // Test removing the inner block.
+    Node actual = parse("{{x()}}");
 
-    Node root = parse("try {foo()} catch(e) {} finally {}");
+    Node outerBlockNode = actual.getFirstChild();
+    Node innerBlockNode = outerBlockNode.getFirstChild();
+    innerBlockNode.setIsSyntheticBlock(true);
 
+    NodeUtil.removeChild(outerBlockNode, innerBlockNode);
+    String expected = "{{}}";
+    String difference = parse(expected).checkTreeEquals(actual);
+    if (difference != null) {
+      assertTrue("Nodes do not match:\n" + difference, false);
+    }
+  }
+
+  public void testRemoveTryChild1() {
     // Test removing the finally clause.
-    Node actual = root.cloneTree();
+    Node actual = parse("try {foo()} catch(e) {} finally {}");
 
     Node tryNode = actual.getFirstChild();
     Node tryBlock = tryNode.getFirstChild();
@@ -737,38 +745,75 @@ public class NodeUtilTest extends TestCase {
     if (difference != null) {
       assertTrue("Nodes do not match:\n" + difference, false);
     }
+  }
 
+  public void testRemoveTryChild2() {
     // Test removing the try clause.
-    actual = root.cloneTree();
+    Node actual = parse("try {foo()} catch(e) {} finally {}");
 
-    tryNode = actual.getFirstChild();
-    tryBlock = tryNode.getFirstChild();
-    catchBlocks = tryNode.getFirstChild().getNext();
-    finallyBlock = tryNode.getLastChild();
+    Node tryNode = actual.getFirstChild();
+    Node tryBlock = tryNode.getFirstChild();
+    Node catchBlocks = tryNode.getFirstChild().getNext();
 
     NodeUtil.removeChild(tryNode, tryBlock);
-    expected = "try {} catch(e) {} finally {}";
-    difference = parse(expected).checkTreeEquals(actual);
+    String expected = "try {} catch(e) {} finally {}";
+    String difference = parse(expected).checkTreeEquals(actual);
     if (difference != null) {
       assertTrue("Nodes do not match:\n" + difference, false);
     }
+  }
 
+  public void testRemoveTryChild3() {
     // Test removing the catch clause.
-    actual = root.cloneTree();
+    Node actual = parse("try {foo()} catch(e) {} finally {}");
 
-    tryNode = actual.getFirstChild();
-    tryBlock = tryNode.getFirstChild();
-    catchBlocks = tryNode.getFirstChild().getNext();
+    Node tryNode = actual.getFirstChild();
+    Node tryBlock = tryNode.getFirstChild();
+    Node catchBlocks = tryNode.getFirstChild().getNext();
     Node catchBlock = catchBlocks.getFirstChild();
-    finallyBlock = tryNode.getLastChild();
+    Node finallyBlock = tryNode.getLastChild();
 
     NodeUtil.removeChild(catchBlocks, catchBlock);
-    expected = "try {foo()} finally {}";
-    difference = parse(expected).checkTreeEquals(actual);
+    String expected = "try {foo()} finally {}";
+    String difference = parse(expected).checkTreeEquals(actual);
     if (difference != null) {
       assertTrue("Nodes do not match:\n" + difference, false);
     }
+  }
 
+  public void testRemoveTryChild4() {
+    // Test removing the catch clause without a finally.
+    Node actual = parse("try {foo()} catch(e) {} finally {}");
+
+    Node tryNode = actual.getFirstChild();
+    Node tryBlock = tryNode.getFirstChild();
+    Node catchBlocks = tryNode.getFirstChild().getNext();
+    Node catchBlock = catchBlocks.getFirstChild();
+    Node finallyBlock = tryNode.getLastChild();
+
+    NodeUtil.removeChild(tryNode, catchBlocks);
+    String expected = "try {foo()} finally {}";
+    String difference = parse(expected).checkTreeEquals(actual);
+    if (difference != null) {
+      assertTrue("Nodes do not match:\n" + difference, false);
+    }
+  }
+
+  public void testRemoveTryChild5() {
+    Node actual = parse("try {foo()} catch(e) {} finally {}");
+
+    Node tryNode = actual.getFirstChild();
+    Node tryBlock = tryNode.getFirstChild();
+    Node catchBlocks = tryNode.getFirstChild().getNext();
+    Node catchBlock = catchBlocks.getFirstChild();
+    Node finallyBlock = tryNode.getLastChild();
+
+    NodeUtil.removeChild(catchBlocks, catchBlock);
+    String expected = "try {foo()} finally {}";
+    String difference = parse(expected).checkTreeEquals(actual);
+    if (difference != null) {
+      assertTrue("Nodes do not match:\n" + difference, false);
+    }
   }
 
   public void testRemoveVarChild() {
@@ -1191,7 +1236,7 @@ public class NodeUtilTest extends TestCase {
     assertFalse(NodeUtil.evaluatesToLocalValue(callExpr));
     assertFalse(NodeUtil.functionCallHasSideEffects(callExpr));
     assertFalse(NodeUtil.mayHaveSideEffects(callExpr));
-    
+
     // No modifications, non-local result
     flags.clearAllFlags();
     newExpr.setSideEffectFlags(flags.valueOf());
@@ -1249,5 +1294,304 @@ public class NodeUtilTest extends TestCase {
 
     ImmutableSet<String> defines = ImmutableSet.of();
     return NodeUtil.isValidDefineValue(value, defines);
+  }
+
+  public void testGetNumberValue() {
+    // Strings
+    assertEquals(1.0, NodeUtil.getNumberValue(getNode("'\\uFEFF1'")));
+    assertEquals(0.0, NodeUtil.getNumberValue(getNode("''")));
+    assertEquals(0.0, NodeUtil.getNumberValue(getNode("' '")));
+    assertEquals(0.0, NodeUtil.getNumberValue(getNode("' \\t'")));
+    assertEquals(0.0, NodeUtil.getNumberValue(getNode("'+0'")));
+    assertEquals(-0.0, NodeUtil.getNumberValue(getNode("'-0'")));
+    assertEquals(2.0, NodeUtil.getNumberValue(getNode("'+2'")));
+    assertEquals(-1.6, NodeUtil.getNumberValue(getNode("'-1.6'")));
+    assertEquals(16.0, NodeUtil.getNumberValue(getNode("'16'")));
+    assertEquals(16.0, NodeUtil.getNumberValue(getNode("' 16 '")));
+    assertEquals(16.0, NodeUtil.getNumberValue(getNode("' 16 '")));
+    assertEquals(12300.0, NodeUtil.getNumberValue(getNode("'123e2'")));
+    assertEquals(12300.0, NodeUtil.getNumberValue(getNode("'123E2'")));
+    assertEquals(1.23, NodeUtil.getNumberValue(getNode("'123e-2'")));
+    assertEquals(1.23, NodeUtil.getNumberValue(getNode("'123E-2'")));
+    assertEquals(-1.23, NodeUtil.getNumberValue(getNode("'-123e-2'")));
+    assertEquals(-1.23, NodeUtil.getNumberValue(getNode("'-123E-2'")));
+    assertEquals(1.23, NodeUtil.getNumberValue(getNode("'+123e-2'")));
+    assertEquals(1.23, NodeUtil.getNumberValue(getNode("'+123E-2'")));
+    assertEquals(12300.0, NodeUtil.getNumberValue(getNode("'+123e+2'")));
+    assertEquals(12300.0, NodeUtil.getNumberValue(getNode("'+123E+2'")));
+
+    assertEquals(15.0, NodeUtil.getNumberValue(getNode("'0xf'")));
+    assertEquals(15.0, NodeUtil.getNumberValue(getNode("'0xF'")));
+
+    // Chrome and rhino behavior differently from FF and IE. FF and IE
+    // consider a negative hex number to be invalid
+    assertEquals(null, NodeUtil.getNumberValue(getNode("'-0xf'")));
+    assertEquals(null, NodeUtil.getNumberValue(getNode("'-0xF'")));
+    assertEquals(null, NodeUtil.getNumberValue(getNode("'+0xf'")));
+    assertEquals(null, NodeUtil.getNumberValue(getNode("'+0xF'")));
+
+    assertEquals(16.0, NodeUtil.getNumberValue(getNode("'0X10'")));
+    assertEquals(Double.NaN, NodeUtil.getNumberValue(getNode("'0X10.8'")));
+    assertEquals(77.0, NodeUtil.getNumberValue(getNode("'077'")));
+    assertEquals(-77.0, NodeUtil.getNumberValue(getNode("'-077'")));
+    assertEquals(-77.5, NodeUtil.getNumberValue(getNode("'-077.5'")));
+    assertEquals(
+        Double.NEGATIVE_INFINITY,
+        NodeUtil.getNumberValue(getNode("'-Infinity'")));
+    assertEquals(
+        Double.POSITIVE_INFINITY,
+        NodeUtil.getNumberValue(getNode("'Infinity'")));
+    assertEquals(
+        Double.POSITIVE_INFINITY,
+        NodeUtil.getNumberValue(getNode("'+Infinity'")));
+    // FireFox treats "infinity" as "Infinity", IE treats it as NaN
+    assertEquals(null, NodeUtil.getNumberValue(getNode("'-infinity'")));
+    assertEquals(null, NodeUtil.getNumberValue(getNode("'infinity'")));
+    assertEquals(null, NodeUtil.getNumberValue(getNode("'+infinity'")));
+
+    assertEquals(Double.NaN, NodeUtil.getNumberValue(getNode("'NaN'")));
+    assertEquals(
+        Double.NaN, NodeUtil.getNumberValue(getNode("'some unknown string'")));
+    assertEquals(Double.NaN, NodeUtil.getNumberValue(getNode("'123 blah'")));
+
+    // Literals
+    assertEquals(1.0, NodeUtil.getNumberValue(getNode("1")));
+    // "-1" is parsed as a literal
+    assertEquals(-1.0, NodeUtil.getNumberValue(getNode("-1")));
+    // "+1" is parse as an op + literal
+    assertEquals(null, NodeUtil.getNumberValue(getNode("+1")));
+    assertEquals(22.0, NodeUtil.getNumberValue(getNode("22")));
+    assertEquals(18.0, NodeUtil.getNumberValue(getNode("022")));
+    assertEquals(34.0, NodeUtil.getNumberValue(getNode("0x22")));
+
+    assertEquals(
+        1.0, NodeUtil.getNumberValue(getNode("true")));
+    assertEquals(
+        0.0, NodeUtil.getNumberValue(getNode("false")));
+    assertEquals(
+        0.0, NodeUtil.getNumberValue(getNode("null")));
+    assertEquals(
+        Double.NaN, NodeUtil.getNumberValue(getNode("void 0")));
+    assertEquals(
+        Double.NaN, NodeUtil.getNumberValue(getNode("void f")));
+    // values with side-effects are ignored.
+    assertEquals(
+        null, NodeUtil.getNumberValue(getNode("void f()")));
+    assertEquals(
+        Double.NaN, NodeUtil.getNumberValue(getNode("NaN")));
+    assertEquals(
+        Double.POSITIVE_INFINITY,
+        NodeUtil.getNumberValue(getNode("Infinity")));
+    assertEquals(
+        Double.NEGATIVE_INFINITY,
+        NodeUtil.getNumberValue(getNode("-Infinity")));
+
+    // "infinity" is not a known name.
+    assertEquals(null, NodeUtil.getNumberValue(getNode("infinity")));
+    assertEquals(null, NodeUtil.getNumberValue(getNode("-infinity")));
+
+    // getNumberValue only converts literals
+    assertEquals(null, NodeUtil.getNumberValue(getNode("x")));
+    assertEquals(null, NodeUtil.getNumberValue(getNode("x.y")));
+    assertEquals(null, NodeUtil.getNumberValue(getNode("1/2")));
+    assertEquals(null, NodeUtil.getNumberValue(getNode("1-2")));
+    assertEquals(null, NodeUtil.getNumberValue(getNode("+1")));
+  }
+
+  public void testIsNumbericResult() {
+    assertTrue(NodeUtil.isNumericResult(getNode("1")));
+    assertFalse(NodeUtil.isNumericResult(getNode("true")));
+    assertTrue(NodeUtil.isNumericResult(getNode("+true")));
+    assertTrue(NodeUtil.isNumericResult(getNode("+1")));
+    assertTrue(NodeUtil.isNumericResult(getNode("-1")));
+    assertTrue(NodeUtil.isNumericResult(getNode("-Infinity")));
+    assertTrue(NodeUtil.isNumericResult(getNode("Infinity")));
+    assertTrue(NodeUtil.isNumericResult(getNode("NaN")));
+    assertFalse(NodeUtil.isNumericResult(getNode("undefined")));
+    assertFalse(NodeUtil.isNumericResult(getNode("void 0")));
+
+    assertTrue(NodeUtil.isNumericResult(getNode("a << b")));
+    assertTrue(NodeUtil.isNumericResult(getNode("a >> b")));
+    assertTrue(NodeUtil.isNumericResult(getNode("a >>> b")));
+
+    assertFalse(NodeUtil.isNumericResult(getNode("a == b")));
+    assertFalse(NodeUtil.isNumericResult(getNode("a != b")));
+    assertFalse(NodeUtil.isNumericResult(getNode("a === b")));
+    assertFalse(NodeUtil.isNumericResult(getNode("a !== b")));
+    assertFalse(NodeUtil.isNumericResult(getNode("a < b")));
+    assertFalse(NodeUtil.isNumericResult(getNode("a > b")));
+    assertFalse(NodeUtil.isNumericResult(getNode("a <= b")));
+    assertFalse(NodeUtil.isNumericResult(getNode("a >= b")));
+    assertFalse(NodeUtil.isNumericResult(getNode("a in b")));
+    assertFalse(NodeUtil.isNumericResult(getNode("a instanceof b")));
+
+    assertFalse(NodeUtil.isNumericResult(getNode("'a'")));
+    assertFalse(NodeUtil.isNumericResult(getNode("'a'+b")));
+    assertFalse(NodeUtil.isNumericResult(getNode("a+'b'")));
+    assertFalse(NodeUtil.isNumericResult(getNode("a+b")));
+    assertFalse(NodeUtil.isNumericResult(getNode("a()")));
+    assertFalse(NodeUtil.isNumericResult(getNode("''.a")));
+    assertFalse(NodeUtil.isNumericResult(getNode("a.b")));
+    assertFalse(NodeUtil.isNumericResult(getNode("a.b()")));
+    assertFalse(NodeUtil.isNumericResult(getNode("a().b()")));
+    assertFalse(NodeUtil.isNumericResult(getNode("new a()")));
+
+    // Definitely not numberic
+    assertFalse(NodeUtil.isNumericResult(getNode("([1,2])")));
+    assertFalse(NodeUtil.isNumericResult(getNode("({a:1})")));
+
+    // These are number but aren't handled yet, "false" here means "unknown".
+    assertFalse(NodeUtil.isNumericResult(getNode("1 && 2")));
+    assertFalse(NodeUtil.isNumericResult(getNode("1 || 2")));
+    assertFalse(NodeUtil.isNumericResult(getNode("a ? 2 : 3")));
+    assertFalse(NodeUtil.isNumericResult(getNode("a,1")));
+    assertFalse(NodeUtil.isNumericResult(getNode("a=1")));
+  }
+
+  public void testIsBooleanResult() {
+    assertFalse(NodeUtil.isBooleanResult(getNode("1")));
+    assertTrue(NodeUtil.isBooleanResult(getNode("true")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("+true")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("+1")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("-1")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("-Infinity")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("Infinity")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("NaN")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("undefined")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("void 0")));
+
+    assertFalse(NodeUtil.isBooleanResult(getNode("a << b")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("a >> b")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("a >>> b")));
+
+    assertTrue(NodeUtil.isBooleanResult(getNode("a == b")));
+    assertTrue(NodeUtil.isBooleanResult(getNode("a != b")));
+    assertTrue(NodeUtil.isBooleanResult(getNode("a === b")));
+    assertTrue(NodeUtil.isBooleanResult(getNode("a !== b")));
+    assertTrue(NodeUtil.isBooleanResult(getNode("a < b")));
+    assertTrue(NodeUtil.isBooleanResult(getNode("a > b")));
+    assertTrue(NodeUtil.isBooleanResult(getNode("a <= b")));
+    assertTrue(NodeUtil.isBooleanResult(getNode("a >= b")));
+    assertTrue(NodeUtil.isBooleanResult(getNode("a in b")));
+    assertTrue(NodeUtil.isBooleanResult(getNode("a instanceof b")));
+
+    assertFalse(NodeUtil.isBooleanResult(getNode("'a'")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("'a'+b")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("a+'b'")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("a+b")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("a()")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("''.a")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("a.b")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("a.b()")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("a().b()")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("new a()")));
+
+    // Definitely not boolean
+    assertFalse(NodeUtil.isBooleanResult(getNode("([true,false])")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("({a:true})")));
+
+    // These are boolean but aren't handled yet, "false" here means "unknown".
+    assertFalse(NodeUtil.isBooleanResult(getNode("true && false")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("true || false")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("a ? true : false")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("a,true")));
+    assertFalse(NodeUtil.isBooleanResult(getNode("a=1")));
+  }
+
+  public void testMayBeString() {
+    assertFalse(NodeUtil.mayBeString(getNode("1")));
+    assertFalse(NodeUtil.mayBeString(getNode("true")));
+    assertFalse(NodeUtil.mayBeString(getNode("+true")));
+    assertFalse(NodeUtil.mayBeString(getNode("+1")));
+    assertFalse(NodeUtil.mayBeString(getNode("-1")));
+    assertFalse(NodeUtil.mayBeString(getNode("-Infinity")));
+    assertFalse(NodeUtil.mayBeString(getNode("Infinity")));
+    assertFalse(NodeUtil.mayBeString(getNode("NaN")));
+    assertFalse(NodeUtil.mayBeString(getNode("undefined")));
+    assertFalse(NodeUtil.mayBeString(getNode("void 0")));
+    assertFalse(NodeUtil.mayBeString(getNode("null")));
+
+    assertFalse(NodeUtil.mayBeString(getNode("a << b")));
+    assertFalse(NodeUtil.mayBeString(getNode("a >> b")));
+    assertFalse(NodeUtil.mayBeString(getNode("a >>> b")));
+
+    assertFalse(NodeUtil.mayBeString(getNode("a == b")));
+    assertFalse(NodeUtil.mayBeString(getNode("a != b")));
+    assertFalse(NodeUtil.mayBeString(getNode("a === b")));
+    assertFalse(NodeUtil.mayBeString(getNode("a !== b")));
+    assertFalse(NodeUtil.mayBeString(getNode("a < b")));
+    assertFalse(NodeUtil.mayBeString(getNode("a > b")));
+    assertFalse(NodeUtil.mayBeString(getNode("a <= b")));
+    assertFalse(NodeUtil.mayBeString(getNode("a >= b")));
+    assertFalse(NodeUtil.mayBeString(getNode("a in b")));
+    assertFalse(NodeUtil.mayBeString(getNode("a instanceof b")));
+
+    assertTrue(NodeUtil.mayBeString(getNode("'a'")));
+    assertTrue(NodeUtil.mayBeString(getNode("'a'+b")));
+    assertTrue(NodeUtil.mayBeString(getNode("a+'b'")));
+    assertTrue(NodeUtil.mayBeString(getNode("a+b")));
+    assertTrue(NodeUtil.mayBeString(getNode("a()")));
+    assertTrue(NodeUtil.mayBeString(getNode("''.a")));
+    assertTrue(NodeUtil.mayBeString(getNode("a.b")));
+    assertTrue(NodeUtil.mayBeString(getNode("a.b()")));
+    assertTrue(NodeUtil.mayBeString(getNode("a().b()")));
+    assertTrue(NodeUtil.mayBeString(getNode("new a()")));
+
+    // These can't be strings but they aren't handled yet.
+    assertTrue(NodeUtil.mayBeString(getNode("1 && 2")));
+    assertTrue(NodeUtil.mayBeString(getNode("1 || 2")));
+    assertTrue(NodeUtil.mayBeString(getNode("1 ? 2 : 3")));
+    assertTrue(NodeUtil.mayBeString(getNode("1,2")));
+    assertTrue(NodeUtil.mayBeString(getNode("a=1")));
+    assertTrue(NodeUtil.mayBeString(getNode("1+1")));
+    assertTrue(NodeUtil.mayBeString(getNode("true+true")));
+    assertTrue(NodeUtil.mayBeString(getNode("null+null")));
+    assertTrue(NodeUtil.mayBeString(getNode("NaN+NaN")));
+
+    // These are not strings but they aren't primitives either
+    assertTrue(NodeUtil.mayBeString(getNode("([1,2])")));
+    assertTrue(NodeUtil.mayBeString(getNode("({a:1})")));
+    assertTrue(NodeUtil.mayBeString(getNode("({}+1)")));
+    assertTrue(NodeUtil.mayBeString(getNode("(1+{})")));
+    assertTrue(NodeUtil.mayBeString(getNode("([]+1)")));
+    assertTrue(NodeUtil.mayBeString(getNode("(1+[])")));
+  }
+
+  public void testGetNearestFunctionName() {
+    testFunctionName("function a() {}", "a");
+    testFunctionName("(function a() {})", "a");
+    testFunctionName("({a:function () {}})", "a");
+    testFunctionName("({get a() {}})", "a");
+    testFunctionName("({set a(b) {}})", "a");
+    testFunctionName("({set a(b) {}})", "a");
+    testFunctionName("({1:function () {}})", "1");
+    testFunctionName("var a = function a() {}", "a");
+    testFunctionName("var a;a = function a() {}", "a");
+    testFunctionName("var o;o.a = function a() {}", "o.a");
+    testFunctionName("this.a = function a() {}", "this.a");
+  }
+
+  static void testFunctionName(String js, String expected) {
+    assertEquals(
+        expected,
+        NodeUtil.getNearestFunctionName(getFunctionNode(js)));
+  }
+
+  static Node getFunctionNode(String js) {
+    Node root = parse(js);
+    return getFunctionNode(root);
+  }
+
+  static Node getFunctionNode(Node n) {
+    if (n.getType() == Token.FUNCTION) {
+      return n;
+    }
+    for (Node c : n.children()) {
+      Node result = getFunctionNode(c);
+      if (result != null) {
+        return result;
+      }
+    }
+    return null;
   }
 }

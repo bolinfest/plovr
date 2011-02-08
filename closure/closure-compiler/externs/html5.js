@@ -20,6 +20,11 @@
  *  Created from
  *  http://www.whatwg.org/specs/web-apps/current-work/multipage/index.html
  *
+ *  This also includes ArrayBuffer, from
+ *  http://www.khronos.org/registry/typedarray/specs/latest/#3, which is
+ *  included here so that it can be used by the FileAPI externs without pulling
+ *  in the full WebGL externs.
+ *
  *  This relies on w3c_event.js being included first.
  *
  * @externs
@@ -577,24 +582,6 @@ function openDatabase(name, version, description, size) {}
  */
 Window.prototype.openDatabase = function(name, version, description, size) {};
 
-//HTML5 LocalFileSystem objects
-/**
- * @constructor
- */
-function LocalFileSystem() {}
-
-/**
- * Get LocalFileSystem object
- * @return {LocalFileSystem}
- */
-function requestFileSystem() {}
-
-/**
- * Get LocalFileSystem object
- * @return {LocalFileSystem}
- */
-Window.prototype.requestFileSystem = function() {};
-
 /**
  * @type {boolean}
  */
@@ -774,11 +761,45 @@ WebWorker.prototype.onmessage;
  */
 WebWorker.prototype.onerror;
 
-/** @type {WebWorker} */
-var Worker;
+/**
+ * @see http://dev.w3.org/html5/workers/
+ * @constructor
+ * @implements {EventTarget}
+ */
+function Worker(opt_arg0) {}
 
-/** @type {WebWorker} */
-Window.prototype.Worker;
+/** @inheritDoc */
+Worker.prototype.addEventListener = function(
+    type, listener, useCapture) {};
+
+/** @inheritDoc */
+Worker.prototype.removeEventListener = function(
+    type, listener, useCapture) {};
+
+/** @inheritDoc */
+Worker.prototype.dispatchEvent = function(evt) {};
+
+/**
+ * Stops the worker process
+ */
+Worker.prototype.terminate = function() {};
+
+/**
+ * Posts a message to the worker thread.
+ * @param {*} message
+ * @param {Array.<MessagePort>=} opt_ports
+ */
+Worker.prototype.postMessage = function(message, opt_ports) {};
+
+/**
+ * Sent when the worker thread posts a message to its creator.
+ */
+Worker.prototype.onmessage = function() {};
+
+/**
+ * Sent when the worker thread encounters an error.
+ */
+Worker.prototype.onerror = function() {};
 
 /**
  * @type {boolean}
@@ -991,13 +1012,13 @@ function MessageChannel() {}
 
 /**
  * Returns the first port.
- * @type {MessagePort}
+ * @type {!MessagePort}
  */
 MessageChannel.prototype.port1;
 
 /**
  * Returns the second port.
- * @type {MessagePort}
+ * @type {!MessagePort}
  */
 MessageChannel.prototype.port2;
 
@@ -1318,6 +1339,72 @@ History.prototype.pushState = function(data, title, opt_url) {};
 History.prototype.replaceState = function(data, title, opt_url) {};
 
 /**
+ * @see http://www.w3.org/TR/html5/history.html#event-definitions
+ * @constructor
+ * @extends {Event}
+ */
+function PopStateEvent() {}
+
+/**
+ * @type {*}
+ */
+PopStateEvent.prototype.state;
+
+/**
+ * Initializes the event after it has been created with document.createEvent
+ * @param {string} typeArg
+ * @param {boolean} canBubbleArg
+ * @param {boolean} cancelableArg
+ * @param {*} stateArg
+ */
+PopStateEvent.prototype.initPopStateEvent = function(typeArg, canBubbleArg,
+    cancelableArg, stateArg) {};
+
+/**
+ * @see http://www.w3.org/TR/html5/history.html#event-definitions
+ * @constructor
+ * @extends {Event}
+ */
+function HashChangeEvent() {}
+
+/** @type {string} */
+HashChangeEvent.prototype.oldURL;
+
+/** @type {string} */
+HashChangeEvent.prototype.newURL;
+
+/**
+ * Initializes the event after it has been created with document.createEvent
+ * @param {string} typeArg
+ * @param {boolean} canBubbleArg
+ * @param {boolean} cancelableArg
+ * @param {string} oldURLArg
+ * @param {string} newURLArg
+ */
+HashChangeEvent.prototype.initHashChangeEvent = function(typeArg, canBubbleArg,
+    cancelableArg, oldURLArg, newURLArg) {};
+
+/**
+ * @see http://www.w3.org/TR/html5/history.html#event-definitions
+ * @constructor
+ * @extends {Event}
+ */
+function PageTransitionEvent() {}
+
+/** @type {boolean} */
+PageTransitionEvent.prototype.persisted;
+
+/**
+ * Initializes the event after it has been created with document.createEvent
+ * @param {string} typeArg
+ * @param {boolean} canBubbleArg
+ * @param {boolean} cancelableArg
+ * @param {*} persistedArg
+ */
+PageTransitionEvent.prototype.initPageTransitionEvent = function(typeArg,
+    canBubbleArg, cancelableArg, persistedArg) {};
+
+/**
  * @constructor
  */
 function FileList() {}
@@ -1347,6 +1434,18 @@ XMLHttpRequest.prototype.upload;
  * @param {string} mimeType The mime type to override with.
  */
 XMLHttpRequest.prototype.overrideMimeType = function(mimeType) {};
+
+/**
+ * @type {string}
+ * @see http://dev.w3.org/2006/webapi/XMLHttpRequest-2/#the-responsetype-attribute
+ */
+XMLHttpRequest.prototype.responseType;
+
+/**
+ * @type {*}
+ * @see http://dev.w3.org/2006/webapi/XMLHttpRequest-2/#the-responsetype-attribute
+ */
+XMLHttpRequest.prototype.response;
 
 /**
  * XMLHttpRequestEventTarget defines events for checking the status of a data
@@ -1394,3 +1493,13 @@ function Image(opt_width, opt_height) {}
  * @const
  */
 HTMLElement.prototype.dataset;
+
+
+/**
+ * @param {number} length The length in bytes
+ * @constructor
+ */
+function ArrayBuffer(length) {}
+
+/** @type {number} */
+ArrayBuffer.prototype.byteLength;

@@ -288,6 +288,10 @@ public class DefaultPassConfig extends PassConfig {
     checks.add(options.messageBundle != null ?
         replaceMessages : createEmptyPass("replaceMessages"));
 
+    if (options.getTweakProcessing().isOn()) {
+      checks.add(processTweaks);
+    }
+
     // Defines in code always need to be processed.
     checks.add(processDefines);
 
@@ -564,6 +568,13 @@ public class DefaultPassConfig extends PassConfig {
 
     if (options.coalesceVariableNames) {
       passes.add(coalesceVariableNames);
+
+      // coalesceVariables creates identity assignments and more redundant code
+      // that can be removed, rerun the peephole optimizations to clean them
+      // up.
+      if (options.foldConstants) {
+        passes.add(peepholeOptimizations);
+      }
     }
 
     if (options.collapseVariableDeclarations) {
@@ -1102,6 +1113,21 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
+  /** Process goog.tweak.getTweak() calls. */
+  final PassFactory processTweaks = new PassFactory("processTweaks", true) {
+    @Override
+    protected CompilerPass createInternal(final AbstractCompiler compiler) {
+      return new CompilerPass() {
+        @Override
+        public void process(Node externs, Node jsRoot) {
+          new ProcessTweaks(compiler,
+              options.getTweakProcessing().shouldStrip(),
+              options.getTweakReplacements()).process(externs, jsRoot);
+        }
+      };
+    }
+  };
+
   /** Override @define-annotated constants. */
   final PassFactory processDefines =
       new PassFactory("processDefines", true) {
@@ -1189,7 +1215,8 @@ public class DefaultPassConfig extends PassConfig {
           ReplaceStrings pass = new ReplaceStrings(
               compiler,
               options.replaceStringsPlaceholderToken,
-              options.replaceStringsFunctionDescriptions);
+              options.replaceStringsFunctionDescriptions,
+              options.replaceStringsReservedStrings);
           pass.process(externs, root);
           stringMap = pass.getStringMap();
         }
@@ -1432,6 +1459,7 @@ public class DefaultPassConfig extends PassConfig {
       };
     }
   };
+
 
   /** Inlines simple methods, like getters */
   private PassFactory inlineSimpleMethods =

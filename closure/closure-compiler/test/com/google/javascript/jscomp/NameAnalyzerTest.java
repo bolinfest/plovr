@@ -916,6 +916,16 @@ public class NameAnalyzerTest extends CompilerTestCase {
         "}; new Bar().func();");
   }
 
+  public void testDoNotChangeInstanceOfGetElem() {
+    testSame("var goog = {};" +
+        "function f(obj, name) {" +
+        "  if (obj instanceof goog[name]) {" +
+        "    return name;" +
+        "  }" +
+        "}" +
+        "window['f'] = f;");
+  }
+
   public void testWeirdnessOnLeftSideOfPrototype() {
     // This checks a bug where 'x' was removed, but the function referencing
     // it was not, causing problems.
@@ -1019,6 +1029,47 @@ public class NameAnalyzerTest extends CompilerTestCase {
     test("function Foo(){} var foo = null;" +
          "var f = function () {1 + (foo = new Foo()); return foo}",
          "");
+  }
+
+  public void testRhsAssignWithHook1() {
+    testSame("function Foo(){} var foo = null;" +
+        "var f = window.a ? " +
+        "    function () {return new Foo()} : function () {return foo}; f()");
+  }
+
+  public void testRhsAssignWithHook2() {
+    test("function Foo(){} var foo = null;" +
+        "var f = window.a ? " +
+        "    function () {return new Foo()} : function () {return foo};",
+        "");
+  }
+
+  public void testRhsAssignWithHook3() {
+    testSame("function Foo(){} var foo = null; var f = {};" +
+        "f.b = window.a ? " +
+        "    function () {return new Foo()} : function () {return foo}; f.b()");
+  }
+
+  public void testRhsAssignWithHook4() {
+    test("function Foo(){} var foo = null; var f = {};" +
+        "f.b = window.a ? " +
+        "    function () {return new Foo()} : function () {return foo};",
+        "");
+  }
+
+  public void testRhsAssignWithHook5() {
+    testSame("function Foo(){} var foo = null; var f = {};" +
+        "f.b = window.a ? function () {return new Foo()} :" +
+        "    window.b ? function () {return foo} :" +
+        "    function() { return Foo }; f.b()");
+  }
+
+  public void testRhsAssignWithHook6() {
+    test("function Foo(){} var foo = null; var f = {};" +
+        "f.b = window.a ? function () {return new Foo()} :" +
+        "    window.b ? function () {return foo} :" +
+        "    function() { return Foo };",
+        "");
   }
 
   public void testNestedAssign1() {

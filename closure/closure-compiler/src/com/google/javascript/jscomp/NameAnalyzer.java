@@ -804,12 +804,13 @@ final class NameAnalyzer implements CompilerPass {
       }
 
       if (parent.getType() == Token.INSTANCEOF &&
-          parent.getLastChild() == n) {
+          parent.getLastChild() == n &&
+          // Don't cover GETELEMs with a global root node.
+          n.isQualifiedName()) {
         JsName checkedClass = getName(nameInfo.name, true);
         refNodes.add(
             new InstanceOfCheckNode(
                 checkedClass, n, parent, parent.getParent()));
-
         return;
       }
 
@@ -1405,6 +1406,12 @@ final class NameAnalyzer implements CompilerPass {
     // declaration or assignment.
     Node parent = function.getParent();
     if (parent != null) {
+      // Account for functions defined in the form:
+      //   var a = cond ? function a() {} : function b() {};
+      while (parent.getType() == Token.HOOK) {
+        parent = parent.getParent();
+      }
+
       if (parent.getType() == Token.NAME) {
         return scopes.get(parent);
       }

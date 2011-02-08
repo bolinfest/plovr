@@ -148,15 +148,15 @@ public class UnreachableCodeEliminationTest extends CompilerTestCase {
   public void testTryCatchFinally() {
     testSame("try {foo()} catch (e) {bar()}");
     testSame("try { try {foo()} catch (e) {bar()}} catch (x) {bar()}");
-    test("try {var x = 1} catch (e) {e()}", "{var x = 1}");
+    test("try {var x = 1} catch (e) {e()}", "try {var x = 1} finally {}");
     test("try {var x = 1} catch (e) {e()} finally {x()}",
         " try {var x = 1}                 finally {x()}");
     test("try {var x = 1} catch (e) {e()} finally {}",
-        "     {var x = 1}");
+        "try {var x = 1} finally {}");
     testSame("try {var x = 1} finally {x()}");
-    test("try {var x = 1} finally {}", "{var x = 1}");
-    test("function f() { return; try{var x = 1}catch(e){} }",
-        "function f() { var x; return; {}}");
+    testSame("try {var x = 1} finally {}");
+    test("function f() {return; try{var x = 1}catch(e){} }",
+         "function f() {var x;}");
   }
 
   public void testRemovalRequiresRedeclaration() {
@@ -233,11 +233,42 @@ public class UnreachableCodeEliminationTest extends CompilerTestCase {
 
   public void testCascadedRemovalOfUnlessUnconditonalJumps() {
     test("switch (a) { case 'a': break; case 'b': break; case 'c': break }",
+         "switch (a) { case 'a': break; case 'b': case 'c': }");
+    // Only one break removed per pass.
+    test("switch (a) { case 'a': break; case 'b': case 'c': }",
          "switch (a) { case 'a': case 'b': case 'c': }");
+
     test("function foo() {" +
-         "  switch (a) { case 'a':return; case 'b':return; case 'c':return }}",
-         "function foo() { switch (a) { case 'a': case 'b': case 'c': }}");
+      "  switch (a) { case 'a':return; case 'b':return; case 'c':return }}",
+      "function foo() { switch (a) { case 'a':return; case 'b': case 'c': }}");
+    test("function foo() {" +
+      "  switch (a) { case 'a':return; case 'b': case 'c': }}",
+      "function foo() { switch (a) { case 'a': case 'b': case 'c': }}");
+
     testSame("function foo() {" +
              "switch (a) { case 'a':return 2; case 'b':return 1}}");
+  }
+
+  public void testIssue311() {
+    test("function a(b) {\n" +
+         "  switch (b.v) {\n" +
+         "    case 'SWITCH':\n" +
+         "      if (b.i >= 0) {\n" +
+         "        return b.o;\n" +
+         "      } else {\n" +
+         "        return;\n" +
+         "      }\n" +
+         "      break;\n" +
+         "  }\n" +
+         "}",
+         "function a(b) {\n" +
+         "  switch (b.v) {\n" +
+         "    case 'SWITCH':\n" +
+         "      if (b.i >= 0) {\n" +
+         "        return b.o;\n" +
+         "      } else {\n" +
+         "      }\n" +
+         "  }\n" +
+         "}");
   }
 }

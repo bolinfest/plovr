@@ -292,6 +292,7 @@ public class FunctionType extends PrototypeObjectType {
       return false;
     }
 
+    boolean replacedPrototype = prototype != null;
     this.prototype = prototype;
 
     if (isConstructor() || isInterface()) {
@@ -300,6 +301,11 @@ public class FunctionType extends PrototypeObjectType {
         superClass.addSubType(this);
       }
     }
+
+    if (replacedPrototype) {
+      clearCachedValues();
+    }
+
     return true;
   }
 
@@ -381,7 +387,7 @@ public class FunctionType extends PrototypeObjectType {
                 new FunctionBuilder(registry)
                     .withReturnType(getReturnType())
                     .build(),
-                false);
+                false, source);
           } else {
             params = params.cloneTree();
             Node thisTypeNode = Node.newString(Token.NAME, "thisType");
@@ -395,7 +401,7 @@ public class FunctionType extends PrototypeObjectType {
                     .withParamsNode(params)
                     .withReturnType(getReturnType())
                     .build(),
-                false);
+                false, source);
           }
         } else if ("apply".equals(name)) {
           // Define the "apply" function lazily.
@@ -415,7 +421,7 @@ public class FunctionType extends PrototypeObjectType {
                   .withParams(builder)
                   .withReturnType(getReturnType())
                   .build(),
-              false);
+              false, source);
         }
       }
 
@@ -425,7 +431,7 @@ public class FunctionType extends PrototypeObjectType {
 
   @Override
   boolean defineProperty(String name, JSType type,
-      boolean inferred, boolean inExterns) {
+      boolean inferred, boolean inExterns, Node propertyNode) {
     if ("prototype".equals(name)) {
       ObjectType objType = type.toObjectType();
       if (objType != null) {
@@ -439,7 +445,7 @@ public class FunctionType extends PrototypeObjectType {
         return false;
       }
     }
-    return super.defineProperty(name, type, inferred, inExterns);
+    return super.defineProperty(name, type, inferred, inExterns, propertyNode);
   }
 
   @Override
@@ -600,33 +606,6 @@ public class FunctionType extends PrototypeObjectType {
       return null;
     }
     return maybeSuperInstanceType.getConstructor();
-  }
-
-  /**
-   * Given a constructor or an interface type, find out whether the unknown
-   * type is a supertype of the current type.
-   */
-  public boolean hasUnknownSupertype() {
-    Preconditions.checkArgument(isConstructor() || isInterface());
-    Preconditions.checkArgument(!this.isUnknownType());
-    // Potential infinite loop if our type system messes up or someone defines
-    // a bad type. Otherwise the loop should always end.
-    FunctionType ctor = this;
-    while (true) {
-      ObjectType maybeSuperInstanceType =
-          ctor.getPrototype().getImplicitPrototype();
-      if (maybeSuperInstanceType == null) {
-        return false;
-      }
-      if (maybeSuperInstanceType.isUnknownType()) {
-        return true;
-      }
-      ctor = maybeSuperInstanceType.getConstructor();
-      if (ctor == null) {
-        return false;
-      }
-      Preconditions.checkState(ctor.isConstructor() || ctor.isInterface());
-    }
   }
 
   /**
@@ -851,6 +830,27 @@ public class FunctionType extends PrototypeObjectType {
       subTypes = Lists.newArrayList();
     }
     subTypes.add(subType);
+  }
+
+  @Override
+  void clearCachedValues() {
+    super.clearCachedValues();
+
+    if (subTypes != null) {
+      for (FunctionType subType : subTypes) {
+        subType.clearCachedValues();
+      }
+    }
+
+    if (!isNativeObjectType()) {
+      if (hasInstanceType()) {
+        getInstanceType().clearCachedValues();
+      }
+
+      if (prototype != null) {
+        prototype.clearCachedValues();
+      }
+    }
   }
 
   /**

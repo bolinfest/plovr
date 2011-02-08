@@ -82,7 +82,7 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testTypeCheck2() throws Exception {
-    testTypes("/**@return {void}*/function foo(){ foo()--; }",
+    testTypes("/**@return {void}*/function foo(){ var x=foo(); x--; }",
         "increment/decrement\n" +
         "found   : undefined\n" +
         "required: number");
@@ -6412,10 +6412,13 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testForwardTypeDeclaration2() throws Exception {
-    testClosureTypes(
-        "goog.addDependency('zzz.js', ['MyType'], []);" +
-        "/** @param {MyType} x */ function f(x) { }" +
-        "f(3);", null);
+    String f = "goog.addDependency('zzz.js', ['MyType'], []);" +
+        "/** @param {MyType} x */ function f(x) { }";
+    testClosureTypes(f, null);
+    testClosureTypes(f + "f(3);",
+        "actual parameter 1 of f does not match formal parameter\n" +
+        "found   : number\n" +
+        "required: (MyType|null|undefined)");
   }
 
   public void testForwardTypeDeclaration3() throws Exception {

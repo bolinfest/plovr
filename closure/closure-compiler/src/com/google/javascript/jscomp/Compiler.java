@@ -21,6 +21,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.CompilerOptions.DevMode;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.jscomp.CompilerOptions.TracerMode;
@@ -709,7 +710,8 @@ public class Compiler extends AbstractCompiler {
       removeTryCatchFinally();
     }
 
-    if (!options.stripTypes.isEmpty() ||
+    if (options.getTweakProcessing().shouldStrip() ||
+        !options.stripTypes.isEmpty() ||
         !options.stripNameSuffixes.isEmpty() ||
         !options.stripTypePrefixes.isEmpty() ||
         !options.stripNamePrefixes.isEmpty()) {
@@ -775,6 +777,9 @@ public class Compiler extends AbstractCompiler {
     startPass("stripCode");
     StripCode r = new StripCode(this, stripTypes, stripNameSuffixes,
         stripTypePrefixes, stripNamePrefixes);
+    if (options.getTweakProcessing().shouldStrip()) {
+      r.enableTweakStripping();
+    }
     process(r);
     endPass();
   }
@@ -976,7 +981,14 @@ public class Compiler extends AbstractCompiler {
       getRoot().getLastChild().addChildToBack(newRoot);
     }
 
-    inputsByName.put(sourceName, new CompilerInput(ast));
+    CompilerInput newInput = new CompilerInput(ast);
+    inputsByName.put(sourceName, newInput);
+
+    JSModule module = oldInput.getModule();
+    if (module != null) {
+      module.addAfter(newInput, oldInput);
+      module.remove(oldInput);
+    }
     return true;
   }
 
@@ -1378,7 +1390,17 @@ public class Compiler extends AbstractCompiler {
         String code = toSource(root, sourceMap);
         if (!code.isEmpty()) {
           cb.append(code);
-          if (!code.endsWith(";")) {
+
+          // In order to avoid parse ambiguity when files are concatenated
+          // together, all files should end in a semi-colon. Do a quick
+          // heuristic check if there's an obvious semi-colon already there.
+          int length = code.length();
+          char lastChar = code.charAt(length - 1);
+          char secondLastChar = length >= 2 ?
+              code.charAt(length - 2) : '\0';
+          boolean hasSemiColon = lastChar == ';' ||
+              (lastChar == '\n' && secondLastChar == ';');
+          if (!hasSemiColon) {
             cb.append(";");
           }
         }

@@ -423,9 +423,9 @@ public class ParserTest extends BaseJSTypeTestCase {
     assertNotNull(info);
 
     assertTypeEquals(createRecordTypeBuilder().
-                     addProperty("x", NUMBER_TYPE).
-                     addProperty("y", STRING_TYPE).
-                     addProperty("z", UNKNOWN_TYPE).
+                     addProperty("x", NUMBER_TYPE, null).
+                     addProperty("y", STRING_TYPE, null).
+                     addProperty("z", UNKNOWN_TYPE, null).
                      build(),
                      info.getType());
 
@@ -622,7 +622,9 @@ public class ParserTest extends BaseJSTypeTestCase {
   }
 
   public void testDestructuringAssignForbidden4() {
-    parseError("[x, y] = foo();", "destructuring assignment forbidden");
+    parseError("[x, y] = foo();",
+        "destructuring assignment forbidden",
+        "invalid assignment target");
   }
 
   public void testLetForbidden() {
@@ -738,6 +740,7 @@ public class ParserTest extends BaseJSTypeTestCase {
         "getters are not supported in Internet Explorer");
     this.es5mode = true;
     parse("var x = {get a(){}};");
+    parseError("var x = {get a(b){}};", "getters may not have parameters");
   }
 
   public void testSetter() {
@@ -746,6 +749,8 @@ public class ParserTest extends BaseJSTypeTestCase {
         "setters are not supported in Internet Explorer");
     this.es5mode = true;
     parse("var x = {set a(x){}};");
+    parseError("var x = {set a(){}};",
+        "setters must have exactly one parameter");
   }
 
   public void testLamestWarningEver() {

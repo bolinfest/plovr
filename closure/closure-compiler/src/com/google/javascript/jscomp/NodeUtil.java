@@ -25,6 +25,8 @@ import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TokenStream;
+import com.google.javascript.rhino.jstype.FunctionType;
+import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.TernaryValue;
 
 import java.util.Arrays;
@@ -192,6 +194,7 @@ public final class NodeUtil {
     switch (n.getType()) {
       case Token.TRUE:
         return 1.0;
+
       case Token.FALSE:
       case Token.NULL:
         return 0.0;
@@ -200,9 +203,14 @@ public final class NodeUtil {
         return n.getDouble();
 
       case Token.VOID:
-        return Double.NaN;
+        if (mayHaveSideEffects(n.getFirstChild())) {
+          return null;
+        } else {
+          return Double.NaN;
+        }
 
       case Token.NAME:
+        // Check for known constants
         String name = n.getString();
         if (name.equals("undefined")) {
           return Double.NaN;
@@ -214,8 +222,89 @@ public final class NodeUtil {
           return Double.POSITIVE_INFINITY;
         }
         return null;
+
+      case Token.NEG:
+        if (n.getChildCount() == 1 && n.getFirstChild().getType() == Token.NAME
+            && n.getFirstChild().getString().equals("Infinity")) {
+          return Double.NEGATIVE_INFINITY;
+        }
+        return null;
+
+      case Token.STRING:
+        String s = trimJsWhiteSpace(n.getString());
+        // return ScriptRuntime.toNumber(s);
+        if (s.length() == 0) {
+          return 0.0;
+        }
+
+        if (s.length() > 2
+            && s.charAt(0) == '0'
+            && (s.charAt(1) == 'x' || s.charAt(1) == 'X')) {
+          // Attempt to convert hex numbers.
+          try {
+            return Double.valueOf(Integer.parseInt(s.substring(2), 16));
+          } catch (NumberFormatException e) {
+            return Double.NaN;
+          }
+        }
+
+        if (s.length() > 3
+            && (s.charAt(0) == '-' || s.charAt(0) == '+')
+            && s.charAt(1) == '0'
+            && (s.charAt(2) == 'x' || s.charAt(2) == 'X')) {
+          // hex numbers with explicit signs vary between browsers.
+          return null;
+        }
+
+        // FireFox and IE treat the "Infinity" differently. FireFox is case
+        // insensitive, but IE treats "infinity" as NaN.  So leave it alone.
+        if (s.equals("infinity")
+            || s.equals("-infinity")
+            || s.equals("+infinity")) {
+          return null;
+        }
+
+        try {
+          return Double.parseDouble(s);
+        } catch (NumberFormatException e) {
+          return Double.NaN;
+        }
     }
+
     return null;
+  }
+
+  static String trimJsWhiteSpace(String s) {
+    int start = 0;
+    int end = s.length();
+    while (end > 0 && isStrWhiteSpaceChar(s.charAt(end-1))) {
+      end--;
+    }
+    while (start < end && isStrWhiteSpaceChar(s.charAt(start))) {
+      start++;
+    }
+    return s.substring(start, end);
+  }
+
+  /**
+   * Copied from Rhino's ScriptRuntime
+   */
+  static boolean isStrWhiteSpaceChar(int c) {
+    switch (c) {
+      case ' ': // <SP>
+      case '\n': // <LF>
+      case '\r': // <CR>
+      case '\t': // <TAB>
+      case '\u00A0': // <NBSP>
+      case '\u000C': // <FF>
+      case '\u000B': // <VT>
+      case '\u2028': // <LS>
+      case '\u2029': // <PS>
+      case '\uFEFF': // <BOM>
+        return true;
+      default:
+        return Character.getType(c) == Character.SPACE_SEPARATOR;
+    }
   }
 
   /**
@@ -277,8 +366,12 @@ public final class NodeUtil {
     // Check for the form { 'x' : function() { } }
     Node parent = n.getParent();
     switch (parent.getType()) {
+      case Token.SET:
+      case Token.GET:
       case Token.STRING:
         // Return the name of the literal's key.
+        return parent.getString();
+      case Token.NUMBER:
         return getStringValue(parent);
     }
 
@@ -982,6 +1075,96 @@ public final class NodeUtil {
   }
 
   /**
+   * Returns true if the result of node evaluation is always a number
+   */
+  static boolean isNumericResult(Node n) {
+    switch (n.getType()) {
+      // NOTE: ADD is deliberately excluded as it may produce
+      // a string.
+      case Token.BITNOT:
+      case Token.BITOR:
+      case Token.BITXOR:
+      case Token.BITAND:
+      case Token.LSH:
+      case Token.RSH:
+      case Token.URSH:
+      case Token.SUB:
+      case Token.MUL:
+      case Token.MOD:
+      case Token.DIV:
+      case Token.INC:
+      case Token.DEC:
+      case Token.POS:
+      case Token.NEG:
+      case Token.NUMBER:
+        return true;
+      case Token.NAME:
+        String name = n.getString();
+        if (name.equals("NaN")) {
+          return true;
+        }
+        if (name.equals("Infinity")) {
+          return true;
+        }
+        return false;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * @return Whether the result of node evaluation is always a boolean
+   */
+  static boolean isBooleanResult(Node n) {
+    // TODO(johnlenz): Add a recursive option to recurse into
+    // AND, OR, HOOK, COMMA and ASSIGN, like "getExpressionBooleanValue".
+    switch (n.getType()) {
+      // Primitives
+      case Token.TRUE:
+      case Token.FALSE:
+      // Comparisons
+      case Token.EQ:
+      case Token.NE:
+      case Token.SHEQ:
+      case Token.SHNE:
+      case Token.LT:
+      case Token.GT:
+      case Token.LE:
+      case Token.GE:
+      // Queryies
+      case Token.IN:
+      case Token.INSTANCEOF:
+      // Inversion
+      case Token.NOT:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  static boolean isUndefined(Node n) {
+    switch (n.getType()) {
+      case Token.VOID:
+        return true;
+      case Token.NAME:
+        return n.getString().equals("undefined");
+    }
+    return false;
+  }
+
+  static boolean isNull(Node n) {
+    return n.getType() == Token.NULL;
+  }
+
+  /**
+   * @returns Whether the results is possibly a string.
+   */
+  static boolean mayBeString(Node n) {
+    return !isNumericResult(n) && !isBooleanResult(n)
+        && !isUndefined(n) && !isNull(n);
+  }
+
+  /**
    * Returns true if the operator is associative.
    * e.g. (a * b) * c = a * (b * c)
    * Note: "+" is not associative because it is also the concatenation
@@ -993,6 +1176,7 @@ public final class NodeUtil {
       case Token.AND:
       case Token.OR:
       case Token.BITOR:
+      case Token.BITXOR:
       case Token.BITAND:
         return true;
       default:
@@ -1011,6 +1195,7 @@ public final class NodeUtil {
     switch (type) {
       case Token.MUL:
       case Token.BITOR:
+      case Token.BITXOR:
       case Token.BITAND:
         return true;
       default:
@@ -1370,12 +1555,40 @@ public final class NodeUtil {
         && child == parent.getLastChild();
   }
 
+  /** Whether the node is a CATCH container BLOCK. */
+  static boolean isTryCatchNodeContainer(Node n) {
+    Node parent = n.getParent();
+    return parent.getType() == Token.TRY
+        && parent.getFirstChild().getNext() == n;
+  }
+
   /** Safely remove children while maintaining a valid node structure. */
   static void removeChild(Node parent, Node node) {
-    // Node parent = node.getParent();
-    if (isStatementBlock(parent)
-        || isSwitchCase(node)
-        || isTryFinallyNode(parent, node)) {
+    if (isTryFinallyNode(parent, node)) {
+      if (NodeUtil.hasCatchHandler(getCatchBlock(parent))) {
+        // A finally can only be removed if there is a catch.
+        parent.removeChild(node);
+      } else {
+        // Otherwise only its children can be removed.
+        node.detachChildren();
+      }
+    } else if (node.getType() == Token.CATCH) {
+      // The CATCH can can only be removed if there is a finally clause.
+      Node tryNode = node.getParent().getParent();
+      Preconditions.checkState(NodeUtil.hasFinally(tryNode));
+      node.detachFromParent();
+    } else if (isTryCatchNodeContainer(node)) {
+      // The container node itself can't be removed, but the contained CATCH
+      // can if there is a 'finally' clause
+      Node tryNode = node.getParent();
+      Preconditions.checkState(NodeUtil.hasFinally(tryNode));
+      node.detachChildren();
+    } else if (node.getType() == Token.BLOCK) {
+      // Simply empty the block.  This maintains source location and
+      // "synthetic"-ness.
+      node.detachChildren();
+    } else if (isStatementBlock(parent)
+        || isSwitchCase(node)) {
       // A statement in a block can simply be removed.
       parent.removeChild(node);
     } else if (parent.getType() == Token.VAR) {
@@ -1387,10 +1600,6 @@ public final class NodeUtil {
         // This would leave an empty VAR, remove the VAR itself.
         removeChild(parent.getParent(), parent);
       }
-    } else if (node.getType() == Token.BLOCK) {
-      // Simply empty the block.  This maintains source location and
-      // "synthetic"-ness.
-      node.detachChildren();
     } else if (parent.getType() == Token.LABEL
         && node == parent.getLastChild()) {
       // Remove the node from the parent, so it can be reused.
@@ -1406,6 +1615,17 @@ public final class NodeUtil {
     } else {
       throw new IllegalStateException("Invalid attempt to remove node: " +
           node.toString() + " of "+ parent.toString());
+    }
+  }
+
+  /**
+   * Add a finally block if one does not exist.
+   */
+  static void maybeAddFinally(Node tryNode) {
+    Preconditions.checkState(tryNode.getType() == Token.TRY);
+    if (!NodeUtil.hasFinally(tryNode)) {
+      tryNode.addChildrenToBack(new Node(Token.BLOCK)
+          .copyInformationFrom(tryNode));
     }
   }
 
@@ -1642,6 +1862,55 @@ public final class NodeUtil {
         return true;
     }
     return false;
+  }
+
+  /**
+   * Get the name of an object literal key.
+   *
+   * @param key A node
+   */
+  static String getObjectLitKeyName(Node key) {
+    switch (key.getType()) {
+      case Token.NUMBER:
+        return NodeUtil.getStringValue(key);
+      case Token.STRING:
+      case Token.GET:
+      case Token.SET:
+        return key.getString();
+    }
+    throw new IllegalStateException("Unexpected node type: " + key);
+  }
+
+  /**
+   * @param key A OBJECTLIT key node.
+   * @return The type expected when using the key.
+   */
+  static JSType getObjectLitKeyTypeFromValueType(Node key, JSType valueType) {
+    if (valueType != null) {
+      switch (key.getType()) {
+        case Token.GET:
+          // GET must always return a function type.
+          if (valueType.isFunctionType()) {
+            FunctionType fntype = ((FunctionType) valueType);
+            valueType = fntype.getReturnType();
+          } else {
+            return null;
+          }
+          break;
+        case Token.SET:
+          if (valueType.isFunctionType()) {
+            // SET must always return a function type.
+            FunctionType fntype = ((FunctionType) valueType);
+            Node param = fntype.getParametersNode().getFirstChild();
+            // SET function must always have one parameter.
+            valueType = param.getJSType();
+          } else {
+            return null;
+          }
+          break;
+      }
+    }
+    return valueType;
   }
 
   /**
@@ -2309,9 +2578,9 @@ public final class NodeUtil {
     * @return The Node containing the Function parameters.
     */
   static Node getFnParameters(Node fnNode) {
-   // Function NODE: [ FUNCTION -> NAME, LP -> ARG1, ARG2, ... ]
-   Preconditions.checkArgument(fnNode.getType() == Token.FUNCTION);
-   return fnNode.getFirstChild().getNext();
+    // Function NODE: [ FUNCTION -> NAME, LP -> ARG1, ARG2, ... ]
+    Preconditions.checkArgument(fnNode.getType() == Token.FUNCTION);
+    return fnNode.getFirstChild().getNext();
   }
 
   /**

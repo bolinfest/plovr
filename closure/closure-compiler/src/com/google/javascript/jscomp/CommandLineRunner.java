@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.common.io.Files;
 import com.google.common.io.LimitInputStream;
 
 import org.kohsuke.args4j.CmdLineException;
@@ -31,6 +32,7 @@ import org.kohsuke.args4j.spi.OptionHandler;
 import org.kohsuke.args4j.spi.Parameters;
 import org.kohsuke.args4j.spi.Setter;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
@@ -38,11 +40,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.Set;
+import java.util.StringTokenizer;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+
+import java.nio.charset.Charset;
 
 /**
  * CommandLineRunner translates flags into Java API calls on the Compiler.
@@ -50,7 +55,8 @@ import java.util.zip.ZipInputStream;
  * This class may be extended and used to create other Java classes
  * that behave the same as running the Compiler from the command line. If you
  * want to run the compiler in-process in Java, you should look at this class
- * for hints on what API calls to make, but you should not use this class directly.
+ * for hints on what API calls to make, but you should not use this class
+ * directly.
  *
  * Example:
  * <pre>
@@ -115,7 +121,6 @@ public class CommandLineRunner extends
     private CompilerOptions.DevMode jscomp_dev_mode =
         CompilerOptions.DevMode.OFF;
 
-    // TODO(nicksantos): Make the next 2 flags package-private.
     @Option(name = "--logging_level",
         usage = "The logging level (standard java.util.logging.Level"
         + " values) for Compiler progress. Does not control errors or"
@@ -193,11 +198,6 @@ public class CommandLineRunner extends
         usage = "Interpolate output into this string at the place denoted"
         + " by the marker token %output%. See --output_wrapper_marker")
     private String output_wrapper = "";
-
-    @Option(name = "--output_wrapper_marker",
-        usage = "Use this token as output marker in the value of"
-        + " --output_wrapper")
-    private String output_wrapper_marker = "%output%";
 
     @Option(name = "--module_wrapper",
         usage = "An output wrapper for a javascript module (optional). "
@@ -314,6 +314,10 @@ public class CommandLineRunner extends
         handler = BooleanOptionHandler.class,
         usage = "Prints the compiler version to stderr.")
     private boolean version = false;
+    
+    @Option(name = "--flagfile",
+        usage = "A file containing additional command-line options.")
+    private String flag_file = "";    
 
     // Our own option parser to be backwards-compatible.
     // It needs to be public because of the crazy reflection that args4j does.
@@ -331,7 +335,11 @@ public class CommandLineRunner extends
 
       @Override
       public int parseArguments(Parameters params) throws CmdLineException {
-        String param = params.getParameter(0);
+        String param = null;
+        try {
+          param = params.getParameter(0);
+        } catch (CmdLineException e) {}
+
         if (param == null) {
           setter.addValue(true);
           return 0;
@@ -400,13 +408,14 @@ public class CommandLineRunner extends
     initConfigFromFlags(args, err);
   }
 
-  private void initConfigFromFlags(String[] args, PrintStream err) {
+  private List<String> processArgs(String[] args) {
     // Args4j has a different format that the old command-line parser.
     // So we use some voodoo to get the args into the format that args4j
     // expects.
     Pattern argPattern = Pattern.compile("(--[a-zA-Z_]+)=(.*)");
     Pattern quotesPattern = Pattern.compile("^['\"](.*)['\"]$");
     List<String> processedArgs = Lists.newArrayList();
+    
     for (String arg : args) {
       Matcher matcher = argPattern.matcher(arg);
       if (matcher.matches()) {
@@ -423,13 +432,52 @@ public class CommandLineRunner extends
         processedArgs.add(arg);
       }
     }
+    
+    return processedArgs;
+  }
+  
+  private void processFlagFile(PrintStream err) 
+            throws CmdLineException, IOException {
+    List<String> argsInFile = Lists.newArrayList();
+    File flagFileInput = new File(flags.flag_file);
+    StringTokenizer tokenizer = new StringTokenizer(
+        Files.toString(flagFileInput, Charset.defaultCharset()));
 
+    while (tokenizer.hasMoreTokens()) {
+        argsInFile.add(tokenizer.nextToken());
+    }
+    
+    flags.flag_file = "";
+    List<String> processedFileArgs 
+        = processArgs(argsInFile.toArray(new String[] {}));
+    CmdLineParser parserFileArgs = new CmdLineParser(flags);
+    parserFileArgs.parseArgument(processedFileArgs.toArray(new String[] {}));
+    
+    // Currently we are not supporting this (prevent direct/indirect loops)
+    if (!flags.flag_file.equals("")) {
+      err.println("ERROR - Arguments in the file cannot contain "
+          + "--flagfile option.");
+      isConfigValid = false;
+    }
+  }
+  
+  private void initConfigFromFlags(String[] args, PrintStream err) {
+
+    List<String> processedArgs = processArgs(args);
+    
     CmdLineParser parser = new CmdLineParser(flags);
     isConfigValid = true;
     try {
       parser.parseArgument(processedArgs.toArray(new String[] {}));
+      // For contains --flagfile flag
+      if (!flags.flag_file.equals("")) {
+        processFlagFile(err);
+      }
     } catch (CmdLineException e) {
       err.println(e.getMessage());
+      isConfigValid = false;
+    } catch (IOException ioErr) {
+      err.println("ERROR - " + flags.flag_file + " read error.");
       isConfigValid = false;
     }
 
@@ -467,7 +515,6 @@ public class CommandLineRunner extends
                new ClosureCodingConvention())
           .setSummaryDetailLevel(flags.summary_detail_level)
           .setOutputWrapper(flags.output_wrapper)
-          .setOutputWrapperMarker(flags.output_wrapper_marker)
           .setModuleWrapper(flags.module_wrapper)
           .setModuleOutputPathPrefix(flags.module_output_path_prefix)
           .setCreateSourceMap(flags.create_source_map)
@@ -563,6 +610,7 @@ public class CommandLineRunner extends
     "w3c_css3d.js",
     "w3c_elementtraversal.js",
     "w3c_geolocation.js",
+    "w3c_indexeddb.js",
     "w3c_range.js",
     "w3c_selectors.js",
     "w3c_xml.js",

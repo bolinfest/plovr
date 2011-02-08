@@ -31,7 +31,7 @@ import java.util.regex.Pattern;
  * with literals, and simplifying returns.
  *
  */
-public class PeepholeSubstituteAlternateSyntax
+class PeepholeSubstituteAlternateSyntax
   extends AbstractPeepholeOptimization {
 
   private static final int AND_PRECEDENCE = NodeUtil.precedence(Token.AND);
@@ -390,10 +390,13 @@ public class PeepholeSubstituteAlternateSyntax
         }
 
         // if(x)foo(); -> x&&foo();
-        if (isLowerPrecedenceInExpression(cond, AND_PRECEDENCE) ||
+        if (isLowerPrecedenceInExpression(cond, AND_PRECEDENCE) &&
             isLowerPrecedenceInExpression(expr.getFirstChild(),
                 AND_PRECEDENCE)) {
-          // One additional set of parentheses isn't worth it.
+          // One additional set of parentheses is worth the change even if
+          // there is no immediate code size win. However, two extra pair of
+          // {}, we would have to think twice. (unless we know for sure the
+          // we can further optimize its parent.
           return n;
         }
 
@@ -405,6 +408,32 @@ public class PeepholeSubstituteAlternateSyntax
         reportCodeChange();
 
         return newExpr;
+      } else {
+
+        // Try to combine two IF-ELSE
+        if (NodeUtil.isStatementBlock(thenBranch) &&
+            thenBranch.hasOneChild()) {
+          Node innerIf = thenBranch.getFirstChild();
+
+          if (innerIf.getType() == Token.IF) {
+            Node innerCond = innerIf.getFirstChild();
+            Node innerThenBranch = innerCond.getNext();
+            Node innerElseBranch = innerThenBranch.getNext();
+
+            if (innerElseBranch == null &&
+                 !(isLowerPrecedenceInExpression(cond, AND_PRECEDENCE) &&
+                   isLowerPrecedenceInExpression(innerCond, AND_PRECEDENCE))) {
+              n.detachChildren();
+              n.addChildToBack(new Node(Token.AND, cond,
+                  innerCond.detachFromParent()).copyInformationFrom(cond));
+              n.addChildrenToBack(innerThenBranch.detachFromParent());
+              reportCodeChange();
+              // Not worth trying to fold the current IF-ELSE into && because
+              // the inner IF-ELSE wasn't able to be folded into && anyways.
+              return n;
+            }
+          }
+        }
       }
 
       return n;

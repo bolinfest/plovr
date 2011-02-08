@@ -17,6 +17,8 @@
 package com.google.javascript.jscomp;
 
 
+import com.google.common.base.Joiner;
+
 import junit.framework.TestCase;
 
 
@@ -54,7 +56,7 @@ public class ExternExportsPassTest extends TestCase {
                     " * @param {*} f\n" +
                     " * @return {undefined}\n" +
                     " */\n" +
-                    "var foobar = function(d, e, f) {\n}");
+                    "var foobar = function(d, e, f) {\n};\n");
   }
 
   public void testExportSymbolDefinedInVar() throws Exception {
@@ -66,7 +68,7 @@ public class ExternExportsPassTest extends TestCase {
                     " * @param {*} f\n" +
                     " * @return {undefined}\n" +
                     " */\n" +
-                    "var foobar = function(d, e, f) {\n}");
+                    "var foobar = function(d, e, f) {\n};\n");
   }
 
   public void testExportProperty() throws Exception {
@@ -80,7 +82,7 @@ public class ExternExportsPassTest extends TestCase {
                     " * @param {*} f\n" +
                     " * @return {undefined}\n" +
                     " */\n" +
-                    "a.b.cprop = function(d, e, f) {\n}");
+                    "a.b.cprop = function(d, e, f) {\n};\n");
   }
 
   public void testExportMultiple() throws Exception {
@@ -110,7 +112,7 @@ public class ExternExportsPassTest extends TestCase {
                     " * @param {*} i\n" +
                     " * @return {undefined}\n" +
                     " */\n" +
-                    "a.b.prototype.c = function(g, h, i) {\n}");
+                    "a.b.prototype.c = function(g, h, i) {\n};\n");
   }
 
   public void testExportMultiple2() throws Exception {
@@ -136,7 +138,7 @@ public class ExternExportsPassTest extends TestCase {
                     " * @param {*} i\n" +
                     " * @return {undefined}\n" +
                     " */\n" +
-                    "hello.b.prototype.c = function(g, h, i) {\n}");
+                    "hello.b.prototype.c = function(g, h, i) {\n};\n");
   }
 
   public void testExportMultiple3() throws Exception {
@@ -157,19 +159,19 @@ public class ExternExportsPassTest extends TestCase {
                     " * @param {*} f\n" +
                     " * @return {undefined}\n" +
                     " */\n" +
-                    "prefix.c = function(d, e, f) {\n}");
+                    "prefix.c = function(d, e, f) {\n};\n");
   }
 
   public void testExportNonStaticSymbol() throws Exception {
     compileAndCheck("var a = {}; a.b = {}; var d = {}; a.b.c = d;" +
                     "goog.exportSymbol('foobar', a.b.c)",
-                    "var foobar = {}");
+                    "var foobar = {};\n");
   }
 
   public void testExportNonStaticSymbol2() throws Exception {
     compileAndCheck("var a = {}; a.b = {}; var d = null; a.b.c = d;" +
                     "goog.exportSymbol('foobar', a.b.c())",
-                    "var foobar = {}");
+                    "var foobar = {};\n");
   }
 
   public void testExportNonexistentProperty() throws Exception {
@@ -177,7 +179,7 @@ public class ExternExportsPassTest extends TestCase {
                     "goog.exportProperty(a.b, 'none', a.b.none)",
                     "var a = {};\n" +
                     "a.b = {};\n" +
-                    "a.b.none = {}");
+                    "a.b.none = {};\n");
   }
 
   public void testExportSymbolWithTypeAnnotation() {
@@ -197,7 +199,7 @@ public class ExternExportsPassTest extends TestCase {
                     " * @param {number} param2\n" +
                     " * @return {string}\n" +
                     " */\n" +
-                    "var externalName = function(param1, param2) {\n}");
+                    "var externalName = function(param1, param2) {\n};\n");
   }
 
   public void testExportSymbolWithoutTypeCheck() {
@@ -215,7 +217,7 @@ public class ExternExportsPassTest extends TestCase {
                       "return param1 + param2;" +
                     "};" +
                     "goog.exportSymbol('externalName', internalName)",
-                    "var externalName = function(param1, param2) {\n}");
+                    "var externalName = function(param1, param2) {\n};\n");
   }
 
   public void testExportSymbolWithConstructor() {
@@ -230,7 +232,7 @@ public class ExternExportsPassTest extends TestCase {
                     " * @return {undefined}\n" +
                     " * @constructor\n" +
                     " */\n" +
-                    "var externalName = function() {\n}");
+                    "var externalName = function() {\n};\n");
   }
 
   public void testExportSymbolWithConstructorWithoutTypeCheck() {
@@ -249,7 +251,7 @@ public class ExternExportsPassTest extends TestCase {
                     "internalName = function() {" +
                     "};" +
                     "goog.exportSymbol('externalName', internalName)",
-                    "var externalName = function() {\n}");
+                    "var externalName = function() {\n};\n");
   }
 
   public void testExportFunctionWithOptionalArguments() {
@@ -264,7 +266,7 @@ public class ExternExportsPassTest extends TestCase {
         "/**\n" +
         " * @param {number=} a\n" +
         " */\n" +
-        "var externalName = function(a) {\n}");
+        "var externalName = function(a) {\n};\n");
   }
 
   public void testExportFunctionWithVariableArguments() {
@@ -281,8 +283,23 @@ public class ExternExportsPassTest extends TestCase {
         " * @param {...number} a\n" +
         " * @return {number}\n" +
         " */\n" +
-        "var externalName = function(a) {\n}");
+        "var externalName = function(a) {\n};\n");
   }
+
+  /**
+   * Enums are not currently handled.
+   */
+   public void testExportEnum() {
+     compileAndCheck(
+         "/** @enum {string}\n @export */ var E = {A:1, B:2};" +
+         "goog.exportSymbol('E', E);",
+         // TODO(johnlenz): We would like this:
+         // "/**\n" +
+         // " * @enum {string}\n" +
+         //" */\n" +
+         "var E = {};\n"
+     );
+   }
 
   /** If we export a property with "prototype" as a path component, there
     * is no need to emit the initializer for prototype because every namespace
@@ -308,7 +325,7 @@ public class ExternExportsPassTest extends TestCase {
         "/**\n" +
         " * @return {number}\n" +
         " */\n" +
-        "Foo.prototype.m = function() {\n}"
+        "Foo.prototype.m = function() {\n};\n"
     );
   }
 
@@ -443,7 +460,11 @@ public class ExternExportsPassTest extends TestCase {
 
     Result result = compiler.compile(externFiles, inputs, options);
 
-    assertTrue(result.success);
+    if (!result.success) {
+      String msg = "Errors:";
+      msg += Joiner.on("\n").join(result.errors);
+      assertTrue(msg, result.success);
+    }
 
     return result;
   }

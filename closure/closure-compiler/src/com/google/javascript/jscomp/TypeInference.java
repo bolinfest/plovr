@@ -573,14 +573,14 @@ class TypeInference
         if (objectType.hasProperty(propName) ||
             !objectType.isInstanceType()) {
           if ("prototype".equals(propName)) {
-            objectType.defineDeclaredProperty(propName, rightType, false);
+            objectType.defineDeclaredProperty(propName, rightType, false, getprop);
           } else {
-            objectType.defineInferredProperty(propName, rightType, false);
+            objectType.defineInferredProperty(propName, rightType, false, getprop);
           }
         } else {
           if (getprop.getFirstChild().getType() == Token.THIS &&
               getJSType(syntacticScope.getRootNode()).isConstructor()) {
-            objectType.defineInferredProperty(propName, rightType, false);
+            objectType.defineInferredProperty(propName, rightType, false, getprop);
           } else {
             registry.registerPropertyOnType(propName, objectType);
           }
@@ -622,7 +622,7 @@ class TypeInference
              (!objectType.isInstanceType() ||
                  (var.isExtern() && !objectType.isNativeObjectType())))) {
           return objectType.defineDeclaredProperty(
-              propName, var.getType(), var.isExtern());
+              propName, var.getType(), var.isExtern(), getprop);
         }
       }
     }
@@ -681,6 +681,10 @@ class TypeInference
     JSType type = n.getJSType();
     Preconditions.checkNotNull(type);
 
+    for (Node name = n.getFirstChild(); name != null; name = name.getNext()) {
+      scope = traverse(name.getFirstChild(), scope);
+    }
+
     // Object literals can be reflected on other types, or changed with
     // type casts.
     // See CodingConvention#getObjectLiteralCase and goog.object.reflect.
@@ -701,13 +705,17 @@ class TypeInference
     for (Node name = n.getFirstChild(); name != null;
          name = name.getNext()) {
       Node value = name.getFirstChild();
-      scope = traverse(value, scope);
-      String memberName = NodeUtil.getStringValue(name);
+      String memberName = NodeUtil.getObjectLitKeyName(name);
       if (memberName != null) {
-        objectType.defineInferredProperty(memberName, getJSType(value), false);
+        JSType rawValueType =  name.getFirstChild().getJSType();
+        JSType valueType = NodeUtil.getObjectLitKeyTypeFromValueType(
+            name, rawValueType);
+        if (valueType == null) {
+          valueType = getNativeType(UNKNOWN_TYPE);
+        }
+        objectType.defineInferredProperty(memberName, valueType, false, name);
       } else {
         n.setJSType(getNativeType(UNKNOWN_TYPE));
-        return scope;
       }
     }
     return scope;

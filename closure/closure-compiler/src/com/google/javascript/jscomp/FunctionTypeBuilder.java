@@ -139,12 +139,14 @@ final class FunctionTypeBuilder {
       ObjectType objectType = ObjectType.cast(type);
       if (objectType == null) {
         reportWarning(EXTENDS_NON_OBJECT, fnName, type.toString());
-      } else if (objectType.isUnknownType() &&
-          // If this has a supertype that hasn't been resolved yet,
-          // then we can assume this type will be ok once the super
-          // type resolves.
-          (objectType.getImplicitPrototype() == null ||
-           objectType.getImplicitPrototype().isResolved())) {
+      } else if (
+          objectType.isEmptyType() ||
+          (objectType.isUnknownType() &&
+           // If this has a supertype that hasn't been resolved yet,
+           // then we can assume this type will be ok once the super
+           // type resolves.
+           (objectType.getImplicitPrototype() == null ||
+            objectType.getImplicitPrototype().isResolved()))) {
         reportWarning(RESOLVED_TAG_EMPTY, "@extends", fnName);
       } else {
         return true;
@@ -159,12 +161,14 @@ final class FunctionTypeBuilder {
       ObjectType objectType = ObjectType.cast(type);
       if (objectType == null) {
         reportError(BAD_IMPLEMENTED_TYPE, fnName);
-      } else if (objectType.isUnknownType() &&
-          // If this has a supertype that hasn't been resolved yet,
-          // then we can assume this type will be ok once the super
-          // type resolves.
-          (objectType.getImplicitPrototype() == null ||
-           objectType.getImplicitPrototype().isResolved())) {
+      } else if (
+          objectType.isEmptyType() ||
+          (objectType.isUnknownType() &&
+           // If this has a supertype that hasn't been resolved yet,
+           // then we can assume this type will be ok once the super
+           // type resolves.
+           (objectType.getImplicitPrototype() == null ||
+            objectType.getImplicitPrototype().isResolved()))) {
         reportWarning(RESOLVED_TAG_EMPTY, "@implements", fnName);
       } else {
         return true;
@@ -316,8 +320,7 @@ final class FunctionTypeBuilder {
       while (!worklist.isEmpty()) {
         Node current = worklist.remove(worklist.size() - 1);
         int cType = current.getType();
-        if (cType == Token.RETURN && current.getFirstChild() != null ||
-            cType == Token.THROW) {
+        if (cType == Token.RETURN && current.getFirstChild() != null) {
           hasNonEmptyReturns = true;
           break;
         } else if (NodeUtil.isStatementBlock(current) ||
@@ -392,10 +395,16 @@ final class FunctionTypeBuilder {
    * @param type The type of this.
    */
   FunctionTypeBuilder inferThisType(JSDocInfo info, JSType type) {
-    ObjectType objType = ObjectType.cast(type);
-    if (objType != null && (info == null || !info.hasType())) {
-      thisType = objType;
+    // Look at the @this annotation first.
+    inferThisType(info, (Node) null);
+
+    if (thisType == null) {
+      ObjectType objType = ObjectType.cast(type);
+      if (objType != null && (info == null || !info.hasType())) {
+        thisType = objType;
+      }
     }
+
     return this;
   }
 

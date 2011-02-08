@@ -20,6 +20,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.javascript.rhino.Node;
 
@@ -42,6 +43,10 @@ public class CommandLineRunnerTest extends TestCase {
   private ByteArrayOutputStream outReader = null;
   private ByteArrayOutputStream errReader = null;
 
+  // If set, this will be appended to the end of the args list.
+  // For testing args parsing.
+  private String lastArg = null;
+
   // If set to true, uses comparison by string instead of by AST.
   private boolean useStringComparison = false;
 
@@ -56,7 +61,7 @@ public class CommandLineRunnerTest extends TestCase {
   private List<String> args = Lists.newArrayList();
 
   /** Externs for the test */
-  private final List<JSSourceFile> externs = Lists.newArrayList(
+  private final List<JSSourceFile> DEFAULT_EXTERNS = ImmutableList.of(
     JSSourceFile.fromCode("externs",
         "var arguments;"
         + "/**\n"
@@ -88,10 +93,14 @@ public class CommandLineRunnerTest extends TestCase {
         + "/** @nosideeffects */ function noSideEffects() {}")
   );
 
+  private List<JSSourceFile> externs;
+
   @Override
   public void setUp() throws Exception {
     super.setUp();
+    externs = DEFAULT_EXTERNS;
     lastCompiler = null;
+    lastArg = null;
     outReader = new ByteArrayOutputStream();
     errReader = new ByteArrayOutputStream();
     useStringComparison = false;
@@ -220,6 +229,7 @@ public class CommandLineRunnerTest extends TestCase {
     testSame("var goog = {}; goog.provide('goog.dom');");
   }
 
+
   //////////////////////////////////////////////////////////////////////////////
   // Integration tests
 
@@ -257,7 +267,7 @@ public class CommandLineRunnerTest extends TestCase {
          " var a;" +
          " return ((a=b.id) && (a=parseInt(a.substr(1))) && a>0);" +
          "}");
-  }  
+  }
 
   public void testDebugFlag1() {
     args.add("--compilation_level=SIMPLE_OPTIMIZATIONS");
@@ -588,6 +598,16 @@ public class CommandLineRunnerTest extends TestCase {
             "Version: "));
   }
 
+  public void testVersionFlag2() {
+    lastArg = "--version";
+    testSame("");
+    assertEquals(
+        0,
+        new String(errReader.toByteArray()).indexOf(
+            "Closure Compiler (http://code.google.com/closure/compiler)\n" +
+            "Version: "));
+  }
+
   public void testPrintAstFlag() {
     args.add("--print_ast=true");
     testSame("");
@@ -602,6 +622,37 @@ public class CommandLineRunnerTest extends TestCase {
         "  node0 -> node1 [label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
         "}\n\n",
         new String(outReader.toByteArray()));
+  }
+
+  public void testSyntheticExterns() {
+    externs = ImmutableList.of(
+        JSSourceFile.fromCode("externs", "myVar.property;"));
+    test("var theirVar = {}; var myVar = {}; var yourVar = {};",
+         VarCheck.UNDEFINED_EXTERN_VAR_ERROR);
+
+    args.add("--jscomp_off=externsValidation");
+    args.add("--warning_level=VERBOSE");
+    test("var theirVar = {}; var myVar = {}; var yourVar = {};",
+         "var theirVar={},myVar={},yourVar={};");
+
+    args.add("--jscomp_off=externsValidation");
+    args.add("--warning_level=VERBOSE");
+    test("var theirVar = {}; var myVar = {}; var myVar = {};",
+         SyntacticScopeCreator.VAR_MULTIPLY_DECLARED_ERROR);
+  }
+
+  public void testGoogAssertStripping() {
+    args.add("--compilation_level=ADVANCED_OPTIMIZATIONS");
+    test("goog.asserts.assert(false)",
+         "");
+    args.add("--debug");
+    test("goog.asserts.assert(false)", "goog.$asserts$.$assert$(false)");
+  }
+
+  public void testMissingReturnCheckOnWithVerbose() {
+    args.add("--warning_level=VERBOSE");
+    test("/** @return {number} */ function f() {f()} f();",
+        CheckMissingReturn.MISSING_RETURN_STATEMENT);
   }
 
   /* Helper functions */
@@ -700,6 +751,10 @@ public class CommandLineRunnerTest extends TestCase {
         args.add("--module");
         args.add("mod" + i + ":1" + (i > 0 ? ":mod0" : ""));
       }
+    }
+
+    if (lastArg != null) {
+      args.add(lastArg);
     }
 
     String[] argStrings = args.toArray(new String[] {});

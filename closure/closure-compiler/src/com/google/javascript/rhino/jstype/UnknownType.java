@@ -42,6 +42,7 @@ package com.google.javascript.rhino.jstype;
 import static com.google.javascript.rhino.jstype.TernaryValue.UNKNOWN;
 
 import com.google.javascript.rhino.ErrorReporter;
+import com.google.javascript.rhino.Node;
 
 import java.util.Set;
 
@@ -110,16 +111,6 @@ public class UnknownType extends ObjectType {
   }
 
   @Override
-  public JSType getLeastSupertype(JSType that) {
-    return this;
-  }
-
-  @Override
-  public JSType getGreatestSubtype(JSType that) {
-    return this;
-  }
-
-  @Override
   public <T> T visit(Visitor<T> visitor) {
     return visitor.caseUnknownType();
   }
@@ -131,7 +122,7 @@ public class UnknownType extends ObjectType {
 
   @Override
   boolean defineProperty(String propertyName, JSType type,
-      boolean inferred, boolean inExterns) {
+      boolean inferred, boolean inExterns, Node propertyNode) {
     // nothing to define
     return true;
   }
