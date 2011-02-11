@@ -97,7 +97,7 @@ public final class Manifest {
   }
 
   /**
-   * @param the set of files (or directories) that contain JS inputs that
+   * @return the set of files (or directories) that contain JS inputs that
    *     may be included in the compilation
    */
   public Set<File> getDependencies() {
