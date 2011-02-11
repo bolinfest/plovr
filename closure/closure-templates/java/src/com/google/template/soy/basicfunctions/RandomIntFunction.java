@@ -16,7 +16,11 @@
 
 package com.google.template.soy.basicfunctions;
 
-import com.google.common.collect.ImmutableSet;
+import static com.google.template.soy.javasrc.restricted.SoyJavaSrcFunctionUtils.toIntegerJavaExpr;
+import static com.google.template.soy.tofu.restricted.SoyTofuFunctionUtils.toSoyData;
+
+import java.util.List;
+
 import com.google.common.collect.Lists;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
@@ -25,15 +29,10 @@ import com.google.template.soy.exprtree.Operator;
 import com.google.template.soy.javasrc.restricted.JavaCodeUtils;
 import com.google.template.soy.javasrc.restricted.JavaExpr;
 import com.google.template.soy.javasrc.restricted.SoyJavaSrcFunction;
-import static com.google.template.soy.javasrc.restricted.SoyJavaSrcFunctionUtils.toIntegerJavaExpr;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.SoyJsCodeUtils;
 import com.google.template.soy.jssrc.restricted.SoyJsSrcFunction;
 import com.google.template.soy.tofu.restricted.SoyTofuFunction;
-import static com.google.template.soy.tofu.restricted.SoyTofuFunctionUtils.toSoyData;
-
-import java.util.List;
-import java.util.Set;
 
 
 /**
@@ -54,8 +53,8 @@ class RandomIntFunction implements SoyTofuFunction, SoyJsSrcFunction, SoyJavaSrc
   }
 
 
-  @Override public Set<Integer> getValidArgsSizes() {
-    return ImmutableSet.of(1);
+  @Override public boolean isValidArgsSize(int numArgs) {
+    return numArgs == 1;
   }
 
 

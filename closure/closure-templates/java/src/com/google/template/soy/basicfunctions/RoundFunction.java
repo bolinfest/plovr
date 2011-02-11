@@ -57,8 +57,8 @@ class RoundFunction implements SoyTofuFunction, SoyJsSrcFunction, SoyJavaSrcFunc
   }
 
 
-  @Override public Set<Integer> getValidArgsSizes() {
-    return ImmutableSet.of(1, 2);
+  @Override public boolean isValidArgsSize(int numArgs) {
+    return 1 <= numArgs && numArgs <= 2;
   }
 
 

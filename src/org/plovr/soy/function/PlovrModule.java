@@ -13,5 +13,6 @@ public class PlovrModule extends AbstractModule {
   protected void configure() {
     Multibinder<SoyFunction> soyFunctionsSetBinder = Multibinder.newSetBinder(binder(), SoyFunction.class);
     soyFunctionsSetBinder.addBinding().to(SubstringFunction.class);
+    soyFunctionsSetBinder.addBinding().to(ListFunction.class);
   }
 }

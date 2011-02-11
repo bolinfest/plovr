@@ -459,7 +459,7 @@ class EvalVisitor extends AbstractExprNodeVisitor<SoyData> {
     SoyTofuFunction fn = soyTofuFunctionsMap.get(fnName);
     if (fn != null) {
       // TODO: Pass to check num args at compile time.
-      if (! fn.getValidArgsSizes().contains(numArgs)) {
+      if (! fn.isValidArgsSize(numArgs)) {
         throw new SoyTofuException(
             "Function '" + fnName + "' called with the wrong number of arguments" +
             " (function call \"" + node.toSourceString() + "\").");

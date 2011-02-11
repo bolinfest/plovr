@@ -3,10 +3,8 @@ package org.plovr.soy.function;
 import static com.google.template.soy.tofu.restricted.SoyTofuFunctionUtils.toSoyData;
 
 import java.util.List;
-import java.util.Set;
 
 import com.google.inject.Inject;
-import com.google.inject.internal.ImmutableSet;
 import com.google.template.soy.data.SoyData;
 import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.data.restricted.StringData;
@@ -31,8 +29,8 @@ public class SubstringFunction
 
 
   @Override
-  public Set<Integer> getValidArgsSizes() {
-    return ImmutableSet.of(2, 3);
+  public boolean isValidArgsSize(int numArgs) {
+    return 2 <= numArgs && numArgs <= 3;
   }
 
 
