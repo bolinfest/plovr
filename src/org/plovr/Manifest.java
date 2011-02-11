@@ -57,6 +57,8 @@ public final class Manifest {
    */
   private Map<String, JsInput> lastOrdering;
 
+  private final List<String> soyPluginModuleNames;
+
   /**
    *
    * @param closureLibraryDirectory Directory that is the root of the Closure
@@ -73,12 +75,14 @@ public final class Manifest {
       List<JsInput> requiredInputs,
       @Nullable List<File> externs,
       @Nullable List<JsInput> builtInExterns,
+      List<String> soyPluginModuleNames,
       boolean customExternsOnly) {
     Preconditions.checkNotNull(dependencies);
     Preconditions.checkNotNull(requiredInputs);
     Preconditions.checkArgument(requiredInputs.size() > 0,
         "No inputs were specified! " +
         "Make sure there is an option named 'inputs' in the config file");
+    Preconditions.checkNotNull(soyPluginModuleNames);
 
     // TODO(bolinfest): Monitor directories for changes and have the JsInput
     // mark itself dirty when there is a change.
@@ -88,6 +92,7 @@ public final class Manifest {
     this.externs = externs == null ? null : ImmutableSet.copyOf(externs);
     this.builtInExterns = builtInExterns == null
         ? null : ImmutableSet.copyOf(builtInExterns);
+    this.soyPluginModuleNames = ImmutableList.copyOf(soyPluginModuleNames);
     this.customExternsOnly = customExternsOnly;
   }
 
@@ -311,7 +316,8 @@ public final class Manifest {
         if (name.startsWith(uglyPrefix)) {
           name = name.substring(uglyPrefix.length());
         }
-        JsInput input = LocalFileJsInput.createForFileWithName(file, name);
+        JsInput input = LocalFileJsInput.createForFileWithName(file, name,
+            soyPluginModuleNames);
         logger.config("Dependency: " + input);
         output.add(input);
       }

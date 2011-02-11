@@ -36,6 +36,8 @@ public class ManifestTest extends TestCase {
       }
   };
 
+  private final List<String> soyFunctionPlugins = ImmutableList.of();
+
   public void testSimpleManifest() throws CompilationException {
     File closureLibraryDirectory = new File("closure/closure-library/closure/goog/");
 
@@ -54,6 +56,7 @@ public class ManifestTest extends TestCase {
         ImmutableList.<JsInput>of(requiredInput),
         externs,
         null, // builtInExterns
+        soyFunctionPlugins,
         customExternsOnly);
 
     final ModuleConfig moduleConfig = null;
@@ -109,6 +112,7 @@ public class ManifestTest extends TestCase {
         ImmutableList.<JsInput>of(a, b, c),
         externs,
         null, // builtInExterns
+        soyFunctionPlugins,
         customExternsOnly);
 
     List<JsInput> order;
@@ -131,6 +135,7 @@ public class ManifestTest extends TestCase {
         ImmutableList.<JsInput>of(a, b, c),
         externs,
         null, // builtInExterns
+        soyFunctionPlugins,
         customExternsOnly);
 
     order = manifest.getInputsInCompilationOrder();

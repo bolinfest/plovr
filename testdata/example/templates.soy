@@ -9,7 +9,7 @@
 
 <ul>
 {foreach $weekday in $weekdays}
-  <li>{$weekday}
+  <li>{substring($weekday, 0, 3)}
 {/foreach}
 </ul>
 {/template}

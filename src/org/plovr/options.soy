@@ -160,6 +160,10 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     Equivalent to the command-line <code>--formatting=PRINT_INPUT_DELIMITER</code> flag for
     the Closure Compiler.
     Defaults to <code>false</code>.
+  {case 'soy-function-plugins'}
+    Specifies the full class names of Guice modules for Soy function plugins and
+    print directive plugins.  For example <code>"org.plovr.soy.function.PlovrModule"</code>,
+    will include the Plovr substring plugin.
   {case 'output-wrapper'}
     If specified, a template into which compiled JavaScript will be written.
     The placeholder for compiled code is <code>%output%</code>, so to wrap the

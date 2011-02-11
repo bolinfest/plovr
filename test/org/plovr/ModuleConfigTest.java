@@ -38,6 +38,8 @@ public class ModuleConfigTest {
       }
   };
 
+  private final List<String> soyFunctionPlugins = ImmutableList.of();
+
   private ModuleConfig.ModuleInfo newModule(
       String name, String input, String[] deps) {
     ModuleConfig.ModuleInfo moduleInfo = new ModuleConfig.ModuleInfo();
@@ -91,6 +93,7 @@ public class ModuleConfigTest {
         ImmutableList.<JsInput>of(a, b, c, d, e),
         externs,
         null, // builtInExterns
+        soyFunctionPlugins,
         customExternsOnly);
 
     ModuleConfig.Builder builder = ModuleConfig.builder(new File("."));
@@ -173,6 +176,7 @@ public class ModuleConfigTest {
         ImmutableList.<JsInput>of(a, b, c, d, e, f, g, dep1, dep2),
         externs,
         null, // builtInExterns
+        soyFunctionPlugins,
         customExternsOnly);
 
     ModuleConfig.Builder builder = ModuleConfig.builder(new File("."));
@@ -248,6 +252,7 @@ public class ModuleConfigTest {
         ImmutableList.<JsInput>of(a, b, c, d, e, dep1),
         externs,
         null, // builtInExterns
+        soyFunctionPlugins,
         customExternsOnly);
 
     ModuleConfig.Builder builder = ModuleConfig.builder(new File("."));

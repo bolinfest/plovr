@@ -2,6 +2,7 @@ package org.plovr;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -38,11 +39,8 @@ public abstract class LocalFileJsInput extends AbstractJsInput {
     this.lastModified = source.lastModified();
   }
 
-  static JsInput createForName(String name) {
-    return createForFileWithName(new File(name), name);
-  }
-
-  static JsInput createForFileWithName(File file, String name) {
+  static JsInput createForFileWithName(File file, String name,
+      List<String> soyPluginModuleNames) {
     // Cache requests for existing inputs to minimize how often files are
     // re-parsed.
     Pair<File,String> pair = Pair.of(file, name);
@@ -53,7 +51,7 @@ public abstract class LocalFileJsInput extends AbstractJsInput {
 
     JsInput newInput;
     if (file.getName().endsWith(".soy")) {
-      newInput = new SoyFile(name, file);
+      newInput = new SoyFile(name, file, soyPluginModuleNames);
     } else {
       newInput = new JsSourceFile(name, file);
     }

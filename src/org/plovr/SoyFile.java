@@ -2,11 +2,17 @@ package org.plovr;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 import java.util.logging.Logger;
 
 import org.plovr.io.Files;
 
+import com.google.common.collect.Lists;
+import com.google.inject.Guice;
+import com.google.inject.Injector;
+import com.google.inject.Module;
 import com.google.template.soy.SoyFileSet;
+import com.google.template.soy.SoyModule;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.jssrc.SoyJsSrcOptions;
 import com.google.template.soy.jssrc.SoyJsSrcOptions.CodeStyle;
@@ -24,6 +30,8 @@ public class SoyFile extends LocalFileJsInput {
 
   private static final SoyJsSrcOptions SOY_OPTIONS;
 
+  private final Injector injector;
+
   static {
     SoyJsSrcOptions jsSrcOptions = new SoyJsSrcOptions();
     jsSrcOptions.setShouldGenerateJsdoc(true);
@@ -39,13 +47,14 @@ public class SoyFile extends LocalFileJsInput {
     SOY_OPTIONS = jsSrcOptions;
   }
 
-  SoyFile(String name, File source) {
+  SoyFile(String name, File source, List<String> pluginModuleNames) {
     super(name, source);
+    this.injector = createInjector(pluginModuleNames);
   }
 
   @Override
   public String getCode() {
-    SoyFileSet.Builder builder = new SoyFileSet.Builder();
+    SoyFileSet.Builder builder = injector.getInstance(SoyFileSet.Builder.class);
     builder.add(getSource());
     builder.setCssHandlingScheme(CssHandlingScheme.BACKEND_SPECIFIC);
     SoyFileSet fileSet = builder.build();
@@ -73,4 +82,22 @@ public class SoyFile extends LocalFileJsInput {
     }
   }
 
+  private static Injector createInjector(List<String> pluginModuleNames) {
+    List<Module> guiceModules = Lists.newArrayList();
+    guiceModules.add(new SoyModule());
+
+    for (String name : pluginModuleNames) {
+      try {
+        guiceModules.add((Module) Class.forName(name).newInstance());
+      } catch (ClassNotFoundException e) {
+        throw new RuntimeException("Cannot find plugin module \"" + name + "\".", e);
+      } catch (IllegalAccessException e) {
+        throw new RuntimeException("Cannot access plugin module \"" + name + "\".", e);
+      } catch (InstantiationException e) {
+        throw new RuntimeException("Cannot instantiate plugin module \"" + name + "\".", e);
+      }
+    }
+
+    return Guice.createInjector(guiceModules);
+  }
 }

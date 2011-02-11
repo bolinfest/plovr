@@ -367,6 +367,23 @@ public enum ConfigOption {
       builder.setDisambiguateProperties(disambiguateProperties);
     }
   }),
+
+  SOY_FUNCTION_PLUGINS("soy-function-plugins", new ConfigUpdater() {
+    @Override
+    public void apply(String input, Config.Builder builder) {
+      builder.addSoyFunctionPlugin(input);
+    }
+
+    @Override
+    public void apply(JsonArray inputs, Config.Builder builder) {
+      for (JsonElement item : inputs) {
+        String input = GsonUtil.stringOrNull(item);
+        if (input != null) {
+          apply(input, builder);
+        }
+      }
+    }
+  }),
   ;
 
   private static class ConfigUpdater {

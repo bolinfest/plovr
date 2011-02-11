@@ -11,6 +11,8 @@ import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
+import org.plovr.util.Pair;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
 import com.google.common.base.Function;
@@ -27,6 +29,8 @@ import com.google.javascript.jscomp.CompilationLevel;
 import com.google.javascript.jscomp.CompilerOptions;
 import com.google.javascript.jscomp.DiagnosticGroup;
 import com.google.javascript.jscomp.WarningLevel;
+import com.google.template.soy.xliffmsgplugin.XliffMsgPluginModule;
+
 
 public final class Config implements Comparable<Config> {
 
@@ -45,6 +49,8 @@ public final class Config implements Comparable<Config> {
 
   @Nullable
   private final ModuleConfig moduleConfig;
+
+  private final ImmutableList<String> soyFunctionPlugins;
 
   private final CompilationMode compilationMode;
 
@@ -89,6 +95,7 @@ public final class Config implements Comparable<Config> {
       String rootConfigFileContent,
       Manifest manifest,
       @Nullable ModuleConfig moduleConfig,
+      List<String> soyFunctionPlugins,
       CompilationMode compilationMode,
       WarningLevel warningLevel,
       boolean debug,
@@ -111,6 +118,7 @@ public final class Config implements Comparable<Config> {
     this.rootConfigFileContent = rootConfigFileContent;
     this.manifest = manifest;
     this.moduleConfig = moduleConfig;
+    this.soyFunctionPlugins = ImmutableList.copyOf(soyFunctionPlugins);
     this.compilationMode = compilationMode;
     this.warningLevel = warningLevel;
     this.debug = debug;
@@ -166,6 +174,14 @@ public final class Config implements Comparable<Config> {
 
   public boolean hasModules() {
     return moduleConfig != null;
+  }
+
+  public ImmutableList<String> getSoyFunctionPlugins() {
+    return soyFunctionPlugins;
+  }
+
+  public boolean hasSoyFunctionPlugins() {
+    return !soyFunctionPlugins.isEmpty();
   }
 
   public CompilationMode getCompilationMode() {
@@ -304,13 +320,16 @@ public final class Config implements Comparable<Config> {
 
     private String pathToClosureLibrary = null;
 
-    private ImmutableList.Builder<String> paths = ImmutableList.builder();
+    private final ImmutableList.Builder<String> paths = ImmutableList.builder();
 
-    private ImmutableList.Builder<JsInput> inputs = ImmutableList.builder();
+    /** List of (file, path) pairs for inputs */
+    private final ImmutableList.Builder<Pair<File, String>> inputs = ImmutableList.builder();
 
     private ImmutableList.Builder<String> externs = null;
 
     private ImmutableList.Builder<JsInput> builtInExterns = null;
+
+    private ImmutableList.Builder<String> soyFunctionPlugins = null;
 
     private boolean customExternsOnly = false;
 
@@ -377,6 +396,9 @@ public final class Config implements Comparable<Config> {
       this.moduleConfigBuilder = (config.moduleConfig == null)
           ? null
           : ModuleConfig.builder(config.moduleConfig);
+      this.soyFunctionPlugins = config.hasSoyFunctionPlugins()
+          ? new ImmutableList.Builder<String>().addAll(config.getSoyFunctionPlugins())
+          : null;
       this.compilationMode = config.compilationMode;
       this.warningLevel = config.warningLevel;
       this.debug = config.debug;
@@ -415,7 +437,7 @@ public final class Config implements Comparable<Config> {
     public void addInput(File file, String name) {
       Preconditions.checkNotNull(file);
       Preconditions.checkNotNull(name);
-      inputs.add(LocalFileJsInput.createForFileWithName(file, name));
+      inputs.add(Pair.of(file, name));
     }
 
     public void addInputByName(String name) {
@@ -456,6 +478,26 @@ public final class Config implements Comparable<Config> {
         moduleConfigBuilder = ModuleConfig.builder(relativePathBase);
       }
       return moduleConfigBuilder;
+    }
+
+    /**
+     * Adds a soy plugin module.
+     * 
+     * <pre>
+     *   addSoyFunctionPlugin("org.plovr.soy.function.PlovrModule")
+     * </pre>
+     * 
+     * @param qualifiedName the module class name
+     */
+    public void addSoyFunctionPlugin(String qualifiedName) {
+      Preconditions.checkNotNull(qualifiedName);
+
+      if (soyFunctionPlugins == null) {
+        soyFunctionPlugins = ImmutableList.builder();
+        // always add this one
+        soyFunctionPlugins.add(XliffMsgPluginModule.class.getName());
+      }
+      soyFunctionPlugins.add(qualifiedName);
     }
 
     public void setCompilationMode(CompilationMode mode) {
@@ -533,6 +575,8 @@ public final class Config implements Comparable<Config> {
           ? null
           : moduleConfigBuilder.build();
 
+      List<String> soyFunctionNames = createSoyFunctionPluginNames();
+
       Manifest manifest;
       if (this.manifest == null) {
         List<File> externs = this.externs == null ? null
@@ -550,9 +594,10 @@ public final class Config implements Comparable<Config> {
 
         manifest = new Manifest(closureLibraryDirectory,
           Lists.transform(paths.build(), STRING_TO_FILE),
-          inputs.build(),
+          createJsInputs(soyFunctionNames),
           externs,
           builtInExterns != null ? builtInExterns.build() : null,
+          soyFunctionNames,
           customExternsOnly);
       } else {
         manifest = this.manifest;
@@ -563,6 +608,7 @@ public final class Config implements Comparable<Config> {
           rootConfigFileContent,
           manifest,
           moduleConfig,
+          soyFunctionNames,
           compilationMode,
           warningLevel,
           debug,
@@ -581,6 +627,28 @@ public final class Config implements Comparable<Config> {
           disambiguateProperties);
 
       return config;
+    }
+
+    private List<JsInput> createJsInputs(List<String> soyPluginModuleNames) {
+      ImmutableList<Pair<File, String>> inputFiles = inputs.build();
+      List<JsInput> jsInputs = Lists.newArrayListWithCapacity(inputFiles.size());
+      for (Pair<File, String> pair : inputFiles) {
+        File file = pair.getFirst();
+        String name = pair.getSecond();
+
+        jsInputs.add(
+            LocalFileJsInput.createForFileWithName(file, name, soyPluginModuleNames));
+      }
+
+      return jsInputs;
+    }
+
+    private List<String> createSoyFunctionPluginNames() {
+      if (this.soyFunctionPlugins == null) {
+        return ImmutableList.of();
+      }
+      // TODO: Do we need to add any other modules than what we've configured?
+      return this.soyFunctionPlugins.build();
     }
   }
 
