@@ -32,7 +32,7 @@ public final class ConfigParser {
     Preconditions.checkArgument(root.isJsonObject());
 
     File parentDirectory = file.getAbsoluteFile().getParentFile();
-    Config.Builder builder = Config.builder(parentDirectory,
+    Config.Builder builder = Config.builder(parentDirectory, file,
         rootConfigFileContent);
 
     // Keep track of the keys in the options object so that plovr can warn

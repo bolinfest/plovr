@@ -3,12 +3,16 @@ package org.plovr;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
-import java.util.Map;
+import java.util.List;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executors;
 
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.SourceMap;
 import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
 public final class CompilationServer implements Runnable {
@@ -24,18 +28,18 @@ public final class CompilationServer implements Runnable {
   /**
    * Map of config ids to original Config objects.
    */
-  private final Map<String, Config> configs;
+  private final ConcurrentMap<String, Config> configs;
 
   /**
    * Maps a config id to the last Compilation performed for that config.
    */
-  private final Map<String, Compilation> compilations;
+  private final ConcurrentMap<String, Compilation> compilations;
 
   public CompilationServer(String listenAddress, int port) {
     this.listenAddress = listenAddress;
     this.port = port;
-    this.configs = Maps.newHashMap();
-    this.compilations = Maps.newHashMap();
+    this.configs = Maps.newConcurrentMap();
+    this.compilations = Maps.newConcurrentMap();
   }
 
   public void registerConfig(Config config) {
@@ -45,6 +49,43 @@ public final class CompilationServer implements Runnable {
           "A config with this id has already been registered: " + id);
     }
     configs.put(id, config);
+  }
+
+  private void reload(Config config) throws IOException {
+    Preconditions.checkNotNull(config.getConfigFile(),
+        "Can't reload a config without a file");
+
+    System.err.println("Reloading " + config.getConfigFile().getPath());
+    Config newConfig = ConfigParser.parseFile(config.getConfigFile());
+    replaceConfig(config, newConfig);
+  }
+
+  private void replaceConfig(Config oldConfig, Config newConfig) {
+    // Remove compilations from the old configuration
+    compilations.remove(oldConfig.getId());
+    configs.put(newConfig.getId(), newConfig);
+
+    if (!oldConfig.getId().equals(newConfig.getId())) {
+      // Remove the old config if the ID has changed
+      configs.remove(oldConfig.getId());
+    }
+  }
+
+  private void detectChangesToConfigs() {
+    // Create a copy of the values to ensure no ConcurrentModificationExceptions
+    // are thrown
+    List<Config> values = ImmutableList.copyOf(configs.values());
+
+    for (Config config : values) {
+      if (config.isOutOfDate()) {
+        try {
+          reload(config);
+        } catch (IOException e) {
+          throw new RuntimeException("Error reloading config: "
+              + config.getId());
+        }
+      }
+    }
   }
 
   @Override
@@ -67,8 +108,17 @@ public final class CompilationServer implements Runnable {
 
     // Register all of the handlers.
     for (Handler handler : Handler.values()) {
-      server.createContext(handler.getContext(),
-          handler.createHandlerForCompilationServer(this));
+      final HttpHandler delegate = handler.createHandlerForCompilationServer(this);
+
+      server.createContext(handler.getContext(), new HttpHandler() {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+          // Reload any configuration files if necessary
+          detectChangesToConfigs();
+
+          delegate.handle(exchange);
+        }
+      });
     }
 
     server.setExecutor(Executors.newCachedThreadPool());

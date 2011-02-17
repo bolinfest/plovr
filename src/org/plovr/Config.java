@@ -85,6 +85,14 @@ public final class Config implements Comparable<Config> {
   private final boolean disambiguateProperties;
 
   /**
+   * Time this configuration was loaded
+   */
+  private final long timestamp;
+
+  @Nullable
+  private final File configFile;
+
+  /**
    * @param id Unique identifier for the configuration. This is used as an
    *        argument to the &lt;script> tag that loads the compiled code.
    * @param manifest
@@ -111,7 +119,9 @@ public final class Config implements Comparable<Config> {
       Set<String> stripTypePrefixes,
       Set<String> idGenerators,
       boolean ambiguateProperties,
-      boolean disambiguateProperties) {
+      boolean disambiguateProperties,
+      File configFile,
+      long timestamp) {
     Preconditions.checkNotNull(defines);
 
     this.id = id;
@@ -135,11 +145,13 @@ public final class Config implements Comparable<Config> {
     this.idGenerators = ImmutableSet.copyOf(idGenerators);
     this.ambiguateProperties = ambiguateProperties;
     this.disambiguateProperties = disambiguateProperties;
+    this.configFile = configFile;
+    this.timestamp = timestamp;
   }
 
-  public static Builder builder(File relativePathBase,
+  public static Builder builder(File relativePathBase, File configFile,
       String rootConfigFileContent) {
-    return new Builder(relativePathBase, rootConfigFileContent);
+    return new Builder(relativePathBase, configFile, rootConfigFileContent);
   }
 
   public static Builder builder(Config config) {
@@ -153,7 +165,7 @@ public final class Config implements Comparable<Config> {
   @VisibleForTesting
   public static Builder builderForTesting() {
     File rootDirectory = File.listRoots()[0];
-    return new Builder(rootDirectory, "");
+    return new Builder(rootDirectory, null, "");
   }
 
   public String getId() {
@@ -224,6 +236,17 @@ public final class Config implements Comparable<Config> {
 
   public boolean getTreatWarningsAsErrors() {
     return treatWarningsAsErrors;
+  }
+
+  public File getConfigFile() {
+    return configFile;
+  }
+
+  public boolean isOutOfDate() {
+    if (configFile != null) {
+      return timestamp < configFile.lastModified();
+    }
+    return false;
   }
 
   public CompilerOptions getCompilerOptions() {
@@ -312,6 +335,11 @@ public final class Config implements Comparable<Config> {
 
     private final File relativePathBase;
 
+    @Nullable
+    private File configFile;
+
+    private long lastModified;
+
     private final String rootConfigFileContent;
 
     private String id = null;
@@ -375,7 +403,7 @@ public final class Config implements Comparable<Config> {
     private static final Pattern ID_PATTERN = Pattern.compile(
         AbstractGetHandler.CONFIG_ID_PATTERN);
 
-    private Builder(File relativePathBase, String rootConfigFileContent) {
+    private Builder(File relativePathBase, File configFile, String rootConfigFileContent) {
       Preconditions.checkNotNull(relativePathBase);
       Preconditions.checkArgument(relativePathBase.isDirectory(),
           relativePathBase + " is not a directory");
@@ -384,12 +412,14 @@ public final class Config implements Comparable<Config> {
       this.rootConfigFileContent = rootConfigFileContent;
       manifest = null;
       defines = Maps.newHashMap();
+      setConfigFile(configFile);
     }
 
     /** Effectively a copy constructor. */
     private Builder(Config config) {
       Preconditions.checkNotNull(config);
       this.relativePathBase = null;
+      this.configFile = null;
       this.rootConfigFileContent = config.rootConfigFileContent;
       this.id = config.id;
       this.manifest = config.manifest;
@@ -473,6 +503,11 @@ public final class Config implements Comparable<Config> {
       this.pathToClosureLibrary = pathToClosureLibrary;
     }
 
+    public void setConfigFile(File configFile) {
+      this.configFile = configFile;
+      this.lastModified = configFile != null ? configFile.lastModified() : 0;
+    }
+
     public ModuleConfig.Builder getModuleConfigBuilder() {
       if (moduleConfigBuilder == null) {
         moduleConfigBuilder = ModuleConfig.builder(relativePathBase);
@@ -482,11 +517,11 @@ public final class Config implements Comparable<Config> {
 
     /**
      * Adds a soy plugin module.
-     * 
+     *
      * <pre>
      *   addSoyFunctionPlugin("org.plovr.soy.function.PlovrModule")
      * </pre>
-     * 
+     *
      * @param qualifiedName the module class name
      */
     public void addSoyFunctionPlugin(String qualifiedName) {
@@ -624,7 +659,9 @@ public final class Config implements Comparable<Config> {
           stripTypePrefixes,
           idGenerators,
           ambiguateProperties,
-          disambiguateProperties);
+          disambiguateProperties,
+          configFile,
+          lastModified);
 
       return config;
     }
