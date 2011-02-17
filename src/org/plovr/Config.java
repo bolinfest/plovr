@@ -17,6 +17,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -35,6 +36,8 @@ import com.google.template.soy.xliffmsgplugin.XliffMsgPluginModule;
 public final class Config implements Comparable<Config> {
 
   private static final Logger logger = Logger.getLogger("org.plovr.Config");
+
+  public static final String GLOBAL_SCOPE_NAME = "a";
 
   private final String id;
 
@@ -84,6 +87,8 @@ public final class Config implements Comparable<Config> {
 
   private final boolean disambiguateProperties;
 
+  private final String globalScopeName;
+
   /**
    * Time this configuration was loaded
    */
@@ -121,7 +126,8 @@ public final class Config implements Comparable<Config> {
       boolean ambiguateProperties,
       boolean disambiguateProperties,
       File configFile,
-      long timestamp) {
+      long timestamp,
+      String globalScopeName) {
     Preconditions.checkNotNull(defines);
 
     this.id = id;
@@ -147,6 +153,7 @@ public final class Config implements Comparable<Config> {
     this.disambiguateProperties = disambiguateProperties;
     this.configFile = configFile;
     this.timestamp = timestamp;
+    this.globalScopeName = globalScopeName;
   }
 
   public static Builder builder(File relativePathBase, File configFile,
@@ -249,6 +256,10 @@ public final class Config implements Comparable<Config> {
     return false;
   }
 
+  public String getGlobalScopeName() {
+    return globalScopeName;
+  }
+
   public CompilerOptions getCompilerOptions() {
     Preconditions.checkArgument(compilationMode != CompilationMode.RAW,
         "Cannot compile using RAW mode");
@@ -297,6 +308,15 @@ public final class Config implements Comparable<Config> {
     if (moduleConfig != null) {
       options.crossModuleCodeMotion = true;
       options.crossModuleMethodMotion = true;
+      if (!Strings.isNullOrEmpty(globalScopeName)) {
+        Preconditions.checkState(
+            options.collapseAnonymousFunctions == true ||
+            level != CompilationLevel.ADVANCED_OPTIMIZATIONS,
+            "For reasons unknown, setting this to false ends up " +
+            "with a fairly larger final output, even though we just go " +
+            "and re-anonymize the functions a few steps later.");
+        options.globalScopeName = GLOBAL_SCOPE_NAME;
+      }
     }
 
     if (diagnosticGroups != null) {
@@ -393,6 +413,8 @@ public final class Config implements Comparable<Config> {
 
     private boolean disambiguateProperties;
 
+    private String globalScopeName;
+
     private final Map<String, JsonPrimitive> defines;
 
     /**
@@ -444,6 +466,7 @@ public final class Config implements Comparable<Config> {
       this.idGenerators = config.idGenerators;
       this.ambiguateProperties = config.ambiguateProperties;
       this.disambiguateProperties = config.disambiguateProperties;
+      this.globalScopeName = config.globalScopeName;
       this.defines = Maps.newHashMap(config.defines);
     }
 
@@ -601,6 +624,10 @@ public final class Config implements Comparable<Config> {
       this.disambiguateProperties = disambiguateProperties;
     }
 
+    public void setGlobalScopeName(String scope) {
+      this.globalScopeName = scope;
+    }
+
     public Config build() {
       File closureLibraryDirectory = pathToClosureLibrary != null
           ? new File(pathToClosureLibrary)
@@ -661,7 +688,8 @@ public final class Config implements Comparable<Config> {
           ambiguateProperties,
           disambiguateProperties,
           configFile,
-          lastModified);
+          lastModified,
+          globalScopeName);
 
       return config;
     }

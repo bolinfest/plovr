@@ -219,6 +219,17 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     "deps": "app"
   }
 }</pre>{/literal}
+  {case 'global-scope-name'}
+    A scope name for multiple modules to share. This will cause
+    modules to be wrapped with a
+    {literal}<code>(function($) { with ($) { ... } })(scope)</code>{/literal}
+    (and the main module will additionally start with
+    {literal}<code>scope = {}</code>{/literal}
+    so that you don't actually have to do anything special). As a
+    result, none of the modules' global variables will make it to the
+    real global scope. Instead they will be inside of the specified
+    scope variable, which should not be touched by any other code on
+    the page.
   {case 'define'}
     An object literal that contains a mapping of variables in the JavaScript code
     that are annotated with <code>@define</code> (indicating that they can be

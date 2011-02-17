@@ -12,6 +12,7 @@ import org.plovr.io.Streams;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
@@ -183,7 +184,9 @@ public final class Compilation {
     ModuleConfig moduleConfig = config.getModuleConfig();
     String rootModule = moduleConfig.getRootModule();
 
-    if (rootModule.equals(moduleName)) {
+    boolean isRootModule = rootModule.equals(moduleName);
+
+    if (isRootModule) {
       // For the root module, prepend the following global variables:
       //
       // PLOVR_MODULE_INFO
@@ -212,7 +215,32 @@ public final class Compilation {
 
     JSModule module = nameToModule.get(moduleName);
     String moduleCode = compiler.toSource(module);
+
+    boolean hasGlobalScopeName =
+        !Strings.isNullOrEmpty(config.getGlobalScopeName()) &&
+        config.getCompilationMode() != CompilationMode.WHITESPACE;
+
+    // Optionally wrap the module in an anonymous function, with the
+    // requisite wrapper to make it work.
+    if (hasGlobalScopeName) {
+      if (isRootModule) {
+        // Initialize the global scope in the root module.
+        builder.append(config.getGlobalScopeName());
+        builder.append("={};");
+      }
+      builder.append("(function(");
+      builder.append(Config.GLOBAL_SCOPE_NAME);
+      builder.append("){with(");
+      builder.append(Config.GLOBAL_SCOPE_NAME);
+      builder.append("){\n");
+    }
     builder.append(moduleCode);
+    if (hasGlobalScopeName) {
+      builder.append("}})(");
+      builder.append(config.getGlobalScopeName());
+      builder.append(");");
+    }
+
     if (resetSourceMap) {
       SourceMap sourceMap = compiler.getSourceMap();
       if (sourceMap != null) sourceMap.reset();
@@ -221,7 +249,7 @@ public final class Compilation {
     // http://code.google.com/p/closure-library/issues/detail?id=196
     // http://blog.getfirebug.com/2009/08/11/give-your-eval-a-name-with-sourceurl/
     // non-root modules are loaded with eval, give it a sourceURL for better debugging
-    if (!rootModule.equals(moduleName)) {
+    if (!isRootModule) {
         builder.append("\n//@ sourceURL=" + moduleNameToUri.apply(moduleName));
     }
 

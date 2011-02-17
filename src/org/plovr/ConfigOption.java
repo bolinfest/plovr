@@ -246,6 +246,13 @@ public enum ConfigOption {
     }
   }),
 
+  GLOBAL_SCOPE_NAME("global-scope-name", new ConfigUpdater() {
+    @Override
+    public void apply(String scope, Config.Builder builder) {
+      builder.setGlobalScopeName(scope);
+    }
+  }),
+
   DEFINE("define", new ConfigUpdater() {
     @Override
     public void apply(JsonObject obj, Config.Builder builder) {
