@@ -37,6 +37,18 @@ public final class Config implements Comparable<Config> {
 
   private static final Logger logger = Logger.getLogger("org.plovr.Config");
 
+  /**
+   * This is the name of the scope that all global variables will be
+   * put into if the global-scope-name argument is supplied in the
+   * plovr config. This scope name is never externally visible, but it
+   * does have the effect of shadowing access to any page-scope
+   * globals of that name.
+   *
+   * For example, if "$" were chosen, then that would shadow the
+   * global jQuery object, which would be problematic for developers
+   * who were using the Compiler with jQuery. As "a" is unlikely to be
+   * supplied as an extern, it is a good choice for the GLOBAL_SCOPE_NAME.
+   */
   public static final String GLOBAL_SCOPE_NAME = "a";
 
   private final String id;

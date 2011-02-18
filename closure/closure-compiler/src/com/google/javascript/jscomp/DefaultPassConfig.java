@@ -536,10 +536,10 @@ public class DefaultPassConfig extends PassConfig {
 
     boolean scopeGlobalVariables = !options.globalScopeName.isEmpty();
     if (scopeGlobalVariables) {
-        if (exportedNames == null) {
-            exportedNames = Sets.newHashSet();
-        }
-        exportedNames.add(options.globalScopeName);
+      if (exportedNames == null) {
+        exportedNames = Sets.newHashSet();
+      }
+      exportedNames.add(options.globalScopeName);
     }
 
     // This comes after property renaming because quoted property names must
