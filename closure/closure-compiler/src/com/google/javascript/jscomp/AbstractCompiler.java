@@ -73,9 +73,9 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
   public abstract JSTypeRegistry getTypeRegistry();
 
   /**
-   * Gets a memoized scope creator.
+   * Gets a memoized scope creator with type information.
    */
-  abstract ScopeCreator getScopeCreator();
+  abstract ScopeCreator getTypedScopeCreator();
 
   /**
    * Gets the top scope.
@@ -202,6 +202,11 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
    * @return Whether the compiler is in ES5Mode.
    */
   abstract boolean acceptEcmaScript5();
+
+  /**
+   * @return Whether the compiler accepts `const' keyword.
+   */
+  abstract boolean acceptConstKeyword();
 
   /**
    * Returns the parser configuration.

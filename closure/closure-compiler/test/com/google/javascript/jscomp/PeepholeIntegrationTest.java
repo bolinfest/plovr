@@ -79,14 +79,14 @@ public class PeepholeIntegrationTest extends CompilerTestCase {
 
   /** Check that removing blocks with 1 child works */
   public void testFoldOneChildBlocksIntegration() {
-     fold("function(){switch(foo()){default:{break}}}",
-          "function(){foo()}");
+     fold("function f(){switch(foo()){default:{break}}}",
+          "function f(){foo()}");
 
-     fold("function(){switch(x){default:{break}}}",
-          "function(){}");
+     fold("function f(){switch(x){default:{break}}}",
+          "function f(){}");
 
-     fold("function(){switch(x){default:x;case 1:return 2}}",
-          "function(){switch(x){default:case 1:return 2}}");
+     fold("function f(){switch(x){default:x;case 1:return 2}}",
+          "function f(){switch(x){default:case 1:return 2}}");
 
      // ensure that block folding does not break hook ifs
      fold("if(x){if(true){foo();foo()}else{bar();bar()}}",
@@ -100,17 +100,16 @@ public class PeepholeIntegrationTest extends CompilerTestCase {
 
      fold("if(x()){} else {x()}", "x()||x()");
      fold("if(x){}", ""); // Even the condition has no side effect.
-     fold("if(a()){A()} else if (b()) {} else {C()}",
-          "if(a())A();else b()||C()");
+     fold("if(a()){A()} else if (b()) {} else {C()}", "a()?A():b()||C()");
 
      fold("if(a()){} else if (b()) {} else {C()}",
           "a()||b()||C()");
      fold("if(a()){A()} else if (b()) {} else if (c()) {} else{D()}",
-          "if(a())A();else b()||c()||D()");
+          "a()?A():b()||c()||D()");
      fold("if(a()){} else if (b()) {} else if (c()) {} else{D()}",
           "a()||b()||c()||D()");
      fold("if(a()){A()} else if (b()) {} else if (c()) {} else{}",
-          "if(a())A();else b()||c()");
+          "a()?A():b()||c()");
 
      // Verify that non-global scope works.
      fold("function foo(){if(x()){}}", "function foo(){x()}");
@@ -135,8 +134,8 @@ public class PeepholeIntegrationTest extends CompilerTestCase {
   /** Try to minimize returns */
   public void testFoldReturnsIntegration() {
     // if-then-else duplicate statement removal handles this case:
-    fold("function(){if(x)return;else return}",
-         "function(){}");
+    fold("function f(){if(x)return;else return}",
+         "function f(){}");
   }
 
   public void testBug1059649() {
@@ -166,12 +165,12 @@ public class PeepholeIntegrationTest extends CompilerTestCase {
     fold("function z() {if (a) { return true }" +
          "else if (b) { return true }" +
          "else { return true }}",
-         "function z() {return true;}");
+         "function z() {return !0;}");
 
     fold("function z() {if (a()) { return true }" +
          "else if (b()) { return true }" +
          "else { return true }}",
-         "function z() {a()||b();return true;}");
+         "function z() {a()||b();return !0;}");
   }
 
   public void testFoldLogicalOpIntegration() {
@@ -251,7 +250,7 @@ public class PeepholeIntegrationTest extends CompilerTestCase {
     fold("x()||!!y()", "x()||y()");
 
     /* This is similar to the !!true case */
-    fold("!(!!x()&&y())", "x()&&y()");
+    fold("!!x()&&y()", "x()&&y()");
   }
 
   public void testBug1509085() {
@@ -314,5 +313,15 @@ public class PeepholeIntegrationTest extends CompilerTestCase {
     fold("(x && false) && y()", "");
     fold("a = x || false ? b : c", "a=x?b:c");
     fold("do {x()} while((x && false) && y())", "x()");
+  }
+
+  public void testTrueFalseFolding() {
+    fold("x = true", "x = !0");
+    fold("x = false", "x = !1");
+    fold("x = !3", "x = !1");
+    fold("x = true && !0", "x = !0");
+    fold("x = !!!!!!!!!!!!3", "x = !0");
+    fold("if(!3){x()}", "");
+    fold("if(!!3){x()}", "x()");
   }
 }

@@ -1006,8 +1006,8 @@ public class Compiler extends AbstractCompiler {
   }
 
   @Override
-  ScopeCreator getScopeCreator() {
-    return getPassConfig().getScopeCreator();
+  ScopeCreator getTypedScopeCreator() {
+    return getPassConfig().getTypedScopeCreator();
   }
 
   @Override
@@ -1632,10 +1632,15 @@ public class Compiler extends AbstractCompiler {
   }
 
   @Override
+  public boolean acceptConstKeyword() {
+    return options.acceptConstKeyword;
+  }
+
+  @Override
   Config getParserConfig() {
     if (parserConfig == null) {
       parserConfig = ParserRunner.createConfig(
-        isIdeMode(), acceptEcmaScript5());
+        isIdeMode(), acceptEcmaScript5(), acceptConstKeyword());
     }
     return parserConfig;
   }

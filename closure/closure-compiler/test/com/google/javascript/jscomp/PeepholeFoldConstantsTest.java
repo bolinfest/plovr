@@ -27,8 +27,9 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Tests for PeepholeFoldConstants in isolation. Tests for the interaction of
- * multiple peephole passes are in PeepholeIntegrationTest.
+ * Tests for {@link PeepholeFoldConstants} in isolation. Tests for
+ * the interaction of multiple peephole passes are in
+ * {@link PeepholeIntegrationTest}.
  */
 public class PeepholeFoldConstantsTest extends CompilerTestCase {
 
@@ -421,7 +422,7 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
     fold("x = foo() + 'a' + 2", "x = foo()+\"a2\"");
     fold("x = '' + null", "x = \"null\"");
     fold("x = true + '' + false", "x = \"truefalse\"");
-    fold("x = '' + []", "x = \"\"+[]");      // cannot fold (but nice if we can)
+    fold("x = '' + []", "x = ''");      // cannot fold (but nice if we can)
   }
 
   public void testFoldConstructor() {
@@ -466,6 +467,10 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
     foldSame("x = 'abcdef'.indexOf([1,2])");
   }
 
+  public void testStringJoinAddSparse() {
+    foldSame("x = [,,'a'].join(',')"); // Could be: x = ',,a'
+  }
+
   public void testStringJoinAdd() {
     fold("x = ['a', 'b', 'c'].join('')", "x = \"abc\"");
     fold("x = [].join(',')", "x = \"\"");
@@ -504,6 +509,12 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
 
     fold("x = [1,2,3].join('abcdef')",
          "x = '1abcdef2abcdef3'");
+
+    fold("x = [1,2].join()", "x = '1,2'");
+    fold("x = [null,undefined,''].join(',')", "x = ',,'");
+    fold("x = [null,undefined,0].join(',')", "x = ',,0'");
+    // This can be folded but we don't currently.
+    foldSame("x = [[1,2],[3,4]].join()"); // would like: "x = '1,2,3,4'"
   }
 
   public void testStringJoinAdd_b1992789() {
@@ -684,6 +695,7 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
   }
 
   public void testFoldGetElem() {
+    foldSame("x = [,10][0]"); // Should be "x = void 0";
     fold("x = [10, 20][0]", "x = 10");
     fold("x = [10, 20][1]", "x = 20");
     fold("x = [10, 20][0.5]", "",
@@ -702,7 +714,7 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
 
   public void testFoldLeft() {
     foldSame("(+x - 1) + 2"); // not yet
-    foldSame("(+x + 1) + 2"); // not yet
+    fold("(+x + 1) + 2", "+x + 3");
   }
 
   public void testFoldArrayLength() {
@@ -710,6 +722,9 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
     fold("x = [].length", "x = 0");
     fold("x = [1,2,3].length", "x = 3");
     fold("x = [a,b].length", "x = 2");
+
+    // Not handled yet
+    foldSame("x = [,,1].length"); // Should be "x = 3"
 
     // Cannot fold
     fold("x = [foo(), 0].length", "x = [foo(),0].length");
@@ -751,6 +766,8 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
     fold("'' instanceof String", "false");
     fold("true instanceof Object", "false");
     fold("true instanceof Boolean", "false");
+    fold("!0 instanceof Object", "false");
+    fold("!0 instanceof Boolean", "false");
     fold("false instanceof Object", "false");
     fold("null instanceof Object", "false");
     fold("undefined instanceof Object", "false");
@@ -849,6 +866,8 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
   public void testFoldLeftChildConcat() {
     foldSame("x +5 + \"1\"");
     fold("x+\"5\" + \"1\"", "x + \"51\"");
+    // fold("\"a\"+(c+\"b\")","\"a\"+c+\"b\"");
+    fold("\"a\"+(\"b\"+c)","\"ab\"+c");
   }
 
   public void testFoldLeftChildOp() {
@@ -898,6 +917,31 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
     fold("x/('12'+'6')", "x/126");
     fold("true*x", "1*x");
     fold("x/false", "x/0");  // should we add an error check? :)
+  }
+
+  public void testNotFoldBackToTrueFalse() {
+    foldSame("!0");
+    foldSame("!1");
+    fold("!3", "false");
+  }
+
+  public void testFoldBangConstants() {
+    fold("1 + !0", "2");
+    fold("1 + !1", "1");
+    fold("'a ' + !1", "'a false'");
+    fold("'a ' + !0", "'a true'");
+  }
+
+  public void testFoldMixed() {
+    fold("''+[1]", "'1'");
+    foldSame("false+[]"); // would like: "\"false\""
+  }
+
+  public void testFoldVoid() {
+    foldSame("void 0");
+    fold("void 1", "void 0");
+    fold("void x", "void 0");
+    fold("void x()", "void x()");
   }
 
   private static final List<String> LITERAL_OPERANDS =

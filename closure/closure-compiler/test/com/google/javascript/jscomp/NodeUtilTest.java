@@ -198,8 +198,8 @@ public class NodeUtilTest extends TestCase {
     assertEquals("1", NodeUtil.getStringValue(getNode("1.0")));
     assertEquals("0", NodeUtil.getStringValue(getNode("'0'")));
     assertEquals(null, NodeUtil.getStringValue(getNode("/a/")));
-    assertEquals(null, NodeUtil.getStringValue(getNode("{}")));
-    assertEquals(null, NodeUtil.getStringValue(getNode("[]")));
+    assertEquals("[object Object]", NodeUtil.getStringValue(getNode("{}")));
+    assertEquals("", NodeUtil.getStringValue(getNode("[]")));
     assertEquals("false", NodeUtil.getStringValue(getNode("false")));
     assertEquals("null", NodeUtil.getStringValue(getNode("null")));
     assertEquals("0", NodeUtil.getStringValue(getNode("0")));
@@ -211,6 +211,20 @@ public class NodeUtilTest extends TestCase {
     assertEquals("NaN", NodeUtil.getStringValue(getNode("NaN")));
     assertEquals("Infinity", NodeUtil.getStringValue(getNode("Infinity")));
     assertEquals(null, NodeUtil.getStringValue(getNode("x")));
+  }
+
+  public void testGetArrayStringValue() {
+    assertEquals("", NodeUtil.getStringValue(getNode("[]")));
+    assertEquals("", NodeUtil.getStringValue(getNode("['']")));
+    assertEquals("", NodeUtil.getStringValue(getNode("[null]")));
+    assertEquals("", NodeUtil.getStringValue(getNode("[undefined]")));
+    assertEquals("", NodeUtil.getStringValue(getNode("[void 0]")));
+    assertEquals("NaN", NodeUtil.getStringValue(getNode("[NaN]")));
+    assertEquals(",", NodeUtil.getStringValue(getNode("[,'']")));
+    assertEquals(",,", NodeUtil.getStringValue(getNode("[[''],[''],['']]")));
+    assertEquals("1,2", NodeUtil.getStringValue(getNode("[[1.0],[2.0]]")));
+    assertEquals(null, NodeUtil.getStringValue(getNode("[a]")));
+    assertEquals(null, NodeUtil.getStringValue(getNode("[1,a]")));
   }
 
   public void testIsObjectLiteralKey1() throws Exception {
@@ -671,10 +685,10 @@ public class NodeUtilTest extends TestCase {
             parse("foo();")));
     assertNodeNames(Sets.<String>newHashSet(),
         NodeUtil.getVarsDeclaredInBranch(
-            parse("function(){var foo;}")));
+            parse("function f(){var foo;}")));
     assertNodeNames(Sets.newHashSet("goo"),
         NodeUtil.getVarsDeclaredInBranch(
-            parse("var goo;function(){var foo;}")));
+            parse("var goo;function f(){var foo;}")));
   }
 
   private void assertNodeNames(Set<String> nodeNames, Collection<Node> nodes) {
@@ -1440,12 +1454,12 @@ public class NodeUtilTest extends TestCase {
     assertFalse(NodeUtil.isNumericResult(getNode("([1,2])")));
     assertFalse(NodeUtil.isNumericResult(getNode("({a:1})")));
 
-    // These are number but aren't handled yet, "false" here means "unknown".
-    assertFalse(NodeUtil.isNumericResult(getNode("1 && 2")));
-    assertFalse(NodeUtil.isNumericResult(getNode("1 || 2")));
-    assertFalse(NodeUtil.isNumericResult(getNode("a ? 2 : 3")));
-    assertFalse(NodeUtil.isNumericResult(getNode("a,1")));
-    assertFalse(NodeUtil.isNumericResult(getNode("a=1")));
+    // Recurse into the expression when necessary.
+    assertTrue(NodeUtil.isNumericResult(getNode("1 && 2")));
+    assertTrue(NodeUtil.isNumericResult(getNode("1 || 2")));
+    assertTrue(NodeUtil.isNumericResult(getNode("a ? 2 : 3")));
+    assertTrue(NodeUtil.isNumericResult(getNode("a,1")));
+    assertTrue(NodeUtil.isNumericResult(getNode("a=1")));
   }
 
   public void testIsBooleanResult() {
@@ -1491,10 +1505,11 @@ public class NodeUtilTest extends TestCase {
     assertFalse(NodeUtil.isBooleanResult(getNode("({a:true})")));
 
     // These are boolean but aren't handled yet, "false" here means "unknown".
-    assertFalse(NodeUtil.isBooleanResult(getNode("true && false")));
-    assertFalse(NodeUtil.isBooleanResult(getNode("true || false")));
-    assertFalse(NodeUtil.isBooleanResult(getNode("a ? true : false")));
-    assertFalse(NodeUtil.isBooleanResult(getNode("a,true")));
+    assertTrue(NodeUtil.isBooleanResult(getNode("true && false")));
+    assertTrue(NodeUtil.isBooleanResult(getNode("true || false")));
+    assertTrue(NodeUtil.isBooleanResult(getNode("a ? true : false")));
+    assertTrue(NodeUtil.isBooleanResult(getNode("a,true")));
+    assertTrue(NodeUtil.isBooleanResult(getNode("a=true")));
     assertFalse(NodeUtil.isBooleanResult(getNode("a=1")));
   }
 
@@ -1538,15 +1553,15 @@ public class NodeUtilTest extends TestCase {
     assertTrue(NodeUtil.mayBeString(getNode("new a()")));
 
     // These can't be strings but they aren't handled yet.
-    assertTrue(NodeUtil.mayBeString(getNode("1 && 2")));
-    assertTrue(NodeUtil.mayBeString(getNode("1 || 2")));
-    assertTrue(NodeUtil.mayBeString(getNode("1 ? 2 : 3")));
-    assertTrue(NodeUtil.mayBeString(getNode("1,2")));
-    assertTrue(NodeUtil.mayBeString(getNode("a=1")));
-    assertTrue(NodeUtil.mayBeString(getNode("1+1")));
-    assertTrue(NodeUtil.mayBeString(getNode("true+true")));
-    assertTrue(NodeUtil.mayBeString(getNode("null+null")));
-    assertTrue(NodeUtil.mayBeString(getNode("NaN+NaN")));
+    assertFalse(NodeUtil.mayBeString(getNode("1 && 2")));
+    assertFalse(NodeUtil.mayBeString(getNode("1 || 2")));
+    assertFalse(NodeUtil.mayBeString(getNode("1 ? 2 : 3")));
+    assertFalse(NodeUtil.mayBeString(getNode("1,2")));
+    assertFalse(NodeUtil.mayBeString(getNode("a=1")));
+    assertFalse(NodeUtil.mayBeString(getNode("1+1")));
+    assertFalse(NodeUtil.mayBeString(getNode("true+true")));
+    assertFalse(NodeUtil.mayBeString(getNode("null+null")));
+    assertFalse(NodeUtil.mayBeString(getNode("NaN+NaN")));
 
     // These are not strings but they aren't primitives either
     assertTrue(NodeUtil.mayBeString(getNode("([1,2])")));

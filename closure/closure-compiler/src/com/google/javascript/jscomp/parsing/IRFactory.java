@@ -509,11 +509,18 @@ public class IRFactory {
       return node;
     }
 
-   @Override
-  Node processFunctionNode(FunctionNode functionNode) {
+    @Override
+    Node processFunctionNode(FunctionNode functionNode) {
       Name name = functionNode.getFunctionName();
       Boolean isUnnamedFunction = false;
       if (name == null) {
+        int functionType = functionNode.getFunctionType();
+        if (functionType != FunctionNode.FUNCTION_EXPRESSION) {
+          errorReporter.error(
+            "unnamed function statement",
+            sourceName,
+            functionNode.getLineno(), "", 0);
+        }
         name = new Name();
         name.setIdentifier("");
         isUnnamedFunction = true;
@@ -853,6 +860,11 @@ public class IRFactory {
 
     @Override
     Node processVariableDeclaration(VariableDeclaration declarationNode) {
+      if (!config.acceptConstKeyword && declarationNode.getType() ==
+          com.google.javascript.jscomp.mozilla.rhino.Token.CONST) {
+        processIllegalToken(declarationNode);
+      }
+
       Node node = newNode(Token.VAR);
       for (VariableInitializer child : declarationNode.getVariables()) {
         node.addChildToBack(transform(child));

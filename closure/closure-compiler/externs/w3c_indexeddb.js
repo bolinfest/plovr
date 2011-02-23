@@ -595,15 +595,15 @@ function IDBTransaction() {}
 /** @type {IDBTransaction} */
 Window.prototype.IDBTransaction;
 
-/** @inheritDoc */	
-IDBTransaction.prototype.addEventListener = function(	
-    type, listener, useCapture) {};	
- 	
-/** @inheritDoc */	
-IDBTransaction.prototype.removeEventListener = function(	
-    type, listener, useCapture) {};	
-	
-/** @inheritDoc */	
+/** @inheritDoc */
+IDBTransaction.prototype.addEventListener = function(
+    type, listener, useCapture) {};
+
+/** @inheritDoc */
+IDBTransaction.prototype.removeEventListener = function(
+    type, listener, useCapture) {};
+
+/** @inheritDoc */
 IDBTransaction.prototype.dispatchEvent = function(evt) {};
 
 /**
@@ -680,15 +680,15 @@ IDBTransaction.prototype.ontimeout = function() {};
  */
 function IDBDynamicTransaction() {}
 
-/** @inheritDoc */	
-IDBDynamicTransaction.prototype.addEventListener = function(	
-    type, listener, useCapture) {};	
-	
-/** @inheritDoc */	
-IDBDynamicTransaction.prototype.removeEventListener = function(	
-    type, listener, useCapture) {};	
-	
-/** @inheritDoc */	
+/** @inheritDoc */
+IDBDynamicTransaction.prototype.addEventListener = function(
+    type, listener, useCapture) {};
+
+/** @inheritDoc */
+IDBDynamicTransaction.prototype.removeEventListener = function(
+    type, listener, useCapture) {};
+
+/** @inheritDoc */
 IDBDynamicTransaction.prototype.dispatchEvent = function(evt) {};
 
 /**
@@ -729,8 +729,6 @@ function IDBKeyRange() {}
 
 /** @type {IDBKeyRange} */
 Window.prototype.IDBKeyRange;
-
-
 
 /**
  * @type {IDBKeyRange}

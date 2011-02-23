@@ -114,7 +114,7 @@ public class RenameVarsTest extends CompilerTestCase {
     test("var walk = function walk(node, aFunction) {" +
          "  walk(node, aFunction);" +
          "};",
-         "var d = function a(b, c) {" +
+         "var a = function a(b, c) {" +
          "  a(b, c);" +
          "};");
 
@@ -123,8 +123,8 @@ public class RenameVarsTest extends CompilerTestCase {
     test("var walk = function walk(node, aFunction) {" +
          "  walk(node, aFunction);" +
          "};",
-         "var walk = function a(b, c) {" +
-         "  a(b, c);" +
+         "var walk = function walk(a, b) {" +
+         "  walk(a, b);" +
          "};");
   }
 
@@ -158,6 +158,40 @@ public class RenameVarsTest extends CompilerTestCase {
          "function a(b, c) { (function(d, e) {}) }");
     test("function f1(v1, v2) { function f2(v3, v4) {} }",
          "function a(b, c) { function d(e, f) {} }");
+  }
+
+  public void testBleedingRecursiveFunctions1() {
+    // On IE, bleeding functions will interfere with each other if
+    // they are in the same scope. In the below example, we want to be
+    // sure that a and b get separate names.
+    test("var x = function a(x) { return x ? 1 : a(1); };" +
+         "var y = function b(x) { return x ? 2 : b(2); };",
+         "var c = function b(a) { return a ? 1 : b(1); };" +
+         "var e = function d(a) { return a ? 2 : d(2); };");
+  }
+
+  public void testBleedingRecursiveFunctions2() {
+    test("function f() {" +
+         "  var x = function a(x) { return x ? 1 : a(1); };" +
+         "  var y = function b(x) { return x ? 2 : b(2); };" +
+         "}",
+         "function d() {" +
+         "  var e = function b(a) { return a ? 1 : b(1); };" +
+         "  var f = function a(c) { return c ? 2 : a(2); };" +
+         "}");
+  }
+
+  public void testBleedingRecursiveFunctions3() {
+    test("function f() {" +
+         "  var x = function a(x) { return x ? 1 : a(1); };" +
+         "  var y = function b(x) { return x ? 2 : b(2); };" +
+         "  var z = function c(x) { return x ? y : c(2); };" +
+         "}",
+         "function f() {" +
+         "  var g = function c(a) { return a ? 1 : c(1); };" +
+         "  var d = function a(b) { return b ? 2 : a(2); };" +
+         "  var h = function b(e) { return e ? d : b(2); };" +
+         "}");
   }
 
   public void testRenameWithExterns1() {
@@ -218,11 +252,11 @@ public class RenameVarsTest extends CompilerTestCase {
          "var a,b,c,d,e,f; " +
              "(function(g) {}); try { } catch(h) {}; var i = a + a;"
          );
-    test("function(A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z," +
-         "a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,$){};" +
+    test("(function(A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z," +
+         "a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,$){});" +
          "var a4,a3,a2,a1,b4,b3,b2,b1,ab,ac,ad,fg;function foo(){};",
-         "function(a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z," +
-         "A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z,$){};" +
+         "(function(a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z," +
+         "A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z,$){});" +
          "var aa,ba,ca,da,ea,fa,ga,ha,ia,ja,ka,la;function ma(){};");
   }
 
@@ -255,13 +289,15 @@ public class RenameVarsTest extends CompilerTestCase {
 
   public void testStableRenameWithPointlesslyAnonymousFunctions() {
     VariableMap expectedVariableMap = makeVariableMap("L 0", "a", "L 1", "b");
-    testRenameMap("function (v1, v2) {}; function (v3, v4) {};",
-                  "function (a, b) {}; function (a, b) {};",
+    testRenameMap("(function (v1, v2) {}); (function (v3, v4) {});",
+                  "(function (a, b) {}); (function (a, b) {});",
                   expectedVariableMap);
 
     expectedVariableMap = makeVariableMap("L 0", "a", "L 1", "b", "L 2", "c");
-    testRenameMapUsingOldMap("function (v0, v1, v2) {}; function (v3, v4) {};",
-                             "function (a, b, c) {}; function (a, b) {};",
+    testRenameMapUsingOldMap("(function (v0, v1, v2) {});" +
+                             "(function (v3, v4) {});",
+                             "(function (a, b, c) {});" +
+                             "(function (a, b) {});",
                              expectedVariableMap);
   }
 
@@ -282,9 +318,10 @@ public class RenameVarsTest extends CompilerTestCase {
 
     expectedVariableMap = makeVariableMap(
         "f1", "a", "L 0", "b", "L 1", "c", "L 2", "d", "L 3", "e", "L 4", "f");
-    testRenameMapUsingOldMap("function f1(v1, v2) { (function(v3, v4, v5) {}) }",
-                             "function a(b, c) { (function(d, e, f) {}) }",
-                             expectedVariableMap);
+    testRenameMapUsingOldMap(
+        "function f1(v1, v2) { (function(v3, v4, v5) {}) }",
+        "function a(b, c) { (function(d, e, f) {}) }",
+        expectedVariableMap);
   }
 
   public void testStableRenameWithExterns1() {
@@ -488,7 +525,7 @@ public class RenameVarsTest extends CompilerTestCase {
     generatePseudoNames = true;
     test("var foo = function(a, b, c){}",
          "var $foo$$ = function($a$$, $b$$, $c$$){}");
-    
+
     test("var a = function(a, b, c){}",
          "var $a$$ = function($a$$, $b$$, $c$$){}");
   }

@@ -115,6 +115,9 @@ public final class NodeUtil {
       case Token.NUMBER:
         return TernaryValue.forBoolean(n.getDouble() != 0);
 
+      case Token.NOT:
+        return getBooleanValue(n.getLastChild()).not();
+
       case Token.NULL:
       case Token.FALSE:
       case Token.VOID:
@@ -149,7 +152,7 @@ public final class NodeUtil {
    * <code>String()</code> JavaScript cast function.
    */
   static String getStringValue(Node n) {
-    // TODO(user): Convert constant array, object, and regex literals as well.
+    // TODO(user): regex literals as well.
     switch (n.getType()) {
       case Token.STRING:
         return n.getString();
@@ -181,8 +184,63 @@ public final class NodeUtil {
 
       case Token.VOID:
         return "undefined";
+
+      case Token.NOT:
+        TernaryValue child = getBooleanValue(n.getFirstChild());
+        if (child != TernaryValue.UNKNOWN) {
+          return child.toBoolean(true) ? "false" : "true"; // reversed.
+        }
+        break;
+
+      case Token.ARRAYLIT:
+        return arrayToString(n);
+
+      case Token.OBJECTLIT:
+        return "[object Object]";
     }
     return null;
+  }
+
+  /**
+   * When converting arrays to string using Array.prototype.toString or
+   * Array.prototype.join, the rules for conversion to String are different
+   * than converting each element individually.  Specifically, "null" and
+   * "undefined" are converted to an empty string.
+   * @param n A node that is a member of an Array.
+   * @return The string representation.
+   */
+  static String getArrayElementStringValue(Node n) {
+    return NodeUtil.isNullOrUndefined(n) ? "" : getStringValue(n);
+  }
+
+  static String arrayToString(Node literal) {
+    Node first = literal.getFirstChild();
+    int[] skipIndexes = (int[]) literal.getProp(Node.SKIP_INDEXES_PROP);
+    StringBuilder result = new StringBuilder();
+    int nextSlot = 0;
+    int nextSkipSlot = 0;
+    for (Node n = first; n != null; n = n.getNext()) {
+      while (skipIndexes != null && nextSkipSlot < skipIndexes.length) {
+        if (nextSlot == skipIndexes[nextSkipSlot]) {
+          result.append(',');
+          nextSlot++;
+          nextSkipSlot++;
+        } else {
+          break;
+        }
+      }
+      String childValue = getArrayElementStringValue(n);
+      if (childValue == null) {
+        return null;
+      }
+      if (n != first) {
+        result.append(',');
+      }
+      result.append(childValue);
+
+      nextSlot++;
+    }
+    return result.toString();
   }
 
   /**
@@ -230,48 +288,64 @@ public final class NodeUtil {
         }
         return null;
 
+      case Token.NOT:
+        TernaryValue child = getBooleanValue(n.getFirstChild());
+        if (child != TernaryValue.UNKNOWN) {
+          return child.toBoolean(true) ? 0.0 : 1.0; // reversed.
+        }
+        break;
+
       case Token.STRING:
-        String s = trimJsWhiteSpace(n.getString());
-        // return ScriptRuntime.toNumber(s);
-        if (s.length() == 0) {
-          return 0.0;
-        }
+        return getStringNumberValue(n.getString());
 
-        if (s.length() > 2
-            && s.charAt(0) == '0'
-            && (s.charAt(1) == 'x' || s.charAt(1) == 'X')) {
-          // Attempt to convert hex numbers.
-          try {
-            return Double.valueOf(Integer.parseInt(s.substring(2), 16));
-          } catch (NumberFormatException e) {
-            return Double.NaN;
-          }
-        }
-
-        if (s.length() > 3
-            && (s.charAt(0) == '-' || s.charAt(0) == '+')
-            && s.charAt(1) == '0'
-            && (s.charAt(2) == 'x' || s.charAt(2) == 'X')) {
-          // hex numbers with explicit signs vary between browsers.
-          return null;
-        }
-
-        // FireFox and IE treat the "Infinity" differently. FireFox is case
-        // insensitive, but IE treats "infinity" as NaN.  So leave it alone.
-        if (s.equals("infinity")
-            || s.equals("-infinity")
-            || s.equals("+infinity")) {
-          return null;
-        }
-
-        try {
-          return Double.parseDouble(s);
-        } catch (NumberFormatException e) {
-          return Double.NaN;
-        }
+      case Token.ARRAYLIT:
+      case Token.OBJECTLIT:
+        String value = getStringValue(n);
+        return value != null ? getStringNumberValue(value) : null;
     }
 
     return null;
+  }
+
+  static Double getStringNumberValue(String rawJsString) {
+    String s = trimJsWhiteSpace(rawJsString);
+    // return ScriptRuntime.toNumber(s);
+    if (s.length() == 0) {
+      return 0.0;
+    }
+
+    if (s.length() > 2
+        && s.charAt(0) == '0'
+        && (s.charAt(1) == 'x' || s.charAt(1) == 'X')) {
+      // Attempt to convert hex numbers.
+      try {
+        return Double.valueOf(Integer.parseInt(s.substring(2), 16));
+      } catch (NumberFormatException e) {
+        return Double.NaN;
+      }
+    }
+
+    if (s.length() > 3
+        && (s.charAt(0) == '-' || s.charAt(0) == '+')
+        && s.charAt(1) == '0'
+        && (s.charAt(2) == 'x' || s.charAt(2) == 'X')) {
+      // hex numbers with explicit signs vary between browsers.
+      return null;
+    }
+
+    // FireFox and IE treat the "Infinity" differently. FireFox is case
+    // insensitive, but IE treats "infinity" as NaN.  So leave it alone.
+    if (s.equals("infinity")
+        || s.equals("-infinity")
+        || s.equals("+infinity")) {
+      return null;
+    }
+
+    try {
+      return Double.parseDouble(s);
+    } catch (NumberFormatException e) {
+      return Double.NaN;
+    }
   }
 
   static String trimJsWhiteSpace(String s) {
@@ -390,6 +464,8 @@ public final class NodeUtil {
       case Token.TRUE:
       case Token.FALSE:
         return true;
+      case Token.NOT:
+        return isImmutableValue(n.getFirstChild());
       case Token.VOID:
       case Token.NEG:
         return isImmutableValue(n.getFirstChild());
@@ -1075,12 +1151,47 @@ public final class NodeUtil {
   }
 
   /**
+   * Apply the supplied predicate against the potential
+   * all possible result of the expression.
+   */
+  static boolean valueCheck(Node n, Predicate<Node> p) {
+    switch (n.getType()) {
+      case Token.ASSIGN:
+      case Token.COMMA:
+        return valueCheck(n.getLastChild(), p);
+      case Token.AND:
+      case Token.OR:
+        return valueCheck(n.getFirstChild(), p)
+            && valueCheck(n.getLastChild(), p);
+      case Token.HOOK:
+        return valueCheck(n.getFirstChild().getNext(), p)
+            && valueCheck(n.getLastChild(), p);
+      default:
+        return p.apply(n);
+    }
+  }
+
+  static class NumbericResultPredicate implements Predicate<Node> {
+    public boolean apply(Node n) {
+      return isNumericResultHelper(n);
+    }
+  }
+
+  static final NumbericResultPredicate NUMBERIC_RESULT_PREDICATE =
+      new NumbericResultPredicate();
+
+  /**
    * Returns true if the result of node evaluation is always a number
    */
   static boolean isNumericResult(Node n) {
+    return valueCheck(n, NUMBERIC_RESULT_PREDICATE);
+  }
+
+  static boolean isNumericResultHelper(Node n) {
     switch (n.getType()) {
-      // NOTE: ADD is deliberately excluded as it may produce
-      // a string.
+      case Token.ADD:
+        return !mayBeString(n.getFirstChild())
+            && !mayBeString(n.getLastChild());
       case Token.BITNOT:
       case Token.BITOR:
       case Token.BITXOR:
@@ -1112,12 +1223,23 @@ public final class NodeUtil {
     }
   }
 
+  static class BooleanResultPredicate implements Predicate<Node> {
+    public boolean apply(Node n) {
+      return isBooleanResultHelper(n);
+    }
+  }
+
+  static final BooleanResultPredicate BOOLEAN_RESULT_PREDICATE =
+      new BooleanResultPredicate();
+
   /**
    * @return Whether the result of node evaluation is always a boolean
    */
   static boolean isBooleanResult(Node n) {
-    // TODO(johnlenz): Add a recursive option to recurse into
-    // AND, OR, HOOK, COMMA and ASSIGN, like "getExpressionBooleanValue".
+    return valueCheck(n, BOOLEAN_RESULT_PREDICATE);
+  }
+
+  static boolean isBooleanResultHelper(Node n) {
     switch (n.getType()) {
       // Primitives
       case Token.TRUE:
@@ -1156,10 +1278,35 @@ public final class NodeUtil {
     return n.getType() == Token.NULL;
   }
 
+  static boolean isNullOrUndefined(Node n) {
+    return isNull(n) || isUndefined(n);
+  }
+
+  static class MayBeStringResultPredicate implements Predicate<Node> {
+    public boolean apply(Node n) {
+      return mayBeStringHelper(n);
+    }
+  }
+
+  static final MayBeStringResultPredicate MAY_BE_STRING_PREDICATE =
+      new MayBeStringResultPredicate();
+
   /**
    * @returns Whether the results is possibly a string.
    */
   static boolean mayBeString(Node n) {
+    return mayBeString(n, true);
+  }
+
+  static boolean mayBeString(Node n, boolean recurse) {
+    if (recurse) {
+      return valueCheck(n, MAY_BE_STRING_PREDICATE);
+    } else {
+      return mayBeStringHelper(n);
+    }
+  }
+
+  static boolean mayBeStringHelper(Node n) {
     return !isNumericResult(n) && !isBooleanResult(n)
         && !isUndefined(n) && !isNull(n);
   }
@@ -1687,6 +1834,23 @@ public final class NodeUtil {
    */
   static boolean isThis(Node node) {
     return node.getType() == Token.THIS;
+  }
+
+
+  /**
+   * Is this an ARRAYLIT node
+   */
+  static boolean isArrayLiteral(Node node) {
+    return node.getType() == Token.ARRAYLIT;
+  }
+
+  /**
+   * Is this an sparse ARRAYLIT node
+   */
+  static boolean isSparseArray(Node node) {
+    Preconditions.checkArgument(isArrayLiteral(node));
+    int[] skipList = (int[]) node.getProp(Node.SKIP_INDEXES_PROP);
+    return skipList != null && skipList.length > 0;
   }
 
   /**
@@ -2344,7 +2508,6 @@ public final class NodeUtil {
    *   "void 0"
    */
   static Node newUndefinedNode(Node srcReferenceNode) {
-    // TODO(johnlenz): Why this instead of the more common "undefined"?
     Node node = new Node(Token.VOID, Node.newNumber(0));
     if (srcReferenceNode != null) {
         node.copyInformationFromForTree(srcReferenceNode);
