@@ -24,7 +24,7 @@ import java.util.logging.Logger;
  */
 class AddScopeToGlobals implements CompilerPass {
   static final Logger logger =
-      Logger.getLogger(UncollapseAnonymousFunctions.class.getName());
+      Logger.getLogger(AddScopeToGlobals.class.getName());
 
   private final AbstractCompiler compiler;
   private final String scope;

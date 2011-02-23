@@ -23,18 +23,18 @@ public class AddScopeToGlobalsTest extends CompilerTestCase {
   }
 
   public void testLocalVar() {
-    testSame("function () { var a; }");
-    testSame("function () { var a, b = 5, c; }");
+    testSame("function x() { var a; }");
+    testSame("function x() { var a, b = 5, c; }");
   }
 
   public void testGlobalInFunc() {
-    test("var x = 5; function() { x = 6; }",
-         "$.x = 5; function() { x = 6; }");
+    test("var x = 5; var y = function() { x = 6; }",
+         "$.x = 5; $.y = function() { x = 6; }");
   }
 
   public void testGlobalAliasInFunc() {
-    test("var x = 5; function() { var x = 6; }",
-         "$.x = 5; function() { var x = 6; }");
+    test("var x = 5; var y = function() { var x = 6; }",
+         "$.x = 5; $.y = function() { var x = 6; }");
   }
 
   public void testGlobalNonVar() {
