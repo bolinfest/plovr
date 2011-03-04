@@ -12,14 +12,14 @@ public class AddScopeToGlobalsTest extends CompilerTestCase {
   }
 
   public void testGlobalVar() {
-    test("var x", "$.x = undefined");
-    test("var x, y", "$.x = undefined, $.y = undefined");
-    test("var x = 5, y", "$.x = 5, $.y = undefined");
-    test("var x, y = 5, z", "$.x = undefined, $.y = 5, $.z = undefined");
+    test("var x", "$.x = void 0");
+    test("var x, y", "$.x = void 0, $.y = void 0");
+    test("var x = 5, y", "$.x = 5, $.y = void 0");
+    test("var x, y = 5, z", "$.x = void 0, $.y = 5, $.z = void 0");
 
-    test("var x, y = z = 5", "$.x = undefined, $.y = $.z = 5");
-    test("var x, y = z = a", "$.x = undefined, $.y = $.z = a");
-    test("var x, y = z = a = b", "$.x = undefined, $.y = $.z = $.a = b");
+    test("var x, y = z = 5", "$.x = void 0, $.y = $.z = 5");
+    test("var x, y = z = a", "$.x = void 0, $.y = $.z = a");
+    test("var x, y = z = a = b", "$.x = void 0, $.y = $.z = $.a = b");
   }
 
   public void testLocalVar() {

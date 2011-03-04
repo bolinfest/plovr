@@ -102,8 +102,7 @@ class AddScopeToGlobals implements CompilerPass {
           updateNameWithProp(value, assign, name.getString());
         } else {
           // TODO: Can we do something clever here?
-          assign.addChildToBack(
-            Node.newString(Token.NAME, "undefined").copyInformationFrom(name));
+          assign.addChildToBack(NodeUtil.newUndefinedNode(name));
         }
         assign.copyInformationFrom(name);
 
