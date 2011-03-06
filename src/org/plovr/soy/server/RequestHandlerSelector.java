@@ -35,10 +35,12 @@ public class RequestHandlerSelector implements HttpHandler {
     builder.put(".css", "text/css");
     builder.put(".gif", "image/gif");
     builder.put(".html", "text/html");
+    builder.put(".jpeg", "image/jpeg");
+    builder.put(".jpg", "image/jpeg");
     builder.put(".js", "text/javascript");
     builder.put(".png", "image/png");
-    builder.put(".txt", "text/plain");
     builder.put(".sh", "text/plain");
+    builder.put(".txt", "text/plain");
     builder.put(".ttf", "font/ttf");
     extensionToContentType = builder.build();
 
