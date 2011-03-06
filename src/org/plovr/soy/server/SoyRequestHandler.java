@@ -10,10 +10,13 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.plovr.HttpUtil;
+import org.plovr.SoyFile;
 
 import com.google.common.base.Charsets;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Files;
+import com.google.inject.Injector;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.base.IntegerIdGenerator;
 import com.google.template.soy.base.SoySyntaxException;
@@ -36,6 +39,9 @@ import com.sun.net.httpserver.HttpHandler;
 public class SoyRequestHandler implements HttpHandler {
 
   private static final Logger logger = Logger.getLogger(SoyRequestHandler.class.getName());
+
+  private static final Injector injector = SoyFile.createInjector(
+      ImmutableList.of("org.plovr.soy.function.PlovrModule"));
 
   private final Config config;
 
@@ -131,7 +137,7 @@ public class SoyRequestHandler implements HttpHandler {
   }
 
   private static SoyTofu getSoyTofu(Config config) {
-    SoyFileSet.Builder builder = new SoyFileSet.Builder();
+    SoyFileSet.Builder builder = injector.getInstance(SoyFileSet.Builder.class);
     builder.setCompileTimeGlobals(config.getCompileTimeGlobals());
     // Add all of the .soy files under config.getContentDirectory().
     addToBuilder(config.getContentDirectory(), builder);

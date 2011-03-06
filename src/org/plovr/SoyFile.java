@@ -82,7 +82,7 @@ public class SoyFile extends LocalFileJsInput {
     }
   }
 
-  private static Injector createInjector(List<String> pluginModuleNames) {
+  public static Injector createInjector(List<String> pluginModuleNames) {
     List<Module> guiceModules = Lists.newArrayList();
     guiceModules.add(new SoyModule());
 
