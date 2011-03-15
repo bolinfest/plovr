@@ -75,12 +75,24 @@ public class AliasStringsTest extends CompilerTestCase {
 
     test("function f() {" +
          "var styles=['width',100,'px','display','none'].join('')}",
-         "var $$S_width='width';" +
-         "var $$S_px='px';" +
-         "var $$S_none='none';" +
          "var $$S_='';" +
+         "var $$S_none='none';" +
+         "var $$S_px='px';" +
+         "var $$S_width='width';" +
          "function f() {var styles=[$$S_width,100,$$S_px,'display'," +
          "$$S_none].join($$S_)}");
+  }
+
+  public void testSortedOutput() {
+    strings = ImmutableSet.of("aba", "aaa", "aca", "bca", "bba");
+    test("function f() {return ['aba', 'aaa', 'aca', 'bca', 'bba']}",
+         "var $$S_aaa='aaa';" +
+         "var $$S_aba='aba';" +
+         "var $$S_aca='aca';" +
+         "var $$S_bba='bba';" +
+         "var $$S_bca='bca';" +
+         "function f() {" +
+         "  return [$$S_aba, $$S_aaa, $$S_aca, $$S_bca, $$S_bba]}");
   }
 
   public void testObjectLiterals() {
@@ -89,9 +101,9 @@ public class AliasStringsTest extends CompilerTestCase {
     test("var foo={px:435}", "var foo={px:435}");
 
     // string as key
-    test("var foo={'px':435}", "var foo={px:435}");
+    test("var foo={'px':435}", "var foo={'px':435}");
     test("bar=function f(){return {'px':435}}",
-         "bar=function f(){return {px:435}}");
+         "bar=function f(){return {'px':435}}");
 
     test("function f() {var foo={bar:'!@#$%^&*()'}}",
          "var $$S_$21$40$23$24$25$5e$26$2a$28$29='!@#$%^&*()';" +

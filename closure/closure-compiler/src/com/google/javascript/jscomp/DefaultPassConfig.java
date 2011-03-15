@@ -24,6 +24,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.io.Files;
 import com.google.javascript.jscomp.AbstractCompiler.LifeCycleStage;
+import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.jscomp.NodeTraversal.Callback;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -238,13 +239,6 @@ public class DefaultPassConfig extends PassConfig {
       checks.add(objectPropertyStringPreprocess);
     }
 
-    // DiagnosticGroups override the plain checkTypes option.
-    if (options.enables(DiagnosticGroups.CHECK_TYPES)) {
-      options.checkTypes = true;
-    } else if (options.disables(DiagnosticGroups.CHECK_TYPES)) {
-      options.checkTypes = false;
-    }
-
     if (options.checkTypes) {
       checks.add(resolveTypes.makeOneTimePass());
       checks.add(inferTypes.makeOneTimePass());
@@ -257,8 +251,9 @@ public class DefaultPassConfig extends PassConfig {
     }
 
     // CheckAccessControls only works if check types is on.
-    if (options.enables(DiagnosticGroups.ACCESS_CONTROLS)
-        && options.checkTypes) {
+    if (options.checkTypes &&
+        (options.enables(DiagnosticGroups.ACCESS_CONTROLS)
+         || options.enables(DiagnosticGroups.CONSTANT_PROPERTY))) {
       checks.add(checkAccessControls);
     }
 
@@ -271,7 +266,9 @@ public class DefaultPassConfig extends PassConfig {
       checks.add(checkSuspiciousProperties);
     }
 
-    if (options.checkCaja || options.checkEs5Strict) {
+    if (options.getLanguageIn() == LanguageMode.ECMASCRIPT5_STRICT
+        || options.checkCaja
+        || options.checkEs5Strict) {
       checks.add(checkStrictMode);
     }
 
@@ -483,8 +480,6 @@ public class DefaultPassConfig extends PassConfig {
           CustomPassExecutionTime.AFTER_OPTIMIZATION_LOOP));
     }
 
-// TODO(user): Fix Checkpath between nodes.
-/*
     if (options.flowSensitiveInlineVariables) {
       passes.add(flowSensitiveInlineVariables);
 
@@ -494,7 +489,12 @@ public class DefaultPassConfig extends PassConfig {
         passes.add(removeUnusedVars);
       }
     }
-*/
+
+    // Running this pass again is required to have goog.events compile down to
+    // nothing when compiled on its own.
+    if (options.smartNameRemoval) {
+      passes.add(smartNamePass2);
+    }
 
     if (options.collapseAnonymousFunctions) {
       passes.add(collapseAnonymousFunctions);
@@ -627,6 +627,10 @@ public class DefaultPassConfig extends PassConfig {
 
     if (options.labelRenaming) {
       passes.add(renameLabels);
+    }
+
+    if (options.foldConstants) {
+      passes.add(latePeepholeOptimizations);
     }
 
     if (options.anonymousFunctionNaming ==
@@ -928,8 +932,21 @@ public class DefaultPassConfig extends PassConfig {
     @Override
     protected CompilerPass createInternal(AbstractCompiler compiler) {
       return new PeepholeOptimizationsPass(compiler,
-            new PeepholeSubstituteAlternateSyntax(),
+            new PeepholeSubstituteAlternateSyntax(true),
             new PeepholeRemoveDeadCode(),
+            new PeepholeFoldConstants());
+    }
+  };
+
+  /** Same as peepholeOptimizations but aggreesively merges code together */
+  private final PassFactory latePeepholeOptimizations =
+      new PassFactory("peepholeOptimizations", false) {
+    @Override
+    protected CompilerPass createInternal(AbstractCompiler compiler) {
+      return new PeepholeOptimizationsPass(compiler,
+            new StatementFusion(),
+            new PeepholeRemoveDeadCode(),
+            new PeepholeSubstituteAlternateSyntax(false),
             new PeepholeFoldConstants());
     }
   };
@@ -1048,13 +1065,10 @@ public class DefaultPassConfig extends PassConfig {
         callbacks.add(
             new CheckUnreachableCode(compiler, options.checkUnreachableCode));
       }
-// TODO(user): Fix Checkpath between nodes.
-/*
       if (options.checkMissingReturn.isOn() && options.checkTypes) {
         callbacks.add(
             new CheckMissingReturn(compiler, options.checkMissingReturn));
       }
-*/
       return combineChecks(compiler, callbacks);
     }
   };
@@ -1484,6 +1498,24 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
+  /**
+   * Process smart name processing - removes unused classes and does referencing
+   * starting with minimum set of names.
+   */
+  private final PassFactory smartNamePass2 =
+      new PassFactory("smartNamePass", true) {
+    @Override
+    protected CompilerPass createInternal(final AbstractCompiler compiler) {
+      return new CompilerPass() {
+        @Override
+        public void process(Node externs, Node root) {
+          NameAnalyzer na = new NameAnalyzer(compiler, false);
+          na.process(externs, root);
+          na.removeUnreferenced();
+        }
+      };
+    }
+  };
 
   /** Inlines simple methods, like getters */
   private PassFactory inlineSimpleMethods =
@@ -1862,6 +1894,7 @@ public class DefaultPassConfig extends PassConfig {
         options.variableRenaming == VariableRenamingPolicy.LOCAL,
         preserveAnonymousFunctionNames,
         options.generatePseudoNames,
+        options.shadowVariables,
         prevVariableMap,
         reservedChars,
         exportedNames);

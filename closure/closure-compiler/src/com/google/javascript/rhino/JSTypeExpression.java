@@ -1,4 +1,4 @@
-/* 
+/*
  *
  * ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0
@@ -36,7 +36,7 @@
  * file under either the MPL or the GPL.
  *
  * ***** END LICENSE BLOCK ***** */
- 
+
 package com.google.javascript.rhino;
 
 import com.google.javascript.rhino.jstype.JSType;
@@ -97,14 +97,13 @@ public final class JSTypeExpression implements Serializable {
    * Evaluates the type expression into a {@code JSType} object.
    */
   public JSType evaluate(StaticScope<JSType> scope, JSTypeRegistry registry) {
-    return registry.createFromTypeNodes(root, sourceName, scope,
-        root.getBooleanProp(Node.BRACELESS_TYPE));
+    return registry.createFromTypeNodes(root, sourceName, scope);
   }
 
   @Override
   public boolean equals(Object other) {
     return other instanceof JSTypeExpression &&
-        ((JSTypeExpression) other).root.checkTreeEqualsSilent(root);
+        ((JSTypeExpression) other).root.isEquivalentTo(root);
   }
 
   @Override

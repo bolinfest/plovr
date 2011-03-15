@@ -26,6 +26,7 @@ import static com.google.javascript.rhino.jstype.JSTypeNative.DATE_FUNCTION_TYPE
 import static com.google.javascript.rhino.jstype.JSTypeNative.ERROR_FUNCTION_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.EVAL_ERROR_FUNCTION_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.FUNCTION_FUNCTION_TYPE;
+import static com.google.javascript.rhino.jstype.JSTypeNative.GLOBAL_THIS;
 import static com.google.javascript.rhino.jstype.JSTypeNative.NO_OBJECT_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.NO_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.NULL_TYPE;
@@ -419,8 +420,24 @@ final class TypedScopeCreator implements ScopeCreator {
 
       // We do want to traverse the name of a named function, but we don't
       // want to traverse the arguments or body.
-      return parent == null || parent.getType() != Token.FUNCTION ||
+      boolean descend = parent == null || parent.getType() != Token.FUNCTION ||
           n == parent.getFirstChild() || parent == scope.getRootNode();
+
+      if (descend) {
+        // Handle hoisted functions on pre-order traversal, so that they
+        // get hit before other things in the scope.
+        if (NodeUtil.isStatementParent(n)) {
+          for (Node child = n.getFirstChild();
+               child != null;
+               child = child.getNext()) {
+            if (NodeUtil.isHoistedFunctionDeclaration(child)) {
+              defineFunctionLiteral(child, n);
+            }
+          }
+        }
+      }
+
+      return descend;
     }
 
     @Override
@@ -437,7 +454,10 @@ final class TypedScopeCreator implements ScopeCreator {
             nonExternFunctions.add(n);
           }
 
-          defineFunctionLiteral(n, parent);
+          // Hoisted functions are handled during pre-traversal.
+          if (!NodeUtil.isHoistedFunctionDeclaration(n)) {
+            defineFunctionLiteral(n, parent);
+          }
           break;
 
         case Token.ASSIGN:
@@ -544,8 +564,10 @@ final class TypedScopeCreator implements ScopeCreator {
       info = getBestJSDocInfo(objectLit);
       Node lValue = getBestLValue(objectLit);
       String lValueName = getBestLValueName(lValue);
+      boolean createdEnumType = false;
       if (info != null && info.hasEnumParameterType()) {
         type = createEnumTypeFromNodes(objectLit, lValueName, info, lValue);
+        createdEnumType = true;
       }
 
       if (type == null) {
@@ -554,8 +576,11 @@ final class TypedScopeCreator implements ScopeCreator {
 
       setDeferredType(objectLit, type);
 
-      processObjectLitProperties(
-          t, objectLit, ObjectType.cast(objectLit.getJSType()));
+      // If this is an enum, the properties were already taken care of above.
+      if (!createdEnumType) {
+        processObjectLitProperties(
+            t, objectLit, ObjectType.cast(objectLit.getJSType()));
+      }
     }
 
     /**
@@ -571,8 +596,8 @@ final class TypedScopeCreator implements ScopeCreator {
         Node value = keyNode.getFirstChild();
         String memberName = NodeUtil.getObjectLitKeyName(keyNode);
         JSDocInfo info = keyNode.getJSDocInfo();
-        JSType valueType = getDeclaredPropType(
-            t, info, keyNode, value);
+        JSType valueType = getDeclaredType(
+            t.getSourceName(), info, keyNode, value);
         JSType keyType = NodeUtil.getObjectLitKeyTypeFromValueType(
             keyNode, valueType);
         if (keyType != null) {
@@ -601,11 +626,6 @@ final class TypedScopeCreator implements ScopeCreator {
      * Extracts type information from either the {@code @type} tag or from
      * the {@code @return} and {@code @param} tags.
      */
-    private JSType getDeclaredTypeInAnnotation(
-        NodeTraversal t, Node node, JSDocInfo info) {
-      return getDeclaredTypeInAnnotation(t.getSourceName(), node, info);
-    }
-
     private JSType getDeclaredTypeInAnnotation(String sourceName,
         Node node, JSDocInfo info) {
       JSType jsType = null;
@@ -702,38 +722,14 @@ final class TypedScopeCreator implements ScopeCreator {
       Node value = name.getFirstChild();
 
       // variable's type
-      JSType type = null;
-
-      if (value != null && value.getType() == Token.FUNCTION &&
-          shouldUseFunctionLiteralType(
-              (FunctionType) value.getJSType(), info, name)) {
-        type = value.getJSType();
-      }
-
+      JSType type = getDeclaredType(sourceName, info, name, value);
       if (type == null) {
-        if (info == null) {
-          // the variable's type will be inferred
-          CompilerInput input = compiler.getInput(sourceName);
-          Preconditions.checkNotNull(input, sourceName);
-          type = input.isExtern() ?
-              getNativeType(UNKNOWN_TYPE) : null;
-        } else if (info.hasEnumParameterType()) {
-          if (value != null && value.getType() == Token.OBJECTLIT) {
-            // If this is an object literal, than an enum type
-            // has already been created for it.
-            type = value.getJSType();
-          } else {
-            type = createEnumTypeFromNodes(
-                value, name.getString(), info, name);
-          }
-        } else if (info.isConstructor()) {
-          type = createFunctionTypeFromNodes(
-              value, name.getString(), info, name);
-        } else {
-          type = getDeclaredTypeInAnnotation(sourceName, name, info);
-        }
+        // The variable's type will be inferred.
+        CompilerInput input = compiler.getInput(sourceName);
+        Preconditions.checkNotNull(input, sourceName);
+        type = input.isExtern() ?
+            getNativeType(UNKNOWN_TYPE) : null;
       }
-
       defineSlot(name, var, type);
     }
 
@@ -1019,7 +1015,7 @@ final class TypedScopeCreator implements ScopeCreator {
      *
      * @param n the defining NAME or GETPROP or object literal key node.
      * @param parent the {@code n}'s parent.
-     * @param name The name that this should be known by.
+     * @param variableName The name that this should be known by.
      * @param type the variable's type. It may be {@code null} if
      *     {@code inferred} is {@code true}.
      * @param inferred Whether the type is inferred or declared.
@@ -1028,8 +1024,9 @@ final class TypedScopeCreator implements ScopeCreator {
         JSType type, boolean inferred) {
       Preconditions.checkArgument(!variableName.isEmpty());
 
+      boolean isGlobalVar = n.getType() == Token.NAME && scope.isGlobal();
       boolean shouldDeclareOnGlobalThis =
-          n.getType() == Token.NAME && scope.isGlobal() &&
+          isGlobalVar &&
           (parent.getType() == Token.VAR ||
            parent.getType() == Token.FUNCTION);
 
@@ -1064,7 +1061,7 @@ final class TypedScopeCreator implements ScopeCreator {
 
         if (shouldDeclareOnGlobalThis) {
           ObjectType globalThis =
-              typeRegistry.getNativeObjectType(JSTypeNative.GLOBAL_THIS);
+              typeRegistry.getNativeObjectType(GLOBAL_THIS);
           if (inferred) {
             globalThis.defineInferredProperty(variableName,
                 type == null ?
@@ -1123,6 +1120,17 @@ final class TypedScopeCreator implements ScopeCreator {
           }
         }
       }
+
+      if (isGlobalVar && "Window".equals(variableName)
+          && type instanceof FunctionType
+          && type.isConstructor()) {
+        FunctionType globalThisCtor =
+            typeRegistry.getNativeObjectType(GLOBAL_THIS).getConstructor();
+        globalThisCtor.getInstanceType().clearCachedValues();
+        globalThisCtor.getPrototype().clearCachedValues();
+        globalThisCtor
+            .setPrototypeBasedOn(((FunctionType) type).getInstanceType());
+      }
     }
 
     /**
@@ -1148,28 +1156,54 @@ final class TypedScopeCreator implements ScopeCreator {
      * @param rValue The node that {@code n} is being initialized to,
      *     or {@code null} if this is a stub declaration.
      */
-    private JSType getDeclaredPropType(NodeTraversal t, JSDocInfo info,
+    private JSType getDeclaredType(String sourceName, JSDocInfo info,
         Node lValue, @Nullable Node rValue) {
       if (info != null && info.hasType()) {
-        return getDeclaredTypeInAnnotation(t, lValue, info);
+        return getDeclaredTypeInAnnotation(sourceName, lValue, info);
       } else if (rValue != null && rValue.getType() == Token.FUNCTION &&
           shouldUseFunctionLiteralType(
               (FunctionType) rValue.getJSType(), info, lValue)) {
         return rValue.getJSType();
-      } else if (info != null && info.hasEnumParameterType()) {
-        if (rValue != null && rValue.getType() == Token.OBJECTLIT) {
-          return rValue.getJSType();
-        } else {
-          return createEnumTypeFromNodes(
+      } else if (info != null) {
+        if (info.hasEnumParameterType()) {
+          if (rValue != null && rValue.getType() == Token.OBJECTLIT) {
+            return rValue.getJSType();
+          } else {
+            return createEnumTypeFromNodes(
+                rValue, lValue.getQualifiedName(), info, lValue);
+          }
+        } else if (info.isConstructor() || info.isInterface()) {
+          return createFunctionTypeFromNodes(
               rValue, lValue.getQualifiedName(), info, lValue);
+        } else {
+          // Check if this is constant, and if it has a known type.
+          if (info.isConstant()) {
+            JSType knownType = null;
+            if (rValue != null) {
+              if (rValue.getJSType() != null
+                  && !rValue.getJSType().isUnknownType()) {
+                return rValue.getJSType();
+              } else if (rValue.getType() == Token.OR) {
+                // Check for a very specific JS idiom:
+                // var x = x || TYPE;
+                // This is used by Closure's base namespace for esoteric
+                // reasons.
+                Node firstClause = rValue.getFirstChild();
+                Node secondClause = firstClause.getNext();
+                boolean namesMatch = firstClause.getType() == Token.NAME
+                    && lValue.getType() == Token.NAME
+                    && firstClause.getString().equals(lValue.getString());
+                if (namesMatch && secondClause.getJSType() != null
+                    && !secondClause.getJSType().isUnknownType()) {
+                  return secondClause.getJSType();
+                }
+              }
+            }
+          }
         }
-      } else if (info != null &&
-                 (info.isConstructor() || info.isInterface())) {
-        return createFunctionTypeFromNodes(
-            rValue, lValue.getQualifiedName(), info, lValue);
-      } else {
-        return getDeclaredTypeInAnnotation(t, lValue, info);
       }
+
+      return getDeclaredTypeInAnnotation(sourceName, lValue, info);
     }
 
     /**
@@ -1319,18 +1353,19 @@ final class TypedScopeCreator implements ScopeCreator {
       // 1) @type annnotation / @enum annotation
       // 2) ASSIGN to FUNCTION literal
       // 3) @param/@return annotation (with no function literal)
-      // 4) ASSIGN to anything else
+      // 4) ASSIGN to something marked @const
+      // 5) ASSIGN to anything else
       //
-      // 1 and 3 are declarations, 4 is inferred, and 2 is a declaration iff
+      // 1, 3, and 4 are declarations, 5 is inferred, and 2 is a declaration iff
       // the function has not been declared before.
       //
       // FUNCTION literals are special because TypedScopeCreator is very smart
       // about getting as much type information as possible for them.
 
-      // Determining type for #1 + #2 + #3
-      JSType valueType = getDeclaredPropType(t, info, n, rhsValue);
+      // Determining type for #1 + #2 + #3 + #4
+      JSType valueType = getDeclaredType(t.getSourceName(), info, n, rhsValue);
       if (valueType == null && rhsValue != null) {
-        // Determining type for #4
+        // Determining type for #5
         valueType = rhsValue.getJSType();
       }
 
@@ -1347,9 +1382,12 @@ final class TypedScopeCreator implements ScopeCreator {
 
       boolean inferred = true;
       if (info != null) {
-        // Determining declaration for #1 + #3
-        inferred = !(info.hasType() || info.hasEnumParameterType() ||
-            FunctionTypeBuilder.isFunctionTypeDeclaration(info));
+        // Determining declaration for #1 + #3 + #4
+        inferred = !(info.hasType()
+            || info.hasEnumParameterType()
+            || (info.isConstant() && valueType != null
+                && !valueType.isUnknownType())
+            || FunctionTypeBuilder.isFunctionTypeDeclaration(info));
       }
 
       if (inferred) {
@@ -1487,7 +1525,7 @@ final class TypedScopeCreator implements ScopeCreator {
         }
 
         member.getFirstChild().setJSType(thisType);
-        JSType jsType = getDeclaredPropType(t, info, member, value);
+        JSType jsType = getDeclaredType(t.getSourceName(), info, member, value);
         Node name = member.getLastChild();
         if (jsType != null &&
             (name.getType() == Token.NAME || name.getType() == Token.STRING)) {

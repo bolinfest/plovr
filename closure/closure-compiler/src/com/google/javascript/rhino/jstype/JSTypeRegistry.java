@@ -324,7 +324,8 @@ public class JSTypeRegistry implements Serializable {
             null, null, true, true);
     ObjectType booleanPrototype = BOOLEAN_OBJECT_FUNCTION_TYPE.getPrototype();
     registerNativeType(
-        JSTypeNative.BOOLEAN_OBJECT_FUNCTION_TYPE, BOOLEAN_OBJECT_FUNCTION_TYPE);
+        JSTypeNative.BOOLEAN_OBJECT_FUNCTION_TYPE,
+        BOOLEAN_OBJECT_FUNCTION_TYPE);
 
     ObjectType BOOLEAN_OBJECT_TYPE =
         BOOLEAN_OBJECT_FUNCTION_TYPE.getInstanceType();
@@ -376,7 +377,8 @@ public class JSTypeRegistry implements Serializable {
         new ErrorFunctionType(this, "ReferenceError");
     REFERENCE_ERROR_FUNCTION_TYPE.setPrototypeBasedOn(ERROR_TYPE);
     registerNativeType(
-        JSTypeNative.REFERENCE_ERROR_FUNCTION_TYPE, REFERENCE_ERROR_FUNCTION_TYPE);
+        JSTypeNative.REFERENCE_ERROR_FUNCTION_TYPE,
+        REFERENCE_ERROR_FUNCTION_TYPE);
 
     ObjectType REFERENCE_ERROR_TYPE =
         REFERENCE_ERROR_FUNCTION_TYPE.getInstanceType();
@@ -528,8 +530,11 @@ public class JSTypeRegistry implements Serializable {
     registerNativeType(JSTypeNative.LEAST_FUNCTION_TYPE, LEAST_FUNCTION_TYPE);
 
     // the 'this' object in the global scope
-    ObjectType GLOBAL_THIS = createObjectType("global this", null,
-        UNKNOWN_TYPE /* to be resolved later */);
+    FunctionType GLOBAL_THIS_CTOR =
+        new FunctionType(this, "global this", null,
+            createArrowType(createParameters(false, ALL_TYPE), NUMBER_TYPE),
+            null, null, true, true);
+    ObjectType GLOBAL_THIS = GLOBAL_THIS_CTOR.getInstanceType();
     registerNativeType(JSTypeNative.GLOBAL_THIS, GLOBAL_THIS);
 
     // greatest function type, i.e. (NoType...) -> All
@@ -822,18 +827,6 @@ public class JSTypeRegistry implements Serializable {
   }
 
   /**
-   * Try to resolve a type name, but forgive the user and don't emit
-   * a warning if this doesn't resolve.
-   */
-  public JSType getForgivingType(StaticScope<JSType> scope, String jsTypeName,
-      String sourceName, int lineno, int charno) {
-    JSType type = getType(
-        scope, jsTypeName, sourceName, lineno, charno);
-    type.forgiveUnknownNames();
-    return type;
-  }
-
-  /**
    * Looks up a type by name. To allow for forward references to types, an
    * unrecognized string has to be bound to a NamedType object that will be
    * resolved later.
@@ -860,8 +853,9 @@ public class JSTypeRegistry implements Serializable {
   }
 
   /**
-   * Flushes out the current resolved and unresovled Named Types from the type registry.
-   * This is intended to be used ONLY before a compile is run.
+   * Flushes out the current resolved and unresovled Named Types from
+   * the type registry.  This is intended to be used ONLY before a
+   * compile is run.
    */
   public void clearNamedTypes() {
     resolvedNamedTypes.clear();
@@ -1341,28 +1335,15 @@ public class JSTypeRegistry implements Serializable {
    */
   public JSType createFromTypeNodes(Node n, String sourceName,
       StaticScope<JSType> scope) {
-    return createFromTypeNodes(n, sourceName, scope, false);
-  }
-
-  /**
-   * Creates a JSType from the nodes representing a type.
-   * @param n The node with type info.
-   * @param sourceName The source file name.
-   * @param scope A scope for doing type name lookups.
-   * @param forgiving Whether we should be forgiving about type names
-   *     that we can't find.
-   */
-  public JSType createFromTypeNodes(Node n, String sourceName,
-      StaticScope<JSType> scope, boolean forgiving) {
     if (resolveMode == ResolveMode.LAZY_EXPRESSIONS) {
       // If the type expression doesn't contain any names, just
       // resolve it anyway.
       boolean hasNames = hasTypeName(n);
       if (hasNames) {
-        return new UnresolvedTypeExpression(this, n, sourceName, forgiving);
+        return new UnresolvedTypeExpression(this, n, sourceName);
       }
     }
-    return createFromTypeNodesInternal(n, sourceName, scope, forgiving);
+    return createFromTypeNodesInternal(n, sourceName, scope);
   }
 
   private boolean hasTypeName(Node n) {
@@ -1382,7 +1363,7 @@ public class JSTypeRegistry implements Serializable {
 
   /** @see #createFromTypeNodes(Node, String, StaticScope, boolean) */
   private JSType createFromTypeNodesInternal(Node n, String sourceName,
-      StaticScope<JSType> scope, boolean forgiving) {
+      StaticScope<JSType> scope) {
     switch (n.getType()) {
       case Token.LC: // Record type.
         return createRecordTypeFromNodes(
@@ -1390,7 +1371,7 @@ public class JSTypeRegistry implements Serializable {
 
       case Token.BANG: // Not nullable
         return createFromTypeNodesInternal(
-            n.getFirstChild(), sourceName, scope, forgiving)
+            n.getFirstChild(), sourceName, scope)
             .restrictByNotNullOrUndefined();
 
       case Token.QMARK: // Nullable or unknown
@@ -1400,17 +1381,17 @@ public class JSTypeRegistry implements Serializable {
         }
         return createDefaultObjectUnion(
             createFromTypeNodesInternal(
-                firstChild, sourceName, scope, forgiving));
+                firstChild, sourceName, scope));
 
       case Token.EQUALS: // Optional
         return createOptionalType(
             createFromTypeNodesInternal(
-                n.getFirstChild(), sourceName, scope, false));
+                n.getFirstChild(), sourceName, scope));
 
       case Token.ELLIPSIS: // Var args
         return createOptionalType(
             createFromTypeNodesInternal(
-                n.getFirstChild(), sourceName, scope, false));
+                n.getFirstChild(), sourceName, scope));
 
       case Token.STAR: // The AllType
         return getNativeType(ALL_TYPE);
@@ -1424,7 +1405,7 @@ public class JSTypeRegistry implements Serializable {
         for (Node child = n.getFirstChild(); child != null;
              child = child.getNext()) {
           builder.addAlternate(
-              createFromTypeNodesInternal(child, sourceName, scope, false));
+              createFromTypeNodesInternal(child, sourceName, scope));
         }
         return builder.build();
 
@@ -1437,9 +1418,6 @@ public class JSTypeRegistry implements Serializable {
       case Token.STRING:
         JSType namedType = getType(scope, n.getString(), sourceName,
             n.getLineno(), n.getCharno());
-        if (forgiving) {
-          namedType.forgiveUnknownNames();
-        }
         if (resolveMode != ResolveMode.LAZY_NAMES) {
           namedType = namedType.resolveInternal(reporter, scope);
         }
@@ -1451,13 +1429,13 @@ public class JSTypeRegistry implements Serializable {
                "Object".equals(n.getString()))) {
             JSType parameterType =
                 createFromTypeNodesInternal(
-                    typeList.getLastChild(), sourceName, scope, false);
+                    typeList.getLastChild(), sourceName, scope);
             namedType = new ParameterizedType(
                 this, (ObjectType) namedType, parameterType);
             if (typeList.hasMoreThanOneChild()) {
               JSType indexType =
                   createFromTypeNodesInternal(
-                      typeList.getFirstChild(), sourceName, scope, false);
+                      typeList.getFirstChild(), sourceName, scope);
               namedType = new IndexedType(
                   this, (ObjectType) namedType, indexType);
             }
@@ -1477,7 +1455,7 @@ public class JSTypeRegistry implements Serializable {
           thisType =
               ObjectType.cast(
                   createFromTypeNodesInternal(
-                      contextNode, sourceName, scope, false)
+                      contextNode, sourceName, scope)
                   .restrictByNotNullOrUndefined());
           if (thisType == null) {
             reporter.warning(
@@ -1505,11 +1483,11 @@ public class JSTypeRegistry implements Serializable {
               } else {
                 paramBuilder.addVarArgs(
                     createFromTypeNodesInternal(
-                        arg.getFirstChild(), sourceName, scope, false));
+                        arg.getFirstChild(), sourceName, scope));
               }
             } else {
               JSType type = createFromTypeNodesInternal(
-                  arg, sourceName, scope, false);
+                  arg, sourceName, scope);
               if (arg.getType() == Token.EQUALS) {
                 boolean addSuccess = paramBuilder.addOptionalParams(type);
                 if (!addSuccess) {
@@ -1526,7 +1504,7 @@ public class JSTypeRegistry implements Serializable {
         }
 
         JSType returnType =
-            createFromTypeNodesInternal(current, sourceName, scope, false);
+            createFromTypeNodesInternal(current, sourceName, scope);
 
         return new FunctionBuilder(this)
             .withParams(paramBuilder)
@@ -1580,7 +1558,7 @@ public class JSTypeRegistry implements Serializable {
       if (hasType) {
         // We have a declared type.
         fieldType = createFromTypeNodesInternal(
-            fieldTypeNode.getLastChild(), sourceName, scope, false);
+            fieldTypeNode.getLastChild(), sourceName, scope);
       } else {
         // Otherwise, the type is UNKNOWN.
         fieldType = getNativeType(JSTypeNative.UNKNOWN_TYPE);

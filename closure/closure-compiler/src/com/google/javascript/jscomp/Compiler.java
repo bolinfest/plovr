@@ -21,7 +21,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.CompilerOptions.DevMode;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.jscomp.CompilerOptions.TracerMode;
@@ -253,6 +252,22 @@ public class Compiler extends AbstractCompiler {
             DiagnosticGroups.CHECK_VARIABLES))) {
       guards.add(new DiagnosticGroupWarningsGuard(
           DiagnosticGroups.CHECK_VARIABLES, CheckLevel.OFF));
+    }
+
+    // DiagnosticGroups override the plain checkTypes option.
+    if (options.enables(DiagnosticGroups.CHECK_TYPES)) {
+      options.checkTypes = true;
+    } else if (options.disables(DiagnosticGroups.CHECK_TYPES)) {
+      options.checkTypes = false;
+    } else if (!options.checkTypes) {
+      // If DiagnosticGroups did not override the plain checkTypes
+      // option, and checkTypes is enabled, then turn off the
+      // parser type warnings.
+      guards.add(
+          new DiagnosticGroupWarningsGuard(
+              DiagnosticGroup.forType(
+                  RhinoErrorReporter.TYPE_PARSE_ERROR),
+              CheckLevel.OFF));
     }
     this.warningsGuard = new ComposeWarningsGuard(guards);
   }
@@ -915,9 +930,9 @@ public class Compiler extends AbstractCompiler {
         options.disambiguateProperties) {
       // The type based optimizations require that type information is preserved
       // during other optimizations.
-      return n1.checkTreeTypeAwareEqualsSilent(n2);
+      return n1.isEquivalentToTyped(n2);
     } else {
-      return n1.checkTreeEqualsSilent(n2);
+      return n1.isEquivalentTo(n2);
     }
   }
 
@@ -1428,6 +1443,8 @@ public class Compiler extends AbstractCompiler {
     builder.setLineBreak(options.lineBreak);
     builder.setSourceMap(sourceMap);
     builder.setSourceMapDetailLevel(options.sourceMapDetailLevel);
+    builder.setTagAsStrict(
+        options.getLanguageOut() == LanguageMode.ECMASCRIPT5_STRICT);
 
     Charset charset = options.outputCharset != null ?
         Charset.forName(options.outputCharset) : null;
@@ -1628,7 +1645,11 @@ public class Compiler extends AbstractCompiler {
 
   @Override
   public boolean acceptEcmaScript5() {
-    return options.languageIn == LanguageMode.ECMASCRIPT5;
+    return options.getLanguageIn() == LanguageMode.ECMASCRIPT5;
+  }
+
+  public LanguageMode languageMode() {
+    return options.getLanguageIn();
   }
 
   @Override
@@ -1639,8 +1660,25 @@ public class Compiler extends AbstractCompiler {
   @Override
   Config getParserConfig() {
     if (parserConfig == null) {
+      Config.LanguageMode mode;
+      switch (options.getLanguageIn()) {
+        case ECMASCRIPT3:
+          mode = Config.LanguageMode.ECMASCRIPT3;
+          break;
+        case ECMASCRIPT5:
+          mode = Config.LanguageMode.ECMASCRIPT5;
+          break;
+        case ECMASCRIPT5_STRICT:
+          mode = Config.LanguageMode.ECMASCRIPT5_STRICT;
+          break;
+        default:
+          throw new IllegalStateException("unexpected language mode");
+      }
+
       parserConfig = ParserRunner.createConfig(
-        isIdeMode(), acceptEcmaScript5(), acceptConstKeyword());
+        isIdeMode(),
+        mode,
+        acceptConstKeyword());
     }
     return parserConfig;
   }

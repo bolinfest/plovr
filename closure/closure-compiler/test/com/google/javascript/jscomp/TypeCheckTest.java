@@ -372,8 +372,8 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testOptionalArgFunctionParamError() throws Exception {
-    String expectedWarning = "Parse error. variable length argument must be " +
-        "last";
+    String expectedWarning =
+        "Bad type annotation. variable length argument must be last";
     testTypes("/** @param {function(...[number], number=)} a */" +
               "function f(a) {};", expectedWarning, false);
   }
@@ -1845,7 +1845,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
 
   public void testAbstractMethodHandling5() throws Exception {
     testTypes(
-        "/** @type {Function} */ var abstractFn = function() {};" +
+        "/** @type {!Function} */ var abstractFn = function() {};" +
         "/** @param {number} x */ var f = abstractFn;" +
         "f('x');",
         "actual parameter 1 of f does not match formal parameter\n" +
@@ -2196,13 +2196,10 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testStubFunctionDeclaration8() throws Exception {
-    /** TODO(user): This is not exactly correct yet. The var
-            itself is nullable. */
     testFunctionType(
         "/** @type {Function} */ var f = function() {}; ",
         "f",
-        createNullableType(U2U_CONSTRUCTOR_TYPE).
-          restrictByNotNullOrUndefined().toString());
+        createNullableType(U2U_CONSTRUCTOR_TYPE).toString());
   }
 
   public void testStubFunctionDeclaration9() throws Exception {
@@ -2490,6 +2487,29 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "right: boolean");
   }
 
+  public void testDeleteOperator1() throws Exception {
+    testTypes(
+        "var x = {};" +
+        "/** @return {string} */ function f() { return delete x['a']; }",
+        "inconsistent return type\n" +
+        "found   : boolean\n" +
+        "required: string");
+  }
+
+  public void testDeleteOperator2() throws Exception {
+    testTypes(
+        "var obj = {};" +
+        "/** \n" +
+        " * @param {string} x\n" +
+        " * @return {Object} */ function f(x) { return obj; }" +
+        "/** @param {?number} x */ function g(x) {" +
+        "  if (x) { delete f(x)['a']; }" +
+        "}",
+        "actual parameter 1 of f does not match formal parameter\n" +
+        "found   : number\n" +
+        "required: string");
+  }
+
   public void testEnumStaticMethod1() throws Exception {
     testTypes(
         "/** @enum */ var Foo = {AAA: 1};" +
@@ -2769,6 +2789,16 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "inconsistent return type\n" +
         "found   : boolean\n" +
         "required: number");
+  }
+
+  public void testEnum41() throws Exception {
+    testTypes(
+        "/** @enum {number} */ var MyEnum = {/** @const */ FOO: 1};" +
+        "/** @return {string} */" +
+        "function f() { return MyEnum.FOO; }",
+        "inconsistent return type\n" +
+        "found   : MyEnum.<number>\n" +
+        "required: string");
   }
 
   public void testAliasedEnum1() throws Exception {
@@ -3082,7 +3112,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   public void testBadExtends1() throws Exception {
     testTypes("/** @constructor */function base() {}\n" +
         "/** @constructor\n * @extends {not_base} */function derived() {}\n",
-        "Parse error. Unknown type not_base");
+        "Bad type annotation. Unknown type not_base");
   }
 
   public void testBadExtends2() throws Exception {
@@ -3114,7 +3144,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "/** @constructor \n * @extends {Sub} */ function Sub2() {}" +
         "/** @param {Sub} x */ function foo(x) {}" +
         "foo(new Sub2());",
-        "Parse error. Unknown type bad");
+        "Bad type annotation. Unknown type bad");
   }
 
   public void testLateExtends() throws Exception {
@@ -3258,7 +3288,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         " * @implements {nonExistent}\n" +
         " * @implements {Base2}\n" +
         " */ function derived() {}",
-        "Parse error. Unknown type nonExistent");
+        "Bad type annotation. Unknown type nonExistent");
   }
 
   public void testBadImplements2() throws Exception {
@@ -3287,7 +3317,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
 
   public void testBadInterfaceExtends1() throws Exception {
     testTypes("/** @interface \n * @extends {nonExistent} */function A() {}",
-        "Parse error. Unknown type nonExistent");
+        "Bad type annotation. Unknown type nonExistent");
   }
 
   public void testBadInterfaceExtends2() throws Exception {
@@ -4496,11 +4526,21 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testGlobalThis2() throws Exception {
+    // this.alert = 3 doesn't count as a declaration, so this isn't a warning.
     testTypes("/** @constructor */ function Bindow() {}" +
         "/** @param {string} msg */ " +
         "Bindow.prototype.alert = function(msg) {};" +
         "this.alert = 3;" +
-        "(new Bindow()).alert(this.alert)",
+        "(new Bindow()).alert(this.alert)");
+  }
+
+
+  public void testGlobalThis2b() throws Exception {
+    testTypes("/** @constructor */ function Bindow() {}" +
+        "/** @param {string} msg */ " +
+        "Bindow.prototype.alert = function(msg) {};" +
+        "/** @return {number} */ this.alert = function() { return 3; };" +
+        "(new Bindow()).alert(this.alert())",
         "actual parameter 1 of Bindow.prototype.alert " +
         "does not match formal parameter\n" +
         "found   : number\n" +
@@ -4512,7 +4552,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "/** @param {string} msg */ " +
         "function alert(msg) {};" +
         "this.alert(3);",
-        "actual parameter 1 of this.alert " +
+        "actual parameter 1 of global this.alert " +
         "does not match formal parameter\n" +
         "found   : number\n" +
         "required: string");
@@ -4523,7 +4563,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "/** @param {string} msg */ " +
         "var alert = function(msg) {};" +
         "this.alert(3);",
-        "actual parameter 1 of this.alert " +
+        "actual parameter 1 of global this.alert " +
         "does not match formal parameter\n" +
         "found   : number\n" +
         "required: string");
@@ -4536,7 +4576,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "  var alert = function(msg) {};" +
         "}" +
         "this.alert(3);",
-        "Property alert never defined on this");
+        "Property alert never defined on global this");
   }
 
   public void testGlobalThis6() throws Exception {
@@ -4546,6 +4586,35 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "var x = 3;" +
         "x = 'msg';" +
         "this.alert(this.x);");
+  }
+
+  public void testGlobalThis7() throws Exception {
+    testTypes(
+        "/** @constructor */ function Window() {}" +
+        "/** @param {Window} msg */ " +
+        "var foo = function(msg) {};" +
+        "foo(this);");
+  }
+
+  public void testGlobalThis8() throws Exception {
+    testTypes(
+        "/** @constructor */ function Window() {}" +
+        "/** @param {number} msg */ " +
+        "var foo = function(msg) {};" +
+        "foo(this);",
+        "actual parameter 1 of foo does not match formal parameter\n" +
+        "found   : global this\n" +
+        "required: number");
+  }
+
+  public void testGlobalThis9() throws Exception {
+    testTypes(
+        // Window is not marked as a constructor, so the
+        // inheritance doesn't happen.
+        "function Window() {}" +
+        "Window.prototype.alert = function() {};" +
+        "this.alert();",
+        "Property alert never defined on global this");
   }
 
   public void testControlFlowRestrictsType1() throws Exception {
@@ -4820,7 +4889,8 @@ public class TypeCheckTest extends CompilerTypeTestCase {
              "Element.prototype.innerHTML;" +
              "/** @constructor \n @extends Element */" +
              "function DIVElement() {};",
-             "(new DIVElement).innerHTML = new Array();", null, false);
+             "(new DIVElement).innerHTML = new Array();",
+             null, false);
   }
 
   public void testImplicitCastNotInExterns() throws Exception {
@@ -5195,7 +5265,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   public void testScopedConstructors2() throws Exception {
     testTypes(
         "/** @param {Function} f */" +
-        "function foo1(f) { " +
+        "function foo1(f) {" +
         "  /** @param {Function} g */" +
         "  f.prototype.bar = function(g) {};" +
         "}");
@@ -5306,7 +5376,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "})();" +
         "/** @param {ns.Foo} x */ function f(x) {}" +
         "f(new ns.Foo(true));",
-        "Parse error. Unknown type ns.Foo");
+        "Bad type annotation. Unknown type ns.Foo");
   }
 
   public void testQualifiedNameInference9() throws Exception {
@@ -5599,7 +5669,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "/** @type {some.unknown.type} */var f1;" +
         "var f2 = opt_f || f1;" +
         "f2();",
-        "Parse error. Unknown type some.unknown.type");
+        "Bad type annotation. Unknown type some.unknown.type");
   }
 
   public void testCall4() throws Exception {
@@ -5769,36 +5839,36 @@ public class TypeCheckTest extends CompilerTypeTestCase {
 
   public void testCast7() throws Exception {
     testTypes("var x = /** @type {foo} */ (new Object());",
-        "Parse error. Unknown type foo");
+        "Bad type annotation. Unknown type foo");
   }
 
   public void testCast8() throws Exception {
     testTypes("function f() { return /** @type {foo} */ (new Object()); }",
-        "Parse error. Unknown type foo");
+        "Bad type annotation. Unknown type foo");
   }
 
   public void testCast9() throws Exception {
     testTypes("var foo = {};" +
         "function f() { return /** @type {foo} */ (new Object()); }",
-        "Parse error. Unknown type foo");
+        "Bad type annotation. Unknown type foo");
   }
 
   public void testCast10() throws Exception {
     testTypes("var foo = function() {};" +
         "function f() { return /** @type {foo} */ (new Object()); }",
-        "Parse error. Unknown type foo");
+        "Bad type annotation. Unknown type foo");
   }
 
   public void testCast11() throws Exception {
     testTypes("var goog = {}; goog.foo = {};" +
         "function f() { return /** @type {goog.foo} */ (new Object()); }",
-        "Parse error. Unknown type goog.foo");
+        "Bad type annotation. Unknown type goog.foo");
   }
 
   public void testCast12() throws Exception {
     testTypes("var goog = {}; goog.foo = function() {};" +
         "function f() { return /** @type {goog.foo} */ (new Object()); }",
-        "Parse error. Unknown type goog.foo");
+        "Bad type annotation. Unknown type goog.foo");
   }
 
   public void testCast13() throws Exception {
@@ -5808,7 +5878,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "goog.addDependency('zzz.js', ['goog.foo'], []);" +
         "goog.foo = function() {};" +
         "function f() { return /** @type {goog.foo} */ (new Object()); }",
-        "Parse error. Unknown type goog.foo");
+        "Bad type annotation. Unknown type goog.foo");
   }
 
   public void testCast14() throws Exception {
@@ -6552,7 +6622,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "var goog = {};\n" +
         "/** @constructor\n @extends {goog.Missing} */function Sub() {};" +
         "/** @override */Sub.prototype.foo = function() {};",
-        "Parse error. Unknown type goog.Missing");
+        "Bad type annotation. Unknown type goog.Missing");
   }
 
   public void testInheritanceCheck14() throws Exception {
@@ -6562,7 +6632,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "goog.Super = function() {};\n" +
         "/** @constructor\n @extends {goog.Super} */function Sub() {};" +
         "/** @override */Sub.prototype.foo = function() {};",
-        "Parse error. Unknown type goog.Missing");
+        "Bad type annotation. Unknown type goog.Missing");
   }
 
   // TODO(user): We should support this way of declaring properties as it is
@@ -6679,7 +6749,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "/** @constructor\n @implements {Super} */function Sub() {};" +
         "/** @override */Sub.prototype.foo = function() {};",
         new String[] {
-          "Parse error. Unknown type Super",
+          "Bad type annotation. Unknown type Super",
           "property foo not defined on any superclass of Sub"
         });
   }
@@ -6713,6 +6783,20 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "inconsistent return type\n" +
         "found   : number\n" +
         "required: string");
+  }
+
+  public void testInterfaceInheritanceCheck12() throws Exception {
+    testTypes(
+        "/** @interface */ function I() {};\n" +
+        "/** @type {string} */ I.prototype.foobar;\n" +
+        "/** \n * @constructor \n * @implements {I} */\n" +
+        "function C() {\n" +
+        "/** \n * @type {number} */ this.foobar = 2;};\n" +
+        "/** @type {I} */ \n var test = new C(); alert(test.foobar);",
+        "mismatch of the foobar property type and the type of the property" +
+        " it overrides from interface I\n" +
+        "original: string\n" +
+        "override: number");
   }
 
   public void testInterfacePropertyNotImplemented() throws Exception {
@@ -7336,13 +7420,12 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   public void testNoForwardTypeDeclaration() throws Exception {
     testTypes(
         "/** @param {MyType} x */ function f(x) {}",
-        "Parse error. Unknown type MyType");
+        "Bad type annotation. Unknown type MyType");
   }
 
   public void testNoForwardTypeDeclarationAndNoBraces() throws Exception {
-    // To better support third-party code, we do not warn when
-    // there are no braces around an unknown type name.
-    testTypes("/** @return The result. */ function f() {}");
+    testTypes("/** @return The result. */ function f() {}",
+        "Bad type annotation. Unknown type The");
   }
 
   public void testForwardTypeDeclaration1() throws Exception {
@@ -7992,7 +8075,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "function extend(x, y) {}" +
         "/** @constructor */ function Foo() {}" +
         "extend(Foo, /** @lends */ ({bar: 1}));",
-        "Parse error. missing object name in @lends tag");
+        "Bad type annotation. missing object name in @lends tag");
   }
 
   public void testLends2() throws Exception {
@@ -8042,7 +8125,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "function extend(x, y) {}" +
         "/** @constructor */ function Foo() {}" +
         "extend(Foo, /** @lends {Foo.prototype|Foo} */ ({bar: 1}));",
-        "Parse error. expected closing }");
+        "Bad type annotation. expected closing }");
   }
 
   public void testLends8() throws Exception {
@@ -8059,8 +8142,8 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "/** @constructor */ function Foo() {}" +
         "extend(Foo, /** @lends {!Foo} */ ({bar: 1}));",
         Lists.newArrayList(
-            "Parse error. expected closing }",
-            "Parse error. missing object name in @lends tag"));
+            "Bad type annotation. expected closing }",
+            "Bad type annotation. missing object name in @lends tag"));
   }
 
   public void testDeclaredNativeTypeEquality() throws Exception {

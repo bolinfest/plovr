@@ -59,6 +59,15 @@ Blob.prototype.slice = function(start, length) {};
 function BlobBuilder() {}
 
 /**
+ * @see http://www.w3.org/TR/file-writer-api/#widl-BlobBuilder-append0
+ * @see http://www.w3.org/TR/file-writer-api/#widl-BlobBuilder-append1
+ * @see http://www.w3.org/TR/file-writer-api/#widl-BlobBuilder-append2
+ * @param {string|Blob|ArrayBuffer} data
+ * @param {string=} endings
+ */
+BlobBuilder.prototype.append = function(data, endings) {};
+
+/**
  * @see http://www.w3.org/TR/file-writer-api/#widl-BlobBuilder-getBlob
  * @param {string=} contentType
  * @return {!Blob}
@@ -66,22 +75,17 @@ function BlobBuilder() {}
 BlobBuilder.prototype.getBlob = function(contentType) {};
 
 /**
- * @see http://www.w3.org/TR/file-writer-api/#widl-BlobBuilder-append0
- * @see http://www.w3.org/TR/file-writer-api/#widl-BlobBuilder-append1
- * TODO(dbk): Add http://www.w3.org/TR/file-writer-api/#widl-BlobBuilder-append1,
- *     which involves adding ArrayBuffer.
- * @param {string|Blob|ArrayBuffer} data
- * @param {string=} endings
- */
-BlobBuilder.prototype.append = function(data, endings) {};
-
-/**
  * @see http://www.w3.org/TR/file-system-api/#the-directoryentry-interface
- * TODO(dbk): Add http://www.w3.org/TR/file-system-api/#widl-DirectoryEntry-createReader
  * @constructor
  * @extends {Entry}
  */
 function DirectoryEntry() {};
+
+/**
+ * @see http://www.w3.org/TR/file-system-api/#widl-DirectoryEntry-createReader
+ * @return {!DirectoryReader}
+ */
+DirectoryEntry.prototype.createReader = function() {};
 
 /**
  * @see http://www.w3.org/TR/file-system-api/#widl-DirectoryEntry-getFile
@@ -112,23 +116,36 @@ DirectoryEntry.prototype.removeRecursively = function(successCallback,
     errorCallback) {};
 
 /**
+ * @see http://www.w3.org/TR/file-system-api/#the-directoryreader-interface
+ * @constructor
+ */
+function DirectoryReader() {};
+
+/**
+ * @see http://www.w3.org/TR/file-system-api/#widl-DirectoryReader-readEntries
+ * @param {function(!Array.<!Entry>)} successCallback
+ * @param {function(!FileError)=} errorCallback
+ */
+DirectoryReader.prototype.readEntries = function(successCallback,
+    errorCallback) {};
+
+/**
  * @see http://www.w3.org/TR/file-system-api/#the-entry-interface
- * TODO(dbk): add http://www.w3.org/TR/file-system-api/#widl-Entry-getMetadata
  * @constructor
  */
 function Entry() {};
 
 /**
  * @see http://www.w3.org/TR/file-system-api/#widl-Entry-isFile
- * @return {boolean}
+ * @type {boolean}
  */
-Entry.prototype.isFile = function() {};
+Entry.prototype.isFile;
 
 /**
  * @see http://www.w3.org/TR/file-system-api/#widl-Entry-isDirectory
- * @return {boolean}
+ * @type {boolean}
  */
-Entry.prototype.isDirectory = function() {};
+Entry.prototype.isDirectory;
 
 /**
  * @see http://www.w3.org/TR/file-system-api/#widl-Entry-name
@@ -181,6 +198,13 @@ Entry.prototype.toURI = function(mimeType) {};
  * @param {function(!FileError)=} errorCallback
  */
 Entry.prototype.remove = function(successCallback, errorCallback) {};
+
+/**
+ * @see http://www.w3.org/TR/file-system-api/#widl-Entry-getMetadata
+ * @param {function(!Metadata)} successCallback
+ * @param {function(!FileError)=} errorCallback
+ */
+Entry.prototype.getMetadata = function(successCallback, errorCallback) {};
 
 /**
  * @see http://www.w3.org/TR/file-system-api/#widl-Entry-getParent
@@ -255,11 +279,17 @@ function FileError() {}
  */
 FileError.prototype.NOT_FOUND_ERR = 1;
 
+/** @type {number} */
+FileError.NOT_FOUND_ERR = 1;
+
 /**
  * @see http://www.w3.org/TR/FileAPI/#dfn-SECURITY_ERR
  * @type {number}
  */
 FileError.prototype.SECURITY_ERR = 2;
+
+/** @type {number} */
+FileError.SECURITY_ERR = 2;
 
 /**
  * @see http://www.w3.org/TR/FileAPI/#dfn-ABORT_ERR
@@ -267,11 +297,17 @@ FileError.prototype.SECURITY_ERR = 2;
  */
 FileError.prototype.ABORT_ERR = 3;
 
+/** @type {number} */
+FileError.ABORT_ERR = 3;
+
 /**
  * @see http://www.w3.org/TR/FileAPI/#dfn-NOT_READABLE_ERR
  * @type {number}
  */
 FileError.prototype.NOT_READABLE_ERR = 4;
+
+/** @type {number} */
+FileError.NOT_READABLE_ERR = 4;
 
 /**
  * @see http://www.w3.org/TR/FileAPI/#dfn-ENCODING_ERR
@@ -279,11 +315,17 @@ FileError.prototype.NOT_READABLE_ERR = 4;
  */
 FileError.prototype.ENCODING_ERR = 5;
 
+/** @type {number} */
+FileError.ENCODING_ERR = 5;
+
 /**
  * @see http://www.w3.org/TR/file-writer-api/#widl-FileError-NO_MODIFICATION_ALLOWED_ERR
  * @type {number}
  */
 FileError.prototype.NO_MODIFICATION_ALLOWED_ERR = 6;
+
+/** @type {number} */
+FileError.NO_MODIFICATION_ALLOWED_ERR = 6;
 
 /**
  * @see http://www.w3.org/TR/file-writer-api/#widl-FileException-INVALID_STATE_ERR
@@ -291,11 +333,17 @@ FileError.prototype.NO_MODIFICATION_ALLOWED_ERR = 6;
  */
 FileError.prototype.INVALID_STATE_ERR = 7;
 
+/** @type {number} */
+FileError.INVALID_STATE_ERR = 7;
+
 /**
  * @see http://www.w3.org/TR/file-writer-api/#widl-FileException-SYNTAX_ERR
  * @type {number}
  */
 FileError.prototype.SYNTAX_ERR = 8;
+
+/** @type {number} */
+FileError.SYNTAX_ERR = 8;
 
 /**
  * @see http://www.w3.org/TR/file-system-api/#widl-FileError-INVALID_MODIFICATION_ERR
@@ -303,11 +351,17 @@ FileError.prototype.SYNTAX_ERR = 8;
  */
 FileError.prototype.INVALID_MODIFICATION_ERR = 9;
 
+/** @type {number} */
+FileError.INVALID_MODIFICATION_ERR = 9;
+
 /**
  * @see http://www.w3.org/TR/file-system-api/#widl-FileError-QUOTA_EXCEEDED_ERR
  * @type {number}
  */
 FileError.prototype.QUOTA_EXCEEDED_ERR = 10;
+
+/** @type {number} */
+FileError.QUOTA_EXCEEDED_ERR = 10;
 
 /**
  * @see http://www.w3.org/TR/file-system-api/#widl-FileException-TYPE_MISMATCH_ERR
@@ -315,11 +369,17 @@ FileError.prototype.QUOTA_EXCEEDED_ERR = 10;
  */
 FileError.prototype.TYPE_MISMATCH_ERR = 11;
 
+/** @type {number} */
+FileError.TYPE_MISMATCH_ERR = 11;
+
 /**
  * @see http://www.w3.org/TR/file-system-api/#widl-FileException-PATH_EXISTS_ERR
  * @type {number}
  */
 FileError.prototype.PATH_EXISTS_ERR = 12;
+
+/** @type {number} */
+FileError.PATH_EXISTS_ERR = 12;
 
 /**
  * @see http://www.w3.org/TR/FileAPI/#dfn-code-exception
@@ -582,6 +642,19 @@ FileWriter.prototype.truncate = function(size) {};
  * @constructor
  */
 function LocalFileSystem() {}
+
+/**
+ * Metadata interface.
+ * @see http://www.w3.org/TR/file-system-api/#idl-def-Metadata
+ * @constructor
+ */
+function Metadata() {}
+
+/**
+ * @see http://www.w3.org/TR/file-system-api/#widl-Metadata-modificationTime
+ * @type {!Date}
+ */
+Metadata.prototype.modificationTime;
 
 /**
  * @see http://www.w3.org/TR/file-system-api/#widl-LocalFileSystem-TEMPORARY

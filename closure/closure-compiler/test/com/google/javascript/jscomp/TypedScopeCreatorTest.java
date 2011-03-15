@@ -352,7 +352,7 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
         "function Foo() {}" +
         "Foo.prototype.bar = 1;" +
         "var x = new Foo();",
-        RhinoErrorReporter.PARSE_ERROR);
+        RhinoErrorReporter.TYPE_PARSE_ERROR);
     ObjectType x = (ObjectType) findNameType("x", globalScope);
     assertEquals("Foo", x.toString());
     assertTrue(x.getImplicitPrototype().hasOwnProperty("bar"));
@@ -367,7 +367,7 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
         "function Foo() {}" +
         "Foo.prototype = {bar: 1};" +
         "var x = new Foo();",
-        RhinoErrorReporter.PARSE_ERROR);
+        RhinoErrorReporter.TYPE_PARSE_ERROR);
     ObjectType x = (ObjectType) findNameType("x", globalScope);
     assertEquals("Foo", x.toString());
     // Should be true
@@ -1014,6 +1014,56 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
              "function f() { var y = x.prop; }");
     JSType yType = lastLocalScope.getVar("y").getType();
     assertEquals("number", yType.toString());
+  }
+
+  public void testDeclaredConstType1() throws Exception {
+    testSame(
+        "/** @const */ var x = 3;" +
+        "function f() { var y = x; }");
+    JSType yType = lastLocalScope.getVar("y").getType();
+    assertEquals("number", yType.toString());
+  }
+
+  public void testDeclaredConstType2() throws Exception {
+    testSame(
+        "/** @const */ var x = {};" +
+        "function f() { var y = x; }");
+    JSType yType = lastLocalScope.getVar("y").getType();
+    assertEquals("{}", yType.toString());
+  }
+
+  public void testDeclaredConstType3() throws Exception {
+    testSame(
+        "/** @const */ var x = {};" +
+        "/** @const */ x.z = 'hi';" +
+        "function f() { var y = x.z; }");
+    JSType yType = lastLocalScope.getVar("y").getType();
+    assertEquals("string", yType.toString());
+  }
+
+  public void testDeclaredConstType4() throws Exception {
+    testSame(
+        "/** @constructor */ function Foo() {}" +
+        "/** @const */ Foo.prototype.z = 'hi';" +
+        "function f() { var y = (new Foo()).z; }");
+    JSType yType = lastLocalScope.getVar("y").getType();
+    assertEquals("string", yType.toString());
+
+    ObjectType fooType =
+        ((FunctionType) globalScope.getVar("Foo").getType()).getInstanceType();
+    assertTrue(fooType.isPropertyTypeDeclared("z"));
+  }
+
+  public void testDeclaredConstType5() throws Exception {
+    testSame(
+        "/** @const */ var goog = goog || {};" +
+        "/** @const */ var foo = goog || {};" +
+        "function f() { var y = goog; var z = foo; }");
+    JSType yType = lastLocalScope.getVar("y").getType();
+    assertEquals("{}", yType.toString());
+
+    JSType zType = lastLocalScope.getVar("z").getType();
+    assertEquals("?", zType.toString());
   }
 
   public void testBadCtorInit1() throws Exception {

@@ -41,8 +41,12 @@ public class CompilerOptions implements Serializable, Cloneable {
   /**
    * The JavaScript language version accepted.
    */
-  LanguageMode languageIn;
+  private LanguageMode languageIn;
 
+  /**
+   * The JavaScript language version accepted.
+   */
+  private LanguageMode languageOut;
 
   /**
    * Whether the compiler handles `const' keyword or not.
@@ -380,6 +384,9 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   /** Reserve property names on the global this object. */
   public boolean reserveRawExports;
+
+  /** Should shadow variable names in outer scope. */
+  boolean shadowVariables;
 
   /**
    * Generate pseudo names for variables and properties for debugging purposes.
@@ -725,6 +732,7 @@ public class CompilerOptions implements Serializable, Cloneable {
     propertyRenaming = PropertyRenamingPolicy.OFF;
     labelRenaming = false;
     generatePseudoNames = false;
+    shadowVariables = false;
     renamePrefix = null;
     aliasKeywords = false;
     collapseProperties = false;
@@ -946,6 +954,12 @@ public class CompilerOptions implements Serializable, Cloneable {
     this.propertyRenaming = newPropertyPolicy;
   }
 
+
+  /** Should shadow outer scope variable name during renaming. */
+  public void setShadowVariables(boolean shadow) {
+    this.shadowVariables = shadow;
+  }
+
   /**
    * If true, flattens multi-level property names on extern types
    * (e.g. String$f = x). This should only be used with the typed version of
@@ -1035,6 +1049,10 @@ public class CompilerOptions implements Serializable, Cloneable {
     this.runtimeTypeCheck = false;
   }
 
+  public void setGenerateExports(boolean generateExports) {
+    this.generateExports = generateExports;
+  }
+
   public void setCodingConvention(CodingConvention codingConvention) {
     this.codingConvention = codingConvention;
   }
@@ -1104,6 +1122,22 @@ public class CompilerOptions implements Serializable, Cloneable {
   }
 
   /**
+   * Sets how goog.tweak calls are processed.
+   */
+  public void setLanguageIn(LanguageMode languageIn) {
+    this.languageIn = languageIn;
+    this.languageOut = languageIn;
+  }
+
+  public LanguageMode getLanguageIn() {
+    return languageIn;
+  }
+
+  public LanguageMode getLanguageOut() {
+    return languageOut;
+  }
+
+  /**
    * Whether to include "undefined" in the default types.
    *   For example:
    *     "{Object}" is normally "Object|null" becomes "Object|null|undefined"
@@ -1135,6 +1169,11 @@ public class CompilerOptions implements Serializable, Cloneable {
      * Shiny new JavaScript
      */
     ECMASCRIPT5,
+
+    /**
+     * Nitpicky, shiny new JavaScript
+     */
+    ECMASCRIPT5_STRICT,
   }
 
   /** When to do the extra sanity checks */

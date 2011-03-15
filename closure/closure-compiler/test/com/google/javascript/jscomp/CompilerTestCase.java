@@ -88,6 +88,11 @@ public abstract class CompilerTestCase extends TestCase  {
   private boolean acceptES5 = true;
 
   /**
+   * Whether externs changes should be allowed for this pass.
+   */
+  private boolean allowExternsChanges = false;
+
+  /**
    * Constructs a test.
    *
    * @param externs Externs JS as a string
@@ -146,7 +151,7 @@ public abstract class CompilerTestCase extends TestCase  {
     CompilerOptions options = new CompilerOptions();
 
     if (this.acceptES5) {
-      options.languageIn = LanguageMode.ECMASCRIPT5;
+      options.setLanguageIn(LanguageMode.ECMASCRIPT5);
     }
 
     // This doesn't affect whether checkSymbols is run--it just affects
@@ -188,6 +193,13 @@ public abstract class CompilerTestCase extends TestCase  {
    */
   protected void enableEcmaScript5(boolean acceptES5) {
     this.acceptES5 = acceptES5;
+  }
+
+  /**
+   * Whether to allow externs changes.
+   */
+  protected void allowExternsChanges(boolean allowExternsChanges) {
+    this.allowExternsChanges = allowExternsChanges;
   }
 
   /**
@@ -385,7 +397,7 @@ public abstract class CompilerTestCase extends TestCase  {
     CompilerOptions options = getOptions();
 
     if (this.acceptES5) {
-      options.languageIn = LanguageMode.ECMASCRIPT5;
+      options.setLanguageIn(LanguageMode.ECMASCRIPT5);
     }
     // Note that in this context, turning on the checkTypes option won't
     // actually cause the type check to run.
@@ -616,7 +628,8 @@ public abstract class CompilerTestCase extends TestCase  {
    * @param error Expected error, or null if no error is expected
    * @param warning Expected warning, or null if no warning is expected
    */
-  public void testSame(String[] js, DiagnosticType error, DiagnosticType warning) {
+  public void testSame(
+      String[] js, DiagnosticType error, DiagnosticType warning) {
     test(js, js, error, warning);
   }
 
@@ -803,7 +816,19 @@ public abstract class CompilerTestCase extends TestCase  {
         normalizeActualCode(compiler, externsRootClone, mainRootClone);
       }
 
-      if (mainRootClone.checkTreeEqualsSilent(mainRoot)) {
+      boolean codeChange = !mainRootClone.isEquivalentTo(mainRoot);
+      boolean externsChange = !externsRootClone.isEquivalentTo(externsRoot);
+
+      // Generally, externs should not be change by the compiler passes.
+      if (externsChange && !allowExternsChanges) {
+        String explanation = externsRootClone.checkTreeEquals(externsRoot);
+        fail("Unexpected changes to externs" +
+            "\nExpected: " + compiler.toSource(externsRootClone) +
+            "\nResult: " + compiler.toSource(externsRoot) +
+            "\n" + explanation);
+      }
+
+      if (!codeChange && !externsChange) {
         assertFalse(
             "compiler.reportCodeChange() was called " +
             "even though nothing changed",

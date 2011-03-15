@@ -63,6 +63,11 @@ public class InlineVariablesTest extends CompilerTestCase {
     testSame("var _x = 1; var z = _x;");
   }
 
+  public void testNoInlineExportedName2() {
+    testSame("var f = function() {}; var _x = f;" +
+             "var y = function() { _x(); }; var _y = f;");
+  }
+
   public void testDoNotInlineIncrement() {
     testSame("var x = 1; x++;");
   }
@@ -283,7 +288,7 @@ public class InlineVariablesTest extends CompilerTestCase {
             "(function() { a++; })(); var z = x;"});
     test(
         new String[] { "var x = a;", "",
-            "function cow() { a++; }; cow(); var z = x;"}, 
+            "function cow() { a++; }; cow(); var z = x;"},
         new String[] { "var x = a;", "",
             ";(function cow(){ a++; })(); var z = x;"});
     testSame(

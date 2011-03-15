@@ -16,7 +16,6 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.Node;
 
@@ -25,18 +24,16 @@ import com.google.javascript.rhino.Node;
  * some useless code removal, some minimizations).
  *
  * @author dcc@google.com (Devin Coughlin)
+ * @author acleung@google.com (Alan Leung)(
  */
 class PeepholeOptimizationsPass extends AbstractPostOrderCallback
     implements CompilerPass {
   private AbstractCompiler compiler;
 
-  private ImmutableSet<AbstractPeepholeOptimization> peepholeOptimizations;
-
-  PeepholeOptimizationsPass(AbstractCompiler compiler,
-      ImmutableSet<AbstractPeepholeOptimization> optimizations) {
-    this.compiler = compiler;
-    this.peepholeOptimizations = optimizations;
-  }
+  // Use an array here for faster iteration compared to ImmutableSet
+  // TODO should sort based on likelihood that a given optimzation can
+  // modify something.
+  private final AbstractPeepholeOptimization[] peepholeOptimizations;
 
   /**
    * Creates a peephole optimization pass that runs the given
@@ -44,7 +41,8 @@ class PeepholeOptimizationsPass extends AbstractPostOrderCallback
    */
   PeepholeOptimizationsPass(AbstractCompiler compiler,
       AbstractPeepholeOptimization... optimizations) {
-    this(compiler, ImmutableSet.copyOf(optimizations));
+    this.compiler = compiler;
+    this.peepholeOptimizations = optimizations;
   }
 
   public AbstractCompiler getCompiler() {

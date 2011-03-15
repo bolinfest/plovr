@@ -498,7 +498,7 @@ public class RemoveUnusedVarsTest extends CompilerTestCase {
     testSame("var b=function(){return};b()");
     testSame("var b=function(c){return c};b(1)");
     test("var b=function(c){};b.call(null, x)",
-         "var b=function(){};b.call(null, x)");
+         "var b=function(){};b.call(null)");
     test("var b=function(c){};b.apply(null, x)",
          "var b=function(){};b.apply(null, x)");
 
@@ -553,6 +553,33 @@ public class RemoveUnusedVarsTest extends CompilerTestCase {
          "var b=function(){};var b=function(){};b(1,2)");
   }
 
+  public void testCallSiteInteraction_contructors() {
+    this.modifyCallSites = true;
+    // The third level tests that the functions which have already been looked
+    // at get re-visited if they are changed by a call site removal.
+    test("var Ctor1=function(a,b){return a};" +
+        "var Ctor2=function(a,b){Ctor1.call(this,a,b)};" +
+        "goog$inherits(Ctor2, Ctor1);" +
+        "new Ctor2(1,2)",
+        "var Ctor1=function(a){return a};" +
+        "var Ctor2=function(a){Ctor1.call(this,a)};" +
+        "goog$inherits(Ctor2, Ctor1);" +
+        "new Ctor2(1)");
+  }
+
+  public void testFunctionArgRemovalCausingInconsistency() {
+    this.modifyCallSites = true;
+    // Test the case where an unused argument is removed and the argument
+    // contains a call site in its subtree (will cause the call site's parent
+    // pointer to be null).
+    test("var a=function(x,y){};" +
+        "var b=function(z){};" +
+        "a(new b, b)",
+        "var a=function(){};" +
+        "var b=function(){};" +
+        "a(new b)");
+  }
+
   public void testDoNotOptimizeJSCompiler_renameProperty() {
     this.modifyCallSites = true;
 
@@ -576,7 +603,7 @@ public class RemoveUnusedVarsTest extends CompilerTestCase {
     // this.modifyCallSites = false;
     testSame("({set s(a) {}})");
   }
-  
+
   public void testRemoveInheritedClass1() {
     test("function goog$inherits(){}" +
         "/**@constructor*/function a(){}" +
@@ -584,7 +611,7 @@ public class RemoveUnusedVarsTest extends CompilerTestCase {
         "goog$inherits(b,a); new a",
         "function a(){} new a");
   }
-  
+
   public void testRemoveInheritedClass2() {
     test("function goog$inherits(){}" +
         "function goog$mixin(){}" +
@@ -638,7 +665,7 @@ public class RemoveUnusedVarsTest extends CompilerTestCase {
         "function c(){}" +
         "goog$mixin(c.prototype,a.prototype); new c");
   }
-  
+
   public void testRemoveInheritedClass7() {
     test("function goog$mixin(){}" +
         "/**@constructor*/function a(){alert(goog$mixin(a, a))}" +
@@ -647,7 +674,7 @@ public class RemoveUnusedVarsTest extends CompilerTestCase {
         "function goog$mixin(){}" +
         "function a(){alert(goog$mixin(a, a))} new a");
   }
-  
+
   public void testRemoveInheritedClass8() {
     test("/**@constructor*/function a(){}" +
         "/**@constructor*/function b(){}" +
@@ -662,7 +689,7 @@ public class RemoveUnusedVarsTest extends CompilerTestCase {
         "/**@constructor*/function c(){}" +
         "b.inherits(a);c.mixin(b.prototype);new c");
   }
-  
+
   public void testRemoveInheritedClass10() {
     test("function goog$inherits(){}" +
         "/**@constructor*/function a(){}" +
@@ -672,7 +699,7 @@ public class RemoveUnusedVarsTest extends CompilerTestCase {
         "function goog$inherits(){}" +
         "function a(){} function b(){} goog$inherits(b,a); new a; new b");
   }
-  
+
   public void testRemoveInheritedClass11() {
     testSame("function goog$inherits(){}" +
         "function goog$mixin(a,b){goog$inherits(a,b)}" +
