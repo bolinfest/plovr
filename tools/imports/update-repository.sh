@@ -21,9 +21,12 @@ if [ ! -d "${HGROOT}/tools/imports/${REPOSITORY}" ]; then
   exit 1
 fi
 
+REVISION=`svn info http://${REPOSITORY}.googlecode.com/svn/ | \
+    grep Revision | awk '{print $2}'`
+
 cd ${HGROOT}
 tools/imports/${REPOSITORY}/update.sh
-hg commit -m "Pull latest changes from ${REPOSITORY} SVN repository." \
+hg commit -m "Pull latest changes from ${REPOSITORY} SVN repository at r${REVISION}." \
     tools/imports/${REPOSITORY}/shamap
 
 # REV is something like 1648:af131e4e3231
@@ -33,4 +36,6 @@ REV=`hg branches | grep ${REPOSITORY} | awk '{print $2}'`
 REV2=`echo $REV | awk -F ":" '{print $2}'`
 
 hg merge -r $REV2
-hg commit -m "merge from ${REPOSITORY} branch"
+hg commit -m "merge from ${REPOSITORY} branch at ${REPOSITORY} revision ${REVISION}"
+
+echo "merge from ${REPOSITORY} committed: run hg push to check in"
