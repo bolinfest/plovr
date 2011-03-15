@@ -22,15 +22,15 @@ if [ ! -d "${HGROOT}/tools/imports/${REPOSITORY}" ]; then
 fi
 
 cd ${HGROOT}
-tools/imports/closure-library/update.sh
-hg commit -m "Pull latest changes from Closure Library SVN repository." \
-    tools/imports/closure-library/shamap
+tools/imports/${REPOSITORY}/update.sh
+hg commit -m "Pull latest changes from ${REPOSITORY} SVN repository." \
+    tools/imports/${REPOSITORY}/shamap
 
 # REV is something like 1648:af131e4e3231
-REV=`hg branches | grep closure-library | awk '{print $2}'
+REV=`hg branches | grep ${REPOSITORY} | awk '{print $2}'`
 
 # REV2 will be the part after the colon: af131e4e3231
 REV2=`echo $REV | awk -F ":" '{print $2}'`
 
 hg merge -r $REV2
-hg commit -m "merge from closure-library branch"
+hg commit -m "merge from ${REPOSITORY} branch"
