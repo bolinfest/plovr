@@ -74,6 +74,7 @@ public class ManifestTest extends TestCase {
             "/goog/debug/errorhandlerweakdep.js",
             "/goog/useragent/useragent.js",
             "/goog/events/browserfeature.js",
+            "/goog/disposable/idisposable.js",
             "/goog/disposable/disposable.js",
             "/goog/events/event.js",
             "/goog/events/eventtype.js",
