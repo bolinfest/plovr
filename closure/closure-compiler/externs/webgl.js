@@ -26,6 +26,7 @@
 
 /**
  * @constructor
+ * @noalias
  */
 function WebGLRenderingContext() {
 }
@@ -2519,7 +2520,7 @@ WebGLRenderingContext.prototype.uniform1f = function(location, value) {};
 
 /**
  * @param {WebGLUniformLocation} location
- * @param {WebGLFloatArray|Float32Array} value
+ * @param {WebGLFloatArray|Float32Array|Array.<number>} value
  */
 WebGLRenderingContext.prototype.uniform1fv = function(location, value) {};
 
@@ -2531,7 +2532,7 @@ WebGLRenderingContext.prototype.uniform1i = function(location, value) {};
 
 /**
  * @param {WebGLUniformLocation} location
- * @param {WebGLIntArray|Int32Array} value
+ * @param {WebGLIntArray|Int32Array|Array.<number>} value
  */
 WebGLRenderingContext.prototype.uniform1iv = function(location, value) {};
 
@@ -2545,7 +2546,7 @@ WebGLRenderingContext.prototype.uniform2f = function(
 
 /**
  * @param {WebGLUniformLocation} location
- * @param {WebGLFloatArray|Float32Array} value
+ * @param {WebGLFloatArray|Float32Array|Array.<number>} value
  */
 WebGLRenderingContext.prototype.uniform2fv = function(location, value) {};
 
@@ -2559,7 +2560,7 @@ WebGLRenderingContext.prototype.uniform2i = function(
 
 /**
  * @param {WebGLUniformLocation} location
- * @param {WebGLIntArray|Int32Array} value
+ * @param {WebGLIntArray|Int32Array|Array.<number>} value
  */
 WebGLRenderingContext.prototype.uniform2iv = function(location, value) {};
 
@@ -2574,7 +2575,7 @@ WebGLRenderingContext.prototype.uniform3f = function(
 
 /**
  * @param {WebGLUniformLocation} location
- * @param {WebGLFloatArray|Float32Array} value
+ * @param {WebGLFloatArray|Float32Array|Array.<number>} value
  */
 WebGLRenderingContext.prototype.uniform3fv = function(location, value) {};
 
@@ -2589,7 +2590,7 @@ WebGLRenderingContext.prototype.uniform3i = function(
 
 /**
  * @param {WebGLUniformLocation} location
- * @param {WebGLIntArray|Int32Array} value
+ * @param {WebGLIntArray|Int32Array|Array.<number>} value
  */
 WebGLRenderingContext.prototype.uniform3iv = function(location, value) {};
 
@@ -2605,7 +2606,7 @@ WebGLRenderingContext.prototype.uniform4f = function(
 
 /**
  * @param {WebGLUniformLocation} location
- * @param {WebGLFloatArray|Float32Array} value
+ * @param {WebGLFloatArray|Float32Array|Array.<number>} value
  */
 WebGLRenderingContext.prototype.uniform4fv = function(location, value) {};
 
@@ -2621,14 +2622,14 @@ WebGLRenderingContext.prototype.uniform4i = function(
 
 /**
  * @param {WebGLUniformLocation} location
- * @param {WebGLIntArray|Int32Array} value
+ * @param {WebGLIntArray|Int32Array|Array.<number>} value
  */
 WebGLRenderingContext.prototype.uniform4iv = function(location, value) {};
 
 /**
  * @param {WebGLUniformLocation} location
  * @param {boolean} transpose
- * @param {WebGLFloatArray|Float32Array} data
+ * @param {WebGLFloatArray|Float32Array|Array.<number>} data
  */
 WebGLRenderingContext.prototype.uniformMatrix2fv = function(
     location, transpose, data) {};
@@ -2636,7 +2637,7 @@ WebGLRenderingContext.prototype.uniformMatrix2fv = function(
 /**
  * @param {WebGLUniformLocation} location
  * @param {boolean} transpose
- * @param {WebGLFloatArray|Float32Array} data
+ * @param {WebGLFloatArray|Float32Array|Array.<number>} data
  */
 WebGLRenderingContext.prototype.uniformMatrix3fv = function(
     location, transpose, data) {};
@@ -2644,7 +2645,7 @@ WebGLRenderingContext.prototype.uniformMatrix3fv = function(
 /**
  * @param {WebGLUniformLocation} location
  * @param {boolean} transpose
- * @param {WebGLFloatArray|Float32Array} data
+ * @param {WebGLFloatArray|Float32Array|Array.<number>} data
  */
 WebGLRenderingContext.prototype.uniformMatrix4fv = function(
     location, transpose, data) {};
@@ -2667,7 +2668,7 @@ WebGLRenderingContext.prototype.vertexAttrib1f = function(index, value) {};
 
 /**
  * @param {number} index
- * @param {WebGLFloatArray|Float32Array} values
+ * @param {WebGLFloatArray|Float32Array|Array.<number>} values
  */
 WebGLRenderingContext.prototype.vertexAttrib1fv = function(index, values) {};
 
@@ -2681,7 +2682,7 @@ WebGLRenderingContext.prototype.vertexAttrib2f = function(
 
 /**
  * @param {number} index
- * @param {WebGLFloatArray|Float32Array} values
+ * @param {WebGLFloatArray|Float32Array|Array.<number>} values
  */
 WebGLRenderingContext.prototype.vertexAttrib2fv = function(
     index, values) {};
@@ -2697,7 +2698,7 @@ WebGLRenderingContext.prototype.vertexAttrib3f = function(
 
 /**
  * @param {number} index
- * @param {WebGLFloatArray|Float32Array} values
+ * @param {WebGLFloatArray|Float32Array|Array.<number>} values
  */
 WebGLRenderingContext.prototype.vertexAttrib3fv = function(index, values) {};
 
@@ -2713,7 +2714,7 @@ WebGLRenderingContext.prototype.vertexAttrib4f = function(
 
 /**
  * @param {number} index
- * @param {WebGLFloatArray|Float32Array} values
+ * @param {WebGLFloatArray|Float32Array|Array.<number>} values
  */
 WebGLRenderingContext.prototype.vertexAttrib4fv = function(index, values) {};
 
@@ -2736,9 +2737,20 @@ WebGLRenderingContext.prototype.vertexAttribPointer = function(
  */
 WebGLRenderingContext.prototype.viewport = function(x, y, width, height) {};
 
+/**
+ * @return {Array.<string>}
+ */
+WebGLRenderingContext.prototype.getSupportedExtensions = function() {};
+
+/**
+ * @param {string} name
+ * @return {Object}
+ */
+WebGLRenderingContext.prototype.getExtension = function(name) {};
 
 /**
  * @constructor
+ * @noalias
  */
 function WebGLContextAttributes() {}
 
@@ -2762,12 +2774,14 @@ WebGLContextAttributes.prototype.remove = function(name) {};
 
 /**
  * @constructor
+ * @noalias
  */
 function WebGLObject() {}
 
 
 /**
  * @constructor
+ * @noalias
  * @extends {WebGLObject}
  */
 function WebGLBuffer() {}
@@ -2775,6 +2789,7 @@ function WebGLBuffer() {}
 
 /**
  * @constructor
+ * @noalias
  * @extends {WebGLObject}
  */
 function WebGLFramebuffer() {}
@@ -2782,6 +2797,7 @@ function WebGLFramebuffer() {}
 
 /**
  * @constructor
+ * @noalias
  * @extends {WebGLObject}
  */
 function WebGLProgram() {}
@@ -2789,6 +2805,7 @@ function WebGLProgram() {}
 
 /**
  * @constructor
+ * @noalias
  * @extends {WebGLObject}
  */
 function WebGLRenderbuffer() {}
@@ -2796,6 +2813,7 @@ function WebGLRenderbuffer() {}
 
 /**
  * @constructor
+ * @noalias
  * @extends {WebGLObject}
  */
 function WebGLShader() {}
@@ -2803,6 +2821,7 @@ function WebGLShader() {}
 
 /**
  * @constructor
+ * @noalias
  * @extends {WebGLObject}
  */
 function WebGLTexture() {}
@@ -2810,6 +2829,7 @@ function WebGLTexture() {}
 
 /**
  * @constructor
+ * @noalias
  */
 function WebGLActiveInfo() {}
 
@@ -2826,6 +2846,7 @@ WebGLActiveInfo.prototype.name;
 /**
  * @param {number} length
  * @constructor
+ * @noalias
  */
 function WebGLArrayBuffer(length) {}
 
@@ -2835,6 +2856,7 @@ WebGLArrayBuffer.prototype.byteLength;
 
 /**
  * @constructor
+ * @noalias
  */
 function WebGLObjectArray() {}
 
@@ -2850,11 +2872,13 @@ WebGLObjectArray.prototype.get = function(index) {};
 
 /**
  * @constructor
+ * @noalias
  */
 function WebGLUniformLocation() {}
 
 /**
  * @constructor
+ * @noalias
  * @extends {WebGLObject}
  */
 function WebGLArray() {}
@@ -2882,6 +2906,7 @@ WebGLArray.prototype.slice = function(offset, length) {};
  * @param {Array.<number>|WebGLArray|number} dataOrLength
  * @extends {WebGLArray}
  * @constructor
+ * @noalias
  */
 function WebGLFloatArray(dataOrLength) {}
 
@@ -2890,6 +2915,7 @@ function WebGLFloatArray(dataOrLength) {}
  * @param {Array.<number>|WebGLArray|number} dataOrLength
  * @extends {WebGLArray}
  * @constructor
+ * @noalias
  */
 function WebGLUnsignedByteArray(dataOrLength) {}
 
@@ -2898,6 +2924,7 @@ function WebGLUnsignedByteArray(dataOrLength) {}
  * @param {Array.<number>|WebGLArray|number} dataOrLength
  * @extends {WebGLArray}
  * @constructor
+ * @noalias
  */
 function WebGLByteArray(dataOrLength) {}
 
@@ -2906,6 +2933,7 @@ function WebGLByteArray(dataOrLength) {}
  * @param {Array.<number>|WebGLArray|number} dataOrLength
  * @extends {WebGLArray}
  * @constructor
+ * @noalias
  */
 function WebGLUnsignedShortArray(dataOrLength) {}
 
@@ -2914,6 +2942,7 @@ function WebGLUnsignedShortArray(dataOrLength) {}
  * @param {Array.<number>|WebGLArray|number} dataOrLength
  * @extends {WebGLArray}
  * @constructor
+ * @noalias
  */
 function WebGLShortArray(dataOrLength) {}
 
@@ -2922,6 +2951,7 @@ function WebGLShortArray(dataOrLength) {}
  * @param {Array.<number>|WebGLArray|number} dataOrLength
  * @extends {WebGLArray}
  * @constructor
+ * @noalias
  */
 function WebGLUnsignedIntArray(dataOrLength) {}
 
@@ -2930,12 +2960,14 @@ function WebGLUnsignedIntArray(dataOrLength) {}
  * @param {Array.<number>|WebGLArray|number} dataOrLength
  * @extends {WebGLArray}
  * @constructor
+ * @noalias
  */
 function WebGLIntArray(dataOrLength) {}
 
 
 /**
  * @constructor
+ * @noalias
  */
 function ArrayBufferView() {}
 
@@ -2951,6 +2983,7 @@ ArrayBufferView.prototype.byteLength;
 
 /**
  * @constructor
+ * @noalias
  * @extends ArrayBufferView
  */
 function TypedArray() {}
@@ -2991,6 +3024,7 @@ TypedArray.prototype.subarray = function(begin, opt_end) {};
  * @param {number=} opt_length
  * @extends {TypedArray}
  * @constructor
+ * @noalias
  */
 function Int8Array(length, opt_byteOffset, opt_length) {}
 
@@ -3005,6 +3039,7 @@ Int8Array.BYTES_PER_ELEMENT;
  * @param {number=} opt_length
  * @extends {TypedArray}
  * @constructor
+ * @noalias
  */
 function Uint8Array(length, opt_byteOffset, opt_length) {}
 
@@ -3018,6 +3053,7 @@ Uint8Array.BYTES_PER_ELEMENT;
  * @param {number=} opt_length
  * @extends {TypedArray}
  * @constructor
+ * @noalias
  */
 function Int16Array(length, opt_byteOffset, opt_length) {}
 
@@ -3031,6 +3067,7 @@ Int16Array.BYTES_PER_ELEMENT;
  * @param {number=} opt_length
  * @extends {TypedArray}
  * @constructor
+ * @noalias
  */
 function Uint16Array(length, opt_byteOffset, opt_length) {}
 
@@ -3044,6 +3081,7 @@ Uint16Array.BYTES_PER_ELEMENT;
  * @param {number=} opt_length
  * @extends {TypedArray}
  * @constructor
+ * @noalias
  */
 function Int32Array(length, opt_byteOffset, opt_length) {}
 
@@ -3058,6 +3096,7 @@ Int32Array.BYTES_PER_ELEMENT;
  * @param {number=} opt_length
  * @extends {TypedArray}
  * @constructor
+ * @noalias
  */
 function Uint32Array(length, opt_byteOffset, opt_length) {}
 
@@ -3072,6 +3111,7 @@ Uint32Array.BYTES_PER_ELEMENT;
  * @param {number=} opt_length
  * @extends {TypedArray}
  * @constructor
+ * @noalias
  */
 function Float32Array(length, opt_byteOffset, opt_length) {}
 
@@ -3086,6 +3126,7 @@ Float32Array.BYTES_PER_ELEMENT;
  * @param {number=} opt_length
  * @extends {TypedArray}
  * @constructor
+ * @noalias
  */
 function Float64Array(length, opt_byteOffset, opt_length) {}
 
@@ -3099,6 +3140,7 @@ Float64Array.BYTES_PER_ELEMENT;
  * @param {number=} opt_byteLength
  * @extends {ArrayBufferView}
  * @constructor
+ * @noalias
  */
 function DataView(buffer, opt_byteOffset, opt_byteLength) {}
 

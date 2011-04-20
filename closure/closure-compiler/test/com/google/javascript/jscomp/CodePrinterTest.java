@@ -39,6 +39,7 @@ public class CodePrinterTest extends TestCase {
       DefaultPassConfig passConfig = new DefaultPassConfig(null);
       CompilerPass typeResolver = passConfig.resolveTypes.create(compiler);
       Node externs = new Node(Token.SCRIPT);
+      externs.setIsSyntheticBlock(true);
       Node externAndJsRoot = new Node(Token.BLOCK, externs, n);
       externAndJsRoot.setIsSyntheticBlock(true);
       typeResolver.process(externs, n);
@@ -1122,6 +1123,34 @@ public class CodePrinterTest extends TestCase {
     assertPrint("var x={1:1}", "var x={1:1}");
   }
 
+  public void testObjectLit2() {
+    assertPrint("var x={1:1}", "var x={1:1}");
+    assertPrint("var x={'1':1}", "var x={1:1}");
+    assertPrint("var x={'1.0':1}", "var x={\"1.0\":1}");
+    assertPrint("var x={1.5:1}", "var x={\"1.5\":1}");
+
+  }
+
+  public void testObjectLit3() {
+    assertPrint("var x={3E9:1}",
+                "var x={3E9:1}");
+    assertPrint("var x={'3000000000':1}", // More than 31 bits
+                "var x={3E9:1}");
+    assertPrint("var x={'3000000001':1}",
+                "var x={3000000001:1}");
+    assertPrint("var x={'6000000001':1}",  // More than 32 bits
+                "var x={6000000001:1}");
+    assertPrint("var x={\"12345678901234567\":1}",  // More than 53 bits
+                "var x={\"12345678901234567\":1}");
+  }
+
+  public void testObjectLit4() {
+    // More than 128 bits.
+    assertPrint(
+        "var x={\"123456789012345671234567890123456712345678901234567\":1}",
+        "var x={\"123456789012345671234567890123456712345678901234567\":1}");
+  }
+
   public void testGetter() {
     assertPrint("var x = {}", "var x={}");
     assertPrint("var x = {get a() {return 1}}", "var x={get a(){return 1}}");
@@ -1129,30 +1158,36 @@ public class CodePrinterTest extends TestCase {
       "var x = {get a() {}, get b(){}}",
       "var x={get a(){},get b(){}}");
 
-    // Valid ES5 but Rhino doesn't accept this yet.
-    // assertPrint(
-    //  "var x = {get 1() {return 1}}",
-    //  "var x={get \"1\"(){return 1}}");
+    assertPrint(
+      "var x = {get 'a'() {return 1}}",
+      "var x={get \"a\"(){return 1}}");
 
-    // Valid ES5 but Rhino doesn't accept this yet.
-    // assertPrint(
-    //  "var x = {get \"()\"() {return 1}}",
-    //   "var x={get \"()\"(){return 1}}");
+    assertPrint(
+      "var x = {get 1() {return 1}}",
+      "var x={get 1(){return 1}}");
+
+    assertPrint(
+      "var x = {get \"()\"() {return 1}}",
+      "var x={get \"()\"(){return 1}}");
   }
 
   public void testSetter() {
     assertPrint("var x = {}", "var x={}");
-    assertPrint("var x = {set a(x) {return 1}}", "var x={set a(x){return 1}}");
+    assertPrint(
+       "var x = {set a(y) {return 1}}",
+       "var x={set a(y){return 1}}");
 
-    // Valid ES5 but Rhino doesn't accept this yet.
-    // assertPrint(
-    //  "var x = {set 1(x) {return 1}}",
-    //  "var x={set \"1\"(x){return 1}}");
+    assertPrint(
+      "var x = {get 'a'() {return 1}}",
+      "var x={get \"a\"(){return 1}}");
 
-    // Valid ES5 but Rhino doesn't accept this yet.
-    // assertPrint(
-    //  "var x = {set \"(x)\"() {return 1}}",
-    //   "var x={set \"(x)\"(){return 1}}");
+    assertPrint(
+      "var x = {set 1(y) {return 1}}",
+      "var x={set 1(y){return 1}}");
+
+    assertPrint(
+      "var x = {set \"(x)\"(y) {return 1}}",
+      "var x={set \"(x)\"(y){return 1}}");
   }
 
   public void testNegCollapse() {
@@ -1165,5 +1200,25 @@ public class CodePrinterTest extends TestCase {
   public void testStrict() {
     String result = parsePrint("var x", false, false, 0, false, true);
     assertEquals("'use strict';var x", result);
+  }
+
+  public void testArrayLiteral() {
+    assertPrint("var x = [,];","var x=[,]");
+    assertPrint("var x = [,,];","var x=[,,]");
+    assertPrint("var x = [,s,,];","var x=[,s,,]");
+    assertPrint("var x = [,s];","var x=[,s]");
+    assertPrint("var x = [s,];","var x=[s]");
+  }
+
+  public void testZero() {
+    assertPrint("var x ='\\0';", "var x=\"\\0\"");
+    assertPrint("var x ='\\x00';", "var x=\"\\0\"");
+    assertPrint("var x ='\\u0000';", "var x=\"\\0\"");
+  }
+
+  public void testUnicode() {
+    assertPrint("var x ='\\x0f';", "var x=\"\\u000f\"");
+    assertPrint("var x ='\\x68';", "var x=\"h\"");
+    assertPrint("var x ='\\x7f';", "var x=\"\\u007f\"");
   }
 }

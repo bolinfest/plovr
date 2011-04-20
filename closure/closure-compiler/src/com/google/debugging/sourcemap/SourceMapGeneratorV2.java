@@ -20,6 +20,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -46,7 +47,7 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
    */
   private static final String BASE64_MAP =
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
-      "abcdefghijklmnopqrstuvwzyz" +
+      "abcdefghijklmnopqrstuvwxyz" +
       "0123456789+/";
 
   /**
@@ -237,7 +238,7 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
    *
    * 1.  {
    * 2.    version: 2,
-   * 3.    file: “out.js”
+   * 3.    file: "out.js"
    * 4.    lineCount: 2
    * 5.    lineMaps: [
    * 6.        "ABAAA",
@@ -256,15 +257,15 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
    * Line 2: File revision (always the first entry in the object)
    * Line 3: The name of the file that this source map is associated with.
    * Line 4: The number of lines represented in the sourcemap.
-   * Line 5: “lineMaps” field is a JSON array, where each entry represents a
+   * Line 5: "lineMaps" field is a JSON array, where each entry represents a
    *     line in the generated text.
    * Line 6: A line entry, representing a series of line segments, where each
    *     segment encodes an mappings-id and repetition count.
    * Line 9: An optional source root, useful for relocating source files on a
-   *     server or removing repeated prefix values in the “sources” entry.
-   * Line 10: A list of sources used by the “mappings” entry relative to the
+   *     server or removing repeated prefix values in the "sources" entry.
+   * Line 10: A list of sources used by the "mappings" entry relative to the
    *     sourceRoot.
-   * Line 11: A list of symbol names used by the “mapping” entry.  This list
+   * Line 11: A list of symbol names used by the "mapping" entry.  This list
    *     may be incomplete.
    * Line 12: The mappings field.
    * Line 13: Each entry represent a block of text in the original source, and
@@ -273,7 +274,7 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
    *     The line in the source file the text begins
    *     The column in the line that the text begins
    *     An optional name (from the original source) that this entry represents.
-   *     This can either be an string or index into the “names” field.
+   *     This can either be an string or index into the "names" field.
    */
   public void appendTo(Appendable out, String name) throws IOException {
     int maxLine = prepMappings();
@@ -554,8 +555,8 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
       LineMapEncoder.encodeEntry(sb, id, lastId, reps);
 
       if (validate) {
-        LineMapDecoder.LineEntry entry = LineMapDecoder.decodeLineEntry(
-            sb.toString(), lastId);
+        SourceMapLineDecoder.LineEntry entry =
+            SourceMapLineDecoder.decodeLineEntry(sb.toString(), lastId);
         Preconditions.checkState(entry.id == id && entry.reps == reps,
             "expected (%s,%s) but got (%s,%s)",
             id, reps, entry.id, entry.reps);
@@ -669,132 +670,6 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
         sb.append(chars[--size]);
       }
       return sb.toString();
-    }
-  }
-
-  /**
-   * A line mapping decoder class used for testing and validation.
-   */
-  @VisibleForTesting
-  public static class LineMapDecoder {
-    private static LineEntry decodeLineEntry(String in, int lastId) {
-      return decodeLineEntry(new StringParser(in), lastId);
-    }
-
-    private static LineEntry decodeLineEntry(StringParser reader, int lastId) {
-      int repDigits = 0;
-
-      // Determine the number of digits used for the repetition count.
-      // Each "!" indicates another base64 digit.
-      for (char peek = reader.peek(); peek == '!'; peek = reader.peek()) {
-        repDigits++;
-        reader.next(); // consume the "!"
-      }
-
-      int idDigits = 0;
-      int reps = 0;
-      if (repDigits == 0) {
-        // No repetition digit escapes, so the next character represents the
-        // number of digits in the id (bottom 2 bits) and the number of
-        // repetitions (top 4 digits).
-        char digit = reader.next();
-        int value = addBase64Digit(digit, 0);
-        reps = (value >> 2);
-        idDigits = (value & 3);
-      } else {
-        char digit = reader.next();
-        idDigits = addBase64Digit(digit, 0);
-
-        int value = 0;
-        for (int i = 0; i < repDigits; i++) {
-          digit = reader.next();
-          value = addBase64Digit(digit, value);
-        }
-        reps = value;
-      }
-
-      // Adjust for 1 offset encoding.
-      reps += 1;
-      idDigits += 1;
-
-      // Decode the id token.
-      int value = 0;
-      for (int i = 0; i < idDigits; i++) {
-        char digit = reader.next();
-        value = addBase64Digit(digit, value);
-      }
-      int mappingId = getIdFromRelativeId(value, idDigits, lastId);
-      return new LineEntry(mappingId, reps);
-    }
-
-    public static List<Integer> decodeLine(String lineSource) {
-      return decodeLine(new StringParser(lineSource));
-    }
-
-    static private List<Integer> decodeLine(StringParser reader) {
-      List<Integer> result = Lists.newArrayListWithCapacity(512);
-      int lastId = 0;
-      while (reader.hasNext()) {
-        LineEntry entry = decodeLineEntry(reader, lastId);
-        lastId = entry.id;
-
-        for (int i=0; i < entry.reps; i++) {
-          result.add(entry.id);
-        }
-      }
-
-      return result;
-    }
-
-    /**
-     * Build base64 number a digit at a time, most significant digit first.
-     */
-    private static int addBase64Digit(char digit, int previousValue) {
-      return (previousValue * 64) + BASE64_MAP.indexOf(digit);
-    }
-
-    /**
-     * @return the id from the relative id.
-     */
-    public static int getIdFromRelativeId(int rawId, int digits, int lastId) {
-      // The value range depends on the number of digits
-      int base = 1 << (digits * 6);
-      return ((rawId >= base/2) ? rawId - base : rawId) + lastId;
-      // return (rawId - (base/2)) + lastId;
-    }
-
-    static class LineEntry {
-      final int id;
-      final int reps;
-      public LineEntry(int id, int reps) {
-        this.id = id;
-        this.reps = reps;
-      }
-    }
-
-    /**
-     * A simple class for maintaining the current location
-     * in the input.
-     */
-    static class StringParser {
-      final String content;
-      int current = 0;
-
-      StringParser(String content) {
-        this.content = content;
-      }
-
-      char next() {
-        return content.charAt(current++);
-      }
-
-      char peek() {
-        return content.charAt(current);
-      }
-
-      boolean hasNext() {
-        return  current < content.length() -1;
-      }
     }
   }
 

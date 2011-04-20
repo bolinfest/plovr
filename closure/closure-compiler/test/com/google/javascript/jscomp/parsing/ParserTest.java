@@ -31,6 +31,9 @@ import java.util.List;
 
 
 public class ParserTest extends BaseJSTypeTestCase {
+  private static final String SUSPICIOUS_COMMENT_WARNING =
+      IRFactory.SUSPICIOUS_COMMENT_WARNING;
+
   private static final String TRAILING_COMMA_MESSAGE =
       ScriptRuntime.getMessage0("msg.extra.trailing.comma");
 
@@ -366,6 +369,7 @@ public class ParserTest extends BaseJSTypeTestCase {
     assertNotNull(info);
     assertFalse(info.hasParameter("index"));
     assertTrue(info.hasReturnType());
+    assertTypeEquals(UNKNOWN_TYPE, info.getReturnType());
   }
 
   public void testJSDocAttachment7() {
@@ -571,6 +575,7 @@ public class ParserTest extends BaseJSTypeTestCase {
 
   private Node createScript(Node n) {
     Node script = new Node(Token.SCRIPT);
+    script.setIsSyntheticBlock(true);
     script.addChildToBack(n);
     return script;
   }
@@ -607,6 +612,14 @@ public class ParserTest extends BaseJSTypeTestCase {
 
   public void testTrailingCommaWarning7() {
     parseError("var a = {,};", BAD_PROPERTY_MESSAGE);
+  }
+
+  public void testSuspiciousBlockCommentWarning1() {
+    parse("/* @type {number} */ var x = 3;", SUSPICIOUS_COMMENT_WARNING);
+  }
+
+  public void testSuspiciousBlockCommentWarning2() {
+    parse("/* \n * @type {number} */ var x = 3;", SUSPICIOUS_COMMENT_WARNING);
   }
 
   public void testCatchClauseForbidden() {
@@ -736,7 +749,7 @@ public class ParserTest extends BaseJSTypeTestCase {
     assertEquals(Token.OBJECTLIT, objectLit.getType());
 
     Node number = objectLit.getFirstChild();
-    assertEquals(Token.NUMBER, number.getType());
+    assertEquals(Token.STRING, number.getType());
     assertNotNull(number.getJSDocInfo());
   }
 
@@ -746,18 +759,30 @@ public class ParserTest extends BaseJSTypeTestCase {
 
   public void testGetter() {
     mode = LanguageMode.ECMASCRIPT3;
+    parseError("var x = {get 1(){}};",
+        "getters are not supported in Internet Explorer");
+    parseError("var x = {get 'a'(){}};",
+        "getters are not supported in Internet Explorer");
     parseError("var x = {get a(){}};",
         "getters are not supported in Internet Explorer");
     mode = LanguageMode.ECMASCRIPT5;
+    parse("var x = {get 1(){}};");
+    parse("var x = {get 'a'(){}};");
     parse("var x = {get a(){}};");
     parseError("var x = {get a(b){}};", "getters may not have parameters");
   }
 
   public void testSetter() {
     mode = LanguageMode.ECMASCRIPT3;
+    parseError("var x = {set 1(x){}};",
+        "setters are not supported in Internet Explorer");
+    parseError("var x = {set 'a'(x){}};",
+        "setters are not supported in Internet Explorer");
     parseError("var x = {set a(x){}};",
         "setters are not supported in Internet Explorer");
     mode = LanguageMode.ECMASCRIPT5;
+    parse("var x = {set 1(x){}};");
+    parse("var x = {set 'a'(x){}};");
     parse("var x = {set a(x){}};");
     parseError("var x = {set a(){}};",
         "setters must have exactly one parameter");
@@ -793,6 +818,9 @@ public class ParserTest extends BaseJSTypeTestCase {
 
   public void testReservedKeywords() {
     boolean isIdeMode = false;
+
+    mode = LanguageMode.ECMASCRIPT3;
+
     parseError("var boolean;", "missing variable name");
     parseError("function boolean() {};",
         "missing ( before function parameters.");
@@ -815,7 +843,67 @@ public class ParserTest extends BaseJSTypeTestCase {
     parse("boolean = 1;");
     parseError("class = 1;", "identifier is a reserved word");
     parseError("public = 2;", "identifier is a reserved word");
+  }
 
+  public void testKeywordsAsProperties() {
+    boolean isIdeMode = false;
+
+    mode = LanguageMode.ECMASCRIPT3;
+
+    parseError("var x = {function: 1};", "invalid property id");
+    parseError("x.function;", "missing name after . operator");
+    parseError("var x = {get x(){} };",
+        "getters are not supported in Internet Explorer");
+    parseError("var x = {get function(){} };", "invalid property id");
+    parseError("var x = {get 'function'(){} };",
+        "getters are not supported in Internet Explorer");
+    parseError("var x = {get 1(){} };",
+        "getters are not supported in Internet Explorer");
+    parseError("var x = {set function(a){} };", "invalid property id");
+    parseError("var x = {set 'function'(a){} };",
+        "setters are not supported in Internet Explorer");
+    parseError("var x = {set 1(a){} };",
+        "setters are not supported in Internet Explorer");
+    parseError("var x = {class: 1};", "invalid property id");
+    parseError("x.class;", "missing name after . operator");
+    parse("var x = {let: 1};");
+    parse("x.let;");
+    parse("var x = {yield: 1};");
+    parse("x.yield;");
+
+    mode = LanguageMode.ECMASCRIPT5;
+
+    parse("var x = {function: 1};");
+    parse("x.function;");
+    parse("var x = {get function(){} };");
+    parse("var x = {get 'function'(){} };");
+    parse("var x = {get 1(){} };");
+    parse("var x = {set function(a){} };");
+    parse("var x = {set 'function'(a){} };");
+    parse("var x = {set 1(a){} };");
+    parse("var x = {class: 1};");
+    parse("x.class;");
+    parse("var x = {let: 1};");
+    parse("x.let;");
+    parse("var x = {yield: 1};");
+    parse("x.yield;");
+
+    mode = LanguageMode.ECMASCRIPT5_STRICT;
+
+    parse("var x = {function: 1};");
+    parse("x.function;");
+    parse("var x = {get function(){} };");
+    parse("var x = {get 'function'(){} };");
+    parse("var x = {get 1(){} };");
+    parse("var x = {set function(a){} };");
+    parse("var x = {set 'function'(a){} };");
+    parse("var x = {set 1(a){} };");
+    parse("var x = {class: 1};");
+    parse("x.class;");
+    parse("var x = {let: 1};");
+    parse("x.let;");
+    parse("var x = {yield: 1};");
+    parse("x.yield;");
   }
 
   private void parseError(String string, String... errors) {

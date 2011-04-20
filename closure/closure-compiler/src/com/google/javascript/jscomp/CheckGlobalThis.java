@@ -16,7 +16,6 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.NodeTraversal.Callback;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
@@ -61,7 +60,6 @@ final class CheckGlobalThis implements Callback {
       "dangerous use of the global 'this' object");
 
   private final AbstractCompiler compiler;
-  private final CheckLevel level;
 
   /**
    * If {@code assignLhsChild != null}, then the node being traversed is
@@ -70,9 +68,8 @@ final class CheckGlobalThis implements Callback {
    */
   private Node assignLhsChild = null;
 
-  CheckGlobalThis(AbstractCompiler compiler, CheckLevel level) {
+  CheckGlobalThis(AbstractCompiler compiler) {
     this.compiler = compiler;
-    this.level = level;
   }
 
   /**
@@ -106,8 +103,7 @@ final class CheckGlobalThis implements Callback {
             pType == Token.ASSIGN ||
 
             // object literal keys
-            pType == Token.STRING ||
-            pType == Token.NUMBER)) {
+            pType == Token.STRING)) {
         return false;
       }
 
@@ -156,7 +152,7 @@ final class CheckGlobalThis implements Callback {
 
   public void visit(NodeTraversal t, Node n, Node parent) {
     if (n.getType() == Token.THIS && shouldReportThis(n, parent)) {
-      compiler.report(t.makeError(n, level, GLOBAL_THIS));
+      compiler.report(t.makeError(n, GLOBAL_THIS));
     }
     if (n == assignLhsChild) {
       assignLhsChild = null;

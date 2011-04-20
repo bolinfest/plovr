@@ -104,18 +104,24 @@ public class NodeUtilTest extends TestCase {
     assertBooleanFalse("void foo()");
     assertBooleanUnknown("b");
     assertBooleanUnknown("-'0.0'");
+
+    // Known but getBooleanValue return false for expressions with side-effects
+    assertBooleanUnknown("{a:foo()}");
+    assertBooleanUnknown("[foo()]");
   }
 
   private void assertBooleanTrue(String val) {
-    assertEquals(TernaryValue.TRUE, NodeUtil.getBooleanValue(getNode(val)));
+    assertEquals(TernaryValue.TRUE, NodeUtil.getPureBooleanValue(getNode(val)));
   }
 
   private void assertBooleanFalse(String val) {
-    assertEquals(TernaryValue.FALSE, NodeUtil.getBooleanValue(getNode(val)));
+    assertEquals(
+        TernaryValue.FALSE, NodeUtil.getPureBooleanValue(getNode(val)));
   }
 
   private void assertBooleanUnknown(String val) {
-    assertEquals(TernaryValue.UNKNOWN, NodeUtil.getBooleanValue(getNode(val)));
+    assertEquals(
+        TernaryValue.UNKNOWN, NodeUtil.getPureBooleanValue(getNode(val)));
   }
 
   public void testGetExpressionBooleanValue() {
@@ -175,21 +181,24 @@ public class NodeUtilTest extends TestCase {
 
     assertExpressionBooleanUnknown("b");
     assertExpressionBooleanUnknown("-'0.0'");
+
+    assertExpressionBooleanTrue("{a:foo()}");
+    assertExpressionBooleanTrue("[foo()]");
   }
 
   private void assertExpressionBooleanTrue(String val) {
     assertEquals(TernaryValue.TRUE,
-        NodeUtil.getExpressionBooleanValue(getNode(val)));
+        NodeUtil.getImpureBooleanValue(getNode(val)));
   }
 
   private void assertExpressionBooleanFalse(String val) {
     assertEquals(TernaryValue.FALSE,
-        NodeUtil.getExpressionBooleanValue(getNode(val)));
+        NodeUtil.getImpureBooleanValue(getNode(val)));
   }
 
   private void assertExpressionBooleanUnknown(String val) {
     assertEquals(TernaryValue.UNKNOWN,
-        NodeUtil.getExpressionBooleanValue(getNode(val)));
+        NodeUtil.getImpureBooleanValue(getNode(val)));
   }
 
   public void testGetStringValue() {
@@ -554,6 +563,7 @@ public class NodeUtilTest extends TestCase {
     Node function = NodeUtil.newFunctionNode(
         "foo", params, body, -1, -1);
     Node actual = new Node(Token.SCRIPT);
+    actual.setIsSyntheticBlock(true);
     actual.addChildToFront(function);
     String difference = expected.checkTreeEquals(actual);
     if (difference != null) {
@@ -609,15 +619,21 @@ public class NodeUtilTest extends TestCase {
   public void testReferencesThis() {
     assertTrue(NodeUtil.referencesThis(
         parse("this")));
-    assertTrue(NodeUtil.referencesThis(
-        parse("function foo(){}(this)")));
+    // Don't descend into functions (starts at the script node)
+    assertFalse(NodeUtil.referencesThis(
+        parse("function foo(){this}")));
+    // But starting with a function properly check for 'this'
+    Node n = parse("function foo(){this}").getFirstChild();
+    assertEquals(n.getType(), Token.FUNCTION);
+    assertTrue(NodeUtil.referencesThis(n));
     assertTrue(NodeUtil.referencesThis(
         parse("b?this:null")));
 
     assertFalse(NodeUtil.referencesThis(
         parse("a")));
-    assertFalse(NodeUtil.referencesThis(
-        parse("function foo(){}")));
+    n = parse("function foo(){}").getFirstChild();
+    assertEquals(n.getType(), Token.FUNCTION);
+    assertFalse(NodeUtil.referencesThis(n));
     assertFalse(NodeUtil.referencesThis(
         parse("(b?foo():null)")));
   }

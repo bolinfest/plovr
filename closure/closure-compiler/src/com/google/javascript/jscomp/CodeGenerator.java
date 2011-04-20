@@ -203,7 +203,7 @@ class CodeGenerator {
 
       case Token.ARRAYLIT:
         add("[");
-        addArrayList(first, (int[]) n.getProp(Node.SKIP_INDEXES_PROP));
+        addArrayList(first);
         add("]");
         break;
 
@@ -219,10 +219,7 @@ class CodeGenerator {
         break;
 
       case Token.NUMBER:
-        Preconditions.checkState(
-            childCount ==
-            ((n.getParent() != null &&
-              n.getParent().getType() == Token.OBJECTLIT) ? 1 : 0));
+        Preconditions.checkState(childCount == 0);
         cc.addNumber(n.getDouble());
         break;
 
@@ -340,13 +337,20 @@ class CodeGenerator {
         Node body = fn.getLastChild();
 
         // Add the property name.
-        if (TokenStream.isJSIdentifier(name) &&
+        if (!n.isQuotedString() &&
+            TokenStream.isJSIdentifier(name) &&
             // do not encode literally any non-literal characters that were
             // unicode escaped.
             NodeUtil.isLatin(name)) {
           add(name);
         } else {
-          add(jsString(n.getString(), outputCharsetEncoder));
+          // Determine if the string is a simple number.
+          double d = getSimpleNumber(name);
+          if (!Double.isNaN(d)) {
+            cc.addNumber(d);
+          } else {
+            add(jsString(n.getString(), outputCharsetEncoder));
+          }
         }
 
         add(parameters);
@@ -650,18 +654,25 @@ class CodeGenerator {
           if (c.getType() == Token.GET || c.getType() == Token.SET) {
             add(c);
           } else {
-            // Object literal property names don't have to be quoted if they are
-            // not JavaScript keywords
-            if (c.getType() == Token.STRING &&
-                !c.isQuotedString() &&
-                !TokenStream.isKeyword(c.getString()) &&
-                TokenStream.isJSIdentifier(c.getString()) &&
-                // do not encode literally any non-literal characters that were
-                // unicode escaped.
-                NodeUtil.isLatin(c.getString())) {
-              add(c.getString());
+            Preconditions.checkState(c.getType() == Token.STRING);
+            String key = c.getString();
+            // Object literal property names don't have to be quoted if they
+            // are not JavaScript keywords
+            if (!c.isQuotedString() &&
+                !TokenStream.isKeyword(key) &&
+                TokenStream.isJSIdentifier(key) &&
+                // do not encode literally any non-literal characters that
+                // were unicode escaped.
+                NodeUtil.isLatin(key)) {
+              add(key);
             } else {
-              addExpr(c, 1);
+              // Determine if the string is a simple number.
+              double d = getSimpleNumber(key);
+              if (!Double.isNaN(d)) {
+                cc.addNumber(d);
+              } else {
+                addExpr(c, 1);
+              }
             }
             add(":");
             addExpr(c.getFirstChild(), 1);
@@ -717,6 +728,31 @@ class CodeGenerator {
     }
 
     cc.endSourceMapping(n);
+  }
+
+  static boolean isSimpleNumber(String s) {
+    int len = s.length();
+    for (int index = 0; index < len; index++) {
+      char c = s.charAt(index);
+      if (c < '0' || c > '9') {
+        return false;
+      }
+    }
+    return len > 0;
+  }
+
+  static double getSimpleNumber(String s) {
+    if (isSimpleNumber(s)) {
+      try {
+        long l = Long.parseLong(s);
+        if (l < NodeUtil.MAX_POSITIVE_INTEGER_NUMBER) {
+          return l;
+        }
+      } catch (NumberFormatException e) {
+        // The number was too long to parse. Fall through to NaN.
+      }
+    }
+    return Double.NaN;
   }
 
   /**
@@ -875,27 +911,19 @@ class CodeGenerator {
    * slot.
    * @param firstInList The first in the node list (chained through the next
    * property).
-   * @param skipIndexes If not null, then the array of skipped entries in the
-   * array.
    */
-  void addArrayList(Node firstInList, int[] skipIndexes) {
-    int nextSlot = 0;
-    int nextSkipSlot = 0;
+  void addArrayList(Node firstInList) {
+    boolean lastWasEmpty = false;
     for (Node n = firstInList; n != null; n = n.getNext()) {
-      while (skipIndexes != null && nextSkipSlot < skipIndexes.length) {
-        if (nextSlot == skipIndexes[nextSkipSlot]) {
-          cc.listSeparator();
-          nextSlot++;
-          nextSkipSlot++;
-        } else {
-          break;
-        }
-      }
       if (n != firstInList) {
         cc.listSeparator();
       }
       addExpr(n, 1);
-      nextSlot++;
+      lastWasEmpty = n.getType() == Token.EMPTY;
+    }
+
+    if (lastWasEmpty) {
+      cc.listSeparator();
     }
   }
 
@@ -971,6 +999,7 @@ class CodeGenerator {
     for (int i = 0; i < s.length(); i++) {
       char c = s.charAt(i);
       switch (c) {
+        case '\0': sb.append("\\0"); break;
         case '\n': sb.append("\\n"); break;
         case '\r': sb.append("\\r"); break;
         case '\t': sb.append("\\t"); break;
@@ -1017,7 +1046,7 @@ class CodeGenerator {
             // No charsetEncoder provided - pass straight latin characters
             // through, and escape the rest.  Doing the explicit character
             // check is measurably faster than using the CharsetEncoder.
-            if (c > 0x1f && c <= 0x7f) {
+            if (c > 0x1f && c < 0x7f) {
               sb.append(c);
             } else {
               // Other characters can be misinterpreted by some js parsers,

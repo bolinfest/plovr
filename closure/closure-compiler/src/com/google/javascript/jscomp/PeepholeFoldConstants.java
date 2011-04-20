@@ -24,16 +24,13 @@ import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.TernaryValue;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Peephole optimization to fold constants (e.g. x + 1 + 7 --> x + 8).
  *
  */
 class PeepholeFoldConstants extends AbstractPeepholeOptimization {
-
-  static final DiagnosticType DIVIDE_BY_0_ERROR = DiagnosticType.error(
-      "JSC_DIVIDE_BY_0_ERROR",
-      "Divide by 0");
 
   static final DiagnosticType INVALID_GETELEM_INDEX_ERROR =
       DiagnosticType.error(
@@ -64,6 +61,9 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
       "Fractional bitwise operand: {0}");
 
   private static final double MAX_FOLD_NUMBER = Math.pow(2, 53);
+
+  // The LOCALE independent "locale"
+  private static final Locale ROOT_LOCALE = new Locale("");
 
   @Override
   Node optimizeSubtree(Node subtree) {
@@ -332,7 +332,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
       return n;
     }
 
-    TernaryValue leftVal = NodeUtil.getBooleanValue(left);
+    TernaryValue leftVal = NodeUtil.getPureBooleanValue(left);
     if (leftVal == TernaryValue.UNKNOWN) {
       return n;
     }
@@ -529,7 +529,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
 
     int type = n.getType();
 
-    TernaryValue leftVal = NodeUtil.getBooleanValue(left);
+    TernaryValue leftVal = NodeUtil.getImpureBooleanValue(left);
 
     if (leftVal != TernaryValue.UNKNOWN) {
       boolean lval = leftVal.toBoolean(true);
@@ -540,7 +540,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
           !lval && type == Token.AND) {
         result = left;
 
-      } else {
+      } else if (!mayHaveSideEffects(left)) {
         // (FALSE || x) => x
         // (TRUE && x) => x
         result = right;
@@ -708,14 +708,12 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
         break;
       case Token.MOD:
         if (rval == 0) {
-          error(DIVIDE_BY_0_ERROR, right);
           return null;
         }
         result = lval % rval;
         break;
       case Token.DIV:
         if (rval == 0) {
-          error(DIVIDE_BY_0_ERROR, right);
           return null;
         }
         result = lval / rval;
@@ -906,8 +904,9 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
           && right.getString().equals("undefined"))
           || (Token.VOID == right.getType()
               && NodeUtil.isLiteralValue(right.getFirstChild(), false)));
-
-    switch (left.getType()) {
+    int lhType = getNormalizedNodeType(left);
+    int rhType = getNormalizedNodeType(right);
+    switch (lhType) {
       case Token.VOID:
         if (!NodeUtil.isLiteralValue(left.getFirstChild(), false)) {
           return n;
@@ -925,7 +924,6 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
           result = compareToUndefined(left, op);
           break;
         }
-        int rhType = right.getType();
         if (rhType != Token.TRUE &&
             rhType != Token.FALSE &&
             rhType != Token.NULL) {
@@ -934,12 +932,12 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
         switch (op) {
           case Token.SHEQ:
           case Token.EQ:
-            result = left.getType() == right.getType();
+            result = lhType == rhType;
             break;
 
           case Token.SHNE:
           case Token.NE:
-            result = left.getType() != right.getType();
+            result = lhType != rhType;
             break;
 
           case Token.GE:
@@ -1068,6 +1066,23 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
     reportCodeChange();
 
     return newNode;
+  }
+
+  /**
+   * @return Translate NOT expressions into TRUE or FALSE when possible.
+   */
+  private int getNormalizedNodeType(Node n) {
+    int type = n.getType();
+    if (type == Token.NOT) {
+      TernaryValue value = NodeUtil.getPureBooleanValue(n);
+      switch (value) {
+        case TRUE:
+          return Token.TRUE;
+        case FALSE:
+          return Token.FALSE;
+      }
+    }
+    return type;
   }
 
   /**
@@ -1228,13 +1243,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
       return subtree;
     }
 
-    Node firstArg = callTarget.getNext();
-    if (firstArg == null) {
-      return subtree;
-    }
-
-    if (!NodeUtil.isGet(callTarget) ||
-        !NodeUtil.isImmutableValue(firstArg)) {
+    if (!NodeUtil.isGet(callTarget)) {
       return subtree;
     }
 
@@ -1247,18 +1256,52 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
     }
 
     String functionNameString = functionName.getString();
-    if (functionNameString.equals("indexOf") ||
-        functionNameString.equals("lastIndexOf")) {
-      subtree = tryFoldStringIndexOf(subtree, functionNameString,
-          stringNode, firstArg);
-    } else if (functionNameString.equals("substr")) {
-      subtree = tryFoldStringSubstr(subtree, stringNode, firstArg);
-    } else if (functionNameString.equals("substring")) {
-      subtree = tryFoldStringSubstring(subtree, stringNode, firstArg);
+    Node firstArg = callTarget.getNext();
+    if (firstArg == null) {
+      if (functionNameString.equals("toLowerCase")) {
+        subtree = tryFoldStringToLowerCase(subtree, stringNode);
+      } else if (functionNameString.equals("toUpperCase")) {
+        subtree = tryFoldStringToUpperCase(subtree, stringNode);
+      }
+      return subtree;
+    } else if (NodeUtil.isImmutableValue(firstArg)) {
+      if (functionNameString.equals("indexOf") ||
+          functionNameString.equals("lastIndexOf")) {
+        subtree = tryFoldStringIndexOf(subtree, functionNameString,
+            stringNode, firstArg);
+      } else if (functionNameString.equals("substr")) {
+        subtree = tryFoldStringSubstr(subtree, stringNode, firstArg);
+      } else if (functionNameString.equals("substring")) {
+        subtree = tryFoldStringSubstring(subtree, stringNode, firstArg);
+      }
     }
 
     return subtree;
- }
+  }
+
+  /**
+   * @return The lowered string Node.
+   */
+  private Node tryFoldStringToLowerCase(Node subtree, Node stringNode) {
+    // From Rhino, NativeString.java. See ECMA 15.5.4.11
+    String lowered = stringNode.getString().toLowerCase(ROOT_LOCALE);
+    Node replacement = Node.newString(lowered);
+    subtree.getParent().replaceChild(subtree, replacement);
+    reportCodeChange();
+    return replacement;
+  }
+
+  /**
+   * @return The uppered string Node.
+   */
+  private Node tryFoldStringToUpperCase(Node subtree, Node stringNode) {
+    // From Rhino, NativeString.java. See ECMA 15.5.4.12
+    String uppered = stringNode.getString().toUpperCase(ROOT_LOCALE);
+    Node replacement = Node.newString(uppered);
+    subtree.getParent().replaceChild(subtree, replacement);
+    reportCodeChange();
+    return replacement;
+  }
 
   /**
    * Try to evaluate String.indexOf/lastIndexOf:
@@ -1317,12 +1360,9 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
     Node functionName = arrayNode.getNext();
 
     if ((arrayNode.getType() != Token.ARRAYLIT) ||
-        NodeUtil.isSparseArray(arrayNode) ||
         !functionName.getString().equals("join")) {
       return n;
     }
-
-    // TODO(johnlenz): handle sparse arrays
 
     String joinString = (right == null) ? "," : NodeUtil.getStringValue(right);
     List<Node> arrayFoldedChildren = Lists.newLinkedList();
@@ -1332,7 +1372,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
     Node elem = arrayNode.getFirstChild();
     // Merges adjacent String nodes.
     while (elem != null) {
-      if (NodeUtil.isImmutableValue(elem)) {
+      if (NodeUtil.isImmutableValue(elem) || elem.getType() == Token.EMPTY) {
         if (sb == null) {
           sb = new StringBuilder();
         } else {
@@ -1524,9 +1564,11 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
   private Node tryFoldGetElem(Node n, Node left, Node right) {
     Preconditions.checkArgument(n.getType() == Token.GETELEM);
 
-    if (left.getType() == Token.ARRAYLIT && !NodeUtil.isSparseArray(left)) {
-      // TODO(johnlenz): handle sparse arrays
+    if (left.getType() == Token.OBJECTLIT) {
+      return tryFoldObjectPropAccess(n, left, right);
+    }
 
+    if (left.getType() == Token.ARRAYLIT) {
       if (right.getType() != Token.NUMBER) {
         // Sometimes people like to use complex expressions to index into
         // arrays, or strings to index into array methods.
@@ -1555,8 +1597,13 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
         return n;
       }
 
+      if (elem.getType() == Token.EMPTY) {
+        elem = NodeUtil.newUndefinedNode(elem);
+      } else {
+        left.removeChild(elem);
+      }
+
       // Replace the entire GETELEM with the value
-      left.removeChild(elem);
       n.getParent().replaceChild(n, elem);
       reportCodeChange();
       return elem;
@@ -1570,13 +1617,16 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
   private Node tryFoldGetProp(Node n, Node left, Node right) {
     Preconditions.checkArgument(n.getType() == Token.GETPROP);
 
+    if (left.getType() == Token.OBJECTLIT) {
+      return tryFoldObjectPropAccess(n, left, right);
+    }
+
     if (right.getType() == Token.STRING &&
         right.getString().equals("length")) {
       int knownLength = -1;
       switch (left.getType()) {
         case Token.ARRAYLIT:
-          // TODO(johnlenz): handle sparse arrays
-          if (NodeUtil.isSparseArray(left) || mayHaveSideEffects(left)) {
+          if (mayHaveSideEffects(left)) {
             // Nope, can't fold this, without handling the side-effects.
             return n;
           }
@@ -1598,6 +1648,71 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
       return lengthNode;
     }
 
+    return n;
+  }
+
+  private Node tryFoldObjectPropAccess(Node n, Node left, Node right) {
+    Preconditions.checkArgument(NodeUtil.isGet(n));
+
+    if (left.getType() != Token.OBJECTLIT || right.getType() != Token.STRING) {
+      return n;
+    }
+
+    Node parent = n.getParent();
+    if ((NodeUtil.isAssignmentOp(parent) && parent.getFirstChild() == n)
+        || parent.getType() == Token.INC
+        || parent.getType() == Token.DEC) {
+      // If GETPROP/GETELEM is used as assignment target the object literal is
+      // acting as a temporary we can't fold it here:
+      //    "{a:x}.a += 1" is not "x += 1"
+      return n;
+    }
+
+    // find the last definition in the object literal
+    Node key = null;
+    Node value = null;
+    for (Node c = left.getFirstChild(); c != null; c = c.getNext()) {
+      if (c.getString().equals(right.getString())) {
+        switch (c.getType()) {
+          case Token.SET:
+            continue;
+          case Token.GET:
+          case Token.STRING:
+            if (value != null && mayHaveSideEffects(value)) {
+              // The previously found value had side-effects
+              return n;
+            }
+            key = c;
+            value = key.getFirstChild();
+            break;
+          default:
+            throw new IllegalStateException();
+        }
+      } else if (mayHaveSideEffects(c.getFirstChild())) {
+        // We don't handle the side-effects here as they might need a temporary
+        // or need to be reordered.
+        return n;
+      }
+    }
+
+    // Didn't find a definition of the name in the object literal, it might
+    // be coming from the Object prototype
+    if (value == null) {
+      return n;
+    }
+
+    if (value.getType() == Token.FUNCTION && NodeUtil.referencesThis(value)) {
+      // 'this' may refer to the object we are trying to remove
+      return n;
+    }
+
+    Node replacement = value.detachFromParent();
+    if (key.getType() == Token.GET){
+      replacement = new Node(Token.CALL, replacement);
+    }
+
+    n.getParent().replaceChild(n, replacement);
+    reportCodeChange();
     return n;
   }
 }

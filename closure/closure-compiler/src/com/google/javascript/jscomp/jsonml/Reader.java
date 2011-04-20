@@ -137,8 +137,9 @@ public class Reader {
     Node root = new Node(Token.BLOCK);
     nodeIndex = -1;
 
+    Preconditions.checkState(rootElement.getType() == TagType.Program);
     transformElement(rootElement, root);
-    return root;
+    return root.removeFirstChild();
   }
 
   /**
@@ -569,27 +570,8 @@ public class Reader {
     parent.addChildToBack(node);
 
     // iterate through all the children and look for empty elements
-    int skipCount = 0;
     for (JsonML child : element.getChildren()) {
-      if (child.getType() == TagType.Empty) {
-        skipCount++;
-      }
       transformElement(child, node);
-    }
-
-    // if at least one empty element occurs, set up SKIP_INDEXES_PROP
-    if (skipCount > 0) {
-      int [] skipIndexes = new int[skipCount];
-      int i = 0;
-      int j = 0;
-      for (JsonML child : element.getChildren()) {
-        if (child.getType() == TagType.Empty) {
-          skipIndexes[i] = j;
-          ++i;
-        }
-        ++j;
-      }
-      node.putProp(Node.SKIP_INDEXES_PROP, skipIndexes);
     }
   }
 
@@ -650,6 +632,7 @@ public class Reader {
 
     // always insert an extra BLOCK node
     Node block = new Node(Token.BLOCK);
+    block.setIsSyntheticBlock(true);
     node.addChildToBack(block);
 
     transformAllChildrenFromIndex(element, block, 1, true);
@@ -773,6 +756,7 @@ public class Reader {
 
     // the first child represent body
     Node block = new Node(Token.BLOCK);
+    block.setIsSyntheticBlock(true);
     node.addChildToBack(block);
 
     transformAllChildren(element, block, true);
@@ -809,8 +793,7 @@ public class Reader {
   private void transformEmpty(JsonML element, Node parent) {
     switch (parent.getType()) {
       case Token.ARRAYLIT:
-        // nothing happens, but we make sure that the elements are
-        // taken into account by nodeIndex
+        parent.addChildToBack(new Node(Token.EMPTY));
         break;
       case Token.FUNCTION:
         parent.addChildToBack(Node.newString(Token.NAME, ""));

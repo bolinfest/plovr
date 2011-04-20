@@ -484,10 +484,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         break;
 
       case Token.NUMBER:
-        // Object literal keys are handled with OBJECTLIT
-        if (!NodeUtil.isObjectLitKey(n, n.getParent())) {
-          ensureTyped(t, n, NUMBER_TYPE);
-        }
+        ensureTyped(t, n, NUMBER_TYPE);
         break;
 
       case Token.STRING:
@@ -1449,9 +1446,22 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     if (childType instanceof FunctionType) {
       FunctionType functionType = (FunctionType) childType;
 
-      // Non-native constructors should never be called directly.
+      boolean isExtern = false;
+      JSDocInfo functionJSDocInfo = functionType.getJSDocInfo();
+      if(functionJSDocInfo != null) {
+        String sourceName = functionJSDocInfo.getSourceName();
+        CompilerInput functionSource = compiler.getInput(sourceName);
+        isExtern = functionSource.isExtern();
+      }
+
+      // Non-native constructors should not be called directly
+      // unless they specify a return type and are defined
+      // in an extern.
       if (functionType.isConstructor() &&
-          !functionType.isNativeObjectType()) {
+          !functionType.isNativeObjectType() &&
+          (functionType.getReturnType().isUnknownType() ||
+           functionType.getReturnType().isVoidType() ||
+           !isExtern)) {
         report(t, n, CONSTRUCTOR_NOT_CALLABLE, childType.toString());
       }
 

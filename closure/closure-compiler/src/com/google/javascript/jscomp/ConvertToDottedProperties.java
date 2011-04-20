@@ -43,8 +43,11 @@ class ConvertToDottedProperties extends AbstractPostOrderCallback
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
     switch (n.getType()) {
+      case Token.GET:
+      case Token.SET:
       case Token.STRING:
-        if (NodeUtil.isObjectLitKey(n, parent)) {
+        if (NodeUtil.isObjectLitKey(n, parent) &&
+            NodeUtil.isValidPropertyName(n.getString())) {
           n.putBooleanProp(Node.QUOTED_PROP, false);
         }
         break;

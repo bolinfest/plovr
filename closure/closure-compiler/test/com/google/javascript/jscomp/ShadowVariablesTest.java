@@ -17,7 +17,7 @@
 package com.google.javascript.jscomp;
 
 /**
- * Unit tests for {@link ShadowVariableTest}.
+ * Unit tests for {@link ShadowVariables}.
  *
  *
  */
@@ -227,6 +227,47 @@ public class ShadowVariablesTest extends CompilerTestCase{
          "function c() {var d=function a(){a()}; var e=function b(){b()}}");
     test("function f(x) { return x ? function(y){} : function(z) {} }",
          "function b(a) { return a ? function(a){} : function(a) {} }");
+  }
 
+  public void testExportedLocal1() {
+    test("function f(a) { a();a();a(); return function($super){} }",
+         "function b(a) { a();a();a(); return function($super){} }");
+  }
+
+  public void testExportedLocal2() {
+    test("function f($super) { $super();$super(); return function(a){} }",
+         "function a($super) { $super();$super(); return function(b){} }");
+  }
+
+  public void testBug4172539() {
+    // All the planets must line up. When we look at the 2nd inner function,
+    // y can shadow x, also m can shadow x as well. Now all that is left for
+    // n to shadow is 'y'. Now because y has already shadowed x, the pseudo
+    // name maps has already updated y gets $x$$. This mean n will be updated
+    // with "$x$$" in the name map which is incorrect. That is the reason
+    // why we can't update the pseudo name map on-the-fly.
+
+    generatePseudoNames = true;
+    test("function f(x) {" +
+         "  x;x;x;" +
+         "  return function (y) { y; x };" +
+         "  return function (y) {" +
+         "    y;" +
+         "    return function (m, n) {" +
+         "       m;m;m;" +
+         "    };" +
+         "  };" +
+         "}",
+
+         "function $f$$($x$$) {" +
+         "  $x$$;$x$$;$x$$;" +
+         "  return function ($y$$) { $y$$; $x$$ };" +
+         "  return function ($x$$) {" +
+         "    $x$$;" +
+         "    return function ($x$$, $y$$) {" +
+         "       $x$$;$x$$;$x$$;" +
+         "    };" +
+         "  };" +
+         "}");
   }
 }

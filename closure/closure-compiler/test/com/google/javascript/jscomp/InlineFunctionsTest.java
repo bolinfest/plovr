@@ -377,6 +377,12 @@ public class InlineFunctionsTest extends CompilerTestCase {
         "};");
   }
 
+  public void testInlineFunctions30() {
+    // As simple a test as we can get.
+    testSame("function foo(){ return eval() }" +
+        "foo();");
+  }
+
   public void testMixedModeInlining1() {
     // Base line tests, direct inlining
     test("function foo(){return 1}" +
@@ -1401,7 +1407,8 @@ public class InlineFunctionsTest extends CompilerTestCase {
     test("function f(){a=1;return 1} var x = 1; x += f()",
         "var x = 1;" +
         "var JSCompiler_temp_const$$0 = x;" +
-        "{var JSCompiler_inline_result$$1; a=1; JSCompiler_inline_result$$1=1}" +
+        "{var JSCompiler_inline_result$$1; a=1;" +
+        " JSCompiler_inline_result$$1=1}" +
         "x = JSCompiler_temp_const$$0 + JSCompiler_inline_result$$1;");
   }
 
@@ -1642,6 +1649,47 @@ public class InlineFunctionsTest extends CompilerTestCase {
   public void testRenamePropertyFunction() {
     testSame("function JSCompiler_renameProperty(x) {return x} " +
              "JSCompiler_renameProperty('foo')");
+  }
+
+  public void testReplacePropertyFunction() {
+    // baseline: an alias doesn't prevents declaration removal, but not
+    // inlining.
+    test("function f(x) {return x} " +
+         "foo(window, f); f(1)",
+         "function f(x) {return x} " +
+         "foo(window, f); 1");
+    // a reference passed to JSCompiler_ObjectPropertyString prevents inlining
+    // as well.
+    testSame("function f(x) {return x} " +
+             "new JSCompiler_ObjectPropertyString(window, f); f(1)");
+  }
+
+  public void testIssue423() {
+    test(
+        "(function($) {\n" +
+        "  $.fn.multicheck = function(options) {\n" +
+        "    initialize.call(this, options);\n" +
+        "  };\n" +
+        "\n" +
+        "  function initialize(options) {\n" +
+        "    options.checkboxes = $(this).siblings(':checkbox');\n" +
+        "    preload_check_all.call(this);\n" +
+        "  }\n" +
+        "\n" +
+        "  function preload_check_all() {\n" +
+        "    $(this).data('checkboxes');\n" +
+        "  }\n" +
+        "})(jQuery)",
+        "(function($){" +
+        "  $.fn.multicheck=function(options$$1){" +
+        "    {" +
+        "     options$$1.checkboxes=$(this).siblings(\":checkbox\");" +
+        "     {" +
+        "       $(this).data(\"checkboxes\")" +
+        "     }" +
+        "    }" +
+        "  }" +
+        "})(jQuery)");
   }
 
   // Inline a single reference function into deeper modules

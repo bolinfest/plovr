@@ -17,6 +17,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
@@ -83,7 +84,9 @@ class ShadowVariables implements CompilerPass {
   // All the information used for renaming.
   private final SortedSet<Assignment> varsByFrequency;
   private final SortedMap<String, Assignment> assignments;
-  private final Map<Node, String> pseudoNameMap;
+  private final Map<Node, String> oldPseudoNameMap;
+  private final Map<Node, String> deltaPseudoNameMap;
+
 
   /**
    * @param assignments Map of old variable names to its assignment Objects.
@@ -99,9 +102,9 @@ class ShadowVariables implements CompilerPass {
     this.compiler = compiler;
     this.assignments = assignments;
     this.varsByFrequency = varsByFrequency;
-    this.pseudoNameMap = pseudoNameMap;
+    this.oldPseudoNameMap = pseudoNameMap;
+    this.deltaPseudoNameMap = Maps.newLinkedHashMap();
   }
-
 
   @Override
   public void process(Node externs, Node root) {
@@ -112,8 +115,14 @@ class ShadowVariables implements CompilerPass {
     //
     // 2. Tries to find shadows for each variables, updates the
     //    variable usage frequency map.
+    //
+    // 3. Updates the pseudo naming map if needed.
     NodeTraversal.traverse(compiler, root, new GatherReferenceInfo());
     NodeTraversal.traverse(compiler, root, new DoShadowVariables());
+
+    if (oldPseudoNameMap != null) {
+      oldPseudoNameMap.putAll(deltaPseudoNameMap);
+    }
   }
 
   private class GatherReferenceInfo extends AbstractPostOrderCallback {
@@ -184,6 +193,11 @@ class ShadowVariables implements CompilerPass {
           continue;
         }
 
+        // Don't shadow an exported local.
+        if (compiler.getCodingConvention().isExported(var.name, s.isLocal())) {
+          continue;
+        }
+
         // Try to look for the best shadow for the current candidate.
         Assignment bestShadow = findBestShadow(s, var);
         if (bestShadow == null) {
@@ -201,11 +215,11 @@ class ShadowVariables implements CompilerPass {
 
         doShadow(localAssignment, bestShadow, var);
 
-        if (pseudoNameMap != null) {
+        if (oldPseudoNameMap != null) {
           String targetPseudoName =
-            pseudoNameMap.get(s.getVar(bestShadow.oldName).nameNode);
+            oldPseudoNameMap.get(s.getVar(bestShadow.oldName).nameNode);
           for (Node use : varToNameUsage.get(var)) {
-            pseudoNameMap.put(use, targetPseudoName);
+            deltaPseudoNameMap.put(use, targetPseudoName);
           }
         }
       }
@@ -223,7 +237,7 @@ class ShadowVariables implements CompilerPass {
      */
     private Assignment findBestShadow(Scope curScope, Var candidate) {
       // Search for the candidate starting from the most used local.
-      TARGET: for (Assignment assignment : varsByFrequency) {
+      for (Assignment assignment : varsByFrequency) {
         if (assignment.oldName.startsWith(RenameVars.LOCAL_VAR_PREFIX)) {
           if (!scopeUpRefMap.get(curScope.getRootNode()).contains(
               assignment.oldName)) {

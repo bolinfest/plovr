@@ -37,16 +37,22 @@ public class Writer {
    */
   public JsonML processAst(Node root) {
     Preconditions.checkNotNull(root);
-    Preconditions.checkArgument(root.getType() == Token.BLOCK);
+    Preconditions.checkArgument(
+      root.getType() == Token.BLOCK || root.getType() == Token.SCRIPT);
 
     JsonML rootElement = new JsonML(TagType.BlockStmt);
-    Node child = root.getFirstChild();
-    while (child != null) {
-      processNode(child, rootElement);
-      child = child.getNext();
+    if (root.getType() == Token.SCRIPT) {
+      processNode(root, rootElement);
+      return rootElement.getChild(0);
+    } else {
+      Node child = root.getFirstChild();
+      while (child != null) {
+        processNode(child, rootElement);
+        child = child.getNext();
+      }
+      // TODO(johnlenz): Add support for multiple scripts.
+      return rootElement.getChild(0);
     }
-
-    return rootElement.getChild(0);
   }
 
   /**
@@ -303,22 +309,8 @@ public class Writer {
     JsonML element = new JsonML(TagType.ArrayExpr);
     currentParent.appendChild(element);
     Iterator<Node> it = node.children().iterator();
-    int[] skipIndexes = (int[]) node.getProp(Node.SKIP_INDEXES_PROP);
-    int i = 0;  // next index in new array to process
-    int j = 0;  // next index in skip array
-    int nextToSkip = 0;
     while (it.hasNext()) {
-      while (skipIndexes != null && j < skipIndexes.length) {
-        if (i == skipIndexes[j]) {
-          element.appendChild(new JsonML(TagType.Empty));
-          ++i;
-          ++j;
-        } else {
-          break;
-        }
-      }
       processNode(it.next(), element);
-      ++i;
     }
   }
 
@@ -432,7 +424,12 @@ public class Writer {
   }
 
   private void processEmpty(Node node, JsonML currentParent) {
-    currentParent.appendChild(new JsonML(TagType.EmptyStmt));
+    if (currentParent.getType() == TagType.ArrayExpr) {
+      // Empty expression are only found in Array literals
+      currentParent.appendChild(new JsonML(TagType.Empty));
+    } else {
+      currentParent.appendChild(new JsonML(TagType.EmptyStmt));
+    }
   }
 
   private void processExprResult(Node node, JsonML currentParent) {

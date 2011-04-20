@@ -181,7 +181,7 @@ public class DefaultPassConfig extends PassConfig {
     }
 
     if (options.checkSuspiciousCode ||
-        options.checkGlobalThisLevel.isOn()) {
+        options.enables(DiagnosticGroups.GLOBAL_THIS)) {
       checks.add(suspiciousCode);
     }
 
@@ -425,14 +425,6 @@ public class DefaultPassConfig extends PassConfig {
       passes.add(devirtualizePrototypeMethods);
     }
 
-    // Running "optimizeCalls" after devirtualization is useful for removing
-    // unneeded "this" values.
-    if (options.optimizeCalls
-        || options.optimizeParameters
-        || options.optimizeReturns) {
-      passes.add(optimizeCalls);
-    }
-
     if (options.customPasses != null) {
       passes.add(getCustomPasses(
           CustomPassExecutionTime.BEFORE_OPTIMIZATION_LOOP));
@@ -595,6 +587,7 @@ public class DefaultPassConfig extends PassConfig {
     }
 
     if (options.collapseVariableDeclarations) {
+      passes.add(exploitAssign);
       passes.add(collapseVariableDeclarations);
     }
 
@@ -638,11 +631,15 @@ public class DefaultPassConfig extends PassConfig {
       passes.add(nameUnmappedAnonymousFunctions);
     }
 
-    // Safety check
-    if (options.checkSymbols) {
-      passes.add(sanityCheckVars);
+    if (options.operaCompoundAssignFix) {
+      passes.add(operaCompoundAssignFix);
     }
 
+    // Safety checks
+    passes.add(sanityCheckAst);
+    passes.add(sanityCheckVars);
+
+    // The resulting AST is not sane without the surrounding with.
     if (scopeGlobalVariables) {
       passes.add(addScopeToGlobals);
     }
@@ -663,11 +660,20 @@ public class DefaultPassConfig extends PassConfig {
       passes.add(inlineFunctions);
     }
 
+    boolean runOptimizeCalls = options.optimizeCalls
+        || options.optimizeParameters
+        || options.optimizeReturns;
+
     if (options.removeUnusedVars || options.removeUnusedLocalVars) {
       if (options.deadAssignmentElimination) {
         passes.add(deadAssignmentsElimination);
       }
-      passes.add(removeUnusedVars);
+      if (!runOptimizeCalls) {
+        passes.add(removeUnusedVars);
+      }
+    }
+    if (runOptimizeCalls) {
+      passes.add(optimizeCallsAndRemoveUnusedVars);
     }
     assertAllLoopablePasses(passes);
     return passes;
@@ -715,10 +721,8 @@ public class DefaultPassConfig extends PassConfig {
         sharedCallbacks.add(new CheckSideEffects(CheckLevel.WARNING));
       }
 
-      CheckLevel checkGlobalThisLevel = options.checkGlobalThisLevel;
-      if (checkGlobalThisLevel.isOn()) {
-        sharedCallbacks.add(
-            new CheckGlobalThis(compiler, checkGlobalThisLevel));
+      if (options.enables(DiagnosticGroups.GLOBAL_THIS)) {
+        sharedCallbacks.add(new CheckGlobalThis(compiler));
       }
       return combineChecks(compiler, sharedCallbacks);
     }
@@ -871,7 +875,8 @@ public class DefaultPassConfig extends PassConfig {
       new PassFactory("processGoogScopeAliases", true) {
     @Override
     protected CompilerPass createInternal(AbstractCompiler compiler) {
-      return new ScopedAliases(compiler);
+      return new ScopedAliases(
+              compiler, options.getAliasTransformationHandler());
     }
   };
 
@@ -934,11 +939,12 @@ public class DefaultPassConfig extends PassConfig {
       return new PeepholeOptimizationsPass(compiler,
             new PeepholeSubstituteAlternateSyntax(true),
             new PeepholeRemoveDeadCode(),
-            new PeepholeFoldConstants());
+            new PeepholeFoldConstants(),
+            new PeepholeCollectPropertyAssignments());
     }
   };
 
-  /** Same as peepholeOptimizations but aggreesively merges code together */
+  /** Same as peepholeOptimizations but aggressively merges code together */
   private final PassFactory latePeepholeOptimizations =
       new PassFactory("peepholeOptimizations", false) {
     @Override
@@ -1247,7 +1253,6 @@ public class DefaultPassConfig extends PassConfig {
       new PassFactory("replaceStrings", true) {
     @Override
     protected CompilerPass createInternal(final AbstractCompiler compiler) {
-      VariableMap map = null;
       return new CompilerPass() {
         @Override public void process(Node externs, Node root) {
           ReplaceStrings pass = new ReplaceStrings(
@@ -1346,11 +1351,11 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /**
-   * Rewrite instance methods as static methods, to make them easier
-   * to inline.
+   * Optimizes unused function arguments, unused return values, and inlines
+   * constant parameters. Also runs RemoveUnusedVars.
    */
-  private final PassFactory optimizeCalls =
-      new PassFactory("optimizeCalls", true) {
+  private final PassFactory optimizeCallsAndRemoveUnusedVars =
+      new PassFactory("optimizeCalls_and_removeUnusedVars", false) {
     @Override
     protected CompilerPass createInternal(AbstractCompiler compiler) {
       OptimizeCalls passes = new OptimizeCalls(compiler);
@@ -1365,7 +1370,14 @@ public class DefaultPassConfig extends PassConfig {
       }
 
       if (options.optimizeCalls) {
-        passes.addPass(new RemoveUnusedVars(compiler, false, true, true));
+        boolean removeOnlyLocals = options.removeUnusedLocalVars
+            && !options.removeUnusedVars;
+        boolean preserveAnonymousFunctionNames =
+            options.anonymousFunctionNaming !=
+            AnonymousFunctionNamingPolicy.OFF;
+        passes.addPass(
+            new RemoveUnusedVars(compiler, !removeOnlyLocals,
+                preserveAnonymousFunctionNames, true));
       }
       return passes;
     }
@@ -1627,6 +1639,19 @@ public class DefaultPassConfig extends PassConfig {
    * Some simple, local collapses (e.g., {@code var x; var y;} becomes
    * {@code var x,y;}.
    */
+  private final PassFactory exploitAssign =
+      new PassFactory("expointAssign", true) {
+    @Override
+    protected CompilerPass createInternal(AbstractCompiler compiler) {
+      return new PeepholeOptimizationsPass(compiler,
+          new ExploitAssigns());
+    }
+  };
+
+  /**
+   * Some simple, local collapses (e.g., {@code var x; var y;} becomes
+   * {@code var x,y;}.
+   */
   private final PassFactory collapseVariableDeclarations =
       new PassFactory("collapseVariableDeclarations", true) {
     @Override
@@ -1704,6 +1729,14 @@ public class DefaultPassConfig extends PassConfig {
           anonymousFunctionNameMap = naf.getFunctionMap();
         }
       };
+    }
+  };
+
+  private final PassFactory operaCompoundAssignFix =
+      new PassFactory("operaCompoundAssignFix", true) {
+    @Override
+    protected CompilerPass createInternal(AbstractCompiler compiler) {
+      return new OperaCompoundAssignFix(compiler);
     }
   };
 
@@ -1845,8 +1878,8 @@ public class DefaultPassConfig extends PassConfig {
 
       case ALL_UNQUOTED:
         RenameProperties rprop = new RenameProperties(
-            compiler, options.generatePseudoNames, prevPropertyMap,
-            reservedChars);
+            compiler, options.propertyAffinity, options.generatePseudoNames,
+            prevPropertyMap, reservedChars);
         rprop.process(externs, root);
         return rprop.getPropertyMap();
 
@@ -1917,6 +1950,15 @@ public class DefaultPassConfig extends PassConfig {
     @Override
     protected CompilerPass createInternal(AbstractCompiler compiler) {
       return new ConvertToDottedProperties(compiler);
+    }
+  };
+
+  /** Checks that all variables are defined. */
+  private final PassFactory sanityCheckAst =
+      new PassFactory("sanityCheckAst", true) {
+    @Override
+    protected CompilerPass createInternal(AbstractCompiler compiler) {
+      return new AstValidator();
     }
   };
 

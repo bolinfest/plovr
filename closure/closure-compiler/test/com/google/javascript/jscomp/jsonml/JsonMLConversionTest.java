@@ -16,10 +16,11 @@
 
 package com.google.javascript.jscomp.jsonml;
 
+import com.google.common.base.Preconditions;
 import com.google.javascript.jscomp.Compiler;
 import com.google.javascript.jscomp.CompilerPass;
 import com.google.javascript.jscomp.CompilerTestCase;
-
+import com.google.javascript.rhino.Token;
 import com.google.javascript.jscomp.jsonml.Writer;
 import com.google.javascript.jscomp.jsonml.JsonML;
 import com.google.javascript.jscomp.jsonml.JsonMLAst;
@@ -48,7 +49,10 @@ public class JsonMLConversionTest extends CompilerTestCase {
 
   private void testConversion(String js, String jsonml) throws Exception {
     JsonML jsonMLRoot = JsonMLUtil.parseString(jsonml);
-    Node astRoot = parseExpectedJs(js);
+    Node root = parseExpectedJs(js);
+    Node astRoot = root.getFirstChild();
+    Preconditions.checkState(astRoot.getType() == Token.SCRIPT);
+
 
     // test JsonML -> AST conversion
     JsonMLAst ast = new JsonMLAst(jsonMLRoot);
@@ -70,7 +74,10 @@ public class JsonMLConversionTest extends CompilerTestCase {
 
   private void testJsonMLToAstConversion(String js) throws Exception {
     JsonML jsonml = JsonMLParser.parse(js);
-    Node ast = parseExpectedJs(js);
+    Node root = parseExpectedJs(js);
+    Node ast = root.getFirstChild();
+    Preconditions.checkState(ast.getType() == Token.SCRIPT);
+
     testJsonMLToAstConversion(ast, jsonml, js);
   }
 
@@ -82,7 +89,7 @@ public class JsonMLConversionTest extends CompilerTestCase {
 
     String explanation = resultAstRoot.checkTreeEquals(astRoot);
     assertNull("JsonML -> AST converter returned incorect result for " + js
-        + "\n" + explanation, explanation);
+       + "\n" + explanation, explanation);
   }
 
   private void testAstToJsonMLConverstion(Node astRoot, JsonML jsonmlRoot,
@@ -95,7 +102,10 @@ public class JsonMLConversionTest extends CompilerTestCase {
 
   private void testConversion(String js) throws Exception {
     JsonML jsonml = JsonMLParser.parse(js);
-    Node ast = parseExpectedJs(js);
+    Node root = parseExpectedJs(js);
+    Node ast = root.getFirstChild();
+    Preconditions.checkState(ast.getType() == Token.SCRIPT);
+
     testJsonMLToAstConversion(ast, jsonml, js);
 
     jsonml = JsonMLParser.parse(js);
@@ -103,6 +113,7 @@ public class JsonMLConversionTest extends CompilerTestCase {
   }
 
   public void testArray() throws Exception {
+    testConversion("[,]");
     testConversion("[]");
     testConversion("[function (x) {}]");
     testConversion("[[], [a, [], [[[]], 1], f([a])], 1];");
@@ -110,6 +121,10 @@ public class JsonMLConversionTest extends CompilerTestCase {
     testConversion("var x = [1, 2, 3]");
     testConversion("[, 1, Object(), , , 2]");
     testConversion("[{x: 'abc', y: 1}]");
+  }
+
+  public void testArray1() throws Exception {
+    testConversion("[,]");
   }
 
   public void testAssignOperators() throws Exception {

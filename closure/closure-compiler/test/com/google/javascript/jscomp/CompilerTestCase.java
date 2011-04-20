@@ -18,6 +18,7 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicates;
 import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.CodeChangeHandler.RecentChange;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
@@ -91,6 +92,11 @@ public abstract class CompilerTestCase extends TestCase  {
    * Whether externs changes should be allowed for this pass.
    */
   private boolean allowExternsChanges = false;
+
+  /**
+   * Whether the AST should be validated.
+   */
+  private boolean astValidationEnabled = true;
 
   /**
    * Constructs a test.
@@ -269,6 +275,13 @@ public abstract class CompilerTestCase extends TestCase  {
    */
   void enableMarkNoSideEffects() {
     markNoSideEffects  = true;
+  }
+
+  /**
+   * Whether to allow Validate the AST after each run of the pass.
+   */
+  protected void enableAstValidation(boolean validate) {
+    astValidationEnabled = validate;
   }
 
   /** Returns a newly created TypeCheck. */
@@ -704,6 +717,9 @@ public abstract class CompilerTestCase extends TestCase  {
     assertTrue("Unexpected parse error(s): " +
         Joiner.on("\n").join(compiler.getErrors()), root != null);
 
+    if (astValidationEnabled) {
+      (new AstValidator()).validateRoot(root);
+    }
     Node externsRoot = root.getFirstChild();
     Node mainRoot = root.getLastChild();
 
@@ -747,6 +763,9 @@ public abstract class CompilerTestCase extends TestCase  {
         recentChange.reset();
 
         getProcessor(compiler).process(externsRoot, mainRoot);
+        if (astValidationEnabled) {
+          (new AstValidator()).validateRoot(root);
+        }
         if (checkLineNumbers) {
           (new LineNumberCheck(compiler)).process(externsRoot, mainRoot);
         }
@@ -1012,5 +1031,20 @@ public abstract class CompilerTestCase extends TestCase  {
 
   protected void setExpectedSymbolTableError(DiagnosticType type) {
     this.expectedSymbolTableError = type;
+  }
+
+  /** Finds the first matching qualified name node in post-traversal order. */
+  protected final Node findQualifiedNameNode(final String name, Node root) {
+    final List<Node> matches = Lists.newArrayList();
+    NodeUtil.visitPostOrder(root,
+        new NodeUtil.Visitor() {
+          @Override public void visit(Node n) {
+            if (name.equals(n.getQualifiedName())) {
+              matches.add(n);
+            }
+          }
+        },
+        Predicates.<Node>alwaysTrue());
+    return matches.get(0);
   }
 }

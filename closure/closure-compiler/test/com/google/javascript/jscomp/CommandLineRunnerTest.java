@@ -114,6 +114,44 @@ public class CommandLineRunnerTest extends TestCase {
     super.tearDown();
   }
 
+  public void testWarningGuardOrdering1() {
+    args.add("--jscomp_error=globalThis");
+    args.add("--jscomp_off=globalThis");
+    testSame("function f() { this.a = 3; }");
+  }
+
+  public void testWarningGuardOrdering2() {
+    args.add("--jscomp_off=globalThis");
+    args.add("--jscomp_error=globalThis");
+    test("function f() { this.a = 3; }", CheckGlobalThis.GLOBAL_THIS);
+  }
+
+  public void testWarningGuardOrdering3() {
+    args.add("--jscomp_warning=globalThis");
+    args.add("--jscomp_off=globalThis");
+    testSame("function f() { this.a = 3; }");
+  }
+
+  public void testWarningGuardOrdering4() {
+    args.add("--jscomp_off=globalThis");
+    args.add("--jscomp_warning=globalThis");
+    test("function f() { this.a = 3; }", CheckGlobalThis.GLOBAL_THIS);
+  }
+
+  public void testCheckGlobalThisOffByDefault() {
+    testSame("function f() { this.a = 3; }");
+  }
+
+  public void testCheckGlobalThisOnWithAdvancedMode() {
+    args.add("--compilation_level=ADVANCED_OPTIMIZATIONS");
+    test("function f() { this.a = 3; }", CheckGlobalThis.GLOBAL_THIS);
+  }
+
+  public void testCheckGlobalThisOnWithErrorFlag() {
+    args.add("--jscomp_error=globalThis");
+    test("function f() { this.a = 3; }", CheckGlobalThis.GLOBAL_THIS);
+  }
+
   public void testTypeCheckingOffByDefault() {
     test("function f(x) { return x; } f();",
          "function f(a) { return a; } f();");
@@ -236,22 +274,22 @@ public class CommandLineRunnerTest extends TestCase {
 
   public void testProcessClosurePrimitives() {
     test("var goog = {}; goog.provide('goog.dom');",
-         "var goog = {}; goog.dom = {};");
+         "var goog = {dom:{}};");
     args.add("--process_closure_primitives=false");
     testSame("var goog = {}; goog.provide('goog.dom');");
   }
 
   public void testCssNameWiring() throws Exception {
-    String prefix =
-        "var goog = {}; goog.getCssName = function() {};" +
-         "goog.setCssNameMapping = function() {};";
-    test(prefix + "goog.setCssNameMapping({'goog': 'a', 'button': 'b'});" +
+    test("var goog = {}; goog.getCssName = function() {};" +
+         "goog.setCssNameMapping = function() {};" +
+         "goog.setCssNameMapping({'goog': 'a', 'button': 'b'});" +
          "var a = goog.getCssName('goog-button');" +
          "var b = goog.getCssName('css-button');" +
          "var c = goog.getCssName('goog-menu');" +
          "var d = goog.getCssName('css-menu');",
-         prefix +
-         "var a = 'a-b'," +
+         "var goog = { getCssName: function() {}," +
+         "             setCssNameMapping: function() {} }," +
+         "    a = 'a-b'," +
          "    b = 'css-b'," +
          "    c = 'a-menu'," +
          "    d = 'css-menu';");
@@ -558,7 +596,7 @@ public class CommandLineRunnerTest extends TestCase {
     args.add("--js_output_file");
     args.add("/path/to/out.js");
     testSame("var x = 3;");
-    assertEquals(SourceMap.Format.LEGACY,
+    assertEquals(SourceMap.Format.DEFAULT,
         lastCompiler.getOptions().sourceMapFormat);
   }
 

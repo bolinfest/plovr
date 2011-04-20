@@ -22,6 +22,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -34,6 +35,7 @@ import java.io.BufferedWriter;
 import java.io.Closeable;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.Flushable;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
@@ -88,7 +90,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
 
   private final CommandLineConfig config;
 
-  private Appendable out;
+  private Appendable jsOutput;
   private final PrintStream err;
   private A compiler;
 
@@ -114,8 +116,8 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
 
   AbstractCommandLineRunner(PrintStream out, PrintStream err) {
     this.config = new CommandLineConfig();
-    this.out = out;
-    this.err = err;
+    this.jsOutput = Preconditions.checkNotNull(out);
+    this.err = Preconditions.checkNotNull(err);
   }
 
   /**
@@ -194,12 +196,11 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       throws FlagUsageException, IOException {
     DiagnosticGroups diagnosticGroups = getDiagnosticGroups();
 
-    diagnosticGroups.setWarningLevels(
-        options, config.jscompError, CheckLevel.ERROR);
-    diagnosticGroups.setWarningLevels(
-        options, config.jscompWarning, CheckLevel.WARNING);
-    diagnosticGroups.setWarningLevels(
-        options, config.jscompOff, CheckLevel.OFF);
+    if (config.warningGuards != null) {
+      for (WarningGuardSpec.Entry entry : config.warningGuards.entries) {
+        diagnosticGroups.setWarningLevel(options, entry.groupName, entry.level);
+      }
+    }
 
     createDefineOrTweakReplacements(config.define, options, false);
 
@@ -287,6 +288,14 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
 
     if (config.computePhaseOrdering) {
       runTimeStats.outputBestPhaseOrdering();
+    }
+
+    try {
+      if (jsOutput instanceof Closeable) {
+        ((Closeable) jsOutput).close();
+      }
+    } catch (IOException e) {
+      throw Throwables.propagate(e);
     }
 
     if (testMode) {
@@ -606,9 +615,9 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
 
     boolean writeOutputToFile = !options.jsOutputFile.isEmpty();
     if (writeOutputToFile) {
-      out = fileNameToOutputWriter(options.jsOutputFile);
-    } else if (out instanceof OutputStream) {
-      out = streamToOutputWriter((OutputStream) out);
+      jsOutput = fileNameToOutputWriter(options.jsOutputFile);
+    } else if (jsOutput instanceof OutputStream) {
+      jsOutput = streamToOutputWriter((OutputStream) jsOutput);
     }
 
     List<String> jsFiles = config.js;
@@ -622,9 +631,11 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     }
 
     int errCode = processResults(result, modules, options);
-    // Close the output if we are writing to a file.
-    if (out instanceof Closeable) {
-      ((Closeable) out).close();
+    // Flush the output if we are writing to a file.
+    // We can't close yet, because we may need to write phase ordering
+    // info to it later.
+    if (jsOutput instanceof Flushable) {
+      ((Flushable) jsOutput).flush();
     }
     return errCode;
   }
@@ -642,8 +653,9 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       if (compiler.getRoot() == null) {
         return 1;
       } else {
-        out.append(DotFormatter.toDot(compiler.getPassConfig().getPassGraph()));
-        out.append('\n');
+        jsOutput.append(
+            DotFormatter.toDot(compiler.getPassConfig().getPassGraph()));
+        jsOutput.append('\n');
         return 0;
       }
     }
@@ -653,26 +665,28 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
         return 1;
       } else {
         ControlFlowGraph<Node> cfg = compiler.computeCFG();
-        DotFormatter.appendDot(compiler.getRoot().getLastChild(), cfg, out);
-        out.append('\n');
+        DotFormatter.appendDot(
+            compiler.getRoot().getLastChild(), cfg, jsOutput);
+        jsOutput.append('\n');
         return 0;
       }
     }
 
     if (config.printTree) {
       if (compiler.getRoot() == null) {
-        out.append("Code contains errors; no tree was generated.\n");
+        jsOutput.append("Code contains errors; no tree was generated.\n");
         return 1;
       } else {
-        compiler.getRoot().appendStringTree(out);
-        out.append("\n");
+        compiler.getRoot().appendStringTree(jsOutput);
+        jsOutput.append("\n");
         return 0;
       }
     }
 
     if (result.success) {
       if (modules == null) {
-        writeOutput(out, compiler, compiler.toSource(), config.outputWrapper,
+        writeOutput(
+            jsOutput, compiler, compiler.toSource(), config.outputWrapper,
             OUTPUT_WRAPPER_MARKER);
 
         // Output the source map if requested.
@@ -1210,12 +1224,13 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
      */
     private void outputBestPhaseOrdering() {
       try {
-        out.append("Best time: " + bestRunTime + "\n");
-        out.append("Worst time: " + worstRunTime + "\n");
+        jsOutput.append("Best time: " + bestRunTime + "\n");
+        jsOutput.append("Worst time: " + worstRunTime + "\n");
 
         int i = 1;
         for (List<String> loop : loopedPassesInBestRun) {
-          out.append("\nLoop " + i + ":\n" + Joiner.on("\n").join(loop)+ "\n");
+          jsOutput.append(
+              "\nLoop " + i + ":\n" + Joiner.on("\n").join(loop)+ "\n");
           i++;
         }
       } catch (IOException e) {
@@ -1484,7 +1499,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     }
 
     private SourceMap.Format sourceMapFormat =
-      SourceMap.Format.LEGACY;
+      SourceMap.Format.DEFAULT;
 
     /**
      * The detail supplied in the source map file, if generated.
@@ -1494,36 +1509,13 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       return this;
     }
 
-    private final List<String> jscompError = Lists.newArrayList();
+    private WarningGuardSpec warningGuards = null;
 
     /**
-     * Make the named class of warnings an error.
+     * Add warning guards.
      */
-    CommandLineConfig setJscompError(List<String> jscompError) {
-      this.jscompError.clear();
-      this.jscompError.addAll(jscompError);
-      return this;
-    }
-
-    private final List<String> jscompWarning = Lists.newArrayList();
-
-    /**
-     * Make the named class of warnings a normal warning.
-     */
-    CommandLineConfig setJscompWarning(List<String> jscompWarning) {
-      this.jscompWarning.clear();
-      this.jscompWarning.addAll(jscompWarning);
-      return this;
-    }
-
-    private final List<String> jscompOff = Lists.newArrayList();
-
-    /**
-     * Turn off the named class of warnings.
-     */
-    CommandLineConfig setJscompOff(List<String> jscompOff) {
-      this.jscompOff.clear();
-      this.jscompOff.addAll(jscompOff);
+    CommandLineConfig setWarningGuardSpec(WarningGuardSpec spec) {
+      this.warningGuards = spec;
       return this;
     }
 
@@ -1628,6 +1620,33 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     CommandLineConfig setLanguageIn(String languageIn) {
       this.languageIn = languageIn;
       return this;
+    }
+  }
+
+  /**
+   * A little helper class to make it easier to collect warning types
+   * from --jscomp_error, --jscomp_warning, and --jscomp_off.
+   */
+  protected static class WarningGuardSpec {
+    private static class Entry {
+      private final CheckLevel level;
+      private final String groupName;
+
+      private Entry(CheckLevel level, String groupName) {
+        this.level = level;
+        this.groupName = groupName;
+      }
+    }
+
+    // The entries, in the order that they were added.
+    private final List<Entry> entries = Lists.newArrayList();
+
+    protected void add(CheckLevel level, String groupName) {
+      entries.add(new Entry(level, groupName));
+    }
+
+    protected void clear() {
+      entries.clear();
     }
   }
 }

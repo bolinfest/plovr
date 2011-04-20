@@ -28,6 +28,7 @@ import com.google.javascript.rhino.Token;
 
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import javax.annotation.Nullable;
@@ -272,26 +273,42 @@ final class MustBeReachingVariableDef extends
         return;
 
       default:
-        if (NodeUtil.isAssignmentOp(n) && NodeUtil.isName(n.getFirstChild())) {
-          Node name = n.getFirstChild();
-          computeMustDef(name.getNext(), cfgNode, output, conditional);
-          addToDefIfLocal(name.getString(), conditional ? null : cfgNode,
+        if (NodeUtil.isAssignmentOp(n)) {
+          if (NodeUtil.isName(n.getFirstChild())) {
+            Node name = n.getFirstChild();
+            computeMustDef(name.getNext(), cfgNode, output, conditional);
+            addToDefIfLocal(name.getString(), conditional ? null : cfgNode,
               n.getLastChild(), output);
-        } else {
-
-          // DEC and INC actually defines the variable.
-          if (n.getType() == Token.DEC || n.getType() == Token.INC) {
-            Node target = n.getFirstChild();
-            if (NodeUtil.isName(target)) {
-              addToDefIfLocal(target.getString(),
-                  conditional ? null : cfgNode, null, output);
-              return;
+            return;
+          } else if (NodeUtil.isGet(n.getFirstChild())) {
+            // Treat all assignments to arguments as redefining the
+            // parameters itself.
+            Node obj = n.getFirstChild().getFirstChild();
+            if (NodeUtil.isName(obj) && "arguments".equals(obj.getString())) {
+              // TODO(user): More accuracy can be introduced
+              // ie: We know exactly what arguments[x] is if x is a constant
+              // number.
+              escapeParameters(output);
             }
           }
+        }
 
-          for (Node c = n.getFirstChild(); c != null; c = c.getNext()) {
-            computeMustDef(c, cfgNode, output, conditional);
+        if (NodeUtil.isName(n) && "arguments".equals(n.getString())) {
+          escapeParameters(output);
+        }
+
+        // DEC and INC actually defines the variable.
+        if (n.getType() == Token.DEC || n.getType() == Token.INC) {
+          Node target = n.getFirstChild();
+          if (NodeUtil.isName(target)) {
+            addToDefIfLocal(target.getString(),
+                conditional ? null : cfgNode, null, output);
+            return;
           }
+        }
+
+        for (Node c = n.getFirstChild(); c != null; c = c.getNext()) {
+          computeMustDef(c, cfgNode, output, conditional);
         }
     }
   }
@@ -334,6 +351,34 @@ final class MustBeReachingVariableDef extends
         def.reachingDef.put(var, definition);
       }
     }
+  }
+
+  private void escapeParameters(MustDef output) {
+    for (Iterator<Var> i = jsScope.getVars(); i.hasNext();) {
+      Var v = i.next();
+      if (isParameter(v)) {
+        // Assume we no longer know where the parameter comes from
+        // anymore.
+        output.reachingDef.put(v, null);
+      }
+    }
+
+    // Also, assume we no longer know anything that depends on a parameter.
+    for (Entry<Var, Definition> pair: output.reachingDef.entrySet()) {
+      Definition value = pair.getValue();
+      if (value == null) {
+        continue;
+      }
+      for (Var dep : value.depends) {
+        if (isParameter(dep)) {
+          output.reachingDef.put(pair.getKey(), null);
+        }
+      }
+    }
+  }
+
+  private boolean isParameter(Var v) {
+    return v.getParentNode().getType() == Token.LP;
   }
 
   /**

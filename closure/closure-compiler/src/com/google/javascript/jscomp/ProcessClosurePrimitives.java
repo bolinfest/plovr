@@ -909,20 +909,17 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
      */
     private Node createDeclarationNode() {
       if (namespace.indexOf('.') == -1) {
-        return makeVarDeclNode(namespace, firstNode);
+        return makeVarDeclNode();
       } else {
-        return makeAssignmentExprNode(namespace, firstNode);
+        return makeAssignmentExprNode();
       }
     }
 
     /**
      * Creates a simple namespace variable declaration
      * (e.g. <code>var foo = {};</code>).
-     *
-     * @param namespace A simple namespace (must be a valid js identifier)
-     * @param sourceNode The node to get source information from.
      */
-    private Node makeVarDeclNode(String namespace, Node sourceNode) {
+    private Node makeVarDeclNode() {
       Node name = Node.newString(Token.NAME, namespace);
       name.addChildToFront(createNamespaceLiteral());
 
@@ -935,7 +932,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
       }
 
       Preconditions.checkState(isNamespacePlaceholder(decl));
-      decl.copyInformationFromForTree(sourceNode);
+      setSourceInfo(decl);
       return decl;
     }
 
@@ -954,20 +951,58 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
     /**
      * Creates a dotted namespace assignment expression
      * (e.g. <code>foo.bar = {};</code>).
-     *
-     * @param namespace A dotted namespace
-     * @param node A node from which to copy source info.
      */
-    private Node makeAssignmentExprNode(String namespace, Node node) {
+    private Node makeAssignmentExprNode() {
       Node decl = new Node(Token.EXPR_RESULT,
           new Node(Token.ASSIGN,
               NodeUtil.newQualifiedNameNode(
-                  compiler.getCodingConvention(), namespace, node, namespace),
+                  compiler.getCodingConvention(), namespace,
+                  firstNode /* real source info will be filled in below */,
+                  namespace),
               createNamespaceLiteral()));
       decl.putBooleanProp(Node.IS_NAMESPACE, true);
       Preconditions.checkState(isNamespacePlaceholder(decl));
-      decl.copyInformationFromForTree(node);
+      setSourceInfo(decl);
       return decl;
+    }
+
+    /**
+     * Copy source info to the new node.
+     */
+    private void setSourceInfo(Node newNode) {
+      Node provideStringNode = getProvideStringNode();
+      int offset = getSourceInfoOffset(provideStringNode);
+      Node sourceInfoNode = provideStringNode == null
+          ? firstNode : provideStringNode;
+      newNode.copyInformationFromForTree(sourceInfoNode);
+      if (offset != 0) {
+        newNode.setSourcePositionForTree(
+            newNode.getSourcePosition() + offset);
+      }
+    }
+
+    /**
+     * Get the offset into the provide node where the symbol appears.
+     */
+    private int getSourceInfoOffset(Node provideStringNode) {
+      if (provideStringNode == null) {
+        return 0;
+      }
+
+      int indexOfLastDot = namespace.lastIndexOf('.');
+
+      // +1 for the opening quote
+      // +1 for the dot
+      // if there's no dot, then the -1 index cancels it out
+      // so elegant!
+      return 2 + indexOfLastDot;
+    }
+
+    private Node getProvideStringNode() {
+      return (firstNode.getFirstChild() != null &&
+              NodeUtil.isExprCall(firstNode)) ?
+          firstNode.getFirstChild().getLastChild() :
+          null;
     }
   }
 

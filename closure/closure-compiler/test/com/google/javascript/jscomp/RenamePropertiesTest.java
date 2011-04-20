@@ -32,7 +32,10 @@ public class RenamePropertiesTest extends CompilerTestCase {
 
   private static boolean generatePseudoNames = false;
 
+  private static boolean useAffinity = false;
+
   private VariableMap prevUsedPropertyMap = null;
+
 
   public RenamePropertiesTest() {
     super(EXTERNS);
@@ -44,6 +47,7 @@ public class RenamePropertiesTest extends CompilerTestCase {
     super.tearDown();
 
     prevUsedPropertyMap = null;
+    useAffinity = false;
   }
 
   @Override protected int getNumRepetitions() {
@@ -64,24 +68,18 @@ public class RenamePropertiesTest extends CompilerTestCase {
   }
 
   public void testPrototypePropertiesAsObjLitKeys2() {
-    // TODO(johnlenz): Add tests when Rhino supports numbers and quoted strings
-    // for get and set.
+    testSame("Bar.prototype = {get 2(){}}; bar[2];");
 
-    // testSame("Bar.prototype = {get 2(){}}; bar[2];");
-
-    // testSame("Bar.prototype = {get 'a'(){}}; bar['a'];");
+    testSame("Bar.prototype = {get 'a'(){}}; bar['a'];");
 
     test("Bar.prototype = {get getA(){}}; bar.getA;",
          "Bar.prototype = {get a(){}}; bar.a;");
   }
 
   public void testPrototypePropertiesAsObjLitKeys3() {
-    // TODO(johnlenz): Add tests when Rhino supports numbers and quoted strings
-    // for get and set.
+    testSame("Bar.prototype = {set 2(x){}}; bar[2];");
 
-    // testSame("Bar.prototype = {set 2(x){}}; bar[2];");
-
-    // testSame("Bar.prototype = {set 'a'(x){}}; bar['a'];");
+    testSame("Bar.prototype = {set 'a'(x){}}; bar['a'];");
 
     test("Bar.prototype = {set getA(x){}}; bar.getA;",
          "Bar.prototype = {set a(x){}}; bar.a;");
@@ -256,7 +254,7 @@ public class RenamePropertiesTest extends CompilerTestCase {
   public void testPropertyAffinity() {
     // 'y' gets to be 'b' because it appears with z often.
     // Other wise, 'x' gets to be 'b' because of alphabetical ordering.
-
+    useAffinity = true;
     test("var foo={};foo.x=1;foo.y=2;foo.z=3;" +
          "function f1() { foo.z; foo.z; foo.z; foo.y}" +
          "function f2() {                      foo.x}",
@@ -265,6 +263,27 @@ public class RenamePropertiesTest extends CompilerTestCase {
          "var foo={};foo.c=1;foo.b=2;foo.a=3;" +
          "function f1() { foo.a; foo.a; foo.a; foo.b}" +
          "function f2() {                      foo.c}");
+
+    test("var foo={};foo.x=1;foo.y=2;foo.z=3;" +
+        "function f1() { foo.z; foo.z; foo.z; foo.y}" +
+        "function f2() { foo.z; foo.z; foo.z; foo.x}",
+
+
+        "var foo={};foo.b=1;foo.c=2;foo.a=3;" +
+        "function f1() { foo.a; foo.a; foo.a; foo.c}" +
+        "function f2() { foo.a; foo.a; foo.a; foo.b}");
+  }
+
+  public void testPropertyAffinityOff() {
+    useAffinity = false;
+    test("var foo={};foo.x=1;foo.y=2;foo.z=3;" +
+         "function f1() { foo.z; foo.z; foo.z; foo.y}" +
+         "function f2() {                      foo.x}",
+
+
+         "var foo={};foo.b=1;foo.c=2;foo.a=3;" +
+         "function f1() { foo.a; foo.a; foo.a; foo.c}" +
+         "function f2() {                      foo.b}");
 
     test("var foo={};foo.x=1;foo.y=2;foo.z=3;" +
         "function f1() { foo.z; foo.z; foo.z; foo.y}" +
@@ -388,7 +407,7 @@ public class RenamePropertiesTest extends CompilerTestCase {
   @Override
   public CompilerPass getProcessor(Compiler compiler) {
     return renameProperties =
-        new RenameProperties(compiler, generatePseudoNames,
+        new RenameProperties(compiler, useAffinity, generatePseudoNames,
                              prevUsedPropertyMap);
   }
 }

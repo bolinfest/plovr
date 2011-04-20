@@ -2166,6 +2166,26 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
     assertAnnotationMarker(jsdoc, "param", 1, 3);
   }
 
+  public void testParseWithMarkers5() throws Exception {
+    JSDocInfo jsdoc =
+        parse("@return some long \n * multiline" +
+              " \n * description */", true);
+
+    assertDocumentationInMarker(
+        assertAnnotationMarker(jsdoc, "return", 0, 0),
+        "some long multiline description", 8, 2, 15);
+  }
+
+  public void testParseWithMarkers6() throws Exception {
+    JSDocInfo jsdoc =
+        parse("@param x some long \n * multiline" +
+              " \n * description */", true);
+
+    assertDocumentationInMarker(
+        assertAnnotationMarker(jsdoc, "param", 0, 0),
+        "some long multiline description", 8, 2, 15);
+  }
+
   public void testParseWithMarkerNames1() throws Exception {
     JSDocInfo jsdoc = parse("@param {SomeType} name somedescription */", true);
 
@@ -2284,6 +2304,12 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
 
   public void testTypeTagConflict13() throws Exception {
     parse("@typedef {boolean} \n * @extends {Object} */",
+        "Bad type annotation. " +
+        "type annotation incompatible with other annotations");
+  }
+
+  public void testTypeTagConflict14() throws Exception {
+    parse("@return x \n * @return y */",
         "Bad type annotation. " +
         "type annotation incompatible with other annotations");
   }

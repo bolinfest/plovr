@@ -16,12 +16,11 @@
 
 package com.google.javascript.jscomp.parsing;
 
-import static com.google.javascript.jscomp.mozilla.rhino.Token.CommentType.JSDOC;
-
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.mozilla.rhino.ErrorReporter;
+import com.google.javascript.jscomp.mozilla.rhino.Token.CommentType;
 import com.google.javascript.jscomp.mozilla.rhino.ast.ArrayLiteral;
 import com.google.javascript.jscomp.mozilla.rhino.ast.Assignment;
 import com.google.javascript.jscomp.mozilla.rhino.ast.AstNode;
@@ -77,6 +76,10 @@ import java.util.Set;
  *
  */
 public class IRFactory {
+
+  static final String SUSPICIOUS_COMMENT_WARNING =
+      "Non-JSDoc comment has annotations. " +
+      "Did you mean to start it with '/**'?";
 
   private final String sourceString;
   private final String sourceName;
@@ -161,8 +164,11 @@ public class IRFactory {
 
     if (node.getComments() != null) {
       for (Comment comment : node.getComments()) {
-        if (comment.getCommentType() == JSDOC && !comment.isParsed()) {
+        if (comment.getCommentType() == CommentType.JSDOC &&
+            !comment.isParsed()) {
           irFactory.handlePossibleFileOverviewJsDoc(comment);
+        } else if (comment.getCommentType() == CommentType.BLOCK) {
+          irFactory.handleBlockComment(comment);
         }
       }
     }
@@ -203,6 +209,20 @@ public class IRFactory {
   }
 
   /**
+   * Check to see if the given block comment looks like it should be JSDoc.
+   */
+  private void handleBlockComment(Comment comment) {
+    String value = comment.getValue();
+    if (value.indexOf("/* @") != -1 ||
+        value.indexOf("\n * @") != -1) {
+      errorReporter.warning(
+          SUSPICIOUS_COMMENT_WARNING,
+          sourceName,
+          comment.getLineno(), "", 0);
+    }
+  }
+
+  /**
    * @return true if the jsDocParser represents a fileoverview.
    */
   private boolean handlePossibleFileOverviewJsDoc(
@@ -238,7 +258,42 @@ public class IRFactory {
     if (jsDocInfo != null) {
       irNode.setJSDocInfo(jsDocInfo);
     }
+    setSourceInfo(irNode, node);
+    return irNode;
+  }
 
+  private Node transformNameAsString(Name node) {
+    JSDocInfo jsDocInfo = handleJsDoc(node);
+    Node irNode = transformDispatcher.processName(node, true);
+    if (jsDocInfo != null) {
+      irNode.setJSDocInfo(jsDocInfo);
+    }
+    setSourceInfo(irNode, node);
+    return irNode;
+  }
+
+  private Node transformNumberAsString(NumberLiteral literalNode) {
+    JSDocInfo jsDocInfo = handleJsDoc(literalNode);
+    Node irNode = newStringNode(getStringValue(literalNode.getNumber()));
+    if (jsDocInfo != null) {
+      irNode.setJSDocInfo(jsDocInfo);
+    }
+    setSourceInfo(irNode, literalNode);
+    return irNode;
+  }
+
+  private static String getStringValue(double value) {
+    long longValue = (long) value;
+
+    // Return "1" instead of "1.0"
+    if (longValue == value) {
+      return Long.toString(longValue);
+    } else {
+      return Double.toString(value);
+    }
+  }
+
+  private void setSourceInfo(Node irNode, AstNode node) {
     // If we have a named function, set the position to that of the name.
     if (irNode.getType() == Token.FUNCTION &&
         irNode.getFirstChild().getLineno() != -1) {
@@ -255,7 +310,6 @@ public class IRFactory {
         irNode.setCharno(charno);
       }
     }
-    return irNode;
   }
 
   /**
@@ -324,12 +378,17 @@ public class IRFactory {
      * unquoted.
      */
     private Node transformAsString(AstNode n) {
-      Node ret = transform(n);
-      if (ret.getType() == Token.STRING) {
+      Node ret;
+      if (n instanceof Name) {
+        ret = transformNameAsString((Name)n);
+      } else if (n instanceof NumberLiteral) {
+        ret = transformNumberAsString((NumberLiteral)n);
         ret.putBooleanProp(Node.QUOTED_PROP, true);
-      } else if (ret.getType() == Token.NAME) {
-        ret.setType(Token.STRING);
+      } else {
+        ret = transform(n);
+        ret.putBooleanProp(Node.QUOTED_PROP, true);
       }
+      Preconditions.checkState(ret.getType() == Token.STRING);
       return ret;
     }
 
@@ -340,28 +399,9 @@ public class IRFactory {
       }
 
       Node node = newNode(Token.ARRAYLIT);
-      int skipCount = 0;
       for (AstNode child : literalNode.getElements()) {
         Node c = transform(child);
-        if (c.getType() == Token.EMPTY) {
-          skipCount++;
-        }
         node.addChildToBack(c);
-
-      }
-      if (skipCount > 0) {
-        int[] skipIndexes = new int[skipCount];
-        int i = 0;
-        int j = 0;
-        for (Node child : node.children()) {
-          if (child.getType() == Token.EMPTY) {
-            node.removeChild(child);
-            skipIndexes[j] = i;
-            j++;
-          }
-          i++;
-        }
-        node.putProp(Node.SKIP_INDEXES_PROP, skipIndexes);
       }
       return node;
     }
@@ -661,13 +701,21 @@ public class IRFactory {
 
     @Override
     Node processName(Name nameNode) {
-      if (isReservedKeyword(nameNode.getIdentifier())) {
-        errorReporter.error(
-          "identifier is a reserved word",
-          sourceName,
-          nameNode.getLineno(), "", 0);
+      return processName(nameNode, false);
+    }
+
+    Node processName(Name nameNode, boolean asString) {
+      if (asString) {
+        return newStringNode(Token.STRING, nameNode.getIdentifier());
+      } else {
+        if (isReservedKeyword(nameNode.getIdentifier())) {
+          errorReporter.error(
+            "identifier is a reserved word",
+            sourceName,
+            nameNode.getLineno(), "", 0);
+        }
+        return newStringNode(Token.NAME, nameNode.getIdentifier());
       }
-      return newStringNode(Token.NAME, nameNode.getIdentifier());
     }
 
     /**
@@ -990,26 +1038,8 @@ public class IRFactory {
 
   private static int transformTokenType(int token) {
     switch (token) {
-      case com.google.javascript.jscomp.mozilla.rhino.Token.ERROR:
-        return Token.ERROR;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.EOF:
-        return Token.EOF;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.EOL:
-        return Token.EOL;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.ENTERWITH:
-        return Token.ENTERWITH;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.LEAVEWITH:
-        return Token.LEAVEWITH;
       case com.google.javascript.jscomp.mozilla.rhino.Token.RETURN:
         return Token.RETURN;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.GOTO:
-        return Token.GOTO;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.IFEQ:
-        return Token.IFEQ;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.IFNE:
-        return Token.IFNE;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.SETNAME:
-        return Token.SETNAME;
       case com.google.javascript.jscomp.mozilla.rhino.Token.BITOR:
         return Token.BITOR;
       case com.google.javascript.jscomp.mozilla.rhino.Token.BITXOR:
@@ -1088,80 +1118,21 @@ public class IRFactory {
         return Token.SHNE;
       case com.google.javascript.jscomp.mozilla.rhino.Token.REGEXP:
         return Token.REGEXP;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.BINDNAME:
-        return Token.BINDNAME;
       case com.google.javascript.jscomp.mozilla.rhino.Token.THROW:
         return Token.THROW;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.RETHROW:
-        return Token.RETHROW;
       case com.google.javascript.jscomp.mozilla.rhino.Token.IN:
         return Token.IN;
       case com.google.javascript.jscomp.mozilla.rhino.Token.INSTANCEOF:
         return Token.INSTANCEOF;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.LOCAL_LOAD:
-        return Token.LOCAL_LOAD;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.GETVAR:
-        return Token.GETVAR;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.SETVAR:
-        return Token.SETVAR;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.CATCH_SCOPE:
-        return Token.CATCH_SCOPE;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.ENUM_INIT_KEYS:
-        return Token.ENUM_INIT_KEYS;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.ENUM_INIT_VALUES:
-        return Token.ENUM_INIT_VALUES;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.ENUM_NEXT:
-        return Token.ENUM_NEXT;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.ENUM_ID:
-        return Token.ENUM_ID;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.THISFN:
-        return Token.THISFN;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.RETURN_RESULT:
-        return Token.RETURN_RESULT;
       case com.google.javascript.jscomp.mozilla.rhino.Token.ARRAYLIT:
         return Token.ARRAYLIT;
       case com.google.javascript.jscomp.mozilla.rhino.Token.OBJECTLIT:
         return Token.OBJECTLIT;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.GET_REF:
-        return Token.GET_REF;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.SET_REF:
-        return Token.SET_REF;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.DEL_REF:
-        return Token.DEL_REF;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.REF_CALL:
-        return Token.REF_CALL;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.REF_SPECIAL:
-        return Token.REF_SPECIAL;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.DEFAULTNAMESPACE:
-        return Token.DEFAULTNAMESPACE;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.ESCXMLTEXT:
-        return Token.ESCXMLTEXT;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.ESCXMLATTR:
-        return Token.ESCXMLATTR;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.REF_MEMBER:
-        return Token.REF_MEMBER;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.REF_NS_MEMBER:
-        return Token.REF_NS_MEMBER;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.REF_NAME:
-        return Token.REF_NAME;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.REF_NS_NAME:
-        return Token.REF_NS_NAME;
       case com.google.javascript.jscomp.mozilla.rhino.Token.TRY:
         return Token.TRY;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.SEMI:
-        return Token.SEMI;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.LB:
-        return Token.LB;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.RB:
-        return Token.RB;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.LC:
-        return Token.LC;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.RC:
-        return Token.RC;
+      // The LP represents a parameter list
       case com.google.javascript.jscomp.mozilla.rhino.Token.LP:
         return Token.LP;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.RP:
-        return Token.RP;
       case com.google.javascript.jscomp.mozilla.rhino.Token.COMMA:
         return Token.COMMA;
       case com.google.javascript.jscomp.mozilla.rhino.Token.ASSIGN:
@@ -1200,14 +1171,8 @@ public class IRFactory {
         return Token.INC;
       case com.google.javascript.jscomp.mozilla.rhino.Token.DEC:
         return Token.DEC;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.DOT:
-        return Token.DOT;
       case com.google.javascript.jscomp.mozilla.rhino.Token.FUNCTION:
         return Token.FUNCTION;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.EXPORT:
-        return Token.EXPORT;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.IMPORT:
-        return Token.IMPORT;
       case com.google.javascript.jscomp.mozilla.rhino.Token.IF:
         return Token.IF;
       case com.google.javascript.jscomp.mozilla.rhino.Token.ELSE:
@@ -1238,61 +1203,23 @@ public class IRFactory {
         return Token.FINALLY;
       case com.google.javascript.jscomp.mozilla.rhino.Token.VOID:
         return Token.VOID;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.RESERVED:
-        return Token.RESERVED;
       case com.google.javascript.jscomp.mozilla.rhino.Token.EMPTY:
         return Token.EMPTY;
       case com.google.javascript.jscomp.mozilla.rhino.Token.BLOCK:
         return Token.BLOCK;
       case com.google.javascript.jscomp.mozilla.rhino.Token.LABEL:
         return Token.LABEL;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.TARGET:
-        return Token.TARGET;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.LOOP:
-        return Token.LOOP;
       case com.google.javascript.jscomp.mozilla.rhino.Token.EXPR_VOID:
       case com.google.javascript.jscomp.mozilla.rhino.Token.EXPR_RESULT:
         return Token.EXPR_RESULT;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.JSR:
-        return Token.JSR;
       case com.google.javascript.jscomp.mozilla.rhino.Token.SCRIPT:
         return Token.SCRIPT;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.TYPEOFNAME:
-        return Token.TYPEOFNAME;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.USE_STACK:
-        return Token.USE_STACK;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.SETPROP_OP:
-        return Token.SETPROP_OP;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.SETELEM_OP:
-        return Token.SETELEM_OP;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.LOCAL_BLOCK:
-        return Token.LOCAL_BLOCK;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.SET_REF_OP:
-        return Token.SET_REF_OP;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.DOTDOT:
-        return Token.DOTDOT;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.COLONCOLON:
-        return Token.COLONCOLON;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.XML:
-        return Token.XML;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.DOTQUERY:
-        return Token.DOTQUERY;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.XMLATTR:
-        return Token.XMLATTR;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.XMLEND:
-        return Token.XMLEND;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.TO_OBJECT:
-        return Token.TO_OBJECT;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.TO_DOUBLE:
-        return Token.TO_DOUBLE;
       case com.google.javascript.jscomp.mozilla.rhino.Token.GET:
         return Token.GET;
       case com.google.javascript.jscomp.mozilla.rhino.Token.SET:
         return Token.SET;
       case com.google.javascript.jscomp.mozilla.rhino.Token.CONST:
         return Token.CONST;
-      case com.google.javascript.jscomp.mozilla.rhino.Token.SETCONST:
-        return Token.SETCONST;
       case com.google.javascript.jscomp.mozilla.rhino.Token.DEBUGGER:
         return Token.DEBUGGER;
     }

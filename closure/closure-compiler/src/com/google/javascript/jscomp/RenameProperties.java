@@ -24,6 +24,8 @@ import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
 import com.google.javascript.jscomp.graph.Graph.GraphEdge;
 import com.google.javascript.jscomp.graph.LinkedUndirectedGraph;
 import com.google.javascript.jscomp.graph.UndiGraph;
+import com.google.javascript.jscomp.graph.UndiGraph.UndiGraphEdge;
+import com.google.javascript.jscomp.graph.UndiGraph.UndiGraphNode;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TokenStream;
@@ -34,6 +36,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -84,8 +87,7 @@ class RenameProperties implements CompilerPass {
    *
    * The graph would have X -> Y with the edge of N.
    */
-  private final UndiGraph<Property, PropertyAffinity> affinityGraph =
-      LinkedUndirectedGraph.createWithoutAnnotations();
+  private final UndiGraph<Property, PropertyAffinity> affinityGraph;
 
   // Property names that don't get renamed
   private final Set<String> externedNames = new HashSet<String>(
@@ -146,32 +148,35 @@ class RenameProperties implements CompilerPass {
    * Creates an instance.
    *
    * @param compiler The JSCompiler
+   * @param affinity Optimize for affinity information.
    * @param generatePseudoNames Generate pseudo names. e.g foo -> $foo$ instead
    *        of compact obfuscated names. This is used for debugging.
    */
-  RenameProperties(AbstractCompiler compiler,
+  RenameProperties(AbstractCompiler compiler, boolean affinity,
       boolean generatePseudoNames) {
-    this(compiler, generatePseudoNames, null, null);
+    this(compiler, affinity, generatePseudoNames, null, null);
   }
 
   /**
    * Creates an instance.
    *
    * @param compiler The JSCompiler.
+   * @param affinity Optimize for affinity information.
    * @param generatePseudoNames Generate pseudo names. e.g foo -> $foo$ instead
    *        of compact obfuscated names. This is used for debugging.
    * @param prevUsedPropertyMap The property renaming map used in a previous
    *        compilation.
    */
-  RenameProperties(AbstractCompiler compiler,
+  RenameProperties(AbstractCompiler compiler, boolean affinity,
       boolean generatePseudoNames, VariableMap prevUsedPropertyMap) {
-    this(compiler, generatePseudoNames, prevUsedPropertyMap, null);
+    this(compiler, affinity, generatePseudoNames, prevUsedPropertyMap, null);
   }
 
   /**
    * Creates an instance.
    *
    * @param compiler The JSCompiler.
+   * @param affinity Optimize for affinity information.
    * @param generatePseudoNames Generate pseudo names. e.g foo -> $foo$ instead
    *        of compact obfuscated names. This is used for debugging.
    * @param prevUsedPropertyMap The property renaming map used in a previous
@@ -180,6 +185,7 @@ class RenameProperties implements CompilerPass {
    *   generated names
    */
   RenameProperties(AbstractCompiler compiler,
+      boolean affinity,
       boolean generatePseudoNames,
       VariableMap prevUsedPropertyMap,
       @Nullable char[] reservedCharacters) {
@@ -187,6 +193,11 @@ class RenameProperties implements CompilerPass {
     this.generatePseudoNames = generatePseudoNames;
     this.prevUsedPropertyMap = prevUsedPropertyMap;
     this.reservedCharacters = reservedCharacters;
+    if (affinity) {
+      this.affinityGraph = LinkedUndirectedGraph.createWithoutAnnotations();
+    } else {
+      this.affinityGraph = null;
+    }
   }
 
   @Override
@@ -208,7 +219,9 @@ class RenameProperties implements CompilerPass {
     }
 
     compiler.addToDebugLog("JS property assignments:");
-    computeAffinityScores();
+    if (affinityGraph != null) {
+      computeAffinityScores();
+    }
 
     // Assign names, sorted by descending frequency to minimize code size.
     Set<Property> propsByFreq = new TreeSet<Property>(FREQUENCY_COMPARATOR);
@@ -294,16 +307,19 @@ class RenameProperties implements CompilerPass {
    */
   private void computeAffinityScores() {
     for (Property p : propertyMap.values()) {
-      for (Property other : propertyMap.values()) {
-        if (p != other && p.numOccurrences < other.numOccurrences) {
-          List<GraphEdge<Property,PropertyAffinity>> edges =
-              affinityGraph.getEdges(p, other);
-          if (!edges.isEmpty()) {
-            p.affinityScore += edges.get(0)
-                .getValue().affinity + other.numOccurrences;
-          }
-        }
+      UndiGraphNode<Property, PropertyAffinity> node =
+          affinityGraph.getUndirectedGraphNode(p);
+
+      int affinityScore = 0;
+      for (Iterator<UndiGraphEdge<Property, PropertyAffinity>> edgeIterator =
+          node.getNeighborEdgesIterator(); edgeIterator.hasNext();) {
+        UndiGraphEdge<Property,PropertyAffinity> edge = edgeIterator.next();
+        affinityScore += edge.getValue().affinity +
+            (node == edge.getNodeA() ?
+                edge.getNodeB().getValue().numOccurrences :
+                edge.getNodeA().getValue().numOccurrences);
       }
+      node.getValue().affinityScore = affinityScore;
     }
   }
 
@@ -366,9 +382,7 @@ class RenameProperties implements CompilerPass {
           for (Node child = n.getFirstChild();
                child != null;
                child = child.getNext()) {
-            if (child.getType() != Token.NUMBER) { // expect STRING, GET, SET
-              externedNames.add(child.getString());
-            }
+            externedNames.add(child.getString());
           }
           break;
       }
@@ -398,16 +412,12 @@ class RenameProperties implements CompilerPass {
           break;
         case Token.OBJECTLIT:
           for (Node key = n.getFirstChild(); key != null; key = key.getNext()) {
-            // We only want keys that are strings (not numbers), and only keys
-            // that were unquoted.
-            if (key.getType() != Token.NUMBER) {
-              if (!key.isQuotedString()) {
-                maybeMarkCandidate(key);
-              } else {
-                // Ensure that we never rename some other property in a way
-                // that could conflict with this quoted key.
-                quotedNames.add(key.getString());
-              }
+            if (!key.isQuotedString()) {
+              maybeMarkCandidate(key);
+            } else {
+              // Ensure that we never rename some other property in a way
+              // that could conflict with this quoted key.
+              quotedNames.add(key.getString());
             }
           }
           break;
@@ -507,7 +517,9 @@ class RenameProperties implements CompilerPass {
       if (prop == null) {
         prop = new Property(name);
         propertyMap.put(name, prop);
-        affinityGraph.createNode(prop);
+        if (affinityGraph != null) {
+          affinityGraph.createNode(prop);
+        }
       }
       prop.numOccurrences++;
       if (currentHighAffinityProperties != null) {
@@ -524,16 +536,19 @@ class RenameProperties implements CompilerPass {
 
     @Override
     public void exitScope(NodeTraversal t) {
+      if (affinityGraph == null) {
+        return;
+      }
       if (!t.inGlobalScope() && t.getScope().getParent().isGlobal()) {
         for (Property p1 : currentHighAffinityProperties) {
           for (Property p2 : currentHighAffinityProperties) {
             if (p1.oldName.compareTo(p2.oldName) < 0) {
-              List<GraphEdge<Property,PropertyAffinity>> edges =
-                  affinityGraph.getEdges(p1, p2);
-              if (edges.isEmpty()) {
+              GraphEdge<Property,PropertyAffinity> edge =
+                  affinityGraph.getFirstEdge(p1, p2);
+              if (edge == null) {
                 affinityGraph.connect(p1, new PropertyAffinity(1), p2);
               } else {
-                edges.get(0).getValue().increase();
+                edge.getValue().increase();
               }
             }
           }
@@ -560,6 +575,7 @@ class RenameProperties implements CompilerPass {
   }
 
   private class PropertyAffinity {
+    // This will forever be zero if no affinity information was gathered.
     private int affinity = 0;
 
     private PropertyAffinity(int affinity) {

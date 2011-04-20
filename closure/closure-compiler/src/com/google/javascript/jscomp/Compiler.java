@@ -232,6 +232,27 @@ public class Compiler extends AbstractCompiler {
       }
     }
 
+    // DiagnosticGroups override the plain checkTypes option.
+    if (options.enables(DiagnosticGroups.CHECK_TYPES)) {
+      options.checkTypes = true;
+    } else if (options.disables(DiagnosticGroups.CHECK_TYPES)) {
+      options.checkTypes = false;
+    } else if (!options.checkTypes) {
+      // If DiagnosticGroups did not override the plain checkTypes
+      // option, and checkTypes is enabled, then turn off the
+      // parser type warnings.
+      options.setWarningLevel(
+          DiagnosticGroup.forType(
+              RhinoErrorReporter.TYPE_PARSE_ERROR),
+          CheckLevel.OFF);
+    }
+
+    if (options.checkGlobalThisLevel.isOn()) {
+      options.setWarningLevel(
+          DiagnosticGroups.GLOBAL_THIS,
+          options.checkGlobalThisLevel);
+    }
+
     // Initialize the warnings guard.
     List<WarningsGuard> guards = Lists.newArrayList();
     guards.add(
@@ -254,21 +275,6 @@ public class Compiler extends AbstractCompiler {
           DiagnosticGroups.CHECK_VARIABLES, CheckLevel.OFF));
     }
 
-    // DiagnosticGroups override the plain checkTypes option.
-    if (options.enables(DiagnosticGroups.CHECK_TYPES)) {
-      options.checkTypes = true;
-    } else if (options.disables(DiagnosticGroups.CHECK_TYPES)) {
-      options.checkTypes = false;
-    } else if (!options.checkTypes) {
-      // If DiagnosticGroups did not override the plain checkTypes
-      // option, and checkTypes is enabled, then turn off the
-      // parser type warnings.
-      guards.add(
-          new DiagnosticGroupWarningsGuard(
-              DiagnosticGroup.forType(
-                  RhinoErrorReporter.TYPE_PARSE_ERROR),
-              CheckLevel.OFF));
-    }
     this.warningsGuard = new ComposeWarningsGuard(guards);
   }
 
@@ -1080,6 +1086,12 @@ public class Compiler extends AbstractCompiler {
     jsRoot = new Node(Token.BLOCK);
     jsRoot.setIsSyntheticBlock(true);
 
+    externsRoot = new Node(Token.BLOCK);
+    externsRoot.setIsSyntheticBlock(true);
+
+    externAndJsRoot = new Node(Token.BLOCK, externsRoot, jsRoot);
+    externAndJsRoot.setIsSyntheticBlock(true);
+
     if (options.tracer.isOn()) {
       tracker = new PerformanceTracker(jsRoot,
           options.tracer == TracerMode.ALL);
@@ -1090,8 +1102,6 @@ public class Compiler extends AbstractCompiler {
 
     try {
       // Parse externs sources.
-      externsRoot = new Node(Token.BLOCK);
-      externsRoot.setIsSyntheticBlock(true);
       for (CompilerInput input : externs) {
         Node n = input.getAstRoot(this);
         if (hasErrors()) {
@@ -1193,9 +1203,6 @@ public class Compiler extends AbstractCompiler {
 
         jsRoot.addChildToBack(n);
       }
-
-      externAndJsRoot = new Node(Token.BLOCK, externsRoot, jsRoot);
-      externAndJsRoot.setIsSyntheticBlock(true);
 
       return externAndJsRoot;
     } finally {
@@ -1445,6 +1452,7 @@ public class Compiler extends AbstractCompiler {
     builder.setSourceMapDetailLevel(options.sourceMapDetailLevel);
     builder.setTagAsStrict(
         options.getLanguageOut() == LanguageMode.ECMASCRIPT5_STRICT);
+    builder.setLineLengthThreshold(options.lineLengthThreshold);
 
     Charset charset = options.outputCharset != null ?
         Charset.forName(options.outputCharset) : null;
@@ -1645,7 +1653,12 @@ public class Compiler extends AbstractCompiler {
 
   @Override
   public boolean acceptEcmaScript5() {
-    return options.getLanguageIn() == LanguageMode.ECMASCRIPT5;
+    switch (options.getLanguageIn()) {
+      case ECMASCRIPT5:
+      case ECMASCRIPT5_STRICT:
+        return true;
+    }
+    return false;
   }
 
   public LanguageMode languageMode() {

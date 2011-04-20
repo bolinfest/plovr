@@ -45,6 +45,8 @@ import javax.annotation.Nullable;
  */
 public final class NodeUtil {
 
+  static final long MAX_POSITIVE_INTEGER_NUMBER = (long)Math.pow(2, 53);
+
   final static String JSC_PROPERTY_NAME_FN = "JSCompiler_renameProperty";
 
   // TODO(user): Eliminate this class and make all of the static methods
@@ -69,45 +71,52 @@ public final class NodeUtil {
    * Note: unlike getBooleanValue this function does not return UNKNOWN
    * for expressions with side-effects.
    */
-  static TernaryValue getExpressionBooleanValue(Node n) {
+  static TernaryValue getImpureBooleanValue(Node n) {
     switch (n.getType()) {
       case Token.ASSIGN:
       case Token.COMMA:
         // For ASSIGN and COMMA the value is the value of the RHS.
-        return getExpressionBooleanValue(n.getLastChild());
+        return getImpureBooleanValue(n.getLastChild());
       case Token.NOT:
-        TernaryValue value = getExpressionBooleanValue(n.getLastChild());
+        TernaryValue value = getImpureBooleanValue(n.getLastChild());
         return value.not();
       case Token.AND: {
-        TernaryValue lhs = getExpressionBooleanValue(n.getFirstChild());
-        TernaryValue rhs = getExpressionBooleanValue(n.getLastChild());
+        TernaryValue lhs = getImpureBooleanValue(n.getFirstChild());
+        TernaryValue rhs = getImpureBooleanValue(n.getLastChild());
         return lhs.and(rhs);
       }
       case Token.OR:  {
-        TernaryValue lhs = getExpressionBooleanValue(n.getFirstChild());
-        TernaryValue rhs = getExpressionBooleanValue(n.getLastChild());
+        TernaryValue lhs = getImpureBooleanValue(n.getFirstChild());
+        TernaryValue rhs = getImpureBooleanValue(n.getLastChild());
         return lhs.or(rhs);
       }
       case Token.HOOK:  {
-        TernaryValue trueValue = getExpressionBooleanValue(
+        TernaryValue trueValue = getImpureBooleanValue(
             n.getFirstChild().getNext());
-        TernaryValue falseValue = getExpressionBooleanValue(n.getLastChild());
+        TernaryValue falseValue = getImpureBooleanValue(n.getLastChild());
         if (trueValue.equals(falseValue)) {
           return trueValue;
         } else {
           return TernaryValue.UNKNOWN;
         }
       }
+      case Token.ARRAYLIT:
+      case Token.OBJECTLIT:
+        // ignoring side-effects
+        return TernaryValue.TRUE;
+
       default:
-        return getBooleanValue(n);
+        return getPureBooleanValue(n);
     }
   }
 
   /**
    * Gets the boolean value of a node that represents a literal. This method
-   * effectively emulates the <code>Boolean()</code> JavaScript cast function.
+   * effectively emulates the <code>Boolean()</code> JavaScript cast function
+   * except it return UNKNOWN for known values with side-effects, use
+   * getExpressionBooleanValue if you don't care about side-effects.
    */
-  static TernaryValue getBooleanValue(Node n) {
+  static TernaryValue getPureBooleanValue(Node n) {
     switch (n.getType()) {
       case Token.STRING:
         return TernaryValue.forBoolean(n.getString().length() > 0);
@@ -116,7 +125,7 @@ public final class NodeUtil {
         return TernaryValue.forBoolean(n.getDouble() != 0);
 
       case Token.NOT:
-        return getBooleanValue(n.getLastChild()).not();
+        return getPureBooleanValue(n.getLastChild()).not();
 
       case Token.NULL:
       case Token.FALSE:
@@ -136,15 +145,18 @@ public final class NodeUtil {
         break;
 
       case Token.TRUE:
-      case Token.ARRAYLIT:
-      case Token.OBJECTLIT:
       case Token.REGEXP:
         return TernaryValue.TRUE;
+
+      case Token.ARRAYLIT:
+      case Token.OBJECTLIT:
+        if (!mayHaveSideEffects(n)) {
+          return TernaryValue.TRUE;
+        }
     }
 
     return TernaryValue.UNKNOWN;
   }
-
 
   /**
    * Gets the value of a node as a String, or null if it cannot be converted.
@@ -167,15 +179,7 @@ public final class NodeUtil {
         break;
 
       case Token.NUMBER:
-        double value = n.getDouble();
-        long longValue = (long) value;
-
-        // Return "1" instead of "1.0"
-        if (longValue == value) {
-          return Long.toString(longValue);
-        } else {
-          return Double.toString(n.getDouble());
-        }
+        return getStringValue(n.getDouble());
 
       case Token.FALSE:
       case Token.TRUE:
@@ -186,7 +190,7 @@ public final class NodeUtil {
         return "undefined";
 
       case Token.NOT:
-        TernaryValue child = getBooleanValue(n.getFirstChild());
+        TernaryValue child = getPureBooleanValue(n.getFirstChild());
         if (child != TernaryValue.UNKNOWN) {
           return child.toBoolean(true) ? "false" : "true"; // reversed.
         }
@@ -201,6 +205,17 @@ public final class NodeUtil {
     return null;
   }
 
+  static String getStringValue(double value) {
+    long longValue = (long) value;
+
+    // Return "1" instead of "1.0"
+    if (longValue == value) {
+      return Long.toString(longValue);
+    } else {
+      return Double.toString(value);
+    }
+  }
+
   /**
    * When converting arrays to string using Array.prototype.toString or
    * Array.prototype.join, the rules for conversion to String are different
@@ -210,25 +225,16 @@ public final class NodeUtil {
    * @return The string representation.
    */
   static String getArrayElementStringValue(Node n) {
-    return NodeUtil.isNullOrUndefined(n) ? "" : getStringValue(n);
+    return (NodeUtil.isNullOrUndefined(n) || n.getType() == Token.EMPTY)
+        ? "" : getStringValue(n);
   }
 
   static String arrayToString(Node literal) {
     Node first = literal.getFirstChild();
-    int[] skipIndexes = (int[]) literal.getProp(Node.SKIP_INDEXES_PROP);
     StringBuilder result = new StringBuilder();
     int nextSlot = 0;
     int nextSkipSlot = 0;
     for (Node n = first; n != null; n = n.getNext()) {
-      while (skipIndexes != null && nextSkipSlot < skipIndexes.length) {
-        if (nextSlot == skipIndexes[nextSkipSlot]) {
-          result.append(',');
-          nextSlot++;
-          nextSkipSlot++;
-        } else {
-          break;
-        }
-      }
       String childValue = getArrayElementStringValue(n);
       if (childValue == null) {
         return null;
@@ -289,7 +295,7 @@ public final class NodeUtil {
         return null;
 
       case Token.NOT:
-        TernaryValue child = getBooleanValue(n.getFirstChild());
+        TernaryValue child = getPureBooleanValue(n.getFirstChild());
         if (child != TernaryValue.UNKNOWN) {
           return child.toBoolean(true) ? 0.0 : 1.0; // reversed.
         }
@@ -308,6 +314,11 @@ public final class NodeUtil {
   }
 
   static Double getStringNumberValue(String rawJsString) {
+    if (rawJsString.contains("\u000b")) {
+      // vertical tab is not always whitespace
+      return null;
+    }
+
     String s = trimJsWhiteSpace(rawJsString);
     // return ScriptRuntime.toNumber(s);
     if (s.length() == 0) {
@@ -351,10 +362,12 @@ public final class NodeUtil {
   static String trimJsWhiteSpace(String s) {
     int start = 0;
     int end = s.length();
-    while (end > 0 && isStrWhiteSpaceChar(s.charAt(end-1))) {
+    while (end > 0
+        && isStrWhiteSpaceChar(s.charAt(end - 1)) == TernaryValue.TRUE) {
       end--;
     }
-    while (start < end && isStrWhiteSpaceChar(s.charAt(start))) {
+    while (start < end
+        && isStrWhiteSpaceChar(s.charAt(start)) == TernaryValue.TRUE) {
       start++;
     }
     return s.substring(start, end);
@@ -363,21 +376,23 @@ public final class NodeUtil {
   /**
    * Copied from Rhino's ScriptRuntime
    */
-  static boolean isStrWhiteSpaceChar(int c) {
+  static TernaryValue isStrWhiteSpaceChar(int c) {
     switch (c) {
+      case '\u000B': // <VT>
+        return TernaryValue.UNKNOWN;  // IE says "no", EcmaScript says "yes"
       case ' ': // <SP>
       case '\n': // <LF>
       case '\r': // <CR>
       case '\t': // <TAB>
       case '\u00A0': // <NBSP>
       case '\u000C': // <FF>
-      case '\u000B': // <VT>
       case '\u2028': // <LS>
       case '\u2029': // <PS>
       case '\uFEFF': // <BOM>
-        return true;
+        return TernaryValue.TRUE;
       default:
-        return Character.getType(c) == Character.SPACE_SEPARATOR;
+        return (Character.getType(c) == Character.SPACE_SEPARATOR)
+            ? TernaryValue.TRUE : TernaryValue.FALSE;
     }
   }
 
@@ -506,6 +521,15 @@ public final class NodeUtil {
   static boolean isLiteralValue(Node n, boolean includeFunctions) {
     switch (n.getType()) {
       case Token.ARRAYLIT:
+        for (Node child = n.getFirstChild(); child != null;
+             child = child.getNext()) {
+          if (child.getType() != Token.EMPTY
+              && !isLiteralValue(child, includeFunctions)) {
+            return false;
+          }
+        }
+        return true;
+
       case Token.REGEXP:
         // Return true only if all children are const.
         for (Node child = n.getFirstChild(); child != null;
@@ -1123,22 +1147,19 @@ public final class NodeUtil {
       case Token.POS:
       case Token.NEG:    return 13;
 
-      case Token.ARRAYLIT:
       case Token.CALL:
-      case Token.EMPTY:
-      case Token.FALSE:
-      case Token.FUNCTION:
       case Token.GETELEM:
       case Token.GETPROP:
-      case Token.GET_REF:
-      case Token.IF:
-      case Token.LP:
+      // Data values
+      case Token.ARRAYLIT:
+      case Token.EMPTY:  // TODO(johnlenz): remove this.
+      case Token.FALSE:
+      case Token.FUNCTION:
       case Token.NAME:
       case Token.NULL:
       case Token.NUMBER:
       case Token.OBJECTLIT:
       case Token.REGEXP:
-      case Token.RETURN:
       case Token.STRING:
       case Token.THIS:
       case Token.TRUE:
@@ -1415,7 +1436,8 @@ public final class NodeUtil {
    * Returns true if the shallow scope contains references to 'this' keyword
    */
   static boolean referencesThis(Node n) {
-    return containsType(n, Token.THIS, new MatchNotFunction());
+    Node start = (isFunction(n)) ? n.getLastChild() : n;
+    return containsType(start, Token.THIS, new MatchNotFunction());
   }
 
   /**
@@ -1850,15 +1872,6 @@ public final class NodeUtil {
   }
 
   /**
-   * Is this an sparse ARRAYLIT node
-   */
-  static boolean isSparseArray(Node node) {
-    Preconditions.checkArgument(isArrayLiteral(node));
-    int[] skipList = (int[]) node.getProp(Node.SKIP_INDEXES_PROP);
-    return skipList != null && skipList.length > 0;
-  }
-
-  /**
    * Is this node or any of its children a CALL?
    */
   static boolean containsCall(Node n) {
@@ -2023,7 +2036,6 @@ public final class NodeUtil {
    */
   static boolean isObjectLitKey(Node node, Node parent) {
     switch (node.getType()) {
-      case Token.NUMBER:
       case Token.STRING:
         return parent.getType() == Token.OBJECTLIT;
       case Token.GET:
@@ -2040,8 +2052,6 @@ public final class NodeUtil {
    */
   static String getObjectLitKeyName(Node key) {
     switch (key.getType()) {
-      case Token.NUMBER:
-        return NodeUtil.getStringValue(key);
       case Token.STRING:
       case Token.GET:
       case Token.SET:

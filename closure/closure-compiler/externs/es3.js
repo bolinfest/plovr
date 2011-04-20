@@ -756,6 +756,14 @@ Array.reduceRight = function(arr, callback, opt_initialValue) {};
 Array.some = function(arr, callback, opt_context) {};
 
 /**
+ * Introduced in 1.8.5.
+ * @param {*} arr
+ * @return {boolean}
+ * @see http://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Array/isArray
+ */
+Array.isArray = function(arr) {};
+
+/**
  * @constructor
  * @param {*=} opt_value
  * @return {boolean}
@@ -1670,11 +1678,12 @@ String.prototype.quote = function() {};
  * Finds a match between a regular expression and a string, and replaces the
  * matched substring with a new substring.
  *
+ * This may have side-effects if the replacement function has side-effects.
+ *
  * @param {RegExp|string} regex
  * @param {string|Function} str
  * @param {string=} opt_flags
  * @return {string}
- * @nosideeffects
  * @see http://developer.mozilla.org/en/Core_JavaScript_1.5_Reference/Global_Objects/String/replace
  */
 String.prototype.replace = function(regex, str, opt_flags) {};
