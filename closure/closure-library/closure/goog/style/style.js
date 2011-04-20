@@ -368,7 +368,8 @@ goog.style.getOffsetParent = function(element) {
     if (!skipStatic && (parent.scrollWidth > parent.clientWidth ||
                         parent.scrollHeight > parent.clientHeight ||
                         positionStyle == 'fixed' ||
-                        positionStyle == 'absolute')) {
+                        positionStyle == 'absolute' ||
+                        positionStyle == 'relative')) {
       return /** @type {!Element} */ (parent);
     }
   }
@@ -413,6 +414,9 @@ goog.style.getVisibleRectForElement = function(element) {
       visibleRect.bottom = Math.min(visibleRect.bottom,
                                     pos.y + el.clientHeight);
       visibleRect.left = Math.max(visibleRect.left, pos.x);
+      // TODO(user): We may want to check whether the current element is
+      // the document element or the body element, in case somebody sets
+      // overflow on the body element in CSS.
       inContainer = inContainer || el != scrollEl;
     }
   }
@@ -722,7 +726,8 @@ goog.style.getRelativePosition = function(a, b) {
 
 
 /**
- * Returns the position relative to the client viewport.
+ * Returns the position of the event or the element's border box relative to
+ * the client viewport.
  * @param {Element|Event|goog.events.Event} el Element or a mouse / touch event.
  * @return {!goog.math.Coordinate} The position.
  */
@@ -759,11 +764,12 @@ goog.style.getClientPosition = function(el) {
 
 
 /**
- * Sets the top and left of an element such that it will have a
- *
- * @param {Element} el The element to set page offset for.
- * @param {number|goog.math.Coordinate} x Left position or coordinate obj.
- * @param {number=} opt_y Top position.
+ * Moves an element to the given coordinates relative to the client viewport.
+ * @param {Element} el Absolutely positioned element to set page offset for.
+ *     It must be in the document.
+ * @param {number|goog.math.Coordinate} x Left position of the element's margin
+ *     box or a coordinate object.
+ * @param {number=} opt_y Top position of the element's margin box.
  */
 goog.style.setPageOffset = function(el, x, opt_y) {
   // Get current pageoffset

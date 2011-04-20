@@ -243,6 +243,23 @@ function testTruncate() {
   asyncTestCase.waitForAsync('testWriteFile');
 }
 
+function testGetLastModified() {
+  if (!fsExists) {
+    return;
+  }
+  var now = goog.now();
+  loadFile('test', goog.fs.DirectoryEntry.Behavior.CREATE).
+      addCallback(function(entry) {
+        return entry.getLastModified();
+      }).addCallback(function(date) {
+        assertRoughlyEquals('Expected the last modified date to be within ' +
+                            'a few milliseconds of the test start time.',
+                            now, date.getTime(), 100);
+      }).addCallback(continueTesting);
+
+  asyncTestCase.waitForAsync('testGetLastModified');
+}
+
 function testCreatePath() {
   if (!fsExists) {
     return;
@@ -347,6 +364,36 @@ function testCreateBadPath() {
       addBoth(continueTesting);
   asyncTestCase.waitForAsync('testCreateBadPath');
 }
+
+function testGetAbsolutePaths() {
+  if (!fsExists) {
+    return;
+  }
+
+  loadFile('foo', goog.fs.DirectoryEntry.Behavior.CREATE).
+      awaitDeferred(loadTestDir()).
+      addCallback(function(testDir) {
+        return testDir.getDirectory('/');
+      }).
+      addCallback(function(root) {
+        assertEquals('/', root.getFullPath());
+        return root.getDirectory('/' + TEST_DIR);
+      }).
+      addCallback(function(testDir) {
+        assertEquals('/goog-fs-test-dir', testDir.getFullPath());
+        return testDir.getDirectory('//' + TEST_DIR + '////');
+      }).
+      addCallback(function(testDir) {
+        assertEquals('/goog-fs-test-dir', testDir.getFullPath());
+        return testDir.getDirectory('////');
+      }).
+      addCallback(function(testDir) {
+        assertEquals('/', testDir.getFullPath());
+      }).
+      addBoth(continueTesting);
+  asyncTestCase.waitForAsync('testGetAbsolutePaths');
+}
+
 
 function continueTesting(result) {
   asyncTestCase.continueTesting();

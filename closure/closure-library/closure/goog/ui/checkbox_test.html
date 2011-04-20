@@ -13,17 +13,20 @@ See the COPYING file for details.
   <title>Closure Unit Tests - goog.ui.Checkbox</title>
   <script src="../base.js"></script>
   <script>
-    goog.require('goog.array');
     goog.require('goog.dom');
     goog.require('goog.dom.a11y');
     goog.require('goog.dom.a11y.Role');
     goog.require('goog.dom.a11y.State');
     goog.require('goog.dom.classes');
+    goog.require('goog.events');
     goog.require('goog.events.KeyCodes');
-    goog.require('goog.testing.asserts');
     goog.require('goog.testing.events');
     goog.require('goog.testing.jsunit');
     goog.require('goog.ui.Checkbox');
+    goog.require('goog.ui.Checkbox.State');
+    goog.require('goog.ui.CheckboxRenderer');
+    goog.require('goog.ui.Component.EventType');
+    goog.require('goog.ui.ControlRenderer');
     goog.require('goog.ui.decorate');
   </script>
 </head>
@@ -100,12 +103,12 @@ See the COPYING file for details.
     assertFalse('checked -> unchecked', checkbox.getChecked());
     checkbox.toggle();
     assertTrue('unchecked -> checked', checkbox.getChecked());
-  };
+  }
 
   function testEvents() {
     checkbox.render();
 
-    var events = []
+    var events = [];
     goog.events.listen(checkbox,
         [goog.ui.Component.EventType.CHECK,
          goog.ui.Component.EventType.UNCHECK,
@@ -177,6 +180,27 @@ See the COPYING file for details.
     testCheckboxWithState.dispose();
   }
 
+  function testCustomRenderer() {
+    var cssClass = 'my-custom-checkbox';
+    var renderer = goog.ui.ControlRenderer.getCustomRenderer(
+        goog.ui.CheckboxRenderer, cssClass);
+    var customCheckbox = new goog.ui.Checkbox(
+        undefined, undefined, renderer);
+    customCheckbox.createDom();
+    assertElementsEquals(
+        ['my-custom-checkbox', 'my-custom-checkbox-unchecked'],
+        goog.dom.classes.get(customCheckbox.getElement()));
+    customCheckbox.setChecked(true);
+    assertElementsEquals(
+        ['my-custom-checkbox', 'my-custom-checkbox-checked'],
+        goog.dom.classes.get(customCheckbox.getElement()));
+    customCheckbox.setChecked(null);
+    assertElementsEquals(
+        ['my-custom-checkbox', 'my-custom-checkbox-undetermined'],
+        goog.dom.classes.get(customCheckbox.getElement()));
+    customCheckbox.dispose();
+  }
+
   function testGetAriaRole() {
     checkbox.createDom();
 
@@ -245,7 +269,7 @@ See the COPYING file for details.
     var testCheckbox = goog.ui.decorate(span);
     assertNotNull('checkbox created', testCheckbox);
     assertEquals('decorate was successful',
-        goog.ui.Checkbox, testCheckbox.constructor)
+        goog.ui.Checkbox, testCheckbox.constructor);
     assertEquals('checkbox state should be: ' + state, state,
         testCheckbox.getChecked());
     assertEquals('checkbox is ' + (!opt_disabled ? 'enabled' : 'disabled'),
