@@ -80,6 +80,13 @@
     <!-- Move ParserConfig.properties where ParserRunner.java expects it. -->
     <copy file="${closure-compiler.dir}/src/com/google/javascript/jscomp/parsing/ParserConfig.properties"
           todir="${classes.dir}/com/google/javascript/jscomp/parsing" />
+    
+    <!-- Include these files to support the "info" command. -->
+    <mkdir dir="${classes.dir}/revisions"/>
+    <copy todir="${basedir}/build/classes/revisions/">
+      <fileset dir="${basedir}/tools/imports/" includes="rev-*" /> 
+    </copy>
+
   </target>
 
   <target name="test"

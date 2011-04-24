@@ -19,6 +19,7 @@ public final class Main {
     System.err.println("plovr build tool\n");
     System.err.println("basic commands:\n");
     System.err.println(" build    compile the input specified in a config file");
+    System.err.println(" info     show the versions of the Closure Tools packaged with plovr");
     System.err.println(" extract  extract messages from the Soy files");
     System.err.println(" serve    start the plovr web server");
     System.exit(1);

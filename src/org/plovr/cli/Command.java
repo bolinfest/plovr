@@ -12,6 +12,8 @@ public enum Command {
 
   BUILD("build", new BuildCommand()),
 
+  INFO("info", new InfoCommand()),
+
   // This may not be part of this enum permanently.
   SOY_SERVE("soyweb", new SoyWebCommand()),
 
