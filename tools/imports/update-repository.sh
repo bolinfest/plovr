@@ -36,7 +36,7 @@ REV=`hg branches | grep ${REPOSITORY} | awk '{print $2}'`
 REV2=`echo $REV | awk -F ":" '{print $2}'`
 
 hg merge -r $REV2
+echo "${REVISION}" > ${HGROOT}/tools/imports/rev-${REPOSITORY}.txt
 hg commit -m "merge from ${REPOSITORY} branch at ${REPOSITORY} revision ${REVISION}"
 
-echo "${REVISION}" > ${HGROOT}/tools/imports/rev-${REPOSITORY}.txt
 echo "merge from ${REPOSITORY} committed: run hg push to check in"
