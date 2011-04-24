@@ -47,6 +47,12 @@
 
     <!-- Clean Closure Templates genfiles. -->
     <ant dir="${closure-templates.dir}" target="clean" inheritAll="false" />
+
+    <!-- No need to clean ${closure-templates.dir}/build or
+         ${closure-compiler.dir}/build because plovr's "compile" target does
+         not use those directories. It compiles Closure Templates and Closure
+         Compiler Java files into its own build/classes directory.
+    -->
   </target>
 
   <target name="compile" description="compile Java source code">
