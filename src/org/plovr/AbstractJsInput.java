@@ -18,8 +18,13 @@ import com.google.common.io.LineReader;
  */
 public abstract class AbstractJsInput implements JsInput {
 
+  /**
+   * This should match the _BASE_REGEX_STRING defined in
+   * http://code.google.com/p/closure-library/source/browse/trunk/closure/bin/build/source.py
+   * to ensure consistency with closurebuilder.py.
+   */
   private static final Pattern GOOG_PROVIDE_OR_REQUIRE =
-      Pattern.compile("\\s*goog\\.(provide|require)\\(['\"]([\\w\\.]+)['\"]\\);?.*");
+      Pattern.compile("\\s*goog\\.(provide|require)\\(\\s*['\"]([\\w\\.]+)['\"]\\s*\\);?.*");
 
   private final String name;
 

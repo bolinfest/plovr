@@ -44,4 +44,21 @@ public class AbstractJsInputTest {
     assertEquals("Regex should tolerate lines that end in \\r\\n",
         ImmutableList.of("example.test.Config"), jsInputWithWindowsLineEndings.getRequires());
   }
+
+  /**
+   * Regression test for http://code.google.com/p/plovr/issues/detail?id=37.
+   */
+  @Test
+  public void testSpacesAroundArgument() {
+    AbstractJsInput jsInputWithSpacesAroundArgument = new DummyAbstractJsInput(
+        "dummy.js",
+        "goog.provide( 'example.test.Control' );\r\n" +
+        "goog.require(\t'example.test.Config'   );\r\n");
+    assertEquals("Regex should tolerate arguments surrounded by spaces",
+        ImmutableList.of("example.test.Control"),
+        jsInputWithSpacesAroundArgument.getProvides());
+    assertEquals("Regex should tolerate arguments surrounded by whitespace characters",
+        ImmutableList.of("example.test.Config"),
+        jsInputWithSpacesAroundArgument.getRequires());
+  }
 }
