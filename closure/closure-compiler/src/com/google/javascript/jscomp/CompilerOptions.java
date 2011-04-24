@@ -1195,7 +1195,7 @@ public class CompilerOptions implements Serializable, Cloneable {
   // Enums
 
   /** When to do the extra sanity checks */
-  static enum LanguageMode {
+  public static enum LanguageMode {
     /**
      * Tranditional JavaScript
      */
