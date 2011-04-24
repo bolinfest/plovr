@@ -90,6 +90,8 @@ public final class Config implements Comparable<Config> {
 
   private final Map<DiagnosticGroup, CheckLevel> diagnosticGroups;
 
+  private final boolean exportTestFunctions;
+
   private final boolean treatWarningsAsErrors;
 
   private final Map<String, JsonPrimitive> defines;
@@ -138,6 +140,7 @@ public final class Config implements Comparable<Config> {
       Charset outputCharset,
       boolean fingerprintJsFiles,
       Map<DiagnosticGroup, CheckLevel> diagnosticGroups,
+      boolean exportTestFunctions,
       boolean treatWarningsAsErrors,
       Map<String, JsonPrimitive> defines,
       Set<String> stripNameSuffixes,
@@ -165,6 +168,7 @@ public final class Config implements Comparable<Config> {
     this.outputCharset = outputCharset;
     this.fingerprintJsFiles = fingerprintJsFiles;
     this.diagnosticGroups = diagnosticGroups;
+    this.exportTestFunctions = exportTestFunctions;
     this.treatWarningsAsErrors = treatWarningsAsErrors;
     this.defines = ImmutableMap.copyOf(defines);
     this.stripNameSuffixes = ImmutableSet.copyOf(stripNameSuffixes);
@@ -321,6 +325,7 @@ public final class Config implements Comparable<Config> {
       }
     }
 
+    options.exportTestFunctions = exportTestFunctions;
     options.stripNameSuffixes = stripNameSuffixes;
     options.stripTypePrefixes = stripTypePrefixes;
     options.setIdGenerators(idGenerators);
@@ -574,6 +579,8 @@ public final class Config implements Comparable<Config> {
 
     private Map<DiagnosticGroup, CheckLevel> diagnosticGroups = null;
 
+    private boolean exportTestFunctions = false;
+
     private boolean treatWarningsAsErrors = false;
 
     private ModuleConfig.Builder moduleConfigBuilder = null;
@@ -637,6 +644,7 @@ public final class Config implements Comparable<Config> {
       this.outputCharset = config.outputCharset;
       this.fingerprintJsFiles = config.fingerprintJsFiles;
       this.diagnosticGroups = config.diagnosticGroups;
+      this.exportTestFunctions = config.exportTestFunctions;
       this.treatWarningsAsErrors = config.treatWarningsAsErrors;
       this.stripNameSuffixes = config.stripNameSuffixes;
       this.stripTypePrefixes = config.stripTypePrefixes;
@@ -774,6 +782,10 @@ public final class Config implements Comparable<Config> {
       this.diagnosticGroups = groups;
     }
 
+    public void setExportTestFunctions(boolean exportTestFunctions) {
+      this.exportTestFunctions = exportTestFunctions;
+    }
+
     public void setTreatWarningsAsErrors(boolean treatWarningsAsErrors) {
       this.treatWarningsAsErrors = treatWarningsAsErrors;
     }
@@ -863,6 +875,7 @@ public final class Config implements Comparable<Config> {
           outputCharset,
           fingerprintJsFiles,
           diagnosticGroups,
+          exportTestFunctions,
           treatWarningsAsErrors,
           defines,
           stripNameSuffixes,

@@ -295,6 +295,13 @@ public enum ConfigOption {
     }
   }),
 
+  EXPORT_TEST_FUNCTIONS("export-test-functions", new ConfigUpdater() {
+    @Override
+    public void apply(boolean exportTestFunctions, Config.Builder builder) {
+      builder.setExportTestFunctions(exportTestFunctions);
+    }
+  }),
+
   NAME_SUFFIXES_TO_STRIP("name-suffixes-to-strip", new ConfigUpdater() {
     @Override
     public void apply(String suffix, Config.Builder builder) {

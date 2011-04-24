@@ -319,6 +319,12 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     in practice. If plovr cannot set a property that you have specified in{sp}
     <code>experimental-compiler-options</code>, then it will print a message to
     standard error.
+  {case 'export-test-functions'}
+    When compiled, all global functions that start with <code>test</code> will
+    be exported via <code>goog.exportSymbol()</code> so that when run as part of
+    the Closure testing framework, the test methods will still be able to be
+    discovered. In short, this makes it possible to unit test JavaScript code
+    compiled in Advanced mode.
 {/switch}
 
 {/template}
