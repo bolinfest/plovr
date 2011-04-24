@@ -444,20 +444,23 @@ public final class Config implements Comparable<Config> {
             setter.invoke(options, primitive.getAsString());
             continue;
           } catch (NoSuchMethodException e) {
-            // Ignore exception.
-            // TODO(bolinfest): Try setting as an enum instead.
+            // Ignore exception and try setting value as an enum instead.
+            if (setCompilerOptionToEnumValue(
+                options, setterName, primitive.getAsString())) {
+              continue;
+            }
           }
         }
       } catch (SecurityException e) {
-        // TODO(bolinfest): Log warning
+        // OK
       } catch (IllegalArgumentException e) {
-        // TODO(bolinfest): Log warning
+        // OK
       } catch (IllegalAccessException e) {
-        // TODO(bolinfest): Log warning
+        // OK
       } catch (NoSuchMethodException e) {
-        // TODO(bolinfest): Log warning
+        // OK
       } catch (InvocationTargetException e) {
-        // TODO(bolinfest): Log warning
+        // OK
       }
 
       System.err.println("Could not set experimental compiler option: " +
@@ -465,6 +468,38 @@ public final class Config implements Comparable<Config> {
     }
   }
 
+  /**
+   * @return true if this was successful
+   */
+  private static boolean setCompilerOptionToEnumValue(
+      CompilerOptions options,
+      String setterMethodName,
+      String value) {
+    for (Method m : CompilerOptions.class.getMethods()) {
+      if (setterMethodName.equals(m.getName())) {
+        Class<?> paramClass = m.getParameterTypes()[0];
+        if (paramClass.isEnum()) {
+          try {
+            Method valueOf = paramClass.getMethod("valueOf", String.class);
+            Object enumValue = valueOf.invoke(null, value);
+            m.invoke(options, enumValue);
+          } catch (IllegalArgumentException e) {
+            // OK
+          } catch (IllegalAccessException e) {
+            // OK
+          } catch (InvocationTargetException e) {
+            // OK
+          } catch (SecurityException e) {
+            // OK
+          } catch (NoSuchMethodException e) {
+            // OK
+          }
+          return true;
+        }
+      }
+    }
+    return false;
+  }
   // TODO(bolinfest): Figure out a better way to do this isNumber() stuff.
   @SuppressWarnings("unchecked")
   private static final Set<Class<? extends Number>> numericClasses =

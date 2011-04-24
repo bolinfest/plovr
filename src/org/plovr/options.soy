@@ -270,6 +270,55 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     Recall that compilation will still succeed if there are warnings, but will
     fail if there are any errors, so enabling this option will draw more
     attention to any potential problems detected by the Closure Compiler.
+  {case 'experimental-compiler-options'}
+    The Closure Compiler contains many options that are only available
+    programmatically in Java.
+    Many of these options are experimental or not finalized, so they
+    may not be a permanent part of the API.
+    Nevertheless, many of them will be useful to you today, so plovr attempts
+    to expose these the <code>experimental-compiler-options</code> option.
+    Under the hood, it uses reflection in Java, so it is fairly hacky,
+    but in practice, it is a convenient way to experiment with Closure Compiler
+    options without writing Java code.
+    <p>
+    If you look at the source code for
+    {sp}<a href="http://closure-compiler.googlecode.com/svn/trunk/src/com/google/javascript/jscomp/CompilerOptions.java">CompilerOptions.java</a>{sp}
+    (which is part of the Closure Compiler), you will see that there are many
+    fields, some of which are public, and some of which are package-private, but
+    are configurable via setter methods. plovr supports setting both types of
+    options through <code>experimental-compiler-options</code>.
+    Consider the following example:
+{literal}<pre>"experimental-compiler-options": {
+  "instrumentForCoverage": true,
+  "checkShadowVars": "ERROR",
+  "languageIn": "ECMASCRIPT5"
+}</pre>{/literal}
+    This example exhibits several of the supported cases:
+    <ul>
+      <li><code>instrumentForCoverage</code> is a public boolean field, so
+        plovr can directly set its value to <code>true</code>.
+      <li><code>checkShadowVars</code> is also a public field, but it has
+        an enum type, <code>CheckLevel</code>. Upon determining that the type of
+        the field is an enum, it uses its <code>valueOf()</code> method in Java
+        to create the enum value that corresponds to the string in the plovr
+        config file. Therefore, when specifying an enum value in{sp}
+        <code>experimental-compiler-options</code>, use the name of the enum
+        value as a string (just like you would for the <code>checks</code> option).
+      <li><code>languageIn</code> is a package private field, but there is a
+        setter method named <code>setLanguageIn()</code> in{sp}
+        <code>CompilerOptions</code>. Again, using reflection, plovr discovers
+        the method and that it takes an enum value, so it uses the{sp}
+        <code>valueOf()</code> method of <code>LanguageMode</code> to get the
+        enum value and then invokes the <code>setLanguageIn()</code> method to
+        set the field in <code>CompilerOptions</code>.
+    </ul>
+    If this sounds messy, that is because it is. (The implementation is in the{sp}
+    <code>applyExperimentalCompilerOptions()</code> method in{sp}
+    <code>org.plovr.Config</code>. Fear not, as it has a corresponding unit test!)
+    Fortunately, you should not have to worry about the implementation details,
+    in practice. If plovr cannot set a property that you have specified in{sp}
+    <code>experimental-compiler-options</code>, then it will print a message to
+    standard error.
 {/switch}
 
 {/template}
