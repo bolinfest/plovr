@@ -135,8 +135,19 @@ plovr.writeErrors = function() {
   // TODO(bolinfest): Make it possible to expand and collapse errors.
 
   var div = document.createElement('div');
-  var html = [];
 
+  // Give div its own CSS class (plovr-error-report) so that users can style it.
+  // For example, they may need to change the position or the z-index:
+  //
+  // http://code.google.com/p/plovr/issues/detail?id=34
+  //
+  // A class is used rather than an id in case there are multiple plovr configs
+  // loaded on the same page. An additional CSS class is included (parameterized
+  // by config id) so that multiple config error boxes can be styled separately.
+  var configId = plovr.getConfigId();
+  div.className = 'plovr-error-report plovr-error-report-config-id-' + configId;
+
+  var html = [];
   plovr.writeErrors_(plovr.errors_, html, plovr.ERROR_STYLE);
   plovr.writeErrors_(plovr.warnings_, html, plovr.WARNING_STYLE);
 
