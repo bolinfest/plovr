@@ -2,6 +2,9 @@ package org.plovr;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +26,8 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.ClosureCodingConvention;
@@ -99,6 +104,9 @@ public final class Config implements Comparable<Config> {
 
   private final boolean disambiguateProperties;
 
+  @Nullable
+  private final JsonObject experimentalCompilerOptions;
+
   private final String globalScopeName;
 
   /**
@@ -137,6 +145,7 @@ public final class Config implements Comparable<Config> {
       Set<String> idGenerators,
       boolean ambiguateProperties,
       boolean disambiguateProperties,
+      JsonObject experimentalCompilerOptions,
       File configFile,
       long timestamp,
       String globalScopeName) {
@@ -163,6 +172,7 @@ public final class Config implements Comparable<Config> {
     this.idGenerators = ImmutableSet.copyOf(idGenerators);
     this.ambiguateProperties = ambiguateProperties;
     this.disambiguateProperties = disambiguateProperties;
+    this.experimentalCompilerOptions = experimentalCompilerOptions;
     this.configFile = configFile;
     this.timestamp = timestamp;
     this.globalScopeName = globalScopeName;
@@ -355,7 +365,97 @@ public final class Config implements Comparable<Config> {
 
     options.enableExternExports(true);
 
+    // After all of the options are set, apply the experimental Compiler
+    // options, which may override existing options that are set.
+    applyExperimentalCompilerOptions(experimentalCompilerOptions, options);
+
     return options;
+  }
+
+  @VisibleForTesting
+  static void applyExperimentalCompilerOptions(
+      JsonObject experimentalCompilerOptions,
+      CompilerOptions options) {
+    if (experimentalCompilerOptions == null) {
+      return;
+    }
+
+    for (Map.Entry<String, JsonElement> entry :
+        experimentalCompilerOptions.entrySet()) {
+      JsonElement el = entry.getValue();
+      // Currently, only primitive values are considered, though in the
+      // future, it would be good to support lists, maps, and sets.
+      if (el == null || !el.isJsonPrimitive()) {
+        System.err.println("No support for values like: " + el);
+        continue;
+      }
+      JsonPrimitive primitive = el.getAsJsonPrimitive();
+
+      String name = entry.getKey();
+      Class<?> c = CompilerOptions.class;
+      Field field;
+      try {
+        field = c.getField(name);
+        Class<?> fieldClass = field.getType();
+
+        if (primitive.isBoolean() &&
+            (Boolean.class.equals(fieldClass) ||
+            boolean.class.equals(fieldClass))) {
+          field.set(options, primitive.getAsBoolean());
+          continue;
+        } else if (primitive.isNumber() && isNumber(fieldClass)) {
+          field.set(options, primitive.getAsNumber());
+          continue;
+        } else if (primitive.isString()) {
+          if (String.class.equals(fieldClass)) {
+            field.set(options, primitive.getAsString());
+            continue;
+          } else if (fieldClass.isEnum()) {
+            String enumName = primitive.getAsString();
+            Method valueOf = fieldClass.getMethod("valueOf", String.class);
+            Object enumValue = valueOf.invoke(null, enumName);
+            field.set(options, enumValue);
+            continue;
+          }
+        }
+      } catch (SecurityException e) {
+        // TODO(bolinfest): Log warning
+      } catch (NoSuchFieldException e) {
+        // TODO(bolinfest): Log warning
+      } catch (IllegalArgumentException e) {
+        // TODO(bolinfest): Log warning
+      } catch (IllegalAccessException e) {
+        // TODO(bolinfest): Log warning
+      } catch (NoSuchMethodException e) {
+        // TODO(bolinfest): Log warning
+      } catch (InvocationTargetException e) {
+        // TODO(bolinfest): Log warning
+      }
+
+      // At this point, either there was no field with the specified name
+      // or the field could not be set.
+      System.err.println("Could not set experimental compiler option: " +
+          name);
+      // TODO(bolinfest): Try to find an appropriate setter method to set
+      // the option instead.
+    }
+  }
+
+  // TODO(bolinfest): Figure out a better way to do this isNumber() stuff.
+
+  private static final Set<Class<? extends Number>> numericClasses =
+      ImmutableSet.<Class<? extends Number>>of(
+      int.class,
+      Integer.class,
+      long.class,
+      Long.class,
+      float.class,
+      Float.class,
+      double.class,
+      Double.class);
+
+  private static boolean isNumber(Class<?> clazz) {
+    return numericClasses.contains(clazz);
   }
 
   @Override
@@ -425,6 +525,8 @@ public final class Config implements Comparable<Config> {
 
     private boolean disambiguateProperties;
 
+    private JsonObject experimentalCompilerOptions;
+
     private String globalScopeName;
 
     private final Map<String, JsonPrimitive> defines;
@@ -478,6 +580,7 @@ public final class Config implements Comparable<Config> {
       this.idGenerators = config.idGenerators;
       this.ambiguateProperties = config.ambiguateProperties;
       this.disambiguateProperties = config.disambiguateProperties;
+      this.experimentalCompilerOptions = config.experimentalCompilerOptions;
       this.globalScopeName = config.globalScopeName;
       this.defines = Maps.newHashMap(config.defines);
     }
@@ -636,6 +739,11 @@ public final class Config implements Comparable<Config> {
       this.disambiguateProperties = disambiguateProperties;
     }
 
+    public void setExperimentalCompilerOptions(
+        JsonObject experimentalCompilerOptions) {
+      this.experimentalCompilerOptions = experimentalCompilerOptions;
+    }
+
     public void setGlobalScopeName(String scope) {
       this.globalScopeName = scope;
     }
@@ -699,6 +807,7 @@ public final class Config implements Comparable<Config> {
           idGenerators,
           ambiguateProperties,
           disambiguateProperties,
+          experimentalCompilerOptions,
           configFile,
           lastModified,
           globalScopeName);

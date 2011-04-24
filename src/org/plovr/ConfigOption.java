@@ -375,6 +375,13 @@ public enum ConfigOption {
     }
   }),
 
+  EXPERIMENTAL_COMPILER_OPTIONS("experimental-compiler-options", new ConfigUpdater() {
+    @Override
+    public void apply(JsonObject value, Config.Builder builder) {
+      builder.setExperimentalCompilerOptions(value);
+    }
+  }),
+
   SOY_FUNCTION_PLUGINS("soy-function-plugins", new ConfigUpdater() {
     @Override
     public void apply(String input, Config.Builder builder) {

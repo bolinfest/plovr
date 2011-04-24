@@ -3,10 +3,13 @@ package org.plovr;
 import java.util.List;
 
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
 
 /**
@@ -81,4 +84,11 @@ public final class GsonUtil {
           return new JsonPrimitive(str);
         }
   };
+
+  public static JsonObject clone(JsonObject value) {
+    Preconditions.checkNotNull(value);
+    // TODO(bolinfest): See if there is a more efficient way to do this.
+    JsonParser parser = new JsonParser();
+    return parser.parse(value.toString()).getAsJsonObject();
+  }
 }
