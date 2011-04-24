@@ -10,7 +10,7 @@ import org.junit.Test;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.javascript.jscomp.CheckLevel;
-import com.google.javascript.jscomp.CompilerOptions;
+import com.google.javascript.jscomp.TestCompilerOptions;
 
 public class ConfigTest {
 
@@ -28,21 +28,27 @@ public class ConfigTest {
 
   @Test
   public void testApplyExperimentalCompilerOptions() {
-    CompilerOptions options = new CompilerOptions();
+    TestCompilerOptions options = new TestCompilerOptions();
     assertFalse(options.allowLegacyJsMessages);
     assertNull(options.checkMissingGetCssNameBlacklist);
     assertEquals(CheckLevel.OFF, options.checkShadowVars);
+    assertFalse(options.getAcceptConstKeyword());
+    assertNull(options.getOutputCharset());
 
     JsonParser parser = new JsonParser();
     JsonObject experimentalOptions = parser.parse("{" +
     		"\"allowLegacyJsMessages\": true, " +
     		"\"checkMissingGetCssNameBlacklist\": \"hello world\", " +
-    		"\"checkShadowVars\": \"ERROR\" " +
+    		"\"checkShadowVars\": \"ERROR\", " +
+    		"\"acceptConstKeyword\": true, " +
+    		"\"outputCharset\": \"UTF-8\" " +
     		"}").getAsJsonObject();
     Config.applyExperimentalCompilerOptions(experimentalOptions, options);
 
     assertTrue(options.allowLegacyJsMessages);
     assertEquals("hello world", options.checkMissingGetCssNameBlacklist);
     assertEquals(CheckLevel.ERROR, options.checkShadowVars);
+    assertTrue(options.getAcceptConstKeyword());
+    assertEquals("UTF-8", options.getOutputCharset());
   }
 }

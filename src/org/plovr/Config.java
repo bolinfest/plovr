@@ -376,6 +376,8 @@ public final class Config implements Comparable<Config> {
   static void applyExperimentalCompilerOptions(
       JsonObject experimentalCompilerOptions,
       CompilerOptions options) {
+    // This method needs to be refactored, but all of the checked exceptions
+    // make refactoring it difficult.
     if (experimentalCompilerOptions == null) {
       return;
     }
@@ -392,35 +394,61 @@ public final class Config implements Comparable<Config> {
       JsonPrimitive primitive = el.getAsJsonPrimitive();
 
       String name = entry.getKey();
-      Class<?> c = CompilerOptions.class;
       Field field;
       try {
-        field = c.getField(name);
-        Class<?> fieldClass = field.getType();
+        try {
+          field = CompilerOptions.class.getField(name);
+        } catch (NoSuchFieldException e) {
+          field = null;
+        }
 
-        if (primitive.isBoolean() &&
-            (Boolean.class.equals(fieldClass) ||
-            boolean.class.equals(fieldClass))) {
-          field.set(options, primitive.getAsBoolean());
+        if (field != null) {
+          Class<?> fieldClass = field.getType();
+
+          if (primitive.isBoolean() &&
+              (Boolean.class.equals(fieldClass) ||
+              boolean.class.equals(fieldClass))) {
+            field.set(options, primitive.getAsBoolean());
+            continue;
+          } else if (primitive.isNumber() && isNumber(fieldClass)) {
+            field.set(options, primitive.getAsNumber());
+            continue;
+          } else if (primitive.isString()) {
+            if (String.class.equals(fieldClass)) {
+              field.set(options, primitive.getAsString());
+              continue;
+            } else if (fieldClass.isEnum()) {
+              String enumName = primitive.getAsString();
+              Method valueOf = fieldClass.getMethod("valueOf", String.class);
+              Object enumValue = valueOf.invoke(null, enumName);
+              field.set(options, enumValue);
+              continue;
+            }
+          }
+        }
+
+        // At this point, either there was no field with the specified name
+        // or the field could not be set. Try to find an appropriate setter
+        // method to set the option instead.
+        String setterName = "set" + createSetterMethodNameForFieldName(name);
+        if (primitive.isBoolean()) {
+          Method setter = CompilerOptions.class.getMethod(setterName, boolean.class);
+          setter.invoke(options, primitive.getAsBoolean());
           continue;
-        } else if (primitive.isNumber() && isNumber(fieldClass)) {
-          field.set(options, primitive.getAsNumber());
-          continue;
+        } else if (primitive.isNumber()) {
+          // TODO(bolinfest): Support the numeric setter. Need to test whether
+          // it works with an int or a double.
         } else if (primitive.isString()) {
-          if (String.class.equals(fieldClass)) {
-            field.set(options, primitive.getAsString());
+          try {
+            Method setter = CompilerOptions.class.getMethod(setterName, String.class);
+            setter.invoke(options, primitive.getAsString());
             continue;
-          } else if (fieldClass.isEnum()) {
-            String enumName = primitive.getAsString();
-            Method valueOf = fieldClass.getMethod("valueOf", String.class);
-            Object enumValue = valueOf.invoke(null, enumName);
-            field.set(options, enumValue);
-            continue;
+          } catch (NoSuchMethodException e) {
+            // Ignore exception.
+            // TODO(bolinfest): Try setting as an enum instead.
           }
         }
       } catch (SecurityException e) {
-        // TODO(bolinfest): Log warning
-      } catch (NoSuchFieldException e) {
         // TODO(bolinfest): Log warning
       } catch (IllegalArgumentException e) {
         // TODO(bolinfest): Log warning
@@ -432,17 +460,13 @@ public final class Config implements Comparable<Config> {
         // TODO(bolinfest): Log warning
       }
 
-      // At this point, either there was no field with the specified name
-      // or the field could not be set.
       System.err.println("Could not set experimental compiler option: " +
           name);
-      // TODO(bolinfest): Try to find an appropriate setter method to set
-      // the option instead.
     }
   }
 
   // TODO(bolinfest): Figure out a better way to do this isNumber() stuff.
-
+  @SuppressWarnings("unchecked")
   private static final Set<Class<? extends Number>> numericClasses =
       ImmutableSet.<Class<? extends Number>>of(
       int.class,
@@ -456,6 +480,10 @@ public final class Config implements Comparable<Config> {
 
   private static boolean isNumber(Class<?> clazz) {
     return numericClasses.contains(clazz);
+  }
+
+  private static String createSetterMethodNameForFieldName(String fieldName) {
+    return fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1);
   }
 
   @Override
