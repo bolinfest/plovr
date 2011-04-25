@@ -13,7 +13,6 @@ import org.plovr.CompileRequestHandler;
 import org.plovr.Config;
 import org.plovr.ConfigParser;
 import org.plovr.ModuleConfig;
-
 import org.plovr.io.Streams;
 
 import com.google.common.base.Function;
@@ -58,15 +57,13 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       String sourceMapPath, String sourceMapName) throws IOException {
     Preconditions.checkNotNull(compilation);
     Result result = compilation.getResult();
-    if (result.success && result.errors.length == 0) {
+    boolean success = (result.success && result.errors.length == 0);
+    if (success) {
 
       // Even if there were no errors, there may have been warnings, so print
       // them to standard error, but do not declare a build failure.
       for (JSError warning : result.warnings) {
         System.err.println(warning);
-      }
-      if (result.warnings.length > 0) {
-        System.err.printf("ATTENTION: %d Warnings\n", result.warnings.length);
       }
 
       ModuleConfig moduleConfig = config.getModuleConfig();
@@ -94,10 +91,24 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       for (JSError warning : result.warnings) {
         System.err.println(warning);
       }
-      System.err.printf("BUILD FAILED: %d Errors, %d Warnings\n",
-          result.errors.length,
+    }
+
+    printSummary(result, compilation);
+    System.exit(success ? 0 : 1);
+  }
+
+  private void printSummary(Result result, Compilation compilation) {
+    if (result.errors.length > 0) {
+      System.err.print("BUILD FAILED: ");
+    } else if (result.warnings.length > 0) {
+      System.err.print("ATTENTION: ");
+    }
+    if (compilation.getTypedPercent() > 0.0) {
+      System.err.printf("%d error(s), %d warning(s), %.2f%% typed\n", result.errors.length,
+          result.warnings.length, compilation.getTypedPercent());
+    } else {
+      System.err.printf("%d error(s), %d warning(s)\n", result.errors.length,
           result.warnings.length);
-      System.exit(1);
     }
   }
 

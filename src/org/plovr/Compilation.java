@@ -434,6 +434,10 @@ public final class Compilation {
     return compilationErrors;
   }
 
+  public double getTypedPercent() {
+    return compiler.getErrorManager().getTypedPercent();
+  }
+
   @VisibleForTesting
   public List<JSSourceFile> getInputs() {
     return inputs;
