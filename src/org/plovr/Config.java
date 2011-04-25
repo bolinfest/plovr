@@ -21,11 +21,13 @@ import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Multimap;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
@@ -33,6 +35,8 @@ import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.ClosureCodingConvention;
 import com.google.javascript.jscomp.CompilationLevel;
 import com.google.javascript.jscomp.CompilerOptions;
+import com.google.javascript.jscomp.CompilerPass;
+import com.google.javascript.jscomp.CustomPassExecutionTime;
 import com.google.javascript.jscomp.DiagnosticGroup;
 import com.google.javascript.jscomp.WarningLevel;
 import com.google.template.soy.xliffmsgplugin.XliffMsgPluginModule;
@@ -88,13 +92,15 @@ public final class Config implements Comparable<Config> {
 
   private final boolean fingerprintJsFiles;
 
-  private final Map<DiagnosticGroup, CheckLevel> diagnosticGroups;
+  private final Map<String, CheckLevel> checkLevelsForDiagnosticGroups;
 
   private final boolean exportTestFunctions;
 
   private final boolean treatWarningsAsErrors;
 
   private final Map<String, JsonPrimitive> defines;
+
+  private final Map<CustomPassExecutionTime, List<CompilerPassFactory>> customPasses;
 
   private final Set<String> stripNameSuffixes;
 
@@ -139,10 +145,11 @@ public final class Config implements Comparable<Config> {
       @Nullable String outputWrapper,
       Charset outputCharset,
       boolean fingerprintJsFiles,
-      Map<DiagnosticGroup, CheckLevel> diagnosticGroups,
+      Map<String, CheckLevel> checkLevelsForDiagnosticGroups,
       boolean exportTestFunctions,
       boolean treatWarningsAsErrors,
       Map<String, JsonPrimitive> defines,
+      Map<CustomPassExecutionTime, List<CompilerPassFactory>> customPasses,
       Set<String> stripNameSuffixes,
       Set<String> stripTypePrefixes,
       Set<String> idGenerators,
@@ -167,9 +174,10 @@ public final class Config implements Comparable<Config> {
     this.outputWrapper = outputWrapper;
     this.outputCharset = outputCharset;
     this.fingerprintJsFiles = fingerprintJsFiles;
-    this.diagnosticGroups = diagnosticGroups;
+    this.checkLevelsForDiagnosticGroups = checkLevelsForDiagnosticGroups;
     this.exportTestFunctions = exportTestFunctions;
     this.treatWarningsAsErrors = treatWarningsAsErrors;
+    this.customPasses = customPasses;
     this.defines = ImmutableMap.copyOf(defines);
     this.stripNameSuffixes = ImmutableSet.copyOf(stripNameSuffixes);
     this.stripTypePrefixes = ImmutableSet.copyOf(stripTypePrefixes);
@@ -286,7 +294,7 @@ public final class Config implements Comparable<Config> {
     return globalScopeName;
   }
 
-  public CompilerOptions getCompilerOptions() {
+  public CompilerOptions getCompilerOptions(PlovrClosureCompiler compiler) {
     Preconditions.checkArgument(compilationMode != CompilationMode.RAW,
         "Cannot compile using RAW mode");
     CompilationLevel level = compilationMode.getCompilationLevel();
@@ -332,6 +340,24 @@ public final class Config implements Comparable<Config> {
     options.ambiguateProperties = ambiguateProperties;
     options.disambiguateProperties = disambiguateProperties;
 
+    // Instantiate the custom compiler passes and register any DiagnosticGroups
+    // from those passes.
+    PlovrDiagnosticGroups groups = compiler.getDiagnosticGroups();
+    Multimap<CustomPassExecutionTime, CompilerPass> passes = getCustomPasses(options);
+    for (Map.Entry<CustomPassExecutionTime, List<CompilerPassFactory>> entry :
+        customPasses.entrySet()) {
+      CustomPassExecutionTime executionTime = entry.getKey();
+      List<CompilerPassFactory> factories = entry.getValue();
+      for (CompilerPassFactory factory : factories) {
+        CompilerPass compilerPass = factory.createCompilerPass(compiler);
+        passes.put(executionTime, compilerPass);
+        if (compilerPass instanceof DiagnosticGroupRegistrar) {
+          DiagnosticGroupRegistrar registrar = (DiagnosticGroupRegistrar)compilerPass;
+          registrar.registerWith(groups);
+        }
+      }
+    }
+
     if (moduleConfig != null) {
       options.crossModuleCodeMotion = true;
       options.crossModuleMethodMotion = true;
@@ -346,10 +372,13 @@ public final class Config implements Comparable<Config> {
       }
     }
 
-    if (diagnosticGroups != null) {
-      for (Map.Entry<DiagnosticGroup, CheckLevel> entry :
-          diagnosticGroups.entrySet()) {
-        DiagnosticGroup group = entry.getKey();
+    // Now that custom passes have registered with the PlovrDiagnosticGroups,
+    // warning levels as specified in the "checks" config option should be
+    // applied.
+    if (checkLevelsForDiagnosticGroups != null) {
+      for (Map.Entry<String, CheckLevel> entry :
+          checkLevelsForDiagnosticGroups.entrySet()) {
+        DiagnosticGroup group = groups.forName(entry.getKey());
         CheckLevel checkLevel = entry.getValue();
         options.setWarningLevel(group, checkLevel);
       }
@@ -375,6 +404,20 @@ public final class Config implements Comparable<Config> {
     applyExperimentalCompilerOptions(experimentalCompilerOptions, options);
 
     return options;
+  }
+
+  /**
+   * Lazily creates and returns the customPasses Multimap for a CompilerOptions.
+   */
+  private static Multimap<CustomPassExecutionTime, CompilerPass> getCustomPasses(
+      CompilerOptions options) {
+    Multimap<CustomPassExecutionTime, CompilerPass> customPasses =
+        options.customPasses;
+    if (customPasses == null) {
+      customPasses = HashMultimap.create();
+      options.customPasses = customPasses;
+    }
+    return customPasses;
   }
 
   @VisibleForTesting
@@ -559,6 +602,8 @@ public final class Config implements Comparable<Config> {
 
     private ImmutableList.Builder<String> soyFunctionPlugins = null;
 
+    private Map<CustomPassExecutionTime, List<CompilerPassFactory>> customPasses = ImmutableMap.of();
+
     private boolean customExternsOnly = false;
 
     private CompilationMode compilationMode = CompilationMode.SIMPLE;
@@ -577,7 +622,7 @@ public final class Config implements Comparable<Config> {
 
     private boolean fingerprintJsFiles = false;
 
-    private Map<DiagnosticGroup, CheckLevel> diagnosticGroups = null;
+    private Map<String, CheckLevel> checkLevelsForDiagnosticGroups = null;
 
     private boolean exportTestFunctions = false;
 
@@ -635,6 +680,7 @@ public final class Config implements Comparable<Config> {
       this.soyFunctionPlugins = config.hasSoyFunctionPlugins()
           ? new ImmutableList.Builder<String>().addAll(config.getSoyFunctionPlugins())
           : null;
+      this.customPasses = config.customPasses;
       this.compilationMode = config.compilationMode;
       this.warningLevel = config.warningLevel;
       this.debug = config.debug;
@@ -643,7 +689,7 @@ public final class Config implements Comparable<Config> {
       this.outputWrapper = config.outputWrapper;
       this.outputCharset = config.outputCharset;
       this.fingerprintJsFiles = config.fingerprintJsFiles;
-      this.diagnosticGroups = config.diagnosticGroups;
+      this.checkLevelsForDiagnosticGroups = config.checkLevelsForDiagnosticGroups;
       this.exportTestFunctions = config.exportTestFunctions;
       this.treatWarningsAsErrors = config.treatWarningsAsErrors;
       this.stripNameSuffixes = config.stripNameSuffixes;
@@ -744,6 +790,11 @@ public final class Config implements Comparable<Config> {
       soyFunctionPlugins.add(qualifiedName);
     }
 
+    public void setCustomPasses(
+        Map<CustomPassExecutionTime, List<CompilerPassFactory>> customPasses) {
+      this.customPasses = ImmutableMap.copyOf(customPasses);
+    }
+
     public void setCompilationMode(CompilationMode mode) {
       Preconditions.checkNotNull(mode);
       this.compilationMode = mode;
@@ -778,8 +829,16 @@ public final class Config implements Comparable<Config> {
       this.fingerprintJsFiles = fingerprint;
     }
 
-    public void setDiagnosticGroups(Map<DiagnosticGroup, CheckLevel> groups) {
-      this.diagnosticGroups = groups;
+    /**
+     * Each key in groups should correspond to a {@link DiagnosticGroup};
+     * however, a key cannot map to a {@link DiagnosticGroup} yet because
+     * custom compiler passes may add their own entries to the
+     * {@link PlovrDiagnosticGroups} collection, which is not populated until
+     * the {@link CompilerOptions} are created.
+     * @param groups
+     */
+    public void setCheckLevelsForDiagnosticGroups(Map<String, CheckLevel> groups) {
+      this.checkLevelsForDiagnosticGroups = groups;
     }
 
     public void setExportTestFunctions(boolean exportTestFunctions) {
@@ -874,10 +933,11 @@ public final class Config implements Comparable<Config> {
           outputWrapper,
           outputCharset,
           fingerprintJsFiles,
-          diagnosticGroups,
+          checkLevelsForDiagnosticGroups,
           exportTestFunctions,
           treatWarningsAsErrors,
           defines,
+          customPasses,
           stripNameSuffixes,
           stripTypePrefixes,
           idGenerators,

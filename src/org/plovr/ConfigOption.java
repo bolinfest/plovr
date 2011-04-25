@@ -2,10 +2,13 @@ package org.plovr;
 
 import java.io.File;
 import java.nio.charset.Charset;
+import java.util.List;
 import java.util.Map;
 
 import org.plovr.ModuleConfig.BadDependencyTreeException;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.gson.JsonArray;
@@ -13,7 +16,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.google.javascript.jscomp.CheckLevel;
-import com.google.javascript.jscomp.DiagnosticGroup;
+import com.google.javascript.jscomp.CustomPassExecutionTime;
 import com.google.javascript.jscomp.WarningLevel;
 
 public enum ConfigOption {
@@ -269,22 +272,17 @@ public enum ConfigOption {
   DIAGNOSTIC_GROUPS("checks", new ConfigUpdater() {
     @Override
     public void apply(JsonObject obj, Config.Builder builder) {
-      Map<DiagnosticGroup, CheckLevel> groups = Maps.newHashMap();
+      Map<String, CheckLevel> groups = Maps.newHashMap();
       for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
-        DiagnosticGroup group = DiagnosticGroupUtil.forName(entry.getKey());
-        if (group == null) {
-          continue;
-        }
-
         String checkLevelString = GsonUtil.stringOrNull(entry.getValue());
         if (checkLevelString == null) {
           continue;
         }
         CheckLevel checkLevel = CheckLevel.valueOf(checkLevelString.toUpperCase());
 
-        groups.put(group, checkLevel);
+        groups.put(entry.getKey(), checkLevel);
       }
-      builder.setDiagnosticGroups(groups);
+      builder.setCheckLevelsForDiagnosticGroups(groups);
     }
   }),
 
@@ -386,6 +384,41 @@ public enum ConfigOption {
     @Override
     public void apply(JsonObject value, Config.Builder builder) {
       builder.setExperimentalCompilerOptions(value);
+    }
+  }),
+
+  CUSTOM_PASSES("custom-passes", new ConfigUpdater() {
+    @Override
+    public void apply(JsonObject value, Config.Builder builder) {
+      ImmutableMap.Builder<CustomPassExecutionTime, List<CompilerPassFactory>>
+          customPasses = ImmutableMap.builder();
+      for (Map.Entry<String, JsonElement> entry : value.entrySet()) {
+        CustomPassExecutionTime executionTime = CustomPassExecutionTime.valueOf(
+            entry.getKey());
+        JsonArray passes;
+        if (entry.getValue().isJsonArray()) {
+          passes = entry.getValue().getAsJsonArray();
+        } else {
+          passes = new JsonArray();
+          passes.add(entry.getValue());
+        }
+
+        ImmutableList.Builder<CompilerPassFactory> factories =
+            ImmutableList.builder();
+        for (JsonElement pass : passes) {
+          JsonObject obj = pass.getAsJsonObject();
+          // This should be a fully-qualified class name.
+          String className = obj.get("name").getAsString();
+          try {
+            Class<?> clazz = Class.forName(className);
+            factories.add(new CompilerPassFactory(clazz));
+          } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+          }
+        }
+        customPasses.put(executionTime, factories.build());
+      }
+      builder.setCustomPasses(customPasses.build());
     }
   }),
 

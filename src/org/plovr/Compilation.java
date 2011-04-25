@@ -77,7 +77,8 @@ public final class Compilation {
   }
 
   public void compile(Config config) {
-    compile(config, new Compiler(), config.getCompilerOptions());
+    PlovrClosureCompiler compiler = new PlovrClosureCompiler();
+    compile(config, compiler, config.getCompilerOptions(compiler));
   }
 
   /**
@@ -94,10 +95,10 @@ public final class Compilation {
     } else {
       this.result = compiler.compileModules(externs, modules, options);
     }
-    
+
     if (config.getTreatWarningsAsErrors() && result.warnings.length > 0) {
       // Combine the errors and warnings into a single array.
-      Result originalResult = this.result;      
+      Result originalResult = this.result;
       JSError[] errors = new JSError[originalResult.errors.length +
                                      originalResult.warnings.length];
       System.arraycopy(
@@ -112,7 +113,7 @@ public final class Compilation {
           errors,
           originalResult.errors.length,
           originalResult.warnings.length);
-      
+
       this.result = new Result(
           errors,
           new JSError[0], /* warnings */
