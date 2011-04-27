@@ -80,11 +80,11 @@
     <!-- Move ParserConfig.properties where ParserRunner.java expects it. -->
     <copy file="${closure-compiler.dir}/src/com/google/javascript/jscomp/parsing/ParserConfig.properties"
           todir="${classes.dir}/com/google/javascript/jscomp/parsing" />
-    
+
     <!-- Include these files to support the "info" command. -->
     <mkdir dir="${classes.dir}/revisions"/>
     <copy todir="${basedir}/build/classes/revisions/">
-      <fileset dir="${basedir}/tools/imports/" includes="rev-*" /> 
+      <fileset dir="${basedir}/tools/imports/" includes="rev-*" />
     </copy>
 
   </target>
@@ -117,7 +117,7 @@
       <arg value="${basedir}/listfiles.sh" />
       <arg value="${closure-compiler.dir}/externs" />
     </exec>
-    
+
     <mkdir dir="${classes.dir}/contrib" />
     <exec executable="bash"
           output="${classes.dir}/contrib_externs.txt"
@@ -262,7 +262,7 @@
              >
       <link href="http://download.oracle.com/javase/6/docs/api/" />
       <link href="http://guava-libraries.googlecode.com/svn/trunk/javadoc/" />
-      <link href="http://google-gson.googlecode.com/svn/tags/1.5/docs/javadocs/" />
+      <link href="http://google-gson.googlecode.com/svn/tags/gson-1.7.1/docs/javadocs/" />
       <link href="http://closure-compiler.googlecode.com/svn/trunk/javadoc/" />
       <link href="http://closure-templates.googlecode.com/svn/trunk/javadoc-complete/" />
     </javadoc>
