@@ -55,7 +55,7 @@ public final class ConfigParser {
     }
 
     for (String unusedOption : options) {
-      System.err.printf("WARNING: UNUSED OPTION '%s' in %s. " +
+      System.err.printf("WARNING: UNUSED OPTION \"%s\" in %s. " +
           "See %s for the complete list of options.\n",
           unusedOption,
           file.getAbsolutePath(),
