@@ -379,6 +379,11 @@ public final class Config implements Comparable<Config> {
       for (Map.Entry<String, CheckLevel> entry :
           checkLevelsForDiagnosticGroups.entrySet()) {
         DiagnosticGroup group = groups.forName(entry.getKey());
+        if (group == null) {
+          System.err.printf("WARNING: UNRECOGNIZED CHECK \"%s\" in your " +
+          		"plovr config. Ignoring.\n", entry.getKey());
+          continue;
+        }
         CheckLevel checkLevel = entry.getValue();
         options.setWarningLevel(group, checkLevel);
       }
