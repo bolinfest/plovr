@@ -23,6 +23,7 @@ public final class VersionUtil {
       put("closure-library", readRevisionFromJar("closure-library")).
       put("closure-compiler", readRevisionFromJar("closure-compiler")).
       put("closure-templates", readRevisionFromJar("closure-templates")).
+      put("plovr", readRevisionFromJar("plovr")).
       build();
 
   private static final String readRevisionFromJar(String projectName) {
@@ -40,7 +41,7 @@ public final class VersionUtil {
 
   /**
    * @param projectName should be one of "closure-library", "closure-compiler",
-   *        or "closure-templates".
+   *        "closure-templates", or "plovr"
    */
   public static @Nullable String getRevision(String projectName) {
     return versions.get(projectName);

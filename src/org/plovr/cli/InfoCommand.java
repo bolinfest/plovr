@@ -25,13 +25,16 @@ public class InfoCommand extends AbstractCommandRunner<InfoCommandOptions> {
     String libraryRevision = VersionUtil.getRevision("closure-library");
     String compilerRevision = VersionUtil.getRevision("closure-compiler");
     String templatesRevision = VersionUtil.getRevision("closure-templates");
+    String plovrRevision = VersionUtil.getRevision("plovr");
 
-    // Calculate the max length so that all versions are right-aligned.
+    // Calculate the max length so that all versions are right-aligned (except
+    // for plovr because its Hg hash is so long).
     int max = Ints.max(
         libraryRevision.length(),
         compilerRevision.length(),
         templatesRevision.length());
 
+    System.out.println("plovr built from revision " + plovrRevision);
     System.out.println("Revision numbers for embedded Closure Tools:");
     System.out.println("Closure Library:    " +
         Strings.repeat(" ", max - libraryRevision.length()) + libraryRevision);

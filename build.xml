@@ -86,6 +86,9 @@
     <copy todir="${basedir}/build/classes/revisions/">
       <fileset dir="${basedir}/tools/imports/" includes="rev-*" />
     </copy>
+    <exec executable="bash">
+      <arg value="${basedir}/insert-plovr-revision.sh" />
+    </exec>
 
   </target>
 
