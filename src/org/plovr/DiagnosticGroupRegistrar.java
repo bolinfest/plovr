@@ -2,5 +2,5 @@ package org.plovr;
 
 public interface DiagnosticGroupRegistrar {
 
-  public void registerWith(PlovrDiagnosticGroups groups);
+  public void registerDiagnosticGroupsWith(PlovrDiagnosticGroups groups);
 }

@@ -49,7 +49,7 @@ public class CheckDoubleEquals implements CompilerPass, DiagnosticGroupRegistrar
   }
 
   @Override
-  public void registerWith(PlovrDiagnosticGroups groups) {
+  public void registerDiagnosticGroupsWith(PlovrDiagnosticGroups groups) {
     groups.registerGroup(DIAGNOSTIC_GROUP_NAME, DIAGNOSTIC_GROUP);
   }
 

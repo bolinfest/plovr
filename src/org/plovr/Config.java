@@ -353,7 +353,7 @@ public final class Config implements Comparable<Config> {
         passes.put(executionTime, compilerPass);
         if (compilerPass instanceof DiagnosticGroupRegistrar) {
           DiagnosticGroupRegistrar registrar = (DiagnosticGroupRegistrar)compilerPass;
-          registrar.registerWith(groups);
+          registrar.registerDiagnosticGroupsWith(groups);
         }
       }
     }
