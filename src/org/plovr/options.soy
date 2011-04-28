@@ -324,6 +324,46 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     the Closure testing framework, the test methods will still be able to be
     discovered. In short, this makes it possible to unit test JavaScript code
     compiled in Advanced mode.
+  {case 'custom-passes'}
+    You can add custom behavior to the Closure Compiler by adding your own
+    compiler pass. The standard way to do this is to create a Java class that
+    implements the{sp}
+    <a href="http://closure-compiler.googlecode.com/svn/trunk/javadoc/com/google/javascript/jscomp/CompilerPass.html">CompilerPass</a>
+    {sp}interface and scheduling it to run by adding it to the{sp}
+    <a href="http://closure-compiler.googlecode.com/svn/trunk/javadoc/com/google/javascript/jscomp/CompilerOptions.html#customPasses">
+    customPasses field of the Closure Compiler</a> (along with a{sp}
+    <a href="http://closure-compiler.googlecode.com/svn/trunk/javadoc/com/google/javascript/jscomp/CustomPassExecutionTime.html">
+    CustomPassExecutionTime</a>). With plovr, you still need to implement{sp}
+    <code>CompilerPass</code>, but you schedule it by listing it in your plovr
+    config. As an example, take a look at the <a href="http://code.google.com/p/plovr/source/browse/test/org/plovr/CheckDoubleEquals.java">
+    CheckDoubleEquals</a> class, which is derived from the "Creating a Compiler Check"
+    example from Chapter 14 of <a href="{BOOK_URL}">
+    Closure: The Definitive Guide</a>. As shown in{sp}
+    <a href="http://code.google.com/p/plovr/source/browse/testdata/custompasses/config.json">config.json</a>,
+    it can be included during compilation by using the <code>custom-passes</code> option as follows:
+{literal}<pre>"custom-passes": {
+  "BEFORE_CHECKS": {
+    "name": "org.plovr.CheckDoubleEquals"
+  }
+}</pre>{/literal}
+    Also note that <code>CheckDoubleEquals</code> implements{sp}
+    <a href="http://plovr.com/javadoc/org/plovr/DiagnosticGroupRegistrar.html">DiagnosticGroupRegistrar</a>,
+    which is a plovr interface that makes it easy to create a{sp}
+    <a href="http://closure-compiler.googlecode.com/svn/trunk/javadoc/com/google/javascript/jscomp/DiagnosticGroup.html">
+    DiagnosticGroup</a>, which is a collection of Compiler checks. In the case
+    of <code>CheckDoubleEquals</code>, it registers a group under the
+    name <code>checkDoubleEquals</code> that contains two checks: one
+    for <code>==</code> and one for <code>!=</code>. Note that it is possible
+    to assign a warning level in the <a href="#checks">checks</a> section of
+    the config file, again as demonstrated in <a href="http://code.google.com/p/plovr/source/browse/testdata/custompasses/config.json">config.json</a>:
+{literal}<pre>"checks": {
+  "checkDoubleEquals": "WARNING"
+}</pre>{/literal}
+    <p>
+    Note that when developing a <code>CompilerPass</code> in Java, plovr has
+    all of the Closure Compiler classes that you need to compile against to
+    create your pass, so include <code>plovr.jar</code> on your classpath when
+    developing your <code>CompilerPass</code>.
 {/switch}
 
 {/template}
