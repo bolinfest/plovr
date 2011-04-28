@@ -2,15 +2,15 @@ package org.plovr;
 
 import java.io.File;
 import java.nio.charset.Charset;
-import java.util.List;
 import java.util.Map;
 
 import org.plovr.ModuleConfig.BadDependencyTreeException;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -389,34 +389,23 @@ public enum ConfigOption {
 
   CUSTOM_PASSES("custom-passes", new ConfigUpdater() {
     @Override
-    public void apply(JsonObject value, Config.Builder builder) {
-      ImmutableMap.Builder<CustomPassExecutionTime, List<CompilerPassFactory>>
-          customPasses = ImmutableMap.builder();
-      for (Map.Entry<String, JsonElement> entry : value.entrySet()) {
-        CustomPassExecutionTime executionTime = CustomPassExecutionTime.valueOf(
-            entry.getKey());
-        JsonArray passes;
-        if (entry.getValue().isJsonArray()) {
-          passes = entry.getValue().getAsJsonArray();
-        } else {
-          passes = new JsonArray();
-          passes.add(entry.getValue());
+    public void apply(JsonArray value, Config.Builder builder) {
+      ImmutableListMultimap.Builder<CustomPassExecutionTime, CompilerPassFactory>
+          customPasses = ImmutableListMultimap.builder();
+      Gson gson = new GsonBuilder().
+          registerTypeAdapter(CustomPassConfig.class,
+              new CustomPassConfig.CustomPassConfigDeserializer())
+          .create();
+      for (JsonElement entry : value) {
+        CustomPassConfig pass = gson.fromJson(entry, CustomPassConfig.class);
+        Class<?> clazz;
+        try {
+          clazz = Class.forName(pass.getClassName());
+        } catch (ClassNotFoundException e) {
+          throw new RuntimeException(e);
         }
-
-        ImmutableList.Builder<CompilerPassFactory> factories =
-            ImmutableList.builder();
-        for (JsonElement pass : passes) {
-          JsonObject obj = pass.getAsJsonObject();
-          // This should be a fully-qualified class name.
-          String className = obj.get("name").getAsString();
-          try {
-            Class<?> clazz = Class.forName(className);
-            factories.add(new CompilerPassFactory(clazz));
-          } catch (ClassNotFoundException e) {
-            throw new RuntimeException(e);
-          }
-        }
-        customPasses.put(executionTime, factories.build());
+        CompilerPassFactory factory = new CompilerPassFactory(clazz);
+        customPasses.put(pass.getWhen(), factory);
       }
       builder.setCustomPasses(customPasses.build());
     }

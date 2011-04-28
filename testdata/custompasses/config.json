@@ -4,9 +4,10 @@
   "checks": {
     "checkDoubleEquals": "WARNING"
   },
-  "custom-passes": {
-    "BEFORE_CHECKS": {
-      "name": "org.plovr.CheckDoubleEquals"
+  "custom-passes": [
+    {
+      "class-name": "org.plovr.CheckDoubleEquals",
+      "when": "BEFORE_CHECKS"
     }
-  }
+  ]
 }

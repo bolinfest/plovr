@@ -6,6 +6,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.Charset;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -21,10 +22,12 @@ import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
-import com.google.common.collect.HashMultimap;
+import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
@@ -100,7 +103,7 @@ public final class Config implements Comparable<Config> {
 
   private final Map<String, JsonPrimitive> defines;
 
-  private final Map<CustomPassExecutionTime, List<CompilerPassFactory>> customPasses;
+  private final ListMultimap<CustomPassExecutionTime, CompilerPassFactory> customPasses;
 
   private final Set<String> stripNameSuffixes;
 
@@ -149,7 +152,7 @@ public final class Config implements Comparable<Config> {
       boolean exportTestFunctions,
       boolean treatWarningsAsErrors,
       Map<String, JsonPrimitive> defines,
-      Map<CustomPassExecutionTime, List<CompilerPassFactory>> customPasses,
+      ListMultimap<CustomPassExecutionTime, CompilerPassFactory> customPasses,
       Set<String> stripNameSuffixes,
       Set<String> stripTypePrefixes,
       Set<String> idGenerators,
@@ -344,10 +347,10 @@ public final class Config implements Comparable<Config> {
     // from those passes.
     PlovrDiagnosticGroups groups = compiler.getDiagnosticGroups();
     Multimap<CustomPassExecutionTime, CompilerPass> passes = getCustomPasses(options);
-    for (Map.Entry<CustomPassExecutionTime, List<CompilerPassFactory>> entry :
-        customPasses.entrySet()) {
+    for (Map.Entry<CustomPassExecutionTime, Collection<CompilerPassFactory>> entry :
+        customPasses.asMap().entrySet()) {
       CustomPassExecutionTime executionTime = entry.getKey();
-      List<CompilerPassFactory> factories = entry.getValue();
+      Collection<CompilerPassFactory> factories = entry.getValue();
       for (CompilerPassFactory factory : factories) {
         CompilerPass compilerPass = factory.createCompilerPass(compiler);
         passes.put(executionTime, compilerPass);
@@ -412,14 +415,14 @@ public final class Config implements Comparable<Config> {
   }
 
   /**
-   * Lazily creates and returns the customPasses Multimap for a CompilerOptions.
+   * Lazily creates and returns the customPasses ListMultimap for a CompilerOptions.
    */
   private static Multimap<CustomPassExecutionTime, CompilerPass> getCustomPasses(
       CompilerOptions options) {
     Multimap<CustomPassExecutionTime, CompilerPass> customPasses =
         options.customPasses;
     if (customPasses == null) {
-      customPasses = HashMultimap.create();
+      customPasses = ArrayListMultimap.create();
       options.customPasses = customPasses;
     }
     return customPasses;
@@ -607,7 +610,7 @@ public final class Config implements Comparable<Config> {
 
     private ImmutableList.Builder<String> soyFunctionPlugins = null;
 
-    private Map<CustomPassExecutionTime, List<CompilerPassFactory>> customPasses = ImmutableMap.of();
+    private ListMultimap<CustomPassExecutionTime, CompilerPassFactory> customPasses = ImmutableListMultimap.of();
 
     private boolean customExternsOnly = false;
 
@@ -796,8 +799,8 @@ public final class Config implements Comparable<Config> {
     }
 
     public void setCustomPasses(
-        Map<CustomPassExecutionTime, List<CompilerPassFactory>> customPasses) {
-      this.customPasses = ImmutableMap.copyOf(customPasses);
+        ListMultimap<CustomPassExecutionTime, CompilerPassFactory> customPasses) {
+      this.customPasses = ImmutableListMultimap.copyOf(customPasses);
     }
 
     public void setCompilationMode(CompilationMode mode) {

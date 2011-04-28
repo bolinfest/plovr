@@ -341,21 +341,25 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     Closure: The Definitive Guide</a>. As shown in{sp}
     <a href="http://code.google.com/p/plovr/source/browse/testdata/custompasses/config.json">config.json</a>,
     it can be included during compilation by using the <code>custom-passes</code> option as follows:
-{literal}<pre>"custom-passes": {
-  "BEFORE_CHECKS": {
-    "name": "org.plovr.CheckDoubleEquals"
+{literal}<pre>"custom-passes": [
+  {
+    "class-name": "org.plovr.CheckDoubleEquals",
+    "when": "BEFORE_CHECKS" <code class="comment">// this value is from the CustomPassExecutionTime enum</code>
   }
-}</pre>{/literal}
+  <code class="comment">// Because "custom-passes" is a list, you can add
+  // as many passes as you like. </code>
+]</pre>{/literal}
     Also note that <code>CheckDoubleEquals</code> implements{sp}
     <a href="http://plovr.com/javadoc/org/plovr/DiagnosticGroupRegistrar.html">DiagnosticGroupRegistrar</a>,
-    which is a plovr interface that makes it easy to create a{sp}
+    which is a plovr interface that makes it easy to register a{sp}
     <a href="http://closure-compiler.googlecode.com/svn/trunk/javadoc/com/google/javascript/jscomp/DiagnosticGroup.html">
-    DiagnosticGroup</a>, which is a collection of Compiler checks. In the case
+    DiagnosticGroup</a>, which is a collection of Closure Compiler checks. In the case
     of <code>CheckDoubleEquals</code>, it registers a group under the
     name <code>checkDoubleEquals</code> that contains two checks: one
     for <code>==</code> and one for <code>!=</code>. Note that it is possible
     to assign a warning level in the <a href="#checks">checks</a> section of
-    the config file, again as demonstrated in <a href="http://code.google.com/p/plovr/source/browse/testdata/custompasses/config.json">config.json</a>:
+    the config file for the <code>DiagnosticGroup</code> that you registered.
+    You can also see an example of this in <a href="http://code.google.com/p/plovr/source/browse/testdata/custompasses/config.json">config.json</a>:
 {literal}<pre>"checks": {
   "checkDoubleEquals": "WARNING"
 }</pre>{/literal}
@@ -363,7 +367,10 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     Note that when developing a <code>CompilerPass</code> in Java, plovr has
     all of the Closure Compiler classes that you need to compile against to
     create your pass, so include <code>plovr.jar</code> on your classpath when
-    developing your <code>CompilerPass</code>.
+    developing your <code>CompilerPass</code>. Further, when running plovr with
+    your <code>CustomPass</code>, make sure to include the <code>.class</code> file
+    for your <code>CustomPass</code> (and any of its dependencies) on the
+    classpath, as well.
 {/switch}
 
 {/template}
