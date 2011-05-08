@@ -2800,7 +2800,7 @@ public final class NodeUtil {
    * @param nameNode A name node
    * @return The JSDocInfo for the name node
    */
-  static JSDocInfo getInfoForNameNode(Node nameNode) {
+  public static JSDocInfo getInfoForNameNode(Node nameNode) {
     JSDocInfo info = null;
     Node parent = null;
     if (nameNode != null) {
@@ -2819,7 +2819,7 @@ public final class NodeUtil {
   /**
    * Get the JSDocInfo for a function.
    */
-  static JSDocInfo getFunctionInfo(Node n) {
+  public static JSDocInfo getFunctionInfo(Node n) {
     Preconditions.checkState(n.getType() == Token.FUNCTION);
     JSDocInfo fnInfo = n.getJSDocInfo();
     if (fnInfo == null && NodeUtil.isFunctionExpression(n)) {

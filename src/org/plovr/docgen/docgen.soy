@@ -1,0 +1,106 @@
+{namespace plovr.docgen}
+
+/**
+ * @param title
+ * @param content
+ */
+{template .baseDoc}
+<!doctype html>
+<html>
+<head>
+  <title>{$title}</title>
+</head>
+<body>
+  {$content|noAutoescape}
+</body>
+</html>
+{/template}
+
+/**
+ * @param hrefs
+ */
+{template .index}
+{call .baseDoc}
+  {param title}Generated Files{/param}
+  {param content}
+    <h1>All Classes</h1>
+    {foreach $href in $hrefs}
+      <a href="{$href}">{$href}</a><br>
+    {/foreach}
+  {/param}
+{/call}
+{/template}
+
+/**
+ * @param classDescriptor
+ * @param pathToSuper
+ * @param pathToBase
+ */
+{template .classDoc}
+<a href="{$pathToBase}index.html">Home</a>
+
+<h1>Class {$classDescriptor.name}</h1>
+
+{if $classDescriptor.superClass}
+extends <a href="{$pathToBase}{$pathToSuper}">{$classDescriptor.superClass}</a>
+{/if}
+
+{if length($classDescriptor.instanceMethods) > 0}
+<table border="1">
+  <tr>
+    <td colspan="2">Method Summary</td>
+  </tr>
+  {foreach $method in $classDescriptor.instanceMethods}
+    {call .methodDoc data="$method" /}
+  {/foreach}
+</table>
+{/if}
+
+{/template}
+
+/**
+ * @param name
+ * @param accessLevel
+ * @param description
+ * @param params
+ * @param returnType
+ */
+{template .methodDoc}
+  <tr>
+    <td valign="top">
+      <code>
+        {switch $accessLevel}
+          {case 'PRIVATE'}private{sp}
+          {case 'PROTECTED'}protected{sp}
+        {/switch}
+        {if $returnType}
+          {$returnType}
+        {/if}
+      </code>
+    </td>
+    <td>
+      <code>{$name}(
+        {foreach $param in $params}
+          {if $param.type != null}
+            {$param.type}{sp}
+          {/if}
+          {$param.name}
+          {if not isLast($param)}, {/if}
+        {/foreach}
+      )</code><br>
+    {if $description}{$description|noAutoescape}{/if}
+    </td>
+  </tr>
+{/template}
+
+/**
+ * @param classDescriptor
+ */
+{template .classPage}
+{call .baseDoc}
+  {param title}{$classDescriptor.name}{/param}
+  {param content}
+    {call .classDoc data="all" /}
+  {/param}
+{/call}
+{/template}
