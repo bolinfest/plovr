@@ -3,13 +3,16 @@ package org.plovr.docgen;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Writer;
+import java.net.URL;
 import java.util.Map;
 import java.util.Set;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Sets;
 import com.google.common.io.Files;
+import com.google.common.io.InputSupplier;
 import com.google.common.io.Resources;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.data.SoyListData;
@@ -18,13 +21,16 @@ import com.google.template.soy.tofu.SoyTofu;
 
 public class DocWriter {
 
-  private static SoyTofu tofu;
+  private static final SoyTofu tofu;
+  private static final URL stylesheet;
 
   static {
     SoyFileSet.Builder builder = new SoyFileSet.Builder();
     builder.add(Resources.getResource(DocWriter.class, "docgen.soy"));
     SoyFileSet fileSet = builder.build();
     tofu = fileSet.compileToJavaObj();
+
+    stylesheet = Resources.getResource(DocWriter.class, "stylesheet.css");
   }
 
   private final Map<String, ClassDescriptor> classes;
@@ -70,6 +76,7 @@ public class DocWriter {
     }
 
     writeIndex(paths);
+    writeStylesheet();
   }
 
   private static String classNameToPath(String className) {
@@ -89,5 +96,16 @@ public class DocWriter {
         new SoyMapData("hrefs", new SoyListData(paths)),
         null /* msgBundle */));
     writer.close();
+  }
+
+  private void writeStylesheet() throws IOException {
+    InputSupplier<? extends InputStream> from = new InputSupplier<InputStream>() {
+      @Override
+      public InputStream getInput() throws IOException {
+        return stylesheet.openStream();
+      }
+    };
+    File to = new File(documentationRootDirectory, "stylesheet.css");
+    Files.copy(from, to);
   }
 }

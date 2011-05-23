@@ -3,12 +3,14 @@
 /**
  * @param title
  * @param content
+ * @param pathToBase
  */
 {template .baseDoc}
 <!doctype html>
 <html>
 <head>
   <title>{$title}</title>
+  <link href="{$pathToBase}stylesheet.css" rel="stylesheet" type="text/css">
 </head>
 <body>
   {$content|noAutoescape}
@@ -28,6 +30,7 @@
       <a href="{$href}">{$href}</a><br>
     {/foreach}
   {/param}
+  {param pathToBase: '' /}
 {/call}
 {/template}
 
@@ -46,7 +49,7 @@ extends <a href="{$pathToBase}{$pathToSuper}">{$classDescriptor.superClass}</a>
 {/if}
 
 {if length($classDescriptor.instanceMethods) > 0}
-<table border="1">
+<table class="method-list">
   <tr>
     <td colspan="2">Method Summary</td>
   </tr>
@@ -67,18 +70,15 @@ extends <a href="{$pathToBase}{$pathToSuper}">{$classDescriptor.superClass}</a>
  */
 {template .methodDoc}
   <tr>
-    <td valign="top">
-      <code>
-        {switch $accessLevel}
-          {case 'PRIVATE'}private{sp}
-          {case 'PROTECTED'}protected{sp}
-        {/switch}
-        {if $returnType}
-          {$returnType}
-        {/if}
-      </code>
+    <td class="method-list-cell method-access method-
+     {switch $accessLevel}
+      {case 'PUBLIC'}public
+      {case 'PROTECTED'}protected
+      {case 'PRIVATE'}private
+     {/switch}
+     ">
     </td>
-    <td>
+    <td class="method-list-cell method-cell">
       <code>{$name}(
         {foreach $param in $params}
           {if $param.type != null}
@@ -87,14 +87,21 @@ extends <a href="{$pathToBase}{$pathToSuper}">{$classDescriptor.superClass}</a>
           {$param.name}
           {if not isLast($param)}, {/if}
         {/foreach}
-      )</code><br>
-    {if $description}{$description|noAutoescape}{/if}
+      )
+      {if $returnType}
+        {sp}&#8658; {$returnType}
+      {/if}
+      </code><br>
+    {if $description}
+      <p class="method-description">{$description|noAutoescape}</p>
+    {/if}
     </td>
   </tr>
 {/template}
 
 /**
  * @param classDescriptor
+ * @param pathToBase
  */
 {template .classPage}
 {call .baseDoc}
@@ -102,5 +109,6 @@ extends <a href="{$pathToBase}{$pathToSuper}">{$classDescriptor.superClass}</a>
   {param content}
     {call .classDoc data="all" /}
   {/param}
+  {param pathToBase: $pathToBase /}
 {/call}
 {/template}

@@ -2,6 +2,8 @@ package org.plovr.docgen;
 
 import java.util.List;
 
+import javax.annotation.Nullable;
+
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
@@ -12,8 +14,8 @@ import com.google.template.soy.data.SoyMapData;
 public class MethodDescriptor implements Descriptor {
 
   private final String name;
-  private final String description;
-  private final TypeExpression returnType;
+  @Nullable private final String description;
+  @Nullable private final TypeExpression returnType;
   private final List<ParamDescriptor> params;
   private final AccessLevel accessLevel;
 
@@ -24,6 +26,7 @@ public class MethodDescriptor implements Descriptor {
       List<ParamDescriptor> params,
       AccessLevel accessLevel) {
     Preconditions.checkNotNull(name);
+    Preconditions.checkNotNull(params);
     Preconditions.checkNotNull(accessLevel);
 
     this.name = name;
@@ -63,7 +66,7 @@ public class MethodDescriptor implements Descriptor {
   public SoyMapData toSoyData() {
     return new SoyMapData(
         "name", name,
-        "description", description,
+        "description", description != null ? description : "",
         "returnType", returnType != null ? returnType.getDisplayName() : null,
         "params", new SoyListData(Lists.transform(params, ParamDescriptor.TO_SOY_DATA)),
         "accessLevel", accessLevel.name());

@@ -140,28 +140,42 @@ public class DescriptorPass implements CompilerPass {
     private void addMethod(String className, String methodName, JSDocInfo info) {
       MethodDescriptor.Builder builder = MethodDescriptor.builder();
       builder.setName(methodName);
-      builder.setDescription(info.getBlockDescription());
-      AccessLevel accessLevel = AccessLevel.getLevelForInfo(
-          info, className, methodName, classes);
-      builder.setAccessLevel(accessLevel);
 
-      // Extract the params. The JavaDoc for getParameterNames() claims that the
-      // iteration order does not match the definition order, but they appear to
-      // be added to a LinkedHashMap in JSDocInfo, which preserves the order.
-      Set<String> paramNames = info.getParameterNames();
-      for (String paramName : paramNames) {
-        JSTypeExpression type = info.getParameterType(paramName);
-        ParamDescriptor.Builder paramBuilder = ParamDescriptor.builder();
-        paramBuilder.setName(paramName);
-        paramBuilder.setDescription(info.getDescriptionForParameter(paramName));
-        paramBuilder.setTypeExpression(
-            TypeExpression.builder().setType(type, compiler).build());
-        builder.addParam(paramBuilder.build());
+      if (info == null) {
+        // TODO(bolinfest): Try to extract the parameters from the AST.
+        logger.warning(String.format(
+            "No documentation for method %s.prototype.%s()",
+            className,
+            methodName));
+        builder.setAccessLevel(AccessLevel.PUBLIC);
+      } else {
+        // TODO(bolinfest): If @override is present, pull the information from
+        // the superclass. Currently, failure to do this causes problems for
+        // overridden methods, such as setParentEventTarget() in
+        // goog.ui.Component.
+        builder.setDescription(info.getBlockDescription());
+        AccessLevel accessLevel = AccessLevel.getLevelForInfo(
+            info, className, methodName, classes);
+        builder.setAccessLevel(accessLevel);
+
+        // Extract the params. The JavaDoc for getParameterNames() claims that the
+        // iteration order does not match the definition order, but they appear to
+        // be added to a LinkedHashMap in JSDocInfo, which preserves the order.
+        Set<String> paramNames = info.getParameterNames();
+        for (String paramName : paramNames) {
+          JSTypeExpression type = info.getParameterType(paramName);
+          ParamDescriptor.Builder paramBuilder = ParamDescriptor.builder();
+          paramBuilder.setName(paramName);
+          paramBuilder.setDescription(info.getDescriptionForParameter(paramName));
+          paramBuilder.setTypeExpression(
+              TypeExpression.builder().setType(type, compiler).build());
+          builder.addParam(paramBuilder.build());
+        }
+
+        // Add the return type.
+        builder.setReturnType(
+            TypeExpression.builder().setType(info.getReturnType(), compiler).build());
       }
-
-      // Add the return type.
-      builder.setReturnType(
-          TypeExpression.builder().setType(info.getReturnType(), compiler).build());
 
       classes.get(className).addInstanceMethod(builder.build());
     }

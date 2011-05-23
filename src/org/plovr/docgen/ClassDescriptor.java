@@ -1,5 +1,6 @@
 package org.plovr.docgen;
 
+import java.util.Collections;
 import java.util.List;
 
 import javax.annotation.Nullable;
@@ -58,12 +59,18 @@ public class ClassDescriptor implements Descriptor {
 
   @Override
   public SoyMapData toSoyData() {
+    Collections.sort(instanceMethods, DescriptorComparator.getInstance());
+    Collections.sort(staticMethods, DescriptorComparator.getInstance());
     return new SoyMapData(
         "name", name,
         "superClass", superClass != null ? superClass.getDisplayName() : null,
         "description", description,
-        "instanceMethods", Lists.transform(instanceMethods, MethodDescriptor.TO_SOY_DATA),
-        "staticMethods", Lists.transform(staticMethods, MethodDescriptor.TO_SOY_DATA));
+        "instanceMethods", Lists.transform(
+            instanceMethods,
+            MethodDescriptor.TO_SOY_DATA),
+        "staticMethods", Lists.transform(
+            staticMethods,
+            MethodDescriptor.TO_SOY_DATA));
   }
 
   public static class Builder {

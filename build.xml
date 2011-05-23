@@ -159,6 +159,7 @@
       <fileset dir="${src.dir}/org/plovr">
         <include name="*.js" />
         <include name="*.soy" />
+        <include name="*.css" />
       </fileset>
     </copy>
     <jar destfile="${build.dir}/plovr.jar">
