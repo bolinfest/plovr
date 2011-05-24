@@ -67,7 +67,7 @@ public class MethodDescriptor implements Descriptor {
     return new SoyMapData(
         "name", name,
         "description", description != null ? description : "",
-        "returnType", returnType != null ? returnType.getDisplayName() : null,
+        "returnType", returnType != null ? returnType.getParamName() : null,
         "params", new SoyListData(Lists.transform(params, ParamDescriptor.TO_SOY_DATA)),
         "accessLevel", accessLevel.name());
   }

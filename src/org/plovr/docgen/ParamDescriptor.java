@@ -40,7 +40,7 @@ public class ParamDescriptor implements Descriptor {
     return new SoyMapData(
         "name", name,
         "description", description,
-        "type", typeExpression.getDisplayName());
+        "type", typeExpression.getParamName());
   }
 
   public static final Function<ParamDescriptor, SoyData> TO_SOY_DATA =
