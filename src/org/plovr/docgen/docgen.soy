@@ -112,3 +112,39 @@ extends <a href="{$pathToBase}{$pathToSuper}">{$classDescriptor.superClass}</a>
   {param pathToBase: $pathToBase /}
 {/call}
 {/template}
+
+/**
+ * @param libraryDescriptor
+ * @param pathToBase
+ */
+{template .libraryDoc}
+<a href="{$pathToBase}index.html">Home</a>
+
+<h1>Class {$libraryDescriptor.name}</h1>
+
+{if length($libraryDescriptor.methods) > 0}
+<table class="method-list">
+  <tr>
+    <td colspan="2">Method Summary</td>
+  </tr>
+  {foreach $method in $libraryDescriptor.methods}
+    {call .methodDoc data="$method" /}
+  {/foreach}
+</table>
+{/if}
+
+{/template}
+
+/**
+ * @param libraryDescriptor
+ * @param pathToBase
+ */
+{template .libraryPage}
+{call .baseDoc}
+  {param title}{$libraryDescriptor.name}{/param}
+  {param content}
+    {call .libraryDoc data="all" /}
+  {/param}
+  {param pathToBase: $pathToBase /}
+{/call}
+{/template}

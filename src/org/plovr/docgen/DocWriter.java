@@ -35,27 +35,27 @@ public class DocWriter {
 
   private final Map<String, ClassDescriptor> classes;
 
+  private final Map<String, LibraryDescriptor> libraries;
+
   private final File documentationRootDirectory;
+
+  private final Set<String> paths = Sets.newTreeSet();
 
   public DocWriter(
       File documentationRootDirectory,
-      Map<String, ClassDescriptor> classes) {
+      Map<String, ClassDescriptor> classes,
+      Map<String, LibraryDescriptor> libraries) {
     this.classes = classes;
+    this.libraries = libraries;
     this.documentationRootDirectory = documentationRootDirectory;
     documentationRootDirectory.mkdirs();
   }
 
   public void write() throws IOException {
-    Set<String> paths = Sets.newTreeSet();
 
     for (Map.Entry<String, ClassDescriptor> entry : classes.entrySet()) {
       String className = entry.getKey();
-      String path = classNameToPath(className);
-      paths.add(path);
-      File file = new File(documentationRootDirectory, path);
-      Files.createParentDirs(file);
-      file.createNewFile();
-      Writer writer = new FileWriter(file);
+      Writer writer = createWriterForProvide(className);
 
       ClassDescriptor descriptor = entry.getValue();
       String pathToBase = createPathToBase(className);
@@ -75,8 +75,32 @@ public class DocWriter {
       writer.close();
     }
 
+    for (Map.Entry<String, LibraryDescriptor> entry : libraries.entrySet()) {
+      String libraryName = entry.getKey();
+      Writer writer = createWriterForProvide(libraryName);
+
+      LibraryDescriptor descriptor = entry.getValue();
+      String pathToBase = createPathToBase(libraryName);
+      writer.append(tofu.render(
+          "plovr.docgen.libraryPage",
+          new SoyMapData(
+              "pathToBase", pathToBase,
+              "libraryDescriptor", descriptor.toSoyData()),
+          null /* msgBundle */));
+      writer.close();
+    }
+
     writeIndex(paths);
     writeStylesheet();
+  }
+
+  private Writer createWriterForProvide(String provide) throws IOException {
+    String path = classNameToPath(provide);
+    paths.add(path);
+    File file = new File(documentationRootDirectory, path);
+    Files.createParentDirs(file);
+    file.createNewFile();
+    return new FileWriter(file);
   }
 
   private static String classNameToPath(String className) {

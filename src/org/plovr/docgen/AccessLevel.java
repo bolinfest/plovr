@@ -12,6 +12,9 @@ public enum AccessLevel {
   PRIVATE,
   ;
 
+  /**
+   * className is only used if the JSDocInfo is for an instance method.
+   */
   public static AccessLevel getLevelForInfo(
       JSDocInfo info,
       String className,
@@ -29,7 +32,11 @@ public enum AccessLevel {
         case PROTECTED: return PROTECTED;
         case PRIVATE: return PRIVATE;
         case INHERITED:
-          return getSuperLevel(className, methodName, classes);
+          if (className == null) {
+            return PUBLIC;
+          } else {
+            return getSuperLevel(className, methodName, classes);
+          }
         default:
           throw new RuntimeException("Unknown visibility: " + visibility);
       }

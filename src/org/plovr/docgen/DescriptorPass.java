@@ -6,6 +6,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
+import javax.annotation.Nullable;
+
 import org.plovr.Config;
 
 import com.google.common.base.Preconditions;
@@ -45,6 +47,8 @@ public class DescriptorPass implements CompilerPass {
 
   private final Map<String, ClassDescriptor.Builder> classes;
 
+  private final Map<String, LibraryDescriptor.Builder> libraries;
+
   public DescriptorPass(AbstractCompiler compiler, Config config) {
     this.compiler = compiler;
     File documentationDirectory = config.getDocumentationOutputDirectory();
@@ -53,6 +57,7 @@ public class DescriptorPass implements CompilerPass {
     this.documentationDirectory = documentationDirectory;
     provides = Sets.newHashSet();
     classes = Maps.newHashMap();
+    libraries = Maps.newHashMap();
   }
 
   @Override
@@ -61,13 +66,22 @@ public class DescriptorPass implements CompilerPass {
     NodeTraversal.traverse(compiler, root, callback);
 
     try {
-      ImmutableMap.Builder<String, ClassDescriptor> mapBuilder =
+      ImmutableMap.Builder<String, ClassDescriptor> classMapBuilder =
           ImmutableMap.builder();
       for (Map.Entry<String, ClassDescriptor.Builder> entry : classes.entrySet()) {
-        mapBuilder.put(entry.getKey(), entry.getValue().build());
+        classMapBuilder.put(entry.getKey(), entry.getValue().build());
       }
+
+      ImmutableMap.Builder<String, LibraryDescriptor> libraryMapBuilder =
+          ImmutableMap.builder();
+      for (Map.Entry<String, LibraryDescriptor.Builder> entry : libraries.entrySet()) {
+        libraryMapBuilder.put(entry.getKey(), entry.getValue().build());
+      }
+
       DocWriter writer = new DocWriter(
-          documentationDirectory, mapBuilder.build());
+          documentationDirectory,
+          classMapBuilder.build(),
+          libraryMapBuilder.build());
       writer.write();
     } catch (IOException e) {
       throw new RuntimeException(e);
@@ -132,7 +146,16 @@ public class DescriptorPass implements CompilerPass {
               }
 
               classes.put(name, builder);
+            } else if (info.isInterface()) {
+              // TODO(bolinfest): Handle interface.
+            } else {
+              // TODO(bolinfest): Process library.
+              // Note that this a funny type of library that contains either:
+              // (1) one function: goog.dispose()
+              // (2) one function with other functions as properties: goog.net.XmlHttp()
             }
+          } else if (left.getNext().getType() == Token.OBJECTLIT) {
+            // TODO(bolinfest): Is likely an enum: verify and process.
           }
         } else if (name.contains(".prototype.")) {
           Node assigneeValue = left.getNext();
@@ -158,25 +181,72 @@ public class DescriptorPass implements CompilerPass {
                 // the JSDocInfo in a different manner.
                 info = n.getJSDocInfo();
               }
-              addMethod(className, methodName, info);
+              TypeExpression superClass = classes.get(className).getSuperClass();
+              MethodDescriptor method = createMethod(methodName, info, className, superClass);
+              // TODO(bolinfest): Fix special cases so method is never null.
+              if (method != null) {
+                classes.get(className).addInstanceMethod(method);
+              }
+            }
+          }
+        } else {
+          // This is likely a member of a library, such as goog.array.peek.
+          // Drop of the last property (peek) to see if what's left (goog.array)
+          // is a namespace declared using goog.provide().
+          int index = name.lastIndexOf('.');
+          if (index >= 0) {
+            String base = name.substring(0, index);
+            if (provides.contains(base) || libraries.containsKey(base)) {
+              LibraryDescriptor.Builder builder = libraries.get(base);
+              if (builder == null) {
+                builder = LibraryDescriptor.builder();
+                builder.setName(base);
+                libraries.put(base, builder);
+              }
+              if (left.getNext().getType() == Token.FUNCTION) {
+                JSDocInfo info = NodeUtil.getFunctionInfo(left.getNext());
+                String methodName = name.substring(index + 1);
+                MethodDescriptor method = createMethod(methodName, info);
+                builder.addMethod(method);
+              }
             }
           }
         }
       }
     }
 
-    private void addMethod(String className, String methodName, JSDocInfo info) {
+    /**
+     * Use this to create a {@link MethodDescriptor} for a function.
+     */
+    private MethodDescriptor createMethod(
+        String methodName,
+        JSDocInfo info) {
+      return createMethod(methodName, info, null, null);
+    }
+
+    /**
+     * Use this to create a {@link MethodDescriptor} for a method associated
+     * with a class.
+     */
+    private MethodDescriptor createMethod(
+        String methodName,
+        JSDocInfo info,
+        @Nullable String className,
+        @Nullable TypeExpression superClass) {
       MethodDescriptor.Builder builder = MethodDescriptor.builder();
       builder.setName(methodName);
-      TypeExpression superClass = classes.get(className).getSuperClass();
 
       if (info == null) {
         // TODO(bolinfest): Try to extract the parameters from the AST.
         // May not be possible if value is goog.abstractMethod.
+        String fullMethod;
+        if (className == null) {
+          fullMethod = String.format("%s", methodName);
+        } else {
+          fullMethod = String.format("%s.prototype.%s", className, methodName);
+        }
         logger.warning(String.format(
-            "No documentation for method %s.prototype.%s()",
-            className,
-            methodName));
+            "No documentation for method %s()", fullMethod));
         builder.setAccessLevel(AccessLevel.PUBLIC);
       } else if (info.isOverride() && superClass != null) {
         // If @override is present, copy the signature information from the
@@ -202,7 +272,7 @@ public class DescriptorPass implements CompilerPass {
           // goog.editor.Plugin.prototype.execCommandInternal;
           //
           // Need to improve the heuristic to support this case.
-          return;
+          return null;
         }
 
         String description = Strings.nullToEmpty(info.getBlockDescription()).trim();
@@ -225,6 +295,7 @@ public class DescriptorPass implements CompilerPass {
         // TODO(bolinfest): Grab the information from the externs file.
         builder.setAccessLevel(AccessLevel.PUBLIC);
       } else {
+        // Ordinary method that is not an override.
         builder.setDescription(info.getBlockDescription());
         AccessLevel accessLevel = AccessLevel.getLevelForInfo(
             info, className, methodName, classes);
@@ -249,7 +320,7 @@ public class DescriptorPass implements CompilerPass {
             TypeExpression.builder().setType(info.getReturnType(), compiler).build());
       }
 
-      classes.get(className).addInstanceMethod(builder.build());
+      return builder.build();
     }
 
     /**
