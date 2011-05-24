@@ -8,6 +8,14 @@ import org.plovr.util.Pair;
 
 abstract class AbstractCommandRunner<T extends AbstractCommandOptions> implements CommandRunner {
 
+  /**
+   * A special value to return from
+   * {@link #runCommandWithOptions(AbstractCommandOptions)} to ensure that the
+   * process does not exit when the method returns. This is important for
+   * commands (such as SoyWeb) that start off a server.
+   */
+  static final int STATUS_NO_EXIT = 4242;
+
   abstract T createOptions();
 
   private final Pair<T, CmdLineParser> createParser() {
@@ -50,6 +58,10 @@ abstract class AbstractCommandRunner<T extends AbstractCommandOptions> implement
     parser.printUsage(System.err);
   }
 
+  /**
+   * @return the exit code this process should exit with or
+   *     {@link #STATUS_NO_EXIT} if it should not shut down
+   */
   abstract int runCommandWithOptions(T options) throws IOException;
 
   /**

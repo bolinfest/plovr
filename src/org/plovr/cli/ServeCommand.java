@@ -25,7 +25,7 @@ public class ServeCommand extends AbstractCommandRunner<ServeCommandOptions> {
       server.registerConfig(config);
     }
     server.run();
-    return 0;
+    return STATUS_NO_EXIT;
   }
 
   @Override

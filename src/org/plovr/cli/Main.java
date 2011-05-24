@@ -40,7 +40,9 @@ public final class Main {
       String[] remainingArgs = new String[args.length - 1];
       System.arraycopy(args, 1, remainingArgs, 0, remainingArgs.length);
       int status = command.execute(remainingArgs);
-      System.exit(status);
+      if (status != AbstractCommandRunner.STATUS_NO_EXIT) {
+        System.exit(status);
+      }
     }
   }
 }
