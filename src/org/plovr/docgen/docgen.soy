@@ -44,6 +44,10 @@
 
 <h1>Class {$classDescriptor.name}</h1>
 
+{if $classDescriptor.description}
+  <p>{$classDescriptor.description|noAutoescape}</p>
+{/if}
+
 {if $classDescriptor.superClass}
 extends <a href="{$pathToBase}{$pathToSuper}">{$classDescriptor.superClass}</a>
 {/if}
