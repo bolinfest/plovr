@@ -7,7 +7,7 @@ cd `hg root`
 find closure/closure-library -name '*.js' | \
     xargs grep -h -o -e "goog.provide\(.*\);" | \
     sed -e "s/goog.provide('\(.*\)');/goog.require('\1');/" > \
-    build/jsdoc/requires.js
+    build/www/jsdoc/requires.js
 
 CONFIG=$(cat <<EOF
 {
@@ -18,4 +18,4 @@ CONFIG=$(cat <<EOF
 EOF
 )
 
-echo $CONFIG > build/jsdoc/config.js
+echo $CONFIG > build/www/jsdoc/config.js

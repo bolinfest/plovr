@@ -13,7 +13,7 @@
   <property name="build.dir" value="${basedir}/build" />
   <property name="classes.dir" value="${build.dir}/classes" />
   <property name="build.dir.www" value="${build.dir}/www" />
-  <property name="build.dir.jsdoc" value="${build.dir}/jsdoc" />
+  <property name="build.dir.www.jsdoc" value="${build.dir.www}/jsdoc" />
   <property name="javadoc.dir" value="${build.dir.www}/javadoc" />
 
   <property name="closure.dir" value="${basedir}/closure" />
@@ -293,9 +293,9 @@
   -->
   <target name="generate-closure-library-jsdoc"
           description="Generates HTML documentation for Closure Library">
-    <delete dir="${build.dir.jsdoc}" />
-    <mkdir dir="${build.dir.jsdoc}" />
-    <exec executable="bash">
+    <delete dir="${build.dir.www.jsdoc}" />
+    <mkdir dir="${build.dir.www.jsdoc}" />
+    <exec executable="bash" failonerror="true">
       <arg value="${scripts.dir}/generate-closure-library-jsdoc.sh" />
     </exec>
     <!-- This assumes that plovr has already been compiled. -->
@@ -303,7 +303,7 @@
           fork="true"
           maxmemory="512m">
       <arg value="jsdoc" />
-      <arg line="${build.dir.jsdoc}/config.js" />
+      <arg line="${build.dir.www.jsdoc}/config.js" />
       <classpath>
         <pathelement path="${src.dir}" />
         <pathelement path="${classes.dir}" />
