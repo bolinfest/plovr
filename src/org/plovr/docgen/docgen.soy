@@ -88,7 +88,7 @@ extends <a href="{$pathToBase}{$pathToSuper}">{$classDescriptor.superClass}</a>
           {if not isLast($param)}, {/if}
         {/foreach}
       )
-      {if $returnType}
+      {if $returnType and $returnType != 'void'}
         {sp}&#8658; {$returnType}
       {/if}
       </code><br>
