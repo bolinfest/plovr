@@ -125,6 +125,9 @@ public class DescriptorPass implements CompilerPass {
           }
         } else if (name.contains(".prototype.")) {
           Node assigneeValue = left.getNext();
+          // TODO(bolinfest): This heuristic is incomplete: in addition to
+          // goog.abstractMethod, other valid values include goog.nullFunction,
+          // goog.functions.TRUE, etc.
           if (assigneeValue.getType() == Token.FUNCTION ||
               (assigneeValue.getType() == Token.GETPROP &&
               "goog.abstractMethod".equals(assigneeValue.getQualifiedName()))) {
