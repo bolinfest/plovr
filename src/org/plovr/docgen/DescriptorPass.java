@@ -49,6 +49,8 @@ public class DescriptorPass implements CompilerPass {
 
   private final Map<String, LibraryDescriptor.Builder> libraries;
 
+  private final Map<String, EnumDescriptor.Builder> enums;
+
   public DescriptorPass(AbstractCompiler compiler, Config config) {
     this.compiler = compiler;
     File documentationDirectory = config.getDocumentationOutputDirectory();
@@ -58,6 +60,7 @@ public class DescriptorPass implements CompilerPass {
     provides = Sets.newHashSet();
     classes = Maps.newHashMap();
     libraries = Maps.newHashMap();
+    enums = Maps.newHashMap();
   }
 
   @Override
@@ -126,6 +129,9 @@ public class DescriptorPass implements CompilerPass {
       }
     }
 
+    /**
+     * @param n n.getType() returns Token.ASSIGN.
+     */
     private void processAssign(Node n) {
       Node left = n.getFirstChild();
       String name = left.getQualifiedName();
@@ -161,7 +167,15 @@ public class DescriptorPass implements CompilerPass {
             // (2) one function with other functions as properties: goog.net.XmlHttp()
           }
         } else if (left.getNext().getType() == Token.OBJECTLIT) {
-          // TODO(bolinfest): Is likely an enum: verify and process.
+          JSDocInfo info = n.getJSDocInfo();
+          // This appears to be an enum.
+          if (info != null && info.hasEnumParameterType()) {
+            EnumDescriptor.Builder builder = EnumDescriptor.builder();
+            builder.setName(name);
+            builder.setDescription(info.getBlockDescription());
+            // TODO(bolinfest): Add enum values to builder.
+            enums.put(name, builder);
+          }
         }
       } else if (name.contains(".prototype.")) {
         // This appears to be an instance method or field.
