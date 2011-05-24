@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -123,13 +124,25 @@ public class DescriptorPass implements CompilerPass {
             }
           }
         } else if (name.contains(".prototype.")) {
-          if (left.getNext().getType() == Token.FUNCTION) {
+          Node assigneeValue = left.getNext();
+          if (assigneeValue.getType() == Token.FUNCTION ||
+              (assigneeValue.getType() == Token.GETPROP &&
+              "goog.abstractMethod".equals(assigneeValue.getQualifiedName()))) {
+            boolean hasFunctionInfo = assigneeValue.getType() == Token.FUNCTION;
+
             // Instance method
             String[] parts = name.split("\\.prototype\\.");
             String className = parts[0];
             if (classes.containsKey(className)) {
               String methodName = parts[1];
-              JSDocInfo info = NodeUtil.getFunctionInfo(left.getNext());
+              JSDocInfo info;
+              if (hasFunctionInfo) {
+                info = NodeUtil.getFunctionInfo(assigneeValue);
+              } else {
+                // If the value on the right is goog.abstractMethod, must get
+                // the JSDocInfo in a different manner.
+                info = n.getJSDocInfo();
+              }
               addMethod(className, methodName, info);
             }
           }
@@ -143,16 +156,42 @@ public class DescriptorPass implements CompilerPass {
 
       if (info == null) {
         // TODO(bolinfest): Try to extract the parameters from the AST.
+        // May not be possible if value is goog.abstractMethod.
         logger.warning(String.format(
             "No documentation for method %s.prototype.%s()",
             className,
             methodName));
         builder.setAccessLevel(AccessLevel.PUBLIC);
-      } else {
-        // TODO(bolinfest): If @override is present, pull the information from
-        // the superclass. Currently, failure to do this causes problems for
-        // overridden methods, such as setParentEventTarget() in
+      } else if (info.isOverride()) {
+        // If @override is present, copy the signature information from the
+        // superclass. This is needed for methods such as setParentEventTarget()
+        // in goog.ui.Component.
+        TypeExpression superClass = classes.get(className).getSuperClass();
+        String superClassName = superClass.getDisplayName();
+        ClassDescriptor.Builder superBuilder = classes.get(superClassName);
+        MethodDescriptor superMethodDescriptor = superBuilder.
+            getInstanceMethodByName(methodName);
+        if (superMethodDescriptor == null) {
+          throw new RuntimeException(String.format(
+              "Method %s() does not exist in %s", methodName, superClassName));
+        }
+
+        String description = Strings.nullToEmpty(info.getBlockDescription()).trim();
+        if (description.isEmpty()) {
+          description = superMethodDescriptor.getDescription();
+        }
+
+        // TODO(bolinfest): Copying all fields directly may not be appropriate,
+        // as something may have changed in overriding. For example, getChild()
+        // in goog.ui.Container returns a goog.ui.Control rather than a
         // goog.ui.Component.
+        builder.setDescription(description);
+        builder.setReturnType(superMethodDescriptor.getReturnType());
+        builder.setAccessLevel(superMethodDescriptor.getAccessLevel());
+        for (ParamDescriptor param : superMethodDescriptor.getParams()) {
+          builder.addParam(param);
+        }
+      } else {
         builder.setDescription(info.getBlockDescription());
         AccessLevel accessLevel = AccessLevel.getLevelForInfo(
             info, className, methodName, classes);
