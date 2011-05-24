@@ -120,12 +120,12 @@ extends <a href="{$pathToBase}{$pathToSuper}">{$classDescriptor.superClass}</a>
 {template .libraryDoc}
 <a href="{$pathToBase}index.html">Home</a>
 
-<h1>Class {$libraryDescriptor.name}</h1>
+<h1>Library {$libraryDescriptor.name}</h1>
 
 {if length($libraryDescriptor.methods) > 0}
 <table class="method-list">
   <tr>
-    <td colspan="2">Method Summary</td>
+    <td colspan="2">Function Summary</td>
   </tr>
   {foreach $method in $libraryDescriptor.methods}
     {call .methodDoc data="$method" /}
