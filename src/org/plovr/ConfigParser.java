@@ -23,7 +23,7 @@ public final class ConfigParser {
   /** Utility class; do not instantiate. */
   private ConfigParser() {}
 
-  public static Config parseFile(File file) throws IOException {
+  public static Config.Builder createBuilderFromFile(File file) throws IOException {
     JsonParser jsonParser = new JsonParser();
     String rootConfigFileContent = Files.toString(file);
     JsonElement root = jsonParser.parse(rootConfigFileContent);
@@ -62,7 +62,11 @@ public final class ConfigParser {
           "http://plovr.com/options.html");
     }
 
-    return builder.build();
+    return builder;
+  }
+
+  public static Config parseFile(File file) throws IOException {
+    return createBuilderFromFile(file).build();
   }
 
   public static Config update(Config config, QueryData queryData) {

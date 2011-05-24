@@ -427,6 +427,14 @@ public enum ConfigOption {
       }
     }
   }),
+
+  JSDOC_HTML_OUTPUT_PATH("jsdoc-html-output-path", new ConfigUpdater() {
+    @Override
+    public void apply(String jsDocHtmlOutputPath, Config.Builder builder) {
+      String fullPath = maybeResolvePath(jsDocHtmlOutputPath, builder);
+      builder.setDocumentationOutputDirectory(new File(fullPath));
+    }
+  }),
   ;
 
   private static class ConfigUpdater {

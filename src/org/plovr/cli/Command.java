@@ -12,6 +12,8 @@ public enum Command {
 
   BUILD("build", new BuildCommand()),
 
+  JSDOC("jsdoc", new JsDocCommand()),
+
   INFO("info", new InfoCommand()),
 
   // This may not be part of this enum permanently.
@@ -40,8 +42,8 @@ public enum Command {
     return null;
   }
 
-  public void execute(String[] args) throws IOException {
-    commandRunner.runCommand(args);
+  public int execute(String[] args) throws IOException {
+    return commandRunner.runCommand(args);
   }
 
   @Override

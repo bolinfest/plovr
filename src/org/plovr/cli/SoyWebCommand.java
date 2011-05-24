@@ -23,7 +23,7 @@ public class SoyWebCommand extends AbstractCommandRunner<SoyWebCommandOptions> {
   }
 
   @Override
-  void runCommandWithOptions(SoyWebCommandOptions options) throws IOException {
+  int runCommandWithOptions(SoyWebCommandOptions options) throws IOException {
     String pathToGlobals = options.getCompileTimeGlobalsFile();
     Map<String, ?> globals;
     if (pathToGlobals == null) {
@@ -54,6 +54,7 @@ public class SoyWebCommand extends AbstractCommandRunner<SoyWebCommandOptions> {
         globals);
     Server server = new Server(config);
     server.run();
+    return 0;
   }
 
   @Override

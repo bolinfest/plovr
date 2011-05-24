@@ -21,7 +21,7 @@ public class InfoCommand extends AbstractCommandRunner<InfoCommandOptions> {
   }
 
   @Override
-  void runCommandWithOptions(InfoCommandOptions options) throws IOException {
+  int runCommandWithOptions(InfoCommandOptions options) throws IOException {
     String libraryRevision = VersionUtil.getRevision("closure-library");
     String compilerRevision = VersionUtil.getRevision("closure-compiler");
     String templatesRevision = VersionUtil.getRevision("closure-templates");
@@ -42,5 +42,6 @@ public class InfoCommand extends AbstractCommandRunner<InfoCommandOptions> {
         Strings.repeat(" ", max - compilerRevision.length()) + compilerRevision);
     System.out.println("Closure Templates:  " +
         Strings.repeat(" ", max - templatesRevision.length()) + templatesRevision);
+    return 0;
   }
 }

@@ -16,7 +16,7 @@ abstract class AbstractCommandRunner<T extends AbstractCommandOptions> implement
   }
 
   @Override
-  public final void runCommand(String[] args) throws IOException {
+  public final int runCommand(String[] args) throws IOException {
     Pair<T, CmdLineParser> parserAndOptions = createParser();
     T options = parserAndOptions.getFirst();
     CmdLineParser parser = parserAndOptions.getSecond();
@@ -30,9 +30,10 @@ abstract class AbstractCommandRunner<T extends AbstractCommandOptions> implement
     }
 
     if (isConfigValid && !options.showHelp()) {
-      runCommandWithOptions(options);
+      return runCommandWithOptions(options);
     } else {
       printUsage(parser);
+      return 1;
     }
   }
 
@@ -49,7 +50,7 @@ abstract class AbstractCommandRunner<T extends AbstractCommandOptions> implement
     parser.printUsage(System.err);
   }
 
-  abstract void runCommandWithOptions(T options) throws IOException;
+  abstract int runCommandWithOptions(T options) throws IOException;
 
   /**
    * @return may be null

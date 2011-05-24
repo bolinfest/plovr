@@ -1,10 +1,14 @@
 package org.plovr.docgen;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
+import org.plovr.Config;
+
+import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
@@ -26,6 +30,8 @@ public class DescriptorPass implements CompilerPass {
 
   private final AbstractCompiler compiler;
 
+  private final File documentationDirectory;
+
   /**
    * The set of string arguments passed to goog.provide() whose type has not
    * been determined. A value will be one of:
@@ -39,8 +45,12 @@ public class DescriptorPass implements CompilerPass {
 
   private final Map<String, ClassDescriptor.Builder> classes;
 
-  public DescriptorPass(AbstractCompiler compiler) {
+  public DescriptorPass(AbstractCompiler compiler, Config config) {
     this.compiler = compiler;
+    File documentationDirectory = config.getDocumentationOutputDirectory();
+    Preconditions.checkNotNull(documentationDirectory,
+        "Must specify an output directory for the generated documentation");
+    this.documentationDirectory = documentationDirectory;
     provides = Sets.newHashSet();
     classes = Maps.newHashMap();
   }
@@ -56,7 +66,8 @@ public class DescriptorPass implements CompilerPass {
       for (Map.Entry<String, ClassDescriptor.Builder> entry : classes.entrySet()) {
         mapBuilder.put(entry.getKey(), entry.getValue().build());
       }
-      DocWriter writer = new DocWriter(mapBuilder.build());
+      DocWriter writer = new DocWriter(
+          documentationDirectory, mapBuilder.build());
       writer.write();
     } catch (IOException e) {
       throw new RuntimeException(e);

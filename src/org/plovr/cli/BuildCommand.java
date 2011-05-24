@@ -29,7 +29,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
   }
 
   @Override
-  void runCommandWithOptions(BuildCommandOptions options) throws IOException {
+  int runCommandWithOptions(BuildCommandOptions options) throws IOException {
     // Even though logging would get printed to stderr and not stdout, it is
     // still distracting and feels wrong. May revisit this at some point.
     Logger.getLogger("org.plovr").setLevel(Level.OFF);
@@ -37,7 +37,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
     List<String> arguments = options.getArguments();
     if (arguments.size() != 1) {
       printUsage();
-      return;
+      return 1;
     }
 
     String configFile = arguments.get(0);
@@ -51,6 +51,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
     }
 
     processResult(compilation, config, options.getSourceMapPath(), config.getId());
+    return 0;
   }
 
   private void processResult(Compilation compilation, Config config,

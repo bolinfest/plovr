@@ -37,11 +37,11 @@ public class DocWriter {
 
   private final File documentationRootDirectory;
 
-  public DocWriter(Map<String, ClassDescriptor> classes) {
+  public DocWriter(
+      File documentationRootDirectory,
+      Map<String, ClassDescriptor> classes) {
     this.classes = classes;
-
-    // TODO(bolinfest): Make this configurable.
-    documentationRootDirectory = new File("build/docgen");
+    this.documentationRootDirectory = documentationRootDirectory;
     documentationRootDirectory.mkdirs();
   }
 

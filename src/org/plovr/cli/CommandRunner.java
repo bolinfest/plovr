@@ -4,6 +4,11 @@ import java.io.IOException;
 
 public interface CommandRunner {
 
-  public void runCommand(String[] args) throws IOException;
+  /**
+   * @param args the arguments passed to the command, not including the command
+   *     name
+   * @return the appropriate exit code for the command
+   */
+  public int runCommand(String[] args) throws IOException;
 
 }

@@ -105,6 +105,8 @@ public final class Config implements Comparable<Config> {
 
   private final ListMultimap<CustomPassExecutionTime, CompilerPassFactory> customPasses;
 
+  private final File documentationOutputDirectory;
+
   private final Set<String> stripNameSuffixes;
 
   private final Set<String> stripTypePrefixes;
@@ -153,6 +155,7 @@ public final class Config implements Comparable<Config> {
       boolean treatWarningsAsErrors,
       Map<String, JsonPrimitive> defines,
       ListMultimap<CustomPassExecutionTime, CompilerPassFactory> customPasses,
+      File documentationOutputDirectory,
       Set<String> stripNameSuffixes,
       Set<String> stripTypePrefixes,
       Set<String> idGenerators,
@@ -181,6 +184,7 @@ public final class Config implements Comparable<Config> {
     this.exportTestFunctions = exportTestFunctions;
     this.treatWarningsAsErrors = treatWarningsAsErrors;
     this.customPasses = customPasses;
+    this.documentationOutputDirectory = documentationOutputDirectory;
     this.defines = ImmutableMap.copyOf(defines);
     this.stripNameSuffixes = ImmutableSet.copyOf(stripNameSuffixes);
     this.stripTypePrefixes = ImmutableSet.copyOf(stripTypePrefixes);
@@ -282,6 +286,10 @@ public final class Config implements Comparable<Config> {
     return treatWarningsAsErrors;
   }
 
+  public File getDocumentationOutputDirectory() {
+    return documentationOutputDirectory;
+  }
+
   public File getConfigFile() {
     return configFile;
   }
@@ -352,7 +360,7 @@ public final class Config implements Comparable<Config> {
       CustomPassExecutionTime executionTime = entry.getKey();
       Collection<CompilerPassFactory> factories = entry.getValue();
       for (CompilerPassFactory factory : factories) {
-        CompilerPass compilerPass = factory.createCompilerPass(compiler);
+        CompilerPass compilerPass = factory.createCompilerPass(compiler, this);
         passes.put(executionTime, compilerPass);
         if (compilerPass instanceof DiagnosticGroupRegistrar) {
           DiagnosticGroupRegistrar registrar = (DiagnosticGroupRegistrar)compilerPass;
@@ -612,6 +620,8 @@ public final class Config implements Comparable<Config> {
 
     private ListMultimap<CustomPassExecutionTime, CompilerPassFactory> customPasses = ImmutableListMultimap.of();
 
+    private File documentationOutputDirectory = null;
+
     private boolean customExternsOnly = false;
 
     private CompilationMode compilationMode = CompilationMode.SIMPLE;
@@ -689,6 +699,7 @@ public final class Config implements Comparable<Config> {
           ? new ImmutableList.Builder<String>().addAll(config.getSoyFunctionPlugins())
           : null;
       this.customPasses = config.customPasses;
+      this.documentationOutputDirectory = config.documentationOutputDirectory;
       this.compilationMode = config.compilationMode;
       this.warningLevel = config.warningLevel;
       this.debug = config.debug;
@@ -798,9 +809,25 @@ public final class Config implements Comparable<Config> {
       soyFunctionPlugins.add(qualifiedName);
     }
 
+    public void setDocumentationOutputDirectory(File documentationOutputDirectory) {
+      Preconditions.checkNotNull(documentationOutputDirectory);
+      this.documentationOutputDirectory = documentationOutputDirectory;
+    }
+
     public void setCustomPasses(
         ListMultimap<CustomPassExecutionTime, CompilerPassFactory> customPasses) {
       this.customPasses = ImmutableListMultimap.copyOf(customPasses);
+    }
+
+    /**
+     * @return an immutable {@link ListMultimap}
+     */
+    public ListMultimap<CustomPassExecutionTime, CompilerPassFactory> getCustomPasses() {
+      if (customPasses != null) {
+        return customPasses;
+      } else {
+        return ImmutableListMultimap.of();
+      }
     }
 
     public void setCompilationMode(CompilationMode mode) {
@@ -886,6 +913,10 @@ public final class Config implements Comparable<Config> {
       this.experimentalCompilerOptions = experimentalCompilerOptions;
     }
 
+    public JsonObject getExperimentalCompilerOptions() {
+      return experimentalCompilerOptions;
+    }
+
     public void setGlobalScopeName(String scope) {
       this.globalScopeName = scope;
     }
@@ -946,6 +977,7 @@ public final class Config implements Comparable<Config> {
           treatWarningsAsErrors,
           defines,
           customPasses,
+          documentationOutputDirectory,
           stripNameSuffixes,
           stripTypePrefixes,
           idGenerators,

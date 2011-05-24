@@ -39,7 +39,8 @@ public final class Main {
     } else {
       String[] remainingArgs = new String[args.length - 1];
       System.arraycopy(args, 1, remainingArgs, 0, remainingArgs.length);
-      command.execute(remainingArgs);
+      int status = command.execute(remainingArgs);
+      System.exit(status);
     }
   }
 }

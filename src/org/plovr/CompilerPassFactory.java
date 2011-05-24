@@ -32,19 +32,29 @@ public class CompilerPassFactory {
 
   /**
    * Creates an instance of the {@link CompilerPass} that this factory is
-   * designed to produce. If the {@link CompilerPass} has a no-arg constructor,
-   * then that will be used. Failing that, a constructor that takes a single
-   * {@link AbstractCompiler} parameter will be used.
+   * designed to produce. It does so via reflection, using the first constructor
+   * it finds that matches one of the following signatures (in priority order):
+   * <ul>
+   *   <li><code>CompilerPass(AbstractCompiler, Config)</code></li>
+   *   <li><code>CompilerPass(AbstractCompiler)</code></li>
+   *   <li><code>CompilerPass()</code></li>
+   * </ul>
    */
-  public CompilerPass createCompilerPass(AbstractCompiler compiler) {
+  public CompilerPass createCompilerPass(
+      AbstractCompiler compiler, Config config) {
     for (Constructor<?> ctor : clazz.getConstructors()) {
       Class<?>[] params = ctor.getParameterTypes();
       try {
-        if (params.length == 0) {
-          return (CompilerPass) ctor.newInstance();
+        if (params.length == 2 &&
+            AbstractCompiler.class.isAssignableFrom(params[0]) &&
+            Config.class.isAssignableFrom(params[1])) {
+          return (CompilerPass) ctor.newInstance(compiler, config);
         }
         if (params.length == 1 && AbstractCompiler.class.isAssignableFrom(params[0])) {
           return (CompilerPass) ctor.newInstance(compiler);
+        }
+        if (params.length == 0) {
+          return (CompilerPass) ctor.newInstance();
         }
       } catch (InstantiationException e) {
         throw new RuntimeException(e);

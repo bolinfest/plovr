@@ -35,12 +35,12 @@ public class ExtractCommand extends AbstractCommandRunner<ExtractCommandOptions>
   }
 
   @Override
-  void runCommandWithOptions(ExtractCommandOptions options) throws IOException {
+  int runCommandWithOptions(ExtractCommandOptions options) throws IOException {
     // Exit if the user did not supply a single config file.
     List<String> arguments = options.getArguments();
     if (arguments.size() != 1) {
       printUsage();
-      return;
+      return 1;
     }
 
     // Use the config file to get the list of inputs, in order.
@@ -52,7 +52,7 @@ public class ExtractCommand extends AbstractCommandRunner<ExtractCommandOptions>
       inputs = manifest.getInputsInCompilationOrder();
     } catch (CompilationException e) {
       System.err.println(e.getMessage());
-      return;
+      return 1;
     }
 
     // This logic is modeled after the implementation of
@@ -74,6 +74,7 @@ public class ExtractCommand extends AbstractCommandRunner<ExtractCommandOptions>
     }
 
     printMessages(sfsBuilder.build());
+    return 0;
   }
 
   /**
