@@ -134,7 +134,10 @@ public class DescriptorPass implements CompilerPass {
       }
 
       if (provides.contains(name)) {
-        // Constructor or Enum
+        // Determine whether this is a constructor, interface, enum, or special
+        // library, such as goog.dispose (a library defined as the one function
+        // it contains) or goog.net.XmlHttp (a library defined as one function
+        // with additional functions defined as properties that are not methods).
         provides.remove(name);
         if (left.getNext().getType() == Token.FUNCTION) {
           JSDocInfo info = NodeUtil.getFunctionInfo(left.getNext());
@@ -161,6 +164,7 @@ public class DescriptorPass implements CompilerPass {
           // TODO(bolinfest): Is likely an enum: verify and process.
         }
       } else if (name.contains(".prototype.")) {
+        // This appears to be an instance method or field.
         Node assigneeValue = left.getNext();
         // TODO(bolinfest): This heuristic is incomplete: in addition to
         // goog.abstractMethod, other valid values include
@@ -194,24 +198,26 @@ public class DescriptorPass implements CompilerPass {
         }
       } else {
         // This is likely a member of a library, such as goog.array.peek.
-        // Drop of the last property (peek) to see if what's left (goog.array)
+        // Drop off the last property (peek) to see if what's left (goog.array)
         // is a namespace declared using goog.provide().
         int index = name.lastIndexOf('.');
-        if (index >= 0) {
-          String base = name.substring(0, index);
-          if (provides.contains(base) || libraries.containsKey(base)) {
-            LibraryDescriptor.Builder builder = libraries.get(base);
-            if (builder == null) {
-              builder = LibraryDescriptor.builder();
-              builder.setName(base);
-              libraries.put(base, builder);
-            }
-            if (left.getNext().getType() == Token.FUNCTION) {
-              JSDocInfo info = NodeUtil.getFunctionInfo(left.getNext());
-              String methodName = name.substring(index + 1);
-              MethodDescriptor method = createMethod(methodName, info);
-              builder.addMethod(method);
-            }
+        if (index < 0) {
+          return;
+        }
+
+        String base = name.substring(0, index);
+        if (provides.contains(base) || libraries.containsKey(base)) {
+          LibraryDescriptor.Builder builder = libraries.get(base);
+          if (builder == null) {
+            builder = LibraryDescriptor.builder();
+            builder.setName(base);
+            libraries.put(base, builder);
+          }
+          if (left.getNext().getType() == Token.FUNCTION) {
+            JSDocInfo info = NodeUtil.getFunctionInfo(left.getNext());
+            String methodName = name.substring(index + 1);
+            MethodDescriptor method = createMethod(methodName, info);
+            builder.addMethod(method);
           }
         }
       }
