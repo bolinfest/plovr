@@ -102,6 +102,8 @@ public class DescriptorPass implements CompilerPass {
     public void visit(NodeTraversal t, Node n, Node parent) {
       switch (n.getType()) {
       case Token.CALL:
+        // When encountering a function call, see if it is a call to
+        // goog.provide().
         Node left = n.getFirstChild();
         if (left.getType() == Token.GETPROP) {
           Node name = left.getFirstChild();
@@ -117,98 +119,98 @@ public class DescriptorPass implements CompilerPass {
         }
         break;
       case Token.ASSIGN:
-        processAssign(n);
+        if (n.getFirstChild().getType() == Token.GETPROP) {
+          processAssign(n);
+        }
         break;
       }
     }
 
     private void processAssign(Node n) {
       Node left = n.getFirstChild();
-      if (left.getType() == Token.GETPROP) {
-        String name = left.getQualifiedName();
-        if (name == null) {
-          return;
+      String name = left.getQualifiedName();
+      if (name == null) {
+        return;
+      }
+
+      if (provides.contains(name)) {
+        // Constructor or Enum
+        provides.remove(name);
+        if (left.getNext().getType() == Token.FUNCTION) {
+          JSDocInfo info = NodeUtil.getFunctionInfo(left.getNext());
+          if (info.isConstructor()) {
+            ClassDescriptor.Builder builder = ClassDescriptor.builder();
+            builder.setName(name);
+            builder.setDescription(info.getBlockDescription());
+
+            if (info.hasBaseType()) {
+              builder.setSuperClass(
+                  TypeExpression.builder().setType(info.getBaseType(), compiler).build());
+            }
+
+            classes.put(name, builder);
+          } else if (info.isInterface()) {
+            // TODO(bolinfest): Handle interface.
+          } else {
+            // TODO(bolinfest): Process library.
+            // Note that this a funny type of library that contains either:
+            // (1) one function: goog.dispose()
+            // (2) one function with other functions as properties: goog.net.XmlHttp()
+          }
+        } else if (left.getNext().getType() == Token.OBJECTLIT) {
+          // TODO(bolinfest): Is likely an enum: verify and process.
         }
+      } else if (name.contains(".prototype.")) {
+        Node assigneeValue = left.getNext();
+        // TODO(bolinfest): This heuristic is incomplete: in addition to
+        // goog.abstractMethod, other valid values include
+        // goog.partial(someFunc, someArg), goog.functions.TRUE, etc.
+        if (assigneeValue.getType() == Token.FUNCTION ||
+            (assigneeValue.getType() == Token.GETPROP &&
+            ("goog.abstractMethod".equals(assigneeValue.getQualifiedName()) ||
+            "goog.nullFunction".equals(assigneeValue.getQualifiedName())))) {
+          boolean hasFunctionInfo = assigneeValue.getType() == Token.FUNCTION;
 
-        if (provides.contains(name)) {
-          // Constructor or Enum
-          provides.remove(name);
-          if (left.getNext().getType() == Token.FUNCTION) {
-            JSDocInfo info = NodeUtil.getFunctionInfo(left.getNext());
-            if (info.isConstructor()) {
-              ClassDescriptor.Builder builder = ClassDescriptor.builder();
-              builder.setName(name);
-              builder.setDescription(info.getBlockDescription());
-
-              if (info.hasBaseType()) {
-                builder.setSuperClass(
-                    TypeExpression.builder().setType(info.getBaseType(), compiler).build());
-              }
-
-              classes.put(name, builder);
-            } else if (info.isInterface()) {
-              // TODO(bolinfest): Handle interface.
+          // Instance method
+          String[] parts = name.split("\\.prototype\\.");
+          String className = parts[0];
+          if (classes.containsKey(className)) {
+            String methodName = parts[1];
+            JSDocInfo info;
+            if (hasFunctionInfo) {
+              info = NodeUtil.getFunctionInfo(assigneeValue);
             } else {
-              // TODO(bolinfest): Process library.
-              // Note that this a funny type of library that contains either:
-              // (1) one function: goog.dispose()
-              // (2) one function with other functions as properties: goog.net.XmlHttp()
+              // If the value on the right is goog.abstractMethod, must get
+              // the JSDocInfo in a different manner.
+              info = n.getJSDocInfo();
             }
-          } else if (left.getNext().getType() == Token.OBJECTLIT) {
-            // TODO(bolinfest): Is likely an enum: verify and process.
-          }
-        } else if (name.contains(".prototype.")) {
-          Node assigneeValue = left.getNext();
-          // TODO(bolinfest): This heuristic is incomplete: in addition to
-          // goog.abstractMethod, other valid values include
-          // goog.partial(someFunc, someArg), goog.functions.TRUE, etc.
-          if (assigneeValue.getType() == Token.FUNCTION ||
-              (assigneeValue.getType() == Token.GETPROP &&
-              ("goog.abstractMethod".equals(assigneeValue.getQualifiedName()) ||
-              "goog.nullFunction".equals(assigneeValue.getQualifiedName())))) {
-            boolean hasFunctionInfo = assigneeValue.getType() == Token.FUNCTION;
-
-            // Instance method
-            String[] parts = name.split("\\.prototype\\.");
-            String className = parts[0];
-            if (classes.containsKey(className)) {
-              String methodName = parts[1];
-              JSDocInfo info;
-              if (hasFunctionInfo) {
-                info = NodeUtil.getFunctionInfo(assigneeValue);
-              } else {
-                // If the value on the right is goog.abstractMethod, must get
-                // the JSDocInfo in a different manner.
-                info = n.getJSDocInfo();
-              }
-              TypeExpression superClass = classes.get(className).getSuperClass();
-              MethodDescriptor method = createMethod(methodName, info, className, superClass);
-              // TODO(bolinfest): Fix special cases so method is never null.
-              if (method != null) {
-                classes.get(className).addInstanceMethod(method);
-              }
+            TypeExpression superClass = classes.get(className).getSuperClass();
+            MethodDescriptor method = createMethod(methodName, info, className, superClass);
+            // TODO(bolinfest): Fix special cases so method is never null.
+            if (method != null) {
+              classes.get(className).addInstanceMethod(method);
             }
           }
-        } else {
-          // This is likely a member of a library, such as goog.array.peek.
-          // Drop of the last property (peek) to see if what's left (goog.array)
-          // is a namespace declared using goog.provide().
-          int index = name.lastIndexOf('.');
-          if (index >= 0) {
-            String base = name.substring(0, index);
-            if (provides.contains(base) || libraries.containsKey(base)) {
-              LibraryDescriptor.Builder builder = libraries.get(base);
-              if (builder == null) {
-                builder = LibraryDescriptor.builder();
-                builder.setName(base);
-                libraries.put(base, builder);
-              }
-              if (left.getNext().getType() == Token.FUNCTION) {
-                JSDocInfo info = NodeUtil.getFunctionInfo(left.getNext());
-                String methodName = name.substring(index + 1);
-                MethodDescriptor method = createMethod(methodName, info);
-                builder.addMethod(method);
-              }
+        }
+      } else {
+        // This is likely a member of a library, such as goog.array.peek.
+        // Drop of the last property (peek) to see if what's left (goog.array)
+        // is a namespace declared using goog.provide().
+        int index = name.lastIndexOf('.');
+        if (index >= 0) {
+          String base = name.substring(0, index);
+          if (provides.contains(base) || libraries.containsKey(base)) {
+            LibraryDescriptor.Builder builder = libraries.get(base);
+            if (builder == null) {
+              builder = LibraryDescriptor.builder();
+              builder.setName(base);
+              libraries.put(base, builder);
+            }
+            if (left.getNext().getType() == Token.FUNCTION) {
+              JSDocInfo info = NodeUtil.getFunctionInfo(left.getNext());
+              String methodName = name.substring(index + 1);
+              MethodDescriptor method = createMethod(methodName, info);
+              builder.addMethod(method);
             }
           }
         }
