@@ -338,7 +338,8 @@
 
     <java jar="${build.dir}/plovr.jar"
           dir="${demo.dir}"
-          fork="true">
+          fork="true"
+          maxmemory="128m">
       <arg value="serve" />
       <arg value="${demo.dir}/demo-config.js" />
       <arg value="${testdata.dir}/modules/plovr-config.js" />
