@@ -52,18 +52,35 @@
 extends <a href="{$pathToBase}{$pathToSuper}">{$classDescriptor.superClass}</a>
 {/if}
 
-{if length($classDescriptor.instanceMethods) > 0}
+{call .methodTable}
+  {param title: 'Instance Method Summary' /}
+  {param methods: $classDescriptor.instanceMethods /} 
+{/call}
+
+{call .methodTable}
+  {param title: 'Static Method Summary' /}
+  {param methods: $classDescriptor.staticMethods /} 
+{/call}
+
+{/template}
+
+/**
+ * @param title
+ * @param methods
+ */
+{template .methodTable}
+{if length($methods) > 0}
 <table class="method-list">
   <tr>
-    <td colspan="2">Method Summary</td>
+    <td colspan="2"><strong>{$title}</strong></td>
   </tr>
-  {foreach $method in $classDescriptor.instanceMethods}
+  {foreach $method in $methods}
     {call .methodDoc data="$method" /}
   {/foreach}
 </table>
 {/if}
-
 {/template}
+
 
 /**
  * @param name

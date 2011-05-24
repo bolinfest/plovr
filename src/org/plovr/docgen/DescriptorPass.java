@@ -200,24 +200,44 @@ public class DescriptorPass implements CompilerPass {
         // This is likely a member of a library, such as goog.array.peek.
         // Drop off the last property (peek) to see if what's left (goog.array)
         // is a namespace declared using goog.provide().
+        // Note that it may also be a static member of a class.
         int index = name.lastIndexOf('.');
         if (index < 0) {
           return;
         }
 
         String base = name.substring(0, index);
-        if (provides.contains(base) || libraries.containsKey(base)) {
-          LibraryDescriptor.Builder builder = libraries.get(base);
-          if (builder == null) {
-            builder = LibraryDescriptor.builder();
-            builder.setName(base);
-            libraries.put(base, builder);
-          }
-          if (left.getNext().getType() == Token.FUNCTION) {
-            JSDocInfo info = NodeUtil.getFunctionInfo(left.getNext());
-            String methodName = name.substring(index + 1);
-            MethodDescriptor method = createMethod(methodName, info);
-            builder.addMethod(method);
+        if (classes.containsKey(base) ||
+            provides.contains(base) ||
+            libraries.containsKey(base)) {
+          boolean isStaticClassMember = classes.containsKey(base);
+          if (isStaticClassMember) {
+            ClassDescriptor.Builder builder = classes.get(base);
+            // Add the static method to the ClassDescriptor.
+            if (left.getNext().getType() == Token.FUNCTION) {
+              JSDocInfo info = NodeUtil.getFunctionInfo(left.getNext());
+              String methodName = name.substring(index + 1);
+              String className = base;
+              TypeExpression superClass = builder.getSuperClass();
+              MethodDescriptor method = createMethod(
+                  methodName, info, className, superClass);
+              builder.addStaticMethod(method);
+            }
+          } else {
+            // Get or create a LibraryDescriptor and add the function to the
+            // library.
+            LibraryDescriptor.Builder builder = libraries.get(base);
+            if (builder == null) {
+              builder = LibraryDescriptor.builder();
+              builder.setName(base);
+              libraries.put(base, builder);
+            }
+            if (left.getNext().getType() == Token.FUNCTION) {
+              JSDocInfo info = NodeUtil.getFunctionInfo(left.getNext());
+              String methodName = name.substring(index + 1);
+              MethodDescriptor method = createMethod(methodName, info);
+              builder.addMethod(method);
+            }
           }
         }
       }
