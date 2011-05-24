@@ -1,12 +1,8 @@
 #!/bin/bash
 
-# This assumes that plovr has already been compiled.
-
 set -e
 
 cd `hg root`
-
-mkdir -p build/jsdoc
 
 find closure/closure-library -name '*.js' | \
     xargs grep -h -o -e "goog.provide\(.*\);" | \
@@ -23,7 +19,3 @@ EOF
 )
 
 echo $CONFIG > build/jsdoc/config.js
-
-# First command is for *nix; second is for Windows/Cygwin
-# java -jar build/plovr.jar jsdoc build/jsdoc/config.js
-java -cp "src;build\\classes;build\\plovr.jar" org.plovr.cli.Main jsdoc build/jsdoc/config.js

@@ -9,9 +9,11 @@
   <property name="www.dir" value="${basedir}/www" />
   <property name="demo.dir" value="${www.dir}/demo" />
   <property name="lib.dir" value="${basedir}/lib" />
+  <property name="scripts.dir" value="${basedir}/scripts" />
   <property name="build.dir" value="${basedir}/build" />
   <property name="classes.dir" value="${build.dir}/classes" />
   <property name="build.dir.www" value="${build.dir}/www" />
+  <property name="build.dir.jsdoc" value="${build.dir}/jsdoc" />
   <property name="javadoc.dir" value="${build.dir.www}/javadoc" />
 
   <property name="closure.dir" value="${basedir}/closure" />
@@ -281,6 +283,34 @@
       <link href="http://closure-templates.googlecode.com/svn/trunk/javadoc-complete/" />
     </javadoc>
   </target>
+  
+  <!--
+  This runs plovr such that classfiles from build/classes are loaded before
+  those in plovr.jar. This way, when developing the documentation generation
+  logic, there is no need to rebuild plovr.jar as part of the build step.
+  plovr.jar is included in the classpath only to include resources and
+  classfiles from jars in the lib directory.
+  -->
+  <target name="generate-closure-library-jsdoc"
+          description="Generates HTML documentation for Closure Library">
+    <delete dir="${build.dir.jsdoc}" />
+    <mkdir dir="${build.dir.jsdoc}" />
+    <exec executable="bash">
+      <arg value="${scripts.dir}/generate-closure-library-jsdoc.sh" />
+    </exec>
+    <!-- This assumes that plovr has already been compiled. -->
+    <java classname="org.plovr.cli.Main"
+          fork="true"
+          maxmemory="512m">
+      <arg value="jsdoc" />
+      <arg line="${build.dir.jsdoc}/config.js" />
+      <classpath>
+        <pathelement path="${src.dir}" />
+        <pathelement path="${classes.dir}" />
+        <pathelement location="${build.dir}/plovr.jar" />
+      </classpath>
+    </java>
+  </target>
 
   <target name="serve-prod-documentation"
           description="run the soyweb server on plovr.com to serve the docs"
@@ -324,6 +354,7 @@
                    jar,
                    test,
                    generate-options-documentation,
+                   generate-closure-library-jsdoc,
                    javadoc"
           />
 </project>
