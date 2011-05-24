@@ -54,7 +54,7 @@ public class SoyWebCommand extends AbstractCommandRunner<SoyWebCommandOptions> {
         globals);
     Server server = new Server(config);
     server.run();
-    return 0;
+    return STATUS_NO_EXIT;
   }
 
   @Override
