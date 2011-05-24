@@ -24,4 +24,6 @@ EOF
 
 echo $CONFIG > build/jsdoc/config.js
 
-java -jar build/plovr.jar jsdoc build/jsdoc/config.js
+# First command is for *nix; second is for Windows/Cygwin
+# java -jar build/plovr.jar jsdoc build/jsdoc/config.js
+java -cp "src;build\\classes;build\\plovr.jar" org.plovr.cli.Main jsdoc build/jsdoc/config.js

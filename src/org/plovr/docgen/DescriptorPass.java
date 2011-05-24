@@ -137,11 +137,12 @@ public class DescriptorPass implements CompilerPass {
         } else if (name.contains(".prototype.")) {
           Node assigneeValue = left.getNext();
           // TODO(bolinfest): This heuristic is incomplete: in addition to
-          // goog.abstractMethod, other valid values include goog.nullFunction,
-          // goog.functions.TRUE, etc.
+          // goog.abstractMethod, other valid values include
+          // goog.partial(someFunc, someArg), goog.functions.TRUE, etc.
           if (assigneeValue.getType() == Token.FUNCTION ||
               (assigneeValue.getType() == Token.GETPROP &&
-              "goog.abstractMethod".equals(assigneeValue.getQualifiedName()))) {
+              ("goog.abstractMethod".equals(assigneeValue.getQualifiedName()) ||
+              "goog.nullFunction".equals(assigneeValue.getQualifiedName())))) {
             boolean hasFunctionInfo = assigneeValue.getType() == Token.FUNCTION;
 
             // Instance method
@@ -181,13 +182,27 @@ public class DescriptorPass implements CompilerPass {
         // If @override is present, copy the signature information from the
         // superclass. This is needed for methods such as setParentEventTarget()
         // in goog.ui.Component.
-        String superClassName = superClass.getDisplayName();
-        ClassDescriptor.Builder superBuilder = classes.get(superClassName);
-        MethodDescriptor superMethodDescriptor = superBuilder.
-            getInstanceMethodByName(methodName);
-        if (superMethodDescriptor == null) {
-          throw new RuntimeException(String.format(
-              "Method %s() does not exist in %s", methodName, superClassName));
+        MethodDescriptor superMethodDescriptor;
+        try {
+          superMethodDescriptor = getSuperMethodDescriptor(
+              className, methodName);
+        } catch (NullPointerException e) {
+          // TODO(bolinfest): Support interfaces.
+          logger.severe(String.format(
+              "Could not find inherited JSDoc for %s.prototype.%s(). " +
+              "May inherit from an interface, which is not supported yet. " +
+              "This method will not be included in the generated documentation.",
+              className,
+              methodName));
+          // TODO(bolinfest): Fix this misleading reporting. For example,
+          // goog.editor.Plugin declares a number of methods without anything
+          // on the right hand side:
+          //
+          // /** JSDoc appears here with method signature. */
+          // goog.editor.Plugin.prototype.execCommandInternal;
+          //
+          // Need to improve the heuristic to support this case.
+          return;
         }
 
         String description = Strings.nullToEmpty(info.getBlockDescription()).trim();
@@ -235,6 +250,25 @@ public class DescriptorPass implements CompilerPass {
       }
 
       classes.get(className).addInstanceMethod(builder.build());
+    }
+
+    /**
+     * Finds the nearest superclass MethodDescriptor by the specified name for
+     * the specified class.
+     */
+    private MethodDescriptor getSuperMethodDescriptor(
+        String className, String methodName) {
+      TypeExpression superClass = classes.get(className).getSuperClass();
+      Preconditions.checkNotNull(superClass, "No superclass for " + className);
+      String superClassName = superClass.getDisplayName();
+      ClassDescriptor.Builder superBuilder = classes.get(superClassName);
+      MethodDescriptor superMethodDescriptor = superBuilder.
+          getInstanceMethodByName(methodName);
+      if (superMethodDescriptor != null) {
+        return superMethodDescriptor;
+      } else {
+        return getSuperMethodDescriptor(superClassName, methodName);
+      }
     }
   }
 }

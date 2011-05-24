@@ -35,7 +35,7 @@ public class JsDocCommand extends AbstractCommandRunner<JsDocCommandOptions> {
   int runCommandWithOptions(JsDocCommandOptions options) throws IOException {
     // Even though logging would get printed to stderr and not stdout, it is
     // still distracting and feels wrong. May revisit this at some point.
-    Logger.getLogger("org.plovr").setLevel(Level.OFF);
+    Logger.getLogger("org.plovr").setLevel(Level.WARNING);
 
     List<String> arguments = options.getArguments();
     if (arguments.size() != 1) {
