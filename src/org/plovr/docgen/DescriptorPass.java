@@ -167,6 +167,7 @@ public class DescriptorPass implements CompilerPass {
     private void addMethod(String className, String methodName, JSDocInfo info) {
       MethodDescriptor.Builder builder = MethodDescriptor.builder();
       builder.setName(methodName);
+      TypeExpression superClass = classes.get(className).getSuperClass();
 
       if (info == null) {
         // TODO(bolinfest): Try to extract the parameters from the AST.
@@ -176,11 +177,10 @@ public class DescriptorPass implements CompilerPass {
             className,
             methodName));
         builder.setAccessLevel(AccessLevel.PUBLIC);
-      } else if (info.isOverride()) {
+      } else if (info.isOverride() && superClass != null) {
         // If @override is present, copy the signature information from the
         // superclass. This is needed for methods such as setParentEventTarget()
         // in goog.ui.Component.
-        TypeExpression superClass = classes.get(className).getSuperClass();
         String superClassName = superClass.getDisplayName();
         ClassDescriptor.Builder superBuilder = classes.get(superClassName);
         MethodDescriptor superMethodDescriptor = superBuilder.
@@ -205,6 +205,10 @@ public class DescriptorPass implements CompilerPass {
         for (ParamDescriptor param : superMethodDescriptor.getParams()) {
           builder.addParam(param);
         }
+      } else if (info.isOverride() && superClass == null) {
+        // This may be a built-in method, such as toString().
+        // TODO(bolinfest): Grab the information from the externs file.
+        builder.setAccessLevel(AccessLevel.PUBLIC);
       } else {
         builder.setDescription(info.getBlockDescription());
         AccessLevel accessLevel = AccessLevel.getLevelForInfo(
