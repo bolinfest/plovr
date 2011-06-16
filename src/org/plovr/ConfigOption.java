@@ -105,6 +105,13 @@ public enum ConfigOption {
     }
   }),
 
+  EXCLUDE_CLOSURE_LIBRARY("experimental-exclude-closure-library", new ConfigUpdater() {
+    @Override
+    public void apply(boolean excludeClosureLibrary, Config.Builder builder) {
+      builder.setExcludeClosureLibrary(excludeClosureLibrary);
+    }
+  }),
+
   COMPILATION_MODE("mode", new ConfigUpdater() {
     @Override
     public void apply(String mode, Config.Builder builder) {

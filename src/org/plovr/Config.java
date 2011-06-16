@@ -607,6 +607,8 @@ public final class Config implements Comparable<Config> {
 
     private String pathToClosureLibrary = null;
 
+    private boolean excludeClosureLibrary = false;
+
     private final ImmutableList.Builder<String> paths = ImmutableList.builder();
 
     /** List of (file, path) pairs for inputs */
@@ -775,6 +777,10 @@ public final class Config implements Comparable<Config> {
 
     public void setPathToClosureLibrary(String pathToClosureLibrary) {
       this.pathToClosureLibrary = pathToClosureLibrary;
+    }
+
+    public void setExcludeClosureLibrary(boolean excludeClosureLibrary) {
+      this.excludeClosureLibrary = excludeClosureLibrary;
     }
 
     public void setConfigFile(File configFile) {
@@ -947,13 +953,15 @@ public final class Config implements Comparable<Config> {
           }
         }
 
-        manifest = new Manifest(closureLibraryDirectory,
-          Lists.transform(paths.build(), STRING_TO_FILE),
-          createJsInputs(soyFunctionNames),
-          externs,
-          builtInExterns != null ? builtInExterns.build() : null,
-          soyFunctionNames,
-          customExternsOnly);
+        manifest = new Manifest(
+            excludeClosureLibrary,
+            closureLibraryDirectory,
+            Lists.transform(paths.build(), STRING_TO_FILE),
+            createJsInputs(soyFunctionNames),
+            externs,
+            builtInExterns != null ? builtInExterns.build() : null,
+            soyFunctionNames,
+            customExternsOnly);
       } else {
         manifest = this.manifest;
       }

@@ -43,6 +43,7 @@ public final class Manifest {
     }
   };
 
+  private final boolean excludeClosureLibrary;
   private final File closureLibraryDirectory;
   private final Set<File> dependencies;
   private final List<JsInput> requiredInputs;
@@ -70,6 +71,7 @@ public final class Manifest {
    * @param externs files (or directories) that contain JS externs
    */
   Manifest(
+      boolean excludeClosureLibrary,
       @Nullable File closureLibraryDirectory,
       List<File> dependencies,
       List<JsInput> requiredInputs,
@@ -86,6 +88,7 @@ public final class Manifest {
 
     // TODO(bolinfest): Monitor directories for changes and have the JsInput
     // mark itself dirty when there is a change.
+    this.excludeClosureLibrary = excludeClosureLibrary;
     this.closureLibraryDirectory = closureLibraryDirectory;
     this.dependencies = ImmutableSet.copyOf(dependencies);
     this.requiredInputs = ImmutableList.copyOf(requiredInputs);
@@ -155,7 +158,9 @@ public final class Manifest {
     Map<String, JsInput> provideToSource = getProvideToSource(allDependencies);
 
     LinkedHashSet<JsInput> compilerInputs = new LinkedHashSet<JsInput>();
-    compilerInputs.add(getBaseJs());
+    if (!this.excludeClosureLibrary) {
+      compilerInputs.add(getBaseJs());
+    }
     for (JsInput requiredInput : requiredInputs) {
       buildDependencies(provideToSource, compilerInputs, requiredInput);
     }

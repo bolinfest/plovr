@@ -142,6 +142,32 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     When specified, it should identify the root directory that contains{sp}
     <code>base.js</code> for that instance of the library, so a sample value
     might be <code>"../closure-library/closure/goog/"</code>.
+  {case 'experimental-exclude-closure-library'}
+    This is an experimental option to address{sp}
+    <a href="http://code.google.com/p/plovr/issues/detail?id=40">Issue 40</a>.
+    When set to <code>true</code>, it will exclude Closure Library's{sp}
+    <code>base.js</code> from the compiled output. This is primarily for
+    developers using a library other than Closure, such as jQuery.
+    Because neither <code>goog.require()</code> nor <code>goog.provide()</code>
+    {sp}will be defined without <code>base.js</code>, all inputs to compilation
+    will have to be listed explicitly, in order, as part of the{sp}
+    <code>inputs</code> option in the config.
+    <p>
+    It is possible (but not guaranteed) that <code>goog.provide()</code> and{sp}
+    <code>goog.require()</code> will be processed correctly by the Compiler in
+    either <code>SIMPLE</code> or <code>ADVANCED</code> mode, even if{sp}
+    <code>base.js</code> from the Closure Library is not present.
+    Therefore, it may be possible to use those functions as "directives" that
+    will be processed by the Compiler to express dependencies (which may be
+    useful if you have complex dependencies that transitively depend on jQuery
+    but not the Closure Library, for example).
+    However, using <code>goog.provide()</code> and <code>goog.require()</code> in
+    <code>RAW</code> or <code>WHITESPACE</code> mode will almost definitely
+    not work without <code>base.js</code>.
+    <p>
+    Because this is an experimental option, it may be removed at some point with
+    a more generic solution for excluding the Closure Library when using another
+    library, such as jQuery or Dojo.
   {case 'mode'}
     Compilation mode, which must be one of <code>"RAW"</code>,{sp}
     <code>"WHITESPACE"</code>, <code>"SIMPLE"</code>, or <code>"ADVANCED"</code>.
