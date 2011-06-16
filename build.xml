@@ -319,7 +319,9 @@
     <copy todir="${build.dir.www}">
       <fileset dir="${www.dir}" includes="**/*" />
     </copy>
-    <java jar="${build.dir}/plovr.jar" fork="true">
+    <java jar="${build.dir}/plovr.jar"
+          fork="true"
+          maxmemory="128m">
       <arg value="soyweb" />
       <arg line="--dir ${build.dir.www}" />
       <arg line="--static" />
