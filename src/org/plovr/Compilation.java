@@ -173,10 +173,21 @@ public final class Compilation {
    * be followed by a call to compiler.getSourceMap().appendTo(writer, module),
    * though compiler.getSourceMap().reset() should be called immediately after
    * when that is the case.
+   *
+   * This method is sychronized in order to fix
+   * http://code.google.com/p/plovr/issues/detail?id=31.
+   * The problem is that if two modules are requested at the same time,
+   * it is often the case that compiler.toSource(module) is executing for the
+   * second module while the source map is still being modified for the first
+   * module, causing an IllegalStateException. Empirically, synchronizing this
+   * method appears to fix things, though a more provably correct (and minimal)
+   * solution should be sought.
    */
-  private String getCodeForModule(String moduleName, boolean isDebugMode,
-      Function<String, String> moduleNameToUri, boolean resetSourceMap) {
-
+  private synchronized String getCodeForModule(
+      String moduleName,
+      boolean isDebugMode,
+      Function<String, String> moduleNameToUri,
+      boolean resetSourceMap) {
     Preconditions.checkState(hasResult(), "Code has not been compiled yet");
     Preconditions.checkState(modules != null,
         "This compilation does not use modules");
