@@ -219,9 +219,6 @@ public final class ModuleConfig {
   Map<String, List<JsInput>> partitionInputsIntoModules(Manifest manifest)
       throws CompilationException {
     List<JsInput> inputsInOrder = manifest.getInputsInCompilationOrder();
-    JsInput baseJs = inputsInOrder.get(0);
-    Preconditions.checkArgument(baseJs.equals(manifest.getBaseJs()),
-        "base.js should be the first input");
 
     // Remove the first item, base.js, from the list.
     inputsInOrder = inputsInOrder.subList(1, inputsInOrder.size());
@@ -261,8 +258,13 @@ public final class ModuleConfig {
     }
 
     // Because it is a special case, add base.js as the first input in the root
-    // module.
-    moduleToInputs.get(rootModule).add(0, baseJs);
+    // module unless the Closure Library is excluded.
+    if (!manifest.isExcludeClosureLibrary()) {
+      JsInput baseJs = inputsInOrder.get(0);
+      Preconditions.checkArgument(baseJs.equals(manifest.getBaseJs()),
+          "base.js should be the first input");
+      moduleToInputs.get(rootModule).add(0, baseJs);
+    }
 
     return moduleToInputs;
   }

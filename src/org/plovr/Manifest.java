@@ -213,6 +213,10 @@ public final class Manifest {
     return provideToSource;
   }
 
+  boolean isExcludeClosureLibrary() {
+    return this.excludeClosureLibrary;
+  }
+
   JsInput getBaseJs() {
     if (closureLibraryDirectory == null) {
       return ResourceReader.getBaseJs();
