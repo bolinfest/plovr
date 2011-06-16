@@ -60,6 +60,27 @@ public final class Manifest {
 
   private final List<String> soyPluginModuleNames;
 
+  // If excludeClosureLibrary ends up being a permanent option, then
+  // eliminate this constructor.
+  Manifest(
+      @Nullable File closureLibraryDirectory,
+      List<File> dependencies,
+      List<JsInput> requiredInputs,
+      @Nullable List<File> externs,
+      @Nullable List<JsInput> builtInExterns,
+      List<String> soyPluginModuleNames,
+      boolean customExternsOnly) {
+    this(
+        false /* boolean excludeClosureLibrary */,
+        closureLibraryDirectory,
+        dependencies,
+        requiredInputs,
+        externs,
+        builtInExterns,
+        soyPluginModuleNames,
+        customExternsOnly);
+  }
+
   /**
    *
    * @param closureLibraryDirectory Directory that is the root of the Closure
