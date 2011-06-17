@@ -219,9 +219,16 @@ public final class ModuleConfig {
   Map<String, List<JsInput>> partitionInputsIntoModules(Manifest manifest)
       throws CompilationException {
     List<JsInput> inputsInOrder = manifest.getInputsInCompilationOrder();
+    JsInput baseJs = null;
 
-    // Remove the first item, base.js, from the list.
-    inputsInOrder = inputsInOrder.subList(1, inputsInOrder.size());
+    // When using the Closure Library, base.js is the first item on the list and
+    // should be removed.
+    if (manifest.isUseClosureLibrary()) {
+      baseJs = inputsInOrder.get(0);
+      Preconditions.checkArgument(baseJs.equals(manifest.getBaseJs()),
+          "base.js should be the first input");
+      inputsInOrder = inputsInOrder.subList(1, inputsInOrder.size());
+    }
 
     // Step 1: Build the set of transitive dependencies for each module.
     Map<String, LinkedHashSet<JsInput>> moduleToTransitiveDependencies = Maps
@@ -259,10 +266,8 @@ public final class ModuleConfig {
 
     // Because it is a special case, add base.js as the first input in the root
     // module unless the Closure Library is excluded.
-    if (!manifest.isExcludeClosureLibrary()) {
-      JsInput baseJs = inputsInOrder.get(0);
-      Preconditions.checkArgument(baseJs.equals(manifest.getBaseJs()),
-          "base.js should be the first input");
+    if (manifest.isUseClosureLibrary()) {
+      Preconditions.checkNotNull(baseJs);
       moduleToInputs.get(rootModule).add(0, baseJs);
     }
 
