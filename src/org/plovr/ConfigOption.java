@@ -148,6 +148,15 @@ public enum ConfigOption {
     }
   }),
 
+  INHERITS("inherits", new ConfigUpdater() {
+    @Override
+    public void apply(String mode, Config.Builder builder) {
+      // Do nothing: this option is handled in a special way in ConfigParser.
+      // This entry exists so that it is included in the generated options
+      // documentation.
+    }
+  }),
+
   DEBUG("debug", new ConfigUpdater() {
     @Override
     public void apply(boolean debug, Config.Builder builder) {

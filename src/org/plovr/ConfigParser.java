@@ -30,14 +30,34 @@ public final class ConfigParser {
 
     Preconditions.checkNotNull(root);
     Preconditions.checkArgument(root.isJsonObject());
+    JsonObject map = root.getAsJsonObject();
 
+    Config.Builder builder;
+    // If this config file inherits from another config file, then create a
+    // config builder based on the contents of the parent first.
     File parentDirectory = file.getAbsoluteFile().getParentFile();
-    Config.Builder builder = Config.builder(parentDirectory, file,
-        rootConfigFileContent);
+    String inheritsOption = ConfigOption.INHERITS.getName();
+    if (map.has(inheritsOption)) {
+      JsonElement el = map.get(inheritsOption);
+      String pathToInheritedConfig = GsonUtil.stringOrNull(el);
+      if (pathToInheritedConfig != null) {
+        // Resolve the path and create a config builder from that file.
+        String pathToParentConfigFile = ConfigOption.maybeResolvePath(
+            pathToInheritedConfig, parentDirectory);
+        builder = createBuilderFromFile(new File(pathToParentConfigFile));
+      } else {
+        throw new RuntimeException(String.format(
+            "Value of %s in %s must be a string but was %s",
+            inheritsOption,
+            file.getAbsolutePath(),
+            el.toString()));
+      }
+    } else {
+      builder = Config.builder(parentDirectory, file, rootConfigFileContent);
+    }
 
     // Keep track of the keys in the options object so that plovr can warn
     // about unused values in the config file.
-    JsonObject map = root.getAsJsonObject();
     Set<String> options = Sets.newHashSet();
     for (Map.Entry<String, JsonElement> entry : map.entrySet()) {
       options.add(entry.getKey());
@@ -46,6 +66,13 @@ public final class ConfigParser {
     // Loop over the options in enum value order because it is helpful if some
     // option values are guaranteed to be processed before others.
     for (ConfigOption option : ConfigOption.values()) {
+      // The inherits option should have already been processed,
+      // if it exists.
+      if (option == ConfigOption.INHERITS) {
+        options.remove(ConfigOption.INHERITS.getName());
+        continue;
+      }
+
       String optionName = option.getName();
       if (!map.has(option.getName())) continue;
 

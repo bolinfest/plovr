@@ -176,6 +176,52 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     Warning level, which must be one of <code>"QUIET"</code>,{sp}
     <code>"DEFAULT"</code>, or <code>"VERBOSE"</code>.
     The default value is <code>"DEFAULT"</code>.
+  {case 'inherits'}
+    Config file from which to inherit. When compiling multiple JavaScript files
+    for the same project, you are likely to have common settings across your
+    plovr config files. For this reason, it is possible for one config file to
+    "inherit" from another config file. For example, you might have a "root"
+    config file that has settings that are universal to all of your config files:
+<pre>{literal}
+<b>// root-config.js</b>
+{
+  "paths": "js",
+  "mode": "ADVANCED",
+  "level": "VERBOSE",
+  "checks": {
+    "deprecated": "ERROR",
+    "nonStandardJsDocs": "ERROR"
+  }
+}{/literal}
+</pre>
+    Then you can use <code>inherits</code> option in the config files for your
+    specific build targets such that they "inherit" the settings from the root
+    config file, eliminating the need to copy and paste the common options:
+<pre>{literal}
+<b>// app-config.js</b>
+{
+  "id": "app",
+  "inherits": "root-config.js",
+  "inputs": "js/app/main.js"
+}
+
+<b>// api-config.js</b>
+{
+  "id": "api",
+  "inherits": "root-config.js",
+  "inputs": "js/api/exports.js"
+}{/literal}
+</pre>
+    Similarly, you may want to have a production and development configs that
+    differ only in their values for the <code>mode</code> and <code>level</code> options.
+    <p>
+    When an option is overridden by a child config file, the value on the right
+    in the child config file outright replaces any value from a parent config
+    file. Therefore, if you have a child config file that wants to add one value
+    to the <code>checks</code> option, the child config file must list all of
+    the parent checks in addition to the check it wants to add. Again, this is
+    because config file inheritance options <em>replace</em> parent values: they are not
+    additive.
   {case 'debug'}
     Equivalent to the command-line <code>--debug</code> flag for the Closure Compiler.
     Defaults to <code>false</code>.
