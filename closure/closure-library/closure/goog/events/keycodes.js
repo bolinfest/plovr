@@ -92,7 +92,8 @@ goog.events.KeyCodes = {
   X: 88,
   Y: 89,
   Z: 90,
-  META: 91,
+  META: 91, // WIN_KEY_LEFT
+  WIN_KEY_RIGHT: 92,
   CONTEXT_MENU: 93,
   NUM_ZERO: 96,
   NUM_ONE: 97,
@@ -186,6 +187,7 @@ goog.events.KeyCodes.isTextModifyingKeyEvent = function(e) {
     case goog.events.KeyCodes.SHIFT:
     case goog.events.KeyCodes.UP:
     case goog.events.KeyCodes.WIN_KEY:
+    case goog.events.KeyCodes.WIN_KEY_RIGHT:
       return false;
     default:
       return true;
@@ -253,7 +255,8 @@ goog.events.KeyCodes.firesKeyPressEvent = function(keyCode, opt_heldKeyCode,
 
   switch (keyCode) {
     case goog.events.KeyCodes.ENTER:
-      return true;
+      // IE9 does not fire KEYPRESS on ENTER.
+      return !(goog.userAgent.IE && goog.userAgent.isDocumentMode(9));
     case goog.events.KeyCodes.ESC:
       return !goog.userAgent.WEBKIT;
   }

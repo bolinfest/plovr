@@ -103,7 +103,7 @@ goog.ui.Container.Orientation = {
 
 
 /**
- * Allows an alternative element to be set to recieve key events, otherwise
+ * Allows an alternative element to be set to receive key events, otherwise
  * defers to the renderer's element choice.
  * @type {Element|undefined}
  * @private
@@ -364,7 +364,6 @@ goog.ui.Container.prototype.enterDocument = function() {
     }
   }, this);
 
-  // Detect right-to-left direction.
   var elem = this.getElement();
 
   // Call the renderer's initializeDom method to initialize the container's DOM.
@@ -456,6 +455,7 @@ goog.ui.Container.prototype.disposeInternal = function() {
     this.keyHandler_ = null;
   }
 
+  this.keyEventTarget_ = null;
   this.childElementIdMap_ = null;
   this.openItem_ = null;
   this.renderer_ = null;

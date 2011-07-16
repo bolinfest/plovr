@@ -594,7 +594,7 @@ goog.string.unescapeEntities = function(str) {
  */
 goog.string.unescapeEntitiesUsingDom_ = function(str) {
   var seen = {'&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"'};
-  var div = goog.global['document']['createElement']('div');
+  var div = document.createElement('div');
   // Match as many valid entity characters as possible. If the actual entity
   // happens to be shorter, it will still work as innerHTML will return the
   // trailing characters unchanged. Since the entity characters do not include
@@ -616,8 +616,11 @@ goog.string.unescapeEntitiesUsingDom_ = function(str) {
     }
     // Fall back to innerHTML otherwise.
     if (!value) {
-      div['innerHTML'] = s;
-      value = div['firstChild']['nodeValue'];
+      // Append a non-entity character to avoid a bug in Webkit that parses
+      // an invalid entity at the end of innerHTML text as the empty string.
+      div.innerHTML = s + ' ';
+      // Then remove the trailing character from the result.
+      value = div.firstChild.nodeValue.slice(0, -1);
     }
     // Cache and return.
     return seen[s] = value;
@@ -661,7 +664,7 @@ goog.string.unescapePureXmlEntities_ = function(str) {
  * Regular expression that matches an HTML entity.
  * See also HTML5: Tokenization / Tokenizing character references.
  * @private
- * @type {RegExp}
+ * @type {!RegExp}
  */
 goog.string.HTML_ENTITY_PATTERN_ = /&([^;\s<&]+);?/g;
 
@@ -750,7 +753,7 @@ goog.string.truncateMiddle = function(str, chars,
     str = goog.string.unescapeEntities(str);
   }
 
-  if (opt_trailingChars) {
+  if (opt_trailingChars && str.length > chars) {
     if (opt_trailingChars > chars) {
       opt_trailingChars = chars;
     }

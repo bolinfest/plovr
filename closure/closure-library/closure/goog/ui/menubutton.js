@@ -39,6 +39,8 @@ goog.require('goog.ui.ControlContent');
 goog.require('goog.ui.Menu');
 goog.require('goog.ui.MenuButtonRenderer');
 goog.require('goog.ui.registry');
+goog.require('goog.userAgent');
+goog.require('goog.userAgent.product');
 
 
 
@@ -67,6 +69,16 @@ goog.ui.MenuButton = function(content, opt_menu, opt_renderer, opt_domHelper) {
     this.setMenu(opt_menu);
   }
   this.timer_ = new goog.Timer(500);  // 0.5 sec
+
+  // Phones running iOS prior to version 4.2.
+  if ((goog.userAgent.product.IPHONE || goog.userAgent.product.IPAD) &&
+      // Check the webkit version against the version for iOS 4.2.1.
+      !goog.userAgent.isVersion('533.17.9')) {
+    // @bug 4322060 This is required so that the menu works correctly on
+    // iOS prior to version 4.2. Otherwise, the blur action closes the menu
+    // before the menu button click can be processed.
+    this.setFocusablePopupMenu(true);
+  }
 };
 goog.inherits(goog.ui.MenuButton, goog.ui.Button);
 
@@ -669,7 +681,12 @@ goog.ui.MenuButton.prototype.setOpen = function(open, opt_e) {
       }
     }
     this.menu_.setVisible(open, false, opt_e);
-    this.attachPopupListeners_(open);
+    // In Pivot Tables the menu button somehow gets disposed of during the
+    // setVisible call, causing attachPopupListeners_ to fail.
+    // TODO(user): Debug what happens.
+    if (!this.isDisposed()) {
+      this.attachPopupListeners_(open);
+    }
   }
 };
 

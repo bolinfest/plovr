@@ -174,6 +174,15 @@ goog.testing.fs.Entry.prototype.clone = goog.abstractMethod;
 
 
 /**
+ * @see {goog.fs.Entry#toUrl}
+ * @return {string}
+ */
+goog.testing.fs.Entry.prototype.toUrl = function(opt_mimetype) {
+  return 'fakefilesystem:' + this.getFullPath();
+};
+
+
+/**
  * @see {goog.fs.Entry#remove}
  * @return {!goog.async.Deferred}
  */

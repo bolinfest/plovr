@@ -20,7 +20,6 @@
  */
 
 goog.provide('goog.net.xpc.CrossPageChannel');
-goog.provide('goog.net.xpc.CrossPageChannel.Role');
 
 goog.require('goog.Disposable');
 goog.require('goog.Uri');
@@ -29,6 +28,7 @@ goog.require('goog.events');
 goog.require('goog.json');
 goog.require('goog.messaging.AbstractChannel');
 goog.require('goog.net.xpc');
+goog.require('goog.net.xpc.CrossPageChannelRole');
 goog.require('goog.net.xpc.FrameElementMethodTransport');
 goog.require('goog.net.xpc.IframePollingTransport');
 goog.require('goog.net.xpc.IframeRelayTransport');
@@ -111,7 +111,6 @@ goog.net.xpc.CrossPageChannel.TRANSPORT_SERVICE_ESCAPE_RE_ =
     new RegExp('^%*' + goog.net.xpc.TRANSPORT_SERVICE_ + '$');
 
 
-
 /**
  * Regexp for unescaping service names.
  * @type {RegExp}
@@ -119,6 +118,7 @@ goog.net.xpc.CrossPageChannel.TRANSPORT_SERVICE_ESCAPE_RE_ =
  */
 goog.net.xpc.CrossPageChannel.TRANSPORT_SERVICE_UNESCAPE_RE_ =
     new RegExp('^%+' + goog.net.xpc.TRANSPORT_SERVICE_ + '$');
+
 
 /**
  * The transport.
@@ -339,8 +339,7 @@ goog.net.xpc.CrossPageChannel.prototype.createPeerIframe = function(
   if (opt_addCfgParam !== false) {
     peerUri.setParameterValue('xpc',
                               goog.json.serialize(
-                                  this.getPeerConfiguration())
-                              );
+                                  this.getPeerConfiguration()));
   }
 
   if (goog.userAgent.GECKO || goog.userAgent.WEBKIT) {
@@ -440,6 +439,7 @@ goog.net.xpc.CrossPageChannel.prototype.close = function() {
   this.state_ = goog.net.xpc.ChannelStates.CLOSED;
   this.transport_.dispose();
   this.transport_ = null;
+  this.connectCb_ = null;
   goog.net.xpc.logger.info('Channel "' + this.name + '" closed');
 };
 
@@ -478,7 +478,13 @@ goog.net.xpc.CrossPageChannel.prototype.send = function(serviceName, payload) {
   // NOTE(user): This check is not reliable in IE, where a document in an
   // iframe does not get unloaded when removing the iframe element from the DOM.
   // TODO(user): Find something that works in IE as well.
-  if (this.peerWindowObject_.closed) {
+  // NOTE(user): "!this.peerWindowObject_.closed" evaluates to 'false' in IE9
+  // sometimes even though typeof(this.peerWindowObject_.closed) is boolean and
+  // this.peerWindowObject_.closed evaluates to 'false'. Casting it to a Boolean
+  // results in sane evaluation. When this happens, it's in the inner iframe
+  // when querying its parent's 'closed' status. Note that this is a different
+  // case than mibuerge@'s note above.
+  if (Boolean(this.peerWindowObject_.closed)) {
     goog.net.xpc.logger.severe('Peer has disappeared.');
     this.close();
     return;
@@ -569,23 +575,13 @@ goog.net.xpc.CrossPageChannel.prototype.unescapeServiceName_ = function(name) {
 
 
 /**
- * The role of the peer.
- * @enum {number}
- */
-goog.net.xpc.CrossPageChannel.Role = {
-  OUTER: 0,
-  INNER: 1
-};
-
-
-/**
  * Returns the role of this channel (either inner or outer).
  * @return {number} The role of this channel.
  */
 goog.net.xpc.CrossPageChannel.prototype.getRole = function() {
   return window.parent == this.peerWindowObject_ ?
-      goog.net.xpc.CrossPageChannel.Role.INNER :
-      goog.net.xpc.CrossPageChannel.Role.OUTER;
+      goog.net.xpc.CrossPageChannelRole.INNER :
+      goog.net.xpc.CrossPageChannelRole.OUTER;
 };
 
 
@@ -607,9 +603,7 @@ goog.net.xpc.CrossPageChannel.prototype.isMessageOriginAcceptable_ = function(
 };
 
 
-/**
- * Disposes of the channel.
- */
+/** @inheritDoc */
 goog.net.xpc.CrossPageChannel.prototype.disposeInternal = function() {
   goog.base(this, 'disposeInternal');
 

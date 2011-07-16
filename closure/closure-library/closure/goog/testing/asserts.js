@@ -94,7 +94,7 @@ function _trueTypeOf(something) {
         }
         break;
     }
-  } catch(e) {
+  } catch (e) {
 
   } finally {
     result = result.substr(0, 1).toUpperCase() + result.substr(1);
@@ -467,6 +467,10 @@ goog.testing.asserts.findDifferences = function(expected, actual) {
     seen2.pop();
   }
 
+  /**
+   * @suppress {missingProperties} The map_ property is unknown to the compiler
+   *     unless goog.structs.Map is loaded.
+   */
   function innerAssert_(var1, var2, path) {
     if (var1 === var2) {
       return;
@@ -591,9 +595,12 @@ goog.testing.asserts.findDifferences = function(expected, actual) {
  *
  * See asserts_test.html for more interesting edge cases.
  *
- * @param {*} a
- * @param {*} b
- * @param {*=} opt_c
+ * The first comparison object provided is the expected value, the second is
+ * the actual.
+ *
+ * @param {*} a Assertion message or comparison object.
+ * @param {*} b Comparison object.
+ * @param {*=} opt_c Comparison object, if an assertion message was provided.
  */
 function assertObjectEquals(a, b, opt_c) {
   _validateArguments(2, arguments);
@@ -603,6 +610,27 @@ function assertObjectEquals(a, b, opt_c) {
   var differences = goog.testing.asserts.findDifferences(v1, v2);
 
   _assert(failureMessage, !differences, differences);
+}
+
+
+/**
+ * Compares two arbitrary objects for non-equalness.
+ *
+ * All the same caveats as for assertObjectEquals apply here:
+ * Undefined values may be confused for missing values, or vice versa.
+ *
+ * @param {*} a Assertion message or comparison object.
+ * @param {*} b Comparison object.
+ * @param {*=} opt_c Comparison object, if an assertion message was provided.
+ */
+function assertObjectNotEquals(a, b, opt_c) {
+  _validateArguments(2, arguments);
+  var v1 = nonCommentArg(1, 2, arguments);
+  var v2 = nonCommentArg(2, 2, arguments);
+  var failureMessage = commentArg(2, arguments) ? commentArg(2, arguments) : '';
+  var differences = goog.testing.asserts.findDifferences(v1, v2);
+
+  _assert(failureMessage, differences, 'Objects should not be equal');
 }
 
 
@@ -657,13 +685,14 @@ function assertElementsEquals(a, b, c) {
   }
 }
 
+
 /**
  * Compares two objects that can be accessed like an array and assert that
  * each element is roughly equal.
  * @param {string|Object} a Failure message (4 arguments)
  *     or object #1 (3 arguments).
  * @param {Object} b Object #1 (3 arguments) or object #2 (4 arguments).
- * @param {Object} c Object #2 (4 arguments) or tolerance (3 arguments)
+ * @param {Object} c Object #2 (4 arguments) or tolerance (3 arguments).
  * @param {number} d tolerance (4 arguments).
  */
 function assertElementsRoughlyEqual(a, b, c, d) {
@@ -838,9 +867,12 @@ function assertRoughlyEquals(a, b, c, opt_d) {
 
 
 /**
- * @param {*} a
- * @param {*} b
- * @param {*=} opt_c
+ * Checks if the given element is the member of the given container.
+ * @param {*} a Failure message (3 arguments) or the contained element
+ *     (2 arguments).
+ * @param {*} b The contained element (3 arguments) or the container
+ *     (2 arguments).
+ * @param {*=} opt_c The container.
  */
 function assertContains(a, b, opt_c) {
   _validateArguments(2, arguments);
@@ -853,9 +885,12 @@ function assertContains(a, b, opt_c) {
 
 
 /**
- * @param {*} a
- * @param {*} b
- * @param {*=} opt_c
+ * Checks if the given element is not the member of the given container.
+ * @param {*} a Failure message (3 arguments) or the contained element
+ *     (2 arguments).
+ * @param {*} b The contained element (3 arguments) or the container
+ *     (2 arguments).
+ * @param {*=} opt_c The container.
  */
 function assertNotContains(a, b, opt_c) {
   _validateArguments(2, arguments);
@@ -965,6 +1000,7 @@ goog.testing.asserts.raiseException_ = function(comment, opt_message) {
  * name is an array index.
  * @param {string} prop
  * @return {boolean}
+ * @private
  */
 goog.testing.asserts.isArrayIndexProp_ = function(prop) {
   return (prop | 0) == prop;
@@ -1013,6 +1049,7 @@ goog.exportSymbol('assertNonEmptyString', assertNonEmptyString);
 goog.exportSymbol('assertNaN', assertNaN);
 goog.exportSymbol('assertNotNaN', assertNotNaN);
 goog.exportSymbol('assertObjectEquals', assertObjectEquals);
+goog.exportSymbol('assertObjectNotEquals', assertObjectNotEquals);
 goog.exportSymbol('assertArrayEquals', assertArrayEquals);
 goog.exportSymbol('assertElementsEquals', assertElementsEquals);
 goog.exportSymbol('assertSameElements', assertSameElements);

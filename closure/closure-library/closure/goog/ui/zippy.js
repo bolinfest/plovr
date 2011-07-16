@@ -22,6 +22,7 @@ goog.provide('goog.ui.Zippy');
 goog.provide('goog.ui.ZippyEvent');
 
 goog.require('goog.dom');
+goog.require('goog.dom.a11y');
 goog.require('goog.dom.classes');
 goog.require('goog.events');
 goog.require('goog.events.Event');
@@ -130,9 +131,7 @@ goog.ui.Zippy.Events = {
 };
 
 
-/**
- * Destroys widget and removes all event listeners.
- */
+/** @inheritDoc */
 goog.ui.Zippy.prototype.disposeInternal = function() {
   if (this.elHeader_) {
     goog.events.removeAll(this.elHeader_);
@@ -198,6 +197,10 @@ goog.ui.Zippy.prototype.setExpanded = function(expanded) {
   } else {
     // Update header image, if any.
     this.updateHeaderClassName(expanded);
+    if (this.elHeader_) {
+      goog.dom.a11y.setState(
+          this.elHeader_, goog.dom.a11y.State.EXPANDED, expanded);
+    }
   }
 
   this.setExpandedInternal(expanded);
@@ -205,7 +208,7 @@ goog.ui.Zippy.prototype.setExpanded = function(expanded) {
   // Fire toggle event
   this.dispatchEvent(new goog.ui.ZippyEvent(goog.ui.Zippy.Events.TOGGLE,
                                             this, this.expanded_));
-}
+};
 
 
 /**

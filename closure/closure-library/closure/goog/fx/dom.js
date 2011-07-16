@@ -38,7 +38,7 @@ goog.provide('goog.fx.dom.Swipe');
 goog.require('goog.color');
 goog.require('goog.events');
 goog.require('goog.fx.Animation');
-goog.require('goog.fx.Animation.EventType');
+goog.require('goog.fx.Transition.EventType');
 goog.require('goog.style');
 
 
@@ -549,7 +549,7 @@ goog.fx.dom.bgColorFadeIn = function(element, start, time, opt_eventHandler) {
   var computedBgColor = goog.style.getBackgroundColor(element);
   var end;
 
-  if (computedBgColor != 'transparent' &&
+  if (computedBgColor && computedBgColor != 'transparent' &&
       computedBgColor != 'rgba(0, 0, 0, 0)') {
     end = goog.color.hexToRgb(goog.color.parse(computedBgColor).hex);
   } else {
@@ -564,10 +564,10 @@ goog.fx.dom.bgColorFadeIn = function(element, start, time, opt_eventHandler) {
 
   if (opt_eventHandler) {
     opt_eventHandler.listen(
-        anim, goog.fx.Animation.EventType.END, setBgColor);
+        anim, goog.fx.Transition.EventType.END, setBgColor);
   } else {
     goog.events.listen(
-        anim, goog.fx.Animation.EventType.END, setBgColor);
+        anim, goog.fx.Transition.EventType.END, setBgColor);
   }
 
   anim.play();

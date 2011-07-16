@@ -427,6 +427,14 @@ function testHtmlEscapeAndUnescapeEntitiesUsingDom() {
                    goog.string.unescapeEntitiesUsingDom_(html)), html);
 }
 
+function testHtmlUnescapeEntitiesUsingDom_withAmpersands() {
+  var html = '&lt;a&b&gt;';
+  var text = '<a&b>';
+
+  assertEquals('wrong unescaped value',
+      text, goog.string.unescapeEntitiesUsingDom_(html));
+}
+
 function testHtmlEscapeAndUnescapePureXmlEntities_() {
   var text = '"x1 < x2 && y2 > y1"';
   var html = '&quot;x1 &lt; x2 &amp;&amp; y2 &gt; y1&quot;';
@@ -468,7 +476,7 @@ function testXssUnescapeEntitiesUsingDom() {
 
   assertEquals('Testing unescapeEntitiesUsingDom_', expected,
                goog.string.unescapeEntitiesUsingDom_(test));
-  assertEquals('unescapeEntitiesUsingDom_ is vulnarable to XSS', 0,
+  assertEquals('unescapeEntitiesUsingDom_ is vulnerable to XSS', 0,
                globalXssVar);
 
   test = '&amp;<script>globalXssVar=1;</' + 'script>';
@@ -476,7 +484,7 @@ function testXssUnescapeEntitiesUsingDom() {
 
   assertEquals('Testing unescapeEntitiesUsingDom_', expected,
                goog.string.unescapeEntitiesUsingDom_(test));
-  assertEquals('unescapeEntitiesUsingDom_ is vulnarable to XSS', 0,
+  assertEquals('unescapeEntitiesUsingDom_ is vulnerable to XSS', 0,
                globalXssVar);
 }
 
@@ -599,6 +607,7 @@ function testTruncateMiddle() {
   assertEquals('abcdefg...xyz', goog.string.truncateMiddle(str, 10, null, 3));
   assertEquals('abcdef...wxyz', goog.string.truncateMiddle(str, 10, null, 4));
   assertEquals('...yz', goog.string.truncateMiddle(str, 2, null, 3));
+  assertEquals(str, goog.string.truncateMiddle(str, 50, null, 3));
 
   assertEquals('Should clip html char', 'true &amp;&...lse',
       goog.string.truncateMiddle(html, 14, null, 3));
