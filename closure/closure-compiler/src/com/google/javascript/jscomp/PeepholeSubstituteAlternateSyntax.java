@@ -16,9 +16,11 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableSet;
+import com.google.javascript.jscomp.CodingConvention.Bind;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.TernaryValue;
@@ -38,7 +40,9 @@ class PeepholeSubstituteAlternateSyntax
   private static final int OR_PRECEDENCE = NodeUtil.precedence(Token.OR);
   private static final int NOT_PRECEDENCE = NodeUtil.precedence(Token.NOT);
 
-  private final boolean doCommaSpliting;
+  private final boolean late;
+
+  private final int STRING_SPLIT_OVERHEAD = ".split('.')".length();
 
   static final DiagnosticType INVALID_REGULAR_EXPRESSION_FLAGS =
     DiagnosticType.error(
@@ -53,8 +57,15 @@ class PeepholeSubstituteAlternateSyntax
     }
   };
 
-  PeepholeSubstituteAlternateSyntax(boolean doCommaSpliting) {
-    this.doCommaSpliting = doCommaSpliting;
+  /**
+   * @param late When late is false, this mean we are currently running before
+   * most of the other optimizations. In this case we would avoid optimizations
+   * that would make the code harder to analyze (such as using string spliting,
+   * merging statements with commans, etc). When this is true, we would
+   * do anything to minimize for size.
+   */
+  PeepholeSubstituteAlternateSyntax(boolean late) {
+    this.late = late;
   }
 
   /**
@@ -127,7 +138,11 @@ class PeepholeSubstituteAlternateSyntax
         // Fall through on purpose because tryFoldStandardConstructors() may
         // convert a NEW node into a CALL node
       case Token.CALL:
-        return tryFoldLiteralConstructor(node);
+        Node result =  tryFoldLiteralConstructor(node);
+        if (result == node) {
+          result = tryFoldImmediateCallToBoundFunction(node);
+        }
+        return result;
 
       case Token.COMMA:
         return tryFoldComma(node);
@@ -135,13 +150,58 @@ class PeepholeSubstituteAlternateSyntax
       case Token.NAME:
         return tryReplaceUndefined(node);
 
+      case Token.BLOCK:
+        return tryReplaceIf(node);
+
+      case Token.ARRAYLIT:
+        return tryMinimizeArrayLiteral(node);
+
       default:
         return node; //Nothing changed
     }
   }
 
+  private Node tryFoldImmediateCallToBoundFunction(Node n) {
+    // Rewriting "(fn.bind(a,b))()" to "fn.call(a,b)" makes it inlinable
+    Preconditions.checkState(n.getType() == Token.CALL);
+    Node callTarget = n.getFirstChild();
+    Bind bind = getCodingConvention().describeFunctionBind(callTarget);
+    if (bind != null) {
+      // replace the call target
+      bind.target.detachFromParent();
+      n.replaceChild(callTarget, bind.target);
+      callTarget = bind.target;
+
+      // push the parameters
+      addParameterAfter(bind.parameters, callTarget);
+
+      // add the this value before the parameters if necessary
+      if (bind.thisValue != null && !NodeUtil.isUndefined(bind.thisValue)) {
+        // rewrite from "fn(a, b)" to "fn.call(thisValue, a, b)"
+        Node newCallTarget = new Node(Token.GETPROP,
+            callTarget.cloneTree(),
+            Node.newString("call").copyInformationFrom(callTarget));
+        n.replaceChild(callTarget, newCallTarget);
+        n.addChildAfter(bind.thisValue.cloneTree(), newCallTarget);
+        n.putBooleanProp(Node.FREE_CALL, false);
+      } else {
+        n.putBooleanProp(Node.FREE_CALL, true);
+      }
+      reportCodeChange();
+    }
+    return n;
+  }
+
+  private void addParameterAfter(Node parameterList, Node after) {
+    if (parameterList != null) {
+      // push the last parameter to the head of the list first.
+      addParameterAfter(parameterList.getNext(), after);
+      after.getParent().addChildAfter(parameterList.cloneTree(), after);
+    }
+  }
+
   private Node tryFoldComma(Node n) {
-    if (!doCommaSpliting) {
+    if (!late) {
       return n;
     }
     Node parent = n.getParent();
@@ -169,13 +229,55 @@ class PeepholeSubstituteAlternateSyntax
   }
 
   /**
+   * Use "return x?1:2;" in place of "if(x)return 1;return 2;"
+   */
+  private Node tryReplaceIf(Node n) {
+
+    for (Node child = n.getFirstChild();
+         child != null; child = child.getNext()){
+      if (child.getType() == Token.IF){
+
+        Node cond = child.getFirstChild();
+        Node thenBranch = cond.getNext();
+        Node elseBranch = thenBranch.getNext();
+        Node nextNode = child.getNext();
+
+        if (nextNode != null && elseBranch == null &&
+            isReturnBlock(thenBranch) && isReturnExpression(nextNode)) {
+          Node thenExpr = null;
+          // if(x)return; return 1 -> return x?void 0:1
+          if (isReturnExpressBlock(thenBranch)) {
+            thenExpr = getBlockReturnExpression(thenBranch);
+            thenExpr.detachFromParent();
+          } else {
+            thenExpr = NodeUtil.newUndefinedNode(child);
+          }
+
+          Node elseExpr = nextNode.getFirstChild();
+
+          cond.detachFromParent();
+          elseExpr.detachFromParent();
+
+          Node hookNode = new Node(Token.HOOK, cond, thenExpr, elseExpr)
+                              .copyInformationFrom(child);
+          Node returnNode = new Node(Token.RETURN, hookNode);
+          n.replaceChild(child, returnNode);
+          n.removeChild(nextNode);
+          reportCodeChange();
+        }
+      }
+    }
+    return n;
+  }
+
+  /**
    * Use "void 0" in place of "undefined"
    */
   private Node tryReplaceUndefined(Node n) {
     // TODO(johnlenz): consider doing this as a normalization.
     if (isASTNormalized()
         && NodeUtil.isUndefined(n)
-        && !NodeUtil.isLhs(n, n.getParent())) {
+        && !NodeUtil.isLValue(n)) {
       Node replacement = NodeUtil.newUndefinedNode(n);
       n.getParent().replaceChild(n, replacement);
       reportCodeChange();
@@ -739,6 +841,21 @@ class PeepholeSubstituteAlternateSyntax
 
   /**
    * @return Whether the node is a block with a single statement that is
+   *     an return with or without an expression.
+   */
+  private boolean isReturnBlock(Node n) {
+    if (n.getType() == Token.BLOCK) {
+      if (n.hasOneChild()) {
+        Node first = n.getFirstChild();
+        return first.getType() == Token.RETURN;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * @return Whether the node is a block with a single statement that is
    *     an return.
    */
   private boolean isReturnExpressBlock(Node n) {
@@ -751,6 +868,16 @@ class PeepholeSubstituteAlternateSyntax
       }
     }
 
+    return false;
+  }
+
+  /**
+   * @return Whether the node is a single return statement.
+   */
+  private boolean isReturnExpression(Node n) {
+    if (n.getType() == Token.RETURN) {
+      return n.hasOneChild();
+    }
     return false;
   }
 
@@ -1101,6 +1228,7 @@ class PeepholeSubstituteAlternateSyntax
         String className = n.getFirstChild().getString();
         if (STANDARD_OBJECT_CONSTRUCTORS.contains(className)) {
           n.setType(Token.CALL);
+          n.putBooleanProp(Node.FREE_CALL, true);
           reportCodeChange();
         }
       }
@@ -1265,6 +1393,59 @@ class PeepholeSubstituteAlternateSyntax
     n.getParent().replaceChild(n, not);
     reportCodeChange();
     return not;
+  }
+
+  private Node tryMinimizeArrayLiteral(Node n) {
+    boolean allStrings = true;
+    for (Node cur = n.getFirstChild(); cur != null; cur = cur.getNext()) {
+      if (cur.getType() != Token.STRING) {
+        allStrings = false;
+      }
+    }
+
+    if (allStrings) {
+      return tryMinimizeStringArrayLiteral(n);
+    } else {
+      return n;
+    }
+  }
+
+  private Node tryMinimizeStringArrayLiteral(Node n) {
+    if(!late) {
+      return n;
+    }
+    int numElements = n.getChildCount();
+    // We save two bytes per element.
+    int saving = numElements * 2 - STRING_SPLIT_OVERHEAD;
+    if (saving <= 0) {
+      return n;
+    }
+
+    String[] strings = new String[n.getChildCount()];
+    int idx = 0;
+    for (Node cur = n.getFirstChild(); cur != null; cur = cur.getNext()) {
+      strings[idx++] = cur.getString();
+    }
+
+    // These delimiters are chars that appears a lot in the program therefore
+    // probably have a small Huffman encoding.
+    NEXT_DELIMITER: for (char delimiter : new char[]{',', ' ', ';', '{', '}'}) {
+      for (String cur : strings) {
+        if (cur.indexOf(delimiter) != -1) {
+          continue NEXT_DELIMITER;
+        }
+      }
+      String template = Joiner.on(delimiter).join(strings);
+      Node call = new Node(Token.CALL,
+        new Node(Token.GETPROP, Node.newString(Token.STRING,template),
+            Node.newString(Token.STRING, "split")),
+        Node.newString(Token.STRING, "" + delimiter));
+      call.copyInformationFromForTree(n);
+      n.getParent().replaceChild(n, call);
+      reportCodeChange();
+      return call;
+    }
+    return n;
   }
 
   private static final Pattern REGEXP_FLAGS_RE = Pattern.compile("^[gmi]*$");

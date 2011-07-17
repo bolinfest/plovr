@@ -21,6 +21,8 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.rhino.JSDocInfo;
+import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -35,7 +37,7 @@ import java.util.Set;
  *
  */
 class ProcessClosurePrimitives extends AbstractPostOrderCallback
-    implements CompilerPass {
+    implements HotSwapCompilerPass {
 
   static final DiagnosticType NULL_ARGUMENT_ERROR = DiagnosticType.error(
       "JSC_NULL_ARGUMENT_ERROR",
@@ -158,6 +160,13 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
   }
 
   @Override
+  public void hotSwapScript(Node scriptRoot) {
+    // TODO(bashir): Implement a real hot-swap version instead and make it fully
+    // consistent with the full version.
+    this.compiler.process(this);
+  }
+
+  @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
     switch (n.getType()) {
       case Token.CALL:
@@ -210,12 +219,18 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
           }
         }
         break;
+
       case Token.ASSIGN:
       case Token.NAME:
         // If this is an assignment to a provided name, remove the provided
         // object.
         handleCandidateProvideDefinition(t, n, parent);
         break;
+
+      case Token.EXPR_RESULT:
+        handleTypedefDefinition(t, n, parent);
+        break;
+
       case Token.FUNCTION:
         // If this is a declaration of a provided named function, this is an
         // error. Hosited functions will explode if the're provided.
@@ -306,6 +321,24 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
         registerAnyProvidedPrefixes(ns, parent, t.getModule());
         providedNames.put(
             ns, new ProvidedName(ns, parent, t.getModule(), true));
+      }
+    }
+  }
+
+  /**
+   * Handles a typedef definition for a goog.provided name.
+   * @param n EXPR_RESULT node.
+   */
+  private void handleTypedefDefinition(
+      NodeTraversal t, Node n, Node parent) {
+    JSDocInfo info = n.getFirstChild().getJSDocInfo();
+    if (t.inGlobalScope() && info != null && info.hasTypedefType()) {
+      String name = n.getFirstChild().getQualifiedName();
+      if (name != null) {
+        ProvidedName pn = providedNames.get(name);
+        if (pn != null) {
+          pn.addDefinition(n, t.getModule());
+        }
       }
     }
   }
@@ -854,7 +887,8 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
 
         // Does this need a VAR keyword?
         replacementNode = candidateDefinition;
-        if (NodeUtil.isExpressionNode(candidateDefinition)) {
+        if (NodeUtil.isExpressionNode(candidateDefinition) &&
+            !candidateDefinition.getFirstChild().isQualifiedName()) {
           candidateDefinition.putBooleanProp(Node.IS_NAMESPACE, true);
           Node assignNode = candidateDefinition.getFirstChild();
           Node nameNode = assignNode.getFirstChild();
@@ -930,6 +964,9 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
       if (compiler.getCodingConvention().isConstant(namespace)) {
         name.putBooleanProp(Node.IS_CONSTANT_NAME, true);
       }
+      if (candidateDefinition == null) {
+        name.setJSDocInfo(createConstantJsDoc());
+      }
 
       Preconditions.checkState(isNamespacePlaceholder(decl));
       setSourceInfo(decl);
@@ -961,9 +998,18 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
                   namespace),
               createNamespaceLiteral()));
       decl.putBooleanProp(Node.IS_NAMESPACE, true);
+      if (candidateDefinition == null) {
+        decl.getFirstChild().setJSDocInfo(createConstantJsDoc());
+      }
       Preconditions.checkState(isNamespacePlaceholder(decl));
       setSourceInfo(decl);
       return decl;
+    }
+
+    private JSDocInfo createConstantJsDoc() {
+      JSDocInfoBuilder builder = new JSDocInfoBuilder(false);
+      builder.recordConstancy();
+      return builder.build(null);
     }
 
     /**

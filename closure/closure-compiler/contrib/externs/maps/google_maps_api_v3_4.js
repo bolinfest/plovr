@@ -15,7 +15,7 @@
  */
 
 /**
- * @fileoverview Externs for the Google Maps V3.4 API.
+ * @fileoverview Externs for the Google Maps V3 API.
  * @see http://code.google.com/apis/maps/documentation/javascript/reference.html
  * @externs
  */
@@ -179,45 +179,15 @@ google.maps.ControlPosition = {
 /**
  * @constructor
  */
-google.maps.DirectionsDistance = function() {};
-
-/**
- * @type {string}
- */
-google.maps.DirectionsDistance.prototype.text;
-
-/**
- * @type {number}
- */
-google.maps.DirectionsDistance.prototype.value;
-
-/**
- * @constructor
- */
-google.maps.DirectionsDuration = function() {};
-
-/**
- * @type {string}
- */
-google.maps.DirectionsDuration.prototype.text;
-
-/**
- * @type {number}
- */
-google.maps.DirectionsDuration.prototype.value;
-
-/**
- * @constructor
- */
 google.maps.DirectionsLeg = function() {};
 
 /**
- * @type {google.maps.DirectionsDistance}
+ * @type {google.maps.Distance}
  */
 google.maps.DirectionsLeg.prototype.distance;
 
 /**
- * @type {google.maps.DirectionsDuration}
+ * @type {google.maps.Duration}
  */
 google.maps.DirectionsLeg.prototype.duration;
 
@@ -428,12 +398,12 @@ google.maps.DirectionsRequest.prototype.provideRouteAlternatives;
 google.maps.DirectionsRequest.prototype.region;
 
 /**
- * @type {google.maps.DirectionsTravelMode}
+ * @type {google.maps.TravelMode}
  */
 google.maps.DirectionsRequest.prototype.travelMode;
 
 /**
- * @type {google.maps.DirectionsUnitSystem}
+ * @type {google.maps.UnitSystem}
  */
 google.maps.DirectionsRequest.prototype.unitSystem;
 
@@ -519,12 +489,12 @@ google.maps.DirectionsStatus = {
 google.maps.DirectionsStep = function() {};
 
 /**
- * @type {google.maps.DirectionsDistance}
+ * @type {google.maps.Distance}
  */
 google.maps.DirectionsStep.prototype.distance;
 
 /**
- * @type {google.maps.DirectionsDuration}
+ * @type {google.maps.Duration}
  */
 google.maps.DirectionsStep.prototype.duration;
 
@@ -549,26 +519,9 @@ google.maps.DirectionsStep.prototype.path;
 google.maps.DirectionsStep.prototype.start_location;
 
 /**
- * @type {google.maps.DirectionsTravelMode}
+ * @type {google.maps.TravelMode}
  */
 google.maps.DirectionsStep.prototype.travel_mode;
-
-/**
- * @enum {string}
- */
-google.maps.DirectionsTravelMode = {
-  WALKING: '',
-  DRIVING: '',
-  BICYCLING: ''
-};
-
-/**
- * @enum {string}
- */
-google.maps.DirectionsUnitSystem = {
-  METRIC: '',
-  IMPERIAL: ''
-};
 
 /**
  * @constructor
@@ -584,6 +537,160 @@ google.maps.DirectionsWaypoint.prototype.location;
  * @type {boolean}
  */
 google.maps.DirectionsWaypoint.prototype.stopover;
+
+/**
+ * @constructor
+ */
+google.maps.Distance = function() {};
+
+/**
+ * @type {string}
+ */
+google.maps.Distance.prototype.text;
+
+/**
+ * @type {number}
+ */
+google.maps.Distance.prototype.value;
+
+/**
+ * @enum {string}
+ */
+google.maps.DistanceMatrixElementStatus = {
+  ZERO_RESULTS: '',
+  NOT_FOUND: '',
+  OK: ''
+};
+
+/**
+ * @constructor
+ */
+google.maps.DistanceMatrixRequest = function() {};
+
+/**
+ * @type {boolean}
+ */
+google.maps.DistanceMatrixRequest.prototype.avoidHighways;
+
+/**
+ * @type {boolean}
+ */
+google.maps.DistanceMatrixRequest.prototype.avoidTolls;
+
+/**
+ * @type {Array.<google.maps.LatLng>|Array.<string>}
+ */
+google.maps.DistanceMatrixRequest.prototype.destinations;
+
+/**
+ * @type {Array.<google.maps.LatLng>|Array.<string>}
+ */
+google.maps.DistanceMatrixRequest.prototype.origins;
+
+/**
+ * @type {string}
+ */
+google.maps.DistanceMatrixRequest.prototype.region;
+
+/**
+ * @type {google.maps.TravelMode}
+ */
+google.maps.DistanceMatrixRequest.prototype.travelMode;
+
+/**
+ * @type {google.maps.UnitSystem}
+ */
+google.maps.DistanceMatrixRequest.prototype.unitSystem;
+
+/**
+ * @constructor
+ */
+google.maps.DistanceMatrixResponse = function() {};
+
+/**
+ * @type {Array.<string>}
+ */
+google.maps.DistanceMatrixResponse.prototype.destinationAddresses;
+
+/**
+ * @type {Array.<string>}
+ */
+google.maps.DistanceMatrixResponse.prototype.originAddresses;
+
+/**
+ * @type {Array.<google.maps.DistanceMatrixResponseRow>}
+ */
+google.maps.DistanceMatrixResponse.prototype.rows;
+
+/**
+ * @constructor
+ */
+google.maps.DistanceMatrixResponseElement = function() {};
+
+/**
+ * @type {google.maps.Distance}
+ */
+google.maps.DistanceMatrixResponseElement.prototype.distance;
+
+/**
+ * @type {google.maps.Duration}
+ */
+google.maps.DistanceMatrixResponseElement.prototype.duration;
+
+/**
+ * @type {google.maps.DistanceMatrixElementStatus}
+ */
+google.maps.DistanceMatrixResponseElement.prototype.status;
+
+/**
+ * @constructor
+ */
+google.maps.DistanceMatrixResponseRow = function() {};
+
+/**
+ * @type {Array.<google.maps.DistanceMatrixResponseElement>}
+ */
+google.maps.DistanceMatrixResponseRow.prototype.elements;
+
+/**
+ * @constructor
+ */
+google.maps.DistanceMatrixService = function() {};
+
+/**
+ * @param {(google.maps.DistanceMatrixRequest|Object.<string, *>)} request
+ * @param {function(google.maps.DistanceMatrixResponse, google.maps.DistanceMatrixStatus)} callback
+ * @return {undefined}
+ */
+google.maps.DistanceMatrixService.prototype.getDistanceMatrix = function(request, callback) {};
+
+/**
+ * @enum {string}
+ */
+google.maps.DistanceMatrixStatus = {
+  OK: '',
+  INVALID_REQUEST: '',
+  MAX_ELEMENTS_EXCEEDED: '',
+  UNKNOWN_ERROR: '',
+  REQUEST_DENIED: '',
+  MAX_DIMENSIONS_EXCEEDED: '',
+  OVER_QUERY_LIMIT: ''
+};
+
+/**
+ * @constructor
+ */
+google.maps.Duration = function() {};
+
+/**
+ * @type {string}
+ */
+google.maps.Duration.prototype.text;
+
+/**
+ * @type {number}
+ */
+google.maps.Duration.prototype.value;
 
 /**
  * @constructor
@@ -3203,6 +3310,23 @@ google.maps.TrafficLayer.prototype.getMap = function() {};
 google.maps.TrafficLayer.prototype.setMap = function(map) {};
 
 /**
+ * @enum {string}
+ */
+google.maps.TravelMode = {
+  WALKING: '',
+  DRIVING: '',
+  BICYCLING: ''
+};
+
+/**
+ * @enum {string}
+ */
+google.maps.UnitSystem = {
+  METRIC: '',
+  IMPERIAL: ''
+};
+
+/**
  * @constructor
  */
 google.maps.ZoomControlOptions = function() {};
@@ -3467,6 +3591,13 @@ google.maps.geometry.spherical.computeLength = function(path, opt_radius) {};
  * @return {google.maps.LatLng}
  */
 google.maps.geometry.spherical.computeOffset = function(from, distance, heading, opt_radius) {};
+
+/**
+ * @param {Array.<google.maps.LatLng>|google.maps.MVCArray.<google.maps.LatLng>} loop
+ * @param {number=} opt_radius
+ * @return {number}
+ */
+google.maps.geometry.spherical.computeSignedArea = function(loop, opt_radius) {};
 
 /**
  * @param {google.maps.LatLng} from

@@ -432,7 +432,6 @@ Window.prototype.getSelection = function() {};
 Window.prototype.home = function() {};
 
 Window.prototype.openDialog;
-Window.prototype.postMessage;
 Window.prototype.releaseEvents;
 Window.prototype.scrollByLines;
 Window.prototype.scrollByPages;
@@ -880,7 +879,10 @@ Element.prototype.textContent;
  */
 Element.prototype.appendChild = function(child) {};
 
-/** @override */
+/**
+ * @override
+ * @return {Element}
+ */
 Element.prototype.cloneNode = function(deep) {};
 
 /** @override */

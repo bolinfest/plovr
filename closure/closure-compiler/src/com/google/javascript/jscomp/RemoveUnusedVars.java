@@ -260,6 +260,16 @@ class RemoveUnusedVars
             return;
           }
         } else {
+
+          // If arguments is escaped, we just assume the worst and continue
+          // on all the parameters.
+          if ("arguments".equals(n.getString()) && scope.isLocal()) {
+            Node lp = scope.getRootNode().getFirstChild().getNext();
+            for (Node a = lp.getFirstChild(); a != null; a = a.getNext()) {
+              markReferencedVar(scope.getVar(a.getString()));
+            }
+          }
+
           // All name references that aren't declarations or assigns
           // are references to other vars.
           if (var != null) {
@@ -488,7 +498,7 @@ class RemoveUnusedVars
 
       // Check all the call sites.
       for (UseSite site : defFinder.getUseSites(definition)) {
-        if (isModifableCallSite(site)) {
+        if (isModifiableCallSite(site)) {
           Node arg = getArgumentForCallOrNewOrDotCall(site, argIndex);
           // TODO(johnlenz): try to remove parameters with side-effects by
           // decomposing the call expression.
@@ -512,7 +522,7 @@ class RemoveUnusedVars
       Definition definition = getFunctionDefinition(function);
 
       for (UseSite site : defFinder.getUseSites(definition)) {
-        if (isModifableCallSite(site)) {
+        if (isModifiableCallSite(site)) {
           Node arg = getArgumentForCallOrNewOrDotCall(site, argIndex);
           if (arg != null) {
             Node argParent = arg.getParent();
@@ -540,7 +550,7 @@ class RemoveUnusedVars
     private void tryRemoveAllFollowingArgs(Node function, final int argIndex) {
       Definition definition = getFunctionDefinition(function);
       for (UseSite site : defFinder.getUseSites(definition)) {
-        if (!isModifableCallSite(site)) {
+        if (!isModifiableCallSite(site)) {
           continue;
         }
         Node arg = getArgumentForCallOrNewOrDotCall(site, argIndex + 1);
@@ -589,34 +599,14 @@ class RemoveUnusedVars
         return false;
       }
 
-      // Assume an exported method result is used, and the definition might be
-      // changed.
-      if (SimpleDefinitionFinder.maybeExported(compiler, definition)) {
-        return false;
-      }
-
-      Collection<UseSite> useSites = defFinder.getUseSites(definition);
-      for (UseSite site : useSites) {
-        // Multiple definitions prevent rewrite.
-        // TODO(johnlenz): Allow rewrite all definitions are valid.
-        Node nameNode = site.node;
-        Collection<Definition> singleSiteDefinitions =
-            defFinder.getDefinitionsReferencedAt(nameNode);
-        if (singleSiteDefinitions.size() > 1) {
-          return false;
-        }
-        Preconditions.checkState(!singleSiteDefinitions.isEmpty());
-        Preconditions.checkState(singleSiteDefinitions.contains(definition));
-      }
-
-      return true;
+      return defFinder.canModifyDefinition(definition);
     }
 
     /**
      * @param site The site to inspect
      * @return Whether the call site is suitable for modification
      */
-    private static boolean isModifableCallSite(UseSite site) {
+    private static boolean isModifiableCallSite(UseSite site) {
       return SimpleDefinitionFinder.isCallOrNewSite(site)
           && !NodeUtil.isFunctionObjectApply(site.node.getParent());
     }
@@ -634,6 +624,14 @@ class RemoveUnusedVars
       Collection<UseSite> useSites = defFinder.getUseSites(definition);
       for (UseSite site : useSites) {
         Node parent = site.node.getParent();
+
+        // This was a use site removed by something else before we run.
+        // 1. By another pass before us which means the definition graph is
+        //    no updated properly.
+        // 2. By the continuations algorithm above.
+        if (parent == null) {
+          continue; // Ignore it.
+        }
 
         // Ignore references within goog.inherits calls.
         if (NodeUtil.isCall(parent) &&

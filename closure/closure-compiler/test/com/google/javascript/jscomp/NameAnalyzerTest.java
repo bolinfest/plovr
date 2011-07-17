@@ -27,7 +27,9 @@ public class NameAnalyzerTest extends CompilerTestCase {
   private static String kExterns =
       "var window, top;" +
       "var document;" +
-      "var Function; var externfoo; methods.externfoo;";
+      "var Function;" +
+      "var Array;" +
+      "var externfoo; methods.externfoo;";
 
   public NameAnalyzerTest() {
     super(kExterns);
@@ -750,8 +752,8 @@ public class NameAnalyzerTest extends CompilerTestCase {
   }
 
   public void testNestedAssigns() {
-    // TODO(nicksantos): Make NameAnalyzer smarter, so that we can eliminate x.
-    testSame("var x = 0; var y = x = 3; window.alert(y);");
+    test("var x = 0; var y = x = 3; window.alert(y);",
+         "var y = 3; window.alert(y);");
   }
 
   public void testComplexNestedAssigns1() {
@@ -1102,15 +1104,18 @@ public class NameAnalyzerTest extends CompilerTestCase {
   }
 
   public void testNestedAssign2() {
-    testSame("var a, b = a = 1; foo(b)");
+    test("var a, b = a = 1; foo(b)",
+         "var b = 1; foo(b)");
   }
 
   public void testNestedAssign3() {
-    testSame("var a, b = a = 1; a = b = 2; foo(b)");
+    test("var a, b = a = 1; a = b = 2; foo(b)",
+         "var b = 1; b = 2; foo(b)");
   }
 
   public void testNestedAssign4() {
-    testSame("var a, b = a = 1; b = a = 2; foo(b)");
+    test("var a, b = a = 1; b = a = 2; foo(b)",
+         "var b = 1; b = 2; foo(b)");
   }
 
   public void testNestedAssign5() {
@@ -1518,6 +1523,115 @@ public class NameAnalyzerTest extends CompilerTestCase {
     testSame(
       "function e() {}\n" +
       "throw new e();");
+  }
+
+  public void testClassDefinedInObjectLit1() {
+    test(
+      "var data = {Foo: function() {}};" +
+      "data.Foo.prototype.toString = function() {};",
+      "");
+  }
+
+  public void testClassDefinedInObjectLit2() {
+    test(
+      "var data = {}; data.bar = {Foo: function() {}};" +
+      "data.bar.Foo.prototype.toString = function() {};",
+      "");
+  }
+
+  public void testClassDefinedInObjectLit3() {
+    test(
+      "var data = {bar: {Foo: function() {}}};" +
+      "data.bar.Foo.prototype.toString = function() {};",
+      "");
+  }
+
+  public void testClassDefinedInObjectLit4() {
+    test(
+      "var data = {};" +
+      "data.baz = {bar: {Foo: function() {}}};" +
+      "data.baz.bar.Foo.prototype.toString = function() {};",
+      "");
+  }
+
+  public void testVarReferencedInClassDefinedInObjectLit1() {
+    testSame(
+      "var ref = 3;" +
+      "var data = {Foo: function() { this.x = ref; }};" +
+      "window.Foo = data.Foo;");
+  }
+
+  public void testVarReferencedInClassDefinedInObjectLit2() {
+    testSame(
+      "var ref = 3;" +
+      "var data = {Foo: function() { this.x = ref; }," +
+      "            Bar: function() {}};" +
+      "window.Bar = data.Bar;");
+  }
+
+  public void testArrayExt() {
+    testSame(
+      "Array.prototype.foo = function() { return 1 };" +
+      "var y = [];" +
+      "switch (y.foo()) {" +
+      "}");
+  }
+
+  public void testArrayAliasExt() {
+    testSame(
+      "Array$X = Array;" +
+      "Array$X.prototype.foo = function() { return 1 };" +
+      "function Array$X() {}" +
+      "var y = [];" +
+      "switch (y.foo()) {" +
+      "}");
+  }
+
+  public void testExternalAliasInstanceof1() {
+    test(
+      "Array$X = Array;" +
+      "function Array$X() {}" +
+      "var y = [];" +
+      "if (y instanceof Array) {}",
+      "var y = [];" +
+      "if (y instanceof Array) {}"
+      );
+  }
+
+  public void testExternalAliasInstanceof2() {
+    testSame(
+      "Array$X = Array;" +
+      "function Array$X() {}" +
+      "var y = [];" +
+      "if (y instanceof Array$X) {}");
+  }
+
+  public void testExternalAliasInstanceof3() {
+    testSame(
+      "var b = Array;" +
+      "var y = [];" +
+      "if (y instanceof b) {}");
+  }
+
+  public void testAliasInstanceof4() {
+    testSame(
+      "function Foo() {};" +
+      "var b = Foo;" +
+      "var y = new Foo();" +
+      "if (y instanceof b) {}");
+  }
+
+  public void testAliasInstanceof5() {
+    // TODO(johnlenz): fix this. "b" should remain.
+    test(
+      "function Foo() {}" +
+      "function Bar() {}" +
+      "var b = x ? Foo : Bar;" +
+      "var y = new Foo();" +
+      "if (y instanceof b) {}",
+      "function Foo() {}" +
+      "var y = new Foo;" +
+      "if (false){}");
   }
 
   @Override

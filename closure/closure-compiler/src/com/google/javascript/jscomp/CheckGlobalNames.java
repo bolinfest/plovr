@@ -40,6 +40,11 @@ class CheckGlobalNames implements CompilerPass {
       "JSC_UNDEFINED_NAME",
       "{0} is never defined");
 
+  static final DiagnosticType NAME_DEFINED_LATE_WARNING =
+      DiagnosticType.warning(
+          "JSC_NAME_DEFINED_LATE",
+          "{0} defined before its owner. {1} is defined at {2}:{3}");
+
   static final DiagnosticType STRICT_MODULE_DEP_QNAME =
       DiagnosticType.disabled(
           "JSC_STRICT_MODULE_DEP_QNAME",
@@ -105,33 +110,53 @@ class CheckGlobalNames implements CompilerPass {
   private void validateName(Name name, boolean isDefined) {
     // If the name is not defined, emit warnings for each reference. While
     // we're looking through each reference, check all the module dependencies.
-    Ref declaration = name.declaration;
-    if (!isDefined) {
-      if (declaration != null) {
-        reportRefToUndefinedName(name, declaration);
-      }
-    }
+    Ref declaration = name.getDeclaration();
+    Name parent = name.parent;
+    boolean singleGlobalParentDecl =
+        parent != null &&
+        parent.getDeclaration() != null &&
+        parent.localSets == 0;
 
-    if (name.refs != null) {
-      JSModuleGraph moduleGraph = compiler.getModuleGraph();
-      for (Ref ref : name.refs) {
-        if (!isDefined) {
-          reportRefToUndefinedName(name, ref);
-        } else {
-          if (declaration != null &&
-              ref.module != declaration.module &&
-              !moduleGraph.dependsOn(ref.module, declaration.module)) {
-            reportBadModuleReference(name, ref);
-          }
-        }
+    JSModuleGraph moduleGraph = compiler.getModuleGraph();
+    for (Ref ref : name.getRefs()) {
+      if (!isDefined && !isTypedef(ref)) {
+        reportRefToUndefinedName(name, ref);
+      } else if (declaration != null &&
+          ref.getModule() != declaration.getModule() &&
+          !moduleGraph.dependsOn(
+              ref.getModule(), declaration.getModule())) {
+        reportBadModuleReference(name, ref);
+      } else if (ref.scope.isGlobal() &&
+          singleGlobalParentDecl &&
+          parent.getDeclaration().preOrderIndex > ref.preOrderIndex) {
+        compiler.report(
+            JSError.make(ref.source.getName(), ref.node,
+                NAME_DEFINED_LATE_WARNING,
+                name.fullName(),
+                parent.fullName(),
+                parent.getDeclaration().source.getName(),
+                String.valueOf(parent.getDeclaration().node.getLineno())));
       }
     }
   }
 
+  private boolean isTypedef(Ref ref) {
+    // If this is an annotated EXPR-GET, don't do anything.
+    Node parent = ref.node.getParent();
+    if (parent.getType() == Token.EXPR_RESULT) {
+      JSDocInfo info = ref.node.getJSDocInfo();
+      if (info != null && info.hasTypedefType()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private void reportBadModuleReference(Name name, Ref ref) {
     compiler.report(
-        JSError.make(ref.sourceName, ref.node, STRICT_MODULE_DEP_QNAME,
-                     ref.module.getName(), name.declaration.module.getName(),
+        JSError.make(ref.source.getName(), ref.node, STRICT_MODULE_DEP_QNAME,
+                     ref.getModule().getName(),
+                     name.getDeclaration().getModule().getName(),
                      name.fullName()));
   }
 
@@ -142,18 +167,9 @@ class CheckGlobalNames implements CompilerPass {
       name = name.parent;
     }
 
-    // If this is an annotated EXPR-GET, don't do anything.
-    Node parent = ref.node.getParent();
-    if (parent.getType() == Token.EXPR_RESULT) {
-      JSDocInfo info = ref.node.getJSDocInfo();
-      if (info != null && info.hasTypedefType()) {
-        return;
-      }
-    }
-
     compiler.report(
-        JSError.make(ref.sourceName, ref.node, level, UNDEFINED_NAME_WARNING,
-            name.fullName()));
+        JSError.make(ref.getSourceName(), ref.node, level,
+            UNDEFINED_NAME_WARNING, name.fullName()));
   }
 
   /**

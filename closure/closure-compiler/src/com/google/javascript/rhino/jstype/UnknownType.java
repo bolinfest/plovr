@@ -61,6 +61,11 @@ public class UnknownType extends ObjectType {
   }
 
   @Override
+  public StaticSlot<JSType> getSlot(String name) {
+    return null;
+  }
+
+  @Override
   public boolean isUnknownType() {
     return true;
   }
@@ -122,7 +127,7 @@ public class UnknownType extends ObjectType {
 
   @Override
   boolean defineProperty(String propertyName, JSType type,
-      boolean inferred, boolean inExterns, Node propertyNode) {
+      boolean inferred, Node propertyNode) {
     // nothing to define
     return true;
   }

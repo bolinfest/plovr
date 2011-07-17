@@ -16,6 +16,7 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import com.google.javascript.jscomp.graph.GraphvizGraph;
 import com.google.javascript.jscomp.graph.LinkedDirectedGraph;
@@ -43,6 +44,11 @@ public abstract class PassConfig {
    */
   private MemoizedScopeCreator typedScopeCreator;
 
+  /**
+   * This is the scope creator that {@code TypedScopeCreator} delegates to.
+   */
+  private TypedScopeCreator internalScopeCreator;
+
   /** The global typed scope. */
   Scope topScope = null;
 
@@ -51,12 +57,27 @@ public abstract class PassConfig {
   }
 
   /**
-   * Regenerates the top scope.
+   * Regenerates the top scope from scratch.
+   *
+   * @param compiler The compiler for which the global scope is regenerated.
+   * @param root The root of the AST.
    */
   void regenerateGlobalTypedScope(AbstractCompiler compiler, Node root) {
-    typedScopeCreator =
-        new MemoizedScopeCreator(new TypedScopeCreator(compiler));
+    internalScopeCreator = new TypedScopeCreator(compiler);
+    typedScopeCreator = new MemoizedScopeCreator(internalScopeCreator);
     topScope = typedScopeCreator.createScope(root, null);
+  }
+
+  /**
+   * Regenerates the top scope potentially only for a sub-tree of AST and then
+   * copies information for the old global scope.
+   *
+   * @param compiler The compiler for which the global scope is generated.
+   * @param scriptRoot The root of the AST used to generate global scope.
+   */
+  void patchGlobalTypedScope(AbstractCompiler compiler, Node scriptRoot) {
+    Preconditions.checkNotNull(internalScopeCreator);
+    internalScopeCreator.patchGlobalScope(topScope, scriptRoot);
   }
 
   /**
@@ -133,6 +154,10 @@ public abstract class PassConfig {
     return new TypeInferencePass(
         compiler, compiler.getReverseAbstractInterpreter(),
         topScope, typedScopeCreator);
+  }
+
+  final InferJSDocInfo makeInferJsDocInfo(AbstractCompiler compiler) {
+    return new InferJSDocInfo(compiler);
   }
 
   /**

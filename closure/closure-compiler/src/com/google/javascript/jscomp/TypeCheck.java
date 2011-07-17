@@ -43,6 +43,8 @@ import com.google.javascript.rhino.jstype.ObjectType;
 import com.google.javascript.rhino.jstype.TernaryValue;
 
 import java.util.Iterator;
+import java.util.Set;
+import java.util.HashMap;
 
 /**
  * <p>Checks the types of JS expressions against any declared type
@@ -62,8 +64,8 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
   //
   // User errors
   //
+  // TODO(nicksantos): delete this
   static final DiagnosticType BAD_DELETE =
-      // TODO(user): make this an error
       DiagnosticType.warning(
           "JSC_BAD_DELETE_OPERAND",
           "delete operator needs a reference operand");
@@ -158,6 +160,12 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
           "a constructor can only extend objects " +
           "and an interface can only extend interfaces");
 
+  static final DiagnosticType CONFLICTING_IMPLEMENTED_TYPE =
+    DiagnosticType.warning(
+        "JSC_CONFLICTING_IMPLEMENTED_TYPE",
+        "{0} cannot implement this type; " +
+        "an interface can only extend, but not implement interfaces");
+
   static final DiagnosticType BAD_IMPLEMENTED_TYPE =
       DiagnosticType.warning(
           "JSC_IMPLEMENTS_NON_INTERFACE",
@@ -212,6 +220,17 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
           "Illegal annotation on {0}. @implicitCast may only be used in " +
           "externs.");
 
+  static final DiagnosticType INCOMPATIBLE_EXTENDED_PROPERTY_TYPE =
+      DiagnosticType.warning(
+          "JSC_INCOMPATIBLE_EXTENDED_PROPERTY_TYPE",
+          "Interface {0} has a property {1} with incompatible types in " +
+          "its super interfaces {2} and {3}");
+
+  static final DiagnosticType EXPECTED_THIS_TYPE =
+      DiagnosticType.warning(
+          "JSC_EXPECTED_THIS_TYPE",
+          "\"{0}\" must be called with a \"this\" type");
+
   static final DiagnosticGroup ALL_DIAGNOSTICS = new DiagnosticGroup(
       DETERMINISTIC_TEST,
       DETERMINISTIC_TEST_NO_RESULT,
@@ -228,6 +247,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       INVALID_INTERFACE_MEMBER_DECLARATION,
       INTERFACE_FUNCTION_NOT_EMPTY,
       CONFLICTING_EXTENDED_TYPE,
+      CONFLICTING_IMPLEMENTED_TYPE,
       BAD_IMPLEMENTED_TYPE,
       HIDDEN_SUPERCLASS_PROPERTY,
       HIDDEN_INTERFACE_PROPERTY,
@@ -238,6 +258,8 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       UNRESOLVED_TYPE,
       WRONG_ARGUMENT_COUNT,
       ILLEGAL_IMPLICIT_CAST,
+      INCOMPATIBLE_EXTENDED_PROPERTY_TYPE,
+      EXPECTED_THIS_TYPE,
       RhinoErrorReporter.TYPE_PARSE_ERROR,
       TypedScopeCreator.UNKNOWN_LENDS,
       TypedScopeCreator.LENDS_ON_NON_OBJECT,
@@ -491,6 +513,9 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         // Object literal keys are handled with OBJECTLIT
         if (!NodeUtil.isObjectLitKey(n, n.getParent())) {
           ensureTyped(t, n, STRING_TYPE);
+        } else {
+          // Object literal keys are not typeable
+          typeable = false;
         }
         break;
 
@@ -698,9 +723,6 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         break;
 
       case Token.DELPROP:
-        if (!isReference(n.getFirstChild())) {
-          report(t, n, BAD_DELETE);
-        }
         ensureTyped(t, n, BOOLEAN_TYPE);
         break;
 
@@ -1013,11 +1035,20 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     FunctionType superClass = ctorType.getSuperClassConstructor();
     boolean superClassHasProperty = superClass != null &&
         superClass.getPrototype().hasProperty(propertyName);
+    // For interface
+    boolean superInterfacesHasProperty = false;
+    if (ctorType.isInterface()) {
+      for (ObjectType interfaceType : ctorType.getExtendedInterfaces()) {
+        superInterfacesHasProperty =
+          superInterfacesHasProperty || interfaceType.hasProperty(propertyName);
+      }
+    }
     boolean declaredOverride = info != null && info.isOverride();
 
     boolean foundInterfaceProperty = false;
     if (ctorType.isConstructor()) {
-      for (JSType implementedInterface : ctorType.getImplementedInterfaces()) {
+      for (JSType implementedInterface :
+          ctorType.getAllImplementedInterfaces()) {
         if (implementedInterface.isUnknownType() ||
             implementedInterface.isEmptyType()) {
           continue;
@@ -1039,7 +1070,8 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       }
     }
 
-    if (!declaredOverride && !superClassHasProperty) {
+    if (!declaredOverride && !superClassHasProperty
+        && !superInterfacesHasProperty) {
       // nothing to do here, it's just a plain new property
       return;
     }
@@ -1068,6 +1100,23 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
             t.makeError(n, HIDDEN_SUPERCLASS_PROPERTY_MISMATCH,
                 propertyName, topInstanceType.toString(),
                 superClassPropType.toString(), propertyType.toString()));
+      }
+    } else if (superInterfacesHasProperty) {
+      // there is an super interface property
+      for (ObjectType interfaceType : ctorType.getExtendedInterfaces()) {
+        if (interfaceType.hasProperty(propertyName)) {
+          JSType superPropertyType =
+            interfaceType.getPropertyType(propertyName);
+          if (!propertyType.canAssignTo(superPropertyType)) {
+            topInstanceType = interfaceType.getConstructor().
+                getTopMostDefiningType(propertyName);
+            compiler.report(
+                t.makeError(n, HIDDEN_SUPERCLASS_PROPERTY_MISMATCH,
+                    propertyName, topInstanceType.toString(),
+                    superPropertyType.toString(),
+                    propertyType.toString()));
+          }
+        }
       }
     } else if (!foundInterfaceProperty) {
       // there is no superclass nor interface implementation
@@ -1379,6 +1428,42 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
   }
 
   /**
+   * Check whether there's any property conflict for for a particular super
+   * interface
+   * @param t The node traversal object that supplies context
+   * @param n The node being visited
+   * @param functionName The function name being checked
+   * @param properties The property names in the super interfaces that have
+   * been visited
+   * @param currentProperties The property names in the super interface
+   * that have been visited
+   * @param interfaceType The super interface that is being visited
+   */
+  private void checkInterfaceConflictProperties(NodeTraversal t, Node n,
+      String functionName, HashMap<String, ObjectType> properties,
+      HashMap<String, ObjectType> currentProperties,
+      ObjectType interfaceType) {
+    Set<String> currentPropertyNames = interfaceType.getPropertyNames();
+    for (String name : currentPropertyNames) {
+      ObjectType oType = properties.get(name);
+      if (oType != null) {
+        if (!interfaceType.getPropertyType(name).isEquivalentTo(
+            oType.getPropertyType(name))) {
+          compiler.report(
+              t.makeError(n, INCOMPATIBLE_EXTENDED_PROPERTY_TYPE,
+                  functionName, name, oType.toString(),
+                  interfaceType.toString()));
+        }
+      }
+      currentProperties.put(name, interfaceType);
+    }
+    for (ObjectType iType : interfaceType.getCtorExtendedInterfaces()) {
+      checkInterfaceConflictProperties(t, n, functionName, properties,
+          currentProperties, iType);
+    }
+  }
+
+  /**
    * Visits a {@link Token#FUNCTION} node.
    *
    * @param t The node traversal object that supplies context, such as the
@@ -1386,40 +1471,65 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
    * @param n The node being visited.
    */
   private void visitFunction(NodeTraversal t, Node n) {
-    JSDocInfo info = n.getJSDocInfo();
-
     FunctionType functionType = (FunctionType) n.getJSType();
     String functionPrivateName = n.getFirstChild().getString();
-    if (functionType.isInterface() || functionType.isConstructor()) {
+    if (functionType.isConstructor()) {
       FunctionType baseConstructor = functionType.
           getPrototype().getImplicitPrototype().getConstructor();
       if (baseConstructor != null &&
           baseConstructor != getNativeType(OBJECT_FUNCTION_TYPE) &&
-          (baseConstructor.isConstructor() && functionType.isInterface() ||
-           baseConstructor.isInterface() && functionType.isConstructor())) {
+          (baseConstructor.isInterface() && functionType.isConstructor())) {
         compiler.report(
             t.makeError(n, CONFLICTING_EXTENDED_TYPE, functionPrivateName));
-      }
-
-      for (JSType baseInterface : functionType.getImplementedInterfaces()) {
-        boolean badImplementedType = false;
-        ObjectType baseInterfaceObj = ObjectType.cast(baseInterface);
-        if (baseInterfaceObj != null) {
-          FunctionType interfaceConstructor =
+      } else {
+        // All interfaces are properly implemented by a class
+        for (JSType baseInterface : functionType.getImplementedInterfaces()) {
+          boolean badImplementedType = false;
+          ObjectType baseInterfaceObj = ObjectType.cast(baseInterface);
+          if (baseInterfaceObj != null) {
+            FunctionType interfaceConstructor =
               baseInterfaceObj.getConstructor();
-          if (interfaceConstructor != null &&
-              !interfaceConstructor.isInterface()) {
+            if (interfaceConstructor != null &&
+                !interfaceConstructor.isInterface()) {
+              badImplementedType = true;
+            }
+          } else {
             badImplementedType = true;
           }
-        } else {
-          badImplementedType = true;
+          if (badImplementedType) {
+            report(t, n, BAD_IMPLEMENTED_TYPE, functionPrivateName);
+          }
         }
-        if (badImplementedType) {
-          report(t, n, BAD_IMPLEMENTED_TYPE, functionPrivateName);
+        // check properties
+        validator.expectAllInterfaceProperties(t, n, functionType);
+      }
+    } else if (functionType.isInterface()) {
+      // Interface must extend only interfaces
+      for (ObjectType extInterface : functionType.getExtendedInterfaces()) {
+        if (extInterface.getConstructor() != null
+            && !extInterface.getConstructor().isInterface()) {
+          compiler.report(
+              t.makeError(n, CONFLICTING_EXTENDED_TYPE, functionPrivateName));
         }
       }
-      if (functionType.isConstructor()) {
-        validator.expectAllInterfaceProperties(t, n, functionType);
+      // Interface cannot implement any interfaces
+      if (functionType.hasImplementedInterfaces()) {
+        compiler.report(t.makeError(n,
+            CONFLICTING_IMPLEMENTED_TYPE, functionPrivateName));
+      }
+      // Check whether the extended interfaces have any conflicts
+      if (functionType.getExtendedInterfacesCount() > 1) {
+        // Only check when extending more than one interfaces
+        HashMap<String, ObjectType> properties
+            = new HashMap<String, ObjectType>();
+        HashMap<String, ObjectType> currentProperties
+            = new HashMap<String, ObjectType>();
+        for (ObjectType interfaceType : functionType.getExtendedInterfaces()) {
+          currentProperties.clear();
+          checkInterfaceConflictProperties(t, n, functionPrivateName,
+              properties, currentProperties, interfaceType);
+          properties.putAll(currentProperties);
+        }
       }
     }
   }
@@ -1463,6 +1573,16 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
            functionType.getReturnType().isVoidType() ||
            !isExtern)) {
         report(t, n, CONSTRUCTOR_NOT_CALLABLE, childType.toString());
+      }
+
+      // Functions with explcit 'this' types must be called in a GETPROP
+      // or GETELEM.
+      if (functionType.isOrdinaryFunction() &&
+          !functionType.getTypeOfThis().isUnknownType() &&
+          !functionType.getTypeOfThis().isNativeObjectType() &&
+          !(child.getType() == Token.GETELEM ||
+            child.getType() == Token.GETPROP)) {
+        report(t, n, EXPECTED_THIS_TYPE, functionType.toString());
       }
 
       visitParameterList(t, n, functionType);
@@ -1667,27 +1787,6 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     } else {
       // The error condition is handled in TypedScopeCreator.
     }
-  }
-
-
-  /**
-   * This predicate is used to determine if the node represents an expression
-   * that is a Reference according to JavaScript definitions.
-   *
-   * @param n The node being checked.
-   * @return true if the sub-tree n is a reference, false otherwise.
-   */
-  private static boolean isReference(Node n) {
-    switch (n.getType()) {
-      case Token.GETELEM:
-      case Token.GETPROP:
-      case Token.NAME:
-        return true;
-
-      default:
-        return false;
-    }
-
   }
 
   /**

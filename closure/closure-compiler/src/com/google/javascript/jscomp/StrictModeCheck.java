@@ -16,12 +16,13 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.collect.Lists;
-
+import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.Scope.Var;
-
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
+
+import java.util.Set;
 
 /**
  * Checks that the code obeys the static restrictions of strict mode:
@@ -36,32 +37,32 @@ import com.google.javascript.rhino.Token;
 class StrictModeCheck extends AbstractPostOrderCallback
     implements CompilerPass {
 
-  static final DiagnosticType UNKNOWN_VARIABLE = DiagnosticType.error(
+  static final DiagnosticType UNKNOWN_VARIABLE = DiagnosticType.warning(
       "JSC_UNKNOWN_VARIABLE", "unknown variable {0}");
 
-  static final DiagnosticType WITH_DISALLOWED = DiagnosticType.error(
+  static final DiagnosticType WITH_DISALLOWED = DiagnosticType.warning(
       "JSC_WITH_DISALLOWED", "\"with\" cannot be used in ES5 strict mode");
 
   static final DiagnosticType EVAL_USE = DiagnosticType.error(
       "JSC_EVAL_USE", "\"eval\" cannot be used in Caja");
 
-  static final DiagnosticType EVAL_DECLARATION = DiagnosticType.error(
+  static final DiagnosticType EVAL_DECLARATION = DiagnosticType.warning(
       "JSC_EVAL_DECLARATION",
       "\"eval\" cannot be redeclared in ES5 strict mode");
 
-  static final DiagnosticType EVAL_ASSIGNMENT = DiagnosticType.error(
+  static final DiagnosticType EVAL_ASSIGNMENT = DiagnosticType.warning(
       "JSC_EVAL_ASSIGNMENT",
       "the \"eval\" object cannot be reassigned in ES5 strict mode");
 
-  static final DiagnosticType ARGUMENTS_DECLARATION = DiagnosticType.error(
+  static final DiagnosticType ARGUMENTS_DECLARATION = DiagnosticType.warning(
       "JSC_ARGUMENTS_DECLARATION",
       "\"arguments\" cannot be redeclared in ES5 strict mode");
 
-  static final DiagnosticType ARGUMENTS_ASSIGNMENT = DiagnosticType.error(
+  static final DiagnosticType ARGUMENTS_ASSIGNMENT = DiagnosticType.warning(
       "JSC_ARGUMENTS_ASSIGNMENT",
       "the \"arguments\" object cannot be reassigned in ES5 strict mode");
 
-  static final DiagnosticType DELETE_VARIABLE = DiagnosticType.error(
+  static final DiagnosticType DELETE_VARIABLE = DiagnosticType.warning(
       "JSC_DELETE_VARIABLE",
       "variables, functions, and arguments cannot be deleted in "
       + "ES5 strict mode");
@@ -69,6 +70,10 @@ class StrictModeCheck extends AbstractPostOrderCallback
   static final DiagnosticType ILLEGAL_NAME = DiagnosticType.error(
       "JSC_ILLEGAL_NAME",
       "identifiers ending in '__' cannot be used in Caja");
+
+  static final DiagnosticType DUPLICATE_OBJECT_KEY = DiagnosticType.warning(
+      "JSC_DUPLICATE_OBJECT_KEY",
+      "object literals cannot contain duplicate keys in ES5 strict mode");
 
   private final AbstractCompiler compiler;
   private final boolean noVarCheck;
@@ -175,12 +180,28 @@ class StrictModeCheck extends AbstractPostOrderCallback
 
   /** Checks that object literal keys are valid. */
   private void checkObjectLiteral(NodeTraversal t, Node n) {
-    if (!noCajaChecks) {
-      for (Node key = n.getFirstChild();
-           key != null;
-           key = key.getNext()) {
-        if (key.getString().endsWith("__")) {
-          t.report(key, ILLEGAL_NAME);
+    Set<String> getters = Sets.newHashSet();
+    Set<String> setters = Sets.newHashSet();
+    for (Node key = n.getFirstChild();
+         key != null;
+         key = key.getNext()) {
+      if (!noCajaChecks && key.getString().endsWith("__")) {
+        t.report(key, ILLEGAL_NAME);
+      }
+      if (key.getType() != Token.SET) {
+        // normal property and getter cases
+        if (getters.contains(key.getString())) {
+          t.report(key, DUPLICATE_OBJECT_KEY);
+        } else {
+          getters.add(key.getString());
+        }
+      }
+      if (key.getType() != Token.GET) {
+        // normal property and setter cases
+        if (setters.contains(key.getString())) {
+          t.report(key, DUPLICATE_OBJECT_KEY);
+        } else {
+          setters.add(key.getString());
         }
       }
     }

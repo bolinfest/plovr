@@ -161,7 +161,7 @@ final class NameAnalyzer implements CompilerPass {
   }
 
   /**
-   * Callback that propagates side effect information across call sites.
+   * Callback that propagates reference information.
    */
   private static class ReferencePropagationCallback
       implements EdgeCallback<JsName, RefType> {
@@ -223,6 +223,9 @@ final class NameAnalyzer implements CompilerPass {
     /** Whether the name has descendants that are written to. */
     boolean hasWrittenDescendants = false;
 
+    /** Whether the name is used in a instanceof check */
+    boolean hasInstanceOfReference = false;
+
     /**
      * Output the node as a string
      *
@@ -265,19 +268,20 @@ final class NameAnalyzer implements CompilerPass {
    * Class for nodes that reference a fully-qualified JS name. Fully qualified
    * names are of form A or A.B (A.B.C, etc.). References can get the value or
    * set the value of the JS name.
-   *
-   * TODO(user) Create an interface with a remove() method that is
-   * implemented differently by type of parent node
    */
   private class JsNameRefNode implements RefNode {
     /** JsName node for this reference */
     JsName name;
 
-    /** Top GETPROP or NAME node defining the name of this node */
+    /**
+     * Top GETPROP or NAME or STRING [objlit key] node defining the name of
+     * this node
+     */
     Node node;
 
     /**
-     * Parent node of the name access (ASSIGN, VAR, FUNCTION, or CALL)
+     * Parent node of the name access
+     * (ASSIGN, VAR, FUNCTION, OBJECTLIT, or CALL)
      */
     Node parent;
 
@@ -286,7 +290,7 @@ final class NameAnalyzer implements CompilerPass {
      * Create a node that refers to a name
      *
      * @param name The name
-     * @param node The top node representing the name (GETPROP, NAME)
+     * @param node The top node representing the name (GETPROP, NAME, STRING)
      */
     JsNameRefNode(JsName name, Node node) {
       this.name = name;
@@ -316,6 +320,11 @@ final class NameAnalyzer implements CompilerPass {
           } else {
             replaceWithRhs(containingNode, parent);
           }
+          break;
+        case Token.OBJECTLIT:
+          // TODO(nicksantos): Come up with a way to remove this.
+          // If we remove object lit keys, then we will need to also
+          // create dependency scopes for them.
           break;
       }
     }
@@ -512,7 +521,7 @@ final class NameAnalyzer implements CompilerPass {
               recordDepScope(nameNode, ns);
             }
           } else {
-            recordDepScope(parent, ns);
+            recordDepScope(n, ns);
           }
         }
       } else if (NodeUtil.isVarDeclaration(n)) {
@@ -587,6 +596,11 @@ final class NameAnalyzer implements CompilerPass {
             JsName nameInfo = getName(nameNode.getString(), true);
             recordSet(nameInfo.name, nameNode);
           }
+        } else if (NodeUtil.isObjectLitKey(n, parent)) {
+          NameInformation ns = createNameInformation(t, n, parent);
+          if (ns != null) {
+            recordSet(ns.name, n);
+          }
         }
       }
 
@@ -619,7 +633,8 @@ final class NameAnalyzer implements CompilerPass {
      * Records the assignment of a value to a global name.
      *
      * @param name Fully qualified name
-     * @param node The top node representing the name (GETPROP, NAME)
+     * @param node The top node representing the name (GETPROP, NAME, or STRING
+     * [objlit key])
      */
     private void recordSet(String name, Node node) {
       JsName jsn = getName(name, true);
@@ -827,6 +842,7 @@ final class NameAnalyzer implements CompilerPass {
         refNodes.add(
             new InstanceOfCheckNode(
                 checkedClass, n, parent, parent.getParent()));
+        checkedClass.hasInstanceOfReference = true;
         return;
       }
 
@@ -862,7 +878,7 @@ final class NameAnalyzer implements CompilerPass {
 
       // An assignment implies a reference from the enclosing dependency scope.
       // For example, foo references bar in: function foo() {bar=5}.
-      if (NodeUtil.isLhs(n, parent)) {
+      if (NodeUtil.isVarOrSimpleAssignLhs(n, parent)) {
         if (referring != null) {
           recordReference(referringName, name, RefType.REGULAR);
         }
@@ -905,7 +921,7 @@ final class NameAnalyzer implements CompilerPass {
      */
     private boolean maybeHiddenAlias(String name, Node n) {
       Node parent = n.getParent();
-      if (NodeUtil.isLhs(n, parent)) {
+      if (NodeUtil.isVarOrSimpleAssignLhs(n, parent)) {
         Node rhs = (parent.getType() == Token.VAR)
             ? n.getFirstChild() : parent.getLastChild();
         return (rhs != null && !NodeUtil.evaluatesToLocalValue(
@@ -1235,11 +1251,15 @@ final class NameAnalyzer implements CompilerPass {
    * directional reference from the original name to the alias. For example,
    * in this case, the assign to {@code a.foo} triggers a reference from
    * {@code b} to {@code a}, but NOT from a to b.
+   *
+   * Similarly, "instanceof" checks do not prevent the removal
+   * of a unaliased name but an instanceof check on an alias can only be removed
+   * if the other aliases are also removed, so we add a connection here.
    */
   private void referenceAliases() {
     for (Map.Entry<String, AliasSet> entry : aliases.entrySet()) {
       JsName name = getName(entry.getKey(), false);
-      if (name.hasWrittenDescendants) {
+      if (name.hasWrittenDescendants || name.hasInstanceOfReference) {
         for (String alias : entry.getValue().names) {
           recordReference(alias, entry.getKey(), RefType.REGULAR);
         }
@@ -1291,16 +1311,39 @@ final class NameAnalyzer implements CompilerPass {
     String name = "";
     Node rootNameNode = n;
     boolean bNameWasShortened = false;
-    while (NodeUtil.isGet(rootNameNode)) {
-      Node prop = rootNameNode.getLastChild();
-      if (rootNameNode.getType() == Token.GETPROP) {
-        name = "." + prop.getString() + name;
+    while (true) {
+      if (NodeUtil.isGet(rootNameNode)) {
+        Node prop = rootNameNode.getLastChild();
+        if (rootNameNode.getType() == Token.GETPROP) {
+          name = "." + prop.getString() + name;
+        } else {
+          // We consider the name to be "a.b" in a.b['c'] or a.b[x].d.
+          bNameWasShortened = true;
+          name = "";
+        }
+        rootNameNode = rootNameNode.getFirstChild();
+      } else if (NodeUtil.isObjectLitKey(
+          rootNameNode, rootNameNode.getParent())) {
+        name = "." + rootNameNode.getString() + name;
+
+        // Check if this is an object literal assigned to something.
+        Node objLit = rootNameNode.getParent();
+        Node objLitParent = objLit.getParent();
+        if (objLitParent.getType() == Token.ASSIGN) {
+          // This must be the right side of the assign.
+          rootNameNode = objLitParent.getFirstChild();
+        } else if (objLitParent.getType() == Token.NAME) {
+          // This must be a VAR initialization.
+          rootNameNode = objLitParent;
+        } else if (objLitParent.getType() == Token.STRING) {
+          // This must be a object literal key initialization.
+          rootNameNode = objLitParent;
+        } else {
+          return null;
+        }
       } else {
-        // We consider the name to be "a.b" in a.b['c'] or a.b[x].d.
-        bNameWasShortened = true;
-        name = "";
+        break;
       }
-      rootNameNode = rootNameNode.getFirstChild();
     }
 
     // Check whether this is a class-defining call. Classes may only be defined
@@ -1471,10 +1514,7 @@ final class NameAnalyzer implements CompilerPass {
       }
 
       if (parent.getType() == Token.ASSIGN) {
-        Node gramp = parent.getParent();
-        if (gramp != null && gramp.getType() == Token.EXPR_RESULT) {
-          return scopes.get(gramp);
-        }
+        return scopes.get(parent);
       }
     }
 

@@ -572,7 +572,7 @@ Array.prototype.unshift = function(var_args) {};
  * left-to-right) as to reduce it to a single value.
  *
  * @param {function(*=, *=, number=, Array=) : *} callback
- * @param {Object=} opt_initialValue
+ * @param {*=} opt_initialValue
  * @this {Object}
  * @see http://developer.mozilla.org/en/Core_JavaScript_1.5_Reference/Global_Objects/Array/reduce
  */
@@ -583,14 +583,14 @@ Array.prototype.reduce = function(callback, opt_initialValue) {};
  * right-to-left) as to reduce it to a single value.
  *
  * @param {function(*=, *=, number=, Array=) : *} callback
- * @param {Object=} opt_initialValue
+ * @param {*=} opt_initialValue
  * @this {Object}
  * @see http://developer.mozilla.org/en/Core_JavaScript_1.5_Reference/Global_Objects/Array/reduceRight
  */
 Array.prototype.reduceRight = function(callback, opt_initialValue) {};
 
 /**
- * Mozilla 1.6+ only.
+ * Available in EcmaScript 5, Mozilla 1.6+.
  * @param {Function} callback
  * @param {Object=} opt_thisobj
  * @return {boolean}
@@ -600,7 +600,7 @@ Array.prototype.reduceRight = function(callback, opt_initialValue) {};
 Array.prototype.every = function(callback, opt_thisobj) {};
 
 /**
- * Mozilla 1.6+ only.
+ * Available in EcmaScript 5, Mozilla 1.6+.
  * @param {Function} callback
  * @param {Object=} opt_thisobj
  * @return {!Array}
@@ -610,7 +610,7 @@ Array.prototype.every = function(callback, opt_thisobj) {};
 Array.prototype.filter = function(callback, opt_thisobj) {};
 
 /**
- * Mozilla 1.6+ only.
+ * Available in EcmaScript 5, Mozilla 1.6+.
  * @param {Function} callback
  * @param {Object=} opt_thisobj
  * @this {Object}
@@ -619,7 +619,7 @@ Array.prototype.filter = function(callback, opt_thisobj) {};
 Array.prototype.forEach = function(callback, opt_thisobj) {};
 
 /**
- * Mozilla 1.6+ only.
+ * Available in EcmaScript 5, Mozilla 1.6+.
  * @param {*} obj
  * @param {number=} opt_fromIndex
  * @return {number}
@@ -630,7 +630,7 @@ Array.prototype.forEach = function(callback, opt_thisobj) {};
 Array.prototype.indexOf = function(obj, opt_fromIndex) {};
 
 /**
- * Mozilla 1.6+ only.
+ * Available in EcmaScript 5, Mozilla 1.6+.
  * @param {*} obj
  * @param {number=} opt_fromIndex
  * @return {number}
@@ -641,7 +641,7 @@ Array.prototype.indexOf = function(obj, opt_fromIndex) {};
 Array.prototype.lastIndexOf = function(obj, opt_fromIndex) {};
 
 /**
- * Mozilla 1.6+ only.
+ * Available in EcmaScript 5, Mozilla 1.6+.
  * @param {Function} callback
  * @param {Object=} opt_thisobj
  * @return {!Array}
@@ -651,7 +651,7 @@ Array.prototype.lastIndexOf = function(obj, opt_fromIndex) {};
 Array.prototype.map = function(callback, opt_thisobj) {};
 
 /**
- * Mozilla 1.6+ only.
+ * Available in EcmaScript 5, Mozilla 1.6+.
  * @param {Function} callback
  * @param {Object=} opt_thisobj
  * @return {boolean}
@@ -1998,11 +1998,24 @@ function Error(opt_message, opt_file, opt_line) {}
 
 
 /**
- * A magical v8 property for altering the maximum depth of the stack trace.
+ * Chrome/v8 specific, altering the maximum depth of the stack trace
+ * (10 by default).
  * @type {number}
- * @see http://code.google.com/p/chromium/issues/detail?id=38958
+ * @see http://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
  */
 Error.stackTraceLimit;
+
+
+/**
+ * Chrome/v8 specific, adds a stack trace to the error object. The optional
+ * constructorOpt parameter allows you to pass in a function value. When
+ * collecting the stack trace all frames above the topmost call to this
+ * function, including that call, will be left out of the stack trace.
+ * @param {Object} error The object to add the stack trace to.
+ * @param {Function=} opt_constructor A function in the stack trace
+ * @see http://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
+ */
+Error.captureStackTrace = function(error, opt_constructor){};
 
 
 /**

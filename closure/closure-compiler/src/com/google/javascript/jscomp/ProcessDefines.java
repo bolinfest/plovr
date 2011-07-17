@@ -67,7 +67,7 @@ class ProcessDefines implements CompilerPass {
   // Errors
   static final DiagnosticType INVALID_DEFINE_TYPE_ERROR =
     DiagnosticType.error(
-        "JSC_INVALID_DEFINE_INIT_ERROR",
+        "JSC_INVALID_DEFINE_TYPE_ERROR",
         "@define tag only permits literal types");
 
   static final DiagnosticType INVALID_DEFINE_INIT_ERROR =
@@ -82,8 +82,8 @@ class ProcessDefines implements CompilerPass {
 
   static final DiagnosticType DEFINE_NOT_ASSIGNABLE_ERROR =
       DiagnosticType.error(
-          "@define variable cannot be assigned here",
-          "@define variable {0} cannot be assigned due to unsafe code at {1}.");
+          "JSC_DEFINE_NOT_ASSIGNABLE_ERROR",
+          "@define variable {0} cannot be reassigned due to code at {1}.");
 
   private static final MessageFormat REASON_DEFINE_NOT_ASSIGNABLE =
       new MessageFormat("line {0} of {1}");
@@ -173,6 +173,7 @@ class ProcessDefines implements CompilerPass {
     // Find all the global names with a @define annotation
     List<Name> allDefines = Lists.newArrayList();
     for (Name name : namespace.getNameIndex().values()) {
+      Ref decl = name.getDeclaration();
       if (name.docInfo != null && name.docInfo.isDefine()) {
         // Process defines should not depend on check types being enabled,
         // so we look for the JSDoc instead of the inferred type.
@@ -180,13 +181,17 @@ class ProcessDefines implements CompilerPass {
           allDefines.add(name);
         } else {
           JSError error = JSError.make(
-              name.declaration.sourceName,
-              name.declaration.node,
-              INVALID_DEFINE_TYPE_ERROR);
+              decl.getSourceName(),
+              decl.node, INVALID_DEFINE_TYPE_ERROR);
           compiler.report(error);
         }
-      } else if (name.refs != null) {
-        for (Ref ref : name.refs) {
+      } else {
+        for (Ref ref : name.getRefs()) {
+          if (ref == decl) {
+            // Declarations were handled above.
+            continue;
+          }
+
           Node n = ref.node;
           Node parent = ref.node.getParent();
           JSDocInfo info = n.getJSDocInfo();
@@ -239,16 +244,20 @@ class ProcessDefines implements CompilerPass {
       // Create a map of references to defines keyed by node for easy lookup
       allRefInfo = Maps.newHashMap();
       for (Name name : listOfDefines) {
-        if (name.declaration != null) {
-          allRefInfo.put(name.declaration.node,
-                         new RefInfo(name.declaration, name));
+        Ref decl = name.getDeclaration();
+        if (decl != null) {
+          allRefInfo.put(decl.node,
+                         new RefInfo(decl, name));
         }
-        if (name.refs != null) {
-          for (Ref ref : name.refs) {
-            // If there's a TWIN def, only put one of the twins in.
-            if (ref.getTwin() == null || !ref.getTwin().isSet()) {
-              allRefInfo.put(ref.node, new RefInfo(ref, name));
-            }
+        for (Ref ref : name.getRefs()) {
+          if (ref == decl) {
+            // Declarations were handled above.
+            continue;
+          }
+
+          // If there's a TWIN def, only put one of the twins in.
+          if (ref.getTwin() == null || !ref.getTwin().isSet()) {
+            allRefInfo.put(ref.node, new RefInfo(ref, name));
           }
         }
       }
@@ -284,7 +293,7 @@ class ProcessDefines implements CompilerPass {
             Node valParent = getValueParent(ref);
             Node val = valParent.getLastChild();
             if (valParent.getType() == Token.ASSIGN && name.isSimpleName() &&
-                name.declaration == ref) {
+                name.getDeclaration() == ref) {
               // For defines, it's an error if a simple name is assigned
               // before it's declared
               compiler.report(

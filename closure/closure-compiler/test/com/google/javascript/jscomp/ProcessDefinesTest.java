@@ -185,9 +185,9 @@ public class ProcessDefinesTest extends CompilerTestCase {
         "var DEF=3;true;3");
 
     Name def = namespace.getNameIndex().get("DEF");
-    assertEquals(0, def.refs.size());
+    assertEquals(1, def.getRefs().size());
     assertEquals(1, def.globalSets);
-    assertNotNull(def.declaration);
+    assertNotNull(def.getDeclaration());
   }
 
   public void testSimpleReassign3() {
@@ -240,9 +240,9 @@ public class ProcessDefinesTest extends CompilerTestCase {
         "var DEF=false;var x=function(){var y=DEF};false");
 
     Name def = namespace.getNameIndex().get("DEF");
-    assertEquals(1, def.refs.size());
+    assertEquals(2, def.getRefs().size());
     assertEquals(1, def.globalSets);
-    assertNotNull(def.declaration);
+    assertNotNull(def.getDeclaration());
   }
 
   public void testReassignAfterRefInConditional() {
@@ -276,9 +276,9 @@ public class ProcessDefinesTest extends CompilerTestCase {
          "var a = {}; a.B = true; true;");
 
     Name aDotB = namespace.getNameIndex().get("a.B");
-    assertEquals(0, aDotB.refs.size());
+    assertEquals(1, aDotB.getRefs().size());
     assertEquals(1, aDotB.globalSets);
-    assertNotNull(aDotB.declaration);
+    assertNotNull(aDotB.getDeclaration());
   }
 
   public void testNamespacedDefine2a() {

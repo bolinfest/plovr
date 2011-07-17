@@ -24,6 +24,9 @@ import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.CompilerOptions.DevMode;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.jscomp.CompilerOptions.TracerMode;
+import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceCollection;
+import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceMap;
+import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.deps.SortedDependencies.CircularDependencyException;
 import com.google.javascript.jscomp.deps.SortedDependencies.MissingProvideException;
 import com.google.javascript.jscomp.mozilla.rhino.ErrorReporter;
@@ -170,6 +173,8 @@ public class Compiler extends AbstractCompiler {
 
   private final PrintStream outStream;
 
+  private GlobalVarReferenceMap globalRefMap = null;
+
   /**
    * Creates a Compiler that reports errors and warnings to its logger.
    */
@@ -253,15 +258,20 @@ public class Compiler extends AbstractCompiler {
           options.checkGlobalThisLevel);
     }
 
+    if (options.getLanguageIn() == LanguageMode.ECMASCRIPT5_STRICT) {
+      options.setWarningLevel(
+          DiagnosticGroups.ES5_STRICT,
+          CheckLevel.ERROR);
+    }
+
     // Initialize the warnings guard.
     List<WarningsGuard> guards = Lists.newArrayList();
     guards.add(
         new SuppressDocWarningsGuard(
             getDiagnosticGroups().getRegisteredGroups()));
-    WarningsGuard warningsGuard = options.getWarningsGuard();
-    if (warningsGuard != null) {
-      guards.add(options.getWarningsGuard());
-    }
+    guards.add(options.getWarningsGuard());
+
+    ComposeWarningsGuard composedGuards = new ComposeWarningsGuard(guards);
 
     // All passes must run the variable check. This synthesizes
     // variables later so that the compiler doesn't crash. It also
@@ -269,13 +279,12 @@ public class Compiler extends AbstractCompiler {
     // about missing variable declarations, we shut that specific
     // error off.
     if (!options.checkSymbols &&
-        (warningsGuard == null || !warningsGuard.disables(
-            DiagnosticGroups.CHECK_VARIABLES))) {
-      guards.add(new DiagnosticGroupWarningsGuard(
+        !composedGuards.enables(DiagnosticGroups.CHECK_VARIABLES)) {
+      composedGuards.addGuard(new DiagnosticGroupWarningsGuard(
           DiagnosticGroups.CHECK_VARIABLES, CheckLevel.OFF));
     }
 
-    this.warningsGuard = new ComposeWarningsGuard(guards);
+    this.warningsGuard = composedGuards;
   }
 
   /**
@@ -755,6 +764,7 @@ public class Compiler extends AbstractCompiler {
     endPass();
   }
 
+  @Override
   void process(CompilerPass p) {
     p.process(externsRoot, jsRoot);
   }
@@ -898,9 +908,7 @@ public class Compiler extends AbstractCompiler {
     return errorManager.getWarnings();
   }
 
-  /**
-   * Returns the root node of the AST, which includes both externs and source.
-   */
+  @Override
   public Node getRoot() {
     return externAndJsRoot;
   }
@@ -952,6 +960,22 @@ public class Compiler extends AbstractCompiler {
   @Override
   public CompilerInput getInput(String name) {
     return inputsByName.get(name);
+  }
+
+  /**
+   * Removes an input file from AST.
+   * @param name The name of the file to be removed.
+   */
+  protected void removeInput(String name) {
+    CompilerInput input = getInput(name);
+    if (input == null) {
+      return;
+    }
+    inputsByName.remove(name);
+    Node root = input.getAstRoot(this);
+    if (root != null) {
+      root.detachFromParent();
+    }
   }
 
   @Override
@@ -1142,9 +1166,6 @@ public class Compiler extends AbstractCompiler {
       boolean staleInputs = false;
       for (CompilerInput input : inputs) {
         Node n = input.getAstRoot(this);
-        if (hasErrors()) {
-          return null;
-        }
 
         // Inputs can have a null AST during initial parse.
         if (n == null) {
@@ -1204,6 +1225,9 @@ public class Compiler extends AbstractCompiler {
         jsRoot.addChildToBack(n);
       }
 
+      if (hasErrors()) {
+        return null;
+      }
       return externAndJsRoot;
     } finally {
       stopTracer(tracer, "parseInputs");
@@ -1385,7 +1409,7 @@ public class Compiler extends AbstractCompiler {
 
           String delimiter = options.inputDelimiter;
 
-          String sourceName = (String)root.getProp(Node.SOURCENAME_PROP);
+          String sourceName = root.getSourceFileName();
           Preconditions.checkState(sourceName != null);
           Preconditions.checkState(!sourceName.isEmpty());
 
@@ -1409,7 +1433,9 @@ public class Compiler extends AbstractCompiler {
               cb.getLineIndex(), cb.getColumnIndex());
         }
 
-        String code = toSource(root, sourceMap);
+        // if LanguageMode is ECMASCRIPT5_STRICT, only print 'use strict'
+        // for the first input file
+        String code = toSource(root, sourceMap, inputSeqNum == 0);
         if (!code.isEmpty()) {
           cb.append(code);
 
@@ -1438,19 +1464,19 @@ public class Compiler extends AbstractCompiler {
   @Override
   String toSource(Node n) {
     initCompilerOptionsIfTesting();
-    return toSource(n, null);
+    return toSource(n, null, true);
   }
 
   /**
    * Generates JavaScript source code for an AST.
    */
-  private String toSource(Node n, SourceMap sourceMap) {
+  private String toSource(Node n, SourceMap sourceMap, boolean firstOutput) {
     CodePrinter.Builder builder = new CodePrinter.Builder(n);
     builder.setPrettyPrint(options.prettyPrint);
     builder.setLineBreak(options.lineBreak);
     builder.setSourceMap(sourceMap);
     builder.setSourceMapDetailLevel(options.sourceMapDetailLevel);
-    builder.setTagAsStrict(
+    builder.setTagAsStrict(firstOutput &&
         options.getLanguageOut() == LanguageMode.ECMASCRIPT5_STRICT);
     builder.setLineLengthThreshold(options.lineLengthThreshold);
 
@@ -1732,12 +1758,7 @@ public class Compiler extends AbstractCompiler {
   @Override
   public CheckLevel getErrorLevel(JSError error) {
     Preconditions.checkNotNull(options);
-    WarningsGuard guards = options.getWarningsGuard();
-    if (guards == null) {
-      return error.level;
-    } else {
-      return guards.level(error);
-    }
+    return warningsGuard.level(error);
   }
 
   /**
@@ -1976,4 +1997,21 @@ public class Compiler extends AbstractCompiler {
   void setHasRegExpGlobalReferences(boolean references) {
     hasRegExpGlobalReferences = references;
   }
+
+  @Override
+  void updateGlobalVarReferences(Map<Var, ReferenceCollection> refMapPatch,
+      Node collectionRoot) {
+    Preconditions.checkState(collectionRoot.getType() == Token.SCRIPT
+        || collectionRoot.getType() == Token.BLOCK);
+    if (globalRefMap == null) {
+      globalRefMap = new GlobalVarReferenceMap(getInputsInOrder());
+    }
+    globalRefMap.updateGlobalVarReferences(refMapPatch, collectionRoot);
+  }
+
+  @Override
+  ReferenceMap getGlobalVarReferences() {
+    return globalRefMap;
+  }
+
 }

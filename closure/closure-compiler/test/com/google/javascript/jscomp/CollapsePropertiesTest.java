@@ -1053,6 +1053,15 @@ public class CollapsePropertiesTest extends CompilerTestCase {
          "var b$c = x; function f() { var a = null; b$c(); }");
   }
 
+  public void testInlineAliasWithModifications() {
+    testSame("var x = 10; function f() { var y = x; x++; alert(y)} ");
+    testSame("var x = 10; function f() { var y = x; x+=1; alert(y)} ");
+    test("var x = {}; x.x = 10; function f() {var y=x.x; x.x++; alert(y)}",
+         "var x$x = 10; function f() {var y=x$x; x$x++; alert(y)}");
+    test("var x = {}; x.x = 10; function f() {var y=x.x; x.x+=1; alert(y)}",
+         "var x$x = 10; function f() {var y=x$x; x$x+=1; alert(y)}");
+  }
+
   public void testCollapsePropertyOnExternType() {
     collapsePropertiesOnExternTypes = true;
     test("String.myFunc = function() {}; String.myFunc();",
@@ -1340,5 +1349,122 @@ public class CollapsePropertiesTest extends CompilerTestCase {
         "a = {b: 3};" +
         "var a = null;" +
         "this.c = a.b;");
+  }
+
+  public void testTypedef1() {
+    test("var foo = {};" +
+         "/** @typedef {number} */ foo.Baz;",
+         "var foo = {}; var foo$Baz;");
+  }
+
+  public void testTypedef2() {
+    test("var foo = {};" +
+         "/** @typedef {number} */ foo.Bar.Baz;" +
+         "foo.Bar = function() {};",
+         "var foo$Bar$Baz; var foo$Bar = function(){};");
+  }
+
+  public void testDelete1() {
+    testSame(
+        "var foo = {};" +
+        "foo.bar = 3;" +
+        "delete foo.bar;");
+  }
+
+  public void testDelete2() {
+    test(
+        "var foo = {};" +
+        "foo.bar = 3;" +
+        "foo.baz = 3;" +
+        "delete foo.bar;",
+        "var foo = {};" +
+        "foo.bar = 3;" +
+        "var foo$baz = 3;" +
+        "delete foo.bar;");
+  }
+
+  public void testDelete3() {
+    testSame(
+        "var foo = {bar: 3};" +
+        "delete foo.bar;");
+  }
+
+  public void testDelete4() {
+    test(
+        "var foo = {bar: 3, baz: 3};" +
+        "delete foo.bar;",
+        "var foo$baz=3;var foo={bar:3};delete foo.bar");
+  }
+
+  public void testDelete5() {
+    test(
+        "var x = {};" +
+        "x.foo = {};" +
+        "x.foo.bar = 3;" +
+        "delete x.foo.bar;",
+        "var x$foo = {};" +
+        "x$foo.bar = 3;" +
+        "delete x$foo.bar;");
+  }
+
+  public void testDelete6() {
+    test(
+        "var x = {};" +
+        "x.foo = {};" +
+        "x.foo.bar = 3;" +
+        "x.foo.baz = 3;" +
+        "delete x.foo.bar;",
+        "var x$foo = {};" +
+        "x$foo.bar = 3;" +
+        "var x$foo$baz = 3;" +
+        "delete x$foo.bar;");
+  }
+
+  public void testDelete7() {
+    test(
+        "var x = {};" +
+        "x.foo = {bar: 3};" +
+        "delete x.foo.bar;",
+        "var x$foo = {bar: 3};" +
+        "delete x$foo.bar;");
+  }
+
+  public void testDelete8() {
+    test(
+        "var x = {};" +
+        "x.foo = {bar: 3, baz: 3};" +
+        "delete x.foo.bar;",
+        "var x$foo$baz = 3; var x$foo = {bar: 3};" +
+        "delete x$foo.bar;");
+  }
+
+  public void testDelete9() {
+    testSame(
+        "var x = {};" +
+        "x.foo = {};" +
+        "x.foo.bar = 3;" +
+        "delete x.foo;");
+  }
+
+  public void testDelete10() {
+    testSame(
+        "var x = {};" +
+        "x.foo = {bar: 3};" +
+        "delete x.foo;");
+  }
+
+  public void testDelete11() {
+    // Constructors are always collapsed.
+    test(
+        "var x = {};" +
+        "x.foo = {};" +
+        "/** @constructor */ x.foo.Bar = function() {};" +
+        "delete x.foo;",
+        "var x = {};" +
+        "x.foo = {};" +
+        "var x$foo$Bar = function() {};" +
+        "delete x.foo;",
+        null,
+        CollapseProperties.NAMESPACE_REDEFINED_WARNING);
   }
 }

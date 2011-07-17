@@ -17,8 +17,8 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -39,8 +39,6 @@ public class ClosureCodingConvention extends DefaultCodingConvention {
 
   private static final long serialVersionUID = 1L;
 
-  private static final String TYPEDEF_NAME = "goog.typedef";
-
   static final DiagnosticType OBJECTLIT_EXPECTED = DiagnosticType.warning(
       "JSC_REFLECT_OBJECTLIT_EXPECTED",
       "Object literal expected as second argument");
@@ -54,9 +52,9 @@ public class ClosureCodingConvention extends DefaultCodingConvention {
       FunctionType childCtor, SubclassType type) {
     if (type == SubclassType.INHERITS) {
       childCtor.defineDeclaredProperty("superClass_",
-          parentCtor.getPrototype(), false, parentCtor.getSource());
+          parentCtor.getPrototype(), parentCtor.getSource());
       childCtor.getPrototype().defineDeclaredProperty("constructor",
-          childCtor, false, parentCtor.getSource());
+          childCtor, parentCtor.getSource());
     }
   }
 
@@ -89,6 +87,8 @@ public class ClosureCodingConvention extends DefaultCodingConvention {
       } else if (callNode.getChildCount() == 3) {
         // goog.inherits(SubClass, SuperClass)
         subclass = callName.getNext();
+      } else {
+        return null;
       }
 
       if (type == SubclassType.MIXIN) {
@@ -239,24 +239,6 @@ public class ClosureCodingConvention extends DefaultCodingConvention {
   }
 
   @Override
-  public String identifyTypeDefAssign(Node n) {
-    Node firstChild = n.getFirstChild();
-    int type = n.getType();
-    if (type == Token.ASSIGN) {
-      if (TYPEDEF_NAME.equals(n.getLastChild().getQualifiedName())) {
-        return firstChild.getQualifiedName();
-      }
-    } else if (type == Token.VAR && firstChild.hasChildren()) {
-      if (TYPEDEF_NAME.equals(
-              firstChild.getFirstChild().getQualifiedName())) {
-        return firstChild.getString();
-      }
-    }
-
-    return null;
-  }
-
-  @Override
   public String getAbstractMethodName() {
     return "goog.abstractMethod";
   }
@@ -279,9 +261,9 @@ public class ClosureCodingConvention extends DefaultCodingConvention {
   @Override
   public void applySingletonGetter(FunctionType functionType,
       FunctionType getterType, ObjectType objectType) {
-    functionType.defineDeclaredProperty("getInstance", getterType, false,
+    functionType.defineDeclaredProperty("getInstance", getterType,
         functionType.getSource());
-    functionType.defineDeclaredProperty("instance_", objectType, false,
+    functionType.defineDeclaredProperty("instance_", objectType,
         functionType.getSource());
   }
 
@@ -308,7 +290,7 @@ public class ClosureCodingConvention extends DefaultCodingConvention {
     Preconditions.checkArgument(callNode.getType() == Token.CALL);
     Node callName = callNode.getFirstChild();
     if (!"goog.reflect.object".equals(callName.getQualifiedName()) ||
-        callName.getChildCount() != 2) {
+        callNode.getChildCount() != 3) {
       return null;
     }
 
@@ -319,6 +301,7 @@ public class ClosureCodingConvention extends DefaultCodingConvention {
 
     Node objectNode = typeNode.getNext();
     if (objectNode.getType() != Token.OBJECTLIT) {
+      // TODO(johnlenz): The coding convention should not be performing checks.
       t.getCompiler().report(JSError.make(t.getSourceName(), callNode,
                                           OBJECTLIT_EXPECTED));
       return null;
@@ -362,5 +345,56 @@ public class ClosureCodingConvention extends DefaultCodingConvention {
         new AssertionFunctionSpec("goog.asserts.assertInstanceof",
             JSTypeNative.OBJECT_TYPE)
     );
+  }
+
+  @Override
+  public Bind describeFunctionBind(Node n) {
+    Bind result = super.describeFunctionBind(n);
+    if (result != null) {
+      return result;
+    }
+
+    // It would be nice to be able to identify a fn.bind call
+    // but that requires knowing the type of "fn".
+
+    if (n.getType() != Token.CALL) {
+      return null;
+    }
+
+    Node callTarget = n.getFirstChild();
+    String name = callTarget.getQualifiedName();
+    if (name != null) {
+      if (name.equals("goog.bind")
+          || name.equals("goog$bind")) {
+        // goog.bind(fn, self, args...);
+        Node fn = callTarget.getNext();
+        if (fn == null) {
+          return null;
+        }
+        Node thisValue = safeNext(fn);
+        Node parameters = safeNext(thisValue);
+        return new Bind(fn, thisValue, parameters);
+      }
+
+      if (name.equals("goog.partial") || name.equals("goog$partial")) {
+        // goog.partial(fn, args...);
+        Node fn = callTarget.getNext();
+        if (fn == null) {
+          return null;
+        }
+        Node thisValue = null;
+        Node parameters = safeNext(fn);
+        return new Bind(fn, thisValue, parameters);
+      }
+    }
+
+    return null;
+  }
+
+  private Node safeNext(Node n) {
+    if (n != null) {
+      return n.getNext();
+    }
+    return null;
   }
 }

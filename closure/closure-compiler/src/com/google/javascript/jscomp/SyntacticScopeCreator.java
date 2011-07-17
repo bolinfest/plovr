@@ -81,7 +81,7 @@ class SyntacticScopeCreator implements ScopeCreator {
 
   private void scanRoot(Node n, Scope parent) {
     if (n.getType() == Token.FUNCTION) {
-      sourceName = (String) n.getProp(Node.SOURCENAME_PROP);
+      sourceName = n.getSourceFileName();
 
       final Node fnNameNode = n.getFirstChild();
       final Node args = fnNameNode.getNext();
@@ -153,7 +153,7 @@ class SyntacticScopeCreator implements ScopeCreator {
         return;  // only one child to scan
 
       case Token.SCRIPT:
-        sourceName = (String) n.getProp(Node.SOURCENAME_PROP);
+        sourceName = n.getSourceFileName();
         break;
     }
 
@@ -195,21 +195,7 @@ class SyntacticScopeCreator implements ScopeCreator {
           return;
         }
 
-        boolean allowDupe = false;
-        JSDocInfo info = n.getJSDocInfo();
-        if (info == null) {
-          info = parent.getJSDocInfo();
-        }
-        allowDupe =
-            info != null && info.getSuppressions().contains("duplicate");
-
-        info = origVar.nameNode.getJSDocInfo();
-        if (info == null) {
-          info = origParent.getJSDocInfo();
-        }
-
-        allowDupe |=
-            info != null && info.getSuppressions().contains("duplicate");
+        boolean allowDupe = hasDuplicateDeclarationSuppression(n, origVar);
 
         if (!allowDupe) {
           compiler.report(
@@ -234,7 +220,6 @@ class SyntacticScopeCreator implements ScopeCreator {
    * Declares a variable.
    *
    * @param n The node corresponding to the variable name.
-   * @param declaredType The variable's type, according to JSDoc
    */
   private void declareVar(Node n) {
     Preconditions.checkState(n.getType() == Token.NAME);
@@ -249,4 +234,45 @@ class SyntacticScopeCreator implements ScopeCreator {
       scope.declare(name, n, null, input);
     }
   }
+
+
+  /**
+   * @param n The name node to check.
+   * @param origVar The associated Var.
+   * @return Whether duplicated declarations warnings should be suppressed
+   *     for the given node.
+   */
+  static boolean hasDuplicateDeclarationSuppression(Node n, Scope.Var origVar) {
+    Preconditions.checkState(n.getType() == Token.NAME);
+    Node parent = n.getParent();
+    Node origParent = origVar.getParentNode();
+
+    JSDocInfo info = n.getJSDocInfo();
+    if (info == null) {
+      info = parent.getJSDocInfo();
+    }
+    if (info != null && info.getSuppressions().contains("duplicate")) {
+      return true;
+    }
+
+    info = origVar.nameNode.getJSDocInfo();
+    if (info == null) {
+      info = origParent.getJSDocInfo();
+    }
+    return (info != null && info.getSuppressions().contains("duplicate"));
+  }
+
+  /**
+   * Generates an untyped global scope from the root of AST of compiler (which
+   * includes externs).
+   *
+   * @param compiler The compiler for which the scope is generated.
+   * @return The new untyped global scope generated as a result of this call.
+   */
+  static Scope generateUntypedTopScope(AbstractCompiler compiler) {
+    return new SyntacticScopeCreator(compiler).createScope(compiler.getRoot(),
+        null);
+  }
+
+
 }

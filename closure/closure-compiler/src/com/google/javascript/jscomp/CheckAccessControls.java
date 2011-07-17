@@ -16,38 +16,34 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.common.base.Preconditions;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimap;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
 import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
-import com.google.javascript.rhino.jstype.JSType;
-import com.google.javascript.rhino.jstype.FunctionPrototypeType;
-import com.google.javascript.rhino.jstype.FunctionType;
-import com.google.javascript.rhino.jstype.ObjectType;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-
-import com.google.common.collect.Multimap;
-import com.google.common.collect.HashMultimap;
+import com.google.javascript.rhino.jstype.FunctionPrototypeType;
+import com.google.javascript.rhino.jstype.FunctionType;
+import com.google.javascript.rhino.jstype.JSType;
+import com.google.javascript.rhino.jstype.ObjectType;
 
 /**
  * A compiler pass that checks that the programmer has obeyed all the access
  * control restrictions indicated by JSDoc annotations, like
  * {@code @private} and {@code @deprecated}.
  *
- * There are two parts to this pass:
- * 1) JSDoc Inference: Attaching the appropriate JSDoc to
- *    all programmer-defined types and properties.
- * 2) Access Control Enforcement: Emitting warnings when the code does not
- *    obey the restrictions attached to JSTypes in step 1.
- *
  * Because access control restrictions are attached to type information,
- * it's important that TypeCheck runs before this pass, so that all types
- * are correctly resolved and propagated before this pass runs.
+ * it's important that TypedScopeCreator, TypeInference, and InferJSDocInfo
+ * all run before this pass. TypedScopeCreator creates and resolves types,
+ * TypeInference propagates those types across the AST, and InferJSDocInfo
+ * propagates JSDoc across the types.
  *
  * @author nicksantos@google.com (Nick Santos)
  */
-class CheckAccessControls implements ScopedCallback, CompilerPass {
+class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
 
   static final DiagnosticType DEPRECATED_NAME = DiagnosticType.disabled(
       "JSC_DEPRECATED_VAR",
@@ -103,6 +99,11 @@ class CheckAccessControls implements ScopedCallback, CompilerPass {
         "JSC_CONSTANT_PROPERTY_REASSIGNED_VALUE",
         "constant property {0} assigned a value more than once");
 
+  static final DiagnosticType CONST_PROPERTY_DELETED =
+      DiagnosticType.warning(
+        "JSC_CONSTANT_PROPERTY_DELETED",
+        "constant property {0} cannot be deleted");
+
   private final AbstractCompiler compiler;
   private final TypeValidator validator;
 
@@ -119,8 +120,14 @@ class CheckAccessControls implements ScopedCallback, CompilerPass {
     this.initializedConstantProperties = HashMultimap.create();
   }
 
+  @Override
   public void process(Node externs, Node root) {
     NodeTraversal.traverse(compiler, root, this);
+  }
+
+  @Override
+  public void hotSwapScript(Node scriptRoot) {
+    NodeTraversal.traverse(compiler, scriptRoot, this);
   }
 
   public void enterScope(NodeTraversal t) {
@@ -349,8 +356,10 @@ class CheckAccessControls implements ScopedCallback, CompilerPass {
       Node getprop) {
     // Check whether the property is modified
     Node parent = getprop.getParent();
+    boolean isDelete = parent.getType() == Token.DELPROP;
     if (!(NodeUtil.isAssignmentOp(parent) && parent.getFirstChild() == getprop)
-        && (parent.getType() != Token.INC) && (parent.getType() != Token.DEC)) {
+        && (parent.getType() != Token.INC) && (parent.getType() != Token.DEC)
+        && !isDelete) {
       return;
     }
 
@@ -358,8 +367,16 @@ class CheckAccessControls implements ScopedCallback, CompilerPass {
       ObjectType.cast(dereference(getprop.getFirstChild().getJSType()));
     String propertyName = getprop.getLastChild().getString();
 
+    boolean isConstant = isPropertyDeclaredConstant(objectType, propertyName);
+
     // Check whether constant properties are reassigned
-    if (objectType != null) {
+    if (isConstant) {
+      if (isDelete) {
+        compiler.report(
+            t.makeError(getprop, CONST_PROPERTY_DELETED, propertyName));
+        return;
+      }
+
       ObjectType oType = objectType;
       while (oType != null) {
         if (oType.hasReferenceName()) {
@@ -374,20 +391,15 @@ class CheckAccessControls implements ScopedCallback, CompilerPass {
         oType = oType.getImplicitPrototype();
       }
 
-      JSDocInfo info = objectType.getOwnPropertyJSDocInfo(propertyName);
-      if (info != null && info.isConstant()
-          && objectType.hasReferenceName()) {
-        initializedConstantProperties.put(objectType.getReferenceName(),
-            propertyName);
-      }
+      Preconditions.checkState(objectType.hasReferenceName());
+      initializedConstantProperties.put(objectType.getReferenceName(),
+          propertyName);
 
       // Add the prototype when we're looking at an instance object
       if (objectType.isInstanceType()) {
         ObjectType prototype = objectType.getImplicitPrototype();
         if (prototype != null) {
-          JSDocInfo prototypeInfo
-            = prototype.getOwnPropertyJSDocInfo(propertyName);
-          if (prototypeInfo != null && prototypeInfo.isConstant()
+          if (prototype.hasProperty(propertyName)
               && prototype.hasReferenceName()) {
             initializedConstantProperties.put(prototype.getReferenceName(),
                 propertyName);
@@ -411,7 +423,7 @@ class CheckAccessControls implements ScopedCallback, CompilerPass {
     if (objectType != null) {
       // Is this a normal property access, or are we trying to override
       // an existing property?
-      boolean isOverride = t.inGlobalScope() &&
+      boolean isOverride = parent.getJSDocInfo() != null &&
           parent.getType() == Token.ASSIGN &&
           parent.getFirstChild() == getprop;
 
@@ -607,6 +619,24 @@ class CheckAccessControls implements ScopedCallback, CompilerPass {
       }
     }
     return null;
+  }
+
+  /**
+   * Returns if a property is declared constant.
+   */
+  private static boolean isPropertyDeclaredConstant(
+      ObjectType objectType, String prop) {
+    for (;
+         // Only objects with reference names can have constant properties.
+         objectType != null && objectType.hasReferenceName();
+
+         objectType = objectType.getImplicitPrototype()) {
+      JSDocInfo docInfo = objectType.getOwnPropertyJSDocInfo(prop);
+      if (docInfo != null && docInfo.isConstant()) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

@@ -65,6 +65,14 @@ class ProxyObjectType extends ObjectType {
     setReferencedType(referencedType);
   }
 
+  @Override
+  public StaticSlot<JSType> getSlot(String name) {
+    if (referencedObjType != null) {
+      return referencedObjType.getSlot(name);
+    }
+    return null;
+  }
+
   JSType getReferencedTypeInternal() {
     return referencedType;
   }
@@ -94,7 +102,8 @@ class ProxyObjectType extends ObjectType {
         null : referencedObjType.hasReferenceName();
   }
 
-  @Override public boolean matchesNumberContext() {
+  @Override
+  public boolean matchesNumberContext() {
     return referencedType.matchesNumberContext();
   }
 
@@ -103,7 +112,8 @@ class ProxyObjectType extends ObjectType {
     return referencedType.matchesStringContext();
   }
 
-  @Override public boolean matchesObjectContext() {
+  @Override
+  public boolean matchesObjectContext() {
     return referencedType.matchesObjectContext();
   }
 
@@ -229,10 +239,10 @@ class ProxyObjectType extends ObjectType {
 
   @Override
   boolean defineProperty(String propertyName, JSType type,
-      boolean inferred, boolean inExterns, Node propertyNode) {
+      boolean inferred, Node propertyNode) {
     return referencedObjType == null ? true :
         referencedObjType.defineProperty(
-            propertyName, type, inferred, inExterns, propertyNode);
+            propertyName, type, inferred, propertyNode);
   }
 
   @Override
@@ -303,10 +313,9 @@ class ProxyObjectType extends ObjectType {
   }
 
   @Override
-  public void setPropertyJSDocInfo(String propertyName, JSDocInfo info,
-      boolean inExterns) {
+  public void setPropertyJSDocInfo(String propertyName, JSDocInfo info) {
     if (referencedObjType != null) {
-      referencedObjType.setPropertyJSDocInfo(propertyName, info, inExterns);
+      referencedObjType.setPropertyJSDocInfo(propertyName, info);
     }
   }
 

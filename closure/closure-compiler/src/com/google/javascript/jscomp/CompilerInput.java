@@ -24,6 +24,7 @@ import com.google.javascript.jscomp.deps.DependencyInfo;
 import com.google.javascript.jscomp.deps.JsFileParser;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
+import com.google.javascript.rhino.jstype.StaticSourceFile;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -37,16 +38,19 @@ import java.util.Set;
  * whether the input is an extern. Also calculates provided and required types.
  *
  */
-public class CompilerInput implements SourceAst, DependencyInfo {
+public class CompilerInput
+    implements SourceAst, DependencyInfo, StaticSourceFile {
   private static final long serialVersionUID = 1L;
 
   // Info about where the file lives.
   private JSModule module;
-  private boolean isExtern;
   final private String name;
 
   // The AST.
   private final SourceAst ast;
+
+  // Source Line Information
+  private int[] lineOffsets = null;
 
   // Provided and required symbols.
   private final Set<String> provides = Sets.newHashSet();
@@ -71,7 +75,12 @@ public class CompilerInput implements SourceAst, DependencyInfo {
   public CompilerInput(SourceAst ast, String inputName, boolean isExtern) {
     this.ast = ast;
     this.name = inputName;
-    this.isExtern = isExtern;
+
+    // TODO(nicksantos): Add a precondition check here. People are passing
+    // in null, but they should not be.
+    if (ast != null && ast.getSourceFile() != null) {
+      ast.getSourceFile().setIsExtern(isExtern);
+    }
   }
 
   public CompilerInput(JSSourceFile file) {
@@ -79,9 +88,7 @@ public class CompilerInput implements SourceAst, DependencyInfo {
   }
 
   public CompilerInput(JSSourceFile file, boolean isExtern) {
-    this.ast = new JsAst(file);
-    this.name = file.getName();
-    this.isExtern = isExtern;
+    this(new JsAst(file), file.getName(), isExtern);
   }
 
   /** Returns a name for this input. Must be unique across all inputs. */
@@ -115,6 +122,7 @@ public class CompilerInput implements SourceAst, DependencyInfo {
   @Override
   public void setSourceFile(SourceFile file) {
     ast.setSourceFile(file);
+    lineOffsets = null;
   }
 
   /** Returns the SourceAst object on which this input is based. */
@@ -290,11 +298,62 @@ public class CompilerInput implements SourceAst, DependencyInfo {
     this.module = module;
   }
 
+  @Override
   public boolean isExtern() {
-    return isExtern;
+    if (ast == null || ast.getSourceFile() == null) {
+      return false;
+    }
+    return ast.getSourceFile().isExtern();
   }
 
   void setIsExtern(boolean isExtern) {
-    this.isExtern = isExtern;
+    if (ast == null || ast.getSourceFile() == null) {
+      return;
+    }
+    ast.getSourceFile().setIsExtern(isExtern);
+  }
+
+  /**
+   * @param lineno the line of the input to get the absolute offset of.
+   * @return the absolute offset of the start of the provided line.
+   * @throws IllegalArgumentException if lineno is less than 1 or greater than
+   *         the number of lines in the source.
+   */
+  public int getLineOffset(int lineno) {
+    if (lineOffsets == null) {
+      findLineOffsets();
+    }
+    if (lineno < 1 || lineno > lineOffsets.length) {
+      throw new IllegalArgumentException(
+          "Expected line number between 1 and " + lineOffsets.length);
+    }
+    return lineOffsets[lineno - 1];
+  }
+
+  /** @return The number of lines in this input. */
+  public int getNumLines() {
+    if (lineOffsets == null) {
+      findLineOffsets();
+    }
+    return lineOffsets.length;
+  }
+
+  private void findLineOffsets() {
+    try {
+      String[] sourceLines = ast.getSourceFile().getCode().split("\n");
+      lineOffsets = new int[sourceLines.length];
+      for (int ii = 1; ii < sourceLines.length; ++ii) {
+        lineOffsets[ii] =
+            lineOffsets[ii - 1] + sourceLines[ii - 1].length() + 1;
+      }
+    } catch (IOException e) {
+      lineOffsets = new int[1];
+      lineOffsets[0] = 0;
+    }
+  }
+
+  @Override
+  public String toString() {
+    return getName();
   }
 }

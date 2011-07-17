@@ -18,19 +18,23 @@ package com.google.javascript.jscomp.parsing;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.mozilla.rhino.ErrorReporter;
 import com.google.javascript.jscomp.mozilla.rhino.ast.Comment;
 import com.google.javascript.jscomp.parsing.Config.LanguageMode;
 import com.google.javascript.rhino.JSDocInfo;
+import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.ScriptRuntime;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.JSDocInfo.Visibility;
+import com.google.javascript.rhino.jstype.SimpleSourceFile;
+import com.google.javascript.rhino.jstype.StaticSourceFile;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -44,6 +48,7 @@ public final class JsDocInfoParser {
 
   private final JsDocTokenStream stream;
   private final JSDocInfoBuilder jsdocBuilder;
+  private final StaticSourceFile sourceFile;
   private final String sourceName;
   private final ErrorReporter errorReporter;
   private final ErrorReporterParser parser = new ErrorReporterParser();
@@ -119,11 +124,15 @@ public final class JsDocInfoParser {
 
   JsDocInfoParser(JsDocTokenStream stream,
                   Comment commentNode,
-                  String sourceName,
+                  StaticSourceFile sourceFile,
                   Config config,
                   ErrorReporter errorReporter) {
     this.stream = stream;
-    this.sourceName = sourceName;
+    this.sourceFile = sourceFile;
+
+    // Sometimes this will be null in tests.
+    this.sourceName = sourceFile == null ? null : sourceFile.getName();
+
     this.jsdocBuilder = new JSDocInfoBuilder(config.parseJsDocDocumentation);
     if (commentNode != null) {
       this.jsdocBuilder.recordOriginalCommentString(commentNode.getValue());
@@ -149,7 +158,7 @@ public final class JsDocInfoParser {
     JsDocInfoParser parser = new JsDocInfoParser(
         new JsDocTokenStream(typeString),
         null,
-        "typeparsing",
+        new SimpleSourceFile("typeparsing", false),
         config,
         NullErrorReporter.forNewRhino());
 
@@ -175,6 +184,8 @@ public final class JsDocInfoParser {
     skipEOLs();
 
     JsDocToken token = next();
+
+    List<ExtendedTypeInfo> extendedTypes = Lists.newArrayList();
 
     // Always record that we have a comment.
     if (jsdocBuilder.shouldParseDocumentation()) {
@@ -408,10 +419,9 @@ public final class JsDocInfoParser {
                     type = createJSTypeExpression(typeNode);
 
                     if (annotation == Annotation.EXTENDS) {
-                      if (!jsdocBuilder.recordBaseType(type)) {
-                        parser.addTypeWarning(
-                            "msg.jsdoc.incompat.type", lineno, charno);
-                      }
+                      // record the extended type, check later
+                      extendedTypes.add(new ExtendedTypeInfo(
+                          type, stream.getLineno(), stream.getCharno()));
                     } else {
                       Preconditions.checkState(
                           annotation == Annotation.IMPLEMENTS);
@@ -792,7 +802,7 @@ public final class JsDocInfoParser {
                   } else {
                     skipEOLs();
                     token = next();
-                    typeNode = parseAndRecordTypeNode(token, lineno, charno);
+                    typeNode = parseAndRecordTypeNode(token);
                   }
 
                   if (annotation == Annotation.THIS) {
@@ -862,9 +872,9 @@ public final class JsDocInfoParser {
                         }
                         break;
                     }
-
-                    token = eatTokensUntilEOL();
                   }
+
+                  token = eatTokensUntilEOL();
                   continue retry;
               }
             }
@@ -875,7 +885,7 @@ public final class JsDocInfoParser {
           if (hasParsedFileOverviewDocInfo()) {
             fileOverviewJSDocInfo = retrieveAndResetParsedJSDocInfo();
           }
-
+          checkExtendedTypes(extendedTypes);
           return true;
 
         case EOF:
@@ -883,6 +893,7 @@ public final class JsDocInfoParser {
           jsdocBuilder.build(null);
           parser.addParserWarning("msg.unexpected.eof",
               stream.getLineno(), stream.getCharno());
+          checkExtendedTypes(extendedTypes);
           return false;
 
         case EOL:
@@ -905,6 +916,23 @@ public final class JsDocInfoParser {
 
       // next token
       token = next();
+    }
+  }
+
+  private void checkExtendedTypes(List<ExtendedTypeInfo> extendedTypes) {
+    for (ExtendedTypeInfo typeInfo : extendedTypes) {
+      // If interface, record the multiple extended interfaces
+      if (jsdocBuilder.isInterfaceRecorded()) {
+        if (!jsdocBuilder.recordExtendedInterface(typeInfo.type)) {
+          parser.addParserWarning("msg.jsdoc.extends.duplicate",
+              typeInfo.lineno, typeInfo.charno);
+        }
+      } else {
+        if (!jsdocBuilder.recordBaseType(typeInfo.type)) {
+          parser.addTypeWarning("msg.jsdoc.incompat.type",
+              typeInfo.lineno, typeInfo.charno);
+        }
+      }
     }
   }
 
@@ -1023,21 +1051,6 @@ public final class JsDocInfoParser {
   private Node parseAndRecordTypeNode(JsDocToken token, boolean matchingLC) {
     return parseAndRecordTypeNode(token, stream.getLineno(), stream.getCharno(),
         matchingLC, false);
-  }
-
-  /**
-   * Looks for a type expression at the current token and if found,
-   * returns it. Note that this method consumes input.
-   *
-   * @param token The current token.
-   * @param lineno The line of the type expression.
-   * @param startCharno The starting character position of the type expression.
-   * @return The type expression found or null if none.
-   */
-  private Node parseAndRecordTypeNode(JsDocToken token, int lineno,
-      int startCharno) {
-    return parseAndRecordTypeNode(token, lineno, startCharno,
-        token == JsDocToken.LC, false);
   }
 
   /**
@@ -1203,6 +1216,21 @@ public final class JsDocInfoParser {
     public ExtractionInfo(String string, JsDocToken token) {
       this.string = string;
       this.token = token;
+    }
+  }
+
+  /**
+   * Tuple for recording extended types
+   */
+  private static class ExtendedTypeInfo {
+    final JSTypeExpression type;
+    final int lineno;
+    final int charno;
+
+    public ExtendedTypeInfo(JSTypeExpression type, int lineno, int charno) {
+      this.type = type;
+      this.lineno = lineno;
+      this.charno = charno;
     }
   }
 
@@ -1670,6 +1698,7 @@ public final class JsDocInfoParser {
       }
     }
 
+    restoreLookAhead(token);
     return reportGenericTypeSyntaxWarning();
   }
 
@@ -1722,6 +1751,7 @@ public final class JsDocInfoParser {
     // NOTE(nicksantos): We're not implementing generics at the moment, so
     // just throw out TypeParameters.
     if (token != JsDocToken.LP) {
+      restoreLookAhead(token);
       return reportTypeSyntaxWarning("msg.jsdoc.missing.lp");
     }
 
@@ -2114,7 +2144,7 @@ public final class JsDocInfoParser {
   private Node createTemplateNode() {
     // The Node type choice is arbitrary.
     Node templateNode = new Node(Token.SCRIPT);
-    templateNode.putProp(Node.SOURCENAME_PROP, sourceName);
+    templateNode.setStaticSourceFile(sourceFile);
     return templateNode;
   }
 

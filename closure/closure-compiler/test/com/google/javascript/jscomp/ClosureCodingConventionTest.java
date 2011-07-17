@@ -145,9 +145,70 @@ public class ClosureCodingConventionTest extends TestCase {
     assertNotClassDefining("goog.mixin(A, B)");
   }
 
+  public void testInheritanceDetection14() {
+    assertNotClassDefining("goog$mixin((function(){}).prototype)");
+  }
+
   public void testInheritanceDetectionPostCollapseProperties() {
     assertDefinesClasses("goog$inherits(A, B);", "A", "B");
     assertNotClassDefining("goog$inherits(A);");
+  }
+
+  public void testObjectLiteralCast() {
+    assertNotObjectLiteralCast("goog.reflect.object();");
+    assertNotObjectLiteralCast("goog.reflect.object(A);");
+    assertNotObjectLiteralCast("goog.reflect.object(1, {});");
+    assertObjectLiteralCast("goog.reflect.object(A, {});");
+  }
+
+  public void testFunctionBind() {
+    assertNotFunctionBind("goog.bind()");  // invalid bind
+    assertFunctionBind("goog.bind(f)");
+    assertFunctionBind("goog.bind(f, obj)");
+    assertFunctionBind("goog.bind(f, obj, p1)");
+
+    assertNotFunctionBind("goog$bind()");  // invalid bind
+    assertFunctionBind("goog$bind(f)");
+    assertFunctionBind("goog$bind(f, obj)");
+    assertFunctionBind("goog$bind(f, obj, p1)");
+
+    assertNotFunctionBind("goog.partial()");  // invalid bind
+    assertFunctionBind("goog.partial(f)");
+    assertFunctionBind("goog.partial(f, obj)");
+    assertFunctionBind("goog.partial(f, obj, p1)");
+
+    assertNotFunctionBind("goog$partial()");  // invalid bind
+    assertFunctionBind("goog$partial(f)");
+    assertFunctionBind("goog$partial(f, obj)");
+    assertFunctionBind("goog$partial(f, obj, p1)");
+
+    assertFunctionBind("(function(){}).bind()");
+    assertFunctionBind("(function(){}).bind(obj)");
+    assertFunctionBind("(function(){}).bind(obj, p1)");
+
+    assertNotFunctionBind("Function.prototype.bind.call()");
+    assertFunctionBind("Function.prototype.bind.call(obj)");
+    assertFunctionBind("Function.prototype.bind.call(obj, p1)");
+  }
+
+  private void assertFunctionBind(String code) {
+    Node n = parseTestCode(code);
+    assertNotNull(conv.describeFunctionBind(n.getFirstChild()));
+  }
+
+  private void assertNotFunctionBind(String code) {
+    Node n = parseTestCode(code);
+    assertNull(conv.describeFunctionBind(n.getFirstChild()));
+  }
+
+  private void assertNotObjectLiteralCast(String code) {
+    Node n = parseTestCode(code);
+    assertNull(conv.getObjectLiteralCast(null, n.getFirstChild()));
+  }
+
+  private void assertObjectLiteralCast(String code) {
+    Node n = parseTestCode(code);
+    assertNotNull(conv.getObjectLiteralCast(null, n.getFirstChild()));
   }
 
   private void assertNotClassDefining(String code) {

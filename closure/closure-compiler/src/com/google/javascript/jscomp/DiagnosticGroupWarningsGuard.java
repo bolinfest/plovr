@@ -24,8 +24,10 @@ import com.google.javascript.jscomp.CheckLevel;
  * @author nicksantos@google.com (Nick Santos)
  */
 public class DiagnosticGroupWarningsGuard extends WarningsGuard {
-  private final DiagnosticGroup group;
-  private final CheckLevel level;
+  private static final long serialVersionUID = 1L;
+
+  final DiagnosticGroup group;
+  final CheckLevel level;
 
   public DiagnosticGroupWarningsGuard(
       DiagnosticGroup group, CheckLevel level) {

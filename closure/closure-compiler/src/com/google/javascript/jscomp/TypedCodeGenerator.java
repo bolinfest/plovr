@@ -95,7 +95,7 @@ class TypedCodeGenerator extends CodeGenerator {
     //     NAME param1
     //     NAME param2
     if (fnNode != null) {
-      Node paramNode = NodeUtil.getFnParameters(fnNode).getFirstChild();
+      Node paramNode = NodeUtil.getFunctionParameters(fnNode).getFirstChild();
 
       // Param types
       for (Node n : funType.getParameters()) {
@@ -126,6 +126,12 @@ class TypedCodeGenerator extends CodeGenerator {
           funType.getSuperClassConstructor().getInstanceType();
         if (!superInstance.toString().equals("Object")) {
           sb.append(" * @extends {"  + superInstance + "}\n");
+        }
+      }
+
+      if (funType.isInterface()) {
+        for (ObjectType interfaceType : funType.getExtendedInterfaces()) {
+          sb.append(" * @extends {" + interfaceType + "}\n");
         }
       }
 

@@ -23,6 +23,7 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.base.Throwables;
+import com.google.common.io.Files;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -192,7 +193,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
    * If you want to ignore the flags API, or intepret flags your own way,
    * then you should override this method.
    */
-  final protected void setRunOptions(CompilerOptions options)
+  protected void setRunOptions(CompilerOptions options)
       throws FlagUsageException, IOException {
     DiagnosticGroups diagnosticGroups = getDiagnosticGroups();
 
@@ -219,7 +220,22 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     inputCharset = getInputCharset();
 
     if (config.jsOutputFile.length() > 0) {
-      options.jsOutputFile = config.jsOutputFile;
+      if (config.skipNormalOutputs) {
+        throw new FlagUsageException("skip_normal_outputs and js_output_file"
+            + " cannot be used together.");
+      } else {
+        options.jsOutputFile = config.jsOutputFile;
+      }
+    }
+
+    if (config.skipNormalOutputs && config.printAst) {
+      throw new FlagUsageException("skip_normal_outputs and print_ast cannot"
+          + " be used together.");
+    }
+
+    if (config.skipNormalOutputs && config.printTree) {
+      throw new FlagUsageException("skip_normal_outputs and print_tree cannot"
+          + " be used together.");
     }
 
     if (config.createSourceMap.length() > 0) {
@@ -241,7 +257,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     if (config.languageIn.length() > 0) {
       if (config.languageIn.equals("ECMASCRIPT5_STRICT") ||
           config.languageIn.equals("ES5_STRICT")) {
-        options.setLanguageIn(CompilerOptions.LanguageMode.ECMASCRIPT5);
+        options.setLanguageIn(CompilerOptions.LanguageMode.ECMASCRIPT5_STRICT);
       } else if (config.languageIn.equals("ECMASCRIPT5") ||
           config.languageIn.equals("ES5")) {
         options.setLanguageIn(CompilerOptions.LanguageMode.ECMASCRIPT5);
@@ -609,7 +625,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     B options = createOptions();
 
     List<JSModule> modules = null;
-    Result result;
+    Result result = null;
 
     setRunOptions(options);
 
@@ -624,10 +640,18 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     List<String> moduleSpecs = config.module;
     if (!moduleSpecs.isEmpty()) {
       modules = createJsModules(moduleSpecs, jsFiles);
-      result = compiler.compileModules(externs, modules, options);
+      if (config.skipNormalOutputs) {
+        compiler.initModules(externs, modules, options);
+      } else {
+        result = compiler.compileModules(externs, modules, options);
+      }
     } else {
       List<JSSourceFile> inputs = createSourceInputs(jsFiles);
-      result = compiler.compile(externs, inputs, options);
+      if (config.skipNormalOutputs) {
+        compiler.init(externs, inputs, options);
+      } else {
+        result = compiler.compile(externs, inputs, options);
+      }
     }
 
     int errCode = processResults(result, modules, options);
@@ -683,7 +707,12 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       }
     }
 
-    if (result.success) {
+    if (config.skipNormalOutputs) {
+      // Output the manifest and bundle files if requested.
+      outputManifest();
+      outputBundle();
+      return 0;
+    } else if (result.success) {
       if (modules == null) {
         writeOutput(
             jsOutput, compiler, compiler.toSource(), config.outputWrapper,
@@ -749,8 +778,9 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       // Output the variable and property name maps if requested.
       outputNameMaps(options);
 
-      // Output the manifest if requested.
+      // Output the manifest and bundle files if requested.
       outputManifest();
+      outputBundle();
     }
 
     // return 0 if no errors, the error count otherwise
@@ -873,15 +903,6 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       return null;
     }
     return expandCommandLinePath(options.sourceMapOutputPath, forModule);
-  }
-
-  /** Expansion function for the manifest. */
-  @VisibleForTesting
-  String expandManifest(JSModule forModule) {
-    if (Strings.isEmpty(config.outputManifest)) {
-      return null;
-    }
-    return expandCommandLinePath(config.outputManifest, forModule);
   }
 
   /**
@@ -1113,52 +1134,75 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
   }
 
   /**
-   * Returns true if and only if a manifest should be generated for each
-   * module, as opposed to one unified manifest.
+   * Returns true if and only if a manifest or bundle should be generated
+   * for each module, as opposed to one unified manifest.
    */
-  private boolean shouldGenerateManifestPerModule() {
+  private boolean shouldGenerateOutputPerModule(String output) {
     return !config.module.isEmpty()
-        && config.outputManifest != null
-        && config.outputManifest.contains("%outname%");
+        && output != null && output.contains("%outname%");
   }
 
   /**
-   * Writes the manifest of all compiler input files that survived
+   * Writes the manifest or bundle of all compiler input files that survived
    * manage_closure_dependencies, if requested.
    */
   private void outputManifest() throws IOException {
-    String outputManifest = config.outputManifest;
-    if (Strings.isEmpty(outputManifest)) {
+    outputManifestOrBundle(config.outputManifests, true);
+  }
+
+  private void outputBundle() throws IOException {
+    outputManifestOrBundle(config.outputBundles, false);
+  }
+
+  private void outputManifestOrBundle(List<String> outputFiles,
+      boolean isManifest) throws IOException {
+    if (outputFiles.isEmpty()) {
       return;
     }
 
-    JSModuleGraph graph = compiler.getModuleGraph();
-    if (shouldGenerateManifestPerModule()) {
-      // Generate per-module manifests.
-      Iterable<JSModule> modules = graph.getAllModules();
-      for (JSModule module : modules) {
-        Writer out = fileNameToOutputWriter(expandManifest(module));
-        printManifestTo(module.getInputs(), out);
+    for (String output : outputFiles) {
+      if (output.isEmpty()) {
+        continue;
+      }
+
+      JSModuleGraph graph = compiler.getModuleGraph();
+      if (shouldGenerateOutputPerModule(output)) {
+        // Generate per-module manifests or bundles
+        Iterable<JSModule> modules = graph.getAllModules();
+        for (JSModule module : modules) {
+          Writer out = fileNameToOutputWriter(
+              expandCommandLinePath(output, module));
+          if (isManifest) {
+            printManifestTo(module.getInputs(), out);
+          } else {
+            printBundleTo(module.getInputs(), out);
+          }
+          out.close();
+        }
+      } else {
+        // Generate a single file manifest or bundle.
+        Writer out = fileNameToOutputWriter(
+            expandCommandLinePath(output, null));
+        if (graph == null) {
+          if (isManifest) {
+            printManifestTo(compiler.getInputsInOrder(), out);
+          } else {
+            printBundleTo(compiler.getInputsInOrder(), out);
+          }
+        } else {
+          printModuleGraphManifestOrBundleTo(graph, out, isManifest);
+        }
         out.close();
       }
-    } else {
-      // Generate a single file manifest.
-      Writer out = fileNameToOutputWriter(expandManifest(null));
-      if (graph == null) {
-        printManifestTo(compiler.getInputsInOrder(), out);
-      } else {
-        printModuleGraphManifestTo(graph, out);
-      }
-      out.close();
     }
   }
 
   /**
-   * Prints a set of modules to the manifest file.
+   * Prints a set of modules to the manifest or bundle file.
    */
   @VisibleForTesting
-  void printModuleGraphManifestTo(
-      JSModuleGraph graph, Appendable out) throws IOException {
+  void printModuleGraphManifestOrBundleTo(JSModuleGraph graph,
+      Appendable out, boolean isManifest) throws IOException {
     Joiner commas = Joiner.on(",");
     boolean requiresNewline = false;
     for (JSModule module : graph.getAllModulesInDependencyOrder()) {
@@ -1166,14 +1210,18 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
         out.append("\n");
       }
 
-      // See CommandLineRunnerTest to see what the format of this
-      // manifest looks like.
-      String dependencies = commas.join(module.getSortedDependencyNames());
-      out.append(
-          String.format("{%s%s}\n",
-              module.getName(),
-              dependencies.isEmpty() ? "" : ":" + dependencies));
-      printManifestTo(module.getInputs(), out);
+      if (isManifest) {
+        // See CommandLineRunnerTest to see what the format of this
+        // manifest looks like.
+        String dependencies = commas.join(module.getSortedDependencyNames());
+        out.append(
+            String.format("{%s%s}\n",
+                module.getName(),
+                dependencies.isEmpty() ? "" : ":" + dependencies));
+        printManifestTo(module.getInputs(), out);
+      } else {
+        printBundleTo(module.getInputs(), out);
+      }
       requiresNewline = true;
     }
   }
@@ -1190,6 +1238,22 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     String result = Joiner.on("\n").join(names);
     out.append(result);
     out.append("\n");
+  }
+
+  /**
+   * Prints all the input contents, starting with a comment that specifies
+   * the input file name before each file
+   */
+  private void printBundleTo(Iterable<CompilerInput> inputs, Appendable out)
+      throws IOException {
+    for (CompilerInput input : inputs) {
+      out.append("//" + input.getName() + "\n");
+      File file = new File(input.getName());
+      if (file.canRead()) {
+        Files.copy(file, inputCharset, out);
+      }
+      out.append("\n");
+    }
   }
 
   private class RunTimeStats {
@@ -1591,13 +1655,23 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       return this;
     }
 
-    private String outputManifest = "";
+    private List<String> outputManifests = ImmutableList.of();
 
     /**
-     * Sets whether to print an output manifest file.
+     * Sets whether to print output manifest files.
      */
-    CommandLineConfig setOutputManifest(String outputManifest) {
-      this.outputManifest = outputManifest;
+    CommandLineConfig setOutputManifest(List<String> outputManifests) {
+      this.outputManifests = outputManifests;
+      return this;
+    }
+
+    private List<String> outputBundles = ImmutableList.of();
+
+    /**
+     * Sets whether to print output bundle files.
+     */
+    CommandLineConfig setOutputBundle(List<String> outputBundles) {
+      this.outputBundles = outputBundles;
       return this;
     }
 
@@ -1619,6 +1693,16 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
      */
     CommandLineConfig setLanguageIn(String languageIn) {
       this.languageIn = languageIn;
+      return this;
+    }
+
+    /**
+     * Set whether the normal outputs of compilation should be skipped
+     */
+    private boolean skipNormalOutputs = false;
+
+    CommandLineConfig setSkipNormalOutputs(boolean skipNormalOutputs) {
+      this.skipNormalOutputs = skipNormalOutputs;
       return this;
     }
   }

@@ -176,15 +176,25 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
   public void testFoldReturns() {
     fold("function f(){if(x)return 1;else return 2}",
          "function f(){return x?1:2}");
+    fold("function f(){if(x)return 1;return 2}",
+         "function f(){return x?1:2}");
+    fold("function f(){if(x)return;return 2}",
+         "function f(){return x?void 0:2}");
     fold("function f(){if(x)return 1+x;else return 2-x}",
+         "function f(){return x?1+x:2-x}");
+    fold("function f(){if(x)return 1+x;return 2-x}",
          "function f(){return x?1+x:2-x}");
     fold("function f(){if(x)return y += 1;else return y += 2}",
          "function f(){return x?(y+=1):(y+=2)}");
 
     fold("function f(){if(x)return;else return 2-x}",
          "function f(){if(x);else return 2-x}");
+    fold("function f(){if(x)return;return 2-x}",
+         "function f(){return x?void 0:2-x}");
     fold("function f(){if(x)return x;else return}",
          "function f(){if(x)return x;else;}");
+    fold("function f(){if(x)return x;return}",
+         "function f(){if(x)return x}");
 
     foldSame("function f(){for(var x in y) { return x.y; } return k}");
   }
@@ -765,6 +775,11 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
     foldSame(
         "var undefined = 1;" +
         "function f() {var undefined=2;var x = undefined;}");
+    foldSame("function f(undefined) {}");
+    foldSame("try {} catch(undefined) {}");
+    foldSame("for (undefined in {}) {}");
+    foldSame("undefined++;");
+    fold("undefined += undefined;", "undefined += void 0;");
   }
 
   public void testSplitCommaExpressions() {
@@ -825,5 +840,126 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
     test("([1])", "1");
     test("([a])", "1");
     testSame("([foo()])");
+  }
+
+  public void testStringArraySplitting() {
+    testSame("var x=['1','2','3','4']");
+    testSame("var x=['1','2','3','4','5']");
+    test("var x=['1','2','3','4','5','6']",
+         "var x='1,2,3,4,5,6'.split(',')");
+    test("var x=['1','2','3','4','5','6','7']",
+         "var x='1,2,3,4,5,6,7'.split(',')");
+    test("var x=[',',',',',',',',',',',']",
+         "var x=', , , , , ,'.split(' ')");
+    test("var x=[',',' ',',',',',',',',']",
+         "var x=',; ;,;,;,;,'.split(';')");
+    test("var x=[',',' ',',',',',',',',']",
+         "var x=',; ;,;,;,;,'.split(';')");
+  }
+
+  public void testBindToCall1() {
+    test("(goog.bind(f))()", "f()");
+    test("(goog.bind(f,a))()", "f.call(a)");
+    test("(goog.bind(f,a,b))()", "f.call(a,b)");
+
+    test("(goog.bind(f))(a)", "f(a)");
+    test("(goog.bind(f,a))(b)", "f.call(a,b)");
+    test("(goog.bind(f,a,b))(c)", "f.call(a,b,c)");
+
+    test("(goog.partial(f))()", "f()");
+    test("(goog.partial(f,a))()", "f(a)");
+    test("(goog.partial(f,a,b))()", "f(a,b)");
+
+    test("(goog.partial(f))(a)", "f(a)");
+    test("(goog.partial(f,a))(b)", "f(a,b)");
+    test("(goog.partial(f,a,b))(c)", "f(a,b,c)");
+
+    test("((function(){}).bind())()", "((function(){}))()");
+    test("((function(){}).bind(a))()", "((function(){})).call(a)");
+    test("((function(){}).bind(a,b))()", "((function(){})).call(a,b)");
+
+    test("((function(){}).bind())(a)", "((function(){}))(a)");
+    test("((function(){}).bind(a))(b)", "((function(){})).call(a,b)");
+    test("((function(){}).bind(a,b))(c)", "((function(){})).call(a,b,c)");
+
+    // Without using type information we don't know "f" is a function.
+    testSame("(f.bind())()");
+    testSame("(f.bind(a))()");
+    testSame("(f.bind())(a)");
+    testSame("(f.bind(a))(b)");
+
+    // Don't rewrite if the bind isn't the immediate call target
+    testSame("(goog.bind(f)).call(g)");
+  }
+
+  public void testBindToCall2() {
+    test("(goog$bind(f))()", "f()");
+    test("(goog$bind(f,a))()", "f.call(a)");
+    test("(goog$bind(f,a,b))()", "f.call(a,b)");
+
+    test("(goog$bind(f))(a)", "f(a)");
+    test("(goog$bind(f,a))(b)", "f.call(a,b)");
+    test("(goog$bind(f,a,b))(c)", "f.call(a,b,c)");
+
+    test("(goog$partial(f))()", "f()");
+    test("(goog$partial(f,a))()", "f(a)");
+    test("(goog$partial(f,a,b))()", "f(a,b)");
+
+    test("(goog$partial(f))(a)", "f(a)");
+    test("(goog$partial(f,a))(b)", "f(a,b)");
+    test("(goog$partial(f,a,b))(c)", "f(a,b,c)");
+
+    // Don't rewrite if the bind isn't the immediate call target
+    testSame("(goog$bind(f)).call(g)");
+  }
+
+  public void testBindToCall3() {
+    // TODO(johnlenz): The code generator wraps free calls with (0,...) to
+    // prevent leaking "this", but the parser doesn't unfold it, making a
+    // AST comparison fail.  For now do a string comparison to validate the
+    // correct code is in fact generated.
+    // The FREE call wrapping should be moved out of the code generator
+    // and into a denormalizing pass.
+    new StringCompareTestCase().testBindToCall3();
+  }
+
+  private static class StringCompareTestCase extends CompilerTestCase {
+
+    StringCompareTestCase() {
+      super("", false);
+    }
+
+    @Override
+    protected CompilerPass getProcessor(Compiler compiler) {
+      CompilerPass peepholePass =
+        new PeepholeOptimizationsPass(compiler,
+            new PeepholeSubstituteAlternateSyntax(false));
+      return peepholePass;
+    }
+
+    public void testBindToCall3() {
+      test("(goog.bind(f.m))()", "(0,f.m)()");
+      test("(goog.bind(f.m,a))()", "f.m.call(a)");
+
+      test("(goog.bind(f.m))(a)", "(0,f.m)(a)");
+      test("(goog.bind(f.m,a))(b)", "f.m.call(a,b)");
+
+      test("(goog.partial(f.m))()", "(0,f.m)()");
+      test("(goog.partial(f.m,a))()", "(0,f.m)(a)");
+
+      test("(goog.partial(f.m))(a)", "(0,f.m)(a)");
+      test("(goog.partial(f.m,a))(b)", "(0,f.m)(a,b)");
+
+      // Without using type information we don't know "f" is a function.
+      testSame("f.m.bind()()");
+      testSame("f.m.bind(a)()");
+      testSame("f.m.bind()(a)");
+      testSame("f.m.bind(a)(b)");
+
+      // Don't rewrite if the bind isn't the immediate call target
+      testSame("goog.bind(f.m).call(g)");
+    }
+
+
   }
 }

@@ -105,11 +105,6 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
         "/** @type {undefined|number} */var a;if (a == foo())return;}");
   }
 
-  public void testTypeCheck7() throws Exception {
-    testTypes("function foo() {delete 'abc';}",
-        TypeCheck.BAD_DELETE);
-  }
-
   public void testTypeCheck8() throws Exception {
     testTypes("/**@return {void}*/function foo(){do {} while (foo());}");
   }
@@ -1342,13 +1337,13 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testFunctionArguments13() throws Exception {
-    // verifying that the argument type have inferable types
+    // verifying that the argument type have non-inferrable types
     testTypes(
         "/** @return {boolean} */ function u() { return true; }" +
-        "/** @param {boolean} b\n@return {boolean} */" +
+        "/** @param {boolean} b\n@return {?boolean} */" +
         "function f(b) { if (u()) { b = null; } return b; }",
-        "inconsistent return type\n" +
-        "found   : (boolean|null)\n" +
+        "assignment\n" +
+        "found   : null\n" +
         "required: boolean");
   }
 
@@ -1967,11 +1962,15 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testDuplicateLocalVarDecl() throws Exception {
-    testTypes(
+    testClosureTypesMultipleWarnings(
         "/** @param {number} x */\n" +
         "function f(x) { /** @type {string} */ var x = ''; }",
-        "variable x redefined with type string, " +
-        "original definition at [testcode]:2 with type number");
+        Lists.newArrayList(
+            "variable x redefined with type string, original definition" +
+            " at  [testcode] :2 with type number",
+            "initializing variable\n" +
+            "found   : string\n" +
+            "required: number"));
   }
 
   public void testStubFunctionDeclaration1() throws Exception {
@@ -2861,11 +2860,6 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
         " */ function derived() {}");
   }
 
-  public void testGoodImplements3() throws Exception {
-    testTypes("/** @interface */function Disposable() {}\n" +
-        "/** @implements {Disposable}\n * @interface */function f() {}");
-  }
-
   public void testBadImplements1() throws Exception {
     testTypes("/** @interface */function Base1() {}\n" +
         "/** @interface */function Base2() {}\n" +
@@ -2880,6 +2874,13 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
     testTypes("/** @interface */function Disposable() {}\n" +
         "/** @implements {Disposable}\n */function f() {}",
         "@implements used without @constructor or @interface for f");
+  }
+
+  public void testBadImplements3() throws Exception {
+    testTypes("/** @interface */function Disposable() {}\n" +
+        "/** @implements {Disposable}\n * @interface */function f() {}",
+        "f cannot implement this type; an interface can only extend, " +
+        "but not implement interfaces");
   }
 
   public void testInterfaceExtends() throws Exception {
@@ -6432,68 +6433,6 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
         "actual parameter 1 of f does not match formal parameter\n" +
         "found   : number\n" +
         "required: (MyType|null|undefined)");
-  }
-
-  public void testMalformedOldTypeDef() throws Exception {
-    testTypes(
-        "var goog = {}; goog.typedef = true;" +
-        "goog.Bar = goog.typedef",
-        "Typedef for goog.Bar does not have any type information");
-  }
-
-  public void testMalformedOldTypeDef2() throws Exception {
-    testTypes(
-        "var goog = {}; goog.typedef = true;" +
-        "/** @typedef {boolean} */ goog.Bar = goog.typedef",
-        "Typedef for goog.Bar does not have any type information");
-  }
-
-  public void testDuplicateOldTypeDef() throws Exception {
-    testTypes(
-        "var goog = {}; goog.typedef = true;" +
-        "/** @constructor */ goog.Bar = function() {};" +
-        "/** @type {number} */ goog.Bar = goog.typedef",
-        "variable goog.Bar redefined with type number, " +
-        "original definition at [testcode]:1 " +
-        "with type function (new:goog.Bar): undefined");
-  }
-
-  public void testOldTypeDef1() throws Exception {
-    testTypes(
-        "var goog = {}; goog.typedef = true;" +
-        "/** @type {number} */ goog.Bar = goog.typedef;" +
-        "/** @param {goog.Bar} x */ function f(x) {}" +
-        "f(3);");
-  }
-
-  public void testOldTypeDef2() throws Exception {
-    testTypes(
-        "var goog = {}; goog.typedef = true;" +
-        "/** @type {number} */ goog.Bar = goog.typedef;" +
-        "/** @param {goog.Bar} x */ function f(x) {}" +
-        "f('3');",
-        "actual parameter 1 of f does not match formal parameter\n" +
-        "found   : string\n" +
-        "required: number");
-  }
-
-  public void testOldTypeDef3() throws Exception {
-    testTypes(
-        "var goog = {}; goog.typedef = true;" +
-        "/** @type {number} */ var Bar = goog.typedef;" +
-        "/** @param {Bar} x */ function f(x) {}" +
-        "f('3');",
-        "actual parameter 1 of f does not match formal parameter\n" +
-        "found   : string\n" +
-        "required: number");
-  }
-
-  public void testCircularOldTypeDef() throws Exception {
-    testTypes(
-        "var goog = {}; goog.typedef = true;" +
-        "/** @type {number|Array.<goog.Bar>} */ goog.Bar = goog.typedef;" +
-        "/** @param {goog.Bar} x */ function f(x) {}" +
-        "f(3); f([3]); f([[3]]);");
   }
 
   public void testDuplicateTypeDef() throws Exception {

@@ -105,6 +105,9 @@ public final class NodeUtil {
         // ignoring side-effects
         return TernaryValue.TRUE;
 
+      case Token.VOID:
+        return TernaryValue.FALSE;
+
       default:
         return getPureBooleanValue(n);
     }
@@ -129,8 +132,13 @@ public final class NodeUtil {
 
       case Token.NULL:
       case Token.FALSE:
-      case Token.VOID:
         return TernaryValue.FALSE;
+
+      case Token.VOID:
+        if (!mayHaveSideEffects(n.getFirstChild())) {
+          return TernaryValue.FALSE;
+        }
+        break;
 
       case Token.NAME:
         String name = n.getString();
@@ -153,6 +161,7 @@ public final class NodeUtil {
         if (!mayHaveSideEffects(n)) {
           return TernaryValue.TRUE;
         }
+        break;
     }
 
     return TernaryValue.UNKNOWN;
@@ -446,7 +455,7 @@ public final class NodeUtil {
    * @param n a node whose type is {@link Token#FUNCTION}
    * @return the function's name, or {@code null} if it has no name
    */
-  static String getNearestFunctionName(Node n) {
+  public static String getNearestFunctionName(Node n) {
     String name = getFunctionName(n);
     if (name != null) {
       return name;
@@ -954,10 +963,11 @@ public final class NodeUtil {
         return false;
       }
 
-      // Functions in the "Math" namespace have no side effects.
+      // Math.floor has no sideeffects.
+      // TODO(nicksantos): This is a terrible terrible hack, until
+      // I create a definitionprovider that understands namespacing.
       if (nameNode.getFirstChild().getType() == Token.NAME) {
-        String namespaceName = nameNode.getFirstChild().getString();
-        if (namespaceName.equals("Math")) {
+        if ("Math.floor".equals(nameNode.getQualifiedName())) {
           return false;
         }
       }
@@ -1437,7 +1447,7 @@ public final class NodeUtil {
    */
   static boolean referencesThis(Node n) {
     Node start = (isFunction(n)) ? n.getLastChild() : n;
-    return containsType(start, Token.THIS, new MatchNotFunction());
+    return containsType(start, Token.THIS, MATCH_NOT_FUNCTION);
   }
 
   /**
@@ -1944,7 +1954,7 @@ public final class NodeUtil {
     return isNameReferenced(
         function.getLastChild(),
         "arguments",
-        new MatchNotFunction());
+        MATCH_NOT_FUNCTION);
   }
 
   /**
@@ -2022,9 +2032,38 @@ public final class NodeUtil {
    * @param parent Parent of the node
    * @return True if n is the left hand of an assign
    */
-  static boolean isLhs(Node n, Node parent) {
+  static boolean isVarOrSimpleAssignLhs(Node n, Node parent) {
     return (parent.getType() == Token.ASSIGN && parent.getFirstChild() == n) ||
            parent.getType() == Token.VAR;
+  }
+
+  /**
+   * Determines whether this node is used as an L-value. Notice that sometimes
+   * names are used as both L-values and R-values.
+   *
+   * We treat "var x;" as a pseudo-L-value, which kind of makes sense if you
+   * treat it as "assignment to 'undefined' at the top of the scope". But if
+   * we're honest with ourselves, it doesn't make sense, and we only do this
+   * because it makes sense to treat this as synactically similar to
+   * "var x = 0;".
+   *
+   * @param node The node
+   * @return True if n is an L-value.
+   */
+  static boolean isLValue(Node node) {
+    int nType = node.getType();
+    Preconditions.checkArgument(nType == Token.NAME || nType == Token.GETPROP ||
+        nType == Token.GETELEM);
+    Node parent = node.getParent();
+    return (NodeUtil.isAssignmentOp(parent) && parent.getFirstChild() == node)
+        || (NodeUtil.isForIn(parent) && parent.getFirstChild() == node)
+        || NodeUtil.isVar(parent)
+        || (parent.getType() == Token.FUNCTION &&
+            parent.getFirstChild() == node)
+        || parent.getType() == Token.DEC
+        || parent.getType() == Token.INC
+        || parent.getType() == Token.LP
+        || parent.getType() == Token.CATCH;
   }
 
   /**
@@ -2328,7 +2367,7 @@ public final class NodeUtil {
   /**
    * Gets the root node of a qualified name. Must be either NAME or THIS.
    */
-  static Node getRootOfQualifiedName(Node qName) {
+  public static Node getRootOfQualifiedName(Node qName) {
     for (Node current = qName; true;
          current = current.getFirstChild()) {
       int type = current.getType();
@@ -2469,7 +2508,7 @@ public final class NodeUtil {
     visitPreOrder(
         root,
         collector,
-        new MatchNotFunction());
+        MATCH_NOT_FUNCTION);
     return collector.vars.values();
   }
 
@@ -2595,6 +2634,8 @@ public final class NodeUtil {
       return !isFunction(n);
     }
   }
+
+  static final Predicate<Node> MATCH_NOT_FUNCTION = new MatchNotFunction();
 
   /**
    * A predicate for matching statements without exiting the current scope.
@@ -2755,7 +2796,7 @@ public final class NodeUtil {
     * @param fnNode The function.
     * @return The Node containing the Function parameters.
     */
-  static Node getFnParameters(Node fnNode) {
+  public static Node getFunctionParameters(Node fnNode) {
     // Function NODE: [ FUNCTION -> NAME, LP -> ARG1, ARG2, ... ]
     Preconditions.checkArgument(fnNode.getType() == Token.FUNCTION);
     return fnNode.getFirstChild().getNext();
@@ -2819,7 +2860,7 @@ public final class NodeUtil {
   /**
    * Get the JSDocInfo for a function.
    */
-  public static JSDocInfo getFunctionInfo(Node n) {
+  public static JSDocInfo getFunctionJSDocInfo(Node n) {
     Preconditions.checkState(n.getType() == Token.FUNCTION);
     JSDocInfo fnInfo = n.getJSDocInfo();
     if (fnInfo == null && NodeUtil.isFunctionExpression(n)) {
@@ -2840,10 +2881,10 @@ public final class NodeUtil {
    * @param n The node.
    * @return The source name property on the node or its ancestors.
    */
-  static String getSourceName(Node n) {
+  public static String getSourceName(Node n) {
     String sourceName = null;
     while (sourceName == null && n != null) {
-      sourceName = (String) n.getProp(Node.SOURCENAME_PROP);
+      sourceName = n.getSourceFileName();
       n = n.getParent();
     }
     return sourceName;
@@ -2853,7 +2894,7 @@ public final class NodeUtil {
    * A new CALL node with the "FREE_CALL" set based on call target.
    */
   static Node newCallNode(Node callTarget, Node... parameters) {
-    boolean isFreeCall = isName(callTarget);
+    boolean isFreeCall = !isGet(callTarget);
     Node call = new Node(Token.CALL, callTarget);
     call.putBooleanProp(Node.FREE_CALL, isFreeCall);
     for (Node parameter : parameters) {

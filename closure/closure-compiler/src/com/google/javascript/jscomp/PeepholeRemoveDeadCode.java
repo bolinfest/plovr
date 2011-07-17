@@ -76,21 +76,35 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
   /**
    * Remove try blocks without catch blocks and with empty or not
    * existent finally blocks.
+   * Or, only leave the finally blocks if try body blocks are empty
    * @return the replacement node, if changed, or the original if not
    */
   private Node tryFoldTry(Node n) {
-    // Removes TRYs that had its CATCH removed and/or empty FINALLY.
     Preconditions.checkState(n.getType() == Token.TRY);
     Node body = n.getFirstChild();
     Node catchBlock = body.getNext();
     Node finallyBlock = catchBlock.getNext();
 
+    // Removes TRYs that had its CATCH removed and/or empty FINALLY.
     if (!catchBlock.hasChildren() &&
         (finallyBlock == null || !finallyBlock.hasChildren())) {
       n.removeChild(body);
       n.getParent().replaceChild(n, body);
       reportCodeChange();
       return body;
+    }
+
+    // Only leave FINALLYs if TRYs are empty
+    if (!body.hasChildren()) {
+      NodeUtil.redeclareVarsInsideBranch(catchBlock);
+      if (finallyBlock != null) {
+        n.removeChild(finallyBlock);
+        n.getParent().replaceChild(n, finallyBlock);
+      } else {
+        n.getParent().removeChild(n);
+      }
+      reportCodeChange();
+      return finallyBlock;
     }
 
     return n;
@@ -120,7 +134,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
    * @return the replacement node, if changed, or the original if not
    */
   private Node tryFoldExpr(Node subtree) {
-    Node result = trySimpilifyUnusedResult(subtree.getFirstChild());
+    Node result = trySimplifyUnusedResult(subtree.getFirstChild());
     if (result == null) {
       Node parent = subtree.getParent();
       // If the EXPR_RESULT no longer has any children, remove it as well.
@@ -141,8 +155,8 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
    * @param n The root of the expression to simplify.
    * @return The replacement node, or null if the node was is not useful.
    */
-  private Node trySimpilifyUnusedResult(Node n) {
-    return trySimpilifyUnusedResult(n, true);
+  private Node trySimplifyUnusedResult(Node n) {
+    return trySimplifyUnusedResult(n, true);
   }
 
   /**
@@ -152,14 +166,14 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
    *     it is not useful, otherwise it replaced with an EMPTY node.
    * @return The replacement node, or null if the node was is not useful.
    */
-  private Node trySimpilifyUnusedResult(Node n, boolean removeUnused) {
+  private Node trySimplifyUnusedResult(Node n, boolean removeUnused) {
     Node result = n;
 
     // Simplify the results of conditional expressions
     switch (n.getType()) {
       case Token.HOOK:
-        Node trueNode = trySimpilifyUnusedResult(n.getFirstChild().getNext());
-        Node falseNode = trySimpilifyUnusedResult(n.getLastChild());
+        Node trueNode = trySimplifyUnusedResult(n.getFirstChild().getNext());
+        Node falseNode = trySimplifyUnusedResult(n.getLastChild());
         // If one or more of the conditional children were removed,
         // transform the HOOK to an equivalent operation:
         //    x() ? foo() : 1 --> x() && foo()
@@ -173,7 +187,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
           n.setType(Token.AND);
           Preconditions.checkState(n.getChildCount() == 2);
         } else if (trueNode == null && falseNode == null) {
-          result = trySimpilifyUnusedResult(n.getFirstChild());
+          result = trySimplifyUnusedResult(n.getFirstChild());
         } else {
           // The structure didn't change.
           result = n;
@@ -184,13 +198,13 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
         // Try to remove the second operand from a AND or OR operations:
         //    x() || f --> x()
         //    x() && f --> x()
-        Node conditionalResultNode = trySimpilifyUnusedResult(
+        Node conditionalResultNode = trySimplifyUnusedResult(
             n.getLastChild());
         if (conditionalResultNode == null) {
           Preconditions.checkState(n.hasOneChild());
           // The conditionally executed code was removed, so
           // replace the AND/OR with its LHS or remove it if it isn't useful.
-          result = trySimpilifyUnusedResult(n.getFirstChild());
+          result = trySimplifyUnusedResult(n.getFirstChild());
         }
         break;
       case Token.FUNCTION:
@@ -203,8 +217,8 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
         // get split into individual EXPR_RESULT statement, if possible), so
         // we special case COMMA (we don't want to rewrite COMMAs as new COMMAs
         // nodes.
-        Node left = trySimpilifyUnusedResult(n.getFirstChild());
-        Node right = trySimpilifyUnusedResult(n.getLastChild());
+        Node left = trySimplifyUnusedResult(n.getFirstChild());
+        Node right = trySimplifyUnusedResult(n.getLastChild());
         if (left == null && right == null) {
           result = null;
         } else if (left == null) {
@@ -223,7 +237,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
           Node resultList = null;
           for (Node next, c = n.getFirstChild(); c != null; c = next) {
             next = c.getNext();
-            c = trySimpilifyUnusedResult(c);
+            c = trySimplifyUnusedResult(c);
             if (c != null) {
               c.detachFromParent();
               if (resultList == null)  {
@@ -384,7 +398,6 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
       Preconditions.checkState(block.getType() == Token.BLOCK);
       if (block.hasChildren()) {
         for (Node blockChild : block.children()) {
-          int type = blockChild.getType();
           // If this is a block with a labelless break, it is useless.
           switch (blockChild.getType()) {
             case Token.BREAK:
@@ -430,7 +443,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
     Node left = n.getFirstChild();
     Node right = left.getNext();
 
-    left = trySimpilifyUnusedResult(left);
+    left = trySimplifyUnusedResult(left);
     if (left == null || !mayHaveSideEffects(left)) {
       // Fold it!
       n.removeChild(right);
@@ -767,11 +780,11 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
     Node increment = cond.getNext();
 
     if (init.getType() != Token.EMPTY && init.getType() != Token.VAR) {
-      init = trySimpilifyUnusedResult(init, false);
+      init = trySimplifyUnusedResult(init, false);
     }
 
     if (increment.getType() != Token.EMPTY) {
-      increment = trySimpilifyUnusedResult(increment, false);
+      increment = trySimplifyUnusedResult(increment, false);
     }
 
     // There is an initializer skip it

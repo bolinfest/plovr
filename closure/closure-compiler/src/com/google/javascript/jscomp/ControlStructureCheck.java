@@ -21,14 +21,12 @@ import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
 /**
- * Check for invalid breaks and continues in the program.
+ * Check for usage of 'with'.
  *
  */
-class ControlStructureCheck implements CompilerPass {
+class ControlStructureCheck implements HotSwapCompilerPass {
 
-  private AbstractCompiler compiler;
-
-  private String sourceName = null;
+  private final AbstractCompiler compiler;
 
   static final DiagnosticType USE_OF_WITH = DiagnosticType.warning(
       "JSC_USE_OF_WITH",
@@ -41,6 +39,11 @@ class ControlStructureCheck implements CompilerPass {
   @Override
   public void process(Node externs, Node root) {
     check(root);
+  }
+
+  @Override
+  public void hotSwapScript(Node scriptRoot) {
+    check(scriptRoot);
   }
 
   /**
@@ -58,11 +61,6 @@ class ControlStructureCheck implements CompilerPass {
           report(node, USE_OF_WITH);
         }
         break;
-
-      case Token.SCRIPT:
-        // Remember the source file name in case we need to report an error.
-        sourceName = (String) node.getProp(Node.SOURCENAME_PROP);
-        break;
     }
 
     for (Node bChild = node.getFirstChild(); bChild != null;) {
@@ -73,6 +71,6 @@ class ControlStructureCheck implements CompilerPass {
   }
 
   private void report(Node n, DiagnosticType error) {
-    compiler.report(JSError.make(sourceName, n, error));
+    compiler.report(JSError.make(n.getSourceFileName(), n, error));
   }
 }

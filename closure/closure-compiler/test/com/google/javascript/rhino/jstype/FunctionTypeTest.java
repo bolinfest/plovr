@@ -38,6 +38,8 @@
 
 package com.google.javascript.rhino.jstype;
 
+import com.google.common.collect.Lists;
+
 import com.google.javascript.rhino.testing.BaseJSTypeTestCase;
 
 
@@ -165,13 +167,44 @@ public class FunctionTypeTest extends BaseJSTypeTestCase {
     FunctionType ctor = registry.createConstructorType(
         "Foo", null, null, null);
     assertFalse(ctor.getInstanceType().isUnknownType());
-    ctor.defineDeclaredProperty("prototype", UNKNOWN_TYPE, false, null);
+    ctor.defineDeclaredProperty("prototype", UNKNOWN_TYPE, null);
     assertTrue(ctor.getInstanceType().isUnknownType());
   }
 
   public void testEmptyFunctionTypes() {
     assertTrue(LEAST_FUNCTION_TYPE.isEmptyType());
     assertFalse(GREATEST_FUNCTION_TYPE.isEmptyType());
+  }
+
+  public void testInterfacePrototypeChain1() {
+    FunctionType iface = registry.createInterfaceType("I", null);
+    assertTypeEquals(
+        iface.getPrototype(),
+        iface.getInstanceType().getImplicitPrototype());
+    assertTypeEquals(
+        OBJECT_TYPE,
+        iface.getPrototype().getImplicitPrototype());
+  }
+
+  public void testInterfacePrototypeChain2() {
+    FunctionType iface = registry.createInterfaceType("I", null);
+    iface.getPrototype().defineDeclaredProperty(
+        "numberProp", NUMBER_TYPE, null);
+
+    FunctionType subIface = registry.createInterfaceType("SubI", null);
+    subIface.setExtendedInterfaces(
+        Lists.<ObjectType>newArrayList(iface.getInstanceType()));
+    assertTypeEquals(
+        subIface.getPrototype(),
+        subIface.getInstanceType().getImplicitPrototype());
+    assertTypeEquals(
+        OBJECT_TYPE,
+        subIface.getPrototype().getImplicitPrototype());
+
+    ObjectType subIfaceInst = subIface.getInstanceType();
+    assertTrue(subIfaceInst.hasProperty("numberProp"));
+    assertTrue(subIfaceInst.isPropertyTypeDeclared("numberProp"));
+    assertFalse(subIfaceInst.isPropertyTypeInferred("numberProp"));
   }
 
   private void assertLeastSupertype(String s, JSType t1, JSType t2) {

@@ -27,6 +27,7 @@ public class InlineFunctionsTest extends CompilerTestCase {
   final boolean allowExpressionDecomposition = true;
   final boolean allowFunctionExpressionInlining = true;
   final boolean allowLocalFunctionInlining = true;
+  boolean assumeStrictThis = false;
 
   public InlineFunctionsTest() {
     this.enableNormalize();
@@ -39,6 +40,7 @@ public class InlineFunctionsTest extends CompilerTestCase {
     super.enableLineNumberCheck(true);
     allowGlobalFunctionInlining = true;
     allowBlockInlining = true;
+    assumeStrictThis = false;
   }
 
   @Override
@@ -49,7 +51,8 @@ public class InlineFunctionsTest extends CompilerTestCase {
         compiler.getUniqueNameIdSupplier(),
         allowGlobalFunctionInlining,
         allowLocalFunctionInlining,
-        allowBlockInlining);
+        allowBlockInlining,
+        assumeStrictThis);
   }
 
   /**
@@ -381,6 +384,13 @@ public class InlineFunctionsTest extends CompilerTestCase {
     // As simple a test as we can get.
     testSame("function foo(){ return eval() }" +
         "foo();");
+  }
+
+  public void testInlineFunctions31() {
+    // Don't introduce a duplicate label in the same scope
+    test("function foo(){ lab:{4;} }" +
+        "lab:{foo();}",
+        "lab:{{JSCompiler_inline_label_0:{4}}}");
   }
 
   public void testMixedModeInlining1() {
@@ -1619,6 +1629,85 @@ public class InlineFunctionsTest extends CompilerTestCase {
          "(function(){ return 1 })();");
   }
 
+  public void testInlineWithThis1() {
+    assumeStrictThis = false;
+    // If no "this" is provided it might need to be coerced to the global
+    // "this".
+    testSame("function f(){} f.call();");
+    testSame("function f(){this} f.call();");
+
+    assumeStrictThis = true;
+    // In strict mode, "this" is never coerced so we can use the provided value.
+    test("function f(){} f.call();", "{}");
+    test("function f(){this} f.call();",
+         "{void 0;}");
+  }
+
+  public void testInlineWithThis2() {
+    // "this" can always be replaced with "this"
+    assumeStrictThis = false;
+    test("function f(){} f.call(this);", "void 0");
+
+    assumeStrictThis = true;
+    test("function f(){} f.call(this);", "void 0");
+  }
+
+  public void testInlineWithThis3() {
+    assumeStrictThis = false;
+    // If no "this" is provided it might need to be coerced to the global
+    // "this".
+    testSame("function f(){} f.call([]);");
+
+    assumeStrictThis = true;
+    // In strict mode, "this" is never coerced so we can use the provided value.
+    test("function f(){} f.call([]);", "{}");
+  }
+
+  public void testInlineWithThis4() {
+    assumeStrictThis = false;
+    // If no "this" is provided it might need to be coerced to the global
+    // "this".
+    testSame("function f(){} f.call(new g);");
+
+    assumeStrictThis = true;
+    // In strict mode, "this" is never coerced so we can use the provided value.
+    test("function f(){} f.call(new g);",
+         "{var JSCompiler_inline_this_0=new g}");
+  }
+
+  public void testInlineWithThis5() {
+    assumeStrictThis = false;
+    // If no "this" is provided it might need to be coerced to the global
+    // "this".
+    testSame("function f(){} f.call(g());");
+
+    assumeStrictThis = true;
+    // In strict mode, "this" is never coerced so we can use the provided value.
+    test("function f(){} f.call(g());",
+         "{var JSCompiler_inline_this_0=g()}");
+  }
+
+  public void testInlineWithThis6() {
+    assumeStrictThis = false;
+    // If no "this" is provided it might need to be coerced to the global
+    // "this".
+    testSame("function f(){this} f.call(new g);");
+
+    assumeStrictThis = true;
+    // In strict mode, "this" is never coerced so we can use the provided value.
+    test("function f(){this} f.call(new g);",
+         "{var JSCompiler_inline_this_0=new g;JSCompiler_inline_this_0}");
+  }
+
+  public void testInlineWithThis7() {
+    assumeStrictThis = true;
+    // In strict mode, "this" is never coerced so we can use the provided value.
+    test("function f(a){a=1;this} f.call();",
+         "{var a$$inline_1=void 0; a$$inline_1=1; void 0;}");
+    test("function f(a){a=1;this} f.call(x, x);",
+         "{var a$$inline_1=x; a$$inline_1=1; x;}");
+  }
+
   // http://en.wikipedia.org/wiki/Fixed_point_combinator#Y_combinator
   public void testFunctionExpressionYCombinator() {
     testSame(
@@ -1662,6 +1751,92 @@ public class InlineFunctionsTest extends CompilerTestCase {
     // as well.
     testSame("function f(x) {return x} " +
              "new JSCompiler_ObjectPropertyString(window, f); f(1)");
+  }
+
+  public void testInlineWithClosureContainingThis() {
+    test("(function (){return f(function(){return this})})();",
+         "f(function(){return this})");
+  }
+
+  public void testInlineObject() {
+    new StringCompare().testInlineObject();
+  }
+
+  private static class StringCompare extends CompilerTestCase {
+    private boolean allowGlobalFunctionInlining = true;
+
+    StringCompare() {
+      super("", false);
+      this.enableNormalize();
+      this.enableMarkNoSideEffects();
+    }
+
+    @Override
+    public void setUp() throws Exception {
+      super.setUp();
+      super.enableLineNumberCheck(true);
+      allowGlobalFunctionInlining = true;
+    }
+
+    @Override
+    protected CompilerPass getProcessor(Compiler compiler) {
+      compiler.resetUniqueNameId();
+      return new InlineFunctions(
+          compiler,
+          compiler.getUniqueNameIdSupplier(),
+          allowGlobalFunctionInlining,
+          true, // allowLocalFunctionInlining
+          true, // allowBlockInlining
+          true); // assumeStrictThis
+    }
+
+    public void testInlineObject() {
+      allowGlobalFunctionInlining = false;
+      // TODO(johnlenz): normalize the AST so an AST comparison can be done.
+      // As is, the expected AST does not match the actual correct result:
+      // The AST matches "g.a()" with a FREE_CALL annotation, but this as
+      // expected string would fail as it won't be mark as a free call.
+      // "(0,g.a)()" matches the output, but not the resulting AST.
+      test("function inner(){function f(){return g.a}(f())()}",
+           "function inner(){(0,g.a)()}");
+    }
+  }
+
+  public void testBug4944818() {
+    test(
+        "var getDomServices_ = function(self) {\n" +
+        "  if (!self.domServices_) {\n" +
+        "    self.domServices_ = goog$component$DomServices.get(" +
+        "        self.appContext_);\n" +
+        "  }\n" +
+        "\n" +
+        "  return self.domServices_;\n" +
+        "};\n" +
+        "\n" +
+        "var getOwnerWin_ = function(self) {\n" +
+        "  return getDomServices_(self).getDomHelper().getWindow();\n" +
+        "};\n" +
+        "\n" +
+        "HangoutStarter.prototype.launchHangout = function() {\n" +
+        "  var self = a.b;\n" +
+        "  var myUrl = new goog.Uri(getOwnerWin_(self).location.href);\n" +
+        "};",
+        "HangoutStarter.prototype.launchHangout = function() { " +
+        "  var self$$2 = a.b;" +
+        "  var JSCompiler_temp_const$$0 = goog.Uri;" +
+        "  {" +
+        "  var JSCompiler_inline_result$$1;" +
+        "  var self$$inline_3 = self$$2;" +
+        "  if (!self$$inline_3.domServices_) {" +
+        "    self$$inline_3.domServices_ = goog$component$DomServices.get(" +
+        "        self$$inline_3.appContext_);" +
+        "  }" +
+        "  JSCompiler_inline_result$$1=self$$inline_3.domServices_;" +
+        "  }" +
+        "  var myUrl = new JSCompiler_temp_const$$0(" +
+        "      JSCompiler_inline_result$$1.getDomHelper()." +
+        "          getWindow().location.href)" +
+        "}");
   }
 
   public void testIssue423() {

@@ -710,6 +710,23 @@ public class CodePrinterTest extends TestCase {
         + "a.Bar = function() {\n};\n");
   }
 
+  public void testTypeAnnotationsMultipleInterface() {
+    assertTypeAnnotations("var a = {};"
+        + "/** @interface */ a.Foo1 = function(){};"
+        + "/** @interface */ a.Foo2 = function(){};"
+        + "/** @interface \n @extends {a.Foo1} \n @extends {a.Foo2} */"
+        + "a.Bar = function(){}",
+        "var a = {};\n"
+        + "/**\n * @interface\n */\n"
+        + "a.Foo1 = function() {\n};\n"
+        + "/**\n * @interface\n */\n"
+        + "a.Foo2 = function() {\n};\n"
+        + "/**\n * @extends {a.Foo1}\n"
+        + " * @extends {a.Foo2}\n"
+        + " * @interface\n */\n"
+        + "a.Bar = function() {\n};\n");
+  }
+
   public void testTypeAnnotationsMember() {
     assertTypeAnnotations("var a = {};"
         + "/** @constructor */ a.Foo = function(){}"
@@ -1211,9 +1228,10 @@ public class CodePrinterTest extends TestCase {
   }
 
   public void testZero() {
-    assertPrint("var x ='\\0';", "var x=\"\\0\"");
-    assertPrint("var x ='\\x00';", "var x=\"\\0\"");
-    assertPrint("var x ='\\u0000';", "var x=\"\\0\"");
+    assertPrint("var x ='\\0';", "var x=\"\\x00\"");
+    assertPrint("var x ='\\x00';", "var x=\"\\x00\"");
+    assertPrint("var x ='\\u0000';", "var x=\"\\x00\"");
+    assertPrint("var x ='\\u00003';", "var x=\"\\x003\"");
   }
 
   public void testUnicode() {
@@ -1221,4 +1239,17 @@ public class CodePrinterTest extends TestCase {
     assertPrint("var x ='\\x68';", "var x=\"h\"");
     assertPrint("var x ='\\x7f';", "var x=\"\\u007f\"");
   }
+
+  public void testUnicodeKeyword() {
+    // keyword "if"
+    assertPrint("var \\u0069\\u0066 = 1;", "var i\\u0066=1");
+    // keyword "var"
+    assertPrint("var v\\u0061\\u0072 = 1;", "var va\\u0072=1");
+    // all are keyword "while"
+    assertPrint("var w\\u0068\\u0069\\u006C\\u0065 = 1;"
+        + "\\u0077\\u0068il\\u0065 = 2;"
+        + "\\u0077h\\u0069le = 3;",
+        "var whil\\u0065=1;whil\\u0065=2;whil\\u0065=3");
+  }
+
 }

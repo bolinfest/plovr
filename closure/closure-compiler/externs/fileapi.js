@@ -53,7 +53,7 @@ Blob.prototype.type;
 Blob.prototype.slice = function(start, length) {};
 
 /**
- * This replaces Blob.slice in Chrome.
+ * This replaces Blob.slice in Chrome since WebKit revision 84005.
  * @see http://lists.w3.org/Archives/Public/public-webapps/2011AprJun/0222.html
  * @param {number} start
  * @param {number} end
@@ -92,8 +92,15 @@ BlobBuilder.prototype.append = function(data, endings) {};
  */
 BlobBuilder.prototype.getBlob = function(contentType) {};
 
+
 /**
- * This replaces BlobBuilder in Chrome.
+ * @see http://www.w3.org/TR/file-writer-api/#the-blobbuilder-interface
+ * @type {function(new:BlobBuilder)}
+ */
+Window.prototype.BlobBuilder;
+
+/**
+ * This has replaced BlobBuilder in Chrome since WebKit revision 84008.
  * @see http://lists.w3.org/Archives/Public/public-webapps/2011AprJun/0222.html
  * @constructor
  */
@@ -114,6 +121,14 @@ WebKitBlobBuilder.prototype.append = function(data, endings) {};
  * @return {!Blob}
  */
 WebKitBlobBuilder.prototype.getBlob = function(contentType) {};
+
+
+/**
+ * @see http://www.w3.org/TR/file-writer-api/#the-blobbuilder-interface
+ * @type {function(new:WebKitBlobBuilder)}
+ */
+Window.prototype.WebKitBlobBuilder;
+
 
 /**
  * @see http://www.w3.org/TR/file-system-api/#the-directoryentry-interface
@@ -227,11 +242,11 @@ Entry.prototype.copyTo = function(parent, newName, successCallback,
     errorCallback) {};
 
 /**
- * @see http://www.w3.org/TR/file-system-api/#widl-Entry-toURI
+ * @see http://www.w3.org/TR/file-system-api/#widl-Entry-toURL
  * @param {string=} mimeType
  * @return {string}
  */
-Entry.prototype.toURI = function(mimeType) {};
+Entry.prototype.toURL = function(mimeType) {};
 
 /**
  * @see http://www.w3.org/TR/file-system-api/#widl-Entry-remove
@@ -745,6 +760,48 @@ function resolveLocalFileSystemURI(uri, successCallback, errorCallback) {}
 Window.prototype.resolveLocalFileSystemURI = function(uri, successCallback,
     errorCallback) {}
 
+/**
+ * This has replaced requestFileSystem in Chrome since WebKit revision 84224.
+ * @see http://www.w3.org/TR/file-system-api/#widl-LocalFileSystem-requestFileSystem
+ * @param {number} type
+ * @param {number} size
+ * @param {function(!FileSystem)} successCallback
+ * @param {function(!FileError)=} errorCallback
+ */
+function webkitRequestFileSystem(type, size, successCallback, errorCallback) {}
+
+/**
+ * This has replaced requestFileSystem in Chrome since WebKit revision 84224.
+ * @see http://www.w3.org/TR/file-system-api/#widl-LocalFileSystem-requestFileSystem
+ * @param {number} type
+ * @param {number} size
+ * @param {function(!FileSystem)} successCallback
+ * @param {function(!FileError)=} errorCallback
+ */
+Window.prototype.webkitRequestFileSystem = function(type, size, successCallback,
+    errorCallback) {};
+
+/**
+ * This has replaced resolveLocalFileSystemURI in Chrome since WebKit revision
+ * 84224.
+ * @see http://www.w3.org/TR/file-system-api/#widl-LocalFileSystem-resolveLocalFileSystemURI
+ * @param {string} uri
+ * @param {function(!Entry)} successCallback
+ * @param {function(!FileError)=} errorCallback
+ */
+function webkitResolveLocalFileSystemURI(uri, successCallback, errorCallback) {}
+
+/**
+ * This has replaced resolveLocalFileSystemURI in Chrome since WebKit revision
+ * 84224.
+ * @see http://www.w3.org/TR/file-system-api/#widl-LocalFileSystem-resolveLocalFileSystemURI
+ * @param {string} uri
+ * @param {function(!Entry)} successCallback
+ * @param {function(!FileError)=} errorCallback
+ */
+Window.prototype.webkitResolveLocalFileSystemURI = function(uri, successCallback,
+    errorCallback) {}
+
 // WindowBlobURIMethods interface, implemented by Window and WorkerGlobalScope.
 // There are three APIs for this: the old specced API, the new specced API, and
 // the webkit-prefixed API.
@@ -787,6 +844,7 @@ function DOMURL() {}
 Window.prototype.URL;
 
 /**
+ * This has replaced URL in Chrome since WebKit revision 75739.
  * @see http://www.w3.org/TR/FileAPI/#
  * @type {!DOMURL}
  */

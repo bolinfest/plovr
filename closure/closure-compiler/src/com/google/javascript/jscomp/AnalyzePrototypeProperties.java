@@ -313,8 +313,9 @@ class AnalyzePrototypeProperties implements CompilerPass {
 
     private boolean isPrototypePropertyAssign(Node assign) {
       Node n = assign.getFirstChild();
-      if (n != null && NodeUtil.isLhs(n, assign) &&
-          n.getType() == Token.GETPROP) {
+      if (n != null && NodeUtil.isVarOrSimpleAssignLhs(n, assign)
+          && n.getType() == Token.GETPROP
+          && assign.getParent().getType() == Token.EXPR_RESULT) {
         // We want to exclude the assignment itself from the usage list
         boolean isChainedProperty =
             n.getFirstChild().getType() == Token.GETPROP;
@@ -376,7 +377,7 @@ class AnalyzePrototypeProperties implements CompilerPass {
 
           if (dest.getType() == Token.STRING &&
               NodeUtil.isExprAssign(grandParent) &&
-              NodeUtil.isLhs(n, parent)) {
+              NodeUtil.isVarOrSimpleAssignLhs(n, parent)) {
             String name = dest.getString();
             Property prop = new AssignmentProperty(grandParent, t.getModule());
             getNameInfoForName(name, PROPERTY).getDeclarations().add(prop);

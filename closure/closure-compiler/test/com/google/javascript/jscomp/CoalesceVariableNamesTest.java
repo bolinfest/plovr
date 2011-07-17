@@ -166,7 +166,10 @@ public class CoalesceVariableNamesTest extends CompilerTestCase {
   }
 
   public void testDeadAssignment() {
-    inFunction("var x = 6; var y; y = 4; x");
+    inFunction("var x = 6; var y; y = 4 ; x");
+    inFunction("var y = 3; var y; y += 4; x");
+    inFunction("var y = 3; var y; y ++  ; x");
+    inFunction("y = 3; var x; var y = 1 ; x");
   }
 
   public void testParameter() {
@@ -347,6 +350,36 @@ public class CoalesceVariableNamesTest extends CompilerTestCase {
         " else" +
         "   this.load();");
   }
+
+  public void testCannotReuseAnyParamsBug() {
+    testSame("function handleKeyboardShortcut(e, key, isModifierPressed) {\n" +
+        "  if (!isModifierPressed) {\n" +
+        "    return false;\n" +
+        "  }\n" +
+        "  var command;\n" +
+        "  switch (key) {\n" +
+        "    case 'b': // Ctrl+B\n" +
+        "      command = COMMAND.BOLD;\n" +
+        "      break;\n" +
+        "    case 'i': // Ctrl+I\n" +
+        "      command = COMMAND.ITALIC;\n" +
+        "      break;\n" +
+        "    case 'u': // Ctrl+U\n" +
+        "      command = COMMAND.UNDERLINE;\n" +
+        "      break;\n" +
+        "    case 's': // Ctrl+S\n" +
+        "      return true;\n" +
+        "  }\n" +
+        "\n" +
+        "  if (command) {\n" +
+        "    this.fieldObject.execCommand(command);\n" +
+        "    return true;\n" +
+        "  }\n" +
+        "\n" +
+        "  return false;\n" +
+        "};");
+  }
+
 
   public void testUsePseduoNames() {
     usePseudoName = true;

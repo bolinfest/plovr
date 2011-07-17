@@ -16,6 +16,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
@@ -114,11 +115,6 @@ public class DefaultCodingConvention implements CodingConvention {
   }
 
   @Override
-  public String identifyTypeDefAssign(Node n) {
-    return null;
-  }
-
-  @Override
   public void applySubclassRelationship(FunctionType parentCtor,
       FunctionType childCtor, SubclassType type) {
     // do nothing
@@ -184,5 +180,49 @@ public class DefaultCodingConvention implements CodingConvention {
   @Override
   public Collection<AssertionFunctionSpec> getAssertionFunctions() {
     return Collections.emptySet();
+  }
+
+  @Override
+  public Bind describeFunctionBind(Node n) {
+    // It would be nice to be able to identify a fn.bind call
+    // but that requires knowing the type of "fn".
+
+    if (n.getType() != Token.CALL) {
+      return null;
+    }
+
+    Node callTarget = n.getFirstChild();
+    String name = callTarget.getQualifiedName();
+    if (name != null) {
+      if (name.equals("Function.prototype.bind.call")) {
+        // goog.bind(fn, self, args...);
+        Node fn = callTarget.getNext();
+        if (fn == null) {
+          return null;
+        }
+        Node thisValue = safeNext(fn);
+        Node parameters = safeNext(thisValue);
+        return new Bind(fn, thisValue, parameters);
+      }
+    }
+
+    if (callTarget.getType() == Token.GETPROP
+        && callTarget.getLastChild().getString().equals("bind")
+        && callTarget.getFirstChild().getType() == Token.FUNCTION) {
+      // (function(){}).bind(self, args...);
+      Node fn = callTarget.getFirstChild();
+      Node thisValue = callTarget.getNext();
+      Node parameters = safeNext(thisValue);
+      return new Bind(fn, thisValue, parameters);
+    }
+
+    return null;
+  }
+
+  private Node safeNext(Node n) {
+    if (n != null) {
+      return n.getNext();
+    }
+    return null;
   }
 }

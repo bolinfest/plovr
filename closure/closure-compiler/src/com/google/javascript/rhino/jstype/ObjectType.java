@@ -77,13 +77,34 @@ import java.util.Set;
  * declared or inferred.
  *
  */
-public abstract class ObjectType extends JSType {
+public abstract class ObjectType extends JSType implements StaticScope<JSType> {
   private boolean visited;
   private JSDocInfo docInfo = null;
   private boolean unknown = true;
 
   ObjectType(JSTypeRegistry registry) {
     super(registry);
+  }
+
+  @Override
+  public StaticScope<JSType> getParentScope() {
+    return getImplicitPrototype();
+  }
+
+  @Override
+  public abstract StaticSlot<JSType> getSlot(String name);
+
+  @Override
+  public StaticSlot<JSType> getOwnSlot(String name) {
+    if (hasOwnProperty(name)) {
+      return getSlot(name);
+    }
+    return null;
+  }
+
+  @Override
+  public ObjectType getTypeOfThis() {
+    return null;
   }
 
   /**
@@ -105,7 +126,8 @@ public abstract class ObjectType extends JSType {
   /**
    * Gets the docInfo for this type.
    */
-  @Override public JSDocInfo getJSDocInfo() {
+  @Override
+  public JSDocInfo getJSDocInfo() {
     if (docInfo != null) {
       return docInfo;
     } else if (getImplicitPrototype() != null) {
@@ -237,16 +259,12 @@ public abstract class ObjectType extends JSType {
    * Defines a property whose type is synthesized (i.e. not inferred).
    * @param propertyName the property's name
    * @param type the type
-   * @param inExterns {@code true} if this property was defined in an externs
-   *        file. TightenTypes assumes that any function passed to an externs
-   *        property could be called, so setting this incorrectly could result
-   *        in live code being removed.
    * @param propertyNode the node corresponding to the declaration of property
    *        which might later be accessed using {@code getPropertyNode}.
    */
   public final boolean defineDeclaredProperty(String propertyName,
-      JSType type, boolean inExterns, Node propertyNode) {
-    boolean result = defineProperty(propertyName, type, false, inExterns,
+      JSType type, Node propertyNode) {
+    boolean result = defineProperty(propertyName, type, false,
         propertyNode);
 
     // All property definitions go through this method
@@ -262,22 +280,18 @@ public abstract class ObjectType extends JSType {
    * Defines a property whose type is inferred.
    * @param propertyName the property's name
    * @param type the type
-   * @param inExterns {@code true} if this property was defined in an externs
-   *        file. TightenTypes assumes that any function passed to an externs
-   *        property could be called, so setting this incorrectly could result
-   *        in live code being removed.
    * @param propertyNode the node corresponding to the inferred definition of
    *        property that might later be accessed using {@code getPropertyNode}.
    */
   public final boolean defineInferredProperty(String propertyName,
-      JSType type, boolean inExterns, Node propertyNode) {
+      JSType type, Node propertyNode) {
     if (hasProperty(propertyName)) {
       JSType originalType = getPropertyType(propertyName);
       type = originalType == null ? type :
           originalType.getLeastSupertype(type);
     }
 
-    boolean result = defineProperty(propertyName, type, true, inExterns,
+    boolean result = defineProperty(propertyName, type, true,
         propertyNode);
 
     // All property definitions go through this method
@@ -298,10 +312,6 @@ public abstract class ObjectType extends JSType {
    * @param propertyName the property's name
    * @param type the type
    * @param inferred {@code true} if this property's type is inferred
-   * @param inExterns {@code true} if this property was defined in an externs
-   *        file. TightenTypes assumes that any function passed to an externs
-   *        property could be called, so setting this incorrectly could result
-   *        in live code being removed.
    * @param propertyNode the node that represents the definition of property.
    *        Depending on the actual sub-type the node type might be different.
    *        The general idea is to have an estimate of where in the source code
@@ -310,7 +320,7 @@ public abstract class ObjectType extends JSType {
    *        conflicts with a previous property type declaration.
    */
   abstract boolean defineProperty(String propertyName, JSType type,
-      boolean inferred, boolean inExterns, Node propertyNode);
+      boolean inferred, Node propertyNode);
 
   /**
    * Gets the node corresponding to the definition of the specified property.
@@ -342,13 +352,8 @@ public abstract class ObjectType extends JSType {
    * {@link JSDocInfo} on its definition.
    * @param info {@code JSDocInfo} for the property definition. May be
    *        {@code null}.
-   * @param inExterns {@code true} if this property was defined in an externs
-   *        file. TightenTypes assumes that any function passed to an externs
-   *        property could be called, so setting this incorrectly could result
-   *        in live code being removed.
    */
-  public void setPropertyJSDocInfo(String propertyName, JSDocInfo info,
-                                   boolean inExterns) {
+  public void setPropertyJSDocInfo(String propertyName, JSDocInfo info) {
     // by default, do nothing
   }
 
@@ -473,6 +478,12 @@ public abstract class ObjectType extends JSType {
       if (implicitProto == null ||
           implicitProto.isNativeObjectType()) {
         unknown = false;
+        for (ObjectType interfaceType : getCtorExtendedInterfaces()) {
+          if (interfaceType.isUnknownType()) {
+            unknown = true;
+            break;
+          }
+        }
       } else {
         unknown = implicitProto.isUnknownType();
       }
@@ -519,6 +530,14 @@ public abstract class ObjectType extends JSType {
    * Intended to be overridden by subclasses.
    */
   public Iterable<ObjectType> getCtorImplementedInterfaces() {
+    return ImmutableSet.of();
+  }
+
+  /**
+   * Gets the interfaces extended by the interface associated with this type.
+   * Intended to be overriden by subclasses.
+   */
+  public Iterable<ObjectType> getCtorExtendedInterfaces() {
     return ImmutableSet.of();
   }
 }

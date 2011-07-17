@@ -46,7 +46,7 @@ import com.google.javascript.rhino.Node;
 /**
  * An object type that is an instance of some function constructor.
  */
-public final class InstanceObjectType extends PrototypeObjectType {
+public class InstanceObjectType extends PrototypeObjectType {
   private static final long serialVersionUID = 1L;
 
   private final FunctionType constructor;
@@ -84,12 +84,12 @@ public final class InstanceObjectType extends PrototypeObjectType {
 
   @Override
   boolean defineProperty(String name, JSType type, boolean inferred,
-      boolean inExterns, Node propertyNode) {
+      Node propertyNode) {
     ObjectType proto = getImplicitPrototype();
     if (proto != null && proto.hasOwnDeclaredProperty(name)) {
       return false;
     }
-    return super.defineProperty(name, type, inferred, inExterns, propertyNode);
+    return super.defineProperty(name, type, inferred, propertyNode);
   }
 
   @Override
@@ -175,6 +175,11 @@ public final class InstanceObjectType extends PrototypeObjectType {
   @Override
   public Iterable<ObjectType> getCtorImplementedInterfaces() {
     return getConstructor().getImplementedInterfaces();
+  }
+
+  @Override
+  public Iterable<ObjectType> getCtorExtendedInterfaces() {
+    return getConstructor().getExtendedInterfaces();
   }
 
   // The owner will always be a resolved type, so there's no need to set

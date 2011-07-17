@@ -40,6 +40,7 @@ function mozIndexedDB() {}
 Window.prototype.mozIndexedDB;
 
 /**
+ * This has replaced indexedDB in Chrome since WebKit revision 69933.
  * @return {!IDBFactory} Provides applications a mechanism for accessing
  *    capabilities of indexed databases.
  */
@@ -607,6 +608,7 @@ IDBTransaction.prototype.removeEventListener = function(
 IDBTransaction.prototype.dispatchEvent = function(evt) {};
 
 /**
+ * This has replaced IDBTransaction in Chrome since WebKit revision 69933.
  * @type {IDBTransaction}
  */
 function webkitIDBTransaction() {}
@@ -731,6 +733,7 @@ function IDBKeyRange() {}
 Window.prototype.IDBKeyRange;
 
 /**
+ * This has replaced IDBKeyRange in Chrome since WebKit revision 69933.
  * @type {IDBKeyRange}
  */
 function webkitIDBKeyRange() {}
@@ -796,15 +799,31 @@ IDBKeyRange.prototype.only = function(value) {};
  * @param {*} bound Creates a left bound key range.
  * @param {boolean=} open Open the key range.
  * @return {!IDBKeyRange} The key range.
+ * @deprecated Use lowerBound.
  */
 IDBKeyRange.prototype.leftBound = function(bound, open) {};
+
+/**
+ * @param {*} bound Creates a lower bound key range.
+ * @param {boolean=} open Open the key range.
+ * @return {!IDBKeyRange} The key range.
+ */
+IDBKeyRange.prototype.lowerBound = function(bound, open) {};
 
 /**
  * @param {*} bound Creates a right bound key range.
  * @param {boolean=} open Open the key range.
  * @return {!IDBKeyRange} The key range.
+ * @deprecated Use upperBound.
  */
 IDBKeyRange.prototype.rightBound = function(bound, open) {};
+
+/**
+ * @param {*} bound Creates an upper bound key range.
+ * @param {boolean=} open Open the key range.
+ * @return {!IDBKeyRange} The key range.
+ */
+IDBKeyRange.prototype.upperBound = function(bound, open) {};
 
 /**
  * @param {*} left The left bound value of openLeft is true.

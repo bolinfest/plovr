@@ -31,6 +31,8 @@ import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.ObjectType;
+import com.google.javascript.rhino.jstype.SimpleSourceFile;
+import com.google.javascript.rhino.jstype.StaticSourceFile;
 import com.google.javascript.rhino.testing.BaseJSTypeTestCase;
 
 import java.util.Collection;
@@ -503,6 +505,16 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
   public void testBug1419535() throws Exception {
     parse("@type {function(Object, string, *)?} */");
     parse("@type {function(Object, string, *)|null} */");
+  }
+
+  public void testIssue477() throws Exception {
+    parse("@type function */",
+        "Bad type annotation. missing opening (");
+  }
+
+  public void testMalformedThisAnnotation() throws Exception {
+    parse("@this */",
+        "Bad type annotation. type not recognized due to syntax error");
   }
 
   public void testParseFunctionalTypeError1() throws Exception {
@@ -1789,8 +1801,51 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
          " * @interface \n" +
          " * @extends {Extended} */");
     assertTrue(jsdoc.isInterface());
+    assertEquals(1, jsdoc.getExtendedInterfacesCount());
+    List<JSTypeExpression> types = jsdoc.getExtendedInterfaces();
     assertTypeEquals(registry.createNamedType("Extended", null, -1, -1),
-        jsdoc.getBaseType());
+        types.get(0));
+  }
+
+  public void testInterfaceMultiExtends1() throws Exception {
+    JSDocInfo jsdoc = parse(
+        " * @interface \n" +
+        " * @extends {Extended1} \n" +
+        " * @extends {Extended2} */");
+    assertTrue(jsdoc.isInterface());
+    assertNull(jsdoc.getBaseType());
+    assertEquals(2, jsdoc.getExtendedInterfacesCount());
+    List<JSTypeExpression> types = jsdoc.getExtendedInterfaces();
+    assertTypeEquals(registry.createNamedType("Extended1", null, -1, -1),
+       types.get(0));
+    assertTypeEquals(registry.createNamedType("Extended2", null, -1, -1),
+        types.get(1));
+  }
+
+  public void testInterfaceMultiExtends2() throws Exception {
+    JSDocInfo jsdoc = parse(
+        " * @extends {Extended1} \n" +
+        " * @interface \n" +
+        " * @extends {Extended2} \n" +
+        " * @extends {Extended3} */");
+    assertTrue(jsdoc.isInterface());
+    assertNull(jsdoc.getBaseType());
+    assertEquals(3, jsdoc.getExtendedInterfacesCount());
+    List<JSTypeExpression> types = jsdoc.getExtendedInterfaces();
+    assertTypeEquals(registry.createNamedType("Extended1", null, -1, -1),
+       types.get(0));
+    assertTypeEquals(registry.createNamedType("Extended2", null, -1, -1),
+        types.get(1));
+    assertTypeEquals(registry.createNamedType("Extended3", null, -1, -1),
+        types.get(2));
+  }
+
+  public void testBadClassMultiExtends() throws Exception {
+    parse(" * @extends {Extended1} \n" +
+        " * @constructor \n" +
+        " * @extends {Extended2} */",
+        "Bad type annotation. type annotation incompatible with other " +
+        "annotations");
   }
 
   public void testBadExtendsWithNullable() throws Exception {
@@ -2152,9 +2207,12 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
         parse("@return {Foo} some long \n * multiline" +
               " \n * description */", true);
 
-    assertDocumentationInMarker(
-        assertAnnotationMarker(jsdoc, "return", 0, 0),
+    JSDocInfo.Marker returnDoc =
+        assertAnnotationMarker(jsdoc, "return", 0, 0);
+    assertDocumentationInMarker(returnDoc,
         "some long multiline description", 13, 2, 15);
+    assertEquals(8, returnDoc.type.getPositionOnStartLine());
+    assertEquals(12, returnDoc.type.getPositionOnEndLine());
   }
 
   public void testParseWithMarkers4() throws Exception {
@@ -2584,13 +2642,14 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
     Config config =
         new Config(extraAnnotations, extraSuppressions,
             true, LanguageMode.ECMASCRIPT3, false);
+    StaticSourceFile file = new SimpleSourceFile(script.getSourceName(), false);
     for (Comment comment : script.getComments()) {
       JsDocInfoParser jsdocParser =
         new JsDocInfoParser(
             new JsDocTokenStream(comment.getValue().substring(3),
                 comment.getLineno()),
             comment,
-            script.getSourceName(),
+            file,
             config,
             testErrorReporter);
       jsdocParser.parse();
@@ -2625,10 +2684,11 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
 
     Config config = new Config(extraAnnotations, extraSuppressions,
         parseDocumentation, LanguageMode.ECMASCRIPT3, false);
+    StaticSourceFile file = new SimpleSourceFile("testcode", false);
     JsDocInfoParser jsdocParser = new JsDocInfoParser(
         stream(comment),
         new Comment(0, 0, CommentType.JSDOC, comment),
-        "testcode", config, errorReporter);
+        file, config, errorReporter);
 
     if (fileLevelJsDocBuilder != null) {
       jsdocParser.setFileLevelJsDocBuilder(fileLevelJsDocBuilder);

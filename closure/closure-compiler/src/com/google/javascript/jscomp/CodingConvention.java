@@ -159,12 +159,6 @@ public interface CodingConvention extends Serializable {
   public List<String> identifyTypeDeclarationCall(Node n);
 
   /**
-   * Checks if the given ASSIGN node is a typedef, and returns the
-   * name of the type if it is.
-   */
-  public String identifyTypeDefAssign(Node n);
-
-  /**
    * In many JS libraries, the function that produces inheritance also
    * adds properties to the superclass and/or subclass.
    */
@@ -228,6 +222,26 @@ public interface CodingConvention extends Serializable {
   public String getGlobalObject();
 
   /**
+   * A Bind instance or null.
+   */
+  public Bind describeFunctionBind(Node n);
+
+  public static class Bind {
+    // The target of the bind action
+    final Node target;
+    // The node representing the "this" value, maybe null
+    final Node thisValue;
+    // The head of a Node list representing the parameters
+    final Node parameters;
+
+    public Bind(Node target, Node thisValue, Node parameters) {
+      this.target = target;
+      this.thisValue = thisValue;
+      this.parameters = parameters;
+    }
+  }
+
+  /**
    * Whether this CALL function is testing for the existence of a property.
    */
   public boolean isPropertyTestFunction(Node call);
@@ -258,7 +272,7 @@ public interface CodingConvention extends Serializable {
     final String subclassName;
     final String superclassName;
 
-    SubclassRelationship(SubclassType type,
+    public SubclassRelationship(SubclassType type,
         Node subclassNode, Node superclassNode) {
       this.type = type;
       this.subclassName = subclassNode.getQualifiedName();

@@ -28,6 +28,8 @@ import java.util.Map;
  * @author nicksantos@google.com (Nick Santos)
  */
 class SuppressDocWarningsGuard extends WarningsGuard {
+  private static final long serialVersionUID = 1L;
+
   /** Warnings guards for each suppressable warnings group, indexed by name. */
   private final Map<String, DiagnosticGroupWarningsGuard> suppressors =
       Maps.newHashMap();
@@ -61,7 +63,7 @@ class SuppressDocWarningsGuard extends WarningsGuard {
         // dependency on the exact structure of our AST, and that seems like
         // a bad idea.
         if (type == Token.FUNCTION) {
-          info = NodeUtil.getFunctionInfo(current);
+          info = NodeUtil.getFunctionJSDocInfo(current);
         } else if (type == Token.SCRIPT) {
           info = current.getJSDocInfo();
         }

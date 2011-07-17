@@ -15,6 +15,8 @@
  */
 package com.google.javascript.jscomp;
 
+import static com.google.javascript.jscomp.FunctionArgumentInjector.THIS_MARKER;
+
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.collect.Lists;
@@ -26,8 +28,8 @@ import com.google.javascript.rhino.Token;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.Map.Entry;
+import java.util.Set;
 
 /**
  * A class to transform the body of a function into a generic block suitable
@@ -140,12 +142,30 @@ class FunctionToBlockMutator {
    * @param fnNode A mutable instance of the function to be inlined.
    */
   private void makeLocalNamesUnique(Node fnNode, boolean isCallInLoop) {
+    Supplier<String> idSupplier = compiler.getUniqueNameIdSupplier();
+    // Make variable names unique to this instance.
     NodeTraversal.traverse(
         compiler, fnNode, new MakeDeclaredNamesUnique(
             new InlineRenamer(
-                compiler.getUniqueNameIdSupplier(),
+                idSupplier,
                 "inline_",
                 isCallInLoop)));
+    // Make label names unique to this instance.
+    new RenameLabels(compiler, new LabelNameSupplier(idSupplier), false)
+        .process(null, fnNode);
+  }
+
+  static class LabelNameSupplier implements Supplier<String> {
+    final Supplier<String> idSupplier;
+
+    LabelNameSupplier(Supplier<String> idSupplier) {
+      this.idSupplier = idSupplier;
+    }
+
+    @Override
+    public String get() {
+        return "JSCompiler_inline_label_" + idSupplier.get();
+    }
   }
 
   /**
@@ -154,6 +174,13 @@ class FunctionToBlockMutator {
   private String getLabelNameForFunction(String fnName){
     String name = (fnName == null || fnName.isEmpty()) ? "anon" : fnName;
     return "JSCompiler_inline_label_" + name + "_" + safeNameIdSupplier.get();
+  }
+
+  /**
+   * Create a unique "this" name.
+   */
+  private String getUniqueThisName() {
+    return "JSCompiler_inline_this_" + safeNameIdSupplier.get();
   }
 
   /**
@@ -173,7 +200,7 @@ class FunctionToBlockMutator {
     if (namesToAlias == null || namesToAlias.isEmpty()) {
       // There are no names to alias, just inline the arguments directly.
       Node result = FunctionArgumentInjector.inject(
-          fnTemplateRoot, null, argMap);
+          compiler, fnTemplateRoot, null, argMap);
       Preconditions.checkState(result == fnTemplateRoot);
       return result;
     } else {
@@ -192,18 +219,40 @@ class FunctionToBlockMutator {
       for (Entry<String, Node> entry : argMap.entrySet()) {
         String name = entry.getKey();
         if (namesToAlias.contains(name)) {
-          Node newValue = entry.getValue().cloneTree();
-          Node newNode = NodeUtil.newVarNode(name, newValue)
-              .copyInformationFromForTree(newValue);
-          newVars.add(0, newNode);
-          // Remove the parameter from the list to replace.
-          newArgMap.remove(name);
+          if (name.equals(THIS_MARKER)) {
+            boolean referencesThis = NodeUtil.referencesThis(fnTemplateRoot);
+            // Update "this", this is only necessary if "this" is referenced
+            // and the value of "this" is not Token.THIS, or the value of "this"
+            // has side effects.
+
+            Node value = entry.getValue();
+            if (value.getType() != Token.THIS
+                && (referencesThis
+                    || NodeUtil.mayHaveSideEffects(value, compiler))) {
+              String newName = getUniqueThisName();
+              Node newValue = entry.getValue().cloneTree();
+              Node newNode = NodeUtil.newVarNode(newName, newValue)
+                  .copyInformationFromForTree(newValue);
+              newVars.add(0, newNode);
+              // Remove the parameter from the list to replace.
+              newArgMap.put(THIS_MARKER,
+                  Node.newString(Token.NAME, newName)
+                      .copyInformationFromForTree(newValue));
+            }
+          } else {
+            Node newValue = entry.getValue().cloneTree();
+            Node newNode = NodeUtil.newVarNode(name, newValue)
+                .copyInformationFromForTree(newValue);
+            newVars.add(0, newNode);
+            // Remove the parameter from the list to replace.
+            newArgMap.remove(name);
+          }
         }
       }
 
       // Inline the arguments.
       Node result = FunctionArgumentInjector.inject(
-          fnTemplateRoot, null, newArgMap);
+          compiler, fnTemplateRoot, null, newArgMap);
       Preconditions.checkState(result == fnTemplateRoot);
 
       // Now that the names have been replaced, add the new aliases for

@@ -506,6 +506,17 @@ Database.prototype.changeVersion = function(
     oldVersion, newVersion, callback, errorCallback, successCallback) {};
 
 /**
+ * @interface
+ */
+function DatabaseCallback() {}
+
+/**
+ * @param {Database} db
+ * @return {undefined}
+ */
+DatabaseCallback.prototype.handleEvent = function(db) {};
+
+/**
  * @constructor
  */
 function SQLError() {}
@@ -567,6 +578,7 @@ SQLResultSetRowList.prototype.length;
 /**
  * @param {number} index
  * @return {Object}
+ * @nosideeffects
  */
 SQLResultSetRowList.prototype.item = function(index) {};
 
@@ -575,18 +587,21 @@ SQLResultSetRowList.prototype.item = function(index) {};
  * @param {string} version
  * @param {string} description
  * @param {number} size
+ * @param {(DatabaseCallback|function(Database))=} opt_callback
  * @return {Database}
  */
-function openDatabase(name, version, description, size) {}
+function openDatabase(name, version, description, size, opt_callback) {}
 
 /**
  * @param {string} name
  * @param {string} version
  * @param {string} description
  * @param {number} size
+ * @param {(DatabaseCallback|function(Database))=} opt_callback
  * @return {Database}
  */
-Window.prototype.openDatabase = function(name, version, description, size) {};
+Window.prototype.openDatabase =
+    function(name, version, description, size, opt_callback) {};
 
 /**
  * @type {boolean}
@@ -594,11 +609,25 @@ Window.prototype.openDatabase = function(name, version, description, size) {};
 HTMLImageElement.prototype.complete;
 
 /**
+ * @type {string}
+ * @see http://www.whatwg.org/specs/web-apps/current-work/multipage/embedded-content-1.html#attr-img-crossorigin
+ */
+HTMLImageElement.prototype.crossOrigin;
+
+/**
  * The postMessage method (as defined by HTML5 spec and implemented in FF3).
  * @param {*} message
- * @param {string} targetOrigin
+ * @param {string|Array} targetOrigin The target origin in the 2-argument
+ *     version of this function. Webkit seems to have implemented this
+ *     function wrong in the 3-argument version so that ports is the
+ *     second argument.
+ * @param {string|Array=} ports An optional array of ports or the target
+ *     origin. Webkit seems to have implemented this
+ *     function wrong in the 3-argument version so that targetOrigin is the
+ *     third argument.
+ * @see http://dev.w3.org/html5/postmsg/#dom-window-postmessage
  */
-Window.prototype.postMessage = function(message, targetOrigin) {};
+Window.prototype.postMessage = function(message, targetOrigin, ports) {};
 
 /**
  * The postMessage method (as implemented in Opera).
@@ -727,6 +756,18 @@ var applicationCache;
 Window.prototype.applicationCache;
 
 /**
+ * @see https://developer.mozilla.org/En/DOM/Worker/Functions_available_to_workers
+ * @param {...string} var_args
+ */
+Window.prototype.importScripts = function(var_args) {};
+
+/**
+ * @see https://developer.mozilla.org/En/DOM/Worker/Functions_available_to_workers
+ * @param {...string} var_args
+ */
+var importScripts = function(var_args) {};
+
+/**
  * @see http://dev.w3.org/html5/workers/
  * @constructor
  * @implements {EventTarget}
@@ -808,6 +849,37 @@ Worker.prototype.onmessage = function() {};
 Worker.prototype.onerror = function() {};
 
 /**
+ * @see http://dev.w3.org/html5/workers/
+ * @param {string} scriptURL The URL of the script to run in the SharedWorker.
+ * @param {string=} opt_name A name that can later be used to obtain a
+ *     reference to the same SharedWorker.
+ * @constructor
+ * @implements {EventTarget}
+ */
+function SharedWorker(scriptURL, opt_name) {}
+
+/** @inheritDoc */
+SharedWorker.prototype.addEventListener = function(
+    type, listener, useCapture) {};
+
+/** @inheritDoc */
+SharedWorker.prototype.removeEventListener = function(
+    type, listener, useCapture) {};
+
+/** @inheritDoc */
+SharedWorker.prototype.dispatchEvent = function(evt) {};
+
+/**
+ * @type {!MessagePort}
+ */
+SharedWorker.prototype.port;
+
+/**
+ * Called on network errors for loading the initial script.
+ */
+SharedWorker.prototype.onerror = function() {};
+
+/**
  * @type {boolean}
  */
 HTMLElement.prototype.draggable;
@@ -887,6 +959,7 @@ HTMLMediaElement.prototype.load = function() {};
 /**
  * @param {string} type Type of the element in question in question.
  * @return {string} Whether it can play the type.
+ * @nosideeffects
  */
 HTMLMediaElement.prototype.canPlayType = function(type) {};
 
@@ -1421,6 +1494,7 @@ FileList.prototype.length;
 /**
  * @param {number} i File to return from the list.
  * @return {File} The ith file in the list.
+ * @nosideeffects
  */
 FileList.prototype.item = function(i) { return null; };
 
@@ -1452,6 +1526,15 @@ XMLHttpRequest.prototype.responseType;
  * @see http://dev.w3.org/2006/webapi/XMLHttpRequest-2/#the-responsetype-attribute
  */
 XMLHttpRequest.prototype.response;
+
+
+/**
+ * @type {ArrayBuffer}
+ * Implemented as a draft spec in Firefox 4 as the way to get a requested array
+ * buffer from an XMLHttpRequest.
+ * @see https://developer.mozilla.org/En/Using_XMLHttpRequest#Receiving_binary_data_using_JavaScript_typed_arrays
+ */
+XMLHttpRequest.prototype.mozResponseArrayBuffer;
 
 /**
  * XMLHttpRequestEventTarget defines events for checking the status of a data
@@ -1502,8 +1585,65 @@ HTMLElement.prototype.dataset;
 
 
 /**
+ * @constructor
+ */
+function DOMTokenList() {}
+
+/**
+ * Returns the number of CSS classes applied to this Element.
+ * @type {number}
+ */
+DOMTokenList.prototype.length;
+
+/**
+ * @param {number} index The index of the item to return.
+ * @return {string} The CSS class at the specified index.
+ * @nosideeffects
+ */
+DOMTokenList.prototype.item = function(index) {};
+
+/**
+ * @param {string} token The CSS class to check for.
+ * @return {boolean} Whether the CSS class has been applied to the Element.
+ * @nosideeffects
+ */
+DOMTokenList.prototype.contains = function(token) {};
+
+/**
+ * @param {string} token The CSS class to add to this element.
+ */
+DOMTokenList.prototype.add = function(token) {};
+
+/**
+ * @param {string} token The CSS class to remove from this element.
+ */
+DOMTokenList.prototype.remove = function(token) {};
+
+/**
+ * @param {string} token The CSS class to toggle from this element.
+ * @return {boolean} False if the token was removed; True otherwise.
+ */
+DOMTokenList.prototype.toggle = function(token) {};
+
+/**
+ * @return {string} A stringified representation of CSS classes.
+ * @nosideeffects
+ */
+DOMTokenList.prototype.toString = function() {};
+
+/**
+ * A better interface to CSS classes than className.
+ * @type {DOMTokenList}
+ * @see http://www.w3.org/TR/html5/elements.html#dom-classlist
+ * @const
+ */
+HTMLElement.prototype.classList;
+
+
+/**
  * @param {number} length The length in bytes
  * @constructor
+ * @noalias
  */
 function ArrayBuffer(length) {}
 

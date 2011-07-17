@@ -44,6 +44,8 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.javascript.rhino.jstype.JSType;
+import com.google.javascript.rhino.jstype.SimpleSourceFile;
+import com.google.javascript.rhino.jstype.StaticSourceFile;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -85,7 +87,10 @@ public class Node implements Cloneable, Serializable {
       CASES_PROP        = 13,
       DEFAULT_PROP      = 14,
       CASEARRAY_PROP    = 15,
+
+      // TODO(nicksantos): Remove this prop.
       SOURCENAME_PROP   = 16,
+
       TYPE_PROP         = 17,
       SPECIAL_PROP_PROP = 18,
       LABEL_PROP        = 19,
@@ -114,40 +119,43 @@ public class Node implements Cloneable, Serializable {
       SPECIALCALL_PROP  = 27,
       DEBUGSOURCE_PROP  = 28,
       JSDOC_INFO_PROP   = 29,     // contains a TokenStream.JSDocInfo object
-      VAR_ARGS_NAME     = 29,     // the name node is a variable length
-                                  // argument placeholder. It can never be
-                                  // used in conjunction with JSDOC_INFO_PROP.
-      SKIP_INDEXES_PROP  = 30,    // array of skipped indexes of array literal
-      INCRDECR_PROP      = 31,    // pre or post type of increment/decrement
-      MEMBER_TYPE_PROP   = 32,    // type of element access operation
-      NAME_PROP          = 33,    // property name
-      PARENTHESIZED_PROP = 34,    // expression is parenthesized
-      QUOTED_PROP        = 35,    // set to indicate a quoted object lit key
-      OPT_ARG_NAME       = 36,    // The name node is an optional argument.
-      SYNTHETIC_BLOCK_PROP = 37,  // A synthetic block. Used to make
+      VAR_ARGS_NAME     = 30,     // the name node is a variable length
+                                  // argument placeholder.
+      SKIP_INDEXES_PROP  = 31,    // array of skipped indexes of array literal
+      INCRDECR_PROP      = 32,    // pre or post type of increment/decrement
+      MEMBER_TYPE_PROP   = 33,    // type of element access operation
+      NAME_PROP          = 34,    // property name
+      PARENTHESIZED_PROP = 35,    // expression is parenthesized
+      QUOTED_PROP        = 36,    // set to indicate a quoted object lit key
+      OPT_ARG_NAME       = 37,    // The name node is an optional argument.
+      SYNTHETIC_BLOCK_PROP = 38,  // A synthetic block. Used to make
                                   // processing simpler, and does not
                                   // represent a real block in the source.
-      EMPTY_BLOCK        = 38,    // Used to indicate BLOCK that replaced
+      EMPTY_BLOCK        = 39,    // Used to indicate BLOCK that replaced
                                   // EMPTY nodes.
-      ORIGINALNAME_PROP  = 39,    // The original name of the node, before
+      ORIGINALNAME_PROP  = 40,    // The original name of the node, before
                                   // renaming.
-      BRACELESS_TYPE     = 40,    // The type syntax without curly braces.
-      SIDE_EFFECT_FLAGS  = 41,    // Function or constructor call side effect
+      BRACELESS_TYPE     = 41,    // The type syntax without curly braces.
+      SIDE_EFFECT_FLAGS  = 42,    // Function or constructor call side effect
                                   // flags
       // Coding convention props
-      IS_CONSTANT_NAME   = 42,    // The variable or property is constant.
-      IS_OPTIONAL_PARAM  = 43,    // The parameter is optional.
-      IS_VAR_ARGS_PARAM  = 44,    // The parameter is a var_args.
-      IS_NAMESPACE       = 45,    // The variable creates a namespace.
-      IS_DISPATCHER      = 46,    // The function is a dispatcher function,
+      IS_CONSTANT_NAME   = 43,    // The variable or property is constant.
+      IS_OPTIONAL_PARAM  = 44,    // The parameter is optional.
+      IS_VAR_ARGS_PARAM  = 45,    // The parameter is a var_args.
+      IS_NAMESPACE       = 46,    // The variable creates a namespace.
+      IS_DISPATCHER      = 47,    // The function is a dispatcher function,
                                   // probably generated from Java code, and
                                   // should be resolved to the proper
                                   // overload if possible.
-      DIRECTIVES         = 47,    // The ES5 directives on this node.
-      DIRECT_EVAL        = 48,    // ES5 distinguishes between direct and
+      DIRECTIVES         = 48,    // The ES5 directives on this node.
+      DIRECT_EVAL        = 49,    // ES5 distinguishes between direct and
                                   // indirect calls to eval.
-      FREE_CALL          = 49,    // A CALL without an explicit "this" value.
-      LAST_PROP          = 49;
+      FREE_CALL          = 50,    // A CALL without an explicit "this" value.
+      STATIC_SOURCE_FILE = 51,    // A StaticSourceFile indicating the file
+                                  // where this node lives.
+      LENGTH             = 52,    // The length of the code represented by
+                                  // this node.
+      LAST_PROP          = 52;
 
   // values of ISNUMBER_PROP to specify
   // which of the children are Number types
@@ -177,6 +185,7 @@ public class Node implements Cloneable, Serializable {
         case CATCH_SCOPE_PROP:   return "catch_scope_prop";
         case LABEL_ID_PROP:      return "label_id_prop";
         case TARGET_PROP:        return "target";
+        case BRACELESS_TYPE:     return "braceless_type";
         case BREAK_PROP:         return "break";
         case CONTINUE_PROP:      return "continue";
         case ENUM_PROP:          return "enum";
@@ -186,6 +195,7 @@ public class Node implements Cloneable, Serializable {
         case CODEOFFSET_PROP:    return "codeoffset";
         case FIXUPS_PROP:        return "fixups";
         case VARS_PROP:          return "vars";
+        case VAR_ARGS_NAME:      return "var_args_name";
         case USES_PROP:          return "uses";
         case REGEXP_PROP:        return "regexp";
         case CASES_PROP:         return "cases";
@@ -215,6 +225,7 @@ public class Node implements Cloneable, Serializable {
         case NAME_PROP:          return "name";
         case PARENTHESIZED_PROP: return "parenthesized";
         case QUOTED_PROP:        return "quoted";
+        case OPT_ARG_NAME:       return "opt_arg";
 
         case SYNTHETIC_BLOCK_PROP: return "synthetic";
         case EMPTY_BLOCK:        return "empty_block";
@@ -229,6 +240,8 @@ public class Node implements Cloneable, Serializable {
         case DIRECTIVES:         return "directives";
         case DIRECT_EVAL:        return "direct_eval";
         case FREE_CALL:          return "free_call";
+        case STATIC_SOURCE_FILE:    return "source_file";
+        case LENGTH:    return "length";
         default:
           Kit.codeBug();
       }
@@ -337,32 +350,102 @@ public class Node implements Cloneable, Serializable {
     private String str;
   }
 
-  // PropListItems are immutable so that they can be shared.
-  private static class PropListItem implements Serializable {
+  // PropListItems must be immutable so that they can be shared.
+  private interface PropListItem {
+    int getType();
+    PropListItem getNext();
+    PropListItem chain(PropListItem next);
+    Object getObjectValue();
+    int getIntValue();
+  }
+
+  private static abstract class AbstractPropListItem
+      implements PropListItem, Serializable {
     private static final long serialVersionUID = 1L;
 
-    final PropListItem next;
-    final int type;
-    final int intValue;
-    final Object objectValue;
+    private final PropListItem next;
+    private final int propType;
 
-    PropListItem(int type, int intValue, PropListItem next) {
-      this(type, intValue, null, next);
-    }
-
-    PropListItem(int type, Object objectValue, PropListItem next) {
-      this(type, 0, objectValue, next);
-    }
-
-    PropListItem(
-        int type, int intValue, Object objectValue, PropListItem next) {
-      this.type = type;
-      this.intValue = intValue;
-      this.objectValue = objectValue;
+    AbstractPropListItem(int propType, PropListItem next) {
+      this.propType = propType;
       this.next = next;
+    }
+
+    public int getType() {
+      return propType;
+    }
+
+    public PropListItem getNext() {
+      return next;
+    }
+
+    public abstract PropListItem chain(PropListItem next);
+  }
+
+  // A base class for Object storing props
+  private static class ObjectPropListItem
+      extends AbstractPropListItem {
+    private static final long serialVersionUID = 1L;
+
+    private final Object objectValue;
+
+    ObjectPropListItem(int propType, Object objectValue, PropListItem next) {
+      super(propType, next);
+      this.objectValue = objectValue;
+    }
+
+    @Override
+    public int getIntValue() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Object getObjectValue() {
+      return objectValue;
+    }
+
+    @Override
+    public String toString() {
+      return objectValue == null ? "null" : objectValue.toString();
+    }
+
+    @Override
+    public PropListItem chain(PropListItem next) {
+      return new ObjectPropListItem(getType(), objectValue, next);
     }
   }
 
+  // A base class for int storing props
+  private static class IntPropListItem extends AbstractPropListItem {
+    private static final long serialVersionUID = 1L;
+
+    final int intValue;
+
+    IntPropListItem(int propType, int intValue, PropListItem next) {
+      super(propType, next);
+      this.intValue = intValue;
+    }
+
+    @Override
+    public int getIntValue() {
+      return intValue;
+    }
+
+    @Override
+    public Object getObjectValue() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public String toString() {
+      return String.valueOf(intValue);
+    }
+
+    @Override
+    public PropListItem chain(PropListItem next) {
+      return new IntPropListItem(getType(), intValue, next);
+    }
+  }
 
   public Node(int nodeType) {
     type = nodeType;
@@ -738,8 +821,8 @@ public class Node implements Cloneable, Serializable {
   @VisibleForTesting
   PropListItem lookupProperty(int propType) {
     PropListItem x = propListHead;
-    while (x != null && propType != x.type) {
-      x = x.next;
+    while (x != null && propType != x.getType()) {
+      x = x.getNext();
     }
     return x;
   }
@@ -774,13 +857,12 @@ public class Node implements Cloneable, Serializable {
   private PropListItem removeProp(PropListItem item, int propType) {
     if (item == null) {
       return null;
-    } else if (item.type == propType) {
-      return item.next;
+    } else if (item.getType() == propType) {
+      return item.getNext();
     } else {
-      PropListItem result = removeProp(item.next, propType);
-      if (result != item.next) {
-        return new PropListItem(
-            item.type, item.intValue, item.objectValue, result);
+      PropListItem result = removeProp(item.getNext(), propType);
+      if (result != item.getNext()) {
+        return item.chain(result);
       } else {
         return item;
       }
@@ -788,11 +870,15 @@ public class Node implements Cloneable, Serializable {
   }
 
   public Object getProp(int propType) {
+    if (propType == SOURCENAME_PROP) {
+      return getSourceFileName();
+    }
+
     PropListItem item = lookupProperty(propType);
     if (item == null) {
       return null;
     }
-    return item.objectValue;
+    return item.getObjectValue();
   }
 
   public boolean getBooleanProp(int propType) {
@@ -808,7 +894,7 @@ public class Node implements Cloneable, Serializable {
     if (item == null) {
       return 0;
     }
-    return item.intValue;
+    return item.getIntValue();
   }
 
   public int getExistingIntProp(int propType) {
@@ -816,13 +902,19 @@ public class Node implements Cloneable, Serializable {
     if (item == null) {
       Kit.codeBug();
     }
-    return item.intValue;
+    return item.getIntValue();
   }
 
   public void putProp(int propType, Object value) {
+    if (propType == SOURCENAME_PROP) {
+      putProp(
+          STATIC_SOURCE_FILE, new SimpleSourceFile((String) value, false));
+      return;
+    }
+
     removeProp(propType);
     if (value != null) {
-      propListHead = new PropListItem(propType, value, propListHead);
+      propListHead = createProp(propType, value, propListHead);
     }
   }
 
@@ -833,21 +925,29 @@ public class Node implements Cloneable, Serializable {
   public void putIntProp(int propType, int value) {
     removeProp(propType);
     if (value != 0) {
-      propListHead = new PropListItem(propType, value, propListHead);
+      propListHead = createProp(propType, value, propListHead);
     }
+  }
+
+  PropListItem createProp(int propType, Object value, PropListItem next) {
+    return new ObjectPropListItem(propType, value, next);
+  }
+
+  PropListItem createProp(int propType, int value, PropListItem next) {
+    return new IntPropListItem(propType, value, next);
   }
 
   // Gets all the property types, in sorted order.
   private int[] getSortedPropTypes() {
     int count = 0;
-    for (PropListItem x = propListHead; x != null; x = x.next) {
+    for (PropListItem x = propListHead; x != null; x = x.getNext()) {
       count++;
     }
 
     int[] keys = new int[count];
-    for (PropListItem x = propListHead; x != null; x = x.next) {
+    for (PropListItem x = propListHead; x != null; x = x.getNext()) {
       count--;
-      keys[count] = x.type;
+      keys[count] = x.getType();
     }
 
     Arrays.sort(keys);
@@ -990,7 +1090,7 @@ public class Node implements Cloneable, Serializable {
               value = "last local block";
               break;
             case ISNUMBER_PROP:
-              switch (x.intValue) {
+              switch (x.getIntValue()) {
                 case BOTH:
                   value = "both";
                   break;
@@ -1005,7 +1105,7 @@ public class Node implements Cloneable, Serializable {
               }
               break;
             case SPECIALCALL_PROP:
-              switch (x.intValue) {
+              switch (x.getIntValue()) {
                 case SPECIALCALL_EVAL:
                   value = "eval";
                   break;
@@ -1018,12 +1118,7 @@ public class Node implements Cloneable, Serializable {
               }
               break;
             default:
-              Object obj = x.objectValue;
-              if (obj != null) {
-                value = obj.toString();
-              } else {
-                value = String.valueOf(x.intValue);
-              }
+              value = x.toString();
               break;
           }
           sb.append(value);
@@ -1129,6 +1224,38 @@ public class Node implements Cloneable, Serializable {
 
   //==========================================================================
   // Source position management
+
+  public void setStaticSourceFile(StaticSourceFile file) {
+    this.putProp(STATIC_SOURCE_FILE, file);
+  }
+
+  /** Sets the source file to a non-extern file of the given name. */
+  public void setSourceFileForTesting(String name) {
+    this.putProp(STATIC_SOURCE_FILE, new SimpleSourceFile(name, false));
+  }
+
+  public String getSourceFileName() {
+    StaticSourceFile file = getStaticSourceFile();
+    return file == null ? null : file.getName();
+  }
+
+  /** Returns the source file associated with this input. May be null */
+  public StaticSourceFile getStaticSourceFile() {
+    return ((StaticSourceFile) this.getProp(STATIC_SOURCE_FILE));
+  }
+
+  public boolean isFromExterns() {
+    StaticSourceFile file = getStaticSourceFile();
+    return file == null ? false : file.isExtern();
+  }
+
+  public int getLength() {
+    return getIntProp(LENGTH);
+  }
+
+  public void setLength(int length) {
+    putIntProp(LENGTH, length);
+  }
 
   public void setLineno(int lineno) {
       int charno = getCharno();
@@ -1276,6 +1403,10 @@ public class Node implements Cloneable, Serializable {
 
   // ==========================================================================
   // Accessors
+
+  PropListItem getPropListHeadForTesting() {
+    return propListHead;
+  }
 
   public Node getParent() {
     return parent;
@@ -1639,6 +1770,10 @@ public class Node implements Cloneable, Serializable {
       if (quoted1 != quoted2) {
         return false;
       }
+    } else if (type == Token.CALL) {
+      if (this.getBooleanProp(FREE_CALL) != node.getBooleanProp(FREE_CALL)) {
+        return false;
+      }
     }
 
     if (recurse) {
@@ -1914,8 +2049,12 @@ public class Node implements Cloneable, Serializable {
     }
 
     if (getProp(SOURCENAME_PROP) == null) {
-        putProp(SOURCENAME_PROP, other.getProp(SOURCENAME_PROP));
+      putProp(SOURCENAME_PROP, other.getProp(SOURCENAME_PROP));
       sourcePosition = other.sourcePosition;
+    }
+
+    if (getProp(STATIC_SOURCE_FILE) == null) {
+      putProp(STATIC_SOURCE_FILE, other.getProp(STATIC_SOURCE_FILE));
     }
 
     return this;

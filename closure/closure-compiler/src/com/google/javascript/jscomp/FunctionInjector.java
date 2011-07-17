@@ -42,6 +42,7 @@ class FunctionInjector {
   private final Supplier<String> safeNameIdSupplier;
   private final boolean allowDecomposition;
   private Set<String> knownConstants = Sets.newHashSet();
+  private final boolean assumeStrictThis;
 
   /**
    * @param allowDecomposition Whether an effort should be made to break down
@@ -51,12 +52,14 @@ class FunctionInjector {
   public FunctionInjector(
       AbstractCompiler compiler,
       Supplier<String> safeNameIdSupplier,
-      boolean allowDecomposition) {
+      boolean allowDecomposition,
+      boolean assumeStrictThis) {
     Preconditions.checkNotNull(compiler);
     Preconditions.checkNotNull(safeNameIdSupplier);
     this.compiler = compiler;
     this.safeNameIdSupplier = safeNameIdSupplier;
     this.allowDecomposition = allowDecomposition;
+    this.assumeStrictThis = assumeStrictThis;
   }
 
   /** The type of inlining to perform. */
@@ -197,9 +200,11 @@ class FunctionInjector {
   private boolean isSupportedCallType(Node callNode) {
     if (callNode.getFirstChild().getType() != Token.NAME) {
       if (NodeUtil.isFunctionObjectCall(callNode)) {
-        Node thisValue = callNode.getFirstChild().getNext();
-        if (thisValue == null || thisValue.getType() != Token.THIS) {
-          return false;
+        if (!assumeStrictThis) {
+          Node thisValue = callNode.getFirstChild().getNext();
+          if (thisValue == null || thisValue.getType() != Token.THIS) {
+            return false;
+          }
         }
       } else if (NodeUtil.isFunctionObjectApply(callNode)) {
         return false;
@@ -253,7 +258,7 @@ class FunctionInjector {
       // Clone the return node first.
       Node safeReturnNode = returnNode.cloneTree();
       Node inlineResult = FunctionArgumentInjector.inject(
-          safeReturnNode, null, argMap);
+          null, safeReturnNode, null, argMap);
       Preconditions.checkArgument(safeReturnNode == inlineResult);
       newExpression = safeReturnNode.removeFirstChild();
     }
@@ -336,7 +341,7 @@ class FunctionInjector {
       // This is a simple call?  Example: "foo();".
       return CallSiteType.SIMPLE_CALL;
     } else if (NodeUtil.isExprAssign(grandParent)
-        && !NodeUtil.isLhs(callNode, parent)
+        && !NodeUtil.isVarOrSimpleAssignLhs(callNode, parent)
         && parent.getFirstChild().getType() == Token.NAME
         && !NodeUtil.isConstantName(parent.getFirstChild())) {
       // This is a simple assignment.  Example: "x = foo();"
@@ -631,8 +636,9 @@ class FunctionInjector {
     if (callNode.getFirstChild().getType() != Token.NAME) {
       if (NodeUtil.isFunctionObjectCall(callNode)) {
         // TODO(johnlenz): Support replace this with a value.
-        Preconditions.checkNotNull(cArg);
-        Preconditions.checkState(cArg.getType() == Token.THIS);
+        if (cArg == null || cArg.getType() != Token.THIS) {
+          return CanInlineResult.NO;
+        }
         cArg = cArg.getNext();
       } else {
         // ".apply" call should be filtered before this.
@@ -641,7 +647,7 @@ class FunctionInjector {
     }
 
     // FUNCTION NODE -> LP NODE: [ ARG1, ARG2, ... ]
-    Node fnParam = NodeUtil.getFnParameters(fnNode).getFirstChild();
+    Node fnParam = NodeUtil.getFunctionParameters(fnNode).getFirstChild();
     while (cArg != null || fnParam != null) {
       // For each named parameter check if a mutable argument use more than one.
       if (fnParam != null) {
@@ -782,7 +788,7 @@ class FunctionInjector {
    * @param referencesThis
    */
   private static int estimateCallCost(Node fnNode, boolean referencesThis) {
-    Node argsNode = NodeUtil.getFnParameters(fnNode);
+    Node argsNode = NodeUtil.getFunctionParameters(fnNode);
     int numArgs = argsNode.getChildCount();
 
     int callCost = NAME_COST_ESTIMATE + PAREN_COST;
@@ -809,7 +815,7 @@ class FunctionInjector {
       Node fnNode, Set<String> namesToAlias, InliningMode mode) {
     // The part of the function that is never inlined:
     //    "function xx(xx,xx){}" (15 + (param count * 3) -1;
-    int paramCount = NodeUtil.getFnParameters(fnNode).getChildCount();
+    int paramCount = NodeUtil.getFunctionParameters(fnNode).getChildCount();
     int commaCount = (paramCount > 1) ? paramCount - 1 : 0;
     int costDeltaFunctionOverhead = 15 + commaCount +
         (paramCount * InlineCostEstimator.ESTIMATED_IDENTIFIER_COST);

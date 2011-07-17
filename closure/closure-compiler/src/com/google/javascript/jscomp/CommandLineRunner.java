@@ -23,7 +23,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.io.Files;
 import com.google.common.io.LimitInputStream;
-import com.google.javascript.jscomp.AbstractCommandLineRunner.WarningGuardSpec;
 
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -224,18 +223,29 @@ public class CommandLineRunner extends
         "corresponds to.")
     private String create_source_map = "";
 
+    @Option(name = "--source_map_format",
+        usage = "The source map format to produce. " +
+        "Options: V1, V2, V3, DEFAULT. DEFAULT produces V2.")
+    private SourceMap.Format source_map_format = SourceMap.Format.DEFAULT;
+
+    // Used to define the flag, values are stored by the handler.
+    @SuppressWarnings("unused")
     @Option(name = "--jscomp_error",
         handler = WarningGuardErrorOptionHandler.class,
         usage = "Make the named class of warnings an error. Options:" +
         DiagnosticGroups.DIAGNOSTIC_GROUP_NAMES)
     private List<String> jscomp_error = Lists.newArrayList();
 
+    // Used to define the flag, values are stored by the handler.
+    @SuppressWarnings("unused")
     @Option(name = "--jscomp_warning",
         handler = WarningGuardWarningOptionHandler.class,
         usage = "Make the named class of warnings a normal warning. " +
         "Options:" + DiagnosticGroups.DIAGNOSTIC_GROUP_NAMES)
     private List<String> jscomp_warning = Lists.newArrayList();
 
+    // Used to define the flag, values are stored by the handler.
+    @SuppressWarnings("unused")
     @Option(name = "--jscomp_off",
         handler = WarningGuardOffOptionHandler.class,
         usage = "Turn off the named class of warnings. Options:" +
@@ -589,12 +599,13 @@ public class CommandLineRunner extends
           .setModuleWrapper(flags.module_wrapper)
           .setModuleOutputPathPrefix(flags.module_output_path_prefix)
           .setCreateSourceMap(flags.create_source_map)
+          .setSourceMapFormat(flags.source_map_format)
           .setWarningGuardSpec(Flags.warningGuardSpec)
           .setDefine(flags.define)
           .setCharset(flags.charset)
           .setManageClosureDependencies(flags.manage_closure_dependencies)
           .setClosureEntryPoints(flags.closure_entry_point)
-          .setOutputManifest(flags.output_manifest)
+          .setOutputManifest(ImmutableList.of(flags.output_manifest))
           .setAcceptConstKeyword(flags.accept_const_keyword)
           .setLanguageIn(flags.language_in);
     }

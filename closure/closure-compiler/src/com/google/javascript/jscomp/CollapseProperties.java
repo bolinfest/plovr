@@ -18,6 +18,7 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.GlobalNamespace.Name;
@@ -130,14 +131,14 @@ class CollapseProperties implements CompilerPass {
     checkNamespaces();
 
     for (Name n : globalNames) {
-      flattenReferencesToCollapsibleDescendantNames(n, n.name);
+      flattenReferencesToCollapsibleDescendantNames(n, n.getName());
     }
 
     // We collapse property definitions after collapsing property references
     // because this step can alter the parse tree above property references,
     // invalidating the node ancestry stored with each reference.
     for (Name n : globalNames) {
-      collapseDeclarationOfNameAndDescendants(n, n.name);
+      collapseDeclarationOfNameAndDescendants(n, n.getName());
     }
   }
 
@@ -171,7 +172,7 @@ class CollapseProperties implements CompilerPass {
           name.aliasingGets > 0) {
         // {@code name} meets condition (b). Find all of its local aliases
         // and try to inline them.
-        List<Ref> refs = Lists.newArrayList(name.refs);
+        List<Ref> refs = Lists.newArrayList(name.getRefs());
         for (Ref ref : refs) {
           if (ref.type == Type.ALIASING_GET && ref.scope.isLocal()) {
             // {@code name} meets condition (c). Try to inline it.
@@ -210,8 +211,7 @@ class CollapseProperties implements CompilerPass {
               Predicates.<Var>equalTo(aliasVar));
       (new NodeTraversal(compiler, collector)).traverseAtScope(scope);
 
-      ReferenceCollection aliasRefs =
-          collector.getReferenceCollection(aliasVar);
+      ReferenceCollection aliasRefs = collector.getReferences(aliasVar);
       if (aliasRefs.isWellDefined()
           && aliasRefs.firstReferenceIsAssigningDeclaration()
           && aliasRefs.isAssignedOnceInLifetime()) {
@@ -223,7 +223,7 @@ class CollapseProperties implements CompilerPass {
               aliasRefs.references.get(i);
 
           Node newNode = alias.node.cloneTree();
-          aliasRef.getParent().replaceChild(aliasRef.getNameNode(), newNode);
+          aliasRef.getParent().replaceChild(aliasRef.getNode(), newNode);
           newNodes.add(newNode);
         }
 
@@ -247,11 +247,21 @@ class CollapseProperties implements CompilerPass {
    */
   private void checkNamespaces() {
     for (Name name : nameMap.values()) {
-      if (name.isNamespace() && name.refs != null &&
-          (name.aliasingGets > 0 || name.localSets + name.globalSets > 1)) {
-        boolean initialized = name.declaration != null;
-        for (Ref ref : name.refs) {
-          if (ref.type == Ref.Type.SET_FROM_GLOBAL ||
+      if (name.isNamespace() &&
+          (name.aliasingGets > 0 || name.localSets + name.globalSets > 1 ||
+           name.deleteProps > 0)) {
+        boolean initialized = name.getDeclaration() != null;
+        for (Ref ref : name.getRefs()) {
+          if (ref == name.getDeclaration()) {
+            continue;
+          }
+
+          if (ref.type == Ref.Type.DELETE_PROP) {
+            if (initialized) {
+              warnAboutNamespaceRedefinition(name, ref);
+            }
+          } else if (
+              ref.type == Ref.Type.SET_FROM_GLOBAL ||
               ref.type == Ref.Type.SET_FROM_LOCAL) {
             if (initialized) {
               warnAboutNamespaceRedefinition(name, ref);
@@ -274,7 +284,7 @@ class CollapseProperties implements CompilerPass {
    */
   private void warnAboutNamespaceAliasing(Name nameObj, Ref ref) {
     compiler.report(
-        JSError.make(ref.sourceName, ref.node,
+        JSError.make(ref.getSourceName(), ref.node,
                      UNSAFE_NAMESPACE_WARNING, nameObj.fullName()));
   }
 
@@ -286,7 +296,7 @@ class CollapseProperties implements CompilerPass {
    */
   private void warnAboutNamespaceRedefinition(Name nameObj, Ref ref) {
     compiler.report(
-        JSError.make(ref.sourceName, ref.node,
+        JSError.make(ref.getSourceName(), ref.node,
                      NAMESPACE_REDEFINED_WARNING, nameObj.fullName()));
   }
 
@@ -302,15 +312,38 @@ class CollapseProperties implements CompilerPass {
     if (n.props == null) return;
 
     for (Name p : n.props) {
-      String propAlias = appendPropForAlias(alias, p.name);
+      String propAlias = appendPropForAlias(alias, p.getName());
 
       if (p.canCollapse()) {
         flattenReferencesTo(p, propAlias);
+      } else if (p.isSimpleStubDeclaration()) {
+        flattenSimpleStubDeclaration(p, propAlias);
       }
 
       flattenReferencesToCollapsibleDescendantNames(p, propAlias);
     }
   }
+
+
+  /**
+   * Flattens a stub declaration.
+   * This is mostly a hack to support legacy users.
+   */
+  private void flattenSimpleStubDeclaration(Name name, String alias) {
+    Ref ref = Iterables.getOnlyElement(name.getRefs());
+    Node nameNode = NodeUtil.newName(
+        compiler.getCodingConvention(), alias, ref.node,
+        name.fullName());
+    Node varNode = new Node(Token.VAR, nameNode).copyInformationFrom(nameNode);
+
+    Preconditions.checkState(
+        ref.node.getParent().getType() == Token.EXPR_RESULT);
+    Node parent = ref.node.getParent();
+    Node gramps = parent.getParent();
+    gramps.replaceChild(parent, varNode);
+    compiler.reportCodeChange();
+  }
+
 
   /**
    * Flattens all references to a collapsible property of a global name except
@@ -320,20 +353,23 @@ class CollapseProperties implements CompilerPass {
    * @param alias The flattened name (e.g. "a$b" or "a$b$c$d")
    */
   private void flattenReferencesTo(Name n, String alias) {
-    if (n.refs != null) {
-      String originalName = n.fullName();
-      for (Ref r : n.refs) {
-        Node rParent = r.node.getParent();
+    String originalName = n.fullName();
+    for (Ref r : n.getRefs()) {
+      if (r == n.getDeclaration()) {
+        // Declarations are handled separately.
+        continue;
+      }
 
-        // There are two cases when we shouldn't flatten a reference:
-        // 1) Object literal keys, because duplicate keys show up as refs.
-        // 2) References inside a complex assign. (a = x.y = 0). These are
-        //    called TWIN references, because they show up twice in the
-        //    reference list. Only collapse the set, not the alias.
-        if (!NodeUtil.isObjectLitKey(r.node, rParent) &&
-            (r.getTwin() == null || r.isSet())) {
-          flattenNameRef(alias, r.node, rParent, originalName);
-        }
+      Node rParent = r.node.getParent();
+
+      // There are two cases when we shouldn't flatten a reference:
+      // 1) Object literal keys, because duplicate keys show up as refs.
+      // 2) References inside a complex assign. (a = x.y = 0). These are
+      //    called TWIN references, because they show up twice in the
+      //    reference list. Only collapse the set, not the alias.
+      if (!NodeUtil.isObjectLitKey(r.node, rParent) &&
+          (r.getTwin() == null || r.isSet())) {
+        flattenNameRef(alias, r.node, rParent, originalName);
       }
     }
 
@@ -360,19 +396,22 @@ class CollapseProperties implements CompilerPass {
     // Only flatten the prefix of a name declaration if the name being
     // initialized is fully qualified (i.e. not an object literal key).
     String originalName = n.fullName();
-    if (n.declaration != null && n.declaration.node != null &&
-        n.declaration.node.getType() == Token.GETPROP) {
-      flattenNameRefAtDepth(alias, n.declaration.node, depth, originalName);
+    Ref decl = n.getDeclaration();
+    if (decl != null && decl.node != null &&
+        decl.node.getType() == Token.GETPROP) {
+      flattenNameRefAtDepth(alias, decl.node, depth, originalName);
     }
 
-    if (n.refs != null) {
-      for (Ref r : n.refs) {
+    for (Ref r : n.getRefs()) {
+      if (r == decl) {
+        // Declarations are handled separately.
+        continue;
+      }
 
-        // References inside a complex assign (a = x.y = 0)
-        // have twins. We should only flatten one of the twins.
-        if (r.getTwin() == null || r.isSet()) {
-          flattenNameRefAtDepth(alias, r.node, depth, originalName);
-        }
+      // References inside a complex assign (a = x.y = 0)
+      // have twins. We should only flatten one of the twins.
+      if (r.getTwin() == null || r.isSet()) {
+        flattenNameRefAtDepth(alias, r.node, depth, originalName);
       }
     }
 
@@ -432,6 +471,12 @@ class CollapseProperties implements CompilerPass {
     Node ref = NodeUtil.newName(
         compiler.getCodingConvention(), alias, n, originalName);
     NodeUtil.copyNameAnnotations(n.getLastChild(), ref);
+    if (parent.getType() == Token.CALL && n == parent.getFirstChild()) {
+      // The node was a call target, we are deliberately flatten these as
+      // we node the "this" isn't provided by the namespace. Mark it as such:
+      parent.putBooleanProp(Node.FREE_CALL, true);
+    }
+
     JSType type = n.getJSType();
     if (type != null) {
       ref.setJSType(type);
@@ -460,14 +505,16 @@ class CollapseProperties implements CompilerPass {
       for (Name p : n.props) {
         // Recurse first so that saved node ancestries are intact when needed.
         collapseDeclarationOfNameAndDescendants(
-            p, appendPropForAlias(alias, p.name));
+            p, appendPropForAlias(alias, p.getName()));
 
-        if (!p.inExterns && canCollapseChildNames && p.declaration != null &&
-            p.declaration.node != null &&
-            p.declaration.node.getParent() != null &&
-            p.declaration.node.getParent().getType() == Token.ASSIGN) {
+        if (!p.inExterns && canCollapseChildNames &&
+            p.getDeclaration() != null &&
+            p.canCollapse() &&
+            p.getDeclaration().node != null &&
+            p.getDeclaration().node.getParent() != null &&
+            p.getDeclaration().node.getParent().getType() == Token.ASSIGN) {
           updateSimpleDeclaration(
-              appendPropForAlias(alias, p.name), p, p.declaration);
+              appendPropForAlias(alias, p.getName()), p, p.getDeclaration());
         }
       }
     }
@@ -573,19 +620,20 @@ class CollapseProperties implements CompilerPass {
    */
   private void updateObjLitOrFunctionDeclaration(
       Name n, String alias, boolean canCollapseChildNames) {
-    if (n.declaration == null) {
+    Ref decl = n.getDeclaration();
+    if (decl == null) {
       // Some names do not have declarations, because they
       // are only defined in local scopes.
       return;
     }
 
-    if (n.declaration.getTwin() != null) {
+    if (decl.getTwin() != null) {
       // Twin declarations will get handled when normal references
       // are handled.
       return;
     }
 
-    switch (n.declaration.node.getParent().getType()) {
+    switch (decl.node.getParent().getType()) {
       case Token.ASSIGN:
         updateObjLitOrFunctionDeclarationAtAssignNode(
             n, alias, canCollapseChildNames);
@@ -613,7 +661,7 @@ class CollapseProperties implements CompilerPass {
     // (e.g. a var node before the exprstmt) because the exprstmt might be
     // the child of an if statement that's not inside a block).
 
-    Ref ref = n.declaration;
+    Ref ref = n.getDeclaration();
     Node rvalue = ref.node.getNext();
     Node varNode = new Node(Token.VAR);
     Node varParent = ref.node.getAncestor(3);
@@ -639,7 +687,9 @@ class CollapseProperties implements CompilerPass {
           compiler.getCodingConvention(),
           alias, ref.node.getAncestor(2), n.fullName());
 
-      if (ref.node.getLastChild().getBooleanProp(Node.IS_CONSTANT_NAME)) {
+      JSDocInfo info = ref.node.getParent().getJSDocInfo();
+      if (ref.node.getLastChild().getBooleanProp(Node.IS_CONSTANT_NAME) ||
+          (info != null && info.isConstant())) {
         nameNode.putBooleanProp(Node.IS_CONSTANT_NAME, true);
       }
 
@@ -685,7 +735,7 @@ class CollapseProperties implements CompilerPass {
             public void visit(NodeTraversal t, Node n, Node parent) {
               if (n.getType() == Token.THIS) {
                 compiler.report(
-                    JSError.make(name.declaration.sourceName, n,
+                    JSError.make(name.getDeclaration().getSourceName(), n,
                         UNSAFE_THIS, name.fullName()));
               }
             }
@@ -706,7 +756,7 @@ class CollapseProperties implements CompilerPass {
       return;
     }
 
-    Ref ref = n.declaration;
+    Ref ref = n.getDeclaration();
     String name = ref.node.getString();
     Node rvalue = ref.node.getFirstChild();
     Node varNode = ref.node.getParent();
@@ -753,7 +803,7 @@ class CollapseProperties implements CompilerPass {
       return;
     }
 
-    Ref ref = n.declaration;
+    Ref ref = n.getDeclaration();
     String fnName = ref.node.getString();
     addStubsForUndeclaredProperties(
         n, fnName, ref.node.getAncestor(2), ref.node.getParent());
@@ -798,9 +848,15 @@ class CollapseProperties implements CompilerPass {
                                TokenStream.isJSIdentifier(key.getString());
       String propName = isJsIdentifier ?
           key.getString() : String.valueOf(++arbitraryNameCounter);
-      String propAlias = appendPropForAlias(alias, propName);
-      String qName = objlitName.fullName() + '.' + propName;
 
+      // If the name cannot be collapsed, skip it.
+      String qName = objlitName.fullName() + '.' + propName;
+      Name p = nameMap.get(qName);
+      if (p != null && !p.canCollapse()) {
+        continue;
+      }
+
+      String propAlias = appendPropForAlias(alias, propName);
       Node refNode = null;
       if (discardKeys) {
         objlit.removeChild(key);
@@ -831,24 +887,21 @@ class CollapseProperties implements CompilerPass {
       compiler.reportCodeChange();
       nameToAddAfter = newVar;
 
-      if (isJsIdentifier) {
-        // Update the global name's node ancestry if it hasn't already been
-        // done. (Duplicate keys in an object literal can bring us here twice
-        // for the same global name.)
-        Name p = nameMap.get(qName);
-        if (p != null) {
-          if (!discardKeys) {
-            Ref newAlias =
-                p.declaration.cloneAndReclassify(Ref.Type.ALIASING_GET);
-            newAlias.node = refNode;
-            p.addRef(newAlias);
-          }
+      // Update the global name's node ancestry if it hasn't already been
+      // done. (Duplicate keys in an object literal can bring us here twice
+      // for the same global name.)
+      if (isJsIdentifier && p != null) {
+        if (!discardKeys) {
+          Ref newAlias =
+              p.getDeclaration().cloneAndReclassify(Ref.Type.ALIASING_GET);
+          newAlias.node = refNode;
+          p.addRef(newAlias);
+        }
 
-          p.declaration.node = nameNode;
+        p.getDeclaration().node = nameNode;
 
-          if (value.getType() == Token.FUNCTION) {
-            checkForHosedThisReferences(value, value.getJSDocInfo(), p);
-          }
+        if (value.getType() == Token.FUNCTION) {
+          checkForHosedThisReferences(value, value.getJSDocInfo(), p);
         }
       }
 
@@ -879,7 +932,7 @@ class CollapseProperties implements CompilerPass {
     if (n.props != null) {
       for (Name p : n.props) {
         if (p.needsToBeStubbed()) {
-          String propAlias = appendPropForAlias(alias, p.name);
+          String propAlias = appendPropForAlias(alias, p.getName());
           Node nameNode = Node.newString(Token.NAME, propAlias);
           Node newVar = new Node(Token.VAR, nameNode)
               .copyInformationFromForTree(addAfter);
@@ -890,8 +943,8 @@ class CollapseProperties implements CompilerPass {
 
           // Determine if this is a constant var by checking the first
           // reference to it. Don't check the declaration, as it might be null.
-          if (p.refs.get(0).node.getLastChild().getBooleanProp(
-                Node.IS_CONSTANT_NAME)) {
+          if (p.getRefs().get(0).node.getLastChild().getBooleanProp(
+                  Node.IS_CONSTANT_NAME)) {
             nameNode.putBooleanProp(Node.IS_CONSTANT_NAME, true);
           }
         }

@@ -290,6 +290,9 @@ ClipboardData.prototype.getData = function(type) { };
  */
 function Window() {}
 
+/** @type {function(new:ActiveXObject, string, string=)} */
+Window.prototype.ActiveXObject;
+
 /** @inheritDoc */
 Window.prototype.addEventListener = function(type, listener, useCapture) {};
 
@@ -478,11 +481,13 @@ Window.prototype.toolbar;
 Window.prototype.top;
 
 /**
+ * @type {function(new:XDomainRequest)}
  * @see http://msdn.microsoft.com/en-us/library/cc287985(VS.85).aspx
  */
 Window.prototype.XDomainRequest;
 
 /**
+ * @type {function(new:XMLHttpRequest)}
  * @see http://msdn.microsoft.com/en-us/library/ms535157(VS.85).aspx
  */
 Window.prototype.XMLHttpRequest;
@@ -573,11 +578,6 @@ Window.prototype.navigate;
  */
 Window.prototype.open = function(opt_url, opt_windowName, opt_windowFeatures,
                                  opt_replace) {};
-
-/**
- * @see http://msdn.microsoft.com/en-us/library/cc197015(VS.85).aspx
- */
-Window.prototype.postMessage;
 
 /**
  * @see http://msdn.microsoft.com/en-us/library/ms536672(VS.85).aspx
@@ -1526,3 +1526,90 @@ function RuntimeObject(opt_str) {}
  * @see http://msdn.microsoft.com/en-us/library/dd347030(VS.85).aspx
  */
 HTMLStyleElement.prototype.styleSheet;
+
+
+/**
+ * IE implements Cross Origin Resource Sharing (cross-domain XMLHttpRequests)
+ * via the XDomainRequest object.
+ *
+ * @constructor
+ * @see http://msdn.microsoft.com/en-us/library/cc288060(v=vs.85).aspx
+ * @see http://www.w3.org/TR/cors/
+ */
+function XDomainRequest() {}
+
+/**
+ * Aborts the request.
+ * @see http://msdn.microsoft.com/en-us/library/cc288129(v=vs.85).aspx
+ */
+XDomainRequest.prototype.abort = function() {};
+
+/**
+ * Sets the method and URL for the request.
+ * @param {string} bstrMethod Either "GET" or "POST"
+ * @param {string} bstrUrl The target URL
+ * @see http://msdn.microsoft.com/en-us/library/cc288168(v=vs.85).aspx
+ */
+XDomainRequest.prototype.open = function(bstrMethod, bstrUrl) {};
+
+/**
+ * Sends the request.
+ * @param {string=} varBody The POST body to send to the server. If omitted,
+ *     the behavior is identical to sending an empty string.
+ * @see http://msdn.microsoft.com/en-us/library/cc288207(v=vs.85).aspx
+ */
+XDomainRequest.prototype.send = function(varBody) {};
+
+/**
+ * Called if the request could not be completed. Note that error information is
+ * not available.
+ * @see http://msdn.microsoft.com/en-us/library/ms536930%28v=VS.85%29.aspx
+ * @type {?function()}
+ */
+XDomainRequest.prototype.onerror;
+
+/**
+ * Called when the response has finished.
+ * @see http://msdn.microsoft.com/en-us/library/ms536942%28v=VS.85%29.aspx
+ * @type {?function()}
+ */
+XDomainRequest.prototype.onload;
+
+/**
+ * Called every time part of the response has been received.
+ * @see http://msdn.microsoft.com/en-us/library/cc197058%28v=VS.85%29.aspx
+ * @type {?function()}
+ */
+XDomainRequest.prototype.onprogress;
+
+/**
+ * Called if the timeout period has elapsed.
+ * @see http://msdn.microsoft.com/en-us/library/cc197061%28v=VS.85%29.aspx
+ * @type {?function()}
+ */
+XDomainRequest.prototype.ontimeout;
+
+/**
+ * The current response body.
+ * @see http://msdn.microsoft.com/en-us/library/cc287956%28v=VS.85%29.aspx
+ * @type {string}
+ */
+XDomainRequest.prototype.responseText;
+
+/**
+ * The timeout (in milliseconds) for the request.
+ * @type {number}
+ */
+XDomainRequest.prototype.timeout;
+
+/**
+ * The Content-Type of the response, or an empty string.
+ * @type {string}
+ */
+XDomainRequest.prototype.contentType;
+
+/**
+ * @type {string}
+ * @see http://msdn.microsoft.com/en-us/library/ms533542(v=vs.85).aspx
+ */
+Navigator.prototype.browserLanguage;

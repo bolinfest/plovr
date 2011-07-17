@@ -586,7 +586,7 @@ class TypeValidator {
       ObjectType instance, ObjectType implementedInterface, String prop) {
     if (!instance.hasProperty(prop)) {
       // Not implemented
-      String sourceName = (String) n.getProp(Node.SOURCENAME_PROP);
+      String sourceName = n.getSourceFileName();
       sourceName = sourceName == null ? "" : sourceName;
       if (shouldReport) {
         compiler.report(JSError.make(sourceName, n,
@@ -697,8 +697,15 @@ class TypeValidator {
       ObjectType objectType = getJSType(n.getFirstChild()).dereference();
       if (objectType != null) {
         String propName = n.getLastChild().getString();
-        while (objectType != null && !objectType.hasOwnProperty(propName)) {
-          objectType = objectType.getImplicitPrototype();
+        if (objectType.getConstructor() != null &&
+            objectType.getConstructor().isInterface()) {
+          objectType = FunctionType.getTopDefiningInterface(
+              objectType, propName);
+        } else {
+          // classes
+          while (objectType != null && !objectType.hasOwnProperty(propName)) {
+            objectType = objectType.getImplicitPrototype();
+          }
         }
 
         // Don't show complex function names or anonymous types.

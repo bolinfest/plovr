@@ -16,28 +16,38 @@
 
 package com.google.javascript.jscomp;
 
+import static com.google.javascript.rhino.jstype.JSTypeNative.GLOBAL_THIS;
+
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
-import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TokenStream;
+import com.google.javascript.rhino.jstype.JSType;
+import com.google.javascript.rhino.jstype.StaticReference;
+import com.google.javascript.rhino.jstype.StaticScope;
+import com.google.javascript.rhino.jstype.StaticSlot;
+import com.google.javascript.rhino.jstype.StaticSourceFile;
+import com.google.javascript.rhino.jstype.StaticSymbolTable;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 
 /**
  * Builds a global namespace of all the objects and their properties in
  * the global scope. Also builds an index of all the references to those names.
  *
  */
-class GlobalNamespace {
+class GlobalNamespace
+    implements StaticScope<JSType>,
+    StaticSymbolTable<GlobalNamespace.Name, GlobalNamespace.Ref> {
 
   private AbstractCompiler compiler;
   private final Node root;
@@ -45,6 +55,13 @@ class GlobalNamespace {
   private boolean inExterns;
   private Scope externsScope;
   private boolean generated = false;
+
+  /**
+   * Each reference has an index in post-order.
+   * Notice that some nodes are represented by 2 Ref objects, so
+   * this index is not necessarily unique.
+   */
+  private int currentPreOrderIndex = 0;
 
   /** Global namespace tree */
   private List<Name> globalNames = new ArrayList<Name>();
@@ -79,14 +96,50 @@ class GlobalNamespace {
     this.root = root;
   }
 
+  @Override
+  public StaticScope<JSType> getParentScope() {
+    return null;
+  }
+
+  @Override
+  public StaticSlot<JSType> getSlot(String name) {
+    return getOwnSlot(name);
+  }
+
+  @Override
+  public StaticSlot<JSType> getOwnSlot(String name) {
+    return nameMap.get(name);
+  }
+
+  @Override
+  public JSType getTypeOfThis() {
+    return compiler.getTypeRegistry().getNativeObjectType(GLOBAL_THIS);
+  }
+
+  @Override
+  public Iterable<Ref> getReferences(Name slot) {
+    ensureGenerated();
+    return Collections.unmodifiableList(slot.getRefs());
+  }
+
+  @Override
+  public Iterable<Name> getAllSymbols() {
+    ensureGenerated();
+    return Collections.unmodifiableCollection(getNameIndex().values());
+  }
+
+  private void ensureGenerated() {
+    if (!generated) {
+      process();
+    }
+  }
+
   /**
    * Gets a list of the roots of the forest of the global names, where the
    * roots are the top-level names.
    */
   List<Name> getNameForest() {
-    if (!generated) {
-      process();
-    }
+    ensureGenerated();
     return globalNames;
   }
 
@@ -95,9 +148,7 @@ class GlobalNamespace {
    * (as in "a", "a.b.c", etc.).
    */
   Map<String, Name> getNameIndex() {
-    if (!generated) {
-      process();
-    }
+    ensureGenerated();
     return nameMap;
   }
 
@@ -211,7 +262,7 @@ class GlobalNamespace {
   /**
    * Builds a tree representation of the global namespace. Omits prototypes.
    */
-  private class BuildGlobalNamespace extends AbstractPostOrderCallback {
+  private class BuildGlobalNamespace implements NodeTraversal.Callback {
 
     private final Predicate<Node> nodeFilter;
 
@@ -228,7 +279,16 @@ class GlobalNamespace {
     }
 
     @Override
-    public void visit(NodeTraversal t, Node n, Node parent) {
+    public void visit(NodeTraversal t, Node n, Node parent) {}
+
+    /** Collect the references in pre-order. */
+    @Override
+    public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
+      collect(t, n, parent);
+      return true;
+    }
+
+    public void collect(NodeTraversal t, Node n, Node parent) {
       if (nodeFilter != null && !nodeFilter.apply(n)) {
         return;
       }
@@ -293,6 +353,17 @@ class GlobalNamespace {
                 isSet = true;
                 type = Name.Type.FUNCTION;
                 break;
+              case Token.INC:
+              case Token.DEC:
+                isSet = true;
+                type = Name.Type.OTHER;
+                break;
+              default:
+                if (NodeUtil.isAssignmentOp(parent) &&
+                    parent.getFirstChild() == n) {
+                  isSet = true;
+                  type = Name.Type.OTHER;
+                }
             }
           }
           name = n.getString();
@@ -308,8 +379,19 @@ class GlobalNamespace {
                   isPropAssign = true;
                 }
                 break;
+              case Token.INC:
+              case Token.DEC:
+                isSet = true;
+                type = Name.Type.OTHER;
+                break;
               case Token.GETPROP:
                 return;
+              default:
+                if (NodeUtil.isAssignmentOp(parent) &&
+                    parent.getFirstChild() == n) {
+                  isSet = true;
+                  type = Name.Type.OTHER;
+                }
             }
           }
           name = n.getQualifiedName();
@@ -456,12 +538,14 @@ class GlobalNamespace {
       Name nameObj = getOrCreateName(name);
       nameObj.type = type;
 
-      Ref set = new Ref(t, n, Ref.Type.SET_FROM_GLOBAL);
+      Ref set = new Ref(t, n, nameObj, Ref.Type.SET_FROM_GLOBAL,
+          currentPreOrderIndex++);
       nameObj.addRef(set);
 
       if (isNestedAssign(parent)) {
         // This assignment is both a set and a get that creates an alias.
-        Ref get = new Ref(t, n, Ref.Type.ALIASING_GET);
+        Ref get = new Ref(t, n, nameObj, Ref.Type.ALIASING_GET,
+            currentPreOrderIndex++);
         nameObj.addRef(get);
         Ref.markTwins(set, get);
       } else if (isConstructorOrEnumDeclaration(n, parent)) {
@@ -523,14 +607,16 @@ class GlobalNamespace {
                             String name) {
       if (maybeHandlePrototypePrefix(t, n, parent, name)) return;
 
-      Name node = getOrCreateName(name);
-      Ref set = new Ref(t, n, Ref.Type.SET_FROM_LOCAL);
-      node.addRef(set);
+      Name nameObj = getOrCreateName(name);
+      Ref set = new Ref(t, n, nameObj,
+          Ref.Type.SET_FROM_LOCAL, currentPreOrderIndex++);
+      nameObj.addRef(set);
 
       if (isNestedAssign(parent)) {
         // This assignment is both a set and a get that creates an alias.
-        Ref get = new Ref(t, n, Ref.Type.ALIASING_GET);
-        node.addRef(get);
+        Ref get = new Ref(t, n, nameObj,
+            Ref.Type.ALIASING_GET, currentPreOrderIndex++);
+        nameObj.addRef(get);
         Ref.markTwins(set, get);
       }
     }
@@ -583,6 +669,9 @@ class GlobalNamespace {
               // the same name (e.g. var a = a ? a : {}).
               type = determineGetTypeForHookOrBooleanExpr(t, parent, name);
             }
+            break;
+          case Token.DELPROP:
+            type = Ref.Type.DELETE_PROP;
             break;
           default:
             type = Ref.Type.ALIASING_GET;
@@ -642,6 +731,8 @@ class GlobalNamespace {
               return Ref.Type.ALIASING_GET;
             }
             break;
+          case Token.DELPROP:
+            return Ref.Type.DELETE_PROP;
         }
         prev = anc;
       }
@@ -660,10 +751,10 @@ class GlobalNamespace {
      */
     void handleGet(NodeTraversal t, Node n, Node parent,
         String name, Ref.Type type) {
-      Name node = getOrCreateName(name);
+      Name nameObj = getOrCreateName(name);
 
       // No need to look up additional ancestors, since they won't be used.
-      node.addRef(new Ref(t, n, type));
+      nameObj.addRef(new Ref(t, n, nameObj, type, currentPreOrderIndex++));
     }
 
     /**
@@ -763,7 +854,7 @@ class GlobalNamespace {
    * correspond to JavaScript objects whose properties we should consider
    * collapsing.
    */
-  static class Name {
+  static class Name implements StaticSlot<JSType> {
     enum Type {
       OBJECTLIT,
       FUNCTION,
@@ -772,11 +863,16 @@ class GlobalNamespace {
       OTHER,
     }
 
-    final String name;
+    private final String name;
     final Name parent;
     List<Name> props;
-    Ref declaration;
-    List<Ref> refs;
+
+    /** The first global assignment to a name. */
+    private Ref declaration;
+
+    /** All references to a name. This must contain {@code declaration}. */
+    private List<Ref> refs;
+
     Type type;
     private boolean isClassOrEnum = false;
     private boolean hasClassOrEnumDescendant = false;
@@ -785,6 +881,7 @@ class GlobalNamespace {
     int aliasingGets = 0;
     int totalGets = 0;
     int callGets = 0;
+    int deleteProps = 0;
     boolean inExterns;
 
     JSDocInfo docInfo = null;
@@ -805,35 +902,53 @@ class GlobalNamespace {
       return node;
     }
 
+    @Override
+    public String getName() {
+      return name;
+    }
+
+    @Override
+    public Ref getDeclaration() {
+      return declaration;
+    }
+
+    @Override
+    public boolean isTypeInferred() {
+      return false;
+    }
+
+    @Override
+    public JSType getType() {
+      return null;
+    }
+
     void addRef(Ref ref) {
+      addRefInternal(ref);
       switch (ref.type) {
         case SET_FROM_GLOBAL:
           if (declaration == null) {
             declaration = ref;
             docInfo = getDocInfoForDeclaration(ref);
-          } else {
-            addRefInternal(ref);
           }
           globalSets++;
           break;
         case SET_FROM_LOCAL:
-          addRefInternal(ref);
           localSets++;
           break;
         case PROTOTYPE_GET:
         case DIRECT_GET:
-          addRefInternal(ref);
           totalGets++;
           break;
         case ALIASING_GET:
-          addRefInternal(ref);
           aliasingGets++;
           totalGets++;
           break;
         case CALL_GET:
-          addRefInternal(ref);
           callGets++;
           totalGets++;
+          break;
+        case DELETE_PROP:
+          deleteProps++;
           break;
         default:
           throw new IllegalStateException();
@@ -841,15 +956,13 @@ class GlobalNamespace {
     }
 
     void removeRef(Ref ref) {
-      if (ref == declaration ||
-          (refs != null && refs.remove(ref))) {
+      if (refs != null && refs.remove(ref)) {
         if (ref == declaration) {
           declaration = null;
           if (refs != null) {
             for (Ref maybeNewDecl : refs) {
               if (maybeNewDecl.type == Ref.Type.SET_FROM_GLOBAL) {
                 declaration = maybeNewDecl;
-                refs.remove(declaration);
                 break;
               }
             }
@@ -875,15 +988,22 @@ class GlobalNamespace {
             callGets--;
             totalGets--;
             break;
+          case DELETE_PROP:
+            deleteProps--;
+            break;
           default:
             throw new IllegalStateException();
         }
       }
     }
 
+    List<Ref> getRefs() {
+      return refs == null ? ImmutableList.<Ref>of() : refs;
+    }
+
     void addRefInternal(Ref ref) {
       if (refs == null) {
-        refs = new LinkedList<Ref>();
+        refs = Lists.newArrayList();
       }
       refs.add(ref);
     }
@@ -903,10 +1023,23 @@ class GlobalNamespace {
       return true;
     }
 
+    boolean isSimpleStubDeclaration() {
+      if (getRefs().size() == 1) {
+        Ref ref = refs.get(0);
+        JSDocInfo info = ref.node.getJSDocInfo();
+        if (ref.node.getParent() != null &&
+            ref.node.getParent().getType() == Token.EXPR_RESULT) {
+          return true;
+        }
+      }
+      return false;
+    }
+
     boolean canCollapse() {
       return !inExterns && !isGetOrSetDefinition() && (isClassOrEnum ||
           (parent == null || parent.canCollapseUnannotatedChildNames()) &&
-          (globalSets > 0 || localSets > 0));
+          (globalSets > 0 || localSets > 0) &&
+          deleteProps == 0);
     }
 
     boolean isGetOrSetDefinition() {
@@ -915,7 +1048,7 @@ class GlobalNamespace {
 
     boolean canCollapseUnannotatedChildNames() {
       if (type == Type.OTHER || isGetOrSetDefinition()
-          || globalSets != 1 || localSets != 0) {
+          || globalSets != 1 || localSets != 0 || deleteProps != 0) {
         return false;
       }
 
@@ -1018,7 +1151,7 @@ class GlobalNamespace {
    * A global name reference. Contains references to the relevant parse tree
    * node and its ancestors that may be affected.
    */
-  static class Ref {
+  static class Ref implements StaticReference<JSType> {
     enum Type {
       SET_FROM_GLOBAL,
       SET_FROM_LOCAL,
@@ -1026,13 +1159,15 @@ class GlobalNamespace {
       ALIASING_GET,     // Prevents a name's properties from being collapsed
       DIRECT_GET,       // Prevents a name from being completely eliminated
       CALL_GET,         // Prevents a name from being collapsed if never set
+      DELETE_PROP,      // Prevents a name from being collapsed at all.
     }
 
     Node node;
+    final CompilerInput source;
+    final Name name;
     final Type type;
-    final String sourceName;
     final Scope scope;
-    final JSModule module;
+    final int preOrderIndex;
 
     /**
      * Certain types of references are actually double-refs. For example,
@@ -1046,27 +1181,53 @@ class GlobalNamespace {
     /**
      * Creates a reference at the current node.
      */
-    Ref(NodeTraversal t, Node name, Type type) {
-      this.node = name;
-      this.sourceName = t.getSourceName();
+    Ref(NodeTraversal t, Node node, Name name, Type type, int index) {
+      this.node = node;
+      this.name = name;
+      this.source = t.getInput();
       this.type = type;
       this.scope = t.getScope();
-      this.module = t.getModule();
+      this.preOrderIndex = index;
     }
 
-    private Ref(Ref original, Type type) {
+    private Ref(Ref original, Type type, int index) {
       this.node = original.node;
-      this.sourceName = original.sourceName;
+      this.name = original.name;
+      this.source = original.source;
       this.type = type;
       this.scope = original.scope;
-      this.module = original.module;
+      this.preOrderIndex = index;
     }
 
-    private Ref(Type type) {
+    private Ref(Type type, int index) {
       this.type = type;
-      this.sourceName = "source";
+      this.source = null;
       this.scope = null;
-      this.module = null;
+      this.name = null;
+      this.preOrderIndex = index;
+    }
+
+    @Override
+    public Node getNode() {
+      return node;
+    }
+
+    @Override
+    public StaticSourceFile getSourceFile() {
+      return source;
+    }
+
+    @Override
+    public StaticSlot<JSType> getSymbol() {
+      return name;
+    }
+
+    JSModule getModule() {
+      return source == null ? null : source.getModule();
+    }
+
+    String getSourceName() {
+      return source == null ? "" : source.getName();
     }
 
     Ref getTwin() {
@@ -1091,11 +1252,11 @@ class GlobalNamespace {
      * a different class.
      */
     Ref cloneAndReclassify(Type type) {
-      return new Ref(this, type);
+      return new Ref(this, type, this.preOrderIndex);
     }
 
     static Ref createRefForTesting(Type type) {
-      return new Ref(type);
+      return new Ref(type, -1);
     }
   }
 }

@@ -27,6 +27,7 @@ import static com.google.javascript.jscomp.CheckAccessControls.DEPRECATED_PROP;
 import static com.google.javascript.jscomp.CheckAccessControls.DEPRECATED_PROP_REASON;
 import static com.google.javascript.jscomp.CheckAccessControls.PRIVATE_OVERRIDE;
 import static com.google.javascript.jscomp.CheckAccessControls.VISIBILITY_MISMATCH;
+import static com.google.javascript.jscomp.CheckAccessControls.CONST_PROPERTY_DELETED;
 import static com.google.javascript.jscomp.CheckAccessControls.CONST_PROPERTY_REASSIGNED_VALUE;
 
 import com.google.javascript.jscomp.CheckLevel;
@@ -405,7 +406,7 @@ public class CheckAccessControlsTest extends CompilerTestCase {
       "/** @constructor \n * @extends {Foo} */ " +
       "function SubFoo() {};" +
       "SubFoo.prototype.bar_ = function() {};"
-    }, null, PRIVATE_OVERRIDE);
+    }, null, BAD_PRIVATE_PROPERTY_ACCESS);
   }
 
   public void testNoPrivateAccessForProperties7() {
@@ -419,6 +420,14 @@ public class CheckAccessControlsTest extends CompilerTestCase {
       "SubFoo.prototype.bar_ = function() {};",
       "SubFoo.prototype.baz = function() { this.bar_(); }"
     }, null, BAD_PRIVATE_PROPERTY_ACCESS);
+  }
+
+  public void testNoPrivateAccessForProperties8() {
+    test(new String[] {
+      "/** @constructor */ function Foo() { /** @private */ this.bar_ = 3; }",
+      "/** @constructor \n * @extends {Foo} */ " +
+      "function SubFoo() { /** @private */ this.bar_ = 3; };"
+    }, null, PRIVATE_OVERRIDE);
   }
 
   public void testProtectedAccessForProperties1() {
@@ -722,11 +731,64 @@ public class CheckAccessControlsTest extends CompilerTestCase {
         "/** @const */ Foo.prototype.prop;");
   }
 
+  public void testConstantProperty11() {
+    test("/** @constructor */ function Foo() {}" +
+        "/** @const */ Foo.prototype.bar;" +
+        "/**\n" +
+        " * @constructor\n" +
+        " * @extends {Foo}\n" +
+        " */ function SubFoo() { this.bar = 5; this.bar = 6; }",
+        null , CONST_PROPERTY_REASSIGNED_VALUE);
+  }
+
+  public void testConstantProperty12() {
+    testSame("/** @constructor */ function Foo() {}" +
+        "/** @const */ Foo.prototype.bar;" +
+        "/**\n" +
+        " * @constructor\n" +
+        " * @extends {Foo}\n" +
+        " */ function SubFoo() { this.bar = 5; }" +
+        "/**\n" +
+        " * @constructor\n" +
+        " * @extends {Foo}\n" +
+        " */ function SubFoo2() { this.bar = 5; }");
+  }
+
+  public void testConstantProperty13() {
+    test("/** @constructor */ function Foo() {}" +
+        "/** @const */ Foo.prototype.bar;" +
+        "/**\n" +
+        " * @constructor\n" +
+        " * @extends {Foo}\n" +
+        " */ function SubFoo() { this.bar = 5; }" +
+        "/**\n" +
+        " * @constructor\n" +
+        " * @extends {SubFoo}\n" +
+        " */ function SubSubFoo() { this.bar = 5; }",
+        null , CONST_PROPERTY_REASSIGNED_VALUE);
+  }
+
+  public void testConstantProperty14() {
+    test("/** @constructor */ function Foo() {" +
+        "/** @const */ this.bar = 3; delete this.bar; }",
+        null, CONST_PROPERTY_DELETED);
+  }
+
   public void testSuppressConstantProperty() {
     testSame("/** @constructor */ function A() {" +
         "/** @const */ this.bar = 3;}" +
         "/**\n" +
         " * @suppress {constantProperty}\n" +
+        " * @constructor\n" +
+        " */ function B() {" +
+        "/** @const */ this.bar = 3;this.bar += 4;}");
+  }
+
+  public void testSuppressConstantProperty2() {
+    testSame("/** @constructor */ function A() {" +
+        "/** @const */ this.bar = 3;}" +
+        "/**\n" +
+        " * @suppress {const}\n" +
         " * @constructor\n" +
         " */ function B() {" +
         "/** @const */ this.bar = 3;this.bar += 4;}");

@@ -26,6 +26,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 
 import javax.annotation.Nullable;
@@ -39,16 +40,7 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
 
   private boolean validate = false;
 
-  private final static int UNMAPPED = -1;
-
-  /**
-   *  A map used to convert integer values in the range 0-63 to their base64
-   *  values.
-   */
-  private static final String BASE64_MAP =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
-      "abcdefghijklmnopqrstuvwxyz" +
-      "0123456789+/";
+  private static final int UNMAPPED = -1;
 
   /**
    * A pre-order traversal ordered list of mappings stored in this map.
@@ -59,6 +51,12 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
    * A map of source names to source name index
    */
   private LinkedHashMap<String, Integer> sourceFileMap =
+      Maps.newLinkedHashMap();
+
+  /**
+   * A map of symbol names to symbol name index
+   */
+  private LinkedHashMap<String, Integer> originalNameMap =
       Maps.newLinkedHashMap();
 
   /**
@@ -96,6 +94,7 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
     mappings.clear();
     lastMapping = null;
     sourceFileMap.clear();
+    originalNameMap.clear();
     lastSourceFile = null;
     lastSourceFileIndex = -1;
     offsetPosition = new FilePosition(0, 0);
@@ -166,17 +165,6 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
       return;
     }
 
-    if (sourceName != lastSourceFile) {
-      lastSourceFile = sourceName;
-      Integer index = sourceFileMap.get(sourceName);
-      if (index != null) {
-        lastSourceFileIndex = index;
-      } else {
-        lastSourceFileIndex = sourceFileMap.size();
-        sourceFileMap.put(sourceName, lastSourceFileIndex);
-      }
-    }
-
     FilePosition adjustedStart = startPosition;
     FilePosition adjustedEnd = endPosition;
 
@@ -209,7 +197,7 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
 
     // Create the new mapping.
     Mapping mapping = new Mapping();
-    mapping.sourceFile = lastSourceFileIndex;
+    mapping.sourceFile = getSourceId(sourceName);
     mapping.originalPosition = sourceStartPosition;
     mapping.originalName = symbolName;
     mapping.startPosition = adjustedStart;
@@ -292,6 +280,13 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
     out.append("]");
     appendFieldEnd(out);
 
+    // Add the mappings themselves.
+    appendFieldStart(out, "mappings");
+    out.append("[");
+    (new MappingWriter()).appendMappings(out);
+    out.append("]");
+    appendFieldEnd(out);
+
     // Files names
     appendFieldStart(out, "sources");
     out.append("[");
@@ -299,10 +294,10 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
     out.append("]");
     appendFieldEnd(out);
 
-    // Add the mappings themselves.
-    appendFieldStart(out, "mappings");
+    // Files names
+    appendFieldStart(out, "names");
     out.append("[");
-    (new MappingWriter()).appendMappings(out);
+    addOriginalNameMap(out);
     out.append("]");
     appendFieldEnd(out);
 
@@ -313,15 +308,28 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
    * Writes the source name map to 'out'.
    */
   private void addSourceNameMap(Appendable out) throws IOException {
+    addMap(out, sourceFileMap);
+  }
+
+  /**
+   * Writes the original name map to 'out'.
+   */
+  private void addOriginalNameMap(Appendable out) throws IOException {
+    addMap(out, originalNameMap);
+  }
+
+  /**
+   * Writes the source name map to 'out'.
+   */
+  private void addMap(Appendable out, Map<String, Integer> map)
+      throws IOException {
     int i = 0;
-    for (Entry<String, Integer> entry : sourceFileMap.entrySet()) {
+    for (Entry<String, Integer> entry : map.entrySet()) {
       String key = entry.getKey();
       if (i != 0) {
         out.append(",");
       }
-      out.append("\"");
-      out.append(key);
-      out.append("\"");
+      out.append(escapeString(key));
       i++;
     }
   }
@@ -336,7 +344,7 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
   // Source map field helpers.
 
   private static void appendFirstField(
-      Appendable out, String name, String value)
+      Appendable out, String name, CharSequence value)
       throws IOException {
     out.append("\"");
     out.append(name);
@@ -345,7 +353,8 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
     out.append(value);
   }
 
-  private static void appendField(Appendable out, String name, String value)
+  private static void appendField(
+      Appendable out, String name, CharSequence value)
       throws IOException {
     out.append(",\n");
     out.append("\"");
@@ -385,6 +394,42 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
 
     // Adjust for the prefix.
     return maxLine + prefixPosition.getLine();
+  }
+
+  /**
+   * Pools source names.
+   * @param sourceName The source location to index.
+   * @return The id to represent the source name in the output.
+   */
+  private int getSourceId(String sourceName) {
+    if (sourceName != lastSourceFile) {
+      lastSourceFile = sourceName;
+      Integer index = sourceFileMap.get(sourceName);
+      if (index != null) {
+        lastSourceFileIndex = index;
+      } else {
+        lastSourceFileIndex = sourceFileMap.size();
+        sourceFileMap.put(sourceName, lastSourceFileIndex);
+      }
+    }
+    return lastSourceFileIndex;
+  }
+
+  /**
+   * Pools symbol names
+   * @param symbolName The symbol name to index.
+   * @return The id to represent the symbol name in the output.
+   */
+  private int getNameId(String symbolName) {
+    int originalNameIndex;
+    Integer index = originalNameMap.get(symbolName);
+    if (index != null) {
+      originalNameIndex = index;
+    } else {
+      originalNameIndex = originalNameMap.size();
+      originalNameMap.put(symbolName, originalNameIndex);
+    }
+    return originalNameIndex;
   }
 
   /**
@@ -459,12 +504,11 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
       out.append(lineValue);
 
       out.append(",");
-      out.append(String.valueOf(
-          m.originalPosition.getColumn()));
+      out.append(String.valueOf(m.originalPosition.getColumn()));
 
       if (m.originalName != null) {
         out.append(",");
-        out.append(escapeString(m.originalName));
+        out.append(String.valueOf(getNameId(m.originalName)));
       }
 
       out.append("],\n");
@@ -503,7 +547,7 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
 
       for (int i = line; i <= nextLine; i++) {
         if (i == nextLine) {
-          closeEntry(id, nextCol-col);
+          closeEntry(id, nextCol - col);
           break;
         }
 
@@ -600,17 +644,17 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
       // mapping id length will exceed 64 base64 characters in length so
       // additional "!" don't signal additional id length characters.
       if (reps > 16 || relativeIdLength > 4) {
-        String repsString = valueToBase64(reps -1, 1);
+        String repsString = valueToBase64(reps - 1, 1);
         for (int i = 0; i < repsString.length(); i++) {
           // TODO(johnlenz): update this to whatever is agreed to.
           out.append('!');
         }
-        String sizeId = valueToBase64(relativeIdString.length() -1, 1);
+        String sizeId = valueToBase64(relativeIdString.length() - 1, 1);
 
         out.append(sizeId);
         out.append(repsString);
       } else {
-        int prefix = ((reps -1) << 2) + (relativeIdString.length() -1);
+        int prefix = ((reps - 1) << 2) + (relativeIdString.length() - 1);
         Preconditions.checkState(prefix < 64 && prefix >= 0,
             "prefix (%s) reps(%s) map id size(%s)",
             prefix, reps, relativeIdString.length());
@@ -626,7 +670,7 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
      * represented as a two-complement value.
      */
     public static int getRelativeMappingId(int id, int idLength, int lastId) {
-      int base = 1 << (idLength *6);
+      int base = 1 << (idLength * 6);
       int relativeId = id - lastId;
       return (relativeId < 0) ? relativeId + base : relativeId;
     }
@@ -637,7 +681,7 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
     public static int getRelativeMappingIdLength(int rawId, int lastId) {
       Preconditions.checkState(rawId >= 0 || rawId == UNMAPPED);
       int relativeId = rawId - lastId;
-      int id = (relativeId < 0 ? Math.abs(relativeId) -1 : relativeId) << 1;
+      int id = (relativeId < 0 ? Math.abs(relativeId) - 1 : relativeId) << 1;
       int digits = 1;
       int base = 64;
       while (id >= base) {
@@ -657,13 +701,13 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
       do {
         int charValue = value & 63; // base64 chars
         value = value >>> 6; // get the next value;
-        chars[size++] = BASE64_MAP.charAt(charValue);
+        chars[size++] = Base64.toBase64(charValue);
       } while (value > 0);
 
       StringBuilder sb = new StringBuilder(size);
 
       while (minimumSize > size) {
-        sb.append(BASE64_MAP.charAt(0));
+        sb.append(Base64.toBase64(0));
         minimumSize--;
       }
       while (size > 0) {
@@ -829,42 +873,9 @@ public class SourceMapGeneratorV2 implements SourceMapGenerator {
     }
   }
 
-  /**
-   * To facilitate incremental compiles, create a source map that is built
-   * piecemeal from other source maps.
-   * @throws IOException
-   */
   @Override
-  public void writeMetaMap(
-      Appendable out, String name, List<SourceMapSection> appSections)
-      throws IOException {
-    // Add the header fields.
-    out.append("{\n");
-    appendFirstField(out, "version", "2");
-    appendField(out, "file", escapeString(name));
-
-    // Add the line character maps.
-    appendFieldStart(out, "sections");
-    out.append("[\n");
-    boolean first = true;
-    Long offset = new Long(0);
-    for (SourceMapSection section : appSections) {
-      if (first) {
-        first = false;
-      } else {
-        out.append(",\n");
-      }
-      out.append("{\n");
-      appendFirstField(out, "offset", offset.toString());
-      appendField(out, "file", escapeString(section.getSectionUrl()));
-      out.append("\n}");
-
-      offset += section.getLength();
-    }
-
-    out.append("\n]");
-    appendFieldEnd(out);
-
-    out.append("\n}\n");
+  public void appendIndexMapTo(
+      Appendable out, String name, List<SourceMapSection> appSections) {
+    throw new UnsupportedOperationException();
   }
 }

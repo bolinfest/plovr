@@ -879,14 +879,7 @@ import java.util.Set;
      */
     private static boolean storageNodeIsLValue(Node node) {
       Preconditions.checkArgument(isStorageNode(node));
-
-      Node parent = node.getParent();
-
-      return (NodeUtil.isAssignmentOp(parent) && parent.getFirstChild() == node)
-          || (NodeUtil.isForIn(parent) && parent.getFirstChild() == node)
-          || NodeUtil.isVar(parent)
-          || parent.getType() == Token.DEC
-          || parent.getType() == Token.INC;
+      return NodeUtil.isLValue(node);
     }
 
     /**
@@ -969,12 +962,12 @@ import java.util.Set;
 
       NodeTraversal.traverse(compiler, root, callback);
 
-      for (Var variable : callback.getReferencedVariables()) {
+      for (Var variable : callback.getAllSymbols()) {
         ReferenceCollection referenceCollection =
-            callback.getReferenceCollection(variable);
+            callback.getReferences(variable);
 
         for (Reference reference : referenceCollection.references) {
-         Node referenceNameNode = reference.getNameNode();
+          Node referenceNameNode = reference.getNode();
 
           // Note that this counts a declaration as a reference to itself
           referencesByNameNode.put(referenceNameNode, variable.getNameNode());

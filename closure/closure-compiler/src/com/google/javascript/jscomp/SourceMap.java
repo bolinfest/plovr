@@ -37,7 +37,7 @@ import java.io.IOException;
 public class SourceMap {
 
   public static enum Format {
-     LEGACY {
+     V1 {
        @Override SourceMap getInstance() {
          return new SourceMap(
            SourceMapGeneratorFactory.getInstance(SourceMapFormat.V1));
@@ -49,11 +49,17 @@ public class SourceMap {
            SourceMapGeneratorFactory.getInstance(SourceMapFormat.DEFAULT));
        }
      },
-     EXPERIMENTIAL {
+     V2 {
        @Override SourceMap getInstance() {
          return new SourceMap(
            SourceMapGeneratorFactory.getInstance(SourceMapFormat.V2));
-       }
+        }
+     },
+     V3 {
+       @Override SourceMap getInstance() {
+         return new SourceMap(
+           SourceMapGeneratorFactory.getInstance(SourceMapFormat.V3));
+        }
      };
      abstract SourceMap getInstance();
   }
@@ -94,7 +100,7 @@ public class SourceMap {
       Node node,
       FilePosition outputStartPosition,
       FilePosition outputEndPosition) {
-    String sourceFile = (String) node.getProp(Node.SOURCENAME_PROP);
+    String sourceFile = node.getSourceFileName();
     // If the node does not have an associated source file or
     // its line number is -1, then the node does not have sufficient
     // information for a mapping to be useful.

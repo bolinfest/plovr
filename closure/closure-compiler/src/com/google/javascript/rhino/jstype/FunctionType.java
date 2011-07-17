@@ -102,10 +102,16 @@ public class FunctionType extends PrototypeObjectType {
   private Node source;
 
   /**
-   * The interfaces directly implemented by this function.
+   * The interfaces directly implemented by this function (for constructors)
    * It is only relevant for constructors. May not be {@code null}.
    */
   private List<ObjectType> implementedInterfaces = ImmutableList.of();
+
+  /**
+   * The interfaces directly extendeded by this function (for interfaces)
+   * It is only relevant for constructors. May not be {@code null}.
+   */
+  private List<ObjectType> extendedInterfaces = ImmutableList.of();
 
   /**
    * The types which are subtypes of this function. It is only relevant for
@@ -190,6 +196,18 @@ public class FunctionType extends PrototypeObjectType {
   @Override
   public boolean canBeCalled() {
     return true;
+  }
+
+  public boolean hasImplementedInterfaces() {
+    if (!implementedInterfaces.isEmpty()){
+      return true;
+    }
+    FunctionType superCtor = isConstructor() ?
+        getSuperClassConstructor() : null;
+    if (superCtor != null) {
+      return superCtor.hasImplementedInterfaces();
+    }
+    return false;
   }
 
   public Iterable<Node> getParameters() {
@@ -300,6 +318,14 @@ public class FunctionType extends PrototypeObjectType {
       if (superClass != null) {
         superClass.addSubType(this);
       }
+
+      if (isInterface()) {
+        for (ObjectType interfaceType : getExtendedInterfaces()) {
+          if (interfaceType.getConstructor() != null) {
+            interfaceType.getConstructor().addSubType(this);
+          }
+        }
+      }
     }
 
     if (replacedPrototype) {
@@ -334,9 +360,8 @@ public class FunctionType extends PrototypeObjectType {
 
       set.add(instance);
 
-      if (constructor.getSuperClassConstructor() != null) {
-        addRelatedInterfaces(
-            constructor.getSuperClassConstructor().getInstanceType(), set);
+      for (ObjectType interfaceType : instance.getCtorExtendedInterfaces()) {
+        addRelatedInterfaces(interfaceType, set);
       }
     }
   }
@@ -359,6 +384,53 @@ public class FunctionType extends PrototypeObjectType {
       registry.registerTypeImplementingInterface(this, type);
     }
     this.implementedInterfaces = ImmutableList.copyOf(implementedInterfaces);
+  }
+
+  /**
+   * Returns all extended interfaces declared by an interfaces or its super-
+   * interfaces. If this is called before all types are resolved, it may return
+   * an incomplete set.
+   */
+  public Iterable<ObjectType> getAllExtendedInterfaces() {
+    // Store them in a linked hash set, so that the compile job is
+    // deterministic.
+    Set<ObjectType> extendedInterfaces = Sets.newLinkedHashSet();
+
+    for (ObjectType interfaceType : getExtendedInterfaces()) {
+      addRelatedExtendedInterfaces(interfaceType, extendedInterfaces);
+    }
+    return extendedInterfaces;
+  }
+
+  private void addRelatedExtendedInterfaces(ObjectType instance,
+      Set<ObjectType> set) {
+    FunctionType constructor = instance.getConstructor();
+    if (constructor != null) {
+      set.add(instance);
+
+      for (ObjectType interfaceType : constructor.getExtendedInterfaces()) {
+        addRelatedExtendedInterfaces(interfaceType, set);
+      }
+    }
+  }
+
+  /** Returns interfaces directly extended by an interface */
+  public Iterable<ObjectType> getExtendedInterfaces() {
+    return extendedInterfaces;
+  }
+
+  /** Returns the number of interfaces directly extended by an interface */
+  public int getExtendedInterfacesCount() {
+    return extendedInterfaces.size();
+  }
+
+  public void setExtendedInterfaces(List<ObjectType> extendedInterfaces)
+    throws UnsupportedOperationException {
+    if (isInterface()) {
+      this.extendedInterfaces = ImmutableList.copyOf(extendedInterfaces);
+    } else {
+      throw new UnsupportedOperationException();
+    }
   }
 
   @Override
@@ -387,7 +459,7 @@ public class FunctionType extends PrototypeObjectType {
                 new FunctionBuilder(registry)
                     .withReturnType(getReturnType())
                     .build(),
-                false, source);
+                source);
           } else {
             params = params.cloneTree();
             Node thisTypeNode = Node.newString(Token.NAME, "thisType");
@@ -401,7 +473,7 @@ public class FunctionType extends PrototypeObjectType {
                     .withParamsNode(params)
                     .withReturnType(getReturnType())
                     .build(),
-                false, source);
+                source);
           }
         } else if ("apply".equals(name)) {
           // Define the "apply" function lazily.
@@ -421,7 +493,7 @@ public class FunctionType extends PrototypeObjectType {
                   .withParams(builder)
                   .withReturnType(getReturnType())
                   .build(),
-              false, source);
+              source);
         }
       }
 
@@ -431,7 +503,7 @@ public class FunctionType extends PrototypeObjectType {
 
   @Override
   boolean defineProperty(String name, JSType type,
-      boolean inferred, boolean inExterns, Node propertyNode) {
+      boolean inferred, Node propertyNode) {
     if ("prototype".equals(name)) {
       ObjectType objType = type.toObjectType();
       if (objType != null) {
@@ -445,7 +517,7 @@ public class FunctionType extends PrototypeObjectType {
         return false;
       }
     }
-    return super.defineProperty(name, type, inferred, inExterns, propertyNode);
+    return super.defineProperty(name, type, inferred, propertyNode);
   }
 
   @Override
@@ -609,19 +681,45 @@ public class FunctionType extends PrototypeObjectType {
   }
 
   /**
+   * Given an interface and a property, finds the top-most super interface
+   * that has the property defined (including this interface).
+   */
+  public static ObjectType getTopDefiningInterface(ObjectType type,
+      String propertyName) {
+    ObjectType foundType = null;
+    if (type.hasProperty(propertyName)) {
+      foundType = type;
+    }
+    for (ObjectType interfaceType : type.getCtorExtendedInterfaces()) {
+      if (interfaceType.hasProperty(propertyName)) {
+        foundType = getTopDefiningInterface(interfaceType, propertyName);
+      }
+    }
+    return foundType;
+  }
+
+  /**
    * Given a constructor or an interface type and a property, finds the
    * top-most superclass that has the property defined (including this
    * constructor).
    */
-  public JSType getTopMostDefiningType(String propertyName) {
+  public ObjectType getTopMostDefiningType(String propertyName) {
     Preconditions.checkState(isConstructor() || isInterface());
     Preconditions.checkArgument(getPrototype().hasProperty(propertyName));
     FunctionType ctor = this;
-    JSType topInstanceType;
-    do {
+
+    if (isInterface()) {
+      return getTopDefiningInterface(this.getInstanceType(), propertyName);
+    }
+
+    ObjectType topInstanceType = ctor.getInstanceType();
+    while (true) {
       topInstanceType = ctor.getInstanceType();
       ctor = ctor.getSuperClassConstructor();
-    } while (ctor != null && ctor.getPrototype().hasProperty(propertyName));
+      if (ctor == null || !ctor.getPrototype().hasProperty(propertyName)) {
+        break;
+      }
+    }
     return topInstanceType;
   }
 
@@ -808,6 +906,7 @@ public class FunctionType extends PrototypeObjectType {
   /**
    * Gets the type of {@code this} in this function.
    */
+  @Override
   public ObjectType getTypeOfThis() {
     return typeOfThis.isNoObjectType() ?
         registry.getNativeObjectType(JSTypeNative.OBJECT_TYPE) : typeOfThis;

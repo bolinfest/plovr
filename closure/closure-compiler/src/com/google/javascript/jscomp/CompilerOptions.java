@@ -54,6 +54,13 @@ public class CompilerOptions implements Serializable, Cloneable {
    */
   boolean acceptConstKeyword;
 
+  /**
+   * Whether the compiler should assume that a function's "this" value
+   * never needs coercion (for example in non-strict "null" or "undefined" will
+   * be coerced to the global "this" and primitives to objects).
+   */
+  private boolean assumeStrictThis;
+
   // TODO(johnlenz): Add an language output mode.
 
   /**
@@ -69,6 +76,12 @@ public class CompilerOptions implements Serializable, Cloneable {
    * </ul>
    */
   public boolean ideMode;
+
+  /**
+   * Even if checkTypes is disabled, clients might want to still infer types.
+   * This is mostly used when ideMode is enabled.
+   */
+  boolean inferTypes;
 
   /**
    * Configures the compiler to skip as many passes as possible.
@@ -137,18 +150,6 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Checks for invalid control structures */
   public boolean checkControlStructures;
 
-  /** Checks for non-extern properties that are read but never set. */
-  public CheckLevel checkUndefinedProperties;
-
-  /**
-   * Checks for non-extern properties that are written but never read.
-   * This check occurs after the first constant-based dead code removal pass,
-   * but before the main optimization loop.  This is noisy if you are
-   * including libraries with methods that you don't use, so it is off by
-   * default.
-   */
-  public boolean checkUnusedPropertiesEarly;
-
   /** Checks types on expressions */
   public boolean checkTypes;
 
@@ -209,6 +210,7 @@ public class CompilerOptions implements Serializable, Cloneable {
   public String checkMissingGetCssNameBlacklist;
 
   /** Checks that the synctactic restrictions of ES5 strict mode are met. */
+  // TODO(johnlenz): remove this.
   public boolean checkEs5Strict;
 
   /** Checks that the synctactic restrictions of Caja are met. */
@@ -221,6 +223,7 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Folds constants (e.g. (2 + 3) to 5) */
   public boolean foldConstants;
 
+  /** Remove assignments to values that can not be referenced */
   public boolean deadAssignmentElimination;
 
   /** Inlines constants (symbols that are all CAPS) */
@@ -405,6 +408,9 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   /** Flattens multi-level property names (e.g. a$b = x) */
   public boolean collapseProperties;
+
+  /** Split object literals into individual variables when possible. */
+  public boolean collapseObjectLiterals;
 
   /** Flattens multi-level property names on extern types (e.g. String$f = x) */
   boolean collapsePropertiesOnExternTypes;
@@ -604,7 +610,8 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   public String jsOutputFile;
 
-  private transient ComposeWarningsGuard warningsGuard;
+  private ComposeWarningsGuard warningsGuard =
+      new ComposeWarningsGuard();
 
   int summaryDetailLevel = 1;
 
@@ -687,8 +694,6 @@ public class CompilerOptions implements Serializable, Cloneable {
     strictMessageReplacement = false;
     checkSuspiciousCode = false;
     checkControlStructures = false;
-    checkUndefinedProperties = CheckLevel.OFF;
-    checkUnusedPropertiesEarly = false;
     checkTypes = false;
     tightenTypes = false;
     inferTypesInGlobalScope = false;
@@ -704,7 +709,6 @@ public class CompilerOptions implements Serializable, Cloneable {
     checkMissingReturn = CheckLevel.OFF;
     checkMissingGetCssNameLevel = CheckLevel.OFF;
     checkMissingGetCssNameBlacklist = null;
-    checkEs5Strict = false;
     checkCaja = false;
     computeFunctionSideEffects = false;
     chainCalls = false;
@@ -716,6 +720,7 @@ public class CompilerOptions implements Serializable, Cloneable {
     inlineConstantVars = false;
     inlineFunctions = false;
     inlineLocalFunctions = false;
+    assumeStrictThis = false;
     crossModuleCodeMotion = false;
     crossModuleMethodMotion = false;
     inlineGetters = false;
@@ -752,6 +757,7 @@ public class CompilerOptions implements Serializable, Cloneable {
     aliasKeywords = false;
     collapseProperties = false;
     collapsePropertiesOnExternTypes = false;
+    collapseObjectLiterals = false;
     devirtualizePrototypeMethods = false;
     disambiguateProperties = false;
     ambiguateProperties = false;
@@ -803,7 +809,6 @@ public class CompilerOptions implements Serializable, Cloneable {
     tracer = TracerMode.OFF;
     colorizeErrorOutput = false;
     errorFormat = ErrorFormat.SINGLELINE;
-    warningsGuard = null;
     debugFunctionSideEffectsPath = null;
     jsOutputFile = "";
     externExports = false;
@@ -930,7 +935,7 @@ public class CompilerOptions implements Serializable, Cloneable {
    * group of warnings.
    */
   boolean enables(DiagnosticGroup type) {
-    return warningsGuard != null && warningsGuard.enables(type);
+    return warningsGuard.enables(type);
   }
 
   /**
@@ -938,7 +943,7 @@ public class CompilerOptions implements Serializable, Cloneable {
    * group of warnings.
    */
   boolean disables(DiagnosticGroup type) {
-    return warningsGuard != null && warningsGuard.disables(type);
+    return warningsGuard.disables(type);
   }
 
   /**
@@ -953,14 +958,25 @@ public class CompilerOptions implements Serializable, Cloneable {
   }
 
   /**
+   * Reset the warnings guard.
+   */
+  public void resetWarningsGuard() {
+    warningsGuard = new ComposeWarningsGuard();
+  }
+
+  /**
+   * The emergency fail safe removes all strict and ERROR-escalating
+   * warnings guards.
+   */
+  void useEmergencyFailSafe() {
+    warningsGuard = warningsGuard.makeEmergencyFailSafeGuard();
+  }
+
+  /**
    * Add a guard to the set of warnings guards.
    */
   public void addWarningsGuard(WarningsGuard guard) {
-    if (warningsGuard == null) {
-      warningsGuard = new ComposeWarningsGuard(guard);
-    } else {
-      warningsGuard.addGuard(guard);
-    }
+    warningsGuard.addGuard(guard);
   }
 
   /**
@@ -1191,6 +1207,36 @@ public class CompilerOptions implements Serializable, Cloneable {
     return this.aliasHandler;
   }
 
+  /**
+   * If true, enables type inference. If checkTypes is enabled, this flag has
+   * no effect.
+   */
+  public void setInferTypes(boolean enable) {
+    inferTypes = enable;
+  }
+
+  /**
+   * Gets the inferTypes flag. Note that if checkTypes is enabled, this flag
+   * is ignored when configuring the compiler.
+   */
+  public boolean getInferTypes() {
+    return inferTypes;
+  }
+
+  /**
+   * @return Whether assumeStrictThis is set.
+   */
+  public boolean isAssumeStrictThis() {
+    return assumeStrictThis;
+  }
+
+  /**
+   * If true, enables enables additional optimizations.
+   */
+  public void setAssumeStrictThis(boolean enable) {
+    this.assumeStrictThis = enable;
+  }
+
   //////////////////////////////////////////////////////////////////////////////
   // Enums
 
@@ -1326,6 +1372,7 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   private static class NullAliasTransformationHandler
       implements AliasTransformationHandler, Serializable {
+    private static final long serialVersionUID = 0L;
 
     private static final AliasTransformation NULL_ALIAS_TRANSFORMATION =
         new NullAliasTransformation();
@@ -1339,6 +1386,8 @@ public class CompilerOptions implements Serializable, Cloneable {
 
     private static class NullAliasTransformation
         implements AliasTransformation, Serializable {
+      private static final long serialVersionUID = 0L;
+
       @Override
       public void addAlias(String alias, String definition) {
       }
