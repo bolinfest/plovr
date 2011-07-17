@@ -201,16 +201,18 @@
                        includes="args4j.jar,
                                  json.jar,
                                  jsr305.jar,
-                                 libtrunk_rhino_parser_jarjared.jar,
                                  protobuf-java.jar"
-                        />
-       <zipgroupfileset dir="${closure-templates.dir}/java/lib"
-                        includes="aopalliance.jar,
-                                  guice-assistedinject-snapshot.jar,
-                                  guice-multibindings-snapshot.jar,
-                                  guice-snapshot.jar,
-                                  javax-inject.jar"
-                        />
+                       />
+      <zipgroupfileset dir="${closure-compiler.dir}/build/lib"
+                       includes="rhino.jar"
+                       />
+      <zipgroupfileset dir="${closure-templates.dir}/java/lib"
+                       includes="aopalliance.jar,
+                                 guice-assistedinject-snapshot.jar,
+                                 guice-multibindings-snapshot.jar,
+                                 guice-snapshot.jar,
+                                 javax-inject.jar"
+                       />
 
       <fileset dir="${classes.dir}" />
       <manifest>

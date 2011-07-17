@@ -146,7 +146,7 @@ public class DescriptorPass implements CompilerPass {
         // with additional functions defined as properties that are not methods).
         provides.remove(name);
         if (left.getNext().getType() == Token.FUNCTION) {
-          JSDocInfo info = NodeUtil.getFunctionInfo(left.getNext());
+          JSDocInfo info = NodeUtil.getFunctionJSDocInfo(left.getNext());
           if (info.isConstructor()) {
             ClassDescriptor.Builder builder = ClassDescriptor.builder();
             builder.setName(name);
@@ -196,7 +196,7 @@ public class DescriptorPass implements CompilerPass {
             String methodName = parts[1];
             JSDocInfo info;
             if (hasFunctionInfo) {
-              info = NodeUtil.getFunctionInfo(assigneeValue);
+              info = NodeUtil.getFunctionJSDocInfo(assigneeValue);
             } else {
               // If the value on the right is goog.abstractMethod, must get
               // the JSDocInfo in a different manner.
@@ -229,7 +229,7 @@ public class DescriptorPass implements CompilerPass {
             ClassDescriptor.Builder builder = classes.get(base);
             // Add the static method to the ClassDescriptor.
             if (left.getNext().getType() == Token.FUNCTION) {
-              JSDocInfo info = NodeUtil.getFunctionInfo(left.getNext());
+              JSDocInfo info = NodeUtil.getFunctionJSDocInfo(left.getNext());
               String methodName = name.substring(index + 1);
               String className = base;
               TypeExpression superClass = builder.getSuperClass();
@@ -247,7 +247,7 @@ public class DescriptorPass implements CompilerPass {
               libraries.put(base, builder);
             }
             if (left.getNext().getType() == Token.FUNCTION) {
-              JSDocInfo info = NodeUtil.getFunctionInfo(left.getNext());
+              JSDocInfo info = NodeUtil.getFunctionJSDocInfo(left.getNext());
               String methodName = name.substring(index + 1);
               MethodDescriptor method = createMethod(methodName, info);
               builder.addMethod(method);

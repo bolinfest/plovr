@@ -3,6 +3,7 @@
 	<classpathentry kind="src" path="src"/>
 	<classpathentry kind="src" path="closure/closure-templates/build/genfiles"/>
 	<classpathentry kind="src" path="closure/closure-compiler/gen"/>
+	<classpathentry kind="lib" path="closure/closure-compiler/lib/rhino/src/mozilla/js/rhino/src"/>
 	<classpathentry kind="src" path="closure/closure-templates/java/src"/>
 	<classpathentry excluding="com/google/javascript/jscomp/ant/*" kind="src" path="closure/closure-compiler/src"/>
 	<classpathentry kind="src" path="test"/>
@@ -10,7 +11,6 @@
 	<classpathentry kind="lib" path="lib/junit-4.8.2.jar"/>
 	<classpathentry kind="lib" path="lib/gson-1.7.1.jar"/>
 	<classpathentry kind="lib" path="lib/guava-r07.jar"/>
-	<classpathentry kind="lib" path="closure/closure-compiler/lib/libtrunk_rhino_parser_jarjared.jar"/>
 	<classpathentry kind="lib" path="closure/closure-compiler/lib/protobuf-java.jar"/>
 	<classpathentry kind="lib" path="closure/closure-compiler/lib/jsr305.jar"/>
 	<classpathentry kind="lib" path="closure/closure-compiler/lib/json.jar"/>
