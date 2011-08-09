@@ -1,17 +1,34 @@
 package org.plovr;
 
-import com.google.common.base.Joiner;
+import java.io.File;
+import java.io.IOException;
 
-public class CoffeeFile {
+import org.plovr.io.Files;
 
-  public static void main(String[] args) throws CoffeeScriptCompilerException {
-    String coffeeScript = Joiner.on('\n').join(
-        "class example.Person",
-        "  constructor: (@first, @last) ->",
-        "  getFirst: -> @first",
-        "  setFirst: (first) -> @first = first"
-        );
-    CoffeeScriptCompiler compiler = CoffeeScriptCompiler.getInstance();
-    System.out.println(compiler.compile(coffeeScript, "example.coffee"));
+/**
+ * {@link CoffeeFile} represents a CoffeeScript source file on disk.
+ *
+ * @author bolinfest@gmail.com (Michael Bolin)
+ */
+public class CoffeeFile extends LocalFileJsInput {
+
+  CoffeeFile(String name, File source) {
+    super(name, source);
+  }
+
+  /**
+   * @throws PlovrCoffeeScriptCompilerException if the CoffeeScript compiler
+   *     encounters an error trying to compile the source
+   */
+  @Override
+  public String getCode() throws PlovrCoffeeScriptCompilerException {
+    try {
+      return CoffeeScriptCompiler.getInstance().compile(
+          Files.toString(getSource()), getName());
+    } catch (CoffeeScriptCompilerException e) {
+      throw new PlovrCoffeeScriptCompilerException(e, this);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 }

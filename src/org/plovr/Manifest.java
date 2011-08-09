@@ -285,41 +285,41 @@ public final class Manifest {
 
   Set<JsInput> getAllDependencies() {
     Set<JsInput> allDependencies = Sets.newHashSet();
-    final boolean includeSoy = true;
+    final boolean externsOnly = false;
     if (closureLibraryDirectory == null) {
       allDependencies.addAll(ResourceReader.getClosureLibrarySources());
     } else {
-      allDependencies.addAll(getFiles(closureLibraryDirectory, includeSoy));
+      allDependencies.addAll(getFiles(closureLibraryDirectory, externsOnly));
     }
     // Add the requiredInputs first so that if a file is both an "input" and a
     // "path" under different names (such as "hello.js" and "/./hello.js"), the
     // name used to specify the input is preferred.
     allDependencies.addAll(requiredInputs);
-    allDependencies.addAll(getFiles(dependencies, includeSoy));
+    allDependencies.addAll(getFiles(dependencies, externsOnly));
     return allDependencies;
   }
 
   private List<JsInput> getExternInputs() {
-    final boolean includeSoy = false;
+    final boolean externsOnly = true;
     List<JsInput> externInputs = Lists.newArrayList(getFiles(externs,
-        includeSoy));
+        externsOnly));
     return ImmutableList.copyOf(externInputs);
   }
 
-  private Set<JsInput> getFiles(File fileToExpand, boolean includeSoy) {
-    return getFiles(Sets.newHashSet(fileToExpand), includeSoy);
+  private Set<JsInput> getFiles(File fileToExpand, boolean externsOnly) {
+    return getFiles(Sets.newHashSet(fileToExpand), externsOnly);
   }
 
-  private Set<JsInput> getFiles(Set<File> filesToExpand, boolean includeSoy) {
+  private Set<JsInput> getFiles(Set<File> filesToExpand, boolean externsOnly) {
     Set<JsInput> inputs = Sets.newHashSet();
     for (File file : filesToExpand) {
-      getInputs(file, "", inputs, includeSoy);
+      getInputs(file, "", inputs, externsOnly);
     }
     return ImmutableSet.copyOf(inputs);
   }
 
   private void getInputs(File file, String path, Set<JsInput> output,
-      boolean includeSoy) {
+      boolean externsOnly) {
     // Some editors may write backup files whose names start with a
     // dot. Furthermore, Emacs will create symlinks that start with a
     // dot that don't point at actual files, causing file.exists() to
@@ -337,7 +337,9 @@ public final class Manifest {
 
     if (file.isFile()) {
       String fileName = file.getName();
-      if (fileName.endsWith(".js") || (includeSoy && fileName.endsWith(".soy"))) {
+      if (fileName.endsWith(".js") ||
+          (!externsOnly && fileName.endsWith(".soy")) ||
+          (!externsOnly && fileName.endsWith(".coffee"))) {
         // Using "." as the value for "paths" in the config file results in ugly
         // names for JsInputs because of the way the relative path is resolved,
         // so strip the leading "/./" from the JsInput name in this case.
@@ -355,7 +357,7 @@ public final class Manifest {
       logger.config("Directory to explore: " + file);
       path += "/" + file.getName();
       for (File entry : file.listFiles()) {
-        getInputs(entry, path, output, includeSoy);
+        getInputs(entry, path, output, externsOnly);
       }
     }
   }

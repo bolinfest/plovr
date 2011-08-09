@@ -100,6 +100,8 @@ public class CompileRequestHandler extends AbstractGetHandler {
       throw new CheckedSoySyntaxException(e);
     } catch (PlovrSoySyntaxException e) {
       throw new CheckedSoySyntaxException(e);
+    } catch (PlovrCoffeeScriptCompilerException e) {
+      throw new CheckedCoffeeScriptCompilerException(e);
     }
   }
 

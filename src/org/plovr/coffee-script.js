@@ -76,6 +76,7 @@ this.CoffeeScript = function() {
   };
 }).call(this);
 
+
 };require['./rewriter'] = new function() {
   var exports = this;
   (function() {
@@ -441,6 +442,7 @@ this.CoffeeScript = function() {
   SINGLE_CLOSERS = ['TERMINATOR', 'CATCH', 'FINALLY', 'ELSE', 'OUTDENT', 'LEADING_WHEN'];
   LINEBREAKS = ['TERMINATOR', 'INDENT', 'OUTDENT'];
 }).call(this);
+
 
 };require['./lexer'] = new function() {
   var exports = this;
@@ -1100,6 +1102,7 @@ this.CoffeeScript = function() {
   INDEXABLE = CALLABLE.concat('NUMBER', 'BOOL');
   LINE_BREAK = ['INDENT', 'OUTDENT', 'TERMINATOR'];
 }).call(this);
+
 
 };require['./parser'] = new function() {
   var exports = this;
@@ -1912,6 +1915,7 @@ if (typeof module !== 'undefined' && require.main === module) {
   })();
 }).call(this);
 
+
 };require['./nodes'] = new function() {
   var exports = this;
   (function() {
@@ -2191,7 +2195,7 @@ if (typeof module !== 'undefined' && require.main === module) {
       }
     };
     Block.prototype.compileRoot = function(o) {
-      var aliases, code, comparator, idt, inc, includes, includesJs, name, provides;
+      var aliases, code, comparator, idt, inc, includes, includesJs, name, provides, providesJs;
       o.indent = this.tab = o.bare ? '' : TAB;
       o.scope = new Scope(null, this, null);
       o.level = LEVEL_TOP;
@@ -2199,7 +2203,7 @@ if (typeof module !== 'undefined' && require.main === module) {
       if (o.google) {
         provides = o.google.provides;
         provides.sort();
-        provides = (function() {
+        providesJs = (function() {
           var _i, _len, _results;
           _results = [];
           for (_i = 0, _len = provides.length; _i < _len; _i++) {
@@ -2208,7 +2212,7 @@ if (typeof module !== 'undefined' && require.main === module) {
           }
           return _results;
         })();
-        provides = provides.join('\n');
+        providesJs = providesJs.join('\n');
         includes = o.google.includes;
         comparator = function(a, b) {
           return a.name.localeCompare(b.name);
@@ -2219,7 +2223,9 @@ if (typeof module !== 'undefined' && require.main === module) {
           _results = [];
           for (_i = 0, _len = includes.length; _i < _len; _i++) {
             inc = includes[_i];
-            _results.push("goog.require('" + inc.name + "');");
+            if (provides.indexOf(inc.name) === -1) {
+              _results.push("goog.require('" + inc.name + "');");
+            }
           }
           return _results;
         })();
@@ -2247,7 +2253,7 @@ if (typeof module !== 'undefined' && require.main === module) {
           return _results;
         })();
         aliases = aliases.join('\n');
-        code = "" + provides + "\n\n" + includesJs + "\n\ngoog.scope(function() {\n" + aliases + "\n" + code + "\n\n}); // close goog.scope()";
+        code = "" + providesJs + "\n\n" + includesJs + "\n\ngoog.scope(function() {\n" + aliases + "\n" + code + "\n\n}); // close goog.scope()";
       }
       if (o.bare) {
         return code;
@@ -4348,6 +4354,7 @@ if (typeof module !== 'undefined' && require.main === module) {
   };
 }).call(this);
 
+
 };require['./coffee-script'] = new function() {
   var exports = this;
   (function() {
@@ -4466,6 +4473,7 @@ if (typeof module !== 'undefined' && require.main === module) {
   parser.yy = require('./nodes');
 }).call(this);
 
+
 };require['./browser'] = new function() {
   var exports = this;
   (function() {
@@ -4543,6 +4551,7 @@ if (typeof module !== 'undefined' && require.main === module) {
     attachEvent('onload', runScripts);
   }
 }).call(this);
+
 
 };
   return require['./coffee-script']

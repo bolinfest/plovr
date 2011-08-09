@@ -50,8 +50,11 @@ public abstract class LocalFileJsInput extends AbstractJsInput {
     }
 
     JsInput newInput;
-    if (file.getName().endsWith(".soy")) {
+    String fileName = file.getName();
+    if (fileName.endsWith(".soy")) {
       newInput = new SoyFile(name, file, soyPluginModuleNames);
+    } else if (fileName.endsWith(".coffee")) {
+      newInput = new CoffeeFile(name, file);
     } else {
       newInput = new JsSourceFile(name, file);
     }
