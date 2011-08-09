@@ -3,7 +3,6 @@
 	<classpathentry kind="src" path="src"/>
 	<classpathentry kind="src" path="closure/closure-templates/build/genfiles"/>
 	<classpathentry kind="src" path="closure/closure-compiler/gen"/>
-	<classpathentry kind="lib" path="closure/closure-compiler/lib/rhino/src/mozilla/js/rhino/src"/>
 	<classpathentry kind="src" path="closure/closure-templates/java/src"/>
 	<classpathentry excluding="com/google/javascript/jscomp/ant/*" kind="src" path="closure/closure-compiler/src"/>
 	<classpathentry kind="src" path="test"/>
@@ -20,5 +19,6 @@
 	<classpathentry kind="lib" path="closure/closure-templates/java/lib/guice-snapshot.jar"/>
 	<classpathentry kind="lib" path="closure/closure-templates/java/lib/javax-inject.jar"/>
 	<classpathentry kind="lib" path="closure/closure-templates/java/lib/aopalliance.jar"/>
+	<classpathentry kind="lib" path="closure/closure-compiler/build/lib/rhino.jar"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>
