@@ -343,13 +343,13 @@ public final class JavaAdapter implements IdFunctionCall
         ClassFileWriter cfw = new ClassFileWriter(adapterName,
                                                   superClass.getName(),
                                                   "<adapter>");
-        cfw.addField("factory", "Lorg/mozilla/javascript/ContextFactory;",
+        cfw.addField("factory", "L" + JarJarHelper.javascriptPrefixSlashes + "/ContextFactory;",
                      (short) (ClassFileWriter.ACC_PUBLIC |
                               ClassFileWriter.ACC_FINAL));
-        cfw.addField("delegee", "Lorg/mozilla/javascript/Scriptable;",
+        cfw.addField("delegee", "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;",
                      (short) (ClassFileWriter.ACC_PUBLIC |
                               ClassFileWriter.ACC_FINAL));
-        cfw.addField("self", "Lorg/mozilla/javascript/Scriptable;",
+        cfw.addField("self", "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;",
                      (short) (ClassFileWriter.ACC_PUBLIC |
                               ClassFileWriter.ACC_FINAL));
         int interfacesCount = interfaces == null ? 0 : interfaces.length;
@@ -603,8 +603,8 @@ public final class JavaAdapter implements IdFunctionCall
                                      String superName)
     {
         cfw.startMethod("<init>",
-                        "(Lorg/mozilla/javascript/ContextFactory;"
-                        +"Lorg/mozilla/javascript/Scriptable;)V",
+                        "(L" + JarJarHelper.javascriptPrefixSlashes + "/ContextFactory;"
+                        +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;)V",
                         ClassFileWriter.ACC_PUBLIC);
 
         // Invoke base class constructor
@@ -615,26 +615,26 @@ public final class JavaAdapter implements IdFunctionCall
         cfw.add(ByteCode.ALOAD_0);  // this
         cfw.add(ByteCode.ALOAD_1);  // first arg: ContextFactory instance
         cfw.add(ByteCode.PUTFIELD, adapterName, "factory",
-                "Lorg/mozilla/javascript/ContextFactory;");
+                "L" + JarJarHelper.javascriptPrefixSlashes + "/ContextFactory;");
 
         // Save parameter in instance variable "delegee"
         cfw.add(ByteCode.ALOAD_0);  // this
         cfw.add(ByteCode.ALOAD_2);  // second arg: Scriptable delegee
         cfw.add(ByteCode.PUTFIELD, adapterName, "delegee",
-                "Lorg/mozilla/javascript/Scriptable;");
+                "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
 
         cfw.add(ByteCode.ALOAD_0);  // this for the following PUTFIELD for self
         // create a wrapper object to be used as "this" in method calls
         cfw.add(ByteCode.ALOAD_2);  // the Scriptable delegee
         cfw.add(ByteCode.ALOAD_0);  // this
         cfw.addInvoke(ByteCode.INVOKESTATIC,
-                      "org/mozilla/javascript/JavaAdapter",
+                      JarJarHelper.javascriptPrefixSlashes + "/JavaAdapter",
                       "createAdapterWrapper",
-                      "(Lorg/mozilla/javascript/Scriptable;"
+                      "(L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                       +"Ljava/lang/Object;"
-                      +")Lorg/mozilla/javascript/Scriptable;");
+                      +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
         cfw.add(ByteCode.PUTFIELD, adapterName, "self",
-                "Lorg/mozilla/javascript/Scriptable;");
+                "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
 
         cfw.add(ByteCode.RETURN);
         cfw.stopMethod((short)3); // 3: this + factory + delegee
@@ -645,9 +645,9 @@ public final class JavaAdapter implements IdFunctionCall
                                            String superName)
     {
         cfw.startMethod("<init>",
-                        "(Lorg/mozilla/javascript/ContextFactory;"
-                        +"Lorg/mozilla/javascript/Scriptable;"
-                        +"Lorg/mozilla/javascript/Scriptable;"
+                        "(L" + JarJarHelper.javascriptPrefixSlashes + "/ContextFactory;"
+                        +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                        +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                         +")V",
                         ClassFileWriter.ACC_PUBLIC);
 
@@ -659,18 +659,18 @@ public final class JavaAdapter implements IdFunctionCall
         cfw.add(ByteCode.ALOAD_0);  // this
         cfw.add(ByteCode.ALOAD_1);  // first arg: ContextFactory instance
         cfw.add(ByteCode.PUTFIELD, adapterName, "factory",
-                "Lorg/mozilla/javascript/ContextFactory;");
+                "L" + JarJarHelper.javascriptPrefixSlashes + "/ContextFactory;");
 
         // Save parameter in instance variable "delegee"
         cfw.add(ByteCode.ALOAD_0);  // this
         cfw.add(ByteCode.ALOAD_2);  // second arg: Scriptable delegee
         cfw.add(ByteCode.PUTFIELD, adapterName, "delegee",
-                "Lorg/mozilla/javascript/Scriptable;");
+                "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
         // save self
         cfw.add(ByteCode.ALOAD_0);  // this
         cfw.add(ByteCode.ALOAD_3);  // second arg: Scriptable self
         cfw.add(ByteCode.PUTFIELD, adapterName, "self",
-                "Lorg/mozilla/javascript/Scriptable;");
+                "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
 
         cfw.add(ByteCode.RETURN);
         cfw.stopMethod((short)4); // 4: this + factory + delegee + self
@@ -691,7 +691,7 @@ public final class JavaAdapter implements IdFunctionCall
         cfw.add(ByteCode.ALOAD_0);
         cfw.add(ByteCode.ACONST_NULL);
         cfw.add(ByteCode.PUTFIELD, adapterName, "factory",
-                "Lorg/mozilla/javascript/ContextFactory;");
+                "L" + JarJarHelper.javascriptPrefixSlashes + "/ContextFactory;");
 
         // Load script class
         cfw.add(ByteCode.NEW, scriptClassName);
@@ -700,30 +700,30 @@ public final class JavaAdapter implements IdFunctionCall
 
         // Run script and save resulting scope
         cfw.addInvoke(ByteCode.INVOKESTATIC,
-                      "org/mozilla/javascript/JavaAdapter",
+                      JarJarHelper.javascriptPrefixSlashes + "/JavaAdapter",
                       "runScript",
-                      "(Lorg/mozilla/javascript/Script;"
-                      +")Lorg/mozilla/javascript/Scriptable;");
+                      "(L" + JarJarHelper.javascriptPrefixSlashes + "/Script;"
+                      +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
         cfw.add(ByteCode.ASTORE_1);
 
         // Save the Scriptable in instance variable "delegee"
         cfw.add(ByteCode.ALOAD_0);  // this
         cfw.add(ByteCode.ALOAD_1);  // the Scriptable
         cfw.add(ByteCode.PUTFIELD, adapterName, "delegee",
-                "Lorg/mozilla/javascript/Scriptable;");
+                "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
 
         cfw.add(ByteCode.ALOAD_0);  // this for the following PUTFIELD for self
         // create a wrapper object to be used as "this" in method calls
         cfw.add(ByteCode.ALOAD_1);  // the Scriptable
         cfw.add(ByteCode.ALOAD_0);  // this
         cfw.addInvoke(ByteCode.INVOKESTATIC,
-                      "org/mozilla/javascript/JavaAdapter",
+                      JarJarHelper.javascriptPrefixSlashes + "/JavaAdapter",
                       "createAdapterWrapper",
-                      "(Lorg/mozilla/javascript/Scriptable;"
+                      "(L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                       +"Ljava/lang/Object;"
-                      +")Lorg/mozilla/javascript/Scriptable;");
+                      +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
         cfw.add(ByteCode.PUTFIELD, adapterName, "self",
-                "Lorg/mozilla/javascript/Scriptable;");
+                "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
 
         cfw.add(ByteCode.RETURN);
         cfw.stopMethod((short)2); // this + delegee
@@ -827,7 +827,7 @@ public final class JavaAdapter implements IdFunctionCall
 
         } else if (retType == Boolean.TYPE) {
             cfw.addInvoke(ByteCode.INVOKESTATIC,
-                          "org/mozilla/javascript/Context",
+                          JarJarHelper.javascriptPrefixSlashes + "/Context",
                           "toBoolean", "(Ljava/lang/Object;)Z");
             cfw.add(ByteCode.IRETURN);
 
@@ -836,7 +836,7 @@ public final class JavaAdapter implements IdFunctionCall
             // return the first character.
             // first convert the value to a string if possible.
             cfw.addInvoke(ByteCode.INVOKESTATIC,
-                          "org/mozilla/javascript/Context",
+                          JarJarHelper.javascriptPrefixSlashes + "/Context",
                           "toString",
                           "(Ljava/lang/Object;)Ljava/lang/String;");
             cfw.add(ByteCode.ICONST_0);
@@ -846,7 +846,7 @@ public final class JavaAdapter implements IdFunctionCall
 
         } else if (retType.isPrimitive()) {
             cfw.addInvoke(ByteCode.INVOKESTATIC,
-                          "org/mozilla/javascript/Context",
+                          JarJarHelper.javascriptPrefixSlashes + "/Context",
                           "toNumber", "(Ljava/lang/Object;)D");
             String typeName = retType.getName();
             switch (typeName.charAt(0)) {
@@ -882,7 +882,7 @@ public final class JavaAdapter implements IdFunctionCall
                               "(Ljava/lang/String;)Ljava/lang/Class;");
 
                 cfw.addInvoke(ByteCode.INVOKESTATIC,
-                              "org/mozilla/javascript/JavaAdapter",
+                              JarJarHelper.javascriptPrefixSlashes + "/JavaAdapter",
                               "convertResult",
                               "(Ljava/lang/Object;"
                               +"Ljava/lang/Class;"
@@ -909,24 +909,24 @@ public final class JavaAdapter implements IdFunctionCall
         // push factory
         cfw.add(ByteCode.ALOAD_0);
         cfw.add(ByteCode.GETFIELD, genName, "factory",
-                "Lorg/mozilla/javascript/ContextFactory;");
+                "L" + JarJarHelper.javascriptPrefixSlashes + "/ContextFactory;");
 
         // push self
         cfw.add(ByteCode.ALOAD_0);
         cfw.add(ByteCode.GETFIELD, genName, "self",
-                "Lorg/mozilla/javascript/Scriptable;");
+                "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
 
         // push function
         cfw.add(ByteCode.ALOAD_0);
         cfw.add(ByteCode.GETFIELD, genName, "delegee",
-                "Lorg/mozilla/javascript/Scriptable;");
+                "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
         cfw.addPush(methodName);
         cfw.addInvoke(ByteCode.INVOKESTATIC,
-                      "org/mozilla/javascript/JavaAdapter",
+                      JarJarHelper.javascriptPrefixSlashes + "/JavaAdapter",
                       "getFunction",
-                      "(Lorg/mozilla/javascript/Scriptable;"
+                      "(L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                       +"Ljava/lang/String;"
-                      +")Lorg/mozilla/javascript/Function;");
+                      +")L" + JarJarHelper.javascriptPrefixSlashes + "/Function;");
 
         // push arguments
         generatePushWrappedArgs(cfw, parms, parms.length);
@@ -950,11 +950,11 @@ public final class JavaAdapter implements IdFunctionCall
         // go through utility method, which creates a Context to run the
         // method in.
         cfw.addInvoke(ByteCode.INVOKESTATIC,
-                      "org/mozilla/javascript/JavaAdapter",
+                      JarJarHelper.javascriptPrefixSlashes + "/JavaAdapter",
                       "callMethod",
-                      "(Lorg/mozilla/javascript/ContextFactory;"
-                      +"Lorg/mozilla/javascript/Scriptable;"
-                      +"Lorg/mozilla/javascript/Function;"
+                      "(L" + JarJarHelper.javascriptPrefixSlashes + "/ContextFactory;"
+                      +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                      +"L" + JarJarHelper.javascriptPrefixSlashes + "/Function;"
                       +"[Ljava/lang/Object;"
                       +"J"
                       +")Ljava/lang/Object;");

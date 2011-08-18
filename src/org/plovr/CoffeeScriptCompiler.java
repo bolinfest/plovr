@@ -2,9 +2,12 @@ package org.plovr;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.net.URL;
+
+import com.google.javascript.jscomp.mozilla.rhino.Context;
+import com.google.javascript.jscomp.mozilla.rhino.JavaScriptException;
+import com.google.javascript.jscomp.mozilla.rhino.NativeObject;
+import com.google.javascript.jscomp.mozilla.rhino.Scriptable;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
@@ -20,10 +23,6 @@ import com.google.gson.JsonObject;
  * com.sun.script.javascript.RhinoScriptEngine behaved reasonably in Java 6:
  * http://stackoverflow.com/questions/7000108/is-it-possible-to-
  *     set-the-optimization-level-for-rhinoscriptengine-in-java-6
- *
- * Further issues arise from differences between the Sun JDK and the OpenJDK:
- * http://codereview.appspot.com/4901042/
- * This is the reason for all of the reflection in this class.
  */
 public class CoffeeScriptCompiler {
 
@@ -31,7 +30,7 @@ public class CoffeeScriptCompiler {
    * @return the singleton instance of the {@link CoffeeScriptCompiler}
    */
   public static CoffeeScriptCompiler getInstance() {
-    return Holder.coffeeScriptCompilerInstance;
+    return CoffeeScriptCompilerHolder.instance;
   }
 
   /** Scope that has the CoffeeScript compiler in memory. */
@@ -113,32 +112,15 @@ public class CoffeeScriptCompiler {
           		"null.");
         } else if (result instanceof String) {
           return (String)result;
-        // Due to reflection, cannot use instanceof.
-        // } else if (result instanceof NativeObject) {
-        } else if (Holder.nativeObjectClass.isInstance(result)) {
-          // API if reflection were not used:
-          // NativeObject obj = (NativeObject)result;
-          // String message = (String)NativeObject.getProperty(obj, "message");
-          // throw new CoffeeScriptCompilerException(message);
-
-          Method getPropertyMethod = result.getClass().getMethod(
-              "getProperty", Holder.scriptableClass, String.class);
-          String message = (String)getPropertyMethod.invoke(
-              null, result, "message");
+        } else if (result instanceof NativeObject) {
+          NativeObject obj = (NativeObject)result;
+          String message = (String)NativeObject.getProperty(obj, "message");
           throw new CoffeeScriptCompilerException(message);
         } else {
           throw new RuntimeException("Unexpected return type: " +
               result.getClass().getName());
         }
-        // If reflection were not used, all of these catch blocks would be
-        // replaced with a single catch for a JavaScriptException.
-      } catch (NoSuchMethodException e) {
-        throw new RuntimeException(e);
-      } catch (IllegalArgumentException e) {
-        throw new RuntimeException(e);
-      } catch (IllegalAccessException e) {
-        throw new RuntimeException(e);
-      } catch (InvocationTargetException e) {
+      } catch (JavaScriptException e) {
         throw new RuntimeException(e);
       }
     } finally {
@@ -146,148 +128,9 @@ public class CoffeeScriptCompiler {
     }
   }
 
-  // What follows is a fairly gross use of reflection that was born out of this
-  // code review: http://codereview.appspot.com/4901042/
-  // The goal is to make it possible to use plovr with either the Sun JDK or the
-  // OpenJDK. If the differences in JDKs cause more code like this, then plovr
-  // will no longer support the OpenJDK.
-
   // Lazy-loading singleton pattern:
   // http://blog.crazybob.org/2007/01/lazy-loading-singletons.html
-  private static class Holder {
-    private static Class contextClass = getRhinoClassByName("Context");
-    private static Class scriptableClass = getRhinoClassByName("Scriptable");
-    private static Class nativeObjectClass =
-        getRhinoClassByName("NativeObject");
-    private static CoffeeScriptCompiler coffeeScriptCompilerInstance =
-        new CoffeeScriptCompiler();
-
-    private static Class getRhinoClassByName(String rhinoClassName) {
-      String[] names = {
-          "sun.org.mozilla.javascript." + rhinoClassName,
-          "sun.org.mozilla.javascript.internal." + rhinoClassName
-      };
-      for (String name : names) {
-        try {
-          Class clazz = Class.forName(name);
-          if (clazz != null) {
-            return clazz;
-          }
-        } catch (ClassNotFoundException e) {
-          // OK, try next class name.
-        }
-      }
-      throw new IllegalArgumentException("No Rhino class: " + rhinoClassName);
-    }
-  }
-
-  private static class Scriptable {
-    private final Object scriptableInstance;
-
-    private Scriptable(Object scriptableInstance) {
-      this.scriptableInstance = scriptableInstance;
-    }
-
-    public void setParentScope(Scriptable parentScope) {
-      try {
-        Method setParentScopeMethod = scriptableInstance.getClass().
-            getMethod("setParentScope", Holder.scriptableClass);
-        setParentScopeMethod.invoke(scriptableInstance,
-            parentScope.scriptableInstance);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
-
-    public void put(String name, Scriptable start, Object value) {
-      try {
-        Method setOptimizationLevelMethod = scriptableInstance.getClass().
-            getMethod("put", String.class, Holder.scriptableClass,
-                Object.class);
-        setOptimizationLevelMethod.invoke(scriptableInstance, name,
-            start.scriptableInstance, value);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  private static class Context {
-    private final Object contextInstance;
-
-    private Context(Object contextInstance) {
-      this.contextInstance = contextInstance;
-    }
-
-    public static Context enter() {
-      try {
-        Method enterMethod = Holder.contextClass.getMethod("enter");
-        Object contextInstance = enterMethod.invoke(null);
-        return new Context(contextInstance);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
-
-    public static void exit() {
-      try {
-        Method exitMethod = Holder.contextClass.getMethod("exit");
-        exitMethod.invoke(null);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
-
-    public void setOptimizationLevel(int level) {
-      try {
-        Method setOptimizationLevelMethod = contextInstance.getClass().
-            getMethod("setOptimizationLevel", int.class);
-        setOptimizationLevelMethod.invoke(contextInstance, level);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
-
-    public Scriptable initStandardObjects() {
-      try {
-        Method initStandardObjectsMethod = contextInstance.getClass().getMethod(
-            "initStandardObjects");
-        Object newScriptableInstance = initStandardObjectsMethod.invoke(
-            contextInstance);
-        return new Scriptable(newScriptableInstance);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
-
-    public Scriptable newObject(Scriptable globalScope) {
-      try {
-        Method newObjectMethod = contextInstance.getClass().getMethod(
-            "newObject", Holder.scriptableClass);
-        Object newScriptableInstance = newObjectMethod.invoke(
-            contextInstance, globalScope.scriptableInstance);
-        return new Scriptable(newScriptableInstance);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
-
-    public Object evaluateString(
-        Scriptable scope,
-        String source,
-        String sourceName,
-        int lineno,
-        Object securityDomain) {
-      try {
-        Method evaluateStringMethod = contextInstance.getClass().getMethod(
-            "evaluateString", Holder.scriptableClass, String.class,
-            String.class, int.class, Object.class);
-        return evaluateStringMethod.invoke(contextInstance,
-            scope.scriptableInstance, source, sourceName, lineno,
-            securityDomain);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
+  private static class CoffeeScriptCompilerHolder {
+    private static CoffeeScriptCompiler instance = new CoffeeScriptCompiler();
   }
 }

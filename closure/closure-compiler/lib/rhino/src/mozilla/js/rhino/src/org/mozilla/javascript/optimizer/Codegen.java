@@ -97,7 +97,7 @@ public class Codegen implements Evaluator
           }
         }
 
-        String mainClassName = "org.mozilla.javascript.gen." + baseName + "_" + serial;
+        String mainClassName = JarJarHelper.javascriptPrefix + ".gen." + baseName + "_" + serial;
 
         byte[] mainClassBytes = compileToClassFile(compilerEnv, mainClassName,
                                                    tree, encodedSource,
@@ -312,7 +312,7 @@ public class Codegen implements Evaluator
         }
 
         if (hasScript) {
-            cfw.addInterface("org/mozilla/javascript/Script");
+            cfw.addInterface(JarJarHelper.javascriptPrefixSlashes + "/Script");
             generateScriptCtor(cfw);
             generateMain(cfw);
             generateExecute(cfw);
@@ -390,11 +390,11 @@ public class Codegen implements Evaluator
         cfw.addALoad(1); // cx
         cfw.addALoad(2); // scope
         cfw.addInvoke(ByteCode.INVOKEVIRTUAL,
-                      "org/mozilla/javascript/BaseFunction",
+                      JarJarHelper.javascriptPrefixSlashes + "/BaseFunction",
                       "createObject",
-                      "(Lorg/mozilla/javascript/Context;"
-                      +"Lorg/mozilla/javascript/Scriptable;"
-                      +")Lorg/mozilla/javascript/Scriptable;");
+                      "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                      +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                      +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
         cfw.addAStore(firstLocal);
 
         cfw.addALoad(0);
@@ -412,10 +412,10 @@ public class Codegen implements Evaluator
                       getBodyMethodSignature(ofn.fnode));
         int exitLabel = cfw.acquireLabel();
         cfw.add(ByteCode.DUP); // make a copy of direct call result
-        cfw.add(ByteCode.INSTANCEOF, "org/mozilla/javascript/Scriptable");
+        cfw.add(ByteCode.INSTANCEOF, JarJarHelper.javascriptPrefixSlashes + "/Scriptable");
         cfw.add(ByteCode.IFEQ, exitLabel);
         // cast direct call result
-        cfw.add(ByteCode.CHECKCAST, "org/mozilla/javascript/Scriptable");
+        cfw.add(ByteCode.CHECKCAST, JarJarHelper.javascriptPrefixSlashes + "/Scriptable");
         cfw.add(ByteCode.ARETURN);
         cfw.markLabel(exitLabel);
 
@@ -457,8 +457,8 @@ public class Codegen implements Evaluator
             return;
 
         cfw.startMethod("resumeGenerator",
-                        "(Lorg/mozilla/javascript/Context;" +
-                        "Lorg/mozilla/javascript/Scriptable;" +
+                        "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;" +
+                        "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;" +
                         "ILjava/lang/Object;" +
                         "Ljava/lang/Object;)Ljava/lang/Object;",
                         (short)(ClassFileWriter.ACC_PUBLIC
@@ -485,8 +485,8 @@ public class Codegen implements Evaluator
             if (isGenerator(n)) {
                 String type = "(" +
                               mainClassSignature +
-                              "Lorg/mozilla/javascript/Context;" +
-                              "Lorg/mozilla/javascript/Scriptable;" +
+                              "L" + JarJarHelper.javascriptPrefixSlashes + "/Context;" +
+                              "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;" +
                               "Ljava/lang/Object;" +
                               "Ljava/lang/Object;I)Ljava/lang/Object;";
                 cfw.addInvoke(ByteCode.INVOKESTATIC,
@@ -511,9 +511,9 @@ public class Codegen implements Evaluator
     private void generateCallMethod(ClassFileWriter cfw)
     {
         cfw.startMethod("call",
-                        "(Lorg/mozilla/javascript/Context;" +
-                        "Lorg/mozilla/javascript/Scriptable;" +
-                        "Lorg/mozilla/javascript/Scriptable;" +
+                        "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;" +
+                        "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;" +
+                        "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;" +
                         "[Ljava/lang/Object;)Ljava/lang/Object;",
                         (short)(ClassFileWriter.ACC_PUBLIC
                                 | ClassFileWriter.ACC_FINAL));
@@ -526,9 +526,9 @@ public class Codegen implements Evaluator
         int nonTopCallLabel = cfw.acquireLabel();
         cfw.addALoad(1); //cx
         cfw.addInvoke(ByteCode.INVOKESTATIC,
-                      "org/mozilla/javascript/ScriptRuntime",
+                      JarJarHelper.javascriptPrefixSlashes + "/ScriptRuntime",
                       "hasTopCall",
-                      "(Lorg/mozilla/javascript/Context;"
+                      "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                       +")Z");
         cfw.add(ByteCode.IFNE, nonTopCallLabel);
         cfw.addALoad(0);
@@ -537,12 +537,12 @@ public class Codegen implements Evaluator
         cfw.addALoad(3);
         cfw.addALoad(4);
         cfw.addInvoke(ByteCode.INVOKESTATIC,
-                      "org/mozilla/javascript/ScriptRuntime",
+                      JarJarHelper.javascriptPrefixSlashes + "/ScriptRuntime",
                       "doTopCall",
-                      "(Lorg/mozilla/javascript/Callable;"
-                      +"Lorg/mozilla/javascript/Context;"
-                      +"Lorg/mozilla/javascript/Scriptable;"
-                      +"Lorg/mozilla/javascript/Scriptable;"
+                      "(L" + JarJarHelper.javascriptPrefixSlashes + "/Callable;"
+                      +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                      +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                      +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                       +"[Ljava/lang/Object;"
                       +")Ljava/lang/Object;");
         cfw.add(ByteCode.ARETURN);
@@ -636,7 +636,7 @@ public class Codegen implements Evaluator
         cfw.addInvoke(ByteCode.INVOKESTATIC,
                       mainMethodClass,
                       "main",
-                      "(Lorg/mozilla/javascript/Script;[Ljava/lang/String;)V");
+                      "(L" + JarJarHelper.javascriptPrefixSlashes + "/Script;[Ljava/lang/String;)V");
         cfw.add(ByteCode.RETURN);
         // 1 = String[] args
         cfw.stopMethod((short)1);
@@ -645,8 +645,8 @@ public class Codegen implements Evaluator
     private void generateExecute(ClassFileWriter cfw)
     {
         cfw.startMethod("exec",
-                        "(Lorg/mozilla/javascript/Context;"
-                        +"Lorg/mozilla/javascript/Scriptable;"
+                        "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                        +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                         +")Ljava/lang/Object;",
                         (short)(ClassFileWriter.ACC_PUBLIC
                                 | ClassFileWriter.ACC_FINAL));
@@ -662,9 +662,9 @@ public class Codegen implements Evaluator
         cfw.addInvoke(ByteCode.INVOKEVIRTUAL,
                       cfw.getClassName(),
                       "call",
-                      "(Lorg/mozilla/javascript/Context;"
-                      +"Lorg/mozilla/javascript/Scriptable;"
-                      +"Lorg/mozilla/javascript/Scriptable;"
+                      "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                      +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                      +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                       +"[Ljava/lang/Object;"
                       +")Ljava/lang/Object;");
 
@@ -761,10 +761,10 @@ public class Codegen implements Evaluator
         cfw.addALoad(CONTEXT_ARG);
         cfw.addALoad(SCOPE_ARG);
         cfw.addInvoke(ByteCode.INVOKEVIRTUAL,
-                      "org/mozilla/javascript/NativeFunction",
+                      JarJarHelper.javascriptPrefixSlashes + "/NativeFunction",
                       "initScriptFunction",
-                      "(Lorg/mozilla/javascript/Context;"
-                      +"Lorg/mozilla/javascript/Scriptable;"
+                      "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                      +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                       +")V");
 
         // precompile all regexp literals
@@ -1045,9 +1045,9 @@ public class Codegen implements Evaluator
                     cfw.addPush(reFlags);
                 }
                 cfw.addInvoke(ByteCode.INVOKEINTERFACE,
-                              "org/mozilla/javascript/RegExpProxy",
+                              JarJarHelper.javascriptPrefixSlashes + "/RegExpProxy",
                               "compileRegExp",
-                              "(Lorg/mozilla/javascript/Context;"
+                              "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                               +"Ljava/lang/String;Ljava/lang/String;"
                               +")Ljava/lang/Object;");
                 cfw.add(ByteCode.PUTSTATIC, mainClassName,
@@ -1108,10 +1108,10 @@ public class Codegen implements Evaluator
 
         cfw.addALoad(contextArg);
         cfw.addInvoke(ByteCode.INVOKESTATIC,
-                      "org/mozilla/javascript/ScriptRuntime",
+                      JarJarHelper.javascriptPrefixSlashes + "/ScriptRuntime",
                       "checkRegExpProxy",
-                      "(Lorg/mozilla/javascript/Context;"
-                      +")Lorg/mozilla/javascript/RegExpProxy;");
+                      "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                      +")L" + JarJarHelper.javascriptPrefixSlashes + "/RegExpProxy;");
         // Stack: proxy, array
         cfw.add(ByteCode.DUP);
         cfw.addALoad(contextArg);
@@ -1126,12 +1126,12 @@ public class Codegen implements Evaluator
                     getCompiledRegexpName(n, i), "Ljava/lang/Object;");
             // Stack: compiledRegExp, scope, cx, proxy, array, proxy, array
             cfw.addInvoke(ByteCode.INVOKEINTERFACE,
-                          "org/mozilla/javascript/RegExpProxy",
+                          JarJarHelper.javascriptPrefixSlashes + "/RegExpProxy",
                           "wrapRegExp",
-                          "(Lorg/mozilla/javascript/Context;"
-                          +"Lorg/mozilla/javascript/Scriptable;"
+                          "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                          +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                           +"Ljava/lang/Object;"
-                          +")Lorg/mozilla/javascript/Scriptable;");
+                          +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
             // Stack: wrappedRegExp, array, proxy, array
             cfw.addPush(i);
             cfw.add(ByteCode.SWAP);
@@ -1148,7 +1148,7 @@ public class Codegen implements Evaluator
             if (1 / num > 0) {
                 // +0.0
                 cfw.add(ByteCode.GETSTATIC,
-                        "org/mozilla/javascript/optimizer/OptRuntime",
+                        JarJarHelper.javascriptPrefixSlashes + "/optimizer/OptRuntime",
                         "zeroObj", "Ljava/lang/Double;");
             } else {
                 cfw.addPush(num);
@@ -1157,18 +1157,18 @@ public class Codegen implements Evaluator
 
         } else if (num == 1.0) {
             cfw.add(ByteCode.GETSTATIC,
-                    "org/mozilla/javascript/optimizer/OptRuntime",
+                    JarJarHelper.javascriptPrefixSlashes + "/optimizer/OptRuntime",
                     "oneObj", "Ljava/lang/Double;");
             return;
 
         } else if (num == -1.0) {
             cfw.add(ByteCode.GETSTATIC,
-                    "org/mozilla/javascript/optimizer/OptRuntime",
+                    JarJarHelper.javascriptPrefixSlashes + "/optimizer/OptRuntime",
                     "minusOneObj", "Ljava/lang/Double;");
 
         } else if (num != num) {
             cfw.add(ByteCode.GETSTATIC,
-                    "org/mozilla/javascript/ScriptRuntime",
+                    JarJarHelper.javascriptPrefixSlashes + "/ScriptRuntime",
                     "NaNobj", "Ljava/lang/Double;");
 
         } else if (itsConstantListSize >= 2000) {
@@ -1209,7 +1209,7 @@ public class Codegen implements Evaluator
     private static void addDoubleWrap(ClassFileWriter cfw)
     {
         cfw.addInvoke(ByteCode.INVOKESTATIC,
-                      "org/mozilla/javascript/optimizer/OptRuntime",
+                      JarJarHelper.javascriptPrefixSlashes + "/optimizer/OptRuntime",
                       "wrapDouble", "(D)Ljava/lang/Double;");
     }
 
@@ -1224,7 +1224,7 @@ public class Codegen implements Evaluator
     }
     static void pushUndefined(ClassFileWriter cfw)
     {
-        cfw.add(ByteCode.GETSTATIC, "org/mozilla/javascript/Undefined",
+        cfw.add(ByteCode.GETSTATIC, JarJarHelper.javascriptPrefixSlashes + "/Undefined",
                 "instance", "Ljava/lang/Object;");
     }
 
@@ -1272,9 +1272,9 @@ public class Codegen implements Evaluator
         StringBuffer sb = new StringBuffer();
         sb.append('(');
         sb.append(mainClassSignature);
-        sb.append("Lorg/mozilla/javascript/Context;"
-                  +"Lorg/mozilla/javascript/Scriptable;"
-                  +"Lorg/mozilla/javascript/Scriptable;");
+        sb.append("L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                  +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                  +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
         if (n.getType() == Token.FUNCTION) {
             OptFunctionNode ofn = OptFunctionNode.get(n);
             if (ofn.isTargetOfDirectCall()) {
@@ -1309,30 +1309,30 @@ public class Codegen implements Evaluator
      }
 
      static final String DEFAULT_MAIN_METHOD_CLASS
-        = "org.mozilla.javascript.optimizer.OptRuntime";
+        = JarJarHelper.javascriptPrefix + ".optimizer.OptRuntime";
 
     private static final String SUPER_CLASS_NAME
-        = "org.mozilla.javascript.NativeFunction";
+        = JarJarHelper.javascriptPrefix + ".NativeFunction";
 
     static final String DIRECT_CALL_PARENT_FIELD = "_dcp";
     private static final String ID_FIELD_NAME = "_id";
 
     private static final String REGEXP_INIT_METHOD_NAME = "_reInit";
     private static final String REGEXP_INIT_METHOD_SIGNATURE
-        =  "(Lorg/mozilla/javascript/RegExpProxy;"
-           +"Lorg/mozilla/javascript/Context;"
+        =  "(L" + JarJarHelper.javascriptPrefixSlashes + "/RegExpProxy;"
+           +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
            +")V";
     static final String REGEXP_ARRAY_FIELD_NAME = "_re";
     static final String REGEXP_ARRAY_FIELD_TYPE = "[Ljava/lang/Object;";
 
     static final String FUNCTION_INIT_SIGNATURE
-        =  "(Lorg/mozilla/javascript/Context;"
-           +"Lorg/mozilla/javascript/Scriptable;"
+        =  "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+           +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
            +")V";
 
    static final String FUNCTION_CONSTRUCTOR_SIGNATURE
-        = "(Lorg/mozilla/javascript/Scriptable;"
-          +"Lorg/mozilla/javascript/Context;I)V";
+        = "(L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+          +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;I)V";
 
     private static final Object globalLock = new Object();
     private static int globalSerialClassCounter;
@@ -1368,8 +1368,8 @@ class BodyCodegen
             // generator has a unique prefix followed by _gen
             String type = "(" +
                           codegen.mainClassSignature +
-                          "Lorg/mozilla/javascript/Context;" +
-                          "Lorg/mozilla/javascript/Scriptable;" +
+                          "L" + JarJarHelper.javascriptPrefixSlashes + "/Context;" +
+                          "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;" +
                           "Ljava/lang/Object;" +
                           "Ljava/lang/Object;I)Ljava/lang/Object;";
             cfw.startMethod(codegen.getBodyMethodName(scriptOrFn) + "_gen",
@@ -1424,9 +1424,9 @@ class BodyCodegen
             // use the enclosing scope of the function as our variable object.
             cfw.addALoad(funObjLocal);
             cfw.addInvoke(ByteCode.INVOKEINTERFACE,
-                          "org/mozilla/javascript/Scriptable",
+                          JarJarHelper.javascriptPrefixSlashes + "/Scriptable",
                           "getParentScope",
-                          "()Lorg/mozilla/javascript/Scriptable;");
+                          "()L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
             cfw.addAStore(variableObjectLocal);
         }
 
@@ -1435,10 +1435,10 @@ class BodyCodegen
         cfw.addALoad(variableObjectLocal);
         cfw.addALoad(argsLocal);
         addScriptRuntimeInvoke("createFunctionActivation",
-                               "(Lorg/mozilla/javascript/NativeFunction;"
-                               +"Lorg/mozilla/javascript/Scriptable;"
+                               "(L" + JarJarHelper.javascriptPrefixSlashes + "/NativeFunction;"
+                               +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                                +"[Ljava/lang/Object;"
-                               +")Lorg/mozilla/javascript/Scriptable;");
+                               +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
         cfw.addAStore(variableObjectLocal);
 
         // create a function object
@@ -1472,10 +1472,10 @@ class BodyCodegen
         cfw.addLoadConstant(maxLocals);
         cfw.addLoadConstant(maxStack);
         addOptRuntimeInvoke("createNativeGenerator",
-                               "(Lorg/mozilla/javascript/NativeFunction;"
-                               +"Lorg/mozilla/javascript/Scriptable;"
-                               +"Lorg/mozilla/javascript/Scriptable;II"
-                               +")Lorg/mozilla/javascript/Scriptable;");
+                               "(L" + JarJarHelper.javascriptPrefixSlashes + "/NativeFunction;"
+                               +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                               +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;II"
+                               +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
 
         cfw.add(ByteCode.ARETURN);
         cfw.stopMethod((short)(localsMax + 1));
@@ -1580,9 +1580,9 @@ class BodyCodegen
             // use the enclosing scope of the function as our variable object.
             cfw.addALoad(funObjLocal);
             cfw.addInvoke(ByteCode.INVOKEINTERFACE,
-                          "org/mozilla/javascript/Scriptable",
+                          JarJarHelper.javascriptPrefixSlashes + "/Scriptable",
                           "getParentScope",
-                          "()Lorg/mozilla/javascript/Scriptable;");
+                          "()L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
             cfw.addAStore(variableObjectLocal);
         }
 
@@ -1732,16 +1732,16 @@ class BodyCodegen
             cfw.addALoad(variableObjectLocal);
             cfw.addALoad(argsLocal);
             addScriptRuntimeInvoke("createFunctionActivation",
-                                   "(Lorg/mozilla/javascript/NativeFunction;"
-                                   +"Lorg/mozilla/javascript/Scriptable;"
+                                   "(L" + JarJarHelper.javascriptPrefixSlashes + "/NativeFunction;"
+                                   +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                                    +"[Ljava/lang/Object;"
-                                   +")Lorg/mozilla/javascript/Scriptable;");
+                                   +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
             cfw.addAStore(variableObjectLocal);
             cfw.addALoad(contextLocal);
             cfw.addALoad(variableObjectLocal);
             addScriptRuntimeInvoke("enterActivationFunction",
-                                   "(Lorg/mozilla/javascript/Context;"
-                                   +"Lorg/mozilla/javascript/Scriptable;"
+                                   "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                                   +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                                    +")V");
         } else {
             debugVariableName = "global";
@@ -1751,10 +1751,10 @@ class BodyCodegen
             cfw.addALoad(variableObjectLocal);
             cfw.addPush(0); // false to indicate it is not eval script
             addScriptRuntimeInvoke("initScript",
-                                   "(Lorg/mozilla/javascript/NativeFunction;"
-                                   +"Lorg/mozilla/javascript/Scriptable;"
-                                   +"Lorg/mozilla/javascript/Context;"
-                                   +"Lorg/mozilla/javascript/Scriptable;"
+                                   "(L" + JarJarHelper.javascriptPrefixSlashes + "/NativeFunction;"
+                                   +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                                   +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                                   +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                                    +"Z"
                                    +")V");
         }
@@ -1768,7 +1768,7 @@ class BodyCodegen
         // default is to generate debug info
         if (compilerEnv.isGenerateDebugInfo()) {
             cfw.addVariableDescriptor(debugVariableName,
-                    "Lorg/mozilla/javascript/Scriptable;",
+                    "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;",
                     cfw.getCurrentCodeOffset(), variableObjectLocal);
         }
 
@@ -1786,7 +1786,7 @@ class BodyCodegen
             if (fnCurrent.itsContainsCalls0) {
                 itsZeroArgArray = getNewWordLocal();
                 cfw.add(ByteCode.GETSTATIC,
-                        "org/mozilla/javascript/ScriptRuntime",
+                        JarJarHelper.javascriptPrefixSlashes + "/ScriptRuntime",
                         "emptyArgs", "[Ljava/lang/Object;");
                 cfw.addAStore(itsZeroArgArray);
             }
@@ -1942,7 +1942,7 @@ class BodyCodegen
         if (fnCurrent == null || hasVarsInRegs) throw Kit.codeBug();
         cfw.addALoad(contextLocal);
         addScriptRuntimeInvoke("exitActivationFunction",
-                               "(Lorg/mozilla/javascript/Context;)V");
+                               "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;)V");
     }
 
     private void generateStatement(Node node)
@@ -2028,11 +2028,11 @@ class BodyCodegen
                     addScriptRuntimeInvoke(
                         "newCatchScope",
                         "(Ljava/lang/Throwable;"
-                        +"Lorg/mozilla/javascript/Scriptable;"
+                        +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                         +"Ljava/lang/String;"
-                        +"Lorg/mozilla/javascript/Context;"
-                        +"Lorg/mozilla/javascript/Scriptable;"
-                        +")Lorg/mozilla/javascript/Scriptable;");
+                        +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                        +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                        +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
                     cfw.addAStore(local);
                 }
                 break;
@@ -2085,9 +2085,9 @@ class BodyCodegen
                 addScriptRuntimeInvoke(
                     "enterWith",
                     "(Ljava/lang/Object;"
-                    +"Lorg/mozilla/javascript/Context;"
-                    +"Lorg/mozilla/javascript/Scriptable;"
-                    +")Lorg/mozilla/javascript/Scriptable;");
+                    +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                    +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                    +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
                 cfw.addAStore(variableObjectLocal);
                 incReferenceWordLocal(variableObjectLocal);
                 break;
@@ -2096,8 +2096,8 @@ class BodyCodegen
                 cfw.addALoad(variableObjectLocal);
                 addScriptRuntimeInvoke(
                     "leaveWith",
-                    "(Lorg/mozilla/javascript/Scriptable;"
-                    +")Lorg/mozilla/javascript/Scriptable;");
+                    "(L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                    +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
                 cfw.addAStore(variableObjectLocal);
                 decReferenceWordLocal(variableObjectLocal);
                 break;
@@ -2115,7 +2115,7 @@ class BodyCodegen
                 cfw.addPush(enumType);
                 addScriptRuntimeInvoke("enumInit",
                                        "(Ljava/lang/Object;"
-                                       +"Lorg/mozilla/javascript/Context;"
+                                       +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                                        +"I"
                                        +")Ljava/lang/Object;");
                 cfw.addAStore(getLocalBlockRegister(node));
@@ -2230,14 +2230,14 @@ class BodyCodegen
     private void generateThrowJavaScriptException()
     {
         cfw.add(ByteCode.NEW,
-                        "org/mozilla/javascript/JavaScriptException");
+                        JarJarHelper.javascriptPrefixSlashes + "/JavaScriptException");
         cfw.add(ByteCode.DUP_X1);
         cfw.add(ByteCode.SWAP);
         cfw.addPush(scriptOrFn.getSourceName());
         cfw.addPush(itsLineNumber);
         cfw.addInvoke(
                     ByteCode.INVOKESPECIAL,
-                    "org/mozilla/javascript/JavaScriptException",
+                    JarJarHelper.javascriptPrefixSlashes + "/JavaScriptException",
                     "<init>",
                     "(Ljava/lang/Object;Ljava/lang/String;I)V");
         cfw.add(ByteCode.ATHROW);
@@ -2278,8 +2278,8 @@ class BodyCodegen
                     cfw.addPush(node.getString());
                     addScriptRuntimeInvoke(
                         "name",
-                        "(Lorg/mozilla/javascript/Context;"
-                        +"Lorg/mozilla/javascript/Scriptable;"
+                        "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                        +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                         +"Ljava/lang/String;"
                         +")Ljava/lang/Object;");
                 }
@@ -2316,11 +2316,11 @@ class BodyCodegen
                 cfw.addALoad(contextLocal);
                 addScriptRuntimeInvoke(
                     "callRef",
-                    "(Lorg/mozilla/javascript/Callable;"
-                    +"Lorg/mozilla/javascript/Scriptable;"
+                    "(L" + JarJarHelper.javascriptPrefixSlashes + "/Callable;"
+                    +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                     +"[Ljava/lang/Object;"
-                    +"Lorg/mozilla/javascript/Context;"
-                    +")Lorg/mozilla/javascript/Ref;");
+                    +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                    +")L" + JarJarHelper.javascriptPrefixSlashes + "/Ref;");
                 break;
 
               case Token.NUMBER:
@@ -2404,7 +2404,7 @@ class BodyCodegen
                     cfw.addALoad(contextLocal);
                     addScriptRuntimeInvoke("enumId",
                                            "(Ljava/lang/Object;"
-                                           +"Lorg/mozilla/javascript/Context;"
+                                           +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                                            +")Ljava/lang/Object;");
                 }
                 break;
@@ -2533,7 +2533,7 @@ class BodyCodegen
                             addScriptRuntimeInvoke("add",
                                 "(Ljava/lang/Object;"
                                 +"Ljava/lang/Object;"
-                                +"Lorg/mozilla/javascript/Context;"
+                                +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                                 +")Ljava/lang/Object;");
                         }
                     }
@@ -2634,7 +2634,7 @@ class BodyCodegen
                     addScriptRuntimeInvoke(
                         "getObjectIndex",
                         "(Ljava/lang/Object;D"
-                        +"Lorg/mozilla/javascript/Context;"
+                        +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                         +")Ljava/lang/Object;");
                 }
                 else {
@@ -2643,8 +2643,8 @@ class BodyCodegen
                         "getObjectElem",
                         "(Ljava/lang/Object;"
                         +"Ljava/lang/Object;"
-                        +"Lorg/mozilla/javascript/Context;"
-                        +"Lorg/mozilla/javascript/Scriptable;"
+                        +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                        +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                         +")Ljava/lang/Object;");
                 }
                 break;
@@ -2654,8 +2654,8 @@ class BodyCodegen
                 cfw.addALoad(contextLocal);
                 addScriptRuntimeInvoke(
                     "refGet",
-                    "(Lorg/mozilla/javascript/Ref;"
-                    +"Lorg/mozilla/javascript/Context;"
+                    "(L" + JarJarHelper.javascriptPrefixSlashes + "/Ref;"
+                    +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                     +")Ljava/lang/Object;");
                 break;
 
@@ -2703,17 +2703,17 @@ class BodyCodegen
                         cfw.addALoad(contextLocal);
                         addScriptRuntimeInvoke(
                             "refGet",
-                            "(Lorg/mozilla/javascript/Ref;"
-                            +"Lorg/mozilla/javascript/Context;"
+                            "(L" + JarJarHelper.javascriptPrefixSlashes + "/Ref;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                             +")Ljava/lang/Object;");
                     }
                     generateExpression(child, node);
                     cfw.addALoad(contextLocal);
                     addScriptRuntimeInvoke(
                         "refSet",
-                        "(Lorg/mozilla/javascript/Ref;"
+                        "(L" + JarJarHelper.javascriptPrefixSlashes + "/Ref;"
                         +"Ljava/lang/Object;"
-                        +"Lorg/mozilla/javascript/Context;"
+                        +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                         +")Ljava/lang/Object;");
                 }
                 break;
@@ -2722,8 +2722,8 @@ class BodyCodegen
                 generateExpression(child, node);
                 cfw.addALoad(contextLocal);
                 addScriptRuntimeInvoke("refDel",
-                                       "(Lorg/mozilla/javascript/Ref;"
-                                       +"Lorg/mozilla/javascript/Context;"
+                                       "(L" + JarJarHelper.javascriptPrefixSlashes + "/Ref;"
+                                       +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                                        +")Ljava/lang/Object;");
                 break;
 
@@ -2735,7 +2735,7 @@ class BodyCodegen
                 addScriptRuntimeInvoke("delete",
                                        "(Ljava/lang/Object;"
                                        +"Ljava/lang/Object;"
-                                       +"Lorg/mozilla/javascript/Context;"
+                                       +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                                        +")Ljava/lang/Object;");
                 break;
 
@@ -2751,10 +2751,10 @@ class BodyCodegen
                     cfw.addPush(node.getString());
                     addScriptRuntimeInvoke(
                         "bind",
-                        "(Lorg/mozilla/javascript/Context;"
-                        +"Lorg/mozilla/javascript/Scriptable;"
+                        "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                        +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                         +"Ljava/lang/String;"
-                        +")Lorg/mozilla/javascript/Scriptable;");
+                        +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
                 }
                 break;
 
@@ -2772,8 +2772,8 @@ class BodyCodegen
                         "specialRef",
                         "(Ljava/lang/Object;"
                         +"Ljava/lang/String;"
-                        +"Lorg/mozilla/javascript/Context;"
-                        +")Lorg/mozilla/javascript/Ref;");
+                        +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                        +")L" + JarJarHelper.javascriptPrefixSlashes + "/Ref;");
                 }
                 break;
 
@@ -2796,36 +2796,36 @@ class BodyCodegen
                         methodName = "memberRef";
                         signature = "(Ljava/lang/Object;"
                                     +"Ljava/lang/Object;"
-                                    +"Lorg/mozilla/javascript/Context;"
+                                    +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                                     +"I"
-                                    +")Lorg/mozilla/javascript/Ref;";
+                                    +")L" + JarJarHelper.javascriptPrefixSlashes + "/Ref;";
                         break;
                       case Token.REF_NS_MEMBER:
                         methodName = "memberRef";
                         signature = "(Ljava/lang/Object;"
                                     +"Ljava/lang/Object;"
                                     +"Ljava/lang/Object;"
-                                    +"Lorg/mozilla/javascript/Context;"
+                                    +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                                     +"I"
-                                    +")Lorg/mozilla/javascript/Ref;";
+                                    +")L" + JarJarHelper.javascriptPrefixSlashes + "/Ref;";
                         break;
                       case Token.REF_NAME:
                         methodName = "nameRef";
                         signature = "(Ljava/lang/Object;"
-                                    +"Lorg/mozilla/javascript/Context;"
-                                    +"Lorg/mozilla/javascript/Scriptable;"
+                                    +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                                    +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                                     +"I"
-                                    +")Lorg/mozilla/javascript/Ref;";
+                                    +")L" + JarJarHelper.javascriptPrefixSlashes + "/Ref;";
                         cfw.addALoad(variableObjectLocal);
                         break;
                       case Token.REF_NS_NAME:
                         methodName = "nameRef";
                         signature = "(Ljava/lang/Object;"
                                     +"Ljava/lang/Object;"
-                                    +"Lorg/mozilla/javascript/Context;"
-                                    +"Lorg/mozilla/javascript/Scriptable;"
+                                    +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                                    +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                                     +"I"
-                                    +")Lorg/mozilla/javascript/Ref;";
+                                    +")L" + JarJarHelper.javascriptPrefixSlashes + "/Ref;";
                         cfw.addALoad(variableObjectLocal);
                         break;
                       default:
@@ -2845,7 +2845,7 @@ class BodyCodegen
                 cfw.addALoad(contextLocal);
                 addScriptRuntimeInvoke("escapeAttributeValue",
                                        "(Ljava/lang/Object;"
-                                       +"Lorg/mozilla/javascript/Context;"
+                                       +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                                        +")Ljava/lang/String;");
                 break;
 
@@ -2854,7 +2854,7 @@ class BodyCodegen
                 cfw.addALoad(contextLocal);
                 addScriptRuntimeInvoke("escapeTextValue",
                                        "(Ljava/lang/Object;"
-                                       +"Lorg/mozilla/javascript/Context;"
+                                       +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                                        +")Ljava/lang/String;");
                 break;
 
@@ -2863,7 +2863,7 @@ class BodyCodegen
                 cfw.addALoad(contextLocal);
                 addScriptRuntimeInvoke("setDefaultNamespace",
                                        "(Ljava/lang/Object;"
-                                       +"Lorg/mozilla/javascript/Context;"
+                                       +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                                        +")Ljava/lang/Object;");
                 break;
 
@@ -3092,10 +3092,10 @@ class BodyCodegen
         cfw.addALoad(variableObjectLocal);
         cfw.addALoad(contextLocal);           // load 'cx'
         addOptRuntimeInvoke("initFunction",
-                            "(Lorg/mozilla/javascript/NativeFunction;"
+                            "(L" + JarJarHelper.javascriptPrefixSlashes + "/NativeFunction;"
                             +"I"
-                            +"Lorg/mozilla/javascript/Scriptable;"
-                            +"Lorg/mozilla/javascript/Context;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                             +")V");
     }
 
@@ -3172,9 +3172,9 @@ class BodyCodegen
              "([Ljava/lang/Object;"
              +"Ljava/lang/String;"
              +"I"
-             +"Lorg/mozilla/javascript/Context;"
-             +"Lorg/mozilla/javascript/Scriptable;"
-             +")Lorg/mozilla/javascript/Scriptable;");
+             +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+             +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+             +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
     }
 
     private void visitObjectLiteral(Node node, Node child)
@@ -3237,9 +3237,9 @@ class BodyCodegen
              "([Ljava/lang/Object;"
              +"[Ljava/lang/Object;"
              +"[I"
-             +"Lorg/mozilla/javascript/Context;"
-             +"Lorg/mozilla/javascript/Scriptable;"
-             +")Lorg/mozilla/javascript/Scriptable;");
+             +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+             +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+             +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
     }
 
     private void visitSpecialCall(Node node, int type, int specialType,
@@ -3263,11 +3263,11 @@ class BodyCodegen
 
         if (type == Token.NEW) {
             methodName = "newObjectSpecial";
-            callSignature = "(Lorg/mozilla/javascript/Context;"
+            callSignature = "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                             +"Ljava/lang/Object;"
                             +"[Ljava/lang/Object;"
-                            +"Lorg/mozilla/javascript/Scriptable;"
-                            +"Lorg/mozilla/javascript/Scriptable;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                             +"I" // call type
                             +")Ljava/lang/Object;";
             cfw.addALoad(variableObjectLocal);
@@ -3275,12 +3275,12 @@ class BodyCodegen
             cfw.addPush(specialType);
         } else {
             methodName = "callSpecial";
-            callSignature = "(Lorg/mozilla/javascript/Context;"
-                            +"Lorg/mozilla/javascript/Callable;"
-                            +"Lorg/mozilla/javascript/Scriptable;"
+            callSignature = "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Callable;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                             +"[Ljava/lang/Object;"
-                            +"Lorg/mozilla/javascript/Scriptable;"
-                            +"Lorg/mozilla/javascript/Scriptable;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                             +"I" // call type
                             +"Ljava/lang/String;I"  // filename, linenumber
                             +")Ljava/lang/Object;";
@@ -3312,8 +3312,8 @@ class BodyCodegen
                 cfw.addPush(name);
                 methodName = "callName0";
                 signature = "(Ljava/lang/String;"
-                            +"Lorg/mozilla/javascript/Context;"
-                            +"Lorg/mozilla/javascript/Scriptable;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                             +")Ljava/lang/Object;";
             } else if (childType == Token.GETPROP) {
                 // x.name() call
@@ -3325,18 +3325,18 @@ class BodyCodegen
                 methodName = "callProp0";
                 signature = "(Ljava/lang/Object;"
                             +"Ljava/lang/String;"
-                            +"Lorg/mozilla/javascript/Context;"
-                            +"Lorg/mozilla/javascript/Scriptable;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                             +")Ljava/lang/Object;";
             } else if (childType == Token.GETPROPNOWARN) {
                 throw Kit.codeBug();
             } else {
                 generateFunctionAndThisObj(child, node);
                 methodName = "call0";
-                signature = "(Lorg/mozilla/javascript/Callable;"
-                            +"Lorg/mozilla/javascript/Scriptable;"
-                            +"Lorg/mozilla/javascript/Context;"
-                            +"Lorg/mozilla/javascript/Scriptable;"
+                signature = "(L" + JarJarHelper.javascriptPrefixSlashes + "/Callable;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                             +")Ljava/lang/Object;";
             }
 
@@ -3351,8 +3351,8 @@ class BodyCodegen
             methodName = "callName";
             signature = "([Ljava/lang/Object;"
                         +"Ljava/lang/String;"
-                        +"Lorg/mozilla/javascript/Context;"
-                        +"Lorg/mozilla/javascript/Scriptable;"
+                        +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                        +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                         +")Ljava/lang/Object;";
         } else {
             int argCount = 0;
@@ -3364,31 +3364,31 @@ class BodyCodegen
             if (argCount == 1) {
                 generateExpression(firstArgChild, node);
                 methodName = "call1";
-                signature = "(Lorg/mozilla/javascript/Callable;"
-                            +"Lorg/mozilla/javascript/Scriptable;"
+                signature = "(L" + JarJarHelper.javascriptPrefixSlashes + "/Callable;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                             +"Ljava/lang/Object;"
-                            +"Lorg/mozilla/javascript/Context;"
-                            +"Lorg/mozilla/javascript/Scriptable;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                             +")Ljava/lang/Object;";
             } else if (argCount == 2) {
                 generateExpression(firstArgChild, node);
                 generateExpression(firstArgChild.getNext(), node);
                 methodName = "call2";
-                signature = "(Lorg/mozilla/javascript/Callable;"
-                            +"Lorg/mozilla/javascript/Scriptable;"
+                signature = "(L" + JarJarHelper.javascriptPrefixSlashes + "/Callable;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                             +"Ljava/lang/Object;"
                             +"Ljava/lang/Object;"
-                            +"Lorg/mozilla/javascript/Context;"
-                            +"Lorg/mozilla/javascript/Scriptable;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                             +")Ljava/lang/Object;";
             } else {
                 generateCallArgArray(node, firstArgChild, false);
                 methodName = "callN";
-                signature = "(Lorg/mozilla/javascript/Callable;"
-                            +"Lorg/mozilla/javascript/Scriptable;"
+                signature = "(L" + JarJarHelper.javascriptPrefixSlashes + "/Callable;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                             +"[Ljava/lang/Object;"
-                            +"Lorg/mozilla/javascript/Context;"
-                            +"Lorg/mozilla/javascript/Scriptable;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                             +")Ljava/lang/Object;";
             }
         }
@@ -3413,10 +3413,10 @@ class BodyCodegen
         addScriptRuntimeInvoke(
             "newObject",
             "(Ljava/lang/Object;"
-            +"Lorg/mozilla/javascript/Context;"
-            +"Lorg/mozilla/javascript/Scriptable;"
+            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
             +"[Ljava/lang/Object;"
-            +")Lorg/mozilla/javascript/Scriptable;");
+            +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
     }
 
     private void visitOptimizedCall(Node node, OptFunctionNode target,
@@ -3467,9 +3467,9 @@ class BodyCodegen
             cfw.add(ByteCode.DUP);
             // stack: ... directFunct directFunct
             cfw.addInvoke(ByteCode.INVOKEINTERFACE,
-                          "org/mozilla/javascript/Scriptable",
+                          JarJarHelper.javascriptPrefixSlashes + "/Scriptable",
                           "getParentScope",
-                          "()Lorg/mozilla/javascript/Scriptable;");
+                          "()L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
             // stack: ... directFunct scope
             cfw.addALoad(contextLocal);
             // stack: ... directFunct scope cx
@@ -3512,7 +3512,7 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
         }
 
         cfw.add(ByteCode.GETSTATIC,
-                "org/mozilla/javascript/ScriptRuntime",
+                JarJarHelper.javascriptPrefixSlashes + "/ScriptRuntime",
                 "emptyArgs", "[Ljava/lang/Object;");
         cfw.addInvoke(ByteCode.INVOKESTATIC,
                       codegen.mainClassName,
@@ -3542,17 +3542,17 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
             addScriptRuntimeInvoke(
                 "newObject",
                 "(Ljava/lang/Object;"
-                +"Lorg/mozilla/javascript/Context;"
-                +"Lorg/mozilla/javascript/Scriptable;"
+                +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                 +"[Ljava/lang/Object;"
-                +")Lorg/mozilla/javascript/Scriptable;");
+                +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
         } else {
             cfw.addInvoke(ByteCode.INVOKEINTERFACE,
-                "org/mozilla/javascript/Callable",
+                JarJarHelper.javascriptPrefixSlashes + "/Callable",
                 "call",
-                "(Lorg/mozilla/javascript/Context;"
-                +"Lorg/mozilla/javascript/Scriptable;"
-                +"Lorg/mozilla/javascript/Scriptable;"
+                "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                 +"[Ljava/lang/Object;"
                 +")Ljava/lang/Object;");
         }
@@ -3644,9 +3644,9 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
                     "getPropFunctionAndThis",
                     "(Ljava/lang/Object;"
                     +"Ljava/lang/String;"
-                    +"Lorg/mozilla/javascript/Context;"
-                    +"Lorg/mozilla/javascript/Scriptable;"
-                    +")Lorg/mozilla/javascript/Callable;");
+                    +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                    +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                    +")L" + JarJarHelper.javascriptPrefixSlashes + "/Callable;");
             } else {
                 // Optimizer do not optimize this case for now
                 if (node.getIntProp(Node.ISNUMBER_PROP, -1) != -1)
@@ -3657,8 +3657,8 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
                     "getElemFunctionAndThis",
                     "(Ljava/lang/Object;"
                     +"Ljava/lang/Object;"
-                    +"Lorg/mozilla/javascript/Context;"
-                    +")Lorg/mozilla/javascript/Callable;");
+                    +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                    +")L" + JarJarHelper.javascriptPrefixSlashes + "/Callable;");
             }
             break;
           }
@@ -3671,9 +3671,9 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
             addScriptRuntimeInvoke(
                 "getNameFunctionAndThis",
                 "(Ljava/lang/String;"
-                +"Lorg/mozilla/javascript/Context;"
-                +"Lorg/mozilla/javascript/Scriptable;"
-                +")Lorg/mozilla/javascript/Callable;");
+                +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                +")L" + JarJarHelper.javascriptPrefixSlashes + "/Callable;");
             break;
           }
 
@@ -3683,16 +3683,16 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
             addScriptRuntimeInvoke(
                 "getValueFunctionAndThis",
                 "(Ljava/lang/Object;"
-                +"Lorg/mozilla/javascript/Context;"
-                +")Lorg/mozilla/javascript/Callable;");
+                +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                +")L" + JarJarHelper.javascriptPrefixSlashes + "/Callable;");
             break;
         }
         // Get thisObj prepared by get(Name|Prop|Elem|Value)FunctionAndThis
         cfw.addALoad(contextLocal);
         addScriptRuntimeInvoke(
             "lastStoredScriptable",
-            "(Lorg/mozilla/javascript/Context;"
-            +")Lorg/mozilla/javascript/Scriptable;");
+            "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+            +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
     }
 
     private void updateLineNumber(Node node)
@@ -3839,11 +3839,11 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
 
         String exceptionName;
         if (exceptionType == JAVASCRIPT_EXCEPTION) {
-            exceptionName = "org/mozilla/javascript/JavaScriptException";
+            exceptionName = JarJarHelper.javascriptPrefixSlashes + "/JavaScriptException";
         } else if (exceptionType == EVALUATOR_EXCEPTION) {
-            exceptionName = "org/mozilla/javascript/EvaluatorException";
+            exceptionName = JarJarHelper.javascriptPrefixSlashes + "/EvaluatorException";
         } else if (exceptionType == ECMAERROR_EXCEPTION) {
-            exceptionName = "org/mozilla/javascript/EcmaError";
+            exceptionName = JarJarHelper.javascriptPrefixSlashes + "/EcmaError";
         } else if (exceptionType == THROWABLE_EXCEPTION) {
             exceptionName = "java/lang/Throwable";
         } else {
@@ -3965,7 +3965,7 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
         cfw.addALoad(variableObjectLocal);
         cfw.addPush(node.getString());
         addScriptRuntimeInvoke("typeofName",
-                               "(Lorg/mozilla/javascript/Scriptable;"
+                               "(L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                                +"Ljava/lang/String;"
                                +")Ljava/lang/String;");
     }
@@ -4004,7 +4004,7 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
         cfw.addALoad(contextLocal);
         cfw.addPush(count);
         addScriptRuntimeInvoke("addInstructionCount",
-                "(Lorg/mozilla/javascript/Context;"
+                "(L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                 +"I)V");
     }
 
@@ -4063,9 +4063,9 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
             cfw.addALoad(contextLocal);
             cfw.addPush(incrDecrMask);
             addScriptRuntimeInvoke("nameIncrDecr",
-                "(Lorg/mozilla/javascript/Scriptable;"
+                "(L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                 +"Ljava/lang/String;"
-                +"Lorg/mozilla/javascript/Context;"
+                +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                 +"I)Ljava/lang/Object;");
             break;
           case Token.GETPROPNOWARN:
@@ -4079,7 +4079,7 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
             addScriptRuntimeInvoke("propIncrDecr",
                                    "(Ljava/lang/Object;"
                                    +"Ljava/lang/String;"
-                                   +"Lorg/mozilla/javascript/Context;"
+                                   +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                                    +"I)Ljava/lang/Object;");
             break;
           }
@@ -4093,14 +4093,14 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
               addOptRuntimeInvoke("elemIncrDecr",
                   "(Ljava/lang/Object;"
                   +"D"
-                  +"Lorg/mozilla/javascript/Context;"
+                  +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                   +"I"
                   +")Ljava/lang/Object;");
             } else {
               addScriptRuntimeInvoke("elemIncrDecr",
                   "(Ljava/lang/Object;"
                   +"Ljava/lang/Object;"
-                  +"Lorg/mozilla/javascript/Context;"
+                  +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                   +"I"
                   +")Ljava/lang/Object;");
             }
@@ -4113,8 +4113,8 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
             cfw.addPush(incrDecrMask);
             addScriptRuntimeInvoke(
                 "refIncrDecr",
-                "(Lorg/mozilla/javascript/Ref;"
-                +"Lorg/mozilla/javascript/Context;"
+                "(L" + JarJarHelper.javascriptPrefixSlashes + "/Ref;"
+                +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                 +"I)Ljava/lang/Object;");
             break;
           }
@@ -4273,7 +4273,7 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
                 (type == Token.INSTANCEOF) ? "instanceOf" : "in",
                 "(Ljava/lang/Object;"
                 +"Ljava/lang/Object;"
-                +"Lorg/mozilla/javascript/Context;"
+                +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                 +")Z");
             cfw.add(ByteCode.IFNE, trueGOTO);
             cfw.add(ByteCode.GOTO, falseGOTO);
@@ -4476,10 +4476,10 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
         cfw.addPush(name);
         addScriptRuntimeInvoke(
             "setName",
-            "(Lorg/mozilla/javascript/Scriptable;"
+            "(L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
             +"Ljava/lang/Object;"
-            +"Lorg/mozilla/javascript/Context;"
-            +"Lorg/mozilla/javascript/Scriptable;"
+            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
             +"Ljava/lang/String;"
             +")Ljava/lang/Object;");
     }
@@ -4496,10 +4496,10 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
         cfw.addPush(name);
         addScriptRuntimeInvoke(
             "strictSetName",
-            "(Lorg/mozilla/javascript/Scriptable;"
+            "(L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
             +"Ljava/lang/Object;"
-            +"Lorg/mozilla/javascript/Context;"
-            +"Lorg/mozilla/javascript/Scriptable;"
+            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
             +"Ljava/lang/String;"
             +")Ljava/lang/Object;");
     }
@@ -4515,9 +4515,9 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
         cfw.addPush(name);
         addScriptRuntimeInvoke(
             "setConst",
-            "(Lorg/mozilla/javascript/Scriptable;"
+            "(L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
             +"Ljava/lang/Object;"
-            +"Lorg/mozilla/javascript/Context;"
+            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
             +"Ljava/lang/String;"
             +")Ljava/lang/Object;");
     }
@@ -4659,7 +4659,7 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
                 "getObjectPropNoWarn",
                 "(Ljava/lang/Object;"
                 +"Ljava/lang/String;"
-                +"Lorg/mozilla/javascript/Context;"
+                +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                 +")Ljava/lang/Object;");
             return;
         }
@@ -4672,9 +4672,9 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
             cfw.addALoad(contextLocal);
             addScriptRuntimeInvoke(
                 "getObjectProp",
-                "(Lorg/mozilla/javascript/Scriptable;"
+                "(L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                 +"Ljava/lang/String;"
-                +"Lorg/mozilla/javascript/Context;"
+                +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                 +")Ljava/lang/Object;");
         } else {
             cfw.addALoad(contextLocal);
@@ -4683,8 +4683,8 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
                 "getObjectProp",
                 "(Ljava/lang/Object;"
                 +"Ljava/lang/String;"
-                +"Lorg/mozilla/javascript/Context;"
-                +"Lorg/mozilla/javascript/Scriptable;"
+                +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
+                +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                 +")Ljava/lang/Object;");
         }
     }
@@ -4711,9 +4711,9 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
                 cfw.addALoad(contextLocal);
                 addScriptRuntimeInvoke(
                     "getObjectProp",
-                    "(Lorg/mozilla/javascript/Scriptable;"
+                    "(L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                     +"Ljava/lang/String;"
-                    +"Lorg/mozilla/javascript/Context;"
+                    +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                     +")Ljava/lang/Object;");
             } else {
                 cfw.addALoad(contextLocal);
@@ -4721,7 +4721,7 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
                     "getObjectProp",
                     "(Ljava/lang/Object;"
                     +"Ljava/lang/String;"
-                    +"Lorg/mozilla/javascript/Context;"
+                    +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                     +")Ljava/lang/Object;");
             }
         }
@@ -4732,7 +4732,7 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
             "(Ljava/lang/Object;"
             +"Ljava/lang/String;"
             +"Ljava/lang/Object;"
-            +"Lorg/mozilla/javascript/Context;"
+            +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
             +")Ljava/lang/Object;");
     }
 
@@ -4755,7 +4755,7 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
                 addOptRuntimeInvoke(
                     "getObjectIndex",
                     "(Ljava/lang/Object;D"
-                    +"Lorg/mozilla/javascript/Context;"
+                    +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                     +")Ljava/lang/Object;");
             } else {
                 // stack: ... object object indexObject
@@ -4766,7 +4766,7 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
                     "getObjectElem",
                     "(Ljava/lang/Object;"
                     +"Ljava/lang/Object;"
-                    +"Lorg/mozilla/javascript/Context;"
+                    +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                     +")Ljava/lang/Object;");
             }
         }
@@ -4778,7 +4778,7 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
                 "(Ljava/lang/Object;"
                 +"D"
                 +"Ljava/lang/Object;"
-                +"Lorg/mozilla/javascript/Context;"
+                +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                 +")Ljava/lang/Object;");
         } else {
             addScriptRuntimeInvoke(
@@ -4786,7 +4786,7 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
                 "(Ljava/lang/Object;"
                 +"Ljava/lang/Object;"
                 +"Ljava/lang/Object;"
-                +"Lorg/mozilla/javascript/Context;"
+                +"L" + JarJarHelper.javascriptPrefixSlashes + "/Context;"
                 +")Ljava/lang/Object;");
         }
     }
@@ -4798,8 +4798,8 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
         cfw.addALoad(variableObjectLocal);
         addScriptRuntimeInvoke("enterDotQuery",
                                "(Ljava/lang/Object;"
-                               +"Lorg/mozilla/javascript/Scriptable;"
-                               +")Lorg/mozilla/javascript/Scriptable;");
+                               +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                               +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
         cfw.addAStore(variableObjectLocal);
 
         // add push null/pop with label in between to simplify code for loop
@@ -4815,15 +4815,15 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
         cfw.addALoad(variableObjectLocal);
         addScriptRuntimeInvoke("updateDotQuery",
                                "(Z"
-                               +"Lorg/mozilla/javascript/Scriptable;"
+                               +"L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
                                +")Ljava/lang/Object;");
         cfw.add(ByteCode.DUP);
         cfw.add(ByteCode.IFNULL, queryLoopStart);
         // stack: ... non_null_result_of_updateDotQuery
         cfw.addALoad(variableObjectLocal);
         addScriptRuntimeInvoke("leaveDotQuery",
-                               "(Lorg/mozilla/javascript/Scriptable;"
-                               +")Lorg/mozilla/javascript/Scriptable;");
+                               "(L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;"
+                               +")L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;");
         cfw.addAStore(variableObjectLocal);
     }
 
@@ -4890,7 +4890,7 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
                 cfw.addALoad(itsZeroArgArray);
             } else {
                 cfw.add(ByteCode.GETSTATIC,
-                        "org/mozilla/javascript/ScriptRuntime",
+                        JarJarHelper.javascriptPrefixSlashes + "/ScriptRuntime",
                         "emptyArgs", "[Ljava/lang/Object;");
             }
         } else {
@@ -4903,7 +4903,7 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
                                         String methodSignature)
     {
         cfw.addInvoke(ByteCode.INVOKESTATIC,
-                      "org.mozilla.javascript.ScriptRuntime",
+                      JarJarHelper.javascriptPrefix + ".ScriptRuntime",
                       methodName,
                       methodSignature);
     }
@@ -4912,7 +4912,7 @@ Else pass the JS object in the aReg and 0.0 in the dReg.
                                      String methodSignature)
     {
         cfw.addInvoke(ByteCode.INVOKESTATIC,
-                      "org/mozilla/javascript/optimizer/OptRuntime",
+                      JarJarHelper.javascriptPrefixSlashes + "/optimizer/OptRuntime",
                       methodName,
                       methodSignature);
     }
