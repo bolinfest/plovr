@@ -240,7 +240,7 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     defines the Soy functions <code>substring()</code> and <code>list()</code>,
     so to use those functions in your Closure Templates, include this option in
     your plovr config:
-<pre>"soy-function-plugins": "org.plovr.soy.function.PlovrModule"</pre>
+<pre>"soy-function-plugins": "org.plovr.soy.function.PlovrModule",</pre>
   {case 'output-wrapper'}
     If specified, a template into which compiled JavaScript will be written.
     The placeholder for compiled code is <code>%output%</code>, so to wrap the
@@ -396,6 +396,12 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     the Closure testing framework, the test methods will still be able to be
     discovered. In short, this makes it possible to unit test JavaScript code
     compiled in Advanced mode.
+  {case 'id-generators'}
+    It is common to set this option as follows so that all event ids are unique:
+    <pre>
+    "id-generators": ["goog.events.getUniqueId"],
+    </pre>
+    See p.444 of <a href="{BOOK_URL}">Closure: The Definitive Guide</a> for details.
   {case 'custom-passes'}
     You can add custom behavior to the Closure Compiler by adding your own
     compiler pass. The standard way to do this is to create a Java class that
@@ -433,7 +439,7 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     the config file for the <code>DiagnosticGroup</code> that you registered.
     You can also see an example of this in <a href="http://code.google.com/p/plovr/source/browse/testdata/custompasses/config.json">config.json</a>:
 {literal}<pre>"checks": {
-  "checkDoubleEquals": "WARNING"
+  "checkDoubleEquals": "WARNING",
 }</pre>{/literal}
     <p>
     Note that when developing a <code>CompilerPass</code> in Java, plovr has
