@@ -7,14 +7,19 @@ import static org.junit.Assert.assertTrue;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.junit.Test;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
+import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.CustomPassExecutionTime;
 
 /**
@@ -72,5 +77,26 @@ public class ConfigParserTest {
         "com.google.template.soy.xliffmsgplugin.XliffMsgPluginModule",
         "org.plovr.soy.function.PlovrModule"),
         soyFunctionPlugins);
+
+    // modules
+    assertNull(config.getModuleConfig());
+
+    // defines
+    Map<String, JsonPrimitive> expectedDefines = ImmutableMap.of(
+        "goog.userAgent.ASSUME_WEBKIT", new JsonPrimitive(true),
+        "goog.DEBUG", new JsonPrimitive(false));
+    assertEquals(expectedDefines, config.getDefines());
+
+    // checks
+    Map<String, CheckLevel> expectedCheckLevels = ImmutableMap.of(
+        "checkTypes", CheckLevel.WARNING);
+    assertEquals(expectedCheckLevels, config.getCheckLevelsForDiagnosticGroups());
+
+    // experimental-compiler-options
+    JsonObject expectedExperimentalCompilerOptions = new JsonObject();
+    expectedExperimentalCompilerOptions.add("instrumentForCoverage",
+        new JsonPrimitive(true));
+    assertEquals(expectedExperimentalCompilerOptions,
+        config.getExperimentalCompilerOptions());
   }
 }

@@ -311,6 +311,21 @@ public final class Config implements Comparable<Config> {
     return customPasses;
   }
 
+  @VisibleForTesting
+  Map<String, JsonPrimitive> getDefines() {
+    return defines;
+  }
+
+  @VisibleForTesting
+  Map<String, CheckLevel> getCheckLevelsForDiagnosticGroups() {
+    return checkLevelsForDiagnosticGroups;
+  }
+
+  @VisibleForTesting
+  JsonObject getExperimentalCompilerOptions() {
+    return experimentalCompilerOptions;
+  }
+
   public String getGlobalScopeName() {
     return globalScopeName;
   }
@@ -818,6 +833,10 @@ public final class Config implements Comparable<Config> {
       return moduleConfigBuilder;
     }
 
+    public void resetModuleConfigBuilder() {
+      moduleConfigBuilder = null;
+    }
+
     /**
      * Adds a soy plugin module.
      *
@@ -913,6 +932,10 @@ public final class Config implements Comparable<Config> {
       this.checkLevelsForDiagnosticGroups = groups;
     }
 
+    public void resetChecks() {
+      this.checkLevelsForDiagnosticGroups = null;
+    }
+
     public void setExportTestFunctions(boolean exportTestFunctions) {
       this.exportTestFunctions = exportTestFunctions;
     }
@@ -923,6 +946,10 @@ public final class Config implements Comparable<Config> {
 
     public void addDefine(String name, JsonPrimitive primitive) {
       defines.put(name, primitive);
+    }
+
+    public void resetDefines() {
+      defines.clear();
     }
 
     public void setStripNameSuffixes(Set<String> stripNameSuffixes) {
@@ -964,6 +991,10 @@ public final class Config implements Comparable<Config> {
 
     public JsonObject getExperimentalCompilerOptions() {
       return experimentalCompilerOptions;
+    }
+
+    public void resetExperimentalCompilerOptions() {
+      this.experimentalCompilerOptions = null;
     }
 
     public void setGlobalScopeName(String scope) {

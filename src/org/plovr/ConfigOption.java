@@ -248,6 +248,12 @@ public enum ConfigOption {
         throw new RuntimeException(e);
       }
     }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetModuleConfigBuilder();
+      return true;
+    }
   }),
 
   MODULE_OUTPUT_PATH("module-output-path", new ConfigUpdater() {
@@ -301,6 +307,12 @@ public enum ConfigOption {
         }
       }
     }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetDefines();
+      return true;
+    }
   }),
 
   DIAGNOSTIC_GROUPS("checks", new ConfigUpdater() {
@@ -317,6 +329,12 @@ public enum ConfigOption {
         groups.put(entry.getKey(), checkLevel);
       }
       builder.setCheckLevelsForDiagnosticGroups(groups);
+    }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetChecks();
+      return true;
     }
   }),
 
@@ -436,6 +454,12 @@ public enum ConfigOption {
     @Override
     public void apply(JsonObject value, Config.Builder builder) {
       builder.setExperimentalCompilerOptions(value);
+    }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetExperimentalCompilerOptions();
+      return true;
     }
   }),
 

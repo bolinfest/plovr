@@ -9,5 +9,24 @@
       "when": "BEFORE_CHECKS"
     }
   ],
-  "soy-function-plugins": "org.plovr.soy.function.PlovrModule"
+  "soy-function-plugins": "org.plovr.soy.function.PlovrModule",
+  "modules": {
+    "app": {
+      "inputs": "app_init.js",
+      "deps": []
+    },
+    "api": {
+      "inputs": ["api.js", "api_init.js"],
+      "deps": "app"
+    }
+  },
+  "define": {
+    "goog.userAgent.ASSUME_IE": true
+  },
+  "checks": {
+    "checkTypes": "ERROR"
+  },
+  "experimental-compiler-options": {
+    "instrumentForCoverage": true
+  }
 }
