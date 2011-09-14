@@ -37,6 +37,17 @@ import java.util.Set;
  * @author nicksantos@google.com (Nick Santos)
  */
 public class CompilerOptions implements Serializable, Cloneable {
+
+  // A common enum for compiler passes that can run either globally or locally.
+  public enum Reach {
+    ALL,
+    LOCAL_ONLY,
+    NONE
+  }
+
+  // TODO(nicksantos): All public properties of this class should be made
+  // package-private, and have a public setter.
+
   private static final long serialVersionUID = 7L;
 
   /**
@@ -117,20 +128,36 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Checks that all symbols are defined */
   public boolean checkSymbols;
 
+  public CheckLevel checkShadowVars;
+
   /**
    * Checks that all variables with the @noshadow attribute are
    * never shadowed.
    */
-  public CheckLevel checkShadowVars;
+  public void setCheckShadowVars(CheckLevel level) {
+    this.checkShadowVars = level;
+  }
 
-  /** Checks for suspicious variable definitions and undefined variables */
   public CheckLevel aggressiveVarCheck;
 
-  /** Checks function arity */
+  /** Checks for suspicious variable definitions and undefined variables */
+  public void setAggressiveVarCheck(CheckLevel level) {
+    this.aggressiveVarCheck = level;
+  }
+
   public CheckLevel checkFunctions;
 
-  /** Checks method arity */
+  /** Checks function arity */
+  public void setCheckFunctions(CheckLevel level) {
+    this.checkFunctions = level;
+  }
+
   public CheckLevel checkMethods;
+
+  /** Checks method arity */
+  public void setCheckMethods(CheckLevel level) {
+    this.checkMethods = level;
+  }
 
   /** Makes sure no duplicate messages */
   public boolean checkDuplicateMessages;
@@ -164,29 +191,55 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Checks for inexistant property calls */
   public boolean checkTypedPropertyCalls;
 
+  public CheckLevel reportMissingOverride;
+
   /**
    * Flags a warning if a property is missing the @override annotation, but it
    * overrides a base class property.
    */
-  public CheckLevel reportMissingOverride;
+  public void setReportMissingOverride(CheckLevel level) {
+    this.reportMissingOverride = level;
+  }
+
+  public CheckLevel reportUnknownTypes;
 
   /** Flags a warning for every node whose type could not be determined. */
-  public CheckLevel reportUnknownTypes;
+  public void setReportUnknownTypes(CheckLevel level) {
+    this.reportUnknownTypes = level;
+  }
 
   /** Checks for missing goog.require() calls **/
   public CheckLevel checkRequires;
 
-  /** Checks for missing goog.provides() calls **/
+  public void setCheckRequires(CheckLevel level) {
+    this.checkRequires = level;
+  }
+
   public CheckLevel checkProvides;
+
+  /** Checks for missing goog.provides() calls **/
+  public void setCheckProvides(CheckLevel level) {
+    this.checkProvides = level;
+  }
+
+  public CheckLevel checkGlobalNamesLevel;
 
   /**
    * Checks the integrity of references to qualified global names.
    * (e.g. "a.b")
    */
-  public CheckLevel checkGlobalNamesLevel;
+  public void setCheckGlobalNamesLevel(CheckLevel level) {
+    this.checkGlobalNamesLevel = level;
+  }
+
+  public CheckLevel brokenClosureRequiresLevel;
 
   /** Sets the check level for bad Closure require calls. */
-  public CheckLevel brokenClosureRequiresLevel;
+  public void setBrokenClosureRequiresLevel(CheckLevel level) {
+    this.brokenClosureRequiresLevel = level;
+  }
+
+  public CheckLevel checkGlobalThisLevel;
 
   /**
    * Checks for certain uses of the {@code this} keyword that are considered
@@ -196,13 +249,19 @@ public class CompilerOptions implements Serializable, Cloneable {
    * If this is off, but collapseProperties is on, then the compiler will
    * usually ignore you and run this check anyways.
    */
-  public CheckLevel checkGlobalThisLevel;
+  public void setCheckGlobalThisLevel(CheckLevel level) {
+    this.checkGlobalThisLevel = level;
+  }
+
+  public CheckLevel checkMissingGetCssNameLevel;
 
   /**
    * Checks that certain string literals only appear in strings used as
    * goog.getCssName arguments.
    */
-  public CheckLevel checkMissingGetCssNameLevel;
+  public void setCheckMissingGetCssNameLevel(CheckLevel level) {
+    this.checkMissingGetCssNameLevel = level;
+  }
 
   /**
    * Regex of string literals that may only appear in goog.getCssName arguments.
@@ -215,6 +274,13 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   /** Checks that the synctactic restrictions of Caja are met. */
   public boolean checkCaja;
+
+  /**
+   * A set of extra annotation names which are accepted and silently ignored
+   * when encountered in a source file. Defaults to null which has the same
+   * effect as specifying an empty set.
+   */
+  Set<String> extraAnnotationNames;
 
   //--------------------------------
   // Optimizations
@@ -233,13 +299,10 @@ public class CompilerOptions implements Serializable, Cloneable {
   public boolean inlineFunctions;
 
   /** Enhanced function inlining */
-  public boolean decomposeExpressions;
-
-  /** Enhanced function inlining */
-  public boolean inlineAnonymousFunctionExpressions;
-
-  /** Enhanced function inlining */
   public boolean inlineLocalFunctions;
+
+  /** Assume closures capture only what they reference */
+  public boolean assumeClosuresOnlyCaptureReferences;
 
   /** Move code to a deeper module */
   public boolean crossModuleCodeMotion;
@@ -269,11 +332,19 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Removes code that will never execute */
   public boolean removeDeadCode;
 
-  /** Checks for unreachable code */
   public CheckLevel checkUnreachableCode;
 
-  /** Checks for missing return statements */
+  /** Checks for unreachable code */
+  public void setCheckUnreachableCode(CheckLevel level) {
+    this.checkUnreachableCode = level;
+  }
+
   public CheckLevel checkMissingReturn;
+
+  /** Checks for missing return statements */
+  public void setCheckMissingReturn(CheckLevel level) {
+    this.checkMissingReturn = level;
+  }
 
   /** Extracts common prototype member declarations */
   public boolean extractPrototypeMemberDeclarations;
@@ -576,6 +647,9 @@ public class CompilerOptions implements Serializable, Cloneable {
   // Fixes open source issue: 390
   boolean operaCompoundAssignFix;
 
+  /** List of properties that we report invalidation errors for. */
+  Map<String, CheckLevel> propertyInvalidationErrors;
+
   /**
    * The name of the scope to prefix all global variable assignments
    * with. This assumes that all of the resulting code will be wrapped
@@ -651,6 +725,9 @@ public class CompilerOptions implements Serializable, Cloneable {
   public SourceMap.Format sourceMapFormat =
       SourceMap.Format.DEFAULT;
 
+  public List<SourceMap.LocationMapping> sourceMapLocationMappings =
+      Collections.emptyList();
+
   /**
    * Charset to use when generating code.  If null, then output ASCII.
    * This needs to be a string because CompilerOptions is serializable.
@@ -712,6 +789,7 @@ public class CompilerOptions implements Serializable, Cloneable {
     checkCaja = false;
     computeFunctionSideEffects = false;
     chainCalls = false;
+    extraAnnotationNames = null;
 
     // Optimizations
     foldConstants = false;
@@ -721,6 +799,7 @@ public class CompilerOptions implements Serializable, Cloneable {
     inlineFunctions = false;
     inlineLocalFunctions = false;
     assumeStrictThis = false;
+    assumeClosuresOnlyCaptureReferences = false;
     crossModuleCodeMotion = false;
     crossModuleMethodMotion = false;
     inlineGetters = false;
@@ -799,6 +878,7 @@ public class CompilerOptions implements Serializable, Cloneable {
     replaceStringsFunctionDescriptions = Collections.emptyList();
     replaceStringsPlaceholderToken = "";
     replaceStringsReservedStrings = Collections.emptySet();
+    propertyInvalidationErrors = Maps.newHashMap();
     globalScopeName = "";
 
     // Output
@@ -1023,6 +1103,72 @@ public class CompilerOptions implements Serializable, Cloneable {
   }
 
   /**
+   * Set the function inlining policy for the compiler.
+   */
+  public void setInlineFunctions(Reach reach) {
+    switch (reach) {
+      case ALL:
+        this.inlineFunctions = true;
+        this.inlineLocalFunctions = true;
+        break;
+      case LOCAL_ONLY:
+        this.inlineFunctions = false;
+        this.inlineLocalFunctions = true;
+        break;
+      case NONE:
+        this.inlineFunctions = false;
+        this.inlineLocalFunctions = false;
+        break;
+      default:
+        throw new IllegalStateException("unexpected");
+    }
+  }
+
+  /**
+   * Set the variable inlining policy for the compiler.
+   */
+  public void setInlineVariables(Reach reach) {
+    switch (reach) {
+      case ALL:
+        this.inlineVariables = true;
+        this.inlineLocalVariables = true;
+        break;
+      case LOCAL_ONLY:
+        this.inlineVariables = false;
+        this.inlineLocalVariables = true;
+        break;
+      case NONE:
+        this.inlineVariables = false;
+        this.inlineLocalVariables = false;
+        break;
+      default:
+        throw new IllegalStateException("unexpected");
+    }
+  }
+
+  /**
+   * Set the variable removal policy for the compiler.
+   */
+  public void setRemoveUnusedVariable(Reach reach) {
+    switch (reach) {
+      case ALL:
+        this.removeUnusedVars = true;
+        this.removeUnusedLocalVars = true;
+        break;
+      case LOCAL_ONLY:
+        this.removeUnusedVars = false;
+        this.removeUnusedLocalVars = true;
+        break;
+      case NONE:
+        this.removeUnusedVars = false;
+        this.removeUnusedLocalVars = false;
+        break;
+      default:
+        throw new IllegalStateException("unexpected");
+    }
+  }
+
+  /**
    * Sets the functions whose debug strings to replace.
    */
   public void setReplaceStringsConfiguration(
@@ -1142,6 +1288,10 @@ public class CompilerOptions implements Serializable, Cloneable {
     this.externExports = enable;
   }
 
+  public void setExtraAnnotationNames(Set<String> extraAnnotationNames) {
+    this.extraAnnotationNames = Sets.newHashSet(extraAnnotationNames);
+  }
+
   public boolean isExternExportsEnabled() {
     return externExports;
   }
@@ -1226,7 +1376,7 @@ public class CompilerOptions implements Serializable, Cloneable {
   /**
    * @return Whether assumeStrictThis is set.
    */
-  public boolean isAssumeStrictThis() {
+  public boolean assumeStrictThis() {
     return assumeStrictThis;
   }
 
@@ -1236,6 +1386,31 @@ public class CompilerOptions implements Serializable, Cloneable {
   public void setAssumeStrictThis(boolean enable) {
     this.assumeStrictThis = enable;
   }
+
+  /**
+   * @return Whether assumeClosuresOnlyCaptureReferences is set.
+   */
+  public boolean assumeClosuresOnlyCaptureReferences() {
+    return assumeClosuresOnlyCaptureReferences;
+  }
+
+  /**
+   * If true, enables enables additional optimizations.
+   */
+  public void setAssumeClosuresOnlyCaptureReferences(boolean enable) {
+    this.assumeClosuresOnlyCaptureReferences = enable;
+  }
+
+  /**
+   * Sets the list of properties that we report property invalidation errors
+   * for.
+   */
+  public void setPropertyInvalidationErrors(
+      Map<String, CheckLevel> propertyInvalidationErrors) {
+    this.propertyInvalidationErrors =
+        Maps.newHashMap(propertyInvalidationErrors);
+  }
+
 
   //////////////////////////////////////////////////////////////////////////////
   // Enums

@@ -27,7 +27,6 @@ import com.google.javascript.jscomp.graph.GraphNode;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.FunctionType;
-import com.google.javascript.rhino.jstype.InstanceObjectType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.ObjectType;
@@ -73,6 +72,7 @@ class NameReferenceGraphConstruction implements CompilerPass {
     return this.graph;
   }
 
+  @Override
   public void process(Node externs, Node root) {
     // Use the MemoizedScopeCreator instance from TypeCheck if available
     // as FunctionTypeBuilder warns about existing types if TypedScopeCreator is
@@ -370,7 +370,7 @@ class NameReferenceGraphConstruction implements CompilerPass {
       if (type.isUnknownType() || type.isUnionType()) {
         return false;
       }
-      return (type instanceof InstanceObjectType || type.autoboxesTo() != null);
+      return (type.isInstanceType() || type.autoboxesTo() != null);
     }
 
     private Name recordStaticNameDefinition(NodeTraversal t, String name,
@@ -380,9 +380,10 @@ class NameReferenceGraphConstruction implements CompilerPass {
         // A.C() -> A.B(). However, this is not important in module code motion
         // and will be ignored (for now).
       }
-      if (type.isFunctionType() && type.isConstructor()) {
+      if (type.isConstructor()) {
         return recordClassConstructorOrInterface(
-            name, (FunctionType) type, n, parent, parent.getParent(), rValue);
+            name, type.toMaybeFunctionType(),
+            n, parent, parent.getParent(), rValue);
       } else {
         Name symbol = graph.defineNameIfNotExists(name, isExtern);
         symbol.setType(type);
@@ -406,9 +407,9 @@ class NameReferenceGraphConstruction implements CompilerPass {
       FunctionType classType = null;
       String className = null;
 
-      if (constructor instanceof FunctionType && constructor.isConstructor()) {
+      if (constructor != null && constructor.isConstructor()) {
         // Case where the class has been properly declared with @constructor
-        classType = (FunctionType) constructor;
+        classType = constructor.toMaybeFunctionType();
         className = classType.getReferenceName();
       } else {
         // We'll guess it is a constructor even if it didn't have @constructor

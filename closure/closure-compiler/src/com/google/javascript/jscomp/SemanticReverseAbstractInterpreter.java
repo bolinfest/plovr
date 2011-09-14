@@ -45,6 +45,7 @@ class SemanticReverseAbstractInterpreter
    */
   private static final Function<TypePair, TypePair> EQ =
     new Function<TypePair, TypePair>() {
+      @Override
       public TypePair apply(TypePair p) {
         if (p.typeA == null || p.typeB == null) {
           return null;
@@ -58,6 +59,7 @@ class SemanticReverseAbstractInterpreter
    */
   private static final Function<TypePair, TypePair> NE =
     new Function<TypePair, TypePair>() {
+      @Override
       public TypePair apply(TypePair p) {
         if (p.typeA == null || p.typeB == null) {
           return null;
@@ -72,6 +74,7 @@ class SemanticReverseAbstractInterpreter
   private static final
       Function<TypePair, TypePair> SHEQ =
     new Function<TypePair, TypePair>() {
+      @Override
       public TypePair apply(TypePair p) {
         if (p.typeA == null || p.typeB == null) {
           return null;
@@ -86,6 +89,7 @@ class SemanticReverseAbstractInterpreter
   private static final
       Function<TypePair, TypePair> SHNE =
     new Function<TypePair, TypePair>() {
+      @Override
       public TypePair apply(TypePair p) {
         if (p.typeA == null || p.typeB == null) {
           return null;
@@ -100,6 +104,7 @@ class SemanticReverseAbstractInterpreter
   private final
       Function<TypePair, TypePair> INEQ =
     new Function<TypePair, TypePair>() {
+      @Override
       public TypePair apply(TypePair p) {
         return new TypePair(
             getRestrictedWithoutUndefined(p.typeA),
@@ -115,6 +120,7 @@ class SemanticReverseAbstractInterpreter
     super(convention, typeRegistry);
   }
 
+  @Override
   public FlowScope getPreciserScopeKnowingConditionOutcome(Node condition,
       FlowScope blindScope, boolean outcome) {
     // Check for the typeof operator.
@@ -413,8 +419,8 @@ class SemanticReverseAbstractInterpreter
     JSType rightType = right.getJSType();
     ObjectType targetType =
         typeRegistry.getNativeObjectType(JSTypeNative.UNKNOWN_TYPE);
-    if (rightType instanceof FunctionType) {
-      targetType = (FunctionType) rightType;
+    if (rightType != null && rightType.isFunctionType()) {
+      targetType = rightType.toMaybeFunctionType();
     }
     Visitor<JSType> visitor;
     if (outcome) {
@@ -483,11 +489,9 @@ class SemanticReverseAbstractInterpreter
 
     @Override
     public JSType caseUnknownType() {
-      if (target instanceof FunctionType) {
-        FunctionType funcTarget = (FunctionType) target;
-        if (funcTarget.hasInstanceType()) {
-          return funcTarget.getInstanceType();
-        }
+      FunctionType funcTarget = JSType.toMaybeFunctionType(target);
+      if (funcTarget != null && funcTarget.hasInstanceType()) {
+        return funcTarget.getInstanceType();
       }
       return getNativeType(UNKNOWN_TYPE);
     }
@@ -512,7 +516,7 @@ class SemanticReverseAbstractInterpreter
         return type;
       }
 
-      FunctionType funcTarget = (FunctionType) target;
+      FunctionType funcTarget = target.toMaybeFunctionType();
       if (funcTarget.hasInstanceType()) {
         return type.getGreatestSubtype(funcTarget.getInstanceType());
       }
@@ -538,7 +542,7 @@ class SemanticReverseAbstractInterpreter
         return type;
       }
 
-      FunctionType funcTarget = (FunctionType) target;
+      FunctionType funcTarget = target.toMaybeFunctionType();
       if (funcTarget.hasInstanceType()) {
         if (type.isSubtype(funcTarget.getInstanceType())) {
           return null;
@@ -556,7 +560,7 @@ class SemanticReverseAbstractInterpreter
         return type;
       }
 
-      FunctionType funcTarget = (FunctionType) target;
+      FunctionType funcTarget = target.toMaybeFunctionType();
       if (funcTarget.hasInstanceType()) {
         return type.getRestrictedUnion(funcTarget.getInstanceType());
       }

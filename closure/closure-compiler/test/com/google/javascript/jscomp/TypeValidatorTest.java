@@ -48,6 +48,7 @@ public class TypeValidatorTest extends CompilerTestCase {
   protected CompilerPass getProcessor(final Compiler compiler) {
     this.compiler = compiler;
     return new CompilerPass() {
+      @Override
       public void process(Node externs, Node n) {
         // Do nothing: we're in it for the type-checking.
       }
@@ -79,7 +80,7 @@ public class TypeValidatorTest extends CompilerTestCase {
 
     assertMismatches(
         Lists.newArrayList(
-            new TypeMismatch(firstFunction, secondFunction),
+            new TypeMismatch(firstFunction, secondFunction, null),
             fromNatives(STRING_TYPE, BOOLEAN_TYPE),
             fromNatives(NUMBER_TYPE, STRING_TYPE)));
   }
@@ -101,7 +102,7 @@ public class TypeValidatorTest extends CompilerTestCase {
 
     assertMismatches(
         Lists.newArrayList(
-            new TypeMismatch(firstFunction, secondFunction),
+            new TypeMismatch(firstFunction, secondFunction, null),
             fromNatives(STRING_TYPE, BOOLEAN_TYPE)));
   }
 
@@ -129,7 +130,7 @@ public class TypeValidatorTest extends CompilerTestCase {
   private TypeMismatch fromNatives(JSTypeNative a, JSTypeNative b) {
     JSTypeRegistry registry = compiler.getTypeRegistry();
     return new TypeMismatch(
-        registry.getNativeType(a), registry.getNativeType(b));
+        registry.getNativeType(a), registry.getNativeType(b), null);
   }
 
   private void assertMismatches(List<TypeMismatch> expected) {

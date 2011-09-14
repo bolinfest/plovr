@@ -155,7 +155,9 @@ public class Node implements Cloneable, Serializable {
                                   // where this node lives.
       LENGTH             = 52,    // The length of the code represented by
                                   // this node.
-      LAST_PROP          = 52;
+      INPUT_ID           = 53,    // The id of the input associated with this
+                                  // node.
+      LAST_PROP          = 53;
 
   // values of ISNUMBER_PROP to specify
   // which of the children are Number types
@@ -241,6 +243,7 @@ public class Node implements Cloneable, Serializable {
         case DIRECT_EVAL:        return "direct_eval";
         case FREE_CALL:          return "free_call";
         case STATIC_SOURCE_FILE:    return "source_file";
+        case INPUT_ID:  return "input_id";
         case LENGTH:    return "length";
         default:
           Kit.codeBug();
@@ -371,14 +374,17 @@ public class Node implements Cloneable, Serializable {
       this.next = next;
     }
 
+    @Override
     public int getType() {
       return propType;
     }
 
+    @Override
     public PropListItem getNext() {
       return next;
     }
 
+    @Override
     public abstract PropListItem chain(PropListItem next);
   }
 
@@ -659,6 +665,20 @@ public class Node implements Cloneable, Serializable {
       i--;
     }
     return n;
+  }
+
+  public int getIndexOfChild(Node child) {
+    Node n = first;
+    int i = 0;
+    while (n != null) {
+      if (child == n) {
+        return i;
+      }
+
+      n = n.next;
+      i++;
+    }
+    return -1;
   }
 
   public Node getLastSibling() {
@@ -954,18 +974,6 @@ public class Node implements Cloneable, Serializable {
     return keys;
   }
 
-  public int getLineno() {
-    return extractLineno(sourcePosition);
-  }
-
-  public int getCharno() {
-    return extractCharno(sourcePosition);
-  }
-
-  public int getSourcePosition() {
-    return sourcePosition;
-  }
-
   /** Can only be called when <tt>getType() == TokenStream.NUMBER</tt> */
   public double getDouble() throws UnsupportedOperationException {
     if (this.getType() == Token.NUMBER) {
@@ -1015,7 +1023,7 @@ public class Node implements Cloneable, Serializable {
       boolean printSource,
       boolean printAnnotations,
       boolean printType) {
-    if (Token.printTrees) {
+    if (Token.shouldPrintTrees()) {
         StringBuilder sb = new StringBuilder();
         toString(sb, printSource, printAnnotations, printType);
         return sb.toString();
@@ -1244,6 +1252,20 @@ public class Node implements Cloneable, Serializable {
     return ((StaticSourceFile) this.getProp(STATIC_SOURCE_FILE));
   }
 
+  /**
+   * @param inputId
+   */
+  public void setInputId(InputId inputId) {
+    this.putProp(INPUT_ID, inputId);
+  }
+
+  /**
+   * @return The Id of the CompilerInput associated with this Node.
+   */
+  public InputId getInputId() {
+    return ((InputId) this.getProp(INPUT_ID));
+  }
+
   public boolean isFromExterns() {
     StaticSourceFile file = getStaticSourceFile();
     return file == null ? false : file.isExtern();
@@ -1255,6 +1277,25 @@ public class Node implements Cloneable, Serializable {
 
   public void setLength(int length) {
     putIntProp(LENGTH, length);
+  }
+
+  public int getLineno() {
+    return extractLineno(sourcePosition);
+  }
+
+  public int getCharno() {
+    return extractCharno(sourcePosition);
+  }
+
+  public int getSourceOffset() {
+    StaticSourceFile file = getStaticSourceFile();
+    int lineOffset = file == null ?
+        Integer.MIN_VALUE : file.getLineOffset(getLineno());
+    return lineOffset + getCharno();
+  }
+
+  public int getSourcePosition() {
+    return sourcePosition;
   }
 
   public void setLineno(int lineno) {
@@ -1269,12 +1310,16 @@ public class Node implements Cloneable, Serializable {
       sourcePosition = mergeLineCharNo(getLineno(), charno);
   }
 
-  public void setSourcePositionForTree(int sourcePosition) {
+  public void setSourceEncodedPosition(int sourcePosition) {
+    this.sourcePosition = sourcePosition;
+  }
+
+  public void setSourceEncodedPositionForTree(int sourcePosition) {
     this.sourcePosition = sourcePosition;
 
     for (Node child = getFirstChild();
          child != null; child = child.getNext()) {
-      child.setSourcePositionForTree(sourcePosition);
+      child.setSourceEncodedPositionForTree(sourcePosition);
     }
   }
 
@@ -1366,6 +1411,7 @@ public class Node implements Cloneable, Serializable {
       this.used = false;
     }
 
+    @Override
     public Iterator<Node> iterator() {
       if (!used) {
         used = true;
@@ -1381,10 +1427,12 @@ public class Node implements Cloneable, Serializable {
       }
     }
 
+    @Override
     public boolean hasNext() {
       return current != null;
     }
 
+    @Override
     public Node next() {
       if (current == null) {
         throw new NoSuchElementException();
@@ -1396,6 +1444,7 @@ public class Node implements Cloneable, Serializable {
       }
     }
 
+    @Override
     public void remove() {
       throw new UnsupportedOperationException();
     }
@@ -1446,12 +1495,15 @@ public class Node implements Cloneable, Serializable {
       this.cur = cur;
     }
 
+    @Override
     public Iterator<Node> iterator() {
       return new Iterator<Node>() {
+        @Override
         public boolean hasNext() {
           return cur != null;
         }
 
+        @Override
         public Node next() {
           if (!hasNext()) throw new NoSuchElementException();
           Node n = cur;
@@ -1459,6 +1511,7 @@ public class Node implements Cloneable, Serializable {
           return n;
         }
 
+        @Override
         public void remove() {
           throw new UnsupportedOperationException();
         }
@@ -1524,7 +1577,7 @@ public class Node implements Cloneable, Serializable {
    * Helper function to ignore differences in Node subclasses that are no longer
    * used.
    */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings("rawtypes")
   static private Class getNodeClass(Node n) {
     Class c = n.getClass();
     if (c == FunctionNode.class || c == ScriptOrFnNode.class) {
@@ -2043,18 +2096,18 @@ public class Node implements Cloneable, Serializable {
    * debug information across node append and remove operations.
    * @return this
    */
+  // TODO(nicksantos): The semantics of this method are ill-defined. Delete it.
   public Node copyInformationFrom(Node other) {
     if (getProp(ORIGINALNAME_PROP) == null) {
-        putProp(ORIGINALNAME_PROP, other.getProp(ORIGINALNAME_PROP));
-    }
-
-    if (getProp(SOURCENAME_PROP) == null) {
-      putProp(SOURCENAME_PROP, other.getProp(SOURCENAME_PROP));
-      sourcePosition = other.sourcePosition;
+      putProp(ORIGINALNAME_PROP, other.getProp(ORIGINALNAME_PROP));
     }
 
     if (getProp(STATIC_SOURCE_FILE) == null) {
       putProp(STATIC_SOURCE_FILE, other.getProp(STATIC_SOURCE_FILE));
+      sourcePosition = other.sourcePosition;
+    } else if (getProp(SOURCENAME_PROP) == null) {
+      putProp(SOURCENAME_PROP, other.getProp(SOURCENAME_PROP));
+      sourcePosition = other.sourcePosition;
     }
 
     return this;
@@ -2065,11 +2118,68 @@ public class Node implements Cloneable, Serializable {
    * entire tree rooted at this node.
    * @return this
    */
+  // TODO(nicksantos): The semantics of this method are ill-defined. Delete it.
   public Node copyInformationFromForTree(Node other) {
     copyInformationFrom(other);
     for (Node child = getFirstChild();
          child != null; child = child.getNext()) {
       child.copyInformationFromForTree(other);
+    }
+
+    return this;
+  }
+
+  /**
+   * Overwrite all the source information in this node with
+   * that of {@code other}.
+   */
+  public Node useSourceInfoFrom(Node other) {
+    putProp(ORIGINALNAME_PROP, other.getProp(ORIGINALNAME_PROP));
+    putProp(STATIC_SOURCE_FILE, other.getProp(STATIC_SOURCE_FILE));
+    sourcePosition = other.sourcePosition;
+    return this;
+  }
+
+  /**
+   * Overwrite all the source information in this node and its subtree with
+   * that of {@code other}.
+   */
+  public Node useSourceInfoFromForTree(Node other) {
+    useSourceInfoFrom(other);
+    for (Node child = getFirstChild();
+         child != null; child = child.getNext()) {
+      child.useSourceInfoFromForTree(other);
+    }
+
+    return this;
+  }
+
+  /**
+   * Overwrite all the source information in this node with
+   * that of {@code other} iff the source info is missing.
+   */
+  public Node useSourceInfoIfMissingFrom(Node other) {
+    if (getProp(ORIGINALNAME_PROP) == null) {
+      putProp(ORIGINALNAME_PROP, other.getProp(ORIGINALNAME_PROP));
+    }
+
+    if (getProp(STATIC_SOURCE_FILE) == null) {
+      putProp(STATIC_SOURCE_FILE, other.getProp(STATIC_SOURCE_FILE));
+      sourcePosition = other.sourcePosition;
+    }
+
+    return this;
+  }
+
+  /**
+   * Overwrite all the source information in this node and its subtree with
+   * that of {@code other} iff the source info is missing.
+   */
+  public Node useSourceInfoIfMissingFromForTree(Node other) {
+    useSourceInfoIfMissingFrom(other);
+    for (Node child = getFirstChild();
+         child != null; child = child.getNext()) {
+      child.useSourceInfoIfMissingFromForTree(other);
     }
 
     return this;
@@ -2414,4 +2524,5 @@ public class Node implements Cloneable, Serializable {
       return Objects.hashCode(nodeA, nodeB);
     }
   }
+
 }

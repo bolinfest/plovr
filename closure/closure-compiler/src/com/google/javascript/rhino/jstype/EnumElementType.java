@@ -83,8 +83,8 @@ public class EnumElementType extends ObjectType {
   }
 
   @Override
-  public boolean isEnumElementType() {
-    return true;
+  public EnumElementType toMaybeEnumElementType() {
+    return this;
   }
 
   @Override
@@ -260,6 +260,31 @@ public class EnumElementType extends ObjectType {
    */
   public JSType getPrimitiveType() {
     return primitiveType;
+  }
+
+  /**
+   * Returns the infimum of a enum element type and another type, or null
+   * if the infimum is empty.
+   *
+   * This can be a little bit weird. For example, suppose you have an enum
+   * of {(string|number)}, and you want the greatest subtype of the enum
+   * and a {number}.
+   *
+   * The infimum is non-empty. But at the same time, we don't really have
+   * a name for this infimum. It's equivalent to "elements of this enum that
+   * are numbers".
+   *
+   * The best we can do is make up a new type. This is similar to what
+   * we do in UnionType#meet, which kind-of-sort-of makes sense, because
+   * an EnumElementType is a union of instances of a type.
+   */
+  JSType meet(JSType that) {
+    JSType meetPrimitive = primitiveType.getGreatestSubtype(that);
+    if (meetPrimitive.isEmptyType()) {
+      return null;
+    } else {
+      return new EnumElementType(registry, meetPrimitive, name);
+    }
   }
 
   @Override

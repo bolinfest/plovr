@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.Scope.Var;
+import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.SimpleSlot;
 import com.google.javascript.rhino.jstype.StaticScope;
@@ -129,6 +130,11 @@ class LinkedFlowScope implements FlowScope {
   }
 
   @Override
+  public Node getRootNode() {
+    return getFunctionScope().getRootNode();
+  }
+
+  @Override
   public StaticScope<JSType> getParentScope() {
     return getFunctionScope().getParentScope();
   }
@@ -136,6 +142,7 @@ class LinkedFlowScope implements FlowScope {
   /**
    * Get the slot for the given symbol.
    */
+  @Override
   public StaticSlot<JSType> getSlot(String name) {
     if (cache.dirtySymbols.contains(name)) {
       for (LinkedFlowSlot slot = lastSlot;
@@ -200,6 +207,7 @@ class LinkedFlowScope implements FlowScope {
    * have enough type information. Then fill in that type information
    * with stuff that we've inferred in the local flow.
    */
+  @Override
   public void completeScope(Scope scope) {
     for (Iterator<Var> it = scope.getVars(); it.hasNext();) {
       Var var = it.next();
@@ -346,9 +354,9 @@ class LinkedFlowScope implements FlowScope {
       }
     }
 
-    for (String key : cache.symbols.keySet()) {
-      if (!slots.containsKey(key)) {
-        slots.put(key, cache.symbols.get(key));
+    for (Map.Entry<String, StaticSlot<JSType>> symbolEntry : cache.symbols.entrySet()) {
+      if (!slots.containsKey(symbolEntry.getKey())) {
+        slots.put(symbolEntry.getKey(), symbolEntry.getValue());
       }
     }
 

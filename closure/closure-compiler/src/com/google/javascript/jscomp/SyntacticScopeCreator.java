@@ -17,6 +17,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
+import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -32,7 +33,7 @@ import com.google.javascript.rhino.Token;
 class SyntacticScopeCreator implements ScopeCreator {
   private final AbstractCompiler compiler;
   private Scope scope;
-  private String sourceName;
+  private InputId inputId;
   private final RedeclarationHandler redeclarationHandler;
 
   // The arguments variable is special, in that it's declared in every local
@@ -63,8 +64,9 @@ class SyntacticScopeCreator implements ScopeCreator {
     this.redeclarationHandler = redeclarationHandler;
   }
 
+  @Override
   public Scope createScope(Node n, Scope parent) {
-    sourceName = null;
+    inputId = null;
     if (parent == null) {
       scope = new Scope(n, compiler);
     } else {
@@ -73,7 +75,7 @@ class SyntacticScopeCreator implements ScopeCreator {
 
     scanRoot(n, parent);
 
-    sourceName = null;
+    inputId = null;
     Scope returnedScope = scope;
     scope = null;
     return returnedScope;
@@ -81,7 +83,12 @@ class SyntacticScopeCreator implements ScopeCreator {
 
   private void scanRoot(Node n, Scope parent) {
     if (n.getType() == Token.FUNCTION) {
-      sourceName = n.getSourceFileName();
+      if (inputId == null) {
+        inputId = NodeUtil.getInputId(n);
+        // TODO(johnlenz): inputId maybe null if the FUNCTION node is detached
+        // from the AST.
+        // Is it meaningful to build a scope for detached FUNCTION node?
+      }
 
       final Node fnNameNode = n.getFirstChild();
       final Node args = fnNameNode.getNext();
@@ -153,7 +160,8 @@ class SyntacticScopeCreator implements ScopeCreator {
         return;  // only one child to scan
 
       case Token.SCRIPT:
-        sourceName = n.getSourceFileName();
+        inputId = n.getInputId();
+        Preconditions.checkNotNull(inputId);
         break;
     }
 
@@ -181,6 +189,7 @@ class SyntacticScopeCreator implements ScopeCreator {
    * The default handler for duplicate declarations.
    */
   private class DefaultRedeclarationHandler implements RedeclarationHandler {
+    @Override
     public void onRedeclaration(
         Scope s, String name, Node n, CompilerInput input) {
       Node parent = n.getParent();
@@ -199,7 +208,7 @@ class SyntacticScopeCreator implements ScopeCreator {
 
         if (!allowDupe) {
           compiler.report(
-              JSError.make(sourceName, n,
+              JSError.make(NodeUtil.getSourceName(n), n,
                            VAR_MULTIPLY_DECLARED_ERROR,
                            name,
                            (origVar.input != null
@@ -210,7 +219,7 @@ class SyntacticScopeCreator implements ScopeCreator {
         // Disallow shadowing "arguments" as we can't handle with our current
         // scope modeling.
         compiler.report(
-            JSError.make(sourceName, n,
+            JSError.make(NodeUtil.getSourceName(n), n,
                 VAR_ARGUMENTS_SHADOWED_ERROR));
       }
     }
@@ -224,7 +233,7 @@ class SyntacticScopeCreator implements ScopeCreator {
   private void declareVar(Node n) {
     Preconditions.checkState(n.getType() == Token.NAME);
 
-    CompilerInput input = compiler.getInput(sourceName);
+    CompilerInput input = compiler.getInput(inputId);
     String name = n.getString();
     if (scope.isDeclared(name, false)
         || (scope.isLocal() && name.equals(ARGUMENTS))) {

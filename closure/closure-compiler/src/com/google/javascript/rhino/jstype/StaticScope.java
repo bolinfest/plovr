@@ -39,6 +39,8 @@
 
 package com.google.javascript.rhino.jstype;
 
+import com.google.javascript.rhino.Node;
+
 /**
  * The {@code StaticScope} interface must be implemented by any object that
  * defines variables for the purposes of static analysis.  It is distinguished
@@ -48,6 +50,11 @@ package com.google.javascript.rhino.jstype;
  * @param <T> The type of information stored about the slot
  */
 public interface StaticScope<T> {
+  /**
+   * Returns the root node associated with this scope. May be null.
+   */
+  Node getRootNode();
+
   /** Returns the scope enclosing this one or null if none. */
   StaticScope<T> getParentScope();
 

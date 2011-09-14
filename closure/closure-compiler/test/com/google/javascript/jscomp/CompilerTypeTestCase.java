@@ -41,10 +41,14 @@ abstract class CompilerTypeTestCase extends BaseJSTypeTestCase {
       "goog.isNull = function(x) {};" +
       "goog.isString = function(x) {};" +
       "goog.isObject = function(x) {};" +
-      "goog.isDefAndNotNull = function(x) {};";
+      "goog.isDefAndNotNull = function(x) {};" +
+      "goog.asserts = {};" +
+      "/** @return {*} */ goog.asserts.assert = function(x) { return x; };";
 
   /** A default set of externs for testing. */
   static final String DEFAULT_EXTERNS =
+      "/** @constructor \n * @param {*=} opt_value */ " +
+      "function Object(opt_value) {}" +
       "/** @constructor \n * @param {*} var_args */ " +
       "function Function(var_args) {}" +
       "/** @type {!Function} */ Function.prototype.apply;" +

@@ -65,6 +65,9 @@ public class SourceFile implements StaticSourceFile, Serializable {
   // from a Jar, it could be the path to the Jar.
   private String originalPath = null;
 
+  // Source Line Information
+  private int[] lineOffsets = null;
+
   // Remember the offset for the previous line query.  If the next line
   // is after this point, we can start scanning at the previous offset rather
   // than starting at the beginning of the file.
@@ -89,6 +92,42 @@ public class SourceFile implements StaticSourceFile, Serializable {
     this.lastOffset = 0;
     this.lastLine = 1;
   }
+
+  @Override
+  public int getLineOffset(int lineno) {
+    if (lineOffsets == null) {
+      findLineOffsets();
+    }
+    if (lineno < 1 || lineno > lineOffsets.length) {
+      throw new IllegalArgumentException(
+          "Expected line number between 1 and " + lineOffsets.length +
+          "\nActual: " + lineno);
+    }
+    return lineOffsets[lineno - 1];
+  }
+
+  /** @return The number of lines in this source file. */
+  int getNumLines() {
+    if (lineOffsets == null) {
+      findLineOffsets();
+    }
+    return lineOffsets.length;
+  }
+
+  private void findLineOffsets() {
+    try {
+      String[] sourceLines = getCode().split("\n");
+      lineOffsets = new int[sourceLines.length];
+      for (int ii = 1; ii < sourceLines.length; ++ii) {
+        lineOffsets[ii] =
+            lineOffsets[ii - 1] + sourceLines[ii - 1].length() + 1;
+      }
+    } catch (IOException e) {
+      lineOffsets = new int[1];
+      lineOffsets[0] = 0;
+    }
+  }
+
 
   //////////////////////////////////////////////////////////////////////////////
   // Implementation
@@ -196,8 +235,18 @@ public class SourceFile implements StaticSourceFile, Serializable {
     lastOffset = pos;
     lastLine = lineNumber;
 
-    return (js.indexOf('\n', pos) == -1) ? null :
-        js.substring(pos, js.indexOf('\n', pos));
+    if (js.indexOf('\n', pos) == -1) {
+      // If next new line cannot be found, there are two cases
+      // 1. pos already reaches the end of file, then null should be returned
+      // 2. otherwise, return the contents between pos and the end of file.
+      if (pos >= js.length()) {
+        return null;
+      } else {
+        return js.substring(pos, js.length());
+      }
+    } else {
+      return js.substring(pos, js.indexOf('\n', pos));
+    }
   }
 
   /**

@@ -27,6 +27,7 @@ import com.google.javascript.jscomp.graph.Annotation;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.FunctionType;
+import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.ObjectType;
 
 import java.util.Collections;
@@ -83,10 +84,12 @@ class CheckPropertyOrder extends AbstractPostOrderCallback
     this.onlyOneError = onlyOneError;
   }
 
+  @Override
   public void process(Node externs, Node root) {
     NodeTraversal.traverse(compiler, root, this);
   }
 
+  @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
     // Look for both top-level functions and assignments of functions to
     // qualified names.
@@ -103,7 +106,7 @@ class CheckPropertyOrder extends AbstractPostOrderCallback
     }
 
     if (func != null) {
-      FunctionType funcType = (FunctionType) func.getJSType();
+      FunctionType funcType = JSType.toMaybeFunctionType(func.getJSType());
       checkConstructor(
           func, (funcType != null) ? funcType.getInstanceType() : null,
           t.getSourceName(), funcName);

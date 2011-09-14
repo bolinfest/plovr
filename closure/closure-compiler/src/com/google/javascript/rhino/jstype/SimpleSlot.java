@@ -39,12 +39,16 @@
 
 package com.google.javascript.rhino.jstype;
 
+import java.io.Serializable;
+
 /**
  * The minimum implementation of StaticSlot<JSType>.
  *
  * @author nicksantos@google.com (Nick Santos)
  */
-public class SimpleSlot implements StaticSlot<JSType> {
+public class SimpleSlot implements StaticSlot<JSType>, Serializable {
+  private static final long serialVersionUID = 1L;
+
   final String name;
   final JSType type;
   final boolean inferred;
@@ -55,18 +59,22 @@ public class SimpleSlot implements StaticSlot<JSType> {
     this.inferred = inferred;
   }
 
+  @Override
   public String getName() {
     return name;
   }
 
+  @Override
   public JSType getType() {
     return type;
   }
 
+  @Override
   public boolean isTypeInferred() {
     return inferred;
   }
 
+  @Override
   public StaticReference<JSType> getDeclaration() {
     return null;
   }

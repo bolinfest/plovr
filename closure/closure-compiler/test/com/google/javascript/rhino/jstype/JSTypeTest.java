@@ -55,6 +55,7 @@ import com.google.javascript.rhino.jstype.JSType.TypePair;
 import com.google.javascript.rhino.jstype.RecordTypeBuilder.RecordProperty;
 import com.google.javascript.rhino.testing.Asserts;
 import com.google.javascript.rhino.testing.BaseJSTypeTestCase;
+import com.google.javascript.rhino.testing.AbstractStaticScope;
 import com.google.javascript.rhino.testing.MapBasedScope;
 
 import java.util.HashMap;
@@ -152,7 +153,8 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     final ObjectType googObject = registry.createAnonymousObjectType();
     googObject.defineDeclaredProperty("Bar", googBar, null);
 
-    namedGoogBar.resolve(null, new StaticScope<JSType>() {
+    namedGoogBar.resolve(null, new AbstractStaticScope<JSType>() {
+          @Override
           public StaticSlot<JSType> getSlot(String name) {
             if ("goog".equals(name)) {
               return new SimpleSlot("goog", googObject, false);
@@ -160,16 +162,6 @@ public class JSTypeTest extends BaseJSTypeTestCase {
               return null;
             }
           }
-
-          public StaticSlot<JSType> getOwnSlot(String name) {
-            return getSlot(name);
-          }
-
-          public StaticScope<JSType> getParentScope() {
-            return null;
-          }
-
-          public JSType getTypeOfThis() { return null; }
         });
     assertNotNull(namedGoogBar.getImplicitPrototype());
 
@@ -392,10 +384,11 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertTypeEquals(UNKNOWN_TYPE,
         U2U_CONSTRUCTOR_TYPE.getPropertyType("anyProperty"));
 
-    assertTrue(U2U_CONSTRUCTOR_TYPE.isNative());
     assertTrue(U2U_CONSTRUCTOR_TYPE.isNativeObjectType());
 
     Asserts.assertResolvesToSame(U2U_CONSTRUCTOR_TYPE);
+
+    assertTrue(U2U_CONSTRUCTOR_TYPE.isNominalConstructor());
   }
 
   /**
@@ -535,6 +528,8 @@ public class JSTypeTest extends BaseJSTypeTestCase {
         NO_OBJECT_TYPE.getPropertyType("anyProperty"));
 
     Asserts.assertResolvesToSame(NO_OBJECT_TYPE);
+
+    assertFalse(NO_OBJECT_TYPE.isNominalConstructor());
   }
 
   /**
@@ -665,6 +660,8 @@ public class JSTypeTest extends BaseJSTypeTestCase {
         NO_TYPE.getPropertyType("anyProperty"));
 
     Asserts.assertResolvesToSame(NO_TYPE);
+
+    assertFalse(NO_TYPE.isNominalConstructor());
   }
 
   /**
@@ -955,6 +952,9 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertTrue(ARRAY_TYPE.isNativeObjectType());
 
     Asserts.assertResolvesToSame(ARRAY_TYPE);
+
+    assertFalse(ARRAY_TYPE.isNominalConstructor());
+    assertTrue(ARRAY_TYPE.getConstructor().isNominalConstructor());
   }
 
   /**
@@ -1061,6 +1061,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertEquals("Unknown", UNKNOWN_TYPE.getDisplayName());
 
     Asserts.assertResolvesToSame(UNKNOWN_TYPE);
+    assertFalse(UNKNOWN_TYPE.isNominalConstructor());
   }
 
   /**
@@ -1182,6 +1183,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertEquals("<Any Type>", ALL_TYPE.getDisplayName());
 
     Asserts.assertResolvesToSame(ALL_TYPE);
+    assertFalse(ALL_TYPE.isNominalConstructor());
   }
 
   /**
@@ -1334,6 +1336,8 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertTrue(OBJECT_TYPE.getImplicitPrototype().isNativeObjectType());
 
     Asserts.assertResolvesToSame(OBJECT_TYPE);
+    assertFalse(OBJECT_TYPE.isNominalConstructor());
+    assertTrue(OBJECT_TYPE.getConstructor().isNominalConstructor());
   }
 
   /**
@@ -1596,6 +1600,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertEquals("number", NUMBER_TYPE.getDisplayName());
 
     Asserts.assertResolvesToSame(NUMBER_TYPE);
+    assertFalse(NUMBER_TYPE.isNominalConstructor());
   }
 
   /**
@@ -1751,6 +1756,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertTypeEquals(NULL_TYPE,
         NULL_TYPE.getGreatestSubtype(
             createUnionType(forwardDeclaredNamedType, NULL_TYPE)));
+    assertFalse(NULL_TYPE.isNominalConstructor());
   }
 
   /**
@@ -1958,6 +1964,8 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertTrue(DATE_TYPE.isNativeObjectType());
 
     Asserts.assertResolvesToSame(DATE_TYPE);
+    assertFalse(DATE_TYPE.isNominalConstructor());
+    assertTrue(DATE_TYPE.getConstructor().isNominalConstructor());
   }
 
   /**
@@ -2103,6 +2111,8 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertTrue(REGEXP_TYPE.isNativeObjectType());
 
     Asserts.assertResolvesToSame(REGEXP_TYPE);
+    assertFalse(REGEXP_TYPE.isNominalConstructor());
+    assertTrue(REGEXP_TYPE.getConstructor().isNominalConstructor());
   }
 
   /**
@@ -2264,6 +2274,8 @@ public class JSTypeTest extends BaseJSTypeTestCase {
 
     assertTrue(STRING_OBJECT_TYPE.hasDisplayName());
     assertEquals("String", STRING_OBJECT_TYPE.getDisplayName());
+    assertFalse(STRING_OBJECT_TYPE.isNominalConstructor());
+    assertTrue(STRING_OBJECT_TYPE.getConstructor().isNominalConstructor());
   }
 
   /**
@@ -2375,6 +2387,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertEquals(null, STRING_TYPE.findPropertyType("unknownProperty"));
 
     Asserts.assertResolvesToSame(STRING_TYPE);
+    assertFalse(STRING_TYPE.isNominalConstructor());
   }
 
   private void assertPropertyTypeDeclared(ObjectType ownerType, String prop) {
@@ -3087,20 +3100,6 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     constructor.defineDeclaredProperty("prototype", prototype, null);
 
     assertEquals(NATIVE_PROPERTIES_COUNT + 1, instance.getPropertiesCount());
-  }
-
-  /**
-   * Tests that the native constructor U2U_CONSTRUCTOR_TYPE is properly
-   * implemented.
-   */
-  public void testFunctionCyclycity() throws Exception {
-    FunctionPrototypeType instanceType =
-        new FunctionPrototypeType(
-            registry, U2U_CONSTRUCTOR_TYPE,
-            U2U_CONSTRUCTOR_TYPE.getInstanceType());
-    U2U_CONSTRUCTOR_TYPE.setPrototype(instanceType);
-    U2U_CONSTRUCTOR_TYPE.detectImplicitPrototypeCycle();
-    instanceType.detectImplicitPrototypeCycle();
   }
 
   /** Tests assigning jsdoc on a prototype property. */
@@ -4985,6 +4984,30 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     verifySubtypeChain(typeChain);
   }
 
+  public void testAnonymousObjectChain() throws Exception {
+    List<JSType> typeChain = Lists.newArrayList(
+        ALL_TYPE,
+        createNullableType(OBJECT_TYPE),
+        OBJECT_TYPE,
+        registry.createAnonymousObjectType(),
+        registry.getNativeType(JSTypeNative.NO_OBJECT_TYPE),
+        registry.getNativeType(JSTypeNative.NO_TYPE));
+    verifySubtypeChain(typeChain);
+  }
+
+  public void testAnonymousEnumElementChain() throws Exception {
+    ObjectType enumElemType = registry.createEnumType(
+        "typeB", registry.createAnonymousObjectType()).getElementsType();
+    List<JSType> typeChain = Lists.newArrayList(
+        ALL_TYPE,
+        createNullableType(OBJECT_TYPE),
+        OBJECT_TYPE,
+        enumElemType,
+        registry.getNativeType(JSTypeNative.NO_OBJECT_TYPE),
+        registry.getNativeType(JSTypeNative.NO_TYPE));
+    verifySubtypeChain(typeChain);
+  }
+
   /**
    * Tests that the given chain of types has a total ordering defined
    * by the subtype relationship, with types at the top of the lattice
@@ -5207,17 +5230,12 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertTrue(fun.getInstanceType().isUnknownType());
   }
 
-  public void testInvalidSetPrototypeBasedOn() {
+  public void testLateSetPrototypeBasedOn() {
     FunctionType fun = registry.createConstructorType("fun", null, null, null);
     assertFalse(fun.getInstanceType().isUnknownType());
 
-    // You cannot change the prototype chain after checking if it is unknown.
-    try {
-      fun.setPrototypeBasedOn(unresolvedNamedType);
-      fail();
-    } catch (IllegalStateException e) {
-      e.printStackTrace();
-    }
+    fun.setPrototypeBasedOn(unresolvedNamedType);
+    assertTrue(fun.getInstanceType().isUnknownType());
   }
 
   public void testGetTypeUnderEquality1() {

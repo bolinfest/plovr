@@ -46,7 +46,7 @@ import com.google.javascript.rhino.Node;
 /**
  * An object type that is an instance of some function constructor.
  */
-public class InstanceObjectType extends PrototypeObjectType {
+class InstanceObjectType extends PrototypeObjectType {
   private static final long serialVersionUID = 1L;
 
   private final FunctionType constructor;
@@ -103,7 +103,8 @@ public class InstanceObjectType extends PrototypeObjectType {
 
   @Override
   boolean isTheObjectType() {
-    return getConstructor().isNative() && "Object".equals(getReferenceName());
+    return getConstructor().isNativeObjectType()
+        && "Object".equals(getReferenceName());
   }
 
   @Override
@@ -113,32 +114,38 @@ public class InstanceObjectType extends PrototypeObjectType {
 
   @Override
   public boolean isArrayType() {
-    return getConstructor().isNative() && "Array".equals(getReferenceName());
+    return getConstructor().isNativeObjectType()
+        && "Array".equals(getReferenceName());
   }
 
   @Override
   public boolean isStringObjectType() {
-    return getConstructor().isNative() && "String".equals(getReferenceName());
+    return getConstructor().isNativeObjectType()
+        && "String".equals(getReferenceName());
   }
 
   @Override
   public boolean isBooleanObjectType() {
-    return getConstructor().isNative() && "Boolean".equals(getReferenceName());
+    return getConstructor().isNativeObjectType()
+        && "Boolean".equals(getReferenceName());
   }
 
   @Override
   public boolean isNumberObjectType() {
-    return getConstructor().isNative() && "Number".equals(getReferenceName());
+    return getConstructor().isNativeObjectType()
+        && "Number".equals(getReferenceName());
   }
 
   @Override
   public boolean isDateType() {
-    return getConstructor().isNative() && "Date".equals(getReferenceName());
+    return getConstructor().isNativeObjectType()
+        && "Date".equals(getReferenceName());
   }
 
   @Override
   public boolean isRegexpType() {
-    return getConstructor().isNative() && "RegExp".equals(getReferenceName());
+    return getConstructor().isNativeObjectType()
+        && "RegExp".equals(getReferenceName());
   }
 
   @Override

@@ -834,8 +834,9 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
   }
 
   public void testNotFoldBackToTrueFalse() {
-    foldSame("!0");
-    foldSame("!1");
+    // TODO(johnlenz): disable this for late folding once it has been reenabled.
+    fold("!0", "true");
+    fold("!1", "false");
     fold("!3", "false");
   }
 
@@ -923,6 +924,10 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
     testSame("!+'\\v1'");
   }
 
+  public void testIssue522() {
+    testSame("[][1] = 1;");
+  }
+
   private static final List<String> LITERAL_OPERANDS =
       ImmutableList.of(
           "null",
@@ -930,8 +935,9 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
           "void 0",
           "true",
           "false",
-          "!0",
-          "!1",
+          // TODO(johnlenz): Add these two back.
+          // "!0",
+          // "!1",
           "0",
           "1",
           "''",

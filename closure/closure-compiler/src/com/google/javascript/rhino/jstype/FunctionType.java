@@ -39,8 +39,8 @@
 
 package com.google.javascript.rhino.jstype;
 
+import static com.google.javascript.rhino.jstype.JSTypeNative.OBJECT_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.U2U_CONSTRUCTOR_TYPE;
-
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -82,8 +82,10 @@ public class FunctionType extends PrototypeObjectType {
    * initializing this field is that there are cycles in the native types
    * graph, so some prototypes must temporarily be {@code null} during
    * the construction of the graph.
+   *
+   * If non-null, the type must be a PrototypeObjectType.
    */
-  private FunctionPrototypeType prototype;
+  private Property prototypeSlot;
 
   /**
    * Whether a function is a constructor, an interface, or just an ordinary
@@ -189,8 +191,8 @@ public class FunctionType extends PrototypeObjectType {
   }
 
   @Override
-  public boolean isFunctionType() {
-    return true;
+  public FunctionType toMaybeFunctionType() {
+    return this;
   }
 
   @Override
@@ -269,16 +271,47 @@ public class FunctionType extends PrototypeObjectType {
     return call;
   }
 
+  @Override
+  public StaticSlot<JSType> getSlot(String name) {
+    if ("prototype".equals(name)) {
+      // Lazy initialization of the prototype field.
+      getPrototype();
+      return prototypeSlot;
+    } else {
+      return super.getSlot(name);
+    }
+  }
+
+  /**
+   * Includes the prototype iff someone has created it. We do not want
+   * to expose the prototype for ordinary functions.
+   */
+  public Set<String> getOwnPropertyNames() {
+    if (prototypeSlot == null) {
+      return super.getOwnPropertyNames();
+    } else {
+      Set<String> names = Sets.newHashSet("prototype");
+      names.addAll(super.getOwnPropertyNames());
+      return names;
+    }
+  }
+
   /**
    * Gets the {@code prototype} property of this function type. This is
    * equivalent to {@code (ObjectType) getPropertyType("prototype")}.
    */
-  public FunctionPrototypeType getPrototype() {
+  public ObjectType getPrototype() {
     // lazy initialization of the prototype field
-    if (prototype == null) {
-      setPrototype(new FunctionPrototypeType(registry, this, null));
+    if (prototypeSlot == null) {
+      setPrototype(
+          new PrototypeObjectType(
+              registry,
+              this.getReferenceName() + ".prototype",
+              registry.getNativeObjectType(OBJECT_TYPE),
+              isNativeObjectType()),
+          null);
     }
-    return prototype;
+    return (ObjectType) prototypeSlot.getType();
   }
 
   /**
@@ -287,13 +320,36 @@ public class FunctionType extends PrototypeObjectType {
    * @param baseType The base type.
    */
   public void setPrototypeBasedOn(ObjectType baseType) {
-    if (prototype == null) {
-      setPrototype(
-          new FunctionPrototypeType(
-              registry, this, baseType, isNativeObjectType()));
-    } else {
-      prototype.setImplicitPrototype(baseType);
+    setPrototypeBasedOn(baseType, null);
+  }
+
+  void setPrototypeBasedOn(ObjectType baseType, Node propertyNode) {
+    // This is a bit weird. We need to successfully handle these
+    // two cases:
+    // Foo.prototype = new Bar();
+    // and
+    // Foo.prototype = {baz: 3};
+    // In the first case, we do not want new properties to get
+    // added to Bar. In the second case, we do want new properties
+    // to get added to the type of the anonymous object.
+    //
+    // We handle this by breaking it into two cases:
+    //
+    // In the first case, we create a new PrototypeObjectType and set
+    // its implicit prototype to the type being assigned. This ensures
+    // that Bar will not get any properties of Foo.prototype, but properties
+    // later assigned to Bar will get inherited properly.
+    //
+    // In the second case, we just use the anonymous object as the prototype.
+    if (baseType.hasReferenceName() ||
+        isNativeObjectType() ||
+        baseType.isFunctionPrototypeType() ||
+        !(baseType instanceof PrototypeObjectType)) {
+
+      baseType = new PrototypeObjectType(
+          registry, this.getReferenceName() + ".prototype", baseType);
     }
+    setPrototype((PrototypeObjectType) baseType, propertyNode);
   }
 
   /**
@@ -301,7 +357,7 @@ public class FunctionType extends PrototypeObjectType {
    * @param prototype the prototype. If this value is {@code null} it will
    *        silently be discarded.
    */
-  public boolean setPrototype(FunctionPrototypeType prototype) {
+  boolean setPrototype(PrototypeObjectType prototype, Node propertyNode) {
     if (prototype == null) {
       return false;
     }
@@ -310,8 +366,19 @@ public class FunctionType extends PrototypeObjectType {
       return false;
     }
 
-    boolean replacedPrototype = prototype != null;
-    this.prototype = prototype;
+    PrototypeObjectType oldPrototype = prototypeSlot == null
+        ? null : (PrototypeObjectType) prototypeSlot.getType();
+    boolean replacedPrototype = oldPrototype != null;
+
+    this.prototypeSlot = new Property("prototype", prototype, true,
+        propertyNode == null ? source : propertyNode);
+    prototype.setOwnerFunction(this);
+
+    if (oldPrototype != null) {
+      // Disassociating the old prototype makes this easier to debug--
+      // we don't have to worry about two prototypes running around.
+      oldPrototype.setOwnerFunction(null);
+    }
 
     if (isConstructor() || isInterface()) {
       FunctionType superClass = getSuperClassConstructor();
@@ -434,71 +501,57 @@ public class FunctionType extends PrototypeObjectType {
   }
 
   @Override
-  public boolean hasProperty(String name) {
-    return super.hasProperty(name) || "prototype".equals(name);
-  }
-
-  @Override
-  public boolean hasOwnProperty(String name) {
-    return super.hasOwnProperty(name) || "prototype".equals(name);
-  }
-
-  @Override
   public JSType getPropertyType(String name) {
-    if ("prototype".equals(name)) {
-      return getPrototype();
-    } else {
-      if (!hasOwnProperty(name)) {
-        if ("call".equals(name)) {
-          // Define the "call" function lazily.
-          Node params = getParametersNode();
-          if (params == null) {
-            // If there's no params array, don't do any type-checking
-            // in this CALL function.
-            defineDeclaredProperty(name,
-                new FunctionBuilder(registry)
-                    .withReturnType(getReturnType())
-                    .build(),
-                source);
-          } else {
-            params = params.cloneTree();
-            Node thisTypeNode = Node.newString(Token.NAME, "thisType");
-            thisTypeNode.setJSType(
-                registry.createOptionalNullableType(getTypeOfThis()));
-            params.addChildToFront(thisTypeNode);
-            thisTypeNode.setOptionalArg(true);
-
-            defineDeclaredProperty(name,
-                new FunctionBuilder(registry)
-                    .withParamsNode(params)
-                    .withReturnType(getReturnType())
-                    .build(),
-                source);
-          }
-        } else if ("apply".equals(name)) {
-          // Define the "apply" function lazily.
-          FunctionParamBuilder builder = new FunctionParamBuilder(registry);
-
-          // Ecma-262 says that apply's second argument must be an Array
-          // or an arguments object. We don't model the arguments object,
-          // so let's just be forgiving for now.
-          // TODO(nicksantos): Model the Arguments object.
-          builder.addOptionalParams(
-              registry.createNullableType(getTypeOfThis()),
-              registry.createNullableType(
-                  registry.getNativeType(JSTypeNative.OBJECT_TYPE)));
+    if (!hasOwnProperty(name)) {
+      if ("call".equals(name)) {
+        // Define the "call" function lazily.
+        Node params = getParametersNode();
+        if (params == null) {
+          // If there's no params array, don't do any type-checking
+          // in this CALL function.
+          defineDeclaredProperty(name,
+              new FunctionBuilder(registry)
+              .withReturnType(getReturnType())
+              .build(),
+              source);
+        } else {
+          params = params.cloneTree();
+          Node thisTypeNode = Node.newString(Token.NAME, "thisType");
+          thisTypeNode.setJSType(
+              registry.createOptionalNullableType(getTypeOfThis()));
+          params.addChildToFront(thisTypeNode);
+          thisTypeNode.setOptionalArg(true);
 
           defineDeclaredProperty(name,
               new FunctionBuilder(registry)
-                  .withParams(builder)
-                  .withReturnType(getReturnType())
-                  .build(),
+              .withParamsNode(params)
+              .withReturnType(getReturnType())
+              .build(),
               source);
         }
-      }
+      } else if ("apply".equals(name)) {
+        // Define the "apply" function lazily.
+        FunctionParamBuilder builder = new FunctionParamBuilder(registry);
 
-      return super.getPropertyType(name);
+        // Ecma-262 says that apply's second argument must be an Array
+        // or an arguments object. We don't model the arguments object,
+        // so let's just be forgiving for now.
+        // TODO(nicksantos): Model the Arguments object.
+        builder.addOptionalParams(
+            registry.createNullableType(getTypeOfThis()),
+            registry.createNullableType(
+                registry.getNativeType(JSTypeNative.OBJECT_TYPE)));
+
+        defineDeclaredProperty(name,
+            new FunctionBuilder(registry)
+            .withParams(builder)
+            .withReturnType(getReturnType())
+            .build(),
+            source);
+      }
     }
+
+    return super.getPropertyType(name);
   }
 
   @Override
@@ -507,23 +560,17 @@ public class FunctionType extends PrototypeObjectType {
     if ("prototype".equals(name)) {
       ObjectType objType = type.toObjectType();
       if (objType != null) {
-        if (objType.isEquivalentTo(prototype)) {
+        if (prototypeSlot != null &&
+            objType.isEquivalentTo(prototypeSlot.getType())) {
           return true;
         }
-        return setPrototype(
-            new FunctionPrototypeType(
-                registry, this, objType, isNativeObjectType()));
+        this.setPrototypeBasedOn(objType, propertyNode);
+        return true;
       } else {
         return false;
       }
     }
     return super.defineProperty(name, type, inferred, propertyNode);
-  }
-
-  @Override
-  public boolean isPropertyTypeInferred(String property) {
-    return "prototype".equals(property) ||
-        super.isPropertyTypeInferred(property);
   }
 
   @Override
@@ -563,10 +610,7 @@ public class FunctionType extends PrototypeObjectType {
         return this;
       }
 
-      FunctionType other = null;
-      if (that instanceof FunctionType) {
-        other = (FunctionType) that;
-      }
+      FunctionType other = that.toMaybeFunctionType();
 
       // If these are ordinary functions, then merge them.
       // Don't do this if any of the params/return
@@ -729,11 +773,9 @@ public class FunctionType extends PrototypeObjectType {
    */
   @Override
   public boolean isEquivalentTo(JSType otherType) {
-    if (!(otherType instanceof FunctionType)) {
-      return false;
-    }
-    FunctionType that = (FunctionType) otherType;
-    if (!that.isFunctionType()) {
+    FunctionType that =
+        JSType.toMaybeFunctionType(otherType);
+    if (that == null) {
       return false;
     }
     if (this.isConstructor()) {
@@ -818,7 +860,7 @@ public class FunctionType extends PrototypeObjectType {
   private void appendVarArgsString(StringBuilder builder, JSType paramType) {
     if (paramType.isUnionType()) {
       // Remove the optionalness from the var arg.
-      paramType = ((UnionType) paramType).getRestrictedUnion(
+      paramType = paramType.toMaybeUnionType().getRestrictedUnion(
           registry.getNativeType(JSTypeNative.VOID_TYPE));
     }
     builder.append("...[").append(paramType.toString()).append("]");
@@ -836,7 +878,8 @@ public class FunctionType extends PrototypeObjectType {
     }
 
     if (that.isFunctionType()) {
-      if (((FunctionType) that).isInterface()) {
+      FunctionType other = that.toMaybeFunctionType();
+      if (other.isInterface()) {
         // Any function can be assigned to an interface function.
         return true;
       }
@@ -851,7 +894,6 @@ public class FunctionType extends PrototypeObjectType {
       // this as an error. It also screws up out standard method
       // for aliasing constructors. Let's punt on all this for now.
       // TODO(nicksantos): fix this.
-      FunctionType other = (FunctionType) that;
       boolean treatThisTypesAsCovariant =
         // If either one of these is a ctor, skip 'this' checking.
         this.isConstructor() || other.isConstructor() ||
@@ -923,6 +965,9 @@ public class FunctionType extends PrototypeObjectType {
    * Sets the source node.
    */
   public void setSource(Node source) {
+    if (null == source) {
+      prototypeSlot = null;
+    }
     this.source = source;
   }
 
@@ -949,8 +994,8 @@ public class FunctionType extends PrototypeObjectType {
         getInstanceType().clearCachedValues();
       }
 
-      if (prototype != null) {
-        prototype.clearCachedValues();
+      if (prototypeSlot != null) {
+        ((PrototypeObjectType) prototypeSlot.getType()).clearCachedValues();
       }
     }
   }
@@ -966,7 +1011,7 @@ public class FunctionType extends PrototypeObjectType {
 
   @Override
   public boolean hasCachedValues() {
-    return prototype != null || super.hasCachedValues();
+    return prototypeSlot != null || super.hasCachedValues();
   }
 
   /**
@@ -981,7 +1026,10 @@ public class FunctionType extends PrototypeObjectType {
     setResolvedTypeInternal(this);
 
     call = (ArrowType) safeResolve(call, t, scope);
-    prototype = (FunctionPrototypeType) safeResolve(prototype, t, scope);
+    if (prototypeSlot != null) {
+      prototypeSlot.setType(
+          safeResolve(prototypeSlot.getType(), t, scope));
+    }
 
     // Warning about typeOfThis if it doesn't resolve to an ObjectType
     // is handled further upstream.
@@ -1016,7 +1064,8 @@ public class FunctionType extends PrototypeObjectType {
 
     if (subTypes != null) {
       for (int i = 0; i < subTypes.size(); i++) {
-        subTypes.set(i, (FunctionType) subTypes.get(i).resolve(t, scope));
+        subTypes.set(
+            i, JSType.toMaybeFunctionType(subTypes.get(i).resolve(t, scope)));
       }
     }
 

@@ -50,8 +50,6 @@ import com.google.javascript.rhino.jstype.UnionType;
 
 import java.io.Serializable;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 
@@ -65,19 +63,25 @@ class UnionTypeBuilder implements Serializable {
 
   // If the best we can do is say "this object is one of twenty things",
   // then we should just give up and admit that we have no clue.
-  private static final int MAX_UNION_SIZE = 20;
+  private static final int DEFAULT_MAX_UNION_SIZE = 20;
 
   private final JSTypeRegistry registry;
   private final List<JSType> alternates = Lists.newArrayList();
   private boolean isAllType = false;
   private boolean isNativeUnknownType = false;
   private boolean areAllUnknownsChecked = true;
+  private final int maxUnionSize;
 
   // Memoize the result, in case build() is called multiple times.
   private JSType result = null;
 
   UnionTypeBuilder(JSTypeRegistry registry) {
+    this(registry, DEFAULT_MAX_UNION_SIZE);
+  }
+
+  UnionTypeBuilder(JSTypeRegistry registry, int maxUnionSize) {
     this.registry = registry;
+    this.maxUnionSize = maxUnionSize;
   }
 
   Iterable<JSType> getAlternates() {
@@ -108,13 +112,13 @@ class UnionTypeBuilder implements Serializable {
           alternate.isCheckedUnknownType();
     }
     if (!isAllType && !isNativeUnknownType) {
-      if (alternate instanceof UnionType) {
-        UnionType union = (UnionType) alternate;
+      if (alternate.isUnionType()) {
+        UnionType union = alternate.toMaybeUnionType();
         for (JSType unionAlt : union.getAlternates()) {
           addAlternate(unionAlt);
         }
       } else {
-        if (alternates.size() > MAX_UNION_SIZE) {
+        if (alternates.size() > maxUnionSize) {
           return this;
         }
 
@@ -171,7 +175,7 @@ class UnionTypeBuilder implements Serializable {
       }
     } else {
       int size = alternates.size();
-      if (size > MAX_UNION_SIZE) {
+      if (size > maxUnionSize) {
         return registry.getNativeType(UNKNOWN_TYPE);
       } else if (size > 1) {
         return null;
@@ -198,19 +202,7 @@ class UnionTypeBuilder implements Serializable {
     return result;
   }
 
-  private static final Comparator<JSType> typeSorter =
-      new Comparator<JSType>() {
-    @Override public int compare(JSType a, JSType b) {
-      return b.hashCode() - a.hashCode();
-    }
-  };
-
   private Collection<JSType> getAlternateListCopy() {
-    // TODO(nicksantos): Until we're at a place where we're no longer
-    // using java's built-in equals to test type equivalence, we need
-    // hash codes to be the same. So the alternates need to be sorted.
-    Collections.sort(alternates, typeSorter);
-
     return ImmutableList.copyOf(alternates);
   }
 }

@@ -16,8 +16,10 @@
 package com.google.javascript.jscomp;
 
 import static com.google.common.base.Preconditions.checkState;
+
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
@@ -32,14 +34,12 @@ import com.google.javascript.jscomp.graph.StandardUnionFind;
 import com.google.javascript.jscomp.graph.UnionFind;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.jstype.FunctionPrototypeType;
 import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
 import com.google.javascript.rhino.jstype.StaticScope;
-import com.google.javascript.rhino.jstype.UnionType;
 
 import java.util.Collection;
 import java.util.List;
@@ -78,16 +78,32 @@ class DisambiguateProperties<T> implements CompilerPass {
       DisambiguateProperties.class.getName());
 
   static class Warnings {
+    // TODO(user): {1} and {2} are not exactly useful for most people.
     static final DiagnosticType INVALIDATION = DiagnosticType.disabled(
         "JSC_INVALIDATION",
         "Property disambiguator skipping all instances of property {0} "
-        + "because of type {1} node {2}");
+        + "because of type {1} node {2}. {3}");
   }
-
-  private final boolean showInvalidationWarnings;
 
   private final AbstractCompiler compiler;
   private final TypeSystem<T> typeSystem;
+
+  /**
+   * Map of a type to all the related errors that invalidated the type
+   * for disambiguation. It has be Object because of the generic nature of
+   * this pass.
+   */
+  private Multimap<Object, JSError> invalidationMap;
+
+  /**
+   * In practice any large code base will have thousands and thousands of
+   * type invalidations, which makes reporting all of the errors useless.
+   * However, certain properties are worth specifically guarding because of the
+   * large amount of code that can be removed as dead code. This list contains
+   * the properties (eg: "toString") that we care about; if any of these
+   * properties is invalidated it causes an error.
+   */
+  private final Map<String, CheckLevel> propertiesToErrorFor;
 
   private class Property {
     /** The name of the property. */
@@ -254,15 +270,18 @@ class DisambiguateProperties<T> implements CompilerPass {
   private Map<String, Property> properties = Maps.newHashMap();
 
   static DisambiguateProperties<JSType> forJSTypeSystem(
-      AbstractCompiler compiler) {
+      AbstractCompiler compiler,
+      Map<String, CheckLevel> propertiesToErrorFor) {
     return new DisambiguateProperties<JSType>(
-        compiler, new JSTypeSystem(compiler));
+        compiler, new JSTypeSystem(compiler), propertiesToErrorFor);
   }
 
   static DisambiguateProperties<ConcreteType> forConcreteTypeSystem(
-      AbstractCompiler compiler, TightenTypes tt) {
+      AbstractCompiler compiler, TightenTypes tt,
+      Map<String, CheckLevel> propertiesToErrorFor) {
     return new DisambiguateProperties<ConcreteType>(
-        compiler, new ConcreteTypeSystem(tt, compiler.getCodingConvention()));
+        compiler, new ConcreteTypeSystem(tt, compiler.getCodingConvention()),
+            propertiesToErrorFor);
   }
 
   /**
@@ -270,17 +289,24 @@ class DisambiguateProperties<T> implements CompilerPass {
    * above for either the JSType system, or the concrete type system.
    */
   private DisambiguateProperties(AbstractCompiler compiler,
-                                 TypeSystem<T> typeSystem) {
+      TypeSystem<T> typeSystem, Map<String, CheckLevel> propertiesToErrorFor) {
     this.compiler = compiler;
     this.typeSystem = typeSystem;
-    this.showInvalidationWarnings = compiler.getErrorLevel(
-        JSError.make("", 0, 0, Warnings.INVALIDATION)) != CheckLevel.OFF;
+    this.propertiesToErrorFor = propertiesToErrorFor;
+    if (!this.propertiesToErrorFor.isEmpty()) {
+      this.invalidationMap = LinkedHashMultimap.create();
+    } else {
+      this.invalidationMap = null;
+    }
   }
 
+  @Override
   public void process(Node externs, Node root) {
     for (TypeMismatch mis : compiler.getTypeValidator().getMismatches()) {
       addInvalidatingType(mis.typeA);
       addInvalidatingType(mis.typeB);
+      recordInvalidationError(mis.typeA, mis.src);
+      recordInvalidationError(mis.typeB, mis.src);
     }
 
     StaticScope<T> scope = typeSystem.getRootScope();
@@ -289,22 +315,38 @@ class DisambiguateProperties<T> implements CompilerPass {
     renameProperties();
   }
 
+  private void recordInvalidationError(JSType t, JSError error) {
+    if (!t.isObject()) {
+      return;
+    }
+    if (t.isUnionType()) {
+      for (JSType alt : t.toMaybeUnionType().getAlternates()) {
+        recordInvalidationError(alt, error);
+      }
+      return;
+    }
+    if (invalidationMap != null) {
+      invalidationMap.put(t, error);
+    }
+  }
+
   /**
    * Invalidates the given type, so that no properties on it will be renamed.
    */
   private void addInvalidatingType(JSType type) {
     type = type.restrictByNotNullOrUndefined();
-    if (type instanceof UnionType) {
-      for (JSType alt : ((UnionType) type).getAlternates()) {
+    if (type.isUnionType()) {
+      for (JSType alt : type.toMaybeUnionType().getAlternates()) {
         addInvalidatingType(alt);
       }
-      return;
-    }
-
-    typeSystem.addInvalidatingType(type);
-    ObjectType objType = ObjectType.cast(type);
-    if (objType != null && objType.getImplicitPrototype() != null) {
-      typeSystem.addInvalidatingType(objType.getImplicitPrototype());
+    } else if (type.isEnumElementType()) {
+      addInvalidatingType(type.toMaybeEnumElementType().getPrimitiveType());
+    } else {
+      typeSystem.addInvalidatingType(type);
+      ObjectType objType = ObjectType.cast(type);
+      if (objType != null && objType.getImplicitPrototype() != null) {
+        typeSystem.addInvalidatingType(objType.getImplicitPrototype());
+      }
     }
   }
 
@@ -327,10 +369,12 @@ class DisambiguateProperties<T> implements CompilerPass {
     protected final Stack<StaticScope<T>> scopes =
         new Stack<StaticScope<T>>();
 
+    @Override
     public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
       return true;
     }
 
+    @Override
     public void enterScope(NodeTraversal t) {
       if (t.inGlobalScope()) {
         scopes.push(typeSystem.getRootScope());
@@ -339,6 +383,7 @@ class DisambiguateProperties<T> implements CompilerPass {
       }
     }
 
+    @Override
     public void exitScope(NodeTraversal t) {
       scopes.pop();
     }
@@ -401,10 +446,33 @@ class DisambiguateProperties<T> implements CompilerPass {
       Property prop = getProperty(name);
       if (!prop.scheduleRenaming(n.getLastChild(),
                                  processProperty(t, prop, type, null))) {
-        if (showInvalidationWarnings) {
+        if (propertiesToErrorFor.containsKey(name)) {
+          String suggestion = "";
+          if (type instanceof JSType) {
+            JSType jsType = (JSType) type;
+            String qName = n.getFirstChild().getQualifiedName();
+            if (jsType.isAllType() || jsType.isUnknownType()) {
+              if (n.getFirstChild().getType() == Token.THIS) {
+                suggestion = "The \"this\" object is unknown in the function,"+
+                    "consider using @this";
+              } else {
+                suggestion = "Consider casting " + qName +
+                    " if you know it's type.";
+              }
+            } else {
+              StringBuilder sb = new StringBuilder();
+              printErrorLocations(sb, jsType);
+              if (sb.length() != 0) {
+                suggestion = "Consider fixing errors for the following types: ";
+                suggestion += sb.toString();
+              }
+            }
+          }
           compiler.report(JSError.make(
-              t.getSourceName(), n, Warnings.INVALIDATION, name,
-              (type == null ? "null" : type.toString()), n.toString()));
+              t.getSourceName(), n, propertiesToErrorFor.get(name),
+              Warnings.INVALIDATION, name,
+              (type == null ? "null" : type.toString()),
+              n.toString(), suggestion));
         }
       }
     }
@@ -424,14 +492,38 @@ class DisambiguateProperties<T> implements CompilerPass {
         Property prop = getProperty(name);
         if (!prop.scheduleRenaming(child,
                                    processProperty(t, prop, type, null))) {
-          if (showInvalidationWarnings) {
+          // TODO(user): It doesn't look like the user can do much in this
+          // case right now.
+          if (propertiesToErrorFor.containsKey(name)) {
             compiler.report(JSError.make(
-                t.getSourceName(), child, Warnings.INVALIDATION, name,
-                (type == null ? "null" : type.toString()), n.toString()));
+                t.getSourceName(), child, propertiesToErrorFor.get(name),
+                Warnings.INVALIDATION, name,
+                (type == null ? "null" : type.toString()), n.toString(), ""));
           }
         }
-
         child = child.getNext();
+      }
+    }
+
+    private void printErrorLocations(StringBuilder sb, JSType t) {
+      if (!t.isObject() || t.isAllType() || t.isUnionType()) {
+        return;
+      }
+      if (t.isUnionType()) {
+        for (JSType alt : t.toMaybeUnionType().getAlternates()) {
+          printErrorLocations(sb, alt);
+        }
+        return;
+      }
+      for (JSError error : invalidationMap.get(t)) {
+        if(sb.length() != 0) {
+          sb.append(", ");
+        }
+        sb.append(t.toString());
+        sb.append(" at ");
+        sb.append(error.sourceName);
+        sb.append(":");
+        sb.append(error.lineNumber);
       }
     }
 
@@ -683,12 +775,15 @@ class DisambiguateProperties<T> implements CompilerPass {
 
     @Override public ImmutableSet<JSType> getTypesToSkipForType(JSType type) {
       type = type.restrictByNotNullOrUndefined();
-      if (type instanceof UnionType) {
+      if (type.isUnionType()) {
         Set<JSType> types = Sets.newHashSet(type);
-        for (JSType alt : ((UnionType) type).getAlternates()) {
+        for (JSType alt : type.toMaybeUnionType().getAlternates()) {
           types.addAll(getTypesToSkipForTypeNonUnion(type));
         }
         return ImmutableSet.copyOf(types);
+      } else if (type.isEnumElementType()) {
+        return getTypesToSkipForType(
+            type.toMaybeEnumElementType().getPrimitiveType());
       }
       return ImmutableSet.copyOf(getTypesToSkipForTypeNonUnion(type));
     }
@@ -719,7 +814,7 @@ class DisambiguateProperties<T> implements CompilerPass {
 
     @Override public Iterable<JSType> getTypeAlternatives(JSType type) {
       if (type.isUnionType()) {
-        return ((UnionType) type).getAlternates();
+        return type.toMaybeUnionType().getAlternates();
       } else {
         ObjectType objType = type.toObjectType();
         if (objType != null &&
@@ -738,6 +833,15 @@ class DisambiguateProperties<T> implements CompilerPass {
     }
 
     @Override public ObjectType getTypeWithProperty(String field, JSType type) {
+      if (type == null) {
+        return null;
+      }
+
+      if (type.isEnumElementType()) {
+        return getTypeWithProperty(
+            field, type.toMaybeEnumElementType().getPrimitiveType());
+      }
+
       if (!(type instanceof ObjectType)) {
         if (type.autoboxesTo() != null) {
           type = type.autoboxesTo();
@@ -789,11 +893,10 @@ class DisambiguateProperties<T> implements CompilerPass {
 
     @Override public JSType getInstanceFromPrototype(JSType type) {
       if (type.isFunctionPrototypeType()) {
-        FunctionPrototypeType prototype = (FunctionPrototypeType) type;
+        ObjectType prototype = (ObjectType) type;
         FunctionType owner = prototype.getOwnerFunction();
         if (owner.isConstructor() || owner.isInterface()) {
-          return ((FunctionPrototypeType) type).getOwnerFunction()
-              .getInstanceType();
+          return prototype.getOwnerFunction().getInstanceType();
         }
       }
       return null;
@@ -805,10 +908,10 @@ class DisambiguateProperties<T> implements CompilerPass {
       ObjectType objType = ObjectType.cast(type);
       if (objType != null) {
         FunctionType constructor;
-        if (objType instanceof FunctionType) {
-          constructor = (FunctionType) objType;
-        } else if (objType instanceof FunctionPrototypeType) {
-          constructor = ((FunctionPrototypeType) objType).getOwnerFunction();
+        if (objType.isFunctionType()) {
+          constructor = objType.toMaybeFunctionType();
+        } else if (objType.isFunctionPrototypeType()) {
+          constructor = objType.getOwnerFunction();
         } else {
           constructor = objType.getConstructor();
         }
@@ -908,10 +1011,14 @@ class DisambiguateProperties<T> implements CompilerPass {
     private ConcreteType maybeAddAutoboxes(
         ConcreteType cType, JSType jsType, String prop) {
       jsType = jsType.restrictByNotNullOrUndefined();
-      if (jsType instanceof UnionType) {
-        for (JSType alt : ((UnionType) jsType).getAlternates()) {
-          return maybeAddAutoboxes(cType, alt, prop);
+      if (jsType.isUnionType()) {
+        for (JSType alt : jsType.toMaybeUnionType().getAlternates()) {
+          cType = maybeAddAutoboxes(cType, alt, prop);
         }
+        return cType;
+      } else if (jsType.isEnumElementType()) {
+        return maybeAddAutoboxes(
+            cType, jsType.toMaybeEnumElementType().getPrimitiveType(), prop);
       }
 
       if (jsType.autoboxesTo() != null) {

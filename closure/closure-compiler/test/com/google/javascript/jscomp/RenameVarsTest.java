@@ -581,9 +581,11 @@ public class RenameVarsTest extends CompilerTestCase {
       this.compiler = compiler;
     }
 
+    @Override
     public void process(Node externs, Node root) {
       ProcessClosurePrimitives closurePass =
-          new ProcessClosurePrimitives(compiler, CheckLevel.WARNING, true);
+          new ProcessClosurePrimitives(
+              compiler, null, CheckLevel.WARNING, true);
       closurePass.process(externs, root);
       renameVars = new RenameVars(compiler, prefix,
           false, false, false, false, previouslyUsedMap, null,

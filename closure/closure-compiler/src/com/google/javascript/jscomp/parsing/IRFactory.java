@@ -173,7 +173,7 @@ class IRFactory {
       for (Comment comment : node.getComments()) {
         if (comment.getCommentType() == CommentType.JSDOC &&
             !comment.isParsed()) {
-          irFactory.handlePossibleFileOverviewJsDoc(comment);
+          irFactory.handlePossibleFileOverviewJsDoc(comment, irNode);
         } else if (comment.getCommentType() == CommentType.BLOCK) {
           irFactory.handleBlockComment(comment);
         }
@@ -242,16 +242,16 @@ class IRFactory {
     return false;
   }
 
-  private void handlePossibleFileOverviewJsDoc(Comment comment) {
-    JsDocInfoParser jsDocParser = createJsDocInfoParser(comment);
+  private void handlePossibleFileOverviewJsDoc(Comment comment, Node irNode) {
+    JsDocInfoParser jsDocParser = createJsDocInfoParser(comment, irNode);
     comment.setParsed(true);
     handlePossibleFileOverviewJsDoc(jsDocParser);
   }
 
-  private JSDocInfo handleJsDoc(AstNode node) {
+  private JSDocInfo handleJsDoc(AstNode node, Node irNode) {
     Comment comment = node.getJsDocNode();
     if (comment != null) {
-      JsDocInfoParser jsDocParser = createJsDocInfoParser(comment);
+      JsDocInfoParser jsDocParser = createJsDocInfoParser(comment, irNode);
       comment.setParsed(true);
       if (!handlePossibleFileOverviewJsDoc(jsDocParser)) {
         return jsDocParser.retrieveAndResetParsedJSDocInfo();
@@ -261,8 +261,8 @@ class IRFactory {
   }
 
   private Node transform(AstNode node) {
-    JSDocInfo jsDocInfo = handleJsDoc(node);
     Node irNode = justTransform(node);
+    JSDocInfo jsDocInfo = handleJsDoc(node, irNode);
     if (jsDocInfo != null) {
       irNode.setJSDocInfo(jsDocInfo);
     }
@@ -271,8 +271,8 @@ class IRFactory {
   }
 
   private Node transformNameAsString(Name node) {
-    JSDocInfo jsDocInfo = handleJsDoc(node);
     Node irNode = transformDispatcher.processName(node, true);
+    JSDocInfo jsDocInfo = handleJsDoc(node, irNode);
     if (jsDocInfo != null) {
       irNode.setJSDocInfo(jsDocInfo);
     }
@@ -281,8 +281,8 @@ class IRFactory {
   }
 
   private Node transformNumberAsString(NumberLiteral literalNode) {
-    JSDocInfo jsDocInfo = handleJsDoc(literalNode);
     Node irNode = newStringNode(getStringValue(literalNode.getNumber()));
+    JSDocInfo jsDocInfo = handleJsDoc(literalNode, irNode);
     if (jsDocInfo != null) {
       irNode.setJSDocInfo(jsDocInfo);
     }
@@ -302,23 +302,15 @@ class IRFactory {
   }
 
   private void setSourceInfo(Node irNode, AstNode node) {
-    // If we have a named function, set the position to that of the name.
-    if (irNode.getType() == Token.FUNCTION &&
-        irNode.getFirstChild().getLineno() != -1) {
-      irNode.setLineno(irNode.getFirstChild().getLineno());
-      irNode.setCharno(irNode.getFirstChild().getCharno());
+    if (irNode.getLineno() == -1) {
+      // If we didn't already set the line, then set it now. This avoids
+      // cases like ParenthesizedExpression where we just return a previous
+      // node, but don't want the new node to get its parent's line number.
+      int lineno = node.getLineno();
+      irNode.setLineno(lineno);
+      int charno = position2charno(node.getAbsolutePosition());
+      irNode.setCharno(charno);
       maybeSetLengthFrom(irNode, node);
-    } else {
-      if (irNode.getLineno() == -1) {
-        // If we didn't already set the line, then set it now.  This avoids
-        // cases like ParenthesizedExpression where we just return a previous
-        // node, but don't want the new node to get its parent's line number.
-        int lineno = node.getLineno();
-        irNode.setLineno(lineno);
-        int charno = position2charno(node.getAbsolutePosition());
-        irNode.setCharno(charno);
-        maybeSetLengthFrom(irNode, node);
-      }
     }
   }
 
@@ -329,10 +321,11 @@ class IRFactory {
    * file-level JSDoc comments (@fileoverview and @license).
    *
    * @param node The JsDoc Comment node to parse.
+   * @param irNode
    * @return A JSDocInfoParser. Will contain either fileoverview jsdoc, or
    *     normal jsdoc, or no jsdoc (if the method parses to the wrong level).
    */
-  private JsDocInfoParser createJsDocInfoParser(Comment node) {
+  private JsDocInfoParser createJsDocInfoParser(Comment node, Node irNode) {
     String comment = node.getValue();
     int lineno = node.getLineno();
     int position = node.getAbsolutePosition();
@@ -345,7 +338,7 @@ class IRFactory {
                                lineno,
                                position2charno(position) + numOpeningChars),
           node,
-          sourceFile,
+          irNode,
           config,
           errorReporter);
     jsdocParser.setFileLevelJsDocBuilder(fileLevelJsDocBuilder);
@@ -356,12 +349,6 @@ class IRFactory {
 
   // Set the length on the node if we're in IDE mode.
   private void maybeSetLengthFrom(Node node, AstNode source) {
-    if (config.isIdeMode) {
-      node.setLength(source.getLength());
-    }
-  }
-
-  private void maybeSetLengthFrom(Node node, Node source) {
     if (config.isIdeMode) {
       node.setLength(source.getLength());
     }
@@ -957,7 +944,7 @@ class IRFactory {
               operand.getType() == Token.GETELEM ||
               operand.getType() == Token.NAME)) {
           String msg =
-              "Invalid delete operand. Only properties can be deleted.";;
+              "Invalid delete operand. Only properties can be deleted.";
           errorReporter.error(
               msg,
               sourceName,

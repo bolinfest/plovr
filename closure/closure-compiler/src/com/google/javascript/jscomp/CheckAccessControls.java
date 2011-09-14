@@ -25,10 +25,10 @@ import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.jstype.FunctionPrototypeType;
 import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.ObjectType;
+import com.google.javascript.rhino.jstype.StaticSourceFile;
 
 /**
  * A compiler pass that checks that the programmer has obeyed all the access
@@ -126,10 +126,11 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
   }
 
   @Override
-  public void hotSwapScript(Node scriptRoot) {
+  public void hotSwapScript(Node scriptRoot, Node originalRoot) {
     NodeTraversal.traverse(compiler, scriptRoot, this);
   }
 
+  @Override
   public void enterScope(NodeTraversal t) {
     if (!t.inGlobalScope()) {
       Node n = t.getScopeRoot();
@@ -145,6 +146,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
     }
   }
 
+  @Override
   public void exitScope(NodeTraversal t) {
     if (!t.inGlobalScope()) {
       Node n = t.getScopeRoot();
@@ -167,24 +169,22 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
   private JSType getClassOfMethod(Node n, Node parent) {
     if (parent.getType() == Token.ASSIGN) {
       Node lValue = parent.getFirstChild();
-      if (lValue.isQualifiedName()) {
-        if (lValue.getType() == Token.GETPROP) {
-          // We have an assignment of the form "a.b = ...".
-          JSType lValueType = lValue.getJSType();
-          if (lValueType != null && lValueType.isConstructor()) {
-            // If a.b is a constructor, then everything in this function
-            // belongs to the "a.b" type.
-            return ((FunctionType) lValueType).getInstanceType();
-          } else {
-            // If a.b is not a constructor, then treat this as a method
-            // of whatever type is on "a".
-            return normalizeClassType(lValue.getFirstChild().getJSType());
-          }
+      if (NodeUtil.isGet(lValue)) {
+        // We have an assignment of the form "a.b = ...".
+        JSType lValueType = lValue.getJSType();
+        if (lValueType != null && lValueType.isNominalConstructor()) {
+          // If a.b is a constructor, then everything in this function
+          // belongs to the "a.b" type.
+          return (lValueType.toMaybeFunctionType()).getInstanceType();
         } else {
-          // We have an assignment of the form "a = ...", so pull the
-          // type off the "a".
-          return normalizeClassType(lValue.getJSType());
+          // If a.b is not a constructor, then treat this as a method
+          // of whatever type is on "a".
+          return normalizeClassType(lValue.getFirstChild().getJSType());
         }
+      } else {
+        // We have an assignment of the form "a = ...", so pull the
+        // type off the "a".
+        return normalizeClassType(lValue.getJSType());
       }
     } else if (NodeUtil.isFunctionDeclaration(n) ||
                parent.getType() == Token.NAME) {
@@ -201,10 +201,10 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
   private JSType normalizeClassType(JSType type) {
     if (type == null || type.isUnknownType()) {
       return type;
-    } else if (type.isConstructor()) {
-      return ((FunctionType) type).getInstanceType();
+    } else if (type.isNominalConstructor()) {
+      return (type.toMaybeFunctionType()).getInstanceType();
     } else if (type.isFunctionPrototypeType()) {
-      FunctionType owner = ((FunctionPrototypeType) type).getOwnerFunction();
+      FunctionType owner = ((ObjectType) type).getOwnerFunction();
       if (owner.isConstructor()) {
         return owner.getInstanceType();
       }
@@ -212,10 +212,12 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
     return type;
   }
 
+  @Override
   public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
     return true;
   }
 
+  @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
     switch (n.getType()) {
       case Token.NAME:
@@ -332,16 +334,21 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
       if (docInfo != null) {
         // If a name is private, make sure that we're in the same file.
         Visibility visibility = docInfo.getVisibility();
-        if (visibility == Visibility.PRIVATE &&
-            !t.getInput().getName().equals(docInfo.getSourceName())) {
-          if (docInfo.isConstructor() &&
-              isValidPrivateConstructorAccess(parent)) {
-            return;
-          }
+        if (visibility == Visibility.PRIVATE) {
+          StaticSourceFile varSrc = var.getSourceFile();
+          StaticSourceFile refSrc = name.getStaticSourceFile();
+          if (varSrc != null &&
+              refSrc != null &&
+              !varSrc.getName().equals(refSrc.getName())) {
+            if (docInfo.isConstructor() &&
+                isValidPrivateConstructorAccess(parent)) {
+              return;
+            }
 
-          compiler.report(
-              t.makeError(name, BAD_PRIVATE_GLOBAL_ACCESS,
-                  name.getString(), docInfo.getSourceName()));
+            compiler.report(
+                t.makeError(name, BAD_PRIVATE_GLOBAL_ACCESS,
+                    name.getString(), varSrc.getName()));
+          }
         }
       }
     }
@@ -447,8 +454,10 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
         return;
       }
 
-      boolean sameInput =
-          t.getInput().getName().equals(docInfo.getSourceName());
+      String referenceSource = getprop.getSourceFileName();
+      String definingSource = docInfo.getSourceName();
+      boolean sameInput = referenceSource != null
+          && referenceSource.equals(definingSource);
       Visibility visibility = docInfo.getVisibility();
       JSType ownerType = normalizeClassType(objectType);
       if (isOverride) {

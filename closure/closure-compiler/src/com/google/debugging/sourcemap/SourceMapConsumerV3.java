@@ -28,6 +28,11 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Class for parsing version 3 of the SourceMap format, as produced by the
@@ -35,7 +40,8 @@ import java.util.ArrayList;
  * http://code.google.com/p/closure-compiler/wiki/SourceMaps
  * @author johnlenz@google.com (John Lenz)
  */
-public class SourceMapConsumerV3 implements SourceMapConsumer {
+public class SourceMapConsumerV3 implements SourceMapConsumer,
+    SourceMappingReversable {
   static final int UNMAPPED = -1;
 
   private String[] sources;
@@ -43,6 +49,9 @@ public class SourceMapConsumerV3 implements SourceMapConsumer {
   private int lineCount;
   // Slots in the lines list will be null if the line does not have any entries.
   private ArrayList<ArrayList<Entry>> lines = null;
+  /** originalFile path ==> original line ==> target mappings */
+  private Map<String, Map<Integer, Collection<OriginalMapping>>>
+      reverseSourceMapping;
 
   public SourceMapConsumerV3() {
 
@@ -58,6 +67,7 @@ public class SourceMapConsumerV3 implements SourceMapConsumer {
   /**
    * Parses the given contents containing a source map.
    */
+  @Override
   public void parse(String contents) throws SourceMapParseException {
     parse(contents, null);
   }
@@ -153,14 +163,25 @@ public class SourceMapConsumerV3 implements SourceMapConsumer {
       JSONArray sections = sourceMapRoot.getJSONArray("sections");
       for (int i = 0, count = sections.length(); i < count; i++) {
         JSONObject section = sections.getJSONObject(i);
-        String url = section.getString("url");
+        if (section.has("map") && section.has("url")) {
+          throw new SourceMapParseException(
+              "Invalid map format: section may not have both 'map' and 'url'");
+        }
         JSONObject offset = section.getJSONObject("offset");
         int line = offset.getInt("line");
         int column = offset.getInt("column");
-
-        String mapSectionContents = sectionSupplier.getSourceMap(url);
-        if (mapSectionContents == null) {
-          throw new SourceMapParseException("Unable to retrieve: " + url);
+        String mapSectionContents;
+        if (section.has("url")) {
+          String url = section.getString("url");
+          mapSectionContents = sectionSupplier.getSourceMap(url);
+          if (mapSectionContents == null) {
+            throw new SourceMapParseException("Unable to retrieve: " + url);
+          }
+        } else if (section.has("map")) {
+          mapSectionContents = section.getString("map");
+        } else {
+          throw new SourceMapParseException(
+              "Invalid map format: section must have either 'map' or 'url'");
         }
         generator.mergeMapSection(line, column, mapSectionContents);
       }
@@ -210,6 +231,39 @@ public class SourceMapConsumerV3 implements SourceMapConsumer {
     int index = search(entries, column, 0, entries.size() - 1);
     Preconditions.checkState(index >= 0, "unexpected:" + index);
     return getOriginalMappingForEntry(entries.get(index));
+  }
+
+  @Override
+  public Collection<String> getOriginalSources() {
+    return Arrays.asList(sources);
+  }
+
+  @Override
+  public Collection<OriginalMapping> getReverseMapping(String originalFile,
+      int line, int column) {
+    // TODO(user): This implementation currently does not make use of the column
+    // parameter.
+
+    // Synchronization needs to be handled by callers.
+    if (reverseSourceMapping == null) {
+      createReverseMapping();
+    }
+
+    Map<Integer, Collection<OriginalMapping>> sourceLineToCollectionMap =
+        reverseSourceMapping.get(originalFile);
+
+    if (sourceLineToCollectionMap == null) {
+      return Collections.emptyList();
+    } else {
+      Collection<OriginalMapping> mappings =
+          sourceLineToCollectionMap.get(line);
+
+      if (mappings == null) {
+        return Collections.emptyList();
+      } else {
+        return mappings;
+      }
+    }
   }
 
   private String[] getJavaStringArray(JSONArray array) throws JSONException {
@@ -441,6 +495,52 @@ public class SourceMapConsumerV3 implements SourceMapConsumer {
   }
 
   /**
+   * Reverse the source map; the created mapping will allow us to quickly go
+   * from a source file and line number to a collection of target
+   * OriginalMappings.
+   */
+  private void createReverseMapping() {
+    reverseSourceMapping =
+        new HashMap<String, Map<Integer, Collection<OriginalMapping>>>();
+
+    for (int targetLine = 0; targetLine < lines.size(); targetLine++) {
+      ArrayList<Entry> entries = lines.get(targetLine);
+
+      if (entries != null) {
+        for (Entry entry : entries) {
+          if (entry.getSourceFileId() != UNMAPPED
+              && entry.getSourceLine() != UNMAPPED) {
+            String originalFile = sources[entry.getSourceFileId()];
+
+            if (!reverseSourceMapping.containsKey(originalFile)) {
+              reverseSourceMapping.put(originalFile,
+                  new HashMap<Integer, Collection<OriginalMapping>>());
+            }
+
+            Map<Integer, Collection<OriginalMapping>> lineToCollectionMap =
+                reverseSourceMapping.get(originalFile);
+
+            int sourceLine = entry.getSourceLine();
+
+            if (!lineToCollectionMap.containsKey(sourceLine)) {
+              lineToCollectionMap.put(sourceLine,
+                  new ArrayList<OriginalMapping>(1));
+            }
+
+            Collection<OriginalMapping> mappings =
+                lineToCollectionMap.get(sourceLine);
+
+            Builder builder = OriginalMapping.newBuilder().setLineNumber(
+                targetLine).setColumnPosition(entry.getGeneratedColumn());
+
+            mappings.add(builder.build());
+          }
+        }
+      }
+    }
+  }
+
+  /**
    * A implementation of the Base64VLQ CharIterator used for decoding the
    * mappings encoded in the JSON string.
    */
@@ -454,6 +554,7 @@ public class SourceMapConsumerV3 implements SourceMapConsumer {
       this.length = content.length();
     }
 
+    @Override
     public char next() {
       return content.charAt(current++);
     }
@@ -462,6 +563,7 @@ public class SourceMapConsumerV3 implements SourceMapConsumer {
       return content.charAt(current);
     }
 
+    @Override
     public boolean hasNext() {
       return  current < length;
     }

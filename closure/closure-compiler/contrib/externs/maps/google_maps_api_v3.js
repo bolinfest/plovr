@@ -15,7 +15,7 @@
  */
 
 /**
- * @fileoverview Externs for the Google Maps V3 API.
+ * @fileoverview Externs for the Google Maps v3 API.
  * @see http://code.google.com/apis/maps/documentation/javascript/reference.html
  * @externs
  */
@@ -1035,11 +1035,6 @@ google.maps.GeocoderRequest.prototype.address;
 google.maps.GeocoderRequest.prototype.bounds;
 
 /**
- * @type {string}
- */
-google.maps.GeocoderRequest.prototype.language;
-
-/**
  * @type {google.maps.LatLng}
  */
 google.maps.GeocoderRequest.prototype.location;
@@ -2000,6 +1995,11 @@ google.maps.MapOptions.prototype.streetViewControl;
 google.maps.MapOptions.prototype.streetViewControlOptions;
 
 /**
+ * @type {Array.<google.maps.MapTypeStyle>}
+ */
+google.maps.MapOptions.prototype.styles;
+
+/**
  * @type {number}
  */
 google.maps.MapOptions.prototype.tilt;
@@ -2254,7 +2254,7 @@ google.maps.Marker.MAX_ZINDEX;
 
 /**
  * @nosideeffects
- * @return {google.maps.Animation}
+ * @return {?google.maps.Animation}
  */
 google.maps.Marker.prototype.getAnimation = function() {};
 
@@ -2331,7 +2331,7 @@ google.maps.Marker.prototype.getVisible = function() {};
 google.maps.Marker.prototype.getZIndex = function() {};
 
 /**
- * @param {google.maps.Animation} animation
+ * @param {?google.maps.Animation} animation
  * @return {undefined}
  */
 google.maps.Marker.prototype.setAnimation = function(animation) {};
@@ -3378,12 +3378,11 @@ google.maps.StreetViewTileData.prototype.tileSize;
 google.maps.StreetViewTileData.prototype.worldSize;
 
 /**
- * @param {Array.<google.maps.MapTypeStyle>} style
+ * @param {Array.<google.maps.MapTypeStyle>} styles
  * @param {(google.maps.StyledMapTypeOptions|Object.<string, *>)=} opt_options
- * @extends {google.maps.MVCObject}
  * @constructor
  */
-google.maps.StyledMapType = function(style, opt_options) {};
+google.maps.StyledMapType = function(styles, opt_options) {};
 
 /**
  * @constructor
@@ -3394,11 +3393,6 @@ google.maps.StyledMapTypeOptions = function() {};
  * @type {string}
  */
 google.maps.StyledMapTypeOptions.prototype.alt;
-
-/**
- * @type {google.maps.StyledMapType}
- */
-google.maps.StyledMapTypeOptions.prototype.baseMapType;
 
 /**
  * @type {number}
@@ -3892,7 +3886,7 @@ google.maps.places.Autocomplete.prototype.getBounds = function() {};
 google.maps.places.Autocomplete.prototype.getPlace = function() {};
 
 /**
- * @param {google.maps.LatLng} bounds
+ * @param {google.maps.LatLngBounds} bounds
  * @return {undefined}
  */
 google.maps.places.Autocomplete.prototype.setBounds = function(bounds) {};

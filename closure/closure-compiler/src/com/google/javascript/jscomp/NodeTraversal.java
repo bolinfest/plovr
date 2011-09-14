@@ -18,6 +18,7 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -69,6 +70,9 @@ public class NodeTraversal {
 
   /** The current source file name */
   private String sourceName;
+
+  /** The current input */
+  private InputId inputId;
 
   /** The scope creator */
   private ScopeCreator scopeCreator;
@@ -123,6 +127,7 @@ public class NodeTraversal {
    * Abstract callback to visit all nodes in post order.
    */
   public abstract static class AbstractPostOrderCallback implements Callback {
+    @Override
     public final boolean shouldTraverse(NodeTraversal nodeTraversal, Node n,
         Node parent) {
       return true;
@@ -134,6 +139,7 @@ public class NodeTraversal {
    * bodies.
    */
   public abstract static class AbstractShallowCallback implements Callback {
+    @Override
     public final boolean shouldTraverse(NodeTraversal nodeTraversal, Node n,
         Node parent) {
       // We do want to traverse the name of a named function, but we don't
@@ -149,6 +155,7 @@ public class NodeTraversal {
    */
   public abstract static class AbstractShallowStatementCallback
       implements Callback {
+    @Override
     public final boolean shouldTraverse(NodeTraversal nodeTraversal, Node n,
         Node parent) {
       return parent == null || NodeUtil.isControlStructure(parent)
@@ -183,6 +190,7 @@ public class NodeTraversal {
       this.include = include;
     }
 
+    @Override
     public boolean shouldTraverse(NodeTraversal nodeTraversal, Node n,
         Node parent) {
       return include == nodeTypes.contains(n.getType());
@@ -207,6 +215,7 @@ public class NodeTraversal {
       this.scopeCallback = (ScopedCallback) cb;
     }
     this.compiler = compiler;
+    this.inputId = null;
     this.sourceName = "";
     this.scopeCreator = scopeCreator;
   }
@@ -219,7 +228,7 @@ public class NodeTraversal {
     // TODO(user): It is possible to get more information if curNode or
     // its parent is missing. We still have the scope stack in which it is still
     // very useful to find out at least which function caused the exception.
-    if (!sourceName.isEmpty()) {
+    if (inputId != null) {
       message =
           unexpectedException.getMessage() + "\n" +
           formatNodeContext("Node", curNode) +
@@ -243,6 +252,7 @@ public class NodeTraversal {
    */
   public void traverse(Node root) {
     try {
+      inputId = NodeUtil.getInputId(root);
       sourceName = "";
       curNode = root;
       pushScope(root);
@@ -266,6 +276,7 @@ public class NodeTraversal {
       Node scopeRoot = roots.get(0).getParent();
       Preconditions.checkState(scopeRoot != null);
 
+      inputId = NodeUtil.getInputId(scopeRoot);
       sourceName = "";
       curNode = scopeRoot;
       pushScope(scopeRoot);
@@ -306,6 +317,7 @@ public class NodeTraversal {
   void traverseWithScope(Node root, Scope s) {
     Preconditions.checkState(s.isGlobal());
 
+    inputId = null;
     sourceName = "";
     curNode = root;
     pushScope(s);
@@ -322,6 +334,9 @@ public class NodeTraversal {
     if (n.getType() == Token.FUNCTION) {
       // We need to do some extra magic to make sure that the scope doesn't
       // get re-created when we dive into the function.
+      if (inputId == null) {
+        inputId = NodeUtil.getInputId(n);
+      }
       sourceName = getSourceName(n);
       curNode = n;
       pushScope(s);
@@ -397,7 +412,7 @@ public class NodeTraversal {
    * Gets the current input source.
    */
   public CompilerInput getInput() {
-    return compiler.getInput(sourceName);
+    return compiler.getInput(inputId);
   }
 
   /**
@@ -438,6 +453,7 @@ public class NodeTraversal {
   private void traverseBranch(Node n, Node parent) {
     int type = n.getType();
     if (type == Token.SCRIPT) {
+      inputId = n.getInputId();
       sourceName = getSourceName(n);
     }
 
@@ -613,6 +629,10 @@ public class NodeTraversal {
   private static String getSourceName(Node n) {
     String name = n.getSourceFileName();
     return name == null ? "" : name;
+  }
+
+  InputId getInputId() {
+    return inputId;
   }
 
   /**

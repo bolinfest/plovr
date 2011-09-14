@@ -30,9 +30,6 @@ import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.ScriptRuntime;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.jstype.SimpleSourceFile;
-import com.google.javascript.rhino.jstype.StaticSourceFile;
-
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -48,8 +45,8 @@ public final class JsDocInfoParser {
 
   private final JsDocTokenStream stream;
   private final JSDocInfoBuilder jsdocBuilder;
-  private final StaticSourceFile sourceFile;
   private final String sourceName;
+  private final Node associatedNode;
   private final ErrorReporter errorReporter;
   private final ErrorReporterParser parser = new ErrorReporterParser();
 
@@ -124,14 +121,14 @@ public final class JsDocInfoParser {
 
   JsDocInfoParser(JsDocTokenStream stream,
                   Comment commentNode,
-                  StaticSourceFile sourceFile,
+                  Node associatedNode,
                   Config config,
                   ErrorReporter errorReporter) {
     this.stream = stream;
-    this.sourceFile = sourceFile;
+    this.associatedNode = associatedNode;
 
     // Sometimes this will be null in tests.
-    this.sourceName = sourceFile == null ? null : sourceFile.getName();
+    this.sourceName = associatedNode == null ? "" : associatedNode.getSourceFileName();
 
     this.jsdocBuilder = new JSDocInfoBuilder(config.parseJsDocDocumentation);
     if (commentNode != null) {
@@ -158,7 +155,7 @@ public final class JsDocInfoParser {
     JsDocInfoParser parser = new JsDocInfoParser(
         new JsDocTokenStream(typeString),
         null,
-        new SimpleSourceFile("typeparsing", false),
+        null,
         config,
         NullErrorReporter.forNewRhino());
 
@@ -237,6 +234,14 @@ public final class JsDocInfoParser {
                   } else {
                     token = eatTokensUntilEOL(token);
                   }
+                  continue retry;
+
+                case CONSISTENTIDGENERATOR:
+                  if (!jsdocBuilder.recordConsistentIdGenerator()) {
+                    parser.addParserWarning("msg.jsdoc.consistidgen",
+                      stream.getLineno(), stream.getCharno());
+                  }
+                  token = eatTokensUntilEOL();
                   continue retry;
 
                 case CONSTANT:
@@ -766,6 +771,14 @@ public final class JsDocInfoParser {
                   }
 
                   token = templateInfo.token;
+                  continue retry;
+
+                case IDGENERATOR:
+                  if (!jsdocBuilder.recordIdGenerator()) {
+                    parser.addParserWarning("msg.jsdoc.idgen",
+                      stream.getLineno(), stream.getCharno());
+                  }
+                  token = eatTokensUntilEOL();
                   continue retry;
 
                 case VERSION:
@@ -1713,6 +1726,8 @@ public final class JsDocInfoParser {
     }
 
     String typeName = stream.getString();
+    int lineno = stream.getLineno();
+    int charno = stream.getCharno();
     while (match(JsDocToken.EOL) &&
         typeName.charAt(typeName.length() - 1) == '.') {
       skipEOLs();
@@ -1722,7 +1737,7 @@ public final class JsDocInfoParser {
       }
     }
 
-    Node typeNameNode = newStringNode(typeName);
+    Node typeNameNode = newStringNode(typeName, lineno, charno);
 
     if (match(JsDocToken.LT)) {
       next();
@@ -2135,8 +2150,13 @@ public final class JsDocInfoParser {
   }
 
   private Node newStringNode(String s) {
-    return Node.newString(s, stream.getLineno(),
-        stream.getCharno()).clonePropsFrom(templateNode);
+    return newStringNode(s, stream.getLineno(), stream.getCharno());
+  }
+
+  private Node newStringNode(String s, int lineno, int charno) {
+    Node n = Node.newString(s, lineno, charno).clonePropsFrom(templateNode);
+    n.setLength(s.length());
+    return n;
   }
 
   // This is similar to IRFactory.createTemplateNode to share common props
@@ -2144,7 +2164,10 @@ public final class JsDocInfoParser {
   private Node createTemplateNode() {
     // The Node type choice is arbitrary.
     Node templateNode = new Node(Token.SCRIPT);
-    templateNode.setStaticSourceFile(sourceFile);
+    templateNode.setStaticSourceFile(
+      this.associatedNode != null ?
+      this.associatedNode.getStaticSourceFile() :
+      null);
     return templateNode;
   }
 
@@ -2260,7 +2283,7 @@ public final class JsDocInfoParser {
   }
 
   JSDocInfo retrieveAndResetParsedJSDocInfo() {
-    return jsdocBuilder.build(sourceName);
+    return jsdocBuilder.build(associatedNode);
   }
 
   /**

@@ -43,6 +43,7 @@ class FunctionInjector {
   private final boolean allowDecomposition;
   private Set<String> knownConstants = Sets.newHashSet();
   private final boolean assumeStrictThis;
+  private final boolean assumeMinimumCapture;
 
   /**
    * @param allowDecomposition Whether an effort should be made to break down
@@ -53,13 +54,15 @@ class FunctionInjector {
       AbstractCompiler compiler,
       Supplier<String> safeNameIdSupplier,
       boolean allowDecomposition,
-      boolean assumeStrictThis) {
+      boolean assumeStrictThis,
+      boolean assumeMinimumCapture) {
     Preconditions.checkNotNull(compiler);
     Preconditions.checkNotNull(safeNameIdSupplier);
     this.compiler = compiler;
     this.safeNameIdSupplier = safeNameIdSupplier;
     this.allowDecomposition = allowDecomposition;
     this.assumeStrictThis = assumeStrictThis;
+    this.assumeMinimumCapture = assumeMinimumCapture;
   }
 
   /** The type of inlining to perform. */
@@ -128,12 +131,18 @@ class FunctionInjector {
     final String fnRecursionName = fnNode.getFirstChild().getString();
     Preconditions.checkState(fnRecursionName != null);
 
+    // If the function references "arguments" directly in the function
+    boolean referencesArguments = NodeUtil.isNameReferenced(
+        block, "arguments", NodeUtil.MATCH_NOT_FUNCTION);
+
+    // or it references "eval" or one of its names anywhere.
     Predicate<Node> p = new Predicate<Node>(){
+      @Override
       public boolean apply(Node n) {
         if (n.getType() == Token.NAME) {
-          return n.getString().equals("arguments")
-            || n.getString().equals("eval")
-            || n.getString().equals(fnName)
+          return n.getString().equals("eval")
+            || (!fnName.isEmpty()
+                && n.getString().equals(fnName))
             || (!fnRecursionName.isEmpty()
                 && n.getString().equals(fnRecursionName));
         }
@@ -141,7 +150,8 @@ class FunctionInjector {
       }
     };
 
-    return !NodeUtil.has(block, p, Predicates.<Node>alwaysTrue());
+    return !referencesArguments
+        && !NodeUtil.has(block, p, Predicates.<Node>alwaysTrue());
   }
 
   /**
@@ -171,10 +181,16 @@ class FunctionInjector {
     // an inner function into another function can capture a variable and cause
     // a memory leak.  This isn't a problem in the global scope as those values
     // last until explicitly cleared.
-    if (containsFunctions && !t.inGlobalScope()) {
-      // TODO(johnlenz): Allow inlining into any scope without local names or
-      // inner functions.
-      return CanInlineResult.NO;
+    if (containsFunctions) {
+      if (!assumeMinimumCapture && !t.inGlobalScope()) {
+        // TODO(johnlenz): Allow inlining into any scope without local names or
+        // inner functions.
+        return CanInlineResult.NO;
+      } else if (NodeUtil.isWithinLoop(callNode)) {
+        // An inner closure maybe relying on a local value holding a value for a
+        // single iteration through a loop.
+        return CanInlineResult.NO;
+      }
     }
 
     // TODO(johnlenz): Add support for 'apply'
@@ -389,6 +405,8 @@ class FunctionInjector {
     CallSiteType callSiteType = classifyCallSite(callNode);
     Preconditions.checkArgument(callSiteType != CallSiteType.UNSUPPORTED);
 
+    boolean isCallInLoop = NodeUtil.isWithinLoop(callNode);
+
     // Store the name for the result. This will be used to
     // replace "return expr" statements with "resultName = expr"
     // to replace
@@ -410,8 +428,10 @@ class FunctionInjector {
 
       case EXPRESSION:
         resultName = getUniqueResultName();
-        needsDefaultReturnResult = false; // The intermediary result already
-                                          // has the default value.
+        // The intermediary result has a default value of "undefined", so
+        // we only need to set the implicit return value if we are in a loop
+        // and the variable maybe reused.
+        needsDefaultReturnResult = isCallInLoop;
         break;
 
       case DECOMPOSABLE_EXPRESSION:
@@ -421,8 +441,6 @@ class FunctionInjector {
       default:
         throw new IllegalStateException("Unexpected call site type.");
     }
-
-    boolean isCallInLoop = NodeUtil.isWithinLoop(callNode);
 
     FunctionToBlockMutator mutator = new FunctionToBlockMutator(
         compiler, this.safeNameIdSupplier);
@@ -559,7 +577,10 @@ class FunctionInjector {
    * inlining would introduce new globals.
    */
   private boolean callMeetsBlockInliningRequirements(
-      NodeTraversal t, Node callNode, Node fnNode, Set<String> namesToAlias) {
+      NodeTraversal t, Node callNode, final Node fnNode,
+      Set<String> namesToAlias) {
+    final boolean assumeMinimumCapture = this.assumeMinimumCapture;
+
     // Note: functions that contain function definitions are filtered out
     // in isCanidateFunction.
 
@@ -574,21 +595,36 @@ class FunctionInjector {
         NodeUtil.getFunctionBody(fnNode),
         new NodeUtil.MatchDeclaration(),
         new NodeUtil.MatchShallowStatement());
-    boolean callerContainsFunction = false;
+    boolean forbidTemps = false;
     if (!t.inGlobalScope()) {
       Node fnCaller = t.getScopeRoot();
       Node fnCallerBody = fnCaller.getLastChild();
 
-      callerContainsFunction = NodeUtil.containsFunction(fnCallerBody);
+      // Don't allow any new vars into a scope that contains eval or one
+      // that contains functions (excluding the function being inlined).
+      Predicate<Node> match = new Predicate<Node>(){
+        @Override
+        public boolean apply(Node n) {
+          if (n.getType() == Token.NAME) {
+            return n.getString().equals("eval");
+          }
+          if (!assumeMinimumCapture && n.getType() == Token.FUNCTION) {
+            return n != fnNode;
+          }
+          return false;
+        }
+      };
+      forbidTemps = NodeUtil.has(fnCallerBody,
+          match, NodeUtil.MATCH_NOT_FUNCTION);
     }
 
-    if (fnContainsVars && callerContainsFunction) {
+    if (fnContainsVars && forbidTemps) {
       return false;
     }
 
-    // If the caller contains functions, verify we aren't adding any
+    // If the caller contains functions or evals, verify we aren't adding any
     // additional VAR declarations because aliasing is needed.
-    if (callerContainsFunction) {
+    if (forbidTemps) {
       Map<String, Node> args =
           FunctionArgumentInjector.getFunctionCallParameterMap(
               fnNode, callNode, this.safeNameIdSupplier);

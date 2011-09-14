@@ -32,6 +32,7 @@ import com.google.javascript.jscomp.deps.SortedDependencies.MissingProvideExcept
 import com.google.javascript.jscomp.mozilla.rhino.ErrorReporter;
 import com.google.javascript.jscomp.parsing.Config;
 import com.google.javascript.jscomp.parsing.ParserRunner;
+import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -49,6 +50,7 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
 
 /**
  * Compiler (and the other classes in this package) does the following:
@@ -104,7 +106,7 @@ public class Compiler extends AbstractCompiler {
   Node jsRoot;
   Node externAndJsRoot;
 
-  private Map<String, CompilerInput> inputsByName;
+  private Map<InputId, CompilerInput> inputsById;
 
   /** The source code map */
   private SourceMap sourceMap;
@@ -252,7 +254,8 @@ public class Compiler extends AbstractCompiler {
           CheckLevel.OFF);
     }
 
-    if (options.checkGlobalThisLevel.isOn()) {
+    if (options.checkGlobalThisLevel.isOn() &&
+        !options.disables(DiagnosticGroups.GLOBAL_THIS)) {
       options.setWarningLevel(
           DiagnosticGroups.GLOBAL_THIS,
           options.checkGlobalThisLevel);
@@ -353,7 +356,7 @@ public class Compiler extends AbstractCompiler {
     this.inputs = getAllInputsFromModules(modules);
     initBasedOnOptions();
 
-    initInputsByNameMap();
+    initInputsByIdMap();
   }
 
   /**
@@ -363,6 +366,7 @@ public class Compiler extends AbstractCompiler {
     // Create the source map if necessary.
     if (options.sourceMapOutputPath != null) {
       sourceMap = options.sourceMapFormat.getInstance();
+      sourceMap.setPrefixMappings(options.sourceMapLocationMappings);
     }
   }
 
@@ -416,7 +420,7 @@ public class Compiler extends AbstractCompiler {
    */
   public void rebuildInputsFromModules() {
     inputs = getAllInputsFromModules(modules);
-    initInputsByNameMap();
+    initInputsByIdMap();
   }
 
   /**
@@ -451,22 +455,20 @@ public class Compiler extends AbstractCompiler {
    * Creates a map to make looking up an input by name fast. Also checks for
    * duplicate inputs.
    */
-  void initInputsByNameMap() {
-    inputsByName = new HashMap<String, CompilerInput>();
+  void initInputsByIdMap() {
+    inputsById = new HashMap<InputId, CompilerInput>();
     for (CompilerInput input : externs) {
-      String name = input.getName();
-      if (!inputsByName.containsKey(name)) {
-        inputsByName.put(name, input);
-      } else {
-        report(JSError.make(DUPLICATE_EXTERN_INPUT, name));
+      InputId id = input.getInputId();
+      CompilerInput previous = inputsById.put(id, input);
+      if (previous != null) {
+        report(JSError.make(DUPLICATE_EXTERN_INPUT, input.getName()));
       }
     }
     for (CompilerInput input : inputs) {
-      String name = input.getName();
-      if (!inputsByName.containsKey(name)) {
-        inputsByName.put(name, input);
-      } else {
-        report(JSError.make(DUPLICATE_INPUT, name));
+      InputId id = input.getInputId();
+      CompilerInput previous = inputsById.put(id, input);
+      if (previous != null) {
+        report(JSError.make(DUPLICATE_INPUT, input.getName()));
       }
     }
   }
@@ -552,6 +554,7 @@ public class Compiler extends AbstractCompiler {
 
   private Result compile() {
     return runInCompilerThread(new Callable<Result>() {
+      @Override
       public Result call() throws Exception {
         compileInternal();
         return getResult();
@@ -589,6 +592,7 @@ public class Compiler extends AbstractCompiler {
     final Object[] result = new Object[1];
     final Throwable[] exception = new Throwable[1];
     Runnable runnable = new Runnable() {
+      @Override
       public void run() {
         try {
           if (dumpTraceReport) {
@@ -932,6 +936,7 @@ public class Compiler extends AbstractCompiler {
   Supplier<String> getUniqueNameIdSupplier() {
     final Compiler self = this;
     return new Supplier<String>() {
+      @Override
       public String get() {
         return String.valueOf(self.nextUniqueNameId());
       }
@@ -958,20 +963,23 @@ public class Compiler extends AbstractCompiler {
   // interface, and which ones should always be injected.
 
   @Override
-  public CompilerInput getInput(String name) {
-    return inputsByName.get(name);
+  public CompilerInput getInput(InputId id) {
+    return inputsById.get(id);
   }
 
   /**
    * Removes an input file from AST.
-   * @param name The name of the file to be removed.
+   * @param id The id of the input to be removed.
    */
-  protected void removeInput(String name) {
-    CompilerInput input = getInput(name);
+  protected void removeExternInput(InputId id) {
+    CompilerInput input = getInput(id);
     if (input == null) {
       return;
     }
-    inputsByName.remove(name);
+    Preconditions.checkState(input.isExtern(), "Not an extern input: "
+        + input.getName());
+    inputsById.remove(id);
+    externs.remove(input);
     Node root = input.getAstRoot(this);
     if (root != null) {
       root.detachFromParent();
@@ -980,23 +988,24 @@ public class Compiler extends AbstractCompiler {
 
   @Override
   public CompilerInput newExternInput(String name) {
-    if (inputsByName.containsKey(name)) {
+    SourceAst ast = new SyntheticAst(name);
+    if (inputsById.containsKey(ast.getInputId())) {
       throw new IllegalArgumentException("Conflicting externs name: " + name);
     }
-    SourceAst ast = new SyntheticAst(name);
-    CompilerInput input = new CompilerInput(ast, name, true);
-    inputsByName.put(name, input);
+    CompilerInput input = new CompilerInput(ast, true);
+    inputsById.put(input.getInputId(), input);
     externsRoot.addChildToFront(ast.getAstRoot(this));
+    externs.add(0, input);
     return input;
   }
 
   /** Add a source input dynamically. Intended for incremental compilation. */
   void addIncrementalSourceAst(JsAst ast) {
-    String sourceName = ast.getSourceFile().getName();
+    InputId id = ast.getInputId();
     Preconditions.checkState(
-        getInput(sourceName) == null,
-        "Duplicate input of name " + sourceName);
-    inputsByName.put(sourceName, new CompilerInput(ast));
+        getInput(id) == null,
+        "Duplicate input " + id.getIdName());
+    inputsById.put(id, new CompilerInput(ast));
   }
 
   /**
@@ -1009,11 +1018,10 @@ public class Compiler extends AbstractCompiler {
    * @return Whether the new AST was attached successfully.
    */
   boolean replaceIncrementalSourceAst(JsAst ast) {
-    String sourceName = ast.getSourceFile().getName();
-    CompilerInput oldInput =
-        Preconditions.checkNotNull(
-            getInput(sourceName),
-            "No input to replace: " + sourceName);
+    CompilerInput oldInput = getInput(ast.getInputId());
+    Preconditions.checkNotNull(
+        oldInput,
+        "No input to replace: " + ast.getInputId().getIdName());
     Node newRoot = ast.getAstRoot(this);
     if (newRoot == null) {
       return false;
@@ -1027,13 +1035,20 @@ public class Compiler extends AbstractCompiler {
     }
 
     CompilerInput newInput = new CompilerInput(ast);
-    inputsByName.put(sourceName, newInput);
+    inputsById.put(ast.getInputId(), newInput);
 
     JSModule module = oldInput.getModule();
     if (module != null) {
       module.addAfter(newInput, oldInput);
       module.remove(oldInput);
     }
+
+    // Verify the input id is set properly.
+    Preconditions.checkState(
+        newInput.getInputId().equals(oldInput.getInputId()));
+    InputId inputIdOnAst = newInput.getAstRoot(this).getInputId();
+    Preconditions.checkState(newInput.getInputId().equals(inputIdOnAst));
+
     return true;
   }
 
@@ -1051,8 +1066,51 @@ public class Compiler extends AbstractCompiler {
   }
 
   @Override
-  ScopeCreator getTypedScopeCreator() {
+  MemoizedScopeCreator getTypedScopeCreator() {
     return getPassConfig().getTypedScopeCreator();
+  }
+
+  @SuppressWarnings("unchecked")
+  DefaultPassConfig ensureDefaultPassConfig() {
+    PassConfig passes = getPassConfig().getBasePassConfig();
+    Preconditions.checkState(passes instanceof DefaultPassConfig,
+        "PassConfigs must eventually delegate to the DefaultPassConfig");
+    return (DefaultPassConfig) passes;
+  }
+
+  public SymbolTable buildKnownSymbolTable() {
+    SymbolTable symbolTable = new SymbolTable(getTypeRegistry());
+
+    MemoizedScopeCreator typedScopeCreator = getTypedScopeCreator();
+    if (typedScopeCreator != null) {
+      symbolTable.addScopes(typedScopeCreator.getAllMemoizedScopes());
+      symbolTable.addSymbolsFrom(typedScopeCreator);
+    }
+
+    GlobalNamespace globalNamespace =
+        ensureDefaultPassConfig().getGlobalNamespace();
+    if (globalNamespace != null) {
+      symbolTable.addSymbolsFrom(globalNamespace);
+    }
+
+    ReferenceCollectingCallback refCollector =
+        new ReferenceCollectingCallback(
+            this, ReferenceCollectingCallback.DO_NOTHING_BEHAVIOR);
+    NodeTraversal.traverse(this, getRoot(), refCollector);
+    symbolTable.addSymbolsFrom(refCollector);
+
+    PreprocessorSymbolTable preprocessorSymbolTable =
+        ensureDefaultPassConfig().getPreprocessorSymbolTable();
+    if (preprocessorSymbolTable != null) {
+      symbolTable.addSymbolsFrom(preprocessorSymbolTable);
+    }
+
+    symbolTable.fillNamespaceReferences();
+    symbolTable.fillThisReferences(this, externsRoot, jsRoot);
+    symbolTable.fillPropertySymbols(this, externsRoot, jsRoot);
+    symbolTable.fillJSDocInfo(this, externsRoot, jsRoot);
+
+    return symbolTable;
   }
 
   @Override
@@ -1240,11 +1298,13 @@ public class Compiler extends AbstractCompiler {
     return new JsAst(file).getAstRoot(this);
   }
 
+  private int syntheticCodeId = 0;
+
   @Override
   Node parseSyntheticCode(String js) {
     CompilerInput input = new CompilerInput(
-        JSSourceFile.fromCode(" [synthetic] ", js));
-    inputsByName.put(input.getName(), input);
+        JSSourceFile.fromCode(" [synthetic:" + (++syntheticCodeId) + "] ", js));
+    inputsById.put(input.getInputId(), input);
     return input.getAstRoot(this);
   }
 
@@ -1267,10 +1327,10 @@ public class Compiler extends AbstractCompiler {
     initCompilerOptionsIfTesting();
     CompilerInput input = new CompilerInput(
         JSSourceFile.fromCode(" [testcode] ", js));
-    if (inputsByName == null) {
-      inputsByName = Maps.newHashMap();
+    if (inputsById == null) {
+      inputsById = Maps.newHashMap();
     }
-    inputsByName.put(input.getName(), input);
+    inputsById.put(input.getInputId(), input);
     return input.getAstRoot(this);
   }
 
@@ -1288,6 +1348,7 @@ public class Compiler extends AbstractCompiler {
    */
   public String toSource() {
     return runInCompilerThread(new Callable<String>() {
+      @Override
       public String call() throws Exception {
         Tracer tracer = newTracer("toSource");
         try {
@@ -1313,6 +1374,7 @@ public class Compiler extends AbstractCompiler {
    */
   public String[] toSourceArray() {
     return runInCompilerThread(new Callable<String[]>() {
+      @Override
       public String[] call() throws Exception {
         Tracer tracer = newTracer("toSourceArray");
         try {
@@ -1338,6 +1400,7 @@ public class Compiler extends AbstractCompiler {
    */
   public String toSource(final JSModule module) {
     return runInCompilerThread(new Callable<String>() {
+      @Override
       public String call() throws Exception {
         List<CompilerInput> inputs = module.getInputs();
         int numInputs = inputs.size();
@@ -1364,6 +1427,7 @@ public class Compiler extends AbstractCompiler {
    */
   public String[] toSourceArray(final JSModule module) {
     return runInCompilerThread(new Callable<String[]>() {
+      @Override
       public String[] call() throws Exception {
         List<CompilerInput> inputs = module.getInputs();
         int numInputs = inputs.size();
@@ -1400,6 +1464,7 @@ public class Compiler extends AbstractCompiler {
                        final int inputSeqNum,
                        final Node root) {
     runInCompilerThread(new Callable<Void>() {
+      @Override
       public Void call() throws Exception {
         if (options.printInputDelimiter) {
           if ((cb.getLength() > 0) && !cb.endsWith("\n")) {
@@ -1409,12 +1474,14 @@ public class Compiler extends AbstractCompiler {
 
           String delimiter = options.inputDelimiter;
 
+          String inputName = root.getInputId().getIdName();
           String sourceName = root.getSourceFileName();
           Preconditions.checkState(sourceName != null);
           Preconditions.checkState(!sourceName.isEmpty());
 
-          delimiter = delimiter.replaceAll("%name%", sourceName)
-            .replaceAll("%num%", String.valueOf(inputSeqNum));
+          delimiter = delimiter
+              .replaceAll("%name%", Matcher.quoteReplacement(inputName))
+              .replaceAll("%num%", String.valueOf(inputSeqNum));
 
           cb.append(delimiter)
             .append("\n");
@@ -1717,7 +1784,8 @@ public class Compiler extends AbstractCompiler {
       parserConfig = ParserRunner.createConfig(
         isIdeMode(),
         mode,
-        acceptConstKeyword());
+        acceptConstKeyword(),
+        options.extraAnnotationNames);
     }
     return parserConfig;
   }
@@ -1819,12 +1887,18 @@ public class Compiler extends AbstractCompiler {
   }
 
   private SourceFile getSourceFileByName(String sourceName) {
-    if (inputsByName.containsKey(sourceName)) {
-      return inputsByName.get(sourceName).getSourceFile();
+    // Here we assume that the source name is the input name, this
+    // is try of javascript parsed from source.
+    if (sourceName != null) {
+      CompilerInput input = inputsById.get(new InputId(sourceName));
+      if (input != null) {
+        return input.getSourceFile();
+      }
     }
     return null;
   }
 
+  @Override
   public String getSourceLine(String sourceName, int lineNumber) {
     if (lineNumber < 1) {
       return null;
@@ -1836,6 +1910,7 @@ public class Compiler extends AbstractCompiler {
     return null;
   }
 
+  @Override
   public Region getSourceRegion(String sourceName, int lineNumber) {
     if (lineNumber < 1) {
       return null;
@@ -1917,6 +1992,13 @@ public class Compiler extends AbstractCompiler {
   @Override
   List<CompilerInput> getInputsInOrder() {
     return Collections.<CompilerInput>unmodifiableList(inputs);
+  }
+
+  /**
+   * Gets the externs in the order in which they are being processed.
+   */
+  List<CompilerInput> getExternsInOrder() {
+    return Collections.<CompilerInput>unmodifiableList(externs);
   }
 
   /**
@@ -2004,7 +2086,8 @@ public class Compiler extends AbstractCompiler {
     Preconditions.checkState(collectionRoot.getType() == Token.SCRIPT
         || collectionRoot.getType() == Token.BLOCK);
     if (globalRefMap == null) {
-      globalRefMap = new GlobalVarReferenceMap(getInputsInOrder());
+      globalRefMap = new GlobalVarReferenceMap(getInputsInOrder(),
+          getExternsInOrder());
     }
     globalRefMap.updateGlobalVarReferences(refMapPatch, collectionRoot);
   }

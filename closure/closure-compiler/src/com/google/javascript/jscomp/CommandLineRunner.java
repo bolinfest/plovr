@@ -34,6 +34,7 @@ import org.kohsuke.args4j.spi.Setter;
 import org.kohsuke.args4j.spi.StringOptionHandler;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
@@ -346,6 +347,16 @@ public class CommandLineRunner extends
         usage = "Prints the compiler version to stderr.")
     private boolean version = false;
 
+    @Option(name = "--translations_file",
+        usage = "Source of translated messages. Currently only supports XTB.")
+    private String translationsFile = "";
+
+    @Option(name = "--translations_project",
+        usage = "Scopes all translations to the specified project." +
+        "When specified, we will use different message ids so that messages " +
+        "in different projects can have different translations.")
+    private String translationsProject = null;
+
     @Option(name = "--flagfile",
         usage = "A file containing additional command-line options.")
     private String flag_file = "";
@@ -424,22 +435,27 @@ public class CommandLineRunner extends
       }
     }
 
-    private static class WarningGuardSetter implements Setter {
-      private final Setter proxy;
+    private static class WarningGuardSetter implements Setter<String> {
+      private final Setter<? super String> proxy;
       private final CheckLevel level;
 
-      private WarningGuardSetter(Setter proxy, CheckLevel level) {
+      private WarningGuardSetter(
+          Setter<? super String> proxy, CheckLevel level) {
         this.proxy = proxy;
         this.level = level;
       }
 
-      @Override public boolean isMultiValued() { return proxy.isMultiValued(); }
+      @Override public boolean isMultiValued() {
+        return proxy.isMultiValued();
+      }
 
-      @Override public Class getType() { return proxy.getType(); }
+      @Override public Class<String> getType() {
+        return (Class<String>) proxy.getType();
+      }
 
-      @Override public void addValue(Object value) throws CmdLineException {
-        proxy.addValue((String) value);
-        warningGuardSpec.add(level, (String) value);
+      @Override public void addValue(String value) throws CmdLineException {
+        proxy.addValue(value);
+        warningGuardSpec.add(level, value);
       }
     }
   }
@@ -621,7 +637,7 @@ public class CommandLineRunner extends
       level.setDebugOptionsForCompilationLevel(options);
     }
 
-    if(flags.generate_exports) {
+    if (flags.generate_exports) {
       options.setGenerateExports(flags.generate_exports);
     }
 
@@ -632,6 +648,26 @@ public class CommandLineRunner extends
     }
 
     options.closurePass = flags.process_closure_primitives;
+
+    if (!flags.translationsFile.isEmpty()) {
+      try {
+        options.messageBundle = new XtbMessageBundle(
+            new FileInputStream(flags.translationsFile),
+            flags.translationsProject);
+      } catch (IOException e) {
+        throw new RuntimeException("Reading XTB file", e);
+      }
+    } else if (CompilationLevel.ADVANCED_OPTIMIZATIONS == level) {
+      // In SIMPLE or WHITESPACE mode, if the user hasn't specified a
+      // translations file, they might reasonably try to write their own
+      // implementation of goog.getMsg that makes the substitution at
+      // run-time.
+      //
+      // In ADVANCED mode, goog.getMsg is going to be renamed anyway,
+      // so we might as well inline it.
+      options.messageBundle = new EmptyMessageBundle();
+    }
+
     return options;
   }
 

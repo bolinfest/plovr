@@ -25,10 +25,10 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
 import com.google.javascript.jscomp.Scope.Var;
+import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.JSType;
-import com.google.javascript.rhino.jstype.SimpleSourceFile;
 import com.google.javascript.rhino.jstype.StaticReference;
 import com.google.javascript.rhino.jstype.StaticSourceFile;
 import com.google.javascript.rhino.jstype.StaticSymbolTable;
@@ -115,7 +115,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
    * Same as process but only runs on a part of AST associated to one script.
    */
   @Override
-  public void hotSwapScript(Node scriptRoot) {
+  public void hotSwapScript(Node scriptRoot, Node originalRoot) {
     NodeTraversal.traverse(compiler, scriptRoot, this);
   }
 
@@ -125,6 +125,11 @@ class ReferenceCollectingCallback implements ScopedCallback,
   @Override
   public Iterable<Var> getAllSymbols() {
     return referenceMap.keySet();
+  }
+
+  @Override
+  public Scope getScope(Var var) {
+    return var.scope;
   }
 
   /**
@@ -139,6 +144,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
    * For each node, update the block stack and reference collection
    * as appropriate.
    */
+  @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
     if (n.getType() == Token.NAME) {
       Var v;
@@ -160,6 +166,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
   /**
    * Updates block stack and invokes any additional behavior.
    */
+  @Override
   public void enterScope(NodeTraversal t) {
     Node n = t.getScope().getRootNode();
     BasicBlock parent = blockStack.isEmpty() ? null : blockStack.peek();
@@ -169,6 +176,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
   /**
    * Updates block statck and invokes any additional behavior.
    */
+  @Override
   public void exitScope(NodeTraversal t) {
     blockStack.pop();
     if (t.getScope().isGlobal()) {
@@ -183,6 +191,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
   /**
    * Updates block stack.
    */
+  @Override
   public boolean shouldTraverse(NodeTraversal nodeTraversal, Node n,
       Node parent) {
     // If node is a new basic block, put on basic block stack
@@ -482,11 +491,12 @@ class ReferenceCollectingCallback implements ScopedCallback,
     private final Node nameNode;
     private final BasicBlock basicBlock;
     private final Scope scope;
+    private final InputId inputId;
     private final StaticSourceFile sourceFile;
 
     Reference(Node nameNode, NodeTraversal t,
         BasicBlock basicBlock) {
-      this(nameNode, basicBlock, t.getScope(), t.getInput());
+      this(nameNode, basicBlock, t.getScope(), t.getInput().getInputId());
     }
 
     // Bleeding functions are weird, because the declaration does
@@ -494,27 +504,27 @@ class ReferenceCollectingCallback implements ScopedCallback,
     static Reference newBleedingFunction(NodeTraversal t,
         BasicBlock basicBlock, Node func) {
       return new Reference(func.getFirstChild(),
-          basicBlock, t.getScope(), t.getInput());
+          basicBlock, t.getScope(), t.getInput().getInputId());
     }
 
     /**
      * Creates a variable reference in a given script file name, used in tests.
      *
-     * @param sourceName The name of the script file.
      * @return The created reference.
      */
     @VisibleForTesting
-    static Reference createRefForTest(String sourceName) {
+    static Reference createRefForTest(CompilerInput input) {
       return new Reference(new Node(Token.NAME), null, null,
-          new SimpleSourceFile(sourceName, false));
+          input.getInputId());
     }
 
     private Reference(Node nameNode,
-        BasicBlock basicBlock, Scope scope, StaticSourceFile sourceFile) {
+        BasicBlock basicBlock, Scope scope, InputId inputId) {
       this.nameNode = nameNode;
       this.basicBlock = basicBlock;
       this.scope = scope;
-      this.sourceFile = sourceFile;
+      this.inputId = inputId;
+      this.sourceFile = nameNode.getStaticSourceFile();
     }
 
     @Override
@@ -525,6 +535,10 @@ class ReferenceCollectingCallback implements ScopedCallback,
     @Override
     public Node getNode() {
       return nameNode;
+    }
+
+    public InputId getInputId() {
+      return inputId;
     }
 
     @Override

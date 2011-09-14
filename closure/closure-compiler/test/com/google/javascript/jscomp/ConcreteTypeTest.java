@@ -36,6 +36,7 @@ import com.google.javascript.rhino.jstype.ObjectType;
 import com.google.javascript.rhino.jstype.StaticReference;
 import com.google.javascript.rhino.jstype.StaticScope;
 import com.google.javascript.rhino.jstype.StaticSlot;
+import com.google.javascript.rhino.testing.AbstractStaticScope;
 import com.google.javascript.rhino.testing.TestErrorReporter;
 
 import junit.framework.TestCase;
@@ -160,8 +161,8 @@ public class ConcreteTypeTest extends TestCase {
     assertNull(obj.getPropertySlot("c"));
 
     // The prototype chain should be: MyObj -> MyObj.prototype -> Object ->
-    // Object.prototype -> {...}.prototype -> null.
-    for (int i = 0; i < 4; ++i) {
+    // Object.prototype -> null.
+    for (int i = 0; i < 3; ++i) {
       assertNotNull(obj = obj.getImplicitPrototype());
       assertTrue(obj.isInstance());
     }
@@ -239,11 +240,13 @@ public class ConcreteTypeTest extends TestCase {
     private final JSTypeRegistry registry = new JSTypeRegistry(
         new TestErrorReporter(null, null));
 
+    @Override
     public JSTypeRegistry getTypeRegistry() {
       return registry;
     }
 
     /** {@inheritDoc} */
+    @Override
     public ConcreteFunctionType createConcreteFunction(
         Node decl, StaticScope<ConcreteType> parent) {
       ConcreteFunctionType funcType = functionByDeclaration.get(decl);
@@ -258,6 +261,7 @@ public class ConcreteTypeTest extends TestCase {
     }
 
     /** {@inheritDoc} */
+    @Override
     public ConcreteInstanceType createConcreteInstance(
         ObjectType instanceType) {
       ConcreteInstanceType instType = instanceByJSType.get(instanceType);
@@ -269,16 +273,19 @@ public class ConcreteTypeTest extends TestCase {
     }
 
     /** {@inheritDoc} */
+    @Override
     public ConcreteFunctionType getConcreteFunction(FunctionType functionType) {
       return functionByJSType.get(functionType);
     }
 
     /** {@inheritDoc} */
+    @Override
     public ConcreteInstanceType getConcreteInstance(ObjectType instanceType) {
       return instanceByJSType.get(instanceType);
     }
 
     /** {@inheritDoc} */
+    @Override
     public StaticScope<ConcreteType> createFunctionScope(
         Node decl, StaticScope<ConcreteType> parent) {
       FakeScope scope = new FakeScope((FakeScope) parent);
@@ -294,6 +301,7 @@ public class ConcreteTypeTest extends TestCase {
     }
 
     /** {@inheritDoc} */
+    @Override
     public StaticScope<ConcreteType> createInstanceScope(
         ObjectType instanceType) {
       FakeScope parentScope = null;
@@ -312,7 +320,7 @@ public class ConcreteTypeTest extends TestCase {
   }
 
   // TODO(user): move to a common place if it can be used elsewhere
-  private class FakeScope implements StaticScope<ConcreteType> {
+  private class FakeScope extends AbstractStaticScope<ConcreteType> {
     private final FakeScope parent;
     private final Map<String, FakeSlot> slots = Maps.newHashMap();
 
@@ -321,14 +329,17 @@ public class ConcreteTypeTest extends TestCase {
     }
 
     /** {@inheritDoc} */
+    @Override
     public StaticScope<ConcreteType> getParentScope() { return parent; }
 
     /** {@inheritDoc} */
+    @Override
     public StaticSlot<ConcreteType> getOwnSlot(String name) {
       return slots.get(name);
     }
 
     /** {@inheritDoc} */
+    @Override
     public StaticSlot<ConcreteType> getSlot(String name) {
       if (slots.containsKey(name)) {
         return slots.get(name);
@@ -340,6 +351,7 @@ public class ConcreteTypeTest extends TestCase {
     }
 
     /** {@inheritDoc} */
+    @Override
     public ConcreteType getTypeOfThis() { return ConcreteType.ALL; }
 
     void addSlot(String name) {

@@ -153,8 +153,8 @@ public class JSDocInfo implements Serializable {
 
   private LazilyInitializedDocumentation documentation = null;
 
-  /** The source file containing the JSDoc. */
-  private String sourceName = null;
+  // The Node this JSDoc is associated with.
+  private Node associatedNode = null;
 
   private Visibility visibility = null;
 
@@ -218,6 +218,10 @@ public class JSDocInfo implements Serializable {
   private static final int MASK_EXTERNS       = 0x00008000; // @externs
   private static final int MASK_JAVADISPATCH  = 0x00010000; // @javadispath
   private static final int MASK_NOCOMPILE     = 0x00020000; // @nocompile
+  // @consistentIdGenerator
+  private static final int MASK_CONSISTIDGEN  = 0x00040000;
+  // @idGenerator
+  private static final int MASK_IDGEN         = 0x00080000;
 
   // 3 bit type field stored in the top 3 bits of the most significant
   // nibble.
@@ -237,6 +241,10 @@ public class JSDocInfo implements Serializable {
 
   // Visible for testing.
   public JSDocInfo() {}
+
+  void setConsistentIdGenerator(boolean value) {
+    setFlag(value, MASK_CONSISTIDGEN);
+  }
 
   void setConstant(boolean value) {
     setFlag(value, MASK_CONSTANT);
@@ -287,6 +295,10 @@ public class JSDocInfo implements Serializable {
     setFlag(value, MASK_NOSHADOW);
   }
 
+  void setIdGenerator(boolean value) {
+    setFlag(value, MASK_IDGEN);
+  }
+
   void setImplicitCast(boolean value) {
     setFlag(value, MASK_IMPLICITCAST);
   }
@@ -313,6 +325,14 @@ public class JSDocInfo implements Serializable {
     } else {
       bitset &= ~mask;
     }
+  }
+
+  /**
+   * @return whether the {@code @consistentIdGenerator} is present on
+   * this {@link JSDocInfo}
+   */
+  public boolean isConsistentIdGenerator() {
+    return getFlag(MASK_CONSISTIDGEN);
   }
 
   /**
@@ -410,6 +430,14 @@ public class JSDocInfo implements Serializable {
    */
   public boolean isNoShadow() {
     return getFlag(MASK_NOSHADOW);
+  }
+
+  /**
+   * @return whether the {@code @idGenerator} is present on
+   * this {@link JSDocInfo}
+   */
+  public boolean isIdGenerator() {
+    return getFlag(MASK_IDGEN);
   }
 
   /**
@@ -1262,19 +1290,23 @@ public class JSDocInfo implements Serializable {
     return documentation == null ? null : documentation.fileOverview;
   }
 
+  public Node getAssociatedNode() {
+    return this.associatedNode;
+  }
+
+  void setAssociatedNode(Node node) {
+    this.associatedNode = node;
+  }
+
   /** Gets the name of the source file that contains this JSDoc. */
   public String getSourceName() {
-    return sourceName;
+    return this.associatedNode != null
+        ? this.associatedNode.getSourceFileName() : null;
   }
 
   /** Gets the list of all markers for the documentation in this JSDoc. */
   public Collection<Marker> getMarkers() {
     return documentation == null ? null : documentation.markers;
-  }
-
-  /** Sets the name of the source file that contains this JSDoc. */
-  void setSourceName(String sourceName) {
-    this.sourceName = sourceName;
   }
 
   /** Gets the template type name. */

@@ -23,12 +23,14 @@ import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.javascript.jscomp.AbstractCommandLineRunner.FlagUsageException;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.Node;
 
 import junit.framework.TestCase;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.util.List;
 
@@ -154,6 +156,12 @@ public class CommandLineRunnerTest extends TestCase {
     test("function f() { this.a = 3; }", CheckGlobalThis.GLOBAL_THIS);
   }
 
+  public void testCheckGlobalThisOff() {
+    args.add("--warning_level=VERBOSE");
+    args.add("--jscomp_off=globalThis");
+    testSame("function f() { this.a = 3; }");
+  }
+
   public void testTypeCheckingOffByDefault() {
     test("function f(x) { return x; } f();",
          "function f(a) { return a; } f();");
@@ -262,7 +270,7 @@ public class CommandLineRunnerTest extends TestCase {
          "/** @define {number} */ var BAR = 3;" +
          "/** @define {boolean} */ var CCC = false;" +
          "/** @define {boolean} */ var DDD = false;",
-         "var FOO = !0, BAR = 5, CCC = !0, DDD = !0;");
+         "var FOO = true, BAR = 5, CCC = true, DDD = true;");
   }
 
   public void testDefineFlag2() {
@@ -301,6 +309,18 @@ public class CommandLineRunnerTest extends TestCase {
          "var goog = {dom:{}};");
     args.add("--process_closure_primitives=false");
     testSame("var goog = {}; goog.provide('goog.dom');");
+  }
+
+  public void testGetMsgWiring() throws Exception {
+    test("var goog = {}; goog.getMsg = function(x) { return x; };" +
+         "/** @desc A real foo. */ var MSG_FOO = goog.getMsg('foo');",
+         "var goog={getMsg:function(a){return a}}, " +
+         "MSG_FOO=goog.getMsg('foo');");
+    args.add("--compilation_level=ADVANCED_OPTIMIZATIONS");
+    test("var goog = {}; goog.getMsg = function(x) { return x; };" +
+         "/** @desc A real foo. */ var MSG_FOO = goog.getMsg('foo');" +
+         "window['foo'] = MSG_FOO;",
+         "window.foo = 'foo';");
   }
 
   public void testCssNameWiring() throws Exception {
@@ -755,7 +775,7 @@ public class CommandLineRunnerTest extends TestCase {
     test("goog.asserts.assert(false)",
          "");
     args.add("--debug");
-    test("goog.asserts.assert(false)", "goog.$asserts$.$assert$(!1)");
+    test("goog.asserts.assert(false)", "goog.$asserts$.$assert$(false)");
   }
 
   public void testMissingReturnCheckOnWithVerbose() {
@@ -817,6 +837,29 @@ public class CommandLineRunnerTest extends TestCase {
     String outputSource = compiler.toSource();
     assertEquals("'use strict'", outputSource.substring(0, 12));
     assertEquals(outputSource.substring(13).indexOf("'use strict'"), -1);
+  }
+
+  public void testWithKeywordDefault() {
+    test("var x = {}; with (x) {}", ControlStructureCheck.USE_OF_WITH);
+  }
+
+  public void testWithKeywordWithEs5ChecksOff() {
+    args.add("--jscomp_off=es5Strict");
+    testSame("var x = {}; with (x) {}");
+  }
+
+  public void testNoSrCFilesWithManifest() throws IOException {
+    args.add("--use_only_custom_externs=true");
+    args.add("--output_manifest=test.MF");
+    CommandLineRunner runner = createCommandLineRunner(new String[0]);
+    String expectedMessage = "";
+    try {
+      runner.doRun();
+    } catch (FlagUsageException e) {
+      expectedMessage = e.getMessage();
+    }
+    assertEquals(expectedMessage, "Bad --js flag. " +
+      "Manifest files cannot be generated when the input is from stdin.");
   }
 
   /* Helper functions */

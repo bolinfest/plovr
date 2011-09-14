@@ -300,7 +300,7 @@ CanvasRenderingContext2D.prototype.strokeText = function(
 CanvasRenderingContext2D.prototype.measureText = function(text) {};
 
 /**
- * @param {HTMLImageElement|HTMLCanvasElement|Image} image
+ * @param {HTMLImageElement|HTMLCanvasElement|Image|HTMLVideoElement} image
  * @param {number} dx Destination x coordinate.
  * @param {number} dy Destination y coordinate.
  * @param {number=} opt_dw Destination box width.  Defaults to the image width.
@@ -634,6 +634,13 @@ Window.prototype.postMessage = function(message, targetOrigin, ports) {};
  * @param {string} message
  */
 Document.prototype.postMessage = function(message) {};
+
+/**
+ * Document head accessor.
+ * @see http://www.whatwg.org/specs/web-apps/current-work/multipage/dom.html#the-head-element-0
+ * @type {HTMLHeadElement}
+ */
+Document.prototype.head;
 
 /**
  * @see https://developer.apple.com/webapps/docs/documentation/AppleApplications/Reference/SafariJSRef/DOMApplicationCache/DOMApplicationCache.html

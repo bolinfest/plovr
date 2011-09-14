@@ -27,6 +27,7 @@ import com.google.common.io.Files;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.CompilerOptions.TweakProcessing;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.TokenStream;
@@ -48,6 +49,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 
 /**
@@ -103,6 +105,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
   private Supplier<List<JSSourceFile>> inputsSupplierForTesting = null;
   private Supplier<List<JSModule>> modulesSupplierForTesting = null;
   private Function<Integer, Boolean> exitCodeReceiverForTesting = null;
+  private Map<String, String> rootRelativePathsMap = null;
 
   // Bookkeeping to measure optimal phase orderings.
   private static final int NUM_RUNS_TO_DETERMINE_OPTIMAL_ORDER = 100;
@@ -270,6 +273,26 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       }
     }
 
+    if (!config.outputManifests.isEmpty()) {
+      Set<String> uniqueNames = Sets.newHashSet();
+      for (String filename : config.outputManifests) {
+        if (!uniqueNames.add(filename)) {
+          throw new FlagUsageException("output_manifest flags specify " +
+              "duplicate file names: " + filename);
+        }
+      }
+    }
+
+    if (!config.outputBundles.isEmpty()) {
+      Set<String> uniqueNames = Sets.newHashSet();
+      for (String filename : config.outputBundles) {
+        if (!uniqueNames.add(filename)) {
+          throw new FlagUsageException("output_bundle flags specify " +
+              "duplicate file names: " + filename);
+        }
+      }
+    }
+
     options.acceptConstKeyword = config.acceptConstKeyword;
   }
 
@@ -367,6 +390,14 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
           throw new FlagUsageException("Can't specify stdin twice.");
         }
 
+        if (!config.outputManifests.isEmpty()) {
+          throw new FlagUsageException("Manifest files cannot be generated " +
+              "when the input is from stdin.");
+        }
+        if (!config.outputBundles.isEmpty()) {
+          throw new FlagUsageException("Bundle files cannot be generated " +
+              "when the input is from stdin.");
+        }
         inputs.add(JSSourceFile.fromInputStream("stdin", System.in));
         usingStdin = true;
       }
@@ -707,6 +738,8 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       }
     }
 
+    rootRelativePathsMap = constructRootRelativePathsMap();
+
     if (config.skipNormalOutputs) {
       // Output the manifest and bundle files if requested.
       outputManifest();
@@ -719,7 +752,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
             OUTPUT_WRAPPER_MARKER);
 
         // Output the source map if requested.
-        outputSourceMap(options);
+        outputSourceMap(options, options.jsOutputFile);
       } else {
         String moduleFilePrefix = config.moduleOutputPathPrefix;
         maybeCreateDirsForPath(moduleFilePrefix);
@@ -952,7 +985,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
    *
    * @param options The options to the Compiler.
    */
-  private void outputSourceMap(B options)
+  private void outputSourceMap(B options, String associatedName)
       throws IOException {
     if (Strings.isEmpty(options.sourceMapOutputPath)) {
       return;
@@ -960,7 +993,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
 
     String outName = expandSourceMapPath(options, null);
     Writer out = fileNameToOutputWriter(outName);
-    compiler.getSourceMap().appendTo(out, outName);
+    compiler.getSourceMap().appendTo(out, associatedName);
     out.close();
   }
 
@@ -1142,10 +1175,6 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
         && output != null && output.contains("%outname%");
   }
 
-  /**
-   * Writes the manifest or bundle of all compiler input files that survived
-   * manage_closure_dependencies, if requested.
-   */
   private void outputManifest() throws IOException {
     outputManifestOrBundle(config.outputManifests, true);
   }
@@ -1154,6 +1183,10 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     outputManifestOrBundle(config.outputBundles, false);
   }
 
+  /**
+   * Writes the manifest or bundle of all compiler input files that survived
+   * manage_closure_dependencies, if requested.
+   */
   private void outputManifestOrBundle(List<String> outputFiles,
       boolean isManifest) throws IOException {
     if (outputFiles.isEmpty()) {
@@ -1227,33 +1260,56 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
   }
 
   /**
-   * Prints a list of input names, delimited by newlines, to the manifest file.
+   * Prints a list of input names (using root-relative paths), delimited by
+   * newlines, to the manifest file.
    */
   private void printManifestTo(Iterable<CompilerInput> inputs, Appendable out)
       throws IOException {
-    List<String> names = Lists.newArrayList();
     for (CompilerInput input : inputs) {
-      names.add(input.getName());
+      String rootRelativePath = rootRelativePathsMap.get(input.getName());
+      String displayName = rootRelativePath != null
+          ? rootRelativePath
+          : input.getName();
+      out.append(displayName);
+      out.append("\n");
     }
-    String result = Joiner.on("\n").join(names);
-    out.append(result);
-    out.append("\n");
   }
 
   /**
    * Prints all the input contents, starting with a comment that specifies
-   * the input file name before each file
+   * the input file name (using root-relative paths) before each file.
    */
   private void printBundleTo(Iterable<CompilerInput> inputs, Appendable out)
       throws IOException {
     for (CompilerInput input : inputs) {
-      out.append("//" + input.getName() + "\n");
+      String rootRelativePath = rootRelativePathsMap.get(input.getName());
+      String displayName = rootRelativePath != null
+          ? rootRelativePath
+          : input.getName();
       File file = new File(input.getName());
-      if (file.canRead()) {
-        Files.copy(file, inputCharset, out);
-      }
+      out.append("//");
+      out.append(displayName);
+      out.append("\n");
+      Files.copy(file, inputCharset, out);
       out.append("\n");
     }
+  }
+
+  /**
+   * Construct and return the input root path map. The key is the exec path of
+   * each input file, and the value is the corresponding root relative path.
+   */
+  private Map<String, String> constructRootRelativePathsMap() {
+    Map<String, String> rootRelativePathsMap = Maps.newLinkedHashMap();
+    for (String mapString : config.manifestMaps) {
+      int colonIndex = mapString.indexOf(':');
+      Preconditions.checkState(colonIndex > 0);
+      String execPath = mapString.substring(0, colonIndex);
+      String rootRelativePath = mapString.substring(colonIndex + 1);
+      Preconditions.checkState(rootRelativePath.indexOf(':') == -1);
+      rootRelativePathsMap.put(execPath, rootRelativePath);
+    }
+    return rootRelativePathsMap;
   }
 
   private class RunTimeStats {
@@ -1659,9 +1715,16 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
 
     /**
      * Sets whether to print output manifest files.
+     * Filter out empty file names.
      */
     CommandLineConfig setOutputManifest(List<String> outputManifests) {
-      this.outputManifests = outputManifests;
+      this.outputManifests = Lists.newArrayList();
+      for (String manifestName : outputManifests) {
+        if (!manifestName.isEmpty()) {
+          this.outputManifests.add(manifestName);
+        }
+      }
+      this.outputManifests = ImmutableList.copyOf(this.outputManifests);
       return this;
     }
 
@@ -1696,15 +1759,26 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       return this;
     }
 
-    /**
-     * Set whether the normal outputs of compilation should be skipped
-     */
     private boolean skipNormalOutputs = false;
 
+    /**
+     * Sets whether the normal outputs of compilation should be skipped.
+     */
     CommandLineConfig setSkipNormalOutputs(boolean skipNormalOutputs) {
       this.skipNormalOutputs = skipNormalOutputs;
       return this;
     }
+
+    private List<String> manifestMaps = ImmutableList.of();
+
+    /**
+     * Sets the execPath:rootRelativePath mappings
+     */
+    CommandLineConfig setManifestMaps(List<String> manifestMaps) {
+      this.manifestMaps = manifestMaps;
+      return this;
+    }
+
   }
 
   /**

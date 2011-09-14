@@ -47,6 +47,11 @@ import java.util.Set;
 class LiveVariablesAnalysis extends
     DataFlowAnalysis<Node, LiveVariablesAnalysis.LiveVariableLattice> {
 
+  // 100 = ((# of original Power Rangers) ^
+  //        (# years of Warren Harding in office)) *
+  //       (# of Ninja Turtles)
+  static final int MAX_VARIABLES_TO_ANALYZE = 100;
+
   public static final String ARGUMENT_ARRAY_ALIAS = "arguments";
 
   private static class LiveVariableJoinOp
@@ -203,8 +208,12 @@ class LiveVariablesAnalysis extends
             // for(var x in y) {...}
             lhs = lhs.getLastChild();
           }
-          addToSetIfLocal(lhs, kill);
-          addToSetIfLocal(lhs, gen);
+          if (NodeUtil.isName(lhs)) {
+            addToSetIfLocal(lhs, kill);
+            addToSetIfLocal(lhs, gen);
+          } else {
+            computeGenKill(lhs, gen, kill, conditional);
+          }
           computeGenKill(rhs, gen, kill, conditional);
         }
         return;

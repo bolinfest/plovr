@@ -88,6 +88,7 @@ public abstract class JSType implements Serializable {
    * method of the union type since this output is used in tests.
    */
   static final Comparator<JSType> ALPHA = new Comparator<JSType>() {
+    @Override
     public int compare(JSType t1, JSType t2) {
       return t1.toString().compareTo(t2.toString());
     }
@@ -241,16 +242,61 @@ public abstract class JSType implements Serializable {
     return false;
   }
 
-  public boolean isUnionType() {
-    return false;
+  public final boolean isUnionType() {
+    return toMaybeUnionType() != null;
   }
 
-  public boolean isFunctionType() {
-    return false;
+  /**
+   * Downcasts this to a UnionType, or returns null if this is not a UnionType.
+   *
+   * Named in honor of Haskell's Maybe type constructor.
+   */
+  public UnionType toMaybeUnionType() {
+    return null;
   }
 
-  public boolean isEnumElementType() {
-    return false;
+  /** Returns true if this is a global this type. */
+  public final boolean isGlobalThisType() {
+    return this == registry.getNativeType(JSTypeNative.GLOBAL_THIS);
+  }
+
+  /** Returns true if toMaybeFunctionType returns a non-null FunctionType. */
+  public final boolean isFunctionType() {
+    return toMaybeFunctionType() != null;
+  }
+
+  /**
+   * Downcasts this to a FunctionType, or returns null if this is not
+   * a function.
+   *
+   * For the purposes of this function, we define a MaybeFunctionType as any
+   * type in the sub-lattice
+   * { x | LEAST_FUNCTION_TYPE <= x <= GREATEST_FUNCTION_TYPE }
+   * This definition excludes bottom types like NoType and NoObjectType.
+   *
+   * This definition is somewhat arbitrary and axiomatic, but this is the
+   * definition that makes the most sense for the most callers.
+   */
+  public FunctionType toMaybeFunctionType() {
+    return null;
+  }
+
+  /**
+   * Null-safe version of toMaybeFunctionType().
+   */
+  public static FunctionType toMaybeFunctionType(JSType type) {
+    return type == null ? null : type.toMaybeFunctionType();
+  }
+
+  public final boolean isEnumElementType() {
+    return toMaybeEnumElementType() != null;
+  }
+
+  /**
+   * Downcasts this to an EnumElementType, or returns null if this is not an EnumElementType.
+   */
+  public EnumElementType toMaybeEnumElementType() {
+    return null;
   }
 
   public boolean isEnumType() {
@@ -294,7 +340,32 @@ public abstract class JSType implements Serializable {
   }
 
   /**
+   * Whether this type is the original constructor of a nominal type.
+   * Does not include structural constructors.
+   */
+  public final boolean isNominalConstructor() {
+    if (isConstructor() || isInterface()) {
+      FunctionType fn = toMaybeFunctionType();
+      if (fn == null) {
+        return false;
+      }
+
+      // Programmer-defined constructors will have a link
+      // back to the original function in the source tree.
+      // Structural constructors will not.
+      if (fn.getSource() != null) {
+        return true;
+      }
+
+      // Native constructors are always nominal.
+      return fn.isNativeObjectType();
+    }
+    return false;
+  }
+
+  /**
    * Whether this type is an Instance object of some constructor.
+   * Does not necessarily mean this is an {@link InstanceObjectType}.
    */
   public boolean isInstanceType() {
     return false;
@@ -472,13 +543,22 @@ public abstract class JSType implements Serializable {
   /**
    * Dereference a type for property access.
    *
+   * Autoboxes the type, and filters null/undefined, and returns the result.
+   */
+  public JSType autobox() {
+    JSType restricted = restrictByNotNullOrUndefined();
+    JSType autobox = restricted.autoboxesTo();
+    return autobox == null ? restricted : autobox;
+  }
+
+  /**
+   * Dereference a type for property access.
+   *
    * Autoboxes the type, filters null/undefined, and returns the result
    * iff it's an object.
    */
   public final ObjectType dereference() {
-    JSType restricted = restrictByNotNullOrUndefined();
-    JSType autobox = restricted.autoboxesTo();
-    return ObjectType.cast(autobox == null ? restricted : autobox);
+    return ObjectType.cast(autobox());
   }
 
   /**
@@ -581,7 +661,7 @@ public abstract class JSType implements Serializable {
   public JSType getLeastSupertype(JSType that) {
     if (that.isUnionType()) {
       // Union types have their own implementation of getLeastSupertype.
-      return that.getLeastSupertype(this);
+      return that.toMaybeUnionType().getLeastSupertype(this);
     }
     return getLeastSupertype(this, that);
   }
@@ -634,10 +714,24 @@ public abstract class JSType implements Serializable {
     } else if (thatType.isSubtype(thisType)) {
       return filterNoResolvedType(thatType);
     } else if (thisType.isUnionType()) {
-      return ((UnionType) thisType).meet(thatType);
+      return thisType.toMaybeUnionType().meet(thatType);
     } else if (thatType.isUnionType()) {
-      return ((UnionType) thatType).meet(thisType);
-    } else if (thisType.isObject() && thatType.isObject()) {
+      return thatType.toMaybeUnionType().meet(thisType);
+    }
+
+    if (thisType.isEnumElementType()) {
+      JSType inf = thisType.toMaybeEnumElementType().meet(thatType);
+      if (inf != null) {
+        return inf;
+      }
+    } else if (thatType.isEnumElementType()) {
+      JSType inf = thatType.toMaybeEnumElementType().meet(thisType);
+      if (inf != null) {
+        return inf;
+      }
+    }
+
+    if (thisType.isObject() && thatType.isObject()) {
       return thisType.getNativeType(JSTypeNative.NO_OBJECT_TYPE);
     }
     return thisType.getNativeType(JSTypeNative.NO_TYPE);
@@ -656,8 +750,8 @@ public abstract class JSType implements Serializable {
       // inf(UnresolvedType1, UnresolvedType2) needs to resolve
       // to the base unresolved type, so that the relation is symmetric.
       return type.getNativeType(JSTypeNative.NO_RESOLVED_TYPE);
-    } else if (type instanceof UnionType) {
-      UnionType unionType = (UnionType) type;
+    } else if (type.isUnionType()) {
+      UnionType unionType = type.toMaybeUnionType();
       boolean needsFiltering = false;
       for (JSType alt : unionType.getAlternates()) {
         if (alt.isNoResolvedType()) {
@@ -734,8 +828,8 @@ public abstract class JSType implements Serializable {
    */
   public TypePair getTypesUnderEquality(JSType that) {
     // unions types
-    if (that instanceof UnionType) {
-      TypePair p = that.getTypesUnderEquality(this);
+    if (that.isUnionType()) {
+      TypePair p = that.toMaybeUnionType().getTypesUnderEquality(this);
       return new TypePair(p.typeB, p.typeA);
     }
 
@@ -767,8 +861,8 @@ public abstract class JSType implements Serializable {
    */
   public TypePair getTypesUnderInequality(JSType that) {
     // unions types
-    if (that instanceof UnionType) {
-      TypePair p = that.getTypesUnderInequality(this);
+    if (that.isUnionType()) {
+      TypePair p = that.toMaybeUnionType().getTypesUnderInequality(this);
       return new TypePair(p.typeB, p.typeA);
     }
 
@@ -812,8 +906,8 @@ public abstract class JSType implements Serializable {
    */
   public TypePair getTypesUnderShallowInequality(JSType that) {
     // union types
-    if (that instanceof UnionType) {
-      TypePair p = that.getTypesUnderShallowInequality(this);
+    if (that.isUnionType()) {
+      TypePair p = that.toMaybeUnionType().getTypesUnderShallowInequality(this);
       return new TypePair(p.typeB, p.typeA);
     }
 
@@ -899,8 +993,8 @@ public abstract class JSType implements Serializable {
       return true;
     }
     // unions
-    if (thatType instanceof UnionType) {
-      UnionType union = (UnionType)thatType;
+    if (thatType.isUnionType()) {
+      UnionType union = thatType.toMaybeUnionType();
       for (JSType element : union.alternates) {
         if (thisType.isSubtype(element)) {
           return true;

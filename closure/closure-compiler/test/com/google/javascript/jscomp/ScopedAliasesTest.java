@@ -177,6 +177,10 @@ public class ScopedAliasesTest extends CompilerTestCase {
 
   private void testTypes(String aliases, String code) {
     testScopedNoChanges(aliases, code);
+    verifyTypes();
+  }
+
+  private void verifyTypes() {
     Compiler lastCompiler = getLastCompiler();
     new TypeVerifyingPass(lastCompiler).process(lastCompiler.externsRoot,
         lastCompiler.jsRoot);
@@ -302,6 +306,27 @@ public class ScopedAliasesTest extends CompilerTestCase {
         ""
         + "/** @type {function() : x} */ types.actual;"
         + "/** @type {function() : goog.Timer} */ types.expected;");
+  }
+
+  public void testForwardJsDoc() {
+    testScoped(
+        "/**\n" +
+        " * @constructor\n" +
+        " */\n" +
+        "foo.Foo = function() {};" +
+        "/** @param {Foo.Bar} x */ function actual(x) {3}" +
+        "var Foo = foo.Foo;" +
+        "/** @constructor */ Foo.Bar = function() {};" +
+        "/** @param {foo.Foo.Bar} x */ function expected(x) {}",
+
+        "/**\n" +
+        " * @constructor\n" +
+        " */\n" +
+        "foo.Foo = function() {};" +
+        "/** @param {foo.Foo.Bar} x */ function actual(x) {3}" +
+        "/** @constructor */ foo.Foo.Bar = function() {};" +
+        "/** @param {foo.Foo.Bar} x */ function expected(x) {}");
+    verifyTypes();
   }
 
   public void testTestTypes() {
@@ -496,7 +521,7 @@ public class ScopedAliasesTest extends CompilerTestCase {
 
   @Override
   protected ScopedAliases getProcessor(Compiler compiler) {
-    return new ScopedAliases(compiler, transformationHandler);
+    return new ScopedAliases(compiler, null, transformationHandler);
   }
 
   private static class TransformationHandlerSpy
@@ -534,36 +559,44 @@ public class ScopedAliasesTest extends CompilerTestCase {
   private static class TypeVerifyingPass
       implements CompilerPass, NodeTraversal.Callback {
     private final Compiler compiler;
-    private List<String> actualTypes = null;
+    private List<Node> actualTypes = null;
 
     public TypeVerifyingPass(Compiler compiler) {
       this.compiler = compiler;
     }
 
+    @Override
     public void process(Node externs, Node root) {
       NodeTraversal.traverse(compiler, root, this);
     }
 
+    @Override
     public boolean shouldTraverse(NodeTraversal nodeTraversal, Node n,
         Node parent) {
       return true;
     }
 
+    @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       JSDocInfo info = n.getJSDocInfo();
       if (info != null) {
         Collection<Node> typeNodes = info.getTypeNodes();
         if (typeNodes.size() > 0) {
           if (actualTypes != null) {
-            List<String> expectedTypes = Lists.newArrayList();
+            List<Node> expectedTypes = Lists.newArrayList();
             for (Node typeNode : info.getTypeNodes()) {
-              expectedTypes.add(typeNode.toStringTree());
+              expectedTypes.add(typeNode);
             }
-            assertEquals(expectedTypes, actualTypes);
+            assertEquals("Wrong number of jsdoc types",
+                expectedTypes.size(), actualTypes.size());
+            for (int i = 0; i < expectedTypes.size(); i++) {
+              assertNull(
+                  expectedTypes.get(i).checkTreeEquals(actualTypes.get(i)));
+            }
           } else {
             actualTypes = Lists.newArrayList();
             for (Node typeNode : info.getTypeNodes()) {
-              actualTypes.add(typeNode.toStringTree());
+              actualTypes.add(typeNode);
             }
           }
         }

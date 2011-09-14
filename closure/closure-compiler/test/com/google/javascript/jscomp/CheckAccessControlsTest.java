@@ -353,6 +353,14 @@ public class CheckAccessControlsTest extends CompilerTestCase {
     });
   }
 
+  public void testPrivateAccessForProperties4() {
+    testSame(new String[] {
+      "/** @constructor */ function Foo() {}" +
+      "/** @private */ Foo.prototype.bar_ = function() {};",
+      "Foo.prototype['baz'] = function() { (new Foo()).bar_(); };"
+    });
+  }
+
   public void testNoPrivateAccessForProperties1() {
     test(new String[] {
       "/** @constructor */ function Foo() {} (new Foo).bar_();",
@@ -582,6 +590,15 @@ public class CheckAccessControlsTest extends CompilerTestCase {
       "function SubFoo() {}" +
       "/** @protected */ SubFoo.prototype.bar = function() {};",
     }, null, PRIVATE_OVERRIDE);
+
+    testSame(new String[] {
+      "/** @constructor */ function Foo() { } " +
+      "/** @private */ Foo.prototype.bar = function() {};",
+      "/** @constructor \n * @extends {Foo} */ " +
+      "function SubFoo() {}" +
+      "/** @override \n *@suppress{visibility} */\n" +
+      " SubFoo.prototype.bar = function() {};",
+    });
   }
 
   public void testAccessOfStaticMethodOnPrivateConstructor() {

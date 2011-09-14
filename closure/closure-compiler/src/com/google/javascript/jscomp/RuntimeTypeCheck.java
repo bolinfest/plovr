@@ -27,7 +27,7 @@ import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.ObjectType;
-import com.google.javascript.rhino.jstype.UnionType;
+import com.google.javascript.rhino.jstype.StaticSourceFile;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -53,6 +53,7 @@ import javax.annotation.Nullable;
 class RuntimeTypeCheck implements CompilerPass {
 
   private static final Comparator<JSType> ALPHA = new Comparator<JSType>() {
+    @Override
     public int compare(JSType t1, JSType t2) {
       return getName(t1).compareTo(getName(t2));
     }
@@ -117,8 +118,8 @@ class RuntimeTypeCheck implements CompilerPass {
     }
 
     private void visitFunction(NodeTraversal t, Node n) {
-      FunctionType funType = (FunctionType) n.getJSType();
-      if (!funType.isConstructor()) {
+      FunctionType funType = n.getJSType().toMaybeFunctionType();
+      if (funType != null && !funType.isConstructor()) {
         return;
       }
 
@@ -233,7 +234,7 @@ class RuntimeTypeCheck implements CompilerPass {
      * Insert checks for the parameters of the function.
      */
     private void visitFunction(NodeTraversal t, Node n) {
-      FunctionType funType = (FunctionType) n.getJSType();
+      FunctionType funType = JSType.toMaybeFunctionType(n.getJSType());
       Node block = n.getLastChild();
       Node paramName = NodeUtil.getFunctionParameters(n).getFirstChild();
       Node insertionPoint = null;
@@ -276,7 +277,7 @@ class RuntimeTypeCheck implements CompilerPass {
 
     private void visitReturn(NodeTraversal t, Node n) {
       Node function = t.getEnclosingFunction();
-      FunctionType funType = (FunctionType) function.getJSType();
+      FunctionType funType = function.getJSType().toMaybeFunctionType();
 
       Node retValue = n.getFirstChild();
       if (retValue == null) {
@@ -308,7 +309,7 @@ class RuntimeTypeCheck implements CompilerPass {
       Collection<JSType> alternates;
       if (type.isUnionType()) {
         alternates = Sets.newTreeSet(ALPHA);
-        Iterables.addAll(alternates, ((UnionType)type).getAlternates());
+        Iterables.addAll(alternates, type.toMaybeUnionType().getAlternates());
       } else {
         alternates = ImmutableList.of(type);
       }
@@ -346,10 +347,9 @@ class RuntimeTypeCheck implements CompilerPass {
 
         String refName = objType.getReferenceName();
 
-        String sourceName =
-            NodeUtil.getSourceName(objType.getConstructor().getSource());
-        CompilerInput sourceInput = compiler.getInput(sourceName);
-        if (sourceInput == null || sourceInput.isExtern()) {
+        StaticSourceFile sourceFile =
+            NodeUtil.getSourceFile(objType.getConstructor().getSource());
+        if (sourceFile == null || sourceFile.isExtern()) {
           return new Node(Token.CALL,
                   jsCode("externClassChecker"),
                   Node.newString(refName));

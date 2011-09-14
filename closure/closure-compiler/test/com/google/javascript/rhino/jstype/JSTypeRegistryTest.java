@@ -43,6 +43,7 @@ import com.google.javascript.rhino.SimpleErrorReporter;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.JSTypeRegistry.ResolveMode;
 import com.google.javascript.rhino.testing.Asserts;
+import com.google.javascript.rhino.testing.AbstractStaticScope;
 import com.google.javascript.rhino.testing.MapBasedScope;
 
 import junit.framework.TestCase;
@@ -83,6 +84,22 @@ public class JSTypeRegistryTest extends TestCase {
     assertTrue(typeRegistry.hasNamespace("a.b"));
   }
 
+  public void testPropertyOnManyTypes() {
+    JSTypeRegistry typeRegistry = new JSTypeRegistry(null);
+
+    JSType type = null;
+
+    // By default the UnionTypeBuilder will treat a union of more than 20
+    // types as an unknown type. We don't want that for property checking
+    // so test that the limit is higher.
+    for (int i = 0; i < 100; i++) {
+      type = typeRegistry.createObjectType("type: " + i, null, null);
+      typeRegistry.registerPropertyOnType("foo", type);
+    }
+
+    assertFalse(typeRegistry.getGreatestSubtypeWithProperty(type, "foo").isUnknownType());
+  }
+
   public void testTypeAsNamespace() {
     JSTypeRegistry typeRegistry = new JSTypeRegistry(null);
 
@@ -105,18 +122,14 @@ public class JSTypeRegistryTest extends TestCase {
     SimpleErrorReporter reporter = new SimpleErrorReporter();
     final JSTypeRegistry typeRegistry = new JSTypeRegistry(reporter);
 
-    StaticScope<JSType> scope = new StaticScope<JSType>() {
+    StaticScope<JSType> scope = new AbstractStaticScope<JSType>() {
+          @Override
           public StaticSlot<JSType> getSlot(final String name) {
             return new SimpleSlot(
                 name,
                 typeRegistry.getNativeType(JSTypeNative.UNKNOWN_TYPE),
                 false);
           }
-          public StaticSlot<JSType> getOwnSlot(String name) {
-            return getSlot(name);
-          }
-          public StaticScope<JSType> getParentScope() { return null; }
-          public JSType getTypeOfThis() { return null; }
         };
 
     ObjectType namedType =
@@ -151,18 +164,14 @@ public class JSTypeRegistryTest extends TestCase {
     SimpleErrorReporter reporter = new SimpleErrorReporter();
     final JSTypeRegistry typeRegistry = new JSTypeRegistry(reporter);
 
-    StaticScope<JSType> scope = new StaticScope<JSType>() {
+    StaticScope<JSType> scope = new AbstractStaticScope<JSType>() {
+          @Override
           public StaticSlot<JSType> getSlot(final String name) {
             return new SimpleSlot(
                 name,
                 typeRegistry.getNativeType(JSTypeNative.UNKNOWN_TYPE),
                 false);
           }
-          public StaticSlot<JSType> getOwnSlot(String name) {
-            return getSlot(name);
-          }
-          public StaticScope<JSType> getParentScope() { return null; }
-          public JSType getTypeOfThis() { return null; }
         };
 
     ObjectType namedType =

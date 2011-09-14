@@ -187,10 +187,15 @@ public class DiagnosticGroups {
       DiagnosticGroups.registerGroup("typeInvalidation",
           DisambiguateProperties.Warnings.INVALIDATION);
 
+  public static DiagnosticGroup DUPLICATE_VARS =
+      DiagnosticGroups.registerGroup("duplicate",
+          SyntacticScopeCreator.VAR_MULTIPLY_DECLARED_ERROR,
+          TypeValidator.DUP_VAR_DECLARATION);
+
   public static DiagnosticGroup ES5_STRICT =
       DiagnosticGroups.registerGroup("es5Strict",
+          ControlStructureCheck.USE_OF_WITH,
           StrictModeCheck.UNKNOWN_VARIABLE,
-          StrictModeCheck.WITH_DISALLOWED,
           StrictModeCheck.EVAL_DECLARATION,
           StrictModeCheck.EVAL_ASSIGNMENT,
           StrictModeCheck.ARGUMENTS_DECLARATION,

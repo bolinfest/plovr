@@ -26,6 +26,7 @@ import com.google.javascript.rhino.testing.BaseJSTypeTestCase;
 import com.google.javascript.rhino.testing.TestErrorReporter;
 
 import java.util.Collection;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -50,18 +51,24 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         compiler.getTypeRegistry());
 
     return new CompilerPass() {
+      @Override
       public void process(Node externs, Node root) {
         checker.processForTesting(externs, root);
+
+        Map<String, CheckLevel> propertiesToErrorFor =
+            Maps.<String, CheckLevel>newHashMap();
+        propertiesToErrorFor.put("foobar", CheckLevel.ERROR);
 
         if (runTightenTypes) {
           TightenTypes tightener = new TightenTypes(compiler);
           tightener.process(externs, root);
           lastPass = DisambiguateProperties.forConcreteTypeSystem(compiler,
-                                                                  tightener);
+              tightener, propertiesToErrorFor);
         } else {
           // This must be created after type checking is run as it depends on
           // any mismatches found during checking.
-          lastPass = DisambiguateProperties.forJSTypeSystem(compiler);
+          lastPass = DisambiguateProperties.forJSTypeSystem(
+              compiler, propertiesToErrorFor);
         }
 
         lastPass.process(externs, root);
@@ -92,14 +99,9 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "/** @type Foo */\n"
         + "var F = new Foo;\n"
         + "F.a = 0;";
-    // TODO(johnlenz): fix this. Doing nothing is safe, but
-    // handling this would be better.
-    String desired = "{a=[[Foo.prototype]]}";
-    String expected = "{}";
+    String expected = "{a=[[Foo.prototype]]}";
     testSets(false, js, js, expected);
-
-    // Tighten types fails here.
-    // testSets(true, js, js, expected);
+    testSets(true, js, js, expected);
   }
 
   public void testOneType3() {
@@ -110,14 +112,9 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "/** @type Foo */\n"
         + "var F = new Foo;\n"
         + "F.a = 0;";
-    // TODO(johnlenz): fix this. Doing nothing is safe, but
-    // handling this would be better.
-    String desired = "{a=[[Foo.prototype]]}";
-    String expected = "{}";
+    String expected = "{a=[[Foo.prototype]]}";
     testSets(false, js, js, expected);
-
-    // Tighten types fails here.
-    // testSets(true, js, js, expected);
+    testSets(true, js, js, expected);
   }
 
   public void testPrototypeAndInstance() {
@@ -179,11 +176,8 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "var B=new Bar;"
         + "B.Bar_prototype$a=0";
 
-    // Would like it to be (but doing nothing is safe):
-    // testSets(false, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
-    testSets(false, js, js, "{}");
-    // TODO(johnlenz): If tighten types is completed, this needs to be fixed.
-    // testSets(true, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
+    testSets(false, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
+    testSets(true, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
   }
 
   public void testTwoTypes3() {
@@ -213,11 +207,8 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "var B=new Bar;"
         + "B.Bar_prototype$a=0";
 
-    // Would like it to be (but doing nothing is safe):
-    // testSets(false, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
-    testSets(false, js, js, "{}");
-    // TODO(johnlenz): If tighten types is completed, this needs to be fixed.
-    // testSets(true, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
+    testSets(false, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
+    testSets(true, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
   }
 
   public void testTwoFields() {
@@ -507,15 +498,15 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
 
   public void testEnum() {
     String js = ""
-      + "/** @enum {string} */ var En = {\n"
-      + "  A: 'first',\n"
-      + "  B: 'second'\n"
-      + "};\n"
-      + "var EA = En.A;\n"
-      + "var EB = En.B;\n"
-      + "/** @constructor */ function Foo(){};\n"
-      + "Foo.prototype.A = 0;\n"
-      + "Foo.prototype.B = 0;\n";
+        + "/** @enum {string} */ var En = {\n"
+        + "  A: 'first',\n"
+        + "  B: 'second'\n"
+        + "};\n"
+        + "var EA = En.A;\n"
+        + "var EB = En.B;\n"
+        + "/** @constructor */ function Foo(){};\n"
+        + "Foo.prototype.A = 0;\n"
+        + "Foo.prototype.B = 0;\n";
     String output = ""
         + "var En={A:'first',B:'second'};"
         + "var EA=En.A;"
@@ -532,6 +523,99 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "Foo.prototype.Foo_prototype$B=0";
     testSets(false, js, output, "{A=[[Foo.prototype]], B=[[Foo.prototype]]}");
     testSets(true, js, ttOutput, "{A=[[Foo.prototype]], B=[[Foo.prototype]]}");
+  }
+
+  public void testEnumOfObjects() {
+    String js = ""
+        + "/** @constructor */ function Formatter() {}"
+        + "Formatter.prototype.format = function() {};"
+        + "/** @constructor */ function Unrelated() {}"
+        + "Unrelated.prototype.format = function() {};"
+        + "/** @enum {!Formatter} */ var Enum = {\n"
+        + "  A: new Formatter()\n"
+        + "};\n"
+        + "Enum.A.format();\n";
+    String output = ""
+        + "/** @constructor */ function Formatter() {}"
+        + "Formatter.prototype.Formatter_prototype$format = function() {};"
+        + "/** @constructor */ function Unrelated() {}"
+        + "Unrelated.prototype.Unrelated_prototype$format = function() {};"
+        + "/** @enum {!Formatter} */ var Enum = {\n"
+        + "  A: new Formatter()\n"
+        + "};\n"
+        + "Enum.A.Formatter_prototype$format();\n";
+    testSets(false, js, output,
+        "{format=[[Formatter.prototype], [Unrelated.prototype]]}");
+
+    // TODO(nicksantos): Fix the type tightener to handle this case.
+    // It currently doesn't work, because getSubTypes is broken for enums.
+  }
+
+  public void testEnumOfObjects2() {
+    String js = ""
+        + "/** @constructor */ function Formatter() {}"
+        + "Formatter.prototype.format = function() {};"
+        + "/** @constructor */ function Unrelated() {}"
+        + "Unrelated.prototype.format = function() {};"
+        + "/** @enum {?Formatter} */ var Enum = {\n"
+        + "  A: new Formatter(),\n"
+        + "  B: new Formatter()\n"
+        + "};\n"
+        + "function f() {\n"
+        + "  var formatter = window.toString() ? Enum.A : Enum.B;\n"
+        + "  formatter.format();\n"
+        + "}";
+    String output = ""
+        + "/** @constructor */ function Formatter() {}"
+        + "Formatter.prototype.format = function() {};"
+        + "/** @constructor */ function Unrelated() {}"
+        + "Unrelated.prototype.format = function() {};"
+        + "/** @enum {?Formatter} */ var Enum = {\n"
+        + "  A: new Formatter(),\n"
+        + "  B: new Formatter()\n"
+        + "};\n"
+        + "function f() {\n"
+        + "  var formatter = window.toString() ? Enum.A : Enum.B;\n"
+        + "  formatter.format();\n"
+        + "}";
+    testSets(false, js, output, "{}");
+  }
+
+  public void testEnumOfObjects3() {
+    String js = ""
+        + "/** @constructor */ function Formatter() {}"
+        + "Formatter.prototype.format = function() {};"
+        + "/** @constructor */ function Unrelated() {}"
+        + "Unrelated.prototype.format = function() {};"
+        + "/** @enum {!Formatter} */ var Enum = {\n"
+        + "  A: new Formatter(),\n"
+        + "  B: new Formatter()\n"
+        + "};\n"
+        + "/** @enum {!Enum} */ var SubEnum = {\n"
+        + "  C: Enum.A\n"
+        + "};\n"
+        + "function f() {\n"
+        + "  var formatter = SubEnum.C\n"
+        + "  formatter.format();\n"
+        + "}";
+    String output = ""
+        + "/** @constructor */ function Formatter() {}"
+        + "Formatter.prototype.Formatter_prototype$format = function() {};"
+        + "/** @constructor */ function Unrelated() {}"
+        + "Unrelated.prototype.Unrelated_prototype$format = function() {};"
+        + "/** @enum {!Formatter} */ var Enum = {\n"
+        + "  A: new Formatter(),\n"
+        + "  B: new Formatter()\n"
+        + "};\n"
+        + "/** @enum {!Enum} */ var SubEnum = {\n"
+        + "  C: Enum.A\n"
+        + "};\n"
+        + "function f() {\n"
+        + "  var formatter = SubEnum.C\n"
+        + "  formatter.Formatter_prototype$format();\n"
+        + "}";
+    testSets(false, js, output,
+        "{format=[[Formatter.prototype], [Unrelated.prototype]]}");
   }
 
   public void testUntypedExterns() {
@@ -1146,9 +1230,28 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
     testSets(false, js, output, "{}");
   }
 
+  public void testErrorOnProtectedProperty() {
+    String js = "function addSingletonGetter(foo) { foo.foobar = 'a'; };";
+
+    Compiler compiler = new Compiler();
+    CompilerOptions options = new CompilerOptions();
+    compiler.init(new JSSourceFile[]{JSSourceFile.fromCode("externs", "")},
+                  new JSSourceFile[]{
+                      JSSourceFile.fromCode("testcode", js)}, options);
+
+    Node root = compiler.parseInputs();
+    Node externsRoot = root.getFirstChild();
+    Node mainRoot = externsRoot.getNext();
+    getProcessor(compiler).process(externsRoot, mainRoot);
+
+    assertEquals(1, compiler.getErrors().length);
+    assertTrue(compiler.getErrors()[0].toString().contains("foobar"));
+  }
+
   public void runFindHighestTypeInChain() {
     // Check that this doesn't go into an infinite loop.
-    DisambiguateProperties.forJSTypeSystem(new Compiler())
+    DisambiguateProperties.forJSTypeSystem(new Compiler(),
+        Maps.<String, CheckLevel>newHashMap())
         .getTypeWithProperty("no",
             new JSTypeRegistry(new TestErrorReporter(null, null))
             .getNativeType(JSTypeNative.OBJECT_PROTOTYPE));

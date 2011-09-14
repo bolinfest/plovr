@@ -30,6 +30,7 @@ import org.apache.tools.ant.BuildException;
 import org.apache.tools.ant.Project;
 import org.apache.tools.ant.Task;
 import org.apache.tools.ant.types.FileList;
+import org.apache.tools.ant.types.Path;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -38,6 +39,8 @@ import java.io.OutputStreamWriter;
 import java.nio.charset.Charset;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 
 /**
@@ -60,9 +63,12 @@ public final class CompileTask
   private boolean prettyPrint;
   private boolean printInputDelimiter;
   private boolean generateExports;
+  private boolean replaceProperties;
+  private String replacePropertiesPrefix;
   private File outputFile;
   private final List<FileList> externFileLists;
   private final List<FileList> sourceFileLists;
+  private final List<Path> sourcePaths;
 
   public CompileTask() {
     this.warningLevel = WarningLevel.DEFAULT;
@@ -73,8 +79,11 @@ public final class CompileTask
     this.prettyPrint = false;
     this.printInputDelimiter = false;
     this.generateExports = false;
+    this.replaceProperties = false;
+    this.replacePropertiesPrefix = "closure.define.";
     this.externFileLists = Lists.newLinkedList();
     this.sourceFileLists = Lists.newLinkedList();
+    this.sourcePaths = Lists.newLinkedList();
   }
 
   /**
@@ -139,6 +148,20 @@ public final class CompileTask
   }
 
   /**
+   * Set the replacement property prefix.
+   */
+  public void setReplacePropertiesPrefix(String value) {
+    this.replacePropertiesPrefix = value;
+  }
+
+  /**
+   * Whether to replace @define lines with properties
+   */
+  public void setReplaceProperties(boolean value) {
+    this.replaceProperties = value;
+  }
+
+  /**
    * Set input file encoding
    */
   public void setEncoding(String encoding) {
@@ -187,6 +210,13 @@ public final class CompileTask
     this.sourceFileLists.add(list);
   }
 
+  /**
+   * Adds a <path/> entry.
+   */
+  public void addPath(Path list) {
+    this.sourcePaths.add(list);
+  }
+
   public void execute() {
     if (this.outputFile == null) {
       throw new BuildException("outputFile attribute must be set");
@@ -229,7 +259,49 @@ public final class CompileTask
 
     this.warningLevel.setOptionsForWarningLevel(options);
     options.setManageClosureDependencies(manageDependencies);
+
+    if (replaceProperties) {
+      convertPropertiesMap(options);
+    }
+
     return options;
+  }
+
+  private void convertPropertiesMap(CompilerOptions options) {
+    Map<String, Object> props = getProject().getProperties();
+    for (Map.Entry<String, Object> entry : props.entrySet()) {
+      String key = entry.getKey();
+      Object value = entry.getValue();
+
+      if (key.startsWith(replacePropertiesPrefix)) {
+        key = key.substring(replacePropertiesPrefix.length());
+
+        if (value instanceof String) {
+          final boolean isTrue = "true".equals(value);
+          final boolean isFalse = "false".equals(value);
+
+          if (isTrue || isFalse) {
+            options.setDefineToBooleanLiteral(key, isTrue);
+          } else {
+            try {
+              double dblTemp = Double.parseDouble((String) value);
+              options.setDefineToDoubleLiteral(key, dblTemp);
+            } catch (NumberFormatException nfe) {
+              // Not a number, assume string
+              options.setDefineToStringLiteral(key, (String) value);
+            }
+          }
+        } else if (value instanceof Boolean) {
+          options.setDefineToBooleanLiteral(key, (Boolean) value);
+        } else if (value instanceof Integer) {
+          options.setDefineToNumberLiteral(key, (Integer) value);
+        } else if (value instanceof Double) {
+          options.setDefineToDoubleLiteral(key, (Double) value);
+        } else {
+          log("Unexpected property value for key=" + key + "; value=" + value);
+        }
+      }
+    }
   }
 
   private Compiler createCompiler(CompilerOptions options) {
@@ -261,6 +333,10 @@ public final class CompileTask
       files.addAll(findJavaScriptFiles(list));
     }
 
+    for (Path list : this.sourcePaths) {
+      files.addAll(findJavaScriptFiles(list));
+    }
+
     return files.toArray(new JSSourceFile[files.size()]);
   }
 
@@ -274,6 +350,21 @@ public final class CompileTask
 
     for (String included : fileList.getFiles(getProject())) {
       files.add(JSSourceFile.fromFile(new File(baseDir, included),
+          Charset.forName(encoding)));
+    }
+
+    return files;
+  }
+
+  /**
+   * Translates an Ant Path into the file list format that the compiler
+   * expects.
+   */
+  private List<JSSourceFile> findJavaScriptFiles(Path path) {
+    List<JSSourceFile> files = Lists.newArrayList();
+
+    for (String included : path.list()) {
+      files.add(JSSourceFile.fromFile(new File(included),
           Charset.forName(encoding)));
     }
 
@@ -321,27 +412,57 @@ public final class CompileTask
    */
   private boolean isStale() {
     long lastRun = outputFile.lastModified();
-    long sourcesLastModified = getLastModifiedTime(this.sourceFileLists);
+    long sourcesLastModified = Math.max(
+        getLastModifiedTime(this.sourceFileLists),
+        getLastModifiedTime(this.sourcePaths));
     long externsLastModified = getLastModifiedTime(this.externFileLists);
 
     return lastRun <= sourcesLastModified || lastRun <= externsLastModified;
   }
 
-  private long getLastModifiedTime(List<FileList> fileLists) {
+  /**
+   * Returns the most recent modified timestamp of the file collection.
+   *
+   * Note: this must be combined into one method to account for both
+   * Path and FileList erasure types.
+   *
+   * @param fileLists Collection of FileList or Path
+   * @return Most recent modified timestamp
+   */
+  private long getLastModifiedTime(List<?> fileLists) {
     long lastModified = 0;
-    for (FileList list : fileLists) {
-      for (String fileName : list.getFiles(this.getProject())) {
-        File path = list.getDir(this.getProject());
-        File file = new File(path, fileName);
-        long fileLastModified = file.lastModified();
-        // If the file is absent, we don't know if it changed (maybe
-        // was deleted), so assume it has just changed.
-        if (fileLastModified == 0) {
-          fileLastModified = new Date().getTime();
+
+    for (Object entry : fileLists) {
+      if (entry instanceof FileList) {
+        FileList list = (FileList) entry;
+
+        for (String fileName : list.getFiles(this.getProject())) {
+          File path = list.getDir(this.getProject());
+          File file = new File(path, fileName);
+          lastModified = Math.max(getLastModifiedTime(file), lastModified);
         }
-        lastModified = Math.max(fileLastModified, lastModified);
+      } else if (entry instanceof Path) {
+        Path path = (Path) entry;
+        for (String src : path.list()) {
+          File file = new File(src);
+          lastModified = Math.max(getLastModifiedTime(file), lastModified);
+        }
       }
     }
+
     return lastModified;
+  }
+
+  /**
+   * Returns the last modified timestamp of the given File.
+   */
+  private long getLastModifiedTime(File file) {
+    long fileLastModified = file.lastModified();
+    // If the file is absent, we don't know if it changed (maybe was deleted),
+    // so assume it has just changed.
+    if (fileLastModified == 0) {
+      fileLastModified = new Date().getTime();
+    }
+    return fileLastModified;
   }
 }

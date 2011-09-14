@@ -37,6 +37,7 @@ public class FunctionInjectorTest extends TestCase {
   static final InliningMode INLINE_DIRECT = InliningMode.DIRECT;
   static final InliningMode INLINE_BLOCK = InliningMode.BLOCK;
   private boolean assumeStrictThis = false;
+  private boolean assumeMinimumCapture = false;
 
   @Override
   protected void setUp() throws Exception {
@@ -47,7 +48,8 @@ public class FunctionInjectorTest extends TestCase {
   private FunctionInjector getInjector() {
     Compiler compiler = new Compiler();
     return new FunctionInjector(
-        compiler, compiler.getUniqueNameIdSupplier(), true, assumeStrictThis);
+        compiler, compiler.getUniqueNameIdSupplier(), true,
+        assumeStrictThis, assumeMinimumCapture);
   }
 
   public void testIsSimpleFunction1() {
@@ -750,6 +752,26 @@ public class FunctionInjectorTest extends TestCase {
         "foo", INLINE_BLOCK, true);
   }
 
+  public void testCanInlineReferenceToFunctionInLoop1() {
+    helperCanInlineReferenceToFunction(
+        CanInlineResult.YES,
+        "function foo(){return a;}; " +
+        "while(1) { foo(); }",
+        "foo", INLINE_BLOCK, true);
+  }
+
+  public void testCanInlineReferenceToFunctionInLoop2() {
+    // If function contains function, don't inline it into a loop.
+    // TODO(johnlenz): this can be improved by looking to see
+    // if the inner function contains any references to values defined
+    // in the outer function.
+    helperCanInlineReferenceToFunction(
+        CanInlineResult.NO,
+        "function foo(){return function() {};}; " +
+        "while(1) { foo(); }",
+        "foo", INLINE_BLOCK, true);
+  }
+
   public void testInline1() {
     helperInlineReferenceToFunction(
         "function foo(){}; foo();",
@@ -1003,7 +1025,8 @@ public class FunctionInjectorTest extends TestCase {
     helperInlineReferenceToFunction(
         "function foo(){function x() {var a; return true;} return x}; foo();",
         "function foo(){function x(){var a;return true}return x};" +
-            "{function x$$inline_1(){var a$$inline_2;return true}x$$inline_1}",
+            "{var x$$inline_1 = function(){" +
+            "var a$$inline_2;return true};x$$inline_1}",
         "foo", INLINE_BLOCK);
   }
 
@@ -1335,7 +1358,8 @@ public class FunctionInjectorTest extends TestCase {
     final Compiler compiler = new Compiler();
     final FunctionInjector injector = new FunctionInjector(
         compiler, compiler.getUniqueNameIdSupplier(), allowDecomposition,
-        assumeStrictThis);
+        assumeStrictThis,
+        assumeMinimumCapture);
     final Node tree = parse(compiler, code);
 
     Node externsRoot = new Node(Token.EMPTY);
@@ -1347,6 +1371,7 @@ public class FunctionInjectorTest extends TestCase {
 
     // can-inline tester
     Method tester = new Method() {
+      @Override
       public boolean call(NodeTraversal t, Node n, Node parent) {
         CanInlineResult result = injector.canInlineReferenceToFunction(
             t, n, fnNode, unsafe, mode,
@@ -1388,7 +1413,8 @@ public class FunctionInjectorTest extends TestCase {
     final Compiler compiler = new Compiler();
     final FunctionInjector injector = new FunctionInjector(
         compiler, compiler.getUniqueNameIdSupplier(), decompose,
-        assumeStrictThis);
+        assumeStrictThis,
+        assumeMinimumCapture);
 
     JSSourceFile[] externsInputs = new JSSourceFile[] {
         JSSourceFile.fromCode("externs", "")
@@ -1422,6 +1448,7 @@ public class FunctionInjectorTest extends TestCase {
 
     // inline tester
     Method tester = new Method() {
+      @Override
       public boolean call(NodeTraversal t, Node n, Node parent) {
 
         CanInlineResult canInline = injector.canInlineReferenceToFunction(
@@ -1536,7 +1563,12 @@ public class FunctionInjectorTest extends TestCase {
 
   private static Node parseExpected(Compiler compiler, String js) {
     Node n = compiler.parseTestCode(js);
-    assertEquals(0, compiler.getErrorCount());
+    String message = "Unexpected errors: ";
+    JSError[] errs = compiler.getErrors();
+    for (int i = 0; i < errs.length; i++){
+      message += "\n" + errs[i].toString();
+    }
+    assertEquals(message, 0, compiler.getErrorCount());
     return n;
   }
 

@@ -97,6 +97,11 @@ class GlobalNamespace
   }
 
   @Override
+  public Node getRootNode() {
+    return root.getParent();
+  }
+
+  @Override
   public StaticScope<JSType> getParentScope() {
     return null;
   }
@@ -120,6 +125,11 @@ class GlobalNamespace
   public Iterable<Ref> getReferences(Name slot) {
     ensureGenerated();
     return Collections.unmodifiableList(slot.getRefs());
+  }
+
+  @Override
+  public StaticScope<JSType> getScope(Name slot) {
+    return this;
   }
 
   @Override
@@ -175,6 +185,7 @@ class GlobalNamespace
       this.newNodes = newNodes;
     }
 
+    @Override
     public boolean apply(Node n) {
       if (!n.isQualifiedName()) {
         return false;
@@ -863,7 +874,7 @@ class GlobalNamespace
       OTHER,
     }
 
-    private final String name;
+    private final String baseName;
     final Name parent;
     List<Name> props;
 
@@ -887,7 +898,7 @@ class GlobalNamespace
     JSDocInfo docInfo = null;
 
     Name(String name, Name parent, boolean inExterns) {
-      this.name = name;
+      this.baseName = name;
       this.parent = parent;
       this.type = Type.OTHER;
       this.inExterns = inExterns;
@@ -902,9 +913,17 @@ class GlobalNamespace
       return node;
     }
 
+    String getBaseName() {
+      return baseName;
+    }
+
     @Override
     public String getName() {
-      return name;
+      return getFullName();
+    }
+
+    String getFullName() {
+      return parent == null ? baseName : parent.getFullName() + '.' + baseName;
     }
 
     @Override
@@ -1116,13 +1135,9 @@ class GlobalNamespace
     }
 
     @Override public String toString() {
-      return fullName() + " (" + type + "): globalSets=" + globalSets +
+      return getFullName() + " (" + type + "): globalSets=" + globalSets +
           ", localSets=" + localSets + ", totalGets=" + totalGets +
           ", aliasingGets=" + aliasingGets + ", callGets=" + callGets;
-    }
-
-    String fullName() {
-      return parent == null ? name : parent.fullName() + '.' + name;
     }
 
     /**
@@ -1163,7 +1178,8 @@ class GlobalNamespace
     }
 
     Node node;
-    final CompilerInput source;
+    final JSModule module;
+    final StaticSourceFile source;
     final Name name;
     final Type type;
     final Scope scope;
@@ -1184,7 +1200,8 @@ class GlobalNamespace
     Ref(NodeTraversal t, Node node, Name name, Type type, int index) {
       this.node = node;
       this.name = name;
-      this.source = t.getInput();
+      this.module = t.getInput() == null ? null : t.getInput().getModule();
+      this.source = node.getStaticSourceFile();
       this.type = type;
       this.scope = t.getScope();
       this.preOrderIndex = index;
@@ -1193,6 +1210,7 @@ class GlobalNamespace
     private Ref(Ref original, Type type, int index) {
       this.node = original.node;
       this.name = original.name;
+      this.module = original.module;
       this.source = original.source;
       this.type = type;
       this.scope = original.scope;
@@ -1201,6 +1219,7 @@ class GlobalNamespace
 
     private Ref(Type type, int index) {
       this.type = type;
+      this.module = null;
       this.source = null;
       this.scope = null;
       this.name = null;
@@ -1223,7 +1242,7 @@ class GlobalNamespace
     }
 
     JSModule getModule() {
-      return source == null ? null : source.getModule();
+      return module;
     }
 
     String getSourceName() {

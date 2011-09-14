@@ -22,7 +22,6 @@ import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.EnumType;
-import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.ObjectType;
 
@@ -63,6 +62,7 @@ class InferJSDocInfo extends AbstractPostOrderCallback
     implements HotSwapCompilerPass {
 
   private final AbstractCompiler compiler;
+  @SuppressWarnings("unused")
   private boolean inExterns;
 
   InferJSDocInfo(AbstractCompiler compiler) {
@@ -82,13 +82,14 @@ class InferJSDocInfo extends AbstractPostOrderCallback
   }
 
   @Override
-  public void hotSwapScript(Node root) {
+  public void hotSwapScript(Node root, Node originalRoot) {
     Preconditions.checkNotNull(root);
     Preconditions.checkState(root.getType() == Token.SCRIPT);
     inExterns = false;
     NodeTraversal.traverse(compiler, root, this);
   }
 
+  @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
     JSDocInfo docInfo;
 
@@ -208,7 +209,7 @@ class InferJSDocInfo extends AbstractPostOrderCallback
         objType.setJSDocInfo(docInfo);
 
         if (objType.isConstructor() || objType.isInterface()) {
-          ((FunctionType) objType).getInstanceType().setJSDocInfo(
+          objType.toMaybeFunctionType(objType).getInstanceType().setJSDocInfo(
               docInfo);
         } else if (objType instanceof EnumType) {
           ((EnumType) objType).getElementsType().setJSDocInfo(docInfo);

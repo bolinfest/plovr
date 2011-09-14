@@ -44,6 +44,7 @@ class CheckMissingReturn implements ScopedCallback {
   private final CheckLevel level;
 
   private static final Predicate<Node> IS_RETURN = new Predicate<Node>() {
+    @Override
     public boolean apply(Node input) {
       // Check for null because the control flow graph's implicit return node is
       // represented by null, so this value might be input.
@@ -55,6 +56,7 @@ class CheckMissingReturn implements ScopedCallback {
   private static final Predicate<DiGraphEdge<Node, ControlFlowGraph.Branch>>
       GOES_THROUGH_TRUE_CONDITION_PREDICATE =
         new Predicate<DiGraphEdge<Node, ControlFlowGraph.Branch>>() {
+    @Override
     public boolean apply(DiGraphEdge<Node, ControlFlowGraph.Branch> input) {
       // First skill all exceptions.
       Branch branch = input.getValue();
@@ -147,9 +149,9 @@ class CheckMissingReturn implements ScopedCallback {
    * @return If a return type is expected, returns it. Otherwise returns null.
    */
   private JSType explicitReturnExpected(Node scope) {
-    JSType scopeType = scope.getJSType();
+    FunctionType scopeType = JSType.toMaybeFunctionType(scope.getJSType());
 
-    if (!(scopeType instanceof FunctionType)) {
+    if (scopeType == null) {
       return null;
     }
 
@@ -157,7 +159,7 @@ class CheckMissingReturn implements ScopedCallback {
       return null;
     }
 
-    JSType returnType = ((FunctionType) scopeType).getReturnType();
+    JSType returnType = scopeType.getReturnType();
 
     if (returnType == null) {
       return null;

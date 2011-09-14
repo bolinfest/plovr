@@ -75,6 +75,15 @@ import java.util.Set;
 public class JSTypeRegistry implements Serializable {
   private static final long serialVersionUID = 1L;
 
+  /**
+   * The UnionTypeBuilder caps the maximum number of alternate types it
+   * remembers and then defaults to "?" (unknown type). By default this max
+   * is 20, but it's very easy for the same property to appear on more than 20
+   * types. Use larger unions for property checking. 3000 was picked
+   * semi-randomly for use by the Google+ FE project.
+   */
+  private static final int PROPERTY_CHECKING_UNION_SIZE = 3000;
+
   // TODO(user): An instance of this class should be used during
   // compilation. We also want to make all types' constructors package private
   // and force usage of this registry instead. This will allow us to evolve the
@@ -262,8 +271,8 @@ public class JSTypeRegistry implements Serializable {
     // The initializations of TOP_LEVEL_PROTOTYPE and OBJECT_FUNCTION_TYPE
     // use each other's results, so at least one of them will get null
     // instead of an actual type; however, this seems to be benign.
-    ObjectType TOP_LEVEL_PROTOTYPE =
-        new FunctionPrototypeType(this, null, null, true);
+    PrototypeObjectType TOP_LEVEL_PROTOTYPE =
+        new PrototypeObjectType(this, null, null, true);
     registerNativeType(JSTypeNative.TOP_LEVEL_PROTOTYPE, TOP_LEVEL_PROTOTYPE);
 
     // Object
@@ -271,15 +280,15 @@ public class JSTypeRegistry implements Serializable {
         new FunctionType(this, "Object", null,
             createArrowType(createOptionalParameters(ALL_TYPE), UNKNOWN_TYPE),
             null, null, true, true);
-    OBJECT_FUNCTION_TYPE.defineDeclaredProperty(
-        "prototype", TOP_LEVEL_PROTOTYPE, null);
-    registerNativeType(JSTypeNative.OBJECT_FUNCTION_TYPE, OBJECT_FUNCTION_TYPE);
 
-    ObjectType OBJECT_PROTOTYPE = OBJECT_FUNCTION_TYPE.getPrototype();
-    registerNativeType(JSTypeNative.OBJECT_PROTOTYPE, OBJECT_PROTOTYPE);
+    OBJECT_FUNCTION_TYPE.setPrototype(TOP_LEVEL_PROTOTYPE, null);
+    registerNativeType(JSTypeNative.OBJECT_FUNCTION_TYPE, OBJECT_FUNCTION_TYPE);
 
     ObjectType OBJECT_TYPE = OBJECT_FUNCTION_TYPE.getInstanceType();
     registerNativeType(JSTypeNative.OBJECT_TYPE, OBJECT_TYPE);
+
+    ObjectType OBJECT_PROTOTYPE = OBJECT_FUNCTION_TYPE.getPrototype();
+    registerNativeType(JSTypeNative.OBJECT_PROTOTYPE, OBJECT_PROTOTYPE);
 
     // Function
     FunctionType FUNCTION_FUNCTION_TYPE =
@@ -607,7 +616,7 @@ public class JSTypeRegistry implements Serializable {
   public void registerPropertyOnType(String propertyName, JSType type) {
     UnionTypeBuilder typeSet = typesIndexedByProperty.get(propertyName);
     if (typeSet == null) {
-      typeSet = new UnionTypeBuilder(this);
+      typeSet = new UnionTypeBuilder(this, PROPERTY_CHECKING_UNION_SIZE);
       typesIndexedByProperty.put(propertyName, typeSet);
     }
 
@@ -632,10 +641,26 @@ public class JSTypeRegistry implements Serializable {
     } else if (type instanceof NamedType) {
       addReferenceTypeIndexedByProperty(
           propertyName, ((NamedType) type).getReferencedType());
-    } else if (type instanceof UnionType) {
-      for (JSType alternate : ((UnionType) type).getAlternates()) {
+    } else if (type.isUnionType()) {
+      for (JSType alternate : type.toMaybeUnionType().getAlternates()) {
         addReferenceTypeIndexedByProperty(propertyName, alternate);
       }
+    }
+  }
+
+  /**
+   * Removes the index's reference to a property on the given type (if it is
+   * currently registered). If the property is not registered on the type yet,
+   * this method will not change internal state.
+   *
+   * @param propertyName the name of the property to unregister
+   * @param type the type to unregister the property on.
+   */
+  public void unregisterPropertyOnType(String propertyName, JSType type) {
+    Map<String, ObjectType> typeSet =
+        eachRefTypeIndexedByProperty.get(propertyName);
+    if (typeSet != null) {
+      typeSet.remove(type.toObjectType().getReferenceName());
     }
   }
 
@@ -1275,6 +1300,35 @@ public class JSTypeRegistry implements Serializable {
   }
 
   /**
+   * Set the implicit prototype if it's possible to do so.
+   * @return True if we were able to set the implicit prototype successfully,
+   *     false if it was not possible to do so for some reason. There are
+   *     a few different reasons why this could fail: for example, numbers
+   *     can't be implicit prototypes, and we don't want to change the implicit
+   *     prototype if other classes have already subclassed this one.
+   */
+  public boolean resetImplicitPrototype(
+      JSType type, ObjectType newImplicitProto) {
+    if (type instanceof PrototypeObjectType) {
+      PrototypeObjectType poType = (PrototypeObjectType) type;
+      poType.clearCachedValues();
+      poType.setImplicitPrototype(newImplicitProto);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Create an anonymous object type for a native type.
+   */
+  ObjectType createNativeAnonymousObjectType() {
+    PrototypeObjectType type =
+        new PrototypeObjectType(this, null, null, true);
+    type.setPrettyPrint(true);
+    return type;
+  }
+
+  /**
    * Creates a constructor function type.
    * @param name the function's name or {@code null} to indicate that the
    *     function is anonymous.
@@ -1361,7 +1415,7 @@ public class JSTypeRegistry implements Serializable {
     return false;
   }
 
-  /** @see #createFromTypeNodes(Node, String, StaticScope, boolean) */
+  /** @see #createFromTypeNodes(Node, String, StaticScope) */
   private JSType createFromTypeNodesInternal(Node n, String sourceName,
       StaticScope<JSType> scope) {
     switch (n.getType()) {

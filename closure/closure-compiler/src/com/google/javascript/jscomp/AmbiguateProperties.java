@@ -33,14 +33,11 @@ import com.google.javascript.jscomp.graph.GraphNode;
 import com.google.javascript.jscomp.graph.SubGraph;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.jstype.FunctionPrototypeType;
 import com.google.javascript.rhino.jstype.FunctionType;
-import com.google.javascript.rhino.jstype.InstanceObjectType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
-import com.google.javascript.rhino.jstype.UnionType;
 
 import java.util.BitSet;
 import java.util.Collection;
@@ -103,6 +100,7 @@ class AmbiguateProperties implements CompilerPass {
    */
   private static final Comparator<Property> FREQUENCY_COMPARATOR =
       new Comparator<Property>() {
+        @Override
         public int compare(Property p1, Property p2) {
           if (p1.numOccurrences != p2.numOccurrences) {
             return p2.numOccurrences - p1.numOccurrences;
@@ -163,15 +161,15 @@ class AmbiguateProperties implements CompilerPass {
    */
   private void addInvalidatingType(JSType type) {
     type = type.restrictByNotNullOrUndefined();
-    if (type instanceof UnionType) {
-      for (JSType alt : ((UnionType) type).getAlternates()) {
+    if (type.isUnionType()) {
+      for (JSType alt : type.toMaybeUnionType().getAlternates()) {
         addInvalidatingType(alt);
       }
     }
 
     invalidatingTypes.add(type);
     ObjectType objType = ObjectType.cast(type);
-    if (objType instanceof InstanceObjectType) {
+    if (objType != null && objType.isInstanceType()) {
       invalidatingTypes.add(objType.getImplicitPrototype());
     }
   }
@@ -190,6 +188,7 @@ class AmbiguateProperties implements CompilerPass {
     return newInt;
   }
 
+  @Override
   public void process(Node externs, Node root) {
     NodeTraversal.traverse(compiler, externs, new ProcessExterns());
     NodeTraversal.traverse(compiler, root, new ProcessProperties());
@@ -282,10 +281,10 @@ class AmbiguateProperties implements CompilerPass {
    * won't be ambiguated).
    */
   private void computeRelatedTypes(JSType type) {
-    if (type instanceof UnionType) {
+    if (type.isUnionType()) {
       type = type.restrictByNotNullOrUndefined();
-      if (type instanceof UnionType) {
-        for (JSType alt : ((UnionType) type).getAlternates()) {
+      if (type.isUnionType()) {
+        for (JSType alt : type.toMaybeUnionType().getAlternates()) {
           computeRelatedTypes(alt);
         }
         return;
@@ -302,9 +301,8 @@ class AmbiguateProperties implements CompilerPass {
     related.set(getIntForType(type));
 
     // A prototype is related to its instance.
-    if (type instanceof FunctionPrototypeType) {
-      addRelatedInstance(
-          ((FunctionPrototypeType) type).getOwnerFunction(), related);
+    if (type.isFunctionPrototypeType()) {
+      addRelatedInstance(((ObjectType) type).getOwnerFunction(), related);
       return;
     }
 
@@ -349,24 +347,29 @@ class AmbiguateProperties implements CompilerPass {
       }
     }
 
+    @Override
     public List<GraphNode<Property, Void>> getNodes() {
       return Lists.<GraphNode<Property, Void>>newArrayList(nodes.values());
     }
 
+    @Override
     public GraphNode<Property, Void> getNode(Property property) {
       return nodes.get(property);
     }
 
+    @Override
     public SubGraph<Property, Void> newSubGraph() {
       return new PropertySubGraph();
     }
 
+    @Override
     public void clearNodeAnnotations() {
       for (PropertyGraphNode node : nodes.values()) {
         node.setAnnotation(null);
       }
     }
 
+    @Override
     public int getWeight(Property value) {
       return value.numOccurrences;
     }
@@ -385,6 +388,7 @@ class AmbiguateProperties implements CompilerPass {
      * sub graph.  That is, if none of its related types intersects with the
      * related types for this sub graph.
      */
+    @Override
     public boolean isIndependentOf(Property prop) {
       return !relatedTypes.intersects(prop.relatedTypes);
     }
@@ -393,6 +397,7 @@ class AmbiguateProperties implements CompilerPass {
      * Adds the node to the sub graph, adding all its related types to the
      * related types for the sub graph.
      */
+    @Override
     public void addNode(Property prop) {
       relatedTypes.or(prop.relatedTypes);
     }
@@ -406,15 +411,18 @@ class AmbiguateProperties implements CompilerPass {
       this.property = property;
     }
 
+    @Override
     public Property getValue() {
       return property;
     }
 
+    @Override
     @SuppressWarnings("unchecked")
     public <A extends Annotation> A getAnnotation() {
       return (A) annotation;
     }
 
+    @Override
     public void setAnnotation(Annotation data) {
       annotation = data;
     }
@@ -443,6 +451,7 @@ class AmbiguateProperties implements CompilerPass {
 
   /** Finds all property references, recording the types on which they occur. */
   private class ProcessProperties extends AbstractPostOrderCallback {
+    @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       switch (n.getType()) {
         case Token.GETPROP: {
@@ -504,10 +513,10 @@ class AmbiguateProperties implements CompilerPass {
 
   /** Returns true if properties on this type should not be renamed. */
   private boolean isInvalidatingType(JSType type) {
-    if (type instanceof UnionType) {
+    if (type.isUnionType()) {
       type = type.restrictByNotNullOrUndefined();
-      if (type instanceof UnionType) {
-        for (JSType alt : ((UnionType) type).getAlternates()) {
+      if (type.isUnionType()) {
+        for (JSType alt : type.toMaybeUnionType().getAlternates()) {
           if (isInvalidatingType(alt)) {
             return true;
           }
@@ -575,10 +584,10 @@ class AmbiguateProperties implements CompilerPass {
 
       ++numOccurrences;
 
-      if (newType instanceof UnionType) {
+      if (newType.isUnionType()) {
         newType = newType.restrictByNotNullOrUndefined();
-        if (newType instanceof UnionType) {
-          for (JSType alt : ((UnionType) newType).getAlternates()) {
+        if (newType.isUnionType()) {
+          for (JSType alt : newType.toMaybeUnionType().getAlternates()) {
             addNonUnionType(alt);
           }
           return;

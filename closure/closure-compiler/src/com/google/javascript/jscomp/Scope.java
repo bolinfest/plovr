@@ -20,19 +20,21 @@ import static com.google.javascript.rhino.jstype.JSTypeNative.GLOBAL_THIS;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
 import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.ObjectType;
 import com.google.javascript.rhino.jstype.StaticReference;
 import com.google.javascript.rhino.jstype.StaticScope;
 import com.google.javascript.rhino.jstype.StaticSlot;
 import com.google.javascript.rhino.jstype.StaticSourceFile;
+import com.google.javascript.rhino.jstype.StaticSymbolTable;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -52,7 +54,8 @@ import java.util.Map;
  * @see DataFlowAnalysis
  *
  */
-public class Scope implements StaticScope<JSType> {
+public class Scope
+    implements StaticScope<JSType>, StaticSymbolTable<Scope.Var, Scope.Var> {
   private final Map<String, Var> vars = new LinkedHashMap<String, Var>();
   private final Scope parent;
   private final int depth;
@@ -139,6 +142,7 @@ public class Scope implements StaticScope<JSType> {
     /**
      * Gets the name of the variable.
      */
+    @Override
     public String getName() {
       return name;
     }
@@ -151,9 +155,13 @@ public class Scope implements StaticScope<JSType> {
       return nameNode;
     }
 
+    CompilerInput getInput() {
+      return input;
+    }
+
     @Override
     public StaticSourceFile getSourceFile() {
-      return input;
+      return nameNode.getStaticSourceFile();
     }
 
     @Override
@@ -243,6 +251,7 @@ public class Scope implements StaticScope<JSType> {
      * Gets this variable's type. To know whether this type has been inferred,
      * see {@code #isTypeInferred()}.
      */
+    @Override
     public JSType getType() {
       return type;
     }
@@ -283,6 +292,7 @@ public class Scope implements StaticScope<JSType> {
      * Returns whether this variable's type is inferred. To get the variable's
      * type, see {@link #getType()}.
      */
+    @Override
     public boolean isTypeInferred() {
       return typeInferred;
     }
@@ -368,8 +378,8 @@ public class Scope implements StaticScope<JSType> {
     this.parent = parent;
     this.rootNode = rootNode;
     JSType nodeType = rootNode.getJSType();
-    if (nodeType != null && nodeType instanceof FunctionType) {
-      thisType = ((FunctionType) nodeType).getTypeOfThis();
+    if (nodeType != null && nodeType.isFunctionType()) {
+      thisType = nodeType.toMaybeFunctionType().getTypeOfThis();
     } else {
       thisType = parent.thisType;
     }
@@ -417,6 +427,7 @@ public class Scope implements StaticScope<JSType> {
    * Gets the container node of the scope. This is typically the FUNCTION
    * node or the global BLOCK/SCRIPT node.
    */
+  @Override
   public Node getRootNode() {
     return rootNode;
   }
@@ -441,6 +452,7 @@ public class Scope implements StaticScope<JSType> {
   /**
    * Gets the type of {@code this} in the current scope.
    */
+  @Override
   public ObjectType getTypeOfThis() {
     return thisType;
   }
@@ -495,10 +507,12 @@ public class Scope implements StaticScope<JSType> {
     vars.remove(var.name);
   }
 
+  @Override
   public StaticSlot<JSType> getSlot(String name) {
     return getVar(name);
   }
 
+  @Override
   public StaticSlot<JSType> getOwnSlot(String name) {
     return vars.get(name);
   }
@@ -546,6 +560,28 @@ public class Scope implements StaticScope<JSType> {
    */
   public Iterator<Var> getVars() {
     return vars.values().iterator();
+  }
+
+  /**
+   * Return an iterable over all of the variables declared in this scope.
+   */
+  Iterable<Var> getVarIterable() {
+    return vars.values();
+  }
+
+  @Override
+  public Iterable<Var> getReferences(Var var) {
+    return ImmutableList.of(var);
+  }
+
+  @Override
+  public StaticScope<JSType> getScope(Var var) {
+    return var.scope;
+  }
+
+  @Override
+  public Iterable<Var> getAllSymbols() {
+    return Collections.unmodifiableCollection(vars.values());
   }
 
   /**

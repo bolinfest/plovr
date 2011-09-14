@@ -58,6 +58,7 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
   }
 
   private final Callback callback = new AbstractPostOrderCallback() {
+    @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       Scope s = t.getScope();
       if (s.isGlobal()) {
@@ -72,6 +73,7 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
   public CompilerPass getProcessor(final Compiler compiler) {
     registry = compiler.getTypeRegistry();
     return new CompilerPass() {
+      @Override
       public void process(Node externs, Node root) {
         ScopeCreator scopeCreator =
             new MemoizedScopeCreator(new TypedScopeCreator(compiler));
@@ -370,9 +372,9 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
         RhinoErrorReporter.TYPE_PARSE_ERROR);
     ObjectType x = (ObjectType) findNameType("x", globalScope);
     assertEquals("Foo", x.toString());
-    // Should be true
-    assertFalse(x.getImplicitPrototype().hasOwnProperty("bar"));
-    assertEquals("number", x.getPropertyType("bar").toString());
+    assertEquals("Foo.prototype", x.getImplicitPrototype().toString());
+    assertTrue(x.getImplicitPrototype().hasOwnProperty("bar"));
+    assertEquals("?", x.getPropertyType("bar").toString());
     assertTrue(x.isPropertyTypeInferred("bar"));
   }
 
@@ -404,17 +406,14 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
         "var x = window;");
     ObjectType x = (ObjectType) findNameType("x", globalScope);
     assertEquals("Window", x.toString());
-    // This should be TRUE
-    assertFalse(x.getImplicitPrototype().hasOwnProperty("alert"));
-    /*
+    assertTrue(x.getImplicitPrototype().hasOwnProperty("alert"));
     assertEquals("function (this:Window, ?): undefined",
         x.getPropertyType("alert").toString());
-    assertTrue(x.isPropertyTypeDeclared("alert"));
+    assertFalse(x.isPropertyTypeDeclared("alert"));
 
     ObjectType y = (ObjectType) findNameType("y", globalScope);
-    assertEquals("function (this:Window, ?): undefined",
+    assertEquals("?",
         y.getPropertyType("alert").toString());
-    */
   }
 
   public void testAddMethodsPrototypeTwoWays() throws Exception {
@@ -436,22 +435,20 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
         instanceType.getPropertyType("m3"));
 
     // Verify the prototype chain.
-    // The prototype property of a Function has to be a FunctionPrototypeType.
-    // In order to make the type safety work out correctly, we create
-    // a FunctionPrototypeType with the anonymous object as its implicit
-    // prototype. Verify this behavior.
+    // This is a special case where we want the anonymous object to
+    // become a prototype.
     assertFalse(instanceType.hasOwnProperty("m1"));
     assertFalse(instanceType.hasOwnProperty("m2"));
     assertFalse(instanceType.hasOwnProperty("m3"));
 
     ObjectType proto1 = instanceType.getImplicitPrototype();
-    assertFalse(proto1.hasOwnProperty("m1"));
-    assertFalse(proto1.hasOwnProperty("m2"));
+    assertTrue(proto1.hasOwnProperty("m1"));
+    assertTrue(proto1.hasOwnProperty("m2"));
     assertTrue(proto1.hasOwnProperty("m3"));
 
     ObjectType proto2 = proto1.getImplicitPrototype();
-    assertTrue(proto2.hasOwnProperty("m1"));
-    assertTrue(proto2.hasOwnProperty("m2"));
+    assertFalse(proto2.hasProperty("m1"));
+    assertFalse(proto2.hasProperty("m2"));
     assertFalse(proto2.hasProperty("m3"));
   }
 
@@ -511,8 +508,7 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
 
     assertEquals("number", iPrototype.getPropertyType("bar").toString());
 
-    // should be: "function (this:I): undefined"
-    assertEquals("function (): undefined",
+    assertEquals("function (this:I): undefined",
         iPrototype.getPropertyType("baz").toString());
 
     // should not be null
@@ -658,6 +654,18 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
     FunctionType func = (FunctionType) globalScope.getVar("Function").getType();
     assertEquals("Function",
         func.getPrototype().getPropertyType("apply").toString());
+  }
+
+  public void testTypesInExterns() throws Exception {
+    testSame(
+        CompilerTypeTestCase.DEFAULT_EXTERNS,
+        "", null);
+
+    Var v = globalScope.getVar("Object");
+    FunctionType obj = (FunctionType) v.getType();
+    assertEquals("function (new:Object, *): ?", obj.toString());
+    assertNotNull(v.getNode());
+    assertNotNull(v.input);
   }
 
   public void testPropertyDeclarationOnInstanceType() {
@@ -886,7 +894,7 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
 
     assertEquals(
         // should be: "function (this:Foo, number): ?"
-        "function (number): ?",
+        "function (this:Foo, number): ?",
         proto.getPropertyType("bar").toString());
   }
 

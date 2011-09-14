@@ -42,6 +42,7 @@ public class CoalesceVariableNamesTest extends CompilerTestCase {
   @Override
   public CompilerPass getProcessor(final Compiler compiler) {
     return new CompilerPass() {
+      @Override
       public void process(Node externs, Node js) {
         NodeTraversal.traverse(compiler, js,
             new CoalesceVariableNames(compiler, usePseudoName));
@@ -404,6 +405,15 @@ public class CoalesceVariableNamesTest extends CompilerTestCase {
                "var closure_var; function bar() { print(closure_var); }",
                "var x_y = 0; print(x_y);     x_y = 1; print(x_y); " +
                "var closure_var; function bar() { print(closure_var); }");
+  }
+
+  public void testMaxVars() {
+    String code = "";
+    for (int i = 0;
+         i < LiveVariablesAnalysis.MAX_VARIABLES_TO_ANALYZE + 1; i++) {
+      code += String.format("var x%d = 0; print(x%d);", i, i);
+    }
+    inFunction(code);
   }
 
   private void inFunction(String src) {

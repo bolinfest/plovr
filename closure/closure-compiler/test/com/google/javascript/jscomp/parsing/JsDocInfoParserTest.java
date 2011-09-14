@@ -24,6 +24,7 @@ import com.google.javascript.jscomp.mozilla.rhino.ast.AstRoot;
 import com.google.javascript.jscomp.mozilla.rhino.ast.Comment;
 import com.google.javascript.jscomp.parsing.Config.LanguageMode;
 import com.google.javascript.jscomp.testing.TestErrorReporter;
+import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.JSTypeExpression;
@@ -498,8 +499,16 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
     testParseType("function (?): (?|number)", "function (?): ?");
   }
 
-  public void testParseFunctionalType19() throws Exception {
-    testParseType("function (new:Object)", "function (new:Object): ?");
+  public void testStructuralConstructor() throws Exception {
+    JSType type = testParseType(
+        "function (new:Object)", "function (new:Object): ?");
+    assertTrue(type.isConstructor());
+    assertFalse(type.isNominalConstructor());
+  }
+
+  public void testNominalConstructor() throws Exception {
+    ObjectType type = testParseType("Array", "(Array|null)").dereference();
+    assertTrue(type.getConstructor().isNominalConstructor());
   }
 
   public void testBug1419535() throws Exception {
@@ -609,17 +618,20 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
         "Bad type annotation. missing closing ]");
   }
 
-  private void testParseType(String type) throws Exception {
-    testParseType(type, type);
+  private JSType testParseType(String type) throws Exception {
+    return testParseType(type, type);
   }
 
-  private void testParseType(
+  private JSType testParseType(
       String type, String typeExpected) throws Exception {
     JSDocInfo info = parse("@type {" + type + "}*/");
 
     assertNotNull(info);
     assertTrue(info.hasType());
-    assertEquals(typeExpected, resolve(info.getType()).toString());
+
+    JSType actual = resolve(info.getType());
+    assertEquals(typeExpected, actual.toString());
+    return actual;
   }
 
   public void testParseNullableModifiers1() throws Exception {
@@ -2145,7 +2157,7 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
 
   public void testSourceName() throws Exception {
     JSDocInfo jsdoc = parse("@deprecated */", true);
-    assertEquals("testcode", jsdoc.getSourceName());
+    assertEquals("testcode", jsdoc.getAssociatedNode().getSourceFileName());
   }
 
   public void testParseBlockComment() throws Exception {
@@ -2649,7 +2661,7 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
             new JsDocTokenStream(comment.getValue().substring(3),
                 comment.getLineno()),
             comment,
-            file,
+            null,
             config,
             testErrorReporter);
       jsdocParser.parse();
@@ -2660,6 +2672,7 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
         testErrorReporter.hasEncounteredAllWarnings());
   }
 
+  @SuppressWarnings("unused")
   private JSDocInfo parseFileOverviewWithoutDoc(String comment,
                                                 String... warnings) {
     return parse(comment, false, true, warnings);
@@ -2685,10 +2698,14 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
     Config config = new Config(extraAnnotations, extraSuppressions,
         parseDocumentation, LanguageMode.ECMASCRIPT3, false);
     StaticSourceFile file = new SimpleSourceFile("testcode", false);
+    Node associatedNode = new Node(Token.SCRIPT);
+    associatedNode.setInputId(new InputId(file.getName()));
+    associatedNode.setStaticSourceFile(file);
     JsDocInfoParser jsdocParser = new JsDocInfoParser(
         stream(comment),
         new Comment(0, 0, CommentType.JSDOC, comment),
-        file, config, errorReporter);
+        associatedNode,
+        config, errorReporter);
 
     if (fileLevelJsDocBuilder != null) {
       jsdocParser.setFileLevelJsDocBuilder(fileLevelJsDocBuilder);

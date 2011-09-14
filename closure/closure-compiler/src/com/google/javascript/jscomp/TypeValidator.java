@@ -39,7 +39,6 @@ import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
-import com.google.javascript.rhino.jstype.UnionType;
 
 import java.text.MessageFormat;
 import java.util.Iterator;
@@ -268,8 +267,8 @@ class TypeValidator {
   }
 
   private boolean containsForwardDeclaredUnresolvedName(JSType type) {
-    if (type instanceof UnionType) {
-      for (JSType alt : ((UnionType) type).getAlternates()) {
+    if (type.isUnionType()) {
+      for (JSType alt : type.toMaybeUnionType().getAlternates()) {
         if (containsForwardDeclaredUnresolvedName(alt)) {
           return true;
         }
@@ -303,25 +302,30 @@ class TypeValidator {
    * first type.
    *
    * @param t The node traversal.
-   * @param n The node to issue warnings on.
+   * @param n The GETELEM node to issue warnings on.
    * @param objType The type of the left side of the GETELEM.
    * @param indexType The type inside the brackets of the GETELEM.
    */
   void expectIndexMatch(NodeTraversal t, Node n, JSType objType,
       JSType indexType) {
+    Preconditions.checkState(n.getType() == Token.GETELEM);
+    Node indexNode = n.getLastChild();
     if (objType.isUnknownType()) {
-      expectStringOrNumber(t, n, indexType, "property access");
-    } else if (objType.toObjectType() != null &&
-        objType.toObjectType().getIndexType() != null) {
-      expectCanAssignTo(t, n, indexType, objType.toObjectType().getIndexType(),
-          "restricted index type");
-    } else if (objType.isArrayType()) {
-      expectNumber(t, n, indexType, "array access");
-    } else if (objType.matchesObjectContext()) {
-      expectString(t, n, indexType, "property access");
+      expectStringOrNumber(t, indexNode, indexType, "property access");
     } else {
-      mismatch(t, n, "only arrays or objects can be accessed",
-          objType, typeRegistry.createUnionType(ARRAY_TYPE, OBJECT_TYPE));
+      ObjectType dereferenced = objType.dereference();
+      if (dereferenced != null && dereferenced.getIndexType() != null) {
+        expectCanAssignTo(t, indexNode, indexType, dereferenced.getIndexType(),
+            "restricted index type");
+      } else if (dereferenced != null && dereferenced.isArrayType()) {
+        expectNumber(t, indexNode, indexType, "array access");
+      } else if (objType.matchesObjectContext()) {
+        expectString(t, indexNode, indexType, "property access");
+      } else {
+        mismatch(t, n, "only arrays or objects can be accessed",
+            objType,
+            typeRegistry.createUnionType(ARRAY_TYPE, OBJECT_TYPE));
+      }
     }
   }
 
@@ -344,7 +348,7 @@ class TypeValidator {
       if (bothIntrinsics(rightType, leftType)) {
         // We have a superior warning for this mistake, which gives you
         // the line numbers of both types.
-        registerMismatch(rightType, leftType);
+        registerMismatch(rightType, leftType, null);
       } else {
         mismatch(t, n,
             "assignment to property " + propName + " of " +
@@ -373,7 +377,7 @@ class TypeValidator {
       if (bothIntrinsics(rightType, leftType)) {
         // We have a superior warning for this mistake, which gives you
         // the line numbers of both types.
-        registerMismatch(rightType, leftType);
+        registerMismatch(rightType, leftType, null);
       } else {
         mismatch(t, n, msg, rightType, leftType);
       }
@@ -425,13 +429,10 @@ class TypeValidator {
   void expectCanOverride(NodeTraversal t, Node n, JSType overridingType,
       JSType hiddenType, String propertyName, JSType ownerType) {
     if (!overridingType.canAssignTo(hiddenType)) {
-      registerMismatch(overridingType, hiddenType);
-      if (shouldReport) {
-        compiler.report(
-            t.makeError(n, HIDDEN_PROPERTY_MISMATCH,
-                propertyName, ownerType.toString(),
-                hiddenType.toString(), overridingType.toString()));
-      }
+      registerMismatch(overridingType, hiddenType,
+          report(t.makeError(n, HIDDEN_PROPERTY_MISMATCH, propertyName,
+            ownerType.toString(), hiddenType.toString(),
+            overridingType.toString())));
     }
   }
 
@@ -450,12 +451,8 @@ class TypeValidator {
         subObject.getImplicitPrototype().getImplicitPrototype();
     if (!declaredSuper.equals(superObject)) {
       if (declaredSuper.equals(getNativeType(OBJECT_TYPE))) {
-        if (shouldReport) {
-          compiler.report(
-              t.makeError(n, MISSING_EXTENDS_TAG_WARNING,
-                  subObject.toString()));
-        }
-        registerMismatch(superObject, declaredSuper);
+        registerMismatch(superObject, declaredSuper, report(
+            t.makeError(n, MISSING_EXTENDS_TAG_WARNING, subObject.toString())));
       } else {
         mismatch(t.getSourceName(), n,
             "mismatch in declaration of superclass type",
@@ -483,12 +480,8 @@ class TypeValidator {
     type = type.restrictByNotNullOrUndefined();
 
     if (!type.canAssignTo(castType) && !castType.canAssignTo(type)) {
-      if (shouldReport) {
-        compiler.report(
-            t.makeError(n, INVALID_CAST,
-                castType.toString(), type.toString()));
-      }
-      registerMismatch(type, castType);
+      registerMismatch(type, castType, report(t.makeError(n, INVALID_CAST,
+          castType.toString(), type.toString())));
     }
   }
 
@@ -503,8 +496,8 @@ class TypeValidator {
    * @param newType The type being applied to the variable. Mostly just here
    *     for the benefit of the warning.
    */
-  void expectUndeclaredVariable(String sourceName, Node n, Node parent, Var var,
-      String variableName, JSType newType) {
+  void expectUndeclaredVariable(String sourceName, CompilerInput input,
+      Node n, Node parent, Var var, String variableName, JSType newType) {
     boolean allowDupe = false;
     if (n.getType() == Token.GETPROP ||
         NodeUtil.isObjectLitKey(n, parent)) {
@@ -529,8 +522,12 @@ class TypeValidator {
       // is an error and the second declaration is ignored, except in the
       // case of native types. A null input type means that the declaration
       // was made in TypedScopeCreator#createInitialScope and is a
-      // native type.
+      // native type. We should redeclare it at the new input site.
       if (var.input == null) {
+        Scope s = var.getScope();
+        s.undeclare(var);
+        s.declare(variableName, n, varType, input, false);
+
         n.setJSType(varType);
         if (parent.getType() == Token.VAR) {
           if (n.getFirstChild() != null) {
@@ -549,13 +546,10 @@ class TypeValidator {
         if (!(allowDupe ||
               var.getParentNode().getType() == Token.EXPR_RESULT) ||
             !newType.equals(varType)) {
-          if (shouldReport) {
-            compiler.report(
-                JSError.make(sourceName, n, DUP_VAR_DECLARATION,
-                    variableName, newType.toString(), var.getInputName(),
-                    String.valueOf(var.nameNode.getLineno()),
-                    varType.toString()));
-          }
+          report(JSError.make(sourceName, n, DUP_VAR_DECLARATION,
+              variableName, newType.toString(), var.getInputName(),
+              String.valueOf(var.nameNode.getLineno()),
+              varType.toString()));
         }
       }
     }
@@ -588,12 +582,10 @@ class TypeValidator {
       // Not implemented
       String sourceName = n.getSourceFileName();
       sourceName = sourceName == null ? "" : sourceName;
-      if (shouldReport) {
-        compiler.report(JSError.make(sourceName, n,
-            INTERFACE_METHOD_NOT_IMPLEMENTED,
-            prop, implementedInterface.toString(), instance.toString()));
-      }
-      registerMismatch(instance, implementedInterface);
+      registerMismatch(instance, implementedInterface,
+          report(JSError.make(sourceName, n,
+          INTERFACE_METHOD_NOT_IMPLEMENTED,
+          prop, implementedInterface.toString(), instance.toString())));
     } else {
       JSType found = instance.getPropertyType(prop);
       JSType required
@@ -602,15 +594,12 @@ class TypeValidator {
       required = required.restrictByNotNullOrUndefined();
       if (!found.canAssignTo(required)) {
         // Implemented, but not correctly typed
-        if (shouldReport) {
-          FunctionType constructor
-            = implementedInterface.toObjectType().getConstructor();
-          compiler.report(t.makeError(n,
-              HIDDEN_INTERFACE_PROPERTY_MISMATCH, prop,
-              constructor.getTopMostDefiningType(prop).toString(),
-              required.toString(), found.toString()));
-        }
-        registerMismatch(found, required);
+        FunctionType constructor
+          = implementedInterface.toObjectType().getConstructor();
+        registerMismatch(found, required, report(t.makeError(n,
+            HIDDEN_INTERFACE_PROPERTY_MISMATCH, prop,
+            constructor.getTopMostDefiningType(prop).toString(),
+            required.toString(), found.toString())));
       }
     }
   }
@@ -630,15 +619,12 @@ class TypeValidator {
 
   private void mismatch(String sourceName, Node n,
                         String msg, JSType found, JSType required) {
-    registerMismatch(found, required);
-    if (shouldReport) {
-      compiler.report(
-          JSError.make(sourceName, n, TYPE_MISMATCH_WARNING,
-                       formatFoundRequired(msg, found, required)));
-    }
+    registerMismatch(found, required, report(
+        JSError.make(sourceName, n, TYPE_MISMATCH_WARNING,
+                     formatFoundRequired(msg, found, required))));
   }
 
-  private void registerMismatch(JSType found, JSType required) {
+  private void registerMismatch(JSType found, JSType required, JSError error) {
     // Don't register a mismatch for differences in null or undefined or if the
     // code didn't downcast.
     found = found.restrictByNotNullOrUndefined();
@@ -647,26 +633,28 @@ class TypeValidator {
       return;
     }
 
-    mismatches.add(new TypeMismatch(found, required));
-    if (found instanceof FunctionType &&
-        required instanceof FunctionType) {
-      FunctionType fnTypeA = ((FunctionType) found);
-      FunctionType fnTypeB = ((FunctionType) required);
+    mismatches.add(new TypeMismatch(found, required, error));
+    if (found.isFunctionType() &&
+        required.isFunctionType()) {
+      FunctionType fnTypeA = found.toMaybeFunctionType();
+      FunctionType fnTypeB = required.toMaybeFunctionType();
       Iterator<Node> paramItA = fnTypeA.getParameters().iterator();
       Iterator<Node> paramItB = fnTypeB.getParameters().iterator();
       while (paramItA.hasNext() && paramItB.hasNext()) {
         registerIfMismatch(paramItA.next().getJSType(),
-            paramItB.next().getJSType());
+            paramItB.next().getJSType(), error);
       }
 
-      registerIfMismatch(fnTypeA.getReturnType(), fnTypeB.getReturnType());
+      registerIfMismatch(
+        fnTypeA.getReturnType(), fnTypeB.getReturnType(), error);
     }
   }
 
-  private void registerIfMismatch(JSType found, JSType required) {
+  private void registerIfMismatch(
+      JSType found, JSType required, JSError error) {
     if (found != null && required != null &&
         !found.canAssignTo(required)) {
-      registerMismatch(found, required);
+      registerMismatch(found, required, error);
     }
   }
 
@@ -733,7 +721,7 @@ class TypeValidator {
       return type.toString();
     } else if (qualifiedName != null) {
       return qualifiedName;
-    } else if (type instanceof FunctionType) {
+    } else if (type.isFunctionType()) {
       // Don't show complex function names.
       return "function";
     } else {
@@ -762,6 +750,13 @@ class TypeValidator {
     return typeRegistry.getNativeType(typeId);
   }
 
+  private JSError report(JSError error) {
+    if (shouldReport) {
+      compiler.report(error);
+    }
+    return error;
+  }
+
   /**
    * Signals that the first type and the second type have been
    * used interchangeably.
@@ -772,15 +767,17 @@ class TypeValidator {
   static class TypeMismatch {
     final JSType typeA;
     final JSType typeB;
+    final JSError src;
 
     /**
      * It's the responsibility of the class that creates the
      * {@code TypeMismatch} to ensure that {@code a} and {@code b} are
      * non-matching types.
      */
-    TypeMismatch(JSType a, JSType b) {
+    TypeMismatch(JSType a, JSType b, JSError src) {
       this.typeA = a;
       this.typeB = b;
+      this.src = src;
     }
 
     @Override public boolean equals(Object object) {

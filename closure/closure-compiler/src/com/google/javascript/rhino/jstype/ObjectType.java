@@ -46,7 +46,10 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.jstype.StaticReference;
+import com.google.javascript.rhino.jstype.StaticSlot;
 
+import java.io.Serializable;
 import java.util.Set;
 
 /**
@@ -87,7 +90,10 @@ public abstract class ObjectType extends JSType implements StaticScope<JSType> {
   }
 
   @Override
-  public StaticScope<JSType> getParentScope() {
+  public Node getRootNode() { return null; }
+
+  @Override
+  public ObjectType getParentScope() {
     return getImplicitPrototype();
   }
 
@@ -323,6 +329,17 @@ public abstract class ObjectType extends JSType implements StaticScope<JSType> {
       boolean inferred, Node propertyNode);
 
   /**
+   * Removes the declared or inferred property from this ObjectType.
+   *
+   * @param propertyName the property's name
+   * @return true if the property was removed successfully. False if the
+   *         property did not exist, or could not be removed.
+   */
+  public boolean removeProperty(String propertyName) {
+    return false;
+  }
+
+  /**
    * Gets the node corresponding to the definition of the specified property.
    * This could be the node corresponding to declaration of the property or the
    * node corresponding to the first reference to this property, e.g.,
@@ -497,7 +514,7 @@ public abstract class ObjectType extends JSType implements StaticScope<JSType> {
   }
 
   /**
-   * Returns true if any cached valeus have been set for this type.  If true,
+   * Returns true if any cached values have been set for this type.  If true,
    * then the prototype chain should not be changed, as it might invalidate the
    * cached values.
    */
@@ -525,6 +542,16 @@ public abstract class ObjectType extends JSType implements StaticScope<JSType> {
     return type == null ? null : type.toObjectType();
   }
 
+  @Override
+  public final boolean isFunctionPrototypeType() {
+    return getOwnerFunction() != null;
+  }
+
+  /** Gets the owner of this if it's a function prototype. */
+  public FunctionType getOwnerFunction() {
+    return null;
+  }
+
   /**
    * Gets the interfaces implemented by the ctor associated with this type.
    * Intended to be overridden by subclasses.
@@ -539,5 +566,93 @@ public abstract class ObjectType extends JSType implements StaticScope<JSType> {
    */
   public Iterable<ObjectType> getCtorExtendedInterfaces() {
     return ImmutableSet.of();
+  }
+
+  static final class Property
+      implements Serializable, StaticSlot<JSType>, StaticReference<JSType> {
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Property's name.
+     */
+    private final String name;
+
+    /**
+     * Property's type.
+     */
+    private JSType type;
+
+    /**
+     * Whether the property's type is inferred.
+     */
+    private final boolean inferred;
+
+    /**
+     * The node corresponding to this property, e.g., a GETPROP node that
+     * declares this property.
+     */
+    private final Node propertyNode;
+
+    /**  The JSDocInfo for this property. */
+    private JSDocInfo docInfo = null;
+
+    Property(String name, JSType type, boolean inferred,
+        Node propertyNode) {
+      this.name = name;
+      this.type = type;
+      this.inferred = inferred;
+      this.propertyNode = propertyNode;
+    }
+
+    @Override
+    public String getName() {
+      return name;
+    }
+
+    @Override
+    public Node getNode() {
+      return propertyNode;
+    }
+
+    @Override
+    public StaticSourceFile getSourceFile() {
+      return propertyNode == null ? null : propertyNode.getStaticSourceFile();
+    }
+
+    @Override
+    public Property getSymbol() {
+      return this;
+    }
+
+    @Override
+    public Property getDeclaration() {
+      return propertyNode == null ? null : this;
+    }
+
+    @Override
+    public JSType getType() {
+      return type;
+    }
+
+    @Override
+    public boolean isTypeInferred() {
+      return inferred;
+    }
+
+    boolean isFromExterns() {
+      return propertyNode == null ? false : propertyNode.isFromExterns();
+    }
+
+    void setType(JSType type) {
+      this.type = type;
+    }
+
+    JSDocInfo getJSDocInfo() {
+      return this.docInfo;
+    }
+
+    void setJSDocInfo(JSDocInfo info) {
+      this.docInfo = info;
+    }
   }
 }

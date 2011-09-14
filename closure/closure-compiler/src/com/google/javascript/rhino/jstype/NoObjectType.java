@@ -81,8 +81,8 @@ public class NoObjectType extends FunctionType {
   }
 
   @Override
-  public boolean isFunctionType() {
-    return false;
+  public FunctionType toMaybeFunctionType() {
+    return null;
   }
 
   @Override
@@ -149,6 +149,11 @@ public class NoObjectType extends FunctionType {
       boolean inferred, Node propertyNode) {
     // nothing, all properties are defined
     return true;
+  }
+
+  @Override
+  public boolean removeProperty(String name) {
+    return false;
   }
 
   @Override

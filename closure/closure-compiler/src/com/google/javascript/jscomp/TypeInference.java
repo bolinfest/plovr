@@ -47,7 +47,6 @@ import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
 import com.google.javascript.rhino.jstype.StaticSlot;
-import com.google.javascript.rhino.jstype.UnionType;
 
 import java.util.Collection;
 import java.util.Iterator;
@@ -77,11 +76,6 @@ class TypeInference
     DiagnosticType.warning(
         "JSC_FUNCTION_LITERAL_UNDEFINED_THIS",
         "Function literal argument refers to undefined this argument");
-
-  static final DiagnosticType FUNCTION_LITERAL_UNREAD_THIS =
-    DiagnosticType.warning(
-        "JSC_FUNCTION_LITERAL_UNREAD_THIS",
-        "Function literal argument does not refer to bound this argument");
 
   private final AbstractCompiler compiler;
   private final JSTypeRegistry registry;
@@ -228,7 +222,7 @@ class TypeInference
                   iterKeyType = narrowedKeyType;
                 }
               }
-              redeclare(informed, item.getString(), iterKeyType);
+              redeclareSimpleVar(informed, item, iterKeyType);
             }
             newScope = informed;
             break;
@@ -470,7 +464,7 @@ class TypeInference
     Node name = n.getFirstChild();
     JSType type = getNativeType(JSTypeNative.UNKNOWN_TYPE);
     name.setJSType(type);
-    redeclare(scope, name.getString(), type);
+    redeclareSimpleVar(scope, name, type);
     return scope;
   }
 
@@ -514,7 +508,7 @@ class TypeInference
         //    which is just wrong. This bug needs to be fixed eventually.
         boolean isVarDeclaration = left.hasChildren();
         if (!isVarDeclaration || var == null || var.isTypeInferred()) {
-          redeclare(scope, varName, resultType);
+          redeclareSimpleVar(scope, left, resultType);
         }
         left.setJSType(isVarDeclaration || leftType == null ?
             resultType : null);
@@ -800,8 +794,8 @@ class TypeInference
     Node left = n.getFirstChild();
     JSType functionType = getJSType(left).restrictByNotNullOrUndefined();
     if (functionType != null) {
-      if (functionType instanceof FunctionType) {
-        FunctionType fnType = (FunctionType) functionType;
+      if (functionType.isFunctionType()) {
+        FunctionType fnType = functionType.toMaybeFunctionType();
         n.setJSType(fnType.getReturnType());
         updateTypeOfParameters(n, fnType);
         updateTypeOfThisOnClosure(n, fnType);
@@ -835,8 +829,7 @@ class TypeInference
         JSType type = getJSType(assertedNode);
         JSType narrowed = type.restrictByNotNullOrUndefined();
         if (type != narrowed) {
-          scope = scope.createChildFlowScope();
-          redeclare(scope, assertedNodeName, narrowed);
+          scope = narrowScope(scope, assertedNode, narrowed);
           callNode.setJSType(narrowed);
         }
       } else if (assertedNode.getType() == Token.AND ||
@@ -852,10 +845,20 @@ class TypeInference
       JSType type = getJSType(assertedNode);
       JSType narrowed = type.getGreatestSubtype(getNativeType(assertedType));
       if (type != narrowed) {
-        scope = scope.createChildFlowScope();
-        redeclare(scope, assertedNodeName, narrowed);
+        scope = narrowScope(scope, assertedNode, narrowed);
         callNode.setJSType(narrowed);
       }
+    }
+    return scope;
+  }
+
+  private FlowScope narrowScope(FlowScope scope, Node node, JSType narrowed) {
+    scope = scope.createChildFlowScope();
+    if (node.getType() == Token.GETPROP) {
+      scope.inferQualifiedSlot(
+          node.getQualifiedName(), getJSType(node), narrowed);
+    } else {
+      redeclareSimpleVar(scope, node, narrowed);
     }
     return scope;
   }
@@ -873,16 +876,16 @@ class TypeInference
         return;
       }
 
-      JSType iParameterType = iParameter.getJSType();
+      JSType iParameterType = getJSType(iParameter);
       Node iArgument = n.getChildAtIndex(i + 1);
       JSType iArgumentType = getJSType(iArgument);
       inferPropertyTypesToMatchConstraint(iArgumentType, iParameterType);
 
-      if (iParameterType instanceof FunctionType) {
-        FunctionType iParameterFnType = (FunctionType) iParameterType;
+      if (iParameterType.isFunctionType()) {
+        FunctionType iParameterFnType = iParameterType.toMaybeFunctionType();
 
         if (iArgument.getType() == Token.FUNCTION &&
-            iArgumentType instanceof FunctionType &&
+            iArgumentType.isFunctionType() &&
             iArgument.getJSDocInfo() == null) {
           iArgument.setJSType(iParameterFnType);
         }
@@ -929,8 +932,8 @@ class TypeInference
         for (Node jParameter : fnType.getParameters()) {
           JSType jParameterType =
               getJSType(jParameter).restrictByNotNullOrUndefined();
-          if (jParameterType instanceof FunctionType) {
-            FunctionType jParameterFnType = (FunctionType) jParameterType;
+          if (jParameterType.isFunctionType()) {
+            FunctionType jParameterFnType = jParameterType.toMaybeFunctionType();
             if (jParameterFnType.getTypeOfThis().equals(iParameterType)) {
               foundTemplateTypeOfThisParameter = true;
               // Find the actual type of the this argument.
@@ -941,26 +944,19 @@ class TypeInference
               Node jArgument = n.getChildAtIndex(j + 1);
               JSType jArgumentType = getJSType(jArgument);
               if (jArgument.getType() == Token.FUNCTION &&
-                  jArgumentType instanceof FunctionType) {
+                  jArgumentType.isFunctionType()) {
                 if (iArgumentType != null &&
                     // null and undefined get filtered out above.
                     !iArgumentType.isNoType()) {
                   // If it's an function expression, update the type of this
                   // using the actual type of T.
-                  FunctionType jArgumentFnType = (FunctionType) jArgumentType;
+                  FunctionType jArgumentFnType = jArgumentType.toMaybeFunctionType();
                   if (jArgumentFnType.getTypeOfThis().isUnknownType()) {
                     // The new type will be picked up when we traverse the inner
                     // function.
                     jArgument.setJSType(
                         registry.createFunctionTypeWithNewThisType(
                             jArgumentFnType, (ObjectType) iArgumentType));
-                  }
-                  // Warn if the anonymous function literal does not
-                  // reference this.
-                  if (!NodeUtil.referencesThis(
-                          NodeUtil.getFunctionBody(jArgument))) {
-                    compiler.report(JSError.make(NodeUtil.getSourceName(n), n,
-                        FUNCTION_LITERAL_UNREAD_THIS));
                   }
                 } else {
                   // Warn if the anonymous function literal references this.
@@ -998,9 +994,15 @@ class TypeInference
       constructorType = constructorType.restrictByNotNullOrUndefined();
       if (constructorType.isUnknownType()) {
         type = getNativeType(UNKNOWN_TYPE);
-      } else if (constructorType instanceof FunctionType) {
-        FunctionType ct = (FunctionType) constructorType;
-        if (ct.isConstructor()) {
+      } else {
+        FunctionType ct = constructorType.toMaybeFunctionType();
+        if (ct == null && constructorType instanceof FunctionType) {
+          // If constructorType is a NoObjectType, then toMaybeFunctionType will
+          // return null. But NoObjectType implements the FunctionType
+          // interface, precisely because it can validly construct objects.
+          ct = (FunctionType) constructorType;
+        }
+        if (ct != null && ct.isConstructor()) {
           type = ct.getInstanceType();
         }
       }
@@ -1088,12 +1090,11 @@ class TypeInference
    * null or undefined.
    */
   private FlowScope dereferencePointer(Node n, FlowScope scope) {
-    if (n.getType() == Token.NAME) {
+    if (n.isQualifiedName()) {
       JSType type = getJSType(n);
       JSType narrowed = type.restrictByNotNullOrUndefined();
       if (type != narrowed) {
-        scope = scope.createChildFlowScope();
-        redeclare(scope, n.getString(), narrowed);
+        scope = narrowScope(scope, n, narrowed);
       }
     }
     return scope;
@@ -1186,8 +1187,8 @@ class TypeInference
       if (literals.booleanValues == BooleanLiteralSet.EMPTY &&
           getNativeType(BOOLEAN_TYPE).isSubtype(type)) {
         // Exclusion only make sense for a union type.
-        if (type instanceof UnionType) {
-          type = ((UnionType) type).getRestrictedUnion(
+        if (type.isUnionType()) {
+          type = type.toMaybeUnionType().getRestrictedUnion(
               getNativeType(BOOLEAN_TYPE));
         }
       }
@@ -1319,7 +1320,10 @@ class TypeInference
         flowScope, flowScope);
   }
 
-  private void redeclare(FlowScope scope, String varName, JSType varType) {
+  private void redeclareSimpleVar(
+      FlowScope scope, Node nameNode, JSType varType) {
+    Preconditions.checkState(nameNode.getType() == Token.NAME);
+    String varName = nameNode.getString();
     if (varType == null) {
       varType = getNativeType(JSTypeNative.UNKNOWN_TYPE);
     }

@@ -153,18 +153,8 @@ class ProxyObjectType extends ObjectType {
   }
 
   @Override
-  public boolean isFunctionPrototypeType() {
-    return referencedType.isFunctionPrototypeType();
-  }
-
-  @Override
   public boolean isEnumType() {
     return referencedType.isEnumType();
-  }
-
-  @Override
-  public boolean isEnumElementType() {
-    return referencedType.isEnumElementType();
   }
 
   @Override
@@ -193,6 +183,27 @@ class ProxyObjectType extends ObjectType {
   }
 
   @Override
+  public boolean isNativeObjectType() {
+    return referencedObjType == null
+        ? false : referencedObjType.isNativeObjectType();
+  }
+
+  @Override
+  public UnionType toMaybeUnionType() {
+    return referencedType.toMaybeUnionType();
+  }
+
+  @Override
+  public FunctionType toMaybeFunctionType() {
+    return referencedType.toMaybeFunctionType();
+  }
+
+  @Override
+  public EnumElementType toMaybeEnumElementType() {
+    return referencedType.toMaybeEnumElementType();
+  }
+
+  @Override
   public TernaryValue testForEquality(JSType that) {
     return referencedType.testForEquality(that);
   }
@@ -200,6 +211,12 @@ class ProxyObjectType extends ObjectType {
   @Override
   public boolean isSubtype(JSType that) {
     return referencedType.isSubtype(that);
+  }
+
+  @Override
+  public FunctionType getOwnerFunction() {
+    return referencedObjType == null
+        ? null : referencedObjType.getOwnerFunction();
   }
 
   @Override
@@ -243,6 +260,12 @@ class ProxyObjectType extends ObjectType {
     return referencedObjType == null ? true :
         referencedObjType.defineProperty(
             propertyName, type, inferred, propertyNode);
+  }
+
+  @Override
+  public boolean removeProperty(String name) {
+    return referencedObjType == null ? false :
+        referencedObjType.removeProperty(name);
   }
 
   @Override

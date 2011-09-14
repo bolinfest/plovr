@@ -22,9 +22,9 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.deps.DependencyInfo;
 import com.google.javascript.jscomp.deps.JsFileParser;
+import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.jstype.StaticSourceFile;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -39,18 +39,16 @@ import java.util.Set;
  *
  */
 public class CompilerInput
-    implements SourceAst, DependencyInfo, StaticSourceFile {
+    implements SourceAst, DependencyInfo {
+
   private static final long serialVersionUID = 1L;
 
   // Info about where the file lives.
   private JSModule module;
-  final private String name;
+  final private InputId id;
 
   // The AST.
   private final SourceAst ast;
-
-  // Source Line Information
-  private int[] lineOffsets = null;
 
   // Provided and required symbols.
   private final Set<String> provides = Sets.newHashSet();
@@ -69,12 +67,16 @@ public class CompilerInput
   }
 
   public CompilerInput(SourceAst ast, boolean isExtern) {
-    this(ast, ast.getSourceFile().getName(), isExtern);
+    this(ast, ast.getInputId(), isExtern);
   }
 
-  public CompilerInput(SourceAst ast, String inputName, boolean isExtern) {
+  public CompilerInput(SourceAst ast, String inputId, boolean isExtern) {
+    this(ast, new InputId(inputId), isExtern);
+  }
+
+  public CompilerInput(SourceAst ast, InputId inputId, boolean isExtern) {
     this.ast = ast;
-    this.name = inputName;
+    this.id = inputId;
 
     // TODO(nicksantos): Add a precondition check here. People are passing
     // in null, but they should not be.
@@ -88,13 +90,23 @@ public class CompilerInput
   }
 
   public CompilerInput(JSSourceFile file, boolean isExtern) {
-    this(new JsAst(file), file.getName(), isExtern);
+    this(new JsAst(file), isExtern);
+  }
+
+  /** Returns a name for this input. Must be unique across all inputs. */
+  @Override
+  public InputId getInputId() {
+    return id;
   }
 
   /** Returns a name for this input. Must be unique across all inputs. */
   @Override
   public String getName() {
-    return name;
+    return id.getIdName();
+  }
+
+  public SourceAst getAst() {
+    return ast;
   }
 
   /** Gets the path relative to closure-base, if one is available. */
@@ -106,7 +118,13 @@ public class CompilerInput
 
   @Override
   public Node getAstRoot(AbstractCompiler compiler) {
-    return ast.getAstRoot(compiler);
+    Node root = ast.getAstRoot(compiler);
+    // The root maybe null if the AST can not be created.
+    if (root != null) {
+      Preconditions.checkState(root.getType() == Token.SCRIPT);
+      Preconditions.checkNotNull(root.getInputId());
+    }
+    return root;
   }
 
   @Override
@@ -122,7 +140,6 @@ public class CompilerInput
   @Override
   public void setSourceFile(SourceFile file) {
     ast.setSourceFile(file);
-    lineOffsets = null;
   }
 
   /** Returns the SourceAst object on which this input is based. */
@@ -298,7 +315,6 @@ public class CompilerInput
     this.module = module;
   }
 
-  @Override
   public boolean isExtern() {
     if (ast == null || ast.getSourceFile() == null) {
       return false;
@@ -313,43 +329,13 @@ public class CompilerInput
     ast.getSourceFile().setIsExtern(isExtern);
   }
 
-  /**
-   * @param lineno the line of the input to get the absolute offset of.
-   * @return the absolute offset of the start of the provided line.
-   * @throws IllegalArgumentException if lineno is less than 1 or greater than
-   *         the number of lines in the source.
-   */
   public int getLineOffset(int lineno) {
-    if (lineOffsets == null) {
-      findLineOffsets();
-    }
-    if (lineno < 1 || lineno > lineOffsets.length) {
-      throw new IllegalArgumentException(
-          "Expected line number between 1 and " + lineOffsets.length);
-    }
-    return lineOffsets[lineno - 1];
+    return ast.getSourceFile().getLineOffset(lineno);
   }
 
   /** @return The number of lines in this input. */
   public int getNumLines() {
-    if (lineOffsets == null) {
-      findLineOffsets();
-    }
-    return lineOffsets.length;
-  }
-
-  private void findLineOffsets() {
-    try {
-      String[] sourceLines = ast.getSourceFile().getCode().split("\n");
-      lineOffsets = new int[sourceLines.length];
-      for (int ii = 1; ii < sourceLines.length; ++ii) {
-        lineOffsets[ii] =
-            lineOffsets[ii - 1] + sourceLines[ii - 1].length() + 1;
-      }
-    } catch (IOException e) {
-      lineOffsets = new int[1];
-      lineOffsets[0] = 0;
-    }
+    return ast.getSourceFile().getNumLines();
   }
 
   @Override

@@ -300,6 +300,70 @@ public class NodeTest extends TestCase {
     assertTrue(nodeClone.getBooleanProp(Node.IS_DISPATCHER));
   }
 
+  public void testGetIndexOfChild() {
+    Node assign = getNode("b = c");
+    assertEquals(2, assign.getChildCount());
+
+    Node firstChild = assign.getFirstChild();
+    Node secondChild = firstChild.getNext();
+    assertNotNull(secondChild);
+
+    assertEquals(0, assign.getIndexOfChild(firstChild));
+    assertEquals(1, assign.getIndexOfChild(secondChild));
+    assertEquals(-1, assign.getIndexOfChild(assign));
+  }
+
+  public void testCopyInformationFrom() {
+    Node assign = getNode("b = c");
+    assign.setSourceEncodedPosition(99);
+    assign.setSourceFileForTesting("foo.js");
+
+    Node lhs = assign.getFirstChild();
+    lhs.copyInformationFrom(assign);
+    assertEquals(99, lhs.getSourcePosition());
+    assertEquals("foo.js", lhs.getSourceFileName());
+
+    assign.setSourceEncodedPosition(101);
+    assign.setSourceFileForTesting("bar.js");
+    lhs.copyInformationFrom(assign);
+    assertEquals(99, lhs.getSourcePosition());
+    assertEquals("foo.js", lhs.getSourceFileName());
+  }
+
+  public void testUseSourceInfoIfMissingFrom() {
+    Node assign = getNode("b = c");
+    assign.setSourceEncodedPosition(99);
+    assign.setSourceFileForTesting("foo.js");
+
+    Node lhs = assign.getFirstChild();
+    lhs.useSourceInfoIfMissingFrom(assign);
+    assertEquals(99, lhs.getSourcePosition());
+    assertEquals("foo.js", lhs.getSourceFileName());
+
+    assign.setSourceEncodedPosition(101);
+    assign.setSourceFileForTesting("bar.js");
+    lhs.useSourceInfoIfMissingFrom(assign);
+    assertEquals(99, lhs.getSourcePosition());
+    assertEquals("foo.js", lhs.getSourceFileName());
+  }
+
+  public void testUseSourceInfoFrom() {
+    Node assign = getNode("b = c");
+    assign.setSourceEncodedPosition(99);
+    assign.setSourceFileForTesting("foo.js");
+
+    Node lhs = assign.getFirstChild();
+    lhs.useSourceInfoFrom(assign);
+    assertEquals(99, lhs.getSourcePosition());
+    assertEquals("foo.js", lhs.getSourceFileName());
+
+    assign.setSourceEncodedPosition(101);
+    assign.setSourceFileForTesting("bar.js");
+    lhs.useSourceInfoFrom(assign);
+    assertEquals(101, lhs.getSourcePosition());
+    assertEquals("bar.js", lhs.getSourceFileName());
+  }
+
   private static Node getNode(String js) {
     Node root = parse("var a=(" + js + ");");
     Node expr = root.getFirstChild();

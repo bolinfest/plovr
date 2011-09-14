@@ -70,6 +70,46 @@ public class FunctionArgumentInjectorTest extends TestCase {
             parseFunction("function f(a,b){ a; if (a) b=0 }")));
   }
 
+  public void testFindModifiedParameters6() {
+    assertEquals(Sets.newHashSet("a", "b"),
+        FunctionArgumentInjector.findModifiedParameters(
+            parseFunction("function f(a,b){ function f(){ a;b; } }")));
+  }
+
+  public void testFindModifiedParameters7() {
+    assertEquals(Sets.newHashSet("b"),
+        FunctionArgumentInjector.findModifiedParameters(
+            parseFunction("function f(a,b){ a; function f(){ b; } }")));
+  }
+
+  public void testFindModifiedParameters8() {
+    assertEquals(Sets.newHashSet("b"),
+        FunctionArgumentInjector.findModifiedParameters(
+            parseFunction(
+                "function f(a,b){ "+
+                "a; function f(){ function g() { b; } } }")));
+  }
+
+  public void testFindModifiedParameters9() {
+    assertEquals(Sets.newHashSet("a", "b"),
+        FunctionArgumentInjector.findModifiedParameters(
+            parseFunction("function f(a,b){ (function(){ a;b; }) }")));
+  }
+
+  public void testFindModifiedParameters10() {
+    assertEquals(Sets.newHashSet("b"),
+        FunctionArgumentInjector.findModifiedParameters(
+            parseFunction("function f(a,b){ a; (function (){ b; }) }")));
+  }
+
+  public void testFindModifiedParameters11() {
+    assertEquals(Sets.newHashSet("b"),
+        FunctionArgumentInjector.findModifiedParameters(
+            parseFunction(
+                "function f(a,b){ "+
+                "a; (function(){ (function () { b; }) }) }")));
+  }
+
   public void testMaybeAddTempsForCallArguments1() {
     // Parameters with side-effects must be executed
     // even if they aren't referenced.
@@ -389,6 +429,7 @@ public class FunctionArgumentInjectorTest extends TestCase {
   private static Supplier<String> getNameSupplier() {
     return new Supplier<String>() {
       int i = 0;
+      @Override
       public String get() {
         return String.valueOf(i++);
       }

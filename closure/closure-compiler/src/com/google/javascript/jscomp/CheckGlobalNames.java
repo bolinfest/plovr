@@ -68,6 +68,7 @@ class CheckGlobalNames implements CompilerPass {
     return this;
   }
 
+  @Override
   public void process(Node externs, Node root) {
     // TODO(nicksantos): Let CollapseProperties and CheckGlobalNames
     // share a namespace.
@@ -132,8 +133,8 @@ class CheckGlobalNames implements CompilerPass {
         compiler.report(
             JSError.make(ref.source.getName(), ref.node,
                 NAME_DEFINED_LATE_WARNING,
-                name.fullName(),
-                parent.fullName(),
+                name.getFullName(),
+                parent.getFullName(),
                 parent.getDeclaration().source.getName(),
                 String.valueOf(parent.getDeclaration().node.getLineno())));
       }
@@ -157,7 +158,7 @@ class CheckGlobalNames implements CompilerPass {
         JSError.make(ref.source.getName(), ref.node, STRICT_MODULE_DEP_QNAME,
                      ref.getModule().getName(),
                      name.getDeclaration().getModule().getName(),
-                     name.fullName()));
+                     name.getFullName()));
   }
 
   private void reportRefToUndefinedName(Name name, Ref ref) {
@@ -169,7 +170,7 @@ class CheckGlobalNames implements CompilerPass {
 
     compiler.report(
         JSError.make(ref.getSourceName(), ref.node, level,
-            UNDEFINED_NAME_WARNING, name.fullName()));
+            UNDEFINED_NAME_WARNING, name.getFullName()));
   }
 
   /**

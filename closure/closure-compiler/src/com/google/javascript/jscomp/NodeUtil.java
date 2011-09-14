@@ -21,12 +21,14 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
+import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TokenStream;
 import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
+import com.google.javascript.rhino.jstype.StaticSourceFile;
 import com.google.javascript.rhino.jstype.TernaryValue;
 
 import java.util.Arrays;
@@ -503,6 +505,55 @@ public final class NodeUtil {
     }
 
     return false;
+  }
+
+  /**
+   * Returns true if the operator on this node is symmetric
+   */
+  public static boolean isSymmetricOperation(Node n) {
+    switch (n.getType()) {
+      case Token.EQ: // equal
+      case Token.NE: // not equal
+      case Token.SHEQ: // exactly equal
+      case Token.SHNE: // exactly not equal
+      case Token.MUL: // multiply, unlike add it only works on numbers
+                      // or results NaN if any of the operators is not a number
+        return true;
+    }
+    return false;
+  }
+
+  /**
+   * Returns true if the operator on this node is relational.
+   * the returned set does not include the equalities.
+   */
+  public static boolean isRelationalOperation(Node n) {
+    switch (n.getType()) {
+      case Token.GT: // equal
+      case Token.GE: // not equal
+      case Token.LT: // exactly equal
+      case Token.LE: // exactly not equal
+        return true;
+    }
+    return false;
+  }
+
+  /**
+   * Returns the inverse of an operator if it is invertible.
+   * ex. '>' ==> '<'
+   */
+  public static int getInverseOperator(int type) {
+    switch (type) {
+      case Token.GT:
+        return Token.LT;
+      case Token.LT:
+        return Token.GT;
+      case Token.GE:
+        return Token.LE;
+      case Token.LE:
+        return Token.GE;
+    }
+    return Token.ERROR;
   }
 
   /**
@@ -1203,6 +1254,7 @@ public final class NodeUtil {
   }
 
   static class NumbericResultPredicate implements Predicate<Node> {
+    @Override
     public boolean apply(Node n) {
       return isNumericResultHelper(n);
     }
@@ -1255,6 +1307,7 @@ public final class NodeUtil {
   }
 
   static class BooleanResultPredicate implements Predicate<Node> {
+    @Override
     public boolean apply(Node n) {
       return isBooleanResultHelper(n);
     }
@@ -1316,6 +1369,7 @@ public final class NodeUtil {
   }
 
   static class MayBeStringResultPredicate implements Predicate<Node> {
+    @Override
     public boolean apply(Node n) {
       return mayBeStringHelper(n);
     }
@@ -2109,7 +2163,7 @@ public final class NodeUtil {
         case Token.GET:
           // GET must always return a function type.
           if (valueType.isFunctionType()) {
-            FunctionType fntype = ((FunctionType) valueType);
+            FunctionType fntype = valueType.toMaybeFunctionType();
             valueType = fntype.getReturnType();
           } else {
             return null;
@@ -2118,7 +2172,7 @@ public final class NodeUtil {
         case Token.SET:
           if (valueType.isFunctionType()) {
             // SET must always return a function type.
-            FunctionType fntype = ((FunctionType) valueType);
+            FunctionType fntype = valueType.toMaybeFunctionType();
             Node param = fntype.getParametersNode().getFirstChild();
             // SET function must always have one parameter.
             valueType = param.getJSType();
@@ -2487,6 +2541,7 @@ public final class NodeUtil {
   private static class VarCollector implements Visitor {
     final Map<String, Node> vars = Maps.newLinkedHashMap();
 
+    @Override
     public void visit(Node n) {
       if (n.getType() == Token.NAME) {
         Node parent = n.getParent();
@@ -2595,6 +2650,7 @@ public final class NodeUtil {
       this.name = name;
     }
 
+    @Override
     public boolean apply(Node n) {
       return n.getType() == Token.NAME
           && n.getString().equals(name);
@@ -2611,6 +2667,7 @@ public final class NodeUtil {
       this.type = type;
     }
 
+    @Override
     public boolean apply(Node n) {
       return n.getType() == type;
     }
@@ -2621,6 +2678,7 @@ public final class NodeUtil {
    * A predicate for matching var or function declarations.
    */
   static class MatchDeclaration implements Predicate<Node> {
+    @Override
     public boolean apply(Node n) {
       return isFunctionDeclaration(n) || n.getType() == Token.VAR;
     }
@@ -2630,6 +2688,7 @@ public final class NodeUtil {
    * A predicate for matching anything except function nodes.
    */
   static class MatchNotFunction implements Predicate<Node>{
+    @Override
     public boolean apply(Node n) {
       return !isFunction(n);
     }
@@ -2641,6 +2700,7 @@ public final class NodeUtil {
    * A predicate for matching statements without exiting the current scope.
    */
   static class MatchShallowStatement implements Predicate<Node>{
+    @Override
     public boolean apply(Node n) {
       Node parent = n.getParent();
       return n.getType() == Token.BLOCK
@@ -2891,6 +2951,31 @@ public final class NodeUtil {
   }
 
   /**
+   * @param n The node.
+   * @return The source name property on the node or its ancestors.
+   */
+  public static StaticSourceFile getSourceFile(Node n) {
+    StaticSourceFile sourceName = null;
+    while (sourceName == null && n != null) {
+      sourceName = n.getStaticSourceFile();
+      n = n.getParent();
+    }
+    return sourceName;
+  }
+
+  /**
+   * @param n The node.
+   * @return The InputId property on the node or its ancestors.
+   */
+  public static InputId getInputId(Node n) {
+    while (n != null && n.getType() != Token.SCRIPT) {
+      n = n.getParent();
+    }
+
+    return (n != null && n.getType() == Token.SCRIPT) ? n.getInputId() : null;
+  }
+
+  /**
    * A new CALL node with the "FREE_CALL" set based on call target.
    */
   static Node newCallNode(Node callTarget, Node... parameters) {
@@ -3023,5 +3108,78 @@ public final class NodeUtil {
       return isString(propNode) && "toString".equals(propNode.getString());
     }
     return false;
+  }
+
+  /** Find the best JSDoc for the given node. */
+  static JSDocInfo getBestJSDocInfo(Node n) {
+    JSDocInfo info = n.getJSDocInfo();
+    if (info == null) {
+      Node parent = n.getParent();
+      if (parent == null) {
+        return null;
+      }
+
+      int parentType = parent.getType();
+      if (parentType == Token.NAME) {
+        info = parent.getJSDocInfo();
+        if (info == null && parent.getParent().hasOneChild()) {
+          info = parent.getParent().getJSDocInfo();
+        }
+      } else if (parentType == Token.ASSIGN) {
+        info = parent.getJSDocInfo();
+      } else if (isObjectLitKey(parent, parent.getParent())) {
+        info = parent.getJSDocInfo();
+      }
+    }
+    return info;
+  }
+
+  /** Find the l-value that the given r-value is being assigned to. */
+  static Node getBestLValue(Node n) {
+    Node parent = n.getParent();
+    int parentType = parent.getType();
+    boolean isFunctionDeclaration = isFunctionDeclaration(n);
+    if (isFunctionDeclaration) {
+      return n.getFirstChild();
+    } else if (parentType == Token.NAME) {
+      return parent;
+    } else if (parentType == Token.ASSIGN) {
+      return parent.getFirstChild();
+    } else if (isObjectLitKey(parent, parent.getParent())) {
+      return parent;
+    }
+    return null;
+  }
+
+  /** Get the owner of the given l-value node. */
+  static Node getBestLValueOwner(@Nullable Node lValue) {
+    if (lValue == null || lValue.getParent() == null) {
+      return null;
+    }
+    if (isObjectLitKey(lValue, lValue.getParent())) {
+      return getBestLValue(lValue.getParent());
+    } else if (isGet(lValue)) {
+      return lValue.getFirstChild();
+    }
+
+    return null;
+  }
+
+  /** Get the name of the given l-value node. */
+  static String getBestLValueName(@Nullable Node lValue) {
+    if (lValue == null || lValue.getParent() == null) {
+      return null;
+    }
+    if (isObjectLitKey(lValue, lValue.getParent())) {
+      Node owner = getBestLValue(lValue.getParent());
+      if (owner != null) {
+        String ownerName = getBestLValueName(owner);
+        if (ownerName != null) {
+          return ownerName + "." + getObjectLitKeyName(lValue);
+        }
+      }
+      return null;
+    }
+    return lValue.getQualifiedName();
   }
 }

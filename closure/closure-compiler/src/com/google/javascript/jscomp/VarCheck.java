@@ -38,7 +38,7 @@ class VarCheck extends AbstractPostOrderCallback implements
 
   static final DiagnosticType UNDEFINED_VAR_ERROR = DiagnosticType.error(
       "JSC_UNDEFINED_VARIABLE",
-      "variable {0} is undefined");
+      "variable {0} is undeclared");
 
   static final DiagnosticType VIOLATED_MODULE_DEP_ERROR = DiagnosticType.error(
       "JSC_VIOLATED_MODULE_DEPENDENCY",
@@ -113,7 +113,7 @@ class VarCheck extends AbstractPostOrderCallback implements
   }
 
   @Override
-  public void hotSwapScript(Node scriptRoot) {
+  public void hotSwapScript(Node scriptRoot, Node originalRoot) {
     Preconditions.checkState(scriptRoot.getType() == Token.SCRIPT);
     NodeTraversal t = new NodeTraversal(compiler, this);
     // Note we use the global scope to prevent wrong "undefined-var errors" on
@@ -240,6 +240,7 @@ class VarCheck extends AbstractPostOrderCallback implements
    * a variable from getting renamed, but no longer have any effect.
    */
   private class NameRefInExternsCheck extends AbstractPostOrderCallback {
+    @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       if (n.getType() == Token.NAME) {
         switch (parent.getType()) {

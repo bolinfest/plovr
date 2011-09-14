@@ -34,7 +34,6 @@ import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.FunctionBuilder;
 import com.google.javascript.rhino.jstype.FunctionParamBuilder;
 import com.google.javascript.rhino.jstype.FunctionType;
-import com.google.javascript.rhino.jstype.InstanceObjectType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
@@ -312,7 +311,7 @@ final class FunctionTypeBuilder {
    */
   FunctionTypeBuilder inferReturnStatementsAsLastResort(
       @Nullable Node functionBlock) {
-    if (functionBlock == null || compiler.getInput(sourceName).isExtern()) {
+    if (functionBlock == null || functionBlock.isFromExterns()) {
       return this;
     }
     Preconditions.checkArgument(functionBlock.getType() == Token.BLOCK);
@@ -397,11 +396,11 @@ final class FunctionTypeBuilder {
 
   /**
    * Infers the type of {@code this}.
-   * @param type The type of this.
+   * @param type The type of this if the info is missing.
    */
   FunctionTypeBuilder inferThisType(JSDocInfo info, JSType type) {
     // Look at the @this annotation first.
-    inferThisType(info, (Node) null);
+    inferThisType(info);
 
     if (thisType == null) {
       ObjectType objType = ObjectType.cast(type);
@@ -416,12 +415,8 @@ final class FunctionTypeBuilder {
   /**
    * Infers the type of {@code this}.
    * @param info The JSDocInfo for this function.
-   * @param owner The node for the object whose prototype "owns" this function.
-   *     For example, {@code A} in the expression {@code A.prototype.foo}. May
-   *     be null to indicate that this is not a prototype property.
    */
-  FunctionTypeBuilder inferThisType(JSDocInfo info,
-      @Nullable Node owner) {
+  FunctionTypeBuilder inferThisType(JSDocInfo info) {
     ObjectType maybeThisType = null;
     if (info != null && info.hasThisType()) {
       maybeThisType = ObjectType.cast(
@@ -430,25 +425,6 @@ final class FunctionTypeBuilder {
     if (maybeThisType != null) {
       thisType = maybeThisType;
       thisType.setValidator(new ThisTypeValidator());
-    } else if (owner != null &&
-               (info == null || !info.hasType())) {
-      // If the function is of the form:
-      // x.prototype.y = function() {}
-      // then we can assume "x" is the @this type. On the other hand,
-      // if it's of the form:
-      // /** @type {Function} */ x.prototype.y;
-      // then we should not give it a @this type.
-      String ownerTypeName = owner.getQualifiedName();
-      Var ownerVar = scope.getVar(ownerTypeName);
-      JSType ownerType = ownerVar == null ? null : ownerVar.getType();
-      FunctionType ownerFnType = ownerType instanceof FunctionType ?
-          (FunctionType) ownerType : null;
-      ObjectType instType =
-          ownerFnType == null || ownerFnType.isOrdinaryFunction() ?
-          null : ownerFnType.getInstanceType();
-      if (instType != null) {
-        thisType = instType;
-      }
     }
 
     return this;
@@ -696,11 +672,11 @@ final class FunctionTypeBuilder {
     JSType existingType = typeRegistry.getType(fnName);
 
     if (existingType != null) {
-      boolean isInstanceObject = existingType instanceof InstanceObjectType;
+      boolean isInstanceObject = existingType.isInstanceType();
       if (isInstanceObject || fnName.equals("Function")) {
         FunctionType existingFn =
             isInstanceObject ?
-            ((InstanceObjectType) existingType).getConstructor() :
+            existingType.toObjectType().getConstructor() :
             typeRegistry.getNativeFunctionType(FUNCTION_FUNCTION_TYPE);
 
         if (existingFn.getSource() == null) {
