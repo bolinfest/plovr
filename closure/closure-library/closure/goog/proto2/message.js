@@ -153,8 +153,8 @@ goog.proto2.Message.prototype.setUnknown = function(tag, value) {
 goog.proto2.Message.prototype.forEachUnknown = function(callback, opt_scope) {
   var scope = opt_scope || this;
   for (var key in this.values_) {
-    if (!this.fields_[key]) {
-      callback.call(scope, /** @type {number} */ (key), this.values_[key]);
+    if (!this.fields_[/** @type {number} */ (key)]) {
+      callback.call(scope, Number(key), this.values_[key]);
     }
   }
 };
@@ -467,7 +467,8 @@ goog.proto2.Message.prototype.has$Value = function(tag) {
   goog.proto2.Util.assert(this.fields_[tag],
                           'No field found for the given tag');
 
-  return tag in this.values_ && goog.isDef(this.values_[tag]);
+  return tag in this.values_ && goog.isDef(this.values_[tag]) &&
+      this.values_[tag] !== null;
 };
 
 

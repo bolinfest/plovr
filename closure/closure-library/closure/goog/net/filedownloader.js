@@ -106,25 +106,29 @@ goog.inherits(goog.net.FileDownloader, goog.Disposable);
  *
  * Returns a Deferred that will contain the downloaded blob. If there's an error
  * while downloading the URL, this Deferred will be passed the
- * {@link goog.net.FileDownloader.Error} object as an errback. If the deferred
- * is cancelled, the download will be cancelled as well.
+ * {@link goog.net.FileDownloader.Error} object as an errback.
  *
  * If a download is already in progress for the given URL, this will return the
  * deferred blob for that download. If the URL has already been downloaded, this
  * will fail once it tries to save the downloaded blob.
  *
+ * When a download is in progress, all Deferreds returned for that download will
+ * be branches of a single parent. If all such branches are cancelled, or if one
+ * is cancelled with opt_deepCancel set, then the download will be cancelled as
+ * well.
+ *
  * @param {string} url The URL of the file to download.
  * @return {!goog.async.Deferred} The deferred result blob.
  */
 goog.net.FileDownloader.prototype.download = function(url) {
-  if (url in this.downloads_) {
-    return this.downloads_[url].deferred.branch();
+  if (this.isDownloading(url)) {
+    return this.downloads_[url].deferred.branch(true /* opt_propagateCancel */);
   }
 
   var download = new goog.net.FileDownloader.Download_(url, this);
   this.downloads_[url] = download;
   this.pool_.getObject(goog.bind(this.gotXhr_, this, download));
-  return download.deferred;
+  return download.deferred.branch(true /* opt_propagateCancel */);
 };
 
 
@@ -140,7 +144,7 @@ goog.net.FileDownloader.prototype.download = function(url) {
  */
 goog.net.FileDownloader.prototype.waitForDownload = function(url) {
   var deferred = new goog.async.Deferred();
-  if (url in this.downloads_) {
+  if (this.isDownloading(url)) {
     this.downloads_[url].deferred.addBoth(function() {
       deferred.callback(null);
     }, this);
@@ -148,6 +152,17 @@ goog.net.FileDownloader.prototype.waitForDownload = function(url) {
     deferred.callback(null);
   }
   return deferred;
+};
+
+
+/**
+ * Returns whether or not there is an active download for a given URL.
+ *
+ * @param {string} url The URL of the download to check.
+ * @return {boolean} Whether or not there is an active download for the URL.
+ */
+goog.net.FileDownloader.prototype.isDownloading = function(url) {
+  return url in this.downloads_;
 };
 
 
@@ -265,7 +280,7 @@ goog.net.FileDownloader.prototype.setBlob = function(url, blob, opt_name) {
       }).
       addCallback(goog.bind(this.fileSuccess_, this, download)).
       addErrback(goog.bind(this.error_, this, download));
-  return download.deferred;
+  return download.deferred.branch(true /* opt_propagateCancel */);
 };
 
 

@@ -1212,6 +1212,16 @@ goog.dom.isNodeLike = function(obj) {
 
 
 /**
+ * Whether the object looks like an Element.
+ * @param {*} obj The object being tested for Element likeness.
+ * @return {boolean} Whether the object looks like an Element.
+ */
+goog.dom.isElement = function(obj) {
+  return goog.isObject(obj) && obj.nodeType == goog.dom.NodeType.ELEMENT;
+};
+
+
+/**
  * Returns true if the specified value is a Window object. This includes the
  * global window for HTML pages, and iframe windows.
  * @param {*} obj Variable to test.
@@ -1625,6 +1635,11 @@ goog.dom.setFocusableTabIndex = function(element, enable) {
   if (enable) {
     element.tabIndex = 0;
   } else {
+    // Set tabIndex to -1 first, then remove it. This is a workaround for
+    // Safari (confirmed in version 4 on Windows). When removing the attribute
+    // without setting it to -1 first, the element remains keyboard focusable
+    // despite not having a tabIndex attribute anymore.
+    element.tabIndex = -1;
     element.removeAttribute('tabIndex'); // Must be camelCase!
   }
 };

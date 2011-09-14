@@ -13,16 +13,14 @@
 // limitations under the License.
 
 /**
- *
  * @fileoverview Provides the goog.jsaction.EventContract object, which is
- * responsible for JsAction-related event handling.
- * Design doc: http://www/eng/designdocs/maps/eventcontract.html.
+ * responsible for jsaction-related event handling.
  *
- * JsAction provides an event handling abstraction which decouples
+ * Jsaction provides an event handling abstraction which decouples
  * the DOM and JavaScript code. The traditional way to associate event
  * handlers with DOM elements is to programmatically obtain a reference to
  * the element in question and register an event handler on it.
- * JsAction allows for a more declarative way to set up event handling code.
+ * Jsaction allows for a more declarative way to set up event handling code.
  * It relies on the custom attribute 'jsaction' which contain a mapping from
  * event type to named actions) and on events bubbling up to a single event
  * handler registered on a container element.
@@ -37,15 +35,24 @@
  * subtree of the container element. Note the body-element can be used as
  * container without restriction, resulting in a single event handler
  * per event type for the whole page.
- * TODO(user): Add the dispatcher, include it in the
- * example and refer to it for action handler registration.
+ *
+ * To complete the setup, EventContract needs to be hooked up to a
+ * dispatcher, whose task it is to look up and invoke the appropriate
+ * handler function for an action.
+ *
+ * var dispatcher = new goog.jsaction.Dispatcher;
+ * contract.setDispatcher(dispatcher);
+ *
+ * Before the dispatcher has been set, EventContract will simply queue
+ * events for later replay. This allows to set up jsaction handling with
+ * very little code and defer loading of the dispatcher and action handlers.
  *
  * A few words about modified click events:
  *
  * A modified click is one for which browsers exhibit special behavior.
  * An example would be ctrl-click (or cmd-click on Macs) to open a link
  * in a new window or tab.
- * In order to support this, JsAction uses custom event types to distiguish
+ * In order to support this, jsaction uses custom event types to distiguish
  * between plain and modified clicks.
  * - Native 'click'-events are separated into custom event types
  *   'click_plain' and 'click_mod'.
@@ -75,6 +82,7 @@
  * - A plain click will be left to the browser to handle, which will
  *   navigate to http://gna.com.
  * - A modified click will cause action 'klik.me' to be invoked.
+ *
  */
 
 
@@ -111,7 +119,7 @@ goog.jsaction.EventType = {
 
 
 /**
- * Instantiates EventContract, the object responsible for JsAction-related
+ * Instantiates EventContract, the object responsible for jsaction-related
  * event handling and queuing.
  * @constructor
  */
@@ -140,8 +148,7 @@ goog.jsaction.EventContract = function() {
   /**
    * The dispatcher object. As long as this isn't set, all events for which
    * an action has been found will be queued.
-   * TODO(user): Change to actual type once dispatcher is available.
-   * @type {Object}
+   * @type {goog.jsaction.Dispatcher}
    * @private
    */
   this.dispatcher_ = null;
@@ -154,7 +161,7 @@ goog.jsaction.EventContract = function() {
  * @private
  * @const
  */
-goog.jsaction.EventContract.ATTR_JSACTION_ = 'jsaction';
+goog.jsaction.EventContract.ATTRIBUTE_NAME_JSACTION_ = 'jsaction';
 
 
 /**
@@ -164,7 +171,7 @@ goog.jsaction.EventContract.ATTR_JSACTION_ = 'jsaction';
  * @private
  * @const
  */
-goog.jsaction.EventContract.PROP_ACTION_MAP_ = '__jsam';
+goog.jsaction.EventContract.PROPERTY_KEY_ACTION_MAP_ = '__jsam';
 
 
 /**
@@ -174,7 +181,7 @@ goog.jsaction.EventContract.PROP_ACTION_MAP_ = '__jsam';
  * @private
  * @const
  */
-goog.jsaction.EventContract.PROP_EVENT_HANDLER_ = '__jsaeh';
+goog.jsaction.EventContract.PROPERTY_KEY_EVENT_HANDLER_ = '__jsaeh';
 
 
 /**
@@ -183,7 +190,7 @@ goog.jsaction.EventContract.PROP_EVENT_HANDLER_ = '__jsaeh';
  * @type {string}
  * @const
  */
-goog.jsaction.EventContract.PROP_REPLAY_INFO = '__jsari';
+goog.jsaction.EventContract.PROPERTY_KEY_REPLAY_INFO = '__jsari';
 
 
 /**
@@ -204,7 +211,7 @@ goog.jsaction.EventContract.DEFAULT_EVENT_TYPE_ =
  * @param {!Element} containerElem The element.
  */
 goog.jsaction.EventContract.prototype.addContainer = function(containerElem) {
-  if (containerElem[goog.jsaction.EventContract.PROP_EVENT_HANDLER_]) {
+  if (containerElem[goog.jsaction.EventContract.PROPERTY_KEY_EVENT_HANDLER_]) {
     if (goog.DEBUG) {
       throw Error('The provided element has already been added as ' +
                   'container to an EventContract instance.');
@@ -219,7 +226,8 @@ goog.jsaction.EventContract.prototype.addContainer = function(containerElem) {
   // all event types.
   var handler = goog.jsaction.EventContract.createEventHandler_(
       this, containerElem);
-  containerElem[goog.jsaction.EventContract.PROP_EVENT_HANDLER_] = handler;
+  containerElem[goog.jsaction.EventContract.PROPERTY_KEY_EVENT_HANDLER_] =
+      handler;
 
   for (var eventType in this.eventTypes_) {
     goog.jsaction.util.addEventListener(containerElem, eventType, handler);
@@ -239,7 +247,8 @@ goog.jsaction.EventContract.prototype.addEvent = function(eventType) {
   this.eventTypes_[eventType] = true;
 
   for (var i = 0, container; container = this.containers_[i]; ++i) {
-    var handler = container[goog.jsaction.EventContract.PROP_EVENT_HANDLER_];
+    var handler = container[
+        goog.jsaction.EventContract.PROPERTY_KEY_EVENT_HANDLER_];
     goog.jsaction.util.addEventListener(container, eventType, handler);
   }
 };
@@ -255,6 +264,15 @@ goog.jsaction.EventContract.prototype.getQueue = function() {
 
 
 /**
+ * Sets the dispatcher.
+ * @param {goog.jsaction.Dispatcher} dispatcher The dispatcher.
+ */
+goog.jsaction.EventContract.prototype.setDispatcher = function(dispatcher) {
+  this.dispatcher_ = dispatcher;
+};
+
+
+/**
  * Gets the action for the given element and event type.
  * @param {!Element} elem The element.
  * @param {string} eventType The event type.
@@ -262,9 +280,9 @@ goog.jsaction.EventContract.prototype.getQueue = function() {
  * @private
  */
 goog.jsaction.EventContract.getAction_ = function(elem, eventType) {
-  var actionMap = elem[goog.jsaction.EventContract.PROP_ACTION_MAP_];
+  var actionMap = elem[goog.jsaction.EventContract.PROPERTY_KEY_ACTION_MAP_];
   if (!actionMap) {
-    actionMap = elem[goog.jsaction.EventContract.PROP_ACTION_MAP_] =
+    actionMap = elem[goog.jsaction.EventContract.PROPERTY_KEY_ACTION_MAP_] =
         goog.jsaction.EventContract.parseJsActionAttribute_(elem);
   }
   return actionMap[eventType] || null;
@@ -281,7 +299,8 @@ goog.jsaction.EventContract.getAction_ = function(elem, eventType) {
  */
 goog.jsaction.EventContract.parseJsActionAttribute_ = function(elem) {
   var actionMap = {};
-  var attrValue = elem.getAttribute(goog.jsaction.EventContract.ATTR_JSACTION_);
+  var attrValue = elem.getAttribute(
+      goog.jsaction.EventContract.ATTRIBUTE_NAME_JSACTION_);
   if (attrValue) {
     var actionSpecs = attrValue.replace(/\s/g, '').split(';');
     for (var i = 0; i < actionSpecs.length; ++i) {
@@ -342,7 +361,7 @@ goog.jsaction.EventContract.prototype.handleEvent_ = function(
   var eventType = e.type;
 
   // If the event is replayed, we use the time from the original event.
-  var replayInfo = e[goog.jsaction.EventContract.PROP_REPLAY_INFO];
+  var replayInfo = e[goog.jsaction.EventContract.PROPERTY_KEY_REPLAY_INFO];
   var time = replayInfo && replayInfo.time || goog.now();
 
   // TODO(user): Apply mapping for event types where the jsaction type
@@ -368,20 +387,24 @@ goog.jsaction.EventContract.prototype.handleEvent_ = function(
   }
 
   if (action && elem) {
-    // TODO(user): Add action dispatching.
+    var actionHandled = false;
+    if (this.dispatcher_) {
+      actionHandled = this.dispatcher_.dispatch(action, elem, e, time);
+    }
 
-    // NOTE(user): If an action is handled by the dispatcher, it
-    // is also up to the dispatcher/handler to stop propagation and
-    // prevent the default.
+    if (!actionHandled) {
+      // NOTE(user): If an action was handled by the dispatcher, it
+      // is also up to the dispatcher/handler to stop propagation
+      // and prevent the default.
+      goog.jsaction.util.stopPropagation(e);
+      goog.jsaction.util.preventDefault(e);
 
-    goog.jsaction.util.stopPropagation(e);
-    goog.jsaction.util.preventDefault(e);
-
-    this.queue_.push({
-      action: action,
-      element: elem,
-      event: /** @type {!Event} */(goog.object.clone(e)),
-      time: time
-    });
+      this.queue_.push({
+        action: action,
+        element: elem,
+        event: /** @type {!Event} */(goog.object.clone(e)),
+        time: time
+      });
+    }
   }
 };

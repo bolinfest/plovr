@@ -21,6 +21,8 @@
 goog.provide('goog.ui.Checkbox');
 goog.provide('goog.ui.Checkbox.State');
 
+goog.require('goog.dom.a11y');
+goog.require('goog.dom.a11y.State');
 goog.require('goog.events.EventType');
 goog.require('goog.events.KeyCodes');
 goog.require('goog.ui.CheckboxRenderer');
@@ -115,11 +117,11 @@ goog.ui.Checkbox.prototype.isUndetermined = function() {
 
 /**
  * Sets the checked state of the checkbox.
- * @param {goog.ui.Checkbox.State} checked The checked state to set.
+ * @param {?boolean} checked The checked state to set.
  */
 goog.ui.Checkbox.prototype.setChecked = function(checked) {
   if (checked != this.checked_) {
-    this.checked_ = checked;
+    this.checked_ = /** @type {goog.ui.Checkbox.State} */ (checked);
     this.getRenderer().setCheckboxState(this.getElement(), this.checked_);
   }
 };
@@ -195,6 +197,15 @@ goog.ui.Checkbox.prototype.enterDocument = function() {
     // Checkbox needs to explicitly listen for click event.
     handler.listen(this.getElement(),
         goog.events.EventType.CLICK, this.handleClickOrSpace_);
+  }
+
+  // Set aria label.
+  if (this.label_) {
+    if (!this.label_.id) {
+      this.label_.id = this.makeId('lbl');
+    }
+    goog.dom.a11y.setState(this.getElement(),
+        goog.dom.a11y.State.LABELLEDBY, this.label_.id);
   }
 };
 
