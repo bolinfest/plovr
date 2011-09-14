@@ -77,6 +77,7 @@ public final class ConfigParser {
       if (!map.has(option.getName())) continue;
 
       JsonElement element = map.get(optionName);
+      option.reset(builder);
       option.update(builder, element);
       options.remove(optionName);
     }

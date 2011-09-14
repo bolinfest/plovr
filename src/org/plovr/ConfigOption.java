@@ -33,7 +33,7 @@ public enum ConfigOption {
     }
   }),
 
-  INPUTS("inputs" , new ConfigUpdater() {
+  INPUTS("inputs", new ConfigUpdater() {
     @Override
     public void apply(String input, Config.Builder builder) {
       builder.addInputByName(input);
@@ -47,6 +47,12 @@ public enum ConfigOption {
           apply(input, builder);
         }
       }
+    }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetInputs();
+      return true;
     }
   }),
 
@@ -65,6 +71,12 @@ public enum ConfigOption {
           apply(path, builder);
         }
       }
+    }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetPaths();
+      return true;
     }
   }),
 
@@ -87,6 +99,12 @@ public enum ConfigOption {
           apply(extern, builder);
         }
       }
+    }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetExterns();
+      return true;
     }
   }),
 
@@ -336,6 +354,12 @@ public enum ConfigOption {
 
       builder.setStripNameSuffixes(suffixesBuilder.build());
     }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetStripNameSuffixes();
+      return true;
+    }
   }),
 
   TYPE_PREFIXES_TO_STRIP("type-prefixes-to-strip", new ConfigUpdater() {
@@ -358,6 +382,12 @@ public enum ConfigOption {
 
       builder.setStripTypePrefixes(typesBuilder.build());
     }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetStripTypePrefixes();
+      return true;
+    }
   }),
 
   ID_GENERATORS("id-generators", new ConfigUpdater() {
@@ -379,6 +409,12 @@ public enum ConfigOption {
       }
 
       builder.setIdGenerators(idGeneratorsBuilder.build());
+    }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetIdGenerators();
+      return true;
     }
   }),
 
@@ -425,6 +461,12 @@ public enum ConfigOption {
       }
       builder.setCustomPasses(customPasses.build());
     }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetCustomPasses();
+      return true;
+    }
   }),
 
   SOY_FUNCTION_PLUGINS("soy-function-plugins", new ConfigUpdater() {
@@ -441,6 +483,12 @@ public enum ConfigOption {
           apply(input, builder);
         }
       }
+    }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetSoyFunctionPlugins();
+      return true;
     }
   }),
 
@@ -503,6 +551,10 @@ public enum ConfigOption {
       // Config using a query data parameter, which anyone could pass in.
       return false;
     }
+
+    public boolean reset(Config.Builder builder) {
+      return false;
+    }
   }
 
   private final String name;
@@ -534,6 +586,16 @@ public enum ConfigOption {
       return false;
     }
     return configUpdater.update(value, builder);
+  }
+
+  /**
+   * Reset the values associated with this option in the specified builder.
+   * This is important for config inheritance to ensure that a sub-config
+   * completely overrides an option from its parent config.
+   * @param builder
+   */
+  public boolean reset(Config.Builder builder) {
+    return configUpdater.reset(builder);
   }
 
   /**

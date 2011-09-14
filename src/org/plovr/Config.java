@@ -301,6 +301,16 @@ public final class Config implements Comparable<Config> {
     return false;
   }
 
+  @VisibleForTesting
+  Set<String> getIdGenerators() {
+    return idGenerators;
+  }
+
+  @VisibleForTesting
+  ListMultimap<CustomPassExecutionTime, CompilerPassFactory> getCustomPasses() {
+    return customPasses;
+  }
+
   public String getGlobalScopeName() {
     return globalScopeName;
   }
@@ -609,14 +619,14 @@ public final class Config implements Comparable<Config> {
 
     private boolean excludeClosureLibrary = false;
 
-    private final ImmutableList.Builder<String> paths = ImmutableList.builder();
+    private final List<String> paths = Lists.newArrayList();
 
     /** List of (file, path) pairs for inputs */
-    private final ImmutableList.Builder<Pair<File, String>> inputs = ImmutableList.builder();
+    private final List<Pair<File, String>> inputs = Lists.newArrayList();
 
-    private ImmutableList.Builder<String> externs = null;
+    private List<String> externs = null;
 
-    private ImmutableList.Builder<JsInput> builtInExterns = null;
+    private List<JsInput> builtInExterns = null;
 
     private ImmutableList.Builder<String> soyFunctionPlugins = null;
 
@@ -740,6 +750,10 @@ public final class Config implements Comparable<Config> {
       paths.add(path);
     }
 
+    public void resetPaths() {
+      paths.clear();
+    }
+
     public void addInput(File file, String name) {
       Preconditions.checkNotNull(file);
       Preconditions.checkNotNull(name);
@@ -751,9 +765,13 @@ public final class Config implements Comparable<Config> {
       addInput(new File(resolvedPath), name);
     }
 
+    public void resetInputs() {
+      inputs.clear();
+    }
+
     public void addExtern(String extern) {
       if (externs == null) {
-        externs = ImmutableList.builder();
+        externs = Lists.newArrayList();
       }
       externs.add(extern);
     }
@@ -764,11 +782,16 @@ public final class Config implements Comparable<Config> {
     public void addBuiltInExtern(String builtInExtern) {
       Preconditions.checkArgument(builtInExtern.startsWith("//"));
       if (builtInExterns == null) {
-        builtInExterns = ImmutableList.builder();
+        builtInExterns = Lists.newArrayList();
       }
       String path = builtInExtern.replace("//", "/contrib/");
       JsInput extern = new ResourceJsInput(path);
       builtInExterns.add(extern);
+    }
+
+    public void resetExterns() {
+      externs = null;
+      builtInExterns = null;
     }
 
     public void setCustomExternsOnly(boolean customExternsOnly) {
@@ -815,6 +838,10 @@ public final class Config implements Comparable<Config> {
       soyFunctionPlugins.add(qualifiedName);
     }
 
+    public void resetSoyFunctionPlugins() {
+      soyFunctionPlugins = null;
+    }
+
     public void setDocumentationOutputDirectory(File documentationOutputDirectory) {
       Preconditions.checkNotNull(documentationOutputDirectory);
       this.documentationOutputDirectory = documentationOutputDirectory;
@@ -823,6 +850,10 @@ public final class Config implements Comparable<Config> {
     public void setCustomPasses(
         ListMultimap<CustomPassExecutionTime, CompilerPassFactory> customPasses) {
       this.customPasses = ImmutableListMultimap.copyOf(customPasses);
+    }
+
+    public void resetCustomPasses() {
+      this.customPasses = null;
     }
 
     /**
@@ -898,12 +929,24 @@ public final class Config implements Comparable<Config> {
       this.stripNameSuffixes = ImmutableSet.copyOf(stripNameSuffixes);
     }
 
+    public void resetStripNameSuffixes() {
+      this.stripNameSuffixes = null;
+    }
+
     public void setStripTypePrefixes(Set<String> stripTypePrefixes) {
       this.stripTypePrefixes = ImmutableSet.copyOf(stripTypePrefixes);
     }
 
+    public void resetStripTypePrefixes() {
+      this.stripTypePrefixes = null;
+    }
+
     public void setIdGenerators(Set<String> idGenerators) {
       this.idGenerators = ImmutableSet.copyOf(idGenerators);
+    }
+
+    public void resetIdGenerators() {
+      this.idGenerators = null;
     }
 
     public void setAmbiguateProperties(boolean ambiguateProperties) {
@@ -941,7 +984,7 @@ public final class Config implements Comparable<Config> {
       Manifest manifest;
       if (this.manifest == null) {
         List<File> externs = this.externs == null ? null
-            : Lists.transform(this.externs.build(), STRING_TO_FILE);
+            : Lists.transform(this.externs, STRING_TO_FILE);
 
         // If there is a module configuration, then add all of the
         // inputs from that.
@@ -956,10 +999,10 @@ public final class Config implements Comparable<Config> {
         manifest = new Manifest(
             excludeClosureLibrary,
             closureLibraryDirectory,
-            Lists.transform(paths.build(), STRING_TO_FILE),
+            Lists.transform(paths, STRING_TO_FILE),
             createJsInputs(soyFunctionNames),
             externs,
-            builtInExterns != null ? builtInExterns.build() : null,
+            builtInExterns != null ? ImmutableList.copyOf(builtInExterns) : null,
             soyFunctionNames,
             customExternsOnly);
       } else {
@@ -1000,7 +1043,7 @@ public final class Config implements Comparable<Config> {
     }
 
     private List<JsInput> createJsInputs(List<String> soyPluginModuleNames) {
-      ImmutableList<Pair<File, String>> inputFiles = inputs.build();
+      ImmutableList<Pair<File, String>> inputFiles = ImmutableList.copyOf(inputs);
       List<JsInput> jsInputs = Lists.newArrayListWithCapacity(inputFiles.size());
       for (Pair<File, String> pair : inputFiles) {
         File file = pair.getFirst();
