@@ -89,6 +89,8 @@ public final class Config implements Comparable<Config> {
 
   private final boolean printInputDelimiter;
 
+  private final File outputFile;
+
   private final String outputWrapper;
 
   private final Charset outputCharset;
@@ -147,6 +149,7 @@ public final class Config implements Comparable<Config> {
       boolean debug,
       boolean prettyPrint,
       boolean printInputDelimiter,
+      @Nullable File outputFile,
       @Nullable String outputWrapper,
       Charset outputCharset,
       boolean fingerprintJsFiles,
@@ -177,6 +180,7 @@ public final class Config implements Comparable<Config> {
     this.debug = debug;
     this.prettyPrint = prettyPrint;
     this.printInputDelimiter = printInputDelimiter;
+    this.outputFile = outputFile;
     this.outputWrapper = outputWrapper;
     this.outputCharset = outputCharset;
     this.fingerprintJsFiles = fingerprintJsFiles;
@@ -250,6 +254,10 @@ public final class Config implements Comparable<Config> {
 
   public WarningLevel getWarningLevel() {
     return warningLevel;
+  }
+
+  public File getOutputFile() {
+    return outputFile;
   }
 
   /**
@@ -661,6 +669,8 @@ public final class Config implements Comparable<Config> {
 
     private boolean printInputDelimiter = false;
 
+    private File outputFile = null;
+
     private String outputWrapper = null;
 
     private Charset outputCharset = Charsets.US_ASCII;
@@ -732,6 +742,7 @@ public final class Config implements Comparable<Config> {
       this.debug = config.debug;
       this.prettyPrint = config.prettyPrint;
       this.printInputDelimiter = config.printInputDelimiter;
+      this.outputFile = config.outputFile;
       this.outputWrapper = config.outputWrapper;
       this.outputCharset = config.outputCharset;
       this.fingerprintJsFiles = config.fingerprintJsFiles;
@@ -908,6 +919,10 @@ public final class Config implements Comparable<Config> {
       this.printInputDelimiter = printInputDelimiter;
     }
 
+    public void setOutputFile(File outputFile) {
+      this.outputFile = outputFile;
+    }
+
     public void setOutputWrapper(String outputWrapper) {
       this.outputWrapper = outputWrapper;
     }
@@ -1051,6 +1066,7 @@ public final class Config implements Comparable<Config> {
           debug,
           prettyPrint,
           printInputDelimiter,
+          outputFile,
           outputWrapper,
           outputCharset,
           fingerprintJsFiles,

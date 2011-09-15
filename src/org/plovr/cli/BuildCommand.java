@@ -18,6 +18,7 @@ import org.plovr.io.Streams;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.io.Closeables;
+import com.google.common.io.Files;
 import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.Result;
 
@@ -35,26 +36,33 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
     Logger.getLogger("org.plovr").setLevel(Level.OFF);
 
     List<String> arguments = options.getArguments();
-    if (arguments.size() != 1) {
+    if (arguments.size() < 1) {
       printUsage();
       return 1;
     }
 
-    String configFile = arguments.get(0);
-    Config config = ConfigParser.parseFile(new File(configFile));
-    Compilation compilation;
-    try {
-      compilation = CompileRequestHandler.compile(config);
-    } catch (CompilationException e) {
-      e.printStackTrace();
-      compilation = null;
+    // TODO(bolinfest): If mode == RAW, then simply concatenate the input files
+    // in order.
+
+    for (String configFile: arguments) {
+      Config config = ConfigParser.parseFile(new File(configFile));
+      Compilation compilation;
+      try {
+        compilation = CompileRequestHandler.compile(config);
+      } catch (CompilationException e) {
+        e.printStackTrace();
+        compilation = null;
+      }
+      boolean isSuccess = processResult(compilation, config, options.getSourceMapPath(), config.getId());
+      if (!isSuccess) {
+        return 1;
+      }
     }
 
-    processResult(compilation, config, options.getSourceMapPath(), config.getId());
     return 0;
   }
 
-  private void processResult(Compilation compilation, Config config,
+  private boolean processResult(Compilation compilation, Config config,
       String sourceMapPath, String sourceMapName) throws IOException {
     Preconditions.checkNotNull(compilation);
     Result result = compilation.getResult();
@@ -69,7 +77,14 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
 
       ModuleConfig moduleConfig = config.getModuleConfig();
       if (moduleConfig == null) {
-        System.out.println(compilation.getCompiledCode());
+        String compiledJs = compilation.getCompiledCode();
+        if (config.getOutputFile() != null) {
+          File outputFile = config.getOutputFile();
+          outputFile.getParentFile().mkdirs();
+          Files.write(compiledJs, outputFile, config.getOutputCharset());
+        } else {
+          System.out.println(compiledJs);
+        }
 
         // It turns out that the SourceMap will not be populated until after the
         // Compiler's internal representation has been output as source code, so
@@ -95,7 +110,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
     }
 
     printSummary(result, compilation);
-    System.exit(success ? 0 : 1);
+    return success;
   }
 
   private void printSummary(Result result, Compilation compilation) {
@@ -115,7 +130,9 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
 
   @Override
   String getUsageIntro() {
-    return "Specify a single config and the result of compilation will be " +
-        "printed to stdout.";
+    return "Specify one or more configs to compile. " +
+    		"If the \"output-file\" option is specified in the config, " +
+    		"the file will be written there; otherwise, " +
+    		"the result of the compilation will be printed to stdout.";
   }
 }

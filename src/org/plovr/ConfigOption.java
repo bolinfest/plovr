@@ -217,6 +217,15 @@ public enum ConfigOption {
     }
   }),
 
+  OUTPUT_FILE("output-file", new ConfigUpdater() {
+    @Override
+    public void apply(String outputFilePath, Config.Builder builder) {
+      File outputFile = (outputFilePath == null) ? null :
+          new File(maybeResolvePath(outputFilePath, builder));
+      builder.setOutputFile(outputFile);
+    }
+  }),
+
   OUTPUT_WRAPPER("output-wrapper", new ConfigUpdater() {
     @Override
     public void apply(String outputWrapper, Config.Builder builder) {

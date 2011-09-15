@@ -241,6 +241,11 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     so to use those functions in your Closure Templates, include this option in
     your plovr config:
 <pre>"soy-function-plugins": "org.plovr.soy.function.PlovrModule",</pre>
+  {case 'output-file'}
+    If specified, when the <code>build</code> command is used, plovr will write
+    the compiled output to this file rather than standard out. Note that if
+    modules are used, you must use{sp}
+    <a href="#module-output-path">module-output-path</a> instead.
   {case 'output-wrapper'}
     If specified, a template into which compiled JavaScript will be written.
     The placeholder for compiled code is <code>%output%</code>, so to wrap the
