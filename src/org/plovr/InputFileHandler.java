@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
 
 import org.plovr.io.Responses;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Functions;
 import com.google.common.io.Resources;
@@ -28,6 +29,14 @@ import com.sun.net.httpserver.HttpExchange;
  * @author bolinfest@gmail.com (Michael Bolin)
  */
 public class InputFileHandler extends AbstractGetHandler {
+
+  private static final String PARENT_DIRECTORY_TOKEN = "../";
+  private static final String PARENT_DIRECTORY_PATTERN =
+      Pattern.quote(PARENT_DIRECTORY_TOKEN);
+  private static final String PARENT_DIRECTORY_REPLACEMENT_TOKEN = "$$/";
+  private static final String PARENT_DIRECTORY_REPLACEMENT_PATTERN =
+      PARENT_DIRECTORY_REPLACEMENT_TOKEN.replaceAll("\\$",
+          Matcher.quoteReplacement("\\$"));
 
   private static final SoyTofu TOFU;
 
@@ -126,6 +135,10 @@ public class InputFileHandler extends AbstractGetHandler {
     }
     String name = matcher.group(1);
 
+    // Reverse the rewriting done by createInputNameToUriConverter().
+    name = name.replaceAll(PARENT_DIRECTORY_REPLACEMENT_PATTERN,
+        PARENT_DIRECTORY_TOKEN);
+
     JsInput requestedInput = manifest.getJsInputByName(name);
 
     // TODO: eliminate this hack with the slash -- just make it an invariant of
@@ -156,7 +169,13 @@ public class InputFileHandler extends AbstractGetHandler {
 
   static Function<JsInput,String> createInputNameToUriConverter(
       CompilationServer server, HttpExchange exchange, final String configId) {
-    final String moduleUriBase = server.getServerForExchange(exchange);
+    String moduleUriBase = server.getServerForExchange(exchange);
+    return createInputNameToUriConverter(moduleUriBase, configId);
+  }
+
+  @VisibleForTesting
+  static Function<JsInput,String> createInputNameToUriConverter(
+      final String moduleUriBase, final String configId) {
     return new Function<JsInput, String>() {
       @Override
       public String apply(JsInput input) {
@@ -169,6 +188,15 @@ public class InputFileHandler extends AbstractGetHandler {
         if (!name.startsWith("/")) {
           name = "/" + name;
         }
+
+        // If an input name has "../" as part of its name, then the URL will be
+        // rewritten as if it were "back a directory." To prevent this from
+        // happening, this pattern is replaced with "$$/". This pattern must be
+        // translated back to the original "../" when handling a request so that
+        // the input can be identified by its name (which contains the relative
+        // path information).
+        name = name.replaceAll(PARENT_DIRECTORY_PATTERN,
+            PARENT_DIRECTORY_REPLACEMENT_PATTERN);
 
         return String.format("%sinput/%s%s",
             moduleUriBase,
