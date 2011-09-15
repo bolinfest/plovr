@@ -294,9 +294,9 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
   {case 'global-scope-name'}
     A scope name for multiple modules to share. This will cause
     modules to be wrapped with a
-    {literal}<code>(function($) { with ($) { ... } })(scope)</code>{/literal}
-    (and the main module will additionally start with
-    {literal}<code>scope = {}</code>{/literal}
+    {literal}<pre>(function($) { with ($) { ... } })(scope)</pre>{/literal}
+    (and the main module will additionally start with{sp}
+    {literal}<code>scope = {}</code>{/literal}{sp}
     so that you don't actually have to do anything special). As a
     result, none of the modules' global variables will make it to the
     real global scope. Instead they will be inside of the specified
