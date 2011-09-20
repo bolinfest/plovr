@@ -16,17 +16,23 @@
 
 package com.google.template.soy.bidifunctions;
 
-import static com.google.template.soy.tofu.restricted.SoyTofuFunctionUtils.toSoyData;
+import static com.google.template.soy.shared.restricted.SoyJavaRuntimeFunctionUtils.toSoyData;
 
-import java.util.List;
-
+import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import com.google.template.soy.data.SoyData;
 import com.google.template.soy.internal.i18n.BidiUtils;
+import com.google.template.soy.javasrc.restricted.JavaCodeUtils;
+import com.google.template.soy.javasrc.restricted.JavaExpr;
+import com.google.template.soy.javasrc.restricted.SoyJavaSrcFunction;
+import com.google.template.soy.javasrc.restricted.SoyJavaSrcFunctionUtils;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.SoyJsSrcFunction;
-import com.google.template.soy.tofu.restricted.SoyTofuFunction;
+import com.google.template.soy.tofu.restricted.SoyAbstractTofuFunction;
+
+import java.util.List;
+import java.util.Set;
 
 
 /**
@@ -37,7 +43,8 @@ import com.google.template.soy.tofu.restricted.SoyTofuFunction;
  * @author Kai Huang
  */
 @Singleton
-class BidiTextDirFunction implements SoyTofuFunction, SoyJsSrcFunction {
+class BidiTextDirFunction extends SoyAbstractTofuFunction
+    implements SoyJsSrcFunction, SoyJavaSrcFunction {
 
 
   @Inject
@@ -49,12 +56,12 @@ class BidiTextDirFunction implements SoyTofuFunction, SoyJsSrcFunction {
   }
 
 
-  @Override public boolean isValidArgsSize(int numArgs) {
-    return 1 <= numArgs && numArgs <= 2;
+  @Override public Set<Integer> getValidArgsSizes() {
+    return ImmutableSet.of(1, 2);
   }
 
 
-  @Override public SoyData computeForTofu(List<SoyData> args) {
+  @Override public SoyData compute(List<SoyData> args) {
     String text = args.get(0).stringValue();
     //noinspection SimplifiableConditionalExpression
     boolean isHtml = (args.size() == 2) ? args.get(1).booleanValue() : false /* default */;
@@ -71,6 +78,22 @@ class BidiTextDirFunction implements SoyTofuFunction, SoyJsSrcFunction {
         "soy.$$bidiTextDir(" + text.getText() + ", " + isHtml.getText() + ")" :
         "soy.$$bidiTextDir(" + text.getText() + ")";
     return new JsExpr(callText, Integer.MAX_VALUE);
+  }
+
+
+  @Override public JavaExpr computeForJavaSrc(List<JavaExpr> args) {
+    JavaExpr text = args.get(0);
+    JavaExpr isHtml = (args.size() == 2) ? args.get(1) : null;
+
+    String bidiFunctionName = BidiUtils.class.getName() + ".estimateDirection";
+
+    return SoyJavaSrcFunctionUtils.toIntegerJavaExpr(
+        JavaCodeUtils.genNewIntegerData(
+            JavaCodeUtils.genFunctionCall(
+                bidiFunctionName,
+                JavaCodeUtils.genCoerceString(text),
+                isHtml != null ? JavaCodeUtils.genCoerceBoolean(isHtml) : "false") +
+            ".ord"));
   }
 
 }

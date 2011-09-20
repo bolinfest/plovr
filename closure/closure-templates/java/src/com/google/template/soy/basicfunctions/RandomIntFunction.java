@@ -17,10 +17,9 @@
 package com.google.template.soy.basicfunctions;
 
 import static com.google.template.soy.javasrc.restricted.SoyJavaSrcFunctionUtils.toIntegerJavaExpr;
-import static com.google.template.soy.tofu.restricted.SoyTofuFunctionUtils.toSoyData;
+import static com.google.template.soy.shared.restricted.SoyJavaRuntimeFunctionUtils.toSoyData;
 
-import java.util.List;
-
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
@@ -32,7 +31,10 @@ import com.google.template.soy.javasrc.restricted.SoyJavaSrcFunction;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.SoyJsCodeUtils;
 import com.google.template.soy.jssrc.restricted.SoyJsSrcFunction;
-import com.google.template.soy.tofu.restricted.SoyTofuFunction;
+import com.google.template.soy.tofu.restricted.SoyAbstractTofuFunction;
+
+import java.util.List;
+import java.util.Set;
 
 
 /**
@@ -41,7 +43,8 @@ import com.google.template.soy.tofu.restricted.SoyTofuFunction;
  * @author Kai Huang
  */
 @Singleton
-class RandomIntFunction implements SoyTofuFunction, SoyJsSrcFunction, SoyJavaSrcFunction {
+class RandomIntFunction extends SoyAbstractTofuFunction
+    implements SoyJsSrcFunction, SoyJavaSrcFunction {
 
 
   @Inject
@@ -53,12 +56,12 @@ class RandomIntFunction implements SoyTofuFunction, SoyJsSrcFunction, SoyJavaSrc
   }
 
 
-  @Override public boolean isValidArgsSize(int numArgs) {
-    return numArgs == 1;
+  @Override public Set<Integer> getValidArgsSizes() {
+    return ImmutableSet.of(1);
   }
 
 
-  @Override public SoyData computeForTofu(List<SoyData> args) {
+  @Override public SoyData compute(List<SoyData> args) {
     SoyData arg = args.get(0);
 
     return toSoyData((int) Math.floor(Math.random() * arg.integerValue()));
