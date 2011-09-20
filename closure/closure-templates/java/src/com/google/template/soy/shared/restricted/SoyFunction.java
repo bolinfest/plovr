@@ -16,6 +16,7 @@
 
 package com.google.template.soy.shared.restricted;
 
+import java.util.Set;
 
 
 /**
@@ -37,8 +38,10 @@ public interface SoyFunction {
 
 
   /**
-   * @param numArgs a number of arguments to the function
-   * @return whether numArgs is an appropriate number of arguments to pass
+   * Gets the set of valid args list sizes. For example, the set {0, 2} would indicate that this
+   * function can take 0 or 2 arguments (but not 1).
+   * @return The set of valid args list sizes.
    */
-  public boolean isValidArgsSize(int numArgs);
+  public Set<Integer> getValidArgsSizes();
+
 }

@@ -26,7 +26,7 @@ public final class PlovrSoySyntaxException extends RuntimeException {
   private final JsInput input;
   private final int lineno;
   private final int charno;
-  
+
   public PlovrSoySyntaxException(SoySyntaxException e, JsInput input) {
     super(e);
     this.soySyntaxException = e;
@@ -54,7 +54,7 @@ public final class PlovrSoySyntaxException extends RuntimeException {
     } else {
       message = String.format("template %s: %s", templateName, soyErrorMsg);
     }
-    
+
     // If the line number is available, format the message as Compiler errors
     // are formatted so it will get hyperlinked appropriately by
     // src/org/plovr/plovr.js
@@ -78,7 +78,7 @@ public final class PlovrSoySyntaxException extends RuntimeException {
 
   @Nullable
   public String getTemplateName() {
-    return soySyntaxException.templateName;
+    return soySyntaxException.getTemplateName();
   }
 
   public JsInput getInput() {

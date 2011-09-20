@@ -18,7 +18,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Files;
 import com.google.inject.Injector;
 import com.google.template.soy.SoyFileSet;
-import com.google.template.soy.base.IntegerIdGenerator;
+import com.google.template.soy.base.IncrementingIdGenerator;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.soyparse.ParseException;
@@ -99,7 +99,8 @@ public class SoyRequestHandler implements HttpHandler {
       path = path.replaceFirst("\\.html$", "");
     }
 
-    File soyFile = new File(config.getContentDirectory(), path + ".soy");
+    String relativePath = path + ".soy";
+    File soyFile = new File(config.getContentDirectory(), relativePath);
     if (!soyFile.exists()) {
       HttpUtil.return404(exchange);
       return;
@@ -107,7 +108,8 @@ public class SoyRequestHandler implements HttpHandler {
 
     SoyFileParser parser = new SoyFileParser(
         Files.newReader(soyFile, Charsets.UTF_8),
-        new IntegerIdGenerator());
+        new IncrementingIdGenerator(),
+        relativePath);
     SoyFileNode node = parser.parseSoyFile();
 
     String namespace = node.getNamespace();

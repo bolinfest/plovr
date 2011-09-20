@@ -499,7 +499,7 @@ public class TranslateToJavaExprVisitor extends AbstractReturningExprNodeVisitor
     // Handle pure functions.
     SoyJavaSrcFunction fn = soyJavaSrcFunctionsMap.get(fnName);
     if (fn != null) {
-      if (! fn.isValidArgsSize(numArgs)) {
+      if (! fn.getValidArgsSizes().contains(numArgs)) {
         throw new SoySyntaxException(
             "Function '" + fnName + "' called with the wrong number of arguments" +
             " (function call \"" + node.toSourceString() + "\").");

@@ -29,7 +29,7 @@ public final class CheckedSoySyntaxException extends CompilationException {
 
   private String getInputPath() {
     if (soySyntaxException != null) {
-      return soySyntaxException.filePath;
+      return soySyntaxException.getSourceLocation().getSourcePath();
     } else {
       return plovrSoySyntaxException.getInput().getName();
     }
@@ -41,7 +41,7 @@ public final class CheckedSoySyntaxException extends CompilationException {
       return soySyntaxException.getMessage();
     } else {
       return plovrSoySyntaxException.getMessage();
-    }    
+    }
   }
 
   @Override

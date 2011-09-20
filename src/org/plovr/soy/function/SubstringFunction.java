@@ -4,7 +4,9 @@ import static com.google.template.soy.tofu.restricted.SoyTofuFunctionUtils.toSoy
 
 import java.util.List;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
+import com.google.inject.Singleton;
 import com.google.template.soy.data.SoyData;
 import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.data.restricted.StringData;
@@ -12,9 +14,12 @@ import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.SoyJsSrcFunction;
 import com.google.template.soy.tofu.restricted.SoyTofuFunction;
 
+import java.util.Set;
+
 /**
  * From "Defining a Custom Function" in "Closure: The Definitive Guide"
  */
+@Singleton
 public class SubstringFunction
     implements SoyJsSrcFunction, SoyTofuFunction {
 
@@ -29,8 +34,8 @@ public class SubstringFunction
 
 
   @Override
-  public boolean isValidArgsSize(int numArgs) {
-    return 2 <= numArgs && numArgs <= 3;
+  public Set<Integer> getValidArgsSizes() {
+    return ImmutableSet.of(2, 3);
   }
 
 

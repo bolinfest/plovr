@@ -59,8 +59,8 @@ class RoundFunction extends SoyAbstractTofuFunction
   }
 
 
-  @Override public boolean isValidArgsSize(int numArgs) {
-    return 1 <= numArgs && numArgs <= 2;
+  @Override public Set<Integer> getValidArgsSizes() {
+    return ImmutableSet.of(1, 2);
   }
 
 

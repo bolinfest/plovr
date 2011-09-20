@@ -35,10 +35,11 @@
              />
     <fileset dir="${closure-templates.dir}/java/lib"
              includes="aopalliance.jar,
-                       guice-assistedinject-snapshot.jar,
-                       guice-multibindings-snapshot.jar,
-                       guice-snapshot.jar,
-                       javax-inject.jar"
+                       guice-3.0.jar,
+                       guice-assistedinject-3.0.jar,
+                       guice-multibindings-3.0.jar,
+                       icu4j-core.jar,
+                       javax.inject.jar"
              />
 
     <pathelement location="${classes.dir}" />
@@ -208,10 +209,11 @@
                        />
       <zipgroupfileset dir="${closure-templates.dir}/java/lib"
                        includes="aopalliance.jar,
-                                 guice-assistedinject-snapshot.jar,
-                                 guice-multibindings-snapshot.jar,
-                                 guice-snapshot.jar,
-                                 javax-inject.jar"
+                                 guice-3.0.jar,
+                                 guice-assistedinject-3.0.jar,
+                                 guice-multibindings-3.0.jar,
+                                 icu4j-core.jar,
+                                 javax.inject.jar"
                        />
 
       <fileset dir="${classes.dir}" />
