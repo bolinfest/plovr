@@ -11,7 +11,6 @@ import com.google.common.collect.Sets;
 import com.google.common.io.Resources;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.data.SoyMapData;
-import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.tofu.SoyTofu;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
@@ -47,11 +46,7 @@ final class IndexRequestHandler implements HttpHandler {
         "configs", Lists.transform(Lists.newArrayList(configs),
             configToSoyData)
         );
-    final SoyMsgBundle messageBundle = null;
-    String html = indexTemplate.render(
-        "org.plovr.index",
-        mapData,
-        messageBundle);
+    String html = indexTemplate.newRenderer("org.plovr.index").setData(mapData).render();
 
     Headers responseHeaders = exchange.getResponseHeaders();
     responseHeaders.set("Content-Type", "text/html");

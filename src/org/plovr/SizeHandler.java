@@ -13,7 +13,6 @@ import com.google.javascript.jscomp.Result;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.data.SoyListData;
 import com.google.template.soy.data.SoyMapData;
-import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.tofu.SoyTofu;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
@@ -97,8 +96,7 @@ final class SizeHandler extends AbstractGetHandler {
         "originalSize", totalOriginalFileSize.getCount(),
         "compiledSize", totalCompiledFileSize.getCount()
         );
-    final SoyMsgBundle messageBundle = null;
-    String html = sizeTemplate.render("org.plovr.size", mapData, messageBundle);
+    String html = sizeTemplate.newRenderer("org.plovr.size").setData(mapData).render();
 
     Headers responseHeaders = exchange.getResponseHeaders();
     responseHeaders.set("Content-Type", "text/html");

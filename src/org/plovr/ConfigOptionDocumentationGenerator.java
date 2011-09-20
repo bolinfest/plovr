@@ -21,7 +21,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.data.SoyMapData;
-import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.tofu.SoyTofu;
 
 /**
@@ -171,8 +170,7 @@ public final class ConfigOptionDocumentationGenerator {
         .put("descriptors", descriptorData)
         .build();
 
-    final SoyMsgBundle messageBundle = null;
-    return TOFU.render("org.plovr.base", soyData, messageBundle);
+    return TOFU.newRenderer("org.plovr.base").setData(soyData).render();
   }
 
   public static void main(String[] args) {

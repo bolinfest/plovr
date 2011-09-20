@@ -65,13 +65,12 @@ public class DocWriter {
       } else {
         pathToSuper = classNameToPath(descriptor.getSuperClass().getDisplayName());
       }
-      writer.append(tofu.render(
-          "plovr.docgen.classPage",
+      writer.append(tofu.newRenderer("plovr.docgen.classPage").setData(
           new SoyMapData(
               "pathToBase", pathToBase,
               "classDescriptor", descriptor.toSoyData(),
-              "pathToSuper", pathToSuper),
-          null /* msgBundle */));
+              "pathToSuper", pathToSuper)).
+          render());
       writer.close();
     }
 
@@ -81,12 +80,11 @@ public class DocWriter {
 
       LibraryDescriptor descriptor = entry.getValue();
       String pathToBase = createPathToBase(libraryName);
-      writer.append(tofu.render(
-          "plovr.docgen.libraryPage",
+      writer.append(tofu.newRenderer("plovr.docgen.libraryPage").setData(
           new SoyMapData(
               "pathToBase", pathToBase,
-              "libraryDescriptor", descriptor.toSoyData()),
-          null /* msgBundle */));
+              "libraryDescriptor", descriptor.toSoyData())).
+          render());
       writer.close();
     }
 
@@ -115,10 +113,9 @@ public class DocWriter {
   private void writeIndex(Set<String> paths) throws IOException {
     File index = new File(documentationRootDirectory, "index.html");
     Writer writer = new FileWriter(index);
-    writer.append(tofu.render(
-        "plovr.docgen.index",
-        new SoyMapData("hrefs", new SoyListData(paths)),
-        null /* msgBundle */));
+    writer.append(tofu.newRenderer("plovr.docgen.index").
+        setData(new SoyMapData("hrefs", new SoyListData(paths))).
+        render());
     writer.close();
   }
 

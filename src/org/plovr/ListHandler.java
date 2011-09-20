@@ -11,7 +11,6 @@ import com.google.common.io.Resources;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.data.SoyListData;
 import com.google.template.soy.data.SoyMapData;
-import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.tofu.SoyTofu;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
@@ -79,8 +78,7 @@ public final class ListHandler extends AbstractGetHandler {
     // Write the response.
     Headers responseHeaders = exchange.getResponseHeaders();
     responseHeaders.set("Content-Type", "text/html");
-    final SoyMsgBundle messageBundle = null;
-    String html = TOFU.render("org.plovr.list", soyData, messageBundle);
+    String html = TOFU.newRenderer("org.plovr.list").setData(soyData).render();
     exchange.sendResponseHeaders(200, html.length());
     Writer responseBody = new OutputStreamWriter(exchange.getResponseBody());
     responseBody.write(html);

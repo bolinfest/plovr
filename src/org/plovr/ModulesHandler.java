@@ -26,7 +26,6 @@ import com.google.common.collect.Sets;
 import com.google.common.io.Resources;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.data.SoyMapData;
-import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.tofu.SoyTofu;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
@@ -124,8 +123,7 @@ public final class ModulesHandler extends AbstractGetHandler {
         .put("svgWidth", svgDimension.width)
         .put("svgHeight", svgDimension.height)
         .build());
-    final SoyMsgBundle messageBundle = null;
-    String xhtml = TOFU.render("org.plovr.modules", mapData, messageBundle);
+    String xhtml = TOFU.newRenderer("org.plovr.modules").setData(mapData).render();
 
     // Write the response.
     Headers responseHeaders = exchange.getResponseHeaders();

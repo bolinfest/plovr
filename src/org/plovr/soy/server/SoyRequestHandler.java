@@ -20,7 +20,6 @@ import com.google.inject.Injector;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.base.IncrementingIdGenerator;
 import com.google.template.soy.base.SoySyntaxException;
-import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.soyparse.ParseException;
 import com.google.template.soy.soyparse.SoyFileParser;
 import com.google.template.soy.soyparse.TokenMgrError;
@@ -117,8 +116,7 @@ public class SoyRequestHandler implements HttpHandler {
 
     SoyTofu tofu = getSoyTofu();
     final Map<String, ?> data = ImmutableMap.of();
-    final SoyMsgBundle msgBundle = null;
-    String html = tofu.render(templateName, data, msgBundle);
+    String html = tofu.newRenderer(templateName).setData(data).render();
 
     Headers responseHeaders = exchange.getResponseHeaders();
     responseHeaders.set("Content-Type", "text/html");

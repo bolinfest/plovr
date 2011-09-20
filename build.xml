@@ -67,9 +67,12 @@
     <ant dir="${closure-compiler.dir}" target="rhino-jarjar" inheritAll="false" />
 
     <mkdir dir="${classes.dir}" />
+    <!-- TODO: Remove excludes when http://code.google.com/p/closure-templates/issues/detail?id=43 is fixed. -->
     <javac destdir="${classes.dir}"
            classpathref="plovr.classpath"
            debug="on"
+           deprecation="on"
+           excludes="com/google/template/soy/examples/*"
            >
       <compilerarg value="-Werror"/>
       <src path="${src.dir}" />

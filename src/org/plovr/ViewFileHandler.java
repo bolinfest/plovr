@@ -9,7 +9,6 @@ import com.google.common.io.Resources;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.data.SoyListData;
 import com.google.template.soy.data.SoyMapData;
-import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.tofu.SoyTofu;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
@@ -57,8 +56,7 @@ final class ViewFileHandler extends AbstractGetHandler {
         "name", input.getName(),
         "lines", new SoyListData((Object[])lines)
         );
-    final SoyMsgBundle messageBundle = null;
-    String html = viewTemplate.render("org.plovr.view", mapData, messageBundle);
+    String html = viewTemplate.newRenderer("org.plovr.view").setData(mapData).render();
 
     // TODO(bolinfest): Add syntax highlighting in the HTML.
     // TODO(bolinfest): Support ctrl+L to prompt for a line number to navigate to.

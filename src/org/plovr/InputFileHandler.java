@@ -18,7 +18,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.data.SoyMapData;
-import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.tofu.SoyTofu;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
@@ -108,8 +107,7 @@ public class InputFileHandler extends AbstractGetHandler {
         "filesAsJsonArray", inputUrls.toString(),
         "path", exchange.getRequestURI().getPath());
 
-    final SoyMsgBundle messageBundle = null;
-    return TOFU.render("org.plovr.raw", mapData, messageBundle);
+    return TOFU.newRenderer("org.plovr.raw").setData(mapData).render();
   }
 
   /**

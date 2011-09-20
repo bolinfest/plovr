@@ -39,14 +39,14 @@ public final class SoyDataUtil {
     } else if (el.isJsonPrimitive()) {
       JsonPrimitive primitive = el.getAsJsonPrimitive();
       if (primitive.isString()) {
-        return new StringData(primitive.getAsString());
+        return StringData.forValue(primitive.getAsString());
       } else if (primitive.isBoolean()) {
-        return new BooleanData(primitive.getAsBoolean());
+        return BooleanData.forValue(primitive.getAsBoolean());
       } else if (primitive.isNumber()) {
         if (primitive.getAsDouble() == primitive.getAsInt()) {
-          return new IntegerData(primitive.getAsInt());
+          return IntegerData.forValue(primitive.getAsInt());
         } else {
-          return new FloatData(primitive.getAsDouble());
+          return FloatData.forValue(primitive.getAsDouble());
         }
       }
     }
