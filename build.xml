@@ -71,6 +71,7 @@
            classpathref="plovr.classpath"
            debug="on"
            >
+      <compilerarg value="-Werror"/>
       <src path="${src.dir}" />
       <src path="${test.dir}" />
       <src path="${closure-compiler.dir}/src" />
