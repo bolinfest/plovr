@@ -6,6 +6,8 @@ import java.io.Writer;
 import java.util.List;
 import java.util.Map;
 
+import javax.annotation.Nullable;
+
 import org.plovr.io.Files;
 import org.plovr.io.Streams;
 
@@ -47,6 +49,12 @@ public final class Compilation {
   private Compiler compiler;
   private Result result;
 
+  /**
+   * This is only assigned if compile() is called with a {@link Config} that is
+   * in {@link CompilationMode#RAW}.
+   */
+  private String inputJsConcatenatedInOrder;
+
   private Compilation(List<JSSourceFile> externs,
       List<JSSourceFile> inputs, List<JSModule> modules) {
     this.externs = ImmutableList.copyOf(externs);
@@ -77,8 +85,43 @@ public final class Compilation {
   }
 
   public void compile(Config config) {
-    PlovrClosureCompiler compiler = new PlovrClosureCompiler();
-    compile(config, compiler, config.getCompilerOptions(compiler));
+    if (config.getCompilationMode() == CompilationMode.RAW) {
+      compileRaw(config);
+    } else {
+      PlovrClosureCompiler compiler = new PlovrClosureCompiler();
+      compile(config, compiler, config.getCompilerOptions(compiler));
+    }
+  }
+
+  private void compileRaw(Config config) {
+    Preconditions.checkArgument(
+        config.getCompilationMode() == CompilationMode.RAW,
+        "Config must be in RAW mode");
+    StringBuilder builder = new StringBuilder();
+    for (JSSourceFile input : inputs) {
+      try {
+        builder.append(input.getCode());
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+    inputJsConcatenatedInOrder = builder.toString();
+
+    // Need to have a dummy Result that appears to be a success (i.e., has no
+    // errors or warnings).
+    this.result = new Result(
+        new JSError[0], // errors
+        new JSError[0], // warnings
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null);
   }
 
   /**
@@ -144,6 +187,10 @@ public final class Compilation {
 
   public String getCompiledCode() {
     Preconditions.checkState(hasResult(), "Code has not been compiled yet");
+    if (inputJsConcatenatedInOrder != null) {
+      return inputJsConcatenatedInOrder;
+    }
+
     String compiledCode = compiler.toSource();
     String outputWrapper = config.getOutputWrapper();
     if (outputWrapper != null) {
@@ -445,8 +492,15 @@ public final class Compilation {
     return compilationErrors;
   }
 
-  public double getTypedPercent() {
-    return compiler.getErrorManager().getTypedPercent();
+  /**
+   * @return null if the code was compiled in {@link CompilationMode#RAW} mode
+   */
+  public @Nullable Double getTypedPercent() {
+    if (this.inputJsConcatenatedInOrder != null) {
+      return null;
+    } else {
+      return compiler.getErrorManager().getTypedPercent();
+    }
   }
 
   @VisibleForTesting

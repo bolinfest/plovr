@@ -29,6 +29,10 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
     return new BuildCommandOptions();
   }
 
+  /**
+   * TODO(bolinfest): This needs an integration test to ensure that it works in
+   * all compilation modes and with and without modules.
+   */
   @Override
   int runCommandWithOptions(BuildCommandOptions options) throws IOException {
     // Even though logging would get printed to stderr and not stdout, it is
@@ -40,9 +44,6 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       printUsage();
       return 1;
     }
-
-    // TODO(bolinfest): If mode == RAW, then simply concatenate the input files
-    // in order.
 
     for (String configFile: arguments) {
       Config config = ConfigParser.parseFile(new File(configFile));
@@ -119,12 +120,17 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
     } else if (result.warnings.length > 0) {
       System.err.print("ATTENTION: ");
     }
-    if (compilation.getTypedPercent() > 0.0) {
-      System.err.printf("%d error(s), %d warning(s), %.2f%% typed\n", result.errors.length,
-          result.warnings.length, compilation.getTypedPercent());
-    } else {
-      System.err.printf("%d error(s), %d warning(s)\n", result.errors.length,
-          result.warnings.length);
+
+    Double typedPercent = compilation.getTypedPercent();
+    if (typedPercent != null) {
+      if (typedPercent > 0.0) {
+        System.err.printf("%d error(s), %d warning(s), %.2f%% typed\n",
+            result.errors.length, result.warnings.length,
+            compilation.getTypedPercent());
+      } else {
+        System.err.printf("%d error(s), %d warning(s)\n", result.errors.length,
+            result.warnings.length);
+      }
     }
   }
 
