@@ -16,7 +16,14 @@
 
 package com.google.template.soy.sharedpasses.opti;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.Map;
+
+import javax.inject.Inject;
+
 import com.google.template.soy.data.SoyData;
+import com.google.template.soy.data.SoyListData;
 import com.google.template.soy.data.internalutils.DataUtils;
 import com.google.template.soy.data.restricted.BooleanData;
 import com.google.template.soy.data.restricted.FloatData;
@@ -33,18 +40,13 @@ import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.exprtree.FloatNode;
 import com.google.template.soy.exprtree.FunctionNode;
 import com.google.template.soy.exprtree.IntegerNode;
+import com.google.template.soy.exprtree.ListLiteralNode;
 import com.google.template.soy.exprtree.OperatorNodes.AndOpNode;
 import com.google.template.soy.exprtree.OperatorNodes.ConditionalOpNode;
 import com.google.template.soy.exprtree.OperatorNodes.OrOpNode;
 import com.google.template.soy.exprtree.StringNode;
 import com.google.template.soy.shared.internal.ImpureFunction;
 import com.google.template.soy.sharedpasses.render.RenderException;
-
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.Map;
-
-import javax.inject.Inject;
 
 
 /**
@@ -200,7 +202,16 @@ class SimplifyExprVisitor extends AbstractExprNodeVisitor<Void> {
     } catch (RenderException e) {
       return;  // failed to preevaluate
     }
-    ConstantNode newNode = DataUtils.convertPrimitiveDataToExpr((PrimitiveData) preevalResult);
+
+    ExprNode newNode;
+    if (preevalResult instanceof PrimitiveData) {
+      newNode = DataUtils.convertPrimitiveDataToExpr((PrimitiveData) preevalResult);
+    } else if (preevalResult instanceof SoyListData) {
+      newNode = ListLiteralNode.createFrom((SoyListData)preevalResult);
+    } else {
+      // TODO: Support SoyMapData and SanitizedContent.
+      throw new IllegalStateException("Unknown result type: " + preevalResult);
+    }
     nodeAsParent.getParent().replaceChild(nodeAsParent, newNode);
   }
 
