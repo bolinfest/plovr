@@ -40,9 +40,13 @@ var goog = goog || {}; // Identifies this file as the Closure base.
 
 
 /**
- * Reference to the global context.  In most cases this will be 'window'.
+ * @define {boolean}
  */
-goog.global = this;
+goog.NODE_JS = false;
+
+
+// eval() is used so that "global" does not need to be an extern.
+goog.global = goog.NODE_JS ? eval('global') : this;
 
 
 /**
@@ -153,6 +157,38 @@ if (!COMPILED) {
 
 
 /**
+ * Used in the context of Node JS to determine whether the argument is an
+ * existing variable in the global namespace, or if it should be added as a
+ * property of goog.global in order to create it.
+ *
+ * @param {string} goog The namespace to test. This is deliberately named "goog"
+ *     rather than "nameSpace" or something more appropriate because the goal is
+ *     to avoid introducing any new variables into the scope of the function
+ *     that would alter the behavior of eval().
+ *
+ *     Because it is known that "goog" is an existing global variable, shadowing
+ *     it with a local variable here does not introduce a new variable in the
+ *     scope of this function. Further, it is known that when the local variable
+ *     goog is the value 'goog', this function should always return true, which
+ *     it does.
+ *
+ *     Ideally, this function would not declare any arguments and would simply
+ *     reference arguments[0], but that yields a WRONG_ARGUMENT_COUNT warning
+ *     at the call sites of goog.isExistingGlobalVariable_() from the Closure
+ *     Compiler when type-checking is enabled. 
+ * @return {boolean}
+ * @private
+ */
+goog.isExistingGlobalVariable_ = function(goog) {
+  // Note that if the variable is declared globally with "var" but is undefined,
+  // then this function will return a false negative.
+  // Similarly, if goog is 'arguments', 'parseInt', or any other member that is
+  // in scope, it will return a false positive.
+  return String(eval('typeof ' + goog)) !== 'undefined';
+};
+
+
+/**
  * Builds an object structure for the provided namespace path,
  * ensuring that names that already exist are not overwritten. For
  * example:
@@ -173,6 +209,17 @@ goog.exportPath_ = function(name, opt_object, opt_objectToExportTo) {
   // base_test.html for an example.
   if (!(parts[0] in cur) && cur.execScript) {
     cur.execScript('var ' + parts[0]);
+  }
+
+  if (goog.NODE_JS && cur === goog.global) {
+    // If parts[0] is already a variable global scope such as "goog", then do
+    // not access it from goog.global because then there will be a global
+    // variable "goog" as well as a "global.goog", and they will be different
+    // objects, causing all sorts of problems.
+    if (goog.isExistingGlobalVariable_(parts[0])) {
+      cur = eval(parts[0]);
+      parts.shift();
+    }
   }
 
   // Certain browsers cannot parse code in the form for((a in b); c;);
@@ -207,6 +254,18 @@ goog.exportPath_ = function(name, opt_object, opt_objectToExportTo) {
 goog.getObjectByName = function(name, opt_obj) {
   var parts = name.split('.');
   var cur = opt_obj || goog.global;
+
+  if (goog.NODE_JS && cur === goog.global) {
+    // If parts[0] is already a variable global scope such as "goog", then do
+    // not access it from goog.global because then there will be a global
+    // variable "goog" as well as a "global.goog", and they will be different
+    // objects, causing all sorts of problems.
+    if (goog.isExistingGlobalVariable_(parts[0])) {
+      cur = eval(parts[0]);
+      parts.shift();
+    }
+  }
+
   for (var part; part = parts.shift(); ) {
     if (goog.isDefAndNotNull(cur[part])) {
       cur = cur[part];
@@ -214,7 +273,7 @@ goog.getObjectByName = function(name, opt_obj) {
       return null;
     }
   }
-  return cur;
+  return /** @type {Object} */ (cur);
 };
 
 
