@@ -532,6 +532,42 @@ public enum ConfigOption {
       builder.setDocumentationOutputDirectory(new File(fullPath));
     }
   }),
+  
+  VARIABLE_MAP_INPUT_FILE("variable-map-input-file", new ConfigUpdater() {
+    @Override
+    public void apply(String file, Config.Builder builder) {
+      File inputFile = (file == null) ? null : 
+          new File(maybeResolvePath(file, builder));
+      builder.setVariableMapInputFile(inputFile);
+    }
+  }),
+  
+  VARIABLE_MAP_OUTPUT_FILE("variable-map-output-file", new ConfigUpdater() {
+    @Override
+    public void apply(String file, Config.Builder builder) {
+      File outputFile = (file == null) ? null : 
+          new File(maybeResolvePath(file, builder));
+      builder.setVariableMapOutputFile(outputFile);
+    }
+  }),
+  
+  PROPERTY_MAP_INPUT_FILE("property-map-input-file", new ConfigUpdater() {
+    @Override
+    public void apply(String file, Config.Builder builder) {
+      File inputFile = (file == null) ? null : 
+          new File(maybeResolvePath(file, builder));
+      builder.setPropertyMapInputFile(inputFile);
+    }
+  }),
+  
+  PROPERTY_MAP_OUTPUT_FILE("property-map-output-file", new ConfigUpdater() {
+    @Override
+    public void apply(String file, Config.Builder builder) {
+      File outputFile = (file == null) ? null : 
+          new File(maybeResolvePath(file, builder));
+      builder.setPropertyMapOutputFile(outputFile);
+    }
+  }),
   ;
 
   private static class ConfigUpdater {

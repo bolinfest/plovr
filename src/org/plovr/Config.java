@@ -41,6 +41,7 @@ import com.google.javascript.jscomp.CompilerOptions;
 import com.google.javascript.jscomp.CompilerPass;
 import com.google.javascript.jscomp.CustomPassExecutionTime;
 import com.google.javascript.jscomp.DiagnosticGroup;
+import com.google.javascript.jscomp.VariableMap;
 import com.google.javascript.jscomp.WarningLevel;
 import com.google.template.soy.xliffmsgplugin.XliffMsgPluginModule;
 
@@ -124,6 +125,14 @@ public final class Config implements Comparable<Config> {
 
   private final String globalScopeName;
 
+  private final File variableMapInputFile;
+
+  private final File variableMapOutputFile;
+
+  private final File propertyMapInputFile;
+
+  private final File propertyMapOutputFile;
+
   /**
    * Time this configuration was loaded
    */
@@ -167,7 +176,11 @@ public final class Config implements Comparable<Config> {
       JsonObject experimentalCompilerOptions,
       File configFile,
       long timestamp,
-      String globalScopeName) {
+      String globalScopeName,
+      File variableMapInputFile,
+      File variableMapOutputFile,
+      File propertyMapInputFile,
+      File propertyMapOutputFile) {
     Preconditions.checkNotNull(defines);
 
     this.id = id;
@@ -199,6 +212,10 @@ public final class Config implements Comparable<Config> {
     this.configFile = configFile;
     this.timestamp = timestamp;
     this.globalScopeName = globalScopeName;
+    this.variableMapInputFile = variableMapInputFile;
+    this.variableMapOutputFile = variableMapOutputFile;
+    this.propertyMapInputFile = propertyMapInputFile;
+    this.propertyMapOutputFile = propertyMapOutputFile;
   }
 
   public static Builder builder(File relativePathBase, File configFile,
@@ -338,6 +355,22 @@ public final class Config implements Comparable<Config> {
     return globalScopeName;
   }
 
+  public File getVariableMapInputFile() {
+    return variableMapInputFile;
+  }
+
+  public File getVariableMapOutputFile() {
+    return variableMapOutputFile;
+  }
+
+  public File getPropertyMapInputFile() {
+    return propertyMapInputFile;
+  }
+
+  public File getPropertyMapOutputFile() {
+    return propertyMapOutputFile;
+  }
+
   public CompilerOptions getCompilerOptions(PlovrClosureCompiler compiler) {
     Preconditions.checkArgument(compilationMode != CompilationMode.RAW,
         "Cannot compile using RAW mode");
@@ -425,11 +458,31 @@ public final class Config implements Comparable<Config> {
         DiagnosticGroup group = groups.forName(entry.getKey());
         if (group == null) {
           System.err.printf("WARNING: UNRECOGNIZED CHECK \"%s\" in your " +
-          		"plovr config. Ignoring.\n", entry.getKey());
+                            "plovr config. Ignoring.\n", entry.getKey());
           continue;
         }
         CheckLevel checkLevel = entry.getValue();
         options.setWarningLevel(group, checkLevel);
+      }
+    }
+
+    if (variableMapInputFile != null) {
+      try {
+        options.inputVariableMapSerialized = VariableMap.load(
+            variableMapInputFile.getAbsolutePath()).toBytes();
+      } catch (IOException e) {
+        logger.severe("The variable map input file '" + variableMapInputFile +
+                      "' could not be loaded: " + e.getMessage());
+      }
+    }
+
+    if (propertyMapInputFile != null) {
+      try {
+        options.inputPropertyMapSerialized = VariableMap.load(
+            propertyMapInputFile.getAbsolutePath()).toBytes();
+      } catch (IOException e) {
+        logger.severe("The property map input file '" + propertyMapInputFile +
+                      "' could not be loaded: " + e.getMessage());
       }
     }
 
@@ -699,6 +752,14 @@ public final class Config implements Comparable<Config> {
 
     private String globalScopeName;
 
+    private File variableMapInputFile;
+
+    private File variableMapOutputFile;
+
+    private File propertyMapInputFile;
+
+    private File propertyMapOutputFile;
+
     private final Map<String, JsonPrimitive> defines;
 
     /**
@@ -756,6 +817,10 @@ public final class Config implements Comparable<Config> {
       this.disambiguateProperties = config.disambiguateProperties;
       this.experimentalCompilerOptions = config.experimentalCompilerOptions;
       this.globalScopeName = config.globalScopeName;
+      this.variableMapInputFile = config.variableMapInputFile;
+      this.variableMapOutputFile = config.variableMapOutputFile;
+      this.propertyMapInputFile = config.propertyMapInputFile;
+      this.propertyMapOutputFile = config.propertyMapOutputFile;
       this.defines = Maps.newHashMap(config.defines);
     }
 
@@ -1016,6 +1081,22 @@ public final class Config implements Comparable<Config> {
       this.globalScopeName = scope;
     }
 
+    public void setVariableMapInputFile(File file) {
+      this.variableMapInputFile = file;
+    }
+
+    public void setVariableMapOutputFile(File file) {
+      this.variableMapOutputFile = file;
+    }
+
+    public void setPropertyMapInputFile(File file) {
+      this.propertyMapInputFile = file;
+    }
+
+    public void setPropertyMapOutputFile(File file) {
+      this.propertyMapOutputFile = file;
+    }
+
     public Config build() {
       File closureLibraryDirectory = pathToClosureLibrary != null
           ? new File(pathToClosureLibrary)
@@ -1084,7 +1165,11 @@ public final class Config implements Comparable<Config> {
           experimentalCompilerOptions,
           configFile,
           lastModified,
-          globalScopeName);
+          globalScopeName,
+          variableMapInputFile,
+          variableMapOutputFile,
+          propertyMapInputFile,
+          propertyMapOutputFile);
 
       return config;
     }

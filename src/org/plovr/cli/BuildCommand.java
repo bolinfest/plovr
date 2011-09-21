@@ -76,6 +76,19 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
         System.err.println(warning);
       }
 
+      // write mapping files if requested
+      if (config.getVariableMapOutputFile() != null) {
+        File variableMapOutputFile = config.getVariableMapOutputFile();
+        variableMapOutputFile.getParentFile().mkdirs();
+        Files.write(result.variableMap.toBytes(), variableMapOutputFile);
+      }
+
+      if (config.getPropertyMapOutputFile() != null) {
+        File propertyMapOutputFile = config.getPropertyMapOutputFile();
+        propertyMapOutputFile.getParentFile().mkdirs();
+        Files.write(result.propertyMap.toBytes(), propertyMapOutputFile);
+      }
+
       ModuleConfig moduleConfig = config.getModuleConfig();
       if (moduleConfig == null) {
         String compiledJs = compilation.getCompiledCode();
@@ -137,8 +150,8 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
   @Override
   String getUsageIntro() {
     return "Specify one or more configs to compile. " +
-    		"If the \"output-file\" option is specified in the config, " +
-    		"the file will be written there; otherwise, " +
-    		"the result of the compilation will be printed to stdout.";
+        "If the \"output-file\" option is specified in the config, " +
+        "the file will be written there; otherwise, " +
+        "the result of the compilation will be printed to stdout.";
   }
 }

@@ -454,6 +454,18 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     your <code>CustomPass</code>, make sure to include the <code>.class</code> file
     for your <code>CustomPass</code> (and any of its dependencies) on the
     classpath, as well.
+  {case 'variable-map-output-file'}
+    If specified, when the <code>build</code> command is used, plovr will write
+    the used variable map to this file.
+  {case 'property-map-output-file'}
+    If specified, when the <code>build</code> command is used, plovr will write
+    the used property map to this file.
+  {case 'variable-map-input-file'}
+    If specified, plovr will pre-populate the compiler's variable map with the
+    variable map contained in this file. 
+  {case 'property-map-input-file'}
+    If specified, plovr will pre-populate the compiler's property map with the
+    property map contained in this file.
 {/switch}
 
 {/template}
