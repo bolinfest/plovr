@@ -73,7 +73,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       // Even if there were no errors, there may have been warnings, so print
       // them to standard error, but do not declare a build failure.
       for (JSError warning : result.warnings) {
-        System.err.println(warning);
+        printJsErrorToStdErr(warning);
       }
 
       // write mapping files if requested
@@ -116,15 +116,24 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       }
     } else {
       for (JSError error : result.errors) {
-        System.err.println(error);
+        printJsErrorToStdErr(error);
       }
       for (JSError warning : result.warnings) {
-        System.err.println(warning);
+        printJsErrorToStdErr(warning);
       }
     }
 
     printSummary(result, compilation);
     return success;
+  }
+
+  /**
+   * Prints out the error message followed by a newline. It turns out that when
+   * you have a lot of errors, they run together if you do not have a line
+   * between them.
+   */
+  private static void printJsErrorToStdErr(JSError error) {
+    System.err.println(error + "\n");
   }
 
   private void printSummary(Result result, Compilation compilation) {
