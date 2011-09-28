@@ -249,7 +249,7 @@ goog.exportPath_ = function(name, opt_object, opt_objectToExportTo) {
  * @param {string} name The fully qualified name.
  * @param {Object=} opt_obj The object within which to look; default is
  *     |goog.global|.
- * @return {Object} The object or, if not found, null.
+ * @return {Object|string|boolean|number} The object or, if not found, null.
  */
 goog.getObjectByName = function(name, opt_obj) {
   var parts = name.split('.');
@@ -273,7 +273,7 @@ goog.getObjectByName = function(name, opt_obj) {
       return null;
     }
   }
-  return /** @type {Object} */ (cur);
+  return /** @type {Object|string|boolean|number} */ (cur);
 };
 
 
