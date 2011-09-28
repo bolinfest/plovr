@@ -231,6 +231,19 @@ public enum ConfigOption {
     public void apply(String outputWrapper, Config.Builder builder) {
       builder.setOutputWrapper(outputWrapper);
     }
+
+    /**
+     * output-wrapper can also be an array of strings that will be
+     * concatenated together.
+     */
+    @Override
+    public void apply(JsonArray outputWrapperParts, Config.Builder builder) {
+      StringBuilder outputWrapper = new StringBuilder();
+      for (JsonElement item : outputWrapperParts) {
+        outputWrapper.append(GsonUtil.stringOrNull(item));
+      }
+      apply(outputWrapper.toString(), builder);
+    }
   }),
 
   OUTPUT_CHARSET("output-charset", new ConfigUpdater() {
@@ -532,38 +545,38 @@ public enum ConfigOption {
       builder.setDocumentationOutputDirectory(new File(fullPath));
     }
   }),
-  
+
   VARIABLE_MAP_INPUT_FILE("variable-map-input-file", new ConfigUpdater() {
     @Override
     public void apply(String file, Config.Builder builder) {
-      File inputFile = (file == null) ? null : 
+      File inputFile = (file == null) ? null :
           new File(maybeResolvePath(file, builder));
       builder.setVariableMapInputFile(inputFile);
     }
   }),
-  
+
   VARIABLE_MAP_OUTPUT_FILE("variable-map-output-file", new ConfigUpdater() {
     @Override
     public void apply(String file, Config.Builder builder) {
-      File outputFile = (file == null) ? null : 
+      File outputFile = (file == null) ? null :
           new File(maybeResolvePath(file, builder));
       builder.setVariableMapOutputFile(outputFile);
     }
   }),
-  
+
   PROPERTY_MAP_INPUT_FILE("property-map-input-file", new ConfigUpdater() {
     @Override
     public void apply(String file, Config.Builder builder) {
-      File inputFile = (file == null) ? null : 
+      File inputFile = (file == null) ? null :
           new File(maybeResolvePath(file, builder));
       builder.setPropertyMapInputFile(inputFile);
     }
   }),
-  
+
   PROPERTY_MAP_OUTPUT_FILE("property-map-output-file", new ConfigUpdater() {
     @Override
     public void apply(String file, Config.Builder builder) {
-      File outputFile = (file == null) ? null : 
+      File outputFile = (file == null) ? null :
           new File(maybeResolvePath(file, builder));
       builder.setPropertyMapOutputFile(outputFile);
     }

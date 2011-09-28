@@ -85,6 +85,7 @@ public final class Compilation {
   }
 
   public void compile(Config config) {
+    this.config = config;
     if (config.getCompilationMode() == CompilationMode.RAW) {
       compileRaw(config);
     } else {
@@ -130,7 +131,6 @@ public final class Compilation {
    */
   private void compile(Config config, Compiler compiler, CompilerOptions options) {
     Preconditions.checkState(!hasResult(), "Compilation already occurred");
-    this.config = config;
     this.compiler = compiler;
 
     if (modules == null) {
@@ -187,11 +187,9 @@ public final class Compilation {
 
   public String getCompiledCode() {
     Preconditions.checkState(hasResult(), "Code has not been compiled yet");
-    if (inputJsConcatenatedInOrder != null) {
-      return inputJsConcatenatedInOrder;
-    }
 
-    String compiledCode = compiler.toSource();
+    String compiledCode = inputJsConcatenatedInOrder != null ?
+        inputJsConcatenatedInOrder : compiler.toSource();
     String outputWrapper = config.getOutputWrapper();
     if (outputWrapper != null) {
       String outputWrapperMarker = config.getOutputWrapperMarker();
@@ -200,6 +198,10 @@ public final class Compilation {
         compiledCode = outputWrapper.substring(0, pos) +
             compiledCode +
             outputWrapper.substring(pos + outputWrapperMarker.length());
+      } else {
+        throw new RuntimeException(
+            "output-wrapper did not contain placeholder: " +
+            outputWrapperMarker);
       }
     }
     return compiledCode;

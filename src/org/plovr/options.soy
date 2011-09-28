@@ -250,7 +250,17 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     If specified, a template into which compiled JavaScript will be written.
     The placeholder for compiled code is <code>%output%</code>, so to wrap the
     compiled output in an anonymous function preceded by a copyright comment, specify:
-<pre>"// Copyright {YEAR}\n{literal}(function(){%output%})();{/literal}"</pre>
+<pre>"output-wrapper": "// Copyright {YEAR}\n{literal}(function(){%output%})();{/literal}",</pre>
+    The value may also be an array of strings that will be concatenated together:
+{literal}<pre>
+"output-wrapper": [
+  "var http = require('http');\n",
+  "var https = require('https');\n",
+  "var nodeUrl = require('url');\n"
+]
+</pre>{/literal}
+    This is helpful if there are many lines to include that would normally be
+    hard to read if the template were one long string.
   {case 'output-charset'}
     Defaults to <code>"US-ASCII"</code>.
     Although <code>datetimesymbols.js</code> in the Closure Library contains
