@@ -247,7 +247,7 @@ public class SoyFileSetParser {
     } else {
       (new RemoveHtmlCommentsVisitor()).exec(soyTree);
     }
-    (new VerifyNoLetCommandUsagesVisitor()).exec(soyTree);
+    // (new VerifyNoLetCommandUsagesVisitor()).exec(soyTree);
     (new VerifyPhnameAttrOnlyOnPlaceholdersVisitor()).exec(soyTree);
     (new CheckSoyDocVisitor(doEnforceSyntaxVersionV2)).exec(soyTree);
     if (doCheckOverrides) {
