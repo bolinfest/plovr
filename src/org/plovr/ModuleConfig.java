@@ -220,6 +220,7 @@ public final class ModuleConfig {
       throws CompilationException {
     List<JsInput> inputsInOrder = manifest.getInputsInCompilationOrder();
     JsInput baseJs = null;
+    JsInput depsJs = null;
 
     // When using the Closure Library, base.js is the first item on the list and
     // should be removed.
@@ -227,7 +228,12 @@ public final class ModuleConfig {
       baseJs = inputsInOrder.get(0);
       Preconditions.checkArgument(baseJs.equals(manifest.getBaseJs()),
           "base.js should be the first input");
-      inputsInOrder = inputsInOrder.subList(1, inputsInOrder.size());
+
+      depsJs = inputsInOrder.get(1);
+      Preconditions.checkArgument(depsJs instanceof DepsJsInput,
+          "deps.js should be the second input");
+
+      inputsInOrder = inputsInOrder.subList(2, inputsInOrder.size());
     }
 
     // Step 1: Build the set of transitive dependencies for each module.
@@ -268,7 +274,9 @@ public final class ModuleConfig {
     // module unless the Closure Library is excluded.
     if (manifest.isUseClosureLibrary()) {
       Preconditions.checkNotNull(baseJs);
-      moduleToInputs.get(rootModule).add(0, baseJs);
+      List<JsInput> rootModuleInputs = moduleToInputs.get(rootModule);
+      rootModuleInputs.add(0, depsJs);
+      rootModuleInputs.add(0, baseJs);
     }
 
     return moduleToInputs;

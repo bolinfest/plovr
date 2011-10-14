@@ -12,6 +12,7 @@ import org.plovr.io.Responses;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Functions;
+import com.google.common.base.Strings;
 import com.google.common.io.Resources;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -133,6 +134,14 @@ public class InputFileHandler extends AbstractGetHandler {
     }
     String name = matcher.group(1);
 
+    // TODO: This will not work when the user supplies his own Closure Library.
+    // (It may also break when modules are used.) Make this more robust and less
+    // hacky.
+    if (name.equals("/closure/goog/deps.js")) {
+      Responses.writeJs(getCodeForDepsJs(manifest), config, exchange);
+      return;
+    }
+
     // Reverse the rewriting done by createInputNameToUriConverter().
     name = name.replaceAll(PARENT_DIRECTORY_REPLACEMENT_PATTERN,
         PARENT_DIRECTORY_TOKEN);
@@ -159,20 +168,44 @@ public class InputFileHandler extends AbstractGetHandler {
     Responses.writeJs(code, config, exchange);
   }
 
+  private String getCodeForDepsJs(Manifest manifest) {
+    // Ordinarily, this will be "/closure/goog/base.js". It could be something
+    // else if the user supplies his own Closure Library.
+    String baseJsPath = manifest.getBaseJs().getName();
+    if (baseJsPath.startsWith("/")) {
+      baseJsPath = baseJsPath.substring(1);
+    }
+    int numDirectories = baseJsPath.split("\\/").length - 1;
+    final String relativePath = Strings.repeat("../", numDirectories);
+
+    Function<JsInput, String> converter = new Function<JsInput, String>() {
+      @Override
+      public String apply(JsInput input) {
+        String path = InputFileHandler.escapeRelativePath.apply(input.getName());
+        if (path.startsWith("/")) {
+          path = path.substring(1);
+        }
+        return relativePath + path;
+      }
+    };
+
+    return manifest.buildDepsJs(converter);
+  }
+
   @Override
   protected void setCacheHeaders(Headers headers) {
     // TODO: allow caching of JS files
     super.setCacheHeaders(headers);
   }
 
-  static Function<JsInput,String> createInputNameToUriConverter(
+  static Function<JsInput, String> createInputNameToUriConverter(
       CompilationServer server, HttpExchange exchange, final String configId) {
     String moduleUriBase = server.getServerForExchange(exchange);
     return createInputNameToUriConverter(moduleUriBase, configId);
   }
 
   @VisibleForTesting
-  static Function<JsInput,String> createInputNameToUriConverter(
+  static Function<JsInput, String> createInputNameToUriConverter(
       final String moduleUriBase, final String configId) {
     return new Function<JsInput, String>() {
       @Override
@@ -193,8 +226,7 @@ public class InputFileHandler extends AbstractGetHandler {
         // translated back to the original "../" when handling a request so that
         // the input can be identified by its name (which contains the relative
         // path information).
-        name = name.replaceAll(PARENT_DIRECTORY_PATTERN,
-            PARENT_DIRECTORY_REPLACEMENT_PATTERN);
+        name = escapeRelativePath.apply(name);
 
         return String.format("%sinput/%s%s",
             moduleUriBase,
@@ -203,4 +235,13 @@ public class InputFileHandler extends AbstractGetHandler {
       }
     };
   }
+
+  static final Function<String, String> escapeRelativePath =
+      new Function<String, String>() {
+        @Override
+        public String apply(String path) {
+          return path.replaceAll(PARENT_DIRECTORY_PATTERN,
+              PARENT_DIRECTORY_REPLACEMENT_PATTERN);
+        }
+  };
 }

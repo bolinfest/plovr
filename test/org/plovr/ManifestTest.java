@@ -66,6 +66,7 @@ public class ManifestTest extends TestCase {
     List<String> expectedNames = ImmutableList.copyOf(
         new String[] {
             "base.js",
+            "deps.js",
             "/goog/debug/error.js",
             "/goog/string/string.js",
             "/goog/asserts/asserts.js",
@@ -141,7 +142,8 @@ public class ManifestTest extends TestCase {
 
     order = manifest.getInputsInCompilationOrder();
 
-    List<String> expectedNames = ImmutableList.of("base.js", "c", "b", "a");
+    List<String> expectedNames = ImmutableList.of("base.js", "deps.js", "c",
+        "b", "a");
     assertEquals(expectedNames, Lists.transform(order, JS_INPUT_TO_NAME));
   }
 }

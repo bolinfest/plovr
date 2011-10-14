@@ -5,18 +5,22 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
 
 import com.google.common.base.Function;
+import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.gson.Gson;
 import com.google.javascript.jscomp.JSModule;
 import com.google.javascript.jscomp.JSSourceFile;
 
@@ -181,6 +185,7 @@ public final class Manifest {
     LinkedHashSet<JsInput> compilerInputs = new LinkedHashSet<JsInput>();
     if (!this.excludeClosureLibrary) {
       compilerInputs.add(getBaseJs());
+      compilerInputs.add(getDepsJs());
     }
     for (JsInput requiredInput : requiredInputs) {
       buildDependencies(provideToSource, compilerInputs, requiredInput);
@@ -225,6 +230,12 @@ public final class Manifest {
       String path = "base.js";
       return new JsSourceFile(path, new File(closureLibraryDirectory, path));
     }
+  }
+
+  JsInput getDepsJs() {
+    Preconditions.checkState(!this.excludeClosureLibrary);
+    String depsJs = buildDepsJs();
+    return new DepsJsInput(getBaseJs(), depsJs);
   }
 
   JsInput getJsInputByName(String name) {
@@ -361,4 +372,46 @@ public final class Manifest {
       }
     }
   }
+
+  /**
+   * For compilation, the exact path to the input in the generated deps.js file
+   * does not matter.
+   */
+  private String buildDepsJs() {
+    return buildDepsJs(new Function<JsInput, String>() {
+      @Override
+      public String apply(JsInput input) {
+        return input.getName();
+      }
+    });
+  }
+
+  String buildDepsJs(Function<JsInput, String> converter) {
+    StringBuilder builder = new StringBuilder();
+    SortedSet<JsInput> inputs = ImmutableSortedSet.copyOf(
+        JsInputComparator.SINGLETON, getAllDependencies());
+
+    final Gson gson = new Gson();
+
+    Function<String, String> toJsString = new Function<String, String>() {
+      @Override
+      public String apply(String str) {
+        return gson.toJson(str);
+      }
+    };
+
+    Joiner comma = Joiner.on(", ");
+
+    for (JsInput input : inputs) {
+      builder.append("goog.addDependency(" +
+          toJsString.apply(converter.apply(input)) +
+          ", [" +
+          comma.join(Lists.transform(input.getProvides(), toJsString)) +
+          "], [" +
+          comma.join(Lists.transform(input.getRequires(), toJsString)) +
+          "]);\n");
+    }
+    return builder.toString();
+  }
+
 }
