@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -146,18 +147,20 @@ public class InputFileHandler extends AbstractGetHandler {
     name = name.replaceAll(PARENT_DIRECTORY_REPLACEMENT_PATTERN,
         PARENT_DIRECTORY_TOKEN);
 
-    JsInput requestedInput = manifest.getJsInputByName(name);
+    // The requested input may not be transitively included by the config, but
+    // it should still be served, so check all of the dependencies.
+    Set<JsInput> allDependencies = manifest.getAllDependencies();
 
     // TODO: eliminate this hack with the slash -- just make it an invariant of
     // the system.
-    if (requestedInput == null) {
-      // Remove the leading slash and try again.
-      name = name.substring(1);
-      requestedInput = manifest.getJsInputByName(name);
-    }
-
-    if (requestedInput != null) {
-      code = requestedInput.getCode();
+    String nameWithoutLeadingSlash =
+        name.startsWith("/") ? name.substring(1) : null;
+    for (JsInput dep : allDependencies) {
+      if (dep.getName().equals(name) ||
+          dep.getName().equals(nameWithoutLeadingSlash)) {
+        code = dep.getCode();
+        break;
+      }
     }
 
     if (code == null) {
