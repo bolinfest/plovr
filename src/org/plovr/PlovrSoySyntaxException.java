@@ -32,7 +32,7 @@ public final class PlovrSoySyntaxException extends RuntimeException {
     this.soySyntaxException = e;
     this.input = input;
 
-    String soyErrorMsg = soySyntaxException.getSoyParserErrorMessage();
+    String soyErrorMsg = soySyntaxException.getOriginalMessage();
     Matcher matcher = PlovrSoySyntaxException.LINE_AND_CHAR_NO.matcher(
         soyErrorMsg);
     if (matcher.find()) {
@@ -47,7 +47,7 @@ public final class PlovrSoySyntaxException extends RuntimeException {
   @Override
   public String getMessage() {
     String templateName = getTemplateName();
-    String soyErrorMsg = soySyntaxException.getSoyParserErrorMessage();
+    String soyErrorMsg = soySyntaxException.getOriginalMessage();
     String message;
     if (templateName == null) {
       message = soyErrorMsg;
