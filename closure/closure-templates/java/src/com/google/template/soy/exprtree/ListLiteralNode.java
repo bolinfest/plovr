@@ -18,12 +18,6 @@ package com.google.template.soy.exprtree;
 
 import java.util.List;
 
-import com.google.common.collect.Lists;
-import com.google.template.soy.data.SoyData;
-import com.google.template.soy.data.SoyListData;
-import com.google.template.soy.data.internalutils.DataUtils;
-import com.google.template.soy.data.restricted.PrimitiveData;
-
 
 /**
  * A node representing a list literal (with items as children).
@@ -81,20 +75,4 @@ public class ListLiteralNode extends AbstractParentExprNode {
     return new ListLiteralNode(this);
   }
 
-  public static ListLiteralNode createFrom(SoyListData soyListData) {
-    List<ExprNode> nodes = Lists.newArrayList();
-    for (SoyData item : soyListData) {
-      ExprNode node;
-      if (item instanceof PrimitiveData) {
-        node = DataUtils.convertPrimitiveDataToExpr((PrimitiveData)item);
-      } else if (item instanceof SoyListData) {
-        node = createFrom((SoyListData)item);
-      } else {
-        // TODO: Support SoyMapData and SanitizedContent.
-        throw new IllegalArgumentException("Could not translate: " + item);
-      }
-      nodes.add(node);
-    }
-    return new ListLiteralNode(nodes);
-  }
 }
