@@ -22,10 +22,13 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 import com.google.javascript.rhino.JSDocInfo;
+import com.google.javascript.rhino.JSDocInfo.Marker;
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.SourcePosition;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
@@ -107,6 +110,11 @@ public final class SymbolTable
    */
   private final Map<Node, SymbolScope> scopes = Maps.newHashMap();
 
+  /**
+   * All JSDocInfo in the program.
+   */
+  private final List<JSDocInfo> docInfos = Lists.newArrayList();
+
   private SymbolScope globalScope = null;
 
   private final JSTypeRegistry registry;
@@ -129,9 +137,40 @@ public final class SymbolTable
     return Collections.unmodifiableCollection(symbols.values());
   }
 
+  /**
+   * Gets the 'natural' ordering of symbols.
+   *
+   * Right now, we only guarantee that symbols in the global scope will come
+   * before symbols in local scopes. After that, the order is deterministic but
+   * undefined.
+   */
+  public Ordering<Symbol> getNaturalSymbolOrdering() {
+    return SYMBOL_ORDERING;
+  }
+
   @Override
   public SymbolScope getScope(Symbol slot) {
     return slot.scope;
+  }
+
+  public Collection<JSDocInfo> getAllJSDocInfo() {
+    return Collections.unmodifiableList(docInfos);
+  }
+
+  /**
+   * Declare a symbol after the main symbol table was constructed.
+   * Throws an exception if you try to declare a symbol twice.
+   */
+  public Symbol declareInferredSymbol(
+      SymbolScope scope, String name, Node declNode) {
+    Symbol symbol = new Symbol(name, null, true, scope);
+    symbols.put(declNode, name, symbol);
+
+    Symbol replacement = scope.ownSymbols.put(name, symbol);
+    Preconditions.checkState(replacement == null, "duplicate symbol");
+
+    symbol.setDeclaration(new Reference(symbol, declNode));
+    return symbol;
   }
 
   /**
@@ -155,24 +194,51 @@ public final class SymbolTable
   }
 
   /**
+   * If {@code sym} is a function, try to find a Symbol for
+   * a parameter with the given name.
+   *
+   * Returns null if we couldn't find one.
+   *
+   * Notice that this just makes a best effort, and may not be able
+   * to find parameters for non-conventional function definitions.
+   * For example, we would not be able to find "y" in this code:
+   * <code>
+   * var x = x() ? function(y) {} : function(y) {};
+   * </code>
+   */
+  public Symbol getParameterInFunction(Symbol sym, String paramName) {
+    SymbolScope scope = getScopeInFunction(sym);
+    if (scope != null) {
+      Symbol param = scope.getSlot(paramName);
+      if (param != null && param.scope == scope) {
+        return param;
+      }
+    }
+    return null;
+  }
+
+  private SymbolScope getScopeInFunction(Symbol sym) {
+    FunctionType type = sym.getFunctionType();
+    if (type == null) {
+      return null;
+    }
+
+    Node functionNode = type.getSource();
+    if (functionNode == null) {
+      return null;
+    }
+
+    return scopes.get(functionNode);
+  }
+
+  /**
    * All local scopes are associated with a function, and some functions
    * are associated with a symbol. Returns the symbol associated with the given
    * scope.
    */
   public Symbol getSymbolForScope(SymbolScope scope) {
     if (scope.isPropertyScope()) {
-      JSType type = scope.getTypeOfThis();
-      if (type != null) {
-        if (type.isGlobalThisType()) {
-          return globalScope.getSlot(GLOBAL_THIS);
-        } else if (type.isNominalConstructor()) {
-          return getSymbolDeclaredBy(type.toMaybeFunctionType());
-        } else if (type.isFunctionPrototypeType()) {
-          return getSymbolForInstancesOf(
-              ((ObjectType) type).getOwnerFunction());
-        }
-      }
-      return null;
+      return getSymbolForTypeHelper(scope.getTypeOfThis(), false);
     }
 
     Node rootNode = scope.getRootNode();
@@ -251,6 +317,8 @@ public final class SymbolTable
   /**
    * Gets all symbols associated with the given type.
    * For union types, this may be multiple symbols.
+   * For instance types, this will return the constructor of
+   * that instance.
    */
   public List<Symbol> getAllSymbolsForType(JSType type) {
     if (type == null) {
@@ -262,49 +330,59 @@ public final class SymbolTable
       List<Symbol> result = Lists.newArrayListWithExpectedSize(2);
       for (JSType alt : unionType.getAlternates()) {
         // Our type system never has nested unions.
-        Symbol altSym = getOnlySymbolForType(alt);
+        Symbol altSym = getSymbolForTypeHelper(alt, true);
         if (altSym != null) {
           result.add(altSym);
         }
       }
       return result;
     }
-    Symbol result = getOnlySymbolForType(type);
+    Symbol result = getSymbolForTypeHelper(type, true);
     return result == null
         ? ImmutableList.<Symbol>of() : ImmutableList.of(result);
   }
 
   /**
    * Gets all symbols associated with the given type.
-   * If there are more that one symbol associated with the given type,
+   * If there is more that one symbol associated with the given type,
    * return null.
+   * @param type The type.
+   * @param linkToCtor If true, we should link instance types back
+   *     to their constructor function. If false, we should link
+   *     instance types back to their prototype. See the comments
+   *     at the top of this file for more information on how
+   *     our internal type system is more granular than Symbols.
    */
-  private Symbol getOnlySymbolForType(JSType type) {
+  private Symbol getSymbolForTypeHelper(JSType type, boolean linkToCtor) {
     if (type == null) {
       return null;
     }
 
-    FunctionType fnType = type.toMaybeFunctionType();
-    if (fnType != null) {
-      return globalScope.getSlot("Function");
+    if (type.isGlobalThisType()) {
+      return globalScope.getSlot(GLOBAL_THIS);
+    } else if (type.isNominalConstructor()) {
+      return linkToCtor ?
+          globalScope.getSlot("Function") :
+          getSymbolDeclaredBy(type.toMaybeFunctionType());
+    } else if (type.isFunctionPrototypeType()) {
+      FunctionType ownerFn = ((ObjectType) type).getOwnerFunction();
+      return linkToCtor ?
+          getSymbolDeclaredBy(ownerFn) :
+          getSymbolForInstancesOf(ownerFn);
+    } else if (type.isInstanceType()) {
+      FunctionType ownerFn = ((ObjectType) type).getConstructor();
+      return linkToCtor ?
+          getSymbolDeclaredBy(ownerFn) :
+          getSymbolForInstancesOf(ownerFn);
+    } else if (type.isFunctionType()) {
+      return linkToCtor ?
+          globalScope.getSlot("Function") :
+          globalScope.getSlot("Function.prototype");
+    } else if (type.autoboxesTo() != null) {
+      return getSymbolForTypeHelper(type.autoboxesTo(), linkToCtor);
+    } else {
+      return null;
     }
-
-    ObjectType objType = type.toObjectType();
-    if (objType != null) {
-      String name = objType.getReferenceName();
-
-      FunctionType ctor = objType.getConstructor();
-      Node sourceNode = ctor == null ? null : ctor.getSource();
-      SymbolScope scope = sourceNode == null
-          ? globalScope : getEnclosingScope(sourceNode);
-
-      return scope.getSlot(
-          (name == null || !objType.isInstanceType())
-          ? "Object" : name);
-    }
-
-    // TODO(nicksantos): Create symbols for value types (number, string).
-    return null;
   }
 
   public String toDebugString() {
@@ -348,6 +426,11 @@ public final class SymbolTable
     for (S scope : scopes) {
       createScopeFrom(scope);
     }
+  }
+
+  /** Gets all the scopes in this symbol table. */
+  Collection<SymbolScope> getAllScopes() {
+    return Collections.unmodifiableCollection(scopes.values());
   }
 
   /**
@@ -396,13 +479,15 @@ public final class SymbolTable
     return declareSymbol(
         sym.getName(), sym.getType(), sym.isTypeInferred(), scope,
         // All symbols must have declaration nodes.
-        Preconditions.checkNotNull(sym.getDeclaration().getNode()));
+        Preconditions.checkNotNull(sym.getDeclaration().getNode()),
+        sym.getJSDocInfo());
   }
 
   private Symbol declareSymbol(
       String name, JSType type, boolean inferred,
-      SymbolScope scope, Node declNode) {
+      SymbolScope scope, Node declNode, JSDocInfo info) {
     Symbol symbol = new Symbol(name, type, inferred, scope);
+    symbol.setJSDocInfo(info);
     symbols.put(declNode, name, symbol);
 
     Symbol replacedSymbol = scope.ownSymbols.put(name, symbol);
@@ -464,7 +549,7 @@ public final class SymbolTable
    * <code>
    * SymbolTable symbolTale = for("var x = new Foo();");
    * Symbol x = symbolTable.getGlobalScope().getSlot("x");
-   * Symbol type = symbolTable.getOnlySymbolForType(x.getType());
+   * Symbol type = symbolTable.getAllSymbolsForType(x.getType()).get(0);
    * </code>
    *
    * Then type.getPropertyScope() will have the properties of the
@@ -526,6 +611,27 @@ public final class SymbolTable
     NodeTraversal.traverseRoots(
         compiler, Lists.newArrayList(externs, root),
         new JSDocInfoCollector(compiler.getTypeRegistry()));
+
+    // Create references to parameters in the JSDoc.
+    for (Symbol sym : getAllSymbols()) {
+      JSDocInfo info = sym.getJSDocInfo();
+      if (info == null) {
+        continue;
+      }
+
+      for (Marker marker : info.getMarkers()) {
+        SourcePosition<Node> pos = marker.getNameNode();
+        if (pos == null) {
+          continue;
+        }
+
+        Node paramNode = pos.getItem();
+        Symbol param = getParameterInFunction(sym, paramNode.getString());
+        if (param != null) {
+          param.defineReferenceAt(paramNode);
+        }
+      }
+    }
   }
 
   private void createPropertyScopeFor(Symbol s) {
@@ -578,6 +684,9 @@ public final class SymbolTable
 
       Symbol newSym = copySymbolTo(newProp, s.propertyScope);
       if (oldProp != null) {
+        if (newSym.getJSDocInfo() == null) {
+          newSym.setJSDocInfo(oldProp.getJSDocInfo());
+        }
         newSym.propertyScope = oldProp.propertyScope;
         for (Reference ref : oldProp.references.values()) {
           newSym.defineReferenceAt(ref.getNode());
@@ -640,6 +749,8 @@ public final class SymbolTable
 
     private Reference declaration = null;
 
+    private JSDocInfo docInfo = null;
+
     Symbol(String name, JSType type, boolean inferred, SymbolScope scope) {
       super(name, type, inferred);
       this.scope = scope;
@@ -654,7 +765,7 @@ public final class SymbolTable
       return JSType.toMaybeFunctionType(getType());
     }
 
-    void defineReferenceAt(Node n) {
+    public void defineReferenceAt(Node n) {
       if (!references.containsKey(n)) {
         references.put(n, new Reference(this, n));
       }
@@ -690,6 +801,15 @@ public final class SymbolTable
     }
 
     @Override
+    public JSDocInfo getJSDocInfo() {
+      return docInfo;
+    }
+
+    void setJSDocInfo(JSDocInfo info) {
+      this.docInfo = info;
+    }
+
+    @Override
     public String toString() {
       Node n = getDeclarationNode();
       int lineNo = n == null ? -1 : n.getLineno();
@@ -708,6 +828,7 @@ public final class SymbolTable
     private final SymbolScope parent;
     private final JSType typeOfThis;
     private final Map<String, Symbol> ownSymbols = Maps.newHashMap();
+    private final int scopeDepth;
 
     SymbolScope(
         Node rootNode,
@@ -716,6 +837,7 @@ public final class SymbolTable
       this.rootNode = rootNode;
       this.parent = parent;
       this.typeOfThis = typeOfThis;
+      this.scopeDepth = parent == null ? 0 : (parent.getScopeDepth() + 1);
     }
 
     @Override
@@ -770,6 +892,10 @@ public final class SymbolTable
 
     public boolean isLexicalScope() {
       return getRootNode() != null;
+    }
+
+    public int getScopeDepth() {
+      return scopeDepth;
     }
   }
 
@@ -860,7 +986,8 @@ public final class SymbolTable
               registry.getNativeType(JSTypeNative.GLOBAL_THIS),
               false /* declared */,
               globalScope,
-              n);
+              n,
+              null);
         } else {
           symbol = globalScope.getSlot(GLOBAL_THIS);
         }
@@ -881,7 +1008,8 @@ public final class SymbolTable
                 type,
                 type != null && !type.isUnknownType(),
                 propScope,
-                n);
+                n,
+                null);
           }
         }
       }
@@ -903,8 +1031,11 @@ public final class SymbolTable
 
     @Override public void visit(NodeTraversal t, Node n, Node parent) {
       if (n.getJSDocInfo() != null) {
+
         // Find references in the JSDocInfo.
         JSDocInfo info = n.getJSDocInfo();
+        docInfos.add(info);
+
         for (Node typeAst : info.getTypeNodes()) {
           SymbolScope scope = scopes.get(t.getScopeRoot());
           visitTypeNode(scope == null ? globalScope : scope, typeAst);
@@ -920,7 +1051,8 @@ public final class SymbolTable
           // primitive type (like {string}). Autobox it to check.
           JSType type = registry.getType(n.getString());
           JSType autobox = type == null ? null : type.autoboxesTo();
-          symbol = autobox == null ? null : getOnlySymbolForType(autobox);
+          symbol = autobox == null
+              ? null : getSymbolForTypeHelper(autobox, true);
         }
         if (symbol != null) {
           symbol.defineReferenceAt(n);
@@ -933,4 +1065,43 @@ public final class SymbolTable
       }
     }
   }
+
+  // Comparators
+  private final Ordering<String> SOURCE_NAME_ORDERING =
+      Ordering.natural().nullsFirst();
+
+  private final Ordering<Node> NODE_ORDERING = new Ordering<Node>() {
+    @Override
+    public int compare(Node a, Node b) {
+      int result = SOURCE_NAME_ORDERING.compare(a.getSourceFileName(), b.getSourceFileName());
+      if (result != 0) {
+        return result;
+      }
+
+      return a.getSourcePosition() - b.getSourcePosition();
+    }
+  };
+
+  private final Ordering<Symbol> SYMBOL_ORDERING = new Ordering<Symbol>() {
+    @Override
+    public int compare(Symbol a, Symbol b) {
+      SymbolScope scopeA = getScope(a);
+      SymbolScope scopeB = getScope(b);
+      int result = scopeA.getScopeDepth() - scopeB.getScopeDepth();
+      if (result != 0) {
+        return result;
+      }
+
+      if (scopeA.isLexicalScope() && !scopeB.isLexicalScope()) {
+        return -1;
+      }
+
+      if (scopeB.isLexicalScope() && !scopeA.isLexicalScope()) {
+        return 1;
+      }
+
+      return NODE_ORDERING.compare(
+          a.getDeclaration().getNode(),  b.getDeclaration().getNode());
+    }
+  };
 }

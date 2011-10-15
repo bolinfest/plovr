@@ -39,6 +39,7 @@
 
 package com.google.javascript.rhino;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
@@ -120,16 +121,47 @@ public class JSDocInfo implements Serializable {
   }
 
   /**
-   * A piece of information in a marker containing a position with a string.
+   * A piece of information (found in a marker) which contains a position
+   * with a string.
    */
   public static class StringPosition extends SourcePosition<String> {
   }
 
   /**
-   * A piece of information in a marker containing a position with a type.
+   * A piece of information (found in a marker) which contains a position
+   * with a string that has no leading or trailing whitespace.
+   */
+  static class TrimmedStringPosition extends StringPosition {
+    @Override public void setItem(String item) {
+      Preconditions.checkArgument(
+          item.charAt(0) != ' ' &&
+          item.charAt(item.length() - 1) != ' ',
+          "String has leading or trailing whitespace");
+      super.setItem(item);
+    }
+  }
+
+  /**
+   * A piece of information (found in a marker) which contains a position
+   * with a name node.
+   */
+  public static class NamePosition extends SourcePosition<Node> {}
+
+  /**
+   * A piece of information (found in a marker) which contains a position
+   * with a type expression syntax tree.
    */
   public static class TypePosition extends SourcePosition<Node> {
-    public boolean hasBrackets = false;
+    private boolean brackets = false;
+
+    /** Returns whether the type has curly braces around it. */
+    public boolean hasBrackets() {
+      return brackets;
+    }
+
+    void setHasBrackets(boolean newVal) {
+      brackets = newVal;
+    }
   }
 
   /**
@@ -143,10 +175,72 @@ public class JSDocInfo implements Serializable {
    * if documentation collection is turned on.
    */
   public static final class Marker {
-    public StringPosition annotation = null;
-    public StringPosition name = null;
-    public StringPosition description = null;
-    public TypePosition type = null;
+    private TrimmedStringPosition annotation = null;
+    private TrimmedStringPosition name = null;
+    private SourcePosition<Node> nameNode = null;
+    private StringPosition description = null;
+    private TypePosition type = null;
+
+    /**
+     * Gets the position information for the annotation name. (e.g., "param")
+     */
+    public StringPosition getAnnotation() {
+      return annotation;
+    }
+
+    void setAnnotation(TrimmedStringPosition p) {
+      annotation = p;
+    }
+
+    /**
+     * Gets the position information for the name found
+     * in a @param tag.
+     * @deprecated Use #getNameNode
+     */
+    @Deprecated
+    public StringPosition getName() {
+      return name;
+    }
+
+    void setName(TrimmedStringPosition p) {
+      name = p;
+    }
+
+    /**
+     * Gets the position information for the name found
+     * in an @param tag.
+     */
+    public SourcePosition<Node> getNameNode() {
+      return nameNode;
+    }
+
+    void setNameNode(SourcePosition<Node> p) {
+      nameNode = p;
+    }
+
+    /**
+     * Gets the position information for the description found
+     * in a block tag.
+     */
+    public StringPosition getDescription() {
+      return description;
+    }
+
+    void setDescription(StringPosition p) {
+      description = p;
+    }
+
+    /**
+     * Gets the position information for the type expression found
+     * in some block tags, like "@param" and "@return".
+     */
+    public TypePosition getType() {
+      return type;
+    }
+
+    void setType(TypePosition p) {
+      type = p;
+    }
   }
 
   private LazilyInitializedInfo info = null;
@@ -1294,7 +1388,14 @@ public class JSDocInfo implements Serializable {
     return this.associatedNode;
   }
 
-  void setAssociatedNode(Node node) {
+  /**
+   * Sets the node associated with this JSDoc.
+   * Notice that many nodes may have pointer to the same JSDocInfo
+   * object (because we propagate it across the type graph). But there
+   * is only one canonical "owner" node of the JSDocInfo, which corresponds
+   * to its original place in the syntax tree.
+   */
+  public void setAssociatedNode(Node node) {
     this.associatedNode = node;
   }
 
@@ -1306,7 +1407,8 @@ public class JSDocInfo implements Serializable {
 
   /** Gets the list of all markers for the documentation in this JSDoc. */
   public Collection<Marker> getMarkers() {
-    return documentation == null ? null : documentation.markers;
+    return (documentation == null || documentation.markers == null)
+        ? ImmutableList.<Marker>of() : documentation.markers;
   }
 
   /** Gets the template type name. */

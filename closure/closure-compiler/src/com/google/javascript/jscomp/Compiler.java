@@ -25,7 +25,6 @@ import com.google.javascript.jscomp.CompilerOptions.DevMode;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.jscomp.CompilerOptions.TracerMode;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceCollection;
-import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceMap;
 import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.deps.SortedDependencies.CircularDependencyException;
 import com.google.javascript.jscomp.deps.SortedDependencies.MissingProvideException;
@@ -1049,6 +1048,7 @@ public class Compiler extends AbstractCompiler {
     InputId inputIdOnAst = newInput.getAstRoot(this).getInputId();
     Preconditions.checkState(newInput.getInputId().equals(inputIdOnAst));
 
+    inputs.remove(oldInput);
     return true;
   }
 
@@ -1688,10 +1688,8 @@ public class Compiler extends AbstractCompiler {
 
   @Override
   void prepareAst(Node root) {
-    Tracer tracer = newTracer("prepareAst");
     CompilerPass pass = new PrepareAst(this);
     pass.process(null, root);
-    stopTracer(tracer, "prepareAst");
   }
 
   void recordFunctionInformation() {
@@ -2093,7 +2091,7 @@ public class Compiler extends AbstractCompiler {
   }
 
   @Override
-  ReferenceMap getGlobalVarReferences() {
+  GlobalVarReferenceMap getGlobalVarReferences() {
     return globalRefMap;
   }
 

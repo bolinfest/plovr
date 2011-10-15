@@ -401,6 +401,10 @@ class PrototypeObjectType extends ObjectType {
     this.prettyPrint = prettyPrint;
   }
 
+  boolean isPrettyPrint() {
+    return prettyPrint;
+  }
+
   @Override
   public FunctionType getConstructor() {
     return null;
@@ -440,7 +444,7 @@ class PrototypeObjectType extends ObjectType {
 
   @Override
   public boolean isSubtype(JSType that) {
-    if (JSType.isSubtype(this, that)) {
+    if (JSType.isSubtypeHelper(this, that)) {
       return true;
     }
 
@@ -452,8 +456,8 @@ class PrototypeObjectType extends ObjectType {
     }
 
     // record types
-    if (that instanceof RecordType) {
-      return RecordType.isSubtype(this, (RecordType) that);
+    if (that.isRecordType()) {
+      return RecordType.isSubtype(this, that.toMaybeRecordType());
     }
 
     // Interfaces

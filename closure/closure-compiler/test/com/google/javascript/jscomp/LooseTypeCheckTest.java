@@ -50,7 +50,7 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
 
   public void testInitialTypingScope() {
     Scope s = new TypedScopeCreator(compiler,
-        new DefaultCodingConvention()).createInitialScope(
+        CodingConventions.getDefault()).createInitialScope(
             new Node(Token.BLOCK));
 
     assertEquals(ARRAY_FUNCTION_TYPE, s.getVar("Array").getType());
@@ -618,7 +618,7 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
     // Don't do type inference on GETELEMs.
     testClosureTypes(
         CLOSURE_DEFS +
-        "function f(arguments) { " +
+        "function f(x) { " +
         "  return goog.isString(arguments[0]) ? arguments[0] : 0;" +
         "}", null);
   }
@@ -627,7 +627,7 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
     // Don't do type inference on GETELEMs.
     testClosureTypes(
         CLOSURE_DEFS +
-        "function f(arguments) { " +
+        "function f(x) { " +
         "  return typeof arguments[0] == 'string' ? arguments[0] : 0;" +
         "}", null);
   }
@@ -2275,19 +2275,20 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
 
   public void testEnum3() throws Exception {
     testTypes("/**@enum*/var a={BB:1,BB:2}",
-        "enum element BB already defined", true);
+        "variable a.BB redefined with type a.<number>, " +
+        "original definition at [testcode]:1 with type a.<number>");
   }
 
   public void testEnum4() throws Exception {
     testTypes("/**@enum*/var a={BB:'string'}",
-        "element type must match enum's type\n" +
+        "assignment to property BB of enum{a}\n" +
         "found   : string\n" +
         "required: number");
   }
 
   public void testEnum5() throws Exception {
     testTypes("/**@enum {String}*/var a={BB:'string'}",
-        "element type must match enum's type\n" +
+        "assignment to property BB of enum{a}\n" +
         "found   : string\n" +
         "required: (String|null|undefined)");
   }
@@ -2306,15 +2307,23 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testEnum8() throws Exception {
-    testTypes("/** @enum */var a=8;",
-        "enum initializer must be an object literal or an enum");
+    testClosureTypesMultipleWarnings("/** @enum */var a=8;",
+        Lists.newArrayList(
+            "enum initializer must be an object literal or an enum",
+            "initializing variable\n" +
+            "found   : number\n" +
+            "required: enum{a}"));
   }
 
   public void testEnum9() throws Exception {
-    testTypes(
+    testClosureTypesMultipleWarnings(
         "var goog = {};" +
         "/** @enum */goog.a=8;",
-        "enum initializer must be an object literal or an enum");
+        Lists.newArrayList(
+            "enum initializer must be an object literal or an enum",
+            "assignment to property a of goog\n" +
+            "found   : number\n" +
+            "required: enum{goog.a}"));
   }
 
   public void testEnum10() throws Exception {
@@ -2361,14 +2370,15 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
 
   public void testEnum16() throws Exception {
     testTypes("var goog = {};" +
-        "/**@enum*/goog.a={BB:1,BB:2}",
-        "enum element BB already defined", true);
+        "/**@enum*/goog .a={BB:1,BB:2}",
+        "variable goog.a.BB redefined with type goog.a.<number>, " +
+        "original definition at [testcode]:1 with type goog.a.<number>");
   }
 
   public void testEnum17() throws Exception {
     testTypes("var goog = {};" +
         "/**@enum*/goog.a={BB:'string'}",
-        "element type must match enum's type\n" +
+        "assignment to property BB of enum{goog.a}\n" +
         "found   : string\n" +
         "required: number");
   }
@@ -3065,7 +3075,7 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
 
   public void testGetprop1() throws Exception {
     testTypes("/** @return {void}*/function foo(){foo().bar;}",
-        "undefined has no properties\n" +
+        "No properties on this expression\n" +
         "found   : undefined\n" +
         "required: Object");
   }
@@ -3130,7 +3140,7 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
 
   public void testPropAccess2() throws Exception {
     testTypes("var bar = void 0; bar.baz;",
-        "undefined has no properties\n" +
+        "No properties on this expression\n" +
         "found   : undefined\n" +
         "required: Object");
   }
@@ -3139,7 +3149,7 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
     // Verifies that we don't emit two warnings, because
     // the var has been dereferenced after the first one.
     testTypes("var bar = void 0; bar.baz; bar.bax;",
-        "undefined has no properties\n" +
+        "No properties on this expression\n" +
         "found   : undefined\n" +
         "required: Object");
   }
@@ -6879,7 +6889,7 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
         "*/\n" +
         "function f(x, y, z) {}\n" +
         "f(this, this, function() { this });",
-        FunctionTypeBuilder.TEMPLATE_TYPE_DUPLICATED.format(), true);
+        FunctionTypeBuilder.TEMPLATE_TYPE_DUPLICATED.format());
   }
 
   public void testBadTemplateType2() throws Exception {
@@ -6891,7 +6901,7 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
         "*/\n" +
         "function f(x, y) {}\n" +
         "f(0, function() {});",
-        TypeInference.TEMPLATE_TYPE_NOT_OBJECT_TYPE.format(), true);
+        TypeInference.TEMPLATE_TYPE_NOT_OBJECT_TYPE.format("number"));
   }
 
   public void testBadTemplateType3() throws Exception {
@@ -6902,7 +6912,7 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
         "*/\n" +
         "function f(x) {}\n" +
         "f(this);",
-        TypeInference.TEMPLATE_TYPE_OF_THIS_EXPECTED.format(), true);
+        TypeInference.TEMPLATE_TYPE_OF_THIS_EXPECTED.format());
   }
 
   public void testBadTemplateType4() throws Exception {
@@ -6912,7 +6922,7 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
         "*/\n" +
         "function f() {}\n" +
         "f();",
-        FunctionTypeBuilder.TEMPLATE_TYPE_EXPECTED.format(), true);
+        FunctionTypeBuilder.TEMPLATE_TYPE_EXPECTED.format());
   }
 
   public void testBadTemplateType5() throws Exception {
@@ -6923,7 +6933,7 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
         "*/\n" +
         "function f() {}\n" +
         "f();",
-        FunctionTypeBuilder.TEMPLATE_TYPE_EXPECTED.format(), true);
+        FunctionTypeBuilder.TEMPLATE_TYPE_EXPECTED.format());
   }
 
   private void checkObjectType(ObjectType objectType, String propertyName,

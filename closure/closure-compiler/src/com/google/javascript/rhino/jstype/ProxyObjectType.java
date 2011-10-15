@@ -153,8 +153,8 @@ class ProxyObjectType extends ObjectType {
   }
 
   @Override
-  public boolean isEnumType() {
-    return referencedType.isEnumType();
+  public EnumType toMaybeEnumType() {
+    return referencedType.toMaybeEnumType();
   }
 
   @Override
@@ -183,9 +183,19 @@ class ProxyObjectType extends ObjectType {
   }
 
   @Override
+  public boolean isAllType() {
+    return referencedType.isAllType();
+  }
+
+  @Override
   public boolean isNativeObjectType() {
     return referencedObjType == null
         ? false : referencedObjType.isNativeObjectType();
+  }
+
+  @Override
+  RecordType toMaybeRecordType() {
+    return referencedType.toMaybeRecordType();
   }
 
   @Override
@@ -392,5 +402,21 @@ class ProxyObjectType extends ObjectType {
   @Override
   public String toDebugHashCodeString() {
     return "{proxy:" + referencedType.toDebugHashCodeString() + "}";
+  }
+
+  @Override
+  public ObjectType getTypeOfThis() {
+    if (referencedObjType != null) {
+      return referencedObjType.getTypeOfThis();
+    }
+    return super.getTypeOfThis();
+  }
+
+  @Override
+  public JSType collapseUnion() {
+    if (referencedType.isUnionType()) {
+      return referencedType.collapseUnion();
+    }
+    return this;
   }
 }

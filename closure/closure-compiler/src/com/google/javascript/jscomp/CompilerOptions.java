@@ -183,11 +183,6 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Tightens types based on a global analysis. */
   public boolean tightenTypes;
 
-  // TODO(user): A temporary flag to prevent the type inference from
-  // running in the global scope because it takes too long to finish.
-  /** Runs a flow sensitive type inference in the global scope */
-  public boolean inferTypesInGlobalScope;
-
   /** Checks for inexistant property calls */
   public boolean checkTypedPropertyCalls;
 
@@ -635,6 +630,9 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Process instances of goog.testing.ObjectPropertyString. */
   boolean processObjectPropertyString;
 
+  /** Replace id generators */
+  boolean replaceIdGenerators = true;  // true by default for legacy reasons.
+
   /** Id generators to replace. */
   Set<String> idGenerators;
 
@@ -773,7 +771,6 @@ public class CompilerOptions implements Serializable, Cloneable {
     checkControlStructures = false;
     checkTypes = false;
     tightenTypes = false;
-    inferTypesInGlobalScope = false;
     checkTypedPropertyCalls = false;
     reportMissingOverride = CheckLevel.OFF;
     reportUnknownTypes = CheckLevel.OFF;
@@ -1093,6 +1090,13 @@ public class CompilerOptions implements Serializable, Cloneable {
    */
   public void setProcessObjectPropertyString(boolean process) {
     processObjectPropertyString = process;
+  }
+
+  /**
+   * @param replaceIdGenerators the replaceIdGenerators to set
+   */
+  public void setReplaceIdGenerators(boolean replaceIdGenerators) {
+    this.replaceIdGenerators = replaceIdGenerators;
   }
 
   /**

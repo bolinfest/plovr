@@ -18,6 +18,7 @@ package com.google.javascript.jscomp;
 
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Ordering;
 import com.google.javascript.jscomp.SymbolTable.Reference;
 import com.google.javascript.jscomp.SymbolTable.Symbol;
 import com.google.javascript.jscomp.SymbolTable.SymbolScope;
@@ -223,7 +224,7 @@ public class SymbolTableTest extends TestCase {
     assertEquals(
         Lists.newArrayList(fn), table.getAllSymbolsForTypeOf(foo));
     assertEquals(
-        Lists.newArrayList(obj), table.getAllSymbolsForTypeOf(fooPrototype));
+        Lists.newArrayList(foo), table.getAllSymbolsForTypeOf(fooPrototype));
     assertEquals(
         foo,
         table.getSymbolDeclaredBy(
@@ -253,6 +254,28 @@ public class SymbolTableTest extends TestCase {
         getGlobalVar(table, "DomHelper.prototype.method");
     assertEquals(
         3, Iterables.size(table.getReferences(method)));
+  }
+
+  public void testSuperClassMethodReferences() throws Exception {
+    SymbolTable table = createSymbolTable(
+        "var goog = {};" +
+        "goog.inherits = function(a, b) {};" +
+        "/** @constructor */ var A = function(){};" +
+        "/** method */ A.prototype.method = function() {};" +
+        "/**\n" +
+        " * @constructor\n" +
+        " * @extends {A}\n" +
+        " */\n" +
+        "var B = function(){};\n" +
+        "goog.inherits(B, A);" +
+        "/** method */ B.prototype.method = function() {" +
+        "  B.superClass_.method();" +
+        "};");
+
+    Symbol methodA =
+        getGlobalVar(table, "A.prototype.method");
+    assertEquals(
+        2, Iterables.size(table.getReferences(methodA)));
   }
 
   public void testFieldReferences() throws Exception {
@@ -335,7 +358,7 @@ public class SymbolTableTest extends TestCase {
     assertEquals("Foo.prototype", refs.get(0).getNode().getQualifiedName());
   }
 
-  public void testReferencesInJSDoc() {
+  public void testReferencesInJSDocType() {
     SymbolTable table = createSymbolTable(
         "/** @constructor */ function Foo() {}\n" +
         "/** @type {Foo} */ var x;\n" +
@@ -368,7 +391,7 @@ public class SymbolTableTest extends TestCase {
     assertEquals(13, refs.get(4).getNode().getCharno());
   }
 
-  public void testReferencesInJSDoc2() {
+  public void testReferencesInJSDocType2() {
     SymbolTable table = createSymbolTable(
         "/** @param {string} x */ function f(x) {}\n");
     Symbol str = getGlobalVar(table, "String");
@@ -386,7 +409,59 @@ public class SymbolTableTest extends TestCase {
     for (int i = 0; i < refs.size(); i++) {
       Reference ref = refs.get(i);
       assertEquals(i != last, ref.getNode().isFromExterns());
+      if (!ref.getNode().isFromExterns()) {
+        assertEquals("in1", ref.getNode().getSourceFileName());
+      }
     }
+  }
+
+  public void testReferencesInJSDocName() {
+    String code = "/** @param {Object} x */ function f(x) {}\n";
+    SymbolTable table = createSymbolTable(code);
+    Symbol x = getLocalVar(table, "x");
+    assertNotNull(x);
+
+    List<Reference> refs = Lists.newArrayList(table.getReferences(x));
+    assertEquals(2, refs.size());
+
+    assertEquals(code.indexOf("x) {"), refs.get(0).getNode().getCharno());
+    assertEquals(code.indexOf("x */"), refs.get(1).getNode().getCharno());
+    assertEquals("in1",
+        refs.get(0).getNode().getSourceFileName());
+  }
+
+  public void testLocalQualifiedNamesInLocalScopes() {
+    SymbolTable table = createSymbolTable(
+        "function f() { var x = {}; x.number = 3; }");
+    Symbol xNumber = getLocalVar(table, "x.number");
+    assertNotNull(xNumber);
+    assertFalse(table.getScope(xNumber).isGlobalScope());
+
+    assertEquals("?", xNumber.getType().toString());
+  }
+
+  public void testNaturalSymbolOrdering() {
+    SymbolTable table = createSymbolTable(
+        "/** @const */ var a = {};" +
+        "/** @const */ a.b = {};" +
+        "/** @param {number} x */ function f(x) {}");
+    Symbol a = getGlobalVar(table, "a");
+    Symbol ab = getGlobalVar(table, "a.b");
+    Symbol f = getGlobalVar(table, "f");
+    Symbol x = getLocalVar(table, "x");
+    Ordering<Symbol> ordering = table.getNaturalSymbolOrdering();
+    assertSymmetricOrdering(ordering, a, ab);
+    assertSymmetricOrdering(ordering, a, f);
+    assertSymmetricOrdering(ordering, ab, f);
+    assertSymmetricOrdering(ordering, f, x);
+  }
+
+  private void assertSymmetricOrdering(
+      Ordering<Symbol> ordering, Symbol first, Symbol second) {
+    assertTrue(ordering.compare(first, first) == 0);
+    assertTrue(ordering.compare(second, second) == 0);
+    assertTrue(ordering.compare(first, second) < 0);
+    assertTrue(ordering.compare(second, first) > 0);
   }
 
   private Symbol getGlobalVar(SymbolTable table, String name) {
@@ -394,10 +469,10 @@ public class SymbolTableTest extends TestCase {
   }
 
   private Symbol getLocalVar(SymbolTable table, String name) {
-    for (Symbol symbol : table.getAllSymbols()) {
-      if (symbol.getName().equals(name) &&
-          table.getScope(symbol).getParentScope() != null) {
-        return symbol;
+    for (SymbolScope scope : table.getAllScopes()) {
+      if (!scope.isGlobalScope() && scope.isLexicalScope() &&
+          scope.getSlot(name) != null) {
+        return scope.getSlot(name);
       }
     }
     return null;

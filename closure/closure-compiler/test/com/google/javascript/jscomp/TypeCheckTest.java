@@ -46,7 +46,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
 
   public void testInitialTypingScope() {
     Scope s = new TypedScopeCreator(compiler,
-        new DefaultCodingConvention()).createInitialScope(
+        CodingConventions.getDefault()).createInitialScope(
             new Node(Token.BLOCK));
 
     assertEquals(ARRAY_FUNCTION_TYPE, s.getVar("Array").getType());
@@ -618,7 +618,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
     // Don't do type inference on GETELEMs.
     testClosureTypes(
         CLOSURE_DEFS +
-        "function f(arguments) { " +
+        "function f(x) { " +
         "  return goog.isString(arguments[0]) ? arguments[0] : 0;" +
         "}", null);
   }
@@ -627,7 +627,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
     // Don't do type inference on GETELEMs.
     testClosureTypes(
         CLOSURE_DEFS +
-        "function f(arguments) { " +
+        "function f(x) { " +
         "  return typeof arguments[0] == 'string' ? arguments[0] : 0;" +
         "}", null);
   }
@@ -838,6 +838,37 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "var f = function(x) {\n" +
         "if (x instanceof T) { return ''; } else { return x; }\n" +
         "};");
+  }
+
+  public void testUndeclaredGlobalProperty1() throws Exception {
+    testTypes("/** @const */ var x = {}; x.y = null;" +
+        "function f(a) { x.y = a; }" +
+        "/** @param {string} a */ function g(a) { }" +
+        "function h() { g(x.y); }");
+  }
+
+  public void testUndeclaredGlobalProperty2() throws Exception {
+    testTypes("/** @const */ var x = {}; x.y = null;" +
+        "function f() { x.y = 3; }" +
+        "/** @param {string} a */ function g(a) { }" +
+        "function h() { g(x.y); }",
+        "actual parameter 1 of g does not match formal parameter\n" +
+        "found   : (null|number)\n" +
+        "required: string");
+  }
+
+  public void testLocallyInferredGlobalProperty1() throws Exception {
+    // We used to have a bug where x.y.z leaked from f into h.
+    testTypes(
+        "/** @constructor */ function F() {}" +
+        "/** @type {number} */ F.prototype.z;" +
+        "/** @const */ var x = {}; /** @type {F} */ x.y;" +
+        "function f() { x.y.z = 'abc'; }" +
+        "/** @param {number} x */ function g(x) {}" +
+        "function h() { g(x.y.z); }",
+        "assignment to property z of F\n" +
+        "found   : string\n" +
+        "required: number");
   }
 
   public void testPropertyInferredPropagation() throws Exception {
@@ -1833,6 +1864,43 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "}");
   }
 
+  public void testInnerFunction10() throws Exception {
+    testTypes(
+        "function f() {" +
+        "  /** @type {?number} */ var x = null;" +
+        "  /** @return {string} */" +
+        "  function g() {" +
+        "    if (!x) {" +
+        "      x = 1;" +
+        "    }" +
+        "    return x;" +
+        "  }" +
+        "}",
+        "inconsistent return type\n" +
+        "found   : number\n" +
+        "required: string");
+  }
+
+  public void testInnerFunction11() throws Exception {
+    // TODO(nicksantos): This is actually bad inference, because
+    // h sets x to null. We should fix this, but for now we do it
+    // this way so that we don't break existing binaries. We will
+    // need to change TypeInference#isUnflowable to fix this.
+    testTypes(
+        "function f() {" +
+        "  /** @type {?number} */ var x = null;" +
+        "  /** @return {number} */" +
+        "  function g() {" +
+        "    x = 1;" +
+        "    h();" +
+        "    return x;" +
+        "  }" +
+        "  function h() {" +
+        "    x = null;" +
+        "  }" +
+        "}");
+  }
+
   public void testAbstractMethodHandling1() throws Exception {
     testTypes(
         "/** @type {Function} */ var abstractFn = function() {};" +
@@ -2615,19 +2683,20 @@ public class TypeCheckTest extends CompilerTypeTestCase {
 
   public void testEnum3() throws Exception {
     testTypes("/**@enum*/var a={BB:1,BB:2}",
-        "enum element BB already defined", true);
+        "variable a.BB redefined with type a.<number>, " +
+        "original definition at [testcode]:1 with type a.<number>");
   }
 
   public void testEnum4() throws Exception {
     testTypes("/**@enum*/var a={BB:'string'}",
-        "element type must match enum's type\n" +
+        "assignment to property BB of enum{a}\n" +
         "found   : string\n" +
         "required: number");
   }
 
   public void testEnum5() throws Exception {
     testTypes("/**@enum {String}*/var a={BB:'string'}",
-        "element type must match enum's type\n" +
+        "assignment to property BB of enum{a}\n" +
         "found   : string\n" +
         "required: (String|null)");
   }
@@ -2646,15 +2715,23 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testEnum8() throws Exception {
-    testTypes("/** @enum */var a=8;",
-        "enum initializer must be an object literal or an enum");
+    testClosureTypesMultipleWarnings("/** @enum */var a=8;",
+        Lists.newArrayList(
+            "enum initializer must be an object literal or an enum",
+            "initializing variable\n" +
+            "found   : number\n" +
+            "required: enum{a}"));
   }
 
   public void testEnum9() throws Exception {
-    testTypes(
+    testClosureTypesMultipleWarnings(
         "var goog = {};" +
         "/** @enum */goog.a=8;",
-        "enum initializer must be an object literal or an enum");
+        Lists.newArrayList(
+            "enum initializer must be an object literal or an enum",
+            "assignment to property a of goog\n" +
+            "found   : number\n" +
+            "required: enum{goog.a}"));
   }
 
   public void testEnum10() throws Exception {
@@ -2701,14 +2778,15 @@ public class TypeCheckTest extends CompilerTypeTestCase {
 
   public void testEnum16() throws Exception {
     testTypes("var goog = {};" +
-        "/**@enum*/goog.a={BB:1,BB:2}",
-        "enum element BB already defined", true);
+        "/**@enum*/goog .a={BB:1,BB:2}",
+        "variable goog.a.BB redefined with type goog.a.<number>, " +
+        "original definition at [testcode]:1 with type goog.a.<number>");
   }
 
   public void testEnum17() throws Exception {
     testTypes("var goog = {};" +
         "/**@enum*/goog.a={BB:'string'}",
-        "element type must match enum's type\n" +
+        "assignment to property BB of enum{goog.a}\n" +
         "found   : string\n" +
         "required: number");
   }
@@ -3605,14 +3683,14 @@ public class TypeCheckTest extends CompilerTypeTestCase {
 
   public void testGetprop1() throws Exception {
     testTypes("/** @return {void}*/function foo(){foo().bar;}",
-        "undefined has no properties\n" +
+        "No properties on this expression\n" +
         "found   : undefined\n" +
         "required: Object");
   }
 
   public void testGetprop2() throws Exception {
     testTypes("var x = null; x.alert();",
-        "null has no properties\n" +
+        "No properties on this expression\n" +
         "found   : null\n" +
         "required: Object");
   }
@@ -3695,7 +3773,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
 
   public void testPropAccess2() throws Exception {
     testTypes("var bar = void 0; bar.baz;",
-        "undefined has no properties\n" +
+        "No properties on this expression\n" +
         "found   : undefined\n" +
         "required: Object");
   }
@@ -3704,7 +3782,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
     // Verifies that we don't emit two warnings, because
     // the var has been dereferenced after the first one.
     testTypes("var bar = void 0; bar.baz; bar.bax;",
-        "undefined has no properties\n" +
+        "No properties on this expression\n" +
         "found   : undefined\n" +
         "required: Object");
   }
@@ -8731,7 +8809,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "*/\n" +
         "function f(x, y, z) {}\n" +
         "f(this, this, function() { this });",
-        FunctionTypeBuilder.TEMPLATE_TYPE_DUPLICATED.format(), true);
+        FunctionTypeBuilder.TEMPLATE_TYPE_DUPLICATED.format());
   }
 
   public void testBadTemplateType2() throws Exception {
@@ -8743,7 +8821,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "*/\n" +
         "function f(x, y) {}\n" +
         "f(0, function() {});",
-        TypeInference.TEMPLATE_TYPE_NOT_OBJECT_TYPE.format(), true);
+        TypeInference.TEMPLATE_TYPE_NOT_OBJECT_TYPE.format("number"));
   }
 
   public void testBadTemplateType3() throws Exception {
@@ -8754,7 +8832,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "*/\n" +
         "function f(x) {}\n" +
         "f(this);",
-        TypeInference.TEMPLATE_TYPE_OF_THIS_EXPECTED.format(), true);
+        TypeInference.TEMPLATE_TYPE_OF_THIS_EXPECTED.format());
   }
 
   public void testBadTemplateType4() throws Exception {
@@ -8764,7 +8842,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "*/\n" +
         "function f() {}\n" +
         "f();",
-        FunctionTypeBuilder.TEMPLATE_TYPE_EXPECTED.format(), true);
+        FunctionTypeBuilder.TEMPLATE_TYPE_EXPECTED.format());
   }
 
   public void testBadTemplateType5() throws Exception {
@@ -8775,7 +8853,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "*/\n" +
         "function f() {}\n" +
         "f();",
-        FunctionTypeBuilder.TEMPLATE_TYPE_EXPECTED.format(), true);
+        FunctionTypeBuilder.TEMPLATE_TYPE_EXPECTED.format());
   }
 
   public void testFunctionLiteralUndefinedThisArgument() throws Exception {
@@ -8810,6 +8888,23 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         + " */\n"
         + "function baz(fn, opt_obj) {}\n"
         + "baz(function() {}, null);");
+  }
+
+  public void testUnionTemplateThisType() throws Exception {
+    testTypes(
+        "/** @constructor */ function F() {}" +
+        "/** @return {F|Array} */ function g() { return []; }" +
+        "/** @param {F} x */ function h(x) { }" +
+        "/**\n" +
+        "* @param {T} x\n" +
+        "* @param {function(this:T, ...)} y\n" +
+        "* @template T\n" +
+        "*/\n" +
+        "function f(x, y) {}\n" +
+        "f(g(), function() { h(this); });",
+        "actual parameter 1 of h does not match formal parameter\n" +
+        "found   : Object\n" +
+        "required: (F|null)");
   }
 
   public void testActiveXObject() throws Exception {
@@ -9222,7 +9317,10 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         registry)
         .processForTesting(null, n);
 
-    assertEquals(0, compiler.getErrorCount());
+    assertEquals(
+        "unexpected error(s) : " +
+        Joiner.on(", ").join(compiler.getErrors()),
+        0, compiler.getErrorCount());
 
     if (descriptions == null) {
       assertEquals(

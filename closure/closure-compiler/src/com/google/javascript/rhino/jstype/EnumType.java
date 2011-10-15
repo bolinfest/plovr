@@ -73,8 +73,8 @@ public class EnumType extends PrototypeObjectType {
   }
 
   @Override
-  public boolean isEnumType() {
-    return true;
+  public EnumType toMaybeEnumType() {
+    return this;
   }
 
   @Override
@@ -122,7 +122,7 @@ public class EnumType extends PrototypeObjectType {
   public boolean isSubtype(JSType that) {
     return that.isEquivalentTo(getNativeType(JSTypeNative.OBJECT_TYPE)) ||
         that.isEquivalentTo(getNativeType(JSTypeNative.OBJECT_PROTOTYPE)) ||
-        JSType.isSubtype(this, that);
+        JSType.isSubtypeHelper(this, that);
   }
 
   @Override

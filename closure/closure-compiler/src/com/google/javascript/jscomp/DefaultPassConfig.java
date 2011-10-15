@@ -208,7 +208,8 @@ public class DefaultPassConfig extends PassConfig {
       checks.add(suspiciousCode);
     }
 
-    if (options.checkControlStructures)  {
+    if (options.checkControlStructures
+        || options.enables(DiagnosticGroups.ES5_STRICT))  {
       checks.add(checkControlStructures);
     }
 
@@ -288,7 +289,9 @@ public class DefaultPassConfig extends PassConfig {
       checks.add(checkGlobalNames);
     }
 
-    checks.add(checkStrictMode);
+    if (options.enables(DiagnosticGroups.ES5_STRICT) || options.checkCaja) {
+      checks.add(checkStrictMode);
+    }
 
     // Replace 'goog.getCssName' before processing defines but after the
     // other checks have been done.
@@ -343,7 +346,9 @@ public class DefaultPassConfig extends PassConfig {
 
     passes.add(createEmptyPass("beforeStandardOptimizations"));
 
-    passes.add(replaceIdGenerators);
+    if (options.replaceIdGenerators) {
+      passes.add(replaceIdGenerators);
+    }
 
     // Optimizes references to the arguments variable.
     if (options.optimizeArgumentsArray) {
@@ -1257,15 +1262,20 @@ public class DefaultPassConfig extends PassConfig {
 
   /** Release references to data that is only needed during checks. */
   final PassFactory garbageCollectChecks =
-      new PassFactory("garbageCollectChecks", true) {
+      new HotSwapPassFactory("garbageCollectChecks", true) {
     @Override
-    protected CompilerPass createInternal(final AbstractCompiler compiler) {
-      return new CompilerPass() {
+    protected HotSwapCompilerPass createInternal(final AbstractCompiler compiler) {
+      return new HotSwapCompilerPass() {
         @Override
         public void process(Node externs, Node jsRoot) {
           // Kill the global namespace so that it can be garbage collected
           // after all passes are through with it.
           namespaceForChecks = null;
+        }
+
+        @Override
+        public void hotSwapScript(Node scriptRoot, Node originalRoot) {
+          process(null, null);
         }
       };
     }

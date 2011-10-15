@@ -40,6 +40,8 @@
 package com.google.javascript.rhino;
 
 import com.google.javascript.rhino.JSDocInfo.Visibility;
+import com.google.javascript.rhino.Token;
+import com.google.javascript.rhino.jstype.StaticSourceFile;
 
 import java.util.Set;
 
@@ -147,10 +149,13 @@ final public class JSDocInfoBuilder {
     JSDocInfo.Marker marker = currentInfo.addMarker();
 
     if (marker != null) {
-      marker.annotation = new JSDocInfo.StringPosition();
-      marker.annotation.setItem(annotation);
-      marker.annotation.setPositionInformation(lineno, charno, lineno,
-                                               charno + annotation.length());
+      JSDocInfo.TrimmedStringPosition position =
+          new JSDocInfo.TrimmedStringPosition();
+      position.setItem(annotation);
+      position.setPositionInformation(lineno, charno, lineno,
+          charno + annotation.length());
+      marker.setAnnotation(position);
+      populated = true;
     }
 
     currentMarker = marker;
@@ -162,10 +167,11 @@ final public class JSDocInfoBuilder {
   public void markText(String text, int startLineno, int startCharno,
       int endLineno, int endCharno) {
     if (currentMarker != null) {
-      currentMarker.description = new JSDocInfo.StringPosition();
-      currentMarker.description.setItem(text);
-      currentMarker.description.setPositionInformation(startLineno, startCharno,
-                                                       endLineno, endCharno);
+      JSDocInfo.StringPosition position = new JSDocInfo.StringPosition();
+      position.setItem(text);
+      position.setPositionInformation(startLineno, startCharno,
+          endLineno, endCharno);
+      currentMarker.setDescription(position);
     }
   }
 
@@ -173,25 +179,55 @@ final public class JSDocInfoBuilder {
    * Adds a type declaration to the current marker.
    */
   public void markTypeNode(Node typeNode, int lineno, int startCharno,
-      int endCharno, boolean hasLC) {
+      int endLineno, int endCharno, boolean hasLC) {
     if (currentMarker != null) {
-      currentMarker.type = new JSDocInfo.TypePosition();
-      currentMarker.type.setItem(typeNode);
-      currentMarker.type.hasBrackets = hasLC;
-      currentMarker.type.setPositionInformation(lineno, startCharno,
-                                                lineno, endCharno);
+      JSDocInfo.TypePosition position = new JSDocInfo.TypePosition();
+      position.setItem(typeNode);
+      position.setHasBrackets(hasLC);
+      position.setPositionInformation(lineno, startCharno,
+          endLineno, endCharno);
+      currentMarker.setType(position);
     }
   }
 
   /**
    * Adds a name declaration to the current marker.
+   * @deprecated Use #markName(String, StaticSourceFile, int, int)
    */
-  public void markName(String name, int lineno, int charno) {
+  @Deprecated
+  public void markName(String name,  int lineno, int charno) {
+    markName(name, null, lineno, charno);
+  }
+
+  /**
+   * Adds a name declaration to the current marker.
+   */
+  public void markName(String name, StaticSourceFile file,
+      int lineno, int charno) {
     if (currentMarker != null) {
-      currentMarker.name = new JSDocInfo.StringPosition();
-      currentMarker.name.setItem(name);
-      currentMarker.name.setPositionInformation(lineno, charno,
-                                                lineno, charno + name.length());
+      // Record the name as both a SourcePosition<String> and a
+      // SourcePosition<Node>. The <String> form is deprecated,
+      // because <Node> is more consistent with how other name
+      // references are handled (see #markTypeNode)
+      //
+      // TODO(nicksantos): Remove all uses of the Name position
+      // and replace them with the NameNode position.
+      JSDocInfo.TrimmedStringPosition position =
+          new JSDocInfo.TrimmedStringPosition();
+      position.setItem(name);
+      position.setPositionInformation(lineno, charno,
+          lineno, charno + name.length());
+      currentMarker.setName(position);
+
+      SourcePosition<Node> nodePos =
+          new JSDocInfo.NamePosition();
+      Node node = Node.newString(Token.NAME, name, lineno, charno);
+      node.setLength(name.length());
+      node.setStaticSourceFile(file);
+      nodePos.setItem(node);
+      nodePos.setPositionInformation(lineno, charno,
+          lineno, charno + name.length());
+      currentMarker.setNameNode(nodePos);
     }
   }
 

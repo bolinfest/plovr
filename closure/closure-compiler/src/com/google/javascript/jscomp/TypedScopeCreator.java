@@ -16,7 +16,6 @@
 
 package com.google.javascript.jscomp;
 
-import static com.google.javascript.jscomp.TypeCheck.ENUM_DUP;
 import static com.google.javascript.jscomp.TypeCheck.ENUM_NOT_CONSTANT;
 import static com.google.javascript.jscomp.TypeCheck.MULTIPLE_VAR_DEF;
 import static com.google.javascript.rhino.jstype.JSTypeNative.ARRAY_FUNCTION_TYPE;
@@ -49,12 +48,15 @@ import static com.google.javascript.rhino.jstype.JSTypeNative.VOID_TYPE;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.CodingConvention.DelegateRelationship;
 import com.google.javascript.jscomp.CodingConvention.ObjectLiteralCast;
 import com.google.javascript.jscomp.CodingConvention.SubclassRelationship;
 import com.google.javascript.jscomp.CodingConvention.SubclassType;
+import com.google.javascript.jscomp.FunctionTypeBuilder.AstFunctionContents;
+import com.google.javascript.jscomp.NodeTraversal.AbstractScopedCallback;
 import com.google.javascript.jscomp.NodeTraversal.AbstractShallowStatementCallback;
 import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.ErrorReporter;
@@ -140,6 +142,10 @@ final class TypedScopeCreator implements ScopeCreator {
   private final Map<String, String> delegateCallingConventions =
       Maps.newHashMap();
 
+  // Simple properties inferred about functions.
+  private final Map<Node, AstFunctionContents> functionAnalysisResults =
+      Maps.newHashMap();
+
   /**
    * Defer attachment of types to nodes until all type names
    * have been resolved. Then, we can resolve the type and attach it.
@@ -189,6 +195,10 @@ final class TypedScopeCreator implements ScopeCreator {
     Scope newScope = null;
     AbstractScopeBuilder scopeBuilder = null;
     if (parent == null) {
+      // Run a first-order analysis over the syntax tree.
+      (new FirstOrderFunctionAnalyzer(compiler, functionAnalysisResults))
+          .process(root.getFirstChild(), root.getLastChild());
+
       // Find all the classes in the global scope.
       newScope = createInitialScope(root);
 
@@ -242,12 +252,21 @@ final class TypedScopeCreator implements ScopeCreator {
     Preconditions.checkNotNull(globalScope);
     Preconditions.checkState(globalScope.isGlobal());
 
+    String scriptName = NodeUtil.getSourceName(scriptRoot);
+    Preconditions.checkNotNull(scriptName);
+    for (Node node : ImmutableList.copyOf(functionAnalysisResults.keySet())) {
+      if (scriptName.equals(NodeUtil.getSourceName(node))) {
+        functionAnalysisResults.remove(node);
+      }
+    }
+
+    (new FirstOrderFunctionAnalyzer(
+        compiler, functionAnalysisResults)).process(null, scriptRoot);
+
     // TODO(bashir): Variable declaration is not the only side effect of last
     // global scope generation but here we only wipe that part off!
 
     // Remove all variables that were previously declared in this scripts.
-    String scriptName = NodeUtil.getSourceName(scriptRoot);
-    Preconditions.checkNotNull(scriptName);
     // First find all vars to remove then remove them because of iterator!
     Iterator<Var> varIter = globalScope.getVars();
     List<Var> varsToRemove = Lists.newArrayList();
@@ -259,6 +278,7 @@ final class TypedScopeCreator implements ScopeCreator {
     }
     for (Var var : varsToRemove) {
       globalScope.undeclare(var);
+      globalScope.getTypeOfThis().removeProperty(var.getName());
     }
 
     // Now re-traverse the given script.
@@ -598,10 +618,8 @@ final class TypedScopeCreator implements ScopeCreator {
       setDeferredType(objectLit, type);
 
       // If this is an enum, the properties were already taken care of above.
-      if (!createdEnumType) {
-        processObjectLitProperties(
-            t, objectLit, ObjectType.cast(objectLit.getJSType()));
-      }
+      processObjectLitProperties(
+          t, objectLit, ObjectType.cast(objectLit.getJSType()), !createdEnumType);
     }
 
     /**
@@ -609,18 +627,22 @@ final class TypedScopeCreator implements ScopeCreator {
      * @param objLit The OBJECTLIT node.
      * @param objLitType The type of the OBJECTLIT node. This might be a named
      *     type, because of the lends annotation.
+     * @param declareOnOwner If true, declare properties on the objLitType as
+     *     well. If false, the caller should take crae of this.
      */
     void processObjectLitProperties(
-        NodeTraversal t, Node objLit, ObjectType objLitType) {
+        NodeTraversal t, Node objLit, ObjectType objLitType,
+        boolean declareOnOwner) {
       for (Node keyNode = objLit.getFirstChild(); keyNode != null;
            keyNode = keyNode.getNext()) {
         Node value = keyNode.getFirstChild();
         String memberName = NodeUtil.getObjectLitKeyName(keyNode);
         JSDocInfo info = keyNode.getJSDocInfo();
-        JSType valueType = getDeclaredType(
-            t.getSourceName(), info, keyNode, value);
-        JSType keyType = NodeUtil.getObjectLitKeyTypeFromValueType(
-            keyNode, valueType);
+        JSType valueType =
+            getDeclaredType(t.getSourceName(), info, keyNode, value);
+        JSType keyType =  objLitType.isEnumType() ?
+            objLitType.toMaybeEnumType().getElementsType() :
+            NodeUtil.getObjectLitKeyTypeFromValueType(keyNode, valueType);
         if (keyType != null) {
           // Try to declare this property in the current scope if it
           // has an authoritative name.
@@ -631,11 +653,10 @@ final class TypedScopeCreator implements ScopeCreator {
             setDeferredType(keyNode, keyType);
           }
 
-          if (objLitType != null) {
+          if (objLitType != null && declareOnOwner) {
             // Declare this property on its object literal.
             boolean isExtern = t.getInput() != null && t.getInput().isExtern();
-            objLitType.defineDeclaredProperty(
-                memberName, keyType, keyNode);
+            objLitType.defineDeclaredProperty(memberName, keyType, keyNode);
           }
         }
       }
@@ -864,7 +885,7 @@ final class TypedScopeCreator implements ScopeCreator {
           FunctionTypeBuilder builder =
               new FunctionTypeBuilder(name, compiler, errorRoot, sourceName,
                   scope)
-              .setSourceNode(fnRoot)
+              .setContents(getFunctionAnalysisResults(fnRoot))
               .inferFromOverriddenFunction(overriddenPropType, parametersNode)
               .inferTemplateTypeName(info)
               .inferReturnType(info)
@@ -888,7 +909,6 @@ final class TypedScopeCreator implements ScopeCreator {
 
           functionType = builder
               .inferParameterTypes(parametersNode, info)
-              .inferReturnStatementsAsLastResort(fnBlock)
               .buildAndRegister();
         }
       }
@@ -967,8 +987,6 @@ final class TypedScopeCreator implements ScopeCreator {
               // GET and SET don't have a String value;
               compiler.report(
                   JSError.make(sourceName, key, ENUM_NOT_CONSTANT, keyName));
-            } else if (enumType.hasOwnProperty(keyName)) {
-              compiler.report(JSError.make(sourceName, key, ENUM_DUP, keyName));
             } else if (!codingConvention.isValidEnumKey(keyName)) {
               compiler.report(
                   JSError.make(sourceName, key, ENUM_NOT_CONSTANT, keyName));
@@ -1104,20 +1122,27 @@ final class TypedScopeCreator implements ScopeCreator {
             FunctionType superClassCtor = fnType.getSuperClassConstructor();
             StaticSlot<JSType> prototypeSlot = fnType.getSlot("prototype");
 
-            // It's not really important what node we declare the prototype
-            // at. It's more important that the Var node is consistent with
-            // the node that the type system uses internally.
-            Node prototypeNode = n;
-            if (prototypeSlot.getDeclaration() != null) {
-              prototypeNode = prototypeSlot.getDeclaration().getNode();
-            }
+            String prototypeName = variableName + ".prototype";
 
-            scopeToDeclareIn.declare(variableName + ".prototype",
-                prototypeNode, prototypeSlot.getType(), input,
-                /* declared iff there's an explicit supertype */
-                superClassCtor == null ||
-                superClassCtor.getInstanceType().equals(
-                    getNativeType(OBJECT_TYPE)));
+            // There are some rare cases where the prototype will already
+            // be declared. See TypedScopeCreatorTest#testBogusPrototypeInit.
+            // Fortunately, other warnings will complain if this happens.
+            if (scopeToDeclareIn.getOwnSlot(prototypeName) == null) {
+              // It's not really important what node we declare the prototype
+              // at. It's more important that the Var node is consistent with
+              // the node that the type system uses internally.
+              Node prototypeNode = n;
+              if (prototypeSlot.getDeclaration() != null) {
+                prototypeNode = prototypeSlot.getDeclaration().getNode();
+              }
+
+              scopeToDeclareIn.declare(prototypeName,
+                  prototypeNode, prototypeSlot.getType(), input,
+                  /* declared iff there's an explicit supertype */
+                  superClassCtor == null ||
+                  superClassCtor.getInstanceType().equals(
+                      getNativeType(OBJECT_TYPE)));
+            }
 
             // Make sure the variable is initialized to something if
             // it constructs itself.
@@ -1720,6 +1745,16 @@ final class TypedScopeCreator implements ScopeCreator {
      */
     void build() {
       NodeTraversal.traverse(compiler, scope.getRootNode(), this);
+
+      AstFunctionContents contents =
+          getFunctionAnalysisResults(scope.getRootNode());
+      if (contents != null) {
+        for (String varName : contents.getEscapedVarNames()) {
+          Var v = scope.getVar(varName);
+          Preconditions.checkState(v.getScope() == scope);
+          v.markEscaped();
+        }
+      }
     }
 
     /**
@@ -1788,4 +1823,66 @@ final class TypedScopeCreator implements ScopeCreator {
       }
     } // end declareArguments
   } // end LocalScopeBuilder
+
+  /**
+   * Does a first-order function analysis that just looks at simple things
+   * like what variables are escaped, and whether 'this' is used.
+   */
+  private static class FirstOrderFunctionAnalyzer
+      extends AbstractScopedCallback implements CompilerPass {
+    private final AbstractCompiler compiler;
+    private final Map<Node, AstFunctionContents> data;
+
+    FirstOrderFunctionAnalyzer(
+        AbstractCompiler compiler, Map<Node, AstFunctionContents> outParam) {
+      this.compiler = compiler;
+      this.data = outParam;
+    }
+
+    @Override public void process(Node externs, Node root) {
+      if (externs == null) {
+        NodeTraversal.traverse(compiler, root, this);
+      } else {
+        NodeTraversal.traverseRoots(
+            compiler, ImmutableList.of(externs, root), this);
+      }
+    }
+
+    @Override public void enterScope(NodeTraversal t) {
+      if (!t.inGlobalScope()) {
+        Node n = t.getScopeRoot();
+        data.put(n, new AstFunctionContents(n));
+      }
+    }
+
+    @Override public void visit(NodeTraversal t, Node n, Node parent) {
+      if (t.inGlobalScope()) {
+        return;
+      }
+
+      if (n.getType() == Token.RETURN && n.getFirstChild() != null) {
+        data.get(t.getScopeRoot()).recordNonEmptyReturn();
+      } else if (n.getType() == Token.NAME && NodeUtil.isLValue(n)) {
+        String name = n.getString();
+        Scope scope = t.getScope();
+        Var var = scope.getVar(name);
+        if (var != null) {
+          Scope ownerScope = var.getScope();
+          if (scope != ownerScope && ownerScope.isLocal()) {
+            data.get(ownerScope.getRootNode()).recordEscapedVarName(name);
+          }
+        }
+      }
+    }
+  }
+
+  private AstFunctionContents getFunctionAnalysisResults(@Nullable Node n) {
+    if (n == null) {
+      return null;
+    }
+
+    // Sometimes this will return null in things like
+    // NameReferenceGraphConstruction that build partial scopes.
+    return functionAnalysisResults.get(n);
+  }
 }

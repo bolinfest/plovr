@@ -133,6 +133,8 @@ public class FunctionType extends PrototypeObjectType {
     super(registry, name,
         registry.getNativeObjectType(JSTypeNative.FUNCTION_INSTANCE_TYPE),
         nativeType);
+    setPrettyPrint(true);
+
     Preconditions.checkArgument(source == null ||
         Token.FUNCTION == source.getType());
     Preconditions.checkNotNull(arrowType);
@@ -154,6 +156,8 @@ public class FunctionType extends PrototypeObjectType {
   private FunctionType(JSTypeRegistry registry, String name, Node source) {
     super(registry, name,
         registry.getNativeObjectType(JSTypeNative.FUNCTION_INSTANCE_TYPE));
+    setPrettyPrint(true);
+
     Preconditions.checkArgument(source == null ||
         Token.FUNCTION == source.getType());
     Preconditions.checkArgument(name != null);
@@ -573,25 +577,15 @@ public class FunctionType extends PrototypeObjectType {
     return super.defineProperty(name, type, inferred, propertyNode);
   }
 
-  @Override
-  public JSType getLeastSupertype(JSType that) {
-    return supAndInfHelper(that, true);
-  }
-
-  @Override
-  public JSType getGreatestSubtype(JSType that) {
-    return supAndInfHelper(that, false);
-  }
-
   /**
-   * Computes the supremum or infimum of functions with other types.
+   * Computes the supremum or infimum of two functions.
    * Because sup() and inf() share a lot of logic for functions, we use
    * a single helper.
    * @param leastSuper If true, compute the supremum of {@code this} with
    *     {@code that}. Otherwise compute the infimum.
    * @return The least supertype or greatest subtype.
    */
-  private JSType supAndInfHelper(JSType that, boolean leastSuper) {
+  FunctionType supAndInfHelper(FunctionType that, boolean leastSuper) {
     // NOTE(nicksantos): When we remove the unknown type, the function types
     // form a lattice with the universal constructor at the top of the lattice,
     // and the LEAST_FUNCTION_TYPE type at the bottom of the lattice.
@@ -605,65 +599,62 @@ public class FunctionType extends PrototypeObjectType {
     // types (like unions of functions), we just fallback on the simpler
     // approach of getting things right at the top and the bottom of the
     // lattice.
-    if (isFunctionType() && that.isFunctionType()) {
-      if (isEquivalentTo(that)) {
-        return this;
-      }
+    //
+    // If there are unknown parameters or return types making things
+    // ambiguous, then sup(A, B) is always the top function type, and
+    // inf(A, B) is always the bottom function type.
+    Preconditions.checkNotNull(that);
 
-      FunctionType other = that.toMaybeFunctionType();
+    if (isEquivalentTo(that)) {
+      return this;
+    }
 
-      // If these are ordinary functions, then merge them.
-      // Don't do this if any of the params/return
-      // values are unknown, because then there will be cycles in
-      // their local lattice and they will merge in weird ways.
-      if (other != null &&
-          isOrdinaryFunction() && that.isOrdinaryFunction() &&
-          !this.call.hasUnknownParamsOrReturn() &&
-          !other.call.hasUnknownParamsOrReturn()) {
+    // If these are ordinary functions, then merge them.
+    // Don't do this if any of the params/return
+    // values are unknown, because then there will be cycles in
+    // their local lattice and they will merge in weird ways.
+    if (isOrdinaryFunction() && that.isOrdinaryFunction() &&
+        !this.call.hasUnknownParamsOrReturn() &&
+        !that.call.hasUnknownParamsOrReturn()) {
 
-        // Check for the degenerate case, but double check
-        // that there's not a cycle.
-        boolean isSubtypeOfThat = this.isSubtype(that);
-        boolean isSubtypeOfThis = that.isSubtype(this);
-        if (isSubtypeOfThat && !isSubtypeOfThis) {
-          return leastSuper ? that : this;
-        } else if (isSubtypeOfThis && !isSubtypeOfThat) {
-          return leastSuper ? this : that;
-        }
-
-        // Merge the two functions component-wise.
-        FunctionType merged = tryMergeFunctionPiecewise(other, leastSuper);
-        if (merged != null) {
-          return merged;
-        }
-      }
-
-      // The function instance type is a special case
-      // that lives above the rest of the lattice.
-      JSType functionInstance = registry.getNativeType(
-          JSTypeNative.FUNCTION_INSTANCE_TYPE);
-      if (functionInstance.isEquivalentTo(that)) {
+      // Check for the degenerate case, but double check
+      // that there's not a cycle.
+      boolean isSubtypeOfThat = this.isSubtype(that);
+      boolean isSubtypeOfThis = that.isSubtype(this);
+      if (isSubtypeOfThat && !isSubtypeOfThis) {
         return leastSuper ? that : this;
-      } else if (functionInstance.isEquivalentTo(this)) {
+      } else if (isSubtypeOfThis && !isSubtypeOfThat) {
         return leastSuper ? this : that;
       }
 
-      // In theory, we should be using the GREATEST_FUNCTION_TYPE as the
-      // greatest function. In practice, we don't because it's way too
-      // broad. The greatest function takes var_args None parameters, which
-      // means that all parameters register a type warning.
-      //
-      // Instead, we use the U2U ctor type, which has unknown type args.
-      FunctionType greatestFn =
-          registry.getNativeFunctionType(JSTypeNative.U2U_CONSTRUCTOR_TYPE);
-      FunctionType leastFn =
-          registry.getNativeFunctionType(JSTypeNative.LEAST_FUNCTION_TYPE);
-      return leastSuper ? greatestFn : leastFn;
+      // Merge the two functions component-wise.
+      FunctionType merged = tryMergeFunctionPiecewise(that, leastSuper);
+      if (merged != null) {
+        return merged;
+      }
     }
 
-    return leastSuper ?
-        super.getLeastSupertype(that) :
-        super.getGreatestSubtype(that);
+    // The function instance type is a special case
+    // that lives above the rest of the lattice.
+    JSType functionInstance = registry.getNativeType(
+        JSTypeNative.FUNCTION_INSTANCE_TYPE);
+    if (functionInstance.isEquivalentTo(that)) {
+      return leastSuper ? that : this;
+    } else if (functionInstance.isEquivalentTo(this)) {
+      return leastSuper ? this : that;
+    }
+
+    // In theory, we should be using the GREATEST_FUNCTION_TYPE as the
+    // greatest function. In practice, we don't because it's way too
+    // broad. The greatest function takes var_args None parameters, which
+    // means that all parameters register a type warning.
+    //
+    // Instead, we use the U2U ctor type, which has unknown type args.
+    FunctionType greatestFn =
+        registry.getNativeFunctionType(JSTypeNative.U2U_CONSTRUCTOR_TYPE);
+    FunctionType leastFn =
+        registry.getNativeFunctionType(JSTypeNative.LEAST_FUNCTION_TYPE);
+    return leastSuper ? greatestFn : leastFn;
   }
 
   /**
@@ -814,9 +805,12 @@ public class FunctionType extends PrototypeObjectType {
    */
   @Override
   public String toString() {
-    if (this == registry.getNativeType(JSTypeNative.FUNCTION_INSTANCE_TYPE)) {
+    if (!isPrettyPrint() ||
+        this == registry.getNativeType(JSTypeNative.FUNCTION_INSTANCE_TYPE)) {
       return "Function";
     }
+
+    setPrettyPrint(false);
 
     StringBuilder b = new StringBuilder(32);
     b.append("function (");
@@ -853,6 +847,8 @@ public class FunctionType extends PrototypeObjectType {
     }
     b.append("): ");
     b.append(call.returnType);
+
+    setPrettyPrint(true);
     return b.toString();
   }
 
@@ -873,7 +869,7 @@ public class FunctionType extends PrototypeObjectType {
    */
   @Override
   public boolean isSubtype(JSType that) {
-    if (JSType.isSubtype(this, that)) {
+    if (JSType.isSubtypeHelper(this, that)) {
       return true;
     }
 
@@ -965,8 +961,16 @@ public class FunctionType extends PrototypeObjectType {
    * Sets the source node.
    */
   public void setSource(Node source) {
-    if (null == source) {
-      prototypeSlot = null;
+    if (prototypeSlot != null) {
+      // NOTE(bashir): On one hand when source is null we want to drop any
+      // references to old nodes retained in prototypeSlot. On the other hand
+      // we cannot simply drop prototypeSlot, so we retain all information
+      // except the propertyNode for which we use an approximation! These
+      // details mostly matter in hot-swap passes.
+      if (source == null || prototypeSlot.getNode() == null) {
+        prototypeSlot = new Property(prototypeSlot.getName(),
+            prototypeSlot.getType(), prototypeSlot.isTypeInferred(), source);
+      }
     }
     this.source = source;
   }

@@ -300,7 +300,14 @@ public abstract class JSType implements Serializable {
   }
 
   public boolean isEnumType() {
-    return false;
+    return toMaybeEnumType() != null;
+  }
+
+  /**
+   * Downcasts this to an EnumType, or returns null if this is not an EnumType.
+   */
+  public EnumType toMaybeEnumType() {
+    return null;
   }
 
   boolean isNamedType() {
@@ -308,7 +315,15 @@ public abstract class JSType implements Serializable {
   }
 
   public boolean isRecordType() {
-    return false;
+    return toMaybeRecordType() != null;
+  }
+
+  /**
+   * Downcasts this to a RecordType, or returns null if this is not
+   * a RecordType.
+   */
+  RecordType toMaybeRecordType() {
+    return null;
   }
 
   public boolean isTemplateType() {
@@ -647,6 +662,13 @@ public abstract class JSType implements Serializable {
   }
 
   /**
+   * Gets the least supertype of this that's not a union.
+   */
+  public JSType collapseUnion() {
+    return this;
+  }
+
+  /**
    * Gets the least supertype of {@code this} and {@code that}.
    * The least supertype is the join (&#8744;) or supremum of both types in the
    * type lattice.<p>
@@ -690,10 +712,6 @@ public abstract class JSType implements Serializable {
    * @return {@code this &#8744; that}
    */
   public JSType getGreatestSubtype(JSType that) {
-    if (that.isRecordType()) {
-      // Record types have their own implementation of getGreatestSubtype.
-      return that.getGreatestSubtype(this);
-    }
     return getGreatestSubtype(this, that);
   }
 
@@ -702,7 +720,15 @@ public abstract class JSType implements Serializable {
    * getGreatestSubtype implementations.
    */
   static JSType getGreatestSubtype(JSType thisType, JSType thatType) {
-    if (thisType.isEquivalentTo(thatType)) {
+    if (thisType.isFunctionType() && thatType.isFunctionType()) {
+      // The FunctionType sub-lattice is not well-defined. i.e., the
+      // proposition
+      // A < B => sup(A, B) == B
+      // does not hold because of unknown parameters and return types.
+      // See the comment in supAndInfHelper for more info on this.
+      return thisType.toMaybeFunctionType().supAndInfHelper(
+          thatType.toMaybeFunctionType(), false);
+    } else if (thisType.isEquivalentTo(thatType)) {
       return thisType;
     } else if (thisType.isUnknownType() || thatType.isUnknownType()) {
       // The greatest subtype with any unknown type is the universal
@@ -717,6 +743,10 @@ public abstract class JSType implements Serializable {
       return thisType.toMaybeUnionType().meet(thatType);
     } else if (thatType.isUnionType()) {
       return thatType.toMaybeUnionType().meet(thisType);
+    } else if (thisType.isRecordType()) {
+      return thisType.toMaybeRecordType().getGreatestSubtypeHelper(thatType);
+    } else if (thatType.isRecordType()) {
+      return thatType.toMaybeRecordType().getGreatestSubtypeHelper(thisType);
     }
 
     if (thisType.isEnumElementType()) {
@@ -956,7 +986,9 @@ public abstract class JSType implements Serializable {
    *
    * @return {@code this &lt;: that}
    */
-  public abstract boolean isSubtype(JSType that);
+  public boolean isSubtype(JSType that) {
+    return isSubtypeHelper(this, that);
+  }
 
   /**
    * Whether this type is meaningfully different from {@code that} type.
@@ -979,7 +1011,7 @@ public abstract class JSType implements Serializable {
    * A generic implementation meant to be used as a helper for common subtyping
    * cases.
    */
-  static boolean isSubtype(JSType thisType, JSType thatType) {
+  static boolean isSubtypeHelper(JSType thisType, JSType thatType) {
     // unknown
     if (thatType.isUnknownType()) {
       return true;
@@ -1001,9 +1033,10 @@ public abstract class JSType implements Serializable {
         }
       }
     }
-    // named types
-    if (thatType instanceof NamedType) {
-      return thisType.isSubtype(((NamedType)thatType).getReferencedType());
+    // proxy types
+    if (thatType instanceof ProxyObjectType) {
+      return thisType.isSubtype(
+          ((ProxyObjectType) thatType).getReferencedTypeInternal());
     }
     return false;
   }

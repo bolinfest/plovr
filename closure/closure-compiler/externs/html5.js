@@ -347,6 +347,30 @@ CanvasRenderingContext2D.prototype.getImageData = function(sx, sy, sw, sh) {};
 CanvasRenderingContext2D.prototype.putImageData = function(imagedata, dx, dy,
     opt_dirtyX, opt_dirtyY, opt_dirtyWidth, opt_dirtyHeight) {};
 
+/** 
+ * Note: Webkit only
+ * @param {number|string=} opt_a
+ * @param {number=} opt_b
+ * @param {number=} opt_c
+ * @param {number=} opt_d
+ * @param {number=} opt_e
+ * @see http://developer.apple.com/library/safari/#documentation/appleapplications/reference/WebKitDOMRef/CanvasRenderingContext2D_idl/Classes/CanvasRenderingContext2D/index.html
+ * @return {undefined}
+ */
+CanvasRenderingContext2D.prototype.setFillColor;
+
+/** 
+ * Note: Webkit only
+ * @param {number|string=} opt_a
+ * @param {number=} opt_b
+ * @param {number=} opt_c
+ * @param {number=} opt_d
+ * @param {number=} opt_e
+ * @see http://developer.apple.com/library/safari/#documentation/appleapplications/reference/WebKitDOMRef/CanvasRenderingContext2D_idl/Classes/CanvasRenderingContext2D/index.html
+ * @return {undefined}
+ */
+CanvasRenderingContext2D.prototype.setStrokeColor;
+
 /** @type {string} */
 CanvasRenderingContext2D.prototype.fillColor;
 
@@ -649,15 +673,15 @@ Document.prototype.head;
  */
 function DOMApplicationCache() {}
 
-/** @inheritDoc */
+/** @override */
 DOMApplicationCache.prototype.addEventListener = function(
     type, listener, useCapture) {};
 
-/** @inheritDoc */
+/** @override */
 DOMApplicationCache.prototype.removeEventListener = function(
     type, listener, useCapture) {};
 
-/** @inheritDoc */
+/** @override */
 DOMApplicationCache.prototype.dispatchEvent = function(evt) {};
 
 /**
@@ -781,15 +805,15 @@ var importScripts = function(var_args) {};
  */
 function WebWorker() {}
 
-/** @inheritDoc */
+/** @override */
 WebWorker.prototype.addEventListener = function(
     type, listener, useCapture) {};
 
-/** @inheritDoc */
+/** @override */
 WebWorker.prototype.removeEventListener = function(
     type, listener, useCapture) {};
 
-/** @inheritDoc */
+/** @override */
 WebWorker.prototype.dispatchEvent = function(evt) {};
 
 /**
@@ -822,15 +846,15 @@ WebWorker.prototype.onerror;
  */
 function Worker(opt_arg0) {}
 
-/** @inheritDoc */
+/** @override */
 Worker.prototype.addEventListener = function(
     type, listener, useCapture) {};
 
-/** @inheritDoc */
+/** @override */
 Worker.prototype.removeEventListener = function(
     type, listener, useCapture) {};
 
-/** @inheritDoc */
+/** @override */
 Worker.prototype.dispatchEvent = function(evt) {};
 
 /**
@@ -865,15 +889,15 @@ Worker.prototype.onerror = function() {};
  */
 function SharedWorker(scriptURL, opt_name) {}
 
-/** @inheritDoc */
+/** @override */
 SharedWorker.prototype.addEventListener = function(
     type, listener, useCapture) {};
 
-/** @inheritDoc */
+/** @override */
 SharedWorker.prototype.removeEventListener = function(
     type, listener, useCapture) {};
 
-/** @inheritDoc */
+/** @override */
 SharedWorker.prototype.dispatchEvent = function(evt) {};
 
 /**
@@ -1116,15 +1140,15 @@ MessageChannel.prototype.port2;
  */
 function MessagePort() {}
 
-/** @inheritDoc */
+/** @override */
 MessagePort.prototype.addEventListener = function(
     type, listener, useCapture) {};
 
-/** @inheritDoc */
+/** @override */
 MessagePort.prototype.removeEventListener = function(
     type, listener, useCapture) {};
 
-/** @inheritDoc */
+/** @override */
 MessagePort.prototype.dispatchEvent = function(evt) {};
 
 
@@ -1328,15 +1352,15 @@ TimeRanges.prototype.end = function(index) { return 0; };
  */
 function WebSocket(url, opt_protocol) {}
 
-/** @inheritDoc */
+/** @override */
 WebSocket.prototype.addEventListener = function(
     type, listener, useCapture) {};
 
-/** @inheritDoc */
+/** @override */
 WebSocket.prototype.removeEventListener = function(
     type, listener, useCapture) {};
 
-/** @inheritDoc */
+/** @override */
 WebSocket.prototype.dispatchEvent = function(evt) {};
 
 /**
@@ -1553,15 +1577,15 @@ XMLHttpRequest.prototype.mozResponseArrayBuffer;
  */
 function XMLHttpRequestEventTarget() {}
 
-/** @inheritDoc */
+/** @override */
 XMLHttpRequestEventTarget.prototype.addEventListener = function(
     type, listener, useCapture) {};
 
-/** @inheritDoc */
+/** @override */
 XMLHttpRequestEventTarget.prototype.removeEventListener = function(
     type, listener, useCapture) {};
 
-/** @inheritDoc */
+/** @override */
 XMLHttpRequestEventTarget.prototype.dispatchEvent = function(evt) {};
 
 /**

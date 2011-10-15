@@ -16,10 +16,10 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.NodeTraversal.AbstractShallowCallback;
 import com.google.javascript.jscomp.NodeTraversal.Callback;
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
 
@@ -93,15 +93,29 @@ public class FieldCleanupPass implements HotSwapCompilerPass {
       // We are a root GetProp
       if (NodeUtil.isGetProp(n) && !NodeUtil.isGetProp(p)) {
         String propName = getFieldName(n);
-        Iterable<ObjectType> types = ImmutableList.copyOf(
-            typeRegistry.getEachReferenceTypeWithProperty(propName));
-        for (ObjectType type : types) {
-          Node pNode = type.getPropertyNode(propName);
-          if (pNode != null && srcName.equals(pNode.getSourceFileName())) {
-            typeRegistry.unregisterPropertyOnType(propName, type);
-            type.removeProperty(propName);
-          }
+        JSType type = n.getFirstChild().getJSType();
+        if (type == null || type.toObjectType() == null) {
+          // Note cases like <primitive>.field
+          return;
         }
+        removeProperty(type.toObjectType(), propName);
+      }
+      if (n.getJSDocInfo() != null) {
+        n.getJSDocInfo().setAssociatedNode(null);
+      }
+    }
+
+    /**
+     * Removes a given property from a type and updates type-registry.
+     *
+     * @param type the object type to be updated, should not be null
+     * @param propName the property to remove
+     */
+    private void removeProperty(ObjectType type, String propName) {
+      Node pNode = type.getPropertyNode(propName);
+      if (pNode != null && srcName.equals(pNode.getSourceFileName())) {
+        typeRegistry.unregisterPropertyOnType(propName, type);
+        type.removeProperty(propName);
       }
     }
 
