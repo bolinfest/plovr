@@ -28,6 +28,7 @@ goog.require('goog.array');
 goog.require('goog.events.EventHandler');
 goog.require('goog.fx.Animation');
 goog.require('goog.fx.Transition.EventType');
+goog.require('goog.fx.TransitionBase.State');
 
 
 
@@ -171,7 +172,7 @@ goog.fx.AnimationParallelQueue.prototype.onBegin = function() {
 };
 
 
-/** @inheritDoc */
+/** @override */
 goog.fx.AnimationParallelQueue.prototype.executeChildrenAction = function(f) {
   goog.array.forEach(this.queue_, f);
 };
@@ -275,7 +276,7 @@ goog.fx.AnimationSerialQueue.prototype.playNext_ = function() {
   // dispatch of a BEGIN event), then we know that we must be restarting, so we
   // should stop all animations in the queue, reset the listeners, and rezero
   // the counter
-  if (this.getStateInternal() == goog.fx.Animation.State.PAUSED) {
+  if (this.getStateInternal() == goog.fx.TransitionBase.State.PAUSED) {
     this.reset_();
 
     goog.array.forEach(this.queue_, function(animation) {
@@ -323,7 +324,7 @@ goog.fx.AnimationSerialQueue.prototype.remove = function(animation) {
 };
 
 
-/** @inheritDoc */
+/** @override */
 goog.fx.AnimationSerialQueue.prototype.executeChildrenAction = function(f) {
   if (this.counter_ > 0) {
     f(this.queue_[this.counter_ - 1]);

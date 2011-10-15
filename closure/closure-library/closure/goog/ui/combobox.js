@@ -229,7 +229,7 @@ goog.ui.ComboBox.prototype.setEnabled = function(enabled) {
 };
 
 
-/** @inheritDoc */
+/** @override */
 goog.ui.ComboBox.prototype.enterDocument = function() {
   goog.ui.ComboBox.superClass_.enterDocument.call(this);
 
@@ -255,7 +255,7 @@ goog.ui.ComboBox.prototype.enterDocument = function() {
 };
 
 
-/** @inheritDoc */
+/** @override */
 goog.ui.ComboBox.prototype.exitDocument = function() {
   this.keyHandler_.dispose();
   delete this.keyHandler_;
@@ -274,7 +274,7 @@ goog.ui.ComboBox.prototype.canDecorate = function() {
 };
 
 
-/** @inheritDoc */
+/** @override */
 goog.ui.ComboBox.prototype.disposeInternal = function() {
   goog.ui.ComboBox.superClass_.disposeInternal.call(this);
 
@@ -752,7 +752,8 @@ goog.ui.ComboBox.prototype.onInputEvent_ = function(e) {
 goog.ui.ComboBox.prototype.handleInputChange_ = function() {
   var token = this.getTokenText_();
   this.setItemVisibilityFromToken_(token);
-  if (this.getDomHelper().getDocument().activeElement == this.input_) {
+  if (goog.dom.getActiveElementIE(this.getDomHelper().getDocument()) ==
+      this.input_) {
     // Do not alter menu visibility unless the user focus is currently on the
     // combobox (otherwise programmatic changes may cause the menu to become
     // visible).

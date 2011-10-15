@@ -431,9 +431,9 @@ goog.ui.AutoComplete.InputHandler.prototype.setCursorPosition = function(pos) {
 
 
 /**
- * Attaches the input handler to an element such as a textarea or input box.
- * The element could basically be anything as long as it exposes the correct
- * interface and events.
+ * Attaches the input handler to a target element. The target element
+ * should be a textarea, input box, or other focusable element with the
+ * same interface.
  * @param {Element|goog.events.EventTarget} target An element to attach the
  *     input handler too.
  */
@@ -454,8 +454,7 @@ goog.ui.AutoComplete.InputHandler.prototype.attachInput = function(target) {
     if (goog.dom.isElement(target)) {
       var ownerDocument = goog.dom.getOwnerDocument(
           /** @type {Element} */ (target));
-      var focusedElement = ownerDocument && ownerDocument.activeElement;
-      if (focusedElement == target) {
+      if (goog.dom.getActiveElementIE(ownerDocument) == target) {
         this.processFocus(/** @type {Element} */ (target));
       }
     }
@@ -597,7 +596,7 @@ goog.ui.AutoComplete.InputHandler.prototype.setTokenText = function(tokenText,
 };
 
 
-/** @inheritDoc */
+/** @override */
 goog.ui.AutoComplete.InputHandler.prototype.disposeInternal = function() {
   goog.ui.AutoComplete.InputHandler.superClass_.disposeInternal.call(this);
   if (this.activeTimeoutId_ != null) {
