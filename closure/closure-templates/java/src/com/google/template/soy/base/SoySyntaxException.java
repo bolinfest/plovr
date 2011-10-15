@@ -107,6 +107,7 @@ public class SoySyntaxException extends RuntimeException {
     return this;
   }
 
+
   @Override public String getMessage() {
     boolean locationKnown = sourceLocation.isKnown();
     boolean templateKnown = templateName != null;
@@ -124,10 +125,10 @@ public class SoySyntaxException extends RuntimeException {
     }
   }
 
-
+  
   /**
    * @return The original error message from the Soy compiler without any
-   *     metadata about the location where the error appears.
+   *     metadata about the location where the error appears.  
    */
   public String getOriginalMessage() {
     return super.getMessage();
