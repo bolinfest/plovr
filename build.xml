@@ -197,7 +197,7 @@
                   prefix="third_party/closure/goog"
                   />
       <zipfileset dir="${closure-templates.dir}/javascript/"
-                  includes="soyutils_usegoog.js, soydata.js"
+                  includes="soyutils_usegoog.js, soyutils.js"
                   prefix="soy" />
       <zipgroupfileset dir="${lib.dir}" includes="*.jar" />
       <zipgroupfileset dir="${closure-compiler.dir}/lib"
