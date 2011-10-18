@@ -1,8 +1,23 @@
 package org.plovr.cli;
 
 import org.kohsuke.args4j.Option;
+import org.plovr.soy.server.SoyRequestHandler;
 
 public class SoyWebCommandOptions extends AbstractCommandOptions {
+
+  /**
+   * By default, when a Soy file is rendered, the {@link SoyRequestHandler} uses
+   * the template by this name as the one to render as the response to the
+   * request. This may be overridden by the {@code templateToRender} constructor
+   * parameter.
+   */
+  private static final String DEFAULT_TEMPLATE_FOR_PAGE = "soyweb";
+
+  @Option(name = "--template",
+      aliases = {"-t"},
+      usage = "The port on which to run the server. Defaults to \"" +
+          DEFAULT_TEMPLATE_FOR_PAGE + "\".")
+  private String templateName = DEFAULT_TEMPLATE_FOR_PAGE;
 
   @Option(name = "--port",
       aliases = {"-p"},
@@ -25,6 +40,10 @@ public class SoyWebCommandOptions extends AbstractCommandOptions {
   private String compileTimeGlobalsFile;
 
   public SoyWebCommandOptions() {}
+
+  public String getTemplateName() {
+    return templateName;
+  }
 
   public int getPort() {
     return port;

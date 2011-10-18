@@ -1,0 +1,187 @@
+{namespace plovr.soyweb}
+
+/***/
+{template .base}
+
+{call plovr.header}
+  {param title: 'plovr SoyWeb command' /}
+  {param selected: 'docs.html' /}
+  {param secondaryHeading: true /}
+  {param secondarySelected: 'soyweb.html' /}
+{/call}
+
+<h2>SoyWeb Command</h2>
+
+SoyWeb is a simple web server built into plovr for serving static content. It is
+analogous to using Python's{sp}
+<a href="http://docs.python.org/library/simplehttpserver.html#module-SimpleHTTPServer"
+target="_blank"><code>SimpleHttpServer</code></a>, except SoyWeb serves a Soy
+file by rendering a template in the file as HTML.
+
+<h3>Motivation</h3>
+
+Oftentimes in web development, UI designers create mocks using HTML and CSS,
+and then developers have to write code or create templates to produce the same
+HTML, but with user data. This creates a burden for both designers and developers:
+
+<ul>
+<li>Designers frequently mock up multiple copies of the same UI with different
+    data sets, so they often copy-and-paste a lot of HTML across each mockup.
+    This makes it difficult to update all of the mockups consistently, so they
+    frequently get out of sync. By teaching designers how to use Soy for the
+    common HTML across each mockup, this duplication can be eliminated.
+<li>Developers often fail to implement a mock exactly as specified by the
+    designer, creating frustration for both parties. By using the exact same
+    template for both the mock and production, the mock will not get out of
+    sync. This is even more important when the designer continues to update the
+    mock after the developer has started implementing the UI that uses it.
+</ul>
+
+With the introduction of the{sp}
+<a href="http://groups.google.com/group/closure-templates-discuss/browse_thread/thread/7f85216f56636a8c"
+target="_blank">September 2011 release of Closure Templates</a>, it is now
+possible to declare list and map literals within a Soy file. As the following
+example demonstrates, this makes it particularly compelling to use SoyWeb for
+composing mocks of web UI.
+<p>
+Unlike other templating languages like PHP and JSP, Soy gives users just enough
+programming logic to eliminate duplicate HTML across pages (using template calls
+and loops), but not so much programming power that business logic will leak into
+the template. 
+
+<h3>Example: js/tasks.soy</h3>
+
+Consider the following file, <code>tasks.soy</code>, in a directory <code>js</code> that
+defines three templates: the UI for a task list, the boilerplate for a demo page,
+and an instance of the task list on a demo page:
+
+{literal}<pre>&#123;namespace tasks}
+
+/**
+ * @param title
+ * @param items
+ */
+&#123;template .list}
+&lt;h1>{$title}&lt;/h1>
+&lt;div>
+  {foreach $item in $items}
+    &lt;div class="{css task-item}">
+      &lt;div style="margin-left: {$item.indent * 24}px">
+        {$item.name}
+      &lt;/div>
+    &lt;/div>
+  {ifempty}
+    &lt;div class="{css tasks-complete}">
+      Nothing to do!
+    &lt;/div>
+  {/foreach}
+&lt;/div>
+&#123;/template}
+
+/**
+ * @param content
+ */
+&#123;template .demoPage}
+&lt;!doctype>
+&lt;html>
+&lt;head>
+  &lt;link rel="stylesheet" href="tasks.css">
+&lt;/head>
+&lt;body>
+  &#123;$content|noAutoescape}
+&lt;/body>
+&lt;/html>
+&#123;/template}
+
+/**
+ * This template will be rendered by SoyWeb when the user loads <b>tasks.soy</b>.
+ * It deliberately includes dummy data so the designer can get a feel for how
+ * the task list will appear with real data rather with minimal copy and paste.
+ */
+&#123;template .soyweb}
+{call .demoPage}
+  {param content}
+    {call .list}
+      {param title: 'Food Shopping' /}
+      {param items: [
+        ['indent': 0, 'name': 'cheese' ],
+        ['indent': 0, 'name': 'crackers' ],
+        ['indent': 0, 'name': 'condiments' ],
+        ['indent': 1, 'name': 'ketchup' ],
+        ['indent': 1, 'name': 'mayo' ],
+      ] /}
+    {/call}
+  {/param}
+{/call}
+&#123;/template}</pre>{/literal}
+
+To see how the rendered template looks using SoyWeb, run the following command:
+
+<pre>java -jar plovr.jar soyweb --dir js</pre>
+
+Then point your browser to <code>http://localhost:9811/tasks.html</code> to
+see the task list populated with the data specified by the{sp}
+<code>.soyweb</code> template.
+
+<p>
+
+Now creating another template with a different set of mock data is much less
+work, as <code>js/tasks2.soy</code> can reuse the existing templates:
+
+{literal}<pre>&#123;namespace tasks2}
+
+/**
+ * This template will be rendered by SoyWeb when the user loads <b>tasks2.soy</b>.
+ * This makes it possible to see how an empty task list will be rendered.
+ */
+&#123;template .soyweb}
+{call tasks.demoPage}
+  {param content}
+    {call tasks.list}
+      {param title: 'Food Shopping' /}
+      {param items: [] /}
+    {/call}
+  {/param}
+{/call}
+&#123;/template}</pre>{/literal}
+
+With SoyWeb is running, the rendered version of this template can be seen at{sp}
+<code>http://localhost:9811/tasks2.html</code>.
+
+<h3>Options</h3>
+
+SoyWeb has several command-line options that you can use to customize its
+behavior:
+
+<style>
+.option {lb}font-weight: bold{rb}
+</style>
+
+<ul>
+
+<li><code class="option">--dir</code> is the only required option: it specifies
+    the directory of files to serve. No files in parent directories of{sp}
+    <code class="option">--dir</code> will be served by SoyWeb.
+<li><code class="option">--port</code> is the port on which SoyWeb will handle
+    requests. The default is 9811 (which is one more than plovr's default port,
+    9810).
+<li><code class="option">--template</code> is the name of the template that
+    SoyWeb will use in a <code>.soy</code> file when it is requested. As shown
+    in the example, the default value is <code>soyweb</code>. Note that this
+    template cannot have any required arguments.
+<li><code class="option">--globals</code> refers to a JSON file containing a map
+    of global variable names to values. If supplied, SoyWeb will supply these
+    values as globals when rendering a template. See{sp}
+    <a href="http://code.google.com/p/plovr/source/browse/www-globals.js"
+       target="_blank">www-globals.js</a> for an example of this.
+<li><code class="option">--static</code> if specified, disables SoyWeb's default
+    serving behavior, which is to reload a template each time it is requested.
+    (This is ideal for development.)
+    This option is not generally recommended for use, though admittedly it is
+    used to serve the static content on{sp}
+    <a href="http://plovr.com/" target="_blank">plovr.com</a>. 
+</ul>
+
+{call plovr.footer /}
+
+{/template}

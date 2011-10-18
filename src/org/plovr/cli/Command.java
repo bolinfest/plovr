@@ -16,8 +16,7 @@ public enum Command {
 
   INFO("info", new InfoCommand()),
 
-  // This may not be part of this enum permanently.
-  SOY_SERVE("soyweb", new SoyWebCommand()),
+  SOYWEB("soyweb", new SoyWebCommand()),
 
   // TODO(bolinfest): Finalize the name of this command, as something like
   // "extractmessages" would be more descriptive, yet more to type.

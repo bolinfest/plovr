@@ -44,10 +44,16 @@ public class SoyRequestHandler implements HttpHandler {
 
   private final Config config;
 
+  /**
+   * The name of the template to render within a Soy namespace/file.
+   */
+  private final String templateToRender;
+
   private final SoyTofu tofu;
 
   public SoyRequestHandler(Config config) {
     this.config = config;
+    this.templateToRender = config.getTemplateToRender();
     this.tofu = config.isStatic() ? getSoyTofu(config) : null;
   }
 
@@ -112,7 +118,7 @@ public class SoyRequestHandler implements HttpHandler {
     SoyFileNode node = parser.parseSoyFile();
 
     String namespace = node.getNamespace();
-    String templateName = namespace + ".base";
+    String templateName = namespace + "." + templateToRender;
 
     SoyTofu tofu = getSoyTofu();
     final Map<String, ?> data = ImmutableMap.of();

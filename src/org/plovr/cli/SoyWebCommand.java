@@ -48,6 +48,7 @@ public class SoyWebCommand extends AbstractCommandRunner<SoyWebCommandOptions> {
     }
 
     Config config = new Config(
+        options.getTemplateName(),
         options.getPort(),
         new File(options.getDir()),
         options.isStatic(),

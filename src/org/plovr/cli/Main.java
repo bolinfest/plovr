@@ -22,6 +22,7 @@ public final class Main {
     System.err.println(" info     show the versions of the Closure Tools packaged with plovr");
     System.err.println(" extract  extract messages from the Soy files");
     System.err.println(" serve    start the plovr web server");
+    System.err.println(" soyweb   serve static content as well as Soy");
     System.exit(1);
   }
 

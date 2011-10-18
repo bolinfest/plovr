@@ -5,6 +5,8 @@ import java.util.Map;
 
 public final class Config {
 
+  private final String templateToRender;
+
   private final int port;
 
   private final File contentDirectory;
@@ -13,11 +15,21 @@ public final class Config {
 
   private final Map<String, ?> compileTimeGlobals;
 
-  public Config(int port, File contentDirectory, boolean isStatic, Map<String, ?> compileTimeGlobals) {
+  public Config(
+      String templateToRender,
+      int port,
+      File contentDirectory,
+      boolean isStatic,
+      Map<String, ?> compileTimeGlobals) {
+    this.templateToRender = templateToRender;
     this.port = port;
     this.contentDirectory = contentDirectory;
     this.isStatic = isStatic;
     this.compileTimeGlobals = compileTimeGlobals;
+  }
+
+  public String getTemplateToRender() {
+    return templateToRender;
   }
 
   public int getPort() {

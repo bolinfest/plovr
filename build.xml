@@ -271,6 +271,7 @@
       <jvmarg value="-Xdebug" />
       <jvmarg value="-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=8000"/>
       <arg value="soyweb" />
+      <arg line="--template base" />
       <arg line="--dir ${www.dir}" />
       <arg line="--globals ${basedir}/www-globals.js" />
     </java>
@@ -333,6 +334,7 @@
           fork="true"
           maxmemory="128m">
       <arg value="soyweb" />
+      <arg line="--template base" />
       <arg line="--dir ${build.dir.www}" />
       <arg line="--static" />
       <arg line="--globals ${basedir}/prod-globals.js" />
