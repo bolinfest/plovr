@@ -21,5 +21,6 @@
 	<classpathentry kind="lib" path="closure/closure-templates/java/lib/guice-multibindings-3.0.jar"/>
 	<classpathentry kind="lib" path="closure/closure-templates/java/lib/icu4j-core.jar"/>
 	<classpathentry kind="lib" path="closure/closure-templates/java/lib/javax.inject.jar"/>
+	<classpathentry kind="lib" path="closure/closure-compiler/lib/ant.jar"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>
