@@ -27,6 +27,7 @@ public enum Handler {
   MODULES("/modules", ModulesHandler.class),
   SIZE("/size", SizeHandler.class),
   SOURCEMAP("/sourcemap", SourceMapHandler.class),
+  TEST("/test", TestHandler.class),
   VIEW("/view", ViewFileHandler.class),
   ;
 

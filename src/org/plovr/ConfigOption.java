@@ -80,6 +80,30 @@ public enum ConfigOption {
     }
   }),
 
+  TESTS("tests", new ConfigUpdater() {
+    @Override
+    public void apply(String path, Config.Builder builder) {
+      String resolvedPath = maybeResolvePath(path, builder);
+      builder.addTestPath(resolvedPath);
+    }
+
+    @Override
+    public void apply(JsonArray paths, Config.Builder builder) {
+      for (JsonElement item : paths) {
+        String path = GsonUtil.stringOrNull(item);
+        if (path != null) {
+          apply(path, builder);
+        }
+      }
+    }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetTestPaths();
+      return true;
+    }
+  }),
+
   EXTERNS("externs", new ConfigUpdater() {
     @Override
     public void apply(String extern, Config.Builder builder) {

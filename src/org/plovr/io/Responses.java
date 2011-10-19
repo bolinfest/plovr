@@ -42,9 +42,19 @@ public final class Responses {
 
   public static void writePlainText(String text, HttpExchange exchange)
   throws IOException {
+    writeText(text, "text/plain", exchange);
+  }
+
+  public static void writeHtml(String html, HttpExchange exchange)
+  throws IOException {
+    writeText(html, "text/html", exchange);
+  }
+
+  private static void writeText(String text, String contentType,
+      HttpExchange exchange) throws IOException {
     // Write the Content-Type and Content-Length headers.
     Headers responseHeaders = exchange.getResponseHeaders();
-    responseHeaders.set("Content-Type", "text/plain");
+    responseHeaders.set("Content-Type", contentType);
     exchange.sendResponseHeaders(200, text.length());
 
     // Write the plain text to the response and close it.

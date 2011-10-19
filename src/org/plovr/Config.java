@@ -15,6 +15,7 @@ import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
+import org.plovr.soy.server.FileUtil;
 import org.plovr.util.Pair;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -77,6 +78,8 @@ public final class Config implements Comparable<Config> {
 
   @Nullable
   private final ModuleConfig moduleConfig;
+
+  private final List<String> testPaths;
 
   private final ImmutableList<String> soyFunctionPlugins;
 
@@ -152,6 +155,7 @@ public final class Config implements Comparable<Config> {
       String rootConfigFileContent,
       Manifest manifest,
       @Nullable ModuleConfig moduleConfig,
+      List<String> testPaths,
       List<String> soyFunctionPlugins,
       CompilationMode compilationMode,
       WarningLevel warningLevel,
@@ -187,6 +191,7 @@ public final class Config implements Comparable<Config> {
     this.rootConfigFileContent = rootConfigFileContent;
     this.manifest = manifest;
     this.moduleConfig = moduleConfig;
+    this.testPaths = ImmutableList.copyOf(testPaths);
     this.soyFunctionPlugins = ImmutableList.copyOf(soyFunctionPlugins);
     this.compilationMode = compilationMode;
     this.warningLevel = warningLevel;
@@ -369,6 +374,21 @@ public final class Config implements Comparable<Config> {
 
   public File getPropertyMapOutputFile() {
     return propertyMapOutputFile;
+  }
+
+  /**
+   * @return the file under a test directory, if it exists, or null
+   */
+  public @Nullable File getTestFile(String path) {
+    for (String testPath : testPaths) {
+      File testFile = new File(testPath, path);
+      // Make sure the file exists and is a child of the testPath so there are
+      // no security leaks by requesting a path with ../ in it.
+      if (testFile.exists() && FileUtil.contains(new File(testPath), testFile)) {
+        return testFile;
+      }
+    }
+    return null;
   }
 
   public CompilerOptions getCompilerOptions(PlovrClosureCompiler compiler) {
@@ -704,6 +724,8 @@ public final class Config implements Comparable<Config> {
 
     private List<JsInput> builtInExterns = null;
 
+    private List<String> testPaths = Lists.newArrayList();
+
     private ImmutableList.Builder<String> soyFunctionPlugins = null;
 
     private ListMultimap<CustomPassExecutionTime, CompilerPassFactory> customPasses = ImmutableListMultimap.of();
@@ -793,6 +815,7 @@ public final class Config implements Comparable<Config> {
       this.moduleConfigBuilder = (config.moduleConfig == null)
           ? null
           : ModuleConfig.builder(config.moduleConfig);
+      this.testPaths = config.testPaths;
       this.soyFunctionPlugins = config.hasSoyFunctionPlugins()
           ? new ImmutableList.Builder<String>().addAll(config.getSoyFunctionPlugins())
           : null;
@@ -911,6 +934,15 @@ public final class Config implements Comparable<Config> {
 
     public void resetModuleConfigBuilder() {
       moduleConfigBuilder = null;
+    }
+
+    public void addTestPath(String path) {
+      Preconditions.checkNotNull(path);
+      testPaths.add(path);
+    }
+
+    public void resetTestPaths() {
+      testPaths.clear();
     }
 
     /**
@@ -1141,6 +1173,7 @@ public final class Config implements Comparable<Config> {
           rootConfigFileContent,
           manifest,
           moduleConfig,
+          testPaths,
           soyFunctionNames,
           compilationMode,
           warningLevel,

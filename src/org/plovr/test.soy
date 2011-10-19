@@ -1,0 +1,19 @@
+{namespace org.plovr}
+
+/**
+ * @param title
+ * @param baseJsUrl
+ * @param testJsUrl
+ */
+{template .test}
+<!doctype html>
+<html>
+<head>
+  <title>{$title} test</title>
+</head>
+<body>
+  <script src="{$baseJsUrl}"></script>
+  <script src="{$testJsUrl}"></script>
+</body>
+</html>
+{/template}
