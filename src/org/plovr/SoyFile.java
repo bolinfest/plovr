@@ -3,11 +3,13 @@ package org.plovr;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 
 import org.plovr.io.Files;
 
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Module;
@@ -28,28 +30,37 @@ public class SoyFile extends LocalFileJsInput {
 
   private static final Logger logger = Logger.getLogger("org.plovr.SoyFile");
 
-  private static final SoyJsSrcOptions SOY_OPTIONS;
+  private static final Map<SoyFileOptions, SoyJsSrcOptions> jsSrcOptionsMap =
+      Maps.newHashMap();
 
   private final Injector injector;
 
-  static {
-    SoyJsSrcOptions jsSrcOptions = new SoyJsSrcOptions();
-    jsSrcOptions.setShouldGenerateJsdoc(true);
-    jsSrcOptions.setShouldProvideRequireSoyNamespaces(true);
-    jsSrcOptions.setShouldDeclareTopLevelNamespaces(true);
+  private final SoyJsSrcOptions jsSrcOptions;
 
-    // TODO(mbolin): Make this configurable, though for now, prefer CONCAT
-    // because the return type in STRINGBUILDER mode is {string|undefined}
-    // whereas in CONCAT mode, it is simply {string}, which is much simplier to
-    // deal with in the context of the Closure Compiler's type system.
-    jsSrcOptions.setCodeStyle(CodeStyle.CONCAT);
-
-    SOY_OPTIONS = jsSrcOptions;
+  SoyFile(String name, File source, SoyFileOptions soyFileOptions) {
+    super(name, source);
+    this.injector = createInjector(soyFileOptions.pluginModuleNames);
+    this.jsSrcOptions = get(soyFileOptions);
   }
 
-  SoyFile(String name, File source, List<String> pluginModuleNames) {
-    super(name, source);
-    this.injector = createInjector(pluginModuleNames);
+  private static SoyJsSrcOptions get(SoyFileOptions options) {
+    SoyJsSrcOptions value = jsSrcOptionsMap.get(options);
+    if (value == null) {
+      SoyJsSrcOptions jsSrcOptions = new SoyJsSrcOptions();
+      jsSrcOptions.setShouldGenerateJsdoc(true);
+      jsSrcOptions.setShouldProvideRequireSoyNamespaces(
+          options.useClosureLibrary);
+      jsSrcOptions.setShouldDeclareTopLevelNamespaces(
+          options.useClosureLibrary);
+
+      // TODO(mbolin): Make this configurable, though for now, prefer CONCAT
+      // because the return type in STRINGBUILDER mode is {string|undefined}
+      // whereas in CONCAT mode, it is simply {string}, which is much simplier
+      // to deal with in the context of the Closure Compiler's type system.
+      jsSrcOptions.setCodeStyle(CodeStyle.CONCAT);
+      jsSrcOptionsMap.put(options, value);
+    }
+    return value;
   }
 
   @Override
@@ -60,7 +71,7 @@ public class SoyFile extends LocalFileJsInput {
     SoyFileSet fileSet = builder.build();
     final SoyMsgBundle msgBundle = null;
     try {
-      String code = fileSet.compileToJsSrc(SOY_OPTIONS, msgBundle).get(0);
+      String code = fileSet.compileToJsSrc(jsSrcOptions, msgBundle).get(0);
       logger.fine(code);
       return code;
     } catch (SoySyntaxException e) {

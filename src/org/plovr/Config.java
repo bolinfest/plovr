@@ -1155,14 +1155,17 @@ public final class Config implements Comparable<Config> {
           }
         }
 
+        SoyFileOptions soyFileOptions = new SoyFileOptions(soyFunctionNames,
+            !this.excludeClosureLibrary);
+
         manifest = new Manifest(
             excludeClosureLibrary,
             closureLibraryDirectory,
             Lists.transform(paths, STRING_TO_FILE),
-            createJsInputs(soyFunctionNames),
+            createJsInputs(soyFileOptions),
             externs,
             builtInExterns != null ? ImmutableList.copyOf(builtInExterns) : null,
-            soyFunctionNames,
+            soyFileOptions,
             customExternsOnly);
       } else {
         manifest = this.manifest;
@@ -1207,7 +1210,7 @@ public final class Config implements Comparable<Config> {
       return config;
     }
 
-    private List<JsInput> createJsInputs(List<String> soyPluginModuleNames) {
+    private List<JsInput> createJsInputs(SoyFileOptions soyFileOptions) {
       ImmutableList<Pair<File, String>> inputFiles = ImmutableList.copyOf(inputs);
       List<JsInput> jsInputs = Lists.newArrayListWithCapacity(inputFiles.size());
       for (Pair<File, String> pair : inputFiles) {
@@ -1215,7 +1218,7 @@ public final class Config implements Comparable<Config> {
         String name = pair.getSecond();
 
         jsInputs.add(
-            LocalFileJsInput.createForFileWithName(file, name, soyPluginModuleNames));
+            LocalFileJsInput.createForFileWithName(file, name, soyFileOptions));
       }
 
       return jsInputs;
