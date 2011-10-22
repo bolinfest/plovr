@@ -46,18 +46,16 @@ public class SoyFile extends LocalFileJsInput {
   private static SoyJsSrcOptions get(SoyFileOptions options) {
     SoyJsSrcOptions value = jsSrcOptionsMap.get(options);
     if (value == null) {
-      SoyJsSrcOptions jsSrcOptions = new SoyJsSrcOptions();
-      jsSrcOptions.setShouldGenerateJsdoc(true);
-      jsSrcOptions.setShouldProvideRequireSoyNamespaces(
-          options.useClosureLibrary);
-      jsSrcOptions.setShouldDeclareTopLevelNamespaces(
-          options.useClosureLibrary);
+      value = new SoyJsSrcOptions();
+      value.setShouldGenerateJsdoc(true);
+      value.setShouldProvideRequireSoyNamespaces(options.useClosureLibrary);
+      value.setShouldDeclareTopLevelNamespaces(options.useClosureLibrary);
 
       // TODO(mbolin): Make this configurable, though for now, prefer CONCAT
       // because the return type in STRINGBUILDER mode is {string|undefined}
       // whereas in CONCAT mode, it is simply {string}, which is much simplier
       // to deal with in the context of the Closure Compiler's type system.
-      jsSrcOptions.setCodeStyle(CodeStyle.CONCAT);
+      value.setCodeStyle(CodeStyle.CONCAT);
       jsSrcOptionsMap.put(options, value);
     }
     return value;
