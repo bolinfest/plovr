@@ -1,10 +1,13 @@
 package org.plovr;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+
 import java.io.File;
 import java.util.Collection;
 import java.util.List;
 
-import junit.framework.TestCase;
+import org.junit.Test;
 
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
@@ -16,7 +19,7 @@ import com.google.javascript.jscomp.JSSourceFile;
  *
  * @author bolinfest@gmail.com (Michael Bolin)
  */
-public class ManifestTest extends TestCase {
+public class ManifestTest {
 
   /** Converts a {@link JSSourceFile} to its name. */
   private static Function<JSSourceFile, String> JS_SOURCE_FILE_TO_NAME =
@@ -38,6 +41,7 @@ public class ManifestTest extends TestCase {
 
   private final SoyFileOptions soyFileOptions = new SoyFileOptions();
 
+  @Test
   public void testSimpleManifest() throws CompilationException {
     File closureLibraryDirectory = new File("closure/closure-library/closure/goog/");
 
@@ -94,6 +98,7 @@ public class ManifestTest extends TestCase {
     assertEquals(expectedNames, Lists.transform(inputs, JS_SOURCE_FILE_TO_NAME));
   }
 
+  @Test
   public void testCompilationOrder() throws CompilationException {
     File closureLibraryDirectory = new File("closure/closure-library/closure/goog/");
 

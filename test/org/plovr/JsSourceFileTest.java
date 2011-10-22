@@ -1,17 +1,21 @@
 package org.plovr;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 import java.io.File;
 import java.util.List;
 
-import junit.framework.TestCase;
+import org.junit.Test;
 
 /**
  * {@link JsSourceFileTest} is a unit test for {@link JsSourceFile}.
  *
  * @author bolinfest@gmail.com (Michael Bolin)
  */
-public class JsSourceFileTest extends TestCase {
+public class JsSourceFileTest {
 
+  @Test
   public void testProvidesAndRequireParsing() {
     String path = "test/org/plovr/example.js";
     File testFile = new File(path);
