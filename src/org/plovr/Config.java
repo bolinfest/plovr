@@ -79,7 +79,7 @@ public final class Config implements Comparable<Config> {
   @Nullable
   private final ModuleConfig moduleConfig;
 
-  private final List<String> testPaths;
+  private final File testTemplate;
 
   private final ImmutableList<String> soyFunctionPlugins;
 
@@ -155,7 +155,7 @@ public final class Config implements Comparable<Config> {
       String rootConfigFileContent,
       Manifest manifest,
       @Nullable ModuleConfig moduleConfig,
-      List<String> testPaths,
+      File testTemplate,
       List<String> soyFunctionPlugins,
       CompilationMode compilationMode,
       WarningLevel warningLevel,
@@ -191,7 +191,7 @@ public final class Config implements Comparable<Config> {
     this.rootConfigFileContent = rootConfigFileContent;
     this.manifest = manifest;
     this.moduleConfig = moduleConfig;
-    this.testPaths = ImmutableList.copyOf(testPaths);
+    this.testTemplate = testTemplate;
     this.soyFunctionPlugins = ImmutableList.copyOf(soyFunctionPlugins);
     this.compilationMode = compilationMode;
     this.warningLevel = warningLevel;
@@ -376,15 +376,25 @@ public final class Config implements Comparable<Config> {
     return propertyMapOutputFile;
   }
 
+  public File getTestTemplate() {
+    return testTemplate;
+  }
+
   /**
+   * @param path a relative path, such as "foo/bar_test.js" or
+   *     "foo/bar_test.html".
    * @return the file under a test directory, if it exists, or null
    */
   public @Nullable File getTestFile(String path) {
-    for (String testPath : testPaths) {
-      File testFile = new File(testPath, path);
-      // Make sure the file exists and is a child of the testPath so there are
-      // no security leaks by requesting a path with ../ in it.
-      if (testFile.exists() && FileUtil.contains(new File(testPath), testFile)) {
+    for (File dependency : manifest.getDependencies()) {
+      if (!dependency.isDirectory()) {
+        continue;
+      }
+
+      File testFile = new File(dependency, path);
+      // Make sure the file exists and is a child of the dependency directory so
+      // there are no security leaks by requesting a path with ../ in it.
+      if (testFile.exists() && FileUtil.contains(dependency, testFile)) {
         return testFile;
       }
     }
@@ -724,7 +734,7 @@ public final class Config implements Comparable<Config> {
 
     private List<JsInput> builtInExterns = null;
 
-    private List<String> testPaths = Lists.newArrayList();
+    private File testTemplate = null;
 
     private ImmutableList.Builder<String> soyFunctionPlugins = null;
 
@@ -815,7 +825,7 @@ public final class Config implements Comparable<Config> {
       this.moduleConfigBuilder = (config.moduleConfig == null)
           ? null
           : ModuleConfig.builder(config.moduleConfig);
-      this.testPaths = config.testPaths;
+      this.testTemplate = config.testTemplate;
       this.soyFunctionPlugins = config.hasSoyFunctionPlugins()
           ? new ImmutableList.Builder<String>().addAll(config.getSoyFunctionPlugins())
           : null;
@@ -936,13 +946,8 @@ public final class Config implements Comparable<Config> {
       moduleConfigBuilder = null;
     }
 
-    public void addTestPath(String path) {
-      Preconditions.checkNotNull(path);
-      testPaths.add(path);
-    }
-
-    public void resetTestPaths() {
-      testPaths.clear();
+    public void setTestTemplate(File testTemplate) {
+      this.testTemplate = testTemplate;
     }
 
     /**
@@ -1176,7 +1181,7 @@ public final class Config implements Comparable<Config> {
           rootConfigFileContent,
           manifest,
           moduleConfig,
-          testPaths,
+          testTemplate,
           soyFunctionNames,
           compilationMode,
           warningLevel,

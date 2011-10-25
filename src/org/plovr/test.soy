@@ -17,3 +17,300 @@
 </body>
 </html>
 {/template}
+
+/**
+ * A list of the _test.html URLs in this config.
+ *
+ * @param configId
+ * @param tests array of paths to _test.html URLs 
+ */
+{template .listTests}
+<!doctype html>
+<html>
+<head>
+  <title>{$configId} Tests</title>
+</head>
+<body>
+{foreach $test in $tests}
+  {if isFirst($test)}
+    <h3>All Tests ({length($tests)})</h3>
+  
+    <a href="all">Run all tests</a>
+    <p>
+  
+    <ul>
+  {/if}
+
+    <li><a href="/test/{$configId}/{$test}">{$test}</a>
+
+  {if isLast($test)}
+    </ul>
+  {/if}
+
+{ifempty}
+  No tests for {$configId}.
+  {sp}
+  <a href="/">Back to the config list.</a>
+{/foreach}
+</body>
+</html>
+{/template}
+
+/**
+ * A test runner to run all of the _test.html URLs in this config.
+ *
+ * @param configId
+ * @param tests array of paths to _test.html URLs 
+ */
+{template .all}
+<!doctype html>
+<html>
+<head>
+  <title>{$configId} Test Runner</title>
+</head>
+<body>
+{if length($tests)}
+  {call .testRunner data="all" /}
+{else}
+  No tests for config <b>{$configId}</b>.
+  {sp}
+  <a href="/">Back to the config list.</a>
+{/if}
+
+</body>
+</html>
+{/template}
+
+/**
+ * @param configId
+ * @param tests array of paths to _test.html URLs 
+ */
+{template .testRunner}
+{call .testRunnerCss /}
+
+<h1>{$configId} - All JsUnit Tests</h1>
+<p id="header">
+  <a href="list">List of Individual Tests</a>
+  {sp}|{sp}
+  <a href="/">Home</a>
+</p>
+
+<div id="runner"></div>
+//  Use a form so browser persists input values
+<form id="footer" onsubmit="return false">
+  Settings:<br>
+  <input type="checkbox" name="hidepasses" id="hidepasses" checked>
+  <label for="hidepasses">Hide passes</label><br>
+  <input type="checkbox" name="parallel" id="parallel" checked>
+  <label for="parallel">Run in parallel</label>
+  <small>(timing stats not available if enabled)</small><br>
+  <input type="text" name="filter" id="filter" value="">
+  <label for="filter">Run only tests for path</label>
+</form>
+
+<script src="/input/{$configId}/closure/goog/base.js"></script>
+{literal}
+<script>
+goog.require('goog.userAgent.product');
+goog.require('goog.testing.MultiTestRunner');
+</script>
+<script>
+(function() {
+{/literal}
+  var allTests = [
+  {foreach $test in $tests}
+    "/test/{$configId}/{$test}"{if not isLast($test)},{\n}{/if}
+  {/foreach}
+  ];
+{literal}
+  // Add the query string to each URL so that ?mode=advanced can be used for
+  // the benefit of plovr.
+  var queryString = location.search;
+  for (var i = 0, len = allTests.length; i < len; i++) {
+    allTests[i] = allTests[i] + queryString;
+  }
+
+  var hidePassesInput = document.getElementById('hidepasses');
+  var parallelInput = document.getElementById('parallel');
+  var filterInput = document.getElementById('filter');
+  
+  function setFilterFunction() {
+    var matchValue = filterInput.value || '';
+    testRunner.setFilterFunction(function(testPath) {
+      return testPath.indexOf(matchValue) > -1;
+    });
+  }
+  
+  // Create a test runner and render it.
+  var testRunner = new goog.testing.MultiTestRunner()
+      .setName(document.title)
+      .setPoolSize(parallelInput.checked ? 8 : 1)
+      .setStatsBucketSizes(5, 500)
+      .setHidePasses(hidePassesInput.checked)
+      .addTests(allTests);
+  testRunner.render(document.getElementById('runner'));
+  
+  goog.events.listen(hidePassesInput, 'click', function(e) {
+    testRunner.setHidePasses(e.target.checked);
+  });
+  
+  goog.events.listen(parallelInput, 'click', function(e) {
+    testRunner.setPoolSize(e.target.checked ? 8 : 1);
+  });
+  
+  goog.events.listen(filterInput, 'keyup', setFilterFunction);
+  setFilterFunction();
+
+  // Automatically start the test runner.
+  testRunner.start();
+
+  // Export the testRunner so it can be polled by WebDriver.
+  goog.exportSymbol('plovr.MultiTestRunner', testRunner);
+})();
+</script>
+{/literal}
+
+{/template}
+
+/***/
+{template .testRunnerCss}
+{literal}
+<style>
+.goog-testrunner {
+  background-color: #EEE;
+  border: 1px solid #999;
+  padding: 10px;
+  padding-bottom: 25px;
+}
+
+.goog-testrunner-progress {
+  width: auto;
+  height: 20px;
+  background-color: #FFF;
+  border: 1px solid #999;
+}
+
+.goog-testrunner-progress table {
+  width: 100%;
+  height: 20px;
+  border-collapse: collapse;
+}
+
+.goog-testrunner-buttons {
+  margin-top: 7px;
+}
+
+.goog-testrunner-buttons button {
+  width: 75px;
+}
+
+.goog-testrunner-log,
+.goog-testrunner-report,
+.goog-testrunner-stats {
+  margin-top: 7px;
+  width: auto;
+  height: 400px;
+  background-color: #FFF;
+  border: 1px solid #999;
+  font: normal medium monospace;
+  padding: 5px;
+  overflow: auto;  /* Opera doesn't support overflow-y. */
+  overflow-y: scroll;
+  overflow-x: auto;
+}
+
+.goog-testrunner-report div {
+  margin-bottom: 6px;
+  border-bottom: 1px solid #999;
+}
+
+.goog-testrunner-stats table {
+  margin-top: 20px;
+  border-collapse: collapse;
+  border: 1px solid #EEE;
+}
+
+.goog-testrunner-stats td,
+.goog-testrunner-stats th {
+  padding: 2px 6px;
+  border: 1px solid #F0F0F0;
+}
+
+.goog-testrunner-stats th {
+  font-weight: bold;
+}
+
+.goog-testrunner-stats .center {
+  text-align: center;
+}
+
+.goog-testrunner-progress-summary {
+  font: bold small sans-serif;
+}
+
+.goog-testrunner iframe {
+  position: absolute;
+  left: -640px;
+  top: -480px;
+  width: 640px;
+  height: 480px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.goog-testrunner-report-failure {
+  color: #900;
+}
+
+.goog-testrunner-reporttab,
+.goog-testrunner-logtab,
+.goog-testrunner-statstab {
+  float: left;
+  width: 50px;
+  height: 16px;
+  text-align: center;
+  font: normal small arial, helvetica, sans-serif;
+  color: #666;
+  background-color: #DDD;
+  border: 1px solid #999;
+  border-top: 0;
+  cursor: pointer;
+}
+
+.goog-testrunner-reporttab,
+.goog-testrunner-logtab {
+  border-right: 0;
+}
+
+.goog-testrunner-activetab {
+  font-weight: bold;
+  color: #000;
+  background-color: #CCC;
+}
+
+h1 {
+  font: normal x-large arial, helvetica, sans-serif;
+  margin: 0;
+}
+p, form {
+  font: normal small sans-serif;
+  margin: 0;
+}
+#header {
+  position: absolute;
+  right: 10px;
+  top: 13px;
+  color: #090;
+}
+#footer {
+  margin-top: 8px;
+}
+.warning {
+  font-size: 14px;
+  font-weight: bold;
+  width: 80%;
+}
+</style>
+{/literal}
+{/template}

@@ -3,15 +3,19 @@ package org.plovr;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.plovr.io.Responses;
 
 import com.google.common.base.Charsets;
+import com.google.common.collect.Sets;
 import com.google.common.io.Files;
 import com.google.common.io.Resources;
 import com.google.template.soy.SoyFileSet;
+import com.google.template.soy.data.SoyListData;
 import com.google.template.soy.data.SoyMapData;
 import com.google.template.soy.tofu.SoyTofu;
 import com.sun.net.httpserver.HttpExchange;
@@ -50,7 +54,13 @@ public class TestHandler extends AbstractGetHandler {
     }
     String name = matcher.group(1);
 
-    if (name.endsWith("_test.js")) {
+    if ("all".equals(name)) {
+      writeTestPage("org.plovr.all", config, exchange);
+      return;
+    } else if ("list".equals(name)) {
+      writeTestPage("org.plovr.listTests", config, exchange);
+      return;
+    } else if (name.endsWith("_test.js")) {
       // Serve the test code, if it exists.
       File testJsFile = config.getTestFile(name);
       if (testJsFile != null) {
@@ -84,6 +94,7 @@ public class TestHandler extends AbstractGetHandler {
    */
   private boolean writeSyntheticTestFile(String name, Config config,
       HttpExchange exchange) throws IOException {
+    // Unlike replace(), replaceFirst() takes a regex.
     String jsFileName = name.replaceFirst("_test\\.html$", "_test.js");
     if (config.getTestFile(jsFileName) == null) {
       return false;
@@ -99,8 +110,76 @@ public class TestHandler extends AbstractGetHandler {
         "baseJsUrl", baseJsUrl,
         "testJsUrl", testJsUrl);
 
-    String html = TOFU.newRenderer("org.plovr.test").setData(mapData).render();
+    SoyTofu testTemplateTofu = getTestTemplateTofu(config);
+    String html = testTemplateTofu.newRenderer("org.plovr.test").setData(
+        mapData).render();
     Responses.writeHtml(html, exchange);
     return true;
+  }
+
+  private static SoyTofu getTestTemplateTofu(Config config) {
+    if (config.getTestTemplate() != null) {
+      SoyFileSet.Builder builder = new SoyFileSet.Builder();
+      builder.add(config.getTestTemplate());
+      SoyFileSet fileSet = builder.build();
+      return fileSet.compileToJavaObj();
+    } else {
+      return TOFU;
+    }
+  }
+
+  private static void writeTestPage(String templateName, Config config,
+      HttpExchange exchange) throws IOException {
+    Set<String> testFilePaths = getRelativeTestFilePaths(config);
+
+    SoyListData tests = new SoyListData(testFilePaths);
+    SoyMapData soyData = new SoyMapData(
+        "configId", config.getId(),
+        "tests", tests);
+    String html = TOFU.newRenderer(templateName).setData(
+        soyData).render();
+    Responses.writeHtml(html, exchange);
+  }
+
+  /**
+   * @return all paths to _test.html files, none of which start with a leading
+   *     slash
+   */
+  private static Set<String> getRelativeTestFilePaths(Config config) {
+    Manifest manifest = config.getManifest();
+    TreeSet<String> testFilePaths = Sets.newTreeSet();
+
+    for (File dependency : manifest.getDependencies()) {
+      if (!dependency.isDirectory()) {
+        continue;
+      }
+      addAllTestFiles(dependency, dependency, testFilePaths);
+    }
+
+    return testFilePaths;
+  }
+
+  /**
+   * Each value in to testFilePaths must not have a leading slash.
+   */
+  private static void addAllTestFiles(File base, File directory,
+      Set<String> testFilePaths) {
+    for (File entry : directory.listFiles()) {
+      if (entry.isDirectory()) {
+        addAllTestFiles(base, entry, testFilePaths);
+      } else if (entry.isFile()) {
+        if (entry.getName().endsWith("_test.js")) {
+          String basePath = base.getAbsolutePath();
+          String testPath = entry.getAbsolutePath();
+          String relativePath = testPath.substring(basePath.length());
+          if (relativePath.startsWith("/")) {
+            relativePath = relativePath.substring(1);
+          }
+          // Unlike replace(), replaceFirst() takes a regex.
+          relativePath = relativePath.replaceFirst("_test\\.js$", "_test.html");
+          testFilePaths.add(relativePath);
+        }
+      }
+    }
   }
 }
