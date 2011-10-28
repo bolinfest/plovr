@@ -302,6 +302,9 @@ public enum ConfigOption {
    */
   // TODO(bolinfest): A better approach may be to fix the source map, in which
   // case this option could be eliminated.
+  // Note: even if sourcemaps are fixed, this option should still be supported:
+  // http://code.google.com/p/plovr/issues/detail?id=41
+  // http://code.google.com/p/plovr/issues/detail?id=50
   MODULE_INFO_PATH("module-info-path",
       new ConfigUpdater() {
     @Override
