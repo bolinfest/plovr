@@ -3,10 +3,12 @@ package org.plovr.soy.server;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 
+import org.plovr.cli.HttpServerUtil;
+
 import com.sun.net.httpserver.HttpServer;
 
 /**
- * {@link Server}
+ * {@link Server} for SoyWeb.
  *
  * @author bolinfest@gmail.com (Michael Bolin)
  */
@@ -29,6 +31,8 @@ public final class Server implements Runnable {
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
+
+    HttpServerUtil.printListeningStatus(server);
 
     server.createContext("/", new RequestHandlerSelector(config));
     server.start();

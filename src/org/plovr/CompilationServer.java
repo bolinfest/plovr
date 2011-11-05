@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executors;
 
+import org.plovr.cli.HttpServerUtil;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
@@ -104,7 +106,7 @@ public final class CompilationServer implements Runnable {
     port = serverAddress.getPort();
 
     // Feature request http://code.google.com/p/plovr/issues/detail?id=23
-    System.err.println("Listening on " + serverAddress);
+    HttpServerUtil.printListeningStatus(server);
 
     // Register all of the handlers.
     for (Handler handler : Handler.values()) {

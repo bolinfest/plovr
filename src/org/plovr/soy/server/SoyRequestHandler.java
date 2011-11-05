@@ -10,16 +10,25 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.plovr.HttpUtil;
+import org.plovr.QueryData;
 import org.plovr.SoyFile;
+import org.plovr.util.SoyDataUtil;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 import com.google.common.io.Files;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonSyntaxException;
 import com.google.inject.Injector;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.base.IncrementingIdGenerator;
 import com.google.template.soy.base.SoySyntaxException;
+import com.google.template.soy.data.SoyData;
+import com.google.template.soy.data.restricted.StringData;
 import com.google.template.soy.soyparse.ParseException;
 import com.google.template.soy.soyparse.SoyFileParser;
 import com.google.template.soy.soyparse.TokenMgrError;
@@ -41,6 +50,8 @@ public class SoyRequestHandler implements HttpHandler {
 
   private static final Injector injector = SoyFile.createInjector(
       ImmutableList.of("org.plovr.soy.function.PlovrModule"));
+
+  private static final JsonParser parser = new JsonParser();
 
   private final Config config;
 
@@ -121,7 +132,7 @@ public class SoyRequestHandler implements HttpHandler {
     String templateName = namespace + "." + templateToRender;
 
     SoyTofu tofu = getSoyTofu();
-    final Map<String, ?> data = ImmutableMap.of();
+    final Map<String, ?> data = createSoyData(exchange);
     String html = tofu.newRenderer(templateName).setData(data).render();
 
     Headers responseHeaders = exchange.getResponseHeaders();
@@ -161,5 +172,51 @@ public class SoyRequestHandler implements HttpHandler {
         builder.add(file);
       }
     }
+  }
+
+  private Map<String, ?> createSoyData(HttpExchange exchange) {
+    if (config.isSafeMode()) {
+      return ImmutableMap.of();
+    } else {
+      return createSoyDataFromUri(exchange.getRequestURI());
+    }
+  }
+
+  @VisibleForTesting
+  static Map<String, SoyData> createSoyDataFromUri(URI uri) {
+    QueryData queryData = QueryData.createFromUri(uri);
+    Map<String, SoyData> soyData = Maps.newHashMap();
+    for (String param : queryData.getParams()) {
+      soyData.put(param, getValueForQueryParam(queryData.getParam(param)));
+    }
+    return ImmutableMap.copyOf(soyData);
+  }
+
+  @VisibleForTesting
+  static SoyData getValueForQueryParam(String param) {
+    JsonElement jsonElement;
+    try {
+      jsonElement = parser.parse(param);
+    } catch (JsonSyntaxException e) {
+      return StringData.forValue(param);
+    }
+
+    // Gson is a little more liberal than we would like when it comes to parsing
+    // booleans. Only allow "true" and "false" to be converted to BooleanData.
+    if (jsonElement.isJsonPrimitive() &&
+        jsonElement.getAsJsonPrimitive().isBoolean()) {
+      if (!("true".equals(param) || "false".equals(param))) {
+        return StringData.forValue(param);
+      }
+    }
+
+    // Sometimes, Gson will return a Json null if it cannot parse something
+    // rather than throw a JsonSyntaxException. Make sure "null" was actually
+    // specified.
+    if (jsonElement.isJsonNull() && !param.equals("null")) {
+      return StringData.forValue(param);
+    }
+
+    return SoyDataUtil.jsonToSoyData(jsonElement);
   }
 }

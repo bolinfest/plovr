@@ -5,10 +5,17 @@ import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.util.List;
+import java.util.Set;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.LinkedListMultimap;
 
-class QueryData {
+/**
+ * {@link QueryData} represents the query parameters in a URI.
+ *
+ * @author bolinfest@gmail.com (Michael Bolin)
+ */
+public class QueryData {
 
   LinkedListMultimap<String, String> params;
 
@@ -16,12 +23,23 @@ class QueryData {
     this.params = params;
   }
 
-  String getParam(String key) {
-    List<String> values = params.get(key);
+  /**
+   * @param name of a query parameter
+   * @return The value associated with the query parameter, or null if there is
+   *     no value for {@code name}. If there are multiple value for the query
+   *     parameters, the first value is returned, where "first" is the first one
+   *     that appears when the query string is read left to right.
+   */
+  public String getParam(String name) {
+    List<String> values = params.get(name);
     return values.size() > 0 ? values.get(0) : null;
   }
 
-  static QueryData createFromUri(URI uri) {
+  public Set<String> getParams() {
+    return ImmutableSet.copyOf(params.keySet());
+  }
+
+  public static QueryData createFromUri(URI uri) {
     String rawQuery = uri.getRawQuery();
     LinkedListMultimap<String, String> params = LinkedListMultimap.create();
     if (rawQuery != null) {

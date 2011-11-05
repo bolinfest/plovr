@@ -37,7 +37,12 @@ public class SoyWebCommandOptions extends AbstractCommandOptions {
   @Option(name = "--globals",
       aliases = {"-g"},
       usage = "File where global variables for Soy are defined")
-  private String compileTimeGlobalsFile;
+  private String compileTimeGlobalsFile = null;
+
+  @Option(name = "--safe",
+      usage = "Safe mode: URL query parameters cannot be used to inject " +
+          "input into the template.")
+  private boolean isSafeMode = false;
 
   public SoyWebCommandOptions() {}
 
@@ -59,5 +64,9 @@ public class SoyWebCommandOptions extends AbstractCommandOptions {
 
   public String getCompileTimeGlobalsFile() {
     return compileTimeGlobalsFile;
+  }
+
+  public boolean isSafeMode() {
+    return isSafeMode;
   }
 }

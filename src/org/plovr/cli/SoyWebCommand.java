@@ -52,7 +52,8 @@ public class SoyWebCommand extends AbstractCommandRunner<SoyWebCommandOptions> {
         options.getPort(),
         new File(options.getDir()),
         options.isStatic(),
-        globals);
+        globals,
+        options.isSafeMode());
     Server server = new Server(config);
     server.run();
     return STATUS_NO_EXIT;
