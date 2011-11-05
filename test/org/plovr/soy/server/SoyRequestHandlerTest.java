@@ -2,8 +2,13 @@ package org.plovr.soy.server;
 
 import static org.junit.Assert.assertEquals;
 
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.Map;
+
 import org.junit.Test;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.template.soy.data.SoyData;
 import com.google.template.soy.data.restricted.BooleanData;
 import com.google.template.soy.data.restricted.FloatData;
@@ -35,9 +40,21 @@ public final class SoyRequestHandlerTest {
         StringData.forValue("TRUE"), "TRUE");
     assertValueForQueryParam("Boolean data is case-sensitive",
         StringData.forValue("FALSE"), "FALSE");
+    assertValueForQueryParam("Null data is case-sensitive",
+        StringData.forValue("NULL"), "NULL");
     assertValueForQueryParam(
         "Should be able to tolerate a string with double-quotes",
         StringData.forValue("\"Hello,\" I said."), "\"Hello,\" I said.");
+  }
+
+  @Test
+  public void testCreateSoyDataFromUri() throws URISyntaxException {
+    URI uri = new URI("http://localhost:9811/settings.html" +
+    		"?option=trueoption=10&option=null&option=false");
+    Map<String, SoyData> soyData = SoyRequestHandler.createSoyDataFromUri(uri);
+    assertEquals("Should use rightmost value for 'option'",
+        ImmutableMap.of("option", BooleanData.FALSE),
+        soyData);
   }
 
   private void assertValueForQueryParam(SoyData expected, String queryParam) {

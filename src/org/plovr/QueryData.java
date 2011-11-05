@@ -26,13 +26,25 @@ public class QueryData {
   /**
    * @param name of a query parameter
    * @return The value associated with the query parameter, or null if there is
-   *     no value for {@code name}. If there are multiple value for the query
-   *     parameters, the first value is returned, where "first" is the first one
+   *     no value for {@code name}. If there are multiple values for the query
+   *     parameter, the first value is returned, where "first" is the first one
    *     that appears when the query string is read left to right.
    */
   public String getParam(String name) {
     List<String> values = params.get(name);
     return values.size() > 0 ? values.get(0) : null;
+  }
+
+  /**
+   * @param name of a query parameter
+   * @return The value associated with the query parameter, or null if there is
+   *     no value for {@code name}. If there are multiple values for the query
+   *     parameter, the last value is returned, where "last" is the last one
+   *     that appears when the query string is read left to right.
+   */
+  public String getLastValueForParam(String name) {
+    List<String> values = params.get(name);
+    return values.size() > 0 ? values.get(values.size() - 1) : null;
   }
 
   public Set<String> getParams() {

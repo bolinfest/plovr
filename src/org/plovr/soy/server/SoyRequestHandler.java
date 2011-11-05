@@ -187,7 +187,8 @@ public class SoyRequestHandler implements HttpHandler {
     QueryData queryData = QueryData.createFromUri(uri);
     Map<String, SoyData> soyData = Maps.newHashMap();
     for (String param : queryData.getParams()) {
-      soyData.put(param, getValueForQueryParam(queryData.getParam(param)));
+      String queryParamValue = queryData.getLastValueForParam(param);
+      soyData.put(param, getValueForQueryParam(queryParamValue));
     }
     return ImmutableMap.copyOf(soyData);
   }
