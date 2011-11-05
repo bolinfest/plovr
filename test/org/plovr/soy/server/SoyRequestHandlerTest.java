@@ -27,6 +27,7 @@ public final class SoyRequestHandlerTest {
   public void testGetValueForQueryParam() {
     // Nominal cases.
     assertValueForQueryParam(StringData.forValue("soy"), "soy");
+    assertValueForQueryParam(StringData.forValue("soy"), "\"soy\"");
     assertValueForQueryParam(BooleanData.TRUE, "true");
     assertValueForQueryParam(BooleanData.FALSE, "false");
     assertValueForQueryParam(IntegerData.forValue(3), "3");
