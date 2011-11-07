@@ -135,11 +135,12 @@ public class InputFileHandler extends AbstractGetHandler {
     }
     String name = matcher.group(1);
 
-    // TODO: This will not work when the user supplies his own Closure Library.
-    // (It may also break when modules are used.) Make this more robust and less
-    // hacky.
-    if (name.equals("/closure/goog/deps.js") ||
-        (manifest.isBuiltInClosureLibrary() && name.equals("/goog/base.js"))) {
+    // If the user requests the deps.js alongside base.js, then return the
+    // generated dependency info for this config rather than the default deps.js
+    // that comes with the Closure Library.
+    String depsJsName = manifest.isBuiltInClosureLibrary() ?
+        "/closure/goog/deps.js" : "/deps.js";
+    if (name.equals(depsJsName)) {
       Responses.writeJs(getCodeForDepsJs(manifest), config, exchange);
       return;
     }

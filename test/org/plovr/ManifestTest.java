@@ -9,6 +9,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
+import javax.annotation.Nullable;
+
 import org.junit.Test;
 
 import com.google.common.base.Function;
@@ -73,29 +75,29 @@ public class ManifestTest {
 
     List<String> expectedNames = ImmutableList.copyOf(
         new String[] {
-            "/goog/base.js",
-            "/goog/deps.js",
-            "/goog/debug/error.js",
-            "/goog/string/string.js",
-            "/goog/asserts/asserts.js",
-            "/goog/array/array.js",
-            "/goog/debug/entrypointregistry.js",
-            "/goog/debug/errorhandlerweakdep.js",
-            "/goog/useragent/useragent.js",
-            "/goog/events/browserfeature.js",
-            "/goog/disposable/idisposable.js",
-            "/goog/disposable/disposable.js",
-            "/goog/events/event.js",
-            "/goog/events/eventtype.js",
-            "/goog/reflect/reflect.js",
-            "/goog/events/browserevent.js",
-            "/goog/events/eventwrapper.js",
-            "/goog/events/listener.js",
-            "/goog/structs/simplepool.js",
-            "/goog/useragent/jscript.js",
-            "/goog/events/pools.js",
-            "/goog/object/object.js",
-            "/goog/events/events.js",
+            "/base.js",
+            "/deps.js",
+            "/debug/error.js",
+            "/string/string.js",
+            "/asserts/asserts.js",
+            "/array/array.js",
+            "/debug/entrypointregistry.js",
+            "/debug/errorhandlerweakdep.js",
+            "/useragent/useragent.js",
+            "/events/browserfeature.js",
+            "/disposable/idisposable.js",
+            "/disposable/disposable.js",
+            "/events/event.js",
+            "/events/eventtype.js",
+            "/reflect/reflect.js",
+            "/events/browserevent.js",
+            "/events/eventwrapper.js",
+            "/events/listener.js",
+            "/structs/simplepool.js",
+            "/useragent/jscript.js",
+            "/events/pools.js",
+            "/object/object.js",
+            "/events/events.js",
             "test/org/plovr/example.js"
         }
         );
@@ -151,58 +153,46 @@ public class ManifestTest {
 
     order = manifest.getInputsInCompilationOrder();
 
-    List<String> expectedNames = ImmutableList.of("/goog/base.js",
-        "/goog/deps.js", "c", "b", "a");
+    List<String> expectedNames = ImmutableList.of("/base.js",
+        "/deps.js", "c", "b", "a");
     assertEquals(expectedNames, Lists.transform(order, JS_INPUT_TO_NAME));
   }
 
   @Test
   public void testGetAllDependencies() {
+    testGetAllDependenciesContainsBaseJs(null /* closureLibraryDirectory */,
+        "/closure/goog/base.js");
+
+    testGetAllDependenciesContainsBaseJs(new File("testdata/manifest/"),
+        "/base.js");
+  }
+
+  private void testGetAllDependenciesContainsBaseJs(
+      @Nullable File closureLibraryDirectory, final String baseJsName) {
     DummyJsInput input = new DummyJsInput(
         "dummy.js",
         "// Sample code\n",
         ImmutableList.of("test.dummy"),
         ImmutableList.of("goog.string"));
 
-    Manifest builtInClosureLibraryManifest = new Manifest(
-        null /* closureLibraryDirectory */,
+    Manifest manifest = new Manifest(
+        closureLibraryDirectory,
         ImmutableList.<File>of() /* dependencies */,
         ImmutableList.<JsInput>of(input) /* requiredInputs */,
         null /* externs */,
         null /* builtInExterns */,
         new SoyFileOptions(),
         false /* customExternsOnly */);
-    Set<JsInput> dependencies = builtInClosureLibraryManifest
-        .getAllDependencies();
+    Set<JsInput> dependencies = manifest.getAllDependencies();
 
     JsInput valueIfNotFound = null;
-    final String desiredBaseJs = "/closure/goog/base.js";
     JsInput foundValue = Iterables.find(dependencies, new Predicate<JsInput>() {
       @Override
       public boolean apply(JsInput dep) {
-        return desiredBaseJs.equals(dep.getName());
+        return baseJsName.equals(dep.getName());
       }
     }, valueIfNotFound);
-    assertNotNull("Dependencies for bundled Closure Library should contain " +
-        desiredBaseJs, foundValue);
-
-    Manifest externalClosureLibraryManifest = new Manifest(
-        new File("closure/closure-library/closure/goog/"),
-        ImmutableList.<File>of() /* dependencies */,
-        ImmutableList.<JsInput>of(input) /* requiredInputs */,
-        null /* externs */,
-        null /* builtInExterns */,
-        new SoyFileOptions(),
-        false /* customExternsOnly */);
-
-    dependencies = externalClosureLibraryManifest.getAllDependencies();
-    foundValue = Iterables.find(dependencies, new Predicate<JsInput>() {
-      @Override
-      public boolean apply(JsInput dep) {
-        return "/goog/base.js".equals(dep.getName());
-      }
-    }, valueIfNotFound);
-    assertNotNull("Dependencies for external Closure Library should contain " +
-    		"/goog/base.js", foundValue);
+    assertNotNull("Dependencies for Closure Library should contain " +
+        baseJsName, foundValue);
   }
 }
