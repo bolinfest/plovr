@@ -1,16 +1,20 @@
 package org.plovr;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
 import java.io.File;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.Test;
 
 import com.google.common.base.Function;
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.JSSourceFile;
 
@@ -69,8 +73,8 @@ public class ManifestTest {
 
     List<String> expectedNames = ImmutableList.copyOf(
         new String[] {
-            "base.js",
-            "deps.js",
+            "/goog/base.js",
+            "/goog/deps.js",
             "/goog/debug/error.js",
             "/goog/string/string.js",
             "/goog/asserts/asserts.js",
@@ -147,8 +151,58 @@ public class ManifestTest {
 
     order = manifest.getInputsInCompilationOrder();
 
-    List<String> expectedNames = ImmutableList.of("base.js", "deps.js", "c",
-        "b", "a");
+    List<String> expectedNames = ImmutableList.of("/goog/base.js",
+        "/goog/deps.js", "c", "b", "a");
     assertEquals(expectedNames, Lists.transform(order, JS_INPUT_TO_NAME));
+  }
+
+  @Test
+  public void testGetAllDependencies() {
+    DummyJsInput input = new DummyJsInput(
+        "dummy.js",
+        "// Sample code\n",
+        ImmutableList.of("test.dummy"),
+        ImmutableList.of("goog.string"));
+
+    Manifest builtInClosureLibraryManifest = new Manifest(
+        null /* closureLibraryDirectory */,
+        ImmutableList.<File>of() /* dependencies */,
+        ImmutableList.<JsInput>of(input) /* requiredInputs */,
+        null /* externs */,
+        null /* builtInExterns */,
+        new SoyFileOptions(),
+        false /* customExternsOnly */);
+    Set<JsInput> dependencies = builtInClosureLibraryManifest
+        .getAllDependencies();
+
+    JsInput valueIfNotFound = null;
+    final String desiredBaseJs = "/closure/goog/base.js";
+    JsInput foundValue = Iterables.find(dependencies, new Predicate<JsInput>() {
+      @Override
+      public boolean apply(JsInput dep) {
+        return desiredBaseJs.equals(dep.getName());
+      }
+    }, valueIfNotFound);
+    assertNotNull("Dependencies for bundled Closure Library should contain " +
+        desiredBaseJs, foundValue);
+
+    Manifest externalClosureLibraryManifest = new Manifest(
+        new File("closure/closure-library/closure/goog/"),
+        ImmutableList.<File>of() /* dependencies */,
+        ImmutableList.<JsInput>of(input) /* requiredInputs */,
+        null /* externs */,
+        null /* builtInExterns */,
+        new SoyFileOptions(),
+        false /* customExternsOnly */);
+
+    dependencies = externalClosureLibraryManifest.getAllDependencies();
+    foundValue = Iterables.find(dependencies, new Predicate<JsInput>() {
+      @Override
+      public boolean apply(JsInput dep) {
+        return "/goog/base.js".equals(dep.getName());
+      }
+    }, valueIfNotFound);
+    assertNotNull("Dependencies for external Closure Library should contain " +
+    		"/goog/base.js", foundValue);
   }
 }

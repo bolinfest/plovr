@@ -223,13 +223,21 @@ public final class Manifest {
   }
 
   JsInput getBaseJs() {
-    if (closureLibraryDirectory == null) {
+    if (isBuiltInClosureLibrary()) {
       return ResourceReader.getBaseJs();
     } else {
       // TODO: Use a Supplier so that this is only done once.
-      String path = "base.js";
-      return new JsSourceFile(path, new File(closureLibraryDirectory, path));
+      // TODO: This should be "/base.js" instead of "/goog/base.js" in case the
+      // user's local directory is not /goog/. Unfortunately, it generally
+      // works out to "/goog/base.js" right now because of how
+      // getAllDependencies() works.
+      return new JsSourceFile("/goog/base.js",
+          new File(closureLibraryDirectory, "base.js"));
     }
+  }
+
+  boolean isBuiltInClosureLibrary() {
+    return closureLibraryDirectory == null;
   }
 
   JsInput getDepsJs() {
@@ -297,7 +305,7 @@ public final class Manifest {
   Set<JsInput> getAllDependencies() {
     Set<JsInput> allDependencies = Sets.newHashSet();
     final boolean externsOnly = false;
-    if (closureLibraryDirectory == null) {
+    if (isBuiltInClosureLibrary()) {
       allDependencies.addAll(ResourceReader.getClosureLibrarySources());
     } else {
       allDependencies.addAll(getFiles(closureLibraryDirectory, externsOnly));
@@ -329,6 +337,14 @@ public final class Manifest {
     return ImmutableSet.copyOf(inputs);
   }
 
+  /**
+   *
+   * @param file
+   * @param path prefix is prepended to the name of the file to create the name
+   *     for the JsInput.
+   * @param output
+   * @param externsOnly
+   */
   private void getInputs(File file, String path, Set<JsInput> output,
       boolean externsOnly) {
     // Some editors may write backup files whose names start with a

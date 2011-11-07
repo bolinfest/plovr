@@ -138,7 +138,8 @@ public class InputFileHandler extends AbstractGetHandler {
     // TODO: This will not work when the user supplies his own Closure Library.
     // (It may also break when modules are used.) Make this more robust and less
     // hacky.
-    if (name.equals("/closure/goog/deps.js")) {
+    if (name.equals("/closure/goog/deps.js") ||
+        (manifest.isBuiltInClosureLibrary() && name.equals("/goog/base.js"))) {
       Responses.writeJs(getCodeForDepsJs(manifest), config, exchange);
       return;
     }

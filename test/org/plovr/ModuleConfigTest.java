@@ -113,7 +113,7 @@ public class ModuleConfigTest {
 
     assertEquals("Incorrect partition size", 5, partition.size());
     assertCorrectInputs(
-        "a", ImmutableList.of("base.js", "deps.js", "a"), partition.get("a"));
+        "a", ImmutableList.of("/goog/base.js", "/goog/deps.js", "a"), partition.get("a"));
     assertCorrectInputs("b", ImmutableList.of("b"), partition.get("b"));
     assertCorrectInputs("c", ImmutableList.of("c"), partition.get("c"));
     assertCorrectInputs("d", ImmutableList.of("d"), partition.get("d"));
@@ -198,7 +198,7 @@ public class ModuleConfigTest {
 
     assertEquals("Incorrect partition size", 7, partition.size());
     assertCorrectInputs(
-        "a", ImmutableList.of("base.js", "deps.js", "a"), partition.get("a"));
+        "a", ImmutableList.of("/goog/base.js", "/goog/deps.js", "a"), partition.get("a"));
     assertCorrectInputs("b", ImmutableList.of("b", "dep2"), partition.get("b"));
     assertCorrectInputs("c", ImmutableList.of("c"), partition.get("c"));
     assertCorrectInputs("d", ImmutableList.of("d", "dep1"), partition.get("d"));
@@ -272,7 +272,7 @@ public class ModuleConfigTest {
 
     assertEquals("Incorrect partition size", 5, partition.size());
     assertCorrectInputs(
-        "a", ImmutableList.of("base.js", "deps.js", "a"), partition.get("a"));
+        "a", ImmutableList.of("/goog/base.js", "/goog/deps.js", "a"), partition.get("a"));
     assertCorrectInputs("b", ImmutableList.of("b"), partition.get("b"));
     assertCorrectInputs("c", ImmutableList.of("dep1", "c"), partition.get("c"));
     assertCorrectInputs("d", ImmutableList.of("d"), partition.get("d"));
