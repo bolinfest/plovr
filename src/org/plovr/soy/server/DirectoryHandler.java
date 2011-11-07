@@ -53,8 +53,13 @@ final class DirectoryHandler implements HttpHandler {
     Preconditions.checkArgument(staticContentDirectory.isDirectory(),
         "This handler only processes directory listings.");
 
-    // TODO: If the URI does not end in "/", then redirect. This will ensure
-    // that all of the hyperlinks in the page work correctly.
+    // If the URI does not end in "/" (and is not "/"), then redirect. This will
+    // ensure that all of the hyperlinks in the page work correctly.
+    final String path = exchange.getRequestURI().getPath();
+    if (!path.endsWith("/") && !path.equals("/")) {
+      Responses.redirect(exchange, path + "/");
+      return;
+    }
 
     // TODO: This servlet should be enabled by default but there should be an
     // option to turn it off.
@@ -87,7 +92,6 @@ final class DirectoryHandler implements HttpHandler {
     List<String> directoryNames = Lists.transform(directories, fileToName);
     List<String> fileNames = Lists.transform(files, fileToName);
 
-    String path = exchange.getRequestURI().getPath();
     List<Map<String, String>> directoryParts = Lists.newArrayList();
     String href = "/";
     directoryParts.add(ImmutableMap.of("href", href, "name", "Root"));
