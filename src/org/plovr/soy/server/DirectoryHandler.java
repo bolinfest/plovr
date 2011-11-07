@@ -61,9 +61,6 @@ final class DirectoryHandler implements HttpHandler {
       return;
     }
 
-    // TODO: This servlet should be enabled by default but there should be an
-    // option to turn it off.
-
     // Split the files into directories and files.
     List<File> directories = Lists.newArrayList();
     List<File> files = Lists.newArrayList();

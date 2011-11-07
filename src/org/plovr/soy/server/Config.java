@@ -17,19 +17,23 @@ public final class Config {
 
   private final boolean isSafeMode;
 
+  private boolean indexPagesAreEnabled;
+
   public Config(
       String templateToRender,
       int port,
       File contentDirectory,
       boolean isStatic,
       Map<String, ?> compileTimeGlobals,
-      boolean isSafeMode) {
+      boolean isSafeMode,
+      boolean indexPagesAreEnabled) {
     this.templateToRender = templateToRender;
     this.port = port;
     this.contentDirectory = contentDirectory;
     this.isStatic = isStatic;
     this.compileTimeGlobals = compileTimeGlobals;
     this.isSafeMode = isSafeMode;
+    this.indexPagesAreEnabled = indexPagesAreEnabled;
   }
 
   public String getTemplateToRender() {
@@ -54,5 +58,9 @@ public final class Config {
 
   public boolean isSafeMode() {
     return isSafeMode;
+  }
+
+  public boolean indexPagesAreEnabled() {
+    return indexPagesAreEnabled;
   }
 }

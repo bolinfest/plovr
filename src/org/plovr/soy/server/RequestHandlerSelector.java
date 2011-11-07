@@ -81,7 +81,11 @@ public class RequestHandlerSelector implements HttpHandler {
         // If there is no index.html or index.soy and directory listing is
         // enabled, display a list of the files under the requested directory as
         // HTML.
-        directoryHandler.handle(exchange);
+        if (config.indexPagesAreEnabled()) {
+          directoryHandler.handle(exchange);
+        } else {
+          write403Unauthorized(exchange);
+        }
         return;
       }
     }
@@ -144,13 +148,17 @@ public class RequestHandlerSelector implements HttpHandler {
       // Someone is trying to pull a fast one! The request URI might be
       // something like: "/../../../etc/passwd", so do not allow requests to
       // files above the content directory.
-      HttpUtil.writeHtmlErrorMessageResponse(exchange,
-          "You do not have permission to access the requested file.",
-          403);
+      write403Unauthorized(exchange);
       return null;
     } else {
       return staticContent;
     }
+  }
+
+  static void write403Unauthorized(HttpExchange exchange) throws IOException {
+    HttpUtil.writeHtmlErrorMessageResponse(exchange,
+        "You do not have permission to access the requested file.",
+        403);
   }
 
   private static boolean containsNul(byte[] bytes) {

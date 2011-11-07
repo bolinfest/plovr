@@ -45,6 +45,10 @@ public class SoyWebCommandOptions extends AbstractCommandOptions {
       "attacks. Therefore, this should be used for internal prototyping ONLY.")
   private boolean allowQueryParameterInjection = false;
 
+  @Option(name = "--noindexes",
+      usage = "Do not serve index pages that list all files in a directory.")
+  private boolean noIndexPages = false;
+
   public SoyWebCommandOptions() {}
 
   public String getTemplateName() {
@@ -69,5 +73,9 @@ public class SoyWebCommandOptions extends AbstractCommandOptions {
 
   public boolean isSafeMode() {
     return !allowQueryParameterInjection;
+  }
+
+  public boolean areIndexPagesEnabled() {
+    return !noIndexPages;
   }
 }
