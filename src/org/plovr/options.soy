@@ -477,7 +477,7 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     If specified, plovr will pre-populate the compiler's property map with the
     property map contained in this file.
   {case 'test-template'}
-    The Soy file to use as a template for JS unit tests.
+    The Soy file to use as a template for JsUnit-style tests.
     The template will receive the following parameters:
     <ul>
       <li><code>title</code>
@@ -485,7 +485,9 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
       <li><code>testJsUrl</code>
     </ul>
     The default template is:
-{literal}<pre>/**
+{literal}<pre>&#123;namespace org.plovr}
+
+/**
  * @param title
  * @param baseJsUrl
  * @param testJsUrl
@@ -502,6 +504,10 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
 &lt;/body>
 &lt;/html>
 &#123;/template}</pre>{/literal}
+    The value of the <code>test-template</code> option is not the content of your template, but the path
+    to the <code>.soy</code> file that defines your template. Your template
+    must be named <code>org.plovr.test</code>, just like the default template. 
+    <p> 
     See the section on <a href="testing.html">testing</a> for more details. 
   {case 'test-excludes'}
     By default, all files that end in <code>_test.js</code> under

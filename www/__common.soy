@@ -71,6 +71,11 @@
       {param selected: $secondarySelected /}
     {/call}
     {call .headerItem}
+      {param text: 'Testing' /}
+      {param href: 'testing.html' /}
+      {param selected: $secondarySelected /}
+    {/call}
+    {call .headerItem}
       {param text: 'SoyWeb' /}
       {param href: 'soyweb.html' /}
       {param selected: $secondarySelected /}
@@ -101,6 +106,15 @@
     <a href="{$href}">{$text}</a>
   {/if}
 </li>
+{/template}
+
+/**
+ *
+ */
+{template .simpleBookLink}
+{call .bookLink}
+  {param linkHtml}Closure: The Definitive Guide{/param}
+{/call}
 {/template}
 
 /**
