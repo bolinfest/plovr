@@ -275,7 +275,7 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     Though if you do so,
     in order to make sure that your JavaScript code is interpreted with the
     correct character encoding, make sure to specify it in the <code>&lt;script></code>
-    tag as follows:
+    {sp}tag as follows:
 <pre>&lt;script type="text/javascript" src="myscript.js" charset="utf-8">&lt;/script></pre>
   {case 'fingerprint'}
     Whether to fingerprint the JS files for modules when plovr is used in
@@ -309,7 +309,7 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
   {case 'global-scope-name'}
     A scope name for multiple modules to share. This will cause
     modules to be wrapped with a
-    {literal}<pre>(function($) { with ($) { ... } })(scope)</pre>{/literal}
+    {literal}<pre>(function(a) { with (a) { ... } })(scope)</pre>{/literal}
     (and the main module will additionally start with{sp}
     {literal}<code>scope = {}</code>{/literal}{sp}
     so that you don't actually have to do anything special). As a
