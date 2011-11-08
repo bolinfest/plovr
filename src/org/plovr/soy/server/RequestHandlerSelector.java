@@ -9,6 +9,7 @@ import java.util.Map;
 import javax.activation.MimetypesFileTypeMap;
 import javax.annotation.Nullable;
 
+import org.plovr.FileUtil;
 import org.plovr.HttpUtil;
 
 import com.google.common.base.Ascii;

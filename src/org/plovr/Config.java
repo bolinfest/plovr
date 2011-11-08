@@ -15,19 +15,20 @@ import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
-import org.plovr.soy.server.FileUtil;
 import org.plovr.util.Pair;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
 import com.google.common.base.Strings;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -80,6 +81,8 @@ public final class Config implements Comparable<Config> {
   private final ModuleConfig moduleConfig;
 
   private final File testTemplate;
+
+  private final Set<File> testExcludePaths;
 
   private final ImmutableList<String> soyFunctionPlugins;
 
@@ -156,6 +159,7 @@ public final class Config implements Comparable<Config> {
       Manifest manifest,
       @Nullable ModuleConfig moduleConfig,
       File testTemplate,
+      List<File> testExcludePaths,
       List<String> soyFunctionPlugins,
       CompilationMode compilationMode,
       WarningLevel warningLevel,
@@ -192,6 +196,7 @@ public final class Config implements Comparable<Config> {
     this.manifest = manifest;
     this.moduleConfig = moduleConfig;
     this.testTemplate = testTemplate;
+    this.testExcludePaths = ImmutableSet.copyOf(testExcludePaths);
     this.soyFunctionPlugins = ImmutableList.copyOf(soyFunctionPlugins);
     this.compilationMode = compilationMode;
     this.warningLevel = warningLevel;
@@ -378,6 +383,10 @@ public final class Config implements Comparable<Config> {
 
   public File getTestTemplate() {
     return testTemplate;
+  }
+
+  public Set<File> getTestExcludePaths() {
+    return testExcludePaths;
   }
 
   /**
@@ -727,6 +736,8 @@ public final class Config implements Comparable<Config> {
 
     private final List<String> paths = Lists.newArrayList();
 
+    private final List<File> testExcludePaths;
+
     /** List of (file, path) pairs for inputs */
     private final List<Pair<File, String>> inputs = Lists.newArrayList();
 
@@ -809,6 +820,7 @@ public final class Config implements Comparable<Config> {
       Preconditions.checkNotNull(rootConfigFileContent);
       this.relativePathBase = relativePathBase;
       this.rootConfigFileContent = rootConfigFileContent;
+      testExcludePaths = Lists.newArrayList();
       manifest = null;
       defines = Maps.newHashMap();
       setConfigFile(configFile);
@@ -826,6 +838,7 @@ public final class Config implements Comparable<Config> {
           ? null
           : ModuleConfig.builder(config.moduleConfig);
       this.testTemplate = config.testTemplate;
+      this.testExcludePaths = Lists.newArrayList(config.testExcludePaths);
       this.soyFunctionPlugins = config.hasSoyFunctionPlugins()
           ? new ImmutableList.Builder<String>().addAll(config.getSoyFunctionPlugins())
           : null;
@@ -948,6 +961,28 @@ public final class Config implements Comparable<Config> {
 
     public void setTestTemplate(File testTemplate) {
       this.testTemplate = testTemplate;
+    }
+
+    public void addTestExcludePath(final File testExcludePath) {
+      Preconditions.checkNotNull(testExcludePath);
+
+      Set<File> paths = ImmutableSet.copyOf(
+          Lists.transform(this.paths, STRING_TO_FILE));
+      File pathThatContainsExclude = Iterables.find(paths,
+          new Predicate<File>() {
+        @Override
+        public boolean apply(File path) {
+          return FileUtil.contains(path, testExcludePath);
+        }
+      }, null);
+      Preconditions.checkNotNull(pathThatContainsExclude,
+          "No path contains test exclude: " + testExcludePath);
+
+      testExcludePaths.add(testExcludePath);
+    }
+
+    public void resetTestExcludePaths() {
+      testExcludePaths.clear();
     }
 
     /**
@@ -1182,6 +1217,7 @@ public final class Config implements Comparable<Config> {
           manifest,
           moduleConfig,
           testTemplate,
+          testExcludePaths,
           soyFunctionNames,
           compilationMode,
           warningLevel,

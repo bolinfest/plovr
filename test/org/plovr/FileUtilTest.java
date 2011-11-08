@@ -1,4 +1,4 @@
-package org.plovr.soy.server;
+package org.plovr;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;

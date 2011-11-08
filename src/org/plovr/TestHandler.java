@@ -162,7 +162,8 @@ public class TestHandler extends AbstractGetHandler {
       if (!dependency.isDirectory()) {
         continue;
       }
-      addAllTestFiles(dependency, dependency, testFilePaths);
+      addAllTestFiles(dependency, dependency, testFilePaths,
+          config.getTestExcludePaths());
     }
 
     return testFilePaths;
@@ -170,13 +171,25 @@ public class TestHandler extends AbstractGetHandler {
 
   /**
    * Each value in to testFilePaths must not have a leading slash.
+   * @param excludedFilePaths each excluded path is guaranteed to be contained
+   *     by some input path
    */
   private static void addAllTestFiles(File base, File directory,
-      Set<String> testFilePaths) {
+      Set<String> testFilePaths, Set<File> excludedFilePaths) {
+    // Do not recurse on a directory that is explicitly excluded.
+    if (excludedFilePaths.contains(directory)) {
+      return;
+    }
+
     for (File entry : directory.listFiles()) {
       if (entry.isDirectory()) {
-        addAllTestFiles(base, entry, testFilePaths);
+        addAllTestFiles(base, entry, testFilePaths, excludedFilePaths);
       } else if (entry.isFile()) {
+        // Do not consider a file that is explicitly excluded.
+        if (excludedFilePaths.contains(entry)) {
+          continue;
+        }
+
         if (entry.getName().endsWith("_test.js")) {
           String basePath = base.getAbsolutePath();
           String testPath = entry.getAbsolutePath();
