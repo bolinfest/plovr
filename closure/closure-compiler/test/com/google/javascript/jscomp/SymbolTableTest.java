@@ -22,6 +22,7 @@ import com.google.common.collect.Ordering;
 import com.google.javascript.jscomp.SymbolTable.Reference;
 import com.google.javascript.jscomp.SymbolTable.Symbol;
 import com.google.javascript.jscomp.SymbolTable.SymbolScope;
+import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Token;
 
 import junit.framework.TestCase;
@@ -36,6 +37,19 @@ public class SymbolTableTest extends TestCase {
   private static final String EXTERNS = CompilerTypeTestCase.DEFAULT_EXTERNS +
       "\nfunction customExternFn(customExternArg) {}";
 
+  private CompilerOptions options;
+
+  public void setUp() throws Exception {
+    super.setUp();
+
+    options = new CompilerOptions();
+    options.setCodingConvention(new ClosureCodingConvention());
+    CompilationLevel.SIMPLE_OPTIMIZATIONS.setOptionsForCompilationLevel(
+        options);
+    WarningLevel.VERBOSE.setOptionsForWarningLevel(options);
+    options.ideMode = true;
+  }
+
   public void testGlobalVar() throws Exception {
     SymbolTable table = createSymbolTable(
         "/** @type {number} */ var x = 5;");
@@ -43,7 +57,8 @@ public class SymbolTableTest extends TestCase {
     assertNotNull(getGlobalVar(table, "x"));
     assertEquals("number", getGlobalVar(table, "x").getType().toString());
 
-    assertEquals(1, getVars(table).size());
+    // 2 == sizeof({x, *global*})
+    assertEquals(2, getVars(table).size());
   }
 
   public void testGlobalThisReferences() throws Exception {
@@ -53,8 +68,19 @@ public class SymbolTableTest extends TestCase {
     Symbol global = getGlobalVar(table, "*global*");
     assertNotNull(global);
 
-    List<Reference> refs = Lists.newArrayList(table.getReferences(global));
+    List<Reference> refs = table.getReferenceList(global);
     assertEquals(1, refs.size());
+  }
+
+  public void testGlobalThisReferences2() throws Exception {
+    // Make sure the global this is declared, even if it isn't referenced.
+    SymbolTable table = createSymbolTable("");
+
+    Symbol global = getGlobalVar(table, "*global*");
+    assertNotNull(global);
+
+    List<Reference> refs = table.getReferenceList(global);
+    assertEquals(0, refs.size());
   }
 
   public void testGlobalThisPropertyReferences() throws Exception {
@@ -64,7 +90,7 @@ public class SymbolTableTest extends TestCase {
     Symbol foo = getGlobalVar(table, "Foo");
     assertNotNull(foo);
 
-    List<Reference> refs = Lists.newArrayList(table.getReferences(foo));
+    List<Reference> refs = table.getReferenceList(foo);
     assertEquals(2, refs.size());
   }
 
@@ -72,7 +98,7 @@ public class SymbolTableTest extends TestCase {
     SymbolTable table = createSymbolTable(
         "/** @type {number} */ var x = 5; x = 6;");
     Symbol x = getGlobalVar(table, "x");
-    List<Reference> refs = Lists.newArrayList(table.getReferences(x));
+    List<Reference> refs = table.getReferenceList(x);
 
     assertEquals(2, refs.size());
     assertEquals(x.getDeclaration(), refs.get(0));
@@ -84,7 +110,7 @@ public class SymbolTableTest extends TestCase {
     SymbolTable table = createSymbolTable(
         "function f(x) { return x; }");
     Symbol x = getLocalVar(table, "x");
-    List<Reference> refs = Lists.newArrayList(table.getReferences(x));
+    List<Reference> refs = table.getReferenceList(x);
 
     assertEquals(2, refs.size());
     assertEquals(x.getDeclaration(), refs.get(0));
@@ -96,24 +122,44 @@ public class SymbolTableTest extends TestCase {
     SymbolTable table = createSymbolTable(
         "/** @constructor */ function F() { this.foo = 3; this.bar = 5; }");
 
-    Symbol t = getGlobalVar(table, "F.this");
+    Symbol f = getGlobalVar(table, "F");
+    assertNotNull(f);
+
+    Symbol t = table.getParameterInFunction(f, "this");
     assertNotNull(t);
 
-    List<Reference> refs = Lists.newArrayList(table.getReferences(t));
+    List<Reference> refs = table.getReferenceList(t);
     assertEquals(2, refs.size());
   }
 
   public void testLocalThisReferences2() throws Exception {
     SymbolTable table = createSymbolTable(
         "/** @constructor */ function F() {}" +
-        "/** doc */ F.prototype.baz = " +
+        "F.prototype.baz = " +
         "    function() { this.foo = 3; this.bar = 5; };");
 
-    Symbol t = getGlobalVar(table, "F.prototype.baz.this");
+    Symbol baz = getGlobalVar(table, "F.prototype.baz");
+    assertNotNull(baz);
+
+    Symbol t = table.getParameterInFunction(baz, "this");
     assertNotNull(t);
 
-    List<Reference> refs = Lists.newArrayList(table.getReferences(t));
+    List<Reference> refs = table.getReferenceList(t);
     assertEquals(2, refs.size());
+  }
+
+  public void testLocalThisReferences3() throws Exception {
+    SymbolTable table = createSymbolTable(
+        "/** @constructor */ function F() {}");
+
+    Symbol baz = getGlobalVar(table, "F");
+    assertNotNull(baz);
+
+    Symbol t = table.getParameterInFunction(baz, "this");
+    assertNotNull(t);
+
+    List<Reference> refs = table.getReferenceList(t);
+    assertEquals(0, refs.size());
   }
 
   public void testNamespacedReferences() throws Exception {
@@ -186,18 +232,19 @@ public class SymbolTableTest extends TestCase {
   public void testGlobalVarInExterns() throws Exception {
     SymbolTable table = createSymbolTable("customExternFn(1);");
     Symbol fn = getGlobalVar(table, "customExternFn");
-    List<Reference> refs = Lists.newArrayList(table.getReferences(fn));
+    List<Reference> refs = table.getReferenceList(fn);
     assertEquals(2, refs.size());
 
     SymbolScope scope = table.getEnclosingScope(refs.get(0).getNode());
     assertTrue(scope.isGlobalScope());
-    assertNull(table.getSymbolForScope(scope));
+    assertEquals(SymbolTable.GLOBAL_THIS,
+        table.getSymbolForScope(scope).getName());
   }
 
   public void testLocalVarInExterns() throws Exception {
     SymbolTable table = createSymbolTable("");
     Symbol arg = getLocalVar(table, "customExternArg");
-    List<Reference> refs = Lists.newArrayList(table.getReferences(arg));
+    List<Reference> refs = table.getReferenceList(arg);
     assertEquals(1, refs.size());
 
     Symbol fn = getGlobalVar(table, "customExternFn");
@@ -313,7 +360,7 @@ public class SymbolTableTest extends TestCase {
         getGlobalVar(table, "DomHelper.prototype");
     assertNotNull(prototype);
 
-    List<Reference> refs = Lists.newArrayList(table.getReferences(prototype));
+    List<Reference> refs = table.getReferenceList(prototype);
 
     // One of the refs is implicit in the declaration of the function.
     assertEquals(refs.toString(), 2, refs.size());
@@ -328,7 +375,7 @@ public class SymbolTableTest extends TestCase {
         getGlobalVar(table, "Snork.prototype");
     assertNotNull(prototype);
 
-    List<Reference> refs = Lists.newArrayList(table.getReferences(prototype));
+    List<Reference> refs = table.getReferenceList(prototype);
     assertEquals(2, refs.size());
   }
 
@@ -371,7 +418,7 @@ public class SymbolTableTest extends TestCase {
     Symbol foo = getGlobalVar(table, "Foo");
     assertNotNull(foo);
 
-    List<Reference> refs = Lists.newArrayList(table.getReferences(foo));
+    List<Reference> refs = table.getReferenceList(foo);
     assertEquals(5, refs.size());
 
     assertEquals(1, refs.get(0).getNode().getLineno());
@@ -397,7 +444,7 @@ public class SymbolTableTest extends TestCase {
     Symbol str = getGlobalVar(table, "String");
     assertNotNull(str);
 
-    List<Reference> refs = Lists.newArrayList(table.getReferences(str));
+    List<Reference> refs = table.getReferenceList(str);
 
     // We're going to pick up a lot of references from the externs,
     // so it's not meaningful to check the number of references.
@@ -421,7 +468,7 @@ public class SymbolTableTest extends TestCase {
     Symbol x = getLocalVar(table, "x");
     assertNotNull(x);
 
-    List<Reference> refs = Lists.newArrayList(table.getReferences(x));
+    List<Reference> refs = table.getReferenceList(x);
     assertEquals(2, refs.size());
 
     assertEquals(code.indexOf("x) {"), refs.get(0).getNode().getCharno());
@@ -437,7 +484,7 @@ public class SymbolTableTest extends TestCase {
     assertNotNull(xNumber);
     assertFalse(table.getScope(xNumber).isGlobalScope());
 
-    assertEquals("?", xNumber.getType().toString());
+    assertEquals("number", xNumber.getType().toString());
   }
 
   public void testNaturalSymbolOrdering() {
@@ -454,6 +501,125 @@ public class SymbolTableTest extends TestCase {
     assertSymmetricOrdering(ordering, a, f);
     assertSymmetricOrdering(ordering, ab, f);
     assertSymmetricOrdering(ordering, f, x);
+  }
+
+  public void testDeclarationDisagreement() {
+    SymbolTable table = createSymbolTable(
+        "/** @const */ var goog = goog || {};\n" +
+        "/** @param {!Function} x */\n" +
+        "goog.addSingletonGetter2 = function(x) {};\n" +
+        "/** Wakka wakka wakka */\n" +
+        "goog.addSingletonGetter = goog.addSingletonGetter2;\n" +
+        "/** @param {!Function} x */\n" +
+        "goog.addSingletonGetter = function(x) {};\n");
+
+    Symbol method = getGlobalVar(table, "goog.addSingletonGetter");
+    List<Reference> refs = table.getReferenceList(method);
+    assertEquals(2, refs.size());
+
+    // Note that the declaration should show up second.
+    assertEquals(7, method.getDeclaration().getNode().getLineno());
+    assertEquals(5, refs.get(1).getNode().getLineno());
+  }
+
+  public void testMultipleExtends() {
+    SymbolTable table = createSymbolTable(
+        "/** @const */ var goog = goog || {};\n" +
+        "goog.inherits = function(x, y) {};\n" +
+        "/** @constructor */\n" +
+        "goog.A = function() { this.fieldA = this.constructor; };\n" +
+        "/** @constructor */ goog.A.FooA = function() {};\n" +
+        "/** @return {void} */ goog.A.prototype.methodA = function() {};\n" +
+        "/**\n" +
+        " * @constructor\n" +
+        " * @extends {goog.A}\n" +
+        " */\n" +
+        "goog.B = function() { this.fieldB = this.constructor; };\n" +
+        "goog.inherits(goog.B, goog.A);\n" +
+        "/** @return {void} */ goog.B.prototype.methodB = function() {};\n" +
+        "/**\n" +
+        " * @constructor\n" +
+        " * @extends {goog.A}\n" +
+        " */\n" +
+        "goog.B2 = function() { this.fieldB = this.constructor; };\n" +
+        "goog.inherits(goog.B2, goog.A);\n" +
+        "/** @constructor */ goog.B2.FooB = function() {};\n" +
+        "/** @return {void} */ goog.B2.prototype.methodB = function() {};\n" +
+        "/**\n" +
+        " * @constructor\n" +
+        " * @extends {goog.B}\n" +
+        " */\n" +
+        "goog.C = function() { this.fieldC = this.constructor; };\n" +
+        "goog.inherits(goog.C, goog.B);\n" +
+        "/** @constructor */ goog.C.FooC = function() {};\n" +
+        "/** @return {void} */ goog.C.prototype.methodC = function() {};\n");
+
+    Symbol bCtor = getGlobalVar(table, "goog.B.prototype.constructor");
+    assertNotNull(bCtor);
+
+    List<Reference> bRefs = table.getReferenceList(bCtor);
+    assertEquals(2, bRefs.size());
+    assertEquals(11, bCtor.getDeclaration().getNode().getLineno());
+
+    Symbol cCtor = getGlobalVar(table, "goog.C.prototype.constructor");
+    assertNotNull(cCtor);
+
+    List<Reference> cRefs = table.getReferenceList(cCtor);
+    assertEquals(2, cRefs.size());
+    assertEquals(26, cCtor.getDeclaration().getNode().getLineno());
+  }
+
+  public void testJSDocAssociationWithBadNamespace() {
+    SymbolTable table = createSymbolTable(
+        // Notice that the declaration for "goog" is missing.
+        // We want to recover anyway and print out what we know
+        // about goog.Foo.
+        "/** @constructor */ goog.Foo = function(){};");
+
+    Symbol foo = getGlobalVar(table, "goog.Foo");
+    assertNotNull(foo);
+
+    JSDocInfo info = foo.getJSDocInfo();
+    assertNotNull(info);
+    assertTrue(info.isConstructor());
+  }
+
+  public void testMissingConstructorTag() {
+    SymbolTable table = createSymbolTable(
+        "function F() {" +
+        "  this.field1 = 3;" +
+        "}" +
+        "F.prototype.method1 = function() {" +
+        "  this.field1 = 5;" +
+        "};" +
+        "(new F()).method1();");
+
+    // Because the constructor tag is missing, this is going
+    // to be missing a lot of inference.
+    assertNull(getGlobalVar(table, "F.prototype.field1"));
+
+    Symbol sym = getGlobalVar(table, "F.prototype.method1");
+    assertEquals(1, table.getReferenceList(sym).size());
+  }
+
+  public void testTypeCheckingOff() {
+    options = new CompilerOptions();
+
+    // Turning type-checking off is even worse than not annotating anything.
+    SymbolTable table = createSymbolTable(
+        "/** @contstructor */" +
+        "function F() {" +
+        "  this.field1 = 3;" +
+        "}" +
+        "F.prototype.method1 = function() {" +
+        "  this.field1 = 5;" +
+        "};" +
+        "(new F()).method1();");
+    assertNull(getGlobalVar(table, "F.prototype.field1"));
+    assertNull(getGlobalVar(table, "F.prototype.method1"));
+
+    Symbol sym = getGlobalVar(table, "F");
+    assertEquals(3, table.getReferenceList(sym).size());
   }
 
   private void assertSymmetricOrdering(
@@ -495,11 +661,6 @@ public class SymbolTableTest extends TestCase {
         JSSourceFile.fromCode("in1", input));
     List<JSSourceFile> externs = Lists.newArrayList(
         JSSourceFile.fromCode("externs1", EXTERNS));
-    CompilerOptions options = new CompilerOptions();
-    CompilationLevel.SIMPLE_OPTIMIZATIONS.setOptionsForCompilationLevel(
-        options);
-    WarningLevel.VERBOSE.setOptionsForWarningLevel(options);
-    options.ideMode = true;
 
     Compiler compiler = new Compiler();
     compiler.compile(externs, inputs, options);

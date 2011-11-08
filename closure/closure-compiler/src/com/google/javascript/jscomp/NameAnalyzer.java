@@ -672,12 +672,10 @@ final class NameAnalyzer implements CompilerPass {
      */
     private void recordPrototypeSet(String className, String prototypeProperty,
         Node node) {
-      JsName name = getName(className, false);
-      if (name != null) {
-        name.prototypeNames.add(prototypeProperty);
-        refNodes.add(new PrototypeSetNode(name, node));
-        recordWriteOnProperties(className);
-      }
+      JsName name = getName(className, true);
+      name.prototypeNames.add(prototypeProperty);
+      refNodes.add(new PrototypeSetNode(name, node));
+      recordWriteOnProperties(className);
     }
 
     /**
@@ -1671,10 +1669,8 @@ final class NameAnalyzer implements CompilerPass {
       case Token.VAR:
         break;
       case Token.ASSIGN:
-        Preconditions.checkArgument(
-            parent.getType() == Token.FOR,
-            "Unsupported assignment in replaceWithRhs. parent: " +
-            Token.name(parent.getType()));
+        Preconditions.checkArgument(parent.getType() == Token.FOR,
+            "Unsupported assignment in replaceWithRhs. parent: %s", Token.name(parent.getType()));
         break;
       default:
         throw new IllegalArgumentException(

@@ -65,13 +65,6 @@ Window.prototype.JSON.stringify =
 
 
 /**
- * @param {*=} opt_ignoredKey
- * @return {string}
- */
-Date.prototype.toJSON = function(opt_ignoredKey) {};
-
-
-/**
  * @return {string}
  * @nosideeffects
  * @see http://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/String/Trim
@@ -129,7 +122,7 @@ ObjectPropertyDescriptor.prototype.configurable;
  * @return {!Object}
  * @nosideeffects
  * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/create
- */ 
+ */
 Object.create = function(proto, opt_properties) {};
 
 
@@ -139,7 +132,7 @@ Object.create = function(proto, opt_properties) {};
  * @param {!Object} descriptor A ObjectPropertyDescriptor.
  * @return {!Object}
  * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/defineProperty
- */ 
+ */
 Object.defineProperty = function(obj, prop, descriptor) {};
 
 
@@ -148,7 +141,7 @@ Object.defineProperty = function(obj, prop, descriptor) {};
  * @param {!Object} props A map of ObjectPropertyDescriptors.
  * @return {!Object}
  * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/defineProperties
- */ 
+ */
 Object.defineProperties = function(obj, props) {};
 
 
@@ -158,7 +151,7 @@ Object.defineProperties = function(obj, props) {};
  * @return {Object.<ObjectPropertyDescriptor>}
  * @nosideeffects
  * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/getOwnPropertyDescriptor
- */ 
+ */
 Object.getOwnPropertyDescriptor = function(obj, prop) {};
 
 
@@ -167,7 +160,7 @@ Object.getOwnPropertyDescriptor = function(obj, prop) {};
  * @return {Array.<string>}
  * @nosideeffects
  * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/keys
- */ 
+ */
 Object.keys = function(obj) {};
 
 
@@ -176,7 +169,7 @@ Object.keys = function(obj) {};
  * @return {Array.<string>}
  * @nosideeffects
  * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/getOwnPropertyNames
- */ 
+ */
 Object.getOwnPropertyNames = function(obj) {};
 
 
@@ -185,7 +178,7 @@ Object.getOwnPropertyNames = function(obj) {};
  * @return {Object}
  * @nosideeffects
  * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/GetPrototypeOf
- */ 
+ */
 Object.getPrototypeOf = function(obj) {};
 
 
@@ -193,7 +186,7 @@ Object.getPrototypeOf = function(obj) {};
  * @param {!Object} obj
  * @return {void}
  * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/preventExtensions
- */ 
+ */
 Object.preventExtensions = function(obj) {};
 
 
@@ -201,7 +194,7 @@ Object.preventExtensions = function(obj) {};
  * @param {!Object} obj
  * @return {void}
  * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/seal
- */ 
+ */
 Object.seal = function(obj) {};
 
 
@@ -209,7 +202,7 @@ Object.seal = function(obj) {};
  * @param {!Object} obj
  * @return {void}
  * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/freeze
- */ 
+ */
 Object.freeze = function(obj) {};
 
 
@@ -218,7 +211,7 @@ Object.freeze = function(obj) {};
  * @return {boolean}
  * @nosideeffects
  * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/isExtensible
- */ 
+ */
 Object.isExtensible = function(obj) {};
 
 
@@ -227,7 +220,7 @@ Object.isExtensible = function(obj) {};
  * @return {boolean}
  * @nosideeffects
  * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/isSealed
- */ 
+ */
 Object.isSealed = function(obj) {};
 
 
@@ -236,5 +229,29 @@ Object.isSealed = function(obj) {};
  * @return {boolean}
  * @nosideeffects
  * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/isFrozen
- */ 
+ */
 Object.isFrozen = function(obj) {};
+
+
+/**
+ * As per EcmaScript 5, 15.12.3.
+ * @param {string=} opt_key The JSON key for this object.
+ * @return {*} The serializable representation of this object. Note that this
+ *     need not be a string. See http://goo.gl/PEUvs.
+ */
+Object.prototype.toJSON = function(opt_key) {};
+
+
+/**
+ * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Date/toISOString
+ * @return {string}
+ */
+Date.prototype.toISOString = function() {};
+
+
+/**
+ * @param {*=} opt_ignoredKey
+ * @return {string}
+ * @override
+ */
+Date.prototype.toJSON = function(opt_ignoredKey) {};

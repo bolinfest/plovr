@@ -192,7 +192,7 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
     fold("function f(){if(x)return;return 2-x}",
          "function f(){return x?void 0:2-x}");
     fold("function f(){if(x)return x;else return}",
-         "function f(){if(x)return x;else;}");
+         "function f(){if(x)return x;{}}");
     fold("function f(){if(x)return x;return}",
          "function f(){if(x)return x}");
 
@@ -232,7 +232,7 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
          "function z() {(a) ? foo() : goo(); return !0}");
     fold("function z() {if (a) { foo(); x = true; return true " +
          "} else { goo(); x = true; return true }}",
-         "function z() {(a) ? foo() : goo(); x = true; return true}");
+         "function z() {(a) ? foo() : goo(); x = !0; return !0}");
 
     fold("function z() {" +
          "  if (a) { bar(); foo(); return true }" +
@@ -241,7 +241,7 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
          "function z() {" +
          "  if (a) { bar(); foo(); }" +
          "    else { bar(); goo(); }" +
-         "  return true;" +
+         "  return !0;" +
          "}");
   }
 
@@ -515,7 +515,7 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
   }
 
   public void testFoldReturnResult() {
-    fold("function f(){return false;}", "function f(){return false}");
+    fold("function f(){return false;}", "function f(){return !1}");
     foldSame("function f(){return null;}");
     fold("function f(){return void 0;}",
          "function f(){}");
@@ -756,8 +756,8 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
   }
 
   public void testFoldTrueFalse() {
-    fold("x = true", "x = true");
-    fold("x = false", "x = false");
+    fold("x = true", "x = !0");
+    fold("x = false", "x = !1");
   }
 
   public void testIssue291() {
@@ -857,6 +857,42 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
          "var x=',; ;,;,;,;,'.split(';')");
   }
 
+  public void testRemoveElseCause() {
+    test("function f() {" +
+         " if(x) return 1;" +
+         " else if(x) return 2;" +
+         " else if(x) return 3 }",
+         "function f() {" +
+         " if(x) return 1;" +
+         "{ if(x) return 2;" +
+         "{ if(x) return 3 } } }");
+  }
+
+
+  public void testRemoveElseCause1() {
+    test("function f() { if (x) throw 1; else f() }",
+         "function f() { if (x) throw 1; { f() } }");
+  }
+
+  public void testRemoveElseCause2() {
+    test("function f() { if (x) return 1; else f() }",
+         "function f() { if (x) return 1; { f() } }");
+    test("function f() { if (x) return; else f() }",
+         "function f() { if (x) {} else { f() } }");
+    // This case is handled by minimize exit points.
+    testSame("function f() { if (x) return; f() }");
+  }
+
+  public void testRemoveElseCause3() {
+    testSame("function f() { a:{if (x) break a; else f() } }");
+    testSame("function f() { if (x) { a:{ break a } } else f() }");
+    testSame("function f() { if (x) a:{ break a } else f() }");
+  }
+
+  public void testRemoveElseCause4() {
+    testSame("function f() { if (x) { if (y) { return 1; } } else f() }");
+  }
+
   public void testBindToCall1() {
     test("(goog.bind(f))()", "f()");
     test("(goog.bind(f,a))()", "f.call(a)");
@@ -921,6 +957,11 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
     // The FREE call wrapping should be moved out of the code generator
     // and into a denormalizing pass.
     new StringCompareTestCase().testBindToCall3();
+  }
+
+  public void testSimpleFunctionCall() {
+    test("var a = String(23)", "var a = '' + 23");
+    test("var a = String('hello')", "var a = '' + 'hello'");
   }
 
   private static class StringCompareTestCase extends CompilerTestCase {

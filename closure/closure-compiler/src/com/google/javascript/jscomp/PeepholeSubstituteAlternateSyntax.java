@@ -125,7 +125,6 @@ class PeepholeSubstituteAlternateSyntax
         }
         return node;
 
-
       case Token.TRUE:
       case Token.FALSE:
         return reduceTrueFalse(node);
@@ -140,12 +139,15 @@ class PeepholeSubstituteAlternateSyntax
       case Token.CALL:
         Node result =  tryFoldLiteralConstructor(node);
         if (result == node) {
-          result = tryFoldImmediateCallToBoundFunction(node);
+          result = tryFoldSimpleFunctionCall(node);
+          if (result == node) {
+            result = tryFoldImmediateCallToBoundFunction(node);
+          }
         }
         return result;
 
       case Token.COMMA:
-        return tryFoldComma(node);
+        return trySplitComma(node);
 
       case Token.NAME:
         return tryReplaceUndefined(node);
@@ -159,6 +161,26 @@ class PeepholeSubstituteAlternateSyntax
       default:
         return node; //Nothing changed
     }
+  }
+
+  private Node tryFoldSimpleFunctionCall(Node n) {
+    Preconditions.checkState(n.getType() == Token.CALL);
+    Node callTarget = n.getFirstChild();
+    if (callTarget != null && callTarget.getType() == Token.NAME &&
+          callTarget.getString().equals("String")) {
+      // Fold String(a) to ''+(a) - which allows further optimizations
+      Node value = callTarget.getNext();
+      if (value != null) {
+        Node addition = new Node(Token.ADD);
+        Node stringNode = Node.newString("").copyInformationFrom(callTarget);
+        addition.addChildToFront(stringNode);
+        addition.addChildToBack(value.detachFromParent());
+        n.getParent().replaceChild(n, addition);
+        reportCodeChange();
+        return addition;
+      }
+    }
+    return n;
   }
 
   private Node tryFoldImmediateCallToBoundFunction(Node n) {
@@ -200,7 +222,7 @@ class PeepholeSubstituteAlternateSyntax
     }
   }
 
-  private Node tryFoldComma(Node n) {
+  private Node trySplitComma(Node n) {
     if (!late) {
       return n;
     }
@@ -264,10 +286,32 @@ class PeepholeSubstituteAlternateSyntax
           n.replaceChild(child, returnNode);
           n.removeChild(nextNode);
           reportCodeChange();
+        } else if (elseBranch != null && statementMustExitParent(thenBranch)) {
+          child.removeChild(elseBranch);
+          n.addChildAfter(elseBranch, child);
+          reportCodeChange();
         }
       }
     }
     return n;
+  }
+
+  private boolean statementMustExitParent(Node n) {
+    switch (n.getType()) {
+      case Token.THROW:
+      case Token.RETURN:
+        return true;
+      case Token.BLOCK:
+        if (n.hasChildren()) {
+          Node child = n.getLastChild();
+          return statementMustExitParent(child);
+        }
+        return false;
+      // TODO(johnlenz): handle TRY/FINALLY
+      case Token.FUNCTION:
+      default:
+        return false;
+    }
   }
 
   /**
@@ -1387,8 +1431,6 @@ class PeepholeSubstituteAlternateSyntax
   }
 
   private Node reduceTrueFalse(Node n) {
-    // TODO(johnlenz): Re-enable this with Chrome 15.
-    /*
     if (late) {
       Node not = new Node(Token.NOT,
           Node.newNumber(n.getType() == Token.TRUE ? 0 : 1));
@@ -1397,7 +1439,6 @@ class PeepholeSubstituteAlternateSyntax
       reportCodeChange();
       return not;
     }
-    */
     return n;
   }
 

@@ -207,13 +207,17 @@ public class DiagnosticGroups {
           StrictModeCheck.DELETE_VARIABLE,
           StrictModeCheck.DUPLICATE_OBJECT_KEY);
 
+  public static DiagnosticGroup CHECK_PROVIDES =
+      DiagnosticGroups.registerGroup("checkProvides",
+          CheckProvides.MISSING_PROVIDE_WARNING);
+
   /**
    * Adds warning levels by name.
    */
   void setWarningLevel(CompilerOptions options,
       String name, CheckLevel level) {
     DiagnosticGroup group = forName(name);
-    Preconditions.checkNotNull(group, "No warning class for name: " + name);
+    Preconditions.checkNotNull(group, "No warning class for name: %s", name);
     options.setWarningLevel(group, level);
   }
 }

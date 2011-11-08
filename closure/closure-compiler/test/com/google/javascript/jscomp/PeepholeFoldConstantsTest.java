@@ -33,6 +33,8 @@ import java.util.Set;
  */
 public class PeepholeFoldConstantsTest extends CompilerTestCase {
 
+  private boolean late;
+
   // TODO(user): Remove this when we no longer need to do string comparison.
   private PeepholeFoldConstantsTest(boolean compareAsTree) {
     super("", compareAsTree);
@@ -44,14 +46,14 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
 
   @Override
   public void setUp() {
+    late = false;
     enableLineNumberCheck(true);
   }
 
   @Override
   public CompilerPass getProcessor(final Compiler compiler) {
     CompilerPass peepholePass = new PeepholeOptimizationsPass(compiler,
-          new PeepholeFoldConstants());
-
+          new PeepholeFoldConstants(late));
     return peepholePass;
   }
 
@@ -560,6 +562,9 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
     fold("x = ob[new String(12)]", "x = ob['12']");
     fold("x = ob[new String(false)]", "x = ob['false']");
     fold("x = ob[new String(null)]", "x = ob['null']");
+    fold("x = 'a' + new String('b')", "x = 'ab'");
+    fold("x = 'a' + new String(23)", "x = 'a23'");
+    fold("x = 2 + new String(1)", "x = '21'");
     foldSame("x = ob[new String(a)]");
     foldSame("x = new String('a')");
     foldSame("x = (new String('a'))[3]");
@@ -962,10 +967,17 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
   }
 
   public void testNotFoldBackToTrueFalse() {
-    // TODO(johnlenz): disable this for late folding once it has been reenabled.
+    late = false;
     fold("!0", "true");
     fold("!1", "false");
     fold("!3", "false");
+
+    late = true;
+    foldSame("!0");
+    foldSame("!1");
+    fold("!3", "false");
+    foldSame("false");
+    foldSame("true");
   }
 
   public void testFoldBangConstants() {
@@ -1063,9 +1075,8 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
           "void 0",
           "true",
           "false",
-          // TODO(johnlenz): Add these two back.
-          // "!0",
-          // "!1",
+          "!0",
+          "!1",
           "0",
           "1",
           "''",
@@ -1130,6 +1141,7 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
   }
 
   public void testCommutativeOperators() {
+    late = true;
     List<String> operators =
         ImmutableList.of(
             "==",

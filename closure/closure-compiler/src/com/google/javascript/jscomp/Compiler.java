@@ -975,8 +975,7 @@ public class Compiler extends AbstractCompiler {
     if (input == null) {
       return;
     }
-    Preconditions.checkState(input.isExtern(), "Not an extern input: "
-        + input.getName());
+    Preconditions.checkState(input.isExtern(), "Not an extern input: %s", input.getName());
     inputsById.remove(id);
     externs.remove(input);
     Node root = input.getAstRoot(this);
@@ -1001,9 +1000,7 @@ public class Compiler extends AbstractCompiler {
   /** Add a source input dynamically. Intended for incremental compilation. */
   void addIncrementalSourceAst(JsAst ast) {
     InputId id = ast.getInputId();
-    Preconditions.checkState(
-        getInput(id) == null,
-        "Duplicate input " + id.getIdName());
+    Preconditions.checkState(getInput(id) == null, "Duplicate input %s", id.getIdName());
     inputsById.put(id, new CompilerInput(ast));
   }
 
@@ -1018,9 +1015,7 @@ public class Compiler extends AbstractCompiler {
    */
   boolean replaceIncrementalSourceAst(JsAst ast) {
     CompilerInput oldInput = getInput(ast.getInputId());
-    Preconditions.checkNotNull(
-        oldInput,
-        "No input to replace: " + ast.getInputId().getIdName());
+    Preconditions.checkNotNull(oldInput, "No input to replace: %s", ast.getInputId().getIdName());
     Node newRoot = ast.getAstRoot(this);
     if (newRoot == null) {
       return false;
@@ -1085,6 +1080,8 @@ public class Compiler extends AbstractCompiler {
     if (typedScopeCreator != null) {
       symbolTable.addScopes(typedScopeCreator.getAllMemoizedScopes());
       symbolTable.addSymbolsFrom(typedScopeCreator);
+    } else {
+      symbolTable.findScopes(this, externsRoot, jsRoot);
     }
 
     GlobalNamespace globalNamespace =
@@ -1106,6 +1103,7 @@ public class Compiler extends AbstractCompiler {
     }
 
     symbolTable.fillNamespaceReferences();
+    symbolTable.fillPropertyScopes();
     symbolTable.fillThisReferences(this, externsRoot, jsRoot);
     symbolTable.fillPropertySymbols(this, externsRoot, jsRoot);
     symbolTable.fillJSDocInfo(this, externsRoot, jsRoot);

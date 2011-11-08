@@ -87,6 +87,9 @@ public class DefaultPassConfig extends PassConfig {
       DiagnosticType.error("JSC_NAME_REF_REPORT_FILE_ERROR",
           "Error \"{1}\" writing name reference report to \"{0}\".");
 
+  private static final java.util.regex.Pattern GLOBAL_SYMBOL_NAMESPACE_PATTERN =
+    java.util.regex.Pattern.compile("^[a-zA-Z0-9$_]+$");
+
   /**
    * A global namespace to share across checking passes.
    */
@@ -521,7 +524,10 @@ public class DefaultPassConfig extends PassConfig {
     }
 
     // Move functions before extracting prototype member declarations.
-    if (options.moveFunctionDeclarations) {
+    if (options.moveFunctionDeclarations ||
+        // renamePrefixNamescape relies on moveFunctionDeclarations
+        // to preserve semantics.
+        options.renamePrefixNamespace != null) {
       passes.add(moveFunctionDeclarations);
     }
 
@@ -657,6 +663,16 @@ public class DefaultPassConfig extends PassConfig {
     if (options.anonymousFunctionNaming ==
         AnonymousFunctionNamingPolicy.UNMAPPED) {
       passes.add(nameUnmappedAnonymousFunctions);
+    }
+
+    if (options.renamePrefixNamespace != null) {
+      if (!GLOBAL_SYMBOL_NAMESPACE_PATTERN.matcher(
+          options.renamePrefixNamespace).matches()) {
+        throw new IllegalArgumentException(
+            "Illegal character in renamePrefixNamespace name: "
+            + options.renamePrefixNamespace);
+      }
+      passes.add(rescopeGlobalSymbols);
     }
 
     if (options.operaCompoundAssignFix) {
@@ -984,11 +1000,12 @@ public class DefaultPassConfig extends PassConfig {
       new PassFactory("peepholeOptimizations", false) {
     @Override
     protected CompilerPass createInternal(AbstractCompiler compiler) {
+      final boolean late = false;
       return new PeepholeOptimizationsPass(compiler,
-            new PeepholeSubstituteAlternateSyntax(false),
+            new PeepholeSubstituteAlternateSyntax(late),
             new PeepholeReplaceKnownMethods(),
             new PeepholeRemoveDeadCode(),
-            new PeepholeFoldConstants(),
+            new PeepholeFoldConstants(late),
             new PeepholeCollectPropertyAssignments());
     }
   };
@@ -998,12 +1015,13 @@ public class DefaultPassConfig extends PassConfig {
       new PassFactory("latePeepholeOptimizations", true) {
     @Override
     protected CompilerPass createInternal(AbstractCompiler compiler) {
+      final boolean late = true;
       return new PeepholeOptimizationsPass(compiler,
             new StatementFusion(),
             new PeepholeRemoveDeadCode(),
-            new PeepholeSubstituteAlternateSyntax(true),
+            new PeepholeSubstituteAlternateSyntax(late),
             new PeepholeReplaceKnownMethods(),
-            new PeepholeFoldConstants()
+            new PeepholeFoldConstants(late)
             // TODO(johnlenz): reenable this once Chrome 15 is stable
             // new ReorderConstantExpression()
             );
@@ -1383,6 +1401,15 @@ public class DefaultPassConfig extends PassConfig {
     @Override
     protected CompilerPass createInternal(final AbstractCompiler compiler) {
       return new ClosureOptimizePrimitives(compiler);
+    }
+  };
+
+  /** Puts global symbols into a single object. */
+  final PassFactory rescopeGlobalSymbols =
+      new PassFactory("rescopeGlobalSymbols", true) {
+    @Override
+    protected CompilerPass createInternal(AbstractCompiler compiler) {
+      return new RescopeGlobalSymbols(compiler, options.renamePrefixNamespace);
     }
   };
 
