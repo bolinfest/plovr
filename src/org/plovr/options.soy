@@ -476,6 +476,51 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
   {case 'property-map-input-file'}
     If specified, plovr will pre-populate the compiler's property map with the
     property map contained in this file.
+  {case 'test-template'}
+    The Soy file to use as a template for JS unit tests.
+    The template will receive the following parameters:
+    <ul>
+      <li><code>title</code>
+      <li><code>baseJsUrl</code>
+      <li><code>testJsUrl</code>
+    </ul>
+    The default template is:
+{literal}<pre>/**
+ * @param title
+ * @param baseJsUrl
+ * @param testJsUrl
+ */
+&#123;template .test}
+&lt;!doctype html>
+&lt;html>
+&lt;head>
+  &lt;title>&#123;$title} test&lt;/title>
+&lt;/head>
+&lt;body>
+  &lt;script src="&#123;$baseJsUrl}">&lt;/script>
+  &lt;script src="&#123;$testJsUrl}">&lt;/script>
+&lt;/body>
+&lt;/html>
+&#123;/template}</pre>{/literal}
+    See the section on <a href="testing.html">testing</a> for more details. 
+  {case 'test-excludes'}
+    By default, all files that end in <code>_test.js</code> under
+    the <a href="#paths">paths</a> directories are included in the test runner
+    that runs all of the JS unit tests. This option can be used to specify
+    subpaths of <a href="#paths">paths</a> that should be excluded from testing.
+    <p>
+    For example, if the <a href="#closure-library">closure-library</a> option is
+    used to specify a custom Closure Library, then it is likely that
+    {sp}<code>"third_party/closure"</code> will be specified as a
+    {sp}<a href="#paths">path</a> to include utilities such as
+    {sp}<code>goog.async.Deferred</code>. Including such a directory will also
+    include <code>closure/goog/dojo/dom/query_test.js</code>, which fails when
+    run by plovr because its corresponding <code>query_test.html</code> file
+    includes a hardcoded path to <code>base.js</code> that cannot be loaded by
+    plovr. If this is a problem, then <code>"third_party/closure"</code> should
+    be included as an argument to <code>test-excludes</code>.
+    <p>
+    See the section on <a href="testing.html">testing</a> for more details. 
 {/switch}
 
 {/template}
