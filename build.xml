@@ -288,7 +288,7 @@
              classpathref="plovr.classpath"
              >
       <link href="http://download.oracle.com/javase/6/docs/api/" />
-      <link href="http://guava-libraries.googlecode.com/svn/trunk/javadoc/" />
+      <link href="http://docs.guava-libraries.googlecode.com/git-history/v10.0.1/javadoc/" />
       <link href="http://google-gson.googlecode.com/svn/tags/gson-1.7.1/docs/javadocs/" />
       <link href="http://closure-compiler.googlecode.com/svn/trunk/javadoc/" />
       <link href="http://closure-templates.googlecode.com/svn/trunk/javadoc-complete/" />
