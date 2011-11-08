@@ -168,8 +168,8 @@
     <!-- Copy resources needed for org.plovr package. -->
     <copy todir="${classes.dir}/org/plovr">
       <fileset dir="${src.dir}/org/plovr">
-        <include name="*.js" />
-        <include name="*.soy" />
+        <include name="**/*.js" />
+        <include name="**/*.soy" />
       </fileset>
     </copy>
 
