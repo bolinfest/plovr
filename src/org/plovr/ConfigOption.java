@@ -592,6 +592,30 @@ public enum ConfigOption {
       builder.setTestTemplate(new File(resolvedPath));
     }
   }),
+
+  TEST_EXCLUDES("test-excludes", new ConfigUpdater() {
+    @Override
+    public void apply(String path, Config.Builder builder) {
+      String resolvedPath = maybeResolvePath(path, builder);
+      builder.addTestExcludePath(new File(resolvedPath));
+    }
+
+    @Override
+    public void apply(JsonArray paths, Config.Builder builder) {
+      for (JsonElement item : paths) {
+        String path = GsonUtil.stringOrNull(item);
+        if (path != null) {
+          apply(path, builder);
+        }
+      }
+    }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetTestExcludePaths();
+      return true;
+    }
+  }),
   ;
 
   private static class ConfigUpdater {

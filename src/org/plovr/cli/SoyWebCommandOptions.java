@@ -39,10 +39,15 @@ public class SoyWebCommandOptions extends AbstractCommandOptions {
       usage = "File where global variables for Soy are defined")
   private String compileTimeGlobalsFile = null;
 
-  @Option(name = "--safe",
-      usage = "Safe mode: URL query parameters cannot be used to inject " +
-          "input into the template.")
-  private boolean isSafeMode = false;
+  @Option(name = "--unsafe",
+      usage = "Lets a user inject template data via URL query parameters. " +
+      "This is considered unsafe because it creates the possibility for XSS " +
+      "attacks. Therefore, this should be used for internal prototyping ONLY.")
+  private boolean allowQueryParameterInjection = false;
+
+  @Option(name = "--noindexes",
+      usage = "Do not serve index pages that list all files in a directory.")
+  private boolean noIndexPages = false;
 
   public SoyWebCommandOptions() {}
 
@@ -67,6 +72,10 @@ public class SoyWebCommandOptions extends AbstractCommandOptions {
   }
 
   public boolean isSafeMode() {
-    return isSafeMode;
+    return !allowQueryParameterInjection;
+  }
+
+  public boolean areIndexPagesEnabled() {
+    return !noIndexPages;
   }
 }

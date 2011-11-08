@@ -1,4 +1,4 @@
-package org.plovr.soy.server;
+package org.plovr;
 
 import java.io.File;
 

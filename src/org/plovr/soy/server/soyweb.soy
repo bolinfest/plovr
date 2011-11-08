@@ -1,0 +1,64 @@
+{namespace org.plovr.soyweb}
+
+/**
+ * @param directory
+ * @param directoryParts
+ * @param directories
+ * @param files
+ */
+{template .directory}
+<!doctype html>
+<html>
+<head>
+  <title>{$directory} file list</title>
+  <style>
+  {literal}
+  body {
+    font: 13px Arial, sans-serif;    
+  }
+
+  h3 {
+    background-color: #EEE;
+    padding: 5px;
+  }
+  {/literal}
+  </style>
+</head>
+<body>
+
+<h2>
+  {foreach $part in $directoryParts}
+  / <a href="{$part.href}">{$part.name}</a>{sp}
+  {/foreach}
+  /
+</h2>
+
+<h3>Directories</h3>
+
+{foreach $dir in $directories}
+  {call .showFile}
+    {param file: $dir /}
+    {param isDir: true /}
+  {/call}
+{/foreach}
+
+<h3>Files</h3>
+
+{foreach $file in $files}
+  {call .showFile}
+    {param file: $file /}
+    {param isDir: false /}
+  {/call}
+{/foreach}
+
+</body>
+</html>
+{/template}
+
+/**
+ * @param file
+ * @param isDir
+ */
+{template .showFile}
+<a href="{$file}{if $isDir}/{/if}">{$file}</a><br>
+{/template}

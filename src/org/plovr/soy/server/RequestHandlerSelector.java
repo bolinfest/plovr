@@ -7,7 +7,9 @@ import java.net.URI;
 import java.util.Map;
 
 import javax.activation.MimetypesFileTypeMap;
+import javax.annotation.Nullable;
 
+import org.plovr.FileUtil;
 import org.plovr.HttpUtil;
 
 import com.google.common.base.Ascii;
@@ -38,6 +40,8 @@ public class RequestHandlerSelector implements HttpHandler {
 
   private final SoyRequestHandler soyRequestHandler;
 
+  private final DirectoryHandler directoryHandler;
+
   public RequestHandlerSelector(Config config) {
     this.config = config;
     ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
@@ -55,42 +59,44 @@ public class RequestHandlerSelector implements HttpHandler {
     extensionToContentType = builder.build();
 
     soyRequestHandler = new SoyRequestHandler(config);
+    directoryHandler = new DirectoryHandler(config);
   }
 
   @Override
   public void handle(HttpExchange exchange) throws IOException {
-    URI uri = exchange.getRequestURI();
-    String path = uri.getPath();
-
-    // Special case index.html.
-    File contentDir = config.getContentDirectory();
-    if (path.endsWith("/")) {
-      if ((new File(contentDir, path + "index.html")).exists()) {
-        path += "index.html";
-      }
-      // TODO(bolinfest): If there is no index.html or index.soy and
-      // directory listing is enabled, display a list of the files
-      // under the requested directory as HTML.
+    File staticContent = getCorrespondingFileForRequest(config, exchange);
+    if (staticContent == null) {
+      // A 403 response was already written.
+      return;
     }
 
-    String extension = getFileExtension(path);
+    if (staticContent.exists() && staticContent.isDirectory()) {
+      // Special case index.html.
+      File contentDir = config.getContentDirectory();
+      URI uri = exchange.getRequestURI();
+      File indexHtmlFile = new File(contentDir, uri.getPath() + "index.html");
+      File indexSoyFile = new File(contentDir, uri.getPath() + "index.soy");
+      if (indexHtmlFile.exists() || indexSoyFile.exists()) {
+        staticContent = indexHtmlFile;
+      } else {
+        // If there is no index.html or index.soy and directory listing is
+        // enabled, display a list of the files under the requested directory as
+        // HTML.
+        if (config.indexPagesAreEnabled()) {
+          directoryHandler.handle(exchange);
+        } else {
+          write403Unauthorized(exchange);
+        }
+        return;
+      }
+    }
+
+    String extension = getFileExtension(staticContent.toString());
 
     // If the request is for an HTML file but no HTML file exists at that path,
     // try to fall back on a Soy file with the same name. This feature makes it
     // easier to convert an HTML file to a template without having to create a
     // redirect.
-    File staticContent = new File(contentDir, path);
-
-    if (!FileUtil.contains(contentDir, staticContent)) {
-      // Someone is trying to pull a fast one! The request URI might be
-      // something like: "/../../../etc/passwd", so do not allow requests to
-      // files above the content directory.
-      HttpUtil.writeHtmlErrorMessageResponse(exchange,
-          "You do not have permission to access the requested file.",
-          403);
-      return;
-    }
-
     boolean trySoyInstead = !staticContent.exists() && ".html".equals(
         extension);
 
@@ -106,7 +112,7 @@ public class RequestHandlerSelector implements HttpHandler {
       String contentType = extensionToContentType.get(extension);
       if (contentType == null) {
         contentType = MimetypesFileTypeMap.getDefaultFileTypeMap().
-            getContentType(path);
+            getContentType(staticContent.toString());
         if (UNKNOWN_MIME_TYPE.equals(contentType) && !containsNul(bytes)) {
           // As a coarse heuristic, when the MIME type is unknown, if the file
           // does not contain a \0, use 'text/plain' instead of
@@ -125,6 +131,35 @@ public class RequestHandlerSelector implements HttpHandler {
       output.write(bytes);
       output.close();
     }
+  }
+
+  /**
+   * Returns the file that corresponds to the request. If the file is not under
+   * the directory that is being served by SoyWeb, then a 403 response is
+   * written and this method will return {@code null}. The returned
+   * {@link File} object may not represent a file that actually exists.
+   */
+  static @Nullable File getCorrespondingFileForRequest(Config config,
+      HttpExchange exchange) throws IOException {
+    URI uri = exchange.getRequestURI();
+    File contentDir = config.getContentDirectory();
+    File staticContent = new File(contentDir, uri.getPath());
+
+    if (!FileUtil.contains(contentDir, staticContent)) {
+      // Someone is trying to pull a fast one! The request URI might be
+      // something like: "/../../../etc/passwd", so do not allow requests to
+      // files above the content directory.
+      write403Unauthorized(exchange);
+      return null;
+    } else {
+      return staticContent;
+    }
+  }
+
+  static void write403Unauthorized(HttpExchange exchange) throws IOException {
+    HttpUtil.writeHtmlErrorMessageResponse(exchange,
+        "You do not have permission to access the requested file.",
+        403);
   }
 
   private static boolean containsNul(byte[] bytes) {

@@ -1,0 +1,140 @@
+{namespace plovr.testing}
+
+/***/
+{template .base}
+
+{call plovr.header}
+  {param title: 'JsUnit Testing' /}
+  {param selected: 'docs.html' /}
+  {param secondaryHeading: true /}
+  {param secondarySelected: 'testing.html' /}
+{/call}
+
+<h2>JsUnit Testing</h2>
+
+The Closure Testing Framework makes it possible to run JsUnit-style tests.
+plovr aims to facilitate testing by autogenerating the boilerplate HTML needed
+to run a JsUnit-style test, as well as by generating a{sp}
+<code>goog.testing.MultiTestRunner</code> so that all of your tests can be run
+from one page.
+
+<p>
+
+This page is intended to provide the minimum amount of information that you need
+to get started with the Closure Test Framework. For more information, please see
+{sp}{call plovr.simpleBookLink /}. 
+
+<h3>Writing a Test</h3>
+
+The convention for unit testing a file of JavaScript code is to create the test case in
+a file of the same name, except with a <code>_test.js</code> suffix. For example,
+to create a unit test for <code>goog.string</code>, which is defined in
+{sp}<code>string.js</code>, the test code should be written in
+{sp}<code>string_test.js</code>.
+Here is a code sample from such a <code>string_test.js</code> file:
+
+{literal}<pre>goog.require('goog.string');
+goog.require('goog.testing.jsunit');
+
+var testStartsWith = function() &#123;
+  assertTrue('Should start with \'\'', goog.string.startsWith('abcd', ''));
+  assertTrue('Should start with \'ab\'', goog.string.startsWith('abcd', 'ab'));
+};
+</pre>{/literal}
+
+<p>
+
+One might wonder why plovr deviates from the standard of the Closure Library,
+which is to include both the JavaScript and the HTML needed for a test in one
+file with a <code>_test.html</code> suffix. plovr does things differently because in
+the future, plovr will make it possible to run tests in either raw or compiled
+modes. (There is an internal option in the Closure Compiler named{sp}
+<code>exportTestFunctions</code> that will help make this possible.) Keeping the
+JavaScript separate from the HTML will make this easier to implement.
+
+<h3>Running a Test</h3>
+
+Start plovr in server mode and navigate
+to <b>http://localhost:9810/</b> as you normally would to see the list
+of configs that plovr is serving. Under each config, you should see a link to
+{sp}<b>list of tests</b>. Follow that link and you will see the list of the 
+HTML files that plovr has created so you can run your tests.
+There should be one page for each of your test cases.
+
+<p>
+
+To run a test case, simply load the <code>_test.html</code> file that plovr has
+generated for you. On this page, you can set breakpoints and do all sorts of
+things that you would normally do to debug your JavaScript code.
+As you might expect, passing tests are displayed in green while failing tests
+are displayed in red.
+
+<h3>Running All Tests</h3>
+
+Often, you want to run not just one test, but all of your tests. To do so,
+follow the same steps for running an individual test, but instead of clicking
+on <b>list of tests</b>, click on <b>Test runner</b>. This will bring up a
+{sp}<code>goog.testing.MultiTestRunner</code> that runs all of your tests.
+
+<p>
+The "list of tests" page and <code>MultiTestRunner</code> page link to one
+another so that you can easily switch between running one or all of your tests.
+
+<h3>Customizing the HTML for a Test Case</h3>
+
+plovr generates the HTML for your test case from a Soy template. The default
+template that plovr uses can be found in{sp}
+<a href="http://code.google.com/p/plovr/source/browse/src/org/plovr/test.soy">test.soy</a>
+{sp}and is named <code>org.plovr.test</code>. 
+You can specify your own template by using the <a href="options.html#test-template">test-template</a>
+{sp}option in your plovr config. Note that your template must be defined in its
+own Soy file, and must also be named <code>org.plovr.test</code>.
+
+<h3>Tip: Use setUpPage() to Avoid Initialization Errors</h3>
+
+Often, you will <code>goog.require()</code> a library that will not be loaded
+until the test is running. That means that you cannot use that library outside
+of test code. For example, the following will not work:
+
+{literal}<pre>goog.require('goog.Uri');
+goog.require('goog.testing.jsunit');
+
+<span style="color: #A00">// This will throw an exception because goog.Uri is not defined yet.</span>
+var plovrUri = new goog.Uri('http://plovr.com/');
+
+var testGetScheme = function() &#123;
+  assertEquals('http', plovrUri.getScheme());
+};
+
+var testGetDomain = function() &#123;
+  assertEquals('plovr.com', plovrUri.getDomain());
+};</pre>{/literal}
+
+The solution is to use <code>setUpPage()</code>, which is a special function
+that is run once before any of the tests in the test case are run:
+
+{literal}<pre>goog.require('goog.Uri');
+goog.require('goog.testing.jsunit');
+
+var plovrUri;
+
+var setUpTest = function() &#123;
+  plovrUri = new goog.Uri('http://plovr.com/');
+};
+
+var testGetScheme = function() &#123;
+  assertEquals('http', plovrUri.getScheme());
+};
+
+var testGetDomain = function() &#123;
+  assertEquals('plovr.com', plovrUri.getDomain());
+};</pre>{/literal}
+
+To run the same code before each of the tests in the test case is run,
+define a function named <code>setUp()</code> with the code you want to run.
+There are also analogous <code>tearDown()</code> and
+{sp}<code>tearDownPage()</code> functions that you can define to run code
+after each test, or after all tests, respectively.
+
+
+{/template}

@@ -1,0 +1,16 @@
+{namespace tasks2}
+
+/**
+ * This template will be rendered by SoyWeb when the user loads <b>tasks2.soy</b>.
+ * This makes it possible to see how an empty task list will be rendered.
+ */
+{template .soyweb}
+{call tasks.demoPage}
+  {param content}
+    {call tasks.list}
+      {param title: 'Food Shopping' /}
+      {param items: [] /}
+    {/call}
+  {/param}
+{/call}
+{/template}

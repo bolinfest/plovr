@@ -83,7 +83,8 @@
 
 /**
  * @param configId
- * @param tests array of paths to _test.html URLs 
+ * @param baseJsUrl
+ * @param tests array of paths to _test.html URLs
  */
 {template .testRunner}
 {call .testRunnerCss /}
@@ -108,7 +109,7 @@
   <label for="filter">Run only tests for path</label>
 </form>
 
-<script src="/input/{$configId}/closure/goog/base.js"></script>
+<script src="{$baseJsUrl}"></script>
 {literal}
 <script>
 goog.require('goog.userAgent.product');

@@ -43,6 +43,14 @@ public class TestHandler extends AbstractGetHandler {
     super(server, true /* usesRestfulPath */);
   }
 
+  /**
+   * @return the relative URL to load base.js for the specified {@link Config}
+   */
+  private static String getBaseJsUrl(Config config) {
+    return "/input/" + config.getId() +
+        config.getManifest().getBaseJs().getName();
+  }
+
   @Override
   protected void doGet(HttpExchange exchange, QueryData data, Config config)
       throws IOException {
@@ -103,7 +111,7 @@ public class TestHandler extends AbstractGetHandler {
     // Instead of loading base.js and the uncompiled test file, consider
     // creating a plovr config for each test file so that it is easier to run
     // the test in either raw or compiled mode.
-    String baseJsUrl = "/input/" + config.getId() + "/closure/goog/base.js";
+    String baseJsUrl = getBaseJsUrl(config);
     String testJsUrl = "/test/" + config.getId() + "/" + jsFileName;
     SoyMapData mapData = new SoyMapData(
         "title", jsFileName,
@@ -135,6 +143,7 @@ public class TestHandler extends AbstractGetHandler {
     SoyListData tests = new SoyListData(testFilePaths);
     SoyMapData soyData = new SoyMapData(
         "configId", config.getId(),
+        "baseJsUrl", getBaseJsUrl(config),
         "tests", tests);
     String html = TOFU.newRenderer(templateName).setData(
         soyData).render();
@@ -153,7 +162,8 @@ public class TestHandler extends AbstractGetHandler {
       if (!dependency.isDirectory()) {
         continue;
       }
-      addAllTestFiles(dependency, dependency, testFilePaths);
+      addAllTestFiles(dependency, dependency, testFilePaths,
+          config.getTestExcludePaths());
     }
 
     return testFilePaths;
@@ -161,13 +171,25 @@ public class TestHandler extends AbstractGetHandler {
 
   /**
    * Each value in to testFilePaths must not have a leading slash.
+   * @param excludedFilePaths each excluded path is guaranteed to be contained
+   *     by some input path
    */
   private static void addAllTestFiles(File base, File directory,
-      Set<String> testFilePaths) {
+      Set<String> testFilePaths, Set<File> excludedFilePaths) {
+    // Do not recurse on a directory that is explicitly excluded.
+    if (excludedFilePaths.contains(directory)) {
+      return;
+    }
+
     for (File entry : directory.listFiles()) {
       if (entry.isDirectory()) {
-        addAllTestFiles(base, entry, testFilePaths);
+        addAllTestFiles(base, entry, testFilePaths, excludedFilePaths);
       } else if (entry.isFile()) {
+        // Do not consider a file that is explicitly excluded.
+        if (excludedFilePaths.contains(entry)) {
+          continue;
+        }
+
         if (entry.getName().endsWith("_test.js")) {
           String basePath = base.getAbsolutePath();
           String testPath = entry.getAbsolutePath();

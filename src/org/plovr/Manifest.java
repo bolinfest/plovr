@@ -223,13 +223,17 @@ public final class Manifest {
   }
 
   JsInput getBaseJs() {
-    if (closureLibraryDirectory == null) {
+    if (isBuiltInClosureLibrary()) {
       return ResourceReader.getBaseJs();
     } else {
       // TODO: Use a Supplier so that this is only done once.
-      String path = "base.js";
-      return new JsSourceFile(path, new File(closureLibraryDirectory, path));
+      return new JsSourceFile("/base.js",
+          new File(closureLibraryDirectory, "base.js"));
     }
+  }
+
+  boolean isBuiltInClosureLibrary() {
+    return closureLibraryDirectory == null;
   }
 
   JsInput getDepsJs() {
@@ -297,7 +301,7 @@ public final class Manifest {
   Set<JsInput> getAllDependencies() {
     Set<JsInput> allDependencies = Sets.newHashSet();
     final boolean externsOnly = false;
-    if (closureLibraryDirectory == null) {
+    if (isBuiltInClosureLibrary()) {
       allDependencies.addAll(ResourceReader.getClosureLibrarySources());
     } else {
       allDependencies.addAll(getFiles(closureLibraryDirectory, externsOnly));
@@ -324,13 +328,18 @@ public final class Manifest {
   private Set<JsInput> getFiles(Set<File> filesToExpand, boolean externsOnly) {
     Set<JsInput> inputs = Sets.newHashSet();
     for (File file : filesToExpand) {
-      getInputs(file, "", inputs, externsOnly);
+      getInputs(file, inputs, externsOnly, file);
     }
     return ImmutableSet.copyOf(inputs);
   }
 
-  private void getInputs(File file, String path, Set<JsInput> output,
-      boolean externsOnly) {
+  /**
+   *
+   * @param rootOfSearch is the directory where this search started -- this is
+   *     used to determine the relative path of the resulting input
+   */
+  private void getInputs(File file, Set<JsInput> output, boolean externsOnly,
+      final File rootOfSearch) {
     // Some editors may write backup files whose names start with a
     // dot. Furthermore, Emacs will create symlinks that start with a
     // dot that don't point at actual files, causing file.exists() to
@@ -346,6 +355,23 @@ public final class Manifest {
     Preconditions.checkArgument(file.exists(), "File not found at: " +
         file.getAbsolutePath());
 
+    Function<File, String> getRelativePath = new Function<File, String>() {
+      @Override
+      public String apply(File file) {
+        // If the root of the search is a file rather than a directory, then it
+        // should be the file parameter to getInputs(). In that case, just use
+        // the name of the file as the name of the JsInput.
+        if (!rootOfSearch.isDirectory()) {
+          Preconditions.checkArgument(rootOfSearch.equals(file));
+          return file.getName();
+        }
+
+        String rootPath = rootOfSearch.getAbsolutePath();
+        String fullPath = file.getAbsolutePath();
+        return fullPath.substring(rootPath.length());
+      }
+    };
+
     if (file.isFile()) {
       String fileName = file.getName();
       if (fileName.endsWith(".js") ||
@@ -354,7 +380,7 @@ public final class Manifest {
         // Using "." as the value for "paths" in the config file results in ugly
         // names for JsInputs because of the way the relative path is resolved,
         // so strip the leading "/./" from the JsInput name in this case.
-        String name = path + "/" + fileName;
+        String name = getRelativePath.apply(file);
         final String uglyPrefix = "/./";
         if (name.startsWith(uglyPrefix)) {
           name = name.substring(uglyPrefix.length());
@@ -366,9 +392,8 @@ public final class Manifest {
       }
     } else if (file.isDirectory()) {
       logger.config("Directory to explore: " + file);
-      path += "/" + file.getName();
       for (File entry : file.listFiles()) {
-        getInputs(entry, path, output, externsOnly);
+        getInputs(entry, output, externsOnly, rootOfSearch);
       }
     }
   }

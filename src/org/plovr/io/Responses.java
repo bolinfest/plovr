@@ -62,4 +62,10 @@ public final class Responses {
     responseBody.write(text);
     responseBody.close();
   }
+
+  public static void redirect(HttpExchange exchange, String uri)
+      throws IOException {
+    exchange.getResponseHeaders().add("Location", uri);
+    exchange.sendResponseHeaders(302, 0);
+  }
 }

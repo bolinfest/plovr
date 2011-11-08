@@ -162,7 +162,7 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     useful if you have complex dependencies that transitively depend on jQuery
     but not the Closure Library, for example).
     However, using <code>goog.provide()</code> and <code>goog.require()</code> in
-    <code>RAW</code> or <code>WHITESPACE</code> mode will almost definitely
+    {sp}<code>RAW</code> or <code>WHITESPACE</code> mode will almost definitely
     not work without <code>base.js</code>.
     <p>
     Because this is an experimental option, it may be removed at some point with
@@ -275,7 +275,7 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
     Though if you do so,
     in order to make sure that your JavaScript code is interpreted with the
     correct character encoding, make sure to specify it in the <code>&lt;script></code>
-    tag as follows:
+    {sp}tag as follows:
 <pre>&lt;script type="text/javascript" src="myscript.js" charset="utf-8">&lt;/script></pre>
   {case 'fingerprint'}
     Whether to fingerprint the JS files for modules when plovr is used in
@@ -309,7 +309,7 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
   {case 'global-scope-name'}
     A scope name for multiple modules to share. This will cause
     modules to be wrapped with a
-    {literal}<pre>(function($) { with ($) { ... } })(scope)</pre>{/literal}
+    {literal}<pre>(function(a) { with (a) { ... } })(scope)</pre>{/literal}
     (and the main module will additionally start with{sp}
     {literal}<code>scope = {}</code>{/literal}{sp}
     so that you don't actually have to do anything special). As a
@@ -476,6 +476,57 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
   {case 'property-map-input-file'}
     If specified, plovr will pre-populate the compiler's property map with the
     property map contained in this file.
+  {case 'test-template'}
+    The Soy file to use as a template for JsUnit-style tests.
+    The template will receive the following parameters:
+    <ul>
+      <li><code>title</code>
+      <li><code>baseJsUrl</code>
+      <li><code>testJsUrl</code>
+    </ul>
+    The default template is:
+{literal}<pre>&#123;namespace org.plovr}
+
+/**
+ * @param title
+ * @param baseJsUrl
+ * @param testJsUrl
+ */
+&#123;template .test}
+&lt;!doctype html>
+&lt;html>
+&lt;head>
+  &lt;title>&#123;$title} test&lt;/title>
+&lt;/head>
+&lt;body>
+  &lt;script src="&#123;$baseJsUrl}">&lt;/script>
+  &lt;script src="&#123;$testJsUrl}">&lt;/script>
+&lt;/body>
+&lt;/html>
+&#123;/template}</pre>{/literal}
+    The value of the <code>test-template</code> option is not the content of your template, but the path
+    to the <code>.soy</code> file that defines your template. Your template
+    must be named <code>org.plovr.test</code>, just like the default template. 
+    <p> 
+    See the section on <a href="testing.html">testing</a> for more details. 
+  {case 'test-excludes'}
+    By default, all files that end in <code>_test.js</code> under
+    the <a href="#paths">paths</a> directories are included in the test runner
+    that runs all of the JS unit tests. This option can be used to specify
+    subpaths of <a href="#paths">paths</a> that should be excluded from testing.
+    <p>
+    For example, if the <a href="#closure-library">closure-library</a> option is
+    used to specify a custom Closure Library, then it is likely that
+    {sp}<code>"third_party/closure"</code> will be specified as a
+    {sp}<a href="#paths">path</a> to include utilities such as
+    {sp}<code>goog.async.Deferred</code>. Including such a directory will also
+    include <code>closure/goog/dojo/dom/query_test.js</code>, which fails when
+    run by plovr because its corresponding <code>query_test.html</code> file
+    includes a hardcoded path to <code>base.js</code> that cannot be loaded by
+    plovr. If this is a problem, then <code>"third_party/closure"</code> should
+    be included as an argument to <code>test-excludes</code>.
+    <p>
+    See the section on <a href="testing.html">testing</a> for more details. 
 {/switch}
 
 {/template}

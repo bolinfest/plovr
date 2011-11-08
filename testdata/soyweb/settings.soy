@@ -1,0 +1,26 @@
+{namespace settings}
+
+/**
+ * @param? accessToken
+ */
+{template .facebook}
+<div>
+  {if $accessToken}
+    You have granted access to Facebook.
+    Your access token is <b>{$accessToken|id}</b>.
+  {else}
+    This application does not have access to Facebook.
+    {sp}
+    <button>Grant Access</button>
+  {/if}
+</div>
+{/template}
+
+/**
+ * Demo the settings UI using SoyWeb.
+ */
+{template .soyweb}
+<body>
+  {call .facebook data="all" /}
+</body>
+{/template}
