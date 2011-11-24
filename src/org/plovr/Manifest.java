@@ -366,9 +366,9 @@ public final class Manifest {
           return file.getName();
         }
 
-        String rootPath = rootOfSearch.getAbsolutePath();
-        String fullPath = file.getAbsolutePath();
-        return fullPath.substring(rootPath.length());
+        String rootPath = rootOfSearch.toURI().toString();
+        String fullPath = file.toURI().toString();
+        return "/" + fullPath.substring(rootPath.length());
       }
     };
 
