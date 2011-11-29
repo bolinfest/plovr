@@ -14,6 +14,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
@@ -60,7 +61,7 @@ public final class Manifest {
    * the lookup efficient, populate this map when getInputsInCompilationOrder()
    * is called to prepare for the requests that are about to occur.
    */
-  private Map<String, JsInput> lastOrdering;
+  private Map<String, JsInput> dependencyCache;
 
   private final SoyFileOptions soyFileOptions;
 
@@ -178,7 +179,8 @@ public final class Manifest {
   }
 
   public List<JsInput> getInputsInCompilationOrder() throws CompilationException {
-    Set<JsInput> allDependencies = getAllDependencies();
+    Set<JsInput> allDependencies = getAllDependencies(
+        true /* cacheDependencies */);
 
     Map<String, JsInput> provideToSource = getProvideToSource(allDependencies);
 
@@ -190,13 +192,6 @@ public final class Manifest {
     for (JsInput requiredInput : requiredInputs) {
       buildDependencies(provideToSource, compilerInputs, requiredInput);
     }
-
-    // Update lastOrdering before returning.
-    Map<String, JsInput> lastOrdering = Maps.newHashMap();
-    for (JsInput input : compilerInputs) {
-      lastOrdering.put(input.getName(), input);
-    }
-    this.lastOrdering = lastOrdering;
 
     return ImmutableList.copyOf(compilerInputs);
   }
@@ -242,23 +237,30 @@ public final class Manifest {
     return new DepsJsInput(getBaseJs(), depsJs);
   }
 
+  /**
+   * Returns the {@link JsInput} that corresponds to the specified name based on
+   * the dependency cache created by a call to
+   * {@link #getAllDependencies(boolean)}. This method should only be used when
+   * the cache is believed to be valid. Unfortunately, relying on a cache in
+   * this manner may risk correctness of the application; however, it provides
+   * an order-of-magnitude performance benefit:
+   * http://code.google.com/p/plovr/issues/detail?id=54
+   * Therefore, the cache is here to stay, but this method should be exercised
+   * with caution.
+   * <p>
+   * This method must be able to return dependencies that may not be
+   * transitively included by the inputs specified in the config. That is, it
+   * should be able to return any file listed in the generated deps.js.
+   */
   JsInput getJsInputByName(String name) {
-    if (lastOrdering == null) {
+    if (dependencyCache == null) {
       // It is possible that a file could be requested from the manifest before
       // a compilation is done, such as when a user navigates directly to /view.
-      // In that case, lastOrdering will be null, so invoke
-      // getInputsInCompilationOrder() so that it gets initialized.
-      try {
-        // TODO(bolinfest): Create a utility method that just traverses the list
-        // of inputs and dependencies as the ordering is not actually needed at
-        // this point. Such a utility method would not throw a
-        // CompilationException.
-        getInputsInCompilationOrder();
-      } catch (CompilationException e) {
-        throw new RuntimeException(e);
-      }
+      // In that case, dependencyCache will be null, so invoke
+      // getAllDependencies() so that it gets initialized.
+      getAllDependencies(true /* cacheDependencies */);
     }
-    return lastOrdering.get(name);
+    return dependencyCache.get(name);
   }
 
   void buildDependencies(Map<String, JsInput> provideToSource,
@@ -298,7 +300,11 @@ public final class Manifest {
     currentDependencyChain.remove(input);
   }
 
-  Set<JsInput> getAllDependencies() {
+  /**
+   * @param cacheDependencies whether the dependencies should be cached so that
+   *     {@link #getJsInputByName(String)} can leverage the cache so it is fast
+   */
+  Set<JsInput> getAllDependencies(boolean cacheDependencies) {
     Set<JsInput> allDependencies = Sets.newHashSet();
     final boolean externsOnly = false;
     if (isBuiltInClosureLibrary()) {
@@ -311,6 +317,16 @@ public final class Manifest {
     // name used to specify the input is preferred.
     allDependencies.addAll(requiredInputs);
     allDependencies.addAll(getFiles(dependencies, externsOnly));
+
+    if (cacheDependencies) {
+      ImmutableMap.Builder<String, JsInput> dependencyCacheBuilder =
+          ImmutableMap.builder();
+      for (JsInput dep : allDependencies) {
+        dependencyCacheBuilder.put(dep.getName(), dep);
+      }
+      this.dependencyCache = dependencyCacheBuilder.build();
+    }
+
     return allDependencies;
   }
 
@@ -414,7 +430,8 @@ public final class Manifest {
   String buildDepsJs(Function<JsInput, String> converter) {
     StringBuilder builder = new StringBuilder();
     SortedSet<JsInput> inputs = ImmutableSortedSet.copyOf(
-        JsInputComparator.SINGLETON, getAllDependencies());
+        JsInputComparator.SINGLETON,
+        getAllDependencies(true /* cacheDependencies */));
 
     final Gson gson = new Gson();
 

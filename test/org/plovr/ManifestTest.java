@@ -183,7 +183,8 @@ public class ManifestTest {
         null /* builtInExterns */,
         new SoyFileOptions(),
         false /* customExternsOnly */);
-    Set<JsInput> dependencies = manifest.getAllDependencies();
+    Set<JsInput> dependencies = manifest.getAllDependencies(
+        false /* cacheDependencies */);
 
     JsInput valueIfNotFound = null;
     JsInput foundValue = Iterables.find(dependencies, new Predicate<JsInput>() {

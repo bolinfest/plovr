@@ -74,7 +74,8 @@ final class ViewFileHandler extends AbstractGetHandler {
    * Find the Soy file by name in the manifest or throw the specified exception.
    */
   private SoyFile findSoyFile(String name, Manifest manifest, RuntimeException e) {
-    Set<JsInput> allDeps = manifest.getAllDependencies();
+    Set<JsInput> allDeps = manifest.getAllDependencies(
+        false /* cacheDependencies */);
     for (JsInput input : allDeps) {
       if (input.getName().equals(name) && input instanceof SoyFile) {
         return (SoyFile)input;

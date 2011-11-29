@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -123,6 +122,7 @@ public class InputFileHandler extends AbstractGetHandler {
   @Override
   protected void doGet(HttpExchange exchange, QueryData data, Config config)
       throws IOException {
+    long start = System.currentTimeMillis();
     Manifest manifest = config.getManifest();
 
     // Find the code for the requested input.
@@ -149,20 +149,18 @@ public class InputFileHandler extends AbstractGetHandler {
     name = name.replaceAll(PARENT_DIRECTORY_REPLACEMENT_PATTERN,
         PARENT_DIRECTORY_TOKEN);
 
-    // The requested input may not be transitively included by the config, but
-    // it should still be served, so check all of the dependencies.
-    Set<JsInput> allDependencies = manifest.getAllDependencies();
+    JsInput requestedInput = manifest.getJsInputByName(name);
 
     // TODO: eliminate this hack with the slash -- just make it an invariant of
     // the system.
-    String nameWithoutLeadingSlash =
-        name.startsWith("/") ? name.substring(1) : null;
-    for (JsInput dep : allDependencies) {
-      if (dep.getName().equals(name) ||
-          dep.getName().equals(nameWithoutLeadingSlash)) {
-        code = dep.getCode();
-        break;
-      }
+    if (requestedInput == null && name.startsWith("/")) {
+      // Remove the leading slash and try again.
+      name = name.substring(1);
+      requestedInput = manifest.getJsInputByName(name);
+    }
+
+    if (requestedInput != null) {
+      code = requestedInput.getCode();
     }
 
     if (code == null) {
@@ -170,7 +168,14 @@ public class InputFileHandler extends AbstractGetHandler {
       return;
     }
 
+    long end = System.currentTimeMillis();
+
     Responses.writeJs(code, config, exchange);
+    long written = System.currentTimeMillis();
+
+    // Currently included for help with debugging
+    // http://code.google.com/p/plovr/issues/detail?id=54
+    System.out.printf("Millis to load code: %d  to write: %d  name: %s\n", (end - start), (written - end), name);
   }
 
   private String getCodeForDepsJs(Manifest manifest) {
