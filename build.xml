@@ -21,6 +21,11 @@
   <property name="closure-library.dir" value="${closure.dir}/closure-library" />
   <property name="closure-templates.dir" value="${closure.dir}/closure-templates" />
 
+  <available file="${build.dir}/plovr.jar"
+             type="file"
+             property="jar.present"
+             />
+
   <path id="plovr.classpath">
     <!-- All jars listed here must also be included in plovr.jar -->
     <fileset dir="${lib.dir}" includes="*.jar" />
@@ -304,28 +309,18 @@
   -->
   <target name="generate-closure-library-jsdoc"
           description="Generates HTML documentation for Closure Library">
-    <delete dir="${build.dir.www.jsdoc}" />
-    <mkdir dir="${build.dir.www.jsdoc}" />
     <exec executable="bash" failonerror="true">
       <arg value="${scripts.dir}/generate-closure-library-jsdoc.sh" />
     </exec>
-    <!-- This assumes that plovr has already been compiled. -->
-    <java classname="org.plovr.cli.Main"
-          fork="true"
-          maxmemory="512m">
-      <arg value="jsdoc" />
-      <arg line="${build.dir.www.jsdoc}/config.js" />
-      <classpath>
-        <pathelement path="${src.dir}" />
-        <pathelement path="${classes.dir}" />
-        <pathelement location="${build.dir}/plovr.jar" />
-      </classpath>
-    </java>
   </target>
 
   <target name="serve-prod-documentation"
           description="run the soyweb server on plovr.com to serve the docs"
-          depends="generate-options-documentation, javadoc, jar, generate-closure-library-jsdoc">
+          depends="generate-options-documentation, javadoc">
+    <fail unless="jar.present">
+      The plovr jar has not been built. Run "ant jar" to build it.
+    </fail>
+
     <mkdir dir="${build.dir.www}" />
     <copy todir="${build.dir.www}">
       <fileset dir="${www.dir}" includes="**/*" />
@@ -342,10 +337,6 @@
   </target>
 
   <target name="run-demo" description="run the demo">
-    <available file="${build.dir}/plovr.jar"
-               type="file"
-               property="jar.present"
-               />
     <fail unless="jar.present">
       The plovr jar has not been built. Run "ant jar" to build it.
     </fail>
