@@ -40,8 +40,6 @@
 package com.google.javascript.rhino.jstype;
 
 import static com.google.common.base.Preconditions.checkState;
-import static com.google.javascript.rhino.jstype.ObjectType.Property;
-
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
@@ -127,19 +125,19 @@ class PrototypeObjectType extends ObjectType {
   }
 
   @Override
-  public StaticSlot<JSType> getSlot(String name) {
+  public Property getSlot(String name) {
     if (properties.containsKey(name)) {
       return properties.get(name);
     }
     ObjectType implicitPrototype = getImplicitPrototype();
     if (implicitPrototype != null) {
-      StaticSlot<JSType> prop = implicitPrototype.getSlot(name);
+      Property prop = implicitPrototype.getSlot(name);
       if (prop != null) {
         return prop;
       }
     }
     for (ObjectType interfaceType : getCtorExtendedInterfaces()) {
-      StaticSlot<JSType> prop = interfaceType.getSlot(name);
+      Property prop = interfaceType.getSlot(name);
       if (prop != null) {
         return prop;
       }
@@ -352,7 +350,7 @@ class PrototypeObjectType extends ObjectType {
   }
 
   @Override
-  public String toString() {
+  String toStringHelper(boolean forAnnotations) {
     if (hasReferenceName()) {
       return getReferenceName();
     } else if (prettyPrint) {
@@ -379,10 +377,10 @@ class PrototypeObjectType extends ObjectType {
 
         sb.append(property);
         sb.append(": ");
-        sb.append(getPropertyType(property).toString());
+        sb.append(getPropertyType(property).toStringHelper(forAnnotations));
 
         ++i;
-        if (i == MAX_PRETTY_PRINTED_PROPERTIES) {
+        if (!forAnnotations && i == MAX_PRETTY_PRINTED_PROPERTIES) {
           sb.append(", ...");
           break;
         }
@@ -393,7 +391,7 @@ class PrototypeObjectType extends ObjectType {
       prettyPrint = true;
       return sb.toString();
     } else {
-      return "{...}";
+      return forAnnotations ? "?" : "{...}";
     }
   }
 

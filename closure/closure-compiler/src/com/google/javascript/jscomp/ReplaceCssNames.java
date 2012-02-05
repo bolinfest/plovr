@@ -21,6 +21,7 @@ import static com.google.javascript.rhino.jstype.JSTypeNative.STRING_TYPE;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.JSType;
@@ -138,14 +139,14 @@ class ReplaceCssNames implements CompilerPass {
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (n.getType() == Token.CALL &&
+      if (n.isCall() &&
           GET_CSS_NAME_FUNCTION.equals(n.getFirstChild().getQualifiedName())) {
         int count = n.getChildCount();
         Node first = n.getFirstChild().getNext();
         switch (count) {
           case 2:
             // Replace the function call with the processed argument.
-            if (first.getType() == Token.STRING) {
+            if (first.isString()) {
               processStringNode(t, first);
               n.removeChild(first);
               parent.replaceChild(n, first);
@@ -162,18 +163,18 @@ class ReplaceCssNames implements CompilerPass {
 
             Node second = first.getNext();
 
-            if (second.getType() != Token.STRING) {
+            if (!second.isString()) {
               compiler.report(t.makeError(n, STRING_LITERAL_EXPECTED_ERROR,
                   Token.name(second.getType())));
-            } else if (first.getType() == Token.STRING) {
+            } else if (first.isString()) {
               compiler.report(t.makeError(
                   n, UNEXPECTED_STRING_LITERAL_ERROR,
                   first.getString(), second.getString()));
             } else {
               processStringNode(t, second);
               n.removeChild(first);
-              Node replacement = new Node(Token.ADD, first,
-                  Node.newString("-" + second.getString())
+              Node replacement = IR.add(first,
+                  IR.string("-" + second.getString())
                       .copyInformationFrom(second))
                   .copyInformationFrom(n);
               replacement.setJSType(nativeStringType);

@@ -84,7 +84,7 @@ class InferJSDocInfo extends AbstractPostOrderCallback
   @Override
   public void hotSwapScript(Node root, Node originalRoot) {
     Preconditions.checkNotNull(root);
-    Preconditions.checkState(root.getType() == Token.SCRIPT);
+    Preconditions.checkState(root.isScript());
     inExterns = false;
     NodeTraversal.traverse(compiler, root, this);
   }
@@ -101,9 +101,9 @@ class InferJSDocInfo extends AbstractPostOrderCallback
         }
 
         // Only allow JSDoc on VARs, function declarations, and assigns.
-        if (parent.getType() != Token.VAR &&
+        if (!parent.isVar() &&
             !NodeUtil.isFunctionDeclaration(parent) &&
-            !(parent.getType() == Token.ASSIGN &&
+            !(parent.isAssign() &&
               n == parent.getFirstChild())) {
           return;
         }
@@ -119,14 +119,14 @@ class InferJSDocInfo extends AbstractPostOrderCallback
         // /** ... */ var x = function() { ... }
         docInfo = n.getJSDocInfo();
         if (docInfo == null &&
-            !(parent.getType() == Token.VAR &&
+            !(parent.isVar() &&
                 !parent.hasOneChild())) {
           docInfo = parent.getJSDocInfo();
         }
 
         // Try to find the type of the NAME.
         JSType varType = n.getJSType();
-        if (varType == null && parent.getType() == Token.FUNCTION) {
+        if (varType == null && parent.isFunction()) {
           varType = parent.getJSType();
         }
 
@@ -157,8 +157,8 @@ class InferJSDocInfo extends AbstractPostOrderCallback
         // 2)
         // /** @deprecated */
         // obj.prop;
-        if (NodeUtil.isExpressionNode(parent) ||
-            (parent.getType() == Token.ASSIGN &&
+        if (parent.isExprResult() ||
+            (parent.isAssign() &&
              parent.getFirstChild() == n)) {
           docInfo = n.getJSDocInfo();
           if (docInfo == null) {
@@ -209,7 +209,7 @@ class InferJSDocInfo extends AbstractPostOrderCallback
         objType.setJSDocInfo(docInfo);
 
         if (objType.isConstructor() || objType.isInterface()) {
-          objType.toMaybeFunctionType(objType).getInstanceType().setJSDocInfo(
+          JSType.toMaybeFunctionType(objType).getInstanceType().setJSDocInfo(
               docInfo);
         } else if (objType instanceof EnumType) {
           ((EnumType) objType).getElementsType().setJSDocInfo(docInfo);

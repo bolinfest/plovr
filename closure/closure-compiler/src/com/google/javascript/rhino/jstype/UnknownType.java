@@ -61,7 +61,7 @@ public class UnknownType extends ObjectType {
   }
 
   @Override
-  public StaticSlot<JSType> getSlot(String name) {
+  public Property getSlot(String name) {
     return null;
   }
 
@@ -121,7 +121,7 @@ public class UnknownType extends ObjectType {
   }
 
   @Override
-  public String toString() {
+  String toStringHelper(boolean forAnnotations) {
     return getReferenceName();
   }
 

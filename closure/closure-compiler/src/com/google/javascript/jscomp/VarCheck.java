@@ -20,6 +20,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -33,8 +34,6 @@ import java.util.Set;
  */
 class VarCheck extends AbstractPostOrderCallback implements
     HotSwapCompilerPass {
-  /** Name of the synthetic script that holds undefined variables. */
-  static final String SYNTHETIC_VARS_DECLAR = "{SyntheticVarsDeclar}";
 
   static final DiagnosticType UNDEFINED_VAR_ERROR = DiagnosticType.error(
       "JSC_UNDEFINED_VARIABLE",
@@ -65,11 +64,6 @@ class VarCheck extends AbstractPostOrderCallback implements
       "JSC_UNDEFINED_EXTERN_VAR_ERROR",
       "name {0} is not undefined in the externs.");
 
-  static final DiagnosticType INVALID_FUNCTION_DECL =
-    DiagnosticType.error("JSC_INVALID_FUNCTION_DECL",
-        "Syntax error: function declaration must have a name");
-
-  private CompilerInput synthesizedExternsInput = null;
   private Node synthesizedExternsRoot = null;
 
   // Vars that still need to be declared in externs. These will be declared
@@ -114,7 +108,7 @@ class VarCheck extends AbstractPostOrderCallback implements
 
   @Override
   public void hotSwapScript(Node scriptRoot, Node originalRoot) {
-    Preconditions.checkState(scriptRoot.getType() == Token.SCRIPT);
+    Preconditions.checkState(scriptRoot.isScript());
     NodeTraversal t = new NodeTraversal(compiler, this);
     // Note we use the global scope to prevent wrong "undefined-var errors" on
     // variables that are defined in other js files.
@@ -125,7 +119,7 @@ class VarCheck extends AbstractPostOrderCallback implements
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
-    if (n.getType() != Token.NAME) {
+    if (!n.isName()) {
       return;
     }
 
@@ -133,19 +127,14 @@ class VarCheck extends AbstractPostOrderCallback implements
 
     // Only a function can have an empty name.
     if (varName.isEmpty()) {
-      Preconditions.checkState(NodeUtil.isFunction(parent));
-
-      // A function declaration with an empty name passes Rhino,
-      // but is supposed to be a syntax error according to the spec.
-      if (!NodeUtil.isFunctionExpression(parent)) {
-        t.report(n, INVALID_FUNCTION_DECL);
-      }
+      Preconditions.checkState(parent.isFunction());
+      Preconditions.checkState(NodeUtil.isFunctionExpression(parent));
       return;
     }
 
     // Check if this is a declaration for a var that has been declared
     // elsewhere. If so, mark it as a duplicate.
-    if ((parent.getType() == Token.VAR ||
+    if ((parent.isVar() ||
          NodeUtil.isFunctionDeclaration(parent)) &&
         varsToDeclareInExterns.contains(varName)) {
       createSynthesizedExternVar(varName);
@@ -188,11 +177,12 @@ class VarCheck extends AbstractPostOrderCallback implements
     JSModule currModule = currInput.getModule();
     JSModule varModule = varInput.getModule();
     JSModuleGraph moduleGraph = compiler.getModuleGraph();
-    if (varModule != currModule && varModule != null && currModule != null) {
+    if (!sanityCheck &&
+        varModule != currModule && varModule != null && currModule != null) {
       if (moduleGraph.dependsOn(currModule, varModule)) {
         // The module dependency was properly declared.
       } else {
-        if (!sanityCheck && scope.isGlobal()) {
+        if (scope.isGlobal()) {
           if (moduleGraph.dependsOn(varModule, currModule)) {
             // The variable reference violates a declared module dependency.
             t.report(n, VIOLATED_MODULE_DEP_ERROR,
@@ -217,7 +207,7 @@ class VarCheck extends AbstractPostOrderCallback implements
    * subsequent compiler passes from crashing.
    */
   private void createSynthesizedExternVar(String varName) {
-    Node nameNode = Node.newString(Token.NAME, varName);
+    Node nameNode = IR.name(varName);
 
     // Mark the variable as constant if it matches the coding convention
     // for constant vars.
@@ -230,7 +220,7 @@ class VarCheck extends AbstractPostOrderCallback implements
     }
 
     getSynthesizedExternsRoot().addChildToBack(
-        new Node(Token.VAR, nameNode));
+        IR.var(nameNode));
     varsToDeclareInExterns.remove(varName);
     compiler.reportCodeChange();
   }
@@ -242,11 +232,11 @@ class VarCheck extends AbstractPostOrderCallback implements
   private class NameRefInExternsCheck extends AbstractPostOrderCallback {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (n.getType() == Token.NAME) {
+      if (n.isName()) {
         switch (parent.getType()) {
           case Token.VAR:
           case Token.FUNCTION:
-          case Token.LP:
+          case Token.PARAM_LIST:
             // These are okay.
             break;
           case Token.GETPROP:
@@ -275,11 +265,7 @@ class VarCheck extends AbstractPostOrderCallback implements
 
   /** Lazily create a "new" externs input for undeclared variables. */
   private CompilerInput getSynthesizedExternsInput() {
-    if (synthesizedExternsInput == null) {
-      synthesizedExternsInput =
-          compiler.newExternInput(SYNTHETIC_VARS_DECLAR);
-    }
-    return synthesizedExternsInput;
+    return compiler.getSynthesizedExternsInput();
   }
 
   /** Lazily create a "new" externs root for undeclared variables. */

@@ -21,13 +21,15 @@ import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.base.Supplier;
 import com.google.common.base.Throwables;
-import com.google.common.io.Files;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.common.io.Files;
 import com.google.javascript.jscomp.CompilerOptions.TweakProcessing;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.TokenStream;
@@ -222,7 +224,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     options.setTweakProcessing(config.tweakProcessing);
     createDefineOrTweakReplacements(config.tweak, options, true);
 
-    options.manageClosureDependencies = config.manageClosureDependencies;
+    options.setManageClosureDependencies(config.manageClosureDependencies);
     if (config.closureEntryPoints.size() > 0) {
       options.setManageClosureDependencies(config.closureEntryPoints);
     }
@@ -238,8 +240,6 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       if (config.skipNormalOutputs) {
         throw new FlagUsageException("skip_normal_outputs and js_output_file"
             + " cannot be used together.");
-      } else {
-        options.jsOutputFile = config.jsOutputFile;
       }
     }
 
@@ -306,6 +306,9 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     }
 
     options.acceptConstKeyword = config.acceptConstKeyword;
+    options.transformAMDToCJSModules = config.transformAMDToCJSModules;
+    options.processCommonJSModules = config.processCommonJSModules;
+    options.commonJSModulePathPrefix = config.commonJSModulePathPrefix;
   }
 
   final protected A getCompiler() {
@@ -692,9 +695,9 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
 
     setRunOptions(options);
 
-    boolean writeOutputToFile = !options.jsOutputFile.isEmpty();
+    boolean writeOutputToFile = !config.jsOutputFile.isEmpty();
     if (writeOutputToFile) {
-      jsOutput = fileNameToLegacyOutputWriter(options.jsOutputFile);
+      jsOutput = fileNameToLegacyOutputWriter(config.jsOutputFile);
     } else if (jsOutput instanceof OutputStream) {
       jsOutput = streamToLegacyOutputWriter((OutputStream) jsOutput);
     }
@@ -784,7 +787,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
             OUTPUT_WRAPPER_MARKER);
 
         // Output the source map if requested.
-        outputSourceMap(options, options.jsOutputFile);
+        outputSourceMap(options, config.jsOutputFile);
       } else {
         parsedModuleWrappers = parseModuleWrappers(config.moduleWrapper, modules);
         maybeCreateDirsForPath(config.moduleOutputPathPrefix);
@@ -832,7 +835,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       // Output the externs if required.
       if (options.externExportsPath != null) {
         Writer eeOut =
-            openExternExportsStream(options, options.jsOutputFile);
+            openExternExportsStream(options, config.jsOutputFile);
         eeOut.append(result.externExport);
         eeOut.close();
       }
@@ -976,7 +979,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
   /** Expansion function for source map. */
   @VisibleForTesting
   String expandSourceMapPath(B options, JSModule forModule) {
-    if (Strings.isEmpty(options.sourceMapOutputPath)) {
+    if (Strings.isNullOrEmpty(options.sourceMapOutputPath)) {
       return null;
     }
     return expandCommandLinePath(options.sourceMapOutputPath, forModule);
@@ -1041,8 +1044,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
   /**
    * Create a writer with the newer output charset.
    */
-  private Writer streamToOutputWriter2(OutputStream stream)
-      throws IOException {
+  private Writer streamToOutputWriter2(OutputStream stream) {
     if (outputCharset2 == null) {
       return new BufferedWriter(
           new OutputStreamWriter(stream));
@@ -1060,7 +1062,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
    */
   private void outputSourceMap(B options, String associatedName)
       throws IOException {
-    if (Strings.isEmpty(options.sourceMapOutputPath)) {
+    if (Strings.isNullOrEmpty(options.sourceMapOutputPath)) {
       return;
     }
 
@@ -1118,7 +1120,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
 
     // Check the create_name_map_files FLAG.
     if (config.createNameMapFiles) {
-      String basePath = getMapPath(options.jsOutputFile);
+      String basePath = getMapPath(config.jsOutputFile);
 
       propertyMapOutputPath = basePath + "_props_map.out";
       variableMapOutputPath = basePath + "_vars_map.out";
@@ -1311,7 +1313,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       Appendable out, boolean isManifest) throws IOException {
     Joiner commas = Joiner.on(",");
     boolean requiresNewline = false;
-    for (JSModule module : graph.getAllModulesInDependencyOrder()) {
+    for (JSModule module : graph.getAllModules()) {
       if (requiresNewline) {
         out.append("\n");
       }
@@ -1355,6 +1357,23 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
   private void printBundleTo(Iterable<CompilerInput> inputs, Appendable out)
       throws IOException {
     for (CompilerInput input : inputs) {
+      // Every module has an empty file in it. This makes it easier to implement
+      // cross-module code motion.
+      //
+      // But it also leads to a weird edge case because
+      // a) If we don't have a module spec, we create a singleton module, and
+      // b) If we print a bundle file, we copy the original input files.
+      //
+      // This means that in the (rare) case where we have no inputs, and no
+      // module spec, and we're printing a bundle file, we'll have a fake
+      // input file that shouldn't be copied. So we special-case this, to
+      // make all the other cases simpler.
+      if (input.getName().equals(
+              Compiler.createFillFileName(Compiler.SINGLETON_MODULE_NAME))) {
+        Preconditions.checkState(1 == Iterables.size(inputs));
+        return;
+      }
+
       String rootRelativePath = rootRelativePathsMap.get(input.getName());
       String displayName = rootRelativePath != null
           ? rootRelativePath
@@ -1847,6 +1866,39 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
      */
     CommandLineConfig setManifestMaps(List<String> manifestMaps) {
       this.manifestMaps = manifestMaps;
+      return this;
+    }
+
+
+    private boolean transformAMDToCJSModules = false;
+
+    /**
+     * Set whether to transform AMD to Common JS modules.
+     */
+    CommandLineConfig setTransformAMDToCJSModules(boolean transformAMDToCJSModules) {
+      this.transformAMDToCJSModules = transformAMDToCJSModules;
+      return this;
+    }
+
+    private boolean processCommonJSModules = false;
+
+    /**
+     * Sets whether to process Common JS modules.
+     */
+    CommandLineConfig setProcessCommonJSModules(boolean processCommonJSModules) {
+      this.processCommonJSModules = processCommonJSModules;
+      return this;
+    }
+
+
+    private String commonJSModulePathPrefix =
+        ProcessCommonJSModules.DEFAULT_FILENAME_PREFIX;
+
+    /**
+     * Sets the Common JS module path prefix.
+     */
+    CommandLineConfig setCommonJSModulePathPrefix(String commonJSModulePathPrefix) {
+      this.commonJSModulePathPrefix = commonJSModulePathPrefix;
       return this;
     }
 

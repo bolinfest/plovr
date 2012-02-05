@@ -31,7 +31,7 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
       "var RegExp = function f(a){};\n" +
       "var Array = function f(a){};\n";
 
-  private boolean doCommaSplitting = true;
+  private boolean late = true;
 
   // TODO(user): Remove this when we no longer need to do string comparison.
   private PeepholeSubstituteAlternateSyntaxTest(boolean compareAsTree) {
@@ -44,16 +44,17 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
 
   @Override
   public void setUp() throws Exception {
-    doCommaSplitting = true;
+    late = true;
     super.setUp();
     enableLineNumberCheck(true);
+    disableNormalize();
   }
 
   @Override
   public CompilerPass getProcessor(final Compiler compiler) {
     CompilerPass peepholePass =
       new PeepholeOptimizationsPass(compiler,
-          new PeepholeSubstituteAlternateSyntax(doCommaSplitting));
+          new PeepholeSubstituteAlternateSyntax(late));
 
     return peepholePass;
   }
@@ -97,6 +98,7 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
 
   /** Check that removing blocks with 1 child works */
   public void testFoldOneChildBlocks() {
+    late = false;
     fold("function f(){if(x)a();x=3}",
         "function f(){x&&a();x=3}");
     fold("function f(){if(x){a()}x=3}",
@@ -199,6 +201,29 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
     foldSame("function f(){for(var x in y) { return x.y; } return k}");
   }
 
+  public void testCombineIfs1() {
+    fold("function f() {if (x) return 1; if (y) return 1}",
+         "function f() {if (x||y) return 1;}");
+    fold("function f() {if (x) return 1; if (y) foo(); else return 1}",
+         "function f() {if ((!x)&&y) foo(); else return 1;}");
+  }
+
+  public void testCombineIfs2() {
+    // combinable but not yet done
+    foldSame("function f() {if (x) throw 1; if (y) throw 1}");
+    // Can't combine, side-effect
+    fold("function f(){ if (x) g(); if (y) g() }",
+         "function f(){ x&&g(); y&&g() }");
+    // Can't combine, side-effect
+    fold("function f(){ if (x) y = 0; if (y) y = 0; }",
+         "function f(){ x&&(y = 0); y&&(y = 0); }");
+  }
+
+  public void testCombineIfs3() {
+    foldSame("function f() {if (x) return 1; if (y) {g();f()}}");
+  }
+
+
   /** Try to minimize assignments */
   public void testFoldAssignments() {
     fold("function f(){if(x)y=3;else y=4;}", "function f(){y=x?3:4}");
@@ -254,6 +279,8 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
 
   public void testAndParenthesesCount() {
     fold("function f(){if(x||y)a.foo()}", "function f(){(x||y)&&a.foo()}");
+    fold("function f(){if(x.a)x.a=0}",
+         "function f(){x.a&&(x.a=0)}");
     foldSame("function f(){if(x()||y()){x()||y()}}");
   }
 
@@ -418,9 +445,9 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
     fold("x = new Array(Array(1, '2', 3, '4'))", "x = [[1, '2', 3, '4']]");
     fold("x = Array(Array(1, '2', 3, '4'))", "x = [[1, '2', 3, '4']]");
     fold("x = new Array(Object(), Array(\"abc\", Object(), Array(Array())))",
-         "x = [{}, [\"abc\", {}, [[]]]");
+         "x = [{}, [\"abc\", {}, [[]]]]");
     fold("x = new Array(Object(), Array(\"abc\", Object(), Array(Array())))",
-         "x = [{}, [\"abc\", {}, [[]]]");
+         "x = [{}, [\"abc\", {}, [[]]]]");
 
     disableNormalize();
     // Cannot fold above when not normalized
@@ -501,6 +528,32 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
   public void testMinimizeCondition_example1() {
     // Based on a real failing code sample.
     fold("if(!!(f() > 20)) {foo();foo()}", "if(f() > 20){foo();foo()}");
+  }
+
+  public void testFoldLoopBreakLate() {
+    late = true;
+    fold("for(;;) if (a) break", "for(;!a;);");
+    foldSame("for(;;) if (a) { f(); break }");
+    fold("for(;;) if (a) break; else f()", "for(;!a;) { { f(); } }");
+    fold("for(;a;) if (b) break", "for(;a && !b;);");
+    fold("for(;a;) { if (b) break; if (c) break; }", "for(;(a && !b) && !c;);");
+
+    // 'while' is normalized to 'for'
+    enableNormalize(true);
+    fold("while(true) if (a) break", "for(;1&&!a;);");
+  }
+
+  public void testFoldLoopBreakEarly() {
+    late = false;
+    foldSame("for(;;) if (a) break");
+    foldSame("for(;;) if (a) { f(); break }");
+    foldSame("for(;;) if (a) break; else f()");
+    foldSame("for(;a;) if (b) break");
+    foldSame("for(;a;) { if (b) break; if (c) break; }");
+
+    foldSame("while(1) if (a) break");
+    enableNormalize(true);
+    foldSame("while(1) if (a) break");
   }
 
   public void testFoldConditionalVarDeclaration() {
@@ -800,31 +853,31 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
 
   public void testComma1() {
     fold("1, 2", "1; 1");
-    doCommaSplitting = false;
+    late = false;
     foldSame("1, 2");
   }
 
   public void testComma2() {
     test("1, a()", "1; a()");
-    doCommaSplitting = false;
+    late = false;
     foldSame("1, a()");
   }
 
   public void testComma3() {
     test("1, a(), b()", "1; a(); b()");
-    doCommaSplitting = false;
+    late = false;
     foldSame("1, a(), b()");
   }
 
   public void testComma4() {
     test("a(), b()", "a();b()");
-    doCommaSplitting = false;
+    late = false;
     foldSame("a(), b()");
   }
 
   public void testComma5() {
     test("a(), b(), 1", "a();b();1");
-    doCommaSplitting = false;
+    late = false;
     foldSame("a(), b(), 1");
   }
 

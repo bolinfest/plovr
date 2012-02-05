@@ -19,9 +19,8 @@ package com.google.javascript.jscomp;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
 import com.google.javascript.jscomp.Scope.Var;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
-
 import java.util.Iterator;
 import java.util.Set;
 
@@ -79,7 +78,7 @@ class GroupVariableDeclarations implements CompilerPass, ScopedCallback {
     Iterator<Var> scopeVarIter = t.getScope().getVars();
     while (scopeVarIter.hasNext()) {
       Node parentNode = scopeVarIter.next().getParentNode();
-      if (parentNode.getType() == Token.VAR) {
+      if (parentNode.isVar()) {
         varNodes.add(parentNode);
       }
     }
@@ -153,11 +152,9 @@ class GroupVariableDeclarations implements CompilerPass, ScopedCallback {
       // replace
       groupVar.replaceChild(initializedName, clone);
       // add the assignment now.
-      Node initializedVal = initializedName.getFirstChild();
-      initializedName.removeChild(initializedVal);
-      Node assignmentNode = new Node(Token.ASSIGN, initializedName);
-      assignmentNode.addChildAfter(initializedVal, initializedName);
-      if (groupVarParent.getType() == Token.FOR) {
+      Node initializedVal = initializedName.removeFirstChild();
+      Node assignmentNode = IR.assign(initializedName, initializedVal);
+      if (groupVarParent.isFor()) {
         // Handle For and For-In Loops specially. For these, we do not need
         // to construct an EXPR_RESULT node.
         groupVarParent.replaceChild(groupVar, assignmentNode);
@@ -168,14 +165,14 @@ class GroupVariableDeclarations implements CompilerPass, ScopedCallback {
     } else {
       // There is no initialized var. But we need to handle FOR and
       // FOR-IN loops specially
-      if (groupVarParent.getType() == Token.FOR) {
+      if (groupVarParent.isFor()) {
         if (NodeUtil.isForIn(groupVarParent)) {
           // In For-In loop, we replace the VAR node with a NAME node
           Node nameNodeClone = groupVar.getFirstChild().cloneNode();
           groupVarParent.replaceChild(groupVar, nameNodeClone);
         } else {
           // In For loop, we replace the VAR node with an EMPTY node
-          Node emptyNode = new Node(Token.EMPTY);
+          Node emptyNode = IR.empty();
           groupVarParent.replaceChild(groupVar, emptyNode);
         }
       } else {

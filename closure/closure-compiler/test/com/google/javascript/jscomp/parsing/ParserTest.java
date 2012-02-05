@@ -17,12 +17,12 @@
 package com.google.javascript.jscomp.parsing;
 
 import com.google.common.collect.ImmutableList;
-import com.google.javascript.jscomp.mozilla.rhino.ScriptRuntime;
 import com.google.javascript.jscomp.parsing.Config.LanguageMode;
 import com.google.javascript.jscomp.testing.TestErrorReporter;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
+import com.google.javascript.rhino.head.ScriptRuntime;
 import com.google.javascript.rhino.jstype.SimpleSourceFile;
 import com.google.javascript.rhino.jstype.StaticSourceFile;
 import com.google.javascript.rhino.testing.BaseJSTypeTestCase;
@@ -77,7 +77,7 @@ public class ParserTest extends BaseJSTypeTestCase {
 
     assertEquals(Token.CALL, call.getType());
     assertEquals(2, call.getLineno());
-    assertEquals(4, call.getCharno());
+    assertEquals(1, call.getCharno());
   }
 
   public void testLinenoCharnoGetProp1() throws Exception {
@@ -915,6 +915,38 @@ public class ParserTest extends BaseJSTypeTestCase {
     parse("x.yield;");
   }
 
+  public void testGetPropFunctionName() {
+    parseError("function a.b() {}",
+        "missing ( before function parameters.");
+    parseError("var x = function a.b() {}",
+        "missing ( before function parameters.");
+  }
+
+  public void testGetPropFunctionNameIdeMode() {
+    // In IDE mode, we try to fix up the tree, but sometimes
+    // this leads to even more errors.
+    isIdeMode = true;
+    parseError("function a.b() {}",
+        "missing ( before function parameters.",
+        "missing formal parameter",
+        "missing ) after formal parameters",
+        "missing { before function body",
+        "syntax error",
+        "missing ; before statement",
+        "Unsupported syntax: ERROR",
+        "Unsupported syntax: ERROR");
+    parseError("var x = function a.b() {}",
+        "missing ( before function parameters.",
+        "missing formal parameter",
+        "missing ) after formal parameters",
+        "missing { before function body",
+        "syntax error",
+        "missing ; before statement",
+        "missing ; before statement",
+        "Unsupported syntax: ERROR",
+        "Unsupported syntax: ERROR");
+  }
+
   public void testIdeModePartialTree() {
     Node partialTree = parseError("function Foo() {} f.",
         "missing name after . operator");
@@ -926,6 +958,19 @@ public class ParserTest extends BaseJSTypeTestCase {
     assertNotNull(partialTree);
   }
 
+  public void testForEach() {
+    parseError(
+        "function f(stamp, status) {\n" +
+        "  for each ( var curTiming in this.timeLog.timings ) {\n" +
+        "    if ( curTiming.callId == stamp ) {\n" +
+        "      curTiming.flag = status;\n" +
+        "      break;\n" +
+        "    }\n" +
+        "  }\n" +
+        "};",
+        "unsupported language extension: for each");
+  }
+
   /**
    * Verify that the given code has the given parse errors.
    * @return If in IDE mode, returns a partial tree.
@@ -934,7 +979,6 @@ public class ParserTest extends BaseJSTypeTestCase {
     TestErrorReporter testErrorReporter = new TestErrorReporter(errors, null);
     Node script = null;
     try {
-
       StaticSourceFile file = new SimpleSourceFile("input", false);
       script = ParserRunner.parse(
           file, string, ParserRunner.createConfig(isIdeMode, mode, false),

@@ -176,6 +176,65 @@ public class JSModuleGraphTest extends TestCase {
         sourceNames(results));
   }
 
+  public void testManageDependencies3() throws Exception {
+    List<CompilerInput> inputs = setUpManageDependenciesTest();
+    DependencyOptions depOptions = new DependencyOptions();
+    depOptions.setDependencySorting(true);
+    depOptions.setDependencyPruning(true);
+    depOptions.setMoocherDropping(true);
+    depOptions.setEntryPoints(ImmutableList.<String>of("c2"));
+    List<CompilerInput> results = graph.manageDependencies(
+        depOptions, inputs);
+
+    // Everything gets pushed up into module c, because that's
+    // the only one that has entry points.
+    assertInputs(A);
+    assertInputs(B);
+    assertInputs(C, "a1", "c1", "c2");
+    assertInputs(E);
+
+    assertEquals(
+        Lists.newArrayList("a1", "c1", "c2"),
+        sourceNames(results));
+  }
+
+  public void testManageDependencies4() throws Exception {
+    setUpManageDependenciesTest();
+    DependencyOptions depOptions = new DependencyOptions();
+    depOptions.setDependencySorting(true);
+
+    List<CompilerInput> inputs = Lists.newArrayList();
+
+    // Add the inputs in a random order.
+    inputs.addAll(E.getInputs());
+    inputs.addAll(B.getInputs());
+    inputs.addAll(A.getInputs());
+    inputs.addAll(C.getInputs());
+
+    List<CompilerInput> results = graph.manageDependencies(
+        depOptions, inputs);
+
+    assertInputs(A, "a1", "a2", "a3");
+    assertInputs(B, "b1", "b2");
+    assertInputs(C, "c1", "c2");
+    assertInputs(E, "e1", "e2");
+
+    assertEquals(
+        Lists.newArrayList(
+            "a1", "a2", "a3", "b1", "b2", "c1", "c2", "e1", "e2"),
+        sourceNames(results));
+  }
+
+  public void testNoFiles() throws Exception {
+    DependencyOptions depOptions = new DependencyOptions();
+    depOptions.setDependencySorting(true);
+
+    List<CompilerInput> inputs = Lists.newArrayList();
+    List<CompilerInput> results = graph.manageDependencies(
+        depOptions, inputs);
+    assertTrue(results.isEmpty());
+  }
+
   private List<CompilerInput> setUpManageDependenciesTest() {
     List<CompilerInput> inputs = Lists.newArrayList();
 

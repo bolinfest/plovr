@@ -66,7 +66,7 @@ import java.util.Set;
       new Predicate<Node>() {
     @Override
     public boolean apply(Node input) {
-      return !NodeUtil.isFunction(input);
+      return !input.isFunction();
     }
   };
 
@@ -271,7 +271,7 @@ import java.util.Set;
         // For now, we don't allow movement within a CASE.
         //
         // TODO(dcc): be less conservative about movement within CASE
-        if (node2DeepestControlDependentBlock.getType() == Token.CASE) {
+        if (node2DeepestControlDependentBlock.isCase()) {
           return false;
         }
 
@@ -400,7 +400,7 @@ import java.util.Set;
     return NodeUtil.has(node, new Predicate<Node>() {
       @Override
       public boolean apply(Node input) {
-        return NodeUtil.isCall(input) || NodeUtil.isNew(input);
+        return input.isCall() || input.isNew();
       }},
       NOT_FUNCTION_PREDICATE);
   }
@@ -746,7 +746,7 @@ import java.util.Set;
       for (Node reference : findStorageLocationReferences(node)) {
         int effectMask;
 
-        if (NodeUtil.isName(reference)) {
+        if (reference.isName()) {
           // Variable access
           effectMask = effectMaskForVariableReference(reference);
          } else {
@@ -783,7 +783,7 @@ import java.util.Set;
         @Override
         public void visit(NodeTraversal t, Node n, Node parent) {
           if (NodeUtil.isGet(n)
-              || (NodeUtil.isName(n) && !NodeUtil.isFunction(parent))) {
+              || (n.isName() && !parent.isFunction())) {
             references.add(n);
           }
         }
@@ -796,7 +796,7 @@ import java.util.Set;
      * Calculates the effect mask for a variable reference.
      */
     private int effectMaskForVariableReference(Node variableReference) {
-      Preconditions.checkArgument(NodeUtil.isName(variableReference));
+      Preconditions.checkArgument(variableReference.isName());
 
       int effectMask = VISIBILITY_LOCATION_NONE;
 
@@ -845,7 +845,7 @@ import java.util.Set;
      * Only NAMEs, GETPROPs, and GETELEMs are storage nodes.
      */
     private static boolean isStorageNode(Node node) {
-      return NodeUtil.isName(node) || NodeUtil.isGet(node);
+      return node.isName() || NodeUtil.isGet(node);
     }
 
     /**
@@ -867,11 +867,11 @@ import java.util.Set;
         // or an increment/decrement
 
         boolean nonSimpleAssign =
-          NodeUtil.isAssignmentOp(parent) && parent.getType() != Token.ASSIGN;
+          NodeUtil.isAssignmentOp(parent) && !parent.isAssign();
 
         return (nonSimpleAssign
-            || parent.getType() == Token.DEC
-            || parent.getType() == Token.INC);
+            || parent.isDec()
+            || parent.isInc());
       }
 
       return true;
@@ -984,7 +984,7 @@ import java.util.Set;
      * or {@code null} otherwise.
      */
     public Node findDeclaringNameNodeForUse(Node usingNameNode) {
-      Preconditions.checkArgument(NodeUtil.isName(usingNameNode));
+      Preconditions.checkArgument(usingNameNode.isName());
 
       return referencesByNameNode.get(usingNameNode);
     }

@@ -66,7 +66,7 @@ class ProxyObjectType extends ObjectType {
   }
 
   @Override
-  public StaticSlot<JSType> getSlot(String name) {
+  public Property getSlot(String name) {
     if (referencedObjType != null) {
       return referencedObjType.getSlot(name);
     }
@@ -254,8 +254,8 @@ class ProxyObjectType extends ObjectType {
   }
 
   @Override
-  public String toString() {
-    return referencedType.toString();
+  String toStringHelper(boolean forAnnotations) {
+    return referencedType.toStringHelper(forAnnotations);
   }
 
   @Override

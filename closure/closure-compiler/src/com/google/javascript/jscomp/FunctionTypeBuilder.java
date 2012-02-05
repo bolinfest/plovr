@@ -28,10 +28,10 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.Scope.Var;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.FunctionBuilder;
 import com.google.javascript.rhino.jstype.FunctionParamBuilder;
 import com.google.javascript.rhino.jstype.FunctionType;
@@ -271,7 +271,7 @@ final class FunctionTypeBuilder {
               oldParam.isVarArgs() ||
               oldParam.isOptionalArg();
 
-          // The subclass method might right its var_args as individual
+          // The subclass method might write its var_args as individual
           // arguments.
           if (currentParam.getNext() != null && newParam.isVarArgs()) {
             newParam.setVarArgs(false);
@@ -287,6 +287,12 @@ final class FunctionTypeBuilder {
               codingConvention.isVarArgsParameter(currentParam));
         }
       }
+
+      // Clone any remaining params that aren't in the function literal.
+      while (oldParams.hasNext()) {
+        paramBuilder.newParameterFromNode(oldParams.next());
+      }
+
       parametersNode = paramBuilder.build();
     }
     return this;
@@ -403,9 +409,9 @@ final class FunctionTypeBuilder {
    */
   FunctionTypeBuilder inferParameterTypes(JSDocInfo info) {
     // Create a fake args parent.
-    Node lp = new Node(Token.LP);
+    Node lp = IR.paramList();
     for (String name : info.getParameterNames()) {
-      lp.addChildToBack(Node.newString(Token.NAME, name));
+      lp.addChildToBack(IR.name(name));
     }
 
     return inferParameterTypes(lp, info);
@@ -437,6 +443,7 @@ final class FunctionTypeBuilder {
         Sets.<String>newHashSet() :
         Sets.newHashSet(info.getParameterNames());
     boolean foundTemplateType = false;
+    boolean isVarArgs = false;
     for (Node arg : argsParent.children()) {
       String argumentName = arg.getString();
       allJsDocParams.remove(argumentName);
@@ -444,7 +451,8 @@ final class FunctionTypeBuilder {
       // type from JSDocInfo
       JSType parameterType = null;
       boolean isOptionalParam = isOptionalParameter(arg, info);
-      boolean isVarArgs = isVarArgsParameter(arg, info);
+      isVarArgs = isVarArgsParameter(arg, info);
+
       if (info != null && info.hasParameterType(argumentName)) {
         parameterType =
             info.getParameterType(argumentName).evaluate(scope, typeRegistry);
@@ -470,6 +478,14 @@ final class FunctionTypeBuilder {
           isVarArgs);
 
       if (oldParameterType != null) {
+        oldParameterType = oldParameterType.getNext();
+      }
+    }
+
+    // Copy over any old parameters that aren't in the param list.
+    if (!isVarArgs) {
+      while (oldParameterType != null && !isVarArgs) {
+        builder.newParameterFromNode(oldParameterType);
         oldParameterType = oldParameterType.getNext();
       }
     }

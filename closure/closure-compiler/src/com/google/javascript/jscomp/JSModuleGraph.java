@@ -17,6 +17,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.LinkedListMultimap;
@@ -32,7 +33,6 @@ import com.google.javascript.jscomp.graph.LinkedDirectedGraph;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
@@ -49,7 +49,7 @@ import java.util.TreeSet;
  */
 public class JSModuleGraph {
 
-  private Set<JSModule> modules;
+  private List<JSModule> modules;
 
   /**
    * Lists of modules at each depth. <code>modulesByDepth.get(3)</code> is a
@@ -75,14 +75,17 @@ public class JSModuleGraph {
    * Creates a module graph from a list of modules in dependency order.
    */
   public JSModuleGraph(JSModule[] modulesInDepOrder) {
-    this(Lists.<JSModule>newArrayList(modulesInDepOrder));
+    this(ImmutableList.copyOf(modulesInDepOrder));
   }
 
   /**
    * Creates a module graph from a list of modules in dependency order.
    */
   public JSModuleGraph(List<JSModule> modulesInDepOrder) {
-    modules = Sets.newHashSetWithExpectedSize(modulesInDepOrder.size());
+    Preconditions.checkState(
+        modulesInDepOrder.size() == Sets.newHashSet(modulesInDepOrder).size(),
+        "Found duplicate modules");
+    modules = ImmutableList.copyOf(modulesInDepOrder);
     modulesByDepth = Lists.newArrayList();
 
     for (JSModule module : modulesInDepOrder) {
@@ -99,7 +102,6 @@ public class JSModuleGraph {
       }
 
       module.setDepth(depth);
-      modules.add(module);
       if (depth == modulesByDepth.size()) {
         modulesByDepth.add(new ArrayList<JSModule>());
       }
@@ -108,19 +110,9 @@ public class JSModuleGraph {
   }
 
   /**
-   * Gets an iterable over all modules.
+   * Gets an iterable over all modules in dependency order.
    */
   Iterable<JSModule> getAllModules() {
-    return modules;
-  }
-
-  /**
-   * Gets all the modules in dependency order. Modules with the same depth
-   * will be ordered deterministically.
-   */
-  Iterable<JSModule> getAllModulesInDependencyOrder() {
-    List<JSModule> modules = Lists.newArrayList(getAllModules());
-    Collections.sort(modules, new DepthComparator());
     return modules;
   }
 
@@ -274,37 +266,71 @@ public class JSModuleGraph {
   }
 
   /**
-   * Sort the sources of modules in dependency-order.
+   * Applies a DependencyOptions in "dependency sorting" and "dependency pruning"
+   * mode to the given list of inputs. Returns a new list with the files sorted
+   * and removed. This module graph will be updated to reflect the new list.
    *
-   * If a source file provides a symbol that is not required, then that
-   * file will be removed from the compilation. If a source file provides
-   * a symbol that is not required until a later module, then that
-   * file will be moved to the later module.
+   * If you need more fine-grained dependency management, you should create your
+   * own DependencyOptions and call
+   * {@code manageDependencies(DependencyOptions, List<CompilerInput>)}.
    *
    * @param entryPoints The entry points into the program.
    *     Expressed as JS symbols.
    * @param inputs The original list of sources. Used to ensure that the sort
    *     is stable.
-   * @return The sorted list of sources.
    * @throws CircularDependencyException if there is a circular dependency
    *     between the provides and requires.
    * @throws MissingProvideException if an entry point was not provided
    *     by any of the inputs.
+   * @see DependencyOptions for more info on how this works.
    */
   public List<CompilerInput> manageDependencies(
       List<String> entryPoints,
       List<CompilerInput> inputs)
       throws CircularDependencyException, MissingProvideException {
+    DependencyOptions depOptions = new DependencyOptions();
+    depOptions.setDependencySorting(true);
+    depOptions.setDependencyPruning(true);
+    depOptions.setEntryPoints(entryPoints);
+    return manageDependencies(depOptions, inputs);
+  }
+
+  /**
+   * Apply the dependency options to the list of sources, returning a new
+   * source list re-ordering and dropping files as necessary.
+   * This module graph will be updated to reflect the new list.
+   *
+   * @param inputs The original list of sources. Used to ensure that the sort
+   *     is stable.
+   * @throws CircularDependencyException if there is a circular dependency
+   *     between the provides and requires.
+   * @throws MissingProvideException if an entry point was not provided
+   *     by any of the inputs.
+   * @see DependencyOptions for more info on how this works.
+   */
+  public List<CompilerInput> manageDependencies(
+      DependencyOptions depOptions,
+      List<CompilerInput> inputs)
+      throws CircularDependencyException, MissingProvideException {
+
     SortedDependencies<CompilerInput> sorter =
         new SortedDependencies<CompilerInput>(inputs);
-    Set<CompilerInput> entryPointInputs =
-        Sets.newLinkedHashSet(sorter.getInputsWithoutProvides());
-    for (String entryPoint : entryPoints) {
-      entryPointInputs.add(sorter.getInputProviding(entryPoint));
+    Set<CompilerInput> entryPointInputs = Sets.newLinkedHashSet();
+    if (depOptions.shouldPruneDependencies()) {
+      if (!depOptions.shouldDropMoochers()) {
+        entryPointInputs.addAll(sorter.getInputsWithoutProvides());
+      }
+
+      for (String entryPoint : depOptions.getEntryPoints()) {
+        entryPointInputs.add(sorter.getInputProviding(entryPoint));
+      }
+    } else {
+      entryPointInputs.addAll(inputs);
     }
 
     // The order of inputs, sorted independently of modules.
-    List<CompilerInput> absoluteOrder = sorter.getSortedDependenciesOf(inputs);
+    List<CompilerInput> absoluteOrder =
+        sorter.getDependenciesOf(inputs, depOptions.shouldSortDependencies());
 
     // Figure out which sources *must* be in each module.
     ListMultimap<JSModule, CompilerInput> entryPointInputsPerModule =
@@ -325,8 +351,9 @@ public class JSModuleGraph {
     // of that module's dependencies.
     for (JSModule module : entryPointInputsPerModule.keySet()) {
       List<CompilerInput> transitiveClosure =
-          sorter.getSortedDependenciesOf(
-              entryPointInputsPerModule.get(module));
+          sorter.getDependenciesOf(
+              entryPointInputsPerModule.get(module),
+              depOptions.shouldSortDependencies());
       for (CompilerInput input : transitiveClosure) {
         JSModule oldModule = input.getModule();
         if (oldModule == null) {
@@ -350,7 +377,7 @@ public class JSModuleGraph {
 
     // Now, generate the sorted result.
     List<CompilerInput> result = Lists.newArrayList();
-    for (JSModule module : getAllModulesInDependencyOrder()) {
+    for (JSModule module : getAllModules()) {
       result.addAll(module.getInputs());
     }
 
@@ -360,7 +387,7 @@ public class JSModuleGraph {
   LinkedDirectedGraph<JSModule, String> toGraphvizGraph() {
     LinkedDirectedGraph<JSModule, String> graphViz =
         LinkedDirectedGraph.create();
-    for (JSModule module : getAllModulesInDependencyOrder()) {
+    for (JSModule module : getAllModules()) {
       graphViz.createNode(module);
       for (JSModule dep : module.getDependencies()) {
         graphViz.createNode(dep);

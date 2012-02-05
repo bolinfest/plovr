@@ -20,7 +20,6 @@ import com.google.common.base.Preconditions;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.VariableVisibilityAnalysis.VariableVisibility;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 
 /**
  * Tests of {@link VariableVisibilityAnalysis}.
@@ -114,7 +113,7 @@ public class VariableVisibilityAnalysisTest extends CompilerTestCase {
       VariableVisibility visibility) {
     Node labeledVariable = searchLabel(label);
 
-    Preconditions.checkState(NodeUtil.isVar(labeledVariable));
+    Preconditions.checkState(labeledVariable.isVar());
 
     // VAR
     //   NAME
@@ -168,7 +167,7 @@ public class VariableVisibilityAnalysisTest extends CompilerTestCase {
 
       @Override
       public void visit(NodeTraversal t, Node n, Node parent) {
-        if (n.getParent().getType() == Token.LP
+        if (n.getParent().isParamList()
             && parameterName.equals(n.getString())) {
 
           foundNode[0] = n;
@@ -197,7 +196,7 @@ public class VariableVisibilityAnalysisTest extends CompilerTestCase {
 
       @Override
       public void visit(NodeTraversal t, Node n, Node parent) {
-        if (NodeUtil.isFunction(n)
+        if (n.isFunction()
             && functionName.equals(NodeUtil.getFunctionName(n))) {
           foundNode[0] = n;
         }
@@ -235,7 +234,7 @@ public class VariableVisibilityAnalysisTest extends CompilerTestCase {
     }
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (n.getType() == Token.LABEL &&
+      if (n.isLabel() &&
           target.equals(n.getFirstChild().getString())) {
 
         // LABEL

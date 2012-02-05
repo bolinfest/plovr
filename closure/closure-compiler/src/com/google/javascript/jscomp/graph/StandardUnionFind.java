@@ -192,7 +192,8 @@ public class StandardUnionFind<E> implements Serializable, UnionFind<E> {
       }
 
       @Override public Iterator<E> iterator() {
-        return filter(elmap.keySet().iterator(), isSameRoot);
+        return filter(elmap.keySet().iterator(),
+            isSameRoot);
       }
 
       @Override public int size() {

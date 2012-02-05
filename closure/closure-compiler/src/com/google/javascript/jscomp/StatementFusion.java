@@ -36,7 +36,7 @@ public class StatementFusion extends AbstractPeepholeOptimization {
   @Override
   Node optimizeSubtree(Node n) {
     // The block of a function body always need { }.
-    if (!NodeUtil.isFunction(n.getParent()) && canFuseIntoOneStatement(n)) {
+    if (!n.getParent().isFunction() && canFuseIntoOneStatement(n)) {
       fuseIntoOneStatement(n);
       reportCodeChange();
     }
@@ -45,7 +45,7 @@ public class StatementFusion extends AbstractPeepholeOptimization {
 
   private static boolean canFuseIntoOneStatement(Node block) {
     // Fold only statement block. NOT scripts block.
-    if (block.getType() != Token.BLOCK) {
+    if (!block.isBlock()) {
       return false;
     }
 
@@ -57,7 +57,7 @@ public class StatementFusion extends AbstractPeepholeOptimization {
     Node last = block.getLastChild();
 
     for (Node c = block.getFirstChild(); c != null; c = c.getNext()) {
-      if (!NodeUtil.isExpressionNode(c) && c != last) {
+      if (!c.isExprResult() && c != last) {
         return false;
       }
     }
@@ -126,9 +126,9 @@ public class StatementFusion extends AbstractPeepholeOptimization {
     // We can just join the new comma expression with another comma but
     // lets keep all the comma's in a straight line. That way we can use
     // tree comparison.
-    if (exp2.getType() == Token.COMMA) {
+    if (exp2.isComma()) {
       Node leftMostChild = exp2;
-      while(leftMostChild.getType() == Token.COMMA) {
+      while(leftMostChild.isComma()) {
         leftMostChild = leftMostChild.getFirstChild();
       }
       Node parent = leftMostChild.getParent();

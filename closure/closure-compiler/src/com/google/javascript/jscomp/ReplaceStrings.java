@@ -24,6 +24,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.JSType;
@@ -189,7 +190,7 @@ class ReplaceStrings extends AbstractPostOrderCallback
         // Look for calls to class methods.
         if (NodeUtil.isGet(calledFn)) {
           Node rhs = calledFn.getLastChild();
-          if (rhs.getType() == Token.NAME || rhs.getType() == Token.STRING) {
+          if (rhs.isName() || rhs.isString()) {
             String methodName = rhs.getString();
             Collection<String> classes = methods.get(methodName);
             if (classes != null) {
@@ -246,7 +247,7 @@ class ReplaceStrings extends AbstractPostOrderCallback
    */
   private void doSubstitutions(NodeTraversal t, Config config, Node n) {
     Preconditions.checkState(
-        n.getType() == Token.NEW || n.getType() == Token.CALL);
+        n.isNew() || n.isCall());
 
     if (config.parameter != Config.REPLACE_ALL_VALUE) {
       // Note: the first child is the function, but the parameter id is 1 based.
@@ -280,11 +281,11 @@ class ReplaceStrings extends AbstractPostOrderCallback
       case Token.STRING:
         key = expr.getString();
         replacementString = getReplacement(key);
-        replacement = Node.newString(replacementString);
+        replacement = IR.string(replacementString);
         break;
       case Token.ADD:
         StringBuilder keyBuilder = new StringBuilder();
-        Node keyNode = Node.newString("");
+        Node keyNode = IR.string("");
         replacement = buildReplacement(expr, keyNode, keyBuilder);
         key = keyBuilder.toString();
         replacementString = getReplacement(key);
@@ -295,10 +296,10 @@ class ReplaceStrings extends AbstractPostOrderCallback
         Scope.Var var = t.getScope().getVar(expr.getString());
         if (var != null && var.isConst()) {
           Node value = var.getInitialValue();
-          if (value != null && value.getType() == Token.STRING) {
+          if (value != null && value.isString()) {
             key = value.getString();
             replacementString = getReplacement(key);
-            replacement = Node.newString(replacementString);
+            replacement = IR.string(replacementString);
             break;
           }
         }
@@ -369,9 +370,8 @@ class ReplaceStrings extends AbstractPostOrderCallback
         return prefix;
       default:
         keyBuilder.append(placeholderToken);
-        prefix = new Node(
-            Token.ADD, prefix, Node.newString(placeholderToken));
-        return new Node(Token.ADD, prefix, expr.cloneTree());
+        prefix = IR.add(prefix, IR.string(placeholderToken));
+        return IR.add(prefix, expr.cloneTree());
     }
   }
 

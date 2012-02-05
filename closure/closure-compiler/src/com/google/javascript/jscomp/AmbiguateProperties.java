@@ -240,7 +240,7 @@ class AmbiguateProperties implements CompilerPass {
       }
     }
 
-    logger.info("Collapsed " + numRenamedPropertyNames + " properties into "
+    logger.fine("Collapsed " + numRenamedPropertyNames + " properties into "
                 + numNewPropertyNames + " and skipped renaming "
                 + numSkippedPropertyNames + " properties.");
   }
@@ -482,7 +482,7 @@ class AmbiguateProperties implements CompilerPass {
           // ensure that we never rename some other property in a way that
           // could conflict with this quoted name.
           Node child = n.getLastChild();
-          if (child.getType() == Token.STRING) {
+          if (child.isString()) {
             quotedNames.add(child.getString());
           }
           break;

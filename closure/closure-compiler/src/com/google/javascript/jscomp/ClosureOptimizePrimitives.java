@@ -18,9 +18,8 @@ package com.google.javascript.jscomp;
 
 import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
-
 import java.util.List;
 
 /**
@@ -43,7 +42,7 @@ final class ClosureOptimizePrimitives implements CompilerPass {
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (n.getType() == Token.CALL) {
+      if (n.isCall()) {
         String fnName = n.getFirstChild().getQualifiedName();
         if ("goog$object$create".equals(fnName) ||
             "goog.object.create".equals(fnName)) {
@@ -75,8 +74,7 @@ final class ClosureOptimizePrimitives implements CompilerPass {
     for (Node callNode : callNodes) {
       Node curParam = callNode.getFirstChild().getNext();
       if (canOptimizeObjectCreate(curParam)) {
-        Node objNode = new Node(Token.OBJECTLIT)
-            .copyInformationFrom(callNode);
+        Node objNode = IR.objectlit().srcref(callNode);
         while (curParam != null) {
           Node keyNode = curParam;
           Node valueNode = curParam.getNext();
@@ -85,13 +83,12 @@ final class ClosureOptimizePrimitives implements CompilerPass {
           callNode.removeChild(keyNode);
           callNode.removeChild(valueNode);
 
-          if (keyNode.getType() != Token.STRING) {
-            keyNode = Node.newString(NodeUtil.getStringValue(keyNode))
-                .copyInformationFrom(keyNode);
+          if (!keyNode.isString()) {
+            keyNode = IR.string(NodeUtil.getStringValue(keyNode))
+                .srcref(keyNode);
           }
           keyNode.setQuotedString();
-          keyNode.addChildToBack(valueNode);
-          objNode.addChildToBack(keyNode);
+          objNode.addChildToBack(IR.propdef(keyNode, valueNode));
         }
         callNode.getParent().replaceChild(callNode, objNode);
         compiler.reportCodeChange();
@@ -107,8 +104,7 @@ final class ClosureOptimizePrimitives implements CompilerPass {
     Node curParam = firstParam;
     while (curParam != null) {
       // All keys must be strings or numbers.
-      if (curParam.getType() != Token.STRING &&
-          curParam.getType() != Token.NUMBER) {
+      if (!curParam.isString() && !curParam.isNumber()) {
         return false;
       }
       curParam = curParam.getNext();

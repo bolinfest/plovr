@@ -22,8 +22,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.common.io.CharStreams;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.ObjectType;
@@ -112,7 +112,7 @@ class RuntimeTypeCheck implements CompilerPass {
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (NodeUtil.isFunction(n)) {
+      if (n.isFunction()) {
         visitFunction(t, n);
       }
     }
@@ -153,19 +153,19 @@ class RuntimeTypeCheck implements CompilerPass {
       }
 
       Node classNode = NodeUtil.newQualifiedNameNode(
-          compiler.getCodingConvention(), className, -1, -1);
+          compiler.getCodingConvention(), className);
 
-      Node marker = Node.newString(
+      Node marker = IR.string(
               interfaceType == null ?
               "instance_of__" + className :
               "implements__" + interfaceType.getReferenceName());
 
-      Node assign = new Node(Token.EXPR_RESULT, new Node(Token.ASSIGN,
-          new Node(Token.GETELEM,
-              new Node(Token.GETPROP,
+      Node assign = IR.exprResult(IR.assign(
+          IR.getelem(
+              IR.getprop(
                   classNode,
-                  Node.newString("prototype")), marker),
-          new Node(Token.TRUE)));
+                  IR.string("prototype")), marker),
+          IR.trueNode()));
 
       nodeToInsertAfter.getParent().addChildAfter(assign, nodeToInsertAfter);
       compiler.reportCodeChange();
@@ -194,8 +194,7 @@ class RuntimeTypeCheck implements CompilerPass {
     }
 
     private Node findEnclosingConstructorDeclaration(Node n) {
-      while (n.getParent().getType() != Token.SCRIPT &&
-          n.getParent().getType() != Token.BLOCK) {
+      while (!n.getParent().isScript() && !n.getParent().isBlock()) {
         n = n.getParent();
       }
       return n;
@@ -223,9 +222,9 @@ class RuntimeTypeCheck implements CompilerPass {
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (NodeUtil.isFunction(n)) {
+      if (n.isFunction()) {
         visitFunction(t, n);
-      } else if (n.getType() == Token.RETURN) {
+      } else if (n.isReturn()) {
         visitReturn(t, n);
       }
     }
@@ -262,7 +261,7 @@ class RuntimeTypeCheck implements CompilerPass {
           continue;
         }
 
-        checkNode = new Node(Token.EXPR_RESULT, checkNode);
+        checkNode = IR.exprResult(checkNode);
         if (insertionPoint == null) {
           block.addChildToFront(checkNode);
         } else {
@@ -305,7 +304,7 @@ class RuntimeTypeCheck implements CompilerPass {
      * @return the function call node or {@code null} if the type is not checked
      */
     private Node createCheckTypeCallNode(JSType type, Node expr) {
-      Node arrayNode = new Node(Token.ARRAYLIT);
+      Node arrayNode = IR.arraylit();
       Collection<JSType> alternates;
       if (type.isUnionType()) {
         alternates = Sets.newTreeSet(ALPHA);
@@ -320,7 +319,7 @@ class RuntimeTypeCheck implements CompilerPass {
         }
         arrayNode.addChildToBack(checkerNode);
       }
-      return new Node(Token.CALL, jsCode("checkType"), expr, arrayNode);
+      return IR.call(jsCode("checkType"), expr, arrayNode);
     }
 
     /**
@@ -338,9 +337,9 @@ class RuntimeTypeCheck implements CompilerPass {
           || type.isNumberValueType()
           || type.isStringValueType()
           || type.isVoidType()) {
-        return new Node(Token.CALL,
+        return IR.call(
             jsCode("valueChecker"),
-            Node.newString(type.toString()));
+            IR.string(type.toString()));
 
       } else if (type.isInstanceType()) {
         ObjectType objType = (ObjectType) type;
@@ -350,15 +349,15 @@ class RuntimeTypeCheck implements CompilerPass {
         StaticSourceFile sourceFile =
             NodeUtil.getSourceFile(objType.getConstructor().getSource());
         if (sourceFile == null || sourceFile.isExtern()) {
-          return new Node(Token.CALL,
+          return IR.call(
                   jsCode("externClassChecker"),
-                  Node.newString(refName));
+                  IR.string(refName));
         }
 
-        return new Node(Token.CALL,
+        return IR.call(
                 jsCode(objType.getConstructor().isInterface() ?
                         "interfaceChecker" : "classChecker"),
-                Node.newString(refName));
+                IR.string(refName));
 
       } else {
         // We don't check this type (e.g. unknown & all types).
@@ -376,7 +375,7 @@ class RuntimeTypeCheck implements CompilerPass {
 
   private Node jsCode(String prop) {
     return NodeUtil.newQualifiedNameNode(
-        compiler.getCodingConvention(), "jscomp.typecheck." + prop, -1, -1);
+        compiler.getCodingConvention(), "jscomp.typecheck." + prop);
   }
 
   @VisibleForTesting

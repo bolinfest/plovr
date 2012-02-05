@@ -1013,8 +1013,9 @@ public class JSTypeRegistry implements Serializable {
   /**
    * Creates an enum type.
    */
-  public EnumType createEnumType(String name, JSType elementsType) {
-    return new EnumType(this, name, elementsType);
+  public EnumType createEnumType(
+      String name, Node source, JSType elementsType) {
+    return new EnumType(this, name, source, elementsType);
   }
 
   /**
@@ -1550,7 +1551,7 @@ public class JSTypeRegistry implements Serializable {
                     "msg.jsdoc.function.thisnotobject" :
                     "msg.jsdoc.function.newnotobject"),
                 sourceName,
-                contextNode.getLineno(), "", contextNode.getCharno());
+                contextNode.getLineno(), contextNode.getCharno());
           }
 
           isConstructor = current.getType() == Token.NEW;
@@ -1559,7 +1560,7 @@ public class JSTypeRegistry implements Serializable {
 
         FunctionParamBuilder paramBuilder = new FunctionParamBuilder(this);
 
-        if (current.getType() == Token.LP) {
+        if (current.getType() == Token.PARAM_LIST) {
           Node args = current.getFirstChild();
           for (Node arg = current.getFirstChild(); arg != null;
                arg = arg.getNext()) {
@@ -1579,7 +1580,7 @@ public class JSTypeRegistry implements Serializable {
                 if (!addSuccess) {
                   reporter.warning(
                       ScriptRuntime.getMessage0("msg.jsdoc.function.varargs"),
-                      sourceName, arg.getLineno(), "", arg.getCharno());
+                      sourceName, arg.getLineno(), arg.getCharno());
                 }
               } else {
                 paramBuilder.addRequiredParams(type);
@@ -1656,7 +1657,7 @@ public class JSTypeRegistry implements Serializable {
         reporter.warning(
             "Duplicate record field " + fieldName,
             sourceName,
-            n.getLineno(), "", fieldNameNode.getCharno());
+            n.getLineno(), fieldNameNode.getCharno());
       }
     }
 

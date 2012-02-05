@@ -64,8 +64,7 @@ public class ScriptRuntime {
     }
 
     // It is public so NativeRegExp can access it .
-    public static boolean isJSLineTerminator(int c)
-    {
+    public static boolean isJSLineTerminator(int c) {
         // Optimization for faster check for eol character:
         // they do not have 0xDFD0 bits set
         if ((c & 0xDFD0) != 0) {
@@ -84,8 +83,6 @@ public class ScriptRuntime {
     // A similar problem exists for negative zero.
     public static final double
         negativeZero = Double.longBitsToDouble(0x8000000000000000L);
-
-    public static final Double NaNobj = new Double(NaN);
 
     /*
      * Helper function for toNumber, parseInt, and TokenStream.getToken.
@@ -134,8 +131,7 @@ public class ScriptRuntime {
                     return NaN;
                 }
             } else if (radix == 2 || radix == 4 || radix == 8 ||
-                       radix == 16 || radix == 32)
-            {
+                       radix == 16 || radix == 32) {
                 /* The number may also be inaccurate for one of these bases.
                  * This happens if the addition in value*radix + digit causes
                  * a round-down to an even least significant mantissa bit
@@ -240,8 +236,7 @@ public class ScriptRuntime {
         return sum;
     }
 
-    public static String escapeString(String s)
-    {
+    public static String escapeString(String s) {
         return escapeString(s, '"');
     }
 
@@ -249,9 +244,10 @@ public class ScriptRuntime {
      * For escaping strings printed by object and array literals; not quite
      * the same as 'escape.'
      */
-    public static String escapeString(String s, char escapeQuote)
-    {
-        if (!(escapeQuote == '"' || escapeQuote == '\'')) Kit.codeBug();
+    public static String escapeString(String s, char escapeQuote) {
+        if (!(escapeQuote == '"' || escapeQuote == '\'')) {
+          throw new IllegalStateException("unexpected quote char:" + escapeQuote);
+        }
         StringBuffer sb = null;
 
         for(int i = 0, L = s.length(); i != L; ++i) {
@@ -311,8 +307,7 @@ public class ScriptRuntime {
         return (sb == null) ? s : sb.toString();
     }
 
-    static boolean isValidIdentifierName(String s)
-    {
+    static boolean isValidIdentifierName(String s) {
         int L = s.length();
         if (L == 0)
             return false;
@@ -326,58 +321,10 @@ public class ScriptRuntime {
     }
 
     /**
-     * Convert the value to a string.
-     *
-     * See ECMA 9.8.
-     */
-    public static String toString(Object val) {
-        for (;;) {
-            if (val == null) {
-                return "null";
-            }
-            if (val instanceof String) {
-                return (String)val;
-            }
-            if (val instanceof Number) {
-                // XXX should we just teach NativeNumber.stringValue()
-                // about Numbers?
-                return numberToString(((Number)val).doubleValue(), 10);
-            }
-            return val.toString();
-        }
-    }
-
-    public static String numberToString(double d, int base) {
-        if (d != d)
-            return "NaN";
-        if (d == Double.POSITIVE_INFINITY)
-            return "Infinity";
-        if (d == Double.NEGATIVE_INFINITY)
-            return "-Infinity";
-        if (d == 0.0)
-            return "0";
-
-        if ((base < 2) || (base > 36)) {
-            throw Context.reportRuntimeError1(
-                "msg.bad.radix", Integer.toString(base));
-        }
-
-        if (base != 10) {
-            return DToA.JS_dtobasestr(base, d);
-        } else {
-            StringBuffer result = new StringBuffer();
-            DToA.JS_dtostr(result, DToA.DTOSTR_STANDARD, 0, d);
-            return result.toString();
-        }
-
-    }
-
-    /**
      * If str is a decimal presentation of Uint32 value, return it as long.
      * Othewise return -1L;
      */
-    public static long testUint32String(String str)
-    {
+    public static long testUint32String(String str) {
         // The length of the decimal string representation of
         //  UINT32_MAX_VALUE, 4294967296
         final int MAX_VALUE_LENGTH = 10;
@@ -408,8 +355,7 @@ public class ScriptRuntime {
         return -1;
     }
 
-    static boolean isSpecialProperty(String s)
-    {
+    static boolean isSpecialProperty(String s) {
         return s.equals("__proto__") || s.equals("__parent__");
     }
 
@@ -417,35 +363,12 @@ public class ScriptRuntime {
     // Statements
     // ------------------
 
-    public static String getMessage0(String messageId)
-    {
+    public static String getMessage0(String messageId) {
         return getMessage(messageId, null);
     }
 
-    public static String getMessage1(String messageId, Object arg1)
-    {
+    public static String getMessage1(String messageId, Object arg1) {
         Object[] arguments = {arg1};
-        return getMessage(messageId, arguments);
-    }
-
-    public static String getMessage2(
-        String messageId, Object arg1, Object arg2)
-    {
-        Object[] arguments = {arg1, arg2};
-        return getMessage(messageId, arguments);
-    }
-
-    public static String getMessage3(
-        String messageId, Object arg1, Object arg2, Object arg3)
-    {
-        Object[] arguments = {arg1, arg2, arg3};
-        return getMessage(messageId, arguments);
-    }
-
-    public static String getMessage4(
-        String messageId, Object arg1, Object arg2, Object arg3, Object arg4)
-    {
-        Object[] arguments = {arg1, arg2, arg3, arg4};
         return getMessage(messageId, arguments);
     }
 
@@ -453,13 +376,11 @@ public class ScriptRuntime {
      * make sense to use a ListResourceBundle instead of a properties
      * file to avoid (synchronized) text parsing.
      */
-    public static String getMessage(String messageId, Object[] arguments)
-    {
+    public static String getMessage(String messageId, Object[] arguments) {
         final String defaultResource
             = "rhino_ast.java.com.google.javascript.rhino.Messages";
 
-        Context cx = Context.getCurrentContext();
-        Locale locale = cx != null ? cx.getLocale() : Locale.getDefault();
+        Locale locale = Locale.getDefault();
 
         // ResourceBundle does cacheing.
         ResourceBundle rb = ResourceBundle.getBundle(defaultResource, locale);
@@ -481,131 +402,4 @@ public class ScriptRuntime {
         MessageFormat formatter = new MessageFormat(formatString);
         return formatter.format(arguments);
     }
-
-    public static EcmaError constructError(String error, String message)
-    {
-        int[] linep = new int[1];
-        String filename = Context.getSourcePositionFromStack(linep);
-        return constructError(error, message, filename, linep[0], null, 0);
-    }
-
-    public static EcmaError constructError(String error,
-                                           String message,
-                                           String sourceName,
-                                           int lineNumber,
-                                           String lineSource,
-                                           int columnNumber)
-    {
-        return new EcmaError(error, message, sourceName,
-                             lineNumber, lineSource, columnNumber);
-    }
-
-    public static EcmaError typeError(String message)
-    {
-        return constructError("TypeError", message);
-    }
-
-    public static EcmaError typeError0(String messageId)
-    {
-        String msg = getMessage0(messageId);
-        return typeError(msg);
-    }
-
-    public static EcmaError typeError1(String messageId, String arg1)
-    {
-        String msg = getMessage1(messageId, arg1);
-        return typeError(msg);
-    }
-
-    public static EcmaError typeError2(String messageId, String arg1,
-                                       String arg2)
-    {
-        String msg = getMessage2(messageId, arg1, arg2);
-        return typeError(msg);
-    }
-
-    public static EcmaError typeError3(String messageId, String arg1,
-                                       String arg2, String arg3)
-    {
-        String msg = getMessage3(messageId, arg1, arg2, arg3);
-        return typeError(msg);
-    }
-
-    public static RuntimeException undefReadError(Object object, Object id)
-    {
-        String idStr = (id == null) ? "null" : id.toString();
-        return typeError2("msg.undef.prop.read", toString(object), idStr);
-    }
-
-    public static RuntimeException undefCallError(Object object, Object id)
-    {
-        String idStr = (id == null) ? "null" : id.toString();
-        return typeError2("msg.undef.method.call", toString(object), idStr);
-    }
-
-    public static RuntimeException undefWriteError(Object object,
-                                                   Object id,
-                                                   Object value)
-    {
-        String idStr = (id == null) ? "null" : id.toString();
-        String valueStr = toString(value);
-        return typeError3("msg.undef.prop.write", toString(object), idStr,
-                          valueStr);
-    }
-
-    public static RuntimeException notFunctionError(Object value)
-    {
-        return notFunctionError(value, value);
-    }
-
-    public static RuntimeException notFunctionError(Object value,
-                                                    Object messageHelper)
-    {
-        // XXX Use value for better error reporting
-        String msg = (messageHelper == null)
-                     ? "null" : messageHelper.toString();
-        return typeError2("msg.isnt.function", msg,
-                value == null ? "null" : value.getClass().getName());
-    }
-
-    static int lastIndexResult(Context cx)
-    {
-        return cx.scratchIndex;
-    }
-
-    public static void storeUint32Result(Context cx, long value)
-    {
-        if ((value >>> 32) != 0)
-            throw new IllegalArgumentException();
-        cx.scratchUint32 = value;
-    }
-
-    public static long lastUint32Result(Context cx)
-    {
-        long value = cx.scratchUint32;
-        if ((value >>> 32) != 0)
-            throw new IllegalStateException();
-        return value;
-    }
-
-    static String makeUrlForGeneratedScript
-        (boolean isEval, String masterScriptUrl, int masterScriptLine)
-    {
-        if (isEval) {
-            return masterScriptUrl+'#'+masterScriptLine+"(eval)";
-        } else {
-            return masterScriptUrl+'#'+masterScriptLine+"(Function)";
-        }
-    }
-
-    static boolean isGeneratedScript(String sourceUrl) {
-        // ALERT: this may clash with a valid URL containing (eval) or
-        // (Function)
-        return sourceUrl.indexOf("(eval)") >= 0
-               || sourceUrl.indexOf("(Function)") >= 0;
-    }
-
-    public static final Object[] emptyArgs = new Object[0];
-    public static final String[] emptyStrings = new String[0];
-
 }

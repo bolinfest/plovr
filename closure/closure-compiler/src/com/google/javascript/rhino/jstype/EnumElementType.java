@@ -75,7 +75,7 @@ public class EnumElementType extends ObjectType {
   }
 
   @Override
-  public StaticSlot<JSType> getSlot(String name) {
+  public Property getSlot(String name) {
     if (primitiveObjectType != null) {
       return primitiveObjectType.getSlot(name);
     }
@@ -160,8 +160,10 @@ public class EnumElementType extends ObjectType {
   }
 
   @Override
-  public String toString() {
-    return getReferenceName() + ".<" + primitiveType + ">";
+  String toStringHelper(boolean forAnnotations) {
+    return forAnnotations ?
+        primitiveType.toString() :
+        (getReferenceName() + ".<" + primitiveType + ">");
   }
 
   @Override

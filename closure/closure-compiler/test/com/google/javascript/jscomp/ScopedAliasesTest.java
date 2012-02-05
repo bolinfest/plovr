@@ -38,7 +38,6 @@ public class ScopedAliasesTest extends CompilerTestCase {
   private static final String GOOG_SCOPE_START_BLOCK =
       "goog.scope(function() {";
   private static final String GOOG_SCOPE_END_BLOCK = "});";
-  private static final int GOOG_SCOPE_LEN = "goog.scope".length();
 
   private static String EXTERNS = "var window;";
 
@@ -439,8 +438,7 @@ public class ScopedAliasesTest extends CompilerTestCase {
     List<SourcePosition<AliasTransformation>> positions =
         spy.observedPositions.get("testcode");
     assertEquals(1, positions.size());
-    verifyAliasTransformationPosition(
-        1, GOOG_SCOPE_LEN, 2, 1, positions.get(0));
+    verifyAliasTransformationPosition(1, 0, 2, 1, positions.get(0));
 
     assertEquals(1, spy.constructedAliases.size());
     AliasSpy aliasSpy = (AliasSpy) spy.constructedAliases.get(0);
@@ -462,8 +460,7 @@ public class ScopedAliasesTest extends CompilerTestCase {
     List<SourcePosition<AliasTransformation>> positions =
         spy.observedPositions.get("testcode");
     assertEquals(1, positions.size());
-    verifyAliasTransformationPosition(
-        1, GOOG_SCOPE_LEN, 3, 1, positions.get(0));
+    verifyAliasTransformationPosition(1, 0, 3, 1, positions.get(0));
 
     assertEquals(1, spy.constructedAliases.size());
     AliasSpy aliasSpy = (AliasSpy) spy.constructedAliases.get(0);
@@ -494,11 +491,9 @@ public class ScopedAliasesTest extends CompilerTestCase {
         spy.observedPositions.get("testcode");
     assertEquals(2, positions.size());
 
-    verifyAliasTransformationPosition(
-        1, GOOG_SCOPE_LEN, 6, 0, positions.get(0));
+    verifyAliasTransformationPosition(1, 0, 6, 0, positions.get(0));
 
-    verifyAliasTransformationPosition(
-        8, GOOG_SCOPE_LEN, 11, 4, positions.get(1));
+    verifyAliasTransformationPosition(8, 0, 11, 4, positions.get(1));
 
     assertEquals(2, spy.constructedAliases.size());
     AliasSpy aliasSpy = (AliasSpy) spy.constructedAliases.get(0);

@@ -22,6 +22,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -90,7 +91,7 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
      * it to the externsRoot AST.
      */
     void generateExterns() {
-      appendExtern(getExportedPath(), getFunctionValue(value));
+      appendExtern(getExportedPath(), getValue(value));
     }
 
     /**
@@ -109,7 +110,7 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
      * a.b.c = function(x,y) { }
      * </pre>
      */
-    protected void appendExtern(String path, Node functionToExport) {
+    void appendExtern(String path, Node valueToExport) {
       List<String> pathPrefixes = computePathPrefixes(path);
 
       for (int i = 0; i < pathPrefixes.size(); ++i) {
@@ -139,10 +140,15 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
            * exported for a.b with a namespace.
            */
 
-          if (isCompletePathPrefix && functionToExport != null) {
-            initializer = createExternFunction(functionToExport);
+          if (isCompletePathPrefix && valueToExport != null) {
+            if (valueToExport.isFunction()) {
+              initializer = createExternFunction(valueToExport);
+            } else {
+              Preconditions.checkState(valueToExport.isObjectLit());
+              initializer = createExternObjectLit(valueToExport);
+            }
           } else {
-            initializer = new Node(Token.OBJECTLIT);
+            initializer = IR.empty();
           }
 
           appendPathDefinition(pathPrefix, initializer);
@@ -176,12 +182,20 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
       Node pathDefinition;
 
       if (!path.contains(".")) {
-        pathDefinition = NodeUtil.newVarNode(path, initializer);
+        if (initializer.isEmpty()) {
+          pathDefinition = IR.var(IR.name(path));
+        } else {
+          pathDefinition = NodeUtil.newVarNode(path, initializer);
+        }
       } else {
         Node qualifiedPath = NodeUtil.newQualifiedNameNode(
-            compiler.getCodingConvention(), path, -1, -1);
-        pathDefinition = NodeUtil.newExpr(new Node(Token.ASSIGN, qualifiedPath,
-            initializer));
+            compiler.getCodingConvention(), path);
+        if (initializer.isEmpty()) {
+          pathDefinition = NodeUtil.newExpr(qualifiedPath);
+        } else {
+          pathDefinition = NodeUtil.newExpr(
+              IR.assign(qualifiedPath, initializer));
+        }
       }
 
       externsRoot.addChildToBack(pathDefinition);
@@ -199,14 +213,9 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
      * parameter or return types.
      */
     private Node createExternFunction(Node exportedFunction) {
-      List<Node> externParameters = Lists.newLinkedList();
-      for (Node param :
-          NodeUtil.getFunctionParameters(exportedFunction).children()) {
-        externParameters.add(param.cloneNode());
-      }
-
-      Node externFunction = NodeUtil.newFunctionNode("", externParameters,
-          new Node(Token.BLOCK), -1, -1);
+      Node paramList = NodeUtil.getFunctionParameters(exportedFunction)
+          .cloneTree();
+      Node externFunction = IR.function(IR.name(""), paramList, IR.block());
 
       checkForFunctionsWithUnknownTypes(exportedFunction);
       externFunction.setJSType(exportedFunction.getJSType());
@@ -215,11 +224,38 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
     }
 
     /**
+     * Given an object literal to export, create an object lit with all its
+     * string properties. We don't care what the values of those properties
+     * are because they are not checked.
+     */
+    private Node createExternObjectLit(Node exportedObjectLit) {
+      Node lit = IR.objectlit();
+      lit.setJSType(exportedObjectLit.getJSType());
+
+      // This is an indirect way of telling the typed code generator
+      // "print the type of this"
+      lit.setJSDocInfo(new JSDocInfo());
+
+      int index = 1;
+      for (Node child = exportedObjectLit.getFirstChild();
+           child != null;
+           child = child.getNext()) {
+        if (child.isString()) {
+          lit.addChildToBack(
+              IR.propdef(
+                  IR.string(child.getString()),
+                  IR.number(index++)));
+        }
+      }
+      return lit;
+    }
+
+    /**
      * Warn the user if there is an exported function for which a parameter
      * or return type is unknown.
      */
     private void checkForFunctionsWithUnknownTypes(Node function) {
-      Preconditions.checkArgument(NodeUtil.isFunction(function));
+      Preconditions.checkArgument(function.isFunction());
 
       FunctionType functionType =
           JSType.toMaybeFunctionType(function.getJSType());
@@ -283,10 +319,10 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
 
     /**
      * If the given value is a qualified name which refers
-     * a function, the function's node is returned. Otherwise,
+     * a function or object literal, the node is returned. Otherwise,
      * {@code null} is returned.
      */
-    protected Node getFunctionValue(Node qualifiedNameNode) {
+    protected Node getValue(Node qualifiedNameNode) {
       String qualifiedName = value.getQualifiedName();
 
       if (qualifiedName == null) {
@@ -300,7 +336,7 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
 
       Node definition;
 
-      switch(definitionParent.getType()) {
+      switch (definitionParent.getType()) {
         case Token.ASSIGN:
           definition = definitionParent.getLastChild();
           break;
@@ -311,7 +347,7 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
             return null;
       }
 
-      if (definition.getType() != Token.FUNCTION) {
+      if (!definition.isFunction() && !definition.isObjectLit()) {
         return null;
       }
 
@@ -386,7 +422,7 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
     this.exports = Lists.newArrayList();
     this.compiler = compiler;
     this.definitionMap = Maps.newHashMap();
-    this.externsRoot = new Node(Token.BLOCK);
+    this.externsRoot = IR.block();
     this.externsRoot.setIsSyntheticBlock(true);
     this.alreadyExportedPaths = Sets.newHashSet();
     this.mappedPaths = Maps.newHashMap();
@@ -453,13 +489,13 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
           return;
         }
 
-        if (parent.getType() == Token.ASSIGN || parent.getType() == Token.VAR) {
+        if (parent.isAssign() || parent.isVar()) {
           definitionMap.put(n.getQualifiedName(), parent);
         }
 
         // Only handle function calls. This avoids assignments
         // that do not export items directly.
-        if (parent.getType() != Token.CALL) {
+        if (!parent.isCall()) {
           return;
         }
 
@@ -486,7 +522,7 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
 
     // Confirm the arguments are the expected types. If they are not,
     // then we have an export that we cannot statically identify.
-    if (nameArg.getType() != Token.STRING) {
+    if (!nameArg.isString()) {
       return;
     }
 
@@ -512,7 +548,7 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
       return;
     }
 
-    if (nameArg.getType() != Token.STRING) {
+    if (!nameArg.isString()) {
       return;
     }
 

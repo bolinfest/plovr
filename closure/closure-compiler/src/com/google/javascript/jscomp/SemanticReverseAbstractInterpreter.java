@@ -143,11 +143,11 @@ class SemanticReverseAbstractInterpreter
 
         Node typeOfNode = null;
         Node stringNode = null;
-        if (left.getType() == Token.TYPEOF && right.getType() == Token.STRING) {
+        if (left.isTypeOf() && right.isString()) {
           typeOfNode = left;
           stringNode = right;
-        } else if (right.getType() == Token.TYPEOF &&
-                   left.getType() == Token.STRING) {
+        } else if (right.isTypeOf() &&
+                   left.isString()) {
           typeOfNode = right;
           stringNode = left;
         }
@@ -242,7 +242,7 @@ class SemanticReverseAbstractInterpreter
             outcome);
 
       case Token.IN:
-        if (outcome && condition.getFirstChild().getType() == Token.STRING) {
+        if (outcome && condition.getFirstChild().isString()) {
           return caseIn(condition.getLastChild(),
               condition.getFirstChild().getString(), blindScope);
         }

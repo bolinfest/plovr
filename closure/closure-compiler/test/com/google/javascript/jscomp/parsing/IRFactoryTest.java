@@ -18,13 +18,13 @@ package com.google.javascript.jscomp.parsing;
 
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.SourceFile;
-import com.google.javascript.jscomp.mozilla.rhino.CompilerEnvirons;
-import com.google.javascript.jscomp.mozilla.rhino.Parser;
-import com.google.javascript.jscomp.mozilla.rhino.ast.AstRoot;
 import com.google.javascript.jscomp.parsing.Config.LanguageMode;
 import com.google.javascript.jscomp.testing.TestErrorReporter;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.head.CompilerEnvirons;
+import com.google.javascript.rhino.head.Parser;
+import com.google.javascript.rhino.head.ast.AstRoot;
 import com.google.javascript.rhino.testing.BaseJSTypeTestCase;
 
 /**
@@ -40,23 +40,11 @@ public class IRFactoryTest extends BaseJSTypeTestCase {
     mode = LanguageMode.ECMASCRIPT3;
   }
 
-  public void testScript() throws Exception {
-    parse("");
-  }
-
   public void testStrictScript() throws Exception {
     assertNull(newParse("").getDirectives());
     assertEquals(
         Sets.newHashSet("use strict"),
         newParse("'use strict'").getDirectives());
-  }
-
-  public void testName() throws Exception {
-    parse("a");
-  }
-
-  public void testArrayLiteral() throws Exception {
-    parse("[a, b]");
   }
 
   public void testArrayLiteral2() throws Exception {
@@ -67,10 +55,6 @@ public class IRFactoryTest extends BaseJSTypeTestCase {
       "            NAME a 1 [source_file: FileName.js] [length: 1]\n" +
       "            EMPTY 1 [source_file: FileName.js] [length: 1]\n" +
       "            NAME b 1 [source_file: FileName.js] [length: 1]\n");
-  }
-
-  public void testArrayLiteral3() throws Exception {
-    parse("[a, undefined, b]");
   }
 
   public void testArrayLiteral4() throws Exception {
@@ -84,162 +68,6 @@ public class IRFactoryTest extends BaseJSTypeTestCase {
       "            NAME a 1 [source_file: FileName.js] [length: 1]\n" +
       "            EMPTY 1 [source_file: FileName.js] [length: 1]\n" +
       "            NAME b 1 [source_file: FileName.js] [length: 1]\n");
-  }
-
-  public void testAssignment() throws Exception {
-    parse("a = b");
-  }
-
-  public void testAssignment2() throws Exception {
-    parse("a += b");
-  }
-
-  public void testInfix() throws Exception {
-    parse("a + b");
-  }
-
-  public void testScope() throws Exception {
-    parse("{ a; b; c; }");
-  }
-
-  public void testConditional() throws Exception {
-    parse("a ? b : c");
-  }
-
-  public void testEmpty() throws Exception {
-    parse(";;");
-  }
-
-  public void testIf() throws Exception {
-    parse("if (a) { b }");
-  }
-
-  public void testIf2() throws Exception {
-    parse("if (a) { b } else { c }");
-  }
-
-  public void testNumber() throws Exception {
-    parse("0");
-  }
-
-  public void testNumber2() throws Exception {
-    parse("1.2");
-  }
-
-  public void testString() throws Exception {
-    parse("'a'");
-  }
-
-  public void testString2() throws Exception {
-    parse("\"a\"");
-  }
-
-  public void testUnary() throws Exception {
-    parse("-a");
-  }
-
-  public void testUnary2() throws Exception {
-    parse("a++");
-  }
-
-  public void testUnary3() throws Exception {
-    parse("++a");
-  }
-
-  public void testVar() throws Exception {
-    parse("var a = 1");
-  }
-
-  public void testVar2() throws Exception {
-    parse("var a = 1, b = 2");
-  }
-
-  public void testVar3() throws Exception {
-    parse("var a, b = 1");
-  }
-
-  public void testElementGet() throws Exception {
-    parse("a[i]");
-  }
-
-  public void testPropertyGet() throws Exception {
-    parse("a.b");
-  }
-
-  public void testRegexp() throws Exception {
-    parse("/ab+c/");
-  }
-
-  public void testRegexp2() throws Exception {
-    parse("/ab+c/g");
-  }
-
-  public void testFunctionCall() throws Exception {
-    parse("a()");
-  }
-
-  public void testFunctionCall2() throws Exception {
-    parse("a(b)");
-  }
-
-  public void testFunctionCall3() throws Exception {
-    parse("a(b, c)");
-  }
-
-  public void testNew() throws Exception {
-    parse("new A()");
-  }
-
-  public void testNew2() throws Exception {
-    parse("new A(b)");
-  }
-
-  public void testNew3() throws Exception {
-    parse("new A(b, c)");
-  }
-
-  public void testFunction() {
-    parse("function f() {}");
-  }
-
-  public void testFunction2() {
-    parse("(function() {})");
-  }
-
-  public void testFunction3() {
-    parse("function f(a) {}");
-  }
-
-  public void testFunction4() {
-    parse("(function(a) {})");
-  }
-
-  public void testFunction5() {
-    parse("function f(a, b) {}");
-  }
-
-  public void testFunction6() {
-    parse("(function(a, b) {})");
-  }
-
-  public void testReturn() {
-    parse("(function() {return 1;})");
-  }
-
-  public void testReturn2() {
-    parse("function f() {return;}");
-  }
-
-  public void testReturn3() {
-    parse("function f(){return x?1:2}");
-  }
-
-  public void testThrow() {
-    parse("throw e");
-  }
-
-  public void testWith() {
-    parse("with (a) { b }");
   }
 
   public void testObjectLiteral() {
@@ -278,10 +106,10 @@ public class IRFactoryTest extends BaseJSTypeTestCase {
         "SCRIPT 1 [source_file: FileName.js] [length: 14]\n" +
         "    EXPR_RESULT 1 [source_file: FileName.js] [length: 13]\n" +
         "        OBJECTLIT 1 [parenthesized: true] [source_file: FileName.js] [length: 12]\n" +
-        "            GET 1 1 [quoted: 1] [source_file: FileName.js] [length: 1]\n" +
+        "            GETTER_DEF 1 1 [quoted: 1] [source_file: FileName.js] [length: 1]\n" +
         "                FUNCTION  1 [source_file: FileName.js] [length: 6]\n" +
         "                    NAME  1 [source_file: FileName.js]\n" +
-        "                    LP 1 [source_file: FileName.js]\n" +
+        "                    PARAM_LIST 1 [source_file: FileName.js]\n" +
         "                    BLOCK 1 [source_file: FileName.js] [length: 2]\n");
   }
 
@@ -292,49 +120,12 @@ public class IRFactoryTest extends BaseJSTypeTestCase {
         "SCRIPT 1 [source_file: FileName.js] [length: 15]\n" +
         "    EXPR_RESULT 1 [source_file: FileName.js] [length: 14]\n" +
         "        OBJECTLIT 1 [parenthesized: true] [source_file: FileName.js] [length: 13]\n" +
-        "            SET 1 1 [quoted: 1] [source_file: FileName.js] [length: 1]\n" +
+        "            SETTER_DEF 1 1 [quoted: 1] [source_file: FileName.js] [length: 1]\n" +
         "                FUNCTION  1 [source_file: FileName.js] [length: 7]\n" +
         "                    NAME  1 [source_file: FileName.js]\n" +
-        "                    LP 1 [source_file: FileName.js]\n" +
+        "                    PARAM_LIST 1 [source_file: FileName.js]\n" +
         "                        NAME a 1 [source_file: FileName.js] [length: 1]\n" +
         "                    BLOCK 1 [source_file: FileName.js] [length: 2]\n");
-  }
-
-
-  public void testKeywordLiteral() {
-    parse("true");
-  }
-
-  public void testWhile() {
-    parse("while (!a) { a--; }");
-  }
-
-  public void testParen() {
-    parse("(a)");
-  }
-
-  public void testParen2() {
-    parse("(1+1)*2");
-  }
-
-  public void testFor() {
-    parse("for (var i = 0; i < n; i++) { a(i); }");
-  }
-
-  public void testForIn() {
-    parse("for (i in a) { b(i); }");
-  }
-
-  public void testBreak() {
-    parse("while (true) { break; }");
-  }
-
-  public void testContinue() {
-    parse("while (true) { continue; }");
-  }
-
-  public void testDoLoop() {
-    parse("do { a() } while (b());");
   }
 
   // The old and new parser produce different results now with labels, and
@@ -409,10 +200,10 @@ public class IRFactoryTest extends BaseJSTypeTestCase {
         "SCRIPT 1 [source_file: FileName.js] [length: 14]\n" +
         "    EXPR_RESULT 1 [source_file: FileName.js] [length: 13]\n" +
         "        OBJECTLIT 1 [parenthesized: true] [source_file: FileName.js] [length: 12]\n" +
-        "            GET a 1 [source_file: FileName.js] [length: 1]\n" +
+        "            GETTER_DEF a 1 [source_file: FileName.js] [length: 1]\n" +
         "                FUNCTION  1 [source_file: FileName.js] [length: 6]\n" +
         "                    NAME  1 [source_file: FileName.js]\n" +
-        "                    LP 1 [source_file: FileName.js]\n" +
+        "                    PARAM_LIST 1 [source_file: FileName.js]\n" +
         "                    BLOCK 1 [source_file: FileName.js] [length: 2]\n");
   }
 
@@ -422,31 +213,12 @@ public class IRFactoryTest extends BaseJSTypeTestCase {
         "SCRIPT 1 [source_file: FileName.js] [length: 15]\n" +
         "    EXPR_RESULT 1 [source_file: FileName.js] [length: 14]\n" +
         "        OBJECTLIT 1 [parenthesized: true] [source_file: FileName.js] [length: 13]\n" +
-        "            SET a 1 [source_file: FileName.js] [length: 1]\n" +
+        "            SETTER_DEF a 1 [source_file: FileName.js] [length: 1]\n" +
         "                FUNCTION  1 [source_file: FileName.js] [length: 7]\n" +
         "                    NAME  1 [source_file: FileName.js]\n" +
-        "                    LP 1 [source_file: FileName.js]\n" +
+        "                    PARAM_LIST 1 [source_file: FileName.js]\n" +
         "                        NAME x 1 [source_file: FileName.js] [length: 1]\n" +
         "                    BLOCK 1 [source_file: FileName.js] [length: 2]\n");
-  }
-
-  public void testSwitch() {
-    parse("switch (e) {" +
-        "case 'a': a(); break;" +
-        "case 'b': b();" +
-        "case 'c': c(); }");
-  }
-
-  public void testSwitch2() {
-    parse("switch (e) { case 'a': a(); break; default: b();}");
-  }
-
-  public void testSwitch3() {
-    parse("function f(){switch(x){default:case 1:return 2}}");
-  }
-
-  public void testDebugger() {
-    parse("debugger;");
   }
 
   public void testDelete1() {
@@ -598,8 +370,8 @@ public class IRFactoryTest extends BaseJSTypeTestCase {
     Node varExpr = varName.getFirstChild();
 
     assertNodePosition(1, 0, varDecl);
-    assertNodePosition(2, 4, varName);
-    assertNodePosition(3, 4, varExpr);
+    assertNodePosition(2, 4, 1, varName);
+    assertNodePosition(3, 4, 1, varExpr);
   }
 
   public void testReturnLocation() {
@@ -866,7 +638,6 @@ public class IRFactoryTest extends BaseJSTypeTestCase {
 
     Node firstVarDecl = root.getFirstChild();
     Node firstVar = firstVarDecl.getFirstChild();
-    Node firstInitializer = firstVar.getFirstChild();
     Node callNode = firstVar.getFirstChild();
     Node fnName = callNode.getFirstChild();
     Node regexObject = fnName.getNext();
@@ -874,9 +645,9 @@ public class IRFactoryTest extends BaseJSTypeTestCase {
     Node endRegexString = regexObject.getNext();
 
     assertNodePosition(1, 0, firstVarDecl);
-    assertNodePosition(1, 4, firstVar);
-    assertNodePosition(2, 7, callNode);
-    assertNodePosition(2, 0, fnName);
+    assertNodePosition(1, 4, 4, firstVar);
+    assertNodePosition(2, 0, 18, callNode);
+    assertNodePosition(2, 0, 7, fnName);
     assertNodePosition(3, 0, regexObject);
     assertNodePosition(3, 0, aString);
     assertNodePosition(3, 5, endRegexString);
@@ -1076,13 +847,19 @@ public class IRFactoryTest extends BaseJSTypeTestCase {
     Node functionProp = functionCall.getFirstChild();
     Node firstNameComponent = functionProp.getFirstChild();
     Node lastNameComponent = firstNameComponent.getNext();
+    Node aNameComponent = firstNameComponent.getFirstChild();
+    Node bNameComponent = aNameComponent.getNext();
 
-    assertNodePosition(3, 4, functionCall);
+    assertNodePosition(1, 0, 13, functionCall);
+    assertNodePosition(1, 0, 10, functionProp);
     // TODO(bowdidge) New Rhino doesn't keep the position of the dot handy.
     // New Rhino treats the location of the qualified name as the beginning of
     // the whole name.
-    // assertNodePosition(1, 0, firstNameComponent);
-    assertNodePosition(3, 0, lastNameComponent);
+    assertNodePosition(1, 0, 4, firstNameComponent);
+    assertNodePosition(3, 0, 4, lastNameComponent);
+
+    assertNodePosition(1, 0, 1, aNameComponent);
+    assertNodePosition(2, 0, 1, bNameComponent);
   }
 
   public void testLinenoDeclaration() {
@@ -1167,14 +944,16 @@ public class IRFactoryTest extends BaseJSTypeTestCase {
     assertEquals("Column position", charno, n.getCharno());
   }
 
+  private void assertNodePosition(int lineno, int charno, int length, Node n) {
+    assertEquals("Line number", lineno, n.getLineno());
+    assertEquals("Column position", charno, n.getCharno());
+    assertEquals("Length", length, n.getLength());
+  }
+
+
   private void testNewParser(String code, String expected) {
     String actual = newParse(code).toStringTree();
     assertEquals(expected, actual);
-  }
-
-  private void parse(String string) {
-    String compare = newParse(string).checkTreeEquals(oldParse(string));
-    assertTrue(compare, compare == null);
   }
 
   private Node newParse(String string) {
@@ -1193,20 +972,6 @@ public class IRFactoryTest extends BaseJSTypeTestCase {
     Config config = ParserRunner.createConfig(true, mode, false);
     Node root = IRFactory.transformTree(
         script, SourceFile.fromCode("FileName.js", string), string, config, errorReporter);
-
-    return root;
-  }
-
-  private Node oldParse(String string) {
-    com.google.javascript.rhino.CompilerEnvirons environment =
-        new com.google.javascript.rhino.CompilerEnvirons();
-
-    environment.setParseJSDoc(true);
-
-    com.google.javascript.rhino.Parser p =
-        new com.google.javascript.rhino.Parser(environment, null);
-
-    Node root = p.parse(string, null, 0);
 
     return root;
   }

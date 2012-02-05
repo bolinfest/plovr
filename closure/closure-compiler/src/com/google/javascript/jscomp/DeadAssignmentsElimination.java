@@ -26,6 +26,7 @@ import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
 import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.graph.DiGraph.DiGraphNode;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -50,8 +51,8 @@ class DeadAssignmentsElimination extends AbstractPostOrderCallback implements
     @Override
     public boolean apply(Node n) {
       return (NodeUtil.isAssignmentOp(n) &&
-              n.getFirstChild().getType() == Token.NAME) ||
-          n.getType() == Token.INC || n.getType() == Token.DEC;
+              n.getFirstChild().isName()) ||
+          n.isInc() || n.isDec();
     }
   };
 
@@ -177,7 +178,7 @@ class DeadAssignmentsElimination extends AbstractPostOrderCallback implements
     Node parent = n.getParent();
 
     if (NodeUtil.isAssignmentOp(n) ||
-        n.getType() == Token.INC || n.getType() == Token.DEC) {
+        n.isInc() || n.isDec()) {
 
       Node lhs = n.getFirstChild();
       Node rhs = lhs.getNext();
@@ -190,7 +191,7 @@ class DeadAssignmentsElimination extends AbstractPostOrderCallback implements
       }
 
       Scope scope = t.getScope();
-      if (!NodeUtil.isName(lhs)) {
+      if (!lhs.isName()) {
         return; // Not a local variable assignment.
       }
       String name = lhs.getString();
@@ -207,9 +208,9 @@ class DeadAssignmentsElimination extends AbstractPostOrderCallback implements
       // regardless of what the liveness results because it
       // does not change the result afterward.
       if (rhs != null &&
-          NodeUtil.isName(rhs) &&
+          rhs.isName() &&
           rhs.getString().equals(var.name) &&
-          NodeUtil.isAssign(n)) {
+          n.isAssign()) {
         n.removeChild(rhs);
         n.getParent().replaceChild(n, rhs);
         compiler.reportCodeChange();
@@ -235,7 +236,7 @@ class DeadAssignmentsElimination extends AbstractPostOrderCallback implements
         return;
       }
 
-      if (NodeUtil.isAssign(n)) {
+      if (n.isAssign()) {
         n.removeChild(rhs);
         n.getParent().replaceChild(n, rhs);
       } else if (NodeUtil.isAssignmentOp(n)) {
@@ -243,15 +244,15 @@ class DeadAssignmentsElimination extends AbstractPostOrderCallback implements
         n.removeChild(lhs);
         Node op = new Node(NodeUtil.getOpFromAssignmentOp(n), lhs, rhs);
         parent.replaceChild(n, op);
-      } else if (n.getType() == Token.INC || n.getType() == Token.DEC) {
-        if (NodeUtil.isExpressionNode(parent)) {
+      } else if (n.isInc() || n.isDec()) {
+        if (parent.isExprResult()) {
           parent.replaceChild(n,
-              new Node(Token.VOID, Node.newNumber(0).copyInformationFrom(n)));
-        } else if(n.getType() == Token.COMMA && n != parent.getLastChild()) {
+              IR.voidNode(IR.number(0).srcref(n)));
+        } else if(n.isComma() && n != parent.getLastChild()) {
           parent.removeChild(n);
-        } else if (parent.getType() == Token.FOR && !NodeUtil.isForIn(parent) &&
+        } else if (parent.isFor() && !NodeUtil.isForIn(parent) &&
             NodeUtil.getConditionExpression(parent) != n) {
-          parent.replaceChild(n, new Node(Token.EMPTY));
+          parent.replaceChild(n, IR.empty());
         } else {
           // Cannot replace x = a++ with x = a because that's not valid
           // when a is not a number.
@@ -360,9 +361,9 @@ class DeadAssignmentsElimination extends AbstractPostOrderCallback implements
       return VariableLiveness.MAYBE_LIVE;
     }
 
-    if (NodeUtil.isName(n) && variable.equals(n.getString())) {
+    if (n.isName() && variable.equals(n.getString())) {
       if (NodeUtil.isVarOrSimpleAssignLhs(n, n.getParent())) {
-        Preconditions.checkState(n.getParent().getType() == Token.ASSIGN);
+        Preconditions.checkState(n.getParent().isAssign());
         // The expression to which the assignment is made is evaluated before
         // the RHS is evaluated (normal left to right evaluation) but the KILL
         // occurs after the RHS is evaluated.

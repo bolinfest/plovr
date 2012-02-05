@@ -22,6 +22,7 @@ import com.google.common.base.Supplier;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.ExpressionDecomposer.DecompositionType;
 import com.google.javascript.jscomp.MakeDeclaredNamesUnique.ContextualRenamer;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -139,7 +140,7 @@ class FunctionInjector {
     Predicate<Node> p = new Predicate<Node>(){
       @Override
       public boolean apply(Node n) {
-        if (n.getType() == Token.NAME) {
+        if (n.isName()) {
           return n.getString().equals("eval")
             || (!fnName.isEmpty()
                 && n.getString().equals(fnName))
@@ -214,11 +215,11 @@ class FunctionInjector {
    * @return Whether the call is of a type that is supported.
    */
   private boolean isSupportedCallType(Node callNode) {
-    if (callNode.getFirstChild().getType() != Token.NAME) {
+    if (!callNode.getFirstChild().isName()) {
       if (NodeUtil.isFunctionObjectCall(callNode)) {
         if (!assumeStrictThis) {
           Node thisValue = callNode.getFirstChild().getNext();
-          if (thisValue == null || thisValue.getType() != Token.THIS) {
+          if (thisValue == null || !thisValue.isThis()) {
             return false;
           }
         }
@@ -269,7 +270,7 @@ class FunctionInjector {
       newExpression = NodeUtil.newUndefinedNode(srcLocation);
     } else {
       Node returnNode = block.getFirstChild();
-      Preconditions.checkArgument(returnNode.getType() == Token.RETURN);
+      Preconditions.checkArgument(returnNode.isReturn());
 
       // Clone the return node first.
       Node safeReturnNode = returnNode.cloneTree();
@@ -358,13 +359,13 @@ class FunctionInjector {
       return CallSiteType.SIMPLE_CALL;
     } else if (NodeUtil.isExprAssign(grandParent)
         && !NodeUtil.isVarOrSimpleAssignLhs(callNode, parent)
-        && parent.getFirstChild().getType() == Token.NAME
+        && parent.getFirstChild().isName()
         && !NodeUtil.isConstantName(parent.getFirstChild())) {
       // This is a simple assignment.  Example: "x = foo();"
       return CallSiteType.SIMPLE_ASSIGNMENT;
-    } else if (parent.getType() == Token.NAME
+    } else if (parent.isName()
         && !NodeUtil.isConstantName(parent)
-        && grandParent.getType() == Token.VAR
+        && grandParent.isVar()
         && grandParent.hasOneChild()) {
       // This is a var declaration.  Example: "var x = foo();"
       // TODO(johnlenz): Should we be checking for constants on the
@@ -465,13 +466,13 @@ class FunctionInjector {
       case SIMPLE_ASSIGNMENT:
         // The assignment is now part of the inline function so
         // replace it completely.
-        Preconditions.checkState(NodeUtil.isExpressionNode(grandParent));
+        Preconditions.checkState(grandParent.isExprResult());
         greatGrandParent.replaceChild(grandParent, newBlock);
         break;
 
       case SIMPLE_CALL:
         // If nothing is looking at the result just replace the call.
-        Preconditions.checkState(NodeUtil.isExpressionNode(parent));
+        Preconditions.checkState(parent.isExprResult());
         grandParent.replaceChild(parent, newBlock);
         break;
 
@@ -496,7 +497,7 @@ class FunctionInjector {
         injectionPointParent.addChildBefore(newBlock, injectionPoint);
         // Replace the call site with a reference to the intermediate
         // result name.
-        parent.replaceChild(callNode, Node.newString(Token.NAME, resultName));
+        parent.replaceChild(callNode, IR.name(resultName));
         break;
 
       default:
@@ -521,7 +522,7 @@ class FunctionInjector {
       return true;
     } else if (block.hasOneChild()) {
       // Only inline functions that return something.
-      if (block.getFirstChild().getType() == Token.RETURN
+      if (block.getFirstChild().isReturn()
           && block.getFirstChild().getFirstChild() != null) {
         return true;
       }
@@ -605,10 +606,10 @@ class FunctionInjector {
       Predicate<Node> match = new Predicate<Node>(){
         @Override
         public boolean apply(Node n) {
-          if (n.getType() == Token.NAME) {
+          if (n.isName()) {
             return n.getString().equals("eval");
           }
-          if (!assumeMinimumCapture && n.getType() == Token.FUNCTION) {
+          if (!assumeMinimumCapture && n.isFunction()) {
             return n != fnNode;
           }
           return false;
@@ -669,10 +670,10 @@ class FunctionInjector {
     // Functions called via 'call' and 'apply' have a this-object as
     // the first parameter, but this is not part of the called function's
     // parameter list.
-    if (callNode.getFirstChild().getType() != Token.NAME) {
+    if (!callNode.getFirstChild().isName()) {
       if (NodeUtil.isFunctionObjectCall(callNode)) {
         // TODO(johnlenz): Support replace this with a value.
-        if (cArg == null || cArg.getType() != Token.THIS) {
+        if (cArg == null || !cArg.isThis()) {
           return CanInlineResult.NO;
         }
         cArg = cArg.getNext();

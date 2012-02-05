@@ -19,13 +19,11 @@ package com.google.javascript.jscomp;
 import com.google.javascript.jscomp.AnalyzePrototypeProperties.NameInfo;
 import com.google.javascript.jscomp.AnalyzePrototypeProperties.Property;
 import com.google.javascript.jscomp.AnalyzePrototypeProperties.Symbol;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
-
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.logging.Logger;
 
 /**
  * Move prototype methods into later modules.
@@ -33,9 +31,6 @@ import java.util.logging.Logger;
  * @author nicksantos@google.com (Nick Santos)
  */
 class CrossModuleMethodMotion implements CompilerPass {
-
-  private static final Logger logger =
-    Logger.getLogger(CrossModuleMethodMotion.class.getName());
 
   // Internal errors
   static final DiagnosticType NULL_COMMON_MODULE_ERROR = DiagnosticType.error(
@@ -109,7 +104,7 @@ class CrossModuleMethodMotion implements CompilerPass {
       }
 
       JSModule deepestCommonModuleRef = nameInfo.getDeepestCommonModuleRef();
-      if(deepestCommonModuleRef == null) {
+      if (deepestCommonModuleRef == null) {
         compiler.report(JSError.make(NULL_COMMON_MODULE_ERROR));
         continue;
       }
@@ -125,8 +120,9 @@ class CrossModuleMethodMotion implements CompilerPass {
 
         // We should only move a property across modules if:
         // 1) We can move it deeper in the module graph, and
-        // 2) it's a function.
-        // 3) it is not a get or a set.
+        // 2) it's a function, and
+        // 3) it is not a GETTER_DEF or a SETTER_DEF, and
+        // 4) the class is available in the global scope.
         //
         // #1 should be obvious. #2 is more subtle. It's possible
         // to copy off of a prototype, as in the code:
@@ -138,12 +134,16 @@ class CrossModuleMethodMotion implements CompilerPass {
         // So if we move a prototype method into a deeper module, we must
         // replace it with a stub function so that it preserves its original
         // behavior.
+        if (prop.getRootVar() == null || !prop.getRootVar().isGlobal()) {
+          continue;
+        }
+
         Node value = prop.getValue();
         if (moduleGraph.dependsOn(deepestCommonModuleRef, prop.getModule()) &&
-            value.getType() == Token.FUNCTION) {
+            value.isFunction()) {
           Node valueParent = value.getParent();
-          if (valueParent.getType() == Token.GET
-              || valueParent.getType() == Token.SET) {
+          if (valueParent.isGetterDef()
+              || valueParent.isSetterDef()) {
             // TODO(johnlenz): a GET or SET can't be deferred like a normal
             // FUNCTION property definition as a mix-in would get the result
             // of a GET instead of the function itself.
@@ -153,9 +153,9 @@ class CrossModuleMethodMotion implements CompilerPass {
           int stubId = idGenerator.newId();
 
           // example: JSCompiler_stubMethod(id);
-          Node stubCall = new Node(Token.CALL,
-              Node.newString(Token.NAME, STUB_METHOD_NAME),
-              Node.newNumber(stubId))
+          Node stubCall = IR.call(
+              IR.name(STUB_METHOD_NAME),
+              IR.number(stubId))
               .copyInformationFromForTree(value);
           stubCall.putBooleanProp(Node.FREE_CALL, true);
 
@@ -166,26 +166,22 @@ class CrossModuleMethodMotion implements CompilerPass {
           // unstub the function body in the deeper module
           Node unstubParent = compiler.getNodeForCodeInsertion(
               deepestCommonModuleRef);
-          Node unstubCall = new Node(Token.CALL,
-              Node.newString(Token.NAME, UNSTUB_METHOD_NAME),
-              Node.newNumber(stubId),
+          Node unstubCall = IR.call(
+              IR.name(UNSTUB_METHOD_NAME),
+              IR.number(stubId),
               value);
           unstubCall.putBooleanProp(Node.FREE_CALL, true);
           unstubParent.addChildToFront(
               // A.prototype.b = JSCompiler_unstubMethod(id, body);
-              new Node(Token.EXPR_RESULT,
-                  new Node(Token.ASSIGN,
-                      new Node(Token.GETPROP,
+              IR.exprResult(
+                  IR.assign(
+                      IR.getprop(
                           proto.cloneTree(),
-                          Node.newString(Token.STRING, nameInfo.name)),
+                          IR.string(nameInfo.name)),
                       unstubCall))
                   .copyInformationFromForTree(value));
 
           compiler.reportCodeChange();
-          logger.fine("Moved method: " +
-              proto.getQualifiedName() + "." + nameInfo.name +
-              " from module " + prop.getModule() + " to module " +
-              deepestCommonModuleRef);
         }
       }
     }

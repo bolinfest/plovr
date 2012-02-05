@@ -16,13 +16,7 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.javascript.jscomp.CodingConvention.AssertionFunctionSpec;
-import com.google.javascript.jscomp.CodingConvention.Bind;
-import com.google.javascript.jscomp.CodingConvention.ObjectLiteralCast;
-import com.google.javascript.jscomp.CodingConvention.SubclassRelationship;
-import com.google.javascript.jscomp.CodingConvention.SubclassType;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
@@ -219,6 +213,11 @@ public class CodingConventions {
     }
 
     @Override
+    public boolean isPrototypeAlias(Node getProp) {
+      return false;
+    }
+
+    @Override
     public ObjectLiteralCast getObjectLiteralCast(NodeTraversal t,
         Node callNode) {
       return nextConvention.getObjectLiteralCast(t, callNode);
@@ -379,6 +378,11 @@ public class CodingConventions {
     }
 
     @Override
+    public boolean isPrototypeAlias(Node getProp) {
+      return false;
+    }
+
+    @Override
     public ObjectLiteralCast getObjectLiteralCast(NodeTraversal t,
         Node callNode) {
       return null;
@@ -394,7 +398,7 @@ public class CodingConventions {
       // It would be nice to be able to identify a fn.bind call
       // but that requires knowing the type of "fn".
 
-      if (n.getType() != Token.CALL) {
+      if (!n.isCall()) {
         return null;
       }
 
@@ -413,9 +417,9 @@ public class CodingConventions {
         }
       }
 
-      if (callTarget.getType() == Token.GETPROP
+      if (callTarget.isGetProp()
           && callTarget.getLastChild().getString().equals("bind")
-          && callTarget.getFirstChild().getType() == Token.FUNCTION) {
+          && callTarget.getFirstChild().isFunction()) {
         // (function(){}).bind(self, args...);
         Node fn = callTarget.getFirstChild();
         Node thisValue = callTarget.getNext();

@@ -19,6 +19,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.javascript.jscomp.MakeDeclaredNamesUnique.ContextualRenamer;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -119,7 +120,7 @@ class ExpressionDecomposer {
     // Replace the expression with a reference to the new name.
     Node expressionParent = expression.getParent();
     expressionParent.replaceChild(
-        expression, Node.newString(Token.NAME, resultName));
+        expression, IR.name(resultName));
 
     // Re-add the expression at the appropriate place.
     Node newExpressionRoot = NodeUtil.newVarNode(resultName, expression);
@@ -228,7 +229,7 @@ class ExpressionDecomposer {
       // Node extractedCall = extractExpression(decomposition, expressionRoot);
     } else {
       Node parent = nonconditionalExpr.getParent();
-      boolean needResult = parent.getType() != Token.EXPR_RESULT;
+      boolean needResult = !parent.isExprResult();
       Node extractedConditional = extractConditional(
           nonconditionalExpr, exprInjectionPoint, needResult);
     }
@@ -348,8 +349,8 @@ class ExpressionDecomposer {
 
     // Transform the conditional to an IF statement.
     Node cond = null;
-    Node trueExpr = new Node(Token.BLOCK).copyInformationFrom(expr);
-    Node falseExpr = new Node(Token.BLOCK).copyInformationFrom(expr);
+    Node trueExpr = IR.block().srcref(expr);
+    Node falseExpr = IR.block().srcref(expr);
     switch (expr.getType()) {
       case Token.HOOK:
         // a = x?y:z --> if (x) {a=y} else {a=z}
@@ -378,9 +379,9 @@ class ExpressionDecomposer {
 
     Node ifNode;
     if (falseExpr.hasChildren()) {
-      ifNode = new Node(Token.IF, cond, trueExpr, falseExpr);
+      ifNode = IR.ifNode(cond, trueExpr, falseExpr);
     } else {
-      ifNode = new Node(Token.IF, cond, trueExpr);
+      ifNode = IR.ifNode(cond, trueExpr);
     }
     ifNode.copyInformationFrom(expr);
 
@@ -392,12 +393,12 @@ class ExpressionDecomposer {
       injectionPointParent.addChildAfter(ifNode, tempVarNode);
 
       // Replace the expression with the temporary name.
-      Node replacementValueNode = Node.newString(Token.NAME, tempName);
+      Node replacementValueNode = IR.name(tempName);
       parent.replaceChild(expr, replacementValueNode);
     } else {
       // Only conditionals that are the direct child of an expression statement
       // don't need results, for those simply replace the expression statement.
-      Preconditions.checkArgument(parent.getType() == Token.EXPR_RESULT);
+      Preconditions.checkArgument(parent.isExprResult());
       Node gramps = parent.getParent();
       gramps.replaceChild(parent, ifNode);
     }
@@ -417,9 +418,9 @@ class ExpressionDecomposer {
   private static Node buildResultExpression(
       Node expr, boolean needResult, String tempName) {
     if (needResult) {
-      return new Node(Token.ASSIGN,
-          Node.newString(Token.NAME, tempName),
-          expr).copyInformationFromForTree(expr);
+      return IR.assign(
+          IR.name(tempName),
+          expr).srcrefTree(expr);
     } else {
       return expr;
     }
@@ -427,7 +428,7 @@ class ExpressionDecomposer {
 
   private boolean isConstantName(Node n, Set<String> knownConstants) {
     // Non-constant names values may have been changed.
-    return NodeUtil.isName(n) && (NodeUtil.isConstantName(n)
+    return n.isName() && (NodeUtil.isConstantName(n)
         || knownConstants.contains(n.getString()));
   }
 
@@ -441,7 +442,7 @@ class ExpressionDecomposer {
     Node parent = expr.getParent();
 
     boolean isLhsOfAssignOp = NodeUtil.isAssignmentOp(parent)
-        && !NodeUtil.isAssign(parent)
+        && !parent.isAssign()
         && parent.getFirstChild() == expr;
 
     Node firstExtractedNode = null;
@@ -454,7 +455,7 @@ class ExpressionDecomposer {
     //    t1.foo = t1.foo + 2;
     if (isLhsOfAssignOp && NodeUtil.isGet(expr)) {
       for (Node n : expr.children()) {
-        if (n.getType() != Token.STRING && !isConstantName(n, knownConstants)) {
+        if (!n.isString() && !isConstantName(n, knownConstants)) {
           Node extractedNode = extractExpression(n, injectionPoint);
           if (firstExtractedNode == null) {
             firstExtractedNode = extractedNode;
@@ -465,15 +466,14 @@ class ExpressionDecomposer {
 
     // The temp is known to be constant.
     String tempName = getTempConstantValueName();
-    Node replacementValueNode = Node.newString(Token.NAME, tempName)
-        .copyInformationFrom(expr);
+    Node replacementValueNode = IR.name(tempName).srcref(expr);
 
     Node tempNameValue;
 
     // If it is ASSIGN_XXX, keep the assignment in place and extract the
     // original value of the LHS operand.
     if (isLhsOfAssignOp) {
-      Preconditions.checkState(NodeUtil.isName(expr) || NodeUtil.isGet(expr));
+      Preconditions.checkState(expr.isName() || NodeUtil.isGet(expr));
       // Transform "x += 2" into "x = temp + 2"
       Node opNode = new Node(NodeUtil.getOpFromAssignmentOp(parent))
           .copyInformationFrom(parent);
@@ -519,7 +519,7 @@ class ExpressionDecomposer {
    * @return The replacement node.
    */
   private Node rewriteCallExpression(Node call, DecompositionState state) {
-    Preconditions.checkArgument(call.getType() == Token.CALL);
+    Preconditions.checkArgument(call.isCall());
     Node first = call.getFirstChild();
     Preconditions.checkArgument(NodeUtil.isGet(first));
 
@@ -549,11 +549,11 @@ class ExpressionDecomposer {
     //   original-parameter1
     //   original-parameter2
     //   ...
-    Node newCall = new Node(Token.CALL,
-        new Node(Token.GETPROP,
+    Node newCall = IR.call(
+        IR.getprop(
             functionNameNode.cloneNode(),
-            Node.newString("call")),
-        thisNameNode.cloneNode(), call.getLineno(), call.getCharno());
+            IR.string("call")),
+        thisNameNode.cloneNode()).srcref(call);
 
     // Throw away the call name
     call.removeFirstChild();
@@ -609,7 +609,7 @@ class ExpressionDecomposer {
     Node injectionPoint = expressionRoot;
 
     Node parent = injectionPoint.getParent();
-    while (parent.getType() == Token.LABEL) {
+    while (parent.isLabel()) {
       injectionPoint = parent;
       parent = injectionPoint.getParent();
     }
@@ -659,7 +659,7 @@ class ExpressionDecomposer {
         case Token.BLOCK:
         case Token.LABEL:
         case Token.CASE:
-        case Token.DEFAULT:
+        case Token.DEFAULT_CASE:
           return null;
       }
       child = parent;
@@ -802,7 +802,7 @@ class ExpressionDecomposer {
           //
           Node first = parent.getFirstChild();
           if (requiresDecomposition
-              && parent.getType() == Token.CALL
+              && parent.isCall()
               && NodeUtil.isGet(first)) {
             if (maybeExternMethod(first)) {
               return DecompositionType.UNDECOMPOSABLE;
@@ -842,7 +842,7 @@ class ExpressionDecomposer {
    * @return Whether the assignment is safe from side-effects.
    */
   private boolean isSafeAssign(Node n, boolean seenSideEffects) {
-    if (n.getType() == Token.ASSIGN) {
+    if (n.isAssign()) {
       Node lhs = n.getFirstChild();
       switch (lhs.getType()) {
         case Token.NAME:

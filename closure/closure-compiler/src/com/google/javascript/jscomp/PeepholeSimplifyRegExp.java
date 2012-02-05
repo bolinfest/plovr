@@ -18,17 +18,17 @@ package com.google.javascript.jscomp;
 
 import com.google.javascript.jscomp.regex.RegExpTree;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 
 /**
  * Simplifies regular expression patterns and flags.
  *
+ * @author Mike Samuel <mikesamuel@gmail.com>
  */
 class PeepholeSimplifyRegExp extends AbstractPeepholeOptimization {
 
   @Override
   Node optimizeSubtree(Node subtree) {
-    if (subtree.getType() == Token.REGEXP) {
+    if (subtree.isRegExp()) {
       // Split regexp into pattern and flags.
       String pattern = subtree.getFirstChild().getString();
       String flags = subtree.getChildCount() == 2

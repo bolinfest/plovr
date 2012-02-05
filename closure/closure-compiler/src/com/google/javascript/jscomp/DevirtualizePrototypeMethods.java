@@ -19,8 +19,8 @@ package com.google.javascript.jscomp;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.DefinitionsRemover.Definition;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
@@ -99,7 +99,7 @@ class DevirtualizePrototypeMethods
   private static boolean isCall(UseSite site) {
     Node node = site.node;
     Node parent = node.getParent();
-    return (parent.getFirstChild() == node) && NodeUtil.isCall(parent);
+    return (parent.getFirstChild() == node) && parent.isCall();
   }
 
   /**
@@ -119,16 +119,16 @@ class DevirtualizePrototypeMethods
     }
 
     Node functionNode = parent.getLastChild();
-    if ((functionNode == null) || !NodeUtil.isFunction(functionNode)) {
+    if ((functionNode == null) || !functionNode.isFunction()) {
       return false;
     }
 
-    if (!NodeUtil.isGetProp(node)) {
+    if (!node.isGetProp()) {
       return false;
     }
 
     Node nameNode = node.getFirstChild();
-    return NodeUtil.isGetProp(nameNode) &&
+    return nameNode.isGetProp() &&
         nameNode.getLastChild().getString().equals("prototype");
 
   }
@@ -213,7 +213,7 @@ class DevirtualizePrototypeMethods
     // rewrite changes the structure of this object.
     Node rValue = definition.getRValue();
     if (rValue == null ||
-        !NodeUtil.isFunction(rValue) ||
+        !rValue.isFunction() ||
         NodeUtil.isVarArgsFunction(rValue)) {
       return false;
     }
@@ -221,7 +221,7 @@ class DevirtualizePrototypeMethods
     // Exporting a method prevents rewrite.
     Node lValue = definition.getLValue();
     if ((lValue == null) ||
-        !NodeUtil.isGetProp(lValue)) {
+        !lValue.isGetProp()) {
       return false;
     }
     CodingConvention codingConvention = compiler.getCodingConvention();
@@ -298,10 +298,8 @@ class DevirtualizePrototypeMethods
       Node objectNode = node.getFirstChild();
       node.removeChild(objectNode);
       parent.replaceChild(node, objectNode);
-      parent.addChildToFront(
-          Node.newString(Token.NAME, newMethodName)
-              .copyInformationFrom(node));
-      Preconditions.checkState(parent.getType() == Token.CALL);
+      parent.addChildToFront(IR.name(newMethodName).srcref(node));
+      Preconditions.checkState(parent.isCall());
       parent.putBooleanProp(Node.FREE_CALL, true);
       compiler.reportCodeChange();
 
@@ -327,7 +325,7 @@ class DevirtualizePrototypeMethods
     Node expr = parent.getParent();
     Node block = expr.getParent();
 
-    Node newNameNode = Node.newString(Token.NAME, newMethodName)
+    Node newNameNode = IR.name(newMethodName)
         .copyInformationFrom(parent.getFirstChild());
 
     if (specializationState != null) {
@@ -336,12 +334,12 @@ class DevirtualizePrototypeMethods
 
     parent.removeChild(functionNode);
     newNameNode.addChildToFront(functionNode);
-    block.replaceChild(expr, new Node(Token.VAR, newNameNode));
+    block.replaceChild(expr, IR.var(newNameNode));
 
     // add extra argument
     String self = newMethodName + "$self";
     Node argList = functionNode.getFirstChild().getNext();
-    argList.addChildToFront(Node.newString(Token.NAME, self)
+    argList.addChildToFront(IR.name(self)
         .copyInformationFrom(functionNode));
 
     // rewrite body
@@ -387,13 +385,13 @@ class DevirtualizePrototypeMethods
    * traverse function boundaries.
    */
   private void replaceReferencesToThis(Node node, String name) {
-    if (NodeUtil.isFunction(node)) {
+    if (node.isFunction()) {
       return;
     }
 
     for (Node child : node.children()) {
-      if (NodeUtil.isThis(child)) {
-        Node newName = Node.newString(Token.NAME, name);
+      if (child.isThis()) {
+        Node newName = IR.name(name);
         newName.setJSType(child.getJSType());
         node.replaceChild(child, newName);
       } else {

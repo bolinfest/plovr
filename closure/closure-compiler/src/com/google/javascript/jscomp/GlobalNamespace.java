@@ -193,14 +193,14 @@ class GlobalNamespace
 
       Node current;
       for (current = n;
-           current.getType() == Token.GETPROP;
+           current.isGetProp();
            current = current.getFirstChild()) {
         if (newNodes.contains(current)) {
           return true;
         }
       }
 
-      return current.getType() == Token.NAME && newNodes.contains(current);
+      return current.isName() && newNodes.contains(current);
     }
   }
 
@@ -316,12 +316,12 @@ class GlobalNamespace
       boolean isPropAssign = false;
 
       switch (n.getType()) {
-        case Token.GET:
-        case Token.SET:
+        case Token.GETTER_DEF:
+        case Token.SETTER_DEF:
         case Token.STRING:
           // This may be a key in an object literal declaration.
           name = null;
-          if (parent != null && parent.getType() == Token.OBJECTLIT) {
+          if (parent != null && parent.isObjectLit()) {
             name = getNameForObjLitKey(n);
           }
           if (name == null) return;
@@ -330,10 +330,10 @@ class GlobalNamespace
             case Token.STRING:
               type = getValueType(n.getFirstChild());
               break;
-            case Token.GET:
+            case Token.GETTER_DEF:
               type = Name.Type.GET;
               break;
-            case Token.SET:
+            case Token.SETTER_DEF:
               type = Name.Type.SET;
               break;
             default:
@@ -447,7 +447,7 @@ class GlobalNamespace
      */
     String getNameForObjLitKey(Node n) {
       Node parent = n.getParent();
-      Preconditions.checkState(parent.getType() == Token.OBJECTLIT);
+      Preconditions.checkState(parent.isObjectLit());
 
       Node gramps = parent.getParent();
       if (gramps == null) {
@@ -462,8 +462,7 @@ class GlobalNamespace
           //   NAME (gramps)
           //     OBJLIT (parent)
           //       STRING (n)
-          if (greatGramps == null ||
-              greatGramps.getType() != Token.VAR) {
+          if (greatGramps == null || !greatGramps.isVar()) {
             return null;
           }
           name = gramps.getString();
@@ -482,7 +481,7 @@ class GlobalNamespace
           //     OBJLIT (parent)
           //       STRING (n)
           if (greatGramps != null &&
-              greatGramps.getType() == Token.OBJECTLIT) {
+              greatGramps.isObjectLit()) {
             name = getNameForObjLitKey(gramps);
           } else {
             return null;
@@ -828,8 +827,8 @@ class GlobalNamespace
      *     used
      */
     boolean isNestedAssign(Node parent) {
-      return parent.getType() == Token.ASSIGN &&
-             !NodeUtil.isExpressionNode(parent.getParent());
+      return parent.isAssign() &&
+             !parent.getParent().isExprResult();
     }
 
     /**
@@ -1047,7 +1046,7 @@ class GlobalNamespace
         Ref ref = refs.get(0);
         JSDocInfo info = ref.node.getJSDocInfo();
         if (ref.node.getParent() != null &&
-            ref.node.getParent().getType() == Token.EXPR_RESULT) {
+            ref.node.getParent().isExprResult()) {
           return true;
         }
       }

@@ -53,68 +53,54 @@ public class SimpleErrorReporter implements ErrorReporter {
 
     @Override
     public void warning(String message, String sourceName, int line,
-                        String lineSource, int lineOffset)
-    {
+                        int lineOffset) {
         if (warnings == null) {
             warnings = new ArrayList<String>();
         }
         warnings.add(formatDetailedMessage(
-            message, sourceName, line, lineSource, lineOffset));
+            message, sourceName, line, lineOffset));
     }
 
     @Override
     public void error(String message, String sourceName, int line,
-                      String lineSource, int lineOffset)
-    {
+                      int lineOffset) {
         if (errors == null) {
             errors = new ArrayList<String>();
         }
         errors.add(formatDetailedMessage(
-            message, sourceName, line, lineSource, lineOffset));
-    }
-
-    @Override
-    public EvaluatorException runtimeError(
-        String message, String sourceName, int line, String lineSource,
-        int lineOffset)
-    {
-        return new EvaluatorException(
-            message, sourceName, line, lineSource, lineOffset);
+            message, sourceName, line, lineOffset));
     }
 
     /**
      * Returns the list of errors, or {@code null} if there were none.
      */
-    public List<String> errors()
-    {
+    public List<String> errors() {
         return errors;
     }
 
     /**
      * Returns the list of warnings, or {@code null} if there were none.
      */
-    public List<String> warnings()
-    {
+    public List<String> warnings() {
         return warnings;
     }
 
     private String formatDetailedMessage(
-        String message, String sourceName, int line, String lineSource,
-        int lineOffset)
-    {
-        RhinoException e = new RhinoException(message);
-        if (sourceName != null) {
-          e.initSourceName(sourceName);
-        }
-        if (lineSource != null) {
-          e.initLineSource(lineSource);
-        }
-        if (line > 0) {
-          e.initLineNumber(line);
-        }
-        if (lineOffset > 0) {
-          e.initColumnNumber(lineOffset);
-        }
-        return e.getMessage();
+        String message, String sourceName, int lineNumber, int lineOffset) {
+      String details = message;
+      if (sourceName == null || lineNumber <= 0) {
+        return details;
+      }
+      StringBuilder buf = new StringBuilder(details);
+      buf.append(" (");
+      if (sourceName != null) {
+        buf.append(sourceName);
+      }
+      if (lineNumber > 0) {
+        buf.append('#');
+        buf.append(lineNumber);
+      }
+      buf.append(')');
+      return buf.toString();
     }
 }

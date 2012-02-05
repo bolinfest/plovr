@@ -17,7 +17,6 @@
 package com.google.javascript.jscomp.parsing;
 
 import com.google.javascript.rhino.ErrorReporter;
-import com.google.javascript.rhino.EvaluatorException;
 
 /**
  * An error reporter which consumes all calls and performs no actions.
@@ -28,40 +27,46 @@ public abstract class NullErrorReporter  {
   }
 
   public void error(String message, String sourceName, int line,
-      String lineSource, int lineOffset) {
+      int lineOffset) {
   }
 
   public void warning(String message, String sourceName, int line,
-      String lineSource, int lineOffset) {
+      int lineOffset) {
   }
 
   public static ErrorReporter forOldRhino() {
     return new OldRhinoNullReporter();
   }
 
-  public static com.google.javascript.jscomp.mozilla.rhino.ErrorReporter
+  public static com.google.javascript.rhino.head.ErrorReporter
       forNewRhino() {
     return new NewRhinoNullReporter();
   }
 
   private static class NewRhinoNullReporter extends NullErrorReporter
-      implements com.google.javascript.jscomp.mozilla.rhino.ErrorReporter {
+      implements com.google.javascript.rhino.head.ErrorReporter {
     @Override
-    public com.google.javascript.jscomp.mozilla.rhino.EvaluatorException
+    public com.google.javascript.rhino.head.EvaluatorException
       runtimeError(String message, String sourceName, int line,
                    String lineSource, int lineOffset) {
-      return new com.google.javascript.jscomp.mozilla.rhino.EvaluatorException(
+      return new com.google.javascript.rhino.head.EvaluatorException(
           message);
+    }
+
+    @Override
+    public void error(String message, String sourceName, int line,
+        String sourceLine, int lineOffset) {
+      super.error(message, sourceName, line, lineOffset);
+    }
+
+    @Override
+    public void warning(String message, String sourceName, int line,
+        String sourceLine, int lineOffset) {
+      super.warning(message, sourceName, line, lineOffset);
     }
   }
 
   private static class OldRhinoNullReporter extends NullErrorReporter
       implements ErrorReporter {
-    @Override
-    public EvaluatorException runtimeError(String message, String sourceName,
-                                           int line, String lineSource,
-                                           int lineOffset) {
-      return new EvaluatorException(message);
-    }
   }
 }

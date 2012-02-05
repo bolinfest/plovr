@@ -18,15 +18,14 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
+import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.ObjectType;
 
 import java.nio.charset.Charset;
 import java.util.Set;
-
 
 /**
  * A code generator that outputs type annotations for functions and
@@ -41,18 +40,17 @@ class TypedCodeGenerator extends CodeGenerator {
   void add(Node n, Context context) {
     Node parent = n.getParent();
     if (parent != null
-        && (parent.getType() == Token.BLOCK
-            || parent.getType() == Token.SCRIPT)) {
-      if (n.getType() == Token.FUNCTION) {
+        && (parent.isBlock()
+            || parent.isScript())) {
+      if (n.isFunction()) {
         add(getFunctionAnnotation(n));
-      } else if (n.getType() == Token.EXPR_RESULT
-          && n.getFirstChild().getType() == Token.ASSIGN) {
+      } else if (n.isExprResult()
+          && n.getFirstChild().isAssign()) {
         Node rhs = n.getFirstChild().getLastChild();
         add(getTypeAnnotation(rhs));
-      } else if (n.getType() == Token.VAR
-          && n.getFirstChild().getFirstChild() != null
-          && n.getFirstChild().getFirstChild().getType() == Token.FUNCTION) {
-        add(getFunctionAnnotation(n.getFirstChild().getFirstChild()));
+      } else if (n.isVar()
+          && n.getFirstChild().getFirstChild() != null) {
+        add(getTypeAnnotation(n.getFirstChild().getFirstChild()));
       }
     }
 
@@ -60,15 +58,26 @@ class TypedCodeGenerator extends CodeGenerator {
   }
 
   private String getTypeAnnotation(Node node) {
+    // Only add annotations for things with JSDoc, or function literals.
+    JSDocInfo jsdoc = NodeUtil.getBestJSDocInfo(node);
+    if (jsdoc == null && !node.isFunction()) {
+      return "";
+    }
+
     JSType type = node.getJSType();
     if (type == null) {
       return "";
     } else if (type.isFunctionType()) {
       return getFunctionAnnotation(node);
+    } else if (type.isEnumType()) {
+      return "/** @enum {" +
+          type.toMaybeEnumType().getElementsType().toAnnotationString() +
+          "} */\n";
     } else if (!type.isUnknownType()
-        && !type.isEmptyType() && !type.isVoidType() &&
-        !type.isFunctionPrototypeType()) {
-      return "/** @type {" + node.getJSType() + "} */\n";
+        && !type.isEmptyType()
+        && !type.isVoidType()
+        && !type.isFunctionPrototypeType()) {
+      return "/** @type {" + node.getJSType().toAnnotationString() + "} */\n";
     } else {
       return "";
     }
@@ -78,7 +87,7 @@ class TypedCodeGenerator extends CodeGenerator {
    * @param fnNode A node for a function for which to generate a type annotation
    */
   private String getFunctionAnnotation(Node fnNode) {
-    Preconditions.checkState(fnNode.getType() == Token.FUNCTION);
+    Preconditions.checkState(fnNode.isFunction());
     StringBuilder sb = new StringBuilder("/**\n");
 
     JSType type = fnNode.getJSType();
@@ -105,9 +114,11 @@ class TypedCodeGenerator extends CodeGenerator {
         if (paramNode == null) {
           break;
         }
-        sb.append(" * @param {" + getParameterNodeJSDocType(n) + "} ");
-        sb.append(paramNode.getString());
-        sb.append("\n");
+        sb.append(" * ");
+        appendAnnotation(sb, "param", getParameterNodeJSDocType(n));
+        sb.append(" ")
+            .append(paramNode.getString())
+            .append("\n");
         paramNode = paramNode.getNext();
       }
     }
@@ -115,7 +126,9 @@ class TypedCodeGenerator extends CodeGenerator {
     // Return type
     JSType retType = funType.getReturnType();
     if (retType != null && !retType.isUnknownType() && !retType.isEmptyType()) {
-      sb.append(" * @return {" + retType + "}\n");
+      sb.append(" * ");
+      appendAnnotation(sb, "return", retType.toAnnotationString());
+      sb.append("\n");
     }
 
     // Constructor/interface
@@ -127,23 +140,29 @@ class TypedCodeGenerator extends CodeGenerator {
         ObjectType superInstance =
           funType.getSuperClassConstructor().getInstanceType();
         if (!superInstance.toString().equals("Object")) {
-          sb.append(" * @extends {"  + superInstance + "}\n");
+          sb.append(" * ");
+          appendAnnotation(sb, "extends", superInstance.toAnnotationString());
+          sb.append("\n");
         }
       }
 
       if (funType.isInterface()) {
         for (ObjectType interfaceType : funType.getExtendedInterfaces()) {
-          sb.append(" * @extends {" + interfaceType + "}\n");
+          sb.append(" * ");
+          appendAnnotation(sb, "extends", interfaceType.toAnnotationString());
+          sb.append("\n");
         }
       }
 
       // Avoid duplicates, add implemented type to a set first
       Set<String> interfaces = Sets.newTreeSet();
       for (ObjectType interfaze : funType.getImplementedInterfaces()) {
-        interfaces.add(interfaze.toString());
+        interfaces.add(interfaze.toAnnotationString());
       }
       for (String interfaze : interfaces) {
-        sb.append(" * @implements {"  + interfaze + "}\n");
+        sb.append(" * ");
+        appendAnnotation(sb, "implements", interfaze);
+        sb.append("\n");
       }
 
       if (funType.isConstructor()) {
@@ -159,6 +178,10 @@ class TypedCodeGenerator extends CodeGenerator {
 
     sb.append(" */\n");
     return sb.toString();
+  }
+
+  private void appendAnnotation(StringBuilder sb, String name, String type) {
+    sb.append("@").append(name).append(" {").append(type).append("}");
   }
 
   /**
@@ -177,11 +200,14 @@ class TypedCodeGenerator extends CodeGenerator {
     } else {
       // Fix-up optional and vararg parameters to match JSDoc type language
       if (parameterNode.isOptionalArg()) {
-        typeString = parameterType.restrictByNotNullOrUndefined() + "=";
+        typeString =
+            parameterType.restrictByNotNullOrUndefined().toAnnotationString() +
+            "=";
       } else if (parameterNode.isVarArgs()) {
-        typeString = "..." + parameterType.restrictByNotNullOrUndefined();
+        typeString = "..." +
+            parameterType.restrictByNotNullOrUndefined().toAnnotationString();
       } else {
-        typeString = parameterType.toString();
+        typeString = parameterType.toAnnotationString();
       }
     }
 

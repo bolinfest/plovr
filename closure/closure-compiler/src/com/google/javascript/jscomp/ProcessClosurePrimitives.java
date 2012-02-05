@@ -21,6 +21,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
@@ -175,11 +176,11 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
   public void visit(NodeTraversal t, Node n, Node parent) {
     switch (n.getType()) {
       case Token.CALL:
-        boolean isExpr = parent.getType() == Token.EXPR_RESULT;
+        boolean isExpr = parent.isExprResult();
         Node left = n.getFirstChild();
-        if (left.getType() == Token.GETPROP) {
+        if (left.isGetProp()) {
           Node name = left.getFirstChild();
-          if (name.getType() == Token.NAME &&
+          if (name.isName() &&
               GOOG.equals(name.getString())) {
             // For the sake of simplicity, we report code changes
             // when we see a provides/requires, and don't worry about
@@ -196,7 +197,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
               processProvideCall(t, n, parent);
             } else if ("exportSymbol".equals(methodName)) {
               Node arg = left.getNext();
-              if (arg.getType() == Token.STRING) {
+              if (arg.isString()) {
                 int dot = arg.getString().indexOf('.');
                 if (dot == -1) {
                   exportedVariables.add(arg.getString());
@@ -216,7 +217,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
 
               // We can't modify parent, so just create a node that will
               // get compiled out.
-              parent.replaceChild(n, Node.newNumber(0));
+              parent.replaceChild(n, IR.number(0));
               compiler.reportCodeChange();
             } else if ("setCssNameMapping".equals(methodName)) {
               processSetCssNameMapping(t, n, parent);
@@ -254,9 +255,9 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
         break;
 
       case Token.GETPROP:
-        if (n.getFirstChild().getType() == Token.NAME &&
-            parent.getType() != Token.CALL &&
-            parent.getType() != Token.ASSIGN &&
+        if (n.getFirstChild().isName() &&
+            !parent.isCall() &&
+            !parent.isAssign() &&
             "goog.base".equals(n.getQualifiedName())) {
           reportBadBaseClassUse(t, n, "May only be called directly.");
         }
@@ -293,6 +294,9 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
         }
       }
 
+      maybeAddToSymbolTable(left);
+      maybeAddStringNodeToSymbolTable(arg);
+
       // Requires should be removed before runtime.  The one
       // exception is if the type has not been provided yet and
       // errors for broken requires are turned off, in which case,
@@ -300,8 +304,6 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
       // leave this here this time and let it error next time if it
       // is still not provided.
       if (provided != null || requiresLevel.isOn()) {
-        maybeAddToSymbolTable(left);
-        maybeAddStringNodeToSymbolTable(arg);
         parent.detachFromParent();
         compiler.reportCodeChange();
       }
@@ -361,10 +363,10 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
       NodeTraversal t, Node n, Node parent) {
     if (t.inGlobalScope()) {
       String name = null;
-      if (n.getType() == Token.NAME && parent.getType() == Token.VAR) {
+      if (n.isName() && parent.isVar()) {
         name = n.getString();
-      } else if (n.getType() == Token.ASSIGN &&
-          parent.getType() == Token.EXPR_RESULT) {
+      } else if (n.isAssign() &&
+          parent.isExprResult()) {
         name = n.getFirstChild().getQualifiedName();
       }
 
@@ -414,7 +416,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
 
     Node callee = n.getFirstChild();
     Node thisArg = callee.getNext();
-    if (thisArg == null || thisArg.getType() != Token.THIS) {
+    if (thisArg == null || !thisArg.isThis()) {
       reportBadBaseClassUse(t, n, "First argument must be 'this'.");
       return;
     }
@@ -429,12 +431,12 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
     if (enclosingQname.indexOf(".prototype.") == -1) {
       // Handle constructors.
       Node enclosingParent = enclosingFnNameNode.getParent();
-      Node maybeInheritsExpr = (enclosingParent.getType() == Token.ASSIGN ?
+      Node maybeInheritsExpr = (enclosingParent.isAssign() ?
           enclosingParent.getParent() : enclosingParent).getNext();
       Node baseClassNode = null;
       if (maybeInheritsExpr != null &&
-          maybeInheritsExpr.getType() == Token.EXPR_RESULT &&
-          maybeInheritsExpr.getFirstChild().getType() == Token.CALL) {
+          maybeInheritsExpr.isExprResult() &&
+          maybeInheritsExpr.getFirstChild().isCall()) {
         Node callNode = maybeInheritsExpr.getFirstChild();
         if ("goog.inherits".equals(
                 callNode.getFirstChild().getQualifiedName()) &&
@@ -460,7 +462,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
     } else {
       // Handle methods.
       Node methodNameNode = thisArg.getNext();
-      if (methodNameNode == null || methodNameNode.getType() != Token.STRING) {
+      if (methodNameNode == null || !methodNameNode.isString()) {
         reportBadBaseClassUse(t, n, "Second argument must name a method.");
         return;
       }
@@ -501,12 +503,12 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
     } else {
       Node parent = scopeRoot.getParent();
       if (parent != null) {
-        if (parent.getType() == Token.ASSIGN ||
+        if (parent.isAssign() ||
             parent.getLastChild() == scopeRoot &&
             parent.getFirstChild().isQualifiedName()) {
           // x.y.z = function() {...};
           return parent.getFirstChild();
-        } else if (parent.getType() == Token.NAME) {
+        } else if (parent.isName()) {
           // var x = function() {...};
           return parent;
         }
@@ -571,9 +573,9 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
       for (Node key = arg.getFirstChild(); key != null;
           key = key.getNext()) {
         Node value = key.getFirstChild();
-        if (key.getType() != Token.STRING
+        if (!key.isString()
             || value == null
-            || value.getType() != Token.STRING) {
+            || !value.isString()) {
           compiler.report(
               t.makeError(n,
                   NON_STRING_PASSED_TO_SET_CSS_NAME_MAPPING_ERROR));
@@ -660,13 +662,13 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
     if (!rewriteNewDateGoogNow) {
       return;
     }
-    Preconditions.checkArgument(n.getType() == Token.NEW);
+    Preconditions.checkArgument(n.isNew());
     Node date = n.getFirstChild();
-    if (!NodeUtil.isName(date) || !"Date".equals(date.getString())) {
+    if (!date.isName() || !"Date".equals(date.getString())) {
       return;
     }
     Node callGoogNow = date.getNext();
-    if (callGoogNow == null || !NodeUtil.isCall(callGoogNow) ||
+    if (callGoogNow == null || !callGoogNow.isCall() ||
         callGoogNow.getNext() != null) {
       return;
     }
@@ -746,11 +748,11 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
     DiagnosticType diagnostic = null;
     if (firstArg == null) {
       diagnostic = NULL_ARGUMENT_ERROR;
-    } else if (firstArg.getType() != Token.OBJECTLIT) {
+    } else if (!firstArg.isObjectLit()) {
       diagnostic = EXPECTED_OBJECTLIT_ERROR;
     } else if (firstArg.getNext() != null) {
       Node secondArg = firstArg.getNext();
-      if (secondArg.getType() != Token.STRING) {
+      if (!secondArg.isString()) {
         diagnostic = EXPECTED_STRING_ERROR;
       } else if (secondArg.getNext() != null) {
         diagnostic = TOO_MANY_ARGUMENTS_ERROR;
@@ -822,7 +824,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
         boolean explicit) {
       Preconditions.checkArgument(
           node == null /* The base case */ ||
-          NodeUtil.isExpressionNode(node));
+          node.isExprResult());
       this.namespace = namespace;
       this.firstNode = node;
       this.firstModule = module;
@@ -836,7 +838,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
     void addProvide(Node node, JSModule module, boolean explicit) {
       if (explicit) {
         Preconditions.checkState(explicitNode == null);
-        Preconditions.checkArgument(NodeUtil.isExpressionNode(node));
+        Preconditions.checkArgument(node.isExprResult());
         explicitNode = node;
         explicitModule = module;
       }
@@ -854,11 +856,11 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
      * assignment so it repurposed later.
      */
     void addDefinition(Node node, JSModule module) {
-      Preconditions.checkArgument(NodeUtil.isExpressionNode(node) || // assign
-                                  NodeUtil.isFunction(node) ||
-                                  NodeUtil.isVar(node));
+      Preconditions.checkArgument(node.isExprResult() || // assign
+                                  node.isFunction() ||
+                                  node.isVar());
       Preconditions.checkArgument(explicitNode != node);
-      if ((candidateDefinition == null) || !NodeUtil.isExpressionNode(node)) {
+      if ((candidateDefinition == null) || !node.isExprResult()) {
         candidateDefinition = node;
         updateMinimumModule(module);
       }
@@ -900,18 +902,18 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
 
         // Does this need a VAR keyword?
         replacementNode = candidateDefinition;
-        if (NodeUtil.isExpressionNode(candidateDefinition) &&
+        if (candidateDefinition.isExprResult() &&
             !candidateDefinition.getFirstChild().isQualifiedName()) {
           candidateDefinition.putBooleanProp(Node.IS_NAMESPACE, true);
           Node assignNode = candidateDefinition.getFirstChild();
           Node nameNode = assignNode.getFirstChild();
-          if (nameNode.getType() == Token.NAME) {
+          if (nameNode.isName()) {
             // Need to convert this assign to a var declaration.
             Node valueNode = nameNode.getNext();
             assignNode.removeChild(nameNode);
             assignNode.removeChild(valueNode);
             nameNode.addChildToFront(valueNode);
-            Node varNode = new Node(Token.VAR, nameNode);
+            Node varNode = IR.var(nameNode);
             varNode.copyInformationFrom(candidateDefinition);
             candidateDefinition.getParent().replaceChild(
                 candidateDefinition, varNode);
@@ -967,10 +969,10 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
      * (e.g. <code>var foo = {};</code>).
      */
     private Node makeVarDeclNode() {
-      Node name = Node.newString(Token.NAME, namespace);
+      Node name = IR.name(namespace);
       name.addChildToFront(createNamespaceLiteral());
 
-      Node decl = new Node(Token.VAR, name);
+      Node decl = IR.var(name);
       decl.putBooleanProp(Node.IS_NAMESPACE, true);
 
       // TODO(nicksantos): ew ew ew. Create a mutator package.
@@ -992,7 +994,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
      * So always give the namespace literal a type.
      */
     private Node createNamespaceLiteral() {
-      Node objlit = new Node(Token.OBJECTLIT);
+      Node objlit = IR.objectlit();
       objlit.setJSType(
           compiler.getTypeRegistry().createAnonymousObjectType());
       return objlit;
@@ -1003,8 +1005,8 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
      * (e.g. <code>foo.bar = {};</code>).
      */
     private Node makeAssignmentExprNode() {
-      Node decl = new Node(Token.EXPR_RESULT,
-          new Node(Token.ASSIGN,
+      Node decl = IR.exprResult(
+          IR.assign(
               NodeUtil.newQualifiedNameNode(
                   compiler.getCodingConvention(), namespace,
                   firstNode /* real source info will be filled in below */,
@@ -1074,16 +1076,16 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
     }
 
     Node value = null;
-    if (n.getType() == Token.EXPR_RESULT) {
+    if (n.isExprResult()) {
       Node assign = n.getFirstChild();
       value = assign.getLastChild();
-    } else if (n.getType() == Token.VAR) {
+    } else if (n.isVar()) {
       Node name = n.getFirstChild();
       value = name.getFirstChild();
     }
 
     return value != null
-      && value.getType() == Token.OBJECTLIT
+      && value.isObjectLit()
       && !value.hasChildren();
   }
 
@@ -1109,7 +1111,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
 
     Node current = null;
     for (current = syntheticRef;
-         current.getType() == Token.GETPROP;
+         current.isGetProp();
          current = current.getFirstChild()) {
       int fullLen = current.getQualifiedName().length();
       int namespaceLen = current.getFirstChild().getQualifiedName().length();

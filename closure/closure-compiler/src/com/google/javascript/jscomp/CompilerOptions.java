@@ -17,11 +17,11 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.SourcePosition;
 import com.google.javascript.rhino.Token;
@@ -37,6 +37,9 @@ import java.util.Set;
  * @author nicksantos@google.com (Nick Santos)
  */
 public class CompilerOptions implements Serializable, Cloneable {
+
+  // Unused. For people using reflection to circumvent access control.
+  private boolean manageClosureDependencies = false;
 
   // A common enum for compiler passes that can run either globally or locally.
   public enum Reach {
@@ -56,12 +59,13 @@ public class CompilerOptions implements Serializable, Cloneable {
   private LanguageMode languageIn;
 
   /**
-   * The JavaScript language version accepted.
+   * The JavaScript language version that should be produced.
+   * Currently, this is always the same as {@link #languageIn}.
    */
   private LanguageMode languageOut;
 
   /**
-   * Whether the compiler handles `const' keyword or not.
+   * Whether the compiler accepts the `const' keyword.
    */
   boolean acceptConstKeyword;
 
@@ -71,8 +75,6 @@ public class CompilerOptions implements Serializable, Cloneable {
    * be coerced to the global "this" and primitives to objects).
    */
   private boolean assumeStrictThis;
-
-  // TODO(johnlenz): Add an language output mode.
 
   /**
    * Configures the compiler for use as an IDE backend.  In this mode:
@@ -114,8 +116,7 @@ public class CompilerOptions implements Serializable, Cloneable {
   // Input Options
   //--------------------------------
 
-  boolean manageClosureDependencies = false;
-  List<String> manageClosureDependenciesEntryPoints = ImmutableList.of();
+  DependencyOptions dependencyOptions = new DependencyOptions();
 
   /** Returns localized replacement for MSG_* variables */
   // Transient so that clients don't have to implement Serializable.
@@ -128,48 +129,12 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Checks that all symbols are defined */
   public boolean checkSymbols;
 
-  public CheckLevel checkShadowVars;
-
-  /**
-   * Checks that all variables with the @noshadow attribute are
-   * never shadowed.
-   */
-  public void setCheckShadowVars(CheckLevel level) {
-    this.checkShadowVars = level;
-  }
-
   public CheckLevel aggressiveVarCheck;
 
   /** Checks for suspicious variable definitions and undefined variables */
   public void setAggressiveVarCheck(CheckLevel level) {
     this.aggressiveVarCheck = level;
   }
-
-  public CheckLevel checkFunctions;
-
-  /** Checks function arity */
-  public void setCheckFunctions(CheckLevel level) {
-    this.checkFunctions = level;
-  }
-
-  public CheckLevel checkMethods;
-
-  /** Checks method arity */
-  public void setCheckMethods(CheckLevel level) {
-    this.checkMethods = level;
-  }
-
-  /** Makes sure no duplicate messages */
-  public boolean checkDuplicateMessages;
-
-  /** Allows old deprecated js message style */
-  public boolean allowLegacyJsMessages;
-
-  /**
-   * Whether we should throw an exception in case if the message absent from a
-   * bundle.
-   */
-  public boolean strictMessageReplacement;
 
   /** Checks for suspicious statements that have no effect */
   public boolean checkSuspiciousCode;
@@ -180,11 +145,12 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Checks types on expressions */
   public boolean checkTypes;
 
-  /** Tightens types based on a global analysis. */
-  public boolean tightenTypes;
+  boolean tightenTypes;
 
-  /** Checks for inexistant property calls */
-  public boolean checkTypedPropertyCalls;
+  /** Tightens types based on a global analysis. Experimental. */
+  public void setTightenTypes(boolean tighten) {
+    tightenTypes = tighten;
+  }
 
   public CheckLevel reportMissingOverride;
 
@@ -193,28 +159,28 @@ public class CompilerOptions implements Serializable, Cloneable {
    * overrides a base class property.
    */
   public void setReportMissingOverride(CheckLevel level) {
-    this.reportMissingOverride = level;
+    reportMissingOverride = level;
   }
 
-  public CheckLevel reportUnknownTypes;
+  CheckLevel reportUnknownTypes;
 
   /** Flags a warning for every node whose type could not be determined. */
   public void setReportUnknownTypes(CheckLevel level) {
-    this.reportUnknownTypes = level;
+    reportUnknownTypes = level;
   }
 
   /** Checks for missing goog.require() calls **/
   public CheckLevel checkRequires;
 
   public void setCheckRequires(CheckLevel level) {
-    this.checkRequires = level;
+    checkRequires = level;
   }
 
   public CheckLevel checkProvides;
 
   /** Checks for missing goog.provides() calls **/
   public void setCheckProvides(CheckLevel level) {
-    this.checkProvides = level;
+    checkProvides = level;
   }
 
   public CheckLevel checkGlobalNamesLevel;
@@ -224,14 +190,14 @@ public class CompilerOptions implements Serializable, Cloneable {
    * (e.g. "a.b")
    */
   public void setCheckGlobalNamesLevel(CheckLevel level) {
-    this.checkGlobalNamesLevel = level;
+    checkGlobalNamesLevel = level;
   }
 
   public CheckLevel brokenClosureRequiresLevel;
 
   /** Sets the check level for bad Closure require calls. */
   public void setBrokenClosureRequiresLevel(CheckLevel level) {
-    this.brokenClosureRequiresLevel = level;
+    brokenClosureRequiresLevel = level;
   }
 
   public CheckLevel checkGlobalThisLevel;
@@ -263,12 +229,12 @@ public class CompilerOptions implements Serializable, Cloneable {
    */
   public String checkMissingGetCssNameBlacklist;
 
-  /** Checks that the synctactic restrictions of ES5 strict mode are met. */
-  // TODO(johnlenz): remove this.
-  public boolean checkEs5Strict;
-
   /** Checks that the synctactic restrictions of Caja are met. */
-  public boolean checkCaja;
+  boolean checkCaja;
+
+  public void setCheckCaja(boolean check) {
+    checkCaja = check;
+  }
 
   /**
    * A set of extra annotation names which are accepted and silently ignored
@@ -296,8 +262,7 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Enhanced function inlining */
   public boolean inlineLocalFunctions;
 
-  /** Assume closures capture only what they reference */
-  public boolean assumeClosuresOnlyCaptureReferences;
+  boolean assumeClosuresOnlyCaptureReferences;
 
   /** Move code to a deeper module */
   public boolean crossModuleCodeMotion;
@@ -315,7 +280,7 @@ public class CompilerOptions implements Serializable, Cloneable {
   public boolean inlineVariables;
 
   /** Inlines variables */
-  public boolean inlineLocalVariables;
+  boolean inlineLocalVariables;
 
   // TODO(user): This is temporary. Once flow sensitive inlining is stable
   // Remove this.
@@ -344,9 +309,6 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Extracts common prototype member declarations */
   public boolean extractPrototypeMemberDeclarations;
 
-  /** Removes functions that have no body */
-  public boolean removeEmptyFunctions;
-
   /** Removes unused member prototypes */
   public boolean removeUnusedPrototypeProperties;
 
@@ -362,23 +324,32 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Adds variable aliases for externals to reduce code size */
   public boolean aliasExternals;
 
-  /**
-   * If set to a non-empty string, then during an alias externals pass only
-   * externals with these names will be considered for aliasing.
-   */
-  public String aliasableGlobals;
+  String aliasableGlobals;
 
   /**
-   * Additional globals that can not be aliased since they may be undefined or
-   * can cause errors.  Comma separated list of symbols.  e.g. "foo,bar"
+   * A comma separated white-list of global names. When {@link #aliasExternals}
+   * is enable, if set to a non-empty string, only externals with these names
+   * will be considered for aliasing.
    */
-  public String unaliasableGlobals;
+  public void setAliasableGlobals(String names) {
+    aliasableGlobals = names;
+  }
+
+  String unaliasableGlobals;
+
+  /**
+   * A comma separated white-list of global names. When {@link #aliasExternals}
+   * is enable, these global names will not be aliased.
+   */
+  public void setUnaliasableGlobals(String names) {
+    unaliasableGlobals = names;
+  }
 
   /** Collapses multiple variable declarations into one */
   public boolean collapseVariableDeclarations;
 
   /** Group multiple variable declarations into one */
-  public boolean groupVariableDeclarations;
+  boolean groupVariableDeclarations;
 
   /**
    * Collapses anonymous function declarations into named function
@@ -482,7 +453,11 @@ public class CompilerOptions implements Serializable, Cloneable {
   public boolean collapseProperties;
 
   /** Split object literals into individual variables when possible. */
-  public boolean collapseObjectLiterals;
+  boolean collapseObjectLiterals;
+
+  public void setCollapseObjectLiterals(boolean enabled) {
+    collapseObjectLiterals = true;
+  }
 
   /** Flattens multi-level property names on extern types (e.g. String$f = x) */
   boolean collapsePropertiesOnExternTypes;
@@ -502,7 +477,7 @@ public class CompilerOptions implements Serializable, Cloneable {
   /**
    * Where to save debug report for compute function side effects.
    */
-  public String debugFunctionSideEffectsPath;
+  String debugFunctionSideEffectsPath;
 
   /**
    * Rename properties to disambiguate between unrelated fields based on
@@ -525,8 +500,12 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Whether to export test functions. */
   public boolean exportTestFunctions;
 
+  boolean specializeInitialModule;
+
   /** Specialize the initial module at the cost of later modules */
-  public boolean specializeInitialModule;
+  public void setSpecializeInitialModule(boolean enabled) {
+    specializeInitialModule = enabled;
+  }
 
   //--------------------------------
   // Special-purpose alterations
@@ -545,17 +524,12 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** A CodingConvention to use during the compile. */
   private CodingConvention codingConvention;
 
-  /** Instrument code for the purpose of collecting coverage data. */
-  public boolean instrumentForCoverage;
-
-  /**
-   * Instrument code for the purpose of collecting coverage data - restrict to
-   * coverage pass only, and skip all other passes.
-   */
-  public boolean instrumentForCoverageOnly;
+  boolean ignoreCajaProperties;
 
   /** Add code to skip properties that Caja adds to Object.prototype */
-  public boolean ignoreCajaProperties;
+  public void setIgnoreCajaProperties(boolean enabled) {
+    ignoreCajaProperties = enabled;
+  }
 
   public String syntheticBlockStartMarker;
 
@@ -572,6 +546,9 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   /** Processes goog.provide() and goog.require() calls */
   public boolean closurePass;
+
+  /** Processes jQuery aliases */
+  public boolean jqueryPass;
 
   /** Rewrite new Date(goog.now()) to new Date().  */
   boolean rewriteNewDateGoogNow;
@@ -616,14 +593,18 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Move top level function declarations to the top */
   public boolean moveFunctionDeclarations;
 
-  /** Instrumentation template to use */
+  /** Instrumentation template to use with #recordFunctionInformation */
   public String instrumentationTemplate;
+
+  String appNameStr;
 
   /**
    * App identifier string for use by the instrumentation template's
-   * app_name_setter
+   * app_name_setter. @see #instrumentationTemplate
    */
-  public String appNameStr;
+  public void setAppNameStr(String appNameStr) {
+    this.appNameStr = appNameStr;
+  }
 
   /** Record function information */
   public boolean recordFunctionInformation;
@@ -648,11 +629,18 @@ public class CompilerOptions implements Serializable, Cloneable {
   // A list of strings that should not be used as replacements
   Set<String> replaceStringsReservedStrings;
 
-  // Fixes open source issue: 390
-  boolean operaCompoundAssignFix;
-
   /** List of properties that we report invalidation errors for. */
   Map<String, CheckLevel> propertyInvalidationErrors;
+
+  /** Transform AMD to Common JS modules. */
+  boolean transformAMDToCJSModules = false;
+
+  /** Transform AMD to Common JS modules. */
+  boolean processCommonJSModules = false;
+
+  /** Common JS module prefix. */
+  String commonJSModulePathPrefix =
+      ProcessCommonJSModules.DEFAULT_FILENAME_PREFIX;
 
   /**
    * The name of the scope to prefix all global variable assignments
@@ -677,19 +665,24 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** The string to use as the separator for printInputDelimiter */
   public String inputDelimiter = "// Input %num%";
 
-  /** Where to save a report of global name usage */
-  public String reportPath;
+  String reportPath;
 
-  public TracerMode tracer;
+  /** Where to save a report of global name usage */
+  public void setReportPath(String reportPath) {
+    this.reportPath = reportPath;
+  }
+
+  TracerMode tracer;
+
+  public void setTracerMode(TracerMode mode) {
+    tracer = mode;
+  }
 
   private boolean colorizeErrorOutput;
 
   public ErrorFormat errorFormat;
 
-  public String jsOutputFile;
-
-  private ComposeWarningsGuard warningsGuard =
-      new ComposeWarningsGuard();
+  private ComposeWarningsGuard warningsGuard = new ComposeWarningsGuard();
 
   int summaryDetailLevel = 1;
 
@@ -708,11 +701,19 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** The output path for the created externs file. */
   String externExportsPath;
 
+  String nameReferenceReportPath;
+
   /** Where to save a cross-reference report from the name reference graph */
-  public String nameReferenceReportPath;
+  public void setNameReferenceReportPath(String filePath) {
+    nameReferenceReportPath = filePath;
+  }
+
+  String nameReferenceGraphPath;
 
   /** Where to save the name reference graph */
-  public String nameReferenceGraphPath;
+  public void setNameReferenceGraphPath(String filePath) {
+    nameReferenceGraphPath = filePath;
+  }
 
   //--------------------------------
   // Debugging Options
@@ -744,6 +745,18 @@ public class CompilerOptions implements Serializable, Cloneable {
   boolean looseTypes;
 
   /**
+   * When set, assume that apparently side-effect free code is meaningful.
+   */
+  boolean protectHiddenSideEffects;
+
+  /**
+   * When enabled, assume that apparently side-effect free code is meaningful.
+   */
+  public void setProtectHiddenSideEffects(boolean enable) {
+    this.protectHiddenSideEffects = enable;
+  }
+
+  /**
    * Data holder Alias Transformation information accumulated during a compile.
    */
   private transient AliasTransformationHandler aliasHandler;
@@ -766,18 +779,11 @@ public class CompilerOptions implements Serializable, Cloneable {
     nameAnonymousFunctionsOnly = false;
     devMode = DevMode.OFF;
     checkSymbols = false;
-    checkShadowVars = CheckLevel.OFF;
     aggressiveVarCheck = CheckLevel.OFF;
-    checkFunctions = CheckLevel.OFF;
-    checkMethods = CheckLevel.OFF;
-    checkDuplicateMessages = false;
-    allowLegacyJsMessages = false;
-    strictMessageReplacement = false;
     checkSuspiciousCode = false;
     checkControlStructures = false;
     checkTypes = false;
     tightenTypes = false;
-    checkTypedPropertyCalls = false;
     reportMissingOverride = CheckLevel.OFF;
     reportUnknownTypes = CheckLevel.OFF;
     checkRequires = CheckLevel.OFF;
@@ -849,8 +855,6 @@ public class CompilerOptions implements Serializable, Cloneable {
     // Alterations
     runtimeTypeCheck = false;
     runtimeTypeCheckLogFunction = null;
-    instrumentForCoverage = false;
-    instrumentForCoverageOnly = false;
     ignoreCajaProperties = false;
     syntheticBlockStartMarker = null;
     syntheticBlockEndMarker = null;
@@ -858,6 +862,7 @@ public class CompilerOptions implements Serializable, Cloneable {
     markAsCompiled = false;
     removeTryCatchFinally = false;
     closurePass = false;
+    jqueryPass = false;
     rewriteNewDateGoogNow = true;
     removeAbstractMethods = true;
     removeClosureAsserts = false;
@@ -900,8 +905,6 @@ public class CompilerOptions implements Serializable, Cloneable {
 
     // Debugging
     aliasHandler = NULL_ALIAS_TRANSFORMATION_HANDLER;
-
-    operaCompoundAssignFix = true;
   }
 
   /**
@@ -928,15 +931,14 @@ public class CompilerOptions implements Serializable, Cloneable {
       String name = entry.getKey();
       Object value = entry.getValue();
       if (value instanceof Boolean) {
-        map.put(name, ((Boolean) value).booleanValue() ?
-            new Node(Token.TRUE) : new Node(Token.FALSE));
+        map.put(name, NodeUtil.booleanNode(((Boolean) value).booleanValue()));
       } else if (value instanceof Integer) {
-        map.put(name, Node.newNumber(((Integer) value).intValue()));
+        map.put(name, IR.number(((Integer) value).intValue()));
       } else if (value instanceof Double) {
-        map.put(name, Node.newNumber(((Double) value).doubleValue()));
+        map.put(name, IR.number(((Double) value).doubleValue()));
       } else {
         Preconditions.checkState(value instanceof String);
-        map.put(name, Node.newString((String) value));
+        map.put(name, IR.string((String) value));
       }
     }
     return map;
@@ -1159,7 +1161,15 @@ public class CompilerOptions implements Serializable, Cloneable {
   /**
    * Set the variable removal policy for the compiler.
    */
+  @Deprecated
   public void setRemoveUnusedVariable(Reach reach) {
+    setRemoveUnusedVariables(reach);
+  }
+
+  /**
+   * Set the variable removal policy for the compiler.
+   */
+  public void setRemoveUnusedVariables(Reach reach) {
     switch (reach) {
       case ALL:
         this.removeUnusedVars = true;
@@ -1261,10 +1271,21 @@ public class CompilerOptions implements Serializable, Cloneable {
   }
 
   /**
+   * Sets dependency options. See the DependencyOptions class for more info.
+   * This supercedes manageClosureDependencies.
+   */
+  public void setDependencyOptions(DependencyOptions options) {
+    this.dependencyOptions = options;
+  }
+
+  /**
    * Sort inputs by their goog.provide/goog.require calls, and prune inputs
    * whose symbols are not required.
    */
   public void setManageClosureDependencies(boolean newVal) {
+    dependencyOptions.setDependencySorting(newVal);
+    dependencyOptions.setDependencyPruning(newVal);
+    dependencyOptions.setMoocherDropping(false);
     manageClosureDependencies = newVal;
   }
 
@@ -1279,8 +1300,8 @@ public class CompilerOptions implements Serializable, Cloneable {
    */
   public void setManageClosureDependencies(List<String> entryPoints) {
     Preconditions.checkNotNull(entryPoints);
-    manageClosureDependencies = true;
-    manageClosureDependenciesEntryPoints = entryPoints;
+    setManageClosureDependencies(true);
+    dependencyOptions.setEntryPoints(entryPoints);
   }
 
   /**
@@ -1294,8 +1315,12 @@ public class CompilerOptions implements Serializable, Cloneable {
     this.summaryDetailLevel = summaryDetailLevel;
   }
 
-  public void enableExternExports(boolean enable) {
-    this.externExports = enable;
+  /**
+   * @deprecated replaced by {@link #setExternExports}
+   */
+  @Deprecated
+  public void enableExternExports(boolean enabled) {
+    this.externExports = enabled;
   }
 
   public void setExtraAnnotationNames(Set<String> extraAnnotationNames) {
@@ -1405,7 +1430,8 @@ public class CompilerOptions implements Serializable, Cloneable {
   }
 
   /**
-   * If true, enables enables additional optimizations.
+   * Whether to assume closures capture only what they reference. This allows
+   * more aggressive function inlining.
    */
   public void setAssumeClosuresOnlyCaptureReferences(boolean enable) {
     this.assumeClosuresOnlyCaptureReferences = enable;
@@ -1419,6 +1445,425 @@ public class CompilerOptions implements Serializable, Cloneable {
       Map<String, CheckLevel> propertyInvalidationErrors) {
     this.propertyInvalidationErrors =
         Maps.newHashMap(propertyInvalidationErrors);
+  }
+
+  public void setLanguageOut(LanguageMode languageOut) {
+    this.languageOut = languageOut;
+  }
+
+  public void setIdeMode(boolean ideMode) {
+    this.ideMode = ideMode;
+  }
+
+  public void setSkipAllPasses(boolean skipAllPasses) {
+    this.skipAllPasses = skipAllPasses;
+  }
+
+  public void setDevMode(DevMode devMode) {
+    this.devMode = devMode;
+  }
+
+  public void setMessageBundle(MessageBundle messageBundle) {
+    this.messageBundle = messageBundle;
+  }
+
+  public void setCheckSymbols(boolean checkSymbols) {
+    this.checkSymbols = checkSymbols;
+  }
+
+  public void setCheckSuspiciousCode(boolean checkSuspiciousCode) {
+    this.checkSuspiciousCode = checkSuspiciousCode;
+  }
+
+  public void setCheckControlStructures(boolean checkControlStructures) {
+    this.checkControlStructures = checkControlStructures;
+  }
+
+  public void setCheckTypes(boolean checkTypes) {
+    this.checkTypes = checkTypes;
+  }
+
+  public void setCheckMissingGetCssNameBlacklist(String blackList) {
+    this.checkMissingGetCssNameBlacklist = blackList;
+  }
+
+  public void setFoldConstants(boolean foldConstants) {
+    this.foldConstants = foldConstants;
+  }
+
+  public void setDeadAssignmentElimination(boolean deadAssignmentElimination) {
+    this.deadAssignmentElimination = deadAssignmentElimination;
+  }
+
+  public void setInlineConstantVars(boolean inlineConstantVars) {
+    this.inlineConstantVars = inlineConstantVars;
+  }
+
+  public void setInlineFunctions(boolean inlineFunctions) {
+    this.inlineFunctions = inlineFunctions;
+  }
+
+  public void setInlineLocalFunctions(boolean inlineLocalFunctions) {
+    this.inlineLocalFunctions = inlineLocalFunctions;
+  }
+
+  public void setCrossModuleCodeMotion(boolean crossModuleCodeMotion) {
+    this.crossModuleCodeMotion = crossModuleCodeMotion;
+  }
+
+  public void setCoalesceVariableNames(boolean coalesceVariableNames) {
+    this.coalesceVariableNames = coalesceVariableNames;
+  }
+
+  public void setCrossModuleMethodMotion(boolean crossModuleMethodMotion) {
+    this.crossModuleMethodMotion = crossModuleMethodMotion;
+  }
+
+  public void setInlineGetters(boolean inlineGetters) {
+    this.inlineGetters = inlineGetters;
+  }
+
+  public void setInlineVariables(boolean inlineVariables) {
+    this.inlineVariables = inlineVariables;
+  }
+
+  public void setInlineLocalVariables(boolean inlineLocalVariables) {
+    this.inlineLocalVariables = inlineLocalVariables;
+  }
+
+  public void setFlowSensitiveInlineVariables(boolean enabled) {
+    this.flowSensitiveInlineVariables = enabled;
+  }
+
+  public void setSmartNameRemoval(boolean smartNameRemoval) {
+    this.smartNameRemoval = smartNameRemoval;
+  }
+
+  public void setRemoveDeadCode(boolean removeDeadCode) {
+    this.removeDeadCode = removeDeadCode;
+  }
+
+  public void setExtractPrototypeMemberDeclarations(boolean enabled) {
+    this.extractPrototypeMemberDeclarations = enabled;
+  }
+
+  public void setRemoveUnusedPrototypeProperties(boolean enabled) {
+    this.removeUnusedPrototypeProperties = enabled;
+  }
+
+  public void setRemoveUnusedPrototypePropertiesInExterns(
+      boolean enabled) {
+    this.removeUnusedPrototypePropertiesInExterns = enabled;
+  }
+
+  public void setRemoveUnusedVars(boolean removeUnusedVars) {
+    this.removeUnusedVars = removeUnusedVars;
+  }
+
+  public void setRemoveUnusedLocalVars(boolean removeUnusedLocalVars) {
+    this.removeUnusedLocalVars = removeUnusedLocalVars;
+  }
+
+  public void setAliasExternals(boolean aliasExternals) {
+    this.aliasExternals = aliasExternals;
+  }
+
+  public void setCollapseVariableDeclarations(boolean enabled) {
+    this.collapseVariableDeclarations = enabled;
+  }
+
+  public void setGroupVariableDeclarations(boolean enabled) {
+    this.groupVariableDeclarations = enabled;
+  }
+
+  public void setCollapseAnonymousFunctions(boolean enabled) {
+    this.collapseAnonymousFunctions = enabled;
+  }
+
+  public void setAliasableStrings(Set<String> aliasableStrings) {
+    this.aliasableStrings = aliasableStrings;
+  }
+
+  public void setAliasStringsBlacklist(String aliasStringsBlacklist) {
+    this.aliasStringsBlacklist = aliasStringsBlacklist;
+  }
+
+  public void setAliasAllStrings(boolean aliasAllStrings) {
+    this.aliasAllStrings = aliasAllStrings;
+  }
+
+  public void setOutputJsStringUsage(boolean outputJsStringUsage) {
+    this.outputJsStringUsage = outputJsStringUsage;
+  }
+
+  public void setConvertToDottedProperties(boolean convertToDottedProperties) {
+    this.convertToDottedProperties = convertToDottedProperties;
+  }
+
+  public void setRewriteFunctionExpressions(boolean rewriteFunctionExpressions) {
+    this.rewriteFunctionExpressions = rewriteFunctionExpressions;
+  }
+
+  public void setOptimizeParameters(boolean optimizeParameters) {
+    this.optimizeParameters = optimizeParameters;
+  }
+
+  public void setOptimizeReturns(boolean optimizeReturns) {
+    this.optimizeReturns = optimizeReturns;
+  }
+
+  public void setOptimizeCalls(boolean optimizeCalls) {
+    this.optimizeCalls = optimizeCalls;
+  }
+
+  public void setOptimizeArgumentsArray(boolean optimizeArgumentsArray) {
+    this.optimizeArgumentsArray = optimizeArgumentsArray;
+  }
+
+  public void setVariableRenaming(VariableRenamingPolicy variableRenaming) {
+    this.variableRenaming = variableRenaming;
+  }
+
+  public void setPropertyRenaming(PropertyRenamingPolicy propertyRenaming) {
+    this.propertyRenaming = propertyRenaming;
+  }
+
+  public void setLabelRenaming(boolean labelRenaming) {
+    this.labelRenaming = labelRenaming;
+  }
+
+  public void setReserveRawExports(boolean reserveRawExports) {
+    this.reserveRawExports = reserveRawExports;
+  }
+
+  public void setGeneratePseudoNames(boolean generatePseudoNames) {
+    this.generatePseudoNames = generatePseudoNames;
+  }
+
+  public void setRenamePrefix(String renamePrefix) {
+    this.renamePrefix = renamePrefix;
+  }
+
+  public void setRenamePrefixNamespace(String renamePrefixNamespace) {
+    this.renamePrefixNamespace = renamePrefixNamespace;
+  }
+
+  public void setAliasKeywords(boolean aliasKeywords) {
+    this.aliasKeywords = aliasKeywords;
+  }
+
+  public void setCollapseProperties(boolean collapseProperties) {
+    this.collapseProperties = collapseProperties;
+  }
+
+  public void setDevirtualizePrototypeMethods(boolean devirtualizePrototypeMethods) {
+    this.devirtualizePrototypeMethods = devirtualizePrototypeMethods;
+  }
+
+  public void setComputeFunctionSideEffects(boolean computeFunctionSideEffects) {
+    this.computeFunctionSideEffects = computeFunctionSideEffects;
+  }
+
+  public void setDebugFunctionSideEffectsPath(String debugFunctionSideEffectsPath) {
+    this.debugFunctionSideEffectsPath = debugFunctionSideEffectsPath;
+  }
+
+  public void setDisambiguateProperties(boolean disambiguateProperties) {
+    this.disambiguateProperties = disambiguateProperties;
+  }
+
+  public void setAmbiguateProperties(boolean ambiguateProperties) {
+    this.ambiguateProperties = ambiguateProperties;
+  }
+
+  public void setAnonymousFunctionNaming(
+      AnonymousFunctionNamingPolicy anonymousFunctionNaming) {
+    this.anonymousFunctionNaming = anonymousFunctionNaming;
+  }
+
+  public void setInputVariableMapSerialized(byte[] inputVariableMapSerialized) {
+    this.inputVariableMapSerialized = inputVariableMapSerialized;
+  }
+
+  public void setInputPropertyMapSerialized(byte[] inputPropertyMapSerialized) {
+    this.inputPropertyMapSerialized = inputPropertyMapSerialized;
+  }
+
+  public void setExportTestFunctions(boolean exportTestFunctions) {
+    this.exportTestFunctions = exportTestFunctions;
+  }
+
+  public void setRuntimeTypeCheck(boolean runtimeTypeCheck) {
+    this.runtimeTypeCheck = runtimeTypeCheck;
+  }
+
+  public void setRuntimeTypeCheckLogFunction(String runtimeTypeCheckLogFunction) {
+    this.runtimeTypeCheckLogFunction = runtimeTypeCheckLogFunction;
+  }
+
+  public void setSyntheticBlockStartMarker(String syntheticBlockStartMarker) {
+    this.syntheticBlockStartMarker = syntheticBlockStartMarker;
+  }
+
+  public void setSyntheticBlockEndMarker(String syntheticBlockEndMarker) {
+    this.syntheticBlockEndMarker = syntheticBlockEndMarker;
+  }
+
+  public void setLocale(String locale) {
+    this.locale = locale;
+  }
+
+  public void setMarkAsCompiled(boolean markAsCompiled) {
+    this.markAsCompiled = markAsCompiled;
+  }
+
+  public void setRemoveTryCatchFinally(boolean removeTryCatchFinally) {
+    this.removeTryCatchFinally = removeTryCatchFinally;
+  }
+
+  public void setClosurePass(boolean closurePass) {
+    this.closurePass = closurePass;
+  }
+
+  public void setGatherCssNames(boolean gatherCssNames) {
+    this.gatherCssNames = gatherCssNames;
+  }
+
+  public void setStripTypes(Set<String> stripTypes) {
+    this.stripTypes = stripTypes;
+  }
+
+  public void setStripNameSuffixes(Set<String> stripNameSuffixes) {
+    this.stripNameSuffixes = stripNameSuffixes;
+  }
+
+  public void setStripNamePrefixes(Set<String> stripNamePrefixes) {
+    this.stripNamePrefixes = stripNamePrefixes;
+  }
+
+  public void setStripTypePrefixes(Set<String> stripTypePrefixes) {
+    this.stripTypePrefixes = stripTypePrefixes;
+  }
+
+  public void setCustomPasses(Multimap<CustomPassExecutionTime, CompilerPass> customPasses) {
+    this.customPasses = customPasses;
+  }
+
+  public void setMarkNoSideEffectCalls(boolean markNoSideEffectCalls) {
+    this.markNoSideEffectCalls = markNoSideEffectCalls;
+  }
+
+  public void setDefineReplacements(Map<String, Object> defineReplacements) {
+    this.defineReplacements = defineReplacements;
+  }
+
+  public void setTweakReplacements(Map<String, Object> tweakReplacements) {
+    this.tweakReplacements = tweakReplacements;
+  }
+
+  public void setMoveFunctionDeclarations(boolean moveFunctionDeclarations) {
+    this.moveFunctionDeclarations = moveFunctionDeclarations;
+  }
+
+  public void setInstrumentationTemplate(String instrumentationTemplate) {
+    this.instrumentationTemplate = instrumentationTemplate;
+  }
+
+  public void setRecordFunctionInformation(boolean recordFunctionInformation) {
+    this.recordFunctionInformation = recordFunctionInformation;
+  }
+
+  public void setCssRenamingMap(CssRenamingMap cssRenamingMap) {
+    this.cssRenamingMap = cssRenamingMap;
+  }
+
+  public void setReplaceStringsFunctionDescriptions(List<String> replaceStringsFunctionDescriptions) {
+    this.replaceStringsFunctionDescriptions = replaceStringsFunctionDescriptions;
+  }
+
+  public void setReplaceStringsPlaceholderToken(String replaceStringsPlaceholderToken) {
+    this.replaceStringsPlaceholderToken = replaceStringsPlaceholderToken;
+  }
+
+  public void setReplaceStringsReservedStrings(Set<String> replaceStringsReservedStrings) {
+    this.replaceStringsReservedStrings = replaceStringsReservedStrings;
+  }
+
+  public void setPrettyPrint(boolean prettyPrint) {
+    this.prettyPrint = prettyPrint;
+  }
+
+  public void setLineBreak(boolean lineBreak) {
+    this.lineBreak = lineBreak;
+  }
+
+  public void setPrintInputDelimiter(boolean printInputDelimiter) {
+    this.printInputDelimiter = printInputDelimiter;
+  }
+
+  public void setInputDelimiter(String inputDelimiter) {
+    this.inputDelimiter = inputDelimiter;
+  }
+
+  public void setTracer(TracerMode tracer) {
+    this.tracer = tracer;
+  }
+
+  public void setErrorFormat(ErrorFormat errorFormat) {
+    this.errorFormat = errorFormat;
+  }
+
+  public void setWarningsGuard(ComposeWarningsGuard warningsGuard) {
+    this.warningsGuard = warningsGuard;
+  }
+
+  public void setLineLengthThreshold(int lineLengthThreshold) {
+    this.lineLengthThreshold = lineLengthThreshold;
+  }
+
+  public void setExternExports(boolean externExports) {
+    this.externExports = externExports;
+  }
+
+  public void setExternExportsPath(String externExportsPath) {
+    this.externExportsPath = externExportsPath;
+  }
+
+  public void setSourceMapOutputPath(String sourceMapOutputPath) {
+    this.sourceMapOutputPath = sourceMapOutputPath;
+  }
+
+  public void setSourceMapDetailLevel(SourceMap.DetailLevel sourceMapDetailLevel) {
+    this.sourceMapDetailLevel = sourceMapDetailLevel;
+  }
+
+  public void setSourceMapFormat(SourceMap.Format sourceMapFormat) {
+    this.sourceMapFormat = sourceMapFormat;
+  }
+
+  public void setSourceMapLocationMappings(List<SourceMap.LocationMapping> sourceMapLocationMappings) {
+    this.sourceMapLocationMappings = sourceMapLocationMappings;
+  }
+
+  /**
+   * Activates transformation of AMD to CJS modules.
+   */
+  public void setTransformAMDToCJSModules(boolean transformAMDToCJSModules) {
+    this.transformAMDToCJSModules = transformAMDToCJSModules;
+  }
+
+  /**
+   * Activates Common JS module processing.
+   */
+  public void setProcessCommonJSModules(boolean processCommonJSModules) {
+    this.processCommonJSModules = processCommonJSModules;
+  }
+
+  /**
+   * Sets a path prefix for Common JS modules.
+   */
+  public void setCommonJSModulePathPrefix(String commonJSModulePathPrefix) {
+    this.commonJSModulePathPrefix = commonJSModulePathPrefix;
   }
 
 

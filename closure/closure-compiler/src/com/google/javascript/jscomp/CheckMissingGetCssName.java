@@ -17,8 +17,6 @@ package com.google.javascript.jscomp;
 
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
-
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -57,9 +55,9 @@ class CheckMissingGetCssName
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
-    if (n.getType() == Token.STRING &&
-        parent.getType() != Token.GETPROP &&
-        parent.getType() != Token.REGEXP &&
+    if (n.isString() &&
+        !parent.isGetProp() &&
+        !parent.isRegExp() &&
         !NodeUtil.isObjectLitKey(n, parent)) {
       String s = n.getString();
 
@@ -81,7 +79,7 @@ class CheckMissingGetCssName
 
   /** Returns whether the node is an argument of a goog.getCssName call. */
   private boolean insideGetCssNameCall(Node n, Node parent) {
-    return parent.getType() == Token.CALL &&
+    return parent.isCall() &&
         GET_CSS_NAME_FUNCTION.equals(
             parent.getFirstChild().getQualifiedName());
   }
@@ -92,7 +90,7 @@ class CheckMissingGetCssName
    * GET_UNIQUE_ID_FUNCTION).
    */
   private boolean insideGetUniqueIdCall(Node n, Node parent) {
-    String name = parent.getType() == Token.CALL ?
+    String name = parent.isCall() ?
         parent.getFirstChild().getQualifiedName() : null;
 
     return name != null && name.endsWith(GET_UNIQUE_ID_FUNCTION);
@@ -103,12 +101,12 @@ class CheckMissingGetCssName
    * initialization of a variable named *_ID of *_ID_.
    */
   private boolean insideAssignmentToIdConstant(Node n, Node parent) {
-    if (parent.getType() == Token.ASSIGN) {
+    if (parent.isAssign()) {
       String qname = parent.getFirstChild().getQualifiedName();
       return qname != null && isIdName(qname);
-    } else if (parent.getType() == Token.NAME) {
+    } else if (parent.isName()) {
       Node grandParent = parent.getParent();
-      if (grandParent != null && grandParent.getType() == Token.VAR) {
+      if (grandParent != null && grandParent.isVar()) {
         String name = parent.getString();
         return isIdName(name);
       } else {

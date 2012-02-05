@@ -17,6 +17,8 @@
 package com.google.javascript.jscomp;
 
 import javax.annotation.Nullable;
+
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -33,7 +35,7 @@ class ReplaceMessages extends JsMessageVisitor {
 
   static final DiagnosticType BUNDLE_DOES_NOT_HAVE_THE_MESSAGE =
       DiagnosticType.error("JSC_BUNDLE_DOES_NOT_HAVE_THE_MESSAGE",
-          "Message with id = {0} cound not be found in replacement bundle");
+          "Message with id = {0} could not be found in replacement bundle");
 
   ReplaceMessages(AbstractCompiler compiler, MessageBundle bundle,
       boolean checkDuplicatedMessages, JsMessage.Style style,
@@ -106,7 +108,7 @@ class ReplaceMessages extends JsMessageVisitor {
         return origValueNode;
       case Token.ADD:
         // The message is a simple string. Create a string node.
-        return Node.newString(message.toString());
+        return IR.string(message.toString());
       case Token.CALL:
         // The message is a function call. Replace it with a string expression.
         return replaceCallNode(message, origValueNode);
@@ -148,16 +150,15 @@ class ReplaceMessages extends JsMessageVisitor {
     Node nameNode = functionNode.getFirstChild();
     checkNode(nameNode, Token.NAME);
     Node argListNode = nameNode.getNext();
-    checkNode(argListNode, Token.LP);
+    checkNode(argListNode, Token.PARAM_LIST);
     Node oldBlockNode = argListNode.getNext();
     checkNode(oldBlockNode, Token.BLOCK);
 
     Iterator<CharSequence> iterator = message.parts().iterator();
     Node valueNode = iterator.hasNext()
         ? constructAddOrStringNode(iterator, argListNode)
-        : Node.newString("");
-    Node newBlockNode = new Node(Token.BLOCK,
-        new Node(Token.RETURN, valueNode));
+        : IR.string("");
+    Node newBlockNode = IR.block(IR.returnNode(valueNode));
 
     functionNode.replaceChild(oldBlockNode, newBlockNode);
   }
@@ -186,14 +187,14 @@ class ReplaceMessages extends JsMessageVisitor {
           (JsMessage.PlaceholderReference) part;
 
       for (Node node : argListNode.children()) {
-        if (node.getType() == Token.NAME) {
+        if (node.isName()) {
           String arg = node.getString();
 
           // We ignore the case here because the transconsole only supports
           // uppercase placeholder names, but function arguments in javascript
           // code can have mixed case.
           if (arg.equalsIgnoreCase(phRef.getName())) {
-            partNode = Node.newString(Token.NAME, arg);
+            partNode = IR.name(arg);
           }
         }
       }
@@ -205,11 +206,11 @@ class ReplaceMessages extends JsMessageVisitor {
       }
     } else {
       // The part is just a string literal.
-      partNode = Node.newString(part.toString());
+      partNode = IR.string(part.toString());
     }
 
     if (partsIterator.hasNext()) {
-      return new Node(Token.ADD, partNode,
+      return IR.add(partNode,
                       constructAddOrStringNode(partsIterator, argListNode));
     } else {
       return partNode;
@@ -291,6 +292,12 @@ class ReplaceMessages extends JsMessageVisitor {
       JsMessage.PlaceholderReference phRef =
           (JsMessage.PlaceholderReference) part;
 
+      // The translated message is null
+      if (objLitNode == null) {
+        throw new MalformedException("Empty placeholder value map " +
+            "for a translated message with placeholders.", objLitNode);
+      }
+
       for (Node key = objLitNode.getFirstChild(); key != null;
            key = key.getNext()) {
         if (key.getString().equals(phRef.getName())) {
@@ -306,11 +313,11 @@ class ReplaceMessages extends JsMessageVisitor {
       }
     } else {
       // The part is just a string literal.
-      partNode = Node.newString(part.toString());
+      partNode = IR.string(part.toString());
     }
 
     if (parts.hasNext()) {
-      return new Node(Token.ADD, partNode,
+      return IR.add(partNode,
           constructStringExprNode(parts, objLitNode));
     } else {
       return partNode;

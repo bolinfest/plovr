@@ -18,9 +18,8 @@ package com.google.javascript.jscomp;
 
 import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.NodeTraversal.Callback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
-
 import java.util.Collection;
 import java.util.List;
 import java.util.logging.Logger;
@@ -119,12 +118,12 @@ class InlineSimpleMethods extends MethodCompilerPass {
    * and for which the right side is a string.
    */
   private static boolean isPropertyTree(Node expectedGetprop) {
-    if (expectedGetprop.getType() != Token.GETPROP) {
+    if (!expectedGetprop.isGetProp()) {
       return false;
     }
 
     Node leftChild = expectedGetprop.getFirstChild();
-    if (leftChild.getType() != Token.THIS &&
+    if (!leftChild.isThis() &&
         !isPropertyTree(leftChild)) {
       return false;
     }
@@ -142,7 +141,7 @@ class InlineSimpleMethods extends MethodCompilerPass {
    */
   private static void replaceThis(Node expectedGetprop, Node replacement) {
     Node leftChild = expectedGetprop.getFirstChild();
-    if (leftChild.getType() == Token.THIS) {
+    if (leftChild.isThis()) {
       expectedGetprop.replaceChild(leftChild, replacement);
     } else {
       replaceThis(leftChild, replacement);
@@ -160,7 +159,7 @@ class InlineSimpleMethods extends MethodCompilerPass {
     }
 
     Node expectedReturn = expectedBlock.getFirstChild();
-    if (expectedReturn.getType() != Token.RETURN) {
+    if (!expectedReturn.isReturn()) {
       return null;
     }
 
@@ -195,7 +194,7 @@ class InlineSimpleMethods extends MethodCompilerPass {
     }
 
     Node expectedBlock = fn.getLastChild();
-    return  expectedBlock.getType() == Token.BLOCK ?
+    return  expectedBlock.isBlock() ?
         expectedBlock : null;
   }
 
@@ -252,7 +251,7 @@ class InlineSimpleMethods extends MethodCompilerPass {
     // If the return value of the method call is read,
     // replace it with "void 0". Otherwise, remove the call entirely.
     if (NodeUtil.isExprCall(parent)) {
-      parent.getParent().replaceChild(parent, new Node(Token.EMPTY));
+      parent.getParent().replaceChild(parent, IR.empty());
     } else {
       Node srcLocation = call;
       parent.replaceChild(call, NodeUtil.newUndefinedNode(srcLocation));

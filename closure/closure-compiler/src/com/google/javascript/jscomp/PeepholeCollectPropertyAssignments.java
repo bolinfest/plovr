@@ -17,6 +17,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.Node;
 
@@ -33,8 +34,7 @@ public class PeepholeCollectPropertyAssignments
 
   @Override
   Node optimizeSubtree(Node subtree) {
-    if (subtree.getType() != Token.SCRIPT
-        && subtree.getType() != Token.BLOCK) {
+    if (!subtree.isScript() && !subtree.isBlock()) {
       return subtree;
     }
 
@@ -44,7 +44,7 @@ public class PeepholeCollectPropertyAssignments
     // and start processing there.
     for (Node child = subtree.getFirstChild();
          child != null; child = child.getNext()) {
-      if (child.getType() != Token.VAR && !NodeUtil.isExprAssign(child)) {
+      if (!child.isVar() && !NodeUtil.isExprAssign(child)) {
         continue;
       }
       if (!isPropertyAssignmentToName(child.getNext())) {
@@ -54,7 +54,7 @@ public class PeepholeCollectPropertyAssignments
 
       Preconditions.checkState(child.hasOneChild());
       Node name = getName(child);
-      if (name.getType() != Token.NAME) {
+      if (!name.isName()) {
         // The assignment target is not a simple name.
         continue;
       }
@@ -82,7 +82,7 @@ public class PeepholeCollectPropertyAssignments
   }
 
   private Node getName(Node n) {
-    if (n.getType() == Token.VAR) {
+    if (n.isVar()) {
       return n.getFirstChild();
     } else if (NodeUtil.isExprAssign(n)) {
       return n.getFirstChild().getFirstChild();
@@ -91,7 +91,7 @@ public class PeepholeCollectPropertyAssignments
   }
 
   private Node getValue(Node n) {
-    if (n.getType() == Token.VAR) {
+    if (n.isVar()) {
       return n.getFirstChild().getFirstChild();
     } else if (NodeUtil.isExprAssign(n)) {
       return n.getFirstChild().getLastChild();
@@ -100,7 +100,7 @@ public class PeepholeCollectPropertyAssignments
   }
 
   boolean isInterestingValue(Node n) {
-    return n.getType() == Token.OBJECTLIT || n.getType() == Token.ARRAYLIT;
+    return n.isObjectLit() || n.isArrayLit();
   }
 
   private boolean isPropertyAssignmentToName(Node propertyCandidate) {
@@ -114,13 +114,13 @@ public class PeepholeCollectPropertyAssignments
 
     // to a property...
     Node lhs = expr.getFirstChild();
-    if (lhs.getType() != Token.GETELEM && lhs.getType() != Token.GETPROP) {
+    if (!NodeUtil.isGet(lhs)) {
       return false;
     }
 
     // of a variable.
     Node obj = lhs.getFirstChild();
-    if (obj.getType() != Token.NAME) {
+    if (!obj.isName()) {
       return false;
     }
 
@@ -176,13 +176,13 @@ public class PeepholeCollectPropertyAssignments
 
     Node lhs = assignment.getFirstChild();
     Node rhs = lhs.getNext();
-    if (lhs.getType() != Token.GETELEM) {
+    if (!lhs.isGetElem()) {
       return false;
     }
     Node obj = lhs.getFirstChild();
     Node property = obj.getNext();
     // The left hand side must have a numeric index
-    if (property.getType() != Token.NUMBER) {
+    if (!property.isNumber()) {
       return false;
     }
     // that is a valid array index
@@ -205,8 +205,7 @@ public class PeepholeCollectPropertyAssignments
         // Pad the array if it is sparse.
         // So if array is [0] and integer 3 is assigned at index is 2, then
         // we want to produce [0,,2].
-        Node emptyNode = new Node(Token.EMPTY)
-                         .copyInformationFrom(arrayLiteral);
+        Node emptyNode = IR.empty().srcref(arrayLiteral);
         arrayLiteral.addChildToBack(emptyNode);
         ++maxIndexAssigned;
       }
@@ -214,7 +213,7 @@ public class PeepholeCollectPropertyAssignments
     } else {
       // An out of order assignment.  Allow it if it's a hole.
       Node currentValue = arrayLiteral.getChildAtIndex(index);
-      if (currentValue.getType() != Token.EMPTY) {
+      if (!currentValue.isEmpty()) {
         // We've already collected a value for this index.
         return false;
       }
@@ -233,23 +232,23 @@ public class PeepholeCollectPropertyAssignments
     Node property = obj.getNext();
 
     // The property must be statically known.
-    if (lhs.getType() == Token.GETELEM
-        && (property.getType() != Token.STRING
-            && property.getType() != Token.NUMBER)) {
+    if (lhs.isGetElem()
+        && (!property.isString()
+            && !property.isNumber())) {
       return false;
     }
 
     String propertyName;
-    if (property.getType() == Token.NUMBER) {
+    if (property.isNumber()) {
       propertyName = NodeUtil.getStringValue(property);
     } else {
       propertyName = property.getString();
     }
 
-    Node newProperty = Node.newString(propertyName)
+    Node newProperty = IR.string(propertyName)
         .copyInformationFrom(property);
     // Preserve the quotedness of a property reference
-    if (lhs.getType() == Token.GETELEM) {
+    if (lhs.isGetElem()) {
       newProperty.setQuotedString();
     }
     Node newValue = rhs.detachFromParent();
@@ -263,7 +262,7 @@ public class PeepholeCollectPropertyAssignments
 
   private static boolean mightContainForwardReference(
       Node node, String varName) {
-    if (node.getType() == Token.NAME) {
+    if (node.isName()) {
       return varName.equals(node.getString());
     }
     for (Node child = node.getFirstChild(); child != null;

@@ -226,6 +226,17 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "required: string", false);
   }
 
+
+  public void testTypeCheckCustomExterns2() throws Exception {
+    testTypes(
+        DEFAULT_EXTERNS + "/** @enum {string} */ var Enum = {FOO: 1, BAR: 1};",
+        "/** @param {Enum} x */ function f(x) {} f(Enum.FOO); f(true);",
+        "actual parameter 1 of f does not match formal parameter\n" +
+        "found   : boolean\n" +
+        "required: Enum.<string>",
+        false);
+  }
+
   public void testParameterizedArray1() throws Exception {
     testTypes("/** @param {!Array.<number>} a\n" +
         "* @return {string}\n" +
@@ -240,7 +251,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "* @return {number}\n" +
         "*/ var f = function(a) { return a[0]; };",
         "inconsistent return type\n" +
-        "found   : Array\n" +
+        "found   : Array.<number>\n" +
         "required: number");
   }
 
@@ -1480,7 +1491,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
     testFunctionType(
         "/** @param {number} opt_a\n@return {string} */" +
         "function f(opt_a) {}",
-        "function ((number|undefined)): string");
+        "function (number=): string");
   }
 
   public void testFunctionArguments3() throws Exception {
@@ -1494,7 +1505,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
     testFunctionType(
         "/** @param {number} opt_a\n@return {string} */" +
         "function f(a,opt_a) {}",
-        "function (?, (number|undefined)): string");
+        "function (?, number=): string");
   }
 
   public void testFunctionArguments5() throws Exception {
@@ -1638,7 +1649,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   public void testFunctionInference6() throws Exception {
     testFunctionType(
         "/** @this Date\n@return {string} */function f(opt_a) {}",
-        "function (this:Date, ?): string");
+        "function (this:Date, ?=): string");
   }
 
   public void testFunctionInference7() throws Exception {
@@ -2030,10 +2041,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "/** @constructor \n * @extends {F} */ " +
         "function G() {}" +
         "/** @override */ G.prototype.foo = function() { };" +
-        "(new G()).foo(1);",
-        "Function G.prototype.foo: called with 1 argument(s). " +
-        "Function requires at least 0 argument(s) " +
-        "and no more than 0 argument(s).");
+        "(new G()).foo(1);");
   }
 
   public void testMethodInference7() throws Exception {
@@ -2426,7 +2434,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   public void testIn4() throws Exception {
     testTypes("Date in Object",
         "left side of 'in'\n" +
-        "found   : function (new:Date, ?, ?, ?, ?, ?, ?, ?): string\n" +
+        "found   : function (new:Date, ?=, ?=, ?=, ?=, ?=, ?=, ?=): string\n" +
         "required: string");
   }
 
@@ -4759,7 +4767,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "/** @param {number} x */ function f(x) {}" +
         "f(this.Object);",
         "actual parameter 1 of f does not match formal parameter\n" +
-        "found   : function (new:Object, *): ?\n" +
+        "found   : function (new:Object, *=): ?\n" +
         "required: number");
   }
 
@@ -5325,6 +5333,27 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "Property indexOf never defined on String.prototype.toLowerCase");
   }
 
+  public void testIssue368() throws Exception {
+    testTypes(
+        "/** @constructor */ function Foo(){}" +
+        "/**\n" +
+        " * @param {number} one\n" +
+        " * @param {string} two\n" +
+        " */\n" +
+        "Foo.prototype.add = function(one, two) {};" +
+        "/**\n" +
+        " * @constructor\n" +
+        " * @extends {Foo}\n" +
+        " */\n" +
+        "function Bar(){}" +
+        "/** @override */\n" +
+        "Bar.prototype.add = function(ignored) {};" +
+        "(new Bar()).add(1, 2);",
+        "actual parameter 2 of Bar.prototype.add does not match formal parameter\n" +
+        "found   : number\n" +
+        "required: string");
+  }
+
   public void testIssue380() throws Exception {
     testTypes(
         "/** @type { function(string): {innerHTML: string} } */" +
@@ -5437,6 +5466,21 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "  /** @return {Foo} */ y: function() { new Bar(); }" +
         "};" +
         "Bar.prototype.__proto__ = Foo.prototype;");
+  }
+
+  public void testIssue586() throws Exception {
+    testTypes(
+        "/** @constructor */" +
+        "var MyClass = function() {};" +
+        "/** @param {boolean} success */" +
+        "MyClass.prototype.fn = function(success) {};" +
+        "MyClass.prototype.test = function() {" +
+        "  this.fn();" +
+        "  this.fn = function() {};" +
+        "};",
+        "Function MyClass.prototype.fn: called with 0 argument(s). " +
+        "Function requires at least 1 argument(s) " +
+        "and no more than 1 argument(s).");
   }
 
   /**
@@ -6204,6 +6248,66 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "};");
   }
 
+  public void testFunctionBind1() throws Exception {
+    testTypes(
+        "/** @type {function(string, number): boolean} */" +
+        "function f(x, y) { return true; }" +
+        "f.bind(null, 3);",
+        "actual parameter 2 of f.bind does not match formal parameter\n" +
+        "found   : number\n" +
+        "required: string");
+  }
+
+  public void testFunctionBind2() throws Exception {
+    testTypes(
+        "/** @type {function(number): boolean} */" +
+        "function f(x) { return true; }" +
+        "f(f.bind(null, 3)());",
+        "actual parameter 1 of f does not match formal parameter\n" +
+        "found   : boolean\n" +
+        "required: number");
+  }
+
+  public void testFunctionBind3() throws Exception {
+    testTypes(
+        "/** @type {function(number, string): boolean} */" +
+        "function f(x, y) { return true; }" +
+        "f.bind(null, 3)(true);",
+        "actual parameter 1 of function does not match formal parameter\n" +
+        "found   : boolean\n" +
+        "required: string");
+  }
+
+  public void testFunctionBind4() throws Exception {
+    testTypes(
+        "/** @param {...number} x */" +
+        "function f(x) {}" +
+        "f.bind(null, 3, 3, 3)(true);",
+        "actual parameter 1 of function does not match formal parameter\n" +
+        "found   : boolean\n" +
+        "required: (number|undefined)");
+  }
+
+  public void testFunctionBind5() throws Exception {
+    testTypes(
+        "/** @param {...number} x */" +
+        "function f(x) {}" +
+        "f.bind(null, true)(3, 3, 3);",
+        "actual parameter 2 of f.bind does not match formal parameter\n" +
+        "found   : boolean\n" +
+        "required: (number|undefined)");
+  }
+
+  public void testGoogBind1() throws Exception {
+    // We currently do not support goog.bind natively.
+    testClosureTypes(
+        "var goog = {}; goog.bind = function(var_args) {};" +
+        "/** @type {function(number): boolean} */" +
+        "function f(x, y) { return true; }" +
+        "f(goog.bind(f, null, 'x')());",
+        null);
+  }
+
   public void testCast2() throws Exception {
     // can upcast to a base type.
     testTypes("/** @constructor */function base() {}\n" +
@@ -6317,7 +6421,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
     testTypes(
         "for (var i = 0; i < 10; i++) {" +
           "var x = /** @type {Object|number} */ ({foo: 3});" +
-          "/** @param {boolean} x */ function f(x) {}" +
+          "/** @param {number} x */ function f(x) {}" +
           "f(x.foo);" +
           "f([].foo);" +
         "}",
@@ -8702,6 +8806,37 @@ public class TypeCheckTest extends CompilerTypeTestCase {
             "Bad type annotation. missing object name in @lends tag"));
   }
 
+  public void testLends10() throws Exception {
+    testTypes(
+        "function defineClass(x) { return function() {}; } " +
+        "/** @constructor */" +
+        "var Foo = defineClass(" +
+        "    /** @lends {Foo.prototype} */ ({/** @type {number} */ bar: 1}));" +
+        "/** @return {string} */ function f() { return (new Foo()).bar; }",
+        "inconsistent return type\n" +
+        "found   : number\n" +
+        "required: string");
+  }
+
+  public void testLends11() throws Exception {
+    testTypes(
+        "function defineClass(x, y) { return function() {}; } " +
+        "/** @constructor */" +
+        "var Foo = function() {};" +
+        "/** @return {*} */ Foo.prototype.bar = function() { return 3; };" +
+        "/**\n" +
+        " * @constructor\n" +
+        " * @extends {Foo}\n" +
+        " */\n" +
+        "var SubFoo = defineClass(Foo, " +
+        "    /** @lends {SubFoo.prototype} */ ({\n" +
+        "      /** @return {number} */ bar: function() { return 3; }}));" +
+        "/** @return {string} */ function f() { return (new SubFoo()).bar(); }",
+        "inconsistent return type\n" +
+        "found   : number\n" +
+        "required: string");
+  }
+
   public void testDeclaredNativeTypeEquality() throws Exception {
     Node n = parseAndTypeCheck("/** @constructor */ function Object() {};");
     assertEquals(registry.getNativeType(JSTypeNative.OBJECT_FUNCTION_TYPE),
@@ -8978,6 +9113,34 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "/** @param {{otherProp: (string|undefined)}} x */" +
         "function g(x) {}" +
         "var x = {}; f(x); g(x);");
+  }
+
+  public void testRecordType6() throws Exception {
+    testTypes(
+        "/** @return {{prop: (number|undefined)}} x */" +
+        "function f() { return {}; }");
+  }
+
+  public void testRecordType7() throws Exception {
+    testTypes(
+        "/** @return {{prop: (number|undefined)}} x */" +
+        "function f() { var x = {}; g(x); return x; }" +
+        "/** @param {number} x */" +
+        "function g(x) {}",
+        "actual parameter 1 of g does not match formal parameter\n" +
+        "found   : {prop: (number|undefined)}\n" +
+        "required: number");
+  }
+
+  public void testRecordType8() throws Exception {
+    testTypes(
+        "/** @return {{prop: (number|string)}} x */" +
+        "function f() { var x = {prop: 3}; g(x.prop); return x; }" +
+        "/** @param {string} x */" +
+        "function g(x) {}",
+        "actual parameter 1 of g does not match formal parameter\n" +
+        "found   : number\n" +
+        "required: string");
   }
 
   public void testDuplicateRecordFields1() throws Exception {

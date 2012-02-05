@@ -70,7 +70,7 @@ class Denormalize implements CompilerPass, Callback {
     }
 
     // Is the current node something that can be in a for loop initializer?
-    if (!NodeUtil.isExpressionNode(n) && !NodeUtil.isVar(n)) {
+    if (!n.isExprResult() && !n.isVar()) {
       return;
     }
 
@@ -81,8 +81,8 @@ class Denormalize implements CompilerPass, Callback {
     } else if (NodeUtil.isForIn(nextSibling)) {
       Node forNode = nextSibling;
       Node forVar = forNode.getFirstChild();
-      if (NodeUtil.isName(forVar)
-          && NodeUtil.isVar(n) && n.hasOneChild()) {
+      if (forVar.isName()
+          && n.isVar() && n.hasOneChild()) {
         Node name = n.getFirstChild();
         if (!name.hasChildren()
             && forVar.getString().equals(name.getString())) {
@@ -93,8 +93,8 @@ class Denormalize implements CompilerPass, Callback {
           compiler.reportCodeChange();
         }
       }
-    } else if (nextSibling.getType() == Token.FOR
-        && nextSibling.getFirstChild().getType() == Token.EMPTY) {
+    } else if (nextSibling.isFor()
+        && nextSibling.getFirstChild().isEmpty()) {
 
       // Does the current node contain an in operator?  If so, embedding
       // the expression in a for loop can cause some Javascript parsers (such
@@ -111,7 +111,7 @@ class Denormalize implements CompilerPass, Callback {
       parent.removeChild(n);
 
       Node newInitializer;
-      if (NodeUtil.isVar(n)) {
+      if (n.isVar()) {
         newInitializer = n;
       } else {
         // Extract the expression from EXPR_RESULT node.
@@ -143,7 +143,7 @@ class Denormalize implements CompilerPass, Callback {
 
     @Override
     public void visit(NodeTraversal t, Node node, Node parent) {
-      if (node.getType() == Token.NAME || node.getType() == Token.STRING) {
+      if (node.isName() || node.isString()) {
         node.removeProp(Node.IS_CONSTANT_NAME);
       }
     }

@@ -23,6 +23,7 @@ import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.AbstractCommandLineRunner.FlagUsageException;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.Node;
@@ -33,6 +34,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Tests for {@link CommandLineRunner}.
@@ -46,6 +48,7 @@ public class CommandLineRunnerTest extends TestCase {
   private List<Integer> exitCodes = null;
   private ByteArrayOutputStream outReader = null;
   private ByteArrayOutputStream errReader = null;
+  private Map<Integer,String> filenames;
 
   // If set, this will be appended to the end of the args list.
   // For testing args parsing.
@@ -94,6 +97,8 @@ public class CommandLineRunnerTest extends TestCase {
         + "/** @constructor */ function Window() {}\n"
         + "/** @type {string} */ Window.prototype.name;\n"
         + "/** @type {Window} */ var window;"
+        + "/** @constructor */ function Element() {}"
+        + "Element.prototype.offsetWidth;"
         + "/** @nosideeffects */ function noSideEffects() {}")
   );
 
@@ -103,6 +108,7 @@ public class CommandLineRunnerTest extends TestCase {
   public void setUp() throws Exception {
     super.setUp();
     externs = DEFAULT_EXTERNS;
+    filenames = Maps.newHashMap();
     lastCompiler = null;
     lastArg = null;
     outReader = new ByteArrayOutputStream();
@@ -376,14 +382,38 @@ public class CommandLineRunnerTest extends TestCase {
          "}",
          "function f(b) {" +
          " var a;" +
-         " return ((a=b.id) && (a=parseInt(a.substr(1))) && a>0);" +
+         " return ((a=b.id) && (a=parseInt(a.substr(1))) && 0<a);" +
          "}");
+  }
+
+  public void testHiddenSideEffect() {
+    args.add("--compilation_level=ADVANCED_OPTIMIZATIONS");
+    test("element.offsetWidth;",
+         "element.offsetWidth", CheckSideEffects.USELESS_CODE_ERROR);
   }
 
   public void testIssue504() {
     args.add("--compilation_level=ADVANCED_OPTIMIZATIONS");
     test("void function() { alert('hi'); }();",
-         "alert('hi');", CheckSideEffects.USELESS_CODE_ERROR);
+         "alert('hi');void 0", CheckSideEffects.USELESS_CODE_ERROR);
+  }
+
+  public void testIssue601() {
+    args.add("--compilation_level=WHITESPACE_ONLY");
+    test("function f() { return '\\v' == 'v'; } window['f'] = f;",
+         "function f(){return'\\v'=='v'}window['f']=f");
+  }
+
+  public void testIssue601b() {
+    args.add("--compilation_level=ADVANCED_OPTIMIZATIONS");
+    test("function f() { return '\\v' == 'v'; } window['f'] = f;",
+         "window.f=function(){return'\\v'=='v'}");
+  }
+
+  public void testIssue601c() {
+    args.add("--compilation_level=ADVANCED_OPTIMIZATIONS");
+    test("function f() { return '\\u000B' == 'v'; } window['f'] = f;",
+         "window.f=function(){return'\\u000B'=='v'}");
   }
 
   public void testDebugFlag1() {
@@ -877,6 +907,32 @@ public class CommandLineRunnerTest extends TestCase {
       "Manifest files cannot be generated when the input is from stdin.");
   }
 
+  public void testTransformAMD() {
+    args.add("--transform_amd_modules");
+    test("define({test: 1})", "exports = {test: 1}");
+  }
+
+  public void testProcessCJS() {
+    args.add("--process_common_js_modules");
+    args.add("--common_js_entry_module=foo/bar");
+    setFilename(0, "foo/bar.js");
+    test("exports.test = 1",
+        "var module$foo$bar={test:1}; " +
+        "module$foo$bar.module$exports && " +
+        "(module$foo$bar=module$foo$bar.module$exports)");
+  }
+
+  public void testTransformAMDAndProcessCJS() {
+    args.add("--transform_amd_modules");
+    args.add("--process_common_js_modules");
+    args.add("--common_js_entry_module=foo/bar");
+    setFilename(0, "foo/bar.js");
+    test("define({foo: 1})",
+        "var module$foo$bar={}, module$foo$bar={foo:1}; " +
+        "module$foo$bar.module$exports && " +
+        "(module$foo$bar=module$foo$bar.module$exports)");
+  }
+
   /* Helper functions */
 
   private void testSame(String original) {
@@ -999,7 +1055,7 @@ public class CommandLineRunnerTest extends TestCase {
     if (useModules == ModulePattern.NONE) {
       List<JSSourceFile> inputs = Lists.newArrayList();
       for (int i = 0; i < original.length; i++) {
-        inputs.add(JSSourceFile.fromCode("input" + i, original[i]));
+        inputs.add(JSSourceFile.fromCode(getFilename(i), original[i]));
       }
       inputsSupplier = Suppliers.ofInstance(inputs);
     } else if (useModules == ModulePattern.STAR) {
@@ -1036,7 +1092,7 @@ public class CommandLineRunnerTest extends TestCase {
     Compiler compiler = runner.createCompiler();
     List<JSSourceFile> inputs = Lists.newArrayList();
     for (int i = 0; i < original.length; i++) {
-      inputs.add(JSSourceFile.fromCode("input" + i, original[i]));
+      inputs.add(JSSourceFile.fromCode(getFilename(i), original[i]));
     }
     CompilerOptions options = new CompilerOptions();
     // ECMASCRIPT5 is the most forgiving.
@@ -1047,5 +1103,16 @@ public class CommandLineRunnerTest extends TestCase {
     Preconditions.checkNotNull(all);
     Node n = all.getLastChild();
     return n;
+  }
+
+  private void setFilename(int i, String filename) {
+    this.filenames.put(i, filename);
+  }
+
+  private String getFilename(int i) {
+    if (filenames.isEmpty()) {
+      return "input" + i;
+    }
+    return filenames.get(i);
   }
 }

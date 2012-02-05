@@ -20,6 +20,7 @@ import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
 import com.google.javascript.jscomp.NodeTraversal.Callback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -210,14 +211,11 @@ class FunctionRewriter implements CompilerPass {
      *
      * @param methodName Method to call.
      * @param argumentNode Method argument.
-     * @param lineno line number in original source.
-     * @param charno character offset in original line.
      */
     protected final Node buildCallNode(String methodName, Node argumentNode,
-                                       int lineno, int charno) {
-      Node call = new Node(Token.CALL, lineno, charno);
+                                       Node srcref) {
+      Node call = IR.call(IR.name(methodName)).srcref(srcref);
       call.putBooleanProp(Node.FREE_CALL, true);
-      call.addChildToBack(Node.newString(Token.NAME, methodName));
       if (argumentNode != null) {
         call.addChildToBack(argumentNode.cloneTree());
       }
@@ -249,8 +247,7 @@ class FunctionRewriter implements CompilerPass {
     @Override
     public Node reduce(Node node) {
       if (NodeUtil.isEmptyFunctionExpression(node)) {
-        return buildCallNode(FACTORY_METHOD_NAME, null,
-                             node.getLineno(), node.getCharno());
+        return buildCallNode(FACTORY_METHOD_NAME, null, node);
       } else {
         return node;
       }
@@ -274,7 +271,7 @@ class FunctionRewriter implements CompilerPass {
       }
 
       Node statement = body.getFirstChild();
-      if (statement.getType() == Token.RETURN) {
+      if (statement.isReturn()) {
         return statement.getFirstChild();
       }
       return null;
@@ -310,8 +307,7 @@ class FunctionRewriter implements CompilerPass {
       }
 
       if (isIdentityFunction(node)) {
-        return buildCallNode(FACTORY_METHOD_NAME, null,
-                             node.getLineno(), node.getCharno());
+        return buildCallNode(FACTORY_METHOD_NAME, null, node);
       } else {
         return node;
       }
@@ -332,7 +328,7 @@ class FunctionRewriter implements CompilerPass {
 
       Node value = maybeGetSingleReturnRValue(functionNode);
       if (value != null &&
-          NodeUtil.isName(value) &&
+          value.isName() &&
           value.getString().equals(paramNode.getString())) {
         return true;
       }
@@ -371,8 +367,7 @@ class FunctionRewriter implements CompilerPass {
 
       Node valueNode = getValueNode(node);
       if (valueNode != null) {
-        return buildCallNode(FACTORY_METHOD_NAME, valueNode,
-                             node.getLineno(), node.getCharno());
+        return buildCallNode(FACTORY_METHOD_NAME, valueNode, node);
       } else {
         return node;
       }
@@ -425,13 +420,12 @@ class FunctionRewriter implements CompilerPass {
 
       Node propName = getGetPropertyName(node);
       if (propName != null) {
-        if (propName.getType() != Token.STRING) {
+        if (!propName.isString()) {
           throw new IllegalStateException(
               "Expected STRING, got " + Token.name(propName.getType()));
         }
 
-        return buildCallNode(FACTORY_METHOD_NAME, propName,
-                             node.getLineno(), node.getCharno());
+        return buildCallNode(FACTORY_METHOD_NAME, propName, node);
       } else {
         return node;
       }
@@ -447,8 +441,8 @@ class FunctionRewriter implements CompilerPass {
     private Node getGetPropertyName(Node functionNode) {
       Node value = maybeGetSingleReturnRValue(functionNode);
       if (value != null &&
-          NodeUtil.isGetProp(value) &&
-          NodeUtil.isThis(value.getFirstChild())) {
+          value.isGetProp() &&
+          value.getFirstChild().isThis()) {
         return value.getLastChild();
       }
       return null;
@@ -487,13 +481,12 @@ class FunctionRewriter implements CompilerPass {
 
       Node propName = getSetPropertyName(node);
       if (propName != null) {
-        if (propName.getType() != Token.STRING) {
+        if (!propName.isString()) {
           throw new IllegalStateException(
               "Expected STRING, got " + Token.name(propName.getType()));
         }
 
-        return buildCallNode(FACTORY_METHOD_NAME, propName,
-                             node.getLineno(), node.getCharno());
+        return buildCallNode(FACTORY_METHOD_NAME, propName, node);
       } else {
         return node;
       }
@@ -525,9 +518,9 @@ class FunctionRewriter implements CompilerPass {
 
       Node assign = statement.getFirstChild();
       Node lhs = assign.getFirstChild();
-      if (NodeUtil.isGetProp(lhs) && NodeUtil.isThis(lhs.getFirstChild())) {
+      if (lhs.isGetProp() && lhs.getFirstChild().isThis()) {
         Node rhs = assign.getLastChild();
-        if (NodeUtil.isName(rhs) &&
+        if (rhs.isName() &&
             rhs.getString().equals(paramNode.getString())) {
           Node propertyName = lhs.getLastChild();
           return propertyName;

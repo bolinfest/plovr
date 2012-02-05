@@ -22,8 +22,6 @@ import com.google.javascript.jscomp.CodingConvention.AssertionFunctionSpec;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeTraversal.Callback;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
-
 import java.util.List;
 import java.util.Set;
 
@@ -110,7 +108,7 @@ final class ClosureCodeRemoval implements CompilerPass {
       do {
         ancestor = ancestor.getParent();
         assignAncestors.add(ancestor);
-      } while (ancestor.getType() == Token.ASSIGN &&
+      } while (ancestor.isAssign() &&
                ancestor.getFirstChild().isQualifiedName());
       lastAncestor = ancestor.getParent();
     }
@@ -122,7 +120,7 @@ final class ClosureCodeRemoval implements CompilerPass {
       Node rhs = node.getNext();
       Node last = parent;
       for (Node ancestor : assignAncestors) {
-        if (NodeUtil.isExpressionNode(ancestor)) {
+        if (ancestor.isExprResult()) {
           lastAncestor.removeChild(ancestor);
         } else {
           rhs.detachFromParent();
@@ -140,7 +138,7 @@ final class ClosureCodeRemoval implements CompilerPass {
   private class FindAbstractMethods extends AbstractPostOrderCallback {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (n.getType() == Token.ASSIGN) {
+      if (n.isAssign()) {
         Node nameNode = n.getFirstChild();
         Node valueNode = n.getLastChild();
 
@@ -171,7 +169,7 @@ final class ClosureCodeRemoval implements CompilerPass {
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (n.getType() == Token.CALL) {
+      if (n.isCall()) {
         String fnName = n.getFirstChild().getQualifiedName();
         if (assertionNames.contains(fnName)) {
           assertionCalls.add(n);
@@ -213,7 +211,7 @@ final class ClosureCodeRemoval implements CompilerPass {
     for (Node call : assertionCalls) {
       // If the assertion is an expression, just strip the whole thing.
       Node parent = call.getParent();
-      if (NodeUtil.isExpressionNode(parent)) {
+      if (parent.isExprResult()) {
         parent.getParent().removeChild(parent);
       } else {
         // Otherwise, replace the assertion with its first argument,

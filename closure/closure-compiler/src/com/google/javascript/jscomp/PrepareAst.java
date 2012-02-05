@@ -17,6 +17,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
@@ -76,17 +77,6 @@ class PrepareAst implements CompilerPass {
    * Covert EXPR_VOID to EXPR_RESULT to simplify the rest of the code.
    */
   private void normalizeNodeTypes(Node n) {
-    if (n.getType() == Token.EXPR_VOID) {
-      n.setType(Token.EXPR_RESULT);
-      reportChange();
-    }
-
-    // Remove unused properties to minimize differences between ASTs
-    // produced by the two parsers.
-    if (n.getType() == Token.FUNCTION) {
-      Preconditions.checkState(n.getProp(Node.FUNCTION_PROP) == null);
-    }
-
     normalizeBlocks(n);
 
     for (Node child = n.getFirstChild();
@@ -104,15 +94,14 @@ class PrepareAst implements CompilerPass {
    */
   private void normalizeBlocks(Node n) {
     if (NodeUtil.isControlStructure(n)
-        && n.getType() != Token.LABEL
-        && n.getType() != Token.SWITCH) {
+        && !n.isLabel()
+        && !n.isSwitch()) {
       for (Node c = n.getFirstChild(); c != null; c = c.getNext()) {
         if (NodeUtil.isControlStructureCodeBlock(n,c) &&
-            c.getType() != Token.BLOCK) {
-          Node newBlock = new Node(Token.BLOCK, n.getLineno(), n.getCharno());
-          newBlock.copyInformationFrom(n);
+            !c.isBlock()) {
+          Node newBlock = IR.block().srcref(n);
           n.replaceChild(c, newBlock);
-          if (c.getType() != Token.EMPTY) {
+          if (!c.isEmpty()) {
             newBlock.addChildrenToFront(c);
           } else {
             newBlock.setWasEmptyNode(true);
@@ -139,7 +128,7 @@ class PrepareAst implements CompilerPass {
 
     @Override
     public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
-      if (n.getType() == Token.OBJECTLIT) {
+      if (n.isObjectLit()) {
         normalizeObjectLiteralAnnotations(n);
       }
       return true;
@@ -160,7 +149,7 @@ class PrepareAst implements CompilerPass {
     }
 
     private void normalizeObjectLiteralAnnotations(Node objlit) {
-      Preconditions.checkState(objlit.getType() == Token.OBJECTLIT);
+      Preconditions.checkState(objlit.isObjectLit());
       for (Node key = objlit.getFirstChild();
            key != null; key = key.getNext()) {
         Node value = key.getFirstChild();
@@ -173,7 +162,7 @@ class PrepareAst implements CompilerPass {
      * "this" values (what we are call "free" calls) and direct call to eval.
      */
     private void annotateCalls(Node n) {
-      Preconditions.checkState(n.getType() == Token.CALL);
+      Preconditions.checkState(n.isCall());
 
       // Keep track of of the "this" context of a call.  A call without an
       // explicit "this" is a free call.
@@ -184,7 +173,7 @@ class PrepareAst implements CompilerPass {
 
       // Keep track of the context in which eval is called. It is important
       // to distinguish between "(0, eval)()" and "eval()".
-      if (first.getType() == Token.NAME &&
+      if (first.isName() &&
           "eval".equals(first.getString())) {
         first.putBooleanProp(Node.DIRECT_EVAL, true);
       }
@@ -194,10 +183,10 @@ class PrepareAst implements CompilerPass {
      * Translate dispatcher info into the property expected node.
      */
     private void annotateDispatchers(Node n, Node parent) {
-      Preconditions.checkState(n.getType() == Token.FUNCTION);
+      Preconditions.checkState(n.isFunction());
       if (parent.getJSDocInfo() != null
           && parent.getJSDocInfo().isJavaDispatch()) {
-        if (parent.getType() == Token.ASSIGN) {
+        if (parent.isAssign()) {
           Preconditions.checkState(parent.getLastChild() == n);
           n.putBooleanProp(Node.IS_DISPATCHER, true);
         }
@@ -221,9 +210,9 @@ class PrepareAst implements CompilerPass {
      */
     private void normalizeObjectLiteralKeyAnnotations(
         Node objlit, Node key, Node value) {
-      Preconditions.checkState(objlit.getType() == Token.OBJECTLIT);
+      Preconditions.checkState(objlit.isObjectLit());
       if (key.getJSDocInfo() != null &&
-          value.getType() == Token.FUNCTION) {
+          value.isFunction()) {
         value.setJSDocInfo(key.getJSDocInfo());
       }
     }

@@ -17,6 +17,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -43,23 +44,24 @@ class ConvertToDottedProperties extends AbstractPostOrderCallback
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
     switch (n.getType()) {
-      case Token.GET:
-      case Token.SET:
+      case Token.GETTER_DEF:
+      case Token.SETTER_DEF:
       case Token.STRING:
         if (NodeUtil.isObjectLitKey(n, parent) &&
             NodeUtil.isValidPropertyName(n.getString())) {
           n.putBooleanProp(Node.QUOTED_PROP, false);
+          compiler.reportCodeChange();
         }
         break;
 
       case Token.GETELEM:
         Node left = n.getFirstChild();
         Node right = left.getNext();
-        if (right.getType() == Token.STRING &&
+        if (right.isString() &&
             NodeUtil.isValidPropertyName(right.getString())) {
           n.removeChild(left);
           n.removeChild(right);
-          parent.replaceChild(n, new Node(Token.GETPROP, left, right));
+          parent.replaceChild(n, IR.getprop(left, right));
           compiler.reportCodeChange();
         }
         break;

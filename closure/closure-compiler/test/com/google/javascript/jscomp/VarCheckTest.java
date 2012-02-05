@@ -19,7 +19,6 @@ package com.google.javascript.jscomp;
 import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 
 
 public class VarCheckTest extends CompilerTestCase {
@@ -166,37 +165,6 @@ public class VarCheckTest extends CompilerTestCase {
     test("var a = {b:5}; with (a){b;}", null, VarCheck.UNDEFINED_VAR_ERROR);
   }
 
-  public void testInvalidFunctionDecl1() {
-    // This test deliberately sets up an invalid AST.
-    super.enableAstValidation(false);
-
-    final CompilerTestCase testcase = this;
-
-    // A compiler pass that create invalid function names.
-    testSetupPass = new CompilerPass() {
-
-      void visit(Node n) {
-        if (n.getType() == Token.NAME
-            && !n.getString().isEmpty()
-            && n.getParent().getType() == Token.FUNCTION) {
-          n.setString("");
-          testcase.getLastCompiler().reportCodeChange();
-        }
-        for (Node c : n.children()) {
-          visit(c);
-        }
-      }
-
-      @Override
-      public void process(Node externs, Node root) {
-        visit(root);
-      }
-    };
-
-    test("function f() {};", null, VarCheck.INVALID_FUNCTION_DECL);
-    test("if (true) { function f(){}; }", null, VarCheck.INVALID_FUNCTION_DECL);
-  }
-
   public void testValidFunctionExpr() {
     testSame("(function() {});");
   }
@@ -235,18 +203,16 @@ public class VarCheckTest extends CompilerTestCase {
                          null);
   }
 
-  public void testMissingModuleDependencySkipNonStrictPromoted() {
+  public void testMissingModuleDependencySkipNonStrictNotPromoted() {
     sanityCheck = true;
     strictModuleDepErrorLevel = CheckLevel.ERROR;
-    testIndependentModules("var x = 10;", "var y = x++;",
-        VarCheck.STRICT_MODULE_DEP_ERROR, null);
+    testIndependentModules("var x = 10;", "var y = x++;", null, null);
   }
 
-  public void testViolatedModuleDependencyNonStrictPromoted() {
+  public void testViolatedModuleDependencyNonStrictNotPromoted() {
     sanityCheck = true;
     strictModuleDepErrorLevel = CheckLevel.ERROR;
-    testDependentModules("var y = x++;", "var x = 10;",
-        VarCheck.STRICT_MODULE_DEP_ERROR);
+    testDependentModules("var y = x++;", "var x = 10;", null);
   }
 
   public void testDependentStrictModuleDependencyCheck() {
@@ -382,8 +348,8 @@ public class VarCheckTest extends CompilerTestCase {
           new AbstractPostOrderCallback() {
         @Override
         public void visit(NodeTraversal t, Node n, Node parent) {
-          if (NodeUtil.isName(n) && !NodeUtil.isFunction(parent)
-              && parent.getType() != Token.LABEL) {
+          if (n.isName() && !parent.isFunction()
+              && !parent.isLabel()) {
             assertTrue("Variable " + n.getString() + " should have be declared",
                 t.getScope().isDeclared(n.getString(), true));
           }

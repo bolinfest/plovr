@@ -20,6 +20,7 @@ import javax.annotation.Nullable;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.CodingConvention.SubclassRelationship;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -210,7 +211,7 @@ class StripCode implements CompilerPass {
           if (isReferenceToRemovedVar(t, n)) {
             if (parent.getFirstChild() == n) {
               Node gramps = parent.getParent();
-              if (NodeUtil.isExpressionNode(gramps)) {
+              if (gramps.isExprResult()) {
                 // Remove the assignment.
                 Node greatGramps = gramps.getParent();
                 replaceWithEmpty(gramps, greatGramps);
@@ -253,7 +254,7 @@ class StripCode implements CompilerPass {
           replaceWithNull(ancestorChild, ancestor);
           break;
         }
-        if (NodeUtil.isExpressionNode(ancestor)) {
+        if (ancestor.isExprResult()) {
           // Remove the entire expression statement.
           Node ancParent = ancestor.getParent();
           replaceWithEmpty(ancestor, ancParent);
@@ -293,7 +294,7 @@ class StripCode implements CompilerPass {
         // Limit to EXPR_RESULT because it is not
         // safe to eliminate assignment in complex expressions,
         // e.g. in ((x = 7) + 8)
-        if (NodeUtil.isExpressionNode(parent)) {
+        if (parent.isExprResult()) {
           Node gramps = parent.getParent();
           replaceWithEmpty(parent, gramps);
           compiler.reportCodeChange();
@@ -322,7 +323,7 @@ class StripCode implements CompilerPass {
       Node expression = n.getFirstChild();
       if (nameEndsWithFieldNameToStrip(expression) ||
           qualifiedNameBeginsWithStripType(expression)) {
-        if (NodeUtil.isExpressionNode(parent)) {
+        if (parent.isExprResult()) {
           Node gramps = parent.getParent();
           replaceWithEmpty(parent, gramps);
         } else {
@@ -391,8 +392,8 @@ class StripCode implements CompilerPass {
      */
     boolean isCallWhoseReturnValueShouldBeStripped(@Nullable Node n) {
       return n != null &&
-          (n.getType() == Token.CALL ||
-           n.getType() == Token.NEW) &&
+          (n.isCall() ||
+           n.isNew()) &&
           n.hasChildren() &&
           (qualifiedNameBeginsWithStripType(n.getFirstChild()) ||
               nameEndsWithFieldNameToStrip(n.getFirstChild()));
@@ -474,7 +475,7 @@ class StripCode implements CompilerPass {
       //   ... (arguments)
 
       Node function = n.getFirstChild();
-      if (function == null || function.getType() != Token.GETPROP) {
+      if (function == null || !function.isGetProp()) {
         // We are only interested in calls on object references that are
         // properties. We don't need to eliminate method calls on variables
         // that are getting removed, since that's already done by the code
@@ -482,9 +483,9 @@ class StripCode implements CompilerPass {
         return false;
       }
 
-      if (parent != null && parent.getType() == Token.NAME) {
+      if (parent != null && parent.isName()) {
         Node gramps = parent.getParent();
-        if (gramps != null && gramps.getType() == Token.VAR) {
+        if (gramps != null && gramps.isVar()) {
           // The call's return value is being used to initialize a newly
           // declared variable. We should leave the call intact for now.
           // That way, when the traversal reaches the variable declaration,
@@ -510,9 +511,9 @@ class StripCode implements CompilerPass {
      * @return Whether the name ends with a field name that should be stripped
      */
     boolean nameEndsWithFieldNameToStrip(@Nullable Node n) {
-      if (n != null && n.getType() == Token.GETPROP) {
+      if (n != null && n.isGetProp()) {
         Node propNode = n.getLastChild();
-        return propNode != null && propNode.getType() == Token.STRING &&
+        return propNode != null && propNode.isString() &&
                isStripName(propNode.getString());
       }
       return false;
@@ -590,7 +591,7 @@ class StripCode implements CompilerPass {
      * @param parent {@code n}'s parent
      */
     void replaceWithNull(Node n, Node parent) {
-      parent.replaceChild(n, new Node(Token.NULL));
+      parent.replaceChild(n, IR.nullNode());
     }
 
     /**

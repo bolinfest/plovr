@@ -28,8 +28,6 @@ import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceCollect
 import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceMap;
 import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
-
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -181,7 +179,7 @@ class InlineVariables implements CompilerPass {
               referenceInfo.isAssignedOnceInLifetime()) {
             Reference init = referenceInfo.getInitializingReference();
             Node value = init.getAssignedValue();
-            if (value != null && value.getType() == Token.NAME) {
+            if (value != null && value.isName()) {
               aliasCandidates.put(value, new AliasCandidate(v, referenceInfo));
             }
           }
@@ -247,8 +245,8 @@ class InlineVariables implements CompilerPass {
 
     private boolean isLValue(Node n) {
       Node parent = n.getParent();
-      return (parent.getType() == Token.INC
-          || parent.getType() == Token.DEC
+      return (parent.isInc()
+          || parent.isDec()
           || (NodeUtil.isAssignmentOp(parent)
           && parent.getFirstChild() == n));
     }
@@ -333,7 +331,7 @@ class InlineVariables implements CompilerPass {
         blacklistVarReferencesInTree(c, scope);
       }
 
-      if (root.getType() == Token.NAME) {
+      if (root.isName()) {
         staleVars.add(scope.getVar(root.getString()));
       }
     }
@@ -368,7 +366,7 @@ class InlineVariables implements CompilerPass {
       inlineValue(v, reference, value.detachFromParent());
       if (declaration != init) {
         Node expressRoot = init.getGrandparent();
-        Preconditions.checkState(expressRoot.getType() == Token.EXPR_RESULT);
+        Preconditions.checkState(expressRoot.isExprResult());
         NodeUtil.removeChild(expressRoot.getParent(), expressRoot);
       }
 
@@ -422,7 +420,7 @@ class InlineVariables implements CompilerPass {
 
       // Remove var node if empty
       if (!varNode.hasChildren()) {
-        Preconditions.checkState(varNode.getType() == Token.VAR);
+        Preconditions.checkState(varNode.isVar());
         NodeUtil.removeChild(grandparent, varNode);
       }
 
@@ -482,7 +480,7 @@ class InlineVariables implements CompilerPass {
       }
 
       // Determine if we should really inline a String or not.
-      return value.getType() != Token.STRING ||
+      return !value.isString() ||
           isStringWorthInlining(var, refInfo.references);
     }
 
@@ -532,7 +530,7 @@ class InlineVariables implements CompilerPass {
       // VAR declarations and EXPR_RESULT don't need the value, but other
       // ASSIGN expressions parents do.
       if (declaration != initialization &&
-          initialization.getGrandparent().getType() != Token.EXPR_RESULT) {
+          !initialization.getGrandparent().isExprResult()) {
         return false;
       }
 
@@ -554,17 +552,17 @@ class InlineVariables implements CompilerPass {
       // is ok.
       Node value = initialization.getAssignedValue();
       Preconditions.checkState(value != null);
-      if (value.getType() == Token.GETPROP
-          && reference.getParent().getType() == Token.CALL
+      if (value.isGetProp()
+          && reference.getParent().isCall()
           && reference.getParent().getFirstChild() == reference.getNode()) {
         return false;
       }
 
       // Bug 2388531: Don't inline subclass definitions into class defining
       // calls as this confused class removing logic.
-      if (value.getType() == Token.FUNCTION) {
+      if (value.isFunction()) {
         Node callNode = reference.getParent();
-        if (reference.getParent().getType() == Token.CALL) {
+        if (reference.getParent().isCall()) {
           SubclassRelationship relationship =
               compiler.getCodingConvention().getClassesDefinedByCall(callNode);
           if (relationship != null) {
@@ -584,7 +582,7 @@ class InlineVariables implements CompilerPass {
       // Function expressions and other mutable objects can move within
       // the same basic block.
       return NodeUtil.isLiteralValue(value, true)
-          || value.getType() == Token.FUNCTION;
+          || value.isFunction();
     }
 
     /**
@@ -598,14 +596,14 @@ class InlineVariables implements CompilerPass {
       // Check if declaration can be inlined without passing
       // any side-effect causing nodes.
       Iterator<Node> it;
-      if (initialization.getParent().getType() == Token.VAR) {
+      if (initialization.getParent().isVar()) {
         it = NodeIterators.LocalVarMotion.forVar(
             initialization.getNode(),     // NAME
             initialization.getParent(),       // VAR
             initialization.getGrandparent()); // VAR container
-      } else if (initialization.getParent().getType() == Token.ASSIGN) {
+      } else if (initialization.getParent().isAssign()) {
         Preconditions.checkState(
-            initialization.getGrandparent().getType() == Token.EXPR_RESULT);
+            initialization.getGrandparent().isExprResult());
         it = NodeIterators.LocalVarMotion.forAssign(
             initialization.getNode(),     // NAME
             initialization.getParent(),       // ASSIGN
@@ -630,8 +628,8 @@ class InlineVariables implements CompilerPass {
      * @return true if the reference is a normal VAR or FUNCTION declaration.
      */
     private boolean isValidDeclaration(Reference declaration) {
-      return (declaration.getParent().getType() == Token.VAR
-          && declaration.getGrandparent().getType() != Token.FOR)
+      return (declaration.getParent().isVar()
+          && !declaration.getGrandparent().isFor())
           || NodeUtil.isFunctionDeclaration(declaration.getParent());
     }
 
@@ -649,7 +647,7 @@ class InlineVariables implements CompilerPass {
       } else {
         Node parent = initialization.getParent();
         Preconditions.checkState(
-            parent.getType() == Token.ASSIGN
+            parent.isAssign()
             && parent.getFirstChild() == initialization.getNode());
         return true;
       }
@@ -699,10 +697,10 @@ class InlineVariables implements CompilerPass {
 
         boolean isImmutableValueWorthInlining =
             NodeUtil.isImmutableValue(value) &&
-            (value.getType() != Token.STRING ||
+            (!value.isString() ||
                 isStringWorthInlining(v, refInfo.references));
         boolean isInlinableThisAlias =
-            value.getType() == Token.THIS &&
+            value.isThis() &&
             !refInfo.isEscaped();
         if (!isImmutableValueWorthInlining && !isInlinableThisAlias) {
           return false;

@@ -19,10 +19,9 @@ package com.google.javascript.jscomp;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
-
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -92,11 +91,11 @@ class ReplaceIdGenerators implements CompilerPass {
       }
 
       String name = null;
-      if (NodeUtil.isAssign(n)) {
+      if (n.isAssign()) {
         name = n.getFirstChild().getQualifiedName();
-      } else if (NodeUtil.isVar(n)) {
+      } else if (n.isVar()) {
         name = n.getFirstChild().getString();
-      } else if (NodeUtil.isFunction(n)){
+      } else if (n.isFunction()){
         name = n.getFirstChild().getString();
         if (name.isEmpty()) {
           return;
@@ -128,7 +127,7 @@ class ReplaceIdGenerators implements CompilerPass {
   private class ReplaceGenerators extends AbstractPostOrderCallback {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (n.getType() != Token.CALL) {
+      if (!n.isCall()) {
         return;
       }
 
@@ -162,7 +161,7 @@ class ReplaceIdGenerators implements CompilerPass {
       Node id = n.getFirstChild().getNext();
 
       // TODO(user): Error on id not a string literal.
-      if (!NodeUtil.isString(id)) {
+      if (!id.isString()) {
         return;
       }
 
@@ -180,7 +179,7 @@ class ReplaceIdGenerators implements CompilerPass {
         rename = nameGenerator.generateNextName();
       }
 
-      parent.replaceChild(n, Node.newString(rename));
+      parent.replaceChild(n, IR.string(rename));
       idGeneratorMap.add(
           new Replacement(rename, t.getSourceName(), t.getLineNumber()));
 

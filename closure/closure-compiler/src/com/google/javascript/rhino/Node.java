@@ -65,66 +65,13 @@ public class Node implements Cloneable, Serializable {
   private static final long serialVersionUID = 1L;
 
   public static final int
-      // Rhino's AST captures data flow. These are the annotations
-      // it used. We've mostly torn them out.
-      LOCAL_BLOCK_PROP  = -3,
-      OBJECT_IDS_PROP   = -2,
-      CATCH_SCOPE_PROP  = -1,
-      LABEL_ID_PROP     =  0,
-
-      TARGET_PROP       =  1,
-      BREAK_PROP        =  2,
-      CONTINUE_PROP     =  3,
-      ENUM_PROP         =  4,
-      FUNCTION_PROP     =  5,
-      TEMP_PROP         =  6,
-      LOCAL_PROP        =  7,
-      CODEOFFSET_PROP   =  8,
-      FIXUPS_PROP       =  9,
-      VARS_PROP         = 10,
-      USES_PROP         = 11,
-      REGEXP_PROP       = 12,
-      CASES_PROP        = 13,
-      DEFAULT_PROP      = 14,
-      CASEARRAY_PROP    = 15,
-
       // TODO(nicksantos): Remove this prop.
       SOURCENAME_PROP   = 16,
 
-      TYPE_PROP         = 17,
-      SPECIAL_PROP_PROP = 18,
-      LABEL_PROP        = 19,
-      FINALLY_PROP      = 20,
-      LOCALCOUNT_PROP   = 21,
-  /*
-      the following properties are defined and manipulated by the
-      optimizer -
-      TARGETBLOCK_PROP - the block referenced by a branch node
-      VARIABLE_PROP - the variable referenced by a BIND or NAME node
-      LASTUSE_PROP - that variable node is the last reference before
-                      a new def or the end of the block
-      ISNUMBER_PROP - this node generates code on Number children and
-                      delivers a Number result (as opposed to Objects)
-      DIRECTCALL_PROP - this call node should emit code to test the function
-                        object against the known class and call diret if it
-                        matches.
-  */
-
-      TARGETBLOCK_PROP  = 22,
-      VARIABLE_PROP     = 23,
-      LASTUSE_PROP      = 24,
-      ISNUMBER_PROP     = 25,
-      DIRECTCALL_PROP   = 26,
-
-      SPECIALCALL_PROP  = 27,
-      DEBUGSOURCE_PROP  = 28,
       JSDOC_INFO_PROP   = 29,     // contains a TokenStream.JSDocInfo object
       VAR_ARGS_NAME     = 30,     // the name node is a variable length
                                   // argument placeholder.
-      SKIP_INDEXES_PROP  = 31,    // array of skipped indexes of array literal
       INCRDECR_PROP      = 32,    // pre or post type of increment/decrement
-      MEMBER_TYPE_PROP   = 33,    // type of element access operation
-      NAME_PROP          = 34,    // property name
       PARENTHESIZED_PROP = 35,    // expression is parenthesized
       QUOTED_PROP        = 36,    // set to indicate a quoted object lit key
       OPT_ARG_NAME       = 37,    // The name node is an optional argument.
@@ -157,74 +104,24 @@ public class Node implements Cloneable, Serializable {
                                   // this node.
       INPUT_ID           = 53,    // The id of the input associated with this
                                   // node.
-      LAST_PROP          = 53;
-
-  // values of ISNUMBER_PROP to specify
-  // which of the children are Number types
-  public static final int
-      BOTH = 0,
-      LEFT = 1,
-      RIGHT = 2;
-
-  public static final int    // values for SPECIALCALL_PROP
-      NON_SPECIALCALL  = 0,
-      SPECIALCALL_EVAL = 1,
-      SPECIALCALL_WITH = 2;
+      SLASH_V            = 54,    // Whether a STRING node contains a \v
+                                  // vertical tab escape. This is a total hack.
+                                  // See comments in IRFactory about this.
+      LAST_PROP          = 54;
 
   public static final int   // flags for INCRDECR_PROP
       DECR_FLAG = 0x1,
       POST_FLAG = 0x2;
 
-  public static final int   // flags for MEMBER_TYPE_PROP
-      PROPERTY_FLAG    = 0x1, // property access: element is valid name
-      ATTRIBUTE_FLAG   = 0x2, // x.@y or x..@y
-      DESCENDANTS_FLAG = 0x4; // x..y or x..@i
-
   private static final String propToString(int propType) {
       switch (propType) {
-        case LOCAL_BLOCK_PROP:   return "local_block";
-        case OBJECT_IDS_PROP:    return "object_ids_prop";
-        case CATCH_SCOPE_PROP:   return "catch_scope_prop";
-        case LABEL_ID_PROP:      return "label_id_prop";
-        case TARGET_PROP:        return "target";
         case BRACELESS_TYPE:     return "braceless_type";
-        case BREAK_PROP:         return "break";
-        case CONTINUE_PROP:      return "continue";
-        case ENUM_PROP:          return "enum";
-        case FUNCTION_PROP:      return "function";
-        case TEMP_PROP:          return "temp";
-        case LOCAL_PROP:         return "local";
-        case CODEOFFSET_PROP:    return "codeoffset";
-        case FIXUPS_PROP:        return "fixups";
-        case VARS_PROP:          return "vars";
         case VAR_ARGS_NAME:      return "var_args_name";
-        case USES_PROP:          return "uses";
-        case REGEXP_PROP:        return "regexp";
-        case CASES_PROP:         return "cases";
-        case DEFAULT_PROP:       return "default";
-        case CASEARRAY_PROP:     return "casearray";
         case SOURCENAME_PROP:    return "sourcename";
-        case TYPE_PROP:          return "type";
-        case SPECIAL_PROP_PROP:  return "special_prop";
-        case LABEL_PROP:         return "label";
-        case FINALLY_PROP:       return "finally";
-        case LOCALCOUNT_PROP:    return "localcount";
-
-        case TARGETBLOCK_PROP:   return "targetblock";
-        case VARIABLE_PROP:      return "variable";
-        case LASTUSE_PROP:       return "lastuse";
-        case ISNUMBER_PROP:      return "isnumber";
-        case DIRECTCALL_PROP:    return "directcall";
-
-        case SPECIALCALL_PROP:   return "specialcall";
-        case DEBUGSOURCE_PROP:   return "debugsource";
 
         case JSDOC_INFO_PROP:    return "jsdoc_info";
 
-        case SKIP_INDEXES_PROP:  return "skip_indexes";
         case INCRDECR_PROP:      return "incrdecr";
-        case MEMBER_TYPE_PROP:   return "member_type";
-        case NAME_PROP:          return "name";
         case PARENTHESIZED_PROP: return "parenthesized";
         case QUOTED_PROP:        return "quoted";
         case OPT_ARG_NAME:       return "opt_arg";
@@ -246,9 +143,8 @@ public class Node implements Cloneable, Serializable {
         case INPUT_ID:  return "input_id";
         case LENGTH:    return "length";
         default:
-          Kit.codeBug();
+          throw new IllegalStateException("unexpect prop id " + propType);
       }
-      return null;
   }
 
   private static class NumberNode extends Node {
@@ -277,8 +173,16 @@ public class Node implements Cloneable, Serializable {
 
     @Override
     boolean isEquivalentTo(Node node, boolean compareJsType, boolean recurse) {
-      return (super.isEquivalentTo(node, compareJsType, recurse)
-          && getDouble() == ((NumberNode) node).getDouble());
+      boolean equivalent = super.isEquivalentTo(node, compareJsType, recurse);
+      if (equivalent) {
+        double thisValue = getDouble();
+        double thatValue = ((NumberNode) node).getDouble();
+        if (thisValue == thatValue) {
+          // detect the difference between 0.0 and -0.0.
+          return (thisValue != 0.0) || (1/thisValue == 1/thatValue);
+        }
+      }
+      return false;
     }
 
     private double number;
@@ -920,7 +824,7 @@ public class Node implements Cloneable, Serializable {
   public int getExistingIntProp(int propType) {
     PropListItem item = lookupProperty(propType);
     if (item == null) {
-      Kit.codeBug();
+      throw new IllegalStateException("missing prop: " + propType);
     }
     return item.getIntValue();
   }
@@ -1023,12 +927,9 @@ public class Node implements Cloneable, Serializable {
       boolean printSource,
       boolean printAnnotations,
       boolean printType) {
-    if (Token.shouldPrintTrees()) {
-        StringBuilder sb = new StringBuilder();
-        toString(sb, printSource, printAnnotations, printType);
-        return sb.toString();
-    }
-    return String.valueOf(type);
+    StringBuilder sb = new StringBuilder();
+    toString(sb, printSource, printAnnotations, printType);
+    return sb.toString();
   }
 
   private void toString(
@@ -1036,111 +937,57 @@ public class Node implements Cloneable, Serializable {
       boolean printSource,
       boolean printAnnotations,
       boolean printType) {
-    if (Token.printTrees) {
-      sb.append(Token.name(type));
-      if (this instanceof StringNode) {
-        sb.append(' ');
-        sb.append(getString());
-      } else if (type == Token.FUNCTION) {
-        sb.append(' ');
-        // In the case of JsDoc trees, the first child is often not a string
-        // which causes exceptions to be thrown when calling toString or
-        // toStringTree.
-        if (first == null || first.getType() != Token.NAME) {
-          sb.append("<invalid>");
-        } else {
-          sb.append(first.getString());
-        }
-      } else if (this instanceof ScriptOrFnNode) {
-        ScriptOrFnNode sof = (ScriptOrFnNode) this;
-        if (this instanceof FunctionNode) {
-          FunctionNode fn = (FunctionNode) this;
-          sb.append(' ');
-          sb.append(fn.getFunctionName());
-        }
-        if (printSource) {
-          sb.append(" [source name: ");
-          sb.append(sof.getSourceName());
-          sb.append("] [encoded source length: ");
-          sb.append(sof.getEncodedSourceEnd() - sof.getEncodedSourceStart());
-          sb.append("] [base line: ");
-          sb.append(sof.getBaseLineno());
-          sb.append("] [end line: ");
-          sb.append(sof.getEndLineno());
-          sb.append(']');
-        }
-      } else if (type == Token.NUMBER) {
-        sb.append(' ');
-        sb.append(getDouble());
+    sb.append(Token.name(type));
+    if (this instanceof StringNode) {
+      sb.append(' ');
+      sb.append(getString());
+    } else if (type == Token.FUNCTION) {
+      sb.append(' ');
+      // In the case of JsDoc trees, the first child is often not a string
+      // which causes exceptions to be thrown when calling toString or
+      // toStringTree.
+      if (first == null || first.getType() != Token.NAME) {
+        sb.append("<invalid>");
+      } else {
+        sb.append(first.getString());
       }
-      if (printSource) {
-        int lineno = getLineno();
-        if (lineno != -1) {
-          sb.append(' ');
-          sb.append(lineno);
-        }
+    } else if (type == Token.NUMBER) {
+      sb.append(' ');
+      sb.append(getDouble());
+    }
+    if (printSource) {
+      int lineno = getLineno();
+      if (lineno != -1) {
+        sb.append(' ');
+        sb.append(lineno);
       }
+    }
 
-      if (printAnnotations) {
-        int[] keys = getSortedPropTypes();
-        for (int i = 0; i < keys.length; i++) {
-          int type = keys[i];
-          PropListItem x = lookupProperty(type);
-          sb.append(" [");
-          sb.append(propToString(type));
-          sb.append(": ");
-          String value;
-          switch (type) {
-            case TARGETBLOCK_PROP: // can't add this as it recurses
-              value = "target block property";
-              break;
-            case LOCAL_BLOCK_PROP: // can't add this as it is dull
-              value = "last local block";
-              break;
-            case ISNUMBER_PROP:
-              switch (x.getIntValue()) {
-                case BOTH:
-                  value = "both";
-                  break;
-                case RIGHT:
-                  value = "right";
-                  break;
-                case LEFT:
-                  value = "left";
-                  break;
-                default:
-                  throw Kit.codeBug();
-              }
-              break;
-            case SPECIALCALL_PROP:
-              switch (x.getIntValue()) {
-                case SPECIALCALL_EVAL:
-                  value = "eval";
-                  break;
-                case SPECIALCALL_WITH:
-                  value = "with";
-                  break;
-                default:
-                  // NON_SPECIALCALL should not be stored
-                  throw Kit.codeBug();
-              }
-              break;
-            default:
-              value = x.toString();
-              break;
-          }
-          sb.append(value);
-          sb.append(']');
+    if (printAnnotations) {
+      int[] keys = getSortedPropTypes();
+      for (int i = 0; i < keys.length; i++) {
+        int type = keys[i];
+        PropListItem x = lookupProperty(type);
+        sb.append(" [");
+        sb.append(propToString(type));
+        sb.append(": ");
+        String value;
+        switch (type) {
+          default:
+            value = x.toString();
+            break;
         }
+        sb.append(value);
+        sb.append(']');
       }
+    }
 
-      if (printType) {
-        if (jsType != null) {
-          String jsTypeString = jsType.toString();
-          if (jsTypeString != null) {
-            sb.append(" : ");
-            sb.append(jsTypeString);
-          }
+    if (printType) {
+      if (jsType != null) {
+        String jsTypeString = jsType.toString();
+        if (jsTypeString != null) {
+          sb.append(" : ");
+          sb.append(jsTypeString);
         }
       }
     }
@@ -1167,17 +1014,15 @@ public class Node implements Cloneable, Serializable {
 
   private static void toStringTreeHelper(Node n, int level, Appendable sb)
       throws IOException {
-    if (Token.printTrees) {
-      for (int i = 0; i != level; ++i) {
-        sb.append("    ");
-      }
-      sb.append(n.toString());
-      sb.append('\n');
-      for (Node cursor = n.getFirstChild();
-           cursor != null;
-           cursor = cursor.getNext()) {
-        toStringTreeHelper(cursor, level + 1, sb);
-      }
+    for (int i = 0; i != level; ++i) {
+      sb.append("    ");
+    }
+    sb.append(n.toString());
+    sb.append('\n');
+    for (Node cursor = n.getFirstChild();
+         cursor != null;
+         cursor = cursor.getNext()) {
+      toStringTreeHelper(cursor, level + 1, sb);
     }
   }
 
@@ -1574,19 +1419,6 @@ public class Node implements Cloneable, Serializable {
   }
 
   /**
-   * Helper function to ignore differences in Node subclasses that are no longer
-   * used.
-   */
-  @SuppressWarnings("rawtypes")
-  static private Class getNodeClass(Node n) {
-    Class c = n.getClass();
-    if (c == FunctionNode.class || c == ScriptOrFnNode.class) {
-      return Node.class;
-    }
-    return c;
-  }
-
-  /**
    * Compare this node to node2 recursively and return the first pair of nodes
    * that differs doing a preorder depth-first traversal. Package private for
    * testing. Returns null if the nodes are equivalent.
@@ -1636,129 +1468,6 @@ public class Node implements Cloneable, Serializable {
     return res;
   }
 
-  public static String tokenToName(int token) {
-    switch (token) {
-      case Token.ERROR:           return "error";
-      case Token.EOF:             return "eof";
-      case Token.EOL:             return "eol";
-      case Token.ENTERWITH:       return "enterwith";
-      case Token.LEAVEWITH:       return "leavewith";
-      case Token.RETURN:          return "return";
-      case Token.GOTO:            return "goto";
-      case Token.IFEQ:            return "ifeq";
-      case Token.IFNE:            return "ifne";
-      case Token.SETNAME:         return "setname";
-      case Token.BITOR:           return "bitor";
-      case Token.BITXOR:          return "bitxor";
-      case Token.BITAND:          return "bitand";
-      case Token.EQ:              return "eq";
-      case Token.NE:              return "ne";
-      case Token.LT:              return "lt";
-      case Token.LE:              return "le";
-      case Token.GT:              return "gt";
-      case Token.GE:              return "ge";
-      case Token.LSH:             return "lsh";
-      case Token.RSH:             return "rsh";
-      case Token.URSH:            return "ursh";
-      case Token.ADD:             return "add";
-      case Token.SUB:             return "sub";
-      case Token.MUL:             return "mul";
-      case Token.DIV:             return "div";
-      case Token.MOD:             return "mod";
-      case Token.BITNOT:          return "bitnot";
-      case Token.NEG:             return "neg";
-      case Token.NEW:             return "new";
-      case Token.DELPROP:         return "delprop";
-      case Token.TYPEOF:          return "typeof";
-      case Token.GETPROP:         return "getprop";
-      case Token.SETPROP:         return "setprop";
-      case Token.GETELEM:         return "getelem";
-      case Token.SETELEM:         return "setelem";
-      case Token.CALL:            return "call";
-      case Token.NAME:            return "name";
-      case Token.NUMBER:          return "number";
-      case Token.STRING:          return "string";
-      case Token.NULL:            return "null";
-      case Token.THIS:            return "this";
-      case Token.FALSE:           return "false";
-      case Token.TRUE:            return "true";
-      case Token.SHEQ:            return "sheq";
-      case Token.SHNE:            return "shne";
-      case Token.REGEXP:          return "regexp";
-      case Token.POS:             return "pos";
-      case Token.BINDNAME:        return "bindname";
-      case Token.THROW:           return "throw";
-      case Token.IN:              return "in";
-      case Token.INSTANCEOF:      return "instanceof";
-      case Token.GETVAR:          return "getvar";
-      case Token.SETVAR:          return "setvar";
-      case Token.TRY:             return "try";
-      case Token.TYPEOFNAME:      return "typeofname";
-      case Token.THISFN:          return "thisfn";
-      case Token.SEMI:            return "semi";
-      case Token.LB:              return "lb";
-      case Token.RB:              return "rb";
-      case Token.LC:              return "lc";
-      case Token.RC:              return "rc";
-      case Token.LP:              return "lp";
-      case Token.RP:              return "rp";
-      case Token.COMMA:           return "comma";
-      case Token.ASSIGN:          return "assign";
-      case Token.ASSIGN_BITOR:    return "assign_bitor";
-      case Token.ASSIGN_BITXOR:   return "assign_bitxor";
-      case Token.ASSIGN_BITAND:   return "assign_bitand";
-      case Token.ASSIGN_LSH:      return "assign_lsh";
-      case Token.ASSIGN_RSH:      return "assign_rsh";
-      case Token.ASSIGN_URSH:     return "assign_ursh";
-      case Token.ASSIGN_ADD:      return "assign_add";
-      case Token.ASSIGN_SUB:      return "assign_sub";
-      case Token.ASSIGN_MUL:      return "assign_mul";
-      case Token.ASSIGN_DIV:      return "assign_div";
-      case Token.ASSIGN_MOD:      return "assign_mod";
-      case Token.HOOK:            return "hook";
-      case Token.COLON:           return "colon";
-      case Token.OR:              return "or";
-      case Token.AND:             return "and";
-      case Token.INC:             return "inc";
-      case Token.DEC:             return "dec";
-      case Token.DOT:             return "dot";
-      case Token.FUNCTION:        return "function";
-      case Token.EXPORT:          return "export";
-      case Token.IMPORT:          return "import";
-      case Token.IF:              return "if";
-      case Token.ELSE:            return "else";
-      case Token.SWITCH:          return "switch";
-      case Token.CASE:            return "case";
-      case Token.DEFAULT:         return "default";
-      case Token.WHILE:           return "while";
-      case Token.DO:              return "do";
-      case Token.FOR:             return "for";
-      case Token.BREAK:           return "break";
-      case Token.CONTINUE:        return "continue";
-      case Token.VAR:             return "var";
-      case Token.WITH:            return "with";
-      case Token.CATCH:           return "catch";
-      case Token.FINALLY:         return "finally";
-      case Token.RESERVED:        return "reserved";
-      case Token.NOT:             return "not";
-      case Token.VOID:            return "void";
-      case Token.BLOCK:           return "block";
-      case Token.ARRAYLIT:        return "arraylit";
-      case Token.OBJECTLIT:       return "objectlit";
-      case Token.LABEL:           return "label";
-      case Token.TARGET:          return "target";
-      case Token.LOOP:            return "loop";
-      case Token.EXPR_VOID:       return "expr_void";
-      case Token.EXPR_RESULT:     return "expr_result";
-      case Token.JSR:             return "jsr";
-      case Token.SCRIPT:          return "script";
-      case Token.EMPTY:           return "empty";
-      case Token.GET_REF:         return "get_ref";
-      case Token.REF_SPECIAL:     return "ref_special";
-    }
-    return "<unknown="+token+">";
-  }
-
   /** Returns true if this node is equivalent semantically to another */
   public boolean isEquivalentTo(Node node) {
     return isEquivalentTo(node, false, true);
@@ -1781,7 +1490,7 @@ public class Node implements Cloneable, Serializable {
   boolean isEquivalentTo(Node node, boolean compareJsType, boolean recurse) {
     if (type != node.getType()
         || getChildCount() != node.getChildCount()
-        || getNodeClass(this) != getNodeClass(node)) {
+        || this.getClass() != node.getClass()) {
       return false;
     }
 
@@ -1789,29 +1498,7 @@ public class Node implements Cloneable, Serializable {
       return false;
     }
 
-    if (type == Token.ARRAYLIT) {
-      try {
-        int[] indices1 = (int[]) getProp(Node.SKIP_INDEXES_PROP);
-        int[] indices2 = (int[]) node.getProp(Node.SKIP_INDEXES_PROP);
-        if (indices1 == null) {
-          if (indices2 != null) {
-            return false;
-          }
-        } else if (indices2 == null) {
-          return false;
-        } else if (indices1.length != indices2.length) {
-          return false;
-        } else {
-          for (int i = 0; i < indices1.length; i++) {
-            if (indices1[i] != indices2[i]) {
-              return false;
-            }
-          }
-        }
-      } catch (Exception e) {
-        return false;
-      }
-    } else if (type == Token.INC || type == Token.DEC) {
+    if (type == Token.INC || type == Token.DEC) {
       int post1 = this.getIntProp(INCRDECR_PROP);
       int post2 = node.getIntProp(INCRDECR_PROP);
       if (post1 != post2) {
@@ -1821,6 +1508,12 @@ public class Node implements Cloneable, Serializable {
       int quoted1 = this.getIntProp(QUOTED_PROP);
       int quoted2 = node.getIntProp(QUOTED_PROP);
       if (quoted1 != quoted2) {
+        return false;
+      }
+
+      int slashV1 = this.getIntProp(SLASH_V);
+      int slashV2 = node.getIntProp(SLASH_V);
+      if (slashV1 != slashV2) {
         return false;
       }
     } else if (type == Token.CALL) {
@@ -1841,90 +1534,6 @@ public class Node implements Cloneable, Serializable {
     }
 
     return true;
-  }
-
-  public boolean hasSideEffects() {
-    switch (type) {
-      case Token.EXPR_VOID:
-      case Token.COMMA:
-        if (last != null)
-          return last.hasSideEffects();
-        else
-          return true;
-
-      case Token.HOOK:
-        if (first == null || first.next == null || first.next.next == null) {
-          Kit.codeBug();
-        }
-        return first.next.hasSideEffects() && first.next.next.hasSideEffects();
-
-      case Token.ERROR: // Avoid cascaded error messages
-      case Token.EXPR_RESULT:
-      case Token.ASSIGN:
-      case Token.ASSIGN_ADD:
-      case Token.ASSIGN_SUB:
-      case Token.ASSIGN_MUL:
-      case Token.ASSIGN_DIV:
-      case Token.ASSIGN_MOD:
-      case Token.ASSIGN_BITOR:
-      case Token.ASSIGN_BITXOR:
-      case Token.ASSIGN_BITAND:
-      case Token.ASSIGN_LSH:
-      case Token.ASSIGN_RSH:
-      case Token.ASSIGN_URSH:
-      case Token.ENTERWITH:
-      case Token.LEAVEWITH:
-      case Token.RETURN:
-      case Token.GOTO:
-      case Token.IFEQ:
-      case Token.IFNE:
-      case Token.NEW:
-      case Token.DELPROP:
-      case Token.SETNAME:
-      case Token.SETPROP:
-      case Token.SETELEM:
-      case Token.CALL:
-      case Token.THROW:
-      case Token.RETHROW:
-      case Token.SETVAR:
-      case Token.CATCH_SCOPE:
-      case Token.RETURN_RESULT:
-      case Token.SET_REF:
-      case Token.DEL_REF:
-      case Token.REF_CALL:
-      case Token.TRY:
-      case Token.SEMI:
-      case Token.INC:
-      case Token.DEC:
-      case Token.EXPORT:
-      case Token.IMPORT:
-      case Token.IF:
-      case Token.ELSE:
-      case Token.SWITCH:
-      case Token.WHILE:
-      case Token.DO:
-      case Token.FOR:
-      case Token.BREAK:
-      case Token.CONTINUE:
-      case Token.VAR:
-      case Token.CONST:
-      case Token.WITH:
-      case Token.CATCH:
-      case Token.FINALLY:
-      case Token.BLOCK:
-      case Token.LABEL:
-      case Token.TARGET:
-      case Token.LOOP:
-      case Token.JSR:
-      case Token.SETPROP_OP:
-      case Token.SETELEM_OP:
-      case Token.LOCAL_BLOCK:
-      case Token.SET_REF_OP:
-        return true;
-
-      default:
-        return false;
-    }
   }
 
   /**
@@ -2140,6 +1749,10 @@ public class Node implements Cloneable, Serializable {
     return this;
   }
 
+  public Node srcref(Node other) {
+    return useSourceInfoFrom(other);
+  }
+
   /**
    * Overwrite all the source information in this node and its subtree with
    * that of {@code other}.
@@ -2152,6 +1765,10 @@ public class Node implements Cloneable, Serializable {
     }
 
     return this;
+  }
+
+  public Node srcrefTree(Node other) {
+    return useSourceInfoFromForTree(other);
   }
 
   /**
@@ -2498,7 +2115,7 @@ public class Node implements Cloneable, Serializable {
    * This should only be called for STRING nodes children of OBJECTLIT.
    */
   public void setQuotedString() {
-    Kit.codeBug();
+    throw new IllegalStateException("not a StringNode");
   }
 
   static class NodeMismatch {
@@ -2525,4 +2142,230 @@ public class Node implements Cloneable, Serializable {
     }
   }
 
+
+  /*** AST type check methods ***/
+
+  public boolean isAdd() {
+    return this.getType() == Token.ADD;
+  }
+
+  public boolean isAnd() {
+    return this.getType() == Token.AND;
+  }
+
+  public boolean isArrayLit() {
+    return this.getType() == Token.ARRAYLIT;
+  }
+
+  public boolean isAssign() {
+    return this.getType() == Token.ASSIGN;
+  }
+
+  public boolean isAssignAdd() {
+    return this.getType() == Token.ASSIGN_ADD;
+  }
+
+  public boolean isBlock() {
+    return this.getType() == Token.BLOCK;
+  }
+
+  public boolean isBreak() {
+    return this.getType() == Token.BREAK;
+  }
+
+  public boolean isCall() {
+    return this.getType() == Token.CALL;
+  }
+
+  public boolean isCase() {
+    return this.getType() == Token.CASE;
+  }
+
+  public boolean isCatch() {
+    return this.getType() == Token.CATCH;
+  }
+
+  public boolean isComma() {
+    return this.getType() == Token.COMMA;
+  }
+
+  public boolean isContinue() {
+    return this.getType() == Token.CONTINUE;
+  }
+
+  public boolean isDebugger() {
+    return this.getType() == Token.DEBUGGER;
+  }
+
+  public boolean isDec() {
+    return this.getType() == Token.DEC;
+  }
+
+  public boolean isDefaultCase() {
+    return this.getType() == Token.DEFAULT_CASE;
+  }
+
+  public boolean isDelProp() {
+    return this.getType() == Token.DELPROP;
+  }
+
+  public boolean isDo() {
+    return this.getType() == Token.DO;
+  }
+
+  public boolean isEmpty() {
+    return this.getType() == Token.EMPTY;
+  }
+
+  public boolean isExprResult() {
+    return this.getType() == Token.EXPR_RESULT;
+  }
+
+  public boolean isFalse() {
+    return this.getType() == Token.FALSE;
+  }
+
+  public boolean isFor() {
+    return this.getType() == Token.FOR;
+  }
+
+  public boolean isFunction() {
+    return this.getType() == Token.FUNCTION;
+  }
+
+  public boolean isGetterDef() {
+    return this.getType() == Token.GETTER_DEF;
+  }
+
+  public boolean isGetElem() {
+    return this.getType() == Token.GETELEM;
+  }
+
+  public boolean isGetProp() {
+    return this.getType() == Token.GETPROP;
+  }
+
+  public boolean isHook() {
+    return this.getType() == Token.HOOK;
+  }
+
+  public boolean isIf() {
+    return this.getType() == Token.IF;
+  }
+
+  public boolean isIn() {
+    return this.getType() == Token.IN;
+  }
+
+  public boolean isInc() {
+    return this.getType() == Token.INC;
+  }
+
+  public boolean isInstanceOf() {
+    return this.getType() == Token.INSTANCEOF;
+  }
+
+  public boolean isLabel() {
+    return this.getType() == Token.LABEL;
+  }
+
+  public boolean isLabelName() {
+    return this.getType() == Token.LABEL_NAME;
+  }
+
+  public boolean isName() {
+    return this.getType() == Token.NAME;
+  }
+
+  public boolean isNE() {
+    return this.getType() == Token.NE;
+  }
+
+  public boolean isNew() {
+    return this.getType() == Token.NEW;
+  }
+
+  public boolean isNot() {
+    return this.getType() == Token.NOT;
+  }
+
+  public boolean isNull() {
+    return this.getType() == Token.NULL;
+  }
+
+  public boolean isNumber() {
+    return this.getType() == Token.NUMBER;
+  }
+
+  public boolean isObjectLit() {
+    return this.getType() == Token.OBJECTLIT;
+  }
+
+  public boolean isOr() {
+    return this.getType() == Token.OR;
+  }
+
+  public boolean isParamList() {
+    return this.getType() == Token.PARAM_LIST;
+  }
+
+  public boolean isRegExp() {
+    return this.getType() == Token.REGEXP;
+  }
+
+  public boolean isReturn() {
+    return this.getType() == Token.RETURN;
+  }
+
+  public boolean isScript() {
+    return this.getType() == Token.SCRIPT;
+  }
+
+  public boolean isSetterDef() {
+    return this.getType() == Token.SETTER_DEF;
+  }
+
+  public boolean isString() {
+    return this.getType() == Token.STRING;
+  }
+
+  public boolean isSwitch() {
+    return this.getType() == Token.SWITCH;
+  }
+
+  public boolean isThis() {
+    return this.getType() == Token.THIS;
+  }
+
+  public boolean isThrow() {
+    return this.getType() == Token.THROW;
+  }
+
+  public boolean isTrue() {
+    return this.getType() == Token.TRUE;
+  }
+
+  public boolean isTry() {
+    return this.getType() == Token.TRY;
+  }
+
+  public boolean isTypeOf() {
+    return this.getType() == Token.TYPEOF;
+  }
+
+  public boolean isVar() {
+    return this.getType() == Token.VAR;
+  }
+
+  public boolean isVoid() {
+    return this.getType() == Token.VOID;
+  }
+
+  public boolean isWhile() {
+    return this.getType() == Token.WHILE;
+  }
+
+  public boolean isWith() {
+    return this.getType() == Token.WITH;
+  }
 }

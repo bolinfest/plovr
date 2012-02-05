@@ -19,9 +19,8 @@ package com.google.javascript.jscomp;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
-
 import java.util.Deque;
 import java.util.List;
 
@@ -98,7 +97,7 @@ class OptimizeArgumentsArray implements CompilerPass, ScopedCallback {
     // This optimization is valid only within a function so we are going to
     // skip over the initial entry to the global scope.
     Node function = traversal.getScopeRoot();
-    if (!NodeUtil.isFunction(function)) {
+    if (!function.isFunction()) {
       return;
     }
 
@@ -163,7 +162,7 @@ class OptimizeArgumentsArray implements CompilerPass, ScopedCallback {
 
     // Otherwise, we are in a function scope and we should record if the current
     // name is referring to the implicit arguments array.
-    if (NodeUtil.isName(node) && ARGUMENTS.equals(node.getString())) {
+    if (node.isName() && ARGUMENTS.equals(node.getString())) {
       currentArgumentsAccess.add(node);
     }
   }
@@ -178,7 +177,7 @@ class OptimizeArgumentsArray implements CompilerPass, ScopedCallback {
   private boolean tryReplaceArguments(Scope scope) {
 
     Node parametersList = scope.getRootNode().getFirstChild().getNext();
-    Preconditions.checkState(parametersList.getType() == Token.LP);
+    Preconditions.checkState(parametersList.isParamList());
 
     // Keep track of rather this function modified the AST and needs to be
     // reported back to the compiler later.
@@ -202,7 +201,7 @@ class OptimizeArgumentsArray implements CompilerPass, ScopedCallback {
       // Bail on anything but argument[c] access where c is a constant.
       // TODO(user): We might not need to bail out all the time, there might
       // be more cases that we can cover.
-      if (getElem.getType() != Token.GETELEM) {
+      if (!getElem.isGetElem()) {
         return false;
       }
 
@@ -210,7 +209,7 @@ class OptimizeArgumentsArray implements CompilerPass, ScopedCallback {
 
       // We have something like arguments[x] where x is not a constant. That
       // means at least one of the access is not known.
-      if (index.getType() != Token.NUMBER) {
+      if (!index.isNumber()) {
         // TODO(user): Its possible not to give up just yet. The type
         // inference did a 'semi value propagation'. If we know that string
         // is never a subclass of the type of the index. We'd know that
@@ -221,7 +220,7 @@ class OptimizeArgumentsArray implements CompilerPass, ScopedCallback {
       Node getElemParent = getElem.getParent();
       // When we have argument[0](), replacing it with a() is semantically
       // different if argument[0] is a function call that refers to 'this'
-      if (NodeUtil.isCall(getElemParent) &&
+      if (getElemParent.isCall() &&
           getElemParent.getFirstChild() == getElem) {
         // TODO(user): We can consider using .call() if aliasing that
         // argument allows shorter alias for other arguments.
@@ -250,7 +249,7 @@ class OptimizeArgumentsArray implements CompilerPass, ScopedCallback {
     for (int i = 0; i < numExtraArgs; i++) {
       String name = getNewName();
       argNames[i] = name;
-      parametersList.addChildrenToBack(Node.newString(Token.NAME, name));
+      parametersList.addChildrenToBack(IR.name(name));
       changed = true;
     }
 
@@ -259,7 +258,7 @@ class OptimizeArgumentsArray implements CompilerPass, ScopedCallback {
       Node index = ref.getNext();
 
       // Skip if it is unknown.
-      if (index.getType() != Token.NUMBER) {
+      if (!index.isNumber()) {
         continue;
       }
       int value = (int) index.getDouble();
@@ -267,7 +266,7 @@ class OptimizeArgumentsArray implements CompilerPass, ScopedCallback {
       // Unnamed parameter.
       if (value >= numNamedParameter) {
         ref.getParent().getParent().replaceChild(ref.getParent(),
-            Node.newString(Token.NAME, argNames[value - numNamedParameter]));
+            IR.name(argNames[value - numNamedParameter]));
       } else {
 
         // Here, for no apparent reason, the user is accessing a named parameter
@@ -281,7 +280,7 @@ class OptimizeArgumentsArray implements CompilerPass, ScopedCallback {
           name = name.getNext();
         }
         ref.getParent().getParent().replaceChild(ref.getParent(),
-            Node.newString(Token.NAME, name.getString()));
+            IR.name(name.getString()));
       }
       changed = true;
     }

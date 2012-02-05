@@ -147,7 +147,7 @@ public class TypeInferenceTest extends TestCase {
   }
 
   private EnumType createEnumType(String name, JSType elemType) {
-    return registry.createEnumType(name, elemType);
+    return registry.createEnumType(name, null, elemType);
   }
 
   private JSType createUndefinableType(JSTypeNative type) {
@@ -761,6 +761,10 @@ public class TypeInferenceTest extends TestCase {
 
     inFunction("var x = {a:1}; var out = x.a;");
     verify("out", NUMBER_TYPE);
+
+    inFunction("var x = {a:1}; var out = x.a; x.a = 'string'; var out2 = x.a;");
+    verify("out", NUMBER_TYPE);
+    verify("out2", STRING_TYPE);
 
     inFunction("var x = { get a() {return 1} }; var out = x.a;");
     verify("out", UNKNOWN_TYPE);

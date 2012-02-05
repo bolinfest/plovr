@@ -20,9 +20,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
-
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -199,7 +198,7 @@ class SpecializeModule implements CompilerPass {
 
     functionInfoBySpecializedFunctionNode = Maps.newLinkedHashMap();
 
-    Node syntheticModuleJsRoot = new Node(Token.BLOCK);
+    Node syntheticModuleJsRoot = IR.block();
     syntheticModuleJsRoot.setIsSyntheticBlock(true);
 
     for (CompilerInput input : module.getInputs()) {
@@ -218,7 +217,7 @@ class SpecializeModule implements CompilerPass {
 
     // The jsRoot needs a parent (in a normal compilation this would be the
     // node that contains jsRoot and the externs).
-    Node syntheticExternsAndJsRoot = new Node(Token.BLOCK);
+    Node syntheticExternsAndJsRoot = IR.block();
     syntheticExternsAndJsRoot.addChildToBack(syntheticModuleJsRoot);
 
     return syntheticModuleJsRoot;
@@ -239,7 +238,7 @@ class SpecializeModule implements CompilerPass {
     new NodeMatcher() {
       @Override
       public void reportMatch(Node original, Node specialized) {
-        if (NodeUtil.isFunction(original)) {
+        if (original.isFunction()) {
           OriginalFunctionInformation functionInfo =
               new OriginalFunctionInformation(original);
 
@@ -250,7 +249,7 @@ class SpecializeModule implements CompilerPass {
 
       @Override
       public boolean shouldTraverse(Node n1, Node n2) {
-        return !NodeUtil.isFunction(n1);
+        return !n1.isFunction();
       }
     }.match(original, toBeSpecialized);
   }
@@ -461,11 +460,11 @@ class SpecializeModule implements CompilerPass {
 
       Node originalParent = originalFunction.getParent();
 
-      isAssignFunction = NodeUtil.isAssign(originalParent) ||
-          NodeUtil.isName(originalParent);
+      isAssignFunction = originalParent.isAssign() ||
+          originalParent.isName();
 
       assignHasVar =
-          isAssignFunction && NodeUtil.isVar(originalParent.getParent());
+          isAssignFunction && originalParent.getParent().isVar();
     }
 
     private Node copiedOriginalFunction() {
@@ -521,7 +520,7 @@ class SpecializeModule implements CompilerPass {
             NodeUtil.newName(compiler.getCodingConvention(), "", nameNode));
       }
 
-      Node assignment = new Node(Token.ASSIGN, nameNode, functionCopy);
+      Node assignment = IR.assign(nameNode, functionCopy);
       assignment.copyInformationFrom(functionCopy);
 
       return NodeUtil.newExpr(assignment);
@@ -686,7 +685,7 @@ class SpecializeModule implements CompilerPass {
      * however we do not currently support this.
      */
     public boolean canFixupFunction(Node functionNode) {
-      Preconditions.checkArgument(NodeUtil.isFunction(functionNode));
+      Preconditions.checkArgument(functionNode.isFunction());
 
       if (!nodeIsInGlobalScope(functionNode) ||
           initialModuleAliasAnalysis.isAliased(functionNode)) {
@@ -701,7 +700,7 @@ class SpecializeModule implements CompilerPass {
       Node parent = functionNode.getParent();
       Node gramps = parent.getParent();
 
-      if (NodeUtil.isName(parent) && NodeUtil.isVar(gramps)) {
+      if (parent.isName() && gramps.isVar()) {
         // var f = function() {}
         return true;
       }
@@ -743,7 +742,7 @@ class SpecializeModule implements CompilerPass {
      */
     private Node containingFunction(Node node) {
       for (Node ancestor : node.getAncestors()) {
-        if (NodeUtil.isFunction(ancestor)) {
+        if (ancestor.isFunction()) {
           return ancestor;
         }
       }

@@ -17,6 +17,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -51,7 +52,7 @@ class ObjectPropertyStringPostprocess implements CompilerPass {
   private class Callback extends AbstractPostOrderCallback {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (n.getType() != Token.NEW) {
+      if (!n.isNew()) {
         return;
       }
 
@@ -72,7 +73,7 @@ class ObjectPropertyStringPostprocess implements CompilerPass {
         secondArgument.removeChild(newChild);
         n.replaceChild(firstArgument, newChild);
         n.replaceChild(secondArgument,
-            Node.newString(secondArgument.getFirstChild().getString()));
+            IR.string(secondArgument.getFirstChild().getString()));
       } else if (secondArgumentType == Token.GETELEM) {
         // Rewrite "new goog.testing.ObjectPropertyString(window, foo[bar])"
         // as "new goog.testing.ObjectPropertyString(foo, bar)".
@@ -86,7 +87,7 @@ class ObjectPropertyStringPostprocess implements CompilerPass {
         // Rewrite "new goog.testing.ObjectPropertyString(window, foo)" as
         // "new goog.testing.ObjectPropertyString(window, 'foo')"
         n.replaceChild(secondArgument,
-            Node.newString(secondArgument.getString()));
+            IR.string(secondArgument.getString()));
       }
       compiler.reportCodeChange();
     }

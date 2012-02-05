@@ -102,7 +102,7 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass {
 
     @Override
     public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
-      return parent == null || parent.getType() != Token.SCRIPT ||
+      return parent == null || !parent.isScript() ||
           !t.getInput().isExtern();
     }
 
@@ -119,7 +119,7 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass {
           break;
         case Token.FUNCTION:
           if (NodeUtil.isFunctionExpression(n)) {
-            if (parent.getType() == Token.NAME) {
+            if (parent.isName()) {
               String functionName = parent.getString();
               info = (JSDocInfo) parent.getProp(Node.JSDOC_INFO_PROP);
               if (info != null && info.isConstructor()) {
@@ -127,7 +127,7 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass {
               } else {
                 Node gramps = parent.getParent();
                 Preconditions.checkState(
-                    gramps != null && gramps.getType() == Token.VAR);
+                    gramps != null && gramps.isVar());
                 info = (JSDocInfo) gramps.getProp(Node.JSDOC_INFO_PROP);
                 if (info != null && info.isConstructor()) {
                   constructors.add(functionName);
@@ -199,7 +199,7 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass {
 
       // We only consider programmer-defined constructors that are
       // global variables, or are defined on global variables.
-      if (nameNode.getType() != Token.NAME) {
+      if (!nameNode.isName()) {
         return;
       }
 

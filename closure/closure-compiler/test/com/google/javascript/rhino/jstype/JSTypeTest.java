@@ -104,13 +104,13 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     builder.addProperty("b", STRING_TYPE, null);
     recordType = builder.build();
 
-    enumType = new EnumType(registry, "Enum", NUMBER_TYPE);
+    enumType = new EnumType(registry, "Enum", null, NUMBER_TYPE);
     elementsType = enumType.getElementsType();
     functionType = new FunctionBuilder(registry)
         .withReturnType(NUMBER_TYPE)
         .build();
     dateMethod = new FunctionBuilder(registry)
-        .withParamsNode(new Node(Token.LP))
+        .withParamsNode(new Node(Token.PARAM_LIST))
         .withReturnType(NUMBER_TYPE)
         .withTypeOfThis(DATE_TYPE)
         .build();
@@ -2716,14 +2716,11 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     builder.addProperty("e", NUMBER_TYPE, null);
     builder.addProperty("b", STRING_TYPE, null);
     builder.addProperty("c", STRING_TYPE, null);
-    JSType subRecordType = builder.build();
+    JSType otherRecordType = builder.build();
 
-    JSType leastSupertype = recordType.getLeastSupertype(subRecordType);
-
-    builder = new RecordTypeBuilder(registry);
-    builder.addProperty("b", STRING_TYPE, null);
-
-    assertTypeEquals(leastSupertype, builder.build());
+    assertTypeEquals(
+        registry.createUnionType(recordType, otherRecordType),
+        recordType.getLeastSupertype(otherRecordType));
   }
 
   public void testRecordTypeLeastSuperType3() {
@@ -2731,10 +2728,11 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     builder.addProperty("d", NUMBER_TYPE, null);
     builder.addProperty("e", STRING_TYPE, null);
     builder.addProperty("f", STRING_TYPE, null);
-    JSType subRecordType = builder.build();
+    JSType otherRecordType = builder.build();
 
-    JSType leastSupertype = recordType.getLeastSupertype(subRecordType);
-    assertTypeEquals(leastSupertype, OBJECT_TYPE);
+    assertTypeEquals(
+        registry.createUnionType(recordType, otherRecordType),
+        recordType.getLeastSupertype(otherRecordType));
   }
 
   public void testRecordTypeLeastSuperType4() {
@@ -3395,7 +3393,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
    * Tests the behavior of the enum type.
    */
   public void testEnumType() throws Exception {
-    EnumType enumType = new EnumType(registry, "Enum", NUMBER_TYPE);
+    EnumType enumType = new EnumType(registry, "Enum", null, NUMBER_TYPE);
 
     // isXxx
     assertFalse(enumType.isArrayType());
@@ -3496,8 +3494,9 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertEquals("Enum", enumType.getDisplayName());
 
     assertEquals("AnotherEnum", new EnumType(registry, "AnotherEnum",
-        NUMBER_TYPE).getDisplayName());
-    assertFalse(new EnumType(registry, null, NUMBER_TYPE).hasDisplayName());
+        null, NUMBER_TYPE).getDisplayName());
+    assertFalse(
+        new EnumType(registry, null, null, NUMBER_TYPE).hasDisplayName());
 
     Asserts.assertResolvesToSame(enumType);
   }
@@ -3611,7 +3610,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
 
   public void testStringEnumType() throws Exception {
     EnumElementType stringEnum =
-        new EnumType(registry, "Enum", STRING_TYPE).getElementsType();
+        new EnumType(registry, "Enum", null, STRING_TYPE).getElementsType();
 
     assertTypeEquals(UNKNOWN_TYPE, stringEnum.getPropertyType("length"));
     assertTypeEquals(NUMBER_TYPE, stringEnum.findPropertyType("length"));
@@ -3624,7 +3623,8 @@ public class JSTypeTest extends BaseJSTypeTestCase {
 
   public void testStringObjectEnumType() throws Exception {
     EnumElementType stringEnum =
-        new EnumType(registry, "Enum", STRING_OBJECT_TYPE).getElementsType();
+        new EnumType(registry, "Enum", null, STRING_OBJECT_TYPE)
+        .getElementsType();
 
     assertTypeEquals(NUMBER_TYPE, stringEnum.getPropertyType("length"));
     assertTypeEquals(NUMBER_TYPE, stringEnum.findPropertyType("length"));
@@ -4680,19 +4680,19 @@ public class JSTypeTest extends BaseJSTypeTestCase {
   public void testSupertypeOfProxiedFunctionTypes() {
     ObjectType fn1 =
         new FunctionBuilder(registry)
-        .withParamsNode(new Node(Token.LP))
+        .withParamsNode(new Node(Token.PARAM_LIST))
         .withReturnType(NUMBER_TYPE)
         .build();
     ObjectType fn2 =
         new FunctionBuilder(registry)
-        .withParamsNode(new Node(Token.LP))
+        .withParamsNode(new Node(Token.PARAM_LIST))
         .withReturnType(STRING_TYPE)
         .build();
     ObjectType p1 = new ProxyObjectType(registry, fn1);
     ObjectType p2 = new ProxyObjectType(registry, fn2);
     ObjectType supremum =
         new FunctionBuilder(registry)
-        .withParamsNode(new Node(Token.LP))
+        .withParamsNode(new Node(Token.PARAM_LIST))
         .withReturnType(registry.createUnionType(STRING_TYPE, NUMBER_TYPE))
         .build();
 
@@ -4737,7 +4737,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     ObjectType realA = registry.createConstructorType(
         "typeA", null, null, null).getInstanceType();
     ObjectType realB = registry.createEnumType(
-        "typeB", NUMBER_TYPE).getElementsType();
+        "typeB", null, NUMBER_TYPE).getElementsType();
     registry.declareType("typeA", realA);
     registry.declareType("typeB", realB);
 
@@ -4886,6 +4886,12 @@ public class JSTypeTest extends BaseJSTypeTestCase {
 
     builder = new RecordTypeBuilder(registry);
     builder.addProperty("a", STRING_TYPE, null);
+    builder.addProperty("c", STRING_TYPE, null);
+    JSType acType = builder.build();
+    JSType abOrAcType = registry.createUnionType(abType, acType);
+
+    builder = new RecordTypeBuilder(registry);
+    builder.addProperty("a", STRING_TYPE, null);
     builder.addProperty("b", STRING_TYPE, null);
     builder.addProperty("c", NUMBER_TYPE, null);
     JSType abcType = builder.build();
@@ -4895,6 +4901,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
         registry.getNativeType(JSTypeNative.OBJECT_PROTOTYPE),
         registry.getNativeType(JSTypeNative.OBJECT_TYPE),
         aType,
+        abOrAcType,
         abType,
         abcType,
         registry.getNativeType(JSTypeNative.NO_OBJECT_TYPE),
@@ -5076,7 +5083,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
 
   public void testAnonymousEnumElementChain() throws Exception {
     ObjectType enumElemType = registry.createEnumType(
-        "typeB", registry.createAnonymousObjectType()).getElementsType();
+        "typeB", null, registry.createAnonymousObjectType()).getElementsType();
     List<JSType> typeChain = Lists.newArrayList(
         ALL_TYPE,
         createNullableType(OBJECT_TYPE),

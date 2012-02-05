@@ -18,10 +18,12 @@ package com.google.javascript.jscomp;
 
 import javax.annotation.Nullable;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -174,19 +176,19 @@ class AliasExternals implements CompilerPass {
     this.compiler = compiler;
     this.moduleGraph = moduleGraph;
 
-    if (!Strings.isEmpty(unaliasableGlobals) &&
-        !Strings.isEmpty(aliasableGlobals)) {
+    if (!Strings.isNullOrEmpty(unaliasableGlobals) &&
+        !Strings.isNullOrEmpty(aliasableGlobals)) {
       throw new IllegalArgumentException(
           "Cannot pass in both unaliasable and aliasable globals; you must " +
           "choose one or the other.");
     }
 
-    if (!Strings.isEmpty(unaliasableGlobals)) {
+    if (!Strings.isNullOrEmpty(unaliasableGlobals)) {
       this.unaliasableGlobals.addAll(
           Arrays.asList(unaliasableGlobals.split(",")));
     }
 
-    if (!Strings.isEmpty(aliasableGlobals)) {
+    if (!Strings.isNullOrEmpty(aliasableGlobals)) {
       this.aliasableGlobals.addAll(Arrays.asList(aliasableGlobals.split(",")));
     }
 
@@ -210,7 +212,7 @@ class AliasExternals implements CompilerPass {
   @Override
   public void process(Node externs, Node root) {
     defaultRoot = root.getFirstChild();
-    Preconditions.checkState(defaultRoot.getType() == Token.SCRIPT);
+    Preconditions.checkState(defaultRoot.isScript());
 
     aliasProperties(externs, root);
     aliasGlobals(externs, root);
@@ -287,9 +289,9 @@ class AliasExternals implements CompilerPass {
       getPropNode.removeChild(propSrc);
 
       Node newNameNode =
-        Node.newString(Token.NAME, getArrayNotationNameFor(propName));
+          IR.name(getArrayNotationNameFor(propName));
 
-      Node elemNode = new Node(Token.GETELEM, propSrc, newNameNode);
+      Node elemNode = IR.getelem(propSrc, newNameNode);
       replaceNode(getPropNode.getParent(), getPropNode, elemNode);
 
       compiler.reportCodeChange();
@@ -331,9 +333,9 @@ class AliasExternals implements CompilerPass {
 
       // Create the call GETPROP_prop() node, using the old propSrc as the
       // one paremeter to GETPROP_prop() call.
-      Node callName = Node.newString(Token.NAME,
-        getMutatorFor(propNameNode.getString()));
-      Node call = new Node(Token.CALL, callName, propSrc, propDest);
+      Node callName = IR.name(
+          getMutatorFor(propNameNode.getString()));
+      Node call = IR.call( callName, propSrc, propDest);
       call.putBooleanProp(Node.FREE_CALL, true);
 
       // And replace the assign statement with the new call
@@ -376,11 +378,11 @@ class AliasExternals implements CompilerPass {
         name PROP_length
             string length
      */
-    Node propValue = Node.newString(Token.STRING, propName);
+    Node propValue = IR.string(propName);
     Node propNameNode =
-      Node.newString(Token.NAME, getArrayNotationNameFor(propName));
+        IR.name(getArrayNotationNameFor(propName));
     propNameNode.addChildToFront(propValue);
-    Node var = new Node(Token.VAR, propNameNode);
+    Node var = IR.var(propNameNode);
     root.addChildToFront(var);
 
     compiler.reportCodeChange();
@@ -415,22 +417,15 @@ class AliasExternals implements CompilerPass {
     // Function arguments
     String localPropName = getMutatorFor(propName) + "$a";
     String localValueName = getMutatorFor(propName) + "$b";
-    Node hasPropNode = Node.newString(Token.NAME, localPropName);
-    Node propValueNode = Node.newString(Token.NAME, localValueName);
-    List<Node> args = Lists.newArrayList(hasPropNode, propValueNode);
-
-    // Function body
-    Node propNameNode = Node.newString(Token.NAME, localPropName);
-    Node propValue = Node.newString(Token.STRING, propName);
-    Node getProp = new Node(Token.GETPROP, propNameNode, propValue);
-    Node assignFrom = Node.newString(Token.NAME, localValueName);
-    Node assign = new Node(Token.ASSIGN, getProp, assignFrom);
-    Node returnNode = new Node(Token.RETURN, assign);
-    Node functionBody = new Node(Token.BLOCK, returnNode);
-
     // Create the function and append to front of output tree
-    Node fnNode = NodeUtil.newFunctionNode(
-        functionName, args, functionBody, -1, -1);
+    Node fnNode = IR.function(
+        IR.name(functionName),
+        IR.paramList(IR.name(localPropName), IR.name(localValueName)),
+        IR.block(
+            IR.returnNode(
+                IR.assign(
+                    IR.getprop(IR.name(localPropName), IR.string(propName)),
+                    IR.name(localValueName)))));
     root.addChildToFront(fnNode);
 
     compiler.reportCodeChange();
@@ -477,7 +472,7 @@ class AliasExternals implements CompilerPass {
         case Token.GETPROP:
         case Token.GETELEM:
           Node dest = n.getFirstChild().getNext();
-          if (dest.getType() == Token.STRING &&
+          if (dest.isString() &&
               (whitelist.isEmpty() || whitelist.contains(dest.getString()))) {
             props.put(dest.getString(), newSymbolForProperty(dest.getString()));
           }
@@ -493,7 +488,7 @@ class AliasExternals implements CompilerPass {
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (n.getType() == Token.GETPROP) {
+      if (n.isGetProp()) {
         Node propNameNode = n.getLastChild();
 
         if (canReplaceWithGetProp(propNameNode, n, parent)) {
@@ -523,13 +518,13 @@ class AliasExternals implements CompilerPass {
      */
     private boolean canReplaceWithGetProp(Node propNameNode, Node getPropNode,
           Node parent) {
-      boolean isCallTarget = (parent.getType() == Token.CALL)
+      boolean isCallTarget = (parent.isCall())
           && (parent.getFirstChild() == getPropNode);
       boolean isAssignTarget = NodeUtil.isAssignmentOp(parent)
           && (parent.getFirstChild() == getPropNode);
-      boolean isIncOrDec = (parent.getType() == Token.INC) ||
-          (parent.getType() == Token.DEC);
-      return (propNameNode.getType() == Token.STRING) && !isAssignTarget
+      boolean isIncOrDec = (parent.isInc()) ||
+          (parent.isDec());
+      return (propNameNode.isString()) && !isAssignTarget
           && (!isCallTarget || !"eval".equals(propNameNode.getString()))
           && !isIncOrDec
           && props.containsKey(propNameNode.getString());
@@ -546,9 +541,9 @@ class AliasExternals implements CompilerPass {
      */
     private boolean canReplaceWithSetProp(Node propNameNode, Node getPropNode,
         Node parent) {
-      boolean isAssignTarget = (parent.getType() == Token.ASSIGN)
+      boolean isAssignTarget = (parent.isAssign())
           && (parent.getFirstChild() == getPropNode);
-      return (propNameNode.getType() == Token.STRING) && isAssignTarget
+      return (propNameNode.isString()) && isAssignTarget
           && props.containsKey(propNameNode.getString());
     }
   }
@@ -607,7 +602,7 @@ class AliasExternals implements CompilerPass {
    */
   private class GetGlobals extends NodeTraversal.AbstractShallowCallback {
     private void getGlobalName(NodeTraversal t, Node dest, Node parent) {
-      if (dest.getType() == Token.NAME) {
+      if (dest.isName()) {
 
         JSDocInfo docInfo = dest.getJSDocInfo() == null ?
             parent.getJSDocInfo() : dest.getJSDocInfo();
@@ -649,7 +644,7 @@ class AliasExternals implements CompilerPass {
   private final class GlobalGatherer extends AbstractPostOrderCallback {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (n.getType() == Token.NAME) {
+      if (n.isName()) {
         String name = n.getString();
         Scope.Var var = t.getScope().getVar(name);
 
@@ -663,8 +658,8 @@ class AliasExternals implements CompilerPass {
         if (global != null) {
           // If a variable is declared in both externs and normal source,
           // don't alias it.
-          if (n.getParent().getType() == Token.VAR ||
-              n.getParent().getType() == Token.FUNCTION) {
+          if (n.getParent().isVar() ||
+              n.getParent().isFunction()) {
             globals.remove(name);
           }
 
@@ -675,9 +670,9 @@ class AliasExternals implements CompilerPass {
           // something that we want to avoid when aliasing, since we may be
           // dealing with external objects (e.g. ActiveXObject in MSIE)
           if ((NodeUtil.isAssignmentOp(parent) && isFirst) ||
-              (parent.getType() == Token.NEW && isFirst) ||
-              parent.getType() == Token.INC ||
-              parent.getType() == Token.DEC) {
+              (parent.isNew() && isFirst) ||
+              parent.isInc() ||
+              parent.isDec()) {
             global.recordMutator(t);
           } else {
             global.recordAccessor(t);
@@ -724,13 +719,12 @@ class AliasExternals implements CompilerPass {
      */
 
     String globalName = global.name;
-    Node globalValue = Node.newString(Token.NAME, global.name);
+    Node globalValue = IR.name(global.name);
     globalValue.putBooleanProp(Node.IS_CONSTANT_NAME, global.isConstant);
 
-    Node globalNameNode =
-      Node.newString(Token.NAME, "GLOBAL_" + globalName);
+    Node globalNameNode = IR.name("GLOBAL_" + globalName);
     globalNameNode.addChildToFront(globalValue);
-    Node var = new Node(Token.VAR, globalNameNode);
+    Node var = IR.var(globalNameNode);
     root.addChildToFront(var);
 
     compiler.reportCodeChange();

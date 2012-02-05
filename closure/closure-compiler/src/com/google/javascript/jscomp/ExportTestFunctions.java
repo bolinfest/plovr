@@ -16,9 +16,8 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
-
 import java.util.regex.Pattern;
 
 /**
@@ -40,8 +39,8 @@ class ExportTestFunctions implements CompilerPass {
    * Creates a new export test functions compiler pass.
    * @param compiler
    * @param exportSymbolFunction The function name used to export symbols in JS.
-   * @param exportSymbolFunction The function name used to export properties in
-   *     JS.
+   * @param exportPropertyFunction The function name used to export properties
+   *     in JS.
    */
   ExportTestFunctions(AbstractCompiler compiler,
       String exportSymbolFunction, String exportPropertyFunction) {
@@ -62,7 +61,7 @@ class ExportTestFunctions implements CompilerPass {
         return;
       }
 
-      if (parent.getType() == Token.SCRIPT) {
+      if (parent.isScript()) {
         if (NodeUtil.isFunctionDeclaration(n)) {
           // Check for a test function statement.
           String functionName = NodeUtil.getFunctionName(n);
@@ -78,10 +77,10 @@ class ExportTestFunctions implements CompilerPass {
           }
         }
       } else if (NodeUtil.isExprAssign(parent) &&
-            n.getLastChild().getType() != Token.ASSIGN) {
+            !n.getLastChild().isAssign()) {
         // Check for a test method assignment.
         Node grandparent = parent.getParent();
-        if (grandparent != null && grandparent.getType() == Token.SCRIPT) {
+        if (grandparent != null && grandparent.isScript()) {
           String functionName = n.getFirstChild().getQualifiedName();
           if (isTestFunction(n, functionName)) {
             exportTestFunctionAsProperty(functionName, parent, n, grandparent);
@@ -102,11 +101,11 @@ class ExportTestFunctions implements CompilerPass {
      * @param node
      */
     private boolean isVarDeclaredFunction(Node node) {
-      if (node.getType() != Token.VAR) {
+      if (!node.isVar()) {
         return false;
       }
       Node grandchild = node.getFirstChild().getFirstChild();
-      return grandchild != null && grandchild.getType() == Token.FUNCTION;
+      return grandchild != null && grandchild.isFunction();
     }
   }
 
@@ -122,16 +121,16 @@ class ExportTestFunctions implements CompilerPass {
     Node exportCallTarget = NodeUtil.newQualifiedNameNode(
         compiler.getCodingConvention(),
         exportSymbolFunction, node, testFunctionName);
-    Node call = new Node(Token.CALL, exportCallTarget);
-    if (exportCallTarget.getType() == Token.NAME) {
+    Node call = IR.call( exportCallTarget);
+    if (exportCallTarget.isName()) {
       call.putBooleanProp(Node.FREE_CALL, true);
     }
-    call.addChildToBack(Node.newString(testFunctionName));
+    call.addChildToBack(IR.string(testFunctionName));
     call.addChildToBack(NodeUtil.newQualifiedNameNode(
         compiler.getCodingConvention(),
         testFunctionName, node, testFunctionName));
 
-    Node expression = new Node(Token.EXPR_RESULT, call);
+    Node expression = IR.exprResult(call);
 
     scriptNode.addChildAfter(expression, node);
     compiler.reportCodeChange();

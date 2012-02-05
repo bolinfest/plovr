@@ -24,8 +24,6 @@ import com.google.javascript.jscomp.deps.DependencyInfo;
 import com.google.javascript.jscomp.deps.JsFileParser;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
-
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
@@ -121,7 +119,7 @@ public class CompilerInput
     Node root = ast.getAstRoot(compiler);
     // The root maybe null if the AST can not be created.
     if (root != null) {
-      Preconditions.checkState(root.getType() == Token.SCRIPT);
+      Preconditions.checkState(root.isScript());
       Preconditions.checkNotNull(root.getInputId());
     }
     return root;
@@ -188,6 +186,23 @@ public class CompilerInput
     }
   }
 
+  // TODO(nicksantos): Remove addProvide/addRequire/removeRequire once
+  // there is better support for discovering non-closure dependencies.
+  void addProvide(String provide) {
+    getProvides();
+    provides.add(provide);
+  }
+
+  void addRequire(String require) {
+    getRequires();
+    requires.add(require);
+  }
+
+  public void removeRequire(String require) {
+    getRequires();
+    requires.remove(require);
+  }
+
   /**
    * Regenerates the provides/requires if we need to do so.
    */
@@ -247,7 +262,7 @@ public class CompilerInput
     }
 
     void visitSubtree(Node n, Node parent) {
-      if (n.getType() == Token.CALL) {
+      if (n.isCall()) {
         String require =
             codingConvention.extractClassNameIfRequire(n, parent);
         if (require != null) {
@@ -261,8 +276,8 @@ public class CompilerInput
         }
         return;
       } else if (parent != null &&
-          parent.getType() != Token.EXPR_RESULT &&
-          parent.getType() != Token.SCRIPT) {
+          !parent.isExprResult() &&
+          !parent.isScript()) {
         return;
       }
 
@@ -312,6 +327,11 @@ public class CompilerInput
     // An input may only belong to one module.
     Preconditions.checkArgument(
         module == null || this.module == null || this.module == module);
+    this.module = module;
+  }
+
+  /** Overrides the module to which the input belongs. */
+  void overrideModule(JSModule module) {
     this.module = module;
   }
 

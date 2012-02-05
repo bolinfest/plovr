@@ -148,7 +148,7 @@ public class AstValidator implements CompilerPass {
         return;
       default:
         violation("Expected statement but was "
-            + Node.tokenToName(n.getType()) + ".", n);
+            + Token.name(n.getType()) + ".", n);
     }
   }
 
@@ -270,7 +270,7 @@ public class AstValidator implements CompilerPass {
 
       default:
         violation("Expected expression but was "
-            + Node.tokenToName(n.getType()), n);
+            + Token.name(n.getType()), n);
     }
   }
 
@@ -364,7 +364,7 @@ public class AstValidator implements CompilerPass {
   }
 
   private void validateParameters(Node n) {
-    validateNodeType(Token.LP, n);
+    validateNodeType(Token.PARAM_LIST, n);
     for (Node c = n.getFirstChild(); c != null; c = c.getNext()) {
       validateName(c);
     }
@@ -421,7 +421,7 @@ public class AstValidator implements CompilerPass {
   }
 
   private void validateVarOrOptionalExpression(Node n) {
-    if (n.getType() == Token.VAR) {
+    if (n.isVar()) {
       validateVar(n);
     } else {
       validateOptionalExpression(n);
@@ -429,7 +429,7 @@ public class AstValidator implements CompilerPass {
   }
 
   private void validateVarOrAssignmentTarget(Node n) {
-    if (n.getType() == Token.VAR) {
+    if (n.isVar()) {
       // Only one NAME can be declared for FOR-IN expressions.
       this.validateChildCount(n, 1);
       validateVar(n);
@@ -548,7 +548,7 @@ public class AstValidator implements CompilerPass {
     int defaults = 0;
     for (Node c = n.getFirstChild().getNext(); c != null; c = c.getNext()) {
       validateSwitchMember(n.getLastChild());
-      if (c.getType() == Token.DEFAULT) {
+      if (c.isDefaultCase()) {
         defaults++;
       }
     }
@@ -563,17 +563,17 @@ public class AstValidator implements CompilerPass {
       case Token.CASE:
         validateCase(n);
         return;
-      case Token.DEFAULT:
+      case Token.DEFAULT_CASE:
         validateDefault(n);
         return;
       default:
         violation("Expected switch member but was "
-            + Node.tokenToName(n.getType()), n);
+            + Token.name(n.getType()), n);
     }
   }
 
   private void validateDefault(Node n) {
-    validateNodeType(Token.DEFAULT, n);
+    validateNodeType(Token.DEFAULT_CASE, n);
     validateChildCount(n, 1);
     validateSyntheticBlock(n.getLastChild());
   }
@@ -586,7 +586,7 @@ public class AstValidator implements CompilerPass {
   }
 
   private void validateOptionalExpression(Node n) {
-    if (n.getType() == Token.EMPTY) {
+    if (n.isEmpty()) {
       validateChildless(n);
     } else {
       validateExpression(n);
@@ -612,7 +612,7 @@ public class AstValidator implements CompilerPass {
         return;
       default:
         violation("Expected assignment target expression but was "
-            + Node.tokenToName(n.getType()), n);
+            + Token.name(n.getType()), n);
     }
   }
 
@@ -673,10 +673,10 @@ public class AstValidator implements CompilerPass {
 
   private void validateObjectLitKey(Node n) {
     switch (n.getType()) {
-      case Token.GET:
+      case Token.GETTER_DEF:
         validateObjectLitGetKey(n);
         return;
-      case Token.SET:
+      case Token.SETTER_DEF:
         validateObjectLitSetKey(n);
         return;
       case Token.STRING:
@@ -684,12 +684,12 @@ public class AstValidator implements CompilerPass {
         return;
       default:
         violation("Expected object literal key expression but was "
-              + Node.tokenToName(n.getType()), n);
+              + Token.name(n.getType()), n);
     }
   }
 
   private void validateObjectLitGetKey(Node n) {
-    validateNodeType(Token.GET, n);
+    validateNodeType(Token.GETTER_DEF, n);
     validateChildCount(n, 1);
     validateObjectLiteralKeyName(n);
     Node function = n.getFirstChild();
@@ -705,7 +705,7 @@ public class AstValidator implements CompilerPass {
   }
 
   private void validateObjectLitSetKey(Node n) {
-    validateNodeType(Token.SET, n);
+    validateNodeType(Token.SETTER_DEF, n);
     validateChildCount(n, 1);
     validateObjectLiteralKeyName(n);
     Node function = n.getFirstChild();
@@ -733,7 +733,7 @@ public class AstValidator implements CompilerPass {
         // Validate that getString doesn't throw
         n.getString();
       } catch (UnsupportedOperationException e) {
-        violation("getString failed for" + Node.tokenToName(n.getType()), n);
+        violation("getString failed for" + Token.name(n.getType()), n);
       }
     } else {
       validateNonEmptyString(n);
@@ -766,8 +766,8 @@ public class AstValidator implements CompilerPass {
   private void validateNodeType(int type, Node n) {
     if (n.getType() != type) {
       violation(
-          "Expected " + Node.tokenToName(type) + " but was "
-              + Node.tokenToName(n.getType()), n);
+          "Expected " + Token.name(type) + " but was "
+              + Token.name(n.getType()), n);
     }
   }
 

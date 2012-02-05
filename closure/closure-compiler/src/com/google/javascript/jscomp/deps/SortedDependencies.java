@@ -188,6 +188,19 @@ public class SortedDependencies<INPUT extends DependencyInfo> {
    * list.
    */
   public List<INPUT> getSortedDependenciesOf(List<INPUT> roots) {
+    return getDependenciesOf(roots, true);
+  }
+
+  /**
+   * Gets all the dependencies of the given roots. The inputs must be returned
+   * in a stable order. In other words, if A comes before B, and A does not
+   * transitively depend on B, then A must also come before B in the returned
+   * list.
+   *
+   * @param sorted If true, get them in topologically sorted order. If false,
+   *     get them in the original order they were passed to the compiler.
+   */
+  public List<INPUT> getDependenciesOf(List<INPUT> roots, boolean sorted) {
     Preconditions.checkArgument(inputs.containsAll(roots));
     Set<INPUT> included = Sets.newHashSet();
     Deque<INPUT> worklist = new ArrayDeque<INPUT>(roots);
@@ -204,7 +217,7 @@ public class SortedDependencies<INPUT extends DependencyInfo> {
     }
 
     ImmutableList.Builder<INPUT> builder = ImmutableList.builder();
-    for (INPUT current : sortedList) {
+    for (INPUT current : (sorted ? sortedList : inputs)) {
       if (included.contains(current)) {
         builder.add(current);
       }
@@ -218,6 +231,12 @@ public class SortedDependencies<INPUT extends DependencyInfo> {
 
   private static <T> List<T> topologicalStableSort(
       List<T> items, Multimap<T, T> deps) {
+    if (items.size() == 0) {
+      // Priority queue blows up if we give it a size of 0. Since we need
+      // to special case this either way, just bail out.
+      return Lists.newArrayList();
+    }
+
     final Map<T, Integer> originalIndex = Maps.newHashMap();
     for (int i = 0; i < items.size(); i++) {
       originalIndex.put(items.get(i), i);

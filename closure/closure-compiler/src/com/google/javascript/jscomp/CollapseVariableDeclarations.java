@@ -135,23 +135,23 @@ class CollapseVariableDeclarations implements CompilerPass {
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (n.getType() == Token.VAR) {
+      if (n.isVar()) {
         blacklistStubVars(t, n);
       }
 
       // Only care about var nodes
-      if (n.getType() != Token.VAR && !canBeRedeclared(n, t.getScope())) return;
+      if (!n.isVar() && !canBeRedeclared(n, t.getScope())) return;
 
       // If we've already looked at this node, skip it
       if (nodesToCollapse.contains(n)) return;
 
       // Adjacent VAR children of an IF node are the if and else parts and can't
       // be collapsed
-      if (parent.getType() == Token.IF) return;
+      if (parent.isIf()) return;
 
       Node varNode = n;
 
-      boolean hasVar = n.getType() == Token.VAR;
+      boolean hasVar = n.isVar();
 
       // Find variable declarations that follow this one (if any)
       n = n.getNext();
@@ -159,9 +159,9 @@ class CollapseVariableDeclarations implements CompilerPass {
       boolean hasNodesToCollapse = false;
 
       while (n != null &&
-          (n.getType() == Token.VAR || canBeRedeclared(n, t.getScope()))) {
+          (n.isVar() || canBeRedeclared(n, t.getScope()))) {
 
-        if (NodeUtil.isVar(n)) {
+        if (n.isVar()) {
           blacklistStubVars(t, n);
           hasVar = true;
         }
@@ -194,7 +194,7 @@ class CollapseVariableDeclarations implements CompilerPass {
       Node assign = n.getFirstChild();
       Node lhs = assign.getFirstChild();
 
-      if (!NodeUtil.isName(lhs)) {
+      if (!lhs.isName()) {
         return false;
       }
 
@@ -218,14 +218,14 @@ class CollapseVariableDeclarations implements CompilerPass {
         Preconditions.checkState(var.getNext() == n);
         collapse.parent.removeChildAfter(var);
 
-        if (NodeUtil.isVar(n)) {
+        if (n.isVar()) {
           while(n.hasChildren()) {
             var.addChildToBack(n.removeFirstChild());
           }
         } else {
           Node assign = n.getFirstChild();
           Node lhs = assign.getFirstChild();
-          Preconditions.checkState(NodeUtil.isName(lhs));
+          Preconditions.checkState(lhs.isName());
           Node rhs = assign.getLastChild();
           lhs.addChildToBack(rhs.detachFromParent());
           var.addChildToBack(lhs.detachFromParent());

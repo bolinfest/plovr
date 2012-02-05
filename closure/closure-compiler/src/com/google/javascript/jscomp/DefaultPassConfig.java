@@ -27,9 +27,8 @@ import com.google.javascript.jscomp.AbstractCompiler.LifeCycleStage;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.jscomp.ExtractPrototypeMemberDeclarations.Pattern;
 import com.google.javascript.jscomp.NodeTraversal.Callback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
-
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -206,8 +205,11 @@ public class DefaultPassConfig extends PassConfig {
       return checks;
     }
 
+    checks.add(checkSideEffects);
+
     if (options.checkSuspiciousCode ||
-        options.enables(DiagnosticGroups.GLOBAL_THIS)) {
+        options.enables(DiagnosticGroups.GLOBAL_THIS) ||
+        options.enables(DiagnosticGroups.DEBUGGER_STATEMENT_PRESENT)) {
       checks.add(suspiciousCode);
     }
 
@@ -239,6 +241,10 @@ public class DefaultPassConfig extends PassConfig {
       checks.add(closurePrimitives.makeOneTimePass());
     }
 
+    if (options.jqueryPass) {
+      checks.add(jqueryAliases.makeOneTimePass());
+    }
+
     if (options.closurePass && options.checkMissingGetCssNameLevel.isOn()) {
       checks.add(closureCheckGetCssName);
     }
@@ -251,10 +257,6 @@ public class DefaultPassConfig extends PassConfig {
     checks.add(checkVars);
     if (options.computeFunctionSideEffects) {
       checks.add(checkRegExp);
-    }
-
-    if (options.checkShadowVars.isOn()) {
-      checks.add(checkShadowVars);
     }
 
     if (options.aggressiveVarCheck.isOn()) {
@@ -508,7 +510,7 @@ public class DefaultPassConfig extends PassConfig {
 
       // After inlining some of the variable uses, some variables are unused.
       // Re-run remove unused vars to clean it up.
-      if (options.removeUnusedVars) {
+      if (options.removeUnusedVars || options.removeUnusedLocalVars) {
         passes.add(removeUnusedVars);
       }
     }
@@ -675,9 +677,7 @@ public class DefaultPassConfig extends PassConfig {
       passes.add(rescopeGlobalSymbols);
     }
 
-    if (options.operaCompoundAssignFix) {
-      passes.add(operaCompoundAssignFix);
-    }
+    passes.add(stripSideEffectProtection);
 
     // Safety checks
     passes.add(sanityCheckAst);
@@ -748,11 +748,45 @@ public class DefaultPassConfig extends PassConfig {
 
     if (options.removeUnusedPrototypeProperties) {
       passes.add(removeUnusedPrototypeProperties);
+      passes.add(removeUnusedClassProperties);
     }
 
     assertAllLoopablePasses(passes);
     return passes;
   }
+
+  /**
+   * Checks for code that is probably wrong (such as stray expressions).
+   */
+  final HotSwapPassFactory checkSideEffects =
+      new HotSwapPassFactory("checkSideEffects", true) {
+
+    @Override
+    protected HotSwapCompilerPass createInternal(final AbstractCompiler
+        compiler) {
+      // The current approach to protecting "hidden" side-effects is to
+      // wrap them in a function call that is stripped later, this shouldn't
+      // be done in IDE mode where AST changes may be unexpected.
+      boolean protectHiddenSideEffects =
+          options.protectHiddenSideEffects && !options.ideMode;
+      return new CheckSideEffects(compiler,
+          options.checkSuspiciousCode ? CheckLevel.WARNING : CheckLevel.OFF,
+              protectHiddenSideEffects);
+    }
+  };
+
+  /**
+   * Checks for code that is probably wrong (such as stray expressions).
+   */
+  final PassFactory stripSideEffectProtection =
+      new PassFactory("stripSideEffectProtection", true) {
+
+    @Override
+    protected CompilerPass createInternal(final AbstractCompiler
+        compiler) {
+      return new CheckSideEffects.StripProtection(compiler);
+    }
+  };
 
   /**
    * Checks for code that is probably wrong (such as stray expressions).
@@ -767,7 +801,6 @@ public class DefaultPassConfig extends PassConfig {
       List<Callback> sharedCallbacks = Lists.newArrayList();
       if (options.checkSuspiciousCode) {
         sharedCallbacks.add(new CheckAccidentalSemicolon(CheckLevel.WARNING));
-        sharedCallbacks.add(new CheckSideEffects(CheckLevel.WARNING));
       }
 
       if (options.enables(DiagnosticGroups.GLOBAL_THIS)) {
@@ -911,6 +944,15 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
+  /** Expand jQuery Primitives and Aliases pass. */
+  final PassFactory jqueryAliases =
+      new PassFactory("jqueryAliases", true) {
+    @Override
+    protected CompilerPass createInternal(AbstractCompiler compiler) {
+      return new ExpandJqueryAliases(compiler);
+    }
+  };
+
   /**
    * The default i18n pass.
    * A lot of the options are not configurable, because ReplaceMessages
@@ -1003,7 +1045,7 @@ public class DefaultPassConfig extends PassConfig {
       final boolean late = false;
       return new PeepholeOptimizationsPass(compiler,
             new PeepholeSubstituteAlternateSyntax(late),
-            new PeepholeReplaceKnownMethods(),
+            new PeepholeReplaceKnownMethods(late),
             new PeepholeRemoveDeadCode(),
             new PeepholeFoldConstants(late),
             new PeepholeCollectPropertyAssignments());
@@ -1020,11 +1062,9 @@ public class DefaultPassConfig extends PassConfig {
             new StatementFusion(),
             new PeepholeRemoveDeadCode(),
             new PeepholeSubstituteAlternateSyntax(late),
-            new PeepholeReplaceKnownMethods(),
-            new PeepholeFoldConstants(late)
-            // TODO(johnlenz): reenable this once Chrome 15 is stable
-            // new ReorderConstantExpression()
-            );
+            new PeepholeReplaceKnownMethods(late),
+            new PeepholeFoldConstants(late),
+            new ReorderConstantExpression());
     }
   };
 
@@ -1052,16 +1092,6 @@ public class DefaultPassConfig extends PassConfig {
               pass.isGlobalRegExpPropertiesUsed());
         }
       };
-    }
-  };
-
-  /** Checks that no vars are illegally shadowed. */
-  final PassFactory checkShadowVars =
-      new PassFactory("variableShadowDeclarationCheck", true) {
-    @Override
-    protected CompilerPass createInternal(AbstractCompiler compiler) {
-      return new VariableShadowDeclarationCheck(
-          compiler, options.checkShadowVars);
     }
   };
 
@@ -1617,6 +1647,17 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /**
+   * Remove prototype properties that do not appear to be used.
+   */
+  final PassFactory removeUnusedClassProperties =
+      new PassFactory("removeUnusedClassProperties", false) {
+    @Override
+    protected CompilerPass createInternal(AbstractCompiler compiler) {
+      return new RemoveUnusedClassProperties(compiler);
+    }
+  };
+
+  /**
    * Process smart name processing - removes unused classes and does referencing
    * starting with minimum set of names.
    */
@@ -1871,14 +1912,6 @@ public class DefaultPassConfig extends PassConfig {
           anonymousFunctionNameMap = naf.getFunctionMap();
         }
       };
-    }
-  };
-
-  final PassFactory operaCompoundAssignFix =
-      new PassFactory("operaCompoundAssignFix", true) {
-    @Override
-    protected CompilerPass createInternal(AbstractCompiler compiler) {
-      return new OperaCompoundAssignFix(compiler);
     }
   };
 
@@ -2212,12 +2245,12 @@ public class DefaultPassConfig extends PassConfig {
     Map<String, Node> additionalReplacements = Maps.newHashMap();
 
     if (options.markAsCompiled || options.closurePass) {
-      additionalReplacements.put(COMPILED_CONSTANT_NAME, new Node(Token.TRUE));
+      additionalReplacements.put(COMPILED_CONSTANT_NAME, IR.trueNode());
     }
 
     if (options.closurePass && options.locale != null) {
       additionalReplacements.put(CLOSURE_LOCALE_CONSTANT_NAME,
-          Node.newString(options.locale));
+          IR.string(options.locale));
     }
 
     return additionalReplacements;

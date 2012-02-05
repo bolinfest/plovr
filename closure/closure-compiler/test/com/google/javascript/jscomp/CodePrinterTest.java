@@ -668,7 +668,7 @@ public class CodePrinterTest extends TestCase {
         + "function f(a){};\n",
         "goog.java.Long;\n"
         + "/**\n"
-        + " * @param {(Array|null)} a\n"
+        + " * @param {(Array.<number>|null)} a\n"
         + " * @return {undefined}\n"
         + " */\n"
         + "function f(a) {\n}\n");
@@ -869,6 +869,22 @@ public class CodePrinterTest extends TestCase {
         "function t2() {\n  }\n" +
         "  t1.prototype = t2.prototype\n};\n"
     );
+  }
+
+  public void testEnumAnnotation1() {
+    assertTypeAnnotations(
+        "/** @enum {string} */ var Enum = {FOO: 'x', BAR: 'y'};",
+        "/** @enum {string} */\nvar Enum = {FOO:\"x\", BAR:\"y\"};\n");
+  }
+
+  public void testEnumAnnotation2() {
+    assertTypeAnnotations(
+        "var goog = goog || {};" +
+        "/** @enum {string} */ goog.Enum = {FOO: 'x', BAR: 'y'};" +
+        "/** @const */ goog.Enum2 = goog.x ? {} : goog.Enum;",
+        "var goog = goog || {};\n" +
+        "/** @enum {string} */\ngoog.Enum = {FOO:\"x\", BAR:\"y\"};\n" +
+        "/** @type {(Object|{})} */\ngoog.Enum2 = goog.x ? {} : goog.Enum;\n");
   }
 
   private void assertPrettyPrint(String js, String expected) {
@@ -1111,7 +1127,7 @@ public class CodePrinterTest extends TestCase {
     Node n = parse("foo(a);");
     assertPrintNode("foo(a)", n);
     Node call =  n.getFirstChild().getFirstChild();
-    assertTrue(call.getType() == Token.CALL);
+    assertTrue(call.isCall());
     call.putBooleanProp(Node.FREE_CALL, true);
     assertPrintNode("foo(a)", n);
   }
@@ -1120,7 +1136,7 @@ public class CodePrinterTest extends TestCase {
     Node n = parse("x.foo(a);");
     assertPrintNode("x.foo(a)", n);
     Node call =  n.getFirstChild().getFirstChild();
-    assertTrue(call.getType() == Token.CALL);
+    assertTrue(call.isCall());
     call.putBooleanProp(Node.FREE_CALL, true);
     assertPrintNode("(0,x.foo)(a)", n);
   }
@@ -1271,5 +1287,20 @@ public class CodePrinterTest extends TestCase {
 
   public void testIssue582() {
     assertPrint("var x = -0.0;", "var x=-0.0");
+  }
+
+  public void testIssue601() {
+    assertPrint("'\\v' == 'v'", "\"\\v\"==\"v\"");
+    assertPrint("'\\u000B' == '\\v'", "\"\\x0B\"==\"\\v\"");
+    assertPrint("'\\x0B' == '\\v'", "\"\\x0B\"==\"\\v\"");
+  }
+
+  public void testIssue620() {
+    assertPrint("alert(/ / / / /);", "alert(/ // / /)");
+    assertPrint("alert(/ // / /);", "alert(/ // / /)");
+  }
+
+  public void testIssue5746867() {
+    assertPrint("var a = { '$\\\\' : 5 };", "var a={\"$\\\\\":5}");
   }
 }

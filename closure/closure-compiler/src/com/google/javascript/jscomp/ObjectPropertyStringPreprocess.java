@@ -17,6 +17,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -67,15 +68,15 @@ public class ObjectPropertyStringPreprocess implements CompilerPass {
   @Override
   public void process(Node externs, Node root) {
     addExternDeclaration(externs,
-        new Node(Token.VAR,
-            Node.newString(Token.NAME, EXTERN_OBJECT_PROPERTY_STRING)));
+        IR.var(
+            IR.name(EXTERN_OBJECT_PROPERTY_STRING)));
     NodeTraversal.traverse(compiler, root, new Callback());
   }
 
   private void addExternDeclaration(Node externs, Node declarationStmt) {
     Node script = externs.getLastChild();
-    if (script == null || script.getType() != Token.SCRIPT) {
-      script = new Node(Token.SCRIPT);
+    if (script == null || !script.isScript()) {
+      script = IR.script();
       script.setIsSyntheticBlock(true);
       externs.addChildToBack(script);
     }
@@ -86,8 +87,7 @@ public class ObjectPropertyStringPreprocess implements CompilerPass {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       if (OBJECT_PROPERTY_STRING.equals(n.getQualifiedName())) {
-        Node newName =
-            Node.newString(Token.NAME, EXTERN_OBJECT_PROPERTY_STRING);
+        Node newName = IR.name(EXTERN_OBJECT_PROPERTY_STRING);
         newName.copyInformationFrom(n);
         parent.replaceChild(n, newName);
         compiler.reportCodeChange();
@@ -97,7 +97,7 @@ public class ObjectPropertyStringPreprocess implements CompilerPass {
       // Rewrite "new goog.testing.ObjectPropertyString(foo, 'bar')" to
       // "new goog.testing.ObjectPropertyString(window, foo.bar)" and
       // issues errors if bad arguments are encountered.
-      if (n.getType() != Token.NEW) {
+      if (!n.isNew()) {
         return;
       }
 
@@ -123,7 +123,7 @@ public class ObjectPropertyStringPreprocess implements CompilerPass {
       }
 
       Node secondArgument = firstArgument.getNext();
-      if (secondArgument.getType() != Token.STRING) {
+      if (!secondArgument.isString()) {
         compiler.report(t.makeError(secondArgument,
             STRING_LITERAL_EXPECTED_ERROR,
             Token.name(secondArgument.getType())));
@@ -132,13 +132,15 @@ public class ObjectPropertyStringPreprocess implements CompilerPass {
 
       Node newFirstArgument = NodeUtil.newQualifiedNameNode(
           compiler.getCodingConvention(),
-          compiler.getCodingConvention().getGlobalObject(),
-          firstArgument.getLineno(), firstArgument.getCharno());
+          compiler.getCodingConvention().getGlobalObject())
+              .srcrefTree(firstArgument);
+
       Node newSecondArgument = NodeUtil.newQualifiedNameNode(
           compiler.getCodingConvention(),
           firstArgument.getQualifiedName() + "." +
-          firstArgument.getNext().getString(),
-          secondArgument.getLineno(), secondArgument.getCharno());
+          firstArgument.getNext().getString())
+              .srcrefTree(secondArgument);
+
       n.replaceChild(firstArgument, newFirstArgument);
       n.replaceChild(secondArgument, newSecondArgument);
 

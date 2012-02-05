@@ -26,6 +26,7 @@ import com.google.javascript.jscomp.graph.LinkedUndirectedGraph;
 import com.google.javascript.jscomp.graph.UndiGraph;
 import com.google.javascript.jscomp.graph.UndiGraph.UndiGraphEdge;
 import com.google.javascript.jscomp.graph.UndiGraph.UndiGraphNode;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TokenStream;
@@ -260,7 +261,7 @@ class RenameProperties implements CompilerPass {
         }
         sb.append(replacement);
       }
-      parent.replaceChild(nodeEntry.getKey(), Node.newString(sb.toString()));
+      parent.replaceChild(nodeEntry.getKey(), IR.string(sb.toString()));
       changed = true;
     }
 
@@ -375,7 +376,7 @@ class RenameProperties implements CompilerPass {
       switch (n.getType()) {
         case Token.GETPROP:
           Node dest = n.getFirstChild().getNext();
-          if (dest.getType() == Token.STRING) {
+          if (dest.isString()) {
             externedNames.add(dest.getString());
           }
           break;
@@ -407,7 +408,7 @@ class RenameProperties implements CompilerPass {
       switch (n.getType()) {
         case Token.GETPROP:
           Node propNode = n.getFirstChild().getNext();
-          if (propNode.getType() == Token.STRING) {
+          if (propNode.isString()) {
             maybeMarkCandidate(propNode);
           }
           break;
@@ -427,7 +428,7 @@ class RenameProperties implements CompilerPass {
           // ensure that we never rename some other property in a way that
           // could conflict with this quoted name.
           Node child = n.getLastChild();
-          if (child != null && child.getType() == Token.STRING) {
+          if (child != null && child.isString()) {
             quotedNames.add(child.getString());
           }
           break;
@@ -435,7 +436,7 @@ class RenameProperties implements CompilerPass {
           // We replace a JSCompiler_renameProperty function call with a string
           // containing the renamed property.
           Node fnName = n.getFirstChild();
-          if (fnName.getType() == Token.NAME &&
+          if (fnName.isName() &&
               RENAME_PROPERTY_FUNCTION_NAME.equals(fnName.getString())) {
             callNodeToParentMap.put(n, parent);
             countCallCandidates(t, n);
@@ -447,17 +448,17 @@ class RenameProperties implements CompilerPass {
           if (NodeUtil.isFunctionDeclaration(n)) {
             String name = n.getFirstChild().getString();
             if (RENAME_PROPERTY_FUNCTION_NAME.equals(name)) {
-              if (NodeUtil.isExpressionNode(parent)) {
+              if (parent.isExprResult()) {
                 parent.detachFromParent();
               } else {
                 parent.removeChild(n);
               }
               compiler.reportCodeChange();
             }
-          } else if (parent.getType() == Token.NAME &&
+          } else if (parent.isName() &&
                      RENAME_PROPERTY_FUNCTION_NAME.equals(parent.getString())) {
             Node varNode = parent.getParent();
-            if (varNode.getType() == Token.VAR) {
+            if (varNode.isVar()) {
               varNode.removeChild(parent);
               if (!varNode.hasChildren()) {
                 varNode.detachFromParent();
@@ -492,7 +493,7 @@ class RenameProperties implements CompilerPass {
      */
     private void countCallCandidates(NodeTraversal t, Node callNode) {
       Node firstArg = callNode.getFirstChild().getNext();
-      if (firstArg.getType() != Token.STRING) {
+      if (!firstArg.isString()) {
         t.report(callNode, BAD_CALL);
         return;
       }

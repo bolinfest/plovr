@@ -19,7 +19,6 @@ package com.google.javascript.jscomp;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.Node;
@@ -29,7 +28,6 @@ import com.google.javascript.rhino.jstype.TernaryValue;
 import junit.framework.TestCase;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.Set;
 
 public class NodeUtilTest extends TestCase {
@@ -554,23 +552,6 @@ public class NodeUtilTest extends TestCase {
     assertContainsAnonFunc(false, "with (x) function a(){}");
   }
 
-  public void testNewFunctionNode() {
-    Node expected = parse("function foo(p1, p2, p3) { throw 2; }");
-    Node body = new Node(Token.BLOCK, new Node(Token.THROW, Node.newNumber(2)));
-    List<Node> params = Lists.newArrayList(Node.newString(Token.NAME, "p1"),
-                                           Node.newString(Token.NAME, "p2"),
-                                           Node.newString(Token.NAME, "p3"));
-    Node function = NodeUtil.newFunctionNode(
-        "foo", params, body, -1, -1);
-    Node actual = new Node(Token.SCRIPT);
-    actual.setIsSyntheticBlock(true);
-    actual.addChildToFront(function);
-    String difference = expected.checkTreeEquals(actual);
-    if (difference != null) {
-      assertTrue("Nodes do not match:\n" + difference, false);
-    }
-  }
-
   private void assertContainsAnonFunc(boolean expected, String js) {
     Node funcParent = findParentOfFuncDescendant(parse(js));
     assertNotNull("Expected function node in parse tree of: " + js, funcParent);
@@ -580,7 +561,7 @@ public class NodeUtilTest extends TestCase {
 
   private Node findParentOfFuncDescendant(Node n) {
     for (Node c = n.getFirstChild(); c != null; c = c.getNext()) {
-      if (c.getType() == Token.FUNCTION) {
+      if (c.isFunction()) {
         return n;
       }
       Node result = findParentOfFuncDescendant(c);
@@ -593,7 +574,7 @@ public class NodeUtilTest extends TestCase {
 
   private Node getFuncChild(Node n) {
     for (Node c = n.getFirstChild(); c != null; c = c.getNext()) {
-      if (c.getType() == Token.FUNCTION) {
+      if (c.isFunction()) {
         return c;
       }
     }
@@ -730,17 +711,17 @@ public class NodeUtilTest extends TestCase {
 
   public void testIsFunctionExpression1() {
     Node root = parse("(function foo() {})");
-    Node StatementNode = root.getFirstChild();
-    assertTrue(NodeUtil.isExpressionNode(StatementNode));
-    Node functionNode = StatementNode.getFirstChild();
-    assertTrue(NodeUtil.isFunction(functionNode));
+    Node statementNode = root.getFirstChild();
+    assertTrue(statementNode.isExprResult());
+    Node functionNode = statementNode.getFirstChild();
+    assertTrue(functionNode.isFunction());
     assertTrue(NodeUtil.isFunctionExpression(functionNode));
   }
 
   public void testIsFunctionExpression2() {
     Node root = parse("function foo() {}");
     Node functionNode = root.getFirstChild();
-    assertTrue(NodeUtil.isFunction(functionNode));
+    assertTrue(functionNode.isFunction());
     assertFalse(NodeUtil.isFunctionExpression(functionNode));
   }
 
@@ -1048,44 +1029,6 @@ public class NodeUtilTest extends TestCase {
     assertEquals("foo", NodeUtil.getSourceName(n));
   }
 
-  public void testIsLabelName() {
-    Compiler compiler = new Compiler();
-
-    // Test removing the initializer.
-    String code = "a:while(1) {a; continue a; break a; break;}";
-    Node actual = parse(code);
-
-    Node labelNode = actual.getFirstChild();
-    assertTrue(labelNode.getType() == Token.LABEL);
-    assertTrue(NodeUtil.isLabelName(labelNode.getFirstChild()));
-    assertFalse(NodeUtil.isLabelName(labelNode.getLastChild()));
-
-    Node whileNode = labelNode.getLastChild();
-    assertTrue(whileNode.getType() == Token.WHILE);
-    Node whileBlock = whileNode.getLastChild();
-    assertTrue(whileBlock.getType() == Token.BLOCK);
-    assertFalse(NodeUtil.isLabelName(whileBlock));
-
-    Node firstStatement = whileBlock.getFirstChild();
-    assertTrue(firstStatement.getType() == Token.EXPR_RESULT);
-    Node variableReference = firstStatement.getFirstChild();
-    assertTrue(variableReference.getType() == Token.NAME);
-    assertFalse(NodeUtil.isLabelName(variableReference));
-
-    Node continueStatement = firstStatement.getNext();
-    assertTrue(continueStatement.getType() == Token.CONTINUE);
-    assertTrue(NodeUtil.isLabelName(continueStatement.getFirstChild()));
-
-    Node firstBreak = continueStatement.getNext();
-    assertTrue(firstBreak.getType() == Token.BREAK);
-    assertTrue(NodeUtil.isLabelName(firstBreak.getFirstChild()));
-
-    Node secondBreak = firstBreak.getNext();
-    assertTrue(secondBreak.getType() == Token.BREAK);
-    assertFalse(secondBreak.hasChildren());
-    assertFalse(NodeUtil.isLabelName(secondBreak.getFirstChild()));
-  }
-
   public void testLocalValue1() throws Exception {
     // Names are not known to be local.
     assertFalse(testLocalValue("x"));
@@ -1189,7 +1132,7 @@ public class NodeUtilTest extends TestCase {
     Node newExpr = getNode("new x()");
     assertFalse(NodeUtil.evaluatesToLocalValue(newExpr));
 
-    Preconditions.checkState(newExpr.getType() == Token.NEW);
+    Preconditions.checkState(newExpr.isNew());
     Node.SideEffectFlags flags = new Node.SideEffectFlags();
 
     flags.clearAllFlags();
@@ -1233,7 +1176,7 @@ public class NodeUtilTest extends TestCase {
     assertTrue(NodeUtil.functionCallHasSideEffects(callExpr));
 
     Node newExpr = callExpr.getFirstChild().getFirstChild();
-    Preconditions.checkState(newExpr.getType() == Token.NEW);
+    Preconditions.checkState(newExpr.isNew());
     Node.SideEffectFlags flags = new Node.SideEffectFlags();
 
     // No side effects, local result
@@ -1637,6 +1580,22 @@ public class NodeUtilTest extends TestCase {
     testFunctionName("this.a = function a() {}", "this.a");
   }
 
+  public void testGetBestLValue() {
+    assertEquals("x", getFunctionLValue("var x = function() {};"));
+    assertEquals("x", getFunctionLValue("x = function() {};"));
+    assertEquals("x", getFunctionLValue("function x() {};"));
+    assertEquals("x", getFunctionLValue("var x = y ? z : function() {};"));
+    assertEquals("x", getFunctionLValue("var x = y ? function() {} : z;"));
+    assertEquals("x", getFunctionLValue("var x = y && function() {};"));
+    assertEquals("x", getFunctionLValue("var x = y || function() {};"));
+    assertEquals("x", getFunctionLValue("var x = (y, function() {});"));
+  }
+
+  private String getFunctionLValue(String js) {
+    Node lVal = NodeUtil.getBestLValue(getFunctionNode(js));
+    return lVal == null ? null : lVal.getString();
+  }
+
   static void testFunctionName(String js, String expected) {
     assertEquals(
         expected,
@@ -1649,7 +1608,7 @@ public class NodeUtilTest extends TestCase {
   }
 
   static Node getFunctionNode(Node n) {
-    if (n.getType() == Token.FUNCTION) {
+    if (n.isFunction()) {
       return n;
     }
     for (Node c : n.children()) {

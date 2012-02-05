@@ -26,8 +26,6 @@ import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.graph.Annotation;
 import com.google.javascript.jscomp.graph.DiGraph.DiGraphNode;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -551,8 +549,8 @@ abstract class DataFlowAnalysis<N, L extends LatticeElement> {
     AbstractPostOrderCallback finder = new AbstractPostOrderCallback() {
       @Override
       public void visit(NodeTraversal t, Node n, Node parent) {
-        if (jsScope == t.getScope() || !NodeUtil.isName(n)
-            || NodeUtil.isFunction(parent)) {
+        if (jsScope == t.getScope() || !n.isName()
+            || parent.isFunction()) {
           return;
         }
         String name = n.getString();
@@ -570,7 +568,7 @@ abstract class DataFlowAnalysis<N, L extends LatticeElement> {
     //    begin with.
     for (Iterator<Var> i = jsScope.getVars(); i.hasNext();) {
       Var var = i.next();
-      if (var.getParentNode().getType() == Token.CATCH ||
+      if (var.getParentNode().isCatch() ||
           compiler.getCodingConvention().isExported(var.getName())) {
         escaped.add(var);
       }

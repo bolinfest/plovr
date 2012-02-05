@@ -22,6 +22,7 @@ import com.google.common.base.Supplier;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.MakeDeclaredNamesUnique.InlineRenamer;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -118,19 +119,17 @@ class FunctionToBlockMutator {
    * @param n The node to inspect
    */
   private void rewriteFunctionDeclarations(Node n) {
-    if (n.getType() == Token.FUNCTION) {
+    if (n.isFunction()) {
       if (NodeUtil.isFunctionDeclaration(n)) {
         // Rewrite: function f() {} ==> var f = function() {}
         Node fnNameNode = n.getFirstChild();
 
-        Node var = new Node(Token.VAR).copyInformationFrom(n);
-        Node name = Node.newString(Token.NAME, fnNameNode.getString())
-            .copyInformationFrom(fnNameNode);
+        Node name = IR.name(fnNameNode.getString()).srcref(fnNameNode);
+        Node var = IR.var(name).srcref(n);
 
         fnNameNode.setString("");
         // Add the VAR, remove the FUNCTION
         n.getParent().replaceChild(n, var);
-        var.addChildToFront(name);
         // readd the function as a function expression
         name.addChildToFront(n);
       }
@@ -155,7 +154,7 @@ class FunctionToBlockMutator {
     }
 
     // For all VARs
-    if (NodeUtil.isVar(n)) {
+    if (n.isVar()) {
       Node name = n.getFirstChild();
       // It isn't initialized.
       if (!name.hasChildren()) {
@@ -260,7 +259,7 @@ class FunctionToBlockMutator {
             // has side effects.
 
             Node value = entry.getValue();
-            if (value.getType() != Token.THIS
+            if (!value.isThis()
                 && (referencesThis
                     || NodeUtil.mayHaveSideEffects(value, compiler))) {
               String newName = getUniqueThisName();
@@ -270,8 +269,8 @@ class FunctionToBlockMutator {
               newVars.add(0, newNode);
               // Remove the parameter from the list to replace.
               newArgMap.put(THIS_MARKER,
-                  Node.newString(Token.NAME, newName)
-                      .copyInformationFromForTree(newValue));
+                  IR.name(newName)
+                      .srcrefTree(newValue));
             }
           } else {
             Node newValue = entry.getValue().cloneTree();
@@ -347,13 +346,10 @@ class FunctionToBlockMutator {
         replaceReturnWithBreak(block, null, resultName, labelName);
 
         // Add label
-        Node label = new Node(Token.LABEL).copyInformationFrom(block);
-        Node name = Node.newString(Token.LABEL_NAME, labelName)
-            .copyInformationFrom(block);
-        label.addChildToFront(name);
-        label.addChildToBack(block);
+        Node name = IR.labelName(labelName).srcref(block);
+        Node label = IR.label(name, block).srcref(block);
 
-        Node newRoot = new Node(Token.BLOCK).copyInformationFrom(block);
+        Node newRoot = IR.block().srcref(block);
         newRoot.addChildrenToBack(label);
 
 
@@ -380,7 +376,7 @@ class FunctionToBlockMutator {
    *   a = (void) 0;
    */
   private static void addDummyAssignment(Node node, String resultName) {
-    Preconditions.checkArgument(node.getType() == Token.BLOCK);
+    Preconditions.checkArgument(node.isBlock());
 
     // A result is needed create a dummy value.
     Node srcLocation = node;
@@ -402,7 +398,7 @@ class FunctionToBlockMutator {
   private static void convertLastReturnToStatement(
       Node block, String resultName) {
     Node ret = block.getLastChild();
-    Preconditions.checkArgument(ret.getType() == Token.RETURN);
+    Preconditions.checkArgument(ret.isReturn());
     Node resultNode = getReplacementReturnStatement(ret, resultName);
 
     if (resultNode == null) {
@@ -420,8 +416,8 @@ class FunctionToBlockMutator {
   private static Node createAssignStatementNode(String name, Node expression) {
     // Create 'name = result-expression;' statement.
     // EXPR (ASSIGN (NAME, EXPRESSION))
-    Node nameNode = Node.newString(Token.NAME, name);
-    Node assign = new Node(Token.ASSIGN, nameNode, expression);
+    Node nameNode = IR.name(name);
+    Node assign = IR.assign(nameNode, expression);
     return NodeUtil.newExpr(assign);
   }
 
@@ -468,7 +464,7 @@ class FunctionToBlockMutator {
   private static boolean hasReturnAtExit(Node block) {
     // Only inline functions that return something (empty returns
     // will be handled by ConstFolding+EmptyFunctionRemoval)
-    return (block.getLastChild().getType() == Token.RETURN);
+    return (block.getLastChild().isReturn());
   }
 
   /**
@@ -480,19 +476,18 @@ class FunctionToBlockMutator {
   private static Node replaceReturnWithBreak(Node current, Node parent,
       String resultName, String labelName) {
 
-    if (current.getType() == Token.FUNCTION
-        || current.getType() == Token.EXPR_RESULT) {
+    if (current.isFunction()
+        || current.isExprResult()) {
       // Don't recurse into functions definitions, and expressions can't
       // contain RETURN nodes.
       return current;
     }
 
-    if (current.getType() == Token.RETURN) {
+    if (current.isReturn()) {
       Preconditions.checkState(NodeUtil.isStatementBlock(parent));
 
       Node resultNode = getReplacementReturnStatement(current, resultName);
-      Node name = Node.newString(Token.LABEL_NAME, labelName);
-      Node breakNode = new Node(Token.BREAK, name);
+      Node breakNode = IR.breakNode(IR.labelName(labelName));
 
       // Replace the node in parent, and reset current to the first new child.
       breakNode.copyInformationFromForTree(current);

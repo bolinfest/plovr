@@ -20,13 +20,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-import com.google.javascript.jscomp.CodingConvention.AssertionFunctionSpec;
-import com.google.javascript.jscomp.CodingConvention.Bind;
-import com.google.javascript.jscomp.CodingConvention.ObjectLiteralCast;
-import com.google.javascript.jscomp.CodingConvention.SubclassRelationship;
-import com.google.javascript.jscomp.CodingConvention.SubclassType;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.ObjectType;
@@ -93,7 +87,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
       // goog.mixin(SubClass.prototype, SuperClass.prototype)
       // goog$mixin(SubClass.prototype, SuperClass.prototype)
       boolean isDeprecatedCall = callNode.getChildCount() == 2 &&
-          callName.getType() == Token.GETPROP;
+          callName.isGetProp();
       if (isDeprecatedCall) {
         // SubClass.inherits(SuperClass)
         subclass = callName.getFirstChild();
@@ -142,9 +136,9 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
   private SubclassType typeofClassDefiningName(Node callName) {
     // Check if the method name matches one of the class-defining methods.
     String methodName = null;
-    if (callName.getType() == Token.GETPROP) {
+    if (callName.isGetProp()) {
       methodName = callName.getLastChild().getString();
-    } else if (callName.getType() == Token.NAME) {
+    } else if (callName.isName()) {
       String name = callName.getString();
       int dollarIndex = name.lastIndexOf('$');
       if (dollarIndex != -1) {
@@ -174,7 +168,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
    * a.b.c.prototype => true
    */
   private boolean endsWithPrototype(Node qualifiedName) {
-    return qualifiedName.getType() == Token.GETPROP &&
+    return qualifiedName.isGetProp() &&
         qualifiedName.getLastChild().getString().equals("prototype");
   }
 
@@ -203,11 +197,11 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
     String className = null;
     if (NodeUtil.isExprCall(parent)) {
       Node callee = node.getFirstChild();
-      if (callee != null && callee.getType() == Token.GETPROP) {
+      if (callee != null && callee.isGetProp()) {
         String qualifiedName = callee.getQualifiedName();
         if (functionName.equals(qualifiedName)) {
           Node target = callee.getNext();
-          if (target != null && target.getType() == Token.STRING) {
+          if (target != null && target.isString()) {
             className = target.getString();
           }
         }
@@ -240,11 +234,11 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
     if ("goog.addDependency".equals(callName.getQualifiedName()) &&
         n.getChildCount() >= 3) {
       Node typeArray = callName.getNext().getNext();
-      if (typeArray.getType() == Token.ARRAYLIT) {
+      if (typeArray.isArrayLit()) {
         List<String> typeNames = Lists.newArrayList();
         for (Node name = typeArray.getFirstChild(); name != null;
              name = name.getNext()) {
-          if (name.getType() == Token.STRING) {
+          if (name.isString()) {
             typeNames.add(name.getString());
           }
         }
@@ -295,7 +289,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
 
   @Override
   public boolean isPropertyTestFunction(Node call) {
-    Preconditions.checkArgument(call.getType() == Token.CALL);
+    Preconditions.checkArgument(call.isCall());
     return propertyTestFunctions.contains(
         call.getFirstChild().getQualifiedName());
   }
@@ -303,7 +297,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
   @Override
   public ObjectLiteralCast getObjectLiteralCast(NodeTraversal t,
       Node callNode) {
-    Preconditions.checkArgument(callNode.getType() == Token.CALL);
+    Preconditions.checkArgument(callNode.isCall());
     Node callName = callNode.getFirstChild();
     if (!"goog.reflect.object".equals(callName.getQualifiedName()) ||
         callNode.getChildCount() != 3) {
@@ -316,7 +310,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
     }
 
     Node objectNode = typeNode.getNext();
-    if (objectNode.getType() != Token.OBJECTLIT) {
+    if (!objectNode.isObjectLit()) {
       // TODO(johnlenz): The coding convention should not be performing checks.
       t.getCompiler().report(JSError.make(t.getSourceName(), callNode,
                                           OBJECTLIT_EXPECTED));
@@ -373,7 +367,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
     // It would be nice to be able to identify a fn.bind call
     // but that requires knowing the type of "fn".
 
-    if (n.getType() != Token.CALL) {
+    if (!n.isCall()) {
       return null;
     }
 

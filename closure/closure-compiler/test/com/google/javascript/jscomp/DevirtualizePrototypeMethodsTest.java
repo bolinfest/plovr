@@ -521,6 +521,10 @@ public class DevirtualizePrototypeMethodsTest extends CompilerTestCase {
                          "o.foo()"));
   }
 
+  public void testWrapper() {
+    testSame("(function() {})()");
+  }
+
   private static class ModuleTestInput {
     static final String DEFINITION = "a.prototype.foo = function() {}";
     static final String USE = "x.foo()";
@@ -673,7 +677,10 @@ public class DevirtualizePrototypeMethodsTest extends CompilerTestCase {
         return left + "[" + n.getLastChild().getString() + "]";
       } else if (type == Token.THIS) {
         return "this";
+      } else if (type == Token.FUNCTION){
+        return "{ANON FUNCTION}";
       } else {
+        // I wonder if we should just die on this.
         return null;
       }
     }
@@ -682,15 +689,15 @@ public class DevirtualizePrototypeMethodsTest extends CompilerTestCase {
       @Override
       public void visit(NodeTraversal traversal, Node node, Node parent) {
         Node nameNode = null;
-        if (NodeUtil.isFunction(node)) {
-          if (NodeUtil.isName(parent)) {
+        if (node.isFunction()) {
+          if (parent.isName()) {
             nameNode = parent;
-          } else if (NodeUtil.isAssign(parent)) {
+          } else if (parent.isAssign()) {
             nameNode = parent.getFirstChild();
           } else {
             nameNode = node.getFirstChild();
           }
-        } else if (NodeUtil.isCall(node) || NodeUtil.isNew(node)) {
+        } else if (node.isCall() || node.isNew()) {
           nameNode = node.getFirstChild();
         }
 
@@ -705,9 +712,9 @@ public class DevirtualizePrototypeMethodsTest extends CompilerTestCase {
                         (type != null) ? type.toString() : "null"));
         }
 
-        if (NodeUtil.isGetProp(node)) {
+        if (node.isGetProp()) {
           Node child = node.getFirstChild();
-          if (NodeUtil.isName(child) && child.getString().endsWith("$self")) {
+          if (child.isName() && child.getString().endsWith("$self")) {
             JSType type = child.getJSType();
             typeInformation.add(
                 Joiner.on("").join(

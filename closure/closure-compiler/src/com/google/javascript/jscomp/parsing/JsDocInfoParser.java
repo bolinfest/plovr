@@ -20,9 +20,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.google.javascript.jscomp.mozilla.rhino.ErrorReporter;
-import com.google.javascript.jscomp.mozilla.rhino.ast.Comment;
 import com.google.javascript.jscomp.parsing.Config.LanguageMode;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.JSDocInfoBuilder;
@@ -30,6 +29,8 @@ import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.ScriptRuntime;
 import com.google.javascript.rhino.Token;
+import com.google.javascript.rhino.head.ErrorReporter;
+import com.google.javascript.rhino.head.ast.Comment;
 import com.google.javascript.rhino.jstype.StaticSourceFile;
 
 import java.util.HashSet;
@@ -1552,7 +1553,7 @@ public final class JsDocInfoParser {
       token = next();
       if (token == JsDocToken.RC) {
         // EMPTY represents the UNKNOWN type in the Type AST.
-        return wrapNode(Token.ELLIPSIS, new Node(Token.EMPTY));
+        return wrapNode(Token.ELLIPSIS, IR.empty());
       }
       restArg = true;
     }
@@ -1633,7 +1634,7 @@ public final class JsDocInfoParser {
     if (typeExpr == null) {
       return null;
     }
-    Node typeList = new Node(Token.BLOCK);
+    Node typeList = IR.block();
     typeList.addChildToBack(typeExpr);
     while (match(JsDocToken.COMMA)) {
       next();
@@ -1870,7 +1871,7 @@ public final class JsDocInfoParser {
   // has to happen during type resolution. Rather than duplicate the
   // order-checking in two places, we just do all of it in type resolution.
   private Node parseParametersType(JsDocToken token) {
-    Node paramsType = newNode(Token.LP);
+    Node paramsType = newNode(Token.PARAM_LIST);
     boolean isVarArgs = false;
     Node paramType = null;
     if (token != JsDocToken.RP) {
@@ -2176,7 +2177,7 @@ public final class JsDocInfoParser {
   // e.g., source-name, between all nodes.
   private Node createTemplateNode() {
     // The Node type choice is arbitrary.
-    Node templateNode = new Node(Token.SCRIPT);
+    Node templateNode = IR.script();
     templateNode.setStaticSourceFile(
       this.associatedNode != null ?
       this.associatedNode.getStaticSourceFile() :

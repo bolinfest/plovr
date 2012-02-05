@@ -18,7 +18,6 @@ package com.google.javascript.jscomp;
 import com.google.common.base.Preconditions;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 
 /**
  * Collapses anonymous function expressions into named function declarations,
@@ -52,7 +51,7 @@ class CollapseAnonymousFunctions implements CompilerPass {
   private class Callback extends AbstractPostOrderCallback {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (n.getType() != Token.VAR) {
+      if (!n.isVar()) {
         return;
       }
 
@@ -63,10 +62,10 @@ class CollapseAnonymousFunctions implements CompilerPass {
       // definitions are added to scopes before the start of execution.
 
       Node grandparent = parent.getParent();
-      if (!(parent.getType() == Token.SCRIPT ||
+      if (!(parent.isScript() ||
             grandparent != null &&
-            grandparent.getType() == Token.FUNCTION &&
-            parent.getType() == Token.BLOCK)) {
+            grandparent.isFunction() &&
+            parent.isBlock())) {
         return;
       }
 
@@ -76,7 +75,7 @@ class CollapseAnonymousFunctions implements CompilerPass {
       Node name = n.getFirstChild();
       Node value = name.getFirstChild();
       if (value != null &&
-          value.getType() == Token.FUNCTION &&
+          value.isFunction() &&
           !isRecursiveFunction(value)) {
         Node fnName = value.getFirstChild();
         fnName.setString(name.getString());
@@ -105,7 +104,7 @@ class CollapseAnonymousFunctions implements CompilerPass {
     }
 
     private boolean containsName(Node n, String name) {
-      if (n.getType() == Token.NAME && n.getString().equals(name)) {
+      if (n.isName() && n.getString().equals(name)) {
         return true;
       }
 

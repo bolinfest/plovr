@@ -18,9 +18,8 @@ package com.google.javascript.jscomp;
 
 import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
-
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
@@ -108,11 +107,11 @@ class CreateSyntheticBlocks implements CompilerPass {
 
 
     Node originalParent = marker.endMarker.getParent();
-    Node outerBlock = new Node(Token.BLOCK);
+    Node outerBlock = IR.block();
     outerBlock.setIsSyntheticBlock(true);
     originalParent.addChildBefore(outerBlock, marker.startMarker);
 
-    Node innerBlock = new Node(Token.BLOCK);
+    Node innerBlock = IR.block();
     innerBlock.setIsSyntheticBlock(true);
     // Move everything after the start Node up to the end Node into the inner
     // block.
@@ -169,8 +168,7 @@ class CreateSyntheticBlocks implements CompilerPass {
   private class Callback extends AbstractPostOrderCallback {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (n.getType() != Token.CALL
-          || n.getFirstChild().getType() != Token.NAME) {
+      if (!n.isCall() || !n.getFirstChild().isName()) {
         return;
       }
 
@@ -178,7 +176,7 @@ class CreateSyntheticBlocks implements CompilerPass {
       String callName = callTarget.getString();
 
       if (startMarkerName.equals(callName)) {
-        if (parent.getType() != Token.EXPR_RESULT) {
+        if (!parent.isExprResult()) {
           compiler.report(
               t.makeError(n, INVALID_MARKER_USAGE, startMarkerName));
           return;
@@ -192,7 +190,7 @@ class CreateSyntheticBlocks implements CompilerPass {
       }
 
       Node endMarkerNode = parent;
-      if (endMarkerNode.getType() != Token.EXPR_RESULT) {
+      if (!endMarkerNode.isExprResult()) {
         compiler.report(
             t.makeError(n, INVALID_MARKER_USAGE, endMarkerName));
         return;

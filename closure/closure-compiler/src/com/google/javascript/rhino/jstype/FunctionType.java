@@ -162,7 +162,7 @@ public class FunctionType extends PrototypeObjectType {
         Token.FUNCTION == source.getType());
     Preconditions.checkArgument(name != null);
     this.source = source;
-    this.call = new ArrowType(registry, new Node(Token.LP), null);
+    this.call = new ArrowType(registry, new Node(Token.PARAM_LIST), null);
     this.kind = Kind.INTERFACE;
     this.typeOfThis = new InstanceObjectType(registry, this);
   }
@@ -276,7 +276,7 @@ public class FunctionType extends PrototypeObjectType {
   }
 
   @Override
-  public StaticSlot<JSType> getSlot(String name) {
+  public Property getSlot(String name) {
     if ("prototype".equals(name)) {
       // Lazy initialization of the prototype field.
       getPrototype();
@@ -290,6 +290,7 @@ public class FunctionType extends PrototypeObjectType {
    * Includes the prototype iff someone has created it. We do not want
    * to expose the prototype for ordinary functions.
    */
+  @Override
   public Set<String> getOwnPropertyNames() {
     if (prototypeSlot == null) {
       return super.getOwnPropertyNames();
@@ -449,6 +450,11 @@ public class FunctionType extends PrototypeObjectType {
     }
   }
 
+  /** Returns interfaces directly implemented by the class. */
+  public Iterable<ObjectType> getOwnImplementedInterfaces() {
+    return implementedInterfaces;
+  }
+
   public void setImplementedInterfaces(List<ObjectType> implementedInterfaces) {
     // Records this type for each implemented interface.
     for (ObjectType type : implementedInterfaces) {
@@ -507,32 +513,11 @@ public class FunctionType extends PrototypeObjectType {
   @Override
   public JSType getPropertyType(String name) {
     if (!hasOwnProperty(name)) {
-      if ("call".equals(name)) {
-        // Define the "call" function lazily.
-        Node params = getParametersNode();
-        if (params == null) {
-          // If there's no params array, don't do any type-checking
-          // in this CALL function.
-          defineDeclaredProperty(name,
-              new FunctionBuilder(registry)
-              .withReturnType(getReturnType())
-              .build(),
-              source);
-        } else {
-          params = params.cloneTree();
-          Node thisTypeNode = Node.newString(Token.NAME, "thisType");
-          thisTypeNode.setJSType(
-              registry.createOptionalNullableType(getTypeOfThis()));
-          params.addChildToFront(thisTypeNode);
-          thisTypeNode.setOptionalArg(true);
-
-          defineDeclaredProperty(name,
-              new FunctionBuilder(registry)
-              .withParamsNode(params)
-              .withReturnType(getReturnType())
-              .build(),
-              source);
-        }
+      // Define the "call", "apply", and "bind" functions lazily.
+      boolean isCall = "call".equals(name);
+      boolean isBind = "bind".equals(name);
+      if (isCall || isBind) {
+        defineDeclaredProperty(name, getCallOrBindSignature(isCall), source);
       } else if ("apply".equals(name)) {
         // Define the "apply" function lazily.
         FunctionParamBuilder builder = new FunctionParamBuilder(registry);
@@ -556,6 +541,67 @@ public class FunctionType extends PrototypeObjectType {
     }
 
     return super.getPropertyType(name);
+  }
+
+  /**
+   * Get the return value of calling "bind" on this function
+   * with the specified number of arguments.
+   *
+   * If -1 is passed, then we will return a result that accepts
+   * any parameters.
+   */
+  public FunctionType getBindReturnType(int argsToBind) {
+    FunctionBuilder builder = new FunctionBuilder(registry)
+        .withReturnType(getReturnType());
+    if (argsToBind >= 0) {
+      Node origParams = getParametersNode();
+      if (origParams != null) {
+        Node params = origParams.cloneTree();
+        for (int i = 1; i < argsToBind && params.getFirstChild() != null; i++) {
+          if (params.getFirstChild().isVarArgs()) {
+            break;
+          }
+          params.removeFirstChild();
+        }
+        builder.withParamsNode(params);
+      }
+    }
+    return builder.build();
+  }
+
+  /**
+   * Notice that "call" and "bind" have the same argument signature,
+   * except that all the arguments of "bind" (except the first)
+   * are optional.
+   */
+  private FunctionType getCallOrBindSignature(boolean isCall) {
+    boolean isBind = !isCall;
+    FunctionBuilder builder = new FunctionBuilder(registry)
+        .withReturnType(isCall ? getReturnType() : getBindReturnType(-1));
+
+    Node origParams = getParametersNode();
+    if (origParams != null) {
+      Node params = origParams.cloneTree();
+
+      Node thisTypeNode = Node.newString(Token.NAME, "thisType");
+      thisTypeNode.setJSType(
+          registry.createOptionalNullableType(getTypeOfThis()));
+      params.addChildToFront(thisTypeNode);
+      thisTypeNode.setOptionalArg(isCall);
+
+      if (isBind) {
+        // The arguments of bind() are unique in that they are all
+        // optional but not undefinable.
+        for (Node current = thisTypeNode.getNext();
+             current != null; current = current.getNext()) {
+          current.setOptionalArg(true);
+        }
+      }
+
+      builder.withParamsNode(params);
+    }
+
+    return builder.build();
   }
 
   @Override
@@ -804,7 +850,7 @@ public class FunctionType extends PrototypeObjectType {
    * {@code this:T} if the function expects a known type for {@code this}.
    */
   @Override
-  public String toString() {
+  String toStringHelper(boolean forAnnotations) {
     if (!isPrettyPrint() ||
         this == registry.getNativeType(JSTypeNative.FUNCTION_INSTANCE_TYPE)) {
       return "Function";
@@ -822,44 +868,61 @@ public class FunctionType extends PrototypeObjectType {
       } else {
         b.append("this:");
       }
-      b.append(typeOfThis.toString());
+      b.append(typeOfThis.toStringHelper(forAnnotations));
     }
     if (paramNum > 0) {
       if (hasKnownTypeOfThis) {
         b.append(", ");
       }
       Node p = call.parameters.getFirstChild();
-      if (p.isVarArgs()) {
-        appendVarArgsString(b, p.getJSType());
-      } else {
-        b.append(p.getJSType().toString());
-      }
+      appendArgString(b, p, forAnnotations);
+
       p = p.getNext();
       while (p != null) {
         b.append(", ");
-        if (p.isVarArgs()) {
-          appendVarArgsString(b, p.getJSType());
-        } else {
-          b.append(p.getJSType().toString());
-        }
+        appendArgString(b, p, forAnnotations);
         p = p.getNext();
       }
     }
     b.append("): ");
-    b.append(call.returnType);
+    b.append(call.returnType.toStringHelper(forAnnotations));
 
     setPrettyPrint(true);
     return b.toString();
   }
 
+  private void appendArgString(
+      StringBuilder b, Node p, boolean forAnnotations) {
+    if (p.isVarArgs()) {
+      appendVarArgsString(b, p.getJSType(), forAnnotations);
+    } else if (p.isOptionalArg()) {
+      appendOptionalArgString(b, p.getJSType(), forAnnotations);
+    } else {
+      b.append(p.getJSType().toStringHelper(forAnnotations));
+    }
+  }
+
   /** Gets the string representation of a var args param. */
-  private void appendVarArgsString(StringBuilder builder, JSType paramType) {
+  private void appendVarArgsString(StringBuilder builder, JSType paramType,
+      boolean forAnnotations) {
     if (paramType.isUnionType()) {
       // Remove the optionalness from the var arg.
       paramType = paramType.toMaybeUnionType().getRestrictedUnion(
           registry.getNativeType(JSTypeNative.VOID_TYPE));
     }
-    builder.append("...[").append(paramType.toString()).append("]");
+    builder.append("...[").append(
+        paramType.toStringHelper(forAnnotations)).append("]");
+  }
+
+  /** Gets the string representation of an optional param. */
+  private void appendOptionalArgString(
+      StringBuilder builder, JSType paramType, boolean forAnnotations) {
+    if (paramType.isUnionType()) {
+      // Remove the optionalness from the var arg.
+      paramType = paramType.toMaybeUnionType().getRestrictedUnion(
+          registry.getNativeType(JSTypeNative.VOID_TYPE));
+    }
+    builder.append(paramType.toStringHelper(forAnnotations)).append("=");
   }
 
   /**

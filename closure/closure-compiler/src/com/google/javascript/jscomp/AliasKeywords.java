@@ -20,6 +20,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -64,7 +65,7 @@ class AliasKeywords implements CompilerPass {
     private void visitNameNode(Node n) {
       if (isAliasDefinition(n)) {
         throw new IllegalStateException(
-            "Existing alias definition for " + Node.tokenToName(n.getType()));
+            "Existing alias definition for " + Token.name(n.getType()));
       }
     }
   }
@@ -171,9 +172,9 @@ class AliasKeywords implements CompilerPass {
       Node name = NodeUtil.newName(
           compiler.getCodingConvention(),
           getAliasName(), throwNode, getAliasName());
-      Node aliasCall = new Node(Token.CALL, name, throwNode.removeFirstChild());
+      Node aliasCall = IR.call( name, throwNode.removeFirstChild());
       aliasCall.putBooleanProp(Node.FREE_CALL, true);
-      Node exprResult = new Node(Token.EXPR_RESULT, aliasCall);
+      Node exprResult = IR.exprResult(aliasCall);
       parent.replaceChild(throwNode, exprResult);
     }
 
@@ -213,11 +214,12 @@ class AliasKeywords implements CompilerPass {
    * throw. The function throws the object.
    */
   private static Node createAliasFunctionNode(String aliasName) {
-    Node parameterName = Node.newString(Token.NAME, "jscomp_throw_param");
-    List<Node> parameters = Lists.newArrayList(parameterName.cloneNode());
-    Node throwStatement = new Node(Token.THROW, parameterName);
-    Node body = new Node(Token.BLOCK, throwStatement);
-    return NodeUtil.newFunctionNode(aliasName, parameters, body, -1, -1);
+    final String PARAM_NAME = "jscomp_throw_param";
+    return IR.function(
+        IR.name(aliasName),
+        IR.paramList(IR.name(PARAM_NAME)),
+        IR.block(
+            IR.throwNode(IR.name(PARAM_NAME))));
   }
 
   /** Aliases literal keywords (e.g., null) with variable names. */
@@ -263,7 +265,7 @@ class AliasKeywords implements CompilerPass {
     @Override
     public void visit(Node n, Node parent) {
       Node value = n.getFirstChild();
-      if (value.getType() == Token.NUMBER && value.getDouble() == 0) {
+      if (value.isNumber() && value.getDouble() == 0) {
         super.visit(n, parent);
       }
     }
@@ -286,7 +288,7 @@ class AliasKeywords implements CompilerPass {
      */
     protected void insertAliasDeclaration(Node codeRoot) {
       Node varNode = new Node(Token.VAR);
-      Node value = new Node(Token.VOID, Node.newNumber(0));
+      Node value = IR.voidNode(IR.number(0));
       Node name = NodeUtil.newName(
           compiler.getCodingConvention(), getAliasName(),
           varNode, getAliasName());
@@ -410,7 +412,7 @@ class AliasKeywords implements CompilerPass {
    * Does the given node define one of our aliases?
    */
   private boolean isAliasDefinition(Node n) {
-    if (n.getType() != Token.NAME) {
+    if (!n.isName()) {
       return false;
     }
 

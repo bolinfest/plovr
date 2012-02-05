@@ -22,6 +22,7 @@ import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.AbstractCompiler.LifeCycleStage;
 import com.google.javascript.jscomp.DefinitionsRemover.Definition;
 import com.google.javascript.jscomp.Scope.Var;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -34,7 +35,7 @@ import java.util.List;
  * <ul>
  * <li>Removes optional parameters if no caller specifies it as argument.</li>
  * <li>Removes arguments at call site to function that
- *     ignores the parameter. (Not implemented) </li>
+ *     ignores the parameter.</li>
  * <li>Inline a parameter if the function is always called with that constant.
  *     </li>
  * </ul>
@@ -94,7 +95,7 @@ class OptimizeParameters
     // rewrite changes the structure of this object.
     Node rValue = definition.getRValue();
     if (rValue == null ||
-        !NodeUtil.isFunction(rValue) ||
+        !rValue.isFunction() ||
         NodeUtil.isVarArgsFunction(rValue)) {
       return false;
     }
@@ -224,7 +225,7 @@ class OptimizeParameters
     // Remove the constant parameters in the definitions and add it as a local
     // variable.
     Node function = definition.getRValue();
-    if (NodeUtil.isFunction(function)) {
+    if (function.isFunction()) {
       optimizeFunctionDefinition(parameters, function);
     }
   }
@@ -363,7 +364,7 @@ class OptimizeParameters
           // global variable.
           if (v != null &&
               (v.isLocal() ||
-               v.nameNode.getParent().getType() == Token.CATCH)) {
+               v.nameNode.getParent().isCatch())) {
             return false;
           }
         }
@@ -383,10 +384,8 @@ class OptimizeParameters
     for (int index = parameters.size() - 1; index >= 0; index--) {
       if (parameters.get(index).shouldRemove()) {
         Node paramName = eliminateFunctionParamAt(function, index);
-        if (paramName != null) {
-          addVariableToFunction(function, paramName,
-              parameters.get(index).getArg());
-        }
+        addVariableToFunction(function, paramName,
+            parameters.get(index).getArg());
       }
     }
   }
@@ -452,16 +451,21 @@ class OptimizeParameters
    * @param value The initial value of the variable.
    */
   private void addVariableToFunction(Node function, Node varName, Node value) {
-    Preconditions.checkArgument(NodeUtil.isFunction(function),
+    Preconditions.checkArgument(function.isFunction(),
         "Node must be a function.");
 
     Node block = function.getLastChild();
-    Preconditions.checkArgument(block.getType() == Token.BLOCK,
+    Preconditions.checkArgument(block.isBlock(),
         "Node must be a block.");
 
     Preconditions.checkState(value.getParent() == null);
-    Node newVar = NodeUtil.newVarNode(varName.getString(), value);
-    block.addChildToFront(newVar);
+    Node stmt;
+    if (varName != null) {
+      stmt = NodeUtil.newVarNode(varName.getString(), value);
+    } else {
+      stmt = IR.exprResult(value);
+    }
+    block.addChildToFront(stmt);
     compiler.reportCodeChange();
   }
 
@@ -486,7 +490,7 @@ class OptimizeParameters
       // Keep the args in the same order, do the last first.
       eliminateParamsAfter(fnNode, argNode.getNext());
       argNode.detachFromParent();
-      Node var = new Node(Token.VAR, argNode).copyInformationFrom(argNode);
+      Node var = IR.var(argNode).copyInformationFrom(argNode);
       fnNode.getLastChild().addChildrenToFront(var);
       compiler.reportCodeChange();
       return true;
@@ -501,7 +505,7 @@ class OptimizeParameters
    * @return The Node of the argument removed.
    */
   private Node eliminateFunctionParamAt(Node function, int argIndex) {
-    Preconditions.checkArgument(NodeUtil.isFunction(function),
+    Preconditions.checkArgument(function.isFunction(),
         "Node must be a function.");
 
     Node formalArgPtr = NodeUtil.getArgumentForFunction(

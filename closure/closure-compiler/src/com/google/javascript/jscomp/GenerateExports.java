@@ -18,9 +18,8 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.javascript.jscomp.FindExportableNodes.GenerateNodeContext;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
-
 import java.util.Map;
 
 /**
@@ -74,9 +73,9 @@ class GenerateExports implements CompilerPass {
       String grandparent = null;
 
       Node node = context.getNode().getFirstChild();
-      if (node.getType() == Token.GETPROP) {
+      if (node.isGetProp()) {
         parent = node.getFirstChild().getQualifiedName();
-        if (node.getFirstChild().getType() == Token.GETPROP &&
+        if (node.getFirstChild().isGetProp() &&
             getPropertyName(node.getFirstChild()).equals(PROTOTYPE_PROPERTY)) {
           grandparent = node.getFirstChild().getFirstChild().getQualifiedName();
         }
@@ -92,33 +91,31 @@ class GenerateExports implements CompilerPass {
       Node call;
       if (useExportSymbol) {
         // exportSymbol(publicPath, object);
-        call = new Node(Token.CALL,
+        call = IR.call(
             NodeUtil.newQualifiedNameNode(
                 compiler.getCodingConvention(), exportSymbolFunction,
+                context.getNode(), export),
+            IR.string(export),
+            NodeUtil.newQualifiedNameNode(
+                compiler.getCodingConvention(), export,
                 context.getNode(), export));
-        call.addChildToBack(Node.newString(export));
-        call.addChildToBack(NodeUtil.newQualifiedNameNode(
-            compiler.getCodingConvention(), export,
-            context.getNode(), export));
       } else {
         // exportProperty(object, publicName, symbol);
         String property = getPropertyName(node);
-        call = new Node(Token.CALL,
-            new Node[] {
-                NodeUtil.newQualifiedNameNode(
-                    compiler.getCodingConvention(), exportPropertyFunction,
-                    context.getNode(), exportPropertyFunction),
-                NodeUtil.newQualifiedNameNode(
-                    compiler.getCodingConvention(), parent,
-                    context.getNode(), exportPropertyFunction),
-                Node.newString(property),
-                NodeUtil.newQualifiedNameNode(
-                    compiler.getCodingConvention(), export,
-                    context.getNode(), exportPropertyFunction)
-            });
+        call = IR.call(
+            NodeUtil.newQualifiedNameNode(
+                compiler.getCodingConvention(), exportPropertyFunction,
+                context.getNode(), exportPropertyFunction),
+            NodeUtil.newQualifiedNameNode(
+                compiler.getCodingConvention(), parent,
+                context.getNode(), exportPropertyFunction),
+            IR.string(property),
+            NodeUtil.newQualifiedNameNode(
+                compiler.getCodingConvention(), export,
+                context.getNode(), exportPropertyFunction));
       }
 
-      Node expression = new Node(Token.EXPR_RESULT, call);
+      Node expression = IR.exprResult(call);
       annotate(expression);
 
       // It's important that any class-building calls (goog.inherits)
@@ -153,7 +150,7 @@ class GenerateExports implements CompilerPass {
    * @return property name.
    */
   private String getPropertyName(Node node) {
-    Preconditions.checkArgument(node.getType() == Token.GETPROP);
+    Preconditions.checkArgument(node.isGetProp());
     return node.getLastChild().getString();
   }
 }

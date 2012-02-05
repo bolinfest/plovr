@@ -17,9 +17,8 @@ package com.google.javascript.jscomp;
 
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeTraversal.AbstractShallowStatementCallback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -45,6 +44,9 @@ import java.util.List;
  */
 class RescopeGlobalSymbols implements CompilerPass {
 
+  // Appended to variables names that conflict with globalSymbolNamespace.
+  private static final String DISAMBIGUATION_SUFFIX = "$";
+
   private final AbstractCompiler compiler;
   private final String globalSymbolNamespace;
   private final boolean addExtern;
@@ -62,9 +64,7 @@ class RescopeGlobalSymbols implements CompilerPass {
   }
 
   private void addExternForGlobalSymbolNamespace() {
-    Node nameNode = Node.newString(Token.NAME, globalSymbolNamespace);
-    Node varNode = new Node(Token.VAR);
-    varNode.addChildToBack(nameNode);
+    Node varNode = IR.var(IR.name(globalSymbolNamespace));
     CompilerInput input = compiler.newExternInput(
         "{RescopeGlobalSymbolsNamespaceVar}");
     input.getAstRoot(compiler).addChildrenToBack(varNode);
@@ -143,23 +143,39 @@ class RescopeGlobalSymbols implements CompilerPass {
   private class RewriteScopeCallback extends AbstractPostOrderCallback {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (n.getType() != Token.NAME) {
+      if (!n.isName()) {
         return;
       }
       String name = n.getString();
       // Ignore anonymous functions
-      if (parent.getType() == Token.FUNCTION && name.length() == 0) {
+      if (parent.isFunction() && name.length() == 0) {
         return;
       }
       Scope.Var var = t.getScope().getVar(name);
-      // We only care about global vars that are not extern.
-      if (var == null || !var.isGlobal() || var.isExtern()) {
+      if (var == null) {
+        return;
+      }
+      // Don't touch externs.
+      if (var.isExtern()) {
+        return;
+      }
+      // When the globalSymbolNamespace is used as a local variable name
+      // add suffix to avoid shadowing the namespace. Also add a suffix
+      // if a name starts with the name of the globalSymbolnamespace and
+      // the suffix.
+      if (!var.isExtern() && (name.equals(globalSymbolNamespace) ||
+          name.indexOf(globalSymbolNamespace + DISAMBIGUATION_SUFFIX) == 0)) {
+        n.setString(name + DISAMBIGUATION_SUFFIX);
+        compiler.reportCodeChange();
+      }
+      // We only care about global vars.
+      if (!var.isGlobal()) {
         return;
       }
       Node nameNode = var.getNameNode();
       // The exception variable (e in try{}catch(e){}) should not be rewritten.
       if (nameNode != null && nameNode.getParent() != null &&
-          nameNode.getParent().getType() == Token.CATCH) {
+          nameNode.getParent().isCatch()) {
         return;
       }
       replaceSymbol(n, name);
@@ -167,14 +183,13 @@ class RescopeGlobalSymbols implements CompilerPass {
 
     private void replaceSymbol(Node node, String name) {
       Node parent = node.getParent();
-      Node replacement = new Node(Token.GETPROP,
-          Node.newString(Token.NAME, globalSymbolNamespace)
-              .copyInformationFrom(node),
-          Node.newString(name).copyInformationFrom(node));
-      replacement.copyInformationFrom(node);
+      Node replacement = IR.getprop(
+          IR.name(globalSymbolNamespace).srcref(node),
+          IR.string(name).srcref(node));
+      replacement.srcref(node);
       if (node.hasChildren()) {
         // var declaration list: var a = 1, b = 2;
-        Node assign = new Node(Token.ASSIGN, replacement,
+        Node assign = IR.assign(replacement,
             node.removeFirstChild());
         parent.replaceChild(node, assign);
       } else {
@@ -204,7 +219,7 @@ class RescopeGlobalSymbols implements CompilerPass {
       AbstractShallowStatementCallback {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (n.getType() != Token.VAR) {
+      if (!n.isVar()) {
         return;
       }
       List<Node> commas = new ArrayList<Node>();
@@ -214,19 +229,17 @@ class RescopeGlobalSymbols implements CompilerPass {
       // because the previous traversal in RewriteScopeCallback creates
       // them.
       for (Node c : n.children()) {
-        if (c.getType() == Token.ASSIGN ||
-            parent.getType() == Token.FOR) {
+        if (c.isAssign() ||
+            parent.isFor()) {
           interestingChildren.add(c);
         }
       }
       for (Node c : interestingChildren) {
-        if (parent.getType() == Token.FOR && parent.getFirstChild() == n) {
+        if (parent.isFor() && parent.getFirstChild() == n) {
           commas.add(c.cloneTree());
         } else {
           // Var statement outside of for-loop.
-          Node expr = new Node(Token.EXPR_RESULT);
-          expr.copyInformationFrom(c);
-          expr.addChildToBack(c.cloneTree());
+          Node expr = IR.exprResult(c.cloneTree()).srcref(c);
           parent.addChildBefore(expr, n);
         }
       }
@@ -242,7 +255,7 @@ class RescopeGlobalSymbols implements CompilerPass {
     private Node joinOnComma(List<Node> commas, Node source) {
       Node comma = commas.get(0);
       for (int i = 1; i < commas.size(); i++) {
-        Node nextComma = new Node(Token.COMMA, comma, commas.get(i));
+        Node nextComma = IR.comma(comma, commas.get(i));
         nextComma.copyInformationFrom(source);
         comma = nextComma;
       }

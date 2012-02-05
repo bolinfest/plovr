@@ -18,6 +18,7 @@ package com.google.javascript.jscomp;
 
 import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -109,7 +110,7 @@ class AliasStrings extends AbstractPostOrderCallback
 
   @Override
   public void process(Node externs, Node root) {
-    logger.info("Aliasing common strings");
+    logger.fine("Aliasing common strings");
 
     // Traverse the tree and collect strings
     NodeTraversal.traverse(compiler, root, this);
@@ -127,9 +128,9 @@ class AliasStrings extends AbstractPostOrderCallback
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
-    if (n.getType() == Token.STRING &&
-        parent.getType() != Token.GETPROP &&
-        parent.getType() != Token.REGEXP &&
+    if (n.isString() &&
+        !parent.isGetProp() &&
+        !parent.isRegExp() &&
         !NodeUtil.isObjectLitKey(n, parent)) {
 
       String str = n.getString();
@@ -214,7 +215,7 @@ class AliasStrings extends AbstractPostOrderCallback
         case Token.FOR:
         case Token.SWITCH:
         case Token.CASE:
-        case Token.DEFAULT:
+        case Token.DEFAULT_CASE:
         case Token.BLOCK:
         case Token.SCRIPT:
         case Token.FUNCTION:
@@ -256,11 +257,7 @@ class AliasStrings extends AbstractPostOrderCallback
         continue;
       }
       String alias = info.getVariableName(entry.getKey());
-      Node value = Node.newString(Token.STRING, entry.getKey());
-      Node name = Node.newString(Token.NAME, alias);
-      name.addChildToBack(value);
-      Node var = new Node(Token.VAR);
-      var.addChildToBack(name);
+      Node var = IR.var(IR.name(alias), IR.string(entry.getKey()));
       if (info.siblingToInsertVarDeclBefore == null) {
         info.parentForNewVarDecl.addChildToFront(var);
       } else {
@@ -313,7 +310,7 @@ class AliasStrings extends AbstractPostOrderCallback
                                           String name,
                                           StringInfo info) {
     occurrence.parent.replaceChild(occurrence.node,
-                                   Node.newString(Token.NAME, name));
+                                   IR.name(name));
     info.isAliased = true;
     compiler.reportCodeChange();
   }
@@ -333,7 +330,7 @@ class AliasStrings extends AbstractPostOrderCallback
       }
     }
     // TODO(user): Make this save to file OR output to the application
-    logger.info(sb.toString());
+    logger.fine(sb.toString());
   }
 
   // -------------------------------------------------------------------------

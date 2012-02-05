@@ -20,10 +20,8 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.DefinitionsRemover.Definition;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
-
-
 import java.util.Collection;
 import java.util.List;
 
@@ -82,7 +80,7 @@ class OptimizeReturns
 
     // Assume non-function definitions results are used.
     Node rValue = definition.getRValue();
-    if (rValue == null || !NodeUtil.isFunction(rValue)) {
+    if (rValue == null || !rValue.isFunction()) {
       return true;
     }
 
@@ -102,14 +100,14 @@ class OptimizeReturns
       Node useNodeParent = site.node.getParent();
       if (isCall(site)) {
         Node callNode = useNodeParent;
-        Preconditions.checkState(callNode.getType() == Token.CALL);
-        if (isValueUsed(callNode)) {
+        Preconditions.checkState(callNode.isCall());
+        if (NodeUtil.isExpressionResultUsed(callNode)) {
           return true;
         }
       } else {
         // Allow a standalone name reference.
         //     var a;
-        if (!NodeUtil.isVar(useNodeParent)) {
+        if (!useNodeParent.isVar()) {
           return true;
         }
       }
@@ -122,34 +120,6 @@ class OptimizeReturns
   }
 
   /**
-   * Determines if the name node acts as the function name in a call expression.
-   */
-  private static boolean isValueUsed(Node node) {
-    // TODO(johnlenz): consider sharing some code with trySimpleUnusedResult.
-    Node parent = node.getParent();
-    switch (parent.getType()) {
-      case Token.EXPR_RESULT:
-        return false;
-      case Token.HOOK:
-      case Token.AND:
-      case Token.OR:
-        return (node == parent.getFirstChild()) ? true : isValueUsed(parent);
-      case Token.COMMA:
-        return (node == parent.getFirstChild()) ? false : isValueUsed(parent);
-      case Token.FOR:
-        if (NodeUtil.isForIn(parent)) {
-          return true;
-        } else {
-          // Only an expression whose result is in the condition part of the
-          // expression is used.
-          return (parent.getChildAtIndex(1) == node);
-        }
-      default:
-        return true;
-    }
-  }
-
-  /**
    * For the supplied function node, rewrite all the return expressions so that:
    *    return foo();
    * becomes:
@@ -158,13 +128,13 @@ class OptimizeReturns
    */
   private void rewriteReturns(
       final SimpleDefinitionFinder defFinder, Node fnNode) {
-    Preconditions.checkState(NodeUtil.isFunction(fnNode));
+    Preconditions.checkState(fnNode.isFunction());
     NodeUtil.visitPostOrder(
       fnNode.getLastChild(),
       new NodeUtil.Visitor() {
         @Override
         public void visit(Node node) {
-          if (node.getType() == Token.RETURN && node.hasOneChild()) {
+          if (node.isReturn() && node.hasOneChild()) {
             boolean keepValue = NodeUtil.mayHaveSideEffects(
                 node.getFirstChild(), compiler);
             if (!keepValue) {
@@ -173,8 +143,7 @@ class OptimizeReturns
             Node result = node.removeFirstChild();
             if (keepValue) {
               node.getParent().addChildBefore(
-                new Node(
-                  Token.EXPR_RESULT, result).copyInformationFrom(result), node);
+                IR.exprResult(result).srcref(result), node);
             }
             compiler.reportCodeChange();
           }
@@ -189,6 +158,6 @@ class OptimizeReturns
   private static boolean isCall(UseSite site) {
     Node node = site.node;
     Node parent = node.getParent();
-    return (parent.getFirstChild() == node) && NodeUtil.isCall(parent);
+    return (parent.getFirstChild() == node) && parent.isCall();
   }
 }

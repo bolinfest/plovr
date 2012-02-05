@@ -22,6 +22,7 @@ import com.google.javascript.jscomp.CompilerPass;
 import com.google.javascript.jscomp.NodeTraversal;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeUtil;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.TernaryValue;
@@ -120,7 +121,7 @@ class MinimizeExitPoints
     }
 
     // Just an 'if'.
-    if (n.getType() == Token.IF) {
+    if (n.isIf()) {
       Node ifBlock = n.getFirstChild().getNext();
       tryMinimizeExits(ifBlock, exitType, labelName);
       Node elseBlock = ifBlock.getNext();
@@ -131,7 +132,7 @@ class MinimizeExitPoints
     }
 
     // Just a 'try/catch/finally'.
-    if (n.getType() == Token.TRY) {
+    if (n.isTry()) {
       Node tryBlock = n.getFirstChild();
       tryMinimizeExits(tryBlock, exitType, labelName);
       Node allCatchNodes = NodeUtil.getCatchBlock(n);
@@ -148,7 +149,7 @@ class MinimizeExitPoints
     }
 
     // Just a 'label'.
-    if (n.getType() == Token.LABEL) {
+    if (n.isLabel()) {
       Node labelBlock = n.getLastChild();
       tryMinimizeExits(labelBlock, exitType, labelName);
     }
@@ -156,7 +157,7 @@ class MinimizeExitPoints
     // TODO(johnlenz): The last case of SWITCH statement?
 
     // The rest assumes a block with at least one child, bail on anything else.
-    if (n.getType() != Token.BLOCK || n.getLastChild() == null) {
+    if (!n.isBlock() || n.getLastChild() == null) {
       return;
     }
 
@@ -167,7 +168,7 @@ class MinimizeExitPoints
     for (Node c : n.children()) {
 
       // An 'if' block to process below.
-      if (c.getType() == Token.IF) {
+      if (c.isIf()) {
         Node ifTree = c;
         Node trueBlock, falseBlock;
 
@@ -222,7 +223,7 @@ class MinimizeExitPoints
     Node exitNode = null;
 
     // Pick an exit node candidate.
-    if (srcBlock.getType() == Token.BLOCK) {
+    if (srcBlock.isBlock()) {
       if (!srcBlock.hasChildren()) {
         return;
       }
@@ -243,14 +244,14 @@ class MinimizeExitPoints
     if (ifNode.getNext() != null) {
       // Move siblings of the if block into the opposite
       // logic block of the exit.
-      Node newDestBlock = new Node(Token.BLOCK).copyInformationFrom(ifNode);
+      Node newDestBlock = IR.block().srcref(ifNode);
       if (destBlock == null) {
         // Only possible if this is the false block.
         ifNode.addChildToBack(newDestBlock);
-      } else if (destBlock.getType() == Token.EMPTY) {
+      } else if (destBlock.isEmpty()) {
         // Use the new block.
         ifNode.replaceChild(destBlock, newDestBlock);
-      } else if (destBlock.getType() == Token.BLOCK) {
+      } else if (destBlock.isBlock()) {
         // Reuse the existing block.
         newDestBlock = destBlock;
       } else {

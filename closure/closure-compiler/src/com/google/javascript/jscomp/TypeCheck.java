@@ -470,10 +470,10 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         typeable = visitName(t, n, parent);
         break;
 
-      case Token.LP:
+      case Token.PARAM_LIST:
         // If this is under a FUNCTION node, it is a parameter list and can be
         // ignored here.
-        if (parent.getType() != Token.FUNCTION) {
+        if (!parent.isFunction()) {
           ensureTyped(t, n, getJSType(n.getFirstChild()));
         } else {
           typeable = false;
@@ -491,14 +491,6 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
 
       case Token.THIS:
         ensureTyped(t, n, t.getScope().getTypeOfThis());
-        break;
-
-      case Token.REF_SPECIAL:
-        ensureTyped(t, n);
-        break;
-
-      case Token.GET_REF:
-        ensureTyped(t, n, getJSType(n.getFirstChild()));
         break;
 
       case Token.NULL:
@@ -519,8 +511,8 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         }
         break;
 
-      case Token.GET:
-      case Token.SET:
+      case Token.GETTER_DEF:
+      case Token.SETTER_DEF:
         // Object literal keys are handled with OBJECTLIT
         break;
 
@@ -534,7 +526,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
 
       case Token.GETPROP:
         visitGetProp(t, n, parent);
-        typeable = !(parent.getType() == Token.ASSIGN &&
+        typeable = !(parent.isAssign() &&
                      parent.getFirstChild() == n);
         break;
 
@@ -558,7 +550,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
 
       case Token.CALL:
         visitCall(t, n);
-        typeable = !NodeUtil.isExpressionNode(parent);
+        typeable = !parent.isExprResult();
         break;
 
       case Token.RETURN:
@@ -612,7 +604,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         TernaryValue result =
             leftTypeRestricted.testForEquality(rightTypeRestricted);
         if (result != TernaryValue.UNKNOWN) {
-          if (n.getType() == Token.NE) {
+          if (n.isNE()) {
             result = result.not();
           }
           report(t, n, DETERMINISTIC_TEST, leftType.toString(),
@@ -757,7 +749,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       case Token.EXPR_RESULT:
       case Token.BLOCK:
       case Token.EMPTY:
-      case Token.DEFAULT:
+      case Token.DEFAULT_CASE:
       case Token.CONTINUE:
       case Token.DEBUGGER:
       case Token.THROW:
@@ -781,14 +773,14 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
           ensureTyped(t, n);
         } else {
           // If this is an enum, then give that type to the objectlit as well.
-          if ((n.getType() == Token.OBJECTLIT)
+          if ((n.isObjectLit())
               && (parent.getJSType() instanceof EnumType)) {
             ensureTyped(t, n, parent.getJSType());
           } else {
             ensureTyped(t, n);
           }
         }
-        if (n.getType() == Token.OBJECTLIT) {
+        if (n.isObjectLit()) {
           for (Node key : n.children()) {
             visitObjLitKey(t, key, n);
           }
@@ -836,21 +828,21 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
    * of the object type it is referring to.
    * @param t the traversal
    * @param assign the assign node
-   * (<code>assign.getType() == Token.ASSIGN</code> is an implicit invariant)
+   * (<code>assign.isAssign()</code> is an implicit invariant)
    */
   private void visitAssign(NodeTraversal t, Node assign) {
     JSDocInfo info = assign.getJSDocInfo();
     Node lvalue = assign.getFirstChild();
     Node rvalue = assign.getLastChild();
 
-    if (lvalue.getType() == Token.GETPROP) {
+    if (lvalue.isGetProp()) {
       Node object = lvalue.getFirstChild();
       JSType objectJsType = getJSType(object);
       String property = lvalue.getLastChild().getString();
 
       // the first name in this getprop refers to an interface
       // we perform checks in addition to the ones below
-      if (object.getType() == Token.GETPROP) {
+      if (object.isGetProp()) {
         JSType jsType = getJSType(object.getFirstChild());
         if (jsType.isInterface() &&
             object.getLastChild().getString().equals("prototype")) {
@@ -884,7 +876,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       }
 
       // object.prototype.property = ...;
-      if (object.getType() == Token.GETPROP) {
+      if (object.isGetProp()) {
         Node object2 = object.getFirstChild();
         String property2 = NodeUtil.getStringValue(object.getLastChild());
 
@@ -916,7 +908,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         }
         return;
       }
-    } else if (lvalue.getType() == Token.NAME) {
+    } else if (lvalue.isName()) {
       // variable with inferred type case
       JSType rvalueType = getJSType(assign.getLastChild());
       Var var = t.getScope().getVar(lvalue.getString());
@@ -949,6 +941,13 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
    * @param key the assign node
    */
   private void visitObjLitKey(NodeTraversal t, Node key, Node objlit) {
+    // Do not validate object lit value types in externs. We don't really care,
+    // and it makes it easier to generate externs.
+    if (objlit.isFromExterns()) {
+      ensureTyped(t, key);
+      return;
+    }
+
     // TODO(johnlenz): Validate get and set function declarations are valid
     // as is the functions can have "extraneous" bits.
 
@@ -1186,7 +1185,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
               abstractMethodMessage));
     }
 
-    if (assign.getLastChild().getType() == Token.FUNCTION
+    if (assign.getLastChild().isFunction()
         && !NodeUtil.isEmptyBlock(assign.getLastChild().getLastChild())) {
       compiler.report(
           t.makeError(object, INTERFACE_FUNCTION_NOT_EMPTY,
@@ -1228,7 +1227,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     int parentNodeType = parent.getType();
     if (parentNodeType == Token.FUNCTION ||
         parentNodeType == Token.CATCH ||
-        parentNodeType == Token.LP ||
+        parentNodeType == Token.PARAM_LIST ||
         parentNodeType == Token.VAR) {
       return false;
     }
@@ -1260,7 +1259,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     // GETPROP nodes have an assigned type on their node by the scope creator
     // if this is an enum declaration. The only namespaced enum declarations
     // that we allow are of the form object.name = ...;
-    if (n.getJSType() != null && parent.getType() == Token.ASSIGN) {
+    if (n.getJSType() != null && parent.isAssign()) {
       return;
     }
 
@@ -1359,7 +1358,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         return parent.getFirstChild() == getProp;
 
       case Token.NOT:
-        return parent.getParent().getType() == Token.OR &&
+        return parent.getParent().isOr() &&
             parent.getParent().getFirstChild() == parent;
     }
     return false;
@@ -1567,7 +1566,8 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
 
       boolean isExtern = false;
       JSDocInfo functionJSDocInfo = functionType.getJSDocInfo();
-      if(functionJSDocInfo != null) {
+      if( functionJSDocInfo != null  &&
+          functionJSDocInfo.getAssociatedNode() != null) {
         isExtern = functionJSDocInfo.getAssociatedNode().isFromExterns();
       }
 
@@ -1587,8 +1587,8 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       if (functionType.isOrdinaryFunction() &&
           !functionType.getTypeOfThis().isUnknownType() &&
           !functionType.getTypeOfThis().isNativeObjectType() &&
-          !(child.getType() == Token.GETELEM ||
-            child.getType() == Token.GETPROP)) {
+          !(child.isGetElem() ||
+            child.isGetProp())) {
         report(t, n, EXPECTED_THIS_TYPE, functionType.toString());
       }
 
@@ -1747,7 +1747,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         break;
 
       default:
-        report(t, n, UNEXPECTED_TOKEN, Node.tokenToName(op));
+        report(t, n, UNEXPECTED_TOKEN, Token.name(op));
     }
     ensureTyped(t, n);
   }
@@ -1766,7 +1766,6 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
    * <p>Enum aliases are irregular, so we need special code for this :(</p>
    *
    * @param value the value used for initialization of the enum
-   * @param primitiveType The type of each element of the enum.
    */
   private void checkEnumAlias(
       NodeTraversal t, JSDocInfo declInfo, Node value) {
@@ -1842,7 +1841,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
    */
   private void ensureTyped(NodeTraversal t, Node n, JSType type) {
     // Make sure FUNCTION nodes always get function type.
-    Preconditions.checkState(n.getType() != Token.FUNCTION ||
+    Preconditions.checkState(!n.isFunction() ||
             type.isFunctionType() ||
             type.isUnknownType());
     JSDocInfo info = n.getJSDocInfo();
@@ -1854,7 +1853,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       }
 
       if (info.isImplicitCast() && !inExterns) {
-        String propName = n.getType() == Token.GETPROP ?
+        String propName = n.isGetProp() ?
             n.getLastChild().getString() : "(missing)";
         compiler.report(
             t.makeError(n, ILLEGAL_IMPLICIT_CAST, propName));

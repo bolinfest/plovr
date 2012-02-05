@@ -17,13 +17,12 @@
  * @fileoverview Definitions for all the extensions over the
  *  W3C's DOM3 specification in HTML5. This file depends on
  *  w3c_dom3.js. The whole file has been fully type annotated.
- *  Created from
- *  http://www.whatwg.org/specs/web-apps/current-work/multipage/index.html
  *
- *  This also includes ArrayBuffer, from
- *  http://www.khronos.org/registry/typedarray/specs/latest/#3, which is
- *  included here so that it can be used by the FileAPI externs without pulling
- *  in the full WebGL externs.
+ *  @see http://www.whatwg.org/specs/web-apps/current-work/multipage/index.html
+ *  @see http://dev.w3.org/html5/spec/Overview.html
+ *
+ *  This also includes Typed Array definitions from
+ *  http://www.khronos.org/registry/typedarray/specs/latest/
  *
  *  This relies on w3c_event.js being included first.
  *
@@ -347,7 +346,7 @@ CanvasRenderingContext2D.prototype.getImageData = function(sx, sy, sw, sh) {};
 CanvasRenderingContext2D.prototype.putImageData = function(imagedata, dx, dy,
     opt_dirtyX, opt_dirtyY, opt_dirtyWidth, opt_dirtyHeight) {};
 
-/** 
+/**
  * Note: Webkit only
  * @param {number|string=} opt_a
  * @param {number=} opt_b
@@ -359,7 +358,7 @@ CanvasRenderingContext2D.prototype.putImageData = function(imagedata, dx, dy,
  */
 CanvasRenderingContext2D.prototype.setFillColor;
 
-/** 
+/**
  * Note: Webkit only
  * @param {number|string=} opt_a
  * @param {number=} opt_b
@@ -504,16 +503,16 @@ function Database() {}
 Database.prototype.version;
 
 /**
- * @param {function(SQLTransaction) : void} callback
- * @param {(function(SQLError) : void)=} opt_errorCallback
+ * @param {function(!SQLTransaction) : void} callback
+ * @param {(function(!SQLError) : void)=} opt_errorCallback
  * @param {Function=} opt_Callback
  */
 Database.prototype.transaction = function(
     callback, opt_errorCallback, opt_Callback) {};
 
 /**
- * @param {function(SQLTransaction) : void} callback
- * @param {(function(SQLError) : void)=} opt_errorCallback
+ * @param {function(!SQLTransaction) : void} callback
+ * @param {(function(!SQLError) : void)=} opt_errorCallback
  * @param {Function=} opt_Callback
  */
 Database.prototype.readTransaction = function(
@@ -522,8 +521,8 @@ Database.prototype.readTransaction = function(
 /**
  * @param {string} oldVersion
  * @param {string} newVersion
- * @param {function(SQLTransaction) : void} callback
- * @param {function(SQLError) : void} errorCallback
+ * @param {function(!SQLTransaction) : void} callback
+ * @param {function(!SQLError) : void} errorCallback
  * @param {Function} successCallback
  */
 Database.prototype.changeVersion = function(
@@ -535,7 +534,7 @@ Database.prototype.changeVersion = function(
 function DatabaseCallback() {}
 
 /**
- * @param {Database} db
+ * @param {!Database} db
  * @return {undefined}
  */
 DatabaseCallback.prototype.handleEvent = function(db) {};
@@ -563,11 +562,16 @@ function SQLTransaction() {}
 /**
  * @param {string} sqlStatement
  * @param {Array.<*>=} opt_queryArgs
- * @param {(function(SQLTransaction, SQLResultSet) : void)=} opt_callback
- * @param {(function(SQLTransaction, SQLError) : void)=} opt_errorCallback
+ * @param {SQLStatementCallback=} opt_callback
+ * @param {(function(!SQLTransaction, !SQLError) : void)=} opt_errorCallback
  */
 SQLTransaction.prototype.executeSql = function(
     sqlStatement, opt_queryArgs, opt_callback, opt_errorCallback) {};
+
+/**
+ * @typedef {(function(!SQLTransaction, !SQLResultSet) : void)}
+ */
+var SQLStatementCallback;
 
 /**
  * @constructor
@@ -910,10 +914,21 @@ SharedWorker.prototype.port;
  */
 SharedWorker.prototype.onerror = function() {};
 
-/**
- * @type {boolean}
- */
+/** @type {Element} */
+HTMLElement.prototype.contextMenu;
+
+/** @type {boolean} */
 HTMLElement.prototype.draggable;
+
+/**
+ * This is actually a DOMSettableTokenList property. However since that
+ * interface isn't currently defined and no known browsers implement this
+ * feature, just define the property for now.
+ *
+ * @const
+ * @type {Object}
+ */
+HTMLElement.prototype.dropzone;
 
 /**
  * @see http://www.w3.org/TR/html5/dom.html#dom-getelementsbyclassname
@@ -923,6 +938,12 @@ HTMLElement.prototype.draggable;
  */
 HTMLElement.prototype.getElementsByClassName = function(classNames) {};
 // NOTE: Document.prototype.getElementsByClassName is in gecko_dom.js
+
+/** @type {boolean} */
+HTMLElement.prototype.hidden;
+
+/** @type {boolean} */
+HTMLElement.prototype.spellcheck;
 
 /** @type {string} */
 HTMLInputElement.prototype.autocomplete;
@@ -1401,19 +1422,19 @@ WebSocket.prototype.bufferedAmount;
 
 /**
  * An event handler called on open event.
- * @type {?function(Event)}
+ * @type {?function(!Event)}
  */
 WebSocket.prototype.onopen;
 
 /**
  * An event handler called on message event.
- * @type {?function(MessageEvent)}
+ * @type {?function(!MessageEvent)}
  */
 WebSocket.prototype.onmessage;
 
 /**
  * An event handler called on close event.
- * @type {?function(Event)}
+ * @type {?function(!Event)}
  */
 WebSocket.prototype.onclose;
 
@@ -1680,3 +1701,453 @@ function ArrayBuffer(length) {}
 
 /** @type {number} */
 ArrayBuffer.prototype.byteLength;
+
+/**
+ * @param {number} begin
+ * @param {number=} opt_end
+ * @return {!ArrayBuffer}
+ */
+ArrayBuffer.prototype.slice = function(begin, opt_end) {};
+
+
+/**
+ * @constructor
+ * @noalias
+ */
+function ArrayBufferView() {}
+
+/** @type {!ArrayBuffer} */
+ArrayBufferView.prototype.buffer;
+
+/** @type {number} */
+ArrayBufferView.prototype.byteOffset;
+
+/** @type {number} */
+ArrayBufferView.prototype.byteLength;
+
+
+/**
+ * @param {number|ArrayBufferView|Array.<number>|ArrayBuffer} length or array
+ *     or buffer
+ * @param {number=} opt_byteOffset
+ * @param {number=} opt_length
+ * @extends {ArrayBufferView}
+ * @constructor
+ * @noalias
+ */
+function Int8Array(length, opt_byteOffset, opt_length) {}
+
+/** @type {number} */
+Int8Array.BYTES_PER_ELEMENT;
+
+/** @type {number} */
+Int8Array.prototype.BYTES_PER_ELEMENT;
+
+/** @type {number} */
+Int8Array.prototype.length;
+
+/**
+ * @param {ArrayBufferView|Array.<number>} array
+ * @param {number=} opt_offset
+ */
+Int8Array.prototype.set = function(array, opt_offset) {};
+
+/**
+ * @param {number} begin
+ * @param {number=} opt_end
+ * @return {!Int8Array}
+ */
+Int8Array.prototype.subarray = function(begin, opt_end) {};
+
+
+/**
+ * @param {number|ArrayBufferView|Array.<number>|ArrayBuffer} length or array
+ *     or buffer
+ * @param {number=} opt_byteOffset
+ * @param {number=} opt_length
+ * @extends {ArrayBufferView}
+ * @constructor
+ * @noalias
+ */
+function Uint8Array(length, opt_byteOffset, opt_length) {}
+
+/** @type {number} */
+Uint8Array.BYTES_PER_ELEMENT;
+
+/** @type {number} */
+Uint8Array.prototype.BYTES_PER_ELEMENT;
+
+/** @type {number} */
+Uint8Array.prototype.length;
+
+/**
+ * @param {ArrayBufferView|Array.<number>} array
+ * @param {number=} opt_offset
+ */
+Uint8Array.prototype.set = function(array, opt_offset) {};
+
+/**
+ * @param {number} begin
+ * @param {number=} opt_end
+ * @return {!Uint8Array}
+ */
+Uint8Array.prototype.subarray = function(begin, opt_end) {};
+
+
+/**
+ * @param {number|ArrayBufferView|Array.<number>|ArrayBuffer} length or array
+ *     or buffer
+ * @param {number=} opt_byteOffset
+ * @param {number=} opt_length
+ * @extends {ArrayBufferView}
+ * @constructor
+ * @noalias
+ */
+function Uint8ClampedArray(length, opt_byteOffset, opt_length) {}
+
+/** @type {number} */
+Uint8ClampedArray.BYTES_PER_ELEMENT;
+
+/** @type {number} */
+Uint8ClampedArray.prototype.BYTES_PER_ELEMENT;
+
+/** @type {number} */
+Uint8ClampedArray.prototype.length;
+
+/**
+ * @param {ArrayBufferView|Array.<number>} array
+ * @param {number=} opt_offset
+ */
+Uint8ClampedArray.prototype.set = function(array, opt_offset) {};
+
+/**
+ * @param {number} begin
+ * @param {number=} opt_end
+ * @return {!Uint8ClampedArray}
+ */
+Uint8ClampedArray.prototype.subarray = function(begin, opt_end) {};
+
+
+/**
+ * @param {number|ArrayBufferView|Array.<number>|ArrayBuffer} length or array
+ *     or buffer
+ * @param {number=} opt_byteOffset
+ * @param {number=} opt_length
+ * @extends {ArrayBufferView}
+ * @constructor
+ * @noalias
+ */
+function Int16Array(length, opt_byteOffset, opt_length) {}
+
+/** @type {number} */
+Int16Array.BYTES_PER_ELEMENT;
+
+/** @type {number} */
+Int16Array.prototype.BYTES_PER_ELEMENT;
+
+/** @type {number} */
+Int16Array.prototype.length;
+
+/**
+ * @param {ArrayBufferView|Array.<number>} array
+ * @param {number=} opt_offset
+ */
+Int16Array.prototype.set = function(array, opt_offset) {};
+
+/**
+ * @param {number} begin
+ * @param {number=} opt_end
+ * @return {!Int16Array}
+ */
+Int16Array.prototype.subarray = function(begin, opt_end) {};
+
+
+/**
+ * @param {number|ArrayBufferView|Array.<number>|ArrayBuffer} length or array
+ *     or buffer
+ * @param {number=} opt_byteOffset
+ * @param {number=} opt_length
+ * @extends {ArrayBufferView}
+ * @constructor
+ * @noalias
+ */
+function Uint16Array(length, opt_byteOffset, opt_length) {}
+
+/** @type {number} */
+Uint16Array.BYTES_PER_ELEMENT;
+
+/** @type {number} */
+Uint16Array.prototype.BYTES_PER_ELEMENT;
+
+/** @type {number} */
+Uint16Array.prototype.length;
+
+/**
+ * @param {ArrayBufferView|Array.<number>} array
+ * @param {number=} opt_offset
+ */
+Uint16Array.prototype.set = function(array, opt_offset) {};
+
+/**
+ * @param {number} begin
+ * @param {number=} opt_end
+ * @return {!Uint16Array}
+ */
+Uint16Array.prototype.subarray = function(begin, opt_end) {};
+
+
+/**
+ * @param {number|ArrayBufferView|Array.<number>|ArrayBuffer} length or array
+ *     or buffer
+ * @param {number=} opt_byteOffset
+ * @param {number=} opt_length
+ * @extends {ArrayBufferView}
+ * @constructor
+ * @noalias
+ */
+function Int32Array(length, opt_byteOffset, opt_length) {}
+
+/** @type {number} */
+Int32Array.BYTES_PER_ELEMENT;
+
+/** @type {number} */
+Int32Array.prototype.BYTES_PER_ELEMENT;
+
+/** @type {number} */
+Int32Array.prototype.length;
+
+/**
+ * @param {ArrayBufferView|Array.<number>} array
+ * @param {number=} opt_offset
+ */
+Int32Array.prototype.set = function(array, opt_offset) {};
+
+/**
+ * @param {number} begin
+ * @param {number=} opt_end
+ * @return {!Int32Array}
+ */
+Int32Array.prototype.subarray = function(begin, opt_end) {};
+
+
+/**
+ * @param {number|ArrayBufferView|Array.<number>|ArrayBuffer} length or array
+ *     or buffer
+ * @param {number=} opt_byteOffset
+ * @param {number=} opt_length
+ * @extends {ArrayBufferView}
+ * @constructor
+ * @noalias
+ */
+function Uint32Array(length, opt_byteOffset, opt_length) {}
+
+/** @type {number} */
+Uint32Array.BYTES_PER_ELEMENT;
+
+/** @type {number} */
+Uint32Array.prototype.BYTES_PER_ELEMENT;
+
+/** @type {number} */
+Uint32Array.prototype.length;
+
+/**
+ * @param {ArrayBufferView|Array.<number>} array
+ * @param {number=} opt_offset
+ */
+Uint32Array.prototype.set = function(array, opt_offset) {};
+
+/**
+ * @param {number} begin
+ * @param {number=} opt_end
+ * @return {!Uint32Array}
+ */
+Uint32Array.prototype.subarray = function(begin, opt_end) {};
+
+
+/**
+ * @param {number|ArrayBufferView|Array.<number>|ArrayBuffer} length or array
+ *     or buffer
+ * @param {number=} opt_byteOffset
+ * @param {number=} opt_length
+ * @extends {ArrayBufferView}
+ * @constructor
+ * @noalias
+ */
+function Float32Array(length, opt_byteOffset, opt_length) {}
+
+/** @type {number} */
+Float32Array.BYTES_PER_ELEMENT;
+
+/** @type {number} */
+Float32Array.prototype.BYTES_PER_ELEMENT;
+
+/** @type {number} */
+Float32Array.prototype.length;
+
+/**
+ * @param {ArrayBufferView|Array.<number>} array
+ * @param {number=} opt_offset
+ */
+Float32Array.prototype.set = function(array, opt_offset) {};
+
+/**
+ * @param {number} begin
+ * @param {number=} opt_end
+ * @return {!Float32Array}
+ */
+Float32Array.prototype.subarray = function(begin, opt_end) {};
+
+
+/**
+ * @param {number|ArrayBufferView|Array.<number>|ArrayBuffer} length or array
+ *     or buffer
+ * @param {number=} opt_byteOffset
+ * @param {number=} opt_length
+ * @extends {ArrayBufferView}
+ * @constructor
+ * @noalias
+ */
+function Float64Array(length, opt_byteOffset, opt_length) {}
+
+/** @type {number} */
+Float64Array.BYTES_PER_ELEMENT;
+
+/** @type {number} */
+Float64Array.prototype.BYTES_PER_ELEMENT;
+
+/** @type {number} */
+Float64Array.prototype.length;
+
+/**
+ * @param {ArrayBufferView|Array.<number>} array
+ * @param {number=} opt_offset
+ */
+Float64Array.prototype.set = function(array, opt_offset) {};
+
+/**
+ * @param {number} begin
+ * @param {number=} opt_end
+ * @return {!Float64Array}
+ */
+Float64Array.prototype.subarray = function(begin, opt_end) {};
+
+
+/**
+ * @param {ArrayBuffer} buffer
+ * @param {number=} opt_byteOffset
+ * @param {number=} opt_byteLength
+ * @extends {ArrayBufferView}
+ * @constructor
+ * @noalias
+ */
+function DataView(buffer, opt_byteOffset, opt_byteLength) {}
+
+/**
+ * @param {number} byteOffset
+ * @return {number}
+ */
+DataView.prototype.getInt8 = function(byteOffset) {};
+
+/**
+ * @param {number} byteOffset
+ * @return {number}
+ */
+DataView.prototype.getUint8 = function(byteOffset) {};
+
+/**
+ * @param {number} byteOffset
+ * @param {boolean=} opt_littleEndian
+ * @return {number}
+ */
+DataView.prototype.getInt16 = function(byteOffset, opt_littleEndian) {};
+
+/**
+ * @param {number} byteOffset
+ * @param {boolean=} opt_littleEndian
+ * @return {number}
+ */
+DataView.prototype.getUint16 = function(byteOffset, opt_littleEndian) {};
+
+/**
+ * @param {number} byteOffset
+ * @param {boolean=} opt_littleEndian
+ * @return {number}
+ */
+DataView.prototype.getInt32 = function(byteOffset, opt_littleEndian) {};
+
+/**
+ * @param {number} byteOffset
+ * @param {boolean=} opt_littleEndian
+ * @return {number}
+ */
+DataView.prototype.getUint32 = function(byteOffset, opt_littleEndian) {};
+
+/**
+ * @param {number} byteOffset
+ * @param {boolean=} opt_littleEndian
+ * @return {number}
+ */
+DataView.prototype.getFloat32 = function(byteOffset, opt_littleEndian) {};
+
+/**
+ * @param {number} byteOffset
+ * @param {boolean=} opt_littleEndian
+ * @return {number}
+ */
+DataView.prototype.getFloat64 = function(byteOffset, opt_littleEndian) {};
+
+/**
+ * @param {number} byteOffset
+ * @param {number} value
+ */
+DataView.prototype.setInt8 = function(byteOffset, value) {};
+
+/**
+ * @param {number} byteOffset
+ * @param {number} value
+ */
+DataView.prototype.setUint8 = function(byteOffset, value) {};
+
+/**
+ * @param {number} byteOffset
+ * @param {number} value
+ * @param {boolean=} opt_littleEndian
+ */
+DataView.prototype.setInt16 = function(byteOffset, value, opt_littleEndian) {};
+
+/**
+ * @param {number} byteOffset
+ * @param {number} value
+ * @param {boolean=} opt_littleEndian
+ */
+DataView.prototype.setUint16 = function(byteOffset, value, opt_littleEndian) {};
+
+/**
+ * @param {number} byteOffset
+ * @param {number} value
+ * @param {boolean=} opt_littleEndian
+ */
+DataView.prototype.setInt32 = function(byteOffset, value, opt_littleEndian) {};
+
+/**
+ * @param {number} byteOffset
+ * @param {number} value
+ * @param {boolean=} opt_littleEndian
+ */
+DataView.prototype.setUint32 = function(byteOffset, value, opt_littleEndian) {};
+
+/**
+ * @param {number} byteOffset
+ * @param {number} value
+ * @param {boolean=} opt_littleEndian
+ */
+DataView.prototype.setFloat32 = function(
+    byteOffset, value, opt_littleEndian) {};
+
+/**
+ * @param {number} byteOffset
+ * @param {number} value
+ * @param {boolean=} opt_littleEndian
+ */
+DataView.prototype.setFloat64 = function(
+    byteOffset, value, opt_littleEndian) {};

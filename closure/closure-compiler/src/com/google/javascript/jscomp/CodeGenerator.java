@@ -126,7 +126,7 @@ class CodeGenerator {
 
     switch (type) {
       case Token.TRY: {
-        Preconditions.checkState(first.getNext().getType() == Token.BLOCK &&
+        Preconditions.checkState(first.getNext().isBlock() &&
                 !first.getNext().hasMoreThanOneChild());
         Preconditions.checkState(childCount >= 2 && childCount <= 3);
 
@@ -188,13 +188,13 @@ class CodeGenerator {
         break;
 
       case Token.NAME:
-        if (first == null || first.getType() == Token.EMPTY) {
+        if (first == null || first.isEmpty()) {
           addIdentifier(n.getString());
         } else {
           Preconditions.checkState(childCount == 1);
           addIdentifier(n.getString());
           cc.addOp("=", true);
-          if (first.getType() == Token.COMMA) {
+          if (first.isComma()) {
             addExpr(first, NodeUtil.precedence(Token.ASSIGN));
           } else {
             // Add expression, consider nearby code at lowest level of
@@ -210,7 +210,7 @@ class CodeGenerator {
         add("]");
         break;
 
-      case Token.LP:
+      case Token.PARAM_LIST:
         add("(");
         addList(first);
         add(")");
@@ -244,7 +244,7 @@ class CodeGenerator {
         // It's important to our sanity checker that the code
         // we print produces the same AST as the code we parse back.
         // NEG is a weird case because Rhino parses "- -2" as "2".
-        if (n.getFirstChild().getType() == Token.NUMBER) {
+        if (n.getFirstChild().isNumber()) {
           cc.addNumber(-n.getFirstChild().getDouble());
         } else {
           cc.addOp(NodeUtil.opToStrNoFail(type), false);
@@ -266,8 +266,8 @@ class CodeGenerator {
       }
 
       case Token.REGEXP:
-        if (first.getType() != Token.STRING ||
-            last.getType() != Token.STRING) {
+        if (!first.isString() ||
+            !last.isString()) {
           throw new Error("Expected children to be strings");
         }
 
@@ -280,17 +280,6 @@ class CodeGenerator {
           Preconditions.checkState(childCount == 1);
           add(regexp);
         }
-        break;
-
-      case Token.GET_REF:
-        add(first);
-        break;
-
-      case Token.REF_SPECIAL:
-        Preconditions.checkState(childCount == 1);
-        add(first);
-        add(".");
-        add((String) n.getProp(Node.NAME_PROP));
         break;
 
       case Token.FUNCTION:
@@ -315,15 +304,15 @@ class CodeGenerator {
         }
         break;
 
-      case Token.GET:
-      case Token.SET:
-        Preconditions.checkState(n.getParent().getType() == Token.OBJECTLIT);
+      case Token.GETTER_DEF:
+      case Token.SETTER_DEF:
+        Preconditions.checkState(n.getParent().isObjectLit());
         Preconditions.checkState(childCount == 1);
-        Preconditions.checkState(first.getType() == Token.FUNCTION);
+        Preconditions.checkState(first.isFunction());
 
         // Get methods are unnamed
         Preconditions.checkState(first.getFirstChild().getString().isEmpty());
-        if (type == Token.GET) {
+        if (type == Token.GETTER_DEF) {
           // Get methods have no parameters.
           Preconditions.checkState(!first.getChildAtIndex(1).hasChildren());
           add("get ");
@@ -352,7 +341,7 @@ class CodeGenerator {
           if (!Double.isNaN(d)) {
             cc.addNumber(d);
           } else {
-            addJsString(n.getString());
+            addJsString(n);
           }
         }
 
@@ -375,16 +364,16 @@ class CodeGenerator {
             (type == Token.BLOCK &&
                 !preserveBlock &&
                 n.getParent() != null &&
-                n.getParent().getType() == Token.SCRIPT);
+                n.getParent().isScript());
         for (Node c = first; c != null; c = c.getNext()) {
           add(c, Context.STATEMENT);
 
           // VAR doesn't include ';' since it gets used in expressions
-          if (c.getType() == Token.VAR) {
+          if (c.isVar()) {
             cc.endStatement();
           }
 
-          if (c.getType() == Token.FUNCTION) {
+          if (c.isFunction()) {
             cc.maybeLineBreak();
           }
 
@@ -403,7 +392,7 @@ class CodeGenerator {
       case Token.FOR:
         if (childCount == 4) {
           add("for(");
-          if (first.getType() == Token.VAR) {
+          if (first.isVar()) {
             add(first, Context.IN_FOR_INIT_CLAUSE);
           } else {
             addExpr(first, 0, Context.IN_FOR_INIT_CLAUSE);
@@ -455,9 +444,9 @@ class CodeGenerator {
             childCount == 2,
             "Bad GETPROP: expected 2 children, but got %s", childCount);
         Preconditions.checkState(
-            last.getType() == Token.STRING,
+            last.isString(),
             "Bad GETPROP: RHS should be STRING");
-        boolean needsParens = (first.getType() == Token.NUMBER);
+        boolean needsParens = (first.isNumber());
         if (needsParens) {
           add("(");
         }
@@ -558,18 +547,30 @@ class CodeGenerator {
         break;
 
       case Token.NULL:
+        Preconditions.checkState(childCount == 0);
+        add("null");
+        break;
+
       case Token.THIS:
+        Preconditions.checkState(childCount == 0);
+        add("this");
+        break;
+
       case Token.FALSE:
+        Preconditions.checkState(childCount == 0);
+        add("false");
+        break;
+
       case Token.TRUE:
         Preconditions.checkState(childCount == 0);
-        add(Node.tokenToName(type));
+        add("true");
         break;
 
       case Token.CONTINUE:
         Preconditions.checkState(childCount <= 1);
         add("continue");
         if (childCount == 1) {
-          if (first.getType() != Token.LABEL_NAME) {
+          if (!first.isLabelName()) {
             throw new Error("Unexpected token type. Should be LABEL_NAME.");
           }
           add(" ");
@@ -588,7 +589,7 @@ class CodeGenerator {
         Preconditions.checkState(childCount <= 1);
         add("break");
         if (childCount == 1) {
-          if (first.getType() != Token.LABEL_NAME) {
+          if (!first.isLabelName()) {
             throw new Error("Unexpected token type. Should be LABEL_NAME.");
           }
           add(" ");
@@ -596,9 +597,6 @@ class CodeGenerator {
         }
         cc.endStatement();
         break;
-
-      case Token.EXPR_VOID:
-        throw new Error("Unexpected EXPR_VOID. Should be EXPR_RESULT.");
 
       case Token.EXPR_RESULT:
         Preconditions.checkState(childCount == 1);
@@ -631,11 +629,11 @@ class CodeGenerator {
       case Token.STRING:
         if (childCount !=
             ((n.getParent() != null &&
-              n.getParent().getType() == Token.OBJECTLIT) ? 1 : 0)) {
+              n.getParent().isObjectLit()) ? 1 : 0)) {
           throw new IllegalStateException(
               "Unexpected String children: " + n.getParent().toStringTree());
         }
-        addJsString(n.getString());
+        addJsString(n);
         break;
 
       case Token.DELPROP:
@@ -655,10 +653,10 @@ class CodeGenerator {
             cc.listSeparator();
           }
 
-          if (c.getType() == Token.GET || c.getType() == Token.SET) {
+          if (c.isGetterDef() || c.isSetterDef()) {
             add(c);
           } else {
-            Preconditions.checkState(c.getType() == Token.STRING);
+            Preconditions.checkState(c.isString());
             String key = c.getString();
             // Object literal property names don't have to be quoted if they
             // are not JavaScript keywords
@@ -705,7 +703,7 @@ class CodeGenerator {
         addCaseBody(last);
         break;
 
-      case Token.DEFAULT:
+      case Token.DEFAULT_CASE:
         Preconditions.checkState(childCount == 1);
         add("default");
         addCaseBody(first);
@@ -713,18 +711,13 @@ class CodeGenerator {
 
       case Token.LABEL:
         Preconditions.checkState(childCount == 2);
-        if (first.getType() != Token.LABEL_NAME) {
+        if (!first.isLabelName()) {
           throw new Error("Unexpected token type. Should be LABEL_NAME.");
         }
         add(first);
         add(":");
         addNonEmptyStatement(
             last, getContextForNonEmptyExpression(context), true);
-        break;
-
-      // This node is auto generated in anonymous functions and should just get
-      // ignored for our purposes.
-      case Token.SETNAME:
         break;
 
       default:
@@ -763,7 +756,7 @@ class CodeGenerator {
    * @return Whether the name is an indirect eval.
    */
   private boolean isIndirectEval(Node n) {
-    return n.getType() == Token.NAME && "eval".equals(n.getString()) &&
+    return n.isName() && "eval".equals(n.getString()) &&
         !n.getBooleanProp(Node.DIRECT_EVAL);
   }
 
@@ -778,13 +771,13 @@ class CodeGenerator {
       Node n, Context context, boolean allowNonBlockChild) {
     Node nodeToProcess = n;
 
-    if (!allowNonBlockChild && n.getType() != Token.BLOCK) {
+    if (!allowNonBlockChild && !n.isBlock()) {
       throw new Error("Missing BLOCK child.");
     }
 
     // Strip unneeded blocks, that is blocks with <2 children unless
     // the CodePrinter specifically wants to keep them.
-    if (n.getType() == Token.BLOCK) {
+    if (n.isBlock()) {
       int count = getNonEmptyChildCount(n, 2);
       if (count == 0) {
         if (cc.shouldPreserveExtraBlocks()) {
@@ -819,14 +812,14 @@ class CodeGenerator {
       }
     }
 
-    if (nodeToProcess.getType() == Token.EMPTY) {
+    if (nodeToProcess.isEmpty()) {
       cc.endStatement(true);
     } else {
       add(nodeToProcess, context);
 
       // VAR doesn't include ';' since it gets used in expressions - so any
       // VAR in a statement context needs a call to endStatement() here.
-      if (nodeToProcess.getType() == Token.VAR) {
+      if (nodeToProcess.isVar()) {
         cc.endStatement();
       }
     }
@@ -837,9 +830,9 @@ class CodeGenerator {
    * labels).
    */
   private boolean isOneExactlyFunctionOrDo(Node n) {
-    if (n.getType() == Token.LABEL) {
+    if (n.isLabel()) {
       Node labeledStatement = n.getLastChild();
-      if (labeledStatement.getType() != Token.BLOCK) {
+      if (!labeledStatement.isBlock()) {
         return isOneExactlyFunctionOrDo(labeledStatement);
       } else {
         // For labels with block children, we need to ensure that a
@@ -854,7 +847,7 @@ class CodeGenerator {
         }
       }
     } else {
-      return (n.getType() == Token.FUNCTION || n.getType() == Token.DO);
+      return (n.isFunction() || n.isDo());
     }
   }
 
@@ -878,7 +871,7 @@ class CodeGenerator {
   private void addExpr(Node n, int minPrecedence, Context context) {
     if ((NodeUtil.precedence(n.getType()) < minPrecedence) ||
         ((context == Context.IN_FOR_INIT_CLAUSE) &&
-        (n.getType() == Token.IN))){
+        (n.isIn()))){
       add("(");
       add(n, clearContextForNoInOperator(context));
       add(")");
@@ -923,7 +916,7 @@ class CodeGenerator {
         cc.listSeparator();
       }
       addExpr(n, 1);
-      lastWasEmpty = n.getType() == Token.EMPTY;
+      lastWasEmpty = n.isEmpty();
     }
 
     if (lastWasEmpty) {
@@ -944,16 +937,22 @@ class CodeGenerator {
   }
 
   /** Outputs a js string, using the optimal (single/double) quote character */
-  void addJsString(String s) {
-    String cached = ESCAPED_JS_STRINGS.get(s);
-    if (cached == null) {
-      cached = jsString(s);
-      ESCAPED_JS_STRINGS.put(s, cached);
+  private void addJsString(Node n) {
+    String s = n.getString();
+    boolean useSlashV = n.getBooleanProp(Node.SLASH_V);
+    if (useSlashV) {
+      add(jsString(n.getString(), useSlashV));
+    } else {
+      String cached = ESCAPED_JS_STRINGS.get(s);
+      if (cached == null) {
+        cached = jsString(n.getString(), useSlashV);
+        ESCAPED_JS_STRINGS.put(s, cached);
+      }
+      add(cached);
     }
-    add(cached);
   }
 
-  String jsString(String s) {
+  private String jsString(String s, boolean useSlashV) {
     int singleq = 0, doubleq = 0;
 
     // could count the quotes and pick the optimal quote character
@@ -979,19 +978,19 @@ class CodeGenerator {
     }
 
     return strEscape(s, quote, doublequote, singlequote, "\\\\",
-        outputCharsetEncoder);
+        outputCharsetEncoder, useSlashV);
   }
 
   /** Escapes regular expression */
   static String regexpEscape(String s, CharsetEncoder outputCharsetEncoder) {
-    return strEscape(s, '/', "\"", "'", "\\", outputCharsetEncoder);
+    return strEscape(s, '/', "\"", "'", "\\", outputCharsetEncoder, false);
   }
 
   /**
    * Escapes the given string to a double quoted (") JavaScript/JSON string
    */
   static String escapeToDoubleQuotedJsString(String s) {
-    return strEscape(s, '"',  "\\\"", "\'", "\\\\", null);
+    return strEscape(s, '"',  "\\\"", "\'", "\\\\", null, false);
   }
 
   /* If the user doesn't want to specify an output charset encoder, assume
@@ -1002,17 +1001,26 @@ class CodeGenerator {
   }
 
   /** Helper to escape javascript string as well as regular expression */
-  static String strEscape(String s, char quote,
-                          String doublequoteEscape,
-                          String singlequoteEscape,
-                          String backslashEscape,
-                          CharsetEncoder outputCharsetEncoder) {
+  private static String strEscape(
+      String s, char quote,
+      String doublequoteEscape,
+      String singlequoteEscape,
+      String backslashEscape,
+      CharsetEncoder outputCharsetEncoder,
+      boolean useSlashV) {
     StringBuilder sb = new StringBuilder(s.length() + 2);
     sb.append(quote);
     for (int i = 0; i < s.length(); i++) {
       char c = s.charAt(i);
       switch (c) {
         case '\0': sb.append("\\x00"); break;
+        case '\u000B':
+          if (useSlashV) {
+            sb.append("\\v");
+          } else {
+            sb.append("\\x0B");
+          }
+          break;
         case '\n': sb.append("\\n"); break;
         case '\r': sb.append("\\r"); break;
         case '\t': sb.append("\\t"); break;
@@ -1104,9 +1112,9 @@ class CodeGenerator {
     int i = 0;
     Node c = n.getFirstChild();
     for (; c != null && i < maxCount; c = c.getNext()) {
-      if (c.getType() == Token.BLOCK) {
+      if (c.isBlock()) {
         i += getNonEmptyChildCount(c, maxCount-i);
-      } else if (c.getType() != Token.EMPTY) {
+      } else if (!c.isEmpty()) {
         i++;
       }
     }
@@ -1116,12 +1124,12 @@ class CodeGenerator {
   /** Gets the first non-empty child of the given node. */
   private static Node getFirstNonEmptyChild(Node n) {
     for (Node c = n.getFirstChild(); c != null; c = c.getNext()) {
-      if (c.getType() == Token.BLOCK) {
+      if (c.isBlock()) {
         Node result = getFirstNonEmptyChild(c);
         if (result != null) {
           return result;
         }
-      } else if (c.getType() != Token.EMPTY) {
+      } else if (!c.isEmpty()) {
         return c;
       }
     }

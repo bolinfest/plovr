@@ -660,7 +660,7 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
     // The type of apply() on a function instance is resolved dynamically,
     // since apply varies with the type of the function it's called on.
     assertEquals(
-        "function ((Object|null|undefined), (Object|null|undefined)): ?",
+        "function ((Object|null)=, (Object|null)=): ?",
         f.getPropertyType("apply").toString());
 
     // The type of apply() on the function prototype just takes what it was
@@ -677,7 +677,7 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
 
     Var v = globalScope.getVar("Object");
     FunctionType obj = (FunctionType) v.getType();
-    assertEquals("function (new:Object, *): ?", obj.toString());
+    assertEquals("function (new:Object, *=): ?", obj.toString());
     assertNotNull(v.getNode());
     assertNotNull(v.input);
   }
@@ -1038,6 +1038,39 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
     assertEquals("number", yType.toString());
   }
 
+  public void testDeclaredObjectLitProperty6() throws Exception {
+    testSame("var x = {/** This is jsdoc */ prop: function(){}};");
+    Var prop = globalScope.getVar("x.prop");
+    JSType propType = prop.getType();
+    assertEquals("function (): undefined", propType.toString());
+    assertFalse(prop.isTypeInferred());
+    assertFalse(
+        ObjectType.cast(globalScope.getVar("x").getType())
+        .isPropertyTypeInferred("prop"));
+  }
+
+  public void testInferredObjectLitProperty1() throws Exception {
+    testSame("var x = {prop: 3};");
+    Var prop = globalScope.getVar("x.prop");
+    JSType propType = prop.getType();
+    assertEquals("number", propType.toString());
+    assertTrue(prop.isTypeInferred());
+    assertTrue(
+        ObjectType.cast(globalScope.getVar("x").getType())
+        .isPropertyTypeInferred("prop"));
+  }
+
+  public void testInferredObjectLitProperty2() throws Exception {
+    testSame("var x = {prop: function(){}};");
+    Var prop = globalScope.getVar("x.prop");
+    JSType propType = prop.getType();
+    assertEquals("function (): undefined", propType.toString());
+    assertTrue(prop.isTypeInferred());
+    assertTrue(
+        ObjectType.cast(globalScope.getVar("x").getType())
+        .isPropertyTypeInferred("prop"));
+  }
+
   public void testDeclaredConstType1() throws Exception {
     testSame(
         "/** @const */ var x = 3;" +
@@ -1102,6 +1135,30 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
 
   public void testBadIfaceInit2() throws Exception {
     testSame("var x = {}; /** @interface */ x.f;", IFACE_INITIALIZER);
+  }
+
+  public void testFunctionInHook() throws Exception {
+    testSame("/** @param {number} x */ var f = Math.random() ? " +
+        "function(x) {} : function(x) {};");
+    assertEquals("number", lastLocalScope.getVar("x").getType().toString());
+  }
+
+  public void testFunctionInAnd() throws Exception {
+    testSame("/** @param {number} x */ var f = Math.random() && " +
+        "function(x) {};");
+    assertEquals("number", lastLocalScope.getVar("x").getType().toString());
+  }
+
+  public void testFunctionInOr() throws Exception {
+    testSame("/** @param {number} x */ var f = Math.random() || " +
+        "function(x) {};");
+    assertEquals("number", lastLocalScope.getVar("x").getType().toString());
+  }
+
+  public void testFunctionInComma() throws Exception {
+    testSame("/** @param {number} x */ var f = (Math.random(), " +
+        "function(x) {});");
+    assertEquals("number", lastLocalScope.getVar("x").getType().toString());
   }
 
   private JSType findNameType(final String name, Scope scope) {

@@ -18,6 +18,7 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -45,18 +46,18 @@ class DefinitionsRemover {
 
     if (NodeUtil.isVarDeclaration(n) && n.hasChildren()) {
       return new VarDefinition(n, isExtern);
-    } else if (NodeUtil.isFunction(parent) && parent.getFirstChild() == n) {
+    } else if (parent.isFunction() && parent.getFirstChild() == n) {
       if (!NodeUtil.isFunctionExpression(parent)) {
         return new NamedFunctionDefinition(parent, isExtern);
       } else if (!n.getString().equals("")) {
         return new FunctionExpressionDefinition(parent, isExtern);
       }
-    } else if (NodeUtil.isAssign(parent) && parent.getFirstChild() == n) {
+    } else if (parent.isAssign() && parent.getFirstChild() == n) {
       return new AssignmentDefinition(parent, isExtern);
     } else if (NodeUtil.isObjectLitKey(n, parent)) {
       return new ObjectLiteralPropertyDefinition(parent, n, n.getFirstChild(),
           isExtern);
-    } else if (parent.getType() == Token.LP) {
+    } else if (parent.isParamList()) {
       Node function = parent.getParent();
       return new FunctionArgumentDefinition(function, n, isExtern);
     }
@@ -75,17 +76,17 @@ class DefinitionsRemover {
 
     if (NodeUtil.isVarDeclaration(n) && n.hasChildren()) {
       return true;
-    } else if (NodeUtil.isFunction(parent) && parent.getFirstChild() == n) {
+    } else if (parent.isFunction() && parent.getFirstChild() == n) {
       if (!NodeUtil.isFunctionExpression(parent)) {
         return true;
       } else if (!n.getString().equals("")) {
         return true;
       }
-    } else if (NodeUtil.isAssign(parent) && parent.getFirstChild() == n) {
+    } else if (parent.isAssign() && parent.getFirstChild() == n) {
       return true;
     } else if (NodeUtil.isObjectLitKey(n, parent)) {
       return true;
-    } else if (parent.getType() == Token.LP) {
+    } else if (parent.isParamList()) {
       return true;
     }
     return false;
@@ -212,8 +213,8 @@ class DefinitionsRemover {
         Node argumentName,
         boolean inExterns) {
       super(argumentName, inExterns);
-      Preconditions.checkArgument(NodeUtil.isFunction(function));
-      Preconditions.checkArgument(NodeUtil.isName(argumentName));
+      Preconditions.checkArgument(function.isFunction());
+      Preconditions.checkArgument(argumentName.isName());
     }
 
     @Override
@@ -232,7 +233,7 @@ class DefinitionsRemover {
 
     FunctionDefinition(Node node, boolean inExterns) {
       super(inExterns);
-      Preconditions.checkArgument(NodeUtil.isFunction(node));
+      Preconditions.checkArgument(node.isFunction());
       function = node;
     }
 
@@ -276,8 +277,7 @@ class DefinitionsRemover {
     @Override
     public void performRemove() {
       // replace internal name with ""
-      function.replaceChild(function.getFirstChild(),
-                            Node.newString(Token.NAME, ""));
+      function.replaceChild(function.getFirstChild(), IR.name(""));
     }
   }
 
@@ -289,7 +289,7 @@ class DefinitionsRemover {
 
     AssignmentDefinition(Node node, boolean inExterns) {
       super(inExterns);
-      Preconditions.checkArgument(NodeUtil.isAssign(node));
+      Preconditions.checkArgument(node.isAssign());
       assignment = node;
     }
 
@@ -346,13 +346,13 @@ class DefinitionsRemover {
       // flexibility.
 
       switch (name.getType()) {
-        case Token.SET:
-        case Token.GET:
+        case Token.SETTER_DEF:
+        case Token.GETTER_DEF:
         case Token.STRING:
           // TODO(johnlenz): return a GETELEM for quoted strings.
-          return new Node(Token.GETPROP,
-            new Node(Token.OBJECTLIT),
-            name.cloneNode());
+          return IR.getprop(
+              IR.objectlit(),
+              IR.string(name.getString()));
         default:
           throw new IllegalStateException("unexpected");
       }
@@ -384,7 +384,7 @@ class DefinitionsRemover {
           "AST should be normalized first");
       Node parent = var.getParent();
       Node rValue = name.removeFirstChild();
-      Preconditions.checkState(parent.getType() != Token.FOR);
+      Preconditions.checkState(!parent.isFor());
       parent.replaceChild(var, NodeUtil.newExpr(rValue));
     }
 

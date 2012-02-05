@@ -80,7 +80,7 @@ class MakeDeclaredNamesUnique
       // If the contextual renamer is being used the starting context can not
       // be a function.
       Preconditions.checkState(
-          declarationRoot.getType() != Token.FUNCTION ||
+          !declarationRoot.isFunction() ||
           !(rootRenamer instanceof ContextualRenamer));
       Preconditions.checkState(t.inGlobalScope());
       renamer = rootRenamer;
@@ -88,7 +88,7 @@ class MakeDeclaredNamesUnique
       renamer = nameStack.peek().forChildScope();
     }
 
-    if (declarationRoot.getType() != Token.FUNCTION) {
+    if (!declarationRoot.isFunction()) {
       // Add the block declarations
       findDeclaredNames(declarationRoot, null, renamer);
     }
@@ -123,7 +123,7 @@ class MakeDeclaredNamesUnique
         }
         break;
 
-      case Token.LP: {
+      case Token.PARAM_LIST: {
           Renamer renamer = nameStack.peek().forChildScope();
 
           // Add the function parameters
@@ -178,7 +178,7 @@ class MakeDeclaredNamesUnique
         nameStack.pop();
         break;
 
-      case Token.LP:
+      case Token.PARAM_LIST:
         // Note: The parameters and function body variables live in the
         // same scope, we introduce the scope when in the "shouldTraverse"
         // visit of LP, but remove it when when we exit the function above.
@@ -213,7 +213,7 @@ class MakeDeclaredNamesUnique
     // Do a shallow traversal, so don't traverse into function declarations,
     // except for the name of the function itself.
     if (parent == null
-        || parent.getType() != Token.FUNCTION
+        || !parent.isFunction()
         || n == parent.getFirstChild()) {
       if (NodeUtil.isVarDeclaration(n)) {
         renamer.addDeclaredName(n.getString());
@@ -349,7 +349,7 @@ class MakeDeclaredNamesUnique
         List<Node> references = nameMap.get(name);
         Preconditions.checkState(references != null);
         for (Node n : references) {
-          Preconditions.checkState(n.getType() == Token.NAME);
+          Preconditions.checkState(n.isName());
           n.setString(newName);
         }
         compiler.reportCodeChange();
