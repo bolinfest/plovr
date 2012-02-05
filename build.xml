@@ -43,7 +43,7 @@
                        guice-3.0.jar,
                        guice-assistedinject-3.0.jar,
                        guice-multibindings-3.0.jar,
-                       icu4j-core.jar,
+                       icu4j-4_8_1_1.jar,
                        javax.inject.jar"
              />
 
