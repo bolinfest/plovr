@@ -66,6 +66,10 @@ public final class Responses {
   public static void redirect(HttpExchange exchange, String uri)
       throws IOException {
     exchange.getResponseHeaders().add("Location", uri);
-    exchange.sendResponseHeaders(302, 0);
+    exchange.sendResponseHeaders(302, -1);
+  }
+
+  public static void notModified(HttpExchange exchange) throws IOException {
+    exchange.sendResponseHeaders(304, -1);
   }
 }

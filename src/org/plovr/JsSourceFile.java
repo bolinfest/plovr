@@ -25,4 +25,8 @@ public class JsSourceFile extends LocalFileJsInput {
     }
   }
 
+  @Override
+  public boolean supportsEtags() {
+    return true;
+  }
 }

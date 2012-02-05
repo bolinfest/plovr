@@ -87,12 +87,12 @@ abstract class AbstractGetHandler implements HttpHandler {
         }
       } catch (Throwable t) {
         logger.log(Level.SEVERE, "Error during GET request to " + exchange.getRequestURI(), t);
-        
+
         // Even though there has been an error, it is important to write a
         // response or else the client will hang.
         if (exchange.haveResponseHeadersBeenSent()) {
           // If the response headers have already been sent, then just close
-          // whatever has been writen to the response.
+          // whatever has been written to the response.
           Closeables.closeQuietly(exchange.getResponseBody());
         } else {
           HttpUtil.writeErrorMessageResponse(exchange, t.getMessage());
@@ -100,7 +100,7 @@ abstract class AbstractGetHandler implements HttpHandler {
       }
     }
   }
-  
+
   /**
    * Sets the cache headers to disable caching of resources.
    * See http://code.google.com/p/doctype/wiki/ArticleHttpCaching

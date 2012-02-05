@@ -76,4 +76,14 @@ public class DummyJsInput implements JsInput {
     }
     return templateCode;
   }
+
+  @Override
+  public boolean supportsEtags() {
+    return false;
+  }
+
+  @Override
+  public CodeWithEtag getCodeWithEtag() {
+    throw new UnsupportedOperationException();
+  }
 }

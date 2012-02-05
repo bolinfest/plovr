@@ -2,6 +2,7 @@ package org.plovr;
 
 import java.util.List;
 
+import com.google.common.base.Preconditions;
 import com.google.javascript.jscomp.SourceFile.Generator;
 
 /**
@@ -44,4 +45,33 @@ public interface JsInput extends Generator {
    * @throws UnsupportedOperationException if this is not a Soy file
    */
   public String getTemplateCode();
+
+  /**
+   * Whether this input can calculate a stable ETag value for itself.
+   * @see #getCodeWithEtag()
+   */
+  public boolean supportsEtags();
+
+  /**
+   * If {@link #supportsEtags()} returns {@code true}, then this returns the
+   * value returned by {@link #getCode()} along with an ETag; otherwise, it
+   * throws an {@link UnsupportedOperationException}.
+   * <p>
+   * This is generally used as a performance optimization to prevent plovr from
+   * going to disk twice: once to read the code for {@link #getCode()} and then
+   * again to read the code and calculate its ETag. This ensures that the code
+   * and ETag are produced atomically.
+   */
+  public CodeWithEtag getCodeWithEtag();
+
+  static final class CodeWithEtag {
+    public final String code;
+    public final String eTag;
+    public CodeWithEtag(String code, String eTag) {
+      Preconditions.checkNotNull(code);
+      Preconditions.checkNotNull(eTag);
+      this.code = code;
+      this.eTag = eTag;
+    }
+  }
 }

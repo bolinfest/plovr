@@ -1,13 +1,12 @@
 package org.plovr;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.net.URL;
 import java.util.logging.Logger;
 
 import org.plovr.io.Settings;
 
-import com.google.common.io.LineReader;
+import com.google.common.io.Resources;
 
 /**
  * {@link ResourceJsInput} represents a JavaScript file loaded from a JAR, so
@@ -17,9 +16,12 @@ import com.google.common.io.LineReader;
  */
 public class ResourceJsInput extends AbstractJsInput {
 
-  private static final Logger logger = Logger.getLogger("org.plovr.ResourceJsInput");
+  private static final Logger logger = Logger.getLogger(
+      "org.plovr.ResourceJsInput");
 
   private final String pathToResource;
+
+  private CodeWithEtag codeWithEtag;
 
   ResourceJsInput(String pathToResource) {
     super(pathToResource);
@@ -27,22 +29,35 @@ public class ResourceJsInput extends AbstractJsInput {
   }
 
   @Override
-  public String getCode() {
-    try {
-      InputStream input = ResourceReader.class.getResourceAsStream(
-          pathToResource);
-      Readable readable = new InputStreamReader(input, Settings.CHARSET);
-      LineReader lineReader = new LineReader(readable);
-      StringBuilder builder = new StringBuilder();
-      String line;
-      while ((line = lineReader.readLine()) != null) {
-        builder.append(line + "\n");
+  public CodeWithEtag getCodeWithEtag() {
+    // The assignment of codeWithEtag is not thread-safe, though this does not
+    // appear to be particularly important.
+    if (codeWithEtag == null) {
+      // The code for a ResourceJsInput is read once and stored in memory
+      // because it must be immutable.
+      URL url = Resources.getResource(ResourceReader.class, pathToResource);
+      String code;
+      try {
+        code = Resources.toString(url, Settings.CHARSET);
+      } catch (IOException e) {
+        logger.severe(e.getMessage());
+        throw new RuntimeException(e);
       }
-      return builder.toString();
-    } catch (IOException e) {
-      logger.severe(e.getMessage());
-      throw new RuntimeException(e);
+      // The ETag is a function of the code rather than just the name because
+      // the content of a ResourceJsInput may change between plovr versions.
+      String eTag = calculateEtagFor(code);
+      codeWithEtag = new CodeWithEtag(code, eTag);
     }
+    return codeWithEtag;
   }
 
+  @Override
+  public String getCode() {
+    return getCodeWithEtag().code;
+  }
+
+  @Override
+  public boolean supportsEtags() {
+    return true;
+  }
 }

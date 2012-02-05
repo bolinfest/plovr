@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.plovr.JsInput.CodeWithEtag;
 import org.plovr.io.Responses;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -122,11 +123,7 @@ public class InputFileHandler extends AbstractGetHandler {
   @Override
   protected void doGet(HttpExchange exchange, QueryData data, Config config)
       throws IOException {
-    long start = System.currentTimeMillis();
     Manifest manifest = config.getManifest();
-
-    // Find the code for the requested input.
-    String code = null;
 
     URI uri = exchange.getRequestURI();
     Matcher matcher = URI_INPUT_PATTERN.matcher(uri.getPath());
@@ -141,6 +138,7 @@ public class InputFileHandler extends AbstractGetHandler {
     String depsJsName = manifest.isBuiltInClosureLibrary() ?
         "/closure/goog/deps.js" : "/deps.js";
     if (name.equals(depsJsName)) {
+      super.setCacheHeaders(exchange.getResponseHeaders());
       Responses.writeJs(getCodeForDepsJs(manifest), config, exchange);
       return;
     }
@@ -149,17 +147,40 @@ public class InputFileHandler extends AbstractGetHandler {
     name = name.replaceAll(PARENT_DIRECTORY_REPLACEMENT_PATTERN,
         PARENT_DIRECTORY_TOKEN);
 
-    JsInput requestedInput = manifest.getJsInputByName(name);
-
+    // Find the JsInput that matches the specified name.
     // TODO: eliminate this hack with the slash -- just make it an invariant of
     // the system.
+    JsInput requestedInput = manifest.getJsInputByName(name);
     if (requestedInput == null && name.startsWith("/")) {
       // Remove the leading slash and try again.
       name = name.substring(1);
       requestedInput = manifest.getJsInputByName(name);
     }
 
-    if (requestedInput != null) {
+    // Find the code for the requested input.
+    String code;
+    if (requestedInput == null) {
+      code = null;
+    } else if (requestedInput.supportsEtags()) {
+      // Set/check an ETag, if appropriate.
+      CodeWithEtag codeWithEtag = requestedInput.getCodeWithEtag();
+      String eTag = codeWithEtag.eTag;
+      String ifNoneMatch = exchange.getRequestHeaders().getFirst(
+          "If-None-Match");
+      if (eTag.equals(ifNoneMatch)) {
+        Responses.notModified(exchange);
+        return;
+      } else {
+        Headers headers = exchange.getResponseHeaders();
+        headers.set("ETag", eTag);
+        code = codeWithEtag.code;
+      }
+    } else {
+      // Do not set cache headers if the logic for ETags has not been defined
+      // for this JsInput. Setting an "Expires" header based on the last
+      // modified time for a file has been observed to cause resources to be
+      // cached incorrectly by IE6.
+      super.setCacheHeaders(exchange.getResponseHeaders());
       code = requestedInput.getCode();
     }
 
@@ -168,14 +189,7 @@ public class InputFileHandler extends AbstractGetHandler {
       return;
     }
 
-    long end = System.currentTimeMillis();
-
     Responses.writeJs(code, config, exchange);
-    long written = System.currentTimeMillis();
-
-    // Currently included for help with debugging
-    // http://code.google.com/p/plovr/issues/detail?id=54
-    System.out.printf("Millis to load code: %d  to write: %d  name: %s\n", (end - start), (written - end), name);
   }
 
   private String getCodeForDepsJs(Manifest manifest) {
@@ -202,11 +216,13 @@ public class InputFileHandler extends AbstractGetHandler {
     return manifest.buildDepsJs(converter);
   }
 
+  /**
+   * By default, do nothing. {@link AbstractGetHandler#setCacheHeaders(Headers)}
+   * will be called as appropriate from
+   * {@link #doGet(HttpExchange, QueryData, Config)}.
+   */
   @Override
-  protected void setCacheHeaders(Headers headers) {
-    // TODO: allow caching of JS files
-    super.setCacheHeaders(headers);
-  }
+  protected void setCacheHeaders(Headers headers) {}
 
   static Function<JsInput, String> createInputNameToUriConverter(
       CompilationServer server, HttpExchange exchange, final String configId) {
