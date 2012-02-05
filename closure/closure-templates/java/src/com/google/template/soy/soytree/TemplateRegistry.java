@@ -34,7 +34,6 @@ import javax.annotation.concurrent.Immutable;
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
- * @author Kai Huang
  */
 public class TemplateRegistry {
 
@@ -229,7 +228,12 @@ public class TemplateRegistry {
       String delTemplateName, Set<String> activeDelPackageNames)
       throws DelegateTemplateConflictException {
 
-    for (DelegateTemplateDivision division : delTemplatesMap.get(delTemplateName)) {
+    List<DelegateTemplateDivision> divisions = delTemplatesMap.get(delTemplateName);
+    if (divisions == null) {
+      return null;
+    }
+
+    for (DelegateTemplateDivision division : divisions) {
 
       TemplateDelegateNode delTemplate = null;
 

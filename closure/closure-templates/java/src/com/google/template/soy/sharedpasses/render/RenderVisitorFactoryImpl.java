@@ -37,8 +37,6 @@ import javax.inject.Singleton;
 /**
  * Default implementation of RenderVisitorFactory.
  *
- * @author Mark Knichel
- * @author Kai Huang
  */
 @Singleton
 public class RenderVisitorFactoryImpl implements RenderVisitorFactory {
@@ -62,7 +60,7 @@ public class RenderVisitorFactoryImpl implements RenderVisitorFactory {
 
   @Override
   public RenderVisitor create(
-      StringBuilder outputSb, TemplateRegistry templateRegistry,
+      Appendable outputSb, TemplateRegistry templateRegistry,
       @Nullable SoyMapData data, @Nullable SoyMapData ijData,
       @Nullable Deque<Map<String, SoyData>> env, @Nullable Set<String> activeDelPackageNames,
       @Nullable SoyMsgBundle msgBundle, @Nullable SoyCssRenamingMap cssRenamingMap) {

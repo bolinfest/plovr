@@ -41,7 +41,6 @@ import javax.annotation.Nullable;
  * <p> Uses {@code SoyTofuFunction}s and {@code SoyTofuPrintDirective}s instead of
  * {@code SoyJavaRuntimeFunction}s and {@code SoyJavaRuntimePrintDirective}s.
  *
- * @author Kai Huang
  */
 class TofuRenderVisitor extends RenderVisitor {
 
@@ -54,7 +53,7 @@ class TofuRenderVisitor extends RenderVisitor {
    * @param soyTofuDirectivesMap Map of all SoyTofuPrintDirectives (name to directive).
    * @param evalVisitorFactory Factory for creating an instance of EvalVisitor.
    * @param renderVisitorFactory Factory for creating an instance of EvalVisitor.
-   * @param outputSb The StringBuilder to append the output to.
+   * @param outputSb The Appendable to append the output to.
    * @param templateRegistry A registry of all templates. Should never be null (except in some unit
    *     tests).
    * @param data The current template data.
@@ -69,7 +68,7 @@ class TofuRenderVisitor extends RenderVisitor {
   protected TofuRenderVisitor(
       Map<String, SoyTofuPrintDirective> soyTofuDirectivesMap,
       EvalVisitorFactory evalVisitorFactory, RenderVisitorFactory renderVisitorFactory,
-      StringBuilder outputSb, @Nullable TemplateRegistry templateRegistry,
+      Appendable outputSb, @Nullable TemplateRegistry templateRegistry,
       @Nullable SoyMapData data, @Nullable SoyMapData ijData,
       @Nullable Deque<Map<String, SoyData>> env, @Nullable Set<String> activeDelPackageNames,
       @Nullable SoyMsgBundle msgBundle, @Nullable SoyCssRenamingMap cssRenamingMap) {
