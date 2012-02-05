@@ -14,6 +14,7 @@
 
 /**
  * @fileoverview Python style iteration utilities.
+ * @author arv@google.com (Erik Arvidsson)
  */
 
 
@@ -25,7 +26,7 @@ goog.require('goog.array');
 goog.require('goog.asserts');
 
 
-// TODO(user): Add more functions from Python's itertools.
+// TODO(nnaze): Add more functions from Python's itertools.
 // http://docs.python.org/library/itertools.html
 
 
@@ -125,7 +126,7 @@ goog.iter.toIterator = function(iterable) {
   }
 
 
-  // TODO(user): Should we fall back on goog.structs.getValues()?
+  // TODO(arv): Should we fall back on goog.structs.getValues()?
   throw Error('Not implemented');
 };
 

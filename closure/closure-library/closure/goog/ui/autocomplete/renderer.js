@@ -145,7 +145,7 @@ goog.ui.AutoComplete.Renderer = function(opt_parentNode, opt_customRenderer,
    */
   this.rowClassName = goog.getCssName('ac-row');
 
-  // TODO(user): Remove this as soon as we remove references and ensure that
+  // TODO(gboyer): Remove this as soon as we remove references and ensure that
   // no groups are pushing javascript using this.
   /**
    * The old class name for active row.  This name is deprecated because its
@@ -500,9 +500,6 @@ goog.ui.AutoComplete.Renderer.prototype.maybeCreateElement_ = function() {
                        this.handleClick_, false, this);
     goog.events.listen(el, goog.events.EventType.MOUSEDOWN,
                        this.handleMouseDown_, false, this);
-    goog.events.listen(this.dom_.getDocument(),
-                       goog.events.EventType.MOUSEDOWN,
-                       this.handleDocumentMousedown_, false, this);
     goog.events.listen(el, goog.events.EventType.MOUSEOVER,
                        this.handleMouseOver_, false, this);
   }
@@ -625,9 +622,6 @@ goog.ui.AutoComplete.Renderer.prototype.disposeInternal = function() {
         this.handleClick_, false, this);
     goog.events.unlisten(this.element_, goog.events.EventType.MOUSEDOWN,
         this.handleMouseDown_, false, this);
-    goog.events.unlisten(this.dom_.getDocument(),
-        goog.events.EventType.MOUSEDOWN, this.handleDocumentMousedown_, false,
-        this);
     goog.events.unlisten(this.element_, goog.events.EventType.MOUSEOVER,
         this.handleMouseOver_, false, this);
     this.dom_.removeNode(this.element_);
@@ -688,7 +682,17 @@ goog.ui.AutoComplete.Renderer.prototype.hiliteMatchingText_ =
 
     // Create a regular expression to match a token at the beginning of a line
     // or preceeded by non-alpha-numeric characters
-    var re = new RegExp('(.*?)(^|\\W+)(' + token + ')', 'gi');
+    // NOTE(user): this used to have a (^|\\W+) clause where it now has \\b
+    // but it caused various browsers to hang on really long strings. It is
+    // also excessive, because .*?\W+ is the same as .*?\b since \b already
+    // checks that the character before the token is a non-word character
+    // (the only time the regexp is different is if token begins with a
+    // non-word character), and ^ matches the start of the line or following
+    // a line terminator character, which is also \W. The initial group cannot
+    // just be .*? as it will miss line terminators (which is what the \W+
+    // clause used to match). Instead we use [\s\S] to match every character,
+    // including line terminators.
+    var re = new RegExp('([\\s\\S]*?)\\b(' + token + ')', 'gi');
     var textNodes = [];
     var lastIndex = 0;
 
@@ -701,26 +705,25 @@ goog.ui.AutoComplete.Renderer.prototype.hiliteMatchingText_ =
       numMatches++;
       textNodes.push(match[1]);
       textNodes.push(match[2]);
-      textNodes.push(match[3]);
       lastIndex = re.lastIndex;
       match = re.exec(text);
     }
     textNodes.push(text.substring(lastIndex));
 
-    // Replace the tokens with bolded text.  Each set of three textNodes
-    // (starting at index idx) includes two nodes of text before the bolded
-    // token, then a third node (at idx + 2) consisting of what should be
+    // Replace the tokens with bolded text.  Each pair of textNodes
+    // (starting at index idx) includes a node of text before the bolded
+    // token, and a node (at idx + 1) consisting of what should be
     // enclosed in bold tags.
     if (textNodes.length > 1) {
       var maxNumToBold = !this.highlightAllTokens_ ? 1 : numMatches;
       for (var i = 0; i < maxNumToBold; i++) {
-        var idx = 3 * i;
+        var idx = 2 * i;
 
-        node.nodeValue = textNodes[idx] + textNodes[idx + 1];
+        node.nodeValue = textNodes[idx];
         var boldTag = this.dom_.createElement('b');
         boldTag.className = this.highlightedClassName;
         this.dom_.appendChild(boldTag,
-            this.dom_.createTextNode(textNodes[idx + 2]));
+            this.dom_.createTextNode(textNodes[idx + 1]));
         boldTag = node.parentNode.insertBefore(boldTag, node.nextSibling);
         node.parentNode.insertBefore(this.dom_.createTextNode(''),
             boldTag.nextSibling);
@@ -728,7 +731,7 @@ goog.ui.AutoComplete.Renderer.prototype.hiliteMatchingText_ =
       }
 
       // Append the remaining text nodes to the end.
-      var remainingTextNodes = goog.array.slice(textNodes, maxNumToBold * 3);
+      var remainingTextNodes = goog.array.slice(textNodes, maxNumToBold * 2);
       node.nodeValue = remainingTextNodes.join('');
     } else if (rest) {
       this.hiliteMatchingText_(node, rest);
@@ -760,17 +763,18 @@ goog.ui.AutoComplete.Renderer.prototype.getTokenRegExp_ =
     return token;
   }
 
+  if (goog.isArray(tokenOrArray)) {
+    // Remove invalid tokens from the array, which may leave us with nothing.
+    tokenOrArray = goog.array.filter(tokenOrArray, function(str) {
+      return !goog.string.isEmptySafe(str);
+    });
+  }
+
   // If highlighting all tokens, join them with '|' so the regular expression
   // will match on any of them.
   if (this.highlightAllTokens_) {
     if (goog.isArray(tokenOrArray)) {
-      // Remove empty or whitespace entries from the array so the joined array
-      // will only contain valid tokens.
-      var tokenArray = goog.array.filter(tokenOrArray, function(str) {
-        return !goog.string.isEmptySafe(str);
-      });
-
-      tokenArray = goog.array.map(tokenArray, goog.string.regExpEscape);
+      var tokenArray = goog.array.map(tokenOrArray, goog.string.regExpEscape);
       token = tokenArray.join('|');
     } else {
       // Remove excess whitespace from the string so bars will separate valid
@@ -784,11 +788,19 @@ goog.ui.AutoComplete.Renderer.prototype.getTokenRegExp_ =
     // Not highlighting all matching tokens.  If tokenOrArray is a string, use
     // that as the token.  If it is an array, use the first element in the
     // array.
+    // TODO(user): why is this this way?. We should match against all
+    // tokens in the array, but only accept the first match.
     if (goog.isArray(tokenOrArray)) {
       token = tokenOrArray.length > 0 ?
           goog.string.regExpEscape(tokenOrArray[0]) : '';
     } else {
-      token = goog.string.regExpEscape(tokenOrArray);
+      // For the single-match string token, we refuse to match anything if
+      // the string begins with a non-word character, as matches by definition
+      // can only occur at the start of a word. (This also handles the
+      // goog.string.isEmptySafe(tokenOrArray) case.)
+      if (!/^\W/.test(tokenOrArray)) {
+        token = goog.string.regExpEscape(tokenOrArray);
+      }
     }
   }
 
@@ -863,32 +875,13 @@ goog.ui.AutoComplete.Renderer.prototype.handleClick_ = function(e) {
 
 
 /**
- * Handle the mousedown event and tell the AC not to dimiss.
+ * Handle the mousedown event and prevent the AC from losing focus.
  * @param {goog.events.Event} e Browser event object.
  * @private
  */
 goog.ui.AutoComplete.Renderer.prototype.handleMouseDown_ = function(e) {
-  this.dispatchEvent(goog.ui.AutoComplete.EventType.CANCEL_DISMISS);
   e.stopPropagation();
   e.preventDefault();
-};
-
-
-/**
- * Handles the user clicking on the document.
- * @param {Object} e The document click event.
- * @private
- */
-goog.ui.AutoComplete.Renderer.prototype.handleDocumentMousedown_ = function(e) {
-  // If the user clicks on the input element, we don't want to close the
-  // autocomplete, it makes more sense to just unselect the currently selected
-  // item.
-  if (this.target_ == e.target) {
-    this.hiliteNone();
-    e.stopPropagation();
-    return;
-  }
-  this.dispatchEvent(goog.ui.AutoComplete.EventType.DISMISS);
 };
 
 

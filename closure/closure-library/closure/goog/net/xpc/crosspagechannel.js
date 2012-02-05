@@ -337,18 +337,7 @@ goog.net.xpc.CrossPageChannel.prototype.createPeerIframe = function(
     iframeElm.style.width = iframeElm.style.height = '100%';
   }
 
-  var peerUri = this.cfg_[goog.net.xpc.CfgFields.PEER_URI];
-  if (goog.isString(peerUri)) {
-    peerUri = this.cfg_[goog.net.xpc.CfgFields.PEER_URI] =
-        new goog.Uri(peerUri);
-  }
-
-  // Add the channel configuration used by the peer as URL parameter.
-  if (opt_addCfgParam !== false) {
-    peerUri.setParameterValue('xpc',
-                              goog.json.serialize(
-                                  this.getPeerConfiguration()));
-  }
+  var peerUri = this.getPeerUri(opt_addCfgParam);
 
   if (goog.userAgent.GECKO || goog.userAgent.WEBKIT) {
     // Appending the iframe in a timeout to avoid a weird fastback issue, which
@@ -371,6 +360,32 @@ goog.net.xpc.CrossPageChannel.prototype.createPeerIframe = function(
   }
 
   return /** @type {!HTMLIFrameElement} */ (iframeElm);
+};
+
+
+/**
+ * Returns the peer URI, with an optional URL parameter for configuring the peer
+ * window.
+ *
+ * @param {boolean=} opt_addCfgParam Whether to add the peer configuration as
+ *     URL parameter (default: true).
+ * @return {!goog.Uri} The peer URI.
+ */
+goog.net.xpc.CrossPageChannel.prototype.getPeerUri = function(opt_addCfgParam) {
+  var peerUri = this.cfg_[goog.net.xpc.CfgFields.PEER_URI];
+  if (goog.isString(peerUri)) {
+    peerUri = this.cfg_[goog.net.xpc.CfgFields.PEER_URI] =
+        new goog.Uri(peerUri);
+  }
+
+  // Add the channel configuration used by the peer as URL parameter.
+  if (opt_addCfgParam !== false) {
+    peerUri.setParameterValue('xpc',
+                              goog.json.serialize(
+                                  this.getPeerConfiguration()));
+  }
+
+  return peerUri;
 };
 
 
@@ -515,6 +530,20 @@ goog.net.xpc.CrossPageChannel.prototype.send = function(serviceName, payload) {
   this.transport_.send(this.escapeServiceName_(serviceName), payload);
 };
 
+/**
+ * Delivers messages to the appropriate service-handler.
+ *
+ * @param {string} serviceName The name of the port.
+ * @param {string} payload The payload.
+ * @param {string=} opt_origin An optional origin for the message, where the
+ *     underlying transport makes that available.  If this is specified, and
+ *     the PEER_HOSTNAME parameter was provided, they must match or the message
+ *     will be rejected.
+ */
+goog.net.xpc.CrossPageChannel.prototype.safeDeliver = function(
+    serviceName, payload, opt_origin) {
+  this.deliver_(serviceName, payload, opt_origin);
+};
 
 /**
  * Delivers messages to the appropriate service-handler.

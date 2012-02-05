@@ -186,7 +186,7 @@ goog.string.linkify.TOP_LEVEL_DOMAIN_ =
  * @private
  */
 goog.string.linkify.EMAIL_ =
-    '(?:mailto:)?([\\w\\+\\-]+@[A-Za-z0-9\\.-]+\\.' +
+    '(?:mailto:)?([\\w.+-]+@[A-Za-z0-9.-]+\\.' +
     goog.string.linkify.TOP_LEVEL_DOMAIN_ + ')';
 
 
@@ -201,8 +201,11 @@ goog.string.linkify.EMAIL_ =
  * @private
  */
 goog.string.linkify.FIND_LINKS_RE_ = new RegExp(
-    '(.*?)\\b(' +
-    goog.string.linkify.EMAIL_ + '|' +
-    goog.string.linkify.URL_ + '|$)',
+    // Match everything including newlines.
+    '([\\S\\s]*?)(' +
+    // Match email after a word break.
+    '\\b' + goog.string.linkify.EMAIL_ + '|' +
+    // Match url after a workd break.
+    '\\b' + goog.string.linkify.URL_ + '|$)',
     'g');
 

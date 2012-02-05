@@ -36,6 +36,8 @@
  * - decorateInternal
  * - getCssClass
  *
+ * @author arv@google.com (Erik Arvidsson)
+ * @author reto@google.com (Reto Strobl)
  */
 
 goog.provide('goog.ui.SliderBase');
@@ -230,6 +232,22 @@ goog.ui.SliderBase.prototype.blockIncrement_ = 10;
 goog.ui.SliderBase.prototype.minExtent_ = 0;
 
 
+/**
+ * Whether the slider should handle mouse wheel events.
+ * @private
+ * @type {boolean}
+ */
+goog.ui.SliderBase.prototype.isHandleMouseWheel_ = true;
+
+
+/**
+ * Whether the slider is enabled or not.
+ * @private
+ * @type {boolean}
+ */
+goog.ui.SliderBase.prototype.enabled_ = true;
+
+
 // TODO: Make this return a base CSS class (without orientation), in subclasses.
 /**
  * Returns the CSS class applied to the slider element for the given
@@ -278,6 +296,15 @@ goog.ui.SliderBase.THUMB_DRAGGING_CSS_CLASS_ =
     goog.getCssName('goog-slider-thumb-dragging');
 
 
+/**
+ * CSS class name applied when the slider is disabled.
+ * @type {string}
+ * @private
+ */
+goog.ui.SliderBase.DISABLED_CSS_CLASS_ =
+    goog.getCssName('goog-slider-disabled');
+
+
 /** @override */
 goog.ui.SliderBase.prototype.decorateInternal = function(element) {
   goog.ui.SliderBase.superClass_.decorateInternal.call(this, element);
@@ -301,30 +328,59 @@ goog.ui.SliderBase.prototype.enterDocument = function() {
   this.valueDragger_.defaultAction = this.extentDragger_.defaultAction =
       goog.nullFunction;
   this.keyHandler_ = new goog.events.KeyHandler(this.getElement());
-  this.mouseWheelHandler_ = new goog.events.MouseWheelHandler(
-      this.getElement());
-  this.getHandler().
-      listen(this.valueDragger_, goog.fx.Dragger.EventType.BEFOREDRAG,
-          this.handleBeforeDrag_).
-      listen(this.extentDragger_, goog.fx.Dragger.EventType.BEFOREDRAG,
-          this.handleBeforeDrag_).
-      listen(this.valueDragger_,
-          [goog.fx.Dragger.EventType.START, goog.fx.Dragger.EventType.END],
-          this.handleThumbDragStartEnd_).
-      listen(this.extentDragger_,
-          [goog.fx.Dragger.EventType.START, goog.fx.Dragger.EventType.END],
-          this.handleThumbDragStartEnd_).
-      listen(this.keyHandler_, goog.events.KeyHandler.EventType.KEY,
-          this.handleKeyDown_).
-      listen(this.getElement(), goog.events.EventType.MOUSEDOWN,
-          this.handleMouseDown_).
-      listen(this.mouseWheelHandler_,
-          goog.events.MouseWheelHandler.EventType.MOUSEWHEEL,
-          this.handleMouseWheel_);
+  this.enableEventHandlers_(true);
 
   this.getElement().tabIndex = 0;
   this.updateUi_();
 };
+
+
+/**
+ * Attaches/Detaches the event handlers on the slider.
+ * @param {boolean} enable Whether to attach or detach the event handlers.
+ * @private
+ */
+goog.ui.SliderBase.prototype.enableEventHandlers_ = function(enable) {
+  if (enable) {
+    this.getHandler().
+        listen(this.valueDragger_, goog.fx.Dragger.EventType.BEFOREDRAG,
+            this.handleBeforeDrag_).
+        listen(this.extentDragger_, goog.fx.Dragger.EventType.BEFOREDRAG,
+            this.handleBeforeDrag_).
+        listen(this.valueDragger_,
+            [goog.fx.Dragger.EventType.START, goog.fx.Dragger.EventType.END],
+            this.handleThumbDragStartEnd_).
+        listen(this.extentDragger_,
+            [goog.fx.Dragger.EventType.START, goog.fx.Dragger.EventType.END],
+            this.handleThumbDragStartEnd_).
+        listen(this.keyHandler_, goog.events.KeyHandler.EventType.KEY,
+            this.handleKeyDown_).
+        listen(this.getElement(), goog.events.EventType.MOUSEDOWN,
+            this.handleMouseDown_);
+    if (this.isHandleMouseWheel()) {
+      this.enableMouseWheelHandling_(true);
+    }
+  } else {
+    this.getHandler().
+        unlisten(this.valueDragger_, goog.fx.Dragger.EventType.BEFOREDRAG,
+            this.handleBeforeDrag_).
+        unlisten(this.extentDragger_, goog.fx.Dragger.EventType.BEFOREDRAG,
+            this.handleBeforeDrag_).
+        unlisten(this.valueDragger_,
+            [goog.fx.Dragger.EventType.START, goog.fx.Dragger.EventType.END],
+            this.handleThumbDragStartEnd_).
+        unlisten(this.extentDragger_,
+            [goog.fx.Dragger.EventType.START, goog.fx.Dragger.EventType.END],
+            this.handleThumbDragStartEnd_).
+        unlisten(this.keyHandler_, goog.events.KeyHandler.EventType.KEY,
+            this.handleKeyDown_).
+        unlisten(this.getElement(), goog.events.EventType.MOUSEDOWN,
+            this.handleMouseDown_);
+    if (this.isHandleMouseWheel()) {
+      this.enableMouseWheelHandling_(false);
+    }
+  }
+}
 
 
 /** @override */
@@ -483,7 +539,8 @@ goog.ui.SliderBase.prototype.startBlockIncrementing_ = function(e) {
 
   var doc = goog.dom.getOwnerDocument(this.getElement());
   this.getHandler().
-      listen(doc, goog.events.EventType.MOUSEUP, this.handleMouseUp_, true).
+      listen(doc, goog.events.EventType.MOUSEUP,
+          this.stopBlockIncrementing_, true).
       listen(this.getElement(), goog.events.EventType.MOUSEMOVE,
           this.storeMousePos_);
 
@@ -545,18 +602,19 @@ goog.ui.SliderBase.prototype.handleTimerTick_ = function() {
 
 
 /**
- * Handler for the mouse up event.
- * @param {goog.events.Event} e  The event object.
+ * Stops the block incrementing animation and unlistens the necessary
+ * event handlers.
  * @private
  */
-goog.ui.SliderBase.prototype.handleMouseUp_ = function(e) {
+goog.ui.SliderBase.prototype.stopBlockIncrementing_ = function() {
   if (this.incTimer_) {
     this.incTimer_.stop();
   }
 
   var doc = goog.dom.getOwnerDocument(this.getElement());
   this.getHandler().
-      unlisten(doc, goog.events.EventType.MOUSEUP, this.handleMouseUp_, true).
+      unlisten(doc, goog.events.EventType.MOUSEUP,
+          this.stopBlockIncrementing_, true).
       unlisten(this.getElement(), goog.events.EventType.MOUSEMOVE,
           this.storeMousePos_);
 };
@@ -1248,4 +1306,85 @@ goog.ui.SliderBase.prototype.updateAriaStates = function() {
                            goog.dom.a11y.State.VALUENOW,
                            this.getValue());
   }
+};
+
+
+/**
+ * Enables or disables mouse wheel handling for the slider. The mouse wheel
+ * handler enables the user to change the value of slider using a mouse wheel.
+ *
+ * @param {boolean} enable Whether to enable mouse wheel handling.
+ */
+goog.ui.SliderBase.prototype.setHandleMouseWheel = function(enable) {
+  if (this.isInDocument() && enable != this.isHandleMouseWheel()) {
+    this.enableMouseWheelHandling_(enable);
+  }
+
+  this.isHandleMouseWheel_ = enable;
+};
+
+
+/**
+ * @return {boolean} Whether the slider handles mousewheel.
+ */
+goog.ui.SliderBase.prototype.isHandleMouseWheel = function() {
+  return this.isHandleMouseWheel_;
+};
+
+
+/**
+ * Enable/Disable mouse wheel handling.
+ * @param {boolean} enable Whether to enable mouse wheel handling.
+ */
+goog.ui.SliderBase.prototype.enableMouseWheelHandling_ = function(enable) {
+  if (enable) {
+    if (!this.mouseWheelHandler_) {
+      this.mouseWheelHandler_ = new goog.events.MouseWheelHandler(
+          this.getElement());
+    }
+    this.getHandler().listen(this.mouseWheelHandler_,
+        goog.events.MouseWheelHandler.EventType.MOUSEWHEEL,
+        this.handleMouseWheel_);
+  } else {
+    this.getHandler().unlisten(this.mouseWheelHandler_,
+      goog.events.MouseWheelHandler.EventType.MOUSEWHEEL,
+      this.handleMouseWheel_);
+  }
+};
+
+
+
+/**
+ * Enables or disables the slider. A disabled slider will ignore all
+ * user-initiated events. Also fires goog.ui.Component.EventType.ENABLE/DISABLE
+ * event as appropriate.
+ * @param {boolean} enable Whether to enable the slider or not.
+ */
+goog.ui.SliderBase.prototype.setEnabled = function(enable) {
+  if (this.enabled_ == enable) {
+    return;
+  }
+
+  var eventType = enable ?
+      goog.ui.Component.EventType.ENABLE : goog.ui.Component.EventType.DISABLE;
+  if (this.dispatchEvent(eventType)) {
+    this.enabled_ = enable;
+    this.enableEventHandlers_(enable);
+    if (!enable) {
+      // Disabling a slider is equivalent to a mouse up event when the block
+      // increment (if happening) should be halted and any possible event
+      // handlers be appropriately unlistened.
+      this.stopBlockIncrementing_();
+    }
+    goog.dom.classes.enable(this.getElement(),
+        goog.ui.SliderBase.DISABLED_CSS_CLASS_, !enable);
+  }
+};
+
+
+/**
+ * @return {boolean} Whether the slider is enabled or not.
+ */
+goog.ui.SliderBase.prototype.isEnabled = function() {
+  return this.enabled_;
 };

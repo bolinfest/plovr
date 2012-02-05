@@ -351,7 +351,7 @@ goog.testing.TestCase.prototype.shouldRunTests = function() {
 goog.testing.TestCase.prototype.execute = function() {
   this.started = true;
   this.reset();
-  this.startTime_ = this.now_();
+  this.startTime_ = this.now();
   this.running = true;
   this.result_.totalCount = this.getCount();
 
@@ -391,7 +391,7 @@ goog.testing.TestCase.prototype.finalize = function() {
     this.result_.errors.push(err);
   }
   window.setTimeout = goog.testing.TestCase.protectedTimeout_;
-  this.endTime_ = this.now_();
+  this.endTime_ = this.now();
   this.running = false;
   this.result_.runTime = this.endTime_ - this.startTime_;
   this.result_.numFilesLoaded = this.countNumFilesLoaded_();
@@ -446,7 +446,7 @@ goog.testing.TestCase.prototype.log = function(val) {
       // This is an acute problem for Errors, which almost never survive.
       // Grab references to the immutable strings so they survive.
       window.console.log(val, val.message, val.stack);
-      // TODO(user): Consider for Chrome cloning any object if we can ensure
+      // TODO(gboyer): Consider for Chrome cloning any object if we can ensure
       // there are no circular references.
     } else {
       window.console.log(val);
@@ -666,7 +666,7 @@ goog.testing.TestCase.prototype.autoDiscoverTests = function() {
     try {
       var ref = testSource[name];
     } catch (ex) {
-      // NOTE(user): When running tests from a file:// URL on Firefox 3.5
+      // NOTE(brenneman): When running tests from a file:// URL on Firefox 3.5
       // for Windows, any reference to window.sessionStorage raises
       // an "Operation is not supported" exception. Ignore any exceptions raised
       // by simply accessing global properties.
@@ -712,7 +712,7 @@ goog.testing.TestCase.prototype.autoDiscoverTests = function() {
  */
 goog.testing.TestCase.prototype.cycleTests = function() {
   this.saveMessage('Start');
-  this.batchTime_ = this.now_();
+  this.batchTime_ = this.now();
   var nextTest;
   while ((nextTest = this.next()) && this.running) {
     this.result_.runCount++;
@@ -745,7 +745,7 @@ goog.testing.TestCase.prototype.cycleTests = function() {
     // If the max run time is exceeded call this function again async so as not
     // to block the browser.
     if (this.currentTestPointer_ < this.tests_.length &&
-        this.now_() - this.batchTime_ > goog.testing.TestCase.MAX_RUN_TIME) {
+        this.now() - this.batchTime_ > goog.testing.TestCase.MAX_RUN_TIME) {
       this.saveMessage('Breaking async');
       this.timeout(goog.bind(this.cycleTests, this), 100);
       return;
@@ -790,9 +790,9 @@ goog.testing.TestCase.prototype.timeout = function(fn, time) {
 /**
  * @return {number} The current time in milliseconds, don't use goog.now as some
  *     tests override it.
- * @private
+ * @protected
  */
-goog.testing.TestCase.prototype.now_ = function() {
+goog.testing.TestCase.prototype.now = function() {
   return new Date().getTime();
 };
 

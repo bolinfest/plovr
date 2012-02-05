@@ -855,6 +855,15 @@ See the COPYING file for details.
     });
   }
 
+  function testAssertObjectsRoughlyEquals() {
+    assertObjectRoughlyEquals({'a': 1}, {'a': 1.2}, 0.3);
+    assertThrowsJsUnitException(
+        function() { assertObjectRoughlyEquals({'a': 1}, {'a': 1.2}, 0.1); },
+        'Expected <[object Object]> (Object) but was <[object Object]> ' +
+        '(Object)\n   a expected <1> (Number) but was <1.2> (Number) which ' +
+        'was more than 0.1 away');
+  }
+
   function testFindDifferences_equal() {
     assertNull(goog.testing.asserts.findDifferences(true, true));
     assertNull(goog.testing.asserts.findDifferences(null, null));
@@ -971,7 +980,7 @@ See the COPYING file for details.
       }
     }
 
-    // TODO(user,user): This test does not terminate with the current
+    // TODO(gboyer,user): This test does not terminate with the current
     // algorithm. Can be enabled when (if) the algorithm is improved.
     //assertNull(goog.testing.asserts.findDifferences(
     //    createBinTree(5, null), createBinTree(5, null)));

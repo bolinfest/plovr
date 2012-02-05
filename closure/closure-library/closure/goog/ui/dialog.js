@@ -277,7 +277,7 @@ goog.ui.Dialog.prototype.getContent = function() {
  */
 goog.ui.Dialog.prototype.renderIfNoDom_ = function() {
   if (!this.getElement()) {
-    // TODO(user): Ideally we'd only create the DOM, but many applications
+    // TODO(gboyer): Ideally we'd only create the DOM, but many applications
     // are requiring this behavior.  Eventually, it would be best if the
     // element getters could return null if the elements have not been
     // created.
@@ -569,12 +569,18 @@ goog.ui.Dialog.prototype.decorateInternal = function(element) {
         null, titleTextClass, this.titleEl_)[0];
     this.titleCloseEl_ = goog.dom.getElementsByTagNameAndClass(
         null, titleCloseClass, this.titleEl_)[0];
+    // Give the title an id if it doesn't already have one.
+    if (!this.titleEl_.id) {
+      this.titleEl_.id = this.getId();
+    }
   } else {
     // Create the title bar element and insert it before the content area.
     // This is useful if the element to decorate only includes a content area.
-    this.titleEl_ = this.getDomHelper().createDom('div', titleClass);
+    this.titleEl_ = this.getDomHelper().createDom('div',
+        {'className': titleClass, 'id': this.getId()});
     this.getElement().insertBefore(this.titleEl_, this.contentEl_);
   }
+  this.titleId_ = this.titleEl_.id;
 
   // Decorate or create the title text element.
   if (this.titleTextEl_) {
@@ -680,7 +686,7 @@ goog.ui.Dialog.prototype.setVisible = function(visible) {
  * @private
  */
 goog.ui.Dialog.prototype.setVisibleInternal_ = function(e) {
-  if (e.target != this) {
+  if (e.target != this || this.isDisposed()) {
     return;
   }
 
@@ -1039,7 +1045,7 @@ goog.inherits(goog.ui.Dialog.Event, goog.events.Event);
 
 /**
  * Event type constant for dialog events.
- * TODO(user): Change this to goog.ui.Dialog.EventType.SELECT.
+ * TODO(attila): Change this to goog.ui.Dialog.EventType.SELECT.
  * @type {string}
  * @deprecated Use goog.ui.Dialog.EventType.SELECT.
  */
@@ -1082,7 +1088,7 @@ goog.ui.Dialog.EventType = {
  * @extends {goog.structs.Map}
  */
 goog.ui.Dialog.ButtonSet = function(opt_domHelper) {
-  // TODO(user):  Refactor ButtonSet to extend goog.ui.Component?
+  // TODO(attila):  Refactor ButtonSet to extend goog.ui.Component?
   this.dom_ = opt_domHelper || goog.dom.getDomHelper();
   goog.structs.Map.call(this);
 };
@@ -1203,7 +1209,7 @@ goog.ui.Dialog.ButtonSet.prototype.render = function() {
  * to be the default and will receive focus when the button set is rendered.
  * If a button with a name of {@link goog.ui.Dialog.DefaultButtonKeys.CANCEL}
  * is found, it is assumed to have "Cancel" semantics.
- * TODO(user):  ButtonSet should be a goog.ui.Component.  Really.
+ * TODO(attila):  ButtonSet should be a goog.ui.Component.  Really.
  * @param {Element} element The element to decorate; should contain buttons.
  */
 goog.ui.Dialog.ButtonSet.prototype.decorate = function(element) {

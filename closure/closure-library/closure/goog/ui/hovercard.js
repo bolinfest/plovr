@@ -59,11 +59,16 @@ goog.require('goog.ui.AdvancedTooltip');
  * @param {boolean=} opt_checkDescendants Use false for a performance gain if
  *     you are sure that none of your triggering elements have child elements.
  *     Default is true.
- * @param {goog.dom.DomHelper=} opt_domHelper Optional DOM helper.
+ * @param {goog.dom.DomHelper=} opt_domHelper Optional DOM helper to use for
+ *     creating and rendering the hovercard element.
+ * @param {Document=} opt_triggeringDocument Optional document to use in place
+ *     of the one included in the DomHelper for finding triggering elements.
+ *     Defaults to the document included in the DomHelper.
  * @constructor
  * @extends {goog.ui.AdvancedTooltip}
  */
-goog.ui.HoverCard = function(isAnchor, opt_checkDescendants, opt_domHelper) {
+goog.ui.HoverCard = function(isAnchor, opt_checkDescendants, opt_domHelper,
+    opt_triggeringDocument) {
   goog.ui.AdvancedTooltip.call(this, null, null, opt_domHelper);
 
   if (goog.isFunction(isAnchor)) {
@@ -102,8 +107,8 @@ goog.ui.HoverCard = function(isAnchor, opt_checkDescendants, opt_domHelper) {
    * @type {Document}
    * @private
    */
-  this.document_ = opt_domHelper ? opt_domHelper.getDocument() :
-                   goog.dom.getDocument();
+  this.document_ = opt_triggeringDocument || (opt_domHelper ?
+      opt_domHelper.getDocument() : goog.dom.getDocument());
 
   goog.events.listen(this.document_, goog.events.EventType.MOUSEOVER,
                      this.handleTriggerMouseOver_, false, this);
@@ -156,13 +161,13 @@ goog.ui.HoverCard.prototype.maxSearchSteps_;
 /**
  * This function can be overridden by passing a function as the first parameter
  * to the constructor.
- * @param {Element} element Element to test.
+ * @param {Node} node Node to test.
  * @return {boolean} Whether or not hovercard should be shown.
  * @private
  */
-goog.ui.HoverCard.prototype.isAnchor_ = function(element) {
-  return element.tagName in this.anchors_ &&
-      !!element.getAttribute(this.anchors_[element.tagName]);
+goog.ui.HoverCard.prototype.isAnchor_ = function(node) {
+  return node.tagName in this.anchors_ &&
+      !!node.getAttribute(this.anchors_[node.tagName]);
 };
 
 

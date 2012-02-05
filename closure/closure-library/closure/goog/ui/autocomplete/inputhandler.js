@@ -127,6 +127,14 @@ goog.ui.AutoComplete.InputHandler = function(opt_separators, opt_literals,
   goog.Disposable.call(this);
   var throttleTime = opt_throttleTime || 150;
 
+  /**
+   * Whether this input accepts multiple values
+   * @type {boolean}
+   * @private
+   */
+  this.multi_ = opt_multi != null ? opt_multi : true;
+
+  // Set separators depends on this.multi_ being set correctly
   this.setSeparators(goog.isDefAndNotNull(opt_separators) ? opt_separators :
       goog.ui.AutoComplete.InputHandler.STANDARD_LIST_SEPARATORS);
 
@@ -137,13 +145,6 @@ goog.ui.AutoComplete.InputHandler = function(opt_separators, opt_literals,
    * @private
    */
   this.literals_ = opt_literals || '';
-
-  /**
-   * Whether this input accepts multiple values
-   * @type {boolean}
-   * @private
-   */
-  this.multi_ = opt_multi != null ? opt_multi : true;
 
   /**
    * Whether to prevent the default behavior (moving focus to another element)
@@ -905,10 +906,10 @@ goog.ui.AutoComplete.InputHandler.prototype.handleKeyUp = function(e) {
 
 
 /**
- * Adds the necessary key event handlers.
+ * Adds the necessary input event handlers.
  * @private
  */
-goog.ui.AutoComplete.InputHandler.prototype.addKeyEvents_ = function() {
+goog.ui.AutoComplete.InputHandler.prototype.addEventHandlers_ = function() {
   this.keyHandler_.attach(this.activeElement_);
   this.eh_.listen(
       this.keyHandler_, goog.events.KeyHandler.EventType.KEY, this.onKey_);
@@ -916,6 +917,8 @@ goog.ui.AutoComplete.InputHandler.prototype.addKeyEvents_ = function() {
     this.eh_.listen(this.activeElement_,
         goog.events.EventType.KEYUP, this.handleKeyUp);
   }
+  this.eh_.listen(this.activeElement_,
+      goog.events.EventType.MOUSEDOWN, this.onMouseDown_);
 
   // IE also needs a keypress to check if the user typed a separator
   if (goog.userAgent.IE) {
@@ -926,15 +929,17 @@ goog.ui.AutoComplete.InputHandler.prototype.addKeyEvents_ = function() {
 
 
 /**
- * Removes the necessary key event handlers.
+ * Removes the necessary input event handlers.
  * @private
  */
-goog.ui.AutoComplete.InputHandler.prototype.removeKeyEvents_ = function() {
+goog.ui.AutoComplete.InputHandler.prototype.removeEventHandlers_ = function() {
   this.eh_.unlisten(
       this.keyHandler_, goog.events.KeyHandler.EventType.KEY, this.onKey_);
   this.keyHandler_.detach();
   this.eh_.unlisten(this.activeElement_,
       goog.events.EventType.KEYUP, this.handleKeyUp);
+  this.eh_.unlisten(this.activeElement_,
+      goog.events.EventType.MOUSEDOWN, this.onMouseDown_);
 
   if (goog.userAgent.IE) {
     this.eh_.unlisten(this.activeElement_,
@@ -978,7 +983,7 @@ goog.ui.AutoComplete.InputHandler.prototype.processFocus = function(target) {
       this.eh_.listen(this.timer_, goog.Timer.TICK, this.onTick_);
     }
     this.lastValue_ = this.getValue();
-    this.addKeyEvents_();
+    this.addEventHandlers_();
   }
 };
 
@@ -1014,7 +1019,7 @@ goog.ui.AutoComplete.InputHandler.prototype.processBlur_ = function() {
   // in the case where attachInput was called on an input that already had
   // the focus
   if (this.activeElement_) {
-    this.removeKeyEvents_();
+    this.removeEventHandlers_();
     this.activeElement_ = null;
 
     if (this.timer_) {
@@ -1093,6 +1098,27 @@ goog.ui.AutoComplete.InputHandler.prototype.onKeyUp_ = function(e) {
        (e.keyCode == goog.events.KeyCodes.M && e.ctrlKey))) {
     this.stopWaitingForIme_();
   }
+};
+
+
+/**
+ * Handles mouse-down event.
+ * @param {goog.events.BrowserEvent} e Browser event object.
+ * @private
+ */
+goog.ui.AutoComplete.InputHandler.prototype.onMouseDown_ = function(e) {
+  if (this.ac_) {
+    this.handleMouseDown(e);
+  }
+};
+
+
+/**
+ * For subclasses to override to handle the mouse-down event.
+ * @param {goog.events.BrowserEvent} e Browser event object.
+ * @protected
+ */
+goog.ui.AutoComplete.InputHandler.prototype.handleMouseDown = function(e) {
 };
 
 

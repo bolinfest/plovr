@@ -41,6 +41,8 @@
  * Uses features of RFC 3986 for parsing/formatting URIs:
  *   http://gbiv.com/protocols/uri/rfc/rfc3986.html
  *
+ * @author gboyer@google.com (Garrett Boyer) - The "lightened" design.
+ * @author msamuel@google.com (Mike Samuel) - Domain knowledge and regexes.
  */
 
 goog.provide('goog.uri.utils');
@@ -51,6 +53,7 @@ goog.provide('goog.uri.utils.StandardQueryParam');
 
 goog.require('goog.asserts');
 goog.require('goog.string');
+goog.require('goog.userAgent');
 
 
 /**
@@ -234,10 +237,13 @@ goog.uri.utils.ComponentIndex = {
  *     arbitrary strings may still look like path names.
  */
 goog.uri.utils.split = function(uri) {
+
   // See @return comment -- never null.
   return /** @type {!Array.<string|undefined>} */ (
       uri.match(goog.uri.utils.splitRe_));
 };
+
+
 
 
 /**
@@ -276,6 +282,24 @@ goog.uri.utils.getComponentByIndex_ = function(componentIndex, uri) {
 goog.uri.utils.getScheme = function(uri) {
   return goog.uri.utils.getComponentByIndex_(
       goog.uri.utils.ComponentIndex.SCHEME, uri);
+};
+
+
+/**
+ * Gets the effective scheme for the URL.  If the URL is relative then the
+ * scheme is derived from the page's location.
+ * @param {string} uri The URI to examine.
+ * @return {string} The protocol or scheme, always lower case.
+ */
+goog.uri.utils.getEffectiveScheme = function(uri) {
+  var scheme = goog.uri.utils.getScheme(uri);
+  if (!scheme && self.location) {
+    var protocol = self.location.protocol;
+    scheme = protocol.substr(0, protocol.length - 1);
+  }
+  // NOTE: When called from a web worker in Firefox 3.5, location maybe null.
+  // All other browsers with web workers support self.location from the worker.
+  return scheme ? scheme.toLowerCase() : '';
 };
 
 
@@ -912,8 +936,10 @@ goog.uri.utils.removeParam = function(uri, keyEncoded) {
 /**
  * Replaces all existing definitions of a parameter with a single definition.
  *
- * Repeated calls to this can exhibit quadratic behavior in IE6 due to the
- * way string append works, though it should be limited given the 2kb limit.
+ * Repeated calls to this can exhibit quadratic behavior due to the need to
+ * find existing instances and reconstruct the string, though it should be
+ * limited given the 2kb limit.  Consider using appendParams to append multiple
+ * parameters in bulk.
  *
  * @param {string} uri The original URI, which may already have query data.
  * @param {string} keyEncoded The key, which must already be URI encoded.

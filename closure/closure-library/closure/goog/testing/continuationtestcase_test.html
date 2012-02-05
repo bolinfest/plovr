@@ -7,6 +7,7 @@ Use of this source code is governed by the Apache License, Version 2.0.
 See the COPYING file for details.
 -->
 <!--
+Author: brenneman@google.com (Shawn Brenneman)
 -->
 <head>
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -75,7 +76,7 @@ function tearDown() {
 
   waitForTimeout(function() {
     // Pointless assertion to verify that tearDown methods can contain waits.
-    assertTrue(testCase.now_() >= testCase.startTime_);
+    assertTrue(testCase.now() >= testCase.startTime_);
   }, 0);
 }
 

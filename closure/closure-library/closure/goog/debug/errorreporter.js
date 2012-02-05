@@ -230,7 +230,7 @@ goog.debug.ErrorReporter.prototype.setXhrSender = function(xhrSender) {
  */
 goog.debug.ErrorReporter.prototype.setup_ = function() {
   if (goog.userAgent.IE) {
-    // Use "onerror" because caught exceptions in IE don't provide line number.
+  // Use "onerror" because caught exceptions in IE don't provide line number.
     goog.debug.catchErrors(
         goog.bind(this.handleException, this), false, null);
   } else {
@@ -249,7 +249,7 @@ goog.debug.ErrorReporter.prototype.setup_ = function() {
  * Handler for caught exceptions. Sends report to the LoggingServlet and
  * notifies any listeners.
  *
- * @param {Error} e The exception.
+ * @param {Object} e The exception.
  * @param {!Object.<string, string>=} opt_context Context values to optionally
  *     include in the error report.
  */
@@ -321,4 +321,11 @@ goog.debug.ErrorReporter.prototype.sendErrorReport =
         'trace:', opt_trace);
     goog.debug.ErrorReporter.logger_.info(logMessage);
   }
+};
+
+
+/** @override */
+goog.debug.ErrorReporter.prototype.disposeInternal = function() {
+  goog.dispose(this.errorHandler_);
+  goog.base(this, 'disposeInternal');
 };

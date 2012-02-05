@@ -14,12 +14,15 @@ See the COPYING file for details.
   goog.require('goog.ui.Dialog');
   goog.require('goog.ui.Dialog.ButtonSet');
   goog.require('goog.dom');
+  goog.require('goog.dom.a11y');
   goog.require('goog.events');
   goog.require('goog.events.EventType');
+  goog.require('goog.fx.css3');
   goog.require('goog.style');
   goog.require('goog.testing.events');
   goog.require('goog.testing.jsunit');
   goog.require('goog.testing.recordFunction');
+  goog.require('goog.ui.PopupBase');
 </script>
 </head>
 <body>
@@ -559,6 +562,27 @@ See the COPYING file for details.
     assertTrue(goog.style.isElementShown(dialog.buttonEl_));
   }
 
+  function testAriaLabelledBy_render() {
+    dialog.dispose();
+
+    dialog = new goog.ui.Dialog();
+    dialog.render();
+    assertTrue(!!dialog.getTitleElement().id);
+    assertEquals(dialog.getTitleElement().id,
+        goog.dom.a11y.getState(dialog.getElement(), 'labelledby'));
+  }
+
+  function testAriaLabelledBy_decorate() {
+    dialog.dispose();
+
+    dialog = new goog.ui.Dialog();
+    dialog.decorate(decorateTarget);
+    dialog.setVisible(true);
+    assertTrue(!!dialog.getTitleElement().id);
+    assertEquals(dialog.getTitleElement().id,
+        goog.dom.a11y.getState(dialog.getElement(), 'labelledby'));
+  }
+
   function testDefaultOpacityIsAppliedOnRender() {
     dialog.dispose();
 
@@ -603,6 +627,16 @@ See the COPYING file for details.
 
     dialog.exitDocument();
     assertNull('dragger is cleaned up in exitDocument', dialog.dragger_);
+  }
+
+  function testDisposingVisibleDialogWithTransitionsDoesNotThrowException() {
+    var transition = goog.fx.css3.fadeIn(dialog.getElement(),
+        0.1 /* duration */);
+
+    dialog.setTransition(transition, transition, transition, transition);
+    dialog.setVisible(true);
+    dialog.dispose();
+    // Nothing to assert. We only want to ensure that there is no error.
   }
 </script>
 </body>
