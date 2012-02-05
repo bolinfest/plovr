@@ -29,7 +29,7 @@ final class ViewFileHandler extends AbstractGetHandler {
     SoyFileSet.Builder builder = new SoyFileSet.Builder();
     builder.add(Resources.getResource(ViewFileHandler.class, "view.soy"));
     SoyFileSet fileSet = builder.build();
-    viewTemplate = fileSet.compileToJavaObj();
+    viewTemplate = fileSet.compileToTofu();
   }
 
   @Override

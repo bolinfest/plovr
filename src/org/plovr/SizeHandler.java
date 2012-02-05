@@ -30,7 +30,7 @@ final class SizeHandler extends AbstractGetHandler {
     SoyFileSet.Builder builder = new SoyFileSet.Builder();
     builder.add(Resources.getResource(SizeHandler.class, "size.soy"));
     SoyFileSet fileSet = builder.build();
-    sizeTemplate = fileSet.compileToJavaObj();
+    sizeTemplate = fileSet.compileToTofu();
   }
 
   @Override

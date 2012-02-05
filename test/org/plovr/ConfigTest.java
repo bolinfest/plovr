@@ -10,8 +10,8 @@ import org.junit.Test;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.javascript.jscomp.CheckLevel;
-import com.google.javascript.jscomp.TestCompilerOptions;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
+import com.google.javascript.jscomp.PlovrCompilerOptions;
 
 public class ConfigTest {
 
@@ -29,31 +29,31 @@ public class ConfigTest {
 
   @Test
   public void testApplyExperimentalCompilerOptions() {
-    TestCompilerOptions options = new TestCompilerOptions();
-    assertFalse(options.allowLegacyJsMessages);
-    assertFalse(options.instrumentForCoverage);
+    PlovrCompilerOptions options = new PlovrCompilerOptions();
+    assertFalse(options.getProcessObjectPropertyString());
+    assertFalse(options.isExternExportsEnabled());
     assertNull(options.checkMissingGetCssNameBlacklist);
-    assertEquals(CheckLevel.OFF, options.checkShadowVars);
+    assertEquals(CheckLevel.OFF, options.getReportUnknownTypes());
     assertFalse(options.getAcceptConstKeyword());
     assertNull(options.getOutputCharset());
     assertEquals(LanguageMode.ECMASCRIPT3, options.getLanguageIn());
 
     JsonParser parser = new JsonParser();
     JsonObject experimentalOptions = parser.parse("{" +
-    		"\"allowLegacyJsMessages\": true, " +
-    		"\"instrumentForCoverage\": true, " +
+    		"\"processObjectPropertyString\": true, " +
+    		"\"externExports\": true, " +
     		"\"checkMissingGetCssNameBlacklist\": \"hello world\", " +
-    		"\"checkShadowVars\": \"ERROR\", " +
+    		"\"reportUnknownTypes\": \"ERROR\", " +
     		"\"acceptConstKeyword\": true, " +
     		"\"outputCharset\": \"UTF-8\", " +
     		"\"languageIn\": \"ECMASCRIPT5\"" +
     		"}").getAsJsonObject();
     Config.applyExperimentalCompilerOptions(experimentalOptions, options);
 
-    assertTrue(options.allowLegacyJsMessages);
-    assertTrue(options.instrumentForCoverage);
+    assertTrue(options.getProcessObjectPropertyString());
+    assertTrue(options.isExternExportsEnabled());
     assertEquals("hello world", options.checkMissingGetCssNameBlacklist);
-    assertEquals(CheckLevel.ERROR, options.checkShadowVars);
+    assertEquals(CheckLevel.ERROR, options.getReportUnknownTypes());
     assertTrue(options.getAcceptConstKeyword());
     assertEquals("UTF-8", options.getOutputCharset());
     assertEquals(LanguageMode.ECMASCRIPT5, options.getLanguageIn());

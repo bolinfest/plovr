@@ -28,7 +28,7 @@ public class DocWriter {
     SoyFileSet.Builder builder = new SoyFileSet.Builder();
     builder.add(Resources.getResource(DocWriter.class, "docgen.soy"));
     SoyFileSet fileSet = builder.build();
-    tofu = fileSet.compileToJavaObj();
+    tofu = fileSet.compileToTofu();
 
     stylesheet = Resources.getResource(DocWriter.class, "stylesheet.css");
   }

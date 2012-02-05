@@ -24,7 +24,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.google.javascript.jscomp.Compiler;
-import com.google.javascript.jscomp.CompilerOptions;
+import com.google.javascript.jscomp.PlovrCompilerOptions;
 import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.JSModule;
 import com.google.javascript.jscomp.JSSourceFile;
@@ -129,7 +129,8 @@ public final class Compilation {
    * For now, this method is private so that the client does not get access to
    * the Compiler that was used.
    */
-  private void compile(Config config, Compiler compiler, CompilerOptions options) {
+  private void compile(Config config, Compiler compiler,
+      PlovrCompilerOptions options) {
     Preconditions.checkState(!hasResult(), "Compilation already occurred");
     this.compiler = compiler;
 

@@ -33,7 +33,7 @@ public class CompileRequestHandler extends AbstractGetHandler {
     SoyFileSet.Builder builder = new SoyFileSet.Builder();
     builder.add(Resources.getResource(InputFileHandler.class, "raw.soy"));
     SoyFileSet fileSet = builder.build();
-    TOFU = fileSet.compileToJavaObj();
+    TOFU = fileSet.compileToTofu();
   }
 
   private final Gson gson;

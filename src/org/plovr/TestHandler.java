@@ -36,7 +36,7 @@ public class TestHandler extends AbstractGetHandler {
     SoyFileSet.Builder builder = new SoyFileSet.Builder();
     builder.add(Resources.getResource(TestHandler.class, "test.soy"));
     SoyFileSet fileSet = builder.build();
-    TOFU = fileSet.compileToJavaObj();
+    TOFU = fileSet.compileToTofu();
   }
 
   public TestHandler(CompilationServer server) {
@@ -130,7 +130,7 @@ public class TestHandler extends AbstractGetHandler {
       SoyFileSet.Builder builder = new SoyFileSet.Builder();
       builder.add(config.getTestTemplate());
       SoyFileSet fileSet = builder.build();
-      return fileSet.compileToJavaObj();
+      return fileSet.compileToTofu();
     } else {
       return TOFU;
     }

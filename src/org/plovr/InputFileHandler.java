@@ -45,7 +45,7 @@ public class InputFileHandler extends AbstractGetHandler {
     SoyFileSet.Builder builder = new SoyFileSet.Builder();
     builder.add(Resources.getResource(InputFileHandler.class, "raw.soy"));
     SoyFileSet fileSet = builder.build();
-    TOFU = fileSet.compileToJavaObj();
+    TOFU = fileSet.compileToTofu();
   }
 
   public InputFileHandler(CompilationServer server) {

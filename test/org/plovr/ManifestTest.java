@@ -93,9 +93,6 @@ public class ManifestTest {
             "/events/browserevent.js",
             "/events/eventwrapper.js",
             "/events/listener.js",
-            "/structs/simplepool.js",
-            "/useragent/jscript.js",
-            "/events/pools.js",
             "/object/object.js",
             "/events/events.js",
             "test/org/plovr/example.js"

@@ -640,12 +640,6 @@ public class CompilerOptions implements Serializable, Cloneable {
   String commonJSModulePathPrefix =
       ProcessCommonJSModules.DEFAULT_FILENAME_PREFIX;
 
-  /**
-   * The name of the scope to prefix all global variable assignments
-   * with. This assumes that all of the resulting code will be wrapped
-   * in a with (scope) { } wrapper.
-   */
-  public String globalScopeName;
 
   //--------------------------------
   // Output options
@@ -885,7 +879,6 @@ public class CompilerOptions implements Serializable, Cloneable {
     replaceStringsPlaceholderToken = "";
     replaceStringsReservedStrings = Collections.emptySet();
     propertyInvalidationErrors = Maps.newHashMap();
-    globalScopeName = "";
 
     // Output
     printInputDelimiter = false;
@@ -1808,6 +1801,10 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   public void setWarningsGuard(ComposeWarningsGuard warningsGuard) {
     this.warningsGuard = warningsGuard;
+  }
+
+  public void setLineLengthThreshold(int lineLengthThreshold) {
+    this.lineLengthThreshold = lineLengthThreshold;
   }
 
   public void setExternExports(boolean externExports) {

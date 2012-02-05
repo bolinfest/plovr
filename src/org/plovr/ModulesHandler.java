@@ -56,7 +56,7 @@ public final class ModulesHandler extends AbstractGetHandler {
     SoyFileSet.Builder builder = new SoyFileSet.Builder();
     builder.add(Resources.getResource(ModulesHandler.class, "modules.soy"));
     SoyFileSet fileSet = builder.build();
-    TOFU = fileSet.compileToJavaObj();
+    TOFU = fileSet.compileToTofu();
   }
 
   public ModulesHandler(CompilationServer server) {

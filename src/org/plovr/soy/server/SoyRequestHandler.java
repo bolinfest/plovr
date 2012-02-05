@@ -159,7 +159,7 @@ public class SoyRequestHandler implements HttpHandler {
     // Add all of the .soy files under config.getContentDirectory().
     addToBuilder(config.getContentDirectory(), builder);
     SoyFileSet soyFileSet = builder.build();
-    return soyFileSet.compileToJavaObj();
+    return soyFileSet.compileToTofu();
   }
 
   private static void addToBuilder(File file, SoyFileSet.Builder builder) {

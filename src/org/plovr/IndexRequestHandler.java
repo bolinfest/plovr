@@ -28,7 +28,7 @@ final class IndexRequestHandler implements HttpHandler {
     SoyFileSet.Builder builder = new SoyFileSet.Builder();
     builder.add(Resources.getResource(IndexRequestHandler.class, "index.soy"));
     SoyFileSet fileSet = builder.build();
-    indexTemplate = fileSet.compileToJavaObj();
+    indexTemplate = fileSet.compileToTofu();
   }
 
   @Override

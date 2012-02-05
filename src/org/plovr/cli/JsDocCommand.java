@@ -46,8 +46,8 @@ public class JsDocCommand extends AbstractCommandRunner<JsDocCommandOptions> {
     File configFile = new File(arguments.get(0));
     Config.Builder builder = ConfigParser.createBuilderFromFile(configFile);
 
-    // CompilerOptions.ideMode must be set to true, or else the AST will not
-    // contain all of the necessary JSDocInfo.
+    // PlovrCompilerOptions.ideMode must be set to true, or else the AST will
+    // not contain all of the necessary JSDocInfo.
     JsonObject experimentalCompilerOptions = builder.getExperimentalCompilerOptions();
     if (experimentalCompilerOptions == null) {
       experimentalCompilerOptions = new JsonObject();

@@ -47,7 +47,7 @@ public final class ConfigOptionDocumentationGenerator {
 
     builder.add(new File("www/__common.soy"));
     SoyFileSet fileSet = builder.build();
-    TOFU = fileSet.compileToJavaObj();
+    TOFU = fileSet.compileToTofu();
   }
 
   private static class OptionDescriptor {

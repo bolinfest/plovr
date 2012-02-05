@@ -35,7 +35,7 @@ final class DirectoryHandler implements HttpHandler {
     SoyFileSet.Builder builder = new SoyFileSet.Builder();
     builder.add(Resources.getResource(DirectoryHandler.class, "soyweb.soy"));
     SoyFileSet fileSet = builder.build();
-    soyWebTemplate = fileSet.compileToJavaObj();
+    soyWebTemplate = fileSet.compileToTofu();
   }
 
   /**

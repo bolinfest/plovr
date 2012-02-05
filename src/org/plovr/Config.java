@@ -39,7 +39,7 @@ import com.google.gson.JsonPrimitive;
 import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.ClosureCodingConvention;
 import com.google.javascript.jscomp.CompilationLevel;
-import com.google.javascript.jscomp.CompilerOptions;
+import com.google.javascript.jscomp.PlovrCompilerOptions;
 import com.google.javascript.jscomp.CompilerPass;
 import com.google.javascript.jscomp.CustomPassExecutionTime;
 import com.google.javascript.jscomp.DiagnosticGroup;
@@ -410,12 +410,13 @@ public final class Config implements Comparable<Config> {
     return null;
   }
 
-  public CompilerOptions getCompilerOptions(PlovrClosureCompiler compiler) {
+  public PlovrCompilerOptions getCompilerOptions(
+      PlovrClosureCompiler compiler) {
     Preconditions.checkArgument(compilationMode != CompilationMode.RAW,
         "Cannot compile using RAW mode");
     CompilationLevel level = compilationMode.getCompilationLevel();
     logger.info("Compiling with level: " + level);
-    CompilerOptions options = new CompilerOptions();
+    PlovrCompilerOptions options = new PlovrCompilerOptions();
     level.setOptionsForCompilationLevel(options);
     if (debug) {
       level.setDebugOptionsForCompilationLevel(options);
@@ -528,7 +529,7 @@ public final class Config implements Comparable<Config> {
     // This is a hack to work around the fact that a SourceMap
     // will not be created unless a file is specified to which the SourceMap
     // should be written.
-    // TODO(bolinfest): Change com.google.javascript.jscomp.CompilerOptions so
+    // TODO(bolinfest): Change com.google.javascript.jscomp.PlovrCompilerOptions so
     // that this is configured by a boolean, just like enableExternExports() was
     // added to support generating externs without writing them to a file.
     try {
@@ -538,7 +539,7 @@ public final class Config implements Comparable<Config> {
       logger.severe("A temp file for the Source Map could not be created");
     }
 
-    options.enableExternExports(true);
+    options.setExternExports(true);
 
     // After all of the options are set, apply the experimental Compiler
     // options, which may override existing options that are set.
@@ -548,10 +549,10 @@ public final class Config implements Comparable<Config> {
   }
 
   /**
-   * Lazily creates and returns the customPasses ListMultimap for a CompilerOptions.
+   * Lazily creates and returns the customPasses ListMultimap for a PlovrCompilerOptions.
    */
   private static Multimap<CustomPassExecutionTime, CompilerPass> getCustomPasses(
-      CompilerOptions options) {
+      PlovrCompilerOptions options) {
     Multimap<CustomPassExecutionTime, CompilerPass> customPasses =
         options.customPasses;
     if (customPasses == null) {
@@ -564,7 +565,7 @@ public final class Config implements Comparable<Config> {
   @VisibleForTesting
   static void applyExperimentalCompilerOptions(
       JsonObject experimentalCompilerOptions,
-      CompilerOptions options) {
+      PlovrCompilerOptions options) {
     // This method needs to be refactored, but all of the checked exceptions
     // make refactoring it difficult.
     if (experimentalCompilerOptions == null) {
@@ -586,10 +587,14 @@ public final class Config implements Comparable<Config> {
       Field field;
       try {
         try {
-          field = CompilerOptions.class.getField(name);
+          field = PlovrCompilerOptions.class.getField(name);
         } catch (NoSuchFieldException e) {
           field = null;
         }
+
+        // TODO: If the field is private, use field.setAccessible(true), though
+        // only if there is no public setter method (which may have other side-
+        // effects, which is why it should be preferred).
 
         if (field != null) {
           Class<?> fieldClass = field.getType();
@@ -621,7 +626,7 @@ public final class Config implements Comparable<Config> {
         // method to set the option instead.
         String setterName = "set" + createSetterMethodNameForFieldName(name);
         if (primitive.isBoolean()) {
-          Method setter = CompilerOptions.class.getMethod(setterName, boolean.class);
+          Method setter = PlovrCompilerOptions.class.getMethod(setterName, boolean.class);
           setter.invoke(options, primitive.getAsBoolean());
           continue;
         } else if (primitive.isNumber()) {
@@ -629,7 +634,7 @@ public final class Config implements Comparable<Config> {
           // it works with an int or a double.
         } else if (primitive.isString()) {
           try {
-            Method setter = CompilerOptions.class.getMethod(setterName, String.class);
+            Method setter = PlovrCompilerOptions.class.getMethod(setterName, String.class);
             setter.invoke(options, primitive.getAsString());
             continue;
           } catch (NoSuchMethodException e) {
@@ -661,10 +666,10 @@ public final class Config implements Comparable<Config> {
    * @return true if this was successful
    */
   private static boolean setCompilerOptionToEnumValue(
-      CompilerOptions options,
+      PlovrCompilerOptions options,
       String setterMethodName,
       String value) {
-    for (Method m : CompilerOptions.class.getMethods()) {
+    for (Method m : PlovrCompilerOptions.class.getMethods()) {
       if (setterMethodName.equals(m.getName())) {
         Class<?> paramClass = m.getParameterTypes()[0];
         if (paramClass.isEnum()) {
@@ -1077,7 +1082,7 @@ public final class Config implements Comparable<Config> {
      * however, a key cannot map to a {@link DiagnosticGroup} yet because
      * custom compiler passes may add their own entries to the
      * {@link PlovrDiagnosticGroups} collection, which is not populated until
-     * the {@link CompilerOptions} are created.
+     * the {@link PlovrCompilerOptions} are created.
      * @param groups
      */
     public void setCheckLevelsForDiagnosticGroups(Map<String, CheckLevel> groups) {

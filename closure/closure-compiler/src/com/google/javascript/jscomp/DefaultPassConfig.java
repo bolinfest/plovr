@@ -565,12 +565,12 @@ public class DefaultPassConfig extends PassConfig {
       passes.add(gatherRawExports);
     }
 
-    boolean scopeGlobalVariables = !options.globalScopeName.isEmpty();
+    boolean scopeGlobalVariables = !((PlovrCompilerOptions)options).globalScopeName.isEmpty();
     if (scopeGlobalVariables) {
       if (exportedNames == null) {
         exportedNames = Sets.newHashSet();
       }
-      exportedNames.add(options.globalScopeName);
+      exportedNames.add(((PlovrCompilerOptions)options).globalScopeName);
     }
 
     // This comes after property renaming because quoted property names must
@@ -2175,7 +2175,7 @@ public class DefaultPassConfig extends PassConfig {
       new PassFactory("addScopeToGlobals", true) {
     @Override
     protected CompilerPass createInternal(AbstractCompiler compiler) {
-      return new AddScopeToGlobals(compiler, options.globalScopeName);
+      return new AddScopeToGlobals(compiler, ((PlovrCompilerOptions)options).globalScopeName);
     }
   };
 
