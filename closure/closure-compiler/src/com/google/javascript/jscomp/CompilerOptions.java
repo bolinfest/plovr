@@ -24,8 +24,6 @@ import com.google.common.collect.Sets;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.SourcePosition;
-import com.google.javascript.rhino.Token;
-
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
@@ -898,7 +896,6 @@ public class CompilerOptions implements Serializable, Cloneable {
     colorizeErrorOutput = false;
     errorFormat = ErrorFormat.SINGLELINE;
     debugFunctionSideEffectsPath = null;
-    jsOutputFile = "";
     externExports = false;
     nameReferenceReportPath = null;
     nameReferenceGraphPath = null;
@@ -1215,10 +1212,6 @@ public class CompilerOptions implements Serializable, Cloneable {
    */
   public void setNameAnonymousFunctionsOnly(boolean value) {
     this.nameAnonymousFunctionsOnly = value;
-  }
-
-  public void lineLengthThreshold(int value) {
-    this.lineLengthThreshold = value;
   }
 
   public void setColorizeErrorOutput(boolean colorizeErrorOutput) {
@@ -1815,10 +1808,6 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   public void setWarningsGuard(ComposeWarningsGuard warningsGuard) {
     this.warningsGuard = warningsGuard;
-  }
-
-  public void setLineLengthThreshold(int lineLengthThreshold) {
-    this.lineLengthThreshold = lineLengthThreshold;
   }
 
   public void setExternExports(boolean externExports) {
