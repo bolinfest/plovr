@@ -114,7 +114,7 @@ public class CoffeeScriptCompiler {
           return (String)result;
         } else if (result instanceof NativeObject) {
           NativeObject obj = (NativeObject)result;
-          String message = (String)NativeObject.getProperty(obj, "message");
+          String message = NativeObject.getProperty(obj, "message").toString();
           throw new CoffeeScriptCompilerException(message);
         } else {
           throw new RuntimeException("Unexpected return type: " +

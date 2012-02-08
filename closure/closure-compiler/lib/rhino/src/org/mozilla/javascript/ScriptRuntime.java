@@ -153,29 +153,29 @@ public class ScriptRuntime {
 
     public final static Class<?>
         ContextClass
-            = Kit.classOrNull("org.mozilla.javascript.Context"),
+            = Kit.classOrNull(JarJarHelper.javascriptPrefix + ".Context"),
         ContextFactoryClass
-            = Kit.classOrNull("org.mozilla.javascript.ContextFactory"),
+            = Kit.classOrNull(JarJarHelper.javascriptPrefix + ".ContextFactory"),
         FunctionClass
-            = Kit.classOrNull("org.mozilla.javascript.Function"),
+            = Kit.classOrNull(JarJarHelper.javascriptPrefix + ".Function"),
         ScriptableObjectClass
-            = Kit.classOrNull("org.mozilla.javascript.ScriptableObject");
+            = Kit.classOrNull(JarJarHelper.javascriptPrefix + ".ScriptableObject");
     public static final Class<Scriptable> ScriptableClass =
         Scriptable.class;
 
     private static final String[] lazilyNames = {
-        "RegExp",        "org.mozilla.javascript.regexp.NativeRegExp",
-        "Packages",      "org.mozilla.javascript.NativeJavaTopPackage",
-        "java",          "org.mozilla.javascript.NativeJavaTopPackage",
-        "javax",         "org.mozilla.javascript.NativeJavaTopPackage",
-        "org",           "org.mozilla.javascript.NativeJavaTopPackage",
-        "com",           "org.mozilla.javascript.NativeJavaTopPackage",
-        "edu",           "org.mozilla.javascript.NativeJavaTopPackage",
-        "net",           "org.mozilla.javascript.NativeJavaTopPackage",
-        "getClass",      "org.mozilla.javascript.NativeJavaTopPackage",
-        "JavaAdapter",   "org.mozilla.javascript.JavaAdapter",
-        "JavaImporter",  "org.mozilla.javascript.ImporterTopLevel",
-        "Continuation",  "org.mozilla.javascript.NativeContinuation",
+        "RegExp",        JarJarHelper.javascriptPrefix + ".regexp.NativeRegExp",
+        "Packages",      JarJarHelper.javascriptPrefix + ".NativeJavaTopPackage",
+        "java",          JarJarHelper.javascriptPrefix + ".NativeJavaTopPackage",
+        "javax",         JarJarHelper.javascriptPrefix + ".NativeJavaTopPackage",
+        "org",           JarJarHelper.javascriptPrefix + ".NativeJavaTopPackage",
+        "com",           JarJarHelper.javascriptPrefix + ".NativeJavaTopPackage",
+        "edu",           JarJarHelper.javascriptPrefix + ".NativeJavaTopPackage",
+        "net",           JarJarHelper.javascriptPrefix + ".NativeJavaTopPackage",
+        "getClass",      JarJarHelper.javascriptPrefix + ".NativeJavaTopPackage",
+        "JavaAdapter",   JarJarHelper.javascriptPrefix + ".JavaAdapter",
+        "JavaImporter",  JarJarHelper.javascriptPrefix + ".ImporterTopLevel",
+        "Continuation",  JarJarHelper.javascriptPrefix + ".NativeContinuation",
         //	TODO	Grotesque hack using literal string (xml) just to minimize
 		//			changes for now
         "XML",           "(xml)",
@@ -3080,7 +3080,7 @@ public class ScriptRuntime {
     // ------------------
 
     public static ScriptableObject getGlobal(Context cx) {
-        final String GLOBAL_CLASS = "org.mozilla.javascript.tools.shell.Global";
+        final String GLOBAL_CLASS = JarJarHelper.javascriptPrefix + ".tools.shell.Global";
         Class<?> globalClass = Kit.classOrNull(GLOBAL_CLASS);
         if (globalClass != null) {
             try {
@@ -3669,7 +3669,7 @@ public class ScriptRuntime {
     private static class DefaultMessageProvider implements MessageProvider {
         public String getMessage(String messageId, Object[] arguments) {
             final String defaultResource
-                = "org.mozilla.javascript.resources.Messages";
+                = JarJarHelper.javascriptPrefix + ".resources.Messages";
 
             Context cx = Context.getCurrentContext();
             Locale locale = cx != null ? cx.getLocale() : Locale.getDefault();

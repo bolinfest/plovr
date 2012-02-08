@@ -299,7 +299,7 @@ public abstract class RhinoException extends RuntimeException
                 methodName = !"_c_script_0".equals(methodName) && match.find() ?
                         match.group(1) : null;
                 list.add(new ScriptStackElement(fileName, methodName, e.getLineNumber()));
-            } else if ("org.mozilla.javascript.Interpreter".equals(e.getClassName())
+            } else if ((JarJarHelper.javascriptPrefix + ".Interpreter").equals(e.getClassName())
                     && "interpretLoop".equals(e.getMethodName())
                     && interpreterStack != null
                     && interpreterStack.length > interpreterStackIndex) {

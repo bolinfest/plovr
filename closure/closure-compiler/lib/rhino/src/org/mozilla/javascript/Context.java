@@ -531,11 +531,11 @@ public class Context
     public static void addContextListener(ContextListener listener)
     {
         // Special workaround for the debugger
-        String DBG = "org.mozilla.javascript.tools.debugger.Main";
+        String DBG = JarJarHelper.javascriptPrefix + ".tools.debugger.Main";
         if (DBG.equals(listener.getClass().getName())) {
             Class<?> cl = listener.getClass();
             Class<?> factoryClass = Kit.classOrNull(
-                "org.mozilla.javascript.ContextFactory");
+                JarJarHelper.javascriptPrefix + ".ContextFactory");
             Class<?>[] sig = { factoryClass };
             Object[] args = { ContextFactory.getGlobal() };
             try {
@@ -2437,9 +2437,9 @@ public class Context
     }
 
     private static Class<?> codegenClass = Kit.classOrNull(
-                             "org.mozilla.javascript.optimizer.Codegen");
+                             JarJarHelper.javascriptPrefix + ".optimizer.Codegen");
     private static Class<?> interpreterClass = Kit.classOrNull(
-                             "org.mozilla.javascript.Interpreter");
+                             JarJarHelper.javascriptPrefix + ".Interpreter");
 
     private Evaluator createCompiler()
     {
@@ -2515,7 +2515,7 @@ public class Context
     {
         if (regExpProxy == null) {
             Class<?> cl = Kit.classOrNull(
-                          "org.mozilla.javascript.regexp.RegExpImpl");
+                          JarJarHelper.javascriptPrefix + ".regexp.RegExpImpl");
             if (cl != null) {
                 regExpProxy = (RegExpProxy)Kit.newInstanceOrNull(cl);
             }
