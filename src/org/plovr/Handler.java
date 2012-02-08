@@ -20,6 +20,7 @@ public enum Handler {
   INDEX("/", IndexRequestHandler.class),
   CONFIG("/config", ConfigRequestHandler.class),
   COMPILE("/compile", CompileRequestHandler.class),
+  CSS("/css", CssHandler.class),
   EXTERNS("/externs", ExternsHandler.class),
   INPUT("/input", InputFileHandler.class),
   LIST("/list", ListHandler.class),

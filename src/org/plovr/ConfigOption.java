@@ -616,6 +616,56 @@ public enum ConfigOption {
       return true;
     }
   }),
+
+  /************************* CSS OPTIONS *************************/
+
+  CSS_INPUTS("css-inputs", new ConfigUpdater() {
+    @Override
+    public void apply(String input, Config.Builder builder) {
+      String resolvedPath = maybeResolvePath(input, builder);
+      builder.addCssInput(new File(resolvedPath));
+    }
+
+    @Override
+    public void apply(JsonArray inputs, Config.Builder builder) {
+      for (JsonElement item : inputs) {
+        String path = GsonUtil.stringOrNull(item);
+        if (path != null) {
+          apply(path, builder);
+        }
+      }
+    }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetCssInputs();
+      return true;
+    }
+  }),
+
+  CSS_ALLOWED_NON_STANDARD_FUNCTIONS("css-allowed-non-standard-functions",
+      new ConfigUpdater() {
+    @Override
+    public void apply(String function, Config.Builder builder) {
+      builder.addAllowedNonStandardCssFunction(function);
+    }
+
+    @Override
+    public void apply(JsonArray functions, Config.Builder builder) {
+      for (JsonElement item : functions) {
+        String function = GsonUtil.stringOrNull(item);
+        if (function != null) {
+          apply(function, builder);
+        }
+      }
+    }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetAllowedNonStandardCssFunctions();
+      return true;
+    }
+  }),
   ;
 
   private static class ConfigUpdater {

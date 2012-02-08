@@ -147,6 +147,10 @@ public final class Config implements Comparable<Config> {
   @Nullable
   private final File configFile;
 
+  private final List<File> cssInputs;
+
+  private final List<String> allowedNonStandardCssFunctions;
+
   /**
    * @param id Unique identifier for the configuration. This is used as an
    *        argument to the &lt;script> tag that loads the compiled code.
@@ -188,7 +192,9 @@ public final class Config implements Comparable<Config> {
       File variableMapInputFile,
       File variableMapOutputFile,
       File propertyMapInputFile,
-      File propertyMapOutputFile) {
+      File propertyMapOutputFile,
+      List<File> cssInputs,
+      List<String> allowedNonStandardCssFunctions) {
     Preconditions.checkNotNull(defines);
 
     this.id = id;
@@ -226,6 +232,9 @@ public final class Config implements Comparable<Config> {
     this.variableMapOutputFile = variableMapOutputFile;
     this.propertyMapInputFile = propertyMapInputFile;
     this.propertyMapOutputFile = propertyMapOutputFile;
+    this.cssInputs = ImmutableList.copyOf(cssInputs);
+    this.allowedNonStandardCssFunctions = ImmutableList.copyOf(
+        allowedNonStandardCssFunctions);
   }
 
   public static Builder builder(File relativePathBase, File configFile,
@@ -387,6 +396,14 @@ public final class Config implements Comparable<Config> {
 
   public Set<File> getTestExcludePaths() {
     return testExcludePaths;
+  }
+
+  public List<File> getCssInputs() {
+    return cssInputs;
+  }
+
+  public List<String> getAllowedNonStandardCssFunctions() {
+    return allowedNonStandardCssFunctions;
   }
 
   /**
@@ -810,6 +827,12 @@ public final class Config implements Comparable<Config> {
 
     private final Map<String, JsonPrimitive> defines;
 
+    /************************* CSS OPTIONS *************************/
+
+    private List<File> cssInputs = Lists.newArrayList();
+
+    private List<String> allowedNonStandardFunctions = Lists.newArrayList();
+
     /**
      * Pattern to validate a config id. A config id may not contain funny
      * characters, such as slashes, because ids are used in RESTful URLs, so
@@ -873,6 +896,9 @@ public final class Config implements Comparable<Config> {
       this.propertyMapInputFile = config.propertyMapInputFile;
       this.propertyMapOutputFile = config.propertyMapOutputFile;
       this.defines = Maps.newHashMap(config.defines);
+      this.cssInputs = Lists.newArrayList(config.cssInputs);
+      this.allowedNonStandardFunctions = Lists.newArrayList(
+          config.allowedNonStandardCssFunctions);
     }
 
     /** Directory against which relative paths should be resolved. */
@@ -1174,6 +1200,27 @@ public final class Config implements Comparable<Config> {
       this.propertyMapOutputFile = file;
     }
 
+    public void addCssInput(File cssInput) {
+      Preconditions.checkNotNull(cssInput);
+      Preconditions.checkArgument(cssInput.exists(),
+          "CSS input %s must exist", cssInput.getAbsolutePath());
+      Preconditions.checkArgument(cssInput.isFile(),
+          "CSS input %s must be a file", cssInput.getAbsolutePath());
+      cssInputs.add(cssInput);
+    }
+
+    public void resetCssInputs() {
+      cssInputs.clear();
+    }
+
+    public void addAllowedNonStandardCssFunction(String function) {
+      allowedNonStandardFunctions.add(function);
+    }
+
+    public void resetAllowedNonStandardCssFunctions() {
+      allowedNonStandardFunctions.clear();
+    }
+
     public Config build() {
       File closureLibraryDirectory = pathToClosureLibrary != null
           ? new File(pathToClosureLibrary)
@@ -1251,7 +1298,9 @@ public final class Config implements Comparable<Config> {
           variableMapInputFile,
           variableMapOutputFile,
           propertyMapInputFile,
-          propertyMapOutputFile);
+          propertyMapOutputFile,
+          cssInputs,
+          allowedNonStandardFunctions);
 
       return config;
     }

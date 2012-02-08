@@ -50,6 +50,11 @@ public final class Responses {
     writeText(html, "text/html", exchange);
   }
 
+  public static void writeCss(String css, HttpExchange exchange)
+  throws IOException {
+    writeText(css, "text/css", exchange);
+  }
+
   private static void writeText(String text, String contentType,
       HttpExchange exchange) throws IOException {
     // Write the Content-Type and Content-Length headers.

@@ -62,6 +62,12 @@
   </li>
   {/if}
 
+  {if $config.hasCss}
+  <li>
+    <a href="/css/{$config.id}/">CSS output</a>
+  </li>
+  {/if}
+
   <li>
     <a href="/test/{$config.id}/list">List of tests</a>
   </li>

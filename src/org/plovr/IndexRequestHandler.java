@@ -64,7 +64,8 @@ final class IndexRequestHandler implements HttpHandler {
       return new SoyMapData(
           "id", config.getId(),
           "hasModules", config.hasModules(),
-          "rootModule", config.hasModules() ? config.getModuleConfig().getRootModule() : null
+          "rootModule", config.hasModules() ? config.getModuleConfig().getRootModule() : null,
+          "hasCss", !config.getCssInputs().isEmpty()
       );
     }
   };
