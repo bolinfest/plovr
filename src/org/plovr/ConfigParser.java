@@ -45,6 +45,7 @@ public final class ConfigParser {
         String pathToParentConfigFile = ConfigOption.maybeResolvePath(
             pathToInheritedConfig, parentDirectory);
         builder = createBuilderFromFile(new File(pathToParentConfigFile));
+        builder.addConfigFile(file);
       } else {
         throw new RuntimeException(String.format(
             "Value of %s in %s must be a string but was %s",

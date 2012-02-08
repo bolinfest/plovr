@@ -139,13 +139,8 @@ public final class Config implements Comparable<Config> {
 
   private final File propertyMapOutputFile;
 
-  /**
-   * Time this configuration was loaded
-   */
-  private final long timestamp;
-
-  @Nullable
-  private final File configFile;
+  private List<FileWithLastModified> configFileInheritanceChain =
+      Lists.newArrayList();
 
   private final List<File> cssInputs;
 
@@ -186,8 +181,7 @@ public final class Config implements Comparable<Config> {
       boolean ambiguateProperties,
       boolean disambiguateProperties,
       JsonObject experimentalCompilerOptions,
-      File configFile,
-      long timestamp,
+      List<FileWithLastModified> configFileInheritanceChain,
       String globalScopeName,
       File variableMapInputFile,
       File variableMapOutputFile,
@@ -225,8 +219,7 @@ public final class Config implements Comparable<Config> {
     this.ambiguateProperties = ambiguateProperties;
     this.disambiguateProperties = disambiguateProperties;
     this.experimentalCompilerOptions = experimentalCompilerOptions;
-    this.configFile = configFile;
-    this.timestamp = timestamp;
+    this.configFileInheritanceChain = ImmutableList.copyOf(configFileInheritanceChain);
     this.globalScopeName = globalScopeName;
     this.variableMapInputFile = variableMapInputFile;
     this.variableMapOutputFile = variableMapOutputFile;
@@ -253,7 +246,7 @@ public final class Config implements Comparable<Config> {
   @VisibleForTesting
   public static Builder builderForTesting() {
     File rootDirectory = File.listRoots()[0];
-    return new Builder(rootDirectory, null, "");
+    return new Builder(rootDirectory, "");
   }
 
   public String getId() {
@@ -334,13 +327,26 @@ public final class Config implements Comparable<Config> {
     return documentationOutputDirectory;
   }
 
+  /**
+   * Gets the file that was loaded by plovr to create this config. Note that
+   * there may be other files that were loaded as part of the config
+   * inheritance change in order to create this config.
+   */
   public File getConfigFile() {
-    return configFile;
+    int lastIndex = configFileInheritanceChain.size() - 1;
+    return configFileInheritanceChain.get(lastIndex).file;
   }
 
+  /**
+   * @return true if the last modified time for the underlying config file
+   *     (or any of the config files that it inherited) has changed since this
+   *     config was originally created
+   */
   public boolean isOutOfDate() {
-    if (configFile != null) {
-      return timestamp < configFile.lastModified();
+    for (FileWithLastModified file : configFileInheritanceChain) {
+      if (file.isOutOfDate()) {
+        return true;
+      }
     }
     return false;
   }
@@ -741,10 +747,12 @@ public final class Config implements Comparable<Config> {
 
     private final File relativePathBase;
 
-    @Nullable
-    private File configFile;
-
-    private long lastModified;
+    /**
+     * This is the inheritance chain of config files that produced this config.
+     * Descendants are added to the end of the list.
+     */
+    private List<FileWithLastModified> configFileInheritanceChain =
+        Lists.newArrayList();
 
     private final String rootConfigFileContent;
 
@@ -842,6 +850,11 @@ public final class Config implements Comparable<Config> {
         AbstractGetHandler.CONFIG_ID_PATTERN);
 
     private Builder(File relativePathBase, File configFile, String rootConfigFileContent) {
+      this(relativePathBase, rootConfigFileContent);
+      addConfigFile(configFile);
+    }
+
+    private Builder(File relativePathBase, String rootConfigFileContent) {
       Preconditions.checkNotNull(relativePathBase);
       Preconditions.checkArgument(relativePathBase.isDirectory(),
           relativePathBase + " is not a directory");
@@ -851,14 +864,14 @@ public final class Config implements Comparable<Config> {
       testExcludePaths = Lists.newArrayList();
       manifest = null;
       defines = Maps.newHashMap();
-      setConfigFile(configFile);
     }
 
     /** Effectively a copy constructor. */
     private Builder(Config config) {
       Preconditions.checkNotNull(config);
       this.relativePathBase = null;
-      this.configFile = null;
+      this.configFileInheritanceChain = Lists.newArrayList(
+          config.configFileInheritanceChain);
       this.rootConfigFileContent = config.rootConfigFileContent;
       this.id = config.id;
       this.manifest = config.manifest;
@@ -974,9 +987,13 @@ public final class Config implements Comparable<Config> {
       this.excludeClosureLibrary = excludeClosureLibrary;
     }
 
-    public void setConfigFile(File configFile) {
-      this.configFile = configFile;
-      this.lastModified = configFile != null ? configFile.lastModified() : 0;
+    /**
+     * Appends the specified file to the end of the config file inheritance
+     * chain for this builder.
+     */
+    void addConfigFile(File configFile) {
+      Preconditions.checkNotNull(configFile);
+      configFileInheritanceChain.add(new FileWithLastModified(configFile));
     }
 
     public ModuleConfig.Builder getModuleConfigBuilder() {
@@ -1292,8 +1309,7 @@ public final class Config implements Comparable<Config> {
           ambiguateProperties,
           disambiguateProperties,
           experimentalCompilerOptions,
-          configFile,
-          lastModified,
+          configFileInheritanceChain,
           globalScopeName,
           variableMapInputFile,
           variableMapOutputFile,
@@ -1342,5 +1358,19 @@ public final class Config implements Comparable<Config> {
   @Override
   public int compareTo(Config otherConfig) {
     return getId().compareTo(otherConfig.getId());
+  }
+
+  private static class FileWithLastModified {
+    public final File file;
+    public final long lastModified;
+    private FileWithLastModified(File file) {
+      Preconditions.checkNotNull(file);
+      this.file = file;
+      this.lastModified = file.lastModified();
+    }
+    public boolean isOutOfDate() {
+      // true if the last modified time has changed
+      return this.lastModified != file.lastModified();
+    }
   }
 }
