@@ -15,26 +15,26 @@ public final class HttpExchangeUtil {
       Pattern.compile("Chrome/(\\d+)\\.");
 
   /**
-   * There is a bug in Chrome 16 that affects plovr in serve mode:
+   * There is a bug in Google Chrome that affects plovr in serve mode:
    * http://code.google.com/p/chromium/issues/detail?id=105824
    * which was discussed at length on the Google Group:
    * https://groups.google.com/forum/?fromgroups#!topic/plovr/yWiGfVG-hq4
-   * This method detects whether the request is from Chrome 16, in which case
-   * ETags should not be used.
+   * This bug has been observed on Chrome 16 and 17, so for now, we only check
+   * for Chrome 17 and earlier.
    */
-  public static boolean isGoogleChrome16OrEarlier(HttpExchange exchange) {
+  public static boolean isGoogleChrome17OrEarlier(HttpExchange exchange) {
     String userAgent = exchange.getRequestHeaders().getFirst("User-Agent");
-    return isGoogleChrome16OrEarlier(userAgent);
+    return isGoogleChrome17OrEarlier(userAgent);
   }
 
   @VisibleForTesting
-  static boolean isGoogleChrome16OrEarlier(String userAgent) {
+  static boolean isGoogleChrome17OrEarlier(String userAgent) {
     boolean isChrome = userAgent != null && userAgent.contains("Chrome");
     if (isChrome) {
       Matcher matcher = CHROME_VERSION_PATTERN.matcher(userAgent);
       if (matcher.find()) {
         int version = Integer.parseInt(matcher.group(1), 10);
-        return version <= 16;
+        return version <= 17;
       }
     }
     return false;

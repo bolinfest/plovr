@@ -169,7 +169,7 @@ public class InputFileHandler extends AbstractGetHandler {
       String ifNoneMatch = exchange.getRequestHeaders().getFirst(
           "If-None-Match");
       if (eTag.equals(ifNoneMatch) &&
-          !HttpExchangeUtil.isGoogleChrome16OrEarlier(exchange)) {
+          !HttpExchangeUtil.isGoogleChrome17OrEarlier(exchange)) {
         Responses.notModified(exchange);
         return;
       } else {
