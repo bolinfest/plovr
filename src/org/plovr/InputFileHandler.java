@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
 
 import org.plovr.JsInput.CodeWithEtag;
 import org.plovr.io.Responses;
+import org.plovr.util.HttpExchangeUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
@@ -167,7 +168,8 @@ public class InputFileHandler extends AbstractGetHandler {
       String eTag = codeWithEtag.eTag;
       String ifNoneMatch = exchange.getRequestHeaders().getFirst(
           "If-None-Match");
-      if (eTag.equals(ifNoneMatch)) {
+      if (eTag.equals(ifNoneMatch) &&
+          !HttpExchangeUtil.isGoogleChrome16OrEarlier(exchange)) {
         Responses.notModified(exchange);
         return;
       } else {
