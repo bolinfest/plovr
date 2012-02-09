@@ -146,6 +146,8 @@ public final class Config implements Comparable<Config> {
 
   private final List<String> allowedNonStandardCssFunctions;
 
+  private final String gssFunctionMapProviderClassName;
+
   /**
    * @param id Unique identifier for the configuration. This is used as an
    *        argument to the &lt;script> tag that loads the compiled code.
@@ -188,7 +190,8 @@ public final class Config implements Comparable<Config> {
       File propertyMapInputFile,
       File propertyMapOutputFile,
       List<File> cssInputs,
-      List<String> allowedNonStandardCssFunctions) {
+      List<String> allowedNonStandardCssFunctions,
+      String gssFunctionMapProviderClassName) {
     Preconditions.checkNotNull(defines);
 
     this.id = id;
@@ -228,6 +231,7 @@ public final class Config implements Comparable<Config> {
     this.cssInputs = ImmutableList.copyOf(cssInputs);
     this.allowedNonStandardCssFunctions = ImmutableList.copyOf(
         allowedNonStandardCssFunctions);
+    this.gssFunctionMapProviderClassName = gssFunctionMapProviderClassName;
   }
 
   public static Builder builder(File relativePathBase, File configFile,
@@ -410,6 +414,10 @@ public final class Config implements Comparable<Config> {
 
   public List<String> getAllowedNonStandardCssFunctions() {
     return allowedNonStandardCssFunctions;
+  }
+
+  public String getGssFunctionMapProviderClassName() {
+    return gssFunctionMapProviderClassName;
   }
 
   /**
@@ -841,6 +849,8 @@ public final class Config implements Comparable<Config> {
 
     private List<String> allowedNonStandardFunctions = Lists.newArrayList();
 
+    private String gssFunctionMapProviderClassName;
+
     /**
      * Pattern to validate a config id. A config id may not contain funny
      * characters, such as slashes, because ids are used in RESTful URLs, so
@@ -912,6 +922,8 @@ public final class Config implements Comparable<Config> {
       this.cssInputs = Lists.newArrayList(config.cssInputs);
       this.allowedNonStandardFunctions = Lists.newArrayList(
           config.allowedNonStandardCssFunctions);
+      this.gssFunctionMapProviderClassName = config.
+          gssFunctionMapProviderClassName;
     }
 
     /** Directory against which relative paths should be resolved. */
@@ -1238,6 +1250,11 @@ public final class Config implements Comparable<Config> {
       allowedNonStandardFunctions.clear();
     }
 
+    public void setGssFunctionMapProvider(
+        String gssFunctionMapProviderClassName) {
+      this.gssFunctionMapProviderClassName = gssFunctionMapProviderClassName;
+    }
+
     public Config build() {
       File closureLibraryDirectory = pathToClosureLibrary != null
           ? new File(pathToClosureLibrary)
@@ -1316,7 +1333,8 @@ public final class Config implements Comparable<Config> {
           propertyMapInputFile,
           propertyMapOutputFile,
           cssInputs,
-          allowedNonStandardFunctions);
+          allowedNonStandardFunctions,
+          gssFunctionMapProviderClassName);
 
       return config;
     }

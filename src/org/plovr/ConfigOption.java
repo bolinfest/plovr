@@ -666,6 +666,14 @@ public enum ConfigOption {
       return true;
     }
   }),
+
+  CSS_GSS_FUNCTION_MAP_PROVIDER("css-gss-function-map-provider",
+      new ConfigUpdater() {
+    @Override
+    public void apply(String functionMapProviderClass, Config.Builder builder) {
+      builder.setGssFunctionMapProvider(functionMapProviderClass);
+    }
+  })
   ;
 
   private static class ConfigUpdater {

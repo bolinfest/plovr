@@ -10,6 +10,7 @@ import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableList;
 import com.google.common.css.JobDescription;
 import com.google.common.css.JobDescription.OutputFormat;
+import com.google.common.css.GssFunctionMapProvider;
 import com.google.common.css.JobDescriptionBuilder;
 import com.google.common.css.SourceCode;
 import com.google.common.css.compiler.ast.BasicErrorManager;
@@ -46,7 +47,19 @@ public class CssHandler extends AbstractGetHandler {
     builder.setProcessDependencies(true);
     builder.setSimplifyCss(true);
     builder.setEliminateDeadStyles(true);
-    builder.setGssFunctionMapProvider(new DefaultGssFunctionMapProvider());
+
+    // Use the user-specified GssFunctionMapProvider if specified; otherwise,
+    // fall back on the default.
+    GssFunctionMapProvider functionMapProvider;
+    String functionMapProviderClassName = config.
+        getGssFunctionMapProviderClassName();
+    if (functionMapProviderClassName == null) {
+      functionMapProvider = new DefaultGssFunctionMapProvider();
+    } else {
+      functionMapProvider = getGssFunctionMapProviderForName(
+          functionMapProviderClassName);
+    }
+    builder.setGssFunctionMapProvider(functionMapProvider);
 
     for (File input : config.getCssInputs()) {
       String fileContents;
@@ -102,6 +115,44 @@ public class CssHandler extends AbstractGetHandler {
           cssParseTree.getVisitController());
       prettyPrinterPass.runPass();
       return prettyPrinterPass.getPrettyPrintedString();
+    }
+  }
+
+  /**
+   * This method is taken from com.google.common.css.compiler.commandline.
+   *     ClosureCommandLineCompiler.
+   * @param gssFunctionMapProviderClassName such as
+   *     "com.google.common.css.compiler.gssfunctions.DefaultGssFunctionMapProvider"
+   * @return a new instance of the {@link GssFunctionMapProvider} that
+   *     corresponds to the specified class name, or a new instance of
+   *     {@link DefaultGssFunctionMapProvider} if the class name is
+   *     {@code null}.
+   */
+  private static GssFunctionMapProvider getGssFunctionMapProviderForName(
+      String gssFunctionMapProviderClassName) {
+    // Verify that a class with the given name exists.
+    Class<?> clazz;
+    try {
+      clazz = Class.forName(gssFunctionMapProviderClassName);
+    } catch (ClassNotFoundException e) {
+      throw new RuntimeException(String.format(
+          "Class does not exist: %s", gssFunctionMapProviderClassName), e);
+    }
+
+    // The class must implement GssFunctionMapProvider.
+    if (!GssFunctionMapProvider.class.isAssignableFrom(clazz)) {
+      throw new RuntimeException(String.format(
+          "%s does not implement GssFunctionMapProvider",
+          gssFunctionMapProviderClassName));
+    }
+
+    // Create the GssFunctionMapProvider using reflection.
+    try {
+      return (GssFunctionMapProvider) clazz.newInstance();
+    } catch (InstantiationException e) {
+      throw new RuntimeException(e);
+    } catch (IllegalAccessException e) {
+      throw new RuntimeException(e);
     }
   }
 
