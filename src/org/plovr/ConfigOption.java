@@ -643,6 +643,30 @@ public enum ConfigOption {
     }
   }),
 
+  CSS_ALLOWED_UNRECOGNIZED_PROPERTIES("css-allowed-unrecognized-properties",
+      new ConfigUpdater() {
+    @Override
+    public void apply(String property, Config.Builder builder) {
+      builder.addAllowedUnrecognizedProperty(property);
+    }
+
+    @Override
+    public void apply(JsonArray properties, Config.Builder builder) {
+      for (JsonElement item : properties) {
+        String property = GsonUtil.stringOrNull(item);
+        if (property != null) {
+          apply(property, builder);
+        }
+      }
+    }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetAllowedUnrecognizedProperties();
+      return true;
+    }
+  }),
+
   CSS_ALLOWED_NON_STANDARD_FUNCTIONS("css-allowed-non-standard-functions",
       new ConfigUpdater() {
     @Override

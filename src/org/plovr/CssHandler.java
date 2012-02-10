@@ -64,11 +64,12 @@ public class CssHandler extends AbstractGetHandler {
     builder.setOutputFormat(
         prettyPrint ? JobDescription.OutputFormat.PRETTY_PRINTED
                     : JobDescription.OutputFormat.COMPRESSED);
+    builder.setAllowedUnrecognizedProperties(
+        config.getAllowedUnrecognizedProperties());
     builder.setAllowedNonStandardFunctions(
         config.getAllowedNonStandardCssFunctions());
     // TODO: Read more of these options from a config.
 //    builder.setAllowUnrecognizedFunctions(true);
-//    builder.setAllowedUnrecognizedProperties(true);
 //    builder.setAllowUnrecognizedProperties(true);
 //    builder.setVendor(vendor);
     builder.setAllowWebkitKeyframes(true);

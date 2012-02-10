@@ -144,6 +144,8 @@ public final class Config implements Comparable<Config> {
 
   private final List<File> cssInputs;
 
+  private final List<String> allowedUnrecognizedProperties;
+
   private final List<String> allowedNonStandardCssFunctions;
 
   private final String gssFunctionMapProviderClassName;
@@ -192,6 +194,7 @@ public final class Config implements Comparable<Config> {
       File propertyMapInputFile,
       File propertyMapOutputFile,
       List<File> cssInputs,
+      List<String> allowedUnrecognizedProperties,
       List<String> allowedNonStandardCssFunctions,
       String gssFunctionMapProviderClassName,
       File cssOutputFile) {
@@ -232,6 +235,8 @@ public final class Config implements Comparable<Config> {
     this.propertyMapInputFile = propertyMapInputFile;
     this.propertyMapOutputFile = propertyMapOutputFile;
     this.cssInputs = ImmutableList.copyOf(cssInputs);
+    this.allowedUnrecognizedProperties = ImmutableList.copyOf(
+        allowedUnrecognizedProperties);
     this.allowedNonStandardCssFunctions = ImmutableList.copyOf(
         allowedNonStandardCssFunctions);
     this.gssFunctionMapProviderClassName = gssFunctionMapProviderClassName;
@@ -414,6 +419,10 @@ public final class Config implements Comparable<Config> {
 
   public List<File> getCssInputs() {
     return cssInputs;
+  }
+
+  public List<String> getAllowedUnrecognizedProperties() {
+    return allowedUnrecognizedProperties;
   }
 
   public List<String> getAllowedNonStandardCssFunctions() {
@@ -855,6 +864,8 @@ public final class Config implements Comparable<Config> {
 
     private List<File> cssInputs = Lists.newArrayList();
 
+    private List<String> allowedUnrecognizedProperties = Lists.newArrayList();
+
     private List<String> allowedNonStandardFunctions = Lists.newArrayList();
 
     private String gssFunctionMapProviderClassName;
@@ -930,6 +941,8 @@ public final class Config implements Comparable<Config> {
       this.propertyMapOutputFile = config.propertyMapOutputFile;
       this.defines = Maps.newHashMap(config.defines);
       this.cssInputs = Lists.newArrayList(config.cssInputs);
+      this.allowedUnrecognizedProperties = Lists.newArrayList(
+          config.allowedUnrecognizedProperties);
       this.allowedNonStandardFunctions = Lists.newArrayList(
           config.allowedNonStandardCssFunctions);
       this.gssFunctionMapProviderClassName = config.
@@ -1261,6 +1274,14 @@ public final class Config implements Comparable<Config> {
       allowedNonStandardFunctions.clear();
     }
 
+    public void addAllowedUnrecognizedProperty(String property) {
+      allowedUnrecognizedProperties.add(property);
+    }
+
+    public void resetAllowedUnrecognizedProperties() {
+      allowedUnrecognizedProperties.clear();
+    }
+
     public void setGssFunctionMapProvider(
         String gssFunctionMapProviderClassName) {
       this.gssFunctionMapProviderClassName = gssFunctionMapProviderClassName;
@@ -1348,6 +1369,7 @@ public final class Config implements Comparable<Config> {
           propertyMapInputFile,
           propertyMapOutputFile,
           cssInputs,
+          allowedUnrecognizedProperties,
           allowedNonStandardFunctions,
           gssFunctionMapProviderClassName,
           cssOutputFile);
