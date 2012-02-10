@@ -39,10 +39,10 @@ import com.google.gson.JsonPrimitive;
 import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.ClosureCodingConvention;
 import com.google.javascript.jscomp.CompilationLevel;
-import com.google.javascript.jscomp.PlovrCompilerOptions;
 import com.google.javascript.jscomp.CompilerPass;
 import com.google.javascript.jscomp.CustomPassExecutionTime;
 import com.google.javascript.jscomp.DiagnosticGroup;
+import com.google.javascript.jscomp.PlovrCompilerOptions;
 import com.google.javascript.jscomp.VariableMap;
 import com.google.javascript.jscomp.WarningLevel;
 import com.google.template.soy.xliffmsgplugin.XliffMsgPluginModule;
@@ -148,6 +148,8 @@ public final class Config implements Comparable<Config> {
 
   private final String gssFunctionMapProviderClassName;
 
+  private final File cssOutputFile;
+
   /**
    * @param id Unique identifier for the configuration. This is used as an
    *        argument to the &lt;script> tag that loads the compiled code.
@@ -191,7 +193,8 @@ public final class Config implements Comparable<Config> {
       File propertyMapOutputFile,
       List<File> cssInputs,
       List<String> allowedNonStandardCssFunctions,
-      String gssFunctionMapProviderClassName) {
+      String gssFunctionMapProviderClassName,
+      File cssOutputFile) {
     Preconditions.checkNotNull(defines);
 
     this.id = id;
@@ -232,6 +235,7 @@ public final class Config implements Comparable<Config> {
     this.allowedNonStandardCssFunctions = ImmutableList.copyOf(
         allowedNonStandardCssFunctions);
     this.gssFunctionMapProviderClassName = gssFunctionMapProviderClassName;
+    this.cssOutputFile = cssOutputFile;
   }
 
   public static Builder builder(File relativePathBase, File configFile,
@@ -418,6 +422,10 @@ public final class Config implements Comparable<Config> {
 
   public String getGssFunctionMapProviderClassName() {
     return gssFunctionMapProviderClassName;
+  }
+
+  public File getCssOutputFile() {
+    return cssOutputFile;
   }
 
   /**
@@ -851,6 +859,8 @@ public final class Config implements Comparable<Config> {
 
     private String gssFunctionMapProviderClassName;
 
+    private File cssOutputFile = null;
+
     /**
      * Pattern to validate a config id. A config id may not contain funny
      * characters, such as slashes, because ids are used in RESTful URLs, so
@@ -924,6 +934,7 @@ public final class Config implements Comparable<Config> {
           config.allowedNonStandardCssFunctions);
       this.gssFunctionMapProviderClassName = config.
           gssFunctionMapProviderClassName;
+      this.cssOutputFile = config.cssOutputFile;
     }
 
     /** Directory against which relative paths should be resolved. */
@@ -1255,6 +1266,10 @@ public final class Config implements Comparable<Config> {
       this.gssFunctionMapProviderClassName = gssFunctionMapProviderClassName;
     }
 
+    public void setCssOutputFile(File cssOutputFile) {
+      this.cssOutputFile = cssOutputFile;
+    }
+
     public Config build() {
       File closureLibraryDirectory = pathToClosureLibrary != null
           ? new File(pathToClosureLibrary)
@@ -1334,7 +1349,8 @@ public final class Config implements Comparable<Config> {
           propertyMapOutputFile,
           cssInputs,
           allowedNonStandardFunctions,
-          gssFunctionMapProviderClassName);
+          gssFunctionMapProviderClassName,
+          cssOutputFile);
 
       return config;
     }

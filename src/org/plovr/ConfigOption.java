@@ -673,7 +673,16 @@ public enum ConfigOption {
     public void apply(String functionMapProviderClass, Config.Builder builder) {
       builder.setGssFunctionMapProvider(functionMapProviderClass);
     }
-  })
+  }),
+
+  CSS_OUTPUT_FILE("css-output-file", new ConfigUpdater() {
+    @Override
+    public void apply(String outputFilePath, Config.Builder builder) {
+      File outputFile = (outputFilePath == null) ? null :
+          new File(maybeResolvePath(outputFilePath, builder));
+      builder.setCssOutputFile(outputFile);
+    }
+  }),
   ;
 
   private static class ConfigUpdater {
