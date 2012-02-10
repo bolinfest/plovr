@@ -8,9 +8,9 @@ import org.plovr.io.Responses;
 
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableList;
+import com.google.common.css.GssFunctionMapProvider;
 import com.google.common.css.JobDescription;
 import com.google.common.css.JobDescription.OutputFormat;
-import com.google.common.css.GssFunctionMapProvider;
 import com.google.common.css.JobDescriptionBuilder;
 import com.google.common.css.SourceCode;
 import com.google.common.css.compiler.ast.BasicErrorManager;
@@ -34,8 +34,36 @@ public class CssHandler extends AbstractGetHandler {
   @Override
   protected void doGet(HttpExchange exchange, QueryData data, Config config)
       throws IOException {
+    JobDescription job = createJobFromConfig(config, true /* prettyPrint */);
+    ErrorManager errorManager = new ErrorManager();
+    try {
+      String output = execute(job, errorManager);
+      StringBuilder css = new StringBuilder();
+
+      // Prepend output with errors inside a CSS comment.
+      // Hopefully such comments don't contain "*/"!
+      if (errorManager.hasErrors()) {
+        css.append("/*\n");
+        for (GssError error : errorManager.getErrors()) {
+          css.append(error.format() + "\n");
+        }
+        css.append("*/\n");
+      }
+
+      css.append(output);
+      Responses.writeCss(css.toString(), exchange);
+    } catch (GssParserException e) {
+      String css = String.format("/* %s */", e.getMessage());
+      Responses.writeCss(css, exchange);
+    }
+  }
+
+  public static JobDescription createJobFromConfig(Config config,
+      boolean prettyPrint) {
     JobDescriptionBuilder builder = new JobDescriptionBuilder();
-    builder.setOutputFormat(JobDescription.OutputFormat.PRETTY_PRINTED);
+    builder.setOutputFormat(
+        prettyPrint ? JobDescription.OutputFormat.PRETTY_PRINTED
+                    : JobDescription.OutputFormat.COMPRESSED);
     builder.setAllowedNonStandardFunctions(
         config.getAllowedNonStandardCssFunctions());
     // TODO: Read more of these options from a config.
@@ -74,31 +102,10 @@ public class CssHandler extends AbstractGetHandler {
       builder.addInput(new SourceCode(fileName, fileContents));
     }
 
-    JobDescription job = builder.getJobDescription();
-    ErrorManager errorManager = new ErrorManager();
-    try {
-      String output = execute(job, errorManager);
-      StringBuilder css = new StringBuilder();
-
-      // Prepend output with errors inside a CSS comment.
-      // Hopefully such comments don't contain "*/"!
-      if (errorManager.hasErrors()) {
-        css.append("/*\n");
-        for (GssError error : errorManager.getErrors()) {
-          css.append(error.format() + "\n");
-        }
-        css.append("*/\n");
-      }
-
-      css.append(output);
-      Responses.writeCss(css.toString(), exchange);
-    } catch (GssParserException e) {
-      String css = String.format("/* %s */", e.getMessage());
-      Responses.writeCss(css, exchange);
-    }
+    return builder.getJobDescription();
   }
 
-  private String execute(JobDescription job, ErrorManager errorManager)
+  public static String execute(JobDescription job, ErrorManager errorManager)
       throws GssParserException {
     GssParser parser = new GssParser(job.inputs);
     CssTree cssParseTree = parser.parse();
@@ -156,7 +163,7 @@ public class CssHandler extends AbstractGetHandler {
     }
   }
 
-  private static class ErrorManager extends BasicErrorManager {
+  public static class ErrorManager extends BasicErrorManager {
     @Override
     public void print(String msg) {
       // printing to /dev/null!

@@ -12,11 +12,17 @@ import org.plovr.CompilationException;
 import org.plovr.CompileRequestHandler;
 import org.plovr.Config;
 import org.plovr.ConfigParser;
+import org.plovr.CssHandler;
+import org.plovr.CssHandler.ErrorManager;
 import org.plovr.ModuleConfig;
 import org.plovr.io.Streams;
 
+import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
+import com.google.common.css.JobDescription;
+import com.google.common.css.compiler.ast.GssError;
+import com.google.common.css.compiler.ast.GssParserException;
 import com.google.common.io.Closeables;
 import com.google.common.io.Files;
 import com.google.javascript.jscomp.JSError;
@@ -55,6 +61,11 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
         compilation = null;
       }
       boolean isSuccess = processResult(compilation, config, options.getSourceMapPath(), config.getId());
+      if (!isSuccess) {
+        return 1;
+      }
+
+      isSuccess = processCssIfPresent(config);
       if (!isSuccess) {
         return 1;
       }
@@ -154,6 +165,35 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
             result.warnings.length);
       }
     }
+  }
+
+  private boolean processCssIfPresent(Config config) throws IOException {
+    List<File> cssInputs = config.getCssInputs();
+    File cssOutputFile = config.getCssOutputFile();
+    if (cssInputs.isEmpty() || cssOutputFile == null) {
+      return true;
+    }
+
+    JobDescription job = CssHandler.createJobFromConfig(config,
+        false /* prettyPrint */);
+    ErrorManager errorManager = new ErrorManager();
+    String compiledCss;
+    try {
+      compiledCss = CssHandler.execute(job, errorManager);
+    } catch (GssParserException e) {
+      e.printStackTrace();
+      return false;
+    }
+
+    if (errorManager.hasErrors()) {
+      for (GssError error : errorManager.getErrors()) {
+        System.err.println(error.format() + "\n");
+      }
+      return false;
+    } else {
+      Files.write(compiledCss, cssOutputFile, Charsets.UTF_8);
+    }
+    return true;
   }
 
   @Override
