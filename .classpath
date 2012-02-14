@@ -20,7 +20,7 @@
 	<classpathentry kind="lib" path="closure/closure-templates/java/lib/guice-multibindings-3.0.jar"/>
 	<classpathentry kind="lib" path="closure/closure-templates/java/lib/javax.inject.jar"/>
 	<classpathentry kind="lib" path="closure/closure-compiler/lib/ant.jar"/>
-	<classpathentry kind="lib" path="lib/guava-10.0.1.jar"/>
+	<classpathentry kind="lib" path="lib/guava-11.0.1.jar"/>
 	<classpathentry kind="lib" path="closure/closure-templates/java/lib/icu4j-4_8_1_1.jar"/>
 	<classpathentry kind="lib" path="lib/closure-stylesheets-20111230.jar"/>
 	<classpathentry kind="output" path="build/classes"/>
