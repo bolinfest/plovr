@@ -75,7 +75,10 @@ public class CssHandler extends AbstractGetHandler {
     builder.setAllowWebkitKeyframes(true);
     builder.setProcessDependencies(true);
     builder.setSimplifyCss(true);
-    builder.setEliminateDeadStyles(true);
+
+    // See http://bolinfest.com/webkit/placeholder.html and
+    // https://groups.google.com/forum/#!topic/closure-stylesheets-discuss/yDe2Rp5lZFo
+    builder.setEliminateDeadStyles(false);
 
     // Use the user-specified GssFunctionMapProvider if specified; otherwise,
     // fall back on the default.
