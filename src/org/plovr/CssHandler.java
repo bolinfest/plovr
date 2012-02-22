@@ -68,6 +68,7 @@ public class CssHandler extends AbstractGetHandler {
         config.getAllowedUnrecognizedProperties());
     builder.setAllowedNonStandardFunctions(
         config.getAllowedNonStandardCssFunctions());
+    builder.setTrueConditionNames(ImmutableList.copyOf(config.getCssDefines()));
     // TODO: Read more of these options from a config.
 //    builder.setAllowUnrecognizedFunctions(true);
 //    builder.setAllowUnrecognizedProperties(true);

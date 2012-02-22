@@ -643,6 +643,29 @@ public enum ConfigOption {
     }
   }),
 
+  CSS_DEFINES("css-defines", new ConfigUpdater() {
+    @Override
+    public void apply(String define, Config.Builder builder) {
+      builder.addCssDefine(define);
+    }
+
+    @Override
+    public void apply(JsonArray inputs, Config.Builder builder) {
+      for (JsonElement item : inputs) {
+        String define = GsonUtil.stringOrNull(item);
+        if (define != null) {
+          apply(define, builder);
+        }
+      }
+    }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetCssDefines();
+      return true;
+    }
+  }),
+
   CSS_ALLOWED_UNRECOGNIZED_PROPERTIES("css-allowed-unrecognized-properties",
       new ConfigUpdater() {
     @Override
