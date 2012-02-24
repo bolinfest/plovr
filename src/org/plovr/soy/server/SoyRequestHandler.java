@@ -11,12 +11,10 @@ import java.util.logging.Logger;
 
 import org.plovr.HttpUtil;
 import org.plovr.QueryData;
-import org.plovr.SoyFile;
 import org.plovr.util.SoyDataUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.common.io.Files;
@@ -47,9 +45,6 @@ import com.sun.net.httpserver.HttpHandler;
 public class SoyRequestHandler implements HttpHandler {
 
   private static final Logger logger = Logger.getLogger(SoyRequestHandler.class.getName());
-
-  private static final Injector injector = SoyFile.createInjector(
-      ImmutableList.of("org.plovr.soy.function.PlovrModule"));
 
   private static final JsonParser parser = new JsonParser();
 
@@ -154,6 +149,7 @@ public class SoyRequestHandler implements HttpHandler {
   }
 
   private static SoyTofu getSoyTofu(Config config) {
+    Injector injector = config.getInjector();
     SoyFileSet.Builder builder = injector.getInstance(SoyFileSet.Builder.class);
     builder.setCompileTimeGlobals(config.getCompileTimeGlobals());
     // Add all of the .soy files under config.getContentDirectory().

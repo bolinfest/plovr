@@ -49,6 +49,11 @@ public class SoyWebCommandOptions extends AbstractCommandOptions {
       usage = "Do not serve index pages that list all files in a directory.")
   private boolean noIndexPages = false;
 
+  @Option(name = "--plugins",
+      usage = "A comma-delimited list of fully-qualified Java classes that " +
+      "define custom functions or print directives for Closure Templates.")
+  private String pluginModuleNames;
+
   public SoyWebCommandOptions() {}
 
   public String getTemplateName() {
@@ -77,5 +82,9 @@ public class SoyWebCommandOptions extends AbstractCommandOptions {
 
   public boolean areIndexPagesEnabled() {
     return !noIndexPages;
+  }
+
+  public String getPluginModuleNames() {
+    return pluginModuleNames;
   }
 }

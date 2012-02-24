@@ -1,7 +1,14 @@
 package org.plovr.soy.server;
 
 import java.io.File;
+import java.util.List;
 import java.util.Map;
+
+import org.plovr.SoyFile;
+
+import com.google.common.base.Strings;
+import com.google.common.collect.Lists;
+import com.google.inject.Injector;
 
 public final class Config {
 
@@ -19,6 +26,9 @@ public final class Config {
 
   private boolean indexPagesAreEnabled;
 
+  private final Injector injector;
+
+
   public Config(
       String templateToRender,
       int port,
@@ -26,7 +36,8 @@ public final class Config {
       boolean isStatic,
       Map<String, ?> compileTimeGlobals,
       boolean isSafeMode,
-      boolean indexPagesAreEnabled) {
+      boolean indexPagesAreEnabled,
+      String pluginModuleNames) {
     this.templateToRender = templateToRender;
     this.port = port;
     this.contentDirectory = contentDirectory;
@@ -34,6 +45,16 @@ public final class Config {
     this.compileTimeGlobals = compileTimeGlobals;
     this.isSafeMode = isSafeMode;
     this.indexPagesAreEnabled = indexPagesAreEnabled;
+
+    List<String> moduleNames = Lists.newArrayList();
+    moduleNames.add("org.plovr.soy.function.PlovrModule");
+    for (String plugin : Strings.nullToEmpty(pluginModuleNames).split(",")) {
+      plugin = plugin.trim();
+      if (!plugin.isEmpty()) {
+        moduleNames.add(plugin);
+      }
+    }
+    this.injector = SoyFile.createInjector(moduleNames);
   }
 
   public String getTemplateToRender() {
@@ -62,5 +83,9 @@ public final class Config {
 
   public boolean indexPagesAreEnabled() {
     return indexPagesAreEnabled;
+  }
+
+  public Injector getInjector() {
+    return injector;
   }
 }
