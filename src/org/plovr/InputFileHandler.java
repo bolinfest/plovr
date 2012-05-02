@@ -136,8 +136,7 @@ public class InputFileHandler extends AbstractGetHandler {
     // If the user requests the deps.js alongside base.js, then return the
     // generated dependency info for this config rather than the default deps.js
     // that comes with the Closure Library.
-    String depsJsName = manifest.isBuiltInClosureLibrary() ?
-        "/closure/goog/deps.js" : "/deps.js";
+    String depsJsName = Manifest.DEPS_JS_INPUT_NAME;
     if (name.equals(depsJsName)) {
       super.setCacheHeaders(exchange.getResponseHeaders());
       Responses.writeJs(getCodeForDepsJs(manifest), config, exchange);
@@ -195,9 +194,11 @@ public class InputFileHandler extends AbstractGetHandler {
   }
 
   private String getCodeForDepsJs(Manifest manifest) {
-    // Ordinarily, this will be "/closure/goog/base.js". It could be something
-    // else if the user supplies his own Closure Library.
-    String baseJsPath = manifest.getBaseJs().getName();
+    String baseJsPath = Manifest.BASE_JS_INPUT_NAME;
+
+    // Although baseJsPath is a constant, so this logic will always produce the
+    // same result, we keep it here in case Manifest.BASE_JS_INPUT_NAME is
+    // redefined in the future.
     if (baseJsPath.startsWith("/")) {
       baseJsPath = baseJsPath.substring(1);
     }

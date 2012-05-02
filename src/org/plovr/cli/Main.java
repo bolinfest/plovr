@@ -14,7 +14,7 @@ public final class Main {
 
   private Main() {}
 
-  private static void usage() {
+  private static int usage() {
     // TODO(bolinfest): Make this a data-driven list from the Command enum.
     System.err.println("plovr build tool\n");
     System.err.println("basic commands:\n");
@@ -23,26 +23,41 @@ public final class Main {
     System.err.println(" extract  extract messages from the Soy files");
     System.err.println(" serve    start the plovr web server");
     System.err.println(" soyweb   serve static content as well as Soy");
-    System.exit(1);
+    return 1;
   }
 
   public static void main(String[] args) throws IOException {
+    Integer exitCode = mainWithExitCode(args);
+    if (exitCode != null) {
+      System.exit(exitCode);
+    }
+  }
+
+  /**
+   * @param args command line arguments
+   * @return an exit code or {@code null} if this is a process that should not
+   *     exit
+   * @throws IOException
+   */
+  public static Integer mainWithExitCode(String[] args) throws IOException {
     // The Compiler logging statements produce too much output.
     Compiler.setLoggingLevel(Level.OFF);
 
     if (args.length == 0) {
-      usage();
+      return usage();
     }
 
     Command command = Command.getCommandForName(args[0]);
     if (command == null) {
-      usage();
+      return usage();
     } else {
       String[] remainingArgs = new String[args.length - 1];
       System.arraycopy(args, 1, remainingArgs, 0, remainingArgs.length);
       int status = command.execute(remainingArgs);
-      if (status != AbstractCommandRunner.STATUS_NO_EXIT) {
-        System.exit(status);
+      if (status == AbstractCommandRunner.STATUS_NO_EXIT) {
+        return null;
+      } else {
+        return status;
       }
     }
   }

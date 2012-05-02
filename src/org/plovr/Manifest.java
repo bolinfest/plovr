@@ -10,6 +10,7 @@ import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -35,6 +36,9 @@ import com.google.javascript.jscomp.JSSourceFile;
  */
 public final class Manifest {
 
+  static final String BASE_JS_INPUT_NAME = "/closure/goog/base.js";
+  static final String DEPS_JS_INPUT_NAME = "/closure/goog/deps.js";
+
   private static final Logger logger = Logger.getLogger(Manifest.class.getName());
 
   /**
@@ -50,7 +54,7 @@ public final class Manifest {
 
   private final boolean excludeClosureLibrary;
   private final File closureLibraryDirectory;
-  private final Set<File> dependencies;
+  private final Set<ConfigPath> dependencies;
   private final List<JsInput> requiredInputs;
   private final Set<File> externs;
   private final Set<JsInput> builtInExterns;
@@ -67,9 +71,10 @@ public final class Manifest {
 
   // If excludeClosureLibrary ends up being a permanent option, then
   // eliminate this constructor.
+  @VisibleForTesting
   Manifest(
       @Nullable File closureLibraryDirectory,
-      List<File> dependencies,
+      List<ConfigPath> dependencies,
       List<JsInput> requiredInputs,
       @Nullable List<File> externs,
       @Nullable List<JsInput> builtInExterns,
@@ -99,7 +104,7 @@ public final class Manifest {
   Manifest(
       boolean excludeClosureLibrary,
       @Nullable File closureLibraryDirectory,
-      List<File> dependencies,
+      List<ConfigPath> dependencies,
       List<JsInput> requiredInputs,
       @Nullable List<File> externs,
       @Nullable List<JsInput> builtInExterns,
@@ -130,7 +135,13 @@ public final class Manifest {
    *     may be included in the compilation
    */
   public Set<File> getDependencies() {
-    return ImmutableSet.copyOf(dependencies);
+    return ImmutableSet.copyOf(Iterables.transform(dependencies,
+        new Function<ConfigPath, File>() {
+      @Override
+      public File apply(ConfigPath configPath) {
+        return configPath.getFile();
+      }
+    }));
   }
 
   /**
@@ -222,7 +233,7 @@ public final class Manifest {
       return ResourceReader.getBaseJs();
     } else {
       // TODO: Use a Supplier so that this is only done once.
-      return new JsSourceFile("/base.js",
+      return new JsSourceFile(BASE_JS_INPUT_NAME,
           new File(closureLibraryDirectory, "base.js"));
     }
   }
@@ -310,7 +321,8 @@ public final class Manifest {
     if (isBuiltInClosureLibrary()) {
       allDependencies.addAll(ResourceReader.getClosureLibrarySources());
     } else {
-      allDependencies.addAll(getFiles(closureLibraryDirectory, externsOnly));
+      allDependencies.addAll(getFiles(
+          new ConfigPath(closureLibraryDirectory, "/closure/goog/"), externsOnly));
     }
     // Add the requiredInputs first so that if a file is both an "input" and a
     // "path" under different names (such as "hello.js" and "/./hello.js"), the
@@ -331,20 +343,30 @@ public final class Manifest {
   }
 
   private List<JsInput> getExternInputs() {
+    // TODO: Change externs to be specified as ConfigPaths instead of Files so
+    // that this transformation is unnecessary.
+    Set<ConfigPath> externs = Sets.newHashSet(
+        Iterables.transform(this.externs, new Function<File, ConfigPath>() {
+      @Override
+      public ConfigPath apply(File file) {
+        return new ConfigPath(file, file.getAbsolutePath());
+      }
+    }));
+
     final boolean externsOnly = true;
     List<JsInput> externInputs = Lists.newArrayList(getFiles(externs,
         externsOnly));
     return ImmutableList.copyOf(externInputs);
   }
 
-  private Set<JsInput> getFiles(File fileToExpand, boolean externsOnly) {
+  private Set<JsInput> getFiles(ConfigPath fileToExpand, boolean externsOnly) {
     return getFiles(Sets.newHashSet(fileToExpand), externsOnly);
   }
 
-  private Set<JsInput> getFiles(Set<File> filesToExpand, boolean externsOnly) {
+  private Set<JsInput> getFiles(Set<ConfigPath> filesToExpand, boolean externsOnly) {
     Set<JsInput> inputs = Sets.newHashSet();
-    for (File file : filesToExpand) {
-      getInputs(file, inputs, externsOnly, file);
+    for (ConfigPath configPath : filesToExpand) {
+      getInputs(configPath.getFile(), inputs, externsOnly, configPath);
     }
     return ImmutableSet.copyOf(inputs);
   }
@@ -355,7 +377,7 @@ public final class Manifest {
    *     used to determine the relative path of the resulting input
    */
   private void getInputs(File file, Set<JsInput> output, boolean externsOnly,
-      final File rootOfSearch) {
+      final ConfigPath rootOfSearch) {
     // Some editors may write backup files whose names start with a
     // dot. Furthermore, Emacs will create symlinks that start with a
     // dot that don't point at actual files, causing file.exists() to
@@ -377,14 +399,15 @@ public final class Manifest {
         // If the root of the search is a file rather than a directory, then it
         // should be the file parameter to getInputs(). In that case, just use
         // the name of the file as the name of the JsInput.
-        if (!rootOfSearch.isDirectory()) {
-          Preconditions.checkArgument(rootOfSearch.equals(file));
+        File rootOfSearchFile = rootOfSearch.getFile();
+        if (!rootOfSearchFile.isDirectory()) {
+          Preconditions.checkArgument(rootOfSearchFile.equals(file));
           return file.getName();
         }
 
-        String rootPath = rootOfSearch.toURI().toString();
+        String rootPath = rootOfSearchFile.toURI().toString();
         String fullPath = file.toURI().toString();
-        return "/" + fullPath.substring(rootPath.length());
+        return fullPath.substring(rootPath.length());
       }
     };
 
@@ -395,12 +418,13 @@ public final class Manifest {
           (!externsOnly && fileName.endsWith(".coffee"))) {
         // Using "." as the value for "paths" in the config file results in ugly
         // names for JsInputs because of the way the relative path is resolved,
-        // so strip the leading "/./" from the JsInput name in this case.
+        // so strip the leading "./" from the JsInput name in this case.
         String name = getRelativePath.apply(file);
-        final String uglyPrefix = "/./";
+        final String uglyPrefix = "./";
         if (name.startsWith(uglyPrefix)) {
           name = name.substring(uglyPrefix.length());
         }
+        name = rootOfSearch.getName() + name;
         JsInput input = LocalFileJsInput.createForFileWithName(file, name,
             soyFileOptions);
         logger.config("Dependency: " + input);

@@ -798,7 +798,7 @@ public final class Config implements Comparable<Config> {
 
     private boolean excludeClosureLibrary = false;
 
-    private final List<String> paths = Lists.newArrayList();
+    private final List<ConfigPath> paths = Lists.newArrayList();
 
     private final List<File> testExcludePaths;
 
@@ -974,7 +974,7 @@ public final class Config implements Comparable<Config> {
       this.id = id;
     }
 
-    public void addPath(String path) {
+    public void addPath(ConfigPath path) {
       Preconditions.checkNotNull(path);
       paths.add(path);
     }
@@ -1062,13 +1062,11 @@ public final class Config implements Comparable<Config> {
     public void addTestExcludePath(final File testExcludePath) {
       Preconditions.checkNotNull(testExcludePath);
 
-      Set<File> paths = ImmutableSet.copyOf(
-          Lists.transform(this.paths, STRING_TO_FILE));
-      File pathThatContainsExclude = Iterables.find(paths,
-          new Predicate<File>() {
+      ConfigPath pathThatContainsExclude = Iterables.find(paths,
+          new Predicate<ConfigPath>() {
         @Override
-        public boolean apply(File path) {
-          return FileUtil.contains(path, testExcludePath);
+        public boolean apply(ConfigPath path) {
+          return FileUtil.contains(path.getFile(), testExcludePath);
         }
       }, null);
       Preconditions.checkNotNull(pathThatContainsExclude,
@@ -1343,7 +1341,7 @@ public final class Config implements Comparable<Config> {
         manifest = new Manifest(
             excludeClosureLibrary,
             closureLibraryDirectory,
-            Lists.transform(paths, STRING_TO_FILE),
+            paths,
             createJsInputs(soyFileOptions),
             externs,
             builtInExterns != null ? ImmutableList.copyOf(builtInExterns) : null,

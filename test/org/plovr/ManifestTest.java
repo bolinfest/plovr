@@ -51,7 +51,7 @@ public class ManifestTest {
   public void testSimpleManifest() throws CompilationException {
     File closureLibraryDirectory = new File("closure/closure-library/closure/goog/");
 
-    final List<File> dependencies = ImmutableList.of();
+    final List<ConfigPath> dependencies = ImmutableList.of();
 
     String path = "test/org/plovr/example.js";
     File testFile = new File(path);
@@ -75,26 +75,26 @@ public class ManifestTest {
 
     List<String> expectedNames = ImmutableList.copyOf(
         new String[] {
-            "/base.js",
-            "/deps.js",
-            "/debug/error.js",
-            "/string/string.js",
-            "/asserts/asserts.js",
-            "/array/array.js",
-            "/debug/entrypointregistry.js",
-            "/debug/errorhandlerweakdep.js",
-            "/useragent/useragent.js",
-            "/events/browserfeature.js",
-            "/disposable/idisposable.js",
-            "/disposable/disposable.js",
-            "/events/event.js",
-            "/events/eventtype.js",
-            "/reflect/reflect.js",
-            "/events/browserevent.js",
-            "/events/eventwrapper.js",
-            "/events/listener.js",
-            "/object/object.js",
-            "/events/events.js",
+            "/closure/goog/base.js",
+            "/closure/goog/deps.js",
+            "/closure/goog/debug/error.js",
+            "/closure/goog/string/string.js",
+            "/closure/goog/asserts/asserts.js",
+            "/closure/goog/array/array.js",
+            "/closure/goog/debug/entrypointregistry.js",
+            "/closure/goog/debug/errorhandlerweakdep.js",
+            "/closure/goog/useragent/useragent.js",
+            "/closure/goog/events/browserfeature.js",
+            "/closure/goog/disposable/idisposable.js",
+            "/closure/goog/disposable/disposable.js",
+            "/closure/goog/events/event.js",
+            "/closure/goog/events/eventtype.js",
+            "/closure/goog/reflect/reflect.js",
+            "/closure/goog/events/browserevent.js",
+            "/closure/goog/events/eventwrapper.js",
+            "/closure/goog/events/listener.js",
+            "/closure/goog/object/object.js",
+            "/closure/goog/events/events.js",
             "test/org/plovr/example.js"
         }
         );
@@ -105,7 +105,7 @@ public class ManifestTest {
   public void testCompilationOrder() throws CompilationException {
     File closureLibraryDirectory = new File("closure/closure-library/closure/goog/");
 
-    final List<File> dependencies = ImmutableList.of();
+    final List<ConfigPath> dependencies = ImmutableList.of();
     final List<File> externs = ImmutableList.of();
     final boolean customExternsOnly = false;
 
@@ -150,8 +150,12 @@ public class ManifestTest {
 
     order = manifest.getInputsInCompilationOrder();
 
-    List<String> expectedNames = ImmutableList.of("/base.js",
-        "/deps.js", "c", "b", "a");
+    List<String> expectedNames = ImmutableList.of(
+        "/closure/goog/base.js",
+        "/closure/goog/deps.js",
+        "c",
+        "b",
+        "a");
     assertEquals(expectedNames, Lists.transform(order, JS_INPUT_TO_NAME));
   }
 
@@ -161,7 +165,7 @@ public class ManifestTest {
         "/closure/goog/base.js");
 
     testGetAllDependenciesContainsBaseJs(new File("testdata/manifest/"),
-        "/base.js");
+        "/closure/goog/base.js");
   }
 
   private void testGetAllDependenciesContainsBaseJs(
@@ -174,7 +178,7 @@ public class ManifestTest {
 
     Manifest manifest = new Manifest(
         closureLibraryDirectory,
-        ImmutableList.<File>of() /* dependencies */,
+        ImmutableList.<ConfigPath>of() /* dependencies */,
         ImmutableList.<JsInput>of(input) /* requiredInputs */,
         null /* externs */,
         null /* builtInExterns */,

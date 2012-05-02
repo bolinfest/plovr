@@ -59,8 +59,8 @@ public enum ConfigOption {
   PATHS("paths", new ConfigUpdater() {
     @Override
     public void apply(String path, Config.Builder builder) {
-      String resolvedPath = maybeResolvePath(path, builder);
-      builder.addPath(resolvedPath);
+      File resolvedPath = maybeResolvePathFile(path, builder);
+      builder.addPath(new ConfigPath(resolvedPath, path));
     }
 
     @Override
@@ -850,6 +850,21 @@ public enum ConfigOption {
       return path;
     } else {
       return (new File(relativePathBase, path)).getAbsolutePath();
+    }
+  }
+
+  static File maybeResolvePathFile(String path, Config.Builder builder) {
+    return maybeResolvePathFile(path, builder.getRelativePathBase());
+  }
+
+  static File maybeResolvePathFile(String path, File relativePathBase) {
+    // Unfortunately, a File object must be constructed in order to determine
+    // whether the path is absolute.
+    File file = new File(path);
+    if (file.isAbsolute()) {
+      return file;
+    } else {
+      return new File(relativePathBase, path);
     }
   }
 
