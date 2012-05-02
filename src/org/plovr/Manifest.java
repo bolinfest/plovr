@@ -419,12 +419,17 @@ public final class Manifest {
         // Using "." as the value for "paths" in the config file results in ugly
         // names for JsInputs because of the way the relative path is resolved,
         // so strip the leading "./" from the JsInput name in this case.
-        String name = getRelativePath.apply(file);
-        final String uglyPrefix = "./";
-        if (name.startsWith(uglyPrefix)) {
-          name = name.substring(uglyPrefix.length());
+        String name;
+        if (file.equals(rootOfSearch.getFile())) {
+          name = rootOfSearch.getName();
+        } else {
+          name = getRelativePath.apply(file);
+          final String uglyPrefix = "./";
+          if (name.startsWith(uglyPrefix)) {
+            name = name.substring(uglyPrefix.length());
+          }
+          name = rootOfSearch.getName() + name;
         }
-        name = rootOfSearch.getName() + name;
         JsInput input = LocalFileJsInput.createForFileWithName(file, name,
             soyFileOptions);
         logger.config("Dependency: " + input);

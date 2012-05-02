@@ -12,6 +12,8 @@ import java.util.Set;
 
 import org.junit.Test;
 
+import com.google.common.base.Function;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
@@ -98,5 +100,48 @@ public class ConfigParserTest {
         new JsonPrimitive(true));
     assertEquals(expectedExperimentalCompilerOptions,
         config.getExperimentalCompilerOptions());
+  }
+
+  @Test
+  public void testInputNames() throws IOException, CompilationException {
+    File configFile = new File("testdata/name-collision/config.js");
+    assertTrue("Could not find test config file", configFile.exists());
+    Config config = ConfigParser.parseFile(configFile);
+
+    List<String> inputNames = Lists.transform(config.getManifest().getInputsInCompilationOrder(),
+        new Function<JsInput, String>() {
+          @Override
+          public String apply(JsInput input) {
+            return input.getName();
+          }
+    });
+    assertEquals(ImmutableList.of(
+        "/closure/goog/base.js",
+        "/closure/goog/deps.js",
+        "/closure/goog/debug/error.js",
+        "/closure/goog/string/string.js",
+        "/closure/goog/asserts/asserts.js",
+        "/closure/goog/array/array.js",
+        "/closure/goog/useragent/useragent.js",
+        "/closure/goog/dom/browserfeature.js",
+        "/closure/goog/dom/tagname.js",
+        "/closure/goog/dom/classes.js",
+        "/closure/goog/math/coordinate.js",
+        "/closure/goog/math/size.js",
+        "/closure/goog/object/object.js",
+        "/closure/goog/dom/dom.js",
+        "/closure/goog/structs/inversionmap.js",
+        "/closure/goog/i18n/graphemebreak.js",
+        "/closure/goog/format/format.js",
+        "/closure/goog/i18n/bidi.js",
+        "/closure/goog/i18n/bidiformatter.js",
+        "/closure/goog/soy/soy.js",
+        "/closure/goog/useragent/jscript.js",
+        "/closure/goog/string/stringbuffer.js",
+        "../../closure/closure-templates/javascript/soyutils_usegoog.js",
+        "custom/foo/bar.soy",
+        "main/foo/bar.soy",
+        "main.js"),
+        inputNames);
   }
 }
