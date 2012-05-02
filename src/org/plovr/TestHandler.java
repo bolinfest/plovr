@@ -154,7 +154,7 @@ public class TestHandler extends AbstractGetHandler {
    * @return all paths to _test.html files, none of which start with a leading
    *     slash
    */
-  private static Set<String> getRelativeTestFilePaths(Config config) {
+  public static Set<String> getRelativeTestFilePaths(Config config) {
     Manifest manifest = config.getManifest();
     TreeSet<String> testFilePaths = Sets.newTreeSet();
 

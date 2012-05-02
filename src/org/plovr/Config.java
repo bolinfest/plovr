@@ -15,7 +15,10 @@ import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.htmlunit.HtmlUnitDriver;
 import org.plovr.util.Pair;
+import org.plovr.webdriver.WebDriverFactory;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
@@ -444,6 +447,33 @@ public final class Config implements Comparable<Config> {
 
   public File getCssOutputFile() {
     return cssOutputFile;
+  }
+
+  public List<WebDriverFactory> getWebDriverFactories() {
+    // TODO: Read JSON data out of the config file to determine which factories
+    // to create. Initially, the JSON will specify the class name, and the
+    // WebDriver will be created via reflection.
+    final WebDriverFactory factory = new WebDriverFactory() {
+      @Override
+      public WebDriver newInstance() {
+
+        // TODO: Suppress the
+        // "WARNING: Obsolete content type encountered: 'text/javascript'"
+        // junk that HtmlUnit spits out because it is cluttering up the test
+        // output.
+        HtmlUnitDriver driver = new HtmlUnitDriver();
+        driver.setJavascriptEnabled(true);
+        return driver;
+
+//        try {
+//          Class clazz = Class.forName("org.openqa.selenium.firefox.FirefoxDriver");
+//          return (WebDriver)clazz.newInstance();
+//        } catch (Exception e) {
+//          throw new RuntimeException(e);
+//        }
+      }
+    };
+    return ImmutableList.of(factory);
   }
 
   /**

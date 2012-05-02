@@ -21,6 +21,8 @@ public enum Command {
   // TODO(bolinfest): Finalize the name of this command, as something like
   // "extractmessages" would be more descriptive, yet more to type.
   EXTRACT_MESSAGES("extract", new ExtractCommand()),
+
+  TEST("test", new TestCommand()),
   ;
 
   private final String name;
