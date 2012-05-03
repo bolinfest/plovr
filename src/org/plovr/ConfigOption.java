@@ -5,6 +5,8 @@ import java.nio.charset.Charset;
 import java.util.Map;
 
 import org.plovr.ModuleConfig.BadDependencyTreeException;
+import org.plovr.webdriver.ReflectionWebDriverFactory;
+import org.plovr.webdriver.WebDriverFactory;
 
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableSet;
@@ -582,6 +584,29 @@ public enum ConfigOption {
       File outputFile = (file == null) ? null :
           new File(maybeResolvePath(file, builder));
       builder.setPropertyMapOutputFile(outputFile);
+    }
+  }),
+
+  TEST_DRIVERS("test-drivers", new ConfigUpdater() {
+
+    @Override
+    public void apply(JsonObject driver, Config.Builder builder) {
+      String clazz = driver.get("class").getAsString();
+      WebDriverFactory factory = new ReflectionWebDriverFactory(clazz);
+      builder.addTestDriverFactory(factory);
+    }
+
+    @Override
+    public void apply(JsonArray drivers, Config.Builder builder) {
+      for (JsonElement item : drivers) {
+        apply(item.getAsJsonObject(), builder);
+      }
+    }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetTestDrivers();
+      return true;
     }
   }),
 

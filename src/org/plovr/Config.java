@@ -15,8 +15,6 @@ import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.htmlunit.HtmlUnitDriver;
 import org.plovr.util.Pair;
 import org.plovr.webdriver.WebDriverFactory;
 
@@ -83,6 +81,8 @@ public final class Config implements Comparable<Config> {
 
   @Nullable
   private final ModuleConfig moduleConfig;
+
+  private final List<WebDriverFactory> testDrivers;
 
   private final File testTemplate;
 
@@ -168,6 +168,7 @@ public final class Config implements Comparable<Config> {
       String id,
       String rootConfigFileContent,
       Manifest manifest,
+      List<WebDriverFactory> testDrivers,
       @Nullable ModuleConfig moduleConfig,
       File testTemplate,
       List<File> testExcludePaths,
@@ -211,6 +212,7 @@ public final class Config implements Comparable<Config> {
     this.rootConfigFileContent = rootConfigFileContent;
     this.manifest = manifest;
     this.moduleConfig = moduleConfig;
+    this.testDrivers = ImmutableList.copyOf(testDrivers);
     this.testTemplate = testTemplate;
     this.testExcludePaths = ImmutableSet.copyOf(testExcludePaths);
     this.soyFunctionPlugins = ImmutableList.copyOf(soyFunctionPlugins);
@@ -450,30 +452,7 @@ public final class Config implements Comparable<Config> {
   }
 
   public List<WebDriverFactory> getWebDriverFactories() {
-    // TODO: Read JSON data out of the config file to determine which factories
-    // to create. Initially, the JSON will specify the class name, and the
-    // WebDriver will be created via reflection.
-    final WebDriverFactory factory = new WebDriverFactory() {
-      @Override
-      public WebDriver newInstance() {
-
-        // TODO: Suppress the
-        // "WARNING: Obsolete content type encountered: 'text/javascript'"
-        // junk that HtmlUnit spits out because it is cluttering up the test
-        // output.
-        HtmlUnitDriver driver = new HtmlUnitDriver();
-        driver.setJavascriptEnabled(true);
-        return driver;
-
-//        try {
-//          Class clazz = Class.forName("org.openqa.selenium.firefox.FirefoxDriver");
-//          return (WebDriver)clazz.newInstance();
-//        } catch (Exception e) {
-//          throw new RuntimeException(e);
-//        }
-      }
-    };
-    return ImmutableList.of(factory);
+    return ImmutableList.copyOf(testDrivers);
   }
 
   /**
@@ -839,6 +818,8 @@ public final class Config implements Comparable<Config> {
 
     private List<JsInput> builtInExterns = null;
 
+    private List<WebDriverFactory> testDrivers = Lists.newArrayList();
+
     private File testTemplate = null;
 
     private ImmutableList.Builder<String> soyFunctionPlugins = null;
@@ -1083,6 +1064,14 @@ public final class Config implements Comparable<Config> {
 
     public void resetModuleConfigBuilder() {
       moduleConfigBuilder = null;
+    }
+
+    public void addTestDriverFactory(WebDriverFactory factory) {
+      testDrivers.add(factory);
+    }
+
+    public void resetTestDrivers() {
+      testDrivers.clear();
     }
 
     public void setTestTemplate(File testTemplate) {
@@ -1385,6 +1374,7 @@ public final class Config implements Comparable<Config> {
           id,
           rootConfigFileContent,
           manifest,
+          testDrivers,
           moduleConfig,
           testTemplate,
           testExcludePaths,
