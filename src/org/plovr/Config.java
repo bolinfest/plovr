@@ -600,6 +600,7 @@ public final class Config implements Comparable<Config> {
     // added to support generating externs without writing them to a file.
     try {
       File tempFile = File.createTempFile("source", "map");
+      tempFile.deleteOnExit();
       options.sourceMapOutputPath = tempFile.getAbsolutePath();
     } catch (IOException e) {
       logger.severe("A temp file for the Source Map could not be created");
