@@ -106,7 +106,7 @@ goog.ui.MenuItemRenderer.prototype.getCompositeCssClass_ = function(index) {
 };
 
 
-/** @return {goog.dom.a11y.Role} The ARIA role. */
+/** @override */
 goog.ui.MenuItemRenderer.prototype.getAriaRole = function() {
   return goog.dom.a11y.Role.MENU_ITEM;
 };
@@ -194,7 +194,7 @@ goog.ui.MenuItemRenderer.prototype.hasContentStructure = function(element) {
   var child = goog.dom.getFirstElementChild(element);
   var contentClassName = this.getCompositeCssClass_(
       goog.ui.MenuItemRenderer.CompositeCssClassIndex_.CONTENT);
-  return !!child && child.className.indexOf(contentClassName) != -1;
+  return !!child && goog.dom.classes.has(child, contentClassName);
 };
 
 
@@ -224,7 +224,8 @@ goog.ui.MenuItemRenderer.prototype.setSelectable = function(item, element,
     selectable) {
   if (element) {
     goog.dom.a11y.setRole(element, selectable ?
-        goog.dom.a11y.Role.MENU_ITEM_RADIO : this.getAriaRole());
+        goog.dom.a11y.Role.MENU_ITEM_RADIO :
+        /** @type {string} */ (this.getAriaRole()));
     this.setEnableCheckBoxStructure(item, element, selectable);
   }
 };
@@ -241,7 +242,8 @@ goog.ui.MenuItemRenderer.prototype.setCheckable = function(item, element,
     checkable) {
   if (element) {
     goog.dom.a11y.setRole(element, checkable ?
-        goog.dom.a11y.Role.MENU_ITEM_CHECKBOX : this.getAriaRole());
+        goog.dom.a11y.Role.MENU_ITEM_CHECKBOX :
+        /** @type {string} */ (this.getAriaRole()));
     this.setEnableCheckBoxStructure(item, element, checkable);
   }
 };
@@ -259,8 +261,7 @@ goog.ui.MenuItemRenderer.prototype.hasCheckBoxStructure = function(element) {
     var child = contentElement.firstChild;
     var checkboxClassName = this.getCompositeCssClass_(
         goog.ui.MenuItemRenderer.CompositeCssClassIndex_.CHECKBOX);
-    return !!child && !!child.className &&
-        child.className.indexOf(checkboxClassName) != -1;
+    return !!child && goog.dom.classes.has(child, checkboxClassName);
   }
   return false;
 };

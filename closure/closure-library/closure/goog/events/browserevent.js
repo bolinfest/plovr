@@ -34,6 +34,7 @@
  * - altKey         {boolean}   Was alt key depressed
  * - shiftKey       {boolean}   Was shift key depressed
  * - metaKey        {boolean}   Was meta key depressed
+ * - defaultPrevented {boolean} Whether the default action has been prevented
  * - state          {Object}    History state object
  *
  * NOTE: The keyCode member contains the raw browser keyCode. For normalized
@@ -290,7 +291,9 @@ goog.events.BrowserEvent.prototype.init = function(e, opt_currentTarget) {
   this.platformModifierKey = goog.userAgent.MAC ? e.metaKey : e.ctrlKey;
   this.state = e.state;
   this.event_ = e;
-  delete this.returnValue_;
+  if (e.defaultPrevented) {
+    this.preventDefault();
+  }
   delete this.propagationStopped_;
 };
 
@@ -404,9 +407,4 @@ goog.events.BrowserEvent.prototype.getBrowserEvent = function() {
 
 /** @override */
 goog.events.BrowserEvent.prototype.disposeInternal = function() {
-  goog.events.BrowserEvent.superClass_.disposeInternal.call(this);
-  this.event_ = null;
-  this.target = null;
-  this.currentTarget = null;
-  this.relatedTarget = null;
 };

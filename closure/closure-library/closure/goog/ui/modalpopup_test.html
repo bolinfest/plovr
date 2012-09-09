@@ -21,6 +21,7 @@ See the COPYING file for details.
   goog.require('goog.fx.css3');
   goog.require('goog.style');
   goog.require('goog.ui.PopupBase.EventType');
+  goog.require('goog.testing.MockClock');
   goog.require('goog.testing.jsunit');
 </script>
 </head>
@@ -29,14 +30,17 @@ See the COPYING file for details.
 
 
 var popup;
+var mockClock;
 
 
 function setUp() {
+  mockClock = new goog.testing.MockClock(true);
 }
 
 
 function tearDown() {
   goog.dispose(popup);
+  mockClock.dispose();
 }
 
 
@@ -255,6 +259,66 @@ function testTransitionsPlayedOnHide() {
 }
 
 
+function testTransitionsAndDisposingOnHideWorks() {
+  popup = new goog.ui.ModalPopup();
+  popup.render();
+
+  goog.events.listen(popup, goog.ui.PopupBase.EventType.HIDE, function() {
+    popup.dispose();
+  });
+
+  var popupShowTransition = goog.fx.css3.fadeIn(popup.getElement(),
+      0.1 /* duration */);
+  var popupHideTransition = goog.fx.css3.fadeOut(popup.getElement(),
+      0.1 /* duration */);
+  var bgShowTransition = goog.fx.css3.fadeIn(popup.getElement(),
+      0.1 /* duration */);
+  var bgHideTransition = goog.fx.css3.fadeOut(popup.getElement(),
+      0.1 /* duration */);
+
+  popup.setTransition(popupShowTransition, popupHideTransition,
+      bgShowTransition, bgHideTransition);
+  popup.setVisible(true);
+  popup.setVisible(false);
+  // Nothing to assert. We only want to ensure that there is no error.
+}
+
+
+function testSetVisibleWorksCorrectlyWithTransitions() {
+  popup = new goog.ui.ModalPopup();
+  popup.render();
+  popup.setTransition(
+      goog.fx.css3.fadeIn(popup.getElement(), 1),
+      goog.fx.css3.fadeIn(popup.getBackgroundElement(), 1),
+      goog.fx.css3.fadeOut(popup.getElement(), 1),
+      goog.fx.css3.fadeOut(popup.getBackgroundElement(), 1));
+
+  // Consecutive calls to setVisible works without needing to wait for
+  // transition to finish.
+  popup.setVisible(true);
+  assertTrue(popup.isVisible());
+  popup.setVisible(false);
+  assertFalse(popup.isVisible());
+  mockClock.tick(1100);
+
+  // Calling setVisible(true) immediately changed the state to visible.
+  popup.setVisible(true);
+  assertTrue(popup.isVisible());
+  mockClock.tick(1100);
+
+  // Consecutive calls to setVisible, in opposite order.
+  popup.setVisible(false);
+  popup.setVisible(true);
+  assertTrue(popup.isVisible());
+  mockClock.tick(1100);
+
+  // Calling setVisible(false) immediately changed the state to not visible.
+  popup.setVisible(false);
+  assertFalse(popup.isVisible());
+  mockClock.tick(1100);
+}
+
+
 function testTransitionsDisposed() {
   popup = new goog.ui.ModalPopup();
   popup.render();
@@ -271,6 +335,30 @@ function testTransitionsDisposed() {
 
   transition.dispatchEvent(goog.fx.Transition.EventType.END);
   assertFalse(hideHandlerCalled);
+}
+
+
+function testBackgroundHeight() {
+  // Insert an absolutely-positioned element larger than the viewport.
+  var viewportSize = goog.dom.getViewportSize();
+  var w = viewportSize.width * 2;
+  var h = viewportSize.height * 2;
+  var dummy = goog.dom.createElement('div');
+  dummy.style.position = 'absolute';
+  goog.style.setSize(dummy, w, h);
+  document.body.appendChild(dummy);
+
+  try {
+    popup = new goog.ui.ModalPopup();
+    popup.render();
+    popup.setVisible(true);
+
+    var size = goog.style.getSize(popup.getBackgroundElement());
+    assertTrue('Background element must cover the size of the content',
+        size.width >= w && size.height >= h);
+  } finally {
+    goog.dom.removeNode(dummy);
+  }
 }
 
 

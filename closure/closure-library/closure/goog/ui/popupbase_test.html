@@ -18,11 +18,20 @@ See the COPYING file for details.
   goog.require('goog.events.EventType');
   goog.require('goog.fx.Transition');
   goog.require('goog.fx.Transition.EventType');
+  goog.require('goog.fx.css3');
   goog.require('goog.ui.Popup');
   goog.require('goog.testing.MockClock');
   goog.require('goog.testing.events');
   goog.require('goog.testing.jsunit');
 </script>
+<style>
+#moveOffscreenPopupDiv {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  top: -1000px;
+}
+</style>
 </head>
 <body>
 
@@ -33,6 +42,9 @@ See the COPYING file for details.
 
   <div id="popupDiv" style="visibility:hidden">
     Popup Contents Here.
+  </div>
+  <div id="moveOffscreenPopupDiv">
+    Move offscreen popup contents here.
   </div>
 </div>
 
@@ -51,6 +63,7 @@ function setUp() {
 function tearDown() {
   popup.dispose();
   clock.uninstall();
+  document.body.setAttribute('dir','ltr');
 }
 
 function testSetVisible() {
@@ -241,7 +254,63 @@ function testOnHideTransition() {
   assertTrue(hideHandlerCalled);
 }
 
+function testSetVisibleWorksCorrectlyWithTransitions() {
+  popup.setTransition(
+      goog.fx.css3.fadeIn(popup.getElement(), 1),
+      goog.fx.css3.fadeOut(popup.getElement(), 1));
 
+  // Consecutive calls to setVisible works without needing to wait for
+  // transition to finish.
+  popup.setVisible(true);
+  assertTrue(popup.isVisible());
+  popup.setVisible(false);
+  assertFalse(popup.isVisible());
+  clock.tick(1100);
+
+  // Calling setVisible(true) immediately changed the state to visible.
+  popup.setVisible(true);
+  assertTrue(popup.isVisible());
+  clock.tick(1100);
+
+  // Consecutive calls to setVisible, in opposite order.
+  popup.setVisible(false);
+  popup.setVisible(true);
+  assertTrue(popup.isVisible());
+  clock.tick(1100);
+
+  // Calling setVisible(false) immediately changed the state to not visible.
+  popup.setVisible(false);
+  assertFalse(popup.isVisible());
+  clock.tick(1100);
+}
+
+function testWasRecentlyVisibleWorksCorrectlyWithTransitions() {
+  popup.setTransition(
+      goog.fx.css3.fadeIn(popup.getElement(), 1),
+      goog.fx.css3.fadeOut(popup.getElement(), 1));
+
+  popup.setVisible(true);
+  clock.tick(1100);
+  popup.setVisible(false);
+  assertTrue(popup.isOrWasRecentlyVisible());
+  clock.tick(goog.ui.PopupBase.DEBOUNCE_DELAY_MS);
+  assertFalse(popup.isOrWasRecentlyVisible());
+}
+
+function testMoveOffscreenRTL() {
+  document.body.setAttribute('dir','rtl');
+  popup.reposition = function() {
+    this.element_.style.left = '100px';
+    this.element_.style.top = '100px';
+  }
+  popup.setType(goog.ui.PopupBase.Type.MOVE_OFFSCREEN);
+  popup.setElement(goog.dom.getElement('moveOffscreenPopupDiv'));
+  originalScrollWidth = goog.dom.getDocumentScrollElement().scrollWidth;
+  popup.setVisible(true);
+  popup.setVisible(false);
+  assertFalse('Moving a popup offscreen should not cause scrollbars',
+      goog.dom.getDocumentScrollElement().scrollWidth != originalScrollWidth);
+}
 
 /**
  * @implements {goog.fx.Transition}

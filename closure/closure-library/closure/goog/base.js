@@ -443,12 +443,14 @@ goog.nullFunction = function() {};
 /**
  * The identity function. Returns its first argument.
  *
- * @param {...*} var_args The arguments of the function.
- * @return {*} The first argument.
+ * @param {*=} opt_returnValue The single value that will be returned.
+ * @param {...*} var_args Optional trailing arguments. These are ignored.
+ * @return {?} The first argument. We can't know the type -- just pass it along
+ *      without type.
  * @deprecated Use goog.functions.identity instead.
  */
-goog.identityFunction = function(var_args) {
-  return arguments[0];
+goog.identityFunction = function(opt_returnValue, var_args) {
+  return opt_returnValue;
 };
 
 
@@ -481,9 +483,26 @@ goog.abstractMethod = function() {
  */
 goog.addSingletonGetter = function(ctor) {
   ctor.getInstance = function() {
-    return ctor.instance_ || (ctor.instance_ = new ctor());
+    if (ctor.instance_) {
+      return ctor.instance_;
+    }
+    if (goog.DEBUG) {
+      // NOTE: JSCompiler can't optimize away Array#push.
+      goog.instantiatedSingletons_[goog.instantiatedSingletons_.length] = ctor;
+    }
+    return ctor.instance_ = new ctor;
   };
 };
+
+
+/**
+ * All singleton classes that have been instantiated, for testing. Don't read
+ * it directly, use the {@code goog.testing.singleton} module. The compiler
+ * removes this variable if unused.
+ * @type {!Array.<!Function>}
+ * @private
+ */
+goog.instantiatedSingletons_ = [];
 
 
 if (!COMPILED && goog.ENABLE_DEBUG_LOADER) {
@@ -1017,19 +1036,6 @@ goog.cloneObject = function(obj) {
 
 
 /**
- * Forward declaration for the clone method. This is necessary until the
- * compiler can better support duck-typing constructs as used in
- * goog.cloneObject.
- *
- * TODO(brenneman): Remove once the JSCompiler can infer that the check for
- * proto.clone is safe in goog.cloneObject.
- *
- * @type {Function}
- */
-Object.prototype.clone;
-
-
-/**
  * A native implementation of goog.bind.
  * @param {Function} fn A function to partially apply.
  * @param {Object|undefined} selfObj Specifies the object which |this| should
@@ -1391,7 +1397,7 @@ goog.getMsg = function(str, opt_values) {
  * <p>Also handy for making public items that are defined in anonymous
  * closures.
  *
- * ex. goog.exportSymbol('Foo', Foo);
+ * ex. goog.exportSymbol('public.path.Foo', Foo);
  *
  * ex. goog.exportSymbol('public.path.Foo.staticFunction',
  *                       Foo.staticFunction);
@@ -1460,6 +1466,7 @@ goog.inherits = function(childCtor, parentCtor) {
   tempCtor.prototype = parentCtor.prototype;
   childCtor.superClass_ = parentCtor.prototype;
   childCtor.prototype = new tempCtor();
+  /** @override */
   childCtor.prototype.constructor = childCtor;
 };
 

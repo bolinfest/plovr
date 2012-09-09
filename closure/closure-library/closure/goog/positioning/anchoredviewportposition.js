@@ -20,7 +20,6 @@
 
 goog.provide('goog.positioning.AnchoredViewportPosition');
 
-goog.require('goog.functions');
 goog.require('goog.math.Box');
 goog.require('goog.positioning');
 goog.require('goog.positioning.AnchoredPosition');
@@ -47,12 +46,15 @@ goog.require('goog.positioning.OverflowStatus');
  * @param {boolean=} opt_adjust Whether the positioning should be adjusted until
  *     the element fits inside the viewport even if that means that the anchored
  *     corners are ignored.
+ * @param {goog.math.Box=} opt_overflowConstraint Box object describing the
+ *     dimensions in which the movable element could be shown.
  * @constructor
  * @extends {goog.positioning.AnchoredPosition}
  */
 goog.positioning.AnchoredViewportPosition = function(anchorElement,
                                                      corner,
-                                                     opt_adjust) {
+                                                     opt_adjust,
+                                                     opt_overflowConstraint) {
   goog.positioning.AnchoredPosition.call(this, anchorElement, corner);
 
   /**
@@ -71,6 +73,13 @@ goog.positioning.AnchoredViewportPosition = function(anchorElement,
       (goog.positioning.Overflow.ADJUST_X |
        goog.positioning.Overflow.ADJUST_Y) :
       goog.positioning.Overflow.IGNORE;
+
+  /**
+   * The dimensions in which the movable element could be shown.
+   * @type {goog.math.Box|undefined}
+   * @private
+   */
+  this.overflowConstraint_ = opt_overflowConstraint || undefined;
 };
 goog.inherits(goog.positioning.AnchoredViewportPosition,
               goog.positioning.AnchoredPosition);
@@ -111,42 +120,43 @@ goog.positioning.AnchoredViewportPosition.prototype.reposition = function(
   var status = goog.positioning.positionAtAnchor(this.element, this.corner,
       movableElement, movableCorner, null, opt_margin,
       goog.positioning.Overflow.FAIL_X | goog.positioning.Overflow.FAIL_Y,
-      opt_preferredSize);
+      opt_preferredSize, this.overflowConstraint_);
 
   // If the desired position is outside the viewport try mirroring the corners
   // horizontally or vertically.
   if (status & goog.positioning.OverflowStatus.FAILED) {
-    var cornerFallback = this.correctCorner_(status, this.corner);
-    var movableCornerFallback = this.correctCorner_(status, movableCorner);
+    var cornerFallback = this.adjustCorner(status, this.corner);
+    var movableCornerFallback = this.adjustCorner(status, movableCorner);
 
     status = goog.positioning.positionAtAnchor(this.element, cornerFallback,
         movableElement, movableCornerFallback, null, opt_margin,
         goog.positioning.Overflow.FAIL_X | goog.positioning.Overflow.FAIL_Y,
-        opt_preferredSize);
+        opt_preferredSize, this.overflowConstraint_);
 
     if (status & goog.positioning.OverflowStatus.FAILED) {
       // If that also fails, pick the best corner from the two tries,
       // and adjust the position until it fits.
-      cornerFallback = this.correctCorner_(status, cornerFallback);
-      movableCornerFallback = this.correctCorner_(
+      cornerFallback = this.adjustCorner(status, cornerFallback);
+      movableCornerFallback = this.adjustCorner(
           status, movableCornerFallback);
 
       goog.positioning.positionAtAnchor(this.element, cornerFallback,
           movableElement, movableCornerFallback, null, opt_margin,
-          this.getLastResortOverflow(), opt_preferredSize);
+          this.getLastResortOverflow(), opt_preferredSize,
+          this.overflowConstraint_);
     }
   }
 };
 
 
 /**
- * Flip the given corner if X or Y positioning failed.
+ * Adjusts the corner if X or Y positioning failed.
  * @param {number} status The status of the last positionAtAnchor call.
- * @param {goog.positioning.Corner} corner The corner to correct.
- * @return {goog.positioning.Corner} The new corner.
- * @private
+ * @param {goog.positioning.Corner} corner The corner to adjust.
+ * @return {goog.positioning.Corner} The adjusted corner.
+ * @protected
  */
-goog.positioning.AnchoredViewportPosition.prototype.correctCorner_ = function(
+goog.positioning.AnchoredViewportPosition.prototype.adjustCorner = function(
     status, corner) {
   if (status & goog.positioning.OverflowStatus.FAILED_HORIZONTAL) {
     corner = goog.positioning.flipCornerHorizontal(corner);

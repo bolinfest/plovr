@@ -127,7 +127,13 @@ var _trueTypeOf = function(something) {
 };
 
 var _displayStringForValue = function(aVar) {
-  var result = '<' + aVar + '>';
+  var result;
+  try {
+    result = '<' + String(aVar) + '>';
+  } catch (ex) {
+    result = '<toString failed: ' + ex.message + '>';
+    // toString does not work on this object :-(
+  }
   if (!(aVar === null || aVar === JSUNIT_UNDEFINED_VALUE)) {
     result += ' (' + _trueTypeOf(aVar) + ')';
   }
@@ -168,6 +174,53 @@ var _assert = function(comment, booleanValue, failureMessage) {
   if (!booleanValue) {
     goog.testing.asserts.raiseException_(comment, failureMessage);
   }
+};
+
+
+/**
+ * @param {*} expected The expected value.
+ * @param {*} actual The actual value.
+ * @return {string} A failure message of the values don't match.
+ * @private
+ */
+goog.testing.asserts.getDefaultErrorMsg_ = function(expected, actual) {
+  var msg = 'Expected ' + _displayStringForValue(expected) + ' but was ' +
+      _displayStringForValue(actual);
+  if ((typeof expected == 'string') && (typeof actual == 'string')) {
+    // Try to find a human-readable difference.
+    var limit = Math.min(expected.length, actual.length);
+    var commonPrefix = 0;
+    while (commonPrefix < limit &&
+        expected.charAt(commonPrefix) == actual.charAt(commonPrefix)) {
+      commonPrefix++;
+    }
+
+    var commonSuffix = 0;
+    while (commonSuffix < limit &&
+        expected.charAt(expected.length - commonSuffix - 1) ==
+            actual.charAt(actual.length - commonSuffix - 1)) {
+      commonSuffix++;
+    }
+
+    if (commonPrefix + commonSuffix > limit) {
+      commonSuffix = 0;
+    }
+
+    if (commonPrefix > 2 || commonSuffix > 2) {
+      var printString = function(str) {
+        var startIndex = Math.max(0, commonPrefix - 2);
+        var endIndex = Math.min(str.length, str.length - (commonSuffix - 2));
+        return (startIndex > 0 ? '...' : '') +
+            str.substring(startIndex, endIndex) +
+            (endIndex < str.length ? '...' : '');
+      };
+
+      msg += '\nDifference was at position ' + commonPrefix +
+          '. Expected [' + printString(expected) +
+          '] vs. actual [' + printString(actual) + ']';
+    }
+  }
+  return msg;
 };
 
 
@@ -318,8 +371,7 @@ var assertEquals = function(a, b, opt_c) {
   var var1 = nonCommentArg(1, 2, arguments);
   var var2 = nonCommentArg(2, 2, arguments);
   _assert(commentArg(2, arguments), var1 === var2,
-          'Expected ' + _displayStringForValue(var1) + ' but was ' +
-          _displayStringForValue(var2));
+          goog.testing.asserts.getDefaultErrorMsg_(var1, var2));
 };
 
 
@@ -345,8 +397,7 @@ var assertNull = function(a, opt_b) {
   _validateArguments(1, arguments);
   var aVar = nonCommentArg(1, 1, arguments);
   _assert(commentArg(1, arguments), aVar === null,
-      'Expected ' + _displayStringForValue(null) + ' but was ' +
-      _displayStringForValue(aVar));
+      goog.testing.asserts.getDefaultErrorMsg_(null, aVar));
 };
 
 
@@ -370,8 +421,7 @@ var assertUndefined = function(a, opt_b) {
   _validateArguments(1, arguments);
   var aVar = nonCommentArg(1, 1, arguments);
   _assert(commentArg(1, arguments), aVar === JSUNIT_UNDEFINED_VALUE,
-      'Expected ' + _displayStringForValue(JSUNIT_UNDEFINED_VALUE) +
-      ' but was ' + _displayStringForValue(aVar));
+      goog.testing.asserts.getDefaultErrorMsg_(JSUNIT_UNDEFINED_VALUE, aVar));
 };
 
 
@@ -531,11 +581,13 @@ goog.testing.asserts.findDifferences = function(expected, actual,
     }
     var equal = typedPredicate(var1, var2);
     return equal ? goog.testing.asserts.EQUALITY_PREDICATE_VARS_ARE_EQUAL :
-        'expected ' + _displayStringForValue(var1) +
-        ' but was ' + _displayStringForValue(var2);
+        goog.testing.asserts.getDefaultErrorMsg_(var1, var2);
   };
 
   /**
+   * @param {*} var1 An item in the expected object.
+   * @param {*} var2 The corresponding item in the actual object.
+   * @param {string} path Their path in the objects.
    * @suppress {missingProperties} The map_ property is unknown to the compiler
    *     unless goog.structs.Map is loaded.
    */
@@ -554,10 +606,10 @@ goog.testing.asserts.findDifferences = function(expected, actual,
           goog.testing.asserts.EQUALITY_PREDICATE_CANT_PROCESS) {
         if (errorMessage !=
             goog.testing.asserts.EQUALITY_PREDICATE_VARS_ARE_EQUAL) {
-          failures.push(path + ' ' + errorMessage);
+          failures.push(path + ': ' + errorMessage);
         }
       } else if (isArray && var1.length != var2.length) {
-        failures.push(path + ' expected ' + var1.length + '-element array ' +
+        failures.push(path + ': Expected ' + var1.length + '-element array ' +
                       'but got a ' + var2.length + '-element array');
       } else {
         var childPath = path + (isArray ? '[%s]' : (path ? '.%s' : '%s'));
@@ -637,15 +689,15 @@ goog.testing.asserts.findDifferences = function(expected, actual,
         }
       }
     } else {
-      failures.push(path + ' expected ' + _displayStringForValue(var1) +
-                    ' but was ' + _displayStringForValue(var2));
+      failures.push(path + ' ' +
+          goog.testing.asserts.getDefaultErrorMsg_(var1, var2));
     }
   }
 
   innerAssert(expected, actual, '');
   return failures.length == 0 ? null :
-      'Expected ' + _displayStringForValue(expected) + ' but was ' +
-      _displayStringForValue(actual) + '\n   ' + failures.join('\n   ');
+      goog.testing.asserts.getDefaultErrorMsg_(expected, actual) +
+          '\n   ' + failures.join('\n   ');
 };
 
 
@@ -704,15 +756,14 @@ var assertObjectRoughlyEquals = function(a, b, c, opt_d) {
     }
     var equal = typedPredicate(var1, var2, tolerance);
     return equal ? goog.testing.asserts.EQUALITY_PREDICATE_VARS_ARE_EQUAL :
-        'expected ' + _displayStringForValue(var1) +
-        ' but was ' + _displayStringForValue(var2) +
+        goog.testing.asserts.getDefaultErrorMsg_(var1, var2) +
         ' which was more than ' + tolerance + ' away';
   };
   var differences = goog.testing.asserts.findDifferences(
       v1, v2, equalityPredicate);
 
   _assert(failureMessage, !differences, differences);
-}
+};
 
 
 /**
@@ -737,9 +788,13 @@ var assertObjectNotEquals = function(a, b, opt_c) {
 
 
 /**
- * @param {*} a The expected value (2 args) or the debug message (3 args).
- * @param {*} b The actual value (2 args) or the expected value (3 args).
- * @param {*=} opt_c The actual value (3 args only).
+ * Compares two arrays ignoring negative indexes and extra properties on the
+ * array objects. Use case: Internet Explorer adds the index, lastIndex and
+ * input enumerable fields to the result of string.match(/regexp/g), which makes
+ * assertObjectEquals fail.
+ * @param {*} a The expected array (2 args) or the debug message (3 args).
+ * @param {*} b The actual array (2 args) or the expected array (3 args).
+ * @param {*=} opt_c The actual array (3 args only).
  */
 var assertArrayEquals = function(a, b, opt_c) {
   _validateArguments(2, arguments);
@@ -757,7 +812,8 @@ var assertArrayEquals = function(a, b, opt_c) {
           typeOfVar2 == 'Array',
           'Expected an array for assertArrayEquals but found a ' + typeOfVar2);
 
-  assertObjectEquals.apply(null, arguments);
+  assertObjectEquals(failureMessage,
+      Array.prototype.concat.call(v1), Array.prototype.concat.call(v2));
 };
 
 
@@ -892,8 +948,8 @@ var assertHTMLEquals = function(a, b, opt_c) {
   var var2Standardized = standardizeHTML(var2);
 
   _assert(commentArg(2, arguments), var1Standardized === var2Standardized,
-          'Expected ' + _displayStringForValue(var1Standardized) + ' but was ' +
-          _displayStringForValue(var2Standardized));
+          goog.testing.asserts.getDefaultErrorMsg_(
+              var1Standardized, var2Standardized));
 };
 
 
@@ -922,8 +978,8 @@ var assertCSSValueEquals = function(a, b, c, opt_d) {
 
   _assert(commentArg(3, arguments),
           expectedValueStandardized == actualValueStandardized,
-          'Expected ' + _displayStringForValue(expectedValueStandardized) +
-          ' but was ' + _displayStringForValue(actualValueStandardized));
+          goog.testing.asserts.getDefaultErrorMsg_(
+              expectedValueStandardized, actualValueStandardized));
 };
 
 
@@ -1130,10 +1186,9 @@ goog.testing.JsUnitException = function(comment, opt_message) {
 
 /** @override */
 goog.testing.JsUnitException.prototype.toString = function() {
-  // TODO(agrieve): Fix dependency in build rules.  For more info see
-  // http://b/2020085
-  return '[JsUnitException]';
+  return this.message;
 };
+
 
 goog.exportSymbol('fail', fail);
 goog.exportSymbol('assert', assert);

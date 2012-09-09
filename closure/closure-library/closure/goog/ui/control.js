@@ -465,6 +465,7 @@ goog.ui.Control.prototype.setPreferredAriaRole = function(role) {
  * or null if the control itself hasn't been rendered yet.  Overrides
  * {@link goog.ui.Component#getContentElement} by delegating to the renderer.
  * @return {Element} Element to contain child elements (null if none).
+ * @override
  */
 goog.ui.Control.prototype.getContentElement = function() {
   // Delegate to renderer.
@@ -477,6 +478,7 @@ goog.ui.Control.prototype.getContentElement = function() {
  * Overrides {@link goog.ui.Component#canDecorate}.
  * @param {Element} element Element to decorate.
  * @return {boolean} Whether the element can be decorated by this component.
+ * @override
  */
 goog.ui.Control.prototype.canDecorate = function(element) {
   // Controls support pluggable renderers; delegate to the renderer.
@@ -568,6 +570,10 @@ goog.ui.Control.prototype.enableMouseEventHandling_ = function(enable) {
         listen(element, goog.events.EventType.MOUSEDOWN, this.handleMouseDown).
         listen(element, goog.events.EventType.MOUSEUP, this.handleMouseUp).
         listen(element, goog.events.EventType.MOUSEOUT, this.handleMouseOut);
+    if (this.handleContextMenu != goog.nullFunction) {
+      handler.listen(element, goog.events.EventType.CONTEXTMENU,
+          this.handleContextMenu);
+    }
     if (goog.userAgent.IE) {
       handler.listen(element, goog.events.EventType.DBLCLICK,
           this.handleDblClick);
@@ -580,6 +586,10 @@ goog.ui.Control.prototype.enableMouseEventHandling_ = function(enable) {
             this.handleMouseDown).
         unlisten(element, goog.events.EventType.MOUSEUP, this.handleMouseUp).
         unlisten(element, goog.events.EventType.MOUSEOUT, this.handleMouseOut);
+    if (this.handleContextMenu != goog.nullFunction) {
+      handler.unlisten(element, goog.events.EventType.CONTEXTMENU,
+          this.handleContextMenu);
+    }
     if (goog.userAgent.IE) {
       handler.unlisten(element, goog.events.EventType.DBLCLICK,
           this.handleDblClick);
@@ -1168,6 +1178,13 @@ goog.ui.Control.prototype.handleMouseOut = function(e) {
     }
   }
 };
+
+
+/**
+ * Handles contextmenu events.
+ * @param {goog.events.BrowserEvent} e Event to handle.
+ */
+goog.ui.Control.prototype.handleContextMenu = goog.nullFunction;
 
 
 /**

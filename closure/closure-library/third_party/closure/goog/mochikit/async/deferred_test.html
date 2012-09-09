@@ -316,9 +316,7 @@ function testChainedDeferred2() {
     mockClock.tick();
     neverHappen();
   } catch (ex) {
-    assertTrue('In debug mode, should catch unhandled throw from d2. ' +
-               'Error message may include stack trace in some browsers.',
-               goog.string.startsWith(ex.message, 'x'));
+    assertTrue('Should catch unhandled throw from d2.', ex.message == 'x');
   }
 }
 
@@ -362,12 +360,11 @@ function testUnhandledErrors() {
   d.addCallback(throwStuff);
 
   try {
-    d.callback(1);
+    d.callback(123);
     mockClock.tick();
     neverHappen();
   } catch (ex) {
-    assertEquals('In debug mode, unhandled exceptions should hit the browser.',
-                 1, ex);
+    assertEquals('Unhandled throws should hit the browser.', 123, ex);
   }
 
   try {
@@ -828,4 +825,3 @@ function testWhenDoesntAlterOriginalChain() {
 </script>
 </body>
 </html>
-

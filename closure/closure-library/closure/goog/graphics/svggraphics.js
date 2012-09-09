@@ -166,7 +166,7 @@ goog.graphics.SvgGraphics.prototype.setElementAttributes = function(element,
  * Appends an element.
  *
  * @param {goog.graphics.Element} element The element wrapper.
- * @param {goog.graphics.SvgGroupElement=} opt_group The group wrapper element
+ * @param {goog.graphics.GroupElement=} opt_group The group wrapper element
  *     to append to. If not specified, appends to the main canvas.
  * @private
  */
@@ -180,6 +180,7 @@ goog.graphics.SvgGraphics.prototype.append_ = function(element, opt_group) {
  * Sets the fill of the given element.
  * @param {goog.graphics.StrokeAndFillElement} element The element wrapper.
  * @param {goog.graphics.Fill?} fill The fill object.
+ * @override
  */
 goog.graphics.SvgGraphics.prototype.setElementFill = function(element, fill) {
   var svgElement = element.getElement();
@@ -245,9 +246,10 @@ goog.graphics.SvgGraphics.prototype.setElementFill = function(element, fill) {
 
 
 /**
-* Sets the stroke of the given element.
+ * Sets the stroke of the given element.
  * @param {goog.graphics.StrokeAndFillElement} element The element wrapper.
  * @param {goog.graphics.Stroke?} stroke The stroke object.
+ * @override
  */
 goog.graphics.SvgGraphics.prototype.setElementStroke = function(element,
     stroke) {
@@ -276,6 +278,7 @@ goog.graphics.SvgGraphics.prototype.setElementStroke = function(element,
  * @param {number} angle The angle of the rotation transform.
  * @param {number} centerX The horizontal center of the rotation transform.
  * @param {number} centerY The vertical center of the rotation transform.
+ * @override
  */
 goog.graphics.SvgGraphics.prototype.setElementTransform = function(element, x,
     y, angle, centerX, centerY) {
@@ -286,6 +289,7 @@ goog.graphics.SvgGraphics.prototype.setElementTransform = function(element, x,
 
 /**
  * Creates the DOM representation of the graphics area.
+ * @override
  */
 goog.graphics.SvgGraphics.prototype.createDom = function() {
   // Set up the standard attributes.
@@ -317,6 +321,7 @@ goog.graphics.SvgGraphics.prototype.createDom = function() {
  * Changes the coordinate system position.
  * @param {number} left The coordinate system left bound.
  * @param {number} top The coordinate system top bound.
+ * @override
  */
 goog.graphics.SvgGraphics.prototype.setCoordOrigin = function(left, top) {
   this.coordLeft = left;
@@ -330,6 +335,7 @@ goog.graphics.SvgGraphics.prototype.setCoordOrigin = function(left, top) {
  * Changes the coordinate size.
  * @param {number} coordWidth The coordinate width.
  * @param {number} coordHeight The coordinate height.
+ * @override
  */
 goog.graphics.SvgGraphics.prototype.setCoordSize = function(coordWidth,
     coordHeight) {
@@ -400,6 +406,7 @@ goog.graphics.SvgGraphics.prototype.updateManualViewBox_ = function() {
  * Change the size of the canvas.
  * @param {number} pixelWidth The width in pixels.
  * @param {number} pixelHeight The height in pixels.
+ * @override
  */
 goog.graphics.SvgGraphics.prototype.setSize = function(pixelWidth,
     pixelHeight) {
@@ -449,6 +456,7 @@ goog.graphics.SvgGraphics.prototype.getPixelSize = function() {
 
 /**
  * Remove all drawing elements from the graphics.
+ * @override
  */
 goog.graphics.SvgGraphics.prototype.clear = function() {
   this.canvasElement.clear();
@@ -467,10 +475,11 @@ goog.graphics.SvgGraphics.prototype.clear = function() {
  * @param {goog.graphics.Stroke?} stroke Stroke object describing the
  *    stroke.
  * @param {goog.graphics.Fill?} fill Fill object describing the fill.
- * @param {goog.graphics.SvgGroupElement=} opt_group The group wrapper element
+ * @param {goog.graphics.GroupElement=} opt_group The group wrapper element
  *     to append to. If not specified, appends to the main canvas.
  *
  * @return {goog.graphics.EllipseElement} The newly created element.
+ * @override
  */
 goog.graphics.SvgGraphics.prototype.drawEllipse = function(
     cx, cy, rx, ry, stroke, fill, opt_group) {
@@ -493,10 +502,11 @@ goog.graphics.SvgGraphics.prototype.drawEllipse = function(
  * @param {goog.graphics.Stroke?} stroke Stroke object describing the
  *    stroke.
  * @param {goog.graphics.Fill?} fill Fill object describing the fill.
- * @param {goog.graphics.SvgGroupElement=} opt_group The group wrapper element
+ * @param {goog.graphics.GroupElement=} opt_group The group wrapper element
  *     to append to. If not specified, appends to the main canvas.
  *
  * @return {goog.graphics.RectElement} The newly created element.
+ * @override
  */
 goog.graphics.SvgGraphics.prototype.drawRect = function(x, y, width, height,
     stroke, fill, opt_group) {
@@ -516,7 +526,7 @@ goog.graphics.SvgGraphics.prototype.drawRect = function(x, y, width, height,
  * @param {number} width Width of the image.
  * @param {number} height Height of the image.
  * @param {string} src The source fo the image.
- * @param {goog.graphics.SvgGroupElement=} opt_group The group wrapper element
+ * @param {goog.graphics.GroupElement=} opt_group The group wrapper element
  *     to append to. If not specified, appends to the main canvas.
  *
  * @return {goog.graphics.ImageElement} The newly created image wrapped in a
@@ -552,10 +562,11 @@ goog.graphics.SvgGraphics.prototype.drawImage = function(x, y, width, height,
  * @param {goog.graphics.Stroke?} stroke Stroke object describing the
  *    stroke.
  * @param {goog.graphics.Fill?} fill Fill object describing the fill.
- * @param {goog.graphics.SvgGroupElement=} opt_group The group wrapper element
+ * @param {goog.graphics.GroupElement=} opt_group The group wrapper element
  *     to append to. If not specified, appends to the main canvas.
  *
  * @return {goog.graphics.TextElement} The newly created element.
+ * @override
  */
 goog.graphics.SvgGraphics.prototype.drawTextOnLine = function(
     text, x1, y1, x2, y2, align, font, stroke, fill, opt_group) {
@@ -613,14 +624,15 @@ goog.graphics.SvgGraphics.prototype.drawTextOnLine = function(
 /**
  * Draw a path.
  *
- * @param {goog.graphics.Path} path The path object to draw.
+ * @param {!goog.graphics.Path} path The path object to draw.
  * @param {goog.graphics.Stroke?} stroke Stroke object describing the
  *    stroke.
  * @param {goog.graphics.Fill?} fill Fill object describing the fill.
- * @param {goog.graphics.SvgGroupElement=} opt_group The group wrapper element
+ * @param {goog.graphics.GroupElement=} opt_group The group wrapper element
  *     to append to. If not specified, appends to the main canvas.
  *
  * @return {goog.graphics.PathElement} The newly created element.
+ * @override
  */
 goog.graphics.SvgGraphics.prototype.drawPath = function(
     path, stroke, fill, opt_group) {
@@ -675,10 +687,11 @@ goog.graphics.SvgGraphics.getSvgPath = function(path) {
 /**
  * Create an empty group of drawing elements.
  *
- * @param {goog.graphics.SvgGroupElement=} opt_group The group wrapper element
+ * @param {goog.graphics.GroupElement=} opt_group The group wrapper element
  *     to append to. If not specified, appends to the main canvas.
  *
  * @return {goog.graphics.GroupElement} The newly created group.
+ * @override
  */
 goog.graphics.SvgGraphics.prototype.createGroup = function(opt_group) {
   var element = this.createSvgElement_('g');
@@ -697,6 +710,7 @@ goog.graphics.SvgGraphics.prototype.createGroup = function(opt_group) {
  *
  * @param {string} text The text string to measure.
  * @param {goog.graphics.Font} font The font object describing the font style.
+ * @override
  */
 goog.graphics.SvgGraphics.prototype.getTextWidth = function(text, font) {
   // TODO(user) Implement

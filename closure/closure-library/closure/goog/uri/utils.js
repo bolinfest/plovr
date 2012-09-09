@@ -88,39 +88,39 @@ goog.uri.utils.CharCode_ = {
  */
 goog.uri.utils.buildFromEncodedParts = function(opt_scheme, opt_userInfo,
     opt_domain, opt_port, opt_path, opt_queryData, opt_fragment) {
-  var out = [];
+  var out = '';
 
   if (opt_scheme) {
-    out.push(opt_scheme, ':');
+    out += opt_scheme + ':';
   }
 
   if (opt_domain) {
-    out.push('//');
+    out += '//';
 
     if (opt_userInfo) {
-      out.push(opt_userInfo, '@');
+      out += opt_userInfo + '@';
     }
 
-    out.push(opt_domain);
+    out += opt_domain;
 
     if (opt_port) {
-      out.push(':', opt_port);
+      out += ':' + opt_port;
     }
   }
 
   if (opt_path) {
-    out.push(opt_path);
+    out += opt_path;
   }
 
   if (opt_queryData) {
-    out.push('?', opt_queryData);
+    out += '?' + opt_queryData;
   }
 
   if (opt_fragment) {
-    out.push('#', opt_fragment);
+    out += '#' + opt_fragment;
   }
 
-  return out.join('');
+  return out;
 };
 
 
@@ -589,25 +589,23 @@ goog.uri.utils.appendQueryData_ = function(buffer) {
  */
 goog.uri.utils.appendKeyValuePairs_ = function(key, value, pairs) {
   if (goog.isArray(value)) {
-    // It's an array, so append all elements.  Here, we must convince
-    // jscompiler that it is, indeed, an array.
-    value = /** @type {Array} */ (value);
+    // Convince the compiler it's an array.
+    goog.asserts.assertArray(value);
     for (var j = 0; j < value.length; j++) {
-      pairs.push('&', key);
-      // Check for empty string, null and undefined get encoded
-      // into the url as literal strings
-      if (value[j] !== '') {
-        pairs.push('=', goog.string.urlEncode(value[j]));
-      }
+      // Convert to string explicitly, to short circuit the null and array
+      // logic in this function -- this ensures that null and undefined get
+      // written as literal 'null' and 'undefined', and arrays don't get
+      // expanded out but instead encoded in the default way.
+      goog.uri.utils.appendKeyValuePairs_(key, String(value[j]), pairs);
     }
   } else if (value != null) {
-    // Not null or undefined, so safe to append.
-    pairs.push('&', key);
-    // Check for empty string, null and undefined get encoded
-    // into the url as literal strings
-    if (value !== '') {
-      pairs.push('=', goog.string.urlEncode(value));
-    }
+    // Skip a top-level null or undefined entirely.
+    pairs.push('&', key,
+        // Check for empty string. Zero gets encoded into the url as literal
+        // strings.  For empty string, skip the equal sign, to be consistent
+        // with UriBuilder.java.
+        value === '' ? '' : '=',
+        goog.string.urlEncode(value));
   }
 };
 

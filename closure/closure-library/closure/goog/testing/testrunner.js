@@ -283,6 +283,7 @@ goog.testing.TestRunner.prototype.onComplete_ = function() {
     logEl.removeChild(logEl.firstChild);
   }
 
+  // Highlight the page to indicate the overall outcome.
   this.writeLog(log);
 
   var runAgainLink = document.createElement('a');
@@ -363,6 +364,18 @@ goog.testing.TestRunner.prototype.writeLog = function(log) {
 
     div.style.color = color;
     div.style.font = 'normal 100% monospace';
+    if (i == 0) {
+      // Highlight the first line as a header that indicates the test outcome.
+      div.style.padding = '20px';
+      div.style.marginBottom = '10px';
+      if (isFailOrError) {
+        div.style.border = '5px solid ' + color;
+        div.style.backgroundColor = '#ffeeee';
+      } else {
+        div.style.border = '1px solid black';
+        div.style.backgroundColor = '#eeffee';
+      }
+    }
 
     try {
       div.style.whiteSpace = 'pre-wrap';

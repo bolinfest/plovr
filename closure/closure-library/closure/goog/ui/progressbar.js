@@ -83,6 +83,7 @@ goog.ui.ProgressBar.ORIENTATION_TO_CSS_NAME_[
 
 /**
  * Creates the DOM nodes needed for the progress bar
+ * @override
  */
 goog.ui.ProgressBar.prototype.createDom = function() {
   this.thumbElement_ = this.createThumb_();
@@ -95,9 +96,7 @@ goog.ui.ProgressBar.prototype.createDom = function() {
 };
 
 
-/**
- * Called when the DOM for the component is for sure in the document.
- */
+/** @override */
 goog.ui.ProgressBar.prototype.enterDocument = function() {
   goog.ui.ProgressBar.superClass_.enterDocument.call(this);
   this.attachEvents_();
@@ -110,9 +109,7 @@ goog.ui.ProgressBar.prototype.enterDocument = function() {
 };
 
 
-/**
- * Called when the DOM for the component is for sure in the document.
- */
+/** @override */
 goog.ui.ProgressBar.prototype.exitDocument = function() {
   goog.ui.ProgressBar.superClass_.exitDocument.call(this);
   this.detachEvents_();
@@ -158,7 +155,8 @@ goog.ui.ProgressBar.prototype.detachEvents_ = function() {
  * Decorates an existing HTML DIV element as a progress bar input. If the
  * element contains a child with a class name of 'progress-bar-thumb' that will
  * be used as the thumb.
- * @param {HTMLElement} element  The HTML element to decorate.
+ * @param {Element} element  The HTML element to decorate.
+ * @override
  */
 goog.ui.ProgressBar.prototype.decorateInternal = function(element) {
   goog.ui.ProgressBar.superClass_.decorateInternal.call(this, element);

@@ -157,8 +157,8 @@ goog.ui.ModalPopup.prototype.getCssClass = function() {
 
 /**
  * Returns the background iframe mask element, if any.
- * @return {Element} The background iframe mask element.
- * @protected
+ * @return {Element} The background iframe mask element, may return
+ *     null/undefined if the modal popup does not use iframe mask.
  */
 goog.ui.ModalPopup.prototype.getBackgroundIframe = function() {
   return this.bgIframeEl_;
@@ -176,7 +176,7 @@ goog.ui.ModalPopup.prototype.getBackgroundElement = function() {
 
 /**
  * Creates the initial DOM representation for the modal popup.
- * Overrides {@link goog.ui.Component#createDom}.
+ * @override
  */
 goog.ui.ModalPopup.prototype.createDom = function() {
   // Create the modal popup element, and make sure it's hidden.
@@ -310,6 +310,7 @@ goog.ui.ModalPopup.prototype.exitDocument = function() {
 goog.ui.ModalPopup.prototype.setVisible = function(visible) {
   goog.asserts.assert(
       this.isInDocument(), 'ModalPopup must be rendered first.');
+
   if (visible == this.visible_) {
     return;
   }
@@ -371,11 +372,11 @@ goog.ui.ModalPopup.prototype.show_ = function() {
   if (this.popupShowTransition_ && this.bgShowTransition_) {
     goog.events.listenOnce(
         /** @type {goog.events.EventTarget} */ (this.popupShowTransition_),
-        goog.fx.Transition.EventType.END, this.onShow_, false, this);
-    this.popupShowTransition_.play();
+        goog.fx.Transition.EventType.END, this.onShow, false, this);
     this.bgShowTransition_.play();
+    this.popupShowTransition_.play();
   } else {
-    this.onShow_();
+    this.onShow();
   }
 };
 
@@ -395,14 +396,22 @@ goog.ui.ModalPopup.prototype.hide_ = function() {
       this.getDomHelper().getWindow(), goog.events.EventType.RESIZE,
       this.resizeBackground_);
 
+  // Set visibility to hidden even if there is a transition. This
+  // reduces complexity in subclasses who may want to override
+  // setVisible (such as goog.ui.Dialog).
+  this.visible_ = false;
+
   if (this.popupHideTransition_ && this.bgHideTransition_) {
     goog.events.listenOnce(
         /** @type {goog.events.EventTarget} */ (this.popupHideTransition_),
-        goog.fx.Transition.EventType.END, this.onHide_, false, this);
-    this.popupHideTransition_.play();
+        goog.fx.Transition.EventType.END, this.onHide, false, this);
     this.bgHideTransition_.play();
+    // The transition whose END event you are listening to must be played last
+    // to prevent errors when disposing on hide event, which occur on browsers
+    // that do not support CSS3 transitions.
+    this.popupHideTransition_.play();
   } else {
-    this.onHide_();
+    this.onHide();
   }
 };
 
@@ -425,21 +434,22 @@ goog.ui.ModalPopup.prototype.showPopupElement_ = function(visible) {
 
 
 /**
- * Called after the popup is shown.
- * @private
+ * Called after the popup is shown. If there is a transition, this
+ * will be called after the transition completed or stopped.
+ * @protected
  */
-goog.ui.ModalPopup.prototype.onShow_ = function() {
+goog.ui.ModalPopup.prototype.onShow = function() {
   this.dispatchEvent(goog.ui.PopupBase.EventType.SHOW);
 };
 
 
 /**
- * Called after the popup is hidden.
- * @private
+ * Called after the popup is hidden. If there is a transition, this
+ * will be called after the transition completed or stopped.
+ * @protected
  */
-goog.ui.ModalPopup.prototype.onHide_ = function() {
+goog.ui.ModalPopup.prototype.onHide = function() {
   this.showPopupElement_(false);
-  this.visible_ = false;
   this.dispatchEvent(goog.ui.PopupBase.EventType.HIDE);
 };
 
@@ -480,11 +490,15 @@ goog.ui.ModalPopup.prototype.resizeBackground_ = function() {
   var doc = this.getDomHelper().getDocument();
   var win = goog.dom.getWindow(doc) || window;
 
-  // Take the max of scroll height and view height for cases in which document
-  // does not fill screen.
+  // Take the max of document height and view height, in case the document does
+  // not fill the viewport. Read from both the body element and the html element
+  // to account for browser differences in treatment of absolutely-positioned
+  // content.
   var viewSize = goog.dom.getViewportSize(win);
-  var w = Math.max(doc.body.scrollWidth, viewSize.width);
-  var h = Math.max(doc.body.scrollHeight, viewSize.height);
+  var w = Math.max(viewSize.width,
+      Math.max(doc.body.scrollWidth, doc.documentElement.scrollWidth));
+  var h = Math.max(viewSize.height,
+      Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight));
 
   if (this.bgIframeEl_) {
     goog.style.showElement(this.bgIframeEl_, true);

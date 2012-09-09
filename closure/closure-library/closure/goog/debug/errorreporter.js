@@ -24,6 +24,7 @@ goog.provide('goog.debug.ErrorReporter.ExceptionEvent');
 goog.require('goog.debug');
 goog.require('goog.debug.ErrorHandler');
 goog.require('goog.debug.Logger');
+goog.require('goog.debug.entryPointRegistry');
 goog.require('goog.events');
 goog.require('goog.events.Event');
 goog.require('goog.events.EventTarget');
@@ -31,6 +32,7 @@ goog.require('goog.net.XhrIo');
 goog.require('goog.object');
 goog.require('goog.string');
 goog.require('goog.uri.utils');
+goog.require('goog.userAgent');
 
 
 
@@ -230,7 +232,7 @@ goog.debug.ErrorReporter.prototype.setXhrSender = function(xhrSender) {
  */
 goog.debug.ErrorReporter.prototype.setup_ = function() {
   if (goog.userAgent.IE) {
-  // Use "onerror" because caught exceptions in IE don't provide line number.
+    // Use "onerror" because caught exceptions in IE don't provide line number.
     goog.debug.catchErrors(
         goog.bind(this.handleException, this), false, null);
   } else {

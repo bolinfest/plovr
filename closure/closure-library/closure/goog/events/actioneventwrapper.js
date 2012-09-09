@@ -54,9 +54,9 @@ goog.events.actionEventWrapper = new goog.events.ActionEventWrapper_();
  */
 goog.events.ActionEventWrapper_.EVENT_TYPES_ = [
   goog.events.EventType.CLICK,
-  goog.userAgent.GECKO ?
-      goog.events.EventType.KEYPRESS :
-      goog.events.EventType.KEYDOWN
+  goog.userAgent.IE ?
+      goog.events.EventType.KEYDOWN :
+      goog.events.EventType.KEYPRESS
 ];
 
 
@@ -74,6 +74,7 @@ goog.events.ActionEventWrapper_.EVENT_TYPES_ = [
  * @param {Object=} opt_scope Element in whose scope to call the listener.
  * @param {goog.events.EventHandler=} opt_eventHandler Event handler to add
  *     listener to.
+ * @override
  */
 goog.events.ActionEventWrapper_.prototype.listen = function(target, listener,
     opt_capt, opt_scope, opt_eventHandler) {
@@ -114,6 +115,7 @@ goog.events.ActionEventWrapper_.prototype.listen = function(target, listener,
  * @param {Object=} opt_scope Element in whose scope to call the listener.
  * @param {goog.events.EventHandler=} opt_eventHandler Event handler to remove
  *     listener from.
+ * @override
  */
 goog.events.ActionEventWrapper_.prototype.unlisten = function(target, listener,
     opt_capt, opt_scope, opt_eventHandler) {

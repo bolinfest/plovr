@@ -263,24 +263,24 @@ goog.async.Deferred.prototype.check_ = function() {
 /**
  * Record a successful result for this operation, and send the result
  * to all registered callback functions.
- * @param {*} result The result of the operation.
+ * @param {*=} opt_result The result of the operation.
  */
-goog.async.Deferred.prototype.callback = function(result) {
+goog.async.Deferred.prototype.callback = function(opt_result) {
   this.check_();
-  this.assertNotDeferred_(result);
-  this.resback_(true /* isSuccess */, result);
+  this.assertNotDeferred_(opt_result);
+  this.resback_(true /* isSuccess */, opt_result);
 };
 
 
 /**
  * Record that this operation failed with an error, and send the error
  * to all registered errback functions.
- * @param {*} result The error result of the operation.
+ * @param {*=} opt_result The error result of the operation.
  */
-goog.async.Deferred.prototype.errback = function(result) {
+goog.async.Deferred.prototype.errback = function(opt_result) {
   this.check_();
-  this.assertNotDeferred_(result);
-  this.resback_(false /* isSuccess */, result);
+  this.assertNotDeferred_(opt_result);
+  this.resback_(false /* isSuccess */, opt_result);
 };
 
 
@@ -472,6 +472,7 @@ goog.async.Deferred.prototype.fire_ = function() {
 
     var f = this.hadError_ ? errback : callback;
     if (f) {
+      /** @preserveTry */
       try {
         var ret = f.call(scope || this.defaultScope_, res);
 
@@ -511,15 +512,10 @@ goog.async.Deferred.prototype.fire_ = function() {
 
   if (unhandledException) {
     // Rethrow the unhandled error after a timeout. Execution will continue, but
-    // the error will be seen by global handlers and the user. The rethrow will
+    // the error will be seen by global handlers and the user. The throw will
     // be canceled if another errback is appended before the timeout executes.
+    // The error's original stack trace is preserved where available.
     this.unhandledExceptionTimeoutId_ = goog.global.setTimeout(function() {
-      // The stack trace is clobbered when the error is rethrown. Append the
-      // stack trace to the message if available. Since no one is capturing this
-      // error, the stack trace will be printed to the debug console.
-      if (goog.DEBUG && goog.isDef(res.message) && res.stack) {
-        res.message += '\n' + res.stack;
-      }
       throw res;
     }, 0);
   }
@@ -620,12 +616,13 @@ goog.async.Deferred.AlreadyCalledError = function(deferred) {
 goog.inherits(goog.async.Deferred.AlreadyCalledError, goog.debug.Error);
 
 
-/**
- * Message text.
- * @type {string}
- * @override
- */
-goog.async.Deferred.AlreadyCalledError.prototype.message = 'Already called';
+/** @override */
+goog.async.Deferred.AlreadyCalledError.prototype.message =
+    'Deferred has already fired';
+
+
+/** @override */
+goog.async.Deferred.AlreadyCalledError.prototype.name = 'AlreadyCalledError';
 
 
 
@@ -647,9 +644,9 @@ goog.async.Deferred.CancelledError = function(deferred) {
 goog.inherits(goog.async.Deferred.CancelledError, goog.debug.Error);
 
 
-/**
- * Message text.
- * @type {string}
- * @override
- */
+/** @override */
 goog.async.Deferred.CancelledError.prototype.message = 'Deferred was cancelled';
+
+
+/** @override */
+goog.async.Deferred.CancelledError.prototype.name = 'CancelledError';
