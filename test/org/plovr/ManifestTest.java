@@ -18,7 +18,7 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.javascript.jscomp.JSSourceFile;
+import com.google.javascript.jscomp.SourceFile;
 
 /**
  * {@link ManifestTest} is a unit test for {@link Manifest}.
@@ -27,11 +27,11 @@ import com.google.javascript.jscomp.JSSourceFile;
  */
 public class ManifestTest {
 
-  /** Converts a {@link JSSourceFile} to its name. */
-  private static Function<JSSourceFile, String> JS_SOURCE_FILE_TO_NAME =
-    new Function<JSSourceFile, String>() {
+  /** Converts a {@link SourceFile} to its name. */
+  private static Function<SourceFile, String> JS_SOURCE_FILE_TO_NAME =
+    new Function<SourceFile, String>() {
       @Override
-      public String apply(JSSourceFile jsSourceFile) {
+      public String apply(SourceFile jsSourceFile) {
         return jsSourceFile.getName();
       }
   };
@@ -71,7 +71,7 @@ public class ManifestTest {
 
     final ModuleConfig moduleConfig = null;
     Compilation compilerArguments = manifest.getCompilerArguments(moduleConfig);
-    List<JSSourceFile> inputs = compilerArguments.getInputs();
+    List<SourceFile> inputs = compilerArguments.getInputs();
 
     List<String> expectedNames = ImmutableList.copyOf(
         new String[] {

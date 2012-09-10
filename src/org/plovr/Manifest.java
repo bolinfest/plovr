@@ -24,7 +24,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.gson.Gson;
 import com.google.javascript.jscomp.JSModule;
-import com.google.javascript.jscomp.JSSourceFile;
+import com.google.javascript.jscomp.SourceFile;
 
 
 /**
@@ -42,13 +42,13 @@ public final class Manifest {
   private static final Logger logger = Logger.getLogger(Manifest.class.getName());
 
   /**
-   * Converts a plovr JsInput to a Closure Compiler JSSourceFile.
+   * Converts a plovr JsInput to a Closure Compiler SourceFile.
    */
-  static Function<JsInput, JSSourceFile> inputToSourceFile =
-      new Function<JsInput, JSSourceFile>() {
+  static Function<JsInput, SourceFile> inputToSourceFile =
+      new Function<JsInput, SourceFile>() {
     @Override
-    public JSSourceFile apply(JsInput jsInput) {
-      return JSSourceFile.fromGenerator(jsInput.getName(), jsInput);
+    public SourceFile apply(JsInput jsInput) {
+      return SourceFile.fromGenerator(jsInput.getName(), jsInput);
     }
   };
 
@@ -161,7 +161,7 @@ public final class Manifest {
   public Compilation getCompilerArguments(
       @Nullable ModuleConfig moduleConfig) throws CompilationException {
     // Build up the list of externs to use in the compilation.
-    ImmutableList.Builder<JSSourceFile> builder = ImmutableList.builder();
+    ImmutableList.Builder<SourceFile> builder = ImmutableList.builder();
     if (!customExternsOnly) {
       builder.addAll(getDefaultExterns());
     }
@@ -171,11 +171,11 @@ public final class Manifest {
     if (this.builtInExterns != null) {
       builder.addAll(Iterables.transform(builtInExterns, inputToSourceFile));
     }
-    List<JSSourceFile> externs = builder.build();
+    List<SourceFile> externs = builder.build();
 
     if (moduleConfig == null) {
       List<JsInput> jsInputs = getInputsInCompilationOrder();
-      List<JSSourceFile> inputs = Lists.transform(jsInputs, inputToSourceFile);
+      List<SourceFile> inputs = Lists.transform(jsInputs, inputToSourceFile);
       logger.config("Inputs: " + jsInputs.toString());
       return Compilation.create(externs, inputs);
     } else {
@@ -184,7 +184,7 @@ public final class Manifest {
     }
   }
 
-  private List<JSSourceFile> getDefaultExterns() {
+  private List<SourceFile> getDefaultExterns() {
     logger.fine("Using default externs");
     return ResourceReader.getDefaultExterns();
   }

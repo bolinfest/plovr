@@ -24,12 +24,12 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.google.javascript.jscomp.Compiler;
-import com.google.javascript.jscomp.PlovrCompilerOptions;
 import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.JSModule;
-import com.google.javascript.jscomp.JSSourceFile;
+import com.google.javascript.jscomp.PlovrCompilerOptions;
 import com.google.javascript.jscomp.Result;
 import com.google.javascript.jscomp.SourceExcerptProvider;
+import com.google.javascript.jscomp.SourceFile;
 import com.google.javascript.jscomp.SourceMap;
 
 /**
@@ -40,8 +40,8 @@ import com.google.javascript.jscomp.SourceMap;
  */
 public final class Compilation {
 
-  private final List<JSSourceFile> externs;
-  private final List<JSSourceFile> inputs;
+  private final List<SourceFile> externs;
+  private final List<SourceFile> inputs;
   private final List<JSModule> modules;
   private final Map<String, JSModule> nameToModule;
 
@@ -55,8 +55,8 @@ public final class Compilation {
    */
   private String inputJsConcatenatedInOrder;
 
-  private Compilation(List<JSSourceFile> externs,
-      List<JSSourceFile> inputs, List<JSModule> modules) {
+  private Compilation(List<SourceFile> externs,
+      List<SourceFile> inputs, List<JSModule> modules) {
     this.externs = ImmutableList.copyOf(externs);
     this.inputs = inputs == null ? null : ImmutableList.copyOf(inputs);
     this.modules = modules == null ? null : ImmutableList.copyOf(modules);
@@ -74,12 +74,12 @@ public final class Compilation {
         nameToModuleBuilder.build();
   }
 
-  public static Compilation create(List<JSSourceFile> externs,
-      List<JSSourceFile> inputs) {
+  public static Compilation create(List<SourceFile> externs,
+      List<SourceFile> inputs) {
     return new Compilation(externs, inputs, null);
   }
 
-  public static Compilation createForModules(List<JSSourceFile> externs,
+  public static Compilation createForModules(List<SourceFile> externs,
       List<JSModule> modules) {
     return new Compilation(externs, null, modules);
   }
@@ -99,7 +99,7 @@ public final class Compilation {
         config.getCompilationMode() == CompilationMode.RAW,
         "Config must be in RAW mode");
     StringBuilder builder = new StringBuilder();
-    for (JSSourceFile input : inputs) {
+    for (SourceFile input : inputs) {
       try {
         builder.append(input.getCode());
       } catch (IOException e) {
@@ -507,7 +507,7 @@ public final class Compilation {
   }
 
   @VisibleForTesting
-  public List<JSSourceFile> getInputs() {
+  public List<SourceFile> getInputs() {
     return inputs;
   }
 

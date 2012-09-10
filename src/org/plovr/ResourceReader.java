@@ -12,7 +12,7 @@ import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.io.LineReader;
-import com.google.javascript.jscomp.JSSourceFile;
+import com.google.javascript.jscomp.SourceFile;
 import com.google.javascript.jscomp.SourceFile.Generator;
 
 class ResourceReader {
@@ -78,28 +78,28 @@ class ResourceReader {
   }
 
   /**
-   * @return a JSSourceFile for each externs file bundled with plovr
+   * @return a SourceFile for each externs file bundled with plovr
    */
-  static List<JSSourceFile> getDefaultExterns() {
+  static List<SourceFile> getDefaultExterns() {
     return ExternsHolder.instance.externs;
   }
 
-  private static final Function<String, JSSourceFile> INPUT_TO_JS_SOURCE_FILE =
-    new Function<String, JSSourceFile>() {
+  private static final Function<String, SourceFile> INPUT_TO_JS_SOURCE_FILE =
+    new Function<String, SourceFile>() {
       @Override
-      public JSSourceFile apply(String path) {
+      public SourceFile apply(String path) {
         Generator generator = new ResourceJsInput(path);
-        return JSSourceFile.fromGenerator(path, generator);
+        return SourceFile.fromGenerator(path, generator);
       }
   };
 
   private static class ExternsHolder {
     private static final ExternsHolder instance = new ExternsHolder();
 
-    final List<JSSourceFile> externs;
+    final List<SourceFile> externs;
 
     private ExternsHolder() {
-      List<JSSourceFile> externs;
+      List<SourceFile> externs;
       try {
         externs = loadExternsFromManifest();
       } catch (IOException e) {
@@ -109,7 +109,7 @@ class ResourceReader {
       this.externs = externs;
     }
 
-    static List<JSSourceFile> loadExternsFromManifest() throws IOException {
+    static List<SourceFile> loadExternsFromManifest() throws IOException {
       return loadFromManifest("/externs_manifest.txt", "/externs/",
           INPUT_TO_JS_SOURCE_FILE);
     }
