@@ -23,6 +23,7 @@ import com.google.javascript.jscomp.ControlFlowGraph.AbstractCfgNodeTraversalCal
 import com.google.javascript.jscomp.ControlFlowGraph.Branch;
 import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.graph.GraphNode;
+import com.google.javascript.jscomp.graph.LatticeElement;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -64,9 +65,11 @@ final class MustBeReachingVariableDef extends
    * this definition reads from. For example N: a = b + foo.bar(c). The
    * definition node will be N, the depending set would be {b,c}.
    */
-  private static class Definition {
+  static class Definition {
     final Node node;
     final Set<Var> depends = Sets.newHashSet();
+    private boolean unknownDependencies = false;
+
     Definition(Node node) {
       this.node = node;
     }
@@ -287,7 +290,7 @@ final class MustBeReachingVariableDef extends
             Node obj = n.getFirstChild().getFirstChild();
             if (obj.isName() && "arguments".equals(obj.getString())) {
               // TODO(user): More accuracy can be introduced
-              // ie: We know exactly what arguments[x] is if x is a constant
+              // i.e. We know exactly what arguments[x] is if x is a constant
               // number.
               escapeParameters(output);
             }
@@ -391,39 +394,43 @@ final class MustBeReachingVariableDef extends
         new AbstractCfgNodeTraversalCallback() {
       @Override
       public void visit(NodeTraversal t, Node n, Node parent) {
-        if (n.isName() && jsScope.isDeclared(n.getString(), true)) {
-          def.depends.add(jsScope.getVar(n.getString()));
+        if (n.isName()) {
+          Var dep = jsScope.getVar(n.getString());
+          if (dep == null) {
+            def.unknownDependencies = true;
+          } else {
+            def.depends.add(dep);
+          }
         }
       }
     });
   }
 
   /**
-   * Gets the must reaching definition of a given node. The node must be one of
-   * the control flow graph nodes.
+   * Gets the must reaching definition of a given node.
    *
    * @param name name of the variable. It can only be names of local variable
    *     that are not function parameters, escaped variables or variables
    *     declared in catch.
    * @param useNode the location of the use where the definition reaches.
    */
-  Node getDef(String name, Node useNode) {
+  Definition getDef(String name, Node useNode) {
     Preconditions.checkArgument(getCfg().hasNode(useNode));
     GraphNode<Node, Branch> n = getCfg().getNode(useNode);
     FlowState<MustDef> state = n.getAnnotation();
-    Definition def = state.getIn().reachingDef.get(jsScope.getVar(name));
-    if (def == null) {
-      return null;
-    } else {
-      return def.node;
-    }
+    return state.getIn().reachingDef.get(jsScope.getVar(name));
   }
 
-  boolean dependsOnOuterScopeVars(String name, Node useNode) {
-    Preconditions.checkArgument(getCfg().hasNode(useNode));
-    GraphNode<Node, Branch> n = getCfg().getNode(useNode);
-    FlowState<MustDef> state = n.getAnnotation();
-    Definition def = state.getIn().reachingDef.get(jsScope.getVar(name));
+  Node getDefNode(String name, Node useNode) {
+    Definition def = getDef(name, useNode);
+    return def == null ? null : def.node;
+  }
+
+  boolean dependsOnOuterScopeVars(Definition def) {
+    if (def.unknownDependencies) {
+      return true;
+    }
+
     for (Var s : def.depends) {
       if (s.scope != jsScope) {
         return true;

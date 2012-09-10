@@ -194,7 +194,14 @@ class UnreachableCodeElimination extends AbstractPostOrderCallback
     Node parent = n.getParent();
     if (n.isEmpty() ||
         (n.isBlock() && !n.hasChildren())) {
-      // Not always trivial to remove, let FoldContants work its magic later.
+      // Not always trivial to remove, let FoldConstants work its magic later.
+      return;
+    }
+
+    // TODO(user): This is a problem with removeNoOpStatements. Everything
+    // every expression in a FOR-IN header looks like side effect free on it's
+    // own.
+    if (NodeUtil.isForIn(parent)) {
       return;
     }
 
@@ -240,6 +247,7 @@ class UnreachableCodeElimination extends AbstractPostOrderCallback
     if (logger.isLoggable(Level.FINE)) {
       logger.fine("Removing " + n.toString());
     }
+
     NodeUtil.removeChild(n.getParent(), n);
   }
 }

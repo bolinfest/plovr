@@ -15,7 +15,7 @@
  */
 
 /**
- * @fileoverview Definitions for w3c IndexedDB API. In Chrome all the IndexedDB
+ * @fileoverview Definitions for W3C's IndexedDB API. In Chrome all the IndexedDB
  * classes are prefixed with 'webkit'. In order to access constants and static
  * methods of these classes they must be duplicated with the prefix here.
  * @see http://www.w3.org/TR/IndexedDB/
@@ -34,6 +34,9 @@ Window.prototype.mozIndexedDB;
 Window.prototype.webkitIndexedDB;
 
 /** @type {IDBFactory} */
+Window.prototype.msIndexedDB;
+
+/** @type {IDBFactory} */
 Window.prototype.indexedDB;
 
 /**
@@ -50,6 +53,12 @@ function IDBFactory() {}
 IDBFactory.prototype.open = function(name, opt_description) {};
 
 /**
+ * @param {string} name The name of the database to delete.
+ * @return {!IDBRequest} The IDBRequest object.
+ */
+IDBFactory.prototype.deleteDatabase = function(name) {};
+
+/**
  * @constructor
  * @see http://www.w3.org/TR/IndexedDB/#idl-def-IDBDatabaseException
  */
@@ -57,6 +66,7 @@ function IDBDatabaseException() {}
 
 /**
  * @constructor
+ * @extends {IDBDatabaseException}
  * @see http://www.w3.org/TR/IndexedDB/#idl-def-IDBDatabaseException
  */
 function webkitIDBDatabaseException() {}
@@ -217,14 +227,32 @@ IDBDatabaseException.message;
  */
 webkitIDBDatabaseException.message;
 
+/** @type {function(new:IDBRequest)} */
+Window.prototype.IDBRequest;
+
+/** @type {function(new:IDBRequest)} */
+Window.prototype.webkitIDBRequest;
+
 /**
  * @constructor
+ * @implements {EventTarget}
  * @see http://www.w3.org/TR/IndexedDB/#idl-def-IDBRequest
  */
 function IDBRequest() {}
 
+/** @override */
+IDBRequest.prototype.addEventListener = function(type, listener, useCapture) {};
+
+/** @override */
+IDBRequest.prototype.removeEventListener =
+    function(type, listener, useCapture) {};
+
+/** @override */
+IDBRequest.prototype.dispatchEvent = function(evt) {};
+
 /**
  * @constructor
+ * @extends {IDBRequest}
  * @see http://www.w3.org/TR/IndexedDB/#idl-def-IDBRequest
  */
 function webkitIDBRequest() {}
@@ -260,14 +288,14 @@ webkitIDBRequest.DONE;
 IDBRequest.prototype.readyState;
 
 /**
- * @type {function(Event)}
+ * @type {function(!Event)}
  */
-IDBRequest.prototype.onsuccess = function() {};
+IDBRequest.prototype.onsuccess = function(e) {};
 
 /**
- * @type {function(Event)}
+ * @type {function(!Event)}
  */
-IDBRequest.prototype.onerror = function() {};
+IDBRequest.prototype.onerror = function(e) {};
 
 /**
  * @type {*}
@@ -356,6 +384,21 @@ IDBDatabase.prototype.transaction = function(storeNames, mode) {};
 IDBDatabase.prototype.close = function() {};
 
 /**
+ * @type {Function}
+ */
+IDBDatabase.prototype.onabort = function() {};
+
+/**
+ * @type {Function}
+ */
+IDBDatabase.prototype.onerror = function() {};
+
+/**
+ * @type {Function}
+ */
+IDBDatabase.prototype.onversionchange = function() {};
+
+/**
  * @constructor
  * @see http://www.w3.org/TR/IndexedDB/#idl-def-IDBObjectStore
  */
@@ -400,7 +443,7 @@ IDBObjectStore.prototype.add = function(value, key) {};
 IDBObjectStore.prototype.remove = function(key) {};
 
 /**
- * @param {*} key The key of the document to retreive.
+ * @param {*} key The key of the document to retrieve.
  * @return {!IDBRequest} The IDBRequest object.
  */
 IDBObjectStore.prototype.get = function(key) {};
@@ -422,7 +465,7 @@ IDBObjectStore.prototype.openCursor = function(range, direction) {};
 IDBObjectStore.prototype.createIndex = function(name, keyPath, opt_paramters) {};
 
 /**
- * @param {string} name The name of the index to retreive.
+ * @param {string} name The name of the index to retrieve.
  * @return {!IDBIndex} The IDBIndex object.
  */
 IDBObjectStore.prototype.index = function(name) {};
@@ -488,16 +531,22 @@ IDBIndex.prototype.openCursor = function(range, direction) {};
 IDBIndex.prototype.openKeyCursor = function(range, direction) {};
 
 /**
- * @param {*} key The id of the object to retreive.
+ * @param {*} key The id of the object to retrieve.
  * @return {!IDBRequest} The IDBRequest object.
  */
 IDBIndex.prototype.get = function(key) {};
 
 /**
- * @param {*} key The id of the object to retreive.
+ * @param {*} key The id of the object to retrieve.
  * @return {!IDBRequest} The IDBRequest object.
  */
 IDBIndex.prototype.getKey = function(key) {};
+
+/** @type {function(new:IDBCursor)} */
+Window.prototype.IDBCursor;
+
+/** @type {function(new:IDBCursor)} */
+Window.prototype.webkitIDBCursor;
 
 /**
  * @constructor
@@ -507,6 +556,7 @@ function IDBCursor() {}
 
 /**
  * @constructor
+ * @extends {IDBCursor}
  * @see http://www.w3.org/TR/IndexedDB/#idl-def-IDBCursor
  */
 function webkitIDBCursor() {}
@@ -607,6 +657,12 @@ IDBCursor.prototype.advance = function(count) {};
  */
 IDBCursor.prototype['delete'] = function() {};
 
+/** @type {function(new:IDBTransaction)} */
+Window.prototype.IDBTransaction;
+
+/** @type {function(new:IDBTransaction)} */
+Window.prototype.webkitIDBTransaction;
+
 /**
  * @constructor
  * @see http://www.w3.org/TR/IndexedDB/#idl-def-IDBTransaction
@@ -615,6 +671,7 @@ function IDBTransaction() {}
 
 /**
  * @constructor
+ * @extends {IDBTransaction}
  * @see http://www.w3.org/TR/IndexedDB/#idl-def-IDBTransaction
  */
 function webkitIDBTransaction() {}
@@ -668,7 +725,7 @@ IDBTransaction.prototype.mode;
 IDBTransaction.prototype.db;
 
 /**
- * @param {string} name The name of the object store to retreive.
+ * @param {string} name The name of the object store to retrieve.
  * @return {!IDBObjectStore} The object store.
  */
 IDBTransaction.prototype.objectStore = function(name) {};
@@ -693,6 +750,12 @@ IDBTransaction.prototype.oncomplete = function() {};
  */
 IDBTransaction.prototype.onerror = function() {};
 
+/** @type {function(new:IDBKeyRange)} */
+Window.prototype.IDBKeyRange;
+
+/** @type {function(new:IDBKeyRange)} */
+Window.prototype.webkitIDBKeyRange;
+
 /**
  * @constructor
  * @see http://www.w3.org/TR/IndexedDB/#idl-def-IDBKeyRange
@@ -701,6 +764,7 @@ function IDBKeyRange() {}
 
 /**
  * @constructor
+ * @extends {IDBKeyRange}
  * @see http://www.w3.org/TR/IndexedDB/#idl-def-IDBKeyRange
  */
 function webkitIDBKeyRange() {}

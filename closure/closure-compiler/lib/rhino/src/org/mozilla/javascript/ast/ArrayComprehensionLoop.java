@@ -58,7 +58,7 @@ public class ArrayComprehensionLoop extends ForInLoop {
     public ArrayComprehensionLoop(int pos, int len) {
         super(pos, len);
     }
-
+    
     /**
      * Returns {@code null} for loop body
      * @return loop body (always {@code null} for this node type)

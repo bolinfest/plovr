@@ -177,7 +177,7 @@ public class ParserTest extends BaseJSTypeTestCase {
 
     Node key = n.getFirstChild();
 
-    assertEquals(Token.STRING, key.getType());
+    assertEquals(Token.STRING_KEY, key.getType());
     assertEquals(3, key.getLineno());
     assertEquals(10, key.getCharno());
 
@@ -189,7 +189,7 @@ public class ParserTest extends BaseJSTypeTestCase {
 
     key = key.getNext();
 
-    assertEquals(Token.STRING, key.getType());
+    assertEquals(Token.STRING_KEY, key.getType());
     assertEquals(4, key.getLineno());
     assertEquals(1, key.getCharno());
 
@@ -584,7 +584,6 @@ public class ParserTest extends BaseJSTypeTestCase {
 
   private Node createScript(Node n) {
     Node script = new Node(Token.SCRIPT);
-    script.setIsSyntheticBlock(true);
     script.addChildToBack(n);
     return script;
   }
@@ -675,12 +674,12 @@ public class ParserTest extends BaseJSTypeTestCase {
 
   public void testGeneratorsForbidden() {
     parseError("var i = (x for (x in obj));",
-        "missing ) in parenthetical");
+        "Unsupported syntax: GENEXPR");
   }
 
   public void testGettersForbidden1() {
     parseError("var x = {get foo() { return 3; }};",
-        "getters are not supported in Internet Explorer");
+        IRFactory.GETTER_ERROR_MESSAGE);
   }
 
   public void testGettersForbidden2() {
@@ -700,12 +699,12 @@ public class ParserTest extends BaseJSTypeTestCase {
 
   public void testGettersForbidden5() {
     parseError("var x = {a: 2, get foo() { return 3; }};",
-        "getters are not supported in Internet Explorer");
+        IRFactory.GETTER_ERROR_MESSAGE);
   }
 
   public void testSettersForbidden() {
     parseError("var x = {set foo() { return 3; }};",
-        "setters are not supported in Internet Explorer");
+        IRFactory.SETTER_ERROR_MESSAGE);
   }
 
   public void testSettersForbidden2() {
@@ -758,7 +757,7 @@ public class ParserTest extends BaseJSTypeTestCase {
     assertEquals(Token.OBJECTLIT, objectLit.getType());
 
     Node number = objectLit.getFirstChild();
-    assertEquals(Token.STRING, number.getType());
+    assertEquals(Token.STRING_KEY, number.getType());
     assertNotNull(number.getJSDocInfo());
   }
 
@@ -769,11 +768,11 @@ public class ParserTest extends BaseJSTypeTestCase {
   public void testGetter() {
     mode = LanguageMode.ECMASCRIPT3;
     parseError("var x = {get 1(){}};",
-        "getters are not supported in Internet Explorer");
+        IRFactory.GETTER_ERROR_MESSAGE);
     parseError("var x = {get 'a'(){}};",
-        "getters are not supported in Internet Explorer");
+        IRFactory.GETTER_ERROR_MESSAGE);
     parseError("var x = {get a(){}};",
-        "getters are not supported in Internet Explorer");
+        IRFactory.GETTER_ERROR_MESSAGE);
     mode = LanguageMode.ECMASCRIPT5;
     parse("var x = {get 1(){}};");
     parse("var x = {get 'a'(){}};");
@@ -784,11 +783,11 @@ public class ParserTest extends BaseJSTypeTestCase {
   public void testSetter() {
     mode = LanguageMode.ECMASCRIPT3;
     parseError("var x = {set 1(x){}};",
-        "setters are not supported in Internet Explorer");
+        IRFactory.SETTER_ERROR_MESSAGE);
     parseError("var x = {set 'a'(x){}};",
-        "setters are not supported in Internet Explorer");
+        IRFactory.SETTER_ERROR_MESSAGE);
     parseError("var x = {set a(x){}};",
-        "setters are not supported in Internet Explorer");
+        IRFactory.SETTER_ERROR_MESSAGE);
     mode = LanguageMode.ECMASCRIPT5;
     parse("var x = {set 1(x){}};");
     parse("var x = {set 'a'(x){}};");
@@ -862,17 +861,17 @@ public class ParserTest extends BaseJSTypeTestCase {
     parseError("var x = {function: 1};", "invalid property id");
     parseError("x.function;", "missing name after . operator");
     parseError("var x = {get x(){} };",
-        "getters are not supported in Internet Explorer");
+        IRFactory.GETTER_ERROR_MESSAGE);
     parseError("var x = {get function(){} };", "invalid property id");
     parseError("var x = {get 'function'(){} };",
-        "getters are not supported in Internet Explorer");
+        IRFactory.GETTER_ERROR_MESSAGE);
     parseError("var x = {get 1(){} };",
-        "getters are not supported in Internet Explorer");
+        IRFactory.GETTER_ERROR_MESSAGE);
     parseError("var x = {set function(a){} };", "invalid property id");
     parseError("var x = {set 'function'(a){} };",
-        "setters are not supported in Internet Explorer");
+        IRFactory.SETTER_ERROR_MESSAGE);
     parseError("var x = {set 1(a){} };",
-        "setters are not supported in Internet Explorer");
+        IRFactory.SETTER_ERROR_MESSAGE);
     parseError("var x = {class: 1};", "invalid property id");
     parseError("x.class;", "missing name after . operator");
     parse("var x = {let: 1};");
@@ -933,6 +932,8 @@ public class ParserTest extends BaseJSTypeTestCase {
         "missing { before function body",
         "syntax error",
         "missing ; before statement",
+        "missing ; before statement",
+        "missing } after function body",
         "Unsupported syntax: ERROR",
         "Unsupported syntax: ERROR");
     parseError("var x = function a.b() {}",
@@ -943,6 +944,7 @@ public class ParserTest extends BaseJSTypeTestCase {
         "syntax error",
         "missing ; before statement",
         "missing ; before statement",
+        "missing } after function body",
         "Unsupported syntax: ERROR",
         "Unsupported syntax: ERROR");
   }

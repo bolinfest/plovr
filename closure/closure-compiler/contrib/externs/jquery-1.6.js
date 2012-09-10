@@ -215,7 +215,7 @@ jQuery.browser;
 $.browser;
 
 /**
- * This type is used interally to define the jQuery.browser subtype
+ * This type is used internally to define the jQuery.browser subtype
  * @constructor
  * @private
  */
@@ -527,7 +527,7 @@ jQuery.prototype.die = function(arg1, handler) {};
 
 /**
  * @param {Object} collection
- * @param {function(number,*)} callback
+ * @param {function(number, ?)} callback
  * @return {Object}
  */
 jQuery.each = function(collection, callback) {};
@@ -540,7 +540,7 @@ jQuery.prototype.each = function(fnc) {};
 
 /**
  * @param {Object} collection
- * @param {function(number,*)} callback
+ * @param {function(number, ?)} callback
  * @return {Object}
  */
 $.each = function(collection, callback) {};
@@ -584,9 +584,10 @@ jQuery.event = function(eventType) {};
  * @constructor
  * @extends {jQuery.event}
  * @param {string} eventType
+ * @param {Object=} properties
  * @return {jQuery.Event}
  */
-jQuery.Event = function(eventType) {};
+jQuery.Event = function(eventType, properties) {};
 
 /**
  * @constructor
@@ -599,9 +600,10 @@ $.event = function(eventType) {};
  * @constructor
  * @extends {jQuery.event}
  * @param {string} eventType
+ * @param {Object=} properties
  * @return {$.Event}
  */
-$.Event = function(eventType) {};
+$.Event = function(eventType, properties) {};
 
 /** @type {Element} */
 jQuery.event.prototype.currentTarget;
@@ -1790,7 +1792,7 @@ jQuery.support;
 $.support;
 
 /**
- * This type is used interally to define the jQuery.support subtype
+ * This type is used internally to define the jQuery.support subtype
  * @constructor
  * @private
  */

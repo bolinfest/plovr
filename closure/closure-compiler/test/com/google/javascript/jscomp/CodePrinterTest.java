@@ -16,12 +16,16 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.common.base.Joiner;
+import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
 import junit.framework.TestCase;
+
+import java.util.List;
 
 public class CodePrinterTest extends TestCase {
   static Node parse(String js) {
@@ -41,7 +45,6 @@ public class CodePrinterTest extends TestCase {
       CompilerPass typeResolver = passConfig.resolveTypes.create(compiler);
       Node externs = new Node(Token.SCRIPT);
       externs.setInputId(new InputId("externs"));
-      externs.setIsSyntheticBlock(true);
       Node externAndJsRoot = new Node(Token.BLOCK, externs, n);
       externAndJsRoot.setIsSyntheticBlock(true);
       typeResolver.process(externs, n);
@@ -77,6 +80,14 @@ public class CodePrinterTest extends TestCase {
       int lineThreshold) {
     return new CodePrinter.Builder(parse(js)).setPrettyPrint(prettyprint)
         .setLineLengthThreshold(lineThreshold).setLineBreak(lineBreak).build();
+  }
+
+  String parsePrint(String js, boolean prettyprint, boolean lineBreak,
+      boolean preferLineBreakAtEof, int lineThreshold) {
+    return new CodePrinter.Builder(parse(js, true)).setPrettyPrint(prettyprint)
+        .setLineLengthThreshold(lineThreshold).setLineBreak(lineBreak)
+        .setPreferLineBreakAtEndOfFile(preferLineBreakAtEof)
+        .build();
   }
 
   String parsePrint(String js, boolean prettyprint, boolean lineBreak,
@@ -162,7 +173,7 @@ public class CodePrinterTest extends TestCase {
 
     assertPrint("/--> <\\/script>/g", "/--\\> <\\/script>/g");
 
-    // Break HTML start comments. Certain versions of Webkit
+    // Break HTML start comments. Certain versions of WebKit
     // begin an HTML comment when they see this.
     assertPrint("'<!-- I am a string -->'", "\"<\\!-- I am a string --\\>\"");
 
@@ -237,7 +248,7 @@ public class CodePrinterTest extends TestCase {
     // Function declaration.
     assertPrint("function f(){}", "function f(){}");
 
-    // Make sure we don't treat non-latin character escapes as raw strings.
+    // Make sure we don't treat non-Latin character escapes as raw strings.
     assertPrint("({ 'a': 4, '\\u0100': 4 })", "({\"a\":4,\"\\u0100\":4})");
     assertPrint("({ a: 4, '\\u0100': 4 })", "({a:4,\"\\u0100\":4})");
 
@@ -385,9 +396,13 @@ public class CodePrinterTest extends TestCase {
   }
 
   private void assertPrint(String js, String expected) {
-    parse(expected); // validate the expected string is valid js
+    parse(expected); // validate the expected string is valid JS
     assertEquals(expected,
         parsePrint(js, false, CodePrinter.DEFAULT_LINE_LENGTH_THRESHOLD));
+  }
+
+  private void assertPrintSame(String js) {
+    assertPrint(js, js);
   }
 
   // Make sure that the code generator doesn't associate an
@@ -461,6 +476,44 @@ public class CodePrinterTest extends TestCase {
     assertEquals(expected,
         parsePrint(js, false, true,
             CodePrinter.DEFAULT_LINE_LENGTH_THRESHOLD));
+  }
+
+  public void testPreferLineBreakAtEndOfFile() {
+    // short final line, no previous break, do nothing
+    assertLineBreakAtEndOfFile(
+        "\"1234567890\";",
+        "\"1234567890\"",
+        "\"1234567890\"");
+
+    // short final line, shift previous break to end
+    assertLineBreakAtEndOfFile(
+        "\"123456789012345678901234567890\";\"1234567890\"",
+        "\"123456789012345678901234567890\";\n\"1234567890\"",
+        "\"123456789012345678901234567890\"; \"1234567890\";\n");
+    assertLineBreakAtEndOfFile(
+        "var12345678901234567890123456 instanceof Object;",
+        "var12345678901234567890123456 instanceof\nObject",
+        "var12345678901234567890123456 instanceof Object;\n");
+
+    // long final line, no previous break, add a break at end
+    assertLineBreakAtEndOfFile(
+        "\"1234567890\";\"12345678901234567890\";",
+        "\"1234567890\";\"12345678901234567890\"",
+        "\"1234567890\";\"12345678901234567890\";\n");
+
+    // long final line, previous break, add a break at end
+    assertLineBreakAtEndOfFile(
+        "\"123456789012345678901234567890\";\"12345678901234567890\";",
+        "\"123456789012345678901234567890\";\n\"12345678901234567890\"",
+        "\"123456789012345678901234567890\";\n\"12345678901234567890\";\n");
+  }
+
+  private void assertLineBreakAtEndOfFile(String js,
+      String expectedWithoutBreakAtEnd, String expectedWithBreakAtEnd) {
+    assertEquals(expectedWithoutBreakAtEnd,
+        parsePrint(js, false, false, false, 30));
+    assertEquals(expectedWithBreakAtEnd,
+        parsePrint(js, false, false, true, 30));
   }
 
   public void testPrettyPrinter() {
@@ -1091,7 +1144,9 @@ public class CodePrinterTest extends TestCase {
     assertPrintNumber("1E5", 100000.0);
     assertPrintNumber("100000.1", 100000.1);
 
-    assertPrintNumber("1.0E-6", 0.000001);
+    assertPrintNumber("1E-6", 0.000001);
+    assertPrintNumber("-0x38d7ea4c68001", -0x38d7ea4c68001L);
+    assertPrintNumber("0x38d7ea4c68001", 0x38d7ea4c68001L);
   }
 
   // Make sure to test as both a String and a Node, because
@@ -1156,6 +1211,7 @@ public class CodePrinterTest extends TestCase {
     assertPrint("var x=({x:1})", "var x={x:1}");
     assertPrint("var x={'x':1}", "var x={\"x\":1}");
     assertPrint("var x={1:1}", "var x={1:1}");
+    assertPrint("({},42)+0", "({},42)+0");
   }
 
   public void testObjectLit2() {
@@ -1286,7 +1342,7 @@ public class CodePrinterTest extends TestCase {
   }
 
   public void testIssue582() {
-    assertPrint("var x = -0.0;", "var x=-0.0");
+    assertPrint("var x = -0.0;", "var x=-0");
   }
 
   public void testIssue601() {
@@ -1302,5 +1358,84 @@ public class CodePrinterTest extends TestCase {
 
   public void testIssue5746867() {
     assertPrint("var a = { '$\\\\' : 5 };", "var a={\"$\\\\\":5}");
+  }
+
+  public void testCommaSpacing() {
+    assertPrint("var a = (b = 5, c = 5);",
+        "var a=(b=5,c=5)");
+    assertPrettyPrint("var a = (b = 5, c = 5);",
+        "var a = (b = 5, c = 5);\n");
+  }
+
+  public void testManyCommas() {
+    int numCommas = 10000;
+    List<String> numbers = Lists.newArrayList("0", "1");
+    Node current = new Node(Token.COMMA, Node.newNumber(0), Node.newNumber(1));
+    for (int i = 2; i < numCommas; i++) {
+      current = new Node(Token.COMMA, current);
+
+      // 1000 is printed as 1E3, and screws up our test.
+      int num = i % 1000;
+      numbers.add(String.valueOf(num));
+      current.addChildToBack(Node.newNumber(num));
+    }
+
+    String expected = Joiner.on(",").join(numbers);
+    String actual = printNode(current).replace("\n", "");
+    assertEquals(expected, actual);
+  }
+
+  public void testManyAdds() {
+    int numAdds = 10000;
+    List<String> numbers = Lists.newArrayList("0", "1");
+    Node current = new Node(Token.ADD, Node.newNumber(0), Node.newNumber(1));
+    for (int i = 2; i < numAdds; i++) {
+      current = new Node(Token.ADD, current);
+
+      // 1000 is printed as 1E3, and screws up our test.
+      int num = i % 1000;
+      numbers.add(String.valueOf(num));
+      current.addChildToBack(Node.newNumber(num));
+    }
+
+    String expected = Joiner.on("+").join(numbers);
+    String actual = printNode(current).replace("\n", "");
+    assertEquals(expected, actual);
+  }
+
+  public void testMinusNegativeZero() {
+    // Negative zero is weird, because we have to be able to distinguish
+    // it from positive zero (there are some subtle differences in behavior).
+    assertPrint("x- -0", "x- -0");
+  }
+
+  public void testStringEscapeSequences() {
+    // From the SingleEscapeCharacter grammar production.
+    assertPrintSame("var x=\"\\b\"");
+    assertPrintSame("var x=\"\\f\"");
+    assertPrintSame("var x=\"\\n\"");
+    assertPrintSame("var x=\"\\r\"");
+    assertPrintSame("var x=\"\\t\"");
+    assertPrintSame("var x=\"\\v\"");
+    assertPrint("var x=\"\\\"\"", "var x='\"'");
+    assertPrint("var x=\"\\\'\"", "var x=\"'\"");
+
+    // From the LineTerminator grammar
+    assertPrint("var x=\"\\u000A\"", "var x=\"\\n\"");
+    assertPrint("var x=\"\\u000D\"", "var x=\"\\r\"");
+    assertPrintSame("var x=\"\\u2028\"");
+    assertPrintSame("var x=\"\\u2029\"");
+
+    // Now with regular expressions.
+    assertPrintSame("var x=/\\b/");
+    assertPrintSame("var x=/\\f/");
+    assertPrintSame("var x=/\\n/");
+    assertPrintSame("var x=/\\r/");
+    assertPrintSame("var x=/\\t/");
+    assertPrintSame("var x=/\\v/");
+    assertPrintSame("var x=/\\u000A/");
+    assertPrintSame("var x=/\\u000D/");
+    assertPrintSame("var x=/\\u2028/");
+    assertPrintSame("var x=/\\u2029/");
   }
 }

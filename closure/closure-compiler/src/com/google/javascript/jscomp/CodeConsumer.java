@@ -226,7 +226,7 @@ abstract class CodeConsumer {
       append(" ");
     }
 
-    // Allow formating around the operator.
+    // Allow formatting around the operator.
     appendOp(op, binOp);
 
     // Line breaking after an operator is always safe. Line breaking before an
@@ -241,11 +241,14 @@ abstract class CodeConsumer {
     // This is not pretty printing. This is to prevent misparsing of x- -4 as
     // x--4 (which is a syntax error).
     char prev = getLastChar();
-    if (x < 0 && prev == '-') {
+    boolean negativeZero = isNegativeZero(x);
+    if ((x < 0 || negativeZero) && prev == '-') {
       add(" ");
     }
 
-    if ((long) x == x && !isNegativeZero(x)) {
+    if (negativeZero) {
+      addConstant("-0");
+    } else if ((long) x == x) {
       long value = (long) x;
       long mantissa = value;
       int exp = 0;
@@ -256,13 +259,24 @@ abstract class CodeConsumer {
         }
       }
       if (exp > 2) {
-        add(Long.toString(mantissa) + "E" + Integer.toString(exp));
+        addConstant(Long.toString(mantissa) + "E" + Integer.toString(exp));
       } else {
-        add(Long.toString(value));
+        long valueAbs = Math.abs(value);
+        if (Long.toHexString(valueAbs).length() + 2 <
+            Long.toString(valueAbs).length()) {
+          addConstant((value < 0 ? "-" : "") + "0x" +
+              Long.toHexString(valueAbs));
+        } else {
+          addConstant(Long.toString(value));
+        }
       }
     } else {
-      add(String.valueOf(x));
+      addConstant(String.valueOf(x).replace(".0E", "E"));
     }
+  }
+
+  void addConstant(String newcode) {
+    add(newcode);
   }
 
   static boolean isNegativeZero(double x) {

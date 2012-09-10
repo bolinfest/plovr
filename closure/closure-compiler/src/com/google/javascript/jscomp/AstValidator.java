@@ -29,7 +29,7 @@ public class AstValidator implements CompilerPass {
 
   // Possible enhancements:
   // * verify NAME, LABEL_NAME, GETPROP property name and unquoted
-  // object-literal keys are valid javascript identifiers.
+  // object-literal keys are valid JavaScript identifiers.
   // * optionally verify every node has source location information.
   // * optionally verify every node has an assigned JSType
   //
@@ -82,7 +82,6 @@ public class AstValidator implements CompilerPass {
 
   public void validateScript(Node n) {
     validateNodeType(Token.SCRIPT, n);
-    validateIsSynthetic(n);
     validateHasSourceName(n);
     validateHasInputId(n);
     for (Node c = n.getFirstChild(); c != null; c = c.getNext()) {
@@ -162,7 +161,7 @@ public class AstValidator implements CompilerPass {
         validateChildless(n);
         return;
 
-      // General uniary ops
+      // General unary ops
       case Token.DELPROP:
       case Token.POS:
       case Token.NEG:
@@ -679,7 +678,7 @@ public class AstValidator implements CompilerPass {
       case Token.SETTER_DEF:
         validateObjectLitSetKey(n);
         return;
-      case Token.STRING:
+      case Token.STRING_KEY:
         validateObjectLitStringKey(n);
         return;
       default:
@@ -721,7 +720,7 @@ public class AstValidator implements CompilerPass {
   }
 
   private void validateObjectLitStringKey(Node n) {
-    validateNodeType(Token.STRING, n);
+    validateNodeType(Token.STRING_KEY, n);
     validateChildCount(n, 1);
     validateObjectLiteralKeyName(n);
     validateExpression(n.getFirstChild());

@@ -29,6 +29,33 @@
  * @externs
  */
 
+/*
+ * JSON API.
+ */
+
+/**
+ * @see https://developer.mozilla.org/En/Using_native_JSON
+ */
+Window.prototype.JSON = {};
+
+/**
+ * @param {string} text
+ * @param {(function(string, *) : *)=} opt_reviver
+ * @return {*}
+ * @see http://ejohn.org/blog/ecmascript-5-strict-mode-json-and-more/
+ */
+Window.prototype.JSON.parse = function(text, opt_reviver) {};
+
+/**
+ * @param {*} value
+ * @param {(Array.<string>|(function(string, *) : *)|null)=} opt_replacer
+ * @param {(number|string)=} opt_space
+ * @return {string}
+ * @see http://ejohn.org/blog/ecmascript-5-strict-mode-json-and-more/
+ */
+Window.prototype.JSON.stringify =
+    function(value, opt_replacer, opt_space) {};
+
 /**
  * @constructor
  * @extends {HTMLElement}
@@ -347,7 +374,7 @@ CanvasRenderingContext2D.prototype.putImageData = function(imagedata, dx, dy,
     opt_dirtyX, opt_dirtyY, opt_dirtyWidth, opt_dirtyHeight) {};
 
 /**
- * Note: Webkit only
+ * Note: WebKit only
  * @param {number|string=} opt_a
  * @param {number=} opt_b
  * @param {number=} opt_c
@@ -359,7 +386,7 @@ CanvasRenderingContext2D.prototype.putImageData = function(imagedata, dx, dy,
 CanvasRenderingContext2D.prototype.setFillColor;
 
 /**
- * Note: Webkit only
+ * Note: WebKit only
  * @param {number|string=} opt_a
  * @param {number=} opt_b
  * @param {number=} opt_c
@@ -459,6 +486,12 @@ function ImageData() {}
 
 /** @type {CanvasPixelArray} */
 ImageData.prototype.data;
+
+/** @type {number} */
+ImageData.prototype.width;
+
+/** @type {number} */
+ImageData.prototype.height;
 
 /**
  * @constructor
@@ -563,7 +596,8 @@ function SQLTransaction() {}
  * @param {string} sqlStatement
  * @param {Array.<*>=} opt_queryArgs
  * @param {SQLStatementCallback=} opt_callback
- * @param {(function(!SQLTransaction, !SQLError) : void)=} opt_errorCallback
+ * @param {(function(!SQLTransaction, !SQLError) : (boolean|void))=}
+ *     opt_errorCallback
  */
 SQLTransaction.prototype.executeSql = function(
     sqlStatement, opt_queryArgs, opt_callback, opt_errorCallback) {};
@@ -646,11 +680,11 @@ HTMLImageElement.prototype.crossOrigin;
  * The postMessage method (as defined by HTML5 spec and implemented in FF3).
  * @param {*} message
  * @param {string|Array} targetOrigin The target origin in the 2-argument
- *     version of this function. Webkit seems to have implemented this
+ *     version of this function. WebKit seems to have implemented this
  *     function wrong in the 3-argument version so that ports is the
  *     second argument.
  * @param {string|Array=} ports An optional array of ports or the target
- *     origin. Webkit seems to have implemented this
+ *     origin. WebKit seems to have implemented this
  *     function wrong in the 3-argument version so that targetOrigin is the
  *     third argument.
  * @see http://dev.w3.org/html5/postmsg/#dom-window-postmessage
@@ -730,45 +764,45 @@ DOMApplicationCache.prototype.status;
 /**
  * Sent when the update process finishes for the first time; that is, the first
  * time an application cache is saved.
- * @type {EventListener}
+ * @type {?function(!Event)}
  */
 DOMApplicationCache.prototype.oncached;
 
 /**
  * Sent when the cache update process begins.
- * @type {EventListener}
+ * @type {?function(!Event)}
  */
 DOMApplicationCache.prototype.onchecking;
 
 /**
  * Sent when the update process begins downloading resources in the manifest
  * file.
- * @type {EventListener}
+ * @type {?function(!Event)}
  */
 DOMApplicationCache.prototype.ondownloading;
 
 /**
  * Sent when an error occurs.
- * @type {EventListener}
+ * @type {?function(!Event)}
  */
 DOMApplicationCache.prototype.onerror;
 
 /**
  * Sent when the update process finishes but the manifest file does not change.
- * @type {EventListener}
+ * @type {?function(!Event)}
  */
 DOMApplicationCache.prototype.onnoupdate;
 
 /**
  * Sent when each resource in the manifest file begins to download.
- * @type {EventListener}
+ * @type {?function(!Event)}
  */
 DOMApplicationCache.prototype.onprogress;
 
 /**
  * Sent when there is an existing application cache, the update process
  * finishes, and there is a new application cache ready for use.
- * @type {EventListener}
+ * @type {?function(!Event)}
  */
 DOMApplicationCache.prototype.onupdateready;
 
@@ -803,6 +837,12 @@ Window.prototype.importScripts = function(var_args) {};
 var importScripts = function(var_args) {};
 
 /**
+ * @see http://dev.w3.org/html5/postmsg/
+ * @interface
+ */
+function Transferable() {}
+
+/**
  * @see http://dev.w3.org/html5/workers/
  * @constructor
  * @implements {EventTarget}
@@ -833,13 +873,13 @@ WebWorker.prototype.postMessage = function(message) {};
 
 /**
  * Sent when the worker thread posts a message to its creator.
- * @type {EventListener}
+ * @type {?function(!MessageEvent)}
  */
 WebWorker.prototype.onmessage;
 
 /**
  * Sent when the worker thread encounters an error.
- * @type {EventListener}
+ * @type {?function(!Event)}
  */
 WebWorker.prototype.onerror;
 
@@ -869,17 +909,26 @@ Worker.prototype.terminate = function() {};
 /**
  * Posts a message to the worker thread.
  * @param {*} message
- * @param {Array.<MessagePort>=} opt_ports
+ * @param {Array.<Transferable>=} opt_transfer
  */
-Worker.prototype.postMessage = function(message, opt_ports) {};
+Worker.prototype.postMessage = function(message, opt_transfer) {};
+
+/**
+ * Posts a message to the worker thread.
+ * @param {*} message
+ * @param {Array.<Transferable>=} opt_transfer
+ */
+Worker.prototype.webkitPostMessage = function(message, opt_transfer) {};
 
 /**
  * Sent when the worker thread posts a message to its creator.
+ * @type {?function(!MessageEvent)}
  */
 Worker.prototype.onmessage = function() {};
 
 /**
  * Sent when the worker thread encounters an error.
+ * @type {?function(!Event)}
  */
 Worker.prototype.onerror = function() {};
 
@@ -911,8 +960,117 @@ SharedWorker.prototype.port;
 
 /**
  * Called on network errors for loading the initial script.
+ * @type {?function(!Event)}
  */
 SharedWorker.prototype.onerror = function() {};
+
+/**
+ * @see http://dev.w3.org/html5/workers/
+ * @interface
+ */
+function WorkerLocation() {}
+
+/** @type {string} */
+WorkerLocation.prototype.protocol;
+
+/** @type {string} */
+WorkerLocation.prototype.host;
+
+/** @type {string} */
+WorkerLocation.prototype.hostname;
+
+/** @type {string} */
+WorkerLocation.prototype.port;
+
+/** @type {string} */
+WorkerLocation.prototype.pathname;
+
+/** @type {string} */
+WorkerLocation.prototype.search;
+
+/** @type {string} */
+WorkerLocation.prototype.hash;
+
+/**
+ * @see http://dev.w3.org/html5/workers/
+ * @interface
+ * @extends {EventTarget}
+ */
+function WorkerGlobalScope() {}
+
+/** @type {WorkerGlobalScope} */
+WorkerGlobalScope.prototype.self;
+
+/** @type {WorkerLocation} */
+WorkerGlobalScope.prototype.location;
+
+/**
+ * Closes the worker represented by this WorkerGlobalScope.
+ */
+WorkerGlobalScope.prototype.close = function() {};
+
+/**
+ * Sent when the worker encounters an error.
+ * @type {?function(!Event)}
+ */
+WorkerGlobalScope.prototype.onerror;
+
+/**
+ * Sent when the worker goes offline.
+ * @type {?function(!Event)}
+ */
+WorkerGlobalScope.prototype.onoffline;
+
+/**
+ * Sent when the worker goes online.
+ * @type {?function(!Event)}
+ */
+WorkerGlobalScope.prototype.ononline;
+
+/**
+ * @see http://dev.w3.org/html5/workers/
+ * @interface
+ * @extends {WorkerGlobalScope}
+ */
+function DedicatedWorkerGlobalScope() {}
+
+/**
+ * Posts a message to creator of this worker.
+ * @param {*} message
+ * @param {Array.<Transferable>=} opt_transfer
+ */
+DedicatedWorkerGlobalScope.prototype.postMessage =
+    function(message, opt_transfer) {};
+
+/**
+ * Posts a message to creator of this worker.
+ * @param {*} message
+ * @param {Array.<Transferable>=} opt_transfer
+ */
+DedicatedWorkerGlobalScope.prototype.webkitPostMessage =
+    function(message, opt_transfer) {};
+
+/**
+ * Sent when the creator posts a message to this worker.
+ * @type {?function(!MessageEvent)}
+ */
+DedicatedWorkerGlobalScope.prototype.onmessage = function() {};
+
+/**
+ * @see http://dev.w3.org/html5/workers/
+ * @interface
+ * @extends {WorkerGlobalScope}
+ */
+function SharedWorkerGlobalScope() {}
+
+/** @type {string} */
+SharedWorkerGlobalScope.prototype.name;
+
+/**
+ * Sent when a connection to this worker is opened.
+ * @type {?function(!Event)}
+ */
+SharedWorkerGlobalScope.prototype.onconnect = function() {};
 
 /** @type {Element} */
 HTMLElement.prototype.contextMenu;
@@ -1158,6 +1316,7 @@ MessageChannel.prototype.port2;
  * @see http://dev.w3.org/html5/spec/comms.html#messageport
  * @constructor
  * @implements {EventTarget}
+ * @implements {Transferable}
  */
 function MessagePort() {}
 
@@ -1174,11 +1333,13 @@ MessagePort.prototype.dispatchEvent = function(evt) {};
 
 
 /**
- * Posts a message through the channel, optionally with the given ports.
+ * Posts a message through the channel, optionally with the given
+ * Array of Transferables.
  * @param {*} message
- * @param {Array.<MessagePort>=} opt_ports
+ * @param {Array.<Transferable>=} opt_transfer
  */
-MessagePort.prototype.postMessage = function(message, opt_ports) {};
+MessagePort.prototype.postMessage = function(message, opt_transfer) {
+};
 
 /**
  * Begins dispatching messages received on the port.
@@ -1191,7 +1352,7 @@ MessagePort.prototype.start = function() {};
 MessagePort.prototype.close = function() {};
 
 /**
- * @type {?function(MessageEvent)}
+ * @type {?function(!MessageEvent)}
  */
 MessagePort.prototype.onmessage;
 
@@ -1440,7 +1601,7 @@ WebSocket.prototype.onclose;
 
 /**
  * Transmits data using the connection.
- * @param {string} data
+ * @param {string|ArrayBuffer} data
  * @return {boolean}
  */
 WebSocket.prototype.send = function(data) {};
@@ -1449,6 +1610,11 @@ WebSocket.prototype.send = function(data) {};
  * Closes the Web Socket connection or connection attempt, if any.
  */
 WebSocket.prototype.close = function() {};
+
+/**
+ * @type {string} Sets the type of data (blob or arraybuffer) for binary data.
+ */
+WebSocket.prototype.binaryType;
 
 // HTML5 History
 /**
@@ -1680,6 +1846,7 @@ DOMTokenList.prototype.toggle = function(token) {};
 /**
  * @return {string} A stringified representation of CSS classes.
  * @nosideeffects
+ * @override
  */
 DOMTokenList.prototype.toString = function() {};
 
@@ -1696,6 +1863,7 @@ HTMLElement.prototype.classList;
  * @param {number} length The length in bytes
  * @constructor
  * @noalias
+ * @implements {Transferable}
  */
 function ArrayBuffer(length) {}
 
@@ -2151,3 +2319,262 @@ DataView.prototype.setFloat32 = function(
  */
 DataView.prototype.setFloat64 = function(
     byteOffset, value, opt_littleEndian) {};
+
+/**
+ * Constraint Validation API properties and methods
+ * @see http://www.w3.org/TR/2009/WD-html5-20090423/forms.html#the-constraint-validation-api
+ */
+
+/** @return {boolean} */
+HTMLFormElement.prototype.checkValidity = function() {};
+
+/** @type {boolean} */
+HTMLFormElement.prototype.novalidate;
+
+/** @constructor */
+function ValidityState() {}
+
+/** @type {boolean} */
+ValidityState.prototype.customError;
+
+/** @type {boolean} */
+ValidityState.prototype.patternMismatch;
+
+/** @type {boolean} */
+ValidityState.prototype.rangeOverflow;
+
+/** @type {boolean} */
+ValidityState.prototype.rangeUnderflow;
+
+/** @type {boolean} */
+ValidityState.prototype.stepMismatch;
+
+/** @type {boolean} */
+ValidityState.prototype.typeMismatch;
+
+/** @type {boolean} */
+ValidityState.prototype.tooLong;
+
+/** @type {boolean} */
+ValidityState.prototype.valid;
+
+/** @type {boolean} */
+ValidityState.prototype.valueMissing;
+
+
+/** @type {boolean} */
+HTMLButtonElement.prototype.autofocus;
+
+/**
+ * @const
+ * @type {NodeList}
+ */
+HTMLButtonElement.prototype.labels;
+
+/** @type {string} */
+HTMLButtonElement.prototype.validationMessage;
+
+/**
+ * @const
+ * @type {ValidityState}
+ */
+HTMLButtonElement.prototype.validity;
+
+/** @type {boolean} */
+HTMLButtonElement.prototype.willValidate;
+
+/** @return {boolean} */
+HTMLButtonElement.prototype.checkValidity = function() {};
+
+/** @param {string} message */
+HTMLButtonElement.prototype.setCustomValidity = function(message) {};
+
+/** @type {boolean} */
+HTMLInputElement.prototype.autofocus;
+
+/** @type {boolean} */
+HTMLInputElement.prototype.formNoValidate;
+
+/**
+ * @const
+ * @type {NodeList}
+ */
+HTMLInputElement.prototype.labels;
+
+/** @type {string} */
+HTMLInputElement.prototype.validationMessage;
+
+/**
+ * @const
+ * @type {ValidityState}
+ */
+HTMLInputElement.prototype.validity;
+
+/** @type {boolean} */
+HTMLInputElement.prototype.willValidate;
+
+/** @return {boolean} */
+HTMLInputElement.prototype.checkValidity = function() {};
+
+/** @param {string} message */
+HTMLInputElement.prototype.setCustomValidity = function(message) {};
+
+/** @type {boolean} */
+HTMLSelectElement.prototype.autofocus;
+
+/**
+ * @const
+ * @type {NodeList}
+ */
+HTMLSelectElement.prototype.labels;
+
+/** @type {string} */
+HTMLSelectElement.prototype.validationMessage;
+
+/**
+ * @const
+ * @type {ValidityState}
+ */
+HTMLSelectElement.prototype.validity;
+
+/** @type {boolean} */
+HTMLSelectElement.prototype.willValidate;
+
+/** @return {boolean} */
+HTMLSelectElement.prototype.checkValidity = function() {};
+
+/** @param {string} message */
+HTMLSelectElement.prototype.setCustomValidity = function(message) {};
+
+/** @type {boolean} */
+HTMLTextAreaElement.prototype.autofocus;
+
+/**
+ * @const
+ * @type {NodeList}
+ */
+HTMLTextAreaElement.prototype.labels;
+
+/** @type {string} */
+HTMLTextAreaElement.prototype.validationMessage;
+
+/**
+ * @const
+ * @type {ValidityState}
+ */
+HTMLTextAreaElement.prototype.validity;
+
+/** @type {boolean} */
+HTMLTextAreaElement.prototype.willValidate;
+
+/** @return {boolean} */
+HTMLTextAreaElement.prototype.checkValidity = function() {};
+
+/** @param {string} message */
+HTMLTextAreaElement.prototype.setCustomValidity = function(message) {};
+
+/**
+ * @constructor
+ * @extends {HTMLElement}
+ * @see http://www.w3.org/TR/html5/the-embed-element.html#htmlembedelement
+ */
+function HTMLEmbedElement() {}
+
+/**
+ * @type {string}
+ * @see http://www.w3.org/TR/html5/dimension-attributes.html#dom-dim-width
+ */
+HTMLEmbedElement.prototype.width;
+
+/**
+ * @type {string}
+ * @see http://www.w3.org/TR/html5/dimension-attributes.html#dom-dim-height
+ */
+HTMLEmbedElement.prototype.height;
+
+/**
+ * @type {string}
+ * @see http://www.w3.org/TR/html5/the-embed-element.html#dom-embed-src
+ */
+HTMLEmbedElement.prototype.src;
+
+/**
+ * @type {string}
+ * @see http://www.w3.org/TR/html5/the-embed-element.html#dom-embed-type
+ */
+HTMLEmbedElement.prototype.type;
+
+// Fullscreen APIs.
+
+/** 
+ * @see http://www.w3.org/TR/2012/WD-fullscreen-20120703/#dom-element-requestfullscreen 
+ */
+Element.prototype.requestFullscreen = function() {};
+
+/** 
+ * @type {boolean} 
+ * @see http://www.w3.org/TR/2012/WD-fullscreen-20120703/#dom-document-fullscreenenabled
+ */
+Document.prototype.fullscreenEnabled;
+
+/** 
+ * @type {Element} 
+ * @see http://www.w3.org/TR/2012/WD-fullscreen-20120703/#dom-document-fullscreenelement
+ */
+Document.prototype.fullscreenElement;
+
+/**
+ * @see http://www.w3.org/TR/2012/WD-fullscreen-20120703/#dom-document-exitfullscreen
+ */
+Document.prototype.exitFullscreen = function() {};
+
+// Externs definitions of browser current implementations.
+// Firefox 10 implementation.
+Element.prototype.mozRequestFullScreen = function() {};
+
+Element.prototype.mozRequestFullScreenWithKeys = function() {};
+
+/** @type {boolean} */
+Document.prototype.mozFullScreen;
+
+Document.prototype.mozCancelFullScreen = function() {};
+
+/** @type {Element} */
+Document.prototype.mozFullScreenElement;
+
+/** @type {boolean} */
+Document.prototype.mozFullScreenEnabled;
+
+// Chrome 21 implementation.
+/**
+ * The current fullscreen element for the document is set to this element.
+ * Valid only for Webkit browsers.
+ * @param {number=} opt_allowKeyboardInput Whether keyboard input is desired.
+ *     Should use ALLOW_KEYBOARD_INPUT constant.
+ */
+Element.prototype.webkitRequestFullScreen = function(opt_allowKeyboardInput) {};
+
+/**
+ * The current fullscreen element for the document is set to this element.
+ * Valid only for Webkit browsers.
+ * @param {number=} opt_allowKeyboardInput Whether keyboard input is desired.
+ *     Should use ALLOW_KEYBOARD_INPUT constant.
+ */
+Element.prototype.webkitRequestFullscreen = function(opt_allowKeyboardInput) {};
+
+/** @type {boolean} */
+Document.prototype.webkitIsFullScreen;
+
+Document.prototype.webkitCancelFullScreen = function() {};
+
+/** @type {Element} */
+Document.prototype.webkitCurrentFullScreenElement;
+
+/** @type {boolean} */
+Document.prototype.webkitFullScreenKeyboardInputAllowed;
+
+/** @type {number} */
+Element.ALLOW_KEYBOARD_INPUT = 1;
+
+/** @type {number} */
+Element.prototype.ALLOW_KEYBOARD_INPUT = 1;

@@ -549,7 +549,7 @@ class InlineVariables implements CompilerPass {
       // rather than the context of the window.
       //   var a = b.c;
       //   f(a)
-      // is ok.
+      // is OK.
       Node value = initialization.getAssignedValue();
       Preconditions.checkState(value != null);
       if (value.isGetProp()
@@ -558,14 +558,21 @@ class InlineVariables implements CompilerPass {
         return false;
       }
 
-      // Bug 2388531: Don't inline subclass definitions into class defining
-      // calls as this confused class removing logic.
       if (value.isFunction()) {
         Node callNode = reference.getParent();
         if (reference.getParent().isCall()) {
+          CodingConvention convention = compiler.getCodingConvention();
+          // Bug 2388531: Don't inline subclass definitions into class defining
+          // calls as this confused class removing logic.
           SubclassRelationship relationship =
-              compiler.getCodingConvention().getClassesDefinedByCall(callNode);
+              convention.getClassesDefinedByCall(callNode);
           if (relationship != null) {
+            return false;
+          }
+
+          // issue 668: Don't inline singleton getter methods
+          // calls as this confused class removing logic.
+          if (convention.getSingletonGetterClassName(callNode) != null) {
             return false;
           }
         }
@@ -642,15 +649,23 @@ class InlineVariables implements CompilerPass {
       } else if (initialization.isDeclaration()) {
         // The reference is a FUNCTION declaration or normal VAR declaration
         // with a value.
-        return NodeUtil.isFunctionDeclaration(initialization.getParent())
-            || initialization.getNode().getFirstChild() != null;
+        if (!NodeUtil.isFunctionDeclaration(initialization.getParent())
+            && initialization.getNode().getFirstChild() == null) {
+          return false;
+        }
       } else {
         Node parent = initialization.getParent();
         Preconditions.checkState(
             parent.isAssign()
             && parent.getFirstChild() == initialization.getNode());
-        return true;
       }
+
+      Node n = initialization.getAssignedValue();
+      if (n.isFunction()) {
+        return compiler.getCodingConvention().isInlinableFunction(n);
+      }
+
+      return true;
     }
 
     /**

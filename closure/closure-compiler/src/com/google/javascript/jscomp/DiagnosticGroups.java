@@ -27,11 +27,17 @@ import java.util.Map;
  * @author nicksantos@google.com (Nick Santos)
  */
 public class DiagnosticGroups {
+  static final DiagnosticType UNUSED =
+      DiagnosticType.warning("JSC_UNUSED", "{0}");
 
   public DiagnosticGroups() {}
 
   private final static Map<String, DiagnosticGroup> groupsByName =
       Maps.newHashMap();
+
+  static DiagnosticGroup registerDeprecatedGroup(String name) {
+    return registerGroup(name, new DiagnosticGroup(name, UNUSED));
+  }
 
   static DiagnosticGroup registerGroup(String name,
       DiagnosticGroup group) {
@@ -59,7 +65,7 @@ public class DiagnosticGroups {
   }
 
   /** Find the diagnostic group registered under the given name. */
-  protected DiagnosticGroup forName(String name) {
+  public DiagnosticGroup forName(String name) {
     return groupsByName.get(name);
   }
 
@@ -67,16 +73,16 @@ public class DiagnosticGroups {
   // New groups should be added to this list if they are public and should
   // be listed on the command-line as an available option.
   //
-  // If a group is suppressable on a per-file basis, it should be added
+  // If a group is suppressible on a per-file basis, it should be added
   // to parser/ParserConfig.properties
   static final String DIAGNOSTIC_GROUP_NAMES =
       "accessControls, ambiguousFunctionDecl, checkRegExp, " +
-      "checkTypes, checkVars, constantProperty, deprecated, " +
+      "checkTypes, checkVars, const, constantProperty, deprecated, " +
       "duplicateMessage, " +
       "es5Strict, externsValidation, fileoverviewTags, globalThis, " +
       "internetExplorerChecks, invalidCasts, missingProperties, " +
       "nonStandardJsDocs, strictModuleDepCheck, typeInvalidation, " +
-      "undefinedVars, unknownDefines, uselessCode, " +
+      "undefinedNames, undefinedVars, unknownDefines, uselessCode, " +
       "visibility";
 
   public static DiagnosticGroup GLOBAL_THIS =
@@ -118,8 +124,7 @@ public class DiagnosticGroups {
           TypeValidator.INVALID_CAST);
 
   public static DiagnosticGroup FILEOVERVIEW_JSDOC =
-      DiagnosticGroups.registerGroup("fileoverviewTags",
-          RhinoErrorReporter.EXTRA_FILEOVERVIEW);
+      DiagnosticGroups.registerDeprecatedGroup("fileoverviewTags");
 
   public static DiagnosticGroup STRICT_MODULE_DEP_CHECK =
       DiagnosticGroups.registerGroup("strictModuleDepCheck",
@@ -157,6 +162,10 @@ public class DiagnosticGroups {
   public static DiagnosticGroup UNDEFINED_VARIABLES =
       DiagnosticGroups.registerGroup("undefinedVars",
           VarCheck.UNDEFINED_VAR_ERROR);
+
+  public static DiagnosticGroup UNDEFINED_NAMES =
+      DiagnosticGroups.registerGroup("undefinedNames",
+          CheckGlobalNames.UNDEFINED_NAME_WARNING);
 
   public static DiagnosticGroup DEBUGGER_STATEMENT_PRESENT =
       DiagnosticGroups.registerGroup("checkDebuggerStatement",

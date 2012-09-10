@@ -19,6 +19,9 @@
  *  W3C's DOM specification by Gecko. This file depends on
  *  w3c_dom2.js.
  *
+ * When a non-standard extension appears in both Gecko and IE, we put
+ * it in gecko_dom.js
+ *
  * @externs
  */
 
@@ -108,18 +111,6 @@ Window.prototype.globalStorage;
 Window.prototype.history;
 
 /**
- * @type {number}
- * @see https://developer.mozilla.org/en/DOM/window.innerHeight
- */
-Window.prototype.innerHeight;
-
-/**
- * @type {number}
- * @see https://developer.mozilla.org/en/DOM/window.innerWidth
- */
-Window.prototype.innerWidth;
-
-/**
  * Returns the number of frames (either frame or iframe elements) in the
  * window.
  *
@@ -164,31 +155,7 @@ Window.prototype.navigator;
 Window.prototype.opener;
 
 /**
- * @type {number}
- * @see https://developer.mozilla.org/en/DOM/window.outerHeight
- */
-Window.prototype.outerHeight;
-
-/**
- * @type {number}
- * @see https://developer.mozilla.org/en/DOM/window.outerWidth
- */
-Window.prototype.outerWidth;
-
-/**
- * @type {number}
- * @see https://developer.mozilla.org/en/DOM/window.pageXOffset
- */
-Window.prototype.pageXOffset;
-
-/**
- * @type {number}
- * @see https://developer.mozilla.org/en/DOM/window.pageYOffset
- */
-Window.prototype.pageYOffset;
-
-/**
- * @type {?Window}
+ * @type {!Window}
  * @see https://developer.mozilla.org/en/DOM/window.parent
  */
 Window.prototype.parent;
@@ -199,82 +166,8 @@ Window.prototype.personalbar;
 /** @see https://developer.mozilla.org/en/DOM/window.pkcs11 */
 Window.prototype.pkcs11;
 
+/** @see https://developer.mozilla.org/en/DOM/window */
 Window.prototype.returnValue;
-
-/** @see https://developer.mozilla.org/En/DOM/window.screen */
-Window.prototype.screen;
-
-/**
- * @type {number}
- * @see https://developer.mozilla.org/En/DOM/window.screen.availTop
- */
-Window.prototype.screen.availTop;
-
-/**
- * @type {number}
- * @see https://developer.mozilla.org/En/DOM/window.screen.availLeft
- */
-Window.prototype.screen.availLeft;
-
-/**
- * @type {number}
- * @see https://developer.mozilla.org/En/DOM/window.screen.availHeight
- */
-Window.prototype.screen.availHeight;
-
-/**
- * @type {number}
- * @see https://developer.mozilla.org/En/DOM/window.screen.availWidth
- */
-Window.prototype.screen.availWidth;
-
-/**
- * @type {number}
- * @see https://developer.mozilla.org/En/DOM/window.screen.colorDepth
- */
-Window.prototype.screen.colorDepth;
-
-/**
- * @type {number}
- * @see https://developer.mozilla.org/En/DOM/window.screen.height
- */
-Window.prototype.screen.height;
-
-/**
- * @type {number}
- * @see https://developer.mozilla.org/En/DOM/window.screen.left
- */
-Window.prototype.screen.left;
-
-/**
- * @type {number}
- * @see https://developer.mozilla.org/En/DOM/window.screen.pixelDepth
- */
-Window.prototype.screen.pixelDepth;
-
-/**
- * @type {number}
- * @see https://developer.mozilla.org/En/DOM/window.screen.top
- */
-Window.prototype.screen.top;
-
-/**
- * @type {number}
- * @see https://developer.mozilla.org/En/DOM/window.screen.width
- */
-Window.prototype.screen.width;
-
-/**
- * @type {number}
- * @see https://developer.mozilla.org/En/DOM/window.screenX
- */
-Window.prototype.screenX;
-
-/**
- * @type {number}
- * @see https://developer.mozilla.org/En/DOM/window.screenY
- */
-Window.prototype.screenY;
 
 /** @see https://developer.mozilla.org/en/DOM/window.scrollbars */
 Window.prototype.scrollbars;
@@ -290,18 +183,6 @@ Window.prototype.scrollMaxX;
  * @see https://developer.mozilla.org/En/DOM/window.scrollMaxY
  */
 Window.prototype.scrollMaxY;
-
-/**
- * @type {number}
- * @see https://developer.mozilla.org/En/DOM/window.scrollX
- */
-Window.prototype.scrollX;
-
-/**
- * @type {number}
- * @see https://developer.mozilla.org/En/DOM/window.scrollY
- */
-Window.prototype.scrollY;
 
 /**
  * @type {!Window}
@@ -404,7 +285,7 @@ Window.prototype.escape = function(regular) {};
 Window.prototype.find;
 
 /** @see https://developer.mozilla.org/en/DOM/window.focus */
-window.focus = function() {};
+Window.prototype.focus = function() {};
 
 /** @see https://developer.mozilla.org/en/DOM/window.forward */
 Window.prototype.forward = function() {};
@@ -450,7 +331,15 @@ Window.prototype.setInterval;
  * @return {number}
  */
 Window.prototype.setTimeout = function(callback, delay, var_args) {};
+
+/**
+ * @param {string} uri
+ * @param {?=} opt_arguments
+ * @param {string=} opt_options
+ * @see https://developer.mozilla.org/en/DOM/window.showModalDialog
+ */
 Window.prototype.showModalDialog;
+
 Window.prototype.sizeToContent;
 
 /**
@@ -467,92 +356,154 @@ Window.prototype.stop = function() {};
 Window.prototype.unescape = function(escaped) {};
 
 Window.prototype.updateCommands;
-/** @type {?function (Event)} */ Window.prototype.onabort;
-/** @type {?function (Event)} */ Window.prototype.onbeforeunload;
-/** @type {?function (Event)} */ Window.prototype.onblur;
-/** @type {?function (Event)} */ Window.prototype.onchange;
-/** @type {?function (Event)} */ Window.prototype.onclick;
-/** @type {?function (Event)} */ Window.prototype.onclose;
-/** @type {?function (Event)} */ Window.prototype.oncontextmenu;
-/** @type {?function (Event)} */ Window.prototype.ondblclick;
-/** @type {?function (Event)} */ Window.prototype.ondragdrop;
-// onerror has a special signature.
-// See https://developer.mozilla.org/en/DOM/window.onerror
-// and http://msdn.microsoft.com/en-us/library/cc197053(VS.85).aspx
-/** @type {?function (string, string, number)} */
-Window.prototype.onerror;
-/** @type {?function (Event)} */ Window.prototype.onfocus;
-/** @type {?function (Event)} */ Window.prototype.onhashchange;
-/** @type {?function (Event)} */ Window.prototype.onkeydown;
-/** @type {?function (Event)} */ Window.prototype.onkeypress;
-/** @type {?function (Event)} */ Window.prototype.onkeyup;
-/** @type {?function (Event)} */ Window.prototype.onload;
-/** @type {?function (Event)} */ Window.prototype.onmousedown;
-/** @type {?function (Event)} */ Window.prototype.onmousemove;
-/** @type {?function (Event)} */ Window.prototype.onmouseout;
-/** @type {?function (Event)} */ Window.prototype.onmouseover;
-/** @type {?function (Event)} */ Window.prototype.onmouseup;
-/** @type {?function (Event)} */ Window.prototype.onmousewheel;
-/** @type {?function (Event)} */ Window.prototype.onpaint;
-/** @type {?function (Event)} */ Window.prototype.onpopstate;
-/** @type {?function (Event)} */ Window.prototype.onreset;
-/** @type {?function (Event)} */ Window.prototype.onresize;
-/** @type {?function (Event)} */ Window.prototype.onscroll;
-/** @type {?function (Event)} */ Window.prototype.onselect;
-/** @type {?function (Event)} */ Window.prototype.onsubmit;
-/** @type {?function (Event)} */ Window.prototype.onunload;
 
 // properties of Document
+
+/**
+ * @see https://developer.mozilla.org/en/DOM/document.alinkColor
+ * @type {string}
+ */
 Document.prototype.alinkColor;
+
+/**
+ * @see https://developer.mozilla.org/en/DOM/document.anchors
+ * @type {HTMLCollection}
+ */
 Document.prototype.anchors;
+
+/**
+ * @see https://developer.mozilla.org/en/DOM/document.applets
+ * @type {HTMLCollection}
+ */
 Document.prototype.applets;
 /** @type {boolean} */ Document.prototype.async;
 /** @type {string?} */ Document.prototype.baseURI;
 Document.prototype.baseURIObject;
+
+/**
+ * @see https://developer.mozilla.org/en/DOM/document.bgColor
+ * @type {string}
+ */
 Document.prototype.bgColor;
+
 /** @type {HTMLBodyElement} */ Document.prototype.body;
 Document.prototype.characterSet;
+
+/**
+ * @see https://developer.mozilla.org/en/DOM/document.compatMode
+ * @type {string}
+ */
 Document.prototype.compatMode;
+
 Document.prototype.contentType;
 /** @type {string} */ Document.prototype.cookie;
 Document.prototype.defaultView;
+
+/**
+ * @see https://developer.mozilla.org/en/DOM/document.designMode
+ * @type {string}
+ */
 Document.prototype.designMode;
+
 Document.prototype.documentURIObject;
+
+/**
+ * @see https://developer.mozilla.org/en/DOM/document.domain
+ * @type {string}
+ */
 Document.prototype.domain;
+
+/**
+ * @see https://developer.mozilla.org/en/DOM/document.embeds
+ * @type {HTMLCollection}
+ */
 Document.prototype.embeds;
+
+/**
+ * @see https://developer.mozilla.org/en/DOM/document.fgColor
+ * @type {string}
+ */
 Document.prototype.fgColor;
+
 /** @type {Element} */ Document.prototype.firstChild;
+
+/**
+ * @see https://developer.mozilla.org/en/DOM/document.forms
+ * @type {HTMLCollection}
+ */
 Document.prototype.forms;
+
 /** @type {number} */ Document.prototype.height;
 /** @type {Array} */ Document.prototype.images;
-Document.prototype.implementation;
+
+/**
+ * @type {string}
+ * @see https://developer.mozilla.org/en/DOM/document.lastModified
+ */
 Document.prototype.lastModified;
+
+/**
+ * @type {string}
+ * @see https://developer.mozilla.org/en/DOM/document.linkColor
+ */
 Document.prototype.linkColor;
+
+/**
+ * @see https://developer.mozilla.org/en/DOM/document.links
+ * @type {HTMLCollection}
+ */
 Document.prototype.links;
+
 /**
  * @type {!Location}
  * @implicitCast
  */
 Document.prototype.location;
+
+/**
+ * @type {string}
+ * @see https://developer.mozilla.org/en/DOM/Using_the_Page_Visibility_API
+ */
+Document.prototype.mozVisibilityState;
+
 Document.prototype.namespaceURI;
 Document.prototype.nodePrincipal;
 Document.prototype.plugins;
 Document.prototype.popupNode;
+
+/**
+ * @type {string}
+ * @see https://developer.mozilla.org/en/DOM/document.referrer
+ */
 Document.prototype.referrer;
+
+/**
+ * @see https://developer.mozilla.org/en/DOM/document.styleSheets
+ */
 Document.prototype.styleSheets;
+
 /** @type {?string} */ Document.prototype.title;
 Document.prototype.tooltipNode;
 /** @type {string} */ Document.prototype.URL;
+
+/**
+ * @type {string}
+ * @see https://developer.mozilla.org/en/DOM/document.vlinkColor
+ */
 Document.prototype.vlinkColor;
+
 /** @type {number} */ Document.prototype.width;
 
 // Methods of Document
-Document.prototype.clear;
+/**
+ * @see https://developer.mozilla.org/en/DOM/document.clear
+ */
+Document.prototype.clear = function() {};
+
+/**
+ * @see https://developer.mozilla.org/en/DOM/document.close
+ */
 Document.prototype.close;
-Document.prototype.createAttribute;
-Document.prototype.createCDATASection;
-Document.prototype.createComment;
-Document.prototype.createDocumentFragment;
 
 /**
  * @see https://developer.mozilla.org/en/DOM/document.createElementNS
@@ -561,7 +512,6 @@ Document.prototype.createDocumentFragment;
  * @return {!Element}
  */
 Document.prototype.createElementNS = function(namespaceURI, qualifiedName) {};
-Document.prototype.createEntityReference;
 
 /**
  * @param {string} type
@@ -569,25 +519,24 @@ Document.prototype.createEntityReference;
  */
 Document.prototype.createEvent = function(type) {};
 Document.prototype.createNSResolver;
-Document.prototype.createProcessingInstruction;
 /** @return {Range} */ Document.prototype.createRange = function() {};
-Document.prototype.createTextNode;
 Document.prototype.createTreeWalker;
 
-/**
- * @param {number} x
- * @param {number} y
- * @return {Element}
- * @nosideeffects
- */
-Document.prototype.elementFromPoint = function(x, y) {};
 Document.prototype.evaluate;
+
+/**
+ * @param {string} commandName
+ * @param {?boolean=} opt_showUi
+ * @param {*=} opt_value
+ * @see https://developer.mozilla.org/en/Rich-Text_Editing_in_Mozilla#Executing_Commands
+ */
 Document.prototype.execCommand;
 
 /**
  * @param {string} s id.
  * @return {HTMLElement}
  * @nosideeffects
+ * @see https://developer.mozilla.org/en/DOM/document.getElementById
  */
 Document.prototype.getElementById = function(s) {};
 
@@ -595,6 +544,7 @@ Document.prototype.getElementById = function(s) {};
  * @param {string} name
  * @return {!NodeList}
  * @nosideeffects
+ * @see https://developer.mozilla.org/en/DOM/document.getElementsByClassName
  */
 Document.prototype.getElementsByClassName = function(name) {};
 
@@ -602,6 +552,7 @@ Document.prototype.getElementsByClassName = function(name) {};
  * @param {string} name
  * @return {!NodeList}
  * @nosideeffects
+ * @see https://developer.mozilla.org/en/DOM/document.getElementsByName
  */
 Document.prototype.getElementsByName = function(name) {};
 
@@ -610,6 +561,7 @@ Document.prototype.getElementsByName = function(name) {};
  * @param {string} name
  * @return {!NodeList}
  * @nosideeffects
+ * @see https://developer.mozilla.org/en/DOM/document.getElementsByTagNameNS
  */
 Document.prototype.getElementsByTagNameNS = function(namespace, name) {};
 
@@ -623,13 +575,56 @@ Document.prototype.importNode = function(externalNode, deep) {};
 /** @param {string} uri */
 Document.prototype.load = function(uri) {};
 Document.prototype.loadOverlay;
+
+/**
+ * @see https://developer.mozilla.org/en/DOM/document.open
+ */
 Document.prototype.open;
+
+/**
+ * @see https://developer.mozilla.org/en/Midas
+ * @see http://msdn.microsoft.com/en-us/library/ms536676(VS.85).aspx
+ */
 Document.prototype.queryCommandEnabled;
+
+/**
+ * @see https://developer.mozilla.org/en/Midas
+ * @see http://msdn.microsoft.com/en-us/library/ms536678(VS.85).aspx
+ */
 Document.prototype.queryCommandIndeterm;
+
+/**
+ * @see https://developer.mozilla.org/en/Midas
+ * @see http://msdn.microsoft.com/en-us/library/ms536679(VS.85).aspx
+ */
 Document.prototype.queryCommandState;
+
+/**
+ * @see https://developer.mozilla.org/en/DOM/document.queryCommandSupported
+ * @see http://msdn.microsoft.com/en-us/library/ms536681(VS.85).aspx
+ * @param {string} command
+ * @return {?} Implementation-specific.
+ */
+Document.prototype.queryCommandSupported;
+
+/**
+ * @see https://developer.mozilla.org/en/Midas
+ * @see http://msdn.microsoft.com/en-us/library/ms536683(VS.85).aspx
+ */
 Document.prototype.queryCommandValue;
-Document.prototype.write;
-Document.prototype.writeln;
+
+/**
+ * @see https://developer.mozilla.org/en/DOM/document.write
+ * @param {string} text
+ */
+Document.prototype.write = function(text) {};
+
+/**
+ * @see https://developer.mozilla.org/en/DOM/document.writeln
+ * @param {string} text
+ */
+Document.prototype.writeln = function(text) {};
+
 Document.prototype.ononline;
 Document.prototype.onoffline;
 
@@ -813,10 +808,6 @@ Element.prototype.children;
  * @implicitCast
  */
 Element.prototype.className;
-/** @type {number} */ Element.prototype.clientHeight;
-/** @type {number} */ Element.prototype.clientLeft;
-/** @type {number} */ Element.prototype.clientTop;
-/** @type {number} */ Element.prototype.clientWidth;
 /** @type {string} */ Element.prototype.dir;
 
 /**
@@ -846,19 +837,10 @@ Element.prototype.nodeName;
 Element.prototype.nodePrincipal;
 /** @type {number} */ Element.prototype.nodeType;
 Element.prototype.nodeValue;
-/** @type {number} */ Element.prototype.offsetHeight;
-/** @type {number} */ Element.prototype.offsetLeft;
-/** @type {Element} */ Element.prototype.offsetParent;
-/** @type {number} */ Element.prototype.offsetTop;
-/** @type {number} */ Element.prototype.offsetWidth;
 /** @type {Document} */ Element.prototype.ownerDocument;
 /** @type {Node} */ Element.prototype.parentNode;
 Element.prototype.prefix;
 /** @type {Node} */ Element.prototype.previousSibling;
-/** @type {number} */ Element.prototype.scrollHeight;
-/** @type {number} */ Element.prototype.scrollLeft;
-/** @type {number} */ Element.prototype.scrollTop;
-/** @type {number} */ Element.prototype.scrollWidth;
 /** @type {CSSStyleDeclaration} */ Element.prototype.style;
 /**
  * @type {number}
@@ -894,13 +876,6 @@ Element.prototype.blur = function() {};
 
 /** @return {undefined} */
 Element.prototype.click = function() {};
-
-/**
- * @return { {top: number, left: number, right: number, bottom: number} }
- * @see https://developer.mozilla.org/En/DOM:element.getBoundingClientRect
- * @nosideeffects
- */
-Element.prototype.getBoundingClientRect = function() {};
 
 /** @return {undefined} */
 Element.prototype.focus = function() {};
@@ -940,34 +915,6 @@ Element.prototype.removeEventListener = function(type, handler, useCapture) {};
 
 /** @override */
 Element.prototype.replaceChild = function(insertedNode, replacedNode) {};
-
-/**
- * @param {boolean=} opt_alignWithTop
- */
-Element.prototype.scrollIntoView = function(opt_alignWithTop) {};
-
-// Event handlers
-/** @type {?function (Event)} */ Element.prototype.oncopy;
-/** @type {?function (Event)} */ Element.prototype.oncut;
-/** @type {?function (Event)} */ Element.prototype.onpaste;
-/** @type {?function (Event)} */ Element.prototype.onbeforeunload;
-/** @type {?function (Event)} */ Element.prototype.onblur;
-/** @type {?function (Event)} */ Element.prototype.onchange;
-/** @type {?function (Event)} */ Element.prototype.onclick;
-/** @type {?function (Event)} */ Element.prototype.oncontextmenu;
-/** @type {?function (Event)} */ Element.prototype.ondblclick;
-/** @type {?function (Event)} */ Element.prototype.onfocus;
-/** @type {?function (Event)} */ Element.prototype.onkeydown;
-/** @type {?function (Event)} */ Element.prototype.onkeypress;
-/** @type {?function (Event)} */ Element.prototype.onkeyup;
-/** @type {?function (Event)} */ Element.prototype.onmousedown;
-/** @type {?function (Event)} */ Element.prototype.onmousemove;
-/** @type {?function (Event)} */ Element.prototype.onmouseout;
-/** @type {?function (Event)} */ Element.prototype.onmouseover;
-/** @type {?function (Event)} */ Element.prototype.onmouseup;
-/** @type {?function (Event)} */ Element.prototype.onmousewheel;
-/** @type {?function (Event)} */ Element.prototype.onresize;
-/** @type {?function (Event)} */ Element.prototype.onscroll;
 
 /** @type {number} */
 HTMLInputElement.prototype.selectionStart;
@@ -1130,7 +1077,8 @@ PluginArray.prototype.item = function(index) {};
  */
 PluginArray.prototype.namedItem = function(name) {};
 
-PluginArray.prototype.refresh = function() {};
+/** @param {boolean=} reloadDocuments */
+PluginArray.prototype.refresh = function(reloadDocuments) {};
 
 /** @constructor */
 function MimeTypeArray() {}

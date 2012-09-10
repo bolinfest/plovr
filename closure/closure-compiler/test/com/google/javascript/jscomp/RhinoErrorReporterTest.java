@@ -16,11 +16,14 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.javascript.rhino.Node;
 
 import junit.framework.TestCase;
+
+import java.util.List;
 
 /**
  * Tests for error message filtering.
@@ -37,30 +40,37 @@ public class RhinoErrorReporterTest extends TestCase {
 
   public void testTrailingComma() throws Exception {
     String message =
-        "Parse error. Internet Explorer has a non-standard " +
-        "intepretation of trailing commas. Arrays will have the wrong " +
-        "length and objects will not parse at all.";
+        "Parse error. IE8 (and below) will parse trailing commas in " +
+        "array and object literals incorrectly. " +
+        "If you are targeting newer versions of JS, " +
+        "set the appropriate language_in option.";
     assertError(
         "var x = [1,];",
         RhinoErrorReporter.TRAILING_COMMA,
         message);
-    assertError(
-        "var x = {1: 2,};",
+    JSError error = assertError(
+        "var x = {\n" +
+        "    1: 2,\n" +
+        "};",
         RhinoErrorReporter.TRAILING_COMMA,
         message);
-  }
 
+    assertEquals(2, error.getLineNumber());
+
+    // Rhino uses the "beginning" of the line where the comma appears,
+    // for some odd reason.
+    assertEquals(4, error.getCharno());
+  }
 
   /**
    * Verifies that the compiler emits an error for the given code.
    */
-  private void assertError(
+  private JSError assertError(
       String code, DiagnosticType type, String description) {
     Compiler compiler = new Compiler();
-    JSSourceFile[] externs = new JSSourceFile[] {};
-    JSSourceFile[] inputs =  new JSSourceFile[] {
-      JSSourceFile.fromCode("input", code)
-    };
+    List<SourceFile> externs = ImmutableList.of();
+    List<SourceFile> inputs = ImmutableList.of(
+        SourceFile.fromCode("input", code));
     compiler.init(externs, inputs, new CompilerOptions());
     compiler.parseInputs();
     assertEquals("Expected error", 1, compiler.getErrorCount());
@@ -69,5 +79,6 @@ public class RhinoErrorReporterTest extends TestCase {
         Iterables.getOnlyElement(Lists.newArrayList(compiler.getErrors()));
     assertEquals(type, error.getType());
     assertEquals(description, error.description);
+    return error;
   }
 }

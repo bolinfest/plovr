@@ -20,13 +20,16 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.ControlFlowGraph.AbstractCfgNodeTraversalCallback;
 import com.google.javascript.jscomp.ControlFlowGraph.Branch;
 import com.google.javascript.jscomp.DataFlowAnalysis.FlowState;
+import com.google.javascript.jscomp.MustBeReachingVariableDef.Definition;
 import com.google.javascript.jscomp.MustBeReachingVariableDef.MustDef;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeTraversal.AbstractShallowCallback;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
+import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.graph.DiGraph.DiGraphEdge;
 import com.google.javascript.jscomp.graph.DiGraph.DiGraphNode;
 import com.google.javascript.rhino.Node;
@@ -34,6 +37,7 @@ import com.google.javascript.rhino.Token;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Inline variables when possible. Using the information from
@@ -70,6 +74,7 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
    * need two separate dataflow result.
    */
   private final AbstractCompiler compiler;
+  private final Set<Var> inlinedNewDependencies = Sets.newHashSet();
 
   // These two pieces of data is persistent in the whole execution of enter
   // scope.
@@ -89,13 +94,17 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
         }
 
         // TODO(user): We only care about calls to functions that
-        // passes one of the dependent variable to a non-sideeffect free
+        // passes one of the dependent variable to a non-side-effect free
         // function.
         if (n.isCall() && NodeUtil.functionCallHasSideEffects(n)) {
           return true;
         }
 
         if (n.isNew() && NodeUtil.constructorCallHasSideEffects(n)) {
+          return true;
+        }
+
+        if (n.isDelProp()) {
           return true;
         }
 
@@ -135,7 +144,7 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
     candidates = Lists.newLinkedList();
 
     // Using the forward reaching definition search to find all the inline
-    // candiates
+    // candidates
     new NodeTraversal(compiler, new GatherCandiates()).traverse(
         t.getScopeRoot().getLastChild());
 
@@ -145,6 +154,17 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
     for (Candidate c : candidates) {
       if (c.canInline()) {
         c.inlineVariable();
+
+        // If definition c has dependencies, then inlining it may have
+        // introduced new dependencies for our other inlining candidates.
+        //
+        // MustBeReachingVariableDef uses this dependency graph in its
+        // analysis, so some of these candidates may no longer be valid.
+        // We keep track of when the variable dependency graph changed
+        // so that we can back off appropriately.
+        if (!c.defMetadata.depends.isEmpty()) {
+          inlinedNewDependencies.add(t.getScope().getVar(c.varName));
+        }
       }
     }
   }
@@ -154,7 +174,7 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
 
   @Override
   public void process(Node externs, Node root) {
-    (new NodeTraversal(compiler, this)).traverse(root);
+    (new NodeTraversal(compiler, this)).traverseRoots(externs, root);
   }
 
   @Override
@@ -169,7 +189,7 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
   /**
    * Gathers a list of possible candidates for inlining based only on
    * information from {@link MustBeReachingVariableDef}. The list will be stored
-   * in {@code candidiates} and the validity of each inlining Candidate should
+   * in {@code candidates} and the validity of each inlining Candidate should
    * be later verified with {@link Candidate#canInline()} when
    * {@link MaybeReachingVariableUse} has been performed.
    */
@@ -191,11 +211,16 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
         public void visit(NodeTraversal t, Node n, Node parent) {
           if (n.isName()) {
 
+            // n.getParent() isn't null. This just the case where n is the root
+            // node that gatherCb started at.
+            if (parent == null) {
+              return;
+            }
+
             // Make sure that the name node is purely a read.
             if ((NodeUtil.isAssignmentOp(parent) && parent.getFirstChild() == n)
-                || parent.isVar() || parent.isInc() ||
-                parent.isDec() || parent.isParamList() ||
-                parent.isCatch()) {
+                || parent.isVar() || parent.isInc() || parent.isDec() ||
+                parent.isParamList() || parent.isCatch()) {
               return;
             }
 
@@ -204,10 +229,12 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
               return;
             }
 
-            Node defNode = reachingDef.getDef(name, cfgNode);
-            if (defNode != null &&
-                !reachingDef.dependsOnOuterScopeVars(name, cfgNode)) {
-              candidates.add(new Candidate(name, defNode, n, cfgNode));
+            Definition def = reachingDef.getDef(name, cfgNode);
+            // TODO(nicksantos): We need to add some notion of @const outer
+            // scope vars. We can inline those just fine.
+            if (def != null &&
+                !reachingDef.dependsOnOuterScopeVars(def)) {
+              candidates.add(new Candidate(name, def, n, cfgNode));
             }
           }
         }
@@ -227,7 +254,7 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
 
     // Nodes related to the definition.
     private Node def;
-    private final Node defCfgNode;
+    private final Definition defMetadata;
 
     // Nodes related to the use.
     private final Node use;
@@ -237,22 +264,35 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
     // use in the CFG.
     private int numUseWithinUseCfgNode;
 
-    Candidate(String varName, Node defCfgNode, Node use, Node useCfgNode) {
+    Candidate(String varName, Definition defMetadata,
+        Node use, Node useCfgNode) {
       Preconditions.checkArgument(use.isName());
       this.varName = varName;
-      this.defCfgNode = defCfgNode;
+      this.defMetadata = defMetadata;
       this.use = use;
       this.useCfgNode = useCfgNode;
     }
 
-    private boolean canInline() {
+    private Node getDefCfgNode() {
+      return defMetadata.node;
+    }
 
+    private boolean canInline() {
       // Cannot inline a parameter.
-      if (defCfgNode.isFunction()) {
+      if (getDefCfgNode().isFunction()) {
         return false;
       }
 
-      getDefinition(defCfgNode, null);
+      // If one of our dependencies has been inlined, then our dependency
+      // graph is wrong. Re-computing it would take another CFG computation,
+      // so we just back off for now.
+      for (Var dependency : defMetadata.depends) {
+        if (inlinedNewDependencies.contains(dependency)) {
+          return false;
+        }
+      }
+
+      getDefinition(getDefCfgNode(), null);
       getNumUseInUseCfgNode(useCfgNode, null);
 
       // Definition was not found.
@@ -266,11 +306,10 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
         return false;
       }
 
-
       // The right of the definition has side effect:
       // Example, for x:
       // x = readProp(b), modifyProp(b); print(x);
-      if (checkRightOf(def, defCfgNode, SIDE_EFFECT_PREDICATE)) {
+      if (checkRightOf(def, getDefCfgNode(), SIDE_EFFECT_PREDICATE)) {
         return false;
       }
 
@@ -281,8 +320,7 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
         return false;
       }
 
-
-      // TODO(user): Side-effect is ok sometimes. As long as there are no
+      // TODO(user): Side-effect is OK sometimes. As long as there are no
       // side-effect function down all paths to the use. Once we have all the
       // side-effect analysis tool.
       if (NodeUtil.mayHaveSideEffects(def.getLastChild())) {
@@ -304,13 +342,13 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
       }
 
 
-      Collection<Node> uses = reachingUses.getUses(varName, defCfgNode);
+      Collection<Node> uses = reachingUses.getUses(varName, getDefCfgNode());
 
       if (uses.size() != 1) {
         return false;
       }
 
-      // We give up inling stuff with R-Value that has GETPROP, GETELEM,
+      // We give up inlining stuff with R-Value that has GETPROP, GETELEM,
       // or anything that creates a new object.
       // Example:
       // var x = a.b.c; j.c = 1; print(x);
@@ -345,15 +383,15 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
 
       // We can skip the side effect check along the paths of two nodes if
       // they are just next to each other.
-      if (NodeUtil.isStatementBlock(defCfgNode.getParent()) &&
-          defCfgNode.getNext() != useCfgNode) {
+      if (NodeUtil.isStatementBlock(getDefCfgNode().getParent()) &&
+          getDefCfgNode().getNext() != useCfgNode) {
         // Similar side effect check as above but this time the side effect is
         // else where along the path.
         // x = readProp(b); while(modifyProp(b)) {}; print(x);
         CheckPathsBetweenNodes<Node, ControlFlowGraph.Branch>
           pathCheck = new CheckPathsBetweenNodes<Node, ControlFlowGraph.Branch>(
                  cfg,
-                 cfg.getDirectedGraphNode(defCfgNode),
+                 cfg.getDirectedGraphNode(getDefCfgNode()),
                  cfg.getDirectedGraphNode(useCfgNode),
                  SIDE_EFFECT_PREDICATE,
                  Predicates.

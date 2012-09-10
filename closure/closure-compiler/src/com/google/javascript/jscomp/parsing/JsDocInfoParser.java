@@ -17,6 +17,7 @@
 package com.google.javascript.jscomp.parsing;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
@@ -43,7 +44,7 @@ import java.util.Set;
  *
  */
 // TODO(nicksantos): Unify all the JSDocInfo stuff into one package, instead of
-// spreading it across mutliple packages.
+// spreading it across multiple packages.
 public final class JsDocInfoParser {
 
   private final JsDocTokenStream stream;
@@ -99,7 +100,7 @@ public final class JsDocInfoParser {
   /**
    * Sets the JsDocBuilder for the file-level (root) node of this parse. The
    * parser uses the builder to append any preserve annotations it encounters
-   * in jsdoc comments.
+   * in JsDoc comments.
    *
    * @param fileLevelJsDocBuilder
    */
@@ -336,8 +337,7 @@ public final class JsDocInfoParser {
                     token = eatTokensUntilEOL(token);
                   }
 
-                  if (!jsdocBuilder.recordFileOverview(fileOverview) ||
-                      fileOverviewJSDocInfo != null) {
+                  if (!jsdocBuilder.recordFileOverview(fileOverview)) {
                     parser.addParserWarning("msg.jsdoc.fileoverview.extra",
                         stream.getLineno(), stream.getCharno());
                   }
@@ -384,6 +384,14 @@ public final class JsDocInfoParser {
                 case EXPORT:
                   if (!jsdocBuilder.recordExport()) {
                     parser.addParserWarning("msg.jsdoc.export",
+                        stream.getLineno(), stream.getCharno());
+                  }
+                  token = eatTokensUntilEOL();
+                  continue retry;
+
+                case EXPOSE:
+                  if (!jsdocBuilder.recordExpose()) {
+                    parser.addParserWarning("msg.jsdoc.expose",
                         stream.getLineno(), stream.getCharno());
                   }
                   token = eatTokensUntilEOL();
@@ -767,13 +775,15 @@ public final class JsDocInfoParser {
 
                 case TEMPLATE:
                   ExtractionInfo templateInfo = extractSingleLineBlock();
-                  String templateTypeName = templateInfo.string;
+                  List<String> names = Lists.newArrayList(
+                      Splitter.on(',')
+                          .trimResults()
+                          .split(templateInfo.string));
 
-                  if (templateTypeName.length() == 0) {
+                  if (names.size() == 0 || names.get(0).length() == 0) {
                     parser.addTypeWarning("msg.jsdoc.templatemissing",
                           stream.getLineno(), stream.getCharno());
-                  } else if (!jsdocBuilder.recordTemplateTypeName(
-                      templateTypeName)) {
+                  } else if (!jsdocBuilder.recordTemplateTypeNames(names)) {
                     parser.addTypeWarning("msg.jsdoc.template.at.most.once",
                         stream.getLineno(), stream.getCharno());
                   }
@@ -1344,10 +1354,19 @@ public final class JsDocInfoParser {
 
     boolean ignoreStar = false;
 
+    // Track the start of the line to count whitespace that
+    // the tokenizer skipped. Because this case is rare, it's easier
+    // to do this here than in the tokenizer.
+    int lineStartChar = -1;
+
     do {
       switch (token) {
         case STAR:
-          if (!ignoreStar) {
+          if (ignoreStar) {
+            // Mark the position after the star as the new start of the line.
+            lineStartChar = stream.getCharno() + 1;
+          } else {
+            // The star is part of the comment.
             if (builder.length() > 0) {
               builder.append(' ');
             }
@@ -1364,16 +1383,34 @@ public final class JsDocInfoParser {
           }
 
           ignoreStar = true;
+          lineStartChar = 0;
           token = next();
           continue;
 
-        case ANNOTATION:
-        case EOC:
-        case EOF:
-          // When we're capturing a license block, annotations
-          // in the block are ok.
-          if (!(option == WhitespaceOption.PRESERVE &&
-                token == JsDocToken.ANNOTATION)) {
+        default:
+          ignoreStar = false;
+          state = State.SEARCHING_ANNOTATION;
+
+          boolean isEOC = token == JsDocToken.EOC;
+          if (!isEOC) {
+            if (lineStartChar != -1 && option == WhitespaceOption.PRESERVE) {
+              int numSpaces = stream.getCharno() - lineStartChar;
+              for (int i = 0; i < numSpaces; i++) {
+                builder.append(' ');
+              }
+              lineStartChar = -1;
+            } else if (builder.length() > 0) {
+              // All tokens must be separated by a space.
+              builder.append(' ');
+            }
+          }
+
+          if (token == JsDocToken.EOC ||
+              token == JsDocToken.EOF ||
+              // When we're capturing a license block, annotations
+              // in the block are OK.
+              (token == JsDocToken.ANNOTATION &&
+               option != WhitespaceOption.PRESERVE)) {
             String multilineText = builder.toString();
 
             if (option != WhitespaceOption.PRESERVE) {
@@ -1389,16 +1426,6 @@ public final class JsDocInfoParser {
             }
 
             return new ExtractionInfo(multilineText, token);
-          }
-
-          // FALL THROUGH
-
-        default:
-          ignoreStar = false;
-          state = State.SEARCHING_ANNOTATION;
-
-          if (builder.length() > 0) {
-            builder.append(' ');
           }
 
           builder.append(toString(token));
@@ -1665,12 +1692,14 @@ public final class JsDocInfoParser {
       // {?=} - equals
       // {function(?, number)} - comma
       // {function(number, ?)} - right paren
+      // {function(number, ...[?])} - right bracket
       // {function(): ?|number} - pipe
       // I'm not a big fan of using look-ahead for this, but it makes
       // the type language a lot nicer.
       token = next();
       if (token == JsDocToken.COMMA ||
           token == JsDocToken.EQUALS ||
+          token == JsDocToken.RB ||
           token == JsDocToken.RC ||
           token == JsDocToken.RP ||
           token == JsDocToken.PIPE) {
@@ -1985,7 +2014,7 @@ public final class JsDocInfoParser {
 
         boolean isPipe = token == JsDocToken.PIPE;
         if (isPipe && match(JsDocToken.PIPE)) {
-          // We support double pipes for backwards compatiblity.
+          // We support double pipes for backwards compatibility.
           next();
         }
         skipEOLs();
@@ -1997,7 +2026,7 @@ public final class JsDocInfoParser {
       }
 
       union.addChildToBack(expr);
-      // We support commas for backwards compatiblity.
+      // We support commas for backwards compatibility.
     } while (match(JsDocToken.PIPE, JsDocToken.COMMA));
 
     if (alternate == null) {

@@ -61,8 +61,8 @@ class PeepholeSubstituteAlternateSyntax
   /**
    * @param late When late is false, this mean we are currently running before
    * most of the other optimizations. In this case we would avoid optimizations
-   * that would make the code harder to analyze (such as using string spliting,
-   * merging statements with commans, etc). When this is true, we would
+   * that would make the code harder to analyze (such as using string splitting,
+   * merging statements with commas, etc). When this is true, we would
    * do anything to minimize for size.
    */
   PeepholeSubstituteAlternateSyntax(boolean late) {
@@ -189,7 +189,7 @@ class PeepholeSubstituteAlternateSyntax
         Node fixedIfCondition = IR.not(ifCondition)
             .srcref(ifCondition);
 
-        // Ok, join the IF expression with the FOR expression
+        // OK, join the IF expression with the FOR expression
         Node forCondition = NodeUtil.getConditionExpression(n);
         if (forCondition.isEmpty()) {
           n.replaceChild(forCondition, fixedIfCondition);
@@ -210,9 +210,15 @@ class PeepholeSubstituteAlternateSyntax
     Node callTarget = n.getFirstChild();
     if (callTarget != null && callTarget.isName() &&
           callTarget.getString().equals("String")) {
-      // Fold String(a) to ''+(a) - which allows further optimizations
+      // Fold String(a) to '' + (a) on immutable literals,
+      // which allows further optimizations
+      //
+      // We can't do this in the general case, because String(a) has
+      // slightly different semantics than '' + (a). See
+      // http://code.google.com/p/closure-compiler/issues/detail?id=759
       Node value = callTarget.getNext();
-      if (value != null) {
+      if (value != null && value.getNext() == null &&
+          NodeUtil.isImmutableValue(value)) {
         Node addition = IR.add(
             IR.string("").srcref(callTarget),
             value.detachFromParent());
@@ -228,7 +234,7 @@ class PeepholeSubstituteAlternateSyntax
     // Rewriting "(fn.bind(a,b))()" to "fn.call(a,b)" makes it inlinable
     Preconditions.checkState(n.isCall());
     Node callTarget = n.getFirstChild();
-    Bind bind = getCodingConvention().describeFunctionBind(callTarget);
+    Bind bind = getCodingConvention().describeFunctionBind(callTarget, false);
     if (bind != null) {
       // replace the call target
       bind.target.detachFromParent();
@@ -264,7 +270,7 @@ class PeepholeSubstituteAlternateSyntax
   }
 
   private Node trySplitComma(Node n) {
-    if (!late) {
+    if (late) {
       return n;
     }
     Node parent = n.getParent();
@@ -1151,7 +1157,7 @@ class PeepholeSubstituteAlternateSyntax
               // It only occurs when both of expressions are not NOT expressions
               if (!leftParent.isNot()
                   && !rightParent.isNot()) {
-                // If an expression has higher precendence than && or ||,
+                // If an expression has higher precedence than && or ||,
                 // but lower precedence than NOT, an additional () is needed
                 // Thus we do not preceed
                 int op_precedence = NodeUtil.precedence(first.getType());
@@ -1464,8 +1470,8 @@ class PeepholeSubstituteAlternateSyntax
         && pattern.getString().length() < 100
 
         && (null == flags || flags.isString())
-        // don't escape patterns with unicode escapes since Safari behaves badly
-        // (read can't parse or crashes) on regex literals with unicode escapes
+        // don't escape patterns with Unicode escapes since Safari behaves badly
+        // (read can't parse or crashes) on regex literals with Unicode escapes
         && (isEcmaScript5OrGreater()
             || !containsUnicodeEscape(pattern.getString()))) {
 
@@ -1530,6 +1536,7 @@ class PeepholeSubstituteAlternateSyntax
     if(!late) {
       return n;
     }
+
     int numElements = n.getChildCount();
     // We save two bytes per element.
     int saving = numElements * 2 - STRING_SPLIT_OVERHEAD;
@@ -1545,12 +1552,8 @@ class PeepholeSubstituteAlternateSyntax
 
     // These delimiters are chars that appears a lot in the program therefore
     // probably have a small Huffman encoding.
-    NEXT_DELIMITER: for (char delimiter : new char[]{',', ' ', ';', '{', '}'}) {
-      for (String cur : strings) {
-        if (cur.indexOf(delimiter) != -1) {
-          continue NEXT_DELIMITER;
-        }
-      }
+    String delimiter = pickDelimiter(strings);
+    if (delimiter != null) {
       String template = Joiner.on(delimiter).join(strings);
       Node call = IR.call(
           IR.getprop(
@@ -1565,14 +1568,45 @@ class PeepholeSubstituteAlternateSyntax
     return n;
   }
 
+  /**
+   * Find a delimiter that does not occur in the given strings
+   * @param strings The strings that must be separated.
+   * @return a delimiter string or null
+   */
+  private String pickDelimiter(String[] strings) {
+    boolean allLength1 = true;
+    for (String s : strings) {
+      if (s.length() != 1) {
+        allLength1 = false;
+        break;
+      }
+    }
+
+    if (allLength1) {
+      return "";
+    }
+
+    String[] delimiters = new String[]{" ", ";", ",", "{", "}", null};
+    int i = 0;
+    NEXT_DELIMITER: for (;delimiters[i] != null; i++) {
+      for (String cur : strings) {
+        if (cur.contains(delimiters[i])) {
+          continue NEXT_DELIMITER;
+        }
+      }
+      break;
+    }
+    return delimiters[i];
+  }
+
   private static final Pattern REGEXP_FLAGS_RE = Pattern.compile("^[gmi]*$");
 
   /**
    * are the given flags valid regular expression flags?
-   * Javascript recognizes several suffix flags for regular expressions,
+   * JavaScript recognizes several suffix flags for regular expressions,
    * 'g' - global replace, 'i' - case insensitive, 'm' - multi-line.
-   * They are case insensitive, and javascript does not recognize the extended
-   * syntax mode, single-line mode, or expression replacement mode from perl5.
+   * They are case insensitive, and JavaScript does not recognize the extended
+   * syntax mode, single-line mode, or expression replacement mode from Perl 5.
    */
   private static boolean areValidRegexpFlags(String flags) {
     return REGEXP_FLAGS_RE.matcher(flags).matches();
@@ -1586,8 +1620,8 @@ class PeepholeSubstituteAlternateSyntax
    * 'new RegExp('foobar','g')' with '/foobar/g' may change the behavior of
    * the program if the RegExp is used inside a loop, for example.
    * <p>
-   * EmcaScript 5 explicitly disallows pooling of regular expression literals so
-   * in EcmaScript 5, {@code /foo/g} and {@code new RegExp('foo', 'g')} are
+   * ECMAScript 5 explicitly disallows pooling of regular expression literals so
+   * in ECMAScript 5, {@code /foo/g} and {@code new RegExp('foo', 'g')} are
    * equivalent.
    * From section 7.8.5:
    * "Then each time the literal is evaluated, a new object is created as if by
@@ -1669,7 +1703,7 @@ class PeepholeSubstituteAlternateSyntax
   }
 
   /**
-   * true if the javascript string would contain a unicode escape when written
+   * true if the JavaScript string would contain a Unicode escape when written
    * out as the body of a regular expression literal.
    */
   static boolean containsUnicodeEscape(String s) {
@@ -1680,7 +1714,7 @@ class PeepholeSubstituteAlternateSyntax
         ++nSlashes;
       }
       // if there are an even number of slashes before the \ u then it is a
-      // unicode literal.
+      // Unicode literal.
       if (0 == (nSlashes & 1)) { return true; }
     }
     return false;

@@ -74,14 +74,14 @@ gadgets.rpc.ACK;
 /**
  * @param {?string} targetId The id of the target gadget, null for container.
  * @param {string} serviceName The RPC service to call.
- * @param {function(...[*]) : void=} opt_callback Function called when the RPC
+ * @param {!Function=} opt_callback Function called when the RPC
  *     completes.
  * @param {...*} var_args Variable arguments that are passed to the RPC handler.
  */
 gadgets.rpc.call = function(targetId, serviceName, opt_callback, var_args) {};
 
 /**
- * Force rpc utilities to fallback to secure mechanisms for type=URL gadgets.
+ * Force RPC utilities to fallback to secure mechanisms for type=URL gadgets.
  */
 gadgets.rpc.forceParentVerifiable = function() {};
 
@@ -92,7 +92,7 @@ gadgets.rpc.getRelayChannel = function() {};
 
 /**
  * @param {string} targetId The frame ID to get the relay for.
- * @return {string} The relay url of the given gadget (or container).
+ * @return {string} The relay URL of the given gadget (or container).
  */
 gadgets.rpc.getRelayUrl = function(targetId) {};
 
@@ -113,13 +113,13 @@ gadgets.rpc.receive = function(fragment) {};
 
 /**
  * @param {string} serviceName The RPC service to register a handler for.
- * @param {function(...[*]) : *} handler Handler for an RPC call, return
+ * @param {!Function} handler Handler for an RPC call, return
  *     value will be sent back to the caller.
  */
 gadgets.rpc.register = function(serviceName, handler) {};
 
 /**
- * @param {function(...[*]) : *} handler Handler for unknown RPC calls,
+ * @param {!Function} handler Handler for unknown RPC calls,
  *     return value will be sent back to the caller.
  */
 gadgets.rpc.registerDefault = function(handler) {};
@@ -532,7 +532,7 @@ gadgets.config = {};
  *
  * @param {string} component The name of the component to register. Should
  *     be the same as the fully qualified name of the <Require> feature or
- *     the name of a fully qualified javascript object reference
+ *     the name of a fully qualified JavaScript object reference
  *     (e.g. "gadgets.io").
  * @param {Object=} opt_validators Mapping of option name to validation
  *     functions that take the form function(data) {return isValid(data);}

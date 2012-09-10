@@ -50,7 +50,7 @@ public class PeepholeReplaceKnownMethodsTest extends CompilerTestCase {
     fold("x = 'abcdefbe'.lastIndexOf('b')", "x = 6");
     fold("x = 'abcdefbe'.lastIndexOf('b', 5)", "x = 1");
 
-    // Both elements must be string. Dont do anything if either one is not
+    // Both elements must be strings. Don't do anything if either one is not
     // string.
     fold("x = 'abc1def'.indexOf(1)", "x = 3");
     fold("x = 'abcNaNdef'.indexOf(NaN)", "x = 3");
@@ -58,7 +58,7 @@ public class PeepholeReplaceKnownMethodsTest extends CompilerTestCase {
     fold("x = 'abcnulldef'.indexOf(null)", "x = 3");
     fold("x = 'abctruedef'.indexOf(true)", "x = 3");
 
-    // The following testcase fails with JSC_PARSE_ERROR. Hence omitted.
+    // The following test case fails with JSC_PARSE_ERROR. Hence omitted.
     // foldSame("x = 1.indexOf('bcd');");
     foldSame("x = NaN.indexOf('bcd')");
     foldSame("x = undefined.indexOf('bcd')");
@@ -205,9 +205,19 @@ public class PeepholeReplaceKnownMethodsTest extends CompilerTestCase {
     fold("x = 'a b c d e'.split(' ', 1)", "x = ['a']");
     fold("x = 'a b c d e'.split(' ', 3)", "x = ['a','b','c']");
     fold("x = 'a b c d e'.split(null, 1)", "x = ['a b c d e']");
-    fold("x = 'aaaaa'.split('a')", "x = ['', '', '', '', '']");
+    fold("x = 'aaaaa'.split('a')", "x = ['', '', '', '', '', '']");
+    fold("x = 'xyx'.split('x')", "x = ['', 'y', '']");
+
+    // Empty separator
     fold("x = 'abcde'.split('')", "x = ['a','b','c','d','e']");
     fold("x = 'abcde'.split('', 3)", "x = ['a','b','c']");
+
+    // Empty separator AND empty string
+    fold("x = ''.split('')", "x = []");
+
+    // Separator equals string
+    fold("x = 'aaa'.split('aaa')", "x = ['','']");
+    fold("x = ' '.split(' ')", "x = ['','']");
 
     foldSame("x = 'abcde'.split(/ /)");
     foldSame("x = 'abcde'.split(' ', -1)");
@@ -255,9 +265,13 @@ public class PeepholeReplaceKnownMethodsTest extends CompilerTestCase {
     fold("x = parseInt('0xA', 16)", "x = 10");
     fold("x = parseInt('07', 8)", "x = 7");
     fold("x = parseInt('08')", "x = 8");
+    fold("x = parseInt('0')", "x = 0");
+    fold("x = parseFloat('0')", "x = 0");
     fold("x = parseFloat('1.23')", "x = 1.23");
     fold("x = parseFloat('1.2300')", "x = 1.23");
     fold("x = parseFloat(' 0.3333')", "x = 0.3333");
+    fold("x = parseFloat('0100')", "x = 100");
+    fold("x = parseFloat('0100.000')", "x = 100");
 
     //Mozilla Dev Center test cases
     fold("x = parseInt(' 0xF', 16)", "x = 15");
@@ -285,6 +299,7 @@ public class PeepholeReplaceKnownMethodsTest extends CompilerTestCase {
 
     //Invalid calls
     foldSame("x = parseInt('0xa', 10)");
+    foldSame("x = parseInt('')");
 
     enableEcmaScript5(false);
     foldSame("x = parseInt('08')");

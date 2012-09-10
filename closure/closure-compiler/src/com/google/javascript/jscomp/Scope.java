@@ -25,7 +25,6 @@ import com.google.common.collect.Iterators;
 import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.ObjectType;
 import com.google.javascript.rhino.jstype.StaticReference;
@@ -40,7 +39,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Scope contains information about a variable scope in javascript.
+ * Scope contains information about a variable scope in JavaScript.
  * Scopes can be nested, a scope points back to its parent scope.
  * A Scope contains information about variables defined in that scope.
  * <p>
@@ -94,11 +93,6 @@ public class Scope
     private JSType type;
 
     /**
-     * The variable's doc info.
-     */
-    private final JSDocInfo info;
-
-    /**
      * Whether the variable's type has been inferred or is declared. An inferred
      * type may change over time (as more code is discovered), whereas a
      * declared type is a static contract that must be matched.
@@ -107,9 +101,6 @@ public class Scope
 
     /** Input source */
     final CompilerInput input;
-
-    /** Whether the variable is a define */
-    final boolean isDefine;
 
     /**
      * The index at which the var is declared. e..g if it's 0, it's the first
@@ -120,7 +111,11 @@ public class Scope
     /** The enclosing scope */
     final Scope scope;
 
+    /** @see isMarkedEscaped */
     private boolean markedEscaped = false;
+
+    /** @see isMarkedAssignedExactlyOnce */
+    private boolean markedAssignedExactlyOnce = false;
 
     /**
      * Creates a variable.
@@ -128,16 +123,13 @@ public class Scope
      * @param inferred whether its type is inferred (as opposed to declared)
      */
     private Var(boolean inferred, String name, Node nameNode, JSType type,
-                Scope scope, int index, CompilerInput input, boolean isDefine,
-                JSDocInfo info) {
+                Scope scope, int index, CompilerInput input) {
       this.name = name;
       this.nameNode = nameNode;
       this.type = type;
       this.scope = scope;
       this.index = index;
       this.input = input;
-      this.isDefine = isDefine;
-      this.info = info;
       this.typeInferred = inferred;
     }
 
@@ -185,7 +177,7 @@ public class Scope
 
     /**
      * Whether this is a bleeding function (an anonymous named function
-     * that bleeds into the inner scope.
+     * that bleeds into the inner scope).
      */
     public boolean isBleedingFunction() {
       return NodeUtil.isFunctionExpression(getParentNode());
@@ -229,24 +221,15 @@ public class Scope
 
     /**
      * Returns {@code true} if the variable is declared as a define.
-     * A variable is a define if it is annotaed by {@code @define}.
+     * A variable is a define if it is annotated by {@code @define}.
      */
     public boolean isDefine() {
-      return isDefine;
+      JSDocInfo info = getJSDocInfo();
+      return info != null && info.isDefine();
     }
 
     public Node getInitialValue() {
-      Node parent = getParentNode();
-      int pType = parent.getType();
-      if (pType == Token.FUNCTION) {
-        return parent;
-      } else if (pType == Token.ASSIGN) {
-        return parent.getLastChild();
-      } else if (pType == Token.VAR) {
-        return nameNode.getFirstChild();
-      } else {
-        return null;
-      }
+      return NodeUtil.getRValueOfLValue(nameNode);
     }
 
     /**
@@ -270,7 +253,7 @@ public class Scope
      */
     @Override
     public JSDocInfo getJSDocInfo() {
-      return info;
+      return nameNode == null ? null : NodeUtil.getBestJSDocInfo(nameNode);
     }
 
     /**
@@ -308,11 +291,8 @@ public class Scope
     }
 
     public boolean isNoShadow() {
-      if (info != null && info.isNoShadow()) {
-        return true;
-      } else {
-        return false;
-      }
+      JSDocInfo info = getJSDocInfo();
+      return info != null && info.isNoShadow();
     }
 
     @Override public boolean equals(Object other) {
@@ -333,7 +313,12 @@ public class Scope
       return "Scope.Var " + name + "{" + type + "}";
     }
 
-    /** Record that this is escaped by an inner scope. */
+    /**
+     * Record that this is escaped by an inner scope.
+     *
+     * In other words, it's assigned in an inner scope so that it's much harder
+     * to make assertions about its value at a given point.
+     */
     void markEscaped() {
       markedEscaped = true;
     }
@@ -344,6 +329,24 @@ public class Scope
      */
     boolean isMarkedEscaped() {
       return markedEscaped;
+    }
+
+    /**
+     * Record that this is assigned exactly once..
+     *
+     * In other words, it's assigned in an inner scope so that it's much harder
+     * to make assertions about its value at a given point.
+     */
+    void markAssignedExactlyOnce() {
+      markedAssignedExactlyOnce = true;
+    }
+
+    /**
+     * Whether this is assigned exactly once.
+     * Notice that not all scope creators record this information.
+     */
+    boolean isMarkedAssignedExactlyOnce() {
+      return markedAssignedExactlyOnce;
     }
   }
 
@@ -362,9 +365,7 @@ public class Scope
         null,  // no type info
         scope,
         -1,    // no variable index
-        null,  // input,
-        false, // not a define
-        null   // no jsdoc
+        null   // input
         );
     }
 
@@ -502,13 +503,7 @@ public class Scope
     // Make sure that it's declared only once
     Preconditions.checkState(vars.get(name) == null);
 
-    // native variables do not have a name node.
-    JSDocInfo info = nameNode == null
-        ? null : NodeUtil.getBestJSDocInfo(nameNode);
-
-    Var var = new Var(inferred, name, nameNode, type, this, vars.size(), input,
-        info != null && info.isDefine(), info);
-
+    Var var = new Var(inferred, name, nameNode, type, this, vars.size(), input);
     vars.put(name, var);
     return var;
   }
@@ -524,12 +519,12 @@ public class Scope
   }
 
   @Override
-  public StaticSlot<JSType> getSlot(String name) {
+  public Var getSlot(String name) {
     return getVar(name);
   }
 
   @Override
-  public StaticSlot<JSType> getOwnSlot(String name) {
+  public Var getOwnSlot(String name) {
     return vars.get(name);
   }
 

@@ -17,11 +17,14 @@
 package com.google.javascript.jscomp.ant;
 
 import com.google.common.collect.Lists;
+import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.CommandLineRunner;
 import com.google.javascript.jscomp.CompilationLevel;
 import com.google.javascript.jscomp.Compiler;
 import com.google.javascript.jscomp.CompilerOptions;
-import com.google.javascript.jscomp.JSSourceFile;
+import com.google.javascript.jscomp.DiagnosticGroup;
+import com.google.javascript.jscomp.DiagnosticGroups;
+import com.google.javascript.jscomp.SourceFile;
 import com.google.javascript.jscomp.MessageFormatter;
 import com.google.javascript.jscomp.Result;
 import com.google.javascript.jscomp.WarningLevel;
@@ -41,7 +44,6 @@ import java.nio.charset.Charset;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.logging.Level;
 
 /**
@@ -54,6 +56,7 @@ import java.util.logging.Level;
  */
 public final class CompileTask
     extends Task {
+  private CompilerOptions.LanguageMode languageIn;
   private WarningLevel warningLevel;
   private boolean debugOptions;
   private String encoding = "UTF-8";
@@ -72,8 +75,10 @@ public final class CompileTask
   private final List<FileList> externFileLists;
   private final List<FileList> sourceFileLists;
   private final List<Path> sourcePaths;
+  private final List<Warning> warnings;
 
   public CompileTask() {
+    this.languageIn = CompilerOptions.LanguageMode.ECMASCRIPT3;
     this.warningLevel = WarningLevel.DEFAULT;
     this.debugOptions = false;
     this.compilationLevel = CompilationLevel.SIMPLE_OPTIMIZATIONS;
@@ -89,6 +94,25 @@ public final class CompileTask
     this.externFileLists = Lists.newLinkedList();
     this.sourceFileLists = Lists.newLinkedList();
     this.sourcePaths = Lists.newLinkedList();
+    this.warnings = Lists.newLinkedList();
+  }
+
+  /**
+   * Set the language to which input sources conform.
+   * @param value The name of the language.
+   *     (ECMASCRIPT3, ECMASCRIPT5, ECMASCRIPT5_STRICT).
+   */
+  public void setLanguageIn(String value) {
+    if (value.equals("ECMASCRIPT5_STRICT") || value.equals("ES5_STRICT")) {
+      this.languageIn = CompilerOptions.LanguageMode.ECMASCRIPT5_STRICT;
+    } else if (value.equals("ECMASCRIPT5") || value.equals("ES5")) {
+      this.languageIn = CompilerOptions.LanguageMode.ECMASCRIPT5;
+    } else if (value.equals("ECMASCRIPT3") || value.equals("ES3")) {
+      this.languageIn = CompilerOptions.LanguageMode.ECMASCRIPT3;
+    } else {
+      throw new BuildException(
+          "Unrecognized 'languageIn' option value (" + value + ")");
+    }
   }
 
   /**
@@ -188,7 +212,7 @@ public final class CompileTask
   }
 
   /**
-   * Set print input delimitter formatting option
+   * Set print input delimiter formatting option
    */
   public void setPrintInputDelimiter(boolean print) {
     this.printInputDelimiter = print;
@@ -216,6 +240,18 @@ public final class CompileTask
   }
 
   /**
+   * Adds a <warning/> entry
+   *
+   * Each warning entry must have two attributes, group and level. Group must
+   * contain one of the constants from DiagnosticGroups (e.g.,
+   * "ACCESS_CONTROLS"), while level must contain one of the CheckLevel
+   * constants ("ERROR", "WARNING" or "OFF").
+   */
+  public void addWarning(Warning warning) {
+    this.warnings.add(warning);
+  }
+
+  /**
    * Sets the source files.
    */
   public void addSources(FileList list) {
@@ -239,12 +275,12 @@ public final class CompileTask
     CompilerOptions options = createCompilerOptions();
     Compiler compiler = createCompiler(options);
 
-    JSSourceFile[] externs = findExternFiles();
-    JSSourceFile[] sources = findSourceFiles();
+    List<SourceFile> externs = findExternFiles();
+    List<SourceFile> sources = findSourceFiles();
 
     if (isStale() || forceRecompile) {
-      log("Compiling " + sources.length + " file(s) with " +
-          externs.length + " extern(s)");
+      log("Compiling " + sources.size() + " file(s) with " +
+          externs.size() + " extern(s)");
 
       Result result = compiler.compile(externs, sources, options);
       if (result.success) {
@@ -269,6 +305,8 @@ public final class CompileTask
     options.printInputDelimiter = this.printInputDelimiter;
     options.generateExports = this.generateExports;
 
+    options.setLanguageIn(this.languageIn);
+
     this.warningLevel.setOptionsForWarningLevel(options);
     options.setManageClosureDependencies(manageDependencies);
 
@@ -278,12 +316,23 @@ public final class CompileTask
 
     convertDefineParameters(options);
 
+    for (Warning warning : warnings) {
+      CheckLevel level = warning.getLevel();
+      String groupName = warning.getGroup();
+      DiagnosticGroup group = new DiagnosticGroups().forName(groupName);
+      if (group == null) {
+        throw new BuildException(
+            "Unrecognized 'warning' option value (" + groupName + ")");
+      }
+      options.setWarningLevel(group, level);
+    }
+
     return options;
   }
 
   /**
    * Creates a new {@code <define/>} nested element. Supports name and value
-   * attribtues.
+   * attributes.
    */
   public Parameter createDefine() {
     Parameter param = new Parameter();
@@ -380,8 +429,8 @@ public final class CompileTask
     return compiler;
   }
 
-  private JSSourceFile[] findExternFiles() {
-    List<JSSourceFile> files = Lists.newLinkedList();
+  private List<SourceFile> findExternFiles() {
+    List<SourceFile> files = Lists.newLinkedList();
     if (!this.customExternsOnly) {
       files.addAll(getDefaultExterns());
     }
@@ -390,11 +439,11 @@ public final class CompileTask
       files.addAll(findJavaScriptFiles(list));
     }
 
-    return files.toArray(new JSSourceFile[files.size()]);
+    return files;
   }
 
-  private JSSourceFile[] findSourceFiles() {
-    List<JSSourceFile> files = Lists.newLinkedList();
+  private List<SourceFile> findSourceFiles() {
+    List<SourceFile> files = Lists.newLinkedList();
 
     for (FileList list : this.sourceFileLists) {
       files.addAll(findJavaScriptFiles(list));
@@ -404,19 +453,19 @@ public final class CompileTask
       files.addAll(findJavaScriptFiles(list));
     }
 
-    return files.toArray(new JSSourceFile[files.size()]);
+    return files;
   }
 
   /**
    * Translates an Ant file list into the file format that the compiler
    * expects.
    */
-  private List<JSSourceFile> findJavaScriptFiles(FileList fileList) {
-    List<JSSourceFile> files = Lists.newLinkedList();
+  private List<SourceFile> findJavaScriptFiles(FileList fileList) {
+    List<SourceFile> files = Lists.newLinkedList();
     File baseDir = fileList.getDir(getProject());
 
     for (String included : fileList.getFiles(getProject())) {
-      files.add(JSSourceFile.fromFile(new File(baseDir, included),
+      files.add(SourceFile.fromFile(new File(baseDir, included),
           Charset.forName(encoding)));
     }
 
@@ -427,11 +476,11 @@ public final class CompileTask
    * Translates an Ant Path into the file list format that the compiler
    * expects.
    */
-  private List<JSSourceFile> findJavaScriptFiles(Path path) {
-    List<JSSourceFile> files = Lists.newArrayList();
+  private List<SourceFile> findJavaScriptFiles(Path path) {
+    List<SourceFile> files = Lists.newArrayList();
 
     for (String included : path.list()) {
-      files.add(JSSourceFile.fromFile(new File(included),
+      files.add(SourceFile.fromFile(new File(included),
           Charset.forName(encoding)));
     }
 
@@ -443,7 +492,7 @@ public final class CompileTask
    *
    * Adapted from {@link CommandLineRunner}.
    */
-  private List<JSSourceFile> getDefaultExterns() {
+  private List<SourceFile> getDefaultExterns() {
     try {
       return CommandLineRunner.getDefaultExterns();
     } catch (IOException e) {
@@ -467,7 +516,7 @@ public final class CompileTask
       throw new BuildException(e);
     }
 
-    log("Compiled javascript written to " + this.outputFile.getAbsolutePath(),
+    log("Compiled JavaScript written to " + this.outputFile.getAbsolutePath(),
         Project.MSG_DEBUG);
   }
 

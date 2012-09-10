@@ -37,12 +37,12 @@ import java.util.List;
 public class ControlFlowAnalysisTest extends TestCase {
 
   /**
-   * Given an input in Javascript, test if the control flow analysis
+   * Given an input in JavaScript, test if the control flow analysis
    * creates the proper control flow graph by comparing the expected
    * Dot file output.
    *
-   * @param input Input Javascript.
-   * @param expected Expected Graphvis Dot file.
+   * @param input Input JavaScript.
+   * @param expected Expected Graphviz Dot file.
    */
   private void testCfg(String input, String expected) {
     testCfg(input, expected, true);
@@ -215,9 +215,9 @@ public class ControlFlowAnalysisTest extends TestCase {
   }
 
   /**
-   * Given an input in Javascript, get a control flow graph for it.
+   * Given an input in JavaScript, get a control flow graph for it.
    *
-   * @param input Input Javascript.
+   * @param input Input JavaScript.
    */
   private ControlFlowGraph<Node> createCfg(String input,
       boolean runSynBlockPass) {
@@ -239,12 +239,12 @@ public class ControlFlowAnalysisTest extends TestCase {
   }
 
   /**
-   * Given an input in Javascript, test if the control flow analysis
+   * Given an input in JavaScript, test if the control flow analysis
    * creates the proper control flow graph by comparing the expected
    * Dot file output.
    *
-   * @param input Input Javascript.
-   * @param expected Expected Graphvis Dot file.
+   * @param input Input JavaScript.
+   * @param expected Expected Graphviz Dot file.
    * @param shouldTraverseFunctions Whether to traverse functions when
    *    constructing the CFG (true by default). Passed in to the
    *    constructor of {@link ControlFlowAnalysis}.
@@ -684,36 +684,30 @@ public class ControlFlowAnalysisTest extends TestCase {
       "  node1 -> node2 [weight=1];\n" +
       "  node3 [label=\"NAME\"];\n" +
       "  node1 -> node3 [weight=1];\n" +
-      "  node4 [label=\"FOR\"];\n" +
-      "  node1 -> node4 " +
-      "[label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
-      "  node0 -> node4 [weight=1];\n" +
-      "  node5 [label=\"NAME\"];\n" +
-      "  node4 -> node5 [weight=1];\n" +
+      "  node4 [label=\"NAME\"];\n" +
+      "  node1 -> node4 [label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
+      "  node5 [label=\"FOR\"];\n" +
+      "  node0 -> node5 [weight=1];\n" +
       "  node6 [label=\"NAME\"];\n" +
-      "  node4 -> node6 [weight=1];\n" +
+      "  node5 -> node6 [weight=1];\n" +
+      "  node5 -> node4 [weight=1];\n" +
+      "  node4 -> node5 [label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
       "  node7 [label=\"BLOCK\"];\n" +
-      "  node4 -> node7 [weight=1];\n" +
+      "  node5 -> node7 [weight=1];\n" +
       "  node8 [label=\"EXPR_RESULT\"];\n" +
       "  node7 -> node8 [weight=1];\n" +
       "  node9 [label=\"CALL\"];\n" +
       "  node8 -> node9 [weight=1];\n" +
       "  node10 [label=\"NAME\"];\n" +
       "  node9 -> node10 [weight=1];\n" +
-      "  node8 -> node4 " +
-      "[label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
-      "  node7 -> node8 " +
-      "[label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
+      "  node8 -> node5 [label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
+      "  node7 -> node8 [label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
       "  node11 [label=\"EMPTY\"];\n" +
-      "  node4 -> node11 " +
-      "[label=\"ON_FALSE\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
-      "  node4 -> node7 " +
-      "[label=\"ON_TRUE\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
+      "  node5 -> node11 [label=\"ON_FALSE\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
+      "  node5 -> node7 [label=\"ON_TRUE\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
       "  node0 -> node11 [weight=1];\n" +
-      "  node11 -> RETURN " +
-      "[label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
-      "  node0 -> node1 " +
-      "[label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
+      "  node11 -> RETURN [label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
+      "  node0 -> node1 [label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
       "}\n";
     testCfg(src, expected);
   }
@@ -1110,7 +1104,7 @@ public class ControlFlowAnalysisTest extends TestCase {
     // BREAK to FINALLY.
     assertCrossEdge(cfg, Token.BREAK, Token.BLOCK, Branch.UNCOND);
     // FINALLY to FINALLY.
-    assertCrossEdge(cfg, Token.BLOCK, Token.BLOCK, Branch.UNCOND);
+    assertCrossEdge(cfg, Token.BLOCK, Token.BLOCK, Branch.ON_EX);
     assertCrossEdge(cfg, Token.WHILE, Token.BLOCK, Branch.ON_FALSE);
     assertReturnEdge(cfg, Token.BLOCK);
   }
@@ -1121,7 +1115,7 @@ public class ControlFlowAnalysisTest extends TestCase {
     ControlFlowGraph<Node> cfg = createCfg(src);
     assertCrossEdge(cfg, Token.THROW, Token.BLOCK, Branch.ON_EX);
     assertCrossEdge(cfg, Token.VAR, Token.BLOCK, Branch.UNCOND);
-    assertCrossEdge(cfg, Token.IF, Token.BLOCK, Branch.UNCOND);
+    assertCrossEdge(cfg, Token.IF, Token.BLOCK, Branch.ON_EX);
   }
 
   public void testReturn() {
@@ -1271,7 +1265,7 @@ public class ControlFlowAnalysisTest extends TestCase {
             "label: for (var x in y) { " +
             "    if (x) { break label; } else { i++ } x(); }"),
         Lists.newArrayList(
-            Token.SCRIPT, Token.VAR, Token.VAR,
+            Token.SCRIPT, Token.VAR, Token.VAR, Token.NAME,
             Token.FOR, Token.BLOCK,
             Token.IF, Token.BLOCK, Token.BREAK,
             Token.BLOCK, Token.EXPR_RESULT, Token.EXPR_RESULT));

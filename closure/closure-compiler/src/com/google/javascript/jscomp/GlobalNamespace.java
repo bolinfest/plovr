@@ -96,6 +96,10 @@ class GlobalNamespace
     this.root = root;
   }
 
+  boolean hasExternsRoot() {
+    return externsRoot != null;
+  }
+
   @Override
   public Node getRootNode() {
     return root.getParent();
@@ -107,12 +111,13 @@ class GlobalNamespace
   }
 
   @Override
-  public StaticSlot<JSType> getSlot(String name) {
+  public Name getSlot(String name) {
     return getOwnSlot(name);
   }
 
   @Override
-  public StaticSlot<JSType> getOwnSlot(String name) {
+  public Name getOwnSlot(String name) {
+    ensureGenerated();
     return nameMap.get(name);
   }
 
@@ -282,7 +287,7 @@ class GlobalNamespace
     }
 
     /**
-     * Builds a global namepsace, but only visits nodes that match the
+     * Builds a global namespace, but only visits nodes that match the
      * given filter.
      */
     BuildGlobalNamespace(Predicate<Node> nodeFilter) {
@@ -318,7 +323,7 @@ class GlobalNamespace
       switch (n.getType()) {
         case Token.GETTER_DEF:
         case Token.SETTER_DEF:
-        case Token.STRING:
+        case Token.STRING_KEY:
           // This may be a key in an object literal declaration.
           name = null;
           if (parent != null && parent.isObjectLit()) {
@@ -327,7 +332,7 @@ class GlobalNamespace
           if (name == null) return;
           isSet = true;
           switch (n.getType()) {
-            case Token.STRING:
+            case Token.STRING_KEY:
               type = getValueType(n.getFirstChild());
               break;
             case Token.GETTER_DEF:
@@ -475,7 +480,7 @@ class GlobalNamespace
           Node lvalue = gramps.getFirstChild();
           name = lvalue.getQualifiedName();
           break;
-        case Token.STRING:
+        case Token.STRING_KEY:
           // OBJLIT
           //   STRING (gramps)
           //     OBJLIT (parent)
@@ -502,7 +507,7 @@ class GlobalNamespace
     /**
      * Gets the type of a value or simple expression.
      *
-     * @param n An rvalue in an assignment or variable declaration (not null)
+     * @param n An r-value in an assignment or variable declaration (not null)
      * @return A {@link Name.Type}
      */
     Name.Type getValueType(Node n) {
@@ -530,7 +535,7 @@ class GlobalNamespace
     }
 
     /**
-     * Updates our respresentation of the global namespace to reflect an
+     * Updates our representation of the global namespace to reflect an
      * assignment to a global name in global scope.
      *
      * @param t The traversal
@@ -558,54 +563,34 @@ class GlobalNamespace
             currentPreOrderIndex++);
         nameObj.addRef(get);
         Ref.markTwins(set, get);
-      } else if (isConstructorOrEnumDeclaration(n, parent)) {
+      } else if (isTypeDeclaration(n, parent)) {
         // Names with a @constructor or @enum annotation are always collapsed
-        nameObj.setIsClassOrEnum();
+        nameObj.setDeclaredType();
       }
     }
 
     /**
      * Determines whether a set operation is a constructor or enumeration
-     * declaration. The set operation may either be an assignment to a name,
-     * a variable declaration, or an object literal key mapping.
+     * or interface declaration. The set operation may either be an assignment
+     * to a name, a variable declaration, or an object literal key mapping.
      *
      * @param n The node that represents the name being set
      * @param parent Parent node of {@code n} (an ASSIGN, VAR, or OBJLIT node)
      * @return Whether the set operation is either a constructor or enum
      *     declaration
      */
-    private boolean isConstructorOrEnumDeclaration(Node n, Node parent) {
-      JSDocInfo info;
-      int valueNodeType;
-      switch (parent.getType()) {
-        case Token.ASSIGN:
-          info = parent.getJSDocInfo();
-          valueNodeType = n.getNext().getType();
-          break;
-        case Token.VAR:
-          info = n.getJSDocInfo();
-          if (info == null) {
-            info = parent.getJSDocInfo();
-          }
-          Node valueNode = n.getFirstChild();
-          valueNodeType = valueNode != null ? valueNode.getType() : Token.VOID;
-          break;
-        default:
-          if (NodeUtil.isFunctionDeclaration(parent)) {
-            info = parent.getJSDocInfo();
-            valueNodeType = Token.FUNCTION;
-            break;
-          }
-          return false;
-      }
+    private boolean isTypeDeclaration(Node n, Node parent) {
+      Node valueNode = NodeUtil.getRValueOfLValue(n);
+      JSDocInfo info = NodeUtil.getBestJSDocInfo(n);
       // Heed the annotations only if they're sensibly used.
-      return info != null &&
-             (info.isConstructor() && valueNodeType == Token.FUNCTION ||
-              info.hasEnumParameterType() && valueNodeType == Token.OBJECTLIT);
+      return info != null && valueNode != null &&
+             (info.isConstructor() && valueNode.isFunction() ||
+              info.isInterface() && valueNode.isFunction() ||
+              info.hasEnumParameterType() && valueNode.isObjectLit());
     }
 
     /**
-     * Updates our respresentation of the global namespace to reflect an
+     * Updates our representation of the global namespace to reflect an
      * assignment to a global name in a local scope.
      *
      * @param t The traversal
@@ -632,7 +617,7 @@ class GlobalNamespace
     }
 
     /**
-     * Updates our respresentation of the global namespace to reflect a read
+     * Updates our representation of the global namespace to reflect a read
      * of a global name.
      *
      * @param t The traversal
@@ -750,7 +735,7 @@ class GlobalNamespace
     }
 
     /**
-     * Updates our respresentation of the global namespace to reflect a read
+     * Updates our representation of the global namespace to reflect a read
      * of a global name.
      *
      * @param t The current node traversal
@@ -768,7 +753,7 @@ class GlobalNamespace
     }
 
     /**
-     * Updates our respresentation of the global namespace to reflect a read
+     * Updates our representation of the global namespace to reflect a read
      * of a global name's longest prefix before the "prototype" property if the
      * name includes the "prototype" property. Does nothing otherwise.
      *
@@ -884,15 +869,15 @@ class GlobalNamespace
     private List<Ref> refs;
 
     Type type;
-    private boolean isClassOrEnum = false;
-    private boolean hasClassOrEnumDescendant = false;
+    private boolean declaredType = false;
+    private boolean hasDeclaredTypeDescendant = false;
     int globalSets = 0;
     int localSets = 0;
     int aliasingGets = 0;
     int totalGets = 0;
     int callGets = 0;
     int deleteProps = 0;
-    boolean inExterns;
+    final boolean inExterns;
 
     JSDocInfo docInfo = null;
 
@@ -1054,7 +1039,7 @@ class GlobalNamespace
     }
 
     boolean canCollapse() {
-      return !inExterns && !isGetOrSetDefinition() && (isClassOrEnum ||
+      return !inExterns && !isGetOrSetDefinition() && (declaredType ||
           (parent == null || parent.canCollapseUnannotatedChildNames()) &&
           (globalSets > 0 || localSets > 0) &&
           deleteProps == 0);
@@ -1078,7 +1063,7 @@ class GlobalNamespace
         return false;
       }
 
-      if (isClassOrEnum) {
+      if (declaredType) {
         return true;
       }
 
@@ -1105,12 +1090,16 @@ class GlobalNamespace
       return globalSets == 0 && localSets > 0;
     }
 
-    void setIsClassOrEnum() {
-      isClassOrEnum = true;
+    void setDeclaredType() {
+      declaredType = true;
       for (Name ancestor = parent; ancestor != null;
            ancestor = ancestor.parent) {
-        ancestor.hasClassOrEnumDescendant = true;
+        ancestor.hasDeclaredTypeDescendant = true;
       }
+    }
+
+    boolean isDeclaredType() {
+      return declaredType;
     }
 
     /**
@@ -1122,7 +1111,7 @@ class GlobalNamespace
      * considered namespaces.
      */
     boolean isNamespace() {
-      return hasClassOrEnumDescendant && type == Type.OBJECTLIT;
+      return hasDeclaredTypeDescendant && type == Type.OBJECTLIT;
     }
 
     /**

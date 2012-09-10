@@ -16,9 +16,11 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Joiner;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
+import com.google.javascript.jscomp.type.SemanticReverseAbstractInterpreter;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
@@ -32,7 +34,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 /**
- * Unit test for the Compiler DisambiguateProprties pass.
+ * Unit test for the Compiler DisambiguateProperties pass.
  *
  */
 public class DisambiguatePropertiesTest extends CompilerTestCase {
@@ -124,6 +126,15 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "/** @type Foo */\n"
         + "var F = new Foo;\n"
         + "F.a = 0;";
+    testSets(false, js, js, "{a=[[Foo.prototype]]}");
+    testSets(true, js, js, "{a=[[Foo.prototype]]}");
+  }
+
+  public void testPrototypeAndInstance2() {
+    String js = ""
+        + "/** @constructor */ function Foo() {}\n"
+        + "Foo.prototype.a = 0;\n"
+        + "new Foo().a = 0;";
     testSets(false, js, js, "{a=[[Foo.prototype]]}");
     testSets(true, js, js, "{a=[[Foo.prototype]]}");
   }
@@ -772,7 +783,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
       + "/** @type {Buz|Foo} */ var d;\n"
       + "b.a = 5; c.a = 6; d.a = 7;";
 
-    // We are testing the skipping of multiple types caused by unioning with
+    // We are testing the skipping of multiple types caused by unionizing with
     // extern types.
     testSets(false, externs, js, output, "{a=[[T1], [T2]]}");
   }
@@ -1273,21 +1284,19 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
   }
 
   public void testErrorOnProtectedProperty() {
-    String js = "function addSingletonGetter(foo) { foo.foobar = 'a'; };";
+    test("function addSingletonGetter(foo) { foo.foobar = 'a'; };", null,
+         DisambiguateProperties.Warnings.INVALIDATION);
+    assertTrue(getLastCompiler().getErrors()[0].toString().contains("foobar"));
+  }
 
-    Compiler compiler = new Compiler();
-    CompilerOptions options = new CompilerOptions();
-    compiler.init(new JSSourceFile[]{JSSourceFile.fromCode("externs", "")},
-                  new JSSourceFile[]{
-                      JSSourceFile.fromCode("testcode", js)}, options);
-
-    Node root = compiler.parseInputs();
-    Node externsRoot = root.getFirstChild();
-    Node mainRoot = externsRoot.getNext();
-    getProcessor(compiler).process(externsRoot, mainRoot);
-
-    assertEquals(1, compiler.getErrors().length);
-    assertTrue(compiler.getErrors()[0].toString().contains("foobar"));
+  public void testMismatchForbiddenInvalidation() {
+    test("/** @constructor */ function F() {}" +
+         "/** @type {number} */ F.prototype.foobar = 3;" +
+         "/** @return {number} */ function g() { return new F(); }",
+         null,
+         DisambiguateProperties.Warnings.INVALIDATION);
+    assertTrue(getLastCompiler().getErrors()[0].toString()
+        .contains("Consider fixing errors"));
   }
 
   public void runFindHighestTypeInChain() {
@@ -1336,9 +1345,10 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
     this.runTightenTypes = runTightenTypes;
     Compiler compiler = new Compiler();
     CompilerOptions options = new CompilerOptions();
-    compiler.init(new JSSourceFile[]{JSSourceFile.fromCode("externs", "")},
-                  new JSSourceFile[]{
-                      JSSourceFile.fromCode("testcode", js)}, options);
+    compiler.init(
+        ImmutableList.of(SourceFile.fromCode("externs", "")),
+        ImmutableList.of(SourceFile.fromCode("testcode", js)),
+        options);
 
     Node root = compiler.parseInputs();
     assertTrue("Unexpected parse error(s): " +
@@ -1351,7 +1361,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
     assertEquals(fieldTypes, mapToString(lastPass.getRenamedTypesForTesting()));
   }
 
-  /** Sorts the map and converts to a string for comparision purposes. */
+  /** Sorts the map and converts to a string for comparison purposes. */
   private <T> String mapToString(Multimap<String, Collection<T>> map) {
     TreeMap<String, String> retMap = Maps.newTreeMap();
     for (String key : map.keySet()) {

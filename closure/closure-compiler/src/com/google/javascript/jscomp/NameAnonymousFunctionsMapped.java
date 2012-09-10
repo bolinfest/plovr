@@ -24,7 +24,7 @@ import java.util.*;
 import java.util.logging.*;
 
 /**
- * Gives anonymous fuction names that are optimized to be small and provides a
+ * Gives anonymous function names that are optimized to be small and provides a
  * mapping back to the original names. This makes it way easier to debug because
  * debuggers and stack traces use the function names. So if you have
  *
@@ -88,6 +88,7 @@ class NameAnonymousFunctionsMapped implements CompilerPass {
       switch (node.getType()) {
         case Token.NAME:
         case Token.STRING:
+        case Token.STRING_KEY:
           return node.getString();
         default:
           return new CodePrinter.Builder(node).build();

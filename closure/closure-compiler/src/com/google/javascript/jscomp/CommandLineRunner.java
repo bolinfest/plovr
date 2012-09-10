@@ -43,9 +43,7 @@ import java.io.PrintStream;
 import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Map;
-import java.util.ResourceBundle;
 import java.util.Set;
-import java.util.StringTokenizer;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -134,12 +132,12 @@ public class CommandLineRunner extends
     private String logging_level = Level.WARNING.getName();
 
     @Option(name = "--externs",
-        usage = "The file containing javascript externs. You may specify"
+        usage = "The file containing JavaScript externs. You may specify"
         + " multiple")
     private List<String> externs = Lists.newArrayList();
 
     @Option(name = "--js",
-        usage = "The javascript filename. You may specify multiple")
+        usage = "The JavaScript filename. You may specify multiple")
     private List<String> js = Lists.newArrayList();
 
     @Option(name = "--js_output_file",
@@ -148,10 +146,10 @@ public class CommandLineRunner extends
     private String js_output_file = "";
 
     @Option(name = "--module",
-        usage = "A javascript module specification. The format is "
+        usage = "A JavaScript module specification. The format is "
         + "<name>:<num-js-files>[:[<dep>,...][:]]]. Module names must be "
         + "unique. Each dep is the name of a module that this module "
-        + "depends on. Modules must be listed in dependency order, and js "
+        + "depends on. Modules must be listed in dependency order, and JS "
         + "source files must be listed in the corresponding order. Where "
         + "--module flags occur in relation to --js flags is unimportant")
     private List<String> module = Lists.newArrayList();
@@ -206,7 +204,7 @@ public class CommandLineRunner extends
     private String output_wrapper = "";
 
     @Option(name = "--module_wrapper",
-        usage = "An output wrapper for a javascript module (optional). "
+        usage = "An output wrapper for a JavaScript module (optional). "
         + "The format is <name>:<wrapper>. The module name must correspond "
         + "with a module specified using --module. The wrapper must "
         + "contain %s as the code placeholder. The %basename% placeholder can "
@@ -214,7 +212,7 @@ public class CommandLineRunner extends
     private List<String> module_wrapper = Lists.newArrayList();
 
     @Option(name = "--module_output_path_prefix",
-        usage = "Prefix for filenames of compiled js modules. "
+        usage = "Prefix for filenames of compiled JS modules. "
         + "<module-name>.js will be appended to this prefix. Directories "
         + "will be created as needed. Use with --module")
     private String module_output_path_prefix = "./";
@@ -276,6 +274,12 @@ public class CommandLineRunner extends
     private CompilationLevel compilation_level =
         CompilationLevel.SIMPLE_OPTIMIZATIONS;
 
+    @Option(name = "--use_types_for_optimization",
+        usage = "Experimental: perform additional optimizations " +
+        "based on available information.  Inaccurate type annotations " +
+        "may result in incorrect results.")
+    private boolean use_types_for_optimization = false;
+
     @Option(name = "--warning_level",
         usage = "Specifies the warning level to use. Options: " +
         "QUIET, DEFAULT, VERBOSE")
@@ -303,11 +307,11 @@ public class CommandLineRunner extends
     private List<FormattingOption> formatting = Lists.newArrayList();
 
     @Option(name = "--process_common_js_modules",
-        usage = "Process Common JS modules to a concatenable form.")
+        usage = "Process CommonJS modules to a concatenable form.")
     private boolean process_common_js_modules = false;
 
     @Option(name = "--common_js_module_path_prefix",
-        usage = "Path prefix to be removed from Common JS module names.")
+        usage = "Path prefix to be removed from CommonJS module names.")
     private String common_js_path_prefix =
         ProcessCommonJSModules.DEFAULT_FILENAME_PREFIX;
 
@@ -317,7 +321,7 @@ public class CommandLineRunner extends
     private String common_js_entry_module;
 
     @Option(name = "--transform_amd_modules",
-        usage = "Transform AMD to Common JS modules.")
+        usage = "Transform AMD to CommonJS modules.")
     private boolean transform_amd_modules = false;
 
     @Option(name = "--process_closure_primitives",
@@ -334,6 +338,14 @@ public class CommandLineRunner extends
         + "those symbols are never required, then that input will not "
         + "be included in the compilation.")
     private boolean manage_closure_dependencies = false;
+
+    @Option(name = "--only_closure_dependencies",
+        handler = BooleanOptionHandler.class,
+        usage = "Only include files in the transitive dependency of the "
+        + "entry points (specified by closure_entry_point). Files that do "
+        + "not provide dependencies will be removed. This supersedes"
+        + "manage_closure_dependencies")
+    private boolean only_closure_dependencies = false;
 
     @Option(name = "--closure_entry_point",
         usage = "Entry points to the program. Must be goog.provide'd "
@@ -355,7 +367,7 @@ public class CommandLineRunner extends
         usage = "Prints out a list of all the files in the compilation. "
         + "If --manage_closure_dependencies is on, this will not include "
         + "files that got dropped because they were not required. "
-        + "The %outname% placeholder expands to the js output file. "
+        + "The %outname% placeholder expands to the JS output file. "
         + "If you're using modularization, using %outname% will create "
         + "a manifest for each module.")
     private String output_manifest = "";
@@ -387,6 +399,12 @@ public class CommandLineRunner extends
     @Option(name = "--flagfile",
         usage = "A file containing additional command-line options.")
     private String flag_file = "";
+
+    @Option(name = "--warnings_whitelist_file",
+        usage = "A file containing warnings to suppress. Each line should be " +
+            "of the form\n" +
+            "<file-name>:<line-number>?  <warning-description>")
+    private String warnings_whitelist_file = "";
 
     @Argument
     private List<String> arguments = Lists.newArrayList();
@@ -541,9 +559,6 @@ public class CommandLineRunner extends
 
   private final Flags flags = new Flags();
 
-  private static final String configResource =
-      "com.google.javascript.jscomp.parsing.ParserConfig";
-
   private boolean isConfigValid = false;
 
   /**
@@ -559,6 +574,30 @@ public class CommandLineRunner extends
   protected CommandLineRunner(String[] args, PrintStream out, PrintStream err) {
     super(out, err);
     initConfigFromFlags(args, err);
+  }
+
+  /**
+   * Split strings into tokens delimited by whitespace, but treat quoted
+   * strings as single tokens. Non-whitespace characters adjacent to quoted
+   * strings will be returned as part of the token. For example, the string
+   * {@code "--js='/home/my project/app.js'"} would be returned as a single
+   * token.
+   *
+   * @param lines strings to tokenize
+   * @return a list of tokens
+   */
+  private List<String> tokenizeKeepingQuotedStrings(List<String> lines) {
+    List<String> tokens = Lists.newArrayList();
+    Pattern tokenPattern =
+        Pattern.compile("(?:[^ \t\f\\x0B'\"]|(?:'[^']*'|\"[^\"]*\"))+");
+
+    for (String line : lines) {
+      Matcher matcher = tokenPattern.matcher(line);
+      while (matcher.find()) {
+        tokens.add(matcher.group(0));
+      }
+    }
+    return tokens;
   }
 
   private List<String> processArgs(String[] args) {
@@ -591,14 +630,9 @@ public class CommandLineRunner extends
 
   private void processFlagFile(PrintStream err)
             throws CmdLineException, IOException {
-    List<String> argsInFile = Lists.newArrayList();
     File flagFileInput = new File(flags.flag_file);
-    StringTokenizer tokenizer = new StringTokenizer(
-        Files.toString(flagFileInput, Charset.defaultCharset()));
-
-    while (tokenizer.hasMoreTokens()) {
-        argsInFile.add(tokenizer.nextToken());
-    }
+    List<String> argsInFile = tokenizeKeepingQuotedStrings(
+        Files.readLines(flagFileInput, Charset.defaultCharset()));
 
     flags.flag_file = "";
     List<String> processedFileArgs
@@ -637,11 +671,10 @@ public class CommandLineRunner extends
     }
 
     if (flags.version) {
-      ResourceBundle config = ResourceBundle.getBundle(configResource);
       err.println(
           "Closure Compiler (http://code.google.com/closure/compiler)\n" +
-          "Version: " + config.getString("compiler.version") + "\n" +
-          "Built on: " + config.getString("compiler.date"));
+          "Version: " + Compiler.getReleaseVersion() + "\n" +
+          "Built on: " + Compiler.getReleaseDate());
       err.flush();
     }
 
@@ -661,6 +694,15 @@ public class CommandLineRunner extends
       isConfigValid = false;
       parser.printUsage(err);
     } else {
+      CodingConvention conv;
+      if (flags.third_party) {
+        conv = CodingConventions.getDefault();
+      } else if (flags.process_jquery_primitives) {
+        conv = new JqueryCodingConvention();
+      } else {
+        conv = new ClosureCodingConvention();
+      }
+
       getCommandLineConfig()
           .setPrintTree(flags.print_tree)
           .setPrintAst(flags.print_ast)
@@ -676,9 +718,7 @@ public class CommandLineRunner extends
           .setVariableMapOutputFile(flags.variable_map_output_file)
           .setCreateNameMapFiles(flags.create_name_map_files)
           .setPropertyMapOutputFile(flags.property_map_output_file)
-          .setCodingConvention(flags.third_party ?
-               CodingConventions.getDefault() :
-               new ClosureCodingConvention())
+          .setCodingConvention(conv)
           .setSummaryDetailLevel(flags.summary_detail_level)
           .setOutputWrapper(flags.output_wrapper)
           .setModuleWrapper(flags.module_wrapper)
@@ -689,24 +729,36 @@ public class CommandLineRunner extends
           .setDefine(flags.define)
           .setCharset(flags.charset)
           .setManageClosureDependencies(flags.manage_closure_dependencies)
+          .setOnlyClosureDependencies(flags.only_closure_dependencies)
           .setClosureEntryPoints(flags.closure_entry_point)
           .setOutputManifest(ImmutableList.of(flags.output_manifest))
           .setAcceptConstKeyword(flags.accept_const_keyword)
           .setLanguageIn(flags.language_in)
           .setProcessCommonJSModules(flags.process_common_js_modules)
           .setCommonJSModulePathPrefix(flags.common_js_path_prefix)
-          .setTransformAMDToCJSModules(flags.transform_amd_modules);
+          .setTransformAMDToCJSModules(flags.transform_amd_modules)
+          .setWarningsWhitelistFile(flags.warnings_whitelist_file);
     }
   }
 
   @Override
   protected CompilerOptions createOptions() {
     CompilerOptions options = new CompilerOptions();
-    options.setCodingConvention(new ClosureCodingConvention());
+    if (flags.process_jquery_primitives) {
+      options.setCodingConvention(new JqueryCodingConvention());
+    } else {
+      options.setCodingConvention(new ClosureCodingConvention());
+    }
+
     CompilationLevel level = flags.compilation_level;
     level.setOptionsForCompilationLevel(options);
+
     if (flags.debug) {
       level.setDebugOptionsForCompilationLevel(options);
+    }
+
+    if (flags.use_types_for_optimization) {
+      level.setTypeBasedOptimizationOptions(options);
     }
 
     if (flags.generate_exports) {
@@ -723,10 +775,6 @@ public class CommandLineRunner extends
 
     options.jqueryPass = flags.process_jquery_primitives &&
         CompilationLevel.ADVANCED_OPTIMIZATIONS == level;
-
-    if (flags.process_jquery_primitives) {
-      options.setCodingConvention(new JqueryCodingConvention());
-    }
 
     if (!flags.translationsFile.isEmpty()) {
       try {
@@ -756,13 +804,13 @@ public class CommandLineRunner extends
   }
 
   @Override
-  protected List<JSSourceFile> createExterns() throws FlagUsageException,
+  protected List<SourceFile> createExterns() throws FlagUsageException,
       IOException {
-    List<JSSourceFile> externs = super.createExterns();
+    List<SourceFile> externs = super.createExterns();
     if (flags.use_only_custom_externs || isInTestMode()) {
       return externs;
     } else {
-      List<JSSourceFile> defaultExterns = getDefaultExterns();
+      List<SourceFile> defaultExterns = getDefaultExterns();
       defaultExterns.addAll(externs);
       return defaultExterns;
     }
@@ -825,16 +873,22 @@ public class CommandLineRunner extends
    * @return a mutable list
    * @throws IOException
    */
-  public static List<JSSourceFile> getDefaultExterns() throws IOException {
+  public static List<SourceFile> getDefaultExterns() throws IOException {
     InputStream input = CommandLineRunner.class.getResourceAsStream(
         "/externs.zip");
+    if (input == null) {
+      // In some environments, the externs.zip is relative to this class.
+      input = CommandLineRunner.class.getResourceAsStream("externs.zip");
+    }
+    Preconditions.checkNotNull(input);
+
     ZipInputStream zip = new ZipInputStream(input);
-    Map<String, JSSourceFile> externsMap = Maps.newHashMap();
+    Map<String, SourceFile> externsMap = Maps.newHashMap();
     for (ZipEntry entry = null; (entry = zip.getNextEntry()) != null; ) {
       BufferedInputStream entryStream = new BufferedInputStream(
           new LimitInputStream(zip, entry.getSize()));
       externsMap.put(entry.getName(),
-          JSSourceFile.fromInputStream(
+          SourceFile.fromInputStream(
               // Give the files an odd prefix, so that they do not conflict
               // with the user's files.
               "externs.zip//" + entry.getName(),
@@ -847,7 +901,7 @@ public class CommandLineRunner extends
 
     // Order matters, so the resources must be added to the result list
     // in the expected order.
-    List<JSSourceFile> externs = Lists.newArrayList();
+    List<SourceFile> externs = Lists.newArrayList();
     for (String key : DEFAULT_EXTERNS_NAMES) {
       externs.add(externsMap.get(key));
     }

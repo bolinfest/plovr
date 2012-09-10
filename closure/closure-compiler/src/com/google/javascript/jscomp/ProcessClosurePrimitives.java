@@ -118,18 +118,15 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
       Lists.newArrayList();
   private final Set<String> exportedVariables = Sets.newHashSet();
   private final CheckLevel requiresLevel;
-  private final boolean rewriteNewDateGoogNow;
   private final PreprocessorSymbolTable preprocessorSymbolTable;
 
   ProcessClosurePrimitives(AbstractCompiler compiler,
       @Nullable PreprocessorSymbolTable preprocessorSymbolTable,
-      CheckLevel requiresLevel,
-      boolean rewriteNewDateGoogNow) {
+      CheckLevel requiresLevel) {
     this.compiler = compiler;
     this.preprocessorSymbolTable = preprocessorSymbolTable;
     this.moduleGraph = compiler.getModuleGraph();
     this.requiresLevel = requiresLevel;
-    this.rewriteNewDateGoogNow = rewriteNewDateGoogNow;
 
     // goog is special-cased because it is provided in Closure's base library.
     providedNames.put(GOOG,
@@ -239,7 +236,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
 
       case Token.FUNCTION:
         // If this is a declaration of a provided named function, this is an
-        // error. Hosited functions will explode if the're provided.
+        // error. Hoisted functions will explode if they're provided.
         if (t.inGlobalScope() &&
             !NodeUtil.isFunctionExpression(n)) {
           String name = n.getFirstChild().getString();
@@ -248,10 +245,6 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
             compiler.report(t.makeError(n, FUNCTION_NAMESPACE_ERROR, name));
           }
         }
-        break;
-
-      case Token.NEW:
-        trySimplifyNewDate(t, n, parent);
         break;
 
       case Token.GETPROP:
@@ -573,7 +566,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
       for (Node key = arg.getFirstChild(); key != null;
           key = key.getNext()) {
         Node value = key.getFirstChild();
-        if (!key.isString()
+        if (!key.isStringKey()
             || value == null
             || !value.isString()) {
           compiler.report(
@@ -652,34 +645,6 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
       parent.getParent().removeChild(parent);
       compiler.reportCodeChange();
     }
-  }
-
-
-  /**
-   * Try to simplify "new Date(goog.now())" to "new Date()".
-   */
-  private void trySimplifyNewDate(NodeTraversal t, Node n, Node parent) {
-    if (!rewriteNewDateGoogNow) {
-      return;
-    }
-    Preconditions.checkArgument(n.isNew());
-    Node date = n.getFirstChild();
-    if (!date.isName() || !"Date".equals(date.getString())) {
-      return;
-    }
-    Node callGoogNow = date.getNext();
-    if (callGoogNow == null || !callGoogNow.isCall() ||
-        callGoogNow.getNext() != null) {
-      return;
-    }
-    Node googNow = callGoogNow.getFirstChild();
-    String googNowQName = googNow.getQualifiedName();
-    if (googNowQName == null || !"goog.now".equals(googNowQName)
-        || googNow.getNext() != null) {
-      return;
-    }
-    n.removeChild(callGoogNow);
-    compiler.reportCodeChange();
   }
 
   /**
@@ -852,7 +817,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
     /**
      * Record function declaration, variable declaration or assignment that
      * refers to the same name as the provide statement.  Give preference to
-     * declarations; if no declation exists record a reference to an
+     * declarations; if no declaration exists, record a reference to an
      * assignment so it repurposed later.
      */
     void addDefinition(Node node, JSModule module) {

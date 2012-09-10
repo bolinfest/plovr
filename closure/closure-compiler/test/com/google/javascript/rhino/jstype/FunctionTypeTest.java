@@ -147,9 +147,9 @@ public class FunctionTypeTest extends BaseJSTypeTestCase {
         .withReturnType(BOOLEAN_TYPE).build();
 
     assertLeastSupertype(
-        "Function", twoNumbers, oneNumber);
+        "function (number, number): boolean", twoNumbers, oneNumber);
     assertGreatestSubtype(
-        "function (...[*]): None", twoNumbers, oneNumber);
+        "function (number): boolean", twoNumbers, oneNumber);
   }
 
   public void testSubtypeWithInterfaceThisType() {
@@ -264,5 +264,12 @@ public class FunctionTypeTest extends BaseJSTypeTestCase {
         "function ((Date|null|undefined), string=, number=):" +
         " function (...[?]): boolean",
         fn.getPropertyType("bind").toString());
+  }
+
+  public void testPrint() {
+    FunctionType fn = new FunctionBuilder(registry)
+      .withTypeOfThis(new TemplateType(registry, "T"))
+      .withReturnType(BOOLEAN_TYPE).build();
+    assertEquals("function (this:T, ...[?]): boolean", fn.toString());
   }
 }

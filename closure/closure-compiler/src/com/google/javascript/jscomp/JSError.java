@@ -40,8 +40,11 @@ public class JSError {
   /** Line number of the source */
   public final int lineNumber;
 
-  /** Level */
+  /** @deprecated Use #getDefaultLevel */
+  @Deprecated
   public final CheckLevel level;
+
+  private final CheckLevel defaultLevel;
 
   // character number
   private final int charno;
@@ -145,6 +148,7 @@ public class JSError {
     this.lineNumber = lineno;
     this.charno = charno;
     this.sourceName = sourceName;
+    this.defaultLevel = level == null ? type.level : level;
     this.level = level == null ? type.level : level;
   }
 
@@ -201,6 +205,13 @@ public class JSError {
   }
 
   /**
+   * Get the line number. One-based.
+   */
+  public int getLineNumber() {
+    return lineNumber;
+  }
+
+  /**
    * @return the offset of the region the Error applies to, or -1 if the offset
    *         is unknown.
    */
@@ -214,6 +225,11 @@ public class JSError {
    */
   public int getNodeLength() {
     return node != null ? node.getLength() : 0;
+  }
+
+  /** The default level, before any of the WarningsGuards are applied. */
+  public CheckLevel getDefaultLevel() {
+    return defaultLevel;
   }
 
   @Override
@@ -237,7 +253,7 @@ public class JSError {
     if (!description.equals(jsError.description)) {
       return false;
     }
-    if (level != jsError.level) {
+    if (defaultLevel != jsError.defaultLevel) {
       return false;
     }
     if (sourceName != null ? !sourceName.equals(jsError.sourceName)
@@ -258,7 +274,7 @@ public class JSError {
     result = 31 * result + description.hashCode();
     result = 31 * result + (sourceName != null ? sourceName.hashCode() : 0);
     result = 31 * result + lineNumber;
-    result = 31 * result + level.hashCode();
+    result = 31 * result + defaultLevel.hashCode();
     result = 31 * result + charno;
     return result;
   }

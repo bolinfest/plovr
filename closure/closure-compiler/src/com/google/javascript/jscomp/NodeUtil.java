@@ -178,6 +178,7 @@ public final class NodeUtil {
     // TODO(user): regex literals as well.
     switch (n.getType()) {
       case Token.STRING:
+      case Token.STRING_KEY:
         return n.getString();
 
       case Token.NAME:
@@ -359,7 +360,7 @@ public final class NodeUtil {
       return null;
     }
 
-    // FireFox and IE treat the "Infinity" differently. FireFox is case
+    // Firefox and IE treat the "Infinity" differently. Firefox is case
     // insensitive, but IE treats "infinity" as NaN.  So leave it alone.
     if (s.equals("infinity")
         || s.equals("-infinity")
@@ -391,10 +392,10 @@ public final class NodeUtil {
   /**
    * Copied from Rhino's ScriptRuntime
    */
-  static TernaryValue isStrWhiteSpaceChar(int c) {
+  public static TernaryValue isStrWhiteSpaceChar(int c) {
     switch (c) {
       case '\u000B': // <VT>
-        return TernaryValue.UNKNOWN;  // IE says "no", EcmaScript says "yes"
+        return TernaryValue.UNKNOWN;  // IE says "no", ECMAScript says "yes"
       case ' ': // <SP>
       case '\n': // <LF>
       case '\r': // <CR>
@@ -427,13 +428,13 @@ public final class NodeUtil {
    * @return the function's name, or {@code null} if it has no name
    */
   static String getFunctionName(Node n) {
+    Preconditions.checkState(n.isFunction());
     Node parent = n.getParent();
-    String name = n.getFirstChild().getString();
     switch (parent.getType()) {
       case Token.NAME:
         // var name = function() ...
         // var name2 = function name1() ...
-        return parent.getString();
+        return parent.getQualifiedName();
 
       case Token.ASSIGN:
         // qualified.name = function() ...
@@ -442,7 +443,8 @@ public final class NodeUtil {
 
       default:
         // function name() ...
-        return name != null && name.length() != 0 ? name : null;
+        String name = n.getFirstChild().getQualifiedName();
+        return name;
     }
   }
 
@@ -462,6 +464,10 @@ public final class NodeUtil {
    * @return the function's name, or {@code null} if it has no name
    */
   public static String getNearestFunctionName(Node n) {
+    if (!n.isFunction()) {
+      return null;
+    }
+
     String name = getFunctionName(n);
     if (name != null) {
       return name;
@@ -472,7 +478,7 @@ public final class NodeUtil {
     switch (parent.getType()) {
       case Token.SETTER_DEF:
       case Token.GETTER_DEF:
-      case Token.STRING:
+      case Token.STRING_KEY:
         // Return the name of the literal's key.
         return parent.getString();
       case Token.NUMBER:
@@ -573,7 +579,7 @@ public final class NodeUtil {
    * </code>
    * If it is evaluated in a different scope, then it
    * captures a different variable. Even if the function did not read
-   * any captured vairables directly, it would still fail this definition,
+   * any captured variables directly, it would still fail this definition,
    * because it affects the lifecycle of variables in the enclosing scope.
    *
    * However, a function literal with respect to a particular scope is
@@ -659,7 +665,7 @@ public final class NodeUtil {
         return isValidDefineValue(val.getFirstChild(), defines)
             && isValidDefineValue(val.getLastChild(), defines);
 
-      // Uniary operators are valid if the child is valid.
+      // Unary operators are valid if the child is valid.
       case Token.NOT:
       case Token.NEG:
       case Token.POS:
@@ -801,6 +807,7 @@ public final class NodeUtil {
       case Token.FALSE:
       case Token.NULL:
       case Token.STRING:
+      case Token.STRING_KEY:
       case Token.SWITCH:
       case Token.TRY:
       case Token.EMPTY:
@@ -929,7 +936,7 @@ public final class NodeUtil {
   /**
    * Do calls to this constructor have side effects?
    *
-   * @param callNode - construtor call node
+   * @param callNode - constructor call node
    */
   static boolean constructorCallHasSideEffects(Node callNode) {
     return constructorCallHasSideEffects(callNode, null);
@@ -1015,9 +1022,9 @@ public final class NodeUtil {
         return false;
       }
 
-      // Math.floor has no sideeffects.
+      // Math.floor has no side-effects.
       // TODO(nicksantos): This is a terrible terrible hack, until
-      // I create a definitionprovider that understands namespacing.
+      // I create a definitionProvider that understands namespacing.
       if (nameNode.getFirstChild().isName()) {
         if ("Math.floor".equals(nameNode.getQualifiedName())) {
           return false;
@@ -1222,6 +1229,7 @@ public final class NodeUtil {
       case Token.OBJECTLIT:
       case Token.REGEXP:
       case Token.STRING:
+      case Token.STRING_KEY:
       case Token.THIS:
       case Token.TRUE:
         return 15;
@@ -1233,8 +1241,8 @@ public final class NodeUtil {
   }
 
   /**
-   * Apply the supplied predicate against the potential
-   * all possible result of the expression.
+   * Apply the supplied predicate against
+   * all possible result Nodes of the expression.
    */
   static boolean valueCheck(Node n, Predicate<Node> p) {
     switch (n.getType()) {
@@ -1337,7 +1345,7 @@ public final class NodeUtil {
       case Token.GT:
       case Token.LE:
       case Token.GE:
-      // Queryies
+      // Queries
       case Token.IN:
       case Token.INSTANCEOF:
       // Inversion
@@ -1751,7 +1759,7 @@ public final class NodeUtil {
         // A finally can only be removed if there is a catch.
         parent.removeChild(node);
       } else {
-        // Otherwise only its children can be removed.
+        // Otherwise, only its children can be removed.
         node.detachChildren();
       }
     } else if (node.isCatch()) {
@@ -1904,6 +1912,15 @@ public final class NodeUtil {
   }
 
   /**
+   * Returns whether this is a bleeding function (an anonymous named function
+   * that bleeds into the inner scope).
+   */
+  static boolean isBleedingFunctionName(Node n) {
+    return n.isName() && !n.getString().isEmpty() &&
+        isFunctionExpression(n.getParent());
+  }
+
+  /**
    * Determines if a node is a function expression that has an empty body.
    *
    * @param node a node
@@ -1918,6 +1935,7 @@ public final class NodeUtil {
    * looking for references to the "arguments" var_args object.
    */
   static boolean isVarArgsFunction(Node function) {
+    // TODO(johnlenz): rename this function
     Preconditions.checkArgument(function.isFunction());
     return isNameReferenced(
         function.getLastChild(),
@@ -2012,7 +2030,7 @@ public final class NodeUtil {
    * We treat "var x;" as a pseudo-L-value, which kind of makes sense if you
    * treat it as "assignment to 'undefined' at the top of the scope". But if
    * we're honest with ourselves, it doesn't make sense, and we only do this
-   * because it makes sense to treat this as synactically similar to
+   * because it makes sense to treat this as syntactically similar to
    * "var x = 0;".
    *
    * @param n The node
@@ -2041,8 +2059,7 @@ public final class NodeUtil {
    */
   static boolean isObjectLitKey(Node node, Node parent) {
     switch (node.getType()) {
-      case Token.STRING:
-        return parent.isObjectLit();
+      case Token.STRING_KEY:
       case Token.GETTER_DEF:
       case Token.SETTER_DEF:
         return true;
@@ -2057,7 +2074,7 @@ public final class NodeUtil {
    */
   static String getObjectLitKeyName(Node key) {
     switch (key.getType()) {
-      case Token.STRING:
+      case Token.STRING_KEY:
       case Token.GETTER_DEF:
       case Token.SETTER_DEF:
         return key.getString();
@@ -2325,7 +2342,7 @@ public final class NodeUtil {
   }
 
   /**
-   * Sets the debug information (source file info and orignal name)
+   * Sets the debug information (source file info and original name)
    * on the given node.
    *
    * @param node The node on which to set the debug information.
@@ -2417,7 +2434,7 @@ public final class NodeUtil {
         // no Unicode escaped characters - some browsers are less tolerant
         // of Unicode characters that might be valid according to the
         // language spec.
-        // Note that by this point, unicode escapes have been converted
+        // Note that by this point, Unicode escapes have been converted
         // to UTF-16 characters, so we're only searching for character
         // values, not escapes.
         isLatin(name);
@@ -2704,35 +2721,35 @@ public final class NodeUtil {
   }
 
   /**
-   * A pre-order traversal, calling Vistor.visit for each child matching
+   * A pre-order traversal, calling Visitor.visit for each child matching
    * the predicate.
    */
   static void visitPreOrder(Node node,
-                     Visitor vistor,
+                     Visitor visitor,
                      Predicate<Node> traverseChildrenPred) {
-    vistor.visit(node);
+    visitor.visit(node);
 
     if (traverseChildrenPred.apply(node)) {
       for (Node c = node.getFirstChild(); c != null; c = c.getNext()) {
-        visitPreOrder(c, vistor, traverseChildrenPred);
+        visitPreOrder(c, visitor, traverseChildrenPred);
       }
     }
   }
 
   /**
-   * A post-order traversal, calling Vistor.visit for each child matching
+   * A post-order traversal, calling Visitor.visit for each child matching
    * the predicate.
    */
   static void visitPostOrder(Node node,
-                     Visitor vistor,
+                     Visitor visitor,
                      Predicate<Node> traverseChildrenPred) {
     if (traverseChildrenPred.apply(node)) {
       for (Node c = node.getFirstChild(); c != null; c = c.getNext()) {
-        visitPostOrder(c, vistor, traverseChildrenPred);
+        visitPostOrder(c, visitor, traverseChildrenPred);
       }
     }
 
-    vistor.visit(node);
+    visitor.visit(node);
   }
 
   /**
@@ -2781,7 +2798,7 @@ public final class NodeUtil {
    *     IS_CONSTANT_NAME property.
    * <li>The normalize pass renames any variable with the IS_CONSTANT_NAME
    *     annotation and that is initialized to a constant value with
-   *     a variable name inlucding $$constant.
+   *     a variable name including $$constant.
    * <li>Return true here if the variable includes $$constant in its name.
    * </ol>
    *
@@ -3050,6 +3067,20 @@ public final class NodeUtil {
     return null;
   }
 
+  /** Gets the r-value of a node returned by getBestLValue. */
+  static Node getRValueOfLValue(Node n) {
+    Node parent = n.getParent();
+    switch (parent.getType()) {
+      case Token.ASSIGN:
+        return n.getNext();
+      case Token.VAR:
+        return n.getFirstChild();
+      case Token.FUNCTION:
+        return parent;
+    }
+    return null;
+  }
+
   /** Get the owner of the given l-value node. */
   static Node getBestLValueOwner(@Nullable Node lValue) {
     if (lValue == null || lValue.getParent() == null) {
@@ -3089,6 +3120,7 @@ public final class NodeUtil {
     // TODO(johnlenz): consider sharing some code with trySimpleUnusedResult.
     Node parent = expr.getParent();
     switch (parent.getType()) {
+      case Token.BLOCK:
       case Token.EXPR_RESULT:
         return false;
       case Token.HOOK:
@@ -3097,6 +3129,21 @@ public final class NodeUtil {
         return (expr == parent.getFirstChild())
             ? true : isExpressionResultUsed(parent);
       case Token.COMMA:
+        Node gramps = parent.getParent();
+        if (gramps.isCall() &&
+            parent == gramps.getFirstChild()) {
+          // Semantically, a direct call to eval is different from an indirect
+          // call to an eval. See ECMA-262 S15.1.2.1. So it's OK for the first
+          // expression to a comma to be a no-op if it's used to indirect
+          // an eval. This we pretend that this is "used".
+          if (expr == parent.getFirstChild() &&
+              parent.getChildCount() == 2 &&
+              expr.getNext().isName() &&
+              "eval".equals(expr.getNext().getString())) {
+            return true;
+          }
+        }
+
         return (expr == parent.getFirstChild())
             ? false : isExpressionResultUsed(parent);
       case Token.FOR:
@@ -3107,6 +3154,57 @@ public final class NodeUtil {
         }
         break;
     }
+    return true;
+  }
+
+  /**
+   * @param n The expression to check.
+   * @return Whether the expression is unconditionally executed only once in the
+   *     containing execution scope.
+   */
+  static boolean isExecutedExactlyOnce(Node n) {
+    inspect: do {
+      Node parent = n.getParent();
+      switch (parent.getType()) {
+        case Token.IF:
+        case Token.HOOK:
+        case Token.AND:
+        case Token.OR:
+          if (parent.getFirstChild() != n) {
+            return false;
+          }
+          // other ancestors may be conditional
+          continue inspect;
+        case Token.FOR:
+          if (NodeUtil.isForIn(parent)) {
+            if (parent.getChildAtIndex(1) != n) {
+              return false;
+            }
+          } else {
+            if (parent.getFirstChild() != n) {
+              return false;
+            }
+          }
+          // other ancestors may be conditional
+          continue inspect;
+        case Token.WHILE:
+        case Token.DO:
+          return false;
+        case Token.TRY:
+          // Consider all code under a try/catch to be conditionally executed.
+          if (!hasFinally(parent) || parent.getLastChild() != n) {
+            return false;
+          }
+          continue inspect;
+        case Token.CASE:
+        case Token.DEFAULT_CASE:
+          return false;
+        case Token.SCRIPT:
+        case Token.FUNCTION:
+          // Done, we've reached the scope root.
+          break inspect;
+      }
+    } while ((n = n.getParent()) != null);
     return true;
   }
 

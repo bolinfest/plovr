@@ -262,7 +262,7 @@ public abstract class ObjectType extends JSType implements StaticScope<JSType> {
   public abstract ObjectType getImplicitPrototype();
 
   /**
-   * Defines a property whose type is synthesized (i.e. not inferred).
+   * Defines a property whose type is explicitly declared by the programmer.
    * @param propertyName the property's name
    * @param type the type
    * @param propertyNode the node corresponding to the declaration of property
@@ -283,6 +283,16 @@ public abstract class ObjectType extends JSType implements StaticScope<JSType> {
   }
 
   /**
+   * Defines a property whose type is on a synthesized object. These objects
+   * don't actually exist in the user's program. They're just used for
+   * bookkeeping in the type system.
+   */
+  public final boolean defineSynthesizedProperty(String propertyName,
+      JSType type, Node propertyNode) {
+    return defineProperty(propertyName, type, false, propertyNode);
+  }
+
+  /**
    * Defines a property whose type is inferred.
    * @param propertyName the property's name
    * @param type the type
@@ -291,7 +301,12 @@ public abstract class ObjectType extends JSType implements StaticScope<JSType> {
    */
   public final boolean defineInferredProperty(String propertyName,
       JSType type, Node propertyNode) {
+    StaticSlot<JSType> originalSlot = getSlot(propertyName);
     if (hasProperty(propertyName)) {
+      if (isPropertyTypeDeclared(propertyName)) {
+        // We never want to hide a declared property with an inferred property.
+        return true;
+      }
       JSType originalType = getPropertyType(propertyName);
       type = originalType == null ? type :
           originalType.getLeastSupertype(type);
@@ -552,6 +567,9 @@ public abstract class ObjectType extends JSType implements StaticScope<JSType> {
     return null;
   }
 
+  /** Sets the owner function. By default, does nothing. */
+  void setOwnerFunction(FunctionType type) {}
+
   /**
    * Gets the interfaces implemented by the ctor associated with this type.
    * Intended to be overridden by subclasses.
@@ -562,7 +580,7 @@ public abstract class ObjectType extends JSType implements StaticScope<JSType> {
 
   /**
    * Gets the interfaces extended by the interface associated with this type.
-   * Intended to be overriden by subclasses.
+   * Intended to be overridden by subclasses.
    */
   public Iterable<ObjectType> getCtorExtendedInterfaces() {
     return ImmutableSet.of();

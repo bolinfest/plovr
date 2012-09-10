@@ -32,7 +32,11 @@ public class CheckGlobalNamesTest extends CompilerTestCase {
   private boolean injectNamespace = false;
 
   public CheckGlobalNamesTest() {
-    super("function alert() {}");
+    super("function alert() {}" +
+          "/** @constructor */ function Object(){}" +
+          "Object.prototype.hasOwnProperty = function() {};" +
+          "/** @constructor */ function Function(){}" +
+          "Function.prototype.call = function() {};");
   }
 
   @Override
@@ -44,7 +48,7 @@ public class CheckGlobalNamesTest extends CompilerTestCase {
         @Override
         public void process(Node externs, Node js) {
           checkGlobalNames.injectNamespace(
-              new GlobalNamespace(compiler, js))
+              new GlobalNamespace(compiler, externs, js))
               .process(externs, js);
         }
       };
@@ -98,7 +102,7 @@ public class CheckGlobalNamesTest extends CompilerTestCase {
   }
 
   public void testRefToPropertyOfAliasedName() {
-    // this is ok, because "a" was aliased
+    // this is OK, because "a" was aliased
     testSame(NAMES + "alert(a); alert(a.x);");
   }
 
@@ -154,6 +158,23 @@ public class CheckGlobalNamesTest extends CompilerTestCase {
   public void testNamespaceInjection() {
     injectNamespace = true;
     testSame(NAMES + "var c = a.x.b;", UNDEFINED_NAME_WARNING);
+  }
+
+  public void testSuppressionOfUndefinedNamesWarning() {
+    testSame(new String[] {
+        NAMES +
+        "/** @constructor */ function Foo() { };" +
+        "/** @suppress {undefinedNames} */" +
+        "Foo.prototype.bar = function() {" +
+        "  alert(a.x);" +
+        "  alert(a.x.b());" +
+        "  a.x();" +
+        "  var c = a.x.b;" +
+        "  var c = a.x.b();" +
+        "  a.x.b();" +
+        "  a.x.b = 3;" +
+        "};",
+    });
   }
 
   public void testNoWarningForSimpleVarModuleDep1() {
@@ -227,6 +248,13 @@ public class CheckGlobalNamesTest extends CompilerTestCase {
         NAME_DEFINED_LATE_WARNING);
   }
 
+  public void testLateDefinedName6() {
+    testSame(
+        "var x = {}; x.y.prototype.z = 3;" +
+        "/** @constructor */ x.y = function() {};",
+        NAME_DEFINED_LATE_WARNING);
+  }
+
   public void testOkLateDefinedName1() {
     testSame("function f() { x.y = {}; } var x = {};");
   }
@@ -242,5 +270,70 @@ public class CheckGlobalNamesTest extends CompilerTestCase {
         "  default: x.y.z = {}; " +
         "  case (x.y = {}): break;" +
         "}", NAME_DEFINED_LATE_WARNING);
+  }
+
+  public void testOkGlobalDeclExpr() {
+    testSame("var x = {}; /** @type {string} */ x.foo;");
+  }
+
+  public void testBadInterfacePropRef() {
+    testSame(
+        "/** @interface */ function F() {}" +
+         "F.bar();",
+         UNDEFINED_NAME_WARNING);
+  }
+
+  public void testInterfaceFunctionPropRef() {
+    testSame(
+        "/** @interface */ function F() {}" +
+         "F.call(); F.hasOwnProperty('z');");
+  }
+
+  public void testObjectPrototypeProperties() {
+    testSame("var x = {}; var y = x.hasOwnProperty('z');");
+  }
+
+  public void testCustomObjectPrototypeProperties() {
+    testSame("Object.prototype.seal = function() {};" +
+        "var x = {}; x.seal();");
+  }
+
+  public void testFunctionPrototypeProperties() {
+    testSame("var x = {}; var y = x.hasOwnProperty('z');");
+  }
+
+  public void testIndirectlyDeclaredProperties() {
+    testSame(
+        "Function.prototype.inherits = function(ctor) {" +
+        "  this.superClass_ = ctor;" +
+        "};" +
+        "/** @constructor */ function Foo() {}" +
+        "Foo.prototype.bar = function() {};" +
+        "/** @constructor */ function SubFoo() {}" +
+        "SubFoo.inherits(Foo);" +
+        "SubFoo.superClass_.bar();");
+  }
+
+  public void testGoogInheritsAlias() {
+    testSame(
+        "Function.prototype.inherits = function(ctor) {" +
+        "  this.superClass_ = ctor;" +
+        "};" +
+        "/** @constructor */ function Foo() {}" +
+        "Foo.prototype.bar = function() {};" +
+        "/** @constructor */ function SubFoo() {}" +
+        "SubFoo.inherits(Foo);" +
+        "SubFoo.superClass_.bar();");
+  }
+
+  public void testGoogInheritsAlias2() {
+    testSame(
+        CompilerTypeTestCase.CLOSURE_DEFS +
+        "/** @constructor */ function Foo() {}" +
+        "Foo.prototype.bar = function() {};" +
+        "/** @constructor */ function SubFoo() {}" +
+        "goog.inherits(SubFoo, Foo);" +
+        "SubFoo.superClazz();",
+         UNDEFINED_NAME_WARNING);
   }
 }

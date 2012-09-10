@@ -37,14 +37,16 @@ class PhaseOptimizer implements CompilerPass {
   // This ordering is computed offline by running with compute_phase_ordering.
   @VisibleForTesting
   static final List<String> OPTIMAL_ORDER = ImmutableList.of(
-     "removeUnreachableCode",
-     "removeUnusedVars",
-     "foldConstants",
      "deadAssignmentsElimination",
-     "inlineVariables",
      "inlineFunctions",
      "removeUnusedPrototypeProperties",
-     "minimizeExitPoints");
+     "removeUnreachableCode",
+     "removeUnusedVars",
+     "minimizeExitPoints",
+     "inlineVariables",
+     "collapseObjectLiterals",
+     "peepholeOptimizations"
+     );
 
   static final int MAX_LOOPS = 100;
   static final String OPTIMIZE_LOOP_ERROR =
@@ -53,7 +55,7 @@ class PhaseOptimizer implements CompilerPass {
   private static final Logger logger =
       Logger.getLogger(PhaseOptimizer.class.getName());
 
-  private List<CompilerPass> passes = Lists.newArrayList();
+  private final List<CompilerPass> passes = Lists.newArrayList();
 
   private final AbstractCompiler compiler;
   private final PerformanceTracker tracker;
@@ -69,9 +71,19 @@ class PhaseOptimizer implements CompilerPass {
   private static boolean randomizeLoops = false;
   private static List<List<String>> loopsRun = Lists.newArrayList();
 
-  PhaseOptimizer(AbstractCompiler compiler, PerformanceTracker tracker) {
+  private final ProgressRange progressRange;
+
+  /**
+   * @param compiler the compiler that owns/creates this.
+   * @param tracker an optional performance tracker
+   * @param progressRange the progress range for the process function or null
+   * if progress should not be reported.
+   */
+  PhaseOptimizer(AbstractCompiler compiler, PerformanceTracker tracker,
+      ProgressRange progressRange) {
     this.compiler = compiler;
     this.tracker = tracker;
+    this.progressRange = progressRange;
     compiler.addChangeHandler(recentChange);
   }
 
@@ -164,8 +176,19 @@ class PhaseOptimizer implements CompilerPass {
    */
   @Override
   public void process(Node externs, Node root) {
+    double progress = 0.0;
+    double progressStep = 0.0;
+    if (progressRange != null) {
+      progressStep = (progressRange.maxValue - progressRange.initialValue)
+          / passes.size();
+      progress = progressRange.initialValue;
+    }
     for (CompilerPass pass : passes) {
       pass.process(externs, root);
+      if (progressRange != null) {
+        progress += progressStep;
+        compiler.setProgress(progress);
+      }
       if (hasHaltingErrors()) {
         return;
       }
@@ -255,7 +278,8 @@ class PhaseOptimizer implements CompilerPass {
   }
 
   /**
-   * Delegates to a PassFactory for processing.
+   * Wraps every pass factory as a pass, to ensure that we don't
+   * keep references to passes and their data structures.
    */
   private class PassFactoryDelegate extends NamedPass {
     private final AbstractCompiler myCompiler;
@@ -380,6 +404,16 @@ class PhaseOptimizer implements CompilerPass {
 
       myPasses.removeAll(optimalPasses);
       myPasses.addAll(optimalPasses);
+    }
+  }
+
+  static class ProgressRange {
+    public final double initialValue;
+    public final double maxValue;
+
+    public ProgressRange(double initialValue, double maxValue) {
+      this.initialValue = initialValue;
+      this.maxValue = maxValue;
     }
   }
 }

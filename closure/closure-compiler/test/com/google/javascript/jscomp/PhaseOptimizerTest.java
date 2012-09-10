@@ -17,6 +17,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.collect.Lists;
+import com.google.javascript.jscomp.CompilerOptions.TracerMode;
 import com.google.javascript.jscomp.PhaseOptimizer.Loop;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -41,8 +42,9 @@ public class PhaseOptimizerTest extends TestCase {
     passesRun.clear();
     compiler = new Compiler();
     compiler.initCompilerOptionsIfTesting();
-    tracker = new PerformanceTracker(new Node(Token.BLOCK), false);
-    optimizer = new PhaseOptimizer(compiler, tracker);
+    tracker = new PerformanceTracker(
+        new Node(Token.BLOCK), TracerMode.TIMING_ONLY);
+    optimizer = new PhaseOptimizer(compiler, tracker, null);
   }
 
   public void testOneRun() {
@@ -167,6 +169,28 @@ public class PhaseOptimizerTest extends TestCase {
     }
     optimizer.process(null, null);
     assertEquals(PhaseOptimizer.OPTIMAL_ORDER, passesRun);
+  }
+
+  public void testProgress() {
+    final List<Double> progressList = Lists.newArrayList();
+    compiler = new Compiler() {
+      @Override void setProgress(double p) {
+        progressList.add(p);
+      }
+    };
+    compiler.initCompilerOptionsIfTesting();
+    optimizer = new PhaseOptimizer(compiler, null,
+        new PhaseOptimizer.ProgressRange(0, 100));
+    addOneTimePass("x1");
+    addOneTimePass("x2");
+    addOneTimePass("x3");
+    addOneTimePass("x4");
+    optimizer.process(null, null);
+    assertEquals(4, progressList.size());
+    assertEquals(25, Math.round(progressList.get(0)));
+    assertEquals(50, Math.round(progressList.get(1)));
+    assertEquals(75, Math.round(progressList.get(2)));
+    assertEquals(100, Math.round(progressList.get(3)));
   }
 
   public void assertPasses(String ... names) {

@@ -498,6 +498,12 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
     testParseType("function (?): (?|number)", "function (?): ?");
   }
 
+  public void testParseFunctionalType19() throws Exception {
+    testParseType(
+        "function(...[?]): void",
+        "function (...[?]): undefined");
+  }
+
   public void testStructuralConstructor() throws Exception {
     JSType type = testParseType(
         "function (new:Object)", "function (new:Object): ?");
@@ -1114,8 +1120,8 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
   }
 
   public void testParseExtendsInvalidName() throws Exception {
-    // This looks bad, but for the time being it should be ok, as
-    // we will not find a type with this name in the js parsed tree.
+    // This looks bad, but for the time being it should be OK, as
+    // we will not find a type with this name in the JS parsed tree.
     // If this is fixed in the future, change this test to check for a
     // warning/error message.
     assertTypeEquals(
@@ -1269,7 +1275,7 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
     this.fileLevelJsDocBuilder = node.getJsDocBuilderForNode();
     String comment = "@preserve Foo\nBar\n\nBaz*/";
     parse(comment);
-    assertEquals(" Foo\n Bar\n\n Baz", node.getJSDocInfo().getLicense());
+    assertEquals(" Foo\nBar\n\nBaz", node.getJSDocInfo().getLicense());
   }
 
   public void testParseLicense() throws Exception {
@@ -1277,7 +1283,15 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
     this.fileLevelJsDocBuilder = node.getJsDocBuilderForNode();
     String comment = "@license Foo\nBar\n\nBaz*/";
     parse(comment);
-    assertEquals(" Foo\n Bar\n\n Baz", node.getJSDocInfo().getLicense());
+    assertEquals(" Foo\nBar\n\nBaz", node.getJSDocInfo().getLicense());
+  }
+
+  public void testParseLicenseAscii() throws Exception {
+    Node node = new Node(1);
+    this.fileLevelJsDocBuilder = node.getJsDocBuilderForNode();
+    String comment = "@license Foo\n *   Bar\n\n  Baz*/";
+    parse(comment);
+    assertEquals(" Foo\n   Bar\n\n  Baz", node.getJSDocInfo().getLicense());
   }
 
   public void testParseLicenseWithAnnotation() throws Exception {
@@ -1401,6 +1415,14 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
 
   public void testParseExport2() throws Exception {
     parse("@export\n@export*/", "extra @export tag");
+  }
+
+  public void testParseExpose1() throws Exception {
+    assertTrue(parse("@expose*/").isExpose());
+  }
+
+  public void testParseExpose2() throws Exception {
+    parse("@expose\n@expose*/", "extra @expose tag");
   }
 
   public void testParseExterns1() throws Exception {
@@ -2402,6 +2424,10 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
   public void testParserWithTemplateDuplicated() {
     parse("@template T\n@template V */",
         "Bad type annotation. @template tag at most once");
+  }
+
+  public void testParserWithTwoTemplates() {
+    parse("@template T,V */");
   }
 
   public void testWhitelistedNewAnnotations() {

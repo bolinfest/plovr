@@ -155,10 +155,7 @@ public class JSTypeRegistry implements Serializable {
   private boolean lastGeneration = true;
 
   // The template type name.
-  private String templateTypeName;
-
-  // The template type.
-  private TemplateType templateType;
+  private Map<String, TemplateType> templateTypes = Maps.newHashMap();
 
   private final boolean tolerateUndefinedValues;
 
@@ -465,6 +462,11 @@ public class JSTypeRegistry implements Serializable {
     registerNativeType(
         JSTypeNative.STRING_OBJECT_TYPE, STRING_OBJECT_TYPE);
 
+    // (null,void)
+    JSType NULL_VOID =
+        createUnionType(NULL_TYPE, VOID_TYPE);
+    registerNativeType(JSTypeNative.NULL_VOID, NULL_VOID);
+
     // (Object,string,number)
     JSType OBJECT_NUMBER_STRING =
         createUnionType(OBJECT_TYPE, NUMBER_TYPE, STRING_TYPE);
@@ -536,7 +538,7 @@ public class JSTypeRegistry implements Serializable {
 
     // least function type, i.e. (All...) -> NoType
     FunctionType LEAST_FUNCTION_TYPE =
-        createFunctionType(NO_TYPE, true, ALL_TYPE);
+        createNativeFunctionTypeWithVarArgs(NO_TYPE, ALL_TYPE);
     registerNativeType(JSTypeNative.LEAST_FUNCTION_TYPE, LEAST_FUNCTION_TYPE);
 
     // the 'this' object in the global scope
@@ -549,7 +551,7 @@ public class JSTypeRegistry implements Serializable {
 
     // greatest function type, i.e. (NoType...) -> All
     FunctionType GREATEST_FUNCTION_TYPE =
-      createFunctionType(ALL_TYPE, true, NO_TYPE);
+        createNativeFunctionTypeWithVarArgs(ALL_TYPE, NO_TYPE);
     registerNativeType(JSTypeNative.GREATEST_FUNCTION_TYPE,
         GREATEST_FUNCTION_TYPE);
 
@@ -691,7 +693,15 @@ public class JSTypeRegistry implements Serializable {
     if (typesIndexedByProperty.containsKey(propertyName)) {
       for (JSType alt :
                typesIndexedByProperty.get(propertyName).getAlternates()) {
-        if (!alt.getGreatestSubtype(type).isEmptyType()) {
+        JSType greatestSubtype = alt.getGreatestSubtype(type);
+        if (!greatestSubtype.isEmptyType()) {
+          // We've found a type with this property. Now we just have to make
+          // sure it's not a type used for internal bookkeeping.
+          RecordType maybeRecordType = greatestSubtype.toMaybeRecordType();
+          if (maybeRecordType != null && maybeRecordType.isSynthetic()) {
+            continue;
+          }
+
           return true;
         }
       }
@@ -791,7 +801,7 @@ public class JSTypeRegistry implements Serializable {
 
   /**
    * Tells the type system that {@code type} implements interface {@code
-   * InterfaceInstance}.
+   * interfaceInstance}.
    * {@code inter} must be an ObjectType for the instance of the interface as it
    * could be a named type and not yet have the constructor.
    */
@@ -865,7 +875,8 @@ public class JSTypeRegistry implements Serializable {
   public JSType getType(String jsTypeName) {
     // TODO(user): Push every local type name out of namesToTypes so that
     // NamedType#resolve is correct.
-    if (jsTypeName.equals(templateTypeName)) {
+    TemplateType templateType = templateTypes.get(jsTypeName);
+    if (templateType != null) {
       return templateType;
     }
     return namesToTypes.get(jsTypeName);
@@ -910,7 +921,7 @@ public class JSTypeRegistry implements Serializable {
   }
 
   /**
-   * Flushes out the current resolved and unresovled Named Types from
+   * Flushes out the current resolved and unresolved Named Types from
    * the type registry.  This is intended to be used ONLY before a
    * compile is run.
    */
@@ -965,9 +976,15 @@ public class JSTypeRegistry implements Serializable {
    * @return the union of the type and the Null type
    */
   public JSType createDefaultObjectUnion(JSType type) {
-    return shouldTolerateUndefinedValues()
+    if (type.isTemplateType()) {
+      // Template types represent the substituted type exactly and should
+      // not be wrapped.
+      return type;
+    } else {
+      return shouldTolerateUndefinedValues()
         ? createOptionalNullableType(type)
         : createNullableType(type);
+    }
   }
 
   /**
@@ -979,7 +996,7 @@ public class JSTypeRegistry implements Serializable {
   }
 
   /**
-   * Creates a nullabel and undefine-able value of the given type.
+   * Creates a nullable and undefine-able value of the given type.
    * @return The union of the type and null and undefined.
    */
   public JSType createOptionalNullableType(JSType type) {
@@ -999,7 +1016,7 @@ public class JSTypeRegistry implements Serializable {
   }
 
   /**
-   * Creates a union type whose variants are the builtin types specified
+   * Creates a union type whose variants are the built-in types specified
    * by the arguments.
    */
   public JSType createUnionType(JSTypeNative... variants) {
@@ -1085,6 +1102,19 @@ public class JSTypeRegistry implements Serializable {
   public FunctionType createFunctionTypeWithVarArgs(
       JSType returnType, JSType... parameterTypes) {
     return createFunctionType(
+        returnType, createParametersWithVarArgs(parameterTypes));
+  }
+
+  /**
+   * Creates a function type. The last parameter type of the function is
+   * considered a variable length argument.
+   *
+   * @param returnType the function's return type
+   * @param parameterTypes the parameters' types
+   */
+  private FunctionType createNativeFunctionTypeWithVarArgs(
+      JSType returnType, JSType... parameterTypes) {
+    return createNativeFunctionType(
         returnType, createParametersWithVarArgs(parameterTypes));
   }
 
@@ -1281,6 +1311,15 @@ public class JSTypeRegistry implements Serializable {
     return new FunctionBuilder(this)
         .withParamsNode(parameters)
         .withReturnType(returnType)
+        .build();
+  }
+
+  private FunctionType createNativeFunctionType(
+      JSType returnType, Node parameters) {
+    return new FunctionBuilder(this)
+        .withParamsNode(parameters)
+        .withReturnType(returnType)
+        .forNativeType()
         .build();
   }
 
@@ -1667,16 +1706,17 @@ public class JSTypeRegistry implements Serializable {
   /**
    * Sets the template type name.
    */
-  public void setTemplateTypeName(String name) {
-    templateTypeName = name;
-    templateType = new TemplateType(this, name);
+  public void setTemplateTypeNames(List<String> names) {
+    Preconditions.checkNotNull(names);
+    for (String name : names) {
+      templateTypes.put(name, new TemplateType(this, name));
+    }
   }
 
   /**
    * Clears the template type name.
    */
-  public void clearTemplateTypeName() {
-    templateTypeName = null;
-    templateType = null;
+  public void clearTemplateTypeNames() {
+    templateTypes.clear();
   }
 }

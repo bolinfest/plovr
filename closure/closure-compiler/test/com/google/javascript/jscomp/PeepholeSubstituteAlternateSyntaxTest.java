@@ -23,7 +23,7 @@ package com.google.javascript.jscomp;
  */
 public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
 
-  // Externs for builtin constructors
+  // Externs for built-in constructors
   // Needed for testFoldLiteralObjectConstructors(),
   // testFoldLiteralArrayConstructors() and testFoldRegExp...()
   private static final String FOLD_CONSTANTS_TEST_EXTERNS =
@@ -313,7 +313,7 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
 
     // Cannot fold all the way to a literal because there are too few arguments.
     fold("x = new RegExp",                    "x = RegExp()");
-    // Empty regexp should not fold to // since that is a line comment in js
+    // Empty regexp should not fold to // since that is a line comment in JS
     fold("x = new RegExp(\"\")",              "x = RegExp(\"\")");
     fold("x = new RegExp(\"\", \"i\")",       "x = RegExp(\"\",\"i\")");
     // Bogus flags should not fold
@@ -355,7 +355,7 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
          "x = RegExp(\"foobar\",\"g\")");
     fold("x = new RegExp(\"foobar\", \"ig\")",
          "x = RegExp(\"foobar\",\"ig\")");
-    // ... unless in EcmaScript 5 mode per section 7.8.5 of EcmaScript 5.
+    // ... unless in ECMAScript 5 mode per section 7.8.5 of ECMAScript 5.
     enableEcmaScript5(true);
     fold("x = new RegExp(\"foobar\", \"ig\")",
          "x = /foobar/ig");
@@ -364,7 +364,7 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
     enableEcmaScript5(false);
     fold("x = new RegExp(\"\\u2028\")", "x = RegExp(\"\\u2028\")");
     fold("x = new RegExp(\"\\\\\\\\u2028\")", "x = /\\\\u2028/");
-    // Sunset Safari exclusions for EcmaScript 5 and later.
+    // Sunset Safari exclusions for ECMAScript 5 and later.
     enableEcmaScript5(true);
     fold("x = new RegExp(\"\\u2028\\u2029\")", "x = /\\u2028\\u2029/");
     fold("x = new RegExp(\"\\\\u2028\")", "x = /\\u2028/");
@@ -836,6 +836,7 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
   }
 
   public void testSplitCommaExpressions() {
+    late = false;
     // Don't try to split in expressions.
     foldSame("while (foo(), !0) boo()");
     foldSame("var a = (foo(), !0);");
@@ -852,32 +853,37 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
   }
 
   public void testComma1() {
-    fold("1, 2", "1; 1");
     late = false;
+    fold("1, 2", "1; 1");
+    late = true;
     foldSame("1, 2");
   }
 
   public void testComma2() {
-    test("1, a()", "1; a()");
     late = false;
+    test("1, a()", "1; a()");
+    late = true;
     foldSame("1, a()");
   }
 
   public void testComma3() {
-    test("1, a(), b()", "1; a(); b()");
     late = false;
+    test("1, a(), b()", "1; a(); b()");
+    late = true;
     foldSame("1, a(), b()");
   }
 
   public void testComma4() {
-    test("a(), b()", "a();b()");
     late = false;
+    test("a(), b()", "a();b()");
+    late = true;
     foldSame("a(), b()");
   }
 
   public void testComma5() {
-    test("a(), b(), 1", "a();b();1");
     late = false;
+    test("a(), b(), 1", "a();b();1");
+    late = true;
     foldSame("a(), b(), 1");
   }
 
@@ -899,15 +905,22 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
     testSame("var x=['1','2','3','4']");
     testSame("var x=['1','2','3','4','5']");
     test("var x=['1','2','3','4','5','6']",
-         "var x='1,2,3,4,5,6'.split(',')");
+         "var x='123456'.split('')");
+    test("var x=['1','2','3','4','5','00']",
+         "var x='1 2 3 4 5 00'.split(' ')");
     test("var x=['1','2','3','4','5','6','7']",
-         "var x='1,2,3,4,5,6,7'.split(',')");
-    test("var x=[',',',',',',',',',',',']",
-         "var x=', , , , , ,'.split(' ')");
-    test("var x=[',',' ',',',',',',',',']",
-         "var x=',; ;,;,;,;,'.split(';')");
-    test("var x=[',',' ',',',',',',',',']",
-         "var x=',; ;,;,;,;,'.split(';')");
+        "var x='1234567'.split('')");
+    test("var x=['1','2','3','4','5','6','00']",
+         "var x='1 2 3 4 5 6 00'.split(' ')");
+    test("var x=[' ,',',',',',',',',',',']",
+         "var x=' ,;,;,;,;,;,'.split(';')");
+    test("var x=[',,',' ',',',',',',',',']",
+         "var x=',,; ;,;,;,;,'.split(';')");
+    test("var x=['a,',' ',',',',',',',',']",
+         "var x='a,; ;,;,;,;,'.split(';')");
+
+    // all possible delimiters used, leave it alone
+    testSame("var x=[',', ' ', ';', '{', '}']");
   }
 
   public void testRemoveElseCause() {
@@ -1015,6 +1028,8 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
   public void testSimpleFunctionCall() {
     test("var a = String(23)", "var a = '' + 23");
     test("var a = String('hello')", "var a = '' + 'hello'");
+    testSame("var a = String('hello', bar());");
+    testSame("var a = String({valueOf: function() { return 1; }});");
   }
 
   private static class StringCompareTestCase extends CompilerTestCase {

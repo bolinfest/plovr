@@ -15,16 +15,20 @@
  */
 package com.google.javascript.jscomp;
 
-import java.net.URI;
-import java.net.URISyntaxException;
-
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 
+import java.io.File;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.Set;
+import java.util.regex.Pattern;
+
 /**
- * Rewrites a Common JS module http://wiki.commonjs.org/wiki/Modules/1.1.1
+ * Rewrites a CommonJS module http://wiki.commonjs.org/wiki/Modules/1.1.1
  * into a form that can be safely concatenated.
  * Does not add a function around the module body but instead adds suffixes
  * to global variables to avoid conflicts.
@@ -32,10 +36,11 @@ import com.google.javascript.rhino.Node;
  * goog.provide and goog.require are emitted for closure compiler automatic
  * ordering.
  */
-class ProcessCommonJSModules implements CompilerPass {
+public class ProcessCommonJSModules implements CompilerPass {
 
-  public static final String  DEFAULT_FILENAME_PREFIX = "./";
+  public static final String DEFAULT_FILENAME_PREFIX = "." + File.separator;
 
+  private static final String MODULE_NAME_SEPARATOR = "\\$";
   private static final String MODULE_NAME_PREFIX = "module$";
 
   private final AbstractCompiler compiler;
@@ -44,15 +49,14 @@ class ProcessCommonJSModules implements CompilerPass {
   private JSModule module;
 
   ProcessCommonJSModules(AbstractCompiler compiler, String filenamePrefix) {
-    this.compiler = compiler;
-    this.filenamePrefix = filenamePrefix;
-    this.reportDependencies = true;
+    this(compiler, filenamePrefix, true);
   }
 
   ProcessCommonJSModules(AbstractCompiler compiler, String filenamePrefix,
       boolean reportDependencies) {
     this.compiler = compiler;
-    this.filenamePrefix = filenamePrefix;
+    this.filenamePrefix = filenamePrefix.endsWith(File.separator) ?
+        filenamePrefix : filenamePrefix + File.separator;
     this.reportDependencies = reportDependencies;
   }
 
@@ -62,7 +66,7 @@ class ProcessCommonJSModules implements CompilerPass {
         .traverse(compiler, root, new ProcessCommonJsModulesCallback());
   }
 
-  private String guessCJSModuleName(String filename) {
+  String guessCJSModuleName(String filename) {
     return toModuleName(normalizeSourceName(filename));
   }
 
@@ -81,7 +85,8 @@ class ProcessCommonJSModules implements CompilerPass {
    */
   public static String toModuleName(String filename) {
     return MODULE_NAME_PREFIX +
-        filename.replaceAll("^\\./", "").replaceAll("/", "\\$")
+        filename.replaceAll("^\\." + Pattern.quote(File.separator), "")
+            .replaceAll(Pattern.quote(File.separator), MODULE_NAME_SEPARATOR)
             .replaceAll("\\.js$", "").replaceAll("-", "_");
   }
 
@@ -94,8 +99,8 @@ class ProcessCommonJSModules implements CompilerPass {
     requiredFilename = requiredFilename.replaceAll("\\.js$", "");
     currentFilename = currentFilename.replaceAll("\\.js$", "");
 
-    if (requiredFilename.startsWith("./") ||
-        requiredFilename.startsWith("../")) {
+    if (requiredFilename.startsWith("." + File.separator) ||
+        requiredFilename.startsWith(".." + File.separator)) {
       try {
         requiredFilename = (new URI(currentFilename)).resolve(new URI(requiredFilename))
             .toString();
@@ -120,6 +125,7 @@ class ProcessCommonJSModules implements CompilerPass {
       AbstractPostOrderCallback {
 
     private int scriptNodeCount = 0;
+    private Set<String> modulesWithExports = Sets.newHashSet();
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
@@ -199,6 +205,10 @@ class ProcessCommonJSModules implements CompilerPass {
      */
     private void emitOptionalModuleExportsOverride(Node script,
         String moduleName) {
+      if (!modulesWithExports.contains(moduleName)) {
+        return;
+      }
+
       Node moduleExportsProp = IR.getprop(IR.name(moduleName),
           IR.string("module$exports"));
       script.addChildToBack(IR.ifNode(
@@ -219,6 +229,7 @@ class ProcessCommonJSModules implements CompilerPass {
       Node exports = prop.getChildAtIndex(1);
       exports.putProp(Node.ORIGINALNAME_PROP, "exports");
       exports.setString("module$exports");
+      modulesWithExports.add(moduleName);
     }
 
     /**
@@ -243,7 +254,7 @@ class ProcessCommonJSModules implements CompilerPass {
 
     private final String suffix;
 
-    public SuffixVarsCallback(String suffix) {
+    SuffixVarsCallback(String suffix) {
       this.suffix = suffix;
     }
 

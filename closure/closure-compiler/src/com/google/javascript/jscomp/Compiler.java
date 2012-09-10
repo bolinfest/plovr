@@ -17,28 +17,35 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Charsets;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.base.Throwables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.io.CharStreams;
 import com.google.javascript.jscomp.CompilerOptions.DevMode;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
-import com.google.javascript.jscomp.CompilerOptions.TracerMode;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceCollection;
 import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.deps.SortedDependencies.CircularDependencyException;
 import com.google.javascript.jscomp.deps.SortedDependencies.MissingProvideException;
 import com.google.javascript.jscomp.parsing.Config;
 import com.google.javascript.jscomp.parsing.ParserRunner;
+import com.google.javascript.jscomp.type.ChainableReverseAbstractInterpreter;
+import com.google.javascript.jscomp.type.ClosureReverseAbstractInterpreter;
+import com.google.javascript.jscomp.type.ReverseAbstractInterpreter;
+import com.google.javascript.jscomp.type.SemanticReverseAbstractInterpreter;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.head.ErrorReporter;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.io.Serializable;
 import java.nio.charset.Charset;
@@ -46,8 +53,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -59,7 +71,7 @@ import java.util.regex.Matcher;
  * <li>checks for undefined variables
  * <li>performs optimizations such as constant folding and constants inlining
  * <li>renames variables (to short names)
- * <li>outputs compact javascript code
+ * <li>outputs compact JavaScript code
  * </ul>
  *
  * External variables are declared in 'externs' files. For instance, the file
@@ -78,6 +90,9 @@ public class Compiler extends AbstractCompiler {
   static final DiagnosticType MISSING_ENTRY_ERROR = DiagnosticType.error(
       "JSC_MISSING_ENTRY_ERROR",
       "required entry point \"{0}\" never provided");
+
+  private static final String CONFIG_RESOURCE =
+      "com.google.javascript.jscomp.parsing.ParserConfig";
 
   CompilerOptions options = null;
 
@@ -102,6 +117,10 @@ public class Compiler extends AbstractCompiler {
   // Warnings guard for filtering warnings.
   private WarningsGuard warningsGuard;
 
+  // Compile-time injected libraries. The node points to the last node of
+  // the library, so code can be inserted after.
+  private final Map<String, Node> injectedLibraries = Maps.newLinkedHashMap();
+
   // Parse tree root nodes
   Node externsRoot;
   Node jsRoot;
@@ -120,9 +139,6 @@ public class Compiler extends AbstractCompiler {
    * unique.
    */
   private int uniqueNameId = 0;
-
-  /** Whether to use threads. */
-  private boolean useThreads = true;
 
   /**
    * Whether to assume there are references to the RegExp Global object
@@ -163,7 +179,32 @@ public class Compiler extends AbstractCompiler {
       DiagnosticType.error("JSC_OPTIMIZE_LOOP_ERROR",
           "Exceeded max number of code motion iterations: {0}");
 
-  private static final long COMPILER_STACK_SIZE = 1048576L;
+  // We use many recursive algorithms that use O(d) memory in the depth
+  // of the tree.
+  private static final long COMPILER_STACK_SIZE = (1 << 21); // About 2MB
+
+  /**
+   * Under JRE 1.6, the JS Compiler overflows the stack when running on some
+   * large or complex JS code. When threads are available, we run all compile
+   * jobs on a separate thread with a larger stack.
+   *
+   * That way, we don't have to increase the stack size for *every* thread
+   * (which is what -Xss does).
+   */
+  private static final ExecutorService compilerExecutor =
+      Executors.newCachedThreadPool(new ThreadFactory() {
+    @Override public Thread newThread(Runnable r) {
+      return new Thread(null, r, "jscompiler", COMPILER_STACK_SIZE);
+    }
+  });
+
+  /**
+   * Use a dedicated compiler thread per Compiler instance.
+   */
+  private Thread compilerThread = null;
+
+  /** Whether to use threads. */
+  private boolean useThreads = true;
 
 
   /**
@@ -177,6 +218,8 @@ public class Compiler extends AbstractCompiler {
   private final PrintStream outStream;
 
   private GlobalVarReferenceMap globalRefMap = null;
+
+  private volatile double progress = 0.0;
 
   /**
    * Creates a Compiler that reports errors and warnings to its logger.
@@ -293,7 +336,9 @@ public class Compiler extends AbstractCompiler {
 
   /**
    * Initializes the instance state needed for a compile job.
+   * @deprecated Convert your arrays to lists and use the list-based API.
    */
+  @Deprecated
   public void init(JSSourceFile[] externs, JSSourceFile[] inputs,
       CompilerOptions options) {
     init(Lists.<JSSourceFile>newArrayList(externs),
@@ -303,10 +348,12 @@ public class Compiler extends AbstractCompiler {
   /**
    * Initializes the instance state needed for a compile job.
    */
-  public void init(List<JSSourceFile> externs, List<JSSourceFile> inputs,
+  public <T1 extends SourceFile, T2 extends SourceFile> void init(
+      List<T1> externs,
+      List<T2> inputs,
       CompilerOptions options) {
     JSModule module = new JSModule(SINGLETON_MODULE_NAME);
-    for (JSSourceFile input : inputs) {
+    for (SourceFile input : inputs) {
       module.add(input);
     }
 
@@ -316,10 +363,12 @@ public class Compiler extends AbstractCompiler {
   /**
    * Initializes the instance state needed for a compile job if the sources
    * are in modules.
+   * @deprecated Convert your arrays to lists and use the list-based API.
    */
+  @Deprecated
   public void init(JSSourceFile[] externs, JSModule[] modules,
       CompilerOptions options) {
-    initModules(Lists.<JSSourceFile>newArrayList(externs),
+    initModules(Lists.<SourceFile>newArrayList(externs),
          Lists.<JSModule>newArrayList(modules), options);
   }
 
@@ -327,9 +376,8 @@ public class Compiler extends AbstractCompiler {
    * Initializes the instance state needed for a compile job if the sources
    * are in modules.
    */
-  public void initModules(
-      List<JSSourceFile> externs, List<JSModule> modules,
-      CompilerOptions options) {
+  public <T extends SourceFile> void initModules(
+      List<T> externs, List<JSModule> modules, CompilerOptions options) {
     initOptions(options);
 
     checkFirstModule(modules);
@@ -371,10 +419,10 @@ public class Compiler extends AbstractCompiler {
     }
   }
 
-  private List<CompilerInput> makeCompilerInput(
-      List<JSSourceFile> files, boolean isExtern) {
+  private <T extends SourceFile> List<CompilerInput> makeCompilerInput(
+      List<T> files, boolean isExtern) {
     List<CompilerInput> inputs = Lists.newArrayList();
-    for (JSSourceFile file : files) {
+    for (T file : files) {
       inputs.add(new CompilerInput(file, isExtern));
     }
     return inputs;
@@ -417,7 +465,7 @@ public class Compiler extends AbstractCompiler {
   private static void fillEmptyModules(List<JSModule> modules) {
     for (JSModule module : modules) {
       if (module.getInputs().isEmpty()) {
-        module.add(JSSourceFile.fromCode(
+        module.add(SourceFile.fromCode(
             createFillFileName(module.getName()), ""));
       }
     }
@@ -469,14 +517,14 @@ public class Compiler extends AbstractCompiler {
     inputsById = new HashMap<InputId, CompilerInput>();
     for (CompilerInput input : externs) {
       InputId id = input.getInputId();
-      CompilerInput previous = inputsById.put(id, input);
+      CompilerInput previous = putCompilerInput(id, input);
       if (previous != null) {
         report(JSError.make(DUPLICATE_EXTERN_INPUT, input.getName()));
       }
     }
     for (CompilerInput input : inputs) {
       InputId id = input.getInputId();
-      CompilerInput previous = inputsById.put(id, input);
+      CompilerInput previous = putCompilerInput(id, input);
       if (previous != null) {
         report(JSError.make(DUPLICATE_INPUT, input.getName()));
       }
@@ -484,36 +532,49 @@ public class Compiler extends AbstractCompiler {
   }
 
   public Result compile(
-      JSSourceFile extern, JSSourceFile input, CompilerOptions options) {
-     return compile(extern, new JSSourceFile[] { input }, options);
+      SourceFile extern, SourceFile input, CompilerOptions options) {
+     return compile(Lists.newArrayList(extern), Lists.newArrayList(input), options);
   }
 
+  /**
+   * @deprecated Convert your arrays to lists and use the list-based API.
+   */
+  @Deprecated
   public Result compile(
-      JSSourceFile extern, JSSourceFile[] input, CompilerOptions options) {
-     return compile(new JSSourceFile[] { extern }, input, options);
+      SourceFile extern, JSSourceFile[] input, CompilerOptions options) {
+     return compile(Lists.newArrayList(extern), Lists.newArrayList(input), options);
   }
 
+  /**
+   * @deprecated Convert your arrays to lists and use the list-based
+   *     compileModules method.
+   */
+  @Deprecated
   public Result compile(
       JSSourceFile extern, JSModule[] modules, CompilerOptions options) {
-     return compile(new JSSourceFile[] { extern }, modules, options);
+     return compileModules(
+         Lists.newArrayList(extern), Lists.newArrayList(modules), options);
   }
 
   /**
    * Compiles a list of inputs.
+   * @deprecated Convert your arrays to lists and use the list-based compile
+   *     method.
    */
+  @Deprecated
   public Result compile(JSSourceFile[] externs,
                         JSSourceFile[] inputs,
                         CompilerOptions options) {
-    return compile(Lists.<JSSourceFile>newArrayList(externs),
-        Lists.<JSSourceFile>newArrayList(inputs),
+    return compile(Lists.<SourceFile>newArrayList(externs),
+        Lists.<SourceFile>newArrayList(inputs),
         options);
   }
 
   /**
    * Compiles a list of inputs.
    */
-  public Result compile(List<JSSourceFile> externs,
-      List<JSSourceFile> inputs, CompilerOptions options) {
+  public <T1 extends SourceFile, T2 extends SourceFile> Result compile(
+      List<T1> externs, List<T2> inputs, CompilerOptions options) {
     // The compile method should only be called once.
     Preconditions.checkState(jsRoot == null);
 
@@ -532,11 +593,14 @@ public class Compiler extends AbstractCompiler {
 
   /**
    * Compiles a list of modules.
+   * @deprecated Convert your arrays to lists and use the list-based
+   *     compileModules method.
    */
+  @Deprecated
   public Result compile(JSSourceFile[] externs,
                         JSModule[] modules,
                         CompilerOptions options) {
-    return compileModules(Lists.<JSSourceFile>newArrayList(externs),
+    return compileModules(Lists.<SourceFile>newArrayList(externs),
         Lists.<JSModule>newArrayList(modules),
         options);
   }
@@ -544,7 +608,7 @@ public class Compiler extends AbstractCompiler {
   /**
    * Compiles a list of modules.
    */
-  public Result compileModules(List<JSSourceFile> externs,
+  public <T extends SourceFile> Result compileModules(List<T> externs,
       List<JSModule> modules, CompilerOptions options) {
     // The compile method should only be called once.
     Preconditions.checkState(jsRoot == null);
@@ -580,58 +644,51 @@ public class Compiler extends AbstractCompiler {
     useThreads = false;
   }
 
-  private <T> T runInCompilerThread(final Callable<T> callable) {
-    return runCallable(callable, useThreads, options.tracer.isOn());
-  }
-
-  static <T> T runCallableWithLargeStack(final Callable<T> callable) {
-    return runCallable(callable, true, false);
-  }
-
   @SuppressWarnings("unchecked")
-  static <T> T runCallable(
-      final Callable<T> callable, boolean useLargeStackThread, boolean trace) {
-
-    // Under JRE 1.6, the jscompiler overflows the stack when running on some
-    // large or complex js code. Here we start a new thread with a larger
-    // stack in order to let the compiler do its thing, without having to
-    // increase the stack size for *every* thread (which is what -Xss does).
-    // Might want to add thread pool support for clients that compile a lot.
-
-    final boolean dumpTraceReport = trace;
-    final Object[] result = new Object[1];
+  <T> T runInCompilerThread(final Callable<T> callable) {
+    final boolean dumpTraceReport = options != null && options.tracer.isOn();
+    T result = null;
     final Throwable[] exception = new Throwable[1];
-    Runnable runnable = new Runnable() {
+    Callable<T> bootCompilerThread = new Callable<T>() {
       @Override
-      public void run() {
+      public T call() {
         try {
+          compilerThread = Thread.currentThread();
           if (dumpTraceReport) {
             Tracer.initCurrentThreadTrace();
           }
-          result[0] = callable.call();
+          return callable.call();
         } catch (Throwable e) {
           exception[0] = e;
         } finally {
+          compilerThread = null;
           if (dumpTraceReport) {
             Tracer.logAndClearCurrentThreadTrace();
           }
         }
+        return null;
       }
     };
 
-    if (useLargeStackThread) {
-      Thread th = new Thread(null, runnable, "jscompiler", COMPILER_STACK_SIZE);
-      th.start();
-      while (true) {
-        try {
-          th.join();
-          break;
-        } catch (InterruptedException ignore) {
-          // ignore
-        }
+    Preconditions.checkState(
+        compilerThread == null || compilerThread == Thread.currentThread(),
+        "Please do not share the Compiler across threads");
+
+    // If the compiler thread is available, use it.
+    if (useThreads && compilerThread == null) {
+      try {
+        result = compilerExecutor.submit(bootCompilerThread).get();
+      } catch (InterruptedException e) {
+        throw Throwables.propagate(e);
+      } catch (ExecutionException e) {
+        throw Throwables.propagate(e);
       }
     } else {
-      runnable.run();
+      try {
+        result = callable.call();
+      } catch (Exception e) {
+        exception[0] = e;
+      }
     }
 
     // Pass on any exception caught by the runnable object.
@@ -639,11 +696,15 @@ public class Compiler extends AbstractCompiler {
       throw new RuntimeException(exception[0]);
     }
 
-    return (T) result[0];
+    return result;
   }
 
   private void compileInternal() {
+    setProgress(0.0);
     parse();
+    // 15 percent of the work is assumed to be for parsing (based on some
+    // minimal analysis on big JS projects, of course this depends on options)
+    setProgress(0.15);
     if (hasErrors()) {
       return;
     }
@@ -682,6 +743,7 @@ public class Compiler extends AbstractCompiler {
     if (options.devMode == DevMode.START_AND_END) {
       runSanityCheck();
     }
+    setProgress(1.0);
   }
 
   public void parse() {
@@ -735,7 +797,10 @@ public class Compiler extends AbstractCompiler {
   public void check() {
     runCustomPasses(CustomPassExecutionTime.BEFORE_CHECKS);
 
-    PhaseOptimizer phaseOptimizer = new PhaseOptimizer(this, tracker);
+    // We are currently only interested in check-passes for progress reporting
+    // as it is used for IDEs, that's why the maximum progress is set to 1.0.
+    PhaseOptimizer phaseOptimizer = new PhaseOptimizer(this, tracker,
+        new PhaseOptimizer.ProgressRange(getProgress(), 1.0));
     if (options.devMode == DevMode.EVERY_PASS) {
       phaseOptimizer.setSanityCheck(sanityCheck);
     }
@@ -1002,17 +1067,22 @@ public class Compiler extends AbstractCompiler {
       throw new IllegalArgumentException("Conflicting externs name: " + name);
     }
     CompilerInput input = new CompilerInput(ast, true);
-    inputsById.put(input.getInputId(), input);
+    putCompilerInput(input.getInputId(), input);
     externsRoot.addChildToFront(ast.getAstRoot(this));
     externs.add(0, input);
     return input;
+  }
+
+  private CompilerInput putCompilerInput(InputId id, CompilerInput input) {
+    input.setCompiler(this);
+    return inputsById.put(id, input);
   }
 
   /** Add a source input dynamically. Intended for incremental compilation. */
   void addIncrementalSourceAst(JsAst ast) {
     InputId id = ast.getInputId();
     Preconditions.checkState(getInput(id) == null, "Duplicate input %s", id.getIdName());
-    inputsById.put(id, new CompilerInput(ast));
+    putCompilerInput(id, new CompilerInput(ast));
   }
 
   /**
@@ -1040,7 +1110,7 @@ public class Compiler extends AbstractCompiler {
     }
 
     CompilerInput newInput = new CompilerInput(ast);
-    inputsById.put(ast.getInputId(), newInput);
+    putCompilerInput(ast.getInputId(), newInput);
 
     JSModule module = oldInput.getModule();
     if (module != null) {
@@ -1089,7 +1159,7 @@ public class Compiler extends AbstractCompiler {
       modules.get(0).add(newInput);
     }
 
-    inputsById.put(ast.getInputId(), newInput);
+    putCompilerInput(ast.getInputId(), newInput);
 
     return true;
   }
@@ -1097,6 +1167,14 @@ public class Compiler extends AbstractCompiler {
   @Override
   JSModuleGraph getModuleGraph() {
     return moduleGraph;
+  }
+
+  /**
+   * Gets a module graph. This will always return a module graph, even
+   * in the degenerate case when there's only one module.
+   */
+  JSModuleGraph getDegenerateModuleGraph() {
+    return moduleGraph == null ? new JSModuleGraph(modules) : moduleGraph;
   }
 
   @Override
@@ -1108,7 +1186,7 @@ public class Compiler extends AbstractCompiler {
   }
 
   @Override
-  MemoizedScopeCreator getTypedScopeCreator() {
+  public MemoizedScopeCreator getTypedScopeCreator() {
     return getPassConfig().getTypedScopeCreator();
   }
 
@@ -1209,7 +1287,7 @@ public class Compiler extends AbstractCompiler {
       jsRoot.detachChildren();
     }
 
-    // Parse main js sources.
+    // Parse main JS sources.
     jsRoot = IR.block();
     jsRoot.setIsSyntheticBlock(true);
 
@@ -1220,8 +1298,7 @@ public class Compiler extends AbstractCompiler {
     externAndJsRoot.setIsSyntheticBlock(true);
 
     if (options.tracer.isOn()) {
-      tracker = new PerformanceTracker(jsRoot,
-          options.tracer == TracerMode.ALL);
+      tracker = new PerformanceTracker(jsRoot, options.tracer);
       addChangeHandler(tracker.getCodeChangeHandler());
     }
 
@@ -1242,11 +1319,12 @@ public class Compiler extends AbstractCompiler {
         processAMDAndCommonJSModules();
       }
 
+      hoistExterns(externsRoot);
+
       // Check if the sources need to be re-ordered.
+      boolean staleInputs = false;
       if (options.dependencyOptions.needsManagement()) {
         for (CompilerInput input : inputs) {
-          input.setCompiler(this);
-
           // Forward-declare all the provided types, so that they
           // are not flagged even if they are dropped from the process.
           for (String provide : input.getProvides()) {
@@ -1258,6 +1336,7 @@ public class Compiler extends AbstractCompiler {
           inputs =
               (moduleGraph == null ? new JSModuleGraph(modules) : moduleGraph)
               .manageDependencies(options.dependencyOptions, inputs);
+          staleInputs = true;
         } catch (CircularDependencyException e) {
           report(JSError.make(
               JSModule.CIRCULAR_DEPENDENCY_ERROR, e.getMessage()));
@@ -1277,39 +1356,10 @@ public class Compiler extends AbstractCompiler {
         }
       }
 
-      // Check if inputs need to be rebuilt from modules.
-      boolean staleInputs = false;
-      for (CompilerInput input : inputs) {
-        Node n = input.getAstRoot(this);
-
-        // Inputs can have a null AST during initial parse.
-        if (n == null) {
-          continue;
-        }
-
-        if (n.getJSDocInfo() != null) {
-          JSDocInfo info = n.getJSDocInfo();
-          if (info.isExterns()) {
-            // If the input file is explicitly marked as an externs file, then
-            // assume the programmer made a mistake and throw it into
-            // the externs pile anyways.
-            externsRoot.addChildToBack(n);
-            input.setIsExtern(true);
-
-            input.getModule().remove(input);
-
-            externs.add(input);
-            staleInputs = true;
-          } else if (info.isNoCompile()) {
-            input.getModule().remove(input);
-            staleInputs = true;
-          }
-        }
-      }
+      hoistNoCompileFiles();
 
       if (staleInputs) {
-        fillEmptyModules(modules);
-        rebuildInputsFromModules();
+        repartitionInputs();
       }
 
       // Build the AST.
@@ -1350,11 +1400,83 @@ public class Compiler extends AbstractCompiler {
   }
 
   /**
+   * Hoists inputs with the @externs annotation into the externs list.
+   */
+  private void hoistExterns(Node externsRoot) {
+    boolean staleInputs = false;
+    for (CompilerInput input : inputs) {
+      if (options.dependencyOptions.needsManagement() &&
+          options.closurePass) {
+        // If we're doing scanning dependency info anyway, use that
+        // information to skip sources that obviously aren't externs.
+        if (!input.getProvides().isEmpty() || !input.getRequires().isEmpty()) {
+          continue;
+        }
+      }
+
+      Node n = input.getAstRoot(this);
+
+      // Inputs can have a null AST on a parse error.
+      if (n == null) {
+        continue;
+      }
+
+      JSDocInfo info = n.getJSDocInfo();
+      if (info != null && info.isExterns()) {
+        // If the input file is explicitly marked as an externs file, then
+        // assume the programmer made a mistake and throw it into
+        // the externs pile anyways.
+        externsRoot.addChildToBack(n);
+        input.setIsExtern(true);
+
+        input.getModule().remove(input);
+
+        externs.add(input);
+        staleInputs = true;
+      }
+    }
+
+    if (staleInputs) {
+      repartitionInputs();
+    }
+  }
+
+  /**
+   * Hoists inputs with the @nocompiler annotation out of the inputs.
+   */
+  private void hoistNoCompileFiles() {
+    boolean staleInputs = false;
+    for (CompilerInput input : inputs) {
+      Node n = input.getAstRoot(this);
+
+      // Inputs can have a null AST on a parse error.
+      if (n == null) {
+        continue;
+      }
+
+      JSDocInfo info = n.getJSDocInfo();
+      if (info != null && info.isNoCompile()) {
+        input.getModule().remove(input);
+        staleInputs = true;
+      }
+    }
+
+    if (staleInputs) {
+      repartitionInputs();
+    }
+  }
+
+  private void repartitionInputs() {
+    fillEmptyModules(modules);
+    rebuildInputsFromModules();
+  }
+
+  /**
    * Transforms AMD and CJS modules to something closure compiler can
    * process and creates JSModules and the corresponding dependency tree
    * on the way.
    */
-  private void processAMDAndCommonJSModules() {
+  void processAMDAndCommonJSModules() {
     Map<String, JSModule> modulesByName = Maps.newLinkedHashMap();
     Map<CompilerInput, JSModule> modulesByInput = Maps.newLinkedHashMap();
     // TODO(nicksantos): Refactor module dependency resolution to work nicely
@@ -1390,7 +1512,12 @@ public class Compiler extends AbstractCompiler {
       for (JSModule module : modules) {
         for (CompilerInput input : module.getInputs()) {
           for (String require : input.getRequires()) {
-            module.addDependency(modulesByName.get(require));
+            JSModule dependency = modulesByName.get(require);
+            if (dependency == null) {
+              report(JSError.make(MISSING_ENTRY_ERROR, require));
+            } else {
+              module.addDependency(dependency);
+            }
           }
         }
       }
@@ -1408,7 +1535,7 @@ public class Compiler extends AbstractCompiler {
     }
   }
 
-  public Node parse(JSSourceFile file) {
+  public Node parse(SourceFile file) {
     initCompilerOptionsIfTesting();
     addToDebugLog("Parsing: " + file.getName());
     return new JsAst(file).getAstRoot(this);
@@ -1419,8 +1546,8 @@ public class Compiler extends AbstractCompiler {
   @Override
   Node parseSyntheticCode(String js) {
     CompilerInput input = new CompilerInput(
-        JSSourceFile.fromCode(" [synthetic:" + (++syntheticCodeId) + "] ", js));
-    inputsById.put(input.getInputId(), input);
+        SourceFile.fromCode(" [synthetic:" + (++syntheticCodeId) + "] ", js));
+    putCompilerInput(input.getInputId(), input);
     return input.getAstRoot(this);
   }
 
@@ -1442,18 +1569,18 @@ public class Compiler extends AbstractCompiler {
   @Override
   Node parseSyntheticCode(String fileName, String js) {
     initCompilerOptionsIfTesting();
-    return parse(JSSourceFile.fromCode(fileName, js));
+    return parse(SourceFile.fromCode(fileName, js));
   }
 
   @Override
   Node parseTestCode(String js) {
     initCompilerOptionsIfTesting();
     CompilerInput input = new CompilerInput(
-        JSSourceFile.fromCode(" [testcode] ", js));
+        SourceFile.fromCode("[testcode]", js));
     if (inputsById == null) {
       inputsById = Maps.newHashMap();
     }
-    inputsById.put(input.getInputId(), input);
+    putCompilerInput(input.getInputId(), input);
     return input.getAstRoot(this);
   }
 
@@ -1467,7 +1594,7 @@ public class Compiler extends AbstractCompiler {
   //------------------------------------------------------------------------
 
   /**
-   * Converts the main parse tree back to js code.
+   * Converts the main parse tree back to JS code.
    */
   public String toSource() {
     return runInCompilerThread(new Callable<String>() {
@@ -1493,7 +1620,7 @@ public class Compiler extends AbstractCompiler {
   }
 
   /**
-   * Converts the parse tree for each input back to js code.
+   * Converts the parse tree for each input back to JS code.
    */
   public String[] toSourceArray() {
     return runInCompilerThread(new Callable<String[]>() {
@@ -1519,7 +1646,7 @@ public class Compiler extends AbstractCompiler {
   }
 
   /**
-   * Converts the parse tree for a module back to js code.
+   * Converts the parse tree for a module back to JS code.
    */
   public String toSource(final JSModule module) {
     return runInCompilerThread(new Callable<String>() {
@@ -1546,7 +1673,7 @@ public class Compiler extends AbstractCompiler {
 
 
   /**
-   * Converts the parse tree for each input in a module back to js code.
+   * Converts the parse tree for each input in a module back to JS code.
    */
   public String[] toSourceArray(final JSModule module) {
     return runInCompilerThread(new Callable<String[]>() {
@@ -1577,7 +1704,7 @@ public class Compiler extends AbstractCompiler {
   }
 
   /**
-   * Writes out js code from a root node. If printing input delimiters, this
+   * Writes out JS code from a root node. If printing input delimiters, this
    * method will attach a comment to the start of the text indicating which
    * input the output derived from. If there were any preserve annotations
    * within the root's source, they will also be printed in a block comment
@@ -1664,6 +1791,7 @@ public class Compiler extends AbstractCompiler {
     CodePrinter.Builder builder = new CodePrinter.Builder(n);
     builder.setPrettyPrint(options.prettyPrint);
     builder.setLineBreak(options.lineBreak);
+    builder.setPreferLineBreakAtEndOfFile(options.preferLineBreakAtEndOfFile);
     builder.setSourceMap(sourceMap);
     builder.setSourceMapDetailLevel(options.sourceMapDetailLevel);
     builder.setTagAsStrict(firstOutput &&
@@ -1753,7 +1881,7 @@ public class Compiler extends AbstractCompiler {
     // unmodified local names.
     normalize();
 
-    PhaseOptimizer phaseOptimizer = new PhaseOptimizer(this, tracker);
+    PhaseOptimizer phaseOptimizer = new PhaseOptimizer(this, tracker, null);
     if (options.devMode == DevMode.EVERY_PASS) {
       phaseOptimizer.setSanityCheck(sanityCheck);
     }
@@ -1928,7 +2056,7 @@ public class Compiler extends AbstractCompiler {
 
   /**
    * The warning classes that are available from the command-line, and
-   * are suppressable by the {@code @suppress} annotation.
+   * are suppressible by the {@code @suppress} annotation.
    */
   protected DiagnosticGroups getDiagnosticGroups() {
     return new DiagnosticGroups();
@@ -1936,7 +2064,7 @@ public class Compiler extends AbstractCompiler {
 
   @Override
   public void report(JSError error) {
-    CheckLevel level = error.level;
+    CheckLevel level = error.getDefaultLevel();
     if (warningsGuard != null) {
       CheckLevel newLevel = warningsGuard.level(error);
       if (newLevel != null) {
@@ -1945,6 +2073,9 @@ public class Compiler extends AbstractCompiler {
     }
 
     if (level.isOn()) {
+      if (getOptions().errorHandler != null) {
+        getOptions().errorHandler.report(level, error);
+      }
       errorManager.report(level, error);
     }
   }
@@ -2012,9 +2143,10 @@ public class Compiler extends AbstractCompiler {
     logger.fine(str);
   }
 
-  private SourceFile getSourceFileByName(String sourceName) {
+  @Override
+  SourceFile getSourceFileByName(String sourceName) {
     // Here we assume that the source name is the input name, this
-    // is try of javascript parsed from source.
+    // is try of JavaScript parsed from source.
     if (sourceName != null) {
       CompilerInput input = inputsById.get(new InputId(sourceName));
       if (input != null) {
@@ -2140,7 +2272,7 @@ public class Compiler extends AbstractCompiler {
    * different output targets without having to perform checking multiple times.
    *
    * NOTE: This does not include all parts of the compiler's internal state. In
-   * particular, JSSourceFiles and CompilerOptions are not recorded. In
+   * particular, SourceFiles and CompilerOptions are not recorded. In
    * order to recreate a Compiler instance from scratch, you would need to
    * call {@code init} with the same arguments as in the initial creation before
    * restoring intermediate state.
@@ -2156,6 +2288,7 @@ public class Compiler extends AbstractCompiler {
     private PassConfig.State passConfigState;
     private JSTypeRegistry typeRegistry;
     private AbstractCompiler.LifeCycleStage lifeCycleStage;
+    private Map<String, Node> injectedLibraries;
 
     private IntermediateState() {}
   }
@@ -2173,6 +2306,7 @@ public class Compiler extends AbstractCompiler {
     state.passConfigState = getPassConfig().getIntermediateState();
     state.typeRegistry = typeRegistry;
     state.lifeCycleStage = getLifeCycleStage();
+    state.injectedLibraries = Maps.newLinkedHashMap(injectedLibraries);
 
     return state;
   }
@@ -2191,6 +2325,9 @@ public class Compiler extends AbstractCompiler {
     getPassConfig().setIntermediateState(state.passConfigState);
     typeRegistry = state.typeRegistry;
     setLifeCycleStage(state.lifeCycleStage);
+
+    injectedLibraries.clear();
+    injectedLibraries.putAll(state.injectedLibraries);
   }
 
   @VisibleForTesting
@@ -2238,4 +2375,157 @@ public class Compiler extends AbstractCompiler {
     return synthesizedExternsInput;
   }
 
+  @Override
+  public double getProgress() {
+    return progress;
+  }
+
+  @Override
+  void setProgress(double newProgress) {
+    if (newProgress > 1.0) {
+      progress = 1.0;
+    } else if (newProgress < 0.0) {
+      progress = 0.0;
+    } else {
+      progress = newProgress;
+    }
+  }
+
+  /**
+   * Replaces one file in a hot-swap mode. The given JsAst should be made
+   * from a new version of a file that already was present in the last compile
+   * call. If the file is new, this will silently ignored.
+   *
+   * @param ast the ast of the file that is being replaced
+   */
+  public void replaceScript(JsAst ast) {
+    CompilerInput input = this.getInput(ast.getInputId());
+    if (!replaceIncrementalSourceAst(ast)) {
+      return;
+    }
+    Node originalRoot = input.getAstRoot(this);
+
+    processNewScript(ast, originalRoot);
+  }
+
+  /**
+   * Adds a new Script AST to the compile state. If a script for the same file
+   * already exists the script will not be added, instead a call to
+   * #replaceScript should be used.
+   *
+   * @param ast the ast of the new file
+   */
+  public void addNewScript(JsAst ast) {
+    if (!addNewSourceAst(ast)) {
+      return;
+    }
+    Node emptyScript = new Node(Token.SCRIPT);
+    InputId inputId = ast.getInputId();
+    emptyScript.setInputId(inputId);
+    emptyScript.setStaticSourceFile(
+        SourceFile.fromCode(inputId.getIdName(), ""));
+
+    processNewScript(ast, emptyScript);
+  }
+
+  private void processNewScript(JsAst ast, Node originalRoot) {
+    Node js = ast.getAstRoot(this);
+    Preconditions.checkNotNull(js);
+
+    runHotSwap(originalRoot, js, this.getCleanupPassConfig());
+    // NOTE: If hot swap passes that use GlobalNamespace are added, we will need
+    // to revisit this approach to clearing GlobalNamespaces
+    runHotSwapPass(null, null, ensureDefaultPassConfig().garbageCollectChecks);
+
+    this.getTypeRegistry().clearNamedTypes();
+    this.removeSyntheticVarsInput();
+
+    runHotSwap(originalRoot, js, this.ensureDefaultPassConfig());
+  }
+
+  /**
+   * Execute the passes from a PassConfig instance over a single replaced file.
+   */
+  private void runHotSwap(
+      Node originalRoot, Node js, PassConfig passConfig) {
+    for (PassFactory passFactory : passConfig.getChecks()) {
+      runHotSwapPass(originalRoot, js, passFactory);
+    }
+  }
+
+  private void runHotSwapPass(
+      Node originalRoot, Node js, PassFactory passFactory) {
+    HotSwapCompilerPass pass = passFactory.getHotSwapPass(this);
+    if (pass != null) {
+      logger.info("Performing HotSwap for pass " + passFactory.getName());
+      pass.hotSwapScript(js, originalRoot);
+    }
+  }
+
+  private PassConfig getCleanupPassConfig() {
+    return new CleanupPasses(getOptions());
+  }
+
+  private void removeSyntheticVarsInput() {
+    String sourceName = Compiler.SYNTHETIC_EXTERNS;
+    removeExternInput(new InputId(sourceName));
+  }
+
+  @Override
+  Node ensureLibraryInjected(String resourceName) {
+    if (injectedLibraries.containsKey(resourceName)) {
+      return null;
+    }
+
+    // All libraries depend on js/base.js
+    boolean isBase = "base".equals(resourceName);
+    if (!isBase) {
+      ensureLibraryInjected("base");
+    }
+
+    Node firstChild = loadLibraryCode(resourceName).removeChildren();
+    Node lastChild = firstChild.getLastSibling();
+
+    Node parent = getNodeForCodeInsertion(null);
+    if (isBase) {
+      parent.addChildrenToFront(firstChild);
+    } else {
+      parent.addChildrenAfter(
+          firstChild, injectedLibraries.get("base"));
+    }
+    reportCodeChange();
+
+    injectedLibraries.put(resourceName, lastChild);
+    return lastChild;
+  }
+
+  /** Load a library as a resource */
+  @VisibleForTesting
+  Node loadLibraryCode(String resourceName) {
+    String originalCode;
+    try {
+      originalCode = CharStreams.toString(new InputStreamReader(
+          Compiler.class.getResourceAsStream(
+              String.format("js/%s.js", resourceName)),
+          Charsets.UTF_8));
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+
+    return Normalize.parseAndNormalizeSyntheticCode(
+        this, originalCode,
+        String.format("jscomp_%s_", resourceName));
+  }
+
+  /** Returns the compiler version baked into the jar. */
+  public static String getReleaseVersion() {
+    ResourceBundle config = ResourceBundle.getBundle(CONFIG_RESOURCE);
+    return config.getString("compiler.version");
+  }
+
+  /** Returns the compiler date baked into the jar. */
+  public static String getReleaseDate() {
+    ResourceBundle config = ResourceBundle.getBundle(CONFIG_RESOURCE);
+    return config.getString("compiler.date");
+  }
 }

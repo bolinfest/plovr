@@ -25,7 +25,9 @@ import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.graph.Annotation;
 import com.google.javascript.jscomp.graph.DiGraph.DiGraphNode;
+import com.google.javascript.jscomp.graph.LatticeElement;
 import com.google.javascript.rhino.Node;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -540,7 +542,7 @@ abstract class DataFlowAnalysis<N, L extends LatticeElement> {
    * variable local not to our definition of scope.</li>
    * <li>Exported variables as they can be needed after the script terminates.
    * </li>
-   * <li>Names of named functions because in javascript, <i>function foo(){}</i>
+   * <li>Names of named functions because in JavaScript, <i>function foo(){}</i>
    * does not kill <i>foo</i> in the dataflow.</li>
    */
   static void computeEscaped(final Scope jsScope, final Set<Var> escaped,

@@ -16,12 +16,9 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.google.common.io.CharStreams;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.jstype.FunctionType;
@@ -29,8 +26,6 @@ import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.ObjectType;
 import com.google.javascript.rhino.jstype.StaticSourceFile;
 
-import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.TreeSet;
@@ -38,12 +33,12 @@ import java.util.TreeSet;
 import javax.annotation.Nullable;
 
 /**
- * Inserts runtime type assertions.
+ * Inserts run-time type assertions.
  *
  * <p>We add markers to user-defined interfaces and classes in order to check if
  * an object conforms to that type.
  *
- * <p>For each function, we insert a runtime type assertion for each parameter
+ * <p>For each function, we insert a run-time type assertion for each parameter
  * and return value for which the compiler has a type.
  *
  * <p>The JavaScript code which implements the type assertions is in
@@ -96,7 +91,7 @@ class RuntimeTypeCheck implements CompilerPass {
    * {@code C.prototype['instance_of__C']}, and for each interface I it
    * implements , we add {@code C.prototype['implements__I']}.
    *
-   * <p>Since interfaces are not a runtime JS concept, we use these markers to
+   * <p>Since interfaces are not a run-time JS concept, we use these markers to
    * recognize an interface implementation at runtime. We also use markers for
    * user-defined classes, so that we can easily recognize them independently of
    * which module they are defined in and whether the module is loaded.
@@ -208,7 +203,7 @@ class RuntimeTypeCheck implements CompilerPass {
   }
 
   /**
-   * Insert calls to the runtime type checking function {@code checkType}, which
+   * Insert calls to the run-time type checking function {@code checkType}, which
    * takes an expression to check and a list of checkers (one of which must
    * match). It returns the expression back to facilitate checking of return
    * values. We have checkers for value types, class types (user-defined and
@@ -367,33 +362,24 @@ class RuntimeTypeCheck implements CompilerPass {
   }
 
   private void addBoilerplateCode() {
-    Node js = getBoilerplateCode(compiler, logFunction);
-    compiler.getNodeForCodeInsertion(null).addChildrenToFront(
-        js.removeChildren());
-    compiler.reportCodeChange();
+    Node newNode = compiler.ensureLibraryInjected("runtime_type_check");
+    if (newNode != null && logFunction != null) {
+      // Inject the custom log function.
+      Node logOverride = IR.exprResult(
+          IR.assign(
+              NodeUtil.newQualifiedNameNode(
+                  compiler.getCodingConvention(),
+                  "$jscomp.typecheck.log"),
+              NodeUtil.newQualifiedNameNode(
+                  compiler.getCodingConvention(),
+                  logFunction)));
+      newNode.getParent().addChildAfter(logOverride, newNode);
+      compiler.reportCodeChange();
+    }
   }
 
   private Node jsCode(String prop) {
     return NodeUtil.newQualifiedNameNode(
-        compiler.getCodingConvention(), "jscomp.typecheck." + prop);
-  }
-
-  @VisibleForTesting
-  static Node getBoilerplateCode(
-      AbstractCompiler compiler, @Nullable String logFunction) {
-    String boilerplateCode;
-    try {
-      boilerplateCode = CharStreams.toString(new InputStreamReader(
-          RuntimeTypeCheck.class.getResourceAsStream(
-          "js/runtime_type_check.js"), Charsets.UTF_8));
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
-
-    boilerplateCode = boilerplateCode.replace("%%LOG%%",
-        logFunction == null ? "function(warning, expr) {}" : logFunction);
-
-    return Normalize.parseAndNormalizeSyntheticCode(
-        compiler, boilerplateCode, "jscomp_runtimeTypeCheck_");
+        compiler.getCodingConvention(), "$jscomp.typecheck." + prop);
   }
 }

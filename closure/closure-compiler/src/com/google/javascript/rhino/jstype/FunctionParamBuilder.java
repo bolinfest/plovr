@@ -73,7 +73,7 @@ public class FunctionParamBuilder {
   /**
    * Add optional parameters of the given type to the end of the param list.
    * @param types Types for each optional parameter. The builder will make them
-   *     undefineable.
+   *     undefine-able.
    * @return False if this is called after var args are added.
    */
   public boolean addOptionalParams(JSType ...types) {
@@ -115,6 +115,18 @@ public class FunctionParamBuilder {
     Node newParam = newParameter(n.getJSType());
     newParam.setVarArgs(n.isVarArgs());
     newParam.setOptionalArg(n.isOptionalArg());
+    return newParam;
+  }
+
+  /**
+   * Copies the parameter specification from the given node,
+   * but makes sure it's optional.
+   */
+  public Node newOptionalParameterFromNode(Node n) {
+    Node newParam = newParameterFromNode(n);
+    if (!newParam.isVarArgs() && !newParam.isOptionalArg()) {
+      newParam.setOptionalArg(true);
+    }
     return newParam;
   }
 

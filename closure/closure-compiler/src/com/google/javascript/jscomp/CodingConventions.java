@@ -16,10 +16,14 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.jstype.FunctionType;
+import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
+import com.google.javascript.rhino.jstype.StaticScope;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -156,10 +160,14 @@ public class CodingConventions {
     }
 
     @Override
+    public boolean isInlinableFunction(Node n) {
+      return nextConvention.isInlinableFunction(n);
+    }
+
+    @Override
     public DelegateRelationship getDelegateRelationship(Node callNode) {
       return nextConvention.getDelegateRelationship(callNode);
     }
-
 
     @Override
     public void applyDelegateRelationship(
@@ -185,7 +193,7 @@ public class CodingConventions {
 
     @Override
     public void defineDelegateProxyPrototypeProperties(
-        JSTypeRegistry registry, Scope scope,
+        JSTypeRegistry registry, StaticScope<JSType> scope,
         List<ObjectType> delegateProxyPrototypes,
         Map<String, String> delegateCallingConventions) {
       nextConvention.defineDelegateProxyPrototypeProperties(
@@ -204,7 +212,12 @@ public class CodingConventions {
 
     @Override
     public Bind describeFunctionBind(Node n) {
-      return nextConvention.describeFunctionBind(n);
+      return describeFunctionBind(n, false);
+    }
+
+    @Override
+    public Bind describeFunctionBind(Node n, boolean useTypeInfo) {
+      return nextConvention.describeFunctionBind(n, useTypeInfo);
     }
 
     @Override
@@ -218,9 +231,13 @@ public class CodingConventions {
     }
 
     @Override
-    public ObjectLiteralCast getObjectLiteralCast(NodeTraversal t,
-        Node callNode) {
-      return nextConvention.getObjectLiteralCast(t, callNode);
+    public ObjectLiteralCast getObjectLiteralCast(Node callNode) {
+      return nextConvention.getObjectLiteralCast(callNode);
+    }
+
+    @Override
+    public Collection<String> getIndirectlyDeclaredProperties() {
+      return nextConvention.getIndirectlyDeclaredProperties();
     }
   }
 
@@ -336,6 +353,12 @@ public class CodingConventions {
     }
 
     @Override
+    public boolean isInlinableFunction(Node n) {
+      Preconditions.checkState(n.isFunction());
+      return true;
+    }
+
+    @Override
     public DelegateRelationship getDelegateRelationship(Node callNode) {
       return null;
     }
@@ -361,7 +384,7 @@ public class CodingConventions {
 
     @Override
     public void defineDelegateProxyPrototypeProperties(
-        JSTypeRegistry registry, Scope scope,
+        JSTypeRegistry registry, StaticScope<JSType> scope,
         List<ObjectType> delegateProxyPrototypes,
         Map<String, String> delegateCallingConventions) {
       // do nothing.
@@ -383,8 +406,7 @@ public class CodingConventions {
     }
 
     @Override
-    public ObjectLiteralCast getObjectLiteralCast(NodeTraversal t,
-        Node callNode) {
+    public ObjectLiteralCast getObjectLiteralCast(Node callNode) {
       return null;
     }
 
@@ -395,9 +417,11 @@ public class CodingConventions {
 
     @Override
     public Bind describeFunctionBind(Node n) {
-      // It would be nice to be able to identify a fn.bind call
-      // but that requires knowing the type of "fn".
+      return describeFunctionBind(n, false);
+    }
 
+    @Override
+    public Bind describeFunctionBind(Node n, boolean useTypeInfo) {
       if (!n.isCall()) {
         return null;
       }
@@ -418,16 +442,29 @@ public class CodingConventions {
       }
 
       if (callTarget.isGetProp()
-          && callTarget.getLastChild().getString().equals("bind")
-          && callTarget.getFirstChild().isFunction()) {
-        // (function(){}).bind(self, args...);
-        Node fn = callTarget.getFirstChild();
-        Node thisValue = callTarget.getNext();
-        Node parameters = safeNext(thisValue);
-        return new Bind(fn, thisValue, parameters);
+          && callTarget.getLastChild().getString().equals("bind")) {
+        Node maybeFn = callTarget.getFirstChild();
+        JSType maybeFnType = maybeFn.getJSType();
+        FunctionType fnType = null;
+        if (useTypeInfo && maybeFnType != null) {
+          fnType = maybeFnType.restrictByNotNullOrUndefined()
+              .toMaybeFunctionType();
+        }
+
+        if (fnType != null || maybeFn.isFunction()) {
+          // (function(){}).bind(self, args...);
+          Node thisValue = callTarget.getNext();
+          Node parameters = safeNext(thisValue);
+          return new Bind(maybeFn, thisValue, parameters);
+        }
       }
 
       return null;
+    }
+
+    @Override
+    public Collection<String> getIndirectlyDeclaredProperties() {
+      return ImmutableList.of();
     }
 
     private Node safeNext(Node n) {

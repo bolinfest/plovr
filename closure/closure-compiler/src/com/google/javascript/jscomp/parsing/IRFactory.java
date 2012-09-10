@@ -39,6 +39,7 @@ import com.google.javascript.rhino.head.ast.ContinueStatement;
 import com.google.javascript.rhino.head.ast.DoLoop;
 import com.google.javascript.rhino.head.ast.ElementGet;
 import com.google.javascript.rhino.head.ast.EmptyExpression;
+import com.google.javascript.rhino.head.ast.EmptyStatement;
 import com.google.javascript.rhino.head.ast.ExpressionStatement;
 import com.google.javascript.rhino.head.ast.ForInLoop;
 import com.google.javascript.rhino.head.ast.ForLoop;
@@ -79,6 +80,16 @@ import java.util.Set;
  */
 class IRFactory {
 
+  static final String GETTER_ERROR_MESSAGE =
+      "getters are not supported in older versions of JS. " +
+      "If you are targeting newer versions of JS, " +
+      "set the appropriate language_in option.";
+
+  static final String SETTER_ERROR_MESSAGE =
+      "setters are not supported in older versions of JS. " +
+      "If you are targeting newer versions of JS, " +
+      "set the appropriate language_in option.";
+
   static final String SUSPICIOUS_COMMENT_WARNING =
       "Non-JSDoc comment has annotations. " +
       "Did you mean to start it with '/**'?";
@@ -90,14 +101,14 @@ class IRFactory {
   private final ErrorReporter errorReporter;
   private final TransformDispatcher transformDispatcher;
 
-  // non-static for thread safety
-  private final Set<String> ALLOWED_DIRECTIVES = Sets.newHashSet("use strict");
+  private static final ImmutableSet<String> ALLOWED_DIRECTIVES =
+      ImmutableSet.of("use strict");
 
-  private static final Set<String> ES5_RESERVED_KEYWORDS =
+  private static final ImmutableSet<String> ES5_RESERVED_KEYWORDS =
       ImmutableSet.of(
           // From Section 7.6.1.2
           "class", "const", "enum", "export", "extends", "import", "super");
-  private static final Set<String> ES5_STRICT_RESERVED_KEYWORDS =
+  private static final ImmutableSet<String> ES5_STRICT_RESERVED_KEYWORDS =
       ImmutableSet.of(
           // From Section 7.6.1.2
           "class", "const", "enum", "export", "extends", "import", "super",
@@ -330,8 +341,8 @@ class IRFactory {
    *
    * @param node The JsDoc Comment node to parse.
    * @param irNode
-   * @return A JSDocInfoParser. Will contain either fileoverview jsdoc, or
-   *     normal jsdoc, or no jsdoc (if the method parses to the wrong level).
+   * @return A JsDocInfoParser. Will contain either fileoverview JsDoc, or
+   *     normal JsDoc, or no JsDoc (if the method parses to the wrong level).
    */
   private JsDocInfoParser createJsDocInfoParser(Comment node, Node irNode) {
     String comment = node.getValue();
@@ -451,7 +462,7 @@ class IRFactory {
      * Parse the directives, encode them in the AST, and remove their nodes.
      *
      * For information on ES5 directives, see section 14.1 of
-     * Ecma-262, Edition 5.
+     * ECMA-262, Edition 5.
      *
      * It would be nice if Rhino would eventually take care of this for
      * us, but right now their directive-processing is a one-off.
@@ -552,6 +563,12 @@ class IRFactory {
 
     @Override
     Node processEmptyExpression(EmptyExpression exprNode) {
+      Node node = newNode(Token.EMPTY);
+      return node;
+    }
+
+    @Override
+    Node processEmptyStatement(EmptyStatement exprNode) {
       Node node = newNode(Token.EMPTY);
       return node;
     }
@@ -659,11 +676,32 @@ class IRFactory {
 
       lp.setCharno(position2charno(lparenCharno));
       for (AstNode param : functionNode.getParams()) {
-        lp.addChildToBack(transform(param));
+        Node paramNode = transform(param);
+        // When in ideMode Rhino can generate a param list with only a single
+        // ErrorNode. This is transformed into an EMPTY node. Drop this node in
+        // ideMode to keep the AST in a valid state.
+        if (paramNode.isName()) {
+          lp.addChildToBack(paramNode);
+        } else {
+          // We expect this in ideMode or when there is an error handling
+          // destructuring parameter assignments which aren't supported
+          // (an error has already been reported).
+          Preconditions.checkState(
+              config.isIdeMode
+              || paramNode.isObjectLit()
+              || paramNode.isArrayLit());
+        }
       }
       node.addChildToBack(lp);
 
       Node bodyNode = transform(functionNode.getBody());
+      if (!bodyNode.isBlock()) {
+        // When in ideMode Rhino tries to parse some constructs the compiler
+        // doesn't support, repair it here. see Rhino's
+        // Parser#parseFunctionBodyExpr.
+        Preconditions.checkState(config.isIdeMode);
+        bodyNode = IR.block();
+      }
       parseDirectives(bodyNode);
       node.addChildToBack(bodyNode);
      return node;
@@ -755,7 +793,14 @@ class IRFactory {
 
     @Override
     Node processNewExpression(NewExpression exprNode) {
-      return processFunctionCall(exprNode);
+      Node node = newNode(transformTokenType(exprNode.getType()), transform(exprNode.getTarget()));
+      for (AstNode child : exprNode.getArguments()) {
+        node.addChildToBack(transform(child));
+      }
+      node.setLineno(exprNode.getLineno());
+      node.setCharno(position2charno(exprNode.getAbsolutePosition()));
+      maybeSetLengthFrom(node, exprNode);
+      return node;
     }
 
     @Override
@@ -782,6 +827,8 @@ class IRFactory {
         }
 
         Node key = transformAsString(el.getLeft());
+        key.setType(Token.STRING_KEY);
+
         Node value = transform(el.getRight());
         if (el.isGetter()) {
           key.setType(Token.GETTER_DEF);
@@ -1078,14 +1125,14 @@ class IRFactory {
 
     void reportGetter(AstNode node) {
       errorReporter.error(
-          "getters are not supported in Internet Explorer",
+          GETTER_ERROR_MESSAGE,
           sourceName,
           node.getLineno(), "", 0);
     }
 
     void reportSetter(AstNode node) {
       errorReporter.error(
-          "setters are not supported in Internet Explorer",
+          SETTER_ERROR_MESSAGE,
           sourceName,
           node.getLineno(), "", 0);
     }

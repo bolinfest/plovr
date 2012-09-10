@@ -41,14 +41,14 @@ import java.util.Set;
 import java.util.logging.Logger;
 
 /**
- * Generates deps.js files by scanning javascript files for
+ * Generates deps.js files by scanning JavaScript files for
  * calls to goog.provide(), goog.require() and goog.addDependency().
  *
  * @author agrieve@google.com (Andrew Grieve)
  */
 public class DepsGenerator {
 
-  enum InclusionStrategy {
+  public static enum InclusionStrategy {
     ALWAYS,
     WHEN_IN_SRCS,
     DO_NOT_DUPLICATE
@@ -406,7 +406,7 @@ public class DepsGenerator {
   }
 
   /**
-   * Prints a list of strings formatted as a Javascript array of string
+   * Prints a list of strings formatted as a JavaScript array of string
    * literals.
    */
   private static void writeJsArray(PrintStream out, Collection<String> values) {

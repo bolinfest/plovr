@@ -68,6 +68,12 @@ public abstract class PassConfig {
     topScope = typedScopeCreator.createScope(root, null);
   }
 
+  void clearTypedScope() {
+    internalScopeCreator = null;
+    typedScopeCreator = null;
+    topScope = null;
+  }
+
   /**
    * Regenerates the top scope potentially only for a sub-tree of AST and then
    * copies information for the old global scope.
@@ -224,13 +230,13 @@ public abstract class PassConfig {
    * Get intermediate state for a running pass config, so it can
    * be paused and started again later.
    */
-  abstract State getIntermediateState();
+  protected abstract State getIntermediateState();
 
   /**
    * Set the intermediate state for a pass config, to restart
    * a compilation process that had been previously paused.
    */
-  abstract void setIntermediateState(State state);
+  protected abstract void setIntermediateState(State state);
 
   /**
    * An implementation of PassConfig that just proxies all its method calls
@@ -261,11 +267,11 @@ public abstract class PassConfig {
       return delegate.getTopScope();
     }
 
-    @Override State getIntermediateState() {
+    @Override protected State getIntermediateState() {
       return delegate.getIntermediateState();
     }
 
-    @Override void setIntermediateState(State state) {
+    @Override protected void setIntermediateState(State state) {
       delegate.setIntermediateState(state);
     }
   }
@@ -273,7 +279,7 @@ public abstract class PassConfig {
   /**
    * Intermediate state for a running pass configuration.
    */
-  static class State implements Serializable {
+  public static class State implements Serializable {
     private static final long serialVersionUID = 1L;
 
     final Map<String, Integer> cssNames;
@@ -286,12 +292,12 @@ public abstract class PassConfig {
     final FunctionNames functionNames;
     final String idGeneratorMap;
 
-    State(Map<String, Integer> cssNames, Set<String> exportedNames,
-          CrossModuleMethodMotion.IdGenerator crossModuleIdGenerator,
-          VariableMap variableMap, VariableMap propertyMap,
-          VariableMap anonymousFunctionNameMap,
-          VariableMap stringMap, FunctionNames functionNames,
-          String idGeneratorMap) {
+    public State(Map<String, Integer> cssNames, Set<String> exportedNames,
+        CrossModuleMethodMotion.IdGenerator crossModuleIdGenerator,
+        VariableMap variableMap, VariableMap propertyMap,
+        VariableMap anonymousFunctionNameMap,
+        VariableMap stringMap, FunctionNames functionNames,
+        String idGeneratorMap) {
       this.cssNames = cssNames;
       this.exportedNames = exportedNames;
       this.crossModuleIdGenerator = crossModuleIdGenerator;

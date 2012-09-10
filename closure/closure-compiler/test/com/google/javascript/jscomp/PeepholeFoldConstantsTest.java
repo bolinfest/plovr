@@ -771,6 +771,10 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
         PeepholeFoldConstants.INDEX_OUT_OF_BOUNDS_ERROR);
     fold("x = [10, 20][2]",     "",
         PeepholeFoldConstants.INDEX_OUT_OF_BOUNDS_ERROR);
+
+    foldSame("x = [foo(), 0][1]");
+    fold("x = [0, foo()][1]", "x = foo()");
+    foldSame("x = [0, foo()][0]");
   }
 
   public void testFoldComplex() {
@@ -803,7 +807,7 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
     fold("x = ''.length", "x = 0");
     fold("x = '123'.length", "x = 3");
 
-    // Test unicode escapes are accounted for.
+    // Test Unicode escapes are accounted for.
     fold("x = '123\u01dc'.length", "x = 4");
   }
 
@@ -883,7 +887,7 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
     fold("x=y*x", "x*=y");
     fold("x.y=x.y+z", "x.y+=z");
     foldSame("next().x = next().x + 1");
-    // This is ok, really.
+    // This is OK, really.
     fold("({a:1}).a = ({a:1}).a + 1", "({a:1}).a = 2");
   }
 
@@ -904,7 +908,7 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
     foldSame("x=y*x");
     foldSame("x.y=x.y+z");
     foldSame("next().x = next().x + 1");
-    // This is ok, really.
+    // This is OK, really.
     fold("({a:1}).a = ({a:1}).a + 1", "({a:1}).a = 2");
   }
 
@@ -1141,9 +1145,9 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
           "'abc'",
           "'def'",
           "NaN",
-          "Infinity"
+          "Infinity",
           // TODO(nicksantos): Add more literals
-          // "-Infinity",
+          "-Infinity"
           //"({})",
           // "[]"
           //"[0]",
@@ -1182,7 +1186,9 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
             assertSameResults(join(a, op, b), "false");
             assertSameResults(join(a, inverse, b), "false");
           } else if (a.equals(b) && equalitors.contains(op)) {
-            if (a.equals("NaN") || a.equals("Infinity")) {
+            if (a.equals("NaN") ||
+                a.equals("Infinity") ||
+                a.equals("-Infinity")) {
               foldSame(join(a, op, b));
               foldSame(join(a, inverse, b));
             } else {
@@ -1226,6 +1232,10 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
     }
   }
 
+  public void testConvertToNumberNegativeInf() {
+    foldSame("var x = 3 * (r ? Infinity : -Infinity);");
+  }
+
   private String join(String operandA, String op, String operandB) {
     return operandA + " " + op + " " + operandB;
   }
@@ -1267,8 +1277,8 @@ public class PeepholeFoldConstantsTest extends CompilerTestCase {
     Compiler compiler = createCompiler();
     CompilerOptions options = getOptions();
     compiler.init(
-        new JSSourceFile[] {},
-        new JSSourceFile[] { JSSourceFile.fromCode("testcode", js) },
+        ImmutableList.<SourceFile>of(),
+        ImmutableList.of(SourceFile.fromCode("testcode", js)),
         options);
     Node root = compiler.parseInputs();
     assertTrue("Unexpected parse error(s): " +

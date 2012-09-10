@@ -146,7 +146,8 @@ public class PeepholeCollectPropertyAssignments
       return false;
     }
     // and does not have a reference to a variable initialized after it.
-    if (mightContainForwardReference(rhs, name)) {
+    if (!NodeUtil.isLiteralValue(rhs, true)
+        && mightContainForwardReference(rhs, name)) {
       return false;
     }
 
@@ -245,7 +246,7 @@ public class PeepholeCollectPropertyAssignments
       propertyName = property.getString();
     }
 
-    Node newProperty = IR.string(propertyName)
+    Node newProperty = IR.stringKey(propertyName)
         .copyInformationFrom(property);
     // Preserve the quotedness of a property reference
     if (lhs.isGetElem()) {

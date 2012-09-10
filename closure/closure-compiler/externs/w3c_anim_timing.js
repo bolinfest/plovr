@@ -15,28 +15,20 @@
  */
 /**
  * @fileoverview Definitions for timing control for script base animations. The
- *  whole file has been fully type annotated. Created from
- *  http://webstuff.nfshost.com/anim-timing/Overview.html
+ *  whole file has been fully type annotated.
  *
+ * @see http://www.w3.org/TR/animation-timing/
+ * @see http://webstuff.nfshost.com/anim-timing/Overview.html
  * @externs
  */
 
 /**
- * @interface
- */
-function FrameRequestCallback() {};
-
-/**
- * @param {number} timestamp
- */
-FrameRequestCallback.prototype.sample = function(timestamp) {};
-
-/**
- * @param {FrameRequestCallback|Function} callback
- * @param {Element} element
+ * @param {function(number)} callback
+ * @param {Element=} opt_element In early versions of this API, the callback
+ *     was invoked only if the element was visible.
  * @return {number}
  */
-function requestAnimationFrame(callback, element) {};
+function requestAnimationFrame(callback, opt_element) {};
 
 /**
  * @param {number} handle
@@ -44,11 +36,11 @@ function requestAnimationFrame(callback, element) {};
 function cancelRequestAnimationFrame(handle) {};
 
 /**
- * @param {FrameRequestCallback|Function} callback
- * @param {Element} element
+ * @param {function(number)} callback
+ * @param {Element=} opt_element
  * @return {number}
  */
-function webkitRequestAnimationFrame(callback, element) {};
+function webkitRequestAnimationFrame(callback, opt_element) {};
 
 /**
  * @param {number} handle
@@ -56,13 +48,144 @@ function webkitRequestAnimationFrame(callback, element) {};
 function webkitCancelRequestAnimationFrame(handle) {};
 
 /**
- * @param {FrameRequestCallback|Function} callback
- * @param {Element} element
+ * @param {number} handle
+ */
+function webkitCancelAnimationFrame(handle) {};
+
+/**
+ * @param {?function(number)} callback It's legitimate to pass a null
+ *     callback and listen on the MozBeforePaint event instead.
+ * @param {Element=} opt_element
  * @return {number}
  */
-function mozRequestAnimationFrame(callback, element) {};
+function mozRequestAnimationFrame(callback, opt_element) {};
 
 /**
  * @param {number} handle
  */
 function mozCancelRequestAnimationFrame(handle) {};
+
+/**
+ * @param {number} handle
+ */
+function mozCancelAnimationFrame(handle) {};
+
+/**
+ * @param {function(number)} callback
+ * @param {Element=} opt_element
+ * @return {number}
+ */
+function msRequestAnimationFrame(callback, opt_element) {};
+
+/**
+ * @param {number} handle
+ */
+function msCancelRequestAnimationFrame(handle) {};
+
+/**
+ * @param {number} handle
+ */
+function msCancelAnimationFrame(handle) {};
+
+/**
+ * @param {function(number)} callback
+ * @param {Element=} opt_element
+ * @return {number}
+ */
+function oRequestAnimationFrame(callback, opt_element) {};
+
+/**
+ * @param {number} handle
+ */
+function oCancelRequestAnimationFrame(handle) {};
+
+/**
+ * @param {number} handle
+ */
+function oCancelAnimationFrame(handle) {};
+
+/**
+ * @param {function(number)} callback
+ * @param {Element=} opt_element
+ * @return {number}
+ */
+Window.prototype.requestAnimationFrame = function(callback, opt_element) {};
+
+/**
+ * @param {number} handle
+ */
+Window.prototype.cancelRequestAnimationFrame = function(handle) {};
+
+/**
+ * @param {number} handle
+ */
+Window.prototype.cancelAnimationFrame = function(handle) {};
+
+/**
+ * @param {function(number)} callback
+ * @param {Element=} opt_element
+ * @return {number}
+ */
+Window.prototype.webkitRequestAnimationFrame = function(callback, opt_element) {};
+
+/**
+ * @param {number} handle
+ */
+Window.prototype.webkitCancelRequestAnimationFrame = function(handle) {};
+
+/**
+ * @param {number} handle
+ */
+Window.prototype.webkitCancelAnimationFrame = function(handle) {};
+
+/**
+ * @param {?function(number)} callback It's legitimate to pass a null
+ *     callback and listen on the MozBeforePaint event instead.
+ * @param {Element=} opt_element
+ * @return {number}
+ */
+Window.prototype.mozRequestAnimationFrame = function(callback, opt_element) {};
+
+/**
+ * @param {number} handle
+ */
+Window.prototype.mozCancelRequestAnimationFrame = function(handle) {};
+
+/**
+ * @param {number} handle
+ */
+Window.prototype.mozCancelAnimationFrame = function(handle) {};
+
+/**
+ * @param {function(number)} callback
+ * @param {Element=} opt_element
+ * @return {number}
+ */
+Window.prototype.msRequestAnimationFrame = function(callback, opt_element) {};
+
+/**
+ * @param {number} handle
+ */
+Window.prototype.msCancelRequestAnimationFrame = function(handle) {};
+
+/**
+ * @param {number} handle
+ */
+Window.prototype.msCancelAnimationFrame = function(handle) {};
+
+/**
+ * @param {function(number)} callback
+ * @param {Element=} opt_element
+ * @return {number}
+ */
+Window.prototype.oRequestAnimationFrame = function(callback, opt_element) {};
+
+/**
+ * @param {number} handle
+ */
+Window.prototype.oCancelRequestAnimationFrame = function(handle) {};
+
+/**
+ * @param {number} handle
+ */
+Window.prototype.oCancelAnimationFrame = function(handle) {};

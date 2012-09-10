@@ -31,6 +31,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.io.Files;
 import com.google.javascript.jscomp.CompilerOptions.TweakProcessing;
+import com.google.javascript.jscomp.PerformanceTracker.Stats;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.TokenStream;
 import com.google.protobuf.CodedOutputStream;
@@ -52,6 +53,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Map.Entry;
 import java.util.logging.Level;
 
 /**
@@ -112,8 +114,8 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
   private String legacyOutputCharset;
 
   private boolean testMode = false;
-  private Supplier<List<JSSourceFile>> externsSupplierForTesting = null;
-  private Supplier<List<JSSourceFile>> inputsSupplierForTesting = null;
+  private Supplier<List<SourceFile>> externsSupplierForTesting = null;
+  private Supplier<List<SourceFile>> inputsSupplierForTesting = null;
   private Supplier<List<JSModule>> modulesSupplierForTesting = null;
   private Function<Integer, Boolean> exitCodeReceiverForTesting = null;
   private Map<String, String> rootRelativePathsMap = null;
@@ -149,8 +151,8 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
    */
   @VisibleForTesting
   void enableTestMode(
-      Supplier<List<JSSourceFile>> externsSupplier,
-      Supplier<List<JSSourceFile>> inputsSupplier,
+      Supplier<List<SourceFile>> externsSupplier,
+      Supplier<List<SourceFile>> inputsSupplier,
       Supplier<List<JSModule>> modulesSupplier,
       Function<Integer, Boolean> exitCodeReceiver) {
     Preconditions.checkArgument(
@@ -206,7 +208,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
   /**
    * Sets options based on the configurations set flags API.
    * Called during the run() run() method.
-   * If you want to ignore the flags API, or intepret flags your own way,
+   * If you want to ignore the flags API, or interpret flags your own way,
    * then you should override this method.
    */
   protected void setRunOptions(CompilerOptions options)
@@ -219,15 +221,38 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       }
     }
 
+    if (!config.warningsWhitelistFile.isEmpty()) {
+      options.addWarningsGuard(
+          WhitelistWarningsGuard.fromFile(
+              new File(config.warningsWhitelistFile)));
+    }
+
     createDefineOrTweakReplacements(config.define, options, false);
 
     options.setTweakProcessing(config.tweakProcessing);
     createDefineOrTweakReplacements(config.tweak, options, true);
 
-    options.setManageClosureDependencies(config.manageClosureDependencies);
-    if (config.closureEntryPoints.size() > 0) {
-      options.setManageClosureDependencies(config.closureEntryPoints);
+    // Dependency options
+    if (config.onlyClosureDependencies) {
+      if (config.closureEntryPoints.isEmpty()) {
+        throw new FlagUsageException("When only_closure_dependencies is "
+          + "on, you must specify at least one closure_entry_point");
+      }
+
+      options.setDependencyOptions(new DependencyOptions()
+          .setDependencyPruning(true)
+          .setDependencySorting(true)
+          .setMoocherDropping(true)
+          .setEntryPoints(config.closureEntryPoints));
+    } else if (config.manageClosureDependencies ||
+        config.closureEntryPoints.size() > 0) {
+      options.setDependencyOptions(new DependencyOptions()
+          .setDependencyPruning(true)
+          .setDependencySorting(true)
+          .setMoocherDropping(false)
+          .setEntryPoints(config.closureEntryPoints));
     }
+
     options.devMode = config.jscompDevMode;
     options.setCodingConvention(config.codingConvention);
     options.setSummaryDetailLevel(config.summaryDetailLevel);
@@ -389,13 +414,13 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
    *        stdin. If true, '-' is only allowed to appear once.
    * @return An array of inputs
    */
-  protected List<JSSourceFile> createInputs(List<String> files,
+  protected List<SourceFile> createInputs(List<String> files,
       boolean allowStdIn) throws FlagUsageException, IOException {
-    List<JSSourceFile> inputs = new ArrayList<JSSourceFile>(files.size());
+    List<SourceFile> inputs = new ArrayList<SourceFile>(files.size());
     boolean usingStdin = false;
     for (String filename : files) {
       if (!"-".equals(filename)) {
-        JSSourceFile newFile = JSSourceFile.fromFile(filename, inputCharset);
+        SourceFile newFile = SourceFile.fromFile(filename, inputCharset);
         inputs.add(newFile);
       } else {
         if (!allowStdIn) {
@@ -413,7 +438,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
           throw new FlagUsageException("Bundle files cannot be generated " +
               "when the input is from stdin.");
         }
-        inputs.add(JSSourceFile.fromInputStream("stdin", System.in));
+        inputs.add(SourceFile.fromInputStream("stdin", System.in));
         usingStdin = true;
       }
     }
@@ -421,9 +446,9 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
   }
 
   /**
-   * Creates js source code inputs from a list of files.
+   * Creates JS source code inputs from a list of files.
    */
-  private List<JSSourceFile> createSourceInputs(List<String> files)
+  private List<SourceFile> createSourceInputs(List<String> files)
       throws FlagUsageException, IOException {
     if (isInTestMode()) {
       return inputsSupplierForTesting.get();
@@ -439,12 +464,12 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
   }
 
   /**
-   * Creates js extern inputs from a list of files.
+   * Creates JS extern inputs from a list of files.
    */
-  private List<JSSourceFile> createExternInputs(List<String> files)
+  private List<SourceFile> createExternInputs(List<String> files)
       throws FlagUsageException, IOException {
     if (files.isEmpty()) {
-      return ImmutableList.of(JSSourceFile.fromCode("/dev/null", ""));
+      return ImmutableList.of(SourceFile.fromCode("/dev/null", ""));
     }
     try {
       return createInputs(files, false);
@@ -459,7 +484,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
    * @param specs A list of module specifications, not null or empty. The spec
    *        format is: <code>name:num-js-files[:[dep,...][:]]</code>. Module
    *        names must not contain the ':' character.
-   * @param jsFiles A list of js file paths, not null
+   * @param jsFiles A list of JS file paths, not null
    * @return An array of module objects
    */
   List<JSModule> createJsModules(
@@ -504,17 +529,17 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
 
       // We will allow modules of zero input.
       if (numJsFiles < 0) {
-        throw new FlagUsageException("Invalid js file count '" + parts[1]
+        throw new FlagUsageException("Invalid JS file count '" + parts[1]
             + "' for module: " + name);
       }
       if (nextJsFileIndex + numJsFiles > totalNumJsFiles) {
-        throw new FlagUsageException("Not enough js files specified. Expected "
+        throw new FlagUsageException("Not enough JS files specified. Expected "
             + (nextJsFileIndex + numJsFiles - totalNumJsFiles)
             + " more in module:" + name);
       }
       List<String> moduleJsFiles =
           jsFiles.subList(nextJsFileIndex, nextJsFileIndex + numJsFiles);
-      for (JSSourceFile input : createInputs(moduleJsFiles, false)) {
+      for (SourceFile input : createInputs(moduleJsFiles, false)) {
         module.add(input);
       }
       nextJsFileIndex += numJsFiles;
@@ -540,7 +565,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     }
 
     if (nextJsFileIndex < totalNumJsFiles) {
-      throw new FlagUsageException("Too many js files specified. Expected "
+      throw new FlagUsageException("Too many JS files specified. Expected "
           + nextJsFileIndex + " but found " + totalNumJsFiles);
     }
 
@@ -614,7 +639,8 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     if (parsedModuleWrappers == null) {
       parsedModuleWrappers = parseModuleWrappers(
           config.moduleWrapper,
-          Lists.newArrayList(compiler.getModuleGraph().getAllModules()));
+          Lists.newArrayList(
+              compiler.getDegenerateModuleGraph().getAllModules()));
     }
 
     String fileName = getModuleOutputFileName(m);
@@ -685,7 +711,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
   protected int doRun() throws FlagUsageException, IOException {
     Compiler.setLoggingLevel(Level.parse(config.loggingLevel));
 
-    List<JSSourceFile> externs = createExterns();
+    List<SourceFile> externs = createExterns();
 
     compiler = createCompiler();
     B options = createOptions();
@@ -712,7 +738,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
         result = compiler.compileModules(externs, modules, options);
       }
     } else {
-      List<JSSourceFile> inputs = createSourceInputs(jsFiles);
+      List<SourceFile> inputs = createSourceInputs(jsFiles);
       if (config.skipNormalOutputs) {
         compiler.init(externs, inputs, options);
       } else {
@@ -789,7 +815,8 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
         // Output the source map if requested.
         outputSourceMap(options, config.jsOutputFile);
       } else {
-        parsedModuleWrappers = parseModuleWrappers(config.moduleWrapper, modules);
+        parsedModuleWrappers = parseModuleWrappers(
+            config.moduleWrapper, modules);
         maybeCreateDirsForPath(config.moduleOutputPathPrefix);
 
         // If the source map path is in fact a pattern for each
@@ -846,10 +873,94 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       // Output the manifest and bundle files if requested.
       outputManifest();
       outputBundle();
+
+      if (options.tracer.isOn()) {
+        outputTracerReport();
+      }
     }
 
     // return 0 if no errors, the error count otherwise
     return Math.min(result.errors.length, 0x7f);
+  }
+
+  private void outputTracerReport() {
+    JvmMetrics.maybeWriteJvmMetrics(this.err, "verbose:pretty:all");
+
+    OutputStreamWriter output = new OutputStreamWriter(this.err);
+    try {
+      int runtime = 0;
+      int runs = 0;
+      int changes = 0;
+      int diff = 0;
+      int gzDiff = 0;
+
+      // header
+      output.write("Summary:\n");
+      output.write("pass,runtime,runs,chancingRuns,reduction,gzReduction\n");
+      Map<String, Stats> runtimeMap = compiler.tracker.getStats();
+      for (Entry<String, Stats> entry : runtimeMap.entrySet()) {
+        String key = entry.getKey();
+        Stats stats = entry.getValue();
+
+        output.write(key);
+        output.write(",");
+        output.write(String.valueOf(stats.runtime));
+        runtime += stats.runtime;
+        output.write(",");
+        output.write(String.valueOf(stats.runs));
+        runs += stats.runs;
+        output.write(",");
+        output.write(String.valueOf(stats.changes));
+        changes += stats.changes;
+        output.write(",");
+        output.write(String.valueOf(stats.diff));
+        diff += stats.diff;
+        output.write(",");
+        output.write(String.valueOf(stats.gzDiff));
+        gzDiff += stats.gzDiff;
+        output.write("\n");
+      }
+      output.write("TOTAL");
+      output.write(",");
+      output.write(String.valueOf(runtime));
+      output.write(",");
+      output.write(String.valueOf(runs));
+      output.write(",");
+      output.write(String.valueOf(changes));
+      output.write(",");
+      output.write(String.valueOf(diff));
+      output.write(",");
+      output.write(String.valueOf(gzDiff));
+      output.write("\n");
+      output.write("\n");
+
+      output.write("Log:\n");
+      output.write(
+          "pass,runtime,runs,chancingRuns,reduction,gzReduction,size,gzSize\n");
+      List<Stats> runtimeLog = compiler.tracker.getLog();
+      for (Stats stats : runtimeLog) {
+        output.write(stats.pass);
+        output.write(",");
+        output.write(String.valueOf(stats.runtime));
+        output.write(",");
+        output.write(String.valueOf(stats.runs));
+        output.write(",");
+        output.write(String.valueOf(stats.changes));
+        output.write(",");
+        output.write(String.valueOf(stats.diff));
+        output.write(",");
+        output.write(String.valueOf(stats.gzDiff));
+        output.write(",");
+        output.write(String.valueOf(stats.size));
+        output.write(",");
+        output.write(String.valueOf(stats.gzSize));
+        output.write("\n");
+      }
+      output.write("\n");
+      output.close();
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
   }
 
   /**
@@ -908,7 +1019,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     return Charsets.UTF_8;
   }
 
-  protected List<JSSourceFile> createExterns() throws FlagUsageException,
+  protected List<SourceFile> createExterns() throws FlagUsageException,
       IOException {
     return isInTestMode() ? externsSupplierForTesting.get() :
         createExternInputs(config.externs);
@@ -955,9 +1066,9 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
    * The placeholder will expand to a different value depending on
    * the current output mode. There are three scenarios:
    *
-   * 1) Single js output, single extra output: sub in jsOutputPath.
-   * 2) Multiple js output, single extra output: sub in the base module name.
-   * 3) Multiple js output, multiple extra output: sub in the module output
+   * 1) Single JS output, single extra output: sub in jsOutputPath.
+   * 2) Multiple JS output, single extra output: sub in the base module name.
+   * 3) Multiple JS output, multiple extra output: sub in the module output
    *    file.
    *
    * Passing a JSModule to this function automatically triggers case #3.
@@ -989,7 +1100,8 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
    * Converts a file name into a Writer taking in account the output charset.
    * Returns null if the file name is null.
    */
-  private Writer fileNameToLegacyOutputWriter(String fileName) throws IOException {
+  private Writer fileNameToLegacyOutputWriter(String fileName)
+      throws IOException {
     if (fileName == null) {
       return null;
     }
@@ -1016,7 +1128,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
   }
 
   /**
-   * Converts a file name into a Ouputstream.
+   * Converts a file name into a Outputstream.
    * Returns null if the file name is null.
    */
   protected OutputStream filenameToOutputStream(String fileName)
@@ -1273,9 +1385,9 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
         continue;
       }
 
-      JSModuleGraph graph = compiler.getModuleGraph();
       if (shouldGenerateOutputPerModule(output)) {
         // Generate per-module manifests or bundles
+        JSModuleGraph graph = compiler.getDegenerateModuleGraph();
         Iterable<JSModule> modules = graph.getAllModules();
         for (JSModule module : modules) {
           Writer out = fileNameToOutputWriter2(
@@ -1291,14 +1403,15 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
         // Generate a single file manifest or bundle.
         Writer out = fileNameToOutputWriter2(
             expandCommandLinePath(output, null));
-        if (graph == null) {
+        if (config.module.isEmpty()) {
           if (isManifest) {
             printManifestTo(compiler.getInputsInOrder(), out);
           } else {
             printBundleTo(compiler.getInputsInOrder(), out);
           }
         } else {
-          printModuleGraphManifestOrBundleTo(graph, out, isManifest);
+          printModuleGraphManifestOrBundleTo(
+              compiler.getDegenerateModuleGraph(), out, isManifest);
         }
         out.close();
       }
@@ -1521,7 +1634,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     private final List<String> externs = Lists.newArrayList();
 
     /**
-     * The file containing javascript externs. You may specify multiple.
+     * The file containing JavaScript externs. You may specify multiple.
      */
     CommandLineConfig setExterns(List<String> externs) {
       this.externs.clear();
@@ -1532,7 +1645,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     private final List<String> js = Lists.newArrayList();
 
     /**
-     * The javascript filename. You may specify multiple.
+     * The JavaScript filename. You may specify multiple.
      */
     CommandLineConfig setJs(List<String> js) {
       this.js.clear();
@@ -1553,10 +1666,10 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     private final List<String> module = Lists.newArrayList();
 
     /**
-     * A javascript module specification. The format is
+     * A JavaScript module specification. The format is
      * <name>:<num-js-files>[:[<dep>,...][:]]]. Module names must be
      * unique. Each dep is the name of a module that this module
-     * depends on. Modules must be listed in dependency order, and js
+     * depends on. Modules must be listed in dependency order, and JS
      * source files must be listed in the corresponding order. Where
      * --module flags occur in relation to --js flags is unimportant
      */
@@ -1662,7 +1775,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     private final List<String> moduleWrapper = Lists.newArrayList();
 
     /**
-     * An output wrapper for a javascript module (optional). See the flag
+     * An output wrapper for a JavaScript module (optional). See the flag
      * description for formatting requirements.
      */
     CommandLineConfig setModuleWrapper(List<String> moduleWrapper) {
@@ -1674,7 +1787,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     private String moduleOutputPathPrefix = "";
 
     /**
-     * Prefix for filenames of compiled js modules.
+     * Prefix for filenames of compiled JS modules.
      * <module-name>.js will be appended to this prefix. Directories
      * will be created as needed. Use with --module
      */
@@ -1789,6 +1902,18 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       return this;
     }
 
+    private boolean onlyClosureDependencies = false;
+
+    /**
+     * Sets whether to sort files by their goog.provide/require deps,
+     * and prune inputs that are not required, and drop all non-closure
+     * files.
+     */
+    CommandLineConfig setOnlyClosureDependencies(boolean newVal) {
+      this.onlyClosureDependencies = newVal;
+      return this;
+    }
+
     private List<String> closureEntryPoints = ImmutableList.of();
 
     /**
@@ -1842,7 +1967,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
 
     /**
      * Sets whether to accept input files as ECMAScript5 compliant.
-     * Otherwise input files are treated as ECMAScript3 compliant.
+     * Otherwise, input files are treated as ECMAScript3 compliant.
      */
     CommandLineConfig setLanguageIn(String languageIn) {
       this.languageIn = languageIn;
@@ -1873,9 +1998,10 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     private boolean transformAMDToCJSModules = false;
 
     /**
-     * Set whether to transform AMD to Common JS modules.
+     * Set whether to transform AMD to CommonJS modules.
      */
-    CommandLineConfig setTransformAMDToCJSModules(boolean transformAMDToCJSModules) {
+    CommandLineConfig setTransformAMDToCJSModules(
+        boolean transformAMDToCJSModules) {
       this.transformAMDToCJSModules = transformAMDToCJSModules;
       return this;
     }
@@ -1883,9 +2009,10 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     private boolean processCommonJSModules = false;
 
     /**
-     * Sets whether to process Common JS modules.
+     * Sets whether to process CommonJS modules.
      */
-    CommandLineConfig setProcessCommonJSModules(boolean processCommonJSModules) {
+    CommandLineConfig setProcessCommonJSModules(
+        boolean processCommonJSModules) {
       this.processCommonJSModules = processCommonJSModules;
       return this;
     }
@@ -1895,13 +2022,23 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
         ProcessCommonJSModules.DEFAULT_FILENAME_PREFIX;
 
     /**
-     * Sets the Common JS module path prefix.
+     * Sets the CommonJS module path prefix.
      */
-    CommandLineConfig setCommonJSModulePathPrefix(String commonJSModulePathPrefix) {
+    CommandLineConfig setCommonJSModulePathPrefix(
+        String commonJSModulePathPrefix) {
       this.commonJSModulePathPrefix = commonJSModulePathPrefix;
       return this;
     }
 
+    private String warningsWhitelistFile = "";
+
+    /**
+     * Sets a whitelist file that suppresses warnings.
+     */
+    CommandLineConfig setWarningsWhitelistFile(String fileName) {
+      this.warningsWhitelistFile = fileName;
+      return this;
+    }
   }
 
   /**

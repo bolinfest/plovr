@@ -17,9 +17,11 @@ package com.google.javascript.jscomp;
 
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.jstype.FunctionType;
+import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
+import com.google.javascript.rhino.jstype.StaticScope;
 
 import java.io.Serializable;
 import java.util.Collection;
@@ -127,13 +129,13 @@ public interface CodingConvention extends Serializable {
 
   /**
    * Convenience method for determining provided dependencies amongst different
-   * js scripts.
+   * JS scripts.
    */
   public String extractClassNameIfProvide(Node node, Node parent);
 
   /**
    * Convenience method for determining required dependencies amongst different
-   * js scripts.
+   * JS scripts.
    */
   public String extractClassNameIfRequire(Node node, Node parent);
 
@@ -189,6 +191,14 @@ public interface CodingConvention extends Serializable {
   public void applySingletonGetter(FunctionType functionType,
       FunctionType getterType, ObjectType objectType);
 
+  /**
+   * @return Whether the function is inlinable by convention.
+   */
+  public boolean isInlinableFunction(Node n);
+
+  /**
+   * @return the delegate relationship created by the call or null.
+   */
   public DelegateRelationship getDelegateRelationship(Node callNode);
 
   /**
@@ -219,7 +229,7 @@ public interface CodingConvention extends Serializable {
    * @param delegateProxyPrototypes List of delegate proxy prototypes.
    */
   public void defineDelegateProxyPrototypeProperties(
-      JSTypeRegistry registry, Scope scope,
+      JSTypeRegistry registry, StaticScope<JSType> scope,
       List<ObjectType> delegateProxyPrototypes,
       Map<String, String> delegateCallingConventions);
 
@@ -233,6 +243,13 @@ public interface CodingConvention extends Serializable {
    */
   public Bind describeFunctionBind(Node n);
 
+  /**
+   * A Bind instance or null.
+   * @param useTypeInfo If we believe type information is reliable enough
+   *     to use to figure out what the bind function is.
+   */
+  public Bind describeFunctionBind(Node n, boolean useTypeInfo);
+
   public static class Bind {
     // The target of the bind action
     final Node target;
@@ -245,6 +262,18 @@ public interface CodingConvention extends Serializable {
       this.target = target;
       this.thisValue = thisValue;
       this.parameters = parameters;
+    }
+
+    /**
+     * The number of parameters bound (not including the 'this' value).
+     */
+    int getBoundParameterCount() {
+      if (parameters == null) {
+        return 0;
+      }
+      Node paramParent = parameters.getParent();
+      return paramParent.getChildCount() -
+          paramParent.getIndexOfChild(parameters);
     }
   }
 
@@ -263,11 +292,16 @@ public interface CodingConvention extends Serializable {
    * returns information on the cast. By default, always returns null. Meant
    * to be overridden by subclasses.
    *
-   * @param t The node traversal.
    * @param callNode A CALL node.
    */
-  public ObjectLiteralCast getObjectLiteralCast(NodeTraversal t,
-      Node callNode);
+  public ObjectLiteralCast getObjectLiteralCast(Node callNode);
+
+  /**
+   * Gets a collection of all properties that are defined indirectly on global
+   * objects. (For example, Closure defines superClass_ in the goog.inherits
+   * call).
+   */
+  public Collection<String> getIndirectlyDeclaredProperties();
 
   /**
    * Returns the set of AssertionFunction.
@@ -322,9 +356,14 @@ public interface CodingConvention extends Serializable {
     /** Object to cast. */
     final Node objectNode;
 
-    ObjectLiteralCast(String typeName, Node objectNode) {
+    /** Error message */
+    final DiagnosticType diagnosticType;
+
+    ObjectLiteralCast(String typeName, Node objectNode,
+        DiagnosticType diagnosticType) {
       this.typeName = typeName;
       this.objectNode = objectNode;
+      this.diagnosticType = diagnosticType;
     }
   }
 
@@ -334,8 +373,8 @@ public interface CodingConvention extends Serializable {
    *   -One or more of its parameters are not of a certain type.
    */
   public class AssertionFunctionSpec {
-    private final String functionName;
-    private final JSTypeNative assertedType;
+    protected final String functionName;
+    protected final JSTypeNative assertedType;
 
     public AssertionFunctionSpec(String functionName) {
       this(functionName, null);
@@ -364,8 +403,8 @@ public interface CodingConvention extends Serializable {
      * Returns the type for a type assertion, or null if the function asserts
      * that the node must not be null or undefined.
      */
-    public JSTypeNative getAssertedType() {
-      return assertedType;
+    public JSType getAssertedType(Node call, JSTypeRegistry registry) {
+      return assertedType != null ? registry.getNativeType(assertedType) : null;
     }
   }
 }

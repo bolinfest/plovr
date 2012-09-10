@@ -67,6 +67,7 @@ public enum WarningLevel {
     options.checkUnreachableCode = CheckLevel.OFF;
     options.checkMissingReturn = CheckLevel.OFF;
     options.setWarningLevel(DiagnosticGroups.ACCESS_CONTROLS, CheckLevel.OFF);
+    options.setWarningLevel(DiagnosticGroups.CONST, CheckLevel.OFF);
     options.setWarningLevel(DiagnosticGroups.CONSTANT_PROPERTY, CheckLevel.OFF);
     options.checkGlobalNamesLevel = CheckLevel.OFF;
     options.checkSuspiciousCode = false;
@@ -87,7 +88,7 @@ public enum WarningLevel {
   }
 
   /**
-   * Add all the check pass that are possibly relevant to a non googler.
+   * Add all the check pass that are possibly relevant to a non-googler.
    * @param options The CompilerOptions object to set the options on.
    */
   private static void addVerboseWarnings(CompilerOptions options) {
@@ -111,5 +112,7 @@ public enum WarningLevel {
         DiagnosticGroups.MISSING_PROPERTIES, CheckLevel.WARNING);
     options.setWarningLevel(
         DiagnosticGroups.DEPRECATED, CheckLevel.WARNING);
+    options.setWarningLevel(
+        DiagnosticGroups.ES5_STRICT, CheckLevel.WARNING);
   }
 }

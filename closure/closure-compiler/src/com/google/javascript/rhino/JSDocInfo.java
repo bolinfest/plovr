@@ -93,7 +93,7 @@ public class JSDocInfo implements Serializable {
     List<JSTypeExpression> implementedInterfaces = null;
     Map<String, JSTypeExpression> parameters = null;
     List<JSTypeExpression> thrownTypes = null;
-    String templateTypeName = null;
+    ImmutableList<String> templateTypeNames = null;
 
     // Other information
     String description = null;
@@ -310,12 +310,13 @@ public class JSDocInfo implements Serializable {
   private static final int MASK_IMPLICITCAST  = 0x00002000; // @implicitCast
   private static final int MASK_NOSIDEEFFECTS = 0x00004000; // @nosideeffects
   private static final int MASK_EXTERNS       = 0x00008000; // @externs
-  private static final int MASK_JAVADISPATCH  = 0x00010000; // @javadispath
+  private static final int MASK_JAVADISPATCH  = 0x00010000; // @javadispatch
   private static final int MASK_NOCOMPILE     = 0x00020000; // @nocompile
   // @consistentIdGenerator
   private static final int MASK_CONSISTIDGEN  = 0x00040000;
   // @idGenerator
   private static final int MASK_IDGEN         = 0x00080000;
+  private static final int MASK_EXPOSE        = 0x00100000; // @expose
 
   // 3 bit type field stored in the top 3 bits of the most significant
   // nibble.
@@ -383,6 +384,10 @@ public class JSDocInfo implements Serializable {
 
   void setExport(boolean value) {
     setFlag(value, MASK_EXPORT);
+  }
+
+  void setExpose(boolean value) {
+    setFlag(value, MASK_EXPOSE);
   }
 
   void setNoShadow(boolean value) {
@@ -519,6 +524,14 @@ public class JSDocInfo implements Serializable {
   }
 
   /**
+   * Returns whether the {@code @expose} annotation is present on this
+   * {@link JSDocInfo}.
+   */
+  public boolean isExpose() {
+    return getFlag(MASK_EXPOSE);
+  }
+
+  /**
    * Returns whether the {@code @noshadow} annotation is present on this
    * {@link JSDocInfo}.
    */
@@ -559,7 +572,7 @@ public class JSDocInfo implements Serializable {
   }
 
   /**
-   * Returns whether the {@code @javadispath} annotation is present on this
+   * Returns whether the {@code @javadispatch} annotation is present on this
    * {@link JSDocInfo}.
    */
   public boolean isJavaDispatch() {
@@ -890,16 +903,16 @@ public class JSDocInfo implements Serializable {
    * Declares a template type name. Template type names are described using the
    * {@code @template} annotation.
    *
-   * @param templateTypeName the template type name.
+   * @param templateTypeNames the template type name.
    */
-  boolean declareTemplateTypeName(String templateTypeName) {
+  boolean declareTemplateTypeNames(List<String> templateTypeNames) {
     lazyInitInfo();
 
-    if (info.templateTypeName != null) {
+    if (info.templateTypeNames != null) {
       return false;
     }
 
-    info.templateTypeName = templateTypeName;
+    info.templateTypeNames = ImmutableList.copyOf(templateTypeNames);
     return true;
   }
 
@@ -1412,11 +1425,11 @@ public class JSDocInfo implements Serializable {
   }
 
   /** Gets the template type name. */
-  public String getTemplateTypeName() {
-    if (info == null) {
-      return null;
+  public ImmutableList<String> getTemplateTypeNames() {
+    if (info == null || info.templateTypeNames == null) {
+      return ImmutableList.of();
     }
-    return info.templateTypeName;
+    return info.templateTypeNames;
   }
 
   /**

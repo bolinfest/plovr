@@ -75,7 +75,7 @@ class PrototypeObjectType extends ObjectType {
   private final boolean nativeType;
 
   // NOTE(nicksantos): The implicit prototype can change over time.
-  // Modelling this is a bear. Always call getImplicitPrototype(), because
+  // Modeling this is a bear. Always call getImplicitPrototype(), because
   // some subclasses override this to do special resolution handling.
   private ObjectType implicitPrototypeFallback;
 
@@ -240,7 +240,7 @@ class PrototypeObjectType extends ObjectType {
         name, type, inferred, propertyNode);
     Property oldProp = properties.get(name);
     if (oldProp != null) {
-      // This is to keep previously inferred jsdoc info, e.g., in a
+      // This is to keep previously inferred JsDoc info, e.g., in a
       // replaceScript scenario.
       newProp.setJSDocInfo(oldProp.getJSDocInfo());
     }
@@ -512,6 +512,7 @@ class PrototypeObjectType extends ObjectType {
     return nativeType;
   }
 
+  @Override
   void setOwnerFunction(FunctionType type) {
     Preconditions.checkState(ownerFunction == null || type == null);
     ownerFunction = type;
@@ -550,4 +551,46 @@ class PrototypeObjectType extends ObjectType {
     }
     return this;
   }
+
+  @Override
+  public void matchConstraint(JSType constraint) {
+    // We only want to match constraints on anonymous types.
+    if (hasReferenceName()) {
+      return;
+    }
+
+    // Handle the case where the constraint object is a record type.
+    //
+    // param constraint {{prop: (number|undefined)}}
+    // function f(constraint) {}
+    // f({});
+    //
+    // We want to modify the object literal to match the constraint, by
+    // taking any each property on the record and trying to match
+    // properties on this object.
+    if (constraint.isRecordType()) {
+      matchRecordTypeConstraint(constraint.toObjectType());
+    } else if (constraint.isUnionType()) {
+      for (JSType alt : constraint.toMaybeUnionType().getAlternates()) {
+        if (alt.isRecordType()) {
+          matchRecordTypeConstraint(alt.toObjectType());
+        }
+      }
+    }
+  }
+
+  public void matchRecordTypeConstraint(ObjectType constraintObj) {
+    for (String prop : constraintObj.getOwnPropertyNames()) {
+      JSType propType = constraintObj.getPropertyType(prop);
+      if (!isPropertyTypeDeclared(prop)) {
+        JSType typeToInfer = propType;
+        if (!hasProperty(prop)) {
+          typeToInfer = getNativeType(JSTypeNative.VOID_TYPE)
+              .getLeastSupertype(propType);
+        }
+        defineInferredProperty(prop, typeToInfer, null);
+      }
+    }
+  }
+
 }

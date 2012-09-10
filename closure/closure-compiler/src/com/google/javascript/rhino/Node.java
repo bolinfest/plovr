@@ -107,7 +107,9 @@ public class Node implements Cloneable, Serializable {
       SLASH_V            = 54,    // Whether a STRING node contains a \v
                                   // vertical tab escape. This is a total hack.
                                   // See comments in IRFactory about this.
-      LAST_PROP          = 54;
+      INFERRED_FUNCTION  = 55,    // Marks a function whose parameter types
+                                  // have been inferred.
+      LAST_PROP          = 55;
 
   public static final int   // flags for INCRDECR_PROP
       DECR_FLAG = 0x1,
@@ -142,6 +144,8 @@ public class Node implements Cloneable, Serializable {
         case STATIC_SOURCE_FILE:    return "source_file";
         case INPUT_ID:  return "input_id";
         case LENGTH:    return "length";
+        case SLASH_V:   return "slash_v";
+        case INFERRED_FUNCTION:   return "inferred";
         default:
           throw new IllegalStateException("unexpect prop id " + propType);
       }
@@ -631,24 +635,14 @@ public class Node implements Cloneable, Serializable {
   }
 
   public void addChildrenToBack(Node children) {
-    for (Node child = children; child != null; child = child.next) {
-      Preconditions.checkArgument(child.parent == null);
-      child.parent = this;
-    }
-    if (last != null) {
-      last.next = children;
-    }
-    last = children.getLastSibling();
-    if (first == null) {
-      first = children;
-    }
+    addChildrenAfter(children, getLastChild());
   }
 
   /**
    * Add 'child' before 'node'.
    */
   public void addChildBefore(Node newChild, Node node) {
-    Preconditions.checkArgument(node != null,
+    Preconditions.checkArgument(node != null && node.parent == this,
         "The existing child node of the parent should not be null.");
     Preconditions.checkArgument(newChild.next == null,
         "The new child node has siblings.");
@@ -670,13 +664,35 @@ public class Node implements Cloneable, Serializable {
   public void addChildAfter(Node newChild, Node node) {
     Preconditions.checkArgument(newChild.next == null,
         "The new child node has siblings.");
-    Preconditions.checkArgument(newChild.parent == null,
-        "The new child node already has a parent.");
-    newChild.parent = this;
-    newChild.next = node.next;
-    node.next = newChild;
-    if (last == node) {
-        last = newChild;
+    addChildrenAfter(newChild, node);
+  }
+
+  /**
+   * Add all children after 'node'.
+   */
+  public void addChildrenAfter(Node children, Node node) {
+    Preconditions.checkArgument(node == null || node.parent == this);
+    for (Node child = children; child != null; child = child.next) {
+      Preconditions.checkArgument(child.parent == null);
+      child.parent = this;
+    }
+
+    Node lastSibling = children.getLastSibling();
+    if (node != null) {
+      Node oldNext = node.next;
+      node.next = children;
+      lastSibling.next = oldNext;
+      if (node == last) {
+        last = lastSibling;
+      }
+    } else {
+      // Append to the beginning.
+      if (first != null) {
+        lastSibling.next = first;
+      } else {
+        last = lastSibling;
+      }
+      first = children;
     }
   }
 
@@ -753,7 +769,7 @@ public class Node implements Cloneable, Serializable {
 
   /**
    * Clone the properties from the provided node without copying
-   * the property object.  The recieving node may not have any
+   * the property object.  The receiving node may not have any
    * existing properties.
    * @param other The node to clone properties from.
    * @return this node.
@@ -1134,9 +1150,14 @@ public class Node implements Cloneable, Serializable {
 
   public int getSourceOffset() {
     StaticSourceFile file = getStaticSourceFile();
-    int lineOffset = file == null ?
-        Integer.MIN_VALUE : file.getLineOffset(getLineno());
-    return lineOffset + getCharno();
+    if (file == null) {
+      return -1;
+    }
+    int lineno = getLineno();
+    if (lineno == -1) {
+      return -1;
+    }
+    return file.getLineOffset(lineno) + getCharno();
   }
 
   public int getSourcePosition() {
@@ -1212,7 +1233,7 @@ public class Node implements Cloneable, Serializable {
   // Iteration
 
   /**
-   * <p>Return an iterable object that iterates over this nodes's children.
+   * <p>Return an iterable object that iterates over this node's children.
    * The iterator does not support the optional operation
    * {@link Iterator#remove()}.</p>
    *
@@ -1229,7 +1250,7 @@ public class Node implements Cloneable, Serializable {
   }
 
   /**
-   * <p>Return an iterable object that iterates over this nodes's siblings.
+   * <p>Return an iterable object that iterates over this node's siblings.
    * The iterator does not support the optional operation
    * {@link Iterator#remove()}.</p>
    *
@@ -1504,11 +1525,13 @@ public class Node implements Cloneable, Serializable {
       if (post1 != post2) {
         return false;
       }
-    } else if (type == Token.STRING) {
-      int quoted1 = this.getIntProp(QUOTED_PROP);
-      int quoted2 = node.getIntProp(QUOTED_PROP);
-      if (quoted1 != quoted2) {
-        return false;
+    } else if (type == Token.STRING || type == Token.STRING_KEY) {
+      if (type == Token.STRING_KEY) {
+        int quoted1 = this.getIntProp(QUOTED_PROP);
+        int quoted2 = node.getIntProp(QUOTED_PROP);
+        if (quoted1 != quoted2) {
+          return false;
+        }
       }
 
       int slashV1 = this.getIntProp(SLASH_V);
@@ -1546,7 +1569,8 @@ public class Node implements Cloneable, Serializable {
    */
   public String getQualifiedName() {
     if (type == Token.NAME) {
-      return getString();
+      String name = getString();
+      return name.isEmpty() ? null : name;
     } else if (type == Token.GETPROP) {
       String left = getFirstChild().getQualifiedName();
       if (left == null) {
@@ -1567,6 +1591,7 @@ public class Node implements Cloneable, Serializable {
   public boolean isQualifiedName() {
     switch (getType()) {
       case Token.NAME:
+        return getString().isEmpty() ? false : true;
       case Token.THIS:
         return true;
       case Token.GETPROP:
@@ -1584,7 +1609,7 @@ public class Node implements Cloneable, Serializable {
   public boolean isUnscopedQualifiedName() {
     switch (getType()) {
       case Token.NAME:
-        return true;
+        return getString().isEmpty() ? false : true;
       case Token.GETPROP:
         return getFirstChild().isUnscopedQualifiedName();
       default:
@@ -1820,9 +1845,9 @@ public class Node implements Cloneable, Serializable {
   /**
    * An inner class that provides back-door access to the license
    * property of the JSDocInfo property for this node. This is only
-   * meant to be used for top level script nodes where the
+   * meant to be used for top-level script nodes where the
    * {@link com.google.javascript.jscomp.parsing.JsDocInfoParser} needs to
-   * be able to append directly to the top level node, not just the
+   * be able to append directly to the top-level node, not just the
    * current node.
    */
   public class FileLevelJsDocBuilder {
@@ -2327,6 +2352,10 @@ public class Node implements Cloneable, Serializable {
 
   public boolean isString() {
     return this.getType() == Token.STRING;
+  }
+
+  public boolean isStringKey() {
+    return this.getType() == Token.STRING_KEY;
   }
 
   public boolean isSwitch() {

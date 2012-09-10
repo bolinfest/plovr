@@ -55,19 +55,19 @@ public class ProcessClosurePrimitivesTest extends CompilerTestCase {
   @Override public CompilerPass getProcessor(final Compiler compiler) {
     if ((additionalCode == null) && (additionalEndCode == null)) {
       return new ProcessClosurePrimitives(
-          compiler, null, CheckLevel.ERROR, true);
+          compiler, null, CheckLevel.ERROR);
     } else {
       return new CompilerPass() {
         @Override
         public void process(Node externs, Node root) {
           // Process the original code.
-          new ProcessClosurePrimitives(compiler, null, CheckLevel.OFF, true)
+          new ProcessClosurePrimitives(compiler, null, CheckLevel.OFF)
               .process(externs, root);
 
           // Inject additional code at the beginning.
           if (additionalCode != null) {
-            JSSourceFile file =
-                JSSourceFile.fromCode("additionalcode", additionalCode);
+            SourceFile file =
+                SourceFile.fromCode("additionalcode", additionalCode);
             Node scriptNode = root.getFirstChild();
             Node newScriptNode = new CompilerInput(file).getAstRoot(compiler);
             if (addAdditionalNamespace) {
@@ -83,8 +83,8 @@ public class ProcessClosurePrimitivesTest extends CompilerTestCase {
 
           // Inject additional code at the end.
           if (additionalEndCode != null) {
-            JSSourceFile file =
-                JSSourceFile.fromCode("additionalendcode", additionalEndCode);
+            SourceFile file =
+                SourceFile.fromCode("additionalendcode", additionalEndCode);
             Node scriptNode = root.getFirstChild();
             Node newScriptNode = new CompilerInput(file).getAstRoot(compiler);
             if (addAdditionalNamespace) {
@@ -99,7 +99,7 @@ public class ProcessClosurePrimitivesTest extends CompilerTestCase {
           }
 
           // Process the tree a second time.
-          new ProcessClosurePrimitives(compiler, null, CheckLevel.ERROR, true)
+          new ProcessClosurePrimitives(compiler, null, CheckLevel.ERROR)
               .process(externs, root);
         }
       };
@@ -296,15 +296,6 @@ public class ProcessClosurePrimitivesTest extends CompilerTestCase {
              "if (EXPERIMENT_FOO) {goog.require('foo.bar');}",
          "var foo={}; var EXPERIMENT_FOO = true; if (EXPERIMENT_FOO) {}",
          MISSING_PROVIDE_ERROR);
-  }
-
-  public void testNewDateGoogNowSimplification() {
-    test("var x = new Date(goog.now());", "var x = new Date();");
-    testSame("var x = new Date(goog.now() + 1);");
-    testSame("var x = new Date(goog.now(1));");
-    testSame("var x = new Date(1, goog.now());");
-    testSame("var x = new Date(1);");
-    testSame("var x = new Date();");
   }
 
   public void testAddDependency() {
@@ -860,5 +851,9 @@ public class ProcessClosurePrimitivesTest extends CompilerTestCase {
   public void testNoStubForProvidedTypedef4() {
     test("goog.provide('x.y.z'); /** @typedef {number} */ x.y.z;",
          "var x = {}; x.y = {}; x.y.z;");
+  }
+
+  public void testProvideRequireSameFile() {
+    test("goog.provide('x');\ngoog.require('x');", "var x = {};");
   }
 }

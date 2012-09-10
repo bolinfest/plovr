@@ -174,12 +174,12 @@ class PeepholeReplaceKnownMethods extends AbstractPeepholeOptimization{
   }
 
   /**
-   * @return The uppered string Node.
+   * @return The upped string Node.
    */
   private Node tryFoldStringToUpperCase(Node subtree, Node stringNode) {
     // From Rhino, NativeString.java. See ECMA 15.5.4.12
-    String uppered = stringNode.getString().toUpperCase(ROOT_LOCALE);
-    Node replacement = IR.string(uppered);
+    String upped = stringNode.getString().toUpperCase(ROOT_LOCALE);
+    Node replacement = IR.string(upped);
     subtree.getParent().replaceChild(subtree, replacement);
     reportCodeChange();
     return replacement;
@@ -195,11 +195,21 @@ class PeepholeReplaceKnownMethods extends AbstractPeepholeOptimization{
     }
 
     int startIndex = 0, endIndex = input.length() - 1;
-    while (startIndex < input.length() && input.charAt(startIndex) == '0') {
+
+    // Remove leading zeros
+    while (startIndex < input.length() && input.charAt(startIndex) == '0' &&
+        input.charAt(startIndex) != '.') {
       startIndex++;
     }
-    while (endIndex >= 0 && input.charAt(endIndex) == '0') {
-      endIndex--;
+
+    // Remove trailing zeros only after the decimal
+    if (input.indexOf('.') >= 0) {
+      while (endIndex >= 0 && input.charAt(endIndex) == '0') {
+        endIndex--;
+      }
+      if (input.charAt(endIndex) == '.') {
+        endIndex--;
+      }
     }
     if (startIndex >= endIndex) {
       return input;
@@ -278,10 +288,16 @@ class PeepholeReplaceKnownMethods extends AbstractPeepholeOptimization{
       }
 
       stringVal = NodeUtil.trimJsWhiteSpace(stringVal);
+      if (stringVal.length() == 0) {
+        return n;
+      }
     }
 
     Node newNode;
-    if (isParseInt) {
+    if (stringVal.equals("0")) {
+      // Special case for parseInt("0") or parseFloat("0")
+      newNode = IR.number(0);
+    } else if (isParseInt) {
       if (radix == 0 || radix == 16) {
         if (stringVal.length() > 1 &&
             stringVal.substring(0, 2).equalsIgnoreCase("0x")) {
@@ -320,7 +336,7 @@ class PeepholeReplaceKnownMethods extends AbstractPeepholeOptimization{
         return n;
       }
       // Make sure that the parsed number matches the original string
-      // This prevents rounding differences between the java implementation
+      // This prevents rounding differences between the Java implementation
       // and native script.
       if (!normalizeNumericString(stringVal).equals(normalizedNewVal)) {
         return n;
@@ -675,7 +691,7 @@ class PeepholeReplaceKnownMethods extends AbstractPeepholeOptimization{
       return -1;
     }
 
-    return matchIndex + separator.length();
+    return matchIndex;
   }
 
   /**
@@ -683,42 +699,43 @@ class PeepholeReplaceKnownMethods extends AbstractPeepholeOptimization{
    */
   private String[] jsSplit(String stringValue, String separator, int limit) {
     Preconditions.checkArgument(limit >= 0);
+    Preconditions.checkArgument(stringValue != null);
 
     // For limits of 0, return an empty array
     if (limit == 0) {
       return new String[0];
     }
 
-    /* If a separator is not specified, return the entire string as
-     * the only element of an array.
-     */
+    // If a separator is not specified, return the entire string as
+    // the only element of an array.
     if (separator == null) {
       return new String[] {stringValue};
     }
 
     List<String> splitStrings = Lists.newArrayList();
 
-    /* If an empty string is specified for the separator, split apart each
-     * character of the string.
-     */
+    // If an empty string is specified for the separator, split apart each
+    // character of the string.
     if (separator.length() == 0) {
       for (int i = 0; i < stringValue.length() && i < limit; i++) {
         splitStrings.add(stringValue.substring(i, i + 1));
       }
     } else {
-      int startIndex = 0, matchEndIndex;
-      while ((matchEndIndex =
+      int startIndex = 0, matchIndex;
+      while ((matchIndex =
           jsSplitMatch(stringValue, startIndex, separator)) >= 0 &&
           splitStrings.size() < limit) {
-        if (separator.length() == 0) {
-          matchEndIndex++;
-        }
-        splitStrings.add(stringValue.substring(startIndex,
-            matchEndIndex - separator.length()));
-        startIndex = matchEndIndex;
+        splitStrings.add(stringValue.substring(startIndex, matchIndex));
+
+        startIndex = matchIndex + separator.length();
       }
-      if (startIndex < stringValue.length() && splitStrings.size() < limit) {
-        splitStrings.add(stringValue.substring(startIndex));
+
+      if (splitStrings.size() < limit) {
+        if (startIndex < stringValue.length()) {
+          splitStrings.add(stringValue.substring(startIndex));
+        } else {
+          splitStrings.add("");
+        }
       }
     }
 

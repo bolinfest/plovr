@@ -392,7 +392,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
   }
 
   /**
-   * Tests the behavior of the Bottom Object yype.
+   * Tests the behavior of the Bottom Object type.
    */
   public void testNoObjectType() throws Exception {
     // isXxx
@@ -2741,7 +2741,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
   }
 
   /**
-   * Tests the getGreastestSubtype method for record types.
+   * Tests the getGreatestSubtype method for record types.
    */
   public void testRecordTypeGreatestSubType1() {
     RecordTypeBuilder builder = new RecordTypeBuilder(registry);
@@ -2973,7 +2973,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
         .withParamsNode(registry.createParameters())
         .withTypeOfThis(DATE_TYPE).build();
     FunctionType dateMethodWithParam = new FunctionBuilder(registry)
-        .withParamsNode(registry.createParameters(NUMBER_TYPE))
+        .withParamsNode(registry.createOptionalParameters(NUMBER_TYPE))
         .withTypeOfThis(DATE_TYPE).build();
     FunctionType dateMethodWithReturn = new FunctionBuilder(registry)
         .withReturnType(NUMBER_TYPE)
@@ -2982,7 +2982,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
         .withParamsNode(registry.createParameters())
         .withTypeOfThis(STRING_OBJECT_TYPE).build();
     FunctionType stringMethodWithParam = new FunctionBuilder(registry)
-        .withParamsNode(registry.createParameters(NUMBER_TYPE))
+        .withParamsNode(registry.createOptionalParameters(NUMBER_TYPE))
         .withTypeOfThis(STRING_OBJECT_TYPE).build();
     FunctionType stringMethodWithReturn = new FunctionBuilder(registry)
         .withReturnType(NUMBER_TYPE)
@@ -3091,7 +3091,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
    */
   public void testFunctionPrototypeAndImplicitPrototype1() {
     FunctionType constructor =
-        registry.createConstructorType(null, null, null, null);
+        registry.createConstructorType("Foo", null, null, null);
     ObjectType instance = constructor.getInstanceType();
 
     // adding one property on the prototype
@@ -3119,7 +3119,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertEquals(NATIVE_PROPERTIES_COUNT + 1, instance.getPropertiesCount());
   }
 
-  /** Tests assigning jsdoc on a prototype property. */
+  /** Tests assigning JsDoc on a prototype property. */
   public void testJSDocOnPrototypeProperty() throws Exception {
     subclassCtor.setPropertyJSDocInfo("prototype", new JSDocInfo());
     assertNull(subclassCtor.getOwnPropertyJSDocInfo("prototype"));
@@ -4374,7 +4374,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
 
   public void testSubtypingFunctionFixedArgsNotMatching() throws Exception {
     FunctionType f1 = registry.createFunctionType(OBJECT_TYPE,
-        false, EVAL_ERROR_TYPE);
+        false, EVAL_ERROR_TYPE, UNKNOWN_TYPE);
     FunctionType f2 = registry.createFunctionType(STRING_OBJECT_TYPE,
         false, ERROR_TYPE, ALL_TYPE);
 
@@ -4668,7 +4668,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertTypeEquals(CHECKED_UNKNOWN_TYPE, expected);
   }
 
-  /** Tests the subclass of an unresolve named type */
+  /** Tests the subclass of an unresolved named type */
   public void testSubclassOfUnresolvedNamedType() {
     assertTrue(subclassOfUnresolvedNamedType.isUnknownType());
   }
@@ -4741,9 +4741,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     registry.declareType("typeA", realA);
     registry.declareType("typeB", realB);
 
-    assertEquals(a.hashCode(), realA.hashCode());
     assertTypeEquals(a, realA);
-    assertEquals(b.hashCode(), realB.hashCode());
     assertTypeEquals(b, realB);
 
     a.resolve(null, null);
@@ -4751,9 +4749,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
 
     assertTrue(a.isResolved());
     assertTrue(b.isResolved());
-    assertEquals(a.hashCode(), realA.hashCode());
     assertTypeEquals(a, realA);
-    assertEquals(b.hashCode(), realB.hashCode());
     assertTypeEquals(b, realB);
 
     JSType resolvedA = Asserts.assertValidResolve(a);
@@ -4775,7 +4771,6 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     NamedType b = new NamedType(registry, "typeA", "source", 1, 0);
     registry.forwardDeclareType("typeA");
 
-    assertEquals(a.hashCode(), b.hashCode());
     assertTypeEquals(a, b);
 
     a.resolve(null, EMPTY_SCOPE);
@@ -4783,7 +4778,6 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertTrue(a.isResolved());
     assertFalse(b.isResolved());
 
-    assertEquals(a.hashCode(), b.hashCode());
     assertTypeEquals(a, b);
 
     assertFalse(a.isEquivalentTo(UNKNOWN_TYPE));
@@ -5260,7 +5254,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertTypeEquals(ALL_TYPE,
         ALL_TYPE.getRestrictedTypeGivenToBooleanOutcome(false));
 
-    assertTypeEquals(UNKNOWN_TYPE,
+    assertTypeEquals(CHECKED_UNKNOWN_TYPE,
         UNKNOWN_TYPE.getRestrictedTypeGivenToBooleanOutcome(true));
     assertTypeEquals(UNKNOWN_TYPE,
         UNKNOWN_TYPE.getRestrictedTypeGivenToBooleanOutcome(false));
@@ -5708,9 +5702,10 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     JSDocInfo privateInfo = new JSDocInfo();
     privateInfo.setVisibility(Visibility.PRIVATE);
 
-    sup.defineProperty("X", NUMBER_TYPE, false, null);
+    sup.defineProperty("X", NUMBER_TYPE, true, null);
     sup.setPropertyJSDocInfo("X", privateInfo);
 
+    sub.defineProperty("X", NUMBER_TYPE, true, null);
     sub.setPropertyJSDocInfo("X", deprecated);
 
     assertFalse(sup.getOwnPropertyJSDocInfo("X").isDeprecated());
@@ -5754,6 +5749,49 @@ public class JSTypeTest extends BaseJSTypeTestCase {
             registry.getDirectImplementors(
                 interfaceType.getInstanceType()),
             googBar));
+  }
+
+  public void testIsTemplatedType() throws Exception {
+    assertTrue(
+        new TemplateType(registry, "T")
+            .hasAnyTemplate());
+    assertFalse(
+        ARRAY_TYPE
+            .hasAnyTemplate());
+
+    assertTrue(
+        registry.createParameterizedType(
+            ARRAY_TYPE, new TemplateType(registry, "T"))
+            .hasAnyTemplate());
+    assertFalse(
+        registry.createParameterizedType(
+            ARRAY_TYPE, STRING_TYPE)
+            .hasAnyTemplate());
+
+    assertTrue(
+        new FunctionBuilder(registry)
+            .withReturnType(new TemplateType(registry, "T"))
+            .build()
+            .hasAnyTemplate());
+    assertTrue(
+        new FunctionBuilder(registry)
+            .withTypeOfThis(new TemplateType(registry, "T"))
+            .build()
+            .hasAnyTemplate());
+    assertFalse(
+        new FunctionBuilder(registry)
+            .withReturnType(STRING_TYPE)
+            .build()
+            .hasAnyTemplate());
+
+    assertTrue(
+        registry.createUnionType(
+            NULL_TYPE, new TemplateType(registry, "T"), STRING_TYPE)
+            .hasAnyTemplate());
+    assertFalse(
+        registry.createUnionType(
+            NULL_TYPE, ARRAY_TYPE, STRING_TYPE)
+            .hasAnyTemplate());
   }
 
   private static boolean containsType(

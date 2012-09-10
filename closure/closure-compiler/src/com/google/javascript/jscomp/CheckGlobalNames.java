@@ -16,11 +16,15 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.common.base.Preconditions;
+import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.GlobalNamespace.Name;
 import com.google.javascript.jscomp.GlobalNamespace.Ref;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
+
+import java.util.Set;
 
 /**
  * Checks references to undefined properties of global variables.
@@ -30,9 +34,12 @@ import com.google.javascript.rhino.Node;
 class CheckGlobalNames implements CompilerPass {
 
   private final AbstractCompiler compiler;
+  private final CodingConvention convention;
   private final CheckLevel level;
 
   private GlobalNamespace namespace = null;
+  private final Set<String> objectPrototypeProps = Sets.newHashSet();
+  private final Set<String> functionPrototypeProps = Sets.newHashSet();
 
   // Warnings
   static final DiagnosticType UNDEFINED_NAME_WARNING = DiagnosticType.warning(
@@ -55,6 +62,7 @@ class CheckGlobalNames implements CompilerPass {
    */
   CheckGlobalNames(AbstractCompiler compiler, CheckLevel level) {
     this.compiler = compiler;
+    this.convention = compiler.getCodingConvention();
     this.level = level;
   }
 
@@ -63,20 +71,49 @@ class CheckGlobalNames implements CompilerPass {
    * can be re-used for multiple check passes. Returns this for easy chaining.
    */
   CheckGlobalNames injectNamespace(GlobalNamespace namespace) {
+    Preconditions.checkArgument(namespace.hasExternsRoot());
     this.namespace = namespace;
     return this;
   }
 
   @Override
   public void process(Node externs, Node root) {
-    // TODO(nicksantos): Let CollapseProperties and CheckGlobalNames
-    // share a namespace.
     if (namespace == null) {
-      namespace = new GlobalNamespace(compiler, root);
+      namespace = new GlobalNamespace(compiler, externs, root);
     }
 
+    // Find prototype properties that will affect our analysis.
+    Preconditions.checkState(namespace.hasExternsRoot());
+    findPrototypeProps("Object", objectPrototypeProps);
+    findPrototypeProps("Function", functionPrototypeProps);
+    objectPrototypeProps.addAll(
+        convention.getIndirectlyDeclaredProperties());
+
     for (Name name : namespace.getNameForest()) {
+      // Skip extern names. Externs are often not runnable as real code,
+      // and will do things like:
+      // var x;
+      // x.method;
+      // which this check forbids.
+      if (name.inExterns) {
+        continue;
+      }
+
       checkDescendantNames(name, name.globalSets + name.localSets > 0);
+    }
+  }
+
+  private void findPrototypeProps(String type, Set<String> props) {
+    Name slot = namespace.getSlot(type);
+    if (slot != null) {
+      for (Ref ref : slot.getRefs()) {
+        if (ref.type == Ref.Type.PROTOTYPE_GET) {
+          Node fullName = ref.getNode().getParent().getParent();
+          if (fullName.isGetProp()) {
+            props.add(fullName.getLastChild().getString());
+          }
+        }
+      }
     }
   }
 
@@ -112,30 +149,47 @@ class CheckGlobalNames implements CompilerPass {
     // we're looking through each reference, check all the module dependencies.
     Ref declaration = name.getDeclaration();
     Name parent = name.parent;
-    boolean singleGlobalParentDecl =
-        parent != null &&
-        parent.getDeclaration() != null &&
-        parent.localSets == 0;
 
     JSModuleGraph moduleGraph = compiler.getModuleGraph();
     for (Ref ref : name.getRefs()) {
+      // Don't worry about global exprs.
+      boolean isGlobalExpr = ref.getNode().getParent().isExprResult();
+
       if (!isDefined && !isTypedef(ref)) {
-        reportRefToUndefinedName(name, ref);
+        if (!isGlobalExpr) {
+          reportRefToUndefinedName(name, ref);
+        }
       } else if (declaration != null &&
           ref.getModule() != declaration.getModule() &&
           !moduleGraph.dependsOn(
               ref.getModule(), declaration.getModule())) {
         reportBadModuleReference(name, ref);
-      } else if (ref.scope.isGlobal() &&
-          singleGlobalParentDecl &&
-          parent.getDeclaration().preOrderIndex > ref.preOrderIndex) {
-        compiler.report(
-            JSError.make(ref.source.getName(), ref.node,
-                NAME_DEFINED_LATE_WARNING,
-                name.getFullName(),
-                parent.getFullName(),
-                parent.getDeclaration().source.getName(),
-                String.valueOf(parent.getDeclaration().node.getLineno())));
+      } else {
+        // Check for late references.
+        if (ref.scope.isGlobal()) {
+          // Prototype references are special, because in our reference graph,
+          // A.prototype counts as a reference to A.
+          boolean isPrototypeGet = (ref.type == Ref.Type.PROTOTYPE_GET);
+          Name owner = isPrototypeGet ? name : parent;
+          boolean singleGlobalParentDecl =
+              owner != null &&
+              owner.getDeclaration() != null &&
+              owner.localSets == 0;
+
+          if (singleGlobalParentDecl &&
+              owner.getDeclaration().preOrderIndex > ref.preOrderIndex) {
+            String refName = isPrototypeGet
+                ? name.getFullName() + ".prototype"
+                : name.getFullName();
+            compiler.report(
+                JSError.make(ref.source.getName(), ref.node,
+                    NAME_DEFINED_LATE_WARNING,
+                    refName,
+                    owner.getFullName(),
+                    owner.getDeclaration().source.getName(),
+                    String.valueOf(owner.getDeclaration().node.getLineno())));
+          }
+        }
       }
     }
   }
@@ -176,16 +230,59 @@ class CheckGlobalNames implements CompilerPass {
    * Checks whether the given name is a property, and whether that property
    * must be initialized with its full qualified name.
    */
-  private static boolean propertyMustBeInitializedByFullName(Name name) {
-    // If an object literal in the global namespace  is never aliased,
-    // then all of its properties must be defined using its full qualified
-    // name. This implies that its properties must all be in the global
-    // namespace as well.
+  private boolean propertyMustBeInitializedByFullName(Name name) {
+    // If an object or function literal in the global namespace is never
+    // aliased, then its properties can only come from one of 2 places:
+    // 1) From its prototype chain, or
+    // 2) From an assignment to its fully qualified name.
+    // If we assume #1 is not the case, then #2 implies that its
+    // properties must all be modeled in the GlobalNamespace as well.
     //
-    // The same is not true for FUNCTION and OTHER types, because their
-    // implicit prototypes have properties that are not captured by the global
-    // namespace.
-    return name.parent != null && name.parent.aliasingGets == 0 &&
-        name.parent.type == Name.Type.OBJECTLIT;
+    // We assume that for global object literals and types (constructors and
+    // interfaces), we can find all the properties inherited from the prototype
+    // chain of functions and objects.
+    if (name.parent == null) {
+      return false;
+    }
+
+    boolean parentIsAliased = false;
+    if (name.parent.aliasingGets > 0) {
+      for (Ref ref : name.parent.getRefs()) {
+        if (ref.type == Ref.Type.ALIASING_GET) {
+          Node aliaser = ref.getNode().getParent();
+
+          // We don't need to worry about known aliased, because
+          // they're already covered by the getIndirectlyDeclaredProperties
+          // call at the top.
+          boolean isKnownAlias =
+              aliaser.isCall() &&
+              (convention.getClassesDefinedByCall(aliaser) != null ||
+               convention.getSingletonGetterClassName(aliaser) != null);
+          if (!isKnownAlias) {
+            parentIsAliased = true;
+          }
+        }
+      }
+    }
+
+    if (parentIsAliased) {
+      return false;
+    }
+
+    if (objectPrototypeProps.contains(name.getBaseName())) {
+      return false;
+    }
+
+    if (name.parent.type == Name.Type.OBJECTLIT) {
+      return true;
+    }
+
+    if (name.parent.type == Name.Type.FUNCTION &&
+        name.parent.isDeclaredType() &&
+        !functionPrototypeProps.contains(name.getBaseName())) {
+      return true;
+    }
+
+    return false;
   }
 }

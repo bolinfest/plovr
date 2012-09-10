@@ -15,7 +15,7 @@
  */
 
 /**
- * @fileoverview Java Script Builtins for windows properties.
+ * @fileoverview JavaScript Built-Ins for windows properties.
  *
  * @externs
  */
@@ -113,6 +113,13 @@ var netscape;
  * @see https://developer.mozilla.org/en/Core_JavaScript_1.5_Reference/Global_Objects/sun
  */
 var sun;
+
+// Magic variable for Norton Identity Protection's Chrome extension.  This
+// program will overwrite whatever's stored in the variable 'o' with random
+// values, so we want to avoid it.
+// NOTE(user): Added 8-30-2012.  We may want to remove this once Norton
+// Identity Protection has been fixed and pushed to most people.
+var o;
 
 /**
  * @see https://developer.mozilla.org/en/DOM/window.alert

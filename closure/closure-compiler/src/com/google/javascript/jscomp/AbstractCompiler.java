@@ -20,6 +20,7 @@ import com.google.common.base.Supplier;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceCollection;
 import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.parsing.Config;
+import com.google.javascript.jscomp.type.ReverseAbstractInterpreter;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.head.ErrorReporter;
@@ -47,9 +48,15 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
   // CompilerPass's constructor.
 
   /**
-   * Looks up an input (possibly an externs input) by name. May return null.
+   * Looks up an input (possibly an externs input) by input id.
+   * May return null.
    */
   public abstract CompilerInput getInput(InputId inputId);
+
+  /**
+   * Looks up a source file by name. May return null.
+   */
+  abstract SourceFile getSourceFileByName(String sourceName);
 
   /**
    * Creates a new externs file.
@@ -255,7 +262,7 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
   abstract void setHasRegExpGlobalReferences(boolean references);
 
   /**
-   * @return Whether the AST constains references to the RegExp global object
+   * @return Whether the AST contains references to the RegExp global object
    *     properties.
    */
   abstract boolean hasRegExpGlobalReferences();
@@ -329,4 +336,30 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
    * definitions;
    */
   abstract CompilerInput getSynthesizedExternsInput();
+
+  /**
+   * @return a number in [0,1] range indicating an approximate progress of the
+   * last compile. Note this should only be used as a hint and no assumptions
+   * should be made on accuracy, even a completed compile may choose not to set
+   * this to 1.0 at the end.
+   */
+  public abstract double getProgress();
+
+  /** Sets the progress to a certain value in [0,1] range. */
+  abstract void setProgress(double progress);
+
+  /**
+   * The subdir js/ contains libraries of code that we inject
+   * at compile-time only if requested by this function.
+   *
+   * Notice that these libraries will almost always create global symbols.
+   *
+   * @param resourceName The name of the library. For example, if "base" is
+   *     is specified, then we load js/base.js
+   * @return If new code was injected, returns the last expression node of the
+   *     library. If the caller needs to add additional code, they should add
+   *     it as the next sibling of this node. If new code was not injected,
+   *     returns null.
+   */
+  abstract Node ensureLibraryInjected(String resourceName);
 }

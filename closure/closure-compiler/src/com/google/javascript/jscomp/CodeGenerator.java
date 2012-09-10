@@ -100,8 +100,6 @@ class CodeGenerator {
           "Bad binary operator \"%s\": expected 2 arguments but got %s",
           opstr, childCount);
       int p = NodeUtil.precedence(type);
-      addLeftExpr(first, p, context);
-      cc.addOp(opstr, true);
 
       // For right-hand-side of operations, only pass context if it's
       // the IN_FOR_INIT_CLAUSE one.
@@ -112,12 +110,16 @@ class CodeGenerator {
       // we can simply generate a * b * c.
       if (last.getType() == type &&
           NodeUtil.isAssociative(type)) {
+        addExpr(first, p, context);
+        cc.addOp(opstr, true);
         addExpr(last, p, rhsContext);
       } else if (NodeUtil.isAssignmentOp(n) && NodeUtil.isAssignmentOp(last)) {
         // Assignments are the only right-associative binary operators
+        addExpr(first, p, context);
+        cc.addOp(opstr, true);
         addExpr(last, p, rhsContext);
       } else {
-        addExpr(last, p + 1, rhsContext);
+        unrollBinaryOperator(n, type, opstr, context, rhsContext, p, p + 1);
       }
       return;
     }
@@ -195,7 +197,7 @@ class CodeGenerator {
           addIdentifier(n.getString());
           cc.addOp("=", true);
           if (first.isComma()) {
-            addExpr(first, NodeUtil.precedence(Token.ASSIGN));
+            addExpr(first, NodeUtil.precedence(Token.ASSIGN), Context.OTHER);
           } else {
             // Add expression, consider nearby code at lowest level of
             // precedence.
@@ -218,7 +220,7 @@ class CodeGenerator {
 
       case Token.COMMA:
         Preconditions.checkState(childCount == 2);
-        addList(first, false, context);
+        unrollBinaryOperator(n, Token.COMMA, ",", context, Context.OTHER, 0, 0);
         break;
 
       case Token.NUMBER:
@@ -234,7 +236,7 @@ class CodeGenerator {
         // All of these unary operators are right-associative
         Preconditions.checkState(childCount == 1);
         cc.addOp(NodeUtil.opToStrNoFail(type), false);
-        addExpr(first, NodeUtil.precedence(type));
+        addExpr(first, NodeUtil.precedence(type), Context.OTHER);
         break;
       }
 
@@ -248,7 +250,7 @@ class CodeGenerator {
           cc.addNumber(-n.getFirstChild().getDouble());
         } else {
           cc.addOp(NodeUtil.opToStrNoFail(type), false);
-          addExpr(first, NodeUtil.precedence(type));
+          addExpr(first, NodeUtil.precedence(type), Context.OTHER);
         }
 
         break;
@@ -257,11 +259,11 @@ class CodeGenerator {
       case Token.HOOK: {
         Preconditions.checkState(childCount == 3);
         int p = NodeUtil.precedence(type);
-        addLeftExpr(first, p + 1, context);
+        addExpr(first, p + 1, context);
         cc.addOp("?", true);
-        addExpr(first.getNext(), 1);
+        addExpr(first.getNext(), 1, Context.OTHER);
         cc.addOp(":", true);
-        addExpr(last, 1);
+        addExpr(last, 1, Context.OTHER);
         break;
       }
 
@@ -332,7 +334,7 @@ class CodeGenerator {
         if (!n.isQuotedString() &&
             TokenStream.isJSIdentifier(name) &&
             // do not encode literally any non-literal characters that were
-            // unicode escaped.
+            // Unicode escaped.
             NodeUtil.isLatin(name)) {
           add(name);
         } else {
@@ -378,7 +380,7 @@ class CodeGenerator {
           }
 
           // Prefer to break lines in between top-level statements
-          // because top level statements are more homogeneous.
+          // because top-level statements are more homogeneous.
           if (preferLineBreaks) {
             cc.notePreferredLineBreak();
           }
@@ -450,7 +452,7 @@ class CodeGenerator {
         if (needsParens) {
           add("(");
         }
-        addLeftExpr(first, NodeUtil.precedence(type), context);
+        addExpr(first, NodeUtil.precedence(type), context);
         if (needsParens) {
           add(")");
         }
@@ -463,7 +465,7 @@ class CodeGenerator {
         Preconditions.checkState(
             childCount == 2,
             "Bad GETELEM: expected 2 children but got %s", childCount);
-        addLeftExpr(first, NodeUtil.precedence(type), context);
+        addExpr(first, NodeUtil.precedence(type), context);
         add("[");
         add(first.getNext());
         add("]");
@@ -486,7 +488,7 @@ class CodeGenerator {
         // A non-zero post-prop value indicates a post inc/dec, default of zero
         // is a pre-inc/dec.
         if (postProp != 0) {
-          addLeftExpr(first, NodeUtil.precedence(type), context);
+          addExpr(first, NodeUtil.precedence(type), context);
           cc.addOp(o, false);
         } else {
           cc.addOp(o, false);
@@ -508,10 +510,10 @@ class CodeGenerator {
         if (isIndirectEval(first)
             || n.getBooleanProp(Node.FREE_CALL) && NodeUtil.isGet(first)) {
           add("(0,");
-          addExpr(first, NodeUtil.precedence(Token.COMMA));
+          addExpr(first, NodeUtil.precedence(Token.COMMA), Context.OTHER);
           add(")");
         } else {
-          addLeftExpr(first, NodeUtil.precedence(type), context);
+          addExpr(first, NodeUtil.precedence(type), context);
         }
         add("(");
         addList(first.getNext());
@@ -548,7 +550,7 @@ class CodeGenerator {
 
       case Token.NULL:
         Preconditions.checkState(childCount == 0);
-        add("null");
+        cc.addConstant("null");
         break;
 
       case Token.THIS:
@@ -558,12 +560,12 @@ class CodeGenerator {
 
       case Token.FALSE:
         Preconditions.checkState(childCount == 0);
-        add("false");
+        cc.addConstant("false");
         break;
 
       case Token.TRUE:
         Preconditions.checkState(childCount == 0);
-        add("true");
+        cc.addConstant("true");
         break;
 
       case Token.CONTINUE:
@@ -615,7 +617,7 @@ class CodeGenerator {
             first, Token.CALL, NodeUtil.MATCH_NOT_FUNCTION)) {
           precedence = NodeUtil.precedence(first.getType()) + 1;
         }
-        addExpr(first, precedence);
+        addExpr(first, precedence, Context.OTHER);
 
         // '()' is optional when no arguments are present
         Node next = first.getNext();
@@ -626,13 +628,15 @@ class CodeGenerator {
         }
         break;
 
+      case Token.STRING_KEY:
+        Preconditions.checkState(
+            childCount == 1, "Object lit key must have 1 child");
+        addJsString(n);
+        break;
+
       case Token.STRING:
-        if (childCount !=
-            ((n.getParent() != null &&
-              n.getParent().isObjectLit()) ? 1 : 0)) {
-          throw new IllegalStateException(
-              "Unexpected String children: " + n.getParent().toStringTree());
-        }
+        Preconditions.checkState(
+            childCount == 0, "A string may not have children");
         addJsString(n);
         break;
 
@@ -656,7 +660,7 @@ class CodeGenerator {
           if (c.isGetterDef() || c.isSetterDef()) {
             add(c);
           } else {
-            Preconditions.checkState(c.isString());
+            Preconditions.checkState(c.isStringKey());
             String key = c.getString();
             // Object literal property names don't have to be quoted if they
             // are not JavaScript keywords
@@ -664,7 +668,7 @@ class CodeGenerator {
                 !TokenStream.isKeyword(key) &&
                 TokenStream.isJSIdentifier(key) &&
                 // do not encode literally any non-literal characters that
-                // were unicode escaped.
+                // were Unicode escaped.
                 NodeUtil.isLatin(key)) {
               add(key);
             } else {
@@ -673,11 +677,11 @@ class CodeGenerator {
               if (!Double.isNaN(d)) {
                 cc.addNumber(d);
               } else {
-                addExpr(c, 1);
+                addExpr(c, 1, Context.OTHER);
               }
             }
             add(":");
-            addExpr(c.getFirstChild(), 1);
+            addExpr(c.getFirstChild(), 1, Context.OTHER);
           }
         }
         add("}");
@@ -725,6 +729,31 @@ class CodeGenerator {
     }
 
     cc.endSourceMapping(n);
+  }
+
+  /**
+   * We could use addList recursively here, but sometimes we produce
+   * very deeply nested operators and run out of stack space, so we
+   * just unroll the recursion when possible.
+   *
+   * We assume nodes are left-recursive.
+   */
+  private void unrollBinaryOperator(
+      Node n, int op, String opStr, Context context,
+      Context rhsContext, int leftPrecedence, int rightPrecedence) {
+    Node firstNonOperator = n.getFirstChild();
+    while (firstNonOperator.getType() == op) {
+      firstNonOperator = firstNonOperator.getFirstChild();
+    }
+
+    addExpr(firstNonOperator, leftPrecedence, context);
+
+    Node current = firstNonOperator;
+    do {
+      current = current.getParent();
+      cc.addOp(opStr, true);
+      addExpr(current.getFirstChild().getNext(), rightPrecedence, rhsContext);
+    } while (current != n);
   }
 
   static boolean isSimpleNumber(String s) {
@@ -851,29 +880,11 @@ class CodeGenerator {
     }
   }
 
-  /**
-   * Adds a node at the left-hand side of an expression. Unlike
-   * {@link #addExpr(Node,int)}, this preserves information about the context.
-   *
-   * The left side of an expression is special because in the JavaScript
-   * grammar, certain tokens may be parsed differently when they are at
-   * the beginning of a statement. For example, "{}" is parsed as a block,
-   * but "{'x': 'y'}" is parsed as an object literal.
-   */
-  void addLeftExpr(Node n, int minPrecedence, Context context) {
-    addExpr(n, minPrecedence, context);
-  }
-
-  void addExpr(Node n, int minPrecedence) {
-    addExpr(n, minPrecedence, Context.OTHER);
-  }
-
   private void addExpr(Node n, int minPrecedence, Context context) {
     if ((NodeUtil.precedence(n.getType()) < minPrecedence) ||
-        ((context == Context.IN_FOR_INIT_CLAUSE) &&
-        (n.isIn()))){
+        ((context == Context.IN_FOR_INIT_CLAUSE) && n.isIn())){
       add("(");
-      add(n, clearContextForNoInOperator(context));
+      add(n, Context.OTHER);
       add(")");
     } else {
       add(n, context);
@@ -893,10 +904,10 @@ class CodeGenerator {
     for (Node n = firstInList; n != null; n = n.getNext()) {
       boolean isFirst = n == firstInList;
       if (isFirst) {
-        addLeftExpr(n, isArrayOrFunctionArgument ? 1 : 0, lhsContext);
+        addExpr(n, isArrayOrFunctionArgument ? 1 : 0, lhsContext);
       } else {
         cc.listSeparator();
-        addExpr(n, isArrayOrFunctionArgument ? 1 : 0);
+        addExpr(n, isArrayOrFunctionArgument ? 1 : 0, Context.OTHER);
       }
     }
   }
@@ -915,7 +926,7 @@ class CodeGenerator {
       if (n != firstInList) {
         cc.listSeparator();
       }
-      addExpr(n, 1);
+      addExpr(n, 1, Context.OTHER);
       lastWasEmpty = n.isEmpty();
     }
 
@@ -936,7 +947,7 @@ class CodeGenerator {
     }
   }
 
-  /** Outputs a js string, using the optimal (single/double) quote character */
+  /** Outputs a JS string, using the optimal (single/double) quote character */
   private void addJsString(Node n) {
     String s = n.getString();
     boolean useSlashV = n.getBooleanProp(Node.SLASH_V);
@@ -1000,7 +1011,7 @@ class CodeGenerator {
     return regexpEscape(s, null);
   }
 
-  /** Helper to escape javascript string as well as regular expression */
+  /** Helper to escape JavaScript string as well as regular expression */
   private static String strEscape(
       String s, char quote,
       String doublequoteEscape,
@@ -1021,12 +1032,20 @@ class CodeGenerator {
             sb.append("\\x0B");
           }
           break;
+        // From the SingleEscapeCharacter grammar production.
+        case '\b': sb.append("\\b"); break;
+        case '\f': sb.append("\\f"); break;
         case '\n': sb.append("\\n"); break;
         case '\r': sb.append("\\r"); break;
         case '\t': sb.append("\\t"); break;
         case '\\': sb.append(backslashEscape); break;
         case '\"': sb.append(doublequoteEscape); break;
         case '\'': sb.append(singlequoteEscape); break;
+
+        // From LineTerminators (ES5 Section 7.3, Table 3)
+        case '\u2028': sb.append("\\u2028"); break;
+        case '\u2029': sb.append("\\u2029"); break;
+
         case '>':                       // Break --> into --\> or ]]> into ]]\>
           if (i >= 2 &&
               ((s.charAt(i - 1) == '-' && s.charAt(i - 2) == '-') ||
@@ -1064,15 +1083,15 @@ class CodeGenerator {
               appendHexJavaScriptRepresentation(sb, c);
             }
           } else {
-            // No charsetEncoder provided - pass straight latin characters
+            // No charsetEncoder provided - pass straight Latin characters
             // through, and escape the rest.  Doing the explicit character
             // check is measurably faster than using the CharsetEncoder.
             if (c > 0x1f && c < 0x7f) {
               sb.append(c);
             } else {
-              // Other characters can be misinterpreted by some js parsers,
+              // Other characters can be misinterpreted by some JS parsers,
               // or perhaps mangled by proxies along the way,
-              // so we play it safe and unicode escape them.
+              // so we play it safe and Unicode escape them.
               appendHexJavaScriptRepresentation(sb, c);
             }
           }
@@ -1088,7 +1107,7 @@ class CodeGenerator {
       return s;
     }
 
-    // Now going through the string to escape non-latin characters if needed.
+    // Now going through the string to escape non-Latin characters if needed.
     StringBuilder sb = new StringBuilder();
     for (int i = 0; i < s.length(); i++) {
       char c = s.charAt(i);
@@ -1166,17 +1185,6 @@ class CodeGenerator {
   }
 
   /**
-   * If we're in a IN_FOR_INIT_CLAUSE, (and thus can't permit in operators
-   * in the expression), but have added parentheses, the expressions within
-   * the parens have no limits.  Clear the context flag  Be safe and don't
-   * clear the flag if it held another value.
-   */
-  private  Context clearContextForNoInOperator(Context context) {
-    return (context == Context.IN_FOR_INIT_CLAUSE
-        ? Context.OTHER : context);
-  }
-
-  /**
    * @see #appendHexJavaScriptRepresentation(int, Appendable)
    */
   private static void appendHexJavaScriptRepresentation(
@@ -1190,19 +1198,19 @@ class CodeGenerator {
   }
 
   /**
-   * Returns a javascript representation of the character in a hex escaped
+   * Returns a JavaScript representation of the character in a hex escaped
    * format.
    *
-   * @param codePoint The codepoint to append.
+   * @param codePoint The code point to append.
    * @param out The buffer to which the hex representation should be appended.
    */
   private static void appendHexJavaScriptRepresentation(
       int codePoint, Appendable out)
       throws IOException {
     if (Character.isSupplementaryCodePoint(codePoint)) {
-      // Handle supplementary unicode values which are not representable in
-      // javascript.  We deal with these by escaping them as two 4B sequences
-      // so that they will round-trip properly when sent from java to javascript
+      // Handle supplementary Unicode values which are not representable in
+      // JavaScript.  We deal with these by escaping them as two 4B sequences
+      // so that they will round-trip properly when sent from Java to JavaScript
       // and back.
       char[] surrogates = Character.toChars(codePoint);
       appendHexJavaScriptRepresentation(surrogates[0], out);

@@ -15,7 +15,7 @@
  */
 
 /**
- * @fileoverview Definitions for Ecmascript 5.
+ * @fileoverview Definitions for ECMAScript 5.
  * @see http://www.ecma-international.org/publications/files/drafts/tc39-2009-025.pdf
  * @externs
  */
@@ -32,36 +32,6 @@
  * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Function/bind
  */
 Function.prototype.bind = function(selfObj, var_args) {};
-
-
-/*
- * JSON api.
- */
-
-/**
- * @see https://developer.mozilla.org/En/Using_native_JSON
- */
-Window.prototype.JSON = {};
-
-
-/**
- * @param {string} text
- * @param {(function(string, *) : *)=} opt_reviver
- * @return {*}
- * @see http://ejohn.org/blog/ecmascript-5-strict-mode-json-and-more/
- */
-Window.prototype.JSON.parse = function(text, opt_reviver) {};
-
-
-/**
- * @param {*} value
- * @param {(Array.<string>|(function(string, *) : *)|null)=} opt_replacer
- * @param {(number|string)=} opt_space
- * @return {string}
- * @see http://ejohn.org/blog/ecmascript-5-strict-mode-json-and-more/
- */
-Window.prototype.JSON.stringify =
-    function(value, opt_replacer, opt_space) {};
 
 
 /**
@@ -89,7 +59,7 @@ String.prototype.trimRight = function() {};
 
 
 /**
- * A object property discriptor used by Object.create, Object.defineProperty,
+ * A object property descriptor used by Object.create, Object.defineProperty,
  * Object.defineProperties, Object.getOwnPropertyDescriptor.
  *
  * Note: not a real constructor.
@@ -234,7 +204,7 @@ Object.isFrozen = function(obj) {};
 
 
 /**
- * As per EcmaScript 5, 15.12.3.
+ * As per ECMAScript 5, 15.12.3.
  * @param {string=} opt_key The JSON key for this object.
  * @return {*} The serializable representation of this object. Note that this
  *     need not be a string. See http://goo.gl/PEUvs.

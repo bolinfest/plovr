@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.Scope.Var;
+import com.google.javascript.jscomp.type.FlowScope;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.SimpleSlot;
@@ -204,7 +205,8 @@ class LinkedFlowScope implements FlowScope {
    * with stuff that we've inferred in the local flow.
    */
   @Override
-  public void completeScope(Scope scope) {
+  public void completeScope(StaticScope<JSType> staticScope) {
+    Scope scope = (Scope) staticScope;
     for (Iterator<Var> it = scope.getVars(); it.hasNext();) {
       Var var = it.next();
       if (var.isTypeInferred()) {
@@ -263,7 +265,7 @@ class LinkedFlowScope implements FlowScope {
 
       // If two flow scopes are in the same function, then they could have
       // two possible function scopes: the real one and the BOTTOM scope.
-      // If they have different function scopes, we *should* iterate thru all
+      // If they have different function scopes, we *should* iterate through all
       // the variables in each scope and compare. However, 99.9% of the time,
       // they're not equal. And the other .1% of the time, we can pretend
       // they're equal--this just means that data flow analysis will have
@@ -376,7 +378,7 @@ class LinkedFlowScope implements FlowScope {
    * as possible in a map. Optimized for fast lookup.
    */
   private static class FlatFlowScopeCache {
-    // The Scope for the entire function or for the gloal scope.
+    // The Scope for the entire function or for the global scope.
     private final Scope functionScope;
 
     // The linked flow scope that this cache represents.

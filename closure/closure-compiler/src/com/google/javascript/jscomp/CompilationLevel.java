@@ -98,6 +98,7 @@ public enum CompilationLevel {
 
     // Does not call applyBasicCompilationOptions(options) because the call to
     // skipAllCompilerPasses() cannot be easily undone.
+    options.dependencyOptions.setDependencySorting(true);
     options.closurePass = true;
     options.setRenamingPolicy(
         VariableRenamingPolicy.LOCAL, PropertyRenamingPolicy.OFF);
@@ -105,6 +106,7 @@ public enum CompilationLevel {
     options.setInlineVariables(Reach.LOCAL_ONLY);
     options.flowSensitiveInlineVariables = true;
     options.setInlineFunctions(Reach.LOCAL_ONLY);
+    options.setAssumeClosuresOnlyCaptureReferences(true);
     options.checkGlobalThisLevel = CheckLevel.OFF;
     options.foldConstants = true;
     options.coalesceVariableNames = true;
@@ -133,6 +135,7 @@ public enum CompilationLevel {
     // create possible conflicts between multiple diagnostic groups.
 
     // All the safe optimizations.
+    options.dependencyOptions.setDependencySorting(true);
     options.closurePass = true;
     options.foldConstants = true;
     options.coalesceVariableNames = true;
@@ -163,6 +166,7 @@ public enum CompilationLevel {
     options.smartNameRemoval = true;
     options.inlineConstantVars = true;
     options.setInlineFunctions(Reach.ALL);
+    options.setAssumeClosuresOnlyCaptureReferences(true);
     options.inlineGetters = true;
     options.setInlineVariables(Reach.ALL);
     options.flowSensitiveInlineVariables = true;
@@ -184,5 +188,27 @@ public enum CompilationLevel {
     // Kindly tell the user that they have JsDocs that we don't understand.
     options.setWarningLevel(DiagnosticGroups.NON_STANDARD_JSDOC,
         CheckLevel.WARNING);
+  }
+
+  /**
+   * Enable additional optimizations that use type information.
+   * @param options The CompilerOptions object to set the options on.
+   */
+  public void setTypeBasedOptimizationOptions(CompilerOptions options) {
+    switch (this) {
+      case ADVANCED_OPTIMIZATIONS:
+        options.inferTypes = true;
+        options.disambiguateProperties = true;
+        options.ambiguateProperties = true;
+        options.inlineProperties = true;
+        // TODO(johnlenz) :removeUnusedClassProperties isn't strictly a 
+        // type based pass, but add it here for now because I may have to 
+        // make it into one.
+        options.removeUnusedClassProperties = true;
+        break;
+      case SIMPLE_OPTIMIZATIONS:
+        // TODO(johnlenz): enable peephole type based optimization.
+        break;
+    }
   }
 }

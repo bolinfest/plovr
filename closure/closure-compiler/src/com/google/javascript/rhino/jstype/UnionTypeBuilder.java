@@ -145,7 +145,7 @@ class UnionTypeBuilder implements Serializable {
         }
 
         // Function types are special, because they have their
-        // own bizarro sub-lattice. See the commants on
+        // own bizarre sub-lattice. See the comments on
         // FunctionType#supAndInf helper and above at functionTypePosition.
         if (alternate.isFunctionType() && functionTypePosition != -1) {
           // See the comments on functionTypePosition above.
@@ -172,7 +172,9 @@ class UnionTypeBuilder implements Serializable {
           if (alternate.isUnknownType() ||
               current.isUnknownType() ||
               alternate.isNoResolvedType() ||
-              current.isNoResolvedType()) {
+              current.isNoResolvedType() ||
+              alternate.hasAnyTemplate() ||
+              current.hasAnyTemplate()) {
             if (alternate.isEquivalentTo(current)) {
               // Alternate is unnecessary.
               return this;

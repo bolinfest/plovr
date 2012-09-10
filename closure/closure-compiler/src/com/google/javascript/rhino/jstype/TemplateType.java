@@ -66,7 +66,17 @@ public class TemplateType extends ProxyObjectType {
   }
 
   @Override
-  public boolean isTemplateType() {
+  public TemplateType toMaybeTemplateType() {
+    return this;
+  }
+
+  @Override
+  public boolean hasAnyTemplateInternal() {
     return true;
+  }
+
+  @Override
+  public <T> T visit(Visitor<T> visitor) {
+    return visitor.caseTemplateType(this);
   }
 }

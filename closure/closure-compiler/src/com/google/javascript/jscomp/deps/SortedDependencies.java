@@ -83,7 +83,7 @@ public class SortedDependencies<INPUT extends DependencyInfo> {
     for (INPUT input : inputs) {
       for (String req : input.getRequires()) {
         INPUT dep = provideMap.get(req);
-        if (dep != null) {
+        if (dep != null && dep != input) {
           deps.put(input, dep);
         }
       }
@@ -118,6 +118,13 @@ public class SortedDependencies<INPUT extends DependencyInfo> {
       return provideMap.get(symbol);
     }
     throw new MissingProvideException(symbol);
+  }
+
+  /**
+   * Return the input that gives us the given symbol, or null.
+   */
+  public INPUT maybeGetInputProviding(String symbol) {
+    return provideMap.get(symbol);
   }
 
   /**

@@ -100,7 +100,7 @@ public class RemoveUnusedClassPropertiesTest extends CompilerTestCase {
   }
 
   public void testInc1() {
-    // Increments and Decrements are handled similiarly to compound assignments
+    // Increments and Decrements are handled similarly to compound assignments
     // but need a placeholder value when replaced.
     test("this.x++", "0");
     testSame("x = (this.x++)");
@@ -112,7 +112,7 @@ public class RemoveUnusedClassPropertiesTest extends CompilerTestCase {
   }
 
   public void testInc2() {
-    // Increments and Decrements are handled similiarly to compound assignments
+    // Increments and Decrements are handled similarly to compound assignments
     // but need a placeholder value when replaced.
     test("this.a++, f()", "0, f()");
     test("x = (this.a++, f())", "x = (0, f())");
@@ -141,5 +141,20 @@ public class RemoveUnusedClassPropertiesTest extends CompilerTestCase {
     // it can remove properties even when the object are referenced
     test("this.y = 1;alert(Object.keys(this))",
          "1;alert(Object.keys(this))");
+  }
+
+  public void testIssue730() {
+    // Partial removal of properties can causes problems if the object is
+    // sealed.
+    // TODO(johnlenz): should we not allow partial removals?
+    test(
+        "function A() {this.foo = 0;}\n" +
+        "function B() {this.a = new A();}\n" +
+        "B.prototype.dostuff = function() {this.a.foo++;alert('hi');}\n" +
+        "new B().dostuff();\n",
+        "function A(){0}" +
+        "function B(){this.a=new A}" +
+        "B.prototype.dostuff=function(){this.a.foo++;alert(\"hi\")};" +
+        "new B().dostuff();");
   }
 }

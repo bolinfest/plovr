@@ -406,6 +406,8 @@ public class NodeUtilTest extends TestCase {
     assertSideEffect(false, "({}||[]).foo = 2;");
     assertSideEffect(false, "(true ? {} : []).foo = 2;");
     assertSideEffect(false, "({},[]).foo = 2;");
+
+    assertSideEffect(true, "delete a.b");
   }
 
   public void testObjectMethodSideEffects() {
@@ -500,7 +502,7 @@ public class NodeUtilTest extends TestCase {
     assertMutableState(false, "a");
     assertMutableState(true, "[b, c [d, [e]]]");
     assertMutableState(true, "({a: x, b: y, c: z})");
-    // Note: RegEx objects are not immutable,  for instance, the exec
+    // Note: RegExp objects are not immutable,  for instance, the exec
     // method maintains state for "global" searches.
     assertMutableState(true, "/abc/gi");
     assertMutableState(false, "'a'");
@@ -1319,7 +1321,7 @@ public class NodeUtilTest extends TestCase {
     assertEquals(
         Double.POSITIVE_INFINITY,
         NodeUtil.getNumberValue(getNode("'+Infinity'")));
-    // FireFox treats "infinity" as "Infinity", IE treats it as NaN
+    // Firefox treats "infinity" as "Infinity", IE treats it as NaN
     assertEquals(null, NodeUtil.getNumberValue(getNode("'-infinity'")));
     assertEquals(null, NodeUtil.getNumberValue(getNode("'infinity'")));
     assertEquals(null, NodeUtil.getNumberValue(getNode("'+infinity'")));
@@ -1411,7 +1413,7 @@ public class NodeUtilTest extends TestCase {
     assertFalse(NodeUtil.isNumericResult(getNode("a().b()")));
     assertFalse(NodeUtil.isNumericResult(getNode("new a()")));
 
-    // Definitely not numberic
+    // Definitely not numeric
     assertFalse(NodeUtil.isNumericResult(getNode("([1,2])")));
     assertFalse(NodeUtil.isNumericResult(getNode("({a:1})")));
 
@@ -1567,6 +1569,7 @@ public class NodeUtilTest extends TestCase {
   }
 
   public void testGetNearestFunctionName() {
+    testFunctionName("(function() {})()", null);
     testFunctionName("function a() {}", "a");
     testFunctionName("(function a() {})", "a");
     testFunctionName("({a:function () {}})", "a");
@@ -1591,6 +1594,70 @@ public class NodeUtilTest extends TestCase {
     assertEquals("x", getFunctionLValue("var x = (y, function() {});"));
   }
 
+  public void testIsExecutedExactlyOnce() {
+    assertEquals(true, executedOnceTestCase("x;"));
+
+    assertEquals(true, executedOnceTestCase("x && 1;"));
+    assertEquals(false, executedOnceTestCase("1 && x;"));
+
+    assertEquals(false, executedOnceTestCase("1 && (x && 1);"));
+
+    assertEquals(true, executedOnceTestCase("x || 1;"));
+    assertEquals(false, executedOnceTestCase("1 || x;"));
+
+    assertEquals(false, executedOnceTestCase("1 && (x || 1);"));
+
+    assertEquals(true, executedOnceTestCase("x ? 1 : 2;"));
+    assertEquals(false, executedOnceTestCase("1 ? 1 : x;"));
+    assertEquals(false, executedOnceTestCase("1 ? x : 2;"));
+
+    assertEquals(false, executedOnceTestCase("1 && (x ? 1 : 2);"));
+
+    assertEquals(true, executedOnceTestCase("if (x) {}"));
+    assertEquals(false, executedOnceTestCase("if (true) {x;}"));
+    assertEquals(false, executedOnceTestCase("if (true) {} else {x;}"));
+
+    assertEquals(false, executedOnceTestCase("if (1) { if (x) {} }"));
+
+    assertEquals(true, executedOnceTestCase("for(x;;){}"));
+    assertEquals(false, executedOnceTestCase("for(;x;){}"));
+    assertEquals(false, executedOnceTestCase("for(;;x){}"));
+    assertEquals(false, executedOnceTestCase("for(;;){x;}"));
+
+    assertEquals(false, executedOnceTestCase("if (1) { for(x;;){} }"));
+
+    assertEquals(false, executedOnceTestCase("for(x in {}){}"));
+    assertEquals(true, executedOnceTestCase("for({}.a in x){}"));
+    assertEquals(false, executedOnceTestCase("for({}.a in {}){x}"));
+
+    assertEquals(false, executedOnceTestCase("if (1) { for(x in {}){} }"));
+
+    assertEquals(true, executedOnceTestCase("switch (x) {}"));
+    assertEquals(false, executedOnceTestCase("switch (1) {case x:}"));
+    assertEquals(false, executedOnceTestCase("switch (1) {case 1: x}"));
+    assertEquals(false, executedOnceTestCase("switch (1) {default: x}"));
+
+    assertEquals(false, executedOnceTestCase("if (1) { switch (x) {} }"));
+
+    assertEquals(false, executedOnceTestCase("while (x) {}"));
+    assertEquals(false, executedOnceTestCase("while (1) {x}"));
+
+    assertEquals(false, executedOnceTestCase("do {} while (x)"));
+    assertEquals(false, executedOnceTestCase("do {x} while (1)"));
+
+    assertEquals(false, executedOnceTestCase("try {x} catch (e) {}"));
+    assertEquals(false, executedOnceTestCase("try {} catch (e) {x}"));
+    assertEquals(true, executedOnceTestCase("try {} finally {x}"));
+
+    assertEquals(false, executedOnceTestCase("if (1) { try {} finally {x} }"));
+  }
+
+  private boolean executedOnceTestCase(String code) {
+    Node ast = parse(code);
+    Node nameNode = getNameNode(ast, "x");
+    return NodeUtil.isExecutedExactlyOnce(nameNode);
+  }
+
   private String getFunctionLValue(String js) {
     Node lVal = NodeUtil.getBestLValue(getFunctionNode(js));
     return lVal == null ? null : lVal.getString();
@@ -1613,6 +1680,19 @@ public class NodeUtilTest extends TestCase {
     }
     for (Node c : n.children()) {
       Node result = getFunctionNode(c);
+      if (result != null) {
+        return result;
+      }
+    }
+    return null;
+  }
+
+  static Node getNameNode(Node n, String name) {
+    if (n.isName() && n.getString().equals(name)) {
+      return n;
+    }
+    for (Node c : n.children()) {
+      Node result = getNameNode(c, name);
       if (result != null) {
         return result;
       }

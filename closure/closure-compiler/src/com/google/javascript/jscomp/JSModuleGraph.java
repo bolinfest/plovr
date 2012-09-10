@@ -324,6 +324,11 @@ public class JSModuleGraph {
       for (String entryPoint : depOptions.getEntryPoints()) {
         entryPointInputs.add(sorter.getInputProviding(entryPoint));
       }
+
+      CompilerInput baseJs = sorter.maybeGetInputProviding("goog");
+      if (baseJs != null) {
+        entryPointInputs.add(baseJs);
+      }
     } else {
       entryPointInputs.addAll(inputs);
     }
@@ -395,18 +400,6 @@ public class JSModuleGraph {
       }
     }
     return graphViz;
-  }
-
-  /**
-   * A module depth comparator that considers a deeper module to be
-   * "greater than" a shallower module. Uses module names to
-   * consistently break ties.
-   */
-  private class DepthComparator implements Comparator<JSModule> {
-    @Override
-    public int compare(JSModule m1, JSModule m2) {
-      return depthCompare(m1, m2);
-    }
   }
 
   /**

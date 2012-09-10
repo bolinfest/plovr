@@ -270,7 +270,7 @@ public class CoalesceVariableNamesTest extends CompilerTestCase {
     //        e     c
     //         \   /
     //           d
-    // The coloring paritioning would be:
+    // The coloring partitioning would be:
     //  a = { a, c }
     //  b = { b, d }
     //  e = { e }
@@ -289,7 +289,7 @@ public class CoalesceVariableNamesTest extends CompilerTestCase {
                "  e=1; a=1; e; a;");
 
     // If we favor "d" first by declaring "d" earlier,
-    // the coloring paritioning would be:
+    // the coloring partitioning would be:
     //  b = { b, e }
     //  d = { d, a }
     //  c = { c }
@@ -381,6 +381,25 @@ public class CoalesceVariableNamesTest extends CompilerTestCase {
         "};");
   }
 
+  public void testForInWithAssignment() {
+    inFunction(
+      "var _f = function (commands) {" +
+          "  var k, v, ref;" +
+          "  for (k in ref = commands) {" +
+          "    v = ref[k];" +
+          "    alert(k + ':' + v);" +
+          "  }" +
+          "}",
+
+      "var _f = function (commands) {" +
+          "  var k,ref;" +
+          "  for (k in ref = commands) {" +
+          "    commands = ref[k];" +
+          "    alert(k + ':' + commands);" +
+          "  }" +
+          "}"
+        );
+  }
 
   public void testUsePseduoNames() {
     usePseudoName = true;

@@ -27,10 +27,12 @@
 
 
 /**
- * @see http://www.w3.org/TR/FileAPI/#dfn-Blob
+ * @see http://dev.w3.org/2006/webapi/FileAPI/#dfn-Blob
+ * @param {Array.<ArrayBufferView|Blob|string>=} opt_blobParts
+ * @param {Object=} opt_options
  * @constructor
  */
-function Blob() {}
+function Blob(opt_blobParts, opt_options) {}
 
 /**
  * @see http://www.w3.org/TR/FileAPI/#dfn-size
@@ -810,12 +812,14 @@ Window.prototype.webkitResolveLocalFileSystemURI = function(uri, successCallback
 /**
  * @see http://www.w3.org/TR/FileAPI/#dfn-createObjectURL
  * @param {!Blob} blob
+ * @return {string}
  */
 function createObjectURL(blob) {};
 
 /**
  * @see http://www.w3.org/TR/FileAPI/#dfn-createObjectURL
  * @param {!Blob} blob
+ * @return {string}
  */
 Window.prototype.createObjectURL = function(blob) {};
 
@@ -853,6 +857,7 @@ Window.prototype.webkitURL;
 /**
  * @see http://www.w3.org/TR/FileAPI/#dfn-createObjectURL
  * @param {!Blob} blob
+ * @return {string}
  */
 DOMURL.prototype.createObjectURL = function(blob) {};
 
@@ -861,3 +866,46 @@ DOMURL.prototype.createObjectURL = function(blob) {};
  * @param {string} url
  */
 DOMURL.prototype.revokeObjectURL = function(url) {};
+
+/**
+ * @see https://developers.google.com/chrome/whitepapers/storage
+ * @constructor
+ */
+function StorageInfo() {}
+
+/**
+ * @see https://developers.google.com/chrome/whitepapers/storage
+ * @type {number}
+ * */
+StorageInfo.prototype.TEMPORARY = 0;
+
+/**
+ * @see https://developers.google.com/chrome/whitepapers/storage
+ * @type {number}
+ */
+StorageInfo.prototype.PERSISTENT = 1;
+
+/**
+ * @see https://developers.google.com/chrome/whitepapers/storage#requestQuota
+ * @param {number} type
+ * @param {number} size
+ * @param {function(number)} successCallback
+ * @param {function(!DOMException)=} errorCallback
+ */
+StorageInfo.prototype.requestQuota = function(type, size, successCallback,
+    errorCallback) {};
+
+/**
+ * @see https://developers.google.com/chrome/whitepapers/storage#queryUsageAndQuota
+ * @param {number} type
+ * @param {function(number, number)} successCallback
+ * @param {function(!DOMException)=} errorCallback
+ */
+StorageInfo.prototype.queryUsageAndQuota = function(type, successCallback,
+    errorCallback) {};
+
+/**
+ * @see https://developers.google.com/chrome/whitepapers/storage
+ * @type {!StorageInfo}
+ */
+Window.prototype.webkitStorageInfo;

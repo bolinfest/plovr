@@ -70,6 +70,8 @@ public abstract class JSType implements Serializable {
   private boolean resolved = false;
   private JSType resolveResult = null;
 
+  private boolean inTemplatedCheckVisit = false;
+
   public static final String UNKNOWN_NAME =
       "Unknown class name";
 
@@ -326,7 +328,57 @@ public abstract class JSType implements Serializable {
     return null;
   }
 
-  public boolean isTemplateType() {
+  public final boolean isParameterizedType() {
+    return toMaybeParameterizedType() != null;
+  }
+
+  /**
+   * Downcasts this to a ParameterizedType, or returns null if this is not
+   * a function.
+   */
+  public ParameterizedType toMaybeParameterizedType() {
+    return null;
+  }
+
+  /**
+   * Null-safe version of toMaybeParameterizedType().
+   */
+  public static ParameterizedType toMaybeParameterizedType(JSType type) {
+    return type == null ? null : type.toMaybeParameterizedType();
+  }
+
+  public final boolean isTemplateType() {
+    return toMaybeTemplateType() != null;
+  }
+
+  /**
+   * Downcasts this to a TemplateType, or returns null if this is not
+   * a function.
+   */
+  public TemplateType toMaybeTemplateType() {
+    return null;
+  }
+
+  /**
+   * Null-safe version of toMaybeTemplateType().
+   */
+  public static TemplateType toMaybeTemplateType(JSType type) {
+    return type == null ? null : type.toMaybeTemplateType();
+  }
+
+  public boolean hasAnyTemplate() {
+    if (!this.inTemplatedCheckVisit) {
+      this.inTemplatedCheckVisit = true;
+      boolean result = hasAnyTemplateInternal();
+      this.inTemplatedCheckVisit = false;
+      return result;
+    } else {
+      // prevent infinite recursion, this is "not yet".
+      return false;
+    }
+  }
+
+  boolean hasAnyTemplateInternal() {
     return false;
   }
 
@@ -651,7 +703,17 @@ public abstract class JSType implements Serializable {
    * ECMA-262 specification.<p>
    */
   public final boolean canTestForShallowEqualityWith(JSType that) {
-    return this.isSubtype(that) || that.isSubtype(this);
+    if (isEmptyType() || that.isEmptyType()) {
+      return isSubtype(that) || that.isSubtype(this);
+    }
+
+    JSType inf = getGreatestSubtype(that);
+    return !inf.isEmptyType() ||
+        // Our getGreatestSubtype relation on functions is pretty bad.
+        // Let's just say it's always ok to compare two functions.
+        // Once the TODO in FunctionType is fixed, we should be able to
+        // remove this.
+        inf == registry.getNativeType(JSTypeNative.LEAST_FUNCTION_TYPE);
   }
 
   /**
@@ -768,7 +830,7 @@ public abstract class JSType implements Serializable {
   }
 
   /**
-   * When computing infimums, we may get a situation like
+   * When computing infima, we may get a situation like
    * inf(Type1, Type2)
    * where both types are unresolved, so they're technically
    * subtypes of one another.
@@ -818,6 +880,10 @@ public abstract class JSType implements Serializable {
    * method of types to get the restricted type.
    */
   public JSType getRestrictedTypeGivenToBooleanOutcome(boolean outcome) {
+    if (outcome && this == getNativeType(JSTypeNative.UNKNOWN_TYPE)) {
+      return getNativeType(JSTypeNative.CHECKED_UNKNOWN_TYPE);
+    }
+
     BooleanLiteralSet literals = getPossibleToBooleanOutcomes();
     if (literals.contains(outcome)) {
       return this;
@@ -1170,4 +1236,13 @@ public abstract class JSType implements Serializable {
    *     annotations. Otherwise, it's for warnings.
    */
   abstract String toStringHelper(boolean forAnnotations);
+
+  /**
+   * Modify this type so that it matches the specified type.
+   *
+   * This is useful for reverse type-inference, where we want to
+   * infer that an object literal matches its constraint (much like
+   * how the java compiler does reverse-inference to figure out generics).
+   */
+  public void matchConstraint(JSType constraint) {}
 }

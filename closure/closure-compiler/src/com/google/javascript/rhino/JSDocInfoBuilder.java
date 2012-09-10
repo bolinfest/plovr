@@ -40,9 +40,9 @@
 package com.google.javascript.rhino;
 
 import com.google.javascript.rhino.JSDocInfo.Visibility;
-import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.StaticSourceFile;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -295,8 +295,8 @@ final public class JSDocInfoBuilder {
    * @return {@code true} if the template type name was recorded and
    *     {@code false} if a template type name was already defined.
    */
-  public boolean recordTemplateTypeName(String name) {
-    if (currentInfo.declareTemplateTypeName(name)) {
+  public boolean recordTemplateTypeNames(List<String> names) {
+    if (currentInfo.declareTemplateTypeNames(names)) {
       populated = true;
       return true;
     } else {
@@ -825,6 +825,20 @@ final public class JSDocInfoBuilder {
   public boolean recordExport() {
     if (!currentInfo.isExport()) {
       currentInfo.setExport(true);
+      populated = true;
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  /**
+   * Records that the {@link JSDocInfo} being built should have its
+   * {@link JSDocInfo#isExpose()} flag set to {@code true}.
+   */
+  public boolean recordExpose() {
+    if (!currentInfo.isExpose()) {
+      currentInfo.setExpose(true);
       populated = true;
       return true;
     } else {

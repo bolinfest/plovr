@@ -41,6 +41,7 @@ package com.google.javascript.rhino.jstype;
 
 import static com.google.javascript.rhino.jstype.JSTypeNative.OBJECT_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.U2U_CONSTRUCTOR_TYPE;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -110,7 +111,7 @@ public class FunctionType extends PrototypeObjectType {
   private List<ObjectType> implementedInterfaces = ImmutableList.of();
 
   /**
-   * The interfaces directly extendeded by this function (for interfaces)
+   * The interfaces directly extended by this function (for interfaces)
    * It is only relevant for constructors. May not be {@code null}.
    */
   private List<ObjectType> extendedInterfaces = ImmutableList.of();
@@ -124,12 +125,13 @@ public class FunctionType extends PrototypeObjectType {
   /**
    * The template type name. May be {@code null}.
    */
-  private String templateTypeName;
+  private final ImmutableList<String> templateTypeNames;
 
   /** Creates an instance for a function that might be a constructor. */
   FunctionType(JSTypeRegistry registry, String name, Node source,
       ArrowType arrowType, ObjectType typeOfThis,
-      String templateTypeName,  boolean isConstructor, boolean nativeType) {
+      ImmutableList<String> templateTypeNames,
+      boolean isConstructor, boolean nativeType) {
     super(registry, name,
         registry.getNativeObjectType(JSTypeNative.FUNCTION_INSTANCE_TYPE),
         nativeType);
@@ -149,7 +151,8 @@ public class FunctionType extends PrototypeObjectType {
           registry.getNativeObjectType(JSTypeNative.UNKNOWN_TYPE);
     }
     this.call = arrowType;
-    this.templateTypeName = templateTypeName;
+    this.templateTypeNames = templateTypeNames != null
+        ? templateTypeNames : ImmutableList.<String>of();
   }
 
   /** Creates an instance for a function that is an interface. */
@@ -165,6 +168,7 @@ public class FunctionType extends PrototypeObjectType {
     this.call = new ArrowType(registry, new Node(Token.PARAM_LIST), null);
     this.kind = Kind.INTERFACE;
     this.typeOfThis = new InstanceObjectType(registry, this);
+    this.templateTypeNames = ImmutableList.of();
   }
 
   /** Creates an instance for a function that is an interface. */
@@ -308,13 +312,23 @@ public class FunctionType extends PrototypeObjectType {
   public ObjectType getPrototype() {
     // lazy initialization of the prototype field
     if (prototypeSlot == null) {
-      setPrototype(
-          new PrototypeObjectType(
-              registry,
-              this.getReferenceName() + ".prototype",
-              registry.getNativeObjectType(OBJECT_TYPE),
-              isNativeObjectType()),
-          null);
+      String refName = getReferenceName();
+      if (refName == null) {
+        // Someone is trying to access the prototype of a structural function.
+        // We don't want to give real properties to this prototype, because
+        // then it would propagate to all structural functions.
+        setPrototypeNoCheck(
+           registry.getNativeObjectType(JSTypeNative.UNKNOWN_TYPE),
+           null);
+      } else {
+        setPrototype(
+            new PrototypeObjectType(
+                registry,
+                this.getReferenceName() + ".prototype",
+                registry.getNativeObjectType(OBJECT_TYPE),
+                isNativeObjectType()),
+            null);
+      }
     }
     return (ObjectType) prototypeSlot.getType();
   }
@@ -348,13 +362,12 @@ public class FunctionType extends PrototypeObjectType {
     // In the second case, we just use the anonymous object as the prototype.
     if (baseType.hasReferenceName() ||
         isNativeObjectType() ||
-        baseType.isFunctionPrototypeType() ||
-        !(baseType instanceof PrototypeObjectType)) {
+        baseType.isFunctionPrototypeType()) {
 
       baseType = new PrototypeObjectType(
           registry, this.getReferenceName() + ".prototype", baseType);
     }
-    setPrototype((PrototypeObjectType) baseType, propertyNode);
+    setPrototype(baseType, propertyNode);
   }
 
   /**
@@ -362,7 +375,7 @@ public class FunctionType extends PrototypeObjectType {
    * @param prototype the prototype. If this value is {@code null} it will
    *        silently be discarded.
    */
-  boolean setPrototype(PrototypeObjectType prototype, Node propertyNode) {
+  boolean setPrototype(ObjectType prototype, Node propertyNode) {
     if (prototype == null) {
       return false;
     }
@@ -370,9 +383,13 @@ public class FunctionType extends PrototypeObjectType {
     if (isConstructor() && prototype == getInstanceType()) {
       return false;
     }
+    return setPrototypeNoCheck(prototype, propertyNode);
+  }
 
-    PrototypeObjectType oldPrototype = prototypeSlot == null
-        ? null : (PrototypeObjectType) prototypeSlot.getType();
+  /** Set the prototype without doing any sanity checks. */
+  private boolean setPrototypeNoCheck(ObjectType prototype, Node propertyNode) {
+    ObjectType oldPrototype = prototypeSlot == null
+        ? null : (ObjectType) prototypeSlot.getType();
     boolean replacedPrototype = oldPrototype != null;
 
     this.prototypeSlot = new Property("prototype", prototype, true,
@@ -522,7 +539,7 @@ public class FunctionType extends PrototypeObjectType {
         // Define the "apply" function lazily.
         FunctionParamBuilder builder = new FunctionParamBuilder(registry);
 
-        // Ecma-262 says that apply's second argument must be an Array
+        // ECMA-262 says that apply's second argument must be an Array
         // or an arguments object. We don't model the arguments object,
         // so let's just be forgiving for now.
         // TODO(nicksantos): Model the Arguments object.
@@ -628,7 +645,7 @@ public class FunctionType extends PrototypeObjectType {
    * Because sup() and inf() share a lot of logic for functions, we use
    * a single helper.
    * @param leastSuper If true, compute the supremum of {@code this} with
-   *     {@code that}. Otherwise compute the infimum.
+   *     {@code that}. Otherwise, compute the infimum.
    * @return The least supertype or greatest subtype.
    */
   FunctionType supAndInfHelper(FunctionType that, boolean leastSuper) {
@@ -786,21 +803,20 @@ public class FunctionType extends PrototypeObjectType {
    */
   public ObjectType getTopMostDefiningType(String propertyName) {
     Preconditions.checkState(isConstructor() || isInterface());
-    Preconditions.checkArgument(getPrototype().hasProperty(propertyName));
+    Preconditions.checkArgument(getInstanceType().hasProperty(propertyName));
     FunctionType ctor = this;
 
     if (isInterface()) {
       return getTopDefiningInterface(this.getInstanceType(), propertyName);
     }
 
-    ObjectType topInstanceType = ctor.getInstanceType();
-    while (true) {
+    ObjectType topInstanceType = null;
+    do {
       topInstanceType = ctor.getInstanceType();
       ctor = ctor.getSuperClassConstructor();
-      if (ctor == null || !ctor.getPrototype().hasProperty(propertyName)) {
-        break;
-      }
-    }
+    } while (ctor != null
+        && ctor.getPrototype().hasProperty(propertyName));
+
     return topInstanceType;
   }
 
@@ -861,7 +877,7 @@ public class FunctionType extends PrototypeObjectType {
     StringBuilder b = new StringBuilder(32);
     b.append("function (");
     int paramNum = call.parameters.getChildCount();
-    boolean hasKnownTypeOfThis = !typeOfThis.isUnknownType();
+    boolean hasKnownTypeOfThis = !(typeOfThis instanceof UnknownType);
     if (hasKnownTypeOfThis) {
       if (isConstructor()) {
         b.append("new:");
@@ -906,7 +922,7 @@ public class FunctionType extends PrototypeObjectType {
   private void appendVarArgsString(StringBuilder builder, JSType paramType,
       boolean forAnnotations) {
     if (paramType.isUnionType()) {
-      // Remove the optionalness from the var arg.
+      // Remove the optionality from the var arg.
       paramType = paramType.toMaybeUnionType().getRestrictedUnion(
           registry.getNativeType(JSTypeNative.VOID_TYPE));
     }
@@ -918,7 +934,7 @@ public class FunctionType extends PrototypeObjectType {
   private void appendOptionalArgString(
       StringBuilder builder, JSType paramType, boolean forAnnotations) {
     if (paramType.isUnionType()) {
-      // Remove the optionalness from the var arg.
+      // Remove the optionality from the var arg.
       paramType = paramType.toMaybeUnionType().getRestrictedUnion(
           registry.getNativeType(JSTypeNative.VOID_TYPE));
     }
@@ -1010,7 +1026,7 @@ public class FunctionType extends PrototypeObjectType {
   @Override
   public ObjectType getTypeOfThis() {
     return typeOfThis.isNoObjectType() ?
-        registry.getNativeObjectType(JSTypeNative.OBJECT_TYPE) : typeOfThis;
+        registry.getNativeObjectType(JSTypeNative.UNKNOWN_TYPE) : typeOfThis;
   }
 
   /**
@@ -1062,7 +1078,7 @@ public class FunctionType extends PrototypeObjectType {
       }
 
       if (prototypeSlot != null) {
-        ((PrototypeObjectType) prototypeSlot.getType()).clearCachedValues();
+        ((ObjectType) prototypeSlot.getType()).clearCachedValues();
       }
     }
   }
@@ -1084,8 +1100,8 @@ public class FunctionType extends PrototypeObjectType {
   /**
    * Gets the template type name.
    */
-  public String getTemplateTypeName() {
-    return templateTypeName;
+  public ImmutableList<String> getTemplateTypeNames() {
+    return templateTypeNames;
   }
 
   @Override
@@ -1103,7 +1119,7 @@ public class FunctionType extends PrototypeObjectType {
     //
     // TODO(nicksantos): Handle this correctly if we have a UnionType.
     //
-    // TODO(nicksantos): In ES3, the runtime coerces "null" to the global
+    // TODO(nicksantos): In ES3, the run-time coerces "null" to the global
     // activation object. In ES5, it leaves it as null. Just punt on this
     // issue for now by coercing out null. This is complicated by the
     // fact that when most people write @this {Foo}, they really don't
@@ -1178,5 +1194,22 @@ public class FunctionType extends PrototypeObjectType {
     } else {
       return type.toDebugHashCodeString();
     }
+  }
+
+  /** Create a new constructor with the parameters and return type stripped. */
+  public FunctionType cloneWithoutArrowType() {
+    FunctionType result = new FunctionType(
+        registry, getReferenceName(), source,
+        registry.createArrowType(null, null), getInstanceType(),
+        null, true, false);
+    result.setPrototypeBasedOn(getInstanceType());
+    return result;
+  }
+
+  @Override
+  public boolean hasAnyTemplateInternal() {
+    return !getTemplateTypeNames().isEmpty()
+        || typeOfThis.hasAnyTemplate()
+        || call.hasAnyTemplate();
   }
 }

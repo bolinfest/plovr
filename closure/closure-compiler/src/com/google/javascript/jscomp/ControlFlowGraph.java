@@ -34,7 +34,7 @@ class ControlFlowGraph<N> extends
 
   /**
    * A special node marked by the node value key null to a singleton
-   * "return" when control is transfered outside of the current control flow
+   * "return" when control is transferred outside of the current control flow
    * graph.
    */
   private final DiGraphNode<N, ControlFlowGraph.Branch> implicitReturn;
@@ -96,7 +96,7 @@ class ControlFlowGraph<N> extends
    * {@code null}. See {@link ControlFlowGraph#getOptionalNodeComparator}.
    * @param isForward Whether the comparator sorts the nodes in the direction of
    *    the flow.
-   * @return a comparator or null (in particular, if not overriden)
+   * @return a comparator or null (in particular, if not overridden)
    */
   public Comparator<DiGraphNode<N, Branch>> getOptionalNodeComparator(
       boolean isForward) {
@@ -113,7 +113,15 @@ class ControlFlowGraph<N> extends
     ON_FALSE,
     /** Unconditional branch. */
     UNCOND,
-    /** Exception related. */
+    /**
+     * Exception-handling code paths.
+     * Conflates two kind of control flow passing:
+     * - An exception is thrown, and falls into a catch or finally block
+     * - During exception handling, a finally block finishes and control
+     *   passes to the next finally block.
+     * In theory, we need 2 different edge types. In practice, we
+     * can just treat them as "the edges we can't really optimize".
+     */
     ON_EX,
     /** Possible folded-away template */
     SYN_BLOCK;
@@ -180,7 +188,9 @@ class ControlFlowGraph<N> extends
         // for(var x = 0; x < 10; x++) { } has a graph that is isomorphic to
         // var x = 0; while(x<10) {  x++; }
         if (NodeUtil.isForIn(parent)) {
-          return n == parent.getLastChild();
+          // TODO(user): Investigate how we should handle the case where
+          // we have a very complex expression inside the FOR-IN header.
+          return n != parent.getFirstChild();
         } else {
           return NodeUtil.getConditionExpression(parent) != n;
         }

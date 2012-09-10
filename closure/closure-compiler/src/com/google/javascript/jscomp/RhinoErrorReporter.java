@@ -26,7 +26,7 @@ import java.util.Map.Entry;
 import java.util.regex.Pattern;
 
 /**
- * An error reporter for serizalizing Rhino errors into our error format.
+ * An error reporter for serializing Rhino errors into our error format.
  * @author nicksantos@google.com (Nick Santos)
  */
 class RhinoErrorReporter {
@@ -37,16 +37,14 @@ class RhinoErrorReporter {
   static final DiagnosticType TYPE_PARSE_ERROR =
       DiagnosticType.warning("JSC_TYPE_PARSE_ERROR", "{0}");
 
-  // A special-cased error, so that it can be configured via the
+  // Special-cased errors, so that they can be configured via the
   // warnings API.
-  static final DiagnosticType EXTRA_FILEOVERVIEW =
-      DiagnosticType.warning("JSC_EXTRA_FILEOVERVIEW", "Parse error. {0}");
-
   static final DiagnosticType TRAILING_COMMA =
       DiagnosticType.error("JSC_TRAILING_COMMA",
-          "Parse error. Internet Explorer has a non-standard " +
-          "intepretation of trailing commas. Arrays will have the wrong " +
-          "length and objects will not parse at all.");
+          "Parse error. IE8 (and below) will parse trailing commas in " +
+          "array and object literals incorrectly. " +
+          "If you are targeting newer versions of JS, " +
+          "set the appropriate language_in option.");
 
   static final DiagnosticType DUPLICATE_PARAM =
       DiagnosticType.error("JSC_DUPLICATE_PARAM", "Parse error. {0}");
@@ -57,7 +55,7 @@ class RhinoErrorReporter {
   // A map of Rhino messages to their DiagnosticType.
   private final Map<Pattern, DiagnosticType> typeMap;
 
-  private final AbstractCompiler compiler;
+  final AbstractCompiler compiler;
 
   /**
    * For each message such as "Not a good use of {0}", replace the place
@@ -72,12 +70,6 @@ class RhinoErrorReporter {
   private RhinoErrorReporter(AbstractCompiler compiler) {
     this.compiler = compiler;
     typeMap = ImmutableMap.of(
-
-        // Extra @fileoverview
-        replacePlaceHolders(
-            ScriptRuntime.getMessage0("msg.jsdoc.fileoverview.extra")),
-        EXTRA_FILEOVERVIEW,
-
         // Trailing comma
         replacePlaceHolders(
             com.google.javascript.rhino.head.ScriptRuntime
@@ -108,13 +100,13 @@ class RhinoErrorReporter {
     return new OldRhinoErrorReporter(compiler);
   }
 
-  public void warning(String message, String sourceName, int line,
+  void warningAtLine(String message, String sourceName, int line,
       int lineOffset) {
     compiler.report(
         makeError(message, sourceName, line, lineOffset, CheckLevel.WARNING));
   }
 
-  public void error(String message, String sourceName, int line,
+  void errorAtLine(String message, String sourceName, int line,
       int lineOffset) {
     compiler.report(
         makeError(message, sourceName, line, lineOffset, CheckLevel.ERROR));
@@ -142,10 +134,22 @@ class RhinoErrorReporter {
     private OldRhinoErrorReporter(AbstractCompiler compiler) {
       super(compiler);
     }
+
+    @Override
+    public void error(String message, String sourceName, int line,
+        int lineOffset) {
+      super.errorAtLine(message, sourceName, line, lineOffset);
+    }
+
+    @Override
+    public void warning(String message, String sourceName, int line,
+        int lineOffset) {
+      super.warningAtLine(message, sourceName, line, lineOffset);
+    }
   }
 
   private static class NewRhinoErrorReporter extends RhinoErrorReporter
-      implements com.google.javascript.rhino.head.ErrorReporter {
+      implements com.google.javascript.rhino.head.ast.IdeErrorReporter {
 
     private NewRhinoErrorReporter(AbstractCompiler compiler) {
       super(compiler);
@@ -162,13 +166,39 @@ class RhinoErrorReporter {
     @Override
     public void error(String message, String sourceName, int line,
         String sourceLine, int lineOffset) {
-      super.error(message, sourceName, line, lineOffset);
+      super.errorAtLine(message, sourceName, line, lineOffset);
+    }
+
+    @Override
+    public void error(String message, String sourceName,
+        int offset, int length) {
+      int line = 1;
+      int column = 0;
+      SourceFile file = this.compiler.getSourceFileByName(sourceName);
+      if (file != null) {
+        line = file.getLineOfOffset(offset);
+        column = file.getColumnOfOffset(offset);
+      }
+      super.errorAtLine(message, sourceName, line, column);
     }
 
     @Override
     public void warning(String message, String sourceName, int line,
         String sourceLine, int lineOffset) {
-      super.warning(message, sourceName, line, lineOffset);
+      super.warningAtLine(message, sourceName, line, lineOffset);
+    }
+
+    @Override
+    public void warning(String message, String sourceName,
+        int offset, int length) {
+      int line = 1;
+      int column = 0;
+      SourceFile file = this.compiler.getSourceFileByName(sourceName);
+      if (file != null) {
+        line = file.getLineOfOffset(offset);
+        column = file.getColumnOfOffset(offset);
+      }
+      super.errorAtLine(message, sourceName, line, column);
     }
   }
 }

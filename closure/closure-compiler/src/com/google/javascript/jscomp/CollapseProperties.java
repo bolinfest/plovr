@@ -233,7 +233,7 @@ class CollapseProperties implements CompilerPass {
         compiler.reportCodeChange();
 
         // Inlining the variable may have introduced new references
-        // to descendents of {@code name}. So those need to be collected now.
+        // to descendants of {@code name}. So those need to be collected now.
         namespace.scanNewNodes(alias.scope, newNodes);
         return true;
       }
@@ -564,7 +564,7 @@ class CollapseProperties implements CompilerPass {
       //     name a$b$c
       //       NODE
 
-      // Remove the rvalue (NODE).
+      // Remove the r-value (NODE).
       parent.removeChild(rvalue);
       nameNode.addChildToFront(rvalue);
 
@@ -694,6 +694,9 @@ class CollapseProperties implements CompilerPass {
         nameNode.putBooleanProp(Node.IS_CONSTANT_NAME, true);
       }
 
+      if (info != null) {
+        varNode.setJSDocInfo(info);
+      }
       varNode.addChildToBack(nameNode);
       nameNode.addChildToFront(rvalue);
       varParent.replaceChild(gramps, varNode);

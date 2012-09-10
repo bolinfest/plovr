@@ -130,14 +130,13 @@ class AliasStrings extends AbstractPostOrderCallback
   public void visit(NodeTraversal t, Node n, Node parent) {
     if (n.isString() &&
         !parent.isGetProp() &&
-        !parent.isRegExp() &&
-        !NodeUtil.isObjectLitKey(n, parent)) {
+        !parent.isRegExp()) {
 
       String str = n.getString();
 
       // "undefined" is special-cased, since it needs to be used when JS code
       // is unloading and therefore variable references aren't available.
-      // This is because of a bug in FireFox.
+      // This is because of a bug in Firefox.
       if ("undefined".equals(str)) {
         return;
       }

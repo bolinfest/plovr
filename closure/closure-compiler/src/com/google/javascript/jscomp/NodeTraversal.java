@@ -31,7 +31,7 @@ import java.util.Set;
 
 
 /**
- * Nodetraversal allows an iteration through the nodes in the parse tree,
+ * NodeTraversal allows an iteration through the nodes in the parse tree,
  * and facilitates the optimizations on the parse tree.
  *
  */
@@ -313,17 +313,18 @@ public class NodeTraversal {
   private static final String MISSING_SOURCE = "[source unknown]";
 
   private String formatNodePosition(Node n) {
-    if (n == null) {
+    String sourceFileName = getBestSourceFileName(n);
+    if (sourceFileName == null) {
       return MISSING_SOURCE + "\n";
     }
 
     int lineNumber = n.getLineno();
     int columnNumber = n.getCharno();
-    String src = compiler.getSourceLine(sourceName, lineNumber);
+    String src = compiler.getSourceLine(sourceFileName, lineNumber);
     if (src == null) {
       src = MISSING_SOURCE;
     }
-    return sourceName + ":" + lineNumber + ":" + columnNumber + "\n"
+    return sourceFileName + ":" + lineNumber + ":" + columnNumber + "\n"
         + src + "\n";
   }
 
@@ -376,7 +377,7 @@ public class NodeTraversal {
    * root).
    *
    * @param node the node to traverse
-   * @param parent the node's parent, it may be not be {@code null}
+   * @param parent the node's parent, it may not be {@code null}
    * @param refinedScope the refined scope of the scope currently at the top of
    *     the scope stack or in trivial cases that very scope or {@code null}
    */
@@ -538,7 +539,7 @@ public class NodeTraversal {
 
     // Body
     Preconditions.checkState(body.getNext() == null &&
-            body.isBlock());
+            body.isBlock(), body);
     traverseBranch(body, n);
 
     popScope();
@@ -646,7 +647,8 @@ public class NodeTraversal {
   /** Reports a diagnostic (error or warning) */
   public void report(Node n, DiagnosticType diagnosticType,
       String... arguments) {
-    JSError error = JSError.make(getSourceName(), n, diagnosticType, arguments);
+    JSError error = JSError.make(getBestSourceFileName(n),
+        n, diagnosticType, arguments);
     compiler.report(error);
   }
 
@@ -668,7 +670,7 @@ public class NodeTraversal {
    */
   public JSError makeError(Node n, CheckLevel level, DiagnosticType type,
       String... arguments) {
-    return JSError.make(getSourceName(), n, level, type, arguments);
+    return JSError.make(getBestSourceFileName(n), n, level, type, arguments);
   }
 
   /**
@@ -679,6 +681,10 @@ public class NodeTraversal {
    * @param arguments Arguments to be incorporated into the message
    */
   public JSError makeError(Node n, DiagnosticType type, String... arguments) {
-    return JSError.make(getSourceName(), n, type, arguments);
+    return JSError.make(getBestSourceFileName(n), n, type, arguments);
+  }
+
+  private String getBestSourceFileName(Node n) {
+    return n == null ? sourceName : n.getSourceFileName();
   }
 }

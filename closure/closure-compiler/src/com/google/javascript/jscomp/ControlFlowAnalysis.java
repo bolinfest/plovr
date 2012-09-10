@@ -420,6 +420,8 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
       Node item = forNode.getFirstChild();
       Node collection = item.getNext();
       Node body = collection.getNext();
+      // The collection behaves like init.
+      createEdge(collection, Branch.UNCOND, forNode);
       // The edge that transfer control to the beginning of the loop body.
       createEdge(forNode, Branch.ON_TRUE, computeFallThrough(body));
       // The edge to end of the loop.
@@ -762,7 +764,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
         } else if (parent.getLastChild() == node){
           if (cfa != null) {
             for (Node finallyNode : cfa.finallyMap.get(parent)) {
-              cfa.createEdge(fromNode, Branch.UNCOND, finallyNode);
+              cfa.createEdge(fromNode, Branch.ON_EX, finallyNode);
             }
           }
           return computeFollowNode(fromNode, parent, cfa);
@@ -781,13 +783,13 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
     if (nextSibling != null) {
       return computeFallThrough(nextSibling);
     } else {
-      // If there are no more siblings, control is transfered up the AST.
+      // If there are no more siblings, control is transferred up the AST.
       return computeFollowNode(fromNode, parent, cfa);
     }
   }
 
   /**
-   * Computes the destination node of n when we want to fallthough into the
+   * Computes the destination node of n when we want to fallthrough into the
    * subtree of n. We don't always create a CFG edge into n itself because of
    * DOs and FORs.
    */
@@ -797,7 +799,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
         return computeFallThrough(n.getFirstChild());
       case Token.FOR:
         if (NodeUtil.isForIn(n)) {
-          return n;
+          return n.getFirstChild().getNext();
         }
         return computeFallThrough(n.getFirstChild());
       case Token.LABEL:

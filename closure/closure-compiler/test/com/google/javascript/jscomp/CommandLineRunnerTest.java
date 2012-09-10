@@ -68,8 +68,8 @@ public class CommandLineRunnerTest extends TestCase {
   private List<String> args = Lists.newArrayList();
 
   /** Externs for the test */
-  private final List<JSSourceFile> DEFAULT_EXTERNS = ImmutableList.of(
-    JSSourceFile.fromCode("externs",
+  private final List<SourceFile> DEFAULT_EXTERNS = ImmutableList.of(
+    SourceFile.fromCode("externs",
         "var arguments;"
         + "/**\n"
         + " * @constructor\n"
@@ -99,10 +99,11 @@ public class CommandLineRunnerTest extends TestCase {
         + "/** @type {Window} */ var window;"
         + "/** @constructor */ function Element() {}"
         + "Element.prototype.offsetWidth;"
-        + "/** @nosideeffects */ function noSideEffects() {}")
+        + "/** @nosideeffects */ function noSideEffects() {}\n"
+        + "/** @param {...*} x */ function alert(x) {}\n")
   );
 
-  private List<JSSourceFile> externs;
+  private List<SourceFile> externs;
 
   @Override
   public void setUp() throws Exception {
@@ -187,6 +188,37 @@ public class CommandLineRunnerTest extends TestCase {
         "var b = goog.c.b(a, {a: 1}),c;" +
         "for (c in b) { b[c].call(b); }" +
         "window.Foo = a;");
+  }
+
+  public void testInlineVariables() {
+    args.add("--compilation_level=ADVANCED_OPTIMIZATIONS");
+    test(
+        "/** @constructor */ function F() { this.a = 0; }" +
+        "F.prototype.inc = function() { this.a++; return 10; };" +
+        "F.prototype.bar = function() { " +
+        "  var c = 3; var val = inc(); this.a += val + c;" +
+        "};" +
+        "window['f'] = new F();" +
+        "window['f']['bar'] = window['f'].bar;",
+        "function a(){ this.a = 0; }" +
+        "a.prototype.b = function(){ var b=inc(); this.a += b + 3; };" +
+        "window.f = new a;" +
+        "window.f.bar = window.f.b");
+  }
+
+  public void testTypedAdvanced() {
+    args.add("--compilation_level=ADVANCED_OPTIMIZATIONS");
+    args.add("--use_types_for_optimization");
+    test(
+        "/** @constructor */\n" +
+        "function Foo() {}\n" +
+        "Foo.prototype.handle1 = function(x, y) { alert(y); };\n" +
+        "/** @constructor */\n" +
+        "function Bar() {}\n" +
+        "Bar.prototype.handle1 = function(x, y) {};\n" +
+        "new Foo().handle1(1, 2);\n" +
+        "new Bar().handle1(1, 2);\n",
+        "alert(2)");
   }
 
   public void testTypeCheckingOnWithVerbose() {
@@ -349,8 +381,12 @@ public class CommandLineRunnerTest extends TestCase {
   //////////////////////////////////////////////////////////////////////////////
   // Integration tests
 
-  public void testIssue70() {
+  public void testIssue70a() {
     test("function foo({}) {}", RhinoErrorReporter.PARSE_ERROR);
+  }
+
+  public void testIssue70b() {
+    test("function foo([]) {}", RhinoErrorReporter.PARSE_ERROR);
   }
 
   public void testIssue81() {
@@ -499,14 +535,15 @@ public class CommandLineRunnerTest extends TestCase {
   }
 
   public void testSourceSortingOff() {
-    test(new String[] {
+    args.add("--compilation_level=WHITESPACE_ONLY");
+    testSame(
+        new String[] {
           "goog.require('beer');",
           "goog.provide('beer');"
-         }, ProcessClosurePrimitives.LATE_PROVIDE_ERROR);
+        });
   }
 
   public void testSourceSortingOn() {
-    args.add("--manage_closure_dependencies=true");
     test(new String[] {
           "goog.require('beer');",
           "goog.provide('beer');"
@@ -514,6 +551,30 @@ public class CommandLineRunnerTest extends TestCase {
          new String[] {
            "var beer = {};",
            ""
+         });
+  }
+
+  public void testSourceSortingOn2() {
+    test(new String[] {
+          "goog.provide('a');",
+          "goog.require('a');\n" +
+          "var COMPILED = false;",
+         },
+         new String[] {
+           "var a={};",
+           "var COMPILED=!1"
+         });
+  }
+
+  public void testSourceSortingOn3() {
+    args.add("--manage_closure_dependencies=true");
+    test(new String[] {
+          "goog.addDependency('sym', [], []);\nvar x = 3;",
+          "var COMPILED = false;",
+         },
+         new String[] {
+          "var COMPILED = !1;",
+          "var x = 3;"
          });
   }
 
@@ -616,6 +677,57 @@ public class CommandLineRunnerTest extends TestCase {
          });
   }
 
+  public void testSourcePruningOn7() {
+    args.add("--manage_closure_dependencies=true");
+    test(new String[] {
+          "var COMPILED = false;",
+         },
+         new String[] {
+          "var COMPILED = !1;",
+         });
+  }
+
+  public void testSourcePruningOn8() {
+    args.add("--only_closure_dependencies");
+    args.add("--closure_entry_point=scotch");
+    args.add("--warning_level=VERBOSE");
+    test(new String[] {
+          "/** @externs */\n" +
+          "var externVar;",
+          "goog.provide('scotch'); var x = externVar;"
+         },
+         new String[] {
+           "var scotch = {}, x = externVar;",
+         });
+  }
+
+  public void testNoCompile() {
+    args.add("--warning_level=VERBOSE");
+    test(new String[] {
+          "/** @nocompile */\n" +
+          "goog.provide('x');\n" +
+          "var dupeVar;",
+          "var dupeVar;"
+         },
+         new String[] {
+           "var dupeVar;"
+         });
+  }
+
+  public void testDependencySortingWhitespaceMode() {
+    args.add("--manage_closure_dependencies");
+    args.add("--compilation_level=WHITESPACE_ONLY");
+    test(new String[] {
+          "goog.require('beer');",
+          "goog.provide('beer');\ngoog.require('hops');",
+          "goog.provide('hops');",
+         },
+         new String[] {
+          "goog.provide('hops');",
+          "goog.provide('beer');\ngoog.require('hops');",
+          "goog.require('beer');"
+         });
+  }
 
   public void testForwardDeclareDroppedTypes() {
     args.add("--manage_closure_dependencies=true");
@@ -640,6 +752,39 @@ public class CommandLineRunnerTest extends TestCase {
            ""
          },
          RhinoErrorReporter.TYPE_PARSE_ERROR);
+  }
+
+  public void testOnlyClosureDependenciesEmptyEntryPoints() throws Exception {
+    // Prevents this from trying to load externs.zip
+    args.add("--use_only_custom_externs=true");
+
+    args.add("--only_closure_dependencies=true");
+    try {
+      CommandLineRunner runner = createCommandLineRunner(new String[0]);
+      runner.doRun();
+      fail("Expected FlagUsageException");
+    } catch (FlagUsageException e) {
+      assertTrue(e.getMessage(),
+          e.getMessage().contains("only_closure_dependencies"));
+    }
+  }
+
+  public void testOnlyClosureDependenciesOneEntryPoint() throws Exception {
+    args.add("--only_closure_dependencies=true");
+    args.add("--closure_entry_point=beer");
+    test(new String[] {
+          "goog.require('beer'); var beerRequired = 1;",
+          "goog.provide('beer');\ngoog.require('hops');\nvar beerProvided = 1;",
+          "goog.provide('hops'); var hopsProvided = 1;",
+          "goog.provide('scotch'); var scotchProvided = 1;",
+          "goog.require('scotch');\nvar includeFileWithoutProvides = 1;",
+          "/** This is base.js */\nvar COMPILED = false;",
+         },
+         new String[] {
+           "var COMPILED = !1;",
+           "var hops = {}, hopsProvided = 1;",
+           "var beer = {}, beerProvided = 1;"
+         });
   }
 
   public void testSourceMapExpansion1() {
@@ -800,7 +945,7 @@ public class CommandLineRunnerTest extends TestCase {
 
   public void testSyntheticExterns() {
     externs = ImmutableList.of(
-        JSSourceFile.fromCode("externs", "myVar.property;"));
+        SourceFile.fromCode("externs", "myVar.property;"));
     test("var theirVar = {}; var myVar = {}; var yourVar = {};",
          VarCheck.UNDEFINED_EXTERN_VAR_ERROR);
 
@@ -856,6 +1001,15 @@ public class CommandLineRunnerTest extends TestCase {
     test("var x = f.function", RhinoErrorReporter.PARSE_ERROR);
   }
 
+  public void testES5ChecksByDefault() {
+    testSame("var x = 3; delete x;");
+  }
+
+  public void testES5ChecksInVerbose() {
+    args.add("--warning_level=VERBOSE");
+    test("function f(x) { delete x; }", StrictModeCheck.DELETE_VARIABLE);
+  }
+
   public void testES5() {
     args.add("--language_in=ECMASCRIPT5");
     test("var x = f.function", "var x = f.function");
@@ -866,6 +1020,7 @@ public class CommandLineRunnerTest extends TestCase {
     args.add("--language_in=ECMASCRIPT5_STRICT");
     test("var x = f.function", "'use strict';var x = f.function");
     test("var let", RhinoErrorReporter.PARSE_ERROR);
+    test("function f(x) { delete x; }", StrictModeCheck.DELETE_VARIABLE);
   }
 
   public void testES5StrictUseStrict() {
@@ -917,9 +1072,7 @@ public class CommandLineRunnerTest extends TestCase {
     args.add("--common_js_entry_module=foo/bar");
     setFilename(0, "foo/bar.js");
     test("exports.test = 1",
-        "var module$foo$bar={test:1}; " +
-        "module$foo$bar.module$exports && " +
-        "(module$foo$bar=module$foo$bar.module$exports)");
+        "var module$foo$bar={test:1};");
   }
 
   public void testTransformAMDAndProcessCJS() {
@@ -928,9 +1081,7 @@ public class CommandLineRunnerTest extends TestCase {
     args.add("--common_js_entry_module=foo/bar");
     setFilename(0, "foo/bar.js");
     test("define({foo: 1})",
-        "var module$foo$bar={}, module$foo$bar={foo:1}; " +
-        "module$foo$bar.module$exports && " +
-        "(module$foo$bar=module$foo$bar.module$exports)");
+        "var module$foo$bar={}, module$foo$bar={foo:1};");
   }
 
   /* Helper functions */
@@ -1049,13 +1200,13 @@ public class CommandLineRunnerTest extends TestCase {
   private Compiler compile(String[] original) {
     CommandLineRunner runner = createCommandLineRunner(original);
     assertTrue(runner.shouldRunCompiler());
-    Supplier<List<JSSourceFile>> inputsSupplier = null;
+    Supplier<List<SourceFile>> inputsSupplier = null;
     Supplier<List<JSModule>> modulesSupplier = null;
 
     if (useModules == ModulePattern.NONE) {
-      List<JSSourceFile> inputs = Lists.newArrayList();
+      List<SourceFile> inputs = Lists.newArrayList();
       for (int i = 0; i < original.length; i++) {
-        inputs.add(JSSourceFile.fromCode(getFilename(i), original[i]));
+        inputs.add(SourceFile.fromCode(getFilename(i), original[i]));
       }
       inputsSupplier = Suppliers.ofInstance(inputs);
     } else if (useModules == ModulePattern.STAR) {
@@ -1071,7 +1222,7 @@ public class CommandLineRunnerTest extends TestCase {
     }
 
     runner.enableTestMode(
-        Suppliers.<List<JSSourceFile>>ofInstance(externs),
+        Suppliers.<List<SourceFile>>ofInstance(externs),
         inputsSupplier,
         modulesSupplier,
         new Function<Integer, Boolean>() {
@@ -1090,9 +1241,9 @@ public class CommandLineRunnerTest extends TestCase {
     String[] argStrings = args.toArray(new String[] {});
     CommandLineRunner runner = new CommandLineRunner(argStrings);
     Compiler compiler = runner.createCompiler();
-    List<JSSourceFile> inputs = Lists.newArrayList();
+    List<SourceFile> inputs = Lists.newArrayList();
     for (int i = 0; i < original.length; i++) {
-      inputs.add(JSSourceFile.fromCode(getFilename(i), original[i]));
+      inputs.add(SourceFile.fromCode(getFilename(i), original[i]));
     }
     CompilerOptions options = new CompilerOptions();
     // ECMASCRIPT5 is the most forgiving.

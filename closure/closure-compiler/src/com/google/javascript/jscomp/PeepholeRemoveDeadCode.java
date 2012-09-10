@@ -389,7 +389,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
       Preconditions.checkState(executingCase.isDefaultCase()
           || executingCase.isCase());
       // We only expect a DEFAULT case if the case we are checking is the
-      // DEFAULT case.  Otherwise we assume the DEFAULT case has already
+      // DEFAULT case.  Otherwise, we assume the DEFAULT case has already
       // been removed.
       Preconditions.checkState(caseNode == executingCase
           || !executingCase.isDefaultCase());
@@ -405,7 +405,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
             case Token.VAR:
               if (blockChild.hasOneChild()
                   && blockChild.getFirstChild().getFirstChild() == null) {
-                // Variable declarations without initializations are ok.
+                // Variable declarations without initializations are OK.
                 continue;
               }
               return false;
@@ -460,7 +460,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
     // Remove any useless children
     for (Node c = n.getFirstChild(); c != null; ) {
       Node next = c.getNext();  // save c.next, since 'c' may be removed
-      if (!mayHaveSideEffects(c) && !c.isSyntheticBlock()) {
+      if (!isUnremovableNode(c) && !mayHaveSideEffects(c)) {
         // TODO(johnlenz): determine what this is actually removing. Candidates
         //    include: EMPTY nodes, control structures without children
         //    (removing infinite loops), empty try blocks.  What else?
@@ -483,6 +483,13 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
     }
 
     return n;
+  }
+
+  /**
+   * Some nodes unremovable node don't have side-effects.
+   */
+  private boolean isUnremovableNode(Node n) {
+    return (n.isBlock() && n.isSyntheticBlock()) || n.isScript();
   }
 
   // TODO(johnlenz): Consider moving this to a separate peephole pass.
@@ -727,7 +734,11 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
 
     TernaryValue condValue = NodeUtil.getImpureBooleanValue(cond);
     if (condValue == TernaryValue.UNKNOWN) {
-      return n;  // We can't remove branches otherwise!
+      // If the result nodes are equivalent, then one of the nodes can be
+      // removed and it doesn't matter which.
+      if (!areNodesEqualForInlining(thenBody, elseBody)) {
+        return n;  // We can't remove branches otherwise!
+      }
     }
 
     // Transform "(a = 2) ? x =2 : y" into "a=2,x=2"

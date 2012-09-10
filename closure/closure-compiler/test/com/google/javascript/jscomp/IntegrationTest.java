@@ -16,38 +16,20 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.base.Joiner;
 import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
-import junit.framework.TestCase;
-
 /**
  * Tests for {@link PassFactory}.
  *
  * @author nicksantos@google.com (Nick Santos)
  */
-public class IntegrationTest extends TestCase {
-
-  /** Externs for the test */
-  private final JSSourceFile[] DEFAULT_EXTERNS = new JSSourceFile[] {
-    JSSourceFile.fromCode("externs",
-        "var arguments;\n"
-        + "/** @constructor */ function Window() {}\n"
-        + "/** @type {string} */ Window.prototype.name;\n"
-        + "/** @type {string} */ Window.prototype.offsetWidth;\n"
-        + "/** @type {Window} */ var window;\n"
-        + "/** @nosideeffects */ function noSideEffects() {}\n"
-        + "/** @constructor\n * @nosideeffects */ function Widget() {}\n"
-        + "/** @modifies {this} */ Widget.prototype.go = function() {};\n"
-        + "/** @return {string} */ var widgetToken = function() {};\n")
-  };
-
-  private JSSourceFile[] externs = DEFAULT_EXTERNS;
+public class IntegrationTest extends IntegrationTestCase {
 
   private static final String CLOSURE_BOILERPLATE =
       "/** @define {boolean} */ var COMPILED = false; var goog = {};" +
@@ -55,15 +37,6 @@ public class IntegrationTest extends TestCase {
 
   private static final String CLOSURE_COMPILED =
       "var COMPILED = true; var goog$exportSymbol = function() {};";
-
-  // The most recently used compiler.
-  private Compiler lastCompiler;
-
-  @Override
-  public void setUp() {
-    externs = DEFAULT_EXTERNS;
-    lastCompiler = null;
-  }
 
   public void testBug1949424() {
     CompilerOptions options = createCompilerOptions();
@@ -289,6 +262,28 @@ public class IntegrationTest extends TestCase {
          "goog.exportSymbol('testFoo', testFoo);");
   }
 
+  public void testExpose() {
+    CompilerOptions options = createCompilerOptions();
+    CompilationLevel.ADVANCED_OPTIMIZATIONS
+        .setOptionsForCompilationLevel(options);
+    test(options,
+         "var x = {eeny: 1, /** @expose */ meeny: 2};" +
+         "/** @constructor */ var Foo = function() {};" +
+         "/** @expose */  Foo.prototype.miny = 3;" +
+         "Foo.prototype.moe = 4;" +
+         "function moe(a, b) { return a.meeny + b.miny; }" +
+         "window['x'] = x;" +
+         "window['Foo'] = Foo;" +
+         "window['moe'] = moe;",
+         "function a(){}" +
+         "a.prototype.miny=3;" +
+         "window.x={a:1,meeny:2};" +
+         "window.Foo=a;" +
+         "window.moe=function(b,c){" +
+         "  return b.meeny+c.miny" +
+         "}");
+  }
+
   public void testCheckSymbolsOff() {
     CompilerOptions options = createCompilerOptions();
     testSame(options, "x = 3;");
@@ -367,8 +362,8 @@ public class IntegrationTest extends TestCase {
         + "}",
         "function someTest() {\n"
         + "  function Foo() { this.b = 3; }\n"
-        + "  Foo.prototype.a = function(a, b) {};\n"
         + "  function Bar() {}\n"
+        + "  Foo.prototype.a = function(a, b) {};\n"
         + "  goog.c(Bar, Foo);\n"
         + "  var o = new Bar();\n"
         + "  o.a(o.a, o.b);\n"
@@ -795,7 +790,7 @@ public class IntegrationTest extends TestCase {
     test(options,
          "var goog = {}; goog.provide('foo.Bar'); " +
          "var foo = {}; foo.Bar = {};",
-         "var foo = {}; var foo = {}; foo.Bar = {};");
+         "var foo = {}; foo = {}; foo.Bar = {};");
   }
 
   public void testProvidedNamespaceIsConst5() {
@@ -1118,6 +1113,29 @@ public class IntegrationTest extends TestCase {
     assertNull(lastCompiler.getResult().namedAnonFunctionMap);
   }
 
+  public void testNameAnonymousFunctionsWithVarRemoval() {
+    CompilerOptions options = createCompilerOptions();
+    options.setRemoveUnusedVariables(CompilerOptions.Reach.LOCAL_ONLY);
+    options.setInlineVariables(true);
+    String code = "var f = function longName() {}; var g = function() {};" +
+        "function longerName() {} var i = longerName;";
+    test(options, code,
+         "var f = function() {}; var g = function() {}; " +
+         "var i = function() {};");
+
+    options.anonymousFunctionNaming = AnonymousFunctionNamingPolicy.MAPPED;
+    test(options, code,
+         "var f = function longName() {}; var g = function $() {};" +
+         "var i = function longerName(){};");
+    assertNotNull(lastCompiler.getResult().namedAnonFunctionMap);
+
+    options.anonymousFunctionNaming = AnonymousFunctionNamingPolicy.UNMAPPED;
+    test(options, code,
+         "var f = function longName() {}; var g = function $g$() {};" +
+         "var i = function longerName(){};");
+    assertNull(lastCompiler.getResult().namedAnonFunctionMap);
+  }
+
   public void testExtractPrototypeMemberDeclarations() {
     CompilerOptions options = createCompilerOptions();
     String code = "var f = function() {};";
@@ -1311,8 +1329,8 @@ public class IntegrationTest extends TestCase {
 
   public void testRenameLabels() {
     CompilerOptions options = createCompilerOptions();
-    String code = "longLabel: while (true) { break longLabel; }";
-    String expected = "a: while (true) { break a; }";
+    String code = "longLabel: for(;true;) { break longLabel; }";
+    String expected = "a: for(;true;) { break a; }";
     testSame(options, code);
 
     options.labelRenaming = true;
@@ -1517,7 +1535,7 @@ public class IntegrationTest extends TestCase {
 
     testSame(options, code);
 
-    options.collapseVariableDeclarations = false;
+    options.collapseVariableDeclarations = true;
 
     test(options, code, "for (var a = 1, b = 2; ;) {}");
   }
@@ -1549,9 +1567,8 @@ public class IntegrationTest extends TestCase {
     CompilerOptions options = createCompilerOptions();
 
     options.aliasExternals = true;
-    externs = new JSSourceFile[] {
-      JSSourceFile.fromCode("externs", "extern.foo")
-    };
+    externs = ImmutableList.of(
+        SourceFile.fromCode("externs", "extern.foo"));
 
     test(options,
          "var extern; " +
@@ -1564,10 +1581,9 @@ public class IntegrationTest extends TestCase {
   public void testDuplicateVariablesInExterns() {
     CompilerOptions options = createCompilerOptions();
     options.checkSymbols = true;
-    externs = new JSSourceFile[] {
-      JSSourceFile.fromCode("externs",
-          "var externs = {}; /** @suppress {duplicate} */ var externs = {};")
-    };
+    externs = ImmutableList.of(
+        SourceFile.fromCode("externs",
+            "var externs = {}; /** @suppress {duplicate} */ var externs = {};"));
     testSame(options, "");
   }
 
@@ -1581,7 +1597,9 @@ public class IntegrationTest extends TestCase {
     checkUnexpectedErrorsOrWarnings(compiler, 1);
     assertEquals(
         "JSC_PARSE_ERROR. Parse error. " +
-        "getters are not supported in Internet Explorer " +
+        "getters are not supported in older versions of JS. " +
+        "If you are targeting newer versions of JS, " +
+        "set the appropriate language_in option. " +
         "at i0 line 1 : 0",
         compiler.getErrors()[0].toString());
 
@@ -1632,6 +1650,68 @@ public class IntegrationTest extends TestCase {
 
     Compiler compiler = compile(options, code);
     testSame(options, code);
+  }
+
+  public void testIssue701() {
+    // Check ASCII art in license comments.
+    String ascii = "/**\n" +
+        " * @preserve\n" +
+        "   This\n" +
+        "     is\n" +
+        "       ASCII    ART\n" +
+        "*/";
+    String result = "/*\n\n" +
+        "   This\n" +
+        "     is\n" +
+        "       ASCII    ART\n" +
+        "*/\n";
+    testSame(createCompilerOptions(), ascii);
+    assertEquals(result, lastCompiler.toSource());
+  }
+
+  public void testIssue724() {
+    CompilerOptions options = createCompilerOptions();
+    CompilationLevel.ADVANCED_OPTIMIZATIONS
+        .setOptionsForCompilationLevel(options);
+    String code =
+        "isFunction = function(functionToCheck) {" +
+        "  var getType = {};" +
+        "  return functionToCheck && " +
+        "      getType.toString.apply(functionToCheck) === " +
+        "     '[object Function]';" +
+        "};";
+    String result =
+        "isFunction=function(a){var b={};" +
+        "return a&&\"[object Function]\"===b.b.a(a)}";
+
+    test(options, code, result);
+  }
+
+  public void testIssue730() {
+    CompilerOptions options = createCompilerOptions();
+    CompilationLevel.ADVANCED_OPTIMIZATIONS
+        .setOptionsForCompilationLevel(options);
+
+    String code =
+        "/** @constructor */function A() {this.foo = 0; Object.seal(this);}\n" +
+        "/** @constructor */function B() {this.a = new A();}\n" +
+        "B.prototype.dostuff = function() {this.a.foo++;alert('hi');}\n" +
+        "new B().dostuff();\n";
+
+    test(options,
+        code,
+        "function a(){this.b=0;Object.seal(this)}" +
+        "(new function(){this.a=new a}).a.b++;" +
+        "alert(\"hi\")");
+
+    options.removeUnusedClassProperties = true;
+
+    // This is still a problem when removeUnusedClassProperties are enabled.
+    test(options,
+        code,
+        "function a(){Object.seal(this)}" +
+        "(new function(){this.a=new a}).a.b++;" +
+        "alert(\"hi\")");
   }
 
   public void testCoaleseVariables() {
@@ -1760,7 +1840,8 @@ public class IntegrationTest extends TestCase {
         "  a = a + 'y';\n" +
         "  return a;\n" +
         "}",
-        "function f(a) {return a + 'xy'}");
+        // This should eventually get inlined completely.
+        "function f(a) { a += 'x'; return a += 'y'; }");
   }
 
   public void testIssue284() {
@@ -1781,6 +1862,30 @@ public class IntegrationTest extends TestCase {
         "");
   }
 
+  public void testIssue772() throws Exception {
+    CompilerOptions options = createCompilerOptions();
+    options.closurePass = true;
+    options.checkTypes = true;
+    test(
+        options,
+        "/** @const */ var a = {};" +
+        "/** @const */ a.b = {};" +
+        "/** @const */ a.b.c = {};" +
+        "goog.scope(function() {" +
+        "  var b = a.b;" +
+        "  var c = b.c;" +
+        "  /** @typedef {string} */" +
+        "  c.MyType;" +
+        "  /** @param {c.MyType} x The variable. */" +
+        "  c.myFunc = function(x) {};" +
+        "});",
+        "/** @const */ var a = {};" +
+        "/** @const */ a.b = {};" +
+        "/** @const */ a.b.c = {};" +
+        "a.b.c.MyType;" +
+        "a.b.c.myFunc = function(x) {};");
+  }
+
   public void testCodingConvention() {
     Compiler compiler = new Compiler();
     compiler.initOptions(new CompilerOptions());
@@ -1794,14 +1899,14 @@ public class IntegrationTest extends TestCase {
     options.foldConstants = true;
     test(options,
       "var x=['1','2','3','4','5','6','7']",
-      "var x='1,2,3,4,5,6,7'.split(',')");
+      "var x='1234567'.split('')");
 
     options = createCompilerOptions();
     options.foldConstants = true;
     options.computeFunctionSideEffects = false;
     options.removeUnusedVars = true;
 
-    // If we do splits too early, it would add a sideeffect to x.
+    // If we do splits too early, it would add a side-effect to x.
     test(options,
       "var x=['1','2','3','4','5','6','7']",
       "");
@@ -1825,7 +1930,7 @@ public class IntegrationTest extends TestCase {
       test(options,
            "var x = 3; function f() { return x + z; }",
            "function f() { return x + z; }");
-      fail("Expected runtime exception");
+      fail("Expected run-time exception");
     } catch (RuntimeException e) {
       assertTrue(e.getMessage().indexOf("Unexpected variable x") != -1);
     }
@@ -1834,9 +1939,10 @@ public class IntegrationTest extends TestCase {
   public void testSuppressEs5StrictWarning() {
     CompilerOptions options = createCompilerOptions();
     options.setWarningLevel(DiagnosticGroups.ES5_STRICT, CheckLevel.WARNING);
-    testSame(options,
+    test(options,
         "/** @suppress{es5Strict} */\n" +
-        "function f() { var arguments; }");
+        "function f() { var arguments; }",
+        "function f() {}");
   }
 
   public void testCheckProvidesWarning() {
@@ -1856,7 +1962,7 @@ public class IntegrationTest extends TestCase {
     testSame(options,
         "/** @constructor\n" +
         " *  @suppress{checkProvides} */\n" +
-        "function f() { var arguments; }");
+        "function f() {}");
   }
 
   public void testRenamePrefixNamespace() {
@@ -1934,144 +2040,247 @@ public class IntegrationTest extends TestCase {
         "print(3/0);print(3/-0);");
   }
 
-  private void testSame(CompilerOptions options, String original) {
-    testSame(options, new String[] { original });
+  public void testSingletonGetter1() {
+    CompilerOptions options = createCompilerOptions();
+    CompilationLevel.ADVANCED_OPTIMIZATIONS
+        .setOptionsForCompilationLevel(options);
+    options.setCodingConvention(new ClosureCodingConvention());
+    test(options,
+        "/** @const */\n" +
+        "var goog = goog || {};\n" +
+        "goog.addSingletonGetter = function(ctor) {\n" +
+        "  ctor.getInstance = function() {\n" +
+        "    return ctor.instance_ || (ctor.instance_ = new ctor());\n" +
+        "  };\n" +
+        "};" +
+        "function Foo() {}\n" +
+        "goog.addSingletonGetter(Foo);" +
+        "Foo.prototype.bar = 1;" +
+        "function Bar() {}\n" +
+        "goog.addSingletonGetter(Bar);" +
+        "Bar.prototype.bar = 1;",
+        "");
   }
 
-  private void testSame(CompilerOptions options, String[] original) {
-    test(options, original, original);
+  public void testIncompleteFunction1() {
+    CompilerOptions options = createCompilerOptions();
+    options.ideMode = true;
+    DiagnosticType[] warnings = new DiagnosticType[]{
+        RhinoErrorReporter.PARSE_ERROR,
+        RhinoErrorReporter.PARSE_ERROR};
+    test(options,
+        new String[] { "var foo = {bar: function(e) }" },
+        new String[] { "var foo = {bar: function(e){}};" },
+        warnings
+    );
   }
 
-  /**
-   * Asserts that when compiling with the given compiler options,
-   * {@code original} is transformed into {@code compiled}.
-   */
-  private void test(CompilerOptions options,
-      String original, String compiled) {
-    test(options, new String[] { original }, new String[] { compiled });
+  public void testIncompleteFunction2() {
+    CompilerOptions options = createCompilerOptions();
+    options.ideMode = true;
+    DiagnosticType[] warnings = new DiagnosticType[]{
+        RhinoErrorReporter.PARSE_ERROR,
+        RhinoErrorReporter.PARSE_ERROR,
+        RhinoErrorReporter.PARSE_ERROR,
+        RhinoErrorReporter.PARSE_ERROR,
+        RhinoErrorReporter.PARSE_ERROR,
+        RhinoErrorReporter.PARSE_ERROR};
+    test(options,
+        new String[] { "function hi" },
+        new String[] { "function hi() {}" },
+        warnings
+    );
   }
 
-  /**
-   * Asserts that when compiling with the given compiler options,
-   * {@code original} is transformed into {@code compiled}.
-   */
-  private void test(CompilerOptions options,
-      String[] original, String[] compiled) {
-    Compiler compiler = compile(options, original);
-    assertEquals("Expected no warnings or errors\n" +
-        "Errors: \n" + Joiner.on("\n").join(compiler.getErrors()) +
-        "Warnings: \n" + Joiner.on("\n").join(compiler.getWarnings()),
-        0, compiler.getErrors().length + compiler.getWarnings().length);
-
-    Node root = compiler.getRoot().getLastChild();
-    Node expectedRoot = parse(compiled, options);
-    String explanation = expectedRoot.checkTreeEquals(root);
-    assertNull("\nExpected: " + compiler.toSource(expectedRoot) +
-        "\nResult: " + compiler.toSource(root) +
-        "\n" + explanation, explanation);
+  public void testSortingOff() {
+    CompilerOptions options = new CompilerOptions();
+    options.closurePass = true;
+    options.setCodingConvention(new ClosureCodingConvention());
+    test(options,
+         new String[] {
+           "goog.require('goog.beer');",
+           "goog.provide('goog.beer');"
+         },
+         ProcessClosurePrimitives.LATE_PROVIDE_ERROR);
   }
 
-  /**
-   * Asserts that when compiling with the given compiler options,
-   * there is an error or warning.
-   */
-  private void test(CompilerOptions options,
-      String original, DiagnosticType warning) {
-    test(options, new String[] { original }, warning);
+  public void testUnboundedArrayLiteralInfiniteLoop() {
+    CompilerOptions options = createCompilerOptions();
+    options.ideMode = true;
+    test(options,
+         "var x = [1, 2",
+         "var x = [1, 2]",
+         RhinoErrorReporter.PARSE_ERROR);
   }
 
-  private void test(CompilerOptions options,
-      String original, String compiled, DiagnosticType warning) {
-    test(options, new String[] { original }, new String[] { compiled },
-         warning);
+  public void testProvideRequireSameFile() throws Exception {
+    CompilerOptions options = createCompilerOptions();
+    options.setDependencyOptions(
+        new DependencyOptions()
+        .setDependencySorting(true));
+    options.closurePass = true;
+    test(
+        options,
+        "goog.provide('x');\ngoog.require('x');",
+        "var x = {};");
   }
 
-  private void test(CompilerOptions options,
-      String[] original, DiagnosticType warning) {
-    test(options, original, null, warning);
+  public void testDependencySorting() throws Exception {
+    CompilerOptions options = createCompilerOptions();
+    options.setDependencyOptions(
+        new DependencyOptions()
+        .setDependencySorting(true));
+    test(
+        options,
+        new String[] {
+          "goog.require('x');",
+          "goog.provide('x');",
+        },
+        new String[] {
+          "goog.provide('x');",
+          "goog.require('x');",
+
+          // For complicated reasons involving modules,
+          // the compiler creates a synthetic source file.
+          "",
+        });
   }
 
-  /**
-   * Asserts that when compiling with the given compiler options,
-   * there is an error or warning.
-   */
-  private void test(CompilerOptions options,
-      String[] original, String[] compiled, DiagnosticType warning) {
-    Compiler compiler = compile(options, original);
-    checkUnexpectedErrorsOrWarnings(compiler, 1);
-    assertEquals("Expected exactly one warning or error",
-        1, compiler.getErrors().length + compiler.getWarnings().length);
-    if (compiler.getErrors().length > 0) {
-      assertEquals(warning, compiler.getErrors()[0].getType());
-    } else {
-      assertEquals(warning, compiler.getWarnings()[0].getType());
+  public void testStrictWarningsGuard() throws Exception {
+    CompilerOptions options = createCompilerOptions();
+    options.checkTypes = true;
+    options.addWarningsGuard(new StrictWarningsGuard());
+
+    Compiler compiler = compile(options,
+        "/** @return {number} */ function f() { return true; }");
+    assertEquals(1, compiler.getErrors().length);
+    assertEquals(0, compiler.getWarnings().length);
+  }
+
+  public void testStrictWarningsGuardEmergencyMode() throws Exception {
+    CompilerOptions options = createCompilerOptions();
+    options.checkTypes = true;
+    options.addWarningsGuard(new StrictWarningsGuard());
+    options.useEmergencyFailSafe();
+
+    Compiler compiler = compile(options,
+        "/** @return {number} */ function f() { return true; }");
+    assertEquals(0, compiler.getErrors().length);
+    assertEquals(1, compiler.getWarnings().length);
+  }
+
+  public void testInlineProperties() {
+    CompilerOptions options = createCompilerOptions();
+    CompilationLevel level = CompilationLevel.ADVANCED_OPTIMIZATIONS;
+    level.setOptionsForCompilationLevel(options);
+    level.setTypeBasedOptimizationOptions(options);
+
+    String code = "" +
+        "var ns = {};\n" +
+        "/** @constructor */\n" +
+        "ns.C = function () {this.someProperty = 1}\n" +
+        "alert(new ns.C().someProperty + new ns.C().someProperty);\n";
+    assertTrue(options.inlineProperties);
+    assertTrue(options.collapseProperties);
+    // CollapseProperties used to prevent inlining this property.
+    test(options, code, "alert(2);");
+  }
+
+  public void testCheckConstants1() {
+    CompilerOptions options = createCompilerOptions();
+    CompilationLevel level = CompilationLevel.SIMPLE_OPTIMIZATIONS;
+    level.setOptionsForCompilationLevel(options);
+    WarningLevel warnings = WarningLevel.QUIET;
+    warnings.setOptionsForWarningLevel(options);
+
+    String code = "" +
+        "var foo; foo();\n" +
+        "/** @const */\n" +
+        "var x = 1; foo(); x = 2;\n";
+    test(options, code, code);
+  }
+
+  public void testCheckConstants2() {
+    CompilerOptions options = createCompilerOptions();
+    CompilationLevel level = CompilationLevel.SIMPLE_OPTIMIZATIONS;
+    level.setOptionsForCompilationLevel(options);
+    WarningLevel warnings = WarningLevel.DEFAULT;
+    warnings.setOptionsForWarningLevel(options);
+
+    String code = "" +
+        "var foo;\n" +
+        "/** @const */\n" +
+        "var x = 1; foo(); x = 2;\n";
+    test(options, code, ConstCheck.CONST_REASSIGNED_VALUE_ERROR);
+  }
+
+  public void testIssue787() {
+    CompilerOptions options = createCompilerOptions();
+    CompilationLevel level = CompilationLevel.SIMPLE_OPTIMIZATIONS;
+    level.setOptionsForCompilationLevel(options);
+    WarningLevel warnings = WarningLevel.DEFAULT;
+    warnings.setOptionsForWarningLevel(options);
+
+    String code = "" +
+        "function some_function() {\n" +
+        "  var fn1;\n" +
+        "  var fn2;\n" +
+        "\n" +
+        "  if (any_expression) {\n" +
+        "    fn2 = external_ref;\n" +
+        "    fn1 = function (content) {\n" +
+        "      return fn2();\n" +
+        "    }\n" +
+        "  }\n" +
+        "\n" +
+        "  return {\n" +
+        "    method1: function () {\n" +
+        "      if (fn1) fn1();\n" +
+        "      return true;\n" +
+        "    },\n" +
+        "    method2: function () {\n" +
+        "      return false;\n" +
+        "    }\n" +
+        "  }\n" +
+        "}";
+
+    String result = "" +
+        "function some_function() {\n" +
+        "  var a, b;\n" +
+        "  any_expression && (b = external_ref, a = function() {\n" +
+        "    return b()\n" +
+        "  });\n" +
+        "  return{method1:function() {\n" +
+        "    a && a();\n" +
+        "    return !0\n" +
+        "  }, method2:function() {\n" +
+        "    return !1\n" +
+        "  }}\n" +
+        "}\n" +
+        "";
+
+    test(options, code, result);
+  }
+
+  public void testManyAdds() {
+    CompilerOptions options = createCompilerOptions();
+    CompilationLevel level = CompilationLevel.SIMPLE_OPTIMIZATIONS;
+    level.setOptionsForCompilationLevel(options);
+    WarningLevel warnings = WarningLevel.VERBOSE;
+    warnings.setOptionsForWarningLevel(options);
+
+    int numAdds = 5000;
+    StringBuilder original = new StringBuilder("var x = 0");
+    for (int i = 0; i < numAdds; i++) {
+      original.append(" + 1");
     }
-
-    if (compiled != null) {
-      Node root = compiler.getRoot().getLastChild();
-      Node expectedRoot = parse(compiled, options);
-      String explanation = expectedRoot.checkTreeEquals(root);
-      assertNull("\nExpected: " + compiler.toSource(expectedRoot) +
-          "\nResult: " + compiler.toSource(root) +
-          "\n" + explanation, explanation);
-    }
-  }
-
-  private void checkUnexpectedErrorsOrWarnings(
-      Compiler compiler, int expected) {
-    int actual = compiler.getErrors().length + compiler.getWarnings().length;
-    if (actual != expected) {
-      String msg = "";
-      for (JSError err : compiler.getErrors()) {
-        msg += "Error:" + err.toString() + "\n";
-      }
-      for (JSError err : compiler.getWarnings()) {
-        msg += "Warning:" + err.toString() + "\n";
-      }
-      assertEquals("Unexpected warnings or errors.\n "+ msg,
-        expected, actual);
-    }
-  }
-
-  private Compiler compile(CompilerOptions options, String original) {
-    return compile(options, new String[] { original });
-  }
-
-  private Compiler compile(CompilerOptions options, String[] original) {
-    Compiler compiler = lastCompiler = new Compiler();
-    JSSourceFile[] inputs = new JSSourceFile[original.length];
-    for (int i = 0; i < original.length; i++) {
-      inputs[i] = JSSourceFile.fromCode("input" + i, original[i]);
-    }
-    compiler.compile(
-        externs, CompilerTestCase.createModuleChain(original), options);
-    return compiler;
-  }
-
-  private Node parse(String[] original, CompilerOptions options) {
-    Compiler compiler = new Compiler();
-    JSSourceFile[] inputs = new JSSourceFile[original.length];
-    for (int i = 0; i < inputs.length; i++) {
-      inputs[i] = JSSourceFile.fromCode("input" + i, original[i]);
-    }
-    compiler.init(externs, inputs, options);
-    checkUnexpectedErrorsOrWarnings(compiler, 0);
-    Node all = compiler.parseInputs();
-    checkUnexpectedErrorsOrWarnings(compiler, 0);
-    Node n = all.getLastChild();
-    Node externs = all.getFirstChild();
-
-    (new CreateSyntheticBlocks(
-        compiler, "synStart", "synEnd")).process(externs, n);
-    (new Normalize(compiler, false)).process(externs, n);
-    (MakeDeclaredNamesUnique.getContextualRenameInverter(compiler)).process(
-        externs, n);
-    (new Denormalize(compiler)).process(externs, n);
-    return n;
+    original.append(";");
+    test(options, original.toString(), "var x = " + numAdds + ";");
   }
 
   /** Creates a CompilerOptions object with google coding conventions. */
-  private CompilerOptions createCompilerOptions() {
+  @Override
+  protected CompilerOptions createCompilerOptions() {
     CompilerOptions options = new CompilerOptions();
     options.setCodingConvention(new GoogleCodingConvention());
     return options;

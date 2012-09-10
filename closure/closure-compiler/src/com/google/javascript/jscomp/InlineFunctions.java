@@ -261,7 +261,7 @@ class InlineFunctions implements SpecializationAwareCompilerPass {
 
         // verify the function meets all the requirements.
         // TODO(johnlenz): Minimum requirement checks are about 5% of the
-        // runtime cost of this pass.
+        // run-time cost of this pass.
         if (!isCandidateFunction(fn)) {
           // It doesn't meet the requirements.
           fs.setInline(false);
@@ -535,7 +535,7 @@ class InlineFunctions implements SpecializationAwareCompilerPass {
       if (result != CanInlineResult.NO) {
         // Yeah!
         boolean decompose =
-          (result == CanInlineResult.AFTER_DECOMPOSITION);
+          (result == CanInlineResult.AFTER_PREPARATION);
         fs.addReference(new Reference(callNode, module, mode, decompose));
         return true;
       }
@@ -743,7 +743,7 @@ class InlineFunctions implements SpecializationAwareCompilerPass {
    */
   private void resolveInlineConflictsForFunction(FunctionState fs) {
     // Functions that aren't referenced don't cause conflicts.
-    if (!fs.hasReferences()) {
+    if (!fs.hasReferences() || !fs.canInline()) {
       return;
     }
 
@@ -808,7 +808,7 @@ class InlineFunctions implements SpecializationAwareCompilerPass {
       if (fs.canInline()) {
         for (Reference ref : fs.getReferences()) {
           if (ref.requiresDecomposition) {
-            decomposer.maybeDecomposeExpression(ref.callNode);
+            injector.maybePrepareCall(ref.callNode);
           }
         }
       }
@@ -1010,7 +1010,7 @@ class InlineFunctions implements SpecializationAwareCompilerPass {
     /** Gets the function node */
     public Node getFunctionNode();
 
-    /** Removes itself from the javascript */
+    /** Removes itself from the JavaScript */
     public void remove();
 
     public Node getDeclaringBlock();
@@ -1081,7 +1081,7 @@ class InlineFunctions implements SpecializationAwareCompilerPass {
 
     public FunctionExpression(Node fn, int index) {
       this.fn = fn;
-      // A number is not a valid function javascript indentifier
+      // A number is not a valid function JavaScript identifier
       // so we don't need to worry about collisions.
       this.fakeName = String.valueOf(index);
     }

@@ -29,10 +29,13 @@ import static com.google.javascript.rhino.jstype.JSTypeNative.VOID_TYPE;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.CodingConvention.AssertionFunctionSpec;
 import com.google.javascript.jscomp.ControlFlowGraph.Branch;
 import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.graph.DiGraph.DiGraphEdge;
+import com.google.javascript.jscomp.type.FlowScope;
+import com.google.javascript.jscomp.type.ReverseAbstractInterpreter;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -41,9 +44,14 @@ import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
+import com.google.javascript.rhino.jstype.ModificationVisitor;
 import com.google.javascript.rhino.jstype.ObjectType;
+import com.google.javascript.rhino.jstype.ParameterizedType;
 import com.google.javascript.rhino.jstype.StaticSlot;
+import com.google.javascript.rhino.jstype.TemplateType;
+import com.google.javascript.rhino.jstype.UnionType;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -55,17 +63,8 @@ import java.util.Map;
  */
 class TypeInference
     extends DataFlowAnalysis.BranchedForwardDataFlowAnalysis<Node, FlowScope> {
-  static final DiagnosticType TEMPLATE_TYPE_NOT_OBJECT_TYPE =
-      DiagnosticType.warning(
-      "JSC_TEMPLATE_TYPE_NOT_OBJECT_TYPE",
-      "The template type must be an object type.\nActual: {0}");
 
-  static final DiagnosticType TEMPLATE_TYPE_OF_THIS_EXPECTED =
-      DiagnosticType.warning(
-      "JSC_TEMPLATE_TYPE_OF_THIS_EXPECTED",
-      "A function type with the template type as the type of this must be a " +
-      "parameter type");
-
+  // TODO(johnlenz): We no longer make this check, but we should.
   static final DiagnosticType FUNCTION_LITERAL_UNDEFINED_THIS =
     DiagnosticType.warning(
         "JSC_FUNCTION_LITERAL_UNDEFINED_THIS",
@@ -523,7 +522,7 @@ class TypeInference
       if (!objectType.isPropertyTypeDeclared(propName)) {
         // We do not want a "stray" assign to define an inferred property
         // for every object of this type in the program. So we use a heuristic
-        // approach to determine whether to infer the propery.
+        // approach to determine whether to infer the property.
         //
         // 1) If the property is already defined, join it with the previously
         //    inferred type.
@@ -610,19 +609,33 @@ class TypeInference
         // There are two situations where we don't want to use type information
         // from the scope, even if we have it.
 
-        // 1) The var is escaped in a weird way, e.g.,
+        // 1) The var is escaped and assigned in an inner scope, e.g.,
         // function f() { var x = 3; function g() { x = null } (x); }
         boolean isInferred = var.isTypeInferred();
         boolean unflowable = isInferred &&
             isUnflowable(syntacticScope.getVar(varName));
 
         // 2) We're reading type information from another scope for an
-        // inferred variable.
-        // var t = null; function f() { (t); }
-        boolean nonLocalInferredSlot =
-            isInferred &&
-            syntacticScope.getParent() != null &&
-            var == syntacticScope.getParent().getSlot(varName);
+        // inferred variable. That variable is assigned more than once,
+        // and we can't know which type we're getting.
+        //
+        // var t = null; function f() { (t); } doStuff(); t = {};
+        //
+        // Notice that this heuristic isn't perfect. For example, you might
+        // have:
+        //
+        // function f() { (t); } f(); var t = 3;
+        //
+        // In this case, we would infer the first reference to t as
+        // type {number}, even though it's undefined.
+        boolean nonLocalInferredSlot = false;
+        if (isInferred && syntacticScope.isLocal()) {
+          Var maybeOuterVar = syntacticScope.getParent().getVar(varName);
+          if (var == maybeOuterVar &&
+              !maybeOuterVar.isMarkedAssignedExactlyOnce()) {
+            nonLocalInferredSlot = true;
+          }
+        }
 
         if (!unflowable && !nonLocalInferredSlot) {
           type = var.getType();
@@ -684,7 +697,7 @@ class TypeInference
         objectType.defineInferredProperty(memberName, valueType, name);
 
         // Do normal flow inference if this is a direct property assignment.
-        if (qObjName != null && name.isString()) {
+        if (qObjName != null && name.isStringKey()) {
           String qKeyName = qObjName + "." + memberName;
           Var var = syntacticScope.getVar(qKeyName);
           JSType oldType = var == null ? null : var.getType();
@@ -782,14 +795,13 @@ class TypeInference
 
     Node left = n.getFirstChild();
     JSType functionType = getJSType(left).restrictByNotNullOrUndefined();
-    if (functionType != null) {
-      if (functionType.isFunctionType()) {
-        FunctionType fnType = functionType.toMaybeFunctionType();
-        n.setJSType(fnType.getReturnType());
-        backwardsInferenceFromCallSite(n, fnType);
-      } else if (functionType.equals(getNativeType(CHECKED_UNKNOWN_TYPE))) {
-        n.setJSType(getNativeType(CHECKED_UNKNOWN_TYPE));
-      }
+    if (functionType.isFunctionType()) {
+      FunctionType fnType = functionType.toMaybeFunctionType();
+      n.setJSType(fnType.getReturnType());
+      backwardsInferenceFromCallSite(n, fnType);
+    } else if (functionType.isEquivalentTo(
+        getNativeType(CHECKED_UNKNOWN_TYPE))) {
+      n.setJSType(getNativeType(CHECKED_UNKNOWN_TYPE));
     }
 
     scope = tightenTypesAfterAssertions(scope, n);
@@ -809,38 +821,39 @@ class TypeInference
     if (assertedNode == null) {
       return scope;
     }
-    JSTypeNative assertedType = assertionFunctionSpec.getAssertedType();
+    JSType assertedType = assertionFunctionSpec.getAssertedType(
+        callNode, registry);
     String assertedNodeName = assertedNode.getQualifiedName();
+
+    JSType narrowed;
     // Handle assertions that enforce expressions evaluate to true.
     if (assertedType == null) {
-      if (assertedNodeName != null) {
-        JSType type = getJSType(assertedNode);
-        JSType narrowed = type.restrictByNotNullOrUndefined();
-        if (type != narrowed) {
-          scope = narrowScope(scope, assertedNode, narrowed);
-          callNode.setJSType(narrowed);
-        }
-      } else if (assertedNode.isAnd() ||
-                 assertedNode.isOr()) {
-        BooleanOutcomePair conditionOutcomes =
-            traverseWithinShortCircuitingBinOp(assertedNode, scope);
-        scope = reverseInterpreter.getPreciserScopeKnowingConditionOutcome(
-            assertedNode, conditionOutcomes.getOutcomeFlowScope(
-                assertedNode.getType(), true), true);
-      }
-    } else if (assertedNodeName != null) {
+      // Handle arbitrary expressions within the assert.
+      scope = reverseInterpreter.getPreciserScopeKnowingConditionOutcome(
+          assertedNode, scope, true);
+      // Build the result of the assertExpression
+      narrowed = getJSType(assertedNode).restrictByNotNullOrUndefined();
+    } else {
       // Handle assertions that enforce expressions are of a certain type.
       JSType type = getJSType(assertedNode);
-      JSType narrowed = type.getGreatestSubtype(getNativeType(assertedType));
-      if (type != narrowed) {
+      narrowed = type.getGreatestSubtype(assertedType);
+      if (assertedNodeName != null && type.differsFrom(narrowed)) {
         scope = narrowScope(scope, assertedNode, narrowed);
-        callNode.setJSType(narrowed);
       }
+    }
+
+    if (getJSType(callNode).differsFrom(narrowed)) {
+      callNode.setJSType(narrowed);
     }
     return scope;
   }
 
   private FlowScope narrowScope(FlowScope scope, Node node, JSType narrowed) {
+    if (node.isThis()) {
+      // "this" references don't need to be modeled in the control flow graph.
+      return scope;
+    }
+
     scope = scope.createChildFlowScope();
     if (node.isGetProp()) {
       scope.inferQualifiedSlot(
@@ -866,7 +879,7 @@ class TypeInference
    *
    * However, there are a few special syntactic forms where we do some
    * some half-assed backwards type-inference, because programmers
-   * expect it in this day and age. To take an example from java,
+   * expect it in this day and age. To take an example from Java,
    * <code>
    * List<String> x = Lists.newArrayList();
    * </code>
@@ -877,8 +890,11 @@ class TypeInference
    * JS. Those cases are enumerated here.
    */
   private void backwardsInferenceFromCallSite(Node n, FunctionType fnType) {
+    boolean updatedFnType = inferTemplatedTypesForCall(n, fnType);
+    if (updatedFnType) {
+      fnType = n.getFirstChild().getJSType().toMaybeFunctionType();
+    }
     updateTypeOfParameters(n, fnType);
-    updateTypeOfThisOnClosure(n, fnType);
     updateBind(n, fnType);
   }
 
@@ -887,23 +903,22 @@ class TypeInference
    * "bound" function by looking at the number of parameters in the call site.
    */
   private void updateBind(Node n, FunctionType fnType) {
-    // TODO(nicksantos): Use the coding convention, so that we get goog.bind
-    // for free.
-    Node calledFn = n.getFirstChild();
-    boolean looksLikeBind = calledFn.isGetProp()
-        && calledFn.getLastChild().getString().equals("bind");
-    if (!looksLikeBind) {
+    CodingConvention.Bind bind =
+        compiler.getCodingConvention().describeFunctionBind(n, true);
+    if (bind == null) {
       return;
     }
 
-    Node callTarget = calledFn.getFirstChild();
-    FunctionType callTargetFn = getJSType(callTarget)
+    FunctionType callTargetFn = getJSType(bind.target)
         .restrictByNotNullOrUndefined().toMaybeFunctionType();
     if (callTargetFn == null) {
       return;
     }
 
-    n.setJSType(callTargetFn.getBindReturnType(n.getChildCount() - 1));
+    n.setJSType(
+        callTargetFn.getBindReturnType(
+            // getBindReturnType expects the 'this' argument to be included.
+            bind.getBoundParameterCount() + 1));
   }
 
   /**
@@ -924,16 +939,138 @@ class TypeInference
       JSType iArgumentType = getJSType(iArgument);
       inferPropertyTypesToMatchConstraint(iArgumentType, iParameterType);
 
-      if (iParameterType.isFunctionType()) {
-        FunctionType iParameterFnType = iParameterType.toMaybeFunctionType();
-
+      // TODO(johnlenz): Filter out non-function types
+      // (such as null and undefined) as
+      // we only care about FUNCTION subtypes here.
+      JSType restrictedParameter = iParameterType
+          .restrictByNotNullOrUndefined()
+          .toMaybeFunctionType();
+      if (restrictedParameter != null) {
         if (iArgument.isFunction() &&
             iArgumentType.isFunctionType() &&
             iArgument.getJSDocInfo() == null) {
-          iArgument.setJSType(iParameterFnType);
+          iArgument.setJSType(restrictedParameter);
+          iArgument.putBooleanProp(Node.INFERRED_FUNCTION, true);
         }
       }
       i++;
+    }
+  }
+
+  private Map<TemplateType, JSType> inferTemplateTypesFromParameters(
+      FunctionType fnType, Node call) {
+    if (fnType.getTemplateTypeNames().isEmpty()
+        || !call.hasMoreThanOneChild()) {
+      return Collections.emptyMap();
+    }
+
+    Map<TemplateType, JSType> resolvedTypes = Maps.newIdentityHashMap();
+    maybeResolveTemplateTypeFromNodes(
+        fnType.getParameters(),
+        call.getChildAtIndex(1).siblings(),
+        resolvedTypes);
+    return resolvedTypes;
+  }
+
+  private void maybeResolveTemplatedType(
+      JSType paramType,
+      JSType argType,
+      Map<TemplateType, JSType> resolvedTypes) {
+    if (paramType.isTemplateType()) {
+      // @param {T}
+      resolvedTemplateType(
+          resolvedTypes, paramType.toMaybeTemplateType(), argType);
+    } else if (paramType.isUnionType()) {
+      // @param {Array.<T>|NodeList|Arguments|{length:number}}
+      UnionType unionType = paramType.toMaybeUnionType();
+      for (JSType alernative : unionType.getAlternates()) {
+        maybeResolveTemplatedType(alernative, argType, resolvedTypes);
+      }
+    } else if (paramType.isFunctionType()) {
+      FunctionType paramFunctionType = paramType.toMaybeFunctionType();
+      FunctionType argFunctionType = argType
+          .restrictByNotNullOrUndefined()
+          .collapseUnion()
+          .toMaybeFunctionType();
+      if (argFunctionType != null && argFunctionType.isSubtype(paramType)) {
+        // infer from return type of the function type
+        maybeResolveTemplatedType(
+            paramFunctionType.getReturnType(),
+            argFunctionType.getReturnType(), resolvedTypes);
+        // infer from parameter types of the function type
+        maybeResolveTemplateTypeFromNodes(
+            paramFunctionType.getParameters(),
+            argFunctionType.getParameters(), resolvedTypes);
+      }
+    } else if (paramType.isParameterizedType()) {
+      ParameterizedType paramObjectType = paramType.toMaybeParameterizedType();
+      JSType typeParameter = paramObjectType.getParameterType();
+      Preconditions.checkNotNull(typeParameter);
+      if (typeParameter != null) {
+        // @param {Array.<T>}
+        ObjectType argObjectType = argType
+            .restrictByNotNullOrUndefined()
+            .collapseUnion()
+            .toMaybeParameterizedType();
+        if (argObjectType != null && argObjectType.isSubtype(paramType)) {
+          JSType argTypeParameter = argObjectType.getParameterType();
+          Preconditions.checkNotNull(argTypeParameter);
+          maybeResolveTemplatedType(
+              typeParameter, argTypeParameter, resolvedTypes);
+        }
+      }
+    }
+  }
+
+  private void maybeResolveTemplateTypeFromNodes(
+      Iterable<Node> declParams,
+      Iterable<Node> callParams,
+      Map<TemplateType, JSType> resolvedTypes) {
+    maybeResolveTemplateTypeFromNodes(
+        declParams.iterator(), callParams.iterator(), resolvedTypes);
+  }
+
+  private void maybeResolveTemplateTypeFromNodes(
+      Iterator<Node> declParams,
+      Iterator<Node> callParams,
+      Map<TemplateType, JSType> resolvedTypes) {
+    while (declParams.hasNext() && callParams.hasNext()) {
+      maybeResolveTemplatedType(
+          getJSType(declParams.next()),
+          getJSType(callParams.next()),
+          resolvedTypes);
+    }
+  }
+
+  private void resolvedTemplateType(
+      Map<TemplateType, JSType> map, TemplateType template, JSType resolved) {
+    JSType previous = map.get(template);
+    if (!resolved.isUnknownType()) {
+      if (previous == null) {
+        map.put(template, resolved);
+      } else {
+        JSType join = previous.getLeastSupertype(resolved);
+        map.put(template, join);
+      }
+    }
+  }
+
+  private static class TemplateTypeReplacer extends ModificationVisitor {
+    private final Map<TemplateType, JSType> replacements;
+    private final JSTypeRegistry registry;
+
+    TemplateTypeReplacer(
+        JSTypeRegistry registry, Map<TemplateType, JSType> replacements) {
+      super(registry);
+      this.registry = registry;
+      this.replacements = replacements;
+    }
+
+    @Override
+    public JSType caseTemplateType(TemplateType type) {
+      JSType replacement = replacements.get(type);
+      return replacement != null ?
+          replacement : registry.getNativeType(UNKNOWN_TYPE);
     }
   }
 
@@ -942,99 +1079,37 @@ class TypeInference
    * inference will set the type of this on a function literal argument to the
    * the actual type of T.
    */
-  private void updateTypeOfThisOnClosure(Node n, FunctionType fnType) {
-    // TODO(user): Make the template logic more general.
-
-    if (fnType.getTemplateTypeName() == null) {
-      return;
+  private boolean inferTemplatedTypesForCall(
+      Node n, FunctionType fnType) {
+    if (fnType.getTemplateTypeNames().isEmpty()) {
+      return false;
     }
 
-    int i = 0;
-    int childCount = n.getChildCount();
-    // Find the parameter whose type is the template type.
-    for (Node iParameter : fnType.getParameters()) {
-      JSType iParameterType =
-          getJSType(iParameter).restrictByNotNullOrUndefined();
-      if (iParameterType.isTemplateType()) {
-        // Find the actual type of this argument.
-        ObjectType iArgumentType = null;
-        if (i + 1 < childCount) {
-          Node iArgument = n.getChildAtIndex(i + 1);
-          iArgumentType = getJSType(iArgument)
-              .restrictByNotNullOrUndefined()
-              .collapseUnion()
-              .toObjectType();
-          if (iArgumentType == null) {
-            compiler.report(
-                JSError.make(NodeUtil.getSourceName(iArgument), iArgument,
-                    TEMPLATE_TYPE_NOT_OBJECT_TYPE,
-                    getJSType(iArgument).toString()));
-            return;
-          }
-        }
+    // Try to infer the template types
+    Map<TemplateType, JSType> inferred = inferTemplateTypesFromParameters(
+        fnType, n);
+    if (inferred.size() > 0) {
+      // Something useful was found, try to replace it.
+      TemplateTypeReplacer replacer = new TemplateTypeReplacer(
+          registry, inferred);
+      Node callTarget = n.getFirstChild();
 
-        // Find the parameter whose type is function(this: T, ...)
-        boolean foundTemplateTypeOfThisParameter = false;
-        int j = 0;
-        for (Node jParameter : fnType.getParameters()) {
-          JSType jParameterType =
-              getJSType(jParameter).restrictByNotNullOrUndefined();
-          if (jParameterType.isFunctionType()) {
-            FunctionType jParameterFnType = jParameterType.toMaybeFunctionType();
-            if (jParameterFnType.getTypeOfThis().equals(iParameterType)) {
-              foundTemplateTypeOfThisParameter = true;
-              // Find the actual type of the this argument.
-              if (j + 1 >= childCount) {
-                // TypeCheck#visitParameterList will warn so we bail.
-                return;
-              }
-              Node jArgument = n.getChildAtIndex(j + 1);
-              JSType jArgumentType = getJSType(jArgument);
-              if (jArgument.isFunction() &&
-                  jArgumentType.isFunctionType()) {
-                if (iArgumentType != null &&
-                    // null and undefined get filtered out above.
-                    !iArgumentType.isNoType()) {
-                  // If it's an function expression, update the type of this
-                  // using the actual type of T.
-                  FunctionType jArgumentFnType = jArgumentType.toMaybeFunctionType();
-                  if (jArgumentFnType.getTypeOfThis().isUnknownType()) {
-                    // The new type will be picked up when we traverse the inner
-                    // function.
-                    jArgument.setJSType(
-                        registry.createFunctionTypeWithNewThisType(
-                            jArgumentFnType, iArgumentType));
-                  }
-                } else {
-                  // Warn if the anonymous function literal references this.
-                  if (NodeUtil.referencesThis(
-                          NodeUtil.getFunctionBody(jArgument))) {
-                    compiler.report(JSError.make(NodeUtil.getSourceName(n), n,
-                        FUNCTION_LITERAL_UNDEFINED_THIS));
-                  }
-                }
-              }
-              // TODO(user): Add code to TypeCheck to check that the
-              // types of the arguments match.
-            }
-          }
-          j++;
-        }
+      FunctionType replacementFnType = fnType.visit(replacer)
+          .toMaybeFunctionType();
+      Preconditions.checkNotNull(replacementFnType);
 
-        if (!foundTemplateTypeOfThisParameter) {
-          compiler.report(JSError.make(NodeUtil.getSourceName(n), n,
-              TEMPLATE_TYPE_OF_THIS_EXPECTED));
-          return;
-        }
-      }
-      i++;
+      callTarget.setJSType(replacementFnType);
+      n.setJSType(replacementFnType.getReturnType());
+
+      return true;
     }
+    return false;
   }
 
   private FlowScope traverseNew(Node n, FlowScope scope) {
-    Node constructor = n.getFirstChild();
-    scope = traverse(constructor, scope);
+    scope = traverseChildren(n, scope);
 
+    Node constructor = n.getFirstChild();
     JSType constructorType = constructor.getJSType();
     JSType type = null;
     if (constructorType != null) {
@@ -1051,14 +1126,11 @@ class TypeInference
         }
         if (ct != null && ct.isConstructor()) {
           type = ct.getInstanceType();
+          backwardsInferenceFromCallSite(n, ct);
         }
       }
     }
     n.setJSType(type);
-
-    for (Node arg = constructor.getNext(); arg != null; arg = arg.getNext()) {
-      scope = traverse(arg, scope);
-    }
     return scope;
   }
 
@@ -1116,24 +1188,7 @@ class TypeInference
       return;
     }
 
-    ObjectType constraintObj =
-        ObjectType.cast(constraint.restrictByNotNullOrUndefined());
-    if (constraintObj != null && constraintObj.isRecordType()) {
-      ObjectType objType = ObjectType.cast(type.restrictByNotNullOrUndefined());
-      if (objType != null) {
-        for (String prop : constraintObj.getOwnPropertyNames()) {
-          JSType propType = constraintObj.getPropertyType(prop);
-          if (!objType.isPropertyTypeDeclared(prop)) {
-            JSType typeToInfer = propType;
-            if (!objType.hasProperty(prop)) {
-              typeToInfer =
-                  getNativeType(VOID_TYPE).getLeastSupertype(propType);
-            }
-            objType.defineInferredProperty(prop, typeToInfer, null);
-          }
-        }
-      }
-    }
+    type.matchConstraint(constraint);
   }
 
   /**
@@ -1153,30 +1208,39 @@ class TypeInference
 
   private JSType getPropertyType(JSType objType, String propName,
       Node n, FlowScope scope) {
+    // We often have a couple of different types to choose from for the
+    // property. Ordered by accuracy, we have
+    // 1) A locally inferred qualified name (which is in the FlowScope)
+    // 2) A globally declared qualified name (which is in the FlowScope)
+    // 3) A property on the owner type (which is on objType)
+    // 4) A name in the type registry (as a last resort)
+    JSType unknownType = getNativeType(UNKNOWN_TYPE);
+    JSType propertyType = null;
+    boolean isLocallyInferred = false;
+
     // Scopes sometimes contain inferred type info about qualified names.
     String qualifiedName = n.getQualifiedName();
     StaticSlot<JSType> var = scope.getSlot(qualifiedName);
     if (var != null) {
       JSType varType = var.getType();
       if (varType != null) {
-        if (varType.equals(getNativeType(UNKNOWN_TYPE)) &&
-            var != syntacticScope.getSlot(qualifiedName)) {
-          // If the type of this qualified name has been checked in this scope,
-          // then use CHECKED_UNKNOWN_TYPE instead to indicate that.
-          return getNativeType(CHECKED_UNKNOWN_TYPE);
-        } else {
-          return varType;
+        boolean isDeclared = !var.isTypeInferred();
+        isLocallyInferred = (var != syntacticScope.getSlot(qualifiedName));
+        if (isDeclared || isLocallyInferred) {
+          propertyType = varType;
         }
       }
     }
 
-    JSType propertyType = null;
-    if (objType != null) {
-      propertyType = objType.findPropertyType(propName);
+    if (propertyType == null && objType != null) {
+      JSType foundType = objType.findPropertyType(propName);
+      if (foundType != null) {
+        propertyType = foundType;
+      }
     }
 
-    if ((propertyType == null || propertyType.isUnknownType()) &&
-        qualifiedName != null) {
+    if ((propertyType == null || propertyType.isUnknownType())
+        && qualifiedName != null) {
       // If we find this node in the registry, then we can infer its type.
       ObjectType regType = ObjectType.cast(registry.getType(qualifiedName));
       if (regType != null) {
@@ -1184,7 +1248,15 @@ class TypeInference
       }
     }
 
-    return propertyType;
+    if (propertyType == null) {
+      return getNativeType(UNKNOWN_TYPE);
+    } else if (propertyType.isEquivalentTo(unknownType) && isLocallyInferred) {
+      // If the type has been checked in this scope,
+      // then use CHECKED_UNKNOWN_TYPE instead to indicate that.
+      return getNativeType(CHECKED_UNKNOWN_TYPE);
+    } else {
+      return propertyType;
+    }
   }
 
   private BooleanOutcomePair traverseOr(Node n, FlowScope scope) {

@@ -20,15 +20,17 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.jstype.FunctionType;
+import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
+import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
-
 
 /**
  * This describes the Closure-specific JavaScript coding conventions.
@@ -42,12 +44,21 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
       "JSC_REFLECT_OBJECTLIT_EXPECTED",
       "Object literal expected as second argument");
 
+  private final Set<String> indirectlyDeclaredProperties;
+
   public ClosureCodingConvention() {
     this(CodingConventions.getDefault());
   }
 
   public ClosureCodingConvention(CodingConvention wrapped) {
     super(wrapped);
+
+    Set<String> props = Sets.newHashSet(
+        "superClass_",
+        "instance_",
+        "getInstance");
+    props.addAll(wrapped.getIndirectlyDeclaredProperties());
+    indirectlyDeclaredProperties = ImmutableSet.copyOf(props);
   }
 
   /**
@@ -57,11 +68,20 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
   @Override
   public void applySubclassRelationship(FunctionType parentCtor,
       FunctionType childCtor, SubclassType type) {
+    super.applySubclassRelationship(parentCtor, childCtor, type);
     if (type == SubclassType.INHERITS) {
       childCtor.defineDeclaredProperty("superClass_",
           parentCtor.getPrototype(), childCtor.getSource());
       childCtor.getPrototype().defineDeclaredProperty("constructor",
-          childCtor, childCtor.getSource());
+          // Notice that constructor functions do not need to be covariant
+          // on the superclass.
+          // So if G extends F, new G() and new F() can accept completely
+          // different argument types, but G.prototype.constructor needs
+          // to be covariant on F.prototype.constructor.
+          // To get around this, we just turn off type-checking on arguments
+          // and return types of G.prototype.constructor.
+          childCtor.cloneWithoutArrowType(),
+          childCtor.getSource());
     }
   }
 
@@ -73,6 +93,10 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
    */
   @Override
   public SubclassRelationship getClassesDefinedByCall(Node callNode) {
+    SubclassRelationship relationship =
+        super.getClassesDefinedByCall(callNode);
+    if (relationship != null) return relationship;
+
     Node callName = callNode.getFirstChild();
     SubclassType type = typeofClassDefiningName(callName);
     if (type != null) {
@@ -158,7 +182,8 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
 
   @Override
   public boolean isSuperClassReference(String propertyName) {
-    return "superClass_".equals(propertyName);
+    return "superClass_".equals(propertyName) ||
+        super.isSuperClassReference(propertyName);
   }
 
   /**
@@ -173,7 +198,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
   }
 
   /**
-   * Exctracts X from goog.provide('X'), if the applied Node is goog.
+   * Extracts X from goog.provide('X'), if the applied Node is goog.
    *
    * @return The extracted class name, or null.
    */
@@ -183,7 +208,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
   }
 
   /**
-   * Exctracts X from goog.require('X'), if the applied Node is goog.
+   * Extracts X from goog.require('X'), if the applied Node is goog.
    *
    * @return The extracted class name, or null.
    */
@@ -245,7 +270,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
         return typeNames;
       }
     }
-    return null;
+    return super.identifyTypeDeclarationCall(n);
   }
 
   @Override
@@ -262,7 +287,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
     if (!("goog.addSingletonGetter".equals(callName) ||
           "goog$addSingletonGetter".equals(callName)) ||
         callNode.getChildCount() != 2) {
-      return null;
+      return super.getSingletonGetterClassName(callNode);
     }
 
     return callArg.getNext().getQualifiedName();
@@ -271,6 +296,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
   @Override
   public void applySingletonGetter(FunctionType functionType,
       FunctionType getterType, ObjectType objectType) {
+    super.applySingletonGetter(functionType, getterType, objectType);
     functionType.defineDeclaredProperty("getInstance", getterType,
         functionType.getSource());
     functionType.defineDeclaredProperty("instance_", objectType,
@@ -291,13 +317,18 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
   public boolean isPropertyTestFunction(Node call) {
     Preconditions.checkArgument(call.isCall());
     return propertyTestFunctions.contains(
-        call.getFirstChild().getQualifiedName());
+        call.getFirstChild().getQualifiedName()) ||
+        super.isPropertyTestFunction(call);
   }
 
   @Override
-  public ObjectLiteralCast getObjectLiteralCast(NodeTraversal t,
-      Node callNode) {
+  public ObjectLiteralCast getObjectLiteralCast(Node callNode) {
     Preconditions.checkArgument(callNode.isCall());
+    ObjectLiteralCast proxyCast = super.getObjectLiteralCast(callNode);
+    if (proxyCast != null) {
+      return proxyCast;
+    }
+
     Node callName = callNode.getFirstChild();
     if (!"goog.reflect.object".equals(callName.getQualifiedName()) ||
         callNode.getChildCount() != 3) {
@@ -311,14 +342,11 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
 
     Node objectNode = typeNode.getNext();
     if (!objectNode.isObjectLit()) {
-      // TODO(johnlenz): The coding convention should not be performing checks.
-      t.getCompiler().report(JSError.make(t.getSourceName(), callNode,
-                                          OBJECTLIT_EXPECTED));
-      return null;
+      return new ObjectLiteralCast(null, null, OBJECTLIT_EXPECTED);
     }
 
-    return new ObjectLiteralCast(typeNode.getQualifiedName(),
-                                 typeNode.getNext());
+    return new ObjectLiteralCast(
+        typeNode.getQualifiedName(), typeNode.getNext(), null);
   }
 
   @Override
@@ -350,22 +378,16 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
             JSTypeNative.OBJECT_TYPE),
         new AssertionFunctionSpec("goog.asserts.assertArray",
             JSTypeNative.ARRAY_TYPE),
-        // TODO(agrieve): It would be better if this could make the first
-        // parameter the type of the second parameter.
-        new AssertionFunctionSpec("goog.asserts.assertInstanceof",
-            JSTypeNative.OBJECT_TYPE)
+        new AssertInstanceofSpec("goog.asserts.assertInstanceof")
     );
   }
 
   @Override
-  public Bind describeFunctionBind(Node n) {
-    Bind result = super.describeFunctionBind(n);
+  public Bind describeFunctionBind(Node n, boolean useTypeInfo) {
+    Bind result = super.describeFunctionBind(n, useTypeInfo);
     if (result != null) {
       return result;
     }
-
-    // It would be nice to be able to identify a fn.bind call
-    // but that requires knowing the type of "fn".
 
     if (!n.isCall()) {
       return null;
@@ -401,10 +423,48 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
     return null;
   }
 
+  @Override
+  public Collection<String> getIndirectlyDeclaredProperties() {
+    return indirectlyDeclaredProperties;
+  }
+
   private Node safeNext(Node n) {
     if (n != null) {
       return n.getNext();
     }
     return null;
   }
+
+  /**
+   * A function that will throw an exception when if the value is not
+   * an instanceof a specific type.
+   */
+  public static class AssertInstanceofSpec extends AssertionFunctionSpec {
+    public AssertInstanceofSpec(String functionName) {
+      super(functionName, JSTypeNative.OBJECT_TYPE);
+    }
+
+    /**
+     * Returns the type for a type assertion, or null if the function asserts
+     * that the node must not be null or undefined.
+     */
+    @Override
+    public JSType getAssertedType(Node call, JSTypeRegistry registry) {
+      if (call.getChildCount() > 2) {
+        Node constructor = call.getFirstChild().getNext().getNext();
+        if (constructor != null) {
+          JSType ownerType = constructor.getJSType();
+          if (ownerType != null
+              && ownerType.isFunctionType()
+              && ownerType.isConstructor()) {
+            FunctionType functionType = ((FunctionType) ownerType);
+            return functionType.getInstanceType();
+          }
+        }
+      }
+      return super.getAssertedType(call, registry);
+    }
+  }
+
+
 }

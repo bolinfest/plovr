@@ -96,7 +96,7 @@ public class ScopedAliasesTest extends CompilerTestCase {
   }
 
   public void testOverridden() {
-    // Test that the alias doesn't get unaliased when it's overriden by a
+    // Test that the alias doesn't get unaliased when it's overridden by a
     // parameter.
     testScopedNoChanges(
         "var g = goog;", "goog.x = function(g) {g.z()};");
@@ -172,6 +172,62 @@ public class ScopedAliasesTest extends CompilerTestCase {
          "var Popup = {};" +
          "var OtherPopup = {};" +
          "OtherPopup.newMethod = function() { return new OtherPopup(); };");
+  }
+
+  public void testShadowedScopedVar() {
+    test("var goog = {};" +
+         "goog.bar = {};" +
+         "goog.scope(function() {" +
+         "  var bar = goog.bar;" +
+         // This is bogus, because when the aliases are expanded, goog will
+         // shadow goog.bar.
+         "  bar.newMethod = function(goog) { return goog + bar; };" +
+         "});",
+         "var goog={};" +
+         "goog.bar={};" +
+         "goog.bar.newMethod=function(goog$$1){return goog$$1 + goog.bar}");
+  }
+
+  public void testShadowedScopedVarTwoScopes() {
+    test("var goog = {};" +
+         "goog.bar = {};" +
+         "goog.scope(function() {" +
+         "  var bar = goog.bar;" +
+         "  bar.newMethod = function(goog, a) { return bar + a; };" +
+         "});" +
+         "goog.scope(function() {" +
+         "  var bar = goog.bar;" +
+         "  bar.newMethod2 = function(goog, b) { return bar + b; };" +
+         "});",
+         "var goog={};" +
+         "goog.bar={};" +
+         "goog.bar.newMethod=function(goog$$1, a){return goog.bar + a};" +
+         "goog.bar.newMethod2=function(goog$$1, b){return goog.bar + b};");
+  }
+
+  public void testUsingObjectLiteralToEscapeScoping() {
+    // There are many ways to shoot yourself in the foot with goog.scope
+    // and make the compiler generate bad code. We generally don't care.
+    //
+    // We only try to protect against accidental mis-use, not deliberate
+    // mis-use.
+    test(
+        "var goog = {};" +
+        "goog.bar = {};" +
+        "goog.scope(function() {" +
+        "  var bar = goog.bar;" +
+        "  var baz = goog.bar.baz;" +
+        "  goog.foo = function() {" +
+        "    goog.bar = {baz: 3};" +
+        "    return baz;" +
+        "  };" +
+        "});",
+        "var goog = {};" +
+        "goog.bar = {};" +
+        "goog.foo = function(){" +
+        "  goog.bar = {baz:3};" +
+        "  return goog.bar.baz;" +
+        "};");
   }
 
   private void testTypes(String aliases, String code) {
@@ -313,18 +369,18 @@ public class ScopedAliasesTest extends CompilerTestCase {
         " * @constructor\n" +
         " */\n" +
         "foo.Foo = function() {};" +
-        "/** @param {Foo.Bar} x */ function actual(x) {3}" +
+        "/** @param {Foo.Bar} x */ foo.Foo.actual = function(x) {3};" +
         "var Foo = foo.Foo;" +
         "/** @constructor */ Foo.Bar = function() {};" +
-        "/** @param {foo.Foo.Bar} x */ function expected(x) {}",
+        "/** @param {foo.Foo.Bar} x */ foo.Foo.expected = function(x) {};",
 
         "/**\n" +
         " * @constructor\n" +
         " */\n" +
         "foo.Foo = function() {};" +
-        "/** @param {foo.Foo.Bar} x */ function actual(x) {3}" +
+        "/** @param {foo.Foo.Bar} x */ foo.Foo.actual = function(x) {3};" +
         "/** @constructor */ foo.Foo.Bar = function() {};" +
-        "/** @param {foo.Foo.Bar} x */ function expected(x) {}");
+        "/** @param {foo.Foo.Bar} x */ foo.Foo.expected = function(x) {};");
     verifyTypes();
   }
 
@@ -345,6 +401,14 @@ public class ScopedAliasesTest extends CompilerTestCase {
         "var x = goog.Timer;",
         "/** @param draggable */ types.actual;"
         + "/** @param draggable */ types.expected;");
+  }
+
+  public void testIssue772() {
+    testTypes(
+        "var b = a.b;" +
+        "var c = b.c;",
+        "/** @param {c.MyType} x */ types.actual;" +
+        "/** @param {a.b.c.MyType} x */ types.expected;");
   }
 
   // TODO(robbyw): What if it's recursive?  var goog = goog.dom;
@@ -409,6 +473,8 @@ public class ScopedAliasesTest extends CompilerTestCase {
     testScopedFailure("var x = goog['dom']",
         ScopedAliases.GOOG_SCOPE_NON_ALIAS_LOCAL);
     testScopedFailure("var x = goog.dom, y = 10",
+        ScopedAliases.GOOG_SCOPE_NON_ALIAS_LOCAL);
+    testScopedFailure("function f() {}",
         ScopedAliases.GOOG_SCOPE_NON_ALIAS_LOCAL);
   }
 
@@ -582,7 +648,7 @@ public class ScopedAliasesTest extends CompilerTestCase {
             for (Node typeNode : info.getTypeNodes()) {
               expectedTypes.add(typeNode);
             }
-            assertEquals("Wrong number of jsdoc types",
+            assertEquals("Wrong number of JsDoc types",
                 expectedTypes.size(), actualTypes.size());
             for (int i = 0; i < expectedTypes.size(); i++) {
               assertNull(

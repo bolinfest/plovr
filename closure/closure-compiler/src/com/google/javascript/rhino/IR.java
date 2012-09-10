@@ -100,7 +100,7 @@ public class IR {
   }
 
   public static Node block(Node ... stmts) {
-    Node block = new Node(Token.BLOCK);
+    Node block = block();
     for (Node stmt : stmts) {
       Preconditions.checkState(mayBeStatement(stmt));
       block.addChildToBack(stmt);
@@ -108,14 +108,41 @@ public class IR {
     return block;
   }
 
-  public static Node script(Node ... stmts) {
-    // TODO(johnlenz): finish setting up the SCRIPT node
-    Node block = new Node(Token.SCRIPT);
+  public static Node block(List<Node> stmts) {
+    Node paramList = block();
     for (Node stmt : stmts) {
       Preconditions.checkState(mayBeStatement(stmt));
+      paramList.addChildToBack(stmt);
+    }
+    return paramList;
+  }
+
+  private static Node blockUnchecked(Node stmt) {
+    return new Node(Token.BLOCK, stmt);
+  }
+
+  public static Node script() {
+    // TODO(johnlenz): finish setting up the SCRIPT node
+    Node block = new Node(Token.SCRIPT);
+    return block;
+  }
+
+  public static Node script(Node ... stmts) {
+    Node block = script();
+    for (Node stmt : stmts) {
+      Preconditions.checkState(mayBeStatementNoReturn(stmt));
       block.addChildToBack(stmt);
     }
     return block;
+  }
+
+  public static Node script(List<Node> stmts) {
+    Node paramList = script();
+    for (Node stmt : stmts) {
+      Preconditions.checkState(mayBeStatementNoReturn(stmt));
+      paramList.addChildToBack(stmt);
+    }
+    return paramList;
   }
 
   public static Node var(Node name, Node value) {
@@ -220,8 +247,8 @@ public class IR {
   }
 
   public static Node tryFinally(Node tryBody, Node finallyBody) {
-    Preconditions.checkState(tryBody.isLabelName());
-    Preconditions.checkState(finallyBody.isLabelName());
+    Preconditions.checkState(tryBody.isBlock());
+    Preconditions.checkState(finallyBody.isBlock());
     Node catchBody = block().copyInformationFrom(tryBody);
     return new Node(Token.TRY, tryBody, catchBody, finallyBody);
   }
@@ -229,11 +256,12 @@ public class IR {
   public static Node tryCatch(Node tryBody, Node catchNode) {
     Preconditions.checkState(tryBody.isBlock());
     Preconditions.checkState(catchNode.isCatch());
-    Node catchBody = block(catchNode).copyInformationFrom(catchNode);
+    Node catchBody = blockUnchecked(catchNode).copyInformationFrom(catchNode);
     return new Node(Token.TRY, tryBody, catchBody);
   }
 
-  public static Node tryCatchFinally(Node tryBody, Node catchNode, Node finallyBody) {
+  public static Node tryCatchFinally(
+      Node tryBody, Node catchNode, Node finallyBody) {
     Preconditions.checkState(finallyBody.isBlock());
     Node tryNode = tryCatch(tryBody, catchNode);
     tryNode.addChildToBack(finallyBody);
@@ -373,7 +401,8 @@ public class IR {
     Node objectlit = new Node(Token.OBJECTLIT);
     for (Node propdef : propdefs) {
       Preconditions.checkState(
-          propdef.isString() || propdef.isGetterDef() || propdef.isSetterDef());
+          propdef.isStringKey() ||
+          propdef.isGetterDef() || propdef.isSetterDef());
       Preconditions.checkState(propdef.hasOneChild());
       objectlit.addChildToBack(propdef);
     }
@@ -383,7 +412,7 @@ public class IR {
   // TODO(johnlenz): quoted props
 
   public static Node propdef(Node string, Node value) {
-    Preconditions.checkState(string.isString());
+    Preconditions.checkState(string.isStringKey());
     Preconditions.checkState(!string.hasChildren());
     Preconditions.checkState(mayBeExpression(value));
     string.addChildToFront(value);
@@ -412,6 +441,10 @@ public class IR {
 
   public static Node string(String s) {
     return Node.newString(s);
+  }
+
+  public static Node stringKey(String s) {
+    return Node.newString(Token.STRING_KEY, s);
   }
 
   public static Node number(double d) {
@@ -463,7 +496,7 @@ public class IR {
    * It isn't possible to always determine if a detached node is a expression,
    * so make a best guess.
    */
-  private static boolean mayBeStatement(Node n) {
+  private static boolean mayBeStatementNoReturn(Node n) {
     switch (n.getType()) {
       case Token.EMPTY:
       case Token.FUNCTION:
@@ -481,7 +514,6 @@ public class IR {
       case Token.FOR:
       case Token.IF:
       case Token.LABEL:
-      case Token.RETURN:
       case Token.SWITCH:
       case Token.THROW:
       case Token.TRY:
@@ -493,6 +525,17 @@ public class IR {
       default:
         return false;
     }
+  }
+
+  /**
+   * It isn't possible to always determine if a detached node is a expression,
+   * so make a best guess.
+   */
+  private static boolean mayBeStatement(Node n) {
+    if (!mayBeStatementNoReturn(n)) {
+      return n.isReturn();
+    }
+    return true;
   }
 
   /**

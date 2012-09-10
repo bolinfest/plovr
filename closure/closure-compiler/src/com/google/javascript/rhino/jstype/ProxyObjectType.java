@@ -419,4 +419,24 @@ class ProxyObjectType extends ObjectType {
     }
     return this;
   }
+
+  @Override
+  public void matchConstraint(JSType constraint) {
+    referencedType.matchConstraint(constraint);
+  }
+
+  @Override
+  public ParameterizedType toMaybeParameterizedType() {
+    return referencedType.toMaybeParameterizedType();
+  }
+
+  @Override
+  public TemplateType toMaybeTemplateType() {
+    return referencedType.toMaybeTemplateType();
+  }
+
+  @Override
+  public boolean hasAnyTemplateInternal() {
+    return referencedType.hasAnyTemplate();
+  }
 }

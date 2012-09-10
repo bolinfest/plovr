@@ -143,6 +143,9 @@ public class PeepholeRemoveDeadCodeTest extends CompilerTestCase {
     foldSame("var z=x?y():void 0");
     foldSame("(w?x:void 0).y=z");
     foldSame("(w?x:void 0).y+=z");
+
+    fold("y = (x ? void 0 : void 0)", "y = void 0");
+    fold("y = (x ? f() : f())", "y = f()");
   }
 
   public void testConstantConditionWithSideEffect1() {
@@ -238,7 +241,7 @@ public class PeepholeRemoveDeadCodeTest extends CompilerTestCase {
 
   public void testRemoveUselessOps() {
     // There are four place where expression results are discarded:
-    //  - a top level expression EXPR_RESULT
+    //  - a top-level expression EXPR_RESULT
     //  - the LHS of a COMMA
     //  - the FOR init expression
     //  - the FOR increment expression
@@ -510,7 +513,7 @@ public class PeepholeRemoveDeadCodeTest extends CompilerTestCase {
   }
 
   public void testComplex5() {
-    // can't simplify lhs of short circuit statements with side effects
+    // can't simplify LHS of short circuit statements with side effects
     testSame("(a() ? 1 : 1 + c()) && foo()");
   }
 

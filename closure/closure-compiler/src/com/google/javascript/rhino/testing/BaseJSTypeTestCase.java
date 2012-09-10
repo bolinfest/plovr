@@ -83,6 +83,7 @@ public abstract class BaseJSTypeTestCase extends TestCase {
   protected JSType NUMBER_STRING_BOOLEAN;
   protected JSType NUMBER_TYPE;
   protected FunctionType OBJECT_FUNCTION_TYPE;
+  protected JSType NULL_VOID;
   protected JSType OBJECT_NUMBER_STRING;
   protected JSType OBJECT_NUMBER_STRING_BOOLEAN;
   protected JSType OBJECT_PROTOTYPE;
@@ -172,6 +173,8 @@ public abstract class BaseJSTypeTestCase extends TestCase {
         registry.getNativeType(JSTypeNative.NUMBER_TYPE);
     OBJECT_FUNCTION_TYPE =
         registry.getNativeFunctionType(JSTypeNative.OBJECT_FUNCTION_TYPE);
+    NULL_VOID =
+        registry.getNativeType(JSTypeNative.NULL_VOID);
     OBJECT_NUMBER_STRING =
         registry.getNativeType(JSTypeNative.OBJECT_NUMBER_STRING);
     OBJECT_NUMBER_STRING_BOOLEAN =
@@ -429,9 +432,9 @@ public abstract class BaseJSTypeTestCase extends TestCase {
 
   /**
    * A definition of all extern types. This should be kept in sync with
-   * javascript/externs/es3.js. This is used to check that the builtin types
+   * javascript/externs/es3.js. This is used to check that the built-in types
    * declared in {@link JSTypeRegistry} have the same type as that in the
-   * externs. It can also be used for any tests that want to use builtin types
+   * externs. It can also be used for any tests that want to use built-in types
    * in their externs.
    */
   public static final String ALL_NATIVE_EXTERN_TYPES =

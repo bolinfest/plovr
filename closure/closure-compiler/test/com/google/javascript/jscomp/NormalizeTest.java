@@ -395,8 +395,8 @@ public class NormalizeTest extends CompilerTestCase {
   public void testNormalizeSyntheticCode() {
     Compiler compiler = new Compiler();
     compiler.init(
-        Lists.<JSSourceFile>newArrayList(),
-        Lists.<JSSourceFile>newArrayList(), new CompilerOptions());
+        Lists.<SourceFile>newArrayList(),
+        Lists.<SourceFile>newArrayList(), new CompilerOptions());
     Node code = Normalize.parseAndNormalizeSyntheticCode(
         compiler, "function f(x) {} function g(x) {}", "prefix_");
     assertEquals(
@@ -462,6 +462,19 @@ public class NormalizeTest extends CompilerTestCase {
     }
   }
 
+  public void testExposeSimple() {
+    test("var x = {}; /** @expose */ x.y = 3; x.y = 5;",
+         "var x = {}; x['y'] = 3; x['y'] = 5;");
+  }
+
+  public void testExposeComplex() {
+    test(
+        "var x = {/** @expose */ a: 1, b: 2};"
+        + "x.a = 3; /** @expose */ x.b = 5;",
+        "var x = {'a': 1, 'b': 2};"
+        + "x['a'] = 3; x['b'] = 5;");
+  }
+
   private Set<Node> findNodesWithProperty(Node root, final int prop) {
     final Set<Node> set = Sets.newHashSet();
     NodeTraversal.traverse(
@@ -477,7 +490,7 @@ public class NormalizeTest extends CompilerTestCase {
   }
 
   public void testRenamingConstantProperties() {
-    // In order to detecte that foo.BAR is a constant, we need collapse
+    // In order to detect that foo.BAR is a constant, we need collapse
     // properties to run first so that we can tell if the initial value is
     // non-null and immutable.
     new WithCollapse().testConstantProperties();

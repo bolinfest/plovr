@@ -18,9 +18,11 @@ package com.google.javascript.jscomp;
 
 
 import com.google.common.base.Joiner;
+import com.google.common.collect.Lists;
 
 import junit.framework.TestCase;
 
+import java.util.List;
 
 /**
  * Tests for {@link ExternExportsPass}.
@@ -32,7 +34,7 @@ public class ExternExportsPassTest extends TestCase {
 
   /**
    * ExternExportsPass relies on type information to emit JSDoc annotations for
-   * exported externs. However, the user can disable typechecking and still
+   * exported externs. However, the user can disable type checking and still
    * ask for externs to be exported. Set this flag to enable or disable checking
    * of types during a test.
    */
@@ -442,7 +444,7 @@ public class ExternExportsPassTest extends TestCase {
   }
 
   /**
-   * Compiles the passed in javascript with the passed in externs and returns
+   * Compiles the passed in JavaScript with the passed in externs and returns
    * the new externs exported by the this pass.
    *
    * @param js the source to be compiled
@@ -463,17 +465,15 @@ public class ExternExportsPassTest extends TestCase {
     options.checkSymbols = true;
     options.checkTypes = runCheckTypes;
 
-    JSSourceFile[] inputs = {
-      JSSourceFile.fromCode("testcode",
+    List<SourceFile> inputs = Lists.newArrayList(
+      SourceFile.fromCode("testcode",
                             "var goog = {};" +
                             "goog.exportSymbol = function(a, b) {}; " +
                             "goog.exportProperty = function(a, b, c) {}; " +
-                            js)
-    };
+                            js));
 
-    JSSourceFile[] externFiles = {
-        JSSourceFile.fromCode("externs", externs)
-    };
+    List<SourceFile> externFiles = Lists.newArrayList(
+        SourceFile.fromCode("externs", externs));
 
     Result result = compiler.compile(externFiles, inputs, options);
 
