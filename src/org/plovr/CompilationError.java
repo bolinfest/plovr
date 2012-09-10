@@ -29,7 +29,7 @@ final class CompilationError {
   }
 
   String getMessage() {
-    if (jsError.level == CheckLevel.OFF) {
+    if (jsError.getDefaultLevel() == CheckLevel.OFF) {
       // This is probably related to
       // http://code.google.com/p/closure-compiler/issues/detail?id=277
       // Please help track it down!
@@ -41,12 +41,12 @@ final class CompilationError {
       return jsError.description;
     } else {
       LightweightMessageFormatter formatter = new LightweightMessageFormatter(sourceExcerptProvider);
-      return jsError.format(jsError.level, formatter);
+      return jsError.format(jsError.getDefaultLevel(), formatter);
     }
   }
 
   boolean isError() {
-    return jsError.level == CheckLevel.ERROR;
+    return jsError.getDefaultLevel() == CheckLevel.ERROR;
   }
 
   int getLineNumber() {
