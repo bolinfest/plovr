@@ -495,7 +495,7 @@ public class FeaturesSoyInfo extends SoyFileInfo {
   private FeaturesSoyInfo() {
     super("features.soy",
           "soy.examples.features",
-          ImmutableSortedSet.<String>of(
+          ImmutableSortedSet.of(
               Param.AUTHOR,
               Param.BOO,
               Param.COMPANION_NAME,
