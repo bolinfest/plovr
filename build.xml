@@ -76,6 +76,7 @@
            classpathref="plovr.classpath"
            debug="on"
            deprecation="on"
+           fork="true"
            >
       <compilerarg value="-Werror"/>
       <src path="${src.dir}" />
