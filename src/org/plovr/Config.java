@@ -90,6 +90,8 @@ public final class Config implements Comparable<Config> {
 
   private final ImmutableList<String> soyFunctionPlugins;
 
+  private final boolean soyUseInjectedData;
+
   private final CompilationMode compilationMode;
 
   private final WarningLevel warningLevel;
@@ -173,6 +175,7 @@ public final class Config implements Comparable<Config> {
       File testTemplate,
       List<File> testExcludePaths,
       List<String> soyFunctionPlugins,
+      boolean soyUseInjectedData,
       CompilationMode compilationMode,
       WarningLevel warningLevel,
       boolean debug,
@@ -216,6 +219,7 @@ public final class Config implements Comparable<Config> {
     this.testTemplate = testTemplate;
     this.testExcludePaths = ImmutableSet.copyOf(testExcludePaths);
     this.soyFunctionPlugins = ImmutableList.copyOf(soyFunctionPlugins);
+    this.soyUseInjectedData = soyUseInjectedData;
     this.compilationMode = compilationMode;
     this.warningLevel = warningLevel;
     this.debug = debug;
@@ -298,6 +302,10 @@ public final class Config implements Comparable<Config> {
 
   public boolean hasSoyFunctionPlugins() {
     return !soyFunctionPlugins.isEmpty();
+  }
+
+  public boolean getSoyUseInjectedData() {
+    return soyUseInjectedData;
   }
 
   public CompilationMode getCompilationMode() {
@@ -825,6 +833,8 @@ public final class Config implements Comparable<Config> {
 
     private ImmutableList.Builder<String> soyFunctionPlugins = null;
 
+    private boolean soyUseInjectedData = false;
+
     private ListMultimap<CustomPassExecutionTime, CompilerPassFactory> customPasses = ImmutableListMultimap.of();
 
     private File documentationOutputDirectory = null;
@@ -937,6 +947,7 @@ public final class Config implements Comparable<Config> {
       this.soyFunctionPlugins = config.hasSoyFunctionPlugins()
           ? new ImmutableList.Builder<String>().addAll(config.getSoyFunctionPlugins())
           : null;
+      this.soyUseInjectedData = config.soyUseInjectedData;
       this.customPasses = config.customPasses;
       this.documentationOutputDirectory = config.documentationOutputDirectory;
       this.compilationMode = config.compilationMode;
@@ -1126,6 +1137,10 @@ public final class Config implements Comparable<Config> {
     public void setDocumentationOutputDirectory(File documentationOutputDirectory) {
       Preconditions.checkNotNull(documentationOutputDirectory);
       this.documentationOutputDirectory = documentationOutputDirectory;
+    }
+
+    public void setSoyUseInjectedData(boolean soyUseInjectedData) {
+      this.soyUseInjectedData = soyUseInjectedData;
     }
 
     public void setCustomPasses(
@@ -1356,7 +1371,7 @@ public final class Config implements Comparable<Config> {
         }
 
         SoyFileOptions soyFileOptions = new SoyFileOptions(soyFunctionNames,
-            !this.excludeClosureLibrary);
+            !this.excludeClosureLibrary, this.soyUseInjectedData);
 
         manifest = new Manifest(
             excludeClosureLibrary,
@@ -1380,6 +1395,7 @@ public final class Config implements Comparable<Config> {
           testTemplate,
           testExcludePaths,
           soyFunctionNames,
+          this.soyUseInjectedData,
           compilationMode,
           warningLevel,
           debug,

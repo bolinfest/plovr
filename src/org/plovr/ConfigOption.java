@@ -543,6 +543,20 @@ public enum ConfigOption {
     }
   }),
 
+  SOY_USE_INJECTED_DATA("soy-use-injected-data", new ConfigUpdater() {
+    @Override
+    public void apply(boolean soyUseInjectedData, Config.Builder builder) {
+      builder.setSoyUseInjectedData(soyUseInjectedData);
+    }
+
+    @Override
+    public boolean update(String soyUseInjectedDataParam, Config.Builder builder) {
+      boolean soyUseInjectedData = Boolean.valueOf(soyUseInjectedDataParam);
+      builder.setSoyUseInjectedData(soyUseInjectedData);
+      return true;
+    }
+  }),
+
   JSDOC_HTML_OUTPUT_PATH("jsdoc-html-output-path", new ConfigUpdater() {
     @Override
     public void apply(String jsDocHtmlOutputPath, Config.Builder builder) {
