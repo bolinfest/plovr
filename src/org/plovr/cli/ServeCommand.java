@@ -24,7 +24,8 @@ public class ServeCommand extends AbstractCommandRunner<ServeCommandOptions> {
     }
 
     CompilationServer server = new CompilationServer(options.getListenAddress(),
-        options.getPort());
+        options.getPort(),
+        options.isHttps());
     // Register all of the configs.
     for (String arg : arguments) {
       File configFile = new File(arg);

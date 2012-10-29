@@ -27,7 +27,8 @@ public final class Server implements Runnable {
     try {
       // 0 indicates the system default should be used.
       final int maxQueuedIncomingConnections = 0;
-      server = HttpServer.create(addr, maxQueuedIncomingConnections);
+      server = HttpServerUtil.create(
+          addr, maxQueuedIncomingConnections, config.isHttps());
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

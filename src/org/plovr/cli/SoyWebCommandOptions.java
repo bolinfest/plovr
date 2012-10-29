@@ -54,6 +54,10 @@ public class SoyWebCommandOptions extends AbstractCommandOptions {
       "define custom functions or print directives for Closure Templates.")
   private String pluginModuleNames;
 
+  @Option(name = "--https",
+      usage = "Serve via https://")
+  private boolean isHttps = false;
+
   public SoyWebCommandOptions() {}
 
   public String getTemplateName() {
@@ -86,5 +90,9 @@ public class SoyWebCommandOptions extends AbstractCommandOptions {
 
   public String getPluginModuleNames() {
     return pluginModuleNames;
+  }
+
+  public boolean isHttps() {
+    return isHttps;
   }
 }

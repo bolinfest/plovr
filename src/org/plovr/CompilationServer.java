@@ -23,6 +23,8 @@ public final class CompilationServer implements Runnable {
 
   private int port;
 
+  private final boolean isHttps;
+
   // All maps are keyed on a Config id rather than a Config because there could
   // be multiple, different Config objects with the same id because of how query
   // data can be used to redefine a Config for an individual request.
@@ -37,9 +39,10 @@ public final class CompilationServer implements Runnable {
    */
   private final ConcurrentMap<String, Compilation> compilations;
 
-  public CompilationServer(String listenAddress, int port) {
+  public CompilationServer(String listenAddress, int port, boolean isHttps) {
     this.listenAddress = listenAddress;
     this.port = port;
+    this.isHttps = isHttps;
     this.configs = Maps.newConcurrentMap();
     this.compilations = Maps.newConcurrentMap();
   }
@@ -95,7 +98,7 @@ public final class CompilationServer implements Runnable {
     InetSocketAddress addr = new InetSocketAddress(listenAddress, port);
     HttpServer server;
     try {
-      server = HttpServer.create(addr, 0);
+      server = HttpServerUtil.create(addr, 0, isHttps);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

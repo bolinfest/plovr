@@ -24,10 +24,11 @@ public final class Config {
 
   private final boolean isSafeMode;
 
-  private boolean indexPagesAreEnabled;
+  private final boolean indexPagesAreEnabled;
+
+  private final boolean isHttps;
 
   private final Injector injector;
-
 
   public Config(
       String templateToRender,
@@ -37,6 +38,7 @@ public final class Config {
       Map<String, ?> compileTimeGlobals,
       boolean isSafeMode,
       boolean indexPagesAreEnabled,
+      boolean isHttps,
       String pluginModuleNames) {
     this.templateToRender = templateToRender;
     this.port = port;
@@ -45,6 +47,7 @@ public final class Config {
     this.compileTimeGlobals = compileTimeGlobals;
     this.isSafeMode = isSafeMode;
     this.indexPagesAreEnabled = indexPagesAreEnabled;
+    this.isHttps = isHttps;
 
     List<String> moduleNames = Lists.newArrayList();
     moduleNames.add("org.plovr.soy.function.PlovrModule");
@@ -83,6 +86,10 @@ public final class Config {
 
   public boolean indexPagesAreEnabled() {
     return indexPagesAreEnabled;
+  }
+
+  public boolean isHttps() {
+    return isHttps;
   }
 
   public Injector getInjector() {

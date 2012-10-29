@@ -20,6 +20,10 @@ public class ServeCommandOptions extends AbstractCommandOptions {
       usage = "The port on which to run the server.")
   private int port = 9810;
 
+  @Option(name = "--https",
+      usage = "Serve via https://")
+  private boolean isHttps = false;
+
   @Argument
   private List<String> arguments = Lists.newLinkedList();
 
@@ -29,6 +33,10 @@ public class ServeCommandOptions extends AbstractCommandOptions {
 
   public int getPort() {
     return port;
+  }
+
+  public boolean isHttps() {
+    return isHttps;
   }
 
   public List<String> getArguments() {
