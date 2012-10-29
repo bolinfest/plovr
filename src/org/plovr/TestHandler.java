@@ -191,8 +191,13 @@ public class TestHandler extends AbstractGetHandler {
         }
 
         if (entry.getName().endsWith("_test.js")) {
-          String basePath = base.getAbsolutePath();
-          String testPath = entry.getAbsolutePath();
+          // This path substitution is to fix an issue where these paths were
+          // not working on Windows:
+          // http://code.google.com/p/plovr/issues/detail?id=64
+          // TODO(mbolin): Create a more general path escaping mechanism and
+          // make sure that it is used consistently across the codebase.
+          String basePath = base.getAbsolutePath().replace('\\', '/');
+          String testPath = entry.getAbsolutePath().replace('\\', '/');
           String relativePath = testPath.substring(basePath.length());
           if (relativePath.startsWith("/")) {
             relativePath = relativePath.substring(1);
