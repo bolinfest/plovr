@@ -78,6 +78,7 @@ public class PlovrSoySyntaxExceptionTest {
   }
 
   @Test
+  @SuppressWarnings("deprecation")
   public void testSoyExceptionWithoutLineNumber() {
     String errorMessage = "Found references to data keys that are not" +
     		" declared in SoyDoc: [weekdays]";
