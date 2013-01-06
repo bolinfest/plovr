@@ -24,6 +24,7 @@ import com.google.gson.JsonSyntaxException;
 import com.google.inject.Injector;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.base.IncrementingIdGenerator;
+import com.google.template.soy.base.SoyFileKind;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.data.SoyData;
 import com.google.template.soy.data.restricted.StringData;
@@ -119,8 +120,9 @@ public class SoyRequestHandler implements HttpHandler {
 
     SoyFileParser parser = new SoyFileParser(
         Files.newReader(soyFile, Charsets.UTF_8),
-        new IncrementingIdGenerator(),
-        relativePath);
+        SoyFileKind.SRC,
+        relativePath,
+        new IncrementingIdGenerator());
     SoyFileNode node = parser.parseSoyFile();
 
     String namespace = node.getNamespace();

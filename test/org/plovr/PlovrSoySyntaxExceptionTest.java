@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.SoySyntaxException;
 
 /**
@@ -49,14 +50,17 @@ public class PlovrSoySyntaxExceptionTest {
     assertEquals("55", matcher.group(1));
     assertEquals("7", matcher.group(2));
   }
-  
+
   @Test
   public void testSoyExceptionWithLineNumber() {
     String errorMessage = "Left brace '{' not allowed within a Soy tag " +
         "delimited by single braces (consider using double braces to delimit " +
         "the Soy tag) [line 13, column 1].";
-    SoySyntaxException soySyntaxException = new SoySyntaxException(errorMessage);
-    soySyntaxException.setTemplateName(".base");
+    SoySyntaxException soySyntaxException = SoySyntaxException.createWithMetaInfo(
+        errorMessage,
+        new SourceLocation("src/org/plovr/plovr.js", /* lineNumber */ 13),
+        /* filePath */ null, // Must not be specified when SourceLocation is set.
+        /* templateName */ ".base");
     PlovrSoySyntaxException exception = new PlovrSoySyntaxException(
         soySyntaxException, input);
     assertEquals(
