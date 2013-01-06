@@ -4,10 +4,10 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URL;
 
-import com.google.javascript.rhino.head.Context;
-import com.google.javascript.rhino.head.JavaScriptException;
-import com.google.javascript.rhino.head.NativeObject;
-import com.google.javascript.rhino.head.Scriptable;
+import sun.org.mozilla.javascript.internal.Context;
+import sun.org.mozilla.javascript.internal.JavaScriptException;
+import sun.org.mozilla.javascript.internal.NativeObject;
+import sun.org.mozilla.javascript.internal.Scriptable;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
