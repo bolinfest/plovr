@@ -351,11 +351,11 @@ public class ContextFactory
 
         if (isDom3Present()) {
             return org.mozilla.javascript.xml.XMLLib.Factory.create(
-                JarJarHelper.javascriptPrefix + ".xmlimpl.XMLLibImpl"
+                "org.mozilla.javascript.xmlimpl.XMLLibImpl"
             );
         } else if (Kit.classOrNull("org.apache.xmlbeans.XmlCursor") != null) {
             return org.mozilla.javascript.xml.XMLLib.Factory.create(
-                JarJarHelper.javascriptPrefix + ".xml.impl.xmlbeans.XMLLibImpl"
+                "org.mozilla.javascript.xml.impl.xmlbeans.XMLLibImpl"
             );
         } else {
             return null;

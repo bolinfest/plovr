@@ -200,20 +200,20 @@ public class PolicySecurityController extends SecurityController
         cfw.add(ByteCode.RETURN);
         cfw.stopMethod((short)1);
         String callableCallSig =
-            "L" + JarJarHelper.javascriptPrefixSlashes + "/Context;" +
-            "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;" +
-            "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;" +
+            "Lorg/mozilla/javascript/Context;" +
+            "Lorg/mozilla/javascript/Scriptable;" +
+            "Lorg/mozilla/javascript/Scriptable;" +
             "[Ljava/lang/Object;)Ljava/lang/Object;";
 
         cfw.startMethod("call",
-                "(L" + JarJarHelper.javascriptPrefixSlashes + "/Callable;" + callableCallSig,
+                "(Lorg/mozilla/javascript/Callable;" + callableCallSig,
                 (short)(ClassFileWriter.ACC_PUBLIC
                         | ClassFileWriter.ACC_FINAL));
         for(int i = 1; i < 6; ++i) {
             cfw.addALoad(i);
         }
         cfw.addInvoke(ByteCode.INVOKEINTERFACE,
-                JarJarHelper.javascriptPrefixSlashes + "/Callable", "call",
+                "org/mozilla/javascript/Callable", "call",
                 "(" + callableCallSig);
         cfw.add(ByteCode.ARETURN);
         cfw.stopMethod((short)6);
