@@ -286,7 +286,7 @@ public final class OptRuntime extends ScriptRuntime
 
     public static class GeneratorState {
         static final String CLASS_NAME =
-            JarJarHelper.javascriptPrefixSlashes + "/optimizer/OptRuntime$GeneratorState";
+            "org/mozilla/javascript/optimizer/OptRuntime$GeneratorState";
 
         public int resumptionPoint;
         static final String resumptionPoint_NAME = "resumptionPoint";
@@ -295,7 +295,7 @@ public final class OptRuntime extends ScriptRuntime
         public Scriptable thisObj;
         static final String thisObj_NAME = "thisObj";
         static final String thisObj_TYPE =
-            "L" + JarJarHelper.javascriptPrefixSlashes + "/Scriptable;";
+            "Lorg/mozilla/javascript/Scriptable;";
 
         Object[] stackState;
         Object[] localsState;
