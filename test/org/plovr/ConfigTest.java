@@ -7,6 +7,7 @@ import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
+import com.google.common.base.Charsets;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.javascript.jscomp.CheckLevel;
@@ -55,7 +56,7 @@ public class ConfigTest {
     assertEquals("hello world", options.checkMissingGetCssNameBlacklist);
     assertEquals(CheckLevel.ERROR, options.getReportUnknownTypes());
     assertTrue(options.getAcceptConstKeyword());
-    assertEquals("UTF-8", options.getOutputCharset());
+    assertEquals(Charsets.UTF_8, options.getOutputCharset());
     assertEquals(LanguageMode.ECMASCRIPT5, options.getLanguageIn());
   }
 }

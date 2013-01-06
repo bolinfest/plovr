@@ -582,8 +582,8 @@ public final class Config implements Comparable<Config> {
 
     if (variableMapInputFile != null) {
       try {
-        options.inputVariableMapSerialized = VariableMap.load(
-            variableMapInputFile.getAbsolutePath()).toBytes();
+        options.setInputVariableMap(VariableMap.load(
+            variableMapInputFile.getAbsolutePath()));
       } catch (IOException e) {
         logger.severe("The variable map input file '" + variableMapInputFile +
                       "' could not be loaded: " + e.getMessage());
@@ -592,8 +592,8 @@ public final class Config implements Comparable<Config> {
 
     if (propertyMapInputFile != null) {
       try {
-        options.inputPropertyMapSerialized = VariableMap.load(
-            propertyMapInputFile.getAbsolutePath()).toBytes();
+        options.setInputPropertyMap(VariableMap.load(
+            propertyMapInputFile.getAbsolutePath()));
       } catch (IOException e) {
         logger.severe("The property map input file '" + propertyMapInputFile +
                       "' could not be loaded: " + e.getMessage());

@@ -1,5 +1,7 @@
 package com.google.javascript.jscomp;
 
+import java.nio.charset.Charset;
+
 import org.plovr.ConfigTest;
 
 /**
@@ -35,7 +37,9 @@ public class PlovrCompilerOptions extends CompilerOptions {
     return acceptConstKeyword;
   }
 
-  public String getOutputCharset() {
-    return outputCharset;
+  /** Expand the visibility of this method from package-private to public. */
+  @Override
+  public Charset getOutputCharset() {
+    return super.getOutputCharset();
   }
 }
