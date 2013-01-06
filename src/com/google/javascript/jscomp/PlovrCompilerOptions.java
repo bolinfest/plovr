@@ -23,13 +23,6 @@ import org.plovr.ConfigTest;
 @SuppressWarnings("serial")
 public class PlovrCompilerOptions extends CompilerOptions {
 
-  /**
-   * The name of the scope to prefix all global variable assignments
-   * with. This assumes that all of the resulting code will be wrapped
-   * in a with (scope) { } wrapper.
-   */
-  public String globalScopeName = "";
-
   public boolean getProcessObjectPropertyString() {
     return processObjectPropertyString;
   }

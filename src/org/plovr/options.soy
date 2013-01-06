@@ -307,16 +307,50 @@ without editing the config file or the URL in the <code>&lt;script></code> tag.
   }
 }</pre>{/literal}
   {case 'global-scope-name'}
-    A scope name for multiple modules to share. This will cause
-    modules to be wrapped with a
-    {literal}<pre>(function(a) { with (a) { ... } })(scope)</pre>{/literal}
-    (and the main module will additionally start with{sp}
-    {literal}<code>scope = {}</code>{/literal}{sp}
-    so that you don't actually have to do anything special). As a
-    result, none of the modules' global variables will make it to the
-    real global scope. Instead they will be inside of the specified
-    scope variable, which should not be touched by any other code on
-    the page.
+    Specifies the name of the variable to use as the top-level scope object for modules.
+    This has the side-effect of applying Closure Compiler's <code>RescopeGlobalSymbols</code> pass
+    (with <code>z</code> as the name of the namespace) when generating the compiled JavaScript.
+    This, in combination with an anonymous function wrapper, makes it possible to include modules of
+    compiled JavaScript on an arbitrary page without running the risk of interfering with the host
+    page's JavaScript.
+    For example, assume that the compiled version of your JavaScript is as follows:
+{literal}<pre>// module1.js
+var a = function() { /*...*/ };
+console.log(a());
+
+// module2.js
+var c = function() { var b = a(); return document.getElementById(b); };
+console.log(c());
+</pre>{/literal}
+    Normally, it is fine to load <code>module1.js</code> and later load <code>module2.js</code>{sp}
+    (which relies on <code>a()</code> being defined in <code>module1.js</code>) in your own webapp.
+    However, if you are loading this code on an arbitrary third-party web site (e.g., you are
+    creating an embeddable library, such as Google Maps), then you run the risk of a collision, as{sp}
+    <code>a</code> and <code>c</code>, may already be defined by the host page.
+    <p>
+    Using <code>global-scope-name</code> creates a new object to represent the global scope of
+    your JavaScript. All implicit global references in your code are prefixed with this new
+    global object, and are then wrapped in an anonymous function to ensure that your code does not
+    conflict with that of the host page. 
+    For example, if the value of <code>global-scope-name</code> is <code>"__moduleGlobalScope__"</code>,
+    then the previous example will become:
+{literal}<pre>// module1.js
+__moduleGlobalScope__={};(function(z){
+z.a = function() { /*...*/ };
+window.console.log(z.a());
+})(__moduleGlobalScope__);
+
+// module2.js
+function(z){
+z.c = function() { var b = z.a(); return window.document.getElementById(b); };
+window.console.log(z.c());
+})(__moduleGlobalScope__);
+</pre>{/literal}
+    Note how <code>a</code> is defined on <code>__moduleGlobalScope__</code> in <code>module1.js</code>{sp}
+    so that it is available in <code>module2.js</code>, but not to the code in the host environment.
+    Also note that <code>RescopeGlobalSymbols</code> does not blindly rescope all variables:
+    it knows that <code>b</code> is a local variable and that <code>document</code> is an extern,
+    so neither of those are recoped as properties of <code>z</code>, as appropriate. 
   {case 'define'}
     An object literal that contains a mapping of variables in the JavaScript code
     that are annotated with <code>@define</code> (indicating that they can be

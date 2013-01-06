@@ -292,13 +292,12 @@ public final class Compilation {
       }
       builder.append("(function(");
       builder.append(Config.GLOBAL_SCOPE_NAME);
-      builder.append("){with(");
-      builder.append(Config.GLOBAL_SCOPE_NAME);
+      // Including a newline makes the offset into the source map easier to calculate.
       builder.append("){\n");
     }
     builder.append(moduleCode);
     if (hasGlobalScopeName) {
-      builder.append("}})(");
+      builder.append("})(");
       builder.append(config.getGlobalScopeName());
       builder.append(");");
     }

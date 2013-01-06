@@ -63,10 +63,10 @@ public final class Config implements Comparable<Config> {
    *
    * For example, if "$" were chosen, then that would shadow the
    * global jQuery object, which would be problematic for developers
-   * who were using the Compiler with jQuery. As "a" is unlikely to be
+   * who were using the Compiler with jQuery. As "z" is unlikely to be
    * supplied as an extern, it is a good choice for the GLOBAL_SCOPE_NAME.
    */
-  public static final String GLOBAL_SCOPE_NAME = "a";
+  public static final String GLOBAL_SCOPE_NAME = "z";
 
   private final String id;
 
@@ -559,7 +559,7 @@ public final class Config implements Comparable<Config> {
             "For reasons unknown, setting this to false ends up " +
             "with a fairly larger final output, even though we just go " +
             "and re-anonymize the functions a few steps later.");
-        options.globalScopeName = GLOBAL_SCOPE_NAME;
+        options.renamePrefixNamespace = GLOBAL_SCOPE_NAME;
       }
     }
 
