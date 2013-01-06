@@ -136,6 +136,7 @@ public class ConfigParserTest {
         "/closure/goog/format/format.js",
         "/closure/goog/i18n/bidi.js",
         "/closure/goog/i18n/bidiformatter.js",
+        "/closure/goog/soy/data.js",
         "/closure/goog/soy/soy.js",
         "/closure/goog/string/stringbuffer.js",
         "../../closure/closure-templates/javascript/soyutils_usegoog.js",

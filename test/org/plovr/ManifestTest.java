@@ -92,6 +92,7 @@ public class ManifestTest {
             "/closure/goog/reflect/reflect.js",
             "/closure/goog/events/browserevent.js",
             "/closure/goog/events/eventwrapper.js",
+            "/closure/goog/events/listenable.js",
             "/closure/goog/events/listener.js",
             "/closure/goog/object/object.js",
             "/closure/goog/events/events.js",
