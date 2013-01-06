@@ -193,17 +193,16 @@ var corner = goog.positioning.Corner;
 var overflow = goog.positioning.Overflow;
 var testArea;
 
-function setUpPage() {
+function setUp() {
+  window.scrollTo(0, 0);
+
   var viewportSize = goog.dom.getViewportSize();
   // Some tests need enough size viewport.
   if (viewportSize.width < 600 || viewportSize.height < 600) {
     window.moveTo(0, 0);
     window.resizeTo(640, 640);
   }
-}
 
-function setUp() {
-  window.scrollTo(0, 0);
   testArea = goog.dom.getElement('test-area');
 }
 

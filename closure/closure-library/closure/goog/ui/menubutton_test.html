@@ -40,7 +40,10 @@ See the COPYING file for details.
   goog.require('goog.ui.MenuButton');
   goog.require('goog.ui.MenuItem');
   goog.require('goog.userAgent');
+  goog.require('goog.userAgent.product');
   goog.require('goog.userAgent.product.isVersion');
+
+
 </script>
 </head>
 <body>
@@ -75,6 +78,15 @@ function MyFakeEvent(keyCode) {
 }
 
 function setUp() {
+  window.scrollTo(0, 0);
+
+  var viewportSize = goog.dom.getViewportSize();
+  // Some tests need enough size viewport.
+  if (viewportSize.width < 600 || viewportSize.height < 600) {
+    window.moveTo(0, 0);
+    window.resizeTo(640, 640);
+  }
+
   clonedMenuButtonDom = goog.dom.getElement('demoMenuButton').cloneNode(true);
 
   menuButton = new goog.ui.MenuButton();

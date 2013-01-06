@@ -208,7 +208,7 @@ goog.editor.plugins.LinkBubble.prototype.setBlockOpeningUnsafeSchemes =
  * Schemes should all be in lowercase. If the plugin is set to block opening
  * unsafe schemes, user-entered URLs will be converted to lowercase and checked
  * against this list. The whitelist has no effect if blocking is not enabled.
- * @param {Array.<String>} schemes String array of URL schemes to allow (http,
+ * @param {Array.<string>} schemes String array of URL schemes to allow (http,
  *     https, etc.).
  */
 goog.editor.plugins.LinkBubble.prototype.setSafeToOpenSchemes =
@@ -439,10 +439,15 @@ goog.editor.plugins.LinkBubble.prototype.getLinkToTextObj_ = function() {
 
 
 /**
- * Shows the link dialog
+ * Shows the link dialog.
+ * @param {goog.events.BrowserEvent} e The event.
  * @private
  */
-goog.editor.plugins.LinkBubble.prototype.showLinkDialog_ = function() {
+goog.editor.plugins.LinkBubble.prototype.showLinkDialog_ = function(e) {
+  // Needed when this occurs due to an ENTER key event, else the newly created
+  // dialog manages to have its OK button pressed, causing it to disappear.
+  e.preventDefault();
+
   this.getFieldObject().execCommand(goog.editor.Command.MODAL_LINK_EDITOR,
       new goog.editor.Link(
           /** @type {HTMLAnchorElement} */ (this.getTargetElement()),
@@ -466,6 +471,7 @@ goog.editor.plugins.LinkBubble.prototype.deleteLink_ = function() {
   this.closeBubble();
 
   this.getFieldObject().dispatchChange();
+  this.getFieldObject().focus();
 };
 
 

@@ -209,7 +209,7 @@ goog.ui.ControlRenderer.prototype.getContentElement = function(element) {
  */
 goog.ui.ControlRenderer.prototype.enableClassName = function(control,
     className, enable) {
-  var element = (/** @type {Element} */
+  var element = /** @type {Element} */ (
       control.getElement ? control.getElement() : control);
   if (element) {
     // For IE6, we need to enable any combined classes involving this class
@@ -393,9 +393,9 @@ goog.ui.ControlRenderer.prototype.setAriaStates = function(control, element) {
     this.updateAriaState(element, goog.ui.Component.State.DISABLED,
                          true);
   }
-  if (control.isSelected()) {
+  if (control.isSupportedState(goog.ui.Component.State.SELECTED)) {
     this.updateAriaState(element, goog.ui.Component.State.SELECTED,
-                         true);
+                         control.isSelected());
   }
   if (control.isSupportedState(goog.ui.Component.State.CHECKED)) {
     this.updateAriaState(element, goog.ui.Component.State.CHECKED,

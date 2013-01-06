@@ -12,12 +12,14 @@ See the COPYING file for details.
 <script src="../base.js"></script>
 <script>
   goog.require('goog.array');
+  goog.require('goog.dom');
   goog.require('goog.testing.PropertyReplacer');
   goog.require('goog.testing.jsunit');
   goog.require('goog.testing.recordFunction');
 </script>
 </head>
 <body>
+<div class="foo"></div>
 <script>
 
 function testArrayIndexOf() {
@@ -120,6 +122,16 @@ function testArrayForEachOmitsDeleted() {
     s += val + index;
   });
   assertEquals('a0c2', s);
+}
+
+function testArrayForEachScope() {
+  var scope = {};
+  var a = ['a', 'b', 'c', 'd'];
+  goog.array.forEach(a, function(val, index, a2) {
+    assertEquals(a, a2);
+    assertEquals('number', typeof index);
+    assertEquals(this, scope);
+  }, scope);
 }
 
 function testArrayForEachRight() {
@@ -568,6 +580,23 @@ function testArrayEveryOmitsDeleted() {
   assertFalse(b);
 }
 
+function testArrayCount() {
+  var a = [0, 1, 2, 3, 4];
+  var context = {};
+  assertEquals(3, goog.array.count(a, function(element, index, array) {
+    assertTrue(goog.isNumber(index));
+    assertEquals(a, array);
+    assertEquals(context, this);
+    return element % 2 == 0;
+  }, context));
+
+  delete a[2];
+  assertEquals('deleted element is ignored', 4,
+      goog.array.count(a, function() {
+        return true;
+      }));
+}
+
 function testArrayContains() {
   var a = [0, 1, 2, 3];
   assertTrue('contain, Should contain 3', goog.array.contains(a, 3));
@@ -775,6 +804,13 @@ function testExtendWithArguments() {
   var a2 = [0, 1, 2, 3, 4, 5];
   goog.array.extend(a, f(1, 2, 3), f(4, 5));
   assertArrayEquals('extend, should be equal', a, a2);
+}
+
+function testExtendWithQuerySelector() {
+  var a = [0];
+  var d = goog.dom.getElementsByTagNameAndClass('div', 'foo');
+  goog.array.extend(a, d);
+  assertEquals(2, a.length);
 }
 
 function testArraySplice() {

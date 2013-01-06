@@ -26,12 +26,12 @@ goog.provide('goog.editor.Field');
 goog.provide('goog.editor.Field.EventType');
 
 goog.require('goog.array');
+goog.require('goog.asserts');
 goog.require('goog.async.Delay');
 goog.require('goog.debug.Logger');
 goog.require('goog.dom');
 goog.require('goog.dom.Range');
 goog.require('goog.dom.TagName');
-goog.require('goog.dom.classes');
 goog.require('goog.editor.BrowserFeature');
 goog.require('goog.editor.Command');
 goog.require('goog.editor.Plugin');
@@ -253,10 +253,15 @@ goog.editor.Field.EventType = {
    */
   BLUR: 'blur',
   /**
-   * Dispach before tab is handled by the field.  This is a legacy way
+   * Dispatched before tab is handled by the field.  This is a legacy way
    * of controlling tab behavior.  Use trog.plugins.AbstractTabHandler now.
    */
   BEFORETAB: 'beforetab',
+  /**
+   * Dispatched after the iframe containing the field is resized, so that UI
+   * components which contain it can respond.
+   */
+  IFRAME_RESIZED: 'ifrsz',
   /**
    * Dispatched when the selection changes.
    * Use handleSelectionChange from plugin API instead of listening
@@ -334,6 +339,22 @@ goog.editor.Field.prototype.selectionChangeTarget_;
 
 
 /**
+ * Flag controlling wether to capture mouse up events on the window or not.
+ * @type {boolean}
+ * @private
+ */
+goog.editor.Field.prototype.useWindowMouseUp_ = false;
+
+
+/**
+ * FLag indicating the handling of a mouse event sequence.
+ * @type {boolean}
+ * @private
+ */
+goog.editor.Field.prototype.waitingForMouseUp_ = false;
+
+
+/**
  * Sets the active field id.
  * @param {?string} fieldId The active field id.
  */
@@ -347,6 +368,18 @@ goog.editor.Field.setActiveFieldId = function(fieldId) {
  */
 goog.editor.Field.getActiveFieldId = function() {
   return goog.editor.Field.activeFieldId_;
+};
+
+
+/**
+ * Sets flag to control whether to use window mouse up after seeing
+ * a mouse down operation on the field.
+ * @param {boolean} flag True to track window mouse up.
+ */
+goog.editor.Field.prototype.setUseWindowMouseUp = function(flag) {
+  goog.asserts.assert(!flag || !this.usesIframe(),
+      'procssing window mouse up should only be enabled when not using iframe');
+  this.useWindowMouseUp_ = flag;
 };
 
 
@@ -418,8 +451,10 @@ goog.editor.Field.prototype.getOriginalElement = function() {
 goog.editor.Field.prototype.addListener = function(type, listener, opt_capture,
                                                    opt_handler) {
   var elem = this.getElement();
-  // On Gecko, keyboard events only reliably fire on the document element.
-  if (elem && goog.editor.BrowserFeature.USE_DOCUMENT_FOR_KEY_EVENTS) {
+  // On Gecko, keyboard events only reliably fire on the document element when
+  // using an iframe.
+  if (goog.editor.BrowserFeature.USE_DOCUMENT_FOR_KEY_EVENTS && elem &&
+      this.usesIframe()) {
     elem = elem.ownerDocument;
   }
   this.eventRegister.listen(elem, type, listener, opt_capture, opt_handler);
@@ -840,7 +875,13 @@ goog.editor.Field.prototype.setupChangeListeners_ = function() {
   }
 
   this.addListener(goog.events.EventType.MOUSEDOWN, this.handleMouseDown_);
-  this.addListener(goog.events.EventType.MOUSEUP, this.handleMouseUp_);
+  if (this.useWindowMouseUp_) {
+    this.eventRegister.listen(this.editableDomHelper.getDocument(),
+        goog.events.EventType.MOUSEUP, this.handleMouseUp_);
+    this.addListener(goog.events.EventType.DRAGSTART, this.handleDragStart_);
+  } else {
+    this.addListener(goog.events.EventType.MOUSEUP, this.handleMouseUp_);
+  }
 };
 
 
@@ -977,7 +1018,10 @@ goog.editor.Field.MUTATION_EVENTS_GECKO = [
  * @protected
  */
 goog.editor.Field.prototype.setupMutationEventHandlersGecko = function() {
-  if (goog.editor.BrowserFeature.HAS_DOM_SUBTREE_MODIFIED_EVENT) {
+  // Always use DOMSubtreeModified on Gecko when not using an iframe so that
+  // DOM mutations outside the Field do not trigger handleMutationEventGecko_.
+  if (goog.editor.BrowserFeature.HAS_DOM_SUBTREE_MODIFIED_EVENT ||
+      !this.usesIframe()) {
     this.eventRegister.listen(this.getElement(), 'DOMSubtreeModified',
         this.handleMutationEventGecko_);
   } else {
@@ -1186,7 +1230,7 @@ goog.editor.Field.prototype.injectContents = function(contents, field) {
   var styles = {};
   var newHtml = this.getInjectableContents(contents, styles);
   goog.style.setStyle(field, styles);
-  field.innerHTML = newHtml;
+  goog.editor.node.replaceInnerHtml(field, newHtml);
 };
 
 
@@ -1927,11 +1971,7 @@ goog.editor.Field.cancelLinkClick_ = function(e) {
  * @private
  */
 goog.editor.Field.prototype.handleMouseDown_ = function(e) {
-  // If the user clicks on an object (like an image) in the field
-  // and the activeField is not set, set it.
-  if (!goog.editor.Field.getActiveFieldId()) {
-    goog.editor.Field.setActiveFieldId(this.id);
-  }
+  goog.editor.Field.setActiveFieldId(this.id);
 
   // Open links in a new window if the user control + clicks.
   if (goog.userAgent.IE) {
@@ -1941,6 +1981,18 @@ goog.editor.Field.prototype.handleMouseDown_ = function(e) {
       this.originalDomHelper.getWindow().open(targetElement.href);
     }
   }
+  this.waitingForMouseUp_ = true;
+};
+
+
+/**
+ * Handle drag start. Needs to cancel listening for the mouse up event on the
+ * window.
+ * @param {goog.events.BrowserEvent} e The event.
+ * @private
+ */
+goog.editor.Field.prototype.handleDragStart_ = function(e) {
+  this.waitingForMouseUp_ = false;
 };
 
 
@@ -1950,6 +2002,11 @@ goog.editor.Field.prototype.handleMouseDown_ = function(e) {
  * @private
  */
 goog.editor.Field.prototype.handleMouseUp_ = function(e) {
+  if (this.useWindowMouseUp_ && !this.waitingForMouseUp_) {
+    return;
+  }
+  this.waitingForMouseUp_ = false;
+
   /*
    * We fire a selection change event immediately for listeners that depend on
    * the native browser event object (e).  On IE, a listener that tries to
@@ -2384,7 +2441,7 @@ goog.editor.Field.prototype.makeUneditable = function(opt_skipRestore) {
   // so that the original node will have the same properties as it did before
   // it was made editable.
   if (goog.isString(html)) {
-    field.innerHTML = html;
+    goog.editor.node.replaceInnerHtml(field, html);
     this.resetOriginalElemProperties();
   }
 

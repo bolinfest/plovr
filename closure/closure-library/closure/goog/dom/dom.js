@@ -1232,7 +1232,7 @@ goog.dom.getParentElement = function(element) {
     return element.parentElement;
   }
   var parent = element.parentNode;
-  return goog.dom.isElement(parent) ? (/** @type {!Element} */ parent) : null;
+  return goog.dom.isElement(parent) ? /** @type {!Element} */ (parent) : null;
 };
 
 
@@ -1290,9 +1290,7 @@ goog.dom.compareNodeOrder = function(node1, node2) {
   }
 
   // Special case for document nodes on IE 7 and 8.
-  if ((node1.nodeType == goog.dom.NodeType.DOCUMENT ||
-      node2.nodeType == goog.dom.NodeType.DOCUMENT) &&
-      goog.userAgent.IE && !goog.userAgent.isVersion(9)) {
+  if (goog.userAgent.IE && !goog.userAgent.isDocumentMode(9)) {
     if (node1.nodeType == goog.dom.NodeType.DOCUMENT) {
       return -1;
     }
@@ -1797,7 +1795,7 @@ goog.dom.getNodeTextOffset = function(node, opt_offsetParent) {
  * @return {Node} The node at the given offset.
  */
 goog.dom.getNodeAtOffset = function(parent, offset, opt_result) {
-  var stack = [parent], pos = 0, cur;
+  var stack = [parent], pos = 0, cur = null;
   while (stack.length > 0 && pos < offset) {
     cur = stack.pop();
     if (cur.nodeName in goog.dom.TAGS_TO_IGNORE_) {

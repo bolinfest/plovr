@@ -116,7 +116,9 @@ goog.editor.BrowserFeature = {
   // Whether keyboard events only reliably fire on the document.
   // On Gecko without contentEditable, keyboard events only fire reliably on the
   // document element. With contentEditable, the field itself is focusable,
-  // which means that it will fire key events.
+  // which means that it will fire key events. This does not apply if
+  // application is using ContentEditableField or otherwise overriding Field
+  // not to use an iframe.
   USE_DOCUMENT_FOR_KEY_EVENTS: goog.userAgent.GECKO &&
       !goog.editor.defines.USE_CONTENTEDITABLE_IN_FIREFOX_3,
 
@@ -147,7 +149,8 @@ goog.editor.BrowserFeature = {
       goog.userAgent.WEBKIT || goog.userAgent.OPERA,
 
   // Whether clicking on an editable link will take you to that site.
-  FOLLOWS_EDITABLE_LINKS: goog.userAgent.WEBKIT,
+  FOLLOWS_EDITABLE_LINKS: goog.userAgent.WEBKIT ||
+      goog.userAgent.IE && goog.userAgent.isVersion('9'),
 
   // Whether this browser has document.activeElement available.
   HAS_ACTIVE_ELEMENT:

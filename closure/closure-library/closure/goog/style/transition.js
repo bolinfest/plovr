@@ -62,10 +62,14 @@ goog.style.transition.set = function(element, properties) {
         if (goog.isString(p)) {
           return p;
         } else {
-          goog.asserts.assert(p && p.property && goog.isNumber(p.duration) &&
-              p.timing && goog.isNumber(p.delay));
-          return p.property + ' ' + p.duration + 's ' + p.timing + ' ' +
-              p.delay + 's';
+          goog.asserts.assertObject(p,
+              'Expected css3 property to be an object.');
+          var propString = p.property + ' ' + p.duration + 's ' + p.timing +
+              ' ' + p.delay + 's';
+          goog.asserts.assert(p.property && goog.isNumber(p.duration) &&
+              p.timing && goog.isNumber(p.delay),
+              'Unexpected css3 property value: %s', propString);
+          return propString;
         }
       });
   goog.style.transition.setPropertyValue_(element, values.join(','));
@@ -100,7 +104,9 @@ goog.style.transition.isSupported = function() {
           '-moz-transition:opacity 1s linear;-o-transition:opacity 1s linear;' +
           'transition:opacity 1s linear">';
 
-      var testElement = el.firstChild;
+      var testElement = /** @type {Element} */ (el.firstChild);
+      goog.asserts.assert(testElement.nodeType == Node.ELEMENT_NODE);
+
       goog.style.transition.css3TransitionSupported_ =
           goog.isDef(testElement.style.transition) ||
           goog.isDef(testElement.style.WebkitTransition) ||
