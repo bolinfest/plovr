@@ -16,8 +16,6 @@
 
 package com.google.javascript.jscomp;
 
-import static com.google.javascript.rhino.testing.Asserts.assertTypeEquals;
-
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.type.FlowScope;
 import com.google.javascript.jscomp.type.ReverseAbstractInterpreter;
@@ -44,7 +42,7 @@ public class SemanticReverseAbstractInterpreterTest
   }
 
   public FlowScope newScope() {
-    Scope globalScope = new Scope(new Node(Token.EMPTY), compiler);
+    Scope globalScope = Scope.createGlobalScope(new Node(Token.EMPTY));
     functionScope = new Scope(globalScope, new Node(Token.EMPTY));
     return LinkedFlowScope.createEntryLattice(functionScope);
   }
@@ -459,6 +457,35 @@ public class SemanticReverseAbstractInterpreterTest
             new TypedName("a", U2U_CONSTRUCTOR_TYPE)),
         Sets.newHashSet(
             new TypedName("a", ALL_TYPE)));
+  }
+
+  @SuppressWarnings("unchecked")
+  public void testTypeof3() {
+    FlowScope blind = newScope();
+    testBinop(blind,
+        Token.EQ,
+        new Node(Token.TYPEOF, createVar(
+            blind, "a", OBJECT_NUMBER_STRING_BOOLEAN)),
+        Node.newString("function"),
+        Sets.newHashSet(
+            new TypedName("a", U2U_CONSTRUCTOR_TYPE)),
+        Sets.newHashSet(
+            new TypedName("a", OBJECT_NUMBER_STRING_BOOLEAN)));
+  }
+
+  @SuppressWarnings("unchecked")
+  public void testTypeof4() {
+    FlowScope blind = newScope();
+    testBinop(blind,
+        Token.EQ,
+        new Node(Token.TYPEOF, createVar(
+            blind, "a", createUnionType(
+                U2U_CONSTRUCTOR_TYPE,NUMBER_STRING_BOOLEAN))),
+        Node.newString("function"),
+        Sets.newHashSet(
+            new TypedName("a", U2U_CONSTRUCTOR_TYPE)),
+        Sets.newHashSet(
+            new TypedName("a", NUMBER_STRING_BOOLEAN)));
   }
 
   @SuppressWarnings("unchecked")

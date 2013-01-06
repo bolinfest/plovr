@@ -54,6 +54,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.javascript.rhino.ErrorReporter;
+import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.ScriptRuntime;
 import com.google.javascript.rhino.Token;
@@ -256,8 +257,9 @@ public class JSTypeRegistry implements Serializable {
 
     UnknownType UNKNOWN_TYPE = new UnknownType(this, false);
     registerNativeType(JSTypeNative.UNKNOWN_TYPE, UNKNOWN_TYPE);
+    UnknownType checkedUnknownType = new UnknownType(this, true);
     registerNativeType(
-        JSTypeNative.CHECKED_UNKNOWN_TYPE, new UnknownType(this, true));
+        JSTypeNative.CHECKED_UNKNOWN_TYPE, checkedUnknownType);
 
     VoidType VOID_TYPE = new VoidType(this);
     registerNativeType(JSTypeNative.VOID_TYPE, VOID_TYPE);
@@ -270,7 +272,7 @@ public class JSTypeRegistry implements Serializable {
     // use each other's results, so at least one of them will get null
     // instead of an actual type; however, this seems to be benign.
     PrototypeObjectType TOP_LEVEL_PROTOTYPE =
-        new PrototypeObjectType(this, null, null, true);
+        new PrototypeObjectType(this, null, null, true, null, null);
     registerNativeType(JSTypeNative.TOP_LEVEL_PROTOTYPE, TOP_LEVEL_PROTOTYPE);
 
     // Object
@@ -327,7 +329,7 @@ public class JSTypeRegistry implements Serializable {
     // Boolean
     FunctionType BOOLEAN_OBJECT_FUNCTION_TYPE =
         new FunctionType(this, "Boolean", null,
-            createArrowType(createParameters(false, ALL_TYPE), BOOLEAN_TYPE),
+            createArrowType(createOptionalParameters(ALL_TYPE), BOOLEAN_TYPE),
             null, null, true, true);
     ObjectType booleanPrototype = BOOLEAN_OBJECT_FUNCTION_TYPE.getPrototype();
     registerNativeType(
@@ -424,7 +426,7 @@ public class JSTypeRegistry implements Serializable {
     // Number
     FunctionType NUMBER_OBJECT_FUNCTION_TYPE =
         new FunctionType(this, "Number", null,
-            createArrowType(createParameters(false, ALL_TYPE), NUMBER_TYPE),
+            createArrowType(createOptionalParameters(ALL_TYPE), NUMBER_TYPE),
             null, null, true, true);
     ObjectType numberPrototype = NUMBER_OBJECT_FUNCTION_TYPE.getPrototype();
     registerNativeType(
@@ -451,7 +453,7 @@ public class JSTypeRegistry implements Serializable {
     // String
     FunctionType STRING_OBJECT_FUNCTION_TYPE =
         new FunctionType(this, "String", null,
-            createArrowType(createParameters(false, ALL_TYPE), STRING_TYPE),
+            createArrowType(createOptionalParameters(ALL_TYPE), STRING_TYPE),
             null, null, true, true);
     ObjectType stringPrototype = STRING_OBJECT_FUNCTION_TYPE.getPrototype();
     registerNativeType(
@@ -507,7 +509,7 @@ public class JSTypeRegistry implements Serializable {
         createFunctionType(UNKNOWN_TYPE, true, UNKNOWN_TYPE);
     registerNativeType(JSTypeNative.U2U_FUNCTION_TYPE, U2U_FUNCTION_TYPE);
 
-    // unknown constructor type, i.e. (?...) -> ? with the NoObject type
+    // unknown constructor type, i.e. (?...) -> ? with the Unknown type
     // as instance type
     FunctionType U2U_CONSTRUCTOR_TYPE =
         // This is equivalent to
@@ -518,7 +520,7 @@ public class JSTypeRegistry implements Serializable {
             createArrowType(
                 createParametersWithVarArgs(UNKNOWN_TYPE),
                 UNKNOWN_TYPE),
-            NO_OBJECT_TYPE, null, true, true) {
+            UNKNOWN_TYPE, null, true, true) {
           private static final long serialVersionUID = 1L;
 
           @Override public FunctionType getConstructor() {
@@ -591,6 +593,9 @@ public class JSTypeRegistry implements Serializable {
   }
 
   private void register(JSType type, String name) {
+    Preconditions.checkArgument(
+        !name.contains("<"), "Type names cannot contain template annotations.");
+
     namesToTypes.put(name, type);
 
     // Add all the namespaces in which this name lives.
@@ -1127,7 +1132,7 @@ public class JSTypeRegistry implements Serializable {
   public FunctionType createConstructorType(
       JSType returnType, JSType... parameterTypes) {
     return createConstructorType(
-        null, null, createParameters(parameterTypes), returnType);
+        null, null, createParameters(parameterTypes), returnType, null);
   }
 
   /**
@@ -1137,10 +1142,11 @@ public class JSTypeRegistry implements Serializable {
    * @param returnType the function's return type
    * @param parameterTypes the parameters' types
    */
-  public FunctionType createConstructorTypeWithVarArgs(
+  private FunctionType createConstructorTypeWithVarArgs(
       JSType returnType, JSType... parameterTypes) {
     return createConstructorType(
-        null, null, createParametersWithVarArgs(parameterTypes), returnType);
+        null, null, createParametersWithVarArgs(parameterTypes), returnType,
+        null);
   }
 
   /**
@@ -1363,11 +1369,12 @@ public class JSTypeRegistry implements Serializable {
 
   /**
    * Create an anonymous object type.
+   * @param info Used to mark object literals as structs; can be {@code null}
    */
-  public ObjectType createAnonymousObjectType() {
-    PrototypeObjectType type =
-        new PrototypeObjectType(this, null, null);
+  public ObjectType createAnonymousObjectType(JSDocInfo info) {
+    PrototypeObjectType type = new PrototypeObjectType(this, null, null);
     type.setPrettyPrint(true);
+    type.setJSDocInfo(info);
     return type;
   }
 
@@ -1395,7 +1402,7 @@ public class JSTypeRegistry implements Serializable {
    */
   ObjectType createNativeAnonymousObjectType() {
     PrototypeObjectType type =
-        new PrototypeObjectType(this, null, null, true);
+        new PrototypeObjectType(this, null, null, true, null, null);
     type.setPrettyPrint(true);
     return type;
   }
@@ -1410,12 +1417,13 @@ public class JSTypeRegistry implements Serializable {
    *     to indicate that the parameter types are unknown.
    * @param returnType the function's return type or {@code null} to indicate
    *     that the return type is unknown.
+   * @param templateKeys the templatized type keys for the class.
    */
   public FunctionType createConstructorType(String name, Node source,
-      Node parameters, JSType returnType) {
+      Node parameters, JSType returnType, ImmutableList<String> templateKeys) {
     return new FunctionType(this, name, source,
         createArrowType(parameters, returnType), null,
-        null, true, false);
+        templateKeys, true, false);
   }
 
   /**
@@ -1434,6 +1442,27 @@ public class JSTypeRegistry implements Serializable {
   public ParameterizedType createParameterizedType(
       ObjectType objectType, JSType parameterType) {
     return new ParameterizedType(this, objectType, parameterType);
+  }
+
+  /**
+   * Creates a templatized instance of the specified type.
+   * @param baseType the type to be templatized.
+   * @param templatizedTypes a list of the template JSTypes. Will be matched by
+   *     list order to the template keys specified in the constructor function.
+   */
+  public JSType createTemplatizedType(
+      JSType baseType, ImmutableList<JSType> templatizedTypes) {
+    // Only instance object types can currently be templatized; extend this
+    // logic when more types can be templatized.
+    if (baseType instanceof InstanceObjectType) {
+      ObjectType baseObjType = baseType.toObjectType();
+      return new InstanceObjectType(
+          this, baseObjType.getConstructor(), baseObjType.isNativeObjectType(),
+          templatizedTypes);
+    } else {
+      throw new IllegalArgumentException(
+          "Only instance object types can be templatized");
+    }
   }
 
   /**

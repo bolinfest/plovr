@@ -18,7 +18,6 @@ package com.google.javascript.jscomp;
 
 import static com.google.javascript.jscomp.TypeCheck.BAD_IMPLEMENTED_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.FUNCTION_FUNCTION_TYPE;
-import static com.google.javascript.rhino.jstype.JSTypeNative.OBJECT_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.UNKNOWN_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.VOID_TYPE;
 
@@ -83,8 +82,10 @@ final class FunctionTypeBuilder {
   private List<ObjectType> implementedInterfaces = null;
   private List<ObjectType> extendedInterfaces = null;
   private ObjectType baseType = null;
-  private ObjectType thisType = null;
+  private JSType thisType = null;
   private boolean isConstructor = false;
+  private boolean makesStructs = false;
+  private boolean makesDicts = false;
   private boolean isInterface = false;
   private Node parametersNode = null;
   private ImmutableList<String> templateTypeNames = ImmutableList.of();
@@ -105,6 +106,10 @@ final class FunctionTypeBuilder {
       DiagnosticType.warning(
           "JSC_IMPLEMENTS_WITHOUT_CONSTRUCTOR",
           "@implements used without @constructor or @interface for {0}");
+
+  static final DiagnosticType CONSTRUCTOR_REQUIRED =
+      DiagnosticType.warning("JSC_CONSTRUCTOR_REQUIRED",
+                             "{0} used without @constructor for {1}");
 
   static final DiagnosticType VAR_ARGS_MUST_BE_LAST = DiagnosticType.warning(
       "JSC_VAR_ARGS_MUST_BE_LAST",
@@ -181,24 +186,6 @@ final class FunctionTypeBuilder {
       } else {
         return true;
       }
-    }
-  }
-
-  private class ThisTypeValidator implements Predicate<JSType> {
-    @Override
-    public boolean apply(JSType type) {
-      // TODO(user): Doing an instanceof check here is too
-      // restrictive as (Date,Error) is, for instance, an object type
-      // even though its implementation is a UnionType. Would need to
-      // create interfaces JSType, ObjectType, FunctionType etc and have
-      // separate implementation instead of the class hierarchy, so that
-      // union types can also be object types, etc.
-      if (!type.restrictByNotNullOrUndefined().isSubtype(
-              typeRegistry.getNativeType(OBJECT_TYPE))) {
-        reportWarning(THIS_TYPE_NON_OBJECT, type.toString());
-        return false;
-      }
-      return true;
     }
   }
 
@@ -322,7 +309,15 @@ final class FunctionTypeBuilder {
   FunctionTypeBuilder inferInheritance(@Nullable JSDocInfo info) {
     if (info != null) {
       isConstructor = info.isConstructor();
+      makesStructs = info.makesStructs();
+      makesDicts = info.makesDicts();
       isInterface = info.isInterface();
+
+      if (makesStructs && !isConstructor) {
+        reportWarning(CONSTRUCTOR_REQUIRED, "@struct", fnName);
+      } else if (makesDicts && !isConstructor) {
+        reportWarning(CONSTRUCTOR_REQUIRED, "@dict", fnName);
+      }
 
       // base type
       if (info.hasBaseType()) {
@@ -338,21 +333,27 @@ final class FunctionTypeBuilder {
         }
       }
 
-      // implemented interfaces
-      if (isConstructor || isInterface) {
-        implementedInterfaces = Lists.newArrayList();
-        for (JSTypeExpression t : info.getImplementedInterfaces()) {
-          JSType maybeInterType = t.evaluate(scope, typeRegistry);
-          if (maybeInterType != null &&
-              maybeInterType.setValidator(new ImplementedTypeValidator())) {
-            implementedInterfaces.add((ObjectType) maybeInterType);
+      // Implemented interfaces (for constructors only).
+      if (info.getImplementedInterfaceCount() > 0) {
+        if (isConstructor) {
+          implementedInterfaces = Lists.newArrayList();
+          for (JSTypeExpression t : info.getImplementedInterfaces()) {
+            JSType maybeInterType = t.evaluate(scope, typeRegistry);
+            if (maybeInterType != null &&
+                maybeInterType.setValidator(new ImplementedTypeValidator())) {
+              implementedInterfaces.add((ObjectType) maybeInterType);
+            }
           }
+        } else if (isInterface) {
+          reportWarning(
+              TypeCheck.CONFLICTING_IMPLEMENTED_TYPE, fnName);
+        } else {
+          reportWarning(CONSTRUCTOR_REQUIRED, "@implements", fnName);
         }
-      } else if (info.getImplementedInterfaceCount() > 0) {
-        reportWarning(IMPLEMENTS_WITHOUT_CONSTRUCTOR, fnName);
       }
 
-      // extended interfaces (for interface only)
+      // extended interfaces (for interfaces only)
+      // We've already emitted a warning if this is not an interface.
       if (isInterface) {
         extendedInterfaces = Lists.newArrayList();
         for (JSTypeExpression t : info.getExtendedInterfaces()) {
@@ -391,14 +392,16 @@ final class FunctionTypeBuilder {
    * @param info The JSDocInfo for this function.
    */
   FunctionTypeBuilder inferThisType(JSDocInfo info) {
-    ObjectType maybeThisType = null;
+    JSType maybeThisType = null;
     if (info != null && info.hasThisType()) {
-      maybeThisType = ObjectType.cast(
-          info.getThisType().evaluate(scope, typeRegistry));
+      // TODO(johnlenz): In ES5 strict mode a function can have a null or
+      // undefined "this" value, but all the existing "@this" annotations
+      // don't declare restricted types.
+      maybeThisType = info.getThisType().evaluate(scope, typeRegistry)
+          .restrictByNotNullOrUndefined();
     }
     if (maybeThisType != null) {
       thisType = maybeThisType;
-      thisType.setValidator(new ThisTypeValidator());
     }
 
     return this;
@@ -622,7 +625,7 @@ final class FunctionTypeBuilder {
           .withParamsNode(parametersNode)
           .withReturnType(returnType, returnTypeInferred)
           .withTypeOfThis(thisType)
-          .withTemplateNames(templateTypeNames)
+          .withTemplateKeys(templateTypeNames)
           .build();
       maybeSetBaseType(fnType);
     }
@@ -661,9 +664,14 @@ final class FunctionTypeBuilder {
    */
   private FunctionType getOrCreateConstructor() {
     FunctionType fnType = typeRegistry.createConstructorType(
-        fnName, contents.getSourceNode(), parametersNode, returnType);
+        fnName, contents.getSourceNode(), parametersNode, returnType, null);
     JSType existingType = typeRegistry.getType(fnName);
 
+    if (makesStructs) {
+      fnType.setStruct();
+    } else if (makesDicts) {
+      fnType.setDict();
+    }
     if (existingType != null) {
       boolean isInstanceObject = existingType.isInstanceType();
       if (isInstanceObject || fnName.equals("Function")) {

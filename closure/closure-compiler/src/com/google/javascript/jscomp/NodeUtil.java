@@ -42,17 +42,16 @@ import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
- * NodeUtil contains utilities that get properties from the Node object.
+ * NodeUtil contains generally useful AST utilities.
  *
  */
 public final class NodeUtil {
 
-  static final long MAX_POSITIVE_INTEGER_NUMBER = (long)Math.pow(2, 53);
+  static final long MAX_POSITIVE_INTEGER_NUMBER = (long) Math.pow(2, 53);
 
-  final static String JSC_PROPERTY_NAME_FN = "JSCompiler_renameProperty";
+  static final String JSC_PROPERTY_NAME_FN = "JSCompiler_renameProperty";
 
-  // TODO(user): Eliminate this class and make all of the static methods
-  // instance methods of com.google.javascript.rhino.Node.
+  static final char LARGEST_BASIC_LATIN = 0x7f;
 
   /** the set of builtin constructors that don't have side effects. */
   private static final Set<String> CONSTRUCTORS_WITHOUT_SIDE_EFFECTS =
@@ -119,7 +118,7 @@ public final class NodeUtil {
    * Gets the boolean value of a node that represents a literal. This method
    * effectively emulates the <code>Boolean()</code> JavaScript cast function
    * except it return UNKNOWN for known values with side-effects, use
-   * getExpressionBooleanValue if you don't care about side-effects.
+   * getImpureBooleanValue if you don't care about side-effects.
    */
   static TernaryValue getPureBooleanValue(Node n) {
     switch (n.getType()) {
@@ -500,6 +499,7 @@ public final class NodeUtil {
       case Token.TRUE:
       case Token.FALSE:
         return true;
+      case Token.CAST:
       case Token.NOT:
         return isImmutableValue(n.getFirstChild());
       case Token.VOID:
@@ -520,7 +520,7 @@ public final class NodeUtil {
   /**
    * Returns true if the operator on this node is symmetric
    */
-  public static boolean isSymmetricOperation(Node n) {
+  static boolean isSymmetricOperation(Node n) {
     switch (n.getType()) {
       case Token.EQ: // equal
       case Token.NE: // not equal
@@ -537,7 +537,7 @@ public final class NodeUtil {
    * Returns true if the operator on this node is relational.
    * the returned set does not include the equalities.
    */
-  public static boolean isRelationalOperation(Node n) {
+  static boolean isRelationalOperation(Node n) {
     switch (n.getType()) {
       case Token.GT: // equal
       case Token.GE: // not equal
@@ -552,7 +552,7 @@ public final class NodeUtil {
    * Returns the inverse of an operator if it is invertible.
    * ex. '>' ==> '<'
    */
-  public static int getInverseOperator(int type) {
+  static int getInverseOperator(int type) {
     switch (type) {
       case Token.GT:
         return Token.LT;
@@ -590,6 +590,9 @@ public final class NodeUtil {
    */
   static boolean isLiteralValue(Node n, boolean includeFunctions) {
     switch (n.getType()) {
+      case Token.CAST:
+        return isLiteralValue(n.getFirstChild(), includeFunctions);
+
       case Token.ARRAYLIT:
         for (Node child = n.getFirstChild(); child != null;
              child = child.getNext()) {
@@ -752,7 +755,7 @@ public final class NodeUtil {
    * @param child The expression itself.
    * @return Newly created EXPR node with the child as subexpression.
    */
-  public static Node newExpr(Node child) {
+  static Node newExpr(Node child) {
     return IR.exprResult(child).srcref(child);
   }
 
@@ -793,6 +796,7 @@ public final class NodeUtil {
     // that we know to be safe
     switch (n.getType()) {
       // other side-effect free statements and expressions
+      case Token.CAST:
       case Token.AND:
       case Token.BLOCK:
       case Token.EXPR_RESULT:
@@ -872,7 +876,7 @@ public final class NodeUtil {
         return true;
 
       default:
-        if (isSimpleOperatorType(n.getType())) {
+        if (isSimpleOperator(n)) {
           break;
         }
 
@@ -1040,8 +1044,9 @@ public final class NodeUtil {
                 nameNode.getLastChild().getString())) {
           Node param = nameNode.getNext();
           if (param != null &&
-              (param.isString() || param.isRegExp()))
-          return false;
+              (param.isString() || param.isRegExp())) {
+            return false;
+          }
         }
       }
     }
@@ -1233,6 +1238,8 @@ public final class NodeUtil {
       case Token.THIS:
       case Token.TRUE:
         return 15;
+      case Token.CAST:
+        return 16;
 
       default: throw new Error("Unknown precedence for " +
                                Token.name(type) +
@@ -1240,22 +1247,72 @@ public final class NodeUtil {
     }
   }
 
+  static boolean isUndefined(Node n) {
+    switch (n.getType()) {
+      case Token.VOID:
+        return true;
+      case Token.NAME:
+        return n.getString().equals("undefined");
+    }
+    return false;
+  }
+
+  static boolean isNullOrUndefined(Node n) {
+    return n.isNull() || isUndefined(n);
+  }
+
+  static final Predicate<Node> IMMUTABLE_PREDICATE = new Predicate<Node>() {
+    @Override
+    public boolean apply(Node n) {
+      return isImmutableValue(n);
+    }
+  };
+
+  static boolean isImmutableResult(Node n) {
+    return allResultsMatch(n, IMMUTABLE_PREDICATE);
+  }
+
   /**
    * Apply the supplied predicate against
    * all possible result Nodes of the expression.
    */
-  static boolean valueCheck(Node n, Predicate<Node> p) {
+  static boolean allResultsMatch(Node n, Predicate<Node> p) {
     switch (n.getType()) {
+      case Token.CAST:
+        return allResultsMatch(n.getFirstChild(), p);
       case Token.ASSIGN:
       case Token.COMMA:
-        return valueCheck(n.getLastChild(), p);
+        return allResultsMatch(n.getLastChild(), p);
       case Token.AND:
       case Token.OR:
-        return valueCheck(n.getFirstChild(), p)
-            && valueCheck(n.getLastChild(), p);
+        return allResultsMatch(n.getFirstChild(), p)
+            && allResultsMatch(n.getLastChild(), p);
       case Token.HOOK:
-        return valueCheck(n.getFirstChild().getNext(), p)
-            && valueCheck(n.getLastChild(), p);
+        return allResultsMatch(n.getFirstChild().getNext(), p)
+            && allResultsMatch(n.getLastChild(), p);
+      default:
+        return p.apply(n);
+    }
+  }
+
+  /**
+   * Apply the supplied predicate against
+   * all possible result Nodes of the expression.
+   */
+  static boolean anyResultsMatch(Node n, Predicate<Node> p) {
+    switch (n.getType()) {
+      case Token.CAST:
+        return anyResultsMatch(n.getFirstChild(), p);
+      case Token.ASSIGN:
+      case Token.COMMA:
+        return anyResultsMatch(n.getLastChild(), p);
+      case Token.AND:
+      case Token.OR:
+        return anyResultsMatch(n.getFirstChild(), p)
+            || anyResultsMatch(n.getLastChild(), p);
+      case Token.HOOK:
+        return anyResultsMatch(n.getFirstChild().getNext(), p)
+            || anyResultsMatch(n.getLastChild(), p);
       default:
         return p.apply(n);
     }
@@ -1275,7 +1332,7 @@ public final class NodeUtil {
    * Returns true if the result of node evaluation is always a number
    */
   static boolean isNumericResult(Node n) {
-    return valueCheck(n, NUMBERIC_RESULT_PREDICATE);
+    return allResultsMatch(n, NUMBERIC_RESULT_PREDICATE);
   }
 
   static boolean isNumericResultHelper(Node n) {
@@ -1328,7 +1385,7 @@ public final class NodeUtil {
    * @return Whether the result of node evaluation is always a boolean
    */
   static boolean isBooleanResult(Node n) {
-    return valueCheck(n, BOOLEAN_RESULT_PREDICATE);
+    return allResultsMatch(n, BOOLEAN_RESULT_PREDICATE);
   }
 
   static boolean isBooleanResultHelper(Node n) {
@@ -1358,19 +1415,7 @@ public final class NodeUtil {
     }
   }
 
-  static boolean isUndefined(Node n) {
-    switch (n.getType()) {
-      case Token.VOID:
-        return true;
-      case Token.NAME:
-        return n.getString().equals("undefined");
-    }
-    return false;
-  }
 
-  static boolean isNullOrUndefined(Node n) {
-    return n.isNull() || isUndefined(n);
-  }
 
   static class MayBeStringResultPredicate implements Predicate<Node> {
     @Override
@@ -1391,7 +1436,7 @@ public final class NodeUtil {
 
   static boolean mayBeString(Node n, boolean recurse) {
     if (recurse) {
-      return valueCheck(n, MAY_BE_STRING_PREDICATE);
+      return anyResultsMatch(n, MAY_BE_STRING_PREDICATE);
     } else {
       return mayBeStringHelper(n);
     }
@@ -1804,7 +1849,7 @@ public final class NodeUtil {
       parent.replaceChild(node, IR.empty());
     } else {
       throw new IllegalStateException("Invalid attempt to remove node: " +
-          node.toString() + " of "+ parent.toString());
+          node.toString() + " of " + parent.toString());
     }
   }
 
@@ -1855,13 +1900,6 @@ public final class NodeUtil {
   static Node getFunctionBody(Node fn) {
     Preconditions.checkArgument(fn.isFunction());
     return fn.getLastChild();
-  }
-
-  /**
-   * Is this node or any of its children a CALL?
-   */
-  static boolean containsCall(Node n) {
-    return containsType(n, Token.CALL);
   }
 
   /**
@@ -1982,34 +2020,6 @@ public final class NodeUtil {
   }
 
   /**
-   * @return Whether the callNode represents an expression in the form of:
-   *    x.apply(...)
-   *    x['apply'](...)
-   *  or
-   *    x.call(...)
-   *    x['call'](...)
-   */
-  static boolean isFunctionObjectCallOrApply(Node callNode) {
-    return isFunctionObjectCall(callNode) || isFunctionObjectApply(callNode);
-  }
-
-  /**
-   * @return Whether the callNode represents an expression in the form of:
-   *    x.call(...)
-   *    x['call'](...)
-   * where x is a NAME node.
-   */
-  static boolean isSimpleFunctionObjectCall(Node callNode) {
-    if (isFunctionObjectCall(callNode)) {
-      if (callNode.getFirstChild().getFirstChild().isName()) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  /**
    * Determines whether this node is strictly on the left hand side of an assign
    * or var initialization. Notably, this does not include all L-values, only
    * statements where the node is used only as an L-value.
@@ -2036,10 +2046,13 @@ public final class NodeUtil {
    * @param n The node
    * @return True if n is an L-value.
    */
-  static boolean isLValue(Node n) {
+  public static boolean isLValue(Node n) {
     Preconditions.checkArgument(n.isName() || n.isGetProp() ||
         n.isGetElem());
     Node parent = n.getParent();
+    if (parent == null) {
+      return false;
+    }
     return (NodeUtil.isAssignmentOp(parent) && parent.getFirstChild() == n)
         || (NodeUtil.isForIn(parent) && parent.getFirstChild() == n)
         || parent.isVar()
@@ -2331,7 +2344,7 @@ public final class NodeUtil {
   /**
    * Gets the root node of a qualified name. Must be either NAME or THIS.
    */
-  public static Node getRootOfQualifiedName(Node qName) {
+  static Node getRootOfQualifiedName(Node qName) {
     for (Node current = qName; true;
          current = current.getFirstChild()) {
       if (current.isName() || current.isThis()) {
@@ -2412,9 +2425,7 @@ public final class NodeUtil {
    *
    * @return True if all characters in the string are in Basic Latin set.
    */
-
   static boolean isLatin(String s) {
-    char LARGEST_BASIC_LATIN = 0x7f;
     int len = s.length();
     for (int index = 0; index < len; index++) {
       char c = s.charAt(index);
@@ -2428,7 +2439,7 @@ public final class NodeUtil {
   /**
    * Determines whether the given name is a valid variable name.
    */
-  public static boolean isValidSimpleName(String name) {
+  static boolean isValidSimpleName(String name) {
     return TokenStream.isJSIdentifier(name) &&
         !TokenStream.isKeyword(name) &&
         // no Unicode escaped characters - some browsers are less tolerant
@@ -2486,7 +2497,7 @@ public final class NodeUtil {
   /**
    * Retrieves vars declared in the current node tree, excluding descent scopes.
    */
-  public static Collection<Node> getVarsDeclaredInBranch(Node root) {
+  static Collection<Node> getVarsDeclaredInBranch(Node root) {
     VarCollector collector = new VarCollector();
     visitPreOrder(
         root,
@@ -2506,6 +2517,9 @@ public final class NodeUtil {
     return isPrototypeProperty(n.getFirstChild().getFirstChild());
   }
 
+  /**
+   * @return Whether the node represents a qualified prototype property.
+   */
   static boolean isPrototypeProperty(Node n) {
     String lhsString = n.getQualifiedName();
     if (lhsString == null) {
@@ -2909,6 +2923,8 @@ public final class NodeUtil {
    */
   static boolean evaluatesToLocalValue(Node value, Predicate<Node> locals) {
     switch (value.getType()) {
+      case Token.CAST:
+        return evaluatesToLocalValue(value.getFirstChild(), locals);
       case Token.ASSIGN:
         // A result that is aliased by a non-local name, is the effectively the
         // same as returning a non-local name, but this doesn't matter if the
@@ -3007,6 +3023,16 @@ public final class NodeUtil {
       call.getFirstChild().getNext(), index);
   }
 
+  /**
+   * Returns whether this is a target of a call or new.
+   */
+  static boolean isCallOrNewTarget(Node target) {
+    Node parent = target.getParent();
+    return parent != null
+        && NodeUtil.isCallOrNew(parent)
+        && parent.getFirstChild() == target;
+  }
+
   private static boolean isToStringMethodCall(Node call) {
     Node getNode = call.getFirstChild();
     if (isGet(getNode)) {
@@ -3040,6 +3066,8 @@ public final class NodeUtil {
                  parent.isAnd() ||
                  (parent.isComma() && parent.getFirstChild() != n)) {
         return getBestJSDocInfo(parent);
+      } else if (parent.isCast()) {
+        return parent.getJSDocInfo();
       }
     }
     return info;
@@ -3062,6 +3090,8 @@ public final class NodeUtil {
         parent.isOr() ||
         parent.isAnd() ||
         (parent.isComma() && parent.getFirstChild() != n)) {
+      return getBestLValue(parent);
+    } else if (parent.isCast()) {
       return getBestLValue(parent);
     }
     return null;
@@ -3123,6 +3153,8 @@ public final class NodeUtil {
       case Token.BLOCK:
       case Token.EXPR_RESULT:
         return false;
+      case Token.CAST:
+        return isExpressionResultUsed(parent);
       case Token.HOOK:
       case Token.AND:
       case Token.OR:
@@ -3208,10 +3240,16 @@ public final class NodeUtil {
     return true;
   }
 
+  /**
+   * @return An appropriate AST node for the boolean value.
+   */
   static Node booleanNode(boolean value) {
     return value ? IR.trueNode() : IR.falseNode();
   }
 
+  /**
+   * @return An appropriate AST node for the double value.
+   */
   static Node numberNode(double value, Node srcref) {
     Node result;
     if (Double.isNaN(value)) {
@@ -3227,5 +3265,15 @@ public final class NodeUtil {
       result.srcrefTree(srcref);
     }
     return result;
+  }
+
+  static boolean isNaN(Node n) {
+    if ((n.isName() && n.getString().equals("NaN")) ||
+        (n.getType() == Token.DIV &&
+         n.getFirstChild().isNumber() && n.getFirstChild().getDouble() == 0 &&
+         n.getLastChild().isNumber() && n.getLastChild().getDouble() == 0)) {
+      return true;
+    }
+    return false;
   }
 }

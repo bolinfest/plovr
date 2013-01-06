@@ -39,13 +39,11 @@
 
 package com.google.javascript.rhino.jstype;
 
-import com.google.common.collect.ImmutableSet;
 import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 
 import java.util.Collections;
-import java.util.Set;
 
 /**
  * An object type which uses composition to delegate all calls.
@@ -66,11 +64,9 @@ class ProxyObjectType extends ObjectType {
   }
 
   @Override
-  public Property getSlot(String name) {
-    if (referencedObjType != null) {
-      return referencedObjType.getSlot(name);
-    }
-    return null;
+  PropertyMap getPropertyMap() {
+    return referencedObjType == null
+        ? PropertyMap.immutableEmptyMap() : referencedObjType.getPropertyMap();
   }
 
   JSType getReferencedTypeInternal() {
@@ -188,6 +184,16 @@ class ProxyObjectType extends ObjectType {
   }
 
   @Override
+  public boolean isStruct() {
+    return referencedType.isStruct();
+  }
+
+  @Override
+  public boolean isDict() {
+    return referencedType.isDict();
+  }
+
+  @Override
   public boolean isNativeObjectType() {
     return referencedObjType == null
         ? false : referencedObjType.isNativeObjectType();
@@ -236,19 +242,6 @@ class ProxyObjectType extends ObjectType {
   }
 
   @Override
-  public boolean canAssignTo(JSType that) {
-    return referencedType.canAssignTo(that);
-  }
-
-  @Override
-  public boolean isEquivalentTo(JSType that) {
-    if (this == that) {
-      return true;
-    }
-    return referencedType.isEquivalentTo(that);
-  }
-
-  @Override
   public int hashCode() {
     return referencedType.hashCode();
   }
@@ -279,52 +272,8 @@ class ProxyObjectType extends ObjectType {
   }
 
   @Override
-  public boolean isPropertyTypeDeclared(String propertyName) {
-    return referencedObjType == null ? false :
-        referencedObjType.isPropertyTypeDeclared(propertyName);
-  }
-
-  @Override
-  public Node getPropertyNode(String propertyName) {
-    return referencedObjType == null ? null :
-        referencedObjType.getPropertyNode(propertyName);
-  }
-
-  @Override
-  public boolean isPropertyTypeInferred(String propertyName) {
-    return referencedObjType == null ? false :
-        referencedObjType.isPropertyTypeInferred(propertyName);
-  }
-
-  @Override
-  public boolean isPropertyInExterns(String propertyName) {
-    return referencedObjType == null ? false :
-        referencedObjType.isPropertyInExterns(propertyName);
-  }
-
-  @Override
-  public int getPropertiesCount() {
-    return referencedObjType == null ? 0 :
-        referencedObjType.getPropertiesCount();
-  }
-
-  @Override
-  protected void collectPropertyNames(Set<String> props) {
-    if (referencedObjType != null) {
-      referencedObjType.collectPropertyNames(props);
-    }
-  }
-
-  @Override
   public JSType findPropertyType(String propertyName) {
     return referencedType.findPropertyType(propertyName);
-  }
-
-  @Override
-  public JSType getPropertyType(String propertyName) {
-    return referencedObjType == null ?
-        getNativeType(JSTypeNative.UNKNOWN_TYPE) :
-        referencedObjType.getPropertyType(propertyName);
   }
 
   @Override
@@ -340,34 +289,10 @@ class ProxyObjectType extends ObjectType {
   }
 
   @Override
-  public JSDocInfo getOwnPropertyJSDocInfo(String propertyName) {
-    return referencedObjType == null ? null :
-        referencedObjType.getOwnPropertyJSDocInfo(propertyName);
-  }
-
-  @Override
   public void setPropertyJSDocInfo(String propertyName, JSDocInfo info) {
     if (referencedObjType != null) {
       referencedObjType.setPropertyJSDocInfo(propertyName, info);
     }
-  }
-
-  @Override
-  public boolean hasProperty(String propertyName) {
-    return referencedObjType == null ? false :
-        referencedObjType.hasProperty(propertyName);
-  }
-
-  @Override
-  public boolean hasOwnProperty(String propertyName) {
-    return referencedObjType == null ? false :
-        referencedObjType.hasOwnProperty(propertyName);
-  }
-
-  @Override
-  public Set<String> getOwnPropertyNames() {
-    return referencedObjType == null ? ImmutableSet.<String>of() :
-        referencedObjType.getOwnPropertyNames();
   }
 
   @Override
@@ -393,6 +318,10 @@ class ProxyObjectType extends ObjectType {
     return referencedType.visit(visitor);
   }
 
+  @Override <T> T visit(RelationshipVisitor<T> visitor, JSType that) {
+    return referencedType.visit(visitor, that);
+  }
+
   @Override
   JSType resolveInternal(ErrorReporter t, StaticScope<JSType> scope) {
     setReferencedType(referencedType.resolve(t, scope));
@@ -405,7 +334,7 @@ class ProxyObjectType extends ObjectType {
   }
 
   @Override
-  public ObjectType getTypeOfThis() {
+  public JSType getTypeOfThis() {
     if (referencedObjType != null) {
       return referencedObjType.getTypeOfThis();
     }
@@ -436,7 +365,7 @@ class ProxyObjectType extends ObjectType {
   }
 
   @Override
-  public boolean hasAnyTemplateInternal() {
-    return referencedType.hasAnyTemplate();
+  public boolean hasAnyTemplateTypesInternal() {
+    return referencedType.hasAnyTemplateTypes();
   }
 }

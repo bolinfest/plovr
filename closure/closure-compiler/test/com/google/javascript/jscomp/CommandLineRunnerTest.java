@@ -74,6 +74,8 @@ public class CommandLineRunnerTest extends TestCase {
         + "/**\n"
         + " * @constructor\n"
         + " * @param {...*} var_args\n"
+        + " * @nosideeffects\n"
+        + " * @throws {Error}\n"
         + " */\n"
         + "function Function(var_args) {}\n"
         + "/**\n"
@@ -450,6 +452,12 @@ public class CommandLineRunnerTest extends TestCase {
     args.add("--compilation_level=ADVANCED_OPTIMIZATIONS");
     test("function f() { return '\\u000B' == 'v'; } window['f'] = f;",
          "window.f=function(){return'\\u000B'=='v'}");
+  }
+
+  public void testIssue846() {
+    args.add("--compilation_level=ADVANCED_OPTIMIZATIONS");
+    testSame(
+        "try { new Function('this is an error'); } catch(a) { alert('x'); }");
   }
 
   public void testDebugFlag1() {
@@ -904,6 +912,17 @@ public class CommandLineRunnerTest extends TestCase {
         builder.toString());
   }
 
+  public void testOutputModuleGraphJson() throws Exception {
+    useModules = ModulePattern.STAR;
+    testSame(new String[] {
+        "var x = 3;", "var y = 5;", "var z = 7;", "var a = 9;"});
+
+    StringBuilder builder = new StringBuilder();
+    lastCommandLineRunner.printModuleGraphJsonTo(
+        lastCompiler.getModuleGraph(), builder);
+    assertTrue(builder.toString().indexOf("transitive-dependencies") != -1);
+  }
+
   public void testVersionFlag() {
     args.add("--version");
     testSame("");
@@ -1068,20 +1087,60 @@ public class CommandLineRunnerTest extends TestCase {
   }
 
   public void testProcessCJS() {
+    useStringComparison = true;
     args.add("--process_common_js_modules");
     args.add("--common_js_entry_module=foo/bar");
     setFilename(0, "foo/bar.js");
+    String expected = "var module$foo$bar={test:1};";
+    test("exports.test = 1", expected);
+    assertEquals(expected + "\n", outReader.toString());
+  }
+
+  public void testProcessCJSWithModuleOutput() {
+    useStringComparison = true;
+    args.add("--process_common_js_modules");
+    args.add("--common_js_entry_module=foo/bar");
+    args.add("--module=auto");
+    setFilename(0, "foo/bar.js");
     test("exports.test = 1",
         "var module$foo$bar={test:1};");
+    // With modules=auto no direct output is created.
+    assertEquals("", outReader.toString());
+  }
+
+  public void testFormattingSingleQuote() {
+    testSame("var x = '';");
+    assertEquals("var x=\"\";", lastCompiler.toSource());
+
+    args.add("--formatting=SINGLE_QUOTES");
+    testSame("var x = '';");
+    assertEquals("var x='';", lastCompiler.toSource());
   }
 
   public void testTransformAMDAndProcessCJS() {
+    useStringComparison = true;
     args.add("--transform_amd_modules");
     args.add("--process_common_js_modules");
     args.add("--common_js_entry_module=foo/bar");
     setFilename(0, "foo/bar.js");
     test("define({foo: 1})",
-        "var module$foo$bar={}, module$foo$bar={foo:1};");
+        "var module$foo$bar={},module$foo$bar={foo:1};");
+  }
+
+  public void testModuleJSON() {
+    useStringComparison = true;
+    args.add("--transform_amd_modules");
+    args.add("--process_common_js_modules");
+    args.add("--common_js_entry_module=foo/bar");
+    args.add("--output_module_dependencies=test.json");
+    setFilename(0, "foo/bar.js");
+    test("define({foo: 1})",
+        "var module$foo$bar={},module$foo$bar={foo:1};");
+  }
+
+  public void testOutputSameAsInput() {
+    args.add("--js_output_file=" + getFilename(0));
+    test("", AbstractCommandLineRunner.OUTPUT_SAME_AS_INPUT_ERROR);
   }
 
   /* Helper functions */
@@ -1199,7 +1258,7 @@ public class CommandLineRunnerTest extends TestCase {
 
   private Compiler compile(String[] original) {
     CommandLineRunner runner = createCommandLineRunner(original);
-    assertTrue(runner.shouldRunCompiler());
+    assertTrue(new String(errReader.toByteArray()), runner.shouldRunCompiler());
     Supplier<List<SourceFile>> inputsSupplier = null;
     Supplier<List<JSModule>> modulesSupplier = null;
 

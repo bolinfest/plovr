@@ -151,7 +151,9 @@ public class CommandLineRunner extends
         + "unique. Each dep is the name of a module that this module "
         + "depends on. Modules must be listed in dependency order, and JS "
         + "source files must be listed in the corresponding order. Where "
-        + "--module flags occur in relation to --js flags is unimportant")
+        + "--module flags occur in relation to --js flags is unimportant. "
+        + "Provide the value 'auto' to trigger module creation from CommonJS"
+        + "modules.")
     private List<String> module = Lists.newArrayList();
 
     @Option(name = "--variable_map_input_file",
@@ -193,14 +195,15 @@ public class CommandLineRunner extends
     @Option(name = "--summary_detail_level",
         usage = "Controls how detailed the compilation summary is. Values:"
         + " 0 (never print summary), 1 (print summary only if there are "
-        + "errors or warnings), 2 (print summary if type checking is on, "
-        + "see --check_types), 3 (always print summary). The default level "
-        + "is 1")
+        + "errors or warnings), 2 (print summary if the 'checkTypes' "
+        + "diagnostic  group is enabled, see --jscomp_warning), "
+        + "3 (always print summary). The default level is 1")
     private int summary_detail_level = 1;
 
     @Option(name = "--output_wrapper",
         usage = "Interpolate output into this string at the place denoted"
-        + " by the marker token %output%. See --output_wrapper_marker")
+        + " by the marker token %output%. Use marker token %output|jsstring%"
+        + " to do js string escaping on the output.")
     private String output_wrapper = "";
 
     @Option(name = "--module_wrapper",
@@ -303,7 +306,7 @@ public class CommandLineRunner extends
     @Option(name = "--formatting",
         usage = "Specifies which formatting options, if any, should be "
         + "applied to the output JS. Options: "
-        + "PRETTY_PRINT, PRINT_INPUT_DELIMITER")
+        + "PRETTY_PRINT, PRINT_INPUT_DELIMITER, SINGLE_QUOTES")
     private List<FormattingOption> formatting = Lists.newArrayList();
 
     @Option(name = "--process_common_js_modules",
@@ -371,6 +374,10 @@ public class CommandLineRunner extends
         + "If you're using modularization, using %outname% will create "
         + "a manifest for each module.")
     private String output_manifest = "";
+
+    @Option(name = "--output_module_dependencies",
+        usage = "Prints out a JSON file of dependencies between modules.")
+    private String output_module_dependencies = "";
 
     @Option(name = "--accept_const_keyword",
         usage = "Allows usage of const keyword.")
@@ -541,6 +548,7 @@ public class CommandLineRunner extends
   private static enum FormattingOption {
     PRETTY_PRINT,
     PRINT_INPUT_DELIMITER,
+    SINGLE_QUOTES
     ;
 
     private void applyToOptions(CompilerOptions options) {
@@ -550,6 +558,9 @@ public class CommandLineRunner extends
           break;
         case PRINT_INPUT_DELIMITER:
           options.printInputDelimiter = true;
+          break;
+        case SINGLE_QUOTES:
+          options.setPreferSingleQuotes(true);
           break;
         default:
           throw new RuntimeException("Unknown formatting option: " + this);
@@ -732,6 +743,7 @@ public class CommandLineRunner extends
           .setOnlyClosureDependencies(flags.only_closure_dependencies)
           .setClosureEntryPoints(flags.closure_entry_point)
           .setOutputManifest(ImmutableList.of(flags.output_manifest))
+          .setOutputModuleDependencies(flags.output_module_dependencies)
           .setAcceptConstKeyword(flags.accept_const_keyword)
           .setLanguageIn(flags.language_in)
           .setProcessCommonJSModules(flags.process_common_js_modules)

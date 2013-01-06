@@ -48,7 +48,7 @@ abstract class AbstractPeepholeOptimization {
    * @param diagnostic The error type
    * @param n The node for which the error should be reported
    */
-  protected void error(DiagnosticType diagnostic, Node n) {
+  protected void report(DiagnosticType diagnostic, Node n) {
     JSError error =
         JSError.make(NodeUtil.getSourceName(n), n, diagnostic, n.toString());
     compiler.report(error);
@@ -115,6 +115,17 @@ abstract class AbstractPeepholeOptimization {
    */
   boolean mayHaveSideEffects(Node n) {
     return NodeUtil.mayHaveSideEffects(n, compiler);
+  }
+
+  /**
+   * Returns true if the current node's type implies side effects.
+   *
+   * This is a non-recursive version of the may have side effects
+   * check; used to check wherever the current node's type is one of
+   * the reason's why a subtree has side effects.
+   */
+  boolean nodeTypeMayHaveSideEffects(Node n) {
+    return NodeUtil.nodeTypeMayHaveSideEffects(n, compiler);
   }
 
   /**

@@ -155,6 +155,7 @@ public class Token {
         // JSCompiler introduced tokens
         LABEL_NAME     = 153,
         STRING_KEY     = 154, // object literal key
+        CAST           = 155,
 
         // JSDoc-only tokens
         ANNOTATION     = 300,
@@ -241,7 +242,6 @@ public class Token {
           case ASSIGN_DIV:      return "ASSIGN_DIV";
           case ASSIGN_MOD:      return "ASSIGN_MOD";
           case HOOK:            return "HOOK";
-          case COLON:           return "COLON";
           case OR:              return "OR";
           case AND:             return "AND";
           case INC:             return "INC";
@@ -268,6 +268,7 @@ public class Token {
           case SETTER_DEF:      return "SETTER_DEF";
           case CONST:           return "CONST";
           case DEBUGGER:        return "DEBUGGER";
+          case CAST:            return "CAST";
           case ANNOTATION:      return "ANNOTATION";
           case PIPE:            return "PIPE";
           case STAR:            return "STAR";
@@ -277,6 +278,9 @@ public class Token {
           case BANG:            return "BANG";
           case VOID:            return "VOID";
           case EQUALS:          return "EQUALS";
+          case LB:              return "LB";
+          case LC:              return "LC";
+          case COLON:           return "COLON";
         }
 
         // Token without name

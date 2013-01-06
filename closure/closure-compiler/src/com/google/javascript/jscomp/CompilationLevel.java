@@ -106,7 +106,6 @@ public enum CompilationLevel {
     options.setInlineVariables(Reach.LOCAL_ONLY);
     options.flowSensitiveInlineVariables = true;
     options.setInlineFunctions(Reach.LOCAL_ONLY);
-    options.setAssumeClosuresOnlyCaptureReferences(true);
     options.checkGlobalThisLevel = CheckLevel.OFF;
     options.foldConstants = true;
     options.coalesceVariableNames = true;
@@ -166,7 +165,6 @@ public enum CompilationLevel {
     options.smartNameRemoval = true;
     options.inlineConstantVars = true;
     options.setInlineFunctions(Reach.ALL);
-    options.setAssumeClosuresOnlyCaptureReferences(true);
     options.inlineGetters = true;
     options.setInlineVariables(Reach.ALL);
     options.flowSensitiveInlineVariables = true;
@@ -201,13 +199,15 @@ public enum CompilationLevel {
         options.disambiguateProperties = true;
         options.ambiguateProperties = true;
         options.inlineProperties = true;
-        // TODO(johnlenz) :removeUnusedClassProperties isn't strictly a 
-        // type based pass, but add it here for now because I may have to 
+        // TODO(johnlenz) :removeUnusedClassProperties isn't strictly a
+        // type based pass, but add it here for now because I may have to
         // make it into one.
         options.removeUnusedClassProperties = true;
         break;
       case SIMPLE_OPTIMIZATIONS:
         // TODO(johnlenz): enable peephole type based optimization.
+        break;
+      case WHITESPACE_ONLY:
         break;
     }
   }

@@ -28,6 +28,7 @@ import com.google.javascript.jscomp.CompilerOptions.DevMode;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceCollection;
 import com.google.javascript.jscomp.Scope.Var;
+import com.google.javascript.jscomp.deps.SortedDependencies;
 import com.google.javascript.jscomp.deps.SortedDependencies.CircularDependencyException;
 import com.google.javascript.jscomp.deps.SortedDependencies.MissingProvideException;
 import com.google.javascript.jscomp.parsing.Config;
@@ -42,13 +43,13 @@ import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.head.ErrorReporter;
+import com.google.javascript.rhino.head.ast.AstRoot;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.io.Serializable;
-import java.nio.charset.Charset;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -220,6 +221,7 @@ public class Compiler extends AbstractCompiler {
   private GlobalVarReferenceMap globalRefMap = null;
 
   private volatile double progress = 0.0;
+  private String lastPassName;
 
   /**
    * Creates a Compiler that reports errors and warnings to its logger.
@@ -474,7 +476,7 @@ public class Compiler extends AbstractCompiler {
   /**
    * Rebuilds the internal list of inputs by iterating over all modules.
    * This is necessary if inputs have been added to or removed from a module
-   * after the {@link #init(JSSourceFile[], JSModule[], CompilerOptions)} call.
+   * after the {@link #init(List, List, CompilerOptions)} call.
    */
   public void rebuildInputsFromModules() {
     inputs = getAllInputsFromModules(modules);
@@ -664,6 +666,8 @@ public class Compiler extends AbstractCompiler {
           compilerThread = null;
           if (dumpTraceReport) {
             Tracer.logAndClearCurrentThreadTrace();
+            tracker.outputTracerReport(outStream == null ?
+                System.out : outStream);
           }
         }
         return null;
@@ -700,11 +704,11 @@ public class Compiler extends AbstractCompiler {
   }
 
   private void compileInternal() {
-    setProgress(0.0);
+    setProgress(0.0, null);
     parse();
     // 15 percent of the work is assumed to be for parsing (based on some
     // minimal analysis on big JS projects, of course this depends on options)
-    setProgress(0.15);
+    setProgress(0.15, "parse");
     if (hasErrors()) {
       return;
     }
@@ -743,7 +747,7 @@ public class Compiler extends AbstractCompiler {
     if (options.devMode == DevMode.START_AND_END) {
       runSanityCheck();
     }
-    setProgress(1.0);
+    setProgress(1.0, "recordFunctionInformation");
   }
 
   public void parse() {
@@ -851,7 +855,7 @@ public class Compiler extends AbstractCompiler {
   private final PassFactory sanityCheck =
       new PassFactory("sanityCheck", false) {
     @Override
-    protected CompilerPass createInternal(AbstractCompiler compiler) {
+    protected CompilerPass create(AbstractCompiler compiler) {
       return new SanityCheck(compiler);
     }
   };
@@ -1405,8 +1409,7 @@ public class Compiler extends AbstractCompiler {
   private void hoistExterns(Node externsRoot) {
     boolean staleInputs = false;
     for (CompilerInput input : inputs) {
-      if (options.dependencyOptions.needsManagement() &&
-          options.closurePass) {
+      if (options.dependencyOptions.needsManagement()) {
         // If we're doing scanning dependency info anyway, use that
         // information to skip sources that obviously aren't externs.
         if (!input.getProvides().isEmpty() || !input.getRequires().isEmpty()) {
@@ -1527,7 +1530,16 @@ public class Compiler extends AbstractCompiler {
             options.dependencyOptions, inputs)) {
           modules.add(modulesByInput.get(input));
         }
+        JSModule root = new JSModule("root");
+        for (JSModule m : modules) {
+          m.addDependency(root);
+        }
+        modules.add(0, root);
+        SortedDependencies<JSModule> sorter =
+          new SortedDependencies<JSModule>(modules);
+        modules = sorter.getDependenciesOf(modules, true);
         this.modules = modules;
+
         this.moduleGraph = new JSModuleGraph(modules);
       } catch (Exception e) {
         Throwables.propagate(e);
@@ -1789,19 +1801,10 @@ public class Compiler extends AbstractCompiler {
    */
   private String toSource(Node n, SourceMap sourceMap, boolean firstOutput) {
     CodePrinter.Builder builder = new CodePrinter.Builder(n);
-    builder.setPrettyPrint(options.prettyPrint);
-    builder.setLineBreak(options.lineBreak);
-    builder.setPreferLineBreakAtEndOfFile(options.preferLineBreakAtEndOfFile);
+    builder.setCompilerOptions(options);
     builder.setSourceMap(sourceMap);
-    builder.setSourceMapDetailLevel(options.sourceMapDetailLevel);
     builder.setTagAsStrict(firstOutput &&
         options.getLanguageOut() == LanguageMode.ECMASCRIPT5_STRICT);
-    builder.setLineLengthThreshold(options.lineLengthThreshold);
-
-    Charset charset = options.outputCharset != null ?
-        Charset.forName(options.outputCharset) : null;
-    builder.setOutputCharset(charset);
-
     return builder.build();
   }
 
@@ -1887,9 +1890,6 @@ public class Compiler extends AbstractCompiler {
     }
     phaseOptimizer.consume(getPassConfig().getOptimizations());
     phaseOptimizer.process(externsRoot, jsRoot);
-    if (hasErrors()) {
-      return;
-    }
   }
 
   @Override
@@ -2004,8 +2004,10 @@ public class Compiler extends AbstractCompiler {
       case ECMASCRIPT5:
       case ECMASCRIPT5_STRICT:
         return true;
+      case ECMASCRIPT3:
+        return false;
     }
-    return false;
+    throw new IllegalStateException("unexpected language mode");
   }
 
   public LanguageMode languageMode() {
@@ -2381,11 +2383,15 @@ public class Compiler extends AbstractCompiler {
   }
 
   @Override
-  void setProgress(double newProgress) {
+  String getLastPassName() {
+    return lastPassName;
+  }
+
+  @Override
+  void setProgress(double newProgress, String passName) {
+    this.lastPassName = passName;
     if (newProgress > 1.0) {
       progress = 1.0;
-    } else if (newProgress < 0.0) {
-      progress = 0.0;
     } else {
       progress = newProgress;
     }
@@ -2527,5 +2533,20 @@ public class Compiler extends AbstractCompiler {
   public static String getReleaseDate() {
     ResourceBundle config = ResourceBundle.getBundle(CONFIG_RESOURCE);
     return config.getString("compiler.date");
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void setOldParseTree(String sourceName, AstRoot oldAst) {
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public AstRoot getOldParseTreeByName(String sourceName) {
+    return null;
   }
 }

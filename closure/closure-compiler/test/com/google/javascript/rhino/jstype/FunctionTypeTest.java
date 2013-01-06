@@ -38,6 +38,7 @@
 
 package com.google.javascript.rhino.jstype;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.javascript.rhino.Node;
@@ -133,7 +134,7 @@ public class FunctionTypeTest extends BaseJSTypeTestCase {
         .withReturnType(NUMBER_TYPE).build();
 
     assertLeastSupertype(
-        "function (this:Object): (number|string)", retString, retNumber);
+        "function (this:(Array|Date)): (number|string)", retString, retNumber);
     assertGreatestSubtype(
         "function (this:NoObject): None", retString, retNumber);
   }
@@ -162,7 +163,7 @@ public class FunctionTypeTest extends BaseJSTypeTestCase {
         .withParamsNode(registry.createParameters())
         .withTypeOfThis(OBJECT_TYPE)
         .withReturnType(BOOLEAN_TYPE).build();
-    assertTrue(objReturnBoolean.canAssignTo(ifaceReturnBoolean));
+    assertTrue(objReturnBoolean.isSubtype(ifaceReturnBoolean));
   }
 
   public void testOrdinaryFunctionPrototype() {
@@ -174,7 +175,7 @@ public class FunctionTypeTest extends BaseJSTypeTestCase {
 
   public void testCtorWithPrototypeSet() {
     FunctionType ctor = registry.createConstructorType(
-        "Foo", null, null, null);
+        "Foo", null, null, null, null);
     assertFalse(ctor.getInstanceType().isUnknownType());
 
     Node node = new Node(Token.OBJECTLIT);
@@ -186,8 +187,7 @@ public class FunctionTypeTest extends BaseJSTypeTestCase {
     assertTrue(ctor.isPropertyTypeInferred("prototype"));
     assertTrue(ctor.getPropertyType("prototype").isUnknownType());
 
-    // The node is not recorded.
-    assertNull(ctor.getPropertyNode("prototype"));
+    assertEquals(node, ctor.getPropertyNode("prototype"));
   }
 
   public void testEmptyFunctionTypes() {
@@ -238,8 +238,44 @@ public class FunctionTypeTest extends BaseJSTypeTestCase {
 
   public void testIsEquivalentTo() {
     FunctionType type = new FunctionBuilder(registry).build();
-    assertFalse(type.isEquivalentTo(null));
+    assertFalse(type.equals(null));
     assertTrue(type.isEquivalentTo(type));
+  }
+
+  public void testIsEquivalentToParams() {
+    FunctionType oneNum = new FunctionBuilder(registry)
+        .withParamsNode(registry.createParameters(NUMBER_TYPE))
+        .build();
+    FunctionType optNum = new FunctionBuilder(registry)
+        .withParamsNode(registry.createOptionalParameters(NUMBER_TYPE))
+        .build();
+    FunctionType varNum = new FunctionBuilder(registry)
+        .withParamsNode(registry.createParametersWithVarArgs(NUMBER_TYPE))
+        .build();
+    Asserts.assertEquivalenceOperations(oneNum, oneNum);
+    Asserts.assertEquivalenceOperations(optNum, optNum);
+    Asserts.assertEquivalenceOperations(varNum, varNum);
+    assertFalse(oneNum.isEquivalentTo(optNum));
+    assertFalse(oneNum.isEquivalentTo(varNum));
+    assertFalse(optNum.isEquivalentTo(varNum));
+  }
+
+  public void testIsEquivalentOptAndVarArgs() {
+    FunctionType varNum = new FunctionBuilder(registry)
+        .withParamsNode(registry.createParametersWithVarArgs(NUMBER_TYPE))
+        .build();
+
+    FunctionParamBuilder builder = new FunctionParamBuilder(registry);
+    builder.addOptionalParams(NUMBER_TYPE);
+    builder.addVarArgs(NUMBER_TYPE);
+    FunctionType optAndVarNum = new FunctionBuilder(registry)
+        .withParamsNode(builder.build())
+        .build();
+
+    // We currently do not consider function(T=, ...T) and function(...T)
+    // equivalent. This may change.
+    assertFalse(varNum.isEquivalentTo(optAndVarNum));
+    assertFalse(optAndVarNum.isEquivalentTo(varNum));
   }
 
   public void testRecursiveFunction() {
@@ -266,10 +302,60 @@ public class FunctionTypeTest extends BaseJSTypeTestCase {
         fn.getPropertyType("bind").toString());
   }
 
+  public void testCallSignature1() {
+    FunctionType fn = new FunctionBuilder(registry)
+        .withTypeOfThis(DATE_TYPE)
+        .withParamsNode(registry.createParameters(STRING_TYPE, NUMBER_TYPE))
+        .withReturnType(BOOLEAN_TYPE).build();
+
+    assertEquals(
+        "function ((Date|null|undefined), string, number): boolean",
+        fn.getPropertyType("call").toString());
+  }
+
+  public void testCallSignature2() {
+    FunctionType fn = new FunctionBuilder(registry)
+        .withTypeOfThis(DATE_TYPE)
+        .withParamsNode(registry.createParameters())
+        .withReturnType(BOOLEAN_TYPE).build();
+
+    assertEquals(
+        "function ((Date|null)=): boolean",
+        fn.getPropertyType("call").toString());
+  }
+
+  public void testTemplatedFunctionDerivedFunctions() {
+    FunctionType fn = new FunctionBuilder(registry)
+      .withTypeOfThis(new TemplateType(registry, "T"))
+      .withTemplateKeys(ImmutableList.of("T"))
+      .withReturnType(BOOLEAN_TYPE).build();
+
+    assertEquals("[T]",
+        fn.getPropertyType("call").getTemplateKeys().toString());
+    assertEquals("[T]",
+        fn.getPropertyType("apply").getTemplateKeys().toString());
+    assertEquals("[T]",
+        fn.getPropertyType("bind").getTemplateKeys().toString());
+    assertEquals("[T]",
+        fn.getBindReturnType(0).getTemplateKeys().toString());
+  }
+
   public void testPrint() {
     FunctionType fn = new FunctionBuilder(registry)
       .withTypeOfThis(new TemplateType(registry, "T"))
       .withReturnType(BOOLEAN_TYPE).build();
     assertEquals("function (this:T, ...[?]): boolean", fn.toString());
+  }
+
+  public void testSetImplementsOnInterface() {
+    FunctionType iface = registry.createInterfaceType("I", null);
+    FunctionType subIface = registry.createInterfaceType("SubI", null);
+    try {
+      subIface.setImplementedInterfaces(
+          ImmutableList.of(iface.getInstanceType()));
+      fail("Expected exception");
+    } catch (UnsupportedOperationException e) {
+      // OK
+    }
   }
 }

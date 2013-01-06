@@ -16,10 +16,9 @@
 
 package com.google.javascript.jscomp;
 
-import static com.google.javascript.rhino.testing.Asserts.assertTypeEquals;
-
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.type.ClosureReverseAbstractInterpreter;
@@ -35,6 +34,7 @@ import com.google.javascript.rhino.testing.Asserts;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Tests {@link TypeCheck}.
@@ -2118,10 +2118,15 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testTypeRedefinition() throws Exception {
-    testTypes("a={};/**@enum {string}*/ a.A = {ZOR:'b'};"
+    testClosureTypesMultipleWarnings(
+        "a={};/**@enum {string}*/ a.A = {ZOR:'b'};"
         + "/** @constructor */ a.A = function() {}",
-        "variable a.A redefined with type function (new:a.A): undefined, " +
-        "original definition at [testcode]:1 with type enum{a.A}");
+        Lists.newArrayList(
+            "variable a.A redefined with type function (new:a.A): undefined, " +
+            "original definition at [testcode]:1 with type enum{a.A}",
+            "assignment to property A of a\n" +
+            "found   : function (new:a.A): undefined\n" +
+            "required: enum{a.A}"));
   }
 
   public void testIn1() throws Exception {
@@ -2895,7 +2900,7 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
   public void testBadImplements2() throws Exception {
     testTypes("/** @interface */function Disposable() {}\n" +
         "/** @implements {Disposable}\n */function f() {}",
-        "@implements used without @constructor or @interface for f");
+        "@implements used without @constructor for f");
   }
 
   public void testBadImplements3() throws Exception {
@@ -2921,15 +2926,13 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
   public void testBadInterfaceExtends2() throws Exception {
     testTypes("/** @constructor */function A() {}\n" +
         "/** @interface \n * @extends {A} */function B() {}",
-        "B cannot extend this type; a constructor can only extend objects " +
-        "and an interface can only extend interfaces");
+        "B cannot extend this type; interfaces can only extend interfaces");
   }
 
   public void testBadInterfaceExtends3() throws Exception {
     testTypes("/** @interface */function A() {}\n" +
         "/** @constructor \n * @extends {A} */function B() {}",
-        "B cannot extend this type; a constructor can only extend objects " +
-        "and an interface can only extend interfaces");
+        "B cannot extend this type; constructors can only extend constructors");
   }
 
   public void testBadInterfaceExtends4() throws Exception {
@@ -4266,7 +4269,8 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
         "function foo(opt_f) {" +
         "  /** @type {Function} */" +
         "  return opt_f || function () {};" +
-        "}");
+        "}",
+        "Type annotations are not allowed here. Are you missing parentheses?");
   }
 
   /**
@@ -5049,11 +5053,7 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
         "/** @type {Foo} */ var x = /** @type {Foo} */ ({})");
 
     testTypes("/** @constructor */ function Foo() {} \n" +
-        "/** @type {Foo} */ var x = (/** @type {Foo} */ {})");
-
-    // Not really encourage because of possible ambiguity but it works.
-    testTypes("/** @constructor */ function Foo() {} \n" +
-        "/** @type {Foo} */ var x = /** @type {Foo} */ {}");
+        "/** @type {Foo} */ var x = (/** @type {Foo} */ y)");
   }
 
   public void testNestedCasts() throws Exception {
@@ -5185,19 +5185,19 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testAnonymousType1() throws Exception {
-    testTypes("function f() {}" +
+    testTypes("function f() { return {}; }" +
         "/** @constructor */\n" +
         "f().bar = function() {};");
   }
 
   public void testAnonymousType2() throws Exception {
-    testTypes("function f() {}" +
+    testTypes("function f() { return {}; }" +
         "/** @interface */\n" +
         "f().bar = function() {};");
   }
 
   public void testAnonymousType3() throws Exception {
-    testTypes("function f() {}" +
+    testTypes("function f() { return {}; }" +
         "/** @enum */\n" +
         "f().bar = {FOO: 1};");
   }
@@ -5265,7 +5265,7 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testUnknownConstructorInstanceType2() throws Exception {
-    testTypes("function g(f) { return /** @type Array */ new f(); }");
+    testTypes("function g(f) { return /** @type Array */ (new f()); }");
   }
 
   public void testUnknownConstructorInstanceType3() throws Exception {
@@ -6852,7 +6852,8 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
   public void testTypeCheckStandaloneAST() throws Exception {
     Node n = compiler.parseTestCode("function Foo() { }");
     typeCheck(n);
-    TypedScopeCreator scopeCreator = new TypedScopeCreator(compiler);
+    MemoizedScopeCreator scopeCreator =
+        new MemoizedScopeCreator(new TypedScopeCreator(compiler));
     Scope topScope = scopeCreator.createScope(n, null);
 
     Node second = compiler.parseTestCode("new Foo");
@@ -6936,10 +6937,12 @@ public class LooseTypeCheckTest extends CompilerTypeTestCase {
           0, compiler.getWarningCount());
     } else {
       assertEquals(descriptions.size(), compiler.getWarningCount());
+      Set<String> actualWarningDescriptions = Sets.newHashSet();
       for (int i = 0; i < descriptions.size(); i++) {
-        assertEquals(descriptions.get(i),
-            compiler.getWarnings()[i].description);
+        actualWarningDescriptions.add(compiler.getWarnings()[i].description);
       }
+      assertEquals(
+          Sets.newHashSet(descriptions), actualWarningDescriptions);
     }
   }
 

@@ -16,8 +16,6 @@
 
 package com.google.javascript.jscomp;
 
-import static com.google.javascript.rhino.testing.Asserts.assertTypeEquals;
-
 import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.type.FlowScope;
 import com.google.javascript.rhino.Node;
@@ -44,7 +42,7 @@ public class LinkedFlowScopeTest extends CompilerTypeTestCase {
   public void setUp() throws Exception {
     super.setUp();
 
-    globalScope = new Scope(blockNode, compiler);
+    globalScope = Scope.createGlobalScope(blockNode);
     globalScope.declare("globalA", null, null, null);
     globalScope.declare("globalB", null, null, null);
 

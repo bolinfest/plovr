@@ -17,9 +17,12 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
@@ -123,7 +126,7 @@ class ReplaceStrings extends AbstractPostOrderCallback
    *     function($,,,)
    *   or
    *     class.prototype.method($,,,)
-   * @param reservedNames A set of names that should not be used as replacement
+   * @param blacklisted A set of names that should not be used as replacement
    *     strings.  Useful to prevent unwanted strings for appearing in the
    *     final output.
    * where '$' is used to indicate which parameter should be replaced.
@@ -131,36 +134,62 @@ class ReplaceStrings extends AbstractPostOrderCallback
   ReplaceStrings(
       AbstractCompiler compiler, String placeholderToken,
       List<String> functionsToInspect,
-      Set<String> reservedNames) {
+      Set<String> blacklisted,
+      VariableMap previousMappings) {
     this.compiler = compiler;
     this.placeholderToken = placeholderToken.isEmpty()
         ? DEFAULT_PLACEHOLDER_TOKEN : placeholderToken;
     this.registry = compiler.getTypeRegistry();
+
+    Iterable<String> reservedNames = blacklisted;
+    if (previousMappings != null) {
+      Set<String> previous =
+          previousMappings.getOriginalNameToNewNameMap().keySet();
+      reservedNames = Iterables.concat(blacklisted, previous);
+      initMapping(previousMappings, blacklisted);
+    }
     this.nameGenerator = createNameGenerator(reservedNames);
 
     // Initialize the map of functions to inspect for renaming candidates.
     parseConfiguration(functionsToInspect);
   }
 
+  private void initMapping(
+      VariableMap previousVarMap, Set<String> reservedNames) {
+    Map<String,String> previous = previousVarMap.getOriginalNameToNewNameMap();
+    for (Map.Entry<String,String> entry : previous.entrySet()) {
+      String key = entry.getKey();
+      if (!reservedNames.contains(key)) {
+        String value = entry.getValue();
+        results.put(value, new Result(value, key));
+      }
+    }
+  }
+
+  static final Predicate<Result> USED_RESULTS = new Predicate<Result>() {
+    @Override
+    public boolean apply(Result result) {
+      // The list of locations may be empty if the map
+      // was pre-populated from a previous map.
+      return !result.replacementLocations.isEmpty();
+    }
+  };
+
   // Get the list of all replacements performed.
   List<Result> getResult() {
-    return ImmutableList.copyOf(results.values());
+    return ImmutableList.copyOf(
+        Iterables.filter(results.values(), USED_RESULTS));
   }
 
   // Get the list of replaces as a VariableMap
   VariableMap getStringMap() {
-    Map<String, String> map = Maps.newHashMap();
-    for (Result result : results.values()) {
-      /* VariableMap don't support newlines, escape them. */
-      map.put(result.replacement, escapeForVariableMap(result.original));
+    ImmutableMap.Builder<String, String> map = ImmutableMap.builder();
+    for (Result result : Iterables.filter(results.values(), USED_RESULTS)) {
+      map.put(result.replacement, result.original);
     }
 
-    VariableMap stringMap = new VariableMap(map);
+    VariableMap stringMap = new VariableMap(map.build());
     return stringMap;
-  }
-
-  private String escapeForVariableMap(String original) {
-    return original.replace("\\", "\\\\").replace("\n", "\\n");
   }
 
   @Override
@@ -461,10 +490,10 @@ class ReplaceStrings extends AbstractPostOrderCallback
    * Use a name generate to create names so the names overlap with the names
    * used for variable and properties.
    */
-  private static NameGenerator createNameGenerator(Set<String> reservedNames) {
+  private static NameGenerator createNameGenerator(Iterable<String> reserved) {
     final String namePrefix = "";
     final char[] reservedChars = new char[0];
     return new NameGenerator(
-        ImmutableSet.copyOf(reservedNames), namePrefix, reservedChars);
+        ImmutableSet.copyOf(reserved), namePrefix, reservedChars);
   }
 }

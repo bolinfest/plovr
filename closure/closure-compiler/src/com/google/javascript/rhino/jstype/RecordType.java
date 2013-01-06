@@ -39,14 +39,11 @@
 
 package com.google.javascript.rhino.jstype;
 
-import com.google.common.collect.Maps;
-import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.jstype.RecordTypeBuilder.RecordProperty;
 
 import java.util.Map;
 import java.util.Set;
-import java.util.SortedMap;
 
 /**
  * A record (structural) type.
@@ -64,7 +61,6 @@ import java.util.SortedMap;
 class RecordType extends PrototypeObjectType {
   private static final long serialVersionUID = 1L;
 
-  private final SortedMap<String, JSType> properties = Maps.newTreeMap();
   private final boolean declared;
   private boolean isFrozen = false;
 
@@ -114,25 +110,16 @@ class RecordType extends PrototypeObjectType {
     return !declared;
   }
 
-  @Override
-  public boolean isEquivalentTo(JSType other) {
-    if (!other.isRecordType()) {
-      return false;
-    }
-
-    // Compare properties.
-    RecordType otherRecord = other.toMaybeRecordType();
-    if (otherRecord == this) {
-      return true;
-    }
-
-    Set<String> keySet = properties.keySet();
-    Map<String, JSType> otherProps = otherRecord.properties;
-    if (!otherProps.keySet().equals(keySet)) {
+  boolean checkRecordEquivalenceHelper(
+      RecordType otherRecord, EquivalenceMethod eqMethod) {
+    Set<String> keySet = getOwnPropertyNames();
+    Set<String> otherKeySet = otherRecord.getOwnPropertyNames();
+    if (!otherKeySet.equals(keySet)) {
       return false;
     }
     for (String key : keySet) {
-      if (!otherProps.get(key).isEquivalentTo(properties.get(key))) {
+      if (!otherRecord.getPropertyType(key).checkEquivalenceHelper(
+              getPropertyType(key), eqMethod)) {
         return false;
       }
     }
@@ -151,10 +138,6 @@ class RecordType extends PrototypeObjectType {
       return false;
     }
 
-    if (!inferred) {
-      properties.put(propertyName, type);
-    }
-
     return super.defineProperty(propertyName, type, inferred,
         propertyNode);
   }
@@ -168,9 +151,9 @@ class RecordType extends PrototypeObjectType {
       // The greatest subtype consists of those *unique* properties of both
       // record types. If any property conflicts, then the NO_TYPE type
       // is returned.
-      for (String property : properties.keySet()) {
+      for (String property : getOwnPropertyNames()) {
         if (thatRecord.hasProperty(property) &&
-            !thatRecord.getPropertyType(property).isEquivalentTo(
+            !thatRecord.getPropertyType(property).isInvariant(
                 getPropertyType(property))) {
           return registry.getNativeObjectType(JSTypeNative.NO_TYPE);
         }
@@ -179,7 +162,7 @@ class RecordType extends PrototypeObjectType {
             getPropertyNode(property));
       }
 
-      for (String property : thatRecord.properties.keySet()) {
+      for (String property : thatRecord.getOwnPropertyNames()) {
         if (!hasProperty(property)) {
           builder.addProperty(property, thatRecord.getPropertyType(property),
               thatRecord.getPropertyNode(property));
@@ -201,17 +184,15 @@ class RecordType extends PrototypeObjectType {
       //    of all classes with a property "x" with a compatible property type.
       //    and which are a subtype of {@code that}.
       // 2) Take the intersection of all of these unions.
-      for (Map.Entry<String, JSType> entry : properties.entrySet()) {
-        String propName = entry.getKey();
-        JSType propType = entry.getValue();
+      for (String propName : getOwnPropertyNames()) {
+        JSType propType = getPropertyType(propName);
         UnionTypeBuilder builder = new UnionTypeBuilder(registry);
         for (ObjectType alt :
                  registry.getEachReferenceTypeWithProperty(propName)) {
           JSType altPropType = alt.getPropertyType(propName);
           if (altPropType != null && !alt.isEquivalentTo(this) &&
               alt.isSubtype(that) &&
-              (propType.isUnknownType() || altPropType.isUnknownType() ||
-                  altPropType.isEquivalentTo(propType))) {
+              propType.isInvariant(altPropType)) {
             builder.addAlternate(alt);
           }
         }
@@ -267,38 +248,28 @@ class RecordType extends PrototypeObjectType {
     // properties. But z can be assigned to x. Even though z and y are the
     // same type, the properties of z are inferred--and so an assignment
     // to the property of z would not violate any restrictions on it.
-    for (String property : typeB.properties.keySet()) {
+    for (String property : typeB.getOwnPropertyNames()) {
       if (!typeA.hasProperty(property)) {
         return false;
       }
 
       JSType propA = typeA.getPropertyType(property);
       JSType propB = typeB.getPropertyType(property);
-      if (!propA.isUnknownType() && !propB.isUnknownType()) {
-        if (typeA.isPropertyTypeDeclared(property)) {
-          if (!propA.isEquivalentTo(propB)) {
-            return false;
-          }
-        } else {
-          if (!propA.isSubtype(propB)) {
-            return false;
-          }
+      if (typeA.isPropertyTypeDeclared(property)) {
+        // If one declared property isn't invariant,
+        // then the whole record isn't covariant.
+        if (!propA.isInvariant(propB)) {
+          return false;
+        }
+      } else {
+        // If one inferred property isn't a subtype,
+        // then the whole record isn't covariant.
+        if (!propA.isSubtype(propB)) {
+          return false;
         }
       }
     }
 
     return true;
-  }
-
-  @Override
-  JSType resolveInternal(ErrorReporter t, StaticScope<JSType> scope) {
-    for (Map.Entry<String, JSType> entry : properties.entrySet()) {
-      JSType type = entry.getValue();
-      JSType resolvedType = type.resolve(t, scope);
-      if (type != resolvedType) {
-        properties.put(entry.getKey(), resolvedType);
-      }
-    }
-    return super.resolveInternal(t, scope);
   }
 }

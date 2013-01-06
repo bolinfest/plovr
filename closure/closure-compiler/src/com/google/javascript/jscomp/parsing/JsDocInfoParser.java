@@ -179,6 +179,7 @@ public final class JsDocInfoParser {
    * @return {@code true} if JSDoc information was correctly parsed,
    *     {@code false} otherwise
    */
+  @SuppressWarnings("incomplete-switch")
   boolean parse() {
     int lineno;
     int charno;
@@ -253,10 +254,20 @@ public final class JsDocInfoParser {
                   token = eatTokensUntilEOL();
                   continue retry;
 
-                case CONSTANT:
-                  if (!jsdocBuilder.recordConstancy()) {
-                    parser.addParserWarning("msg.jsdoc.const",
-                        stream.getLineno(), stream.getCharno());
+                case STRUCT:
+                  if (!jsdocBuilder.recordStruct()) {
+                    parser.addTypeWarning("msg.jsdoc.incompat.type",
+                                          stream.getLineno(),
+                                          stream.getCharno());
+                  }
+                  token = eatTokensUntilEOL();
+                  continue retry;
+
+                case DICT:
+                  if (!jsdocBuilder.recordDict()) {
+                    parser.addTypeWarning("msg.jsdoc.incompat.type",
+                                          stream.getLineno(),
+                                          stream.getCharno());
                   }
                   token = eatTokensUntilEOL();
                   continue retry;
@@ -434,9 +445,6 @@ public final class JsDocInfoParser {
                     charno = stream.getCharno();
 
                     typeNode = wrapNode(Token.BANG, typeNode);
-                    if (typeNode != null && !matchingRc) {
-                      typeNode.putBooleanProp(Node.BRACELESS_TYPE, true);
-                    }
                     type = createJSTypeExpression(typeNode);
 
                     if (annotation == Annotation.EXTENDS) {
@@ -699,30 +707,6 @@ public final class JsDocInfoParser {
                   token = eatTokensUntilEOL();
                   continue retry;
 
-                case PRIVATE:
-                  if (!jsdocBuilder.recordVisibility(Visibility.PRIVATE)) {
-                    parser.addParserWarning("msg.jsdoc.visibility.private",
-                        stream.getLineno(), stream.getCharno());
-                  }
-                  token = eatTokensUntilEOL();
-                  continue retry;
-
-                case PROTECTED:
-                  if (!jsdocBuilder.recordVisibility(Visibility.PROTECTED)) {
-                    parser.addParserWarning("msg.jsdoc.visibility.protected",
-                        stream.getLineno(), stream.getCharno());
-                  }
-                  token = eatTokensUntilEOL();
-                  continue retry;
-
-                case PUBLIC:
-                  if (!jsdocBuilder.recordVisibility(Visibility.PUBLIC)) {
-                    parser.addParserWarning("msg.jsdoc.visibility.public",
-                        stream.getLineno(), stream.getCharno());
-                  }
-                  token = eatTokensUntilEOL();
-                  continue retry;
-
                 case NO_SHADOW:
                   if (!jsdocBuilder.recordNoShadow()) {
                     parser.addParserWarning("msg.jsdoc.noshadow",
@@ -767,6 +751,14 @@ public final class JsDocInfoParser {
                   } else {
                     token = eatTokensUntilEOL(token);
                   }
+                  continue retry;
+
+                case STABLEIDGENERATOR:
+                  if (!jsdocBuilder.recordStableIdGenerator()) {
+                    parser.addParserWarning("msg.jsdoc.stableidgen",
+                      stream.getLineno(), stream.getCharno());
+                  }
+                  token = eatTokensUntilEOL();
                   continue retry;
 
                 case SUPPRESS:
@@ -816,8 +808,12 @@ public final class JsDocInfoParser {
                   token = versionInfo.token;
                   continue retry;
 
+                case CONSTANT:
                 case DEFINE:
                 case RETURN:
+                case PRIVATE:
+                case PROTECTED:
+                case PUBLIC:
                 case THIS:
                 case TYPE:
                 case TYPEDEF:
@@ -825,30 +821,54 @@ public final class JsDocInfoParser {
                   charno = stream.getCharno();
 
                   Node typeNode = null;
-                  if (!lookAheadForTypeAnnotation() &&
-                      annotation == Annotation.RETURN) {
-                    // If RETURN doesn't have a type annotation, record
-                    // it as the unknown type.
-                    typeNode = newNode(Token.QMARK);
-                  } else {
+                  boolean hasType = lookAheadForTypeAnnotation();
+                  boolean isAlternateTypeAnnotation =
+                      (annotation == Annotation.PRIVATE ||
+                       annotation == Annotation.PROTECTED ||
+                       annotation == Annotation.PUBLIC ||
+                       annotation == Annotation.CONSTANT);
+                  boolean canSkipTypeAnnotation =
+                      (isAlternateTypeAnnotation ||
+                       annotation == Annotation.RETURN);
+                  type = null;
+                  if (hasType || !canSkipTypeAnnotation) {
                     skipEOLs();
                     token = next();
                     typeNode = parseAndRecordTypeNode(token);
-                  }
 
-                  if (annotation == Annotation.THIS) {
-                    typeNode = wrapNode(Token.BANG, typeNode);
-                    if (typeNode != null && token != JsDocToken.LC) {
-                      typeNode.putBooleanProp(Node.BRACELESS_TYPE, true);
+                    if (annotation == Annotation.THIS) {
+                      typeNode = wrapNode(Token.BANG, typeNode);
                     }
+                    type = createJSTypeExpression(typeNode);
                   }
-                  type = createJSTypeExpression(typeNode);
 
-                  if (type == null) {
-                    // error reported during recursive descent
-                    // recovering parsing
-                  } else {
+                  // The error was reported during recursive descent
+                  // recovering parsing
+                  boolean hasError = type == null && !canSkipTypeAnnotation;
+                  if (!hasError) {
+                    // Record types for @type.
+                    // If the @private, @protected, or @public annotations
+                    // have a type attached, pretend that they actually wrote:
+                    // @type {type}\n@private
+                    // This will have some weird behavior in some cases
+                    // (for example, @private can now be used as a type-cast),
+                    // but should be mostly OK.
+                    if ((type != null && isAlternateTypeAnnotation)
+                        || annotation == Annotation.TYPE) {
+                      if (!jsdocBuilder.recordType(type)) {
+                        parser.addTypeWarning(
+                            "msg.jsdoc.incompat.type", lineno, charno);
+                      }
+                    }
+
                     switch (annotation) {
+                      case CONSTANT:
+                        if (!jsdocBuilder.recordConstancy()) {
+                          parser.addParserWarning("msg.jsdoc.const",
+                              stream.getLineno(), stream.getCharno());
+                        }
+                        break;
+
                       case DEFINE:
                         if (!jsdocBuilder.recordDefineType(type)) {
                           parser.addParserWarning("msg.jsdoc.define",
@@ -856,7 +876,35 @@ public final class JsDocInfoParser {
                         }
                         break;
 
+                      case PRIVATE:
+                        if (!jsdocBuilder.recordVisibility(Visibility.PRIVATE)) {
+                          parser.addParserWarning(
+                              "msg.jsdoc.visibility.private",
+                              lineno, charno);
+                        }
+                        break;
+
+                      case PROTECTED:
+                        if (!jsdocBuilder.recordVisibility(Visibility.PROTECTED)) {
+                          parser.addParserWarning(
+                              "msg.jsdoc.visibility.protected",
+                              lineno, charno);
+                        }
+                        break;
+
+                      case PUBLIC:
+                        if (!jsdocBuilder.recordVisibility(Visibility.PUBLIC)) {
+                          parser.addParserWarning(
+                              "msg.jsdoc.visibility.public",
+                              lineno, charno);
+                        }
+                        break;
+
                       case RETURN:
+                        if (type == null) {
+                          type = createJSTypeExpression(newNode(Token.QMARK));
+                        }
+
                         if (!jsdocBuilder.recordReturnType(type)) {
                           parser.addTypeWarning(
                               "msg.jsdoc.incompat.type", lineno, charno);
@@ -884,13 +932,6 @@ public final class JsDocInfoParser {
 
                       case THIS:
                         if (!jsdocBuilder.recordThisType(type)) {
-                          parser.addTypeWarning(
-                              "msg.jsdoc.incompat.type", lineno, charno);
-                        }
-                        break;
-
-                      case TYPE:
-                        if (!jsdocBuilder.recordType(type)) {
                           parser.addTypeWarning(
                               "msg.jsdoc.incompat.type", lineno, charno);
                         }
@@ -1151,10 +1192,6 @@ public final class JsDocInfoParser {
       typeNode = parseTypeNameAnnotation(token);
     } else {
       typeNode = parseTypeExpressionAnnotation(token);
-    }
-
-    if (typeNode != null && !matchingLC) {
-      typeNode.putBooleanProp(Node.BRACELESS_TYPE, true);
     }
 
     if (typeNode != null) {
@@ -1694,6 +1731,7 @@ public final class JsDocInfoParser {
       // {function(number, ?)} - right paren
       // {function(number, ...[?])} - right bracket
       // {function(): ?|number} - pipe
+      // {Array.<?>} - greater than
       // I'm not a big fan of using look-ahead for this, but it makes
       // the type language a lot nicer.
       token = next();
@@ -1702,7 +1740,8 @@ public final class JsDocInfoParser {
           token == JsDocToken.RB ||
           token == JsDocToken.RC ||
           token == JsDocToken.RP ||
-          token == JsDocToken.PIPE) {
+          token == JsDocToken.PIPE ||
+          token == JsDocToken.GT) {
         restoreLookAhead(token);
         return newNode(Token.QMARK);
       }
@@ -1761,7 +1800,6 @@ public final class JsDocInfoParser {
   /**
    * TypeName := NameExpression | NameExpression TypeApplication
    * TypeApplication := '.<' TypeExpressionList '>'
-   * TypeExpressionList := TypeExpression // a white lie
    */
   private Node parseTypeName(JsDocToken token) {
     if (token != JsDocToken.STRING) {

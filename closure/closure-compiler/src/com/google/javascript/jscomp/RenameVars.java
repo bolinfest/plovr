@@ -18,6 +18,7 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
@@ -32,9 +33,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.SortedMap;
 import java.util.SortedSet;
-import java.util.TreeMap;
 import java.util.TreeSet;
 
 import javax.annotation.Nullable;
@@ -111,8 +110,8 @@ final class RenameVars implements CompilerPass {
   }
 
   /** Maps an old name to a new name assignment */
-  private final SortedMap<String, Assignment> assignments =
-      new TreeMap<String, Assignment>();
+  private final Map<String, Assignment> assignments =
+      new HashMap<String, Assignment>();
 
   /** Whether renaming should apply to local variables only. */
   private final boolean localRenamingOnly;
@@ -527,7 +526,7 @@ final class RenameVars implements CompilerPass {
    * Gets the variable map.
    */
   VariableMap getVariableMap() {
-    return new VariableMap(renameMap);
+    return new VariableMap(ImmutableMap.copyOf(renameMap));
   }
 
   /**

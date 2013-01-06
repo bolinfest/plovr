@@ -104,9 +104,9 @@ class RemoveUnusedVars
   private final Map<Node, Assign> assignsByNode = Maps.newHashMap();
 
   /**
-   * Subclass name -> inherits call EXPR node.
+   * Subclass name -> class-defining call EXPR node. (like inherits)
    */
-  private final Multimap<Var, Node> inheritsCalls =
+  private final Multimap<Var, Node> classDefiningCalls =
       ArrayListMultimap.create();
 
   /**
@@ -230,22 +230,31 @@ class RemoveUnusedVars
         break;
 
       case Token.CALL:
+        Var modifiedVar = null;
+
         // Look for calls to inheritance-defining calls (such as goog.inherits).
         SubclassRelationship subclassRelationship =
             codingConvention.getClassesDefinedByCall(n);
         if (subclassRelationship != null) {
-          Var subclassVar = scope.getVar(subclassRelationship.subclassName);
-          // Don't try to track the inheritance calls for non-globals. It would
-          // be more correct to only not track when the subclass does not
-          // reference a constructor, but checking that it is a global is
-          // easier and mostly the same.
-          if (subclassVar != null && subclassVar.isGlobal()
-              && !referenced.contains(subclassVar)) {
-            // Save a reference to the EXPR node.
-            inheritsCalls.put(subclassVar, parent);
-            continuations.put(subclassVar, new Continuation(n, scope));
-            return;
+          modifiedVar = scope.getVar(subclassRelationship.subclassName);
+        } else {
+          // Look for calls to addSingletonGetter calls.
+          String className = codingConvention.getSingletonGetterClassName(n);
+          if (className != null) {
+            modifiedVar = scope.getVar(className);
           }
+        }
+
+        // Don't try to track the inheritance calls for non-globals. It would
+        // be more correct to only not track when the subclass does not
+        // reference a constructor, but checking that it is a global is
+        // easier and mostly the same.
+        if (modifiedVar != null && modifiedVar.isGlobal()
+            && !referenced.contains(modifiedVar)) {
+          // Save a reference to the EXPR node.
+          classDefiningCalls.put(modifiedVar, parent);
+          continuations.put(modifiedVar, new Continuation(n, scope));
+          return;
         }
         break;
 
@@ -254,7 +263,7 @@ class RemoveUnusedVars
         if (parent.isVar()) {
           Node value = n.getFirstChild();
           if (value != null && var != null && isRemovableVar(var) &&
-              !NodeUtil.mayHaveSideEffects(value)) {
+              !NodeUtil.mayHaveSideEffects(value, compiler)) {
             // If the var is unreferenced and creating its value has no side
             // effects, then we can create a continuation for it instead
             // of traversing immediately.
@@ -789,7 +798,7 @@ class RemoveUnusedVars
 
       // Remove calls to inheritance-defining functions where the unreferenced
       // class is the subclass.
-      for (Node exprCallNode : inheritsCalls.get(var)) {
+      for (Node exprCallNode : classDefiningCalls.get(var)) {
         NodeUtil.removeChild(exprCallNode.getParent(), exprCallNode);
         compiler.reportCodeChange();
       }
@@ -827,7 +836,7 @@ class RemoveUnusedVars
         // foreach iterations have 3 children. Leave them alone.
       } else if (toRemove.isVar() &&
           nameNode.hasChildren() &&
-          NodeUtil.mayHaveSideEffects(nameNode.getFirstChild())) {
+          NodeUtil.mayHaveSideEffects(nameNode.getFirstChild(), compiler)) {
         // If this is a single var declaration, we can at least remove the
         // declaration itself and just leave the value, e.g.,
         // var a = foo(); => foo();

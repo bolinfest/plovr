@@ -265,6 +265,7 @@ public final class CompileTask
     this.sourcePaths.add(list);
   }
 
+  @Override
   public void execute() {
     if (this.outputFile == null) {
       throw new BuildException("outputFile attribute must be set");
@@ -363,6 +364,7 @@ public final class CompileTask
    * @param options
    */
   private void convertPropertiesMap(CompilerOptions options) {
+    @SuppressWarnings("unchecked")
     Map<String, Object> props = getProject().getProperties();
     for (Map.Entry<String, Object> entry : props.entrySet()) {
       String key = entry.getKey();

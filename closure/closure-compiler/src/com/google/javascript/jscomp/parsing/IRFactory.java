@@ -94,6 +94,9 @@ class IRFactory {
       "Non-JSDoc comment has annotations. " +
       "Did you mean to start it with '/**'?";
 
+  static final String MISPLACED_TYPE_ANNOTATION =
+      "Type annotations are not allowed here. Are you missing parentheses?";
+
   private final String sourceString;
   private final StaticSourceFile sourceFile;
   private final String sourceName;
@@ -273,19 +276,99 @@ class IRFactory {
       JsDocInfoParser jsDocParser = createJsDocInfoParser(comment, irNode);
       parsedComments.add(comment);
       if (!handlePossibleFileOverviewJsDoc(jsDocParser)) {
-        return jsDocParser.retrieveAndResetParsedJSDocInfo();
+        JSDocInfo info = jsDocParser.retrieveAndResetParsedJSDocInfo();
+        if (info != null) {
+          validateTypeAnnotations(info, node, irNode);
+        }
+        return info;
       }
     }
     return null;
+  }
+
+  private void validateTypeAnnotations(
+      JSDocInfo info, AstNode node, Node irNode) {
+    if (info.hasType()) {
+      boolean valid = false;
+      switch (node.getType()) {
+        // Casts are valid
+        case com.google.javascript.rhino.head.Token.LP:
+          valid = node instanceof ParenthesizedExpression;
+          break;
+        // Variable declarations are valid
+        case com.google.javascript.rhino.head.Token.VAR:
+          valid = true;
+          break;
+        // Function declarations are valid
+        case com.google.javascript.rhino.head.Token.FUNCTION:
+          FunctionNode fnNode = (FunctionNode)node;
+          valid = fnNode.getFunctionType() == FunctionNode.FUNCTION_STATEMENT;
+          break;
+        // Object literal properties and catch declarations are valid.
+        case com.google.javascript.rhino.head.Token.NAME:
+          valid = node.getParent() instanceof ObjectProperty
+              || node.getParent() instanceof CatchClause
+              || node.getParent() instanceof FunctionNode;
+          break;
+        // Object literal properties are valid
+        case com.google.javascript.rhino.head.Token.GET:
+        case com.google.javascript.rhino.head.Token.SET:
+        case com.google.javascript.rhino.head.Token.NUMBER:
+        case com.google.javascript.rhino.head.Token.STRING:
+          valid = node.getParent() instanceof ObjectProperty;
+          break;
+
+        // Property assignments are valid, if at the root of an expression.
+        case com.google.javascript.rhino.head.Token.ASSIGN:
+          if (node instanceof Assignment) {
+            valid = isExprStmt(node.getParent())
+                && isPropAccess(((Assignment)node).getLeft());
+          }
+          break;
+
+        // Property definitions are valid, if at the root of an expression.
+        case com.google.javascript.rhino.head.Token.GETPROP:
+        case com.google.javascript.rhino.head.Token.GETELEM:
+          valid = isExprStmt(node.getParent());
+          break;
+      }
+      if (!valid) {
+        errorReporter.warning(MISPLACED_TYPE_ANNOTATION,
+            sourceName,
+            node.getLineno(), "", 0);
+      }
+    }
+  }
+
+  private boolean isPropAccess(AstNode node) {
+    return node.getType() == com.google.javascript.rhino.head.Token.GETPROP
+        || node.getType() == com.google.javascript.rhino.head.Token.GETELEM;
+  }
+
+  private boolean isExprStmt(AstNode node) {
+    return node.getType() == com.google.javascript.rhino.head.Token.EXPR_RESULT
+        || node.getType() == com.google.javascript.rhino.head.Token.EXPR_VOID;
   }
 
   private Node transform(AstNode node) {
     Node irNode = justTransform(node);
     JSDocInfo jsDocInfo = handleJsDoc(node, irNode);
     if (jsDocInfo != null) {
+      irNode = maybeInjectCastNode(node, jsDocInfo, irNode);
       irNode.setJSDocInfo(jsDocInfo);
     }
     setSourceInfo(irNode, node);
+    return irNode;
+  }
+
+  private Node maybeInjectCastNode(AstNode node, JSDocInfo info, Node irNode) {
+    if (node.getType() == com.google.javascript.rhino.head.Token.LP
+        && node instanceof ParenthesizedExpression
+        && info.hasType()
+        // TODO(johnlenz): for now, attach object literal type directly.
+        && !irNode.isObjectLit()) {
+      irNode = newNode(Token.CAST, irNode);
+    }
     return irNode;
   }
 
@@ -793,7 +876,9 @@ class IRFactory {
 
     @Override
     Node processNewExpression(NewExpression exprNode) {
-      Node node = newNode(transformTokenType(exprNode.getType()), transform(exprNode.getTarget()));
+      Node node = newNode(
+          transformTokenType(exprNode.getType()),
+          transform(exprNode.getTarget()));
       for (AstNode child : exprNode.getArguments()) {
         node.addChildToBack(transform(child));
       }
@@ -867,7 +952,6 @@ class IRFactory {
     @Override
     Node processParenthesizedExpression(ParenthesizedExpression exprNode) {
       Node node = transform(exprNode.getExpression());
-      node.putProp(Node.PARENTHESIZED_PROP, Boolean.TRUE);
       return node;
     }
 

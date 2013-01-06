@@ -326,10 +326,131 @@ public class PeepholeRemoveDeadCodeTest extends CompilerTestCase {
     // TODO(johnlenz): merge the useless "case 2"
     foldSame("switch(a){case 1: goo(); case 2:break; case 3: foo()}");
 
+    // Can't remove unused code with a "var" in it.
+    fold("switch(1){case 2: var x=0;}", "var x;");
+    fold("switch ('repeated') {\n" +
+        "case 'repeated':\n" +
+        "  foo();\n" +
+        "  break;\n" +
+        "case 'repeated':\n" +
+        "  var x=0;\n" +
+        "  break;\n" +
+        "}",
+        "var x; {foo();}");
+
     // Can't remove cases if something useful is done.
     foldSame("switch(a){case 1: var c =2; break;}");
     foldSame("function f() {switch(a){case 1: return;}}");
     foldSame("x:switch(a){case 1: break x;}");
+
+    fold("switch ('foo') {\n" +
+        "case 'foo':\n" +
+        "  foo();\n" +
+        "  break;\n" +
+        "case 'bar':\n" +
+        "  bar();\n" +
+        "  break;\n" +
+        "}",
+        "{foo();}");
+    fold("switch ('noMatch') {\n" +
+        "case 'foo':\n" +
+        "  foo();\n" +
+        "  break;\n" +
+        "case 'bar':\n" +
+        "  bar();\n" +
+        "  break;\n" +
+        "}",
+        "");
+    foldSame("switch ('fallThru') {\n" +
+        "case 'fallThru':\n" +
+        "  if (foo(123) > 0) {\n" +
+        "    foobar(1);\n" +
+        "    break;\n" +
+        "  }\n" +
+        "  foobar(2);\n" +
+        "case 'bar':\n" +
+        "  bar();\n" +
+        "}");
+    foldSame("switch ('fallThru') {\n" +
+        "case 'fallThru':\n" +
+        "  foo();\n" +
+        "case 'bar':\n" +
+        "  bar();\n" +
+        "}");
+    foldSame("switch ('hasDefaultCase') {\n" +
+        "case 'foo':\n" +
+        "  foo();\n" +
+        "  break;\n" +
+        "default:\n" +
+        "  bar();\n" +
+        "  break;\n" +
+        "}");
+    fold("switch ('repeated') {\n" +
+        "case 'repeated':\n" +
+        "  foo();\n" +
+        "  break;\n" +
+        "case 'repeated':\n" +
+        "  bar();\n" +
+        "  break;\n" +
+        "}",
+        "{foo();}");
+    fold("switch ('foo') {\n" +
+        "case 'bar':\n" +
+        "  bar();\n" +
+        "  break;\n" +
+        "case notConstant:\n" +
+        "  foobar();\n" +
+        "  break;\n" +
+        "case 'foo':\n" +
+        "  foo();\n" +
+        "  break;\n" +
+        "}",
+        "switch ('foo') {\n" +
+        "case notConstant:\n" +
+        "  foobar();\n" +
+        "  break;\n" +
+        "case 'foo':\n" +
+        "  foo();\n" +
+        "  break;\n" +
+        "}");
+    fold("switch (1) {\n" +
+        "case 1:\n" +
+        "  foo();\n" +
+        "  break;\n" +
+        "case 2:\n" +
+        "  bar();\n" +
+        "  break;\n" +
+        "}",
+        "{foo();}");
+    fold("switch (1) {\n" +
+        "case 1.1:\n" +
+        "  foo();\n" +
+        "  break;\n" +
+        "case 2:\n" +
+        "  bar();\n" +
+        "  break;\n" +
+        "}",
+        "");
+    foldSame("switch (0) {\n" +
+        "case NaN:\n" +
+        "  foobar();\n" +
+        "  break;\n" +
+        "case -0.0:\n" +
+        "  foo();\n" +
+        "  break;\n" +
+        "case 2:\n" +
+        "  bar();\n" +
+        "  break;\n" +
+        "}");
+    foldSame("switch ('\\v') {\n" +
+        "case '\\u000B':\n" +
+        "  foo();\n" +
+        "}");
+    foldSame("switch ('empty') {\n" +
+        "case 'empty':\n" +
+        "case 'foo':\n" +
+        "  foo();\n" +
+        "}");
   }
 
   public void testRemoveNumber() {

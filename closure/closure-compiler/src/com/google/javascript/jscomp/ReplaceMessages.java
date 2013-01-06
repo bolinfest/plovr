@@ -16,13 +16,13 @@
 
 package com.google.javascript.jscomp;
 
-import javax.annotation.Nullable;
-
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
 import java.util.Iterator;
+
+import javax.annotation.Nullable;
 
 /**
  * ReplaceMessages replaces user-visible messages with alternatives.
@@ -48,7 +48,21 @@ class ReplaceMessages extends JsMessageVisitor {
   }
 
   @Override
-  protected void processJsMessage(JsMessage message,
+  void processMessageFallback(
+      Node callNode, JsMessage message1, JsMessage message2) {
+    boolean isFirstMessageTranslated =
+        (bundle.getMessage(message1.getId()) != null);
+    boolean isSecondMessageTranslated =
+        (bundle.getMessage(message2.getId()) != null);
+    Node replacementNode =
+        isSecondMessageTranslated && !isFirstMessageTranslated ?
+        callNode.getChildAtIndex(2) : callNode.getChildAtIndex(1);
+    callNode.getParent().replaceChild(callNode,
+        replacementNode.detachFromParent());
+  }
+
+  @Override
+  void processJsMessage(JsMessage message,
       JsMessageDefinition definition) {
 
     // Get the replacement.
@@ -333,22 +347,6 @@ class ReplaceMessages extends JsMessageVisitor {
           constructStringExprNode(parts, objLitNode));
     } else {
       return partNode;
-    }
-  }
-
-  /**
-   * Checks a node's type.
-   *
-   * @throws MalformedException if the node is null or the wrong type
-   */
-  private void checkNode(@Nullable Node node, int type) throws MalformedException {
-    if (node == null) {
-      throw new MalformedException(
-          "Expected node type " + type + "; found: null", node);
-    }
-    if (node.getType() != type) {
-      throw new MalformedException(
-          "Expected node type " + type + "; found: " + node.getType(), node);
     }
   }
 

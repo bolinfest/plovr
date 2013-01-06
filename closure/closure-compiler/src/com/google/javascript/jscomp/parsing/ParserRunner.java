@@ -42,6 +42,7 @@ public class ParserRunner {
   private static Set<String> annotationNames = null;
 
   private static Set<String> suppressionNames = null;
+  private static Set<String> reservedVars = null;
 
   // Should never need to instantiate class of static methods.
   private ParserRunner() {}
@@ -73,6 +74,11 @@ public class ParserRunner {
         isIdeMode, languageMode, acceptConstKeyword);
   }
 
+  public static Set<String> getReservedVars() {
+    initResourceConfig();
+    return reservedVars;
+  }
+
   private static synchronized void initResourceConfig() {
     if (annotationNames != null) {
       return;
@@ -81,6 +87,7 @@ public class ParserRunner {
     ResourceBundle config = ResourceBundle.getBundle(configResource);
     annotationNames = extractList(config.getString("jsdoc.annotations"));
     suppressionNames = extractList(config.getString("jsdoc.suppressions"));
+    reservedVars = extractList(config.getString("compiler.reserved.vars"));
   }
 
   private static Set<String> extractList(String configProp) {
@@ -101,11 +108,11 @@ public class ParserRunner {
    * @return The AST of the given text.
    * @throws IOException
    */
-  public static Node parse(StaticSourceFile sourceFile,
-                           String sourceString,
-                           Config config,
-                           ErrorReporter errorReporter,
-                           Logger logger) throws IOException {
+  public static ParseResult parse(StaticSourceFile sourceFile,
+                                  String sourceString,
+                                  Config config,
+                                  ErrorReporter errorReporter,
+                                  Logger logger) throws IOException {
     Context cx = Context.enter();
     cx.setErrorReporter(errorReporter);
     cx.setLanguageVersion(Context.VERSION_1_5);
@@ -143,6 +150,19 @@ public class ParserRunner {
           astRoot, sourceFile, sourceString, config, errorReporter);
       root.setIsSyntheticBlock(true);
     }
-    return root;
+    return new ParseResult(root, astRoot);
+  }
+
+  /**
+   * Holds results of parsing. Includes both ast formats.
+   */
+  public static class ParseResult {
+    public final Node ast;
+    public final AstRoot oldAst;
+
+    public ParseResult(Node ast, AstRoot oldAst) {
+      this.ast = ast;
+      this.oldAst = oldAst;
+    }
   }
 }

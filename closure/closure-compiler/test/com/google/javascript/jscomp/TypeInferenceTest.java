@@ -21,6 +21,7 @@ import static com.google.javascript.rhino.jstype.JSTypeNative.ARRAY_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.BOOLEAN_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.CHECKED_UNKNOWN_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.FUNCTION_INSTANCE_TYPE;
+import static com.google.javascript.rhino.jstype.JSTypeNative.NO_RESOLVED_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.NULL_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.NUMBER_OBJECT_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.NUMBER_TYPE;
@@ -139,7 +140,7 @@ public class TypeInferenceTest extends TestCase {
   }
 
   private void verify(String name, JSType type) {
-    Asserts.assertTypeEquals(type, getType(name));
+    Asserts.assertTypeEquals("Mismatch for " + name, type, getType(name));
   }
 
   private void verify(String name, JSTypeNative type) {
@@ -205,6 +206,12 @@ public class TypeInferenceTest extends TestCase {
     verify("x", NUMBER_TYPE);
   }
 
+  public void testExprWithinCast() {
+    assuming("x", OBJECT_TYPE);
+    inFunction("/** @type {string} */ (x = 1);");
+    verify("x", NUMBER_TYPE);
+  }
+
   public void testGetProp() {
     assuming("x", createNullableType(OBJECT_TYPE));
     inFunction("x.y();");
@@ -242,7 +249,7 @@ public class TypeInferenceTest extends TestCase {
   }
 
   public void testPropertyInference1() {
-    ObjectType thisType = registry.createAnonymousObjectType();
+    ObjectType thisType = registry.createAnonymousObjectType(null);
     thisType.defineDeclaredProperty("foo",
         createUndefinableType(STRING_TYPE), null);
     assumingThisType(thisType);
@@ -251,7 +258,7 @@ public class TypeInferenceTest extends TestCase {
   }
 
   public void testPropertyInference2() {
-    ObjectType thisType = registry.createAnonymousObjectType();
+    ObjectType thisType = registry.createAnonymousObjectType(null);
     thisType.defineDeclaredProperty("foo",
         createUndefinableType(STRING_TYPE), null);
     assumingThisType(thisType);
@@ -260,7 +267,7 @@ public class TypeInferenceTest extends TestCase {
   }
 
   public void testPropertyInference3() {
-    ObjectType thisType = registry.createAnonymousObjectType();
+    ObjectType thisType = registry.createAnonymousObjectType(null);
     thisType.defineDeclaredProperty("foo",
         createUndefinableType(STRING_TYPE), null);
     assumingThisType(thisType);
@@ -494,7 +501,7 @@ public class TypeInferenceTest extends TestCase {
     verify("x", STRING_OBJECT_TYPE);
   }
 
-  public void testAssertWithIsDef() {
+  public void testAssertWithIsDefAndNotNull() {
     JSType startType = createNullableType(NUMBER_TYPE);
     assuming("x", startType);
     inFunction(
@@ -503,6 +510,22 @@ public class TypeInferenceTest extends TestCase {
         "out2 = x;");
     verify("out1", startType);
     verify("out2", NUMBER_TYPE);
+  }
+
+  public void testIsDefAndNoResolvedType() {
+    JSType startType = createUndefinableType(NO_RESOLVED_TYPE);
+    assuming("x", startType);
+    inFunction(
+        "out1 = x;" +
+        "if (goog.isDef(x)) { out2a = x; out2b = x.length; out2c = x; }" +
+        "out3 = x;" +
+        "if (goog.isDef(x)) { out4 = x; }");
+    verify("out1", startType);
+    verify("out2a", NO_RESOLVED_TYPE);
+    verify("out2b", CHECKED_UNKNOWN_TYPE);
+    verify("out2c", NO_RESOLVED_TYPE);
+    verify("out3", startType);
+    verify("out4", NO_RESOLVED_TYPE);
   }
 
   public void testAssertWithNotIsNull() {
@@ -574,6 +597,26 @@ public class TypeInferenceTest extends TestCase {
     verifySubtypeOf("y", OBJECT_TYPE);
   }
 
+  public void testFor5() {
+    assuming("y", parameterize(
+        getNativeObjectType(ARRAY_TYPE), getNativeType(NUMBER_TYPE)));
+    inFunction(
+        "var x = null; for (var i = 0; i < y.length; i++) { x = y[i]; }");
+    verify("x", createNullableType(NUMBER_TYPE));
+    verify("i", NUMBER_TYPE);
+  }
+
+  public void testFor6() {
+    assuming("y", getNativeObjectType(ARRAY_TYPE));
+    inFunction(
+        "var x = null;" +
+        "for (var i = 0; i < y.length; i++) { " +
+        " if (y[i] == 'z') { x = y[i]; } " +
+        "}");
+    verify("x", getNativeType(UNKNOWN_TYPE));
+    verify("i", NUMBER_TYPE);
+  }
+
   public void testSwitch1() {
     assuming("x", NUMBER_TYPE);
     inFunction("var y = null; switch(x) {\n" +
@@ -639,7 +682,7 @@ public class TypeInferenceTest extends TestCase {
         createNullableType(
             registry.getNativeType(JSTypeNative.U2U_CONSTRUCTOR_TYPE)));
     inFunction("var y = new x();");
-    verify("y", JSTypeNative.NO_OBJECT_TYPE);
+    verify("y", UNKNOWN_TYPE);
   }
 
   public void testInnerFunction1() {
@@ -1028,5 +1071,17 @@ public class TypeInferenceTest extends TestCase {
         "goog.asserts.assert(typeof x.prop != 'undefined');" +
         "out = x.prop;");
     verify("out", CHECKED_UNKNOWN_TYPE);
+  }
+
+  private ObjectType getNativeObjectType(JSTypeNative t) {
+    return registry.getNativeObjectType(t);
+  }
+
+  private JSType getNativeType(JSTypeNative t) {
+    return registry.getNativeType(t);
+  }
+
+  private JSType parameterize(ObjectType objType, JSType t) {
+    return registry.createParameterizedType(objType, t);
   }
 }

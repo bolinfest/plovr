@@ -40,15 +40,14 @@
 package com.google.javascript.rhino.jstype;
 
 import static com.google.common.base.Preconditions.checkState;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -71,7 +70,7 @@ class PrototypeObjectType extends ObjectType {
   private static final long serialVersionUID = 1L;
 
   private final String className;
-  private final Map<String, Property> properties;
+  private final PropertyMap properties;
   private final boolean nativeType;
 
   // NOTE(nicksantos): The implicit prototype can change over time.
@@ -103,17 +102,21 @@ class PrototypeObjectType extends ObjectType {
    */
   PrototypeObjectType(JSTypeRegistry registry, String className,
       ObjectType implicitPrototype) {
-    this(registry, className, implicitPrototype, false);
+    this(registry, className, implicitPrototype, false, null, null);
   }
 
   /**
-   * Creates an object type, allowing specification of the implicit prototype
-   * when creating native objects.
+   * Creates an object type, allowing specification of the implicit prototype,
+   * whether the object is native, and any templatized types.
    */
   PrototypeObjectType(JSTypeRegistry registry, String className,
-      ObjectType implicitPrototype, boolean nativeType) {
-    super(registry);
-    this.properties = Maps.newTreeMap();
+      ObjectType implicitPrototype, boolean nativeType,
+      ImmutableList<String> templateKeys,
+      ImmutableList<JSType> templatizedTypes) {
+    super(registry, templateKeys, templatizedTypes);
+    this.properties = new PropertyMap();
+    this.properties.setParentSource(this);
+
     this.className = className;
     this.nativeType = nativeType;
     if (nativeType || implicitPrototype != null) {
@@ -125,109 +128,8 @@ class PrototypeObjectType extends ObjectType {
   }
 
   @Override
-  public Property getSlot(String name) {
-    if (properties.containsKey(name)) {
-      return properties.get(name);
-    }
-    ObjectType implicitPrototype = getImplicitPrototype();
-    if (implicitPrototype != null) {
-      Property prop = implicitPrototype.getSlot(name);
-      if (prop != null) {
-        return prop;
-      }
-    }
-    for (ObjectType interfaceType : getCtorExtendedInterfaces()) {
-      Property prop = interfaceType.getSlot(name);
-      if (prop != null) {
-        return prop;
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Gets the number of properties of this object.
-   */
-  @Override
-  public int getPropertiesCount() {
-    ObjectType implicitPrototype = getImplicitPrototype();
-    if (implicitPrototype == null) {
-      return this.properties.size();
-    }
-    int localCount = 0;
-    for (String property : properties.keySet()) {
-      if (!implicitPrototype.hasProperty(property)) {
-        localCount++;
-      }
-    }
-    return implicitPrototype.getPropertiesCount() + localCount;
-  }
-
-  @Override
-  public boolean hasProperty(String propertyName) {
-    // Unknown types have all properties.
-    return isUnknownType() || getSlot(propertyName) != null;
-  }
-
-  @Override
-  public boolean hasOwnProperty(String propertyName) {
-    return properties.get(propertyName) != null;
-  }
-
-  @Override
-  public Set<String> getOwnPropertyNames() {
-    return properties.keySet();
-  }
-
-  @Override
-  public boolean isPropertyTypeDeclared(String property) {
-    StaticSlot<JSType> slot = getSlot(property);
-    if (slot == null) {
-      return false;
-    }
-    return !slot.isTypeInferred();
-  }
-
-  @Override
-  void collectPropertyNames(Set<String> props) {
-    for (String prop : properties.keySet()) {
-      props.add(prop);
-    }
-    ObjectType implicitPrototype = getImplicitPrototype();
-    if (implicitPrototype != null) {
-      implicitPrototype.collectPropertyNames(props);
-    }
-  }
-
-  @Override
-  public boolean isPropertyTypeInferred(String property) {
-    StaticSlot<JSType> slot = getSlot(property);
-    if (slot == null) {
-      return false;
-    }
-    return slot.isTypeInferred();
-  }
-
-  @Override
-  public JSType getPropertyType(String property) {
-    StaticSlot<JSType> slot = getSlot(property);
-    if (slot == null) {
-      return getNativeType(JSTypeNative.UNKNOWN_TYPE);
-    }
-    return slot.getType();
-  }
-
-  @Override
-  public boolean isPropertyInExterns(String propertyName) {
-    Property p = properties.get(propertyName);
-    if (p != null) {
-      return p.isFromExterns();
-    }
-    ObjectType implicitPrototype = getImplicitPrototype();
-    if (implicitPrototype != null) {
-      return implicitPrototype.isPropertyInExterns(propertyName);
-    }
-    return false;
+  PropertyMap getPropertyMap() {
+    return properties;
   }
 
   @Override
@@ -238,47 +140,19 @@ class PrototypeObjectType extends ObjectType {
     }
     Property newProp = new Property(
         name, type, inferred, propertyNode);
-    Property oldProp = properties.get(name);
-    if (oldProp != null) {
-      // This is to keep previously inferred JsDoc info, e.g., in a
-      // replaceScript scenario.
-      newProp.setJSDocInfo(oldProp.getJSDocInfo());
-    }
-    properties.put(name, newProp);
+    properties.putProperty(name, newProp);
     return true;
   }
 
   @Override
   public boolean removeProperty(String name) {
-    return properties.remove(name) != null;
-  }
-
-  @Override
-  public Node getPropertyNode(String propertyName) {
-    Property p = properties.get(propertyName);
-    if (p != null) {
-      return p.getNode();
-    }
-    ObjectType implicitPrototype = getImplicitPrototype();
-    if (implicitPrototype != null) {
-      return implicitPrototype.getPropertyNode(propertyName);
-    }
-    return null;
-  }
-
-  @Override
-  public JSDocInfo getOwnPropertyJSDocInfo(String propertyName) {
-    Property p = properties.get(propertyName);
-    if (p != null) {
-      return p.getJSDocInfo();
-    }
-    return null;
+    return properties.removeProperty(name);
   }
 
   @Override
   public void setPropertyJSDocInfo(String propertyName, JSDocInfo info) {
     if (info != null) {
-      if (!properties.containsKey(propertyName)) {
+      if (properties.getOwnProperty(propertyName) == null) {
         // If docInfo was attached, but the type of the property
         // was not defined anywhere, then we consider this an explicit
         // declaration of the property.
@@ -288,7 +162,7 @@ class PrototypeObjectType extends ObjectType {
 
       // The prototype property is not represented as a normal Property.
       // We probably don't want to attach any JSDoc to it anyway.
-      Property property = properties.get(propertyName);
+      Property property = properties.getOwnProperty(propertyName);
       if (property != null) {
         property.setJSDocInfo(info);
       }
@@ -319,7 +193,7 @@ class PrototypeObjectType extends ObjectType {
 
     JSType propertyType = getPropertyType(propertyName);
     ObjectType nativeType =
-        this.isFunctionType() ?
+        isFunctionType() ?
         registry.getNativeObjectType(JSTypeNative.FUNCTION_PROTOTYPE) :
         registry.getNativeObjectType(JSTypeNative.OBJECT_PROTOTYPE);
     JSType nativePropertyType = nativeType.getPropertyType(propertyName);
@@ -462,18 +336,17 @@ class PrototypeObjectType extends ObjectType {
     // Find all the interfaces implemented by this class and compare each one
     // to the interface instance.
     ObjectType thatObj = that.toObjectType();
-    ObjectType thatCtor = thatObj == null ? null : thatObj.getConstructor();
-    if (thatCtor != null && thatCtor.isInterface()) {
-      Iterable<ObjectType> thisInterfaces = getCtorImplementedInterfaces();
-      for (ObjectType thisInterface : thisInterfaces) {
+    FunctionType thatCtor = thatObj == null ? null : thatObj.getConstructor();
+
+    if (getConstructor() != null && getConstructor().isInterface()) {
+      for (ObjectType thisInterface : getCtorExtendedInterfaces()) {
         if (thisInterface.isSubtype(that)) {
           return true;
         }
       }
-    }
-
-    if (getConstructor() != null && getConstructor().isInterface()) {
-      for (ObjectType thisInterface : getCtorExtendedInterfaces()) {
+    } else if (thatCtor != null && thatCtor.isInterface()) {
+      Iterable<ObjectType> thisInterfaces = getCtorImplementedInterfaces();
+      for (ObjectType thisInterface : thisInterfaces) {
         if (thisInterface.isSubtype(that)) {
           return true;
         }
@@ -487,7 +360,7 @@ class PrototypeObjectType extends ObjectType {
       // to avoid guessing.
       return true;
     }
-    return this.isImplicitPrototype(thatObj);
+    return thatObj != null && isImplicitPrototype(thatObj);
   }
 
   private boolean implicitPrototypeChainIsUnknown() {

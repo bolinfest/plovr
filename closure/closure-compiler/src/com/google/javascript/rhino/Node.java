@@ -65,14 +65,10 @@ public class Node implements Cloneable, Serializable {
   private static final long serialVersionUID = 1L;
 
   public static final int
-      // TODO(nicksantos): Remove this prop.
-      SOURCENAME_PROP   = 16,
-
       JSDOC_INFO_PROP   = 29,     // contains a TokenStream.JSDocInfo object
       VAR_ARGS_NAME     = 30,     // the name node is a variable length
                                   // argument placeholder.
       INCRDECR_PROP      = 32,    // pre or post type of increment/decrement
-      PARENTHESIZED_PROP = 35,    // expression is parenthesized
       QUOTED_PROP        = 36,    // set to indicate a quoted object lit key
       OPT_ARG_NAME       = 37,    // The name node is an optional argument.
       SYNTHETIC_BLOCK_PROP = 38,  // A synthetic block. Used to make
@@ -82,13 +78,10 @@ public class Node implements Cloneable, Serializable {
                                   // EMPTY nodes.
       ORIGINALNAME_PROP  = 40,    // The original name of the node, before
                                   // renaming.
-      BRACELESS_TYPE     = 41,    // The type syntax without curly braces.
       SIDE_EFFECT_FLAGS  = 42,    // Function or constructor call side effect
                                   // flags
       // Coding convention props
       IS_CONSTANT_NAME   = 43,    // The variable or property is constant.
-      IS_OPTIONAL_PARAM  = 44,    // The parameter is optional.
-      IS_VAR_ARGS_PARAM  = 45,    // The parameter is a var_args.
       IS_NAMESPACE       = 46,    // The variable creates a namespace.
       IS_DISPATCHER      = 47,    // The function is a dispatcher function,
                                   // probably generated from Java code, and
@@ -117,14 +110,11 @@ public class Node implements Cloneable, Serializable {
 
   private static final String propToString(int propType) {
       switch (propType) {
-        case BRACELESS_TYPE:     return "braceless_type";
         case VAR_ARGS_NAME:      return "var_args_name";
-        case SOURCENAME_PROP:    return "sourcename";
 
         case JSDOC_INFO_PROP:    return "jsdoc_info";
 
         case INCRDECR_PROP:      return "incrdecr";
-        case PARENTHESIZED_PROP: return "parenthesized";
         case QUOTED_PROP:        return "quoted";
         case OPT_ARG_NAME:       return "opt_arg";
 
@@ -134,8 +124,6 @@ public class Node implements Cloneable, Serializable {
         case SIDE_EFFECT_FLAGS:  return "side_effect_flags";
 
         case IS_CONSTANT_NAME:   return "is_constant_name";
-        case IS_OPTIONAL_PARAM:  return "is_optional_param";
-        case IS_VAR_ARGS_PARAM:  return "is_var_args_param";
         case IS_NAMESPACE:       return "is_namespace";
         case IS_DISPATCHER:      return "is_dispatcher";
         case DIRECTIVES:         return "directives";
@@ -810,10 +798,6 @@ public class Node implements Cloneable, Serializable {
   }
 
   public Object getProp(int propType) {
-    if (propType == SOURCENAME_PROP) {
-      return getSourceFileName();
-    }
-
     PropListItem item = lookupProperty(propType);
     if (item == null) {
       return null;
@@ -846,12 +830,6 @@ public class Node implements Cloneable, Serializable {
   }
 
   public void putProp(int propType, Object value) {
-    if (propType == SOURCENAME_PROP) {
-      putProp(
-          STATIC_SOURCE_FILE, new SimpleSourceFile((String) value, false));
-      return;
-    }
-
     removeProp(propType);
     if (value != null) {
       propListHead = createProp(propType, value, propListHead);
@@ -1739,9 +1717,6 @@ public class Node implements Cloneable, Serializable {
     if (getProp(STATIC_SOURCE_FILE) == null) {
       putProp(STATIC_SOURCE_FILE, other.getProp(STATIC_SOURCE_FILE));
       sourcePosition = other.sourcePosition;
-    } else if (getProp(SOURCENAME_PROP) == null) {
-      putProp(SOURCENAME_PROP, other.getProp(SOURCENAME_PROP));
-      sourcePosition = other.sourcePosition;
     }
 
     return this;
@@ -1879,8 +1854,9 @@ public class Node implements Cloneable, Serializable {
   /**
    * Sets the {@link JSDocInfo} attached to this node.
    */
-  public void setJSDocInfo(JSDocInfo info) {
+  public Node setJSDocInfo(JSDocInfo info) {
       putProp(JSDOC_INFO_PROP, info);
+      return this;
   }
 
   /**
@@ -2204,6 +2180,10 @@ public class Node implements Cloneable, Serializable {
 
   public boolean isCase() {
     return this.getType() == Token.CASE;
+  }
+
+  public boolean isCast() {
+    return this.getType() == Token.CAST;
   }
 
   public boolean isCatch() {

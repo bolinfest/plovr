@@ -29,7 +29,6 @@ import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeTraversal.Callback;
 import com.google.javascript.jscomp.Scope.Var;
-import com.google.javascript.jscomp.ScopeCreator;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.EnumType;
@@ -76,7 +75,7 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
     return new CompilerPass() {
       @Override
       public void process(Node externs, Node root) {
-        ScopeCreator scopeCreator =
+        MemoizedScopeCreator scopeCreator =
             new MemoizedScopeCreator(new TypedScopeCreator(compiler));
         Scope topScope = scopeCreator.createScope(root.getParent(), null);
         (new TypeInferencePass(
@@ -664,7 +663,7 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
 
   public void testPropertyInExterns3() {
     testSame(
-        "/** @constructor \n * @param {*} x */ function Object(x) {}" +
+        "/** @constructor \n * @param {*=} x */ function Object(x) {}" +
         "/** @type {number} */ Object.one;", "", null);
 
     ObjectType obj = globalScope.getVar("Object").getType().dereference();
@@ -1134,6 +1133,76 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
     assertEquals("number", findNameType("f", lastLocalScope).toString());
   }
 
+  public void testTemplateType9() {
+    testSame(
+        "/** @constructor */\n" +
+        "function Foo() {}\n" +
+        "/**\n" +
+        " * @this {T}\n" +
+        " * @return {T}\n" +
+        " * @template T\n" +
+        " */\n" +
+        "Foo.prototype.method = function() {};\n" +
+        "/**\n" +
+        " * @constructor\n" +
+        " * @extends {Foo}\n" +
+        " */\n" +
+        "function Bar() {}\n" +
+        "\n" +
+        "var g = new Bar().method();\n");
+    assertEquals("Bar", findNameType("g", globalScope).toString());
+  }
+
+  public void testTemplateType10() {
+    // NOTE: we would like the type within the function to remain "Foo"
+    // we can handle this by support template type like "T extends Foo"
+    // to provide a "minimum" type for "Foo" within the function body.
+    testSame(
+        "/** @constructor */\n" +
+        "function Foo() {}\n" +
+        "\n" +
+        "/**\n" +
+        " * @this {T}\n" +
+        " * @return {T} fn\n" +
+        " * @template T\n" +
+        " */\n" +
+        "Foo.prototype.method = function() {var g = this;};\n");
+    assertEquals("T", findNameType("g", lastLocalScope).toString());
+  }
+
+  public void testTemplateType11() {
+    testSame(
+        "/**\n" +
+        " * @this {T}\n" +
+        " * @return {T} fn\n" +
+        " * @template T\n" +
+        " */\n" +
+        "var method = function() {};\n" +
+        "/**\n" +
+        " * @constructor\n" +
+        " */\n" +
+        "function Bar() {}\n" +
+        "\n" +
+        "var g = method().call(new Bar());\n");
+    // NOTE: we would like this to be "Bar"
+    assertEquals("?", findNameType("g", globalScope).toString());
+  }
+
+  public void testTemplateType12() {
+    testSame(
+        "/** @constructor */\n" +
+        "function Foo() {}\n" +
+        "\n" +
+        "/**\n" +
+        " * @this {Array.<T>|{length:number}}\n" +
+        " * @return {T} fn\n" +
+        " * @template T\n" +
+        " */\n" +
+        "Foo.prototype.method = function() {var g = this;};\n");
+    assertEquals("(Array.<T>|{length: number})",
+        findNameType("g", lastLocalScope).toString());
+  }
+
   public void testClosureParameterTypesWithoutJSDoc() {
     testSame(
         "/**\n" +
@@ -1239,7 +1308,7 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
         CompilerTypeTestCase.ACTIVE_X_OBJECT_DEF,
         "var x = new ActiveXObject();", null);
     assertEquals(
-        "NoObject",
+        "?",
         findNameType("x", globalScope).toString());
   }
 
@@ -1483,6 +1552,22 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
     assertEquals("number", lastLocalScope.getVar("x").getType().toString());
   }
 
+  public void testDeclaredCatchExpression1() {
+    testSame(
+        "try {} catch (e) {}");
+    // Note: "e" actually belongs to a inner scope but we don't
+    // model catches as separate scopes currently.
+    assertEquals(null, globalScope.getVar("e").getType());
+  }
+
+  public void testDeclaredCatchExpression2() {
+    testSame(
+        "try {} catch (/** @type {string} */ e) {}");
+    // Note: "e" actually belongs to a inner scope but we don't
+    // model catches as separate scopes currently.
+    assertEquals("string", globalScope.getVar("e").getType().toString());
+  }
+
   private JSType findNameType(final String name, Scope scope) {
     return findTypeOnMatchedNode(new Predicate<Node>() {
       @Override public boolean apply(Node n) {
@@ -1527,9 +1612,5 @@ public class TypedScopeCreatorTest extends CompilerTestCase {
 
   private ObjectType getNativeObjectType(JSTypeNative type) {
     return (ObjectType) registry.getNativeType(type);
-  }
-
-  private void assertTypeEquals(String s, JSType type) {
-    assertEquals(s, type.toString());
   }
 }

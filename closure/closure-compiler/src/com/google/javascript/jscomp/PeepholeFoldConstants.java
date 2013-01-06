@@ -29,33 +29,37 @@ import com.google.javascript.rhino.jstype.TernaryValue;
  */
 class PeepholeFoldConstants extends AbstractPeepholeOptimization {
 
+  // TODO(johnlenz): optimizations should not be emiting errors. Move these to
+  // a check pass.
   static final DiagnosticType INVALID_GETELEM_INDEX_ERROR =
-      DiagnosticType.error(
+      DiagnosticType.warning(
           "JSC_INVALID_GETELEM_INDEX_ERROR",
           "Array index not integer: {0}");
 
   static final DiagnosticType INDEX_OUT_OF_BOUNDS_ERROR =
-      DiagnosticType.error(
+      DiagnosticType.warning(
           "JSC_INDEX_OUT_OF_BOUNDS_ERROR",
           "Array index out of bounds: {0}");
 
   static final DiagnosticType NEGATING_A_NON_NUMBER_ERROR =
-      DiagnosticType.error(
+      DiagnosticType.warning(
           "JSC_NEGATING_A_NON_NUMBER_ERROR",
           "Can't negate non-numeric value: {0}");
 
   static final DiagnosticType BITWISE_OPERAND_OUT_OF_RANGE =
-      DiagnosticType.error(
+      DiagnosticType.warning(
           "JSC_BITWISE_OPERAND_OUT_OF_RANGE",
           "Operand out of range, bitwise operation will lose information: {0}");
 
-  static final DiagnosticType SHIFT_AMOUNT_OUT_OF_BOUNDS = DiagnosticType.error(
-      "JSC_SHIFT_AMOUNT_OUT_OF_BOUNDS",
-      "Shift amount out of bounds: {0}");
+  static final DiagnosticType SHIFT_AMOUNT_OUT_OF_BOUNDS =
+      DiagnosticType.warning(
+          "JSC_SHIFT_AMOUNT_OUT_OF_BOUNDS",
+          "Shift amount out of bounds: {0}");
 
-  static final DiagnosticType FRACTIONAL_BITWISE_OPERAND = DiagnosticType.error(
-      "JSC_FRACTIONAL_BITWISE_OPERAND",
-      "Fractional bitwise operand: {0}");
+  static final DiagnosticType FRACTIONAL_BITWISE_OPERAND =
+      DiagnosticType.warning(
+          "JSC_FRACTIONAL_BITWISE_OPERAND",
+          "Fractional bitwise operand: {0}");
 
   private static final double MAX_FOLD_NUMBER = Math.pow(2, 53);
 
@@ -368,30 +372,30 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
         }
         return n;
       case Token.NEG:
-        try {
-          if (left.isName()) {
-            if (left.getString().equals("Infinity")) {
-              // "-Infinity" is valid and a literal, don't modify it.
-              return n;
-            } else if (left.getString().equals("NaN")) {
-              // "-NaN" is "NaN".
-              n.removeChild(left);
-              parent.replaceChild(n, left);
-              reportCodeChange();
-              return left;
-            }
+        if (left.isName()) {
+          if (left.getString().equals("Infinity")) {
+            // "-Infinity" is valid and a literal, don't modify it.
+            return n;
+          } else if (left.getString().equals("NaN")) {
+            // "-NaN" is "NaN".
+            n.removeChild(left);
+            parent.replaceChild(n, left);
+            reportCodeChange();
+            return left;
           }
+        }
 
+        if (left.isNumber()) {
           double negNum = -left.getDouble();
 
           Node negNumNode = IR.number(negNum);
           parent.replaceChild(n, negNumNode);
           reportCodeChange();
           return negNumNode;
-        } catch (UnsupportedOperationException ex) {
+        } else {
           // left is not a number node, so do not replace, but warn the
           // user because they can't be doing anything good
-          error(NEGATING_A_NON_NUMBER_ERROR, left);
+          report(NEGATING_A_NON_NUMBER_ERROR, left);
           return n;
         }
       case Token.BITNOT:
@@ -405,17 +409,17 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
               reportCodeChange();
               return notIntValNode;
             } else {
-              error(FRACTIONAL_BITWISE_OPERAND, left);
+              report(FRACTIONAL_BITWISE_OPERAND, left);
               return n;
             }
           } else {
-            error(BITWISE_OPERAND_OUT_OF_RANGE, left);
+            report(BITWISE_OPERAND_OUT_OF_RANGE, left);
             return n;
           }
         } catch (UnsupportedOperationException ex) {
           // left is not a number node, so do not replace, but warn the
           // user because they can't be doing anything good
-          error(NEGATING_A_NON_NUMBER_ERROR, left);
+          report(NEGATING_A_NON_NUMBER_ERROR, left);
           return n;
         }
         default:
@@ -860,27 +864,27 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
       // check ranges.  We do not do anything that would clip the double to
       // a 32-bit range, since the user likely does not intend that.
       if (!(lval >= Integer.MIN_VALUE && lval <= Integer.MAX_VALUE)) {
-        error(BITWISE_OPERAND_OUT_OF_RANGE, left);
+        report(BITWISE_OPERAND_OUT_OF_RANGE, left);
         return n;
       }
 
       // only the lower 5 bits are used when shifting, so don't do anything
       // if the shift amount is outside [0,32)
       if (!(rval >= 0 && rval < 32)) {
-        error(SHIFT_AMOUNT_OUT_OF_BOUNDS, right);
+        report(SHIFT_AMOUNT_OUT_OF_BOUNDS, right);
         return n;
       }
 
       // Convert the numbers to ints
       int lvalInt = (int) lval;
       if (lvalInt != lval) {
-        error(FRACTIONAL_BITWISE_OPERAND, left);
+        report(FRACTIONAL_BITWISE_OPERAND, left);
         return n;
       }
 
       int rvalInt = (int) rval;
       if (rvalInt != rval) {
-        error(FRACTIONAL_BITWISE_OPERAND, right);
+        report(FRACTIONAL_BITWISE_OPERAND, right);
         return n;
       }
 
@@ -918,18 +922,28 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
    */
   @SuppressWarnings("fallthrough")
   private Node tryFoldComparison(Node n, Node left, Node right) {
+    TernaryValue result = evaluateComparison(n.getType(), left, right);
+    if (result == TernaryValue.UNKNOWN) {
+      return n;
+    }
+
+    Node newNode = NodeUtil.booleanNode(result.toBoolean(true));
+    n.getParent().replaceChild(n, newNode);
+    reportCodeChange();
+
+    return newNode;
+  }
+
+  static TernaryValue evaluateComparison(int op, Node left, Node right) {
     boolean leftLiteral = NodeUtil.isLiteralValue(left, true);
     boolean rightLiteral = NodeUtil.isLiteralValue(right, true);
 
     if (!leftLiteral || !rightLiteral) {
       // We only handle literal operands for LT and GT.
-      if (n.getType() != Token.GT && n.getType() != Token.LT) {
-        return n;
+      if (op != Token.GT && op != Token.LT) {
+        return TernaryValue.UNKNOWN;
       }
     }
-
-    int op = n.getType();
-    boolean result;
 
     boolean undefinedRight = NodeUtil.isUndefined(right) && rightLiteral;
     boolean nullRight = right.isNull();
@@ -938,160 +952,122 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
     switch (lhType) {
       case Token.VOID:
         if (!leftLiteral) {
-          return n;
+          return TernaryValue.UNKNOWN;
         } else if (!rightLiteral) {
-          return n;
+          return TernaryValue.UNKNOWN;
         } else {
-          result = compareToUndefined(right, op);
+          return TernaryValue.forBoolean(compareToUndefined(right, op));
         }
-        break;
+
       case Token.NULL:
         if (rightLiteral && isEqualityOp(op)) {
-          result = compareToNull(right, op);
-          break;
+          return TernaryValue.forBoolean(compareToNull(right, op));
         }
         // fallthrough
       case Token.TRUE:
       case Token.FALSE:
         if (undefinedRight) {
-          result = compareToUndefined(left, op);
-          break;
+          return TernaryValue.forBoolean(compareToUndefined(left, op));
         }
         if (rhType != Token.TRUE &&
             rhType != Token.FALSE &&
             rhType != Token.NULL) {
-          return n;
+          return TernaryValue.UNKNOWN;
         }
         switch (op) {
           case Token.SHEQ:
           case Token.EQ:
-            result = lhType == rhType;
-            break;
+            return TernaryValue.forBoolean(lhType == rhType);
 
           case Token.SHNE:
           case Token.NE:
-            result = lhType != rhType;
-            break;
+            return TernaryValue.forBoolean(lhType != rhType);
 
           case Token.GE:
           case Token.LE:
           case Token.GT:
           case Token.LT:
-            Boolean compareResult = compareAsNumbers(op, left, right);
-            if (compareResult != null) {
-              result = compareResult;
-            } else {
-              return n;
-            }
-            break;
-
-          default:
-            return n;  // we only handle == and != here
+            return compareAsNumbers(op, left, right);
         }
-        break;
+        return TernaryValue.UNKNOWN;
 
       case Token.THIS:
         if (!right.isThis()) {
-          return n;
+          return TernaryValue.UNKNOWN;
         }
         switch (op) {
           case Token.SHEQ:
           case Token.EQ:
-            result = true;
-            break;
+            return TernaryValue.TRUE;
 
           case Token.SHNE:
           case Token.NE:
-            result = false;
-            break;
-
-          // We can only handle == and != here.
-          // GT, LT, GE, LE depend on the type of "this" and how it will
-          // be converted to number.  The results are different depending on
-          // whether it is a string, NaN or other number value.
-          default:
-            return n;
+            return TernaryValue.FALSE;
         }
-        break;
+
+        // We can only handle == and != here.
+        // GT, LT, GE, LE depend on the type of "this" and how it will
+        // be converted to number.  The results are different depending on
+        // whether it is a string, NaN or other number value.
+        return TernaryValue.UNKNOWN;
 
       case Token.STRING:
         if (undefinedRight) {
-          result = compareToUndefined(left, op);
-          break;
+          return TernaryValue.forBoolean(compareToUndefined(left, op));
         }
         if (nullRight && isEqualityOp(op)) {
-          result = compareToNull(left, op);
-          break;
+          return TernaryValue.forBoolean(compareToNull(left, op));
         }
         if (Token.STRING != right.getType()) {
-          return n;  // Only eval if they are the same type
+          return TernaryValue.UNKNOWN;  // Only eval if they are the same type
         }
 
-        TernaryValue ternary = TernaryValue.UNKNOWN;
         switch (op) {
           case Token.SHEQ:
           case Token.EQ:
-            ternary = areStringsEqual(left.getString(), right.getString());
-            break;
+            return areStringsEqual(left.getString(), right.getString());
 
           case Token.SHNE:
           case Token.NE:
-            ternary =
-                areStringsEqual(left.getString(), right.getString()).not();
-            break;
+            return areStringsEqual(left.getString(), right.getString()).not();
         }
 
-        if (ternary == TernaryValue.UNKNOWN) {
-          return n;
-        }
-        result = ternary.toBoolean(true);
-        break;
+        return TernaryValue.UNKNOWN;
 
       case Token.NUMBER:
         if (undefinedRight) {
-          result = compareToUndefined(left, op);
-          break;
+          return TernaryValue.forBoolean(compareToUndefined(left, op));
         }
         if (nullRight && isEqualityOp(op)) {
-          result = compareToNull(left, op);
-          break;
+          return TernaryValue.forBoolean(compareToNull(left, op));
         }
         if (Token.NUMBER != right.getType()) {
-          return n;  // Only eval if they are the same type
+          return TernaryValue.UNKNOWN;  // Only eval if they are the same type
         }
-        Boolean compareResult = compareAsNumbers(op, left, right);
-        if (compareResult != null) {
-          result = compareResult;
-        } else {
-          return null;
-        }
-        break;
+        return compareAsNumbers(op, left, right);
 
       case Token.NAME:
         if (leftLiteral && undefinedRight) {
-          result = compareToUndefined(left, op);
-          break;
+          return TernaryValue.forBoolean(compareToUndefined(left, op));
         }
 
         if (rightLiteral) {
           boolean undefinedLeft = (left.getString().equals("undefined"));
           if (undefinedLeft) {
-            result = compareToUndefined(right, op);
-            break;
+            return TernaryValue.forBoolean(compareToUndefined(right, op));
           }
           if (leftLiteral && nullRight && isEqualityOp(op)) {
-            result = compareToNull(left, op);
-            break;
+            return TernaryValue.forBoolean(compareToNull(left, op));
           }
         }
 
         if (Token.NAME != right.getType()) {
-          return n;  // Only eval if they are the same type
+          return TernaryValue.UNKNOWN;  // Only eval if they are the same type
         }
         String ln = left.getString();
         String rn = right.getString();
         if (!ln.equals(rn)) {
-          return n;  // Not the same value name.
+          return TernaryValue.UNKNOWN;  // Not the same value name.
         }
 
         switch (op) {
@@ -1099,26 +1075,22 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
           // to handle EQ,NE,LE,GE,SHEQ, and SHNE.
           case Token.LT:
           case Token.GT:
-            result = false;
-            break;
-          default:
-            return n;  // don't handle that op
+            return TernaryValue.FALSE;
         }
-        break;
+
+        return TernaryValue.UNKNOWN;  // don't handle that op
 
       case Token.NEG:
         if (leftLiteral) {
           if (undefinedRight) {
-            result = compareToUndefined(left, op);
-            break;
+            return TernaryValue.forBoolean(compareToUndefined(left, op));
           }
           if (nullRight && isEqualityOp(op)) {
-            result = compareToNull(left, op);
-            break;
+            return TernaryValue.forBoolean(compareToNull(left, op));
           }
         }
         // Nothing else for now.
-        return n;
+        return TernaryValue.UNKNOWN;
 
       case Token.ARRAYLIT:
       case Token.OBJECTLIT:
@@ -1126,31 +1098,23 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
       case Token.FUNCTION:
         if (leftLiteral) {
           if (undefinedRight) {
-            result = compareToUndefined(left, op);
-            break;
+            return TernaryValue.forBoolean(compareToUndefined(left, op));
           }
           if (nullRight && isEqualityOp(op)) {
-            result = compareToNull(left, op);
-            break;
+            return TernaryValue.forBoolean(compareToNull(left, op));
           }
         }
         // ignore the rest for now.
-        return n;
+        return TernaryValue.UNKNOWN;
 
       default:
         // assert, this should cover all consts
-        return n;
+        return TernaryValue.UNKNOWN;
     }
-
-    Node newNode = NodeUtil.booleanNode(result);
-    n.getParent().replaceChild(n, newNode);
-    reportCodeChange();
-
-    return newNode;
   }
 
   /** Returns whether two JS strings are equal. */
-  private TernaryValue areStringsEqual(String a, String b) {
+  private static TernaryValue areStringsEqual(String a, String b) {
     // In JS, browsers parse \v differently. So do not consider strings
     // equal if one contains \v.
     if (a.indexOf('\u000B') != -1 ||
@@ -1164,7 +1128,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
   /**
    * @return Translate NOT expressions into TRUE or FALSE when possible.
    */
-  private int getNormalizedNodeType(Node n) {
+  private static int getNormalizedNodeType(Node n) {
     int type = n.getType();
     if (type == Token.NOT) {
       TernaryValue value = NodeUtil.getPureBooleanValue(n);
@@ -1173,50 +1137,52 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
           return Token.TRUE;
         case FALSE:
           return Token.FALSE;
+        case UNKNOWN:
+          return type;
       }
     }
     return type;
   }
 
   /**
-   * The result of the comparison as a Boolean or null if the
+   * The result of the comparison, or UNKNOWN if the
    * result could not be determined.
    */
-  private Boolean compareAsNumbers(int op, Node left, Node right) {
+  private static TernaryValue compareAsNumbers(int op, Node left, Node right) {
     Double leftValue = NodeUtil.getNumberValue(left);
     if (leftValue == null) {
-      return null;
+      return TernaryValue.UNKNOWN;
     }
     Double rightValue = NodeUtil.getNumberValue(right);
     if (rightValue == null) {
-      return null;
+      return TernaryValue.UNKNOWN;
     }
 
     double lv = leftValue;
     double rv = rightValue;
 
-    Boolean result;
     switch (op) {
       case Token.SHEQ:
       case Token.EQ:
         Preconditions.checkState(
             left.isNumber() && right.isNumber());
-        result = lv == rv;
-        break;
+        return TernaryValue.forBoolean(lv == rv);
       case Token.SHNE:
       case Token.NE:
         Preconditions.checkState(
             left.isNumber() && right.isNumber());
-        result = lv != rv;
-        break;
-      case Token.LE: result = lv <= rv; break;
-      case Token.LT: result = lv <  rv; break;
-      case Token.GE: result = lv >= rv; break;
-      case Token.GT: result = lv >  rv; break;
+        return TernaryValue.forBoolean(lv != rv);
+      case Token.LE:
+        return TernaryValue.forBoolean(lv <= rv);
+      case Token.LT:
+        return TernaryValue.forBoolean(lv <  rv);
+      case Token.GE:
+        return TernaryValue.forBoolean(lv >= rv);
+      case Token.GT:
+        return TernaryValue.forBoolean(lv >  rv);
       default:
-        return null;  // don't handle that op
+        return TernaryValue.UNKNOWN;  // don't handle that op
     }
-    return result;
   }
 
   /**
@@ -1224,7 +1190,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
    * @param op The boolean op to compare with
    * @return Whether the boolean op is true or false
    */
-  private boolean compareToUndefined(Node value, int op) {
+  private static boolean compareToUndefined(Node value, int op) {
     Preconditions.checkState(NodeUtil.isLiteralValue(value, true));
     boolean valueUndefined = NodeUtil.isUndefined(value);
     boolean valueNull = (Token.NULL == value.getType());
@@ -1249,7 +1215,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
     }
   }
 
-  private boolean isEqualityOp(int op) {
+  private static boolean isEqualityOp(int op) {
     switch (op) {
       case Token.EQ:
       case Token.NE:
@@ -1265,7 +1231,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
    * @param op The boolean op to compare with
    * @return Whether the boolean op is true or false
    */
-  private boolean compareToNull(Node value, int op) {
+  private static boolean compareToNull(Node value, int op) {
     boolean valueUndefined = NodeUtil.isUndefined(value);
     boolean valueNull = (Token.NULL == value.getType());
     boolean equivalent = valueUndefined || valueNull;
@@ -1437,12 +1403,12 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
     double index = right.getDouble();
     int intIndex = (int) index;
     if (intIndex != index) {
-      error(INVALID_GETELEM_INDEX_ERROR, right);
+      report(INVALID_GETELEM_INDEX_ERROR, right);
       return n;
     }
 
     if (intIndex < 0) {
-      error(INDEX_OUT_OF_BOUNDS_ERROR, right);
+      report(INDEX_OUT_OF_BOUNDS_ERROR, right);
       return n;
     }
 
@@ -1461,7 +1427,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
     }
 
     if (elem == null) {
-      error(INDEX_OUT_OF_BOUNDS_ERROR, right);
+      report(INDEX_OUT_OF_BOUNDS_ERROR, right);
       return n;
     }
 

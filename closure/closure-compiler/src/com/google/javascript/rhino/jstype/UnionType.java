@@ -185,18 +185,6 @@ public class UnionType extends JSType {
   }
 
   @Override
-  public boolean canAssignTo(JSType that) {
-    boolean canAssign = true;
-    for (JSType t : alternates) {
-      if (t.isUnknownType()) {
-        return true;
-      }
-      canAssign &= t.canAssignTo(that);
-    }
-    return canAssign;
-  }
-
-  @Override
   public boolean canBeCalled() {
     for (JSType t : alternates) {
       if (!t.canBeCalled()) {
@@ -267,6 +255,26 @@ public class UnionType extends JSType {
   }
 
   @Override
+  public boolean isStruct() {
+    for (JSType typ : getAlternates()) {
+      if (typ.isStruct()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @Override
+  public boolean isDict() {
+    for (JSType typ : getAlternates()) {
+      if (typ.isDict()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @Override
   public JSType getLeastSupertype(JSType that) {
     if (!that.isUnknownType() && !that.isUnionType()) {
       for (JSType alternate : alternates) {
@@ -299,7 +307,7 @@ public class UnionType extends JSType {
     JSType result = builder.build();
     if (!result.isNoType()) {
       return result;
-    } else if (this.isObject() && that.isObject()) {
+    } else if (this.isObject() && (that.isObject() && !that.isNoType())) {
       return getNativeType(JSTypeNative.NO_OBJECT_TYPE);
     } else {
       return getNativeType(JSTypeNative.NO_TYPE);
@@ -310,30 +318,33 @@ public class UnionType extends JSType {
    * Two union types are equal if they have the same number of alternates
    * and all alternates are equal.
    */
-  @Override
-  public boolean isEquivalentTo(JSType object) {
-    if (object == null) {
+  boolean checkUnionEquivalenceHelper(
+      UnionType that, EquivalenceMethod eqMethod) {
+    if (eqMethod == EquivalenceMethod.IDENTITY
+        && alternates.size() != that.alternates.size()) {
       return false;
     }
-    if (object.isUnionType()) {
-      UnionType that = object.toMaybeUnionType();
-      if (alternates.size() != that.alternates.size()) {
+    for (JSType alternate : that.alternates) {
+      if (!hasAlternate(alternate, eqMethod)) {
         return false;
       }
-      for (JSType alternate : that.alternates) {
-        if (!hasAlternate(alternate)) {
-          return false;
-        }
-      }
-      return true;
-    } else {
-      return false;
     }
+    return true;
   }
 
-  private boolean hasAlternate(JSType type) {
+  private boolean hasAlternate(JSType type, EquivalenceMethod eqMethod) {
     for (JSType alternate : alternates) {
-      if (alternate.isEquivalentTo(type)) {
+      if (alternate.checkEquivalenceHelper(type, eqMethod)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @Override
+  public boolean hasProperty(String pname) {
+    for (JSType alternate : alternates) {
+      if (alternate.hasProperty(pname)) {
         return true;
       }
     }
@@ -394,7 +405,8 @@ public class UnionType extends JSType {
   public JSType getRestrictedUnion(JSType type) {
     UnionTypeBuilder restricted = new UnionTypeBuilder(registry);
     for (JSType t : alternates) {
-      if (t.isUnknownType() || !t.isSubtype(type)) {
+      // Keep all unknown/unresolved types.
+      if (t.isUnknownType() || t.isNoResolvedType() || !t.isSubtype(type)) {
         restricted.addAlternate(t);
       }
     }
@@ -519,6 +531,10 @@ public class UnionType extends JSType {
     return visitor.caseUnionType(this);
   }
 
+  @Override <T> T visit(RelationshipVisitor<T> visitor, JSType that) {
+    return visitor.caseUnionType(this, that);
+  }
+
   @Override
   JSType resolveInternal(ErrorReporter t, StaticScope<JSType> scope) {
     setResolvedTypeInternal(this); // for circularly defined types.
@@ -595,9 +611,9 @@ public class UnionType extends JSType {
   }
 
   @Override
-  public boolean hasAnyTemplateInternal() {
+  public boolean hasAnyTemplateTypesInternal() {
     for (JSType alternate : alternates) {
-      if (alternate.hasAnyTemplate()) {
+      if (alternate.hasAnyTemplateTypes()) {
         return true;
       }
     }

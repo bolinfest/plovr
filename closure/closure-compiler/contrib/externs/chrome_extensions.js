@@ -173,6 +173,13 @@ chrome.tabs.executeScript = function(tabId, details, opt_callback) {};
 chrome.tabs.get = function(tabId, callback) {};
 
 
+/**
+ * Note: as of 2012-04-12, this function is no longer documented on
+ * the public web pages, but there are still existing usages
+ *
+ * @param {number?} windowId Window id.
+ * @param {function(Array.<Tab>): void} callback Callback.
+ */
 chrome.tabs.getAllInWindow = function(windowId, callback) {};
 
 
@@ -182,6 +189,13 @@ chrome.tabs.getAllInWindow = function(windowId, callback) {};
 chrome.tabs.getCurrent = function(callback) {};
 
 
+/**
+ * Note: as of 2012-04-12, this function is no longer documented on
+ * the public web pages, but there are still existing usages.
+ *
+ * @param {number?} windowId Window id.
+ * @param {function(Tab): void} callback Callback.
+ */
 chrome.tabs.getSelected = function(windowId, callback) {};
 
 
@@ -1035,6 +1049,40 @@ chrome.history.onVisited;
 chrome.input = {};
 chrome.input.ime = {};
 
+/**
+ * The OnKeyEvent event takes an extra argument.
+ * @constructor
+ */
+function ChromeInputImeOnKeyEventEvent() {}
+
+
+/**
+ * @param {function(string, !ChromeKeyboardEvent): (boolean|undefined)} callback
+ *     callback.
+ * @param {Array.<string>=} opt_extraInfoSpec Array of extra information.
+ */
+ChromeInputImeOnKeyEventEvent.prototype.addListener =
+    function(callback, opt_extraInfoSpec) {};
+
+
+/**
+ * @param {function(string, !ChromeKeyboardEvent): (boolean|undefined)} callback
+ *     callback.
+ */
+ChromeInputImeOnKeyEventEvent.prototype.removeListener = function(callback) {};
+
+/**
+ * @param {function(string, !ChromeKeyboardEvent): (boolean|undefined)} callback
+ *     callback.
+ */
+ChromeInputImeOnKeyEventEvent.prototype.hasListener = function(callback) {};
+
+/**
+ * @param {function(string, !ChromeKeyboardEvent): (boolean|undefined)} callback
+ *     callback.
+ */
+ChromeInputImeOnKeyEventEvent.prototype.hasListeners = function(callback) {};
+
 
 /**
  * @param {!Object.<string,number>} parameters An object with a
@@ -1074,7 +1122,7 @@ chrome.input.ime.setCandidates = function(parameters, opt_callback) {};
 /**
  * @param {!Object.<string,(string|number|Object.<string,(string|number)>)>}
  *     parameters An object with 'contextID' (number), 'text' (string),
- *     'selectionStart (number), 'selectEnd' (number), 'cursor' (number),
+ *     'selectionStart (number), 'selectionEnd' (number), 'cursor' (number),
  *     and 'segments' (array of object) keys.
  * @param {function(boolean): void=} opt_callback Callback function.
  */
@@ -1106,6 +1154,13 @@ chrome.input.ime.setMenuItems = function(parameters, opt_callback) {};
  */
 chrome.input.ime.updateMenuItems = function(parameters, opt_callback) {};
 
+/**
+ * @param {string} requestId Request id of the event that was handled. This
+ *     should come from keyEvent.requestId.
+ * @param {boolean} response True if the keystroke was handled, false if not.
+ */
+chrome.input.ime.keyEventHandled = function(requestId, response) {};
+
 
 /** @type {!ChromeEvent} */
 chrome.input.ime.onActivate;
@@ -1131,7 +1186,7 @@ chrome.input.ime.onFocus;
 chrome.input.ime.onInputContextUpdate;
 
 
-/** @type {!ChromeEvent} */
+/** @type {!ChromeInputImeOnKeyEventEvent} */
 chrome.input.ime.onKeyEvent;
 
 
@@ -1677,6 +1732,10 @@ Port.prototype.sender;
 Port.prototype.postMessage = function(obj) {};
 
 
+/**
+ * Note: as of 2012-04-12, this function is no longer documented on
+ * the public web pages, but there are still existing usages.
+ */
 Port.prototype.disconnect = function() {};
 
 

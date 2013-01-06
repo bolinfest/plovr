@@ -23,8 +23,8 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.javascript.rhino.Node;
 
+import java.util.Collections;
 import java.util.List;
-import java.util.Random;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -65,6 +65,9 @@ class PhaseOptimizer implements CompilerPass {
   private Tracer currentTracer = null;
   private String currentPassName = null;
   private PassFactory sanityCheck = null;
+
+  private double progress = 0.0;
+  private double progressStep = 0.0;
 
   // The following static properties are only used for computing optimal
   // phase orderings. They should not be touched by normal compiler runs.
@@ -123,14 +126,13 @@ class PhaseOptimizer implements CompilerPass {
    * frequency of multi-run passes in a fixed-point loop.
    */
   void consume(List<PassFactory> factories) {
-    Loop currentLoop = new LoopInternal();
+    Loop currentLoop = new Loop();
     boolean isCurrentLoopPopulated = false;
     for (PassFactory factory : factories) {
       if (factory.isOneTimePass()) {
         if (isCurrentLoopPopulated) {
           passes.add(currentLoop);
-
-          currentLoop = new LoopInternal();
+          currentLoop = new Loop();
           isCurrentLoopPopulated = false;
         }
         addOneTimePass(factory);
@@ -150,7 +152,7 @@ class PhaseOptimizer implements CompilerPass {
    * This pass will be run once.
    */
   void addOneTimePass(PassFactory factory) {
-    passes.add(new PassFactoryDelegate(compiler, factory));
+    passes.add(new NamedPass(factory));
   }
 
   /**
@@ -159,7 +161,7 @@ class PhaseOptimizer implements CompilerPass {
    * @return The loop structure. Pass suppliers should be added to the loop.
    */
   Loop addFixedPointLoop() {
-    Loop loop = new LoopInternal();
+    Loop loop = new Loop();
     passes.add(loop);
     return loop;
   }
@@ -176,19 +178,16 @@ class PhaseOptimizer implements CompilerPass {
    */
   @Override
   public void process(Node externs, Node root) {
-    double progress = 0.0;
-    double progressStep = 0.0;
+    progress = 0.0;
+    progressStep = 0.0;
     if (progressRange != null) {
       progressStep = (progressRange.maxValue - progressRange.initialValue)
           / passes.size();
       progress = progressRange.initialValue;
     }
+
     for (CompilerPass pass : passes) {
       pass.process(externs, root);
-      if (progressRange != null) {
-        progress += progressStep;
-        compiler.setProgress(progress);
-      }
       if (hasHaltingErrors()) {
         return;
       }
@@ -212,6 +211,12 @@ class PhaseOptimizer implements CompilerPass {
 
     String passToCheck = currentPassName;
     try {
+      if (progressRange == null) {
+        compiler.setProgress(-1, currentPassName);
+      } else {
+        progress += progressStep;
+        compiler.setProgress(progress, currentPassName);
+      }
       stopTracer(currentTracer, currentPassName);
       currentPassName = null;
       currentTracer = null;
@@ -259,50 +264,25 @@ class PhaseOptimizer implements CompilerPass {
   /**
    * A single compiler pass.
    */
-  private abstract class NamedPass implements CompilerPass {
+  class NamedPass implements CompilerPass {
     private final String name;
+    private final PassFactory factory;
 
-    NamedPass(String name) {
-      this.name = name;
+    NamedPass(PassFactory factory) {
+      this.name = factory.getName();
+      this.factory = factory;
     }
 
     @Override
     public void process(Node externs, Node root) {
       logger.fine(name);
       startPass(name);
-      processInternal(externs, root);
+      // Delay the creation of the actual pass until *after* all previous passes
+      // have been processed.
+      // Some precondition checks rely on this, eg, in CoalesceVariableNames.
+      factory.create(compiler).process(externs, root);
       endPass(externs, root);
     }
-
-    abstract void processInternal(Node externs, Node root);
-  }
-
-  /**
-   * Wraps every pass factory as a pass, to ensure that we don't
-   * keep references to passes and their data structures.
-   */
-  private class PassFactoryDelegate extends NamedPass {
-    private final AbstractCompiler myCompiler;
-    private final PassFactory factory;
-
-    private PassFactoryDelegate(
-        AbstractCompiler myCompiler, PassFactory factory) {
-      super(factory.getName());
-      this.myCompiler = myCompiler;
-      this.factory = factory;
-    }
-
-    @Override
-    void processInternal(Node externs, Node root) {
-      factory.create(myCompiler).process(externs, root);
-    }
-  }
-
-  /**
-   * Runs a set of compiler passes until they reach a fixed point.
-   */
-  static abstract class Loop implements CompilerPass {
-    abstract void addLoopedPass(PassFactory factory);
   }
 
   /**
@@ -311,17 +291,16 @@ class PhaseOptimizer implements CompilerPass {
    * Notice that this is a non-static class, because it includes the closure
    * of PhaseOptimizer.
    */
-  private class LoopInternal extends Loop {
+  class Loop implements CompilerPass {
     private final List<NamedPass> myPasses = Lists.newArrayList();
     private final Set<String> myNames = Sets.newHashSet();
 
-    @Override
     void addLoopedPass(PassFactory factory) {
       String name = factory.getName();
       Preconditions.checkArgument(!myNames.contains(name),
           "Already a pass with name '%s' in this loop", name);
-      myNames.add(factory.getName());
-      myPasses.add(new PassFactoryDelegate(compiler, factory));
+      myNames.add(name);
+      myPasses.add(new NamedPass(factory));
     }
 
     /**
@@ -375,13 +354,7 @@ class PhaseOptimizer implements CompilerPass {
 
     /** Re-arrange the passes in a random order. */
     private void randomizePasses() {
-      List<NamedPass> mixedupPasses = Lists.newArrayList();
-      Random random = new Random();
-      while (myPasses.size() > 0) {
-        mixedupPasses.add(
-            myPasses.remove(random.nextInt(myPasses.size())));
-      }
-      myPasses.addAll(mixedupPasses);
+      Collections.shuffle(myPasses);
     }
 
     /** Re-arrange the passes in an optimal order. */

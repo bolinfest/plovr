@@ -67,8 +67,8 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
    * could be inlined using {@link GatherCandiates}.
    *
    * The second step involves verifying that each candidate is actually safe
-   * to inline with {@link Candidate#canInline()} and finally perform inlining
-   * using {@link Candidate#inlineVariable()}.
+   * to inline with {@link Candidate#canInline(Scope)} and finally perform
+   * inlining using {@link Candidate#inlineVariable()}.
    *
    * The reason for the delayed evaluation of the candidates is because we
    * need two separate dataflow result.
@@ -152,7 +152,7 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
     reachingUses = new MaybeReachingVariableUse(cfg, t.getScope(), compiler);
     reachingUses.analyze();
     for (Candidate c : candidates) {
-      if (c.canInline()) {
+      if (c.canInline(t.getScope())) {
         c.inlineVariable();
 
         // If definition c has dependencies, then inlining it may have
@@ -190,7 +190,7 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
    * Gathers a list of possible candidates for inlining based only on
    * information from {@link MustBeReachingVariableDef}. The list will be stored
    * in {@code candidates} and the validity of each inlining Candidate should
-   * be later verified with {@link Candidate#canInline()} when
+   * be later verified with {@link Candidate#canInline(Scope)} when
    * {@link MaybeReachingVariableUse} has been performed.
    */
   private class GatherCandiates extends AbstractShallowCallback {
@@ -277,7 +277,7 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
       return defMetadata.node;
     }
 
-    private boolean canInline() {
+    private boolean canInline(final Scope scope) {
       // Cannot inline a parameter.
       if (getDefCfgNode().isFunction()) {
         return false;
@@ -323,7 +323,7 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
       // TODO(user): Side-effect is OK sometimes. As long as there are no
       // side-effect function down all paths to the use. Once we have all the
       // side-effect analysis tool.
-      if (NodeUtil.mayHaveSideEffects(def.getLastChild())) {
+      if (NodeUtil.mayHaveSideEffects(def.getLastChild(), compiler)) {
         return false;
       }
 
@@ -348,13 +348,18 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
         return false;
       }
 
-      // We give up inlining stuff with R-Value that has GETPROP, GETELEM,
-      // or anything that creates a new object.
+      // We give up inlining stuff with R-Value that has:
+      // 1) GETPROP, GETELEM,
+      // 2) anything that creates a new object.
+      // 3) a direct reference to a catch expression.
       // Example:
       // var x = a.b.c; j.c = 1; print(x);
       // Inlining print(a.b.c) is not safe consider j and be alias to a.b.
       // TODO(user): We could get more accuracy by looking more in-detail
       // what j is and what x is trying to into to.
+      // TODO(johnlenz): rework catch expression handling when we
+      // have lexical scope support so catch expressions don't
+      // need to be special cased.
       if (NodeUtil.has(def.getLastChild(),
           new Predicate<Node>() {
               @Override
@@ -367,6 +372,12 @@ class FlowSensitiveInlineVariables extends AbstractPostOrderCallback
                   case Token.REGEXP:
                   case Token.NEW:
                     return true;
+                  case Token.NAME:
+                    Var var = scope.getOwnSlot(input.getString());
+                    if (var != null
+                        && var.getParentNode().isCatch()) {
+                      return true;
+                    }
                 }
                 return false;
               }

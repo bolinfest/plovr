@@ -47,6 +47,7 @@ public class ParameterizedTypeTest extends BaseJSTypeTestCase {
     super.setUp();
   }
 
+  @Override
   protected ParameterizedType createParameterizedType(
       ObjectType objectType, JSType parameterType) {
     return registry.createParameterizedType(objectType, parameterType);
@@ -56,7 +57,7 @@ public class ParameterizedTypeTest extends BaseJSTypeTestCase {
    * Assert that a type can assign to itself.
    */
   private void assertTypeCanAssignToItself(JSType type) {
-    assertTrue(type.canAssignTo(type));
+    assertTrue(type.isSubtype(type));
   }
 
   /**
@@ -67,14 +68,14 @@ public class ParameterizedTypeTest extends BaseJSTypeTestCase {
     ParameterizedType arrOfString = createParameterizedType(
         ARRAY_TYPE, STRING_TYPE);
     assertTypeCanAssignToItself(arrOfString);
-    assertTrue(arrOfString.canAssignTo(ARRAY_TYPE));
-    assertTrue(ARRAY_TYPE.canAssignTo(arrOfString));
+    assertTrue(arrOfString.isSubtype(ARRAY_TYPE));
+    assertTrue(ARRAY_TYPE.isSubtype(arrOfString));
 
     ParameterizedType arrOfNumber = createParameterizedType(
         ARRAY_TYPE, NUMBER_TYPE);
     assertTypeCanAssignToItself(arrOfNumber);
-    assertTrue(arrOfNumber.canAssignTo(ARRAY_TYPE));
-    assertTrue(ARRAY_TYPE.canAssignTo(arrOfNumber));
+    assertTrue(arrOfNumber.isSubtype(ARRAY_TYPE));
+    assertTrue(ARRAY_TYPE.isSubtype(arrOfNumber));
 
     assertTrue(arrOfString.isEquivalentTo(createParameterizedType(
         ARRAY_TYPE, STRING_TYPE)));
@@ -101,5 +102,14 @@ public class ParameterizedTypeTest extends BaseJSTypeTestCase {
     ParameterizedType arrOfUnknown = createParameterizedType(
         ARRAY_TYPE, UNKNOWN_TYPE);
     assertEquals("Array.<?>", arrOfUnknown.toString());
+  }
+
+  public void testDifferentRawTypes() throws Exception {
+    ParameterizedType arrOfNumber = createParameterizedType(
+        ARRAY_TYPE, NUMBER_TYPE);
+    ParameterizedType objType = createParameterizedType(
+        OBJECT_TYPE, UNKNOWN_TYPE);
+    assertTrue(arrOfNumber.isSubtype(objType));
+    assertFalse(objType.isSubtype(arrOfNumber));
   }
 }

@@ -25,22 +25,28 @@ import com.google.common.collect.ImmutableSet;
  */
 public class ReplaceIdGeneratorsTest extends CompilerTestCase {
 
-  public boolean generatePseudoNames = false;
+  private boolean generatePseudoNames = false;
+  private ReplaceIdGenerators lastPass = null;
+  private String previousMappings = null;
 
   @Override
   protected CompilerPass getProcessor(final Compiler compiler) {
-    return new ReplaceIdGenerators(
+    lastPass = new ReplaceIdGenerators(
         compiler,
         new ImmutableSet.Builder<String>()
             .add("goog.events.getUniqueId")
-        .add("goog.place.getUniqueId").build(),
-        generatePseudoNames);
+            .add("goog.place.getUniqueId")
+            .build(),
+        generatePseudoNames,
+        previousMappings);
+    return lastPass;
   }
 
   @Override
   protected void setUp() throws Exception {
     super.setUp();
     generatePseudoNames = false;
+    previousMappings = null;
   }
 
   @Override
@@ -52,6 +58,104 @@ public class ReplaceIdGeneratorsTest extends CompilerTestCase {
     test("foo.bar = goog.events.getUniqueId('foo_bar')",
          "foo.bar = 'a'",
          "foo.bar = 'foo_bar$0'");
+  }
+
+  public void testSerialization1() {
+    testMap("var x = goog.events.getUniqueId('xxx');\n" +
+            "var y = goog.events.getUniqueId('yyy');\n",
+
+            "var x = 'a';\n" +
+            "var y = 'b';\n",
+
+            "[goog.events.getUniqueId]\n" +
+            "\n" +
+            "a:testcode:1:32\n" +
+            "b:testcode:2:32\n" +
+            "\n");
+  }
+
+  public void testSerialization2() {
+    testMap("/** @consistentIdGenerator */ id = function() {};" +
+         "f1 = id('f1');" +
+         "f1 = id('f1')",
+
+         "id = function() {};" +
+         "f1 = 'a';" +
+         "f1 = 'a'",
+
+         "[id]\n" +
+         "\n" +
+         "a:f1\n" +
+         "\n");
+  }
+
+  public void testReusePreviousSerialization1() {
+    previousMappings =
+        "[goog.events.getUniqueId]\n" +
+        "\n" +
+        "previous1:testcode:1:32\n" +
+        "previous2:testcode:2:32\n" +
+        "\n" +
+        "[goog.place.getUniqueId]\n" +
+        "\n" +
+        "\n";
+    testMap("var x = goog.events.getUniqueId('xxx');\n" +
+            "var y = goog.events.getUniqueId('yyy');\n",
+
+            "var x = 'previous1';\n" +
+            "var y = 'previous2';\n",
+
+            "[goog.events.getUniqueId]\n" +
+            "\n" +
+            "previous1:testcode:1:32\n" +
+            "previous2:testcode:2:32\n" +
+            "\n");
+  }
+
+  public void testReusePreviousSerialization2() {
+    previousMappings =
+        "[goog.events.getUniqueId]\n" +
+        "\n" +
+        "a:testcode:1:32\n" +
+        "b:testcode:2:32\n" +
+        "\n" +
+        "[goog.place.getUniqueId]\n" +
+        "\n" +
+        "\n";
+    testMap(
+        "var x = goog.events.getUniqueId('xxx');\n" +
+        "\n" + // new line to change location
+        "var y = goog.events.getUniqueId('yyy');\n",
+
+        "var x = 'a';\n" +
+        "var y = 'c';\n",
+
+        "[goog.events.getUniqueId]\n" +
+        "\n" +
+        "a:testcode:1:32\n" +
+        "c:testcode:3:32\n" +
+        "\n");
+  }
+
+  public void testReusePreviousSerializationConsistent1() {
+    previousMappings =
+        "[id]\n" +
+        "\n" +
+        "a:f1\n" +
+        "\n";
+    testMap(
+        "/** @consistentIdGenerator */ id = function() {};" +
+        "f1 = id('f1');" +
+        "f1 = id('f1')",
+
+        "id = function() {};" +
+        "f1 = 'a';" +
+        "f1 = 'a'",
+
+        "[id]\n" +
+        "\n" +
+        "a:f1\n" +
+        "\n");
   }
 
   public void testSimple() {
@@ -115,6 +219,24 @@ public class ReplaceIdGeneratorsTest extends CompilerTestCase {
         "f1 = 'f1$0'");
   }
 
+  public void testSimpleStable() {
+    testNonPseudoSupportingGenerator(
+        "/** @stableIdGenerator */ id = function() {};" +
+        "foo.bar = id('foo_bar')",
+
+        "id = function() {};" +
+        "foo.bar = '125lGg'");
+
+    testNonPseudoSupportingGenerator(
+        "/** @stableIdGenerator */ id = function() {};" +
+        "f1 = id('f1');" +
+        "f1 = id('f1')",
+
+        "id = function() {};" +
+        "f1 = 'AAAMiw';" +
+        "f1 = 'AAAMiw'");
+  }
+
   public void testVar() {
     test("/** @consistentIdGenerator */ var id = function() {};" +
          "foo.bar = id('foo_bar')",
@@ -124,6 +246,13 @@ public class ReplaceIdGeneratorsTest extends CompilerTestCase {
 
          "var id = function() {};" +
          "foo.bar = 'foo_bar$0'");
+
+    testNonPseudoSupportingGenerator(
+        "/** @stableIdGenerator */ var id = function() {};" +
+        "foo.bar = id('foo_bar')",
+
+        "var id = function() {};" +
+        "foo.bar = '125lGg'");
   }
 
   public void testObjLit() {
@@ -135,6 +264,13 @@ public class ReplaceIdGeneratorsTest extends CompilerTestCase {
 
          "get.id = function() {};" +
          "foo.bar = {a: 'foo_bar$0'}");
+
+    testNonPseudoSupportingGenerator(
+        "/** @stableIdGenerator */ get.id = function() {};" +
+        "foo.bar = {a: get.id('foo_bar')}",
+
+        "get.id = function() {};" +
+        "foo.bar = {a: '125lGg'}");
   }
 
   public void testTwoGenerators() {
@@ -160,27 +296,36 @@ public class ReplaceIdGeneratorsTest extends CompilerTestCase {
          "f4 = '1$1';");
   }
 
-  public void testTwoMixedGenerators() {
+  public void testMixedGenerators() {
     test("/** @idGenerator */ var id1 = function() {};" +
          "/** @consistentIdGenerator */ var id2 = function() {};" +
+         "/** @stableIdGenerator */ var id3 = function() {};" +
          "f1 = id1('1');" +
          "f2 = id1('1');" +
          "f3 = id2('1');" +
-         "f4 = id2('1');",
+         "f4 = id2('1');" +
+         "f5 = id3('1');" +
+         "f6 = id3('1');",
 
          "var id1 = function() {};" +
          "var id2 = function() {};" +
+         "var id3 = function() {};" +
          "f1 = 'a';" +
          "f2 = 'b';" +
          "f3 = 'a';" +
-         "f4 = 'a';",
+         "f4 = 'a';" +
+         "f5 = 'AAAAMQ';" +
+         "f6 = 'AAAAMQ';",
 
          "var id1 = function() {};" +
          "var id2 = function() {};" +
+         "var id3 = function() {};" +
          "f1 = '1$0';" +
          "f2 = '1$1';" +
          "f3 = '1$0';" +
-         "f4 = '1$0';");
+         "f4 = '1$0';" +
+         "f5 = 'AAAAMQ';" +
+         "f6 = 'AAAAMQ';");
   }
 
   public void testLocalCall() {
@@ -202,10 +347,25 @@ public class ReplaceIdGeneratorsTest extends CompilerTestCase {
 
         "var id = function() {};" +
         "function fb() {foo.bar = 'foo_bar$0'}");
+
+    testNonPseudoSupportingGenerator(
+        "/** @stableIdGenerator */ var id = function() {};" +
+        "function fb() {foo.bar = id('foo_bar')}",
+
+        "var id = function() {};" +
+        "function fb() {foo.bar = '125lGg'}");
   }
 
   public void testConflictingIdGenerator() {
     testSame(new String[] {"/** @idGenerator \n @consistentIdGenerator \n*/" +
+                           "var id = function() {}; "},
+        ReplaceIdGenerators.CONFLICTING_GENERATOR_TYPE);
+
+    testSame(new String[] {"/** @stableIdGenerator \n @idGenerator \n*/" +
+                           "var id = function() {}; "},
+        ReplaceIdGenerators.CONFLICTING_GENERATOR_TYPE);
+
+    testSame(new String[] {"/** @stableIdGenerator \n @consistentIdGenerator \n*/" +
                            "var id = function() {}; "},
         ReplaceIdGenerators.CONFLICTING_GENERATOR_TYPE);
 
@@ -219,10 +379,22 @@ public class ReplaceIdGeneratorsTest extends CompilerTestCase {
         "if (x) {foo.bar = 'foo_bar$0'}");
   }
 
+  private void testMap(String code, String expected, String expectedMap) {
+    test(code, expected);
+    assertEquals(expectedMap, lastPass.getSerializedIdMappings());
+  }
+
   private void test(String code, String expected, String expectedPseudo) {
     generatePseudoNames = false;
     test(code, expected);
     generatePseudoNames = true;
     test(code, expectedPseudo);
+  }
+
+  private void testNonPseudoSupportingGenerator(String code, String expected) {
+    generatePseudoNames = false;
+    test(code, expected);
+    generatePseudoNames = true;
+    test(code, expected);
   }
 }

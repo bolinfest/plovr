@@ -377,6 +377,23 @@ final public class JSDocInfoBuilder {
   }
 
   /**
+   * Records that the {@link JSDocInfo} being built should have its {@link
+   * JSDocInfo#isStableIdGenerator()} flag set to {@code true}.
+   *
+   * @return {@code true} if the stableIdGenerator flag was recorded and {@code false} if it was
+   *     already recorded.
+   */
+  public boolean recordStableIdGenerator() {
+    if (!currentInfo.isStableIdGenerator()) {
+      currentInfo.setStableIdGenerator(true);
+      populated = true;
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  /**
    * Records the version.
    */
   public boolean recordVersion(String version) {
@@ -719,6 +736,40 @@ final public class JSDocInfoBuilder {
 
   /**
    * Records that the {@link JSDocInfo} being built should have its
+   * {@link JSDocInfo#makesStructs()} flag set to {@code true}.
+   *
+   * @return {@code true} if the struct was recorded and {@code false}
+   * if it was already defined or it was incompatible with the existing flags
+   */
+  public boolean recordStruct() {
+    if (hasAnySingletonTypeTags() || currentInfo.isInterface() ||
+        currentInfo.makesDicts() || currentInfo.makesStructs()) {
+      return false;
+    }
+    currentInfo.setStruct();
+    populated = true;
+    return true;
+  }
+
+  /**
+   * Records that the {@link JSDocInfo} being built should have its
+   * {@link JSDocInfo#makesDicts()} flag set to {@code true}.
+   *
+   * @return {@code true} if the dict was recorded and {@code false}
+   * if it was already defined or it was incompatible with the existing flags
+   */
+  public boolean recordDict() {
+    if (hasAnySingletonTypeTags() || currentInfo.isInterface() ||
+        currentInfo.makesDicts() || currentInfo.makesStructs()) {
+      return false;
+    }
+    currentInfo.setDict();
+    populated = true;
+    return true;
+  }
+
+  /**
+   * Records that the {@link JSDocInfo} being built should have its
    * {@link JSDocInfo#isJavaDispatch()} flag set to {@code true}.
    *
    * @return {@code true} if the javadispatch was recorded and {@code false}
@@ -804,18 +855,17 @@ final public class JSDocInfoBuilder {
    * {@link JSDocInfo#isInterface()} flag set to {@code true}.
    *
    * @return {@code true} if the flag was recorded and {@code false}
-   *     if it was already defined or it was incompatible with the existing
-   *     flags
+   * if it was already defined or it was incompatible with the existing flags
    */
   public boolean recordInterface() {
-    if (!hasAnySingletonTypeTags() &&
-        !currentInfo.isConstructor() && !currentInfo.isInterface()) {
-      currentInfo.setInterface(true);
-      populated = true;
-      return true;
-    } else {
+    if (hasAnySingletonTypeTags() ||
+        currentInfo.makesStructs() || currentInfo.makesDicts() ||
+        currentInfo.isConstructor() || currentInfo.isInterface()) {
       return false;
     }
+    currentInfo.setInterface(true);
+    populated = true;
+    return true;
   }
 
   /**

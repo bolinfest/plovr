@@ -509,9 +509,23 @@ History.prototype.length;
 History.prototype.forward = function() {};
 
 /**
+ * @type {boolean}
+ * @implicitCast
+ * @see http://msdn.microsoft.com/en-us/library/ie/ms533072(v=vs.85).aspx
+ */
+HTMLFrameElement.prototype.allowTransparency;
+
+/**
  * @see http://msdn.microsoft.com/en-us/library/ms533692(VS.85).aspx
  */
 HTMLFrameElement.prototype.contentWindow;
+
+/**
+ * @type {boolean}
+ * @implicitCast
+ * @see http://msdn.microsoft.com/en-us/library/ie/ms533072(v=vs.85).aspx
+ */
+HTMLIFrameElement.prototype.allowTransparency;
 
 /**
  * @see http://msdn.microsoft.com/en-us/library/ms533692(VS.85).aspx
@@ -1052,6 +1066,12 @@ Element.prototype.onmouseenter;
 Element.prototype.onmouseleave;
 
 /**
+ * @type {?function(Event)}
+ * @see http://msdn.microsoft.com/en-us/library/ms536969(VS.85).aspx
+ */
+Element.prototype.onselectstart;
+
+/**
  * @see http://msdn.microsoft.com/en-us/library/aa752326(VS.85).aspx
  */
 Element.prototype.outerHTML;
@@ -1099,6 +1119,61 @@ Element.prototype.unselectable;
 
 /**
  * @constructor
+ * @see http://msdn.microsoft.com/en-us/library/aa752462(v=vs.85).aspx
+ */
+function HTMLFiltersCollection() {}
+
+/**
+ * @see http://msdn.microsoft.com/en-us/library/aa752463(v=vs.85).aspx
+ * @type {number}
+ */
+HTMLFiltersCollection.prototype.length;
+
+/**
+ * @see http://msdn.microsoft.com/en-us/library/ms537452(v=vs.85).aspx
+ * @type {HTMLFiltersCollection}
+ */
+Element.prototype.filters;
+
+/**
+ * @constructor
+ * @see http://msdn.microsoft.com/en-us/library/ms532853(v=vs.85).aspx
+ */
+function HTMLFilter() {}
+
+/**
+ * @see http://msdn.microsoft.com/en-us/library/ms532954(v=vs.85).aspx
+ */
+HTMLFilter.prototype.apply = function() {};
+
+/**
+ * @constructor
+ * @extends {HTMLFilter}
+ * @see http://msdn.microsoft.com/en-us/library/ms532967(v=vs.85).aspx
+ */
+function AlphaFilter() {}
+
+/**
+ * @see http://msdn.microsoft.com/en-us/library/ms532910(v=vs.85).aspx
+ * @type {number}
+ */
+AlphaFilter.prototype.Opacity;
+
+/**
+ * @constructor
+ * @extends {HTMLFilter}
+ * @see http://msdn.microsoft.com/en-us/library/ms532969(v=vs.85).aspx
+ */
+function AlphaImageLoaderFilter() {}
+
+/**
+ * @see http://msdn.microsoft.com/en-us/library/ms532920(v=vs.85).aspx
+ * @type {string}
+ */
+AlphaImageLoaderFilter.prototype.sizingMethod;
+
+/**
+ * @constructor
  * @see http://msdn.microsoft.com/en-us/library/ms535866(VS.85).aspx
  */
 function Location() {}
@@ -1133,6 +1208,10 @@ Location.prototype.hostname;
  */
 Location.prototype.href;
 
+/**
+ * @see https://docs.google.com/document/view?id=1r_VTFKApVOaNIkocrg0z-t7lZgzisTuGTXkdzAk4gLU&hl=en
+ * @type {string}
+ */
 Location.prototype.origin;
 
 /**
@@ -1283,3 +1362,9 @@ Navigator.prototype.browserLanguage;
  * @see http://blogs.msdn.com/b/ie/archive/2011/09/20/touch-input-for-ie10-and-metro-style-apps.aspx
  */
 Navigator.prototype.msPointerEnabled;
+
+/**
+ * @type {number}
+ * @see http://msdn.microsoft.com/en-us/library/ms533721(v=vs.85).aspx
+ */
+Screen.prototype.deviceXDPI;

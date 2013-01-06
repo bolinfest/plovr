@@ -40,13 +40,16 @@ class PeepholeSubstituteAlternateSyntax
   private static final int AND_PRECEDENCE = NodeUtil.precedence(Token.AND);
   private static final int OR_PRECEDENCE = NodeUtil.precedence(Token.OR);
   private static final int NOT_PRECEDENCE = NodeUtil.precedence(Token.NOT);
+  private static final CodeGenerator REGEXP_ESCAPER =
+      CodeGenerator.forCostEstimation(
+          null /* blow up if we try to produce code */);
 
   private final boolean late;
 
   private final int STRING_SPLIT_OVERHEAD = ".split('.')".length();
 
   static final DiagnosticType INVALID_REGULAR_EXPRESSION_FLAGS =
-    DiagnosticType.error(
+    DiagnosticType.warning(
         "JSC_INVALID_REGULAR_EXPRESSION_FLAGS",
         "Invalid flags to RegExp constructor: {0}");
 
@@ -551,7 +554,7 @@ class PeepholeSubstituteAlternateSyntax
   boolean isPure(Node n) {
     return n == null
         || (!NodeUtil.canBeSideEffected(n)
-            && !NodeUtil.mayHaveSideEffects(n));
+            && !mayHaveSideEffects(n));
   }
 
   /**
@@ -1488,7 +1491,7 @@ class PeepholeSubstituteAlternateSyntax
       } else {
         // fold to /foobar/gi
         if (!areValidRegexpFlags(flags.getString())) {
-          error(INVALID_REGULAR_EXPRESSION_FLAGS, flags);
+          report(INVALID_REGULAR_EXPRESSION_FLAGS, flags);
           return n;
         }
         if (!areSafeFlagsToFold(flags.getString())) {
@@ -1707,7 +1710,7 @@ class PeepholeSubstituteAlternateSyntax
    * out as the body of a regular expression literal.
    */
   static boolean containsUnicodeEscape(String s) {
-    String esc = CodeGenerator.regexpEscape(s);
+    String esc = REGEXP_ESCAPER.regexpEscape(s);
     for (int i = -1; (i = esc.indexOf("\\u", i + 1)) >= 0;) {
       int nSlashes = 0;
       while (i - nSlashes > 0 && '\\' == esc.charAt(i - nSlashes - 1)) {

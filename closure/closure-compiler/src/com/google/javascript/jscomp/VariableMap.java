@@ -16,8 +16,9 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
-import com.google.common.collect.Maps;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.CharStreams;
 import com.google.common.io.Files;
@@ -33,15 +34,15 @@ import java.util.*;
 public class VariableMap {
 
   /** Maps original source name to new name */
-  private final Map<String, String> map;
+  private final ImmutableMap<String, String> map;
 
   /** Maps new name to source name, lazily initialized */
-  private Map<String, String> reverseMap = null;
+  private ImmutableMap<String, String> reverseMap = null;
 
   private static final char SEPARATOR = ':';
 
   VariableMap(Map<String, String> map) {
-    this.map = Collections.unmodifiableMap(map);
+    this.map = ImmutableMap.copyOf(map);
   }
 
   /**
@@ -57,9 +58,7 @@ public class VariableMap {
    * if it's not found.
    */
   public String lookupSourceName(String newName) {
-    if (reverseMap == null) {
-      initReverseMap();
-    }
+    initReverseMap();
     return reverseMap.get(newName);
   }
 
@@ -68,11 +67,11 @@ public class VariableMap {
    */
   private synchronized void initReverseMap() {
     if (reverseMap == null) {
-      Map<String, String> rm = new HashMap<String, String>();
+      ImmutableMap.Builder<String, String> rm = ImmutableMap.builder();
       for (Map.Entry<String, String> entry : map.entrySet()) {
         rm.put(entry.getValue(), entry.getKey());
       }
-      reverseMap = Collections.unmodifiableMap(rm);
+      reverseMap = rm.build();
     }
   }
 
@@ -87,9 +86,7 @@ public class VariableMap {
    * Returns an unmodifiable mapping from new names to original names.
    */
   public Map<String, String> getNewNameToOriginalNameMap() {
-    if (reverseMap == null) {
-      initReverseMap();
-    }
+    initReverseMap();
     return reverseMap;
   }
 
@@ -120,9 +117,9 @@ public class VariableMap {
     Writer writer = new OutputStreamWriter(baos, Charsets.UTF_8);
     try {
       for (Map.Entry<String, String> entry : map.entrySet()) {
-        writer.write(entry.getKey());
+        writer.write(escape(entry.getKey()));
         writer.write(SEPARATOR);
-        writer.write(entry.getValue());
+        writer.write(escape(entry.getValue()));
         writer.write('\n');
       }
       writer.close();
@@ -149,16 +146,50 @@ public class VariableMap {
       throw new RuntimeException(e);
     }
 
-    Map<String, String> map = new HashMap<String, String>();
+    ImmutableMap.Builder<String, String> map = ImmutableMap.builder();
 
     for (String line : lines) {
-      int pos = line.lastIndexOf(SEPARATOR);
+      int pos = findIndexOfChar(line, SEPARATOR);
       if (pos <= 0 || pos == line.length() - 1) {
         throw new ParseException("Bad line: " + line, 0);
       }
-      map.put(line.substring(0, pos), line.substring(pos + 1));
+      map.put(
+          unescape(line.substring(0, pos)),
+          unescape(line.substring(pos + 1)));
     }
-    return new VariableMap(map);
+    return new VariableMap(map.build());
+  }
+
+  private static String escape(String value) {
+    return value.replace("\\", "\\\\")
+        .replace(":", "\\:")
+        .replace("\n", "\\n");
+  }
+
+  private static int findIndexOfChar(String value, char stopChar) {
+    int len = value.length();
+    for (int i=0; i<len; i++) {
+      char c = value.charAt(i);
+      if (c == '\\' && ++i < len) {
+        c = value.charAt(i);
+      } else if (c == stopChar){
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  private static String unescape(CharSequence value) {
+    StringBuilder sb = new StringBuilder();
+    int len = value.length();
+    for (int i=0; i<len; i++) {
+      char c = value.charAt(i);
+      if (c == '\\' && ++i < len) {
+        c = value.charAt(i);
+      }
+      sb.append(c);
+    }
+    return sb.toString();
   }
 
   /**
@@ -168,6 +199,11 @@ public class VariableMap {
    *   object.
    */
   public static VariableMap fromMap(Map<String, String> map) {
-    return new VariableMap(Maps.newHashMap(map));
+    return new VariableMap(map);
+  }
+
+  @VisibleForTesting
+  Map<String, String> toMap() {
+    return map;
   }
 }

@@ -68,14 +68,21 @@ abstract class CompilerTypeTestCase extends BaseJSTypeTestCase {
       "/** @type {!Function} */ Function.prototype.apply;" +
       "/** @type {!Function} */ Function.prototype.bind;" +
       "/** @type {!Function} */ Function.prototype.call;" +
-      "/** @constructor \n * @param {*} arg \n @return {string} */" +
+      "/** @constructor \n * @param {*=} arg \n @return {string} */" +
       "function String(arg) {}" +
       "/** @param {number} sliceArg */\n" +
       "String.prototype.slice = function(sliceArg) {};" +
       "/** @type {number} */ String.prototype.length;" +
       "/** @constructor \n * @param {*} var_args \n @return {!Array} */" +
-      "function Array(var_args) {}" +
-      "/** @type {number} */ Array.prototype.length;" + ACTIVE_X_OBJECT_DEF;
+      "function Array(var_args) {}\n" +
+      "/** @type {number} */ Array.prototype.length;\n" +
+      "/** @constructor */\n" +
+      "function Arguments() {}\n" +
+      "/** @type {number} */\n" +
+      "Arguments.prototype.length;\n" +
+      "/** @type {!Arguments} */\n" +
+      "var arguments;" +
+      "" + ACTIVE_X_OBJECT_DEF;
 
   protected Compiler compiler;
 
@@ -84,6 +91,10 @@ abstract class CompilerTypeTestCase extends BaseJSTypeTestCase {
     options.setLanguageIn(LanguageMode.ECMASCRIPT5);
     options.setWarningLevel(
         DiagnosticGroups.MISSING_PROPERTIES, CheckLevel.WARNING);
+    options.setWarningLevel(
+        DiagnosticGroups.MISPLACED_TYPE_ANNOTATION, CheckLevel.WARNING);
+    options.setWarningLevel(
+        DiagnosticGroups.CAST, CheckLevel.WARNING);
     options.setCodingConvention(getCodingConvention());
     return options;
   }

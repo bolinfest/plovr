@@ -24,7 +24,10 @@ import com.google.common.collect.Sets;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.SourcePosition;
+
 import java.io.Serializable;
+import java.nio.charset.Charset;
+import java.text.ParseException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -263,9 +266,6 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Inlines functions defined in local scopes */
   public boolean inlineLocalFunctions;
 
-  /** More aggressive function inlining */
-  boolean assumeClosuresOnlyCaptureReferences;
-
   /** Inlines properties */
   boolean inlineProperties;
 
@@ -499,11 +499,14 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Give anonymous functions names for easier debugging */
   public AnonymousFunctionNamingPolicy anonymousFunctionNaming;
 
-  /** Serialized input variable renaming map. */
-  public byte[] inputVariableMapSerialized;
+  /** Input anonymous function renaming map. */
+  VariableMap inputAnonymousFunctionNamingMap;
 
-  /** Serialized input property renaming map. */
-  public byte[] inputPropertyMapSerialized;
+  /** Input variable renaming map. */
+  VariableMap inputVariableMap;
+
+  /** Input property renaming map. */
+  VariableMap inputPropertyMap;
 
   /** Whether to export test functions. */
   public boolean exportTestFunctions;
@@ -518,6 +521,27 @@ public class CompilerOptions implements Serializable, Cloneable {
   //--------------------------------
   // Special-purpose alterations
   //--------------------------------
+
+  /**
+   * Replace UI strings with chrome.i18n.getMessage calls.
+   * Used by Chrome extensions/apps.
+   */
+  boolean replaceMessagesWithChromeI18n;
+  String tcProjectId;
+
+  public void setReplaceMessagesWithChromeI18n(
+      boolean replaceMessagesWithChromeI18n,
+      String tcProjectId) {
+    if (replaceMessagesWithChromeI18n &&
+        messageBundle != null &&
+        !(messageBundle instanceof EmptyMessageBundle)) {
+      throw new RuntimeException("When replacing messages with " +
+          "chrome.i18n.getMessage, a message bundle should not be specified.");
+    }
+
+    this.replaceMessagesWithChromeI18n = replaceMessagesWithChromeI18n;
+    this.tcProjectId = tcProjectId;
+  }
 
   /** Inserts run-time type assertions for debugging. */
   boolean runtimeTypeCheck;
@@ -619,6 +643,9 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Map used in the renaming of CSS class names. */
   public CssRenamingMap cssRenamingMap;
 
+  /** Whitelist used in the renaming of CSS class names. */
+  Set<String> cssRenamingWhitelist;
+
   /** Process instances of goog.testing.ObjectPropertyString. */
   boolean processObjectPropertyString;
 
@@ -628,11 +655,21 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Id generators to replace. */
   Set<String> idGenerators;
 
+  /**
+   * A previous map of ids (serialized to a string by a previous compile).
+   * This will be used as a hint during the ReplaceIdGenerators pass, which
+   * will attempt to reuse the same ids.
+   */
+  String idGeneratorsMapSerialized;
+
   /** Configuration strings */
   List<String> replaceStringsFunctionDescriptions;
+
   String replaceStringsPlaceholderToken;
   // A list of strings that should not be used as replacements
   Set<String> replaceStringsReservedStrings;
+  // A previous map of replacements to strings.
+  VariableMap replaceStringsInputMap;
 
   /** List of properties that we report invalidation errors for. */
   Map<String, CheckLevel> propertyInvalidationErrors;
@@ -666,6 +703,29 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   /** The string to use as the separator for printInputDelimiter */
   public String inputDelimiter = "// Input %num%";
+
+  boolean preferSingleQuotes;
+
+  /**
+   * Normally, when there are an equal number of single and double quotes
+   * in a string, the compiler will use double quotes. Set this to true
+   * to prefer single quotes.
+   */
+  public void setPreferSingleQuotes(boolean enabled) {
+    this.preferSingleQuotes = enabled;
+  }
+
+  boolean trustedStrings;
+
+  /**
+   * Some people want to put arbitrary user input into strings, which are then
+   * run through the compiler. These scripts are then put into HTML.
+   * By default, we assume strings are untrusted. If the compiler is run
+   * from the command-line, we assume that strings are trusted.
+   */
+  public void setTrustedStrings(boolean yes) {
+    trustedStrings = yes;
+  }
 
   String reportPath;
 
@@ -819,7 +879,6 @@ public class CompilerOptions implements Serializable, Cloneable {
     inlineFunctions = false;
     inlineLocalFunctions = false;
     assumeStrictThis = false;
-    assumeClosuresOnlyCaptureReferences = false;
     inlineProperties = false;
     crossModuleCodeMotion = false;
     crossModuleMethodMotion = false;
@@ -893,6 +952,7 @@ public class CompilerOptions implements Serializable, Cloneable {
     recordFunctionInformation = false;
     generateExports = false;
     cssRenamingMap = null;
+    cssRenamingWhitelist = null;
     processObjectPropertyString = false;
     idGenerators = Collections.emptySet();
     replaceStringsFunctionDescriptions = Collections.emptyList();
@@ -1142,6 +1202,15 @@ public class CompilerOptions implements Serializable, Cloneable {
   }
 
   /**
+   * A previous map of ids (serialized to a string by a previous compile).
+   * This will be used as a hint during the ReplaceIdGenerators pass, which
+   * will attempt to reuse the same ids.
+   */
+  public void setIdGeneratorsMap(String previousMappings) {
+    this.idGeneratorsMapSerialized = previousMappings;
+  }
+
+  /**
    * Set the function inlining policy for the compiler.
    */
   public void setInlineFunctions(Reach reach) {
@@ -1372,6 +1441,13 @@ public class CompilerOptions implements Serializable, Cloneable {
   }
 
   /**
+   * Gets the output charset as a rich object.
+   */
+  Charset getOutputCharset() {
+    return outputCharset == null ? null : Charset.forName(outputCharset);
+  }
+
+  /**
    * Sets how goog.tweak calls are processed.
    */
   public void setTweakProcessing(TweakProcessing tweakProcessing) {
@@ -1469,21 +1545,6 @@ public class CompilerOptions implements Serializable, Cloneable {
    */
   public void setAssumeStrictThis(boolean enable) {
     this.assumeStrictThis = enable;
-  }
-
-  /**
-   * @return Whether assumeClosuresOnlyCaptureReferences is set.
-   */
-  public boolean assumeClosuresOnlyCaptureReferences() {
-    return assumeClosuresOnlyCaptureReferences;
-  }
-
-  /**
-   * Whether to assume closures capture only what they reference. This allows
-   * more aggressive function inlining.
-   */
-  public void setAssumeClosuresOnlyCaptureReferences(boolean enable) {
-    this.assumeClosuresOnlyCaptureReferences = enable;
   }
 
   /**
@@ -1738,12 +1799,28 @@ public class CompilerOptions implements Serializable, Cloneable {
     this.anonymousFunctionNaming = anonymousFunctionNaming;
   }
 
-  public void setInputVariableMapSerialized(byte[] inputVariableMapSerialized) {
-    this.inputVariableMapSerialized = inputVariableMapSerialized;
+  public void setInputAnonymousFunctionNamingMap(VariableMap inputMap) {
+    this.inputAnonymousFunctionNamingMap = inputMap;
   }
 
-  public void setInputPropertyMapSerialized(byte[] inputPropertyMapSerialized) {
-    this.inputPropertyMapSerialized = inputPropertyMapSerialized;
+  @Deprecated
+  public void setInputVariableMapSerialized(byte[] inputVariableMapSerialized)
+      throws ParseException {
+    this.inputVariableMap = VariableMap.fromBytes(inputVariableMapSerialized);
+  }
+
+  public void setInputVariableMap(VariableMap inputVariableMap) {
+    this.inputVariableMap = inputVariableMap;
+  }
+
+  @Deprecated
+  public void setInputPropertyMapSerialized(byte[] inputPropertyMapSerialized)
+      throws ParseException {
+    this.inputPropertyMap = VariableMap.fromBytes(inputPropertyMapSerialized);
+  }
+
+  public void setInputPropertyMap(VariableMap inputPropertyMap) {
+    this.inputPropertyMap = inputPropertyMap;
   }
 
   public void setExportTestFunctions(boolean exportTestFunctions) {
@@ -1834,6 +1911,10 @@ public class CompilerOptions implements Serializable, Cloneable {
     this.cssRenamingMap = cssRenamingMap;
   }
 
+  public void setCssRenamingWhitelist(Set<String> whitelist) {
+    this.cssRenamingWhitelist = whitelist;
+  }
+
   public void setReplaceStringsFunctionDescriptions(List<String> replaceStringsFunctionDescriptions) {
     this.replaceStringsFunctionDescriptions = replaceStringsFunctionDescriptions;
   }
@@ -1844,6 +1925,10 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   public void setReplaceStringsReservedStrings(Set<String> replaceStringsReservedStrings) {
     this.replaceStringsReservedStrings = replaceStringsReservedStrings;
+  }
+
+  public void setReplaceStringsInputMap(VariableMap serializedMap) {
+    this.replaceStringsInputMap = serializedMap;
   }
 
   public void setPrettyPrint(boolean prettyPrint) {
@@ -1947,7 +2032,21 @@ public class CompilerOptions implements Serializable, Cloneable {
     /**
      * Nitpicky, shiny new JavaScript
      */
-    ECMASCRIPT5_STRICT,
+    ECMASCRIPT5_STRICT;
+
+    public static LanguageMode fromString(String value) {
+      if (value.equals("ECMASCRIPT5_STRICT") ||
+          value.equals("ES5_STRICT")) {
+        return CompilerOptions.LanguageMode.ECMASCRIPT5_STRICT;
+      } else if (value.equals("ECMASCRIPT5") ||
+          value.equals("ES5")) {
+        return CompilerOptions.LanguageMode.ECMASCRIPT5;
+      } else if (value.equals("ECMASCRIPT3") ||
+                 value.equals("ES3")) {
+        return CompilerOptions.LanguageMode.ECMASCRIPT3;
+      }
+      return null;
+    }
   }
 
   /** When to do the extra sanity checks */

@@ -39,6 +39,7 @@
 
 package com.google.javascript.rhino.testing;
 
+import com.google.common.collect.ImmutableList;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.jstype.FunctionBuilder;
@@ -47,6 +48,7 @@ import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
+import com.google.javascript.rhino.jstype.ParameterizedType;
 import com.google.javascript.rhino.jstype.RecordTypeBuilder;
 
 import junit.framework.TestCase;
@@ -59,12 +61,12 @@ public abstract class BaseJSTypeTestCase extends TestCase {
   protected ObjectType NO_OBJECT_TYPE;
   protected ObjectType NO_TYPE;
   protected ObjectType NO_RESOLVED_TYPE;
-  protected JSType ARRAY_FUNCTION_TYPE;
+  protected FunctionType ARRAY_FUNCTION_TYPE;
   protected ObjectType ARRAY_TYPE;
   protected JSType BOOLEAN_OBJECT_FUNCTION_TYPE;
   protected ObjectType BOOLEAN_OBJECT_TYPE;
   protected JSType BOOLEAN_TYPE;
-  protected JSType CHECKED_UNKNOWN_TYPE;
+  protected ObjectType CHECKED_UNKNOWN_TYPE;
   protected JSType DATE_FUNCTION_TYPE;
   protected ObjectType DATE_TYPE;
   protected JSType ERROR_FUNCTION_TYPE;
@@ -128,7 +130,7 @@ public abstract class BaseJSTypeTestCase extends TestCase {
     NO_RESOLVED_TYPE =
         registry.getNativeObjectType(JSTypeNative.NO_RESOLVED_TYPE);
     ARRAY_FUNCTION_TYPE =
-        registry.getNativeType(JSTypeNative.ARRAY_FUNCTION_TYPE);
+        registry.getNativeFunctionType(JSTypeNative.ARRAY_FUNCTION_TYPE);
     ARRAY_TYPE =
         registry.getNativeObjectType(JSTypeNative.ARRAY_TYPE);
     BOOLEAN_OBJECT_FUNCTION_TYPE =
@@ -138,7 +140,7 @@ public abstract class BaseJSTypeTestCase extends TestCase {
     BOOLEAN_TYPE =
         registry.getNativeType(JSTypeNative.BOOLEAN_TYPE);
     CHECKED_UNKNOWN_TYPE =
-        registry.getNativeType(JSTypeNative.CHECKED_UNKNOWN_TYPE);
+        registry.getNativeObjectType(JSTypeNative.CHECKED_UNKNOWN_TYPE);
     DATE_FUNCTION_TYPE =
         registry.getNativeType(JSTypeNative.DATE_FUNCTION_TYPE);
     DATE_TYPE =
@@ -407,6 +409,16 @@ public abstract class BaseJSTypeTestCase extends TestCase {
     return registry.createOptionalType(type);
   }
 
+  protected JSType createTemplatizedType(
+      JSType baseType, ImmutableList<JSType> templatizedTypes) {
+    return registry.createTemplatizedType(baseType, templatizedTypes);
+  }
+
+  protected JSType createParameterizedType(
+      ObjectType type, JSType typeParameter) {
+    return registry.createParameterizedType(type, typeParameter);
+  }
+
   /**
    * Asserts that a Node representing a type expression resolves to the
    * correct {@code JSType}.
@@ -440,41 +452,48 @@ public abstract class BaseJSTypeTestCase extends TestCase {
   public static final String ALL_NATIVE_EXTERN_TYPES =
       "/**\n"
       + " * @constructor\n"
-      + " * @param {*} opt_value\n"
+      + " * @param {*=} opt_value\n"
       + " */\n"
       + "function Object(opt_value) {}\n"
       + "\n"
       + "/**\n"
       + " * @constructor\n"
       + " * @extends {Object}\n"
-      + " * @param {*} var_args\n"
+      + " * @param {...*} var_args\n"
       + " */\n"
       + "\n"
       + "function Function(var_args) {}\n"
       + "/**\n"
       + " * @constructor\n"
       + " * @extends {Object}\n"
-      + " * @param {*} var_args\n"
+      + " * @param {...*} var_args\n"
       + " * @return {!Array}\n"
       + " */\n"
       + "function Array(var_args) {}\n"
       + "\n"
       + "/**\n"
       + " * @constructor\n"
-      + " * @param {*} opt_value\n"
+      + " * @param {*=} opt_value\n"
       + " * @return {boolean}\n"
       + " */\n"
       + "function Boolean(opt_value) {}\n"
       + "\n"
       + "/**\n"
       + " * @constructor\n"
-      + " * @param {*} opt_value\n"
+      + " * @param {*=} opt_value\n"
       + " * @return {number}\n"
       + " */\n"
       + "function Number(opt_value) {}\n"
       + "\n"
       + "/**\n"
       + " * @constructor\n"
+      + " * @param {?=} opt_yr_num\n"
+      + " * @param {?=} opt_mo_num\n"
+      + " * @param {?=} opt_day_num\n"
+      + " * @param {?=} opt_hr_num\n"
+      + " * @param {?=} opt_min_num\n"
+      + " * @param {?=} opt_sec_num\n"
+      + " * @param {?=} opt_ms_num\n"
       + " * @return {string}\n"
       + " */\n"
       + "function Date(opt_yr_num, opt_mo_num, opt_day_num, opt_hr_num,"
@@ -483,24 +502,24 @@ public abstract class BaseJSTypeTestCase extends TestCase {
       + "/**\n"
       + " * @constructor\n"
       + " * @extends {Object}\n"
-      + " * @param {*} opt_str\n"
+      + " * @param {*=} opt_str\n"
       + " * @return {string}\n"
       + " */\n"
       + "function String(opt_str) {}\n"
       + "\n"
       + "/**\n"
       + " * @constructor\n"
-      + " * @param {*} opt_pattern\n"
-      + " * @param {*} opt_flags\n"
+      + " * @param {*=} opt_pattern\n"
+      + " * @param {*=} opt_flags\n"
       + " * @return {!RegExp}\n"
       + " */\n"
       + "function RegExp(opt_pattern, opt_flags) {}\n"
       + "\n"
       + "/**\n"
       + " * @constructor\n"
-      + " * @param {*} opt_message\n"
-      + " * @param {*} opt_file\n"
-      + " * @param {*} opt_line\n"
+      + " * @param {*=} opt_message\n"
+      + " * @param {*=} opt_file\n"
+      + " * @param {*=} opt_line\n"
       + " * @return {!Error}\n"
       + " */\n"
       + "function Error(opt_message, opt_file, opt_line) {}\n"
@@ -508,9 +527,9 @@ public abstract class BaseJSTypeTestCase extends TestCase {
       + "/**\n"
       + " * @constructor\n"
       + " * @extends {Error}\n"
-      + " * @param {*} opt_message\n"
-      + " * @param {*} opt_file\n"
-      + " * @param {*} opt_line\n"
+      + " * @param {*=} opt_message\n"
+      + " * @param {*=} opt_file\n"
+      + " * @param {*=} opt_line\n"
       + " * @return {!EvalError}\n"
       + " */\n"
       + "function EvalError(opt_message, opt_file, opt_line) {}\n"
@@ -518,9 +537,9 @@ public abstract class BaseJSTypeTestCase extends TestCase {
       + "/**\n"
       + " * @constructor\n"
       + " * @extends {Error}\n"
-      + " * @param {*} opt_message\n"
-      + " * @param {*} opt_file\n"
-      + " * @param {*} opt_line\n"
+      + " * @param {*=} opt_message\n"
+      + " * @param {*=} opt_file\n"
+      + " * @param {*=} opt_line\n"
       + " * @return {!RangeError}\n"
       + " */\n"
       + "function RangeError(opt_message, opt_file, opt_line) {}\n"
@@ -528,9 +547,9 @@ public abstract class BaseJSTypeTestCase extends TestCase {
       + "/**\n"
       + " * @constructor\n"
       + " * @extends {Error}\n"
-      + " * @param {*} opt_message\n"
-      + " * @param {*} opt_file\n"
-      + " * @param {*} opt_line\n"
+      + " * @param {*=} opt_message\n"
+      + " * @param {*=} opt_file\n"
+      + " * @param {*=} opt_line\n"
       + " * @return {!ReferenceError}\n"
       + " */\n"
       + "function ReferenceError(opt_message, opt_file, opt_line) {}\n"
@@ -538,9 +557,9 @@ public abstract class BaseJSTypeTestCase extends TestCase {
       + "/**\n"
       + " * @constructor\n"
       + " * @extends {Error}\n"
-      + " * @param {*} opt_message\n"
-      + " * @param {*} opt_file\n"
-      + " * @param {*} opt_line\n"
+      + " * @param {*=} opt_message\n"
+      + " * @param {*=} opt_file\n"
+      + " * @param {*=} opt_line\n"
       + " * @return {!SyntaxError}\n"
       + " */\n"
       + "function SyntaxError(opt_message, opt_file, opt_line) {}\n"
@@ -548,9 +567,9 @@ public abstract class BaseJSTypeTestCase extends TestCase {
       + "/**\n"
       + " * @constructor\n"
       + " * @extends {Error}\n"
-      + " * @param {*} opt_message\n"
-      + " * @param {*} opt_file\n"
-      + " * @param {*} opt_line\n"
+      + " * @param {*=} opt_message\n"
+      + " * @param {*=} opt_file\n"
+      + " * @param {*=} opt_line\n"
       + " * @return {!TypeError}\n"
       + " */\n"
       + "function TypeError(opt_message, opt_file, opt_line) {}\n"
@@ -558,16 +577,16 @@ public abstract class BaseJSTypeTestCase extends TestCase {
       + "/**\n"
       + " * @constructor\n"
       + " * @extends {Error}\n"
-      + " * @param {*} opt_message\n"
-      + " * @param {*} opt_file\n"
-      + " * @param {*} opt_line\n"
+      + " * @param {*=} opt_message\n"
+      + " * @param {*=} opt_file\n"
+      + " * @param {*=} opt_line\n"
       + " * @return {!URIError}\n"
       + " */\n"
       + "function URIError(opt_message, opt_file, opt_line) {}\n"
       + "\n"
       + "/**\n"
       + " * @param {string} progId\n"
-      + " * @param {string} opt_location\n"
+      + " * @param {string=} opt_location\n"
       + " * @constructor\n"
       + " */\n"
       + "function ActiveXObject(progId, opt_location) {}\n";
@@ -586,5 +605,9 @@ public abstract class BaseJSTypeTestCase extends TestCase {
 
   protected final void assertTypeNotEquals(String msg, JSType a, JSType b) {
     Asserts.assertTypeNotEquals(msg, a, b);
+  }
+
+  protected final ParameterizedType parameterize(ObjectType objType, JSType t) {
+    return registry.createParameterizedType(objType, t);
   }
 }

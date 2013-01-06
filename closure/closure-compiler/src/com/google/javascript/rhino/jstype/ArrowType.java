@@ -174,7 +174,7 @@ final class ArrowType extends JSType {
    * @return True if our parameter spec is equal to {@code that}'s parameter
    *     spec.
    */
-  boolean hasEqualParameters(ArrowType that) {
+  boolean hasEqualParameters(ArrowType that, EquivalenceMethod eqMethod) {
     Node thisParam = parameters.getFirstChild();
     Node otherParam = that.parameters.getFirstChild();
     while (thisParam != null && otherParam != null) {
@@ -183,7 +183,8 @@ final class ArrowType extends JSType {
       if (thisParamType != null) {
         // Both parameter lists give a type for this param, it should be equal
         if (otherParamType != null &&
-            !thisParamType.isEquivalentTo(otherParamType)) {
+            !thisParamType.checkEquivalenceHelper(
+                otherParamType, eqMethod)) {
           return false;
         }
       } else {
@@ -191,6 +192,16 @@ final class ArrowType extends JSType {
           return false;
         }
       }
+
+      // Check var_args/optionality
+      if (thisParam.isOptionalArg() != otherParam.isOptionalArg()) {
+        return false;
+      }
+
+      if (thisParam.isVarArgs() != otherParam.isVarArgs()) {
+        return false;
+      }
+
       thisParam = thisParam.getNext();
       otherParam = otherParam.getNext();
     }
@@ -199,17 +210,13 @@ final class ArrowType extends JSType {
     return thisParam == otherParam;
   }
 
-  @Override
-  public boolean isEquivalentTo(JSType object) {
+  boolean checkArrowEquivalenceHelper(
+      ArrowType that, EquivalenceMethod eqMethod) {
     // Please keep this method in sync with the hashCode() method below.
-    if (!(object instanceof ArrowType)) {
+    if (!returnType.checkEquivalenceHelper(that.returnType, eqMethod)) {
       return false;
     }
-    ArrowType that = (ArrowType) object;
-    if (!returnType.isEquivalentTo(that.returnType)) {
-      return false;
-    }
-    return hasEqualParameters(that);
+    return hasEqualParameters(that, eqMethod);
   }
 
   @Override
@@ -254,6 +261,10 @@ final class ArrowType extends JSType {
     throw new UnsupportedOperationException();
   }
 
+  @Override <T> T visit(RelationshipVisitor<T> visitor, JSType that) {
+    throw new UnsupportedOperationException();
+  }
+
   @Override
   public BooleanLiteralSet getPossibleToBooleanOutcomes() {
     return BooleanLiteralSet.TRUE;
@@ -286,12 +297,12 @@ final class ArrowType extends JSType {
 
   @Override
   String toStringHelper(boolean forAnnotations) {
-    return super.toString();
+    return "[ArrowType]";
   }
 
   @Override
-  public boolean hasAnyTemplateInternal() {
-    return returnType.hasAnyTemplate()
+  public boolean hasAnyTemplateTypesInternal() {
+    return returnType.hasAnyTemplateTypes()
         || hasTemplatedParameterType();
   }
 
@@ -300,7 +311,7 @@ final class ArrowType extends JSType {
       for (Node paramNode = parameters.getFirstChild();
            paramNode != null; paramNode = paramNode.getNext()) {
         JSType type = paramNode.getJSType();
-        if (type != null && type.hasAnyTemplate()) {
+        if (type != null && type.hasAnyTemplateTypes()) {
           return true;
         }
       }

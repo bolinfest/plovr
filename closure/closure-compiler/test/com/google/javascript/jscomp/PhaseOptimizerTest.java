@@ -52,18 +52,6 @@ public class PhaseOptimizerTest extends TestCase {
     assertPasses("x");
   }
 
-  public void testTwoRuns() {
-    addOneTimePass("x");
-    optimizer.process(null, null);
-    try {
-      optimizer.process(null, null);
-      fail();
-    } catch (IllegalStateException e) {
-      assertEquals(
-          "One-time passes cannot be run multiple times: x", e.getMessage());
-    }
-  }
-
   public void testLoop1() {
     Loop loop = optimizer.addFixedPointLoop();
     addLoopedPass(loop, "x", 0);
@@ -174,7 +162,7 @@ public class PhaseOptimizerTest extends TestCase {
   public void testProgress() {
     final List<Double> progressList = Lists.newArrayList();
     compiler = new Compiler() {
-      @Override void setProgress(double p) {
+      @Override void setProgress(double p, String name) {
         progressList.add(p);
       }
     };
@@ -217,7 +205,7 @@ public class PhaseOptimizerTest extends TestCase {
       String name, final CompilerPass pass, boolean isOneTime) {
     return new PassFactory(name, isOneTime) {
       @Override
-      protected CompilerPass createInternal(AbstractCompiler compiler) {
+      protected CompilerPass create(AbstractCompiler compiler) {
         return pass;
       }
     };

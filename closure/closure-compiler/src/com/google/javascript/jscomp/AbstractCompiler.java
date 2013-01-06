@@ -24,10 +24,13 @@ import com.google.javascript.jscomp.type.ReverseAbstractInterpreter;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.head.ErrorReporter;
+import com.google.javascript.rhino.head.ast.AstRoot;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 
 import java.util.List;
 import java.util.Map;
+
+import javax.annotation.Nullable;
 
 /**
  * An abstract compiler, to help remove the circular dependency of
@@ -345,8 +348,18 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
    */
   public abstract double getProgress();
 
-  /** Sets the progress to a certain value in [0,1] range. */
-  abstract void setProgress(double progress);
+  /**
+   * Gets the last pass name set by setProgress.
+   */
+  abstract String getLastPassName();
+
+  /**
+   * Sets the progress percentage as well as the name of the last pass that
+   * ran (if available).
+   * @param progress A precentage expressed as a double in the range [0, 1].
+   *     Use -1 if you just want to set the last pass name.
+   */
+  abstract void setProgress(double progress, @Nullable String lastPassName);
 
   /**
    * The subdir js/ contains libraries of code that we inject
@@ -362,4 +375,18 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
    *     returns null.
    */
   abstract Node ensureLibraryInjected(String resourceName);
+
+   /**
+    * Stores the "new" Rhino parse tree for a given source file.
+    * @param sourceName The source file name.
+    * @param astRoot The "new" Rhino parse tree.
+    */
+   abstract void setOldParseTree(String sourceName, AstRoot astRoot);
+
+   /**
+    * Gets an old format parse tree for a given source file.
+    * @param sourceName The source file name to get the tree for.
+    * @return The "new" Rhino parse tree for the given source file.
+    */
+   abstract AstRoot getOldParseTreeByName(String sourceName);
 }

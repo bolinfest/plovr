@@ -18,7 +18,28 @@
  * @fileoverview Externs for Angular 1.
  *
  * TODO: Mocks.
- * TODO: Remaining Services.
+ * TODO: Remaining Services:
+ *     $compileProvider
+ *     $controller
+ *     $controllerProvider
+ *     $cookies
+ *     $cookieStore
+ *     $document
+ *     $exceptionHandler
+ *     $filter
+ *     $filterProvider
+ *     $httpBackend
+ *     $interpolate
+ *     $locale
+ *     $parse
+ *     $resource
+ *     $rootElement
+ *     $rootScope
+ *     $rootScopeProvider
+ *     $routeParams
+ *     $sanitize
+ *     $templateCache
+ *     $window
  * TODO: Resolve two issues with angular.$http
  *         1) angular.$http cannot be declared as a callable type.
  *            Its helper methods should be used instead.
@@ -32,6 +53,12 @@
  */
 
 /**
+ * @typedef {(Window|Document|Element|Array.<Element>|string|angular.JQLite|
+ *     NodeList|{length: number})}
+ */
+var JQLiteSelector;
+
+/**
  * @type {Object}
  * @const
  */
@@ -39,9 +66,9 @@ var angular = {};
 
 /**
  * @param {Object} self
- * @param {function()} fn
+ * @param {Function} fn
  * @param {...*} args
- * @return {function()}
+ * @return {Function}
  */
 angular.bind = function(self, fn, args) {};
 
@@ -60,10 +87,11 @@ angular.bootstrap = function(element, opt_modules) {};
 angular.copy = function(source, opt_dest) {};
 
 /**
- * @param {string|Element} element
+ * @param {(JQLiteSelector|Object)} element
+ * @param {(JQLiteSelector|Object)=} opt_context
  * @return {Object}
  */
-angular.element = function(element) {};
+angular.element = function(element, opt_context) {};
 
 /**
  * @param {*} o1
@@ -100,7 +128,7 @@ angular.identity = function(arg) {};
 
 /**
  * @param {Array.<string|Function>} modules
- * @return {function()}
+ * @return {angular.$injector}
  */
 angular.injector = function(modules) {};
 
@@ -176,12 +204,283 @@ angular.module = function(name, opt_requires, opt_configFn) {};
 
 /**
  * @typedef {{
+ *   $normalize: function(string): string,
+ *   $observe: function(string, function(*)): function(*),
+ *   $set: function(string, ?(string|boolean), boolean=, string=)
+ *   }}
+ */
+angular.Attributes;
+
+/**
+ * @param {string} name
+ * @return {string}
+ */
+angular.Attributes.$normalize = function(name) {};
+
+/**
+ * @param {string} key
+ * @param {function(*)} fn
+ * @return {function(*)}
+ */
+angular.Attributes.$observe = function(key, fn) {};
+
+/**
+ * @param {string} key
+ * @param {?(string|boolean)} value
+ * @param {boolean=} opt_writeAttr
+ * @param {string=} opt_attrName
+ */
+angular.Attributes.$set = function(key, value, opt_writeAttr, opt_attrName) {};
+
+/**
+ * @typedef {{
+ *   addClass: function(string): angular.JQLite,
+ *   after: function(JQLiteSelector): angular.JQLite,
+ *   append: function(JQLiteSelector): angular.JQLite,
+ *   attr: function(string, (string|boolean)=): (angular.JQLite|string|boolean),
+ *   bind: function(string, Function): angular.JQLite,
+ *   children: function(): angular.JQLite,
+ *   clone: function(): angular.JQLite,
+ *   contents: function(): angular.JQLite,
+ *   controller: function(string=): Object,
+ *   css: function(string, string=): (angular.JQLite|string),
+ *   data: function(string=, *=): *,
+ *   eq: function(number): angular.JQLite,
+ *   find: function(string): angular.JQLite,
+ *   hasClass: function(string): boolean,
+ *   html: function(string=): (angular.JQLite|string),
+ *   inheritedData: function(string=, *=): *,
+ *   injector: function(): angular.$injector,
+ *   length: number,
+ *   next: function(): angular.JQLite,
+ *   parent: function(): angular.JQLite,
+ *   prepend: function(JQLiteSelector): angular.JQLite,
+ *   prop: function(string, *=): *,
+ *   ready: function(Function): angular.JQLite,
+ *   remove: function(): angular.JQLite,
+ *   removeAttr: function(string): angular.JQLite,
+ *   removeClass: function(string): angular.JQLite,
+ *   removeData: function(): angular.JQLite,
+ *   replaceWith: function(JQLiteSelector): angular.JQLite,
+ *   scope: function(): angular.Scope,
+ *   text: function(string=): (angular.JQLite|string),
+ *   toggleClass: function(string, boolean=): angular.JQLite,
+ *   unbind: function(string=, Function=): angular.JQLite,
+ *   val: function(string=): (angular.JQLite|string),
+ *   wrap: function(JQLiteSelector): angular.JQLite
+ *   }}
+ */
+angular.JQLite;
+
+/**
+ * @param {string} name
+ * @return {angular.JQLite}
+ */
+angular.JQLite.addClass = function(name) {};
+
+/**
+ * @param {JQLiteSelector} element
+ * @return {angular.JQLite}
+ */
+angular.JQLite.after = function(element) {};
+
+/**
+ * @param {JQLiteSelector} element
+ * @return {angular.JQLite}
+ */
+angular.JQLite.append = function(element) {};
+
+/**
+ * @param {string} name
+ * @param {(string|boolean)=} opt_value
+ * @return {angular.JQLite|string|boolean}
+ */
+angular.JQLite.attr = function(name, opt_value) {};
+
+/**
+ * @param {string} type
+ * @param {Function} fn
+ * @return {angular.JQLite}
+ */
+angular.JQLite.bind = function(type, fn) {};
+
+/**
+ * @return {angular.JQLite}
+ */
+angular.JQLite.children = function() {};
+
+/**
+ * @return {angular.JQLite}
+ */
+angular.JQLite.clone = function() {};
+
+/**
+ * @return {angular.JQLite}
+ */
+angular.JQLite.contents = function() {};
+
+/**
+ * @param {string=} opt_name
+ * @return {Object}
+ */
+angular.JQLite.controller = function(opt_name) {};
+
+/**
+ * @param {string} name
+ * @param {string=} opt_value
+ * @return {angular.JQLite|string}
+ */
+angular.JQLite.css = function(name, opt_value) {};
+
+/**
+ * @param {string=} opt_key
+ * @param {*=} opt_value
+ * @return {*}
+ */
+angular.JQLite.data = function(opt_key, opt_value) {};
+
+/**
+ * @param {number} index
+ * @return {angular.JQLite}
+ */
+angular.JQLite.eq = function(index) {};
+
+/**
+ * @param {string} selector
+ * @return {angular.JQLite}
+ */
+angular.JQLite.find = function(selector) {};
+
+/**
+ * @param {string} name
+ * @return {boolean}
+ */
+angular.JQLite.hasClass = function(name) {};
+
+/**
+ * @param {string=} opt_value
+ * @return {angular.JQLite|string}
+ */
+angular.JQLite.html = function(opt_value) {};
+
+/**
+ * @param {string=} opt_key
+ * @param {*=} opt_value
+ * @return {*}
+ */
+angular.JQLite.inheritedData = function(opt_key, opt_value) {};
+
+/**
+ * @return {angular.$injector}
+ */
+angular.JQLite.injector = function() {};
+
+/** @type {number} */
+angular.JQLite.length;
+
+/**
+ * @return {angular.JQLite}
+ */
+angular.JQLite.next = function() {};
+
+/**
+ * @return {angular.JQLite}
+ */
+angular.JQLite.parent = function() {};
+
+/**
+ * @param {JQLiteSelector} element
+ * @return {angular.JQLite}
+ */
+angular.JQLite.prepend = function(element) {};
+
+/**
+ * @param {string} name
+ * @param {*=} opt_value
+ * @return {*}
+ */
+angular.JQLite.prop = function(name, opt_value) {};
+
+/**
+ * @param {Function} fn
+ * @return {angular.JQLite}
+ */
+angular.JQLite.ready = function(fn) {};
+
+/**
+ * @return {angular.JQLite}
+ */
+angular.JQLite.remove = function() {};
+
+/**
+ * @param {string} name
+ * @return {angular.JQLite}
+ */
+angular.JQLite.removeAttr = function(name) {};
+
+/**
+ * @param {string} name
+ * @return {angular.JQLite}
+ */
+angular.JQLite.removeClass = function(name) {};
+
+/**
+ * @return {angular.JQLite}
+ */
+angular.JQLite.removeData = function() {};
+
+/**
+ * @param {JQLiteSelector} element
+ * @return {angular.JQLite}
+ */
+angular.JQLite.replaceWith = function(element) {};
+
+/**
+ * @return {angular.Scope}
+ */
+angular.JQLite.scope = function() {};
+
+/**
+ * @param {string=} opt_value
+ * @return {angular.JQLite|string}
+ */
+angular.JQLite.text = function(opt_value) {};
+
+/**
+ * @param {string} name
+ * @param {boolean=} opt_condition
+ * @return {angular.JQLite}
+ */
+angular.JQLite.toggleClass = function(name, opt_condition) {};
+
+/**
+ * @param {string=} opt_type
+ * @param {Function=} opt_fn
+ * @return {angular.JQLite}
+ */
+angular.JQLite.unbind = function(opt_type, opt_fn) {};
+
+/**
+ * @param {string=} opt_value
+ * @return {angular.JQLite|string}
+ */
+angular.JQLite.val = function(opt_value) {};
+
+/**
+ * @param {JQLiteSelector} element
+ * @return {angular.JQLite}
+ */
+angular.JQLite.wrap = function(element) {};
+
+/**
+ * @typedef {{
  *   config: function((Function|Array.<string|Function>)):angular.Module,
  *   constant: function(string, *):angular.Module,
  *   controller:
  *       function(string, (Function|Array.<string|Function>)):angular.Module,
  *   directive:
- *       function(string, (Function|Array.<string|Function>)):angular.Module,
+ *       (function(string, (Function|Array.<string|Function>)):angular.Module|
+ *       function(!Object.<(Function|Array.<string|Function>)>):angular.Module),
  *   factory:
  *       function(string, (Function|Array.<string|Function>)):angular.Module,
  *   filter:
@@ -190,7 +489,7 @@ angular.module = function(name, opt_requires, opt_configFn) {};
  *   provider:
  *       function(string, (Function|Array.<string|Function>)):angular.Module,
  *   requires: Array.<string>,
- *   run: function(function()):angular.Module,
+ *   run: function((Function|Array.<string|Function>)):angular.Module,
  *   service:
  *       function(string, (Function|Array.<string|Function>)):angular.Module,
  *   value: function(string, *):angular.Module
@@ -247,7 +546,7 @@ angular.Module.filter = function(name, filterFactory) {};
 angular.Module.provider = function(name, providerType) {};
 
 /**
- * @param {function()} initializationFn
+ * @param {Function|Array.<string|Function>} initializationFn
  * @return {angular.Module}
  */
 angular.Module.run = function(initializationFn) {};
@@ -280,25 +579,25 @@ angular.noop = function() {};
 
 /**
  * @typedef {{
- *   $apply: function((string|function())=):*,
+ *   $apply: function((string|function(angular.Scope))=):*,
  *   $broadcast: function(string, ...[*]),
  *   $destroy: function(),
  *   $digest: function(),
  *   $emit: function(string, ...[*]),
  *   $eval: function((string|function())=, Object=):*,
  *   $evalAsync: function((string|function())=),
- *   $id: number,
- *   $new: function():Object,
+ *   $id: string,
+ *   $new: function(boolean=):angular.Scope,
  *   $on: function(string, function(angular.Scope.Event, ...[?])):function(),
+ *   $parent: angular.Scope,
  *   $watch: function(
- *       (string|function()),
- *       (function(*, *, angular.Scope)|string)=, boolean=):function()
+ *       (string|Function), (string|Function)=, boolean=):function()
  *   }}
  */
 angular.Scope;
 
 /**
- * @param {(string|function())=} opt_exp
+ * @param {(string|function(angular.Scope))=} opt_exp
  * @return {*}
  */
 angular.Scope.$apply = function(opt_exp) {};
@@ -331,10 +630,14 @@ angular.Scope.$eval = function(opt_exp, opt_locals) {};
  */
 angular.Scope.$evalAsync = function(opt_exp) {};
 
+/** @type {string} */
+angular.Scope.$id;
+
 /**
- * @return {Object}
+ * @param {boolean=} opt_isolate
+ * @return {angular.Scope}
  */
-angular.Scope.$new = function() {};
+angular.Scope.$new = function(opt_isolate) {};
 
 /**
  * @param {string} name
@@ -343,9 +646,12 @@ angular.Scope.$new = function() {};
  */
 angular.Scope.$on = function(name, listener) {};
 
+/** @type {angular.Scope} */
+angular.Scope.$parent;
+
 /**
- * @param {string|function()} exp
- * @param {(string|function())=} opt_listener
+ * @param {string|Function} exp
+ * @param {(string|Function)=} opt_listener
  * @param {boolean=} opt_objectEquality
  * @return {function()}
  */
@@ -423,15 +729,52 @@ angular.version.dot = 0;
 angular.version.codeName = '';
 
 /******************************************************************************
- * $http Service
+ * $anchorScroll Service
  *****************************************************************************/
 
 /**
- * @param {string} cacheId
- * @param {angular.$cacheFactory.Options=} opt_options
- * @return {angular.$cacheFactory.Cache}
+ * @typedef {function()}
  */
-angular.$cacheFactory = function(cacheId, opt_options) {};
+angular.$anchorScroll;
+
+/******************************************************************************
+ * $anchorScrollProvider Service
+ *****************************************************************************/
+
+/**
+ * @typedef {{
+ *   disableAutoScrolling: function()
+ *   }}
+ */
+angular.$anchorScrollProvider;
+
+/**
+ * @type {function()}
+ */
+angular.$anchorScrollProvider.disableAutoScrolling = function() {};
+
+/******************************************************************************
+ * $compile Service
+ *****************************************************************************/
+
+/**
+ * @typedef {
+ *   function(
+ *       (JQLiteSelector|Object), function(angular.Scope, Function=)=, number=):
+ *           function(angular.Scope, function(Object, angular.Scope=)=): Object}
+ */
+angular.$compile;
+
+/******************************************************************************
+ * $cacheFactory Service
+ *****************************************************************************/
+
+/**
+ * @typedef {
+ *   function(string, angular.$cacheFactory.Options=):
+ *       !angular.$cacheFactory.Cache}
+ */
+angular.$cacheFactory;
 
 /** @typedef {{capacity: (number|undefined)}} */
 angular.$cacheFactory.Options;
@@ -456,6 +799,10 @@ angular.$cacheFactory.Cache;
  *   }}
  */
 angular.$cacheFactory.Cache.Info;
+
+/******************************************************************************
+ * $http Service
+ *****************************************************************************/
 
 /**
  * This is a typedef because the closure compiler does not allow
@@ -552,18 +899,22 @@ angular.$http.pendingRequests;
 
 /**
  * @typedef {{
- *   then: function(function(*), function(*)=): angular.$http.HttpPromise,
- *   success: function(
- *       function((string|Object), number, function(string):string, Object)),
- *   error: function(
- *       function((string|Object), number, function(string):string, Object))
+ *   then: function(
+ *       ?function(!angular.$http.Response),
+ *       function(!angular.$http.Response)=): angular.$http.HttpPromise,
+ *   success: function(function(
+ *       (string|Object), number, function(string=): (string|Object),
+ *       !angular.$http.Config)),
+ *   error: function(function(
+ *       (string|Object), number, function(string=): (string|Object),
+ *       !angular.$http.Config))
  *   }}
  */
 angular.$http.HttpPromise;
 
 /**
- * @param {function(*)} successCallback
- * @param {function(*)=} opt_errorCallback
+ * @param {?function(!angular.$http.Response)} successCallback
+ * @param {function(!angular.$http.Response)=} opt_errorCallback
  * @return {angular.$http.HttpPromise}
  */
 angular.$http.HttpPromise.then = function(
@@ -581,6 +932,76 @@ angular.$http.HttpPromise.success = function(callback) {};
  */
 angular.$http.HttpPromise.error = function(callback) {};
 
+/**
+ * @typedef {{
+ *   data: (string|Object),
+ *   status: number,
+ *   headers: function(string=): (string|Object),
+ *   config: !angular.$http.Config
+ *   }}
+ */
+angular.$http.Response;
+
+/******************************************************************************
+ * $injector Service
+ *****************************************************************************/
+
+/**
+ * @typedef {{
+ *   annotate: function((Function|Array.<string|Function>)):Array.<string>,
+ *   get: function(string):*,
+ *   instantiate: function(Function, Object=):Object,
+ *   invoke: function(
+ *       (Function|Array.<string|Function>), Object=, Object=):*
+ *   }}
+ */
+angular.$injector;
+
+/**
+ * @param {(Function|Array.<string|Function>)} fn
+ * @return {Array.<string>}
+ */
+angular.$injector.annotate = function(fn) {};
+
+/**
+ * @param {string} name
+ * @return {*}
+ */
+angular.$injector.get = function(name) {};
+
+/**
+ * @param {Function} type
+ * @param {Object=} opt_locals
+ * @return {Object}
+ */
+angular.$injector.instantiate = function(type, opt_locals) {};
+
+/**
+ * @param {(Function|Array.<string|Function>)} fn
+ * @param {Object=} opt_self
+ * @param {Object=} opt_locals
+ * @return {*}
+ */
+angular.$injector.invoke = function(fn, opt_self, opt_locals) {};
+
+/******************************************************************************
+ * $interpolateProvider Service
+ *****************************************************************************/
+
+/**
+ * @typedef {{
+ *   startSymbol: function(string),
+ *   endSymbol: function(string)
+ *   }}
+ */
+angular.$interpolateProvider;
+
+/** @type {function(string)} */
+angular.$interpolateProvider.startSymbol;
+
+/** @type {function(string)} */
+angular.$interpolateProvider.endSymbol;
+
 /******************************************************************************
  * $location Service
  *****************************************************************************/
@@ -590,11 +1011,12 @@ angular.$http.HttpPromise.error = function(callback) {};
  *   absUrl: function():string,
  *   hash: function(string=):string,
  *   host: function():string,
- *   path: function(string=):string,
+ *   path: function(string=):(string|angular.$location),
  *   port: function():number,
  *   protocol: function():string,
  *   replace: function(),
- *   search: function((string|Object.<string,string>)=, string=):string,
+ *   search: function((string|Object.<string, string>)=, ?string=):
+ *       (string|!Object.<string, string>),
  *   url: function(string=):string
  *   }}
  */
@@ -618,7 +1040,7 @@ angular.$location.host = function() {};
 
 /**
  * @param {string=} opt_path
- * @return {string}
+ * @return {string|angular.$location}
  */
 angular.$location.path = function(opt_path) {};
 
@@ -639,8 +1061,8 @@ angular.$location.replace = function() {};
 
 /**
  * @param {(string|Object.<string, string>)=} opt_search
- * @param {string=} opt_paramValue
- * @return {string}
+ * @param {?string=} opt_paramValue
+ * @return {string|!Object.<string, string>}
  */
 angular.$location.search = function(opt_search, opt_paramValue) {};
 
@@ -649,6 +1071,32 @@ angular.$location.search = function(opt_search, opt_paramValue) {};
  * @return {string}
  */
 angular.$location.url = function(opt_url) {};
+
+/******************************************************************************
+ * $locationProvider Service
+ *****************************************************************************/
+
+/**
+ * @typedef {{
+ *   hashPrefix:
+ *       function(string=): (string|angular.$locationProvider),
+ *   html5Mode:
+ *       function(boolean=): (boolean|angular.$locationProvider)
+ *   }}
+ */
+angular.$locationProvider;
+
+/**
+ * @param {string=} opt_prefix
+ * @return {string|angular.$locationProvider}
+ */
+angular.$locationProvider.hashPrefix = function(opt_prefix) {};
+
+/**
+ * @param {boolean=} opt_enabled
+ * @return {boolean|angular.$locationProvider}
+ */
+angular.$locationProvider.html5Mode = function(opt_enabled) {};
 
 /******************************************************************************
  * $log Service
@@ -685,6 +1133,135 @@ angular.$log.log = function(var_args) {};
 angular.$log.warn = function(var_args) {};
 
 /******************************************************************************
+ * NgModelController
+ *****************************************************************************/
+
+/**
+ * @constructor
+ */
+angular.NgModelController = function() {};
+
+/**
+ * @type {?}
+ */
+angular.NgModelController.prototype.$modelValue;
+
+/**
+ * @type {boolean}
+ */
+angular.NgModelController.prototype.$dirty;
+
+/**
+ * @type {!Object.<boolean>}
+ */
+angular.NgModelController.prototype.$error;
+
+/**
+ * @type {!Array.<function(?):*>}
+ */
+angular.NgModelController.prototype.$formatters;
+
+/**
+ * @type {boolean}
+ */
+angular.NgModelController.prototype.$invalid;
+
+/**
+ * @type {!Array.<function(?):*>}
+ */
+angular.NgModelController.prototype.$parsers;
+
+/**
+ * @type {boolean}
+ */
+angular.NgModelController.prototype.$pristine;
+
+angular.NgModelController.prototype.$render = function() {};
+
+/**
+ * @param {string} key
+ * @param {boolean} isValid
+ */
+angular.NgModelController.prototype.$setValidity = function(key, isValid) {};
+
+/**
+ * @param {?} value
+ */
+angular.NgModelController.prototype.$setViewValue = function(value) {};
+
+/**
+ * @type {boolean}
+ */
+angular.NgModelController.prototype.$valid;
+
+/**
+ * @type {!Array.<function()>}
+ */
+angular.NgModelController.prototype.$viewChangeListener;
+
+/**
+ * @type {?}
+ */
+angular.NgModelController.prototype.$viewValue;
+
+/******************************************************************************
+ * $provide Service
+ *****************************************************************************/
+
+/**
+ * @typedef {{
+ *   constant: function(string, *): Object,
+ *   decorator: function(string, (Function|Array.<string|Function>)),
+ *   factory: function(string, (Function|Array.<string|Function>)): Object,
+ *   provider: function(string, (Function|Array.<string|Function>)): Object,
+ *   service: function(string, (Function|Array.<string|Function>)): Object,
+ *   value: function(string, *): Object
+ *   }}
+ */
+angular.$provide;
+
+/**
+ * @param {string} name
+ * @param {*} object
+ * @return {Object}
+ */
+angular.$provide.constant = function(name, object) {};
+
+/**
+ * @param {string} name
+ * @param {Function|Array.<string|Function>} decorator
+ */
+angular.$provide.decorator = function(name, decorator) {};
+
+/**
+ * @param {string} name
+ * @param {Function|Array.<string|Function>} providerFunction
+ * @return {Object}
+ */
+angular.$provide.factory = function(name, providerFunction) {};
+
+/**
+ * @param {string} name
+ * @param {Function|Array.<string|Function>} providerType
+ * @return {Object}
+ */
+angular.$provide.provider = function(name, providerType) {};
+
+/**
+ * @param {string} name
+ * @param {Function|Array.<string|Function>} constructor
+ * @return {Object}
+ */
+angular.$provide.service = function(name, constructor) {};
+
+/**
+ * @param {string} name
+ * @param {*} object
+ * @return {Object}
+ */
+angular.$provide.value = function(name, object) {};
+
+/******************************************************************************
  * $q Service
  *****************************************************************************/
 
@@ -692,7 +1269,7 @@ angular.$log.warn = function(var_args) {};
  * @typedef {{
  *   all: function(Array.<angular.$q.Promise>): angular.$q.Promise,
  *   defer: function():angular.$q.Deferred,
- *   reject: function():angular.$q.Promise,
+ *   reject: function(*):angular.$q.Promise,
  *   when: function(*):angular.$q.Promise
  *   }}
  */
@@ -710,9 +1287,10 @@ angular.$q.all = function(promises) {};
 angular.$q.defer = function() {};
 
 /**
+ * @param {*} reason
  * @return {angular.$q.Promise}
  */
-angular.$q.reject = function() {};
+angular.$q.reject = function(reason) {};
 
 /**
  * @param {*} value
@@ -722,30 +1300,30 @@ angular.$q.when = function(value) {};
 
 /**
  * @typedef {{
- *   resolve: function(*),
- *   reject: function(*),
+ *   resolve: function(*=),
+ *   reject: function(*=),
  *   promise: angular.$q.Promise
  *   }}
  */
 angular.$q.Deferred;
 
-/** @param {*} value */
-angular.$q.Deferred.resolve = function(value) {};
+/** @param {*=} opt_value */
+angular.$q.Deferred.resolve = function(opt_value) {};
 
-/** @param {*} reason */
-angular.$q.Deferred.reject = function(reason) {};
+/** @param {*=} opt_reason */
+angular.$q.Deferred.reject = function(opt_reason) {};
 
 /** @type {angular.$q.Promise} */
 angular.$q.Deferred.promise;
 
 /**
- * @typedef {{then: function(function(*), function(*)=): angular.$q.Promise}}
+ * @typedef {{then: function(?function(?), function(?)=): angular.$q.Promise}}
  */
 angular.$q.Promise;
 
 /**
- * @param {function(*)} successCallback
- * @param {function(*)=} opt_errorCallback
+ * @param {?function(?)} successCallback
+ * @param {function(?)=} opt_errorCallback
  * @return {angular.$q.Promise}
  */
 angular.$q.Promise.then = function(successCallback, opt_errorCallback) {};
@@ -828,7 +1406,7 @@ angular.$routeProvider.when = function(path, route) {};
 
 /**
  * @typedef {{
- *   controller: (Function|Array.<string|Function>|undefined),
+ *   controller: (Function|Array.<string|Function>|string|undefined),
  *   template: (string|undefined),
  *   templateUrl: (string|undefined),
  *   resolve: (Object.<string, (
@@ -840,7 +1418,7 @@ angular.$routeProvider.when = function(path, route) {};
  */
 angular.$routeProvider.Params;
 
-/** @type {Function|Array.<string|Function>} */
+/** @type {Function|Array.<string|Function>|string} */
 angular.$routeProvider.Params.controller;
 
 /** @type {string} */
@@ -862,24 +1440,6 @@ angular.$routeProvider.Params.redirectTo;
 
 /** @type {boolean} */
 angular.$routeProvider.Params.reloadOnSearch;
-
-/******************************************************************************
- * $interpolateProvider Service
- *****************************************************************************/
-
-/**
- * @typedef {{
- *   startSymbol: function(string),
- *   endSymbol: function(string)
- *   }}
- */
-angular.$interpolateProvider;
-
-/** @type {function(string)} */
-angular.$interpolateProvider.startSymbol;
-
-/** @type {function(string)} */
-angular.$interpolateProvider.endSymbol;
 
 /******************************************************************************
  * $timeout Service

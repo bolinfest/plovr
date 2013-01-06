@@ -46,6 +46,9 @@ public class ParserTest extends BaseJSTypeTestCase {
       com.google.javascript.rhino.ScriptRuntime.getMessage0(
           "msg.jsdoc.missing.gt");
 
+  private static final String MISPLACED_TYPE_ANNOTATION =
+      IRFactory.MISPLACED_TYPE_ANNOTATION;
+
   private Config.LanguageMode mode;
   private boolean isIdeMode = false;
 
@@ -973,6 +976,71 @@ public class ParserTest extends BaseJSTypeTestCase {
         "unsupported language extension: for each");
   }
 
+  public void testMisplacedTypeAnnotation1() {
+    // misuse with COMMA
+    parse(
+        "var o = {};" +
+        "/** @type {string} */ o.prop1 = 1, o.prop2 = 2;",
+        MISPLACED_TYPE_ANNOTATION);
+  }
+
+  public void testMisplacedTypeAnnotation2() {
+    // missing parenthese for the cast.
+    parse(
+        "var o = /** @type {string} */ getValue();",
+        MISPLACED_TYPE_ANNOTATION);
+  }
+
+  public void testMisplacedTypeAnnotation3() {
+    // missing parenthese for the cast.
+    parse(
+        "var o = 1 + /** @type {string} */ value;",
+        MISPLACED_TYPE_ANNOTATION);
+  }
+
+  public void testMisplacedTypeAnnotation4() {
+    // missing parenthese for the cast.
+    parse(
+        "var o = /** @type {!Array.<string>} */ ['hello', 'you'];",
+        MISPLACED_TYPE_ANNOTATION);
+  }
+
+  public void testMisplacedTypeAnnotation5() {
+    // missing parenthese for the cast.
+    parse(
+        "var o = (/** @type {!Foo} */ {});",
+        MISPLACED_TYPE_ANNOTATION);
+  }
+
+  public void testMisplacedTypeAnnotation6() {
+    parse("var o = /** @type {function():string} */ function() {return 'str';}",
+        MISPLACED_TYPE_ANNOTATION);
+  }
+
+  public void testValidTypeAnnotation1() {
+    parse("/** @type {string} */ var o = 'str';");
+    parse("var /** @type {string} */ o = 'str', /** @type {number} */ p = 0;");
+    parse("/** @type {function():string} */ function o() { return 'str'; }");
+    parse("var o = {}; /** @type {string} */ o.prop = 'str';");
+    parse("var o = {}; /** @type {string} */ o['prop'] = 'str';");
+    parse("var o = { /** @type {string} */ prop : 'str' };");
+    parse("var o = { /** @type {string} */ 'prop' : 'str' };");
+    parse("var o = { /** @type {string} */ 1 : 'str' };");
+  }
+
+  public void testValidTypeAnnotation2() {
+    mode = LanguageMode.ECMASCRIPT5;
+    parse("var o = { /** @type {string} */ get prop() { return 'str' }};");
+    parse("var o = { /** @type {string} */ set prop(s) {}};");
+  }
+
+  public void testValidTypeAnnotation3() {
+    // These two we don't currently support in the type checker but
+    // we would like to.
+    parse("try {} catch (/** @type {Error} */ e) {}");
+    parse("function f(/** @type {string} */ a) {}");
+  }
+
   /**
    * Verify that the given code has the given parse errors.
    * @return If in IDE mode, returns a partial tree.
@@ -984,7 +1052,7 @@ public class ParserTest extends BaseJSTypeTestCase {
       StaticSourceFile file = new SimpleSourceFile("input", false);
       script = ParserRunner.parse(
           file, string, ParserRunner.createConfig(isIdeMode, mode, false),
-          testErrorReporter, Logger.getAnonymousLogger());
+          testErrorReporter, Logger.getAnonymousLogger()).ast;
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -1003,7 +1071,7 @@ public class ParserTest extends BaseJSTypeTestCase {
       StaticSourceFile file = new SimpleSourceFile("input", false);
       script = ParserRunner.parse(
           file, string, ParserRunner.createConfig(true, mode, false),
-          testErrorReporter, Logger.getAnonymousLogger());
+          testErrorReporter, Logger.getAnonymousLogger()).ast;
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

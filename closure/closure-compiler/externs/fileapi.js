@@ -31,6 +31,7 @@
  * @param {Array.<ArrayBufferView|Blob|string>=} opt_blobParts
  * @param {Object=} opt_options
  * @constructor
+ * @nosideeffects
  */
 function Blob(opt_blobParts, opt_options) {}
 
@@ -50,7 +51,8 @@ Blob.prototype.type;
  * @see http://www.w3.org/TR/FileAPI/#dfn-slice
  * @param {number} start
  * @param {number} length
- * @return {Blob}
+ * @return {!Blob}
+ * @nosideeffects
  */
 Blob.prototype.slice = function(start, length) {};
 
@@ -59,7 +61,8 @@ Blob.prototype.slice = function(start, length) {};
  * @see http://lists.w3.org/Archives/Public/public-webapps/2011AprJun/0222.html
  * @param {number} start
  * @param {number} end
- * @return {Blob}
+ * @return {!Blob}
+ * @nosideeffects
  */
 Blob.prototype.webkitSlice = function(start, end) {};
 
@@ -68,9 +71,16 @@ Blob.prototype.webkitSlice = function(start, end) {};
  * @see http://lists.w3.org/Archives/Public/public-webapps/2011AprJun/0222.html
  * @param {number} start
  * @param {number} end
- * @return {Blob}
+ * @return {!Blob}
+ * @nosideeffects
  */
 Blob.prototype.mozSlice = function(start, end) {};
+
+/**
+ * @see http://dev.w3.org/2006/webapi/FileAPI/#dfn-Blob
+ * @type {function(new:Blob, Array.<ArrayBufferView|Blob|string>=, Object=)}
+ */
+Window.prototype.Blob;
 
 /**
  * @see http://www.w3.org/TR/file-writer-api/#the-blobbuilder-interface
@@ -300,7 +310,7 @@ File.prototype.name;
 
 /**
  * @see http://www.w3.org/TR/FileAPI/#dfn-lastModifiedDate
- * @type {string}
+ * @type {Date}
  */
 File.prototype.lastModifiedDate;
 
@@ -715,6 +725,12 @@ function Metadata() {}
 Metadata.prototype.modificationTime;
 
 /**
+ * @see http://www.w3.org/TR/file-system-api/#widl-Metadata-size
+ * @type {number}
+ */
+Metadata.prototype.size;
+
+/**
  * @see http://www.w3.org/TR/file-system-api/#widl-LocalFileSystem-TEMPORARY
  * @type {number}
 */
@@ -811,17 +827,17 @@ Window.prototype.webkitResolveLocalFileSystemURI = function(uri, successCallback
 
 /**
  * @see http://www.w3.org/TR/FileAPI/#dfn-createObjectURL
- * @param {!Blob} blob
+ * @param {!Object} obj
  * @return {string}
  */
-function createObjectURL(blob) {};
+function createObjectURL(obj) {};
 
 /**
  * @see http://www.w3.org/TR/FileAPI/#dfn-createObjectURL
- * @param {!Blob} blob
+ * @param {!Object} obj
  * @return {string}
  */
-Window.prototype.createObjectURL = function(blob) {};
+Window.prototype.createObjectURL = function(obj) {};
 
 /**
  * @see http://www.w3.org/TR/FileAPI/#dfn-revokeObjectURL
@@ -856,10 +872,10 @@ Window.prototype.webkitURL;
 
 /**
  * @see http://www.w3.org/TR/FileAPI/#dfn-createObjectURL
- * @param {!Blob} blob
+ * @param {!Object} obj
  * @return {string}
  */
-DOMURL.prototype.createObjectURL = function(blob) {};
+DOMURL.prototype.createObjectURL = function(obj) {};
 
 /**
  * @see http://www.w3.org/TR/FileAPI/#dfn-revokeObjectURL

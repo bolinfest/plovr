@@ -38,6 +38,17 @@ public class IntegrationTest extends IntegrationTestCase {
   private static final String CLOSURE_COMPILED =
       "var COMPILED = true; var goog$exportSymbol = function() {};";
 
+  public void testConstructorCycle() {
+    CompilerOptions options = createCompilerOptions();
+    options.checkTypes = true;
+    test(options,
+        "/** @return {function()} */ var AsyncTestCase = function() {};\n" +
+        "/**\n" +
+        " * @constructor\n" +
+        " */ Foo = /** @type {function(new:Foo)} */ (AyncTestCase());",
+        RhinoErrorReporter.PARSE_ERROR);
+  }
+
   public void testBug1949424() {
     CompilerOptions options = createCompilerOptions();
     options.collapseProperties = true;
@@ -1965,6 +1976,30 @@ public class IntegrationTest extends IntegrationTestCase {
         "function f() {}");
   }
 
+  public void testSuppressCastWarning() {
+    CompilerOptions options = createCompilerOptions();
+    options.setWarningLevel(DiagnosticGroups.CHECK_TYPES, CheckLevel.WARNING);
+
+    normalizeResults = true;
+
+    test(options,
+        "function f() { var xyz = /** @type {string} */ (0); }",
+        DiagnosticType.warning(
+            "JSC_INVALID_CAST", "invalid cast"));
+
+    testSame(options,
+        "/** @suppress{cast} */\n" +
+        "function f() { var xyz = /** @type {string} */ (0); }");
+  }
+
+  public void testRenamePrefix() {
+    String code = "var x = {}; function f(y) {}";
+    CompilerOptions options = createCompilerOptions();
+    options.renamePrefix = "G_";
+    options.variableRenaming = VariableRenamingPolicy.ALL;
+    test(options, code, "var G_={}; function G_a(a) {}");
+  }
+
   public void testRenamePrefixNamespace() {
     String code =
         "var x = {}; x.FOO = 5; x.bar = 3;";
@@ -1975,6 +2010,18 @@ public class IntegrationTest extends IntegrationTestCase {
     options.collapseProperties = true;
     options.renamePrefixNamespace = "_";
     test(options, code, "_.x$FOO = 5; _.x$bar = 3;");
+  }
+
+  public void testRenamePrefixNamespaceProtectSideEffects() {
+    String code = "var x = null; try { +x.FOO; } catch (e) {}";
+
+    CompilerOptions options = createCompilerOptions();
+    testSame(options, code);
+
+    CompilationLevel.SIMPLE_OPTIMIZATIONS.setOptionsForCompilationLevel(
+        options);
+    options.renamePrefixNamespace = "_";
+    test(options, code, "_.x = null; try { +_.x.FOO; } catch (e) {}");
   }
 
   public void testRenamePrefixNamespaceActivatesMoveFunctionDeclarations() {
@@ -2186,6 +2233,68 @@ public class IntegrationTest extends IntegrationTestCase {
     test(options, code, "alert(2);");
   }
 
+  public void testGoogDefineClass1() {
+    CompilerOptions options = createCompilerOptions();
+    CompilationLevel level = CompilationLevel.ADVANCED_OPTIMIZATIONS;
+    level.setOptionsForCompilationLevel(options);
+    level.setTypeBasedOptimizationOptions(options);
+
+    String code = "" +
+        "var ns = {};\n" +
+        "ns.C = goog.defineClass(null, {\n" +
+        "  /** @constructor */\n" +
+        "  constructor: function () {this.someProperty = 1}\n" +
+        "});\n" +
+        "alert(new ns.C().someProperty + new ns.C().someProperty);\n";
+    assertTrue(options.inlineProperties);
+    assertTrue(options.collapseProperties);
+    // CollapseProperties used to prevent inlining this property.
+    test(options, code, "alert(2);");
+  }
+
+  public void testGoogDefineClass2() {
+    CompilerOptions options = createCompilerOptions();
+    CompilationLevel level = CompilationLevel.ADVANCED_OPTIMIZATIONS;
+    level.setOptionsForCompilationLevel(options);
+    level.setTypeBasedOptimizationOptions(options);
+
+    String code = "" +
+        "var C = goog.defineClass(null, {\n" +
+        "  /** @constructor */\n" +
+        "  constructor: function () {this.someProperty = 1}\n" +
+        "});\n" +
+        "alert(new C().someProperty + new C().someProperty);\n";
+    assertTrue(options.inlineProperties);
+    assertTrue(options.collapseProperties);
+    // CollapseProperties used to prevent inlining this property.
+    test(options, code, "alert(2);");
+  }
+
+  public void testGoogDefineClass3() {
+    CompilerOptions options = createCompilerOptions();
+    CompilationLevel level = CompilationLevel.ADVANCED_OPTIMIZATIONS;
+    level.setOptionsForCompilationLevel(options);
+    level.setTypeBasedOptimizationOptions(options);
+    WarningLevel warnings = WarningLevel.VERBOSE;
+    warnings.setOptionsForWarningLevel(options);
+
+    String code = "" +
+        "var C = goog.defineClass(null, {\n" +
+        "  /** @constructor */\n" +
+        "  constructor: function () {\n" +
+        "    /** @type {number} */\n" +
+        "    this.someProperty = 1},\n" +
+        "  /** @param {string} a */\n" +
+        "  someMethod: function (a) {}\n" +
+        "});" +
+        "var x = new C();\n" +
+        "x.someMethod(x.someProperty);\n";
+    assertTrue(options.inlineProperties);
+    assertTrue(options.collapseProperties);
+    // CollapseProperties used to prevent inlining this property.
+    test(options, code, TypeValidator.TYPE_MISMATCH_WARNING);
+  }
+
   public void testCheckConstants1() {
     CompilerOptions options = createCompilerOptions();
     CompilationLevel level = CompilationLevel.SIMPLE_OPTIMIZATIONS;
@@ -2269,7 +2378,7 @@ public class IntegrationTest extends IntegrationTestCase {
     WarningLevel warnings = WarningLevel.VERBOSE;
     warnings.setOptionsForWarningLevel(options);
 
-    int numAdds = 5000;
+    int numAdds = 4750;
     StringBuilder original = new StringBuilder("var x = 0");
     for (int i = 0; i < numAdds; i++) {
       original.append(" + 1");

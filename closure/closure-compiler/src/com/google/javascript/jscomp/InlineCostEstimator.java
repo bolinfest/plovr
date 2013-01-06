@@ -63,7 +63,7 @@ class InlineCostEstimator {
     }
 
     void add(Node root) {
-      CodeGenerator cg = new CodeGenerator(this);
+      CodeGenerator cg = CodeGenerator.forCostEstimation(this);
       cg.add(root);
     }
 

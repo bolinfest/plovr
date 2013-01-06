@@ -172,30 +172,6 @@ class NamedType extends ProxyObjectType {
     return true;
   }
 
-  /**
-   * Two named types are equivalent if they are the same {@code
-   * ObjectType} object.  This is complicated by the fact that isEquivalent
-   * is sometimes called before we have a chance to resolve the type
-   * names.
-   *
-   * @return {@code true} iff {@code that} == {@code this} or {@code that}
-   *         is a {@link NamedType} whose reference is the same as ours,
-   *         or {@code that} is the type we reference.
-   */
-  @Override
-  public boolean isEquivalentTo(JSType that) {
-    if (this == that) {
-      return true;
-    }
-
-    ObjectType objType = ObjectType.cast(that);
-    if (objType != null) {
-      return objType.isNominalType() &&
-          reference.equals(objType.getReferenceName());
-    }
-    return false;
-  }
-
   @Override
   public int hashCode() {
     return reference.hashCode();
@@ -211,7 +187,7 @@ class NamedType extends ProxyObjectType {
     // makes more sense. Now, resolution via registry is first in order to
     // avoid triggering the warnings built into the resolution via properties.
     boolean resolved = resolveViaRegistry(t, enclosing);
-    if (detectImplicitPrototypeCycle()) {
+    if (detectInheritanceCycle()) {
       handleTypeCycle(t);
     }
 
@@ -223,7 +199,7 @@ class NamedType extends ProxyObjectType {
     }
 
     resolveViaProperties(t, enclosing);
-    if (detectImplicitPrototypeCycle()) {
+    if (detectInheritanceCycle()) {
       handleTypeCycle(t);
     }
 
@@ -330,6 +306,7 @@ class NamedType extends ProxyObjectType {
     }
     setReferencedType(type);
     checkEnumElementCycle(t);
+    checkProtoCycle(t);
     setResolvedTypeInternal(getReferencedType());
   }
 
@@ -345,6 +322,13 @@ class NamedType extends ProxyObjectType {
     JSType referencedType = getReferencedType();
     if (referencedType instanceof EnumElementType &&
         ((EnumElementType) referencedType).getPrimitiveType() == this) {
+      handleTypeCycle(t);
+    }
+  }
+
+  private void checkProtoCycle(ErrorReporter t) {
+    JSType referencedType = getReferencedType();
+    if (referencedType == this) {
       handleTypeCycle(t);
     }
   }

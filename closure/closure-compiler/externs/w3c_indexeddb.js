@@ -15,9 +15,10 @@
  */
 
 /**
- * @fileoverview Definitions for W3C's IndexedDB API. In Chrome all the IndexedDB
- * classes are prefixed with 'webkit'. In order to access constants and static
- * methods of these classes they must be duplicated with the prefix here.
+ * @fileoverview Definitions for W3C's IndexedDB API. In Chrome all the
+ * IndexedDB classes are prefixed with 'webkit'. In order to access constants
+ * and static methods of these classes they must be duplicated with the
+ * prefix here.
  * @see http://www.w3.org/TR/IndexedDB/
  *
  * @externs
@@ -47,14 +48,14 @@ function IDBFactory() {}
 
 /**
  * @param {string} name The name of the database to open.
- * @param {string=} opt_description The description of the database.
- * @return {!IDBRequest} The IDBRequest object.
+ * @param {number=} opt_version The version at which to open the database.
+ * @return {!IDBOpenDBRequest} The IDBRequest object.
  */
-IDBFactory.prototype.open = function(name, opt_description) {};
+IDBFactory.prototype.open = function(name, opt_version) {};
 
 /**
  * @param {string} name The name of the database to delete.
- * @return {!IDBRequest} The IDBRequest object.
+ * @return {!IDBOpenDBRequest} The IDBRequest object.
  */
 IDBFactory.prototype.deleteDatabase = function(name) {};
 
@@ -321,8 +322,29 @@ IDBRequest.prototype.source;
  */
 IDBRequest.prototype.transaction;
 
+/** @type {function(new:IDBOpenDBRequest)} */
+Window.prototype.IDBOpenDBRequest;
+
 /**
  * @constructor
+ * @extends {IDBRequest}
+ * @see http://www.w3.org/TR/IndexedDB/#idl-def-IDBOpenDBRequest
+ */
+function IDBOpenDBRequest() {}
+
+/**
+ * @type {function(!IDBVersionChangeEvent)}
+ */
+IDBOpenDBRequest.prototype.onblocked = function(e) {};
+
+/**
+ * @type {function(!IDBVersionChangeEvent)}
+ */
+IDBOpenDBRequest.prototype.onupgradeneeded = function(e) {};
+
+/**
+ * @constructor
+ * @implements {EventTarget}
  * @see http://www.w3.org/TR/IndexedDB/#idl-def-IDBDatabase
  */
 function IDBDatabase() {}
@@ -346,7 +368,7 @@ IDBDatabase.prototype.description;
 IDBDatabase.prototype.version;
 
 /**
- * @type {Array.<string>}
+ * @type {DOMStringList}
  * @const
  */
 IDBDatabase.prototype.objectStoreNames;
@@ -373,7 +395,7 @@ IDBDatabase.prototype.setVersion = function(version) {};
 
 /**
  * @param {Array.<string>} storeNames The stores to open in this transaction.
- * @param {number=} mode The mode for opening the object stores.
+ * @param {(number|string)=} mode The mode for opening the object stores.
  * @return {!IDBTransaction} The IDBRequest object.
  */
 IDBDatabase.prototype.transaction = function(storeNames, mode) {};
@@ -398,6 +420,26 @@ IDBDatabase.prototype.onerror = function() {};
  */
 IDBDatabase.prototype.onversionchange = function() {};
 
+/** @override */
+IDBDatabase.prototype.addEventListener =
+    function(type, listener, useCapture) {};
+
+/** @override */
+IDBDatabase.prototype.removeEventListener =
+    function(type, listener, useCapture) {};
+
+/** @override */
+IDBDatabase.prototype.dispatchEvent = function(evt) {};
+
+/**
+ * Typedef for valid key types according to the w3 specification. Note that this
+ * is slightly wider than what is actually allowed, as all Array elements must
+ * have a valid key type.
+ * @see http://www.w3.org/TR/IndexedDB/#key-construct
+ * @typedef {number|string|!Date|!Array}
+ */
+var IDBKeyType;
+
 /**
  * @constructor
  * @see http://www.w3.org/TR/IndexedDB/#idl-def-IDBObjectStore
@@ -406,51 +448,59 @@ function IDBObjectStore() {}
 
 /**
  * @type {string}
- * @const
  */
 IDBObjectStore.prototype.name;
 
 /**
  * @type {string}
- * @const
  */
 IDBObjectStore.prototype.keyPath;
 
 /**
- * @type {Array.<string>}
- * @const
+ * @type {DOMStringList}
  */
 IDBObjectStore.prototype.indexNames;
 
+/** @type {IDBTransaction} */
+IDBObjectStore.prototype.transaction;
+
+/** @type {boolean} */
+IDBObjectStore.prototype.autoIncrement;
+
 /**
  * @param {*} value The value to put into the object store.
- * @param {*=} key The key of this value.
+ * @param {IDBKeyType=} key The key of this value.
  * @return {!IDBRequest} The IDBRequest object.
  */
 IDBObjectStore.prototype.put = function(value, key) {};
 
 /**
  * @param {*} value The value to add into the object store.
- * @param {*=} key The key of this value.
+ * @param {IDBKeyType=} key The key of this value.
  * @return {!IDBRequest} The IDBRequest object.
  */
 IDBObjectStore.prototype.add = function(value, key) {};
 
 /**
- * @param {*} key The key of the document to remove.
+ * @param {IDBKeyType} key The key of this value.
  * @return {!IDBRequest} The IDBRequest object.
  */
-IDBObjectStore.prototype.remove = function(key) {};
+IDBObjectStore.prototype['delete'] = function(key) {};
 
 /**
- * @param {*} key The key of the document to retrieve.
+ * @param {IDBKeyType} key The key of the document to retrieve.
  * @return {!IDBRequest} The IDBRequest object.
  */
 IDBObjectStore.prototype.get = function(key) {};
 
 /**
+ * @return {!IDBRequest} The IDBRequest object.
+ */
+IDBObjectStore.prototype.clear = function() {};
+
+/**
  * @param {IDBKeyRange=} range The range of the cursor.
- * @param {number=} direction The direction of cursor enumeration.
+ * @param {(number|string)=} direction The direction of cursor enumeration.
  * @return {!IDBRequest} The IDBRequest object.
  */
 IDBObjectStore.prototype.openCursor = function(range, direction) {};
@@ -476,15 +526,10 @@ IDBObjectStore.prototype.index = function(name) {};
 IDBObjectStore.prototype.deleteIndex = function(indexName) {};
 
 /**
+ * @param {IDBKeyType=} key The key of this value.
  * @return {!IDBRequest} The IDBRequest object.
  */
-IDBObjectStore.prototype.clear = function() {};
-
-/**
- * Note: This is currently only supported by Mozilla's implementation
- * @return {!IDBRequest} The IDBRequest object.
- */
-IDBObjectStore.prototype.getAll = function() {};
+IDBObjectStore.prototype.count = function(key) {};
 
 /**
  * @constructor
@@ -518,14 +563,14 @@ IDBIndex.prototype.unique;
 
 /**
  * @param {IDBKeyRange=} range The range of the cursor.
- * @param {number=} direction The direction of cursor enumeration.
+ * @param {(number|string)=} direction The direction of cursor enumeration.
  * @return {!IDBRequest} The IDBRequest object.
  */
 IDBIndex.prototype.openCursor = function(range, direction) {};
 
 /**
  * @param {IDBKeyRange=} range The range of the cursor.
- * @param {number=} direction The direction of cursor enumeration.
+ * @param {(number|string)=} direction The direction of cursor enumeration.
  * @return {!IDBRequest} The IDBRequest object.
  */
 IDBIndex.prototype.openKeyCursor = function(range, direction) {};
@@ -622,7 +667,7 @@ IDBCursor.prototype.source;
 IDBCursor.prototype.direction;
 
 /**
- * @type {*}
+ * @type {IDBKeyType}
  * @const
  */
 IDBCursor.prototype.key;
@@ -713,7 +758,7 @@ IDBTransaction.VERSION_CHANGE;
 webkitIDBTransaction.VERSION_CHANGE;
 
 /**
- * @type {number}
+ * @type {number|string}
  * @const
  */
 IDBTransaction.prototype.mode;
@@ -850,3 +895,35 @@ IDBKeyRange.bound = function(left, right, openLeft, openRight) {};
  * @return {!IDBKeyRange} The key range.
  */
 webkitIDBKeyRange.bound = function(left, right, openLeft, openRight) {};
+
+/**
+ * @constructor
+ * @extends {Event}
+ * @see http://www.w3.org/TR/IndexedDB/#idl-def-IDBVersionChangeEvent
+ */
+function IDBVersionChangeEvent() {}
+
+/**
+ * @type {number}
+ * @const
+ */
+IDBVersionChangeEvent.prototype.oldVersion;
+
+/**
+ * @type {?number}
+ * @const
+ */
+IDBVersionChangeEvent.prototype.newVersion;
+
+/**
+ * @constructor
+ * @extends {IDBVersionChangeEvent}
+ * @see http://www.w3.org/TR/IndexedDB/#idl-def-IDBVersionChangeEvent
+ */
+function webkitIDBVersionChangeEvent() {}
+
+/**
+ * @type {string}
+ * @const
+ */
+webkitIDBVersionChangeEvent.prototype.version;

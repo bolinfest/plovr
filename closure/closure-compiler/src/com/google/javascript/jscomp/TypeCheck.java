@@ -28,6 +28,7 @@ import static com.google.javascript.rhino.jstype.JSTypeNative.UNKNOWN_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.VOID_TYPE;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.type.ReverseAbstractInterpreter;
@@ -156,9 +157,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
   static final DiagnosticType CONFLICTING_EXTENDED_TYPE =
       DiagnosticType.warning(
           "JSC_CONFLICTING_EXTENDED_TYPE",
-          "{0} cannot extend this type; " +
-          "a constructor can only extend objects " +
-          "and an interface can only extend interfaces");
+          "{1} cannot extend this type; {0}s can only extend {0}s");
 
   static final DiagnosticType CONFLICTING_IMPLEMENTED_TYPE =
     DiagnosticType.warning(
@@ -231,6 +230,20 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
           "JSC_EXPECTED_THIS_TYPE",
           "\"{0}\" must be called with a \"this\" type");
 
+  static final DiagnosticType IN_USED_WITH_STRUCT =
+      DiagnosticType.warning("JSC_IN_USED_WITH_STRUCT",
+                             "Cannot use the IN operator with structs");
+
+  static final DiagnosticType ILLEGAL_PROPERTY_CREATION =
+      DiagnosticType.warning("JSC_ILLEGAL_PROPERTY_CREATION",
+                             "Cannot add a property to a struct instance " +
+                             "after it is constructed.");
+
+  static final DiagnosticType ILLEGAL_OBJLIT_KEY =
+      DiagnosticType.warning(
+          "ILLEGAL_OBJLIT_KEY",
+          "Illegal key, the object literal is a {0}");
+
   static final DiagnosticGroup ALL_DIAGNOSTICS = new DiagnosticGroup(
       DETERMINISTIC_TEST,
       DETERMINISTIC_TEST_NO_RESULT,
@@ -260,6 +273,9 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       ILLEGAL_IMPLICIT_CAST,
       INCOMPATIBLE_EXTENDED_PROPERTY_TYPE,
       EXPECTED_THIS_TYPE,
+      IN_USED_WITH_STRUCT,
+      ILLEGAL_PROPERTY_CREATION,
+      ILLEGAL_OBJLIT_KEY,
       RhinoErrorReporter.TYPE_PARSE_ERROR,
       TypedScopeCreator.UNKNOWN_LENDS,
       TypedScopeCreator.LENDS_ON_NON_OBJECT,
@@ -275,7 +291,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
   private final JSTypeRegistry typeRegistry;
   private Scope topScope;
 
-  private ScopeCreator scopeCreator;
+  private MemoizedScopeCreator scopeCreator;
 
   private final CheckLevel reportMissingOverride;
   private final CheckLevel reportUnknownTypes;
@@ -300,7 +316,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       ReverseAbstractInterpreter reverseInterpreter,
       JSTypeRegistry typeRegistry,
       Scope topScope,
-      ScopeCreator scopeCreator,
+      MemoizedScopeCreator scopeCreator,
       CheckLevel reportMissingOverride,
       CheckLevel reportUnknownTypes) {
     this.compiler = compiler;
@@ -467,6 +483,19 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     boolean typeable = true;
 
     switch (n.getType()) {
+      case Token.CAST:
+        Node expr = n.getFirstChild();
+        ensureTyped(t, n, getJSType(expr));
+
+        // If the cast, tightens the type apply it, so it is available post
+        // normalization.
+        JSType castType = getJSType(n);
+        JSType exprType = getJSType(expr);
+        if (castType.isSubtype(exprType)) {
+          expr.setJSType(castType);
+        }
+        break;
+
       case Token.NAME:
         typeable = visitName(t, n, parent);
         break;
@@ -553,8 +582,8 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       case Token.DEC:
       case Token.INC:
         left = n.getFirstChild();
-        validator.expectNumber(
-            t, left, getJSType(left), "increment/decrement");
+        checkPropCreation(t, left);
+        validator.expectNumber(t, left, getJSType(left), "increment/decrement");
         ensureTyped(t, n, NUMBER_TYPE);
         break;
 
@@ -673,21 +702,21 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       case Token.IN:
         left = n.getFirstChild();
         right = n.getLastChild();
-        leftType = getJSType(left);
         rightType = getJSType(right);
+        validator.expectString(t, left, getJSType(left), "left side of 'in'");
         validator.expectObject(t, n, rightType, "'in' requires an object");
-        validator.expectString(t, left, leftType, "left side of 'in'");
+        if (rightType.isStruct()) {
+          report(t, right, IN_USED_WITH_STRUCT);
+        }
         ensureTyped(t, n, BOOLEAN_TYPE);
         break;
 
       case Token.INSTANCEOF:
         left = n.getFirstChild();
         right = n.getLastChild();
-        leftType = getJSType(left);
         rightType = getJSType(right).restrictByNotNullOrUndefined();
-
         validator.expectAnyObject(
-            t, left, leftType, "deterministic instanceof yields false");
+            t, left, getJSType(left), "deterministic instanceof yields false");
         validator.expectActualObject(
             t, right, rightType, "instanceof requires an object");
         ensureTyped(t, n, BOOLEAN_TYPE);
@@ -709,6 +738,9 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       case Token.ASSIGN_SUB:
       case Token.ASSIGN_ADD:
       case Token.ASSIGN_MUL:
+        checkPropCreation(t, n.getFirstChild());
+        // fall through
+
       case Token.LSH:
       case Token.RSH:
       case Token.URSH:
@@ -766,9 +798,18 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
 
       // These nodes require data flow analysis.
       case Token.DO:
-      case Token.FOR:
       case Token.IF:
       case Token.WHILE:
+        typeable = false;
+        break;
+
+      case Token.FOR:
+        if (NodeUtil.isForIn(n)) {
+          Node obj = n.getChildAtIndex(1);
+          if (getJSType(obj).isStruct()) {
+            report(t, obj, IN_USED_WITH_STRUCT);
+          }
+        }
         typeable = false;
         break;
 
@@ -789,8 +830,9 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
           }
         }
         if (n.isObjectLit()) {
+          JSType typ = getJSType(n);
           for (Node key : n.children()) {
-            visitObjLitKey(t, key, n);
+            visitObjLitKey(t, key, n, typ);
           }
         }
         break;
@@ -855,7 +897,8 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     if (lvalue.isGetProp()) {
       Node object = lvalue.getFirstChild();
       JSType objectJsType = getJSType(object);
-      String property = lvalue.getLastChild().getString();
+      Node property = lvalue.getLastChild();
+      String pname = property.getString();
 
       // the first name in this getprop refers to an interface
       // we perform checks in addition to the ones below
@@ -863,23 +906,30 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         JSType jsType = getJSType(object.getFirstChild());
         if (jsType.isInterface() &&
             object.getLastChild().getString().equals("prototype")) {
-          visitInterfaceGetprop(t, assign, object, property, lvalue, rvalue);
+          visitInterfaceGetprop(t, assign, object, pname, lvalue, rvalue);
         }
       }
 
       checkEnumAlias(t, info, rvalue);
+      checkPropCreation(t, lvalue);
 
       // Prototype assignments are special, because they actually affect
       // the definition of a class. These are mostly validated
       // during TypedScopeCreator, and we only look for the "dumb" cases here.
       // object.prototype = ...;
-      if (property.equals("prototype")) {
+      if (pname.equals("prototype")) {
         if (objectJsType != null && objectJsType.isFunctionType()) {
           FunctionType functionType = objectJsType.toMaybeFunctionType();
           if (functionType.isConstructor()) {
             JSType rvalueType = rvalue.getJSType();
             validator.expectObject(t, rvalue, rvalueType,
                 OVERRIDING_PROTOTYPE_WITH_NON_OBJECT);
+            // Only assign structs to the prototype of a @struct constructor
+            if (functionType.makesStructs() && !rvalueType.isStruct()) {
+              String funName = functionType.getTypeOfThis().toString();
+              compiler.report(t.makeError(assign, CONFLICTING_EXTENDED_TYPE,
+                                          "struct", funName));
+            }
             return;
           }
         }
@@ -891,16 +941,16 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       ObjectType type = ObjectType.cast(
           objectJsType.restrictByNotNullOrUndefined());
       if (type != null) {
-        if (type.hasProperty(property) &&
-            !type.isPropertyTypeInferred(property) &&
-            !propertyIsImplicitCast(type, property)) {
-          JSType expectedType = type.getPropertyType(property);
+        if (type.hasProperty(pname) &&
+            !type.isPropertyTypeInferred(pname) &&
+            !propertyIsImplicitCast(type, pname)) {
+          JSType expectedType = type.getPropertyType(pname);
           if (!expectedType.isUnknownType()) {
             validator.expectCanAssignToPropertyOf(
                 t, assign, getJSType(rvalue),
-                expectedType, object, property);
+                expectedType, object, pname);
             checkPropertyInheritanceOnGetpropAssign(
-                t, assign, object, property, info, expectedType);
+                t, assign, object, pname, info, expectedType);
             return;
           }
         }
@@ -909,7 +959,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       // If we couldn't get the property type with normal object property
       // lookups, then check inheritance anyway with the unknown type.
       checkPropertyInheritanceOnGetpropAssign(
-          t, assign, object, property, info, getNativeType(UNKNOWN_TYPE));
+          t, assign, object, pname, info, getNativeType(UNKNOWN_TYPE));
     }
 
     // Check qualified name sets to 'object' and 'object.property'.
@@ -947,6 +997,22 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       ensureTyped(t, assign, rightType);
     } else {
       ensureTyped(t, assign);
+    }
+  }
+
+  /** Check that we don't create new properties on structs. */
+  private void checkPropCreation(NodeTraversal t, Node lvalue) {
+    if (lvalue.isGetProp()) {
+      Node obj = lvalue.getFirstChild();
+      Node prop = lvalue.getLastChild();
+      JSType objType = getJSType(obj);
+      String pname = prop.getString();
+      if (objType.isStruct() && !objType.hasProperty(pname)) {
+        if (!(obj.isThis() &&
+              getJSType(t.getScope().getRootNode()).isConstructor())) {
+          report(t, prop, ILLEGAL_PROPERTY_CREATION);
+        }
+      }
     }
   }
 
@@ -990,12 +1056,20 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
    * @param t the traversal
    * @param key the assign node
    */
-  private void visitObjLitKey(NodeTraversal t, Node key, Node objlit) {
+  private void visitObjLitKey(
+      NodeTraversal t, Node key, Node objlit, JSType litType) {
     // Do not validate object lit value types in externs. We don't really care,
     // and it makes it easier to generate externs.
     if (objlit.isFromExterns()) {
       ensureTyped(t, key);
       return;
+    }
+
+    // Structs must have unquoted keys and dicts must have quoted keys
+    if (litType.isStruct() && key.isQuotedString()) {
+      report(t, key, ILLEGAL_OBJLIT_KEY, "struct");
+    } else if (litType.isDict() && !key.isQuotedString()) {
+      report(t, key, ILLEGAL_OBJLIT_KEY, "dict");
     }
 
     // TODO(johnlenz): Validate get and set function declarations are valid
@@ -1160,7 +1234,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       // there is a superclass implementation
       JSType superClassPropType =
           superClass.getInstanceType().getPropertyType(propertyName);
-      if (!propertyType.canAssignTo(superClassPropType)) {
+      if (!propertyType.isSubtype(superClassPropType)) {
         compiler.report(
             t.makeError(n, HIDDEN_SUPERCLASS_PROPERTY_MISMATCH,
                 propertyName, topInstanceType.toString(),
@@ -1172,7 +1246,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         if (interfaceType.hasProperty(propertyName)) {
           JSType superPropertyType =
               interfaceType.getPropertyType(propertyName);
-          if (!propertyType.canAssignTo(superPropertyType)) {
+          if (!propertyType.isSubtype(superPropertyType)) {
             topInstanceType = interfaceType.getConstructor().
                 getTopMostDefiningType(propertyName);
             compiler.report(
@@ -1307,13 +1381,6 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
    * @param parent The parent of <code>n</code>
    */
   private void visitGetProp(NodeTraversal t, Node n, Node parent) {
-    // GETPROP nodes have an assigned type on their node by the scope creator
-    // if this is an enum declaration. The only namespaced enum declarations
-    // that we allow are of the form object.name = ...;
-    if (n.getJSType() != null && parent.isAssign()) {
-      return;
-    }
-
     // obj.prop or obj.method()
     // Lots of types can appear on the left, a call to a void function can
     // never be on the left. getPropertyType will decide what is acceptable
@@ -1322,15 +1389,12 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     Node objNode = n.getFirstChild();
     JSType childType = getJSType(objNode);
 
-    // TODO(user): remove in favor of flagging every property access on
-    // non-object.
-    if (!validator.expectNotNullOrUndefined(t, n, childType,
-            "No properties on this expression", getNativeType(OBJECT_TYPE))) {
-      ensureTyped(t, n);
-      return;
+    if (childType.isDict()) {
+      report(t, property, TypeValidator.ILLEGAL_PROPERTY_ACCESS, "'.'", "dict");
+    } else if (validator.expectNotNullOrUndefined(t, n, childType,
+        "No properties on this expression", getNativeType(OBJECT_TYPE))) {
+      checkPropertyAccess(childType, property.getString(), t, n);
     }
-
-    checkPropertyAccess(childType, property.getString(), t, n);
     ensureTyped(t, n);
   }
 
@@ -1424,9 +1488,8 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
    * @param n The node being visited.
    */
   private void visitGetElem(NodeTraversal t, Node n) {
-    Node left = n.getFirstChild();
-    Node right = n.getLastChild();
-    validator.expectIndexMatch(t, n, getJSType(left), getJSType(right));
+    validator.expectIndexMatch(
+        t, n, getJSType(n.getFirstChild()), getJSType(n.getLastChild()));
     ensureTyped(t, n);
   }
 
@@ -1504,7 +1567,15 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       String functionName, HashMap<String, ObjectType> properties,
       HashMap<String, ObjectType> currentProperties,
       ObjectType interfaceType) {
-    Set<String> currentPropertyNames = interfaceType.getPropertyNames();
+    ObjectType implicitProto = interfaceType.getImplicitPrototype();
+    Set<String> currentPropertyNames;
+    if (implicitProto == null) {
+      // This can be the case if interfaceType is proxy to a non-existent
+      // object (which is a bad type annotation, but shouldn't crash).
+      currentPropertyNames = ImmutableSet.of();
+    } else {
+      currentPropertyNames = implicitProto.getOwnPropertyNames();
+    }
     for (String name : currentPropertyNames) {
       ObjectType oType = properties.get(name);
       if (oType != null) {
@@ -1536,12 +1607,23 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     String functionPrivateName = n.getFirstChild().getString();
     if (functionType.isConstructor()) {
       FunctionType baseConstructor = functionType.getSuperClassConstructor();
-      if (baseConstructor != null &&
-          baseConstructor != getNativeType(OBJECT_FUNCTION_TYPE) &&
-          (baseConstructor.isInterface() && functionType.isConstructor())) {
+      if (baseConstructor != getNativeType(OBJECT_FUNCTION_TYPE) &&
+          baseConstructor != null &&
+          baseConstructor.isInterface()) {
         compiler.report(
-            t.makeError(n, CONFLICTING_EXTENDED_TYPE, functionPrivateName));
+            t.makeError(n, CONFLICTING_EXTENDED_TYPE,
+                        "constructor", functionPrivateName));
       } else {
+        if (baseConstructor != getNativeType(OBJECT_FUNCTION_TYPE)) {
+          ObjectType proto = functionType.getPrototype();
+          if (functionType.makesStructs() && !proto.isStruct()) {
+            compiler.report(t.makeError(n, CONFLICTING_EXTENDED_TYPE,
+                                        "struct", functionPrivateName));
+          } else if (functionType.makesDicts() && !proto.isDict()) {
+            compiler.report(t.makeError(n, CONFLICTING_EXTENDED_TYPE,
+                                        "dict", functionPrivateName));
+          }
+        }
         // All interfaces are properly implemented by a class
         for (JSType baseInterface : functionType.getImplementedInterfaces()) {
           boolean badImplementedType = false;
@@ -1569,14 +1651,11 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         if (extInterface.getConstructor() != null
             && !extInterface.getConstructor().isInterface()) {
           compiler.report(
-              t.makeError(n, CONFLICTING_EXTENDED_TYPE, functionPrivateName));
+              t.makeError(n, CONFLICTING_EXTENDED_TYPE,
+                          "interface", functionPrivateName));
         }
       }
-      // Interface cannot implement any interfaces
-      if (functionType.hasImplementedInterfaces()) {
-        compiler.report(t.makeError(n,
-            CONFLICTING_IMPLEMENTED_TYPE, functionPrivateName));
-      }
+
       // Check whether the extended interfaces have any conflicts
       if (functionType.getExtendedInterfacesCount() > 1) {
         // Only check when extending more than one interfaces
@@ -1638,7 +1717,8 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       // or GETELEM.
       if (functionType.isOrdinaryFunction() &&
           !functionType.getTypeOfThis().isUnknownType() &&
-          !functionType.getTypeOfThis().isNativeObjectType() &&
+          !(functionType.getTypeOfThis().toObjectType() != null &&
+          functionType.getTypeOfThis().toObjectType().isNativeObjectType()) &&
           !(child.isGetElem() ||
             child.isGetProp())) {
         report(t, n, EXPECTED_THIS_TYPE, functionType.toString());
@@ -1892,6 +1972,10 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     JSDocInfo info = n.getJSDocInfo();
     if (info != null) {
       if (info.hasType()) {
+        // TODO(johnlenz): Change this so that we only look for casts on CAST
+        // nodes one the misplaced type annotation warning is on by default and
+        // people have been given a chance to fix them.  As is, this is here
+        // simply for legacy casts.
         JSType infoType = info.getType().evaluate(t.getScope(), typeRegistry);
         validator.expectCanCast(t, n, infoType, type);
         type = infoType;
@@ -1916,11 +2000,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
    */
   double getTypedPercent() {
     int total = nullCount + unknownCount + typedCount;
-    if (total == 0) {
-      return 0.0;
-    } else {
-      return (100.0 * typedCount) / total;
-    }
+    return (total == 0) ? 0.0 : (100.0 * typedCount) / total;
   }
 
   private JSType getNativeType(JSTypeNative typeId) {

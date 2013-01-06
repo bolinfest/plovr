@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 package org.mozilla.javascript.tests;
 
 import org.mozilla.javascript.ast.*;
@@ -1031,6 +1035,29 @@ public class ParserTest extends TestCase {
 
         WithStatement st = (WithStatement) root.getFirstChild();
         assertNotNull(st.getJsDoc());
+    }
+
+    public void testJSDocAttachment17() {
+      AstRoot root = parse(
+      "try { throw 'a'; } catch (/** @type {string} */ e) {\n" +
+      "}\n");
+      assertNotNull(root.getComments());
+      assertEquals(1, root.getComments().size());
+
+      TryStatement tryNode = (TryStatement) root.getFirstChild();
+      CatchClause catchNode = tryNode.getCatchClauses().get(0);
+      assertNotNull(catchNode.getVarName().getJsDoc());
+    }
+
+    public void testJSDocAttachment18() {
+      AstRoot root = parse(
+      "function f(/** @type {string} */ e) {}\n");
+      assertNotNull(root.getComments());
+      assertEquals(1, root.getComments().size());
+
+      FunctionNode function = (FunctionNode) root.getFirstChild();
+      AstNode param = function.getParams().get(0);
+      assertNotNull(param.getJsDoc());
     }
 
     public void testParsingWithoutJSDoc() {

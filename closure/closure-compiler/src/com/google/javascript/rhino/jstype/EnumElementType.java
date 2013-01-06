@@ -44,8 +44,6 @@ package com.google.javascript.rhino.jstype;
 import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.Node;
 
-import java.util.Set;
-
 /**
  * The type of individual elements of an enum type
  * (see {@link EnumType}).
@@ -74,12 +72,10 @@ public class EnumElementType extends ObjectType {
     this.name = name;
   }
 
-  @Override
-  public Property getSlot(String name) {
-    if (primitiveObjectType != null) {
-      return primitiveObjectType.getSlot(name);
-    }
-    return null;
+  @Override public PropertyMap getPropertyMap() {
+    return primitiveObjectType == null
+        ? PropertyMap.immutableEmptyMap()
+        : primitiveObjectType.getPropertyMap();
   }
 
   @Override
@@ -133,19 +129,6 @@ public class EnumElementType extends ObjectType {
     return hasReferenceName();
   }
 
-  @Override
-  public boolean isEquivalentTo(JSType that) {
-    if (this == that) {
-      return true;
-    } else if (this.isNominalType()) {
-      ObjectType thatObj = ObjectType.cast(that);
-      if (thatObj != null && thatObj.isNominalType()) {
-        return getReferenceName().equals(thatObj.getReferenceName());
-      }
-    }
-    return false;
-  }
-
   /**
    * If this is equal to a NamedType object, its hashCode must be equal
    * to the hashCode of the NamedType object.
@@ -190,6 +173,10 @@ public class EnumElementType extends ObjectType {
     return visitor.caseEnumElementType(this);
   }
 
+  @Override <T> T visit(RelationshipVisitor<T> visitor, JSType that) {
+    return visitor.caseEnumElementType(this, that);
+  }
+
   @Override
   boolean defineProperty(String propertyName, JSType type,
       boolean inferred, Node propertyNode) {
@@ -198,52 +185,13 @@ public class EnumElementType extends ObjectType {
   }
 
   @Override
-  public boolean isPropertyTypeDeclared(String propertyName) {
-    return primitiveObjectType == null ?
-        false : primitiveObjectType.isPropertyTypeDeclared(propertyName);
-  }
-
-  @Override
-  public boolean isPropertyTypeInferred(String propertyName) {
-    return primitiveObjectType == null ?
-        false : primitiveObjectType.isPropertyTypeInferred(propertyName);
-  }
-
-  @Override
   public ObjectType getImplicitPrototype() {
     return null;
   }
 
   @Override
-  public int getPropertiesCount() {
-    return primitiveObjectType == null ?
-        0 : primitiveObjectType.getPropertiesCount();
-  }
-
-  @Override
-  void collectPropertyNames(Set<String> props) {
-    if (primitiveObjectType != null) {
-      primitiveObjectType.collectPropertyNames(props);
-    }
-  }
-
-  @Override
   public JSType findPropertyType(String propertyName) {
     return primitiveType.findPropertyType(propertyName);
-  }
-
-  @Override
-  public JSType getPropertyType(String propertyName) {
-    return primitiveObjectType == null ?
-        getNativeType(JSTypeNative.UNKNOWN_TYPE) :
-        primitiveObjectType.getPropertyType(propertyName);
-  }
-
-  @Override
-  public boolean hasProperty(String propertyName) {
-    return primitiveObjectType == null ?
-        false :
-        primitiveObjectType.hasProperty(propertyName);
   }
 
   @Override

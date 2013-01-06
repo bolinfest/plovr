@@ -312,11 +312,12 @@ public class JSDocInfo implements Serializable {
   private static final int MASK_EXTERNS       = 0x00008000; // @externs
   private static final int MASK_JAVADISPATCH  = 0x00010000; // @javadispatch
   private static final int MASK_NOCOMPILE     = 0x00020000; // @nocompile
-  // @consistentIdGenerator
-  private static final int MASK_CONSISTIDGEN  = 0x00040000;
-  // @idGenerator
-  private static final int MASK_IDGEN         = 0x00080000;
+  private static final int MASK_CONSISTIDGEN  = 0x00040000; // @consistentIdGenerator
+  private static final int MASK_IDGEN         = 0x00080000; // @idGenerator
   private static final int MASK_EXPOSE        = 0x00100000; // @expose
+  private static final int MASK_STRUCT        = 0x00200000; // @struct
+  private static final int MASK_DICT          = 0x00400000; // @dict
+  private static final int MASK_STALBEIDGEN   = 0x00800000; // @stableIdGenerator
 
   // 3 bit type field stored in the top 3 bits of the most significant
   // nibble.
@@ -341,12 +342,24 @@ public class JSDocInfo implements Serializable {
     setFlag(value, MASK_CONSISTIDGEN);
   }
 
+  void setStableIdGenerator(boolean value) {
+    setFlag(value, MASK_STALBEIDGEN);
+  }
+
   void setConstant(boolean value) {
     setFlag(value, MASK_CONSTANT);
   }
 
   void setConstructor(boolean value) {
     setFlag(value, MASK_CONSTRUCTOR);
+  }
+
+  void setStruct() {
+    setFlag(true, MASK_STRUCT);
+  }
+
+  void setDict() {
+    setFlag(true, MASK_DICT);
   }
 
   void setDefine(boolean value) {
@@ -435,6 +448,13 @@ public class JSDocInfo implements Serializable {
   }
 
   /**
+   * @return whether the {@code @stableIdGenerator} is present on this {@link JSDocInfo}.
+   */
+  public boolean isStableIdGenerator() {
+    return getFlag(MASK_STALBEIDGEN);
+  }
+
+  /**
    * Returns whether the {@code @const} annotation is present on this
    * {@link JSDocInfo}.
    */
@@ -448,6 +468,22 @@ public class JSDocInfo implements Serializable {
    */
   public boolean isConstructor() {
     return getFlag(MASK_CONSTRUCTOR);
+  }
+
+  /**
+   * Returns whether the {@code @struct} annotation is present on this
+   * {@link JSDocInfo}.
+   */
+  public boolean makesStructs() {
+    return getFlag(MASK_STRUCT);
+  }
+
+  /**
+   * Returns whether the {@code @dict} annotation is present on this
+   * {@link JSDocInfo}.
+   */
+  public boolean makesDicts() {
+    return getFlag(MASK_DICT);
   }
 
   /**
