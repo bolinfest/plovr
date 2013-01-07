@@ -54,6 +54,8 @@ public abstract class LocalFileJsInput extends AbstractJsInput {
       newInput = new SoyFile(name, file, soyFileOptions);
     } else if (fileName.endsWith(".coffee")) {
       newInput = new CoffeeFile(name, file);
+    } else if (fileName.endsWith(".ts")) {
+      newInput = new TypeScriptFile(name, file);
     } else {
       newInput = new JsSourceFile(name, file);
     }

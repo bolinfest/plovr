@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# This updates the copy of typescript.js in the plovr repo.
+# This takes the path to the typescript repository as an argument.
+# Usage:
+#
+#     ./scripts/update-typescript.sh ../typescript
+#
+# Writes src/org/plovr/typescript.js
+
+set -e
+
+# Find the root of the plovr repository.
+cd `hg root`
+PLOVR_DIR="$PWD"
+
+# Build typescript.js.
+pushd "$1"
+make compiler
+
+# Copy the result to the plovr repository.
+cp built/local/typescript.js $PLOVR_DIR/src/org/plovr/typescript.js
+
+# Achieve balance.
+popd

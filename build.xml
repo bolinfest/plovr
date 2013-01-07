@@ -115,6 +115,14 @@
           todir="${soy-resources.dir}/soy"
           />
 
+    <!-- Copy resources needed for org.plovr package. -->
+    <copy todir="${classes.dir}/org/plovr">
+      <fileset dir="${src.dir}/org/plovr">
+        <include name="**/*.js" />
+        <include name="**/*.soy" />
+      </fileset>
+    </copy>
+    
     <!-- Include these files to support the "info" command. -->
     <mkdir dir="${classes.dir}/revisions"/>
     <copy todir="${basedir}/build/classes/revisions/">
@@ -190,14 +198,6 @@
           description="build plovr.jar">
     <mkdir dir="${build.dir}" />
     
-    <!-- Copy resources needed for org.plovr package. -->
-    <copy todir="${classes.dir}/org/plovr">
-      <fileset dir="${src.dir}/org/plovr">
-        <include name="**/*.js" />
-        <include name="**/*.soy" />
-      </fileset>
-    </copy>
-
     <!-- Copy resources needed for org.plovr.docgen package. -->
     <copy todir="${classes.dir}/org/plovr/docgen">
       <fileset dir="${src.dir}/org/plovr/docgen">
