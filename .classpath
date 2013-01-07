@@ -8,7 +8,6 @@
 	<classpathentry kind="src" path="test"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="lib" path="lib/junit-4.8.2.jar"/>
-	<classpathentry kind="lib" path="lib/gson-1.7.1.jar"/>
 	<classpathentry kind="lib" path="closure/closure-compiler/lib/protobuf-java.jar"/>
 	<classpathentry kind="lib" path="closure/closure-compiler/lib/jsr305.jar"/>
 	<classpathentry kind="lib" path="closure/closure-compiler/lib/json.jar"/>
@@ -20,9 +19,10 @@
 	<classpathentry kind="lib" path="closure/closure-templates/java/lib/guice-multibindings-3.0.jar"/>
 	<classpathentry kind="lib" path="closure/closure-templates/java/lib/javax.inject.jar"/>
 	<classpathentry kind="lib" path="closure/closure-compiler/lib/ant.jar"/>
-	<classpathentry kind="lib" path="lib/guava-11.0.1.jar"/>
 	<classpathentry kind="lib" path="closure/closure-templates/java/lib/icu4j-4_8_1_1.jar"/>
 	<classpathentry kind="lib" path="lib/closure-stylesheets.jar"/>
 	<classpathentry kind="lib" path="lib/selenium-java-2.21.0.jar"/>
+	<classpathentry kind="lib" path="lib/gson-2.2.2.jar"/>
+	<classpathentry kind="lib" path="lib/guava-13.0.1.jar"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>
