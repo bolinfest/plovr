@@ -1,6 +1,13 @@
 package org.plovr;
 
+import java.io.IOException;
+import java.net.URL;
+
 import sun.org.mozilla.javascript.internal.Scriptable;
+
+import com.google.common.base.Charsets;
+import com.google.common.base.Throwables;
+import com.google.common.io.Resources;
 
 public class TypeScriptCompiler
     extends AbstractJavaScriptBasedCompiler<TypeScriptCompilerException> {
@@ -12,8 +19,17 @@ public class TypeScriptCompiler
     return TypeScriptCompilerHolder.instance;
   }
 
+  private final String libraryDefinitions;
+
   private TypeScriptCompiler() {
     super("org/plovr/typescript.js");
+
+    URL libraryDefinitionsUrl = Resources.getResource("org/plovr/lib.d.ts");
+    try {
+      libraryDefinitions = Resources.toString(libraryDefinitionsUrl, Charsets.UTF_8);
+    } catch (IOException e) {
+      throw Throwables.propagate(e);
+    }
   }
 
   @Override
@@ -21,6 +37,7 @@ public class TypeScriptCompiler
       Scriptable compileScope, String sourceCode, String sourceName) {
     compileScope.put("typeScriptInput", compileScope, sourceCode);
     compileScope.put("filenameForErrorReportingPurposes", compileScope, sourceName);
+    compileScope.put("libraryDefinitions", compileScope, libraryDefinitions);
 
     String js =
         "(function() {\n" +
@@ -47,14 +64,7 @@ public class TypeScriptCompiler
     		"    settings.outputGoogleClosureAnnotations = true;\n" +
     		"\n" +
     		"    var compiler = new TypeScript.TypeScriptCompiler(errorOutput, logger, settings);\n" +
-    		"\n" +
-    		// TODO(bolinfest): Include lib.d.ts until there is a plan
-    		// for converting d.ts files into extern files.
-//    		"    // EXTERNS may not be defined when developing the demo locally.\n" +
-//    		"    if (typeof EXTERNS != 'undefined') {\n" +
-//    		"      compiler.addUnit(EXTERNS, 'lib.d.ts');\n" +
-//    		"    }\n" +
-//    		"\n" +
+    		"    compiler.addUnit(libraryDefinitions, 'lib.d.ts');\n" +
     		"    compiler.addUnit(typeScriptInput, filenameForErrorReportingPurposes);\n" +
     		"    compiler.typeCheck();\n" +
     		"\n" +

@@ -16,7 +16,7 @@ public class TypeScriptCompilerTest {
             "class Animal {\n" +
             "  constructor(public name : string) { }\n" +
             "  move(meters : number) {\n" +
-            "    var report = this.name + \" moved \" + meters + \"m.\";\n" +
+            "    alert(this.name + \" moved \" + meters + \"m.\");\n" +
             "  }\n" +
             "}\n" +
             "\n" +
@@ -41,7 +41,7 @@ public class TypeScriptCompilerTest {
         " * @return {void}\n" +
         " */\n" +
         "Animal.prototype.move = function (meters) {\n" +
-        "  var report = this.name + \" moved \" + meters + \"m.\";\n" +
+        "  alert(this.name + \" moved \" + meters + \"m.\");\n" +
         "};\n" +
         "\n" +
         "goog.provide('Snake');\n" +
