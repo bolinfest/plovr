@@ -12,17 +12,13 @@ import sun.org.mozilla.javascript.internal.Scriptable;
 import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
 import com.google.common.io.Resources;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 /**
+ * Java wrapper around the JavaScript CoffeeScript compiler.
+ * <p>
  * Adapted from JCoffeeScriptCompiler.java in
  * https://github.com/yeungda/jcoffeescript.
- *
- * This class would not need to exist if
- * com.sun.script.javascript.RhinoScriptEngine behaved reasonably in Java 6:
- * http://stackoverflow.com/questions/7000108/is-it-possible-to-
- *     set-the-optimization-level-for-rhinoscriptengine-in-java-6
  */
 public class CoffeeScriptCompiler {
 
@@ -86,10 +82,6 @@ public class CoffeeScriptCompiler {
         JsonObject opts = new JsonObject();
         opts.addProperty("bare", true);
         opts.addProperty("filename", sourceName);
-        JsonObject googleOpts = new JsonObject();
-        googleOpts.add("includes", new JsonArray());
-        googleOpts.add("provides", new JsonArray());
-        opts.add("google", googleOpts);
 
         // Run the CoffeeScript compiler.
         String js = Joiner.on('\n').join(
@@ -108,9 +100,11 @@ public class CoffeeScriptCompiler {
 
         // Return the appropriate value depending on the type of result.
         if (result == null) {
-          throw new RuntimeException("Result from CoffeeScript compiler was " +
-          		"null.");
+          throw new RuntimeException(
+              "Result from CoffeeScript compiler was null.");
         } else if (result instanceof String) {
+          // This is the expected case: CoffeeScript was successfully
+          // translated to JavaScript.
           return (String)result;
         } else if (result instanceof NativeObject) {
           NativeObject obj = (NativeObject)result;
