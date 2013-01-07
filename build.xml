@@ -14,6 +14,7 @@
   <property name="scripts.dir" value="${basedir}/scripts" />
   <property name="build.dir" value="${basedir}/build" />
   <property name="classes.dir" value="${build.dir}/classes" />
+  <property name="soy-resources.dir" value="${build.dir}/soy-resources" />
   <property name="build.dir.www" value="${build.dir}/www" />
   <property name="build.dir.www.jsdoc" value="${build.dir.www}/jsdoc" />
   <property name="javadoc.dir" value="${build.dir.www}/javadoc" />
@@ -67,12 +68,15 @@
     -->
   </target>
 
-  <target name="compile" description="compile Java source code">
+  <target name="pre-compile"
+      description="Closure Tools build steps that must be done before building plovr">
     <!-- Build intermediate Closure Templates target for its genfiles. -->
     <ant dir="${closure-templates.dir}" target="compile" inheritAll="false" useNativeBasedir="true" />
 
     <ant dir="${closure-compiler.dir}" target="rhino-jarjar" inheritAll="false" useNativeBasedir="true" />
-
+  </target>
+  
+  <target name="compile" depends="pre-compile" description="compile Java source code">
     <mkdir dir="${classes.dir}" />
     <javac destdir="${classes.dir}"
            bootclasspath="${env.JAVA7_HOME}/jre/lib/rt.jar"
@@ -101,6 +105,15 @@
     <!-- Move ParserConfig.properties where ParserRunner.java expects it. -->
     <copy file="${closure-compiler.dir}/src/com/google/javascript/jscomp/parsing/ParserConfig.properties"
           todir="${classes.dir}/com/google/javascript/jscomp/parsing" />
+
+    <!-- Copy the JavaScript files from Soy into a directory named "soy". -->
+    <mkdir dir="${soy-resources.dir}/soy" />
+    <copy file="${closure-templates.dir}/javascript/soyutils_usegoog.js"
+          todir="${soy-resources.dir}/soy"
+          />
+    <copy file="${closure-templates.dir}/javascript/soyutils.js"
+          todir="${soy-resources.dir}/soy"
+          />
 
     <!-- Include these files to support the "info" command. -->
     <mkdir dir="${classes.dir}/revisions"/>
@@ -208,9 +221,9 @@
                   excludes="deps.js"
                   prefix="third_party/closure/goog"
                   />
-      <zipfileset dir="${closure-templates.dir}/javascript/"
-                  includes="soyutils_usegoog.js, soyutils.js"
-                  prefix="soy" />
+      <zipfileset dir="${soy-resources.dir}"
+                  includes="**/*.js"
+                  />
       <zipgroupfileset dir="${lib.dir}"
                        includes="*.jar"
                        />
