@@ -32,6 +32,7 @@ DEPS = [
 #   name = 'closure-templates',
 #   srcs = glob(['java/src/**/*.java', genfile('parser.src.tar')]),
 #   deps = DEPS,
+#   visibility = [ 'PUBLIC' ],
 # )
 
 java_library(
@@ -56,6 +57,7 @@ prebuilt_jar(
   name = 'closure-templates',
   binary_jar = genfile('soy.jar'),
   deps = [ ':hack' ],
+  visibility = [ 'PUBLIC' ],
 )
 
 prebuilt_jar(
@@ -81,6 +83,9 @@ prebuilt_jar(
 prebuilt_jar(
   name = 'guice',
   binary_jar = 'java/lib/guice-3.0.jar',
+  visibility = [
+    '//:plovr',
+  ],
 )
 
 prebuilt_jar(
@@ -91,6 +96,9 @@ prebuilt_jar(
 prebuilt_jar(
   name = 'guice-multibindings',
   binary_jar = 'java/lib/guice-multibindings-3.0.jar',
+  visibility = [
+    '//:plovr',
+  ],
 )
 
 prebuilt_jar(

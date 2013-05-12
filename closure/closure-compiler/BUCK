@@ -23,6 +23,7 @@ java_library(
     ':protobuf',
     ':rhino',
   ],
+  visibility = [ 'PUBLIC' ],
 )
 
 # This rule is hacky. It can be cleaned up once the following Buck issue is fixed:
@@ -47,6 +48,7 @@ prebuilt_jar(
   deps = [
     ':gen_rhino',
   ],
+  visibility = [ 'PUBLIC' ],
 )
 
 prebuilt_jar(

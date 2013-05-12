@@ -2,8 +2,6 @@ package com.google.javascript.jscomp;
 
 import java.nio.charset.Charset;
 
-import org.plovr.ConfigTest;
-
 /**
  * {@link PlovrCompilerOptions} is a subclass of {@link CompilerOptions} with
  * customizations for plovr. The need for the subclass is twofold:
