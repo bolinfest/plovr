@@ -2,8 +2,6 @@
 
 # Generates the compiled Soy JAR file.
 
-set -ex
-
 OUTPUT_FILE="$1"
 PARSER_SRC_JAR="$3"
 JAVA_SRCS=`echo "$@" | cut -d ' ' -f 4-`
