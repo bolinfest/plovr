@@ -52,6 +52,11 @@ prebuilt_jar(
 prebuilt_jar(
   name = 'ant',
   binary_jar = 'lib/ant.jar',
+  visibility = [
+    # Closure Templates should really have its own ant.jar and not use
+    # includeAntRuntime="true" in its build.xml file.
+    '//closure/closure-templates:',
+  ],
 )
 
 prebuilt_jar(

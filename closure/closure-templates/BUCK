@@ -1,0 +1,114 @@
+genrule(
+  name = 'javacc',
+  srcs = [
+    'gen_parser.sh',
+    'buildtools/javacc/javacc.jar',
+    'java/src/com/google/template/soy/exprparse/ExpressionParser.jj',
+    'java/src/com/google/template/soy/soyparse/SoyFileParser.jj',
+    'java/src/com/google/template/soy/soyparse/TemplateParser.jj',
+  ],
+  cmd = '$SRCS $OUT',
+  out = 'parser.src.tar',
+)
+
+DEPS = [
+  ':aopalliance',
+  ':args4j',
+  ':cglib',
+  ':guava',
+  ':guice',
+  ':guice-assistedinject',
+  ':guice-multibindings',
+  ':icu4j',
+  ':javacc',
+  ':jsr305',
+  ':jsr330',
+  ':objenesis',
+  '//closure/closure-compiler:ant',
+]
+
+# TODO(mbolin): This does not work yet.
+# java_library(
+#   name = 'closure-templates',
+#   srcs = glob(['java/src/**/*.java', genfile('parser.src.tar')]),
+#   deps = DEPS,
+# )
+
+java_library(
+  name = 'classpath_hack',
+  deps = DEPS,
+)
+
+genrule(
+  name = 'hack',
+  srcs = [
+    'gen_soy_jar.sh',
+    genfile('parser.src.tar'),
+  ] + glob(['java/src/**/*.java']),
+  cmd = '$SRCDIR/gen_soy_jar.sh $OUT $SRCS',
+  out = 'soy.jar',
+  deps = [
+    ':javacc',
+  ],
+)
+
+prebuilt_jar(
+  name = 'closure-templates',
+  binary_jar = genfile('soy.jar'),
+  deps = [ ':hack' ],
+)
+
+prebuilt_jar(
+  name = 'aopalliance',
+  binary_jar = 'java/lib/aopalliance.jar',
+)
+
+prebuilt_jar(
+  name = 'args4j',
+  binary_jar = 'java/lib/args4j-2.0.17.jar',
+)
+
+prebuilt_jar(
+  name = 'cglib',
+  binary_jar = 'java/lib/cglib-nodep-2.2.2.jar',
+)
+
+prebuilt_jar(
+  name = 'guava',
+  binary_jar = 'java/lib/guava-12.0.jar',
+)
+
+prebuilt_jar(
+  name = 'guice',
+  binary_jar = 'java/lib/guice-3.0.jar',
+)
+
+prebuilt_jar(
+  name = 'guice-assistedinject',
+  binary_jar = 'java/lib/guice-assistedinject-3.0.jar',
+)
+
+prebuilt_jar(
+  name = 'guice-multibindings',
+  binary_jar = 'java/lib/guice-multibindings-3.0.jar',
+)
+
+prebuilt_jar(
+  name = 'icu4j',
+  binary_jar = 'java/lib/icu4j-4_8_1_1.jar',
+)
+
+prebuilt_jar(
+  name = 'jsr305',
+  binary_jar = 'java/lib/jsr305.jar',
+)
+
+prebuilt_jar(
+  name = 'jsr330',
+  binary_jar = 'java/lib/javax.inject.jar',
+)
+
+prebuilt_jar(
+  name = 'objenesis',
+  binary_jar = 'java/lib/objenesis-1_2.jar',
+)
