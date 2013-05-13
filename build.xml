@@ -1,7 +1,5 @@
 <project name="plovr" basedir="." default="build">
 
-  <property environment="env" />
-
   <property file="${basedir}/build.properties" />
   <property file="${basedir}/default.build.properties" />
 
@@ -79,7 +77,6 @@
   <target name="compile" depends="pre-compile" description="compile Java source code">
     <mkdir dir="${classes.dir}" />
     <javac destdir="${classes.dir}"
-           bootclasspath="${env.JAVA7_HOME}/jre/lib/rt.jar"
            classpathref="plovr.classpath"
            debug="on"
            deprecation="on"

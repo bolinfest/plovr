@@ -5,6 +5,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URL;
 
+import javax.annotation.Nullable;
 import javax.script.Bindings;
 import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
@@ -64,6 +65,8 @@ abstract class AbstractJavaScriptBasedCompiler<T extends Exception> {
           localBindings, sourceCode, sourceName);
 
       Object result = engine.eval(js);
+      String errorMessage;
+
       // Return the appropriate value depending on the type of result.
       if (result == null) {
         String compilerName = this.getClass().getSimpleName();
@@ -73,10 +76,8 @@ abstract class AbstractJavaScriptBasedCompiler<T extends Exception> {
         // This is the expected case: source code was successfully
         // translated to JavaScript.
         return (String)result;
-      } else if (result.getClass().getName().equals(
-          "sun.org.mozilla.javascript.internal.NativeObject")) {
-        String message = extractMessageFromMysteryResultType(result);
-        throw generateExceptionFromMessage(message);
+      } else if ((errorMessage = extractMessageFromMysteryResultType(result)) != null) {
+        throw generateExceptionFromMessage(errorMessage);
       } else {
         throw new RuntimeException("Unexpected return type: " +
             result.getClass().getName());
@@ -86,26 +87,56 @@ abstract class AbstractJavaScriptBasedCompiler<T extends Exception> {
     }
   }
 
+  @Nullable
   private static String extractMessageFromMysteryResultType(Object result) {
+    String message;
+
+    // Oracle JDK 7.
+    message = tryExtractMessageFromMysteryResultType(result,
+        "sun.org.mozilla.javascript.internal.NativeObject",
+        "sun.org.mozilla.javascript.internal.Scriptable");
+    if (message != null) {
+      return message;
+    }
+
+    // OpenJDK 7.
+    message = tryExtractMessageFromMysteryResultType(result,
+        "sun.org.mozilla.javascript.NativeObject",
+        "sun.org.mozilla.javascript.Scriptable");
+    if (message != null) {
+      return message;
+    }
+
+    return null;
+  }
+
+  @Nullable
+  private static String tryExtractMessageFromMysteryResultType(
+      Object result,
+      String resultClassName,
+      String scriptableClassName) {
+    if (!result.getClass().getName().equals(resultClassName)) {
+      return null;
+    }
+
     try {
       Method method = result.getClass().getMethod(
           "getProperty",
-          Class.forName("sun.org.mozilla.javascript.internal.Scriptable"),
+          Class.forName(scriptableClassName),
           String.class);
-      String message = method.invoke(null, result, "message").toString();
-      return message;
+      return method.invoke(null, result, "message").toString();
     } catch (NoSuchMethodException e) {
-      throw new RuntimeException(e);
+      return null;
     } catch (SecurityException e) {
-      throw new RuntimeException(e);
+      return null;
     } catch (ClassNotFoundException e) {
-      throw new RuntimeException(e);
+      return null;
     } catch (IllegalAccessException e) {
-      throw new RuntimeException(e);
+      return null;
     } catch (IllegalArgumentException e) {
-      throw new RuntimeException(e);
+      return null;
     } catch (InvocationTargetException e) {
-      throw new RuntimeException(e);
+      return null;
     }
   }
 
