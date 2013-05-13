@@ -144,25 +144,29 @@ public class ModificationVisitor implements Visitor<JSType> {
 
   @Override
   public JSType caseObjectType(ObjectType objType) {
-    if (objType.isTemplatized()) {
-      ImmutableList.Builder<JSType> builder = ImmutableList.builder();
-      for (JSType templatizedType : objType.getTemplatizedTypes()) {
-        builder.add(templatizedType.visit(this));
-      }
-      return registry.createTemplatizedType(objType, builder.build());
-    } else {
-      return objType;
-    }
+    return objType;
   }
 
   @Override
-  public JSType caseParameterizedType(ParameterizedType type) {
-    ObjectType genericType = ObjectType.cast(
-        type.getReferencedTypeInternal().visit(this));
-    JSType paramType = type.getParameterType().visit(this);
-    if (type.getReferencedTypeInternal() != genericType
-        || type.getParameterType() != paramType) {
-      type = registry.createParameterizedType(genericType, paramType);
+  public JSType caseTemplatizedType(TemplatizedType type) {
+    boolean changed = false;
+    ObjectType beforeBaseType = type.getReferencedType();
+    ObjectType afterBaseType = ObjectType.cast(beforeBaseType.visit(this));
+    if (beforeBaseType != afterBaseType) {
+      changed = true;
+    }
+
+    ImmutableList.Builder<JSType> builder = ImmutableList.builder();
+    for (JSType beforeTemplateType : type.getTemplateTypes()) {
+      JSType afterTemplateType = beforeTemplateType.visit(this);
+      if (beforeTemplateType != afterTemplateType) {
+        changed = true;
+      }
+      builder.add(afterTemplateType);
+    }
+
+    if (changed) {
+      type = registry.createTemplatizedType(afterBaseType, builder.build());
     }
     return type;
   }

@@ -39,6 +39,7 @@
 
 package com.google.javascript.rhino.jstype;
 
+import com.google.common.collect.ImmutableList;
 import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
@@ -49,7 +50,7 @@ import java.util.Collections;
  * An object type which uses composition to delegate all calls.
  *
  * @see NamedType
- * @see ParameterizedType
+ * @see TemplatizedType
  *
  */
 class ProxyObjectType extends ObjectType {
@@ -59,7 +60,12 @@ class ProxyObjectType extends ObjectType {
   private ObjectType referencedObjType;
 
   ProxyObjectType(JSTypeRegistry registry, JSType referencedType) {
-    super(registry);
+    this(registry, referencedType, null);
+  }
+
+  ProxyObjectType(JSTypeRegistry registry, JSType referencedType,
+                  TemplateTypeMap templateTypeMap) {
+    super(registry, templateTypeMap);
     setReferencedType(referencedType);
   }
 
@@ -302,15 +308,9 @@ class ProxyObjectType extends ObjectType {
   }
 
   @Override
-  public JSType getParameterType() {
+  public ImmutableList<JSType> getTemplateTypes() {
     return referencedObjType == null ? null :
-        referencedObjType.getParameterType();
-  }
-
-  @Override
-  public JSType getIndexType() {
-    return referencedObjType == null ? null :
-        referencedObjType.getIndexType();
+        referencedObjType.getTemplateTypes();
   }
 
   @Override
@@ -355,8 +355,8 @@ class ProxyObjectType extends ObjectType {
   }
 
   @Override
-  public ParameterizedType toMaybeParameterizedType() {
-    return referencedType.toMaybeParameterizedType();
+  public TemplatizedType toMaybeTemplatizedType() {
+    return referencedType.toMaybeTemplatizedType();
   }
 
   @Override
@@ -367,5 +367,10 @@ class ProxyObjectType extends ObjectType {
   @Override
   public boolean hasAnyTemplateTypesInternal() {
     return referencedType.hasAnyTemplateTypes();
+  }
+
+  @Override
+  public TemplateTypeMap getTemplateTypeMap() {
+    return referencedType.getTemplateTypeMap();
   }
 }

@@ -88,9 +88,8 @@ public abstract class ObjectType extends JSType implements StaticScope<JSType> {
     super(registry);
   }
 
-  ObjectType(JSTypeRegistry registry, ImmutableList<String> templateKeys,
-      ImmutableList<JSType> templatizedTypes) {
-    super(registry, templateKeys, templatizedTypes);
+  ObjectType(JSTypeRegistry registry, TemplateTypeMap templateTypeMap) {
+    super(registry, templateTypeMap);
   }
 
   @Override
@@ -129,17 +128,9 @@ public abstract class ObjectType extends JSType implements StaticScope<JSType> {
 
   /**
    * Gets the declared default element type.
-   * @see ParameterizedType
+   * @see TemplatizedType
    */
-  public JSType getParameterType() {
-    return null;
-  }
-
-  /**
-   * Gets the declared default index type.
-   * @see IndexedType
-   */
-  public JSType getIndexType() {
+  public ImmutableList<JSType> getTemplateTypes() {
     return null;
   }
 

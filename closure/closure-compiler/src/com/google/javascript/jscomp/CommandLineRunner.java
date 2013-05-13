@@ -366,6 +366,12 @@ public class CommandLineRunner extends
         + "jQuery.fn and jQuery.extend()")
     private boolean process_jquery_primitives = false;
 
+    @Option(name = "--angular_pass",
+        handler = BooleanOptionHandler.class,
+        usage = "Generate $inject properties for AngularJS for functions "
+        + "annotated with @ngInject")
+    private boolean angular_pass = false;
+
     @Option(name = "--output_manifest",
         usage = "Prints out a list of all the files in the compilation. "
         + "If --manage_closure_dependencies is on, this will not include "
@@ -412,6 +418,10 @@ public class CommandLineRunner extends
             "of the form\n" +
             "<file-name>:<line-number>?  <warning-description>")
     private String warnings_whitelist_file = "";
+
+    @Option(name = "--extra_annotation_name",
+        usage = "A whitelist of tag names in JSDoc. You may specify multiple")
+    private List<String> extra_annotation_name = Lists.newArrayList();
 
     @Argument
     private List<String> arguments = Lists.newArrayList();
@@ -762,6 +772,8 @@ public class CommandLineRunner extends
       options.setCodingConvention(new ClosureCodingConvention());
     }
 
+    options.setExtraAnnotationNames(flags.extra_annotation_name);
+
     CompilationLevel level = flags.compilation_level;
     level.setOptionsForCompilationLevel(options);
 
@@ -787,6 +799,8 @@ public class CommandLineRunner extends
 
     options.jqueryPass = flags.process_jquery_primitives &&
         CompilationLevel.ADVANCED_OPTIMIZATIONS == level;
+
+    options.angularPass = flags.angular_pass;
 
     if (!flags.translationsFile.isEmpty()) {
       try {

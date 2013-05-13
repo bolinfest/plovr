@@ -76,7 +76,7 @@ public class DiagnosticGroups {
   // If a group is suppressible on a per-file basis, it should be added
   // to parser/ParserConfig.properties
   static final String DIAGNOSTIC_GROUP_NAMES =
-      "accessControls, ambiguousFunctionDecl, cast, checkRegExp, " +
+      "accessControls, ambiguousFunctionDecl, checkRegExp, " +
       "checkTypes, checkVars, const, constantProperty, deprecated, " +
       "duplicateMessage, " +
       "es5Strict, externsValidation, fileoverviewTags, globalThis, " +
@@ -144,7 +144,8 @@ public class DiagnosticGroups {
 
   public static final DiagnosticGroup AMBIGUOUS_FUNCTION_DECL =
       DiagnosticGroups.registerGroup("ambiguousFunctionDecl",
-          VariableReferenceCheck.AMBIGUOUS_FUNCTION_DECL);
+          VariableReferenceCheck.AMBIGUOUS_FUNCTION_DECL,
+          StrictModeCheck.BAD_FUNCTION_DECLARATION);
 
   public static final DiagnosticGroup UNKNOWN_DEFINES =
       DiagnosticGroups.registerGroup("unknownDefines",
@@ -186,6 +187,10 @@ public class DiagnosticGroups {
           TypeValidator.ALL_DIAGNOSTICS,
           TypeCheck.ALL_DIAGNOSTICS);
 
+  public static final DiagnosticGroup CHECK_STRUCT_DICT_INHERITENCE =
+      DiagnosticGroups.registerGroup("checkStructDictInheritence",
+          TypeCheck.CONFLICTING_SHAPE_TYPE);
+
   public static final DiagnosticGroup CHECK_VARIABLES =
       DiagnosticGroups.registerGroup("checkVars",
           VarCheck.UNDEFINED_VAR_ERROR,
@@ -204,7 +209,8 @@ public class DiagnosticGroups {
 
   public static final DiagnosticGroup TYPE_INVALIDATION =
       DiagnosticGroups.registerGroup("typeInvalidation",
-          DisambiguateProperties.Warnings.INVALIDATION);
+          DisambiguateProperties.Warnings.INVALIDATION,
+          DisambiguateProperties.Warnings.INVALIDATION_ON_TYPE);
 
   public static final DiagnosticGroup DUPLICATE_VARS =
       DiagnosticGroups.registerGroup("duplicate",
@@ -220,7 +226,8 @@ public class DiagnosticGroups {
           StrictModeCheck.ARGUMENTS_DECLARATION,
           StrictModeCheck.ARGUMENTS_ASSIGNMENT,
           StrictModeCheck.DELETE_VARIABLE,
-          StrictModeCheck.DUPLICATE_OBJECT_KEY);
+          StrictModeCheck.DUPLICATE_OBJECT_KEY,
+          StrictModeCheck.BAD_FUNCTION_DECLARATION);
 
   public static final DiagnosticGroup CHECK_PROVIDES =
       DiagnosticGroups.registerGroup("checkProvides",
@@ -233,10 +240,6 @@ public class DiagnosticGroups {
   public static final DiagnosticGroup MISPLACED_TYPE_ANNOTATION =
       DiagnosticGroups.registerGroup("misplacedTypeAnnotation",
           RhinoErrorReporter.MISPLACED_TYPE_ANNOTATION);
-
-  public static final DiagnosticGroup CAST =
-      DiagnosticGroups.registerGroup("cast",
-          TypeValidator.INVALID_CAST);
 
   public static final DiagnosticGroup SUSPICIOUS_CODE =
       DiagnosticGroups.registerGroup("suspiciousCode",

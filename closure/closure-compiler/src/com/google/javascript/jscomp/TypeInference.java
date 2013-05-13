@@ -26,6 +26,8 @@ import static com.google.javascript.rhino.jstype.JSTypeNative.NUMBER_VALUE_OR_OB
 import static com.google.javascript.rhino.jstype.JSTypeNative.STRING_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.UNKNOWN_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.VOID_TYPE;
+import static com.google.javascript.rhino.jstype.JSTypeRegistry.OBJECT_ELEMENT_TEMPLATE;
+import static com.google.javascript.rhino.jstype.JSTypeRegistry.OBJECT_INDEX_TEMPLATE;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
@@ -46,7 +48,7 @@ import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ModificationVisitor;
 import com.google.javascript.rhino.jstype.ObjectType;
-import com.google.javascript.rhino.jstype.ParameterizedType;
+import com.google.javascript.rhino.jstype.TemplateTypeMap;
 import com.google.javascript.rhino.jstype.StaticSlot;
 import com.google.javascript.rhino.jstype.TemplateType;
 import com.google.javascript.rhino.jstype.UnionType;
@@ -192,7 +194,7 @@ class TypeInference
     // NOTE(nicksantos): Right now, we just treat ON_EX edges like UNCOND
     // edges. If we wanted to be perfect, we'd actually JOIN all the out
     // lattices of this flow with the in lattice, and then make that the out
-    // lattice for the ON_EX edge. But it's probably to expensive to be
+    // lattice for the ON_EX edge. But it's probably too expensive to be
     // worthwhile.
     FlowScope output = flowThrough(source, input);
     Node condition = null;
@@ -221,7 +223,7 @@ class TypeInference
               JSType iterKeyType = getNativeType(STRING_TYPE);
               ObjectType objType = getJSType(obj).dereference();
               JSType objIndexType = objType == null ?
-                  null : objType.getIndexType();
+                  null : objType.getTemplateTypeMap().getTemplateType(OBJECT_INDEX_TEMPLATE);
               if (objIndexType != null && !objIndexType.isUnknownType()) {
                 JSType narrowedKeyType =
                     iterKeyType.getGreatestSubtype(objIndexType);
@@ -497,7 +499,6 @@ class TypeInference
    */
   private FlowScope traverseCatch(Node catchNode, FlowScope scope) {
     Node name = catchNode.getFirstChild();
-    String varName = name.getString();
     JSType type;
     // If the catch expression name was declared in the catch use that type,
     // otherwise use "unknown".
@@ -758,7 +759,6 @@ class TypeInference
         NodeUtil.getBestLValue(n));
     for (Node name = n.getFirstChild(); name != null;
          name = name.getNext()) {
-      Node value = name.getFirstChild();
       String memberName = NodeUtil.getObjectLitKeyName(name);
       if (memberName != null) {
         JSType rawValueType =  name.getFirstChild().getJSType();
@@ -966,14 +966,14 @@ class TypeInference
       fnType = n.getFirstChild().getJSType().toMaybeFunctionType();
     }
     updateTypeOfParameters(n, fnType);
-    updateBind(n, fnType);
+    updateBind(n);
   }
 
   /**
    * When "bind" is called on a function, we infer the type of the returned
    * "bound" function by looking at the number of parameters in the call site.
    */
-  private void updateBind(Node n, FunctionType fnType) {
+  private void updateBind(Node n) {
     CodingConvention.Bind bind =
         compiler.getCodingConvention().describeFunctionBind(n, true);
     if (bind == null) {
@@ -1029,7 +1029,7 @@ class TypeInference
 
   private Map<TemplateType, JSType> inferTemplateTypesFromParameters(
       FunctionType fnType, Node call) {
-    if (fnType.getTemplateKeys().isEmpty()) {
+    if (fnType.getTemplateTypeMap().getTemplateKeys().isEmpty()) {
       return Collections.emptyMap();
     }
 
@@ -1087,21 +1087,25 @@ class TypeInference
             paramFunctionType.getParameters(),
             argFunctionType.getParameters(), resolvedTypes);
       }
-    } else if (paramType.isParameterizedType()) {
-      ParameterizedType paramObjectType = paramType.toMaybeParameterizedType();
-      JSType typeParameter = paramObjectType.getParameterType();
-      Preconditions.checkNotNull(typeParameter);
-      if (typeParameter != null) {
-        // @param {Array.<T>}
-        ObjectType argObjectType = argType
-            .restrictByNotNullOrUndefined()
-            .collapseUnion()
-            .toMaybeParameterizedType();
-        if (argObjectType != null && argObjectType.isSubtype(paramType)) {
-          JSType argTypeParameter = argObjectType.getParameterType();
-          Preconditions.checkNotNull(argTypeParameter);
+    } else if (paramType.isTemplatizedType()) {
+      // @param {Array.<T>}
+      ObjectType referencedParamType = paramType
+          .toMaybeTemplatizedType()
+          .getReferencedType();
+      JSType argObjectType = argType
+          .restrictByNotNullOrUndefined()
+          .collapseUnion();
+
+      if (argObjectType.isSubtype(referencedParamType)) {
+        // If the argument type is a subtype of the parameter type, resolve any
+        // template types amongst their templatized types.
+        TemplateTypeMap paramTypeMap = paramType.getTemplateTypeMap();
+        TemplateTypeMap argTypeMap = argObjectType.getTemplateTypeMap();
+        for (String key : paramTypeMap.getTemplateKeys()) {
           maybeResolveTemplatedType(
-              typeParameter, argTypeParameter, resolvedTypes);
+              paramTypeMap.getTemplateType(key),
+              argTypeMap.getTemplateType(key),
+              resolvedTypes);
         }
       }
     }
@@ -1177,7 +1181,7 @@ class TypeInference
    */
   private boolean inferTemplatedTypesForCall(
       Node n, FunctionType fnType) {
-    if (fnType.getTemplateKeys().isEmpty()) {
+    if (fnType.getTemplateTypeMap().getTemplateKeys().isEmpty()) {
       return false;
     }
 
@@ -1242,13 +1246,10 @@ class TypeInference
 
   private FlowScope traverseGetElem(Node n, FlowScope scope) {
     scope = traverseChildren(n, scope);
-    ObjectType objType = ObjectType.cast(
-        getJSType(n.getFirstChild()).restrictByNotNullOrUndefined());
-    if (objType != null) {
-      JSType type = objType.getParameterType();
-      if (type != null) {
-        n.setJSType(type);
-      }
+    JSType type = getJSType(n.getFirstChild()).restrictByNotNullOrUndefined();
+    TemplateTypeMap typeMap = type.getTemplateTypeMap();
+    if (typeMap.hasTemplateType(OBJECT_ELEMENT_TEMPLATE)) {
+      n.setJSType(typeMap.getTemplateType(OBJECT_ELEMENT_TEMPLATE));
     }
     return dereferencePointer(n.getFirstChild(), scope);
   }

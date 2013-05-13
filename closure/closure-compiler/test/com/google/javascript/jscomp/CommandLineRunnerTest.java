@@ -127,6 +127,15 @@ public class CommandLineRunnerTest extends TestCase {
     super.tearDown();
   }
 
+  public void testUnknownAnnotation() {
+    args.add("--warning_level=VERBOSE");
+    test("/** @unknownTag */ function f() {}",
+         RhinoErrorReporter.BAD_JSDOC_ANNOTATION);
+
+    args.add("--extra_annotation_name=unknownTag");
+    testSame("/** @unknownTag */ function f() {}");
+  }
+
   public void testWarningGuardOrdering1() {
     args.add("--jscomp_error=globalThis");
     args.add("--jscomp_off=globalThis");
@@ -149,6 +158,16 @@ public class CommandLineRunnerTest extends TestCase {
     args.add("--jscomp_off=globalThis");
     args.add("--jscomp_warning=globalThis");
     test("function f() { this.a = 3; }", CheckGlobalThis.GLOBAL_THIS);
+  }
+
+  public void testSimpleModeLeavesUnusedParams() {
+    args.add("--compilation_level=SIMPLE_OPTIMIZATIONS");
+    testSame("window.f = function(a) {};");
+  }
+
+  public void testAdvancedModeRemovesUnusedParams() {
+    args.add("--compilation_level=ADVANCED_OPTIMIZATIONS");
+    test("window.f = function(a) {};", "window.a = function() {};");
   }
 
   public void testCheckGlobalThisOffByDefault() {
@@ -464,7 +483,7 @@ public class CommandLineRunnerTest extends TestCase {
     args.add("--compilation_level=SIMPLE_OPTIMIZATIONS");
     args.add("--debug=false");
     test("function foo(a) {}",
-         "function foo() {}");
+         "function foo(a) {}");
   }
 
   public void testDebugFlag2() {
@@ -747,7 +766,7 @@ public class CommandLineRunnerTest extends TestCase {
           "goog.provide('Scotch'); var x = 3;"
          },
          new String[] {
-           "var beer = {}; function f() {}",
+           "var beer = {}; function f(a) {}",
            ""
          });
 
@@ -756,7 +775,7 @@ public class CommandLineRunnerTest extends TestCase {
           "goog.provide('beer'); /** @param {Scotch} x */ function f(x) {}"
          },
          new String[] {
-           "var beer = {}; function f() {}",
+           "var beer = {}; function f(a) {}",
            ""
          },
          RhinoErrorReporter.TYPE_PARSE_ERROR);
@@ -918,8 +937,7 @@ public class CommandLineRunnerTest extends TestCase {
         "var x = 3;", "var y = 5;", "var z = 7;", "var a = 9;"});
 
     StringBuilder builder = new StringBuilder();
-    lastCommandLineRunner.printModuleGraphJsonTo(
-        lastCompiler.getModuleGraph(), builder);
+    lastCommandLineRunner.printModuleGraphJsonTo(builder);
     assertTrue(builder.toString().indexOf("transitive-dependencies") != -1);
   }
 

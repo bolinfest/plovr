@@ -229,6 +229,16 @@ public final class JsDocInfoParser {
               jsdocBuilder.markAnnotation(annotationName, lineno, charno);
 
               switch (annotation) {
+                case NG_INJECT:
+                  if (jsdocBuilder.isNgInjectRecorded()) {
+                    parser.addParserWarning("msg.jsdoc.nginject.extra",
+                      stream.getLineno(), stream.getCharno());
+                  } else {
+                    jsdocBuilder.recordNgInject(true);
+                  }
+                  token = eatTokensUntilEOL();
+                  continue retry;
+
                 case AUTHOR:
                   if (jsdocBuilder.shouldParseDocumentation()) {
                     ExtractionInfo authorInfo = extractSingleLineBlock();

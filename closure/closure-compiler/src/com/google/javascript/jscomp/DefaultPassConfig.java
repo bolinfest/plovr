@@ -205,6 +205,10 @@ public class DefaultPassConfig extends PassConfig {
       checks.add(jqueryAliases);
     }
 
+    if (options.angularPass) {
+      checks.add(angularPass);
+    }
+
     checks.add(checkSideEffects);
 
     if (options.checkSuspiciousCode ||
@@ -935,6 +939,15 @@ public class DefaultPassConfig extends PassConfig {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       return new ExpandJqueryAliases(compiler);
+    }
+  };
+
+  /** Process AngularJS-specific annotations. */
+  final PassFactory angularPass =
+      new PassFactory("angularPass", true) {
+    @Override
+    protected CompilerPass create(AbstractCompiler compiler) {
+      return new AngularPass(compiler);
     }
   };
 
@@ -1760,7 +1773,7 @@ public class DefaultPassConfig extends PassConfig {
           enableBlockInlining,
           options.assumeStrictThis()
               || options.getLanguageIn() == LanguageMode.ECMASCRIPT5_STRICT,
-          true /* assumeMinimumCapture */);
+          options.assumeClosuresOnlyCaptureReferences);
     }
   };
 

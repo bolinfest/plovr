@@ -1,5 +1,5 @@
 /*
- * Copyright 2008 Google Inc.
+ * Copyright 2008 Closure Compiler Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -120,6 +120,10 @@ var sun;
 // NOTE(user): Added 8-30-2012.  We may want to remove this once Norton
 // Identity Protection has been fixed and pushed to most people.
 var o;
+
+// Used by extensions as $j = jQuery.noConflict();. This overwrites whatever's
+// stored in the variable '$j' with a function.
+var $j;
 
 /**
  * @see https://developer.mozilla.org/en/DOM/window.alert

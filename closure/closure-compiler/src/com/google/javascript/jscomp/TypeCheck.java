@@ -29,7 +29,6 @@ import static com.google.javascript.rhino.jstype.JSTypeNative.VOID_TYPE;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
-import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.type.ReverseAbstractInterpreter;
 import com.google.javascript.rhino.JSDocInfo;
@@ -154,6 +153,11 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
           "JSC_INTERFACE_FUNCTION_NOT_EMPTY",
           "interface member functions must have an empty body");
 
+  static final DiagnosticType CONFLICTING_SHAPE_TYPE =
+      DiagnosticType.warning(
+          "JSC_CONFLICTING_SHAPE_TYPE",
+          "{1} cannot extend this type; {0}s can only extend {0}s");
+
   static final DiagnosticType CONFLICTING_EXTENDED_TYPE =
       DiagnosticType.warning(
           "JSC_CONFLICTING_EXTENDED_TYPE",
@@ -259,6 +263,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       ENUM_NOT_CONSTANT,
       INVALID_INTERFACE_MEMBER_DECLARATION,
       INTERFACE_FUNCTION_NOT_EMPTY,
+      CONFLICTING_SHAPE_TYPE,
       CONFLICTING_EXTENDED_TYPE,
       CONFLICTING_IMPLEMENTED_TYPE,
       BAD_IMPLEMENTED_TYPE,
@@ -927,7 +932,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
             // Only assign structs to the prototype of a @struct constructor
             if (functionType.makesStructs() && !rvalueType.isStruct()) {
               String funName = functionType.getTypeOfThis().toString();
-              compiler.report(t.makeError(assign, CONFLICTING_EXTENDED_TYPE,
+              compiler.report(t.makeError(assign, CONFLICTING_SHAPE_TYPE,
                                           "struct", funName));
             }
             return;
@@ -970,7 +975,6 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     JSType leftType = getJSType(lvalue);
     if (lvalue.isQualifiedName()) {
       // variable with inferred type case
-      JSType rvalueType = getJSType(assign.getLastChild());
       Var var = t.getScope().getVar(lvalue.getQualifiedName());
       if (var != null) {
         if (var.isTypeInferred()) {
@@ -1000,19 +1004,41 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
     }
   }
 
-  /** Check that we don't create new properties on structs. */
+  /**
+   * After a struct object is created, we can't add new properties to it, with
+   * one exception. We allow creation of "static" properties like
+   * Foo.prototype.bar = baz;
+   * where Foo.prototype is a struct, if the assignment happens at the top level
+   * and the constructor Foo is defined in the same file.
+   */
   private void checkPropCreation(NodeTraversal t, Node lvalue) {
     if (lvalue.isGetProp()) {
       Node obj = lvalue.getFirstChild();
       Node prop = lvalue.getLastChild();
       JSType objType = getJSType(obj);
       String pname = prop.getString();
-      if (objType.isStruct() && !objType.hasProperty(pname)) {
-        if (!(obj.isThis() &&
-              getJSType(t.getScope().getRootNode()).isConstructor())) {
-          report(t, prop, ILLEGAL_PROPERTY_CREATION);
+
+      if (!objType.isStruct() || objType.hasProperty(pname)) {
+        return;
+      }
+      Scope s = t.getScope();
+      if (obj.isThis() && getJSType(s.getRootNode()).isConstructor()) {
+        return;
+      }
+      // Prop created outside ctor, check that it's a static prop
+      Node assgnStm = lvalue.getParent().getParent();
+      if (objType instanceof ObjectType &&
+          s.isGlobal() &&
+          NodeUtil.isPrototypePropertyDeclaration(assgnStm)) {
+        ObjectType instance =
+            objType.toObjectType().getOwnerFunction().getInstanceType();
+        String file = lvalue.getSourceFileName();
+        Node ctor = instance.getConstructor().getSource();
+        if (ctor != null && ctor.getSourceFileName().equals(file)) {
+          return;
         }
       }
+      report(t, prop, ILLEGAL_PROPERTY_CREATION);
     }
   }
 
@@ -1476,6 +1502,9 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
       case Token.NOT:
         return parent.getParent().isOr() &&
             parent.getParent().getFirstChild() == parent;
+
+      case Token.CAST:
+        return isPropertyTest(parent);
     }
     return false;
   }
@@ -1617,10 +1646,10 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
         if (baseConstructor != getNativeType(OBJECT_FUNCTION_TYPE)) {
           ObjectType proto = functionType.getPrototype();
           if (functionType.makesStructs() && !proto.isStruct()) {
-            compiler.report(t.makeError(n, CONFLICTING_EXTENDED_TYPE,
+            compiler.report(t.makeError(n, CONFLICTING_SHAPE_TYPE,
                                         "struct", functionPrivateName));
           } else if (functionType.makesDicts() && !proto.isDict()) {
-            compiler.report(t.makeError(n, CONFLICTING_EXTENDED_TYPE,
+            compiler.report(t.makeError(n, CONFLICTING_SHAPE_TYPE,
                                         "dict", functionPrivateName));
           }
         }
@@ -1697,7 +1726,7 @@ public class TypeCheck implements NodeTraversal.Callback, CompilerPass {
 
       boolean isExtern = false;
       JSDocInfo functionJSDocInfo = functionType.getJSDocInfo();
-      if( functionJSDocInfo != null  &&
+      if (functionJSDocInfo != null  &&
           functionJSDocInfo.getAssociatedNode() != null) {
         isExtern = functionJSDocInfo.getAssociatedNode().isFromExterns();
       }

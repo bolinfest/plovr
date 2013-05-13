@@ -364,19 +364,6 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "/** @constructor */ function Baz() {}\n"
         + "Baz.prototype.a = 0;\n"
         + "Baz.prototype.b = 0;\n";
-    String output = ""
-        + "function Foo(){}"
-        + "Foo.prototype.Bar_prototype$a=0;"
-        + "Foo.prototype.Bar_prototype$b=0;"
-        + "function Bar(){}"
-        + "Bar.prototype.Bar_prototype$a=0;"
-        + "Bar.prototype.Bar_prototype$b=0;"
-        + "var B=new Bar;"
-        + "B.Bar_prototype$a=0;"
-        + "B.Bar_prototype$b=0;"
-        + "function Baz(){}"
-        + "Baz.prototype.a$Baz_prototype=0;"
-        + "Baz.prototype.b$Baz_prototype=0;";
     testSets(false, js, "{a=[[Bar.prototype, Foo.prototype], [Baz.prototype]],"
                  + " b=[[Bar.prototype, Foo.prototype], [Baz.prototype]]}");
     testSets(true, js, "{a=[[Bar.prototype, Foo.prototype], [Baz.prototype]],"
@@ -1301,6 +1288,31 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
     assertTrue(getLastCompiler().getErrors()[0].toString()
         .contains("Consider fixing errors"));
   }
+
+  public void testUnionTypeInvalidationError() {
+    String externs = ""
+        + "/** @constructor */ function Baz() {}"
+        + "Baz.prototype.foobar";
+    String js = ""
+        + "/** @constructor */ function Ind() {this.foobar=0}\n"
+        + "/** @constructor */ function Foo() {}\n"
+        + "Foo.prototype.foobar = 0;\n"
+        + "/** @constructor */ function Bar() {}\n"
+        + "Bar.prototype.foobar = 0;\n"
+        + "/** @type {Foo|Bar} */\n"
+        + "var F = new Foo;\n"
+        + "F.foobar = 1\n;"
+        + "F = new Bar;\n"
+        + "/** @type {Baz} */\n"
+        + "var Z = new Baz;\n"
+        + "Z.foobar = 1\n;";
+
+    test(
+        externs, js, "",
+        DisambiguateProperties.Warnings.INVALIDATION_ON_TYPE, null);
+    assertTrue(getLastCompiler().getErrors()[0].toString()
+        .contains("foobar"));
+   }
 
   public void runFindHighestTypeInChain() {
     // Check that this doesn't go into an infinite loop.

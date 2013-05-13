@@ -92,6 +92,9 @@ public class Compiler extends AbstractCompiler {
       "JSC_MISSING_ENTRY_ERROR",
       "required entry point \"{0}\" never provided");
 
+  // Used in PerformanceTracker
+  static final String PARSING_PASS_NAME = "parseInputs";
+
   private static final String CONFIG_RESOURCE =
       "com.google.javascript.jscomp.parsing.ParserConfig";
 
@@ -808,6 +811,9 @@ public class Compiler extends AbstractCompiler {
     if (options.devMode == DevMode.EVERY_PASS) {
       phaseOptimizer.setSanityCheck(sanityCheck);
     }
+    if (options.getCheckDeterminism()) {
+      phaseOptimizer.setPrintAstHashcodes(true);
+    }
     phaseOptimizer.consume(getPassConfig().getChecks());
     phaseOptimizer.process(externsRoot, jsRoot);
     if (hasErrors()) {
@@ -933,7 +939,6 @@ public class Compiler extends AbstractCompiler {
     Preconditions.checkState(currentTracer != null,
         "Tracer should not be null at the end of a pass.");
     stopTracer(currentTracer, currentPassName);
-    String passToCheck = currentPassName;
     currentPassName = null;
     currentTracer = null;
 
@@ -947,7 +952,7 @@ public class Compiler extends AbstractCompiler {
     String comment = passName
         + (recentChange.hasCodeChanged() ? " on recently changed AST" : "");
     if (options.tracer.isOn()) {
-      tracker.recordPassStart(passName);
+      tracker.recordPassStart(passName, true);
     }
     return new Tracer("Compiler", comment);
   }
@@ -1306,7 +1311,7 @@ public class Compiler extends AbstractCompiler {
       addChangeHandler(tracker.getCodeChangeHandler());
     }
 
-    Tracer tracer = newTracer("parseInputs");
+    Tracer tracer = newTracer(PARSING_PASS_NAME);
 
     try {
       // Parse externs sources.
@@ -1399,7 +1404,7 @@ public class Compiler extends AbstractCompiler {
       }
       return externAndJsRoot;
     } finally {
-      stopTracer(tracer, "parseInputs");
+      stopTracer(tracer, PARSING_PASS_NAME);
     }
   }
 
@@ -1887,6 +1892,9 @@ public class Compiler extends AbstractCompiler {
     PhaseOptimizer phaseOptimizer = new PhaseOptimizer(this, tracker, null);
     if (options.devMode == DevMode.EVERY_PASS) {
       phaseOptimizer.setSanityCheck(sanityCheck);
+    }
+    if (options.getCheckDeterminism()) {
+      phaseOptimizer.setPrintAstHashcodes(true);
     }
     phaseOptimizer.consume(getPassConfig().getOptimizations());
     phaseOptimizer.process(externsRoot, jsRoot);

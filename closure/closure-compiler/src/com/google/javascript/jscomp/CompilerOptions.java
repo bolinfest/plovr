@@ -17,6 +17,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
@@ -115,6 +116,12 @@ public class CompilerOptions implements Serializable, Cloneable {
    * every pass. Only intended for internal development.
    */
   DevMode devMode;
+
+  /**
+   * Configures the compiler to log a hash code of the AST after
+   * every pass. Only intended for internal development.
+   */
+  private boolean checkDeterminism;
 
   //--------------------------------
   // Input Options
@@ -265,6 +272,9 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   /** Inlines functions defined in local scopes */
   public boolean inlineLocalFunctions;
+
+  /** More aggressive function inlining */
+  boolean assumeClosuresOnlyCaptureReferences;
 
   /** Inlines properties */
   boolean inlineProperties;
@@ -582,6 +592,9 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Processes jQuery aliases */
   public boolean jqueryPass;
 
+  /** Processes AngularJS-specific annotations */
+  boolean angularPass;
+
   /** Remove goog.abstractMethod assignments. */
   boolean removeAbstractMethods;
 
@@ -849,6 +862,7 @@ public class CompilerOptions implements Serializable, Cloneable {
     skipAllPasses = false;
     nameAnonymousFunctionsOnly = false;
     devMode = DevMode.OFF;
+    checkDeterminism = false;
     checkSymbols = false;
     aggressiveVarCheck = CheckLevel.OFF;
     checkSuspiciousCode = false;
@@ -879,6 +893,7 @@ public class CompilerOptions implements Serializable, Cloneable {
     inlineFunctions = false;
     inlineLocalFunctions = false;
     assumeStrictThis = false;
+    assumeClosuresOnlyCaptureReferences = false;
     inlineProperties = false;
     crossModuleCodeMotion = false;
     crossModuleMethodMotion = false;
@@ -935,6 +950,7 @@ public class CompilerOptions implements Serializable, Cloneable {
     removeTryCatchFinally = false;
     closurePass = false;
     jqueryPass = false;
+    angularPass = false;
     removeAbstractMethods = true;
     removeClosureAsserts = false;
     stripTypes = Collections.emptySet();
@@ -1361,6 +1377,10 @@ public class CompilerOptions implements Serializable, Cloneable {
     this.generateExports = generateExports;
   }
 
+  public void setAngularPass(boolean angularPass) {
+    this.angularPass = angularPass;
+  }
+
   public void setCodingConvention(CodingConvention codingConvention) {
     this.codingConvention = codingConvention;
   }
@@ -1425,8 +1445,8 @@ public class CompilerOptions implements Serializable, Cloneable {
     this.externExports = enabled;
   }
 
-  public void setExtraAnnotationNames(Set<String> extraAnnotationNames) {
-    this.extraAnnotationNames = Sets.newHashSet(extraAnnotationNames);
+  public void setExtraAnnotationNames(Iterable<String> extraAnnotationNames) {
+    this.extraAnnotationNames = ImmutableSet.copyOf(extraAnnotationNames);
   }
 
   public boolean isExternExportsEnabled() {
@@ -1548,6 +1568,21 @@ public class CompilerOptions implements Serializable, Cloneable {
   }
 
   /**
+   * @return Whether assumeClosuresOnlyCaptureReferences is set.
+   */
+  public boolean assumeClosuresOnlyCaptureReferences() {
+    return assumeClosuresOnlyCaptureReferences;
+  }
+
+  /**
+   * Whether to assume closures capture only what they reference. This allows
+   * more aggressive function inlining.
+   */
+  public void setAssumeClosuresOnlyCaptureReferences(boolean enable) {
+    this.assumeClosuresOnlyCaptureReferences = enable;
+  }
+
+  /**
    * Sets the list of properties that we report property invalidation errors
    * for.
    */
@@ -1579,6 +1614,14 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   public void setDevMode(DevMode devMode) {
     this.devMode = devMode;
+  }
+
+  public void setCheckDeterminism(boolean checkDeterminism) {
+    this.checkDeterminism = checkDeterminism;
+  }
+
+  public boolean getCheckDeterminism() {
+    return checkDeterminism;
   }
 
   public void setMessageBundle(MessageBundle messageBundle) {

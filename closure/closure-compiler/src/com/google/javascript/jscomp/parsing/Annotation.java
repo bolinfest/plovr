@@ -25,6 +25,7 @@ import java.util.Map;
  * @author nicksantos@google.com (Nick Santos)
  */
 enum Annotation {
+  NG_INJECT,
   AUTHOR,
   CONSISTENTIDGENERATOR,
   CONSTANT,
@@ -77,12 +78,14 @@ enum Annotation {
 
   static final Map<String, Annotation> recognizedAnnotations =
       new ImmutableMap.Builder<String, Annotation>().
+      put("ngInject", Annotation.NG_INJECT).
       put("argument", Annotation.PARAM).
       put("author", Annotation.AUTHOR).
       put("consistentIdGenerator", Annotation.CONSISTENTIDGENERATOR).
       put("const", Annotation.CONSTANT).
       put("constant", Annotation.CONSTANT).
       put("constructor", Annotation.CONSTRUCTOR).
+      put("copyright", Annotation.LICENSE).
       put("define", Annotation.DEFINE).
       put("deprecated", Annotation.DEPRECATED).
       put("desc", Annotation.DESC).

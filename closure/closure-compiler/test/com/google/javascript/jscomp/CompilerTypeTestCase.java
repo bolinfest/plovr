@@ -76,6 +76,14 @@ abstract class CompilerTypeTestCase extends BaseJSTypeTestCase {
       "/** @constructor \n * @param {*} var_args \n @return {!Array} */" +
       "function Array(var_args) {}\n" +
       "/** @type {number} */ Array.prototype.length;\n" +
+      "/**\n" +
+      " * @param {...T} var_args\n" +
+      " * @return {number} The new length of the array.\n" +
+      " * @this {{length: number}|Array.<T>}\n" +
+      " * @template T\n" +
+      " * @modifies {this}\n" +
+      " */\n" +
+      "Array.prototype.push = function(var_args) {};" +
       "/** @constructor */\n" +
       "function Arguments() {}\n" +
       "/** @type {number} */\n" +
@@ -94,7 +102,7 @@ abstract class CompilerTypeTestCase extends BaseJSTypeTestCase {
     options.setWarningLevel(
         DiagnosticGroups.MISPLACED_TYPE_ANNOTATION, CheckLevel.WARNING);
     options.setWarningLevel(
-        DiagnosticGroups.CAST, CheckLevel.WARNING);
+        DiagnosticGroups.INVALID_CASTS, CheckLevel.WARNING);
     options.setCodingConvention(getCodingConvention());
     return options;
   }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008 Google Inc.
+ * Copyright 2008 Closure Compiler Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -725,6 +725,12 @@ DOMError.prototype.severity;
  * @see http://www.w3.org/TR/DOM-Level-3-Core/core.html#ERROR-DOMError-type
  */
 DOMError.prototype.type;
+
+/**
+ * @type {string}
+ * @see http://www.w3.org/TR/dom/#domerror
+ */
+DOMError.prototype.name;
 
 /**
  * @constructor

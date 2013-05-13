@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 Google Inc.
+ * Copyright 2011 Closure Compiler Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -187,6 +187,8 @@ webkitSpeechRecognitionError.prototype.LANGUAGE_NOT_SUPPORTED;
 /** @type {string} */
 webkitSpeechRecognitionError.prototype.message;
 
+/** @type {string} */
+webkitSpeechRecognitionError.prototype.error;
 
 /**
  * @constructor

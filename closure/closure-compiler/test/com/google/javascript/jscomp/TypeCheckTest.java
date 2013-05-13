@@ -250,7 +250,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         false);
   }
 
-  public void testParameterizedArray1() throws Exception {
+  public void testTemplatizedArray1() throws Exception {
     testTypes("/** @param {!Array.<number>} a\n" +
         "* @return {string}\n" +
         "*/ var f = function(a) { return a[0]; };",
@@ -259,7 +259,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "required: string");
   }
 
-  public void testParameterizedArray2() throws Exception {
+  public void testTemplatizedArray2() throws Exception {
     testTypes("/** @param {!Array.<!Array.<number>>} a\n" +
         "* @return {number}\n" +
         "*/ var f = function(a) { return a[0]; };",
@@ -268,13 +268,13 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "required: number");
   }
 
-  public void testParameterizedArray3() throws Exception {
+  public void testTemplatizedArray3() throws Exception {
     testTypes("/** @param {!Array.<number>} a\n" +
         "* @return {number}\n" +
         "*/ var f = function(a) { a[1] = 0; return a[0]; };");
   }
 
-  public void testParameterizedArray4() throws Exception {
+  public void testTemplatizedArray4() throws Exception {
     testTypes("/** @param {!Array.<number>} a\n" +
         "*/ var f = function(a) { a[0] = 'a'; };",
         "assignment\n" +
@@ -282,12 +282,12 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "required: number");
   }
 
-  public void testParameterizedArray5() throws Exception {
+  public void testTemplatizedArray5() throws Exception {
     testTypes("/** @param {!Array.<*>} a\n" +
         "*/ var f = function(a) { a[0] = 'a'; };");
   }
 
-  public void testParameterizedArray6() throws Exception {
+  public void testTemplatizedArray6() throws Exception {
     testTypes("/** @param {!Array.<*>} a\n" +
         "* @return {string}\n" +
         "*/ var f = function(a) { return a[0]; };",
@@ -296,7 +296,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "required: string");
   }
 
-  public void testParameterizedArray7() throws Exception {
+  public void testTemplatizedArray7() throws Exception {
     testTypes("/** @param {?Array.<number>} a\n" +
         "* @return {string}\n" +
         "*/ var f = function(a) { return a[0]; };",
@@ -305,7 +305,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "required: string");
   }
 
-  public void testParameterizedObject1() throws Exception {
+  public void testTemplatizedObject1() throws Exception {
     testTypes("/** @param {!Object.<number>} a\n" +
         "* @return {string}\n" +
         "*/ var f = function(a) { return a[0]; };",
@@ -314,7 +314,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "required: string");
   }
 
-  public void testParameterizedObject2() throws Exception {
+  public void testTemplatizedObject2() throws Exception {
     testTypes("/** @param {!Object.<string,number>} a\n" +
         "* @return {string}\n" +
         "*/ var f = function(a) { return a['x']; };",
@@ -323,7 +323,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "required: string");
   }
 
-  public void testParameterizedObject3() throws Exception {
+  public void testTemplatizedObject3() throws Exception {
     testTypes("/** @param {!Object.<number,string>} a\n" +
         "* @return {string}\n" +
         "*/ var f = function(a) { return a['x']; };",
@@ -332,7 +332,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "required: number");
   }
 
-  public void testParameterizedObject4() throws Exception {
+  public void testTemplatizedObject4() throws Exception {
     testTypes("/** @enum {string} */ var E = {A: 'a', B: 'b'};\n" +
         "/** @param {!Object.<E,string>} a\n" +
         "* @return {string}\n" +
@@ -342,7 +342,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "required: E.<string>");
   }
 
-  public void testParameterizedObject5() throws Exception {
+  public void testTemplatizedObject5() throws Exception {
     testTypes("/** @constructor */ function F() {" +
         "  /** @type {Object.<number, string>} */ this.numbers = {};" +
         "}" +
@@ -1679,6 +1679,13 @@ public class TypeCheckTest extends CompilerTypeTestCase {
             "required: number"));
   }
 
+  public void testFunctionArguments18() throws Exception {
+    testTypes(
+        "function f(x) {}" +
+        "f(/** @param {number} y */ (function() {}));",
+        "parameter y does not appear in <anonymous>'s parameter list");
+  }
+
   public void testPrintFunctionName1() throws Exception {
     // Ensures that the function name is pretty.
     testTypes(
@@ -2259,6 +2266,20 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "variable goog.foo redefined with type function (?): undefined, " +
         "original definition at [testcode]:1 with type " +
         "function (?): undefined");
+  }
+
+  public void testDuplicateStaticMethodDecl6() throws Exception {
+    // Make sure the CAST node doesn't interfere with the @suppress
+    // annotation.
+    testTypes(
+        "var goog = goog || {};" +
+        "goog.foo = function(x) {};" +
+        "/**\n" +
+        " * @suppress {duplicate}\n" +
+        " * @return {undefined}\n" +
+        " */\n" +
+        "goog.foo = " +
+        "   /** @type {!Function} */ (function(x) {});");
   }
 
   public void testDuplicateStaticPropertyDecl1() throws Exception {
@@ -4103,9 +4124,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
               "Square.prototype = /** @struct */ {\n" +
               "  area: function() { return this.side * this.side; }\n" +
               "};\n" +
-              "Square.prototype.id = function(x) { return x; };\n",
-              "Cannot add a property to a struct instance " +
-              "after it is constructed.");
+              "Square.prototype.id = function(x) { return x; };");
   }
 
   public void testSetprop11() throws Exception {
@@ -4114,11 +4133,20 @@ public class TypeCheckTest extends CompilerTypeTestCase {
               " * @struct\n" +
               " */\n" +
               "function Foo() {}\n" +
+              "/** @constructor */\n" +
               "function Bar() {}\n" +
               "Bar.prototype = new Foo();\n" +
-              "Bar.prototype.someprop = 123;\n",
-              "Cannot add a property to a struct instance " +
-              "after it is constructed.");
+              "Bar.prototype.someprop = 123;");
+  }
+
+  public void testSetprop12() throws Exception {
+    // Create property on a constructor of structs (which isn't itself a struct)
+    testTypes("/**\n" +
+              " * @constructor\n" +
+              " * @struct\n" +
+              " */\n" +
+              "function Foo() {}\n" +
+              "Foo.someprop = 123;");
   }
 
   public void testGetpropDict1() throws Exception {
@@ -4295,6 +4323,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
               " * @struct\n" +
               " */\n" +
               "function Foo() {}\n" +
+              "/** @constructor */\n" +
               "function Bar() {}\n" +
               "Bar.prototype = new Foo();\n" +
               "Bar.prototype['someprop'] = 123;\n",
@@ -6796,6 +6825,28 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "  forEach(x, function(z) { top = z; });" +
         "  if (top) f(top);" +
         "}");
+  }
+
+  public void testBug8017789() throws Exception {
+    testTypes(
+        "/** @param {(map|function())} isResult */" +
+        "var f = function(isResult) {" +
+        "    while (true)" +
+        "        isResult['t'];" +
+        "};" +
+        "/** @typedef {Object.<string, number>} */" +
+        "var map;");
+  }
+
+  public void testTypedefBeforeUse() throws Exception {
+    testTypes(
+        "/** @typedef {Object.<string, number>} */" +
+        "var map;" +
+        "/** @param {(map|function())} isResult */" +
+        "var f = function(isResult) {" +
+        "    while (true)" +
+        "        isResult['t'];" +
+        "};");
   }
 
   public void testScopedConstructors1() throws Exception {
@@ -9375,7 +9426,6 @@ public class TypeCheckTest extends CompilerTypeTestCase {
     TypeCheckResult ns =
         parseAndTypeCheckWithScope("/** @type {!Object} */var t; t.x; t;");
     Node n = ns.root;
-    Scope s = ns.scope;
     JSType type = n.getLastChild().getLastChild().getJSType();
     assertFalse(type.isUnknownType());
     assertTypeEquals(type, OBJECT_TYPE);
@@ -10260,6 +10310,13 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "}");
   }
 
+  public void testMissingProperty43() throws Exception {
+    testTypes(
+        "function f(x) { " +
+        " return /** @type {number} */ (x.impossible) && 1;" +
+        "}");
+  }
+
   public void testReflectObject1() throws Exception {
     testClosureTypes(
         "var goog = {}; goog.reflect = {}; " +
@@ -10597,6 +10654,28 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testTemplateType5() throws Exception {
+    compiler.getOptions().setCodingConvention(new GoogleCodingConvention());
+    testTypes(
+        "var CGI_PARAM_RETRY_COUNT = 'rc';" +
+        "" +
+        "/**" +
+        " * @param {...T} p\n" +
+        " * @return {T} \n" +
+        " * @template T\n" +
+        " */\n" +
+        "function fn(p) { return p; }\n" +
+        "/** @type {!Object} */ var x;" +
+        "" +
+        "/** @return {void} */\n" +
+        "function aScope() {\n" +
+        "  x = fn(CGI_PARAM_RETRY_COUNT, 1);\n" +
+        "}",
+        "assignment\n" +
+        "found   : (number|string)\n" +
+        "required: Object");
+  }
+
+  public void testTemplateType6() throws Exception {
     testTypes(
         "/**" +
         " * @param {Array.<T>} arr \n" +
@@ -10611,6 +10690,16 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "initializing variable\n" +
         "found   : number\n" +
         "required: Object");
+  }
+
+  public void testTemplateType7() throws Exception {
+    // TODO(johnlenz): As the @this type for Array.prototype.push includes
+    // "{length:number}" (and this includes "Array.<number>") we don't
+    // get a type warning here. Consider special-casing array methods.
+    testTypes(
+        "/** @type {!Array.<string>} */\n" +
+        "var query = [];\n" +
+        "query.push(1);\n");
   }
 
   public void disable_testBadTemplateType4() throws Exception {
@@ -11105,7 +11194,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testGenerics1() throws Exception {
-    String FN_DECL = "/** \n" +
+    String fnDecl = "/** \n" +
         " * @param {T} x \n" +
         " * @param {function(T):T} y \n" +
         " * @template T\n" +
@@ -11113,14 +11202,14 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "function f(x,y) { return y(x); }\n";
 
     testTypes(
-        FN_DECL +
+        fnDecl +
         "/** @type {string} */" +
         "var out;" +
         "/** @type {string} */" +
         "var result = f('hi', function(x){ out = x; return x; });");
 
     testTypes(
-        FN_DECL +
+        fnDecl +
         "/** @type {string} */" +
         "var out;" +
         "var result = f(0, function(x){ out = x; return x; });",
@@ -11129,7 +11218,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "required: string");
 
     testTypes(
-        FN_DECL +
+        fnDecl +
         "var out;" +
         "/** @type {string} */" +
         "var result = f(0, function(x){ out = x; return x; });",
@@ -11297,7 +11386,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "}\n");
   }
 
-  public void testParameterized1() throws Exception {
+  public void testTemplatized1() throws Exception {
     testTypes(
         "/** @type {!Array.<string>} */" +
         "var arr1 = [];\n" +
@@ -11309,7 +11398,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "required: Array.<string>");
   }
 
-  public void testParameterized2() throws Exception {
+  public void testTemplatized2() throws Exception {
     testTypes(
         "/** @type {!Array.<string>} */" +
         "var arr1 = /** @type {!Array.<number>} */([]);\n",
@@ -11318,7 +11407,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "required: Array.<string>");
   }
 
-  public void testParameterized3() throws Exception {
+  public void testTemplatized3() throws Exception {
     testTypes(
         "/** @type {Array.<string>} */" +
         "var arr1 = /** @type {!Array.<number>} */([]);\n",
@@ -11327,7 +11416,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "required: (Array.<string>|null)");
   }
 
-  public void testParameterized4() throws Exception {
+  public void testTemplatized4() throws Exception {
     testTypes(
         "/** @type {Array.<string>} */" +
         "var arr1 = [];\n" +
@@ -11338,7 +11427,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "required: (Array.<number>|null)");
   }
 
-  public void testParameterized5() throws Exception {
+  public void testTemplatized5() throws Exception {
     testTypes(
         "/**\n" +
         " * @param {Object.<T>} obj\n" +
@@ -11354,10 +11443,10 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "some(g());\n");
   }
 
-  public void testParameterizedTypeSubtypes2() throws Exception {
-    JSType arrayOfNumber = createParameterizedType(
+  public void testTemplatizedTypeSubtypes2() throws Exception {
+    JSType arrayOfNumber = createTemplatizedType(
         ARRAY_TYPE, NUMBER_TYPE);
-    JSType arrayOfString = createParameterizedType(
+    JSType arrayOfString = createTemplatizedType(
         ARRAY_TYPE, STRING_TYPE);
     assertFalse(arrayOfString.isSubtype(createUnionType(arrayOfNumber, NULL_VOID)));
 
@@ -11437,7 +11526,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
 
   void testTypes(String externs, String js, String description, boolean isError)
       throws Exception {
-    Node n = parseAndTypeCheck(externs, js);
+    parseAndTypeCheck(externs, js);
 
     JSError[] errors = compiler.getErrors();
     if (description != null && isError) {
@@ -11525,7 +11614,8 @@ public class TypeCheckTest extends CompilerTypeTestCase {
     Node n = compiler.parseTestCode(js);
     assertEquals(0, compiler.getErrorCount());
     Node externsNode = new Node(Token.BLOCK);
-    Node externAndJsRoot = new Node(Token.BLOCK, externsNode, n);
+    // create a parent node for the extern and source blocks
+    new Node(Token.BLOCK, externsNode, n);
 
     makeTypeCheck().processForTesting(null, n);
     assertEquals(0, compiler.getErrorCount());

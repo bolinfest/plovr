@@ -205,10 +205,6 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     return compiler.getDiagnosticGroups();
   }
 
-  /** No longer does anything. */
-  @Deprecated
-  protected void initOptionsFromFlags(CompilerOptions options) {}
-
   /**
    * A helper function for creating the dependency options object.
    */
@@ -360,6 +356,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     options.transformAMDToCJSModules = config.transformAMDToCJSModules;
     options.processCommonJSModules = config.processCommonJSModules;
     options.commonJSModulePathPrefix = config.commonJSModulePathPrefix;
+    options.angularPass = config.angularPass;
   }
 
   final protected A getCompiler() {
@@ -885,7 +882,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       }
 
       // Output the variable and property name maps if requested.
-      outputNameMaps(options);
+      outputNameMaps();
 
       // Output the manifest and bundle files if requested.
       outputManifest();
@@ -1221,7 +1218,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
    * Outputs the variable and property name maps for the specified compiler if
    * the proper FLAGS are set.
    */
-  private void outputNameMaps(B options) throws FlagUsageException,
+  private void outputNameMaps() throws FlagUsageException,
       IOException {
 
     String propertyMapOutputPath = null;
@@ -1423,7 +1420,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     if (config.outputModuleDependencies != null &&
         config.outputModuleDependencies != "") {
       Writer out = fileNameToOutputWriter2(config.outputModuleDependencies);
-      printModuleGraphJsonTo(compiler.getDegenerateModuleGraph(), out);
+      printModuleGraphJsonTo(out);
       out.close();
     }
   }
@@ -1432,8 +1429,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
    * Prints the current module graph as JSON.
    */
   @VisibleForTesting
-  void printModuleGraphJsonTo(JSModuleGraph graph,
-      Appendable out) throws IOException {
+  void printModuleGraphJsonTo(Appendable out) throws IOException {
     out.append(compiler.getDegenerateModuleGraph().toJson().toString());
   }
 
@@ -2068,6 +2064,16 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
      */
     CommandLineConfig setWarningsWhitelistFile(String fileName) {
       this.warningsWhitelistFile = fileName;
+      return this;
+    }
+
+    private boolean angularPass = false;
+
+    /**
+     * Sets whether to process AngularJS-specific annotations.
+     */
+    CommandLineConfig setAngularPass(boolean angularPass) {
+      this.angularPass = angularPass;
       return this;
     }
   }

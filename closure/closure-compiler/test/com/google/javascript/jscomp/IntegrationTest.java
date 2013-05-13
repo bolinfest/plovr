@@ -19,10 +19,17 @@ package com.google.javascript.jscomp;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
+import com.google.javascript.jscomp.CompilerOptions.TracerMode;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Tests for {@link PassFactory}.
@@ -261,6 +268,26 @@ public class IntegrationTest extends IntegrationTestCase {
          "/** @export */ function f() {} goog.exportSymbol('f', f);");
   }
 
+  public void testAngularPassOff() {
+    testSame(createCompilerOptions(),
+        "/** @ngInject */ function f() {} " +
+        "/** @ngInject */ function g(a){} " +
+        "/** @ngInject */ var b = function f(a) {} ");
+  }
+
+  public void testAngularPassOn() {
+    CompilerOptions options = createCompilerOptions();
+    options.angularPass = true;
+    test(options,
+        "/** @ngInject */ function f() {} " +
+        "/** @ngInject */ function g(a){} " +
+        "/** @ngInject */ var b = function f(a, b, c) {} ",
+
+        "function f() {} " +
+        "function g(a) {} g.$inject=['a'];" +
+        "var b = function f(a, b, c) {}; b.$inject=['a', 'b', 'c']");
+  }
+
   public void testExportTestFunctionsOff() {
     testSame(createCompilerOptions(), "function testFoo() {}");
   }
@@ -282,7 +309,8 @@ public class IntegrationTest extends IntegrationTestCase {
          "/** @constructor */ var Foo = function() {};" +
          "/** @expose */  Foo.prototype.miny = 3;" +
          "Foo.prototype.moe = 4;" +
-         "function moe(a, b) { return a.meeny + b.miny; }" +
+         "/** @expose */  Foo.prototype.tiger;" +
+         "function moe(a, b) { return a.meeny + b.miny + a.tiger; }" +
          "window['x'] = x;" +
          "window['Foo'] = Foo;" +
          "window['moe'] = moe;",
@@ -291,7 +319,7 @@ public class IntegrationTest extends IntegrationTestCase {
          "window.x={a:1,meeny:2};" +
          "window.Foo=a;" +
          "window.moe=function(b,c){" +
-         "  return b.meeny+c.miny" +
+         "  return b.meeny+c.miny+b.tiger" +
          "}");
   }
 
@@ -1659,7 +1687,6 @@ public class IntegrationTest extends IntegrationTestCase {
         "  set appData(data) { this.appData_ = data; }\n" +
         "};";
 
-    Compiler compiler = compile(options, code);
     testSame(options, code);
   }
 
@@ -1988,8 +2015,23 @@ public class IntegrationTest extends IntegrationTestCase {
             "JSC_INVALID_CAST", "invalid cast"));
 
     testSame(options,
-        "/** @suppress{cast} */\n" +
+        "/** @suppress {invalidCasts} */\n" +
         "function f() { var xyz = /** @type {string} */ (0); }");
+
+    testSame(options,
+        "/** @const */ var g = {};" +
+        "/** @suppress {invalidCasts} */" +
+        "g.a = g.b = function() { var xyz = /** @type {string} */ (0); }");
+  }
+
+  public void testLhsCast() {
+    CompilerOptions options = createCompilerOptions();
+    test(
+        options,
+        "/** @const */ var g = {};" +
+        "/** @type {number} */ (g.foo) = 3;",
+        "/** @const */ var g = {};" +
+        "g.foo = 3;");
   }
 
   public void testRenamePrefix() {
@@ -2356,7 +2398,7 @@ public class IntegrationTest extends IntegrationTestCase {
     String result = "" +
         "function some_function() {\n" +
         "  var a, b;\n" +
-        "  any_expression && (b = external_ref, a = function() {\n" +
+        "  any_expression && (b = external_ref, a = function(a) {\n" +
         "    return b()\n" +
         "  });\n" +
         "  return{method1:function() {\n" +
@@ -2385,6 +2427,39 @@ public class IntegrationTest extends IntegrationTestCase {
     }
     original.append(";");
     test(options, original.toString(), "var x = " + numAdds + ";");
+  }
+
+  // Checks that the summary and the log in the output of PerformanceTracker
+  // have the expected number of columns
+  public void testPerfTracker() {
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
+    PrintStream outstream = new PrintStream(output);
+    Compiler compiler = new Compiler(outstream);
+    CompilerOptions options = new CompilerOptions();
+    List<SourceFile> inputs = Lists.newArrayList();
+    List<SourceFile> externs = Lists.newArrayList();
+
+    options.setTracerMode(TracerMode.ALL);
+    inputs.add(SourceFile.fromCode("foo", "function fun(){}"));
+    compiler.compile(externs, inputs, options);
+    outstream.flush();
+    outstream.close();
+    Pattern p = Pattern.compile(
+        ".*Summary:\npass,runtime,runs,changingRuns,reduction,gzReduction" +
+        ".*TOTAL:" +
+        "\nRuntime\\(ms\\): [0-9]+" +
+        "\n#Runs: [0-9]+" +
+        "\n#Changing runs: [0-9]+" +
+        "\n#Loopable runs: [0-9]+" +
+        "\n#Changing loopable runs: [0-9]+" +
+        "\nReduction\\(bytes\\): [0-9]+" +
+        "\nGzReduction\\(bytes\\): [0-9]+" +
+        "\nSize\\(bytes\\): [0-9]+" +
+        "\nGzSize\\(bytes\\): [0-9]+" +
+        "\n\nLog:\n" +
+        "pass,runtime,runs,changingRuns,reduction,gzReduction,size,gzSize.*",
+        Pattern.DOTALL);
+    assertTrue(p.matcher(output.toString()).matches());
   }
 
   /** Creates a CompilerOptions object with google coding conventions. */

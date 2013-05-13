@@ -50,7 +50,6 @@ import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.SimpleErrorReporter;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.jstype.ArrowType;
 import com.google.javascript.rhino.jstype.JSType.TypePair;
 import com.google.javascript.rhino.jstype.RecordTypeBuilder.RecordProperty;
 import com.google.javascript.rhino.testing.Asserts;
@@ -4606,14 +4605,14 @@ public class JSTypeTest extends BaseJSTypeTestCase {
         recordType,
         forwardDeclaredNamedType,
         createUnionType(forwardDeclaredNamedType, NULL_TYPE),
-        createParameterizedType(OBJECT_TYPE, STRING_TYPE),
-        createParameterizedType(OBJECT_TYPE, NUMBER_TYPE),
-        createParameterizedType(ARRAY_TYPE, STRING_TYPE),
-        createParameterizedType(ARRAY_TYPE, NUMBER_TYPE),
+        createTemplatizedType(OBJECT_TYPE, STRING_TYPE),
+        createTemplatizedType(OBJECT_TYPE, NUMBER_TYPE),
+        createTemplatizedType(ARRAY_TYPE, STRING_TYPE),
+        createTemplatizedType(ARRAY_TYPE, NUMBER_TYPE),
         createUnionType(
-            createParameterizedType(ARRAY_TYPE, BOOLEAN_TYPE), NULL_TYPE),
+            createTemplatizedType(ARRAY_TYPE, BOOLEAN_TYPE), NULL_TYPE),
         createUnionType(
-            createParameterizedType(OBJECT_TYPE, BOOLEAN_TYPE), NULL_TYPE)
+            createTemplatizedType(OBJECT_TYPE, BOOLEAN_TYPE), NULL_TYPE)
         );
   }
 
@@ -5166,14 +5165,14 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     verifySubtypeChain(typeChain);
   }
 
-  public void testParameterizedArrayChain() throws Exception {
-    JSType arrayOfNoType = createParameterizedType(
+  public void testTemplatizedArrayChain() throws Exception {
+    JSType arrayOfNoType = createTemplatizedType(
         ARRAY_TYPE, NO_TYPE);
-    JSType arrayOfString = createParameterizedType(
+    JSType arrayOfString = createTemplatizedType(
         ARRAY_TYPE, STRING_TYPE);
-    JSType arrayOfStringOrNumber = createParameterizedType(
+    JSType arrayOfStringOrNumber = createTemplatizedType(
         ARRAY_TYPE, createUnionType(STRING_TYPE, NUMBER_TYPE));
-    JSType arrayOfAllType = createParameterizedType(
+    JSType arrayOfAllType = createTemplatizedType(
         ARRAY_TYPE, ALL_TYPE);
 
     List<JSType> typeChain = Lists.newArrayList(
@@ -5188,16 +5187,16 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     verifySubtypeChain(typeChain, false);
   }
 
-  public void testParameterizedArrayChain2() throws Exception {
-    JSType arrayOfNoType = createParameterizedType(
+  public void testTemplatizedArrayChain2() throws Exception {
+    JSType arrayOfNoType = createTemplatizedType(
         ARRAY_TYPE, NO_TYPE);
-    JSType arrayOfNoObjectType = createParameterizedType(
+    JSType arrayOfNoObjectType = createTemplatizedType(
         ARRAY_TYPE, NO_OBJECT_TYPE);
-    JSType arrayOfArray = createParameterizedType(
+    JSType arrayOfArray = createTemplatizedType(
         ARRAY_TYPE, ARRAY_TYPE);
-    JSType arrayOfObject = createParameterizedType(
+    JSType arrayOfObject = createTemplatizedType(
         ARRAY_TYPE, OBJECT_TYPE);
-    JSType arrayOfAllType = createParameterizedType(
+    JSType arrayOfAllType = createTemplatizedType(
         ARRAY_TYPE, ALL_TYPE);
 
     List<JSType> typeChain = Lists.newArrayList(
@@ -5213,14 +5212,14 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     verifySubtypeChain(typeChain, false);
   }
 
-  public void testParameterizedObjectChain() throws Exception {
-    JSType objectOfNoType = createParameterizedType(
+  public void testTemplatizedObjectChain() throws Exception {
+    JSType objectOfNoType = createTemplatizedType(
         OBJECT_TYPE, NO_TYPE);
-    JSType objectOfString = createParameterizedType(
+    JSType objectOfString = createTemplatizedType(
         OBJECT_TYPE, STRING_TYPE);
-    JSType objectOfStringOrNumber = createParameterizedType(
+    JSType objectOfStringOrNumber = createTemplatizedType(
         OBJECT_TYPE, createUnionType(STRING_TYPE, NUMBER_TYPE));
-    JSType objectOfAllType = createParameterizedType(
+    JSType objectOfAllType = createTemplatizedType(
         OBJECT_TYPE, ALL_TYPE);
 
     List<JSType> typeChain = Lists.newArrayList(
@@ -5235,16 +5234,16 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     verifySubtypeChain(typeChain, false);
   }
 
-  public void testMixedParameterizedTypeChain() throws Exception {
-    JSType arrayOfNoType = createParameterizedType(
+  public void testMixedTemplatizedTypeChain() throws Exception {
+    JSType arrayOfNoType = createTemplatizedType(
         ARRAY_TYPE, NO_TYPE);
-    JSType arrayOfString = createParameterizedType(
+    JSType arrayOfString = createTemplatizedType(
         ARRAY_TYPE, STRING_TYPE);
-    JSType objectOfString = createParameterizedType(
+    JSType objectOfString = createTemplatizedType(
         OBJECT_TYPE, STRING_TYPE);
-    JSType objectOfStringOrNumber = createParameterizedType(
+    JSType objectOfStringOrNumber = createTemplatizedType(
         OBJECT_TYPE, createUnionType(STRING_TYPE, NUMBER_TYPE));
-    JSType objectOfAllType = createParameterizedType(
+    JSType objectOfAllType = createTemplatizedType(
         OBJECT_TYPE, ALL_TYPE);
 
     List<JSType> typeChain = Lists.newArrayList(
@@ -5260,14 +5259,14 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     verifySubtypeChain(typeChain, false);
   }
 
-  public void testParameterizedTypeSubtypes() {
-    JSType objectOfString = createParameterizedType(
+  public void testTemplatizedTypeSubtypes() {
+    JSType objectOfString = createTemplatizedType(
         OBJECT_TYPE, STRING_TYPE);
-    JSType arrayOfString = createParameterizedType(
+    JSType arrayOfString = createTemplatizedType(
         ARRAY_TYPE, STRING_TYPE);
-    JSType arrayOfNumber = createParameterizedType(
+    JSType arrayOfNumber = createTemplatizedType(
         ARRAY_TYPE, NUMBER_TYPE);
-    JSType arrayOfUnknown = createParameterizedType(
+    JSType arrayOfUnknown = createTemplatizedType(
         ARRAY_TYPE, UNKNOWN_TYPE);
 
     assertFalse(objectOfString.isSubtype(ARRAY_TYPE));
@@ -5290,15 +5289,13 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertFalse(arrayOfString.isSubtype(createUnionType(arrayOfNumber, NULL_VOID)));
   }
 
-  public void testParameterizedTypeRelations() throws Exception {
-    JSType objectOfString = createParameterizedType(
+  public void testTemplatizedTypeRelations() throws Exception {
+    JSType objectOfString = createTemplatizedType(
         OBJECT_TYPE, STRING_TYPE);
-    JSType arrayOfString = createParameterizedType(
+    JSType arrayOfString = createTemplatizedType(
         ARRAY_TYPE, STRING_TYPE);
-    JSType arrayOfNumber = createParameterizedType(
+    JSType arrayOfNumber = createTemplatizedType(
         ARRAY_TYPE, NUMBER_TYPE);
-    JSType arrayOfUnknown = createParameterizedType(
-        ARRAY_TYPE, UNKNOWN_TYPE);
 
     // Union and least super type cases:
     //
@@ -5328,10 +5325,10 @@ public class JSTypeTest extends BaseJSTypeTestCase {
         JSType.getLeastSupertype(ARRAY_TYPE, arrayOfString));
 
     assertEquals(
-        "(Array|Object.<string>)",
+        "(Array|Object.<string,?>)",
         JSType.getLeastSupertype(objectOfString, ARRAY_TYPE).toString());
     assertEquals(
-        "(Array|Object.<string>)",
+        "(Array|Object.<string,?>)",
         JSType.getLeastSupertype(ARRAY_TYPE, objectOfString).toString());
 
     assertEquals(
@@ -5345,10 +5342,10 @@ public class JSTypeTest extends BaseJSTypeTestCase {
         JSType.getLeastSupertype(arrayOfString, arrayOfString));
 
     assertEquals(
-        "(Array.<string>|Object.<string>)",
+        "(Array.<string>|Object.<string,?>)",
         JSType.getLeastSupertype(objectOfString, arrayOfString).toString());
     assertEquals(
-        "(Array.<string>|Object.<string>)",
+        "(Array.<string>|Object.<string,?>)",
         JSType.getLeastSupertype(arrayOfString, objectOfString).toString());
 
     assertTypeEquals(
@@ -6068,18 +6065,13 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertTrue(
         new TemplateType(registry, "T")
             .hasAnyTemplateTypes());
-    assertFalse(
-        ARRAY_TYPE
-            .hasAnyTemplateTypes());
+    assertFalse(ARRAY_TYPE.hasAnyTemplateTypes());
 
     assertTrue(
-        registry.createParameterizedType(
-            ARRAY_TYPE, new TemplateType(registry, "T"))
+        createTemplatizedType(ARRAY_TYPE, new TemplateType(registry, "T"))
             .hasAnyTemplateTypes());
     assertFalse(
-        registry.createParameterizedType(
-            ARRAY_TYPE, STRING_TYPE)
-            .hasAnyTemplateTypes());
+        createTemplatizedType(ARRAY_TYPE, STRING_TYPE).hasAnyTemplateTypes());
 
     assertTrue(
         new FunctionBuilder(registry)
@@ -6114,14 +6106,14 @@ public class JSTypeTest extends BaseJSTypeTestCase {
         templatizedCtor.getInstanceType(),
         ImmutableList.of(NUMBER_TYPE, STRING_TYPE));
 
-    assertTrue(templatizedInstance.isTemplatized());
-    assertTrue(templatizedInstance.hasTemplatizedType("A"));
-    assertTrue(templatizedInstance.hasTemplatizedType("B"));
-    assertFalse(templatizedInstance.hasTemplatizedType("C"));
+    TemplateTypeMap templateTypeMap = templatizedInstance.getTemplateTypeMap();
+    assertTrue(templateTypeMap.hasTemplateKey("A"));
+    assertTrue(templateTypeMap.hasTemplateKey("B"));
+    assertFalse(templateTypeMap.hasTemplateKey("C"));
 
-    assertEquals(NUMBER_TYPE, templatizedInstance.getTemplatizedType("A"));
-    assertEquals(STRING_TYPE, templatizedInstance.getTemplatizedType("B"));
-    assertEquals(UNKNOWN_TYPE, templatizedInstance.getTemplatizedType("C"));
+    assertEquals(NUMBER_TYPE, templateTypeMap.getTemplateType("A"));
+    assertEquals(STRING_TYPE, templateTypeMap.getTemplateType("B"));
+    assertEquals(UNKNOWN_TYPE, templateTypeMap.getTemplateType("C"));
 
     assertEquals("TestingType.<number,string>", templatizedInstance.toString());
   }
@@ -6133,31 +6125,16 @@ public class JSTypeTest extends BaseJSTypeTestCase {
         templatizedCtor.getInstanceType(),
         ImmutableList.of(NUMBER_TYPE));
 
-    assertTrue(templatizedInstance.isTemplatized());
-    assertTrue(templatizedInstance.hasTemplatizedType("A"));
-    assertTrue(templatizedInstance.hasTemplatizedType("B"));
-    assertFalse(templatizedInstance.hasTemplatizedType("C"));
+    TemplateTypeMap templateTypeMap = templatizedInstance.getTemplateTypeMap();
+    assertTrue(templateTypeMap.hasTemplateKey("A"));
+    assertTrue(templateTypeMap.hasTemplateKey("B"));
+    assertFalse(templateTypeMap.hasTemplateKey("C"));
 
-    assertEquals(NUMBER_TYPE, templatizedInstance.getTemplatizedType("A"));
-    assertEquals(UNKNOWN_TYPE, templatizedInstance.getTemplatizedType("B"));
-    assertEquals(UNKNOWN_TYPE, templatizedInstance.getTemplatizedType("C"));
+    assertEquals(NUMBER_TYPE, templateTypeMap.getTemplateType("A"));
+    assertEquals(UNKNOWN_TYPE, templateTypeMap.getTemplateType("B"));
+    assertEquals(UNKNOWN_TYPE, templateTypeMap.getTemplateType("C"));
 
     assertEquals("TestingType.<number,?>", templatizedInstance.toString());
-  }
-
-  public void testInvalidTemplatizedType() throws Exception {
-    FunctionType templatizedCtor = registry.createConstructorType(
-        "TestingType", null, null, UNKNOWN_TYPE, ImmutableList.of("A", "B"));
-
-    boolean exceptionThrown = false;
-    try {
-      JSType templatizedInstance = registry.createTemplatizedType(
-          templatizedCtor.getInstanceType(),
-          ImmutableList.of(NUMBER_TYPE, STRING_TYPE, BOOLEAN_TYPE));
-    } catch (IllegalArgumentException e) {
-      exceptionThrown = true;
-    }
-    assertTrue(exceptionThrown);
   }
 
   public void testCanCastTo() {

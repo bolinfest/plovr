@@ -1,5 +1,5 @@
 /*
- * Copyright 2008 Google Inc.
+ * Copyright 2008 Closure Compiler Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -766,6 +766,12 @@ DOMApplicationCache.prototype.DOWNLOADING = 3;
  * @type {number}
  */
 DOMApplicationCache.prototype.UPDATEREADY = 4;
+
+/**
+ * The cache is obsolete.
+ * @type {number}
+ */
+DOMApplicationCache.prototype.OBSOLETE = 5;
 
 /**
  * The current status of the application cache.
@@ -2744,7 +2750,7 @@ MutationRecord.prototype.attributeName;
 MutationRecord.prototype.attributeNamespace;
 
 /** @type {?string} */
-MutationRecord.prototype.oldvalue;
+MutationRecord.prototype.oldValue;
 
 
 /**

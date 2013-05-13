@@ -1,5 +1,5 @@
 /*
- * Copyright 2008 Google Inc.
+ * Copyright 2008 Closure Compiler Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -405,7 +405,7 @@ Document.prototype.createEntityReference = function(name) {};
 Document.prototype.createProcessingInstruction = function(target, data) {};
 
 /**
- * @param {string} data
+ * @param {number|string} data
  * @return {!Text}
  * @see http://www.w3.org/TR/1998/REC-DOM-Level-1-19981001/level-one-core.html#method-createTextNode
  * @nosideeffects
@@ -850,4 +850,3 @@ Window.prototype.onerror;
 /** @type {?function (Event=)} */ Window.prototype.onsubmit;
 /** @type {?function (Event)} */ Window.prototype.onunload;
 /** @type {?function (Event)} */ Window.prototype.onwheel;
-

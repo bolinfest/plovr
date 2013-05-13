@@ -93,13 +93,14 @@ class Normalize implements CompilerPass {
         compiler, js,
         new MakeDeclaredNamesUnique(
             new BoilerplateRenamer(
+                compiler.getCodingConvention(),
                 compiler.getUniqueNameIdSupplier(),
                 prefix)));
     return js;
   }
 
   static Node parseAndNormalizeTestCode(
-      AbstractCompiler compiler, String code, String prefix) {
+      AbstractCompiler compiler, String code) {
     Node js = compiler.parseTestCode(code);
     NodeTraversal.traverse(compiler, js,
         new Normalize.NormalizeStatements(compiler, false));
@@ -173,6 +174,9 @@ class Normalize implements CompilerPass {
         }
       } else if (n.isStringKey() && isMarkedExpose(n)) {
         exposedProperties.add(n.getString());
+      } else if (n.isGetProp() && n.getParent().isExprResult()
+                  && isMarkedExpose(n)) {
+        exposedProperties.add(n.getLastChild().getString());
       }
     }
 
@@ -372,7 +376,7 @@ class Normalize implements CompilerPass {
 
     @Override
     public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
-      doStatementNormalizations(t, n, parent);
+      doStatementNormalizations(n);
 
       return true;
     }
@@ -426,7 +430,7 @@ class Normalize implements CompilerPass {
       // There are only two cases where a string token
       // may be a variable reference: The right side of a GETPROP
       // or an OBJECTLIT key.
-      boolean isObjLitKey = NodeUtil.isObjectLitKey(n, parent);
+      boolean isObjLitKey = NodeUtil.isObjectLitKey(n);
       boolean isProperty = isObjLitKey ||
           (parent.isGetProp() &&
            parent.getLastChild() == n);
@@ -499,8 +503,7 @@ class Normalize implements CompilerPass {
     /**
      * Do normalizations that introduce new siblings or parents.
      */
-    private void doStatementNormalizations(
-        NodeTraversal t, Node n, Node parent) {
+    private void doStatementNormalizations(Node n) {
       if (n.isLabel()) {
         normalizeLabels(n);
       }

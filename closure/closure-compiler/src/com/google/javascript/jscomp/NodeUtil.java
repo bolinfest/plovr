@@ -247,8 +247,6 @@ public final class NodeUtil {
   static String arrayToString(Node literal) {
     Node first = literal.getFirstChild();
     StringBuilder result = new StringBuilder();
-    int nextSlot = 0;
-    int nextSkipSlot = 0;
     for (Node n = first; n != null; n = n.getNext()) {
       String childValue = getArrayElementStringValue(n);
       if (childValue == null) {
@@ -258,8 +256,6 @@ public final class NodeUtil {
         result.append(',');
       }
       result.append(childValue);
-
-      nextSlot++;
     }
     return result.toString();
   }
@@ -2068,9 +2064,8 @@ public final class NodeUtil {
    * (e.g. key1 in {key1: value1, key2: value2}).
    *
    * @param node A node
-   * @param parent The node's parent
    */
-  static boolean isObjectLitKey(Node node, Node parent) {
+  static boolean isObjectLitKey(Node node) {
     switch (node.getType()) {
       case Token.STRING_KEY:
       case Token.GETTER_DEF:
@@ -2511,10 +2506,8 @@ public final class NodeUtil {
    *     some constructor.
    */
   static boolean isPrototypePropertyDeclaration(Node n) {
-    if (!isExprAssign(n)) {
-      return false;
-    }
-    return isPrototypeProperty(n.getFirstChild().getFirstChild());
+    return isExprAssign(n) &&
+        isPrototypeProperty(n.getFirstChild().getFirstChild());
   }
 
   /**
@@ -2522,11 +2515,7 @@ public final class NodeUtil {
    */
   static boolean isPrototypeProperty(Node n) {
     String lhsString = n.getQualifiedName();
-    if (lhsString == null) {
-      return false;
-    }
-    int prototypeIdx = lhsString.indexOf(".prototype.");
-    return prototypeIdx != -1;
+    return lhsString != null && lhsString.contains(".prototype.");
   }
 
   /**
@@ -2803,21 +2792,15 @@ public final class NodeUtil {
   }
 
   /**
-   * Returns true if a name node represents a constant variable.
-   *
-   * <p>Determining whether a variable is constant has three steps:
+   * <p>Determines whether a variable is constant:
    * <ol>
-   * <li>In CodingConventionAnnotator, any name that matches the
+   * <li>In Normalize, any name that matches the
    *     {@link CodingConvention#isConstant(String)} is annotated with an
    *     IS_CONSTANT_NAME property.
-   * <li>The normalize pass renames any variable with the IS_CONSTANT_NAME
-   *     annotation and that is initialized to a constant value with
-   *     a variable name including $$constant.
-   * <li>Return true here if the variable includes $$constant in its name.
    * </ol>
    *
    * @param node A NAME or STRING node
-   * @return True if the variable is constant
+   * @return True if a name node represents a constant variable
    */
   static boolean isConstantName(Node node) {
     return node.getBooleanProp(Node.IS_CONSTANT_NAME);
@@ -2826,15 +2809,14 @@ public final class NodeUtil {
   /** Whether the given name is constant by coding convention. */
   static boolean isConstantByConvention(
       CodingConvention convention, Node node, Node parent) {
-    String name = node.getString();
-    if (parent.isGetProp() &&
-        node == parent.getLastChild()) {
-      return convention.isConstantKey(name);
-    } else if (isObjectLitKey(node, parent)) {
-      return convention.isConstantKey(name);
-    } else {
-      return convention.isConstant(name);
+    if (parent.isGetProp() && node == parent.getLastChild()) {
+      return convention.isConstantKey(node.getString());
+    } else if (isObjectLitKey(node)) {
+      return convention.isConstantKey(node.getString());
+    } else if (node.isName()) {
+      return convention.isConstant(node.getString());
     }
+    return false;
   }
 
   /**
@@ -3054,8 +3036,8 @@ public final class NodeUtil {
       if (parent.isName()) {
         return getBestJSDocInfo(parent);
       } else if (parent.isAssign()) {
-        return parent.getJSDocInfo();
-      } else if (isObjectLitKey(parent, parent.getParent())) {
+        return getBestJSDocInfo(parent);
+      } else if (isObjectLitKey(parent)) {
         return parent.getJSDocInfo();
       } else if (parent.isFunction()) {
         return parent.getJSDocInfo();
@@ -3083,7 +3065,7 @@ public final class NodeUtil {
       return parent;
     } else if (parent.isAssign()) {
       return parent.getFirstChild();
-    } else if (isObjectLitKey(parent, parent.getParent())) {
+    } else if (isObjectLitKey(parent)) {
       return parent;
     } else if (
         (parent.isHook() && parent.getFirstChild() != n) ||
@@ -3116,7 +3098,7 @@ public final class NodeUtil {
     if (lValue == null || lValue.getParent() == null) {
       return null;
     }
-    if (isObjectLitKey(lValue, lValue.getParent())) {
+    if (isObjectLitKey(lValue)) {
       return getBestLValue(lValue.getParent());
     } else if (isGet(lValue)) {
       return lValue.getFirstChild();
@@ -3130,7 +3112,7 @@ public final class NodeUtil {
     if (lValue == null || lValue.getParent() == null) {
       return null;
     }
-    if (isObjectLitKey(lValue, lValue.getParent())) {
+    if (isObjectLitKey(lValue)) {
       Node owner = getBestLValue(lValue.getParent());
       if (owner != null) {
         String ownerName = getBestLValueName(owner);

@@ -96,12 +96,11 @@ class InlineObjectLiterals implements CompilerPass {
           // that it refers to, since they will have been moved around.
           staleVars.add(v);
 
-          Reference declaration = referenceInfo.references.get(0);
           Reference init = referenceInfo.getInitializingReference();
 
           // Split up the object into individual variables if the object
           // is never referenced directly in full.
-          splitObject(v, declaration, init, referenceInfo);
+          splitObject(v, init, referenceInfo);
         }
       }
     }
@@ -269,7 +268,7 @@ class InlineObjectLiterals implements CompilerPass {
      * variable name.
      */
     private Map<String, String> computeVarList(
-        Var v, ReferenceCollection referenceInfo) {
+        ReferenceCollection referenceInfo) {
       Map<String, String> varmap = Maps.newLinkedHashMap();
 
       for (Reference ref : referenceInfo.references) {
@@ -396,12 +395,11 @@ class InlineObjectLiterals implements CompilerPass {
      * Splits up the object literal into individual variables, and
      * updates all uses.
      */
-    private void splitObject(Var v, Reference declaration,
-                             Reference init,
+    private void splitObject(Var v, Reference init,
                              ReferenceCollection referenceInfo) {
       // First figure out the FULL set of possible keys, so that they
       // can all be properly set as necessary.
-      Map<String, String> varmap = computeVarList(v, referenceInfo);
+      Map<String, String> varmap = computeVarList(referenceInfo);
 
       Map<String, Node> initvals = Maps.newHashMap();
       // Figure out the top-level of the var assign node. If it's a plain

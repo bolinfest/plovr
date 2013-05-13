@@ -367,7 +367,18 @@ class RemoveUnusedVars
    * @param fnScope The scope inside the function
    */
   private void removeUnreferencedFunctionArgs(Scope fnScope) {
-    // TODO(johnlenz): Update type registry for function signature changes.
+    // Notice that removing unreferenced function args breaks
+    // Function.prototype.length. In advanced mode, we don't really care
+    // about this: we consider "length" the equivalent of reflecting on
+    // the function's lexical source.
+    //
+    // Rather than create a new option for this, we assume that if the user
+    // is removing globals, then it's OK to remove unused function args.
+    //
+    // See http://code.google.com/p/closure-compiler/issues/detail?id=253
+    if (!removeGlobals) {
+      return;
+    }
 
     Node function = fnScope.getRootNode();
 
@@ -535,7 +546,6 @@ class RemoveUnusedVars
         if (isModifiableCallSite(site)) {
           Node arg = getArgumentForCallOrNewOrDotCall(site, argIndex);
           if (arg != null) {
-            Node argParent = arg.getParent();
             // Even if we can't change the signature in general we can always
             // remove an unused value off the end of the parameter list.
             if (canModifyAllSites
@@ -791,8 +801,6 @@ class RemoveUnusedVars
    * assignments to those variables as well.
    */
   private void removeUnreferencedVars() {
-    CodingConvention convention = codingConvention;
-
     for (Iterator<Var> it = maybeUnreferenced.iterator(); it.hasNext(); ) {
       Var var = it.next();
 

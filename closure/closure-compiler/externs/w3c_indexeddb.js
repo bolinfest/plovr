@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 PicNet Pty Ltd.
+ * Copyright 2011 The Closure Compiler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -576,13 +576,13 @@ IDBIndex.prototype.openCursor = function(range, direction) {};
 IDBIndex.prototype.openKeyCursor = function(range, direction) {};
 
 /**
- * @param {*} key The id of the object to retrieve.
+ * @param {IDBKeyType} key The id of the object to retrieve.
  * @return {!IDBRequest} The IDBRequest object.
  */
 IDBIndex.prototype.get = function(key) {};
 
 /**
- * @param {*} key The id of the object to retrieve.
+ * @param {IDBKeyType} key The id of the object to retrieve.
  * @return {!IDBRequest} The IDBRequest object.
  */
 IDBIndex.prototype.getKey = function(key) {};
@@ -686,8 +686,8 @@ IDBCursor.prototype.update = function(value) {};
 
 /**
  * Note: Must be quoted to avoid parse error.
- * @param {*=} key Continue enumerating the cursor from the specified key
- *    (or next).
+ * @param {IDBKeyType=} key Continue enumerating the cursor from the specified
+ *     key (or next).
  */
 IDBCursor.prototype['continue'] = function(key) {};
 
@@ -839,59 +839,59 @@ IDBKeyRange.prototype.lowerOpen;
 IDBKeyRange.prototype.upperOpen;
 
 /**
- * @param {*} value The single key value of this range.
+ * @param {IDBKeyType} value The single key value of this range.
  * @return {!IDBKeyRange} The key range.
  */
 IDBKeyRange.only = function(value) {};
 
 /**
- * @param {*} value The single key value of this range.
+ * @param {IDBKeyType} value The single key value of this range.
  * @return {!IDBKeyRange} The key range.
  */
 webkitIDBKeyRange.only = function(value) {};
 
 /**
- * @param {*} bound Creates a lower bound key range.
+ * @param {IDBKeyType} bound Creates a lower bound key range.
  * @param {boolean=} open Open the key range.
  * @return {!IDBKeyRange} The key range.
  */
 IDBKeyRange.lowerBound = function(bound, open) {};
 
 /**
- * @param {*} bound Creates a lower bound key range.
+ * @param {IDBKeyType} bound Creates a lower bound key range.
  * @param {boolean=} open Open the key range.
  * @return {!IDBKeyRange} The key range.
  */
 webkitIDBKeyRange.lowerBound = function(bound, open) {};
 
 /**
- * @param {*} bound Creates an upper bound key range.
+ * @param {IDBKeyType} bound Creates an upper bound key range.
  * @param {boolean=} open Open the key range.
  * @return {!IDBKeyRange} The key range.
  */
 IDBKeyRange.upperBound = function(bound, open) {};
 
 /**
- * @param {*} bound Creates an upper bound key range.
+ * @param {IDBKeyType} bound Creates an upper bound key range.
  * @param {boolean=} open Open the key range.
  * @return {!IDBKeyRange} The key range.
  */
 webkitIDBKeyRange.upperBound = function(bound, open) {};
 
 /**
- * @param {*} left The left bound value of openLeft is true.
- * @param {*} right The right bound value of openRight is true.
- * @param {boolean=} openLeft Whether to open a left bound range.
- * @param {boolean=} openRight Whether to open a right bound range.
+ * @param {IDBKeyType} left The left bound value.
+ * @param {IDBKeyType} right The right bound value.
+ * @param {boolean=} openLeft Whether the left bound value should be excluded.
+ * @param {boolean=} openRight Whether the right bound value should be excluded.
  * @return {!IDBKeyRange} The key range.
  */
 IDBKeyRange.bound = function(left, right, openLeft, openRight) {};
 
 /**
- * @param {*} left The left bound value of openLeft is true.
- * @param {*} right The right bound value of openRight is true.
- * @param {boolean=} openLeft Whether to open a left bound range.
- * @param {boolean=} openRight Whether to open a right bound range.
+ * @param {IDBKeyType} left The left bound value.
+ * @param {IDBKeyType} right The right bound value.
+ * @param {boolean=} openLeft Whether the left bound value should be excluded.
+ * @param {boolean=} openRight Whether the right bound value should be excluded.
  * @return {!IDBKeyRange} The key range.
  */
 webkitIDBKeyRange.bound = function(left, right, openLeft, openRight) {};

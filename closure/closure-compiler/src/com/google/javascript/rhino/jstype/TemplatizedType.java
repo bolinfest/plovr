@@ -39,85 +39,76 @@
 
 package com.google.javascript.rhino.jstype;
 
+import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 
 /**
- * An object type with a declared default element type, such as
+ * An object type with declared template types, such as
  * <code>Array.<string></code>.
  *
- * // TODO(user): Define the subtyping relation for parameterized types. Also,
- * take parameterized type into account for equality.
- *
  */
-public final class ParameterizedType extends ProxyObjectType {
+public final class TemplatizedType extends ProxyObjectType {
   private static final long serialVersionUID = 1L;
 
-  final JSType parameterType;
+  final ImmutableList<JSType> templateTypes;
 
-  ParameterizedType(
-      JSTypeRegistry registry, ObjectType objectType, JSType parameterType) {
-    super(registry, objectType);
-    this.parameterType = parameterType;
-  }
+  TemplatizedType(
+      JSTypeRegistry registry, ObjectType objectType,
+      ImmutableList<JSType> templateTypes) {
+    super(registry, objectType, objectType.getTemplateTypeMap().extendValues(
+        templateTypes));
 
-  @Override
-  public JSType getParameterType() {
-    return parameterType;
+    // Cache which template keys were filled, and what JSTypes they were filled
+    // with.
+    ImmutableList<String> filledTemplateKeys =
+        objectType.getTemplateTypeMap().getUnfilledTemplateKeys();
+    ImmutableList.Builder<JSType> builder = ImmutableList.builder();
+    for (String filledTemplateKey : filledTemplateKeys) {
+      builder.add(getTemplateTypeMap().getTemplateType(filledTemplateKey));
+    }
+    this.templateTypes = builder.build();
   }
 
   @Override
   String toStringHelper(boolean forAnnotations) {
-    String result = super.toStringHelper(forAnnotations);
-    return result + ".<" + parameterType.toStringHelper(forAnnotations) + ">";
+    String typeString = super.toStringHelper(forAnnotations);
+
+    if (!templateTypes.isEmpty()) {
+      typeString += ".<" + Joiner.on(",").join(templateTypes) + ">";
+    }
+
+    return typeString;
   }
 
   @Override
   public <T> T visit(Visitor<T> visitor) {
-    return visitor.caseParameterizedType(this);
+    return visitor.caseTemplatizedType(this);
   }
 
   @Override <T> T visit(RelationshipVisitor<T> visitor, JSType that) {
-    return visitor.caseParameterizedType(this, that);
+    return visitor.caseTemplatizedType(this, that);
   }
 
   @Override
-  public ParameterizedType toMaybeParameterizedType() {
+  public TemplatizedType toMaybeTemplatizedType() {
     return this;
   }
 
   @Override
-  public boolean hasAnyTemplateTypesInternal() {
-    return super.hasAnyTemplateTypes() || parameterType.hasAnyTemplateTypes();
+  public ImmutableList<JSType> getTemplateTypes() {
+    return templateTypes;
   }
 
-  @Override
+  //@Override
   public boolean isSubtype(JSType that) {
     return isSubtypeHelper(this, that);
   }
 
-  boolean isParameterizeSubtypeOf(JSType thatType) {
-    if (thatType.isParameterizedType()) {
-      JSType thisParameter = this.parameterType;
-      JSType thatParameter = thatType.toMaybeParameterizedType().parameterType;
-      // Currently, there is no way to declare a parameterized type so we have
-      // no way to determine if the type parameters are in anyway related.
-      //
-      // Right now we fallback to the raw type relationship if the raw types
-      // are different. This is not great, and we'll figure out a better
-      // solution later.
-      if (this.wrapsSameRawType(thatType)) {
-        return (thisParameter.isSubtype(thatParameter)
-            || thatParameter.isSubtype(thisParameter));
-      }
-    }
-
-    return this.getReferencedTypeInternal().isSubtype(thatType);
-  }
-
   boolean wrapsSameRawType(JSType that) {
-    return that.isParameterizedType() && this.getReferencedTypeInternal()
+    return that.isTemplatizedType() && this.getReferencedTypeInternal()
         .isEquivalentTo(
-            that.toMaybeParameterizedType().getReferencedTypeInternal());
+            that.toMaybeTemplatizedType().getReferencedTypeInternal());
   }
 
   boolean wrapsRawType(JSType that) {
@@ -125,14 +116,14 @@ public final class ParameterizedType extends ProxyObjectType {
   }
 
   /**
-   * Computes the greatest subtype of two related parameterized types.
+   * Computes the greatest subtype of two related templatized types.
    * @return The greatest subtype.
    */
   JSType getGreatestSubtypeHelper(JSType rawThat) {
     Preconditions.checkNotNull(rawThat);
 
     if (!wrapsSameRawType(rawThat)) {
-      if (!rawThat.isParameterizedType()) {
+      if (!rawThat.isTemplatizedType()) {
         if (this.isSubtype(rawThat)) {
           return this;
         } else if (rawThat.isSubtype(this)) {
@@ -145,16 +136,34 @@ public final class ParameterizedType extends ProxyObjectType {
       return this.getNativeType(JSTypeNative.NO_TYPE);
     }
 
-    ParameterizedType that = rawThat.toMaybeParameterizedType();
+    TemplatizedType that = rawThat.toMaybeTemplatizedType();
     Preconditions.checkNotNull(that);
 
-    if (this.parameterType.isEquivalentTo(that.parameterType)) {
+    if (getTemplateTypeMap().checkEquivalenceHelper(
+        that.getTemplateTypeMap(), EquivalenceMethod.INVARIANT)) {
       return this;
     }
 
     // For types that have the same raw type but different type parameters,
     // we simply create a type has a "unknown" type parameter.  This is
     // equivalent to the raw type.
+    return getReferencedObjTypeInternal();
+  }
+
+  @Override
+  public TemplateTypeMap getTemplateTypeMap() {
+    return templateTypeMap;
+  }
+
+  @Override
+  public boolean hasAnyTemplateTypesInternal() {
+    return templateTypeMap.hasAnyTemplateTypesInternal();
+  }
+
+  /**
+   * @return The referenced ObjectType wrapped by this TemplatizedType.
+   */
+  public ObjectType getReferencedType() {
     return getReferencedObjTypeInternal();
   }
 }

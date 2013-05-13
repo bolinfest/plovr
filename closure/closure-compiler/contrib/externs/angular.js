@@ -1197,7 +1197,7 @@ angular.NgModelController.prototype.$valid;
 /**
  * @type {!Array.<function()>}
  */
-angular.NgModelController.prototype.$viewChangeListener;
+angular.NgModelController.prototype.$viewChangeListeners;
 
 /**
  * @type {?}
@@ -1450,11 +1450,18 @@ angular.$routeProvider.Params.reloadOnSearch;
  */
 angular.$timeout;
 
-// /**
-//  * This extern is incomplete. $timeout cannot be a function with properties.
-//  * To use cancel, index $timeout.
-//  * Example: $timeout['cancel'](promise);
-//  * @param {angular.$q.Promise=} opt_promise
-//  * @return {boolean}
-//  */
-// angular.$timeout.cancel = function(opt_promise) {};
+/**
+ * Augment the angular.$timeout type definition by reopening the type via an
+ * artificial angular.$timeout instance.
+ *
+ * This allows us to define methods on function objects which is something
+ * that can't be expressed via typical type annotations.
+ *
+ * @type {angular.$timeout}
+ */
+angular.$timeout_;
+
+/**
+ * @type {function(angular.$q.Promise):boolean}
+ */
+angular.$timeout_.cancel = function(promise) {};

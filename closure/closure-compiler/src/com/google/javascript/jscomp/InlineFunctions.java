@@ -140,7 +140,7 @@ class InlineFunctions implements SpecializationAwareCompilerPass {
       return;  // Nothing left to do.
     }
     resolveInlineConflicts();
-    decomposeExpressions(fnNames);
+    decomposeExpressions();
     NodeTraversal.traverse(compiler, root,
         new CallVisitor(
             fns, anonFns, new Inline(injector, specializationState)));
@@ -477,7 +477,7 @@ class InlineFunctions implements SpecializationAwareCompilerPass {
     public void visit(NodeTraversal t, Node n, Node parent) {
       super.visit(t, n, parent);
       if (n.isName()) {
-        checkNameUsage(t, n, parent);
+        checkNameUsage(n, parent);
       }
     }
 
@@ -546,7 +546,7 @@ class InlineFunctions implements SpecializationAwareCompilerPass {
     /**
      * Find functions that can be inlined.
      */
-    private void checkNameUsage(NodeTraversal t, Node n, Node parent) {
+    private void checkNameUsage(Node n, Node parent) {
       Preconditions.checkState(n.isName());
 
       if (isCandidateUsage(n)) {
@@ -639,7 +639,7 @@ class InlineFunctions implements SpecializationAwareCompilerPass {
       String fnName = fn.getName();
       Node fnNode = fs.getSafeFnNode();
 
-      Node newCode = injector.inline(t, callNode, fnName, fnNode, mode);
+      injector.inline(callNode, fnName, fnNode, mode);
       t.getCompiler().reportCodeChange();
       t.getCompiler().addToDebugLog("Inlined function: " + fn.getName());
     }
@@ -800,10 +800,7 @@ class InlineFunctions implements SpecializationAwareCompilerPass {
    * For any call-site that needs it, prepare the call-site for inlining
    * by rewriting the containing expression.
    */
-  private void decomposeExpressions(Set<String> fnNames) {
-    ExpressionDecomposer decomposer = new ExpressionDecomposer(
-        compiler, compiler.getUniqueNameIdSupplier(), fnNames);
-
+  private void decomposeExpressions() {
     for (FunctionState fs : fns.values()) {
       if (fs.canInline()) {
         for (Reference ref : fs.getReferences()) {
@@ -966,7 +963,7 @@ class InlineFunctions implements SpecializationAwareCompilerPass {
 
     public void addReference(Reference ref) {
       if (references == null) {
-        references = Maps.newHashMap();
+        references = Maps.newLinkedHashMap();
       }
       references.put(ref.callNode, ref);
     }

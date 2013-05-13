@@ -135,17 +135,14 @@ class NameReferenceGraphConstruction implements CompilerPass {
         // we're probably going to get an unknown type here.
         JSType type = getType(root);
 
-        Node gParent = parent.getParent();
-        Node ggParent = gParent.getParent();
         if (parent.isAssign() &&
             NodeUtil.isPrototypeProperty(parent.getFirstChild())) {
           pushContainingFunction(
-              recordPrototypePropDefinition(t, parent.getFirstChild(), type,
-                  parent, gParent, ggParent));
+              recordPrototypePropDefinition(parent.getFirstChild(), type, parent));
         } else {
           pushContainingFunction(
               recordStaticNameDefinition(
-                t, name, type, root, parent, gParent, root.getLastChild()));
+                name, type, root, root.getLastChild()));
         }
       }
     }
@@ -185,11 +182,11 @@ class NameReferenceGraphConstruction implements CompilerPass {
           }
 
           if (isPrototypeNameReference(n)) {
-            recordPrototypePropUse(t, n, parent);
+            recordPrototypePropUse(n, parent);
           } else if (isStaticNameReference(n, t.getScope())) {
-            recordStaticNameUse(t, n, parent);
+            recordStaticNameUse(n, parent);
           } else {
-            recordUnknownUse(t, n, parent);
+            recordUnknownUse(n, parent);
           }
           break;
 
@@ -205,7 +202,7 @@ class NameReferenceGraphConstruction implements CompilerPass {
               rhs.isGetProp()) {
             if (NodeUtil.isPrototypeProperty(lhs)) {
               Name name = recordPrototypePropDefinition(
-                  t, lhs, getType(rhs), n, parent, parent.getParent());
+                  lhs, getType(rhs), n);
               name.setAliased(true);
             }
           }
@@ -372,8 +369,8 @@ class NameReferenceGraphConstruction implements CompilerPass {
       return (type.isInstanceType() || type.autoboxesTo() != null);
     }
 
-    private Name recordStaticNameDefinition(NodeTraversal t, String name,
-        JSType type, Node n, Node parent, Node gParent, Node rValue) {
+    private Name recordStaticNameDefinition(String name, JSType type,
+        Node n, Node rValue) {
       if (getNamedContainingFunction() != graph.MAIN) {
         // TODO(user): if A.B() defines A.C(), there is a dependence from
         // A.C() -> A.B(). However, this is not important in module code motion
@@ -382,7 +379,7 @@ class NameReferenceGraphConstruction implements CompilerPass {
       if (type.isConstructor()) {
         return recordClassConstructorOrInterface(
             name, type.toMaybeFunctionType(),
-            n, parent, parent.getParent(), rValue);
+            n, rValue);
       } else {
         Name symbol = graph.defineNameIfNotExists(name, isExtern);
         symbol.setType(type);
@@ -400,8 +397,7 @@ class NameReferenceGraphConstruction implements CompilerPass {
      *     declaration for recording the rValue's type.
      */
     private Name recordPrototypePropDefinition(
-        NodeTraversal t, Node qName, JSType type,
-        @Nullable Node assign, @Nullable Node parent, @Nullable Node gParent) {
+        Node qName, JSType type, @Nullable Node assign) {
       JSType constructor = getType(NodeUtil.getPrototypeClassName(qName));
       FunctionType classType = null;
       String className = null;
@@ -418,7 +414,7 @@ class NameReferenceGraphConstruction implements CompilerPass {
       }
       // In case we haven't seen the function yet.
       recordClassConstructorOrInterface(
-          className, classType, null, null, null, null);
+          className, classType, null, null);
 
       String qNameStr = className + ".prototype." +
           NodeUtil.getPrototypePropertyName(qName);
@@ -433,7 +429,7 @@ class NameReferenceGraphConstruction implements CompilerPass {
     }
 
     private Reference recordStaticNameUse(
-        NodeTraversal t, Node n, Node parent) {
+        Node n, Node parent) {
       if (isExtern) {
         // Don't count reference in extern as a use.
         return null;
@@ -446,8 +442,7 @@ class NameReferenceGraphConstruction implements CompilerPass {
       }
     }
 
-    private void recordPrototypePropUse(
-        NodeTraversal t, Node n, Node parent) {
+    private void recordPrototypePropUse(Node n, Node parent) {
       Preconditions.checkArgument(n.isGetProp());
       Node instance = n.getFirstChild();
       JSType instanceType = getType(instance);
@@ -472,7 +467,7 @@ class NameReferenceGraphConstruction implements CompilerPass {
           // TODO(user): TightenType can help a whole lot here.
           recordSubclassPrototypePropUse(constructor, propName, ref);
         } else {
-          recordUnknownUse(t, n, parent);
+          recordUnknownUse(n, parent);
         }
       }
     }
@@ -513,7 +508,7 @@ class NameReferenceGraphConstruction implements CompilerPass {
       }
     }
 
-    private void recordUnknownUse(NodeTraversal t, Node n, Node parent) {
+    private void recordUnknownUse(Node n, Node parent) {
       if (isExtern) {
         // Don't count reference in extern as a use.
         return;
@@ -531,8 +526,7 @@ class NameReferenceGraphConstruction implements CompilerPass {
      * the properties and prototype properties of this name in the graph.
      */
     private Name recordClassConstructorOrInterface(
-        String name, FunctionType type, @Nullable Node n, @Nullable Node parent,
-        @Nullable Node gParent, @Nullable Node rhs) {
+        String name, FunctionType type, @Nullable Node n, @Nullable Node rhs) {
       Preconditions.checkArgument(type.isConstructor() || type.isInterface());
       Name symbol = graph.defineNameIfNotExists(name, isExtern);
       if (rhs != null) {
