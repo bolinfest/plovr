@@ -3,7 +3,7 @@ package org.plovr;
 import java.io.IOException;
 import java.net.URL;
 
-import sun.org.mozilla.javascript.internal.Scriptable;
+import javax.script.Bindings;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Throwables;
@@ -34,10 +34,10 @@ public class TypeScriptCompiler
 
   @Override
   protected String insertScopeVariablesAndGenerateExecutableJavaScript(
-      Scriptable compileScope, String sourceCode, String sourceName) {
-    compileScope.put("typeScriptInput", compileScope, sourceCode);
-    compileScope.put("filenameForErrorReportingPurposes", compileScope, sourceName);
-    compileScope.put("libraryDefinitions", compileScope, libraryDefinitions);
+      Bindings compileScope, String sourceCode, String sourceName) {
+    compileScope.put("typeScriptInput", sourceCode);
+    compileScope.put("filenameForErrorReportingPurposes", sourceName);
+    compileScope.put("libraryDefinitions", libraryDefinitions);
 
     String js =
         "(function() {\n" +

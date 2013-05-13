@@ -1,13 +1,15 @@
 package org.plovr;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.URL;
 
-import sun.org.mozilla.javascript.internal.Context;
-import sun.org.mozilla.javascript.internal.JavaScriptException;
-import sun.org.mozilla.javascript.internal.NativeObject;
-import sun.org.mozilla.javascript.internal.Scriptable;
+import javax.script.Bindings;
+import javax.script.ScriptContext;
+import javax.script.ScriptEngine;
+import javax.script.ScriptEngineManager;
+import javax.script.ScriptException;
 
 import com.google.common.base.Charsets;
 import com.google.common.io.Resources;
@@ -20,7 +22,7 @@ import com.google.common.io.Resources;
 abstract class AbstractJavaScriptBasedCompiler<T extends Exception> {
 
   /** Scope that has the compiler in memory. */
-  private final Scriptable globalScope;
+  private final Bindings globalScope;
 
   /**
    * @param pathToCompiler should be a path that can be loaded via
@@ -31,21 +33,12 @@ abstract class AbstractJavaScriptBasedCompiler<T extends Exception> {
     try {
       try {
         URL compilerUrl = Resources.getResource(pathToCompiler);
-        String compilerJs = Resources.toString(compilerUrl,
-            Charsets.UTF_8);
-        Context context = Context.enter();
-        context.setOptimizationLevel(-1);
-        try {
-          globalScope = context.initStandardObjects();
-          context.evaluateString(globalScope,
-              compilerJs,
-              pathToCompiler,
-              /* lineno */ 1,
-              /* securityDomain */ null);
-        } finally {
-          Context.exit();
-        }
-      } catch (UnsupportedEncodingException e) {
+        String compilerJs = Resources.toString(compilerUrl, Charsets.UTF_8);
+        ScriptEngineManager factory = new ScriptEngineManager();
+        ScriptEngine engine = factory.getEngineByName("JavaScript");
+        engine.eval(compilerJs);
+        globalScope = engine.getBindings(ScriptContext.ENGINE_SCOPE);
+      } catch (ScriptException e) {
         throw new RuntimeException(e); // This should never happen
       }
     } catch (IOException e) {
@@ -60,40 +53,59 @@ abstract class AbstractJavaScriptBasedCompiler<T extends Exception> {
    */
   public final synchronized String compile(String sourceCode,
       String sourceName) throws T {
-    Context context = Context.enter();
-    try {
-      Scriptable compileScope = context.newObject(globalScope);
-      compileScope.setParentScope(globalScope);
-      String js = insertScopeVariablesAndGenerateExecutableJavaScript(
-          compileScope, sourceCode, sourceName);
-      try {
-        // Run the compiler.
-        final Object securityDomain = null;
-        Object result = context.evaluateString(compileScope, js, sourceName, 1,
-            securityDomain);
 
-        // Return the appropriate value depending on the type of result.
-        if (result == null) {
-          String compilerName = this.getClass().getSimpleName();
-          throw new RuntimeException(
-              "Result from " + compilerName + " compiler was null.");
-        } else if (result instanceof String) {
-          // This is the expected case: source code was successfully
-          // translated to JavaScript.
-          return (String)result;
-        } else if (result instanceof NativeObject) {
-          NativeObject obj = (NativeObject)result;
-          String message = NativeObject.getProperty(obj, "message").toString();
-          throw generateExceptionFromMessage(message);
-        } else {
-          throw new RuntimeException("Unexpected return type: " +
-              result.getClass().getName());
-        }
-      } catch (JavaScriptException e) {
-        throw new RuntimeException(e);
+    try {
+      ScriptEngineManager factory = new ScriptEngineManager();
+      ScriptEngine engine = factory.getEngineByName("JavaScript");
+      engine.setBindings(globalScope, ScriptContext.GLOBAL_SCOPE);
+
+      Bindings localBindings = engine.getBindings(ScriptContext.ENGINE_SCOPE);
+      String js = insertScopeVariablesAndGenerateExecutableJavaScript(
+          localBindings, sourceCode, sourceName);
+
+      Object result = engine.eval(js);
+      // Return the appropriate value depending on the type of result.
+      if (result == null) {
+        String compilerName = this.getClass().getSimpleName();
+        throw new RuntimeException(
+            "Result from " + compilerName + " compiler was null.");
+      } else if (result instanceof String) {
+        // This is the expected case: source code was successfully
+        // translated to JavaScript.
+        return (String)result;
+      } else if (result.getClass().getName().equals(
+          "sun.org.mozilla.javascript.internal.NativeObject")) {
+        String message = extractMessageFromMysteryResultType(result);
+        throw generateExceptionFromMessage(message);
+      } else {
+        throw new RuntimeException("Unexpected return type: " +
+            result.getClass().getName());
       }
-    } finally {
-      Context.exit();
+    } catch (ScriptException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private static String extractMessageFromMysteryResultType(Object result) {
+    try {
+      Method method = result.getClass().getMethod(
+          "getProperty",
+          Class.forName("sun.org.mozilla.javascript.internal.Scriptable"),
+          String.class);
+      String message = method.invoke(null, result, "message").toString();
+      return message;
+    } catch (NoSuchMethodException e) {
+      throw new RuntimeException(e);
+    } catch (SecurityException e) {
+      throw new RuntimeException(e);
+    } catch (ClassNotFoundException e) {
+      throw new RuntimeException(e);
+    } catch (IllegalAccessException e) {
+      throw new RuntimeException(e);
+    } catch (IllegalArgumentException e) {
+      throw new RuntimeException(e);
+    } catch (InvocationTargetException e) {
+      throw new RuntimeException(e);
     }
   }
 
@@ -110,5 +122,5 @@ abstract class AbstractJavaScriptBasedCompiler<T extends Exception> {
    *     event of a failure.
    */
   abstract protected String insertScopeVariablesAndGenerateExecutableJavaScript(
-      Scriptable compileScope, String sourceCode, String sourceName);
+      Bindings compileScope, String sourceCode, String sourceName);
 }

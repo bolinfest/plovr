@@ -1,6 +1,6 @@
 package org.plovr;
 
-import sun.org.mozilla.javascript.internal.Scriptable;
+import javax.script.Bindings;
 
 import com.google.gson.JsonObject;
 
@@ -32,8 +32,8 @@ public class CoffeeScriptCompiler
 
   @Override
   protected String insertScopeVariablesAndGenerateExecutableJavaScript(
-      Scriptable compileScope, String sourceCode, String sourceName) {
-    compileScope.put("coffeeScriptSource", compileScope, sourceCode);
+      Bindings compileScope, String sourceCode, String sourceName) {
+    compileScope.put("coffeeScriptSource", sourceCode);
 
     // Build up the options to the CoffeeScript compiler.
     JsonObject opts = new JsonObject();
