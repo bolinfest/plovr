@@ -474,6 +474,21 @@ goog.ui.Component.prototype.getElement = function() {
 
 
 /**
+ * Gets the component's element. This differs from getElement in that
+ * it assumes that the element exists (i.e. the component has been
+ * rendered/decorated) and will cause an assertion error otherwise (if
+ * assertion is enabled).
+ * @return {!Element} The element for the component.
+ */
+goog.ui.Component.prototype.getElementStrict = function() {
+  var el = this.element_;
+  goog.asserts.assert(
+      el, 'Can not call getElementStrict before rendering/decorating.');
+  return el;
+};
+
+
+/**
  * Sets the component's root element to the given element.  Considered
  * protected and final.
  *
@@ -793,8 +808,6 @@ goog.ui.Component.prototype.exitDocument = function() {
  * @protected
  */
 goog.ui.Component.prototype.disposeInternal = function() {
-  goog.ui.Component.superClass_.disposeInternal.call(this);
-
   if (this.inDocument_) {
     this.exitDocument();
   }
@@ -819,7 +832,8 @@ goog.ui.Component.prototype.disposeInternal = function() {
   this.element_ = null;
   this.model_ = null;
   this.parent_ = null;
-  // TODO(gboyer): delete this.dom_ breaks many unit tests.
+
+  goog.ui.Component.superClass_.disposeInternal.call(this);
 };
 
 

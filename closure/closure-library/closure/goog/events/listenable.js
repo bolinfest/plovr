@@ -44,6 +44,42 @@ goog.events.Listenable.USE_LISTENABLE_INTERFACE = false;
 
 
 /**
+ * An expando property to indicate that an object implements
+ * goog.events.Listenable.
+ *
+ * See addImplementation/isImplementedBy.
+ *
+ * @type {string}
+ * @const
+ * @private
+ */
+goog.events.Listenable.IMPLEMENTED_BY_PROP_ = '__closure_listenable';
+
+
+/**
+ * Marks a given class (constructor) as an implementation of
+ * Listenable, do that we can query that fact at runtime. The class
+ * must have already implemented the interface.
+ * @param {!Function} cls The class constructor. The corresponding
+ *     class must have already implemented the interface.
+ */
+goog.events.Listenable.addImplementation = function(cls) {
+  cls.prototype[goog.events.Listenable.IMPLEMENTED_BY_PROP_] = true;
+};
+
+
+/**
+ * @param {Object} obj The object to check.
+ * @return {boolean} Whether a given instance implements
+ *     Listenable. The class/superclass of the instance must call
+ *     addImplementation.
+ */
+goog.events.Listenable.isImplementedBy = function(obj) {
+  return !!(obj && obj[goog.events.Listenable.IMPLEMENTED_BY_PROP_]);
+};
+
+
+/**
  * Adds an event listener. A listener can only be added once to an
  * object and if it is added again the key for the listener is
  * returned. Note that if the existing listener is a one-off listener
@@ -88,6 +124,8 @@ goog.events.Listenable.prototype.listenOnce;
 /**
  * Removes an event listener which was added with listen() or listenOnce().
  *
+ * Implementation needs to call goog.events.cleanUp.
+ *
  * @param {string} type Event type or array of event types.
  * @param {!Function} listener Callback method, or an object
  *     with a handleEvent function. TODO(user): Consider whether
@@ -104,6 +142,8 @@ goog.events.Listenable.prototype.unlisten;
 /**
  * Removes an event listener which was added with listen() by the key
  * returned by listen().
+ *
+ * Implementation needs to call goog.events.cleanUp.
  *
  * @param {goog.events.ListenableKey} key The key returned by
  *     listen() or listenOnce().
@@ -132,6 +172,9 @@ goog.events.Listenable.prototype.dispatchEvent;
  * Removes all listeners from this listenable. If type is specified,
  * it will only remove listeners of the particular type. otherwise all
  * registered listeners will be removed.
+ *
+ * Implementation needs to call goog.events.cleanUp for each removed
+ * listener.
  *
  * @param {string=} opt_type Type of event to remove, default is to
  *     remove all types.
@@ -169,6 +212,35 @@ goog.events.Listenable.prototype.fireListeners;
 goog.events.Listenable.prototype.getListeners;
 
 
+/**
+ * Gets the goog.events.ListenableKey for the event or null if no such
+ * listener is in use.
+ *
+ * @param {string} type The name of the event without the 'on' prefix.
+ * @param {!Function} listener The listener function to get.
+ * @param {boolean=} capture Whether the listener is a capturing listener.
+ * @param {Object=} opt_listenerScope Object in whose scope to call the
+ *     listener.
+ * @return {goog.events.ListenableKey} the found listener or null if not found.
+ */
+goog.events.Listenable.prototype.getListener;
+
+
+
+/**
+ * Whether there is any active listeners matching the specified
+ * signature. If either the type or capture parameters are
+ * unspecified, the function will match on the remaining criteria.
+ *
+ * @param {string=} opt_type Event type.
+ * @param {boolean=} opt_capture Whether to check for capture or bubble
+ *     listeners.
+ * @return {boolean} Whether there is any active listeners matching
+ *     the requested type and/or capture phase.
+ */
+goog.events.Listenable.prototype.hasListener;
+
+
 
 /**
  * An interface that describes a single registered listener.
@@ -178,8 +250,26 @@ goog.events.ListenableKey = function() {};
 
 
 /**
+ * Counter used to create a unique key
+ * @type {number}
+ * @private
+ */
+goog.events.ListenableKey.counter_ = 0;
+
+
+/**
+ * Reserves a key to be used for ListenableKey#key field.
+ * @return {number} A number to be used to fill ListenableKey#key
+ *     field.
+ */
+goog.events.ListenableKey.reserveKey = function() {
+  return ++goog.events.ListenableKey.counter_;
+};
+
+
+/**
  * The source event target.
- * @type {!Object}
+ * @type {!(Object|goog.events.Listenable|goog.events.EventTarget)}
  */
 goog.events.ListenableKey.prototype.src;
 
@@ -211,3 +301,10 @@ goog.events.ListenableKey.prototype.capture;
  * @type {Object}
  */
 goog.events.ListenableKey.prototype.handler;
+
+
+/**
+ * A globally unique number to identify the key.
+ * @type {number}
+ */
+goog.events.ListenableKey.prototype.key;

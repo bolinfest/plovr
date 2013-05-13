@@ -63,6 +63,15 @@ goog.inherits(goog.ui.Palette, goog.ui.Control);
 
 
 /**
+ * Events fired by the palette object
+ * @enum {string}
+ */
+goog.ui.Palette.EventType = {
+  AFTER_HIGHLIGHT: goog.events.getUniqueId('afterhighlight')
+};
+
+
+/**
  * Palette dimensions (columns x rows).  If the number of rows is undefined,
  * it is calculated on first use.
  * @type {goog.math.Size}
@@ -391,7 +400,7 @@ goog.ui.Palette.prototype.getHighlightedIndex = function() {
 /**
  * Returns the currently highlighted palette item, or null if no item is
  * highlighted.
- * @return {Node} The highlighted item (null if none).
+ * @return {Node} The highlighted item (undefined if none).
  */
 goog.ui.Palette.prototype.getHighlightedItem = function() {
   var items = this.getContent();
@@ -410,6 +419,7 @@ goog.ui.Palette.prototype.setHighlightedIndex = function(index) {
     this.highlightIndex_(this.highlightedIndex_, false);
     this.highlightedIndex_ = index;
     this.highlightIndex_(index, true);
+    this.dispatchEvent(goog.ui.Palette.EventType.AFTER_HIGHLIGHT);
   }
 };
 
@@ -417,7 +427,7 @@ goog.ui.Palette.prototype.setHighlightedIndex = function(index) {
 /**
  * Highlights the given item, or removes the highlight if the argument is null
  * or invalid.  Any previously-highlighted item will be un-highlighted.
- * @param {Node} item Item to highlight.
+ * @param {Node|undefined} item Item to highlight.
  */
 goog.ui.Palette.prototype.setHighlightedItem = function(item) {
   var items = /** @type {Array.<Node>} */ (this.getContent());
@@ -441,8 +451,7 @@ goog.ui.Palette.prototype.getSelectedIndex = function() {
  */
 goog.ui.Palette.prototype.getSelectedItem = function() {
   return this.selectionModel_ ?
-    /** @type {Node} */ (this.selectionModel_.getSelectedItem()) :
-    null;
+      /** @type {Node} */ (this.selectionModel_.getSelectedItem()) : null;
 };
 
 

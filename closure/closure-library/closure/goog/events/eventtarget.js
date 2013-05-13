@@ -27,6 +27,7 @@ goog.require('goog.events');
 goog.require('goog.events.Event');
 goog.require('goog.events.Listenable');
 goog.require('goog.events.Listener');
+goog.require('goog.object');
 
 
 
@@ -85,13 +86,36 @@ goog.events.EventTarget = function() {
     /**
      * Maps of event type to an array of listeners.
      *
-     * @type {Object.<string, !Array.<!goog.events.Listener>>}
+     * @type {Object.<string, !Array.<!goog.events.ListenableKey>>}
      * @private
      */
     this.eventTargetListeners_ = {};
+
+    /**
+     * Whether the EventTarget has been disposed. This is only true
+     * when disposeInternal of EventTarget is completed (whereas
+     * this.isDisposed() is true the moment obj.dispose() is called,
+     * even before calling its disposeInternal).
+     * @type {boolean}
+     * @private
+     */
+    this.reallyDisposed_ = false;
+
+    /**
+     * The object to use for event.target. Useful when mixing in an
+     * EventTarget to another object.
+     * @type {!Object}
+     * @private
+     */
+    this.actualEventTarget_ = this;
   }
 };
 goog.inherits(goog.events.EventTarget, goog.Disposable);
+
+
+if (goog.events.Listenable.USE_LISTENABLE_INTERFACE) {
+  goog.events.Listenable.addImplementation(goog.events.EventTarget);
+}
 
 
 /**
@@ -179,7 +203,7 @@ goog.events.EventTarget.prototype.removeEventListener = function(
 /** @override */
 goog.events.EventTarget.prototype.dispatchEvent = function(e) {
   if (goog.events.Listenable.USE_LISTENABLE_INTERFACE) {
-    if (this.isDisposed()) {
+    if (this.reallyDisposed_) {
       return true;
     }
 
@@ -192,7 +216,7 @@ goog.events.EventTarget.prototype.dispatchEvent = function(e) {
     }
 
     return goog.events.EventTarget.dispatchEventInternal_(
-        this, e, ancestorsTree);
+        this.actualEventTarget_, e, ancestorsTree);
   } else {
     return goog.events.dispatchEvent(this, e);
   }
@@ -217,6 +241,7 @@ goog.events.EventTarget.prototype.disposeInternal = function() {
 
   if (goog.events.Listenable.USE_LISTENABLE_INTERFACE) {
     this.removeAllListeners();
+    this.reallyDisposed_ = true;
   } else {
     goog.events.removeAll(this);
   }
@@ -265,7 +290,8 @@ goog.events.EventTarget.prototype.listenOnce = function(
  */
 goog.events.EventTarget.prototype.listenInternal_ = function(
     type, listener, callOnce, opt_useCapture, opt_listenerScope) {
-  goog.asserts.assert(!this.isDisposed());
+  goog.asserts.assert(
+      !this.reallyDisposed_, 'Can not listen on disposed object.');
 
   var listenerArray = this.eventTargetListeners_[type] ||
       (this.eventTargetListeners_[type] = []);
@@ -296,8 +322,6 @@ goog.events.EventTarget.prototype.listenInternal_ = function(
 /** @override */
 goog.events.EventTarget.prototype.unlisten = function(
     type, listener, opt_useCapture, opt_listenerScope) {
-  goog.asserts.assert(!this.isDisposed());
-
   if (!(type in this.eventTargetListeners_)) {
     return false;
   }
@@ -307,9 +331,7 @@ goog.events.EventTarget.prototype.unlisten = function(
       listenerArray, listener, opt_useCapture, opt_listenerScope);
   if (index > -1) {
     var listenerObj = listenerArray[index];
-    // We still need to mark this as removed as unlisten may be called
-    // when a listener fired (the listener may already be queued to be
-    // fired in the same dispatch sequence).
+    goog.events.cleanUp(listenerObj);
     listenerObj.removed = true;
     return goog.array.removeAt(listenerArray, index);
   }
@@ -319,14 +341,17 @@ goog.events.EventTarget.prototype.unlisten = function(
 
 /** @override */
 goog.events.EventTarget.prototype.unlistenByKey = function(key) {
-  goog.asserts.assert(!this.isDisposed());
-
   var type = key.type;
   if (!(type in this.eventTargetListeners_)) {
     return false;
   }
 
-  return goog.array.remove(this.eventTargetListeners_[type], key);
+  var removed = goog.array.remove(this.eventTargetListeners_[type], key);
+  if (removed) {
+    goog.events.cleanUp(key);
+    key.removed = true;
+  }
+  return removed;
 };
 
 
@@ -337,7 +362,11 @@ goog.events.EventTarget.prototype.removeAllListeners = function(
   for (var type in this.eventTargetListeners_) {
     if (!opt_type || type == opt_type) {
       var listenerArray = this.eventTargetListeners_[type];
-      count += listenerArray.length;
+      for (var i = 0; i < listenerArray.length; i++) {
+        ++count;
+        goog.events.cleanUp(listenerArray[i]);
+        listenerArray[i].removed = true;
+      }
       listenerArray.length = 0;
     }
   }
@@ -348,7 +377,9 @@ goog.events.EventTarget.prototype.removeAllListeners = function(
 /** @override */
 goog.events.EventTarget.prototype.fireListeners = function(
     type, capture, eventObject) {
-  goog.asserts.assert(!this.isDisposed());
+  goog.asserts.assert(
+      !this.reallyDisposed_,
+      'Can not fire listeners after dispose() completed.');
 
   if (!(type in this.eventTargetListeners_)) {
     return true;
@@ -389,13 +420,57 @@ goog.events.EventTarget.prototype.getListeners = function(type, capture) {
 };
 
 
+/** @override */
+goog.events.EventTarget.prototype.getListener = function(
+    type, listener, capture, opt_listenerScope) {
+  var listenerArray = this.eventTargetListeners_[type];
+  var i = -1;
+  if (listenerArray) {
+    i = goog.events.EventTarget.findListenerIndex_(
+        listenerArray, listener, capture, opt_listenerScope);
+  }
+  return i > -1 ? listenerArray[i] : null;
+};
+
+
+/** @override */
+goog.events.EventTarget.prototype.hasListener = function(
+    opt_type, opt_capture) {
+  var hasType = goog.isDef(opt_type);
+  var hasCapture = goog.isDef(opt_capture);
+
+  return goog.object.some(
+      this.eventTargetListeners_, function(listenersArray, type) {
+        for (var i = 0; i < listenersArray.length; ++i) {
+          if ((!hasType || listenersArray[i].type == opt_type) &&
+              (!hasCapture || listenersArray[i].capture == opt_capture)) {
+            return true;
+          }
+        }
+
+        return false;
+      });
+};
+
+
+/**
+ * Sets the target to be used for {@code event.target} when firing
+ * event. Mainly used for testing. For example, see
+ * {@code goog.testing.events.mixinListenable}.
+ * @param {!Object} target The target.
+ */
+goog.events.EventTarget.prototype.setTargetForTesting = function(target) {
+  this.actualEventTarget_ = target;
+};
+
+
 /**
  * Dispatches the given event on the ancestorsTree.
  *
  * TODO(user): Look for a way to reuse this logic in
  * goog.events, if possible.
  *
- * @param {!goog.events.EventTarget} target The target to dispatch on.
+ * @param {!Object} target The target to dispatch on.
  * @param {goog.events.Event|Object|string} e The event object.
  * @param {Array.<goog.events.Listenable>=} opt_ancestorsTree The ancestors
  *     tree of the target, in reverse order from the closest ancestor

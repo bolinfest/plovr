@@ -64,6 +64,7 @@ goog.net.XhrManager = function(
     opt_minCount,
     opt_maxCount,
     opt_timeoutInterval) {
+  goog.base(this);
 
   /**
    * Maximum number of retries for a given request
@@ -528,11 +529,6 @@ goog.net.XhrManager.Event = function(type, target, id, xhrIo) {
   this.xhrLite = /** @type {goog.net.XhrLite} */ (xhrIo);
 };
 goog.inherits(goog.net.XhrManager.Event, goog.events.Event);
-
-
-/** @override */
-goog.net.XhrManager.Event.prototype.disposeInternal = function() {
-};
 
 
 
