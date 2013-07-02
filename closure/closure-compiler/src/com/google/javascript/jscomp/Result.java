@@ -36,7 +36,7 @@ public class Result {
   public final String externExport;
   public final String idGeneratorMap;
 
-  public Result(JSError[] errors, JSError[] warnings, String debugLog,
+  Result(JSError[] errors, JSError[] warnings, String debugLog,
          VariableMap variableMap, VariableMap propertyMap,
          VariableMap namedAnonFunctionMap,
          VariableMap stringMap,

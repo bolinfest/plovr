@@ -45,6 +45,7 @@ import com.google.javascript.jscomp.CompilerPass;
 import com.google.javascript.jscomp.CustomPassExecutionTime;
 import com.google.javascript.jscomp.DiagnosticGroup;
 import com.google.javascript.jscomp.PlovrCompilerOptions;
+import com.google.javascript.jscomp.StrictWarningsGuard;
 import com.google.javascript.jscomp.VariableMap;
 import com.google.javascript.jscomp.WarningLevel;
 import com.google.template.soy.xliffmsgplugin.XliffMsgPluginModule;
@@ -615,6 +616,10 @@ public final class Config implements Comparable<Config> {
     }
 
     options.setExternExports(true);
+
+    if (getTreatWarningsAsErrors()) {                                         
+      options.addWarningsGuard(new StrictWarningsGuard());                    
+    }
 
     // After all of the options are set, apply the experimental Compiler
     // options, which may override existing options that are set.
