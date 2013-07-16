@@ -59,7 +59,7 @@ cd $ORIGINAL_PWD
 java \
 -classpath \
 ${PLOVR_DIR}/build/classes:\
-${PLOVR_DIR}/lib/guava-13.0.1.jar:\
+${PLOVR_DIR}/lib/guava-14.0.1.jar:\
 ${PLOVR_DIR}/lib/gson-2.2.2.jar:\
 ${PLOVR_DIR}/lib/junit-4.8.2.jar:\
 ${PLOVR_DIR}/lib/selenium-java-2.21.0.jar:\

@@ -10,7 +10,6 @@ import org.junit.Test;
 import com.google.common.base.Charsets;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.jscomp.PlovrCompilerOptions;
 
@@ -34,7 +33,6 @@ public class ConfigTest {
     assertFalse(options.getProcessObjectPropertyString());
     assertFalse(options.isExternExportsEnabled());
     assertNull(options.checkMissingGetCssNameBlacklist);
-    assertEquals(CheckLevel.OFF, options.getReportUnknownTypes());
     assertFalse(options.getAcceptConstKeyword());
     assertNull(options.getOutputCharset());
     assertEquals(LanguageMode.ECMASCRIPT3, options.getLanguageIn());
@@ -44,7 +42,6 @@ public class ConfigTest {
     		"\"processObjectPropertyString\": true, " +
     		"\"externExports\": true, " +
     		"\"checkMissingGetCssNameBlacklist\": \"hello world\", " +
-    		"\"reportUnknownTypes\": \"ERROR\", " +
     		"\"acceptConstKeyword\": true, " +
     		"\"outputCharset\": \"UTF-8\", " +
     		"\"languageIn\": \"ECMASCRIPT5\"" +
@@ -54,7 +51,6 @@ public class ConfigTest {
     assertTrue(options.getProcessObjectPropertyString());
     assertTrue(options.isExternExportsEnabled());
     assertEquals("hello world", options.checkMissingGetCssNameBlacklist);
-    assertEquals(CheckLevel.ERROR, options.getReportUnknownTypes());
     assertTrue(options.getAcceptConstKeyword());
     assertEquals(Charsets.UTF_8, options.getOutputCharset());
     assertEquals(LanguageMode.ECMASCRIPT5, options.getLanguageIn());

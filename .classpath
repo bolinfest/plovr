@@ -22,7 +22,7 @@
 	<classpathentry kind="lib" path="closure/closure-templates/java/lib/icu4j-4_8_1_1.jar"/>
 	<classpathentry kind="lib" path="lib/selenium-java-2.21.0.jar"/>
 	<classpathentry kind="lib" path="lib/gson-2.2.2.jar"/>
-	<classpathentry kind="lib" path="lib/guava-13.0.1.jar"/>
+	<classpathentry kind="lib" path="lib/guava-14.0.1.jar"/>
 	<classpathentry kind="lib" path="lib/closure-stylesheets-20130106.jar"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>

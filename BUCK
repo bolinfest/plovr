@@ -41,7 +41,7 @@ prebuilt_jar(
 
 prebuilt_jar(
   name = 'guava',
-  binary_jar = 'lib/guava-13.0.1.jar',
+  binary_jar = 'lib/guava-14.0.1.jar',
 )
 
 prebuilt_jar(
