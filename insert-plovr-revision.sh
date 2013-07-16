@@ -1,7 +1,6 @@
 #!/bin/bash
 
 DIR=build/classes/revisions
-cd `hg root`
+cd "$(git rev-parse --show-toplevel)"
 mkdir -p ${DIR}
-hg tip | grep changeset | awk '{print $2}' > ${DIR}/rev-plovr.txt
-
+git rev-parse HEAD > ${DIR}/rev-plovr.txt

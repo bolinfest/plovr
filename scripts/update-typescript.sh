@@ -11,7 +11,7 @@
 set -e
 
 # Find the root of the plovr repository.
-cd `hg root`
+cd "$(git rev-parse --show-toplevel)"
 PLOVR_DIR="$PWD"
 
 # Build typescript.js.

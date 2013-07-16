@@ -46,7 +46,7 @@ PLOVR_SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 cd $PLOVR_SCRIPT_DIR
 
 # Find the absolute path of the plovr project directory. 
-cd `hg root`
+cd "$(git rev-parse --show-toplevel)"
 PLOVR_DIR="$PWD"
 
 # Navigate back to the original directory and run plovr.

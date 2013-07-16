@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-cd `hg root`
+cd "$(git rev-parse --show-toplevel)"
 
 ant clean jar
 

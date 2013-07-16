@@ -2,7 +2,7 @@
 
 set -e
 
-cd `hg root`
+cd "$(git rev-parse --show-toplevel)"
 
 if [ ! -e "build/plovr.jar" ]; then
   echo "Must build plovr.jar before running this script"
