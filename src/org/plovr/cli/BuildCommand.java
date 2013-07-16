@@ -23,7 +23,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.css.JobDescription;
 import com.google.common.css.compiler.ast.GssError;
 import com.google.common.css.compiler.ast.GssParserException;
-import com.google.common.io.Closeables;
 import com.google.common.io.Files;
 import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.Result;
@@ -116,9 +115,9 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
         // it should only be written out to a file after the compiled code has
         // been generated.
         if (sourceMapPath != null) {
-          Writer writer = Streams.createFileWriter(sourceMapPath, config);
-          result.sourceMap.appendTo(writer, sourceMapName);
-          Closeables.closeQuietly(writer);
+          try (Writer writer = Streams.createFileWriter(sourceMapPath, config)) {
+            result.sourceMap.appendTo(writer, sourceMapName);
+          }
         }
       } else {
         Function<String, String> moduleNameToUri = moduleConfig.

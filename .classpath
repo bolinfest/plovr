@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <classpath>
 	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="src" path="closure/closure-stylesheets/build/genfiles/java"/>
+	<classpathentry kind="src" path="closure/closure-stylesheets/src"/>
 	<classpathentry kind="src" path="closure/closure-templates/build/genfiles"/>
 	<classpathentry kind="src" path="closure/closure-compiler/gen"/>
 	<classpathentry kind="src" path="closure/closure-templates/java/src"/>
@@ -23,6 +25,5 @@
 	<classpathentry kind="lib" path="lib/selenium-java-2.21.0.jar"/>
 	<classpathentry kind="lib" path="lib/gson-2.2.2.jar"/>
 	<classpathentry kind="lib" path="lib/guava-14.0.1.jar"/>
-	<classpathentry kind="lib" path="lib/closure-stylesheets-20130106.jar"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>

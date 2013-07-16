@@ -13,7 +13,6 @@ import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.io.Closeables;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -93,7 +92,12 @@ abstract class AbstractGetHandler implements HttpHandler {
         if (exchange.haveResponseHeadersBeenSent()) {
           // If the response headers have already been sent, then just close
           // whatever has been written to the response.
-          Closeables.closeQuietly(exchange.getResponseBody());
+          try {
+            exchange.getResponseBody().close();
+          } catch (IOException e) {
+            // Let the user know, but don't take down plovr.
+            e.printStackTrace();
+          }
         } else {
           HttpUtil.writeErrorMessageResponse(exchange, t.getMessage());
         }

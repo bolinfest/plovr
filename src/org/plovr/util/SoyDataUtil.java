@@ -43,7 +43,8 @@ public final class SoyDataUtil {
       } else if (primitive.isBoolean()) {
         return BooleanData.forValue(primitive.getAsBoolean());
       } else if (primitive.isNumber()) {
-        if (primitive.getAsDouble() == primitive.getAsInt()) {
+        Number number = primitive.getAsNumber();
+        if (number instanceof Integer) {
           return IntegerData.forValue(primitive.getAsInt());
         } else {
           return FloatData.forValue(primitive.getAsDouble());

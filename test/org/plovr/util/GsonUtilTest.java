@@ -49,7 +49,7 @@ public class GsonUtilTest {
   public void testToListOfStrings() {
     assertEquals(null, GsonUtil.toListOfStrings(null));
 
-    assertEquals(null, GsonUtil.toListOfStrings(new JsonNull()));
+    assertEquals(null, GsonUtil.toListOfStrings(JsonNull.INSTANCE));
 
     assertEquals(ImmutableList.of("foo"),
         GsonUtil.toListOfStrings(new JsonPrimitive("foo")));

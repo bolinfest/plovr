@@ -20,6 +20,7 @@
   <property name="closure.dir" value="${basedir}/closure" />
   <property name="closure-compiler.dir" value="${closure.dir}/closure-compiler" />
   <property name="closure-library.dir" value="${closure.dir}/closure-library" />
+  <property name="closure-stylesheets.dir" value="${closure.dir}/closure-stylesheets" />
   <property name="closure-templates.dir" value="${closure.dir}/closure-templates" />
 
   <available file="${build.dir}/plovr.jar"
@@ -72,10 +73,28 @@
     <ant dir="${closure-templates.dir}" target="compile" inheritAll="false" useNativeBasedir="true" />
 
     <ant dir="${closure-compiler.dir}" target="rhino-jarjar" inheritAll="false" useNativeBasedir="true" />
+
+    <ant dir="${closure-stylesheets.dir}" target="javacc" inheritAll="false" useNativeBasedir="true" />
   </target>
   
   <target name="compile" depends="pre-compile" description="compile Java source code">
     <mkdir dir="${classes.dir}" />
+    <!--
+      Compile Closure Stylesheets genfiles separately because it triggers deprecation
+      warnings, and we would like to compile with warnings treated as errors.
+     -->
+    <javac destdir="${classes.dir}"
+           classpathref="plovr.classpath"
+           debug="on"
+           fork="false"
+           target="1.7"
+           source="1.7"
+           includeantruntime="false"
+           >
+      <compilerarg value="-Werror"/>
+      <src path="${closure-stylesheets.dir}/src" />
+      <src path="${closure-stylesheets.dir}/build/genfiles" />
+    </javac>
     <javac destdir="${classes.dir}"
            classpathref="plovr.classpath"
            debug="on"
