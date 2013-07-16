@@ -1,0 +1,3 @@
+build/
+TESTS-TestSuites.xml
+junit*.properties
