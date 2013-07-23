@@ -7,6 +7,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.Charset;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +47,7 @@ import com.google.javascript.jscomp.CompilerPass;
 import com.google.javascript.jscomp.CustomPassExecutionTime;
 import com.google.javascript.jscomp.DiagnosticGroup;
 import com.google.javascript.jscomp.PlovrCompilerOptions;
+import com.google.javascript.jscomp.SourceMap.LocationMapping;
 import com.google.javascript.jscomp.StrictWarningsGuard;
 import com.google.javascript.jscomp.VariableMap;
 import com.google.javascript.jscomp.WarningLevel;
@@ -625,6 +627,13 @@ public final class Config implements Comparable<Config> {
     }
 
     options.setExternExports(true);
+
+    // Add location mapping for paths in source map.
+    // TODO: Allow an option for generating the "sourceRoot" member in source
+    // maps. See http://code.google.com/p/closure-compiler/issues/detail?id=770
+    List<LocationMapping> locationMappings = Arrays.asList(
+        new LocationMapping("", "/input/" + getId() + "/"));
+    options.setSourceMapLocationMappings(locationMappings);
 
     if (getTreatWarningsAsErrors()) {
       options.addWarningsGuard(new StrictWarningsGuard());
