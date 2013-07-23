@@ -20,6 +20,7 @@ import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.data.SoyMapData;
 import com.google.template.soy.tofu.SoyTofu;
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 
 public class CompileRequestHandler extends AbstractGetHandler {
@@ -83,6 +84,12 @@ public class CompileRequestHandler extends AbstractGetHandler {
           ImmutableList.of(e.createCompilationError()),
           viewSourceUrl,
           builder);
+    }
+
+    // Set header identifying source map unless in RAW mode
+    if (config.getCompilationMode() != CompilationMode.RAW) {
+        Headers responseHeaders = exchange.getResponseHeaders();
+        responseHeaders.set("X-SourceMap", "/sourcemap?id=" + config.getId());
     }
 
     Responses.writeJs(builder.toString(), config, exchange);
