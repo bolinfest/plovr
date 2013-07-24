@@ -211,7 +211,7 @@ class DefaultVisitController implements MutatingVisitController {
 
   /**
    * Base class for VisitStates which control visits of {@link CssNodesListNode}
-   * children and can replace currently visited node with replacement nodes.
+   * children and can replace currently visited node with replacement nodes.
    *
    * @param <T> type of the children CSS nodes that can be used as a replacement
    *     for currently visited block node
