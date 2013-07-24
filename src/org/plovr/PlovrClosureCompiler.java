@@ -16,7 +16,6 @@ public class PlovrClosureCompiler extends Compiler {
 
   private PlovrDiagnosticGroups diagnosticGroups = new PlovrDiagnosticGroups();
 
-  public PlovrClosureCompiler() { super(); }
   public PlovrClosureCompiler(PrintStream errorStream) { super(errorStream); }
 
   @Override

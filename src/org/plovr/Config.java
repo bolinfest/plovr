@@ -260,7 +260,7 @@ public final class Config implements Comparable<Config> {
         allowedNonStandardCssFunctions);
     this.gssFunctionMapProviderClassName = gssFunctionMapProviderClassName;
     this.cssOutputFile = cssOutputFile;
-    this.errorStream = errorStream;
+    this.errorStream = Preconditions.checkNotNull(errorStream);
   }
 
   public static Builder builder(File relativePathBase, File configFile,
@@ -919,7 +919,7 @@ public final class Config implements Comparable<Config> {
 
     private File cssOutputFile = null;
 
-    private PrintStream errorStream;
+    private PrintStream errorStream = System.err;
 
     /**
      * Pattern to validate a config id. A config id may not contain funny
@@ -1362,7 +1362,7 @@ public final class Config implements Comparable<Config> {
     }
 
     public void setErrorStream(PrintStream errorStream) {
-      this.errorStream = errorStream;
+      this.errorStream = Preconditions.checkNotNull(errorStream);
     }
 
     public Config build() {

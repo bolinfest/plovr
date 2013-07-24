@@ -51,10 +51,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
     }
 
     for (String configFile: arguments) {
-      Config.Builder configBuilder = Config.builder(
-          ConfigParser.parseFile(new File(configFile)));
-      configBuilder.setErrorStream(System.err);
-      Config config = configBuilder.build();
+      Config config = ConfigParser.parseFile(new File(configFile));
       Compilation compilation;
       try {
         compilation = CompileRequestHandler.compile(config);
