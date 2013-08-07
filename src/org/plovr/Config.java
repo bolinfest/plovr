@@ -493,9 +493,11 @@ public final class Config implements Comparable<Config> {
     logger.info("Compiling with level: " + level);
     PlovrCompilerOptions options = new PlovrCompilerOptions();
     level.setOptionsForCompilationLevel(options);
+    /* Edit by EasyGIS [ET]
     if (debug) {
       level.setDebugOptionsForCompilationLevel(options);
     }
+    */
     options.setCodingConvention(new ClosureCodingConvention());
     warningLevel.setOptionsForWarningLevel(options);
     options.prettyPrint = prettyPrint;
@@ -524,6 +526,8 @@ public final class Config implements Comparable<Config> {
         }
       }
     }
+    // Edit by EasyGIS [ET]
+    options.setDefineToBooleanLiteral("goog.DEBUG", debug);
 
     options.exportTestFunctions = exportTestFunctions;
     options.stripNameSuffixes = stripNameSuffixes;
