@@ -13,11 +13,19 @@ public class BuildCommandOptions extends AbstractCommandOptions {
       usage = "Specifies where the source map for the compilation should be written")
   private String sourceMapPath = null;
 
+  @Option(name = "--goog-debug",
+      usage = "Define goog.DEBUG is true")
+  private boolean debug = false;
+
   @Argument
   private List<String> arguments = Lists.newLinkedList();
 
   public String getSourceMapPath() {
     return sourceMapPath;
+  }
+
+  public boolean getDebug() {
+    return debug;
   }
 
   public List<String> getArguments() {
