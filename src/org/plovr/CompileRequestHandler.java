@@ -1,13 +1,5 @@
 package org.plovr;
 
-import java.io.IOException;
-import java.net.URL;
-import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import org.plovr.io.Responses;
-
 import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
@@ -20,7 +12,16 @@ import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.data.SoyMapData;
 import com.google.template.soy.tofu.SoyTofu;
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
+
+import org.plovr.io.Responses;
+
+import java.io.IOException;
+import java.net.URL;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class CompileRequestHandler extends AbstractGetHandler {
 
@@ -83,6 +84,12 @@ public class CompileRequestHandler extends AbstractGetHandler {
           ImmutableList.of(e.createCompilationError()),
           viewSourceUrl,
           builder);
+    }
+
+    // Set header identifying source map unless in RAW mode.
+    if (config.getCompilationMode() != CompilationMode.RAW) {
+      Headers responseHeaders = exchange.getResponseHeaders();
+      responseHeaders.set("X-SourceMap", "/sourcemap?id=" + config.getId());
     }
 
     Responses.writeJs(builder.toString(), config, exchange);

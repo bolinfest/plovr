@@ -2,10 +2,12 @@ package org.plovr;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.Charset;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +47,7 @@ import com.google.javascript.jscomp.CompilerPass;
 import com.google.javascript.jscomp.CustomPassExecutionTime;
 import com.google.javascript.jscomp.DiagnosticGroup;
 import com.google.javascript.jscomp.PlovrCompilerOptions;
+import com.google.javascript.jscomp.SourceMap.LocationMapping;
 import com.google.javascript.jscomp.StrictWarningsGuard;
 import com.google.javascript.jscomp.VariableMap;
 import com.google.javascript.jscomp.WarningLevel;
@@ -163,6 +166,8 @@ public final class Config implements Comparable<Config> {
 
   private final File cssOutputFile;
 
+  private final PrintStream errorStream;
+
   /**
    * @param id Unique identifier for the configuration. This is used as an
    *        argument to the &lt;script> tag that loads the compiled code.
@@ -212,7 +217,8 @@ public final class Config implements Comparable<Config> {
       List<String> allowedUnrecognizedProperties,
       List<String> allowedNonStandardCssFunctions,
       String gssFunctionMapProviderClassName,
-      File cssOutputFile) {
+      File cssOutputFile,
+      PrintStream errorStream) {
     Preconditions.checkNotNull(defines);
 
     this.id = id;
@@ -260,6 +266,7 @@ public final class Config implements Comparable<Config> {
         allowedNonStandardCssFunctions);
     this.gssFunctionMapProviderClassName = gssFunctionMapProviderClassName;
     this.cssOutputFile = cssOutputFile;
+    this.errorStream = Preconditions.checkNotNull(errorStream);
   }
 
   public static Builder builder(File relativePathBase, File configFile,
@@ -464,6 +471,10 @@ public final class Config implements Comparable<Config> {
     return cssOutputFile;
   }
 
+  public PrintStream getErrorStream() {
+    return errorStream;
+  }
+
   public List<WebDriverFactory> getWebDriverFactories() {
     return ImmutableList.copyOf(testDrivers);
   }
@@ -622,8 +633,15 @@ public final class Config implements Comparable<Config> {
 
     options.setExternExports(true);
 
-    if (getTreatWarningsAsErrors()) {                                         
-      options.addWarningsGuard(new StrictWarningsGuard());                    
+    // Add location mapping for paths in source map.
+    // TODO: Allow an option for generating the "sourceRoot" member in source
+    // maps. See http://code.google.com/p/closure-compiler/issues/detail?id=770
+    List<LocationMapping> locationMappings = Arrays.asList(
+        new LocationMapping("", "/input/" + getId() + "/"));
+    options.setSourceMapLocationMappings(locationMappings);
+
+    if (getTreatWarningsAsErrors()) {
+      options.addWarningsGuard(new StrictWarningsGuard());
     }
 
     // After all of the options are set, apply the experimental Compiler
@@ -917,6 +935,8 @@ public final class Config implements Comparable<Config> {
 
     private File cssOutputFile = null;
 
+    private PrintStream errorStream = System.err;
+
     /**
      * Pattern to validate a config id. A config id may not contain funny
      * characters, such as slashes, because ids are used in RESTful URLs, so
@@ -996,6 +1016,7 @@ public final class Config implements Comparable<Config> {
       this.gssFunctionMapProviderClassName = config.
           gssFunctionMapProviderClassName;
       this.cssOutputFile = config.cssOutputFile;
+      this.errorStream = config.errorStream;
     }
 
     /** Directory against which relative paths should be resolved. */
@@ -1361,6 +1382,10 @@ public final class Config implements Comparable<Config> {
       this.cssOutputFile = cssOutputFile;
     }
 
+    public void setErrorStream(PrintStream errorStream) {
+      this.errorStream = Preconditions.checkNotNull(errorStream);
+    }
+
     public Config build() {
       File closureLibraryDirectory = pathToClosureLibrary != null
           ? new File(pathToClosureLibrary)
@@ -1446,7 +1471,8 @@ public final class Config implements Comparable<Config> {
           allowedUnrecognizedProperties,
           allowedNonStandardFunctions,
           gssFunctionMapProviderClassName,
-          cssOutputFile);
+          cssOutputFile,
+          errorStream);
 
       return config;
     }

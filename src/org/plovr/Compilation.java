@@ -89,7 +89,7 @@ public final class Compilation {
     if (config.getCompilationMode() == CompilationMode.RAW) {
       compileRaw(config);
     } else {
-      PlovrClosureCompiler compiler = new PlovrClosureCompiler();
+      PlovrClosureCompiler compiler = new PlovrClosureCompiler(config.getErrorStream());
       compile(config, compiler, config.getCompilerOptions(compiler));
     }
   }

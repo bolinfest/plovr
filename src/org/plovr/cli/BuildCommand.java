@@ -82,13 +82,6 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
     Result result = compilation.getResult();
     boolean success = (result.success && result.errors.length == 0);
     if (success) {
-
-      // Even if there were no errors, there may have been warnings, so print
-      // them to standard error, but do not declare a build failure.
-      for (JSError warning : result.warnings) {
-        printJsErrorToStdErr(warning);
-      }
-
       // write mapping files if requested
       if (config.getVariableMapOutputFile() != null) {
         File variableMapOutputFile = config.getVariableMapOutputFile();
@@ -127,46 +120,9 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
             createModuleNameToUriFunction();
         compilation.writeCompiledCodeToFiles(moduleNameToUri, sourceMapPath);
       }
-    } else {
-      for (JSError error : result.errors) {
-        printJsErrorToStdErr(error);
-      }
-      for (JSError warning : result.warnings) {
-        printJsErrorToStdErr(warning);
-      }
     }
 
-    printSummary(result, compilation);
     return success;
-  }
-
-  /**
-   * Prints out the error message followed by a newline. It turns out that when
-   * you have a lot of errors, they run together if you do not have a line
-   * between them.
-   */
-  private static void printJsErrorToStdErr(JSError error) {
-    System.err.println(error + "\n");
-  }
-
-  private void printSummary(Result result, Compilation compilation) {
-    if (result.errors.length > 0) {
-      System.err.print("BUILD FAILED: ");
-    } else if (result.warnings.length > 0) {
-      System.err.print("ATTENTION: ");
-    }
-
-    Double typedPercent = compilation.getTypedPercent();
-    if (typedPercent != null) {
-      if (typedPercent > 0.0) {
-        System.err.printf("%d error(s), %d warning(s), %.2f%% typed\n",
-            result.errors.length, result.warnings.length,
-            compilation.getTypedPercent());
-      } else {
-        System.err.printf("%d error(s), %d warning(s)\n", result.errors.length,
-            result.warnings.length);
-      }
-    }
   }
 
   private boolean processCssIfPresent(Config config) throws IOException {
