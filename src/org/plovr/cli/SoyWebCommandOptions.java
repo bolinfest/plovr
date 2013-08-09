@@ -54,9 +54,13 @@ public class SoyWebCommandOptions extends AbstractCommandOptions {
       "define custom functions or print directives for Closure Templates.")
   private String pluginModuleNames;
 
-  @Option(name = "--https",
-      usage = "Serve via https://")
-  private boolean isHttps = false;
+  @Option(name = "--jks",
+      usage = "Keystore file (.jks) containing SSL certificates to serve via https://")
+  private String jksFile = "";
+
+  @Option(name = "--passphrase",
+      usage = "Passphrase for the keystore (--jks)")
+  private String passphrase = "";
 
   public SoyWebCommandOptions() {}
 
@@ -92,7 +96,11 @@ public class SoyWebCommandOptions extends AbstractCommandOptions {
     return pluginModuleNames;
   }
 
-  public boolean isHttps() {
-    return isHttps;
+  public String getJksFile() {
+    return jksFile;
+  }
+
+  public String getPassphrase() {
+    return passphrase;
   }
 }

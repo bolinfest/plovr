@@ -51,7 +51,10 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
     }
 
     for (String configFile: arguments) {
-      Config config = ConfigParser.parseFile(new File(configFile));
+      Config.Builder builder = ConfigParser.createBuilderFromFile(
+	    new File(configFile));
+      builder.setGoogDebug(options.getDebug());
+      Config config = builder.build();
       Compilation compilation;
       try {
         compilation = CompileRequestHandler.compile(config);

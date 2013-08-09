@@ -102,6 +102,8 @@ public final class Config implements Comparable<Config> {
 
   private final boolean debug;
 
+  private final boolean googDebug;
+
   private final boolean prettyPrint;
 
   private final boolean printInputDelimiter;
@@ -185,6 +187,7 @@ public final class Config implements Comparable<Config> {
       CompilationMode compilationMode,
       WarningLevel warningLevel,
       boolean debug,
+      boolean googDebug,
       boolean prettyPrint,
       boolean printInputDelimiter,
       @Nullable File outputFile,
@@ -230,6 +233,7 @@ public final class Config implements Comparable<Config> {
     this.compilationMode = compilationMode;
     this.warningLevel = warningLevel;
     this.debug = debug;
+    this.googDebug = googDebug;
     this.prettyPrint = prettyPrint;
     this.printInputDelimiter = printInputDelimiter;
     this.outputFile = outputFile;
@@ -515,6 +519,7 @@ public final class Config implements Comparable<Config> {
       options.inputDelimiter = "// Input %num%: %name%";
     }
     options.setOutputCharset(getOutputCharset().name());
+    options.setDefineToBooleanLiteral("goog.DEBUG", googDebug);
 
     // Apply this.defines.
     for (Map.Entry<String, JsonPrimitive> entry : defines.entrySet()) {
@@ -870,6 +875,8 @@ public final class Config implements Comparable<Config> {
 
     private boolean debug = false;
 
+    private boolean googDebug = true;
+
     private boolean prettyPrint = false;
 
     private boolean printInputDelimiter = false;
@@ -978,6 +985,7 @@ public final class Config implements Comparable<Config> {
       this.compilationMode = config.compilationMode;
       this.warningLevel = config.warningLevel;
       this.debug = config.debug;
+      this.googDebug = config.googDebug;
       this.prettyPrint = config.prettyPrint;
       this.printInputDelimiter = config.printInputDelimiter;
       this.outputFile = config.outputFile;
@@ -1201,6 +1209,10 @@ public final class Config implements Comparable<Config> {
 
     public void setDebugOptions(boolean debug) {
       this.debug = debug;
+    }
+
+    public void setGoogDebug(boolean googDebug) {
+      this.googDebug = googDebug;
     }
 
     public void setPrettyPrint(boolean prettyPrint) {
@@ -1429,6 +1441,7 @@ public final class Config implements Comparable<Config> {
           compilationMode,
           warningLevel,
           debug,
+          googDebug,
           prettyPrint,
           printInputDelimiter,
           outputFile,
