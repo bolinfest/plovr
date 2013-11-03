@@ -503,6 +503,9 @@ public final class Config implements Comparable<Config> {
     CompilationLevel level = compilationMode.getCompilationLevel();
     logger.info("Compiling with level: " + level);
     PlovrCompilerOptions options = new PlovrCompilerOptions();
+
+    options.setTreatWarningsAsErrors(getTreatWarningsAsErrors());
+
     level.setOptionsForCompilationLevel(options);
     if (debug) {
       level.setDebugOptionsForCompilationLevel(options);

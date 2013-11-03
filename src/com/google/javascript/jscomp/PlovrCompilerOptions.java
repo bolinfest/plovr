@@ -38,4 +38,19 @@ public class PlovrCompilerOptions extends CompilerOptions {
   public Charset getOutputCharset() {
     return super.getOutputCharset();
   }
+
+  private boolean treatWarningsAsErrors = false;
+
+  /**
+   * If treatWarningsAsErrors is set to true, future calls to setWarningLevel
+   * will always interpret WARNING as ERROR.
+   */
+  public void setTreatWarningsAsErrors(boolean value) {
+    treatWarningsAsErrors = value;
+  }
+
+  @Override public void setWarningLevel(DiagnosticGroup group, CheckLevel level) {
+    boolean escalateToError = treatWarningsAsErrors && level == CheckLevel.WARNING;
+    super.setWarningLevel(group, escalateToError ? CheckLevel.ERROR : level);
+  }
 }
