@@ -23,6 +23,12 @@
   <property name="closure-stylesheets.dir" value="${closure.dir}/closure-stylesheets" />
   <property name="closure-templates.dir" value="${closure.dir}/closure-templates" />
 
+  <!--
+    Use -Dtest.class to change what tests are run on the command-line.
+    i.e., -Dtest.class=PlovrSoySyntaxExceptionTest will run just that test class.
+  -->
+  <property name="test.class" value="*Test"/>
+
   <available file="${build.dir}/plovr.jar"
              type="file"
              property="jar.present"
@@ -155,18 +161,25 @@
   <target name="test"
           depends="jar"
           description="run the unit tests">
+    <mkdir dir="build/testoutput"/>
     <junit failureproperty="hasFailingTests"
            showoutput="true">
-
       <formatter type="plain" usefile="false" />
+      <formatter type="xml" />
 
-      <batchtest fork="yes">
+      <batchtest fork="yes" todir="build/testoutput">
         <fileset dir="${test.dir}">
-          <include name="**/*Test.java" />
+          <include name="**/${test.class}.java" />
         </fileset>
       </batchtest>
       <classpath refid="plovr.classpath"></classpath>
     </junit>
+
+    <junitreport todir="build/testoutput">
+       <fileset dir="build/testoutput" includes="*.xml"/>
+       <report todir="build/testoutput" />
+    </junitreport>
+
     <fail if="hasFailingTests" />
 
     <ant dir="${testdata.dir}" target="build" />
