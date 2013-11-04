@@ -13,6 +13,7 @@ import java.util.Set;
 import org.junit.Test;
 
 import com.google.common.base.Function;
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -61,8 +62,11 @@ public class ConfigParserTest {
     assertEquals("Should have only one path", 1, paths.size());
     File path = Iterables.getFirst(paths, null);
     assertTrue(
-        "path should be a subdirectory of inherits, not child",
-        path.getAbsolutePath().endsWith("inherits/child/../fakedir"));
+        "path should be a subdirectory of inherits, not child\n" +
+        "Got: " + path.getAbsolutePath(),
+        path.getAbsolutePath().endsWith(
+            Joiner.on(File.separator).join(
+                "inherits", "child", "..", "fakedir")));
 
     // id-generators
     Set<String> idGenerators = config.getIdGenerators();
