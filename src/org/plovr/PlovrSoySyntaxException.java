@@ -14,7 +14,7 @@ import com.google.template.soy.base.SoySyntaxException;
  *
  * @author bolinfest@gmail.com (Michael Bolin)
  */
-public final class PlovrSoySyntaxException extends RuntimeException {
+public final class PlovrSoySyntaxException extends UncheckedCompilationException {
 
   private static final long serialVersionUID = 1L;
 
@@ -83,5 +83,9 @@ public final class PlovrSoySyntaxException extends RuntimeException {
 
   public JsInput getInput() {
     return input;
+  }
+
+  @Override public CompilationException toCheckedException() {
+    return new CheckedSoySyntaxException(this);
   }
 }

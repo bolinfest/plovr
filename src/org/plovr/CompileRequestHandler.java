@@ -37,27 +37,11 @@ public class CompileRequestHandler extends AbstractGetHandler {
     TOFU = fileSet.compileToTofu();
   }
 
-  private final Gson gson;
-
-  private final String plovrJsLib;
+  private final ClientErrorReporter reporter;
 
   public CompileRequestHandler(CompilationServer server) {
     super(server);
-
-    GsonBuilder gsonBuilder = new GsonBuilder();
-    gsonBuilder.registerTypeAdapter(CompilationError.class,
-        new CompilationErrorSerializer());
-    gson = gsonBuilder.create();
-
-    URL plovrJsLibUrl = Resources.getResource("org/plovr/plovr.js");
-    String plovrJsLib;
-    try {
-      plovrJsLib = Resources.toString(plovrJsLibUrl, Charsets.US_ASCII);
-    } catch (IOException e) {
-      logger.log(Level.SEVERE, "Error loading errors.js", e);
-      plovrJsLib = null;
-    }
-    this.plovrJsLib = plovrJsLib;
+    this.reporter = new ClientErrorReporter();
   }
 
   @Override
@@ -79,11 +63,10 @@ public class CompileRequestHandler extends AbstractGetHandler {
       Preconditions.checkState(builder.length() == 0,
           "Should not write errors to builder if output has already been written");
       String viewSourceUrl = getViewSourceUrlForExchange(exchange);
-      writeErrors(
-          config,
-          ImmutableList.of(e.createCompilationError()),
-          viewSourceUrl,
-          builder);
+      reporter.newReport(config)
+          .withErrors(ImmutableList.of(e.createCompilationError()))
+          .withViewSourceUrl(viewSourceUrl)
+          .appendTo(builder);
     }
 
     // Set header identifying source map unless in RAW mode.
@@ -124,11 +107,10 @@ public class CompileRequestHandler extends AbstractGetHandler {
     try {
       compilation = compile(config);
     } catch (CompilationException e) {
-      writeErrors(
-          config,
-          ImmutableList.of(e.createCompilationError()),
-          viewSourceUrl,
-          appendable);
+      reporter.newReport(config)
+          .withErrors(ImmutableList.of(e.createCompilationError()))
+          .withViewSourceUrl(viewSourceUrl)
+          .appendTo(appendable);
       return;
     }
 
@@ -173,44 +155,11 @@ public class CompileRequestHandler extends AbstractGetHandler {
     // Write out the plovr library, even if there are no warnings.
     // It is small, and it exports some symbols that may be of use to
     // developers.
-    writeErrorsAndWarnings(
-        config,
-        compilation.getCompilationErrors(),
-        compilation.getCompilationWarnings(),
-        viewSourceUrl,
-        appendable);
-  }
-
-  private void writeErrors(
-      Config config,
-      List<CompilationError> errors,
-      String viewSourceUrl,
-      Appendable builder)
-  throws IOException {
-    writeErrorsAndWarnings(
-        config,
-        errors,
-        ImmutableList.<CompilationError>of(),
-        viewSourceUrl,
-        builder);
-  }
-
-  private void writeErrorsAndWarnings(
-      Config config,
-      List<CompilationError> errors,
-      List<CompilationError> warnings,
-      String viewSourceUrl,
-      Appendable builder) throws IOException {
-    Preconditions.checkNotNull(errors);
-    Preconditions.checkNotNull(builder);
-
-    String configIdJsString = gson.toJson(config.getId());
-    builder.append(plovrJsLib)
-        .append("plovr.addErrors(").append(gson.toJson(errors)).append(");\n")
-        .append("plovr.addWarnings(").append(gson.toJson(warnings)).append(");\n")
-        .append("plovr.setConfigId(").append(configIdJsString).append(");\n")
-        .append("plovr.setViewSourceUrl(\"").append(viewSourceUrl).append("\");\n")
-        .append("plovr.writeErrorsOnLoad();\n");
+    reporter.newReport(config)
+        .withErrors(compilation.getCompilationErrors())
+        .withWarnings(compilation.getCompilationWarnings())
+        .withViewSourceUrl(viewSourceUrl)
+        .appendTo(appendable);
   }
 
   private String getViewSourceUrlForExchange(HttpExchange exchange) {
