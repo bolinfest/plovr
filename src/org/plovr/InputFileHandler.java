@@ -1,20 +1,10 @@
 package org.plovr;
 
-import java.io.IOException;
-import java.net.URI;
-import java.util.List;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import org.plovr.JsInput.CodeWithEtag;
-import org.plovr.io.Responses;
-import org.plovr.util.HttpExchangeUtil;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Functions;
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableList;
 import com.google.common.io.Resources;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -22,8 +12,19 @@ import com.google.gson.JsonPrimitive;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.data.SoyMapData;
 import com.google.template.soy.tofu.SoyTofu;
+
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
+import org.plovr.JsInput.CodeWithEtag;
+import org.plovr.io.Responses;
+import org.plovr.util.HttpExchangeUtil;
+
+import java.io.IOException;
+import java.net.URI;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * {@link InputFileHandler} serves the content of input files to a compilation.
@@ -49,8 +50,11 @@ public class InputFileHandler extends AbstractGetHandler {
     TOFU = fileSet.compileToTofu();
   }
 
+  private final ClientErrorReporter reporter;
+
   public InputFileHandler(CompilationServer server) {
     super(server, true /* usesRestfulPath */);
+    this.reporter = new ClientErrorReporter();
   }
 
   /**
@@ -139,7 +143,15 @@ public class InputFileHandler extends AbstractGetHandler {
     String depsJsName = Manifest.DEPS_JS_INPUT_NAME;
     if (name.equals(depsJsName)) {
       super.setCacheHeaders(exchange.getResponseHeaders());
-      Responses.writeJs(getCodeForDepsJs(manifest), config, exchange);
+      StringBuilder builder = new StringBuilder();
+      try {
+        builder.append(getCodeForDepsJs(manifest));
+      } catch (UncheckedCompilationException e) {
+        reporter.newReport(config)
+            .withErrors(ImmutableList.of(e.createCompilationError()))
+            .appendTo(builder);
+      }
+      Responses.writeJs(builder.toString(), config, exchange);
       return;
     }
 
@@ -159,35 +171,43 @@ public class InputFileHandler extends AbstractGetHandler {
 
     // Find the code for the requested input.
     String code;
-    if (requestedInput == null) {
-      code = null;
-    } else if (requestedInput.supportsEtags()) {
-      // Set/check an ETag, if appropriate.
-      CodeWithEtag codeWithEtag = requestedInput.getCodeWithEtag();
-      String eTag = codeWithEtag.eTag;
-      String ifNoneMatch = exchange.getRequestHeaders().getFirst(
-          "If-None-Match");
-      if (eTag.equals(ifNoneMatch) &&
-          !HttpExchangeUtil.isGoogleChrome(exchange)) {
-        Responses.notModified(exchange);
-        return;
+    try {
+      if (requestedInput == null) {
+        code = null;
+      } else if (requestedInput.supportsEtags()) {
+        // Set/check an ETag, if appropriate.
+        CodeWithEtag codeWithEtag = requestedInput.getCodeWithEtag();
+        String eTag = codeWithEtag.eTag;
+        String ifNoneMatch = exchange.getRequestHeaders().getFirst(
+            "If-None-Match");
+        if (eTag.equals(ifNoneMatch) &&
+            !HttpExchangeUtil.isGoogleChrome(exchange)) {
+          Responses.notModified(exchange);
+          return;
+        } else {
+          Headers headers = exchange.getResponseHeaders();
+          headers.set("ETag", eTag);
+          code = codeWithEtag.code;
+        }
       } else {
-        Headers headers = exchange.getResponseHeaders();
-        headers.set("ETag", eTag);
-        code = codeWithEtag.code;
+        // Do not set cache headers if the logic for ETags has not been defined
+        // for this JsInput. Setting an "Expires" header based on the last
+        // modified time for a file has been observed to cause resources to be
+        // cached incorrectly by IE6.
+        super.setCacheHeaders(exchange.getResponseHeaders());
+        code = requestedInput.getCode();
       }
-    } else {
-      // Do not set cache headers if the logic for ETags has not been defined
-      // for this JsInput. Setting an "Expires" header based on the last
-      // modified time for a file has been observed to cause resources to be
-      // cached incorrectly by IE6.
-      super.setCacheHeaders(exchange.getResponseHeaders());
-      code = requestedInput.getCode();
-    }
 
-    if (code == null) {
-      HttpUtil.writeNullResponse(exchange);
-      return;
+      if (code == null) {
+        HttpUtil.writeNullResponse(exchange);
+        return;
+      }
+    } catch (UncheckedCompilationException e) {
+      StringBuilder builder = new StringBuilder();
+      reporter.newReport(config)
+          .withErrors(ImmutableList.of(e.createCompilationError()))
+          .appendTo(builder);
+      code = builder.toString();
     }
 
     Responses.writeJs(code, config, exchange);

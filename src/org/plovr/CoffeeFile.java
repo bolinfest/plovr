@@ -21,7 +21,7 @@ public class CoffeeFile extends LocalFileJsInput {
    *     encounters an error trying to compile the source
    */
   @Override
-  public String getCode() throws PlovrCoffeeScriptCompilerException {
+  public String getCode() {
     try {
       return CoffeeScriptCompiler.getInstance().compile(
           Files.toString(getSource()), getName());
