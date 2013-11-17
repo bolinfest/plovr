@@ -64,6 +64,9 @@ prebuilt_jar(
 prebuilt_jar(
   name = 'args4j',
   binary_jar = 'lib/args4j.jar',
+  visibility = [
+    'PUBLIC',
+  ],
 )
 
 prebuilt_jar(
@@ -79,14 +82,23 @@ prebuilt_jar(
 prebuilt_jar(
   name = 'json',
   binary_jar = 'lib/json.jar',
+  visibility = [
+    'PUBLIC',
+  ],
 )
 
 prebuilt_jar(
   name = 'jsr305',
   binary_jar = 'lib/jsr305.jar',
+  visibility = [
+    'PUBLIC',
+  ],
 )
 
 prebuilt_jar(
   name = 'protobuf',
   binary_jar = 'lib/protobuf-java.jar',
+  visibility = [
+    'PUBLIC',
+  ],
 )

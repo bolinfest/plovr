@@ -1,3 +1,24 @@
+java_library(
+  name = 'closure-templates',
+  srcs = glob(['java/src/**/*.java']) + [ genfile('parser.src.zip') ],
+  deps = [
+    ':aopalliance',
+    ':args4j',
+    ':cglib',
+    ':guava',
+    ':guice',
+    ':guice-assistedinject',
+    ':guice-multibindings',
+    ':icu4j',
+    ':javacc',
+    ':jsr305',
+    ':jsr330',
+    ':objenesis',
+    '//closure/closure-compiler:ant',
+  ],
+  visibility = [ 'PUBLIC' ],
+)
+
 genrule(
   name = 'javacc',
   srcs = [
@@ -7,57 +28,8 @@ genrule(
     'java/src/com/google/template/soy/soyparse/SoyFileParser.jj',
     'java/src/com/google/template/soy/soyparse/TemplateParser.jj',
   ],
-  cmd = '$SRCS $OUT',
-  out = 'parser.src.tar',
-)
-
-DEPS = [
-  ':aopalliance',
-  ':args4j',
-  ':cglib',
-  ':guava',
-  ':guice',
-  ':guice-assistedinject',
-  ':guice-multibindings',
-  ':icu4j',
-  ':javacc',
-  ':jsr305',
-  ':jsr330',
-  ':objenesis',
-  '//closure/closure-compiler:ant',
-]
-
-# TODO(mbolin): This does not work yet.
-# java_library(
-#   name = 'closure-templates',
-#   srcs = glob(['java/src/**/*.java', genfile('parser.src.tar')]),
-#   deps = DEPS,
-#   visibility = [ 'PUBLIC' ],
-# )
-
-java_library(
-  name = 'classpath_hack',
-  deps = DEPS,
-)
-
-genrule(
-  name = 'hack',
-  srcs = [
-    'gen_soy_jar.sh',
-    genfile('parser.src.tar'),
-  ] + glob(['java/src/**/*.java']),
-  cmd = '$SRCDIR/gen_soy_jar.sh $OUT $SRCS',
-  out = 'soy.jar',
-  deps = [
-    ':javacc',
-  ],
-)
-
-prebuilt_jar(
-  name = 'closure-templates',
-  binary_jar = genfile('soy.jar'),
-  deps = [ ':hack' ],
-  visibility = [ 'PUBLIC' ],
+  cmd = '$SRCS $OUT $TMP',
+  out = 'parser.src.zip',
 )
 
 prebuilt_jar(

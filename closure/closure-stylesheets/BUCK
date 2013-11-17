@@ -1,0 +1,45 @@
+java_library(
+  name = 'closure-stylesheets',
+  srcs = glob(['src/**/*.java']) + [ genfile('parser.src.zip') ],
+  deps = [
+    ':args4j',
+    ':gson',
+    ':guava',
+    ':javacc',
+    ':jsr305',
+  ],
+  visibility = [
+    'PUBLIC',
+  ],
+)
+
+genrule(
+  name = 'javacc',
+  srcs = [
+    'gen_parser.sh',
+    'lib/javacc.jar',
+    'src/com/google/common/css/compiler/ast/GssParserCC.jj',
+  ],
+  cmd = '$SRCS $OUT $TMP',
+  out = 'parser.src.zip',
+)
+
+prebuilt_jar(
+  name = 'args4j',
+  binary_jar = 'lib/args4j-2.0.17.jar',
+)
+
+prebuilt_jar(
+  name = 'gson',
+  binary_jar = 'lib/gson-1.7.1.jar',
+)
+
+prebuilt_jar(
+  name = 'guava',
+  binary_jar = 'lib/guava-12.0.jar',
+)
+
+prebuilt_jar(
+  name = 'jsr305',
+  binary_jar = 'lib/jsr305.jar',
+)

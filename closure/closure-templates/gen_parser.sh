@@ -7,19 +7,20 @@ EXPRESSION_PARSER_JJ="$2"
 SOY_FILE_PARSER_JJ="$3"
 TEMPLATE_PARSER_JJ="$4"
 OUTPUT_FILE="$5"
+TMP="$6"
 
 cd $TMP
 
 mkdir -p com/google/template/soy/exprparse
-java -classpath $JAVACC org.javacc.parser.Main $EXPRESSION_PARSER_JJ
+java -classpath $JAVACC org.javacc.parser.Main $EXPRESSION_PARSER_JJ &> /dev/null
 mv *.java com/google/template/soy/exprparse
 
 mkdir -p com/google/template/soy/soyparse
-java -classpath $JAVACC org.javacc.parser.Main $SOY_FILE_PARSER_JJ
+java -classpath $JAVACC org.javacc.parser.Main $SOY_FILE_PARSER_JJ &> /dev/null
 mv *.java com/google/template/soy/soyparse
 
 mkdir -p com/google/template/soy/soyparse
-java -classpath $JAVACC org.javacc.parser.Main $TEMPLATE_PARSER_JJ
+java -classpath $JAVACC org.javacc.parser.Main $TEMPLATE_PARSER_JJ &> /dev/null
 mv *.java com/google/template/soy/soyparse
 
-tar cf $OUTPUT_FILE *
+zip -r $OUTPUT_FILE *

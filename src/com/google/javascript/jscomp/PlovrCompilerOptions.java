@@ -2,8 +2,6 @@ package com.google.javascript.jscomp;
 
 import java.nio.charset.Charset;
 
-import org.plovr.ConfigTest;
-
 /**
  * {@link PlovrCompilerOptions} is a subclass of {@link CompilerOptions} with
  * customizations for plovr. The need for the subclass is twofold:
@@ -14,7 +12,7 @@ import org.plovr.ConfigTest;
  *       {@link RescopeGlobalSymbols} pass).
  *   <li>It provides public accessors to properties that are ordinarily
  *       package-private, which is helpful during unit-testing. (See
- *       {@link ConfigTest}).
+ *       {@link org.plovr.ConfigTest}).
  * </ol>
  * Originally, these modifications were contained in plovr's local fork of
  * {@link CompilerOptions}, but this often created merge conflicts when syncing

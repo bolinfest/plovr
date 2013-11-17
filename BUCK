@@ -2,13 +2,19 @@ java_library(
   name = 'plovr',
   srcs = glob(['src/**/*.java']),
   resources = glob(['src/**/*.js']),
+  source = '7',
+  target = '7',
   deps = [
-    ':closure-stylesheets',
     ':gson',
     ':guava',
     ':selenium',
+    '//closure/closure-compiler:args4j',
     '//closure/closure-compiler:closure-compiler',
+    '//closure/closure-compiler:json',
+    '//closure/closure-compiler:jsr305',
+    '//closure/closure-compiler:protobuf',
     '//closure/closure-compiler:rhino',
+    '//closure/closure-stylesheets:closure-stylesheets',
     '//closure/closure-templates:closure-templates',
     '//closure/closure-templates:guice',
     '//closure/closure-templates:guice-multibindings',
@@ -21,17 +27,12 @@ java_test(
   srcs = glob(['test/**/*.java']),
   resources = glob(['test/**/*.js']),
   deps = [
-    ':closure-stylesheets',
     ':gson',
     ':junit',
     ':plovr',
     ':guava',
+    '//closure/closure-stylesheets:closure-stylesheets',
   ],
-)
-
-prebuilt_jar(
-  name = 'closure-stylesheets',
-  binary_jar = 'lib/closure-stylesheets-20130106.jar',
 )
 
 prebuilt_jar(
