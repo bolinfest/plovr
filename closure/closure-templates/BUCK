@@ -1,6 +1,10 @@
 java_library(
   name = 'closure-templates',
   srcs = glob(['java/src/**/*.java']) + [ genfile('parser.src.zip') ],
+  resources = [
+    'javascript/soyutils.js',
+    'javascript/soyutils_usegoog.js',
+  ],
   deps = [
     ':aopalliance',
     ':args4j',

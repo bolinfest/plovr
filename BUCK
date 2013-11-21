@@ -1,7 +1,11 @@
 java_library(
   name = 'plovr',
   srcs = glob(['src/**/*.java']),
-  resources = glob(['src/**/*.js']),
+  resources = glob([
+    'src/**/*.js',
+    'src/**/*.soy',
+    'src/**/*.ts',
+  ]),
   source = '7',
   target = '7',
   deps = [
@@ -21,7 +25,6 @@ java_library(
   ],
 )
 
-# TODO(mbolin): This does not work yet.
 java_test(
   name = 'test',
   srcs = glob(['test/**/*.java']),
@@ -31,7 +34,10 @@ java_test(
     ':junit',
     ':plovr',
     ':guava',
+    '//closure/closure-compiler:closure-compiler',
+    '//closure/closure-compiler:jsr305',
     '//closure/closure-stylesheets:closure-stylesheets',
+    '//closure/closure-templates:closure-templates',
   ],
 )
 
