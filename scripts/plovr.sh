@@ -59,7 +59,7 @@ cd $ORIGINAL_PWD
 java \
 -classpath \
 ${PLOVR_DIR}/build/classes:\
-${PLOVR_DIR}/lib/guava-14.0.1.jar:\
+${PLOVR_DIR}/lib/guava-15.0.jar:\
 ${PLOVR_DIR}/lib/gson-2.2.2.jar:\
 ${PLOVR_DIR}/lib/hamcrest-core-1.3.jar:\
 ${PLOVR_DIR}/lib/hamcrest-library-1.3.jar:\
