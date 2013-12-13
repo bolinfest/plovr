@@ -38,7 +38,7 @@ import com.google.template.soy.exprtree.OperatorNodes.TimesOpNode;
 import com.google.template.soy.exprtree.StringNode;
 import com.google.template.soy.exprtree.VarNode;
 
-import junit.framework.AssertionFailedError;
+import org.junit.AssertionFailedError;
 import junit.framework.TestCase;
 
 import java.util.List;

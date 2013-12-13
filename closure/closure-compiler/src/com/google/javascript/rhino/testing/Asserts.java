@@ -44,7 +44,7 @@ import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.StaticScope;
 
-import junit.framework.Assert;
+import org.junit.Assert;
 
 import java.util.Iterator;
 

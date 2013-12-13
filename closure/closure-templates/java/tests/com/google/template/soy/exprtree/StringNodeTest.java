@@ -16,7 +16,7 @@
 
 package com.google.template.soy.exprtree;
 
-import junit.framework.*;
+import org.junit.*;
 
 
 /**

@@ -21,7 +21,7 @@ import com.google.common.css.SourceCodeLocation;
 import com.google.common.css.compiler.ast.CssCombinatorNode.Combinator;
 import com.google.common.css.compiler.ast.testing.AstUtilityTestCase;
 
-import junit.framework.AssertionFailedError;
+import org.junit.AssertionFailedError;
 
 /**
  * Unit tests for {@link AstUtilityTestCase}.

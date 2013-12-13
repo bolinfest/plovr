@@ -16,7 +16,7 @@
 
 package com.google.javascript.jscomp;
 
-import junit.framework.*;
+import org.junit.*;
 
 /**
  * @author anatol@google.com (Anatol Pomazau)

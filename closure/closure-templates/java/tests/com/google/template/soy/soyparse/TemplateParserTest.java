@@ -63,7 +63,7 @@ import com.google.template.soy.soytree.SwitchCaseNode;
 import com.google.template.soy.soytree.SwitchDefaultNode;
 import com.google.template.soy.soytree.SwitchNode;
 
-import junit.framework.AssertionFailedError;
+import org.junit.AssertionFailedError;
 import junit.framework.TestCase;
 
 import java.util.List;

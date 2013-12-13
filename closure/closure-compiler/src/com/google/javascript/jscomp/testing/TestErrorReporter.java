@@ -19,7 +19,7 @@ package com.google.javascript.jscomp.testing;
 import com.google.javascript.rhino.head.ErrorReporter;
 import com.google.javascript.rhino.head.EvaluatorException;
 
-import junit.framework.Assert;
+import org.junit.Assert;
 
 /**
  * <p>An error reporter for testing that verifies that messages reported to the

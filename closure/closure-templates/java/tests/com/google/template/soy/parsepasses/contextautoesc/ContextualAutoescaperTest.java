@@ -32,7 +32,7 @@ import com.google.template.soy.soytree.CallNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.TemplateNode;
 
-import junit.framework.ComparisonFailure;
+import org.junit.ComparisonFailure;
 import junit.framework.TestCase;
 
 import java.util.List;
