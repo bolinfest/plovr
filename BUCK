@@ -53,7 +53,24 @@ prebuilt_jar(
 
 prebuilt_jar(
   name = 'junit',
-  binary_jar = 'lib/junit-4.8.2.jar',
+  binary_jar = 'lib/junit-4.11.jar',
+  deps = [
+    ':hamcrest-core',
+    ':hamcrest-library',
+  ],
+)
+
+prebuilt_jar(
+  name = 'hamcrest-core',
+  binary_jar = 'lib/hamcrest-core-1.3.jar',
+)
+
+prebuilt_jar(
+  name = 'hamcrest-library',
+  binary_jar = 'lib/hamcrest-library-1.3.jar',
+  deps = [
+    ':hamcrest-core',
+  ],
 )
 
 prebuilt_jar(
