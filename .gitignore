@@ -2,3 +2,4 @@ build/
 /build.properties
 
 /buck-out/
+/.nobuckcheck
