@@ -25,6 +25,8 @@ public final class CompilationServer implements Runnable {
 
   private final boolean isHttps;
 
+  private final String baseUrl;
+
   // All maps are keyed on a Config id rather than a Config because there could
   // be multiple, different Config objects with the same id because of how query
   // data can be used to redefine a Config for an individual request.
@@ -39,10 +41,12 @@ public final class CompilationServer implements Runnable {
    */
   private final ConcurrentMap<String, Compilation> compilations;
 
-  public CompilationServer(String listenAddress, int port, boolean isHttps) {
+  public CompilationServer(String listenAddress, int port, boolean isHttps,
+                           String baseUrl) {
     this.listenAddress = listenAddress;
     this.port = port;
     this.isHttps = isHttps;
+    this.baseUrl = baseUrl;
     this.configs = Maps.newConcurrentMap();
     this.compilations = Maps.newConcurrentMap();
   }
@@ -173,6 +177,9 @@ public final class CompilationServer implements Runnable {
    * @return the server scheme, name, and port, such as "http://localhost:9810/"
    */
   public String getServerForExchange(HttpExchange exchange) {
+    if (this.baseUrl != null) {
+        return this.baseUrl;
+    }
     URI referrer = HttpUtil.getReferrer(exchange);
     String scheme;
     String host;

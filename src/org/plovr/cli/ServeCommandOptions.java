@@ -24,6 +24,10 @@ public class ServeCommandOptions extends AbstractCommandOptions {
       usage = "Serve via https://")
   private boolean isHttps = false;
 
+  @Option(name = "--base-url",
+      usage = "Use this URL as the base for server-generated URLs.")
+  private String baseUrl = null;
+
   @Argument
   private List<String> arguments = Lists.newLinkedList();
 
@@ -37,6 +41,10 @@ public class ServeCommandOptions extends AbstractCommandOptions {
 
   public boolean isHttps() {
     return isHttps;
+  }
+
+  public String getBaseUrl() {
+    return baseUrl;
   }
 
   public List<String> getArguments() {
