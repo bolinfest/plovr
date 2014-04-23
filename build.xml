@@ -130,6 +130,12 @@
     <copy file="${closure-compiler.dir}/src/com/google/javascript/jscomp/parsing/ParserConfig.properties"
           todir="${classes.dir}/com/google/javascript/jscomp/parsing" />
 
+    <!-- Move compiler JS resources -->
+    <mkdir dir="${classes.dir}/com/google/javascript/jscomp/js/" />
+    <copy todir="${classes.dir}/com/google/javascript/jscomp/js">
+      <fileset dir="${closure-compiler.dir}/src/com/google/javascript/jscomp/js" includes="**/*" />
+    </copy>
+
     <!-- Copy the JavaScript files from Soy into a directory named "soy". -->
     <mkdir dir="${soy-resources.dir}/soy" />
     <copy file="${closure-templates.dir}/javascript/soyutils_usegoog.js"
