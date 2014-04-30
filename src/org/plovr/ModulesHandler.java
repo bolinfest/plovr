@@ -276,7 +276,7 @@ public final class ModulesHandler extends AbstractGetHandler {
     } else if (numBytes < 1024 * 1024) {
       return String.format("%.1fK", numBytes / 1024f);
     } else if (numBytes < 1024 * 1024 * 1024) {
-      return String.format("%.1fM", numBytes / (1024 * 1024));
+      return String.format("%.1fM", numBytes / (1024 * 1024f));
     } else {
       return String.valueOf(numBytes);
     }
