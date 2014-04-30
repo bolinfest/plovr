@@ -16,7 +16,7 @@
   <script src="{$baseJsUrl}"></script>
   <script>{\n}
     {foreach $r in $requires}
-      goog.require('{$r}');{\n}
+      goog.require('{$r |escapeJsString}');{\n}
     {/foreach}
   </script>
   <script src="{$testJsUrl}"></script>
