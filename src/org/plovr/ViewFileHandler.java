@@ -46,7 +46,7 @@ final class ViewFileHandler extends AbstractGetHandler {
     try {
       input = manifest.getJsInputByName(name);
       codeToDisplay = input.getCode();
-    } catch (RuntimeException e) {
+    } catch (UncheckedCompilationException e) {
       SoyFile soyFile = findSoyFile(name, manifest, e);
       input = soyFile;
       codeToDisplay = soyFile.getTemplateCode();
