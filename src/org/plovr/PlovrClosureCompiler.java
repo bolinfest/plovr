@@ -2,6 +2,8 @@ package org.plovr;
 
 import com.google.javascript.jscomp.Compiler;
 import com.google.javascript.jscomp.DiagnosticGroups;
+import com.google.javascript.jscomp.ErrorManager;
+
 import java.io.PrintStream;
 
 /**
@@ -17,6 +19,8 @@ public class PlovrClosureCompiler extends Compiler {
   private PlovrDiagnosticGroups diagnosticGroups = new PlovrDiagnosticGroups();
 
   public PlovrClosureCompiler(PrintStream errorStream) { super(errorStream); }
+
+  public PlovrClosureCompiler(ErrorManager errorManager) { super(errorManager); }
 
   @Override
   protected PlovrDiagnosticGroups getDiagnosticGroups() {
