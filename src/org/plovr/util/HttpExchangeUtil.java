@@ -27,14 +27,23 @@ public final class HttpExchangeUtil {
     return isGoogleChrome17OrEarlier(userAgent);
   }
 
+  public static boolean isGoogleChrome35OrEarlier(HttpExchange exchange) {
+    String userAgent = exchange.getRequestHeaders().getFirst("User-Agent");
+    return isGoogleChromeVersionOrEarlier(userAgent, 35);
+  }
+
   @VisibleForTesting
   static boolean isGoogleChrome17OrEarlier(String userAgent) {
+    return isGoogleChromeVersionOrEarlier(userAgent, 17);
+  }
+
+  static boolean isGoogleChromeVersionOrEarlier(String userAgent, int expectedVersion) {
     boolean isChrome = userAgent != null && userAgent.contains("Chrome");
     if (isChrome) {
       Matcher matcher = CHROME_VERSION_PATTERN.matcher(userAgent);
       if (matcher.find()) {
         int version = Integer.parseInt(matcher.group(1), 10);
-        return version <= 17;
+        return version <= expectedVersion;
       }
     }
     return false;

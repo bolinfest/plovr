@@ -167,8 +167,12 @@ public class InputFileHandler extends AbstractGetHandler {
       String eTag = codeWithEtag.eTag;
       String ifNoneMatch = exchange.getRequestHeaders().getFirst(
           "If-None-Match");
+
+      // Don't send etags on old version of Chrome, because of a weird Java
+      // HttpServer bug that it reacted badly to. See:
+      // https://code.google.com/p/chromium/issues/detail?id=105824
       if (eTag.equals(ifNoneMatch) &&
-          !HttpExchangeUtil.isGoogleChrome(exchange)) {
+          !HttpExchangeUtil.isGoogleChrome35OrEarlier(exchange)) {
         Responses.notModified(exchange);
         return;
       } else {
