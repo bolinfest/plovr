@@ -23,7 +23,9 @@ public final class CompilationServer implements Runnable {
 
   private int port;
 
-  private final boolean isHttps;
+  private final String jksFile;
+
+  private final String passphrase;
 
   // All maps are keyed on a Config id rather than a Config because there could
   // be multiple, different Config objects with the same id because of how query
@@ -39,10 +41,11 @@ public final class CompilationServer implements Runnable {
    */
   private final ConcurrentMap<String, Compilation> compilations;
 
-  public CompilationServer(String listenAddress, int port, boolean isHttps) {
+  public CompilationServer(String listenAddress, int port, String jksFile, String passphrase) {
     this.listenAddress = listenAddress;
     this.port = port;
-    this.isHttps = isHttps;
+    this.jksFile = jksFile;
+    this.passphrase = passphrase;
     this.configs = Maps.newConcurrentMap();
     this.compilations = Maps.newConcurrentMap();
   }
@@ -98,7 +101,7 @@ public final class CompilationServer implements Runnable {
     InetSocketAddress addr = new InetSocketAddress(listenAddress, port);
     HttpServer server;
     try {
-      server = HttpServerUtil.create(addr, 0, isHttps);
+      server = HttpServerUtil.create(addr, 0, this.jksFile, this.passphrase);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

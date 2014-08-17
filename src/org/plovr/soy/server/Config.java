@@ -26,7 +26,9 @@ public final class Config {
 
   private final boolean indexPagesAreEnabled;
 
-  private final boolean isHttps;
+  private final String jksFile;
+
+  private final String passphrase;
 
   private final Injector injector;
 
@@ -38,7 +40,8 @@ public final class Config {
       Map<String, ?> compileTimeGlobals,
       boolean isSafeMode,
       boolean indexPagesAreEnabled,
-      boolean isHttps,
+      String jksFile,
+      String passphrase,
       String pluginModuleNames) {
     this.templateToRender = templateToRender;
     this.port = port;
@@ -47,7 +50,8 @@ public final class Config {
     this.compileTimeGlobals = compileTimeGlobals;
     this.isSafeMode = isSafeMode;
     this.indexPagesAreEnabled = indexPagesAreEnabled;
-    this.isHttps = isHttps;
+    this.jksFile = jksFile;
+    this.passphrase = passphrase;
 
     List<String> moduleNames = Lists.newArrayList();
     moduleNames.add("org.plovr.soy.function.PlovrModule");
@@ -88,8 +92,12 @@ public final class Config {
     return indexPagesAreEnabled;
   }
 
-  public boolean isHttps() {
-    return isHttps;
+  public String getJksFile() {
+    return jksFile;
+  }
+
+  public String getPassphrase() {
+    return passphrase;
   }
 
   public Injector getInjector() {
