@@ -3,11 +3,17 @@ package org.plovr;
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.plovr.util.Pair;
 
+import com.google.common.base.Objects;
+import com.google.common.base.Throwables;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Maps;
 
 /**
@@ -25,7 +31,26 @@ public abstract class LocalFileJsInput extends AbstractJsInput {
 
   private long lastModified;
 
-  private static Map<Pair<File,String>, JsInput> jsInputCache = Maps.newHashMap();
+  private static final CacheLoader<Key, JsInput> fileLoader =
+      new CacheLoader<Key, JsInput>() {
+    public JsInput load(Key key) {
+      File file = key.file;
+      String name = key.name;
+      String fileName = file.getName();
+      if (fileName.endsWith(".soy")) {
+        return new SoyFile(name, file, key.soyFileOptions);
+      } else if (fileName.endsWith(".coffee")) {
+        return new CoffeeFile(name, file);
+      } else if (fileName.endsWith(".ts")) {
+        return new TypeScriptFile(name, file);
+      } else {
+        return new JsSourceFile(name, file);
+      }
+    }
+  };
+
+  private static final LoadingCache<Key, JsInput> jsInputCache =
+      CacheBuilder.newBuilder().build(fileLoader);
 
   LocalFileJsInput(String name, File source) {
     super(name);
@@ -38,30 +63,41 @@ public abstract class LocalFileJsInput extends AbstractJsInput {
     this.lastModified = source.lastModified();
   }
 
-  static JsInput createForFileWithName(File file, String name,
-      SoyFileOptions soyFileOptions) {
-    // Cache requests for existing inputs to minimize how often files are
-    // re-parsed.
-    Pair<File,String> pair = Pair.of(file, name);
-    JsInput existingInput = jsInputCache.get(pair);
-    if (existingInput != null) {
-      return existingInput;
+  private static final class Key {
+    private final File file;
+    private final String name;
+    private final SoyFileOptions soyFileOptions;
+
+    Key(File file, String name, SoyFileOptions soyFileOptions) {
+      this.file = file;
+      this.name = name;
+      this.soyFileOptions = soyFileOptions;
     }
 
-    JsInput newInput;
-    String fileName = file.getName();
-    if (fileName.endsWith(".soy")) {
-      newInput = new SoyFile(name, file, soyFileOptions);
-    } else if (fileName.endsWith(".coffee")) {
-      newInput = new CoffeeFile(name, file);
-    } else if (fileName.endsWith(".ts")) {
-      newInput = new TypeScriptFile(name, file);
-    } else {
-      newInput = new JsSourceFile(name, file);
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(file, name, soyFileOptions);
     }
-    Pair<File,String> newPair = Pair.of(file, name);
-    jsInputCache.put(newPair, newInput);
-    return newInput;
+
+    @Override
+    public boolean equals(Object obj) {
+      if (!(obj instanceof Key)) {
+        return false;
+      }
+      Key that = (Key) obj;
+      return Objects.equal(this.file, that.file) &&
+          Objects.equal(this.name, that.name) &&
+          Objects.equal(this.soyFileOptions, that.soyFileOptions);
+    }
+  }
+
+  static JsInput createForFileWithName(File file, String name,
+      SoyFileOptions soyFileOptions) {
+    try {
+      return jsInputCache.get(new Key(file, name, soyFileOptions));
+    } catch (ExecutionException e) {
+      throw Throwables.propagate(e);
+    }
   }
 
   final protected File getSource() {
