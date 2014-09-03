@@ -166,6 +166,8 @@ public final class Config implements Comparable<Config> {
 
   private final PrintStream errorStream;
 
+  private final Set<Pattern> warningExcludePaths;
+
   /**
    * @param id Unique identifier for the configuration. This is used as an
    *        argument to the &lt;script> tag that loads the compiled code.
@@ -215,7 +217,8 @@ public final class Config implements Comparable<Config> {
       List<String> allowedNonStandardCssFunctions,
       String gssFunctionMapProviderClassName,
       File cssOutputFile,
-      PrintStream errorStream) {
+      PrintStream errorStream,
+      Set<Pattern> warningExcludePaths) {
     Preconditions.checkNotNull(defines);
 
     this.id = id;
@@ -263,6 +266,7 @@ public final class Config implements Comparable<Config> {
     this.gssFunctionMapProviderClassName = gssFunctionMapProviderClassName;
     this.cssOutputFile = cssOutputFile;
     this.errorStream = Preconditions.checkNotNull(errorStream);
+    this.warningExcludePaths = warningExcludePaths;
   }
 
   public static Builder builder(File relativePathBase, File configFile,
@@ -344,7 +348,7 @@ public final class Config implements Comparable<Config> {
    * in response to an HTTP request.
    */
   public String getJsContentType() {
-    return "text/javascript; charset=" + outputCharset.name();
+    return "application/javascript; charset=" + outputCharset.name();
   }
 
   /**
@@ -470,6 +474,8 @@ public final class Config implements Comparable<Config> {
   public PrintStream getErrorStream() {
     return errorStream;
   }
+
+  public Set<Pattern> getWarningExcludePaths() { return warningExcludePaths; }
 
   public List<WebDriverFactory> getWebDriverFactories() {
     return ImmutableList.copyOf(testDrivers);
@@ -933,6 +939,8 @@ public final class Config implements Comparable<Config> {
 
     private PrintStream errorStream = System.err;
 
+    private Set<Pattern> warningExcludePaths = Sets.newHashSet();
+
     /**
      * Pattern to validate a config id. A config id may not contain funny
      * characters, such as slashes, because ids are used in RESTful URLs, so
@@ -1012,6 +1020,7 @@ public final class Config implements Comparable<Config> {
           gssFunctionMapProviderClassName;
       this.cssOutputFile = config.cssOutputFile;
       this.errorStream = config.errorStream;
+      this.warningExcludePaths = config.warningExcludePaths;
     }
 
     /** Directory against which relative paths should be resolved. */
@@ -1377,6 +1386,14 @@ public final class Config implements Comparable<Config> {
       this.errorStream = Preconditions.checkNotNull(errorStream);
     }
 
+    public void addWarningExcludePath(Pattern path) {
+      warningExcludePaths.add(path);
+    }
+
+    public void resetWarningExcludePaths() {
+      warningExcludePaths.clear();
+    }
+
     public Config build() {
       File closureLibraryDirectory = pathToClosureLibrary != null
           ? new File(pathToClosureLibrary)
@@ -1462,7 +1479,8 @@ public final class Config implements Comparable<Config> {
           allowedNonStandardFunctions,
           gssFunctionMapProviderClassName,
           cssOutputFile,
-          errorStream);
+          errorStream,
+          warningExcludePaths);
 
       return config;
     }

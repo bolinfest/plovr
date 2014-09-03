@@ -3,6 +3,7 @@ package org.plovr;
 import java.io.File;
 import java.nio.charset.Charset;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.plovr.ModuleConfig.BadDependencyTreeException;
 import org.plovr.webdriver.ReflectionWebDriverFactory;
@@ -769,7 +770,28 @@ public enum ConfigOption {
       builder.setCssOutputFile(outputFile);
     }
   }),
-  ;
+
+  WARNING_EXCLUDE_PATHS("warning-exclude-paths", new ConfigUpdater() {
+
+    @Override
+    public void apply(String pattern, Config.Builder builder) {
+      Pattern path = Pattern.compile(pattern);
+      builder.addWarningExcludePath(path);
+    }
+
+    @Override
+    public void apply(JsonArray warningExcludePaths, Config.Builder builder) {
+      for (JsonElement item : warningExcludePaths) {
+        apply(item.getAsString(), builder);
+      }
+    }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetWarningExcludePaths();
+      return true;
+    }
+  });
 
   private static class ConfigUpdater {
 
