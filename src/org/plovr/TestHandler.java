@@ -104,9 +104,14 @@ public class TestHandler extends AbstractGetHandler {
       HttpExchange exchange) throws IOException {
     // Unlike replace(), replaceFirst() takes a regex.
     String jsFileName = name.replaceFirst("_test\\.html$", "_test.js");
-    if (config.getTestFile(jsFileName) == null) {
+    File jsFile = config.getTestFile(jsFileName);
+    if (jsFile == null) {
       return false;
     }
+
+    // Get the requires that we need.
+    JsInput testJsInput = LocalFileJsInput.createForFileWithName(
+        jsFile, jsFileName, null);
 
     // Instead of loading base.js and the uncompiled test file, consider
     // creating a plovr config for each test file so that it is easier to run
@@ -116,7 +121,8 @@ public class TestHandler extends AbstractGetHandler {
     SoyMapData mapData = new SoyMapData(
         "title", jsFileName,
         "baseJsUrl", baseJsUrl,
-        "testJsUrl", testJsUrl);
+        "testJsUrl", testJsUrl,
+        "requires", new SoyListData(testJsInput.getRequires()));
 
     SoyTofu testTemplateTofu = getTestTemplateTofu(config);
     String html = testTemplateTofu.newRenderer("org.plovr.test").setData(

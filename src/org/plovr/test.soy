@@ -4,6 +4,7 @@
  * @param title
  * @param baseJsUrl
  * @param testJsUrl
+ * @param requires
  */
 {template .test}
 <!doctype html>
@@ -13,6 +14,11 @@
 </head>
 <body>
   <script src="{$baseJsUrl}"></script>
+  <script>{\n}
+    {foreach $r in $requires}
+      goog.require('{$r |escapeJsString}');{\n}
+    {/foreach}
+  </script>
   <script src="{$testJsUrl}"></script>
 </body>
 </html>
@@ -22,7 +28,7 @@
  * A list of the _test.html URLs in this config.
  *
  * @param configId
- * @param tests array of paths to _test.html URLs 
+ * @param tests array of paths to _test.html URLs
  */
 {template .listTests}
 <!doctype html>
@@ -34,10 +40,10 @@
 {foreach $test in $tests}
   {if isFirst($test)}
     <h3>All Tests ({length($tests)})</h3>
-  
+
     <a href="all">Run all tests</a>
     <p>
-  
+
     <ul>
   {/if}
 
@@ -60,7 +66,7 @@
  * A test runner to run all of the _test.html URLs in this config.
  *
  * @param configId
- * @param tests array of paths to _test.html URLs 
+ * @param tests array of paths to _test.html URLs
  */
 {template .all}
 <!doctype html>
@@ -134,14 +140,14 @@ goog.require('goog.testing.MultiTestRunner');
   var hidePassesInput = document.getElementById('hidepasses');
   var parallelInput = document.getElementById('parallel');
   var filterInput = document.getElementById('filter');
-  
+
   function setFilterFunction() {
     var matchValue = filterInput.value || '';
     testRunner.setFilterFunction(function(testPath) {
       return testPath.indexOf(matchValue) > -1;
     });
   }
-  
+
   // Create a test runner and render it.
   var testRunner = new goog.testing.MultiTestRunner()
       .setName(document.title)
@@ -150,15 +156,15 @@ goog.require('goog.testing.MultiTestRunner');
       .setHidePasses(hidePassesInput.checked)
       .addTests(allTests);
   testRunner.render(document.getElementById('runner'));
-  
+
   goog.events.listen(hidePassesInput, 'click', function(e) {
     testRunner.setHidePasses(e.target.checked);
   });
-  
+
   goog.events.listen(parallelInput, 'click', function(e) {
     testRunner.setPoolSize(e.target.checked ? 8 : 1);
   });
-  
+
   goog.events.listen(filterInput, 'keyup', setFilterFunction);
   setFilterFunction();
 
