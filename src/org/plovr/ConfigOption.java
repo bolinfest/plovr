@@ -775,21 +775,21 @@ public enum ConfigOption {
 
     @Override
     public void apply(String pattern, Config.Builder builder) {
-        Pattern path = Pattern.compile(pattern);
-        builder.addWarningExcludePath(path);
+      Pattern path = Pattern.compile(pattern);
+      builder.addWarningExcludePath(path);
     }
 
     @Override
     public void apply(JsonArray warningExcludePaths, Config.Builder builder) {
-        for (JsonElement item : warningExcludePaths) {
-            apply(item.getAsString(), builder);
-        }
+      for (JsonElement item : warningExcludePaths) {
+        apply(item.getAsString(), builder);
+      }
     }
 
     @Override
     public boolean reset(Config.Builder builder) {
-        builder.resetWarningExcludePaths();
-        return true;
+      builder.resetWarningExcludePaths();
+      return true;
     }
   });
 
