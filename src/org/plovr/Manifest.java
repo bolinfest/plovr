@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
@@ -14,6 +15,8 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -60,12 +63,48 @@ public final class Manifest {
   private final Set<JsInput> builtInExterns;
   private final boolean customExternsOnly;
 
+  private final Supplier<Set<JsInput>> dependencySetSupplierInternal = new Supplier<Set<JsInput>>() {
+    @Override public Set<JsInput> get() {
+      Set<JsInput> allDependencies = Sets.newHashSet();
+      final boolean externsOnly = false;
+      if (isBuiltInClosureLibrary()) {
+        allDependencies.addAll(ResourceReader.getClosureLibrarySources());
+      } else {
+        allDependencies.addAll(getFiles(
+                                   new ConfigPath(closureLibraryDirectory, "/closure/goog/"), externsOnly));
+      }
+      // Add the requiredInputs first so that if a file is both an "input" and a
+      // "path" under different names (such as "hello.js" and "/./hello.js"), the
+      // name used to specify the input is preferred.
+      allDependencies.addAll(requiredInputs);
+      allDependencies.addAll(getFiles(dependencies, externsOnly));
+
+      return allDependencies;
+    }
+  };
+
+  private final Supplier<Set<JsInput>> dependencySetSupplier = Suppliers.memoizeWithExpiration(
+      dependencySetSupplierInternal, 5, TimeUnit.SECONDS);
+
   /**
    * When RAW mode is used, each input will need to be accessed by name. To make
    * the lookup efficient, populate this map when getInputsInCompilationOrder()
    * is called to prepare for the requests that are about to occur.
    */
-  private Map<String, JsInput> dependencyCache;
+  private final Supplier<Map<String, JsInput>> dependencyMapSupplierInternal = new Supplier<Map<String, JsInput>>() {
+    @Override public Map<String, JsInput> get() {
+      ImmutableMap.Builder<String, JsInput> dependencyCacheBuilder =
+          ImmutableMap.builder();
+      Set<JsInput> allDependencies = dependencySetSupplier.get();
+      for (JsInput dep : allDependencies) {
+        dependencyCacheBuilder.put(dep.getName(), dep);
+      }
+      return dependencyCacheBuilder.build();
+    }
+  };
+
+  private final Supplier<Map<String, JsInput>> dependencyMapSupplier = Suppliers.memoizeWithExpiration(
+      dependencyMapSupplierInternal, 60, TimeUnit.SECONDS);
 
   private final SoyFileOptions soyFileOptions;
 
@@ -190,9 +229,7 @@ public final class Manifest {
   }
 
   public List<JsInput> getInputsInCompilationOrder() throws CompilationException {
-    Set<JsInput> allDependencies = getAllDependencies(
-        true /* cacheDependencies */);
-
+    Set<JsInput> allDependencies = getAllDependencies();
     Map<String, JsInput> provideToSource = getProvideToSource(allDependencies);
 
     LinkedHashSet<JsInput> compilerInputs = new LinkedHashSet<JsInput>();
@@ -251,7 +288,7 @@ public final class Manifest {
   /**
    * Returns the {@link JsInput} that corresponds to the specified name based on
    * the dependency cache created by a call to
-   * {@link #getAllDependencies(boolean)}. This method should only be used when
+   * {@link #getAllDependencies()}. This method should only be used when
    * the cache is believed to be valid. Unfortunately, relying on a cache in
    * this manner may risk correctness of the application; however, it provides
    * an order-of-magnitude performance benefit:
@@ -264,14 +301,7 @@ public final class Manifest {
    * should be able to return any file listed in the generated deps.js.
    */
   JsInput getJsInputByName(String name) {
-    if (dependencyCache == null) {
-      // It is possible that a file could be requested from the manifest before
-      // a compilation is done, such as when a user navigates directly to /view.
-      // In that case, dependencyCache will be null, so invoke
-      // getAllDependencies() so that it gets initialized.
-      getAllDependencies(true /* cacheDependencies */);
-    }
-    return dependencyCache.get(name);
+    return dependencyMapSupplier.get().get(name);
   }
 
   void buildDependencies(Map<String, JsInput> provideToSource,
@@ -312,34 +342,10 @@ public final class Manifest {
   }
 
   /**
-   * @param cacheDependencies whether the dependencies should be cached so that
-   *     {@link #getJsInputByName(String)} can leverage the cache so it is fast
+   * Get all the dependencies, and build a cache.
    */
-  Set<JsInput> getAllDependencies(boolean cacheDependencies) {
-    Set<JsInput> allDependencies = Sets.newHashSet();
-    final boolean externsOnly = false;
-    if (isBuiltInClosureLibrary()) {
-      allDependencies.addAll(ResourceReader.getClosureLibrarySources());
-    } else {
-      allDependencies.addAll(getFiles(
-          new ConfigPath(closureLibraryDirectory, "/closure/goog/"), externsOnly));
-    }
-    // Add the requiredInputs first so that if a file is both an "input" and a
-    // "path" under different names (such as "hello.js" and "/./hello.js"), the
-    // name used to specify the input is preferred.
-    allDependencies.addAll(requiredInputs);
-    allDependencies.addAll(getFiles(dependencies, externsOnly));
-
-    if (cacheDependencies) {
-      ImmutableMap.Builder<String, JsInput> dependencyCacheBuilder =
-          ImmutableMap.builder();
-      for (JsInput dep : allDependencies) {
-        dependencyCacheBuilder.put(dep.getName(), dep);
-      }
-      this.dependencyCache = dependencyCacheBuilder.build();
-    }
-
-    return allDependencies;
+  Set<JsInput> getAllDependencies() {
+    return dependencySetSupplier.get();
   }
 
   private List<JsInput> getExternInputs() {
@@ -460,7 +466,7 @@ public final class Manifest {
     StringBuilder builder = new StringBuilder();
     SortedSet<JsInput> inputs = ImmutableSortedSet.copyOf(
         JsInputComparator.SINGLETON,
-        getAllDependencies(true /* cacheDependencies */));
+        getAllDependencies());
 
     final Gson gson = new Gson();
 
