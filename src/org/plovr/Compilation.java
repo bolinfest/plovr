@@ -23,10 +23,13 @@ import com.google.common.io.Closeables;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.Compiler;
+import com.google.javascript.jscomp.ErrorManager;
 import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.JSModule;
 import com.google.javascript.jscomp.PlovrCompilerOptions;
+import com.google.javascript.jscomp.PrintStreamErrorManager;
 import com.google.javascript.jscomp.Result;
 import com.google.javascript.jscomp.SourceExcerptProvider;
 import com.google.javascript.jscomp.SourceFile;
@@ -110,7 +113,9 @@ public final class Compilation {
 
     // Need to have a dummy Result that appears to be a success (i.e., has no
     // errors or warnings).
-    this.result = new Compiler().getResult();
+    Compiler dummyCompiler = new Compiler();
+    dummyCompiler.setErrorManager(new PrintStreamErrorManager(System.out));
+    this.result = dummyCompiler.getResult();
   }
 
   /**
