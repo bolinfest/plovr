@@ -1,0 +1,6 @@
+build/
+TESTS-TestSuites.xml
+junit*.properties
+target/
+*~
+.settings
