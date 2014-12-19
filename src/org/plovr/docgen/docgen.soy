@@ -1,4 +1,4 @@
-{namespace plovr.docgen}
+{namespace plovr.docgen autoescape="deprecated-noncontextual"}
 
 /**
  * @param title
@@ -54,12 +54,12 @@ extends <a href="{$pathToBase}{$pathToSuper}">{$classDescriptor.superClass}</a>
 
 {call .methodTable}
   {param title: 'Instance Method Summary' /}
-  {param methods: $classDescriptor.instanceMethods /} 
+  {param methods: $classDescriptor.instanceMethods /}
 {/call}
 
 {call .methodTable}
   {param title: 'Static Method Summary' /}
-  {param methods: $classDescriptor.staticMethods /} 
+  {param methods: $classDescriptor.staticMethods /}
 {/call}
 
 {/template}

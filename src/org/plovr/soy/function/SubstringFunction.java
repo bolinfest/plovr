@@ -62,10 +62,10 @@ public class SubstringFunction extends SoyAbstractTofuFunction
     IntegerData start = (IntegerData) args.get(1);
 
     if (args.size() == 2) {
-      return toSoyData(str.getValue().substring(start.getValue()));
+      return toSoyData(str.getValue().substring(start.integerValue()));
     } else {
       IntegerData end = (IntegerData) args.get(2);
-      return toSoyData(str.getValue().substring(start.getValue(), end.getValue()));
+      return toSoyData(str.getValue().substring(start.integerValue(), end.integerValue()));
     }
   }
 }

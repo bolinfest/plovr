@@ -5,14 +5,13 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Writer;
+import java.nio.file.Files;
 import java.net.URL;
 import java.util.Map;
 import java.util.Set;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Sets;
-import com.google.common.io.Files;
-import com.google.common.io.InputSupplier;
 import com.google.common.io.Resources;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.data.SoyListData;
@@ -25,7 +24,7 @@ public class DocWriter {
   private static final URL stylesheet;
 
   static {
-    SoyFileSet.Builder builder = new SoyFileSet.Builder();
+    SoyFileSet.Builder builder = SoyFileSet.builder();
     builder.add(Resources.getResource(DocWriter.class, "docgen.soy"));
     SoyFileSet fileSet = builder.build();
     tofu = fileSet.compileToTofu();
@@ -96,7 +95,7 @@ public class DocWriter {
     String path = classNameToPath(provide);
     paths.add(path);
     File file = new File(documentationRootDirectory, path);
-    Files.createParentDirs(file);
+    com.google.common.io.Files.createParentDirs(file);
     file.createNewFile();
     return new FileWriter(file);
   }
@@ -120,13 +119,7 @@ public class DocWriter {
   }
 
   private void writeStylesheet() throws IOException {
-    InputSupplier<? extends InputStream> from = new InputSupplier<InputStream>() {
-      @Override
-      public InputStream getInput() throws IOException {
-        return stylesheet.openStream();
-      }
-    };
     File to = new File(documentationRootDirectory, "stylesheet.css");
-    Files.copy(from, to);
+    Files.copy(stylesheet.openStream(), to.toPath());
   }
 }

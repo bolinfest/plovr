@@ -13,9 +13,6 @@ import org.plovr.ConfigParser;
 import org.plovr.JsInput;
 import org.plovr.Manifest;
 
-import com.google.common.io.CharStreams;
-import com.google.common.io.InputSupplier;
-import com.google.common.io.OutputSupplier;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.msgs.SoyMsgPlugin;
@@ -60,16 +57,10 @@ public class ExtractCommand extends AbstractCommandRunner<ExtractCommandOptions>
 
     // Select all of the Soy files in the list of inputs and add them to a
     // SoyFileSet
-    SoyFileSet.Builder sfsBuilder = new SoyFileSet.Builder();
+    SoyFileSet.Builder sfsBuilder = SoyFileSet.builder();
     for (final JsInput input : inputs) {
       if (input.isSoyFile()) {
-        InputSupplier<? extends Reader> reader = new InputSupplier<StringReader>() {
-          @Override
-          public StringReader getInput() throws IOException {
-            return new StringReader(input.getTemplateCode());
-          }
-        };
-        sfsBuilder.add(reader, input.getName());
+        sfsBuilder.add(input.getTemplateCode(), input.getName());
       }
     }
 
@@ -88,13 +79,7 @@ public class ExtractCommand extends AbstractCommandRunner<ExtractCommandOptions>
     SoyMsgPlugin msgPlugin = new XliffMsgPlugin();
     CharSequence seq = msgPlugin.generateExtractedMsgsFile(msgBundle,
         soyOutputFileOptions);
-    OutputSupplier<PrintStream> out = new OutputSupplier<PrintStream>() {
-      @Override
-      public PrintStream getOutput() throws IOException {
-        return System.out;
-      }
-    };
-    CharStreams.write(seq, out);
+    System.out.append(seq);
   }
 
 }
