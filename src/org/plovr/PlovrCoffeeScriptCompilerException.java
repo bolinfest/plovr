@@ -9,7 +9,7 @@ import com.google.common.base.Preconditions;
  *
  * @author bolinfest@gmail.com (Michael Bolin)
  */
-public class PlovrCoffeeScriptCompilerException extends RuntimeException {
+public class PlovrCoffeeScriptCompilerException extends UncheckedCompilationException {
 
   private static final long serialVersionUID = 1L;
 
@@ -34,5 +34,9 @@ public class PlovrCoffeeScriptCompilerException extends RuntimeException {
 
   public int getLineNumber() {
     return coffeeScriptCompilerException.getLineNumber();
+  }
+
+  @Override public CompilationException toCheckedException() {
+    return new CheckedCoffeeScriptCompilerException(this);
   }
 }

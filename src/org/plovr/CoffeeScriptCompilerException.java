@@ -10,7 +10,7 @@ import com.google.common.annotations.VisibleForTesting;
  *
  * @author bolinfest@gmail.com (Michael Bolin)
  */
-public class CoffeeScriptCompilerException extends Exception {
+public class CoffeeScriptCompilerException extends RuntimeException {
 
   private static final long serialVersionUID = 1L;
 
