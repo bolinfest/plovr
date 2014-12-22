@@ -34,7 +34,7 @@ public final class ConfigOptionDocumentationGenerator {
   private static final SoyTofu TOFU;
 
   static {
-    SoyFileSet.Builder builder = new SoyFileSet.Builder();
+    SoyFileSet.Builder builder = SoyFileSet.builder();
     builder.add(Resources.getResource(ConfigOptionDocumentationGenerator.class,
         "options.soy"));
 

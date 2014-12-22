@@ -27,7 +27,7 @@ final class SizeHandler extends AbstractGetHandler {
   public SizeHandler(CompilationServer server) {
     super(server);
 
-    SoyFileSet.Builder builder = new SoyFileSet.Builder();
+    SoyFileSet.Builder builder = SoyFileSet.builder();
     builder.add(Resources.getResource(SizeHandler.class, "size.soy"));
     SoyFileSet fileSet = builder.build();
     sizeTemplate = fileSet.compileToTofu();

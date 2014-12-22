@@ -31,7 +31,7 @@ public class CompileRequestHandler extends AbstractGetHandler {
   private static final SoyTofu TOFU;
 
   static {
-    SoyFileSet.Builder builder = new SoyFileSet.Builder();
+    SoyFileSet.Builder builder = SoyFileSet.builder();
     builder.add(Resources.getResource(InputFileHandler.class, "raw.soy"));
     SoyFileSet fileSet = builder.build();
     TOFU = fileSet.compileToTofu();
