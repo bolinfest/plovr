@@ -1,4 +1,4 @@
-{namespace org.plovr}
+{namespace org.plovr autoescape="deprecated-noncontextual"}
 
 /***/
 {template .base}
@@ -331,7 +331,7 @@ console.log(c());
     Using <code>global-scope-name</code> creates a new object to represent the global scope of
     your JavaScript. All implicit global references in your code are prefixed with this new
     global object, and are then wrapped in an anonymous function to ensure that your code does not
-    conflict with that of the host page. 
+    conflict with that of the host page.
     For example, if the value of <code>global-scope-name</code> is <code>"__moduleGlobalScope__"</code>,
     then the previous example will become:
 {literal}<pre>// module1.js
@@ -350,7 +350,7 @@ window.console.log(z.c());
     so that it is available in <code>module2.js</code>, but not to the code in the host environment.
     Also note that <code>RescopeGlobalSymbols</code> does not blindly rescope all variables:
     it knows that <code>b</code> is a local variable and that <code>document</code> is an extern,
-    so neither of those are recoped as properties of <code>z</code>, as appropriate. 
+    so neither of those are recoped as properties of <code>z</code>, as appropriate.
   {case 'define'}
     An object literal that contains a mapping of variables in the JavaScript code
     that are annotated with <code>@define</code> (indicating that they can be
@@ -506,7 +506,7 @@ window.console.log(z.c());
     the used property map to this file.
   {case 'variable-map-input-file'}
     If specified, plovr will pre-populate the compiler's variable map with the
-    variable map contained in this file. 
+    variable map contained in this file.
   {case 'property-map-input-file'}
     If specified, plovr will pre-populate the compiler's property map with the
     property map contained in this file.
@@ -540,9 +540,9 @@ window.console.log(z.c());
 &#123;/template}</pre>{/literal}
     The value of the <code>test-template</code> option is not the content of your template, but the path
     to the <code>.soy</code> file that defines your template. Your template
-    must be named <code>org.plovr.test</code>, just like the default template. 
-    <p> 
-    See the section on <a href="testing.html">testing</a> for more details. 
+    must be named <code>org.plovr.test</code>, just like the default template.
+    <p>
+    See the section on <a href="testing.html">testing</a> for more details.
   {case 'test-excludes'}
     By default, all files that end in <code>_test.js</code> under
     the <a href="#paths">paths</a> directories are included in the test runner
@@ -560,7 +560,7 @@ window.console.log(z.c());
     plovr. If this is a problem, then <code>"third_party/closure"</code> should
     be included as an argument to <code>test-excludes</code>.
     <p>
-    See the section on <a href="testing.html">testing</a> for more details. 
+    See the section on <a href="testing.html">testing</a> for more details.
 {/switch}
 
 {/template}

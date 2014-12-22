@@ -107,7 +107,7 @@ class ExtractPrototypeMemberDeclarations implements CompilerPass {
         // aliased.
         "t.y=".length() - "x[p].y=".length()),
 
-    USE_ANON_FUNCTION(
+    USE_IIFE(
        // Global Overhead:
        0,
        // Per-extraction overhead:
@@ -178,13 +178,13 @@ class ExtractPrototypeMemberDeclarations implements CompilerPass {
       Node stmt = new Node(first.node.getType(),
          IR.assign(
               IR.name(prototypeAlias),
-              NodeUtil.newQualifiedNameNode(
-                  compiler.getCodingConvention(), className + ".prototype",
+              NodeUtil.newQName(
+                  compiler, className + ".prototype",
                   instance.parent, className + ".prototype")))
           .copyInformationFromForTree(first.node);
 
       instance.parent.addChildBefore(stmt, first.node);
-    } else if (pattern == Pattern.USE_ANON_FUNCTION){
+    } else if (pattern == Pattern.USE_IIFE){
       Node block = IR.block();
       Node func = IR.function(
            IR.name(""),
@@ -192,8 +192,8 @@ class ExtractPrototypeMemberDeclarations implements CompilerPass {
            block);
 
       Node call = IR.call(func,
-           NodeUtil.newQualifiedNameNode(
-               compiler.getCodingConvention(), className + ".prototype",
+           NodeUtil.newQName(
+               compiler, className + ".prototype",
                instance.parent, className + ".prototype"));
       call.putIntProp(Node.FREE_CALL, 1);
 
@@ -220,8 +220,8 @@ class ExtractPrototypeMemberDeclarations implements CompilerPass {
     // x.prototype.y = ...  ->  t.y = ...
     Node assignment = declar.node.getFirstChild();
     Node lhs = assignment.getFirstChild();
-    Node name = NodeUtil.newQualifiedNameNode(
-        compiler.getCodingConvention(),
+    Node name = NodeUtil.newQName(
+        compiler,
         prototypeAlias + "." + declar.memberName, declar.node,
         declar.memberName);
 

@@ -66,7 +66,7 @@ class PhaseOptimizer implements CompilerPass {
   // The time of the last change made to the program by any pass.
   private int lastChange;
   private static final int START_TIME = 0;
-  private Node jsRoot;
+  private final Node jsRoot;
   // Compiler/reportChangeToScope must call reportCodeChange to update all
   // change handlers. This flag prevents double update in ScopedChangeHandler.
   private boolean crossScopeReporting;
@@ -86,7 +86,7 @@ class PhaseOptimizer implements CompilerPass {
     RUN_PASSES_THAT_CHANGED_STH_IN_PREV_ITER
   }
 
-  // NOTE(user): There used to be some code that tried various orderings of
+  // NOTE(dimvar): There used to be some code that tried various orderings of
   // loopable passes and picked the fastest one. This code became stale
   // gradually and I decided to remove it. It was also never tried after the
   // new pass scheduler was written. If we need to revisit this order in the
@@ -108,9 +108,9 @@ class PhaseOptimizer implements CompilerPass {
       "Fixed point loop exceeded the maximum number of iterations.";
 
   /**
-   * @param compiler the compiler that owns/creates this.
+   * @param comp the compiler that owns/creates this.
    * @param tracker an optional performance tracker
-   * @param progressRange the progress range for the process function or null
+   * @param range the progress range for the process function or null
    *        if progress should not be reported.
    */
   PhaseOptimizer(
@@ -187,8 +187,10 @@ class PhaseOptimizer implements CompilerPass {
   }
 
   private void setSanityCheckState() {
-    lastAst = jsRoot.cloneTree();
-    mtoc = NodeUtil.mapMainToClone(jsRoot, lastAst);
+    if (inLoop) {
+      lastAst = jsRoot.cloneTree();
+      mtoc = NodeUtil.mapMainToClone(jsRoot, lastAst);
+    }
   }
 
   /**
@@ -234,9 +236,13 @@ class PhaseOptimizer implements CompilerPass {
   private void maybeSanityCheck(Node externs, Node root) {
     if (sanityCheck != null) {
       sanityCheck.create(compiler).process(externs, root);
-      if (inLoop) {
+      // The cross-module passes are loopable and ran together, but do not
+      // participate in the other optimization loops, and are not relevant to
+      // tracking changed scopes.
+      if (inLoop &&
+          !currentPass.name.equals(Compiler.CROSS_MODULE_CODE_MOTION_NAME) &&
+          !currentPass.name.equals(Compiler.CROSS_MODULE_METHOD_MOTION_NAME)) {
         NodeUtil.verifyScopeChanges(mtoc, jsRoot, true, compiler);
-        setSanityCheckState();
       }
     }
   }
@@ -261,14 +267,25 @@ class PhaseOptimizer implements CompilerPass {
     @Override
     public void process(Node externs, Node root) {
       logger.fine(name);
+      if (sanityCheck != null) {
+        // Before running the pass, clone the AST so you can sanity-check the
+        // changed AST against the clone after the pass finishes.
+        setSanityCheckState();
+      }
       if (tracker != null) {
         tracker.recordPassStart(name, factory.isOneTimePass());
       }
       tracer = new Tracer("JSCompiler");
+
+      compiler.beforePass(name);
+
       // Delay the creation of the actual pass until *after* all previous passes
       // have been processed.
       // Some precondition checks rely on this, eg, in CoalesceVariableNames.
       factory.create(compiler).process(externs, root);
+
+      compiler.afterPass(name);
+
       try {
         if (progressRange == null) {
           compiler.setProgress(-1, name);
@@ -276,8 +293,12 @@ class PhaseOptimizer implements CompilerPass {
           progress += progressStep;
           compiler.setProgress(progress, name);
         }
+        // Don't move this line in the IF. We create a Tracer even when the tracker
+        // is null; so we must also stop the tracer when the tracker is null.
+        // Otherwise, Tracer.ThreadTrace#events can become too big.
+        long traceRuntime = tracer.stop();
         if (tracker != null) {
-          tracker.recordPassStop(name, tracer.stop());
+          tracker.recordPassStop(name, traceRuntime);
         }
         maybePrintAstHashcodes(name, root);
         maybeSanityCheck(externs, root);
@@ -404,7 +425,7 @@ class PhaseOptimizer implements CompilerPass {
       setScope(root);
       // lastRuns is initialized before each loop. This way, when a pass is run
       // in the 2nd loop for the 1st time, it looks at all scopes.
-      lastRuns = new HashMap<NamedPass, Integer>();
+      lastRuns = new HashMap<>();
       for (NamedPass pass : myPasses) {
         lastRuns.put(pass, START_TIME);
       }

@@ -16,7 +16,6 @@
  * @fileoverview Detects images dragged and dropped on to the window.
  *
  * @author robbyw@google.com (Robby Walker)
- * @author wcrosby@google.com (Wayne Crosby)
  */
 
 goog.provide('goog.ui.DragDropDetector');
@@ -44,9 +43,10 @@ goog.require('goog.userAgent');
  *     the demos directory.
  * @constructor
  * @extends {goog.events.EventTarget}
+ * @final
  */
 goog.ui.DragDropDetector = function(opt_filePath) {
-  goog.base(this);
+  goog.ui.DragDropDetector.base(this, 'constructor');
 
   var iframe = goog.dom.createDom(goog.dom.TagName.IFRAME, {
     'frameborder': 0
@@ -61,7 +61,7 @@ goog.ui.DragDropDetector = function(opt_filePath) {
           goog.ui.DragDropDetector.BASE_CSS_NAME_, 'w3c-editable-iframe');
   iframe.src = opt_filePath || goog.ui.DragDropDetector.DEFAULT_FILE_PATH_;
 
-  this.element_ = /** @type {HTMLIFrameElement} */ (iframe);
+  this.element_ = /** @type {!HTMLIFrameElement} */ (iframe);
 
   this.handler_ = new goog.events.EventHandler(this);
   this.handler_.listen(iframe, goog.events.EventType.LOAD, this.initIframe_);
@@ -125,7 +125,8 @@ goog.ui.DragDropDetector.BASE_CSS_NAME_ = goog.getCssName('goog-dragdrop');
  * @desc Message shown to users to inform them that they can't drag and drop
  *     local files.
  */
-var MSG_DRAG_DROP_LOCAL_FILE_ERROR = goog.getMsg('It is not possible to drag ' +
+goog.ui.DragDropDetector.MSG_DRAG_DROP_LOCAL_FILE_ERROR = goog.getMsg(
+    'It is not possible to drag ' +
     'and drop image files at this time.\nPlease drag an image from your web ' +
     'browser.');
 
@@ -134,7 +135,8 @@ var MSG_DRAG_DROP_LOCAL_FILE_ERROR = goog.getMsg('It is not possible to drag ' +
  * @desc Message shown to users trying to drag and drop protected images from
  *     Flickr, etc.
  */
-var MSG_DRAG_DROP_PROTECTED_FILE_ERROR = goog.getMsg('The image you are ' +
+goog.ui.DragDropDetector.MSG_DRAG_DROP_PROTECTED_FILE_ERROR = goog.getMsg(
+    'The image you are ' +
     'trying to drag has been blocked by the hosting site.');
 
 
@@ -143,17 +145,17 @@ var MSG_DRAG_DROP_PROTECTED_FILE_ERROR = goog.getMsg('The image you are ' +
  * entry is of the form:
  *     regex: url regex
  *     message: user visible message about this special case
- * @type {Array.<{regex: RegExp, message: string}>}
+ * @type {Array<{regex: RegExp, message: string}>}
  * @private
  */
 goog.ui.DragDropDetector.SPECIAL_CASE_URLS_ = [
   {
     regex: /^file:\/\/\//,
-    message: MSG_DRAG_DROP_LOCAL_FILE_ERROR
+    message: goog.ui.DragDropDetector.MSG_DRAG_DROP_LOCAL_FILE_ERROR
   },
   {
     regex: /flickr(.*)spaceball.gif$/,
-    message: MSG_DRAG_DROP_PROTECTED_FILE_ERROR
+    message: goog.ui.DragDropDetector.MSG_DRAG_DROP_PROTECTED_FILE_ERROR
   }
 ];
 
@@ -416,7 +418,6 @@ goog.ui.DragDropDetector.prototype.switchToIframe_ = function(e) {
   // This is only called on IE.
   if (this.isCoveringScreen_) {
     goog.style.setElementShown(this.textInput_, false);
-    this.isShowingInput_ = false;
   }
 };
 
@@ -559,7 +560,7 @@ goog.ui.DragDropDetector.prototype.handleNodeInserted_ = function(e) {
 
 /** @override */
 goog.ui.DragDropDetector.prototype.disposeInternal = function() {
-  goog.base(this, 'disposeInternal');
+  goog.ui.DragDropDetector.base(this, 'disposeInternal');
   this.handler_.dispose();
   this.handler_ = null;
 };
@@ -573,9 +574,11 @@ goog.ui.DragDropDetector.prototype.disposeInternal = function() {
  *     occurred.
  * @constructor
  * @extends {goog.events.Event}
+ * @final
  */
 goog.ui.DragDropDetector.ImageDropEvent = function(url, position) {
-  goog.base(this, goog.ui.DragDropDetector.EventType.IMAGE_DROPPED);
+  goog.ui.DragDropDetector.ImageDropEvent.base(this, 'constructor',
+      goog.ui.DragDropDetector.EventType.IMAGE_DROPPED);
 
   /**
    * The url of the image that was dropped.
@@ -619,9 +622,11 @@ goog.ui.DragDropDetector.ImageDropEvent.prototype.getPosition = function() {
  * @param {string} url The url of the dropped link.
  * @constructor
  * @extends {goog.events.Event}
+ * @final
  */
 goog.ui.DragDropDetector.LinkDropEvent = function(url) {
-  goog.base(this, goog.ui.DragDropDetector.EventType.LINK_DROPPED);
+  goog.ui.DragDropDetector.LinkDropEvent.base(this, 'constructor',
+      goog.ui.DragDropDetector.EventType.LINK_DROPPED);
 
   /**
    * The url of the link that was dropped.

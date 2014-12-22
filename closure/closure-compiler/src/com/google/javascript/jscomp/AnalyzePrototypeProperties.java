@@ -20,7 +20,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.graph.FixedPointGraphTraversal;
@@ -48,6 +47,7 @@ import java.util.Stack;
  * Global functions are also represented by nodes in this graph, with
  * similar semantics.
  *
+ * @author nicksantos@google.com (Nick Santos)
  */
 class AnalyzePrototypeProperties implements CompilerPass {
 
@@ -95,11 +95,11 @@ class AnalyzePrototypeProperties implements CompilerPass {
 
   // All the real NameInfo for prototype properties, hashed by the name
   // of the property that they represent.
-  private final Map<String, NameInfo> propertyNameInfo = Maps.newHashMap();
+  private final Map<String, NameInfo> propertyNameInfo = Maps.newLinkedHashMap();
 
   // All the NameInfo for global functions, hashed by the name of the
   // global variable that it's assigned to.
-  private final Map<String, NameInfo> varNameInfo = Maps.newHashMap();
+  private final Map<String, NameInfo> varNameInfo = Maps.newLinkedHashMap();
 
   /**
    * Creates a new pass for analyzing prototype properties.
@@ -154,7 +154,7 @@ class AnalyzePrototypeProperties implements CompilerPass {
     FixedPointGraphTraversal<NameInfo, JSModule> t =
         FixedPointGraphTraversal.newTraversal(new PropagateReferences());
     t.computeFixedPoint(symbolGraph,
-        Sets.newHashSet(externNode, globalNode));
+        ImmutableSet.of(externNode, globalNode));
   }
 
   /**
@@ -196,7 +196,7 @@ class AnalyzePrototypeProperties implements CompilerPass {
     //    name are given a special [anonymous] context.
     // 2) Every assignment of a prototype property of a non-function is
     //    given a name context. These contexts do not have scopes.
-    private final Stack<NameContext> symbolStack = new Stack<NameContext>();
+    private final Stack<NameContext> symbolStack = new Stack<>();
 
     @Override
     public void enterScope(NodeTraversal t) {
@@ -558,15 +558,15 @@ class AnalyzePrototypeProperties implements CompilerPass {
     JSModule getModule();
   }
 
-  private enum SymbolType {
+  private static enum SymbolType {
     PROPERTY,
-    VAR;
+    VAR
   }
 
   /**
    * A function initialized as a VAR statement or a function declaration.
    */
-  class GlobalFunction implements Symbol {
+  static class GlobalFunction implements Symbol {
     private final Node nameNode;
     private final Var var;
     private final JSModule module;
@@ -755,7 +755,7 @@ class AnalyzePrototypeProperties implements CompilerPass {
     final String name;
 
     private boolean referenced = false;
-    private final Deque<Symbol> declarations = new ArrayDeque<Symbol>();
+    private final Deque<Symbol> declarations = new ArrayDeque<>();
     private JSModule deepestCommonModuleRef = null;
 
     // True if this property is a function that reads a variable from an

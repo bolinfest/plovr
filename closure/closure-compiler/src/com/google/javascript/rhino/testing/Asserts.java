@@ -39,12 +39,14 @@
 
 package com.google.javascript.rhino.testing;
 
+import static junit.framework.Assert.assertEquals;
+
 import com.google.common.collect.Iterables;
 import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.StaticScope;
 
-import org.junit.Assert;
+import junit.framework.Assert;
 
 import java.util.Iterator;
 
@@ -97,9 +99,9 @@ public class Asserts {
   }
 
   public static void assertTypeEquals(String message, JSType a, JSType b) {
-    Assert.assertTrue(
+    assertEquals(
         "Both types must be null, or both must be non-null " + a + "," + b,
-        (a == null) == (b == null));
+        (b == null), (a == null));
     if (a == null) {
       return;
     }

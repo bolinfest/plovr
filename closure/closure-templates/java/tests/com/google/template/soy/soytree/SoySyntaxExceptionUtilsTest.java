@@ -25,7 +25,6 @@ import junit.framework.TestCase;
 /**
  * Unit tests for SoySyntaxExceptionUtils.
  *
- * @author Kai Huang
  */
 public class SoySyntaxExceptionUtilsTest extends TestCase {
 
@@ -33,7 +32,7 @@ public class SoySyntaxExceptionUtilsTest extends TestCase {
   public void testCreateWithNode() {
 
     String testFileContent =
-        "{namespace boo}\n" +
+        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/** @param goo */\n" +
         "{template name=\".foo\"}\n" +
@@ -60,7 +59,7 @@ public class SoySyntaxExceptionUtilsTest extends TestCase {
     SoySyntaxException sse = SoySyntaxException.createCausedWithoutMetaInfo(message, cause);
 
     String testFileContent =
-        "{namespace boo}\n" +
+        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/** @param goo */\n" +
         "{template name=\".foo\"}\n" +

@@ -16,9 +16,18 @@
 
 package com.google.template.soy.shared.restricted;
 
+import com.google.common.collect.ImmutableSet;
+import com.google.template.soy.data.Dir;
 import com.google.template.soy.data.SanitizedContent;
-import com.google.template.soy.data.SoyData;
+import com.google.template.soy.data.SanitizedContent.ContentKind;
+import com.google.template.soy.data.SoyValue;
 import com.google.template.soy.data.UnsafeSanitizedContentOrdainer;
+import com.google.template.soy.data.restricted.BooleanData;
+import com.google.template.soy.data.restricted.FloatData;
+import com.google.template.soy.data.restricted.IntegerData;
+import com.google.template.soy.data.restricted.NullData;
+import com.google.template.soy.data.restricted.StringData;
+import com.google.template.soy.shared.restricted.TagWhitelist.OptionalSafeTag;
 
 import junit.framework.TestCase;
 
@@ -31,7 +40,7 @@ public class SanitizersTest extends TestCase {
     }
     ASCII_CHARS = sb.toString();
   }
-  private static final SoyData ASCII_CHARS_SOYDATA = SoyData.createFromExistingData(ASCII_CHARS);
+  private static final SoyValue ASCII_CHARS_SOYDATA = StringData.forValue(ASCII_CHARS);
 
   /** Substrings that might change the parsing mode of scripts they are embedded in. */
   private static final String[] EMBEDDING_HAZARDS = new String[] {
@@ -40,7 +49,7 @@ public class SanitizersTest extends TestCase {
 
   public final void testEscapeJsString() {
     // The minimal escapes.
-    // Do not remove anything from this set without talking to your friendly local security-team@.
+    // Do not remove anything from this set without talking to your friendly local ise-team@.
     assertEquals(
         "\\x00 \\x22 \\x27 \\\\ \\r \\n \\u2028 \\u2029",
         Sanitizers.escapeJsString("\u0000 \" \' \\ \r \n \u2028 \u2029"));
@@ -66,7 +75,7 @@ public class SanitizersTest extends TestCase {
 
   public final void testEscapeJsRegExpString() {
     // The minimal escapes.
-    // Do not remove anything from this set without talking to your friendly local security-team@.
+    // Do not remove anything from this set without talking to your friendly local ise-team@.
     assertEquals(
         "\\x00 \\x22 \\x27 \\\\ \\/ \\r \\n \\u2028 \\u2029" +
         // RegExp operators.
@@ -97,22 +106,21 @@ public class SanitizersTest extends TestCase {
     assertEquals(  // Adds quotes.
         "'Don\\x27t run with \\x22scissors\\x22.\\n'",
         Sanitizers.escapeJsValue("Don't run with \"scissors\".\n"));
-    assertEquals(  // SoyData version does the same as String version.
+    assertEquals(  // SoyValue version does the same as String version.
         "'Don\\x27t run with \\x22scissors\\x22.\\n'",
-        Sanitizers.escapeJsValue(
-            SoyData.createFromExistingData("Don't run with \"scissors\".\n")));
+        Sanitizers.escapeJsValue(StringData.forValue("Don't run with \"scissors\".\n")));
     assertEquals(
         " 4.0 ",
-        Sanitizers.escapeJsValue(SoyData.createFromExistingData(4)));
+        Sanitizers.escapeJsValue(IntegerData.forValue(4)));
     assertEquals(
         " 4.5 ",
-        Sanitizers.escapeJsValue(SoyData.createFromExistingData(4.5)));
+        Sanitizers.escapeJsValue(FloatData.forValue(4.5)));
     assertEquals(
         " true ",
-        Sanitizers.escapeJsValue(SoyData.createFromExistingData(true)));
+        Sanitizers.escapeJsValue(BooleanData.TRUE));
     assertEquals(
         " null ",
-        Sanitizers.escapeJsValue(SoyData.createFromExistingData(null)));
+        Sanitizers.escapeJsValue(NullData.INSTANCE));
     assertEquals(
         "foo() + bar",
         Sanitizers.escapeJsValue(UnsafeSanitizedContentOrdainer.ordainAsSafe(
@@ -126,7 +134,7 @@ public class SanitizersTest extends TestCase {
 
   public final void testEscapeCssString() {
     // The minimal escapes.
-    // Do not remove anything from this set without talking to your friendly local security-team@.
+    // Do not remove anything from this set without talking to your friendly local ise-team@.
     assertEquals(
         "\\0  \\22  \\27  \\5c  \\a  \\c  \\d ",
         Sanitizers.escapeCssString("\u0000 \" \' \\ \n \u000c \r"));
@@ -151,7 +159,7 @@ public class SanitizersTest extends TestCase {
 
   public final void testFilterCssValue() {
     assertEquals("33px", Sanitizers.filterCssValue("33px"));
-    assertEquals("33px", Sanitizers.filterCssValue(SoyData.createFromExistingData("33px")));
+    assertEquals("33px", Sanitizers.filterCssValue(StringData.forValue("33px")));
     assertEquals("-.5em", Sanitizers.filterCssValue("-.5em"));
     assertEquals("inherit", Sanitizers.filterCssValue("inherit"));
     assertEquals("display", Sanitizers.filterCssValue("display"));
@@ -161,7 +169,7 @@ public class SanitizersTest extends TestCase {
     assertEquals("red", Sanitizers.filterCssValue("red"));
     assertEquals("#aabbcc", Sanitizers.filterCssValue("#aabbcc"));
     assertEquals("zSoyz", Sanitizers.filterCssValue("expression"));
-    assertEquals("zSoyz", Sanitizers.filterCssValue(SoyData.createFromExistingData("expression")));
+    assertEquals("zSoyz", Sanitizers.filterCssValue(StringData.forValue("expression")));
     assertEquals("zSoyz", Sanitizers.filterCssValue("Expression"));
     assertEquals("zSoyz", Sanitizers.filterCssValue("\\65xpression"));
     assertEquals("zSoyz", Sanitizers.filterCssValue("\\65 xpression"));
@@ -179,7 +187,7 @@ public class SanitizersTest extends TestCase {
 
   public final void testFilterHtmlAttributes() {
     assertEquals("dir", Sanitizers.filterHtmlAttributes("dir"));
-    assertEquals("dir", Sanitizers.filterHtmlAttributes(SoyData.createFromExistingData("dir")));
+    assertEquals("dir", Sanitizers.filterHtmlAttributes(StringData.forValue("dir")));
     assertEquals("zSoyz", Sanitizers.filterHtmlAttributes("><script>alert('foo')</script"));
     assertEquals("zSoyz", Sanitizers.filterHtmlAttributes("style"));
     assertEquals("zSoyz", Sanitizers.filterHtmlAttributes("onclick"));
@@ -187,27 +195,27 @@ public class SanitizersTest extends TestCase {
 
     assertEquals(
         "a=1 b=2 dir=\"ltr\"",
-        Sanitizers.filterHtmlAttributes(SoyData.createFromExistingData(
+        Sanitizers.filterHtmlAttributes(
             UnsafeSanitizedContentOrdainer.ordainAsSafe(
-                "a=1 b=2 dir=\"ltr\"", SanitizedContent.ContentKind.ATTRIBUTES))));
+                "a=1 b=2 dir=\"ltr\"", SanitizedContent.ContentKind.ATTRIBUTES)));
     assertEquals(
         "Should append a space to parse correctly",
         "foo=\"bar\" dir=ltr ",
-        Sanitizers.filterHtmlAttributes(SoyData.createFromExistingData(
+        Sanitizers.filterHtmlAttributes(
             UnsafeSanitizedContentOrdainer.ordainAsSafe(
-                "foo=\"bar\" dir=ltr", SanitizedContent.ContentKind.ATTRIBUTES))));
+                "foo=\"bar\" dir=ltr", SanitizedContent.ContentKind.ATTRIBUTES)));
     assertEquals(
         "Should append a space to parse correctly",
         "foo=\"bar\" checked ",
-        Sanitizers.filterHtmlAttributes(SoyData.createFromExistingData(
+        Sanitizers.filterHtmlAttributes(
             UnsafeSanitizedContentOrdainer.ordainAsSafe(
-                "foo=\"bar\" checked", SanitizedContent.ContentKind.ATTRIBUTES))));
+                "foo=\"bar\" checked", SanitizedContent.ContentKind.ATTRIBUTES)));
     assertEquals(
         "No duplicate space should be added",
         "foo=\"bar\" checked ",
-        Sanitizers.filterHtmlAttributes(SoyData.createFromExistingData(
+        Sanitizers.filterHtmlAttributes(
             UnsafeSanitizedContentOrdainer.ordainAsSafe(
-                "foo=\"bar\" checked ", SanitizedContent.ContentKind.ATTRIBUTES))));
+                "foo=\"bar\" checked ", SanitizedContent.ContentKind.ATTRIBUTES)));
 
     for (String hazard : EMBEDDING_HAZARDS) {
       assertFalse(hazard, Sanitizers.filterHtmlAttributes(hazard).contains(hazard));
@@ -216,12 +224,12 @@ public class SanitizersTest extends TestCase {
 
   public final void testFilterHtmlElementName() {
     assertEquals("h1", Sanitizers.filterHtmlElementName("h1"));
-    assertEquals("h1", Sanitizers.filterHtmlElementName(SoyData.createFromExistingData("h1")));
+    assertEquals("h1", Sanitizers.filterHtmlElementName(StringData.forValue("h1")));
     assertEquals("zSoyz", Sanitizers.filterHtmlElementName("script"));
     assertEquals("zSoyz", Sanitizers.filterHtmlElementName("style"));
     assertEquals("zSoyz", Sanitizers.filterHtmlElementName("SCRIPT"));
     assertEquals("zSoyz", Sanitizers.filterHtmlElementName("><script>alert('foo')</script"));
-    assertEquals("zSoyz", Sanitizers.filterHtmlElementName(SoyData.createFromExistingData("<h1>")));
+    assertEquals("zSoyz", Sanitizers.filterHtmlElementName(StringData.forValue("<h1>")));
 
     for (String hazard : EMBEDDING_HAZARDS) {
       assertFalse(hazard, Sanitizers.filterHtmlElementName(hazard).contains(hazard));
@@ -230,7 +238,7 @@ public class SanitizersTest extends TestCase {
 
   public final void testEscapeUri() {
     // The minimal escapes.
-    // Do not remove anything from this set without talking to your friendly local security-team@.
+    // Do not remove anything from this set without talking to your friendly local ise-team@.
     assertEquals(
         "%00%0A%0C%0D%22%23%26%27%2F%3A%3D%3F%40",
         Sanitizers.escapeUri("\u0000\n\f\r\"#&'/:=?@"));
@@ -332,6 +340,13 @@ public class SanitizersTest extends TestCase {
             "\nj\n\na\nv\na\ns\nc\nr\ni\np\nt\n:\na\nl\ne\nr\nt\n(\n1\n3\n3\n7\n)"));
     assertEquals("#zSoyz", Sanitizers.filterNormalizeUri("\u000e  javascript:alert('XSS');"));
 
+    // Tests of filtering heirarchy within uri path (/.. etc )
+    assertEquals("#zSoyz", Sanitizers.filterNormalizeUri("a/../"));
+    assertEquals("#zSoyz", Sanitizers.filterNormalizeUri("/..?"));
+    assertEquals("#zSoyz", Sanitizers.filterNormalizeUri("http://bad.url.com../../s../.#.."));
+    assertEquals("#zSoyz", Sanitizers.filterNormalizeUri("http://badurl.com/normal/../unsafe"));
+
+
     // Things we should accept.
     assertEquals("http://google.com/", Sanitizers.filterNormalizeUri("http://google.com/"));
     assertEquals("https://google.com/", Sanitizers.filterNormalizeUri("https://google.com/"));
@@ -351,6 +366,74 @@ public class SanitizersTest extends TestCase {
     assertEquals("#zSoyz", Sanitizers.filterNormalizeUri(
         UnsafeSanitizedContentOrdainer.ordainAsSafe(
             "javascript:handleClick()", SanitizedContent.ContentKind.HTML)));
+    assertEquals("../", Sanitizers.filterNormalizeUri("../"));
+    assertEquals(".%2E", Sanitizers.filterNormalizeUri(".%2E"));
+    assertEquals("..", Sanitizers.filterNormalizeUri(".."));
+    assertEquals("%2E%2E", Sanitizers.filterNormalizeUri("%2E%2E"));
+    assertEquals("%2e%2e", Sanitizers.filterNormalizeUri("%2e%2e"));
+    assertEquals("%2e.", Sanitizers.filterNormalizeUri("%2e."));
+    assertEquals("http://goodurl.com/.stuff/?/../.",
+        Sanitizers.filterNormalizeUri("http://goodurl.com/.stuff/?/../."));
+    assertEquals("http://good.url.com../..s../.#..",
+        Sanitizers.filterNormalizeUri("http://good.url.com../..s../.#.."));
+    assertEquals("http://goodurl.com/normal/%2e/unsafe?",
+        Sanitizers.filterNormalizeUri("http://goodurl.com/normal/%2e/unsafe?"));
+  }
+
+  public final void testFilterImageDataUri() {
+    String allBase64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz/+";
+    // NOTE: These are not semantically correct images, nor even correctly padded base64.  Note the
+    // "=" character is only used at the end, as zero padding.
+    String[] validImageDataUris = new String[] {
+      "data:image/png;base64," + allBase64Chars,
+      "data:image/png;base64," + allBase64Chars + allBase64Chars,
+      "data:image/png;base64," + allBase64Chars + "==",
+      "data:image/gif;base64," + allBase64Chars,
+      "data:image/tiff;base64," + allBase64Chars,
+      "data:image/webp;base64," + allBase64Chars,
+      "data:image/bmp;base64," + allBase64Chars
+    };
+    String[] invalidImageDataUris = new String[] {
+      // Wrong protocol type (beta)
+      "beta:image/foo;base64," + allBase64Chars,
+      // Wrong MIME type (image/foo)
+      "data:image/foo;base64," + allBase64Chars,
+      // bake64 instead of base64
+      "data:image/png;bake64," + allBase64Chars,
+      // Invalid chars .()
+      "data:image/png;base64,ABCD.()",
+      // Remote URL's.
+      "https://www.google.com",
+      "https://www.google.com/foo.png",
+      // Relative URL's.
+      "/foo",
+      // Extra junk at beginning and end. To ensure regexp is multiline-safe.
+      "\ndata:image/png;base64," + allBase64Chars,
+      "xdata:image/png;base64," + allBase64Chars,
+      ".data:image/png;base64," + allBase64Chars,
+      "data:image/png;base64," + allBase64Chars + "\n",
+      "data:image/png;base64," + allBase64Chars + "=x",
+      "data:image/png;base64," + allBase64Chars + ".",
+      // "=" in wrong place:
+      "data:image/png;base64," + allBase64Chars + "=" + allBase64Chars,
+      // MIME types that are fundamentally insecure.
+      "data:image/svg+xml;base64," + allBase64Chars
+    };
+
+    for (int i = 0; i < validImageDataUris.length; i++) {
+      String validStr = validImageDataUris[i];
+      SanitizedContent result = Sanitizers.filterImageDataUri(validStr);
+      assertEquals("Failed invalidImageDataUris[" + i + "]", validStr, result.toString());
+      assertEquals(SanitizedContent.ContentKind.URI, result.getContentKind());
+    }
+
+    for (int i = 0; i < invalidImageDataUris.length; i++) {
+      String invalidStr = invalidImageDataUris[i];
+      SanitizedContent result = Sanitizers.filterImageDataUri(invalidStr);
+      assertEquals("Failed invalidImageDataUris[" + i + "]",
+          "data:image/gif;base64,zSoyz", result.toString());
+      assertEquals(SanitizedContent.ContentKind.URI, result.getContentKind());
+    }
   }
 
   public final void testEscapeHtml() {
@@ -370,7 +453,7 @@ public class SanitizersTest extends TestCase {
 
   public final void testEscapeHtmlAttributeNospace() {
     // The minimal escapes.
-    // Do not remove anything from this set without talking to your friendly local security-team@.
+    // Do not remove anything from this set without talking to your friendly local ise-team@.
     assertEquals(
         "&#9;&#10;&#11;&#12;&#13;&#32;&quot;&#39;&#96;&lt;&gt;&amp;",
         Sanitizers.escapeHtmlAttributeNospace("\u0009\n\u000B\u000C\r \"'\u0060<>&"));
@@ -391,7 +474,7 @@ public class SanitizersTest extends TestCase {
 
   public final void testNormalizeHtml() {
     // The minimal escapes.
-    // Do not remove anything from this set without talking to your friendly local security-team@.
+    // Do not remove anything from this set without talking to your friendly local ise-team@.
     assertEquals(
         "&quot;&#39;&lt;&gt;",
         Sanitizers.normalizeHtml("\"'<>"));
@@ -412,7 +495,7 @@ public class SanitizersTest extends TestCase {
 
   public final void testNormalizeHtmlNospace() {
     // The minimal escapes.
-    // Do not remove anything from this set without talking to your friendly local security-team@.
+    // Do not remove anything from this set without talking to your friendly local ise-team@.
     assertEquals(
         "&#9;&#10;&#11;&#12;&#13;&#32;&quot;&#39;&#96;&lt;&gt;",
         Sanitizers.normalizeHtmlNospace("\u0009\n\u000B\u000C\r \"'\u0060<>"));
@@ -491,30 +574,121 @@ public class SanitizersTest extends TestCase {
     assertEquals("&amp;amp;", cleanHtml("&<hr>amp;"));
   }
 
+  public final void testCleanHtml() {
+    assertEquals(UnsafeSanitizedContentOrdainer.ordainAsSafe("<em>foo</em>", ContentKind.HTML),
+        Sanitizers.cleanHtml("<em>f<object>oo</em>"));
+    assertEquals(UnsafeSanitizedContentOrdainer.ordainAsSafe("<em>foo</em>", ContentKind.HTML),
+        Sanitizers.cleanHtml(StringData.forValue("<em>f<object>oo</em>")));
+    assertEquals(
+        UnsafeSanitizedContentOrdainer.ordainAsSafe("<em>foo</em>", ContentKind.HTML, Dir.LTR),
+        Sanitizers.cleanHtml(
+            UnsafeSanitizedContentOrdainer.ordainAsSafe("<em>f<object>oo</em>", ContentKind.CSS)));
+
+    // Input of ContentKind.HTML is left alone.
+    assertEquals(
+        UnsafeSanitizedContentOrdainer.ordainAsSafe(
+            "<script>notevil()</script>", ContentKind.HTML),
+        Sanitizers.cleanHtml(UnsafeSanitizedContentOrdainer.ordainAsSafe(
+            "<script>notevil()</script>", ContentKind.HTML)));
+  }
+
+  public final void testCleanHtml_optionalSafeTags() {
+    // No OptionalSafeTags.
+    assertEquals(UnsafeSanitizedContentOrdainer.ordainAsSafe("<em>ff</em>", ContentKind.HTML),
+        Sanitizers.cleanHtml("<em><ul>f</ul><ol><li><span>f</span></li></ol></em>"));
+    // One OptionalSafeTag.
+    assertEquals(UnsafeSanitizedContentOrdainer.ordainAsSafe(
+        "<em>f<span>f</span></em>", ContentKind.HTML),
+        Sanitizers.cleanHtml(
+            StringData.forValue("<em><ul>f</ul><ol><li><span>f</span></li></ol></em>"),
+            ImmutableSet.of(OptionalSafeTag.SPAN)));
+    // All OptionalSafeTags.
+    assertEquals(UnsafeSanitizedContentOrdainer.ordainAsSafe(
+        "<em><ul>f</ul><ol><li><span>f</span></li></ol></em>", ContentKind.HTML),
+        Sanitizers.cleanHtml(
+            StringData.forValue("<em><ul>f</ul><ol><li><span>f</span></li></ol></em>"),
+            ImmutableSet.copyOf(OptionalSafeTag.values())));
+
+    // Does not preserve <li> which are not nested in a parent <ol> or <ul>.
+    assertEquals(UnsafeSanitizedContentOrdainer.ordainAsSafe("foo", ContentKind.HTML),
+        Sanitizers.cleanHtml(
+            StringData.forValue("<p><li>foo</li></p>"), ImmutableSet.of(OptionalSafeTag.LI)));
+    assertEquals(
+        UnsafeSanitizedContentOrdainer.ordainAsSafe("a<ul>f</ul><ol>o</ol>o", ContentKind.HTML),
+        Sanitizers.cleanHtml(
+            StringData.forValue("<li>a</li><ul>f</ul><ol>o</ol><li>o</li>"),
+            ImmutableSet.of(OptionalSafeTag.LI, OptionalSafeTag.OL, OptionalSafeTag.UL)));
+    assertEquals(
+        UnsafeSanitizedContentOrdainer.ordainAsSafe("<ul>f<ol>o</ol></ul>o", ContentKind.HTML),
+        Sanitizers.cleanHtml(
+            StringData.forValue("<ul>f<ol>o</ul><li>o</li></ol>"),
+            ImmutableSet.of(OptionalSafeTag.LI, OptionalSafeTag.OL, OptionalSafeTag.UL)));
+    assertEquals(
+        UnsafeSanitizedContentOrdainer.ordainAsSafe(
+            "<ol><li>0<ol><li>1</li></ol><li>2</li></li></ol>3", ContentKind.HTML),
+        Sanitizers.cleanHtml(
+            StringData.forValue("<ol><li>0<ol><li>1</li></ol><li>2</li></ol><ul><li>3</li></ul>"),
+            ImmutableSet.of(OptionalSafeTag.LI, OptionalSafeTag.OL)));
+    assertEquals(
+        UnsafeSanitizedContentOrdainer.ordainAsSafe("<ul>&lt;3 cookies</ul>", ContentKind.HTML),
+        Sanitizers.cleanHtml(
+            StringData.forValue("<ul></ol></foo><3 cookies"),
+            ImmutableSet.of(OptionalSafeTag.LI, OptionalSafeTag.OL, OptionalSafeTag.UL)));
+    assertEquals(
+        UnsafeSanitizedContentOrdainer.ordainAsSafe(
+            "<span>endless&lt; /span&gt;</span>", ContentKind.HTML),
+        Sanitizers.cleanHtml(
+            StringData.forValue("<span>endless< /span>"),
+            ImmutableSet.of(OptionalSafeTag.SPAN)));
+  }
+
+  public final void testCleanHtml_preservesDirAttribute() {
+    ImmutableSet<OptionalSafeTag> treatSpanSafe = ImmutableSet.of(OptionalSafeTag.SPAN);
+    assertEquals(UnsafeSanitizedContentOrdainer.ordainAsSafe(
+        "<span dir=\"ltr\">foo</span>", ContentKind.HTML),
+        Sanitizers.cleanHtml("<span dir=\"ltr\" other=\"no\">f<object>oo</span>", treatSpanSafe));
+    assertEquals(UnsafeSanitizedContentOrdainer.ordainAsSafe(
+        "<span dir=\"rtl\">foo</span>", ContentKind.HTML),
+        Sanitizers.cleanHtml("<span dir=\'Rtl\'>f<object>oo</span>", treatSpanSafe));
+    assertEquals(UnsafeSanitizedContentOrdainer.ordainAsSafe(
+        "<span dir=\"rtl\">foo</span>", ContentKind.HTML),
+        Sanitizers.cleanHtml("<span DIR=\'RTL\'>f<object>oo</span>", treatSpanSafe));
+
+    // Doesn't preserve malformed directionality.
+    assertEquals(UnsafeSanitizedContentOrdainer.ordainAsSafe("<span>foo</span>", ContentKind.HTML),
+        Sanitizers.cleanHtml("<span dir='ltr \"onload=alert(1337)//\"'>foo</span>", treatSpanSafe));
+    assertEquals(UnsafeSanitizedContentOrdainer.ordainAsSafe("<span>foo</span>", ContentKind.HTML),
+        Sanitizers.cleanHtml("<span d\\u0131r=ltr>foo</span>", treatSpanSafe));
+    assertEquals(UnsafeSanitizedContentOrdainer.ordainAsSafe("<span>foo</span>", ContentKind.HTML),
+        Sanitizers.cleanHtml("<span>foo</span dir=ltr>", treatSpanSafe));
+    assertEquals(UnsafeSanitizedContentOrdainer.ordainAsSafe("<span>foo</span>", ContentKind.HTML),
+        Sanitizers.cleanHtml("<span dir=ltr>f<object>oo</span>", treatSpanSafe));
+  }
+
   public final void testFilterNoAutoescape() {
     // Filter out anything marked with sanitized content of kind "text" which indicates it
     // previously was constructed without any escaping.
-    assertEquals(SoyData.createFromExistingData("zSoyz"), Sanitizers.filterNoAutoescape(
+    assertEquals(StringData.forValue("zSoyz"), Sanitizers.filterNoAutoescape(
         UnsafeSanitizedContentOrdainer.ordainAsSafe("x", SanitizedContent.ContentKind.TEXT)));
-    assertEquals(SoyData.createFromExistingData("zSoyz"),
+    assertEquals(StringData.forValue("zSoyz"),
         Sanitizers.filterNoAutoescape(UnsafeSanitizedContentOrdainer.ordainAsSafe(
             "<!@*!@(*!@(>", SanitizedContent.ContentKind.TEXT)));
 
     // Everything else should be let through. Hope it's safe!
-    assertEquals(SoyData.createFromExistingData("<div>test</div>"),
+    assertEquals(StringData.forValue("<div>test</div>"),
         Sanitizers.filterNoAutoescape(UnsafeSanitizedContentOrdainer.ordainAsSafe(
             "<div>test</div>", SanitizedContent.ContentKind.HTML)));
-    assertEquals(SoyData.createFromExistingData("foo='bar'"),
+    assertEquals(StringData.forValue("foo='bar'"),
         Sanitizers.filterNoAutoescape(UnsafeSanitizedContentOrdainer.ordainAsSafe(
             "foo='bar'", SanitizedContent.ContentKind.ATTRIBUTES)));
-    assertEquals(SoyData.createFromExistingData(".foo{color:green}"),
+    assertEquals(StringData.forValue(".foo{color:green}"),
         Sanitizers.filterNoAutoescape(UnsafeSanitizedContentOrdainer.ordainAsSafe(
             ".foo{color:green}", SanitizedContent.ContentKind.CSS)));
-    assertEquals(SoyData.createFromExistingData("<div>test</div>"),
-        Sanitizers.filterNoAutoescape(SoyData.createFromExistingData("<div>test</div>")));
-    assertEquals(SoyData.createFromExistingData("null"),
-        Sanitizers.filterNoAutoescape(SoyData.createFromExistingData(null)));
-    assertEquals(SoyData.createFromExistingData("123"),
-        Sanitizers.filterNoAutoescape(SoyData.createFromExistingData(123)));
+    assertEquals(StringData.forValue("<div>test</div>"),
+        Sanitizers.filterNoAutoescape(StringData.forValue("<div>test</div>")));
+    assertEquals(StringData.forValue("null"),
+        Sanitizers.filterNoAutoescape(NullData.INSTANCE));
+    assertEquals(StringData.forValue("123"),
+        Sanitizers.filterNoAutoescape(IntegerData.forValue(123)));
   }
 }

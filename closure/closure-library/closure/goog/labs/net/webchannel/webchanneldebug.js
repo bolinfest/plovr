@@ -16,7 +16,7 @@
  * @fileoverview Provides a utility for tracing and debugging WebChannel
  *     requests.
  *
- * @visibility {//visibility:private}
+ * @visibility {:internal}
  */
 
 
@@ -31,6 +31,8 @@ goog.require('goog.log');
  * Logs and keeps a buffer of debugging info for the Channel.
  *
  * @constructor
+ * @struct
+ * @final
  */
 goog.labs.net.webChannel.WebChannelDebug = function() {
   /**
@@ -240,7 +242,7 @@ WebChannelDebug.prototype.redactResponse_ = function(responseText) {
 
 /**
  * Removes data from a response array that may be sensitive.
- * @param {!Array} array The array to clean.
+ * @param {!Array<?>} array The array to clean.
  * @private
  */
 WebChannelDebug.prototype.maybeRedactArray_ = function(array) {

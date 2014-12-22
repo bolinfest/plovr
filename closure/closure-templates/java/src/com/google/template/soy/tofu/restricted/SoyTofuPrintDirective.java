@@ -37,8 +37,8 @@ import java.util.List;
  *
  * @see SoyAbstractTofuPrintDirective
  * @see com.google.template.soy.shared.restricted.SoyJavaRuntimePrintDirective
- * @author Kai Huang
  */
+// TODO SOON: Deprecate.
 public interface SoyTofuPrintDirective extends SoyPrintDirective {
 
 

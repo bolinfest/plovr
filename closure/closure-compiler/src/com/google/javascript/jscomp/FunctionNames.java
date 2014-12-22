@@ -21,7 +21,8 @@ import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.Node;
 
 import java.io.Serializable;
-import java.util.*;
+import java.util.Map;
+
 
 /**
  * Extract a list of all function nodes defined in a JavaScript
@@ -97,11 +98,11 @@ class FunctionNames implements CompilerPass, Serializable {
     }
 
     // this.foo -> foo
-    str = str.replaceAll("::this\\.", ".");
+    str = str.replace("::this.", ".");
     // foo.prototype.bar -> foo.bar
     // AnonymousFunctionNamingCallback already replaces ".prototype."
     // with "..", just remove the extra dot.
-    str = str.replaceAll("\\.\\.", ".");
+    str = str.replace("..", ".");
     // remove toplevel anonymous blocks, if they exists.
     str = str.replaceFirst("^(<anonymous>::)*", "");
     return str;

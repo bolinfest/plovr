@@ -78,11 +78,10 @@ class CheckMissingGetCssName
   }
 
   /** Returns whether the node is an argument of a goog.getCssName call. */
-  private boolean insideGetCssNameCall(Node n) {
+  private static boolean insideGetCssNameCall(Node n) {
     Node parent = n.getParent();
     return parent.isCall() &&
-        GET_CSS_NAME_FUNCTION.equals(
-            parent.getFirstChild().getQualifiedName());
+        parent.getFirstChild().matchesQualifiedName(GET_CSS_NAME_FUNCTION);
   }
 
   /**
@@ -90,7 +89,7 @@ class CheckMissingGetCssName
    * a unique id (the last part of the qualified name matches
    * GET_UNIQUE_ID_FUNCTION).
    */
-  private boolean insideGetUniqueIdCall(Node n) {
+  private static boolean insideGetUniqueIdCall(Node n) {
     Node parent = n.getParent();
     String name = parent.isCall() ?
         parent.getFirstChild().getQualifiedName() : null;
@@ -120,7 +119,7 @@ class CheckMissingGetCssName
     }
   }
 
-  private boolean isIdName(String name) {
+  private static boolean isIdName(String name) {
     return name.endsWith("ID") || name.endsWith("ID_");
   }
 }

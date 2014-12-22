@@ -17,14 +17,17 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.collect.Sets;
+import com.google.javascript.jscomp.NodeTraversal.AbstractShallowCallback;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.BasicBlock;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.Behavior;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.Reference;
+import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceCollection;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceMap;
 import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.Node;
 
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -38,7 +41,7 @@ import java.util.Set;
  */
 class VariableReferenceCheck implements HotSwapCompilerPass {
 
-  static final DiagnosticType UNDECLARED_REFERENCE = DiagnosticType.warning(
+  static final DiagnosticType EARLY_REFERENCE = DiagnosticType.warning(
       "JSC_REFERENCE_BEFORE_DECLARE",
       "Variable referenced before declaration: {0}");
 
@@ -49,6 +52,26 @@ class VariableReferenceCheck implements HotSwapCompilerPass {
   static final DiagnosticType AMBIGUOUS_FUNCTION_DECL =
     DiagnosticType.disabled("AMBIGUOUS_FUNCTION_DECL",
         "Ambiguous use of a named function: {0}.");
+
+  static final DiagnosticType EARLY_REFERENCE_ERROR = DiagnosticType.error(
+      "JSC_REFERENCE_BEFORE_DECLARE_ERROR",
+      "Illegal variable reference before declaration: {0}");
+
+  static final DiagnosticType REASSIGNED_CONSTANT = DiagnosticType.error(
+      "JSC_REASSIGNED_CONSTANT",
+      "Constant reassigned: {0}");
+
+  static final DiagnosticType REDECLARED_VARIABLE_ERROR = DiagnosticType.error(
+      "JSC_REDECLARED_VARIABLE_ERROR",
+      "Illegal redeclared variable: {0}");
+
+  static final DiagnosticType PARAMETER_SHADOWED_ERROR = DiagnosticType.error(
+      "JSC_PARAMETER_SHADOWED_ERROR",
+      "Only var and function declaration can shadow parameters");
+
+  static final DiagnosticType DECLARATION_NOT_DIRECTLY_IN_BLOCK = DiagnosticType.error(
+      "JSC_DECLARATION_NOT_DIRECTLY_IN_BLOCK",
+      "Block-scoped declaration not directly within block: {0}");
 
   private final AbstractCompiler compiler;
   private final CheckLevel checkLevel;
@@ -90,9 +113,72 @@ class VariableReferenceCheck implements HotSwapCompilerPass {
       // all global variables. This should be fixed.
 
       // Check all vars after finishing a scope
-      for (Iterator<Var> it = t.getScope().getVars(); it.hasNext();) {
+      Scope scope = t.getScope();
+      for (Iterator<Var> it = scope.getVars(); it.hasNext();) {
         Var v = it.next();
-        checkVar(v, referenceMap.getReferences(v).references);
+        ReferenceCollection referenceCollection = referenceMap.getReferences(v);
+        // TODO(moz): Figure out why this could be null
+        if (referenceCollection != null) {
+          if (scope.getRootNode().isFunction() && v.getParentNode().isDefaultValue()
+              && v.getParentNode().getFirstChild() == v.getNode()) {
+            checkDefaultParam(v, scope);
+          } else if (scope.isFunctionBlockScope()) {
+            checkShadowParam(v, scope, referenceCollection.references);
+          }
+          checkVar(v, referenceCollection.references);
+        }
+      }
+    }
+
+    /**
+     * Do a shallow check since cases like:
+     *   function f(y = () => x, x = 5) { return y(); }
+     * is legal. We are going to miss cases like:
+     *   function f(y = (() => x)(), x = 5) { return y(); }
+     * but this should be rare.
+     */
+    private class ShallowReferenceCollector extends AbstractShallowCallback {
+      private final Set<Node> currParamReferences = new LinkedHashSet<>();
+
+      @Override
+      public void visit(NodeTraversal t, Node n, Node parent) {
+        if (!NodeUtil.isReferenceName(n)) {
+          return;
+        }
+        currParamReferences.add(n);
+      }
+    }
+
+    private void checkDefaultParam(Var v, Scope scope) {
+      ShallowReferenceCollector check = new ShallowReferenceCollector();
+      NodeTraversal.traverse(compiler, v.getParentNode().getChildAtIndex(1), check);
+      for (Node ref : check.currParamReferences) {
+        String refName = ref.getString();
+        if (!scope.isDeclared(refName, true)) {
+          compiler.report(JSError.make(ref, checkLevel, EARLY_REFERENCE_ERROR, v.name));
+        }
+      }
+    }
+
+    private void checkShadowParam(Var v, Scope scope, List<Reference> references) {
+      Scope functionScope = scope.getParent();
+      Var maybeParam = functionScope.getVar(v.getName());
+      if (maybeParam != null && maybeParam.isParam()
+          && maybeParam.getScope() == functionScope) {
+        for (Reference r : references) {
+          if (!r.isDeclaration() || r.getScope() != scope) {
+            continue;
+          }
+          compiler.report(
+              JSError.make(
+                  r.getNode(),
+                  checkLevel,
+                  (r.isVarDeclaration() || r.isHoistedFunction())
+                      && !(maybeParam.getNode().getParent().isDefaultValue()
+                          || maybeParam.getNode().isRest())
+                  ? REDECLARED_VARIABLE
+                  : PARAMETER_SHADOWED_ERROR, v.name));
+        }
       }
     }
 
@@ -125,30 +211,55 @@ class VariableReferenceCheck implements HotSwapCompilerPass {
         if (reference == hoistedFn) {
           continue;
         }
-
         BasicBlock basicBlock = reference.getBasicBlock();
         boolean isDeclaration = reference.isDeclaration();
+        Node referenceNode = reference.getNode();
 
         boolean allowDupe =
-            SyntacticScopeCreator.hasDuplicateDeclarationSuppression(
-                reference.getNode(), v);
+            VarCheck.hasDuplicateDeclarationSuppression(
+                referenceNode, v);
+        boolean letConstShadowsVar = v.getParentNode().isVar()
+            && (reference.isLetDeclaration() || reference.isConstDeclaration());
+        // We disallow redeclaration of caught exception in ES6
+        boolean shadowCatchVar = compiler.getLanguageMode().isEs6OrHigher()
+            && v.getParentNode().isCatch() && reference.isDeclaration()
+            && reference.getNode() != v.getNode();
+        boolean shadowDetected = false;
         if (isDeclaration && !allowDupe) {
           // Look through all the declarations we've found so far, and
           // check if any of them are before this block.
           for (BasicBlock declaredBlock : blocksWithDeclarations) {
             if (declaredBlock.provablyExecutesBefore(basicBlock)) {
+              shadowDetected = true;
               // TODO(johnlenz): Fix AST generating clients that so they would
               // have property StaticSourceFile attached at each node. Or
               // better yet, make sure the generated code never violates
               // the requirement to pass aggressive var check!
-              String filename = NodeUtil.getSourceName(reference.getNode());
+              DiagnosticType diagnosticType;
+              if (v.isLet() || v.isConst()
+                  || letConstShadowsVar || shadowCatchVar) {
+                diagnosticType = REDECLARED_VARIABLE_ERROR;
+              } else {
+                diagnosticType = REDECLARED_VARIABLE;
+              }
               compiler.report(
-                  JSError.make(filename,
-                      reference.getNode(),
+                  JSError.make(
+                      referenceNode,
                       checkLevel,
-                      REDECLARED_VARIABLE, v.name));
+                      diagnosticType, v.name));
               break;
             }
+          }
+        }
+
+        if (!shadowDetected && isDeclaration
+            && (letConstShadowsVar || shadowCatchVar)) {
+          if (v.getScope() == reference.getScope()) {
+            compiler.report(
+                JSError.make(
+                    referenceNode,
+                    checkLevel,
+                    REDECLARED_VARIABLE_ERROR, v.name));
           }
         }
 
@@ -157,37 +268,57 @@ class VariableReferenceCheck implements HotSwapCompilerPass {
           // block it is declared.
           for (BasicBlock declaredBlock : blocksWithDeclarations) {
             if (!declaredBlock.provablyExecutesBefore(basicBlock)) {
-              String filename = NodeUtil.getSourceName(reference.getNode());
               compiler.report(
-                  JSError.make(filename,
-                      reference.getNode(),
+                  JSError.make(
+                      referenceNode,
                       AMBIGUOUS_FUNCTION_DECL, v.name));
               break;
             }
           }
         }
 
+        boolean isUndeclaredReference = false;
         if (!isDeclaration && !isDeclaredInScope) {
           // Don't check the order of refer in externs files.
-          if (!reference.getNode().isFromExterns()) {
-            // Special case to deal with var goog = goog || {}
+          if (!referenceNode.isFromExterns()) {
+            // Special case to deal with var goog = goog || {}. Note that
+            // let x = x || {} is illegal, just like var y = x || {}; let x = y;
             Node grandparent = reference.getGrandparent();
-            if (grandparent.isName()
-                && grandparent.getString() == v.name) {
+            if ((v.isVar() && grandparent.isName()
+                && grandparent.getString().equals(v.name))) {
               continue;
             }
 
             // Only generate warnings if the scopes do not match in order
             // to deal with possible forward declarations and recursion
-            if (reference.getScope() == v.scope) {
-              String filename = NodeUtil.getSourceName(reference.getNode());
+            // TODO(moz): Remove the bypass for "goog" once VariableReferenceCheck
+            // is run after the Closure passes.
+            if (reference.getScope() == v.scope && !v.getName().equals("goog")) {
+              isUndeclaredReference = true;
               compiler.report(
-                  JSError.make(filename,
-                               reference.getNode(),
+                  JSError.make(reference.getNode(),
                                checkLevel,
-                               UNDECLARED_REFERENCE, v.name));
+                               (v.isLet() || v.isConst() || v.isParam())
+                                   ? EARLY_REFERENCE_ERROR
+                                   : EARLY_REFERENCE, v.name));
             }
           }
+        }
+
+        if (!isDeclaration && !isUndeclaredReference
+            && v.isConst() && reference.isLvalue()) {
+          compiler.report(
+              JSError.make(referenceNode,
+                           checkLevel,
+                           REASSIGNED_CONSTANT, v.name));
+        }
+
+        if (isDeclaration && !v.isVar()
+            && reference.getGrandparent().isAddedBlock()) {
+          compiler.report(
+              JSError.make(referenceNode,
+                           checkLevel,
+                           DECLARATION_NOT_DIRECTLY_IN_BLOCK, v.name));
         }
 
         if (isDeclaration) {

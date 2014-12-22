@@ -36,6 +36,7 @@ goog.require('goog.dom.pattern.MatchType');
  *     to unlimited.
  * @constructor
  * @extends {goog.dom.pattern.AbstractPattern}
+ * @final
  */
 goog.dom.pattern.Repeat = function(pattern,
                                    opt_minimum,
@@ -96,7 +97,7 @@ goog.dom.pattern.Repeat.prototype.needsReset_ = false;
 /**
  * The matched nodes.
  *
- * @type {Array.<Node>}
+ * @type {Array<Node>}
  */
 goog.dom.pattern.Repeat.prototype.matches;
 

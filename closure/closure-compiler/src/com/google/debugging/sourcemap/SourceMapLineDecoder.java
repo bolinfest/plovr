@@ -18,28 +18,17 @@ package com.google.debugging.sourcemap;
 
 import com.google.common.collect.Lists;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
  * Class for parsing the line maps in SourceMap v2.
  *
  * @author johnlenz@google.com (John Lenz)
- * @author jschorr@google.com (Joseph Schorr)
  */
 class SourceMapLineDecoder {
 
-  /**
-   * Decodes a line in a character map into a list of mapping IDs.
-   */
-  static List<Integer> decodeLine(String lineSource) {
-    return decodeLine(new StringParser(lineSource));
-  }
-
   private SourceMapLineDecoder() {}
-
-  static LineEntry decodeLineEntry(String in, int lastId) {
-    return decodeLineEntry(new StringParser(in), lastId);
-  }
 
   private static LineEntry decodeLineEntry(StringParser reader, int lastId) {
     int repDigits = 0;
@@ -94,9 +83,7 @@ class SourceMapLineDecoder {
       LineEntry entry = decodeLineEntry(reader, lastId);
       lastId = entry.id;
 
-      for (int i=0; i < entry.reps; i++) {
-        result.add(entry.id);
-      }
+      result.addAll(Collections.nCopies(entry.reps, entry.id));
     }
 
     return result;

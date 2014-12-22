@@ -73,14 +73,6 @@ Window.prototype.dialogArguments;
 Window.prototype.directories;
 
 /**
- * @type {!Document}
- * @see https://developer.mozilla.org/en/DOM/window.document
- */
-Window.prototype.document;
-
-Window.prototype.eval;
-
-/**
  * @type {HTMLObjectElement|HTMLIFrameElement|null}
  * @see https://developer.mozilla.org/en/DOM/window.frameElement
  */
@@ -230,6 +222,7 @@ Window.prototype.alert = function(message) {};
  * Decodes a string of data which has been encoded using base-64 encoding.
  *
  * @param {string} encodedData
+ * @return {string}
  * @see https://developer.mozilla.org/en/DOM/window.atob
  * @nosideeffects
  */
@@ -252,34 +245,8 @@ Window.prototype.btoa = function(stringToEncode) {};
 /** @deprecated */
 Window.prototype.captureEvents;
 
-/**
- * @param {number|undefined?} intervalID
- * @see https://developer.mozilla.org/en/DOM/window.clearInterval
- */
-Window.prototype.clearInterval = function(intervalID) {};
-
-/**
- * @param {number|undefined?} timeoutID
- * @see https://developer.mozilla.org/en/DOM/window.clearTimeout
- */
-Window.prototype.clearTimeout = function(timeoutID) {};
-
 /** @see https://developer.mozilla.org/en/DOM/window.close */
 Window.prototype.close = function() {};
-
-/**
- * @param {*} message
- * @return {boolean}
- */
-Window.prototype.confirm = function(message) {};
-
-/**
- * @param {string} regular
- * @return {string}
- * @see https://developer.mozilla.org/en/DOM/window.escape
- * @nosideeffects
- */
-Window.prototype.escape = function(regular) {};
 
 /** @see https://developer.mozilla.org/en/DOM/window.find */
 Window.prototype.find;
@@ -317,22 +284,6 @@ Window.prototype.scrollByLines;
 Window.prototype.scrollByPages;
 
 /**
- * @param {Function|string} callback
- * @param {number} delay
- * @param {...*} var_args
- * @return {number}
- */
-Window.prototype.setInterval;
-
-/**
- * @param {Function|string} callback
- * @param {number} delay
- * @param {...*} var_args
- * @return {number}
- */
-Window.prototype.setTimeout = function(callback, delay, var_args) {};
-
-/**
  * @param {string} uri
  * @param {?=} opt_arguments
  * @param {string=} opt_options
@@ -346,14 +297,6 @@ Window.prototype.sizeToContent;
  * @see http://msdn.microsoft.com/en-us/library/ms536769(VS.85).aspx
  */
 Window.prototype.stop = function() {};
-
-/**
- * @param {string} escaped
- * @return {string}
- * @see https://developer.mozilla.org/en/DOM/window.unescape
- * @nosideeffects
- */
-Window.prototype.unescape = function(escaped) {};
 
 Window.prototype.updateCommands;
 
@@ -434,7 +377,7 @@ Document.prototype.fgColor;
 Document.prototype.forms;
 
 /** @type {number} */ Document.prototype.height;
-/** @type {Array} */ Document.prototype.images;
+/** @type {HTMLCollection} */ Document.prototype.images;
 
 /**
  * @type {string}
@@ -459,12 +402,6 @@ Document.prototype.links;
  * @implicitCast
  */
 Document.prototype.location;
-
-/**
- * @type {string}
- * @see https://developer.mozilla.org/en/DOM/Using_the_Page_Visibility_API
- */
-Document.prototype.mozVisibilityState;
 
 Document.prototype.namespaceURI;
 Document.prototype.nodePrincipal;
@@ -507,12 +444,15 @@ Document.prototype.clear = function() {};
 Document.prototype.close;
 
 /**
- * @see https://developer.mozilla.org/en/DOM/document.createElementNS
- * @param {string} namespaceURI
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/document.createElementNS
+ * @see http://w3c.github.io/webcomponents/spec/custom/#extensions-to-document-interface-to-instantiate
+ * @param {?string} namespaceURI
  * @param {string} qualifiedName
+ * @param {string=} opt_typeExtension
  * @return {!Element}
  */
-Document.prototype.createElementNS = function(namespaceURI, qualifiedName) {};
+Document.prototype.createElementNS =
+    function(namespaceURI, qualifiedName, opt_typeExtension) {};
 
 /**
  * @param {string} type
@@ -842,7 +782,7 @@ Element.prototype.nodeValue;
 /** @type {Node} */ Element.prototype.parentNode;
 Element.prototype.prefix;
 /** @type {Node} */ Element.prototype.previousSibling;
-/** @type {CSSStyleDeclaration} */ Element.prototype.style;
+/** @type {!CSSStyleDeclaration} */ Element.prototype.style;
 /**
  * @type {number}
  * @implicitCast
@@ -865,7 +805,7 @@ Element.prototype.appendChild = function(child) {};
 
 /**
  * @override
- * @return {Element}
+ * @return {!Element}
  */
 Element.prototype.cloneNode = function(deep) {};
 
@@ -906,13 +846,17 @@ Element.prototype.normalize = function() {};
 
 /**
  * @param {Node} removedNode
- * @return {Node}
+ * @return {!Node}
  * @override
  */
 Element.prototype.removeChild = function(removedNode) {};
 
-/** @override */
-Element.prototype.removeEventListener = function(type, handler, useCapture) {};
+/**
+ * @param {boolean=} opt_useCapture
+ * @override
+ */
+Element.prototype.removeEventListener = function(type, handler, opt_useCapture)
+    {};
 
 /** @override */
 Element.prototype.replaceChild = function(insertedNode, replacedNode) {};
@@ -1031,6 +975,14 @@ Navigator.prototype.productSub;
  * @see https://developer.mozilla.org/en/Navigator.securityPolicy
  */
 Navigator.prototype.securityPolicy;
+
+/**
+ * @param {string} url
+ * @param {ArrayBufferView|Blob|string|FormData=} opt_data
+ * @return {boolean}
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/navigator.sendBeacon
+ */
+Navigator.prototype.sendBeacon = function(url, opt_data) {};
 
 /**
  * @type {string}

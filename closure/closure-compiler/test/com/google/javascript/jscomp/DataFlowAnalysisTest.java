@@ -30,6 +30,7 @@ import com.google.javascript.jscomp.graph.LatticeElement;
 
 import junit.framework.TestCase;
 
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -518,7 +519,7 @@ public class DataFlowAnalysisTest extends TestCase {
     Instruction inst3 = newAssignNumberToVariableInstruction(b, 1);
     Instruction inst4 = newAssignVariableToVariableInstruction(c, b);
     ControlFlowGraph<Instruction> cfg =
-      new ControlFlowGraph<Instruction>(inst1, true, true);
+      new ControlFlowGraph<>(inst1, true, true);
     GraphNode<Instruction, Branch> n1 = cfg.createNode(inst1);
     GraphNode<Instruction, Branch> n2 = cfg.createNode(inst2);
     GraphNode<Instruction, Branch> n3 = cfg.createNode(inst3);
@@ -575,7 +576,7 @@ public class DataFlowAnalysisTest extends TestCase {
     Instruction inst3 = new BranchInstruction(b);
     Instruction inst4 = newAssignVariableToVariableInstruction(c, a);
     ControlFlowGraph<Instruction> cfg =
-      new ControlFlowGraph<Instruction>(inst1, true, true);
+      new ControlFlowGraph<>(inst1, true, true);
     GraphNode<Instruction, Branch> n1 = cfg.createNode(inst1);
     GraphNode<Instruction, Branch> n2 = cfg.createNode(inst2);
     GraphNode<Instruction, Branch> n3 = cfg.createNode(inst3);
@@ -665,9 +666,7 @@ public class DataFlowAnalysisTest extends TestCase {
         assertTrue(outEdges.size() < 2);
         ConstPropLatticeElement aResult = flowThroughArithmeticInstruction(
             (ArithmeticInstruction) node, input);
-        for (int i = 0; i < outEdges.size(); i++) {
-          result.add(aResult);
-        }
+        result.addAll(Collections.nCopies(outEdges.size(), aResult));
       } else {
         BranchInstruction branchInst = (BranchInstruction) node;
         for (DiGraphEdge<Instruction, Branch> branch : outEdges) {
@@ -704,7 +703,7 @@ public class DataFlowAnalysisTest extends TestCase {
     Instruction inst3 = newAssignNumberToVariableInstruction(b, 0);
     Instruction inst4 = newAssignVariableToVariableInstruction(c, b);
     ControlFlowGraph<Instruction> cfg =
-      new ControlFlowGraph<Instruction>(inst1, true, true);
+      new ControlFlowGraph<>(inst1, true, true);
     GraphNode<Instruction, Branch> n1 = cfg.createNode(inst1);
     GraphNode<Instruction, Branch> n2 = cfg.createNode(inst2);
     GraphNode<Instruction, Branch> n3 = cfg.createNode(inst3);
@@ -737,8 +736,9 @@ public class DataFlowAnalysisTest extends TestCase {
     verifyBranchedInHas(n4, a, 0);
   }
 
+  private static final int MAX_STEP = 10;
+
   public void testMaxIterationsExceededException() {
-    final int MAX_STEP = 10;
     Variable a = new Variable("a");
     Instruction inst1 = new ArithmeticInstruction(a, a, Operation.ADD, a);
     ControlFlowGraph<Instruction> cfg =

@@ -31,22 +31,24 @@ function EventTarget() {}
 
 /**
  * @param {string} type
- * @param {EventListener|function(Event):(boolean|undefined)} listener
+ * @param {EventListener|function(!Event):(boolean|undefined)} listener
  * @param {boolean} useCapture
  * @return {undefined}
  */
-EventTarget.prototype.addEventListener = function(type, listener, useCapture) {};
+EventTarget.prototype.addEventListener = function(type, listener, useCapture)
+    {};
 
 /**
  * @param {string} type
- * @param {EventListener|function(Event):(boolean|undefined)} listener
+ * @param {EventListener|function(!Event):(boolean|undefined)} listener
  * @param {boolean} useCapture
  * @return {undefined}
  */
-EventTarget.prototype.removeEventListener = function(type, listener, useCapture) {};
+EventTarget.prototype.removeEventListener = function(type, listener, useCapture)
+    {};
 
 /**
- * @param {Event} evt
+ * @param {!Event} evt
  * @return {boolean}
  */
 EventTarget.prototype.dispatchEvent = function(evt) {};
@@ -57,15 +59,33 @@ EventTarget.prototype.dispatchEvent = function(evt) {};
 function EventListener() {}
 
 /**
- * @param {Event} evt
+ * @param {!Event} evt
  * @return {undefined}
  */
 EventListener.prototype.handleEvent = function(evt) {};
 
+// The EventInit interface and the parameters to the Event constructor are part
+// of DOM Level 3 (suggested) and the DOM "Living Standard" (mandated). They are
+// included here as externs cannot be redefined. The same applies to other
+// *EventInit interfaces and *Event constructors throughout this file. See:
+// http://www.w3.org/TR/DOM-Level-3-Events/#event-initializers
+// http://dom.spec.whatwg.org/#constructing-events
+// https://dvcs.w3.org/hg/d4e/raw-file/tip/source_respec.htm#event-constructors
+
+/**
+ * @typedef {{
+ *   bubbles: (boolean|undefined),
+ *   cancelable: (boolean|undefined)
+ * }}
+ */
+var EventInit;
+
 /**
  * @constructor
+ * @param {string} type
+ * @param {EventInit=} opt_eventInitDict
  */
-function Event() {}
+function Event(type, opt_eventInitDict) {}
 
 /**
  * @type {number}
@@ -107,8 +127,11 @@ Event.prototype.cancelable;
 /** @type {number} */
 Event.prototype.timeStamp;
 
-/** @type {Object} */
-Event.prototype.state;
+/**
+ * Present for events spawned in browsers that support shadow dom.
+ * @type {Array.<!Element>|undefined}
+ */
+Event.prototype.path;
 
 /**
  * @return {undefined}
@@ -129,11 +152,22 @@ Event.prototype.preventDefault = function() {};
 Event.prototype.initEvent = function(eventTypeArg, canBubbleArg, cancelableArg) {};
 
 /**
+ * @typedef {{
+ *   bubbles: (boolean|undefined),
+ *   cancelable: (boolean|undefined),
+ *   detail: *
+ * }}
+ */
+var CustomEventInit;
+
+/**
  * @constructor
  * @extends {Event}
+ * @param {string} type
+ * @param {CustomEventInit=} opt_eventInitDict
  * @see http://www.w3.org/TR/DOM-Level-3-Events/#interface-CustomEvent
  */
-function CustomEvent() {}
+function CustomEvent(type, opt_eventInitDict) {}
 
 /**
  * @param {string} eventType
@@ -150,40 +184,76 @@ CustomEvent.prototype.initCustomEvent = function(
 CustomEvent.prototype.detail;
 
 /**
- * @constructor
+ * @interface
  */
 function DocumentEvent() {}
 
 /**
  * @param {string} eventType
- * @return {Event}
+ * @return {!Event}
  */
 DocumentEvent.prototype.createEvent = function(eventType) {};
 
 /**
+ * @typedef {{
+ *   bubbles: (boolean|undefined),
+ *   cancelable: (boolean|undefined),
+ *   view: (Window|undefined),
+ *   detail: (number|undefined)
+ * }}
+ */
+var UIEventInit;
+
+/**
  * @constructor
  * @extends {Event}
+ * @param {string} type
+ * @param {UIEventInit=} opt_eventInitDict
  */
-function UIEvent() {}
+function UIEvent(type, opt_eventInitDict) {}
 
 /** @type {number} */
 UIEvent.prototype.detail;
 
-///**
-// * @param {string} typeArg
-// * @param {boolean} canBubbleArg
-// * @param {boolean} cancelableArg
-// * @param {AbstractView} viewArg
-// * @param {number} detailArg
-// * @return undefined
-// */
-//UIEvent.prototype.initUIEvent = function (typeArg, canBubbleArg, cancelableArg, viewArg, detailArg) {};
+/**
+ * @param {string} typeArg
+ * @param {boolean} canBubbleArg
+ * @param {boolean} cancelableArg
+ * @param {Window} viewArg
+ * @param {number} detailArg
+ * @return {undefined}
+ */
+UIEvent.prototype.initUIEvent = function(typeArg, canBubbleArg, cancelableArg,
+    viewArg, detailArg) {};
+
+/**
+ * @typedef {{
+ *   bubbles: (boolean|undefined),
+ *   cancelable: (boolean|undefined),
+ *   view: (Window|undefined),
+ *   detail: (number|undefined),
+ *   screenX: (number|undefined),
+ *   screenY: (number|undefined),
+ *   clientX: (number|undefined),
+ *   clientY: (number|undefined),
+ *   ctrlKey: (boolean|undefined),
+ *   shiftKey: (boolean|undefined),
+ *   altKey: (boolean|undefined),
+ *   metaKey: (boolean|undefined),
+ *   button: (number|undefined),
+ *   buttons: (number|undefined),
+ *   relatedTarget: (EventTarget|undefined)
+ * }}
+ */
+var MouseEventInit;
 
 /**
  * @constructor
  * @extends {UIEvent}
+ * @param {string} type
+ * @param {MouseEventInit=} opt_eventInitDict
  */
-function MouseEvent() {}
+function MouseEvent(type, opt_eventInitDict) {}
 
 /** @type {number} */
 MouseEvent.prototype.screenX;
@@ -253,10 +323,32 @@ MutationEvent.prototype.initMutationEvent = function(typeArg, canBubbleArg, canc
 
 // DOM3
 /**
+ * @typedef {{
+ *   bubbles: (boolean|undefined),
+ *   cancelable: (boolean|undefined),
+ *   view: (Window|undefined),
+ *   detail: (number|undefined),
+ *   char: (string|undefined),
+ *   key: (string|undefined),
+ *   code: (string|undefined),
+ *   location: (number|undefined),
+ *   ctrlKey: (boolean|undefined),
+ *   shiftKey: (boolean|undefined),
+ *   altKey: (boolean|undefined),
+ *   metaKey: (boolean|undefined),
+ *   repeat: (boolean|undefined),
+ *   locale: (string|undefined)
+ * }}
+ */
+var KeyboardEventInit;
+
+/**
  * @constructor
  * @extends {UIEvent}
+ * @param {string} type
+ * @param {KeyboardEventInit=} opt_eventInitDict
  */
-function KeyboardEvent() {}
+function KeyboardEvent(type, opt_eventInitDict) {}
 
 /** @type {string} */
 KeyboardEvent.prototype.keyIdentifier;

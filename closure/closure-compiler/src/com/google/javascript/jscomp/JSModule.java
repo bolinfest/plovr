@@ -19,12 +19,14 @@ package com.google.javascript.jscomp;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Queues;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.deps.DependencyInfo;
 import com.google.javascript.jscomp.deps.SortedDependencies;
 import com.google.javascript.jscomp.deps.SortedDependencies.CircularDependencyException;
 
 import java.io.Serializable;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -48,10 +50,10 @@ public class JSModule implements DependencyInfo, Serializable {
   private final String name;
 
   /** Source code inputs */
-  private final List<CompilerInput> inputs = new ArrayList<CompilerInput>();
+  private final List<CompilerInput> inputs = new ArrayList<>();
 
   /** Modules that this module depends on */
-  private final List<JSModule> deps = new ArrayList<JSModule>();
+  private final List<JSModule> deps = new ArrayList<>();
 
   private int depth;
   /**
@@ -72,7 +74,7 @@ public class JSModule implements DependencyInfo, Serializable {
 
   @Override
   public List<String> getProvides() {
-    return ImmutableList.<String>of(name);
+    return ImmutableList.of(name);
   }
 
   @Override
@@ -89,14 +91,18 @@ public class JSModule implements DependencyInfo, Serializable {
     throw new UnsupportedOperationException();
   }
 
-  /** Adds a source file input to this module. */
-  public void add(SourceFile file) {
-    add(new CompilerInput(file));
+  @Override
+  public boolean isModule() {
+    // NOTE: The meaning of "module" has changed over time.  A "JsModule" is
+    // a collection of inputs that are loaded together. A "module" file,
+    // is a CommonJs module, ES6 module, goog.module or other file whose
+    // top level symbols are not in global scope.
+    throw new UnsupportedOperationException();
   }
 
   /** Adds a source file input to this module. */
-  public void addFirst(SourceFile file) {
-    addFirst(new CompilerInput(file));
+  public void add(SourceFile file) {
+    add(new CompilerInput(file));
   }
 
   /** Adds a source code input to this module. */
@@ -131,7 +137,7 @@ public class JSModule implements DependencyInfo, Serializable {
   /** Adds a dependency on another module. */
   public void addDependency(JSModule dep) {
     Preconditions.checkNotNull(dep);
-    Preconditions.checkState(dep != this);
+    Preconditions.checkState(dep != this, "Cannot add dependency on self", this);
     deps.add(dep);
   }
 
@@ -177,12 +183,13 @@ public class JSModule implements DependencyInfo, Serializable {
    */
   public Set<JSModule> getAllDependencies() {
     Set<JSModule> allDeps = Sets.newHashSet(deps);
-    List<JSModule> workList = Lists.newArrayList(deps);
-    while (workList.size() > 0) {
-      JSModule module = workList.remove(workList.size() - 1);
+    ArrayDeque<JSModule> stack = Queues.newArrayDeque(deps);
+
+    while (!stack.isEmpty()) {
+      JSModule module = stack.pop();
       for (JSModule dep : module.getDependencies()) {
         if (allDeps.add(dep)) {
-          workList.add(dep);
+          stack.push(dep);
         }
       }
     }
@@ -261,8 +268,8 @@ public class JSModule implements DependencyInfo, Serializable {
     // Sort the JSModule in this order.
     try {
       List<CompilerInput> sortedList =
-          (new SortedDependencies<CompilerInput>(
-              Collections.<CompilerInput>unmodifiableList(inputs)))
+          (new SortedDependencies<>(
+              Collections.unmodifiableList(inputs)))
           .getSortedList();
       inputs.clear();
       inputs.addAll(sortedList);
@@ -283,7 +290,7 @@ public class JSModule implements DependencyInfo, Serializable {
   public static JSModule[] sortJsModules(Collection<JSModule> modules)
       throws CircularDependencyException {
     // Sort the JSModule in this order.
-    List<JSModule> sortedList = (new SortedDependencies<JSModule>(
+    List<JSModule> sortedList = (new SortedDependencies<>(
             Lists.newArrayList(modules))).getSortedList();
     return sortedList.toArray(new JSModule[sortedList.size()]);
   }

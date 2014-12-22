@@ -13,7 +13,7 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 -->
-<project name="compiler" basedir="." default="jar" xmlns:artifact="antlib:org.apache.maven.artifact.ant">
+<project name="compiler" basedir="." default="jar">
 
   <!--
     Use -Dtest.class to change what tests are run on the command-line.
@@ -21,15 +21,18 @@
   -->
   <property name="test.class" value="*Test"/>
 
+  <!-- Use -Dtest.method in conjunction with the one-test rule. -->
+  <property name="test.method" value=""/>
+
   <!--
     Use -Dtest.fork to specify whether or not to fork the process.
     Some machines run better with forking turned off.
   -->
   <property name="test.fork" value="true"/>
 
-  <!-- Force java 6 -->
-  <property name="ant.build.javac.source" value="1.6" />
-  <property name="ant.build.javac.target" value="1.6" />
+  <!-- Force java 7 -->
+  <property name="ant.build.javac.source" value="1.7" />
+  <property name="ant.build.javac.target" value="1.7" />
 
   <!-- define other variables -->
   <property name="javac.debug" value="on" />
@@ -53,13 +56,13 @@
             value="${build.dir}/${ant.project.name}.jar" />
   <property name="num-fuzz-tests" value="10000"/>
 
-  <property name="jsonml.dir" value="${basedir}/src/com/google/javascript/jscomp/jsonml" />
-  <property name="jsonml-classes.dir" value = "${build.dir}/jsonml-classes" />
-  <property name="jsonml-jarfile" value="${build.dir}/secure_compiler.jar" />
-
   <property name="webservice.dir" value="${basedir}/src/com/google/javascript/jscomp/webservice" />
   <property name="webservice-classes.dir" value = "${build.dir}/webservice-classes" />
   <property name="webservice-jarfile" value="${build.dir}/webservice.jar" />
+
+  <property name="refasterjs.dir" value="${basedir}/src/com/google/javascript/refactoring" />
+  <property name="refasterjs-classes.dir" value = "${build.dir}/refasterjs-classes" />
+  <property name="refasterjs-jarfile" value="${build.dir}/refasterjs.jar" />
 
   <!-- The following server is used to deploy releases to maven central via Sonatypes
        publishing service which runs on oss.sonatype.org.
@@ -75,12 +78,6 @@
 
   <property file="build.properties" />
 
-  <!-- maven ant tasks -->
-  <path id="maven-ant-tasks.classpath" path="${tools.dir}/maven-ant-tasks-2.1.3.jar" />
-  <typedef resource="org/apache/maven/artifact/ant/antlib.xml"
-           uri="antlib:org.apache.maven.artifact.ant"
-           classpathref="maven-ant-tasks.classpath" />
-
   <!-- gather release version -->
   <target name="relversion">
     <exec outputproperty="build.relVersion"
@@ -92,30 +89,6 @@
       <arg value="--tag"/>
       <arg value="--always"/>
     </exec>
-  </target>
-
-  <!-- compile rhino -->
-  <target name="rhino">
-    <ant antfile="build.xml"
-         inheritAll="false"
-         dir="lib/rhino/"
-         target="jar">
-      <property name="build.dir" value="${buildlib.dir}"/>
-      <property name="no-e4x" value="true"/>
-    </ant>
-  </target>
-
-  <target name="rhino-jarjar"
-          depends="rhino"
-          description="Renamespaces Rhino">
-    <taskdef name="jarjar"
-             classname="com.tonicsystems.jarjar.JarJarTask"
-             classpath="lib/jarjar.jar"/>
-    <jarjar destfile="${buildlib.dir}/rhino.jar" update="true">
-      <zipfileset src="${buildlib.dir}/rhino1_7R5pre/js.jar"/>
-      <rule pattern="org.mozilla.javascript.**"
-            result="com.google.javascript.rhino.head.@1"/>
-    </jarjar>
   </target>
 
   <target name="protobuf-gen">
@@ -131,92 +104,6 @@
     </exec>
   </target>
 
-  <!-- Generate pom.xml with the proper rel build number -->
-  <target name="pom" depends="relversion">
-    <copy file="closure-compiler.pom" tofile="${build.dir}/pom.xml">
-      <filterset>
-        <filter token="build.relVersion"
-             value="${build.relVersion}"/>
-      </filterset>
-    </copy>
-
-    <property name="compiler-jarfile-nodeps" value="${build.dir}/closure-${ant.project.name}-${build.relVersion}.jar" />
-    <property name="compiler-jarfile-javadoc" value="${build.dir}/closure-${ant.project.name}-${build.relVersion}-javadoc.jar" />
-    <property name="compiler-jarfile-sources" value="${build.dir}/closure-${ant.project.name}-${build.relVersion}-sources.jar" />
-
-    <artifact:pom id="project" file="${build.dir}/pom.xml" />
-  </target>
-
-  <target name="mvn-install"
-          depends="jar-nodeps,jar-javadoc,jar-sources,pom"
-          description="Install closure-compiler artifacts into the local maven repo">
-    <artifact:install file="${compiler-jarfile-nodeps}">
-      <pom refid="project"/>
-      <attach file="${compiler-jarfile-javadoc}" classifier="javadoc"/>
-      <attach file="${compiler-jarfile-sources}" classifier="sources"/>
-    </artifact:install>
-  </target>
-
-  <!-- The mvn-deploy target takes the generated maven artifacts and pushes
-       them to the Sonatype repository.  You will need to have a
-       gpg key defined and account set up. More docs on how to do this here:
-
-       https://docs.sonatype.org/display/Repository/Sonatype+OSS+Maven+Repository+Usage+Guide
-  -->
-
-  <target name="mvn-deploy"
-    depends="mvn-install"
-    description="Signs and Deploys closure-compiler artifacts to the central maven repo">
-
-    <!-- sign and deploy the main artifact -->
-    <artifact:mvn>
-      <arg value="org.apache.maven.plugins:maven-gpg-plugin:1.1:sign-and-deploy-file" />
-      <arg value="-Durl=${maven-repository-url}" />
-      <arg value="-DrepositoryId=${maven-repository-id}" />
-      <arg value="-DpomFile=${build.dir}/pom.xml" />
-      <arg value="-Dfile=${compiler-jarfile-nodeps}" />
-      <arg value="-Pgpg" />
-    </artifact:mvn>
-
-    <!-- sign and deploy the sources artifact -->
-    <artifact:mvn>
-      <arg value="org.apache.maven.plugins:maven-gpg-plugin:1.1:sign-and-deploy-file" />
-      <arg value="-Durl=${maven-repository-url}" />
-      <arg value="-DrepositoryId=${maven-repository-id}" />
-      <arg value="-DpomFile=${build.dir}/pom.xml" />
-      <arg value="-Dfile=${compiler-jarfile-sources}" />
-      <arg value="-Dclassifier=sources" />
-      <arg value="-Pgpg" />
-    </artifact:mvn>
-
-    <!-- sign and deploy the javadoc artifact -->
-    <artifact:mvn>
-      <arg value="org.apache.maven.plugins:maven-gpg-plugin:1.1:sign-and-deploy-file" />
-      <arg value="-Durl=${maven-repository-url}" />
-      <arg value="-DrepositoryId=${maven-repository-id}" />
-      <arg value="-DpomFile=${build.dir}/pom.xml" />
-      <arg value="-Dfile=${compiler-jarfile-javadoc}" />
-      <arg value="-Dclassifier=javadoc" />
-      <arg value="-Pgpg" />
-    </artifact:mvn>
-  </target>
-
-  <!-- Sync maven dependencies listed in pom.xml -->
-  <target name="mvn-deps-sync" description="sync dependencies/jars in closure-compiler.pom to lib" depends="pom">
-    <artifact:dependencies filesetid="dependency.fileset"
-                           pathid="dependency.classpath"
-                           pomrefid="project"
-                           versionsId="dependency.versions"/>
-    <mkdir dir="${lib.dir}"/>
-    <copy todir="${lib.dir}">
-      <fileset refid="dependency.fileset" />
-      <!-- This mapper strips off all leading directory information -->
-      <mapper classpathref="maven-ant-tasks.classpath"
-          classname="org.apache.maven.artifact.ant.VersionMapper"
-          from="${dependency.versions}" to="flatten" />
-    </copy>
-  </target>
-
   <!-- set the classpath for the project              -->
   <!-- this includes the generated source class files -->
   <!-- and every jar in the /lib directory            -->
@@ -226,12 +113,9 @@
     <fileset dir="${lib.dir}">
       <include name="args4j.jar"/>
       <include name="guava.jar"/>
-      <include name="json.jar"/>
+      <include name="gson.jar"/>
       <include name="jsr305.jar"/>
       <include name="protobuf-java.jar"/>
-    </fileset>
-    <fileset dir="${buildlib.dir}">
-      <include name="rhino.jar"/>
     </fileset>
   </path>
 
@@ -239,9 +123,6 @@
     <pathelement location="${classes.dir}" />
     <fileset dir="${lib.dir}">
       <include name="*.jar"/>
-    </fileset>
-    <fileset dir="${buildlib.dir}">
-      <include name="rhino.jar"/>
     </fileset>
   </path>
 
@@ -251,19 +132,23 @@
 
   <target name="compile"
           description="compile the source code"
-          depends="rhino-jarjar,relversion">
+          depends="relversion">
     <mkdir dir="${classes.dir}" />
     <javac srcdir="${gen.dir}"
            destdir="${classes.dir}"
            excludes=".svn,.git"
-           debug="${javac.debug}">
+           debug="${javac.debug}"
+           includeantruntime="false">
       <classpath refid="srcclasspath.path" />
+      <compilerarg value="-Xlint:unchecked"/>
     </javac>
     <javac srcdir="${src.dir}"
            destdir="${classes.dir}"
-           excludes=".svn,.git,**/jsonml/**,**/webservice/**,**/testing/**"
-           debug="${javac.debug}">
+           excludes=".svn,.git,**/refactoring/**,**/webservice/**,**/testing/**"
+           debug="${javac.debug}"
+           includeantruntime="true">
       <classpath refid="srcclasspath.path" />
+      <compilerarg value="-Xlint:unchecked"/>
     </javac>
 
     <!-- Move Messages.properties where ScriptRuntime.java expects it. -->
@@ -282,24 +167,12 @@
       <entry key="compiler.version" value="${build.relVersion}"/>
     </propertyfile>
 
-    <!-- Move runtime_type_check.js where RuntimeTypeCheck.java expects it. -->
+    <!-- Move the runtime libraries where the compiler expects them. -->
     <mkdir dir="${classes.dir}/com/google/javascript/jscomp/js" />
     <copy todir="${classes.dir}/com/google/javascript/jscomp/js">
       <fileset dir="${src.dir}/com/google/javascript/jscomp/js" />
     </copy>
   </target>
-
-  <target name="jar-nodeps"
-          depends="compile,pom"
-          description="package compiler as an executable jar">
-    <zip destfile="${build.dir}/externs.zip" basedir="${externs.dir}" />
-    <jar destfile="${compiler-jarfile-nodeps}" update="true">
-      <fileset dir="${classes.dir}" />
-      <fileset dir="${build.dir}" includes="externs.zip" />
-      <zipfileset src="${build.dir}/lib/rhino.jar"/>
-    </jar>
-  </target>
-
 
   <target name="jar"
           depends="compile"
@@ -310,11 +183,9 @@
       <fileset dir="${build.dir}" includes="externs.zip" />
       <zipfileset src="${lib.dir}/args4j.jar"/>
       <zipfileset src="${lib.dir}/guava.jar"/>
-      <zipfileset src="${lib.dir}/json.jar"/>
+      <zipfileset src="${lib.dir}/gson.jar"/>
       <zipfileset src="${lib.dir}/jsr305.jar"/>
       <zipfileset src="${lib.dir}/protobuf-java.jar"/>
-
-      <zipfileset src="${buildlib.dir}/rhino.jar"/>
 
       <manifest>
         <attribute name="Main-Class"
@@ -330,14 +201,18 @@
     <javac srcdir="${src.dir}"
            destdir="${testClasses.dir}"
            excludes=".svn,.git"
-           debug="on">
+           debug="on"
+           includeantruntime="false">
       <classpath refid="allclasspath.path" />
+      <compilerarg value="-Xlint:unchecked"/>
     </javac>
     <javac srcdir="${test.dir}"
            destdir="${testClasses.dir}"
            excludes=".svn,.git"
-           debug="on">
+           debug="on"
+           includeantruntime="false">
       <classpath refid="allclasspath.path" />
+      <compilerarg value="-Xlint:unchecked"/>
     </javac>
   </target>
 
@@ -347,7 +222,6 @@
     <jar destfile="${compiler-jarfile}" update="true">
       <fileset dir="${testClasses.dir}" />
       <zipgroupfileset dir="${lib.dir}" includes="*.jar"/>
-      <zipfileset src="${buildlib.dir}/rhino.jar"/>
     </jar>
   </target>
 
@@ -378,6 +252,31 @@
           message="Unit tests failed. See build/testoutput/index.html" />
   </target>
 
+  <target name="one-test"
+          depends="compile-tests"
+          description="Compile and execute one JUnit test
+                       specified with -Dtest.class and -Dtest.method.">
+    <mkdir dir="build/testoutput"/>
+    <junit printsummary="on" fork="${test.fork}"
+           forkmode="once" showoutput="true"
+           failureproperty="junit.failure">
+      <classpath refid="allclasspath.path" />
+      <classpath>
+        <pathelement location="${build.dir}/test" />
+      </classpath>
+      <test todir="build/testoutput" name="${test.class}" methods="${test.method}">
+        <formatter type="brief" usefile="false" />
+        <formatter type="xml" />
+      </test>
+    </junit>
+    <junitreport>
+       <fileset dir="build/testoutput" includes="*.xml"/>
+       <report todir="build/testoutput"/>
+    </junitreport>
+    <fail if="junit.failure"
+          message="Unit tests failed. See build/testoutput/index.html" />
+  </target>
+
   <target name="fuzz-test"
           depends="all-classes-jar"
           description="checks the compiler against a variety of js programs">
@@ -392,8 +291,7 @@
   </target>
 
   <target name="javadoc"
-          description="generate Javadoc"
-          depends="rhino-jarjar">
+          description="generate Javadoc">
     <mkdir dir="${javadoc.dir}" />
     <javadoc
          destdir="${javadoc.dir}"
@@ -406,7 +304,7 @@
         <pathelement location="${gen.dir}" />
       </sourcepath>
       <classpath refid="allclasspath.path" />
-      <link href="http://java.sun.com/javase/6/docs/api/" />
+      <link href="http://docs.oracle.com/javase/7/docs/api/" />
     </javadoc>
   </target>
 
@@ -423,11 +321,11 @@
     </jar>
   </target>
 
-  <!-- JsonML package related targets                 -->
+  <!-- webservce package related targets                 -->
   <!-- set the classpath for the project              -->
   <!-- this includes the generated source class files -->
   <!-- and every jar in the /lib directory            -->
-  <path id="jsonml-classpath.path">
+  <path id="webservice-classpath.path">
     <pathelement location="${classes.dir}" />
     <fileset dir="${lib.dir}">
       <include name="*.jar" />
@@ -435,34 +333,7 @@
     <fileset dir="${classes.dir}">
       <include name="*.class" />
     </fileset>
-    <fileset dir="${buildlib.dir}">
-      <include name="rhino.jar"/>
-    </fileset>
   </path>
-
-  <target name="jsonml-compile"
-          description="compile the source code of classes from JsonML package"
-          depends="compile">
-    <mkdir dir="${jsonml-classes.dir}" />
-    <javac srcdir="${jsonml.dir}"
-           destdir="${jsonml-classes.dir}"
-           excludes=".svn,.git"
-           debug="${javac.debug}">
-      <classpath refid="jsonml-classpath.path" />
-    </javac>
-  </target>
-
-  <target name="jsonml-jar"
-          description="package the compiler and JsonML classes"
-          depends="jsonml-compile, compile">
-   <zip destfile="${build.dir}/externs.zip" basedir="${externs.dir}" includes="*.js" />
-   <jar destfile="${jsonml-jarfile}" update="true">
-     <zipgroupfileset dir="${lib.dir}" includes="*.jar"/>
-     <zipfileset src="${buildlib.dir}/rhino.jar"/>
-     <fileset dir="${classes.dir}" />
-     <fileset dir="${jsonml-classes.dir}" />
-   </jar>
-  </target>
 
   <target name="webservice-compile"
           description="compile the source code of classes from the webservice package"
@@ -472,7 +343,7 @@
            destdir="${webservice-classes.dir}"
            excludes=".svn,.git"
            debug="${javac.debug}">
-      <classpath refid="jsonml-classpath.path" />
+      <classpath refid="webservice-classpath.path" />
     </javac>
   </target>
 
@@ -482,9 +353,50 @@
    <zip destfile="${build.dir}/externs.zip" basedir="${externs.dir}" includes="*.js" />
    <jar destfile="${webservice-jarfile}" update="true">
      <zipgroupfileset dir="${lib.dir}" includes="*.jar"/>
-     <zipfileset src="${buildlib.dir}/rhino.jar"/>
      <fileset dir="${classes.dir}" />
      <fileset dir="${webservice-classes.dir}" />
+   </jar>
+  </target>
+
+  <!-- RefasterJS package related targets                 -->
+  <!-- set the classpath for the project              -->
+  <!-- this includes the generated source class files -->
+  <!-- and every jar in the /lib directory            -->
+  <path id="refasterjs-classpath.path">
+    <pathelement location="${classes.dir}" />
+    <fileset dir="${lib.dir}">
+      <include name="*.jar" />
+    </fileset>
+    <fileset dir="${classes.dir}">
+      <include name="*.class" />
+    </fileset>
+  </path>
+
+  <target name="refasterjs-compile"
+          description="Compiles the source code of classes for RefasterJS"
+          depends="compile">
+    <mkdir dir="${refasterjs-classes.dir}" />
+    <javac srcdir="${refasterjs.dir}"
+           destdir="${refasterjs-classes.dir}"
+           excludes=".svn,.git"
+           debug="${javac.debug}">
+      <classpath refid="refasterjs-classpath.path" />
+    </javac>
+  </target>
+
+  <target name="refasterjs-jar"
+          description="Packages the compiler and RefasterJS classes"
+          depends="refasterjs-compile, compile">
+   <zip destfile="${build.dir}/externs.zip" basedir="${externs.dir}" includes="*.js" />
+   <jar destfile="${refasterjs-jarfile}" update="true">
+     <zipgroupfileset dir="${lib.dir}" includes="*.jar"/>
+     <fileset dir="${build.dir}" includes="externs.zip" />
+     <fileset dir="${classes.dir}" />
+     <fileset dir="${refasterjs-classes.dir}" />
+     <manifest>
+       <attribute name="Main-Class"
+                   value="com.google.javascript.refactoring.RefasterJs" />
+     </manifest>
    </jar>
   </target>
 </project>

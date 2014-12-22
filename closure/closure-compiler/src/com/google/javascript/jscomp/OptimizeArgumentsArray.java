@@ -130,7 +130,7 @@ class OptimizeArgumentsArray implements CompilerPass, ScopedCallback {
     // After the attempt to replace the arguments. The currentArgumentsAccess
     // is stale and as we exit the Scope, no longer holds all the access to the
     // current scope anymore. We'll pop the access list from the outer scope
-    // and set it as currentArgumentsAcess if the outer scope is not the global
+    // and set it as currentArgumentsAccess if the outer scope is not the global
     // scope.
     if (!argumentsAccessStack.isEmpty()) {
       currentArgumentsAccess = argumentsAccessStack.pop();
@@ -202,7 +202,7 @@ class OptimizeArgumentsArray implements CompilerPass, ScopedCallback {
       // Bail on anything but argument[c] access where c is a constant.
       // TODO(user): We might not need to bail out all the time, there might
       // be more cases that we can cover.
-      if (!getElem.isGetElem()) {
+      if (!getElem.isGetElem() || ref != getElem.getFirstChild()) {
         return false;
       }
 

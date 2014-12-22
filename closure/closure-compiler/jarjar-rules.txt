@@ -1,1 +1,0 @@
-rule org.mozilla.javascript.** com.google.javascript.rhino.head.@1

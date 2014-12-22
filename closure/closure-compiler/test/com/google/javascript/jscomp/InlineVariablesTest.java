@@ -23,6 +23,7 @@ package com.google.javascript.jscomp;
  *
  * @author kushal@google.com (Kushal Dave)
  */
+
 public class InlineVariablesTest extends CompilerTestCase {
 
   private boolean inlineAllStrings = false;
@@ -35,6 +36,7 @@ public class InlineVariablesTest extends CompilerTestCase {
   @Override
   public void setUp() {
     super.enableLineNumberCheck(true);
+    compareJsDoc = false;
   }
 
   @Override
@@ -91,7 +93,7 @@ public class InlineVariablesTest extends CompilerTestCase {
 
   public void testInlineInFunction2() {
     test("function baz() { " +
-            "var a = new obj();"+
+            "var a = new obj();" +
             "result = a;" +
          "}",
          "function baz() { " +
@@ -1062,6 +1064,92 @@ public class InlineVariablesTest extends CompilerTestCase {
     testSame(
         "function F() { this.a = 0; }" +
         "F.prototype.inc = function() { this.a++; return 10; };" +
-        "F.prototype.bar = function() { var val = inc(); this.a += val; };");
+        "F.prototype.bar = function() { var x = this.inc(); this.a += x; };");
+  }
+
+  public void testExternalIssue1053() {
+    testSame(
+        "var u; function f() { u = Random(); var x = u; f(); alert(x===u)}");
+  }
+
+  public void testHoistedFunction1() {
+    test("var x = 1; function f() { return x; }", "function f() { return 1; }");
+  }
+
+  public void testHoistedFunction2() {
+    testSame(
+        "var impl_0;" +
+        "b(a());" +
+        "function a() { impl_0 = {}; }" +
+        "function b() { window['f'] = impl_0; }");
+  }
+
+  public void testHoistedFunction3() {
+    testSame(
+        "var impl_0;" +
+        "b();" +
+        "impl_0 = 1;" +
+        "function b() { window['f'] = impl_0; }");
+  }
+
+  public void testHoistedFunction4() {
+    test(
+        "var impl_0;" +
+        "impl_0 = 1;" +
+        "b();" +
+        "function b() { window['f'] = impl_0; }",
+        "1; b(); function b() { window['f'] = 1; }");
+  }
+
+  public void testHoistedFunction5() {
+    testSame(
+        "a();" +
+        "var debug = 1;" +
+        "function b() { return debug; }" +
+        "function a() { return b(); }");
+  }
+
+  public void testHoistedFunction6() {
+    test(
+        "var debug = 1;" +
+        "a();" +
+        "function b() { return debug; }" +
+        "function a() { return b(); }",
+        "a();" +
+        "function b() { return 1; }" +
+        "function a() { return b(); }");
+  }
+
+  public void testIssue354() {
+    test(
+        "var enabled = true;" +
+        "function Widget() {}" +
+        "Widget.prototype = {" +
+        "  frob: function() {" +
+        "    search();" +
+        "  }" +
+        "};" +
+        "function search() {" +
+        "  if (enabled)" +
+        "    alert(1);" +
+        "  else" +
+        "    alert(2);" +
+        "}" +
+        "window.foo = new Widget();" +
+        "window.bar = search;",
+        "function Widget() {}" +
+        "Widget.prototype = {" +
+        "  frob: function() {" +
+        "    search();" +
+        "  }" +
+        "};" +
+        "function search() {" +
+        "  if (true)" +
+        "    alert(1);" +
+        "  else" +
+        "    alert(2);" +
+        "}" +
+        "window.foo = new Widget();" +
+        "window.bar = search;");
   }
 }

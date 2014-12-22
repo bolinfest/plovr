@@ -16,7 +16,6 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.javascript.rhino.Node;
 
@@ -49,8 +48,7 @@ abstract class AbstractPeepholeOptimization {
    * @param n The node for which the error should be reported
    */
   protected void report(DiagnosticType diagnostic, Node n) {
-    JSError error =
-        JSError.make(NodeUtil.getSourceName(n), n, diagnostic, n.toString());
+    JSError error = JSError.make(n, diagnostic, n.toString());
     compiler.report(error);
   }
 
@@ -147,22 +145,4 @@ abstract class AbstractPeepholeOptimization {
     return compiler.getCodingConvention();
   }
 
-  /**
-   * Check if the specified node is null or is still in the AST.
-   */
-  @VisibleForTesting
-  static Node validateResult(Node n) {
-    done: {
-      if (n != null && !n.isScript()
-          && (!n.isBlock() || !n.isSyntheticBlock())) {
-        for (Node parent : n.getAncestors()) {
-          if (parent.isScript()) {
-            break done;
-          }
-        }
-        Preconditions.checkState(false);
-      }
-    }
-    return n;
-  }
 }

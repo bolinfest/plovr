@@ -16,8 +16,7 @@
 
 package com.google.template.soy.javasrc.restricted;
 
-import com.google.common.base.Objects;
-
+import java.util.Objects;
 
 /**
  * Value class to represent a Java expression. Includes the text of the expression as well as the
@@ -29,7 +28,6 @@ import com.google.common.base.Objects;
  * the Soy expression operators matches that of Java (as well as Java), so the precedence numbers
  * are correct when used for generating Java code as well.
  *
- * @author Kai Huang
  */
 public class JavaExpr {
 
@@ -73,8 +71,7 @@ public class JavaExpr {
 
 
   @Override public String toString() {
-    return Objects.toStringHelper(this)
-        .add("text", text).add("type", type).add("precedence", precedence).toString();
+    return String.format("JavaExpr{text=%s, precedence=%d}", text, precedence);
   }
 
 
@@ -95,7 +92,7 @@ public class JavaExpr {
 
 
   @Override public int hashCode() {
-    return Objects.hashCode(text, type, precedence);
+    return Objects.hash(text, type, precedence);
   }
 
 }

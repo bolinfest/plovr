@@ -66,14 +66,14 @@ public class IR {
   }
 
   public static Node paramList(Node param) {
-    Preconditions.checkState(param.isName());
+    Preconditions.checkState(param.isName() || param.isRest());
     return new Node(Token.PARAM_LIST, param);
   }
 
   public static Node paramList(Node ... params) {
     Node paramList = paramList();
     for (Node param : params) {
-      Preconditions.checkState(param.isName());
+      Preconditions.checkState(param.isName() || param.isRest());
       paramList.addChildToBack(param);
     }
     return paramList;
@@ -82,7 +82,7 @@ public class IR {
   public static Node paramList(List<Node> params) {
     Node paramList = paramList();
     for (Node param : params) {
-      Preconditions.checkState(param.isName());
+      Preconditions.checkState(param.isName() || param.isRest());
       paramList.addChildToBack(param);
     }
     return paramList;
@@ -145,16 +145,30 @@ public class IR {
     return paramList;
   }
 
-  public static Node var(Node name, Node value) {
-    Preconditions.checkState(name.isName() && !name.hasChildren());
-    Preconditions.checkState(mayBeExpression(value));
-    name.addChildToFront(value);
-    return var(name);
+  public static Node var(Node lhs, Node value) {
+    return declaration(lhs, value, Token.VAR);
   }
 
-  public static Node var(Node name) {
-    Preconditions.checkState(name.isName());
-    return new Node(Token.VAR, name);
+  public static Node var(Node lhs) {
+    return declaration(lhs, Token.VAR);
+  }
+
+  public static Node declaration(Node lhs, int type) {
+    Preconditions.checkState(
+        lhs.isName() || lhs.isArrayPattern() || lhs.isObjectPattern());
+    return new Node(type, lhs);
+  }
+
+  public static Node declaration(Node lhs, Node value, int type) {
+    if (lhs.isName()) {
+      Preconditions.checkState(!lhs.hasChildren());
+    } else {
+      Preconditions.checkState(lhs.isArrayPattern() || lhs.isObjectPattern());
+    }
+    Preconditions.checkState(mayBeExpression(value));
+
+    lhs.addChildToBack(value);
+    return new Node(type, lhs);
   }
 
   public static Node returnNode() {
@@ -164,6 +178,15 @@ public class IR {
   public static Node returnNode(Node expr) {
     Preconditions.checkState(mayBeExpression(expr));
     return new Node(Token.RETURN, expr);
+  }
+
+  public static Node yield() {
+    return new Node(Token.YIELD);
+  }
+
+  public static Node yield(Node expr) {
+    Preconditions.checkState(mayBeExpression(expr));
+    return new Node(Token.YIELD, expr);
   }
 
   public static Node throwNode(Node expr) {
@@ -193,6 +216,12 @@ public class IR {
     Preconditions.checkState(body.isBlock());
     Preconditions.checkState(mayBeExpression(cond));
     return new Node(Token.DO, body, cond);
+  }
+
+  public static Node whileNode(Node cond, Node body) {
+    Preconditions.checkState(body.isBlock());
+    Preconditions.checkState(mayBeExpression(cond));
+    return new Node(Token.WHILE, cond, body);
   }
 
   public static Node forIn(Node target, Node cond, Node body) {
@@ -332,7 +361,7 @@ public class IR {
   }
 
   public static Node assign(Node target, Node expr) {
-    Preconditions.checkState(isAssignmentTarget(target));
+    Preconditions.checkState(target.isValidAssignmentTarget());
     Preconditions.checkState(mayBeExpression(expr));
     return new Node(Token.ASSIGN, target, expr);
   }
@@ -342,6 +371,10 @@ public class IR {
     Preconditions.checkState(mayBeExpression(trueval));
     Preconditions.checkState(mayBeExpression(falseval));
     return new Node(Token.HOOK, cond, trueval, falseval);
+  }
+
+  public static Node in(Node expr1, Node expr2) {
+    return binaryOp(Token.IN, expr1, expr2);
   }
 
   public static Node comma(Node expr1, Node expr2) {
@@ -361,6 +394,13 @@ public class IR {
   }
 
   /**
+   * "<"
+   */
+  public static Node lt(Node expr1, Node expr2) {
+    return binaryOp(Token.LT, expr1, expr2);
+  }
+
+  /**
    * "=="
    */
   public static Node eq(Node expr1, Node expr2) {
@@ -372,6 +412,13 @@ public class IR {
    */
   public static Node sheq(Node expr1, Node expr2) {
     return binaryOp(Token.SHEQ, expr1, expr2);
+  }
+
+  /**
+   * "!=="
+   */
+  public static Node shne(Node expr1, Node expr2) {
+    return binaryOp(Token.SHNE, expr1, expr2);
   }
 
   public static Node voidNode(Node expr1) {
@@ -388,6 +435,18 @@ public class IR {
 
   public static Node cast(Node expr1) {
     return unaryOp(Token.CAST, expr1);
+  }
+
+  public static Node inc(Node exp, boolean isPost) {
+    Node op = unaryOp(Token.INC, exp);
+    op.putBooleanProp(Node.INCRDECR_PROP, isPost);
+    return op;
+  }
+
+  public static Node dec(Node exp, boolean isPost) {
+    Node op = unaryOp(Token.DEC, exp);
+    op.putBooleanProp(Node.INCRDECR_PROP, isPost);
+    return op;
   }
 
   public static Node add(Node expr1, Node expr2) {
@@ -451,6 +510,33 @@ public class IR {
     return Node.newString(Token.STRING_KEY, s);
   }
 
+  public static Node stringKey(String s, Node value) {
+    Preconditions.checkState(mayBeExpression(value));
+    Node stringKey = stringKey(s);
+    stringKey.addChildToFront(value);
+    return stringKey;
+  }
+
+  public static Node rest(String name) {
+    return Node.newString(Token.REST, name);
+  }
+
+  public static Node spread(Node expr) {
+    Preconditions.checkState(mayBeExpression(expr));
+    return new Node(Token.SPREAD, expr);
+  }
+
+  public static Node superNode() {
+    return new Node(Token.SUPER);
+  }
+
+  public static Node memberDef(String name, Node function) {
+    Preconditions.checkState(function.isFunction());
+    Node member = Node.newString(Token.MEMBER_DEF, name);
+    member.addChildToBack(function);
+    return member;
+  }
+
   public static Node number(double d) {
     return Node.newNumber(d);
   }
@@ -486,10 +572,6 @@ public class IR {
 
   private static boolean mayBeExpressionOrEmpty(Node n) {
     return n.isEmpty() || mayBeExpression(n);
-  }
-
-  private static boolean isAssignmentTarget(Node n) {
-    return n.isName() || n.isGetProp() || n.isGetElem();
   }
 
   // NOTE: some nodes are neither statements nor expression nodes:
@@ -607,13 +689,17 @@ public class IR {
       case Token.RSH:
       case Token.SHEQ:
       case Token.SHNE:
+      case Token.SPREAD:
       case Token.STRING:
       case Token.SUB:
+      case Token.SUPER:
+      case Token.TEMPLATELIT:
       case Token.THIS:
       case Token.TYPEOF:
       case Token.TRUE:
       case Token.URSH:
       case Token.VOID:
+      case Token.YIELD:
         return true;
 
       default:

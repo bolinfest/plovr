@@ -16,8 +16,9 @@
 
 package com.google.javascript.jscomp;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Charsets;
 import com.google.common.io.CharStreams;
 import com.google.common.io.Files;
 import com.google.javascript.rhino.jstype.StaticSourceFile;
@@ -323,21 +324,18 @@ public class SourceFile implements StaticSourceFile, Serializable {
     return builder().buildFromCode(fileName, code);
   }
 
-  public static SourceFile fromCode(String fileName,
-      String originalPath, String code) {
-    return builder().withOriginalPath(originalPath)
-        .buildFromCode(fileName, code);
-  }
-
+  /**
+   * @deprecated Use {@link #fromInputStream(String, InputStream, Charset)}
+   */
+  @Deprecated
   public static SourceFile fromInputStream(String fileName, InputStream s)
       throws IOException {
     return builder().buildFromInputStream(fileName, s);
   }
 
-  public static SourceFile fromInputStream(String fileName,
-      String originalPath, InputStream s) throws IOException {
-    return builder().withOriginalPath(originalPath)
-        .buildFromInputStream(fileName, s);
+  public static SourceFile fromInputStream(String fileName, InputStream s,
+      Charset charset) throws IOException {
+    return builder().withCharset(charset).buildFromInputStream(fileName, s);
   }
 
   public static SourceFile fromReader(String fileName, Reader r)
@@ -362,7 +360,7 @@ public class SourceFile implements StaticSourceFile, Serializable {
    * the source file (if it differs from the path on disk).
    */
   public static class Builder {
-    private Charset charset = Charsets.UTF_8;
+    private Charset charset = UTF_8;
     private String originalPath = null;
 
     public Builder() {}
@@ -471,7 +469,7 @@ public class SourceFile implements StaticSourceFile, Serializable {
     // This is stored as a String, but passed in and out as a Charset so that
     // we can serialize the class.
     // Default input file format for JSCompiler has always been UTF_8.
-    private String inputCharset = Charsets.UTF_8.name();
+    private String inputCharset = UTF_8.name();
 
     OnDisk(File file, String originalPath, Charset c) {
       super(file.getPath());

@@ -17,7 +17,7 @@
 package com.google.template.soy.xliffmsgplugin;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.template.soy.base.IndentedLinesBuilder;
+import com.google.template.soy.base.internal.IndentedLinesBuilder;
 import com.google.template.soy.internal.base.CharEscaper;
 import com.google.template.soy.internal.base.CharEscapers;
 import com.google.template.soy.msgs.SoyMsgBundle;
@@ -37,7 +37,6 @@ import javax.annotation.Nullable;
  *
  * <p> XLIFF specification: http://docs.oasis-open.org/xliff/xliff-core/xliff-core.html
  *
- * @author Kai Huang
  */
 class XliffGenerator {
 

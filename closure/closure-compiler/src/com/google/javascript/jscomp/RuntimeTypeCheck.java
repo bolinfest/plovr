@@ -82,6 +82,7 @@ class RuntimeTypeCheck implements CompilerPass {
     NodeTraversal.traverse(compiler, root, new AddMarkers(compiler));
     NodeTraversal.traverse(compiler, root, new AddChecks());
     addBoilerplateCode();
+    new Normalize(compiler, false).process(externs, root);
   }
 
   /**
@@ -147,8 +148,8 @@ class RuntimeTypeCheck implements CompilerPass {
         return nodeToInsertAfter;
       }
 
-      Node classNode = NodeUtil.newQualifiedNameNode(
-          compiler.getCodingConvention(), className);
+      Node classNode = NodeUtil.newQName(
+          compiler, className);
 
       Node marker = IR.string(
               interfaceType == null ?
@@ -188,7 +189,7 @@ class RuntimeTypeCheck implements CompilerPass {
       return nodeToInsertAfter;
     }
 
-    private Node findEnclosingConstructorDeclaration(Node n) {
+    private static Node findEnclosingConstructorDeclaration(Node n) {
       while (!n.getParent().isScript() && !n.getParent().isBlock()) {
         n = n.getParent();
       }
@@ -341,6 +342,10 @@ class RuntimeTypeCheck implements CompilerPass {
 
         String refName = objType.getReferenceName();
 
+        if (refName.equals("Object")) {
+          return jsCode("objectChecker");
+        }
+
         StaticSourceFile sourceFile =
             NodeUtil.getSourceFile(objType.getConstructor().getSource());
         if (sourceFile == null || sourceFile.isExtern()) {
@@ -362,16 +367,16 @@ class RuntimeTypeCheck implements CompilerPass {
   }
 
   private void addBoilerplateCode() {
-    Node newNode = compiler.ensureLibraryInjected("runtime_type_check");
+    Node newNode = compiler.ensureLibraryInjected("runtime_type_check", true);
     if (newNode != null && logFunction != null) {
       // Inject the custom log function.
       Node logOverride = IR.exprResult(
           IR.assign(
-              NodeUtil.newQualifiedNameNode(
-                  compiler.getCodingConvention(),
+              NodeUtil.newQName(
+                  compiler,
                   "$jscomp.typecheck.log"),
-              NodeUtil.newQualifiedNameNode(
-                  compiler.getCodingConvention(),
+              NodeUtil.newQName(
+                  compiler,
                   logFunction)));
       newNode.getParent().addChildAfter(logOverride, newNode);
       compiler.reportCodeChange();
@@ -379,7 +384,7 @@ class RuntimeTypeCheck implements CompilerPass {
   }
 
   private Node jsCode(String prop) {
-    return NodeUtil.newQualifiedNameNode(
-        compiler.getCodingConvention(), "$jscomp.typecheck." + prop);
+    return NodeUtil.newQName(
+        compiler, "$jscomp.typecheck." + prop);
   }
 }

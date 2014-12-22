@@ -67,6 +67,11 @@ class ReplaceIdGenerators implements CompilerPass {
           "JSC_MISSING_NAME_MAP_FOR_GENERATOR",
           "The mapped id generator, does not have a renaming map supplied.");
 
+  static final DiagnosticType INVALID_GENERATOR_PARAMETER =
+      DiagnosticType.warning(
+          "JSC_INVALID_GENERATOR_PARAMETER",
+          "An id generator must be called with a literal.");
+
   private final AbstractCompiler compiler;
   private final Map<String, NameSupplier> nameGenerators;
   private final Map<String, Map<String, String>> consistNameMap;
@@ -219,7 +224,7 @@ class ReplaceIdGenerators implements CompilerPass {
     }
   }
 
-  private NameSupplier createNameSupplier(
+  private static NameSupplier createNameSupplier(
       RenameStrategy renameStrategy, RenamingMap mappings) {
     Preconditions.checkState(renameStrategy == RenameStrategy.MAPPED);
     return new MappedNameSupplier(mappings);
@@ -325,8 +330,9 @@ class ReplaceIdGenerators implements CompilerPass {
       }
 
       Node arg = n.getFirstChild().getNext();
-
-      if (arg.isString()) {
+      if (arg == null) {
+        compiler.report(t.makeError(n, INVALID_GENERATOR_PARAMETER));
+      } else if (arg.isString()) {
         String rename = getObfuscatedName(
             arg, callName, nameGenerator, arg.getString());
         parent.replaceChild(n, IR.string(rename));
@@ -342,8 +348,9 @@ class ReplaceIdGenerators implements CompilerPass {
         arg.detachFromParent();
         parent.replaceChild(n, arg);
         compiler.reportCodeChange();
+      } else {
+        compiler.report(t.makeError(n, INVALID_GENERATOR_PARAMETER));
       }
-      // TODO(user): Error on id not a string or object literal.
     }
 
     private String getObfuscatedName(
@@ -448,12 +455,12 @@ class ReplaceIdGenerators implements CompilerPass {
     return resultMap;
   }
 
-  private void reportInvalidLine(String line, int lineIndex) {
+  private static void reportInvalidLine(String line, int lineIndex) {
     JSError.make(INVALID_GENERATOR_ID_MAPPING,
         "line(" + line + "): " + lineIndex);
   }
 
-  String getIdForGeneratorNode(boolean consistent, Node n) {
+  static String getIdForGeneratorNode(boolean consistent, Node n) {
     Preconditions.checkState(n.isString() || n.isStringKey());
     if (consistent) {
       return n.getString();

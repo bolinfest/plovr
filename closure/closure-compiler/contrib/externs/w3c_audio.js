@@ -69,6 +69,23 @@ AudioContext.prototype.decodeAudioData = function(audioData, successCallback,
 AudioContext.prototype.createBufferSource = function() {};
 
 /**
+ * @param {HTMLMediaElement} mediaElement
+ * @return {!MediaElementAudioSourceNode}
+ */
+AudioContext.prototype.createMediaElementSource = function(mediaElement) {};
+
+/**
+ * @param {MediaStream} mediaStream
+ * @return {!MediaStreamAudioSourceNode}
+ */
+AudioContext.prototype.createMediaStreamSource = function(mediaStream) {};
+
+/**
+ * @return {!MediaStreamAudioDestinationNode}
+ */
+AudioContext.prototype.createMediaStreamDestination = function() {};
+
+/**
  * To be deprecated. Use createScriptProcessor instead.
  * @param {number} bufferSize
  * @param {number} numberOfInputs
@@ -86,11 +103,6 @@ AudioContext.prototype.createJavaScriptNode = function(bufferSize,
  */
 AudioContext.prototype.createScriptProcessor = function(bufferSize,
     numberOfInputChannels_opt, numberOfOutputChannels_opt) {};
-
-/**
- * @return {!OscillatorNode}
- */
-AudioContext.prototype.createOscillator = function() {};
 
 /**
  * @return {!RealtimeAnalyserNode}
@@ -127,9 +139,19 @@ AudioContext.prototype.createDelay = function(maxDelayTime) {};
 AudioContext.prototype.createBiquadFilter = function() {};
 
 /**
+ * @return {!WaveShaperNode}
+ */
+AudioContext.prototype.createWaveShaper = function() {};
+
+/**
  * @return {!AudioPannerNode}
  */
 AudioContext.prototype.createPanner = function() {};
+
+/**
+ * @return {!StereoPannerNode}
+ */
+AudioContext.prototype.createStereoPanner = function() {};
 
 /**
  * @return {!ConvolverNode}
@@ -137,14 +159,16 @@ AudioContext.prototype.createPanner = function() {};
 AudioContext.prototype.createConvolver = function() {};
 
 /**
+ * @param {number=} numberOfOutputs
  * @return {!AudioChannelSplitter}
  */
-AudioContext.prototype.createChannelSplitter = function() {};
+AudioContext.prototype.createChannelSplitter = function(numberOfOutputs) {};
 
 /**
+ * @param {number=} numberOfInputs
  * @return {!AudioChannelMerger}
  */
-AudioContext.prototype.createChannelMerger = function() {};
+AudioContext.prototype.createChannelMerger = function(numberOfInputs) {};
 
 /**
  * @return {!DynamicsCompressorNode}
@@ -152,21 +176,16 @@ AudioContext.prototype.createChannelMerger = function() {};
 AudioContext.prototype.createDynamicsCompressor = function() {};
 
 /**
- * @param {HTMLMediaElement} mediaElement
- * @return {!MediaElementAudioSourceNode}
+ * @return {!OscillatorNode}
  */
-AudioContext.prototype.createMediaElementSource = function(mediaElement) {};
+AudioContext.prototype.createOscillator = function() {};
 
 /**
- * @param {MediaStream} mediaStream
- * @return {!MediaStreamAudioSourceNode}
+ * @param {Float32Array} real
+ * @param {Float32Array} imag
+ * @return {!PeriodicWave}
  */
-AudioContext.prototype.createMediaStreamSource = function(mediaStream) {};
-
-/**
- * @return {!MediaStreamAudioDestinationNode}
- */
-AudioContext.prototype.createMediaStreamDestination = function() {};
+AudioContext.prototype.createPeriodicWave = function(real, imag) {};
 
 /**
  * @param {number} numberOfChannels
@@ -217,6 +236,15 @@ AudioNode.prototype.numberOfInputs;
 /** @type {number} */
 AudioNode.prototype.numberOfOutputs;
 
+/** @type {number} */
+AudioNode.prototype.channelCount;
+
+/** @type {string} */
+AudioNode.prototype.channelCountMode;
+
+/** @type {string} */
+AudioNode.prototype.channelInterpretation;
+
 /**
  * @constructor
  * @extends {AudioNode}
@@ -229,20 +257,14 @@ var AudioSourceNode = function() {};
  */
 var AudioDestinationNode = function() {};
 
-/** @type {number} */
+/**
+ * To be deprecated. Use maxChannelCount instead.
+ * @type {number}
+ */
 AudioDestinationNode.prototype.numberOfChannels;
 
-/**
- * @constructor
- * @extends {AudioDestinationNode}
- */
-var MediaStreamAudioDestinationNode = function() {};
-
-/**
- * @type {!MediaStream}
- * @const
- */
-MediaStreamAudioDestinationNode.prototype.stream;
+/** @type {number} */
+AudioDestinationNode.prototype.maxChannelCount;
 
 /**
  * @constructor
@@ -252,50 +274,69 @@ var AudioParam = function() {};
 /** @type {number} */
 AudioParam.prototype.value;
 
-/** @type {number} */
+/**
+ * To be deprecated.
+ * @type {number}
+ */
 AudioParam.prototype.maxValue;
 
-/** @type {number} */
+/**
+ * To be deprecated.
+ * @type {number}
+ */
 AudioParam.prototype.minValue;
 
 /** @type {number} */
 AudioParam.prototype.defaultValue;
 
-/** @type {number} */
+/**
+ * To be deprecated.
+ * @type {number}
+ */
 AudioParam.prototype.units;
 
 /**
  * @param {number} value
- * @param {number} time
+ * @param {number} startTime
  */
-AudioParam.prototype.setValueAtTime = function(value, time) {};
+AudioParam.prototype.setValueAtTime = function(value, startTime) {};
 
 /**
  * @param {number} value
- * @param {number} time
+ * @param {number} endTime
  */
-AudioParam.prototype.linearRampToValueAtTime = function(value, time) {};
+AudioParam.prototype.linearRampToValueAtTime = function(value, endTime) {};
 
 /**
  * @param {number} value
- * @param {number} time
+ * @param {number} endTime
  */
-AudioParam.prototype.exponentialRampToValueAtTime = function(value, time) {};
+AudioParam.prototype.exponentialRampToValueAtTime = function(value, endTime) {};
 
 /**
- * @param {number} targetValue
- * @param {number} time
+ * @param {number} target
+ * @param {number} startTime
  * @param {number} timeConstant
  */
-AudioParam.prototype.setTargetValueAtTime = function(targetValue, time,
+AudioParam.prototype.setTargetAtTime = function(target, startTime,
+    timeConstant) {};
+
+/**
+ * @deprecated Use setTargetAtTime instead.
+ * @param {number} target
+ * @param {number} startTime
+ * @param {number} timeConstant
+ */
+AudioParam.prototype.setTargetValueAtTime = function(target, startTime,
     timeConstant) {};
 
 /**
  * @param {Float32Array} values
- * @param {number} time
+ * @param {number} startTime
  * @param {number} duration
  */
-AudioParam.prototype.setValueCurveAtTime = function(values, time, duration) {};
+AudioParam.prototype.setValueCurveAtTime = function(values, startTime,
+    duration) {};
 
 /**
  * @param {number} startTime
@@ -331,7 +372,10 @@ DelayNode.prototype.delayTime;
  */
 var AudioBuffer = function() {};
 
-/** @type {AudioGain} */
+/**
+ * To be deprecated.
+ * @type {AudioGain}
+ */
 AudioBuffer.prototype.gain;
 
 /** @type {number} */
@@ -359,36 +403,46 @@ AudioBuffer.prototype.getChannelData = function(channel) {};
 var AudioBufferSourceNode = function() {};
 
 /**
+ * To be deprecated.
  * @const
  * @type {number}
  */
 AudioBufferSourceNode.prototype.UNSCHEDULED_STATE; /* = 0 */
 
 /**
+ * To be deprecated.
  * @const
  * @type {number}
  */
 AudioBufferSourceNode.prototype.SCHEDULED_STATE; /* = 1 */
 
 /**
+ * To be deprecated.
  * @const
  * @type {number}
  */
 AudioBufferSourceNode.prototype.PLAYING_STATE; /* = 2 */
 
 /**
+ * To be deprecated.
  * @const
  * @type {number}
  */
 AudioBufferSourceNode.prototype.FINISHED_STATE; /* = 3 */
 
-/** @type {number} */
+/**
+ * To be deprecated.
+ * @type {number}
+ */
 AudioBufferSourceNode.prototype.playbackState;
 
 /** @type {AudioBuffer} */
 AudioBufferSourceNode.prototype.buffer;
 
-/** @type {number} */
+/**
+ * To be deprecated.
+ * @type {number}
+ */
 AudioBufferSourceNode.prototype.gain;
 
 /** @type {!AudioParam} */
@@ -417,11 +471,13 @@ AudioBufferSourceNode.prototype.start = function(when, opt_offset,
 AudioBufferSourceNode.prototype.stop = function(when) {};
 
 /**
+ * To be deprecated.
  * @param {number} when
  */
 AudioBufferSourceNode.prototype.noteOn = function(when) {};
 
 /**
+ * To be deprecated.
  * @param {number} when
  * @param {number} grainOffset
  * @param {number} grainDuration
@@ -430,6 +486,7 @@ AudioBufferSourceNode.prototype.noteGrainOn = function(when, grainOffset,
     grainDuration) {};
 
 /**
+ * To be deprecated.
  * @param {number} when
  */
 AudioBufferSourceNode.prototype.noteOff = function(when) {};
@@ -441,12 +498,7 @@ AudioBufferSourceNode.prototype.noteOff = function(when) {};
 var MediaElementAudioSourceNode = function() {};
 
 /**
- * @constructor
- * @extends {AudioSourceNode}
- */
-var MediaStreamAudioSourceNode = function() {};
-
-/**
+ * To be deprecated. Use ScriptProcessorNode instead.
  * @constructor
  * @extends {AudioNode}
  */
@@ -501,42 +553,48 @@ AudioProcessingEvent.prototype.outputBuffer;
 var AudioPannerNode = function() {};
 
 /**
+ * To be deprecated. Use 'equalpower' instead.
  * @const
  * @type {number}
  */
 AudioPannerNode.prototype.EQUALPOWER = 0;
 
 /**
+ * To be deprecated. Use 'HRTF' instead.
  * @const
  * @type {number}
  */
 AudioPannerNode.prototype.HRTF = 1;
 
 /**
+ * To be deprecated.
  * @const
  * @type {number}
  */
 AudioPannerNode.prototype.SOUNDFIELD = 2;
 
 /**
+ * To be deprecated. Use 'linear' instead.
  * @const
  * @type {number}
  */
 AudioPannerNode.prototype.LINEAR_DISTANCE = 0;
 
 /**
+ * To be deprecated. Use 'inverse' instead.
  * @const
  * @type {number}
  */
 AudioPannerNode.prototype.INVERSE_DISTANCE = 1;
 
 /**
+ * To be deprecated. Use 'exponential' instead.
  * @const
  * @type {number}
  */
 AudioPannerNode.prototype.EXPONENTIAL_DISTANCE = 2;
 
-/** @type {number} */
+/** @type {number|string} */
 AudioPannerNode.prototype.panningModel;
 
 /**
@@ -560,7 +618,7 @@ AudioPannerNode.prototype.setOrientation = function(x, y, z) {};
  */
 AudioPannerNode.prototype.setVelocity = function(x, y, z) {};
 
-/** @type {number} */
+/** @type {number|string} */
 AudioPannerNode.prototype.distanceModel;
 
 /** @type {number} */
@@ -581,18 +639,37 @@ AudioPannerNode.prototype.coneOuterAngle;
 /** @type {number} */
 AudioPannerNode.prototype.coneOuterGain;
 
-/** @type {AudioGain} */
+/**
+ * To be deprecated.
+ * @type {AudioGain}
+ */
 AudioPannerNode.prototype.coneGain;
 
-/** @type {AudioGain} */
+/**
+ * To be deprecated.
+ * @type {AudioGain}
+ */
 AudioPannerNode.prototype.distanceGain;
+
+/**
+ * @constructor
+ * @extends {AudioNode}
+ * @see http://webaudio.github.io/web-audio-api/#the-stereopannernode-interface
+ */
+var StereoPannerNode = function() {};
+
+/** @type {!AudioParam} */
+StereoPannerNode.prototype.pan;
 
 /**
  * @constructor
  */
 var AudioListener = function() {};
 
-/** @type {number} */
+/**
+ * To be deprecated.
+ * @type {number}
+ */
 AudioListener.prototype.gain;
 
 /** @type {number} */
@@ -716,48 +793,56 @@ DynamicsCompressorNode.prototype.release;
 var BiquadFilterNode = function() {};
 
 /**
+ * To be deprecated. Use 'lowpass' instead.
  * @const
  * @type {number}
  */
 BiquadFilterNode.prototype.LOWPASS = 0;
 
 /**
+ * To be deprecated. Use 'highpass' instead.
  * @const
  * @type {number}
  */
 BiquadFilterNode.prototype.HIGHPASS = 1;
 
 /**
+ * To be deprecated. Use 'bandpass' instead.
  * @const
  * @type {number}
  */
 BiquadFilterNode.prototype.BANDPASS = 2;
 
 /**
+ * To be deprecated. Use 'lowshelf' instead.
  * @const
  * @type {number}
  */
 BiquadFilterNode.prototype.LOWSHELF = 3;
 
 /**
+ * To be deprecated. Use 'highshelf' instead.
  * @const
  * @type {number}
  */
 BiquadFilterNode.prototype.HIGHSHELF = 4;
 
 /**
+ * To be deprecated. Use 'peaking' instead.
  * @const
  * @type {number}
  */
 BiquadFilterNode.prototype.PEAKING = 5;
 
 /**
+ * To be deprecated. Use 'notch' instead.
  * @const
  * @type {number}
  */
 BiquadFilterNode.prototype.NOTCH = 6;
 
 /**
+ * To be deprecated. Use 'allpass' instead.
  * @const
  * @type {number}
  */
@@ -768,6 +853,9 @@ BiquadFilterNode.prototype.type;
 
 /** @type {!AudioParam} */
 BiquadFilterNode.prototype.frequency;
+
+/** @type {!AudioParam} */
+BiquadFilterNode.prototype.detune;
 
 /** @type {!AudioParam} */
 BiquadFilterNode.prototype.Q;
@@ -785,8 +873,25 @@ BiquadFilterNode.prototype.getFrequencyResponse = function(frequencyHz,
 
 /**
  * @constructor
+ * @extends {AudioNode}
+ */
+var WaveShaperNode = function() {};
+
+/** @type {Float32Array} */
+WaveShaperNode.prototype.curve;
+
+/** @type {string} */
+WaveShaperNode.prototype.oversample;
+
+/**
+ * @constructor
  */
 var WaveTable = function() {};
+
+/**
+ * @constructor
+ */
+var PeriodicWave = function() {};
 
 /**
  * @constructor
@@ -797,7 +902,10 @@ var OscillatorNode = function() {};
 /** @type {string} */
 OscillatorNode.prototype.type;
 
-/** @type {number} */
+/**
+ * To be deprecated.
+ * @type {number}
+ */
 OscillatorNode.prototype.playbackState;
 
 /** @type {!AudioParam} */
@@ -812,17 +920,35 @@ OscillatorNode.prototype.start;
 /** @type {function(number)} */
 OscillatorNode.prototype.stop;
 
-/** @type {function(WaveTable)} */
+/**
+ * To be deprecated.
+ * @type {function(WaveTable)}
+ */
 OscillatorNode.prototype.setWaveTable;
+
+/** @type {function(PeriodicWave)} */
+OscillatorNode.prototype.setPeriodicWave;
+
+/** @type {EventListener} */
+OscillatorNode.prototype.onended;
 
 /**
  * @constructor
- * @extends {AudioNode}
+ * @extends {AudioSourceNode}
  */
-var WaveShaperNode = function() {};
+var MediaStreamAudioSourceNode = function() {};
 
-/** @type {Float32Array} */
-WaveShaperNode.prototype.curve;
+/**
+ * @constructor
+ * @extends {AudioDestinationNode}
+ */
+var MediaStreamAudioDestinationNode = function() {};
+
+/**
+ * @type {!MediaStream}
+ * @const
+ */
+MediaStreamAudioDestinationNode.prototype.stream;
 
 /**
  * Definitions for the Web Audio API with webkit prefix.
@@ -860,6 +986,7 @@ var webkitAudioPannerNode = function() {};
 /**
  * @param {string=} src
  * @constructor
+ * @extends {HTMLAudioElement}
  */
 var Audio = function(src) {};
 

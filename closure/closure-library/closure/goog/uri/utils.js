@@ -42,7 +42,6 @@
  *   http://www.ietf.org/rfc/rfc3986.txt
  *
  * @author gboyer@google.com (Garrett Boyer) - The "lightened" design.
- * @author msamuel@google.com (Mike Samuel) - Domain knowledge and regexes.
  */
 
 goog.provide('goog.uri.utils');
@@ -189,19 +188,19 @@ goog.uri.utils.buildFromEncodedParts = function(opt_scheme, opt_userInfo,
 goog.uri.utils.splitRe_ = new RegExp(
     '^' +
     '(?:' +
-      '([^:/?#.]+)' +                     // scheme - ignore special characters
-                                          // used by other URL parts such as :,
-                                          // ?, /, #, and .
+        '([^:/?#.]+)' +                  // scheme - ignore special characters
+                                         // used by other URL parts such as :,
+                                         // ?, /, #, and .
     ':)?' +
     '(?://' +
-      '(?:([^/?#]*)@)?' +                 // userInfo
-      '([^/#?]*?)' +                      // domain
-      '(?::([0-9]+))?' +                  // port
-      '(?=[/#?]|$)' +                     // authority-terminating character
+        '(?:([^/?#]*)@)?' +              // userInfo
+        '([^/#?]*?)' +                   // domain
+        '(?::([0-9]+))?' +               // port
+        '(?=[/#?]|$)' +                  // authority-terminating character
     ')?' +
-    '([^?#]+)?' +                         // path
-    '(?:\\?([^#]*))?' +                   // query
-    '(?:#(.*))?' +                        // fragment
+    '([^?#]+)?' +                        // path
+    '(?:\\?([^#]*))?' +                  // query
+    '(?:#(.*))?' +                       // fragment
     '$');
 
 
@@ -229,7 +228,7 @@ goog.uri.utils.ComponentIndex = {
  * </pre>
  *
  * @param {string} uri The URI string to examine.
- * @return {!Array.<string|undefined>} Each component still URI-encoded.
+ * @return {!Array<string|undefined>} Each component still URI-encoded.
  *     Each component that is present will contain the encoded value, whereas
  *     components that are not present will be undefined or empty, depending
  *     on the browser's regular expression implementation.  Never null, since
@@ -239,7 +238,7 @@ goog.uri.utils.split = function(uri) {
   goog.uri.utils.phishingProtection_();
 
   // See @return comment -- never null.
-  return /** @type {!Array.<string|undefined>} */ (
+  return /** @type {!Array<string|undefined>} */ (
       uri.match(goog.uri.utils.splitRe_));
 };
 
@@ -298,11 +297,17 @@ goog.uri.utils.phishingProtection_ = function() {
 
 /**
  * @param {?string} uri A possibly null string.
+ * @param {boolean=} opt_preserveReserved If true, percent-encoding of RFC-3986
+ *     reserved characters will not be removed.
  * @return {?string} The string URI-decoded, or null if uri is null.
  * @private
  */
-goog.uri.utils.decodeIfPossible_ = function(uri) {
-  return uri && decodeURIComponent(uri);
+goog.uri.utils.decodeIfPossible_ = function(uri, opt_preserveReserved) {
+  if (!uri) {
+    return uri;
+  }
+
+  return opt_preserveReserved ? decodeURI(uri) : decodeURIComponent(uri);
 };
 
 
@@ -388,7 +393,8 @@ goog.uri.utils.getDomainEncoded = function(uri) {
  * @return {?string} The decoded domain, or null if none.
  */
 goog.uri.utils.getDomain = function(uri) {
-  return goog.uri.utils.decodeIfPossible_(goog.uri.utils.getDomainEncoded(uri));
+  return goog.uri.utils.decodeIfPossible_(
+      goog.uri.utils.getDomainEncoded(uri), true /* opt_preserveReserved */);
 };
 
 
@@ -423,7 +429,8 @@ goog.uri.utils.getPathEncoded = function(uri) {
  *     slash, if any.
  */
 goog.uri.utils.getPath = function(uri) {
-  return goog.uri.utils.decodeIfPossible_(goog.uri.utils.getPathEncoded(uri));
+  return goog.uri.utils.decodeIfPossible_(
+      goog.uri.utils.getPathEncoded(uri), true /* opt_preserveReserved */);
 };
 
 
@@ -522,7 +529,7 @@ goog.uri.utils.removeFragment = function(uri) {
  *
  * @param {string} uri1 The first URI.
  * @param {string} uri2 The second URI.
- * @return {boolean} Whether they have the same domain and port.
+ * @return {boolean} Whether they have the same scheme, domain and port.
  */
 goog.uri.utils.haveSameDomain = function(uri1, uri2) {
   var pieces1 = goog.uri.utils.split(uri1);
@@ -584,7 +591,7 @@ goog.uri.utils.QueryValue;
  * ];
  * </pre>
  *
- * @typedef {!Array.<string|goog.uri.utils.QueryValue>}
+ * @typedef {!Array<string|goog.uri.utils.QueryValue>}
  */
 goog.uri.utils.QueryArray;
 
@@ -594,7 +601,7 @@ goog.uri.utils.QueryArray;
  *
  * Internal implementation utility, performing very few object allocations.
  *
- * @param {!Array.<string|undefined>} buffer A string buffer.  The first element
+ * @param {!Array<string|undefined>} buffer A string buffer.  The first element
  *     must be the base URI, and may have a fragment identifier.  If the array
  *     contains more than one element, the second element must be an ampersand,
  *     and may be overwritten, depending on the base URI.  Undefined elements
@@ -633,7 +640,7 @@ goog.uri.utils.appendQueryData_ = function(buffer) {
  * Appends key=value pairs to an array, supporting multi-valued objects.
  * @param {string} key The key prefix.
  * @param {goog.uri.utils.QueryValue} value The value to serialize.
- * @param {!Array.<string>} pairs The array to which the 'key=value' strings
+ * @param {!Array<string>} pairs The array to which the 'key=value' strings
  *     should be appended.
  * @private
  */
@@ -663,12 +670,12 @@ goog.uri.utils.appendKeyValuePairs_ = function(key, value, pairs) {
 /**
  * Builds a buffer of query data from a sequence of alternating keys and values.
  *
- * @param {!Array.<string|undefined>} buffer A string buffer to append to.  The
+ * @param {!Array<string|undefined>} buffer A string buffer to append to.  The
  *     first element appended will be an '&', and may be replaced by the caller.
- * @param {goog.uri.utils.QueryArray|Arguments} keysAndValues An array with
+ * @param {!goog.uri.utils.QueryArray|!Arguments} keysAndValues An array with
  *     alternating keys and values -- see the typedef.
  * @param {number=} opt_startIndex A start offset into the arary, defaults to 0.
- * @return {!Array.<string|undefined>} The buffer argument.
+ * @return {!Array<string|undefined>} The buffer argument.
  * @private
  */
 goog.uri.utils.buildQueryDataBuffer_ = function(
@@ -692,7 +699,7 @@ goog.uri.utils.buildQueryDataBuffer_ = function(
  * @param {goog.uri.utils.QueryArray} keysAndValues Alternating keys and
  *     values.  See the typedef.
  * @param {number=} opt_startIndex A start offset into the arary, defaults to 0.
- * @return {string} The encoded query string, in the for 'a=1&b=2'.
+ * @return {string} The encoded query string, in the form 'a=1&b=2'.
  */
 goog.uri.utils.buildQueryData = function(keysAndValues, opt_startIndex) {
   var buffer = goog.uri.utils.buildQueryDataBuffer_(
@@ -705,12 +712,12 @@ goog.uri.utils.buildQueryData = function(keysAndValues, opt_startIndex) {
 /**
  * Builds a buffer of query data from a map.
  *
- * @param {!Array.<string|undefined>} buffer A string buffer to append to.  The
+ * @param {!Array<string|undefined>} buffer A string buffer to append to.  The
  *     first element appended will be an '&', and may be replaced by the caller.
- * @param {Object.<goog.uri.utils.QueryValue>} map An object where keys are
- *     URI-encoded parameter keys, and the values conform to the contract
+ * @param {!Object<string, goog.uri.utils.QueryValue>} map An object where keys
+ *     are URI-encoded parameter keys, and the values conform to the contract
  *     specified in the goog.uri.utils.QueryValue typedef.
- * @return {!Array.<string|undefined>} The buffer argument.
+ * @return {!Array<string|undefined>} The buffer argument.
  * @private
  */
 goog.uri.utils.buildQueryDataBufferFromMap_ = function(buffer, map) {
@@ -726,10 +733,10 @@ goog.uri.utils.buildQueryDataBufferFromMap_ = function(buffer, map) {
  * Builds a query data string from a map.
  * Currently generates "&key&" for empty args.
  *
- * @param {Object} map An object where keys are URI-encoded parameter keys,
- *     and the values are arbitrary types or arrays.  Keys with a null value
- *     are dropped.
- * @return {string} The encoded query string, in the for 'a=1&b=2'.
+ * @param {!Object<string, goog.uri.utils.QueryValue>} map An object where keys
+ *     are URI-encoded parameter keys, and the values are arbitrary types
+ *     or arrays. Keys with a null value are dropped.
+ * @return {string} The encoded query string, in the form 'a=1&b=2'.
  */
 goog.uri.utils.buildQueryDataFromMap = function(map) {
   var buffer = goog.uri.utils.buildQueryDataBufferFromMap_([], map);
@@ -777,9 +784,9 @@ goog.uri.utils.appendParams = function(uri, var_args) {
  * Appends query parameters from a map.
  *
  * @param {string} uri The original URI, which may already have query data.
- * @param {Object} map An object where keys are URI-encoded parameter keys,
- *     and the values are arbitrary types or arrays.  Keys with a null value
- *     are dropped.
+ * @param {!Object<goog.uri.utils.QueryValue>} map An object where keys are
+ *     URI-encoded parameter keys, and the values are arbitrary types or arrays.
+ *     Keys with a null value are dropped.
  * @return {string} The new parameters.
  */
 goog.uri.utils.appendParamsFromMap = function(uri, map) {
@@ -914,7 +921,7 @@ goog.uri.utils.getParamValue = function(uri, keyEncoded) {
  * Gets all values of a query parameter.
  * @param {string} uri The URI to process.  May contain a framgnet.
  * @param {string} keyEncoded The URI-encoded key.  Case-snsitive.
- * @return {!Array.<string>} All URI-decoded values with the given key.
+ * @return {!Array<string>} All URI-decoded values with the given key.
  *     If the key is not found, this will have length 0, but never be null.
  */
 goog.uri.utils.getParamValues = function(uri, keyEncoded) {
@@ -1027,6 +1034,29 @@ goog.uri.utils.appendPath = function(baseUri, path) {
     path = path.substr(1);
   }
   return goog.string.buildString(baseUri, '/', path);
+};
+
+
+/**
+ * Replaces the path.
+ * @param {string} uri URI to use as the base.
+ * @param {string} path New path.
+ * @return {string} Updated URI.
+ */
+goog.uri.utils.setPath = function(uri, path) {
+  // Add any missing '/'.
+  if (!goog.string.startsWith(path, '/')) {
+    path = '/' + path;
+  }
+  var parts = goog.uri.utils.split(uri);
+  return goog.uri.utils.buildFromEncodedParts(
+      parts[goog.uri.utils.ComponentIndex.SCHEME],
+      parts[goog.uri.utils.ComponentIndex.USER_INFO],
+      parts[goog.uri.utils.ComponentIndex.DOMAIN],
+      parts[goog.uri.utils.ComponentIndex.PORT],
+      path,
+      parts[goog.uri.utils.ComponentIndex.QUERY_DATA],
+      parts[goog.uri.utils.ComponentIndex.FRAGMENT]);
 };
 
 

@@ -45,6 +45,7 @@ goog.require('goog.events');
  * TODO(user): revisit msg in exception and errors in this class. In newer
  *     Chrome (v22+) the error/request come with a DOM error string that is
  *     already very descriptive.
+ * @final
  */
 goog.db.ObjectStore = function(store) {
   /**
@@ -322,7 +323,7 @@ goog.db.ObjectStore.prototype.clear = function() {
  *     available option is unique, which defaults to false. If unique is true,
  *     the index will enforce that there is only ever one object in the object
  *     store for each unique value it indexes on.
- * @return {goog.db.Index} The newly created, wrapped index.
+ * @return {!goog.db.Index} The newly created, wrapped index.
  * @throws {goog.db.Error} In case of an error creating the index.
  */
 goog.db.ObjectStore.prototype.createIndex = function(
@@ -341,7 +342,7 @@ goog.db.ObjectStore.prototype.createIndex = function(
  * Gets an index.
  *
  * @param {string} name Name of the index to fetch.
- * @return {goog.db.Index} The requested wrapped index.
+ * @return {!goog.db.Index} The requested wrapped index.
  * @throws {goog.db.Error} In case of an error getting the index.
  */
 goog.db.ObjectStore.prototype.getIndex = function(name) {
@@ -379,21 +380,22 @@ goog.db.ObjectStore.prototype.deleteIndex = function(name) {
  * @return {!goog.async.Deferred} The deferred number of records.
  */
 goog.db.ObjectStore.prototype.count = function(opt_range) {
-  var request;
   var d = new goog.async.Deferred();
 
   try {
     var range = opt_range ? opt_range.range() : null;
-    request = this.store_.count(range);
+    var request = this.store_.count(range);
+    request.onsuccess = function(ev) {
+      d.callback(ev.target.result);
+    };
+    var self = this;
+    request.onerror = function(ev) {
+      d.errback(goog.db.Error.fromRequest(ev.target, self.getName()));
+    };
   } catch (ex) {
     d.errback(goog.db.Error.fromException(ex, this.getName()));
   }
-  request.onsuccess = function(ev) {
-    d.callback(ev.target.result);
-  };
-  request.onerror = function(ev) {
-    d.errback(goog.db.Error.fromRequest(ev.target, this.getName()));
-  };
+
   return d;
 };
 

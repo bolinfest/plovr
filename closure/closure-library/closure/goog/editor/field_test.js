@@ -18,7 +18,6 @@
  * (such as via usesIframe()) it's important to re-run a lot of the same tests.
  *
  * @author nicksantos@google.com (Nick Santos)
- * @author jparent@google.com (Julie Parent)
  * @author gboyer@google.com (Garrett Boyer)
  */
 
@@ -33,6 +32,7 @@ goog.require('goog.editor.Plugin');
 goog.require('goog.editor.range');
 goog.require('goog.events');
 goog.require('goog.events.BrowserEvent');
+goog.require('goog.events.EventType');
 goog.require('goog.events.KeyCodes');
 goog.require('goog.functions');
 goog.require('goog.testing.LooseMock');
@@ -65,7 +65,6 @@ function tearDown() {
   // it is lame. It manifests its lameness by throwing an exception.
   // Kudos to XT for helping me to figure this out.
   try {
-    goog.events.removeAllNativeListeners();
   } catch (e) {}
 }
 
@@ -77,6 +76,7 @@ function tearDown() {
  * Dummy plugin for test usage.
  * @constructor
  * @extends {goog.editor.Plugin}
+ * @final
  */
 function TestPlugin() {
   this.getTrogClassId = function() {
@@ -225,6 +225,47 @@ function getBrowserEvent() {
 
 
 /**
+ * @param {boolean} followLinkInNewWindow Whether activating a hyperlink
+ *     in the editable field will open a new window or not.
+ * @return {!goog.editor.Field} Returns an editable field after its load phase.
+ */
+function createEditableFieldWithListeners(followLinkInNewWindow) {
+  var editableField = new FieldConstructor('testField');
+  editableField.setFollowLinkInNewWindow(followLinkInNewWindow);
+
+  var originalElement = editableField.getOriginalElement();
+  editableField.setupFieldObject(originalElement);
+  editableField.handleFieldLoad();
+
+  return editableField;
+}
+
+function getListenerTarget(editableField) {
+  var elt = editableField.getElement();
+  var listenerTarget =
+      goog.editor.BrowserFeature.USE_DOCUMENT_FOR_KEY_EVENTS &&
+          editableField.usesIframe() ? elt.ownerDocument : elt;
+  return listenerTarget;
+}
+
+function assertClickDefaultActionIsCanceled(editableField) {
+  var cancelClickDefaultActionListener = goog.events.getListener(
+      getListenerTarget(editableField), goog.events.EventType.CLICK,
+      goog.editor.Field.cancelLinkClick_, undefined, editableField);
+
+  assertNotNull(cancelClickDefaultActionListener);
+}
+
+function assertClickDefaultActionIsNotCanceled(editableField) {
+  var cancelClickDefaultActionListener = goog.events.getListener(
+      getListenerTarget(editableField), goog.events.EventType.CLICK,
+      goog.editor.Field.cancelLinkClick_, undefined, editableField);
+
+  assertNull(cancelClickDefaultActionListener);
+}
+
+
+/**
  * Tests that plugins are disabled when the field is made uneditable.
  */
 
@@ -246,6 +287,36 @@ function testMakeUneditableDisablesPlugins() {
   editableField.makeUneditable();
 
   assertEquals(1, calls);
+
+  editableField.dispose();
+}
+
+
+/**
+ * Test that if a browser open a new page when clicking a link in a content
+ * editable element, a click listener is set to cancel this default action.
+ */
+function testClickDefaultActionIsCanceledWhenBrowserFollowsClick() {
+  // Simulate a browser that will open a new page when activating a link in a
+  // content editable element.
+  var editableField =
+      createEditableFieldWithListeners(true /* followLinkInNewWindow */);
+  assertClickDefaultActionIsCanceled(editableField);
+
+  editableField.dispose();
+}
+
+
+/**
+ * Test that if a browser does not open a new page when clicking a link in a
+ * content editable element, the click default action is not canceled.
+ */
+function testClickDefaultActionIsNotCanceledWhenBrowserDontFollowsClick() {
+  // Simulate a browser that will NOT open a new page when activating a link in
+  // a content editable element.
+  var editableField =
+      createEditableFieldWithListeners(false /* followLinkInNewWindow */);
+  assertClickDefaultActionIsNotCanceled(editableField);
 
   editableField.dispose();
 }
@@ -919,12 +990,19 @@ function testQueryCommandValue() {
   editableField.makeEditable();
   assertFalse(editableField.queryCommandValue('boo'));
 
-  editableField.getElement().focus();
-  editableField.dispatchSelectionChangeEvent();
+  focusFieldSync(editableField);
   assertNull(editableField.queryCommandValue('boo'));
   assertObjectEquals({'boo': null, 'aieee': null},
       editableField.queryCommandValue(['boo', 'aieee']));
   editableField.dispose();
+}
+
+function focusFieldSync(field) {
+  field.focus();
+
+  // IE fires focus events async, so create a fake focus event
+  // synchronously.
+  goog.testing.events.fireFocusEvent(field.getElement());
 }
 
 

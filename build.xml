@@ -39,19 +39,17 @@
     <fileset dir="${lib.dir}" includes="*.jar" />
     <fileset dir="${closure-compiler.dir}/lib"
              includes="args4j.jar,
+                       guava.jar,
                        json.jar,
                        jsr305.jar,
                        protobuf-java.jar"
-             />
-    <fileset dir="${closure-compiler.dir}/build/lib"
-             includes="rhino.jar"
              />
     <fileset dir="${closure-templates.dir}/java/lib"
              includes="aopalliance.jar,
                        guice-3.0.jar,
                        guice-assistedinject-3.0.jar,
                        guice-multibindings-3.0.jar,
-                       icu4j-4_8_1_1.jar,
+                       icu4j-51_1.jar,
                        javax.inject.jar"
              />
 
@@ -77,9 +75,6 @@
       description="Closure Tools build steps that must be done before building plovr">
     <!-- Build intermediate Closure Templates target for its genfiles. -->
     <ant dir="${closure-templates.dir}" target="compile" inheritAll="false" useNativeBasedir="true" />
-
-    <ant dir="${closure-compiler.dir}" target="rhino-jarjar" inheritAll="false" useNativeBasedir="true" />
-
     <ant dir="${closure-stylesheets.dir}" target="javacc" inheritAll="false" useNativeBasedir="true" />
   </target>
   
@@ -111,8 +106,7 @@
            source="1.7"
            includeantruntime="true"
            encoding="UTF-8"
-           >
-      <compilerarg value="-Werror"/>
+           > 
       <src path="${src.dir}" />
       <src path="${test.dir}" />
       <src path="${closure-compiler.dir}/src" />
@@ -139,9 +133,6 @@
     <!-- Copy the JavaScript files from Soy into a directory named "soy". -->
     <mkdir dir="${soy-resources.dir}/soy" />
     <copy file="${closure-templates.dir}/javascript/soyutils_usegoog.js"
-          todir="${soy-resources.dir}/soy"
-          />
-    <copy file="${closure-templates.dir}/javascript/soyutils.js"
           todir="${soy-resources.dir}/soy"
           />
 
@@ -266,19 +257,17 @@
                        />
       <zipgroupfileset dir="${closure-compiler.dir}/lib"
                        includes="args4j.jar,
+                                 guava.jar,
                                  json.jar,
                                  jsr305.jar,
                                  protobuf-java.jar"
-                       />
-      <zipgroupfileset dir="${closure-compiler.dir}/build/lib"
-                       includes="rhino.jar"
                        />
       <zipgroupfileset dir="${closure-templates.dir}/java/lib"
                        includes="aopalliance.jar,
                                  guice-3.0.jar,
                                  guice-assistedinject-3.0.jar,
                                  guice-multibindings-3.0.jar,
-                                 icu4j-core.jar,
+                                 icu4j-51_1.jar,
                                  javax.inject.jar"
                        />
 

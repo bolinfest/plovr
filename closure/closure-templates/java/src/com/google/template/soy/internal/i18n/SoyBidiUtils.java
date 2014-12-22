@@ -17,8 +17,8 @@
 package com.google.template.soy.internal.i18n;
 
 import com.google.common.base.Preconditions;
+import com.google.template.soy.data.Dir;
 
-import java.util.EnumMap;
 import java.util.regex.Pattern;
 
 
@@ -27,7 +27,6 @@ import java.util.regex.Pattern;
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
- * @author Aharon Lanin
  */
 public class SoyBidiUtils {
 
@@ -38,12 +37,7 @@ public class SoyBidiUtils {
    * The code snippet that can be used to determine at template runtime whether the bidi global
    * direction is rtl.
    */
-  private static final String GOOG_IS_RTL_CODE_SNIPPET = "goog.i18n.bidi.IS_RTL";
-
-
-  /** BiDi formatter cache, so we don't have to keep creating new ones. */
-  private static EnumMap<BidiUtils.Dir, BidiFormatter> bidiFormatterCache =
-      new EnumMap<BidiUtils.Dir, BidiFormatter>(BidiUtils.Dir.class);
+  private static final String GOOG_IS_RTL_CODE_SNIPPET = "soy.$$IS_LOCALE_RTL";
 
 
   /**
@@ -113,18 +107,13 @@ public class SoyBidiUtils {
 
 
   /**
-   * Get a bidi formatter - preferably a cached one.
+   * Get a bidi formatter.
    * @param dir The directionality as an integer (ltr=1, rtl=-1).
    * @return The BidiFormatter.
    */
   public static BidiFormatter getBidiFormatter(int dir) {
-    BidiUtils.Dir actualDir = BidiUtils.Dir.valueOf(dir);
-    BidiFormatter bidiFormatter = bidiFormatterCache.get(actualDir);
-    if (bidiFormatter == null) {
-      bidiFormatter = BidiFormatter.getInstance(actualDir);
-      bidiFormatterCache.put(actualDir, bidiFormatter);
-    }
-    return bidiFormatter;
+    Preconditions.checkArgument(dir != 0);
+    return BidiFormatter.getInstance(dir < 0 ? Dir.RTL : Dir.LTR);
   }
 
 }

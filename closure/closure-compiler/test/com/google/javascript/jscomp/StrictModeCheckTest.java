@@ -20,7 +20,6 @@ public class StrictModeCheckTest extends CompilerTestCase {
   private static final String EXTERNS = "var arguments; function eval(str) {}";
 
   private boolean noVarCheck;
-  private boolean noCajaChecks;
 
   public StrictModeCheckTest() {
     super(EXTERNS);
@@ -29,13 +28,13 @@ public class StrictModeCheckTest extends CompilerTestCase {
   @Override
   protected void setUp() throws Exception {
     super.setUp();
+    enableTypeCheck(CheckLevel.OFF);
     noVarCheck = false;
-    noCajaChecks = false;
   }
 
   @Override
   protected CompilerPass getProcessor(Compiler compiler) {
-    return new StrictModeCheck(compiler, noVarCheck, noCajaChecks);
+    return new StrictModeCheck(compiler, noVarCheck);
   }
 
   @Override
@@ -43,9 +42,27 @@ public class StrictModeCheckTest extends CompilerTestCase {
     return 1;
   }
 
-  public void testEval() {
-    test("function foo() { eval('a'); }", null,
-         StrictModeCheck.EVAL_USE);
+  public void testUseOfWith1() {
+    testSame("var a; with(a){}", StrictModeCheck.USE_OF_WITH);
+  }
+
+  public void testUseOfWith2() {
+    testSame("var a;\n" +
+             "/** @suppress {with} */" +
+             "with(a){}");
+  }
+
+  public void testUseOfWith3() {
+    testSame(
+        "function f(expr, context) {\n" +
+        "  try {\n" +
+        "    /** @suppress{with} */ with (context) {\n" +
+        "      return eval('[' + expr + '][0]');\n" +
+        "    }\n" +
+        "  } catch (e) {\n" +
+        "    return null;\n" +
+        "  }\n" +
+        "};\n");
   }
 
   public void testEval2() {
@@ -63,7 +80,7 @@ public class StrictModeCheckTest extends CompilerTestCase {
   }
 
   public void testEval5() {
-    testSame("function eval() {}", StrictModeCheck.EVAL_DECLARATION);
+    testSame("/** @suppress {duplicate} */ function eval() {}", StrictModeCheck.EVAL_DECLARATION);
   }
 
   public void testEval6() {
@@ -101,7 +118,7 @@ public class StrictModeCheckTest extends CompilerTestCase {
   }
 
   public void testArguments3() {
-    testSame("function arguments() {}",
+    testSame("/** @suppress {duplicate,checkTypes} */ function arguments() {}",
          StrictModeCheck.ARGUMENTS_DECLARATION);
   }
 
@@ -114,14 +131,30 @@ public class StrictModeCheckTest extends CompilerTestCase {
     testSame("var o = {arguments: 3};");
   }
 
-  public void testEvalAssignment() {
-    noCajaChecks = true;
-    testSame("function foo() { eval = []; }",
-         StrictModeCheck.EVAL_ASSIGNMENT);
+  public void testArgumentsCallee() {
+    testSame("function foo() {arguments.callee}",
+         StrictModeCheck.ARGUMENTS_CALLEE_FORBIDDEN);
   }
 
-  public void testEvalAssignment2() {
-    test("function foo() { eval = []; }", null, StrictModeCheck.EVAL_USE);
+  public void testArgumentsCaller() {
+    testSame("function foo() {arguments.caller}",
+         StrictModeCheck.ARGUMENTS_CALLER_FORBIDDEN);
+  }
+
+  public void testFunctionCallerProp() {
+    testSame("function foo() {foo.caller}",
+         StrictModeCheck.FUNCTION_CALLER_FORBIDDEN);
+  }
+
+  public void testFunctionArgumentsProp() {
+    testSame("function foo() {foo.arguments}",
+         StrictModeCheck.FUNCTION_ARGUMENTS_PROP_FORBIDDEN);
+  }
+
+
+  public void testEvalAssignment() {
+    testSame("/** @suppress {checkTypes} */ function foo() { eval = []; }",
+         StrictModeCheck.EVAL_ASSIGNMENT);
   }
 
   public void testAssignToArguments() {
@@ -143,54 +176,10 @@ public class StrictModeCheckTest extends CompilerTestCase {
   }
 
   public void testDeleteProperty() {
-    testSame("function f(obj) { delete obj.a; }");
+    testSame("/** @suppress {checkTypes} */ function f(obj) { delete obj.a; }");
   }
 
-  public void testIllegalName() {
-    test("var a__ = 3;", null, StrictModeCheck.ILLEGAL_NAME);
-  }
-
-  public void testIllegalName2() {
-    test("function a__() {}", null, StrictModeCheck.ILLEGAL_NAME);
-  }
-
-  public void testIllegalName3() {
-    test("function f(a__) {}", null, StrictModeCheck.ILLEGAL_NAME);
-  }
-
-  public void testIllegalName4() {
-    test("try {} catch (a__) {}", null, StrictModeCheck.ILLEGAL_NAME);
-  }
-
-  public void testIllegalName5() {
-    noVarCheck = true;
-    test("var a = b__;", null, StrictModeCheck.ILLEGAL_NAME);
-  }
-
-  public void testIllegalName6() {
-    test("function f(obj) { return obj.a__; }", null,
-         StrictModeCheck.ILLEGAL_NAME);
-  }
-
-  public void testIllegalName7() {
-    noCajaChecks = true;
-    testSame("var a__ = 3;");
-  }
-
-  public void testIllegalName8() {
-    test("var o = {a__: 3};", null, StrictModeCheck.ILLEGAL_NAME);
-    test("var o = {b: 3, a__: 4};", null, StrictModeCheck.ILLEGAL_NAME);
-    test("var o = {b: 3, get a__() {}};", null, StrictModeCheck.ILLEGAL_NAME);
-    test("var o = {b: 3, set a__(c) {}};", null, StrictModeCheck.ILLEGAL_NAME);
-  }
-
-  public void testIllegalName9() {
-    test("a__: while (true) { var b = 3; }", null,
-         StrictModeCheck.ILLEGAL_NAME);
-  }
-
-  public void testIllegalName10() {
-    // Validate that number as objlit key
+  public void testAllowNumbersAsObjlitKeys() {
     testSame("var o = {1: 3, 2: 4};");
   }
 

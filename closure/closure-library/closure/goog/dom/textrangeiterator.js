@@ -21,6 +21,7 @@
 goog.provide('goog.dom.TextRangeIterator');
 
 goog.require('goog.array');
+goog.require('goog.dom');
 goog.require('goog.dom.NodeType');
 goog.require('goog.dom.RangeIterator');
 goog.require('goog.dom.TagName');
@@ -43,6 +44,7 @@ goog.require('goog.iter.StopIteration');
  * @param {boolean=} opt_reverse Whether to traverse nodes in reverse.
  * @constructor
  * @extends {goog.dom.RangeIterator}
+ * @final
  */
 goog.dom.TextRangeIterator = function(startNode, startOffset, endNode,
     endOffset, opt_reverse) {
@@ -233,7 +235,7 @@ goog.dom.TextRangeIterator.prototype.copyFrom = function(other) {
 
 
 /**
- * @return {goog.dom.TextRangeIterator} An identical iterator.
+ * @return {!goog.dom.TextRangeIterator} An identical iterator.
  * @override
  */
 goog.dom.TextRangeIterator.prototype.clone = function() {

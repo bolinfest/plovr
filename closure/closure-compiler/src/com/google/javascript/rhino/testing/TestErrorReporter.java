@@ -40,7 +40,7 @@
 package com.google.javascript.rhino.testing;
 
 import com.google.javascript.rhino.ErrorReporter;
-import org.junit.Assert;
+import junit.framework.Assert;
 
 /**
  * <p>An error reporter for testing that verifies that messages reported to the

@@ -115,9 +115,25 @@ public class GatherRawExportsTest extends CompilerTestCase {
     assertExported("top.a", "a");
   }
 
+  public void testExportOnGoogGlobalFound1() {
+    assertExported("goog.global['a']", "a");
+  }
+
+  public void testExportOnGoogGlobalFound2() {
+    assertExported("goog.global.a", "a");
+  }
+
+  public void testExportOnGoogGlobalFound3() {
+    assertExported("goog$global['a']", "a");
+  }
+
+  public void testExportOnGoogGlobalFound4() {
+    assertExported("goog$global.a", "a");
+  }
+
   private void assertExported(String js, String ... names) {
     Set<String> setNames = Sets.newHashSet(names);
     testSame(js);
-    assertTrue(last.getExportedVariableNames().equals(setNames));
+    assertEquals(setNames, last.getExportedVariableNames());
   }
 }

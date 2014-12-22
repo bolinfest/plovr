@@ -20,6 +20,7 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.template.soy.base.SoySyntaxException;
+import com.google.template.soy.basetree.SyntaxVersion;
 import com.google.template.soy.shared.internal.SharedTestUtils;
 import com.google.template.soy.shared.restricted.SoyFunction;
 import com.google.template.soy.soytree.SoyFileSetNode;
@@ -31,14 +32,13 @@ import java.util.Set;
 
 
 /**
- * @author Mike Samuel
  */
 public class CheckFunctionCallsVisitorTest extends TestCase {
 
 
   public final void testPureFunctionOk() throws Exception {
     applyCheckFunctionCallsVisitor(Joiner.on('\n').join(
-        "{namespace ns}\n",
+        "{namespace ns autoescape=\"deprecated-noncontextual\"}\n",
         "/**",
         " * @param x",
         " * @param y",
@@ -55,7 +55,7 @@ public class CheckFunctionCallsVisitorTest extends TestCase {
             " Function 'min' called with the wrong number of arguments" +
             " (function call \"min($x)\").",
         Joiner.on('\n').join(
-            "{namespace ns}\n",
+            "{namespace ns autoescape=\"deprecated-noncontextual\"}\n",
             "/**",
             " * @param x",
             " */",
@@ -67,7 +67,7 @@ public class CheckFunctionCallsVisitorTest extends TestCase {
             " Function 'index' called with the wrong number of arguments" +
             " (function call \"index()\").",
         Joiner.on('\n').join(
-            "{namespace ns}\n",
+            "{namespace ns autoescape=\"deprecated-noncontextual\"}\n",
             "/**",
             " */",
             "{template .foo}",
@@ -82,7 +82,7 @@ public class CheckFunctionCallsVisitorTest extends TestCase {
             " Function 'min' called with the wrong number of arguments (function call" +
             " \"min($x)\").",
         Joiner.on('\n').join(
-            "{namespace ns}\n",
+            "{namespace ns autoescape=\"deprecated-noncontextual\"}\n",
             "/**",
             " * @param x",
             " * @param y",
@@ -99,7 +99,7 @@ public class CheckFunctionCallsVisitorTest extends TestCase {
             " Function 'index' must have a foreach loop variable as its argument" +
             " (encountered \"index($x)\").",
         Joiner.on('\n').join(
-            "{namespace ns}\n",
+            "{namespace ns autoescape=\"deprecated-noncontextual\"}\n",
             "/**",
             " * @param x",
             " */",
@@ -115,7 +115,7 @@ public class CheckFunctionCallsVisitorTest extends TestCase {
             " Function 'index' must have a foreach loop variable as its argument" +
             " (encountered \"index($x.y)\").",
         Joiner.on('\n').join(
-            "{namespace ns}\n",
+            "{namespace ns autoescape=\"deprecated-noncontextual\"}\n",
             "/**",
             " * @param x",
             " */",
@@ -131,7 +131,7 @@ public class CheckFunctionCallsVisitorTest extends TestCase {
             " Function 'index' must have a foreach loop variable as its argument" +
             " (encountered \"index($ij.data)\").",
         Joiner.on('\n').join(
-            "{namespace ns}\n",
+            "{namespace ns autoescape=\"deprecated-noncontextual\"}\n",
             "/**",
             " */",
             "{template .foo}",
@@ -147,7 +147,7 @@ public class CheckFunctionCallsVisitorTest extends TestCase {
             " Function 'index' must have a foreach loop variable as its argument" +
             " (encountered \"index($x + 1)\").",
         Joiner.on('\n').join(
-            "{namespace ns}\n",
+            "{namespace ns autoescape=\"deprecated-noncontextual\"}\n",
             "/**",
             " * @param x",
             " */",
@@ -159,7 +159,7 @@ public class CheckFunctionCallsVisitorTest extends TestCase {
 
   public final void testLoopVariableOk() throws Exception {
     applyCheckFunctionCallsVisitor(Joiner.on('\n').join(
-        "{namespace ns}\n",
+        "{namespace ns autoescape=\"deprecated-noncontextual\"}\n",
         "/**",
         " * @param elements",
         " */",
@@ -177,7 +177,7 @@ public class CheckFunctionCallsVisitorTest extends TestCase {
             " Function 'index' must have a foreach loop variable as its argument" +
             " (encountered \"index($z)\").",
         Joiner.on('\n').join(
-            "{namespace ns}\n",
+            "{namespace ns autoescape=\"deprecated-noncontextual\"}\n",
             "/**",
             " * @param elements",
             " */",
@@ -195,7 +195,7 @@ public class CheckFunctionCallsVisitorTest extends TestCase {
 
     applyCheckFunctionCallsVisitor(
         Joiner.on('\n').join(
-            "{namespace ns}\n",
+            "{namespace ns autoescape=\"deprecated-noncontextual\"}\n",
             "/***/",
             "{template .foo}",
             "  {let $m: quoteKeysIfJs(['a': 1, 'b': 'blah']) /}",
@@ -206,7 +206,7 @@ public class CheckFunctionCallsVisitorTest extends TestCase {
             " Function quoteKeysIfJs() must have a map literal as its arg" +
             " (encountered \"quoteKeysIfJs('blah')\").",
         Joiner.on('\n').join(
-            "{namespace ns}\n",
+            "{namespace ns autoescape=\"deprecated-noncontextual\"}\n",
             "/***/",
             "{template .foo}",
             "  {let $m: quoteKeysIfJs('blah') /}",
@@ -219,7 +219,7 @@ public class CheckFunctionCallsVisitorTest extends TestCase {
         "In file no-path:6, template ns.foo:" +
             " Unrecognized function 'bogus' (encountered function call \"bogus()\").",
         Joiner.on('\n').join(
-            "{namespace ns}\n",
+            "{namespace ns autoescape=\"deprecated-noncontextual\"}\n",
             "/**",
             " */",
             "{template .foo}",
@@ -231,21 +231,23 @@ public class CheckFunctionCallsVisitorTest extends TestCase {
   public final void testUnrecognizedFunctionOkInV1() throws Exception {
     applyCheckFunctionCallsVisitor(
         Joiner.on('\n').join(
-            "{namespace ns}\n",
+            "{namespace ns autoescape=\"deprecated-noncontextual\"}\n",
             "{template .foo}",
             "  {print bogus()}",
             "{/template}"),
-        true);
+        SyntaxVersion.V1_0);
   }
 
 
   private void applyCheckFunctionCallsVisitor(String soyContent) throws Exception {
-    applyCheckFunctionCallsVisitor(soyContent, false);
+    applyCheckFunctionCallsVisitor(soyContent, SyntaxVersion.V2_0);
   }
 
 
-  private void applyCheckFunctionCallsVisitor(String soyContent, boolean allowExterns)
+  private void applyCheckFunctionCallsVisitor(
+      String soyContent, SyntaxVersion declaredSyntaxVersion)
       throws Exception {
+
     SoyFileSetNode fileSet = SharedTestUtils.parseSoyFiles(soyContent);
     Map<String, SoyFunction> soyFunctions = ImmutableMap.<String, SoyFunction>of(
         "min",
@@ -258,9 +260,9 @@ public class CheckFunctionCallsVisitorTest extends TestCase {
             return ImmutableSet.of(2);
           }
         });
-    CheckFunctionCallsVisitor v = new CheckFunctionCallsVisitor(soyFunctions);
-    v.setAllowExternallyDefinedFunctions(allowExterns);
-    v.exec(fileSet);
+    CheckFunctionCallsVisitor visitor =
+        new CheckFunctionCallsVisitor(soyFunctions, declaredSyntaxVersion);
+    visitor.exec(fileSet);
   }
 
 

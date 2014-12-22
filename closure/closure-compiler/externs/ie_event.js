@@ -27,25 +27,10 @@
 Event.prototype.Abstract;
 
 /** @type {boolean} */
-Event.prototype.altKey;
-
-/** @type {boolean} */
 Event.prototype.altLeft;
 
 /** @type {string} */
 Event.prototype.Banner;
-
-/** @type {number} */
-Event.prototype.button;
-
-/** @type {boolean} */
-Event.prototype.cancelBubble;
-
-/** @type {number} */
-Event.prototype.clientX;
-
-/** @type {number} */
-Event.prototype.clientY;
 
 /**
  * A ClipboardData on IE, but a DataTransfer on WebKit.
@@ -58,13 +43,7 @@ Event.prototype.clipboardData;
 Event.prototype.contentOverflow;
 
 /** @type {boolean} */
-Event.prototype.ctrlKey;
-
-/** @type {boolean} */
 Event.prototype.ctrlLeft;
-
-/** @type {string} */
-Event.prototype.data;
 
 /** @type {string} */
 Event.prototype.dataFld;
@@ -73,9 +52,6 @@ Event.prototype.domain;
 
 /** @type {Element} */
 Event.prototype.fromElement;
-
-/** @type {number} */
-Event.prototype.keyCode;
 
 /** @type {string} */
 Event.prototype.MoreInfo;
@@ -111,15 +87,6 @@ Event.prototype.returnValue;
 Event.prototype.saveType;
 
 Event.prototype.scheme;
-
-/** @type {number} */
-Event.prototype.screenX;
-
-/** @type {number} */
-Event.prototype.screenY;
-
-/** @type {boolean} */
-Event.prototype.shiftKey;
 
 /** @type {boolean} */
 Event.prototype.shiftLeft;
@@ -178,10 +145,49 @@ MSPointerEvent.MSPOINTER_TYPE_PEN;
 MSPointerEvent.MSPOINTER_TYPE_TOUCH;
 
 /** @type {number} */
+MSPointerEvent.prototype.height;
+
+/** @type {number} */
+MSPointerEvent.prototype.hwTimestamp;
+
+/** @type {boolean} */
+MSPointerEvent.prototype.isPrimary;
+
+/** @type {number} */
 MSPointerEvent.prototype.pointerId;
 
 /** @type {number} */
 MSPointerEvent.prototype.pointerType;
+
+/** @type {number} */
+MSPointerEvent.prototype.pressure;
+
+/** @type {number} */
+MSPointerEvent.prototype.rotation;
+
+/** @type {number} */
+MSPointerEvent.prototype.tiltX;
+
+/** @type {number} */
+MSPointerEvent.prototype.tiltY;
+
+/** @type {number} */
+MSPointerEvent.prototype.timeStamp;
+
+/** @type {number} */
+MSPointerEvent.prototype.width;
+
+/**
+ * @param {number} pointerId
+ * @return {undefined}
+ */
+MSPointerEvent.prototype.msReleasePointerCapture;
+
+/**
+ * @param {number} pointerId
+ * @return {undefined}
+ */
+MSPointerEvent.prototype.msSetPointerCapture;
 
 /**
  * @param {string} typeArg

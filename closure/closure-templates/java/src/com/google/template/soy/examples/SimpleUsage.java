@@ -26,7 +26,6 @@ import com.google.template.soy.tofu.SoyTofu;
 /**
  * Usage of the simple examples.
  *
- * @author Kai Huang
  */
 public class SimpleUsage {
 
@@ -44,7 +43,7 @@ public class SimpleUsage {
   public static void main(String[] args) {
 
     // Compile the template.
-    SoyFileSet sfs = (new SoyFileSet.Builder()).add(Resources.getResource("simple.soy")).build();
+    SoyFileSet sfs = SoyFileSet.builder().add(Resources.getResource("simple.soy")).build();
     SoyTofu tofu = sfs.compileToTofu();
 
     // Example 1.

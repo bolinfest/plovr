@@ -28,6 +28,7 @@ goog.require('goog.dom');
 goog.require('goog.events');
 goog.require('goog.events.InputHandler');
 goog.require('goog.i18n.bidi');
+goog.require('goog.i18n.bidi.Dir');
 goog.require('goog.ui.Component');
 
 
@@ -43,6 +44,7 @@ goog.ui.BidiInput = function(opt_domHelper) {
   goog.ui.Component.call(this, opt_domHelper);
 };
 goog.inherits(goog.ui.BidiInput, goog.ui.Component);
+goog.tagUnsealableClass(goog.ui.BidiInput);
 
 
 /**

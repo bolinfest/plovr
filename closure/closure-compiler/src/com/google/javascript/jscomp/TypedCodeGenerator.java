@@ -194,15 +194,11 @@ class TypedCodeGenerator extends CodeGenerator {
       sb.append("\n");
     }
 
-    if (fnNode != null && fnNode.getBooleanProp(Node.IS_DISPATCHER)) {
-      sb.append(" * @javadispatch\n");
-    }
-
     sb.append(" */\n");
     return sb.toString();
   }
 
-  private void appendAnnotation(StringBuilder sb, String name, String type) {
+  private static void appendAnnotation(StringBuilder sb, String name, String type) {
     sb.append("@").append(name).append(" {").append(type).append("}");
   }
 

@@ -17,13 +17,15 @@
 package com.google.template.soy.soyparse;
 
 import com.google.common.base.Joiner;
-import com.google.template.soy.base.SoyFileKind;
-import com.google.template.soy.base.SoyFileSupplier;
 import com.google.template.soy.base.SoySyntaxException;
+import com.google.template.soy.base.internal.SoyFileKind;
+import com.google.template.soy.base.internal.SoyFileSupplier;
+import com.google.template.soy.basetree.SyntaxVersion;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.SoyNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
+import com.google.template.soy.types.SoyTypeRegistry;
 
 import junit.framework.TestCase;
 
@@ -46,7 +48,7 @@ public class SourceLocationTest extends TestCase {
             ""),
         "/example/file.soy",
         Joiner.on('\n').join(
-            "{template foo}",     // 1
+            "{template foo autoescape=\"deprecated-noncontextual\"}",     // 1
             "  Hello",            // 2
             "  {lb}",             // 3
             "  {print $world}",   // 4
@@ -54,7 +56,7 @@ public class SourceLocationTest extends TestCase {
             "",                   // 6
             "  {call bar /}",     // 7
             "{/template}",        // 8
-            "{template bar}",     // 9
+            "{template bar autoescape=\"deprecated-noncontextual\"}",     // 9
             "  Gooodbye",         // 10
             "{/template}"         // 11
             )
@@ -81,7 +83,7 @@ public class SourceLocationTest extends TestCase {
             ""),
         "/example/file.soy",
         Joiner.on('\n').join(
-            "{template foo}",  // 1
+            "{template foo autoescape=\"deprecated-noncontextual\"}",  // 1
             "  Hello,",        // 2
             "  {switch $i}",   // 3
             "    {case 0}",    // 4
@@ -113,7 +115,7 @@ public class SourceLocationTest extends TestCase {
             ""),
         "/example/file.soy",
         Joiner.on('\n').join(
-            "{template foo}",                   // 1
+            "{template foo autoescape=\"deprecated-noncontextual\"}",                   // 1
             "  Hello",                          // 2
             "  {for $i in range($s, $e, $t)}",  // 3
             "    ,",                            // 4
@@ -142,7 +144,7 @@ public class SourceLocationTest extends TestCase {
             ""),
         "/example/file.soy",
         Joiner.on('\n').join(
-            "{template foo}",                   // 1
+            "{template foo autoescape=\"deprecated-noncontextual\"}",                   // 1
             "  Hello",                          // 2
             "  {foreach $planet in $planets}",  // 3
             "    ,",                            // 4
@@ -174,7 +176,7 @@ public class SourceLocationTest extends TestCase {
             ""),
         "/example/file.soy",
         Joiner.on('\n').join(
-            "{template foo}",                 // 1
+            "{template foo autoescape=\"deprecated-noncontextual\"}",                 // 1
             "  Hello,",                       // 2
             "  {if $skyIsBlue}",              // 3
             "    Earth",                      // 4
@@ -196,13 +198,14 @@ public class SourceLocationTest extends TestCase {
     // JavaCC is pretty good about never using null as a token value.
     try {
       (new SoyFileSetParser(
+          new SoyTypeRegistry(), null, SyntaxVersion.V2_0,
           SoyFileSupplier.Factory.create(
-              "{template t}\nHello, World!\n", SoyFileKind.SRC, "borken.soy")))
+              "{template t autoescape=\"deprecated-noncontextual\"}\nHello, World!\n",
+              SoyFileKind.SRC, "borken.soy")))
           .setDoRunInitialParsingPasses(false)
           .parse();
     } catch (SoySyntaxException ex) {
       // OK
-      return;
     }
   }
 
@@ -212,8 +215,9 @@ public class SourceLocationTest extends TestCase {
       throws Exception {
 
     SoyFileSetNode soyTree =
-        (new SoyFileSetParser(SoyFileSupplier.Factory.create(
-            soySourceCode, SoyFileKind.SRC, soySourcePath)))
+        (new SoyFileSetParser(
+            new SoyTypeRegistry(), null, SyntaxVersion.V2_0,
+            SoyFileSupplier.Factory.create(soySourceCode, SoyFileKind.SRC, soySourcePath)))
             .setDoRunInitialParsingPasses(false)
             .parse();
 

@@ -16,8 +16,9 @@
 
 package com.google.template.soy.jssrc.restricted;
 
-import com.google.common.base.Objects;
+import com.google.template.soy.internal.targetexpr.TargetExpr;
 
+import java.util.Objects;
 
 /**
  * Value class to represent a JS expression. Includes the text of the expression as well as the
@@ -30,9 +31,8 @@ import com.google.common.base.Objects;
  * the Soy expression operators matches that of JS (as well as Java), so the precedence numbers are
  * correct when used for generating JS code as well.
  *
- * @author Kai Huang
  */
-public class JsExpr {
+public class JsExpr implements TargetExpr {
 
 
   /** The JS expression text. */
@@ -53,18 +53,18 @@ public class JsExpr {
 
 
   /** Returns the JS expression text. */
-  public String getText() {
+  @Override public String getText() {
     return text;
   }
 
   /** Returns the precedence of the top-most operator, or Integer.MAX_VALUE. */
-  public int getPrecedence() {
+  @Override public int getPrecedence() {
     return precedence;
   }
 
 
   @Override public String toString() {
-    return Objects.toStringHelper(this).add("text", text).add("precedence", precedence).toString();
+    return String.format("JsExpr{text=%s, precedence=%d}", text, precedence);
   }
 
 
@@ -85,7 +85,7 @@ public class JsExpr {
 
 
   @Override public int hashCode() {
-    return Objects.hashCode(text, precedence);
+    return Objects.hash(text, precedence);
   }
 
 }

@@ -18,9 +18,9 @@ package com.google.template.soy.sharedpasses.opti;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
-import com.google.template.soy.base.IdGenerator;
-import com.google.template.soy.data.SoyData;
-import com.google.template.soy.data.SoyMapData;
+import com.google.template.soy.base.internal.IdGenerator;
+import com.google.template.soy.basetree.SyntaxVersion;
+import com.google.template.soy.data.SoyValue;
 import com.google.template.soy.data.restricted.BooleanData;
 import com.google.template.soy.data.restricted.FloatData;
 import com.google.template.soy.data.restricted.IntegerData;
@@ -47,7 +47,6 @@ import com.google.template.soy.soytree.SoyNode.BlockNode;
 import com.google.template.soy.soytree.SoyNode.MsgBlockNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 import com.google.template.soy.soytree.SoyNode.StandaloneNode;
-import com.google.template.soy.soytree.SoyNode.SyntaxVersion;
 import com.google.template.soy.soytree.SoytreeUtils;
 import com.google.template.soy.soytree.SwitchCaseNode;
 import com.google.template.soy.soytree.SwitchDefaultNode;
@@ -58,7 +57,6 @@ import java.util.List;
 
 import javax.inject.Inject;
 
-
 /**
  * Visitor for simplifying subtrees based on constant values known at compile time.
  *
@@ -66,7 +64,6 @@ import javax.inject.Inject;
  *
  * <p> {@link #exec} should be called on a full Soy tree.
  *
- * @author Kai Huang
  */
 public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
 
@@ -117,13 +114,14 @@ public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
   @Override protected void visitPrintNode(PrintNode node) {
 
     // We attempt to prerender this node if and only if it:
-    // (a) is in V2 syntax,
+    // (a) could be in V2 syntax and has a V2 expression,
     // (b) is not a child of a MsgBlockNode,
     // (c) has a constant expression,
     // (d) has constant expressions for all directive arguments (if any).
     // The prerender attempt may fail due to other reasons not checked above.
 
-    if (node.getSyntaxVersion() != SyntaxVersion.V2) {
+    if (! node.couldHaveSyntaxVersionAtLeast(SyntaxVersion.V2_0) ||
+        node.getExprUnion().getExpr() == null) {
       return;
     }
 
@@ -146,8 +144,9 @@ public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
 
     StringBuilder prerenderOutputSb = new StringBuilder();
     try {
-      prerenderVisitorFactory.create(prerenderOutputSb, templateRegistry, new SoyMapData(), null)
-          .exec(node);
+      PrerenderVisitor prerenderer = prerenderVisitorFactory.create(
+          prerenderOutputSb, templateRegistry);
+      prerenderer.exec(node);
     } catch (RenderException pe) {
       return;  // cannot prerender for some other reason not checked above
     }
@@ -176,7 +175,7 @@ public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
           continue;  // cannot simplify this child
         }
 
-        if (getConstantOrNull(condExpr).toBoolean()) {
+        if (getConstantOrNull(condExpr).coerceToBoolean()) {
           // ------ Constant true. ------
           // Remove all children after this child.
           int condIndex = node.getChildIndex(condNode);
@@ -216,7 +215,7 @@ public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
     visitSoyNode(node);
 
     // If the SwitchNode's expr is not constant, we can't simplify.
-    SoyData switchExprValue = getConstantOrNull(node.getExpr());
+    SoyValue switchExprValue = getConstantOrNull(node.getExpr());
     if (switchExprValue == null) {
       return;  // cannot simplify this node
     }
@@ -233,7 +232,7 @@ public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
         boolean hasMatchingConstant = false;
         boolean hasAllNonmatchingConstants = true;
         for (ExprRootNode<?> caseExpr : caseNode.getExprList()) {
-          SoyData caseExprValue = getConstantOrNull(caseExpr);
+          SoyValue caseExprValue = getConstantOrNull(caseExpr);
           if (caseExprValue == null) {
             hasAllNonmatchingConstants = false;
           } else if (caseExprValue.equals(switchExprValue)) {
@@ -342,7 +341,7 @@ public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
   }
 
 
-  private static SoyData getConstantOrNull(ExprRootNode<?> exprRoot) {
+  private static SoyValue getConstantOrNull(ExprRootNode<?> exprRoot) {
 
     if (exprRoot == null) {
       return null;

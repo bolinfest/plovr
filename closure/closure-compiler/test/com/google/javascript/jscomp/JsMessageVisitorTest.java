@@ -16,14 +16,18 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.base.Joiner;
-import com.google.common.collect.Lists;
 import static com.google.javascript.jscomp.JsMessage.Style;
 import static com.google.javascript.jscomp.JsMessage.Style.CLOSURE;
 import static com.google.javascript.jscomp.JsMessage.Style.LEGACY;
 import static com.google.javascript.jscomp.JsMessage.Style.RELAX;
 import static com.google.javascript.jscomp.JsMessageVisitor.isLowerCamelCaseWithNumericSuffixes;
 import static com.google.javascript.jscomp.JsMessageVisitor.toLowerCamelCaseWithNumericSuffixes;
+
+import com.google.common.base.Joiner;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
+import com.google.debugging.sourcemap.FilePosition;
+import com.google.debugging.sourcemap.SourceMapGeneratorV3;
 import com.google.javascript.rhino.Node;
 
 import junit.framework.TestCase;
@@ -37,14 +41,16 @@ import java.util.List;
  */
 public class JsMessageVisitorTest extends TestCase {
 
+  private CompilerOptions compilerOptions;
   private Compiler compiler;
   private List<JsMessage> messages;
-  private boolean allowLegacyMessages;
+  private JsMessage.Style mode;
 
   @Override
   protected void setUp() throws Exception {
     messages = Lists.newLinkedList();
-    allowLegacyMessages = true;
+    mode = JsMessage.Style.LEGACY;
+    compilerOptions = null;
   }
 
   public void testJsMessageOnVar() {
@@ -56,11 +62,55 @@ public class JsMessageVisitorTest extends TestCase {
     JsMessage msg = messages.get(0);
     assertEquals("MSG_HELLO", msg.getKey());
     assertEquals("Hello", msg.getDesc());
+    assertEquals("[testcode]", msg.getSourceName());
+  }
+
+  public void testJsMessagesWithSrcMap() throws Exception {
+    SourceMapGeneratorV3 sourceMap = new SourceMapGeneratorV3();
+    sourceMap.addMapping("source1.html", null, new FilePosition(10, 0),
+        new FilePosition(0, 0), new FilePosition(0, 100));
+    sourceMap.addMapping("source2.html", null, new FilePosition(10, 0),
+        new FilePosition(1, 0), new FilePosition(1, 100));
+    StringBuilder output = new StringBuilder();
+    sourceMap.appendTo(output, "unused.js");
+
+    compilerOptions = new CompilerOptions();
+    compilerOptions.inputSourceMaps = ImmutableMap.of(
+       "[testcode]", new SourceMapInput(
+           SourceFile.fromCode("example.srcmap", output.toString())));
+
+    extractMessagesSafely(
+        "/** @desc Hello */ var MSG_HELLO = goog.getMsg('a');\n"
+        + "/** @desc Hi */ var MSG_HI = goog.getMsg('b');\n");
+    assertEquals(0, compiler.getWarningCount());
+    assertEquals(2, messages.size());
+
+    JsMessage msg1 = messages.get(0);
+    assertEquals("MSG_HELLO", msg1.getKey());
+    assertEquals("Hello", msg1.getDesc());
+    assertEquals("source1.html", msg1.getSourceName());
+
+    JsMessage msg2 = messages.get(1);
+    assertEquals("MSG_HI", msg2.getKey());
+    assertEquals("Hi", msg2.getDesc());
+    assertEquals("source2.html", msg2.getSourceName());
   }
 
   public void testJsMessageOnProperty() {
     extractMessagesSafely("/** @desc a */ " +
         "pint.sub.MSG_MENU_MARK_AS_UNREAD = goog.getMsg('a')");
+    assertEquals(0, compiler.getWarningCount());
+    assertEquals(1, messages.size());
+
+    JsMessage msg = messages.get(0);
+    assertEquals("MSG_MENU_MARK_AS_UNREAD", msg.getKey());
+    assertEquals("a", msg.getDesc());
+  }
+
+  public void testJsMessageOnObjLit() {
+    extractMessagesSafely("" +
+        "pint.sub = {" +
+        "/** @desc a */ MSG_MENU_MARK_AS_UNREAD: goog.getMsg('a')}");
     assertEquals(0, compiler.getWarningCount());
     assertEquals(1, messages.size());
 
@@ -153,7 +203,7 @@ public class JsMessageVisitorTest extends TestCase {
         "/** @desc The description */ var MSG_A = 'The Message';");
 
     assertEquals(1, messages.size());
-    assertEquals(1, compiler.getWarningCount());
+    assertEquals(0, compiler.getWarningCount());
     JsMessage msg = messages.get(0);
     assertEquals("MSG_A", msg.getKey());
     assertEquals("The Message", msg.toString());
@@ -161,6 +211,8 @@ public class JsMessageVisitorTest extends TestCase {
   }
 
   public void testLegacyMessageWithDescAnnotationAndHelpVar() {
+    mode = RELAX;
+
     // Well, is was better do not allow legacy messages with @desc annotations,
     // but people love to mix styles so we need to check @desc also.
     extractMessagesSafely(
@@ -187,15 +239,15 @@ public class JsMessageVisitorTest extends TestCase {
   }
 
   public void testClosureMessageWithoutGoogGetmsg() {
-    allowLegacyMessages = false;
+    mode = CLOSURE;
 
     extractMessages("var MSG_FOO_HELP = 'I am a bad message';");
 
-    assertEquals(1, messages.size());
-    assertEquals(1, compiler.getErrors().length);
-    JSError error = compiler.getErrors()[0];
+    assertEquals(0, messages.size());
+    assertEquals(1, compiler.getWarnings().length);
+    JSError warning = compiler.getWarnings()[0];
     assertEquals(JsMessageVisitor.MESSAGE_NOT_INITIALIZED_USING_NEW_SYNTAX,
-        error.getType());
+        warning.getType());
   }
 
   public void testClosureFormatParametizedFunction() {
@@ -325,7 +377,7 @@ public class JsMessageVisitorTest extends TestCase {
   }
 
   public void testUnrecognizedFunction() {
-    allowLegacyMessages = false;
+    mode = CLOSURE;
     extractMessages("DP_DatePicker.MSG_DATE_SELECTION = somefunc('a')");
 
     assertEquals(0, messages.size());
@@ -525,6 +577,17 @@ public class JsMessageVisitorTest extends TestCase {
         "var MSG_EXTERNAL_2 = goog.getMsg('a')})");
   }
 
+  public void testUsingMsgPrefixWithFallback() {
+    extractMessages(
+        "function f() {\n" +
+        "/** @desc Hello */ var MSG_UNNAMED_1 = goog.getMsg('hello');\n" +
+        "/** @desc Hello */ var MSG_UNNAMED_2 = goog.getMsg('hello');\n" +
+        "var x = goog.getMsgWithFallback(\n" +
+        "    MSG_UNNAMED_1, MSG_UNNAMED_2);\n" +
+        "}\n");
+    assertNoErrors();
+  }
+
   public void testErrorWhenUsingMsgPrefixWithFallback() {
     extractMessages(
         "/** @desc Hello */ var MSG_HELLO_1 = goog.getMsg('hello');\n" +
@@ -532,6 +595,12 @@ public class JsMessageVisitorTest extends TestCase {
         "/** @desc Hello */ " +
         "var MSG_HELLO_3 = goog.getMsgWithFallback(MSG_HELLO_1, MSG_HELLO_2);");
     assertOneError(JsMessageVisitor.MESSAGE_TREE_MALFORMED);
+  }
+
+  private void assertNoErrors() {
+    String errors = Joiner.on("\n").join(compiler.getErrors());
+    assertEquals("There should be no errors. " + errors,
+        0, compiler.getErrorCount());
   }
 
   private void assertOneError(DiagnosticType type) {
@@ -551,6 +620,9 @@ public class JsMessageVisitorTest extends TestCase {
 
   private void extractMessages(String input) {
     compiler = new Compiler();
+    if (compilerOptions != null) {
+      compiler.initOptions(compilerOptions);
+    }
     Node root = compiler.parseTestCode(input);
     JsMessageVisitor visitor = new CollectMessages(compiler);
     visitor.process(null, root);
@@ -559,8 +631,7 @@ public class JsMessageVisitorTest extends TestCase {
   private class CollectMessages extends JsMessageVisitor {
 
     private CollectMessages(Compiler compiler) {
-      super(compiler, true, Style.getFromParams(true, allowLegacyMessages),
-            null);
+      super(compiler, true, mode, null);
     }
 
     @Override

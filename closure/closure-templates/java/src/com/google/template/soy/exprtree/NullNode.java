@@ -16,13 +16,15 @@
 
 package com.google.template.soy.exprtree;
 
+import com.google.template.soy.types.SoyType;
+import com.google.template.soy.types.primitive.NullType;
+
 
 /**
  * Node representing a null value.
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
- * @author Kai Huang
  */
 public class NullNode extends AbstractPrimitiveNode {
 
@@ -41,6 +43,11 @@ public class NullNode extends AbstractPrimitiveNode {
 
   @Override public Kind getKind() {
     return Kind.NULL_NODE;
+  }
+
+
+  @Override public SoyType getType() {
+    return NullType.getInstance();
   }
 
 

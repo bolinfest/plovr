@@ -17,6 +17,7 @@
 package com.google.template.soy.sharedpasses;
 
 import com.google.template.soy.base.SoySyntaxException;
+import com.google.template.soy.basetree.SyntaxVersion;
 import com.google.template.soy.shared.internal.SharedTestUtils;
 import com.google.template.soy.soytree.SoyFileSetNode;
 
@@ -26,13 +27,10 @@ import junit.framework.TestCase;
 /**
  * Unit tests for CheckSoyDocVisitor.
  *
- * @author Kai Huang
  */
 public class CheckSoyDocVisitorTest extends TestCase {
 
-
   public void testMatchingSimple() throws SoySyntaxException {
-
     // ------ No params ------
     String soyDoc = "";
     String templateBody = "Hello world!";
@@ -54,9 +52,7 @@ public class CheckSoyDocVisitorTest extends TestCase {
     runTemplateTestHelper(soyDoc, templateBody);  // should not throw exception
   }
 
-
   public void testMatchingWithAdvancedStmts() throws SoySyntaxException {
-
     // ------ 'if', 'elseif', 'else', '/if' ------
     String soyDoc = "@param boo @param foo";
     String templateBody =
@@ -101,11 +97,9 @@ public class CheckSoyDocVisitorTest extends TestCase {
     runTemplateTestHelper(soyDoc, templateBody);  // should not throw exception
   }
 
-
   public void testCalls() throws SoySyntaxException {
-
     String fileContent1 =
-        "{namespace boo}\n" +
+        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/**\n" +
         " * @param? goo @param too @param woo @param? zoo\n" +
@@ -142,7 +136,7 @@ public class CheckSoyDocVisitorTest extends TestCase {
         "{/template}\n";
 
     String fileContent2 =
-        "{namespace baa}\n" +
+        "{namespace baa autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/** @param gaa @param maa */\n" +
         "{template name=\".faa\"}\n" +
@@ -152,11 +146,9 @@ public class CheckSoyDocVisitorTest extends TestCase {
     runSoyFilesTestHelper(fileContent1, fileContent2);
   }
 
-
   public void testCallWithMissingParam() throws SoySyntaxException {
-
     String fileContent =
-        "{namespace boo}\n" +
+        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/** @param a */\n" +
         "{template .caller}\n" +
@@ -176,9 +168,7 @@ public class CheckSoyDocVisitorTest extends TestCase {
     runSoyFilesTestHelper(fileContent);
   }
 
-
   public void testUndeclaredParam() throws SoySyntaxException {
-
     String soyDoc = "@param foo";
     String templateBody = "{$boo.foo}";
     try {
@@ -190,9 +180,7 @@ public class CheckSoyDocVisitorTest extends TestCase {
     }
   }
 
-
   public void testUnusedParam() throws SoySyntaxException {
-
     String soyDoc = "@param boo @param? foo";
     String templateBody = "{$boo.foo}";
     try {
@@ -204,11 +192,9 @@ public class CheckSoyDocVisitorTest extends TestCase {
     }
   }
 
-
   public void testUnusedParamInCallWithAllData() throws SoySyntaxException {
-
     String fileContent =
-        "{namespace boo}\n" +
+        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/**\n" +
         " * @param moo\n" +
@@ -232,11 +218,9 @@ public class CheckSoyDocVisitorTest extends TestCase {
     }
   }
 
-
   public void testWithExternalCallWithAllData() throws SoySyntaxException {
-
     String fileContent =
-        "{namespace boo}\n" +
+        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/**\n" +
         " * @param zoo\n" +  // 'zoo' is okay because it may be used in 'goo.moo'
@@ -248,9 +232,7 @@ public class CheckSoyDocVisitorTest extends TestCase {
     runSoyFilesTestHelper(fileContent);
   }
 
-
   public void testUnusedParamWithRecursiveCall() throws SoySyntaxException {
-
     String soyDoc = "@param boo @param foo";
     String templateBody = "{call name=\".foo\" data=\"all\" /}";
     try {
@@ -262,11 +244,9 @@ public class CheckSoyDocVisitorTest extends TestCase {
     }
   }
 
-
   public void testUnusedParamInDelegateTemplate() throws SoySyntaxException {
-
     String fileContent =
-        "{namespace boo}\n" +
+        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/**\n" +
         " * @param zoo\n" +  // 'zoo' may be needed in other implementations of the same delegate
@@ -278,11 +258,9 @@ public class CheckSoyDocVisitorTest extends TestCase {
     runSoyFilesTestHelper(fileContent);
   }
 
-
   public void testDelegateCallVariant() throws SoySyntaxException {
-
     String fileContent = "" +
-        "{namespace boo}\n" +
+        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/**\n" +
         " * @param variant\n" +
@@ -294,18 +272,16 @@ public class CheckSoyDocVisitorTest extends TestCase {
     runSoyFilesTestHelper(fileContent);
   }
 
-
   public void testOnlyCheckFilesInV2() throws SoySyntaxException {
-
     String fileContent0 =
-        "{namespace boo0}\n" +
+        "{namespace boo0 autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +  // file is missing SoyDoc
         "{template .foo0}\n" +
         "  {$goo0.moo0}\n" +
         "{/template}\n";
 
     String fileContent1 =
-        "{namespace boo1}\n" +
+        "{namespace boo1 autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/** Template 1 */\n" +
         "{template .foo1}\n" +
@@ -314,7 +290,7 @@ public class CheckSoyDocVisitorTest extends TestCase {
         "{/template}\n";
 
     String fileContent2 =
-        "{namespace boo2}\n" +
+        "{namespace boo2 autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/** Template 2 */\n" +
         "{template .foo2}\n" +
@@ -330,12 +306,42 @@ public class CheckSoyDocVisitorTest extends TestCase {
     }
   }
 
+  public void testWithHeaderParams() throws SoySyntaxException {
+    String fileContent =
+        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
+        "\n" +
+        "/** */\n" +
+        "{template .foo}\n" +
+        "  {@param goo: string}\n" +
+        "  {@inject zoo: string}\n" +
+        "  {$goo}\n" +
+        "  {$zoo}\n" +
+        "{/template}\n";
+
+    runSoyFilesTestHelper(fileContent);
+
+    fileContent =
+        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
+        "\n" +
+        "/** */\n" +
+        "{template .foo}\n" +
+        "  {@param goo: string}\n" +
+        "  {@inject zoo: string}\n" +
+        "{/template}\n";
+
+    try {
+      runSoyFilesTestHelper(fileContent);
+      fail();
+    } catch (SoySyntaxException sse) {
+      assertTrue(sse.getMessage().contains(
+          "Found params declared in SoyDoc but not used in template: [goo, zoo]"));
+    }
+  }
 
   private static void runTemplateTestHelper(String soyDoc, String templateBody)
       throws SoySyntaxException {
-
     String testFileContent =
-        "{namespace boo}\n" +
+        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/** " + soyDoc + " */\n" +
         "{template name=\".foo\"}\n" +
@@ -345,13 +351,10 @@ public class CheckSoyDocVisitorTest extends TestCase {
     runSoyFilesTestHelper(testFileContent);
   }
 
-
   private static void runSoyFilesTestHelper(String... soyFileContents)
       throws SoySyntaxException {
-
     SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(soyFileContents);
 
-    (new CheckSoyDocVisitor(false)).exec(soyTree);
+    (new CheckSoyDocVisitor(SyntaxVersion.V1_0)).exec(soyTree);
   }
-
 }

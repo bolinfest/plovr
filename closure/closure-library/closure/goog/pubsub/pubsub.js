@@ -15,6 +15,7 @@
 /**
  * @fileoverview  Topic-based publish/subscribe channel implementation.
  *
+ * @author attila@google.com (Attila Bodis)
  */
 
 goog.provide('goog.pubsub.PubSub');
@@ -60,7 +61,7 @@ goog.inherits(goog.pubsub.PubSub, goog.Disposable);
  * of a JavaScript array to (2^32 - 1) / 3 = 1,431,655,765 subscriptions, which
  * should suffice for most applications.
  *
- * @type {!Array}
+ * @type {!Array<?>}
  * @private
  */
 goog.pubsub.PubSub.prototype.subscriptions_;
@@ -79,7 +80,7 @@ goog.pubsub.PubSub.prototype.key_ = 1;
 /**
  * Map of topics to arrays of subscription keys.
  *
- * @type {!Object.<!Array.<number>>}
+ * @type {!Object<!Array<number>>}
  * @private
  */
 goog.pubsub.PubSub.prototype.topics_;
@@ -88,7 +89,7 @@ goog.pubsub.PubSub.prototype.topics_;
 /**
  * Array of subscription keys pending removal once publishing is done.
  *
- * @type {Array.<number>}
+ * @type {Array<number>}
  * @private
  */
 goog.pubsub.PubSub.prototype.pendingKeys_;
@@ -246,11 +247,19 @@ goog.pubsub.PubSub.prototype.publish = function(topic, var_args) {
     // array.
     this.publishDepth_++;
 
+    // Copy var_args to a new array so they can be passed to subscribers.
+    // Note that we can't use Array.slice or goog.array.toArray for this for
+    // performance reasons. Using those with the arguments object will cause
+    // deoptimization.
+    var args = new Array(arguments.length - 1);
+    for (var i = 1, len = arguments.length; i < len; i++) {
+      args[i - 1] = arguments[i];
+    }
+
     // For each key in the list of subscription keys for the topic, apply the
     // function to the arguments in the appropriate context.  The length of the
     // array mush be fixed during the iteration, since subscribers may add new
     // subscribers during publishing.
-    var args = goog.array.slice(arguments, 1);
     for (var i = 0, len = keys.length; i < len; i++) {
       var key = keys[i];
       this.subscriptions_[key + 1].apply(this.subscriptions_[key + 2], args);

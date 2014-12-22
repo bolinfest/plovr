@@ -58,6 +58,7 @@ goog.ui.TwoThumbSlider = function(opt_domHelper) {
   this.rangeModel.setExtent(this.getMaximum() - this.getMinimum());
 };
 goog.inherits(goog.ui.TwoThumbSlider, goog.ui.SliderBase);
+goog.tagUnsealableClass(goog.ui.TwoThumbSlider);
 
 
 /**
@@ -108,13 +109,13 @@ goog.ui.TwoThumbSlider.prototype.getCssClass = function(orient) {
 /**
  * This creates a thumb element with the specified CSS class name.
  * @param {string} cs  CSS class name of the thumb to be created.
- * @return {HTMLDivElement} The created thumb element.
+ * @return {!HTMLDivElement} The created thumb element.
  * @private
  */
 goog.ui.TwoThumbSlider.prototype.createThumb_ = function(cs) {
   var thumb = this.getDomHelper().createDom('div', cs);
   goog.a11y.aria.setRole(thumb, goog.a11y.aria.Role.BUTTON);
-  return /** @type {HTMLDivElement} */ (thumb);
+  return /** @type {!HTMLDivElement} */ (thumb);
 };
 
 

@@ -17,12 +17,11 @@
 package com.google.javascript.jscomp.graph;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
-import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -134,10 +133,10 @@ public abstract class Graph<N, E> implements AdjacencyGraph<N, E> {
 
   /** Gets an immutable list of all nodes. */
   @Override
-  public abstract Collection<GraphNode<N, E>> getNodes();
+  public abstract Collection<? extends GraphNode<N, E>> getNodes();
 
   /** Gets an immutable list of all edges. */
-  public abstract List<GraphEdge<N, E>> getEdges();
+  public abstract List<? extends GraphEdge<N, E>> getEdges();
 
   /**
    * Gets the degree of a node.
@@ -160,8 +159,6 @@ public abstract class Graph<N, E> implements AdjacencyGraph<N, E> {
    */
   public abstract List<GraphNode<N, E>> getNeighborNodes(N value);
 
-  public abstract Iterator<GraphNode<N, E>> getNeighborNodesIterator(N value);
-
   /**
    * Retrieves an edge from the graph.
    *
@@ -169,7 +166,7 @@ public abstract class Graph<N, E> implements AdjacencyGraph<N, E> {
    * @param n2 Node two.
    * @return The list of edges between those two values in the graph.
    */
-  public abstract List<GraphEdge<N, E>> getEdges(N n1, N n2);
+  public abstract List<? extends GraphEdge<N, E>> getEdges(N n1, N n2);
 
   /**
    * Retrieves any edge from the graph.
@@ -244,7 +241,7 @@ public abstract class Graph<N, E> implements AdjacencyGraph<N, E> {
    */
   public final void pushNodeAnnotations() {
     if (nodeAnnotationStack == null) {
-      nodeAnnotationStack = Lists.newLinkedList();
+      nodeAnnotationStack = new LinkedList<>();
     }
     pushAnnotations(nodeAnnotationStack, getNodes());
   }
@@ -265,7 +262,7 @@ public abstract class Graph<N, E> implements AdjacencyGraph<N, E> {
    */
   public final void pushEdgeAnnotations() {
     if (edgeAnnotationStack == null) {
-      edgeAnnotationStack = Lists.newLinkedList();
+      edgeAnnotationStack = new LinkedList<>();
     }
     pushAnnotations(edgeAnnotationStack, getEdges());
   }
@@ -305,7 +302,7 @@ public abstract class Graph<N, E> implements AdjacencyGraph<N, E> {
    */
   class SimpleSubGraph<N, E> implements SubGraph<N, E> {
     private Graph<N, E> graph;
-    private List<GraphNode<N, E>> nodes = Lists.newArrayList();
+    private List<GraphNode<N, E>> nodes = new ArrayList<>();
 
     SimpleSubGraph(Graph<N, E> graph) {
       this.graph = graph;

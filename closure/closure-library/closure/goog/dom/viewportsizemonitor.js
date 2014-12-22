@@ -79,7 +79,7 @@ goog.inherits(goog.dom.ViewportSizeMonitor, goog.events.EventTarget);
  * multiple spooling monitors for a window.
  * @param {Window=} opt_window The window to monitor; defaults to the window in
  *     which this code is executing.
- * @return {goog.dom.ViewportSizeMonitor} Monitor for the given window.
+ * @return {!goog.dom.ViewportSizeMonitor} Monitor for the given window.
  */
 goog.dom.ViewportSizeMonitor.getInstanceForWindow = function(opt_window) {
   var currentWindow = opt_window || window;
@@ -108,7 +108,7 @@ goog.dom.ViewportSizeMonitor.removeInstanceForWindow = function(opt_window) {
 /**
  * Map of window hash code to viewport size monitor for that window, if
  * created.
- * @type {Object.<number,goog.dom.ViewportSizeMonitor>}
+ * @type {Object<number,goog.dom.ViewportSizeMonitor>}
  * @private
  */
 goog.dom.ViewportSizeMonitor.windowInstanceMap_ = {};

@@ -43,6 +43,7 @@ import java.util.zip.GZIPOutputStream;
  * how much a pass impacts the size of the compiled output, before and after
  * gzip.
  *
+ * @author dimvar@google.com (Dimitris Vardoulakis)
  */
 public class PerformanceTracker {
 
@@ -74,7 +75,7 @@ public class PerformanceTracker {
   private int diff = 0;
   private int gzDiff = 0;
 
-  private final Deque<Stats> currentPass = new ArrayDeque<Stats>();
+  private final Deque<Stats> currentPass = new ArrayDeque<>();
 
   /** Summary stats by pass name. */
   private final Map<String, Stats> summary = Maps.newHashMap();
@@ -176,6 +177,14 @@ public class PerformanceTracker {
         gzCodeSize = summaryStats.gzSize = logStats.gzSize = newSize;
       }
     }
+  }
+
+  public boolean tracksSize() {
+    return trackSize;
+  }
+
+  public boolean tracksGzSize() {
+    return trackGzSize;
   }
 
   public int getRuntime() {
@@ -296,7 +305,9 @@ public class PerformanceTracker {
             stats.diff, stats.gzDiff, stats.size, stats.gzSize));
       }
       output.write("\n");
-      output.close();
+      // output can be System.out, so don't close it to not lose subsequent
+      // error messages. Flush to ensure that you will see the tracer report.
+      output.flush();
     } catch (IOException e) {
       throw new RuntimeException("Failed to write statistics to output.", e);
     }

@@ -16,13 +16,12 @@
 
 package com.google.template.soy.soytree;
 
-import org.junit.*;
+import junit.framework.*;
 
 
 /**
  * Unit tests for RawTextNode.
  *
- * @author Kai Huang
  */
 public class RawTextNodeTest extends TestCase {
 

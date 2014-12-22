@@ -14,9 +14,14 @@
 
 /**
  * @fileoverview Defines an interface that represents a Result.
+ *
+ * NOTE: goog.result is soft deprecated - we expect to replace this and
+ * {@link goog.async.Deferred} with {@link goog.Promise}.
  */
 
 goog.provide('goog.result.Result');
+
+goog.require('goog.Thenable');
 
 
 
@@ -26,6 +31,8 @@ goog.provide('goog.result.Result');
  * to a 'Promise' or a 'Future' in other languages and frameworks.
  *
  * @interface
+ * @extends {goog.Thenable}
+ * @deprecated Use {@link goog.Promise} instead - http://go/promisemigration
  */
 goog.result.Result = function() {};
 
@@ -47,6 +54,7 @@ goog.result.Result.prototype.wait = function(handler, opt_scope) {};
  * The States this object can be in.
  *
  * @enum {string}
+ * @deprecated Use {@link goog.Promise} instead - http://go/promisemigration
  */
 goog.result.Result.State = {
   /** The operation was a success and the value is available. */
@@ -100,6 +108,8 @@ goog.result.Result.prototype.isCanceled = function() {};
  * The value to be passed to the error handlers invoked upon cancellation.
  * @constructor
  * @extends {Error}
+ * @final
+ * @deprecated Use {@link goog.Promise} instead - http://go/promisemigration
  */
 goog.result.Result.CancelError = function() {
   // Note that this does not derive from goog.debug.Error in order to prevent

@@ -16,46 +16,46 @@
 
 package com.google.template.soy.sharedpasses.render;
 
-import com.google.inject.Inject;
-import com.google.template.soy.data.SoyData;
-import com.google.template.soy.data.SoyMapData;
-import com.google.template.soy.shared.restricted.SoyJavaRuntimeFunction;
+import com.google.template.soy.data.SoyRecord;
+import com.google.template.soy.data.SoyValueHelper;
+import com.google.template.soy.shared.internal.SharedModule.Shared;
+import com.google.template.soy.shared.restricted.SoyJavaFunction;
 import com.google.template.soy.sharedpasses.render.EvalVisitor.EvalVisitorFactory;
 
-import java.util.Deque;
 import java.util.Map;
 
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 import javax.inject.Singleton;
-
 
 /**
  * Default implementation of EvalVisitorFactory.
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
- * @author Mark Knichel
- * @author Kai Huang
  */
 @Singleton
 public class EvalVisitorFactoryImpl implements EvalVisitorFactory {
 
 
-  /** Map of all SoyJavaRuntimeFunctions (name to function). */
-  private final Map<String, SoyJavaRuntimeFunction> soyJavaRuntimeFunctionsMap;
+  /** Instance of SoyValueHelper to use. */
+  private final SoyValueHelper valueHelper;
+
+  /** Map of all SoyJavaFunctions (name to function). */
+  private final Map<String, SoyJavaFunction> soyJavaFunctionsMap;
 
 
   @Inject
-  public EvalVisitorFactoryImpl(Map<String, SoyJavaRuntimeFunction> soyJavaRuntimeFunctionsMap) {
-    this.soyJavaRuntimeFunctionsMap = soyJavaRuntimeFunctionsMap;
+  public EvalVisitorFactoryImpl(
+      SoyValueHelper valueHelper, @Shared Map<String, SoyJavaFunction> soyJavaFunctionsMap) {
+    this.valueHelper = valueHelper;
+    this.soyJavaFunctionsMap = soyJavaFunctionsMap;
   }
 
 
-  @Override
-  public EvalVisitor create(
-      SoyMapData data, @Nullable SoyMapData ijData, Deque<Map<String, SoyData>> env) {
+  @Override public EvalVisitor create(@Nullable SoyRecord ijData, Environment env) {
 
-    return new EvalVisitor(soyJavaRuntimeFunctionsMap, data, ijData, env);
+    return new EvalVisitor(valueHelper, soyJavaFunctionsMap, ijData, env);
   }
 
 }

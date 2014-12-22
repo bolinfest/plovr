@@ -24,7 +24,6 @@
 goog.provide('goog.messaging.AbstractChannel');
 
 goog.require('goog.Disposable');
-goog.require('goog.debug');
 goog.require('goog.json');
 goog.require('goog.log');
 goog.require('goog.messaging.MessageChannel'); // interface
@@ -39,11 +38,11 @@ goog.require('goog.messaging.MessageChannel'); // interface
  * @implements {goog.messaging.MessageChannel}
  */
 goog.messaging.AbstractChannel = function() {
-  goog.base(this);
+  goog.messaging.AbstractChannel.base(this, 'constructor');
 
   /**
    * The services registered for this channel.
-   * @type {Object.<string, {callback: function((string|!Object)),
+   * @type {Object<string, {callback: function((string|!Object)),
                              objectPayload: boolean}>}
    * @private
    */
@@ -203,7 +202,7 @@ goog.messaging.AbstractChannel.prototype.decodePayload = function(
 
 /** @override */
 goog.messaging.AbstractChannel.prototype.disposeInternal = function() {
-  goog.base(this, 'disposeInternal');
+  goog.messaging.AbstractChannel.base(this, 'disposeInternal');
   delete this.logger;
   delete this.services_;
   delete this.defaultService_;

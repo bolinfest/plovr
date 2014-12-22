@@ -47,7 +47,7 @@ public class DotFormatter {
   private static final String LINE = " -- ";
 
   // stores the current assignment of node to keys
-  private final HashMap<Node, Integer> assignments = new HashMap<Node, Integer>();
+  private final HashMap<Node, Integer> assignments = new HashMap<>();
 
   // key count in order to assign a unique key to each node
   private int keyCount = 0;
@@ -84,21 +84,6 @@ public class DotFormatter {
    */
   public static String toDot(Node n) throws IOException  {
     return toDot(n, null);
-  }
-
-  /**
-   * Converts an AST to dot representation.
-   * @param n the root of the AST described in the dot formatted string
-   * @param inCFG Control Flow Graph.
-   * @param printAnnotations print annotations.
-   * @return the dot representation of the AST
-   */
-  static String toDot(
-      Node n, ControlFlowGraph<Node> inCFG, boolean printAnnotations)
-      throws IOException  {
-    StringBuilder builder = new StringBuilder();
-    new DotFormatter(n, inCFG, builder, printAnnotations);
-    return builder.toString();
   }
 
   /**
@@ -210,7 +195,7 @@ public class DotFormatter {
     return key;
   }
 
-  private String name(Node n) {
+  private static String name(Node n) {
     int type = n.getType();
     switch (type) {
       case Token.VOID:
@@ -221,7 +206,7 @@ public class DotFormatter {
     }
   }
 
-  private String formatNodeName(Integer key) {
+  private static String formatNodeName(Integer key) {
     return "node" + key;
   }
 

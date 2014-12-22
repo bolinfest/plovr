@@ -34,12 +34,13 @@ import java.util.TreeSet;
  * Unit test for the Compiler DisambiguateProperties pass.
  *
  */
+
 public class DisambiguatePropertiesTest extends CompilerTestCase {
   private DisambiguateProperties<?> lastPass;
-  private boolean runTightenTypes;
 
   public DisambiguatePropertiesTest() {
     parseTypeInfo = true;
+    compareJsDoc = false;
   }
 
   @Override
@@ -55,21 +56,13 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
     return new CompilerPass() {
       @Override
       public void process(Node externs, Node root) {
-        Map<String, CheckLevel> propertiesToErrorFor =
-            Maps.<String, CheckLevel>newHashMap();
+        Map<String, CheckLevel> propertiesToErrorFor = Maps.newHashMap();
         propertiesToErrorFor.put("foobar", CheckLevel.ERROR);
 
-        if (runTightenTypes) {
-          TightenTypes tightener = new TightenTypes(compiler);
-          tightener.process(externs, root);
-          lastPass = DisambiguateProperties.forConcreteTypeSystem(compiler,
-              tightener, propertiesToErrorFor);
-        } else {
-          // This must be created after type checking is run as it depends on
-          // any mismatches found during checking.
-          lastPass = DisambiguateProperties.forJSTypeSystem(
-              compiler, propertiesToErrorFor);
-        }
+        // This must be created after type checking is run as it depends on
+        // any mismatches found during checking.
+        lastPass = DisambiguateProperties.forJSTypeSystem(
+            compiler, propertiesToErrorFor);
 
         lastPass.process(externs, root);
       }
@@ -88,8 +81,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "/** @type Foo */\n"
         + "var F = new Foo;\n"
         + "F.a = 0;";
-    testSets(false, js, js, "{a=[[Foo.prototype]]}");
-    testSets(true, js, js, "{a=[[Foo.prototype]]}");
+    testSets(js, js, "{a=[[Foo.prototype]]}");
   }
 
   public void testOneType2() {
@@ -100,8 +92,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "var F = new Foo;\n"
         + "F.a = 0;";
     String expected = "{a=[[Foo.prototype]]}";
-    testSets(false, js, js, expected);
-    testSets(true, js, js, expected);
+    testSets(js, js, expected);
   }
 
   public void testOneType3() {
@@ -113,28 +104,62 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "var F = new Foo;\n"
         + "F.a = 0;";
     String expected = "{a=[[Foo.prototype]]}";
-    testSets(false, js, js, expected);
-    testSets(true, js, js, expected);
+    testSets(js, js, expected);
   }
 
-  public void testPrototypeAndInstance() {
+  public void testOneType4() {
+    String js = ""
+        + "/** @constructor */ function Foo() {}\n"
+        + "Foo.prototype = {'a': 0};\n"
+        + "/** @type Foo */\n"
+        + "var F = new Foo;\n"
+        + "F['a'] = 0;";
+    String expected = "{}";
+    testSets(js, js, expected);
+  }
+
+  public void testPrototypeAndInstance1() {
     String js = ""
         + "/** @constructor */ function Foo() {}\n"
         + "Foo.prototype.a = 0;\n"
         + "/** @type Foo */\n"
         + "var F = new Foo;\n"
         + "F.a = 0;";
-    testSets(false, js, js, "{a=[[Foo.prototype]]}");
-    testSets(true, js, js, "{a=[[Foo.prototype]]}");
+    testSets(js, js, "{a=[[Foo.prototype]]}");
   }
 
   public void testPrototypeAndInstance2() {
     String js = ""
+        + "/** @constructor @template T */ "
+        + "function Foo() {"
+        + "  this.a = 0;"
+        + "}\n"
+        + "/** @type {Foo.<string>} */\n"
+        + "var f1 = new Foo;\n"
+        + "f1.a = 0;"
+        + "/** @type {Foo.<string>} */\n"
+        + "var f2 = new Foo;\n"
+        + "f2.a = 0;";
+    testSets(js, js, "{a=[[Foo]]}");
+  }
+
+  public void testPrototypeAndInstance3() {
+    String js = ""
         + "/** @constructor */ function Foo() {}\n"
         + "Foo.prototype.a = 0;\n"
         + "new Foo().a = 0;";
-    testSets(false, js, js, "{a=[[Foo.prototype]]}");
-    testSets(true, js, js, "{a=[[Foo.prototype]]}");
+    testSets(js, js, "{a=[[Foo.prototype]]}");
+  }
+
+  public void testPrototypeAndInstance4() {
+    String js = ""
+        + "/** @constructor @template T */ "
+        + "function Foo() {}\n"
+        + "Foo.prototype.a = 0;\n"
+        + "/** @type {Foo.<string>} */\n"
+        + "var f = new Foo;\n"
+        + "f.a = 0;";
+    testSets(js, js, "{a=[[Foo.prototype]]}");
   }
 
   public void testTwoTypes1() {
@@ -158,8 +183,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "Bar.prototype.Bar_prototype$a=0;"
         + "var B=new Bar;"
         + "B.Bar_prototype$a=0";
-    testSets(false, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
-    testSets(true, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
+    testSets(js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
   }
 
   public void testTwoTypes2() {
@@ -185,8 +209,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "var B=new Bar;"
         + "B.Bar_prototype$a=0";
 
-    testSets(false, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
-    testSets(true, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
+    testSets(js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
   }
 
   public void testTwoTypes3() {
@@ -216,8 +239,53 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "var B=new Bar;"
         + "B.Bar_prototype$a=0";
 
-    testSets(false, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
-    testSets(true, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
+    testSets(js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
+  }
+
+  public void testTwoTypes4() {
+    String js = ""
+        + "/** @constructor */ function Foo() {}\n"
+        + "Foo.prototype = {a: 0};"
+        + "/** @type Foo */\n"
+        + "var F = new Foo;\n"
+        + "F.a = 0;"
+        + "/** @constructor */ function Bar() {}\n"
+        + "Bar.prototype = {'a': 0};"
+        + "/** @type Bar */\n"
+        + "var B = new Bar;\n"
+        + "B['a'] = 0;";
+
+    String output = ""
+        + "function Foo(){}"
+        + "Foo.prototype = {a: 0};"
+        + "var F=new Foo;"
+        + "F.a=0;"
+        + "function Bar(){}"
+        + "Bar.prototype = {'a': 0};"
+        + "var B=new Bar;"
+        + "B['a']=0";
+
+    testSets(js, output, "{a=[[Foo.prototype]]}");
+  }
+
+  public void testTwoTypes5() {
+    String js = ""
+        + "/** @constructor @template T */ function Foo() { this.a = 0; }\n"
+        + "/** @type Foo.<string> */\n"
+        + "var F = new Foo;\n"
+        + "F.a = 0;"
+        + "/** @constructor @template T */ function Bar() { this.a = 0; }\n"
+        + "/** @type Bar.<string> */\n"
+        + "var B = new Bar;\n"
+        + "B.a = 0;";
+    String output = ""
+        + "function Foo(){ this.Foo$a = 0; }"
+        + "var F=new Foo;"
+        + "F.Foo$a=0;"
+        + "function Bar(){ this.Bar$a = 0; }"
+        + "var B=new Bar;"
+        + "B.Bar$a=0";
+    testSets(js, output, "{a=[[Bar], [Foo]]}");
   }
 
   public void testTwoFields() {
@@ -231,8 +299,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "F.b = 0;";
     String output = "function Foo(){}Foo.prototype.a=0;Foo.prototype.b=0;"
         + "var F=new Foo;F.a=0;F.b=0";
-    testSets(false, js, output, "{a=[[Foo.prototype]], b=[[Foo.prototype]]}");
-    testSets(true, js, output, "{a=[[Foo.prototype]], b=[[Foo.prototype]]}");
+    testSets(js, output, "{a=[[Foo.prototype]], b=[[Foo.prototype]]}");
   }
 
   public void testTwoSeparateFieldsTwoTypes() {
@@ -264,10 +331,8 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "var B=new Bar;"
         + "B.Bar_prototype$a=0;"
         + "B.Bar_prototype$b=0";
-    testSets(false, js, output, "{a=[[Bar.prototype], [Foo.prototype]],"
+    testSets(js, output, "{a=[[Bar.prototype], [Foo.prototype]],"
                                 + " b=[[Bar.prototype], [Foo.prototype]]}");
-    testSets(true, js, output, "{a=[[Bar.prototype], [Foo.prototype]],"
-                               + " b=[[Bar.prototype], [Foo.prototype]]}");
   }
 
   public void testUnionType() {
@@ -283,9 +348,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "B.a = 0;\n"
         + "/** @constructor */ function Baz() {}\n"
         + "Baz.prototype.a = 0;\n";
-    testSets(false, js,
-             "{a=[[Bar.prototype, Foo.prototype], [Baz.prototype]]}");
-    testSets(true, js, "{a=[[Bar.prototype, Foo.prototype], [Baz.prototype]]}");
+    testSets(js, "{a=[[Bar.prototype, Foo.prototype], [Baz.prototype]]}");
   }
 
   public void testIgnoreUnknownType() {
@@ -301,9 +364,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
     String expected = ""
         + "function Foo(){}Foo.prototype.blah=3;var F = new Foo;F.blah=0;"
         + "var U=function(){return{}};U().blah()";
-    testSets(false, js, expected, "{}");
-    testSets(true, BaseJSTypeTestCase.ALL_NATIVE_EXTERN_TYPES,
-        js, expected, "{}");
+    testSets(js, expected, "{}");
   }
 
   public void testIgnoreUnknownType1() {
@@ -320,9 +381,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
     String expected = ""
         + "function Foo(){}Foo.prototype.blah=3;var F = new Foo;F.blah=0;"
         + "var U=function(){return{}};U().blah()";
-    testSets(false, js, expected, "{blah=[[Foo.prototype]]}");
-    testSets(true, BaseJSTypeTestCase.ALL_NATIVE_EXTERN_TYPES,
-        js, expected, "{}");
+    testSets(js, expected, "{blah=[[Foo.prototype]]}");
   }
 
   public void testIgnoreUnknownType2() {
@@ -343,9 +402,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "function Foo(){}Foo.prototype.blah=3;var F = new Foo;F.blah=0;"
         + "function Bar(){}Bar.prototype.blah=3;"
         + "var U=function(){return{}};U().blah()";
-    testSets(false, js, expected, "{}");
-    testSets(true, BaseJSTypeTestCase.ALL_NATIVE_EXTERN_TYPES,
-        js, expected, "{}");
+    testSets(js, expected, "{}");
   }
 
   public void testUnionTypeTwoFields() {
@@ -364,9 +421,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "/** @constructor */ function Baz() {}\n"
         + "Baz.prototype.a = 0;\n"
         + "Baz.prototype.b = 0;\n";
-    testSets(false, js, "{a=[[Bar.prototype, Foo.prototype], [Baz.prototype]],"
-                 + " b=[[Bar.prototype, Foo.prototype], [Baz.prototype]]}");
-    testSets(true, js, "{a=[[Bar.prototype, Foo.prototype], [Baz.prototype]],"
+    testSets(js, "{a=[[Bar.prototype, Foo.prototype], [Baz.prototype]],"
                  + " b=[[Bar.prototype, Foo.prototype], [Baz.prototype]]}");
   }
 
@@ -387,9 +442,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "function Foo(){}Foo.prototype.Foo_prototype$a=0;"
         + "function Bar(){}Bar.prototype.Bar_prototype$a=0;"
         + "var F=new Foo;F.Unique$1$a=0;";
-    testSets(false, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
-    testSets(true, js, ttOutput,
-        "{a=[[Bar.prototype], [Foo.prototype], [Unique$1]]}");
+    testSets(js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
   }
 
   public void testConstructorFields() {
@@ -409,8 +462,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "function Bar(){}"
         + "Bar.prototype.Bar_prototype$a=0;"
         + "new Foo";
-    testSets(false, js, output, "{a=[[Bar.prototype], [Foo]]}");
-    testSets(true, js, ttOutput, "{a=[[Bar.prototype], [Foo.prototype]]}");
+    testSets(js, output, "{a=[[Bar.prototype], [Foo]]}");
   }
 
   public void testStaticProperty() {
@@ -425,9 +477,8 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "Foo.function__new_Foo___undefined$a = 0;"
         + "Bar.function__new_Bar___undefined$a = 0;";
 
-    testSets(false, js, output,
-        "{a=[[function (new:Bar): undefined]," +
-        " [function (new:Foo): undefined]]}");
+    testSets(js, output, "{a=[[function (new:Bar): undefined]," +
+    " [function (new:Foo): undefined]]}");
   }
 
   public void testSupertypeWithSameField() {
@@ -452,9 +503,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "function Bar(){}Bar.prototype.Bar_prototype$a=0;"
         + "var B = new Bar;B.Bar_prototype$a=0;"
         + "function Baz(){}Baz.prototype.Baz_prototype$a=function(){};";
-    testSets(false, js, output, "{a=[[Baz.prototype], [Foo.prototype]]}");
-    testSets(true, js, ttOutput,
-        "{a=[[Bar.prototype], [Baz.prototype], [Foo.prototype]]}");
+    testSets(js, output, "{a=[[Baz.prototype], [Foo.prototype]]}");
   }
 
   public void testScopedType() {
@@ -470,8 +519,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "g.Foo.prototype.g_Foo_prototype$a=0;"
         + "g.Bar=function(){};"
         + "g.Bar.prototype.g_Bar_prototype$a=0;";
-    testSets(false, js, output, "{a=[[g.Bar.prototype], [g.Foo.prototype]]}");
-    testSets(true, js, output, "{a=[[g.Bar.prototype], [g.Foo.prototype]]}");
+    testSets(js, output, "{a=[[g.Bar.prototype], [g.Foo.prototype]]}");
   }
 
   public void testUnresolvedType() {
@@ -491,10 +539,8 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "Bar.prototype.Bar_prototype$a=0;";
 
     setExpectParseWarningsThisTest();
-    testSets(false, BaseJSTypeTestCase.ALL_NATIVE_EXTERN_TYPES,
-        js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
-    testSets(true, BaseJSTypeTestCase.ALL_NATIVE_EXTERN_TYPES,
-        js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
+    testSets(BaseJSTypeTestCase.ALL_NATIVE_EXTERN_TYPES, js,
+        output, "{a=[[Bar.prototype], [Foo.prototype]]}");
   }
 
   public void testNamedType() {
@@ -512,8 +558,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "var Bar=function(){};"
         + "Bar.prototype.Bar_prototype$a=0;"
         + "g.Late = function(){}";
-    testSets(false, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
-    testSets(true, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
+    testSets(js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
   }
 
   public void testUnknownType() {
@@ -531,9 +576,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "Foo.prototype.Foo_prototype$a=fun();\n"
         + "fun().Unique$1$a;\n"
         + "Bar.prototype.Bar_prototype$a=0;";
-    testSets(false, js, js, "{}");
-    testSets(true, BaseJSTypeTestCase.ALL_NATIVE_EXTERN_TYPES, js, ttOutput,
-             "{a=[[Bar.prototype], [Foo.prototype], [Unique$1]]}");
+    testSets(js, js, "{}");
   }
 
   public void testEnum() {
@@ -561,8 +604,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "function Foo(){};"
         + "Foo.prototype.Foo_prototype$A=0;"
         + "Foo.prototype.Foo_prototype$B=0";
-    testSets(false, js, output, "{A=[[Foo.prototype]], B=[[Foo.prototype]]}");
-    testSets(true, js, ttOutput, "{A=[[Foo.prototype]], B=[[Foo.prototype]]}");
+    testSets(js, output, "{A=[[Foo.prototype]], B=[[Foo.prototype]]}");
   }
 
   public void testEnumOfObjects() {
@@ -584,11 +626,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "  A: new Formatter()\n"
         + "};\n"
         + "Enum.A.Formatter_prototype$format();\n";
-    testSets(false, js, output,
-        "{format=[[Formatter.prototype], [Unrelated.prototype]]}");
-
-    // TODO(nicksantos): Fix the type tightener to handle this case.
-    // It currently doesn't work, because getSubTypes is broken for enums.
+    testSets(js, output, "{format=[[Formatter.prototype], [Unrelated.prototype]]}");
   }
 
   public void testEnumOfObjects2() {
@@ -618,7 +656,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "  var formatter = window.toString() ? Enum.A : Enum.B;\n"
         + "  formatter.format();\n"
         + "}";
-    testSets(false, js, output, "{}");
+    testSets(js, output, "{}");
   }
 
   public void testEnumOfObjects3() {
@@ -654,8 +692,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "  var formatter = SubEnum.C\n"
         + "  formatter.Formatter_prototype$format();\n"
         + "}";
-    testSets(false, js, output,
-        "{format=[[Formatter.prototype], [Unrelated.prototype]]}");
+    testSets(js, output, "{format=[[Formatter.prototype], [Unrelated.prototype]]}");
   }
 
   public void testUntypedExterns() {
@@ -684,10 +721,8 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "Bar.prototype.Bar_prototype$window=0;"
         + "window.alert();";
 
-    testSets(false, externs, js, output, "{a=[[Bar.prototype], [Foo.prototype]]"
+    testSets(externs, js, output, "{a=[[Bar.prototype], [Foo.prototype]]"
              + ", window=[[Bar.prototype], [Foo.prototype]]}");
-    testSets(true, externs, js, output, "{a=[[Bar.prototype], [Foo.prototype]],"
-             + " window=[[Bar.prototype], [Foo.prototype]]}");
   }
 
   public void testUnionTypeInvalidation() {
@@ -702,11 +737,11 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "Bar.prototype.a = 0;\n"
         + "/** @type {Foo|Bar} */\n"
         + "var F = new Foo;\n"
-        + "F.a = 1\n;"
+        + "F.a = 1;\n"
         + "F = new Bar;\n"
         + "/** @type {Baz} */\n"
         + "var Z = new Baz;\n"
-        + "Z.a = 1\n;"
+        + "Z.a = 1;\n"
         + "/** @type {Bar|Baz} */\n"
         + "var B = new Baz;\n"
         + "B.a = 1;\n"
@@ -741,8 +776,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "var B = new Baz;"
         + "B.a = 1;"
         + "B = new Bar;";
-    testSets(false, externs, js, output, "{a=[[Ind]]}");
-    testSets(true, externs, js, ttOutput, "{a=[[Unique$1]]}");
+    testSets(externs, js, output, "{a=[[Ind]]}");
   }
 
   public void testUnionAndExternTypes() {
@@ -772,7 +806,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
 
     // We are testing the skipping of multiple types caused by unionizing with
     // extern types.
-    testSets(false, externs, js, output, "{a=[[T1], [T2]]}");
+    testSets(externs, js, output, "{a=[[T1], [T2]]}");
   }
 
   public void testTypedExterns() {
@@ -789,8 +823,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "function Foo(){}"
         + "Foo.prototype.Foo_prototype$alert=0;"
         + "window.alert('blarg');";
-    testSets(false, externs, js, output, "{alert=[[Foo.prototype]]}");
-    testSets(true, externs, js, output, "{alert=[[Foo.prototype]]}");
+    testSets(externs, js, output, "{alert=[[Foo.prototype]]}");
   }
 
   public void testSubtypesWithSameField() {
@@ -806,8 +839,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "}\n"
         + "foo(new Foo);\n"
         + "foo(new Bar);\n";
-    testSets(false, js, "{}");
-    testSets(true, js, "{a=[[Bar.prototype, Foo.prototype]]}");
+    testSets(js, "{}");
   }
 
   public void testSupertypeReferenceOfSubtypeProperty() {
@@ -829,15 +861,14 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "function foo(foo$$1) {\n"
         + "  var x = foo$$1.Bar_prototype$a;\n"
         + "}\n";
-    testSets(false, externs, js, result, "{a=[[Bar.prototype]]}");
+    testSets(externs, js, result, "{a=[[Bar.prototype]]}");
   }
 
   public void testObjectLiteralNotRenamed() {
     String js = ""
         + "var F = {a:'a', b:'b'};"
         + "F.a = 'z';";
-    testSets(false, js, js, "{}");
-    testSets(true, js, js, "{}");
+    testSets(js, js, "{}");
   }
 
   public void testObjectLiteralReflected() {
@@ -859,8 +890,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "function G() {}"
         + "G.prototype.G_prototype$foo = 3;"
         + "goog.reflect.object(F, {F_prototype$foo: 5});";
-    testSets(false, js, result, "{foo=[[F.prototype], [G.prototype]]}");
-    testSets(true, js, result, "{foo=[[F.prototype], [G.prototype]]}");
+    testSets(js, result, "{foo=[[F.prototype], [G.prototype]]}");
   }
 
   public void testObjectLiteralLends() {
@@ -878,8 +908,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "function G() {}"
         + "G.prototype.G_prototype$foo = 3;"
         + "mixin(/** @lends {F.prototype} */ ({F_prototype$foo: 5}));";
-    testSets(false, js, result, "{foo=[[F.prototype], [G.prototype]]}");
-    testSets(true, js, result, "{foo=[[F.prototype], [G.prototype]]}");
+    testSets(js, result, "{foo=[[F.prototype], [G.prototype]]}");
   }
 
   public void testClosureInherits() {
@@ -910,9 +939,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "  Bar.superClass_.f();"
         + "};\n"
         + "(new Bar).f();\n";
-    testSets(false, js, "{f=[[Top.prototype]]}");
-    testSets(true, js, "{constructor=[[Bar.prototype, Foo.prototype]], "
-                 + "f=[[Bar.prototype], [Foo.prototype], [Top.prototype]]}");
+    testSets(js, "{f=[[Top.prototype]]}");
   }
 
   public void testSkipNativeFunctionMethod() {
@@ -929,13 +956,17 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
 
   public void testSkipNativeObjectMethod() {
     String externs = ""
-        + "/** @constructor \n @param {*} opt_v */ function Object(opt_v) {}"
+        + "/**"
+        + " * @constructor\n"
+        + " * @param {*} opt_v\n"
+        + " * @return {!Object}\n"
+        + " */\n"
+        + "function Object(opt_v) {}"
         + "Object.prototype.hasOwnProperty;";
     String js = ""
         + "/** @constructor */ function Foo(){};"
         + "(new Foo).hasOwnProperty('x');";
-    testSets(false, externs, js, js, "{}");
-    testSets(true, externs, js, js, "{}");
+    testSets(externs, js, js, "{}");
   }
 
   public void testExtendNativeType() {
@@ -946,8 +977,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
     String js = ""
         + "/** @constructor\n @extends {Date} */ function SuperDate() {};\n"
         + "(new SuperDate).toString();";
-    testSets(true, externs, js, js, "{}");
-    testSets(false, externs, js, js, "{}");
+    testSets(externs, js, js, "{}");
   }
 
   public void testStringFunction() {
@@ -968,10 +998,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
          + "String.prototype.String_prototype$foo = function() {};\n"
          + "var a = 'str'.toString().String_prototype$foo();\n";
 
-    testSets(false, externs, js, output,
-             "{foo=[[Foo.prototype], [String.prototype]]}");
-    testSets(true, externs, js, output,
-             "{foo=[[Foo.prototype], [String.prototype]]}");
+    testSets(externs, js, output, "{foo=[[Foo.prototype], [String.prototype]]}");
   }
 
   public void testUnusedTypeInExterns() {
@@ -988,10 +1015,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "Bar.prototype.Bar_prototype$a;"
         + "/** @constructor */ function Baz() {};\n"
         + "Baz.prototype.Baz_prototype$a";
-    testSets(false, externs, js, output,
-             "{a=[[Bar.prototype], [Baz.prototype]]}");
-    testSets(true, externs, js, output,
-             "{a=[[Bar.prototype], [Baz.prototype]]}");
+    testSets(externs, js, output, "{a=[[Bar.prototype], [Baz.prototype]]}");
   }
 
   public void testInterface() {
@@ -1003,8 +1027,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "/** @type I */\n"
         + "var F = new Foo;"
         + "var x = F.a;";
-    testSets(false, js, "{a=[[Foo.prototype, I.prototype]]}");
-    testSets(true, js, "{a=[[Foo.prototype], [I.prototype]]}");
+    testSets(js, "{a=[[Foo.prototype, I.prototype]]}");
   }
 
   public void testInterfaceOfSuperclass() {
@@ -1018,9 +1041,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "/** @type Bar */\n"
         + "var B = new Bar;"
         + "B.a = 0";
-    testSets(false, js, "{a=[[Foo.prototype, I.prototype]]}");
-    testSets(true, js,
-        "{a=[[Bar.prototype], [Foo.prototype], [I.prototype]]}");
+    testSets(js, "{a=[[Foo.prototype, I.prototype]]}");
   }
 
   public void testTwoInterfacesWithSomeInheritance() {
@@ -1037,9 +1058,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "/** @type Bar */\n"
         + "var B = new Bar;"
         + "B.a = 0";
-    testSets(false, js, "{a=[[Foo.prototype, I.prototype, I2.prototype]]}");
-    testSets(true, js, "{a=[[Bar.prototype], [Foo.prototype], "
-                       + "[I.prototype], [I2.prototype]]}");
+    testSets(js, "{a=[[Foo.prototype, I.prototype, I2.prototype]]}");
   }
 
   public void testInvalidatingInterface() {
@@ -1056,8 +1075,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "(new Foo).a = 0;"
         + "/** @interface */ function I() {};\n"
         + "I.prototype.a;\n";
-    testSets(false, js, "{}", TypeValidator.TYPE_MISMATCH_WARNING);
-    testSets(true, js, "{}", TypeValidator.TYPE_MISMATCH_WARNING);
+    testSets(js, "{}", TypeValidator.TYPE_MISMATCH_WARNING);
   }
 
   public void testMultipleInterfaces() {
@@ -1070,8 +1088,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "/** @override */"
         + "Foo.prototype.a = 0;\n"
         + "(new Foo).a = 0";
-    testSets(false, js, "{a=[[Foo.prototype, I2.prototype]]}");
-    testSets(true, js, "{a=[[Foo.prototype], [I2.prototype]]}");
+    testSets(js, "{a=[[Foo.prototype, I2.prototype]]}");
   }
 
   public void testInterfaceWithSupertypeImplementor() {
@@ -1084,8 +1101,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "function B() {}\n"
         + "/** @type {C} */ var b = new B();\n"
         + "b.foo();\n";
-    testSets(false, js, "{foo=[[A.prototype, C.prototype]]}");
-    testSets(true, js, "{foo=[[A.prototype], [C.prototype]]}");
+    testSets(js, "{foo=[[A.prototype, C.prototype]]}");
   }
 
   public void testSuperInterface() {
@@ -1098,8 +1114,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "/** @override */\n"
         + "Foo.prototype.a = 0;\n"
         + "(new Foo).a = 0";
-    testSets(false, js, "{a=[[Foo.prototype, I.prototype]]}");
-    testSets(true, js, "{a=[[Foo.prototype], [I.prototype]]}");
+    testSets(js, "{a=[[Foo.prototype, I.prototype]]}");
   }
 
   public void testInterfaceUnionWithCtor() {
@@ -1114,24 +1129,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "function f(x) { x.addEventListener(); };\n"
         + "f(new C()); f(new Impl());";
 
-    testSets(false, js, js,
-        "{addEventListener=[[C.prototype, I.prototype, Impl.prototype]]}");
-
-    // In the tightened case, the disambiguator is smart enough to
-    // disambiguate Impl's method from the interface method.
-    String tightenedOutput = ""
-        + "function I() {};\n"
-        + "I.prototype.I_prototype$addEventListener;\n"
-        + "function Impl() {};\n"
-        + "Impl.prototype.C_prototype$addEventListener;"
-        + "function C() {};\n"
-        + "C.prototype.C_prototype$addEventListener;"
-        + "/** @param {C|I} x */"
-        + "function f(x) { x.C_prototype$addEventListener(); };\n"
-        + "f(new C()); f(new Impl());";
-
-    testSets(true, js, tightenedOutput,
-        "{addEventListener=[[C.prototype, Impl.prototype], [I.prototype]]}");
+    testSets(js, js, "{addEventListener=[[C.prototype, I.prototype, Impl.prototype]]}");
   }
 
   public void testExternInterfaceUnionWithCtor() {
@@ -1148,8 +1146,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "function f(x) { x.addEventListener(); };\n"
         + "f(new C()); f(new Impl());";
 
-    testSets(false, externs, js, js, "{}");
-    testSets(true, externs, js, js, "{}");
+    testSets(externs, js, js, "{}");
   }
 
   /**
@@ -1166,14 +1163,9 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "var F = new Bar;\n"
         + "F.a = 0;";
 
-    testSets(false, "", js, js, "{}", TypeValidator.TYPE_MISMATCH_WARNING,
-             "initializing variable\n"
-             + "found   : Bar\n"
-             + "required: (Foo|null)");
-    testSets(true, "", js, js, "{}", TypeValidator.TYPE_MISMATCH_WARNING,
-             "initializing variable\n"
-             + "found   : Bar\n"
-             + "required: (Foo|null)");
+    testSets("", js, js, "{}", TypeValidator.TYPE_MISMATCH_WARNING, "initializing variable\n"
+     + "found   : Bar\n"
+     + "required: (Foo|null)");
   }
 
   public void testBadCast() {
@@ -1183,8 +1175,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "Bar.prototype.a = 0;\n"
         + "var a = /** @type {!Foo} */ (new Bar);\n"
         + "a.a = 4;";
-    testSets(false, "", js, js, "{}",
-             TypeValidator.INVALID_CAST,
+    testSets("", js, js, "{}", TypeValidator.INVALID_CAST,
              "invalid cast - must be a subtype or supertype\n"
              + "from: Bar\n"
              + "to  : Foo");
@@ -1211,11 +1202,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "var ab = 1 ? new B : new A; var n = ab.A_prototype$f();\n";
 
     for (int i = 0; i < 5; i++) {
-      testSets(false, js, output,
-          "{f=[[A.prototype, B.prototype], [C.prototype]]}");
-
-      testSets(true, js, output,
-          "{f=[[A.prototype, B.prototype], [C.prototype]]}");
+      testSets(js, output, "{f=[[A.prototype, B.prototype], [C.prototype]]}");
     }
   }
 
@@ -1232,8 +1219,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "Bar.prototype.Bar_prototype$a;\n"
         + "var F = { Foo_prototype$a: 'a' };\n";
 
-    testSets(false, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
-    testSets(true, js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
+    testSets(js, output, "{a=[[Bar.prototype], [Foo.prototype]]}");
   }
 
   public void testCustomInherits() {
@@ -1253,7 +1239,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         "function Function(var_args) {}" +
         "/** @return {*} */Function.prototype.call = function(var_args) {};";
 
-    testSets(false, externs, js, js, "{}");
+    testSets(externs, js, js, "{}");
   }
 
   public void testSkipNativeFunctionStaticProperty() {
@@ -1272,7 +1258,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
         + "function Bar(){}"
         + "Bar.a=0";
 
-    testSets(false, js, output, "{}");
+    testSets(js, output, "{}");
   }
 
   public void testErrorOnProtectedProperty() {
@@ -1326,25 +1312,21 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
   }
 
   @SuppressWarnings("unchecked")
-  private void testSets(boolean runTightenTypes, String js, String expected,
-      String fieldTypes) {
-    this.runTightenTypes = runTightenTypes;
+  private void testSets(String js, String expected, String fieldTypes) {
     test(js, expected);
     assertEquals(
         fieldTypes, mapToString(lastPass.getRenamedTypesForTesting()));
   }
 
   @SuppressWarnings("unchecked")
-  private void testSets(boolean runTightenTypes, String externs, String js,
-       String expected, String fieldTypes) {
-    testSets(runTightenTypes, externs, js, expected, fieldTypes, null, null);
+  private void testSets(String externs, String js, String expected,
+       String fieldTypes) {
+    testSets(externs, js, expected, fieldTypes, null, null);
   }
 
   @SuppressWarnings("unchecked")
-  private void testSets(boolean runTightenTypes, String externs, String js,
-       String expected, String fieldTypes, DiagnosticType warning,
-       String description) {
-    this.runTightenTypes = runTightenTypes;
+  private void testSets(String externs, String js, String expected,
+       String fieldTypes, DiagnosticType warning, String description) {
     test(externs, js, expected, null, warning, description);
     assertEquals(
         fieldTypes, mapToString(lastPass.getRenamedTypesForTesting()));
@@ -1357,8 +1339,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
    * <p>The format for the set of types for fields is:
    * {field=[[Type1, Type2]]}
    */
-  private void testSets(boolean runTightenTypes, String js, String fieldTypes) {
-    this.runTightenTypes = runTightenTypes;
+  private void testSets(String js, String fieldTypes) {
     test(js, null, null, null);
     assertEquals(fieldTypes, mapToString(lastPass.getRenamedTypesForTesting()));
   }
@@ -1370,9 +1351,7 @@ public class DisambiguatePropertiesTest extends CompilerTestCase {
    * <p>The format for the set of types for fields is:
    * {field=[[Type1, Type2]]}
    */
-  private void testSets(boolean runTightenTypes, String js, String fieldTypes,
-      DiagnosticType warning) {
-    this.runTightenTypes = runTightenTypes;
+  private void testSets(String js, String fieldTypes, DiagnosticType warning) {
     test(js, null, null, warning);
     assertEquals(fieldTypes, mapToString(lastPass.getRenamedTypesForTesting()));
   }

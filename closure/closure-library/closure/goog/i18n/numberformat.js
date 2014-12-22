@@ -85,6 +85,9 @@ goog.i18n.NumberFormat = function(pattern, opt_currency, opt_currencyStyle) {
    */
   this.baseFormattingNumber_ = null;
 
+  /** @private {string} */
+  this.pattern_;
+
   if (typeof pattern == 'number') {
     this.applyStandardPattern_(pattern);
   } else {
@@ -159,34 +162,33 @@ goog.i18n.NumberFormat.isEnforceAsciiDigits = function() {
 /**
  * Sets minimum number of fraction digits.
  * @param {number} min the minimum.
+ * @return {!goog.i18n.NumberFormat} Reference to this NumberFormat object.
  */
 goog.i18n.NumberFormat.prototype.setMinimumFractionDigits = function(min) {
-  if (min > this.maximumFractionDigits_) {
-    throw Error('Min value must be less than max value');
-  }
   if (this.significantDigits_ > 0 && min > 0) {
     throw Error(
         'Can\'t combine significant digits and minimum fraction digits');
   }
   this.minimumFractionDigits_ = min;
+  return this;
 };
 
 
 /**
  * Sets maximum number of fraction digits.
  * @param {number} max the maximum.
+ * @return {!goog.i18n.NumberFormat} Reference to this NumberFormat object.
  */
 goog.i18n.NumberFormat.prototype.setMaximumFractionDigits = function(max) {
-  if (this.minimumFractionDigits_ > max) {
-    throw Error('Min value must be less than max value');
-  }
   this.maximumFractionDigits_ = max;
+  return this;
 };
 
 
 /**
  * Sets number of significant digits to show. Only fractions will be rounded.
  * @param {number} number The number of significant digits to include.
+ * @return {!goog.i18n.NumberFormat} Reference to this NumberFormat object.
  */
 goog.i18n.NumberFormat.prototype.setSignificantDigits = function(number) {
   if (this.minimumFractionDigits_ > 0 && number >= 0) {
@@ -194,6 +196,7 @@ goog.i18n.NumberFormat.prototype.setSignificantDigits = function(number) {
         'Can\'t combine significant digits and minimum fraction digits');
   }
   this.significantDigits_ = number;
+  return this;
 };
 
 
@@ -211,10 +214,12 @@ goog.i18n.NumberFormat.prototype.getSignificantDigits = function() {
  * is positive. If this is true and significantDigits_ is 2, 1 will be formatted
  * as '1.0'.
  * @param {boolean} showTrailingZeros Whether trailing zeros should be shown.
+ * @return {!goog.i18n.NumberFormat} Reference to this NumberFormat object.
  */
 goog.i18n.NumberFormat.prototype.setShowTrailingZeros =
     function(showTrailingZeros) {
   this.showTrailingZeros_ = showTrailingZeros;
+  return this;
 };
 
 
@@ -233,12 +238,24 @@ goog.i18n.NumberFormat.prototype.setShowTrailingZeros =
  *
  * @param {?number} baseFormattingNumber The number to base formatting on, or
  * null if formatting should not be based on another number.
+ * @return {!goog.i18n.NumberFormat} Reference to this NumberFormat object.
  */
 goog.i18n.NumberFormat.prototype.setBaseFormatting =
     function(baseFormattingNumber) {
   goog.asserts.assert(goog.isNull(baseFormattingNumber) ||
       isFinite(baseFormattingNumber));
   this.baseFormattingNumber_ = baseFormattingNumber;
+  return this;
+};
+
+
+/**
+ * Gets the number on which compact formatting is currently based, or null if
+ * no such number is set. See setBaseFormatting() for more information.
+ * @return {?number}
+ */
+goog.i18n.NumberFormat.prototype.getBaseFormatting = function() {
+  return this.baseFormattingNumber_;
 };
 
 
@@ -331,7 +348,7 @@ goog.i18n.NumberFormat.prototype.applyCompactStyle_ = function(style) {
  * parsing stops after the call. If an error occurs, opt_pos won't be updated.
  *
  * @param {string} text The string to be parsed.
- * @param {Array.<number>=} opt_pos Position to pass in and get back.
+ * @param {Array<number>=} opt_pos Position to pass in and get back.
  * @return {number} Parsed number. This throws an error if the text cannot be
  *     parsed.
  */
@@ -396,7 +413,7 @@ goog.i18n.NumberFormat.prototype.parse = function(text, opt_pos) {
  * handle locale specific decimal, grouping, exponent and digits.
  *
  * @param {string} text The text that need to be parsed.
- * @param {Array.<number>} pos  In/out parsing position. In case of failure,
+ * @param {Array<number>} pos  In/out parsing position. In case of failure,
  *    pos value won't be changed.
  * @return {number} Number value, or NaN if nothing can be parsed.
  * @private
@@ -528,7 +545,7 @@ goog.i18n.NumberFormat.prototype.roundNumber_ = function(number) {
   var power = Math.pow(10, this.maximumFractionDigits_);
   var shiftedNumber = this.significantDigits_ <= 0 ?
       Math.round(number * power) :
-      Math.floor(this.roundToSignificantDigits_(
+      Math.round(this.roundToSignificantDigits_(
           number * power,
           this.significantDigits_,
           this.maximumFractionDigits_));
@@ -550,12 +567,16 @@ goog.i18n.NumberFormat.prototype.roundNumber_ = function(number) {
  *
  * @param {number} number
  * @param {number} minIntDigits Minimum integer digits.
- * @param {Array} parts This array holds the pieces of formatted string.
+ * @param {Array<string>} parts
+ *     This array holds the pieces of formatted string.
  *     This function will add its formatted pieces to the array.
  * @private
  */
 goog.i18n.NumberFormat.prototype.subformatFixed_ =
     function(number, minIntDigits, parts) {
+  if (this.minimumFractionDigits_ > this.maximumFractionDigits_) {
+    throw Error('Min value must be less than max value');
+  }
 
   var rounded = this.roundNumber_(number);
   var power = Math.pow(10, this.maximumFractionDigits_);
@@ -631,7 +652,7 @@ goog.i18n.NumberFormat.prototype.subformatFixed_ =
  * Formats exponent part of a Number.
  *
  * @param {number} exponent Exponential value.
- * @param {Array.<string>} parts The array that holds the pieces of formatted
+ * @param {Array<string>} parts The array that holds the pieces of formatted
  *     string. This function will append more formatted pieces to the array.
  * @private
  */
@@ -659,7 +680,7 @@ goog.i18n.NumberFormat.prototype.addExponentPart_ = function(exponent, parts) {
  * Formats Number in exponential format.
  *
  * @param {number} number Value need to be formated.
- * @param {Array.<string>} parts The array that holds the pieces of formatted
+ * @param {Array<string>} parts The array that holds the pieces of formatted
  *     string. This function will append more formatted pieces to the array.
  * @private
  */
@@ -826,7 +847,7 @@ goog.i18n.NumberFormat.QUOTE_ = '\'';
  * Parses affix part of pattern.
  *
  * @param {string} pattern Pattern string that need to be parsed.
- * @param {Array.<number>} pos One element position array to set and receive
+ * @param {Array<number>} pos One element position array to set and receive
  *     parsing position.
  *
  * @return {string} Affix received from parsing.
@@ -913,7 +934,7 @@ goog.i18n.NumberFormat.prototype.parseAffix_ = function(pattern, pos) {
  * Parses the trunk part of a pattern.
  *
  * @param {string} pattern Pattern string that need to be parsed.
- * @param {Array.<number>} pos One element position array to set and receive
+ * @param {Array<number>} pos One element position array to set and receive
  *     parsing position.
  * @private
  */

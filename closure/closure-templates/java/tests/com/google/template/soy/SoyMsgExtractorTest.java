@@ -16,15 +16,15 @@
 
 package com.google.template.soy;
 
-import com.google.common.base.Charsets;
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import com.google.common.collect.Lists;
 import com.google.common.io.Files;
 
-import java.io.File;
-import java.util.List;
-
 import junit.framework.TestCase;
 
+import java.io.File;
+import java.util.List;
 
 public class SoyMsgExtractorTest extends TestCase {
   private List<File> filesToDelete;
@@ -53,8 +53,10 @@ public class SoyMsgExtractorTest extends TestCase {
 
   public final void testOutputPathFormatFlag() throws Exception {
     File soyFile = getTempFile(".soy");
-    Files.write("{namespace ns}\n/***/\n{template .a}\n{msg desc=\"a\"}H\uff49{/msg}\n{/template}",
-                soyFile, Charsets.UTF_8);
+    Files.write(
+        "{namespace ns autoescape=\"deprecated-noncontextual\"}\n"
+        + "/***/\n{template .a}\n{msg desc=\"a\"}H\uff49{/msg}\n{/template}",
+        soyFile, UTF_8);
 
     String dir = soyFile.getParent().toString();
     String name = soyFile.getName();
@@ -64,25 +66,29 @@ public class SoyMsgExtractorTest extends TestCase {
         "--outputPathFormat", "{INPUT_DIRECTORY}/{INPUT_FILE_NAME_NO_EXT}.xml",
         soyFile.toString());
 
-    String xmlContent = Files.toString(xmlFile, Charsets.UTF_8);
+    String xmlContent = Files.toString(xmlFile, UTF_8);
     assertTrue(xmlContent, xmlContent.contains("<source>H\uff49</source>"));
   }
 
 
   public final void testOutputFileFlag() throws Exception {
     File soyFile1 = getTempFile(".soy");
-    Files.write("{namespace ns}\n/***/\n{template .a}\n{msg desc=\"a\"}H\uff49{/msg}\n{/template}",
-                soyFile1, Charsets.UTF_8);
+    Files.write(
+        "{namespace ns autoescape=\"deprecated-noncontextual\"}\n"
+        + "/***/\n{template .a}\n{msg desc=\"a\"}H\uff49{/msg}\n{/template}",
+        soyFile1, UTF_8);
     File soyFile2 = getTempFile(".soy");
-    Files.write("{namespace ns}\n/***/\n{template .b}\n{msg desc=\"a\"}World{/msg}\n{/template}",
-                soyFile2, Charsets.UTF_8);
+    Files.write(
+        "{namespace ns autoescape=\"deprecated-noncontextual\"}\n"
+        + "/***/\n{template .b}\n{msg desc=\"a\"}World{/msg}\n{/template}",
+        soyFile2, UTF_8);
 
     File xmlFile = getTempFile(".xml");
 
     SoyMsgExtractor.main(
         "--outputFile", xmlFile.toString(), soyFile1.toString(), soyFile2.toString());
 
-    String xmlContent = Files.toString(xmlFile, Charsets.UTF_8);
+    String xmlContent = Files.toString(xmlFile, UTF_8);
     assertTrue(xmlContent, xmlContent.contains("<source>H\uff49</source>"));
     assertTrue(xmlContent, xmlContent.contains("<source>World</source>"));
   }

@@ -24,7 +24,6 @@ import com.google.common.collect.ImmutableSortedSet;
 /**
  * Parsed info about a Soy file.
  *
- * @author Kai Huang
  */
 public class SoyFileInfo {
 
@@ -105,4 +104,11 @@ public class SoyFileInfo {
     return cssNameMap;
   }
 
+  /**
+   * Returns a list of any protocol buffer types used by the templates. The elements
+   * of the list are the default object for a given proto type.
+   */
+  public ImmutableList<Object> getProtoTypes() {
+    return ImmutableList.of();
+  }
 }

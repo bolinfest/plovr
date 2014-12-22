@@ -19,10 +19,11 @@ package com.google.template.soy.sharedpasses;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.template.soy.base.SoySyntaxException;
+import com.google.template.soy.basetree.SyntaxVersion;
 import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
-import com.google.template.soy.exprtree.DataRefNode;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
+import com.google.template.soy.exprtree.VarRefNode;
 import com.google.template.soy.sharedpasses.FindIndirectParamsVisitor.IndirectParamsInfo;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.CallNode;
@@ -35,13 +36,12 @@ import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 import com.google.template.soy.soytree.SoySyntaxExceptionUtils;
 import com.google.template.soy.soytree.TemplateDelegateNode;
 import com.google.template.soy.soytree.TemplateNode;
-import com.google.template.soy.soytree.TemplateNode.SoyDocParam;
 import com.google.template.soy.soytree.TemplateRegistry;
+import com.google.template.soy.soytree.defn.TemplateParam;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-
 
 /**
  * Visitor for checking that in each template, the parameters declared in the SoyDoc match the data
@@ -58,13 +58,11 @@ import java.util.Set;
  * {@code SoySyntaxException} is thrown if the parameters declared in some template's SoyDoc do not
  * match the data keys referenced in that template.
  *
- * @author Kai Huang
  */
 public class CheckSoyDocVisitor extends AbstractSoyNodeVisitor<Void> {
 
-
-  /** Whether the parse tree is guaranteed to all be in V2 syntax. */
-  private final boolean isTreeAllV2;
+  /** User-declared syntax version. */
+  private final SyntaxVersion declaredSyntaxVersion;
 
   /** Registry of all templates in the Soy tree. */
   private TemplateRegistry templateRegistry;
@@ -72,26 +70,15 @@ public class CheckSoyDocVisitor extends AbstractSoyNodeVisitor<Void> {
   /** The GetDataKeysInExprVisitor to use for expressions in the current template (during pass). */
   private GetDataKeysInExprVisitor getDataKeysInExprVisitor;
 
-
   /**
-   * @param isTreeAllV2 Whether the parse tree is guaranteed to all be in V2 syntax.
+   * @param declaredSyntaxVersion User-declared syntax version,
    */
-  public CheckSoyDocVisitor(boolean isTreeAllV2) {
-    this.isTreeAllV2 = isTreeAllV2;
+  public CheckSoyDocVisitor(SyntaxVersion declaredSyntaxVersion) {
+    this.declaredSyntaxVersion = declaredSyntaxVersion;
   }
-
-
-  @Override public Void exec(SoyNode node) {
-    (new MarkLocalVarDataRefsVisitor()).exec(node);
-    super.exec(node);
-    (new UnmarkLocalVarDataRefsVisitor()).exec(node);
-    return null;
-  }
-
 
   // -----------------------------------------------------------------------------------------------
   // Implementations for specific nodes.
-
 
   /**
    * {@inheritDoc}
@@ -99,31 +86,30 @@ public class CheckSoyDocVisitor extends AbstractSoyNodeVisitor<Void> {
    *     the data keys referenced in that template.
    */
   @Override protected void visitSoyFileSetNode(SoyFileSetNode node) {
-
     // Build templateRegistry.
     templateRegistry = new TemplateRegistry(node);
 
-    // Run pass only on the Soy files that are all in V2 syntax. 
+    // Run pass only on the Soy files that are all in V2 syntax.
     for (SoyFileNode soyFile : node.getChildren()) {
       // First determine if Soy file is all in V2 syntax.
-      boolean isFileAllV2;
-      if (isTreeAllV2) {
-        isFileAllV2 = true;
+      boolean doCheckSoyDocInFile;
+      if (declaredSyntaxVersion.num >= SyntaxVersion.V2_0.num) {
+        doCheckSoyDocInFile = true;
       } else {
         try {
-          (new AssertSyntaxVersionV2Visitor()).exec(soyFile);
-          isFileAllV2 = true;
+          // TODO SOON: Use a simpler visitor that doesn't report errors and shortcircuits.
+          (new ReportSyntaxVersionErrorsVisitor(SyntaxVersion.V2_0, true)).exec(soyFile);
+          doCheckSoyDocInFile = true;
         } catch (SoySyntaxException sse) {
-          isFileAllV2 = false;
+          doCheckSoyDocInFile = false;
         }
       }
       // Run pass on Soy file if it is all in V2 syntax.
-      if (isFileAllV2) {
+      if (doCheckSoyDocInFile) {
         visit(soyFile);
       }
     }
   }
-
 
   /**
    * {@inheritDoc}
@@ -131,7 +117,6 @@ public class CheckSoyDocVisitor extends AbstractSoyNodeVisitor<Void> {
    *     the data keys referenced in that template.
    */
   @Override protected void visitTemplateNode(TemplateNode node) {
-
     Set<String> dataKeys = Sets.newHashSet();  // data keys referenced in this template
     getDataKeysInExprVisitor = new GetDataKeysInExprVisitor(dataKeys);
 
@@ -140,13 +125,13 @@ public class CheckSoyDocVisitor extends AbstractSoyNodeVisitor<Void> {
     IndirectParamsInfo ipi = (new FindIndirectParamsVisitor(templateRegistry)).exec(node);
 
     List<String> unusedParams = Lists.newArrayList();
-    for (SoyDocParam param : node.getSoyDocParams()) {
-      if (dataKeys.contains(param.key)) {
-        // Good: Declared in SoyDoc and referenced in template. We remove these from dataKeys so
+    for (TemplateParam param : node.getAllParams()) {
+      if (dataKeys.contains(param.name())) {
+        // Good: Declared and referenced in template. We remove these from dataKeys so
         // that at the end of the for-loop, dataKeys will only contain the keys that are referenced
         // but not declared in SoyDoc.
-        dataKeys.remove(param.key);
-      } else if (ipi.paramKeyToCalleesMultimap.containsKey(param.key) ||
+        dataKeys.remove(param.name());
+      } else if (ipi.paramKeyToCalleesMultimap.containsKey(param.name()) ||
                  ipi.mayHaveIndirectParamsInExternalCalls ||
                  ipi.mayHaveIndirectParamsInExternalDelCalls) {
         // Good: Declared in SoyDoc and either (a) used in a call that passes all data or (b) used
@@ -154,7 +139,7 @@ public class CheckSoyDocVisitor extends AbstractSoyNodeVisitor<Void> {
         // verify).
       } else {
         // Bad: Declared in SoyDoc but not referenced in template.
-        unusedParams.add(param.key);
+        unusedParams.add(param.name());
       }
     }
 
@@ -178,7 +163,6 @@ public class CheckSoyDocVisitor extends AbstractSoyNodeVisitor<Void> {
     }
   }
 
-
   @Override protected void visitCallNode(CallNode node) {
 
     if (node.isPassingAllData()) {
@@ -193,13 +177,10 @@ public class CheckSoyDocVisitor extends AbstractSoyNodeVisitor<Void> {
     visitChildren(node);
   }
 
-
   // -----------------------------------------------------------------------------------------------
   // Fallback implementation.
 
-
   @Override protected void visitSoyNode(SoyNode node) {
-
     if (node instanceof ExprHolderNode) {
       visitExprHolderHelper((ExprHolderNode) node);
     }
@@ -209,10 +190,8 @@ public class CheckSoyDocVisitor extends AbstractSoyNodeVisitor<Void> {
     }
   }
 
-
   // -----------------------------------------------------------------------------------------------
   // Helpers.
-
 
   /**
    * Helper for visiting a node that holds one or more expressions. For each expression, collects
@@ -220,12 +199,10 @@ public class CheckSoyDocVisitor extends AbstractSoyNodeVisitor<Void> {
    * @param exprHolder The node holding the expressions to be visited.
    */
   private void visitExprHolderHelper(ExprHolderNode exprHolder) {
-
     for (ExprUnion exprUnion : exprHolder.getAllExprUnions()) {
       getDataKeysInExprVisitor.exec(exprUnion.getExpr());
     }
   }
-
 
   /**
    * Helper for travering an expression tree and locating all the data keys (excluding local vars
@@ -236,7 +213,6 @@ public class CheckSoyDocVisitor extends AbstractSoyNodeVisitor<Void> {
    * in to the constructor. There is no return value.
    */
   private static class GetDataKeysInExprVisitor extends AbstractExprNodeVisitor<Void> {
-
     /** The set used to collect the data keys found. */
     private final Set<String> dataKeys;
 
@@ -249,16 +225,14 @@ public class CheckSoyDocVisitor extends AbstractSoyNodeVisitor<Void> {
 
     // ------ Implementations for specific nodes. ------
 
-    @Override protected void visitDataRefNode(DataRefNode node) {
+    @Override protected void visitVarRefNode(VarRefNode node) {
 
       // If not referencing injected or local var data, add the first key to the set of data keys
-      // referenced.
-      if (! node.isIjDataRef() && ! node.isLocalVarDataRef()) {
-        dataKeys.add(node.getFirstKey());
+      // referenced. (If it's an undeclared variable reference, then we assume it's a param
+      // for now.)
+      if (node.isPossibleParam()) {
+        dataKeys.add(node.getName());
       }
-
-      // Important: Must visit children since children may be expressions that contain data refs.
-      visitChildren(node);
     }
 
     // ------ Fallback implementation. ------
@@ -269,5 +243,4 @@ public class CheckSoyDocVisitor extends AbstractSoyNodeVisitor<Void> {
       }
     }
   }
-
 }

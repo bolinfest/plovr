@@ -20,7 +20,6 @@ import com.google.common.base.Preconditions;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.head.ScriptRuntime;
 import com.google.javascript.rhino.jstype.TernaryValue;
 
 /**
@@ -585,6 +584,14 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
         // (FALSE || x) => x
         // (TRUE && x) => x
         result = right;
+      } else {
+        // Left side may have side effects, but we know its boolean value.
+        // e.g. true_with_sideeffects || foo() => true_with_sideeffects, foo()
+        // or: false_with_sideeffects && foo() => false_with_sideeffects, foo()
+        // This, combined with PeepholeRemoveDeadCode, helps reduce expressions
+        // like "x() || false || z()".
+        n.detachChildren();
+        result = IR.comma(left, right);
       }
     }
 
@@ -593,7 +600,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
 
     if (result != null) {
       // Fold it!
-      n.removeChild(result);
+      n.detachChildren();
       parent.replaceChild(n, result);
       reportCodeChange();
 
@@ -706,8 +713,8 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
     // Unlike other operations, ADD operands are not always converted
     // to Number.
     if (opType == Token.ADD
-        && (NodeUtil.mayBeString(left, false)
-            || NodeUtil.mayBeString(right, false))) {
+        && (NodeUtil.mayBeString(left)
+            || NodeUtil.mayBeString(right))) {
       return null;
     }
 
@@ -730,13 +737,13 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
 
     switch (opType) {
       case Token.BITAND:
-        result = ScriptRuntime.toInt32(lval) & ScriptRuntime.toInt32(rval);
+        result = NodeUtil.toInt32(lval) & NodeUtil.toInt32(rval);
         break;
       case Token.BITOR:
-        result = ScriptRuntime.toInt32(lval) | ScriptRuntime.toInt32(rval);
+        result = NodeUtil.toInt32(lval) | NodeUtil.toInt32(rval);
         break;
       case Token.BITXOR:
-        result = ScriptRuntime.toInt32(lval) ^ ScriptRuntime.toInt32(rval);
+        result = NodeUtil.toInt32(lval) ^ NodeUtil.toInt32(rval);
         break;
       case Token.ADD:
         result = lval + rval;
@@ -830,7 +837,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
   private Node tryFoldAdd(Node node, Node left, Node right) {
     Preconditions.checkArgument(node.isAdd());
 
-    if (NodeUtil.mayBeString(node, true)) {
+    if (NodeUtil.mayBeString(node)) {
       if (NodeUtil.isLiteralValue(left, false) &&
           NodeUtil.isLiteralValue(right, false)) {
         // '6' + 7
@@ -862,22 +869,14 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
 
       // check ranges.  We do not do anything that would clip the double to
       // a 32-bit range, since the user likely does not intend that.
-      if (!(lval >= Integer.MIN_VALUE && lval <= Integer.MAX_VALUE)) {
+      if (lval < Integer.MIN_VALUE) {
         report(BITWISE_OPERAND_OUT_OF_RANGE, left);
         return n;
       }
-
       // only the lower 5 bits are used when shifting, so don't do anything
       // if the shift amount is outside [0,32)
       if (!(rval >= 0 && rval < 32)) {
         report(SHIFT_AMOUNT_OUT_OF_BOUNDS, right);
-        return n;
-      }
-
-      // Convert the numbers to ints
-      int lvalInt = (int) lval;
-      if (lvalInt != lval) {
-        report(FRACTIONAL_BITWISE_OPERAND, left);
         return n;
       }
 
@@ -889,17 +888,38 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
 
       switch (n.getType()) {
         case Token.LSH:
-          result = lvalInt << rvalInt;
-          break;
         case Token.RSH:
-          result = lvalInt >> rvalInt;
+          // Convert the numbers to ints
+          if (lval > Integer.MAX_VALUE) {
+            report(BITWISE_OPERAND_OUT_OF_RANGE, left);
+            return n;
+          }
+          int lvalInt = (int) lval;
+          if (lvalInt != lval) {
+            report(FRACTIONAL_BITWISE_OPERAND, left);
+            return n;
+          }
+          if (n.getType() == Token.LSH) {
+            result = lvalInt << rvalInt;
+          } else {
+            result = lvalInt >> rvalInt;
+          }
           break;
         case Token.URSH:
           // JavaScript handles zero shifts on signed numbers differently than
           // Java as an Java int can not represent the unsigned 32-bit number
           // where JavaScript can so use a long here.
-          long lvalLong = lvalInt & 0xffffffffL;
-          result = lvalLong >>> rvalInt;
+          long maxUint32 = 0xffffffffL;
+          if (lval > maxUint32) {
+            report(BITWISE_OPERAND_OUT_OF_RANGE, left);
+            return n;
+          }
+          long lvalLong = (long) lval;
+          if (lvalLong != lval) {
+            report(FRACTIONAL_BITWISE_OPERAND, left);
+            return n;
+          }
+          result = (lvalLong & maxUint32) >>> rvalInt;
           break;
         default:
           throw new AssertionError("Unknown shift operator: " +
@@ -1264,7 +1284,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
   }
 
   /** Returns whether this node must be coerced to a string. */
-  private boolean inForcedStringContext(Node n) {
+  private static boolean inForcedStringContext(Node n) {
     if (n.getParent().isGetElem() &&
         n.getParent().getLastChild() == n) {
       return true;
@@ -1371,24 +1391,11 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
     return n;
   }
 
-  private boolean isAssignmentTarget(Node n) {
-    Node parent = n.getParent();
-    if ((NodeUtil.isAssignmentOp(parent) && parent.getFirstChild() == n)
-        || parent.isInc()
-        || parent.isDec()) {
-      // If GETPROP/GETELEM is used as assignment target the object literal is
-      // acting as a temporary we can't fold it here:
-      //    "{a:x}.a += 1" is not "x += 1"
-      return true;
-    }
-    return false;
-  }
-
   private Node tryFoldArrayAccess(Node n, Node left, Node right) {
     // If GETPROP/GETELEM is used as assignment target the array literal is
     // acting as a temporary we can't fold it here:
     //    "[][0] += 1"
-    if (isAssignmentTarget(n)) {
+    if (NodeUtil.isAssignmentTarget(n)) {
       return n;
     }
 
@@ -1448,7 +1455,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
       return n;
     }
 
-    if (isAssignmentTarget(n)) {
+    if (NodeUtil.isAssignmentTarget(n)) {
       // If GETPROP/GETELEM is used as assignment target the object literal is
       // acting as a temporary we can't fold it here:
       //    "{a:x}.a += 1" is not "x += 1"

@@ -176,9 +176,9 @@ public abstract class SourceMapTestCase extends TestCase {
     return tokens;
   }
 
-  abstract protected SourceMap.Format getSourceMapFormat();
+  protected abstract SourceMap.Format getSourceMapFormat();
 
-  abstract protected SourceMapConsumer getSourceMapConsumer();
+  protected abstract SourceMapConsumer getSourceMapConsumer();
 
   protected void compileAndCheck(String js) {
     String inputName = "testcode";
@@ -189,7 +189,7 @@ public abstract class SourceMapTestCase extends TestCase {
   protected void check(
       String inputName, String input, String output,
       String sourceMapFileContent) {
-    Map<String, String> inputMap = new LinkedHashMap<String, String>();
+    Map<String, String> inputMap = new LinkedHashMap<>();
     inputMap.put(inputName, input);
     check(inputMap, output, sourceMapFileContent);
   }
@@ -256,8 +256,7 @@ public abstract class SourceMapTestCase extends TestCase {
       // Ensure that if the token name does not being with an 'STR' (meaning a
       // string) it has an original name.
       if (!inputToken.tokenName.startsWith("STR")) {
-        assertTrue("missing name for " + inputToken.tokenName,
-            !mapping.getIdentifier().isEmpty());
+        assertFalse("missing name for " + inputToken.tokenName, mapping.getIdentifier().isEmpty());
       }
 
       // Ensure that if the mapping has a name, it matches the token.

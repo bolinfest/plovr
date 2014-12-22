@@ -132,8 +132,26 @@ function testException() {
   assertEquals(goog.log.Level.SEVERE, handler.logRecord.getLevel());
   assertEquals('hello', handler.logRecord.getMessage());
   assertEquals(ex, handler.logRecord.getException());
-  assertEquals('Message: boo!',
-      handler.logRecord.getExceptionText().substring(0, 13));
+}
+
+
+function testMessageCallbacks() {
+  var root = goog.debug.LogManager.getRoot();
+  var handler = new TestHandler_();
+  var f = goog.bind(handler.onPublish, handler);
+  root.addHandler(f);
+  var logger = goog.log.getLogger('goog.bar.foo');
+  logger.setLevel(goog.log.Level.WARNING);
+
+  logger.log(goog.log.Level.INFO, function() {
+    throw "Message callback shouldn't be called when below logger's level!";
+  });
+  assertNull(handler.logRecord);
+
+  logger.log(goog.log.Level.WARNING, function() {return 'heya'});
+  assertNotNull(handler.logRecord);
+  assertEquals(goog.log.Level.WARNING, handler.logRecord.getLevel());
+  assertEquals('heya', handler.logRecord.getMessage());
 }
 
 

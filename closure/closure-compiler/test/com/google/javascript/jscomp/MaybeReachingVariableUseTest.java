@@ -58,7 +58,9 @@ public class MaybeReachingVariableUseTest extends TestCase {
 
   public void testLoops() {
     assertMatch("var x=0; while(a){ D:x=1 }; U:x");
-    assertMatch("var x=0; for(;;) { D:x=1 }; U:x");
+    assertNotMatch("var x=0; for(;;) { D:x=1 }; U:x");
+    assertNotMatch("var x=0; for(;true;) { D:x=1 }; U:x");
+    assertNotMatch("var x=0; while (true) { D:x=1 }; U:x");
 
     assertMatch("D:var x=1; while(a) { U:x }");
     assertMatch("D:var x=1; for(;;)  { U:x }");
@@ -121,7 +123,7 @@ public class MaybeReachingVariableUseTest extends TestCase {
   private void assertMatch(String src) {
     computeUseDef(src);
     Collection<Node> result = useDef.getUses("x", def);
-    assertTrue(result.size() == uses.size());
+    assertEquals(uses.size(), result.size());
     assertTrue(result.containsAll(uses));
   }
 

@@ -30,8 +30,10 @@ import com.google.template.soy.data.restricted.StringData;
  *
  * <p> Feel free to static import these helpers in your function implementation classes.
  *
- * @author Kai Huang
+ * @deprecated Simply use {@code *Data.forValue()} directly.
+ *
  */
+@Deprecated
 public class SoyJavaRuntimeFunctionUtils {
 
   private SoyJavaRuntimeFunctionUtils() {}

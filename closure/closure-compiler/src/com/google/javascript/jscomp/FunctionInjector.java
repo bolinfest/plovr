@@ -38,11 +38,19 @@ import java.util.Set;
 class FunctionInjector {
 
   private final AbstractCompiler compiler;
-  private final Supplier<String> safeNameIdSupplier;
   private final boolean allowDecomposition;
   private Set<String> knownConstants = Sets.newHashSet();
   private final boolean assumeStrictThis;
   private final boolean assumeMinimumCapture;
+  private final Supplier<String> safeNameIdSupplier;
+  private final Supplier<String> throwawayNameSupplier =
+      new Supplier<String>() {
+    private int nextId = 0;
+    @Override
+    public String get() {
+      return String.valueOf(nextId++);
+    }
+  };
 
   /**
    * @param allowDecomposition Whether an effort should be made to break down
@@ -82,11 +90,13 @@ class FunctionInjector {
   /** Holds a reference to the call node of a function call */
   static class Reference {
     final Node callNode;
+    final Scope scope;
     final JSModule module;
     final InliningMode mode;
 
-    Reference(Node callNode, JSModule module, InliningMode mode){
+    Reference(Node callNode, Scope scope, JSModule module, InliningMode mode) {
       this.callNode = callNode;
+      this.scope = scope;
       this.module = module;
       this.mode = mode;
     }
@@ -159,24 +169,22 @@ class FunctionInjector {
   }
 
   /**
-   * @param t  The traversal use to reach the call site.
-   * @param callNode The CALL node.
    * @param fnNode The function to evaluate for inlining.
    * @param needAliases A set of function parameter names that can not be
    *     used without aliasing. Returned by getUnsafeParameterNames().
-   * @param mode Inlining mode to be used.
    * @param referencesThis Whether fnNode contains references to its this
    *     object.
    * @param containsFunctions Whether fnNode contains inner functions.
    * @return Whether the inlining can occur.
    */
-  CanInlineResult canInlineReferenceToFunction(NodeTraversal t,
-      Node callNode, Node fnNode, Set<String> needAliases,
-      InliningMode mode, boolean referencesThis, boolean containsFunctions) {
+  CanInlineResult canInlineReferenceToFunction(
+      Reference ref, Node fnNode, Set<String> needAliases,
+      boolean referencesThis, boolean containsFunctions) {
     // TODO(johnlenz): This function takes too many parameter, without
     // context.  Modify the API to take a structure describing the function.
 
     // Allow direct function calls or "fn.call" style calls.
+    Node callNode = ref.callNode;
     if (!isSupportedCallType(callNode)) {
       return CanInlineResult.NO;
     }
@@ -186,7 +194,7 @@ class FunctionInjector {
     // a memory leak.  This isn't a problem in the global scope as those values
     // last until explicitly cleared.
     if (containsFunctions) {
-      if (!assumeMinimumCapture && !t.inGlobalScope()) {
+      if (!assumeMinimumCapture && !ref.scope.isGlobal()) {
         // TODO(johnlenz): Allow inlining into any scope without local names or
         // inner functions.
         return CanInlineResult.NO;
@@ -204,11 +212,11 @@ class FunctionInjector {
       return CanInlineResult.NO;
     }
 
-    if (mode == InliningMode.DIRECT) {
-      return canInlineReferenceDirectly(callNode, fnNode);
+    if (ref.mode == InliningMode.DIRECT) {
+      return canInlineReferenceDirectly(ref, fnNode, needAliases);
     } else {
       return canInlineReferenceAsStatementBlock(
-          t, callNode, fnNode, needAliases);
+          ref, fnNode, needAliases);
     }
   }
 
@@ -237,14 +245,13 @@ class FunctionInjector {
   /**
    * Inline a function into the call site.
    */
-  Node inline(
-      Node callNode, String fnName, Node fnNode, InliningMode mode) {
+  Node inline(Reference ref, String fnName, Node fnNode) {
     Preconditions.checkState(compiler.getLifeCycleStage().isNormalized());
 
-    if (mode == InliningMode.DIRECT) {
-      return inlineReturnValue(callNode, fnNode);
+    if (ref.mode == InliningMode.DIRECT) {
+      return inlineReturnValue(ref, fnNode);
     } else {
-      return inlineFunction(callNode, fnNode, fnName);
+      return inlineFunction(ref, fnNode, fnName);
     }
   }
 
@@ -253,7 +260,8 @@ class FunctionInjector {
    * canInlineReferenceDirectly into the call site, replacing only the CALL
    * node.
    */
-  private Node inlineReturnValue(Node callNode, Node fnNode) {
+  private Node inlineReturnValue(Reference ref, Node fnNode) {
+    Node callNode = ref.callNode;
     Node block = fnNode.getLastChild();
     Node callParentNode = callNode.getParent();
 
@@ -289,7 +297,7 @@ class FunctionInjector {
   /**
    * Supported call site types.
    */
-  private enum CallSiteType {
+  private static enum CallSiteType {
 
     /**
      * Used for a call site for which there does not exist a method
@@ -297,7 +305,7 @@ class FunctionInjector {
      */
     UNSUPPORTED() {
       @Override
-      public void prepare(FunctionInjector injector, Node callNode) {
+      public void prepare(FunctionInjector injector, Reference ref) {
         throw new IllegalStateException("unexpected");
       }
     },
@@ -309,7 +317,7 @@ class FunctionInjector {
      */
     SIMPLE_CALL() {
       @Override
-      public void prepare(FunctionInjector injector, Node callNode) {
+      public void prepare(FunctionInjector injector, Reference ref) {
         // Nothing to do.
       }
     },
@@ -324,7 +332,7 @@ class FunctionInjector {
      */
     SIMPLE_ASSIGNMENT() {
       @Override
-      public void prepare(FunctionInjector injector, Node callNode) {
+      public void prepare(FunctionInjector injector, Reference ref) {
         // Nothing to do.
       }
     },
@@ -339,7 +347,7 @@ class FunctionInjector {
      */
     VAR_DECL_SIMPLE_ASSIGNMENT() {
       @Override
-      public void prepare(FunctionInjector injector, Node callNode) {
+      public void prepare(FunctionInjector injector, Reference ref) {
         // Nothing to do.
       }
     },
@@ -358,13 +366,14 @@ class FunctionInjector {
      */
     EXPRESSION() {
       @Override
-      public void prepare(FunctionInjector injector, Node callNode) {
-        injector.getDecomposer().moveExpression(callNode);
+      public void prepare(FunctionInjector injector, Reference ref) {
+        Node callNode = ref.callNode;
+        injector.getDecomposer(ref.scope).moveExpression(callNode);
 
         // Reclassify after move
-        CallSiteType callSiteType = injector.classifyCallSite(callNode);
+        CallSiteType callSiteType = injector.classifyCallSite(ref);
         Preconditions.checkState(this != callSiteType);
-        callSiteType.prepare(injector, callNode);
+        callSiteType.prepare(injector, ref);
       }
     },
 
@@ -375,23 +384,30 @@ class FunctionInjector {
      */
     DECOMPOSABLE_EXPRESSION() {
       @Override
-      public void prepare(FunctionInjector injector, Node callNode) {
-        injector.getDecomposer().maybeExposeExpression(callNode);
+      public void prepare(FunctionInjector injector, Reference ref) {
+        Node callNode = ref.callNode;
+        injector.getDecomposer(ref.scope).maybeExposeExpression(callNode);
 
         // Reclassify after decomposition
-        CallSiteType callSiteType = injector.classifyCallSite(callNode);
+        CallSiteType callSiteType = injector.classifyCallSite(ref);
         Preconditions.checkState(this != callSiteType);
-        callSiteType.prepare(injector, callNode);
+        callSiteType.prepare(injector, ref);
       }
     };
 
-    public abstract void prepare(FunctionInjector injector, Node callNode);
+    public abstract void prepare(FunctionInjector injector, Reference ref);
   }
 
   /**
    * Determine which, if any, of the supported types the call site is.
+   *
+   * Constant vars are treated differently so that we don't break their
+   * const-ness when we decompose the expression. Once the CONSTANT_VAR
+   * annotation is used everywhere instead of coding conventions, we should just
+   * teach this pass how to remove the annotation.
    */
-  private CallSiteType classifyCallSite(Node callNode) {
+  private CallSiteType classifyCallSite(Reference ref) {
+    Node callNode = ref.callNode;
     Node parent = callNode.getParent();
     Node grandParent = parent.getParent();
 
@@ -402,10 +418,14 @@ class FunctionInjector {
     } else if (NodeUtil.isExprAssign(grandParent)
         && !NodeUtil.isVarOrSimpleAssignLhs(callNode, parent)
         && parent.getFirstChild().isName()
+        // TODO(nicksantos): Remove this once everyone is using
+        // the CONSTANT_VAR annotation. We know how to remove that.
         && !NodeUtil.isConstantName(parent.getFirstChild())) {
       // This is a simple assignment.  Example: "x = foo();"
       return CallSiteType.SIMPLE_ASSIGNMENT;
     } else if (parent.isName()
+        // TODO(nicksantos): Remove this once everyone is using
+        // the CONSTANT_VAR annotation.
         && !NodeUtil.isConstantName(parent)
         && grandParent.isVar()
         && grandParent.hasOneChild()) {
@@ -417,7 +437,7 @@ class FunctionInjector {
       Node expressionRoot = ExpressionDecomposer.findExpressionRoot(callNode);
       if (expressionRoot != null) {
         ExpressionDecomposer decomposer = new ExpressionDecomposer(
-            compiler, safeNameIdSupplier, knownConstants);
+            compiler, safeNameIdSupplier, knownConstants, ref.scope);
         DecompositionType type = decomposer.canExposeExpression(
             callNode);
         if (type == DecompositionType.MOVABLE) {
@@ -433,18 +453,18 @@ class FunctionInjector {
     return CallSiteType.UNSUPPORTED;
   }
 
-  private ExpressionDecomposer getDecomposer() {
+  private ExpressionDecomposer getDecomposer(Scope scope) {
     return new ExpressionDecomposer(
-        compiler, safeNameIdSupplier, knownConstants);
+        compiler, safeNameIdSupplier, knownConstants, scope);
   }
 
   /**
    * If required, rewrite the statement containing the call expression.
    * @see ExpressionDecomposer#canExposeExpression
    */
-  void maybePrepareCall(Node callNode) {
-    CallSiteType callSiteType = classifyCallSite(callNode);
-    callSiteType.prepare(this, callNode);
+  void maybePrepareCall(Reference ref) {
+    CallSiteType callSiteType = classifyCallSite(ref);
+    callSiteType.prepare(this, ref);
   }
 
   /**
@@ -453,13 +473,14 @@ class FunctionInjector {
    * parent expression.
    */
   private Node inlineFunction(
-      Node callNode, Node fnNode, String fnName) {
+      Reference ref, Node fnNode, String fnName) {
+    Node callNode = ref.callNode;
     Node parent = callNode.getParent();
     Node grandParent = parent.getParent();
 
     // TODO(johnlenz): Consider storing the callSite classification in the
     // reference object and passing it in here.
-    CallSiteType callSiteType = classifyCallSite(callNode);
+    CallSiteType callSiteType = classifyCallSite(ref);
     Preconditions.checkArgument(callSiteType != CallSiteType.UNSUPPORTED);
 
     boolean isCallInLoop = NodeUtil.isWithinLoop(callNode);
@@ -472,10 +493,12 @@ class FunctionInjector {
     switch (callSiteType) {
       case SIMPLE_ASSIGNMENT:
         resultName = parent.getFirstChild().getString();
+        removeConstantVarAnnotation(ref.scope, resultName);
         break;
 
       case VAR_DECL_SIMPLE_ASSIGNMENT:
         resultName = parent.getString();
+        removeConstantVarAnnotation(ref.scope, resultName);
         break;
 
       case SIMPLE_CALL:
@@ -535,11 +558,21 @@ class FunctionInjector {
     return newBlock;
   }
 
+  private static void removeConstantVarAnnotation(Scope scope, String name) {
+    Scope.Var var = scope.getVar(name);
+    Node nameNode = var == null ? null : var.getNameNode();
+    if (nameNode == null) return;
+
+    if (nameNode.getBooleanProp(Node.IS_CONSTANT_VAR)) {
+      nameNode.removeProp(Node.IS_CONSTANT_VAR);
+    }
+  }
+
   /**
    * Checks if the given function matches the criteria for an inlinable
    * function, and if so, adds it to our set of inlinable functions.
    */
-  boolean isDirectCallNodeReplacementPossible(Node fnNode) {
+  static boolean isDirectCallNodeReplacementPossible(Node fnNode) {
     // Only inline single-statement functions
     Node block = NodeUtil.getFunctionBody(fnNode);
 
@@ -577,8 +610,8 @@ class FunctionInjector {
    * </pre>
    */
   private CanInlineResult canInlineReferenceAsStatementBlock(
-      NodeTraversal t, Node callNode, Node fnNode, Set<String> namesToAlias) {
-    CallSiteType callSiteType = classifyCallSite(callNode);
+      Reference ref, Node fnNode, Set<String> namesToAlias) {
+    CallSiteType callSiteType = classifyCallSite(ref);
     if (callSiteType == CallSiteType.UNSUPPORTED) {
       return CanInlineResult.NO;
     }
@@ -590,7 +623,7 @@ class FunctionInjector {
     }
 
     if (!callMeetsBlockInliningRequirements(
-            t, callNode, fnNode, namesToAlias)) {
+            ref, fnNode, namesToAlias)) {
       return CanInlineResult.NO;
     }
 
@@ -608,7 +641,7 @@ class FunctionInjector {
    * inlining would introduce new globals.
    */
   private boolean callMeetsBlockInliningRequirements(
-      NodeTraversal t, Node callNode, final Node fnNode,
+      Reference ref, final Node fnNode,
       Set<String> namesToAlias) {
     final boolean assumeMinimumCapture = this.assumeMinimumCapture;
 
@@ -627,8 +660,8 @@ class FunctionInjector {
         new NodeUtil.MatchDeclaration(),
         new NodeUtil.MatchShallowStatement());
     boolean forbidTemps = false;
-    if (!t.inGlobalScope()) {
-      Node fnCaller = t.getScopeRoot();
+    if (!ref.scope.isGlobal()) {
+      Node fnCaller = ref.scope.getRootNode();
       Node fnCallerBody = fnCaller.getLastChild();
 
       // Don't allow any new vars into a scope that contains eval or one
@@ -658,7 +691,7 @@ class FunctionInjector {
     if (forbidTemps) {
       Map<String, Node> args =
           FunctionArgumentInjector.getFunctionCallParameterMap(
-              fnNode, callNode, this.safeNameIdSupplier);
+              fnNode, ref.callNode, this.safeNameIdSupplier);
       boolean hasArgs = !args.isEmpty();
       if (hasArgs) {
         // Limit the inlining
@@ -687,14 +720,13 @@ class FunctionInjector {
    * </pre>
    */
   private CanInlineResult canInlineReferenceDirectly(
-      Node callNode, Node fnNode) {
+      Reference ref, Node fnNode, Set<String> namesToAlias) {
     if (!isDirectCallNodeReplacementPossible(fnNode)) {
       return CanInlineResult.NO;
     }
 
-    Node block = fnNode.getLastChild();
-
     // CALL NODE: [ NAME, ARG1, ARG2, ... ]
+    Node callNode = ref.callNode;
     Node cArg = callNode.getFirstChild().getNext();
 
     // Functions called via 'call' and 'apply' have a this-object as
@@ -713,33 +745,17 @@ class FunctionInjector {
       }
     }
 
-    // FUNCTION NODE -> LP NODE: [ ARG1, ARG2, ... ]
-    Node fnParam = NodeUtil.getFunctionParameters(fnNode).getFirstChild();
-    while (cArg != null || fnParam != null) {
-      // For each named parameter check if a mutable argument use more than one.
-      if (fnParam != null) {
-        if (cArg != null) {
-          // Check for arguments that are evaluated more than once.
-          // Note: Unlike block inlining, there it is not possible that a
-          // parameter reference will be in a loop.
-          if (NodeUtil.mayEffectMutableState(cArg, compiler)
-              && NodeUtil.getNameReferenceCount(
-                  block, fnParam.getString()) > 1) {
-            return CanInlineResult.NO;
-          }
-        }
-
-        // Move to the next name.
-        fnParam = fnParam.getNext();
-      }
-
-      // For every call argument check for side-effects, even if there
-      // isn't a named parameter to match.
-      if (cArg != null) {
-        if (NodeUtil.mayHaveSideEffects(cArg, compiler)) {
-          return CanInlineResult.NO;
-        }
-        cArg = cArg.getNext();
+    Map<String, Node> args =
+        FunctionArgumentInjector.getFunctionCallParameterMap(
+            fnNode, callNode, this.throwawayNameSupplier);
+    boolean hasArgs = !args.isEmpty();
+    if (hasArgs) {
+      // Limit the inlining
+      Set<String> allNamesToAlias = Sets.newHashSet(namesToAlias);
+      FunctionArgumentInjector.maybeAddTempsForCallArguments(
+          fnNode, args, allNamesToAlias, compiler.getCodingConvention());
+      if (!allNamesToAlias.isEmpty()) {
+        return CanInlineResult.NO;
       }
     }
 
@@ -811,7 +827,7 @@ class FunctionInjector {
   /**
    * @return Whether inlining will lower cost.
    */
-  private boolean doesLowerCost(
+  private static boolean doesLowerCost(
       Node fnNode, int callCost,
       int directInlines, int costDeltaDirect,
       int blockInlines, int costDeltaBlock,

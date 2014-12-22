@@ -32,15 +32,13 @@ import com.google.javascript.rhino.jstype.TernaryValue;
  */
 class CheckUnreachableCode implements ScopedCallback {
 
-  static final DiagnosticType UNREACHABLE_CODE = DiagnosticType.error(
+  static final DiagnosticType UNREACHABLE_CODE = DiagnosticType.warning(
       "JSC_UNREACHABLE_CODE", "unreachable code");
 
   private final AbstractCompiler compiler;
-  private final CheckLevel level;
 
-  CheckUnreachableCode(AbstractCompiler compiler, CheckLevel level) {
+  CheckUnreachableCode(AbstractCompiler compiler) {
     this.compiler = compiler;
-    this.level = level;
   }
 
   @Override
@@ -60,10 +58,10 @@ class CheckUnreachableCode implements ScopedCallback {
       if (n.getLineno() != -1 &&
           // Allow spurious semi-colons and spurious breaks.
           !n.isEmpty() && !n.isBreak()) {
-        compiler.report(t.makeError(n, level, UNREACHABLE_CODE));
+        compiler.report(t.makeError(n, UNREACHABLE_CODE));
         // From now on, we are going to assume the user fixed the error and not
         // give more warning related to code section reachable from this node.
-        new GraphReachability<Node, ControlFlowGraph.Branch>(
+        new GraphReachability<>(
             t.getControlFlowGraph()).recompute(n);
 
         // Saves time by not traversing children.
@@ -74,7 +72,7 @@ class CheckUnreachableCode implements ScopedCallback {
   }
 
   private void initScope(ControlFlowGraph<Node> controlFlowGraph) {
-    new GraphReachability<Node, ControlFlowGraph.Branch>(
+    new GraphReachability<>(
         controlFlowGraph, new ReachablePredicate()).compute(
             controlFlowGraph.getEntry().getValue());
   }
@@ -87,7 +85,7 @@ class CheckUnreachableCode implements ScopedCallback {
   public void visit(NodeTraversal t, Node n, Node parent) {
   }
 
-  private final class ReachablePredicate implements
+  private static final class ReachablePredicate implements
       Predicate<EdgeTuple<Node, ControlFlowGraph.Branch>> {
 
     @Override

@@ -16,8 +16,8 @@
 
 package com.google.template.soy.soytree;
 
-import com.google.template.soy.base.SoyFileKind;
 import com.google.template.soy.base.SoySyntaxException;
+import com.google.template.soy.base.internal.SoyFileKind;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 import com.google.template.soy.soytree.TemplateNode.SoyFileHeaderInfo;
 
@@ -27,7 +27,6 @@ import junit.framework.TestCase;
 /**
  * Unit tests for AbstractSoyNodeVisitor.
  *
- * @author Kai Huang
  */
 public class AbstractSoyNodeVisitorTest extends TestCase {
 
@@ -42,13 +41,15 @@ public class AbstractSoyNodeVisitorTest extends TestCase {
     SoyFileHeaderInfo testSoyFileHeaderInfo = new SoyFileHeaderInfo("testNs");
 
     TemplateNode template1 =
-        new TemplateBasicNode(0, testSoyFileHeaderInfo, "name=\".foo\"", "/** @param goo */");
+        (new TemplateBasicNodeBuilder(testSoyFileHeaderInfo))
+            .setId(0).setCmdText("name=\".foo\"").setSoyDoc("/** @param goo */").build();
     soyFile.addChild(template1);
     template1.addChild(new PrintNode(0, true, "$goo", null));
     template1.addChild(new PrintNode(0, true, "2 + 2", null));
 
     TemplateNode template2 =
-        new TemplateBasicNode(0, testSoyFileHeaderInfo, "name=\".moo\"", null);
+        (new TemplateBasicNodeBuilder(testSoyFileHeaderInfo))
+            .setId(0).setCmdText("name=\".moo\"").setSoyDoc(null).build();
     soyFile.addChild(template2);
     template2.addChild(new PrintNode(0, true, "'moo'", null));
 

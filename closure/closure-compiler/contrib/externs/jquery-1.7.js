@@ -928,8 +928,9 @@ jQuery.prototype.fadeTo = function(duration, opacity, arg3, callback) {};
 jQuery.prototype.fadeToggle = function(duration, easing, callback) {};
 
 /**
- * @param {(jQuerySelector|function(number)|Element|jQuery)} arg1
+ * @param {(jQuerySelector|function(number,Element)|Element|jQuery)} arg1
  * @return {!jQuery}
+ * @see http://api.jquery.com/filter/
  */
 jQuery.prototype.filter = function(arg1) {};
 
@@ -1017,17 +1018,21 @@ $.get = function(url, data, success, dataType) {};
 
 /**
  * @param {string} url
- * @param {(Object.<string,*>|function(string,string,jQuery.jqXHR))=} data
- * @param {function(string,string,jQuery.jqXHR)=} success
+ * @param {(Object.<string,*>|
+ *     function(Object.<string,*>,string,jQuery.jqXHR))=} data
+ * @param {function(Object.<string,*>,string,jQuery.jqXHR)=} success
  * @return {jQuery.jqXHR}
+ * @see http://api.jquery.com/jquery.getjson/#jQuery-getJSON-url-data-success
  */
 jQuery.getJSON = function(url, data, success) {};
 
 /**
  * @param {string} url
- * @param {(Object.<string,*>|function(string,string,jQuery.jqXHR))=} data
- * @param {function(string,string,jQuery.jqXHR)=} success
+ * @param {(Object.<string,*>|
+ *     function(Object.<string,*>,string,jQuery.jqXHR))=} data
+ * @param {function(Object.<string,*>,string,jQuery.jqXHR)=} success
  * @return {jQuery.jqXHR}
+ * @see http://api.jquery.com/jquery.getjson/#jQuery-getJSON-url-data-success
  */
 $.getJSON = function(url, data, success) {};
 
@@ -1581,7 +1586,7 @@ jQuery.now = function() {};
 $.now = function() {};
 
 /**
- * @param {(string|Object.<string,*>)} arg1
+ * @param {(string|Object.<string,*>)=} arg1
  * @param {(string|function(!jQuery.event=))=} selector
  * @param {function(!jQuery.event=)=} handler
  * @return {!jQuery}
@@ -2006,28 +2011,31 @@ jQuery.prototype.size = function() {};
 jQuery.prototype.slice = function(start, end) {};
 
 /**
- * @param {(string|number|function())=} duration
- * @param {(function()|string)=} arg2
- * @param {function()=} callback
+ * @param {(Object.<string,*>|string|number)=} optionsOrDuration
+ * @param {(function()|string)=} completeOrEasing
+ * @param {function()=} complete
  * @return {!jQuery}
  */
-jQuery.prototype.slideDown = function(duration, arg2, callback) {};
+jQuery.prototype.slideDown =
+    function(optionsOrDuration, completeOrEasing, complete) {};
 
 /**
- * @param {(string|number|function())=} duration
- * @param {(function()|string)=} arg2
- * @param {function()=} callback
+ * @param {(Object.<string,*>|string|number)=} optionsOrDuration
+ * @param {(function()|string)=} completeOrEasing
+ * @param {function()=} complete
  * @return {!jQuery}
  */
-jQuery.prototype.slideToggle = function(duration, arg2, callback) {};
+jQuery.prototype.slideToggle =
+    function(optionsOrDuration, completeOrEasing, complete) {};
 
 /**
- * @param {(string|number|function())=} duration
- * @param {(function()|string)=} arg2
- * @param {function()=} callback
+ * @param {(Object.<string,*>|string|number)=} optionsOrDuration
+ * @param {(function()|string)=} completeOrEasing
+ * @param {function()=} complete
  * @return {!jQuery}
  */
-jQuery.prototype.slideUp = function(duration, arg2, callback) {};
+jQuery.prototype.slideUp =
+    function(optionsOrDuration, completeOrEasing, complete) {};
 
 /**
  * @param {(boolean|string)=} arg1
@@ -2177,7 +2185,7 @@ jQuery.prototype.toggleClass = function(arg1, flag) {};
 jQuery.prototype.trigger = function(arg1, var_args) {};
 
 /**
- * @param {string} eventType
+ * @param {string|jQuery.event} eventType
  * @param {Array.<*>=} extraParameters
  * @return {*}
  */

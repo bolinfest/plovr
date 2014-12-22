@@ -25,7 +25,6 @@ import java.util.Iterator;
 /**
  * Represents a full set of messages in some language/locale.
  *
- * @author Kai Huang
  */
 public interface SoyMsgBundle extends Iterable<SoyMsg> {
 
@@ -63,12 +62,12 @@ public interface SoyMsgBundle extends Iterable<SoyMsg> {
   // Null object.
 
 
-  /** Null object for SoyMsgBundle. */
+  /** Null object for SoyMsgBundle, assumes English Locale. */
   public static SoyMsgBundle EMPTY =
       new SoyMsgBundle() {
 
         @Override public String getLocaleString() {
-          return null;
+          return "en";
         }
 
         @Override public SoyMsg getMsg(long msgId) {

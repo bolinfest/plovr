@@ -43,6 +43,18 @@ DeviceOrientationEvent.prototype.gamma;
 DeviceOrientationEvent.prototype.absolute;
 
 /**
+ * @type {?number}
+ * @see https://developer.apple.com/library/safari/documentation/SafariDOMAdditions/Reference/DeviceOrientationEventClassRef/DeviceOrientationEvent/DeviceOrientationEvent.html#//apple_ref/javascript/instp/DeviceOrientationEvent/webkitCompassAccuracy
+ */
+DeviceOrientationEvent.prototype.webkitCompassAccuracy;
+
+/**
+ * @type {?number}
+ * @see https://developer.apple.com/library/safari/documentation/SafariDOMAdditions/Reference/DeviceOrientationEventClassRef/DeviceOrientationEvent/DeviceOrientationEvent.html#//apple_ref/javascript/instp/DeviceOrientationEvent/webkitCompassHeading
+ */
+DeviceOrientationEvent.prototype.webkitCompassHeading;
+
+/**
  * @constructor
  */
 function DeviceAcceleration() {}
@@ -62,13 +74,13 @@ DeviceAcceleration.prototype.z;
 function DeviceRotationRate() {}
 
 /** @type {?number} */
-DeviceOrientationEvent.prototype.alpha;
+DeviceRotationRate.prototype.alpha;
 
 /** @type {?number} */
-DeviceOrientationEvent.prototype.beta;
+DeviceRotationRate.prototype.beta;
 
 /** @type {?number} */
-DeviceOrientationEvent.prototype.gamma;
+DeviceRotationRate.prototype.gamma;
 
 /**
  * @constructor

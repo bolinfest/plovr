@@ -26,13 +26,16 @@ public class GenerateExportsTest extends CompilerTestCase {
       "function google_exportSymbol(a, b) {}; " +
       "goog.exportProperty = function(a, b, c) {}; ";
 
+  private boolean allowNonGlobalExports = true;
+
   public GenerateExportsTest() {
     super(EXTERNS);
+    compareJsDoc = false;
   }
 
   @Override
   protected CompilerPass getProcessor(Compiler compiler) {
-    return new GenerateExports(compiler,
+    return new GenerateExports(compiler, allowNonGlobalExports,
         "google_exportSymbol", "goog.exportProperty");
   }
 
@@ -46,6 +49,14 @@ public class GenerateExportsTest extends CompilerTestCase {
   public void setUp() throws Exception {
     super.setUp();
     super.enableLineNumberCheck(false);
+
+    this.allowNonGlobalExports  = true;
+  }
+
+  @Override
+  protected void testExternChanges(String input, String expectedExtern) {
+    this.enableCompareAsTree(false);
+    super.testExternChanges(input, expectedExtern);
   }
 
   public void testExportSymbol() {
@@ -86,8 +97,14 @@ public class GenerateExportsTest extends CompilerTestCase {
    * @see FindExportableNodes
    */
   public void testNestedVarAssign() {
+    this.allowNonGlobalExports = false;
     test("var BAR;\n/** @export */var FOO = BAR = 5",
          null, FindExportableNodes.NON_GLOBAL_ERROR);
+
+    this.allowNonGlobalExports = true;
+    test("var BAR;\n/** @export */var FOO = BAR = 5",
+        null, FindExportableNodes.EXPORT_ANNOTATION_NOT_ALLOWED);
+
   }
 
   /**
@@ -95,12 +112,28 @@ public class GenerateExportsTest extends CompilerTestCase {
    * @see FindExportableNodes
    */
   public void testNestedAssign() {
+    this.allowNonGlobalExports = false;
     test("var BAR;var FOO = {};\n/** @export */FOO.test = BAR = 5",
          null, FindExportableNodes.NON_GLOBAL_ERROR);
+
+    this.allowNonGlobalExports = true;
+    test("var BAR;var FOO = {};\n/** @export */FOO.test = BAR = 5",
+         null, FindExportableNodes.EXPORT_ANNOTATION_NOT_ALLOWED);
   }
 
-  public void testNonGlobalScopeExport() {
+  public void testNonGlobalScopeExport1() {
+    this.allowNonGlobalExports = false;
     test("(function() { /** @export */var FOO = 5 })()",
+         null, FindExportableNodes.NON_GLOBAL_ERROR);
+
+    this.allowNonGlobalExports = true;
+    test("(function() { /** @export */var FOO = 5 })()",
+        null, FindExportableNodes.EXPORT_ANNOTATION_NOT_ALLOWED);
+  }
+
+  public void testNonGlobalScopeExport2() {
+    this.allowNonGlobalExports = false;
+    test("var x = {/** @export */ A:function() {}}",
          null, FindExportableNodes.NON_GLOBAL_ERROR);
   }
 
@@ -122,4 +155,47 @@ public class GenerateExportsTest extends CompilerTestCase {
          "/** @enum {string}\n @export */ var E = {A:1, B:2};" +
          "google_exportSymbol('E', E);");
   }
+
+  public void testExportObjectLit1() {
+    allowExternsChanges(true);
+    String code = "var E = {/** @export */ A:1, B:2};";
+    testSame(code);
+    testExternChanges(code, "Object.prototype.A;");
+  }
+
+  public void testExportObjectLit2() {
+    allowExternsChanges(true);
+    String code = "var E = {/** @export */ get A() { return 1 }, B:2};";
+    testSame(code);
+    testExternChanges(code, "Object.prototype.A;");
+  }
+
+  public void testExportObjectLit3() {
+    allowExternsChanges(true);
+    String code = "var E = {/** @export */ set A(v) {}, B:2};";
+    testSame(code);
+    testExternChanges(code, "Object.prototype.A;");
+  }
+
+  public void testExportObjectLit4() {
+    allowExternsChanges(true);
+    String code = "var E = {/** @export */ A:function() {}, B:2};";
+    testSame(code);
+    testExternChanges(code, "Object.prototype.A;");
+  }
+
+  public void testExportClassMember1() {
+    allowExternsChanges(true);
+    String code = "var E = function() { /** @export */ this.foo = 1; };";
+    testSame(code);
+    testExternChanges(code, "Object.prototype.foo;");
+  }
+
+  public void testExportClassMemberStub() {
+    allowExternsChanges(true);
+    String code = "var E = function() { /** @export */ this.foo; };";
+    testSame(code);
+    testExternChanges(code, "Object.prototype.foo;");
+  }
+
 }

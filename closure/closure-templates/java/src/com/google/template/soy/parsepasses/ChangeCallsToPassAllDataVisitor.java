@@ -17,10 +17,8 @@
 package com.google.template.soy.parsepasses;
 
 import com.google.common.base.Preconditions;
-import com.google.template.soy.exprtree.DataRefNode;
 import com.google.template.soy.exprtree.ExprRootNode;
-import com.google.template.soy.sharedpasses.MarkLocalVarDataRefsVisitor;
-import com.google.template.soy.sharedpasses.UnmarkLocalVarDataRefsVisitor;
+import com.google.template.soy.exprtree.VarRefNode;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.CallBasicNode;
 import com.google.template.soy.soytree.CallDelegateNode;
@@ -31,9 +29,7 @@ import com.google.template.soy.soytree.SoyFileNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.SoyNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
-import com.google.template.soy.soytree.SoyNode.SyntaxVersion;
 import com.google.template.soy.soytree.TemplateNode;
-
 
 /**
  * Visitor to change {@code call}s to use {@code data="all"} whenever possible.
@@ -43,7 +39,6 @@ import com.google.template.soy.soytree.TemplateNode;
  * <p> This visitor must be called on a SoyFileSetNode, SoyFileNode, or TemplateNode (i.e. template
  * or ancestor of a template).
  *
- * @author Kai Huang
  */
 public class ChangeCallsToPassAllDataVisitor extends AbstractSoyNodeVisitor<Void> {
 
@@ -53,12 +48,7 @@ public class ChangeCallsToPassAllDataVisitor extends AbstractSoyNodeVisitor<Void
     Preconditions.checkArgument(
         node instanceof SoyFileSetNode || node instanceof SoyFileNode ||
         node instanceof TemplateNode);
-
-    (new MarkLocalVarDataRefsVisitor()).exec(node);
-
     visit(node);
-
-    (new UnmarkLocalVarDataRefsVisitor()).exec(node);
     return null;
   }
 
@@ -91,15 +81,15 @@ public class ChangeCallsToPassAllDataVisitor extends AbstractSoyNodeVisitor<Void
         return;
       }
       CallParamValueNode valueParam = (CallParamValueNode) param;
-      if (! ("$" + valueParam.getKey()).equals(valueParam.getValueExprText())) {
+      if (!("$" + valueParam.getKey()).equals(valueParam.getValueExprText())) {
         return;
       }
       ExprRootNode<?> valueExprRoot = ((CallParamValueNode) param).getValueExprUnion().getExpr();
       if (valueExprRoot == null) {
         return;
       }
-      DataRefNode valueDataRef = (DataRefNode) valueExprRoot.getChild(0);
-      if (valueDataRef.isLocalVarDataRef() || valueDataRef.isIjDataRef()) {
+      VarRefNode valueDataRef = (VarRefNode) valueExprRoot.getChild(0);
+      if (valueDataRef.isLocalVar() || valueDataRef.isInjected()) {
         return;
       }
     }
@@ -109,14 +99,13 @@ public class ChangeCallsToPassAllDataVisitor extends AbstractSoyNodeVisitor<Void
     if (node instanceof CallBasicNode) {
       CallBasicNode nodeCast = (CallBasicNode) node;
       newCallNode = new CallBasicNode(
-          node.getId(), nodeCast.getCalleeName(), nodeCast.getSrcCalleeName(), false, true,
-          true, null, node.getUserSuppliedPlaceholderName(), SyntaxVersion.V2,
-          node.getEscapingDirectiveNames());
+          node.getId(), nodeCast.getCalleeName(), nodeCast.getSrcCalleeName(), false, false, true,
+          true, null, node.getUserSuppliedPhName(), null, node.getEscapingDirectiveNames());
     } else {
       CallDelegateNode nodeCast = (CallDelegateNode) node;
       newCallNode = new CallDelegateNode(
           node.getId(), nodeCast.getDelCalleeName(), nodeCast.getDelCalleeVariantExpr(), false,
-          nodeCast.allowsEmptyDefault(), true, true, null, node.getUserSuppliedPlaceholderName(),
+          nodeCast.allowsEmptyDefault(), true, true, null, node.getUserSuppliedPhName(),
           node.getEscapingDirectiveNames());
     }
     node.getParent().replaceChild(node, newCallNode);

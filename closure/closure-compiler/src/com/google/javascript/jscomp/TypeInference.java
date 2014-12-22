@@ -28,8 +28,11 @@ import static com.google.javascript.rhino.jstype.JSTypeNative.UNKNOWN_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.VOID_TYPE;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.CodingConvention.AssertionFunctionSpec;
 import com.google.javascript.jscomp.ControlFlowGraph.Branch;
 import com.google.javascript.jscomp.Scope.Var;
@@ -40,6 +43,7 @@ import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.BooleanLiteralSet;
+import com.google.javascript.rhino.jstype.FunctionBuilder;
 import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
@@ -53,9 +57,12 @@ import com.google.javascript.rhino.jstype.TemplateTypeMapReplacer;
 import com.google.javascript.rhino.jstype.UnionType;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 
 /**
  * Type inference within a script node or a function body, using the data-flow
@@ -523,28 +530,67 @@ class TypeInference
       case Token.NAME:
         String varName = left.getString();
         Var var = syntacticScope.getVar(varName);
+        JSType varType = var == null ? null : var.getType();
+        boolean isVarDeclaration = left.hasChildren()
+            && varType != null && !var.isTypeInferred();
 
-        // When looking at VAR initializers for declared VARs, we trust
-        // the declared type over the type it's being initialized to.
-        // This has two purposes:
-        // 1) We avoid re-declaring declared variables so that built-in
-        //    types defined in externs are not redeclared.
-        // 2) When there's a lexical closure like
-        //    /** @type {?string} */ var x = null;
-        //    function f() { x = 'xyz'; }
-        //    the inference will ignore the lexical closure,
-        //    which is just wrong. This bug needs to be fixed eventually.
-        boolean isVarDeclaration = left.hasChildren();
-        if (!isVarDeclaration || var == null || var.isTypeInferred()) {
+        boolean isTypelessConstDecl =
+            isVarDeclaration &&
+            NodeUtil.isConstantDeclaration(
+                compiler.getCodingConvention(),
+                var.getJSDocInfo(), var.getNameNode()) &&
+              !(var.getJSDocInfo() != null &&
+                var.getJSDocInfo().hasType());
+
+        // When looking at VAR initializers for declared VARs, we tend
+        // to use the declared type over the type it's being
+        // initialized to in the global scope.
+        //
+        // For example,
+        // /** @param {number} */ var f = goog.abstractMethod;
+        // it's obvious that the programmer wants you to use
+        // the declared function signature, not the inferred signature.
+        //
+        // Or,
+        // /** @type {Object.<string>} */ var x = {};
+        // the one-time anonymous object on the right side
+        // is as narrow as it can possibly be, but we need to make
+        // sure we back-infer the <string> element constraint on
+        // the left hand side, so we use the left hand side.
+
+        boolean isVarTypeBetter = isVarDeclaration
+            // Makes it easier to check for NPEs.
+            && !resultType.isNullType() && !resultType.isVoidType()
+            // Do not use the var type if the declaration looked like
+            // /** @const */ var x = 3;
+            // because this type was computed from the RHS
+            && !isTypelessConstDecl;
+
+        // TODO(nicksantos): This might be a better check once we have
+        // back-inference of object/array constraints.  It will probably
+        // introduce more type warnings.  It uses the result type iff it's
+        // strictly narrower than the declared var type.
+        //
+        //boolean isVarTypeBetter = isVarDeclaration &&
+        //    (varType.restrictByNotNullOrUndefined().isSubtype(resultType)
+        //     || !resultType.isSubtype(varType));
+
+        if (isVarTypeBetter) {
+          redeclareSimpleVar(scope, left, varType);
+        } else {
           redeclareSimpleVar(scope, left, resultType);
         }
-        left.setJSType(isVarDeclaration || leftType == null ?
-            resultType : null);
+        left.setJSType(resultType);
 
         if (var != null && var.isTypeInferred()) {
           JSType oldType = var.getType();
           var.setType(oldType == null ?
-              resultType : oldType.getLeastSupertype(resultType));
+             resultType : oldType.getLeastSupertype(resultType));
+        } else if (isTypelessConstDecl) {
+          // /** @const */ var x = y;
+          // should be redeclared, so that the type of y
+          // gets propagated to inner scopes.
+          var.setType(resultType);
         }
         break;
       case Token.GETPROP:
@@ -570,14 +616,35 @@ class TypeInference
     JSType nodeType = getJSType(obj);
     ObjectType objectType = ObjectType.cast(
         nodeType.restrictByNotNullOrUndefined());
+    boolean propCreationInConstructor = obj.isThis() &&
+        getJSType(syntacticScope.getRootNode()).isConstructor();
+
     if (objectType == null) {
       registry.registerPropertyOnType(propName, nodeType);
     } else {
-      // Don't add the property to @struct objects outside a constructor
       if (nodeType.isStruct() && !objectType.hasProperty(propName)) {
-        if (!(obj.isThis() &&
-              getJSType(syntacticScope.getRootNode()).isConstructor())) {
-          return;
+        // In general, we don't want to define a property on a struct object,
+        // b/c TypeCheck will later check for improper property creation on
+        // structs. There are two exceptions.
+        // 1) If it's a property created inside the constructor, on the newly
+        //    created instance, allow it.
+        // 2) If it's a prototype property, allow it. For example:
+        //    Foo.prototype.bar = baz;
+        //    where Foo.prototype is a struct and the assignment happens at the
+        //    top level and the constructor Foo is defined in the same file.
+        boolean staticPropCreation = false;
+        Node maybeAssignStm = getprop.getParent().getParent();
+        if (syntacticScope.isGlobal() &&
+            NodeUtil.isPrototypePropertyDeclaration(maybeAssignStm)) {
+          String propCreationFilename = maybeAssignStm.getSourceFileName();
+          Node ctor = objectType.getOwnerFunction().getSource();
+          if (ctor != null &&
+              ctor.getSourceFileName().equals(propCreationFilename)) {
+            staticPropCreation = true;
+          }
+        }
+        if (!propCreationInConstructor && !staticPropCreation) {
+          return; // Early return to avoid creating the property below.
         }
       }
 
@@ -604,8 +671,7 @@ class TypeInference
           } else {
             objectType.defineInferredProperty(propName, rightType, getprop);
           }
-        } else if (obj.isThis() &&
-                   getJSType(syntacticScope.getRootNode()).isConstructor()) {
+        } else if (propCreationInConstructor) {
           objectType.defineInferredProperty(propName, rightType, getprop);
         } else {
           registry.registerPropertyOnType(propName, objectType);
@@ -725,7 +791,7 @@ class TypeInference
     }
 
     // Object literals can be reflected on other types.
-    // See CodingConvention#getObjectLiteralCase and goog.object.reflect.
+    // See CodingConvention#getObjectLiteralCast and goog.reflect.object
     // Ignore these types of literals.
     ObjectType objectType = ObjectType.cast(type);
     if (objectType == null
@@ -873,7 +939,7 @@ class TypeInference
     if (assertedNode == null) {
       return scope;
     }
-    JSType assertedType = assertionFunctionSpec.getAssertedType(
+    JSType assertedType = assertionFunctionSpec.getAssertedOldType(
         callNode, registry);
     String assertedNodeName = assertedNode.getQualifiedName();
 
@@ -888,7 +954,11 @@ class TypeInference
     } else {
       // Handle assertions that enforce expressions are of a certain type.
       JSType type = getJSType(assertedNode);
-      narrowed = type.getGreatestSubtype(assertedType);
+      if (assertedType.isUnknownType() || type.isUnknownType()) {
+        narrowed = assertedType;
+      } else {
+        narrowed = type.getGreatestSubtype(assertedType);
+      }
       if (assertedNodeName != null && type.differsFrom(narrowed)) {
         scope = narrowScope(scope, assertedNode, narrowed);
       }
@@ -954,7 +1024,7 @@ class TypeInference
    */
   private void updateBind(Node n) {
     CodingConvention.Bind bind =
-        compiler.getCodingConvention().describeFunctionBind(n, true);
+        compiler.getCodingConvention().describeFunctionBind(n, false, true);
     if (bind == null) {
       return;
     }
@@ -989,21 +1059,64 @@ class TypeInference
       JSType iArgumentType = getJSType(iArgument);
       inferPropertyTypesToMatchConstraint(iArgumentType, iParameterType);
 
-      // TODO(johnlenz): Filter out non-function types
-      // (such as null and undefined) as
+      // If the parameter to the call is a function expression, propagate the
+      // function signature from the call site to the function node.
+
+      // Filter out non-function types (such as null and undefined) as
       // we only care about FUNCTION subtypes here.
-      JSType restrictedParameter = iParameterType
-          .restrictByNotNullOrUndefined()
-          .toMaybeFunctionType();
-      if (restrictedParameter != null) {
-        if (iArgument.isFunction() &&
-            iArgumentType.isFunctionType() &&
-            iArgument.getJSDocInfo() == null) {
-          iArgument.setJSType(restrictedParameter);
+      FunctionType restrictedParameter = null;
+      if (iParameterType.isUnionType()) {
+        UnionType union = iParameterType.toMaybeUnionType();
+        for (JSType alternative : union.getAlternates()) {
+          if (alternative.isFunctionType()) {
+            // There is only one function type per union.
+            restrictedParameter = alternative.toMaybeFunctionType();
+            break;
+          }
         }
+      } else {
+        restrictedParameter = iParameterType.toMaybeFunctionType();
+      }
+
+      if (restrictedParameter != null
+          && iArgument.isFunction()
+          && iArgumentType.isFunctionType()) {
+        FunctionType argFnType = iArgumentType.toMaybeFunctionType();
+        boolean declared = iArgument.getJSDocInfo() != null;
+        iArgument.setJSType(
+            matchFunction(restrictedParameter, argFnType, declared));
       }
       i++;
     }
+  }
+
+  /**
+   * Take the current function type, and try to match the expected function
+   * type. This is a form of backwards-inference, like record-type constraint
+   * matching.
+   */
+  private FunctionType matchFunction(
+      FunctionType expectedType, FunctionType currentType, boolean declared) {
+    if (declared) {
+      // If the function was declared but it doesn't have a known "this"
+      // but the expected type does, back fill it.
+      if (currentType.getTypeOfThis().isUnknownType()
+          && !expectedType.getTypeOfThis().isUnknownType()) {
+        FunctionType replacement = new FunctionBuilder(registry)
+            .copyFromOtherFunction(currentType)
+            .withTypeOfThis(expectedType.getTypeOfThis())
+            .build();
+         return replacement;
+      }
+    } else {
+      // For now, we just make sure the current type has enough
+      // arguments to match the expected type, and return the
+      // expected type if it does.
+      if (currentType.getMaxArguments() <= expectedType.getMaxArguments()) {
+        return expectedType;
+      }
+    }
+    return currentType;
   }
 
   private Map<TemplateType, JSType> inferTemplateTypesFromParameters(
@@ -1013,6 +1126,7 @@ class TypeInference
     }
 
     Map<TemplateType, JSType> resolvedTypes = Maps.newIdentityHashMap();
+    Set<JSType> seenTypes = Sets.newIdentityHashSet();
 
     Node callTarget = call.getFirstChild();
     if (NodeUtil.isGet(callTarget)) {
@@ -1020,14 +1134,16 @@ class TypeInference
       maybeResolveTemplatedType(
           fnType.getTypeOfThis(),
           getJSType(obj),
-          resolvedTypes);
+          resolvedTypes,
+          seenTypes);
     }
 
     if (call.hasMoreThanOneChild()) {
       maybeResolveTemplateTypeFromNodes(
           fnType.getParameters(),
           call.getChildAtIndex(1).siblings(),
-          resolvedTypes);
+          resolvedTypes,
+          seenTypes);
     }
     return resolvedTypes;
   }
@@ -1035,7 +1151,7 @@ class TypeInference
   private void maybeResolveTemplatedType(
       JSType paramType,
       JSType argType,
-      Map<TemplateType, JSType> resolvedTypes) {
+      Map<TemplateType, JSType> resolvedTypes, Set<JSType> seenTypes) {
     if (paramType.isTemplateType()) {
       // @param {T}
       resolvedTemplateType(
@@ -1044,7 +1160,7 @@ class TypeInference
       // @param {Array.<T>|NodeList|Arguments|{length:number}}
       UnionType unionType = paramType.toMaybeUnionType();
       for (JSType alernative : unionType.getAlternates()) {
-        maybeResolveTemplatedType(alernative, argType, resolvedTypes);
+        maybeResolveTemplatedType(alernative, argType, resolvedTypes, seenTypes);
       }
     } else if (paramType.isFunctionType()) {
       FunctionType paramFunctionType = paramType.toMaybeFunctionType();
@@ -1056,15 +1172,39 @@ class TypeInference
         // infer from return type of the function type
         maybeResolveTemplatedType(
             paramFunctionType.getTypeOfThis(),
-            argFunctionType.getTypeOfThis(), resolvedTypes);
+            argFunctionType.getTypeOfThis(), resolvedTypes, seenTypes);
         // infer from return type of the function type
         maybeResolveTemplatedType(
             paramFunctionType.getReturnType(),
-            argFunctionType.getReturnType(), resolvedTypes);
+            argFunctionType.getReturnType(), resolvedTypes, seenTypes);
         // infer from parameter types of the function type
         maybeResolveTemplateTypeFromNodes(
             paramFunctionType.getParameters(),
-            argFunctionType.getParameters(), resolvedTypes);
+            argFunctionType.getParameters(), resolvedTypes, seenTypes);
+      }
+    } else if (paramType.isRecordType() && !paramType.isNominalType()) {
+      // @param {{foo:T}}
+      if (!seenTypes.contains(paramType)) {
+        seenTypes.add(paramType);
+        ObjectType paramRecordType = paramType.toObjectType();
+        ObjectType argObjectType = argType.restrictByNotNullOrUndefined()
+            .toObjectType();
+        if (argObjectType != null
+            && !argObjectType.isUnknownType()
+            && !argObjectType.isEmptyType()) {
+          Set<String> names = paramRecordType.getPropertyNames();
+          for (String name : names) {
+            if (paramRecordType.hasOwnProperty(name)
+                && argObjectType.hasProperty(name)) {
+              maybeResolveTemplatedType(
+                  paramRecordType.getPropertyType(name),
+                  argObjectType.getPropertyType(name),
+                  resolvedTypes,
+                  seenTypes);
+            }
+          }
+        }
+        seenTypes.remove(paramType);
       }
     } else if (paramType.isTemplatizedType()) {
       // @param {Array.<T>}
@@ -1084,7 +1224,7 @@ class TypeInference
           maybeResolveTemplatedType(
               paramTypeMap.getTemplateType(key),
               argTypeMap.getTemplateType(key),
-              resolvedTypes);
+              resolvedTypes, seenTypes);
         }
       }
     }
@@ -1093,27 +1233,28 @@ class TypeInference
   private void maybeResolveTemplateTypeFromNodes(
       Iterable<Node> declParams,
       Iterable<Node> callParams,
-      Map<TemplateType, JSType> resolvedTypes) {
+      Map<TemplateType, JSType> resolvedTypes, Set<JSType> seenTypes) {
     maybeResolveTemplateTypeFromNodes(
-        declParams.iterator(), callParams.iterator(), resolvedTypes);
+        declParams.iterator(), callParams.iterator(), resolvedTypes, seenTypes);
   }
 
   private void maybeResolveTemplateTypeFromNodes(
       Iterator<Node> declParams,
       Iterator<Node> callParams,
-      Map<TemplateType, JSType> resolvedTypes) {
+      Map<TemplateType, JSType> resolvedTypes,
+      Set<JSType> seenTypes) {
     while (declParams.hasNext() && callParams.hasNext()) {
       Node declParam = declParams.next();
       maybeResolveTemplatedType(
           getJSType(declParam),
           getJSType(callParams.next()),
-          resolvedTypes);
+          resolvedTypes, seenTypes);
       if (declParam.isVarArgs()) {
         while (callParams.hasNext()) {
           maybeResolveTemplatedType(
               getJSType(declParam),
               getJSType(callParams.next()),
-              resolvedTypes);
+              resolvedTypes, seenTypes);
         }
       }
     }
@@ -1139,7 +1280,7 @@ class TypeInference
 
     TemplateTypeReplacer(
         JSTypeRegistry registry, Map<TemplateType, JSType> replacements) {
-      super(registry);
+      super(registry, true);
       this.registry = registry;
       this.replacements = replacements;
     }
@@ -1154,19 +1295,85 @@ class TypeInference
   }
 
   /**
+   * Build the type environment where type transformations will be evaluated.
+   * It only considers the template type variables that do not have a type
+   * transformation.
+   */
+  private Map<String, JSType> buildTypeVariables(
+      Map<TemplateType, JSType> inferredTypes) {
+    Map<String, JSType> typeVars = new HashMap<String, JSType>();
+    for (Entry<TemplateType, JSType> e : inferredTypes.entrySet()) {
+      // Only add the template type that do not have a type transformation
+      if (!e.getKey().isTypeTransformation()) {
+        typeVars.put(e.getKey().getReferenceName(), e.getValue());
+      }
+    }
+    return typeVars;
+  }
+
+  /**
+   * This function will evaluate the type transformations associated to the
+   * template types
+   */
+  private Map<TemplateType, JSType> evaluateTypeTransformations(
+      ImmutableList<TemplateType> templateTypes,
+      Map<TemplateType, JSType> inferredTypes) {
+
+    Map<String, JSType> typeVars = null;
+    Map<TemplateType, JSType> result = null;
+    TypeTransformation ttlObj = null;
+
+    for (TemplateType type : templateTypes) {
+      if (type.isTypeTransformation()) {
+        // Lazy initialization when the first type transformation is found
+        if (ttlObj == null) {
+          ttlObj = new TypeTransformation(compiler, syntacticScope);
+          typeVars = buildTypeVariables(inferredTypes);
+          result = new HashMap<TemplateType, JSType>();
+        }
+        // Evaluate the type transformation expression using the current
+        // known types for the template type variables
+        JSType transformedType = ttlObj.eval(type.getTypeTransformation(),
+                ImmutableMap.<String, JSType>copyOf(typeVars));
+        result.put(type, transformedType);
+        // Add the transformed type to the type variables
+        typeVars.put(type.getReferenceName(), transformedType);
+      }
+    }
+    return result;
+  }
+
+  /**
    * For functions with function(this: T, ...) and T as parameters, type
    * inference will set the type of this on a function literal argument to the
    * the actual type of T.
    */
   private boolean inferTemplatedTypesForCall(
       Node n, FunctionType fnType) {
-    if (fnType.getTemplateTypeMap().getTemplateKeys().isEmpty()) {
+    final ImmutableList<TemplateType> keys = fnType.getTemplateTypeMap()
+        .getTemplateKeys();
+    if (keys.isEmpty()) {
       return false;
     }
 
     // Try to infer the template types
-    Map<TemplateType, JSType> inferred = inferTemplateTypesFromParameters(
+    Map<TemplateType, JSType> rawInferrence = inferTemplateTypesFromParameters(
         fnType, n);
+    Map<TemplateType, JSType> inferred = Maps.newIdentityHashMap();
+    for (TemplateType key : keys) {
+      JSType type = rawInferrence.get(key);
+      if (type == null) {
+        type = unknownType;
+      }
+      inferred.put(key, type);
+    }
+
+    // Try to infer the template types using the type transformations
+    Map<TemplateType, JSType> typeTransformations =
+        evaluateTypeTransformations(keys, inferred);
+    if (typeTransformations != null) {
+      inferred.putAll(typeTransformations);
+    }
 
     // Replace all template types. If we couldn't find a replacement, we
     // replace it with UNKNOWN.
@@ -1223,7 +1430,7 @@ class TypeInference
   }
 
   private BooleanOutcomePair traverseAnd(Node n, FlowScope scope) {
-    return traverseShortCircuitingBinOp(n, scope, true);
+    return traverseShortCircuitingBinOp(n, scope);
   }
 
   private FlowScope traverseChildren(Node n, FlowScope scope) {
@@ -1326,7 +1533,7 @@ class TypeInference
 
     if (propertyType != null && objType != null) {
       JSType restrictedObjType = objType.restrictByNotNullOrUndefined();
-      if (restrictedObjType.isTemplatizedType()
+      if (!restrictedObjType.getTemplateTypeMap().isEmpty()
           && propertyType.hasAnyTemplateTypes()) {
         TemplateTypeMap typeMap = restrictedObjType.getTemplateTypeMap();
         TemplateTypeMapReplacer replacer = new TemplateTypeMapReplacer(
@@ -1356,56 +1563,59 @@ class TypeInference
   }
 
   private BooleanOutcomePair traverseOr(Node n, FlowScope scope) {
-    return traverseShortCircuitingBinOp(n, scope, false);
+    return traverseShortCircuitingBinOp(n, scope);
   }
 
   private BooleanOutcomePair traverseShortCircuitingBinOp(
-      Node n, FlowScope scope, boolean condition) {
+      Node n, FlowScope scope) {
+    Preconditions.checkArgument(n.isAnd() || n.isOr());
+    boolean nIsAnd = n.isAnd();
     Node left = n.getFirstChild();
     Node right = n.getLastChild();
 
     // type the left node
-    BooleanOutcomePair leftLiterals =
-        traverseWithinShortCircuitingBinOp(left,
-            scope.createChildFlowScope());
+    BooleanOutcomePair leftOutcome = traverseWithinShortCircuitingBinOp(
+        left, scope.createChildFlowScope());
     JSType leftType = left.getJSType();
 
     // reverse abstract interpret the left node to produce the correct
     // scope in which to verify the right node
     FlowScope rightScope = reverseInterpreter.
-        getPreciserScopeKnowingConditionOutcome(
-            left, leftLiterals.getOutcomeFlowScope(left.getType(), condition),
-            condition);
+        getPreciserScopeKnowingConditionOutcome(left,
+            leftOutcome.getOutcomeFlowScope(left.getType(), nIsAnd),
+            nIsAnd);
 
     // type the right node
-    BooleanOutcomePair rightLiterals =
-        traverseWithinShortCircuitingBinOp(
-            right, rightScope.createChildFlowScope());
+    BooleanOutcomePair rightOutcome = traverseWithinShortCircuitingBinOp(
+        right, rightScope.createChildFlowScope());
     JSType rightType = right.getJSType();
 
     JSType type;
-    BooleanOutcomePair literals;
+    BooleanOutcomePair outcome;
     if (leftType != null && rightType != null) {
-      leftType = leftType.getRestrictedTypeGivenToBooleanOutcome(!condition);
-      if (leftLiterals.toBooleanOutcomes ==
-          BooleanLiteralSet.get(!condition)) {
-        // Use the restricted left type, since the right side never gets
-        // evaluated.
+      leftType = leftType.getRestrictedTypeGivenToBooleanOutcome(!nIsAnd);
+      if (leftOutcome.toBooleanOutcomes == BooleanLiteralSet.get(!nIsAnd)) {
+        // Either n is && and lhs is false, or n is || and lhs is true.
+        // Use the restricted left type; the right side never gets evaluated.
         type = leftType;
-        literals = leftLiterals;
+        outcome = leftOutcome;
       } else {
         // Use the join of the restricted left type knowing the outcome of the
         // ToBoolean predicate and of the right type.
         type = leftType.getLeastSupertype(rightType);
-        literals =
-            getBooleanOutcomePair(leftLiterals, rightLiterals, condition);
+        outcome = new BooleanOutcomePair(
+            joinBooleanOutcomes(nIsAnd,
+                leftOutcome.toBooleanOutcomes, rightOutcome.toBooleanOutcomes),
+            joinBooleanOutcomes(nIsAnd,
+                leftOutcome.booleanValues, rightOutcome.booleanValues),
+            leftOutcome.getJoinedFlowScope(),
+            rightOutcome.getJoinedFlowScope());
       }
-
       // Exclude the boolean type if the literal set is empty because a boolean
       // can never actually be returned.
-      if (literals.booleanValues == BooleanLiteralSet.EMPTY &&
+      if (outcome.booleanValues == BooleanLiteralSet.EMPTY &&
           getNativeType(BOOLEAN_TYPE).isSubtype(type)) {
-        // Exclusion only make sense for a union type.
+        // Exclusion only makes sense for a union type.
         if (type.isUnionType()) {
           type = type.toMaybeUnionType().getRestrictedUnion(
               getNativeType(BOOLEAN_TYPE));
@@ -1413,18 +1623,17 @@ class TypeInference
       }
     } else {
       type = null;
-      literals = new BooleanOutcomePair(
+      outcome = new BooleanOutcomePair(
           BooleanLiteralSet.BOTH, BooleanLiteralSet.BOTH,
-          leftLiterals.getJoinedFlowScope(),
-          rightLiterals.getJoinedFlowScope());
+          leftOutcome.getJoinedFlowScope(),
+          rightOutcome.getJoinedFlowScope());
     }
     n.setJSType(type);
-
-    return literals;
+    return outcome;
   }
 
-  private BooleanOutcomePair traverseWithinShortCircuitingBinOp(Node n,
-      FlowScope scope) {
+  private BooleanOutcomePair traverseWithinShortCircuitingBinOp(
+      Node n, FlowScope scope) {
     switch (n.getType()) {
       case Token.AND:
         return traverseAnd(n, scope);
@@ -1438,35 +1647,12 @@ class TypeInference
     }
   }
 
-  /**
-   * Infers the boolean outcome pair that can be taken by a
-   * short-circuiting binary operation ({@code &&} or {@code ||}).
-   * @see #getBooleanOutcomes(BooleanLiteralSet, BooleanLiteralSet, boolean)
-   */
-  BooleanOutcomePair getBooleanOutcomePair(BooleanOutcomePair left,
-      BooleanOutcomePair right, boolean condition) {
-    return new BooleanOutcomePair(
-        getBooleanOutcomes(left.toBooleanOutcomes, right.toBooleanOutcomes,
-                           condition),
-        getBooleanOutcomes(left.booleanValues, right.booleanValues, condition),
-        left.getJoinedFlowScope(), right.getJoinedFlowScope());
-  }
-
-  /**
-   * Infers the boolean literal set that can be taken by a
-   * short-circuiting binary operation ({@code &&} or {@code ||}).
-   * @param left the set of possible {@code ToBoolean} predicate results for
-   *    the expression on the left side of the operator
-   * @param right the set of possible {@code ToBoolean} predicate results for
-   *    the expression on the right side of the operator
-   * @param condition the left side {@code ToBoolean} predicate result that
-   *    causes the right side to get evaluated (i.e. not short-circuited)
-   * @return a set of possible {@code ToBoolean} predicate results for the
-   *    entire expression
-   */
-  static BooleanLiteralSet getBooleanOutcomes(BooleanLiteralSet left,
-      BooleanLiteralSet right, boolean condition) {
-    return right.union(left.intersection(BooleanLiteralSet.get(!condition)));
+  private static BooleanLiteralSet joinBooleanOutcomes(
+      boolean isAnd, BooleanLiteralSet left, BooleanLiteralSet right) {
+    // A truthy value on the lhs of an {@code &&} can never make it to the
+    // result. Same for a falsy value on the lhs of an {@code ||}.
+    // Hence the intersection.
+    return right.union(left.intersection(BooleanLiteralSet.get(!isAnd)));
   }
 
   /**

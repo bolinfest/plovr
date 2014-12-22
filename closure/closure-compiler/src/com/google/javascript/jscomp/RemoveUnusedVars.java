@@ -29,7 +29,12 @@ import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 
 /**
  * Garbage collection for variable and function definitions. Basically performs
@@ -65,6 +70,7 @@ import java.util.*;
  * {@code FlowSensitiveInlineVariables}, except that it works for variables
  * used across scopes.
  *
+ * @author nicksantos@google.com (Nick Santos)
  */
 class RemoveUnusedVars
     implements CompilerPass, OptimizeCalls.CallGraphCompilerPass {
@@ -801,9 +807,7 @@ class RemoveUnusedVars
    * assignments to those variables as well.
    */
   private void removeUnreferencedVars() {
-    for (Iterator<Var> it = maybeUnreferenced.iterator(); it.hasNext(); ) {
-      Var var = it.next();
-
+    for (Var var : maybeUnreferenced) {
       // Remove calls to inheritance-defining functions where the unreferenced
       // class is the subclass.
       for (Node exprCallNode : classDefiningCalls.get(var)) {

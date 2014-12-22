@@ -29,7 +29,7 @@ import java.util.Comparator;
  *
  * @param <N> The instruction type of the control flow graph.
  */
-class ControlFlowGraph<N> extends
+public class ControlFlowGraph<N> extends
     LinkedDirectedGraph<N, ControlFlowGraph.Branch> {
 
   /**
@@ -79,16 +79,6 @@ class ControlFlowGraph<N> extends
   public boolean isImplicitReturn(
       DiGraphNode<N, ControlFlowGraph.Branch> node) {
     return node == implicitReturn;
-  }
-
-  /**
-   * Connects the node to the explicit return.
-   *
-   * @param srcValue Node.
-   * @param edgeValue Edge.
-   */
-  public void connectToImplicitReturn(N srcValue, Branch edgeValue) {
-    super.connect(srcValue, edgeValue, null);
   }
 
   /**

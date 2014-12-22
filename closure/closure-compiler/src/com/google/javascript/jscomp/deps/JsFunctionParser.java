@@ -31,7 +31,6 @@ import java.util.regex.Pattern;
  * A parser that can extract dependency information from a .js file.
  *
  * @author agrieve@google.com (Andrew Grieve)
- * @author ielashi@google.com (Islam El-Ashi)
  */
 public class JsFunctionParser extends JsFileLineParser {
 
@@ -80,7 +79,7 @@ public class JsFunctionParser extends JsFileLineParser {
    * @param functions Functions to parse.
    * @return A pattern to extract {@code functions}' arguments.
    */
-  private Pattern getPattern(Collection<String> functions) {
+  private static Pattern getPattern(Collection<String> functions) {
     StringBuilder sb = new StringBuilder("(?:^|;)\\s*(");
 
     for (String function : functions) {
@@ -129,7 +128,7 @@ public class JsFunctionParser extends JsFileLineParser {
     // Quick sanity check that will catch most cases. This is a performance
     // win for people with a lot of JS.
     for (String function : functionsToParse) {
-      if (line.indexOf(function) != -1) {
+      if (line.contains(function)) {
         parseLine = true;
         break;
       }

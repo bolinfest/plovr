@@ -27,7 +27,6 @@ import com.google.template.soy.data.SanitizedContent.ContentKind;
 /**
  * Ways of escaping dynamic content in a template.
  *
- * @author Mike Samuel
  */
 public enum EscapingMode {
 
@@ -67,7 +66,7 @@ public enum EscapingMode {
    * Encode all HTML special characters and quotes, and JS newlines as if to allow them to appear
    * literally in a JS string.
    */
-  ESCAPE_JS_STRING(false, ContentKind.JS_STR_CHARS),
+  ESCAPE_JS_STRING(false, null),
 
   /**
    * If a number or boolean, output as a JS literal.  Otherwise surround in quotes and escape.
@@ -105,8 +104,11 @@ public enum EscapingMode {
    * Percent encode non-URI characters that cannot appear unescaped in a URI such as spaces, and
    * encode characters that are not special in URIs that are special in languages that URIs are
    * embedded in such as parentheses and quotes.
+   *
    * This corresponds to the JavaScript function {@code encodeURI} but additionally encodes quotes
    * parentheses, and percent signs that are not followed by two hex digits.
+   *
+   * This is not necessarily HTML embeddable because we want ampersands to get HTML-escaped.
    */
   NORMALIZE_URI(false, ContentKind.URI),
 

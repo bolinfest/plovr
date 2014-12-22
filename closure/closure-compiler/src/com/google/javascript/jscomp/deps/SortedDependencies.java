@@ -134,7 +134,7 @@ public class SortedDependencies<INPUT extends DependencyInfo> {
    */
   private List<INPUT> findCycle(
       List<INPUT> subGraph, Multimap<INPUT, INPUT> deps) {
-    return findCycle(subGraph.get(0), Sets.<INPUT>newHashSet(subGraph),
+    return findCycle(subGraph.get(0), Sets.newHashSet(subGraph),
         deps, Sets.<INPUT>newHashSet());
   }
 
@@ -156,7 +156,7 @@ public class SortedDependencies<INPUT extends DependencyInfo> {
       // Explicitly use the add() method, to prevent a generics constructor
       // warning that is dumb. The condition it's protecting is
       // obscure, and I think people have proposed that it be removed.
-      List<INPUT> cycle = Lists.<INPUT>newArrayList();
+      List<INPUT> cycle = Lists.newArrayList();
       cycle.add(current);
       return cycle;
     }
@@ -185,7 +185,7 @@ public class SortedDependencies<INPUT extends DependencyInfo> {
   }
 
   public List<INPUT> getSortedList() {
-    return Collections.<INPUT>unmodifiableList(sortedList);
+    return Collections.unmodifiableList(sortedList);
   }
 
   /**
@@ -210,7 +210,7 @@ public class SortedDependencies<INPUT extends DependencyInfo> {
   public List<INPUT> getDependenciesOf(List<INPUT> roots, boolean sorted) {
     Preconditions.checkArgument(inputs.containsAll(roots));
     Set<INPUT> included = Sets.newHashSet();
-    Deque<INPUT> worklist = new ArrayDeque<INPUT>(roots);
+    Deque<INPUT> worklist = new ArrayDeque<>(roots);
     while (!worklist.isEmpty()) {
       INPUT current = worklist.pop();
       if (included.add(current)) {
@@ -233,12 +233,12 @@ public class SortedDependencies<INPUT extends DependencyInfo> {
   }
 
   public List<INPUT> getInputsWithoutProvides() {
-    return Collections.<INPUT>unmodifiableList(noProvides);
+    return Collections.unmodifiableList(noProvides);
   }
 
   private static <T> List<T> topologicalStableSort(
       List<T> items, Multimap<T, T> deps) {
-    if (items.size() == 0) {
+    if (items.isEmpty()) {
       // Priority queue blows up if we give it a size of 0. Since we need
       // to special case this either way, just bail out.
       return Lists.newArrayList();
@@ -249,7 +249,7 @@ public class SortedDependencies<INPUT extends DependencyInfo> {
       originalIndex.put(items.get(i), i);
     }
 
-    PriorityQueue<T> inDegreeZero = new PriorityQueue<T>(items.size(),
+    PriorityQueue<T> inDegreeZero = new PriorityQueue<>(items.size(),
         new Comparator<T>() {
       @Override
       public int compare(T a, T b) {

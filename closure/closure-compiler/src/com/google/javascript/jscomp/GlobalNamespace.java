@@ -24,6 +24,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.google.javascript.jscomp.CodingConvention.SubclassRelationship;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -47,6 +48,7 @@ import java.util.Set;
  * Builds a global namespace of all the objects and their properties in
  * the global scope. Also builds an index of all the references to those names.
  *
+ * @author nicksantos@google.com (Nick Santos)
  */
 class GlobalNamespace
     implements StaticScope<JSType>,
@@ -67,10 +69,10 @@ class GlobalNamespace
   private int currentPreOrderIndex = 0;
 
   /** Global namespace tree */
-  private List<Name> globalNames = new ArrayList<Name>();
+  private List<Name> globalNames = new ArrayList<>();
 
   /** Maps names (e.g. "a.b.c") to nodes in the global namespace tree */
-  private Map<String, Name> nameMap = new HashMap<String, Name>();
+  private Map<String, Name> nameMap = new HashMap<>();
 
   /**
    * Creates an instance that may emit warnings when building the namespace.
@@ -244,7 +246,7 @@ class GlobalNamespace
    * @param name A variable or qualified property name (e.g. "a" or "a.b.c.d")
    * @return The top variable name (e.g. "a")
    */
-  private String getTopVarName(String name) {
+  private static String getTopVarName(String name) {
     int firstDotIndex = name.indexOf('.');
     return firstDotIndex == -1 ? name : name.substring(0, firstDotIndex);
   }
@@ -271,7 +273,7 @@ class GlobalNamespace
    * @param s A scope
    * @return Whether the scope is the global scope
    */
-  private boolean isGlobalScope(Scope s) {
+  private static boolean isGlobalScope(Scope s) {
     return s.getParent() == null;
   }
 
@@ -362,6 +364,7 @@ class GlobalNamespace
                 isSet = true;
                 type = Name.Type.FUNCTION;
                 break;
+              case Token.CATCH:
               case Token.INC:
               case Token.DEC:
                 isSet = true;
@@ -639,6 +642,7 @@ class GlobalNamespace
       if (parent != null) {
         switch (parent.getType()) {
           case Token.IF:
+          case Token.INSTANCEOF:
           case Token.TYPEOF:
           case Token.VOID:
           case Token.NOT:
@@ -647,9 +651,14 @@ class GlobalNamespace
           case Token.NEG:
             break;
           case Token.CALL:
-            type = n == parent.getFirstChild()
-                   ? Ref.Type.CALL_GET
-                   : Ref.Type.ALIASING_GET;
+            if (n == parent.getFirstChild()) {
+              // It is a call target
+              type = Ref.Type.CALL_GET;
+            } else if (isClassDefiningCall(parent)) {
+              type = Ref.Type.DIRECT_GET;
+            } else {
+              type = Ref.Type.ALIASING_GET;
+            }
             break;
           case Token.NEW:
             type = n == parent.getFirstChild()
@@ -684,6 +693,23 @@ class GlobalNamespace
       handleGet(module, scope, n, parent, name, type);
     }
 
+    private boolean isClassDefiningCall(Node callNode) {
+      CodingConvention convention = compiler.getCodingConvention();
+      // Look for goog.inherits, goog.mixin
+      SubclassRelationship classes =
+          convention.getClassesDefinedByCall(callNode);
+      if (classes != null) {
+        return true;
+      }
+
+      // Look for calls to goog.addSingletonGetter calls.
+      String className = convention.getSingletonGetterClassName(callNode);
+      if (className != null) {
+        return true;
+      }
+      return false;
+    }
+
     /**
      * Determines whether the result of a hook (x?y:z) or boolean expression
      * (x||y) or (x&&y) is assigned to a specific global name.
@@ -702,6 +728,7 @@ class GlobalNamespace
       Node prev = parent;
       for (Node anc : parent.getAncestors()) {
         switch (anc.getType()) {
+          case Token.INSTANCEOF:
           case Token.EXPR_RESULT:
           case Token.VAR:
           case Token.IF:
@@ -901,7 +928,7 @@ class GlobalNamespace
 
     Name addProperty(String name, boolean inExterns) {
       if (props == null) {
-        props = new ArrayList<Name>();
+        props = new ArrayList<>();
       }
       Name node = new Name(name, this, inExterns);
       props.add(node);
@@ -1249,10 +1276,6 @@ class GlobalNamespace
 
     JSModule getModule() {
       return module;
-    }
-
-    String getSourceName() {
-      return source == null ? "" : source.getName();
     }
 
     Ref getTwin() {

@@ -29,16 +29,15 @@ import junit.framework.TestCase;
 /**
  * Unit tests for AbstractOperatorNode.
  *
- * @author Kai Huang
  */
 public class AbstractOperatorNodeTest extends TestCase {
 
 
   // Note: We're going to reuse this leaf node in the test trees. This isn't really correct, but
   // should work for this test.
-  private static final DataRefNode x;
+  private static final VarRefNode x;
   static {
-    x = new DataRefNode(false, false, "x");
+    x = new VarRefNode("x", false, false, null);
   }
 
 
@@ -49,15 +48,15 @@ public class AbstractOperatorNodeTest extends TestCase {
     // The expression tree looks like this:
     // [MinusOpNode] n0
     //    [MinusOpNode] n1
-    //       [DataRefNode] $x
+    //       [VarRefNode] $x
     //       [NegativeOpNode] n3
-    //          [DataRefNode] $x
+    //          [VarRefNode] $x
     //    [MinusOpNode] n2
     //       [NegativeOpNode] n4
     //          [MinusOpNode] n5
-    //             [DataRefNode] $x
-    //             [DataRefNode] $x
-    //       [DataRefNode] $x
+    //             [VarRefNode] $x
+    //             [VarRefNode] $x
+    //       [VarRefNode] $x
 
     // Root n0.
     MinusOpNode n0 = new MinusOpNode();
@@ -94,13 +93,13 @@ public class AbstractOperatorNodeTest extends TestCase {
     // The expression tree looks like this:
     // [ConditionalOpNode] n0
     //    [NotOpNode] n1
-    //       [DataRefNode] $x
+    //       [VarRefNode] $x
     //    [NotEqualOpNode] n2
-    //       [DataRefNode] $x
-    //       [DataRefNode] $x
+    //       [VarRefNode] $x
+    //       [VarRefNode] $x
     //    [TimesOpNode] n3
-    //       [DataRefNode] $x
-    //       [DataRefNode] $x
+    //       [VarRefNode] $x
+    //       [VarRefNode] $x
 
     // Root n0.
     ConditionalOpNode n0 = new ConditionalOpNode();

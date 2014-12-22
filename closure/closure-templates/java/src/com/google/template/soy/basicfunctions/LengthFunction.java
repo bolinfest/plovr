@@ -16,35 +16,28 @@
 
 package com.google.template.soy.basicfunctions;
 
-import static com.google.template.soy.javasrc.restricted.SoyJavaSrcFunctionUtils.toIntegerJavaExpr;
-import static com.google.template.soy.shared.restricted.SoyJavaRuntimeFunctionUtils.toSoyData;
-
 import com.google.common.collect.ImmutableSet;
-import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import com.google.template.soy.data.SoyData;
-import com.google.template.soy.data.SoyListData;
-import com.google.template.soy.javasrc.restricted.JavaCodeUtils;
-import com.google.template.soy.javasrc.restricted.JavaExpr;
-import com.google.template.soy.javasrc.restricted.SoyJavaSrcFunction;
+import com.google.template.soy.data.SoyList;
+import com.google.template.soy.data.SoyValue;
+import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.SoyJsSrcFunction;
+import com.google.template.soy.shared.restricted.SoyJavaFunction;
 import com.google.template.soy.shared.restricted.SoyPureFunction;
-import com.google.template.soy.tofu.restricted.SoyAbstractTofuFunction;
 
 import java.util.List;
 import java.util.Set;
 
+import javax.inject.Inject;
 
 /**
  * Soy function that gets the length of a list.
  *
- * @author Kai Huang
  */
 @Singleton
 @SoyPureFunction
-class LengthFunction extends SoyAbstractTofuFunction
-    implements SoyJsSrcFunction, SoyJavaSrcFunction {
+class LengthFunction implements SoyJavaFunction, SoyJsSrcFunction {
 
 
   @Inject
@@ -61,13 +54,18 @@ class LengthFunction extends SoyAbstractTofuFunction
   }
 
 
-  @Override public SoyData compute(List<SoyData> args) {
-    SoyData arg = args.get(0);
+  @Override public SoyValue computeForJava(List<SoyValue> args) {
+    SoyValue arg = args.get(0);
 
-    if (!(arg instanceof SoyListData)) {
-      throw new IllegalArgumentException("Argument to length() function is not SoyListData.");
+    if (arg == null) {
+      throw new IllegalArgumentException("Argument to length() function is null.");
     }
-    return toSoyData(((SoyListData) arg).length());
+
+    if (!(arg instanceof SoyList)) {
+      throw new IllegalArgumentException("Argument to length() function is not a SoyList " +
+          "(found type " + arg.getClass().getName() + ").");
+    }
+    return IntegerData.forValue(((SoyList) arg).length());
   }
 
 
@@ -77,15 +75,6 @@ class LengthFunction extends SoyAbstractTofuFunction
     String exprText = arg.getPrecedence() == Integer.MAX_VALUE ?
                       arg.getText() + ".length" : "(" + arg.getText() + ").length";
     return new JsExpr(exprText, Integer.MAX_VALUE);
-  }
-
-
-  @Override public JavaExpr computeForJavaSrc(List<JavaExpr> args) {
-    JavaExpr arg = args.get(0);
-
-    return toIntegerJavaExpr(
-        JavaCodeUtils.genNewIntegerData(
-            "(" + JavaCodeUtils.genMaybeCast(arg, SoyListData.class) + ").length()"));
   }
 
 }

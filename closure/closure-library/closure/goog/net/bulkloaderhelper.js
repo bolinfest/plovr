@@ -28,23 +28,24 @@ goog.require('goog.log');
 
 /**
  * Helper class used to load multiple URIs.
- * @param {Array.<string|goog.Uri>} uris The URIs to load.
+ * @param {Array<string|goog.Uri>} uris The URIs to load.
  * @constructor
  * @extends {goog.Disposable}
+ * @final
  */
 goog.net.BulkLoaderHelper = function(uris) {
   goog.Disposable.call(this);
 
   /**
    * The URIs to load.
-   * @type {Array.<string|goog.Uri>}
+   * @type {Array<string|goog.Uri>}
    * @private
    */
   this.uris_ = uris;
 
   /**
    * The response from the XHR's.
-   * @type {Array.<string>}
+   * @type {Array<string>}
    * @private
    */
   this.responseTexts_ = [];
@@ -73,7 +74,7 @@ goog.net.BulkLoaderHelper.prototype.getUri = function(id) {
 
 /**
  * Gets the URIs.
- * @return {Array.<string|goog.Uri>} The URIs.
+ * @return {Array<string|goog.Uri>} The URIs.
  */
 goog.net.BulkLoaderHelper.prototype.getUris = function() {
   return this.uris_;
@@ -82,7 +83,7 @@ goog.net.BulkLoaderHelper.prototype.getUris = function() {
 
 /**
  * Gets the response texts.
- * @return {Array.<string>} The response texts.
+ * @return {Array<string>} The response texts.
  */
 goog.net.BulkLoaderHelper.prototype.getResponseTexts = function() {
   return this.responseTexts_;

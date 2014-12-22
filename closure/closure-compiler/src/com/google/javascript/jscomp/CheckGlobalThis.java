@@ -80,6 +80,14 @@ final class CheckGlobalThis implements Callback {
   public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
 
     if (n.isFunction()) {
+      // Arrow functions automatically get the "this" value from the
+      // enclosing scope. e.g. the "this" in
+      //   Foo.prototype.getBar = () => this.bar;
+      // is the global "this", not an instance of Foo.
+      if (n.isArrowFunction()) {
+        return true;
+      }
+
       // Don't traverse functions that are constructors or have the @this
       // or @override annotation.
       JSDocInfo jsDoc = getFunctionJsDocInfo(n);
@@ -181,7 +189,7 @@ final class CheckGlobalThis implements Callback {
    * ... var x = function() {};
    * </pre>
    */
-  private JSDocInfo getFunctionJsDocInfo(Node n) {
+  private static JSDocInfo getFunctionJsDocInfo(Node n) {
     JSDocInfo jsDoc = n.getJSDocInfo();
     Node parent = n.getParent();
     if (jsDoc == null) {

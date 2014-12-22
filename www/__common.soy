@@ -113,7 +113,7 @@
  */
 {template .simpleBookLink}
 {call .bookLink}
-  {param linkHtml}Closure: The Definitive Guide{/param}
+  {param linkHtml kind="html"}Closure: The Definitive Guide{/param}
 {/call}
 {/template}
 
@@ -122,13 +122,13 @@
  */
 {template .bookLink}
 <a href="{BOOK_URL}">
-{$linkHtml|noAutoescape}</a>
+{$linkHtml}</a>
 {/template}
 
 /***/
 {template .imageBookLink}
   {call plovr.bookLink}
-    {param linkHtml}
+    {param linkHtml kind="html"}
     <img src="cover_big.png"
          class="book-cover"
          style="float: right; margin-left: 10px">

@@ -81,7 +81,7 @@ public class PeepholeCollectPropertyAssignments
     return subtree;
   }
 
-  private Node getName(Node n) {
+  private static Node getName(Node n) {
     if (n.isVar()) {
       return n.getFirstChild();
     } else if (NodeUtil.isExprAssign(n)) {
@@ -90,7 +90,7 @@ public class PeepholeCollectPropertyAssignments
     throw new IllegalStateException();
   }
 
-  private Node getValue(Node n) {
+  private static Node getValue(Node n) {
     if (n.isVar()) {
       return n.getFirstChild().getFirstChild();
     } else if (NodeUtil.isExprAssign(n)) {
@@ -99,11 +99,11 @@ public class PeepholeCollectPropertyAssignments
     throw new IllegalStateException();
   }
 
-  boolean isInterestingValue(Node n) {
+  static boolean isInterestingValue(Node n) {
     return n.isObjectLit() || n.isArrayLit();
   }
 
-  private boolean isPropertyAssignmentToName(Node propertyCandidate) {
+  private static boolean isPropertyAssignmentToName(Node propertyCandidate) {
     if (propertyCandidate == null) { return false; }
     // Must be an assignment...
     if (!NodeUtil.isExprAssign(propertyCandidate)) {
@@ -169,7 +169,7 @@ public class PeepholeCollectPropertyAssignments
   }
 
 
-  private boolean collectArrayProperty(
+  private static boolean collectArrayProperty(
       Node arrayLiteral, Node propertyCandidate) {
     Node assignment = propertyCandidate.getFirstChild();
     final int sizeOfArrayAtStart = arrayLiteral.getChildCount();
@@ -225,7 +225,7 @@ public class PeepholeCollectPropertyAssignments
     return true;
   }
 
-  private boolean collectObjectProperty(
+  private static boolean collectObjectProperty(
       Node objectLiteral, Node propertyCandidate) {
     Node assignment = propertyCandidate.getFirstChild();
     Node lhs = assignment.getFirstChild(), rhs = lhs.getNext();
@@ -254,8 +254,35 @@ public class PeepholeCollectPropertyAssignments
     }
     Node newValue = rhs.detachFromParent();
     newProperty.addChildToBack(newValue);
-    objectLiteral.addChildToBack(newProperty);
-
+    // Check if the new property already exists in the object literal
+    // Note: Duplicate keys are invalid in strict mode
+    boolean propertyExists = false;
+    for (Node currentProperty : objectLiteral.children()) {
+      // Get the name of the current property
+      String currentPropertyName = currentProperty.getString();
+      // Get the value of the property
+      Node currentValue = currentProperty.getFirstChild();
+      // Compare the current property name with the new property name
+      if (currentPropertyName.equals(propertyName)) {
+        propertyExists = true;
+        // Check if the current value and the new value are side-effect
+        boolean isCurrentValueSideEffect = NodeUtil.canBeSideEffected(currentValue);
+        boolean isNewValueSideEffect = NodeUtil.canBeSideEffected(newValue);
+        // If they are side-effect free then replace the current value with the new one
+        if (!isCurrentValueSideEffect && !isNewValueSideEffect) {
+          objectLiteral.removeChild(currentProperty);
+          objectLiteral.addChildToBack(newProperty);
+          propertyCandidate.detachFromParent();
+          return true;
+        }
+        // Break the loop if the property exists
+        break;
+      }
+    }
+    // If the property does not already exist we can safely add it
+    if (!propertyExists) {
+      objectLiteral.addChildToBack(newProperty);
+    }
     propertyCandidate.detachFromParent();
     return true;
   }

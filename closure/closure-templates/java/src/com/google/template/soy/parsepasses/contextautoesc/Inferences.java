@@ -16,14 +16,13 @@
 
 package com.google.template.soy.parsepasses.contextautoesc;
 
-import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.template.soy.base.IdGenerator;
+import com.google.template.soy.base.internal.IdGenerator;
 import com.google.template.soy.shared.restricted.SoyPrintDirective;
 import com.google.template.soy.soytree.CallNode;
 import com.google.template.soy.soytree.PrintDirectiveNode;
@@ -33,16 +32,20 @@ import com.google.template.soy.soytree.SoyNode;
 import com.google.template.soy.soytree.SoyNode.StandaloneNode;
 import com.google.template.soy.soytree.SoytreeUtils;
 import com.google.template.soy.soytree.TemplateBasicNode;
+import com.google.template.soy.soytree.TemplateBasicNodeBuilder;
 import com.google.template.soy.soytree.TemplateDelegateNode;
+import com.google.template.soy.soytree.TemplateDelegateNodeBuilder;
 import com.google.template.soy.soytree.TemplateNode;
 import com.google.template.soy.soytree.TemplateNode.SoyFileHeaderInfo;
+import com.google.template.soy.soytree.defn.TemplateParam;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import javax.annotation.Nullable;
-
 
 /**
  * Encapsulates information inferred about a Soy file and decisions made to change it.
@@ -62,7 +65,6 @@ import javax.annotation.Nullable;
  * inferences into the parent until it ends up with a final set of rewriting decisions that the
  * {@link Rewriter} applies to the input Soy parse tree.
  *
- * @author Mike Samuel
  */
 final class Inferences {
 
@@ -97,21 +99,12 @@ final class Inferences {
   private final Set<String> templatesChecked = Sets.newHashSet();
 
   /**
-   * Whether to assume that all Soy inputs are being compiled monolithically.
-   *
-   * This is false if different Soy files may be compiled separately, and their compiled versions
-   * linked together, as is often done with Javascript.
-   */
-  private final boolean assumeNoExternalCalls;
-
-  /**
    * An instance that inherits from a parent.
    */
   public Inferences(Inferences parent) {
     this.parent = parent;
     this.autoescapeCancellingDirectives = parent.autoescapeCancellingDirectives;
     this.idGen = parent.idGen;
-    this.assumeNoExternalCalls = parent.assumeNoExternalCalls;
   }
 
   /**
@@ -122,18 +115,14 @@ final class Inferences {
    * @param idGen Used to generate unique IDs for cloned templates.
    * @param templatesByName Map of template names to instances used to type <code>{call}</code>
    *     commands.
-   * @param assumeNoExternalCalls Whether it's safe to assume templatesByName gives a complete set
-   *     of templates that could ever get called at runtime; in other words, whether this is a
-   *     monolithic compile versus separately linked compiles.
    */
   public Inferences(
       Set<String> autoescapeCancellingDirectives, IdGenerator idGen,
-      Map<String, ImmutableList<TemplateNode>> templatesByName, boolean assumeNoExternalCalls) {
+      Map<String, ImmutableList<TemplateNode>> templatesByName) {
     this.parent = null;
     this.autoescapeCancellingDirectives = ImmutableSet.copyOf(autoescapeCancellingDirectives);
     this.idGen = idGen;
     this.templatesByName.putAll(templatesByName);
-    this.assumeNoExternalCalls = assumeNoExternalCalls;
   }
 
   /**
@@ -156,39 +145,6 @@ final class Inferences {
       }
     }
     return null;
-  }
-
-  /**
-   * Determines whether external definitions are possible for this template.
-   *
-   * For example, if Soy files are compiled separately, external templates or deltemplates may
-   * exist for a particular name.
-   *
-   * If this is false, it is safe to make optimizations based on the templates returned by
-   * lookupTemplates.
-   *
-   * @param name The template name.
-   * @return Whether other definitions for this template may exist outside of this invocation.
-   */
-  public boolean mightHaveExternalDefs(String templateName) {
-    if (assumeNoExternalCalls) {
-      // We're compiling templates in a context where we know we won't see additional templates
-      // combined. Even if we didn't find any callees, we know that new callees won't *later* be
-      // called (perhaps this is a dead codepath, or a deltemplate with no implementations).
-      return false;
-    }
-    List<TemplateNode> targets = lookupTemplates(templateName);
-    if (targets == null || targets.isEmpty()) {
-      // No targets found, so it's almost certainly an extern.
-      return true;
-    }
-    if (targets.size() == 1 && targets.get(0) instanceof TemplateBasicNode) {
-      // If we know the callee and it's not a deltemplate, we definitely know all callees, since
-      // only one non-delegate template may have a particular name.
-      return false;
-    }
-    // There might be external deltemplates.
-    return true;
   }
 
   /**
@@ -304,38 +260,54 @@ final class Inferences {
       // template into a file node that already has a namespace declaration.
       TemplateNode clone;
       boolean useAttrStyleForName = tn.getCommandText().contains("name=");
+
       if (tn instanceof TemplateBasicNode) {
         TemplateBasicNode tbn = (TemplateBasicNode) tn;
-
         String derivedPartialName = (tn.getPartialTemplateName() != null) ?
             derivedName.substring(soyFileHeaderInfo.namespace.length()) : null;
-
-        clone = new TemplateBasicNode(
-            cloneId, soyFileHeaderInfo, derivedName, derivedPartialName,
-            useAttrStyleForName, tbn.isOverride(), tn.isPrivate(),
-            tn.getAutoescapeMode(), tn.getContentKind(), tn.getSoyDoc(), tn.getSyntaxVersion());
+        clone =
+            (new TemplateBasicNodeBuilder(soyFileHeaderInfo))
+                .setId(cloneId)
+                .setCmdTextInfo(
+                    derivedName, derivedPartialName, useAttrStyleForName, tbn.isOverride(),
+                    tn.getVisibility(), tn.getAutoescapeMode(), tn.getContentKind(),
+                    tn.getRequiredCssNamespaces())
+                .setSoyDoc(tn.getSoyDoc())
+                .build();
 
         if (! (derivedName.equals(clone.getTemplateName()) &&
-            Objects.equal(derivedPartialName, clone.getPartialTemplateName()))) {
+            Objects.equals(derivedPartialName, clone.getPartialTemplateName()))) {
           throw new AssertionError();
         }
+
       } else if (tn instanceof TemplateDelegateNode) {
         TemplateDelegateNode tdn = (TemplateDelegateNode) tn;
-        clone = new TemplateDelegateNode(
-            cloneId, soyFileHeaderInfo, derivedName, tdn.getDelTemplateVariant(),
-            tdn.getDelPriority(), tn.getAutoescapeMode(), tn.getContentKind(), tn.getSoyDoc());
-
+        clone =
+            (new TemplateDelegateNodeBuilder(soyFileHeaderInfo))
+                .setId(cloneId)
+                .setCmdTextInfo(
+                    derivedName, tdn.getDelTemplateVariant(), tdn.getDelPriority(),
+                    tn.getAutoescapeMode(), tn.getContentKind(), tn.getRequiredCssNamespaces())
+                .setSoyDoc(tn.getSoyDoc())
+                .build();
         if (! (derivedName.equals(((TemplateDelegateNode) clone).getDelTemplateName()))) {
           throw new AssertionError();
         }
+
       } else {
         throw new AssertionError("Unknown template node type: " + tn.getClass());
       }
-
+      // Reassign all the local variable data which isn't maintained by the cloning process above.
+      clone.setMaxLocalVariableTableSize(tn.getMaxLocalVariableTableSize());
+      Iterator<TemplateParam> tnIterator = tn.getAllParams().iterator();
+      Iterator<TemplateParam> cloneIterator = clone.getAllParams().iterator();
+      while (tnIterator.hasNext()) {
+        cloneIterator.next().setLocalVariableIndex(tnIterator.next().localVariableIndex());
+      }
       clone.setSourceLocation(tn.getSourceLocation());
 
       for (StandaloneNode child : tn.getChildren()) {
-        clone.addChild(SoytreeUtils.cloneWithNewIds(child));
+        clone.addChild(SoytreeUtils.cloneWithNewIds(child, idGen));
       }
 
       b.add(clone);

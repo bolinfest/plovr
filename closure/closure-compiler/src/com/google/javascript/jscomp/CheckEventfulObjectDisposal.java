@@ -17,6 +17,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
@@ -32,8 +33,6 @@ import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
 import com.google.javascript.rhino.jstype.UnionType;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -45,38 +44,46 @@ import java.util.Stack;
  * Check to ensure there exists a path to dispose of each eventful object
  * created.
  *
- * This compiler pass uses the inferred types and hence either type checking or
- * type inference needs to be enabled. The set of eventful objects is initialized
- * to {goog.events.Eventful} and, if the "aggressive" mode is set, expanded to a
- * larger class using the eventize relationship (see http://research.google.com/pubs/pub40738.html).
+ * An eventful class is any class that derives from goog.events.EventHandler
+ * or (in aggressive mode) is disposable and disposes of an eventful class when
+ * it is disposed (see http://research.google.com/pubs/pub40738.html).
  *
  * This pass is heuristic based and should not be used for any check
- * of pass/fail testing.
+ * of pass/fail testing. The pass traverses the AST and marks as errors
+ * cases where an eventful object is allocated but a dispose call is not found.
+ * It only tracks eventful objects that has a easily identifiable static name,
+ * i.e., objects assigned to arrays, returned from functions or captured in
+ * closures are not considered. It simply tries to see if there exists a call to
+ * a dispose method in the AST for every object seen as eventful.
  *
- * This check is performed interprocedurally but in a flow and path
- * insensitive manner.
+ * This compiler pass uses the inferred types and hence either type checking or
+ * type inference needs to be enabled.
  *
  *
  */
- // TODO(user) Pass needs to be updated for listenable interfaces.
+ // TODO(user): Pass needs to be updated for listenable interfaces.
 public class CheckEventfulObjectDisposal implements CompilerPass {
 
-  // Error messages returned
-  static final DiagnosticType EVENTFUL_OBJECT_NOT_DISPOSED = DiagnosticType.error(
-      "JSC_EVENTFUL_OBJECT_NOT_DISPOSED",
-      "eventful object created should be\n" +
-      "  * registered as disposable, or\n" +
-      "  * explicitly disposed of");
-  static final DiagnosticType EVENTFUL_OBJECT_PURELY_LOCAL = DiagnosticType.error(
-      "JSC_EVENTFUL_OBJECT_PURELY_LOCAL",
-      "a purely local eventful object cannot be disposed of later");
-  static final DiagnosticType OVERWRITE_PRIVATE_EVENTFUL_OBJECT = DiagnosticType.error(
-      "JSC_OVERWRITE_PRIVATE_EVENTFUL_OBJECT",
-      "private eventful object overwritten in subclass cannot be properly disposed of");
-  static final DiagnosticType UNLISTEN_WITH_ANONBOUND = DiagnosticType.error(
-      "JSC_UNLISTEN_WITH_ANONBOUND",
-      "an unlisten call with an anonymous or bound function does not result in " +
-      "the event being unlisted to");
+  static final DiagnosticType EVENTFUL_OBJECT_NOT_DISPOSED =
+      DiagnosticType.error(
+        "JSC_EVENTFUL_OBJECT_NOT_DISPOSED",
+        "eventful object created should be\n" +
+        "  * registered as disposable, or\n" +
+        "  * explicitly disposed of");
+  static final DiagnosticType EVENTFUL_OBJECT_PURELY_LOCAL =
+      DiagnosticType.error(
+        "JSC_EVENTFUL_OBJECT_PURELY_LOCAL",
+        "a purely local eventful object cannot be disposed of later");
+  static final DiagnosticType OVERWRITE_PRIVATE_EVENTFUL_OBJECT =
+      DiagnosticType.error(
+        "JSC_OVERWRITE_PRIVATE_EVENTFUL_OBJECT",
+        "private eventful object overwritten in subclass cannot be properly "
+        + "disposed of");
+  static final DiagnosticType UNLISTEN_WITH_ANONBOUND =
+      DiagnosticType.error(
+        "JSC_UNLISTEN_WITH_ANONBOUND",
+        "an unlisten call with an anonymous or bound function does not result "
+        + "in the event being unlisted to");
 
   /**
    * Policies to determine the disposal checking level.
@@ -99,21 +106,38 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
   }
 
   // Seed types
-  private static final String DISPOSABLE_TYPE_NAME = "goog.Disposable";
-  private static final String EVENT_HANDLER_TYPE_NAME = "goog.events.EventHandler";
-  private JSType googDisposableType;
+  private static final String DISPOSABLE_INTERFACE_TYPE_NAME =
+      "goog.disposable.IDisposable";
+  private static final String EVENT_HANDLER_TYPE_NAME =
+      "goog.events.EventHandler";
+  private JSType googDisposableInterfaceType;
   private JSType googEventsEventHandlerType;
 
   // Eventful types
   private Set<JSType> eventfulTypes;
 
   /*
-   * Dispose methods is a map from regex to argument disposed/all arguments disposed.
-   * Note: it is assumed that at most one regex match will occur per disposeMethod call.
+   * Dispose methods is a map of types to maps from property/function name
+   * to argument disposed/all arguments disposed. The key is used to filter
+   * the dispose calls checked against. That is, the pass considers all dispose
+   * calls of classes a class is derived from and not merely those in the map
+   * of its given type.
+   * Note: it is assumed that at most one string match will occur per
+   * disposeMethod call.
    */
-  private Map<String, List<Integer>> disposeMethods;
-  // Member used to signify all arguments should be disposed.
+  private Map<JSType, Map<String, List<Integer>>> disposeCalls;
+
+  /**
+   * Constant used to signify all arguments of method/function
+   * should be marked as disposed.
+   */
   public static final int DISPOSE_ALL = -1;
+
+  /**
+   *  Constant used to signify that object on which this method is called,
+   *  will itself get disposed of.
+   */
+  public static final int DISPOSE_SELF = -2;
 
   private final AbstractCompiler compiler;
   private final JSTypeRegistry typeRegistry;
@@ -124,7 +148,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
   }
 
   // Combine the state and allocation site of eventful objects
-  private class EventfulObjectState {
+  private static class EventfulObjectState {
     public SeenType seen;
     public Node allocationSite;
   }
@@ -132,7 +156,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
   /*
    * The disposal checking policy used.
    */
-  private DisposalCheckingPolicy checkingPolicy;
+  private final DisposalCheckingPolicy checkingPolicy;
 
   /*
    * Eventize DAG represented using adjacency lists.
@@ -156,13 +180,43 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
 
   /**
    * Add a new call that is used to dispose an JS object.
-   * @param pattern A regular expression that matches the function used to dispose of/register
-   *   an object as disposable
-   * @param argumentsThatAreDisposed An array of integers (ideally sorted) that specifies
-   *   the arguments of the function being disposed
+   * @param functionOrMethodName The name or suffix of a function or method
+   *  that disposes of/registers an object as disposable
+   * @param argumentsThatAreDisposed An array of integers (ideally sorted) that
+   *   specifies the arguments of the function being disposed
    */
-  private void addDisposeCall(String pattern, List<Integer> argumentsThatAreDisposed) {
-    this.disposeMethods.put(pattern, argumentsThatAreDisposed);
+  private void addDisposeCall(String functionOrMethodName,
+      List<Integer> argumentsThatAreDisposed) {
+    String potentiallyTypeName, propertyName;
+    JSType objectType = null;
+
+    int lastPeriod = functionOrMethodName.lastIndexOf('.');
+    // If function call has a period it is potentially a method function.
+    if (lastPeriod >= 0) {
+      potentiallyTypeName = functionOrMethodName.substring(0, lastPeriod).
+        replaceFirst(".prototype$", "");
+      propertyName = functionOrMethodName.substring(lastPeriod);
+      objectType = compiler.getTypeRegistry().getType(potentiallyTypeName);
+    } else {
+      propertyName = functionOrMethodName;
+    }
+
+    // Find or create property map for object type
+    Map<String, List<Integer>> map = this.disposeCalls.get(objectType);
+    if (map == null) {
+      map = Maps.newHashMap();
+      this.disposeCalls.put(objectType, map);
+    }
+
+    /*
+     * If this is a static function call store the full function name,
+     * else only the method of the object.
+     */
+    if (objectType == null) {
+      map.put(functionOrMethodName, argumentsThatAreDisposed);
+    } else {
+      map.put(propertyName, argumentsThatAreDisposed);
+    }
   }
 
 
@@ -170,13 +224,25 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
    * Initialize disposeMethods map with calls to dispose calls.
    */
   private void initializeDisposeMethodsMap() {
-    this.disposeMethods = Maps.newHashMap();
+    this.disposeCalls = Maps.newHashMap();
 
-    // Initialize disposeMethods hashmap
-    this.addDisposeCall("goog.dispose", new ArrayList<Integer>(Arrays.asList(0)));
-    this.addDisposeCall("goog.disposeAll", new ArrayList<Integer>(Arrays.asList(DISPOSE_ALL)));
-    this.addDisposeCall(".push", new ArrayList<Integer>(Arrays.asList(0)));
-    this.addDisposeCall(".add", new ArrayList<Integer>(Arrays.asList(DISPOSE_ALL)));
+    /*
+     * Initialize dispose calls map. Checks for:
+     *    - Y.registerDisposable(X)
+     *      (Y has to be of type goog.Disposable)
+     *    - X.dispose()
+     *    - goog.dispose(X)
+     *    - goog.disposeAll(X...)
+     *    - X.removeAll() (X is of type goog.events.EventHandler)
+     *    - Y.add(X...) or Y.push(X)
+     */
+    this.addDisposeCall("goog.dispose", ImmutableList.of(0));
+    this.addDisposeCall("goog.Disposable.registerDisposable", ImmutableList.of(0));
+    this.addDisposeCall("goog.disposeAll", ImmutableList.of(DISPOSE_ALL));
+    this.addDisposeCall("goog.events.EventHandler.removeAll", ImmutableList.of(DISPOSE_SELF));
+    this.addDisposeCall(".dispose", ImmutableList.of(DISPOSE_SELF));
+    this.addDisposeCall(".push", ImmutableList.of(0));
+    this.addDisposeCall(".add", ImmutableList.of(DISPOSE_SELF));
   }
 
 
@@ -193,7 +259,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
   /*
    * Get the type of the this in the current scope of traversal
    */
-  private JSType getTypeOfThisForScope(NodeTraversal t) {
+  private static JSType getTypeOfThisForScope(NodeTraversal t) {
     JSType typeOfThis = t.getScopeRoot().getJSType();
     if (typeOfThis == null) {
       return null;
@@ -204,7 +270,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
   }
 
 
-  /*
+  /**
    * Determines if thisType is possibly a subtype of thatType.
    *
    *  It differs from isSubtype only in that thisType gets expanded
@@ -212,6 +278,10 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
    *
    *  Common case targeted is a function returning an eventful object
    *  that may also return a null.
+   *
+   *  @param thisType the JSType being tested
+   *  @param thatType the JSType that is possibly a base of thisType
+   *  @return whether thisType is possibly subtype of thatType
    */
   private static boolean isPossiblySubtype(JSType thisType, JSType thatType) {
     if (thisType == null) {
@@ -263,7 +333,8 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
    *
    * Warning: Inheritance is not currently handled.
    */
-  private static String generateKey(NodeTraversal t, Node n, boolean noLocalVariables) {
+  private static String generateKey(NodeTraversal t, Node n,
+      boolean noLocalVariables) {
     if (n == null) {
       return null;
     }
@@ -318,7 +389,8 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
           //    this.eh = new goog.events.EventHandler();
           //  }
           //};
-          key = t.getScope().getParentScope().getTypeOfThis().toString() + "~" + key;
+          key = t.getScope().getParentScope().getTypeOfThis().toString() + "~"
+              + key;
         } else {
           if (n.getFirstChild() == null) {
             key = base.getJSType().toString() + "=" + key;
@@ -360,19 +432,22 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
     Preconditions.checkArgument(checkingPolicy != DisposalCheckingPolicy.OFF);
 
     // Initialize types
-    googDisposableType = compiler.getTypeRegistry().getType(DISPOSABLE_TYPE_NAME);
-    googEventsEventHandlerType = compiler.getTypeRegistry().getType(EVENT_HANDLER_TYPE_NAME);
+    googDisposableInterfaceType =
+        compiler.getTypeRegistry().getType(DISPOSABLE_INTERFACE_TYPE_NAME);
+    googEventsEventHandlerType = compiler.getTypeRegistry()
+        .getType(EVENT_HANDLER_TYPE_NAME);
 
     /*
      * Required types not found therefore the kind of pattern considered
      * will not be found.
      */
-    if (googEventsEventHandlerType == null || googDisposableType == null) {
+    if (googEventsEventHandlerType == null ||
+        googDisposableInterfaceType == null) {
       return;
     }
 
     // Seed list of disposable stype
-    eventfulTypes = new HashSet<JSType>();
+    eventfulTypes = new HashSet<>();
     eventfulTypes.add(googEventsEventHandlerType);
 
     // Construct eventizer graph
@@ -386,21 +461,22 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
      * EventfulObjectState which tracks the state (allocated, disposed of)
      * as well as allocation site.
      */
-    eventfulObjectMap = new HashMap<String, EventfulObjectState>();
+    eventfulObjectMap = new HashMap<>();
 
     // Traverse tree
     NodeTraversal.traverse(compiler, root, new Traversal());
 
     /*
      * Scan eventfulObjectMap for allocated eventful objects that
-     * had no free/dispose/eventlistener-removal call.
+     * had no dispose calls.
      */
     for (EventfulObjectState e : eventfulObjectMap.values()) {
       Node n = e.allocationSite;
       if (e.seen == SeenType.ALLOCATED) {
-        compiler.report(JSError.make(n.getSourceFileName(), n, EVENTFUL_OBJECT_NOT_DISPOSED));
-      } else if (e.seen == SeenType.ALLOCATED_LOCALLY) {
-        compiler.report(JSError.make(n.getSourceFileName(), n, EVENTFUL_OBJECT_PURELY_LOCAL));
+        compiler.report(JSError.make(n, EVENTFUL_OBJECT_NOT_DISPOSED));
+      } else if (e.seen == SeenType.ALLOCATED_LOCALLY &&
+          checkingPolicy == DisposalCheckingPolicy.AGGRESSIVE) {
+        compiler.report(JSError.make(n, EVENTFUL_OBJECT_PURELY_LOCAL));
       }
     }
   }
@@ -416,17 +492,17 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
      */
     int white = 0, gray = 1, black = 2;
     int last = eventizes.size() - 1;
-    Map<String, Integer> color = new HashMap<String, Integer>();
-    Stack<String> dfsStack = new Stack<String>();
+    Map<String, Integer> color = new HashMap<>();
+    Stack<String> dfsStack = new Stack<>();
 
     /*
      * Initialize color.
      * Some types are only on one or the other side of the
      * inference.
      */
-    for (String r : eventizes.keySet()) {
-      color.put(r, white);
-      for (String s : eventizes.get(r)) {
+    for (Map.Entry<String, Set<String>> eventizesEntry : eventizes.entrySet()) {
+      color.put(eventizesEntry.getKey(), white);
+      for (String s : eventizesEntry.getValue()) {
         color.put(s, white);
       }
     }
@@ -494,7 +570,8 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
       Node base = first.getFirstChild();
       JSType baseType = base.getJSType();
 
-      if (baseType == null || !isPossiblySubtype(baseType, googDisposableType)) {
+      if (baseType == null ||
+          !isPossiblySubtype(baseType, googDisposableInterfaceType)) {
         return null;
       }
 
@@ -532,9 +609,9 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
 
 
     public ComputeEventizeTraversal() {
-      isConstructorStack = new Stack<Boolean>();
-      isDisposalStack = new Stack<Boolean>();
-      eventizes = new HashMap<String, Set<String>>();
+      isConstructorStack = new Stack<>();
+      isDisposalStack = new Stack<>();
+      eventizes = new HashMap<>();
     }
 
     private Boolean inConstructorScope() {
@@ -563,7 +640,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
 
       if (type.isEmptyType() ||
           type.isUnknownType() ||
-          !isPossiblySubtype(type, googDisposableType)) {
+          !isPossiblySubtype(type, googDisposableInterfaceType)) {
         return true;
       }
 
@@ -598,7 +675,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
 
       Set<String> eventize = eventizes.get(propertyJsTypeName);
       if (eventize == null) {
-        eventize = new HashSet<String>();
+        eventize = new HashSet<>();
         eventizes.put(propertyJsTypeName, eventize);
       }
       eventize.add(className);
@@ -633,8 +710,10 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
               /*
                * Initialize eventizes relationship
                */
-              if (t.getScope() != null && t.getScope().getTypeOfThis() != null) {
-                ObjectType objectType = ObjectType.cast(t.getScope().getTypeOfThis().dereference());
+              if (t.getScope() != null &&
+                  t.getScope().getTypeOfThis() != null) {
+                ObjectType objectType = ObjectType.cast(t.getScope()
+                    .getTypeOfThis().dereference());
 
                 /*
                  * Eventize due to inheritance
@@ -650,7 +729,8 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
                     continue;
                   }
 
-                  addEventize(compiler.getTypeRegistry().getType(functionName), objectType);
+                  addEventize(compiler.getTypeRegistry().getType(functionName),
+                      objectType);
 
                   /*
                    * Don't add transitive eventize edges here, it will be
@@ -701,30 +781,29 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
         /*
          * Anonymous function
          */
-        compiler.report(JSError.make(n.getSourceFileName(), n, UNLISTEN_WITH_ANONBOUND));
+        compiler.report(JSError.make(n, UNLISTEN_WITH_ANONBOUND));
       } else if (listener.isCall()) {
         if (!listener.getFirstChild().isQualifiedName()) {
           /*
            * Anonymous function
            */
-          compiler.report(JSError.make(n.getSourceFileName(), n, UNLISTEN_WITH_ANONBOUND));
-        } else if (listener.getFirstChild().getQualifiedName().equals("goog.bind")) {
+          compiler.report(JSError.make(n, UNLISTEN_WITH_ANONBOUND));
+        } else if (listener.getFirstChild().matchesQualifiedName("goog.bind")) {
           /*
            * Using goog.bind to unlisten
            */
-          compiler.report(JSError.make(n.getSourceFileName(), n, UNLISTEN_WITH_ANONBOUND));
+          compiler.report(JSError.make(n, UNLISTEN_WITH_ANONBOUND));
         }
       }
     }
 
 
-    private void isCalled(NodeTraversal t, Node n) {
+    private void visitCall(NodeTraversal t, Node n) {
       Node functionCalled = n.getFirstChild();
       if (functionCalled == null ||
           !functionCalled.isQualifiedName()) {
           return;
       }
-      String functionCalledName = functionCalled.getQualifiedName();
       JSType typeOfThis = getTypeOfThisForScope(t);
       if (typeOfThis == null) {
         return;
@@ -734,7 +813,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
        * Class considered eventful if there is an unlisten call in the
        * disposal.
        */
-      if (functionCalledName.equals("goog.events.unlisten")) {
+      if (functionCalled.matchesQualifiedName("goog.events.unlisten")) {
 
         if (inDisposalScope()) {
           eventfulTypes.add(typeOfThis);
@@ -742,7 +821,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
         isGoogEventsUnlisten(n);
       }
       if (inDisposalScope() &&
-          functionCalledName.equals("goog.events.removeAll")) {
+          functionCalled.matchesQualifiedName("goog.events.removeAll")) {
         eventfulTypes.add(typeOfThis);
       }
 
@@ -761,7 +840,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
     public void visit(NodeTraversal t, Node n, Node parent) {
       switch (n.getType()) {
         case Token.CALL:
-          isCalled(t, n);
+          visitCall(t, n);
           break;
         default:
           break;
@@ -769,7 +848,8 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
     }
   }
 
-  private class Traversal extends AbstractPostOrderCallback  implements ScopedCallback {
+  private class Traversal extends AbstractPostOrderCallback
+      implements ScopedCallback {
     /*
      * Checks if the input node correspond to the creation of an eventful object
      */
@@ -824,7 +904,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
           Node assign = sibling.getFirstChild();
           if (assign.isAssign()) {
             // assign.getLastChild().isEquivalentTo(propertyNode) did not work
-            if (propertyNode.getQualifiedName().equals(assign.getLastChild().getQualifiedName())) {
+            if (propertyNode.matchesQualifiedName(assign.getLastChild())) {
               if (!assign.getFirstChild().isName()) {
                 return assign.getFirstChild();
               }
@@ -864,7 +944,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
     /*
      * Record the creation of a new eventful object.
      */
-    private void isNew(NodeTraversal t, Node n, Node parent) {
+    private void visitNew(NodeTraversal t, Node n, Node parent) {
       if (!createsEventfulObject(n)) {
         return;
       }
@@ -885,15 +965,6 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
         propertyNode = parent.getFirstChild();
       } else {
         propertyNode = parent;
-      }
-
-      /*
-       * Only perform checks for locally defined eventful objects in aggressive
-       * mode to reduce false positives.
-       */
-      if (propertyNode.isName() &&
-          checkingPolicy != DisposalCheckingPolicy.AGGRESSIVE) {
-        return;
       }
 
       key = generateKey(t, propertyNode, false);
@@ -933,17 +1004,51 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
       }
     }
 
+    private void addDisposeArgumentsMatched(Map<String, List<Integer>> map,
+        Node n, String property, List<Node> foundDisposeCalls) {
+      for (Map.Entry<String, List<Integer>> disposeCallsEntry : map.entrySet()) {
+        if (property.endsWith(disposeCallsEntry.getKey())) {
+          List<Integer> disposeArguments = disposeCallsEntry.getValue();
+
+          // Dispose specific arguments only
+          Node t = n.getNext();
+          int tsArgument = 0;
+          for (Integer disposeArgument : disposeArguments) {
+            switch (disposeArgument) {
+              // Dispose all arguments
+              case DISPOSE_ALL:
+                for (Node tt = n.getNext(); tt != null; tt = tt.getNext()) {
+                  foundDisposeCalls.add(tt);
+                }
+                break;
+              // Dispose objects called on
+              case DISPOSE_SELF:
+                Node calledOn = n.getFirstChild();
+
+                foundDisposeCalls.add(calledOn);
+                break;
+              default:
+                // The current item pointed to by t is beyond that requested in
+                // current array element.
+                if (tsArgument > disposeArgument) {
+                  t = n.getNext();
+                  tsArgument = 0;
+                }
+                for (; tsArgument < disposeArgument && t != null;
+                        ++tsArgument) {
+                  t = t.getNext();
+                }
+                if (tsArgument == disposeArgument && t != null) {
+                  foundDisposeCalls.add(t);
+                }
+                break;
+            }
+          }
+        }
+      }
+    }
+
     private List<Node> maybeGetValueNodesFromCall(Node n) {
-      /*
-       * Checks for:
-       *    - Y.registerDisposable(X)
-       *      (Y has to be of type goog.Disposable)
-       *    - X.dispose()
-       *    - goog.dispose(X)
-       *    - goog.disposeAll(X...)
-       *    - X.removeAll() (X is of type goog.events.EventHandler)
-       *    - <array>.add*(X...) or Y.push(X)
-       */
       List<Node> ret = Lists.newArrayList();
       Node first = n.getFirstChild();
 
@@ -952,79 +1057,18 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
       }
       String property = first.getQualifiedName();
 
-      if (property.endsWith(".registerDisposable"))  {
-        /*
-         *  Ensure object is of type disposable
-         */
-        Node base = first.getFirstChild();
-        JSType baseType = base.getJSType();
-
-        if (baseType != null && isPossiblySubtype(baseType, googDisposableType)) {
-          ret.add(n.getLastChild());
-        }
+      Node base = first.getFirstChild();
+      JSType baseType = null;
+      if (base != null) {
+        baseType = base.getJSType();
       }
 
-      // Call to function known to dispose arguments
-      for (String disposeMethod : disposeMethods.keySet()) {
-        if (property.matches(disposeMethod)) {
-          List<Integer> disposeArguments = disposeMethods.get(disposeMethod);
-
-          // Dispose specific arguments only
-          Node t = first.getNext();
-          int tsArgument = 0;
-          for (Integer disposeArgument : disposeArguments) {
-            // Dispose all arguments?
-            if (disposeArgument == DISPOSE_ALL) {
-              for (Node tt = first.getNext(); tt != null; tt = tt.getNext()) {
-                ret.add(tt);
-              }
-              break;
-            }
-
-            // The current item pointed to by t is beyond that requested in
-            // current array element.
-            if (tsArgument > disposeArgument) {
-              t = first.getNext();
-              tsArgument = 0;
-            }
-            for (; tsArgument < disposeArgument && t != null; ++tsArgument) {
-              t = t.getNext();
-            }
-            if (tsArgument == disposeArgument && t != null) {
-              ret.add(t);
-            }
-          }
-
-          return ret;
-        }
-      }
-
-      /*
-       * n -> call
-       *   n.firstChild -> "dispose" | "removeAll"
-       *   n.firstChild.firstChild -> object
-       */
-      Node calledOn = n.getFirstChild().getFirstChild();
-      if (property.endsWith(".dispose")) {
-        ret.add(calledOn);
-      }
-      if (property.endsWith(".removeAll")) {
-        if (calledOn != null) {
-          JSType calledOnType = calledOn.getJSType();
-          if (calledOnType != null &&
-              !calledOnType.isEmptyType() &&
-              !calledOnType.isUnknownType() &&
-              isPossiblySubtype(calledOnType, googEventsEventHandlerType)) {
-            ret.add(calledOn);
-          }
-        }
-      }
-
-      Node possiblyArray = first.getFirstChild();
-      if (possiblyArray != null) {
-        JSType possiblyArrayType = possiblyArray.getJSType();
-        if (possiblyArrayType != null && possiblyArrayType.isArrayType()) {
-          ret.add(n.getLastChild());
+      for (Map.Entry<JSType, Map<String, List<Integer>>> disposeCallEntry :
+          disposeCalls.entrySet()) {
+        JSType key = disposeCallEntry.getKey();
+        if (key == null ||
+            (baseType != null && isPossiblySubtype(baseType, key))) {
+          addDisposeArgumentsMatched(disposeCallEntry.getValue(), first, property, ret);
         }
       }
 
@@ -1036,7 +1080,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
      * (dispose or removeAll will remove all event listeners from
      * an EventHandler).
      */
-    private void isCall(NodeTraversal t, Node n) {
+    private void visitCall(NodeTraversal t, Node n) {
       // Filter the calls to find a "dispose" call
       List<Node> variableNodes = maybeGetValueNodesFromCall(n);
 
@@ -1075,7 +1119,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
     /*
      * Check function definitions to add custom dispose methods.
      */
-    public void isFunction(NodeTraversal t, Node n) {
+    public void visitFunction(NodeTraversal t, Node n) {
       Preconditions.checkArgument(n.isFunction());
       JSDocInfo jsDocInfo = NodeUtil.getFunctionJSDocInfo(n);
 
@@ -1093,7 +1137,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
         if (jsDocInfo.disposesOf("*")) {
           positionalDisposedParameters.add(DISPOSE_ALL);
         } else {
-          // Param types
+          // Parameter types
           int index = 0;
           for (Node p : funType.getParameters()) {
               // Bail out if the paramNode is not there.
@@ -1107,7 +1151,8 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
               index++;
           }
         }
-        addDisposeCall(NodeUtil.getFunctionName(n), positionalDisposedParameters);
+        addDisposeCall(NodeUtil.getFunctionName(n),
+            positionalDisposedParameters);
       }
     }
 
@@ -1118,7 +1163,7 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
      * Assigning to an array element is taken care of by the generateKey
      * returning null on array ("complex") variable names.
      */
-    public void isAssign(NodeTraversal t, Node n) {
+    public void visitAssign(NodeTraversal t, Node n) {
       Node assignedTo = n.getFirstChild();
       JSType assignedToType = assignedTo.getJSType();
       if (assignedToType == null || assignedToType.isEmptyType()) {
@@ -1139,7 +1184,8 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
 
         JSDocInfo di = n.getJSDocInfo();
         ObjectType objectType =
-            ObjectType.cast(dereference(n.getFirstChild().getFirstChild().getJSType()));
+            ObjectType.cast(dereference(n.getFirstChild().getFirstChild()
+                .getJSType()));
         String propertyName = n.getFirstChild().getLastChild().getString();
 
         boolean fieldIsPrivate = (
@@ -1185,28 +1231,19 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
     /*
      * Filter out any eventful objects returned.
      */
-    private void isReturn(NodeTraversal t, Node n) {
+    private void visitReturn(NodeTraversal t, Node n) {
       Node variableNode = n.getFirstChild();
       if (variableNode == null) {
         return;
       }
-      JSType type = variableNode.getJSType();
-      if (type == null || type.isEmptyType()) {
-        return;
-      }
 
-      boolean isTrackedReturn = false;
-      for (JSType disposalType : eventfulTypes) {
-        if (type.isSubtype(disposalType)) {
-          isTrackedReturn = true;
-          break;
+      if (!variableNode.isArrayLit()) {
+        eventfulObjectDisposed(t, variableNode);
+      } else {
+        for (Node child : variableNode.children()) {
+          eventfulObjectDisposed(t, child);
         }
       }
-      if (!isTrackedReturn) {
-        return;
-      }
-
-      eventfulObjectDisposed(t, variableNode);
     }
 
     /*
@@ -1250,19 +1287,19 @@ public class CheckEventfulObjectDisposal implements CompilerPass {
     public void visit(NodeTraversal t, Node n, Node parent) {
       switch (n.getType()) {
         case Token.ASSIGN:
-          isAssign(t, n);
+          visitAssign(t, n);
           break;
         case Token.CALL:
-          isCall(t, n);
+          visitCall(t, n);
           break;
         case Token.FUNCTION:
-          isFunction(t, n);
+          visitFunction(t, n);
           break;
         case Token.NEW:
-          isNew(t, n, parent);
+          visitNew(t, n, parent);
           break;
         case Token.RETURN:
-          isReturn(t, n);
+          visitReturn(t, n);
           break;
         default:
           break;

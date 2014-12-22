@@ -25,7 +25,6 @@ import com.google.template.soy.shared.AbstractSoyPrintDirectiveTestCase;
 /**
  * Unit tests for EscapeHtmlDirective.
  *
- * @author Kai Huang
  */
 public class EscapeHtmlDirectiveTest extends AbstractSoyPrintDirectiveTestCase {
 
@@ -49,7 +48,7 @@ public class EscapeHtmlDirectiveTest extends AbstractSoyPrintDirectiveTestCase {
         "&lt;foo&gt;",
         // But JS_STR_CHARS are.
         UnsafeSanitizedContentOrdainer.ordainAsSafe(
-            "<foo>", SanitizedContent.ContentKind.JS_STR_CHARS),
+            "<foo>", SanitizedContent.ContentKind.JS),
         escapeHtmlDirective);
     assertTofuOutput(
         "&lt;foo&gt;",

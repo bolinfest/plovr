@@ -16,8 +16,11 @@
 
 package com.google.javascript.jscomp.deps;
 
+import static com.google.common.base.StandardSystemProperty.USER_DIR;
+
 import com.google.common.base.CharMatcher;
 import com.google.common.base.Joiner;
+import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 
@@ -58,9 +61,8 @@ public final class PathUtil {
       return path;
     }
 
-    String[] srcFragments = path.split("/");
     List<String> dstFragments = Lists.newArrayList();
-    for (String fragment : srcFragments) {
+    for (String fragment : Splitter.on('/').split(path)) {
       if (fragment.equals("..")) {
         if (!dstFragments.isEmpty()) {
           dstFragments.remove(dstFragments.size() - 1);
@@ -116,7 +118,7 @@ public final class PathUtil {
    * @return The path made absolute.
    */
   public static String makeAbsolute(String path) {
-    return makeAbsolute(path, System.getProperty("user.dir"));
+    return makeAbsolute(path, USER_DIR.value());
   }
 
   /**

@@ -17,8 +17,8 @@
 package com.google.template.soy.soytree;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.template.soy.base.BaseUtils;
 import com.google.template.soy.base.SoySyntaxException;
+import com.google.template.soy.base.internal.BaseUtils;
 import com.google.template.soy.internal.base.Pair;
 import com.google.template.soy.soytree.SoyNode.MsgPlaceholderInitialNode;
 
@@ -36,7 +36,6 @@ import javax.annotation.Nullable;
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
- * @author Kai Huang
  */
 public class MsgHtmlTagNode extends AbstractBlockNode implements MsgPlaceholderInitialNode {
 
@@ -200,12 +199,12 @@ public class MsgHtmlTagNode extends AbstractBlockNode implements MsgPlaceholderI
   }
 
 
-  @Override public String getUserSuppliedPlaceholderName() {
+  @Override public String getUserSuppliedPhName() {
     return userSuppliedPlaceholderName;
   }
 
 
-  @Override public String genBasePlaceholderName() {
+  @Override public String genBasePhName() {
 
     if (userSuppliedPlaceholderName != null) {
       return BaseUtils.convertToUpperUnderscore(userSuppliedPlaceholderName);

@@ -24,10 +24,9 @@ import javax.annotation.concurrent.Immutable;
  *
  * <p> Important: This class may only be used in implementing plugins (e.g. functions, directives).
  *
- * @author Kai Huang
  */
 @Immutable
-public class NullData extends PrimitiveData {
+public final class NullData extends PrimitiveData {
 
 
   /** Static singleton instance of NullData. */
@@ -47,18 +46,20 @@ public class NullData extends PrimitiveData {
    *
    * <p> Null is falsy.
    */
+  @Deprecated
   @Override public boolean toBoolean() {
     return false;
   }
 
 
+  @SuppressWarnings("EqualsWhichDoesntCheckParameterClass")
   @Override public boolean equals(Object other) {
     return other == NullData.INSTANCE;
   }
 
 
   @Override public int hashCode() {
-    return 827;
+    return getClass().hashCode();
   }
 
 }

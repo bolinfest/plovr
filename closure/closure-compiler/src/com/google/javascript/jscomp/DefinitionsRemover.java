@@ -44,12 +44,12 @@ class DefinitionsRemover {
       return null;
     }
 
-    if (NodeUtil.isVarDeclaration(n) && n.hasChildren()) {
+    if (NodeUtil.isVarDeclaration(n) && (isExtern || n.hasChildren())) {
       return new VarDefinition(n, isExtern);
     } else if (parent.isFunction() && parent.getFirstChild() == n) {
       if (!NodeUtil.isFunctionExpression(parent)) {
         return new NamedFunctionDefinition(parent, isExtern);
-      } else if (!n.getString().equals("")) {
+      } else if (!n.getString().isEmpty()) {
         return new FunctionExpressionDefinition(parent, isExtern);
       }
     } else if (parent.isAssign() && parent.getFirstChild() == n) {
@@ -60,6 +60,12 @@ class DefinitionsRemover {
     } else if (parent.isParamList()) {
       Node function = parent.getParent();
       return new FunctionArgumentDefinition(function, n, isExtern);
+    } else if (parent.getType() == Token.COLON && parent.getFirstChild() == n
+        && isExtern) {
+      Node grandparent = parent.getParent();
+      Preconditions.checkState(grandparent.getType() == Token.LB);
+      Preconditions.checkState(grandparent.getParent().getType() == Token.LC);
+      return new RecordTypePropertyDefinition(n);
     }
     return null;
   }
@@ -74,12 +80,12 @@ class DefinitionsRemover {
       return false;
     }
 
-    if (NodeUtil.isVarDeclaration(n) && n.hasChildren()) {
+    if (NodeUtil.isVarDeclaration(n) && (n.isFromExterns() || n.hasChildren())) {
       return true;
     } else if (parent.isFunction() && parent.getFirstChild() == n) {
       if (!NodeUtil.isFunctionExpression(parent)) {
         return true;
-      } else if (!n.getString().equals("")) {
+      } else if (!n.getString().isEmpty()) {
         return true;
       }
     } else if (parent.isAssign() && parent.getFirstChild() == n) {
@@ -87,6 +93,12 @@ class DefinitionsRemover {
     } else if (NodeUtil.isObjectLitKey(n)) {
       return true;
     } else if (parent.isParamList()) {
+      return true;
+    } else if (parent.getType() == Token.COLON && parent.getFirstChild() == n
+        && n.isFromExterns()) {
+      Node grandparent = parent.getParent();
+      Preconditions.checkState(grandparent.getType() == Token.LB);
+      Preconditions.checkState(grandparent.getParent().getType() == Token.LC);
       return true;
     }
     return false;
@@ -314,6 +326,24 @@ class DefinitionsRemover {
   }
 
   /**
+   * Represents member declarations using a record type from externs.
+   * Example: /** @typedef {{prop: number}} *\/ var typdef;
+   */
+  static final class RecordTypePropertyDefinition extends IncompleteDefinition {
+    RecordTypePropertyDefinition(Node name) {
+      super(IR.getprop(IR.objectlit(), name.cloneNode()),
+            /** isExtern */ true);
+      Preconditions.checkArgument(name.isString());
+    }
+
+    @Override
+    public void performRemove() {
+      throw new UnsupportedOperationException("Can't remove RecordType def");
+    }
+  }
+
+
+  /**
    * Represents member declarations using a object literal.
    * Example: var x = { e : function() { } };
    */
@@ -372,8 +402,8 @@ class DefinitionsRemover {
     VarDefinition(Node node, boolean inExterns) {
       super(inExterns);
       Preconditions.checkArgument(NodeUtil.isVarDeclaration(node));
-      Preconditions.checkArgument(node.hasChildren(),
-          "VAR Declaration of %sshould be assigned a value.", node.getString());
+      Preconditions.checkArgument(inExterns || node.hasChildren(),
+          "VAR Declaration of %s must be assigned a value.", node.getString());
       name = node;
     }
 

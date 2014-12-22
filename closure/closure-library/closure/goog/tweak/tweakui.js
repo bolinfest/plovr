@@ -23,10 +23,17 @@ goog.provide('goog.tweak.TweakUi');
 
 goog.require('goog.array');
 goog.require('goog.asserts');
-goog.require('goog.dom.DomHelper');
+goog.require('goog.dom');
 goog.require('goog.object');
 goog.require('goog.style');
 goog.require('goog.tweak');
+goog.require('goog.tweak.BaseEntry');
+goog.require('goog.tweak.BooleanGroup');
+goog.require('goog.tweak.BooleanInGroupSetting');
+goog.require('goog.tweak.BooleanSetting');
+goog.require('goog.tweak.ButtonAction');
+goog.require('goog.tweak.NumericSetting');
+goog.require('goog.tweak.StringSetting');
 goog.require('goog.ui.Zippy');
 goog.require('goog.userAgent');
 
@@ -37,6 +44,7 @@ goog.require('goog.userAgent');
  * @param {!goog.tweak.Registry} registry The registry to render.
  * @param {goog.dom.DomHelper=} opt_domHelper The DomHelper to render with.
  * @constructor
+ * @final
  */
 goog.tweak.TweakUi = function(registry, opt_domHelper) {
   /**
@@ -136,7 +144,7 @@ goog.tweak.TweakUi.CSS_STYLES_ = (function() {
 /**
  * Creates a TweakUi if tweaks are enabled.
  * @param {goog.dom.DomHelper=} opt_domHelper The DomHelper to render with.
- * @return {Element|undefined} The root UI element or undefined if tweaks are
+ * @return {!Element|undefined} The root UI element or undefined if tweaks are
  *     not enabled.
  */
 goog.tweak.TweakUi.create = function(opt_domHelper) {
@@ -152,7 +160,7 @@ goog.tweak.TweakUi.create = function(opt_domHelper) {
 /**
  * Creates a TweakUi inside of a show/hide link.
  * @param {goog.dom.DomHelper=} opt_domHelper The DomHelper to render with.
- * @return {Element|undefined} The root UI element or undefined if tweaks are
+ * @return {!Element|undefined} The root UI element or undefined if tweaks are
  *     not enabled.
  */
 goog.tweak.TweakUi.createCollapsible = function(opt_domHelper) {
@@ -220,7 +228,7 @@ goog.tweak.TweakUi.isGroupEntry_ = function(entry) {
 /**
  * Returns the list of entries from the given boolean group.
  * @param {!goog.tweak.BooleanGroup} group The group to get the entries from.
- * @return {!Array.<!goog.tweak.BaseEntry>} The sorted entries.
+ * @return {!Array<!goog.tweak.BaseEntry>} The sorted entries.
  * @private
  */
 goog.tweak.TweakUi.extractBooleanGroupEntries_ = function(group) {
@@ -371,15 +379,16 @@ goog.tweak.TweakUi.prototype.insertEntry_ = function(entry) {
 
 /**
  * The body of the tweaks UI and also used for BooleanGroup.
- * @param {!Array.<!goog.tweak.BaseEntry>} entries The entries to show in the
+ * @param {!Array<!goog.tweak.BaseEntry>} entries The entries to show in the
  *     panel.
  * @param {goog.dom.DomHelper=} opt_domHelper The DomHelper to render with.
  * @constructor
+ * @final
  */
 goog.tweak.EntriesPanel = function(entries, opt_domHelper) {
   /**
    * The entries to show in the panel.
-   * @type {!Array.<!goog.tweak.BaseEntry>} entries
+   * @type {!Array<!goog.tweak.BaseEntry>} entries
    * @private
    */
   this.entries_ = entries;
@@ -425,7 +434,7 @@ goog.tweak.EntriesPanel = function(entries, opt_domHelper) {
 
   /**
    * Map of tweak ID -> EntriesPanel for child panels (BooleanGroups).
-   * @type {!Object.<!goog.tweak.EntriesPanel>}
+   * @type {!Object<!goog.tweak.EntriesPanel>}
    */
   this.childPanels = {};
 };
@@ -661,7 +670,7 @@ goog.tweak.EntriesPanel.prototype.createBooleanSettingDom_ =
  * @param {!goog.tweak.BooleanGroup|!goog.tweak.NamespaceEntry_} entry The
  *     entry.
  * @param {string} label The label for the entry.
- * @param {!Array.<goog.tweak.BaseEntry>} childEntries The child entries.
+ * @param {!Array<goog.tweak.BaseEntry>} childEntries The child entries.
  * @return {!DocumentFragment} The DOM element.
  * @private
  */
@@ -787,7 +796,7 @@ goog.tweak.EntriesPanel.prototype.createTweakEntryDom_ = function(entry) {
  * never registered with the TweakRegistry, but are contained within the
  * collection of entries within TweakPanels.
  * @param {string} namespace The namespace for the entry.
- * @param {!Array.<!goog.tweak.BaseEntry>} entries Entries within the namespace.
+ * @param {!Array<!goog.tweak.BaseEntry>} entries Entries within the namespace.
  * @constructor
  * @extends {goog.tweak.BaseEntry}
  * @private
@@ -799,7 +808,7 @@ goog.tweak.NamespaceEntry_ = function(namespace, entries) {
 
   /**
    * Entries within this namespace.
-   * @type {!Array.<!goog.tweak.BaseEntry>}
+   * @type {!Array<!goog.tweak.BaseEntry>}
    */
   this.entries = entries;
 

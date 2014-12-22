@@ -28,18 +28,17 @@ import com.google.template.soy.soytree.SoyNode.LocalVarBlockNode;
 import com.google.template.soy.soytree.SoyNode.LoopNode;
 import com.google.template.soy.soytree.SoyNode.StandaloneNode;
 import com.google.template.soy.soytree.SoyNode.StatementNode;
+import com.google.template.soy.soytree.defn.LocalVar;
 
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 
 /**
  * Node representing a 'for' statement.
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
- * @author Kai Huang
  */
 public class ForNode extends AbstractBlockCommandNode
     implements StandaloneNode, StatementNode, ConditionalBlockNode, LoopNode, ExprHolderNode,
@@ -53,8 +52,8 @@ public class ForNode extends AbstractBlockCommandNode
                       Pattern.COMMENTS | Pattern.DOTALL);
 
 
-  /** The local (loop) variable name. */
-  private final String varName;
+  /** The Local variable for this loop. */
+  private final LocalVar var;
 
   /** The texts of the individual range args (sort of canonicalized). */
   private final ImmutableList<String> rangeArgTexts;
@@ -77,7 +76,7 @@ public class ForNode extends AbstractBlockCommandNode
           "Invalid 'for' command text \"" + commandText + "\".");
     }
 
-    varName = ExprParseUtils.parseVarNameElseThrowSoySyntaxException(
+    String varName = ExprParseUtils.parseVarNameElseThrowSoySyntaxException(
         matcher.group(1), "Invalid variable name in 'for' command text \"" + commandText + "\".");
 
     List<ExprRootNode<?>> tempRangeArgs = ExprParseUtils.parseExprListElseThrowSoySyntaxException(
@@ -94,6 +93,7 @@ public class ForNode extends AbstractBlockCommandNode
       tempRangeArgTexts.add(rangeArg.toSourceString());
     }
     rangeArgTexts = ImmutableList.copyOf(tempRangeArgTexts);
+    var = new LocalVar(varName, this, null);
   }
 
 
@@ -103,7 +103,7 @@ public class ForNode extends AbstractBlockCommandNode
    */
   protected ForNode(ForNode orig) {
     super(orig);
-    this.varName = orig.varName;
+    this.var = orig.var.clone();
     this.rangeArgTexts = orig.rangeArgTexts;  // safe to reuse (immutable)
     List<ExprRootNode<?>> tempRangeArgs =
         Lists.newArrayListWithCapacity(orig.rangeArgs.size());
@@ -119,8 +119,13 @@ public class ForNode extends AbstractBlockCommandNode
   }
 
 
-  @Override public String getVarName() {
-    return varName;
+  public final LocalVar getVar() {
+    return var;
+  }
+
+
+  @Override public final String getVarName() {
+    return var.name();
   }
 
 

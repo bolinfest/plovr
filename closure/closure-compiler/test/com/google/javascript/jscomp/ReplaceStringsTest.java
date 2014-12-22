@@ -23,7 +23,9 @@ import com.google.javascript.jscomp.ReplaceStrings.Result;
 import com.google.javascript.rhino.Node;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -34,8 +36,19 @@ public class ReplaceStringsTest extends CompilerTestCase {
   private ReplaceStrings pass;
   private Set<String> reserved;
   private VariableMap previous;
+  private boolean runDisambiguateProperties = false;
 
-  private final static String EXTERNS =
+  private final List<String> functionsToInspect = Lists.newArrayList(
+      "Error(?)",
+      "goog.debug.Trace.startTracer(*)",
+      "goog.debug.Logger.getLogger(?)",
+      "goog.debug.Logger.prototype.info(?)",
+      "goog.log.getLogger(?)",
+      "goog.log.info(,?)",
+      "goog.log.multiString(,?,?,)"
+      );
+
+  private static final String EXTERNS =
     "var goog = {};\n" +
     "goog.debug = {};\n" +
     "/** @constructor */\n" +
@@ -48,11 +61,18 @@ public class ReplaceStringsTest extends CompilerTestCase {
     " * @param {string} name\n" +
     " * @return {!goog.debug.Logger}\n" +
     " */\n" +
-    "goog.debug.Logger.getLogger = function(name){};\n";
+    "goog.debug.Logger.getLogger = function(name){};\n" +
+    "goog.log = {}\n" +
+    "goog.log.getLogger = function(name){};\n" +
+    "goog.log.info = function(logger, msg, opt_ex) {};\n" +
+    "goog.log.multiString = function(logger, replace1, replace2, keep) {};\n"
+    ;
 
   public ReplaceStringsTest() {
     super(EXTERNS, true);
     enableNormalize();
+    parseTypeInfo = true;
+    compareJsDoc = false;
   }
 
   @Override
@@ -67,25 +87,32 @@ public class ReplaceStringsTest extends CompilerTestCase {
   protected void setUp() throws Exception {
     super.setUp();
     super.enableLineNumberCheck(false);
-    super.enableTypeCheck(CheckLevel.OFF);
+    super.enableTypeCheck(CheckLevel.WARNING);
     reserved = Collections.emptySet();
     previous = null;
   }
 
   @Override
   public CompilerPass getProcessor(final Compiler compiler) {
-    List<String> names = Lists.newArrayList(
-        "Error(?)",
-        "goog.debug.Trace.startTracer(*)",
-        "goog.debug.Logger.getLogger(?)",
-        "goog.debug.Logger.prototype.info(?)"
-        );
-    pass = new ReplaceStrings(compiler, "`", names, reserved, previous);
+    pass = new ReplaceStrings(
+        compiler, "`", functionsToInspect, reserved, previous);
 
     return new CompilerPass() {
         @Override
         public void process(Node externs, Node js) {
-          new CollapseProperties(compiler, true, true).process(externs, js);
+          Map<String, CheckLevel> propertiesToErrorFor = new HashMap<>();
+          propertiesToErrorFor.put("foobar", CheckLevel.ERROR);
+
+          new CollapseProperties(compiler, true).process(externs, js);
+          if (runDisambiguateProperties) {
+            SourceInformationAnnotator sia =
+                new SourceInformationAnnotator(
+                    "test", false /* doSanityChecks */);
+            NodeTraversal.traverse(compiler, js, sia);
+
+            DisambiguateProperties.forJSTypeSystem(
+                compiler, propertiesToErrorFor).process(externs, js);
+          }
           pass.process(externs, js);
         }
       };
@@ -99,7 +126,7 @@ public class ReplaceStringsTest extends CompilerTestCase {
   }
 
   public void testStable1() {
-    previous = VariableMap.fromMap(ImmutableMap.of("previous","xyz"));
+    previous = VariableMap.fromMap(ImmutableMap.of("previous", "xyz"));
     testDebugStrings(
         "Error('xyz');",
         "Error('previous');",
@@ -117,7 +144,7 @@ public class ReplaceStringsTest extends CompilerTestCase {
     // chosen instead.
     // 2) a previously used name "a" is dropped from the output map if
     // it isn't used.
-    previous = VariableMap.fromMap(ImmutableMap.of("a","unused"));
+    previous = VariableMap.fromMap(ImmutableMap.of("a", "unused"));
     testDebugStrings(
         "Error('xyz');",
         "Error('b');",
@@ -129,7 +156,7 @@ public class ReplaceStringsTest extends CompilerTestCase {
         "throw Error('xyz');",
         "throw Error('a');",
         (new String[] { "a", "xyz" }));
-    previous = VariableMap.fromMap(ImmutableMap.of("previous","xyz"));
+    previous = VariableMap.fromMap(ImmutableMap.of("previous", "xyz"));
     testDebugStrings(
         "throw Error('xyz');",
         "throw Error('previous');",
@@ -363,7 +390,7 @@ public class ReplaceStringsTest extends CompilerTestCase {
         "goog$debug$Logger$getLogger('b');" +
         "goog$debug$Logger$getLogger('b');",
         new String[] {
-            "a", "goog.net.XhrTransport","b", "my.app.Application" });
+            "a", "goog.net.XhrTransport", "b", "my.app.Application" });
   }
 
   public void testRepeatedStringsWithDifferentMethods() {
@@ -400,18 +427,85 @@ public class ReplaceStringsTest extends CompilerTestCase {
         (new String[] { "d", "xyz" }));
   }
 
+  public void testLoggerWithNoReplacedParam() {
+    testDebugStrings(
+        "var x = {};" +
+        "x.logger_ = goog.log.getLogger('foo');" +
+        "goog.log.info(x.logger_, 'Some message');",
+        "var x$logger_ = goog.log.getLogger('a');" +
+        "goog.log.info(x$logger_, 'b');",
+        new String[] {
+            "a", "foo",
+            "b", "Some message"});
+  }
+
+  public void testLoggerWithSomeParametersNotReplaced() {
+    testDebugStrings(
+        "var x = {};" +
+        "x.logger_ = goog.log.getLogger('foo');" +
+        "goog.log.multiString(x.logger_, 'Some message', 'Some message2', " +
+            "'Do not replace');",
+        "var x$logger_ = goog.log.getLogger('a');" +
+        "goog.log.multiString(x$logger_, 'b', 'c', 'Do not replace');",
+        new String[] {
+            "a", "foo",
+            "b", "Some message",
+            "c", "Some message2"});
+  }
+
+  public void testWithDisambiguateProperties() throws Exception {
+    runDisambiguateProperties = true;
+    functionsToInspect.add("A.prototype.f(?)");
+    functionsToInspect.add("C.prototype.f(?)");
+
+    String js =
+        "/** @constructor */function A() {}\n"
+        + "/** @param {string} p\n"
+        + "  * @return {string} */\n"
+        + "A.prototype.f = function(p) {return 'a' + p;};\n"
+        + "/** @constructor */function B() {}\n"
+        + "/** @param {string} p\n"
+        + "  * @return {string} */\n"
+        + "B.prototype.f = function(p) {return p + 'b';};\n"
+        + "/** @constructor */function C() {}\n"
+        + "/** @param {string} p\n"
+        + "  * @return {string} */\n"
+        + "C.prototype.f = function(p) {return 'c' + p + 'c';};\n"
+        + "/** @type {A|B} */var ab = 1 ? new B : new A;\n"
+        + "/** @type {string} */var n = ab.f('not replaced');\n"
+        + "(new A).f('replaced with a');"
+        + "(new C).f('replaced with b');";
+
+    String output =
+        "function A() {}\n"
+        + "A.prototype.A_prototype$f = function(p) { return'a'+p; };\n"
+        + "function B() {}\n"
+        + "B.prototype.A_prototype$f = function(p) { return p+'b'; };\n"
+        + "function C() {}\n"
+        + "C.prototype.C_prototype$f = function(p) { return'c'+p+'c'; };\n"
+        + "var ab = 1 ? new B : new A;\n"
+        + "var n = ab.A_prototype$f('not replaced');\n"
+        + "(new A).A_prototype$f('a');"
+        + "(new C).C_prototype$f('b');";
+
+    testDebugStrings(js, output,
+        new String[] {
+            "a", "replaced with a",
+            "b", "replaced with b"});
+  }
+
   private void testDebugStrings(String js, String expected,
                                 String[] substitutedStrings) {
     // Verify that the strings are substituted correctly in the JS code.
     test(js, expected);
 
     List<Result> results = pass.getResult();
-    assertTrue(substitutedStrings.length % 2 == 0);
-    assertEquals(substitutedStrings.length/2, results.size());
+    assertEquals(0, substitutedStrings.length % 2);
+    assertEquals(substitutedStrings.length / 2, results.size());
 
     // Verify that substituted strings are decoded correctly.
     for (int i = 0; i < substitutedStrings.length; i += 2) {
-      Result result = results.get(i/2);
+      Result result = results.get(i / 2);
       String original = substitutedStrings[i + 1];
       assertEquals(original, result.original);
 

@@ -18,6 +18,7 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
@@ -741,7 +742,7 @@ public class NodeUtilTest extends TestCase {
     String expected = "{{}}";
     String difference = parse(expected).checkTreeEquals(actual);
     if (difference != null) {
-      assertTrue("Nodes do not match:\n" + difference, false);
+      fail("Nodes do not match:\n" + difference);
     }
   }
 
@@ -756,7 +757,7 @@ public class NodeUtilTest extends TestCase {
     String expected = "try {foo()} catch(e) {}";
     String difference = parse(expected).checkTreeEquals(actual);
     if (difference != null) {
-      assertTrue("Nodes do not match:\n" + difference, false);
+      fail("Nodes do not match:\n" + difference);
     }
   }
 
@@ -771,7 +772,7 @@ public class NodeUtilTest extends TestCase {
     String expected = "try {} catch(e) {} finally {}";
     String difference = parse(expected).checkTreeEquals(actual);
     if (difference != null) {
-      assertTrue("Nodes do not match:\n" + difference, false);
+      fail("Nodes do not match:\n" + difference);
     }
   }
 
@@ -787,7 +788,7 @@ public class NodeUtilTest extends TestCase {
     String expected = "try {foo()} finally {}";
     String difference = parse(expected).checkTreeEquals(actual);
     if (difference != null) {
-      assertTrue("Nodes do not match:\n" + difference, false);
+      fail("Nodes do not match:\n" + difference);
     }
   }
 
@@ -802,7 +803,7 @@ public class NodeUtilTest extends TestCase {
     String expected = "try {foo()} finally {}";
     String difference = parse(expected).checkTreeEquals(actual);
     if (difference != null) {
-      assertTrue("Nodes do not match:\n" + difference, false);
+      fail("Nodes do not match:\n" + difference);
     }
   }
 
@@ -817,7 +818,7 @@ public class NodeUtilTest extends TestCase {
     String expected = "try {foo()} finally {}";
     String difference = parse(expected).checkTreeEquals(actual);
     if (difference != null) {
-      assertTrue("Nodes do not match:\n" + difference, false);
+      fail("Nodes do not match:\n" + difference);
     }
   }
 
@@ -832,7 +833,7 @@ public class NodeUtilTest extends TestCase {
     String expected = "var goo, hoo";
     String difference = parse(expected).checkTreeEquals(actual);
     if (difference != null) {
-      assertTrue("Nodes do not match:\n" + difference, false);
+      fail("Nodes do not match:\n" + difference);
     }
 
 
@@ -846,7 +847,7 @@ public class NodeUtilTest extends TestCase {
     expected = "var foo, hoo";
     difference = parse(expected).checkTreeEquals(actual);
     if (difference != null) {
-      assertTrue("Nodes do not match:\n" + difference, false);
+      fail("Nodes do not match:\n" + difference);
     }
 
     // Test removing the last child of several children.
@@ -859,7 +860,7 @@ public class NodeUtilTest extends TestCase {
     expected = "var foo";
     difference = parse(expected).checkTreeEquals(actual);
     if (difference != null) {
-      assertTrue("Nodes do not match:\n" + difference, false);
+      fail("Nodes do not match:\n" + difference);
     }
 
     // Test removing the last.
@@ -872,7 +873,7 @@ public class NodeUtilTest extends TestCase {
     expected = "";
     difference = parse(expected).checkTreeEquals(actual);
     if (difference != null) {
-      assertTrue("Nodes do not match:\n" + difference, false);
+      fail("Nodes do not match:\n" + difference);
     }
   }
 
@@ -887,7 +888,7 @@ public class NodeUtilTest extends TestCase {
     String expected = "";
     String difference = parse(expected).checkTreeEquals(actual);
     if (difference != null) {
-      assertTrue("Nodes do not match:\n" + difference, false);
+      fail("Nodes do not match:\n" + difference);
     }
   }
 
@@ -902,7 +903,7 @@ public class NodeUtilTest extends TestCase {
     String expected = "";
     String difference = parse(expected).checkTreeEquals(actual);
     if (difference != null) {
-      assertTrue("Nodes do not match:\n" + difference, false);
+      fail("Nodes do not match:\n" + difference);
     }
   }
 
@@ -1283,10 +1284,10 @@ public class NodeUtilTest extends TestCase {
 
     // Chrome and rhino behavior differently from FF and IE. FF and IE
     // consider a negative hex number to be invalid
-    assertEquals(null, NodeUtil.getNumberValue(getNode("'-0xf'")));
-    assertEquals(null, NodeUtil.getNumberValue(getNode("'-0xF'")));
-    assertEquals(null, NodeUtil.getNumberValue(getNode("'+0xf'")));
-    assertEquals(null, NodeUtil.getNumberValue(getNode("'+0xF'")));
+    assertNull(NodeUtil.getNumberValue(getNode("'-0xf'")));
+    assertNull(NodeUtil.getNumberValue(getNode("'-0xF'")));
+    assertNull(NodeUtil.getNumberValue(getNode("'+0xf'")));
+    assertNull(NodeUtil.getNumberValue(getNode("'+0xF'")));
 
     assertEquals(16.0, NodeUtil.getNumberValue(getNode("'0X10'")));
     assertEquals(Double.NaN, NodeUtil.getNumberValue(getNode("'0X10.8'")));
@@ -1303,9 +1304,9 @@ public class NodeUtilTest extends TestCase {
         Double.POSITIVE_INFINITY,
         NodeUtil.getNumberValue(getNode("'+Infinity'")));
     // Firefox treats "infinity" as "Infinity", IE treats it as NaN
-    assertEquals(null, NodeUtil.getNumberValue(getNode("'-infinity'")));
-    assertEquals(null, NodeUtil.getNumberValue(getNode("'infinity'")));
-    assertEquals(null, NodeUtil.getNumberValue(getNode("'+infinity'")));
+    assertNull(NodeUtil.getNumberValue(getNode("'-infinity'")));
+    assertNull(NodeUtil.getNumberValue(getNode("'infinity'")));
+    assertNull(NodeUtil.getNumberValue(getNode("'+infinity'")));
 
     assertEquals(Double.NaN, NodeUtil.getNumberValue(getNode("'NaN'")));
     assertEquals(
@@ -1317,7 +1318,7 @@ public class NodeUtilTest extends TestCase {
     // "-1" is parsed as a literal
     assertEquals(-1.0, NodeUtil.getNumberValue(getNode("-1")));
     // "+1" is parse as an op + literal
-    assertEquals(null, NodeUtil.getNumberValue(getNode("+1")));
+    assertNull(NodeUtil.getNumberValue(getNode("+1")));
     assertEquals(22.0, NodeUtil.getNumberValue(getNode("22")));
     assertEquals(18.0, NodeUtil.getNumberValue(getNode("022")));
     assertEquals(34.0, NodeUtil.getNumberValue(getNode("0x22")));
@@ -1333,8 +1334,7 @@ public class NodeUtilTest extends TestCase {
     assertEquals(
         Double.NaN, NodeUtil.getNumberValue(getNode("void f")));
     // values with side-effects are ignored.
-    assertEquals(
-        null, NodeUtil.getNumberValue(getNode("void f()")));
+    assertNull(NodeUtil.getNumberValue(getNode("void f()")));
     assertEquals(
         Double.NaN, NodeUtil.getNumberValue(getNode("NaN")));
     assertEquals(
@@ -1345,15 +1345,15 @@ public class NodeUtilTest extends TestCase {
         NodeUtil.getNumberValue(getNode("-Infinity")));
 
     // "infinity" is not a known name.
-    assertEquals(null, NodeUtil.getNumberValue(getNode("infinity")));
-    assertEquals(null, NodeUtil.getNumberValue(getNode("-infinity")));
+    assertNull(NodeUtil.getNumberValue(getNode("infinity")));
+    assertNull(NodeUtil.getNumberValue(getNode("-infinity")));
 
     // getNumberValue only converts literals
-    assertEquals(null, NodeUtil.getNumberValue(getNode("x")));
-    assertEquals(null, NodeUtil.getNumberValue(getNode("x.y")));
-    assertEquals(null, NodeUtil.getNumberValue(getNode("1/2")));
-    assertEquals(null, NodeUtil.getNumberValue(getNode("1-2")));
-    assertEquals(null, NodeUtil.getNumberValue(getNode("+1")));
+    assertNull(NodeUtil.getNumberValue(getNode("x")));
+    assertNull(NodeUtil.getNumberValue(getNode("x.y")));
+    assertNull(NodeUtil.getNumberValue(getNode("1/2")));
+    assertNull(NodeUtil.getNumberValue(getNode("1-2")));
+    assertNull(NodeUtil.getNumberValue(getNode("+1")));
   }
 
   public void testIsNumbericResult() {
@@ -1517,6 +1517,69 @@ public class NodeUtilTest extends TestCase {
     assertTrue(NodeUtil.mayBeString(getNode("(1+[])")));
   }
 
+  public void test1() {
+    assertFalse(NodeUtil.isStringResult(getNode("a+b")));
+  }
+
+  public void testIsStringResult() {
+    assertFalse(NodeUtil.isStringResult(getNode("1")));
+    assertFalse(NodeUtil.isStringResult(getNode("true")));
+    assertFalse(NodeUtil.isStringResult(getNode("+true")));
+    assertFalse(NodeUtil.isStringResult(getNode("+1")));
+    assertFalse(NodeUtil.isStringResult(getNode("-1")));
+    assertFalse(NodeUtil.isStringResult(getNode("-Infinity")));
+    assertFalse(NodeUtil.isStringResult(getNode("Infinity")));
+    assertFalse(NodeUtil.isStringResult(getNode("NaN")));
+    assertFalse(NodeUtil.isStringResult(getNode("undefined")));
+    assertFalse(NodeUtil.isStringResult(getNode("void 0")));
+    assertFalse(NodeUtil.isStringResult(getNode("null")));
+
+    assertFalse(NodeUtil.isStringResult(getNode("a << b")));
+    assertFalse(NodeUtil.isStringResult(getNode("a >> b")));
+    assertFalse(NodeUtil.isStringResult(getNode("a >>> b")));
+
+    assertFalse(NodeUtil.isStringResult(getNode("a == b")));
+    assertFalse(NodeUtil.isStringResult(getNode("a != b")));
+    assertFalse(NodeUtil.isStringResult(getNode("a === b")));
+    assertFalse(NodeUtil.isStringResult(getNode("a !== b")));
+    assertFalse(NodeUtil.isStringResult(getNode("a < b")));
+    assertFalse(NodeUtil.isStringResult(getNode("a > b")));
+    assertFalse(NodeUtil.isStringResult(getNode("a <= b")));
+    assertFalse(NodeUtil.isStringResult(getNode("a >= b")));
+    assertFalse(NodeUtil.isStringResult(getNode("a in b")));
+    assertFalse(NodeUtil.isStringResult(getNode("a instanceof b")));
+
+    assertTrue(NodeUtil.isStringResult(getNode("'a'")));
+    assertTrue(NodeUtil.isStringResult(getNode("'a'+b")));
+    assertTrue(NodeUtil.isStringResult(getNode("a+'b'")));
+    assertFalse(NodeUtil.isStringResult(getNode("a+b")));
+    assertFalse(NodeUtil.isStringResult(getNode("a()")));
+    assertFalse(NodeUtil.isStringResult(getNode("''.a")));
+    assertFalse(NodeUtil.isStringResult(getNode("a.b")));
+    assertFalse(NodeUtil.isStringResult(getNode("a.b()")));
+    assertFalse(NodeUtil.isStringResult(getNode("a().b()")));
+    assertFalse(NodeUtil.isStringResult(getNode("new a()")));
+
+    // These can't be strings but they aren't handled yet.
+    assertFalse(NodeUtil.isStringResult(getNode("1 && 2")));
+    assertFalse(NodeUtil.isStringResult(getNode("1 || 2")));
+    assertFalse(NodeUtil.isStringResult(getNode("1 ? 2 : 3")));
+    assertFalse(NodeUtil.isStringResult(getNode("1,2")));
+    assertFalse(NodeUtil.isStringResult(getNode("a=1")));
+    assertFalse(NodeUtil.isStringResult(getNode("1+1")));
+    assertFalse(NodeUtil.isStringResult(getNode("true+true")));
+    assertFalse(NodeUtil.isStringResult(getNode("null+null")));
+    assertFalse(NodeUtil.isStringResult(getNode("NaN+NaN")));
+
+    // These are not strings but they aren't primitives either
+    assertFalse(NodeUtil.isStringResult(getNode("([1,2])")));
+    assertFalse(NodeUtil.isStringResult(getNode("({a:1})")));
+    assertFalse(NodeUtil.isStringResult(getNode("({}+1)")));
+    assertFalse(NodeUtil.isStringResult(getNode("(1+{})")));
+    assertFalse(NodeUtil.isStringResult(getNode("([]+1)")));
+    assertFalse(NodeUtil.isStringResult(getNode("(1+[])")));
+  }
+
   public void testValidNames() {
     assertTrue(NodeUtil.isValidPropertyName("a"));
     assertTrue(NodeUtil.isValidPropertyName("a3"));
@@ -1576,76 +1639,79 @@ public class NodeUtilTest extends TestCase {
   }
 
   public void testIsNaN() {
-    assertEquals(true, NodeUtil.isNaN(getNode("NaN")));
-    assertEquals(false, NodeUtil.isNaN(getNode("Infinity")));
-    assertEquals(false, NodeUtil.isNaN(getNode("x")));
-    assertEquals(true, NodeUtil.isNaN(getNode("0/0")));
-    assertEquals(false, NodeUtil.isNaN(getNode("1/0")));
-    assertEquals(false, NodeUtil.isNaN(getNode("0/1")));
-    assertEquals(false, NodeUtil.isNaN(IR.number(0.0)));
+    assertTrue(NodeUtil.isNaN(getNode("NaN")));
+    assertFalse(NodeUtil.isNaN(getNode("Infinity")));
+    assertFalse(NodeUtil.isNaN(getNode("x")));
+    assertTrue(NodeUtil.isNaN(getNode("0/0")));
+    assertFalse(NodeUtil.isNaN(getNode("1/0")));
+    assertFalse(NodeUtil.isNaN(getNode("0/1")));
+    assertFalse(NodeUtil.isNaN(IR.number(0.0)));
   }
 
   public void testIsExecutedExactlyOnce() {
-    assertEquals(true, executedOnceTestCase("x;"));
+    assertTrue(executedOnceTestCase("x;"));
 
-    assertEquals(true, executedOnceTestCase("x && 1;"));
-    assertEquals(false, executedOnceTestCase("1 && x;"));
+    assertTrue(executedOnceTestCase("x && 1;"));
+    assertFalse(executedOnceTestCase("1 && x;"));
 
-    assertEquals(false, executedOnceTestCase("1 && (x && 1);"));
+    assertFalse(executedOnceTestCase("1 && (x && 1);"));
 
-    assertEquals(true, executedOnceTestCase("x || 1;"));
-    assertEquals(false, executedOnceTestCase("1 || x;"));
+    assertTrue(executedOnceTestCase("x || 1;"));
+    assertFalse(executedOnceTestCase("1 || x;"));
 
-    assertEquals(false, executedOnceTestCase("1 && (x || 1);"));
+    assertFalse(executedOnceTestCase("1 && (x || 1);"));
 
-    assertEquals(true, executedOnceTestCase("x ? 1 : 2;"));
-    assertEquals(false, executedOnceTestCase("1 ? 1 : x;"));
-    assertEquals(false, executedOnceTestCase("1 ? x : 2;"));
+    assertTrue(executedOnceTestCase("x ? 1 : 2;"));
+    assertFalse(executedOnceTestCase("1 ? 1 : x;"));
+    assertFalse(executedOnceTestCase("1 ? x : 2;"));
 
-    assertEquals(false, executedOnceTestCase("1 && (x ? 1 : 2);"));
+    assertFalse(executedOnceTestCase("1 && (x ? 1 : 2);"));
 
-    assertEquals(true, executedOnceTestCase("if (x) {}"));
-    assertEquals(false, executedOnceTestCase("if (true) {x;}"));
-    assertEquals(false, executedOnceTestCase("if (true) {} else {x;}"));
+    assertTrue(executedOnceTestCase("if (x) {}"));
+    assertFalse(executedOnceTestCase("if (true) {x;}"));
+    assertFalse(executedOnceTestCase("if (true) {} else {x;}"));
 
-    assertEquals(false, executedOnceTestCase("if (1) { if (x) {} }"));
+    assertFalse(executedOnceTestCase("if (1) { if (x) {} }"));
 
-    assertEquals(true, executedOnceTestCase("for(x;;){}"));
-    assertEquals(false, executedOnceTestCase("for(;x;){}"));
-    assertEquals(false, executedOnceTestCase("for(;;x){}"));
-    assertEquals(false, executedOnceTestCase("for(;;){x;}"));
+    assertTrue(executedOnceTestCase("for(x;;){}"));
+    assertFalse(executedOnceTestCase("for(;x;){}"));
+    assertFalse(executedOnceTestCase("for(;;x){}"));
+    assertFalse(executedOnceTestCase("for(;;){x;}"));
 
-    assertEquals(false, executedOnceTestCase("if (1) { for(x;;){} }"));
+    assertFalse(executedOnceTestCase("if (1) { for(x;;){} }"));
 
-    assertEquals(false, executedOnceTestCase("for(x in {}){}"));
-    assertEquals(true, executedOnceTestCase("for({}.a in x){}"));
-    assertEquals(false, executedOnceTestCase("for({}.a in {}){x}"));
+    assertFalse(executedOnceTestCase("for(x in {}){}"));
+    assertTrue(executedOnceTestCase("for({}.a in x){}"));
+    assertFalse(executedOnceTestCase("for({}.a in {}){x}"));
 
-    assertEquals(false, executedOnceTestCase("if (1) { for(x in {}){} }"));
+    assertFalse(executedOnceTestCase("if (1) { for(x in {}){} }"));
 
-    assertEquals(true, executedOnceTestCase("switch (x) {}"));
-    assertEquals(false, executedOnceTestCase("switch (1) {case x:}"));
-    assertEquals(false, executedOnceTestCase("switch (1) {case 1: x}"));
-    assertEquals(false, executedOnceTestCase("switch (1) {default: x}"));
+    assertTrue(executedOnceTestCase("switch (x) {}"));
+    assertFalse(executedOnceTestCase("switch (1) {case x:}"));
+    assertFalse(executedOnceTestCase("switch (1) {case 1: x}"));
+    assertFalse(executedOnceTestCase("switch (1) {default: x}"));
 
-    assertEquals(false, executedOnceTestCase("if (1) { switch (x) {} }"));
+    assertFalse(executedOnceTestCase("if (1) { switch (x) {} }"));
 
-    assertEquals(false, executedOnceTestCase("while (x) {}"));
-    assertEquals(false, executedOnceTestCase("while (1) {x}"));
+    assertFalse(executedOnceTestCase("while (x) {}"));
+    assertFalse(executedOnceTestCase("while (1) {x}"));
 
-    assertEquals(false, executedOnceTestCase("do {} while (x)"));
-    assertEquals(false, executedOnceTestCase("do {x} while (1)"));
+    assertFalse(executedOnceTestCase("do {} while (x)"));
+    assertFalse(executedOnceTestCase("do {x} while (1)"));
 
-    assertEquals(false, executedOnceTestCase("try {x} catch (e) {}"));
-    assertEquals(false, executedOnceTestCase("try {} catch (e) {x}"));
-    assertEquals(true, executedOnceTestCase("try {} finally {x}"));
+    assertFalse(executedOnceTestCase("try {x} catch (e) {}"));
+    assertFalse(executedOnceTestCase("try {} catch (e) {x}"));
+    assertTrue(executedOnceTestCase("try {} finally {x}"));
 
-    assertEquals(false, executedOnceTestCase("if (1) { try {} finally {x} }"));
+    assertFalse(executedOnceTestCase("if (1) { try {} finally {x} }"));
   }
 
-  public void testNewQualifiedNameNode1() {
-    Node actual = NodeUtil.newQualifiedNameNode(
-        new GoogleCodingConvention(), "ns.prop");
+  public void testNewQName1() {
+    Compiler compiler = new Compiler();
+    CompilerOptions options = new CompilerOptions();
+    options.setCodingConvention(new GoogleCodingConvention());
+    compiler.init(ImmutableList.<SourceFile>of(), ImmutableList.<SourceFile>of(), options);
+    Node actual = NodeUtil.newQName(compiler, "ns.prop");
     Node expected = IR.getprop(
         IR.name("ns"),
         IR.string("prop"));
@@ -1653,8 +1719,11 @@ public class NodeUtilTest extends TestCase {
   }
 
   public void testNewQualifiedNameNode2() {
-    Node actual = NodeUtil.newQualifiedNameNode(
-        new GoogleCodingConvention(), "this.prop");
+    Compiler compiler = new Compiler();
+    CompilerOptions options = new CompilerOptions();
+    options.setCodingConvention(new GoogleCodingConvention());
+    compiler.init(ImmutableList.<SourceFile>of(), ImmutableList.<SourceFile>of(), options);
+    Node actual = NodeUtil.newQName(compiler, "this.prop");
     Node expected = IR.getprop(
         IR.thisNode(),
         IR.string("prop"));

@@ -21,9 +21,11 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.google.javascript.jscomp.newtypes.DeclaredTypeRegistry;
+import com.google.javascript.jscomp.newtypes.JSType;
+import com.google.javascript.jscomp.newtypes.QualifiedName;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.jstype.FunctionType;
-import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
@@ -159,7 +161,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
    * "inherits" or "mixin."
    * @return The type of class-defining name, or null.
    */
-  private SubclassType typeofClassDefiningName(Node callName) {
+  private static SubclassType typeofClassDefiningName(Node callName) {
     // Check if the method name matches one of the class-defining methods.
     String methodName = null;
     if (callName.isGetProp()) {
@@ -194,9 +196,19 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
    * a.b.c => false
    * a.b.c.prototype => true
    */
-  private boolean endsWithPrototype(Node qualifiedName) {
+  private static boolean endsWithPrototype(Node qualifiedName) {
     return qualifiedName.isGetProp() &&
         qualifiedName.getLastChild().getString().equals("prototype");
+  }
+
+  /**
+   * @return Whether the node indicates that the file represents a "module", a file whose top level
+   * declarations are not in global scope.
+   */
+  @Override
+  public boolean extractIsModuleFile(Node node, Node parent) {
+    String namespace = extractClassNameIfGoog(node, parent, "goog.module");
+    return namespace != null;
   }
 
   /**
@@ -205,8 +217,12 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
    * @return The extracted class name, or null.
    */
   @Override
-  public String extractClassNameIfProvide(Node node, Node parent){
-    return extractClassNameIfGoog(node, parent, "goog.provide");
+  public String extractClassNameIfProvide(Node node, Node parent) {
+    String namespace = extractClassNameIfGoog(node, parent, "goog.provide");
+    if (namespace == null) {
+      namespace = extractClassNameIfGoog(node, parent, "goog.module");
+    }
+    return namespace;
   }
 
   /**
@@ -215,7 +231,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
    * @return The extracted class name, or null.
    */
   @Override
-  public String extractClassNameIfRequire(Node node, Node parent){
+  public String extractClassNameIfRequire(Node node, Node parent) {
     return extractClassNameIfGoog(node, parent, "goog.require");
   }
 
@@ -225,8 +241,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
     if (NodeUtil.isExprCall(parent)) {
       Node callee = node.getFirstChild();
       if (callee != null && callee.isGetProp()) {
-        String qualifiedName = callee.getQualifiedName();
-        if (functionName.equals(qualifiedName)) {
+        if (callee.matchesQualifiedName(functionName)) {
           Node target = callee.getNext();
           if (target != null && target.isString()) {
             className = target.getString();
@@ -258,7 +273,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
   @Override
   public List<String> identifyTypeDeclarationCall(Node n) {
     Node callName = n.getFirstChild();
-    if ("goog.addDependency".equals(callName.getQualifiedName()) &&
+    if (callName.matchesQualifiedName("goog.addDependency") &&
         n.getChildCount() >= 3) {
       Node typeArray = callName.getNext().getNext();
       if (typeArray.isArrayLit()) {
@@ -272,6 +287,16 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
         return typeNames;
       }
     }
+
+    // Identify forward declaration of form goog.forwardDeclare('foo.bar')
+    if (callName.matchesQualifiedName("goog.forwardDeclare") &&
+        n.getChildCount() == 2) {
+      Node typeDeclaration = n.getChildAtIndex(1);
+      if (typeDeclaration.isString()) {
+        return Lists.newArrayList(typeDeclaration.getString());
+      }
+    }
+
     return super.identifyTypeDeclarationCall(n);
   }
 
@@ -283,11 +308,10 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
   @Override
   public String getSingletonGetterClassName(Node callNode) {
     Node callArg = callNode.getFirstChild();
-    String callName = callArg.getQualifiedName();
 
     // Use both the original name and the post-CollapseProperties name.
-    if (!("goog.addSingletonGetter".equals(callName) ||
-          "goog$addSingletonGetter".equals(callName)) ||
+    if (!(callArg.matchesQualifiedName("goog.addSingletonGetter") ||
+          callArg.matchesQualifiedName("goog$addSingletonGetter")) ||
         callNode.getChildCount() != 2) {
       return super.getSingletonGetterClassName(callNode);
     }
@@ -324,6 +348,22 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
   }
 
   @Override
+  public boolean isFunctionCallThatAlwaysThrows(Node n) {
+    if (n.isExprResult()) {
+      if (!n.getFirstChild().isCall()) {
+        return false;
+      }
+    } else if (!n.isCall()) {
+      return false;
+    }
+    if (n.isExprResult()) {
+      n = n.getFirstChild();
+    }
+    // n is a call
+    return n.getFirstChild().matchesQualifiedName("goog.asserts.fail");
+  }
+
+  @Override
   public ObjectLiteralCast getObjectLiteralCast(Node callNode) {
     Preconditions.checkArgument(callNode.isCall());
     ObjectLiteralCast proxyCast = super.getObjectLiteralCast(callNode);
@@ -332,7 +372,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
     }
 
     Node callName = callNode.getFirstChild();
-    if (!"goog.reflect.object".equals(callName.getQualifiedName()) ||
+    if (!callName.matchesQualifiedName("goog.reflect.object") ||
         callNode.getChildCount() != 3) {
       return null;
     }
@@ -352,54 +392,37 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
   }
 
   @Override
-  public boolean isOptionalParameter(Node parameter) {
-    return false;
-  }
-
-  @Override
-  public boolean isVarArgsParameter(Node parameter) {
-    return false;
-  }
-
-  @Override
   public boolean isPrivate(String name) {
     return false;
   }
 
   @Override
   public Collection<AssertionFunctionSpec> getAssertionFunctions() {
-    return ImmutableList.<AssertionFunctionSpec>of(
-        new AssertionFunctionSpec("goog.asserts.assert"),
+    return ImmutableList.of(
+        new AssertionFunctionSpec("goog.asserts.assert", JSType.TRUTHY),
         new AssertionFunctionSpec("goog.asserts.assertNumber",
-            JSTypeNative.NUMBER_TYPE),
+            JSType.NUMBER, JSTypeNative.NUMBER_TYPE),
         new AssertionFunctionSpec("goog.asserts.assertString",
-            JSTypeNative.STRING_TYPE),
-        new AssertionFunctionSpec("goog.asserts.assertFunction",
-            JSTypeNative.FUNCTION_INSTANCE_TYPE),
+            JSType.STRING, JSTypeNative.STRING_TYPE),
         new AssertionFunctionSpec("goog.asserts.assertObject",
-            JSTypeNative.OBJECT_TYPE),
-        new AssertionFunctionSpec("goog.asserts.assertArray",
-            JSTypeNative.ARRAY_TYPE),
+            JSType.TOP_OBJECT, JSTypeNative.OBJECT_TYPE),
+        new AssertFunctionByTypeName("goog.asserts.assertFunction", "Function"),
+        new AssertFunctionByTypeName("goog.asserts.assertArray", "Array"),
+        new AssertFunctionByTypeName("goog.asserts.assertElement", "Element"),
         new AssertInstanceofSpec("goog.asserts.assertInstanceof")
     );
   }
 
   @Override
-  public Bind describeFunctionBind(Node n, boolean useTypeInfo) {
-    Bind result = super.describeFunctionBind(n, useTypeInfo);
-    if (result != null) {
-      return result;
-    }
-
+  public Bind describeFunctionBind(
+      Node n, boolean callerChecksTypes, boolean iCheckTypes) {
     if (!n.isCall()) {
       return null;
     }
-
     Node callTarget = n.getFirstChild();
-    String name = callTarget.getQualifiedName();
-    if (name != null) {
-      if (name.equals("goog.bind")
-          || name.equals("goog$bind")) {
+    if (callTarget.isQualifiedName()) {
+      if (callTarget.matchesQualifiedName("goog.bind")
+          || callTarget.matchesQualifiedName("goog$bind")) {
         // goog.bind(fn, self, args...);
         Node fn = callTarget.getNext();
         if (fn == null) {
@@ -410,7 +433,8 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
         return new Bind(fn, thisValue, parameters);
       }
 
-      if (name.equals("goog.partial") || name.equals("goog$partial")) {
+      if (callTarget.matchesQualifiedName("goog.partial") ||
+          callTarget.matchesQualifiedName("goog$partial")) {
         // goog.partial(fn, args...);
         Node fn = callTarget.getNext();
         if (fn == null) {
@@ -421,8 +445,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
         return new Bind(fn, thisValue, parameters);
       }
     }
-
-    return null;
+    return super.describeFunctionBind(n, callerChecksTypes, iCheckTypes);
   }
 
   @Override
@@ -430,7 +453,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
     return indirectlyDeclaredProperties;
   }
 
-  private Node safeNext(Node n) {
+  private static Node safeNext(Node n) {
     if (n != null) {
       return n.getNext();
     }
@@ -443,7 +466,7 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
    */
   public static class AssertInstanceofSpec extends AssertionFunctionSpec {
     public AssertInstanceofSpec(String functionName) {
-      super(functionName, JSTypeNative.OBJECT_TYPE);
+      super(functionName, JSType.TOP_OBJECT, JSTypeNative.OBJECT_TYPE);
     }
 
     /**
@@ -451,11 +474,13 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
      * that the node must not be null or undefined.
      */
     @Override
-    public JSType getAssertedType(Node call, JSTypeRegistry registry) {
+    public com.google.javascript.rhino.jstype.JSType
+        getAssertedOldType(Node call, JSTypeRegistry registry) {
       if (call.getChildCount() > 2) {
         Node constructor = call.getFirstChild().getNext().getNext();
         if (constructor != null) {
-          JSType ownerType = constructor.getJSType();
+          com.google.javascript.rhino.jstype.JSType ownerType =
+              constructor.getJSType();
           if (ownerType != null
               && ownerType.isFunctionType()
               && ownerType.isConstructor()) {
@@ -464,9 +489,56 @@ public class ClosureCodingConvention extends CodingConventions.Proxy {
           }
         }
       }
-      return super.getAssertedType(call, registry);
+      return registry.getNativeType(JSTypeNative.UNKNOWN_TYPE);
+    }
+
+    @Override
+    public JSType getAssertedNewType(Node call, DeclaredTypeRegistry scope) {
+      if (call.getChildCount() > 2) {
+        Node constructor = call.getFirstChild().getNext().getNext();
+        if (constructor != null && constructor.isQualifiedName()) {
+          QualifiedName qname = QualifiedName.fromNode(constructor);
+          JSType functionType = scope.getDeclaredTypeOf(qname.getLeftmostName());
+          if (functionType != null) {
+            if (!qname.isIdentifier()) {
+              functionType = functionType.getProp(qname.getAllButLeftmost());
+            }
+            com.google.javascript.jscomp.newtypes.FunctionType ctorType =
+                functionType.getFunTypeIfSingletonObj();
+            if (ctorType != null && ctorType.isConstructor()) {
+              return ctorType.getInstanceTypeOfCtor();
+            }
+
+          }
+        }
+      }
+      return JSType.UNKNOWN;
     }
   }
 
+  /**
+   * A function that will throw an exception when the value is not an
+   * instanceof the given type name, for instance "Element".
+   */
+  public static class AssertFunctionByTypeName extends AssertionFunctionSpec {
+    private final String typeName;
 
+    public AssertFunctionByTypeName(String functionName, String typeName) {
+      super(functionName, null);
+      this.typeName = typeName;
+    }
+
+    @Override
+    public com.google.javascript.rhino.jstype.JSType
+        getAssertedOldType(Node call, JSTypeRegistry registry) {
+      return registry.getType(typeName);
+    }
+
+    @Override
+    public JSType getAssertedNewType(Node call, DeclaredTypeRegistry scope) {
+      JSType result = scope.getDeclaredTypeOf(typeName)
+          .getFunTypeIfSingletonObj().getInstanceTypeOfCtor();
+      return result;
+    }
+  }
 }

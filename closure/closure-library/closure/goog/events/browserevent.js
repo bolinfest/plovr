@@ -18,7 +18,6 @@
  * <pre>
  * The patched event object contains the following members:
  * - type           {string}    Event type, e.g. 'click'
- * - timestamp      {Date}      A date object for when the event was fired
  * - target         {Object}    The element that actually triggered the event
  * - currentTarget  {Object}    The element the listener is attached to
  * - relatedTarget  {Object}    For mouseover and mouseout, the previous object
@@ -41,6 +40,7 @@
  * key and character code use {@link goog.events.KeyHandler}.
  * </pre>
  *
+ * @author arv@google.com (Erik Arvidsson)
  */
 
 goog.provide('goog.events.BrowserEvent');
@@ -65,6 +65,126 @@ goog.require('goog.userAgent');
  * @extends {goog.events.Event}
  */
 goog.events.BrowserEvent = function(opt_e, opt_currentTarget) {
+  goog.events.BrowserEvent.base(this, 'constructor', opt_e ? opt_e.type : '');
+
+  /**
+   * Target that fired the event.
+   * @override
+   * @type {Node}
+   */
+  this.target = null;
+
+  /**
+   * Node that had the listener attached.
+   * @override
+   * @type {Node|undefined}
+   */
+  this.currentTarget = null;
+
+  /**
+   * For mouseover and mouseout events, the related object for the event.
+   * @type {Node}
+   */
+  this.relatedTarget = null;
+
+  /**
+   * X-coordinate relative to target.
+   * @type {number}
+   */
+  this.offsetX = 0;
+
+  /**
+   * Y-coordinate relative to target.
+   * @type {number}
+   */
+  this.offsetY = 0;
+
+  /**
+   * X-coordinate relative to the window.
+   * @type {number}
+   */
+  this.clientX = 0;
+
+  /**
+   * Y-coordinate relative to the window.
+   * @type {number}
+   */
+  this.clientY = 0;
+
+  /**
+   * X-coordinate relative to the monitor.
+   * @type {number}
+   */
+  this.screenX = 0;
+
+  /**
+   * Y-coordinate relative to the monitor.
+   * @type {number}
+   */
+  this.screenY = 0;
+
+  /**
+   * Which mouse button was pressed.
+   * @type {number}
+   */
+  this.button = 0;
+
+  /**
+   * Keycode of key press.
+   * @type {number}
+   */
+  this.keyCode = 0;
+
+  /**
+   * Keycode of key press.
+   * @type {number}
+   */
+  this.charCode = 0;
+
+  /**
+   * Whether control was pressed at time of event.
+   * @type {boolean}
+   */
+  this.ctrlKey = false;
+
+  /**
+   * Whether alt was pressed at time of event.
+   * @type {boolean}
+   */
+  this.altKey = false;
+
+  /**
+   * Whether shift was pressed at time of event.
+   * @type {boolean}
+   */
+  this.shiftKey = false;
+
+  /**
+   * Whether the meta key was pressed at time of event.
+   * @type {boolean}
+   */
+  this.metaKey = false;
+
+  /**
+   * History state object, only set for PopState events where it's a copy of the
+   * state object provided to pushState or replaceState.
+   * @type {Object}
+   */
+  this.state = null;
+
+  /**
+   * Whether the default platform modifier key was pressed at time of event.
+   * (This is control for all platforms except Mac, where it's Meta.)
+   * @type {boolean}
+   */
+  this.platformModifierKey = false;
+
+  /**
+   * The browser event object.
+   * @private {Event}
+   */
+  this.event_ = null;
+
   if (opt_e) {
     this.init(opt_e, opt_currentTarget);
   }
@@ -85,7 +205,7 @@ goog.events.BrowserEvent.MouseButton = {
 
 /**
  * Static data for mapping mouse buttons.
- * @type {Array.<number>}
+ * @type {!Array<number>}
  */
 goog.events.BrowserEvent.IEButtonMap = [
   1, // LEFT
@@ -95,152 +215,14 @@ goog.events.BrowserEvent.IEButtonMap = [
 
 
 /**
- * Target that fired the event.
- * @override
- * @type {Node}
- */
-goog.events.BrowserEvent.prototype.target = null;
-
-
-/**
- * Node that had the listener attached.
- * @override
- * @type {Node|undefined}
- */
-goog.events.BrowserEvent.prototype.currentTarget;
-
-
-/**
- * For mouseover and mouseout events, the related object for the event.
- * @type {Node}
- */
-goog.events.BrowserEvent.prototype.relatedTarget = null;
-
-
-/**
- * X-coordinate relative to target.
- * @type {number}
- */
-goog.events.BrowserEvent.prototype.offsetX = 0;
-
-
-/**
- * Y-coordinate relative to target.
- * @type {number}
- */
-goog.events.BrowserEvent.prototype.offsetY = 0;
-
-
-/**
- * X-coordinate relative to the window.
- * @type {number}
- */
-goog.events.BrowserEvent.prototype.clientX = 0;
-
-
-/**
- * Y-coordinate relative to the window.
- * @type {number}
- */
-goog.events.BrowserEvent.prototype.clientY = 0;
-
-
-/**
- * X-coordinate relative to the monitor.
- * @type {number}
- */
-goog.events.BrowserEvent.prototype.screenX = 0;
-
-
-/**
- * Y-coordinate relative to the monitor.
- * @type {number}
- */
-goog.events.BrowserEvent.prototype.screenY = 0;
-
-
-/**
- * Which mouse button was pressed.
- * @type {number}
- */
-goog.events.BrowserEvent.prototype.button = 0;
-
-
-/**
- * Keycode of key press.
- * @type {number}
- */
-goog.events.BrowserEvent.prototype.keyCode = 0;
-
-
-/**
- * Keycode of key press.
- * @type {number}
- */
-goog.events.BrowserEvent.prototype.charCode = 0;
-
-
-/**
- * Whether control was pressed at time of event.
- * @type {boolean}
- */
-goog.events.BrowserEvent.prototype.ctrlKey = false;
-
-
-/**
- * Whether alt was pressed at time of event.
- * @type {boolean}
- */
-goog.events.BrowserEvent.prototype.altKey = false;
-
-
-/**
- * Whether shift was pressed at time of event.
- * @type {boolean}
- */
-goog.events.BrowserEvent.prototype.shiftKey = false;
-
-
-/**
- * Whether the meta key was pressed at time of event.
- * @type {boolean}
- */
-goog.events.BrowserEvent.prototype.metaKey = false;
-
-
-/**
- * History state object, only set for PopState events where it's a copy of the
- * state object provided to pushState or replaceState.
- * @type {Object}
- */
-goog.events.BrowserEvent.prototype.state;
-
-
-/**
- * Whether the default platform modifier key was pressed at time of event.
- * (This is control for all platforms except Mac, where it's Meta.
- * @type {boolean}
- */
-goog.events.BrowserEvent.prototype.platformModifierKey = false;
-
-
-/**
- * The browser event object.
- * @type {Event}
- * @private
- */
-goog.events.BrowserEvent.prototype.event_ = null;
-
-
-/**
  * Accepts a browser event object and creates a patched, cross browser event
  * object.
  * @param {Event} e Browser event object.
  * @param {EventTarget=} opt_currentTarget Current target for event.
  */
 goog.events.BrowserEvent.prototype.init = function(e, opt_currentTarget) {
+  this.event_ = e;
   var type = this.type = e.type;
-  goog.events.Event.call(this, type);
 
   // TODO(nicksantos): Change this.target to type EventTarget.
   this.target = /** @type {Node} */ (e.target) || e.srcElement;
@@ -269,12 +251,28 @@ goog.events.BrowserEvent.prototype.init = function(e, opt_currentTarget) {
 
   this.relatedTarget = relatedTarget;
 
-  // Webkit emits a lame warning whenever layerX/layerY is accessed.
-  // http://code.google.com/p/chromium/issues/detail?id=101733
-  this.offsetX = (goog.userAgent.WEBKIT || e.offsetX !== undefined) ?
-      e.offsetX : e.layerX;
-  this.offsetY = (goog.userAgent.WEBKIT || e.offsetY !== undefined) ?
-      e.offsetY : e.layerY;
+  // Lazily calculate the offsetX/Y properties because they trigger style
+  // recalc and layout. The original event's getters are themselves lazy.
+  if (Object.defineProperties) {
+    Object.defineProperties(this,
+        /** @lends {goog.events.BrowserEvent.prototype} */ ({
+          offsetX: {
+            configurable: true,
+            enumerable: true,
+            get: this.getOffsetX_,
+            set: this.setOffsetX_
+          },
+          offsetY: {
+            configurable: true,
+            enumerable: true,
+            get: this.getOffsetY_,
+            set: this.setOffsetY_
+          }
+        }));
+  } else {
+    this.offsetX = this.getOffsetX_();
+    this.offsetY = this.getOffsetY_();
+  }
 
   this.clientX = e.clientX !== undefined ? e.clientX : e.pageX;
   this.clientY = e.clientY !== undefined ? e.clientY : e.pageY;
@@ -291,11 +289,9 @@ goog.events.BrowserEvent.prototype.init = function(e, opt_currentTarget) {
   this.metaKey = e.metaKey;
   this.platformModifierKey = goog.userAgent.MAC ? e.metaKey : e.ctrlKey;
   this.state = e.state;
-  this.event_ = e;
   if (e.defaultPrevented) {
     this.preventDefault();
   }
-  delete this.propagationStopped_;
 };
 
 
@@ -408,4 +404,48 @@ goog.events.BrowserEvent.prototype.getBrowserEvent = function() {
 
 /** @override */
 goog.events.BrowserEvent.prototype.disposeInternal = function() {
+};
+
+
+/** @private @return {number} */
+goog.events.BrowserEvent.prototype.getOffsetX_ = function() {
+  // Webkit emits a lame warning whenever layerX/layerY is accessed.
+  // http://code.google.com/p/chromium/issues/detail?id=101733
+  return (goog.userAgent.WEBKIT || this.event_.offsetX !== undefined) ?
+      this.event_.offsetX : this.event_.layerX;
+};
+
+
+/** @private @param {number} offset */
+goog.events.BrowserEvent.prototype.setOffsetX_ = function(offset) {
+  Object.defineProperties(this,
+      /** @lends {goog.events.BrowserEvent.prototype} */ ({
+        offsetX: {
+          writable: true,
+          enumerable: true,
+          configurable: true,
+          value: offset
+        }
+      }));
+};
+
+
+/** @private @return {number} */
+goog.events.BrowserEvent.prototype.getOffsetY_ = function() {
+  return (goog.userAgent.WEBKIT || this.event_.offsetY !== undefined) ?
+      this.event_.offsetY : this.event_.layerY;
+};
+
+
+/** @private @param {number} offset */
+goog.events.BrowserEvent.prototype.setOffsetY_ = function(offset) {
+  Object.defineProperties(this,
+      /** @lends {goog.events.BrowserEvent.prototype} */ ({
+        offsetY: {
+          writable: true,
+          enumerable: true,
+          configurable: true,
+          value: offset
+        }
+      }));
 };

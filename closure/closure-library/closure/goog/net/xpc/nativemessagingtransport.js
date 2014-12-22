@@ -26,9 +26,11 @@ goog.require('goog.asserts');
 goog.require('goog.async.Deferred');
 goog.require('goog.events');
 goog.require('goog.events.EventHandler');
+goog.require('goog.log');
 goog.require('goog.net.xpc');
 goog.require('goog.net.xpc.CrossPageChannelRole');
 goog.require('goog.net.xpc.Transport');
+goog.require('goog.net.xpc.TransportTypes');
 
 
 
@@ -51,10 +53,12 @@ goog.require('goog.net.xpc.Transport');
  *     transport should use.  The default is '2'.
  * @constructor
  * @extends {goog.net.xpc.Transport}
+ * @final
  */
 goog.net.xpc.NativeMessagingTransport = function(channel, peerHostname,
     opt_domHelper, opt_oneSidedHandshake, opt_protocolVersion) {
-  goog.base(this, opt_domHelper);
+  goog.net.xpc.NativeMessagingTransport.base(
+      this, 'constructor', opt_domHelper);
 
   /**
    * The channel this transport belongs to.
@@ -82,7 +86,7 @@ goog.net.xpc.NativeMessagingTransport = function(channel, peerHostname,
 
   /**
    * The event handler.
-   * @type {!goog.events.EventHandler}
+   * @type {!goog.events.EventHandler<!goog.net.xpc.NativeMessagingTransport>}
    * @private
    */
   this.eventHandler_ = new goog.events.EventHandler(this);
@@ -222,7 +226,7 @@ goog.net.xpc.NativeMessagingTransport.MESSAGE_DELIMITER_ = ',';
  * initialized but not disposed yet in a map keyed by the UID of the window
  * object.  This allows for multiple windows to be initiallized and listening
  * for messages.
- * @type {Object.<number>}
+ * @type {Object<number>}
  * @private
  */
 goog.net.xpc.NativeMessagingTransport.activeCount_ = {};
@@ -233,7 +237,7 @@ goog.net.xpc.NativeMessagingTransport.activeCount_ = {};
  * @type {number}
  * @private
  */
-goog.net.xpc.NativeMessagingTransport.sendTimerId_ = 0;
+goog.net.xpc.NativeMessagingTransport.prototype.sendTimerId_ = 0;
 
 
 /**
@@ -314,7 +318,8 @@ goog.net.xpc.NativeMessagingTransport.messageReceived_ = function(msgEvt) {
   //  - channel has become stale (e.g. caching iframes and back clicks)
   var channel = goog.net.xpc.channels[channelName];
   if (channel) {
-    channel.xpcDeliver(service, payload, msgEvt.getBrowserEvent().origin);
+    channel.xpcDeliver(service, payload,
+        /** @type {!MessageEvent} */ (msgEvt.getBrowserEvent()).origin);
     return true;
   }
 
@@ -336,13 +341,7 @@ goog.net.xpc.NativeMessagingTransport.messageReceived_ = function(msgEvt) {
       // navigation (particularly Firefox 1.5+). We can trust the outer peer,
       // since we only accept postMessage messages from the same hostname that
       // originally setup the channel.
-      goog.log.fine(goog.net.xpc.logger,
-          'changing channel name to ' + channelName);
-      staleChannel.name = channelName;
-      // Remove old stale pointer to channel.
-      delete goog.net.xpc.channels[staleChannelName];
-      // Create fresh pointer to channel.
-      goog.net.xpc.channels[channelName] = staleChannel;
+      staleChannel.updateChannelNameAndCatalog(channelName);
       staleChannel.xpcDeliver(service, payload);
       return true;
     }
@@ -626,7 +625,7 @@ goog.net.xpc.NativeMessagingTransport.prototype.disposeInternal = function() {
   // this.channel_.peerWindowObject_.
   delete this.send;
 
-  goog.base(this, 'disposeInternal');
+  goog.net.xpc.NativeMessagingTransport.base(this, 'disposeInternal');
 };
 
 
@@ -636,13 +635,13 @@ goog.net.xpc.NativeMessagingTransport.prototype.disposeInternal = function() {
  * 'SETUP_NTPV2,abc123', where the second part is the endpoint id.  The v2 setup
  * ack message is simply 'SETUP_ACK_NTPV2'.
  * @param {string} payload The payload.
- * @return {!Array.<?string>} An array with the message type as the first member
+ * @return {!Array<?string>} An array with the message type as the first member
  *     and the endpoint id as the second, if one was sent, or null otherwise.
  * @private
  */
 goog.net.xpc.NativeMessagingTransport.parseTransportPayload_ =
     function(payload) {
-  var transportParts = /** @type {!Array.<?string>} */ (payload.split(
+  var transportParts = /** @type {!Array<?string>} */ (payload.split(
       goog.net.xpc.NativeMessagingTransport.MESSAGE_DELIMITER_));
   transportParts[1] = transportParts[1] || null;
   return transportParts;

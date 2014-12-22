@@ -17,13 +17,13 @@
 package com.google.template.soy.parsepasses;
 
 import com.google.common.base.Preconditions;
+import com.google.template.soy.basetree.SyntaxVersion;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.CallBasicNode;
 import com.google.template.soy.soytree.SoyFileNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.SoyNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
-import com.google.template.soy.soytree.SoyNode.SyntaxVersion;
 import com.google.template.soy.soytree.SoySyntaxExceptionUtils;
 
 import java.util.Map;
@@ -38,7 +38,6 @@ import java.util.Map;
  * <p> {@link #exec} should be called on a full parse tree or a Soy file. This pass mutates
  * {@code CallBasicNode}s. There is no return value.
  *
- * @author Kai Huang
  */
 public class SetFullCalleeNamesVisitor extends AbstractSoyNodeVisitor<Void> {
 
@@ -73,7 +72,7 @@ public class SetFullCalleeNamesVisitor extends AbstractSoyNodeVisitor<Void> {
     if (currNamespace == null) {
       String srcCalleeName = node.getSrcCalleeName();
       // TODO: If feasible, change existing instances and remove the startsWith(".") part below.
-      if (node.getSyntaxVersion() != SyntaxVersion.V1 && srcCalleeName.startsWith(".")) {
+      if (node.couldHaveSyntaxVersionAtLeast(SyntaxVersion.V2_0) && srcCalleeName.startsWith(".")) {
         throw SoySyntaxExceptionUtils.createWithNode(
             "Missing namespace in Soy file containing 'call' with namespace-relative callee name" +
                 " (" + node.getTagString() + ").",

@@ -16,13 +16,14 @@
 
 package com.google.template.soy.basetree;
 
+import javax.annotation.Nullable;
+
 
 /**
  * Abstract implementation of a Node.
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
- * @author Kai Huang
  */
 public abstract class AbstractNode implements Node {
 
@@ -31,11 +32,15 @@ public abstract class AbstractNode implements Node {
   protected static final String SPACES = "                                        ";
 
 
+  /** The lowest known upper bound (exclusive!) for the syntax version of this node. */
+  @Nullable private SyntaxVersionBound syntaxVersionBound;
+
   /** The parent of this node. */
   private ParentNode<?> parent;
 
 
   protected AbstractNode() {
+    syntaxVersionBound = null;
     parent = null;
   }
 
@@ -46,12 +51,30 @@ public abstract class AbstractNode implements Node {
    */
   protected AbstractNode(AbstractNode orig) {
     parent = null;  // important: should not copy parent pointer
+    this.syntaxVersionBound = orig.syntaxVersionBound;
+  }
+
+
+  @Override public void maybeSetSyntaxVersionBound(SyntaxVersionBound newSyntaxVersionBound) {
+    syntaxVersionBound = SyntaxVersionBound.selectLower(syntaxVersionBound, newSyntaxVersionBound);
+  }
+
+
+  @Override @Nullable public SyntaxVersionBound getSyntaxVersionBound() {
+    return syntaxVersionBound;
+  }
+
+
+  @Override public boolean couldHaveSyntaxVersionAtLeast(SyntaxVersion syntaxVersionCutoff) {
+    return syntaxVersionBound == null ||
+        syntaxVersionBound.syntaxVersion.num > syntaxVersionCutoff.num;
   }
 
 
   @Override public void setParent(ParentNode<?> parent) {
     this.parent = parent;
   }
+
 
   @Override public ParentNode<?> getParent() {
     return parent;

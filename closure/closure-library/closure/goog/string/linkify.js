@@ -28,12 +28,24 @@ goog.require('goog.string');
  * _blank and it will have a rel=nofollow attribute applied to it so that links
  * created by linkify will not be of interest to search engines.
  * @param {string} text Plain text.
- * @param {Object.<string, string>=} opt_attributes Attributes to add to all
- *      links created. Default are rel=nofollow and target=blank. To clear those
- *      default attributes set rel='' and target='_blank'.
- * @return {string} HTML Linkified HTML text.
+ * @param {Object<string, string>=} opt_attributes Attributes to add to all
+ *      links created. Default are rel=nofollow and target=_blank. To clear
+ *      those default attributes set rel='' and target=''.
+ * @return {string} HTML Linkified HTML text. Any text that is not part of a
+ *      link will be HTML-escaped.
  */
 goog.string.linkify.linkifyPlainText = function(text, opt_attributes) {
+  // This shortcut makes linkifyPlainText ~10x faster if text doesn't contain
+  // URLs or email addresses and adds insignificant performance penalty if it
+  // does.
+  if (text.indexOf('@') == -1 &&
+      text.indexOf('://') == -1 &&
+      text.indexOf('www.') == -1 &&
+      text.indexOf('Www.') == -1 &&
+      text.indexOf('WWW.') == -1) {
+    return goog.string.htmlEscape(text);
+  }
+
   var attributesMap = opt_attributes || {};
   // Set default options.
   if (!('rel' in attributesMap)) {
@@ -76,7 +88,11 @@ goog.string.linkify.linkifyPlainText = function(text, opt_attributes) {
           }
           var splitEndingPunctuation =
               original.match(goog.string.linkify.ENDS_WITH_PUNCTUATION_RE_);
-          if (splitEndingPunctuation) {
+          // An open paren in the link will often be matched with a close paren
+          // at the end, so skip cutting off ending punctuation if there's an
+          // open paren. For example:
+          // http://en.wikipedia.org/wiki/Titanic_(1997_film)
+          if (splitEndingPunctuation && !goog.string.contains(original, '(')) {
             linkText = splitEndingPunctuation[1];
             afterLink = splitEndingPunctuation[2];
           } else {
@@ -147,7 +163,7 @@ goog.string.linkify.ACCEPTABLE_URL_CHARS_ = '\\w~#-@!\\[\\]';
 /**
  * List of all protocols patterns recognized in urls (mailto is handled in email
  * matching).
- * @type {!Array.<string>}
+ * @type {!Array<string>}
  * @const
  * @private
  */
@@ -232,5 +248,5 @@ goog.string.linkify.FIND_LINKS_RE_ = new RegExp(
     '\\b' + goog.string.linkify.EMAIL_ + '|' +
     // Match url after a workd break.
     '\\b' + goog.string.linkify.URL_ + '|$)',
-    'g');
+    'gi');
 

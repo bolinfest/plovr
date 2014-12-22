@@ -22,15 +22,24 @@ goog.provide('goog.stringTest');
 goog.require('goog.functions');
 goog.require('goog.object');
 goog.require('goog.string');
+goog.require('goog.string.Unicode');
+goog.require('goog.testing.MockControl');
 goog.require('goog.testing.PropertyReplacer');
 goog.require('goog.testing.jsunit');
 
 goog.setTestOnly('goog.stringTest');
 
-var stubs = new goog.testing.PropertyReplacer();
+var stubs;
+var mockControl;
+
+function setUp() {
+  stubs = new goog.testing.PropertyReplacer();
+  mockControl = new goog.testing.MockControl();
+}
 
 function tearDown() {
   stubs.reset();
+  mockControl.$tearDown();
 }
 
 
@@ -55,44 +64,83 @@ function testCollapseWhiteSpace() {
 }
 
 
-//=== tests for goog.string.isEmpty ===
-
 function testIsEmpty() {
-  assert('1. Should be empty', goog.string.isEmpty(''));
-  assert('2. Should be empty', goog.string.isEmpty(' '));
-  assert('3. Should be empty', goog.string.isEmpty('    '));
-  assert('4. Should be empty', goog.string.isEmpty(' \t\t\n\xa0   '));
+  assertTrue(goog.string.isEmpty(''));
+  assertTrue(goog.string.isEmpty(' '));
+  assertTrue(goog.string.isEmpty('    '));
+  assertTrue(goog.string.isEmpty(' \t\t\n\xa0   '));
 
-  assert('1. Should not be empty', !goog.string.isEmpty(' abc \t\xa0'));
-  assert('2. Should not be empty', !goog.string.isEmpty(' a b c \t'));
-  assert('3. Should not be empty', !goog.string.isEmpty(';'));
+  assertFalse(goog.string.isEmpty(' abc \t\xa0'));
+  assertFalse(goog.string.isEmpty(' a b c \t'));
+  assertFalse(goog.string.isEmpty(';'));
 
-
-  var a;
-  assert('Undefined is not empty', !goog.string.isEmpty(a));
-  assert('Null is not empty', !goog.string.isEmpty(null));
-  assert('A random object is not empty', !goog.string.isEmpty({a: 1, b: 2}));
+  assertFalse(goog.string.isEmpty(undefined));
+  assertFalse(goog.string.isEmpty(null));
+  assertFalse(goog.string.isEmpty({a: 1, b: 2}));
 }
 
-//=== tests for goog.string.isEmptySafe ===
+
+function testIsEmptyOrWhitespace() {
+  assertTrue(goog.string.isEmptyOrWhitespace(''));
+  assertTrue(goog.string.isEmptyOrWhitespace(' '));
+  assertTrue(goog.string.isEmptyOrWhitespace('    '));
+  assertTrue(goog.string.isEmptyOrWhitespace(' \t\t\n\xa0   '));
+
+  assertFalse(goog.string.isEmptyOrWhitespace(' abc \t\xa0'));
+  assertFalse(goog.string.isEmptyOrWhitespace(' a b c \t'));
+  assertFalse(goog.string.isEmptyOrWhitespace(';'));
+
+  assertFalse(goog.string.isEmptyOrWhitespace(undefined));
+  assertFalse(goog.string.isEmptyOrWhitespace(null));
+  assertFalse(goog.string.isEmptyOrWhitespace({a: 1, b: 2}));
+}
+
+
+function testIsEmptyString() {
+  assertTrue(goog.string.isEmptyString(''));
+
+  assertFalse(goog.string.isEmptyString(' '));
+  assertFalse(goog.string.isEmptyString('    '));
+  assertFalse(goog.string.isEmptyString(' \t\t\n\xa0   '));
+  assertFalse(goog.string.isEmptyString(' abc \t\xa0'));
+  assertFalse(goog.string.isEmptyString(' a b c \t'));
+  assertFalse(goog.string.isEmptyString(';'));
+
+  assertFalse(goog.string.isEmptyString({a: 1, b: 2}));
+}
+
 
 function testIsEmptySafe() {
-  assert('1. Should be empty', goog.string.isEmptySafe(''));
-  assert('2. Should be empty', goog.string.isEmptySafe(' '));
-  assert('3. Should be empty', goog.string.isEmptySafe('    '));
-  assert('4. Should be empty', goog.string.isEmptySafe(' \t\t\n\xa0   '));
+  assertTrue(goog.string.isEmptySafe(''));
+  assertTrue(goog.string.isEmptySafe(' '));
+  assertTrue(goog.string.isEmptySafe('    '));
+  assertTrue(goog.string.isEmptySafe(' \t\t\n\xa0   '));
 
-  assert('1. Should not be empty', !goog.string.isEmptySafe(' abc \t\xa0'));
-  assert('2. Should not be empty', !goog.string.isEmptySafe(' a b c \t'));
-  assert('3. Should not be empty', !goog.string.isEmptySafe(';'));
+  assertFalse(goog.string.isEmptySafe(' abc \t\xa0'));
+  assertFalse(goog.string.isEmptySafe(' a b c \t'));
+  assertFalse(goog.string.isEmptySafe(';'));
 
-
-  var a;
-  assert('Undefined should be empty (safe)', goog.string.isEmptySafe(a));
-  assert('Null should be empty (safe)', goog.string.isEmptySafe(null));
-  assert('A random object is not empty',
-         !goog.string.isEmptySafe({a: 1, b: 2}));
+  assertTrue(goog.string.isEmptySafe(undefined));
+  assertTrue(goog.string.isEmptySafe(null));
+  assertFalse(goog.string.isEmptySafe({a: 1, b: 2}));
 }
+
+
+function testIsEmptyOrWhitespaceSafe() {
+  assertTrue(goog.string.isEmptyOrWhitespaceSafe(''));
+  assertTrue(goog.string.isEmptyOrWhitespaceSafe(' '));
+  assertTrue(goog.string.isEmptyOrWhitespaceSafe('    '));
+  assertTrue(goog.string.isEmptyOrWhitespaceSafe(' \t\t\n\xa0   '));
+
+  assertFalse(goog.string.isEmptyOrWhitespaceSafe(' abc \t\xa0'));
+  assertFalse(goog.string.isEmptyOrWhitespaceSafe(' a b c \t'));
+  assertFalse(goog.string.isEmptyOrWhitespaceSafe(';'));
+
+  assertTrue(goog.string.isEmptyOrWhitespaceSafe(undefined));
+  assertTrue(goog.string.isEmptyOrWhitespaceSafe(null));
+  assertFalse(goog.string.isEmptyOrWhitespaceSafe({a: 1, b: 2}));
+}
+
 
 //=== tests for goog.string.isAlpha ===
 function testIsAlpha() {
@@ -198,7 +246,7 @@ function testCanonicalizeNewlines() {
 
 
 // === tests for goog.string.normalizeWhitespace ===
-function testWhitespace() {
+function testNormalizeWhitespace() {
   assertEquals('All whitespace chars should be replaced with a normal space',
                goog.string.normalizeWhitespace('\xa0 \n\t \xa0 \n\t'),
                '         ');
@@ -455,21 +503,37 @@ function testNewLineToBr() {
 
 // === tests for goog.string.htmlEscape and .unescapeEntities ===
 function testHtmlEscapeAndUnescapeEntities() {
-  var text = '"x1 < x2 && y2 > y1"';
-  var html = '&quot;x1 &lt; x2 &amp;&amp; y2 &gt; y1&quot;';
+  var text = '\'"x1 < x2 && y2 > y1"\'';
+  var html = '&#39;&quot;x1 &lt; x2 &amp;&amp; y2 &gt; y1&quot;&#39;';
 
-  assertEquals('Testing htmlEscape', goog.string.htmlEscape(text), html);
-  assertEquals('Testing htmlEscape', goog.string.htmlEscape(text, false), html);
-  assertEquals('Testing htmlEscape', goog.string.htmlEscape(text, true), html);
-  assertEquals('Testing unescapeEntities',
-               goog.string.unescapeEntities(html), text);
+  assertEquals('Testing htmlEscape', html, goog.string.htmlEscape(text));
+  assertEquals('Testing htmlEscape', html, goog.string.htmlEscape(text, false));
+  assertEquals('Testing htmlEscape', html, goog.string.htmlEscape(text, true));
+  assertEquals('Testing unescapeEntities', text,
+               goog.string.unescapeEntities(html));
 
-  assertEquals('escape -> unescape',
-               goog.string.unescapeEntities(goog.string.htmlEscape(text)),
-               text);
-  assertEquals('unescape -> escape',
-               goog.string.htmlEscape(goog.string.unescapeEntities(html)),
-               html);
+  assertEquals('escape -> unescape', text,
+               goog.string.unescapeEntities(goog.string.htmlEscape(text)));
+  assertEquals('unescape -> escape', html,
+               goog.string.htmlEscape(goog.string.unescapeEntities(html)));
+}
+
+function testHtmlUnescapeEntitiesWithDocument() {
+  var documentMock = {
+    createElement: mockControl.createFunctionMock('createElement')
+  };
+  var divMock = document.createElement('div');
+  documentMock.createElement('div').$returns(divMock);
+  mockControl.$replayAll();
+
+  var html = '&lt;a&b&gt;';
+  var text = '<a&b>';
+
+  assertEquals('wrong unescaped value',
+      text, goog.string.unescapeEntitiesWithDocument(html, documentMock));
+  assertNotEquals('divMock.innerHTML should have been used', '',
+      divMock.innerHTML);
+  mockControl.$verifyAll();
 }
 
 function testHtmlEscapeAndUnescapeEntitiesUsingDom() {
@@ -506,6 +570,31 @@ function testHtmlEscapeAndUnescapePureXmlEntities_() {
   assertEquals('unescape -> escape',
                goog.string.htmlEscape(
                    goog.string.unescapePureXmlEntities_(html)), html);
+}
+
+
+function testForceNonDomHtmlUnescaping() {
+  stubs.set(goog.string, 'FORCE_NON_DOM_HTML_UNESCAPING', true);
+  // Set document.createElement to empty object so that the call to
+  // unescapeEntities will blow up if html unescaping is carried out with DOM.
+  // Notice that we can't directly set document to empty object since IE8 won't
+  // let us do so.
+  stubs.set(goog.global.document, 'createElement', {});
+  goog.string.unescapeEntities('&quot;x1 &lt; x2 &amp;&amp; y2 &gt; y1&quot;');
+}
+
+
+function testHtmlEscapeDetectDoubleEscaping() {
+  stubs.set(goog.string, 'DETECT_DOUBLE_ESCAPING', true);
+  assertEquals('&#101; &lt; pi', goog.string.htmlEscape('e < pi'));
+  assertEquals('&#101; &lt; pi', goog.string.htmlEscape('e < pi', true));
+}
+
+function testHtmlEscapeNullByte() {
+  assertEquals('&#0;', goog.string.htmlEscape('\x00'));
+  assertEquals('&#0;', goog.string.htmlEscape('\x00', true));
+  assertEquals('\\x00', goog.string.htmlEscape('\\x00'));
+  assertEquals('\\x00', goog.string.htmlEscape('\\x00', true));
 }
 
 var globalXssVar = 0;
@@ -586,12 +675,27 @@ function testUnescapeEntitiesPreservesWhitespace() {
 
 
 // === tests for goog.string.whitespaceEscape ===
-function testWhiteSpaceEscape() {
+function testWhitespaceEscape() {
   assertEquals('Should be the same',
       goog.string.whitespaceEscape('one two  three   four    five     '),
       'one two &#160;three &#160; four &#160; &#160;five &#160; &#160; ');
 }
 
+
+// === tests for goog.string.preserveSpaces ===
+function testPreserveSpaces() {
+  var nbsp = goog.string.Unicode.NBSP;
+  assertEquals('', goog.string.preserveSpaces(''));
+  assertEquals(nbsp + 'a', goog.string.preserveSpaces(' a'));
+  assertEquals(nbsp + ' a', goog.string.preserveSpaces('  a'));
+  assertEquals(nbsp + ' ' + nbsp + 'a', goog.string.preserveSpaces('   a'));
+  assertEquals('a ' + nbsp + 'b', goog.string.preserveSpaces('a  b'));
+  assertEquals('a\n' + nbsp + 'b', goog.string.preserveSpaces('a\n b'));
+
+  // We don't care about trailing spaces.
+  assertEquals('a ', goog.string.preserveSpaces('a '));
+  assertEquals('a \n' + nbsp + 'b', goog.string.preserveSpaces('a \n b'));
+}
 
 
 // === tests for goog.string.stripQuotes ===
@@ -1056,6 +1160,18 @@ function testToTitleCase() {
       goog.string.toTitleCase('one.  two.  three', delimiters));
 }
 
+function testCapitalize() {
+  assertEquals('Reptar', goog.string.capitalize('reptar'));
+  assertEquals('Reptar reptar', goog.string.capitalize('reptar reptar'));
+  assertEquals('Reptar', goog.string.capitalize('REPTAR'));
+  assertEquals('Reptar', goog.string.capitalize('Reptar'));
+  assertEquals('1234', goog.string.capitalize('1234'));
+  assertEquals('$#@!', goog.string.capitalize('$#@!'));
+  assertEquals('', goog.string.capitalize(''));
+  assertEquals('R', goog.string.capitalize('r'));
+  assertEquals('R', goog.string.capitalize('R'));
+}
+
 function testParseInt() {
   // Many example values borrowed from
   // http://trac.webkit.org/browser/trunk/LayoutTests/fast/js/kde/
@@ -1171,3 +1287,41 @@ function testSplitLimit() {
       goog.string.splitLimit('bababaababaaabb', '', 10));
 }
 
+function testContains() {
+  assertTrue(goog.string.contains('moot', 'moo'));
+  assertFalse(goog.string.contains('moo', 'moot'));
+  assertFalse(goog.string.contains('Moot', 'moo'));
+  assertTrue(goog.string.contains('moo', 'moo'));
+}
+
+function testCaseInsensitiveContains() {
+  assertTrue(goog.string.caseInsensitiveContains('moot', 'moo'));
+  assertFalse(goog.string.caseInsensitiveContains('moo', 'moot'));
+  assertTrue(goog.string.caseInsensitiveContains('Moot', 'moo'));
+  assertTrue(goog.string.caseInsensitiveContains('moo', 'moo'));
+}
+
+function testEditDistance() {
+  assertEquals('Empty string should match to length of other string', 4,
+      goog.string.editDistance('goat', ''));
+  assertEquals('Empty string should match to length of other string', 4,
+      goog.string.editDistance('', 'moat'));
+
+  assertEquals('Equal strings should have zero edit distance', 0,
+      goog.string.editDistance('abcd', 'abcd'));
+  assertEquals('Equal strings should have zero edit distance', 0,
+      goog.string.editDistance('', ''));
+
+  assertEquals('Edit distance for adding characters incorrect', 4,
+      goog.string.editDistance('bdf', 'abcdefg'));
+  assertEquals('Edit distance for removing characters incorrect', 4,
+      goog.string.editDistance('abcdefg', 'bdf'));
+
+  assertEquals('Edit distance for substituting characters incorrect', 4,
+      goog.string.editDistance('adef', 'ghij'));
+  assertEquals('Edit distance for substituting characters incorrect', 1,
+      goog.string.editDistance('goat', 'boat'));
+
+  assertEquals('Substitution should be preferred over insert/delete', 4,
+      goog.string.editDistance('abcd', 'defg'));
+}

@@ -26,13 +26,13 @@ import javax.annotation.concurrent.Immutable;
  *
  * <p> Important: This class may only be used in implementing plugins (e.g. functions, directives).
  *
- * @author Kai Huang
  */
 @Immutable
-public class UndefinedData extends PrimitiveData {
+public final class UndefinedData extends PrimitiveData {
 
 
   /** Static singleton instance of UndefinedData. */
+  @SuppressWarnings("deprecation")
   public static final UndefinedData INSTANCE = new UndefinedData();
 
 
@@ -53,13 +53,15 @@ public class UndefinedData extends PrimitiveData {
    *
    * <p> Undefined is falsy.
    */
+  @Deprecated
   @Override public boolean toBoolean() {
     return false;
   }
 
 
+  @SuppressWarnings("EqualsWhichDoesntCheckParameterClass")
   @Override public boolean equals(Object other) {
-    return other == this;  // only equal if exact same UndefinedData object
+    return this == other;  // only equal if exact same UndefinedData object
   }
 
 

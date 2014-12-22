@@ -113,7 +113,7 @@ public class FunctionTypeBuilderTest extends CompilerTestCase {
         "", FunctionTypeBuilder.TYPE_REDEFINITION,
         "attempted re-definition of type Function\n"
         + "found   : function (new:Function, ?=): ?\n"
-        + "expected: function (new:Function, ...[*]): ?");
+        + "expected: function (new:Function, ...*): ?");
   }
 
   public void testInlineJsDoc() throws Exception {
@@ -145,7 +145,7 @@ public class FunctionTypeBuilderTest extends CompilerTestCase {
       String typeName = type.getInstanceType().toString();
       FunctionType typeInRegistry = ((ObjectType) getLastCompiler()
           .getTypeRegistry().getType(typeName)).getConstructor();
-      assertTrue(typeInRegistry == type);
+      assertSame(type, typeInRegistry);
     }
   }
 }

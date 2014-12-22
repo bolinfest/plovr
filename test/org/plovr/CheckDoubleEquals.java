@@ -70,7 +70,7 @@ public class CheckDoubleEquals implements CompilerPass, DiagnosticGroupRegistrar
 
         DiagnosticType diagnosticType =
             (type == Token.EQ) ? NO_EQ_OPERATOR : NO_NE_OPERATOR;
-        JSError error = JSError.make(t.getSourceName(), n, diagnosticType);
+        JSError error = JSError.make(n, diagnosticType);
         compiler.report(error);
       }
     }

@@ -24,8 +24,6 @@
  * Tested and verified to work in Gecko 1.9.2+ and WebKit 528+.
  *
  * @author eae@google.com (Emil A Eklund)
- * @author slightlyoff@google.com (Alex Russell)
- * @author dalewis@google.com (Darren Lewis)
  * @see ../demos/css3menubutton.html
  */
 
@@ -47,6 +45,7 @@ goog.require('goog.ui.registry');
  *
  * @constructor
  * @extends {goog.ui.MenuButtonRenderer}
+ * @final
  */
 goog.ui.Css3MenuButtonRenderer = function() {
   goog.ui.MenuButtonRenderer.call(this);
@@ -108,7 +107,7 @@ goog.ui.Css3MenuButtonRenderer.prototype.canDecorate = function(element) {
  * @param {goog.ui.ControlContent} content Text caption or DOM structure to wrap
  *     in a box.
  * @param {goog.dom.DomHelper} dom DOM helper, used for document interaction.
- * @return {Element} Pseudo-rounded-corner box containing the content.
+ * @return {!Element} Pseudo-rounded-corner box containing the content.
  * @override
  */
 goog.ui.Css3MenuButtonRenderer.prototype.createButton = function(content, dom) {

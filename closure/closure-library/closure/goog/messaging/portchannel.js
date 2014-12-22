@@ -30,8 +30,6 @@ goog.require('goog.Timer');
 goog.require('goog.array');
 goog.require('goog.async.Deferred');
 goog.require('goog.debug');
-goog.require('goog.dom');
-goog.require('goog.dom.DomHelper');
 goog.require('goog.events');
 goog.require('goog.events.EventType');
 goog.require('goog.json');
@@ -40,6 +38,7 @@ goog.require('goog.messaging.AbstractChannel');
 goog.require('goog.messaging.DeferredChannel');
 goog.require('goog.object');
 goog.require('goog.string');
+goog.require('goog.userAgent');
 
 
 
@@ -59,9 +58,10 @@ goog.require('goog.string');
  *     worker or removing it from the DOM if it's an iframe.
  * @constructor
  * @extends {goog.messaging.AbstractChannel}
+ * @final
  */
 goog.messaging.PortChannel = function(underlyingPort) {
-  goog.base(this);
+  goog.messaging.PortChannel.base(this, 'constructor');
 
   /**
    * The wrapped message-passing entity.
@@ -139,7 +139,7 @@ goog.messaging.PortChannel.forEmbeddedWindow = function(
 
     var msg = {};
     msg[goog.messaging.PortChannel.FLAG] = true;
-    window.postMessage(msg, [channel.port2], peerOrigin);
+    window.postMessage(msg, peerOrigin, [channel.port2]);
   });
 
   return new goog.messaging.DeferredChannel(deferred);
@@ -328,7 +328,7 @@ goog.messaging.PortChannel.prototype.validateMessage_ = function(data) {
  * The message ports are replaced by placeholder objects that will be replaced
  * with the ports again on the other side of the channel.
  *
- * @param {Array.<MessagePort>} ports The array that will contain ports
+ * @param {Array<MessagePort>} ports The array that will contain ports
  *     extracted from the message. Will be destructively modified. Should be
  *     empty initially.
  * @param {string|!Object} message The message from which ports will be
@@ -348,7 +348,7 @@ goog.messaging.PortChannel.prototype.extractPorts_ = function(ports, message) {
   // We want to compare the exact constructor here because we only want to
   // recurse into object literals, not native objects like Date.
   } else if (message && message.constructor == Object) {
-    return goog.object.map(/** @type {Object} */ (message), function(val, key) {
+    return goog.object.map(/** @type {!Object} */(message), function(val, key) {
       val = this.extractPorts_(ports, val);
       return key == '_port' ? {'type': 'escaped', 'val': val} : val;
     }, this);
@@ -361,7 +361,7 @@ goog.messaging.PortChannel.prototype.extractPorts_ = function(ports, message) {
 /**
  * Injects MessagePorts back into a message received from across the channel.
  *
- * @param {Array.<MessagePort>} ports The array of ports to be injected into the
+ * @param {Array<MessagePort>} ports The array of ports to be injected into the
  *     message.
  * @param {string|!Object} message The message into which the ports will be
  *     injected.
@@ -397,5 +397,5 @@ goog.messaging.PortChannel.prototype.disposeInternal = function() {
     this.port_.terminate();
   }
   delete this.port_;
-  goog.base(this, 'disposeInternal');
+  goog.messaging.PortChannel.base(this, 'disposeInternal');
 };

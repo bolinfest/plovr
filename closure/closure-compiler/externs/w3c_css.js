@@ -19,6 +19,7 @@
  *  The whole file has been fully type annotated.
  *  http://www.w3.org/TR/DOM-Level-2-Style/css.html
  * @externs
+ * @author stevey@google.com (Steve Yegge)
  *
  * TODO(nicksantos): When there are no more occurrences of w3c_range.js and
  * gecko_dom.js being included directly in BUILD files, bug dbeam to split the
@@ -222,6 +223,12 @@ CSSRule.prototype.parentStyleSheet;
  * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSRule-parentRule
  */
 CSSRule.prototype.parentRule;
+
+/**
+ * @type {CSSStyleDeclaration}
+ * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSStyleRule
+ */
+CSSRule.prototype.style;
 
 /**
  * Indicates that the rule is a {@see CSSUnknownRule}.
@@ -895,11 +902,13 @@ function ViewCSS() {}
 
 /**
  * @param {Element} elt
- * @param {?string} pseudoElt
+ * @param {?string=} opt_pseudoElt This argument is required according to the
+ *     CSS2 specification, but optional in all major browsers. See the note at
+ *     https://developer.mozilla.org/en-US/docs/Web/API/Window.getComputedStyle
  * @return {CSSStyleDeclaration}
  * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSview-getComputedStyle
  */
-ViewCSS.prototype.getComputedStyle = function(elt, pseudoElt) {};
+ViewCSS.prototype.getComputedStyle = function(elt, opt_pseudoElt) {};
 
 /**
  * @constructor
@@ -991,6 +1000,12 @@ CSSProperties.prototype.backgroundPosition;
  * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSProperties-backgroundRepeat
  */
 CSSProperties.prototype.backgroundRepeat;
+
+/**
+ * @type {string}
+ * @see http://www.w3.org/TR/css3-background/#the-background-size
+ */
+CSSProperties.prototype.backgroundSize;
 
 /**
  * @implicitCast
@@ -1124,6 +1139,36 @@ CSSProperties.prototype.borderLeftWidth;
  * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSProperties-borderWidth
  */
 CSSProperties.prototype.borderWidth;
+
+/**
+ * @type {string|number}
+ * @see http://www.w3.org/TR/css3-background/#the-border-radius
+ */
+CSSProperties.prototype.borderRadius;
+
+/**
+ * @type {string|number}
+ * @see http://www.w3.org/TR/css3-background/#the-border-radius
+ */
+CSSProperties.prototype.borderBottomLeftRadius;
+
+/**
+ * @type {string|number}
+ * @see http://www.w3.org/TR/css3-background/#the-border-radius
+ */
+CSSProperties.prototype.borderBottomRightRadius;
+
+/**
+ * @type {string|number}
+ * @see http://www.w3.org/TR/css3-background/#the-border-radius
+ */
+CSSProperties.prototype.borderTopLeftRadius;
+
+/**
+ * @type {string|number}
+ * @see http://www.w3.org/TR/css3-background/#the-border-radius
+ */
+CSSProperties.prototype.borderTopRightRadius;
 
 /**
  * @type {string|number}
@@ -1537,6 +1582,12 @@ CSSProperties.prototype.quotes;
 
 /**
  * @type {string}
+ * @see http://www.w3.org/TR/css3-ui/#resize
+ */
+CSSProperties.prototype.resize;
+
+/**
+ * @type {string}
  * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSProperties-richness
  */
 CSSProperties.prototype.richness;
@@ -1701,6 +1752,12 @@ CSSProperties.prototype.zIndex;
 
 /**
  * @type {string}
+ * @see http://www.w3.org/TR/css3-background/#box-shadow
+ */
+CSSProperties.prototype.boxShadow;
+
+/**
+ * @type {string}
  * @see http://www.w3.org/TR/css3-ui/#box-sizing
  */
 CSSProperties.prototype.boxSizing;
@@ -1787,6 +1844,11 @@ CSSProperties.prototype.transitionProperty;
  */
 CSSProperties.prototype.transitionTimingFunction;
 
+/**
+ * @type {string}
+ * @see http://www.w3.org/TR/SVG11/interact.html#PointerEventsProperty
+ */
+CSSProperties.prototype.pointerEvents;
 
 /**
  * TODO(dbeam): Put this in separate file named w3c_cssom.js.
@@ -1802,12 +1864,6 @@ CSSProperties.prototype.transitionTimingFunction;
  * @see http://www.w3.org/TR/cssom-view/#dom-window-matchmedia
  */
 Window.prototype.matchMedia = function(media_query_list) {};
-
-/**
- * @type {Screen}
- * @see http://www.w3.org/TR/cssom-view/#dom-window-screen
- */
-Window.prototype.screen;
 
 /**
  * @type {number}
@@ -2010,13 +2066,13 @@ CaretPosition.prototype.offset;
 // http://www.w3.org/TR/cssom-view/#extensions-to-the-element-interface
 
 /**
- * @return {ClientRectList}
+ * @return {!ClientRectList}
  * @see http://www.w3.org/TR/cssom-view/#dom-element-getclientrects
  */
 Element.prototype.getClientRects = function() {};
 
 /**
- * @return {ClientRect}
+ * @return {!ClientRect}
  * @see http://www.w3.org/TR/cssom-view/#dom-element-getboundingclientrect
  */
 Element.prototype.getBoundingClientRect = function() {};
@@ -2111,13 +2167,13 @@ HTMLElement.prototype.offsetHeight;
 // http://www.w3.org/TR/cssom-view/#extensions-to-the-range-interface
 
 /**
- * @return {ClientRectList}
+ * @return {!ClientRectList}
  * @see http://www.w3.org/TR/cssom-view/#dom-range-getclientrects
  */
 Range.prototype.getClientRects = function() {};
 
 /**
- * @return {ClientRect}
+ * @return {!ClientRect}
  * @see http://www.w3.org/TR/cssom-view/#dom-range-getboundingclientrect
  */
 Range.prototype.getBoundingClientRect = function() {};
@@ -2253,3 +2309,197 @@ ClientRect.prototype.width;
  * @see http://www.w3.org/TR/cssom-view/#dom-clientrect-height
  */
 ClientRect.prototype.height;
+
+/**
+ * @constructor
+ * http://www.w3.org/TR/css3-conditional/#CSS-interface
+ */
+function CSSInterface() {}
+
+/**
+ * @param {string} property
+ * @param {string=} opt_value
+ * @return {boolean}
+ */
+CSSInterface.prototype.supports = function(property, opt_value) {};
+
+/**
+ * TODO(nicksantos): This suppress tag probably isn't needed, and
+ * should be removed.
+ * @suppress {duplicate}
+ * @type {CSSInterface}
+ */
+var CSS;
+
+/** @type {CSSInterface} */
+Window.prototype.CSS;
+
+// http://dev.w3.org/csswg/css-font-loading/
+
+/**
+ * @enum {string}
+ * @see http://dev.w3.org/csswg/css-font-loading/#enumdef-fontfaceloadstatus
+ */
+var FontFaceLoadStatus = {
+  ERROR: 'error',
+  LOADED: 'loaded',
+  LOADING: 'loading',
+  UNLOADED: 'unloaded'
+};
+
+/**
+ * @typedef {{
+ *   style: (string|undefined),
+ *   weight: (string|undefined),
+ *   stretch: (string|undefined),
+ *   unicodeRange: (string|undefined),
+ *   variant: (string|undefined),
+ *   featureSettings: (string|undefined)
+ * }}
+ * @see http://dev.w3.org/csswg/css-font-loading/#dictdef-fontfacedescriptors
+ */
+var FontFaceDescriptors;
+
+/**
+ * @constructor
+ * @param {string} fontFamily
+ * @param {string} source
+ * @param {!FontFaceDescriptors} descriptors
+ * @see http://dev.w3.org/csswg/css-font-loading/#font-face-constructor
+ */
+function FontFace(fontFamily, source, descriptors) {}
+
+/**
+ * @type {string}
+ * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontface-family
+ */
+FontFace.prototype.family;
+
+/**
+ * @type {string}
+ * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontface-style
+ */
+FontFace.prototype.style;
+
+/**
+ * @type {string}
+ * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontface-weight
+ */
+FontFace.prototype.weight;
+
+/**
+ * @type {string}
+ * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontface-stretch
+ */
+FontFace.prototype.stretch;
+
+/**
+ * @type {string}
+ * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontface-unicoderange
+ */
+FontFace.prototype.unicodeRange;
+
+/**
+ * @type {string}
+ * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontface-variant
+ */
+FontFace.prototype.variant;
+
+/**
+ * @type {string}
+ * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontface-featuresettings
+ */
+FontFace.prototype.featureSettings;
+
+/**
+ * @type {FontFaceLoadStatus}
+ * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontface-status
+ */
+FontFace.prototype.status;
+
+/**
+ * @return {!Promise.<!FontFace>}
+ * @see http://dev.w3.org/csswg/css-font-loading/#font-face-load
+ */
+FontFace.prototype.load = function() {};
+
+/**
+ * @enum
+ * @see http://dev.w3.org/csswg/css-font-loading/#enumdef-fontfacesetloadstatus
+ */
+var FontFaceSetLoadStatus = {
+  LOADED: 'loaded',
+  LOADING: 'loading'
+};
+
+/**
+ * @interface
+ * @see http://dev.w3.org/csswg/css-font-loading/#FontFaceSet-interface
+ */
+function FontFaceSet() {}
+
+// Event handlers
+// http://dev.w3.org/csswg/css-font-loading/#FontFaceSet-events
+
+/** @type {?function (Event)} */ FontFaceSet.prototype.onloading;
+/** @type {?function (Event)} */ FontFaceSet.prototype.onloadingdone;
+/** @type {?function (Event)} */ FontFaceSet.prototype.onloadingerror;
+
+/**
+ * @param {!FontFace} value
+ * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontfaceset-add
+ */
+FontFaceSet.prototype.add = function(value) {};
+
+/**
+ * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontfaceset-clear
+ */
+FontFaceSet.prototype.clear = function() {};
+
+/**
+ * @param {!FontFace} value
+ * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontfaceset-delete
+ */
+FontFaceSet.prototype.delete = function(value) {};
+
+/**
+ * @param {!FontFace} font
+ * @return {boolean}
+ * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontfaceset-has
+ */
+FontFaceSet.prototype.has = function(font) {};
+
+/**
+ * @param {function(!FontFace, number, !FontFaceSet)} cb
+ * @param {Object|undefined=} opt_selfObj
+ * see http://dev.w3.org/csswg/css-font-loading/#dom-fontfaceset-foreach
+ */
+FontFaceSet.prototype.forEach = function(cb, opt_selfObj) {};
+
+/**
+ * @param {string} font
+ * @param {string=} opt_text
+ * @return {!Promise.<!Array.<!FontFace>>}
+ * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontfaceset-load
+ */
+FontFaceSet.prototype.load = function(font, opt_text) {};
+
+/**
+ * @param {string} font
+ * @param {string=} opt_text
+ * @return {boolean}
+ * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontfaceset-check
+ */
+FontFaceSet.prototype.check = function(font, opt_text) {};
+
+/**
+ * @type {!Promise.<!FontFaceSet>}
+ * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontfaceset-ready
+ */
+FontFaceSet.prototype.ready;
+
+/**
+ * @type {FontFaceSetLoadStatus}
+ * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontfaceset-status
+ */
+FontFaceSet.prototype.status;

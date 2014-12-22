@@ -16,22 +16,27 @@
 
 package com.google.javascript.jscomp;
 
-import java.util.List;
-
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+
+import java.util.List;
 
 /**
  * Unit tests for {@link ProcessCommonJSModules}
  */
+
 public class ProcessCommonJSModulesTest extends CompilerTestCase {
 
   public ProcessCommonJSModulesTest() {
+    compareJsDoc = false;
   }
 
   @Override
   protected CompilerPass getProcessor(Compiler compiler) {
-    return new ProcessCommonJSModules(compiler, "foo/bar/", false);
+    return new ProcessCommonJSModules(
+        compiler,
+        ES6ModuleLoader.createNaiveLoader(compiler, "foo/bar/"),
+        false);
   }
 
   @Override
@@ -66,7 +71,7 @@ public class ProcessCommonJSModulesTest extends CompilerTestCase {
         "var name = require('name');" +
         "exports.foo = 1;",
         "goog.provide('module$test');" +
-        "var module$test = {};" +
+        "/** @const */ var module$test = {};" +
         "goog.require('module$name');" +
         "var name$$module$test = module$name;" +
         "module$test.foo = 1;");
@@ -74,12 +79,34 @@ public class ProcessCommonJSModulesTest extends CompilerTestCase {
         "var name = require('name');" +
         "module.exports = function() {};",
         "goog.provide('module$test');" +
-        "var module$test = {};" +
         "goog.require('module$name');" +
         "var name$$module$test = module$name;" +
-        "module$test.module$exports = function() {};" +
-        "if(module$test.module$exports)" +
-        "module$test=module$test.module$exports");
+        "/** @const */ var module$test = function () {};");
+  }
+
+  public void testPropertyExports() {
+    setFilename("test");
+    test(
+        "exports.one = 1;" +
+        "module.exports.obj = {};" +
+        "module.exports.obj.two = 2;",
+        "goog.provide('module$test');" +
+        "/** @const */ var module$test = {};" +
+        "module$test.one = 1;" +
+        "module$test.obj = {};" +
+        "module$test.obj.two = 2;");
+  }
+
+  public void testModuleExportsWrittenWithExportsRefs() {
+    setFilename("test");
+    test(
+        "exports.one = 1;" +
+        "module.exports = {};",
+        "goog.provide('module$test');" +
+        "var module$test = {};" +
+        "var exports$$module$test = module$test;" +
+        "exports$$module$test.one = 1;" +
+        "module$test = {};");
   }
 
   public void testVarRenaming() {
@@ -104,17 +131,18 @@ public class ProcessCommonJSModulesTest extends CompilerTestCase {
         "module$test_test.foo = 1;");
   }
 
+  public void testIndex() {
+    setFilename("foo/index.js");
+    test(
+        "var name = require('../name'); exports.bar = 1;",
+        "goog.provide('module$foo$index');" +
+        "var module$foo$index = {};" +
+        "goog.require('module$name');" +
+        "var name$$module$foo$index = module$name;" +
+        "module$foo$index.bar = 1;");
+  }
+
   public void testModuleName() {
-    assertEquals("module$foo$baz",
-        ProcessCommonJSModules.toModuleName("./baz.js", "foo/bar.js"));
-    assertEquals("module$foo$baz_bar",
-        ProcessCommonJSModules.toModuleName("./baz-bar.js", "foo/bar.js"));
-    assertEquals("module$baz",
-        ProcessCommonJSModules.toModuleName("../baz.js", "foo/bar.js"));
-    assertEquals("module$baz",
-        ProcessCommonJSModules.toModuleName("../../baz.js", "foo/bar/abc.js"));
-    assertEquals("module$baz", ProcessCommonJSModules.toModuleName(
-        "../../../baz.js", "foo/bar/abc/xyz.js"));
     setFilename("foo/bar");
     test(
         "var name = require('name');",
@@ -127,17 +155,6 @@ public class ProcessCommonJSModulesTest extends CompilerTestCase {
         "var module$foo$bar = {};" +
         "goog.require('module$foo$name');" +
         "var name$$module$foo$bar = module$foo$name;");
-
-  }
-
-  public void testGuessModuleName() {
-    ProcessCommonJSModules pass = new ProcessCommonJSModules(null, "foo");
-    assertEquals("module$baz",
-        pass.guessCJSModuleName("foo/baz.js"));
-    assertEquals("module$baz",
-        pass.guessCJSModuleName("foo\\baz.js"));
-    assertEquals("module$bar$baz",
-        pass.guessCJSModuleName("foo\\bar\\baz.js"));
   }
 
   public void testSortInputs() throws Exception {

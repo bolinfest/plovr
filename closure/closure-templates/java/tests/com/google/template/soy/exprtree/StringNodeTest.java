@@ -16,13 +16,12 @@
 
 package com.google.template.soy.exprtree;
 
-import org.junit.*;
+import junit.framework.*;
 
 
 /**
  * Unit tests for StringNode.
  *
- * @author Kai Huang
  */
 public class StringNodeTest extends TestCase {
 

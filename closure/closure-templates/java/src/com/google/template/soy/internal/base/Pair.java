@@ -16,7 +16,7 @@
 
 package com.google.template.soy.internal.base;
 
-import com.google.common.base.Objects;
+import java.util.Objects;
 
 import javax.annotation.Nullable;
 
@@ -39,10 +39,9 @@ import javax.annotation.Nullable;
  * This usually involves creating a new custom value-object type. This is
  * difficult to do "by hand" in Java, but avoid the temptation to extend {@code
  * Pair} to accomplish this; consider using the utilities {@link
- * com.google.common.labs.misc.ComparisonKeys} or {@link
- * com.google.common.labs.misc.ValueType} to help you with this instead.
+ * com.google.common.labs.collect.ComparisonKeys} or {@link
+ * com.google.common.labs.reflect.ValueType} to help you with this instead.
  *
- * @author Kevin Bourrillion
  */
 public class Pair<A, B> {
 
@@ -88,13 +87,13 @@ public class Pair<A, B> {
   @Override public boolean equals(@Nullable Object object) {
     if (object instanceof Pair<?,?>) {
       Pair<?,?> that = (Pair<?,?>) object;
-      return Objects.equal(this.first, that.first) && Objects.equal(this.second, that.second);
+      return Objects.equals(this.first, that.first) && Objects.equals(this.second, that.second);
     }
     return false;
   }
 
   @Override public int hashCode() {
-    return Objects.hashCode(first, second);
+    return Objects.hash(first, second);
   }
 
   /**

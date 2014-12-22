@@ -18,7 +18,6 @@
  * {@code goog.events.Listenable}.
  *
  * @author arv@google.com (Erik Arvidsson) [Original implementation]
- * @author pupius@google.com (Daniel Pupius) [Port to use goog.events]
  * @see ../demos/eventtarget.html
  * @see goog.events.Listenable
  */
@@ -26,7 +25,6 @@
 goog.provide('goog.events.EventTarget');
 
 goog.require('goog.Disposable');
-goog.require('goog.array');
 goog.require('goog.asserts');
 goog.require('goog.events');
 goog.require('goog.events.Event');
@@ -64,9 +62,6 @@ goog.require('goog.object');
  *   // Or: goog.events.unlisten(source, 'foo', handleEvent);
  * </pre>
  *
- * TODO(user): Consider writing a parallel class to this that
- * does not implement goog.Disposable.
- *
  * @constructor
  * @extends {goog.Disposable}
  * @implements {goog.events.Listenable}
@@ -86,6 +81,17 @@ goog.events.EventTarget = function() {
    * @private {!Object}
    */
   this.actualEventTarget_ = this;
+
+  /**
+   * Parent event target, used during event bubbling.
+   *
+   * TODO(chrishenry): Change this to goog.events.Listenable. This
+   * currently breaks people who expect getParentEventTarget to return
+   * goog.events.EventTarget.
+   *
+   * @private {goog.events.EventTarget}
+   */
+  this.parentEventTarget_ = null;
 };
 goog.inherits(goog.events.EventTarget, goog.Disposable);
 goog.events.Listenable.addImplementation(goog.events.EventTarget);
@@ -98,19 +104,6 @@ goog.events.Listenable.addImplementation(goog.events.EventTarget);
  * @private
  */
 goog.events.EventTarget.MAX_ANCESTORS_ = 1000;
-
-
-/**
- * Parent event target, used during event bubbling.
- *
- * TODO(user): Change this to goog.events.Listenable. This
- * currently breaks people who expect getParentEventTarget to return
- * goog.events.EventTarget.
- *
- * @type {goog.events.EventTarget}
- * @private
- */
-goog.events.EventTarget.prototype.parentEventTarget_ = null;
 
 
 /**
@@ -141,19 +134,18 @@ goog.events.EventTarget.prototype.setParentEventTarget = function(parent) {
  * using the same type then it will only be called once when the event is
  * dispatched.
  *
- * Supported for legacy but use goog.events.listen(src, type, handler) instead.
- *
- * TODO(user): Deprecate this.
- *
  * @param {string} type The type of the event to listen for.
- * @param {Function|Object} handler The function to handle the event. The
- *     handler can also be an object that implements the handleEvent method
- *     which takes the event object as argument.
+ * @param {function(?):?|{handleEvent:function(?):?}|null} handler The function
+ *     to handle the event. The handler can also be an object that implements
+ *     the handleEvent method which takes the event object as argument.
  * @param {boolean=} opt_capture In DOM-compliant browsers, this determines
  *     whether the listener is fired during the capture or bubble phase
  *     of the event.
  * @param {Object=} opt_handlerScope Object in whose scope to call
  *     the listener.
+ * @deprecated Use {@code #listen} instead, when possible. Otherwise, use
+ *     {@code goog.events.listen} if you are passing Object
+ *     (instead of Function) as handler.
  */
 goog.events.EventTarget.prototype.addEventListener = function(
     type, handler, opt_capture, opt_handlerScope) {
@@ -166,17 +158,18 @@ goog.events.EventTarget.prototype.addEventListener = function(
  * same object as the one added. If the handler has not been added then
  * nothing is done.
  *
- * TODO(user): Deprecate this.
- *
  * @param {string} type The type of the event to listen for.
- * @param {Function|Object} handler The function to handle the event. The
- *     handler can also be an object that implements the handleEvent method
- *     which takes the event object as argument.
+ * @param {function(?):?|{handleEvent:function(?):?}|null} handler The function
+ *     to handle the event. The handler can also be an object that implements
+ *     the handleEvent method which takes the event object as argument.
  * @param {boolean=} opt_capture In DOM-compliant browsers, this determines
  *     whether the listener is fired during the capture or bubble phase
  *     of the event.
  * @param {Object=} opt_handlerScope Object in whose scope to call
  *     the listener.
+ * @deprecated Use {@code #unlisten} instead, when possible. Otherwise, use
+ *     {@code goog.events.unlisten} if you are passing Object
+ *     (instead of Function) as handler.
  */
 goog.events.EventTarget.prototype.removeEventListener = function(
     type, handler, opt_capture, opt_handlerScope) {
@@ -224,7 +217,8 @@ goog.events.EventTarget.prototype.listen = function(
     type, listener, opt_useCapture, opt_listenerScope) {
   this.assertInitialized_();
   return this.eventTargetListeners_.add(
-      type, listener, false /* callOnce */, opt_useCapture, opt_listenerScope);
+      String(type), listener, false /* callOnce */, opt_useCapture,
+      opt_listenerScope);
 };
 
 
@@ -232,7 +226,8 @@ goog.events.EventTarget.prototype.listen = function(
 goog.events.EventTarget.prototype.listenOnce = function(
     type, listener, opt_useCapture, opt_listenerScope) {
   return this.eventTargetListeners_.add(
-      type, listener, true /* callOnce */, opt_useCapture, opt_listenerScope);
+      String(type), listener, true /* callOnce */, opt_useCapture,
+      opt_listenerScope);
 };
 
 
@@ -240,7 +235,7 @@ goog.events.EventTarget.prototype.listenOnce = function(
 goog.events.EventTarget.prototype.unlisten = function(
     type, listener, opt_useCapture, opt_listenerScope) {
   return this.eventTargetListeners_.remove(
-      type, listener, opt_useCapture, opt_listenerScope);
+      String(type), listener, opt_useCapture, opt_listenerScope);
 };
 
 
@@ -252,7 +247,7 @@ goog.events.EventTarget.prototype.unlistenByKey = function(key) {
 
 /** @override */
 goog.events.EventTarget.prototype.removeAllListeners = function(opt_type) {
-  // TODO(user): Previously, removeAllListeners can be called on
+  // TODO(chrishenry): Previously, removeAllListeners can be called on
   // uninitialized EventTarget, so we preserve that behavior. We
   // should remove this when usages that rely on that fact are purged.
   if (!this.eventTargetListeners_) {
@@ -265,15 +260,15 @@ goog.events.EventTarget.prototype.removeAllListeners = function(opt_type) {
 /** @override */
 goog.events.EventTarget.prototype.fireListeners = function(
     type, capture, eventObject) {
-  // TODO(user): Original code avoids array creation when there
+  // TODO(chrishenry): Original code avoids array creation when there
   // is no listener, so we do the same. If this optimization turns
   // out to be not required, we can replace this with
   // getListeners(type, capture) instead, which is simpler.
-  var listenerArray = this.eventTargetListeners_.listeners[type];
+  var listenerArray = this.eventTargetListeners_.listeners[String(type)];
   if (!listenerArray) {
     return true;
   }
-  listenerArray = goog.array.clone(listenerArray);
+  listenerArray = listenerArray.concat();
 
   var rv = true;
   for (var i = 0; i < listenerArray.length; ++i) {
@@ -296,7 +291,7 @@ goog.events.EventTarget.prototype.fireListeners = function(
 
 /** @override */
 goog.events.EventTarget.prototype.getListeners = function(type, capture) {
-  return this.eventTargetListeners_.getListeners(type, capture);
+  return this.eventTargetListeners_.getListeners(String(type), capture);
 };
 
 
@@ -304,14 +299,15 @@ goog.events.EventTarget.prototype.getListeners = function(type, capture) {
 goog.events.EventTarget.prototype.getListener = function(
     type, listener, capture, opt_listenerScope) {
   return this.eventTargetListeners_.getListener(
-      type, listener, capture, opt_listenerScope);
+      String(type), listener, capture, opt_listenerScope);
 };
 
 
 /** @override */
 goog.events.EventTarget.prototype.hasListener = function(
     opt_type, opt_capture) {
-  return this.eventTargetListeners_.hasListener(opt_type, opt_capture);
+  var id = goog.isDef(opt_type) ? String(opt_type) : undefined;
+  return this.eventTargetListeners_.hasListener(id, opt_capture);
 };
 
 
@@ -341,12 +337,9 @@ goog.events.EventTarget.prototype.assertInitialized_ = function() {
 /**
  * Dispatches the given event on the ancestorsTree.
  *
- * TODO(user): Look for a way to reuse this logic in
- * goog.events, if possible.
- *
  * @param {!Object} target The target to dispatch on.
  * @param {goog.events.Event|Object|string} e The event object.
- * @param {Array.<goog.events.Listenable>=} opt_ancestorsTree The ancestors
+ * @param {Array<goog.events.Listenable>=} opt_ancestorsTree The ancestors
  *     tree of the target, in reverse order from the closest ancestor
  *     to the root event target. May be null if the target has no ancestor.
  * @return {boolean} If anyone called preventDefault on the event object (or

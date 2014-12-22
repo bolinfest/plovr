@@ -28,8 +28,10 @@ import org.xml.sax.Locator;
 import org.xml.sax.SAXException;
 import org.xml.sax.XMLReader;
 
-import java.io.*;
-import java.util.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.StringReader;
+import java.util.Map;
 
 import javax.annotation.Nullable;
 import javax.xml.XMLConstants;
@@ -74,17 +76,13 @@ public class XtbMessageBundle implements MessageBundle {
       Handler contentHandler = new Handler();
       reader.setContentHandler(contentHandler);
       reader.parse(new InputSource(xtb));
-    } catch (ParserConfigurationException e) {
-      throw new RuntimeException(e);
-    } catch (SAXException e) {
-      throw new RuntimeException(e);
-    } catch (IOException e) {
+    } catch (ParserConfigurationException | IOException | SAXException e) {
       throw new RuntimeException(e);
     }
   }
 
   // Inlined from guava-internal.
-  private SAXParser createSAXParser()
+  private static SAXParser createSAXParser()
       throws ParserConfigurationException, SAXException {
     SAXParserFactory factory = SAXParserFactory.newInstance();
     factory.setValidating(false);

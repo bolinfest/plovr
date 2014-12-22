@@ -26,6 +26,7 @@ import com.google.javascript.rhino.jstype.JSType;
  * Tests for LinkedFlowScope.
  * @author nicksantos@google.com (Nick Santos)
  */
+
 public class LinkedFlowScopeTest extends CompilerTypeTestCase {
 
   private final Node blockNode = new Node(Token.BLOCK);
@@ -39,7 +40,7 @@ public class LinkedFlowScopeTest extends CompilerTypeTestCase {
   private FlowScope localEntry;
 
   @Override
-  public void setUp() throws Exception {
+  public void setUp() {
     super.setUp();
 
     globalScope = Scope.createGlobalScope(blockNode);

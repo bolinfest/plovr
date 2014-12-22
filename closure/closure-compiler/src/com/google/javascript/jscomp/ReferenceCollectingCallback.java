@@ -23,6 +23,7 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
 import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.InputId;
@@ -33,8 +34,6 @@ import com.google.javascript.rhino.jstype.StaticReference;
 import com.google.javascript.rhino.jstype.StaticSourceFile;
 import com.google.javascript.rhino.jstype.StaticSymbolTable;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -59,12 +58,12 @@ class ReferenceCollectingCallback implements ScopedCallback,
    * name).
    */
   private final Map<Var, ReferenceCollection> referenceMap =
-      Maps.newHashMap();
+      Maps.newLinkedHashMap();
 
   /**
    * The stack of basic blocks and scopes the current traversal is in.
    */
-  private final Deque<BasicBlock> blockStack = new ArrayDeque<BasicBlock>();
+  private List<BasicBlock> blockStack = Lists.newArrayList();
 
   /**
    * Source of behavior at various points in the traversal.
@@ -80,6 +79,14 @@ class ReferenceCollectingCallback implements ScopedCallback,
    * Only collect references for filtered variables.
    */
   private final Predicate<Var> varFilter;
+
+  /**
+   * Traverse hoisted functions where they're referenced, not
+   * where they're declared.
+   */
+  private final Set<Var> startedFunctionTraverse = Sets.newHashSet();
+  private final Set<Var> finishedFunctionTraverse = Sets.newHashSet();
+  private Scope narrowScope;
 
   /**
    * Constructor initializes block stack.
@@ -109,6 +116,15 @@ class ReferenceCollectingCallback implements ScopedCallback,
   public void process(Node externs, Node root) {
     NodeTraversal.traverseRoots(
         compiler, Lists.newArrayList(externs, root), this);
+  }
+
+  /**
+   * Targets reference collection to a particular scope.
+   */
+  void processScope(Scope scope) {
+    this.narrowScope = scope;
+    (new NodeTraversal(compiler, this)).traverseAtScope(scope);
+    this.narrowScope = null;
   }
 
   /**
@@ -146,21 +162,71 @@ class ReferenceCollectingCallback implements ScopedCallback,
    */
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
-    if (n.isName()) {
+    if (n.isName() || n.isRest()
+        || (n.isStringKey() && parent.isObjectPattern() && !n.hasChildren())) {
       Var v;
       if (n.getString().equals("arguments")) {
         v = t.getScope().getArgumentsVar();
       } else {
         v = t.getScope().getVar(n.getString());
       }
-      if (v != null && varFilter.apply(v)) {
-        addReference(v, new Reference(n, t, blockStack.peek()));
+
+      if (v != null) {
+        if (varFilter.apply(v)) {
+          addReference(v, new Reference(n, t, peek(blockStack)));
+        }
+
+        if (v.getParentNode() != null &&
+            NodeUtil.isHoistedFunctionDeclaration(v.getParentNode()) &&
+            // If we're only traversing a narrow scope, do not try to climb outside.
+            (narrowScope == null || narrowScope.getDepth() <= v.getScope().getDepth())) {
+          outOfBandTraversal(v);
+        }
       }
     }
 
     if (isBlockBoundary(n, parent)) {
-      blockStack.pop();
+      pop(blockStack);
     }
+  }
+
+  private void outOfBandTraversal(Var v) {
+    if (startedFunctionTraverse.contains(v)) {
+      return;
+    }
+    startedFunctionTraverse.add(v);
+
+    Node fnNode = v.getParentNode();
+
+    // Replace the block stack with a new one. This algorithm only works
+    // because we know hoisted functions cannot be inside loops. It will have to
+    // change if we ever do general function continuations.
+    Preconditions.checkState(NodeUtil.isHoistedFunctionDeclaration(fnNode));
+
+    Scope containingScope = v.getScope();
+
+    // This is tricky to compute because of the weird traverseAtScope call for
+    // CollapseProperties.
+    List<BasicBlock> newBlockStack = null;
+    if (containingScope.isGlobal()) {
+      newBlockStack = Lists.newArrayList(blockStack.get(0));
+    } else {
+      for (int i = 0; i < blockStack.size(); i++) {
+        if (blockStack.get(i).root == containingScope.getRootNode()) {
+          newBlockStack = Lists.newArrayList(blockStack.subList(0, i + 1));
+        }
+      }
+    }
+    Preconditions.checkNotNull(newBlockStack);
+
+    List<BasicBlock> oldBlockStack = blockStack;
+    blockStack = newBlockStack;
+
+    NodeTraversal outOfBandTraversal = new NodeTraversal(compiler, this);
+    outOfBandTraversal.traverseFunctionOutOfBand(fnNode, containingScope);
+
+    blockStack = oldBlockStack;
+    finishedFunctionTraverse.add(v);
   }
 
   /**
@@ -169,8 +235,8 @@ class ReferenceCollectingCallback implements ScopedCallback,
   @Override
   public void enterScope(NodeTraversal t) {
     Node n = t.getScope().getRootNode();
-    BasicBlock parent = blockStack.isEmpty() ? null : blockStack.peek();
-    blockStack.push(new BasicBlock(parent, n));
+    BasicBlock parent = blockStack.isEmpty() ? null : peek(blockStack);
+    blockStack.add(new BasicBlock(parent, n));
   }
 
   /**
@@ -178,7 +244,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
    */
   @Override
   public void exitScope(NodeTraversal t) {
-    blockStack.pop();
+    pop(blockStack);
     if (t.getScope().isGlobal()) {
       // Update global scope reference lists when we are done with it.
       compiler.updateGlobalVarReferences(referenceMap, t.getScopeRoot());
@@ -194,11 +260,35 @@ class ReferenceCollectingCallback implements ScopedCallback,
   @Override
   public boolean shouldTraverse(NodeTraversal nodeTraversal, Node n,
       Node parent) {
+    // We automatically traverse a hoisted function body when that function
+    // is first referenced, so that the reference lists are in the right order.
+    //
+    // TODO(nicksantos): Maybe generalize this to a continuation mechanism
+    // like in RemoveUnusedVars.
+    if (NodeUtil.isHoistedFunctionDeclaration(n)) {
+      Node nameNode = n.getFirstChild();
+      Var functionVar = nodeTraversal.getScope().getVar(nameNode.getString());
+      if (functionVar != null) {
+        if (finishedFunctionTraverse.contains(functionVar)) {
+          return false;
+        }
+        startedFunctionTraverse.add(functionVar);
+      }
+    }
+
     // If node is a new basic block, put on basic block stack
     if (isBlockBoundary(n, parent)) {
-      blockStack.push(new BasicBlock(blockStack.peek(), n));
+      blockStack.add(new BasicBlock(peek(blockStack), n));
     }
     return true;
+  }
+
+  private static <T> T pop(List<T> list) {
+    return list.remove(list.size() - 1);
+  }
+
+  private static <T> T peek(List<T> list) {
+    return list.get(list.size() - 1);
   }
 
   /**
@@ -209,6 +299,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
       switch (parent.getType()) {
         case Token.DO:
         case Token.FOR:
+        case Token.FOR_OF:
         case Token.TRY:
         case Token.WHILE:
         case Token.WITH:
@@ -428,6 +519,9 @@ class ReferenceCollectingCallback implements ScopedCallback,
       for (BasicBlock block = ref.getBasicBlock();
            block != null; block = block.getParent()) {
         if (block.isFunction) {
+          if (ref.getSymbol().getScope() != ref.scope) {
+            return false;
+          }
           break;
         } else if (block.isLoop) {
           return false;
@@ -486,7 +580,8 @@ class ReferenceCollectingCallback implements ScopedCallback,
   static final class Reference implements StaticReference<JSType> {
 
     private static final Set<Integer> DECLARATION_PARENTS =
-        ImmutableSet.of(Token.VAR, Token.FUNCTION, Token.CATCH);
+        ImmutableSet.of(Token.VAR, Token.LET, Token.CONST, Token.PARAM_LIST,
+            Token.FUNCTION, Token.CLASS, Token.CATCH);
 
     private final Node nameNode;
     private final BasicBlock basicBlock;
@@ -497,14 +592,6 @@ class ReferenceCollectingCallback implements ScopedCallback,
     Reference(Node nameNode, NodeTraversal t,
         BasicBlock basicBlock) {
       this(nameNode, basicBlock, t.getScope(), t.getInput().getInputId());
-    }
-
-    // Bleeding functions are weird, because the declaration does
-    // not appear inside their scope. So they need their own constructor.
-    static Reference newBleedingFunction(NodeTraversal t,
-        BasicBlock basicBlock, Node func) {
-      return new Reference(func.getFirstChild(),
-          basicBlock, t.getScope(), t.getInput().getInputId());
     }
 
     /**
@@ -554,15 +641,45 @@ class ReferenceCollectingCallback implements ScopedCallback,
     }
 
     boolean isDeclaration() {
-      Node parent = getParent();
-      Node grandparent = parent.getParent();
-      return DECLARATION_PARENTS.contains(parent.getType()) ||
-          parent.isParamList() &&
-          grandparent.isFunction();
+      return isDeclarationHelper(nameNode);
+    }
+
+    private static boolean isDeclarationHelper(Node node) {
+      Node parent = node.getParent();
+
+      // Special case for class B extends A, A is not a redeclaration.
+      if (parent.isClass() && node != parent.getFirstChild()) {
+        return false;
+      }
+
+      if (NodeUtil.isNameDeclaration(parent.getParent())
+          && node == parent.getLastChild()) {
+        // This is the RHS of a var/let/const, so not a declaration.
+        return false;
+      }
+
+      // Special cases for destructuring patterns.
+      if (parent.isDestructuringPattern()
+          || (parent.isStringKey() && parent.getParent().isObjectPattern())
+          || (parent.isComputedProp() && parent.getParent().isObjectPattern()
+              && node == parent.getLastChild())
+          || (parent.isDefaultValue() && node == parent.getFirstChild())) {
+        return isDeclarationHelper(parent);
+      }
+
+      return DECLARATION_PARENTS.contains(parent.getType());
     }
 
     boolean isVarDeclaration() {
       return getParent().isVar();
+    }
+
+    boolean isLetDeclaration() {
+      return getParent().isLet();
+    }
+
+    boolean isConstDeclaration() {
+      return getParent().isConst();
     }
 
     boolean isHoistedFunction() {
@@ -621,6 +738,8 @@ class ReferenceCollectingCallback implements ScopedCallback,
       Node parent = getParent();
       int parentType = parent.getType();
       return (parentType == Token.VAR && nameNode.getFirstChild() != null)
+          || (parentType == Token.LET && nameNode.getFirstChild() != null)
+          || (parentType == Token.CONST && nameNode.getFirstChild() != null)
           || parentType == Token.INC
           || parentType == Token.DEC
           || (NodeUtil.isAssignmentOp(parent)
@@ -641,11 +760,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
 
     private final BasicBlock parent;
 
-    /**
-     * Determines whether the block may not be part of the normal control flow,
-     * but instead "hoisted" to the top of the scope.
-     */
-    private final boolean isHoisted;
+    private final Node root;
 
     /**
      * Whether this block denotes a function scope.
@@ -664,9 +779,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
      */
     BasicBlock(BasicBlock parent, Node root) {
       this.parent = parent;
-
-      // only named functions may be hoisted.
-      this.isHoisted = NodeUtil.isHoistedFunctionDeclaration(root);
+      this.root = root;
 
       this.isFunction = root.isFunction();
 
@@ -706,11 +819,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
       BasicBlock currentBlock;
       for (currentBlock = thatBlock;
            currentBlock != null && currentBlock != this;
-           currentBlock = currentBlock.getParent()) {
-        if (currentBlock.isHoisted) {
-          return false;
-        }
-      }
+           currentBlock = currentBlock.getParent()) { }
 
       if (currentBlock == this) {
         return true;

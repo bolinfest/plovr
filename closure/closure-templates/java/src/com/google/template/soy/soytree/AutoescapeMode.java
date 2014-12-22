@@ -16,9 +16,8 @@
 
 package com.google.template.soy.soytree;
 
-import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableMap;
 
-import java.util.Locale;
 import java.util.Set;
 
 
@@ -26,36 +25,46 @@ import java.util.Set;
  * Specifies how the outputs of <code>{print}</code> commands that lack escaping directives are
  * encoded.
  *
- * @author Mike Samuel
  */
 public enum AutoescapeMode {
 
   /** Auto-escaping is off for the template. */
-  FALSE,
+  FALSE("deprecated-noautoescape"),
   /** Auto-escaping is on for the template so directiveless prints will be HTML escaped. */
-  TRUE,
+  TRUE("deprecated-noncontextual"),
   /**
    * Contextual auto-escaping is on for the template so directiveless prints will be escaped based
    * on the surrounding context.
    */
-  CONTEXTUAL,
+  CONTEXTUAL("deprecated-contextual"),
   /**
    * Strict form of contextual autoescaping in which no autoescape-cancelling print directives nor
    * calls to non-strict templates are allowed.
-   *
-   * TODO: The initial implementation of strict mode does not allow any calls, and is only intended
-   * for internal use when parsing {param} and {let} blocks of non-text kind. Once fully implemented
-   * change the name.
    */
-  STRICT,
+  STRICT("strict"),
   ;
+
+  private static final ImmutableMap<String, AutoescapeMode> valueToModeMap;
+
+  static {
+    ImmutableMap.Builder <String, AutoescapeMode> map = ImmutableMap.builder();
+    for (AutoescapeMode value : AutoescapeMode.values()) {
+      map.put(value.attributeValue, value);
+    }
+    valueToModeMap = map.build();
+  }
 
 
   private final String attributeValue;
 
 
-  AutoescapeMode() {
-    this.attributeValue = name().toLowerCase(Locale.ENGLISH);
+  /**
+   * Constructs an AutoescapeMode enum.
+   *
+   * @param attributeValue value of the "autoescape" attribute that specifies this autoescape mode.
+   */
+  AutoescapeMode(String attributeValue) {
+    this.attributeValue = attributeValue;
   }
 
 
@@ -71,11 +80,7 @@ public enum AutoescapeMode {
    * The set created by element-wise application of {@link #getAttributeValue} to all modes.
    */
   public static Set<String> getAttributeValues() {
-    ImmutableSet.Builder<String> values = ImmutableSet.builder();
-    for (AutoescapeMode value : AutoescapeMode.values()) {
-      values.add(value.getAttributeValue());
-    }
-    return values.build();
+    return valueToModeMap.keySet();
   }
 
 
@@ -83,6 +88,6 @@ public enum AutoescapeMode {
    * The value such that attributeValue.equals(value.getAttributeValue()).
    */
   public static AutoescapeMode forAttributeValue(String attributeValue) {
-    return valueOf(attributeValue.toUpperCase(Locale.ENGLISH));
+    return valueToModeMap.get(attributeValue);
   }
 }

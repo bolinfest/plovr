@@ -30,130 +30,365 @@ var jasmine = {};
 
 /**
  * @param {string} name
- * @return {jasmine.Spy} spy
+ * @return {!jasmine.Spy} spy
  */
 jasmine.createSpy = function(name) {};
 
 
-
-/** @constructor */
-jasmine.Matcher = function() {};
-
-
-/** @type {jasmine.Matcher} */
-jasmine.Matcher.prototype.not;
-
-
-/** @param {*} value */
-jasmine.Matcher.prototype.toBe = function(value) {};
-
-
-/** @return {void} */
-jasmine.Matcher.prototype.toBeDefined = function() {};
-
-
-/** @return {void} */
-jasmine.Matcher.prototype.toBeFalsy = function() {};
-
-
-/** @param {*} value */
-jasmine.Matcher.prototype.toBeGreaterThan = function(value) {};
-
-
-/** @param {*} value */
-jasmine.Matcher.prototype.toBeLessThan = function(value) {};
-
-
-/** @return {void} */
-jasmine.Matcher.prototype.toBeNull = function() {};
-
-
-/** @return {void} */
-jasmine.Matcher.prototype.toBeTruthy = function() {};
-
-
-/** @return {void} */
-jasmine.Matcher.prototype.toBeUndefined = function() {};
-
-
-/** @param {*} value */
-jasmine.Matcher.prototype.toContain = function(value) {};
-
-
-/** @param {*} value */
-jasmine.Matcher.prototype.toEqual = function(value) {};
-
-
-/** @return {void} */
-jasmine.Matcher.prototype.toHaveBeenCalled = function() {};
-
-
-/** @param {...*} var_args */
-jasmine.Matcher.prototype.toHaveBeenCalledWith = function(var_args) {};
-
-
-/** @param {(string|RegExp)} pattern */
-jasmine.Matcher.prototype.toMatch = function(pattern) {};
-
-
-/** @param {Error=} opt_expected */
-jasmine.Matcher.prototype.toThrow = function(opt_expected) {};
-
+/**
+ * @param {string} baseName
+ * @param {Array} methodNames
+ */
+jasmine.createSpyObj = function(baseName, methodNames) {};
 
 
 /** @constructor */
-jasmine.Spy = function() {};
+jasmine.TimeProvider = function() {};
 
 
-/** @param {Function} fn */
-jasmine.Spy.prototype.andCallFake = function(fn) {};
+/**
+ * @param {Function} cb
+ * @param {number} time
+ * @return {number}
+ */
+jasmine.TimeProvider.prototype.setTimeout = function(cb, time) {};
 
 
-/** @return {void} */
-jasmine.Spy.prototype.andCallThrough = function() {};
+/**
+ * @param {Function} cb
+ * @param {number} time
+ * @return {number}
+ */
+jasmine.TimeProvider.prototype.setInterval = function(cb, time) {};
 
 
-/** @param {*} value */
-jasmine.Spy.prototype.andReturn = function(value) {};
+/**
+ * @param {number} id
+ */
+jasmine.TimeProvider.prototype.clearTimeout = function(id) {};
 
 
-/** @param {Error} exception */
-jasmine.Spy.prototype.andThrow = function(exception) {};
+/**
+ * @param {number} id
+ */
+jasmine.TimeProvider.prototype.clearInterval = function(id) {};
+
+
+/**
+ * @type {number}
+ */
+jasmine.TimeProvider.prototype.nowMillis;
 
 
 /** @constructor */
-jasmine.Helper = function() {};
+jasmine.Clock = function() {};
 
 
-/** @param {*} value */
-jasmine.Helper.prototype.addMatchers = function(value) {};
+/** @type {!jasmine.TimeProvider} */
+jasmine.Clock.real;
+
+
+/** @type {!jasmine.TimeProvider} */
+jasmine.Clock.installed;
+
+
+/** @return {void} */
+jasmine.Clock.useMock = function() {};
+
+
+/** @param {number} ms */
+jasmine.Clock.tick = function(ms) {};
+
+
+/** @type {number} */
+jasmine.Clock.prototype.nowMillis;
+
+
+/** @constructor */
+jasmine.Matchers = function() {};
+
+
+/** @type {jasmine.Matchers} */
+jasmine.Matchers.prototype.not;
 
 
 /** @type {*} */
-jasmine.Helper.prototype.actual;
+jasmine.Matchers.prototype.actual;
+
+
+/** @param {*} value */
+jasmine.Matchers.prototype.toBe = function(value) {};
+
+
+/** @return {void} */
+jasmine.Matchers.prototype.toBeDefined = function() {};
+
+
+/** @return {void} */
+jasmine.Matchers.prototype.toBeFalsy = function() {};
+
+
+/** @param {*} value */
+jasmine.Matchers.prototype.toBeGreaterThan = function(value) {};
+
+
+/** @param {*} value */
+jasmine.Matchers.prototype.toBeLessThan = function(value) {};
+
+
+/** @param {*} value */
+jasmine.Matchers.prototype.toBeCloseTo = function(value, precision) {};
+
+
+/** @return {void} */
+jasmine.Matchers.prototype.toBeNull = function() {};
+
+
+/** @return {void} */
+jasmine.Matchers.prototype.toBeTruthy = function() {};
+
+
+/** @return {void} */
+jasmine.Matchers.prototype.toBeUndefined = function() {};
+
+
+/** @return {void} */
+jasmine.Matchers.prototype.toBeNaN = function() {};
+
+
+/** @param {*} value */
+jasmine.Matchers.prototype.toContain = function(value) {};
+
+
+/** @param {*} value */
+jasmine.Matchers.prototype.toEqual = function(value) {};
+
+
+/** @return {void} */
+jasmine.Matchers.prototype.toHaveBeenCalled = function() {};
+
+
+/** @param {...*} var_args */
+jasmine.Matchers.prototype.toHaveBeenCalledWith = function(var_args) {};
+
+
+/** @param {(string|RegExp)} pattern */
+jasmine.Matchers.prototype.toMatch = function(pattern) {};
+
+
+/** @param {Error=} opt_expected */
+jasmine.Matchers.prototype.toThrow = function(opt_expected) {};
+
+
+/**
+ * @param {!Object} clazz
+ * @return {!jasmine.Matchers}
+ */
+jasmine.any = function(clazz) {};
+
+
+/** @constructor */
+jasmine.Spec = function() {};
+
+
+/** @type {undefined|function(): string} */
+jasmine.Spec.prototype.message;
+
+
+/**
+ * @param {function(this:jasmine.Spec)} after
+ */
+jasmine.Spec.prototype.after = function(after) {};
+
+
+/** @param {Error|string} e */
+jasmine.Spec.prototype.fail = function(e) {};
+
+
+/**
+ * @param {function()=} opt_onComplete
+ */
+jasmine.Spec.prototype.finish = function(opt_onComplete) {};
+
+/**
+ * @param {Object} matchers
+ */
+jasmine.Spec.prototype.addMatchers = function(matchers) {};
+
+
+/**
+ * @constructor
+ * @extends {Function}
+ */
+jasmine.Spy = function() {};
+
+
+/**
+ * @param {!Function} fn
+ * @return {!jasmine.Spy}
+ */
+jasmine.Spy.prototype.andCallFake = function(fn) {};
+
+
+/** @return {!jasmine.Spy} */
+jasmine.Spy.prototype.andCallThrough = function() {};
+
+
+/**
+ * @param {*} value
+ * @return {!jasmine.Spy}
+ */
+jasmine.Spy.prototype.andReturn = function(value) {};
+
+
+/**
+ * @param {!Error} exception
+ * @return {!jasmine.Spy}
+ */
+jasmine.Spy.prototype.andThrow = function(exception) {};
+
+
+/**
+ * @return {void}
+ */
+jasmine.Spy.prototype.reset = function() {};
+
+
+/** @type {number} */
+jasmine.Spy.prototype.callCount;
+
+
+/** @type {!Array.<!Object>} */
+jasmine.Spy.prototype.calls;
+
+
+/** @type {*} */
+jasmine.Spy.prototype.mostRecentCall;
+
+
+/** @type {!Array} */
+jasmine.Spy.prototype.mostRecentCall.args;
+
+
+/** @constructor */
+jasmine.Suite = function() {};
+
+
+/**
+ * @param {function()=} opt_onComplete
+ */
+jasmine.Suite.prototype.finish = function(opt_onComplete) {};
+
+/**
+ * @param {function(this:jasmine.Spec)} beforeEachFunction
+ */
+jasmine.Suite.prototype.beforeEach = function(beforeEachFunction) {};
+
+/**
+ * @param {function(this:jasmine.Spec)} afterEachFunction
+ */
+jasmine.Suite.prototype.afterEach = function(afterEachFunction) {};
+
+
+/** @constructor */
+jasmine.JsApiReporter = function() {};
+
+
+/** @type {!Array.<string>} */
+jasmine.JsApiReporter.prototype.messages;
+
 
 /** @type {boolean} */
-jasmine.Helper.prototype.isNot;
+jasmine.JsApiReporter.prototype.finished;
 
 
-/** @param {function()} handler */
+/** @return {!Array.<{id:string,name:string,type:string,children:!Array}>} id */
+jasmine.JsApiReporter.prototype.suites = function() {};
+
+
+/** @return {boolean} */
+jasmine.JsApiReporter.prototype.isInitialized = function() {};
+
+
+/** @return {boolean} */
+jasmine.JsApiReporter.prototype.isFinished = function() {};
+
+
+/** @return {boolean} */
+jasmine.JsApiReporter.prototype.isSuccess = function() {};
+
+
+/** @return {string} */
+jasmine.JsApiReporter.prototype.getReport = function() {};
+
+
+/** @return {number} */
+jasmine.JsApiReporter.prototype.getRunTime = function() {};
+
+
+/** @param {Object} runner */
+jasmine.JsApiReporter.prototype.reportRunnerStarting = function(runner) {};
+
+
+/** @return {Object} runner */
+jasmine.JsApiReporter.prototype.reportRunnerResults = function(runner) {};
+
+
+/**
+ * @param {string} id
+ * @return {{messages:Array,result:string}}
+ */
+jasmine.JsApiReporter.prototype.resultsForSpec = function(id) {};
+
+
+/** @constructor */
+jasmine.Env = function() {};
+
+
+/** @type {jasmine.Spec} */
+jasmine.Env.prototype.currentSpec;
+
+
+/** @return {void} */
+jasmine.Env.prototype.execute = function() {};
+
+
+/** @param {jasmine.JsApiReporter} reporter */
+jasmine.Env.prototype.addReporter = function(reporter) {};
+
+
+/** @param {function(this:jasmine.Spec)} handler */
+jasmine.Env.prototype.afterEach = function(handler) {};
+
+
+/** @param {function(this:jasmine.Spec)} handler */
+jasmine.Env.prototype.beforeEach = function(handler) {};
+
+
+/**
+ * @return {!jasmine.Env}
+ */
+jasmine.getEnv = function() {};
+
+
+/** @param {function(this:jasmine.Spec)} handler */
 function afterEach(handler) {}
 
 
-/** @param {function(this:jasmine.Helper)} handler */
+/** @param {function(this:jasmine.Spec)} handler */
 function beforeEach(handler) {}
 
 
 /**
  * @param {string} description
- * @param {function()} handler
+ * @param {function(this:jasmine.Suite)} handler
  */
 function describe(description, handler) {}
 
 
 /**
  * @param {*} expectedValue
- * @return {jasmine.Matcher} matcher
+ * @return {jasmine.Matchers} matcher
  */
 function expect(expectedValue) {}
 
@@ -167,9 +402,16 @@ function inject(var_args) {}
 
 /**
  * @param {string} description
- * @param {function()} handler
+ * @param {function(this:jasmine.Spec)} handler
  */
 function it(description, handler) {}
+
+
+/**
+ * @param {string} description
+ * @param {function(this:jasmine.Spec)} handler
+ */
+function iit(description, handler) {}
 
 
 /**
@@ -206,14 +448,13 @@ function waitsFor(handler, opt_message, opt_timeout) {}
 /**
  * @nosideeffects
  * @param {string} description
- * @param {function()} handler
+ * @param {function(this:jasmine.Suite)} handler
  */
 function xdescribe(description, handler) {}
 
 
 /**
- * @nosideeffects
  * @param {string} description
- * @param {function()} handler
+ * @param {function(this:jasmine.Spec)} handler
  */
 function xit(description, handler) {}

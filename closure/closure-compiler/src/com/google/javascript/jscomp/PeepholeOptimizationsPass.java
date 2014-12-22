@@ -25,7 +25,6 @@ import com.google.javascript.rhino.Node;
  * some useless code removal, some minimizations).
  *
  * @author dcc@google.com (Devin Coughlin)
- * @author acleung@google.com (Alan Leung)(
  */
 class PeepholeOptimizationsPass implements CompilerPass {
   private AbstractCompiler compiler;
@@ -50,10 +49,6 @@ class PeepholeOptimizationsPass implements CompilerPass {
 
   void setRetraverseOnChange(boolean retraverse) {
     this.retraverseOnChange = retraverse;
-  }
-
-  public AbstractCompiler getCompiler() {
-    return compiler;
   }
 
   @Override

@@ -46,7 +46,7 @@ import java.util.Map;
 class MemoizedScopeCreator
     implements ScopeCreator, StaticSymbolTable<Var, Var> {
 
-  private final Map<Node, Scope> scopes = Maps.newHashMap();
+  private final Map<Node, Scope> scopes = Maps.newLinkedHashMap();
   private final ScopeCreator delegate;
 
   /**
@@ -88,11 +88,11 @@ class MemoizedScopeCreator
   }
 
   Collection<Scope> getAllMemoizedScopes() {
-    return Collections.unmodifiableCollection(scopes.values());
-  }
-
-  Scope getScopeIfMemoized(Node n) {
-    return scopes.get(n);
+    // Return scopes in reverse order of creation so that IIFEs will
+    // come before the global scope.
+    List<Scope> temp = Lists.newArrayList(scopes.values());
+    Collections.reverse(temp);
+    return Collections.unmodifiableCollection(temp);
   }
 
   /**
@@ -106,5 +106,10 @@ class MemoizedScopeCreator
         scopes.remove(scopeRoot);
       }
     }
+  }
+
+  @Override
+  public boolean hasBlockScope() {
+    return delegate.hasBlockScope();
   }
 }

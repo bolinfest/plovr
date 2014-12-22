@@ -16,7 +16,9 @@
 
 package com.google.template.soy.exprtree;
 
-import com.google.template.soy.base.BaseUtils;
+import com.google.template.soy.base.internal.BaseUtils;
+import com.google.template.soy.types.SoyType;
+import com.google.template.soy.types.primitive.StringType;
 
 
 /**
@@ -24,7 +26,6 @@ import com.google.template.soy.base.BaseUtils;
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
- * @author Kai Huang
  */
 public class StringNode extends AbstractPrimitiveNode {
 
@@ -53,6 +54,11 @@ public class StringNode extends AbstractPrimitiveNode {
 
   @Override public Kind getKind() {
     return Kind.STRING_NODE;
+  }
+
+
+  @Override public SoyType getType() {
+    return StringType.getInstance();
   }
 
 

@@ -58,7 +58,7 @@ import java.util.Set;
  * can be assigned to a record of type { a : A }.
  *
  */
-class RecordType extends PrototypeObjectType {
+public class RecordType extends PrototypeObjectType {
   private static final long serialVersionUID = 1L;
 
   private final boolean declared;
@@ -203,7 +203,7 @@ class RecordType extends PrototypeObjectType {
   }
 
   @Override
-  RecordType toMaybeRecordType() {
+  public RecordType toMaybeRecordType() {
     return this;
   }
 

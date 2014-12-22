@@ -30,7 +30,9 @@ import java.util.List;
 /**
  * Compiler pass for AngularJS-specific needs. Generates {@code $inject} \
  * properties for functions (class constructors, wrappers, etc) annotated with
- * @ngInject.
+ * @ngInject. Without this pass, AngularJS will not work properly if variable
+ * renaming is enabled, because the function arguments will be renamed.
+ * @see http://docs.angularjs.org/tutorial/step_05#a-note-on-minification
  *
  * <p>For example, the following code:</p>
  * <pre>{@code
@@ -68,11 +70,12 @@ import java.util.List;
  *
  * }</pre>
  */
-class AngularPass extends AbstractPostOrderCallback implements CompilerPass {
+class AngularPass extends AbstractPostOrderCallback
+    implements HotSwapCompilerPass {
   final AbstractCompiler compiler;
 
   /** Nodes annotated with @ngInject */
-  private final List<NodeContext> injectables = new ArrayList<NodeContext>();
+  private final List<NodeContext> injectables = new ArrayList<>();
 
   public AngularPass(AbstractCompiler compiler) {
     this.compiler = compiler;
@@ -96,9 +99,13 @@ class AngularPass extends AbstractPostOrderCallback implements CompilerPass {
 
   @Override
   public void process(Node externs, Node root) {
+    hotSwapScript(root, null);
+  }
+
+  @Override
+  public void hotSwapScript(Node scriptRoot, Node originalRoot) {
     // Traverses AST looking for nodes annotated with @ngInject.
-    NodeTraversal.traverse(compiler, root, this);
-    CodingConvention convention = compiler.getCodingConvention();
+    NodeTraversal.traverse(compiler, scriptRoot, this);
     boolean codeChanged = false;
     // iterates through annotated nodes adding $inject property to elements.
     for (NodeContext entry : injectables) {
@@ -106,7 +113,7 @@ class AngularPass extends AbstractPostOrderCallback implements CompilerPass {
       Node fn = entry.getFunctionNode();
       List<Node> dependencies = createDependenciesList(fn);
       // skips entry if it does have any dependencies.
-      if (dependencies.size() == 0) {
+      if (dependencies.isEmpty()) {
         continue;
       }
       Node dependenciesArray = IR.arraylit(dependencies.toArray(
@@ -115,18 +122,20 @@ class AngularPass extends AbstractPostOrderCallback implements CompilerPass {
       Node statement = IR.exprResult(
           IR.assign(
               IR.getelem(
-                  NodeUtil.newQualifiedNameNode(convention, name),
+                  NodeUtil.newQName(compiler, name),
                   IR.string(INJECT_PROPERTY_NAME)),
               dependenciesArray
           )
       );
+      NodeUtil.setDebugInformation(statement, entry.getNode(), name);
+
       // adds `something.$inject = [...]` node after the annotated node or the following
       // goog.inherits call.
       Node insertionPoint = entry.getTarget();
       Node next = insertionPoint.getNext();
-      while (next != null &&
-             NodeUtil.isExprCall(next) &&
-             convention.getClassesDefinedByCall(
+      while (next != null
+             && NodeUtil.isExprCall(next)
+             && compiler.getCodingConvention().getClassesDefinedByCall(
                  next.getFirstChild()) != null) {
         insertionPoint = next;
         next = insertionPoint.getNext();
@@ -146,7 +155,7 @@ class AngularPass extends AbstractPostOrderCallback implements CompilerPass {
    * @param n the FUNCTION node.
    * @return STRING nodes.
    */
-  private List<Node> createDependenciesList(Node n) {
+  private static List<Node> createDependenciesList(Node n) {
     Preconditions.checkArgument(n.isFunction());
     Node params = NodeUtil.getFunctionParameters(n);
     if (params != null) {
@@ -160,7 +169,7 @@ class AngularPass extends AbstractPostOrderCallback implements CompilerPass {
    * @param params PARAM_LIST node.
    * @return array of STRING nodes.
    */
-  private List<Node> createStringsFromParamList(Node params) {
+  private static List<Node> createStringsFromParamList(Node params) {
     Node param = params.getFirstChild();
     ArrayList<Node> names = Lists.newArrayList();
     while (param != null && param.isName()) {
@@ -220,14 +229,14 @@ class AngularPass extends AbstractPostOrderCallback implements CompilerPass {
         target = n;
         break;
     }
-    // checks that the declaration took place in a block or in a global scope.
-    if (!target.getParent().isScript() && !target.getParent().isBlock()) {
-      compiler.report(t.makeError(n, INJECT_IN_NON_GLOBAL_OR_BLOCK_ERROR));
-      return;
-    }
     // checks that it is a function declaration.
     if (fn == null || !fn.isFunction()) {
       compiler.report(t.makeError(n, INJECT_NON_FUNCTION_ERROR));
+      return;
+    }
+    // checks that the declaration took place in a block or in a global scope.
+    if (!target.getParent().isScript() && !target.getParent().isBlock()) {
+      compiler.report(t.makeError(n, INJECT_IN_NON_GLOBAL_OR_BLOCK_ERROR));
       return;
     }
     // checks that name is present, which must always be the case unless the
@@ -247,10 +256,10 @@ class AngularPass extends AbstractPostOrderCallback implements CompilerPass {
    * var z = x = y = function() {}; // FUNCTION node
    * }</pre>
    * @param n VAR node.
-   * @return the assigned intial value, or the rightmost rvalue of an assignment
+   * @return the assigned initial value, or the rightmost rvalue of an assignment
    * chain, or null.
    */
-  private Node getDeclarationRValue(Node n) {
+  private static Node getDeclarationRValue(Node n) {
     Preconditions.checkNotNull(n);
     Preconditions.checkArgument(n.isVar());
     n = n.getFirstChild().getFirstChild();
@@ -263,7 +272,7 @@ class AngularPass extends AbstractPostOrderCallback implements CompilerPass {
     return n;
   }
 
-  class NodeContext {
+  static class NodeContext {
     /** Name of the function/object. */
     private final String name;
     /** Node jsDoc is attached to. */

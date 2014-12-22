@@ -61,7 +61,7 @@ public enum WarningLevel {
     options.aggressiveVarCheck = CheckLevel.OFF;
     options.checkTypes = false;
     options.setWarningLevel(DiagnosticGroups.CHECK_TYPES, CheckLevel.OFF);
-    options.checkUnreachableCode = CheckLevel.OFF;
+    options.setWarningLevel(DiagnosticGroups.CHECK_USELESS_CODE, CheckLevel.OFF);
     options.checkMissingReturn = CheckLevel.OFF;
     options.setWarningLevel(DiagnosticGroups.ACCESS_CONTROLS, CheckLevel.OFF);
     options.setWarningLevel(DiagnosticGroups.CONST, CheckLevel.OFF);
@@ -71,7 +71,6 @@ public enum WarningLevel {
     options.checkGlobalThisLevel = CheckLevel.OFF;
     options.setWarningLevel(DiagnosticGroups.GLOBAL_THIS, CheckLevel.OFF);
     options.setWarningLevel(DiagnosticGroups.ES5_STRICT, CheckLevel.OFF);
-    options.checkCaja = false;
 
     // Allows annotations that are not standard.
     options.setWarningLevel(DiagnosticGroups.NON_STANDARD_JSDOC,
@@ -84,8 +83,6 @@ public enum WarningLevel {
    */
   private static void addDefaultWarnings(CompilerOptions options) {
     options.checkSuspiciousCode = true;
-    options.checkUnreachableCode = CheckLevel.WARNING;
-    options.checkControlStructures = true;
 
     // Allows annotations that are not standard.
     options.setWarningLevel(DiagnosticGroups.NON_STANDARD_JSDOC,
@@ -129,5 +126,8 @@ public enum WarningLevel {
     // Kindly tell the user that they have JsDocs that we don't understand.
     options.setWarningLevel(DiagnosticGroups.NON_STANDARD_JSDOC,
         CheckLevel.WARNING);
+
+    // Transitional.
+    options.enforceAccessControlCodingConventions = true;
   }
 }

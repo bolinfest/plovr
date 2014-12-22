@@ -32,12 +32,12 @@ public class AstValidatorTest extends CompilerTestCase {
 
   @Override
   protected CompilerPass getProcessor(Compiler compiler) {
-    return createValidator();
+    return createValidator(compiler);
   }
 
-  private AstValidator createValidator() {
+  private AstValidator createValidator(Compiler compiler) {
     lastCheckWasValid = true;
-    return new AstValidator(new ViolationHandler() {
+    return new AstValidator(compiler, new ViolationHandler() {
       @Override
       public void handleViolation(String message, Node n) {
         lastCheckWasValid = false;
@@ -60,10 +60,14 @@ public class AstValidatorTest extends CompilerTestCase {
 
   public void testForIn() {
     valid("for(var a in b);");
-    valid("for(var a = 1 in b);");
     valid("for(a in b);");
     valid("for(a in []);");
     valid("for(a in {});");
+  }
+
+  public void testQuestionableForIn() {
+    setExpectParseWarningsThisTest();
+    valid("for(var a = 1 in b);");
   }
 
   public void testDebugger() {
@@ -120,7 +124,7 @@ public class AstValidatorTest extends CompilerTestCase {
   }
 
   private boolean doCheck(Node n, Check level) {
-    AstValidator validator = createValidator();
+    AstValidator validator = createValidator(createCompiler());
     switch (level) {
       case SCRIPT:
         validator.validateScript(n);

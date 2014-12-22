@@ -24,8 +24,11 @@ goog.require('goog.dom.BrowserFeature');
 goog.require('goog.dom.DomHelper');
 goog.require('goog.dom.NodeType');
 goog.require('goog.dom.TagName');
+goog.require('goog.functions');
+goog.require('goog.html.testing');
 goog.require('goog.object');
 goog.require('goog.string.Unicode');
+goog.require('goog.testing.PropertyReplacer');
 goog.require('goog.testing.asserts');
 goog.require('goog.userAgent');
 goog.require('goog.userAgent.product');
@@ -38,8 +41,11 @@ var $ = goog.dom.getElement;
 var divForTestingScrolling;
 var myIframe;
 var myIframeDoc;
+var stubs;
 
 function setUpPage() {
+
+  stubs = new goog.testing.PropertyReplacer();
   divForTestingScrolling = document.createElement('div');
   divForTestingScrolling.style.width = '5000px';
   divForTestingScrolling.style.height = '5000px';
@@ -70,6 +76,7 @@ function tearDownPage() {
 
 function tearDown() {
   window.scrollTo(0, 0);
+  stubs.reset();
 }
 
 function testDom() {
@@ -82,6 +89,43 @@ function testGetElement() {
 
   assertEquals($, goog.dom.getElement);
   assertEquals(goog.dom.$, goog.dom.getElement);
+}
+
+function testGetElementDomHelper() {
+  var domHelper = new goog.dom.DomHelper();
+  var el = domHelper.getElement('testEl');
+  assertEquals('Should be able to get id', el.id, 'testEl');
+}
+
+function testGetRequiredElement() {
+  var el = goog.dom.getRequiredElement('testEl');
+  assertTrue(goog.isDefAndNotNull(el));
+  assertEquals('testEl', el.id);
+  assertThrows(function() {
+    goog.dom.getRequiredElement('does_not_exist');
+  });
+}
+
+function testGetRequiredElementDomHelper() {
+  var domHelper = new goog.dom.DomHelper();
+  var el = domHelper.getRequiredElement('testEl');
+  assertTrue(goog.isDefAndNotNull(el));
+  assertEquals('testEl', el.id);
+  assertThrows(function() {
+    goog.dom.getRequiredElementByClass('does_not_exist', container);
+  });
+}
+
+function testGetRequiredElementByClassDomHelper() {
+  var domHelper = new goog.dom.DomHelper();
+  assertNotNull(domHelper.getRequiredElementByClass('test1'));
+  assertNotNull(domHelper.getRequiredElementByClass('test2'));
+
+  var container = domHelper.getElement('span-container');
+  assertNotNull(domHelper.getElementByClass('test1', container));
+  assertThrows(function() {
+    domHelper.getRequiredElementByClass('does_not_exist', container);
+  });
 }
 
 function testGetElementsByTagNameAndClass() {
@@ -351,9 +395,6 @@ function testCreateDomWithTypeAttribute() {
 function testCreateDomWithClassList() {
   var el = goog.dom.createDom('div', ['foo', 'bar']);
   assertEquals('foo bar', el.className);
-
-  el = goog.dom.createDom('div', ['foo', 'foo']);
-  assertEquals('foo', el.className);
 }
 
 function testContains() {
@@ -639,6 +680,15 @@ function testGetOwnerDocument() {
   assertEquals(goog.dom.getOwnerDocument(document.documentElement), document);
 }
 
+// Tests the breakages resulting in rollback cl/64715474
+function testGetOwnerDocumentNonNodeInput() {
+  // We should fail on null.
+  assertThrows(function() {
+    goog.dom.getOwnerDocument(null);
+  });
+  assertEquals(document, goog.dom.getOwnerDocument(window));
+}
+
 function testDomHelper() {
   var x = new goog.dom.DomHelper(window.frames['frame'].document);
   assertTrue('Should have some HTML',
@@ -860,6 +910,22 @@ function testSetTextContent() {
       p1.childNodes.length);
   assertEquals(s, p1.firstChild.data);
 
+  // Text/CharacterData
+  p1.innerHTML = 'before';
+  s = 'after';
+  goog.dom.setTextContent(p1.firstChild, s);
+  assertEquals('We should have one childNode after setTextContent', 1,
+      p1.childNodes.length);
+  assertEquals(s, p1.firstChild.data);
+
+  // DocumentFragment
+  var df = document.createDocumentFragment();
+  s = 'hello world';
+  goog.dom.setTextContent(df, s);
+  assertEquals('We should have one childNode after setTextContent', 1,
+      df.childNodes.length);
+  assertEquals(s, df.firstChild.data);
+
   // clean up
   p1.innerHTML = '';
 }
@@ -950,6 +1016,75 @@ function testSetFocusableTabIndex() {
     assertTrue('isFocusableTabIndex() must be true after reenabling tabindex',
         goog.dom.isFocusableTabIndex(goog.dom.getElement('tabIndex0')));
   }
+}
+
+function testIsFocusable() {
+  // Test all types of form elements with no tab index specified are focusable.
+  assertTrue('isFocusable() must be true for anchor elements with ' +
+      'no tab index',
+      goog.dom.isFocusable(goog.dom.getElement('noTabIndexAnchor')));
+  assertTrue('isFocusable() must be true for input elements with ' +
+      'no tab index',
+      goog.dom.isFocusable(goog.dom.getElement('noTabIndexInput')));
+  assertTrue('isFocusable() must be true for textarea elements with ' +
+      'no tab index',
+      goog.dom.isFocusable(goog.dom.getElement('noTabIndexTextArea')));
+  assertTrue('isFocusable() must be true for select elements with ' +
+      'no tab index',
+      goog.dom.isFocusable(goog.dom.getElement('noTabIndexSelect')));
+  assertTrue('isFocusable() must be true for button elements with ' +
+      'no tab index',
+      goog.dom.isFocusable(goog.dom.getElement('noTabIndexButton')));
+
+  // Test form element with negative tab index is not focusable.
+  assertFalse('isFocusable() must be false for form elements with ' +
+      'negative tab index',
+      goog.dom.isFocusable(goog.dom.getElement('negTabIndexButton')));
+
+  // Test form element with zero tab index is focusable.
+  assertTrue('isFocusable() must be true for form elements with ' +
+      'zero tab index',
+      goog.dom.isFocusable(goog.dom.getElement('zeroTabIndexButton')));
+
+  // Test form element with positive tab index is focusable.
+  assertTrue('isFocusable() must be true for form elements with ' +
+      'positive tab index',
+      goog.dom.isFocusable(goog.dom.getElement('posTabIndexButton')));
+
+  // Test disabled form element with no tab index is not focusable.
+  assertFalse('isFocusable() must be false for disabled form elements with ' +
+      'no tab index',
+      goog.dom.isFocusable(goog.dom.getElement('disabledNoTabIndexButton')));
+
+  // Test disabled form element with negative tab index is not focusable.
+  assertFalse('isFocusable() must be false for disabled form elements with ' +
+      'negative tab index',
+      goog.dom.isFocusable(goog.dom.getElement('disabledNegTabIndexButton')));
+
+  // Test disabled form element with zero tab index is not focusable.
+  assertFalse('isFocusable() must be false for disabled form elements with ' +
+      'zero tab index',
+      goog.dom.isFocusable(goog.dom.getElement('disabledZeroTabIndexButton')));
+
+  // Test disabled form element with positive tab index is not focusable.
+  assertFalse('isFocusable() must be false for disabled form elements with ' +
+      'positive tab index',
+      goog.dom.isFocusable(goog.dom.getElement('disabledPosTabIndexButton')));
+
+  // Test non-form types should return same value as isFocusableTabIndex()
+  assertEquals('isFocusable() and isFocusableTabIndex() must agree for ' +
+      ' no tab index',
+      goog.dom.isFocusableTabIndex(goog.dom.getElement('noTabIndex')),
+      goog.dom.isFocusable(goog.dom.getElement('noTabIndex')));
+  assertEquals('isFocusable() and isFocusableTabIndex() must agree for ' +
+      ' tab index -2',
+      goog.dom.isFocusableTabIndex(goog.dom.getElement('tabIndexNegative2')),
+      goog.dom.isFocusable(goog.dom.getElement('tabIndexNegative2')));
+  assertEquals('isFocusable() and isFocusableTabIndex() must agree for ' +
+      ' tab index -1',
+      goog.dom.isFocusableTabIndex(goog.dom.getElement('tabIndexNegative1')),
+      goog.dom.isFocusable(goog.dom.getElement('tabIndexNegative1')));
+
 }
 
 function testGetTextContent() {
@@ -1207,6 +1342,14 @@ function testGetAncestorWithMaxSearchStepsNoMatch() {
   assertNull(matched);
 }
 
+function testGetAncestorByTagWithMaxSearchStepsNoMatch() {
+  var elem = goog.dom.getElement('nestedElement');
+  var searchEl = elem.parentNode.parentNode;
+  var matched = goog.dom.getAncestorByTagNameAndClass(
+      elem, goog.dom.TagName.DIV, /* class */ undefined, 0);
+  assertNull(matched);
+}
+
 function testGetAncestorByTagNameNoMatch() {
   var elem = goog.dom.getElement('nestedElement');
   assertNull(
@@ -1220,6 +1363,13 @@ function testGetAncestorByTagNameOnly() {
       goog.dom.getAncestorByTagNameAndClass(elem, goog.dom.TagName.DIV));
   assertEquals(expected,
       goog.dom.getAncestorByTagNameAndClass(elem, 'div'));
+}
+
+function testGetAncestorByClassWithMaxSearchStepsNoMatch() {
+  var elem = goog.dom.getElement('nestedElement');
+  var searchEl = elem.parentNode.parentNode;
+  var matched = goog.dom.getAncestorByClass(elem, 'testAncestor', 0);
+  assertNull(matched);
 }
 
 function testGetAncestorByClassNameNoMatch() {
@@ -1262,6 +1412,30 @@ function testCreateTable() {
   assertEquals(6, table.getElementsByTagName(goog.dom.TagName.TD).length);
   assertEquals(0,
       table.getElementsByTagName(goog.dom.TagName.TD)[0].childNodes.length);
+}
+
+function testSafeHtmlToNode() {
+  var docFragment = goog.dom.safeHtmlToNode(
+      goog.html.testing.newSafeHtmlForTest('<a>1</a><b>2</b>'));
+  assertNull(docFragment.parentNode);
+  assertEquals(2, docFragment.childNodes.length);
+
+  var div = goog.dom.safeHtmlToNode(
+      goog.html.testing.newSafeHtmlForTest('<div>3</div>'));
+  assertEquals('DIV', div.tagName);
+
+  var script = goog.dom.safeHtmlToNode(
+      goog.html.testing.newSafeHtmlForTest('<script></script>'));
+  assertEquals('SCRIPT', script.tagName);
+
+  if (goog.userAgent.IE && !goog.userAgent.isDocumentModeOrHigher(9)) {
+    // Removing an Element from a DOM tree in IE sets its parentNode to a new
+    // DocumentFragment. Bizarre!
+    assertEquals(goog.dom.NodeType.DOCUMENT_FRAGMENT,
+                 goog.dom.removeNode(div).parentNode.nodeType);
+  } else {
+    assertNull(div.parentNode);
+  }
 }
 
 function testHtmlToDocumentFragment() {
@@ -1350,6 +1524,23 @@ function testGetDocumentScrollOfFixedViewport() {
   }
 }
 
+
+function testGetDocumentScrollFromDocumentWithoutABody() {
+  // Some documents, like SVG docs, do not have a body element. The document
+  // element should be used when computing the document scroll for these
+  // documents.
+  var fakeDocument = {
+    defaultView: {pageXOffset: 0, pageYOffset: 0},
+    documentElement: {scrollLeft: 0, scrollTop: 0}
+  };
+
+  var dh = new goog.dom.DomHelper(fakeDocument);
+  assertEquals(fakeDocument.documentElement, dh.getDocumentScrollElement());
+  assertEquals(0, dh.getDocumentScroll().x);
+  assertEquals(0, dh.getDocumentScroll().y);
+  // OK if this does not throw.
+}
+
 function testActiveElementIE() {
   if (!goog.userAgent.IE) {
     return;
@@ -1386,8 +1577,11 @@ function testParentElement() {
   var detachedHasNoParent = goog.dom.getParentElement(detachedEl);
   assertNull(detachedHasNoParent);
 
-  if (goog.userAgent.IE && !goog.userAgent.isVersionOrHigher('9')) {
-    // svg is not supported in IE8 and below.
+  // svg is not supported in IE8 and below or in IE9 quirks mode
+  var supported = !goog.userAgent.IE ||
+      goog.userAgent.isDocumentModeOrHigher(10) ||
+      (goog.dom.isCss1CompatMode() && goog.userAgent.isDocumentModeOrHigher(9));
+  if (!supported) {
     return;
   }
 
@@ -1419,3 +1613,29 @@ function testParentElement() {
 function isIE8OrHigher() {
   return goog.userAgent.IE && goog.userAgent.product.isVersion('8');
 }
+
+
+function testDevicePixelRatio() {
+  stubs.set(goog.dom, 'getWindow', goog.functions.constant(
+      {
+        matchMedia: function(query) {
+          return {
+            matches: query.indexOf('1.5') >= 0
+          };
+        }
+      }));
+
+  stubs.set(goog.functions, 'CACHE_RETURN_VALUE', false);
+
+  assertEquals(goog.dom.getPixelRatio(), 1.5);
+
+  stubs.set(goog.dom, 'getWindow', goog.functions.constant(
+      {devicePixelRatio: 2.0}));
+  goog.dom.devicePixelRatio_ = null;
+  assertEquals(goog.dom.getPixelRatio(), 2);
+
+  stubs.set(goog.dom, 'getWindow', goog.functions.constant({}));
+  goog.dom.devicePixelRatio_ = null;
+  assertEquals(goog.dom.getPixelRatio(), 1);
+}
+

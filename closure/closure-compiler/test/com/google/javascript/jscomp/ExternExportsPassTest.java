@@ -19,6 +19,7 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
+
 import junit.framework.TestCase;
 
 import java.util.List;
@@ -27,6 +28,7 @@ import java.util.List;
  * Tests for {@link ExternExportsPass}.
  *
  */
+
 public class ExternExportsPassTest extends TestCase {
 
   private boolean runCheckTypes = true;
@@ -44,7 +46,6 @@ public class ExternExportsPassTest extends TestCase {
   @Override
   public void setUp() throws Exception {
     super.setUp();
-
     setRunCheckTypes(true);
   }
 
@@ -440,7 +441,7 @@ public class ExternExportsPassTest extends TestCase {
     assertEquals(0, clientCompileResult.errors.length);
   }
 
-  public void testWarnOnExportFunctionWithUnknownReturnType() {
+  public void testDontWarnOnExportFunctionWithUnknownReturnType() {
     String librarySource =
       "var InternalName = function() {" +
       "  return 6;" +
@@ -449,7 +450,7 @@ public class ExternExportsPassTest extends TestCase {
 
       Result libraryCompileResult = compileAndExportExterns(librarySource);
 
-      assertEquals(1, libraryCompileResult.warnings.length);
+      assertEquals(0, libraryCompileResult.warnings.length);
       assertEquals(0, libraryCompileResult.errors.length);
   }
 
@@ -565,7 +566,7 @@ public class ExternExportsPassTest extends TestCase {
     assertEquals(expected, result.externExport);
   }
 
-  public void testWarnOnExportFunctionWithUnknownParameterTypes() {
+  public void testDontWarnOnExportFunctionWithUnknownParameterTypes() {
     /* This source is missing types for the b and c parameters */
     String librarySource =
       "/**\n" +
@@ -579,7 +580,7 @@ public class ExternExportsPassTest extends TestCase {
 
       Result libraryCompileResult = compileAndExportExterns(librarySource);
 
-      assertEquals(2, libraryCompileResult.warnings.length);
+      assertEquals(0, libraryCompileResult.warnings.length);
       assertEquals(0, libraryCompileResult.errors.length);
   }
 
@@ -599,6 +600,7 @@ public class ExternExportsPassTest extends TestCase {
     Compiler compiler = new Compiler();
     CompilerOptions options = new CompilerOptions();
     options.externExportsPath = "externs.js";
+    options.declaredGlobalExternsOnWindow = false;
 
     // Turn off IDE mode.
     options.ideMode = false;

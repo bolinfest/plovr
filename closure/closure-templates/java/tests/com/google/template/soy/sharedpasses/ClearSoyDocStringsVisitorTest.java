@@ -26,7 +26,6 @@ import junit.framework.TestCase;
 /**
  * Unit tests for ClearSoyDocStringsVisitor.
  *
- * @author Kai Huang
  */
 public class ClearSoyDocStringsVisitorTest extends TestCase {
 
@@ -34,7 +33,7 @@ public class ClearSoyDocStringsVisitorTest extends TestCase {
   public void testClearSoyDocStrings() {
 
     String testFileContent =
-        "{namespace boo}\n" +
+        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/**\n" +
         " * blah blah blah\n" +
@@ -50,13 +49,13 @@ public class ClearSoyDocStringsVisitorTest extends TestCase {
 
     assertTrue(template.getSoyDoc().contains("blah"));
     assertTrue(template.getSoyDocDesc().contains("blah"));
-    assertTrue(template.getSoyDocParams().get(0).desc.contains("blah"));
+    assertTrue(template.getParams().get(0).desc().contains("blah"));
 
     (new ClearSoyDocStringsVisitor()).exec(soyTree);
 
     assertNull(template.getSoyDoc());
     assertNull(template.getSoyDocDesc());
-    assertNull(template.getSoyDocParams().get(0).desc);
+    assertNull(template.getParams().get(0).desc());
   }
 
 }

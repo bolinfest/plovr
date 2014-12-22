@@ -16,8 +16,8 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.HashMultimap;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
 import com.google.javascript.jscomp.Scope.Var;
@@ -29,6 +29,8 @@ import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.ObjectType;
 import com.google.javascript.rhino.jstype.StaticSourceFile;
+
+import javax.annotation.Nullable;
 
 /**
  * A compiler pass that checks that the programmer has obeyed all the access
@@ -69,23 +71,35 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
       "JSC_DEPRECATED_CLASS_REASON",
       "Class {0} has been deprecated: {1}");
 
+  static final DiagnosticType BAD_PACKAGE_PROPERTY_ACCESS =
+      DiagnosticType.error(
+          "JSC_BAD_PACKAGE_PROPERTY_ACCESS",
+          "Access to package-private property {0} of {1} not allowed here.");
+
   static final DiagnosticType BAD_PRIVATE_GLOBAL_ACCESS =
-      DiagnosticType.disabled(
+      DiagnosticType.error(
           "JSC_BAD_PRIVATE_GLOBAL_ACCESS",
           "Access to private variable {0} not allowed outside file {1}.");
 
   static final DiagnosticType BAD_PRIVATE_PROPERTY_ACCESS =
-      DiagnosticType.disabled(
+      DiagnosticType.warning(
           "JSC_BAD_PRIVATE_PROPERTY_ACCESS",
           "Access to private property {0} of {1} not allowed here.");
 
   static final DiagnosticType BAD_PROTECTED_PROPERTY_ACCESS =
-      DiagnosticType.disabled(
+      DiagnosticType.warning(
           "JSC_BAD_PROTECTED_PROPERTY_ACCESS",
           "Access to protected property {0} of {1} not allowed here.");
 
+  static final DiagnosticType
+      BAD_PROPERTY_OVERRIDE_IN_FILE_WITH_FILEOVERVIEW_VISIBILITY =
+      DiagnosticType.error(
+          "JSC_BAD_PROPERTY_OVERRIDE_IN_FILE_WITH_FILEOVERVIEW_VISIBILITY",
+          "Overridden property {0} in file with fileoverview visibility {1}" +
+          " must explicitly redeclare superclass visibility");
+
   static final DiagnosticType PRIVATE_OVERRIDE =
-      DiagnosticType.disabled(
+      DiagnosticType.warning(
           "JSC_PRIVATE_OVERRIDE",
           "Overriding private property of {0}.");
 
@@ -95,7 +109,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
           "{0} is not allowed to extend final class {1}.");
 
   static final DiagnosticType VISIBILITY_MISMATCH =
-      DiagnosticType.disabled(
+      DiagnosticType.warning(
           "JSC_VISIBILITY_MISMATCH",
           "Overriding {0} property of {1} with {2} property.");
 
@@ -109,29 +123,48 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
         "JSC_CONSTANT_PROPERTY_DELETED",
         "constant property {0} cannot be deleted");
 
+  static final DiagnosticType CONVENTION_MISMATCH =
+      DiagnosticType.warning(
+          "JSC_CONVENTION_MISMATCH",
+          "Declared access conflicts with access convention.");
+
   private final AbstractCompiler compiler;
   private final TypeValidator validator;
+  private final boolean enforceCodingConventions;
 
   // State about the current traversal.
   private int deprecatedDepth = 0;
   private int methodDepth = 0;
   private JSType currentClass = null;
 
-  private final Multimap<String, String> initializedConstantProperties;
+  private ImmutableMap<StaticSourceFile, Visibility> defaultVisibilityForFiles;
+  private final Multimap<JSType, String> initializedConstantProperties;
 
-  CheckAccessControls(AbstractCompiler compiler) {
+
+  CheckAccessControls(
+      AbstractCompiler compiler, boolean enforceCodingConventions) {
     this.compiler = compiler;
     this.validator = compiler.getTypeValidator();
     this.initializedConstantProperties = HashMultimap.create();
+    this.enforceCodingConventions = enforceCodingConventions;
   }
 
   @Override
   public void process(Node externs, Node root) {
+    CollectFileOverviewVisibility collectPass =
+        new CollectFileOverviewVisibility(compiler);
+    collectPass.process(externs, root);
+    defaultVisibilityForFiles = collectPass.getFileOverviewVisibilityMap();
+    NodeTraversal.traverse(compiler, externs, this);
     NodeTraversal.traverse(compiler, root, this);
   }
 
   @Override
   public void hotSwapScript(Node scriptRoot, Node originalRoot) {
+    CollectFileOverviewVisibility collectPass =
+        new CollectFileOverviewVisibility(compiler);
+    collectPass.hotSwapScript(scriptRoot, originalRoot);
+    defaultVisibilityForFiles = collectPass.getFileOverviewVisibilityMap();
     NodeTraversal.traverse(compiler, scriptRoot, this);
   }
 
@@ -193,6 +226,16 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
     } else if (NodeUtil.isFunctionDeclaration(n) ||
                parent.isName()) {
       return normalizeClassType(n.getJSType());
+    } else if (parent.isStringKey()
+        || parent.isGetterDef() || parent.isSetterDef()) {
+      Node objectLitParent = parent.getParent().getParent();
+      if (!objectLitParent.isAssign()) {
+        return null;
+      }
+      Node className = NodeUtil.getPrototypeClassName(objectLitParent.getFirstChild());
+      if (className != null) {
+        return normalizeClassType(className.getJSType());
+      }
     }
 
     return null;
@@ -202,7 +245,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
    * Normalize the type of a constructor, its instance, and its prototype
    * all down to the same type (the instance type).
    */
-  private JSType normalizeClassType(JSType type) {
+  private static JSType normalizeClassType(JSType type) {
     if (type == null || type.isUnknownType()) {
       return type;
     } else if (type.isNominalConstructor()) {
@@ -232,6 +275,11 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
         checkPropertyDeprecation(t, n, parent);
         checkPropertyVisibility(t, n, parent);
         checkConstantProperty(t, n);
+        break;
+      case Token.STRING_KEY:
+      case Token.GETTER_DEF:
+      case Token.SETTER_DEF:
+        checkKeyVisibilityConvention(t, n, parent);
         break;
       case Token.NEW:
         checkConstructorDeprecation(t, n, parent);
@@ -329,37 +377,158 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
     }
   }
 
+  private boolean isPrivateByConvention(String name) {
+    return enforceCodingConventions
+        && compiler.getCodingConvention().isPrivate(name);
+  }
+
   /**
-   * Determines whether the given name is visible in the current context.
+   * Determines whether the given OBJECTLIT property visibility
+   * violates the coding convention.
+   * @param t The current traversal.
+   * @param key The objectlit key node (STRING_KEY, GETTER_DEF, SETTER_DEF).
+   */
+  private void checkKeyVisibilityConvention(NodeTraversal t,
+      Node key, Node parent) {
+    JSDocInfo info = key.getJSDocInfo();
+    if (info == null) {
+      return;
+    }
+    if (!isPrivateByConvention(key.getString())) {
+      return;
+    }
+    Node assign = parent.getParent();
+    if (assign == null || !assign.isAssign()) {
+      return;
+    }
+    Node left = assign.getFirstChild();
+    if (!left.isGetProp()
+        || !left.getLastChild().getString().equals("prototype")) {
+      return;
+    }
+    Visibility declaredVisibility = info.getVisibility();
+    // Visibility is declared to be something other than private.
+    if (declaredVisibility != Visibility.INHERITED
+        && declaredVisibility != Visibility.PRIVATE) {
+      compiler.report(t.makeError(key, CONVENTION_MISMATCH));
+    }
+  }
+
+  /**
+   * Reports an error if the given name is not visible in the current context.
    * @param t The current traversal.
    * @param name The name node.
    */
   private void checkNameVisibility(NodeTraversal t, Node name, Node parent) {
     Var var = t.getScope().getVar(name.getString());
-    if (var != null) {
-      JSDocInfo docInfo = var.getJSDocInfo();
-      if (docInfo != null) {
-        // If a name is private, make sure that we're in the same file.
-        Visibility visibility = docInfo.getVisibility();
-        if (visibility == Visibility.PRIVATE) {
-          StaticSourceFile varSrc = var.getSourceFile();
-          StaticSourceFile refSrc = name.getStaticSourceFile();
-          if (varSrc != null &&
-              refSrc != null &&
-              !varSrc.getName().equals(refSrc.getName())) {
-            if (docInfo.isConstructor() &&
-                isValidPrivateConstructorAccess(parent)) {
-              return;
-            }
+    if (var == null) {
+      return;
+    }
 
-            compiler.report(
-                t.makeError(name, BAD_PRIVATE_GLOBAL_ACCESS,
-                    name.getString(), varSrc.getName()));
-          }
+    Visibility v = checkPrivateNameConvention(
+        AccessControlUtils.getEffectiveNameVisibility(
+            name, var, defaultVisibilityForFiles), name);
+
+    switch (v) {
+      case PACKAGE:
+        if (!isPackageAccessAllowed(var, name)) {
+          compiler.report(
+              t.makeError(name, BAD_PACKAGE_PROPERTY_ACCESS,
+                  name.getString(), var.getSourceFile().getName()));
         }
-      }
+        break;
+      case PRIVATE:
+        if (!isPrivateAccessAllowed(var, name, parent)) {
+          compiler.report(
+              t.makeError(name, BAD_PRIVATE_GLOBAL_ACCESS,
+                  name.getString(), var.getSourceFile().getName()));
+        }
+        break;
+      default:
+        // Nothing to do for PUBLIC and PROTECTED
+        // (which is irrelevant for names).
+        break;
     }
   }
+
+
+  /**
+   * Returns the effective visibility of the given name, reporting an error
+   * if there is a contradiction in the various sources of visibility
+   * (example: a variable with a trailing underscore that is declared
+   * {@code @public}).
+   */
+  private Visibility checkPrivateNameConvention(Visibility v, Node name) {
+    if (isPrivateByConvention(name.getString())) {
+      if (v != Visibility.PRIVATE && v != Visibility.INHERITED) {
+        compiler.report(JSError.make(name, CONVENTION_MISMATCH));
+      }
+      return Visibility.PRIVATE;
+    }
+    return v;
+  }
+
+  private static boolean isPrivateAccessAllowed(Var var, Node name, Node parent) {
+    StaticSourceFile varSrc = var.getSourceFile();
+    StaticSourceFile refSrc = name.getStaticSourceFile();
+    JSDocInfo docInfo = var.getJSDocInfo();
+    if (varSrc != null
+        && refSrc != null
+        && !varSrc.getName().equals(refSrc.getName())) {
+      return docInfo != null && docInfo.isConstructor()
+          && isValidPrivateConstructorAccess(parent);
+    } else {
+      return true;
+    }
+  }
+
+  private boolean isPackageAccessAllowed(Var var, Node name) {
+    StaticSourceFile varSrc = var.getSourceFile();
+    StaticSourceFile refSrc = name.getStaticSourceFile();
+    CodingConvention codingConvention = compiler.getCodingConvention();
+    if (varSrc != null && refSrc != null) {
+      String srcPackage = codingConvention.getPackageName(varSrc);
+      String refPackage = codingConvention.getPackageName(refSrc);
+      return srcPackage != null
+          && refPackage != null
+          && srcPackage.equals(refPackage);
+    } else {
+      // If the source file of either var or name is unavailable, conservatively
+      // assume they belong to different packages.
+      // TODO(brndn): by contrast, isPrivateAccessAllowed does allow
+      // private access when a source file is unknown. I didn't change it
+      // in order not to break existing code.
+      return false;
+    }
+  }
+
+  private void checkOverriddenPropertyVisibilityMismatch(
+      Visibility overriding,
+      Visibility overridden,
+      @Nullable Visibility fileOverview,
+      NodeTraversal t,
+      Node getprop) {
+    if (overriding == Visibility.INHERITED
+        && overriding != overridden
+        && fileOverview != null
+        && fileOverview != Visibility.INHERITED) {
+      String propertyName = getprop.getLastChild().getString();
+      compiler.report(
+          t.makeError(getprop,
+              BAD_PROPERTY_OVERRIDE_IN_FILE_WITH_FILEOVERVIEW_VISIBILITY,
+              propertyName,
+              fileOverview.name()));
+    }
+  }
+
+  @Nullable private static Visibility getOverridingPropertyVisibility(Node parent) {
+    JSDocInfo overridingInfo = parent.getJSDocInfo();
+    return overridingInfo == null || !overridingInfo.isOverride()
+        ? null
+        : overridingInfo.getVisibility();
+  }
+
+
 
   /**
    * Checks if a constructor is trying to override a final class.
@@ -377,7 +546,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
   }
 
   /**
-   * Determines whether the given property with @const tag got reassigned
+   * Determines whether the given constant property got reassigned
    * @param t The current traversal.
    * @param getprop The getprop node.
    */
@@ -394,6 +563,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
 
     ObjectType objectType =
       ObjectType.cast(dereference(getprop.getFirstChild().getJSType()));
+
     String propertyName = getprop.getLastChild().getString();
 
     boolean isConstant = isPropertyDeclaredConstant(objectType, propertyName);
@@ -406,31 +576,36 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
         return;
       }
 
+      // Can't check for constant properties on generic function types.
+      // TODO(johnlenz): I'm not 100% certain this is necessary, or if
+      // the type is being inspected incorrectly.
+      if (objectType == null
+          || (objectType.isFunctionType()
+              && !objectType.toMaybeFunctionType().isConstructor())) {
+        return;
+      }
+
       ObjectType oType = objectType;
       while (oType != null) {
-        if (oType.hasReferenceName()) {
-          if (initializedConstantProperties.containsEntry(
-                  oType.getReferenceName(), propertyName)) {
-            compiler.report(
-                t.makeError(getprop, CONST_PROPERTY_REASSIGNED_VALUE,
-                    propertyName));
+        if (initializedConstantProperties.containsEntry(
+            oType, propertyName)) {
+          compiler.report(
+              t.makeError(getprop, CONST_PROPERTY_REASSIGNED_VALUE,
+                  propertyName));
             break;
           }
-        }
         oType = oType.getImplicitPrototype();
       }
 
-      Preconditions.checkState(objectType.hasReferenceName());
-      initializedConstantProperties.put(objectType.getReferenceName(),
+      initializedConstantProperties.put(objectType,
           propertyName);
 
       // Add the prototype when we're looking at an instance object
       if (objectType.isInstanceType()) {
         ObjectType prototype = objectType.getImplicitPrototype();
         if (prototype != null) {
-          if (prototype.hasProperty(propertyName)
-              && prototype.hasReferenceName()) {
-            initializedConstantProperties.put(prototype.getReferenceName(),
+          if (prototype.hasProperty(propertyName)) {
+            initializedConstantProperties.put(prototype,
                 propertyName);
           }
         }
@@ -439,104 +614,282 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
   }
 
   /**
-   * Determines whether the given property is visible in the current context.
+   * Reports an error if the given property is not visible in the current
+   * context.
    * @param t The current traversal.
    * @param getprop The getprop node.
    */
   private void checkPropertyVisibility(NodeTraversal t,
       Node getprop, Node parent) {
-    ObjectType objectType =
+    ObjectType referenceType =
         ObjectType.cast(dereference(getprop.getFirstChild().getJSType()));
+
     String propertyName = getprop.getLastChild().getString();
+    boolean isPrivateByConvention = isPrivateByConvention(propertyName);
+
+    if (isPrivateByConvention
+        && propertyIsDeclaredButNotPrivate(getprop, parent)) {
+      compiler.report(t.makeError(getprop, CONVENTION_MISMATCH));
+      return;
+    }
+
+    StaticSourceFile definingSource = getDefiningSource(
+        getprop, referenceType, propertyName);
+
+    boolean isClassType = false;
+
+    // Is this a normal property access, or are we trying to override
+    // an existing property?
+    boolean isOverride = parent.getJSDocInfo() != null
+        && parent.isAssign()
+        && parent.getFirstChild() == getprop;
+
+    ObjectType objectType = getObjectType(
+        referenceType, isOverride, propertyName);
+
+    Visibility fileOverviewVisibility =
+        defaultVisibilityForFiles.get(definingSource);
+
+    Visibility visibility = AccessControlUtils.getEffectivePropertyVisibility(
+        getprop,
+        referenceType,
+        defaultVisibilityForFiles,
+        enforceCodingConventions ? compiler.getCodingConvention() : null);
+
+    if (isOverride) {
+      Visibility overriding = getOverridingPropertyVisibility(parent);
+      if (overriding != null) {
+        checkOverriddenPropertyVisibilityMismatch(
+            overriding, visibility, fileOverviewVisibility, t, getprop);
+      }
+    }
+
+
 
     if (objectType != null) {
-      // Is this a normal property access, or are we trying to override
-      // an existing property?
-      boolean isOverride = parent.getJSDocInfo() != null &&
-          parent.isAssign() &&
-          parent.getFirstChild() == getprop;
+      JSDocInfo docInfo = objectType.getOwnPropertyJSDocInfo(propertyName);
+      definingSource = docInfo.getStaticSourceFile();
+      isClassType = docInfo.isConstructor();
+    } else if (isPrivateByConvention) {
+      // We can only check visibility references if we know what file
+      // it was defined in.
+      objectType = referenceType;
+    } else if (fileOverviewVisibility == null) {
+      // Otherwise just assume the property is public.
+      return;
+    }
 
-      // Find the lowest property defined on a class with visibility
-      // information.
-      if (isOverride) {
-        objectType = objectType.getImplicitPrototype();
-      }
-      JSDocInfo docInfo = null;
-      for (; objectType != null;
-           objectType = objectType.getImplicitPrototype()) {
-        docInfo = objectType.getOwnPropertyJSDocInfo(propertyName);
-        if (docInfo != null &&
-            docInfo.getVisibility() != Visibility.INHERITED) {
-          break;
-        }
-      }
+    StaticSourceFile referenceSource = getprop.getStaticSourceFile();
 
-      if (objectType == null) {
-        // We couldn't find a visibility modifier; assume it's public.
-        return;
-      }
-
-      String referenceSource = getprop.getSourceFileName();
-      String definingSource = docInfo.getSourceName();
+    if (isOverride) {
       boolean sameInput = referenceSource != null
-          && referenceSource.equals(definingSource);
-      Visibility visibility = docInfo.getVisibility();
-      JSType ownerType = normalizeClassType(objectType);
-      if (isOverride) {
-        // Check an ASSIGN statement that's trying to override a property
-        // on a superclass.
-        JSDocInfo overridingInfo = parent.getJSDocInfo();
-        Visibility overridingVisibility = overridingInfo == null ?
-            Visibility.INHERITED : overridingInfo.getVisibility();
+          && referenceSource.getName().equals(definingSource.getName());
+      checkOverriddenPropertyVisibility(
+          t,
+          getprop,
+          parent,
+          visibility,
+          fileOverviewVisibility,
+          objectType,
+          sameInput);
+    } else {
+      checkNonOverriddenPropertyVisibility(
+          t,
+          getprop,
+          parent,
+          visibility,
+          isClassType,
+          objectType,
+          referenceSource,
+          definingSource);
+    }
+  }
 
-        // Check that (a) the property *can* be overridden, and
-        // (b) that the visibility of the override is the same as the
-        // visibility of the original property.
-        if (visibility == Visibility.PRIVATE && !sameInput) {
-          compiler.report(
-              t.makeError(getprop, PRIVATE_OVERRIDE,
-                  objectType.toString()));
-        } else if (overridingVisibility != Visibility.INHERITED &&
-            overridingVisibility != visibility) {
-          compiler.report(
-              t.makeError(getprop, VISIBILITY_MISMATCH,
-                  visibility.name(), objectType.toString(),
-                  overridingVisibility.name()));
-        }
-      } else {
-        if (sameInput) {
-          // private access is always allowed in the same file.
-          return;
-        } else if (visibility == Visibility.PRIVATE &&
-            (currentClass == null || !ownerType.isEquivalentTo(currentClass))) {
-          if (docInfo.isConstructor() &&
-              isValidPrivateConstructorAccess(parent)) {
-            return;
-          }
+  private static boolean propertyIsDeclaredButNotPrivate(Node getprop, Node parent) {
+    // This is a declaration with JSDoc
+    JSDocInfo info = NodeUtil.getBestJSDocInfo(getprop);
+    if ((parent.isAssign() || parent.isExprResult())
+        && parent.getFirstChild() == getprop
+        && info != null) {
+      Visibility declaredVisibility = info.getVisibility();
+      if (declaredVisibility != Visibility.PRIVATE
+      && declaredVisibility != Visibility.INHERITED) {
+          return true;
+      }
+    }
+    return false;
+  }
 
-          // private access is not allowed outside the file from a different
-          // enclosing class.
-          compiler.report(
-              t.makeError(getprop,
-                  BAD_PRIVATE_PROPERTY_ACCESS,
-                  propertyName,
-                  validator.getReadableJSTypeName(
-                      getprop.getFirstChild(), true)));
-        } else if (visibility == Visibility.PROTECTED) {
-          // There are 3 types of legal accesses of a protected property:
-          // 1) Accesses in the same file
-          // 2) Overriding the property in a subclass
-          // 3) Accessing the property from inside a subclass
-          // The first two have already been checked for.
-          if (currentClass == null || !currentClass.isSubtype(ownerType)) {
-            compiler.report(
-                t.makeError(getprop,  BAD_PROTECTED_PROPERTY_ACCESS,
-                    propertyName,
-                    validator.getReadableJSTypeName(
-                        getprop.getFirstChild(), true)));
-          }
+  @Nullable private static StaticSourceFile getDefiningSource(
+      Node getprop,
+      @Nullable ObjectType referenceType,
+      String propertyName) {
+      if (referenceType != null) {
+        Node propDefNode = referenceType.getPropertyNode(propertyName);
+        if (propDefNode != null) {
+          return propDefNode.getStaticSourceFile();
         }
       }
+    return getprop.getStaticSourceFile();
+  }
+
+  @Nullable private static ObjectType getObjectType(
+      @Nullable ObjectType referenceType,
+      boolean isOverride,
+      String propertyName) {
+    if (referenceType == null) {
+      return null;
+    }
+
+    // Find the lowest property defined on a class with visibility
+    // information.
+    ObjectType objectType = isOverride
+        ? referenceType.getImplicitPrototype()
+        : referenceType;
+    for (; objectType != null;
+        objectType = objectType.getImplicitPrototype()) {
+      JSDocInfo docInfo = objectType.getOwnPropertyJSDocInfo(propertyName);
+      if (docInfo != null
+          && docInfo.getVisibility() != Visibility.INHERITED) {
+        return objectType;
+      }
+    }
+    return null;
+  }
+
+  private void checkOverriddenPropertyVisibility(
+      NodeTraversal t,
+      Node getprop,
+      Node parent,
+      Visibility visibility,
+      Visibility fileOverviewVisibility,
+      ObjectType objectType,
+      boolean sameInput) {
+    // Check an ASSIGN statement that's trying to override a property
+    // on a superclass.
+    JSDocInfo overridingInfo = parent.getJSDocInfo();
+    Visibility overridingVisibility = overridingInfo == null
+        ? Visibility.INHERITED
+        : overridingInfo.getVisibility();
+
+    // Check that:
+    // (a) the property *can* be overridden,
+    // (b) the visibility of the override is the same as the
+    //     visibility of the original property,
+    // (c) the visibility is explicitly redeclared if the override is in
+    //     a file with default visibility in the @fileoverview block.
+    if (visibility == Visibility.PRIVATE && !sameInput) {
+      compiler.report(
+          t.makeError(getprop, PRIVATE_OVERRIDE,
+              objectType.toString()));
+    } else if (overridingVisibility != Visibility.INHERITED
+        && overridingVisibility != visibility
+        && fileOverviewVisibility == null) {
+      compiler.report(
+          t.makeError(getprop, VISIBILITY_MISMATCH,
+              visibility.name(), objectType.toString(),
+              overridingVisibility.name()));
+    }
+  }
+
+  private void checkNonOverriddenPropertyVisibility(
+      NodeTraversal t,
+      Node getprop,
+      Node parent,
+      Visibility visibility,
+      boolean isClassType,
+      JSType objectType,
+      StaticSourceFile referenceSource,
+      StaticSourceFile definingSource) {
+    // private access is always allowed in the same file.
+    if (referenceSource != null
+        && definingSource != null
+        && referenceSource.getName().equals(definingSource.getName())) {
+      return;
+    }
+
+    String propertyName = getprop.getLastChild().getString();
+    JSType ownerType = normalizeClassType(objectType);
+
+    switch (visibility) {
+      case PACKAGE:
+        checkPackagePropertyVisibility(t, getprop, referenceSource, definingSource);
+        break;
+      case PRIVATE:
+        checkPrivatePropertyVisibility(t, getprop, parent, isClassType, ownerType);
+        break;
+      case PROTECTED:
+        checkProtectedPropertyVisibility(t, getprop, ownerType);
+        break;
+      default:
+        break;
+    }
+  }
+
+  private void checkPackagePropertyVisibility(
+      NodeTraversal t,
+      Node getprop,
+      StaticSourceFile referenceSource,
+      StaticSourceFile definingSource) {
+    CodingConvention codingConvention = compiler.getCodingConvention();
+    String refPackage = codingConvention.getPackageName(referenceSource);
+    String defPackage = codingConvention.getPackageName(definingSource);
+    if (refPackage == null
+        || defPackage == null
+        || !refPackage.equals(defPackage)) {
+      String propertyName = getprop.getLastChild().getString();
+      compiler.report(
+          t.makeError(getprop, BAD_PACKAGE_PROPERTY_ACCESS,
+              propertyName,
+              validator.getReadableJSTypeName(
+                  getprop.getFirstChild(), true)));
+      }
+  }
+
+  private void checkPrivatePropertyVisibility(
+      NodeTraversal t,
+      Node getprop,
+      Node parent,
+      boolean isClassType,
+      JSType ownerType) {
+    if (currentClass != null && ownerType.isEquivalentTo(currentClass)) {
+      return;
+    }
+
+    if (isClassType && isValidPrivateConstructorAccess(parent)) {
+      return;
+    }
+
+    // private access is not allowed outside the file from a different
+    // enclosing class.
+    JSType accessedType = getprop.getFirstChild().getJSType();
+    String propertyName = getprop.getLastChild().getString();
+    String readableTypeName = ownerType.equals(accessedType)
+        ? validator.getReadableJSTypeName(getprop.getFirstChild(), true)
+        : ownerType.toString();
+    compiler.report(
+        t.makeError(getprop,
+            BAD_PRIVATE_PROPERTY_ACCESS,
+            propertyName,
+            readableTypeName));
+  }
+
+  private void checkProtectedPropertyVisibility(
+      NodeTraversal t,
+      Node getprop,
+      JSType ownerType) {
+    // There are 3 types of legal accesses of a protected property:
+    // 1) Accesses in the same file
+    // 2) Overriding the property in a subclass
+    // 3) Accessing the property from inside a subclass
+    // The first two have already been checked for.
+    if (currentClass == null || !currentClass.isSubtype(ownerType)) {
+      String propertyName = getprop.getLastChild().getString();
+      compiler.report(
+          t.makeError(getprop,  BAD_PROTECTED_PROPERTY_ACCESS,
+              propertyName,
+              validator.getReadableJSTypeName(
+                  getprop.getFirstChild(), true)));
     }
   }
 
@@ -581,6 +934,12 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
     // We can always assign to a deprecated property, to keep it up to date.
     if (n.isGetProp() && n == parent.getFirstChild() &&
         NodeUtil.isAssignmentOp(parent)) {
+      return false;
+    }
+
+    // Don't warn if the node is just declaring the property, not reading it.
+    if (n.isGetProp() && parent.isExprResult() &&
+        n.getJSDocInfo().isDeprecated()) {
       return false;
     }
 
@@ -655,12 +1014,14 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
   /**
    * Returns if a property is declared constant.
    */
-  private static boolean isPropertyDeclaredConstant(
+  private boolean isPropertyDeclaredConstant(
       ObjectType objectType, String prop) {
+    if (enforceCodingConventions
+        && compiler.getCodingConvention().isConstant(prop)) {
+      return true;
+    }
     for (;
-         // Only objects with reference names can have constant properties.
-         objectType != null && objectType.hasReferenceName();
-
+         objectType != null;
          objectType = objectType.getImplicitPrototype()) {
       JSDocInfo docInfo = objectType.getOwnPropertyJSDocInfo(prop);
       if (docInfo != null && docInfo.isConstant()) {
@@ -702,7 +1063,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
   /**
    * Returns the super class of the given type that has a constructor.
    */
-  private JSType getFinalParentClass(JSType type) {
+  private static JSType getFinalParentClass(JSType type) {
     if (type != null) {
       ObjectType iproto = ObjectType.cast(type).getImplicitPrototype();
       while (iproto != null && iproto.getConstructor() == null) {

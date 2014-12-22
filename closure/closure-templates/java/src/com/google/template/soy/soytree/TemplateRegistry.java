@@ -24,6 +24,7 @@ import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.soytree.TemplateDelegateNode.DelTemplateKey;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -36,7 +37,6 @@ import javax.annotation.concurrent.Immutable;
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
- * @author Kai Huang
  */
 public class TemplateRegistry {
 
@@ -60,7 +60,7 @@ public class TemplateRegistry {
         int delPriority, Map<String, TemplateDelegateNode> delPackageNameToDelTemplateMap) {
       this.delPriority = delPriority;
       this.delPackageNameToDelTemplateMap =
-          Collections.unmodifiableMap(Maps.newHashMap(delPackageNameToDelTemplateMap));
+          Collections.unmodifiableMap(Maps.newLinkedHashMap(delPackageNameToDelTemplateMap));
     }
   }
 
@@ -98,10 +98,10 @@ public class TemplateRegistry {
 
     // ------ Iterate through all templates to collect data. ------
 
-    Map<String, TemplateBasicNode> tempBasicTemplatesMap = Maps.newHashMap();
-    Map<String, Set<DelTemplateKey>> tempDelTemplateNameToKeysMap = Maps.newHashMap();
+    Map<String, TemplateBasicNode> tempBasicTemplatesMap = new LinkedHashMap<>();
+    Map<String, Set<DelTemplateKey>> tempDelTemplateNameToKeysMap = new LinkedHashMap<>();
     Map<DelTemplateKey, Map<Integer, Map<String, TemplateDelegateNode>>> tempDelTemplatesMap =
-        Maps.newHashMap();
+        new LinkedHashMap<>();
 
     for (SoyFileNode soyFile : soyTree.getChildren()) {
       for (TemplateNode template : soyFile.getChildren()) {
@@ -131,13 +131,13 @@ public class TemplateRegistry {
           Map<Integer, Map<String, TemplateDelegateNode>> tempDivisions =
               tempDelTemplatesMap.get(delTemplateKey);
           if (tempDivisions == null) {
-            tempDivisions = Maps.newHashMap();
+            tempDivisions = new LinkedHashMap<>();
             tempDelTemplatesMap.put(delTemplateKey, tempDivisions);
           }
 
           Map<String, TemplateDelegateNode> tempDivision = tempDivisions.get(delPriority);
           if (tempDivision == null) {
-            tempDivision = Maps.newHashMap();
+            tempDivision = new LinkedHashMap<>();
             tempDivisions.put(delPriority, tempDivision);
           }
 
@@ -266,7 +266,7 @@ public class TemplateRegistry {
 
 
   /**
-   * Retrieves the list of {@code DelegateTemplateDivision}s (sorted in descencing priority order)
+   * Retrieves the list of {@code DelegateTemplateDivision}s (sorted in descending priority order)
    * given a delegate template key (name and variant).
    * @param delTemplateKey The delegate template key (name and variant) to retrieve.
    * @return The corresponding list of {@code DelegateTemplateDivision}s (sorted in descencing
@@ -281,6 +281,7 @@ public class TemplateRegistry {
   /**
    * Selects a delegate template based on the rendering rules, given the delegate template key (name
    * and variant) and the set of active delegate package names.
+   *
    * @param delTemplateKey The delegate template key (name and variant) to select an implementation
    *     for.
    * @param activeDelPackageNames The set of active delegate package names.
@@ -292,11 +293,35 @@ public class TemplateRegistry {
       DelTemplateKey delTemplateKey, Set<String> activeDelPackageNames)
       throws DelegateTemplateConflictException {
 
-    List<DelegateTemplateDivision> divisions = delTemplatesMap.get(delTemplateKey);
-    if (divisions == null && delTemplateKey.variant.length() > 0) {
-      // Fallback to empty variant.
-      divisions = delTemplatesMap.get(new DelTemplateKey(delTemplateKey.name, ""));
+    TemplateDelegateNode delTemplate = selectDelTemplateHelper(
+        delTemplateKey, activeDelPackageNames);
+
+    if (delTemplate == null && delTemplateKey.variant.length() > 0) {
+      // Fall back to empty variant.
+      delTemplate = selectDelTemplateHelper(
+          new DelTemplateKey(delTemplateKey.name, ""), activeDelPackageNames);
     }
+
+    return delTemplate;
+  }
+
+
+  /**
+   * Private helper for {@code selectDelTemplate()}. Selects a delegate template based on the
+   * rendering rules, given the delegate template key (name and variant) and the set of active
+   * delegate package names. However, does not fall back to empty variant.
+   *
+   * @param delTemplateKey The delegate template key (name and variant) to select an implementation
+   *     for.
+   * @param activeDelPackageNames The set of active delegate package names.
+   * @return The selected delegate template, or null if there are no active implementations.
+   * @throws DelegateTemplateConflictException
+   */
+  private TemplateDelegateNode selectDelTemplateHelper(
+      DelTemplateKey delTemplateKey, Set<String> activeDelPackageNames)
+      throws DelegateTemplateConflictException {
+
+    List<DelegateTemplateDivision> divisions = delTemplatesMap.get(delTemplateKey);
     if (divisions == null) {
       return null;
     }

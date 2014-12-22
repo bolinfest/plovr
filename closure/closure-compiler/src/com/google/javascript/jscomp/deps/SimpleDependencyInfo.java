@@ -16,11 +16,11 @@
 
 package com.google.javascript.jscomp.deps;
 
-import com.google.common.base.Objects;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * A class to hold JS dependency information for a single .js file.
@@ -34,6 +34,8 @@ public class SimpleDependencyInfo implements DependencyInfo {
 
   /** A list of required symbols. */
   private final List<String> requires;
+
+  private final boolean isModule;
 
   /** The path of the file relative to closure. */
   private final String srcPathRelativeToClosure;
@@ -54,11 +56,12 @@ public class SimpleDependencyInfo implements DependencyInfo {
    */
   public SimpleDependencyInfo(
       String srcPathRelativeToClosure, String pathOfDefiningFile,
-      List<String> provides, List<String> requires) {
+      List<String> provides, List<String> requires, boolean isModule) {
     this.srcPathRelativeToClosure = srcPathRelativeToClosure;
     this.pathOfDefiningFile = pathOfDefiningFile;
     this.provides = provides;
     this.requires = requires;
+    this.isModule = isModule;
   }
 
   @Override
@@ -72,13 +75,18 @@ public class SimpleDependencyInfo implements DependencyInfo {
   }
 
   @Override
+  public boolean isModule() {
+    return this.isModule;
+  }
+
+  @Override
   public Collection<String> getProvides() {
-    return Collections.<String>unmodifiableList(provides);
+    return Collections.unmodifiableList(provides);
   }
 
   @Override
   public Collection<String> getRequires() {
-    return Collections.<String>unmodifiableList(requires);
+    return Collections.unmodifiableList(requires);
   }
 
   @Override
@@ -86,24 +94,25 @@ public class SimpleDependencyInfo implements DependencyInfo {
     if (!(obj instanceof SimpleDependencyInfo)) {
       return false;
     }
-    SimpleDependencyInfo other = (SimpleDependencyInfo)obj;
-    return Objects.equal(other.srcPathRelativeToClosure,
+    SimpleDependencyInfo other = (SimpleDependencyInfo) obj;
+    return Objects.equals(other.srcPathRelativeToClosure,
             srcPathRelativeToClosure) &&
-        Objects.equal(other.pathOfDefiningFile, pathOfDefiningFile) &&
-        Objects.equal(other.requires, this.requires) &&
-        Objects.equal(other.provides, this.provides);
+        Objects.equals(other.pathOfDefiningFile, pathOfDefiningFile) &&
+        Objects.equals(other.requires, this.requires) &&
+        Objects.equals(other.provides, this.provides) &&
+        other.isModule == this.isModule;
   }
 
   @Override
   public String toString() {
     return String.format("DependencyInfo(relativePath='%1$s', path='%2$s', "
-        + "provides=%3$s, requires=%4$s)", srcPathRelativeToClosure,
-        pathOfDefiningFile, provides, requires);
+        + "provides=%3$s, requires=%4$s, module=%5$b)", srcPathRelativeToClosure,
+        pathOfDefiningFile, provides, requires, isModule);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(provides, requires,
-        srcPathRelativeToClosure, pathOfDefiningFile);
+    return Objects.hash(provides, requires,
+        srcPathRelativeToClosure, pathOfDefiningFile, isModule);
   }
 }

@@ -17,6 +17,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.collect.Lists;
+import com.google.common.collect.Ordering;
 import com.google.javascript.jscomp.ControlFlowGraph.Branch;
 import com.google.javascript.jscomp.graph.DiGraph.DiGraphEdge;
 import com.google.javascript.jscomp.graph.DiGraph.DiGraphNode;
@@ -25,7 +26,6 @@ import com.google.javascript.rhino.Token;
 
 import junit.framework.TestCase;
 
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
@@ -55,9 +55,7 @@ public class ControlFlowAnalysisTest extends TestCase {
       ControlFlowGraph<Node> cfg) {
     List<DiGraphEdge<Node, Branch>> edges = Lists.newArrayList();
     for (DiGraphNode<Node, Branch> n : cfg.getDirectedGraphNodes()) {
-      for (DiGraphEdge<Node, Branch> e : cfg.getOutEdges(n.getValue())) {
-        edges.add(e);
-      }
+      edges.addAll(cfg.getOutEdges(n.getValue()));
     }
     return edges;
   }
@@ -207,8 +205,8 @@ public class ControlFlowAnalysisTest extends TestCase {
       Node source = edge.getSource().getValue();
       DiGraphNode<Node, Branch> dest = edge.getDestination();
       if (source.getType() == startToken) {
-        assertTrue("Token " + startToken + " should not have an out going" +
-            " edge to the implicit return", !cfg.isImplicitReturn(dest));
+        assertFalse("Token " + startToken + " should not have an out going"
+            + " edge to the implicit return", cfg.isImplicitReturn(dest));
         return;
       }
     }
@@ -291,6 +289,46 @@ public class ControlFlowAnalysisTest extends TestCase {
     String src = "X: { while(1) { break } }";
     ControlFlowGraph<Node> cfg = createCfg(src);
     assertUpEdge(cfg, Token.BREAK, Token.BLOCK, Branch.UNCOND);
+  }
+
+  public void testThrowInCatchBlock() {
+    String src = "try { throw ''; } catch (e) { throw e;} finally {}";
+    String expected = "digraph AST {\n" +
+    "  node [color=lightblue2, style=filled];\n" +
+    "  node0 [label=\"SCRIPT\"];\n" +
+    "  node1 [label=\"TRY\"];\n" +
+    "  node0 -> node1 [weight=1];\n" +
+    "  node2 [label=\"BLOCK\"];\n" +
+    "  node1 -> node2 [weight=1];\n" +
+    "  node3 [label=\"THROW\"];\n" +
+    "  node2 -> node3 [weight=1];\n" +
+    "  node4 [label=\"STRING\"];\n" +
+    "  node3 -> node4 [weight=1];\n" +
+    "  node5 [label=\"BLOCK\"];\n" +
+    "  node3 -> node5 [label=\"ON_EX\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
+    "  node2 -> node3 [label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
+    "  node1 -> node5 [weight=1];\n" +
+    "  node6 [label=\"CATCH\"];\n" +
+    "  node5 -> node6 [weight=1];\n" +
+    "  node7 [label=\"NAME\"];\n" +
+    "  node6 -> node7 [weight=1];\n" +
+    "  node8 [label=\"BLOCK\"];\n" +
+    "  node6 -> node8 [weight=1];\n" +
+    "  node9 [label=\"THROW\"];\n" +
+    "  node8 -> node9 [weight=1];\n" +
+    "  node10 [label=\"NAME\"];\n" +
+    "  node9 -> node10 [weight=1];\n" +
+    "  node11 [label=\"BLOCK\"];\n" +
+    "  node9 -> node11 [label=\"ON_EX\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
+    "  node8 -> node9 [label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
+    "  node6 -> node8 [label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
+    "  node5 -> node6 [label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
+    "  node1 -> node11 [weight=1];\n" +
+    "  node11 -> RETURN [label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
+    "  node1 -> node2 [label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
+    "  node0 -> node1 [label=\"UNCOND\", fontcolor=\"red\", weight=0.01, color=\"red\"];\n" +
+    "}\n";
+    testCfg(src, expected);
   }
 
   public void testBreakingTryBlock() {
@@ -1419,8 +1457,7 @@ public class ControlFlowAnalysisTest extends TestCase {
   private void assertNodeOrder(ControlFlowGraph<Node> cfg,
       List<Integer> nodeTypes) {
     List<DiGraphNode<Node, Branch>> cfgNodes =
-        Lists.newArrayList(cfg.getDirectedGraphNodes());
-    Collections.sort(cfgNodes, cfg.getOptionalNodeComparator(true));
+        Ordering.from(cfg.getOptionalNodeComparator(true)).sortedCopy(cfg.getDirectedGraphNodes());
 
     // IMPLICIT RETURN must always be last.
     Node implicitReturn = cfgNodes.remove(cfgNodes.size() - 1).getValue();

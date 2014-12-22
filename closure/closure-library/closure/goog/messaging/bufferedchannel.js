@@ -20,9 +20,8 @@
 
 goog.provide('goog.messaging.BufferedChannel');
 
+goog.require('goog.Disposable');
 goog.require('goog.Timer');
-goog.require('goog.Uri');
-goog.require('goog.debug.Error');
 goog.require('goog.events');
 goog.require('goog.log');
 goog.require('goog.messaging.MessageChannel');
@@ -43,6 +42,7 @@ goog.require('goog.messaging.MultiChannel');
  * @constructor
  * @extends {goog.Disposable}
  * @implements {goog.messaging.MessageChannel};
+ * @final
  */
 goog.messaging.BufferedChannel = function(messageChannel, opt_interval) {
   goog.Disposable.call(this);
@@ -50,7 +50,7 @@ goog.messaging.BufferedChannel = function(messageChannel, opt_interval) {
   /**
    * Buffer of messages to be sent when the channel's peer is ready.
    *
-   * @type {Array.<Object>}
+   * @type {Array<Object>}
    * @private
    */
   this.buffer_ = [];
@@ -283,5 +283,5 @@ goog.messaging.BufferedChannel.prototype.setPeerReady_ = function(
 goog.messaging.BufferedChannel.prototype.disposeInternal = function() {
   goog.dispose(this.multiChannel_);
   goog.dispose(this.timer_);
-  goog.base(this, 'disposeInternal');
+  goog.messaging.BufferedChannel.base(this, 'disposeInternal');
 };

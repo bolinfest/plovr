@@ -60,6 +60,7 @@ Author: Neil Sanchala
     <mkdir dir="${build.genfiles.dir}" />
     <mkdir dir="${build.genfiles.dir}/com/google/template/soy/exprparse" />
     <mkdir dir="${build.genfiles.dir}/com/google/template/soy/soyparse" />
+    <mkdir dir="${build.genfiles.dir}/com/google/template/soy/types/parse" />
 
     <!-- JavaCC compilation. Generated files go into the 'genfiles' directory. -->
     <javacc target="${java.src.dir}/com/google/template/soy/exprparse/ExpressionParser.jj"
@@ -70,6 +71,9 @@ Author: Neil Sanchala
             javacchome = "buildtools/javacc" />
     <javacc target = "${java.src.dir}/com/google/template/soy/soyparse/TemplateParser.jj"
             outputdirectory = "${build.genfiles.dir}/com/google/template/soy/soyparse"
+            javacchome = "buildtools/javacc" />
+    <javacc target = "${java.src.dir}/com/google/template/soy/types/parse/TypeParser.jj"
+            outputdirectory = "${build.genfiles.dir}/com/google/template/soy/types/parse"
             javacchome = "buildtools/javacc" />
 
     <!-- Java compilation. -->
@@ -89,7 +93,7 @@ Author: Neil Sanchala
 
   <target name="generated-soyutils"
           depends="compile"
-          description="generates soyutils.js and soyutils_usegoog.js.">
+          description="generates soyutils_usegoog.js.">
     <!-- Load a custom ANT task. -->
     <taskdef name="gen.escape.directives"
              classname="com.google.template.soy.jssrc.internal.GenerateSoyUtilsEscapingDirectiveCode">
@@ -104,15 +108,10 @@ Author: Neil Sanchala
     <mkdir dir="${build.dir}/javascript"/>
 
     <gen.escape.directives>
-      <input path="${basedir}/javascript/soyutils.js"/>
-      <output path="${build.dir}/javascript/soyutils.js"/>
-    </gen.escape.directives>
-
-    <gen.escape.directives>
       <input path="${basedir}/javascript/soyutils_usegoog.js"/>
       <output path="${build.dir}/javascript/soyutils_usegoog.js"/>
-      <jsdefined pattern="goog.string.*"/>
-      <jsdefined pattern="goog.asserts.*"/>
+      <libdefined pattern="goog.string.*"/>
+      <libdefined pattern="goog.asserts.*"/>
     </gen.escape.directives>
   </target>
 
@@ -189,19 +188,6 @@ Author: Neil Sanchala
   </target>
 
 
-  <!-- Target to create a standalone executable SoyToJavaSrcCompilerExperimental.jar. -->
-  <target name="SoyToJavaSrcCompilerExperimental"
-          depends="jar"
-          description="Creates a standalone executable SoyToJavaSrcCompilerExperimental.jar.">
-    <jar destfile="${build.dir}/SoyToJavaSrcCompilerExperimental.jar" update="true">
-      <manifest>
-        <attribute name="Main-Class" value="com.google.template.soy.SoyToJavaSrcCompilerExperimental" />
-      </manifest>
-      <zipfileset src="${soy.jar.file}" />
-    </jar>
-  </target>
-
-
   <!-- Target to generate lite javadoc (for API users). -->
   <target name="javadoc-lite"
           depends="compile"
@@ -215,7 +201,6 @@ Author: Neil Sanchala
       <packageset dir="${java.src.dir}">
         <include name="com/google/template/soy" />
         <include name="com/google/template/soy/data" />
-        <include name="com/google/template/soy/javasrc" />
         <include name="com/google/template/soy/jssrc" />
         <include name="com/google/template/soy/msgs" />
         <include name="com/google/template/soy/parseinfo" />
@@ -653,7 +638,7 @@ Author: Neil Sanchala
       <fileset file="COPYING" />
       <fileset file="${build.dir}/javascript/README" />
       <fileset file="${build.dir}/SoyToJsSrcCompiler.jar" />
-      <fileset dir="${build.dir}/javascript" includes="soyutils.js,soyutils_usegoog.js" />
+      <fileset dir="${build.dir}/javascript" includes="soyutils_usegoog.js" />
     </zip>
   </target>
 

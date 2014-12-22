@@ -130,7 +130,7 @@ class CoalesceVariableNames extends AbstractPostOrderCallback implements
             t, cfg, liveness.getEscapedLocals());
 
     GraphColoring<Var, Void> coloring =
-        new GreedyGraphColoring<Var, Void>(interferenceGraph,
+        new GreedyGraphColoring<>(interferenceGraph,
             coloringTieBreaker);
 
     coloring.color();
@@ -346,7 +346,7 @@ class CoalesceVariableNames extends AbstractPostOrderCallback implements
    * Tries to remove variable declaration if the variable has been coalesced
    * with another variable that has already been declared.
    */
-  private void removeVarDeclaration(Node name) {
+  private static void removeVarDeclaration(Node name) {
     Node var = name.getParent();
     Node parent = var.getParent();
 

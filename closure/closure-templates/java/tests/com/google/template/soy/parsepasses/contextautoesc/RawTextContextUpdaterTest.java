@@ -20,11 +20,15 @@ import java.util.Arrays;
 import java.util.Queue;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
+import com.google.template.soy.soytree.RawTextNode;
 
 import junit.framework.TestCase;
 
 public class RawTextContextUpdaterTest extends TestCase {
+  // The letter 'M' repeated 1500 times.
+  private static final String M1500 = Strings.repeat("M", 1500);
 
   public final void testPcdata() throws Exception {
     assertTransition("HTML_PCDATA", "", "HTML_PCDATA");
@@ -54,6 +58,10 @@ public class RawTextContextUpdaterTest extends TestCase {
     assertTransition("HTML_PCDATA", "<a title=foo id='x'", "HTML_TAG NORMAL");
     assertTransition("HTML_PCDATA", "<a title=\"foo\"", "HTML_TAG NORMAL");
     assertTransition("HTML_PCDATA", "<a title='foo'", "HTML_TAG NORMAL");
+    assertTransition("HTML_PCDATA", "<a title='",
+        "HTML_NORMAL_ATTR_VALUE NORMAL PLAIN_TEXT SINGLE_QUOTE");
+    assertTransition("HTML_PCDATA", "<a data-foo='",
+        "HTML_NORMAL_ATTR_VALUE NORMAL PLAIN_TEXT SINGLE_QUOTE");
     // Into attributes
     assertTransition("HTML_PCDATA", "<a onclick=\"", "JS NORMAL SCRIPT DOUBLE_QUOTE REGEX");
     assertTransition("HTML_PCDATA", "<a onclick=\'", "JS NORMAL SCRIPT SINGLE_QUOTE REGEX");
@@ -132,6 +140,8 @@ public class RawTextContextUpdaterTest extends TestCase {
     assertTransition("HTML_TAG NORMAL", " xmlns", "HTML_ATTRIBUTE_NAME NORMAL URI");
     assertTransition("HTML_TAG NORMAL", " xmlns:foo", "HTML_ATTRIBUTE_NAME NORMAL URI");
     assertTransition("HTML_TAG NORMAL", " xmlnsxyz", "HTML_ATTRIBUTE_NAME NORMAL PLAIN_TEXT");
+    assertTransition("HTML_TAG NORMAL", " xmlnsxyz?", "HTML_ATTRIBUTE_NAME NORMAL PLAIN_TEXT");
+    assertTransition("HTML_TAG NORMAL", " xml?nsxyz", "HTML_ATTRIBUTE_NAME NORMAL PLAIN_TEXT");
     assertTransition("HTML_TAG NORMAL", " svg:style='", "CSS NORMAL STYLE SINGLE_QUOTE");
   }
 
@@ -414,6 +424,7 @@ public class RawTextContextUpdaterTest extends TestCase {
   public final void testJsDqString() throws Exception {
     assertTransition("JS_DQ_STRING", "", "JS_DQ_STRING");
     assertTransition("JS_DQ_STRING", "Hello, World!", "JS_DQ_STRING");
+    assertTransition("JS_DQ_STRING", M1500, "JS_DQ_STRING"); // Check for stack overflow
     assertTransition("JS_DQ_STRING", "\"", "JS DIV_OP");
     assertTransition(
         "JS_DQ_STRING NORMAL SCRIPT SINGLE_QUOTE", "Hello, World!",
@@ -427,6 +438,7 @@ public class RawTextContextUpdaterTest extends TestCase {
   public final void testJsSqString() throws Exception {
     assertTransition("JS_SQ_STRING", "", "JS_SQ_STRING");
     assertTransition("JS_SQ_STRING", "Hello, World!", "JS_SQ_STRING");
+    assertTransition("JS_SQ_STRING", M1500, "JS_SQ_STRING"); // Check for stack overflow
     assertTransition("JS_SQ_STRING", "/*", "JS_SQ_STRING");
     assertTransition("JS_SQ_STRING", "\"", "JS_SQ_STRING");
     assertTransition("JS_SQ_STRING", "\\x27", "JS_SQ_STRING");
@@ -495,7 +507,7 @@ public class RawTextContextUpdaterTest extends TestCase {
     assertTransition("HTML_RCDATA TEXTAREA", "</textarea>", "HTML_PCDATA");
   }
 
-  public final void textText() throws Exception {
+  public final void testText() throws Exception {
     // Plain text's only edge should be back to itself.
     assertTransition("TEXT", "", "TEXT");
     assertTransition("TEXT", "Hello, World!", "TEXT");
@@ -506,8 +518,11 @@ public class RawTextContextUpdaterTest extends TestCase {
   }
 
   private static void assertTransition(String from, String rawText, String to) throws Exception {
-    Context after = RawTextContextUpdater.processRawText(rawText, parseContext(from));
-    assertEquals(rawText, parseContext(to), after);
+    Context after = RawTextContextUpdater.processRawText(
+        new RawTextNode(0, rawText), parseContext(from)).getEndContext();
+    // Assert against the toString() for simpler test authoring -- if a developer misspells the
+    // "to" context, they'll see a useful string-based diff.
+    assertEquals(rawText, "(Context " + to + ")", after.toString());
   }
 
   private static Context parseContext(String text) {

@@ -16,6 +16,8 @@
 
 package com.google.template.soy.data;
 
+
+import java.io.IOException;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 import javax.annotation.concurrent.Immutable;
@@ -24,7 +26,6 @@ import javax.annotation.concurrent.Immutable;
 /**
  * A chunk of sanitized content of a known kind, e.g. the output of an HTML sanitizer.
  *
- * @author Mike Samuel
  */
 @ParametersAreNonnullByDefault
 @Immutable
@@ -50,19 +51,6 @@ public final class SanitizedContent extends SoyData {
      * control.
      */
     JS,
-
-    /**
-     * A sequence of code units that can appear between quotes (either single or double) in a JS
-     * program without causing a parse error, and without causing any side effects.
-     * <p>
-     * The content should not contain unescaped quotes, newlines, or anything else that would
-     * cause parsing to fail or to cause a JS parser to finish the string it is parsing inside
-     * the content.
-     * <p>
-     * The content must also not end inside an escape sequence ; no partial octal escape sequences
-     * or odd number of '{@code \}'s at the end.
-     */
-    JS_STR_CHARS,
 
     /** A properly encoded portion of a URI. */
     URI,
@@ -91,6 +79,7 @@ public final class SanitizedContent extends SoyData {
 
   private final String content;
   private final ContentKind contentKind;
+  private final Dir contentDir;
 
 
   /**
@@ -104,10 +93,13 @@ public final class SanitizedContent extends SoyData {
    *
    * @param content A string of valid content with the given content kind.
    * @param contentKind Describes the kind of string that content is.
+   * @param contentDir The content's direction; null if unknown and thus to be estimated when
+   *     necessary.
    */
-  SanitizedContent(String content, ContentKind contentKind) {
+  SanitizedContent(String content, ContentKind contentKind, @Nullable Dir contentDir) {
     this.content = content;
     this.contentKind = contentKind;
+    this.contentDir = contentDir;
   }
 
 
@@ -127,14 +119,39 @@ public final class SanitizedContent extends SoyData {
   }
 
 
+  /**
+   * Returns the content's direction; null indicates that the direction is unknown, and is to be
+   * estimated when necessary.
+   */
+  @Nullable
+  public Dir getContentDirection() {
+    return contentDir;
+  }
+
+
+  @Deprecated
   @Override
   public boolean toBoolean() {
     return content.length() != 0;  // Consistent with StringData
   }
 
+  @Override public void render(Appendable appendable) throws IOException {
+    appendable.append(content);
+  }
 
   @Override
   public String toString() {
+    return content;
+  }
+
+
+  /**
+   * Returns the string value.
+   *
+   * In contexts where a string value is required, SanitizedCOntent is permitted.
+   */
+  @Override
+  public String stringValue() {
     return content;
   }
 
@@ -143,6 +160,7 @@ public final class SanitizedContent extends SoyData {
   public boolean equals(@Nullable Object other) {
     return other instanceof SanitizedContent &&
         this.contentKind == ((SanitizedContent) other).contentKind &&
+        this.contentDir == ((SanitizedContent) other).contentDir &&
         this.content.equals(((SanitizedContent) other).content);
   }
 
@@ -151,5 +169,4 @@ public final class SanitizedContent extends SoyData {
   public int hashCode() {
     return content.hashCode() + 31 * contentKind.hashCode();
   }
-
 }

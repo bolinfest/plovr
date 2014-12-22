@@ -16,6 +16,8 @@
 
 package com.google.javascript.jscomp.deps;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
@@ -134,7 +136,7 @@ public class DepsGenerator {
 
     ByteArrayOutputStream output = new ByteArrayOutputStream();
     writeDepsContent(depsFiles, jsFiles, new PrintStream(output));
-    return new String(output.toByteArray());
+    return new String(output.toByteArray(), UTF_8);
   }
 
   /**
@@ -383,11 +385,8 @@ public class DepsGenerator {
 
   /**
    * Writes goog.addDependency() lines for each DependencyInfo in depInfos.
-   * @throws IOException Occurs upon an IO error.
    */
-  private void writeDepInfos(PrintStream out,
-      Collection<DependencyInfo> depInfos
-  ) throws IOException {
+  private void writeDepInfos(PrintStream out, Collection<DependencyInfo> depInfos) {
     // Print dependencies.
     // Lines look like this:
     // goog.addDependency('../../path/to/file.js', ['goog.Delay'],
@@ -401,8 +400,17 @@ public class DepsGenerator {
       writeJsArray(out, provides);
       out.print(", ");
       writeJsArray(out, requires);
+      // While transitioning, only write "module" for goog.module 
+      if (depInfo.isModule()) {
+        out.print(", ");
+        writeJsBoolean(out, depInfo.isModule());
+      }
       out.println(");");
     }
+  }
+
+  private void writeJsBoolean(PrintStream out, boolean value) {
+    out.print(value ? "true" : "false");
   }
 
   /**

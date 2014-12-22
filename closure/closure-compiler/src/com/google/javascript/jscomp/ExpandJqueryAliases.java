@@ -315,7 +315,7 @@ class ExpandJqueryAliases extends AbstractPostOrderCallback
             keyNodeReferences, valueNodeReferences,
             objectToLoopOver.isArrayLit()));
 
-    if (keyNodeReferences.size() == 0) {
+    if (keyNodeReferences.isEmpty()) {
      // We didn't do anything useful ...
       t.report(n, JQUERY_USELESS_EACH_EXPANSION, (String) null);
       return;
@@ -504,7 +504,7 @@ class ExpandJqueryAliases extends AbstractPostOrderCallback
    * Given a jQuery.expandedEach callback function, traverse it and collect any
    * references to its parameter names.
    */
-  class FindCallbackArgumentReferences extends AbstractPostOrderCallback
+  static class FindCallbackArgumentReferences extends AbstractPostOrderCallback
       implements ScopedCallback {
 
     private final String keyName;

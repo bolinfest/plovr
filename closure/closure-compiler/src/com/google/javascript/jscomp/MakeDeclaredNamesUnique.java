@@ -57,7 +57,7 @@ class MakeDeclaredNamesUnique
   //   catch expressions
   //   function expressions names
   // Both belong to a scope by themselves.
-  private Deque<Renamer> nameStack = new ArrayDeque<Renamer>();
+  private Deque<Renamer> nameStack = new ArrayDeque<>();
   private final Renamer rootRenamer;
 
   MakeDeclaredNamesUnique() {
@@ -209,7 +209,7 @@ class MakeDeclaredNamesUnique
    * Traverses the current scope and collects declared names.  Does not
    * decent into functions or add CATCH exceptions.
    */
-  private void findDeclaredNames(Node n, Node parent, Renamer renamer) {
+  private static void findDeclaredNames(Node n, Node parent, Renamer renamer) {
     // Do a shallow traversal, so don't traverse into function declarations,
     // except for the name of the function itself.
     if (parent == null
@@ -266,7 +266,7 @@ class MakeDeclaredNamesUnique
     private Set<String> referencedNames = ImmutableSet.of();
 
     // Stack reference sets.
-    private Deque<Set<String>> referenceStack = new ArrayDeque<Set<String>>();
+    private Deque<Set<String>> referenceStack = new ArrayDeque<>();
 
     // Name are globally unique initially, so we don't need a per-scope map.
     private Map<String, List<Node>> nameMap = Maps.newHashMap();
@@ -280,7 +280,7 @@ class MakeDeclaredNamesUnique
       NodeTraversal.traverse(compiler, js, this);
     }
 
-    public static String getOrginalName(String name) {
+    public static String getOriginalName(String name) {
       int index = indexOfSeparator(name);
       return (index == -1) ? name : name.substring(0, index);
     }
@@ -289,8 +289,8 @@ class MakeDeclaredNamesUnique
       return name.lastIndexOf(ContextualRenamer.UNIQUE_ID_SEPARATOR);
     }
 
-    private boolean containsSeparator(String name) {
-      return name.indexOf(ContextualRenamer.UNIQUE_ID_SEPARATOR) != -1;
+    private static boolean containsSeparator(String name) {
+      return name.contains(ContextualRenamer.UNIQUE_ID_SEPARATOR);
     }
 
     /**
@@ -340,7 +340,7 @@ class MakeDeclaredNamesUnique
      */
     void handleScopeVar(Var v) {
       String name  = v.getName();
-      if (containsSeparator(name) && !getOrginalName(name).isEmpty()) {
+      if (containsSeparator(name) && !getOriginalName(name).isEmpty()) {
         String newName = findReplacementName(name);
         referencedNames.remove(name);
         // Adding a reference to the new name to prevent either the parent
@@ -361,7 +361,7 @@ class MakeDeclaredNamesUnique
      * Find a name usable in the local scope.
      */
     private String findReplacementName(String name) {
-      String original = getOrginalName(name);
+      String original = getOriginalName(name);
       String newName = original;
       int i = 0;
       while (!isValidName(newName)) {
@@ -485,7 +485,7 @@ class MakeDeclaredNamesUnique
     /**
      * Given a name and the associated id, create a new unique name.
      */
-    private String getUniqueName(String name, int id) {
+    private static String getUniqueName(String name, int id) {
       return name + UNIQUE_ID_SEPARATOR + id;
     }
 
@@ -546,7 +546,7 @@ class MakeDeclaredNamesUnique
         return name;
       }
 
-      if (name.indexOf(ContextualRenamer.UNIQUE_ID_SEPARATOR) != -1) {
+      if (name.contains(ContextualRenamer.UNIQUE_ID_SEPARATOR)) {
           name = name.substring(
               0, name.lastIndexOf(ContextualRenamer.UNIQUE_ID_SEPARATOR));
       }

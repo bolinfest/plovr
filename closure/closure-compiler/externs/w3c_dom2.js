@@ -22,6 +22,7 @@
  *  http://www.w3.org/TR/REC-DOM-Level-1/ecma-script-language-binding.html
  *
  * @externs
+ * @author stevey@google.com (Steve Yegge)
  */
 // All the provided definitions have been type annotated.
 
@@ -97,7 +98,7 @@ HTMLDocument.prototype.domain;
 HTMLDocument.prototype.URL;
 
 /**
- * @type {HTMLElement}
+ * @type {HTMLBodyElement}
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-56360201
  */
 HTMLDocument.prototype.body;
@@ -176,6 +177,167 @@ HTMLDocument.prototype.writeln = function(text) {};
  * @nosideeffects
  */
 HTMLDocument.prototype.getElementsByName = function(elementName) {};
+
+/**
+ * @param {Node} root
+ * @param {number=} whatToShow
+ * @param {NodeFilter=} filter
+ * @param {boolean=} entityReferenceExpansion
+ * @return {!NodeIterator}
+ * @see http://www.w3.org/TR/DOM-Level-2-Traversal-Range/traversal.html#Traversal-Document
+ * @nosideeffects
+ */
+HTMLDocument.prototype.createNodeIterator = function(
+    root, whatToShow, filter, entityReferenceExpansion) {};
+
+/**
+ * @param {Node} root
+ * @param {number=} whatToShow
+ * @param {NodeFilter=} filter
+ * @param {boolean=} entityReferenceExpansion
+ * @return {!TreeWalker}
+ * @see http://www.w3.org/TR/DOM-Level-2-Traversal-Range/traversal.html#Traversal-Document
+ * @nosideeffects
+ */
+HTMLDocument.prototype.createTreeWalker = function(
+    root, whatToShow, filter, entityReferenceExpansion) {};
+
+
+/** @typedef {{
+  createNodeIterator: function(Node, number=, NodeFilter=, boolean=) : NodeIterator,
+  createTreeWalker: function(Node, number=, NodeFilter=, boolean=) : TreeWalker
+}} */
+var TraversalDocument;
+
+/**
+ * @interface
+ * @see http://www.w3.org/TR/DOM-Level-2-Traversal-Range/traversal.html#Traversal-NodeFilter
+*/
+function NodeFilter() {}
+
+/* Constants for whatToShow */
+/** @const {number} */ NodeFilter.SHOW_ALL;
+/** @const {number} */ NodeFilter.SHOW_ATTRIBUTE;
+/** @const {number} */ NodeFilter.SHOW_CDATA_SECTION;
+/** @const {number} */ NodeFilter.SHOW_COMMENT;
+/** @const {number} */ NodeFilter.SHOW_DOCUMENT;
+/** @const {number} */ NodeFilter.SHOW_DOCUMENT_FRAGMENT;
+/** @const {number} */ NodeFilter.SHOW_DOCUMENT_TYPE;
+/** @const {number} */ NodeFilter.SHOW_ELEMENT;
+/** @const {number} */ NodeFilter.SHOW_ENTITY;
+/** @const {number} */ NodeFilter.SHOW_ENTITY_REFERENCE;
+/** @const {number} */ NodeFilter.SHOW_NOTATION;
+/** @const {number} */ NodeFilter.SHOW_PROCESSING_INSTRUCTION;
+/** @const {number} */ NodeFilter.SHOW_TEXT;
+
+/* Consants for acceptNode */
+/** @const {number} */ NodeFilter.FILTER_ACCEPT;
+/** @const {number} */ NodeFilter.FILTER_REJECT;
+/** @const {number} */ NodeFilter.FILTER_SKIP;
+
+/**
+ * @param {Node} n
+ * @return {number} Any of NodeFilter.FILTER_* constants.
+ * @see http://www.w3.org/TR/DOM-Level-2-Traversal-Range/traversal.html#Traversal-NodeFilter-acceptNode
+*/
+NodeFilter.prototype.acceptNode = function(n) {};
+
+/**
+ * @interface
+ * @see http://www.w3.org/TR/DOM-Level-2-Traversal-Range/traversal.html#Traversal-NodeIterator
+*/
+function NodeIterator() {}
+
+/**
+ * Detach and invalidate the NodeIterator.
+ * @see http://www.w3.org/TR/DOM-Level-2-Traversal-Range/traversal.html#Traversal-NodeIterator-detach
+ */
+NodeIterator.prototype.detach = function() {};
+
+/**
+ * @return {Node} Next node in the set.
+ * @see http://www.w3.org/TR/DOM-Level-2-Traversal-Range/traversal.html#Traversal-NodeIterator-nextNode
+ */
+NodeIterator.prototype.nextNode = function() {};
+
+/**
+ * @return {Node} Previous node in the set.
+ * @see http://www.w3.org/TR/DOM-Level-2-Traversal-Range/traversal.html#Traversal-NodeIterator-previousNode
+ */
+NodeIterator.prototype.previousNode = function() {};
+
+/**
+ * @interface
+ * @see http://www.w3.org/TR/DOM-Level-2-Traversal-Range/traversal.html#Traversal-TreeWalker
+*/
+function TreeWalker() {}
+
+/**
+ * @return {?Node} The new Node or null.
+ * @see http://www.w3.org/TR/DOM-Level-2-Traversal-Range/traversal.html#Traversal-TreeWalker-firstChild
+ */
+TreeWalker.prototype.firstChild = function() {};
+
+/**
+ * @return {?Node} The new Node or null..
+ * @see http://www.w3.org/TR/DOM-Level-2-Traversal-Range/traversal.html#Traversal-TreeWalker-lastChild
+ */
+TreeWalker.prototype.lastChild = function() {};
+
+/**
+ * @return {?Node} The new Node or null.
+ * @see http://www.w3.org/TR/DOM-Level-2-Traversal-Range/traversal.html#Traversal-TreeWalker-nextNode
+ */
+TreeWalker.prototype.nextNode = function() {};
+
+/**
+ * @return {?Node} The new Node or null.
+ * @see http://www.w3.org/TR/DOM-Level-2-Traversal-Range/traversal.html#Traversal-TreeWalker-nextSibling
+ */
+TreeWalker.prototype.nextSibling = function() {};
+
+/**
+ * @return {?Node} The new Node or null.
+ * @see http://www.w3.org/TR/DOM-Level-2-Traversal-Range/traversal.html#Traversal-TreeWalker-parentNode
+ */
+TreeWalker.prototype.parentNode = function() {};
+
+/**
+ * @return {?Node} The new Node or null.
+ * @see http://www.w3.org/TR/DOM-Level-2-Traversal-Range/traversal.html#Traversal-TreeWalker-previousNode
+ */
+TreeWalker.prototype.previousNode = function() {};
+
+/**
+ * @return {?Node} The new Node or null.
+ * @see http://www.w3.org/TR/DOM-Level-2-Traversal-Range/traversal.html#Traversal-TreeWalker-previousSibling
+ */
+TreeWalker.prototype.previousSibling = function() {};
+
+/**
+ * @type {Node}
+ */
+TreeWalker.prototype.root;
+
+/**
+ * @type {number}
+ */
+TreeWalker.prototype.whatToShow;
+
+/**
+ * @type {NodeFilter}
+ */
+TreeWalker.prototype.filter;
+
+/**
+ * @type {boolean}
+ */
+TreeWalker.prototype.expandEntityReference;
+
+/**
+ * @type {Node}
+ */
+TreeWalker.prototype.currentNode;
 
 /**
  * @constructor
@@ -304,7 +466,7 @@ HTMLLinkElement.prototype.target;
  */
 HTMLLinkElement.prototype.type;
 
-/** @override */
+/** @type {StyleSheet} */
 HTMLLinkElement.prototype.sheet;
 
 /**
@@ -415,7 +577,7 @@ HTMLStyleElement.prototype.media;
  */
 HTMLStyleElement.prototype.type;
 
-/** @override */
+/** @type {StyleSheet} */
 HTMLStyleElement.prototype.sheet;
 
 /**

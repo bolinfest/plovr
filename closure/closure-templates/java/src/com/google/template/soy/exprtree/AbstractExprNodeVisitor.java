@@ -66,7 +66,6 @@ import com.google.template.soy.exprtree.OperatorNodes.TimesOpNode;
  * @param <R> The return type of this visitor.
  *
  * @see AbstractReturningExprNodeVisitor
- * @author Kai Huang
  */
 public abstract class AbstractExprNodeVisitor<R> extends AbstractNodeVisitor<ExprNode, R> {
 
@@ -86,14 +85,9 @@ public abstract class AbstractExprNodeVisitor<R> extends AbstractNodeVisitor<Exp
       case LIST_LITERAL_NODE: visitListLiteralNode((ListLiteralNode) node); break;
       case MAP_LITERAL_NODE: visitMapLiteralNode((MapLiteralNode) node); break;
 
-      case VAR_NODE: visitVarNode((VarNode) node); break;
-
-      case DATA_REF_NODE: visitDataRefNode((DataRefNode) node); break;
-      case DATA_REF_ACCESS_KEY_NODE: visitDataRefAccessKeyNode((DataRefAccessKeyNode) node); break;
-      case DATA_REF_ACCESS_INDEX_NODE:
-        visitDataRefAccessIndexNode((DataRefAccessIndexNode) node); break;
-      case DATA_REF_ACCESS_EXPR_NODE:
-        visitDataRefAccessExprNode((DataRefAccessExprNode) node); break;
+      case VAR_REF_NODE: visitVarRefNode((VarRefNode) node); break;
+      case FIELD_ACCESS_NODE: visitFieldAccessNode((FieldAccessNode) node); break;
+      case ITEM_ACCESS_NODE: visitItemAccessNode((ItemAccessNode) node); break;
 
       case GLOBAL_NODE: visitGlobalNode((GlobalNode) node); break;
 
@@ -203,28 +197,20 @@ public abstract class AbstractExprNodeVisitor<R> extends AbstractNodeVisitor<Exp
   // Implementations for reference nodes.
 
 
-  protected void visitVarNode(VarNode node) {
+  protected void visitVarRefNode(VarRefNode node) {
     visitExprNode(node);
   }
 
-  protected void visitDataRefNode(DataRefNode node) {
+  protected void visitDataAccessNode(DataAccessNode node) {
     visitExprNode(node);
   }
 
-  protected void visitDataRefAccessKeyNode(DataRefAccessKeyNode node) {
-    visitDataRefAccessNode(node);
+  protected void visitFieldAccessNode(FieldAccessNode node) {
+    visitDataAccessNode(node);
   }
 
-  protected void visitDataRefAccessIndexNode(DataRefAccessIndexNode node) {
-    visitDataRefAccessNode(node);
-  }
-
-  protected void visitDataRefAccessExprNode(DataRefAccessExprNode node) {
-    visitDataRefAccessNode(node);
-  }
-
-  protected void visitDataRefAccessNode(DataRefAccessNode node) {
-    visitExprNode(node);
+  protected void visitItemAccessNode(ItemAccessNode node) {
+    visitDataAccessNode(node);
   }
 
   protected void visitGlobalNode(GlobalNode node) {

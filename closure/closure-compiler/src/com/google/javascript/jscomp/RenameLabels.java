@@ -124,7 +124,7 @@ final class RenameLabels implements CompilerPass {
 
     // The list of generated names. Typically, the first name will be "a",
     // the second "b", etc.
-    final ArrayList<String> names = new ArrayList<String>();
+    final ArrayList<String> names = new ArrayList<>();
 
 
     @Override
@@ -199,7 +199,7 @@ final class RenameLabels implements CompilerPass {
       if (nameNode != null) {
         // This is a named break or continue;
         String name = nameNode.getString();
-        Preconditions.checkState(name.length() != 0);
+        Preconditions.checkState(!name.isEmpty());
         LabelInfo li = getLabelInfo(name);
         if (li != null) {
           String newName = getNameForId(li.id);
@@ -283,7 +283,7 @@ final class RenameLabels implements CompilerPass {
 
 
   private static class LabelNamespace {
-    final Map<String, LabelInfo> renameMap = new HashMap<String, LabelInfo>();
+    final Map<String, LabelInfo> renameMap = new HashMap<>();
   }
 
 }

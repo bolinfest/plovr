@@ -89,7 +89,7 @@ class InlineVariables implements CompilerPass {
   private Predicate<Var> getFilterForMode() {
     switch (mode) {
       case ALL:
-        return Predicates.<Var>alwaysTrue();
+        return Predicates.alwaysTrue();
       case LOCALS_ONLY:
         return new IdentifyLocals();
       case CONSTANTS_ONLY:
@@ -107,17 +107,17 @@ class InlineVariables implements CompilerPass {
    * or named in all caps, and initialized to an immutable value.
    * CheckConsts has already verified that these are truly constants.
    */
-  private class IdentifyConstants implements Predicate<Var> {
+  private static class IdentifyConstants implements Predicate<Var> {
     @Override
     public boolean apply(Var var) {
-      return var.isConst();
+      return var.isInferredConst();
     }
   }
 
   /**
    * Filters non-global variables.
    */
-  private class IdentifyLocals implements Predicate<Var> {
+  private static class IdentifyLocals implements Predicate<Var> {
     @Override
     public boolean apply(Var var) {
       return var.scope.isLocal();

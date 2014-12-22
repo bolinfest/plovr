@@ -18,7 +18,6 @@ package com.google.template.soy.jssrc.internal;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.inject.Inject;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.jssrc.SoyJsSrcOptions;
 import com.google.template.soy.jssrc.internal.GenJsExprsVisitor.GenJsExprsVisitorFactory;
@@ -37,12 +36,11 @@ import java.util.Deque;
 import java.util.Map;
 
 import javax.annotation.Nullable;
-
+import javax.inject.Inject;
 
 /**
  * Utilities for generating JS code for calls.
  *
- * @author Kai Huang
  */
 class GenCallCodeUtils {
 
@@ -134,7 +132,7 @@ class GenCallCodeUtils {
 
     JsExpr callExpr =
         genCallExprHelper(callNode, localVarTranslations, jsCodeBuilder.getOutputVarName());
-    jsCodeBuilder.indent().append(callExpr.getText(), ";\n");
+    jsCodeBuilder.appendLine(callExpr.getText(), ";");
   }
 
 
@@ -323,7 +321,7 @@ class GenCallCodeUtils {
         CallParamContentNode cpcn = (CallParamContentNode) child;
         JsExpr valueJsExpr;
         if (isComputableAsJsExprsVisitor.exec(cpcn)) {
-          valueJsExpr = JsExprUtils.concatJsExprs(
+          valueJsExpr = JsExprUtils.concatJsExprsForceString(
               genJsExprsVisitorFactory.create(localVarTranslations).exec(cpcn));
         } else {
           // This is a param with content that cannot be represented as JS expressions, so we assume
@@ -340,8 +338,10 @@ class GenCallCodeUtils {
         // in a SanitizedContent instance of the appropriate kind.
 
         // The expression for the constructor of SanitizedContent of the appropriate kind (e.g.,
-        // "new SanitizedHtml"), or null if the node has no 'kind' attribute.
-        valueJsExpr = JsExprUtils.maybeWrapAsSanitizedContent(cpcn.getContentKind(), valueJsExpr);
+        // "new SanitizedHtml"), or null if the node has no 'kind' attribute.  This uses the
+        // variant used in internal blocks.
+        valueJsExpr = JsExprUtils.maybeWrapAsSanitizedContentForInternalBlocks(
+            cpcn.getContentKind(), valueJsExpr);
 
         paramsObjSb.append(valueJsExpr.getText());
       }

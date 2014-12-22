@@ -180,21 +180,22 @@ public class CallGraph implements CompilerPass {
   @VisibleForTesting
   public Function getUniqueFunctionWithName(final String desiredName) {
     Collection<Function> functions =
-        Collections2.<Function>filter(getAllFunctions(),
+        Collections2.filter(getAllFunctions(),
             new Predicate<Function>() {
-        @Override
-        public boolean apply(Function function) {
+              @Override
+              public boolean apply(Function function) {
 
-          String functionName = function.getName();
-          // Anonymous functions will have null names,
-          // so it is important to handle that correctly here
-          if (functionName != null && desiredName != null) {
-            return desiredName.equals(functionName);
-          } else {
-            return desiredName == functionName;
-          }
-        }
-      });
+                String functionName = function.getName();
+                // Anonymous functions will have null names,
+                // so it is important to handle that correctly here
+                if (functionName != null && desiredName != null) {
+                  return desiredName.equals(functionName);
+                } else {
+                  return desiredName == functionName;
+                }
+              }
+            }
+        );
 
     if (functions.size() == 1) {
       return functions.iterator().next();
@@ -609,7 +610,7 @@ public class CallGraph implements CompilerPass {
 
     private void addCallsiteInFunction(Callsite callsite) {
       if (callsitesInFunction == null) {
-        callsitesInFunction = new LinkedList<Callsite>();
+        callsitesInFunction = new LinkedList<>();
       }
       callsitesInFunction.add(callsite);
     }
@@ -643,7 +644,7 @@ public class CallGraph implements CompilerPass {
       Preconditions.checkState(computeBackwardGraph);
       if (callsitesPossiblyTargetingFunction == null) {
         callsitesPossiblyTargetingFunction =
-            new LinkedList<Callsite>();
+            new LinkedList<>();
       }
       callsitesPossiblyTargetingFunction.add(callsite);
     }
@@ -722,7 +723,7 @@ public class CallGraph implements CompilerPass {
       Preconditions.checkState(computeForwardGraph);
 
       if (possibleTargets == null) {
-        possibleTargets = new LinkedList<Function>();
+        possibleTargets = new LinkedList<>();
       }
       possibleTargets.add(target);
     }

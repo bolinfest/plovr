@@ -15,6 +15,8 @@
 /**
  * @fileoverview Utilities for element styles.
  *
+ * @author arv@google.com (Erik Arvidsson)
+ * @author eae@google.com (Emil A Eklund)
  * @see ../demos/inline_block_quirks.html
  * @see ../demos/inline_block_standards.html
  * @see ../demos/style_viewport.html
@@ -64,7 +66,9 @@ goog.style.setStyle = function(element, style, opt_value) {
   if (goog.isString(style)) {
     goog.style.setStyle_(element, opt_value, style);
   } else {
-    goog.object.forEach(style, goog.partial(goog.style.setStyle_, element));
+    for (var key in style) {
+      goog.style.setStyle_(element, style[key], key);
+    }
   }
 };
 
@@ -88,6 +92,17 @@ goog.style.setStyle_ = function(element, value, style) {
 
 
 /**
+ * Style name cache that stores previous property name lookups.
+ *
+ * This is used by setStyle to speed up property lookups, entries look like:
+ *   { StyleName: ActualPropertyName }
+ *
+ * @private {!Object<string, string>}
+ */
+goog.style.styleNameCache_ = {};
+
+
+/**
  * Returns the style property name in camel-case. If it does not exist and a
  * vendor-specific version of the property does exist, then return the vendor-
  * specific property name instead.
@@ -97,18 +112,23 @@ goog.style.setStyle_ = function(element, value, style) {
  * @private
  */
 goog.style.getVendorJsStyleName_ = function(element, style) {
-  var camelStyle = goog.string.toCamelCase(style);
+  var propertyName = goog.style.styleNameCache_[style];
+  if (!propertyName) {
+    var camelStyle = goog.string.toCamelCase(style);
+    propertyName = camelStyle;
 
-  if (element.style[camelStyle] === undefined) {
-    var prefixedStyle = goog.dom.vendor.getVendorJsPrefix() +
-        goog.string.toTitleCase(style);
+    if (element.style[camelStyle] === undefined) {
+      var prefixedStyle = goog.dom.vendor.getVendorJsPrefix() +
+          goog.string.toTitleCase(camelStyle);
 
-    if (element.style[prefixedStyle] !== undefined) {
-      return prefixedStyle;
+      if (element.style[prefixedStyle] !== undefined) {
+        propertyName = prefixedStyle;
+      }
     }
+    goog.style.styleNameCache_[style] = propertyName;
   }
 
-  return camelStyle;
+  return propertyName;
 };
 
 
@@ -126,7 +146,7 @@ goog.style.getVendorStyleName_ = function(element, style) {
 
   if (element.style[camelStyle] === undefined) {
     var prefixedStyle = goog.dom.vendor.getVendorJsPrefix() +
-        goog.string.toTitleCase(style);
+        goog.string.toTitleCase(camelStyle);
 
     if (element.style[prefixedStyle] !== undefined) {
       return goog.dom.vendor.getVendorPrefix() + '-' + style;
@@ -224,6 +244,20 @@ goog.style.getStyle_ = function(element, style) {
 
 
 /**
+ * Retrieves the computed value of the box-sizing CSS attribute.
+ * Browser support: http://caniuse.com/css3-boxsizing.
+ * @param {!Element} element The element whose box-sizing to get.
+ * @return {?string} 'content-box', 'border-box' or 'padding-box'. null if
+ *     box-sizing is not supported (IE7 and below).
+ */
+goog.style.getComputedBoxSizing = function(element) {
+  return goog.style.getStyle_(element, 'boxSizing') ||
+      goog.style.getStyle_(element, 'MozBoxSizing') ||
+      goog.style.getStyle_(element, 'WebkitBoxSizing') || null;
+};
+
+
+/**
  * Retrieves the computed value of the position CSS attribute.
  * @param {Element} element The element to get the position of.
  * @return {string} Position value.
@@ -303,6 +337,18 @@ goog.style.getComputedTextAlign = function(element) {
  */
 goog.style.getComputedCursor = function(element) {
   return goog.style.getStyle_(element, 'cursor');
+};
+
+
+/**
+ * Retrieves the computed value of the CSS transform attribute.
+ * @param {Element} element The element to get the transform of.
+ * @return {string} The computed string representation of the transform matrix.
+ */
+goog.style.getComputedTransform = function(element) {
+  var property = goog.style.getVendorStyleName_(element, 'transform');
+  return goog.style.getStyle_(element, property) ||
+      goog.style.getStyle_(element, 'transform');
 };
 
 
@@ -417,7 +463,7 @@ goog.style.getBoundingClientRect_ = function(el) {
 
   // Patch the result in IE only, so that this function can be inlined if
   // compiled for non-IE.
-  if (goog.userAgent.IE) {
+  if (goog.userAgent.IE && el.ownerDocument.body) {
 
     // In IE, most of the time, 2 extra pixels are added to the top and left
     // due to the implicit 2-pixel inset border.  In IE6/7 quirks mode and
@@ -813,7 +859,8 @@ goog.style.translateRectForAnotherFrame = function(rect, origBase, newBase) {
     // Adjust Body's margin.
     pos = goog.math.Coordinate.difference(pos, goog.style.getPageOffset(body));
 
-    if (goog.userAgent.IE && !origBase.isCss1CompatMode()) {
+    if (goog.userAgent.IE && !goog.userAgent.isDocumentModeOrHigher(9) &&
+        !origBase.isCss1CompatMode()) {
       pos = goog.math.Coordinate.difference(pos, origBase.getDocumentScroll());
     }
 
@@ -885,12 +932,14 @@ goog.style.getClientPosition = function(el) {
         /** @type {!Element} */ (el));
   } else {
     var isAbstractedEvent = goog.isFunction(el.getBrowserEvent);
+    var be = /** @type {!goog.events.BrowserEvent} */ (el);
     var targetEvent = el;
 
-    if (el.targetTouches) {
+    if (el.targetTouches && el.targetTouches.length) {
       targetEvent = el.targetTouches[0];
-    } else if (isAbstractedEvent && el.getBrowserEvent().targetTouches) {
-      targetEvent = el.getBrowserEvent().targetTouches[0];
+    } else if (isAbstractedEvent && be.getBrowserEvent().targetTouches &&
+        be.getBrowserEvent().targetTouches.length) {
+      targetEvent = be.getBrowserEvent().targetTouches[0];
     }
 
     return new goog.math.Coordinate(
@@ -1317,8 +1366,11 @@ goog.style.installStyles = function(stylesString, opt_node) {
   var dh = goog.dom.getDomHelper(opt_node);
   var styleSheet = null;
 
-  if (goog.userAgent.IE) {
-    styleSheet = dh.getDocument().createStyleSheet();
+  // IE < 11 requires createStyleSheet. Note that doc.createStyleSheet will be
+  // undefined as of IE 11.
+  var doc = dh.getDocument();
+  if (goog.userAgent.IE && doc.createStyleSheet) {
+    styleSheet = doc.createStyleSheet();
     goog.style.setStyles(styleSheet, stylesString);
   } else {
     var head = dh.getElementsByTagNameAndClass('head')[0];
@@ -1363,10 +1415,12 @@ goog.style.uninstallStyles = function(styleSheet) {
  * @param {string} stylesString The new content of the stylesheet.
  */
 goog.style.setStyles = function(element, stylesString) {
-  if (goog.userAgent.IE) {
+  if (goog.userAgent.IE && goog.isDef(element.cssText)) {
     // Adding the selectors individually caused the browser to hang if the
     // selector was invalid or there were CSS comments.  Setting the cssText of
-    // the style node works fine and ignores CSS that IE doesn't understand
+    // the style node works fine and ignores CSS that IE doesn't understand.
+    // However IE >= 11 doesn't support cssText any more, so we make sure that
+    // cssText is a defined property and otherwise fall back to innerHTML.
     element.cssText = stylesString;
   } else {
     element.innerHTML = stylesString;
@@ -1529,6 +1583,7 @@ goog.style.setBorderBoxSize = function(element, size) {
   var isCss1CompatMode = goog.dom.getDomHelper(doc).isCss1CompatMode();
 
   if (goog.userAgent.IE &&
+      !goog.userAgent.isVersionOrHigher('10') &&
       (!isCss1CompatMode || !goog.userAgent.isVersionOrHigher('8'))) {
     var style = element.style;
     if (isCss1CompatMode) {
@@ -1592,6 +1647,7 @@ goog.style.setContentBoxSize = function(element, size) {
   var doc = goog.dom.getOwnerDocument(element);
   var isCss1CompatMode = goog.dom.getDomHelper(doc).isCss1CompatMode();
   if (goog.userAgent.IE &&
+      !goog.userAgent.isVersionOrHigher('10') &&
       (!isCss1CompatMode || !goog.userAgent.isVersionOrHigher('8'))) {
     var style = element.style;
     if (isCss1CompatMode) {
@@ -1776,7 +1832,7 @@ goog.style.getIePixelBorder_ = function(element, prop) {
  * @return {!goog.math.Box} The computed border widths.
  */
 goog.style.getBorderBox = function(element) {
-  if (goog.userAgent.IE) {
+  if (goog.userAgent.IE && !goog.userAgent.isDocumentModeOrHigher(9)) {
     var left = goog.style.getIePixelBorder_(element, 'borderLeft');
     var right = goog.style.getIePixelBorder_(element, 'borderRight');
     var top = goog.style.getIePixelBorder_(element, 'borderTop');
@@ -1811,7 +1867,9 @@ goog.style.getBorderBox = function(element) {
 goog.style.getFontFamily = function(el) {
   var doc = goog.dom.getOwnerDocument(el);
   var font = '';
-  if (doc.body.createTextRange) {
+  // The moveToElementText method from the TextRange only works if the element
+  // is attached to the owner document.
+  if (doc.body.createTextRange && goog.dom.contains(doc, el)) {
     var range = doc.body.createTextRange();
     range.moveToElementText(el);
     /** @preserveTry */
@@ -1925,7 +1983,7 @@ goog.style.getFontSize = function(el) {
       // value is inherited and we therefore don't want to count it twice.  If
       // it is different, this element either has explicit style or has a CSS
       // rule applying to it.
-      var parentElement = /** @type {Element} */ (el.parentNode);
+      var parentElement = /** @type {!Element} */ (el.parentNode);
       var parentSize = goog.style.getStyle_(parentElement, 'fontSize');
       return goog.style.getIePixelValue_(parentElement,
                                          fontSize == parentSize ?
@@ -2058,23 +2116,7 @@ goog.style.MATRIX_TRANSLATION_REGEX_ =
  * @return {!goog.math.Coordinate} The CSS translation of the element in px.
  */
 goog.style.getCssTranslation = function(element) {
-  var property;
-  if (goog.userAgent.IE) {
-    property = '-ms-transform';
-  } else if (goog.userAgent.WEBKIT) {
-    property = '-webkit-transform';
-  } else if (goog.userAgent.OPERA) {
-    property = '-o-transform';
-  } else if (goog.userAgent.GECKO) {
-    property = '-moz-transform';
-  }
-  var transform;
-  if (property) {
-    transform = goog.style.getStyle_(element, property);
-  }
-  if (!transform) {
-    transform = goog.style.getStyle_(element, 'transform');
-  }
+  var transform = goog.style.getComputedTransform(element);
   if (!transform) {
     return new goog.math.Coordinate(0, 0);
   }

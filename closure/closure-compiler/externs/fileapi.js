@@ -22,7 +22,6 @@
  *
  * @externs
  * @author dbk@google.com (David Barrett-Kahn)
- * @author mpd@google.com (Michael Davidson)
  */
 
 
@@ -77,12 +76,6 @@ Blob.prototype.webkitSlice = function(start, end) {};
 Blob.prototype.mozSlice = function(start, end) {};
 
 /**
- * @see http://dev.w3.org/2006/webapi/FileAPI/#dfn-Blob
- * @type {function(new:Blob, Array.<ArrayBufferView|Blob|string>=, Object=)}
- */
-Window.prototype.Blob;
-
-/**
  * @see http://www.w3.org/TR/file-writer-api/#the-blobbuilder-interface
  * @constructor
  */
@@ -103,13 +96,6 @@ BlobBuilder.prototype.append = function(data, endings) {};
  * @return {!Blob}
  */
 BlobBuilder.prototype.getBlob = function(contentType) {};
-
-
-/**
- * @see http://www.w3.org/TR/file-writer-api/#the-blobbuilder-interface
- * @type {function(new:BlobBuilder)}
- */
-Window.prototype.BlobBuilder;
 
 /**
  * This has replaced BlobBuilder in Chrome since WebKit revision 84008.
@@ -133,13 +119,6 @@ WebKitBlobBuilder.prototype.append = function(data, endings) {};
  * @return {!Blob}
  */
 WebKitBlobBuilder.prototype.getBlob = function(contentType) {};
-
-
-/**
- * @see http://www.w3.org/TR/file-writer-api/#the-blobbuilder-interface
- * @type {function(new:WebKitBlobBuilder)}
- */
-Window.prototype.WebKitBlobBuilder;
 
 
 /**
@@ -338,6 +317,7 @@ FileEntry.prototype.file = function(successCallback, errorCallback) {};
 /**
  * @see http://www.w3.org/TR/FileAPI/#FileErrorInterface
  * @constructor
+ * @extends {DOMError}
  */
 function FileError() {}
 
@@ -452,6 +432,8 @@ FileError.PATH_EXISTS_ERR = 12;
 /**
  * @see http://www.w3.org/TR/FileAPI/#dfn-code-exception
  * @type {number}
+ * @deprecated Use the 'name' or 'message' attributes of DOMError rather than
+ * 'code'
  */
 FileError.prototype.code;
 
@@ -462,12 +444,19 @@ FileError.prototype.code;
  */
 function FileReader() {}
 
-/** @override */
-FileReader.prototype.addEventListener = function(type, listener, useCapture) {};
-
-/** @override */
-FileReader.prototype.removeEventListener = function(type, listener, useCapture)
+/**
+ * @param {boolean=} opt_useCapture
+ * @override
+ */
+FileReader.prototype.addEventListener = function(type, listener, opt_useCapture)
     {};
+
+/**
+ * @param {boolean=} opt_useCapture
+ * @override
+ */
+FileReader.prototype.removeEventListener = function(type, listener,
+    opt_useCapture) {};
 
 /** @override */
 FileReader.prototype.dispatchEvent = function(evt) {};
@@ -859,29 +848,53 @@ function DOMURL() {}
 
 /**
  * @see http://www.w3.org/TR/FileAPI/#
- * @type {!DOMURL}
+ * @constructor
+ * @param {string} urlString
+ * @param {string=} opt_base
+ * @extends {DOMURL}
  */
-Window.prototype.URL;
+function URL(urlString, opt_base) {}
+
+/** @type {string} */
+URL.prototype.protocol;
 
 /**
- * This has replaced URL in Chrome since WebKit revision 75739.
- * @see http://www.w3.org/TR/FileAPI/#
- * @type {!DOMURL}
+ * @see http://www.w3.org/TR/FileAPI/#dfn-createObjectURL
+ * @param {!File|!Blob|!MediaSource|!MediaStream} obj
+ * @return {string}
  */
-Window.prototype.webkitURL;
+URL.createObjectURL = function(obj) {};
+
+/**
+ * @see http://www.w3.org/TR/FileAPI/#dfn-revokeObjectURL
+ * @param {string} url
+ */
+URL.revokeObjectURL = function(url) {};
+
+/**
+ * This has been replaced by URL in Chrome since WebKit revision 75739.
+ * @constructor
+ * @param {string} urlString
+ * @param {string=} opt_base
+ * @extends {DOMURL}
+ */
+function webkitURL(urlString, opt_base) {}
+
+/** @constructor */
+window.webkitURL = webkitURL;
 
 /**
  * @see http://www.w3.org/TR/FileAPI/#dfn-createObjectURL
  * @param {!Object} obj
  * @return {string}
  */
-DOMURL.prototype.createObjectURL = function(obj) {};
+webkitURL.createObjectURL = function(obj) {};
 
 /**
  * @see http://www.w3.org/TR/FileAPI/#dfn-revokeObjectURL
  * @param {string} url
  */
-DOMURL.prototype.revokeObjectURL = function(url) {};
+webkitURL.revokeObjectURL = function(url) {};
 
 /**
  * @see https://developers.google.com/chrome/whitepapers/storage

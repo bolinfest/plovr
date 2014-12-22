@@ -22,33 +22,39 @@ import com.google.common.collect.Sets;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
+import com.google.javascript.rhino.jstype.JSType;
 
 import java.util.List;
 import java.util.Set;
 
 /**
- * Look for internal properties set using "this" but never read.  Explicitly
- * ignored is the possibility that these properties
- * may be indirectly referenced using "for-in" or "Object.keys".  This is the
- * same assumption used with RemoveUnusedPrototypeProperties but is by slightly
- * wider in scope.
+ * This pass looks for properties that are never read and removes them.
+ * These can be properties created using "this", or static properties of
+ * constructors or interfaces. Explicitly ignored is the possibility that 
+ * these properties may be indirectly referenced using "for-in" or 
+ * "Object.keys".  This is the same assumption used with 
+ * RemoveUnusedPrototypeProperties but is slightly wider in scope.
  *
  * @author johnlenz@google.com (John Lenz)
  */
 class RemoveUnusedClassProperties
     implements CompilerPass, NodeTraversal.Callback {
-  final AbstractCompiler compiler;
-  private boolean inExterns;
+  private final AbstractCompiler compiler;
   private Set<String> used = Sets.newHashSet();
   private List<Node> candidates = Lists.newArrayList();
 
-  RemoveUnusedClassProperties(AbstractCompiler compiler) {
+  private final boolean removeUnusedConstructorProperties;
+
+  RemoveUnusedClassProperties(
+      AbstractCompiler compiler, boolean removeUnusedConstructorProperties) {
     this.compiler = compiler;
+    used.addAll(compiler.getExternProperties());
+    this.removeUnusedConstructorProperties = removeUnusedConstructorProperties;
   }
 
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverseRoots(compiler, this, externs, root);
+    NodeTraversal.traverse(compiler, root, this);
     removeUnused();
   }
 
@@ -78,9 +84,6 @@ class RemoveUnusedClassProperties
 
   @Override
   public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
-    if (n.isScript()) {
-      this.inExterns = n.getStaticSourceFile().isExtern();
-    }
     return true;
   }
 
@@ -89,14 +92,23 @@ class RemoveUnusedClassProperties
      switch (n.getType()) {
        case Token.GETPROP: {
          String propName = n.getLastChild().getString();
-         if (inExterns || isPinningPropertyUse(n)) {
+         if (compiler.getCodingConvention().isExported(propName)
+             || isPinningPropertyUse(n)
+             || !isRemovablePropertyDefinition(n)) {
            used.add(propName);
          } else {
            // This is a definition of a property but it is only removable
            // if it is defined on "this".
-           if (n.getFirstChild().isThis()) {
-             candidates.add(n);
-           }
+           candidates.add(n);
+         }
+         break;
+       }
+
+       case Token.OBJECTLIT: {
+         // Assume any object literal definition might be a reflection on the
+         // class property.
+         for (Node c : n.children()) {
+           used.add(c.getString());
          }
          break;
        }
@@ -116,10 +128,24 @@ class RemoveUnusedClassProperties
      }
   }
 
+  private boolean isRemovablePropertyDefinition(Node n) {
+    Preconditions.checkState(n.isGetProp());
+    Node target = n.getFirstChild();
+    return target.isThis()
+        || (this.removeUnusedConstructorProperties && isConstructor(target))
+        || (target.isGetProp()
+            && target.getLastChild().getString().equals("prototype"));
+  }
+
+  private boolean isConstructor(Node n) {
+    JSType type = n.getJSType();
+    return type != null && (type.isConstructor() || type.isInterface());
+  }
+
   /**
    * @return Whether the property is used in a way that prevents its removal.
    */
-  private boolean isPinningPropertyUse(Node n) {
+  private static boolean isPinningPropertyUse(Node n) {
     // Rather than looking for cases that are uses, we assume all references are
     // pinning uses unless they are:
     //  - a simple assignment (x.a = 1)

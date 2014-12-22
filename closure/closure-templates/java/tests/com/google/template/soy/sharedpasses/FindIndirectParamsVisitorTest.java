@@ -23,7 +23,7 @@ import com.google.template.soy.sharedpasses.FindIndirectParamsVisitor.IndirectPa
 import com.google.template.soy.soytree.SoyFileNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.TemplateNode;
-import com.google.template.soy.soytree.TemplateNode.SoyDocParam;
+import com.google.template.soy.soytree.defn.TemplateParam;
 
 import junit.framework.TestCase;
 
@@ -33,7 +33,6 @@ import java.util.Map;
 /**
  * Unit tests for FindIndirectParamsVisitor.
  *
- * @author Kai Huang
  */
 public class FindIndirectParamsVisitorTest extends TestCase {
 
@@ -41,7 +40,7 @@ public class FindIndirectParamsVisitorTest extends TestCase {
   public void testFindIndirectParams() {
 
     String fileContent1 =
-        "{namespace alpha}\n" +
+        "{namespace alpha autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/** @param a0 @param b3 */\n" +  // 'b3' listed by alpha.zero
         "{template .zero}\n" +
@@ -87,7 +86,7 @@ public class FindIndirectParamsVisitorTest extends TestCase {
         "{/template}\n";
 
     String fileContent2 =
-        "{namespace beta}\n" +
+        "{namespace beta autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/** @param b0 */\n" +
         "{template .zero}\n" +
@@ -131,7 +130,7 @@ public class FindIndirectParamsVisitorTest extends TestCase {
     assertEquals(false, ipi.mayHaveIndirectParamsInExternalCalls);
     assertEquals(false, ipi.mayHaveIndirectParamsInExternalDelCalls);
 
-    Map<String, SoyDocParam> ipMap = ipi.indirectParams;
+    Map<String, TemplateParam> ipMap = ipi.indirectParams;
     assertEquals(6, ipMap.size());
     assertFalse(ipMap.containsKey("a0"));
     assertTrue(ipMap.containsKey("a1"));

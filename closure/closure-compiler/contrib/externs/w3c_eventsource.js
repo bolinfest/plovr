@@ -29,13 +29,19 @@
  */
 function EventSource(url, opt_eventSourceInitDict) {}
 
-/** @override */
+/**
+ * @param {boolean=} opt_useCapture
+ * @override
+ */
 EventSource.prototype.addEventListener = function(
-    type, listener, useCapture) {};
+    type, listener, opt_useCapture) {};
 
-/** @override */
+/**
+ * @param {boolean=} opt_useCapture
+ * @override
+ */
 EventSource.prototype.removeEventListener = function(
-    type, listener, useCapture) {};
+    type, listener, opt_useCapture) {};
 
 /** @override */
 EventSource.prototype.dispatchEvent = function(evt) {};
@@ -76,7 +82,7 @@ EventSource.prototype.readyState;
 /** @type {?function(!Event)} */
 EventSource.prototype.onopen = function(e) {};
 
-/** @type {?function(!MessageEvent)} */
+/** @type {?function(!MessageEvent.<*>)} */
 EventSource.prototype.onmessage = function(e) {};
 
 /** @type {?function(!Event)} */

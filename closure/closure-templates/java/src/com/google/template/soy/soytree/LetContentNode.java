@@ -20,27 +20,22 @@ import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.basetree.MixinParentNode;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.soytree.SoyNode.RenderUnitNode;
+import com.google.template.soy.soytree.defn.LocalVar;
 
 import java.util.List;
 
 import javax.annotation.Nullable;
-
 
 /**
  * Node representing a 'let' statement with content.
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
- * @author Kai Huang
  */
 public class LetContentNode extends LetNode implements RenderUnitNode {
 
-
   /** The mixin object that implements the ParentNode functionality. */
   private final MixinParentNode<StandaloneNode> parentMixin;
-
-  /** The local variable name (without preceding '$'). */
-  private final String varName;
 
   /** The let node's content kind, or null if no 'kind' attribute was present. */
   @Nullable private final ContentKind contentKind;
@@ -58,7 +53,6 @@ public class LetContentNode extends LetNode implements RenderUnitNode {
     parentMixin = new MixinParentNode<StandaloneNode>(this);
 
     CommandTextParseResult parseResult = parseCommandTextHelper(commandText);
-    varName = parseResult.localVarName;
     contentKind = parseResult.contentKind;
 
     if (parseResult.valueExpr != null) {
@@ -66,6 +60,8 @@ public class LetContentNode extends LetNode implements RenderUnitNode {
           "A 'let' tag should contain a value if and only if it is also self-ending (with a" +
               " trailing '/') (invalid tag is {let " + commandText + "}).");
     }
+
+    setVar(new LocalVar(parseResult.localVarName, this, null));
   }
 
 
@@ -76,7 +72,6 @@ public class LetContentNode extends LetNode implements RenderUnitNode {
   protected LetContentNode(LetContentNode orig) {
     super(orig);
     this.parentMixin = new MixinParentNode<StandaloneNode>(orig.parentMixin, this);
-    this.varName = orig.varName;
     this.contentKind = orig.contentKind;
   }
 
@@ -86,8 +81,11 @@ public class LetContentNode extends LetNode implements RenderUnitNode {
   }
 
 
-  @Override public String getVarName() {
-    return varName;
+  /**
+   * Return The local variable name (without preceding '$').
+   */
+  @Override public final String getVarName() {
+    return var.name();
   }
 
 
@@ -109,14 +107,6 @@ public class LetContentNode extends LetNode implements RenderUnitNode {
     appendSourceStringForChildren(sb);
     sb.append("{/").append(getCommandName()).append("}");
     return sb.toString();
-  }
-
-  @Override public void setNeedsEnvFrameDuringInterp(Boolean needsEnvFrameDuringInterp) {
-    parentMixin.setNeedsEnvFrameDuringInterp(needsEnvFrameDuringInterp);
-  }
-
-  @Override public Boolean needsEnvFrameDuringInterp() {
-    return parentMixin.needsEnvFrameDuringInterp();
   }
 
   @Override public int numChildren() {
@@ -183,7 +173,7 @@ public class LetContentNode extends LetNode implements RenderUnitNode {
     return parentMixin.toTreeString(indent);
   }
 
-  @Override public SoyNode clone() {
+  @Override public LetContentNode clone() {
     return new LetContentNode(this);
   }
 

@@ -27,14 +27,14 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonPrimitive;
 import com.google.javascript.jscomp.deps.SortedDependencies;
 import com.google.javascript.jscomp.deps.SortedDependencies.CircularDependencyException;
 import com.google.javascript.jscomp.deps.SortedDependencies.MissingProvideException;
 import com.google.javascript.jscomp.graph.LinkedDirectedGraph;
-
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -148,36 +148,37 @@ public class JSModuleGraph {
 
   /**
    * Returns a JSON representation of the JSModuleGraph. Specifically a
-   * JSONArray of "Modules" where each module has a
+   * JsonArray of "Modules" where each module has a
    * - "name"
    * - "dependencies" (list of module names)
    * - "transitive-dependencies" (list of module names, deepest first)
    * - "inputs" (list of file names)
    * @return List of module JSONObjects.
    */
-  JSONArray toJson() {
-    JSONArray modules = new JSONArray();
+  JsonArray toJson() {
+    JsonArray modules = new JsonArray();
     for (JSModule module : getAllModules()) {
-      JSONObject node = new JSONObject();
+      JsonObject node = new JsonObject();
       try {
-        node.put("name", module.getName());
-        JSONArray deps = new JSONArray();
-        node.put("dependencies", deps);
+        node.add("name", new JsonPrimitive(module.getName()));
+        JsonArray deps = new JsonArray();
+        node.add("dependencies", deps);
         for (JSModule m : module.getDependencies()) {
-          deps.put(m.getName());
+          deps.add(new JsonPrimitive(m.getName()));
         }
-        JSONArray transitiveDeps = new JSONArray();
-        node.put("transitive-dependencies", transitiveDeps);
+        JsonArray transitiveDeps = new JsonArray();
+        node.add("transitive-dependencies", transitiveDeps);
         for (JSModule m : getTransitiveDepsDeepestFirst(module)) {
-          transitiveDeps.put(m.getName());
+          transitiveDeps.add(new JsonPrimitive(m.getName()));
         }
-        JSONArray inputs = new JSONArray();
-        node.put("inputs", inputs);
+        JsonArray inputs = new JsonArray();
+        node.add("inputs", inputs);
         for (CompilerInput input : module.getInputs()) {
-          inputs.put(input.getSourceFile().getOriginalPath());
+          inputs.add(new JsonPrimitive(
+              input.getSourceFile().getOriginalPath()));
         }
-        modules.put(node);
-      } catch (JSONException e) {
+        modules.add(node);
+      } catch (JsonParseException e) {
         Throwables.propagate(e);
       }
     }
@@ -270,7 +271,7 @@ public class JSModuleGraph {
     if (deps != null) {
       return deps;
     }
-    deps = new TreeSet<JSModule>(new InverseDepthComparator());
+    deps = new TreeSet<>(new InverseDepthComparator());
     addDeps(deps, m);
     dependencyMap.put(m, deps);
     return deps;
@@ -279,7 +280,7 @@ public class JSModuleGraph {
   /**
    * Adds a module's transitive dependencies to a set.
    */
-  private void addDeps(Set<JSModule> deps, JSModule m) {
+  private static void addDeps(Set<JSModule> deps, JSModule m) {
     for (JSModule dep : m.getDependencies()) {
       deps.add(dep);
       addDeps(deps, dep);
@@ -371,7 +372,7 @@ public class JSModuleGraph {
           MissingModuleException {
 
     SortedDependencies<CompilerInput> sorter =
-        new SortedDependencies<CompilerInput>(inputs);
+        new SortedDependencies<>(inputs);
     Iterable<CompilerInput> entryPointInputs = createEntryPointInputs(
         depOptions, inputs, sorter);
 
@@ -423,12 +424,12 @@ public class JSModuleGraph {
     }
 
     // Now, generate the sorted result.
-    List<CompilerInput> result = Lists.newArrayList();
+    ImmutableList.Builder<CompilerInput> result = ImmutableList.builder();
     for (JSModule module : getAllModules()) {
       result.addAll(module.getInputs());
     }
 
-    return result;
+    return result.build();
   }
 
   private Collection<CompilerInput> createEntryPointInputs(
@@ -479,6 +480,7 @@ public class JSModuleGraph {
     return entryPointInputs;
   }
 
+  @SuppressWarnings("unused")
   LinkedDirectedGraph<JSModule, String> toGraphvizGraph() {
     LinkedDirectedGraph<JSModule, String> graphViz =
         LinkedDirectedGraph.create();
@@ -496,14 +498,14 @@ public class JSModuleGraph {
    * A module depth comparator that considers a deeper module to be "less than"
    * a shallower module. Uses module names to consistently break ties.
    */
-  private class InverseDepthComparator implements Comparator<JSModule> {
+  private static class InverseDepthComparator implements Comparator<JSModule> {
     @Override
     public int compare(JSModule m1, JSModule m2) {
       return depthCompare(m2, m1);
     }
   }
 
-  private int depthCompare(JSModule m1, JSModule m2) {
+  private static int depthCompare(JSModule m1, JSModule m2) {
     if (m1 == m2) {
       return 0;
     }

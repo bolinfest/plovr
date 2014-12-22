@@ -24,11 +24,11 @@ import com.google.template.soy.soytree.SoyNode.ExprHolderNode;
 import com.google.template.soy.soytree.SoyNode.SplitLevelTopNode;
 import com.google.template.soy.soytree.SoyNode.StandaloneNode;
 import com.google.template.soy.soytree.SoyNode.StatementNode;
+import com.google.template.soy.soytree.defn.LoopVar;
 
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 
 /**
  * Node representing a 'foreach' statement. Should always contain a ForeachNonemptyNode as the
@@ -36,7 +36,6 @@ import java.util.regex.Pattern;
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
- * @author Kai Huang
  */
 public class ForeachNode extends AbstractParentCommandNode<SoyNode>
     implements StandaloneNode, SplitLevelTopNode<SoyNode>, StatementNode, ExprHolderNode {
@@ -48,8 +47,8 @@ public class ForeachNode extends AbstractParentCommandNode<SoyNode>
       Pattern.compile("( [$] \\w+ ) \\s+ in \\s+ (\\S .*)", Pattern.COMMENTS | Pattern.DOTALL);
 
 
-  /** The loop variable name. */
-  private final String varName;
+  /** The loop variable definition. */
+  private final LoopVar var;
 
   /** The parsed expression for the list that we're iterating over. */
   private final ExprRootNode<?> expr;
@@ -69,12 +68,13 @@ public class ForeachNode extends AbstractParentCommandNode<SoyNode>
           "Invalid 'foreach' command text \"" + commandText + "\".");
     }
 
-    varName = ExprParseUtils.parseVarNameElseThrowSoySyntaxException(
+    String varName = ExprParseUtils.parseVarNameElseThrowSoySyntaxException(
         matcher.group(1),
         "Invalid variable name in 'foreach' command text \"" + commandText + "\".");
 
     expr = ExprParseUtils.parseExprElseThrowSoySyntaxException(
         matcher.group(2), "Invalid expression in 'foreach' command text \"" + commandText + "\".");
+    var = new LoopVar(varName, this, null);
   }
 
 
@@ -84,7 +84,7 @@ public class ForeachNode extends AbstractParentCommandNode<SoyNode>
    */
   protected ForeachNode(ForeachNode orig) {
     super(orig);
-    this.varName = orig.varName;
+    this.var = orig.var.clone();
     this.expr = orig.expr.clone();
   }
 
@@ -94,9 +94,15 @@ public class ForeachNode extends AbstractParentCommandNode<SoyNode>
   }
 
 
+  /** Returns the foreach-loop variable. */
+  public final LoopVar getVar() {
+    return var;
+  }
+
+
   /** Returns the foreach-loop variable name. */
-  public String getVarName() {
-    return varName;
+  public final String getVarName() {
+    return var.name();
   }
 
 

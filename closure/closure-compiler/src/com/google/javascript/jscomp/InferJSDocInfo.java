@@ -62,8 +62,6 @@ class InferJSDocInfo extends AbstractPostOrderCallback
     implements HotSwapCompilerPass {
 
   private final AbstractCompiler compiler;
-  @SuppressWarnings("unused")
-  private boolean inExterns;
 
   InferJSDocInfo(AbstractCompiler compiler) {
     this.compiler = compiler;
@@ -72,11 +70,9 @@ class InferJSDocInfo extends AbstractPostOrderCallback
   @Override
   public void process(Node externs, Node root) {
     if (externs != null) {
-      inExterns = true;
       NodeTraversal.traverse(compiler, externs, this);
     }
     if (root != null) {
-      inExterns = false;
       NodeTraversal.traverse(compiler, root, this);
     }
   }
@@ -85,7 +81,6 @@ class InferJSDocInfo extends AbstractPostOrderCallback
   public void hotSwapScript(Node root, Node originalRoot) {
     Preconditions.checkNotNull(root);
     Preconditions.checkState(root.isScript());
-    inExterns = false;
     NodeTraversal.traverse(compiler, root, this);
   }
 
@@ -146,6 +141,22 @@ class InferJSDocInfo extends AbstractPostOrderCallback
         attachJSDocInfoToNominalTypeOrShape(objType, docInfo, n.getString());
         break;
 
+      case Token.STRING_KEY:
+      case Token.GETTER_DEF:
+      case Token.SETTER_DEF:
+        docInfo = n.getJSDocInfo();
+        if (docInfo == null) {
+          return;
+        }
+        ObjectType owningType = dereferenceToObject(parent.getJSType());
+        if (owningType != null) {
+          String propName = n.getString();
+          if (owningType.hasOwnProperty(propName)) {
+            owningType.setPropertyJSDocInfo(propName, docInfo);
+          }
+        }
+        break;
+
       case Token.GETPROP:
         // Infer JSDocInfo on properties.
         // There are two ways to write doc comments on a property.
@@ -191,14 +202,14 @@ class InferJSDocInfo extends AbstractPostOrderCallback
   /**
    * Dereferences the given type to an object, or returns null.
    */
-  private ObjectType dereferenceToObject(JSType type) {
+  private static ObjectType dereferenceToObject(JSType type) {
     return ObjectType.cast(type == null ? null : type.dereference());
   }
 
   /**
    * Handle cases #1 and #3 in the class doc.
    */
-  private void attachJSDocInfoToNominalTypeOrShape(
+  private static void attachJSDocInfoToNominalTypeOrShape(
       ObjectType objType, JSDocInfo docInfo, @Nullable String qName) {
     if (objType.isConstructor() ||
         objType.isEnumType() ||

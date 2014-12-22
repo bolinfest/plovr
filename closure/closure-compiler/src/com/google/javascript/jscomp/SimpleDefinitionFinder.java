@@ -25,6 +25,7 @@ import com.google.javascript.jscomp.DefinitionsRemover.Definition;
 import com.google.javascript.jscomp.DefinitionsRemover.ExternalNameOnlyDefinition;
 import com.google.javascript.jscomp.DefinitionsRemover.UnknownDefinition;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.jscomp.NodeTraversal.Callback;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 
@@ -147,7 +148,7 @@ class SimpleDefinitionFinder implements CompilerPass, DefinitionProvider {
     return null;
   }
 
-  private class DefinitionGatheringCallback extends AbstractPostOrderCallback {
+  private class DefinitionGatheringCallback implements Callback {
     private boolean inExterns;
 
     DefinitionGatheringCallback(boolean inExterns) {
@@ -155,12 +156,30 @@ class SimpleDefinitionFinder implements CompilerPass, DefinitionProvider {
     }
 
     @Override
+    public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
+      if (inExterns) {
+        if (n.isFunction() && !n.getFirstChild().isName()) {
+          // No need to crawl functions in JSDoc
+          return false;
+        }
+        if (parent != null
+            && parent.isFunction() && n != parent.getFirstChild()) {
+          // Arguments of external functions should not count as name
+          // definitions.  They are placeholder names for documentation
+          // purposes only which are not reachable from anywhere.
+          return false;
+        }
+      }
+      return true;
+    }
+
+
+    @Override
     public void visit(NodeTraversal traversal, Node node, Node parent) {
-      // Arguments of external functions should not count as name
-      // definitions.  They are placeholder names for documentation
-      // purposes only which are not reachable from anywhere.
-      if (inExterns && node.isName() && parent.isParamList()) {
-        return;
+      if (inExterns && node.getJSDocInfo() != null) {
+        for (Node typeRoot : node.getJSDocInfo().getTypeNodes()) {
+          traversal.traverse(typeRoot);
+        }
       }
 
       Definition def =
@@ -186,17 +205,15 @@ class SimpleDefinitionFinder implements CompilerPass, DefinitionProvider {
             //    the stub should be dropped if the name is provided elsewhere.
 
             List<Definition> stubsToRemove = Lists.newArrayList();
-            String qualifiedName = node.getQualifiedName();
 
             // If there is no qualified name for this, then there will be
             // no stubs to remove. This will happen if node is an object
             // literal key.
-            if (qualifiedName != null) {
+            if (node.isQualifiedName()) {
               for (Definition prevDef : nameDefinitionMultimap.get(name)) {
                 if (prevDef instanceof ExternalNameOnlyDefinition
                     && !jsdocContainsDeclarations(node)) {
-                  String prevName = prevDef.getLValue().getQualifiedName();
-                  if (qualifiedName.equals(prevName)) {
+                  if (node.matchesQualifiedName(prevDef.getLValue())) {
                     // Drop this stub, there is a real definition.
                     stubsToRemove.add(prevDef);
                   }
@@ -233,11 +250,9 @@ class SimpleDefinitionFinder implements CompilerPass, DefinitionProvider {
 
           boolean dropStub = false;
           if (!jsdocContainsDeclarations(node)) {
-            String qualifiedName = node.getQualifiedName();
-            if (qualifiedName != null) {
+            if (node.isQualifiedName()) {
               for (Definition prevDef : nameDefinitionMultimap.get(name)) {
-                String prevName = prevDef.getLValue().getQualifiedName();
-                if (qualifiedName.equals(prevName)) {
+                if (node.matchesQualifiedName(prevDef.getLValue())) {
                   dropStub = true;
                   break;
                 }

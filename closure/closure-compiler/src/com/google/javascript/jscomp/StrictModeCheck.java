@@ -19,8 +19,10 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.Scope.Var;
+import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
+import com.google.javascript.rhino.jstype.JSType;
 
 import java.util.Set;
 
@@ -30,18 +32,20 @@ import java.util.Set;
  * <li> No use of "with".
  * <li> No deleting variables, functions, or arguments.
  * <li> No re-declarations or assignments of "eval" or arguments.
- * <li> No use of "eval" (optional check for Caja).
+ * <li> No use of arguments.callee
+ * <li> No use of arguments.caller
  * </ol>
  *
  */
 class StrictModeCheck extends AbstractPostOrderCallback
     implements CompilerPass {
 
+  static final DiagnosticType USE_OF_WITH = DiagnosticType.warning(
+      "JSC_USE_OF_WITH",
+      "The 'with' statement cannot be used in ES5 strict mode.");
+
   static final DiagnosticType UNKNOWN_VARIABLE = DiagnosticType.warning(
       "JSC_UNKNOWN_VARIABLE", "unknown variable {0}");
-
-  static final DiagnosticType EVAL_USE = DiagnosticType.error(
-      "JSC_EVAL_USE", "\"eval\" cannot be used in Caja");
 
   static final DiagnosticType EVAL_DECLARATION = DiagnosticType.warning(
       "JSC_EVAL_DECLARATION",
@@ -59,14 +63,28 @@ class StrictModeCheck extends AbstractPostOrderCallback
       "JSC_ARGUMENTS_ASSIGNMENT",
       "the \"arguments\" object cannot be reassigned in ES5 strict mode");
 
+  static final DiagnosticType ARGUMENTS_CALLEE_FORBIDDEN = DiagnosticType.warning(
+      "JSC_ARGUMENTS_CALLEE_FORBIDDEN",
+      "\"arguments.callee\" cannot be used in ES5 strict mode");
+
+  static final DiagnosticType ARGUMENTS_CALLER_FORBIDDEN = DiagnosticType.warning(
+      "JSC_ARGUMENTS_CALLER_FORBIDDEN",
+      "\"arguments.caller\" cannot be used in ES5 strict mode");
+
+  static final DiagnosticType FUNCTION_CALLER_FORBIDDEN = DiagnosticType.warning(
+      "JSC_FUNCTION_CALLER_FORBIDDEN",
+      "A function''s \"caller\" property cannot be used in ES5 strict mode");
+
+  static final DiagnosticType FUNCTION_ARGUMENTS_PROP_FORBIDDEN = DiagnosticType.warning(
+      "JSC_FUNCTION_ARGUMENTS_PROP_FORBIDDEN",
+      "A function''s \"arguments\" property cannot be used in ES5 strict mode");
+
+
+
   static final DiagnosticType DELETE_VARIABLE = DiagnosticType.warning(
       "JSC_DELETE_VARIABLE",
       "variables, functions, and arguments cannot be deleted in "
       + "ES5 strict mode");
-
-  static final DiagnosticType ILLEGAL_NAME = DiagnosticType.error(
-      "JSC_ILLEGAL_NAME",
-      "identifiers ending in '__' cannot be used in Caja");
 
   static final DiagnosticType DUPLICATE_OBJECT_KEY = DiagnosticType.warning(
       "JSC_DUPLICATE_OBJECT_KEY",
@@ -79,17 +97,15 @@ class StrictModeCheck extends AbstractPostOrderCallback
 
   private final AbstractCompiler compiler;
   private final boolean noVarCheck;
-  private final boolean noCajaChecks;
 
   StrictModeCheck(AbstractCompiler compiler) {
-    this(compiler, false, false);
+    this(compiler, false);
   }
 
   StrictModeCheck(
-      AbstractCompiler compiler, boolean noVarCheck, boolean noCajaChecks) {
+      AbstractCompiler compiler, boolean noVarCheck) {
     this.compiler = compiler;
     this.noVarCheck = noVarCheck;
-    this.noCajaChecks = noCajaChecks;
   }
 
   @Override public void process(Node externs, Node root) {
@@ -111,13 +127,23 @@ class StrictModeCheck extends AbstractPostOrderCallback
       checkDelete(t, n);
     } else if (n.isObjectLit()) {
       checkObjectLiteral(t, n);
-    } else if (n.isLabel()) {
-      checkLabel(t, n);
+    } else if (n.isWith()) {
+      checkWith(t, n);
+    }
+  }
+
+  /** Reports a warning for with statements. */
+  private static void checkWith(NodeTraversal t, Node n) {
+    JSDocInfo info = n.getJSDocInfo();
+    boolean allowWith =
+        info != null && info.getSuppressions().contains("with");
+    if (!allowWith) {
+      t.report(n, USE_OF_WITH);
     }
   }
 
   /** Checks that the function is used legally. */
-  private void checkFunctionUse(NodeTraversal t, Node n) {
+  private static void checkFunctionUse(NodeTraversal t, Node n) {
     if (NodeUtil.isFunctionDeclaration(n) && !NodeUtil.isHoistedFunctionDeclaration(n)) {
       t.report(n, BAD_FUNCTION_DECLARATION);
     }
@@ -152,33 +178,23 @@ class StrictModeCheck extends AbstractPostOrderCallback
         t.report(n, UNKNOWN_VARIABLE, n.getString());
       }
     }
-
-    if (!noCajaChecks) {
-      if ("eval".equals(n.getString())) {
-        t.report(n, EVAL_USE);
-      } else if (n.getString().endsWith("__")) {
-        t.report(n, ILLEGAL_NAME);
-      }
-    }
   }
 
   /** Checks that an assignment is not to the "arguments" object. */
-  private void checkAssignment(NodeTraversal t, Node n) {
+  private static void checkAssignment(NodeTraversal t, Node n) {
     if (n.getFirstChild().isName()) {
       if ("arguments".equals(n.getFirstChild().getString())) {
         t.report(n, ARGUMENTS_ASSIGNMENT);
       } else if ("eval".equals(n.getFirstChild().getString())) {
         // Note that assignment to eval is already illegal because any use of
         // that name is illegal.
-        if (noCajaChecks) {
-          t.report(n, EVAL_ASSIGNMENT);
-        }
+        t.report(n, EVAL_ASSIGNMENT);
       }
     }
   }
 
   /** Checks that variables, functions, and arguments are not deleted. */
-  private void checkDelete(NodeTraversal t, Node n) {
+  private static void checkDelete(NodeTraversal t, Node n) {
     if (n.getFirstChild().isName()) {
       Var v = t.getScope().getVar(n.getFirstChild().getString());
       if (v != null) {
@@ -188,15 +204,12 @@ class StrictModeCheck extends AbstractPostOrderCallback
   }
 
   /** Checks that object literal keys are valid. */
-  private void checkObjectLiteral(NodeTraversal t, Node n) {
+  private static void checkObjectLiteral(NodeTraversal t, Node n) {
     Set<String> getters = Sets.newHashSet();
     Set<String> setters = Sets.newHashSet();
     for (Node key = n.getFirstChild();
          key != null;
          key = key.getNext()) {
-      if (!noCajaChecks && key.getString().endsWith("__")) {
-        t.report(key, ILLEGAL_NAME);
-      }
       if (!key.isSetterDef()) {
         // normal property and getter cases
         if (getters.contains(key.getString())) {
@@ -216,22 +229,13 @@ class StrictModeCheck extends AbstractPostOrderCallback
     }
   }
 
-  /** Checks that label names are valid. */
-  private void checkLabel(NodeTraversal t, Node n) {
-    if (n.getFirstChild().getString().endsWith("__")) {
-      if (!noCajaChecks) {
-        t.report(n.getFirstChild(), ILLEGAL_NAME);
-      }
-    }
-  }
-
   /** Checks that are performed on non-extern code only. */
-  private class NonExternChecks extends AbstractPostOrderCallback {
+  private static class NonExternChecks extends AbstractPostOrderCallback {
     @Override public void visit(NodeTraversal t, Node n, Node parent) {
       if ((n.isName()) && isDeclaration(n)) {
         checkDeclaration(t, n);
       } else if (n.isGetProp()) {
-        checkProperty(t, n);
+        checkGetProp(t, n);
       }
     }
 
@@ -241,20 +245,32 @@ class StrictModeCheck extends AbstractPostOrderCallback
         t.report(n, EVAL_DECLARATION);
       } else if ("arguments".equals(n.getString())) {
         t.report(n, ARGUMENTS_DECLARATION);
-      } else if (n.getString().endsWith("__")) {
-        if (!noCajaChecks) {
-          t.report(n, ILLEGAL_NAME);
-        }
       }
     }
 
-    /** Checks for illegal property accesses. */
-    private void checkProperty(NodeTraversal t, Node n) {
-      if (n.getLastChild().getString().endsWith("__")) {
-        if (!noCajaChecks) {
-          t.report(n.getLastChild(), ILLEGAL_NAME);
+    /** Checks that the arguments.callee is not used. */
+    private void checkGetProp(NodeTraversal t, Node n) {
+      Node target = n.getFirstChild();
+      Node prop = n.getLastChild();
+      if (prop.getString().equals("callee")) {
+        if (target.isName() && target.getString().equals("arguments")) {
+          t.report(n, ARGUMENTS_CALLEE_FORBIDDEN);
         }
+      } else if (prop.getString().equals("caller")) {
+        if (target.isName() && target.getString().equals("arguments")) {
+          t.report(n, ARGUMENTS_CALLER_FORBIDDEN);
+        } else if (isFunctionType(target)) {
+          t.report(n, FUNCTION_CALLER_FORBIDDEN);
+        }
+      } else if (prop.getString().equals("arguments")
+          && isFunctionType(target)) {
+        t.report(n, FUNCTION_ARGUMENTS_PROP_FORBIDDEN);
       }
     }
+  }
+
+  private static boolean isFunctionType(Node n) {
+    JSType type = n.getJSType();
+    return (type != null && type.isFunctionType());
   }
 }

@@ -31,7 +31,7 @@ file by rendering a template in the file as HTML.
 <ul>
   <li><a href="#motivation">Motivation</a>
   <li><a href="#example">Example: tasks.soy</a>
-  <li><a href="#queryparams">Setting template parameters with URL query parameters</a> 
+  <li><a href="#queryparams">Setting template parameters with URL query parameters</a>
   <li><a href="#options">Options</a>
 </ul>
 
@@ -64,7 +64,7 @@ composing mocks of web UI.
 Unlike other templating languages like PHP and JSP, Soy gives users just enough
 programming logic to eliminate duplicate HTML across pages (using template calls
 and loops), but not so much programming power that business logic will leak into
-the template. 
+the template.
 
 <h3 id="example">Example: tasks.soy</h3>
 
@@ -105,7 +105,7 @@ and an instance of the task list on a demo page:
   &lt;link rel="stylesheet" href="tasks.css">
 &lt;/head>
 &lt;body>
-  &#123;$content|noAutoescape}
+  &#123;$content}
 &lt;/body>
 &lt;/html>
 &#123;/template}
@@ -117,7 +117,7 @@ and an instance of the task list on a demo page:
  */
 &#123;template .soyweb}
 {call .demoPage}
-  {param content}
+  {param content kind="html"}
     {call .list}
       {param title: 'Food Shopping' /}
       {param items: [
@@ -206,7 +206,7 @@ whether or not he has granted an application access to Facebook:
 
 Normally, if you loaded <code>settings.soy</code> with SoyWeb,{sp}
 <code>accessToken</code> would be <code>null</code>, so you would see the
-"This application does not have access to Facebook" UI. If you wanted to see the "You 
+"This application does not have access to Facebook" UI. If you wanted to see the "You
 have granted access to Facebook" UI, then you would have to
 edit <code>facebook.soy</code> to
 set <code>{lb}param accessToken: 'someToken' /{rb}</code> in the{sp}
@@ -312,7 +312,7 @@ behavior:
     used to serve the static content on{sp}
     <a href="http://plovr.com/" target="_blank">plovr.com</a>.
 <li><code class="option">--noindexes</code> disables listing the files in a
-    directory, much like the "-Indexes" directive in an Apache config. 
+    directory, much like the "-Indexes" directive in an Apache config.
 </ul>
 
 {call plovr.footer /}

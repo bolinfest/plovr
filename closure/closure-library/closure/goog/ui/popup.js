@@ -15,6 +15,7 @@
 /**
  * @fileoverview Definition of the Popup class.
  *
+ * @author eae@google.com (Emil A Eklund)
  * @see ../demos/popup.html
  */
 
@@ -23,7 +24,6 @@ goog.provide('goog.ui.Popup.AbsolutePosition');
 goog.provide('goog.ui.Popup.AnchoredPosition');
 goog.provide('goog.ui.Popup.AnchoredViewPortPosition');
 goog.provide('goog.ui.Popup.ClientPosition');
-goog.provide('goog.ui.Popup.Corner');
 goog.provide('goog.ui.Popup.Overflow');
 goog.provide('goog.ui.Popup.ViewPortClientPosition');
 goog.provide('goog.ui.Popup.ViewPortPosition');
@@ -72,23 +72,13 @@ goog.ui.Popup = function(opt_element, opt_position) {
    *
    * @type {goog.positioning.AbstractPosition|undefined}
    * @protected
-   * @suppress {underscore}
+   * @suppress {underscore|visibility}
    */
   this.position_ = opt_position || undefined;
   goog.ui.PopupBase.call(this, opt_element);
 };
 goog.inherits(goog.ui.Popup, goog.ui.PopupBase);
-
-
-/**
- * Enum for representing an element corner for positioning the popup.
- *
- * @enum {number}
- *
- * @deprecated Use {@link goog.positioning.Corner} instead, this alias will be
- *     removed at the end of Q1 2009.
- */
-goog.ui.Popup.Corner = goog.positioning.Corner;
+goog.tagUnsealableClass(goog.ui.Popup);
 
 
 /**
@@ -238,6 +228,7 @@ goog.ui.Popup.prototype.reposition = function() {
  *
  * @deprecated Use {@link goog.positioning.AnchoredPosition} instead, this
  *     alias will be removed at the end of Q1 2009.
+ * @final
  */
 goog.ui.Popup.AnchoredPosition = goog.positioning.AnchoredPosition;
 
@@ -285,6 +276,7 @@ goog.ui.Popup.AnchoredViewPortPosition =
  *
  * @deprecated Use {@link goog.positioning.AbsolutePosition} instead, this alias
  *     will be removed at the end of Q1 2009.
+ * @final
  */
 goog.ui.Popup.AbsolutePosition = goog.positioning.AbsolutePosition;
 
@@ -323,6 +315,7 @@ goog.ui.Popup.ViewPortPosition = goog.positioning.ViewportPosition;
  *
  * @deprecated Use {@link goog.positioning.ClientPosition} instead, this alias
  *     will be removed at the end of Q1 2009.
+ * @final
  */
 goog.ui.Popup.ClientPosition = goog.positioning.ClientPosition;
 

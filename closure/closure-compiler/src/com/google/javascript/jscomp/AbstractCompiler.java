@@ -17,18 +17,20 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Supplier;
+import com.google.common.collect.ImmutableMap;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceCollection;
 import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.parsing.Config;
+import com.google.javascript.jscomp.parsing.parser.trees.Comment;
 import com.google.javascript.jscomp.type.ReverseAbstractInterpreter;
+import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.head.ErrorReporter;
-import com.google.javascript.rhino.head.ast.AstRoot;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.annotation.Nullable;
 
@@ -43,6 +45,18 @@ import javax.annotation.Nullable;
 public abstract class AbstractCompiler implements SourceExcerptProvider {
   static final DiagnosticType READ_ERROR = DiagnosticType.error(
       "JSC_READ_ERROR", "Cannot read: {0}");
+
+  boolean needsEs6Runtime = false;
+
+  /**
+   * Will be called before each pass runs.
+   */
+  void beforePass(String passName) {}
+
+  /**
+   * Will be called after each pass finishes.
+   */
+  void afterPass(String passName) {}
 
   private LifeCycleStage stage = LifeCycleStage.RAW;
 
@@ -159,6 +173,13 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
   abstract TypeValidator getTypeValidator();
 
   /**
+   * Used only by the new type inference
+   */
+  abstract GlobalTypeInfo getSymbolTable();
+
+  abstract void setSymbolTable(GlobalTypeInfo symbolTable);
+
+  /**
    * Parses code for injecting.
    */
   abstract Node parseSyntheticCode(String code);
@@ -244,9 +265,25 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
   abstract boolean acceptConstKeyword();
 
   /**
-   * Returns the parser configuration.
+   * Represents the different contexts for which the compiler could have
+   * distinct configurations.
    */
-  abstract Config getParserConfig();
+  static enum ConfigContext {
+    /**
+     * Normal JavaScript.
+     */
+    DEFAULT,
+
+    /**
+     * Externs files.
+     */
+    EXTERNS
+  }
+
+  /**
+   * Returns the parser configuration for the specified context.
+   */
+  abstract Config getParserConfig(ConfigContext context);
 
   /**
    * Returns true if type checking is enabled.
@@ -331,6 +368,17 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
    */
   abstract Node getRoot();
 
+  abstract CompilerOptions getOptions();
+
+  /**
+   * The language mode of the current root node. This will match the languageIn
+   * field of the {@link CompilerOptions} before transpilation happens, and
+   * match the languageOut field after transpilation.
+   */
+  abstract CompilerOptions.LanguageMode getLanguageMode();
+
+  abstract void setLanguageMode(CompilerOptions.LanguageMode mode);
+
   // TODO(bashir) It would be good to extract a single dumb data object with
   // only getters and setters that keeps all global information we keep for a
   // compiler instance. Then move some of the functions of this class there.
@@ -390,24 +438,44 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
    *
    * @param resourceName The name of the library. For example, if "base" is
    *     is specified, then we load js/base.js
+   * @param normalizeAndUniquifyNames Whether to normalize the library code and make
+   *     names unique.
    * @return If new code was injected, returns the last expression node of the
    *     library. If the caller needs to add additional code, they should add
    *     it as the next sibling of this node. If new code was not injected,
    *     returns null.
    */
-  abstract Node ensureLibraryInjected(String resourceName);
+  abstract Node ensureLibraryInjected(String resourceName,
+      boolean normalizeAndUniquifyNames);
+
+  /**
+   * Sets the names of the properties defined in externs.
+   * @param externProperties The set of property names defined in externs.
+   */
+  abstract void setExternProperties(Set<String> externProperties);
+
+  /**
+   * Gets the names of the properties defined in externs or null if
+   * GatherExternProperties pass was not run yet.
+   */
+  abstract Set<String> getExternProperties();
+
+  abstract void addComments(String filename, List<Comment> comments);
+
+  /**
+   * Returns all the comments from the given file.
+   */
+  abstract List<Comment> getComments(String filename);
 
    /**
-    * Stores the "new" Rhino parse tree for a given source file.
-    * @param sourceName The source file name.
-    * @param astRoot The "new" Rhino parse tree.
+    * Stores a map of default @define values.  These values
+    * can be overriden by values specifically set in the CompilerOptions.
     */
-   abstract void setOldParseTree(String sourceName, AstRoot astRoot);
+   abstract void setDefaultDefineValues(ImmutableMap<String, Node> values);
 
    /**
-    * Gets an old format parse tree for a given source file.
-    * @param sourceName The source file name to get the tree for.
-    * @return The "new" Rhino parse tree for the given source file.
+    * Gets a map of default @define values.  These values
+    * can be overriden by values specifically set in the CompilerOptions.
     */
-   abstract AstRoot getOldParseTreeByName(String sourceName);
+   abstract ImmutableMap<String, Node> getDefaultDefineValues();
 }

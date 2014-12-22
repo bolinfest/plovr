@@ -16,11 +16,11 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.Iterators;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 
+import java.util.Collections;
 import java.util.Iterator;
 
 /**
@@ -61,7 +61,7 @@ class TransformAMDToCJSModule implements CompilerPass {
     NodeTraversal.traverse(compiler, root, new TransformAMDModulesCallback());
   }
 
-  private void unsupportedDefineError(NodeTraversal t, Node n) {
+  private static void unsupportedDefineError(NodeTraversal t, Node n) {
     t.report(n, UNSUPPORTED_DEFINE_SIGNATURE_ERROR);
   }
 
@@ -69,7 +69,7 @@ class TransformAMDToCJSModule implements CompilerPass {
    * The modules "exports", "require" and "module" are virtual in terms of
    * existing implicitly in CommonJS.
    */
-  private boolean isVirtualModuleName(String moduleName) {
+  private static boolean isVirtualModuleName(String moduleName) {
     return "exports".equals(moduleName) || "require".equals(moduleName) ||
         "module".equals(moduleName);
   }
@@ -134,15 +134,18 @@ class TransformAMDToCJSModule implements CompilerPass {
     }
 
     /**
-     * When define is called with an object literal, assign it to exports and
+     * When define is called with an object literal, assign it to module.exports and
      * we're done.
      */
     private void handleDefineObjectLiteral(Node parent, Node onlyExport,
         Node script) {
       onlyExport.getParent().removeChild(onlyExport);
       script.replaceChild(parent,
-          IR.exprResult(IR.assign(IR.name("exports"), onlyExport))
-              .copyInformationFromForTree(onlyExport));
+          IR.exprResult(
+              IR.assign(
+                  NodeUtil.newQName(compiler, "module.exports"),
+                  onlyExport))
+          .copyInformationFromForTree(onlyExport));
       compiler.reportCodeChange();
     }
 
@@ -155,7 +158,7 @@ class TransformAMDToCJSModule implements CompilerPass {
       Iterator<Node> paramList = callback.getChildAtIndex(1).children().
           iterator();
       Iterator<Node> requires = requiresNode != null ?
-          requiresNode.children().iterator() : Iterators.<Node>emptyIterator();
+          requiresNode.children().iterator() : Collections.<Node>emptyIterator();
       while (paramList.hasNext() || requires.hasNext()) {
         Node aliasNode = paramList.hasNext() ? paramList.next() : null;
         Node modNode = requires.hasNext() ? requires.next() : null;
@@ -264,7 +267,7 @@ class TransformAMDToCJSModule implements CompilerPass {
    * Rewrites the return statement of the callback to be an assignment to
    * module.exports.
    */
-  private class DefineCallbackReturnCallback extends
+  private static class DefineCallbackReturnCallback extends
       NodeTraversal.AbstractShallowStatementCallback {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
@@ -282,7 +285,7 @@ class TransformAMDToCJSModule implements CompilerPass {
   /**
    * Renames names;
    */
-  private class RenameCallback extends AbstractPostOrderCallback {
+  private static class RenameCallback extends AbstractPostOrderCallback {
 
     private final String from;
     private final String to;

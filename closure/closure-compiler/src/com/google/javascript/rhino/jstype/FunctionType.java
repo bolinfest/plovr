@@ -116,13 +116,13 @@ public class FunctionType extends PrototypeObjectType {
    * The interfaces directly implemented by this function (for constructors)
    * It is only relevant for constructors. May not be {@code null}.
    */
-  private List<ObjectType> implementedInterfaces = ImmutableList.of();
+  private ImmutableList<ObjectType> implementedInterfaces = ImmutableList.of();
 
   /**
    * The interfaces directly extended by this function (for interfaces)
    * It is only relevant for constructors. May not be {@code null}.
    */
-  private List<ObjectType> extendedInterfaces = ImmutableList.of();
+  private ImmutableList<ObjectType> extendedInterfaces = ImmutableList.of();
 
   /**
    * The types which are subtypes of this function. It is only relevant for
@@ -509,7 +509,9 @@ public class FunctionType extends PrototypeObjectType {
         return;
       }
 
-      set.add(instance);
+      if (!set.add(instance)) {
+        return;
+      }
 
       for (ObjectType interfaceType : instance.getCtorExtendedInterfaces()) {
         addRelatedInterfaces(interfaceType, set);
@@ -567,7 +569,9 @@ public class FunctionType extends PrototypeObjectType {
       Set<ObjectType> set) {
     FunctionType constructor = instance.getConstructor();
     if (constructor != null) {
-      set.add(instance);
+      if (!set.add(instance)) {
+        return;
+      }
 
       for (ObjectType interfaceType : constructor.getExtendedInterfaces()) {
         addRelatedExtendedInterfaces(interfaceType, set);
@@ -999,8 +1003,8 @@ public class FunctionType extends PrototypeObjectType {
       paramType = paramType.toMaybeUnionType().getRestrictedUnion(
           registry.getNativeType(JSTypeNative.VOID_TYPE));
     }
-    builder.append("...[").append(
-        paramType.toStringHelper(forAnnotations)).append("]");
+    builder.append("...").append(
+        paramType.toStringHelper(forAnnotations));
   }
 
   /** Gets the string representation of an optional param. */
@@ -1186,31 +1190,29 @@ public class FunctionType extends PrototypeObjectType {
     // is handled further upstream.
     //
     // TODO(nicksantos): Handle this correctly if we have a UnionType.
-    //
-    // TODO(nicksantos): In ES3, the run-time coerces "null" to the global
-    // activation object. In ES5, it leaves it as null. Just punt on this
-    // issue for now by coercing out null. This is complicated by the
-    // fact that when most people write @this {Foo}, they really don't
-    // mean "nullable Foo". For certain tags (like @extends) we de-nullify
-    // the name for them.
     JSType maybeTypeOfThis = safeResolve(typeOfThis, t, scope);
     if (maybeTypeOfThis != null) {
-      maybeTypeOfThis = maybeTypeOfThis.restrictByNotNullOrUndefined();
-    }
-    if (maybeTypeOfThis instanceof ObjectType) {
-      typeOfThis = maybeTypeOfThis;
+      if (maybeTypeOfThis.isNullType() || maybeTypeOfThis.isVoidType()) {
+        typeOfThis = maybeTypeOfThis;
+      } else {
+        maybeTypeOfThis = ObjectType.cast(
+            maybeTypeOfThis.restrictByNotNullOrUndefined());
+        if (maybeTypeOfThis != null) {
+          typeOfThis = maybeTypeOfThis;
+        }
+      }
     }
 
-    boolean changed = false;
-    ImmutableList.Builder<ObjectType> resolvedInterfaces =
-        ImmutableList.builder();
-    for (ObjectType iface : implementedInterfaces) {
-      ObjectType resolvedIface = (ObjectType) iface.resolve(t, scope);
-      resolvedInterfaces.add(resolvedIface);
-      changed |= (resolvedIface != iface);
+    ImmutableList<ObjectType> resolvedImplemented =
+        resolveTypeListHelper(implementedInterfaces, t, scope);
+    if (resolvedImplemented != null) {
+      implementedInterfaces = resolvedImplemented;
     }
-    if (changed) {
-      implementedInterfaces = resolvedInterfaces.build();
+
+    ImmutableList<ObjectType> resolvedExtended =
+        resolveTypeListHelper(extendedInterfaces, t, scope);
+    if (resolvedExtended != null) {
+      extendedInterfaces = resolvedExtended;
     }
 
     if (subTypes != null) {
@@ -1221,6 +1223,25 @@ public class FunctionType extends PrototypeObjectType {
     }
 
     return super.resolveInternal(t, scope);
+  }
+
+  /**
+   * Resolve each item in the list, and return a new list if any
+   * references changed. Otherwise, return null.
+   */
+  private ImmutableList<ObjectType> resolveTypeListHelper(
+      ImmutableList<ObjectType> list,
+      ErrorReporter t,
+      StaticScope<JSType> scope) {
+    boolean changed = false;
+    ImmutableList.Builder<ObjectType> resolvedList =
+        ImmutableList.builder();
+    for (ObjectType type : list) {
+      ObjectType resolved = (ObjectType) type.resolve(t, scope);
+      resolvedList.add(resolved);
+      changed |= (resolved != type);
+    }
+    return changed ? resolvedList.build() : null;
   }
 
   @Override

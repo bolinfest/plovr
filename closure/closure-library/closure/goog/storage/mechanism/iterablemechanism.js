@@ -23,7 +23,6 @@ goog.provide('goog.storage.mechanism.IterableMechanism');
 goog.require('goog.array');
 goog.require('goog.asserts');
 goog.require('goog.iter');
-goog.require('goog.iter.Iterator');
 goog.require('goog.storage.mechanism.Mechanism');
 
 
@@ -35,7 +34,7 @@ goog.require('goog.storage.mechanism.Mechanism');
  * @extends {goog.storage.mechanism.Mechanism}
  */
 goog.storage.mechanism.IterableMechanism = function() {
-  goog.base(this);
+  goog.storage.mechanism.IterableMechanism.base(this, 'constructor');
 };
 goog.inherits(goog.storage.mechanism.IterableMechanism,
               goog.storage.mechanism.Mechanism);

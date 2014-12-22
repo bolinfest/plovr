@@ -25,6 +25,7 @@ import java.util.Map;
 
 /**
  * This class implements a traversal to instrument an AST for code coverage.
+ * @author praveenk@google.com (Praveen Kumashi)
  *
  */
 class CoverageInstrumentationCallback extends
@@ -49,7 +50,7 @@ class CoverageInstrumentationCallback extends
    * @param traversal the traversal
    * @return the name of the file it originates from
    */
-  private String getFileName(NodeTraversal traversal) {
+  private static String getFileName(NodeTraversal traversal) {
     return traversal.getSourceName();
   }
 
@@ -112,7 +113,7 @@ class CoverageInstrumentationCallback extends
   }
 
   /**
-   * @returns a Node containing file specific setup logic.
+   * @return a Node containing file specific setup logic.
    */
   private Node newHeaderNode(NodeTraversal traversal) {
     String fileName = getFileName(traversal);

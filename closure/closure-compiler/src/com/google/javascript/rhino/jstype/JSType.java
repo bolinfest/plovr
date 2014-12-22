@@ -44,7 +44,6 @@ import static com.google.javascript.rhino.jstype.TernaryValue.UNKNOWN;
 import com.google.common.base.Predicate;
 import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.JSDocInfo;
-import com.google.javascript.rhino.jstype.JSTypeRegistry.ResolveMode;
 
 import java.io.Serializable;
 import java.util.Comparator;
@@ -392,7 +391,7 @@ public abstract class JSType implements Serializable {
    * Downcasts this to a RecordType, or returns null if this is not
    * a RecordType.
    */
-  RecordType toMaybeRecordType() {
+  public RecordType toMaybeRecordType() {
     return null;
   }
 
@@ -568,7 +567,8 @@ public abstract class JSType implements Serializable {
   /**
    * An equivalence visitor.
    */
-  boolean checkEquivalenceHelper(JSType that, EquivalenceMethod eqMethod) {
+  boolean checkEquivalenceHelper(
+      final JSType that, EquivalenceMethod eqMethod) {
     if (this == that) {
       return true;
     }
@@ -614,8 +614,15 @@ public abstract class JSType implements Serializable {
     }
 
     if (isNominalType() && that.isNominalType()) {
-      return toObjectType().getReferenceName().equals(
-          that.toObjectType().getReferenceName());
+      // TODO(johnlenz): is this valid across scopes?
+      return getConcreteNominalTypeName(this.toObjectType()).equals(
+          getConcreteNominalTypeName(that.toObjectType()));
+    }
+
+    if (isTemplateType() && that.isTemplateType()) {
+      // TemplateType are they same only if they are object identical,
+      // which we check at the start of this function.
+      return false;
     }
 
     // Unbox other proxies.
@@ -635,7 +642,19 @@ public abstract class JSType implements Serializable {
     // instance of each sub-type will ever be created in a given registry, so
     // there is no need to verify members. If the object pointers are not
     // identical, then the type member must be different.
-    return this == that;
+    return false;
+  }
+
+  // Named types may be proxies of concrete types.
+  private String getConcreteNominalTypeName(ObjectType objType) {
+    if (objType instanceof ProxyObjectType) {
+      ObjectType internal = ((ProxyObjectType) objType)
+          .getReferencedObjTypeInternal();
+      if (internal != null && internal.isNominalType()) {
+        return getConcreteNominalTypeName(internal);
+      }
+    }
+    return objType.getReferenceName();
   }
 
   public static boolean isEquivalent(JSType typeA, JSType typeB) {
@@ -645,8 +664,7 @@ public abstract class JSType implements Serializable {
 
   @Override
   public boolean equals(Object jsType) {
-    return (jsType instanceof JSType) ?
-        isEquivalentTo((JSType) jsType) : false;
+    return (jsType instanceof JSType) && isEquivalentTo((JSType) jsType);
   }
 
   @Override
@@ -1320,20 +1338,6 @@ public abstract class JSType implements Serializable {
    * @return the value returned by the visitor
    */
   abstract <T> T visit(RelationshipVisitor<T> visitor, JSType that);
-
-  /**
-   * Force this type to resolve, even if the registry is in a lazy
-   * resolving mode.
-   * @see #resolve
-   */
-  public final JSType forceResolve(ErrorReporter t, StaticScope<JSType> scope) {
-    ResolveMode oldResolveMode = registry.getResolveMode();
-    registry.setResolveMode(ResolveMode.IMMEDIATE);
-    JSType result = resolve(t, scope);
-    registry.setResolveMode(oldResolveMode);
-    return result;
-  }
-
 
   /**
    * Resolve this type in the given scope.

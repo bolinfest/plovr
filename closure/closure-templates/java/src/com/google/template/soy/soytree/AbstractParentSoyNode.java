@@ -21,13 +21,11 @@ import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 
 import java.util.List;
 
-
 /**
  * Abstract implementation of a ParentSoyNode.
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
- * @author Kai Huang
  */
 public abstract class AbstractParentSoyNode<N extends SoyNode> extends AbstractSoyNode
     implements ParentSoyNode<N> {
@@ -53,15 +51,6 @@ public abstract class AbstractParentSoyNode<N extends SoyNode> extends AbstractS
   protected AbstractParentSoyNode(AbstractParentSoyNode<N> orig) {
     super(orig);
     this.parentMixin = new MixinParentNode<N>(orig.parentMixin, this);
-  }
-
-
-  @Override public void setNeedsEnvFrameDuringInterp(Boolean needsEnvFrameDuringInterp) {
-    parentMixin.setNeedsEnvFrameDuringInterp(needsEnvFrameDuringInterp);
-  }
-
-  @Override public Boolean needsEnvFrameDuringInterp() {
-    return parentMixin.needsEnvFrameDuringInterp();
   }
 
   @Override public int numChildren() {

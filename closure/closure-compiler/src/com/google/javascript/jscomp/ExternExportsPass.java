@@ -18,6 +18,7 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Splitter;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -26,8 +27,6 @@ import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.jstype.FunctionType;
-import com.google.javascript.rhino.jstype.JSType;
 
 import java.util.Comparator;
 import java.util.List;
@@ -39,19 +38,10 @@ import java.util.TreeSet;
  * Creates an externs file containing all exported symbols and properties
  * for later consumption.
  *
+ * @author dcc@google.com (Devin Coughlin)
  */
 final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
     implements CompilerPass {
-
-  static final DiagnosticType EXPORTED_FUNCTION_UNKNOWN_PARAMETER_TYPE =
-    DiagnosticType.warning(
-        "JSC_EXPORTED_FUNCTION_UNKNOWN_PARAMETER_TYPE",
-        "Unable to determine type of parameter {0} for exported function {1}");
-
-  static final DiagnosticType EXPORTED_FUNCTION_UNKNOWN_RETURN_TYPE =
-    DiagnosticType.warning(
-        "JSC_EXPORTED_FUNCTION_UNKNOWN_RETURN_TYPE",
-        "Unable to determine return type for exported function {0}");
 
   /** The exports found. */
   private final List<Export> exports;
@@ -167,8 +157,7 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
      * </pre>
      */
     private List<String> computePathPrefixes(String path) {
-      List<String> pieces = Lists.newArrayList(path.split("\\."));
-
+      List<String> pieces = Splitter.on('.').splitToList(path);
       List<String> pathPrefixes = Lists.newArrayList();
 
       for (int i = 0; i < pieces.size(); i++) {
@@ -188,8 +177,7 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
           pathDefinition = NodeUtil.newVarNode(path, initializer);
         }
       } else {
-        Node qualifiedPath = NodeUtil.newQualifiedNameNode(
-            compiler.getCodingConvention(), path);
+        Node qualifiedPath = NodeUtil.newQName(compiler, path);
         if (initializer.isEmpty()) {
           pathDefinition = NodeUtil.newExpr(qualifiedPath);
         } else {
@@ -226,7 +214,6 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
       }
       Node externFunction = IR.function(IR.name(""), paramList, IR.block());
 
-      checkForFunctionsWithUnknownTypes(exportedFunction);
       externFunction.setJSType(exportedFunction.getJSType());
 
       return externFunction;
@@ -249,7 +236,7 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
       for (Node child = exportedObjectLit.getFirstChild();
            child != null;
            child = child.getNext()) {
-        // TODO(user): handle getters or setters?
+        // TODO(dimvar): handle getters or setters?
         if (child.isStringKey()) {
           lit.addChildToBack(
               IR.propdef(
@@ -258,68 +245,6 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
         }
       }
       return lit;
-    }
-
-    /**
-     * Warn the user if there is an exported function for which a parameter
-     * or return type is unknown.
-     */
-    private void checkForFunctionsWithUnknownTypes(Node function) {
-      Preconditions.checkArgument(function.isFunction());
-
-      FunctionType functionType =
-          JSType.toMaybeFunctionType(function.getJSType());
-
-      if (functionType == null) {
-        // No type information is available (CheckTypes was probably not run)
-        // so just bail.
-        return;
-      }
-
-      JSType returnType = functionType.getReturnType();
-
-      /* It is OK if a constructor doesn't have a return type */
-      if (!functionType.isConstructor() &&
-          (returnType == null || returnType.isUnknownType())) {
-        reportUnknownReturnType(function);
-      }
-
-      /* We can't just use the function's type's getParameters() to get the
-       * parameter nodes because the nodes returned from that method
-       * do not have names or locations. Similarly, the function's AST parameter
-       * nodes do not have JSTypes(). So we walk both lists of parameter nodes
-       * in lock step getting parameter names from the first and types from the
-       * second.
-       */
-      Node astParameterIterator = NodeUtil.getFunctionParameters(function)
-        .getFirstChild();
-
-      Node typeParameterIterator = functionType.getParametersNode()
-        .getFirstChild();
-
-      while (astParameterIterator != null) {
-        JSType parameterType = typeParameterIterator.getJSType();
-
-        if (parameterType == null || parameterType.isUnknownType()) {
-          reportUnknownParameterType(function, astParameterIterator);
-        }
-
-        astParameterIterator = astParameterIterator.getNext();
-        typeParameterIterator = typeParameterIterator.getNext();
-      }
-    }
-
-    private void reportUnknownParameterType(Node function, Node parameter) {
-      compiler.report(JSError.make(NodeUtil.getSourceName(function),
-          parameter, CheckLevel.WARNING,
-          EXPORTED_FUNCTION_UNKNOWN_PARAMETER_TYPE,
-          NodeUtil.getFunctionName(function), parameter.getString()));
-    }
-
-    private void reportUnknownReturnType(Node function) {
-      compiler.report(JSError.make(NodeUtil.getSourceName(function),
-          function, CheckLevel.WARNING, EXPORTED_FUNCTION_UNKNOWN_RETURN_TYPE,
-          NodeUtil.getFunctionName(function)));
     }
 
     /**
@@ -404,7 +329,7 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
     String getExportedPath() {
 
       // Find the longest path that has been mapped (if any).
-      List<String> pieces = Lists.newArrayList(exportPath.split("\\."));
+      List<String> pieces = Splitter.on('.').splitToList(exportPath);
 
       for (int i = pieces.size(); i > 0; i--) {
         // Find the path of the current length.
@@ -466,7 +391,7 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
     // paths (which may depend on the shorter ones)
     // come later.
     Set<Export> sorted =
-        new TreeSet<Export>(new Comparator<Export>() {
+        new TreeSet<>(new Comparator<Export>() {
           @Override
           public int compare(Export e1, Export e2) {
             return e1.getExportedPath().compareTo(e2.getExportedPath());

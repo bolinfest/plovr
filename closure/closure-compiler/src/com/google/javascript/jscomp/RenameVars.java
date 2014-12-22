@@ -45,13 +45,20 @@ import javax.annotation.Nullable;
  *
  */
 final class RenameVars implements CompilerPass {
+
+  /**
+   * Limit on number of locals in a scope for temporary local renaming
+   * when {@code preferStableNames} is true.
+   */
+  private static final int MAX_LOCALS_IN_SCOPE_TO_TEMP_RENAME = 1000;
+
   private final AbstractCompiler compiler;
 
   /** List of global NAME nodes */
-  private final ArrayList<Node> globalNameNodes = new ArrayList<Node>();
+  private final ArrayList<Node> globalNameNodes = new ArrayList<>();
 
   /** List of local NAME nodes */
-  private final ArrayList<Node> localNameNodes = new ArrayList<Node>();
+  private final ArrayList<Node> localNameNodes = new ArrayList<>();
 
   /**
    * Maps a name node to its pseudo name, null if we are not generating so
@@ -60,13 +67,13 @@ final class RenameVars implements CompilerPass {
   private final Map<Node, String> pseudoNameMap;
 
   /** Set of extern variable names */
-  private final Set<String> externNames = new HashSet<String>();
+  private final Set<String> externNames = new HashSet<>();
 
   /** Set of reserved variable names */
   private final Set<String> reservedNames;
 
   /** The renaming map */
-  private final Map<String, String> renameMap = new HashMap<String, String>();
+  private final Map<String, String> renameMap = new HashMap<>();
 
   /** The previously used rename map. */
   private final VariableMap prevUsedRenameMap;
@@ -112,7 +119,7 @@ final class RenameVars implements CompilerPass {
 
   /** Maps an old name to a new name assignment */
   private final Map<String, Assignment> assignments =
-      new HashMap<String, Assignment>();
+      new HashMap<>();
 
   /** Whether renaming should apply to local variables only. */
   private final boolean localRenamingOnly;
@@ -127,6 +134,8 @@ final class RenameVars implements CompilerPass {
 
   private final boolean shouldShadow;
 
+  private final boolean preferStableNames;
+
   /** Characters that shouldn't be used in variable names. */
   private final char[] reservedCharacters;
 
@@ -140,18 +149,18 @@ final class RenameVars implements CompilerPass {
   RenameVars(AbstractCompiler compiler, String prefix,
       boolean localRenamingOnly, boolean preserveFunctionExpressionNames,
       boolean generatePseudoNames, boolean shouldShadow,
-      VariableMap prevUsedRenameMap,
+      boolean preferStableNames, VariableMap prevUsedRenameMap,
       @Nullable char[] reservedCharacters,
       @Nullable Set<String> reservedNames) {
     this(compiler, prefix, localRenamingOnly, preserveFunctionExpressionNames,
-        generatePseudoNames, shouldShadow, prevUsedRenameMap,
+        generatePseudoNames, shouldShadow, preferStableNames, prevUsedRenameMap,
         reservedCharacters, reservedNames, null);
 
   }
   RenameVars(AbstractCompiler compiler, String prefix,
       boolean localRenamingOnly, boolean preserveFunctionExpressionNames,
       boolean generatePseudoNames, boolean shouldShadow,
-      VariableMap prevUsedRenameMap,
+      boolean preferStableNames, VariableMap prevUsedRenameMap,
       @Nullable char[] reservedCharacters,
       @Nullable Set<String> reservedNames,
       @Nullable NameGenerator nameGenerator) {
@@ -167,6 +176,7 @@ final class RenameVars implements CompilerPass {
     this.prevUsedRenameMap = prevUsedRenameMap;
     this.reservedCharacters = reservedCharacters;
     this.shouldShadow = shouldShadow;
+    this.preferStableNames = preferStableNames;
     if (reservedNames == null) {
       this.reservedNames = Sets.newHashSet();
     } else {
@@ -208,7 +218,8 @@ final class RenameVars implements CompilerPass {
 
     @Override
     public void enterScope(NodeTraversal t) {
-      if (t.inGlobalScope()) {
+      if (t.inGlobalScope() ||
+          !shouldTemporarilyRenameLocalsInScope(t.getScope())) {
         return;
       }
       Iterator<Var> it = t.getScope().getVars();
@@ -234,7 +245,7 @@ final class RenameVars implements CompilerPass {
       String name = n.getString();
 
       // Ignore anonymous functions
-      if (name.length() == 0) {
+      if (name.isEmpty()) {
         return;
       }
 
@@ -265,7 +276,7 @@ final class RenameVars implements CompilerPass {
         if (local) {
           // Blindly de-uniquify for the Prototype library for issue 103.
           String newName = MakeDeclaredNamesUnique.ContextualRenameInverter
-              .getOrginalName(name);
+              .getOriginalName(name);
           if (!newName.equals(name)) {
             n.setString(newName);
           }
@@ -285,8 +296,10 @@ final class RenameVars implements CompilerPass {
         recordPseudoName(n);
       }
 
-      if (local) {
-        // Local var: assign a new name
+      if (local && shouldTemporarilyRenameLocalsInScope(var.getScope())) {
+        // Give local variables a temporary name based on the
+        // variable's index in the scope to enable name reuse across
+        // locals in independent scopes.
         String tempName = LOCAL_VAR_PREFIX + getLocalVarIndex(var);
         incCount(tempName);
         localNameNodes.add(n);
@@ -351,7 +364,7 @@ final class RenameVars implements CompilerPass {
 
     // Rename vars, sorted by frequency of occurrence to minimize code size.
     SortedSet<Assignment> varsByFrequency =
-        new TreeSet<Assignment>(FREQUENCY_COMPARATOR);
+        new TreeSet<>(FREQUENCY_COMPARATOR);
     varsByFrequency.addAll(assignments.values());
 
     if (shouldShadow) {
@@ -475,8 +488,8 @@ final class RenameVars implements CompilerPass {
     }
 
     // Generated names and the assignments for non-local vars.
-    List<Assignment> pendingAssignments = new ArrayList<Assignment>();
-    List<String> generatedNamesForAssignments = new ArrayList<String>();
+    List<Assignment> pendingAssignments = new ArrayList<>();
+    List<String> generatedNamesForAssignments = new ArrayList<>();
 
     for (Assignment a : varsToRename) {
       if (a.newName != null) {
@@ -519,7 +532,7 @@ final class RenameVars implements CompilerPass {
     int numPendingAssignments = generatedNamesForAssignments.size();
     for (int i = 0; i < numPendingAssignments;) {
       SortedSet<Assignment> varsByOrderOfOccurrence =
-          new TreeSet<Assignment>(ORDER_OF_OCCURRENCE_COMPARATOR);
+          new TreeSet<>(ORDER_OF_OCCURRENCE_COMPARATOR);
 
       // Add k number of Assignment to the set, where k is the number of
       // generated names of the same length.
@@ -586,10 +599,26 @@ final class RenameVars implements CompilerPass {
       } else {
         num += localBleedingFunctionsPerScope.get(s).size();
       }
-
-      num += s.getVarCount();
+      if (shouldTemporarilyRenameLocalsInScope(s)) {
+        num += s.getVarCount();
+      }
       s = s.getParent();
     }
     return num;
+  }
+
+  /**
+   * Returns true if the local variables in a scope should be given
+   * temporary names (eg, 'L 123') prior to renaming to allow reuse of
+   * names across scopes.  With {@code preferStableNames}, temporary
+   * renaming is disabled if the number of locals in the scope is
+   * above a heuristic threshold to allow effective reuse of rename
+   * maps (see {@code prevUsedRenameMap}).  In scopes with many
+   * variables the temporary name given to a variable is unlikely to
+   * be the same temporary name used when the rename map was created.
+   */
+  private boolean shouldTemporarilyRenameLocalsInScope(Scope s) {
+    return (!preferStableNames ||
+        s.getVarCount() <= MAX_LOCALS_IN_SCOPE_TO_TEMP_RENAME);
   }
 }

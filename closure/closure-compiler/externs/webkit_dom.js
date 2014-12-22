@@ -207,8 +207,14 @@ Console.prototype.clear = function() {};
 /** @type {MemoryInfo} */
 Console.prototype.memory;
 
-/** @type {Console} */
+/** @type {!Console} */
 Window.prototype.console;
+
+/**
+ * @type {!Console}
+ * @suppress {duplicate}
+ */
+var console;
 
 /**
  * @type {number}
@@ -273,9 +279,3 @@ ViewCSS.prototype.getMatchedCSSRules =
  */
 Document.prototype.getCSSCanvasContext =
     function(contextId, name, width, height) {};
-
-/**
- * @type {string}
- * @see http://code.google.com/chrome/whitepapers/pagevisibility.html
- */
-Document.prototype.webkitVisibilityState;

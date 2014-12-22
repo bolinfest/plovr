@@ -16,7 +16,7 @@
 
 package com.google.template.soy.sharedpasses;
 
-import com.google.template.soy.base.IdGenerator;
+import com.google.template.soy.base.internal.IdGenerator;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.shared.SoyCssRenamingMap;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
@@ -44,7 +44,6 @@ import javax.annotation.Nullable;
  * contains consecutive RawTextNodes). It's usually advisable to run a simplification pass after
  * this pass.
  *
- * @author Kai Huang
  */
 public class RenameCssVisitor extends AbstractSoyNodeVisitor<Void> {
 

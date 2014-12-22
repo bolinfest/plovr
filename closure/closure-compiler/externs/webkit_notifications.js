@@ -19,8 +19,24 @@
  */
 
 /**
+ * @typedef {{dir: (string|undefined), lang: (string|undefined),
+ *            body: (string|undefined), tag: (string|undefined),
+ *            icon: (string|undefined)}}
+ * @see http://notifications.spec.whatwg.org/#notificationoptions
+ */
+var NotificationOptions;
+
+/** @interface */
+var NotificationOptionsInterface_;
+/** @type {string} */ NotificationOptionsInterface_.prototype.dir;
+/** @type {string} */ NotificationOptionsInterface_.prototype.lang;
+/** @type {string} */ NotificationOptionsInterface_.prototype.body;
+/** @type {string} */ NotificationOptionsInterface_.prototype.tag;
+/** @type {string} */ NotificationOptionsInterface_.prototype.icon;
+
+/**
  * @param {string} title
- * @param {Object=} opt_options
+ * @param {NotificationOptions=} opt_options
  * @constructor
  * @implements {EventTarget}
  * @see http://notifications.spec.whatwg.org/#notification
@@ -37,13 +53,19 @@ Notification.permission;
  */
 Notification.requestPermission = function(opt_callback) {};
 
-/** @override */
+/**
+ * @param {boolean=} opt_useCapture
+ * @override
+ */
 Notification.prototype.addEventListener =
-    function(type, listener, useCapture) {};
+    function(type, listener, opt_useCapture) {};
 
-/** @override */
+/**
+ * @param {boolean=} opt_useCapture
+ * @override
+ */
 Notification.prototype.removeEventListener =
-    function(type, listener, useCapture) {};
+    function(type, listener, opt_useCapture) {};
 
 /** @override */
 Notification.prototype.dispatchEvent = function(evt) {};
@@ -114,6 +136,21 @@ Notification.prototype.onshow;
 Notification.prototype.onclick;
 
 /**
+ * @constructor
+ */
+window.Notification = Notification;
+
+/**
+ * @type {string}
+ */
+window.Notification.permission;
+
+/**
+ * @param {NotificationPermissionCallback=} opt_callback
+ */
+window.Notification.requestPermission = function(opt_callback) {};
+
+/**
  * @typedef {function(string)}
  * @see http://notifications.spec.whatwg.org/#notificationpermissioncallback
  */
@@ -162,4 +199,3 @@ NotificationCenter.prototype.requestPermission = function(opt_callback) {};
  * @type {NotificationCenter}
  */
 Window.prototype.webkitNotifications;
-

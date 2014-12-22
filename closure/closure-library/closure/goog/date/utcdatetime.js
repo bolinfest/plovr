@@ -31,9 +31,9 @@ goog.require('goog.date.Interval');
  * Defaults to current date and time if none is specified. The get... and the
  * getUTC... methods are equivalent.
  *
- * @param {number|Object=} opt_year Four digit UTC year or a date-like object.
- *     If not set, the created object will contain the date determined by
- *     goog.now().
+ * @param {number|goog.date.DateLike=} opt_year Four digit UTC year or a
+ *     date-like object.  If not set, the created object will contain the
+ *     date determined by goog.now().
  * @param {number=} opt_month UTC month, 0 = Jan, 11 = Dec.
  * @param {number=} opt_date UTC date of month, 1 - 31.
  * @param {number=} opt_hours UTC hours, 0 - 23.
@@ -53,9 +53,20 @@ goog.date.UtcDateTime = function(opt_year, opt_month, opt_date, opt_hours,
   } else {
     timestamp = opt_year ? opt_year.getTime() : goog.now();
   }
-  this.date_ = new Date(timestamp);
+  this.date = new Date(timestamp);
 };
 goog.inherits(goog.date.UtcDateTime, goog.date.DateTime);
+
+
+/**
+ * @param {number} timestamp Number of milliseconds since Epoch.
+ * @return {!goog.date.UtcDateTime}
+ */
+goog.date.UtcDateTime.fromTimestamp = function(timestamp) {
+  var date = new goog.date.UtcDateTime();
+  date.setTime(timestamp);
+  return date;
+};
 
 
 /**
@@ -77,7 +88,7 @@ goog.date.UtcDateTime.fromIsoString = function(formatted) {
  * @override
  */
 goog.date.UtcDateTime.prototype.clone = function() {
-  var date = new goog.date.UtcDateTime(this.date_);
+  var date = new goog.date.UtcDateTime(this.date);
   date.setFirstDayOfWeek(this.getFirstDayOfWeek());
   date.setFirstWeekCutOffDay(this.getFirstWeekCutOffDay());
   return date;
@@ -94,7 +105,7 @@ goog.date.UtcDateTime.prototype.add = function(interval) {
       interval.seconds + 60 * (
           interval.minutes + 60 * (
               interval.hours + 24 * interval.days)));
-  this.date_ = new Date(this.date_.getTime() + daysAndTimeMillis);
+  this.date = new Date(this.date.getTime() + daysAndTimeMillis);
 };
 
 

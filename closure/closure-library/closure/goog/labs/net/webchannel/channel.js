@@ -15,7 +15,7 @@
 /**
  * @fileoverview A shared interface for WebChannelBase and BaseTestChannel.
  *
- * @visibility {//visibility:private}
+ * @visibility {:internal}
  */
 
 
@@ -77,7 +77,7 @@ Channel.prototype.createXhrIo = goog.abstractMethod;
 
 /**
  * Callback from ChannelRequest that indicates a request has completed.
- * @param {goog.labs.net.webChannel.WebChannelRequest} request
+ * @param {!goog.labs.net.webChannel.ChannelRequest} request
  *     The request object.
  */
 Channel.prototype.onRequestComplete = goog.abstractMethod;
@@ -92,7 +92,7 @@ Channel.prototype.isClosed = goog.abstractMethod;
 
 /**
  * Callback from ChannelRequest for when new data is received
- * @param {goog.labs.net.webChannel.WebChannelRequest} request
+ * @param {goog.labs.net.webChannel.ChannelRequest} request
  *     The request object.
  * @param {string} responseText The text of the response.
  */
@@ -156,16 +156,6 @@ Channel.prototype.createDataUri = goog.abstractMethod;
 /**
  * Not needed for testchannel.
  *
- * Callback from TestChannel for when the channel is blocked.
- * @param {goog.labs.net.webChannel.BaseTestChannel} testChannel
- *     The TestChannel.
- */
-Channel.prototype.testConnectionBlocked = goog.abstractMethod;
-
-
-/**
- * Not needed for testchannel.
- *
  * Callback from TestChannel for when the channel is finished.
  * @param {goog.labs.net.webChannel.BaseTestChannel} testChannel
  *     The TestChannel.
@@ -180,7 +170,7 @@ Channel.prototype.testConnectionFinished = goog.abstractMethod;
  * Callback from TestChannel for when the channel has an error.
  * @param {goog.labs.net.webChannel.BaseTestChannel} testChannel
  *     The TestChannel.
- * @param {goog.labs.net.webChannel.WebChannelRequest.Error} errorCode
+ * @param {goog.labs.net.webChannel.ChannelRequest.Error} errorCode
  *     The error code of the failure.
  */
 Channel.prototype.testConnectionFailure = goog.abstractMethod;
@@ -188,8 +178,9 @@ Channel.prototype.testConnectionFailure = goog.abstractMethod;
 
 /**
  * Not needed for testchannel.
- * Gets the results for the first channel test
- * @return {Array.<string>} The results.
+ * Gets the result of previous connectivity tests.
+ *
+ * @return {!goog.labs.net.webChannel.ConnectionState} The connectivity state.
  */
-Channel.prototype.getFirstTestResults = goog.abstractMethod;
+Channel.prototype.getConnectionState = goog.abstractMethod;
 });  // goog.scope

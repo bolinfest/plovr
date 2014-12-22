@@ -170,8 +170,7 @@ class AliasKeywords implements CompilerPass {
     @Override
     protected void aliasNode(Node throwNode, Node parent) {
       Node name = NodeUtil.newName(
-          compiler.getCodingConvention(),
-          getAliasName(), throwNode, getAliasName());
+          compiler, getAliasName(), throwNode, getAliasName());
       Node aliasCall = IR.call(name, throwNode.removeFirstChild());
       aliasCall.putBooleanProp(Node.FREE_CALL, true);
       Node exprResult = IR.exprResult(aliasCall);
@@ -236,7 +235,7 @@ class AliasKeywords implements CompilerPass {
     @Override
     protected void aliasNode(Node n, Node parent) {
       Node aliasNode = NodeUtil.newName(
-          compiler.getCodingConvention(), getAliasName(), n, getAliasName());
+          compiler, getAliasName(), n, getAliasName());
       parent.replaceChild(n, aliasNode);
     }
 
@@ -248,8 +247,7 @@ class AliasKeywords implements CompilerPass {
       Node varNode = new Node(Token.VAR);
       Node value = new Node(getTokenId());
       Node name = NodeUtil.newName(
-          compiler.getCodingConvention(), getAliasName(),
-          varNode, getAliasName());
+          compiler, getAliasName(), varNode, getAliasName());
       name.addChildToBack(value);
       varNode.addChildToBack(name);
       codeRoot.addChildrenToFront(varNode);
@@ -278,7 +276,7 @@ class AliasKeywords implements CompilerPass {
     @Override
     protected void aliasNode(Node n, Node parent) {
       Node aliasNode = NodeUtil.newName(
-          compiler.getCodingConvention(), getAliasName(), n, getAliasName());
+          compiler, getAliasName(), n, getAliasName());
       parent.replaceChild(n, aliasNode);
     }
 
@@ -290,8 +288,7 @@ class AliasKeywords implements CompilerPass {
       Node varNode = new Node(Token.VAR);
       Node value = IR.voidNode(IR.number(0));
       Node name = NodeUtil.newName(
-          compiler.getCodingConvention(), getAliasName(),
-          varNode, getAliasName());
+          compiler, getAliasName(), varNode, getAliasName());
       name.addChildToBack(value);
       varNode.addChildToBack(name);
       codeRoot.addChildrenToFront(varNode);

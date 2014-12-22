@@ -59,7 +59,7 @@ public interface Visitor<T> {
   /**
    * Bottom type's case.
    */
-  T caseNoType();
+  T caseNoType(NoType type);
 
   /**
    * Enum element type's case.
@@ -100,6 +100,16 @@ public interface Visitor<T> {
    * Null type's case.
    */
   T caseNullType();
+
+  /**
+   * Named type's case.
+   */
+  T caseNamedType(NamedType type);
+
+  /**
+   * Proxy type's case.
+   */
+  T caseProxyObjectType(ProxyObjectType type);
 
   /**
    * Number value type's case.

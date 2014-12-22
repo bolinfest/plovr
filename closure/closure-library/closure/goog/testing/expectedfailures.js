@@ -58,6 +58,7 @@ goog.require('goog.testing.asserts');
  * </pre>
  *
  * @constructor
+ * @final
  */
 goog.testing.ExpectedFailures = function() {
   goog.testing.ExpectedFailures.setUpConsole_();
@@ -100,7 +101,7 @@ goog.testing.ExpectedFailures.prototype.failureMessage_;
 
 /**
  * An array of suppressed failures.
- * @type {Array}
+ * @type {Array<!Error>}
  * @private
  */
 goog.testing.ExpectedFailures.prototype.suppressedFailures_;

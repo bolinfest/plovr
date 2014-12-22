@@ -29,7 +29,6 @@ import junit.framework.TestCase;
 /**
  * Unit tests for FindIjParamsVisitor.
  *
- * @author Kai Huang
  */
 public class FindIjParamsVisitorTest extends TestCase {
 
@@ -38,7 +37,7 @@ public class FindIjParamsVisitorTest extends TestCase {
 
     // aaa -> {bbb, ccc}, bbb -> ddd.
     String fileContent = "" +
-        "{namespace ns}\n" +
+        "{namespace ns autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/***/\n" +
         "{template .aaa}\n" +
@@ -70,37 +69,29 @@ public class FindIjParamsVisitorTest extends TestCase {
 
     // Test with exec(aaa).
     // Exercises: processCalleeHelper case 5 with incorporateCalleeVisitInfo case 1 (aaa -> bbb).
-    FindIjParamsVisitor fuipv = new FindIjParamsVisitor(templateRegistry);
-    fuipv.exec(aaa);
-    assertEquals(4, fuipv.templateToFinishedInfoMap.size());
-    assertEquals(3, fuipv.templateToFinishedInfoMap.get(ddd).ijParamToCalleesMultimap.size());
-    assertEquals(3, fuipv.templateToFinishedInfoMap.get(ccc).ijParamToCalleesMultimap.size());
-    assertEquals(5, fuipv.templateToFinishedInfoMap.get(bbb).ijParamToCalleesMultimap.size());
-    assertEquals(
-        4, fuipv.templateToFinishedInfoMap.get(bbb).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(10, fuipv.templateToFinishedInfoMap.get(aaa).ijParamToCalleesMultimap.size());
-    assertEquals(
-        6, fuipv.templateToFinishedInfoMap.get(aaa).ijParamToCalleesMultimap.keySet().size());
+    FindIjParamsVisitor visitor = new FindIjParamsVisitor(templateRegistry);
+    visitor.exec(aaa);
+    assertEquals(3, visitor.exec(ddd).ijParamToCalleesMultimap.size());
+    assertEquals(3, visitor.exec(ccc).ijParamToCalleesMultimap.size());
+    assertEquals(5, visitor.exec(bbb).ijParamToCalleesMultimap.size());
+    assertEquals(4, visitor.exec(bbb).ijParamToCalleesMultimap.keySet().size());
+    assertEquals(10, visitor.exec(aaa).ijParamToCalleesMultimap.size());
+    assertEquals(6, visitor.exec(aaa).ijParamToCalleesMultimap.keySet().size());
 
     // Test with exec(bbb) then exec(aaa).
     // Exercises: processCalleeHelper case 1 (aaa -> bbb).
-    fuipv = new FindIjParamsVisitor(templateRegistry);
-    fuipv.exec(bbb);
-    assertEquals(2, fuipv.templateToFinishedInfoMap.size());
-    assertEquals(3, fuipv.templateToFinishedInfoMap.get(ddd).ijParamToCalleesMultimap.size());
-    assertEquals(5, fuipv.templateToFinishedInfoMap.get(bbb).ijParamToCalleesMultimap.size());
-    assertEquals(
-        4, fuipv.templateToFinishedInfoMap.get(bbb).ijParamToCalleesMultimap.keySet().size());
-    fuipv.exec(aaa);
-    assertEquals(4, fuipv.templateToFinishedInfoMap.size());
-    assertEquals(3, fuipv.templateToFinishedInfoMap.get(ddd).ijParamToCalleesMultimap.size());
-    assertEquals(3, fuipv.templateToFinishedInfoMap.get(ccc).ijParamToCalleesMultimap.size());
-    assertEquals(5, fuipv.templateToFinishedInfoMap.get(bbb).ijParamToCalleesMultimap.size());
-    assertEquals(
-        4, fuipv.templateToFinishedInfoMap.get(bbb).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(10, fuipv.templateToFinishedInfoMap.get(aaa).ijParamToCalleesMultimap.size());
-    assertEquals(
-        6, fuipv.templateToFinishedInfoMap.get(aaa).ijParamToCalleesMultimap.keySet().size());
+    visitor = new FindIjParamsVisitor(templateRegistry);
+    visitor.exec(bbb);
+    assertEquals(3, visitor.exec(ddd).ijParamToCalleesMultimap.size());
+    assertEquals(5, visitor.exec(bbb).ijParamToCalleesMultimap.size());
+    assertEquals(4, visitor.exec(bbb).ijParamToCalleesMultimap.keySet().size());
+    visitor.exec(aaa);
+    assertEquals(3, visitor.exec(ddd).ijParamToCalleesMultimap.size());
+    assertEquals(3, visitor.exec(ccc).ijParamToCalleesMultimap.size());
+    assertEquals(5, visitor.exec(bbb).ijParamToCalleesMultimap.size());
+    assertEquals(4, visitor.exec(bbb).ijParamToCalleesMultimap.keySet().size());
+    assertEquals(10, visitor.exec(aaa).ijParamToCalleesMultimap.size());
+    assertEquals(6, visitor.exec(aaa).ijParamToCalleesMultimap.keySet().size());
   }
 
 
@@ -108,7 +99,7 @@ public class FindIjParamsVisitorTest extends TestCase {
 
     // aaa -> {bbb, ccc}, ccc -> bbb.
     String fileContent = "" +
-        "{namespace ns}\n" +
+        "{namespace ns autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/***/\n" +
         "{template .aaa}\n" +
@@ -134,26 +125,23 @@ public class FindIjParamsVisitorTest extends TestCase {
 
     // Test with exec(aaa).
     // Exercises: processCalleeHelper case 4 with incorporateCalleeVisitInfo case 1 (ccc -> bbb).
-    FindIjParamsVisitor fuipv = new FindIjParamsVisitor(templateRegistry);
-    fuipv.exec(aaa);
-    assertEquals(3, fuipv.templateToFinishedInfoMap.size());
-    assertEquals(2, fuipv.templateToFinishedInfoMap.get(bbb).ijParamToCalleesMultimap.size());
-    assertEquals(5, fuipv.templateToFinishedInfoMap.get(ccc).ijParamToCalleesMultimap.size());
-    assertEquals(
-        4, fuipv.templateToFinishedInfoMap.get(ccc).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(7, fuipv.templateToFinishedInfoMap.get(aaa).ijParamToCalleesMultimap.size());
-    assertEquals(
-        5, fuipv.templateToFinishedInfoMap.get(aaa).ijParamToCalleesMultimap.keySet().size());
+    FindIjParamsVisitor visitor = new FindIjParamsVisitor(templateRegistry);
+    visitor.exec(aaa);
+    assertEquals(2, visitor.exec(bbb).ijParamToCalleesMultimap.size());
+    assertEquals(5, visitor.exec(ccc).ijParamToCalleesMultimap.size());
+    assertEquals(4, visitor.exec(ccc).ijParamToCalleesMultimap.keySet().size());
+    assertEquals(7, visitor.exec(aaa).ijParamToCalleesMultimap.size());
+    assertEquals(5, visitor.exec(aaa).ijParamToCalleesMultimap.keySet().size());
   }
 
 
   public void testSimpleRecursion() {
 
-    // Tests direct recurion (cycle of 1) and indirect recursion with a cycle of 2.
+    // Tests direct recursion (cycle of 1) and indirect recursion with a cycle of 2.
 
     // aaa -> bbb, bbb -> {bbb, ccc}, ccc -> bbb.
     String fileContent = "" +
-        "{namespace ns}\n" +
+        "{namespace ns autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/***/\n" +
         "{template .aaa}\n" +
@@ -181,18 +169,14 @@ public class FindIjParamsVisitorTest extends TestCase {
     // Exercises: processCalleeHelper case 2 (bbb -> bbb).
     // Exercises: processCalleeHelper case 3 (ccc -> bbb).
     // Exercises: processCalleeHelper case 5 with incorporateCalleeVisitInfo case 2 (bbb -> ccc).
-    FindIjParamsVisitor fuipv = new FindIjParamsVisitor(templateRegistry);
-    fuipv.exec(aaa);
-    assertEquals(3, fuipv.templateToFinishedInfoMap.size());
-    assertEquals(4, fuipv.templateToFinishedInfoMap.get(ccc).ijParamToCalleesMultimap.size());
-    assertEquals(
-        3, fuipv.templateToFinishedInfoMap.get(ccc).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(4, fuipv.templateToFinishedInfoMap.get(bbb).ijParamToCalleesMultimap.size());
-    assertEquals(
-        3, fuipv.templateToFinishedInfoMap.get(bbb).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(6, fuipv.templateToFinishedInfoMap.get(aaa).ijParamToCalleesMultimap.size());
-    assertEquals(
-        4, fuipv.templateToFinishedInfoMap.get(aaa).ijParamToCalleesMultimap.keySet().size());
+    FindIjParamsVisitor visitor = new FindIjParamsVisitor(templateRegistry);
+    visitor.exec(aaa);
+    assertEquals(4, visitor.exec(ccc).ijParamToCalleesMultimap.size());
+    assertEquals(3, visitor.exec(ccc).ijParamToCalleesMultimap.keySet().size());
+    assertEquals(4, visitor.exec(bbb).ijParamToCalleesMultimap.size());
+    assertEquals(3, visitor.exec(bbb).ijParamToCalleesMultimap.keySet().size());
+    assertEquals(6, visitor.exec(aaa).ijParamToCalleesMultimap.size());
+    assertEquals(4, visitor.exec(aaa).ijParamToCalleesMultimap.keySet().size());
   }
 
 
@@ -202,7 +186,7 @@ public class FindIjParamsVisitorTest extends TestCase {
 
     // aaa -> bbb, bbb -> ccc, ccc -> aaa.
     String fileContent = "" +
-        "{namespace ns}\n" +
+        "{namespace ns autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/***/\n" +
         "{template .aaa}\n" +
@@ -230,18 +214,14 @@ public class FindIjParamsVisitorTest extends TestCase {
     // Exercises: processCalleeHelper case 3 (ccc-> aaa).
     // Exercises: processCalleeHelper case 5 with incorporateCalleeVisitInfo case 3 (bbb -> ccc).
     // Exercises: processCalleeHelper case 5 with incorporateCalleeVisitInfo case 2 (aaa -> bbb).
-    FindIjParamsVisitor fuipv = new FindIjParamsVisitor(templateRegistry);
-    fuipv.exec(aaa);
-    assertEquals(3, fuipv.templateToFinishedInfoMap.size());
-    assertEquals(6, fuipv.templateToFinishedInfoMap.get(ccc).ijParamToCalleesMultimap.size());
-    assertEquals(
-        4, fuipv.templateToFinishedInfoMap.get(ccc).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(6, fuipv.templateToFinishedInfoMap.get(bbb).ijParamToCalleesMultimap.size());
-    assertEquals(
-        4, fuipv.templateToFinishedInfoMap.get(bbb).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(6, fuipv.templateToFinishedInfoMap.get(aaa).ijParamToCalleesMultimap.size());
-    assertEquals(
-        4, fuipv.templateToFinishedInfoMap.get(aaa).ijParamToCalleesMultimap.keySet().size());
+    FindIjParamsVisitor visitor = new FindIjParamsVisitor(templateRegistry);
+    visitor.exec(aaa);
+    assertEquals(6, visitor.exec(ccc).ijParamToCalleesMultimap.size());
+    assertEquals(4, visitor.exec(ccc).ijParamToCalleesMultimap.keySet().size());
+    assertEquals(6, visitor.exec(bbb).ijParamToCalleesMultimap.size());
+    assertEquals(4, visitor.exec(bbb).ijParamToCalleesMultimap.keySet().size());
+    assertEquals(6, visitor.exec(aaa).ijParamToCalleesMultimap.size());
+    assertEquals(4, visitor.exec(aaa).ijParamToCalleesMultimap.keySet().size());
   }
 
 
@@ -249,7 +229,7 @@ public class FindIjParamsVisitorTest extends TestCase {
 
     // aaa -> {bbb, ccc}, bbb -> ddd, ccc -> ddd, ddd -> bbb.
     String fileContent = "" +
-        "{namespace ns}\n" +
+        "{namespace ns autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/***/\n" +
         "{template .aaa}\n" +
@@ -281,21 +261,16 @@ public class FindIjParamsVisitorTest extends TestCase {
 
     // Test with exec(aaa).
     // Exercises: processCalleeHelper case 4 with incorporateCalleeVisitInfo case 4 (ccc -> ddd).
-    FindIjParamsVisitor fuipv = new FindIjParamsVisitor(templateRegistry);
-    fuipv.exec(aaa);
-    assertEquals(4, fuipv.templateToFinishedInfoMap.size());
-    assertEquals(4, fuipv.templateToFinishedInfoMap.get(bbb).ijParamToCalleesMultimap.size());
-    assertEquals(
-        3, fuipv.templateToFinishedInfoMap.get(bbb).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(4, fuipv.templateToFinishedInfoMap.get(ddd).ijParamToCalleesMultimap.size());
-    assertEquals(
-        3, fuipv.templateToFinishedInfoMap.get(ddd).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(6, fuipv.templateToFinishedInfoMap.get(ccc).ijParamToCalleesMultimap.size());
-    assertEquals(
-        4, fuipv.templateToFinishedInfoMap.get(ccc).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(8, fuipv.templateToFinishedInfoMap.get(aaa).ijParamToCalleesMultimap.size());
-    assertEquals(
-        5, fuipv.templateToFinishedInfoMap.get(aaa).ijParamToCalleesMultimap.keySet().size());
+    FindIjParamsVisitor visitor = new FindIjParamsVisitor(templateRegistry);
+    visitor.exec(aaa);
+    assertEquals(4, visitor.exec(bbb).ijParamToCalleesMultimap.size());
+    assertEquals(3, visitor.exec(bbb).ijParamToCalleesMultimap.keySet().size());
+    assertEquals(4, visitor.exec(ddd).ijParamToCalleesMultimap.size());
+    assertEquals(3, visitor.exec(ddd).ijParamToCalleesMultimap.keySet().size());
+    assertEquals(6, visitor.exec(ccc).ijParamToCalleesMultimap.size());
+    assertEquals(4, visitor.exec(ccc).ijParamToCalleesMultimap.keySet().size());
+    assertEquals(8, visitor.exec(aaa).ijParamToCalleesMultimap.size());
+    assertEquals(5, visitor.exec(aaa).ijParamToCalleesMultimap.keySet().size());
   }
 
 
@@ -303,7 +278,7 @@ public class FindIjParamsVisitorTest extends TestCase {
 
     // aaa -> {bbb, ccc}, bbb -> aaa, ccc -> bbb.
     String fileContent = "" +
-        "{namespace ns}\n" +
+        "{namespace ns autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/***/\n" +
         "{template .aaa}\n" +
@@ -329,18 +304,14 @@ public class FindIjParamsVisitorTest extends TestCase {
 
     // Test with exec(aaa).
     // Exercises: processCalleeHelper case 4 with incorporateCalleeVisitInfo case 3 (ccc -> bbb).
-    FindIjParamsVisitor fuipv = new FindIjParamsVisitor(templateRegistry);
-    fuipv.exec(aaa);
-    assertEquals(3, fuipv.templateToFinishedInfoMap.size());
-    assertEquals(6, fuipv.templateToFinishedInfoMap.get(ccc).ijParamToCalleesMultimap.size());
-    assertEquals(
-        4, fuipv.templateToFinishedInfoMap.get(ccc).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(6, fuipv.templateToFinishedInfoMap.get(bbb).ijParamToCalleesMultimap.size());
-    assertEquals(
-        4, fuipv.templateToFinishedInfoMap.get(bbb).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(6, fuipv.templateToFinishedInfoMap.get(aaa).ijParamToCalleesMultimap.size());
-    assertEquals(
-        4, fuipv.templateToFinishedInfoMap.get(aaa).ijParamToCalleesMultimap.keySet().size());
+    FindIjParamsVisitor visitor = new FindIjParamsVisitor(templateRegistry);
+    visitor.exec(aaa);
+    assertEquals(6, visitor.exec(ccc).ijParamToCalleesMultimap.size());
+    assertEquals(4, visitor.exec(ccc).ijParamToCalleesMultimap.keySet().size());
+    assertEquals(6, visitor.exec(bbb).ijParamToCalleesMultimap.size());
+    assertEquals(4, visitor.exec(bbb).ijParamToCalleesMultimap.keySet().size());
+    assertEquals(6, visitor.exec(aaa).ijParamToCalleesMultimap.size());
+    assertEquals(4, visitor.exec(aaa).ijParamToCalleesMultimap.keySet().size());
   }
 
 
@@ -348,7 +319,7 @@ public class FindIjParamsVisitorTest extends TestCase {
 
     // aaa -> {bbb, ccc}, bbb -> ddd.
     String fileContent = "" +
-        "{namespace ns}\n" +
+        "{namespace ns autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/***/\n" +
         "{template .bbb}\n" +
@@ -371,7 +342,6 @@ public class FindIjParamsVisitorTest extends TestCase {
         "{/template}\n";
 
     SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(fileContent);
-    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree);
 
     TemplateNode bbb = soyTree.getChild(0).getChild(0);
     TemplateNode aaa = soyTree.getChild(0).getChild(1);
@@ -379,7 +349,7 @@ public class FindIjParamsVisitorTest extends TestCase {
     TemplateNode ddd = soyTree.getChild(0).getChild(3);
 
     ImmutableMap<TemplateNode, IjParamsInfo> templateToIjParamsInfoMap =
-        (new FindIjParamsVisitor(null)).execForAllTemplates(soyTree);
+        (new FindIjParamsVisitor(null)).execOnAllTemplates(soyTree);
     assertEquals(4, templateToIjParamsInfoMap.size());
     assertEquals(3, templateToIjParamsInfoMap.get(ddd).ijParamToCalleesMultimap.size());
     assertEquals(3, templateToIjParamsInfoMap.get(ccc).ijParamToCalleesMultimap.size());

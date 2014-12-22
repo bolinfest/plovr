@@ -26,6 +26,7 @@ import java.util.Map;
 /**
  * This code implements the instrumentation pass over the AST
  * (returned by JSCompiler).
+ * @author praveenk@google.com (Praveen Kumashi)
  *
  */
 class CoverageInstrumentationPass implements CompilerPass {
@@ -94,7 +95,7 @@ class CoverageInstrumentationPass implements CompilerPass {
     externsNode.addChildToBack(getInstrumentationExternsNode());
   }
 
-  private Node createConditionalVarDecl(String name) {
+  private static Node createConditionalVarDecl(String name) {
     Node var = IR.var(
         IR.name(name),
         IR.or(

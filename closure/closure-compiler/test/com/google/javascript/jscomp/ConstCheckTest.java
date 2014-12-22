@@ -94,11 +94,11 @@ public class ConstCheckTest extends CompilerTestCase {
   }
 
   public void testConstantPreIncremented1() {
-    testError("var XYZ = 1; XYZ++;");
+    testError("var XYZ = 1; ++XYZ;");
   }
 
   public void testConstantPreIncremented2() {
-    testError("var a$b$XYZ = 1; a$b$XYZ++;");
+    testError("var a$b$XYZ = 1; ++a$b$XYZ;");
   }
 
   public void testConstantPostDecremented1() {
@@ -110,11 +110,11 @@ public class ConstCheckTest extends CompilerTestCase {
   }
 
   public void testConstantPreDecremented1() {
-    testError("var XYZ = 1; XYZ--;");
+    testError("var XYZ = 1; --XYZ;");
   }
 
   public void testConstantPreDecremented2() {
-    testError("var a$b$XYZ = 1; a$b$XYZ--;");
+    testError("var a$b$XYZ = 1; --a$b$XYZ;");
   }
 
   public void testAbbreviatedArithmeticAssignment1() {
@@ -145,12 +145,48 @@ public class ConstCheckTest extends CompilerTestCase {
     testError("/** @const */ var xyz = 1; xyz = 3;");
   }
 
-  public void testConstSuppression() {
+  public void testConstSuppressionInFileJsDoc() {
     testSame("/**\n" +
              " * @fileoverview\n" +
              " * @suppress {const}\n" +
              " */\n" +
              "/** @const */ var xyz = 1; xyz = 3;");
+  }
+
+  public void testConstSuppressionOnAssignment() {
+    testSame("/** @const */ var xyz = 1; /** @suppress {const} */ xyz = 3;");
+  }
+
+  public void testConstSuppressionOnAddAssign() {
+    testSame("/** @const */ var xyz = 1; /** @suppress {const} */ xyz += 1;");
+  }
+
+  // If there are two 'var' statements for the same variable, and both are in the JS
+  // (not in externs), the second will be normalized to an assignment, and the
+  // JSDoc with the suppression will be on the new node.
+  public void testConstSuppressionOnVar() {
+    String before = "/** @const */ var xyz = 1;\n/** @suppress {const} */ var xyz = 3;";
+    String after = "/** @const */ var xyz = 1;\n/** @suppress {const} */ xyz = 3;";
+    test(before, after, null);
+  }
+
+  // If there are two 'var' statements for the same variable, one in externs and
+  // one in the JS, there is no normalization, and the suppression remains on the
+  // statement in the JS.
+  public void testConstSuppressionOnVarFromExterns() {
+    String externs = "/** @const */ var xyz;";
+    String js = "/** @suppress {const} */ var xyz = 3;";
+    test(externs, js, js, null, null);
+  }
+
+  public void testConstSuppressionOnInc() {
+    testSame("/** @const */ var xyz = 1; /** @suppress {const} */ xyz++;");
+  }
+
+  public void testConstNameInExterns() {
+    String externs = "/** @const */ var FOO;";
+    String js = "FOO = 1;";
+    test(externs, js, (String) null, ConstCheck.CONST_REASSIGNED_VALUE_ERROR, null);
   }
 
   private void testError(String js) {

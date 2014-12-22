@@ -23,7 +23,6 @@ public class AngularPassTest extends CompilerTestCase {
 
   public AngularPassTest() {
     super();
-    enableLineNumberCheck(false);
   }
 
   @Override
@@ -42,6 +41,7 @@ public class AngularPassTest extends CompilerTestCase {
     CompilerOptions options = new CompilerOptions();
     // enables angularPass.
     options.angularPass = true;
+    compareJsDoc = false;
     return getOptions(options);
   }
 
@@ -141,6 +141,11 @@ public class AngularPassTest extends CompilerTestCase {
   }
 
   public void testNgInjectNonFunction() throws Exception {
+    test("var ns = {}; ns.subns = {};" +
+        "ns.subns.fake = function(x, y){};" +
+        "/** @ngInject */ ns.subns.fake(1);",
+        null, AngularPass.INJECT_NON_FUNCTION_ERROR);
+
     test("/** @ngInject */ var a = 10",
          null, AngularPass.INJECT_NON_FUNCTION_ERROR);
 

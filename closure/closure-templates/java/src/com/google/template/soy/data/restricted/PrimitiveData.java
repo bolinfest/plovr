@@ -18,16 +18,20 @@ package com.google.template.soy.data.restricted;
 
 import com.google.template.soy.data.SoyData;
 
+import java.io.IOException;
+
 
 /**
  * Abstract superclass for a node in a Soy data tree that represents a piece of primitive data
  * (i.e. a leaf node).
  *
  * <p> Important: This class may only be used in implementing plugins (e.g. functions, directives).
+ * <p> Important: Even though this class is not marked 'final', do not extend this class.
  *
- * @author Kai Huang
  */
 public abstract class PrimitiveData extends SoyData {
-
-  // Empty.
+  @Override public void render(Appendable appendable) throws IOException {
+    // PrimitiveData instances can't really benefit from any incremental approach anyway.
+    appendable.append(coerceToString());
+  }
 }

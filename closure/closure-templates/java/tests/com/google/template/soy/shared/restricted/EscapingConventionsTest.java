@@ -16,19 +16,24 @@
 
 package com.google.template.soy.shared.restricted;
 
-import com.google.common.base.Charsets;
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.google.template.soy.data.SoyData;
-import com.google.template.soy.javasrc.codedeps.SoyUtils;
+
+import junit.framework.AssertionFailedError;
+import junit.framework.TestCase;
+
+import org.mozilla.javascript.Context;
+import org.mozilla.javascript.ContextFactory;
+import org.mozilla.javascript.ScriptableObject;
 
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
-import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.List;
@@ -36,18 +41,9 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.mozilla.javascript.Context;
-import org.mozilla.javascript.ContextFactory;
-import org.mozilla.javascript.ScriptableObject;
-
-import org.junit.AssertionFailedError;
-import junit.framework.TestCase;
-
 /**
  * Make sure that the escapers preserve containment consistently in both Java and JavaScript.
  * <p>
- * TODO: Fold these tests into SoyUtilsTest or at least into the same package to remove the
- * dependency on .../javasrc/codedeps.
  */
 public class EscapingConventionsTest extends TestCase {
 
@@ -67,7 +63,6 @@ public class EscapingConventionsTest extends TestCase {
     }
     assertEquals(expected, actual);
   }
-
 
   public final void testJavaScriptStringDirective() throws Exception {
     assertEscaping(
@@ -506,51 +501,9 @@ public class EscapingConventionsTest extends TestCase {
     assertTrue(untrustedValues.iterator().hasNext());  // not empty
     checkEscaping(
         templateText,
-        applyDirectiveJava(directiveName, untrustedValues),
-        directiveName + ":java",
-        lexer, Arrays.asList(expectedTokens));
-    checkEscaping(
-        templateText,
-        applyDirectiveJavaScript(directiveName, untrustedValues),
+        applyDirectiveClosure(directiveName, untrustedValues),
         directiveName + ":javascript",
         lexer, Arrays.asList(expectedTokens));
-    checkEscaping(
-        templateText,
-        applyDirectiveClosure(directiveName, untrustedValues),
-        directiveName + ":closure",
-        lexer, Arrays.asList(expectedTokens));
-  }
-
-  /**
-   * Apply the named directive to the given strings by looking up the escaping method in
-   * {@link SoyUtils}.
-   *
-   * @return Even elements are the raw strings, and odd elements are the corresponding escaped
-   *     versions.
-   */
-  private List<String> applyDirectiveJava(String directiveName, Iterable<String> toEscape)
-      throws Exception {
-    String methodName = "$$" + directiveName;
-    Method method = SoyUtils.class.getDeclaredMethod(methodName, SoyData.class);
-    List<String> strings = Lists.newArrayList();
-    for (String raw : toEscape) {
-      String escaped = (String) method.invoke(null, SoyData.createFromExistingData(raw));
-      strings.add(raw);
-      strings.add(escaped);
-    }
-    return strings;
-  }
-
-  /**
-   * Apply the named directive to the given strings by loading {@code soyutils.js} into Rhino.
-   *
-   * @return Even elements are the raw strings, and odd elements are the corresponding escaped
-   *     versions.
-   */
-  private List<String> applyDirectiveJavaScript(String directiveName, Iterable<String> toEscape)
-      throws Exception {
-    return applyDirectiveInRhino(
-        directiveName, toEscape, getSoyUtilsPath());
   }
 
   /**
@@ -576,7 +529,7 @@ public class EscapingConventionsTest extends TestCase {
     globalScope.defineProperty(
         "navigator", Context.javaToJS(new Navigator(), globalScope), ScriptableObject.DONTENUM);
 
-    Reader soyutils = new InputStreamReader(new FileInputStream(soyUtilsPath), Charsets.UTF_8);
+    Reader soyutils = new InputStreamReader(new FileInputStream(soyUtilsPath), UTF_8);
     try {
       String basename = soyUtilsPath.substring(soyUtilsPath.lastIndexOf('/') + 1);
       context.evaluateReader(globalScope, soyutils, basename, 1, null);
@@ -598,7 +551,7 @@ public class EscapingConventionsTest extends TestCase {
             "  }",
             "  for (var i = 0, n = test_toEscape.size(); i < n; ++i) {",
             "    var raw = String(test_toEscape.get(i));",
-            "    var escaped = soy.$$" + directiveName + "(raw);",
+            "    var escaped = String(soy.$$" + directiveName + "(raw));",
             "    test_output.add(raw);",
             "    test_output.add(escaped);",
             "  }",
@@ -658,10 +611,6 @@ public class EscapingConventionsTest extends TestCase {
    */
   public static final class Navigator {
     public final String userAgent = "testzilla";
-  }
-
-  private static String getSoyUtilsPath() {
-    return "javascript/soyutils.js";
   }
 
   private static String getSoyUtilsUseGoogPath() {

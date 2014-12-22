@@ -25,13 +25,11 @@ import java.util.List;
 
 import javax.annotation.Nullable;
 
-
 /**
  * Node representing a 'param' with content.
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
- * @author Kai Huang
  */
 public class CallParamContentNode extends CallParamNode implements RenderUnitNode {
 
@@ -107,14 +105,6 @@ public class CallParamContentNode extends CallParamNode implements RenderUnitNod
     appendSourceStringForChildren(sb);
     sb.append("{/").append(getCommandName()).append('}');
     return sb.toString();
-  }
-
-  @Override public void setNeedsEnvFrameDuringInterp(Boolean needsEnvFrameDuringInterp) {
-    parentMixin.setNeedsEnvFrameDuringInterp(needsEnvFrameDuringInterp);
-  }
-
-  @Override public Boolean needsEnvFrameDuringInterp() {
-    return parentMixin.needsEnvFrameDuringInterp();
   }
 
   @Override public int numChildren() {

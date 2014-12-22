@@ -23,6 +23,7 @@ package com.google.javascript.jscomp;
 public class CrossModuleCodeMotionTest extends CompilerTestCase {
 
   private static final String EXTERNS = "alert";
+  private boolean parentModuleCanSeeSymbolsDeclaredInChildren = false;
 
   public CrossModuleCodeMotionTest() {
     super(EXTERNS);
@@ -30,12 +31,16 @@ public class CrossModuleCodeMotionTest extends CompilerTestCase {
 
   @Override
   public void setUp() {
+    parentModuleCanSeeSymbolsDeclaredInChildren = false;
     super.enableLineNumberCheck(true);
   }
 
   @Override
   public CompilerPass getProcessor(Compiler compiler) {
-    return new CrossModuleCodeMotion(compiler, compiler.getModuleGraph());
+    return new CrossModuleCodeMotion(
+        compiler,
+        compiler.getModuleGraph(),
+        parentModuleCanSeeSymbolsDeclaredInChildren);
   }
 
   public void testFunctionMovement1() {
@@ -278,6 +283,79 @@ public class CrossModuleCodeMotionTest extends CompilerTestCase {
            "function f(){} f.prototype.bar=function (){};" +
            "var a = new f();"
          });
+  }
+
+  public void testClassMovement_instanceof() {
+    parentModuleCanSeeSymbolsDeclaredInChildren = true;
+    test(createModuleStar(
+             // m1
+             "function f(){} f.prototype.bar=function (){};" +
+             "1 instanceof f;",
+             // m2
+             "var a = new f();"),
+         new String[] {
+           "'undefined' != typeof f && 1 instanceof f;",
+           "function f(){} f.prototype.bar=function (){};" +
+           "var a = new f();"
+         });
+  }
+
+  public void testClassMovement_instanceofTurnedOff() {
+    parentModuleCanSeeSymbolsDeclaredInChildren = false;
+    testSame(createModuleStar(
+             // m1
+             "function f(){} f.prototype.bar=function (){};" +
+             "1 instanceof f;",
+             // m2
+             "var a = new f();"));
+  }
+
+  public void testClassMovement_instanceof2() {
+    parentModuleCanSeeSymbolsDeclaredInChildren = true;
+    test(createModuleStar(
+             // m1
+             "function f(){} f.prototype.bar=function (){};" +
+             "(true && 1 instanceof f);",
+             // m2
+             "var a = new f();"),
+         new String[] {
+           "(true && ('undefined' != typeof f && 1 instanceof f));",
+           "function f(){} f.prototype.bar=function (){};" +
+           "var a = new f();"
+         });
+  }
+
+  public void testClassMovement_instanceof3() {
+    parentModuleCanSeeSymbolsDeclaredInChildren = true;
+    testSame(createModuleStar(
+             // m1
+             "function f(){} f.prototype.bar=function (){};" +
+             "f instanceof 1",
+             // m2
+             "var a = new f();"));
+  }
+
+  public void testClassMovement_instanceof_noRewriteRequired() {
+    parentModuleCanSeeSymbolsDeclaredInChildren = true;
+    testSame(createModuleStar(
+             // m1
+             "function f(){} f.prototype.bar=function (){};" +
+             "1 instanceof f;" +
+             "new f;",
+             // m2
+             "var a = new f();"));
+  }
+
+  public void testClassMovement_instanceof_noRewriteRequired2() {
+    parentModuleCanSeeSymbolsDeclaredInChildren = true;
+    testSame(createModuleChain(
+             // m1
+             "function f(){} f.prototype.bar=function (){};" +
+             "new f;",
+             // m2
+             "1 instanceof f;",
+             // m3
+             "var a = new f();"));
   }
 
   public void testClassMovement2() {
@@ -776,5 +854,24 @@ public class CrossModuleCodeMotionTest extends CompilerTestCase {
           "x()",
           "x()"
     });
+  }
+
+  public void testAbstractMethod() {
+    test(createModuleStar(
+             // m1
+             "var abstractMethod = function () {};" +
+             "function F(){} F.prototype.bar=abstractMethod;" +
+             "function G(){} G.prototype.bar=abstractMethod;",
+             // m2
+             "var f = new F();",
+             // m3
+             "var g = new G();"),
+         new String[] {
+           "var abstractMethod = function () {};",
+           "function F(){} F.prototype.bar=abstractMethod;" +
+           "var f = new F();",
+           "function G(){} G.prototype.bar=abstractMethod;" +
+           "var g = new G();"
+         });
   }
 }

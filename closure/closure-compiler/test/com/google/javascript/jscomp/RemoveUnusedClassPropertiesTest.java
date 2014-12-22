@@ -29,11 +29,12 @@ public class RemoveUnusedClassPropertiesTest extends CompilerTestCase {
 
   public RemoveUnusedClassPropertiesTest() {
     super(EXTERNS);
+    enableGatherExternProperties();
   }
 
   @Override
   protected CompilerPass getProcessor(Compiler compiler) {
-    return new RemoveUnusedClassProperties(compiler);
+    return new RemoveUnusedClassProperties(compiler, true);
   }
 
   public void testSimple1() {
@@ -54,8 +55,8 @@ public class RemoveUnusedClassPropertiesTest extends CompilerTestCase {
   public void testSimple3() {
     // A property defined on an object other than "this" can not be removed.
     testSame("y.a = 2");
-    // but doesn't prevent the removal of the definition on 'this'.
-    test("y.a = 2; this.a = 2", "y.a = 2; 2");
+    // and prevents the removal of the definition on 'this'.
+    testSame("y.a = 2; this.a = 2");
     // Some use of the property "a" prevents the removal.
     testSame("y.a = 2; this.a = 1; alert(x.a)");
   }
@@ -63,8 +64,8 @@ public class RemoveUnusedClassPropertiesTest extends CompilerTestCase {
   public void testObjLit() {
     // A property defined on an object other than "this" can not be removed.
     testSame("({a:2})");
-    // but doesn't prevent the removal of the definition on 'this'.
-    test("({a:0}); this.a = 1;", "({a:0});1");
+    // and prevent the removal of the definition on 'this'.
+    testSame("({a:0}); this.a = 1;");
     // Some use of the property "a" prevents the removal.
     testSame("x = ({a:0}); this.a = 1; alert(x.a)");
   }
@@ -143,18 +144,67 @@ public class RemoveUnusedClassPropertiesTest extends CompilerTestCase {
          "1;alert(Object.keys(this))");
   }
 
+  public void testObjectReflection1() {
+    // Verify reflection prevents removal.
+    testSame(
+        "/** @constructor */ function A() {this.foo = 1;}\n" +
+        "use(goog.reflect.object(A, {foo: 'foo'}));\n");
+  }
+
+  public void testObjectReflection2() {
+    // Any object literal definition prevents removal.
+    // Type based removal would allow this to be removed.
+    testSame(
+        "/** @constructor */ function A() {this.foo = 1;}\n" +
+        "use({foo: 'foo'});\n");
+  }
+
   public void testIssue730() {
     // Partial removal of properties can causes problems if the object is
     // sealed.
-    // TODO(johnlenz): should we not allow partial removals?
-    test(
+    testSame(
         "function A() {this.foo = 0;}\n" +
         "function B() {this.a = new A();}\n" +
         "B.prototype.dostuff = function() {this.a.foo++;alert('hi');}\n" +
-        "new B().dostuff();\n",
-        "function A(){0}" +
-        "function B(){this.a=new A}" +
-        "B.prototype.dostuff=function(){this.a.foo++;alert(\"hi\")};" +
-        "new B().dostuff();");
+        "new B().dostuff();\n");
+  }
+
+  public void testPrototypeProps1() {
+    test(
+        "function A() {this.foo = 1;}\n" +
+        "A.prototype.foo = 0;\n" +
+        "A.prototype.method = function() {this.foo++};\n" +
+        "new A().method()\n",
+        "function A() {1;}\n" +
+        "0;\n" +
+        "A.prototype.method = function() {0;};\n" +
+        "new A().method()\n");
+  }
+
+  public void testPrototypeProps2() {
+    // don't remove properties that are exported by convention
+    testSame(
+        "function A() {this._foo = 1;}\n" +
+        "A.prototype._foo = 0;\n" +
+        "A.prototype.method = function() {this._foo++};\n" +
+        "new A().method()\n");
+  }
+
+  public void testConstructorProperty1() {
+    enableTypeCheck(CheckLevel.OFF);
+
+    test(
+        "/** @constructor */ function C() {} C.prop = 1;",
+        "/** @constructor */ function C() {} 1");
+  }
+
+  public void testConstructorProperty2() {
+    enableTypeCheck(CheckLevel.OFF);
+
+    testSame(
+        "/** @constructor */ function C() {} "
+        + "C.prop = 1; "
+        + "function use(a) { alert(a.prop) }; "
+        + "use(C)");
   }
 }

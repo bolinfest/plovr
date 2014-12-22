@@ -29,7 +29,6 @@ import com.google.javascript.rhino.Token;
 import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.Deque;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -92,7 +91,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
    * stack is the inner most TRY block. A FUNCTION node in this stack implies
    * that the handler is determined by the caller of the function at runtime.
    */
-  private final Deque<Node> exceptionHandler = new ArrayDeque<Node>();
+  private final Deque<Node> exceptionHandler = new ArrayDeque<>();
 
   /*
    * This map is used to handle the follow of FINALLY. For example:
@@ -195,7 +194,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
    */
   private void prioritizeFromEntryNode(DiGraphNode<Node, Branch> entry) {
     PriorityQueue<DiGraphNode<Node, Branch>> worklist =
-        new PriorityQueue<DiGraphNode<Node, Branch>>(10, priorityComparator);
+        new PriorityQueue<>(10, priorityComparator);
     worklist.add(entry);
 
     while (!worklist.isEmpty()) {
@@ -276,13 +275,13 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
         case Token.THROW:
           return false;
         case Token.TRY:
-          /* Just before we are about to visit the second child of the TRY node,
-           * we know that we will be visiting either the CATCH or the FINALLY.
-           * In other words, we know that the post order traversal of the TRY
-           * block has been finished, no more exceptions can be caught by the
-           * handler at this TRY block and should be taken out of the stack.
+          /* When we are done with the TRY block and there is no FINALLY block,
+           * or done with both the TRY and CATCH block, then no more exceptions
+           * can be handled at this TRY statement, so it can be taken out of the
+           * stack.
            */
-          if (n == parent.getFirstChild().getNext()) {
+          if ((!NodeUtil.hasFinally(parent) && n == NodeUtil.getCatchBlock(parent))
+              || NodeUtil.isTryFinallyNode(parent, n)) {
             Preconditions.checkState(exceptionHandler.peek() == parent);
             exceptionHandler.pop();
           }
@@ -405,8 +404,10 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
       // The edge that transfer control to the beginning of the loop body.
       createEdge(forNode, Branch.ON_TRUE, computeFallThrough(body));
       // The edge to end of the loop.
-      createEdge(forNode, Branch.ON_FALSE,
-          computeFollowNode(forNode, this));
+      if (!cond.isEmpty()) {
+        createEdge(forNode, Branch.ON_FALSE,
+            computeFollowNode(forNode, this));
+      }
       // The end of the body will have a unconditional branch to our iter
       // (handled by calling computeFollowNode of the last instruction of the
       // body. Our iter will jump to the forNode again to another condition
@@ -638,8 +639,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
 
   private void handleReturn(Node node) {
     Node lastJump = null;
-    for (Iterator<Node> iter = exceptionHandler.iterator(); iter.hasNext();) {
-      Node curHandler = iter.next();
+    for (Node curHandler : exceptionHandler) {
       if (curHandler.isFunction()) {
         break;
       }
@@ -837,7 +837,18 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
         Preconditions.checkState(handler.isTry());
         Node catchBlock = NodeUtil.getCatchBlock(handler);
 
-        if (!NodeUtil.hasCatchHandler(catchBlock)) { // No catch but a FINALLY.
+        boolean lastJumpInCatchBlock = false;
+        for (Node ancestor : lastJump.getAncestors()) {
+          if (ancestor == handler) {
+            break;
+          } else if (ancestor == catchBlock) {
+            lastJumpInCatchBlock = true;
+            break;
+          }
+        }
+
+        // No catch but a FINALLY, or lastJump is inside the catch block.
+        if (!NodeUtil.hasCatchHandler(catchBlock) || lastJumpInCatchBlock) {
           if (lastJump == cfgNode) {
             createEdge(cfgNode, Branch.ON_EX, handler.getLastChild());
           } else {
@@ -918,6 +929,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
       case Token.INC:
       case Token.DEC:
       case Token.INSTANCEOF:
+      case Token.IN:
         return true;
       case Token.FUNCTION:
         return false;

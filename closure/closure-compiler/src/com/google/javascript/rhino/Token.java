@@ -52,8 +52,7 @@ package com.google.javascript.rhino;
 public class Token {
 
     /**
-     * Token types.  These values correspond to JSTokenType values in
-     * jsscan.c.
+     * Token types.
      */
     public final static int
         ERROR          = -1,
@@ -157,6 +156,41 @@ public class Token {
         STRING_KEY     = 154, // object literal key
         CAST           = 155,
 
+        // ES6
+        ARRAY_PATTERN  = 156, // destructuring patterns
+        OBJECT_PATTERN = 157,
+
+        CLASS          = 158, // classes
+        CLASS_MEMBERS  = 159, // class member container
+        MEMBER_DEF     = 160,
+        SUPER          = 161,
+
+        LET            = 162, // block scoped vars
+
+        FOR_OF         = 163, // for-of
+
+        YIELD          = 164, // generators
+
+        IMPORT         = 165, // modules
+        IMPORT_SPECS   = 166,
+        IMPORT_SPEC    = 167,
+        IMPORT_STAR    = 168, // "* as name", called NameSpaceImport in the spec.
+        EXPORT         = 169,
+        EXPORT_SPECS   = 170,
+        EXPORT_SPEC    = 171,
+        MODULE         = 172,
+
+        REST           = 173, // "..." in formal parameters, or an array pattern.
+        SPREAD         = 174, // "..." in a call expression, or an array literal.
+
+        COMPUTED_PROP  = 175,
+
+        TEMPLATELIT     = 176, // template literal
+        TEMPLATELIT_SUB = 177, // template literal substitution
+
+        DEFAULT_VALUE   = 178, // Formal parameter or destructuring element
+                               // with a default value
+
         // JSDoc-only tokens
         ANNOTATION     = 300,
         PIPE           = 301,
@@ -168,15 +202,12 @@ public class Token {
         EQUALS         = 307,
         LB             = 308,  // left brackets
         LC             = 309,  // left curly braces
-        COLON          = 310;
+        COLON          = 310,
 
-    // Transitional definitions
-    // TODO(johnlenz): remove these
-    public final static int
-         DEFAULT        = DEFAULT_CASE,
-         GET            = GETTER_DEF,
-         LP             = PARAM_LIST,
-         SET            = SETTER_DEF;
+        // Token Types to use for internal bookkeeping,
+        // an AST is invalid while these are present.
+        PLACEHOLDER1   = 1001,
+        PLACEHOLDER2   = 1002;
 
   public static String name(int token) {
         switch (token) {
@@ -226,6 +257,8 @@ public class Token {
           case INSTANCEOF:      return "INSTANCEOF";
           case ARRAYLIT:        return "ARRAYLIT";
           case OBJECTLIT:       return "OBJECTLIT";
+          case TEMPLATELIT:      return "TEMPLATELIT";
+          case TEMPLATELIT_SUB:    return "TEMPLATELIT_SUB";
           case TRY:             return "TRY";
           case PARAM_LIST:      return "PARAM_LIST";
           case COMMA:           return "COMMA";
@@ -281,9 +314,155 @@ public class Token {
           case LB:              return "LB";
           case LC:              return "LC";
           case COLON:           return "COLON";
+
+          case ARRAY_PATTERN:   return "ARRAY_PATTERN";
+          case OBJECT_PATTERN:  return "OBJECT_PATTERN";
+          case CLASS:           return "CLASS";
+          case CLASS_MEMBERS:   return "CLASS_MEMBERS";
+          case MEMBER_DEF:      return "MEMBER_DEF";
+          case SUPER:           return "SUPER";
+          case LET:             return "LET";
+          case FOR_OF:          return "FOR_OF";
+          case YIELD:           return "YIELD";
+          case IMPORT:          return "IMPORT";
+          case IMPORT_SPECS:    return "IMPORT_SPECS";
+          case IMPORT_SPEC:     return "IMPORT_SPEC";
+          case IMPORT_STAR:     return "IMPORT_STAR";
+          case EXPORT:          return "EXPORT";
+          case EXPORT_SPECS:    return "EXPORT_SPECS";
+          case EXPORT_SPEC:     return "EXPORT_SPEC";
+          case MODULE:          return "MODULE";
+          case REST:            return "REST";
+          case SPREAD:          return "SPREAD";
+          case COMPUTED_PROP:   return "COMPUTED_PROP";
+          case DEFAULT_VALUE:   return "DEFAULT_VALUE";
+
+          case PLACEHOLDER1:        return "PLACEHOLDER1";
+          case PLACEHOLDER2:        return "PLACEHOLDER2";
         }
 
         // Token without name
-        throw new IllegalStateException(String.valueOf(token));
+        throw new IllegalStateException("No name defined for " + token);
     }
+
+  /** If the arity isn't always the same, this function returns -1 */
+  public static int arity(int token) {
+    switch (token) {
+      case ERROR:           return -1;
+      case RETURN:          return -1;
+      case BITOR:           return 2;
+      case BITXOR:          return 2;
+      case BITAND:          return 2;
+      case EQ:              return 2;
+      case NE:              return 2;
+      case LT:              return 2;
+      case LE:              return 2;
+      case GT:              return 2;
+      case GE:              return 2;
+      case LSH:             return 2;
+      case RSH:             return 2;
+      case URSH:            return 2;
+      case ADD:             return 2;
+      case SUB:             return 2;
+      case MUL:             return 2;
+      case DIV:             return 2;
+      case MOD:             return 2;
+      case NOT:             return 1;
+      case BITNOT:          return 1;
+      case POS:             return 1;
+      case NEG:             return 1;
+      case NEW:             return -1;
+      case DELPROP:         return 1;
+      case TYPEOF:          return 1;
+      case GETPROP:         return 2;
+      case GETELEM:         return 2;
+      case CALL:            return -1;
+      case NAME:            return 0;
+      case LABEL_NAME:      return 0;
+      case NUMBER:          return 0;
+      case STRING:          return 0;
+      case STRING_KEY:      return -1;
+      case NULL:            return 0;
+      case THIS:            return 0;
+      case FALSE:           return 0;
+      case TRUE:            return 0;
+      case SHEQ:            return 2;
+      case SHNE:            return 2;
+      case REGEXP:          return -1;
+      case THROW:           return 1;
+      case IN:              return 2;
+      case INSTANCEOF:      return 2;
+      case ARRAYLIT:        return -1;
+      case OBJECTLIT:       return -1;
+      case TEMPLATELIT:     return -1;
+      case TEMPLATELIT_SUB: return 1;
+      case TRY:             return -1;
+      case CLASS:           return 3;
+      case MEMBER_DEF:      return 1;
+      case PARAM_LIST:      return -1;
+      case DEFAULT_VALUE:   return 2;
+      case COMMA:           return 2;
+      case ASSIGN:          return 2;
+      case ASSIGN_BITOR:    return 2;
+      case ASSIGN_BITXOR:   return 2;
+      case ASSIGN_BITAND:   return 2;
+      case ASSIGN_LSH:      return 2;
+      case ASSIGN_RSH:      return 2;
+      case ASSIGN_URSH:     return 2;
+      case ASSIGN_ADD:      return 2;
+      case ASSIGN_SUB:      return 2;
+      case ASSIGN_MUL:      return 2;
+      case ASSIGN_DIV:      return 2;
+      case ASSIGN_MOD:      return 2;
+      case HOOK:            return 3;
+      case OR:              return 2;
+      case AND:             return 2;
+      case INC:             return 1;
+      case DEC:             return 1;
+      case FUNCTION:        return 3;
+      case IF:              return -1;
+      case SWITCH:          return -1;
+      case CASE:            return 2;
+      case DEFAULT_CASE:    return 1;
+      case WHILE:           return 2;
+      case DO:              return 2;
+      case FOR:             return -1;
+      case FOR_OF:          return 3;
+      case BREAK:           return -1;
+      case CONTINUE:        return -1;
+      case VAR:             return -1;
+      case WITH:            return 2;
+      case CATCH:           return 2;
+      case EMPTY:           return 0;
+      case BLOCK:           return -1;
+      case LABEL:           return 2;
+      case EXPR_RESULT:     return 1;
+      case SCRIPT:          return -1;
+      case GETTER_DEF:      return 1;
+      case SETTER_DEF:      return 1;
+      case CONST:           return -1;
+      case DEBUGGER:        return -1;
+      case CAST:            return 1;
+      case ANNOTATION:      return -1;
+      case PIPE:            return -1;
+      case STAR:            return -1;
+      case EOC:             return -1;
+      case QMARK:           return -1;
+      case ELLIPSIS:        return -1;
+      case REST:            return 0;
+      case SPREAD:          return 1;
+      case BANG:            return -1;
+      case VOID:            return 1;
+      case EQUALS:          return -1;
+      case LB:              return -1;
+      case LC:              return -1;
+      case COLON:           return -1;
+      case COMPUTED_PROP:   return 2;
+      case IMPORT:          return 3;
+      case IMPORT_STAR:     return 0;
+      case YIELD:           return -1;
+    }
+    throw new IllegalStateException(
+        "No arity defined for " + Token.name(token));
+  }
 }

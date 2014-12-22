@@ -34,6 +34,7 @@ public class RuntimeTypeCheckTest extends CompilerTestCase {
   protected void setUp() {
     super.enableLineNumberCheck(false);
     enableNormalize();
+    compareJsDoc = false;
   }
 
   public void testValue() {
@@ -243,8 +244,8 @@ public class RuntimeTypeCheckTest extends CompilerTestCase {
     compiler.init(Lists.<SourceFile>newArrayList(),
                   Lists.<SourceFile>newArrayList(),
                   new CompilerOptions());
-    Node base = compiler.loadLibraryCode("base");
-    Node typeCheck = compiler.loadLibraryCode("runtime_type_check");
+    Node base = compiler.loadLibraryCode("base", true);
+    Node typeCheck = compiler.loadLibraryCode("runtime_type_check", true);
     test(js,
          compiler.toSource(base) + ";"
          + compiler.toSource(typeCheck) + ";"

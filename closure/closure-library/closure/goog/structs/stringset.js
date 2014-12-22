@@ -33,9 +33,10 @@ goog.require('goog.iter');
 
 /**
  * Creates a set of strings.
- * @param {!Array=} opt_elements Elements to add to the set. The non-string
+ * @param {!Array<?>=} opt_elements Elements to add to the set. The non-string
  *     items will be converted to strings, so 15 and '15' will mean the same.
  * @constructor
+ * @final
  */
 goog.structs.StringSet = function(opt_elements) {
   /**
@@ -47,7 +48,7 @@ goog.structs.StringSet = function(opt_elements) {
 
   if (opt_elements) {
     for (var i = 0; i < opt_elements.length; i++) {
-      this.elements_[this.encode(opt_elements[i])] = null;
+      this.elements_[goog.structs.StringSet.encode_(opt_elements[i])] = null;
     }
   }
 
@@ -57,8 +58,8 @@ goog.structs.StringSet = function(opt_elements) {
 
 /**
  * Empty object. Referring to it is faster than creating a new empty object in
- * {@link #encode}.
- * @type {Object}
+ * {@code goog.structs.StringSet.encode_}.
+ * @const {!Object}
  * @private
  */
 goog.structs.StringSet.EMPTY_OBJECT_ = {};
@@ -72,23 +73,23 @@ goog.structs.StringSet.EMPTY_OBJECT_ = {};
  * @param {*} element The element to escape.
  * @return {*} The escaped element or the element itself if it doesn't have to
  *     be escaped.
- * @protected
+ * @private
  */
-goog.structs.StringSet.prototype.encode = function(element) {
+goog.structs.StringSet.encode_ = function(element) {
   return element in goog.structs.StringSet.EMPTY_OBJECT_ ||
       String(element).charCodeAt(0) == 32 ? ' ' + element : element;
 };
 
 
 /**
- * Inverse function of {@link #encode}.
+ * Inverse function of {@code goog.structs.StringSet.encode_}.
  * NOTE: forEach would be 30% faster in FF if the compiler inlined decode.
  * @param {string} key The escaped element used as the key of the internal
  *     object.
  * @return {string} The unescaped element.
- * @protected
+ * @private
  */
-goog.structs.StringSet.prototype.decode = function(key) {
+goog.structs.StringSet.decode_ = function(key) {
   return key.charCodeAt(0) == 32 ? key.substr(1) : key;
 };
 
@@ -98,17 +99,17 @@ goog.structs.StringSet.prototype.decode = function(key) {
  * @param {*} element The element to add. It will be converted to string.
  */
 goog.structs.StringSet.prototype.add = function(element) {
-  this.elements_[this.encode(element)] = null;
+  this.elements_[goog.structs.StringSet.encode_(element)] = null;
 };
 
 
 /**
  * Adds a the elements of an array to this set.
- * @param {!Array} arr The array to add the elements of.
+ * @param {!Array<?>} arr The array to add the elements of.
  */
 goog.structs.StringSet.prototype.addArray = function(arr) {
   for (var i = 0; i < arr.length; i++) {
-    this.elements_[this.encode(arr[i])] = null;
+    this.elements_[goog.structs.StringSet.encode_(arr[i])] = null;
   }
 };
 
@@ -164,18 +165,18 @@ goog.structs.StringSet.prototype.clone = function() {
  * @return {boolean} Whether it is in the set.
  */
 goog.structs.StringSet.prototype.contains = function(element) {
-  return this.encode(element) in this.elements_;
+  return goog.structs.StringSet.encode_(element) in this.elements_;
 };
 
 
 /**
  * Tells if the set contains all elements of the array.
- * @param {!Array} arr The elements to check.
+ * @param {!Array<?>} arr The elements to check.
  * @return {boolean} Whether they are in the set.
  */
 goog.structs.StringSet.prototype.containsArray = function(arr) {
   for (var i = 0; i < arr.length; i++) {
-    if (!(this.encode(arr[i]) in this.elements_)) {
+    if (!(goog.structs.StringSet.encode_(arr[i]) in this.elements_)) {
       return false;
     }
   }
@@ -203,7 +204,7 @@ goog.structs.StringSet.prototype.equals = function(stringSet) {
  */
 goog.structs.StringSet.prototype.forEach = function(f, opt_obj) {
   for (var key in this.elements_) {
-    f.call(opt_obj, this.decode(key), undefined, this);
+    f.call(opt_obj, goog.structs.StringSet.decode_(key), undefined, this);
   }
 };
 
@@ -287,17 +288,18 @@ goog.structs.StringSet.prototype.getUnion = function(stringSet) {
 
 
 /**
- * @return {!Array.<string>} The elements of the set.
+ * @return {!Array<string>} The elements of the set.
  */
 goog.structs.StringSet.prototype.getValues = Object.keys ?
     function() {
       // Object.keys was introduced in JavaScript 1.8.5, Array#map in 1.6.
-      return Object.keys(this.elements_).map(this.decode, this);
+      return Object.keys(this.elements_).map(
+          goog.structs.StringSet.decode_, this);
     } :
     function() {
       var ret = [];
       for (var key in this.elements_) {
-        ret.push(this.decode(key));
+        ret.push(goog.structs.StringSet.decode_(key));
       }
       return ret;
     };
@@ -360,7 +362,7 @@ goog.structs.StringSet.prototype.isSupersetOf = function(stringSet) {
  * @return {boolean} Whether the element was in the set.
  */
 goog.structs.StringSet.prototype.remove = function(element) {
-  var key = this.encode(element);
+  var key = goog.structs.StringSet.encode_(element);
   if (key in this.elements_) {
     delete this.elements_[key];
     return true;
@@ -371,11 +373,11 @@ goog.structs.StringSet.prototype.remove = function(element) {
 
 /**
  * Removes all elements of the given array from this set.
- * @param {!Array} arr The elements to remove.
+ * @param {!Array<?>} arr The elements to remove.
  */
 goog.structs.StringSet.prototype.removeArray = function(arr) {
   for (var i = 0; i < arr.length; i++) {
-    delete this.elements_[this.encode(arr[i])];
+    delete this.elements_[goog.structs.StringSet.encode_(arr[i])];
   }
 };
 

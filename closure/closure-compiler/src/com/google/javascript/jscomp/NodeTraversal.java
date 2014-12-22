@@ -49,13 +49,13 @@ public class NodeTraversal {
    * are lazily created; so the {@code scopeRoots} stack contains the
    * Nodes for all Scopes that have not been created yet.
    */
-  private final Deque<Scope> scopes = new ArrayDeque<Scope>();
+  private final Deque<Scope> scopes = new ArrayDeque<>();
 
   /**
    * A stack of scope roots. All scopes that have not been created
    * are represented in this Deque.
    */
-  private final Deque<Node> scopeRoots = new ArrayDeque<Node>();
+  private final Deque<Node> scopeRoots = new ArrayDeque<>();
 
 
   /**
@@ -64,7 +64,7 @@ public class NodeTraversal {
    * {@link #getControlFlowGraph()}. Note that {@link ArrayDeque} does not allow
    * {@code null} elements, so {@link LinkedList} is used instead.
    */
-  Deque<ControlFlowGraph<Node>> cfgs = new LinkedList<ControlFlowGraph<Node>>();
+  Deque<ControlFlowGraph<Node>> cfgs = new LinkedList<>();
 
   /** The current source file name */
   private String sourceName;
@@ -73,7 +73,8 @@ public class NodeTraversal {
   private InputId inputId;
 
   /** The scope creator */
-  private ScopeCreator scopeCreator;
+  private final ScopeCreator scopeCreator;
+  private final boolean useBlockScope;
 
   /** Possible callback for scope entry and exist **/
   private ScopedCallback scopeCallback;
@@ -228,7 +229,9 @@ public class NodeTraversal {
    * Creates a node traversal using the specified callback interface.
    */
   public NodeTraversal(AbstractCompiler compiler, Callback cb) {
-    this(compiler, cb, new SyntacticScopeCreator(compiler));
+    this(compiler, cb, compiler.getLanguageMode().isEs6OrHigher()
+        ? new Es6SyntacticScopeCreator(compiler)
+        : new SyntacticScopeCreator(compiler));
   }
 
   /**
@@ -245,6 +248,7 @@ public class NodeTraversal {
     this.inputId = null;
     this.sourceName = "";
     this.scopeCreator = scopeCreator;
+    this.useBlockScope = scopeCreator.hasBlockScope();
   }
 
   private void throwUnexpectedException(Exception unexpectedException) {
@@ -345,13 +349,16 @@ public class NodeTraversal {
    */
   void traverseWithScope(Node root, Scope s) {
     Preconditions.checkState(s.isGlobal());
-
-    inputId = null;
-    sourceName = "";
-    curNode = root;
-    pushScope(s);
-    traverseBranch(root, null);
-    popScope();
+    try {
+      inputId = null;
+      sourceName = "";
+      curNode = root;
+      pushScope(s);
+      traverseBranch(root, null);
+      popScope();
+    } catch (Exception unexpectedException) {
+      throwUnexpectedException(unexpectedException);
+    }
   }
 
   /**
@@ -382,6 +389,26 @@ public class NodeTraversal {
   }
 
   /**
+   * Traverse a function out-of-band of normal traversal.
+   *
+   * @param node The function node.
+   * @param scope The scope the function is contained in. Does not fire enter/exit
+   *     callback events for this scope.
+   */
+  void traverseFunctionOutOfBand(Node node, Scope scope) {
+    Preconditions.checkNotNull(scope);
+    Preconditions.checkState(node.isFunction());
+    Preconditions.checkState(scope.getRootNode() != null);
+    if (inputId == null) {
+      inputId = NodeUtil.getInputId(node);
+    }
+    curNode = node.getParent();
+    pushScope(scope, true /* quietly */);
+    traverseBranch(node, curNode);
+    popScope(true /* quietly */);
+  }
+
+  /**
    * Traverses an inner node recursively with a refined scope. An inner node may
    * be any node with a non {@code null} parent (i.e. all nodes except the
    * root).
@@ -393,6 +420,9 @@ public class NodeTraversal {
    */
   protected void traverseInnerNode(Node node, Node parent, Scope refinedScope) {
     Preconditions.checkNotNull(parent);
+    if (inputId == null) {
+      inputId = NodeUtil.getInputId(node);
+    }
     if (refinedScope != null && getScope() != refinedScope) {
       curNode = node;
       pushScope(refinedScope);
@@ -415,6 +445,22 @@ public class NodeTraversal {
     Node cur = curNode;
     while (cur != null) {
       int line = cur.getLineno();
+      if (line >= 0) {
+        return line;
+      }
+      cur = cur.getParent();
+    }
+    return 0;
+  }
+
+  /**
+   * Gets the current char number, or zero if it cannot be determined. The line
+   * number is retrieved lazily as a running time optimization.
+   */
+  public int getCharno() {
+    Node cur = curNode;
+    while (cur != null) {
+      int line = cur.getCharno();
       if (line >= 0) {
         return line;
       }
@@ -459,7 +505,7 @@ public class NodeTraversal {
    * the function the second time.
    * (We're assuming that P1 runs to a fixpoint, o/w we may miss optimizations.)
    *
-   * Most changes are reported with calls to Compiler.reportCodeChange(), which
+   * <p>Most changes are reported with calls to Compiler.reportCodeChange(), which
    * doesn't know which scope changed. We keep track of the current scope by
    * calling Compiler.setScope inside pushScope and popScope.
    * The automatic tracking can be wrong in rare cases when a pass changes scope
@@ -526,6 +572,8 @@ public class NodeTraversal {
 
     if (type == Token.FUNCTION) {
       traverseFunction(n, parent);
+    } else if (useBlockScope && NodeUtil.createsBlockScope(n)) {
+      traverseBlockScope(n);
     } else {
       for (Node child = n.getFirstChild(); child != null; ) {
         // child could be replaced, in which case our child node
@@ -570,14 +618,22 @@ public class NodeTraversal {
     traverseBranch(args, n);
 
     // Body
-    Preconditions.checkState(body.getNext() == null && body.isBlock(), body);
+    // ES6 "arrow" function may not have a block as a body.
     traverseBranch(body, n);
 
     popScope();
   }
 
+  /** Traverses a non-function block. */
+  private void traverseBlockScope(Node n) {
+    pushScope(n);
+    for (Node child : n.children()) {
+      traverseBranch(child, n);
+    }
+    popScope();
+  }
+
   /** Examines the functions stack for the last instance of a function node. */
-  @SuppressWarnings("unchecked")
   public Node getEnclosingFunction() {
     if (scopes.size() + scopeRoots.size() < 2) {
       return null;
@@ -603,18 +659,33 @@ public class NodeTraversal {
 
   /** Creates a new scope (e.g. when entering a function). */
   private void pushScope(Scope s) {
+    pushScope(s, false);
+  }
+
+  /**
+   * Creates a new scope (e.g. when entering a function).
+   * @param quietly Don't fire an enterScope callback.
+   */
+  private void pushScope(Scope s, boolean quietly) {
     Preconditions.checkState(curNode != null);
     compiler.setScope(s.getRootNode());
     scopes.push(s);
     cfgs.push(null);
-    if (scopeCallback != null) {
+    if (!quietly && scopeCallback != null) {
       scopeCallback.enterScope(this);
     }
   }
 
-  /** Pops back to the previous scope (e.g. when leaving a function). */
   private void popScope() {
-    if (scopeCallback != null) {
+    popScope(false);
+  }
+
+  /**
+   * Pops back to the previous scope (e.g. when leaving a function).
+   * @param quietly Don't fire the exitScope callback.
+   */
+  private void popScope(boolean quietly) {
+    if (!quietly && scopeCallback != null) {
       scopeCallback.exitScope(this);
     }
     if (scopeRoots.isEmpty()) {
@@ -683,8 +754,7 @@ public class NodeTraversal {
   /** Reports a diagnostic (error or warning) */
   public void report(Node n, DiagnosticType diagnosticType,
       String... arguments) {
-    JSError error = JSError.make(
-        getBestSourceFileName(n), n, diagnosticType, arguments);
+    JSError error = JSError.make(n, diagnosticType, arguments);
     compiler.report(error);
   }
 
@@ -706,7 +776,7 @@ public class NodeTraversal {
    */
   public JSError makeError(Node n, CheckLevel level, DiagnosticType type,
       String... arguments) {
-    return JSError.make(getBestSourceFileName(n), n, level, type, arguments);
+    return JSError.make(n, level, type, arguments);
   }
 
   /**
@@ -717,7 +787,7 @@ public class NodeTraversal {
    * @param arguments Arguments to be incorporated into the message
    */
   public JSError makeError(Node n, DiagnosticType type, String... arguments) {
-    return JSError.make(getBestSourceFileName(n), n, type, arguments);
+    return JSError.make(n, type, arguments);
   }
 
   private String getBestSourceFileName(Node n) {

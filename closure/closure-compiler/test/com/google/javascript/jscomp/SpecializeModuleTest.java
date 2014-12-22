@@ -32,6 +32,7 @@ public class SpecializeModuleTest extends CompilerTestCase {
 
   public SpecializeModuleTest() {
     super(SHARED_EXTERNS);
+    compareJsDoc = false;
   }
 
   private PassFactory inlineFunctions =
@@ -39,7 +40,8 @@ public class SpecializeModuleTest extends CompilerTestCase {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       return new InlineFunctions(compiler,
-          compiler.getUniqueNameIdSupplier(), true, false, true, true, true);
+          compiler.getUniqueNameIdSupplier(), true, false, true, true, true,
+          CompilerOptions.UNLIMITED_FUN_SIZE_AFTER_INLINING);
     }
   };
 
@@ -436,7 +438,7 @@ public class SpecializeModuleTest extends CompilerTestCase {
     public void testRemovedFunctions() {
       testSame("function F(){}\nvar G = function(a){};");
 
-      assertEquals(ImmutableSet.of(), lastState.getRemovedFunctions());
+      assertTrue(lastState.getRemovedFunctions().isEmpty());
 
       Node functionF = findFunction("F");
 
@@ -449,13 +451,13 @@ public class SpecializeModuleTest extends CompilerTestCase {
       assertEquals(ImmutableSet.of(functionF, functionG),
           lastState.getRemovedFunctions());
 
-      assertEquals(ImmutableSet.of(), lastState.getSpecializedFunctions());
+      assertTrue(lastState.getSpecializedFunctions().isEmpty());
     }
 
     public void testSpecializedFunctions() {
       testSame("function F(){}\nvar G = function(a){};");
 
-      assertEquals(ImmutableSet.of(), lastState.getSpecializedFunctions());
+      assertTrue(lastState.getSpecializedFunctions().isEmpty());
 
       Node functionF = findFunction("F");
 
@@ -469,7 +471,7 @@ public class SpecializeModuleTest extends CompilerTestCase {
       assertEquals(ImmutableSet.of(functionF, functionG),
           lastState.getSpecializedFunctions());
 
-      assertEquals(ImmutableSet.of(), lastState.getRemovedFunctions());
+      assertTrue(lastState.getRemovedFunctions().isEmpty());
     }
 
     public void testCanFixupFunction() {

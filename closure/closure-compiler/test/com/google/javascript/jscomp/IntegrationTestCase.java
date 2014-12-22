@@ -46,7 +46,14 @@ abstract class IntegrationTestCase extends TestCase {
         + "/** @return {string} */ var widgetToken = function() {};\n"
         + "function alert(message) {}"
         + "function Object() {}"
-        + "Object.seal;"));
+        + "Object.seal;"
+        + "/**\n"
+        + " * @param {...*} var_args\n"
+        + " * @constructor\n"
+        + " */\n"
+        + "function Function(var_args) {}\n"
+        + "/** @param {...*} var_args */\n"
+        + "Function.prototype.call = function (var_args) {};"));
 
   protected List<SourceFile> externs = DEFAULT_EXTERNS;
 
@@ -92,7 +99,7 @@ abstract class IntegrationTestCase extends TestCase {
         0, compiler.getErrors().length + compiler.getWarnings().length);
 
     Node root = compiler.getRoot().getLastChild();
-    Node expectedRoot = parse(compiled, options, normalizeResults);
+    Node expectedRoot = parseExpectedCode(compiled, options, normalizeResults);
     String explanation = expectedRoot.checkTreeEquals(root);
     assertNull("\nExpected: " + compiler.toSource(expectedRoot) +
         "\nResult: " + compiler.toSource(root) +
@@ -137,7 +144,40 @@ abstract class IntegrationTestCase extends TestCase {
 
     if (compiled != null) {
       Node root = compiler.getRoot().getLastChild();
-      Node expectedRoot = parse(compiled, options, normalizeResults);
+      Node expectedRoot = parseExpectedCode(compiled, options, normalizeResults);
+      String explanation = expectedRoot.checkTreeEquals(root);
+      assertNull("\nExpected: " + compiler.toSource(expectedRoot) +
+          "\nResult: " + compiler.toSource(root) +
+          "\n" + explanation, explanation);
+    }
+  }
+
+  /**
+   * Asserts that there is at least one parse error.
+   */
+  protected void testParseError(CompilerOptions options, String original) {
+    testParseError(options, original, null);
+  }
+
+  /**
+   * Asserts that there is at least one parse error.
+   */
+  protected void testParseError(CompilerOptions options,
+      String original, String compiled) {
+    Compiler compiler = compile(options, original);
+    for (JSError error : compiler.getErrors()) {
+      if (!error.getType().equals(RhinoErrorReporter.PARSE_ERROR)) {
+        fail("Found unexpected error type " + error.getType() + ":\n" + error);
+      }
+    }
+    assertEquals("Unexpected warnings: " +
+        Joiner.on("\n").join(compiler.getWarnings()),
+        0, compiler.getWarnings().length);
+
+    if (compiled != null) {
+      Node root = compiler.getRoot().getLastChild();
+      Node expectedRoot = parseExpectedCode(
+          new String[] {compiled}, options, normalizeResults);
       String explanation = expectedRoot.checkTreeEquals(root);
       assertNull("\nExpected: " + compiler.toSource(expectedRoot) +
           "\nResult: " + compiler.toSource(root) +
@@ -156,7 +196,7 @@ abstract class IntegrationTestCase extends TestCase {
 
     if (compiled != null) {
       Node root = compiler.getRoot().getLastChild();
-      Node expectedRoot = parse(compiled, options, normalizeResults);
+      Node expectedRoot = parseExpectedCode(compiled, options, normalizeResults);
       String explanation = expectedRoot.checkTreeEquals(root);
       assertNull("\nExpected: " + compiler.toSource(expectedRoot) +
           "\nResult: " + compiler.toSource(root) +
@@ -170,10 +210,10 @@ abstract class IntegrationTestCase extends TestCase {
     if (actual != expected) {
       String msg = "";
       for (JSError err : compiler.getErrors()) {
-        msg += "Error:" + err.toString() + "\n";
+        msg += "Error:" + err + "\n";
       }
       for (JSError err : compiler.getWarnings()) {
-        msg += "Warning:" + err.toString() + "\n";
+        msg += "Warning:" + err + "\n";
       }
       assertEquals("Unexpected warnings or errors.\n " + msg,
         expected, actual);
@@ -194,6 +234,24 @@ abstract class IntegrationTestCase extends TestCase {
         externs, Lists.newArrayList(CompilerTestCase.createModuleChain(original)),
         options);
     return compiler;
+  }
+
+  /**
+   * Parse the expected code to compare against.
+   * We want to run this with similar parsing options, but don't
+   * want to run the commonjs preprocessing passes (so that we can use this
+   * to test the commonjs code).
+   */
+  protected Node parseExpectedCode(
+      String[] original, CompilerOptions options, boolean normalize) {
+    boolean oldProcessCommonJsModules = options.processCommonJSModules;
+    boolean oldProcessEs6Modules = options.rewriteEs6Modules;
+    options.processCommonJSModules = false;
+    options.rewriteEs6Modules = false;
+    Node expectedRoot = parse(original, options, normalize);
+    options.processCommonJSModules = oldProcessCommonJsModules;
+    options.rewriteEs6Modules = oldProcessEs6Modules;
+    return expectedRoot;
   }
 
   protected Node parse(

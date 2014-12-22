@@ -22,15 +22,13 @@ import com.google.template.soy.shared.restricted.SoyPrintDirective;
 
 
 /**
- * Guice module for i18n directives
+ * Guice module for i18n directives.
  *
- * @author Jeff Craig
  */
 public class I18nDirectivesModule extends AbstractModule {
 
 
   @Override public void configure() {
-
     Multibinder<SoyPrintDirective> soyDirectivesSetBinder =
         Multibinder.newSetBinder(binder(), SoyPrintDirective.class);
 

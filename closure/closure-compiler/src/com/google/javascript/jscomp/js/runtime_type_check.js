@@ -48,7 +48,7 @@ $jscomp.typecheck.log = function(warning, expr) {};
  * @param {*} expr the expression to check.
  * @param {!Array.<!$jscomp.typecheck.Checker>} checkers the checkers to
  *     use in checking, one of these has to match for checking to succeed.
- * #return {*} the given expression back.
+ * @return {*} the given expression back.
  */
 $jscomp.typecheck.checkType = function(expr, checkers) {
   if ($jscomp.typecheck.suspendChecking) {
@@ -83,7 +83,15 @@ $jscomp.typecheck.checkType = function(expr, checkers) {
  * @private
  */
 $jscomp.typecheck.prettify_ = function(expr) {
-  return $jscomp.typecheck.getClassName_(expr) || String(expr);
+  var className = $jscomp.typecheck.getClassName_(expr);
+  if (className) {
+    return className;
+  }
+  try {
+    return String(expr);
+  }
+  catch (e) {}
+  return '<unknown>';
 };
 
 /**
@@ -332,7 +340,7 @@ $jscomp.typecheck.ClassChecker_ = function(className) {
 
   /**
    * The name of the class to check.
-   * #type {string}
+   * @type {string}
    * @private
    */
   this.className_ = className;
@@ -364,7 +372,7 @@ $jscomp.typecheck.InterfaceChecker_ = function(interfaceName) {
 
   /**
    * The name of the interface to check.
-   * #type {string}
+   * @type {string}
    * @private
    */
   this.interfaceName_ = interfaceName;
@@ -385,9 +393,33 @@ $jscomp.typecheck.InterfaceChecker_.prototype.toString = function() {
 
 
 /**
+ * A checker for object types (possibly with non-standard prototype: might not
+ * inherit from Object).
+ *
+ * @constructor
+ * @implements {$jscomp.typecheck.Checker}
+ * @private
+ */
+$jscomp.typecheck.ObjectChecker_ = function() {};
+
+
+/** @inheritDoc */
+$jscomp.typecheck.ObjectChecker_.prototype.check = function(expr) {
+  return typeof(expr) == 'object' && expr;
+};
+
+
+/** @inheritDoc */
+$jscomp.typecheck.ObjectChecker_.prototype.toString = function() {
+  return 'value(object)';
+};
+
+
+
+/**
  * A checker for null values.
  *
- * #type {!$jscomp.typecheck.Checker} a checker.
+ * @type {!$jscomp.typecheck.Checker} a checker.
  */
 $jscomp.typecheck.nullChecker = new $jscomp.typecheck.NullChecker_();
 
@@ -434,3 +466,11 @@ $jscomp.typecheck.classChecker = function(className) {
 $jscomp.typecheck.interfaceChecker = function(interfaceName) {
   return new $jscomp.typecheck.InterfaceChecker_(interfaceName);
 };
+
+
+/**
+ * A checker for objects.
+ *
+ * @type {!$jscomp.typecheck.Checker} a checker.
+ */
+$jscomp.typecheck.objectChecker = new $jscomp.typecheck.ObjectChecker_();

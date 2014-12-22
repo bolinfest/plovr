@@ -33,7 +33,7 @@ import java.util.List;
  *
  * @see CodeGenerator
  */
-class CodePrinter {
+public final class CodePrinter {
   // The number of characters after which we insert a line break in the code
   static final int DEFAULT_LINE_LENGTH_THRESHOLD = 500;
 
@@ -170,8 +170,8 @@ class CodePrinter {
      * @throws IllegalStateException if an attempt to reverse a line cut is
      *     made on a previous line rather than the current line.
      */
-    private FilePosition convertPosition(FilePosition position, int lineIndex,
-                                     int characterPosition, boolean insertion) {
+    private static FilePosition convertPosition(FilePosition position, int lineIndex,
+                                                int characterPosition, boolean insertion) {
       int originalLine = position.getLine();
       int originalChar = position.getColumn();
       if (insertion) {
@@ -296,6 +296,7 @@ class CodePrinter {
 
     @Override
     void appendBlockEnd() {
+      maybeEndStatement();
       endLine();
       indent--;
       append("}");
@@ -355,10 +356,15 @@ class CodePrinter {
       return true;
     }
 
+    @Override
+    void maybeInsertSpace() {
+      add(" ");
+    }
+
     /**
      * @return The TRY node for the specified CATCH node.
      */
-    private Node getTryForCatch(Node n) {
+    private static Node getTryForCatch(Node n) {
       return n.getParent().getParent();
     }
 
@@ -543,7 +549,7 @@ class CodePrinter {
 
   }
 
-  static class Builder {
+  public static final class Builder {
     private final Node root;
     private CompilerOptions options = new CompilerOptions();
     private boolean outputTypes = false;
@@ -555,14 +561,14 @@ class CodePrinter {
      * Sets the root node from which to generate the source code.
      * @param node The root node.
      */
-    Builder(Node node) {
+    public Builder(Node node) {
       root = node;
     }
 
     /**
      * Sets the output options from compiler options.
      */
-    Builder setCompilerOptions(CompilerOptions options) {
+    public Builder setCompilerOptions(CompilerOptions options) {
       try {
         this.options = (CompilerOptions) options.clone();
       } catch (CloneNotSupportedException e) {
@@ -571,7 +577,7 @@ class CodePrinter {
       return this;
     }
 
-    Builder setTypeRegistry(JSTypeRegistry registry) {
+    public Builder setTypeRegistry(JSTypeRegistry registry) {
       this.registry = registry;
       return this;
     }
@@ -580,7 +586,7 @@ class CodePrinter {
      * Sets whether pretty printing should be used.
      * @param prettyPrint If true, pretty printing will be used.
      */
-    Builder setPrettyPrint(boolean prettyPrint) {
+    public Builder setPrettyPrint(boolean prettyPrint) {
       options.prettyPrint = prettyPrint;
       return this;
     }
@@ -589,7 +595,7 @@ class CodePrinter {
      * Sets whether line breaking should be done automatically.
      * @param lineBreak If true, line breaking is done automatically.
      */
-    Builder setLineBreak(boolean lineBreak) {
+    public Builder setLineBreak(boolean lineBreak) {
       options.lineBreak = lineBreak;
       return this;
     }
@@ -598,7 +604,7 @@ class CodePrinter {
      * Sets whether to output closure-style type annotations.
      * @param outputTypes If true, outputs closure-style type annotations.
      */
-    Builder setOutputTypes(boolean outputTypes) {
+    public Builder setOutputTypes(boolean outputTypes) {
       this.outputTypes = outputTypes;
       return this;
     }
@@ -609,7 +615,7 @@ class CodePrinter {
      *
      * @param sourceMap The source map.
      */
-    Builder setSourceMap(SourceMap sourceMap) {
+    public Builder setSourceMap(SourceMap sourceMap) {
       this.sourceMap = sourceMap;
       return this;
     }
@@ -617,7 +623,7 @@ class CodePrinter {
     /**
      * Set whether the output should be tags as ECMASCRIPT 5 Strict.
      */
-    Builder setTagAsStrict(boolean tagAsStrict) {
+    public Builder setTagAsStrict(boolean tagAsStrict) {
       this.tagAsStrict = tagAsStrict;
       return this;
     }
@@ -625,7 +631,7 @@ class CodePrinter {
     /**
      * Generates the source code and returns it.
      */
-    String build() {
+    public String build() {
       if (root == null) {
         throw new IllegalStateException(
             "Cannot build without root node being specified");

@@ -16,21 +16,15 @@
 
 package com.google.template.soy.tofu;
 
+import com.google.common.base.Throwables;
 import com.google.template.soy.sharedpasses.render.RenderException;
-
-import javax.annotation.Nullable;
 
 
 /**
  * Exception thrown when an error occurs during template rendering.
  *
- * @author Kai Huang
  */
 public class SoyTofuException extends RuntimeException {
-
-
-  /** The name of the template with the syntax error if any. */
-  private String templateName;
 
 
   /**
@@ -38,52 +32,18 @@ public class SoyTofuException extends RuntimeException {
    */
   public SoyTofuException(String message) {
     super(message);
-    this.templateName = null;
   }
-
-
-  /**
-   * @param message A detailed description of the error.
-   * @param cause The underlying error.
-   */
-  public SoyTofuException(String message, Throwable cause) {
-    super(message, cause);
-    this.templateName = null;
-  }
-
 
   /**
    * Creates an instance by copying a RenderException.
    * @param re The RenderException to copy.
    */
   public SoyTofuException(RenderException re) {
-    super(re.getRawMessage(), re);
-    this.templateName = re.getTemplateName();
+    super(re.getMessage(), Throwables.getRootCause(re));
+    // At this point, the stack trace aggregation logic in RenderException can be considered done.
+    // Set the stack trace of both the current SoyTofuException class as well as the
+    // RenderException class.
+    re.finalizeStackTrace();
+    re.finalizeStackTrace(this);
   }
-
-
-  /**
-   * The name of the template in which the problem occurred or {@code null} if not known.
-   */
-  public @Nullable String getTemplateName() {
-    return templateName;
-  }
-
-
-  /**
-   * Sets the template name for this error.
-   * @param templateName The name of the template containing this error.
-   * @return This same instance.
-   */
-  public SoyTofuException setTemplateName(String templateName) {
-    this.templateName = templateName;
-    return this;
-  }
-
-
-  @Override public String getMessage() {
-    return
-        ((templateName != null) ? "In template " + templateName + ": " : "") + super.getMessage();
-  }
-
 }

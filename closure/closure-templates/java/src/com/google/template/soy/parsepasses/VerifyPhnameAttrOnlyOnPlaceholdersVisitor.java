@@ -32,7 +32,6 @@ import com.google.template.soy.soytree.SoySyntaxExceptionUtils;
  * <p> Note: Doesn't check HTML tags since we don't parse HTML tags outside of messages anyway. Only
  * checks PrintNode and CallNode.
  *
- * @author Kai Huang
  */
 public class VerifyPhnameAttrOnlyOnPlaceholdersVisitor extends AbstractSoyNodeVisitor<Void> {
 
@@ -49,7 +48,7 @@ public class VerifyPhnameAttrOnlyOnPlaceholdersVisitor extends AbstractSoyNodeVi
 
 
   private void visitMsgPlaceholderInitialContentNodeHelper(MsgPlaceholderInitialNode node) {
-    if (node.getUserSuppliedPlaceholderName() != null &&
+    if (node.getUserSuppliedPhName() != null &&
         ! (node.getParent() instanceof MsgPlaceholderNode)) {
       throw SoySyntaxExceptionUtils.createWithNode(
           "Found 'phname' attribute not on a msg placeholder (tag " + node.toSourceString() + ").",

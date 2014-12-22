@@ -31,7 +31,7 @@ import java.util.Map;
 public class ReplaceMessagesTest extends CompilerTestCase {
 
   private Map<String, JsMessage> messages;
-  private Style style = RELAX;
+  private Style style;
   private boolean strictReplacement;
 
   @Override
@@ -51,6 +51,7 @@ public class ReplaceMessagesTest extends CompilerTestCase {
     messages = Maps.newHashMap();
     strictReplacement = false;
     style = RELAX;
+    compareJsDoc = false;
   }
 
   public void testReplaceSimpleMessage() {
@@ -164,6 +165,17 @@ public class ReplaceMessagesTest extends CompilerTestCase {
          "a.b.c.MSG_J=\"One \"+(x+\" ph\")");
   }
 
+  public void testPlaceholderInPlaceholderValue()  {
+    registerMessage(new JsMessage.Builder("MSG_L")
+        .appendPlaceholderReference("a")
+        .appendStringPart(" has ")
+        .appendPlaceholderReference("b")
+        .build());
+
+    test("/** @desc d */\n" +
+         "var MSG_L = goog.getMsg('{$a} has {$b}', {a: '{$b}', b: 1});",
+         "var MSG_L=\"{$b}\"+(\" has \"+1);");
+  }
   public void testSimpleMessageReplacementMissing()  {
     style = Style.LEGACY;
     test("/** @desc d */\n" +
@@ -179,12 +191,16 @@ public class ReplaceMessagesTest extends CompilerTestCase {
   }
 
   public void testStrictModeAndMessageReplacementAbsentInBundle()  {
+    style = Style.LEGACY;
+
     strictReplacement = true;
     test("var MSG_E = 'Hello';", "var MSG_E = 'Hello';",
          ReplaceMessages.BUNDLE_DOES_NOT_HAVE_THE_MESSAGE);
   }
 
   public void testStrictModeAndMessageReplacementAbsentInNonEmptyBundle()  {
+    style = Style.LEGACY;
+
     registerMessage(new JsMessage.Builder("MSG_J")
         .appendStringPart("One ")
         .appendPlaceholderReference("measly")
@@ -296,6 +312,8 @@ public class ReplaceMessagesTest extends CompilerTestCase {
   }
 
   public void testLegacyStyleBadPlaceholderReferenceInReplacemen() {
+    style = Style.LEGACY;
+
     registerMessage(new JsMessage.Builder("MSG_B")
         .appendStringPart("Ola, ")
         .appendPlaceholderReference("chimp")

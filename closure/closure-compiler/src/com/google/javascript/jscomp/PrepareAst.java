@@ -98,10 +98,9 @@ class PrepareAst implements CompilerPass {
         if (NodeUtil.isControlStructureCodeBlock(n, c) && !c.isBlock()) {
           Node newBlock = IR.block().srcref(n);
           n.replaceChild(c, newBlock);
+          newBlock.setIsAddedBlock(true);
           if (!c.isEmpty()) {
             newBlock.addChildrenToFront(c);
-          } else {
-            newBlock.setWasEmptyNode(true);
           }
           c = newBlock;
           reportChange();
@@ -134,10 +133,6 @@ class PrepareAst implements CompilerPass {
         case Token.CALL:
           annotateCalls(n);
           break;
-
-        case Token.FUNCTION:
-          annotateDispatchers(n, parent);
-          break;
       }
     }
 
@@ -154,7 +149,7 @@ class PrepareAst implements CompilerPass {
      * There are two types of calls we are interested in calls without explicit
      * "this" values (what we are call "free" calls) and direct call to eval.
      */
-    private void annotateCalls(Node n) {
+    private static void annotateCalls(Node n) {
       Preconditions.checkState(n.isCall());
 
       // Keep track of of the "this" context of a call.  A call without an
@@ -179,20 +174,6 @@ class PrepareAst implements CompilerPass {
     }
 
     /**
-     * Translate dispatcher info into the property expected node.
-     */
-    private void annotateDispatchers(Node n, Node parent) {
-      Preconditions.checkState(n.isFunction());
-      if (parent.getJSDocInfo() != null
-          && parent.getJSDocInfo().isJavaDispatch()) {
-        if (parent.isAssign()) {
-          Preconditions.checkState(parent.getLastChild() == n);
-          n.putBooleanProp(Node.IS_DISPATCHER, true);
-        }
-      }
-    }
-
-    /**
      * In the AST that Rhino gives us, it needs to make a distinction
      * between JsDoc on the object literal node and JsDoc on the object literal
      * value. For example,
@@ -207,7 +188,7 @@ class PrepareAst implements CompilerPass {
      * But in few narrow cases (in particular, function literals), it's
      * a lot easier for us if the doc is attached to the value.
      */
-    private void normalizeObjectLiteralKeyAnnotations(
+    private static void normalizeObjectLiteralKeyAnnotations(
         Node objlit, Node key, Node value) {
       Preconditions.checkState(objlit.isObjectLit());
       if (key.getJSDocInfo() != null &&

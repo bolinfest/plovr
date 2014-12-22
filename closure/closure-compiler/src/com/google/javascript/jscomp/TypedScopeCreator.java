@@ -18,6 +18,7 @@ package com.google.javascript.jscomp;
 
 import static com.google.javascript.jscomp.TypeCheck.ENUM_NOT_CONSTANT;
 import static com.google.javascript.jscomp.TypeCheck.MULTIPLE_VAR_DEF;
+import static com.google.javascript.rhino.jstype.JSTypeNative.ARRAY_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.ARRAY_FUNCTION_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.BOOLEAN_OBJECT_FUNCTION_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.BOOLEAN_TYPE;
@@ -55,7 +56,6 @@ import com.google.common.collect.Multiset;
 import com.google.javascript.jscomp.CodingConvention.DelegateRelationship;
 import com.google.javascript.jscomp.CodingConvention.ObjectLiteralCast;
 import com.google.javascript.jscomp.CodingConvention.SubclassRelationship;
-import com.google.javascript.jscomp.CodingConvention.SubclassType;
 import com.google.javascript.jscomp.FunctionTypeBuilder.AstFunctionContents;
 import com.google.javascript.jscomp.NodeTraversal.AbstractScopedCallback;
 import com.google.javascript.jscomp.NodeTraversal.AbstractShallowStatementCallback;
@@ -138,6 +138,11 @@ final class TypedScopeCreator implements ScopeCreator {
       DiagnosticType.warning(
           "JSC_LENDS_ON_NON_OBJECT",
           "May only lend properties to object types. {0} has type {1}.");
+
+  static final DiagnosticType CANNOT_INFER_CONST_TYPE =
+      DiagnosticType.disabled(
+          "JSC_CANNOT_INFER_CONST_TYPE",
+          "Unable to infer type of constant.");
 
   private final AbstractCompiler compiler;
   private final ErrorReporter typeParsingErrorReporter;
@@ -232,21 +237,6 @@ final class TypedScopeCreator implements ScopeCreator {
     }
 
     scopeBuilder.resolveStubDeclarations();
-
-    // Gather the properties in each function that we found in the
-    // global scope, if that function has a @this type that we can
-    // build properties on.
-    for (Node functionNode : scopeBuilder.nonExternFunctions) {
-      JSType type = functionNode.getJSType();
-      if (type != null && type.isFunctionType()) {
-        FunctionType fnType = type.toMaybeFunctionType();
-        JSType fnThisType = fnType.getTypeOfThis();
-        if (!fnThisType.isUnknownType()) {
-          NodeTraversal.traverse(compiler, functionNode.getLastChild(),
-              scopeBuilder.new CollectProperties(fnThisType));
-        }
-      }
-    }
 
     if (parent == null) {
       codingConvention.defineDelegateProxyPrototypeProperties(
@@ -518,7 +508,7 @@ final class TypedScopeCreator implements ScopeCreator {
 
       switch (n.getType()) {
         case Token.CALL:
-          checkForClassDefiningCalls(t, n);
+          checkForClassDefiningCalls(n);
           checkForCallingConventionDefiningCalls(n, delegateCallingConventions);
           break;
 
@@ -610,8 +600,12 @@ final class TypedScopeCreator implements ScopeCreator {
           }
           break;
 
-          // NOTE(nicksantos): If we ever support Array tuples,
-          // we will need to put ARRAYLIT here as well.
+        // NOTE(johnlenz): If we ever support Array tuples,
+        // we will need to handle them here as we do object literals
+        // above.
+        case Token.ARRAYLIT:
+          n.setJSType(getNativeType(ARRAY_TYPE));
+          break;
       }
     }
 
@@ -624,7 +618,7 @@ final class TypedScopeCreator implements ScopeCreator {
         Var lendsVar = scope.getVar(lendsName);
         if (lendsVar == null) {
           compiler.report(
-              JSError.make(sourceName, objectLit, UNKNOWN_LENDS, lendsName));
+              JSError.make(objectLit, UNKNOWN_LENDS, lendsName));
         } else {
           type = lendsVar.getType();
           if (type == null) {
@@ -632,7 +626,7 @@ final class TypedScopeCreator implements ScopeCreator {
           }
           if (!type.isSubtype(typeRegistry.getNativeType(OBJECT_TYPE))) {
             compiler.report(
-                JSError.make(sourceName, objectLit, LENDS_ON_NON_OBJECT,
+                JSError.make(objectLit, LENDS_ON_NON_OBJECT,
                     lendsName, type.toString()));
             type = null;
           } else {
@@ -773,7 +767,7 @@ final class TypedScopeCreator implements ScopeCreator {
       if (n.hasMoreThanOneChild()) {
         if (info != null) {
           // multiple children
-          compiler.report(JSError.make(sourceName, n, MULTIPLE_VAR_DEF));
+          compiler.report(JSError.make(n, MULTIPLE_VAR_DEF));
         }
         for (Node name : n.children()) {
           defineName(name, n, name.getJSDocInfo());
@@ -875,19 +869,18 @@ final class TypedScopeCreator implements ScopeCreator {
         @Nullable String name,
         @Nullable JSDocInfo info,
         @Nullable Node lvalueNode) {
-
       FunctionType functionType = null;
-
-      // Global ctor aliases should be registered with the type registry.
       if (rValue != null && rValue.isQualifiedName() && scope.isGlobal()) {
         Var var = scope.getVar(rValue.getQualifiedName());
         if (var != null && var.getType() != null &&
             var.getType().isFunctionType()) {
           FunctionType aliasedType  = var.getType().toMaybeFunctionType();
-          if ((aliasedType.isConstructor() || aliasedType.isInterface()) &&
-              !aliasedType.isNativeObjectType()) {
+          if ((aliasedType.isConstructor() || aliasedType.isInterface())
+              && !isGoogAbstractMethod(rValue)) {
             functionType = aliasedType;
 
+            // TODO(nick): Remove this. This should already be handled by
+            // normal type resolution.
             if (name != null && scope.isGlobal()) {
               typeRegistry.declareType(name, functionType.getInstanceType());
             }
@@ -935,8 +928,8 @@ final class TypedScopeCreator implements ScopeCreator {
           TemplateTypeMap prototypeOwnerTypeMap = null;
           if (prototypeOwner != null &&
               prototypeOwner.getTypeOfThis() != null) {
-              prototypeOwnerTypeMap =
-                  prototypeOwner.getTypeOfThis().getTemplateTypeMap();
+            prototypeOwnerTypeMap =
+                prototypeOwner.getTypeOfThis().getTemplateTypeMap();
           }
 
           FunctionType overriddenType = null;
@@ -946,13 +939,26 @@ final class TypedScopeCreator implements ScopeCreator {
           }
 
           FunctionTypeBuilder builder =
-              new FunctionTypeBuilder(name, compiler, errorRoot, sourceName,
+              new FunctionTypeBuilder(name, compiler, errorRoot,
                   scope)
               .setContents(getFunctionAnalysisResults(fnRoot))
               .inferFromOverriddenFunction(overriddenType, parametersNode)
               .inferTemplateTypeName(info, prototypeOwner)
-              .inferReturnType(info)
               .inferInheritance(info);
+
+          if (info == null || !info.hasReturnType()) {
+            /**
+             * when there is no {@code @return} annotation, look for inline
+             * return type declaration
+             */
+            if (rValue != null && rValue.isFunction() &&
+                rValue.getFirstChild() != null) {
+              JSDocInfo nameDocInfo = rValue.getFirstChild().getJSDocInfo();
+              builder.inferReturnType(nameDocInfo, true);
+            }
+          } else {
+            builder.inferReturnType(info, false);
+          }
 
           // Infer the context type.
           boolean searchedForThisType = false;
@@ -962,15 +968,8 @@ final class TypedScopeCreator implements ScopeCreator {
                 info, ownerType.getOwnerFunction().getInstanceType());
             searchedForThisType = true;
           } else if (ownerNode != null && ownerNode.isThis()) {
-            // If 'this' has a type, use that instead.
-            // This is a hack, necessary because CollectProperties (below)
-            // doesn't run with the scope that it's building,
-            // so scope.getTypeOfThis() will be wrong.
-            JSType injectedThisType = ownerNode.getJSType();
-            builder.inferThisType(
-                info,
-                injectedThisType == null ?
-                scope.getTypeOfThis() : injectedThisType);
+            // If we have a 'this' node, use the scope type.
+            builder.inferThisType(info, scope.getTypeOfThis());
             searchedForThisType = true;
           }
 
@@ -986,6 +985,17 @@ final class TypedScopeCreator implements ScopeCreator {
 
       // all done
       return functionType;
+    }
+
+    /**
+     * We have to special-case goog.abstractMethod in createFunctionTypeFromNodes,
+     * because some people use it (incorrectly) for interfaces:
+     *
+     * /* @interface * /
+     * var example.MyInterface = goog.abstractMethod;
+     */
+    private boolean isGoogAbstractMethod(Node n) {
+      return n.matchesQualifiedName("goog.abstractMethod");
     }
 
     private ObjectType getPrototypeOwnerType(ObjectType ownerType) {
@@ -1073,10 +1083,10 @@ final class TypedScopeCreator implements ScopeCreator {
             if (keyName == null) {
               // GET and SET don't have a String value;
               compiler.report(
-                  JSError.make(sourceName, key, ENUM_NOT_CONSTANT, keyName));
+                  JSError.make(key, ENUM_NOT_CONSTANT, keyName));
             } else if (!codingConvention.isValidEnumKey(keyName)) {
               compiler.report(
-                  JSError.make(sourceName, key, ENUM_NOT_CONSTANT, keyName));
+                  JSError.make(key, ENUM_NOT_CONSTANT, keyName));
             } else {
               enumType.defineElement(keyName, key);
             }
@@ -1196,7 +1206,7 @@ final class TypedScopeCreator implements ScopeCreator {
               (initialValue.isObjectLit() ||
                initialValue.isQualifiedName());
           if (!isValidValue) {
-            compiler.report(JSError.make(sourceName, n, ENUM_INITIALIZER));
+            compiler.report(JSError.make(n, ENUM_INITIALIZER));
           }
         }
       }
@@ -1285,7 +1295,7 @@ final class TypedScopeCreator implements ScopeCreator {
       if (newVar.getInitialValue() == null &&
           !n.isFromExterns()) {
         compiler.report(
-            JSError.make(sourceName, n,
+            JSError.make(n,
                 fnType.isConstructor() ?
                 CTOR_INITIALIZER : IFACE_INITIALIZER,
                 variableName));
@@ -1322,7 +1332,7 @@ final class TypedScopeCreator implements ScopeCreator {
      * @param rValue The node that {@code n} is being initialized to,
      *     or {@code null} if this is a stub declaration.
      */
-    private JSType getDeclaredType(JSDocInfo info, Node lValue,
+    JSType getDeclaredType(JSDocInfo info, Node lValue,
         @Nullable Node rValue) {
       if (info != null && info.hasType()) {
         return getDeclaredTypeInAnnotation(lValue, info);
@@ -1345,31 +1355,21 @@ final class TypedScopeCreator implements ScopeCreator {
       }
 
       // Check if this is constant, and if it has a known type.
-      if (isConstantSymbol(info, lValue)) {
+      if (NodeUtil.isConstantDeclaration(
+              compiler.getCodingConvention(), info, lValue)) {
         if (rValue != null) {
-          JSDocInfo rValueInfo = rValue.getJSDocInfo();
-          if (rValueInfo != null && rValueInfo.hasType()) {
-            // If rValue has a type-cast, we use the type in the type-cast.
-            return rValueInfo.getType().evaluate(scope, typeRegistry);
-          } else if (rValue.getJSType() != null
-              && !rValue.getJSType().isUnknownType()) {
-            // If rValue's type was already computed during scope creation,
-            // then we can safely use that.
-            return rValue.getJSType();
-          } else if (rValue.isOr()) {
-            // Check for a very specific JS idiom:
-            // var x = x || TYPE;
-            // This is used by Closure's base namespace for esoteric
-            // reasons.
-            Node firstClause = rValue.getFirstChild();
-            Node secondClause = firstClause.getNext();
-            boolean namesMatch = firstClause.isName()
-                && lValue.isName()
-                && firstClause.getString().equals(lValue.getString());
-            if (namesMatch && secondClause.getJSType() != null
-                && !secondClause.getJSType().isUnknownType()) {
-              return secondClause.getJSType();
+          JSType rValueType = getDeclaredRValueType(lValue, rValue);
+          if (rValueType == null) {
+            // Only warn if the user has explicitly declared a value as
+            // const and they have explicitly not provided a type.
+            boolean isTypelessConstDecl = info != null
+                && info.isConstant()
+                && !info.hasType();
+            if (isTypelessConstDecl) {
+              compiler.report(JSError.make(lValue, CANNOT_INFER_CONST_TYPE));
             }
+          } else {
+            return rValueType;
           }
         }
       }
@@ -1377,10 +1377,97 @@ final class TypedScopeCreator implements ScopeCreator {
       return getDeclaredTypeInAnnotation(lValue, info);
     }
 
-    private FunctionType getFunctionType(@Nullable Var v) {
-      JSType t = v == null ? null : v.getType();
-      ObjectType o = t == null ? null : t.dereference();
-      return JSType.toMaybeFunctionType(o);
+    /**
+     * Check for common idioms of a typed R-value assigned to a const L-value.
+     *
+     * Normally, we would only want this sort of propagation to happen under
+     * type inference. But we want a declared const to be nameable in a type
+     * annotation, so we need to figure out the type before we try to resolve
+     * the annotation.
+     */
+    private JSType getDeclaredRValueType(Node lValue, Node rValue) {
+      // If rValue has a type-cast, we use the type in the type-cast.
+      JSDocInfo rValueInfo = rValue.getJSDocInfo();
+      if (rValue.isCast() && rValueInfo != null && rValueInfo.hasType()) {
+        return rValueInfo.getType().evaluate(scope, typeRegistry);
+      }
+
+      // Check if the type has already been computed during scope-creation.
+      // This is mostly useful for literals like BOOLEAN, NUMBER, STRING, and
+      // OBJECT_LITERAL
+      JSType type = rValue.getJSType();
+      if (type != null && !type.isUnknownType()) {
+        return type;
+      }
+
+      // If rValue is a name, try looking it up in the current scope.
+      if (rValue.isQualifiedName()) {
+        return lookupQualifiedName(rValue);
+      }
+
+      // Check for simple invariant operations, such as "!x" or "+x" or "''+x"
+      if (NodeUtil.isBooleanResult(rValue)) {
+        return getNativeType(BOOLEAN_TYPE);
+      }
+
+      if (NodeUtil.isNumericResult(rValue)) {
+        return getNativeType(NUMBER_TYPE);
+      }
+
+      if (NodeUtil.isStringResult(rValue)) {
+        return getNativeType(STRING_TYPE);
+      }
+
+      if (rValue.isNew() && rValue.getFirstChild().isQualifiedName()) {
+        JSType targetType = lookupQualifiedName(rValue.getFirstChild());
+        if (targetType != null) {
+          FunctionType fnType = targetType
+              .restrictByNotNullOrUndefined()
+              .toMaybeFunctionType();
+          if (fnType != null && fnType.hasInstanceType()) {
+            return fnType.getInstanceType();
+          }
+        }
+      }
+
+      // Check for a very specific JS idiom:
+      // var x = x || TYPE;
+      // This is used by Closure's base namespace for esoteric
+      // reasons, so we only really care about that case.
+      if (rValue.isOr()) {
+        Node firstClause = rValue.getFirstChild();
+        Node secondClause = firstClause.getNext();
+        boolean namesMatch = firstClause.isName()
+            && lValue.isName()
+            && firstClause.getString().equals(lValue.getString());
+        if (namesMatch) {
+          type = secondClause.getJSType();
+          if (type != null && !type.isUnknownType()) {
+            return type;
+          }
+        }
+      }
+
+      return null;
+    }
+
+    private JSType lookupQualifiedName(Node n) {
+      String name = n.getQualifiedName();
+      Var slot = scope.getVar(name);
+      if (slot != null && !slot.isTypeInferred()) {
+        JSType type = slot.getType();
+        if (type != null && !type.isUnknownType()) {
+          return type;
+        }
+      } else if (n.isGetProp()) {
+        JSType type = lookupQualifiedName(n.getFirstChild());
+        if (type != null && type.isRecordType()) {
+          JSType propType = type.findPropertyType(
+             n.getLastChild().getString());
+          return propType;
+        }
+      }
+      return null;
     }
 
     /**
@@ -1397,30 +1484,20 @@ final class TypedScopeCreator implements ScopeCreator {
      * Because JS has no 'native' syntax for defining classes,
      * this is often very coding-convention dependent and business-logic heavy.
      */
-    private void checkForClassDefiningCalls(NodeTraversal t, Node n) {
+    private void checkForClassDefiningCalls(Node n) {
       SubclassRelationship relationship =
           codingConvention.getClassesDefinedByCall(n);
       if (relationship != null) {
-        FunctionType superCtor = getFunctionType(
+        ObjectType superClass = TypeValidator.getInstanceOfCtor(
             scope.getVar(relationship.superclassName));
-        FunctionType subCtor = getFunctionType(
+        ObjectType subClass = TypeValidator.getInstanceOfCtor(
             scope.getVar(relationship.subclassName));
-        if (superCtor != null && superCtor.isConstructor() &&
-            subCtor != null && subCtor.isConstructor()) {
-          ObjectType superClass = superCtor.getInstanceType();
-          ObjectType subClass = subCtor.getInstanceType();
-
+        if (superClass != null && subClass != null) {
           // superCtor and subCtor might be structural constructors
           // (like {function(new:Object)}) so we need to resolve them back
           // to the original ctor objects.
-          superCtor = superClass.getConstructor();
-          subCtor = subClass.getConstructor();
-
-          if (relationship.type == SubclassType.INHERITS &&
-              !superClass.isEmptyType() && !subClass.isEmptyType()) {
-            validator.expectSuperType(t, n, superClass, subClass);
-          }
-
+          FunctionType superCtor = superClass.getConstructor();
+          FunctionType subCtor = subClass.getConstructor();
           if (superCtor != null && subCtor != null) {
             codingConvention.applySubclassRelationship(
                 superCtor, subCtor, relationship.type);
@@ -1462,12 +1539,10 @@ final class TypedScopeCreator implements ScopeCreator {
             objectLiteralCast.objectNode.putBooleanProp(
                 Node.REFLECTED_OBJECT, true);
           } else {
-            compiler.report(JSError.make(t.getSourceName(), n,
-                    CONSTRUCTOR_EXPECTED));
+            compiler.report(JSError.make(n, CONSTRUCTOR_EXPECTED));
           }
         } else {
-          compiler.report(JSError.make(t.getSourceName(), n,
-                  objectLiteralCast.diagnosticType));
+          compiler.report(JSError.make(n, objectLiteralCast.diagnosticType));
         }
       }
     }
@@ -1680,7 +1755,9 @@ final class TypedScopeCreator implements ScopeCreator {
       if (info != null) {
         inferred = !(info.hasType()
             || info.hasEnumParameterType()
-            || (isConstantSymbol(info, n) && valueType != null
+            || (NodeUtil.isConstantDeclaration(
+                    compiler.getCodingConvention(), info, n)
+                && valueType != null
                 && !valueType.isUnknownType())
             || FunctionTypeBuilder.isFunctionTypeDeclaration(info));
       }
@@ -1712,22 +1789,6 @@ final class TypedScopeCreator implements ScopeCreator {
         }
       }
       return inferred;
-    }
-
-    private boolean isConstantSymbol(JSDocInfo info, Node node) {
-      if (info != null && info.isConstant()) {
-        return true;
-      }
-
-      switch (node.getType()) {
-        case Token.NAME:
-          return NodeUtil.isConstantByConvention(
-              compiler.getCodingConvention(), node, node.getParent());
-        case Token.GETPROP:
-          return node.isQualifiedName() && NodeUtil.isConstantByConvention(
-              compiler.getCodingConvention(), node.getLastChild(), node);
-      }
-      return false;
     }
 
     /**
@@ -1779,76 +1840,6 @@ final class TypedScopeCreator implements ScopeCreator {
         }
       }
     }
-
-    /**
-     * Collects all declared properties in a function, and
-     * resolves them relative to the global scope.
-     */
-    private final class CollectProperties
-        extends AbstractShallowStatementCallback {
-      private final JSType thisType;
-
-      CollectProperties(JSType thisType) {
-        this.thisType = thisType;
-      }
-
-      @Override
-      public void visit(NodeTraversal t, Node n, Node parent) {
-        if (n.isExprResult()) {
-          Node child = n.getFirstChild();
-          switch (child.getType()) {
-            case Token.ASSIGN:
-              maybeCollectMember(child.getFirstChild(), child,
-                  child.getLastChild());
-              break;
-            case Token.GETPROP:
-              maybeCollectMember(child, child, null);
-              break;
-          }
-        }
-      }
-
-      private void maybeCollectMember(Node member,
-          Node nodeWithJsDocInfo, @Nullable Node value) {
-        JSDocInfo info = nodeWithJsDocInfo.getJSDocInfo();
-
-        // Do nothing if there is no JSDoc type info, or
-        // if the node is not a member expression, or
-        // if the member expression is not of the form: this.someProperty.
-        if (info == null ||
-            !member.isGetProp() ||
-            !member.getFirstChild().isThis()) {
-          return;
-        }
-
-        member.getFirstChild().setJSType(thisType);
-
-        // TODO(johnlenz): We are evaluating these values in the wrong scope:
-        // https://code.google.com/p/closure-compiler/issues/detail?id=926
-        JSType thisObjectType = thisType.toObjectType();
-        if (thisObjectType != null) {
-          ImmutableList<TemplateType> keys =
-              thisObjectType.getTemplateTypeMap().getTemplateKeys();
-          typeRegistry.setTemplateTypeNames(keys);
-        }
-
-        JSType jsType = getDeclaredType(info, member, value);
-
-        if (thisObjectType != null) {
-          typeRegistry.clearTemplateTypeNames();
-        }
-
-        Node name = member.getLastChild();
-        if (jsType != null &&
-            (name.isName() || name.isString()) &&
-            thisType.toObjectType() != null) {
-          thisType.toObjectType().defineDeclaredProperty(
-              name.getString(),
-              jsType,
-              member);
-        }
-      }
-    } // end CollectProperties
   }
 
   /**
@@ -1892,7 +1883,7 @@ final class TypedScopeCreator implements ScopeCreator {
         case Token.VAR:
           // Handle typedefs.
           if (n.hasOneChild()) {
-            checkForTypedef(t, n.getFirstChild(), n.getJSDocInfo());
+            checkForTypedef(n.getFirstChild(), n.getJSDocInfo());
           }
           break;
       }
@@ -1902,18 +1893,16 @@ final class TypedScopeCreator implements ScopeCreator {
     void maybeDeclareQualifiedName(
         NodeTraversal t, JSDocInfo info,
         Node n, Node parent, Node rhsValue) {
-      checkForTypedef(t, n, info);
+      checkForTypedef(n, info);
       super.maybeDeclareQualifiedName(t, info, n, parent, rhsValue);
     }
 
     /**
      * Handle typedefs.
-     * @param t The current traversal.
      * @param candidate A qualified name node.
      * @param info JSDoc comments.
      */
-    private void checkForTypedef(
-        NodeTraversal t, Node candidate, JSDocInfo info) {
+    private void checkForTypedef(Node candidate, JSDocInfo info) {
       if (info == null || !info.hasTypedefType()) {
         return;
       }
@@ -1931,8 +1920,7 @@ final class TypedScopeCreator implements ScopeCreator {
       JSType realType = info.getTypedefType().evaluate(scope, typeRegistry);
       if (realType == null) {
         compiler.report(
-            JSError.make(
-                t.getSourceName(), candidate, MALFORMED_TYPEDEF, typedef));
+            JSError.make(candidate, MALFORMED_TYPEDEF, typedef));
       }
 
       typeRegistry.overwriteDeclaredType(typedef, realType);
@@ -1948,11 +1936,14 @@ final class TypedScopeCreator implements ScopeCreator {
    * local variables.
    */
   private final class LocalScopeBuilder extends AbstractScopeBuilder {
+    private final ObjectType thisTypeForProperties;
+
     /**
      * @param scope The scope that we're building.
      */
     private LocalScopeBuilder(Scope scope) {
       super(scope);
+      thisTypeForProperties = getThisTypeForCollectingProperties();
     }
 
     /**
@@ -1993,12 +1984,61 @@ final class TypedScopeCreator implements ScopeCreator {
       if (n == scope.getRootNode()) {
         return;
       }
+
       if (n.isParamList() && parent == scope.getRootNode()) {
         handleFunctionInputs(parent);
         return;
       }
 
+      // Gather the properties declared in the function,
+      // if that function has a @this type that we can
+      // build properties on.
+      // TODO(nick): It's not clear to me why this is necessary;
+      // it appears to be papering over bugs in the main analyzer.
+      if (thisTypeForProperties != null && n.getParent().isExprResult()) {
+        if (n.isAssign()) {
+          maybeCollectMember(n.getFirstChild(), n, n.getLastChild());
+        } else if (n.isGetProp()) {
+          maybeCollectMember(n, n, null);
+        }
+      }
+
       super.visit(t, n, parent);
+    }
+
+    private ObjectType getThisTypeForCollectingProperties() {
+      Node rootNode = scope.getRootNode();
+      if (rootNode.isFromExterns()) return null;
+
+      JSType type = rootNode.getJSType();
+      if (type == null || !type.isFunctionType()) return null;
+
+      FunctionType fnType = type.toMaybeFunctionType();
+      JSType fnThisType = fnType.getTypeOfThis();
+      return fnThisType.isUnknownType() ? null : fnThisType.toObjectType();
+    }
+
+    private void maybeCollectMember(Node member,
+        Node nodeWithJsDocInfo, @Nullable Node value) {
+      JSDocInfo info = nodeWithJsDocInfo.getJSDocInfo();
+
+      // Do nothing if there is no JSDoc type info, or
+      // if the node is not a member expression, or
+      // if the member expression is not of the form: this.someProperty.
+      if (info == null ||
+          !member.isGetProp() ||
+          !member.getFirstChild().isThis()) {
+        return;
+      }
+
+      JSType jsType = getDeclaredType(info, member, value);
+      Node name = member.getLastChild();
+      if (jsType != null) {
+        thisTypeForProperties.defineDeclaredProperty(
+            name.getString(),
+            jsType,
+            member);
+      }
     }
 
     /** Handle bleeding functions and function parameters. */
@@ -2166,5 +2206,10 @@ final class TypedScopeCreator implements ScopeCreator {
     // Sometimes this will return null in things like
     // NameReferenceGraphConstruction that build partial scopes.
     return functionAnalysisResults.get(n);
+  }
+
+  @Override
+  public boolean hasBlockScope() {
+    return false;
   }
 }

@@ -16,18 +16,26 @@
 
 package com.google.javascript.jscomp;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Charsets;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.io.Files;
 import com.google.javascript.jscomp.AbstractCompiler.LifeCycleStage;
+import com.google.javascript.jscomp.CompilerOptions.ExtractPrototypeMemberDeclarationsMode;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.jscomp.CoverageInstrumentationPass.CoverageReach;
 import com.google.javascript.jscomp.ExtractPrototypeMemberDeclarations.Pattern;
 import com.google.javascript.jscomp.NodeTraversal.Callback;
+import com.google.javascript.jscomp.lint.CheckEnums;
+import com.google.javascript.jscomp.lint.CheckInterfaces;
+import com.google.javascript.jscomp.lint.CheckNullableReturn;
+import com.google.javascript.jscomp.lint.CheckPrototypeProperties;
 import com.google.javascript.jscomp.parsing.ParserRunner;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
@@ -37,6 +45,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -59,14 +68,14 @@ public class DefaultPassConfig extends PassConfig {
   /* Constant name for Closure's locale */
   private static final String CLOSURE_LOCALE_CONSTANT_NAME = "goog.LOCALE";
 
-  // Compiler errors when invalid combinations of passes are run.
-  static final DiagnosticType TIGHTEN_TYPES_WITHOUT_TYPE_CHECK =
-      DiagnosticType.error("JSC_TIGHTEN_TYPES_WITHOUT_TYPE_CHECK",
-          "TightenTypes requires type checking. Please use --check_types.");
-
   static final DiagnosticType CANNOT_USE_PROTOTYPE_AND_VAR =
       DiagnosticType.error("JSC_CANNOT_USE_PROTOTYPE_AND_VAR",
-          "Rename prototypes and inline variables cannot be used together");
+          "Rename prototypes and inline variables cannot be used together.");
+
+  static final DiagnosticType CANNOT_USE_EXPORT_LOCALS_AND_EXTERN_PROP_REMOVAL =
+      DiagnosticType.error("JSC_CANNOT_USE_EXPORT_LOCALS_AND_EXTERN_PROP_REMOVAL",
+          "remove_unused_prototype_properties_in_externs " +
+          "and export_local_property_definitions cannot be used together.");
 
   // Miscellaneous errors.
   static final DiagnosticType REPORT_PATH_IO_ERROR =
@@ -94,11 +103,6 @@ public class DefaultPassConfig extends PassConfig {
    * preprocessing.
    */
   private PreprocessorSymbolTable preprocessorSymbolTable = null;
-
-  /**
-   * A type-tightener to share across optimization passes.
-   */
-  private TightenTypes tightenTypes = null;
 
   /** Names exported by goog.exportSymbol. */
   private Set<String> exportedNames = null;
@@ -136,8 +140,20 @@ public class DefaultPassConfig extends PassConfig {
   /** Id generator map */
   private String idGeneratorMap = null;
 
+  /**
+   * Whether to protect "hidden" side-effects.
+   * @see CheckSideEffects
+   */
+  private final boolean protectHiddenSideEffects;
+
   public DefaultPassConfig(CompilerOptions options) {
     super(options);
+
+    // The current approach to protecting "hidden" side-effects is to
+    // wrap them in a function call that is stripped later, this shouldn't
+    // be done in IDE mode where AST changes may be unexpected.
+    protectHiddenSideEffects = options != null &&
+        options.protectHiddenSideEffects && !options.ideMode;
   }
 
   @Override
@@ -197,8 +213,40 @@ public class DefaultPassConfig extends PassConfig {
     checks.add(createEmptyPass("beforeStandardChecks"));
 
     if (options.closurePass) {
+      checks.add(closureRewriteModule);
+    }
+
+    if (options.needsConversion() || options.aggressiveVarCheck.isOn()) {
+      checks.add(checkVariableReferences);
+    }
+
+    if (options.needsConversion()) {
+      checks.add(es6RenameVariablesInParamLists);
+      checks.add(es6SplitVariableDeclarations);
+      checks.add(es6ConvertSuper);
+      checks.add(convertEs6ToEs3);
+      checks.add(rewriteLetConst);
+      checks.add(rewriteGenerators);
+      checks.add(markTranspilationDone);
+    }
+
+    if (options.transpileOnly) {
+      return checks;
+    }
+
+    if (options.needsConversion()) {
+      checks.add(es6RuntimeLibrary);
+    }
+
+    checks.add(convertStaticInheritance);
+
+    if (options.declaredGlobalExternsOnWindow) {
+      checks.add(declaredGlobalExternsOnWindow);
+    }
+
+    if (options.closurePass) {
       checks.add(closureGoogScopeAliases);
-      checks.add(closureRewriteGoogClass);
+      checks.add(closureRewriteClass);
     }
 
     if (options.nameAnonymousFunctionsOnly) {
@@ -226,11 +274,6 @@ public class DefaultPassConfig extends PassConfig {
         options.enables(DiagnosticGroups.GLOBAL_THIS) ||
         options.enables(DiagnosticGroups.DEBUGGER_STATEMENT_PRESENT)) {
       checks.add(suspiciousCode);
-    }
-
-    if (options.checkControlStructures
-        || options.enables(DiagnosticGroups.ES5_STRICT))  {
-      checks.add(checkControlStructures);
     }
 
     if (options.checkRequires.isOn()) {
@@ -266,17 +309,25 @@ public class DefaultPassConfig extends PassConfig {
     }
 
     checks.add(checkVars);
-    if (options.computeFunctionSideEffects) {
-      checks.add(checkRegExp);
+
+    if (options.inferConsts) {
+      checks.add(inferConsts);
     }
 
-    if (options.aggressiveVarCheck.isOn()) {
-      checks.add(checkVariableReferences);
+    if (options.computeFunctionSideEffects) {
+      checks.add(checkRegExp);
     }
 
     // This pass should run before types are assigned.
     if (options.processObjectPropertyString) {
       checks.add(objectPropertyStringPreprocess);
+    }
+
+    checks.add(createEmptyPass("beforeTypeChecking"));
+
+    if (options.useNewTypeInference) {
+      checks.add(symbolTableForNewTypeInference);
+      checks.add(newTypeInference);
     }
 
     if (options.checkTypes || options.inferTypes) {
@@ -295,16 +346,21 @@ public class DefaultPassConfig extends PassConfig {
       }
     }
 
-    if (options.checkUnreachableCode.isOn() ||
-        (options.checkTypes && options.checkMissingReturn.isOn())) {
+    if (!options.disables(DiagnosticGroups.CHECK_USELESS_CODE) ||
+        options.checkMissingReturn.isOn()) {
       checks.add(checkControlFlow);
     }
 
     // CheckAccessControls only works if check types is on.
     if (options.checkTypes &&
-        (options.enables(DiagnosticGroups.ACCESS_CONTROLS)
+        (!options.disables(DiagnosticGroups.ACCESS_CONTROLS)
          || options.enables(DiagnosticGroups.CONSTANT_PROPERTY))) {
       checks.add(checkAccessControls);
+    }
+
+    // Lint checks must be run after typechecking.
+    if (options.enables(DiagnosticGroups.LINT_CHECKS)) {
+      checks.add(lintChecks);
     }
 
     if (options.checkEventfulObjectDisposalPolicy !=
@@ -316,8 +372,12 @@ public class DefaultPassConfig extends PassConfig {
       checks.add(checkGlobalNames);
     }
 
-    if (options.enables(DiagnosticGroups.ES5_STRICT) || options.checkCaja) {
+    if (options.enables(DiagnosticGroups.ES5_STRICT)) {
       checks.add(checkStrictMode);
+    }
+
+    if (!options.getConformanceConfigs().isEmpty()) {
+      checks.add(checkConformance);
     }
 
     // Replace 'goog.getCssName' before processing defines but after the
@@ -367,6 +427,15 @@ public class DefaultPassConfig extends PassConfig {
   @Override
   protected List<PassFactory> getOptimizations() {
     List<PassFactory> passes = Lists.newArrayList();
+
+    if (options.transpileOnly) {
+      return passes;
+    }
+
+    // Gather property names in externs so they can be queried by the
+    // optimising passes.
+    passes.add(gatherExternProperties);
+
     passes.add(garbageCollectChecks);
 
     // TODO(nicksantos): The order of these passes makes no sense, and needs
@@ -412,15 +481,26 @@ public class DefaultPassConfig extends PassConfig {
       passes.add(collapseProperties);
     }
 
-    // ReplaceStrings runs after CollapseProperties in order to simplify
-    // pulling in values of constants defined in enums structures.
-    if (!options.replaceStringsFunctionDescriptions.isEmpty()) {
-      passes.add(replaceStrings);
+    if (options.inferConsts) {
+      passes.add(inferConsts);
     }
 
-    // Tighten types based on actual usage.
-    if (options.tightenTypes) {
-      passes.add(tightenTypesBuilder);
+    // Running this pass before disambiguate properties allow the removing
+    // unused methods that share the same name as methods called from unused
+    // code.
+    if (options.extraSmartNameRemoval && options.smartNameRemoval) {
+
+      // These passes remove code that is dead because of define flags.
+      // If the dead code is weakly typed, running these passes before property
+      // disambiguation results in more code removal.
+      // The passes are one-time on purpose. (The later runs are loopable.)
+      if (options.foldConstants &&
+          (options.inlineVariables || options.inlineLocalVariables)) {
+        passes.add(earlyInlineVariables);
+        passes.add(earlyPeepholeOptimizations);
+      }
+
+      passes.add(smartNamePass);
     }
 
     // Property disambiguation should only run once and needs to be done
@@ -456,12 +536,9 @@ public class DefaultPassConfig extends PassConfig {
     // as during the checks phase.
     passes.add(checkConsts);
 
-    // The Caja library adds properties to Object.prototype, which breaks
-    // most for-in loops.  This adds a check to each loop that skips
-    // any property matching /___$/.
-    if (options.ignoreCajaProperties) {
-      passes.add(ignoreCajaProperties);
-    }
+    // Detects whether invocations of the method goog.string.Const.from are done
+    // with an argument which is a string literal.
+    passes.add(checkConstParams);
 
     assertAllOneTimePasses(passes);
 
@@ -474,6 +551,15 @@ public class DefaultPassConfig extends PassConfig {
     // the code removing passes.
     if (options.closurePass) {
       passes.add(closureOptimizePrimitives);
+    }
+
+    // ReplaceStrings runs after CollapseProperties in order to simplify
+    // pulling in values of constants defined in enums structures. It also runs
+    // after disambiguate properties and smart name removal so that it can
+    // correctly identify logging types and can replace references to string
+    // expressions.
+    if (!options.replaceStringsFunctionDescriptions.isEmpty()) {
+      passes.add(replaceStrings);
     }
 
     // TODO(user): This forces a first crack at crossModuleCodeMotion
@@ -582,10 +668,11 @@ public class DefaultPassConfig extends PassConfig {
     //
     // Extracting prototype properties screws up the heuristic renaming
     // policies, so never run it when those policies are requested.
-    if (options.extractPrototypeMemberDeclarations &&
-        (options.propertyRenaming != PropertyRenamingPolicy.HEURISTIC &&
-         options.propertyRenaming !=
-            PropertyRenamingPolicy.AGGRESSIVE_HEURISTIC)) {
+    if (options.extractPrototypeMemberDeclarations !=
+            ExtractPrototypeMemberDeclarationsMode.OFF
+        && (options.propertyRenaming != PropertyRenamingPolicy.HEURISTIC
+            && options.propertyRenaming !=
+               PropertyRenamingPolicy.AGGRESSIVE_HEURISTIC)) {
       passes.add(extractPrototypeMemberDeclarations);
     }
 
@@ -700,7 +787,9 @@ public class DefaultPassConfig extends PassConfig {
       passes.add(nameUnmappedAnonymousFunctions);
     }
 
-    passes.add(stripSideEffectProtection);
+    if (protectHiddenSideEffects) {
+      passes.add(stripSideEffectProtection);
+    }
 
     if (options.renamePrefixNamespace != null) {
       if (!GLOBAL_SYMBOL_NAMESPACE_PATTERN.matcher(
@@ -797,11 +886,6 @@ public class DefaultPassConfig extends PassConfig {
       new HotSwapPassFactory("checkSideEffects", true) {
     @Override
     protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
-      // The current approach to protecting "hidden" side-effects is to
-      // wrap them in a function call that is stripped later, this shouldn't
-      // be done in IDE mode where AST changes may be unexpected.
-      boolean protectHiddenSideEffects =
-          options.protectHiddenSideEffects && !options.ideMode;
       return new CheckSideEffects(compiler,
           options.checkSuspiciousCode ? CheckLevel.WARNING : CheckLevel.OFF,
               protectHiddenSideEffects);
@@ -809,13 +893,12 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /**
-   * Checks for code that is probably wrong (such as stray expressions).
+   * Removes the "protector" functions that were added by CheckSideEffects.
    */
   final PassFactory stripSideEffectProtection =
       new PassFactory("stripSideEffectProtection", true) {
     @Override
-    protected CompilerPass create(final AbstractCompiler
-        compiler) {
+    protected CompilerPass create(final AbstractCompiler compiler) {
       return new CheckSideEffects.StripProtection(compiler);
     }
   };
@@ -859,15 +942,6 @@ public class DefaultPassConfig extends PassConfig {
     }
   }
 
-  /** Checks for validity of the control structures. */
-  final HotSwapPassFactory checkControlStructures =
-      new HotSwapPassFactory("checkControlStructures", true) {
-    @Override
-    protected HotSwapCompilerPass create(AbstractCompiler compiler) {
-      return new ControlStructureCheck(compiler);
-    }
-  };
-
   /** Checks that all constructed classes are goog.require()d. */
   final HotSwapPassFactory checkRequires =
       new HotSwapPassFactory("checkRequires", true) {
@@ -896,10 +970,17 @@ public class DefaultPassConfig extends PassConfig {
   final PassFactory generateExports = new PassFactory("generateExports", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
+      if (options.removeUnusedPrototypePropertiesInExterns
+          && options.exportLocalPropertyDefinitions) {
+        return new ErrorPass(
+            compiler, CANNOT_USE_EXPORT_LOCALS_AND_EXTERN_PROP_REMOVAL);
+      }
+
       CodingConvention convention = compiler.getCodingConvention();
       if (convention.getExportSymbolFunction() != null &&
           convention.getExportPropertyFunction() != null) {
         return new GenerateExports(compiler,
+            options.exportLocalPropertyDefinitions,
             convention.getExportSymbolFunction(),
             convention.getExportPropertyFunction());
       } else {
@@ -946,7 +1027,6 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Closure pre-processing pass. */
-  @SuppressWarnings("deprecation")
   final HotSwapPassFactory closurePrimitives =
       new HotSwapPassFactory("closurePrimitives", true) {
     @Override
@@ -955,7 +1035,8 @@ public class DefaultPassConfig extends PassConfig {
       final ProcessClosurePrimitives pass = new ProcessClosurePrimitives(
           compiler,
           preprocessorSymbolTable,
-          options.brokenClosureRequiresLevel);
+          options.brokenClosureRequiresLevel,
+          options.preserveGoogRequires);
 
       return new HotSwapCompilerPass() {
         @Override
@@ -980,10 +1061,10 @@ public class DefaultPassConfig extends PassConfig {
   };
 
   /** Process AngularJS-specific annotations. */
-  final PassFactory angularPass =
-      new PassFactory("angularPass", true) {
+  final HotSwapPassFactory angularPass =
+      new HotSwapPassFactory("angularPass", true) {
     @Override
-    protected CompilerPass create(AbstractCompiler compiler) {
+    protected HotSwapCompilerPass create(AbstractCompiler compiler) {
       return new AngularPass(compiler);
     }
   };
@@ -1001,7 +1082,7 @@ public class DefaultPassConfig extends PassConfig {
           /* warn about message dupes */
           true,
           /* allow messages with goog.getMsg */
-          JsMessage.Style.getFromParams(true, false),
+          JsMessage.Style.CLOSURE,
           /* if we can't find a translation, don't worry about it. */
           false);
     }
@@ -1016,7 +1097,7 @@ public class DefaultPassConfig extends PassConfig {
           /* warn about message dupes */
           true,
           /* allow messages with goog.getMsg */
-          JsMessage.Style.getFromParams(true, false));
+          JsMessage.Style.CLOSURE);
     }
   };
 
@@ -1033,12 +1114,111 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  /** Rewrites goog.class */
-  final HotSwapPassFactory closureRewriteGoogClass =
-      new HotSwapPassFactory("closureRewriteGoogClass", true) {
+  final PassFactory es6RuntimeLibrary =
+      new PassFactory("Es6RuntimeLibrary", true) {
+    @Override
+    protected CompilerPass create(final AbstractCompiler compiler) {
+      return new InjectEs6RuntimeLibrary(compiler);
+    }
+  };
+
+  final HotSwapPassFactory es6RenameVariablesInParamLists =
+      new HotSwapPassFactory("Es6RenameVariablesInParamLists", true) {
+    @Override
+    protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
+      return new Es6RenameVariablesInParamLists(compiler);
+    }
+  };
+
+  final HotSwapPassFactory es6SplitVariableDeclarations =
+      new HotSwapPassFactory("Es6SplitVariableDeclarations", true) {
+    @Override
+    protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
+      return new Es6SplitVariableDeclarations(compiler);
+    }
+  };
+
+  final HotSwapPassFactory es6ConvertSuper =
+      new HotSwapPassFactory("es6ConvertSuper", true) {
+    @Override
+    protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
+      return new Es6ConvertSuper(compiler);
+    }
+  };
+
+  /**
+   * Does the main ES6 to ES3 conversion.
+   * There are a few other passes which run before or after this one,
+   * to convert constructs which are not converted by this pass.
+   */
+  final HotSwapPassFactory convertEs6ToEs3 =
+      new HotSwapPassFactory("convertEs6", true) {
+    @Override
+    protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
+      return new Es6ToEs3Converter(compiler);
+    }
+  };
+
+  final HotSwapPassFactory rewriteLetConst =
+      new HotSwapPassFactory("Es6RewriteLetConst", true) {
+    @Override
+    protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
+      return new Es6RewriteLetConst(compiler);
+    }
+  };
+
+  final HotSwapPassFactory rewriteGenerators =
+      new HotSwapPassFactory("rewriteGenerators", true) {
+    @Override
+    protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
+      return new Es6RewriteGenerators(compiler);
+    }
+  };
+
+  final PassFactory convertStaticInheritance =
+      new PassFactory("Es6StaticInheritance", true) {
+    @Override
+    protected CompilerPass create(AbstractCompiler compiler) {
+      return new Es6ToEs3ClassSideInheritance(compiler);
+    }
+  };
+
+  final PassFactory markTranspilationDone = new PassFactory("setLanguageMode", true) {
+    @Override
+    protected CompilerPass create(final AbstractCompiler compiler) {
+      return new CompilerPass() {
+        @Override
+        public void process(Node externs, Node root) {
+          compiler.setLanguageMode(options.getLanguageOut());
+        }
+      };
+    }
+  };
+
+  /** Applies aliases and inlines goog.scope. */
+  final PassFactory declaredGlobalExternsOnWindow =
+      new PassFactory("declaredGlobalExternsOnWindow", true) {
+    @Override
+    protected CompilerPass create(AbstractCompiler compiler) {
+      return new DeclaredGlobalExternsOnWindow(compiler);
+    }
+  };
+
+  /** Rewrites goog.defineClass */
+  final HotSwapPassFactory closureRewriteClass =
+      new HotSwapPassFactory("closureRewriteClass", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
       return new ClosureRewriteClass(compiler);
+    }
+  };
+
+  /** Rewrites goog.module */
+  final HotSwapPassFactory closureRewriteModule =
+      new HotSwapPassFactory("closureRewriteModule", true) {
+    @Override
+    protected HotSwapCompilerPass create(AbstractCompiler compiler) {
+      return new ClosureRewriteModule(compiler);
     }
   };
 
@@ -1047,11 +1227,9 @@ public class DefaultPassConfig extends PassConfig {
       new PassFactory("closureCheckGetCssName", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
-      String blacklist = options.checkMissingGetCssNameBlacklist;
-      Preconditions.checkState(blacklist != null && !blacklist.isEmpty(),
-          "Not checking use of goog.getCssName because of empty blacklist.");
       return new CheckMissingGetCssName(
-          compiler, options.checkMissingGetCssNameLevel, blacklist);
+          compiler, options.checkMissingGetCssNameLevel,
+          options.checkMissingGetCssNameBlacklist);
     }
   };
 
@@ -1096,6 +1274,31 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
+  final PassFactory earlyPeepholeOptimizations =
+      new PassFactory("earlyPeepholeOptimizations", true) {
+    @Override
+    protected CompilerPass create(AbstractCompiler compiler) {
+      return new PeepholeOptimizationsPass(compiler,
+          new PeepholeRemoveDeadCode());
+    }
+  };
+
+  final PassFactory earlyInlineVariables =
+      new PassFactory("earlyInlineVariables", true) {
+    @Override
+    protected CompilerPass create(AbstractCompiler compiler) {
+      InlineVariables.Mode mode;
+      if (options.inlineVariables) {
+        mode = InlineVariables.Mode.ALL;
+      } else if (options.inlineLocalVariables) {
+        mode = InlineVariables.Mode.LOCALS_ONLY;
+      } else {
+        throw new IllegalStateException("No variable inlining option set.");
+      }
+      return new InlineVariables(compiler, mode, true);
+    }
+  };
+
   /** Various peephole optimizations. */
   final PassFactory peepholeOptimizations =
       new PassFactory("peepholeOptimizations", false) {
@@ -1135,6 +1338,14 @@ public class DefaultPassConfig extends PassConfig {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
       return new VarCheck(compiler);
+    }
+  };
+
+  /** Infers constants. */
+  final PassFactory inferConsts = new PassFactory("inferConsts", true) {
+    @Override
+    protected CompilerPass create(AbstractCompiler compiler) {
+      return new InferConsts(compiler);
     }
   };
 
@@ -1214,6 +1425,22 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
+  final PassFactory symbolTableForNewTypeInference =
+      new PassFactory("GlobalTypeInfo", true) {
+        @Override
+        protected CompilerPass create(final AbstractCompiler compiler) {
+          return new GlobalTypeInfo(compiler);
+        }
+      };
+
+  final PassFactory newTypeInference =
+      new PassFactory("NewTypeInference", true) {
+        @Override
+        protected CompilerPass create(final AbstractCompiler compiler) {
+          return new NewTypeInference(compiler, options.closurePass);
+        }
+      };
+
   final HotSwapPassFactory inferJsDocInfo =
       new HotSwapPassFactory("inferJsDocInfo", true) {
   @Override
@@ -1266,11 +1493,10 @@ public class DefaultPassConfig extends PassConfig {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
       List<Callback> callbacks = Lists.newArrayList();
-      if (options.checkUnreachableCode.isOn()) {
-        callbacks.add(
-            new CheckUnreachableCode(compiler, options.checkUnreachableCode));
+      if (!options.disables(DiagnosticGroups.CHECK_USELESS_CODE)) {
+        callbacks.add(new CheckUnreachableCode(compiler));
       }
-      if (options.checkMissingReturn.isOn() && options.checkTypes) {
+      if (options.checkMissingReturn.isOn()) {
         callbacks.add(
             new CheckMissingReturn(compiler, options.checkMissingReturn));
       }
@@ -1283,7 +1509,20 @@ public class DefaultPassConfig extends PassConfig {
       new HotSwapPassFactory("checkAccessControls", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
-      return new CheckAccessControls(compiler);
+      return new CheckAccessControls(
+          compiler, options.enforceAccessControlCodingConventions);
+    }
+  };
+
+  final HotSwapPassFactory lintChecks =
+      new HotSwapPassFactory("lintChecks", true) {
+    @Override
+    protected HotSwapCompilerPass create(AbstractCompiler compiler) {
+      return combineChecks(compiler, ImmutableList.<Callback>of(
+          new CheckEnums(compiler),
+          new CheckInterfaces(compiler),
+          new CheckNullableReturn(compiler),
+          new CheckPrototypeProperties(compiler)));
     }
   };
 
@@ -1291,8 +1530,7 @@ public class DefaultPassConfig extends PassConfig {
   private static HotSwapCompilerPass combineChecks(AbstractCompiler compiler,
       List<Callback> callbacks) {
     Preconditions.checkArgument(callbacks.size() > 0);
-    Callback[] array = callbacks.toArray(new Callback[callbacks.size()]);
-    return new CombinedCompilerPass(compiler, array);
+    return new CombinedCompilerPass(compiler, callbacks);
   }
 
   /** A compiler pass that resolves types in the global scope. */
@@ -1344,14 +1582,13 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
-  /** Checks that the code is ES5 or Caja compliant. */
+  /** Checks that the code is ES5 strict compliant. */
   final PassFactory checkStrictMode =
       new PassFactory("checkStrictMode", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       return new StrictModeCheck(compiler,
-          !options.checkSymbols,  // don't check variables twice
-          !options.checkCaja);    // disable eval check if not Caja
+          !options.checkSymbols);  // don't check variables twice
     }
   };
 
@@ -1377,10 +1614,11 @@ public class DefaultPassConfig extends PassConfig {
       return new CompilerPass() {
         @Override
         public void process(Node externs, Node jsRoot) {
-          Map<String, Node> replacements = getAdditionalReplacements(options);
+          HashMap<String, Node> replacements = new HashMap<>();
+          replacements.putAll(compiler.getDefaultDefineValues());
+          replacements.putAll(getAdditionalReplacements(options));
           replacements.putAll(options.getDefineReplacements());
-
-          new ProcessDefines(compiler, replacements)
+          new ProcessDefines(compiler, ImmutableMap.copyOf(replacements))
               .injectNamespace(namespaceForChecks).process(externs, jsRoot);
         }
       };
@@ -1416,6 +1654,15 @@ public class DefaultPassConfig extends PassConfig {
     }
   };
 
+  /** Checks that the arguments are constants */
+  final PassFactory checkConstParams =
+      new PassFactory("checkConstParams", true) {
+    @Override
+    protected CompilerPass create(AbstractCompiler compiler) {
+      return new ConstParamCheck(compiler);
+    }
+  };
+
   /** Check memory bloat patterns */
   final PassFactory checkEventfulObjectDisposal =
       new PassFactory("checkEventfulObjectDisposal", true) {
@@ -1432,15 +1679,6 @@ public class DefaultPassConfig extends PassConfig {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       return ((functionNames = new FunctionNames(compiler)));
-    }
-  };
-
-  /** Skips Caja-private properties in for-in loops */
-  final PassFactory ignoreCajaProperties =
-      new PassFactory("ignoreCajaProperties", true) {
-    @Override
-    protected CompilerPass create(AbstractCompiler compiler) {
-      return new IgnoreCajaProperties(compiler);
     }
   };
 
@@ -1524,7 +1762,10 @@ public class DefaultPassConfig extends PassConfig {
       new PassFactory("rescopeGlobalSymbols", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
-      return new RescopeGlobalSymbols(compiler, options.renamePrefixNamespace);
+      return new RescopeGlobalSymbols(
+          compiler,
+          options.renamePrefixNamespace,
+          options.renamePrefixNamespaceAssumeCrossModuleNames);
     }
   };
 
@@ -1533,9 +1774,7 @@ public class DefaultPassConfig extends PassConfig {
       new PassFactory("collapseProperties", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
-      return new CollapseProperties(
-          compiler, options.collapsePropertiesOnExternTypes,
-          !isInliningForbidden());
+      return new CollapseProperties(compiler, !isInliningForbidden());
     }
   };
 
@@ -1546,22 +1785,6 @@ public class DefaultPassConfig extends PassConfig {
     protected CompilerPass create(AbstractCompiler compiler) {
       return new InlineObjectLiterals(
           compiler, compiler.getUniqueNameIdSupplier());
-    }
-  };
-
-  /**
-   * Try to infer the actual types, which may be narrower
-   * than the declared types.
-   */
-  final PassFactory tightenTypesBuilder =
-      new PassFactory("tightenTypes", true) {
-    @Override
-    protected CompilerPass create(AbstractCompiler compiler) {
-      if (!options.checkTypes) {
-        return new ErrorPass(compiler, TIGHTEN_TYPES_WITHOUT_TYPE_CHECK);
-      }
-      tightenTypes = new TightenTypes(compiler);
-      return tightenTypes;
     }
   };
 
@@ -1579,13 +1802,8 @@ public class DefaultPassConfig extends PassConfig {
       new PassFactory("disambiguateProperties", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
-      if (tightenTypes == null) {
-        return DisambiguateProperties.forJSTypeSystem(compiler,
-            options.propertyInvalidationErrors);
-      } else {
-        return DisambiguateProperties.forConcreteTypeSystem(
-            compiler, tightenTypes, options.propertyInvalidationErrors);
-      }
+      return DisambiguateProperties.forJSTypeSystem(compiler,
+          options.propertyInvalidationErrors);
     }
   };
 
@@ -1746,7 +1964,8 @@ public class DefaultPassConfig extends PassConfig {
       new PassFactory("removeUnusedClassProperties", false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
-      return new RemoveUnusedClassProperties(compiler);
+      return new RemoveUnusedClassProperties(
+          compiler, options.removeUnusedConstructorProperties);
     }
   };
 
@@ -1755,6 +1974,8 @@ public class DefaultPassConfig extends PassConfig {
    * starting with minimum set of names.
    */
   final PassFactory smartNamePass = new PassFactory("smartNamePass", true) {
+    private boolean hasWrittenFile = false;
+
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
       return new CompilerPass() {
@@ -1766,8 +1987,14 @@ public class DefaultPassConfig extends PassConfig {
           String reportPath = options.reportPath;
           if (reportPath != null) {
             try {
-              Files.write(na.getHtmlReport(), new File(reportPath),
-                  Charsets.UTF_8);
+              if (hasWrittenFile) {
+                Files.append(na.getHtmlReport(), new File(reportPath),
+                    UTF_8);
+              } else {
+                Files.write(na.getHtmlReport(), new File(reportPath),
+                    UTF_8);
+                hasWrittenFile = true;
+              }
             } catch (IOException e) {
               compiler.report(JSError.make(REPORT_PATH_IO_ERROR, reportPath));
             }
@@ -1831,7 +2058,8 @@ public class DefaultPassConfig extends PassConfig {
           enableBlockInlining,
           options.assumeStrictThis()
               || options.getLanguageIn() == LanguageMode.ECMASCRIPT5_STRICT,
-          options.assumeClosuresOnlyCaptureReferences);
+          options.assumeClosuresOnlyCaptureReferences,
+          options.maxFunctionSizeAfterInlining);
     }
   };
 
@@ -1865,10 +2093,13 @@ public class DefaultPassConfig extends PassConfig {
    * Move global symbols to a deeper common module
    */
   final PassFactory crossModuleCodeMotion =
-      new PassFactory("crossModuleCodeMotion", false) {
+      new PassFactory(Compiler.CROSS_MODULE_CODE_MOTION_NAME, false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
-      return new CrossModuleCodeMotion(compiler, compiler.getModuleGraph());
+      return new CrossModuleCodeMotion(
+          compiler,
+          compiler.getModuleGraph(),
+          options.parentModuleCanSeeSymbolsDeclaredInChildren);
     }
   };
 
@@ -1876,7 +2107,7 @@ public class DefaultPassConfig extends PassConfig {
    * Move methods to a deeper common module
    */
   final PassFactory crossModuleMethodMotion =
-      new PassFactory("crossModuleMethodMotion", false) {
+      new PassFactory(Compiler.CROSS_MODULE_METHOD_MOTION_NAME, false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       return new CrossModuleMethodMotion(
@@ -1959,8 +2190,20 @@ public class DefaultPassConfig extends PassConfig {
       new PassFactory("extractPrototypeMemberDeclarations", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
+      Pattern pattern;
+      switch (options.extractPrototypeMemberDeclarations) {
+        case USE_GLOBAL_TEMP:
+          pattern = Pattern.USE_GLOBAL_TEMP;
+          break;
+        case USE_IIFE:
+          pattern = Pattern.USE_IIFE;
+          break;
+        default:
+          throw new IllegalStateException("unexpected");
+      }
+
       return new ExtractPrototypeMemberDeclarations(
-          compiler, Pattern.USE_GLOBAL_TEMP);
+          compiler, pattern);
     }
   };
 
@@ -2180,20 +2423,6 @@ public class DefaultPassConfig extends PassConfig {
       reservedNames.addAll(exportedNames);
     }
     reservedNames.addAll(ParserRunner.getReservedVars());
-    if (options.alternateRenaming) {
-      RenameVars2 rn = new RenameVars2(
-          compiler,
-          options.renamePrefix,
-          options.variableRenaming == VariableRenamingPolicy.LOCAL,
-          preserveAnonymousFunctionNames,
-          options.generatePseudoNames,
-          options.shadowVariables,
-          prevVariableMap,
-          reservedChars,
-          reservedNames);
-      rn.process(externs, root);
-      return rn.getVariableMap();
-    }
     RenameVars rn = new RenameVars(
         compiler,
         options.renamePrefix,
@@ -2201,6 +2430,7 @@ public class DefaultPassConfig extends PassConfig {
         preserveAnonymousFunctionNames,
         options.generatePseudoNames,
         options.shadowVariables,
+        options.preferStableNames,
         prevVariableMap,
         reservedChars,
         reservedNames);
@@ -2244,7 +2474,7 @@ public class DefaultPassConfig extends PassConfig {
   final PassFactory sanityCheckAst = new PassFactory("sanityCheckAst", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
-      return new AstValidator();
+      return new AstValidator(compiler);
     }
   };
 
@@ -2297,6 +2527,15 @@ public class DefaultPassConfig extends PassConfig {
           // TODO(johnlenz): make global instrumentation an option
           return new CoverageInstrumentationPass(
               compiler, CoverageReach.CONDITIONAL);
+        }
+      };
+
+  /** Extern property names gathering pass. */
+  final PassFactory gatherExternProperties =
+      new PassFactory("gatherExternProperties", true) {
+        @Override
+        protected CompilerPass create(AbstractCompiler compiler) {
+          return new GatherExternProperties(compiler);
         }
       };
 
@@ -2383,7 +2622,7 @@ public class DefaultPassConfig extends PassConfig {
           try {
             Files.write(DotFormatter.toDot(gc.getNameReferenceGraph()),
                 new File(graphFileName),
-                Charsets.UTF_8);
+                UTF_8);
           } catch (IOException e) {
             compiler.report(
                 JSError.make(
@@ -2409,7 +2648,7 @@ public class DefaultPassConfig extends PassConfig {
                 new NameReferenceGraphReport(gc.getNameReferenceGraph());
             Files.write(report.getHtmlReport(),
                 new File(reportFileName),
-                Charsets.UTF_8);
+                UTF_8);
           } catch (IOException e) {
             compiler.report(
                 JSError.make(
@@ -2440,4 +2679,12 @@ public class DefaultPassConfig extends PassConfig {
     }
   }
 
+  private final PassFactory checkConformance =
+      new PassFactory("checkConformance", true) {
+    @Override
+    protected CompilerPass create(final AbstractCompiler compiler) {
+      return new CheckConformance(
+          compiler, ImmutableList.copyOf(options.getConformanceConfigs()));
+    }
+  };
 }

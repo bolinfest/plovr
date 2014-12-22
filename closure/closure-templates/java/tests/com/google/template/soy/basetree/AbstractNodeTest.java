@@ -16,13 +16,12 @@
 
 package com.google.template.soy.basetree;
 
-import org.junit.*;
+import junit.framework.*;
 
 
 /**
  * Unit tests for AbstractNode.
  *
- * @author Kai Huang
  */
 public class AbstractNodeTest extends TestCase {
 

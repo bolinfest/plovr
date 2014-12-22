@@ -16,14 +16,13 @@
  * @fileoverview Utilities for working with ranges in HTML documents.
  *
  * @author robbyw@google.com (Robby Walker)
- * @author ojan@google.com (Ojan Vafai)
- * @author jparent@google.com (Julie Parent)
  */
 
 goog.provide('goog.dom.Range');
 
 goog.require('goog.dom');
 goog.require('goog.dom.AbstractRange');
+goog.require('goog.dom.BrowserFeature');
 goog.require('goog.dom.ControlRange');
 goog.require('goog.dom.MultiRange');
 goog.require('goog.dom.NodeType');
@@ -70,7 +69,7 @@ goog.dom.Range.createFromBrowserSelection = function(selection) {
   } else if (selection.rangeCount) {
     if (selection.rangeCount > 1) {
       return goog.dom.MultiRange.createFromBrowserSelection(
-          /** @type {Selection} */ (selection));
+          /** @type {!Selection} */ (selection));
     } else {
       range = selection.getRangeAt(0);
       isReversed = goog.dom.Range.isReversed(selection.anchorNode,
@@ -89,7 +88,7 @@ goog.dom.Range.createFromBrowserSelection = function(selection) {
  * @param {Range|TextRange} range The browser range object.
  * @param {boolean=} opt_isReversed Whether the focus node is before the anchor
  *     node.
- * @return {goog.dom.AbstractRange} A range wrapper object.
+ * @return {!goog.dom.AbstractRange} A range wrapper object.
  */
 goog.dom.Range.createFromBrowserRange = function(range, opt_isReversed) {
   // Create an IE control range when appropriate.
@@ -104,7 +103,7 @@ goog.dom.Range.createFromBrowserRange = function(range, opt_isReversed) {
  * @param {Node} node The node to select.
  * @param {boolean=} opt_isReversed Whether the focus node is before the anchor
  *     node.
- * @return {goog.dom.AbstractRange} A range wrapper object.
+ * @return {!goog.dom.AbstractRange} A range wrapper object.
  */
 goog.dom.Range.createFromNodeContents = function(node, opt_isReversed) {
   return goog.dom.TextRange.createFromNodeContents(node, opt_isReversed);
@@ -117,7 +116,7 @@ goog.dom.Range.createFromNodeContents = function(node, opt_isReversed) {
  * of whether node is an image node or other control range type node.
  * @param {Node} node The node to place a caret at.
  * @param {number} offset The offset within the node to place the caret at.
- * @return {goog.dom.AbstractRange} A range wrapper object.
+ * @return {!goog.dom.AbstractRange} A range wrapper object.
  */
 goog.dom.Range.createCaret = function(node, offset) {
   return goog.dom.TextRange.createFromNodes(node, offset, node, offset);
@@ -131,7 +130,7 @@ goog.dom.Range.createCaret = function(node, offset) {
  * @param {number} anchorOffset The offset within the node to anchor on.
  * @param {Node} focusNode The node to focus on.
  * @param {number} focusOffset The offset within the node to focus on.
- * @return {goog.dom.AbstractRange} A range wrapper object.
+ * @return {!goog.dom.AbstractRange} A range wrapper object.
  */
 goog.dom.Range.createFromNodes = function(anchorNode, anchorOffset, focusNode,
     focusOffset) {
@@ -180,7 +179,9 @@ goog.dom.Range.clearSelection = function(opt_win) {
 goog.dom.Range.hasSelection = function(opt_win) {
   var sel = goog.dom.AbstractRange.getBrowserSelectionForWindow(
       opt_win || window);
-  return !!sel && (goog.userAgent.IE ? sel.type != 'None' : !!sel.rangeCount);
+  return !!sel &&
+      (goog.dom.BrowserFeature.LEGACY_IE_RANGES ?
+       sel.type != 'None' : !!sel.rangeCount);
 };
 
 

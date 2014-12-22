@@ -19,6 +19,7 @@ import static com.google.javascript.jscomp.SourceExcerptProvider.SourceExcerpt.L
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
+import com.google.debugging.sourcemap.proto.Mapping.OriginalMapping;
 import com.google.javascript.jscomp.SourceExcerptProvider.ExcerptFormatter;
 import com.google.javascript.jscomp.SourceExcerptProvider.SourceExcerpt;
 
@@ -66,32 +67,46 @@ public class LightweightMessageFormatter extends AbstractMessageFormatter {
   }
 
   private String format(JSError error, boolean warning) {
-    // extract source excerpt
     SourceExcerptProvider source = getSource();
-    String sourceExcerpt = source == null ? null :
-        excerpt.get(
-            source, error.sourceName, error.lineNumber, excerptFormatter);
+    String sourceName = error.sourceName;
+    int lineNumber = error.lineNumber;
+    int charno = error.getCharno();
 
-    // formatting the message
+    // Format the non-reverse-mapped position.
     StringBuilder b = new StringBuilder();
-    if (error.sourceName != null) {
-      b.append(error.sourceName);
-      if (error.lineNumber > 0) {
-        b.append(':');
-        b.append(error.lineNumber);
-      }
-      b.append(": ");
+    StringBuilder boldLine = new StringBuilder();
+    String nonMappedPosition = formatPosition(sourceName, lineNumber);
+
+    // Check if we can reverse-map the source.
+    OriginalMapping mapping = source == null ? null : source.getSourceMapping(
+        error.sourceName, error.lineNumber, error.getCharno());
+    if (mapping == null) {
+      boldLine.append(nonMappedPosition);
+    } else {
+      sourceName = mapping.getOriginalFile();
+      lineNumber = mapping.getLineNumber();
+      charno = mapping.getColumnPosition();
+
+      b.append(nonMappedPosition);
+      b.append("\nOriginally at:\n");
+      boldLine.append(formatPosition(sourceName, lineNumber));
     }
 
-    b.append(getLevelName(warning ? CheckLevel.WARNING : CheckLevel.ERROR));
-    b.append(" - ");
+    // extract source excerpt
+    String sourceExcerpt = source == null ? null :
+        excerpt.get(
+            source, sourceName, lineNumber, excerptFormatter);
 
-    b.append(error.description);
+    boldLine.append(getLevelName(warning ? CheckLevel.WARNING : CheckLevel.ERROR));
+    boldLine.append(" - ");
+
+    boldLine.append(error.description);
+
+    b.append(maybeEmbolden(boldLine.toString()));
     b.append('\n');
     if (sourceExcerpt != null) {
       b.append(sourceExcerpt);
       b.append('\n');
-      int charno = error.getCharno();
 
       // padding equal to the excerpt and arrow at the end
       // charno == sourceExpert.length() means something is missing
@@ -108,6 +123,19 @@ public class LightweightMessageFormatter extends AbstractMessageFormatter {
         }
         b.append("^\n");
       }
+    }
+    return b.toString();
+  }
+
+  private String formatPosition(String sourceName, int lineNumber) {
+    StringBuilder b = new StringBuilder();
+    if (sourceName != null) {
+      b.append(sourceName);
+      if (lineNumber > 0) {
+        b.append(':');
+        b.append(lineNumber);
+      }
+      b.append(": ");
     }
     return b.toString();
   }
@@ -131,7 +159,7 @@ public class LightweightMessageFormatter extends AbstractMessageFormatter {
         return null;
       }
       String code = region.getSourceExcerpt();
-      if (code.length() == 0) {
+      if (code.isEmpty()) {
         return null;
       }
 
@@ -149,7 +177,7 @@ public class LightweightMessageFormatter extends AbstractMessageFormatter {
         String line;
         if (end < 0) {
           line = code.substring(start);
-          if (line.length() == 0) {
+          if (line.isEmpty()) {
             return builder.substring(0, builder.length() - 1);
           }
         } else {

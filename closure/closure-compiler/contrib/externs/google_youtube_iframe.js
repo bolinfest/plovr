@@ -182,6 +182,13 @@ YT.Player.prototype.getVideoBytesTotal = function() {};
  * @return {number}
  * @nosideeffects
  */
+YT.Player.prototype.getVideoLoadedFraction = function() {};
+
+
+/**
+ * @return {number}
+ * @nosideeffects
+ */
 YT.Player.prototype.getVideoStartBytes = function() {};
 
 
@@ -261,6 +268,24 @@ YT.Player.prototype.addEventListener = function(eventName, listenerName) {};
 
 /** Destroys the player reference. */
 YT.Player.prototype.destroy = function() {};
+
+
+/**
+ * @return {number}
+ * @nosideeffects
+ */
+YT.Player.prototype.getPlaybackRate = function() {};
+
+
+/** @param {number} suggestedRate */
+YT.Player.prototype.setPlaybackRate = function(suggestedRate) {};
+
+
+/**
+ * @return {!Array.<number>}
+ * @nosideeffects
+ */
+YT.Player.prototype.getAvailablePlaybackRates = function() {};
 
 
 /** @enum */

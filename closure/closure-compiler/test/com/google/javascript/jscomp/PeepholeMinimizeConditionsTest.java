@@ -24,7 +24,6 @@ package com.google.javascript.jscomp;
 public class PeepholeMinimizeConditionsTest extends CompilerTestCase {
 
   private boolean late = true;
-  private boolean aggressive = true;
 
   // TODO(user): Remove this when we no longer need to do string comparison.
   private PeepholeMinimizeConditionsTest(boolean compareAsTree) {
@@ -38,7 +37,6 @@ public class PeepholeMinimizeConditionsTest extends CompilerTestCase {
   @Override
   public void setUp() throws Exception {
     late = true;
-    aggressive = true;
     super.setUp();
     enableLineNumberCheck(true);
     disableNormalize();
@@ -47,7 +45,7 @@ public class PeepholeMinimizeConditionsTest extends CompilerTestCase {
   @Override
   public CompilerPass getProcessor(final Compiler compiler) {
     PeepholeOptimizationsPass peepholePass = new PeepholeOptimizationsPass(
-        compiler, new PeepholeMinimizeConditions(late, aggressive));
+        compiler, new PeepholeMinimizeConditions(late));
     peepholePass.setRetraverseOnChange(false);
     return peepholePass;
   }
@@ -127,7 +125,7 @@ public class PeepholeMinimizeConditionsTest extends CompilerTestCase {
 
     // Play with nested IFs
     fold("function f(){if(x){if(y)foo()}}",
-         "function f(){x&&y&&foo()}");
+         "function f(){x && (y && foo())}");
     fold("function f(){if(x){if(y)foo();else bar()}}",
          "function f(){x&&(y?foo():bar())}");
     fold("function f(){if(x){if(y)foo()}else bar()}",
@@ -278,7 +276,7 @@ public class PeepholeMinimizeConditionsTest extends CompilerTestCase {
   public void testFoldLogicalOpStringCompare() {
     // side-effects
     // There is two way to parse two &&'s and both are correct.
-    assertResultString("if(foo() && false) z()", "foo()&&0&&z()");
+    assertResultString("if(foo() && false) z()", "(foo(),0)&&z()");
   }
 
   public void testFoldNot() {
@@ -432,6 +430,8 @@ public class PeepholeMinimizeConditionsTest extends CompilerTestCase {
     fold("for(;a;) { if (b) break; if (c) break; }",
          "for(;(a && !b);) if (c) break;");
     fold("for(;(a && !b);) if (c) break;", "for(;(a && !b) && !c;);");
+    fold("for(;;) { if (foo) { break; var x; } } x;",
+        "var x; for(;!foo;) {} x;");
 
     // 'while' is normalized to 'for'
     enableNormalize(true);
@@ -464,11 +464,11 @@ public class PeepholeMinimizeConditionsTest extends CompilerTestCase {
 
   public void testFoldIfWithLowerOperatorsInside() {
     fold("if (x + (y=5)) z && (w,z);",
-         "x + (y=5) && z && (w,z)");
+         "x + (y=5) && (z && (w,z))");
     fold("if (!(x+(y=5))) z && (w,z);",
          "x + (y=5) || z && (w,z)");
     fold("if (x + (y=5)) if (z && (w,z)) for(;;) foo();",
-         "if (x + (y=5) && z && (w,z)) for(;;) foo();");
+         "if (x + (y=5) && (z && (w,z))) for(;;) foo();");
   }
 
   public void testSubsituteReturn() {
@@ -682,7 +682,7 @@ public class PeepholeMinimizeConditionsTest extends CompilerTestCase {
     fold("if(x||z)if(y){while(1){}}", "if((x||z)&&y){while(1){}}");
     fold("if(x)if(y||z){while(1){}}", "if((x)&&(y||z)){while(1){}}");
     foldSame("if(x||z)if(y||z){while(1){}}");
-    fold("if(x)if(y){if(z){while(1){}}}", "if(x&&y&&z){while(1){}}");
+    fold("if(x)if(y){if(z){while(1){}}}", "if(x&&(y&&z)){while(1){}}");
   }
 
   public void testIssue291() {

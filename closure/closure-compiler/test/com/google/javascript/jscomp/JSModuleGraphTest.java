@@ -16,17 +16,17 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 
-import org.junit.*;
+import junit.framework.*;
 
 import java.util.*;
-
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
 
 /**
  * Tests for {@link JSModuleGraph}
@@ -168,7 +168,7 @@ public class JSModuleGraphTest extends TestCase {
   public void testManageDependencies2() throws Exception {
     List<CompilerInput> inputs = setUpManageDependenciesTest();
     List<CompilerInput> results = graph.manageDependencies(
-        ImmutableList.<String>of("c2"), inputs);
+        ImmutableList.of("c2"), inputs);
 
     assertInputs(A, "a1", "a3");
     assertInputs(B, "a2", "b2");
@@ -186,7 +186,7 @@ public class JSModuleGraphTest extends TestCase {
     depOptions.setDependencySorting(true);
     depOptions.setDependencyPruning(true);
     depOptions.setMoocherDropping(true);
-    depOptions.setEntryPoints(ImmutableList.<String>of("c2"));
+    depOptions.setEntryPoints(ImmutableList.of("c2"));
     List<CompilerInput> results = graph.manageDependencies(
         depOptions, inputs);
 
@@ -229,6 +229,36 @@ public class JSModuleGraphTest extends TestCase {
         sourceNames(results));
   }
 
+  private static final String BASEJS = Joiner.on("\n").join(
+      "/** @provideGoog */",
+      "var COMPILED = false;",
+      "var goog = goog || {}");
+
+
+  public void testManageDependencies5() throws Exception {
+    A.add(code("a2", provides("a2"), requires("a1")));
+    A.add(code("a1", provides("a1"), requires()));
+    A.add(code("base.js", BASEJS, provides(), requires()));
+
+    for (CompilerInput input : A.getInputs()) {
+      input.setCompiler(compiler);
+    }
+
+    DependencyOptions depOptions = new DependencyOptions();
+    depOptions.setDependencySorting(true);
+
+    List<CompilerInput> inputs = Lists.newArrayList();
+    inputs.addAll(A.getInputs());
+    List<CompilerInput> results = graph.manageDependencies(
+        depOptions, inputs);
+
+    assertInputs(A, "base.js", "a1", "a2");
+
+    assertEquals(
+        Lists.newArrayList("base.js", "a1", "a2"),
+        sourceNames(results));
+  }
+
   public void testNoFiles() throws Exception {
     DependencyOptions depOptions = new DependencyOptions();
     depOptions.setDependencySorting(true);
@@ -239,22 +269,22 @@ public class JSModuleGraphTest extends TestCase {
     assertTrue(results.isEmpty());
   }
 
-  public void testToJson() throws JSONException {
-    JSONArray modules = graph.toJson();
-    assertEquals(6, modules.length());
-    for (int i = 0; i < modules.length(); i++) {
-      JSONObject m = modules.getJSONObject(i);
-      assertNotNull(m.getString("name"));
-      assertNotNull(m.getJSONArray("dependencies"));
-      assertNotNull(m.getJSONArray("transitive-dependencies"));
-      assertNotNull(m.getJSONArray("inputs"));
+  public void testToJson() throws JsonParseException {
+    JsonArray modules = graph.toJson();
+    assertEquals(6, modules.size());
+    for (int i = 0; i < modules.size(); i++) {
+      JsonObject m = modules.get(i).getAsJsonObject();
+      assertNotNull(m.get("name"));
+      assertNotNull(m.get("dependencies"));
+      assertNotNull(m.get("transitive-dependencies"));
+      assertNotNull(m.get("inputs"));
     }
-    JSONObject m = modules.getJSONObject(3);
-    assertEquals("D", m.getString("name"));
-    assertEquals("[\"B\"]", m.getJSONArray("dependencies").toString());
+    JsonObject m = modules.get(3).getAsJsonObject();
+    assertEquals("D", m.get("name").getAsString());
+    assertEquals("[\"B\"]", m.get("dependencies").getAsJsonArray().toString());
     assertEquals(2,
-        m.getJSONArray("transitive-dependencies").length());
-    assertEquals("[]", m.getJSONArray("inputs").toString());
+        m.get("transitive-dependencies").getAsJsonArray().size());
+    assertEquals("[]", m.get("inputs").getAsJsonArray().toString());
   }
 
   private List<CompilerInput> setUpManageDependenciesTest() {
@@ -300,6 +330,12 @@ public class JSModuleGraphTest extends TestCase {
 
   private SourceFile code(
       String sourceName, List<String> provides, List<String> requires) {
+    return code(sourceName, "", provides, requires);
+  }
+
+  private SourceFile code(
+      String sourceName, String source,
+      List<String> provides, List<String> requires) {
     String text = "";
     for (String p : provides) {
       text += "goog.provide('" + p + "');\n";
@@ -307,7 +343,7 @@ public class JSModuleGraphTest extends TestCase {
     for (String r : requires) {
       text += "goog.require('" + r + "');\n";
     }
-    return SourceFile.fromCode(sourceName, text);
+    return SourceFile.fromCode(sourceName, text + source);
   }
 
   private List<String> provides(String ... strings) {

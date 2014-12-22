@@ -34,6 +34,8 @@ public class Config {
     ECMASCRIPT3,
     ECMASCRIPT5,
     ECMASCRIPT5_STRICT,
+    ECMASCRIPT6,
+    ECMASCRIPT6_STRICT,
   }
 
   /**
@@ -66,10 +68,6 @@ public class Config {
    * Accept `const' keyword.
    */
   final boolean acceptConstKeyword;
-
-  /**
-   * Annotation names.
-   */
 
   Config(Set<String> annotationWhitelist, Set<String> suppressionNames,
       boolean isIdeMode, LanguageMode languageMode,

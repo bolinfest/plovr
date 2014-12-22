@@ -1,7 +1,0 @@
-java_library(
-  name = 'rhino',
-  srcs = glob(['src/**/*.java']),
-  visibility = [
-    '//closure/closure-compiler:',
-  ],
-)

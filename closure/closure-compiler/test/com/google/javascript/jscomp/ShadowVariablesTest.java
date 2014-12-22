@@ -30,7 +30,7 @@ public class ShadowVariablesTest extends CompilerTestCase{
   protected CompilerPass getProcessor(Compiler compiler) {
       pass = new RenameVars(
           compiler, "", false, false,
-          generatePseudoNames, true, null, null, null, null);
+          generatePseudoNames, true, false, null, null, null, null);
       return  pass;
   }
 
@@ -256,8 +256,7 @@ public class ShadowVariablesTest extends CompilerTestCase{
     try {
       vm.getNewNameToOriginalNameMap();
     } catch (java.lang.IllegalArgumentException unexpected) {
-      fail("Invalid VariableMap generated: " +
-           vm.getOriginalNameToNewNameMap().toString());
+      fail("Invalid VariableMap generated: " + vm.getOriginalNameToNewNameMap());
     }
   }
 

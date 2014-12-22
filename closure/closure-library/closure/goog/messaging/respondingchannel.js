@@ -23,9 +23,7 @@ goog.provide('goog.messaging.RespondingChannel');
 
 goog.require('goog.Disposable');
 goog.require('goog.log');
-goog.require('goog.messaging.MessageChannel'); // interface
 goog.require('goog.messaging.MultiChannel');
-goog.require('goog.messaging.MultiChannel.VirtualChannel');
 
 
 
@@ -40,7 +38,7 @@ goog.require('goog.messaging.MultiChannel.VirtualChannel');
  * @extends {goog.Disposable}
  */
 goog.messaging.RespondingChannel = function(messageChannel) {
-  goog.base(this);
+  goog.messaging.RespondingChannel.base(this, 'constructor');
 
   /**
    * The message channel wrapped in a MultiChannel so we can send private and
@@ -54,7 +52,7 @@ goog.messaging.RespondingChannel = function(messageChannel) {
    * Map of invocation signatures to function callbacks. These are used to keep
    * track of the asyncronous service invocations so the result of a service
    * call can be passed back to a callback in the calling frame.
-   * @type {Object.<number, function(Object)>}
+   * @type {Object<number, function(Object)>}
    * @private
    */
   this.sigCallbackMap_ = {};

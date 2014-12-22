@@ -34,7 +34,6 @@
 /** @type {number} */ Event.prototype.clientX;
 /** @type {number} */ Event.prototype.clientY;
 /** @type {boolean} */ Event.prototype.ctrlKey;
-/** @type {number} */ Event.prototype.detail;
 /** @type {EventTarget} */ Event.prototype.explicitOriginalTarget;
 /** @type {boolean} */ Event.prototype.isChar;
 /** @type {number} */ Event.prototype.keyCode;
@@ -50,7 +49,6 @@
 /** @type {boolean} */ Event.prototype.shiftKey;
 /** @type {Window} */ Event.prototype.view;
 /** @type {number} */ Event.prototype.which;
-/** @type {Object} */ Event.prototype.state;
 
 /** @constructor */ function nsIDOMPageTransitionEvent() {}
 /** @type {boolean} */ nsIDOMPageTransitionEvent.prototype.persisted;

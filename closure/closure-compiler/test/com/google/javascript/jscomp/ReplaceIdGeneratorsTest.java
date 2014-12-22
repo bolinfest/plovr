@@ -16,8 +16,9 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.collect.ImmutableMap;
+import static com.google.javascript.jscomp.ReplaceIdGenerators.INVALID_GENERATOR_PARAMETER;
 
+import com.google.common.collect.ImmutableMap;
 
 /**
  * Tests for {@link ReplaceIdGenerators}.
@@ -59,6 +60,7 @@ public class ReplaceIdGeneratorsTest extends CompilerTestCase {
     super.setUp();
     generatePseudoNames = false;
     previousMappings = null;
+    compareJsDoc = false;
   }
 
   @Override
@@ -410,6 +412,21 @@ public class ReplaceIdGeneratorsTest extends CompilerTestCase {
          "f6 = 'AAAAMQ';");
   }
 
+  public void testNonLiteralParam1() {
+    testSame(new String[] {"/** @idGenerator */ var id = function() {}; " +
+                           "var x = 'foo';" +
+                           "id(x);"},
+        null,
+        ReplaceIdGenerators.INVALID_GENERATOR_PARAMETER);
+  }
+
+  public void testNonLiteralParam2() {
+    testSame(new String[] {"/** @idGenerator */ var id = function() {}; " +
+                           "id('foo' + 'bar');"},
+        null,
+        ReplaceIdGenerators.INVALID_GENERATOR_PARAMETER);
+  }
+
   public void testLocalCall() {
     testSame(new String[] {"/** @idGenerator */ var id = function() {}; " +
                            "function Foo() { id('foo'); }"},
@@ -468,6 +485,18 @@ public class ReplaceIdGeneratorsTest extends CompilerTestCase {
         "var id = function() {};\n" +
         "function Foo() { id('foo'); }\n",
         ReplaceIdGenerators.MISSING_NAME_MAP_FOR_GENERATOR);
+  }
+
+  public void testBadGenerator1() {
+    testSame("/** @idGenerator */ id = function() {};" +
+         "foo.bar = id()",
+         INVALID_GENERATOR_PARAMETER);
+  }
+
+  public void testBadGenerator2() {
+    testSame("/** @consistentIdGenerator */ id = function() {};" +
+         "foo.bar = id()",
+         INVALID_GENERATOR_PARAMETER);
   }
 
   private void testMap(String code, String expected, String expectedMap) {

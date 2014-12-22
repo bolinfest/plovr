@@ -14,6 +14,7 @@
 
 /**
  * @fileoverview A class that can be used to listen to font size changes.
+ * @author arv@google.com (Erik Arvidsson)
  */
 
 goog.provide('goog.dom.FontSizeMonitor');
@@ -46,6 +47,7 @@ goog.require('goog.userAgent');
  *     size changes.
  * @constructor
  * @extends {goog.events.EventTarget}
+ * @final
  */
 goog.dom.FontSizeMonitor = function(opt_domHelper) {
   goog.events.EventTarget.call(this);

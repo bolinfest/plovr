@@ -19,20 +19,18 @@ package com.google.template.soy.msgs.restricted;
 import static com.google.common.base.Preconditions.checkArgument;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Sets;
+import com.google.common.collect.ImmutableSet;
 
 import java.util.List;
-import java.util.Set;
+import java.util.Objects;
 
 import javax.annotation.Nullable;
-
 
 /**
  * Represents a message in some language/locale. Contains information relevant to translation.
  *
- * @author Kai Huang
  */
-public class SoyMsg {
+public final class SoyMsg {
 
 
   /** A unique id for this message (same across all translations). */
@@ -57,13 +55,13 @@ public class SoyMsg {
   private final String contentType;
 
   /** Location(s) of the source file(s) that this message comes from. */
-  private Set<String> sourcePaths;
+  private ImmutableSet<String> sourcePaths;
 
   /** Whether this is a plural/select message. */
   private final boolean isPlrselMsg;
 
   /** The parts that make up the message content. */
-  private final List<SoyMsgPart> parts;
+  private final ImmutableList<SoyMsgPart> parts;
 
 
   /**
@@ -102,9 +100,9 @@ public class SoyMsg {
     this.desc = desc;
     this.isHidden = isHidden;
     this.contentType = contentType;
-    this.sourcePaths = Sets.newHashSetWithExpectedSize(1);
+    this.sourcePaths = ImmutableSet.of();
     if (sourcePath != null) {
-      this.sourcePaths.add(sourcePath);
+      addSourcePath(sourcePath);
     }
     this.isPlrselMsg = isPlrselMsg;
     this.parts = ImmutableList.copyOf(parts);
@@ -136,6 +134,21 @@ public class SoyMsg {
       boolean isHidden, @Nullable String contentType, @Nullable String sourcePath,
       List<SoyMsgPart> parts) {
     this(id, -1L, localeString, meaning, desc, isHidden, contentType, sourcePath, false, parts);
+  }
+
+
+  /**
+   * Constructor with just enough information for rendering only.
+   * @param id A unique id for this message (same across all translations).
+   * @param localeString The language/locale string, or null if unknown. Should only be null for
+   *     messages newly extracted from source files. Should always be set for messages parsed from
+   *     message files/resources.
+   * @param isPlrselMsg Whether this is a plural/select message.
+   * @param parts The parts that make up the message content.
+   */
+  public SoyMsg(
+      long id, @Nullable String localeString, boolean isPlrselMsg, List<SoyMsgPart> parts) {
+    this(id, -1L, localeString, null, null, false, null, null, isPlrselMsg, parts);
   }
 
 
@@ -176,11 +189,11 @@ public class SoyMsg {
 
   /** @param sourcePath Location of a source file that this message comes from. */
   public void addSourcePath(String sourcePath) {
-    sourcePaths.add(sourcePath);
+    sourcePaths = ImmutableSet.<String>builder().addAll(sourcePaths).add(sourcePath).build();
   }
 
   /** Returns the location(s) of the source file(s) that this message comes from. */
-  public Set<String> getSourcePaths() {
+  public ImmutableSet<String> getSourcePaths() {
     return sourcePaths;
   }
 
@@ -190,8 +203,36 @@ public class SoyMsg {
   }
 
   /** Returns the parts that make up the message content. */
-  public List<SoyMsgPart> getParts() {
+  public ImmutableList<SoyMsgPart> getParts() {
     return parts;
   }
 
+  @Override public boolean equals(Object otherObject) {
+    if (!(otherObject instanceof SoyMsg)) {
+      return false;
+    }
+    SoyMsg other = (SoyMsg) otherObject;
+    // NOTE: Source paths are not considered part of the object's identity, since they're mutable.
+    return id == other.id
+        && altId == other.altId
+        && Objects.equals(localeString, other.localeString)
+        && Objects.equals(meaning, other.meaning)
+        && Objects.equals(desc, other.desc)
+        && isHidden == other.isHidden
+        && Objects.equals(contentType, other.contentType)
+        && isPlrselMsg == other.isPlrselMsg
+        && Objects.equals(parts, other.parts);
+  }
+
+  @Override public int hashCode() {
+    // NOTE: Source paths are not considered part of the object's identity, since they're mutable.
+    return Objects.hash(
+        this.getClass(), id, altId, localeString, meaning, desc, contentType, isPlrselMsg, parts);
+  }
+
+  @Override public String toString() {
+    return this.getClass() + "(" + id + ", " + altId + ", " + localeString + ", " + meaning
+        + ", " + desc + ", " + isHidden + ", " + contentType + ", " + sourcePaths + ", "
+        + isPlrselMsg + ", " + parts + ")";
+  }
 }

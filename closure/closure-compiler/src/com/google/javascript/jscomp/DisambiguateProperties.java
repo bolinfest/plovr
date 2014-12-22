@@ -27,10 +27,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.AbstractCompiler.LifeCycleStage;
-import com.google.javascript.jscomp.ConcreteType.ConcreteFunctionType;
-import com.google.javascript.jscomp.ConcreteType.ConcreteInstanceType;
-import com.google.javascript.jscomp.ConcreteType.ConcreteUnionType;
-import com.google.javascript.jscomp.ConcreteType.ConcreteUniqueType;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
 import com.google.javascript.jscomp.TypeValidator.TypeMismatch;
 import com.google.javascript.jscomp.graph.StandardUnionFind;
@@ -49,6 +45,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 /**
  * DisambiguateProperties renames properties to disambiguate between unrelated
@@ -82,6 +79,7 @@ class DisambiguateProperties<T> implements CompilerPass {
 
   private static final Logger logger = Logger.getLogger(
       DisambiguateProperties.class.getName());
+  private static final Pattern NONWORD_PATTERN = Pattern.compile("[^\\w$]");
 
   static class Warnings {
     // TODO(user): {1} and {2} are not exactly useful for most people.
@@ -152,7 +150,7 @@ class DisambiguateProperties<T> implements CompilerPass {
     /** Returns the types on which this field is referenced. */
     UnionFind<T> getTypes() {
       if (types == null) {
-        types = new StandardUnionFind<T>();
+        types = new StandardUnionFind<>();
       }
       return types;
     }
@@ -283,16 +281,8 @@ class DisambiguateProperties<T> implements CompilerPass {
   static DisambiguateProperties<JSType> forJSTypeSystem(
       AbstractCompiler compiler,
       Map<String, CheckLevel> propertiesToErrorFor) {
-    return new DisambiguateProperties<JSType>(
+    return new DisambiguateProperties<>(
         compiler, new JSTypeSystem(compiler), propertiesToErrorFor);
-  }
-
-  static DisambiguateProperties<ConcreteType> forConcreteTypeSystem(
-      AbstractCompiler compiler, TightenTypes tt,
-      Map<String, CheckLevel> propertiesToErrorFor) {
-    return new DisambiguateProperties<ConcreteType>(
-        compiler, new ConcreteTypeSystem(tt, compiler.getCodingConvention()),
-            propertiesToErrorFor);
   }
 
   /**
@@ -315,13 +305,20 @@ class DisambiguateProperties<T> implements CompilerPass {
   public void process(Node externs, Node root) {
     Preconditions.checkState(
         compiler.getLifeCycleStage() == LifeCycleStage.NORMALIZED);
+    // TypeValidator records places where a type A is used in a context that
+    // expects a type B.
+    // For each pair (A, B), here we mark both A and B as types whose properties
+    // cannot be renamed.
     for (TypeMismatch mis : compiler.getTypeValidator().getMismatches()) {
       addInvalidatingType(mis.typeA, mis.src);
       addInvalidatingType(mis.typeB, mis.src);
     }
-
+    // Gather names of properties in externs; these properties can't be renamed.
     NodeTraversal.traverse(compiler, externs, new FindExternProperties());
+    // Look at each unquoted property access and decide if that property will
+    // be renamed.
     NodeTraversal.traverse(compiler, root, new FindRenameableProperties());
+    // Do the actual renaming.
     renameProperties();
   }
 
@@ -374,7 +371,7 @@ class DisambiguateProperties<T> implements CompilerPass {
   /** Tracks the current type system scope while traversing. */
   private abstract class AbstractScopingCallback implements ScopedCallback {
     protected final Stack<StaticScope<T>> scopes =
-        new Stack<StaticScope<T>>();
+        new Stack<>();
 
     @Override
     public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
@@ -443,9 +440,6 @@ class DisambiguateProperties<T> implements CompilerPass {
       }
     }
 
-    /**
-     * Processes a GETPROP node.
-     */
     private void handleGetProp(NodeTraversal t, Node n) {
       String name = n.getLastChild().getString();
       T type = typeSystem.getType(getScope(), n.getFirstChild(), name);
@@ -470,13 +464,14 @@ class DisambiguateProperties<T> implements CompilerPass {
               List<String> errors = Lists.newArrayList();
               printErrorLocations(errors, jsType);
               if (!errors.isEmpty()) {
-                suggestion = "Consider fixing errors for the following types:\n";
+                suggestion =
+                    "Consider fixing errors for the following types:\n";
                 suggestion += Joiner.on("\n").join(errors);
               }
             }
           }
           compiler.report(JSError.make(
-              t.getSourceName(), n, propertiesToErrorFor.get(name),
+              n, propertiesToErrorFor.get(name),
               Warnings.INVALIDATION, name,
               (type == null ? "null" : type.toString()),
               n.toString(), suggestion));
@@ -484,13 +479,14 @@ class DisambiguateProperties<T> implements CompilerPass {
       }
     }
 
-    /**
-     * Processes a OBJECTLIT node.
-     */
     private void handleObjectLit(NodeTraversal t, Node n) {
-      Node child = n.getFirstChild();
-      while (child != null) {
+      for (Node child = n.getFirstChild();
+          child != null;
+          child = child.getNext()) {
         // Maybe STRING, GET, SET
+        if (child.isQuotedString()) {
+          continue;
+        }
 
         // We should never see a mix of numbers and strings.
         String name = child.getString();
@@ -503,12 +499,11 @@ class DisambiguateProperties<T> implements CompilerPass {
           // case right now.
           if (propertiesToErrorFor.containsKey(name)) {
             compiler.report(JSError.make(
-                t.getSourceName(), child, propertiesToErrorFor.get(name),
+                child, propertiesToErrorFor.get(name),
                 Warnings.INVALIDATION, name,
                 (type == null ? "null" : type.toString()), n.toString(), ""));
           }
         }
-        child = child.getNext();
       }
     }
 
@@ -581,6 +576,9 @@ class DisambiguateProperties<T> implements CompilerPass {
 
         ++propsRenamed;
         prop.expandTypesToSkip();
+        // This loop has poor locality, because instead of walking the AST,
+        // we iterate over all accesses of a property, which can be in very
+        // different places in the code.
         for (Node node : prop.renameNodes) {
           T rootType = prop.rootTypes.get(node);
           if (prop.shouldRename(rootType)) {
@@ -597,7 +595,7 @@ class DisambiguateProperties<T> implements CompilerPass {
                 !reported.contains(prop.name)) {
               reported.add(prop.name);
               compiler.report(JSError.make(
-                  NodeUtil.getSourceName(node), node,
+                  node,
                   checkLevelForProp,
                   Warnings.INVALIDATION_ON_TYPE, prop.name,
                   rootType.toString(), ""));
@@ -640,7 +638,8 @@ class DisambiguateProperties<T> implements CompilerPass {
       if ("{...}".equals(typeName)) {
         newName = name;
       } else {
-        newName = typeName.replaceAll("[^\\w$]", "_") + "$" + name;
+        newName = NONWORD_PATTERN.matcher(typeName).replaceAll("_") + '$'
+            + name;
       }
 
       for (T type : set) {
@@ -807,7 +806,7 @@ class DisambiguateProperties<T> implements CompilerPass {
       return ImmutableSet.copyOf(getTypesToSkipForTypeNonUnion(type));
     }
 
-    private Set<JSType> getTypesToSkipForTypeNonUnion(JSType type) {
+    private static Set<JSType> getTypesToSkipForTypeNonUnion(JSType type) {
       Set<JSType> types = Sets.newHashSet();
       JSType skipType = type;
       while (skipType != null) {
@@ -907,6 +906,12 @@ class DisambiguateProperties<T> implements CompilerPass {
           foundType = maybeType;
         }
       }
+
+      // Unwrap templatized types, they are not unique at runtime.
+      if (foundType != null && foundType.isTemplatizedType()) {
+        foundType = foundType.toMaybeTemplatizedType().getReferencedType();
+      }
+
       return foundType;
     }
 
@@ -955,179 +960,6 @@ class DisambiguateProperties<T> implements CompilerPass {
           }
         }
       }
-    }
-  }
-
-  /** Implementation of TypeSystem using concrete types. */
-  private static class ConcreteTypeSystem implements TypeSystem<ConcreteType> {
-    private final TightenTypes tt;
-    private int nextUniqueId;
-    private CodingConvention codingConvention;
-    private final Set<JSType> invalidatingTypes = Sets.newHashSet();
-
-    // An array of native types that are not tracked by type tightening, and
-    // thus need to be added in if an unknown type is encountered.
-    private static final JSTypeNative [] nativeTypes = new JSTypeNative[] {
-        JSTypeNative.BOOLEAN_OBJECT_TYPE,
-        JSTypeNative.NUMBER_OBJECT_TYPE,
-        JSTypeNative.STRING_OBJECT_TYPE
-    };
-
-    public ConcreteTypeSystem(TightenTypes tt, CodingConvention convention) {
-      this.tt = tt;
-      this.codingConvention = convention;
-    }
-
-    @Override public void addInvalidatingType(JSType type) {
-      checkState(!type.isUnionType());
-      invalidatingTypes.add(type);
-    }
-
-    @Override public StaticScope<ConcreteType> getRootScope() {
-      return tt.getTopScope();
-    }
-
-    @Override public StaticScope<ConcreteType> getFunctionScope(Node decl) {
-      ConcreteFunctionType func = tt.getConcreteFunction(decl);
-      return (func != null) ?
-          func.getScope() : (StaticScope<ConcreteType>) null;
-    }
-
-    @Override
-    public ConcreteType getType(
-        StaticScope<ConcreteType> scope, Node node, String prop) {
-      if (scope != null) {
-        ConcreteType c = tt.inferConcreteType(
-            (TightenTypes.ConcreteScope) scope, node);
-        return maybeAddAutoboxes(c, node, prop);
-      } else {
-        return null;
-      }
-    }
-
-    /**
-     * Add concrete types for autoboxing types if necessary. The concrete type
-     * system does not track native types, like string, so add them if they are
-     * present in the JSType for the node.
-     */
-    private ConcreteType maybeAddAutoboxes(
-        ConcreteType cType, Node node, String prop) {
-      JSType jsType = node.getJSType();
-      if (jsType == null) {
-        return cType;
-      } else if (jsType.isUnknownType()) {
-        for (JSTypeNative nativeType : nativeTypes) {
-          ConcreteType concrete = tt.getConcreteInstance(
-              tt.getTypeRegistry().getNativeObjectType(nativeType));
-          if (concrete != null && !concrete.getPropertyType(prop).isNone()) {
-            cType = cType.unionWith(concrete);
-          }
-        }
-        return cType;
-      }
-
-      return maybeAddAutoboxes(cType, jsType, prop);
-    }
-
-    private ConcreteType maybeAddAutoboxes(
-        ConcreteType cType, JSType jsType, String prop) {
-      jsType = jsType.restrictByNotNullOrUndefined();
-      if (jsType.isUnionType()) {
-        for (JSType alt : jsType.toMaybeUnionType().getAlternates()) {
-          cType = maybeAddAutoboxes(cType, alt, prop);
-        }
-        return cType;
-      } else if (jsType.isEnumElementType()) {
-        return maybeAddAutoboxes(
-            cType, jsType.toMaybeEnumElementType().getPrimitiveType(), prop);
-      }
-
-      if (jsType.autoboxesTo() != null) {
-        JSType autoboxed = jsType.autoboxesTo();
-        return cType.unionWith(tt.getConcreteInstance((ObjectType) autoboxed));
-      } else if (jsType.unboxesTo() != null) {
-        return cType.unionWith(tt.getConcreteInstance((ObjectType) jsType));
-      }
-
-      return cType;
-    }
-
-    @Override public boolean isInvalidatingType(ConcreteType type) {
-      // We will disallow types on functions so that 'prototype' is not renamed.
-      // TODO(user): Support properties on functions as well.
-      return (type == null) || type.isAll() || type.isFunction()
-        || (type.isInstance()
-            && invalidatingTypes.contains(type.toInstance().instanceType));
-    }
-
-    @Override
-    public ImmutableSet<ConcreteType> getTypesToSkipForType(ConcreteType type) {
-      return ImmutableSet.of(type);
-    }
-
-    @Override public boolean isTypeToSkip(ConcreteType type) {
-      // Skip anonymous object literals and enum types.
-      return type.isInstance()
-        && !(type.toInstance().isFunctionPrototype()
-             || type.toInstance().instanceType.isInstanceType());
-    }
-
-    @Override
-    public ConcreteType restrictByNotNullOrUndefined(ConcreteType type) {
-      // These are not represented in concrete types.
-      return type;
-    }
-
-    @Override
-    public Iterable<ConcreteType> getTypeAlternatives(ConcreteType type) {
-      if (type.isUnion()) {
-        return ((ConcreteUnionType) type).getAlternatives();
-      } else {
-        return null;
-      }
-    }
-
-    @Override public ConcreteType getTypeWithProperty(String field,
-                                                      ConcreteType type) {
-      if (type.isInstance()) {
-        ConcreteInstanceType instanceType = (ConcreteInstanceType) type;
-        return instanceType.getInstanceTypeWithProperty(field);
-      } else if (type.isFunction()) {
-        if ("prototype".equals(field)
-            || codingConvention.isSuperClassReference(field)) {
-          return type;
-        }
-      } else if (type.isNone()) {
-        // If the receiver is none, then this code is never reached.  We will
-        // return a new fake type to ensure that this access is renamed
-        // differently from any other, so it can be easily removed.
-        return new ConcreteUniqueType(++nextUniqueId);
-      } else if (type.isUnion()) {
-        // If only one has the property, return that.
-        for (ConcreteType t : ((ConcreteUnionType) type).getAlternatives()) {
-          ConcreteType ret = getTypeWithProperty(field, t);
-          if (ret != null) {
-            return ret;
-          }
-        }
-      }
-      return null;
-    }
-
-    @Override public ConcreteType getInstanceFromPrototype(ConcreteType type) {
-      if (type.isInstance()) {
-        ConcreteInstanceType instanceType = (ConcreteInstanceType) type;
-        if (instanceType.isFunctionPrototype()) {
-          return instanceType.getConstructorType().getInstanceType();
-        }
-      }
-      return null;
-    }
-
-    @Override
-    public void recordInterfaces(ConcreteType type, ConcreteType relatedType,
-        DisambiguateProperties<ConcreteType>.Property p) {
-      // No need to record interfaces when using concrete types.
     }
   }
 }

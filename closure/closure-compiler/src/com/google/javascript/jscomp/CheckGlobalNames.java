@@ -53,8 +53,11 @@ class CheckGlobalNames implements CompilerPass {
   static final DiagnosticType STRICT_MODULE_DEP_QNAME =
       DiagnosticType.disabled(
           "JSC_STRICT_MODULE_DEP_QNAME",
-          "module {0} cannot reference {2}, defined in " +
-          "module {1}");
+          // The newline below causes the JS compiler not to complain when the
+          // referenced module's name changes because, for example, it's a
+          // synthetic module.
+          "cannot reference {2} because of a missing module dependency\n"
+          + "defined in module {1}, referenced from module {0}");
 
   /**
    * Creates a pass to check global name references at the given warning level.
@@ -181,7 +184,7 @@ class CheckGlobalNames implements CompilerPass {
                 ? name.getFullName() + ".prototype"
                 : name.getFullName();
             compiler.report(
-                JSError.make(ref.source.getName(), ref.node,
+                JSError.make(ref.node,
                     NAME_DEFINED_LATE_WARNING,
                     refName,
                     owner.getFullName(),
@@ -193,7 +196,7 @@ class CheckGlobalNames implements CompilerPass {
     }
   }
 
-  private boolean isTypedef(Ref ref) {
+  private static boolean isTypedef(Ref ref) {
     // If this is an annotated EXPR-GET, don't do anything.
     Node parent = ref.node.getParent();
     if (parent.isExprResult()) {
@@ -207,7 +210,7 @@ class CheckGlobalNames implements CompilerPass {
 
   private void reportBadModuleReference(Name name, Ref ref) {
     compiler.report(
-        JSError.make(ref.source.getName(), ref.node, STRICT_MODULE_DEP_QNAME,
+        JSError.make(ref.node, STRICT_MODULE_DEP_QNAME,
                      ref.getModule().getName(),
                      name.getDeclaration().getModule().getName(),
                      name.getFullName()));
@@ -221,7 +224,7 @@ class CheckGlobalNames implements CompilerPass {
     }
 
     compiler.report(
-        JSError.make(ref.getSourceName(), ref.node, level,
+        JSError.make(ref.node, level,
             UNDEFINED_NAME_WARNING, name.getFullName()));
   }
 

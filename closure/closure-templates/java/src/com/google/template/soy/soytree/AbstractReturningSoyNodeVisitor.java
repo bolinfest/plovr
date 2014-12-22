@@ -19,8 +19,9 @@ package com.google.template.soy.soytree;
 import com.google.template.soy.basetree.AbstractReturningNodeVisitor;
 import com.google.template.soy.basetree.ParentNode;
 import com.google.template.soy.soytree.SoyNode.LoopNode;
+import com.google.template.soy.soytree.SoyNode.MsgSubstUnitNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
-import com.google.template.soy.soytree.jssrc.GoogMsgNode;
+import com.google.template.soy.soytree.jssrc.GoogMsgDefNode;
 import com.google.template.soy.soytree.jssrc.GoogMsgRefNode;
 
 import java.util.List;
@@ -52,7 +53,6 @@ import java.util.List;
  * @param <R> The return type of this visitor.
  *
  * @see AbstractSoyNodeVisitor
- * @author Kai Huang
  */
 public abstract class AbstractReturningSoyNodeVisitor<R>
     extends AbstractReturningNodeVisitor<SoyNode, R> {
@@ -69,9 +69,10 @@ public abstract class AbstractReturningSoyNodeVisitor<R>
 
       case RAW_TEXT_NODE: return visitRawTextNode((RawTextNode) node);
 
-      case GOOG_MSG_NODE: return visitGoogMsgNode((GoogMsgNode) node);
+      case GOOG_MSG_DEF_NODE: return visitGoogMsgDefNode((GoogMsgDefNode) node);
       case GOOG_MSG_REF_NODE: return visitGoogMsgRefNode((GoogMsgRefNode) node);
 
+      case MSG_FALLBACK_GROUP_NODE: return visitMsgFallbackGroupNode((MsgFallbackGroupNode) node);
       case MSG_NODE: return visitMsgNode((MsgNode) node);
       case MSG_PLURAL_NODE: return visitMsgPluralNode((MsgPluralNode) node);
       case MSG_PLURAL_CASE_NODE: return visitMsgPluralCaseNode((MsgPluralCaseNode) node);
@@ -88,6 +89,7 @@ public abstract class AbstractReturningSoyNodeVisitor<R>
       case PRINT_DIRECTIVE_NODE: return visitPrintDirectiveNode((PrintDirectiveNode) node);
 
       case CSS_NODE: return visitCssNode((CssNode) node);
+      case XID_NODE: return visitXidNode((XidNode) node);
 
       case LET_VALUE_NODE: return visitLetValueNode((LetValueNode) node);
       case LET_CONTENT_NODE: return visitLetContentNode((LetContentNode) node);
@@ -173,11 +175,15 @@ public abstract class AbstractReturningSoyNodeVisitor<R>
     return visitSoyNode(node);
   }
 
-  protected R visitGoogMsgNode(GoogMsgNode node) {
+  protected R visitGoogMsgDefNode(GoogMsgDefNode node) {
     return visitSoyNode(node);
   }
 
   protected R visitGoogMsgRefNode(GoogMsgRefNode node) {
+    return visitSoyNode(node);
+  }
+
+  protected R visitMsgFallbackGroupNode(MsgFallbackGroupNode node) {
     return visitSoyNode(node);
   }
 
@@ -186,7 +192,7 @@ public abstract class AbstractReturningSoyNodeVisitor<R>
   }
 
   protected R visitMsgPluralNode(MsgPluralNode node) {
-    return visitSoyNode(node);
+    return visitMsgSubstUnitNode(node);
   }
 
   protected R visitMsgPluralCaseNode(MsgPluralCaseNode node) {
@@ -198,11 +204,11 @@ public abstract class AbstractReturningSoyNodeVisitor<R>
   }
 
   protected R visitMsgPluralRemainderNode(MsgPluralRemainderNode node) {
-    return visitSoyNode(node);
+    return visitMsgSubstUnitNode(node);
   }
 
   protected R visitMsgSelectNode(MsgSelectNode node) {
-    return visitSoyNode(node);
+    return visitMsgSubstUnitNode(node);
   }
 
   protected R visitMsgSelectCaseNode(MsgSelectCaseNode node) {
@@ -214,10 +220,14 @@ public abstract class AbstractReturningSoyNodeVisitor<R>
   }
 
   protected R visitMsgPlaceholderNode(MsgPlaceholderNode node) {
-    return visitSoyNode(node);
+    return visitMsgSubstUnitNode(node);
   }
 
   protected R visitMsgHtmlTagNode(MsgHtmlTagNode node) {
+    return visitSoyNode(node);
+  }
+
+  protected R visitMsgSubstUnitNode(MsgSubstUnitNode node) {
     return visitSoyNode(node);
   }
 
@@ -230,6 +240,10 @@ public abstract class AbstractReturningSoyNodeVisitor<R>
   }
 
   protected R visitCssNode(CssNode node) {
+    return visitSoyNode(node);
+  }
+
+  protected R visitXidNode(XidNode node) {
     return visitSoyNode(node);
   }
 

@@ -29,13 +29,12 @@ import junit.framework.TestCase;
 /**
  * Unit tests for RenameCssVisitor.
  *
- * @author Kai Huang
  */
 public class RenameCssVisitorTest extends TestCase {
 
 
   private static final String TEST_FILE_CONTENT =
-      "{namespace boo}\n" +
+      "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
       "\n" +
       "/** Test template. @param goo */\n" +
       "{template name=\".foo\"}\n" +

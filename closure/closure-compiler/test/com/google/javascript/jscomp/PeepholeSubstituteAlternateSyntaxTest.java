@@ -101,6 +101,8 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
     // Bogus flags should not fold
     testSame("x = RegExp(\"foobar\", \"bogus\")",
          PeepholeSubstituteAlternateSyntax.INVALID_REGULAR_EXPRESSION_FLAGS);
+    // Don't fold if the argument is not a string. See issue 1260.
+    foldSame("x = new RegExp(y)");
     // Can Fold
     fold("x = new RegExp(\"foobar\")",        "x = /foobar/");
     fold("x = RegExp(\"foobar\")",            "x = /foobar/");
@@ -113,14 +115,6 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
     fold("x = new RegExp(\"\\\\\\/\", \"\")", "x = /\\//");
     fold("x = new RegExp(\"\\n\")",           "x = /\\n/");
     fold("x = new RegExp('\\\\\\r')",         "x = /\\r/");
-
-    // Don't fold really long regexp literals, because Opera 9.2's
-    // regexp parser will explode.
-    String longRegexp = "";
-    for (int i = 0; i < 200; i++) {
-      longRegexp += "x";
-    }
-    foldSame("x = RegExp(\"" + longRegexp + "\")");
 
     // Shouldn't fold RegExp unnormalized because
     // we can't be sure that RegExp hasn't been redefined
@@ -161,18 +155,18 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
   }
 
   public void testContainsUnicodeEscape() throws Exception {
-    assertTrue(!PeepholeSubstituteAlternateSyntax.containsUnicodeEscape(""));
-    assertTrue(!PeepholeSubstituteAlternateSyntax.containsUnicodeEscape("foo"));
+    assertFalse(PeepholeSubstituteAlternateSyntax.containsUnicodeEscape(""));
+    assertFalse(PeepholeSubstituteAlternateSyntax.containsUnicodeEscape("foo"));
     assertTrue(PeepholeSubstituteAlternateSyntax.containsUnicodeEscape(
         "\u2028"));
     assertTrue(PeepholeSubstituteAlternateSyntax.containsUnicodeEscape(
         "\\u2028"));
     assertTrue(
         PeepholeSubstituteAlternateSyntax.containsUnicodeEscape("foo\\u2028"));
-    assertTrue(!PeepholeSubstituteAlternateSyntax.containsUnicodeEscape(
+    assertFalse(PeepholeSubstituteAlternateSyntax.containsUnicodeEscape(
         "foo\\\\u2028"));
     assertTrue(PeepholeSubstituteAlternateSyntax.containsUnicodeEscape(
-            "foo\\\\u2028bar\\u2028"));
+        "foo\\\\u2028bar\\u2028"));
   }
 
   public void testFoldLiteralObjectConstructors() {
@@ -277,6 +271,21 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
   public void testFoldTrueFalse() {
     fold("x = true", "x = !0");
     fold("x = false", "x = !1");
+  }
+
+  public void testFoldTrueFalseComparison() {
+    fold("x == true", "x == 1");
+    fold("x == false", "x == 0");
+    fold("x != true", "x != 1");
+    fold("x < true", "x < 1");
+    fold("x <= true", "x <= 1");
+    fold("x > true", "x > 1");
+    fold("x >= true", "x >= 1");
+  }
+
+  public void testFoldSubtractionAssignment() {
+    fold("x -= 1", "--x");
+    fold("x -= -1", "++x");
   }
 
   public void testFoldReturnResult() {
@@ -434,7 +443,6 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
     test("(goog$partial(f))(a)", "f(a)");
     test("(goog$partial(f,a))(b)", "f(a,b)");
     test("(goog$partial(f,a,b))(c)", "f(a,b,c)");
-
     // Don't rewrite if the bind isn't the immediate call target
     testSame("(goog$bind(f)).call(g)");
   }
@@ -454,6 +462,24 @@ public class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCase {
     test("var a = String('hello')", "var a = '' + 'hello'");
     testSame("var a = String('hello', bar());");
     testSame("var a = String({valueOf: function() { return 1; }});");
+  }
+
+  public void testRotateAssociativeOperators() {
+    test("a || (b || c); a * (b * c); a | (b | c)",
+        "(a || b) || c; (a * b) * c; (a | b) | c");
+    testSame("a % (b % c); a / (b / c); a - (b - c);");
+    test("a * (b % c);", "b % c * a");
+    test("a * b * (c / d)", "c / d * b * a");
+    test("(a + b) * (c % d)", "c % d * (a + b)");
+    testSame("(a / b) * (c % d)");
+    testSame("(c = 5) * (c % d)");
+    test("(a + b) * c * (d % e)", "d % e * c * (a + b)");
+    test("!a * c * (d % e)", "d % e * c * !a");
+  }
+
+  public void testNoRotateInfiniteLoop() {
+    test("1/x * (y/1 * (1/z))", "1/x * (y/1) * (1/z)");
+    testSame("1/x * (y/1) * (1/z)");
   }
 
   private static class StringCompareTestCase extends CompilerTestCase {

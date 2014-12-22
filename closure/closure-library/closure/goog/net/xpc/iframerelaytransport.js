@@ -20,9 +20,17 @@
 goog.provide('goog.net.xpc.IframeRelayTransport');
 
 goog.require('goog.dom');
+goog.require('goog.dom.safe');
 goog.require('goog.events');
+goog.require('goog.html.SafeHtml');
+goog.require('goog.log');
+goog.require('goog.log.Level');
 goog.require('goog.net.xpc');
+goog.require('goog.net.xpc.CfgFields');
 goog.require('goog.net.xpc.Transport');
+goog.require('goog.net.xpc.TransportTypes');
+goog.require('goog.string');
+goog.require('goog.string.Const');
 goog.require('goog.userAgent');
 
 
@@ -39,9 +47,10 @@ goog.require('goog.userAgent');
  *     the correct window.
  * @constructor
  * @extends {goog.net.xpc.Transport}
+ * @final
  */
 goog.net.xpc.IframeRelayTransport = function(channel, opt_domHelper) {
-  goog.base(this, opt_domHelper);
+  goog.net.xpc.IframeRelayTransport.base(this, 'constructor', opt_domHelper);
 
   /**
    * The channel this transport belongs to.
@@ -78,7 +87,7 @@ if (goog.userAgent.WEBKIT) {
    * Array to keep references to the relay-iframes. Used only if
    * there is no way to detect when the iframes are loaded. In that
    * case the relay-iframes are removed after a timeout.
-   * @type {Array.<Object>}
+   * @type {Array<Object>}
    * @private
    */
   goog.net.xpc.IframeRelayTransport.iframeRefs_ = [];
@@ -166,7 +175,7 @@ goog.net.xpc.IframeRelayTransport.IE_PAYLOAD_MAX_SIZE_ = 1800;
 
 
 /**
- * @typedef {{fragments: !Array.<string>, received: number, expected: number}}
+ * @typedef {{fragments: !Array<string>, received: number, expected: number}}
  */
 goog.net.xpc.IframeRelayTransport.FragmentInfo;
 
@@ -176,7 +185,7 @@ goog.net.xpc.IframeRelayTransport.FragmentInfo;
  * incoming fragments from several channels at a time, even if data is
  * out-of-order or interleaved.
  *
- * @type {!Object.<string, !goog.net.xpc.IframeRelayTransport.FragmentInfo>}
+ * @type {!Object<string, !goog.net.xpc.IframeRelayTransport.FragmentInfo>}
  * @private
  */
 goog.net.xpc.IframeRelayTransport.fragmentMap_ = {};
@@ -329,7 +338,9 @@ goog.net.xpc.IframeRelayTransport.prototype.send_ =
   // handler is not triggered
   if (goog.userAgent.IE) {
     var div = this.getWindow().document.createElement('div');
-    div.innerHTML = '<iframe onload="this.xpcOnload()"></iframe>';
+    goog.dom.safe.setInnerHtml(div, goog.html.SafeHtml.create('iframe', {
+      'onload': goog.string.Const.from('this.xpcOnload()')
+    }));
     var ifr = div.childNodes[0];
     div = null;
     ifr['xpcOnload'] = goog.net.xpc.IframeRelayTransport.iframeLoadHandler_;
@@ -387,7 +398,7 @@ goog.net.xpc.IframeRelayTransport.iframeLoadHandler_ = function() {
 
 /** @override */
 goog.net.xpc.IframeRelayTransport.prototype.disposeInternal = function() {
-  goog.base(this, 'disposeInternal');
+  goog.net.xpc.IframeRelayTransport.base(this, 'disposeInternal');
   if (goog.userAgent.WEBKIT) {
     goog.net.xpc.IframeRelayTransport.cleanup_(0);
   }

@@ -22,6 +22,7 @@
  *   http://www.w3.org/TR/DOM-Level-3-Core/ecma-script-binding.html
  *
  * @externs
+ * @author stevey@google.com (Steve Yegge)
  */
 
 /**
@@ -249,7 +250,7 @@ Document.prototype.normalizeDocument = function() {};
 Document.prototype.renameNode = function(n, namespaceURI, qualifiedName) {};
 
 /**
- * @type {string}
+ * @type {?string}
  * @see http://www.w3.org/TR/DOM-Level-3-Core/core.html#Node3-baseURI
  */
 Node.prototype.baseURI;
@@ -545,13 +546,6 @@ Element.prototype.setIdAttributeNode = function(idAttr, isId) {};
  * @see http://www.w3.org/TR/DOM-Level-3-Core/core.html#ID-ElSetIdAttrNS
  */
 Element.prototype.setIdAttributeNS = function(namespaceURI, localName, isId) {};
-
-/**
- * @type {boolean}
- * @see http://www.w3.org/TR/DOM-Level-3-Core/core.html#Text3-isElementContentWhitespace
- * @nosideeffects
- */
-Text.prototype.isElementContentWhitespace;
 
 /**
  * @type {string}

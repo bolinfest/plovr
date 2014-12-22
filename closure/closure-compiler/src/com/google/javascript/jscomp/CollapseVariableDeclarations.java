@@ -60,6 +60,7 @@ import java.util.Set;
  *
  * <pre>var c = b = a = true;</pre>
  *
+ * @author nicksantos@google.com (Nick Santos)
  */
 class CollapseVariableDeclarations implements CompilerPass {
   /** Reference to JS Compiler */
@@ -212,7 +213,7 @@ class CollapseVariableDeclarations implements CompilerPass {
     }
   }
 
-  private boolean isNamedParameter(Var v) {
+  private static boolean isNamedParameter(Var v) {
     return v.getParentNode().isParamList();
   }
 

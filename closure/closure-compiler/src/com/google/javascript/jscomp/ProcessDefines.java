@@ -17,6 +17,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -51,8 +52,7 @@ class ProcessDefines implements CompilerPass {
    * There are legacy flags that always set these defines, even when they
    * might not be in the binary.
    */
-  private static final Set<String> KNOWN_DEFINES =
-      Sets.newHashSet("COMPILED");
+  private static final Set<String> KNOWN_DEFINES = ImmutableSet.of("COMPILED");
 
   private final AbstractCompiler compiler;
   private final Map<String, Node> dominantReplacements;
@@ -142,9 +142,9 @@ class ProcessDefines implements CompilerPass {
       compiler.reportCodeChange();
     }
 
-    Set<String> unusedReplacements = dominantReplacements.keySet();
-    unusedReplacements.removeAll(allDefines.keySet());
-    unusedReplacements.removeAll(KNOWN_DEFINES);
+    Set<String> unusedReplacements = Sets.difference(
+        dominantReplacements.keySet(), Sets.union(KNOWN_DEFINES, allDefines.keySet()));
+
     for (String unknownDefine : unusedReplacements) {
       compiler.report(JSError.make(UNKNOWN_DEFINE_WARNING, unknownDefine));
     }
@@ -182,7 +182,6 @@ class ProcessDefines implements CompilerPass {
           allDefines.add(name);
         } else {
           JSError error = JSError.make(
-              decl.getSourceName(),
               decl.node, INVALID_DEFINE_TYPE_ERROR);
           compiler.report(error);
         }
@@ -239,7 +238,7 @@ class ProcessDefines implements CompilerPass {
       this.allDefines = Maps.newHashMap();
 
       assignableDefines = Maps.newHashMap();
-      assignAllowed = new ArrayDeque<Integer>();
+      assignAllowed = new ArrayDeque<>();
       assignAllowed.push(1);
 
       // Create a map of references to defines keyed by node for easy lookup
@@ -464,7 +463,7 @@ class ProcessDefines implements CompilerPass {
      * @param info Represents the define variable.
      * @param t The current traversal.
      */
-    private void setDefineInfoNotAssignable(DefineInfo info, NodeTraversal t) {
+    private static void setDefineInfoNotAssignable(DefineInfo info, NodeTraversal t) {
       info.setNotAssignable(format(REASON_DEFINE_NOT_ASSIGNABLE,
                                 t.getLineNumber(), t.getSourceName()));
     }

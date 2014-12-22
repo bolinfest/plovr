@@ -27,7 +27,6 @@ import junit.framework.TestCase;
 /**
  * Unit tests for CombineConsecutiveRawTextNodesVisitor.
  *
- * @author Kai Huang
  */
 public class CombineConsecutiveRawTextNodesVisitorTest extends TestCase {
 
@@ -35,7 +34,7 @@ public class CombineConsecutiveRawTextNodesVisitorTest extends TestCase {
   public void testCombineConsecutiveRawTextNodes() {
 
     String testFileContent =
-        "{namespace boo}\n" +
+        "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/** @param goo */\n" +
         "{template name=\".foo\"}\n" +

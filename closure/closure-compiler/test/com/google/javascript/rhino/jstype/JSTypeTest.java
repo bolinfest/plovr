@@ -2999,7 +2999,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
         registry.createFunctionType(BOOLEAN_TYPE, false, NUMBER_TYPE,
             STRING_TYPE).toString());
 
-    assertEquals("function (new:Array, ...[*]): Array",
+    assertEquals("function (new:Array, ...*): Array",
         ARRAY_FUNCTION_TYPE.toString());
 
     assertEquals("function (new:Boolean, *=): boolean",
@@ -3011,11 +3011,11 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertEquals("function (new:String, *=): string",
         STRING_OBJECT_FUNCTION_TYPE.toString());
 
-    assertEquals("function (...[number]): boolean",
+    assertEquals("function (...number): boolean",
         registry.createFunctionType(BOOLEAN_TYPE, true, NUMBER_TYPE)
         .toString());
 
-    assertEquals("function (number, ...[string]): boolean",
+    assertEquals("function (number, ...string): boolean",
         registry.createFunctionType(BOOLEAN_TYPE, true, NUMBER_TYPE,
             STRING_TYPE).toString());
 
@@ -3671,7 +3671,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertTrue(elementsType.matchesUint32Context());
 
     // toString
-    assertEquals("Enum.<number>", elementsType.toString());
+    assertEquals("Enum<number>", elementsType.toString());
     assertTrue(elementsType.hasDisplayName());
     assertEquals("Enum", elementsType.getDisplayName());
 
@@ -4723,7 +4723,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
         unresolvedNamedType.getLeastSupertype(U2U_FUNCTION_TYPE));
     assertTypeEquals(expected,
         U2U_FUNCTION_TYPE.getLeastSupertype(unresolvedNamedType));
-    assertEquals("(function (...[?]): ?|not.resolved.named.type)",
+    assertEquals("(function (...?): ?|not.resolved.named.type)",
         expected.toString());
   }
 
@@ -5301,16 +5301,16 @@ public class JSTypeTest extends BaseJSTypeTestCase {
 
     // Union and least super type cases:
     //
-    // 1) alternate:Array.<string> and current:Object ==> Object
-    // 2) alternate:Array.<string> and current:Array ==> Array
-    // 3) alternate:Object.<string> and current:Array ==> Array|Object.<string>
-    // 4) alternate:Object and current:Array.<string> ==> Object
-    // 5) alternate:Array and current:Array.<string> ==> Array
-    // 6) alternate:Array and current:Object.<string> ==> Array|Object.<string>
-    // 7) alternate:Array.<string> and current:Array.<number> ==> Array.<?>
-    // 8) alternate:Array.<string> and current:Array.<string> ==> Array.<string>
-    // 9) alternate:Array.<string> and
-    //    current:Object.<string> ==> Object.<string>|Array.<string>
+    // 1) alternate:Array<string> and current:Object ==> Object
+    // 2) alternate:Array<string> and current:Array ==> Array
+    // 3) alternate:Object<string> and current:Array ==> Array|Object<string>
+    // 4) alternate:Object and current:Array<string> ==> Object
+    // 5) alternate:Array and current:Array<string> ==> Array
+    // 6) alternate:Array and current:Object<string> ==> Array|Object<string>
+    // 7) alternate:Array<string> and current:Array<number> ==> Array<?>
+    // 8) alternate:Array<string> and current:Array<string> ==> Array<string>
+    // 9) alternate:Array<string> and
+    //    current:Object<string> ==> Object<string>|Array<string>
 
     assertTypeEquals(
         OBJECT_TYPE,
@@ -5327,10 +5327,10 @@ public class JSTypeTest extends BaseJSTypeTestCase {
         JSType.getLeastSupertype(ARRAY_TYPE, arrayOfString));
 
     assertEquals(
-        "(Array|Object.<string,?>)",
+        "(Array|Object<string,?>)",
         JSType.getLeastSupertype(objectOfString, ARRAY_TYPE).toString());
     assertEquals(
-        "(Array|Object.<string,?>)",
+        "(Array|Object<string,?>)",
         JSType.getLeastSupertype(ARRAY_TYPE, objectOfString).toString());
 
     assertEquals(
@@ -5344,10 +5344,10 @@ public class JSTypeTest extends BaseJSTypeTestCase {
         JSType.getLeastSupertype(arrayOfString, arrayOfString));
 
     assertEquals(
-        "(Array.<string>|Object.<string,?>)",
+        "(Array<string>|Object<string,?>)",
         JSType.getLeastSupertype(objectOfString, arrayOfString).toString());
     assertEquals(
-        "(Array.<string>|Object.<string,?>)",
+        "(Array<string>|Object<string,?>)",
         JSType.getLeastSupertype(arrayOfString, objectOfString).toString());
 
     assertTypeEquals(
@@ -5803,8 +5803,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
    * {@link JSTypeRegistry#createRecordType}.
    */
   public void testCreateRecordType() throws Exception {
-    Map<String, RecordProperty> properties =
-        new HashMap<String, RecordProperty>();
+    Map<String, RecordProperty> properties = new HashMap<>();
     properties.put("hello", new RecordProperty(NUMBER_TYPE, null));
 
     JSType recordType = registry.createRecordType(properties);
@@ -6128,7 +6127,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertEquals(STRING_TYPE, templateTypeMap.getTemplateType(keyB));
     assertEquals(UNKNOWN_TYPE, templateTypeMap.getTemplateType(unknownKey));
 
-    assertEquals("TestingType.<number,string>", templatizedInstance.toString());
+    assertEquals("TestingType<number,string>", templatizedInstance.toString());
   }
 
   public void testPartiallyTemplatizedType() throws Exception {
@@ -6158,7 +6157,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertEquals(UNKNOWN_TYPE, templateTypeMap.getTemplateType(keyB));
     assertEquals(UNKNOWN_TYPE, templateTypeMap.getTemplateType(unknownKey));
 
-    assertEquals("TestingType.<number,?>", templatizedInstance.toString());
+    assertEquals("TestingType<number,?>", templatizedInstance.toString());
   }
 
   public void testCanCastTo() {

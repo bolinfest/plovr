@@ -43,11 +43,12 @@ goog.require('goog.math.Range');
  * ranges will be merged.
  *
  * @constructor
+ * @final
  */
 goog.math.RangeSet = function() {
   /**
    * A sorted list of ranges that represent the values in the set.
-   * @type {!Array.<!goog.math.Range>}
+   * @type {!Array<!goog.math.Range>}
    * @private
    */
   this.ranges_ = [];

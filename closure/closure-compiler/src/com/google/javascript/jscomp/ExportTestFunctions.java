@@ -29,8 +29,9 @@ import java.util.regex.Pattern;
 class ExportTestFunctions implements CompilerPass {
 
   private static final Pattern TEST_FUNCTIONS_NAME_PATTERN =
-      Pattern.compile("^(?:((\\w+\\.)+prototype\\.)*" +
-                      "(setUpPage|setUp|tearDown|tearDownPage|test\\w+))$");
+      Pattern.compile(
+          "^(?:((\\w+\\.)+prototype\\.)*" +
+          "(setUpPage|setUp|shouldRunTests|tearDown|tearDownPage|test[\\w\\$]+))$");
 
   private AbstractCompiler compiler;
   private final String exportSymbolFunction;
@@ -66,14 +67,14 @@ class ExportTestFunctions implements CompilerPass {
         if (NodeUtil.isFunctionDeclaration(n)) {
           // Check for a test function statement.
           String functionName = NodeUtil.getFunctionName(n);
-          if (isTestFunction(n, functionName)) {
+          if (isTestFunction(functionName)) {
             exportTestFunctionAsSymbol(functionName, n, parent);
           }
         } else if (isVarDeclaredFunction(n)) {
           // Check for a test function expression.
           Node functionNode = n.getFirstChild().getFirstChild();
           String functionName = NodeUtil.getFunctionName(functionNode);
-          if (isTestFunction(functionNode, functionName)) {
+          if (isTestFunction(functionName)) {
             exportTestFunctionAsSymbol(functionName, n, parent);
           }
         }
@@ -83,7 +84,7 @@ class ExportTestFunctions implements CompilerPass {
         Node grandparent = parent.getParent();
         if (grandparent != null && grandparent.isScript()) {
           String functionName = n.getFirstChild().getQualifiedName();
-          if (isTestFunction(n, functionName)) {
+          if (isTestFunction(functionName)) {
             exportTestFunctionAsProperty(functionName, parent, n, grandparent);
           }
         }
@@ -119,16 +120,14 @@ class ExportTestFunctions implements CompilerPass {
   private void exportTestFunctionAsSymbol(String testFunctionName, Node node,
       Node scriptNode) {
 
-    Node exportCallTarget = NodeUtil.newQualifiedNameNode(
-        compiler.getCodingConvention(),
+    Node exportCallTarget = NodeUtil.newQName(compiler,
         exportSymbolFunction, node, testFunctionName);
     Node call = IR.call(exportCallTarget);
     if (exportCallTarget.isName()) {
       call.putBooleanProp(Node.FREE_CALL, true);
     }
     call.addChildToBack(IR.string(testFunctionName));
-    call.addChildToBack(NodeUtil.newQualifiedNameNode(
-        compiler.getCodingConvention(),
+    call.addChildToBack(NodeUtil.newQName(compiler,
         testFunctionName, node, testFunctionName));
 
     Node expression = IR.exprResult(call);
@@ -164,12 +163,11 @@ class ExportTestFunctions implements CompilerPass {
    * convention for naming (functions should start with "test"), and we also
    * check if it has no parameters declared.
    *
-   * @param n The function node
    * @param functionName The name of the function
    * @return {@code true} if the function is recognized as a test function.
    */
-  private boolean isTestFunction(Node n, String functionName) {
-    return !(functionName == null
-        || !TEST_FUNCTIONS_NAME_PATTERN.matcher(functionName).matches());
+  private static boolean isTestFunction(String functionName) {
+    return functionName != null
+        && TEST_FUNCTIONS_NAME_PATTERN.matcher(functionName).matches();
   }
 }

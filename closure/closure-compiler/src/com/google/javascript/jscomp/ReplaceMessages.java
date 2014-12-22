@@ -28,6 +28,7 @@ import javax.annotation.Nullable;
  * ReplaceMessages replaces user-visible messages with alternatives.
  * It uses Google specific JsMessageVisitor implementation.
  *
+ * @author anatol@google.com (Anatol Pomazau)
  */
 class ReplaceMessages extends JsMessageVisitor {
   private final MessageBundle bundle;
@@ -69,7 +70,7 @@ class ReplaceMessages extends JsMessageVisitor {
     JsMessage replacement = bundle.getMessage(message.getId());
     if (replacement == null) {
       if (strictReplacement) {
-        compiler.report(JSError.make(message.getSourceName(),
+        compiler.report(JSError.make(
             definition.getMessageNode(), BUNDLE_DOES_NOT_HAVE_THE_MESSAGE,
             message.getId()));
         // Fallback to the default message
@@ -87,14 +88,14 @@ class ReplaceMessages extends JsMessageVisitor {
     try {
       newValue = getNewValueNode(replacement, msgNode);
     } catch (MalformedException e) {
-      compiler.report(JSError.make(message.getSourceName(),
+      compiler.report(JSError.make(
           e.getNode(), MESSAGE_TREE_MALFORMED, e.getMessage()));
       newValue = msgNode;
     }
 
     if (newValue != msgNode) {
       newValue.copyInformationFromForTree(msgNode);
-      definition.getMessageParentNode().replaceChild(msgNode, newValue);
+      msgNode.getParent().replaceChild(msgNode, newValue);
       compiler.reportCodeChange();
     }
   }
@@ -203,8 +204,8 @@ class ReplaceMessages extends JsMessageVisitor {
    *   placeholder reference that does not correspond to a valid argument in
    *   the arg list
    */
-  private Node constructAddOrStringNode(Iterator<CharSequence> partsIterator,
-                                        Node argListNode)
+  private static Node constructAddOrStringNode(Iterator<CharSequence> partsIterator,
+                                               Node argListNode)
       throws MalformedException {
     CharSequence part = partsIterator.next();
     Node partNode = null;
@@ -309,8 +310,8 @@ class ReplaceMessages extends JsMessageVisitor {
    * @throws MalformedException if {@code parts} contains a placeholder
    *   reference that does not correspond to a valid placeholder name
    */
-  private Node constructStringExprNode(Iterator<CharSequence> parts,
-      Node objLitNode) throws MalformedException {
+  private static Node constructStringExprNode(Iterator<CharSequence> parts,
+                                              Node objLitNode) throws MalformedException {
 
     CharSequence part = parts.next();
     Node partNode = null;
@@ -356,7 +357,7 @@ class ReplaceMessages extends JsMessageVisitor {
    *
    * @throws IllegalArgumentException if the node is null or the wrong type
    */
-  private void checkStringExprNode(@Nullable Node node) {
+  private static void checkStringExprNode(@Nullable Node node) {
     if (node == null) {
       throw new IllegalArgumentException("Expected a string; found: null");
     }

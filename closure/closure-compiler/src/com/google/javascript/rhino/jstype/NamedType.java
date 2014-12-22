@@ -79,7 +79,7 @@ import java.util.List;
  * much that has to be changed.<p>
  *
  */
-class NamedType extends ProxyObjectType {
+public class NamedType extends ProxyObjectType {
   private static final long serialVersionUID = 1L;
 
   private final String reference;
@@ -311,8 +311,7 @@ class NamedType extends ProxyObjectType {
   private void handleTypeCycle(ErrorReporter t) {
     setReferencedType(
         registry.getNativeObjectType(JSTypeNative.UNKNOWN_TYPE));
-    t.warning("Cycle detected in inheritance chain of type " + reference,
-        sourceName, lineno, charno);
+    warning(t, "Cycle detected in inheritance chain of type " + reference);
     setResolvedTypeInternal(getReferencedType());
   }
 
@@ -340,8 +339,7 @@ class NamedType extends ProxyObjectType {
           ignoreForwardReferencedTypes &&
           registry.isForwardDeclaredType(reference);
       if (!isForwardDeclared && registry.isLastGeneration()) {
-        t.warning("Bad type annotation. Unknown type " + reference,
-            sourceName, lineno, charno);
+        warning(t, "Bad type annotation. Unknown type " + reference);
       } else {
         setReferencedType(
             registry.getNativeObjectType(
@@ -380,6 +378,10 @@ class NamedType extends ProxyObjectType {
     }
   }
 
+  void warning(ErrorReporter reporter, String message) {
+    reporter.warning(message, sourceName, lineno, charno);
+  }
+
   /** Store enough information to define a property at a later time. */
   private static final class PropertyContinuation {
     private final String propertyName;
@@ -402,5 +404,10 @@ class NamedType extends ProxyObjectType {
       target.defineProperty(
           propertyName, type, inferred, propertyNode);
     }
+  }
+
+  @Override
+  public <T> T visit(Visitor<T> visitor) {
+    return visitor.caseNamedType(this);
   }
 }

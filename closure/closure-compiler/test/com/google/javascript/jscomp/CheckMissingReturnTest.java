@@ -206,6 +206,24 @@ public class CheckMissingReturnTest extends CompilerTestCase {
     testSame(constructorWithReturn);
   }
 
+  public void testClosureAsserts() {
+    String closureDefs =
+        "/** @const */ var goog = {};\n" +
+        "goog.asserts = {};\n" +
+        "goog.asserts.fail = function(x) {};";
+
+    testNotMissing(closureDefs + "goog.asserts.fail('');");
+
+    testNotMissing(closureDefs
+        + "switch (x) { case 1: return 1; default: goog.asserts.fail(''); }");
+  }
+
+  public void testInfiniteLoops() {
+    testNotMissing("while (true) { x = y; if (x === 0) { return 1; } }");
+    testNotMissing("for (;true;) { x = y; if (x === 0) { return 1; } }");
+    testNotMissing("for (;;) { x = y; if (x === 0) { return 1; } }");
+  }
+
   private static String createFunction(String returnType, String body) {
     return "/** @return {" + returnType + "} */ function foo() {" + body + "}";
   }

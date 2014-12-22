@@ -16,13 +16,16 @@
 
 package com.google.template.soy.exprtree;
 
+import com.google.template.soy.types.SoyType;
+import com.google.template.soy.types.primitive.IntType;
+
+import java.util.Objects;
 
 /**
  * Node representing an integer value.
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
- * @author Kai Huang
  */
 public class IntegerNode extends AbstractPrimitiveNode {
 
@@ -54,6 +57,11 @@ public class IntegerNode extends AbstractPrimitiveNode {
   }
 
 
+  @Override public SoyType getType() {
+    return IntType.getInstance();
+  }
+
+
   /** Returns the integer value. */
   public int getValue() {
     return value;
@@ -69,4 +77,15 @@ public class IntegerNode extends AbstractPrimitiveNode {
     return new IntegerNode(this);
   }
 
+
+  @Override public boolean equals(Object other) {
+    if (other == null || other.getClass() != this.getClass()) { return false; }
+    IntegerNode otherInt = (IntegerNode) other;
+    return value == otherInt.value;
+  }
+
+
+  @Override public int hashCode() {
+    return Objects.hash(this.getClass(), value);
+  }
 }

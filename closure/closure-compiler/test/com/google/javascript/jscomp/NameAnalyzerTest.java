@@ -22,6 +22,7 @@ import com.google.javascript.rhino.Node;
  * Tests for {@link NameAnalyzer}
  *
  */
+
 public class NameAnalyzerTest extends CompilerTestCase {
 
   private static String kExterns =
@@ -232,34 +233,31 @@ public class NameAnalyzerTest extends CompilerTestCase {
   }
 
   public void testNoSideEffectAnnotation6() {
-    test("var f; f = /**@nosideeffects*/function(){};", "var a = f();",
+    test("f = /**@nosideeffects*/function(){};", "var a = f();",
          "", null, null);
   }
 
   public void testNoSideEffectAnnotation7() {
-    test("var f;" +
-         "f = /**@nosideeffects*/function(){};",
+    test("f = /**@nosideeffects*/function(){};",
          "f = function(){};" +
          "var a = f();",
          "f = function(){}; f();", null, null);
   }
 
   public void testNoSideEffectAnnotation8() {
-    test("var f;" +
-         "f = function(){};" +
+    test("f = function(){};" +
          "f = /**@nosideeffects*/function(){};",
          "var a = f();",
          "f();", null, null);
   }
 
   public void testNoSideEffectAnnotation9() {
-    test("var f;" +
-         "f = /**@nosideeffects*/function(){};" +
+    test("f = /**@nosideeffects*/function(){};" +
          "f = /**@nosideeffects*/function(){};",
          "var a = f();",
          "", null, null);
 
-    test("var f; f = /**@nosideeffects*/function(){};", "var a = f();",
+    test("f = /**@nosideeffects*/function(){};", "var a = f();",
          "", null, null);
   }
 
@@ -1017,6 +1015,14 @@ public class NameAnalyzerTest extends CompilerTestCase {
         "};");
   }
 
+  public void testDoNotChangeInstanceOfGetprop() {
+    testSame(
+        "function f(obj) {" +
+        "  if (obj instanceof window.MouseEvent) obj.preventDefault();" +
+        "}" +
+        "window['f'] = f;");
+  }
+
   public void testShortCircuit1() {
     test("var a = b() || 1", "b()");
   }
@@ -1230,6 +1236,18 @@ public class NameAnalyzerTest extends CompilerTestCase {
     test("function Foo(){} var foo = null; var f = {};" +
         "f.b = foo;",
         "");
+  }
+
+  public void testAssignWithCall() {
+    test("var fun, x; (fun = function(){ x; })();",
+        "var x; (function(){ x; })();");
+  }
+
+  // Currently this crashes the compiler because it erroneoursly removes var x
+  // and later a sanity check fails.
+  public void testAssignWithCall2() {
+    test("var fun, x; (123, fun = function(){ x; })();",
+        "(123, function(){ x; })();");
   }
 
   public void testNestedAssign1() {

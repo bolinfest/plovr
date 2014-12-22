@@ -16,8 +16,6 @@
  * @fileoverview Utilities for manipulating a form and elements.
  *
  * @author arv@google.com (Erik Arvidsson)
- * @author jonp@google.com (Jon Perlow)
- * @author elsigh@google.com (Lindsey Simon)
  */
 
 goog.provide('goog.dom.forms');
@@ -29,8 +27,8 @@ goog.require('goog.structs.Map');
  * Returns form data as a map of name to value arrays. This doesn't
  * support file inputs.
  * @param {HTMLFormElement} form The form.
- * @return {!goog.structs.Map} A map of the form data as form name to arrays of
- *     values.
+ * @return {!goog.structs.Map.<string, !Array.<string>>} A map of the form data
+ *     as field name to arrays of values.
  */
 goog.dom.forms.getFormDataMap = function(form) {
   var map = new goog.structs.Map();
@@ -119,7 +117,7 @@ goog.dom.forms.getFormDataHelper_ = function(form, result, fnAppend) {
 
 /**
  * Adds the name/value pair to the map.
- * @param {goog.structs.Map} map The map to add to.
+ * @param {!goog.structs.Map.<string, !Array.<string>>} map The map to add to.
  * @param {string} name The name.
  * @param {string} value The value.
  * @private
@@ -136,7 +134,7 @@ goog.dom.forms.addFormDataToMap_ = function(map, name, value) {
 
 /**
  * Adds a name/value pair to an string buffer array in the form 'name=value'.
- * @param {Array} sb The string buffer array for storing data.
+ * @param {Array<string>} sb The string buffer array for storing data.
  * @param {string} name The name.
  * @param {string} value The value.
  * @private
@@ -223,7 +221,7 @@ goog.dom.forms.hasValueByName = function(form, name) {
 /**
  * Gets the current value of any element with a type.
  * @param {Element} el The element.
- * @return {string|Array.<string>|null} The current value of the element
+ * @return {string|Array<string>|null} The current value of the element
  *     (or null).
  */
 goog.dom.forms.getValue = function(el) {
@@ -249,6 +247,7 @@ goog.dom.forms.getValue = function(el) {
  * Alias for goog.dom.form.element.getValue
  * @type {Function}
  * @deprecated Use {@link goog.dom.forms.getValue} instead.
+ * @suppress {missingProvide}
  */
 goog.dom.$F = goog.dom.forms.getValue;
 
@@ -260,7 +259,7 @@ goog.dom.$F = goog.dom.forms.getValue;
  * @param {HTMLFormElement} form The form element.
  * @param {string} name Name of an input to the form.
  *
- * @return {Array.<string>|string|null} The value of the form element, or
+ * @return {Array<string>|string|null} The value of the form element, or
  *     null if the form element does not exist or has no value.
  */
 goog.dom.forms.getValueByName = function(form, name) {
@@ -308,7 +307,7 @@ goog.dom.forms.getSelectSingle_ = function(el) {
 /**
  * Gets the current value of a select-multiple element.
  * @param {Element} el The element.
- * @return {Array.<string>?} The value of the form element (or null).
+ * @return {Array<string>?} The value of the form element (or null).
  * @private
  */
 goog.dom.forms.getSelectMultiple_ = function(el) {
@@ -344,7 +343,7 @@ goog.dom.forms.setValue = function(el, opt_value) {
         break;
       case 'select-multiple':
         goog.dom.forms.setSelectMultiple_(el,
-            /** @type {Array} */ (opt_value));
+            /** @type {Array<string>} */ (opt_value));
         break;
       default:
         el.value = goog.isDefAndNotNull(opt_value) ? opt_value : '';
@@ -391,7 +390,7 @@ goog.dom.forms.setSelectSingle_ = function(el, opt_value) {
 /**
  * Sets the value of a select-multiple element.
  * @param {Element} el The element.
- * @param {Array.<string>|string=} opt_value The value of the selected option
+ * @param {Array<string>|string=} opt_value The value of the selected option
  *     element(s).
  * @private
  */

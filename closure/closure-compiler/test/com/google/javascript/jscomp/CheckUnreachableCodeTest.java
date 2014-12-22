@@ -16,8 +16,6 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.javascript.jscomp.CheckLevel;
-
 /**
  * Tests for {@link CheckUnreachableCode}.
  *
@@ -26,7 +24,7 @@ public class CheckUnreachableCodeTest extends CompilerTestCase {
   @Override
   protected CompilerPass getProcessor(Compiler compiler) {
     return new CombinedCompilerPass(compiler,
-        new CheckUnreachableCode(compiler, CheckLevel.ERROR));
+        new CheckUnreachableCode(compiler));
   }
 
   public void testCorrectSimple() {
@@ -121,14 +119,16 @@ public class CheckUnreachableCodeTest extends CompilerTestCase {
 
   public void testReachableTryCatchFinally() {
     testSame("try { } finally {  }");
-    testSame("try { foo(); } finally bar(); ");
+    testSame("try { foo(); } finally { bar() } ");
     testSame("try { foo() } finally { bar() }");
-    testSame("try { foo(); } catch (e) {e()} finally bar(); ");
+    testSame("try { foo(); } catch (e) {e()} finally { bar() }");
     testSame("try { foo() } catch (e) {e()} finally { bar() }");
+    testSame("try { foo() } catch (e) { throw e; } finally { bar() }");
   }
 
   public void testUnreachableCatch() {
     assertUnreachable("try { var x = 0 } catch (e) { }");
+    assertUnreachable("try { } catch (e) { throw e; }");
   }
 
   public void testSpuriousBreak() {
@@ -210,6 +210,6 @@ public class CheckUnreachableCodeTest extends CompilerTestCase {
   }
 
   private void assertUnreachable(String js) {
-    test(js, js, CheckUnreachableCode.UNREACHABLE_CODE);
+    test(js, js, null, CheckUnreachableCode.UNREACHABLE_CODE);
   }
 }

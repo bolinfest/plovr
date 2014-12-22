@@ -190,8 +190,8 @@ class PeepholeReplaceKnownMethods extends AbstractPeepholeOptimization{
    * @param input string representation of a number
    * @return string with leading and trailing zeros removed
    */
-  private String normalizeNumericString(String input) {
-    if (input == null || input.length() == 0) {
+  private static String normalizeNumericString(String input) {
+    if (input == null || input.isEmpty()) {
       return input;
     }
 
@@ -290,7 +290,7 @@ class PeepholeReplaceKnownMethods extends AbstractPeepholeOptimization{
       }
 
       stringVal = NodeUtil.trimJsWhiteSpace(stringVal);
-      if (stringVal.length() == 0) {
+      if (stringVal.isEmpty()) {
         return n;
       }
     }
@@ -679,8 +679,8 @@ class PeepholeReplaceKnownMethods extends AbstractPeepholeOptimization{
    * Support function for jsSplit, find the first occurrence of
    * separator within stringValue starting at startIndex.
    */
-  private int jsSplitMatch(String stringValue, int startIndex,
-      String separator) {
+  private static int jsSplitMatch(String stringValue, int startIndex,
+                                  String separator) {
 
     if (startIndex + separator.length() > stringValue.length()) {
       return -1;
@@ -717,7 +717,7 @@ class PeepholeReplaceKnownMethods extends AbstractPeepholeOptimization{
 
     // If an empty string is specified for the separator, split apart each
     // character of the string.
-    if (separator.length() == 0) {
+    if (separator.isEmpty()) {
       for (int i = 0; i < stringValue.length() && i < limit; i++) {
         splitStrings.add(stringValue.substring(i, i + 1));
       }

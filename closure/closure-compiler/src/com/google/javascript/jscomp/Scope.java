@@ -19,10 +19,12 @@ package com.google.javascript.jscomp;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterators;
 import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.ObjectType;
 import com.google.javascript.rhino.jstype.StaticReference;
@@ -35,6 +37,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Scope contains information about a variable scope in JavaScript.
@@ -53,7 +56,7 @@ import java.util.Map;
  */
 public class Scope
     implements StaticScope<JSType>, StaticSymbolTable<Scope.Var, Scope.Var> {
-  private final Map<String, Var> vars = new LinkedHashMap<String, Var>();
+  private final Map<String, Var> vars = new LinkedHashMap<>();
   private final Scope parent;
   private final int depth;
   private final Node rootNode;
@@ -210,8 +213,13 @@ public class Scope
      * Returns {@code true} if the variable is declared as a constant,
      * based on the value reported by {@code NodeUtil}.
      */
-    public boolean isConst() {
-      return nameNode != null && NodeUtil.isConstantName(nameNode);
+    public boolean isInferredConst() {
+      if (nameNode == null) {
+        return false;
+      }
+
+      return nameNode.getBooleanProp(Node.IS_CONSTANT_VAR) ||
+          nameNode.getBooleanProp(Node.IS_CONSTANT_NAME);
     }
 
     /**
@@ -253,10 +261,8 @@ public class Scope
 
     /**
      * Sets this variable's type.
-     * @throws IllegalStateException if the variable's type is not inferred
      */
     void setType(JSType type) {
-      Preconditions.checkState(isTypeInferred());
       this.type = type;
     }
 
@@ -285,11 +291,6 @@ public class Scope
       return input.getName();
     }
 
-    public boolean isNoShadow() {
-      JSDocInfo info = getJSDocInfo();
-      return info != null && info.isNoShadow();
-    }
-
     @Override public boolean equals(Object other) {
       if (!(other instanceof Var)) {
         return false;
@@ -311,7 +312,7 @@ public class Scope
     /**
      * Record that this is escaped by an inner scope.
      *
-     * In other words, it's assigned in an inner scope so that it's much harder
+     * <p>In other words, it's assigned in an inner scope so that it's much harder
      * to make assertions about its value at a given point.
      */
     void markEscaped() {
@@ -329,7 +330,7 @@ public class Scope
     /**
      * Record that this is assigned exactly once..
      *
-     * In other words, it's assigned in an inner scope so that it's much harder
+     * <p>In other words, it's assigned in an inner scope so that it's much harder
      * to make assertions about its value at a given point.
      */
     void markAssignedExactlyOnce() {
@@ -342,6 +343,41 @@ public class Scope
      */
     boolean isMarkedAssignedExactlyOnce() {
       return markedAssignedExactlyOnce;
+    }
+
+    boolean isVar() {
+      return declarationType() == Token.VAR;
+    }
+
+    boolean isLet() {
+      return declarationType() == Token.LET;
+    }
+
+    boolean isConst() {
+      return declarationType() == Token.CONST;
+    }
+
+    boolean isParam() {
+      return declarationType() == Token.PARAM_LIST;
+    }
+
+    private int declarationType() {
+      final Set<Integer> types = ImmutableSet.of(
+          Token.VAR,
+          Token.LET,
+          Token.CONST,
+          Token.FUNCTION,
+          Token.CLASS,
+          Token.CATCH,
+          Token.PARAM_LIST);
+      for (Node current = nameNode; current != null;
+          current = current.getParent()) {
+        if (types.contains(current.getType())) {
+          return current.getType();
+        }
+      }
+      throw new IllegalStateException("The nameNode for " + this + " must be a descendant"
+          + " of one of: " + types);
     }
   }
 
@@ -370,7 +406,7 @@ public class Scope
       }
 
       Arguments otherVar = (Arguments) other;
-      return otherVar.scope.getRootNode() == scope.getRootNode();
+      return otherVar.scope.rootNode == scope.rootNode;
     }
 
     @Override public int hashCode() {
@@ -492,7 +528,7 @@ public class Scope
    */
   Var declare(String name, Node nameNode,
       JSType type, CompilerInput input, boolean inferred) {
-    Preconditions.checkState(name != null && name.length() > 0);
+    Preconditions.checkState(name != null && !name.isEmpty());
 
     // Make sure that it's declared only once
     Preconditions.checkState(vars.get(name) == null);
@@ -526,14 +562,16 @@ public class Scope
    * Returns the variable, may be null
    */
   public Var getVar(String name) {
-    Var var = vars.get(name);
-    if (var != null) {
-      return var;
-    } else if (parent != null) { // Recurse up the parent Scope
-      return parent.getVar(name);
-    } else {
-      return null;
+    Scope scope = this;
+    while (scope != null) {
+      Var var = scope.vars.get(name);
+      if (var != null) {
+        return var;
+      }
+      // Recurse up the parent Scope
+      scope = scope.parent;
     }
+    return null;
   }
 
   /**
@@ -551,13 +589,16 @@ public class Scope
    */
   public boolean isDeclared(String name, boolean recurse) {
     Scope scope = this;
-    if (scope.vars.containsKey(name)) {
-      return true;
+    while (true) {
+      if (scope.vars.containsKey(name)) {
+        return true;
+      }
+      if (scope.parent != null && recurse) {
+        scope = scope.parent;
+        continue;
+      }
+      return false;
     }
-    if (scope.parent != null && recurse) {
-      return scope.parent.isDeclared(name, recurse);
-    }
-    return false;
   }
 
   /**
@@ -634,5 +675,37 @@ public class Scope
 
   void setTypeResolver(TypeResolver resolver) {
     this.typeResolver = resolver;
+  }
+
+  public boolean isBlockScope() {
+    return NodeUtil.createsBlockScope(rootNode);
+  }
+
+  /**
+   * A hoist scope is the hoist target for enclosing var declarations. It is
+   * either the top-level block of a function, a global scope, or a module scope.
+   *
+   * TODO(moz): Module scopes are not global, but are also hoist targets.
+   * Support them once module is implemented.
+   *
+   * @return Whether the scope is a hoist target for var declarations.
+   */
+  public boolean isHoistScope() {
+    return isFunctionBlockScope() || isGlobal();
+  }
+
+  public boolean isFunctionBlockScope() {
+    return isBlockScope() && parent != null && parent.getRootNode().isFunction();
+  }
+
+  public Scope getClosestHoistScope() {
+    Scope current = this;
+    while (current != null) {
+      if (current.isHoistScope()) {
+        return current;
+      }
+      current = current.parent;
+    }
+    return null;
   }
 }

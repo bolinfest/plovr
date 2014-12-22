@@ -20,6 +20,7 @@
  *
  * This parser uses http://tools.ietf.org/html/rfc4180 as the definition of CSV.
  *
+ * @author nnaze@google.com (Nathan Naze) Ported to Closure
  */
 goog.provide('goog.labs.format.csv');
 goog.provide('goog.labs.format.csv.ParseError');
@@ -51,6 +52,7 @@ goog.labs.format.csv.ENABLE_VERBOSE_DEBUGGING = goog.DEBUG;
  * @param {string=} opt_message A description of the violated parse expectation.
  * @constructor
  * @extends {goog.debug.Error}
+ * @final
  */
 goog.labs.format.csv.ParseError = function(text, index, opt_message) {
 
@@ -82,7 +84,7 @@ goog.labs.format.csv.ParseError = function(text, index, opt_message) {
     }
   }
 
-  goog.base(this, message);
+  goog.labs.format.csv.ParseError.base(this, 'constructor', message);
 };
 goog.inherits(goog.labs.format.csv.ParseError, goog.debug.Error);
 
@@ -146,9 +148,11 @@ goog.labs.format.csv.Token;
  * be made on the resulting array.
  *
  * @param {string} text The entire CSV text to be parsed.
- * @return {!Array.<!Array.<string>>} The parsed CSV.
+ * @param {boolean=} opt_ignoreErrors Whether to ignore parsing errors and
+ *      instead try to recover and keep going.
+ * @return {!Array<!Array<string>>} The parsed CSV.
  */
-goog.labs.format.csv.parse = function(text) {
+goog.labs.format.csv.parse = function(text, opt_ignoreErrors) {
 
   var index = 0;  // current char offset being considered
 
@@ -242,16 +246,36 @@ goog.labs.format.csv.parse = function(text) {
           break;
         }
 
-        throw new goog.labs.format.csv.ParseError(
-            text, index - 1,
-            'Unexpected character "' + token + '" after quote mark');
+        if (!opt_ignoreErrors) {
+          // Ignoring errors here means keep going in current field after
+          // closing quote. E.g. "ab"c,d splits into abc,d
+          throw new goog.labs.format.csv.ParseError(
+              text, index - 1,
+              'Unexpected character "' + token + '" after quote mark');
+        } else {
+          // Fall back to reading the rest of this field as unquoted.
+          // Note: the rest is guaranteed not start with ", as that case is
+          // eliminated above.
+          var prefix = '"' + text.substring(start, index);
+          var suffix = readField();
+          if (suffix == EOR) {
+            pushBack(NEWLINE);
+            return prefix;
+          } else {
+            return prefix + suffix;
+          }
+        }
       }
     }
 
     if (goog.isNull(end)) {
-      throw new goog.labs.format.csv.ParseError(
-          text, text.length - 1,
-          'Unexpected end of text after open quote');
+      if (!opt_ignoreErrors) {
+        throw new goog.labs.format.csv.ParseError(
+            text, text.length - 1,
+            'Unexpected end of text after open quote');
+      } else {
+        end = text.length;
+      }
     }
 
     // Take substring, combine double quotes.
@@ -298,7 +322,7 @@ goog.labs.format.csv.parse = function(text) {
         break;
       }
 
-      if (token == '"') {
+      if (token == '"' && !opt_ignoreErrors) {
         throw new goog.labs.format.csv.ParseError(text, index - 1,
                                                   'Unexpected quote mark');
       }
@@ -316,7 +340,7 @@ goog.labs.format.csv.parse = function(text) {
 
   /**
    * Read the next record.
-   * @return {!Array.<string>|!goog.labs.format.csv.Sentinels_} A single record
+   * @return {!Array<string>|!goog.labs.format.csv.Sentinels_} A single record
    *     with multiple fields.
    */
   function readRecord() {
@@ -341,7 +365,7 @@ goog.labs.format.csv.parse = function(text) {
 
 /**
  * Sentinel tracking objects.
- * @enum {Object}
+ * @enum {!Object}
  * @private
  */
 goog.labs.format.csv.Sentinels_ = {

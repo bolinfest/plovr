@@ -16,13 +16,15 @@
 
 package com.google.template.soy.exprtree;
 
+import com.google.template.soy.types.SoyType;
+import com.google.template.soy.types.primitive.UnknownType;
+
 
 /**
  * Node representing a global.
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
- * @author Kai Huang
  */
 public class GlobalNode extends AbstractExprNode {
 
@@ -51,6 +53,11 @@ public class GlobalNode extends AbstractExprNode {
 
   @Override public Kind getKind() {
     return Kind.GLOBAL_NODE;
+  }
+
+
+  @Override public SoyType getType() {
+    return UnknownType.getInstance();
   }
 
 

@@ -36,19 +36,8 @@ class PeepholeMinimizeConditions
   extends AbstractPeepholeOptimization {
 
   private static final int AND_PRECEDENCE = NodeUtil.precedence(Token.AND);
-  private static final int NOT_PRECEDENCE = NodeUtil.precedence(Token.NOT);
-  private static final boolean DEFAULT_AGGRESSIVE_MINIMIZE_CONDITIONS = true;
 
   private final boolean late;
-  private final boolean aggressiveMinimization;
-
-  static final Predicate<Node> DONT_TRAVERSE_FUNCTIONS_PREDICATE
-      = new Predicate<Node>() {
-    @Override
-    public boolean apply(Node input) {
-      return !input.isFunction();
-    }
-  };
 
   /**
    * @param late When late is false, this mean we are currently running before
@@ -58,16 +47,11 @@ class PeepholeMinimizeConditions
    * do anything to minimize for size.
    */
   PeepholeMinimizeConditions(boolean late) {
-    this(late, DEFAULT_AGGRESSIVE_MINIMIZE_CONDITIONS);
-  }
-
-  PeepholeMinimizeConditions(boolean late, boolean aggressive) {
     this.late = late;
-    this.aggressiveMinimization = aggressive;
   }
 
   /**
-   * Tries apply our various peephole minimizations on the passed in node.
+   * Tries to apply our various peephole minimizations on the passed in node.
    */
   @Override
   @SuppressWarnings("fallthrough")
@@ -129,7 +113,8 @@ class PeepholeMinimizeConditions
     Node block = n.getLastChild();
     Node maybeIf = block.getFirstChild();
     if (maybeIf != null && maybeIf.isIf()) {
-      Node maybeBreak = maybeIf.getChildAtIndex(1).getFirstChild();
+      Node thenBlock = maybeIf.getChildAtIndex(1);
+      Node maybeBreak = thenBlock.getFirstChild();
       if (maybeBreak != null && maybeBreak.isBreak()
           && !maybeBreak.hasChildren()) {
 
@@ -138,6 +123,7 @@ class PeepholeMinimizeConditions
           block.replaceChild(maybeIf,
               maybeIf.getLastChild().detachFromParent());
         } else {
+          NodeUtil.redeclareVarsInsideBranch(thenBlock);
           block.removeFirstChild();
         }
 
@@ -237,7 +223,7 @@ class PeepholeMinimizeConditions
     return n;
   }
 
-  private boolean statementMustExitParent(Node n) {
+  private static boolean statementMustExitParent(Node n) {
     switch (n.getType()) {
       case Token.THROW:
       case Token.RETURN:
@@ -375,7 +361,7 @@ class PeepholeMinimizeConditions
   /**
    * @return n or the node following any following finally nodes.
    */
-  Node skipFinallyNodes(Node n) {
+  static Node skipFinallyNodes(Node n) {
     while (n != null && NodeUtil.isTryFinallyNode(n.getParent(), n)) {
       n = ControlFlowAnalysis.computeFollowNode(n);
     }
@@ -394,7 +380,7 @@ class PeepholeMinimizeConditions
             || getExceptionHandler(nodeThis) == getExceptionHandler(nodeThat));
   }
 
-  boolean isExceptionPossible(Node n) {
+  static boolean isExceptionPossible(Node n) {
     // TODO(johnlenz): maybe use ControlFlowAnalysis.mayThrowException?
     Preconditions.checkState(n.isReturn()
         || n.isThrow());
@@ -403,7 +389,7 @@ class PeepholeMinimizeConditions
             && !NodeUtil.isLiteralValue(n.getLastChild(), true));
   }
 
-  Node getExceptionHandler(Node n) {
+  static Node getExceptionHandler(Node n) {
     return ControlFlowAnalysis.getExceptionHandler(n);
   }
 
@@ -451,9 +437,8 @@ class PeepholeMinimizeConditions
    * necessary.
    */
   private Node tryMinimizeExprResult(Node n) {
-    MinimizedCondition minCond = (aggressiveMinimization) ?
-      MinimizedCondition.fromConditionNode(n.getFirstChild()) :
-        MinimizedCondition.unoptimized(n.getFirstChild());
+    MinimizedCondition minCond =
+        MinimizedCondition.fromConditionNode(n.getFirstChild());
     MinimizedCondition.MeasuredNode mNode =
         minCond.getMinimized(MinimizationStyle.ALLOW_LEADING_NOT);
     Node placeholder = minCond.getPlaceholder();
@@ -474,9 +459,8 @@ class PeepholeMinimizeConditions
    * necessary.
    */
   private Node tryMinimizeHook(Node n) {
-    MinimizedCondition minCond = (aggressiveMinimization) ?
-      MinimizedCondition.fromConditionNode(n.getFirstChild()) :
-        MinimizedCondition.unoptimized(n.getFirstChild());
+    MinimizedCondition minCond =
+      MinimizedCondition.fromConditionNode(n.getFirstChild());
     MinimizedCondition.MeasuredNode mNode =
         minCond.getMinimized(MinimizationStyle.ALLOW_LEADING_NOT);
     Node placeholder = minCond.getPlaceholder();
@@ -515,9 +499,8 @@ class PeepholeMinimizeConditions
     Node thenBranch = originalCond.getNext();
     Node elseBranch = thenBranch.getNext();
 
-    MinimizedCondition minCond = (aggressiveMinimization) ?
-        MinimizedCondition.fromConditionNode(originalCond) :
-          MinimizedCondition.unoptimized(originalCond);
+    MinimizedCondition minCond =
+        MinimizedCondition.fromConditionNode(originalCond);
     originalCond = null;  // originalCond was mutated and should not be used.
 
     Node placeholder = minCond.getPlaceholder();
@@ -964,13 +947,6 @@ class PeepholeMinimizeConditions
   }
 
   /**
-   * Whether the node type has higher precedence than "precedence"
-   */
-  private static boolean isHigherPrecedence(Node n, final int precedence) {
-    return NodeUtil.precedence(n.getType()) > precedence;
-  }
-
-  /**
    * Does the expression contain a property assignment?
    */
   private static boolean isPropertyAssignmentInExpression(Node n) {
@@ -984,7 +960,7 @@ class PeepholeMinimizeConditions
     };
 
     return NodeUtil.has(n, isPropertyAssignmentInExpressionPredicate,
-        DONT_TRAVERSE_FUNCTIONS_PREDICATE);
+        NodeUtil.MATCH_NOT_FUNCTION);
   }
 
   /**
@@ -996,14 +972,10 @@ class PeepholeMinimizeConditions
    */
   private Node tryMinimizeCondition(Node n) {
     n = performConditionSubstitutions(n);
-    if (aggressiveMinimization) {
-      MinimizedCondition minCond = MinimizedCondition.fromConditionNode(n);
-      return replaceNode(
-          minCond.getPlaceholder(),
-          minCond.getMinimized(MinimizationStyle.PREFER_UNNEGATED));
-    } else {
-      return n;
-    }
+    MinimizedCondition minCond = MinimizedCondition.fromConditionNode(n);
+    return replaceNode(
+        minCond.getPlaceholder(),
+        minCond.getMinimized(MinimizationStyle.PREFER_UNNEGATED));
   }
 
   private Node replaceNode(Node lhs, MinimizedCondition.MeasuredNode rhs) {
@@ -1027,10 +999,6 @@ class PeepholeMinimizeConditions
    *   Returns the replacement for n, or the original if no change was made
    */
   private Node performConditionSubstitutions(Node n) {
-    if (!aggressiveMinimization && n.isNot()) {
-      return simpleDemorgan(n);
-    }
-
     Node parent = n.getParent();
 
     switch (n.getType()) {
@@ -1045,11 +1013,22 @@ class PeepholeMinimizeConditions
         right = performConditionSubstitutions(right);
 
         // Remove useless conditionals
-        // Handle four cases:
+        // Handle the following cases:
         //   x || false --> x
-        //   x || true  --> true
         //   x && true --> x
+        // This works regardless of whether x has side effects.
+        //
+        // If x does not have side effects:
+        //   x || true  --> true
         //   x && false  --> false
+        //
+        // If x may have side effects:
+        //   x || true  --> x,true
+        //   x && false  --> x,false
+        //
+        // In the last two cases, code size may increase slightly (adding
+        // some parens because the comma operator has a low precedence) but
+        // the new AST is easier for other passes to handle.
         TernaryValue rightVal = NodeUtil.getPureBooleanValue(right);
         if (NodeUtil.getPureBooleanValue(right) != TernaryValue.UNKNOWN) {
           int type = n.getType();
@@ -1063,6 +1042,11 @@ class PeepholeMinimizeConditions
             replacement = left;
           } else if (!mayHaveSideEffects(left)) {
             replacement = right;
+          } else {
+            // expr_with_sideeffects || true  =>  expr_with_sideeffects, true
+            // expr_with_sideeffects && false  =>  expr_with_sideeffects, false
+            n.detachChildren();
+            replacement = IR.comma(left, right);
           }
 
           if (replacement != null) {
@@ -1134,88 +1118,6 @@ class PeepholeMinimizeConditions
         // We can't do anything else currently.
         return n;
     }
-  }
-
-  /**
-   *  Perform a heuristic-based application of De Morgan's Laws, trying to
-   *  push NOT nodes further down the AST toward the leaves.
-   */
-  private Node simpleDemorgan(Node n) {
-    Node parent = n.getParent();
-    Node first = n.getFirstChild();
-    switch (first.getType()) {
-      case Token.NOT: {
-        Node newRoot = first.removeFirstChild();
-        parent.replaceChild(n, newRoot);
-        reportCodeChange();
-        // No need to traverse, tryMinimizeCondition is called on the
-        // NOT children are handled below.
-        return newRoot;
-      }
-      case Token.AND:
-      case Token.OR: {
-        // !(!x && !y) --> x || y
-        // !(!x || !y) --> x && y
-        // !(!x && y) --> x || !y
-        // !(!x || y) --> x && !y
-        // !(x && !y) --> !x || y
-        // !(x || !y) --> !x && y
-        // !(x && y) --> !x || !y
-        // !(x || y) --> !x && !y
-        Node leftParent = first.getFirstChild();
-        Node rightParent = first.getLastChild();
-        Node left, right;
-
-        // Check special case when such transformation cannot reduce
-        // due to the added ()
-        // It only occurs when both of expressions are not NOT expressions
-        if (!leftParent.isNot()
-            && !rightParent.isNot()) {
-          // If an expression has higher precedence than && or ||,
-          // but lower precedence than NOT, an additional () is needed
-          // Thus we do not preceed
-          int opPrecedence = NodeUtil.precedence(first.getType());
-          if ((isLowerPrecedence(leftParent, NOT_PRECEDENCE)
-              && isHigherPrecedence(leftParent, opPrecedence))
-              || (isLowerPrecedence(rightParent, NOT_PRECEDENCE)
-                  && isHigherPrecedence(rightParent, opPrecedence))) {
-            return n;
-          }
-        }
-
-        if (leftParent.isNot()) {
-          left = leftParent.removeFirstChild();
-        } else {
-          leftParent.detachFromParent();
-          left = IR.not(leftParent).srcref(leftParent);
-        }
-        if (rightParent.isNot()) {
-          right = rightParent.removeFirstChild();
-        } else {
-          rightParent.detachFromParent();
-          right = IR.not(rightParent).srcref(rightParent);
-        }
-
-        int newOp = (first.isAnd()) ? Token.OR : Token.AND;
-        Node newRoot = new Node(newOp, left, right);
-        parent.replaceChild(n, newRoot);
-        reportCodeChange();
-        // No need to traverse, tryMinimizeCondition is called on the
-        // AND and OR children below.
-        return newRoot;
-      }
-
-      default:
-        TernaryValue nVal = NodeUtil.getPureBooleanValue(first);
-        if (nVal != TernaryValue.UNKNOWN) {
-          boolean result = nVal.not().toBoolean(true);
-          int equivalentResult = result ? 1 : 0;
-          return maybeReplaceChildWithNumber(n, parent, equivalentResult);
-        }
-    }
-    // No need to traverse, tryMinimizeCondition is called on the NOT
-    // children in the general case in the main post-order traversal.
-    return n;
   }
 
   /**

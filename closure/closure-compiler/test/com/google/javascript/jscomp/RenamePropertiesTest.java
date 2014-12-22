@@ -23,6 +23,7 @@ import com.google.common.collect.Lists;
  * {@link RenameProperties} tests.
  *
  */
+
 public class RenamePropertiesTest extends CompilerTestCase {
 
   private static final String EXTERNS =
@@ -42,6 +43,7 @@ public class RenamePropertiesTest extends CompilerTestCase {
   public RenamePropertiesTest() {
     super(EXTERNS);
     enableNormalize();
+    enableGatherExternProperties();
   }
 
   @Override

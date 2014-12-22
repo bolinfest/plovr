@@ -19,7 +19,7 @@
 goog.provide('goog.demos.SampleComponent');
 
 goog.require('goog.dom');
-goog.require('goog.dom.classes');
+goog.require('goog.dom.classlist');
 goog.require('goog.events.EventType');
 goog.require('goog.events.KeyCodes');
 goog.require('goog.events.KeyHandler');
@@ -38,6 +38,7 @@ goog.require('goog.ui.Component');
  *
  * @extends {goog.ui.Component}
  * @constructor
+ * @final
  */
 goog.demos.SampleComponent = function(opt_label, opt_domHelper) {
   goog.base(this, opt_domHelper);
@@ -107,7 +108,7 @@ goog.demos.SampleComponent.prototype.decorateInternal = function(element) {
   }
 
   var elem = this.getElement();
-  goog.dom.classes.add(elem, goog.getCssName('goog-sample-component'));
+  goog.dom.classlist.add(elem, goog.getCssName('goog-sample-component'));
   elem.style.backgroundColor = this.color_;
   elem.tabIndex = 0;
 

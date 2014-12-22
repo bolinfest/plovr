@@ -22,10 +22,9 @@ import com.google.debugging.sourcemap.FilePosition;
 import com.google.debugging.sourcemap.SourceMapFormat;
 import com.google.debugging.sourcemap.SourceMapGenerator;
 import com.google.debugging.sourcemap.SourceMapGeneratorFactory;
-import com.google.debugging.sourcemap.SourceMapGeneratorV1;
-import com.google.debugging.sourcemap.SourceMapGeneratorV2;
 import com.google.javascript.rhino.Node;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -39,27 +38,16 @@ import java.util.Map;
  * @see CodeGenerator
  * @see CodePrinter
  *
+ * @author johnlenz@google.com (John Lenz)
  */
 public class SourceMap {
 
   public static enum Format {
-     V1 {
-       @Override SourceMap getInstance() {
-         return new SourceMap(
-           SourceMapGeneratorFactory.getInstance(SourceMapFormat.V1));
-       }
-     },
      DEFAULT {
        @Override SourceMap getInstance() {
          return new SourceMap(
            SourceMapGeneratorFactory.getInstance(SourceMapFormat.DEFAULT));
        }
-     },
-     V2 {
-       @Override SourceMap getInstance() {
-         return new SourceMap(
-           SourceMapGeneratorFactory.getInstance(SourceMapFormat.V2));
-        }
      },
      V3 {
        @Override SourceMap getInstance() {
@@ -93,7 +81,7 @@ public class SourceMap {
             || NodeUtil.isObjectLitKey(node)
             || (node.isString() && NodeUtil.isGet(node.getParent()));
       }
-    };
+    }
   }
 
   public static class LocationMapping {
@@ -102,6 +90,10 @@ public class SourceMap {
     public LocationMapping(String prefix, String replacement) {
       this.prefix = prefix;
       this.replacement = replacement;
+    }
+    @Override
+    public String toString() {
+      return "(" + prefix + "|" + replacement + ")";
     }
   }
 
@@ -131,15 +123,9 @@ public class SourceMap {
 
     String originalName = (String) node.getProp(Node.ORIGINALNAME_PROP);
 
-    // Strangely, Rhino source lines are one based but columns are
-    // zero based.
-    // We don't change this for the v1 or v2 source maps but for
-    // v3 we make them both 0 based.
+    // Rhino source lines are one based but for v3 source maps, we make
+    // them zero based.
     int lineBaseOffset = 1;
-    if (generator instanceof SourceMapGeneratorV1
-        || generator instanceof SourceMapGeneratorV2) {
-      lineBaseOffset = 0;
-    }
 
     generator.addMapping(
         sourceFile, originalName,
@@ -152,6 +138,11 @@ public class SourceMap {
    * @return a remapped source file.
    */
   private String fixupSourceLocation(String sourceFile) {
+    // Replace backslashes (the file separator used on Windows systems).
+    if (File.separatorChar == '\\') {
+      sourceFile = sourceFile.replace('\\', '/');
+    }
+
     if (prefixMappings.isEmpty()) {
       return sourceFile;
     }
@@ -180,7 +171,7 @@ public class SourceMap {
   }
 
   public void appendTo(Appendable out, String name) throws IOException {
-    generator.appendTo(out, name);
+    generator.appendTo(out, fixupSourceLocation(name));
   }
 
   public void reset() {

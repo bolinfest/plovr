@@ -35,6 +35,7 @@ goog.require('goog.dom.pattern.MatchType');
  *     Defaults to 0.
  * @constructor
  * @extends {goog.dom.pattern.AllChildren}
+ * @final
  */
 goog.dom.pattern.ChildMatches = function(childPattern, opt_minimumMatches) {
   this.childPattern_ = childPattern;
@@ -48,7 +49,7 @@ goog.inherits(goog.dom.pattern.ChildMatches, goog.dom.pattern.AllChildren);
 /**
  * Array of matched child nodes.
  *
- * @type {Array.<Node>}
+ * @type {Array<Node>}
  */
 goog.dom.pattern.ChildMatches.prototype.matches;
 
