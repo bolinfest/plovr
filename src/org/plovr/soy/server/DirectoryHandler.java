@@ -32,7 +32,7 @@ final class DirectoryHandler implements HttpHandler {
   public DirectoryHandler(Config config) {
     this.config = config;
 
-    SoyFileSet.Builder builder = new SoyFileSet.Builder();
+    SoyFileSet.Builder builder = SoyFileSet.builder();
     builder.add(Resources.getResource(DirectoryHandler.class, "soyweb.soy"));
     SoyFileSet fileSet = builder.build();
     soyWebTemplate = fileSet.compileToTofu();

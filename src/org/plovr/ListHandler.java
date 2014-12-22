@@ -20,7 +20,7 @@ public final class ListHandler extends AbstractGetHandler {
   private static final SoyTofu TOFU;
 
   static {
-    SoyFileSet.Builder builder = new SoyFileSet.Builder();
+    SoyFileSet.Builder builder = SoyFileSet.builder();
     builder.add(Resources.getResource(ListHandler.class, "list.soy"));
     SoyFileSet fileSet = builder.build();
     TOFU = fileSet.compileToTofu();

@@ -33,7 +33,7 @@ public class TestHandler extends AbstractGetHandler {
   private static final SoyTofu TOFU;
 
   static {
-    SoyFileSet.Builder builder = new SoyFileSet.Builder();
+    SoyFileSet.Builder builder = SoyFileSet.builder();
     builder.add(Resources.getResource(TestHandler.class, "test.soy"));
     SoyFileSet fileSet = builder.build();
     TOFU = fileSet.compileToTofu();
@@ -133,7 +133,7 @@ public class TestHandler extends AbstractGetHandler {
 
   private static SoyTofu getTestTemplateTofu(Config config) {
     if (config.getTestTemplate() != null) {
-      SoyFileSet.Builder builder = new SoyFileSet.Builder();
+      SoyFileSet.Builder builder = SoyFileSet.builder();
       builder.add(config.getTestTemplate());
       SoyFileSet fileSet = builder.build();
       return fileSet.compileToTofu();
