@@ -43,6 +43,7 @@ import com.google.gson.JsonPrimitive;
 import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.ClosureCodingConvention;
 import com.google.javascript.jscomp.CompilationLevel;
+import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.jscomp.CompilerPass;
 import com.google.javascript.jscomp.CustomPassExecutionTime;
 import com.google.javascript.jscomp.DiagnosticGroup;
@@ -136,6 +137,12 @@ public final class Config implements Comparable<Config> {
 
   private final boolean disambiguateProperties;
 
+  private final LanguageMode languageIn;
+
+  private final LanguageMode languageOut;
+
+  private final boolean newTypeInference;
+
   @Nullable
   private final JsonObject experimentalCompilerOptions;
 
@@ -202,6 +209,9 @@ public final class Config implements Comparable<Config> {
       Set<String> idGenerators,
       boolean ambiguateProperties,
       boolean disambiguateProperties,
+      LanguageMode languageIn,
+      LanguageMode languageOut,
+      boolean newTypeInference,
       JsonObject experimentalCompilerOptions,
       List<FileWithLastModified> configFileInheritanceChain,
       String globalScopeName,
@@ -247,6 +257,9 @@ public final class Config implements Comparable<Config> {
     this.idGenerators = ImmutableSet.copyOf(idGenerators);
     this.ambiguateProperties = ambiguateProperties;
     this.disambiguateProperties = disambiguateProperties;
+    this.languageIn = languageIn;
+    this.languageOut = languageOut;
+    this.newTypeInference = newTypeInference;
     this.experimentalCompilerOptions = experimentalCompilerOptions;
     this.configFileInheritanceChain = ImmutableList.copyOf(configFileInheritanceChain);
     this.globalScopeName = globalScopeName;
@@ -545,6 +558,13 @@ public final class Config implements Comparable<Config> {
     options.setIdGenerators(idGenerators);
     options.ambiguateProperties = ambiguateProperties;
     options.disambiguateProperties = disambiguateProperties;
+    if (languageIn != null) {
+      options.setLanguageIn(languageIn);
+    }
+    if (languageOut != null) {
+      options.setLanguageOut(languageOut);
+    }
+    options.setNewTypeInference(newTypeInference);
 
     // Instantiate the custom compiler passes and register any DiagnosticGroups
     // from those passes.
@@ -903,6 +923,12 @@ public final class Config implements Comparable<Config> {
 
     private boolean disambiguateProperties;
 
+    private LanguageMode languageIn;
+
+    private LanguageMode languageOut;
+
+    private boolean newTypeInference;
+
     private JsonObject experimentalCompilerOptions;
 
     private String globalScopeName;
@@ -995,6 +1021,9 @@ public final class Config implements Comparable<Config> {
       this.idGenerators = config.idGenerators;
       this.ambiguateProperties = config.ambiguateProperties;
       this.disambiguateProperties = config.disambiguateProperties;
+      this.languageIn = languageIn;
+      this.languageOut = languageOut;
+      this.newTypeInference = newTypeInference;
       this.experimentalCompilerOptions = config.experimentalCompilerOptions;
       this.globalScopeName = config.globalScopeName;
       this.variableMapInputFile = config.variableMapInputFile;
@@ -1294,6 +1323,18 @@ public final class Config implements Comparable<Config> {
       this.disambiguateProperties = disambiguateProperties;
     }
 
+    public void setLanguageIn(LanguageMode newVal) {
+      this.languageIn = newVal;
+    }
+
+    public void setLanguageOut(LanguageMode newVal) {
+      this.languageOut = newVal;
+    }
+
+    public void setNewTypeInference(boolean newVal) {
+      this.newTypeInference = newVal;
+    }
+
     public void setExperimentalCompilerOptions(
         JsonObject experimentalCompilerOptions) {
       this.experimentalCompilerOptions = experimentalCompilerOptions;
@@ -1449,6 +1490,9 @@ public final class Config implements Comparable<Config> {
           idGenerators,
           ambiguateProperties,
           disambiguateProperties,
+          languageIn,
+          languageOut,
+          newTypeInference,
           experimentalCompilerOptions,
           configFileInheritanceChain,
           globalScopeName,

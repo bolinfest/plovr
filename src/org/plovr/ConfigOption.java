@@ -8,6 +8,7 @@ import org.plovr.ModuleConfig.BadDependencyTreeException;
 import org.plovr.webdriver.ReflectionWebDriverFactory;
 import org.plovr.webdriver.WebDriverFactory;
 
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
@@ -18,6 +19,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.google.javascript.jscomp.CheckLevel;
+import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.jscomp.CustomPassExecutionTime;
 import com.google.javascript.jscomp.WarningLevel;
 
@@ -139,7 +141,7 @@ public enum ConfigOption {
         CompilationMode compilationMode = CompilationMode.valueOf(mode.toUpperCase());
         builder.setCompilationMode(compilationMode);
       } catch (IllegalArgumentException e) {
-        // OK
+        throw Throwables.propagate(e);
       }
     }
 
@@ -157,7 +159,7 @@ public enum ConfigOption {
         WarningLevel warningLevel = WarningLevel.valueOf(level.toUpperCase());
         builder.setWarningLevel(warningLevel);
       } catch (IllegalArgumentException e) {
-        // OK
+        throw Throwables.propagate(e);
       }
     }
 
@@ -252,6 +254,35 @@ public enum ConfigOption {
     @Override
     public void apply(String outputCharset, Config.Builder builder) {
       builder.setOutputCharset(Charset.forName(outputCharset));
+    }
+  }),
+
+  LANGUAGE_IN("language-in", new ConfigUpdater() {
+    @Override
+    public void apply(String mode, Config.Builder builder) {
+      try {
+        builder.setLanguageIn(LanguageMode.valueOf(mode));
+      } catch (IllegalArgumentException e) {
+        throw Throwables.propagate(e);
+      }
+    }
+  }),
+
+  LANGUAGE_OUT("language-out", new ConfigUpdater() {
+    @Override
+    public void apply(String mode, Config.Builder builder) {
+      try {
+        builder.setLanguageIn(LanguageMode.valueOf(mode));
+      } catch (IllegalArgumentException e) {
+        throw Throwables.propagate(e);
+      }
+    }
+  }),
+
+  NEW_TYPE_INFERENCE("new-type-inference", new ConfigUpdater() {
+    @Override
+    public void apply(boolean on, Config.Builder builder) {
+      builder.setNewTypeInference(on);
     }
   }),
 
