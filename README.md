@@ -7,8 +7,5 @@ more enjoyable.
 
 [Using Plovr](http://plovr.org/docs.html)
 
-Plovr requires Java 7 or higher. You can find Plovr JARs for download:
-
-- [On the Releases page](https://github.com/bolinfest/plovr/releases)
-
-- Using `npm install plovr` from the [NPM registry](https://www.npmjs.com/package/plovr).
+Plovr requires Java 7 or higher. You can find Plovr JARs for download 
+[on the Releases page](https://github.com/bolinfest/plovr/releases)
