@@ -16,14 +16,19 @@ public final class Server implements Runnable {
 
   private final Config config;
 
+  private HttpServer server;
+
   public Server(Config config) {
     this.config = config;
   }
 
   @Override
   public void run() {
+    if (server != null) {
+      throw new RuntimeException("Server already started");
+    }
+
     InetSocketAddress addr = new InetSocketAddress(config.getPort());
-    HttpServer server;
     try {
       // 0 indicates the system default should be used.
       final int maxQueuedIncomingConnections = 0;
@@ -38,4 +43,24 @@ public final class Server implements Runnable {
     server.createContext("/", new RequestHandlerSelector(config));
     server.start();
   }
+
+  /**
+   * Synonym for {@link #run()}
+   */
+  public void start() {
+    run();
+  }
+
+  /**
+   * Stop listening and close all connections.
+   * @param delay Seconds to wait for existing connections to finish.
+   */
+  public void stop(int delay) {
+    if (server == null) {
+      throw new RuntimeException("Server not started");
+    }
+    server.stop(delay);
+    server = null;
+  }
+
 }
