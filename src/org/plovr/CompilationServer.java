@@ -39,6 +39,8 @@ public final class CompilationServer implements Runnable {
    */
   private final ConcurrentMap<String, Compilation> compilations;
 
+  private HttpServer server;
+
   public CompilationServer(String listenAddress, int port, boolean isHttps) {
     this.listenAddress = listenAddress;
     this.port = port;
@@ -95,8 +97,11 @@ public final class CompilationServer implements Runnable {
 
   @Override
   public void run() {
+    if (server != null) {
+      throw new RuntimeException("Server already started");
+    }
+
     InetSocketAddress addr = new InetSocketAddress(listenAddress, port);
-    HttpServer server;
     try {
       server = HttpServerUtil.create(addr, 0, isHttps);
     } catch (IOException e) {
@@ -128,6 +133,25 @@ public final class CompilationServer implements Runnable {
 
     server.setExecutor(Executors.newCachedThreadPool());
     server.start();
+  }
+
+  /**
+   * Synonym for {@link #run()}
+   */
+  public void start() {
+    run();
+  }
+
+  /**
+   * Stop listening and close all connections.
+   * @param delay Seconds to wait for existing connections to finish.
+   */
+  public void stop(int delay) {
+    if (server == null) {
+      throw new RuntimeException("Server not started");
+    }
+    server.stop(delay);
+    server = null;
   }
 
   public boolean containsConfigWithId(String id) {
