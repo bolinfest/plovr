@@ -34,7 +34,7 @@ public class CssHandler extends AbstractGetHandler {
   @Override
   protected void doGet(HttpExchange exchange, QueryData data, Config config)
       throws IOException {
-    JobDescription job = createJobFromConfig(config, true /* prettyPrint */);
+    JobDescription job = createJobFromConfig(config);
     ErrorManager errorManager = new ErrorManager();
     try {
       String output = execute(job, errorManager);
@@ -58,12 +58,9 @@ public class CssHandler extends AbstractGetHandler {
     }
   }
 
-  public static JobDescription createJobFromConfig(Config config,
-      boolean prettyPrint) {
+  public static JobDescription createJobFromConfig(Config config) {
     JobDescriptionBuilder builder = new JobDescriptionBuilder();
-    builder.setOutputFormat(
-        prettyPrint ? JobDescription.OutputFormat.PRETTY_PRINTED
-                    : JobDescription.OutputFormat.COMPRESSED);
+    builder.setOutputFormat(config.getCssOutputFormat());
     builder.setAllowedUnrecognizedProperties(
         config.getAllowedUnrecognizedProperties());
     builder.setAllowedNonStandardFunctions(

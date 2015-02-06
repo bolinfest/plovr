@@ -12,6 +12,7 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
+import com.google.common.css.JobDescription;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
@@ -798,6 +799,25 @@ public enum ConfigOption {
       File outputFile = (outputFilePath == null) ? null :
           new File(maybeResolvePath(outputFilePath, builder));
       builder.setCssOutputFile(outputFile);
+    }
+  }),
+
+  CSS_OUTPUT_FORMAT("css-output-format", new ConfigUpdater() {
+    @Override
+    public void apply(String cssOutputFormatParam, Config.Builder builder) {
+      try {
+        JobDescription.OutputFormat cssOutputFormat =
+            JobDescription.OutputFormat.valueOf(cssOutputFormatParam.toUpperCase());
+        builder.setCssOutputFormat(cssOutputFormat);
+      } catch (IllegalArgumentException e) {
+        throw Throwables.propagate(e);
+      }
+    }
+
+    @Override
+    public boolean update(String cssOutputFormatParam, Config.Builder builder) {
+      apply(cssOutputFormatParam, builder);
+      return true;
     }
   }),
   ;

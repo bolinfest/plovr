@@ -129,8 +129,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       return true;
     }
 
-    JobDescription job = CssHandler.createJobFromConfig(config,
-        false /* prettyPrint */);
+    JobDescription job = CssHandler.createJobFromConfig(config);
     ErrorManager errorManager = new ErrorManager();
     String compiledCss;
     try {
