@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.io.Closeables;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -85,19 +86,17 @@ abstract class AbstractGetHandler implements HttpHandler {
           doGet(exchange, queryData, config);
         }
       } catch (Throwable t) {
-        logger.log(Level.SEVERE, "Error during GET request to " + exchange.getRequestURI(), t);
+        // We regularly see broken pipe IO errors when the other side closes the connection.
+        // These aren't real problems.
+        Level level = t instanceof IOException ? Level.INFO : Level.SEVERE;
+        logger.log(level, "Error during GET request to " + exchange.getRequestURI(), t);
 
         // Even though there has been an error, it is important to write a
         // response or else the client will hang.
         if (exchange.haveResponseHeadersBeenSent()) {
           // If the response headers have already been sent, then just close
           // whatever has been written to the response.
-          try {
-            exchange.getResponseBody().close();
-          } catch (IOException e) {
-            // Let the user know, but don't take down plovr.
-            e.printStackTrace();
-          }
+          Closeables.close(exchange.getResponseBody(), true /* swallow */);
         } else {
           HttpUtil.writeErrorMessageResponse(exchange, t.getMessage());
         }
