@@ -37,6 +37,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
+import com.google.common.css.JobDescription;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
@@ -171,6 +172,8 @@ public final class Config implements Comparable<Config> {
 
   private final File cssOutputFile;
 
+  private final JobDescription.OutputFormat cssOutputFormat;
+
   private final PrintStream errorStream;
 
   /**
@@ -225,6 +228,7 @@ public final class Config implements Comparable<Config> {
       List<String> allowedNonStandardCssFunctions,
       String gssFunctionMapProviderClassName,
       File cssOutputFile,
+      JobDescription.OutputFormat cssOutputFormat,
       PrintStream errorStream) {
     Preconditions.checkNotNull(defines);
 
@@ -275,6 +279,7 @@ public final class Config implements Comparable<Config> {
         allowedNonStandardCssFunctions);
     this.gssFunctionMapProviderClassName = gssFunctionMapProviderClassName;
     this.cssOutputFile = cssOutputFile;
+    this.cssOutputFormat = cssOutputFormat;
     this.errorStream = Preconditions.checkNotNull(errorStream);
   }
 
@@ -478,6 +483,10 @@ public final class Config implements Comparable<Config> {
 
   public File getCssOutputFile() {
     return cssOutputFile;
+  }
+
+  public JobDescription.OutputFormat getCssOutputFormat() {
+    return cssOutputFormat;
   }
 
   public PrintStream getErrorStream() {
@@ -957,6 +966,8 @@ public final class Config implements Comparable<Config> {
 
     private File cssOutputFile = null;
 
+    private JobDescription.OutputFormat cssOutputFormat = JobDescription.OutputFormat.PRETTY_PRINTED;
+
     private PrintStream errorStream = System.err;
 
     /**
@@ -1040,6 +1051,7 @@ public final class Config implements Comparable<Config> {
       this.gssFunctionMapProviderClassName = config.
           gssFunctionMapProviderClassName;
       this.cssOutputFile = config.cssOutputFile;
+      this.cssOutputFormat = config.cssOutputFormat;
       this.errorStream = config.errorStream;
     }
 
@@ -1414,6 +1426,10 @@ public final class Config implements Comparable<Config> {
       this.cssOutputFile = cssOutputFile;
     }
 
+    public void setCssOutputFormat(JobDescription.OutputFormat cssOutputFormat) {
+      this.cssOutputFormat = cssOutputFormat;
+    }
+
     public void setErrorStream(PrintStream errorStream) {
       this.errorStream = Preconditions.checkNotNull(errorStream);
     }
@@ -1506,6 +1522,7 @@ public final class Config implements Comparable<Config> {
           allowedNonStandardFunctions,
           gssFunctionMapProviderClassName,
           cssOutputFile,
+          cssOutputFormat,
           errorStream);
 
       return config;
