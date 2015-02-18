@@ -1700,6 +1700,16 @@ function testFramedPageOffset() {
       goog.style.getFramedPageOffset(testElement3, iframeWindow));
   assertCoordinateApprox(500, 500, 2,
       goog.style.getFramedPageOffset(testElement3, iframeWindow2));
+
+  // In IE, if the element is in a frame that's been removed from the DOM and
+  // relativeWin is not that frame's contentWindow, the contentWindow's parent
+  // reference points to itself. We want to guarantee that we don't fall into
+  // an infinite loop.
+  var iframeParent = iframe.parentElement;
+  iframeParent.removeChild(iframe);
+  // We don't check the value returned as it differs by browser. 0,0 for Chrome
+  // and FF. IE returns 30000 or 30198 for x in IE8-9 and 300 in IE10-11
+  goog.style.getFramedPageOffset(testElement2, window);
 }
 
 
@@ -2025,20 +2035,6 @@ function testGetVisibleRectForElementInsideNestedScrollableArea() {
   assertNull(goog.style.getVisibleRectForElement(el));
 }
 
-function testGeckoMacOrX11RoundPosition() {
-  if ((goog.userAgent.MAC || goog.userAgent.X11) && goog.userAgent.GECKO &&
-      goog.userAgent.isVersionOrHigher('1.9')) {
-
-    var pos = new goog.math.Coordinate(1.5, 1.4);
-    var el = document.createElement('div');
-    goog.style.setPosition(el, pos);
-    assertEquals('The left position should have been rounded',
-                 '2px', el.style.left);
-    assertEquals('The top position should have been rounded',
-                 '1px', el.style.top);
-  }
-}
-
 function testScrollIntoContainerViewQuirks() {
   if (goog.dom.isCss1CompatMode()) return;
 
@@ -2128,6 +2124,23 @@ function testOffsetParent() {
 function testOverflowOffsetParent() {
   var parent = goog.dom.getElement('offset-parent-overflow');
   var child = goog.dom.getElement('offset-child-overflow');
+  assertEquals(parent, goog.style.getOffsetParent(child));
+}
+
+function testShadowDomOffsetParent() {
+  // Ignore browsers that don't support shadowDOM.
+  if (!document.createShadowRoot) {
+    return;
+  }
+
+  var parent = goog.dom.createDom('DIV');
+  parent.style.position = 'relative';
+  var host = goog.dom.createDom('DIV');
+  goog.dom.appendChild(parent, host);
+  var root = host.createShadowRoot();
+  var child = goog.dom.createDom('DIV');
+  goog.dom.appendChild(root, child);
+
   assertEquals(parent, goog.style.getOffsetParent(child));
 }
 
