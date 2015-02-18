@@ -17,6 +17,8 @@
 
 package com.google.javascript.jscomp;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.common.base.Joiner;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.testing.BaseJSTypeTestCase;
@@ -127,12 +129,14 @@ abstract class CompilerTypeTestCase extends BaseJSTypeTestCase {
 
   protected void checkReportedWarningsHelper(String[] expected) {
     JSError[] warnings = compiler.getWarnings();
-    for (int i = 0; i < expected.length; i++) {
-      if (expected[i] != null) {
-        assertTrue("expected a warning", warnings.length > 0);
-        assertEquals(expected[i], warnings[0].description);
-        warnings = Arrays.asList(warnings).subList(1, warnings.length).toArray(
-            new JSError[warnings.length - 1]);
+    for (String element : expected) {
+      if (element != null) {
+        assertThat(warnings.length).named("Number of warnings").isGreaterThan(0);
+        assertThat(warnings[0].description).isEqualTo(element);
+        warnings =
+            Arrays.asList(warnings)
+                .subList(1, warnings.length)
+                .toArray(new JSError[warnings.length - 1]);
       }
     }
     if (warnings.length > 0) {

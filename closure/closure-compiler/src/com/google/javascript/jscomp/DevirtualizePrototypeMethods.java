@@ -17,18 +17,13 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.DefinitionsRemover.Definition;
+import com.google.javascript.rhino.FunctionTypeI;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.jstype.FunctionType;
-import com.google.javascript.rhino.jstype.JSType;
-import com.google.javascript.rhino.jstype.JSTypeNative;
-import com.google.javascript.rhino.jstype.JSTypeRegistry;
-import com.google.javascript.rhino.jstype.ObjectType;
+import com.google.javascript.rhino.TypeI;
 
 import java.util.Collection;
-import java.util.List;
 
 /**
  * Rewrites prototyped methods calls as static calls that take "this"
@@ -64,18 +59,11 @@ import java.util.List;
  *
  */
 class DevirtualizePrototypeMethods
-    implements OptimizeCalls.CallGraphCompilerPass,
-               SpecializationAwareCompilerPass {
+    implements OptimizeCalls.CallGraphCompilerPass, CompilerPass {
   private final AbstractCompiler compiler;
-  private SpecializeModule.SpecializationState specializationState;
 
   DevirtualizePrototypeMethods(AbstractCompiler compiler) {
     this.compiler = compiler;
-  }
-
-  @Override
-  public void enableSpecialization(SpecializeModule.SpecializationState state) {
-    this.specializationState = state;
   }
 
   @Override
@@ -246,18 +234,26 @@ class DevirtualizePrototypeMethods
     // Functions that access "arguments" are not eligible since
     // rewrite changes the structure of this object.
     Node rValue = definition.getRValue();
-    if (rValue == null ||
-        !rValue.isFunction() ||
-        NodeUtil.isVarArgsFunction(rValue)) {
+    if (rValue == null
+        || !rValue.isFunction()
+        || NodeUtil.isVarArgsFunction(rValue)) {
+      return false;
+    }
+
+    Node lValue = definition.getLValue();
+    if ((lValue == null)
+        || !lValue.isGetProp()) {
+      return false;
+    }
+
+    // Note: the definition for prototype defined with an object literal returns
+    // a mock return LValue of the form "{}.prop".
+    if (!lValue.isQualifiedName()
+        && !lValue.getFirstChild().isObjectLit()) {
       return false;
     }
 
     // Exporting a method prevents rewrite.
-    Node lValue = definition.getLValue();
-    if ((lValue == null) ||
-        !lValue.isGetProp()) {
-      return false;
-    }
     CodingConvention codingConvention = compiler.getCodingConvention();
     if (codingConvention.isExported(lValue.getLastChild().getString())) {
       return false;
@@ -279,14 +275,6 @@ class DevirtualizePrototypeMethods
       }
 
       Node nameNode = site.node;
-
-      // Don't rewrite methods called in functions that can't be specialized
-      // if we are specializing
-      if (specializationState != null &&
-          !specializationState.canFixupSpecializedFunctionContainingNode(
-              nameNode)) {
-        return false;
-      }
 
       // Multiple definitions prevent rewrite.
       Collection<Definition> singleSiteDefinitions =
@@ -336,10 +324,6 @@ class DevirtualizePrototypeMethods
       Preconditions.checkState(parent.isCall());
       parent.putBooleanProp(Node.FREE_CALL, true);
       compiler.reportCodeChange();
-
-      if (specializationState != null) {
-        specializationState.reportSpecializedFunctionContainingNode(parent);
-      }
     }
   }
 
@@ -371,10 +355,6 @@ class DevirtualizePrototypeMethods
       parent.removeChild(functionNode);
       newNameNode.addChildToFront(functionNode);
       block.replaceChild(expr, newVarNode);
-
-      if (specializationState != null) {
-        specializationState.reportRemovedFunction(functionNode, block);
-      }
     } else {
       Preconditions.checkState(parent.isObjectLit());
       functionNode = node.getFirstChild();
@@ -386,10 +366,6 @@ class DevirtualizePrototypeMethods
       parent.removeChild(node);
       newNameNode.addChildToFront(functionNode);
       block.addChildAfter(newVarNode, expr);
-
-      if (specializationState != null) {
-        specializationState.reportRemovedFunction(functionNode, block);
-      }
     }
 
     // add extra argument
@@ -409,30 +385,18 @@ class DevirtualizePrototypeMethods
   }
 
   /**
-   * Creates a new JSType based on the original function type by
+   * Creates a new type based on the original function type by
    * adding the original this pointer type to the beginning of the
-   * argument type list and replacing the this pointer type with
-   * NO_TYPE.
+   * argument type list and replacing the this pointer type with bottom.
    */
   private void fixFunctionType(Node functionNode) {
-    FunctionType type = JSType.toMaybeFunctionType(functionNode.getJSType());
-    if (type != null) {
-      JSTypeRegistry typeRegistry = compiler.getTypeRegistry();
-
-      List<JSType> parameterTypes = Lists.newArrayList();
-      parameterTypes.add(type.getTypeOfThis());
-
-      for (Node param : type.getParameters()) {
-        parameterTypes.add(param.getJSType());
-      }
-
-      ObjectType thisType =
-          typeRegistry.getNativeObjectType(JSTypeNative.UNKNOWN_TYPE);
-      JSType returnType = type.getReturnType();
-
-      JSType newType = typeRegistry.createFunctionType(
-          thisType, returnType, parameterTypes);
-      functionNode.setJSType(newType);
+    TypeI t = functionNode.getTypeI();
+    if (t == null) {
+      return;
+    }
+    FunctionTypeI ft = t.toMaybeFunctionType();
+    if (ft != null) {
+      functionNode.setTypeI(ft.convertMethodToFunction());
     }
   }
 
@@ -448,7 +412,7 @@ class DevirtualizePrototypeMethods
     for (Node child : node.children()) {
       if (child.isThis()) {
         Node newName = IR.name(name);
-        newName.setJSType(child.getJSType());
+        newName.setTypeI(child.getTypeI());
         node.replaceChild(child, newName);
       } else {
         replaceReferencesToThis(child, name);

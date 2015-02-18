@@ -119,14 +119,18 @@ public class Node implements Cloneable, Serializable {
                                   // var obj = { get [prop]() {...} };
       COMPUTED_PROP_SETTER = 74,  // A computed property in a setter, e.g.
                                   // var obj = { set [prop](val) {...} };
-      ANALYZED_DURING_GTI  = 75,  // In GlobalTypeInfo, we mark some AST nodes
+      COMPUTED_PROP_VARIABLE = 75, // A computed property that's a variable, e.g. [prop]: string;
+      ANALYZED_DURING_GTI  = 76,  // In GlobalTypeInfo, we mark some AST nodes
                                   // to avoid analyzing them during
                                   // NewTypeInference. We remove this attribute
                                   // in the fwd direction of NewTypeInference.
-      CONSTANT_PROPERTY_DEF = 76; // Used to communicate information between
+      CONSTANT_PROPERTY_DEF = 77, // Used to communicate information between
                                   // GlobalTypeInfo and NewTypeInference.
                                   // We use this to tag getprop nodes that
                                   // declare properties.
+      DECLARED_TYPE_EXPR = 78;    // Used to attach TypeDeclarationNode ASTs to
+                                  // Nodes which represent a typed NAME or
+                                  // FUNCTION.
 
 
   public static final int   // flags for INCRDECR_PROP
@@ -174,11 +178,37 @@ public class Node implements Cloneable, Serializable {
         case COMPUTED_PROP_METHOD: return "computed_prop_method";
         case COMPUTED_PROP_GETTER: return "computed_prop_getter";
         case COMPUTED_PROP_SETTER: return "computed_prop_setter";
+        case COMPUTED_PROP_VARIABLE: return "computed_prop_variable";
         case ANALYZED_DURING_GTI:  return "analyzed_during_gti";
         case CONSTANT_PROPERTY_DEF: return "constant_property_def";
+        case DECLARED_TYPE_EXPR: return "declared_type_expr";
         default:
           throw new IllegalStateException("unexpected prop id " + propType);
       }
+  }
+
+  /**
+   * Represents a node in the type declaration AST.
+   */
+  public static class TypeDeclarationNode extends Node {
+
+    private static final long serialVersionUID = 1L;
+
+    public TypeDeclarationNode(int nodeType) {
+      super(nodeType);
+    }
+
+    public TypeDeclarationNode(int nodeType, Node child) {
+      super(nodeType, child);
+    }
+
+    public TypeDeclarationNode(int nodeType, Node left, Node right) {
+      super(nodeType, left, right);
+    }
+
+    public TypeDeclarationNode(int nodeType, Node left, Node mid, Node right) {
+      super(nodeType, left, mid, right);
+    }
   }
 
   private static class NumberNode extends Node {
@@ -207,8 +237,8 @@ public class Node implements Cloneable, Serializable {
 
     @Override
     boolean isEquivalentTo(
-        Node node, boolean compareJsType, boolean recur, boolean jsDoc) {
-      boolean equiv = super.isEquivalentTo(node, compareJsType, recur, jsDoc);
+        Node node, boolean compareType, boolean recur, boolean jsDoc) {
+      boolean equiv = super.isEquivalentTo(node, compareType, recur, jsDoc);
       if (equiv) {
         double thisValue = getDouble();
         double thatValue = ((NumberNode) node).getDouble();
@@ -266,8 +296,8 @@ public class Node implements Cloneable, Serializable {
 
     @Override
     boolean isEquivalentTo(
-        Node node, boolean compareJsType, boolean recur, boolean jsDoc) {
-      return (super.isEquivalentTo(node, compareJsType, recur, jsDoc)
+        Node node, boolean compareType, boolean recur, boolean jsDoc) {
+      return (super.isEquivalentTo(node, compareType, recur, jsDoc)
           && this.str.equals(((StringNode) node).str));
     }
 
@@ -778,7 +808,7 @@ public class Node implements Cloneable, Serializable {
 
   public void replaceChildAfter(Node prevChild, Node newChild) {
     Preconditions.checkArgument(prevChild.parent == this,
-      "prev is not a child of this node.");
+        "prev is not a child of this node.");
 
     Preconditions.checkArgument(newChild.next == null,
         "The new child node has siblings.");
@@ -898,6 +928,22 @@ public class Node implements Cloneable, Serializable {
     if (value != 0) {
       propListHead = createProp(propType, value, propListHead);
     }
+  }
+
+  /**
+   * TODO(alexeagle): this should take a TypeDeclarationNode
+   * @param typeExpression
+   */
+  public void setDeclaredTypeExpression(Node typeExpression) {
+    putProp(DECLARED_TYPE_EXPR, typeExpression);
+  }
+
+  /**
+   * Returns the syntactical type specified on this node. Not to be confused
+   * with {@link #getJSType()} which returns the compiler-inferred type.
+   */
+  public TypeDeclarationNode getDeclaredTypeExpression() {
+    return (TypeDeclarationNode) getProp(DECLARED_TYPE_EXPR);
   }
 
   PropListItem createProp(int propType, Object value, PropListItem next) {
@@ -1036,11 +1082,11 @@ public class Node implements Cloneable, Serializable {
     }
 
     if (printType) {
-      if (jsType != null) {
-        String jsTypeString = jsType.toString();
-        if (jsTypeString != null) {
+      if (typei != null) {
+        String typeString = typei.toString();
+        if (typeString != null) {
           sb.append(" : ");
-          sb.append(jsTypeString);
+          sb.append(typeString);
         }
       }
     }
@@ -1124,7 +1170,7 @@ public class Node implements Cloneable, Serializable {
    */
   private int sourcePosition;
 
-  private JSType jsType;
+  private TypeI typei;
 
   private Node parent;
 
@@ -1287,11 +1333,11 @@ public class Node implements Cloneable, Serializable {
   }
 
   /**
-   * <p>Return an iterable object that iterates over this node's siblings.
-   * The iterator does not support the optional operation
-   * {@link Iterator#remove()}.</p>
+   * <p>Return an iterable object that iterates over this node's siblings,
+   * <b>including this Node</b>. The iterator does not support the optional
+   * operation {@link Iterator#remove()}.</p>
    *
-   * <p>To iterate over a node's siblings, one can write</p>
+   * <p>To iterate over a node's siblings including itself, one can write</p>
    * <pre>Node n = ...;
    * for (Node sibling : n.siblings()) { ...</pre>
    */
@@ -1542,11 +1588,8 @@ public class Node implements Cloneable, Serializable {
     NodeMismatch res = null;
     Node n, n2;
     for (n = first, n2 = node2.first;
-         res == null && n != null;
+         n != null;
          n = n.next, n2 = n2.next) {
-      if (node2 == null) {
-        throw new IllegalStateException();
-      }
       res = n.checkTreeEqualsImpl(n2, jsDoc);
       if (res != null) {
         return res;
@@ -1574,25 +1617,33 @@ public class Node implements Cloneable, Serializable {
   }
 
   /**
-   * @param compareJsType Whether to compare the JSTypes of the nodes.
+   * @param compareType Whether to compare the JSTypes of the nodes.
    * @param recurse Whether to compare the children of the current node, if
    *    not only the the count of the children are compared.
    * @param jsDoc Whether to check that the JsDoc of the nodes are equivalent.
    * @return Whether this node is equivalent semantically to the provided node.
    */
   boolean isEquivalentTo(
-      Node node, boolean compareJsType, boolean recurse, boolean jsDoc) {
+      Node node, boolean compareType, boolean recurse, boolean jsDoc) {
     if (type != node.getType()
         || getChildCount() != node.getChildCount()
         || this.getClass() != node.getClass()) {
       return false;
     }
 
-    if (compareJsType && !JSType.isEquivalent(jsType, node.getJSType())) {
+    if (compareType && !JSType.isEquivalent((JSType) typei, node.getJSType())) {
       return false;
     }
 
     if (jsDoc && !JSDocInfo.areEquivalent(getJSDocInfo(), node.getJSDocInfo())) {
+      return false;
+    }
+
+    TypeDeclarationNode thisTDN = this.getDeclaredTypeExpression();
+    TypeDeclarationNode thatTDN = node.getDeclaredTypeExpression();
+    if ((thisTDN != null || thatTDN != null) &&
+        (thisTDN == null || thatTDN == null
+            || !thisTDN.isEquivalentTo(thatTDN, compareType, recurse, jsDoc))) {
       return false;
     }
 
@@ -1631,7 +1682,7 @@ public class Node implements Cloneable, Serializable {
       for (n = first, n2 = node.first;
            n != null;
            n = n.next, n2 = n2.next) {
-        if (!n.isEquivalentTo(n2, compareJsType, recurse, jsDoc)) {
+        if (!n.isEquivalentTo(n2, compareType, recurse, jsDoc)) {
           return false;
         }
       }
@@ -1987,12 +2038,25 @@ public class Node implements Cloneable, Serializable {
   //==========================================================================
   // Custom annotations
 
+  /**
+   * Returns the compiled inferred type on this node. Not to be confused
+   * with {@link #getDeclaredTypeExpression()} which returns the syntactically
+   * specified type.
+   */
   public JSType getJSType() {
-      return jsType;
+    return (JSType) typei;
   }
 
   public void setJSType(JSType jsType) {
-      this.jsType = jsType;
+      this.typei = jsType;
+  }
+
+  public TypeI getTypeI() {
+    return typei;
+  }
+
+  public void setTypeI(TypeI type) {
+    this.typei = type;
   }
 
   public FileLevelJsDocBuilder getJsDocBuilderForNode() {
@@ -2037,8 +2101,8 @@ public class Node implements Cloneable, Serializable {
    * Sets the {@link JSDocInfo} attached to this node.
    */
   public Node setJSDocInfo(JSDocInfo info) {
-      putProp(JSDOC_INFO_PROP, info);
-      return this;
+    putProp(JSDOC_INFO_PROP, info);
+    return this;
   }
 
   /** This node was last changed at {@code time} */
@@ -2149,7 +2213,7 @@ public class Node implements Cloneable, Serializable {
   /**
    * Sets whether this node is a static member node. This
    * method is meaningful only on {@link Token#GETTER_DEF},
-   * {@link Token#SETTER_DEF} or {@link Token#MEMBER_DEF} nodes contained
+   * {@link Token#SETTER_DEF} or {@link Token#MEMBER_FUNCTION_DEF} nodes contained
    * within {@link Token#CLASS}.
    */
   public void setStaticMember(boolean isStatic) {
@@ -2159,7 +2223,7 @@ public class Node implements Cloneable, Serializable {
   /**
    * Returns whether this node is a static member node. This
    * method is meaningful only on {@link Token#GETTER_DEF},
-   * {@link Token#SETTER_DEF} or {@link Token#MEMBER_DEF} nodes contained
+   * {@link Token#SETTER_DEF} or {@link Token#MEMBER_FUNCTION_DEF} nodes contained
    * within {@link Token#CLASS}.
    */
   public boolean isStaticMember() {
@@ -2169,7 +2233,7 @@ public class Node implements Cloneable, Serializable {
   /**
    * Sets whether this node is a generator node. This
    * method is meaningful only on {@link Token#FUNCTION} or
-   * {@link Token#MEMBER_DEF} nodes.
+   * {@link Token#MEMBER_FUNCTION_DEF} nodes.
    */
   public void setIsGeneratorFunction(boolean isGenerator) {
     putBooleanProp(GENERATOR_FN, isGenerator);
@@ -2230,7 +2294,7 @@ public class Node implements Cloneable, Serializable {
   /**
    * Sets whether this node is a generator node. This
    * method is meaningful only on {@link Token#FUNCTION} or
-   * {@link Token#MEMBER_DEF} nodes.
+   * {@link Token#MEMBER_FUNCTION_DEF} nodes.
    */
   public void setYieldFor(boolean isGenerator) {
     putBooleanProp(YIELD_FOR, isGenerator);
@@ -2239,7 +2303,7 @@ public class Node implements Cloneable, Serializable {
   /**
    * Returns whether this node is a generator node. This
    * method is meaningful only on {@link Token#FUNCTION} or
-   * {@link Token#MEMBER_DEF} nodes.
+   * {@link Token#MEMBER_FUNCTION_DEF} nodes.
    */
   public boolean isYieldFor() {
     return getBooleanProp(YIELD_FOR);
@@ -2643,8 +2707,12 @@ public class Node implements Cloneable, Serializable {
     return this.getType() == Token.LET;
   }
 
-  public boolean isMemberDef() {
-    return this.getType() == Token.MEMBER_DEF;
+  public boolean isMemberFunctionDef() {
+    return this.getType() == Token.MEMBER_FUNCTION_DEF;
+  }
+
+  public boolean isMemberVariableDef() {
+    return this.getType() == Token.MEMBER_VARIABLE_DEF;
   }
 
   public boolean isName() {

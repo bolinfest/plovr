@@ -36,6 +36,7 @@ public class Config {
     ECMASCRIPT5_STRICT,
     ECMASCRIPT6,
     ECMASCRIPT6_STRICT,
+    ECMASCRIPT6_TYPED,  // Implies STRICT.
   }
 
   /**

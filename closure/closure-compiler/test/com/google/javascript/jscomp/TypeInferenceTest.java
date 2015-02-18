@@ -150,7 +150,7 @@ public class TypeInferenceTest extends TestCase {
     JSType varType = getType(name);
     assertNotNull("The variable " + name + " is missing a type.", varType);
     assertTrue("The type " + varType + " of variable " + name +
-        " is not a subtype of " + type +".",  varType.isSubtype(type));
+        " is not a subtype of " + type +".", varType.isSubtype(type));
   }
 
   private void verifySubtypeOf(String name, JSTypeNative type) {
@@ -1423,11 +1423,11 @@ public class TypeInferenceTest extends TestCase {
   }
 
  public void testTypeTransformationWithNativeTypeExpressionFunctionVarargs() {
-    inFunction("/** @type {function(string, ...[number]): number} */\n"
+    inFunction("/** @type {function(string, ...number): number} */\n"
         + "var x;\n"
         + "/**\n"
         + " * @return {R}\n"
-        + " * @template R := typeExpr('function(string, ...[number]): number') =:\n"
+        + " * @template R := typeExpr('function(string, ...number): number') =:\n"
         + " */\n"
         + "function f(){}\n"
         + "var r = f();");

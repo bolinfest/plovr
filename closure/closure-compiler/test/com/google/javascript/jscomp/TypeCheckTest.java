@@ -449,7 +449,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   public void testOptionalArgFunctionParamError() throws Exception {
     String expectedWarning =
         "Bad type annotation. variable length argument must be last";
-    testTypes("/** @param {function(...[number], number=)} a */" +
+    testTypes("/** @param {function(...number, number=)} a */" +
               "function f(a) {};", expectedWarning, false);
   }
 
@@ -5153,14 +5153,14 @@ public class TypeCheckTest extends CompilerTypeTestCase {
 
   public void testHigherOrderFunctions4() throws Exception {
     testTypes(
-        "/** @type {function(this:Error,...[number]):Date} */var f; new f",
+        "/** @type {function(this:Error, ...number):Date} */var f; new f",
         "cannot instantiate non-constructor");
   }
 
   public void testHigherOrderFunctions5() throws Exception {
     testTypes(
         "/** @param {number} x */ function g(x) {}" +
-        "/** @type {function(new:Error,...[number]):Date} */ var f;" +
+        "/** @type {function(new:Error, ...number):Date} */ var f;" +
         "g(new f());",
         "actual parameter 1 of g does not match formal parameter\n" +
         "found   : Error\n" +
@@ -5629,7 +5629,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   public void testOverriddenParams2() throws Exception {
     testTypes(
         "/** @constructor */ function Foo() {}" +
-        "/** @type {function(...[?])} */" +
+        "/** @type {function(...?)} */" +
         "Foo.prototype.bar = function(var_args) {};" +
         "/**\n" +
         " * @constructor\n" +
@@ -5665,7 +5665,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   public void testOverriddenParams4() throws Exception {
     testTypes(
         "/** @constructor */ function Foo() {}" +
-        "/** @type {function(...[number])} */" +
+        "/** @type {function(...number)} */" +
         "Foo.prototype.bar = function(var_args) {};" +
         "/**\n" +
         " * @constructor\n" +
@@ -6340,88 +6340,6 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "required: number");
   }
 
-  public void testNoTypeCheck1() throws Exception {
-    testTypes("/** @notypecheck */function foo() { new 4 }");
-  }
-
-  public void testNoTypeCheck2() throws Exception {
-    testTypes("/** @notypecheck */var foo = function() { new 4 }");
-  }
-
-  public void testNoTypeCheck3() throws Exception {
-    testTypes("/** @notypecheck */var foo = function bar() { new 4 }");
-  }
-
-  public void testNoTypeCheck4() throws Exception {
-    testTypes("var foo;" +
-        "/** @notypecheck */foo = function() { new 4 }");
-  }
-
-  public void testNoTypeCheck5() throws Exception {
-    testTypes("var foo;" +
-        "foo = /** @notypecheck */function() { new 4 }");
-  }
-
-  public void testNoTypeCheck6() throws Exception {
-    testTypes("var foo;" +
-        "/** @notypecheck */foo = function bar() { new 4 }");
-  }
-
-  public void testNoTypeCheck7() throws Exception {
-    testTypes("var foo;" +
-        "foo = /** @notypecheck */function bar() { new 4 }");
-  }
-
-  public void testNoTypeCheck8() throws Exception {
-    testTypes("/** @fileoverview \n * @notypecheck */ var foo;" +
-        "var bar = 3; /** @param {string} x */ function f(x) {} f(bar);");
-  }
-
-  public void testNoTypeCheck9() throws Exception {
-    testTypes("/** @notypecheck */ function g() { }" +
-        " /** @type {string} */ var a = 1",
-        "initializing variable\n" +
-        "found   : number\n" +
-        "required: string"
-        );
-  }
-
-  public void testNoTypeCheck10() throws Exception {
-    testTypes("/** @notypecheck */ function g() { }" +
-        " function h() {/** @type {string} */ var a = 1}",
-        "initializing variable\n" +
-        "found   : number\n" +
-        "required: string"
-        );
-  }
-
-  public void testNoTypeCheck11() throws Exception {
-    testTypes("/** @notypecheck */ function g() { }" +
-        "/** @notypecheck */ function h() {/** @type {string} */ var a = 1}"
-        );
-  }
-
-  public void testNoTypeCheck12() throws Exception {
-    testTypes("/** @notypecheck */ function g() { }" +
-        "function h() {/** @type {string}\n * @notypecheck\n*/ var a = 1}"
-        );
-  }
-
-  public void testNoTypeCheck13() throws Exception {
-    testTypes("/** @notypecheck */ function g() { }" +
-        "function h() {/** @type {string}\n * @notypecheck\n*/ var a = 1;" +
-        "/** @type {string}*/ var b = 1}",
-        "initializing variable\n" +
-        "found   : number\n" +
-        "required: string"
-        );
-  }
-
-  public void testNoTypeCheck14() throws Exception {
-    testTypes("/** @fileoverview \n * @notypecheck */ function g() { }" +
-        "g(1,2,3)");
-  }
-
   public void testImplicitCast() throws Exception {
     testTypesWithExterns("/** @constructor */ function Element() {};\n" +
              "/** @type {string}\n" +
@@ -6935,7 +6853,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         " * @return {string}\n" +
         " */\n" +
         "function temp2(opt_data) {\n" +
-        "  /** @notypecheck */\n" +
+        "  /** @suppress {checkTypes} */\n" +
         "  function __inner() {\n" +
         "    return temp1(opt_data.activity);\n" +
         "  }\n" +
@@ -8155,6 +8073,65 @@ public class TypeCheckTest extends CompilerTypeTestCase {
         "actual parameter 2 of f.bind does not match formal parameter\n" +
         "found   : boolean\n" +
         "required: (number|undefined)");
+  }
+
+  public void testFunctionBind6() throws Exception {
+    testTypes(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function MyType() {",
+        "  /** @type {number} */",
+        "  this.x = 0;",
+        "  var f = function() {",
+        "    this.x = 'str';",
+        "  }.bind(this);",
+        "}"), Joiner.on('\n').join(
+        "assignment to property x of MyType",
+        "found   : string",
+        "required: number"));
+  }
+
+  public void testFunctionBind7() throws Exception {
+    testTypes(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function MyType() {",
+        "  /** @type {number} */",
+        "  this.x = 0;",
+        "}",
+        "var m = new MyType;",
+        "(function f() {this.x = 'str';}).bind(m);"),
+        Joiner.on('\n').join(
+        "assignment to property x of MyType",
+        "found   : string",
+        "required: number"));
+  }
+
+  public void testFunctionBind8() throws Exception {
+    testTypes(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function MyType() {}",
+        "",
+        "/** @constructor */",
+        "function AnotherType() {}",
+        "AnotherType.prototype.foo = function() {};",
+        "",
+        "/** @type {?} */",
+        "var m = new MyType;",
+        "(function f() {this.foo();}).bind(m);"),
+        (DiagnosticType) null);
+  }
+
+  public void testFunctionBind9() throws Exception {
+    testTypes(Joiner.on('\n').join(
+        "/** @constructor */",
+        "function MyType() {}",
+        "",
+        "/** @constructor */",
+        "function AnotherType() {}",
+        "AnotherType.prototype.foo = function() {};",
+        "",
+        "var m = new MyType;",
+        "(function f() {this.foo();}).bind(m);"),
+        TypeCheck.INEXISTENT_PROPERTY);
   }
 
   public void testGoogBind1() throws Exception {
@@ -11366,8 +11343,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
 
     new TypeCheck(
         compiler,
-        new SemanticReverseAbstractInterpreter(
-            compiler.getCodingConvention(), registry),
+        new SemanticReverseAbstractInterpreter(registry),
         registry, topScope, scopeCreator, CheckLevel.WARNING)
         .process(null, second);
 
@@ -12262,7 +12238,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
          + "* @param {{x:string, x:number}} a"
          + "*/"
          + "function f(a) {};",
-         "Parse error. Duplicate record field x");
+         "Bad type annotation. Duplicate record field x");
   }
 
   public void testDuplicateRecordFields2() throws Exception {
@@ -12271,8 +12247,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
          + " */"
          + "function f(a) {};",
          new String[] {"Bad type annotation. Unknown type x",
-           "Parse error. Duplicate record field number",
-           "Bad type annotation. Unknown type y"});
+           "Bad type annotation. Duplicate record field number"});
   }
 
   public void testMultipleExtendsInterface1() throws Exception {
@@ -13210,12 +13185,9 @@ public class TypeCheckTest extends CompilerTypeTestCase {
     new ProcessClosurePrimitives(compiler, null, CheckLevel.ERROR, false)
         .process(null, n);
 
-    CodingConvention convention = compiler.getCodingConvention();
     new TypeCheck(compiler,
-        new ClosureReverseAbstractInterpreter(
-            convention, registry).append(
-                new SemanticReverseAbstractInterpreter(
-                    convention, registry))
+        new ClosureReverseAbstractInterpreter(registry).append(
+                new SemanticReverseAbstractInterpreter(registry))
             .getFirst(),
         registry)
         .processForTesting(null, n);
@@ -13365,8 +13337,7 @@ public class TypeCheckTest extends CompilerTypeTestCase {
   private TypeCheck makeTypeCheck() {
     return new TypeCheck(
         compiler,
-        new SemanticReverseAbstractInterpreter(
-            compiler.getCodingConvention(), registry),
+        new SemanticReverseAbstractInterpreter(registry),
         registry,
         reportMissingOverrides);
   }

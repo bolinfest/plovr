@@ -16,6 +16,8 @@
 
 package com.google.javascript.jscomp.deps;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.ErrorManager;
 import com.google.javascript.jscomp.PrintStreamErrorManager;
@@ -185,7 +187,7 @@ public class JsFileParserTest extends TestCase {
   }
 
   public void testIncludeGoog3() {
-    // This guy is pretending to provide goog, but he really doesn't.
+    // This is pretending to provide goog, but it really doesn't.
     String contents = "goog.provide('x');\n" +
         "/**\n" +
         " * the first constant in base.js\n" +
@@ -211,8 +213,8 @@ public class JsFileParserTest extends TestCase {
 
   /** Asserts the deps match without errors */
   private void assertDeps(DependencyInfo expected, DependencyInfo actual) {
-    assertEquals(expected, actual);
-    assertEquals(0, errorManager.getErrorCount());
-    assertEquals(0, errorManager.getWarningCount());
+    assertThat(actual).isEqualTo(expected);
+    assertThat(errorManager.getErrorCount()).isEqualTo(0);
+    assertThat(errorManager.getWarningCount()).isEqualTo(0);
   }
 }

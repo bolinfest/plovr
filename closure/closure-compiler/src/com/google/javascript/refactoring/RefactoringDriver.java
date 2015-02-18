@@ -18,11 +18,14 @@ package com.google.javascript.refactoring;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.Compiler;
 import com.google.javascript.jscomp.CompilerOptions;
 import com.google.javascript.jscomp.DependencyOptions;
+import com.google.javascript.jscomp.DiagnosticGroups;
 import com.google.javascript.jscomp.NodeTraversal;
 import com.google.javascript.jscomp.SourceFile;
 import com.google.javascript.rhino.Node;
@@ -41,9 +44,13 @@ public final class RefactoringDriver {
   private final Compiler compiler;
   private final Node rootNode;
 
-  private RefactoringDriver(Scanner scanner, List<SourceFile> inputs, List<SourceFile> externs) {
+  private RefactoringDriver(
+      Scanner scanner,
+      List<SourceFile> inputs,
+      List<SourceFile> externs,
+      CompilerOptions compilerOptions) {
     this.scanner = scanner;
-    this.compiler = createCompiler(inputs, externs);
+    this.compiler = createCompiler(inputs, externs, compilerOptions);
     this.rootNode = this.compiler.getRoot();
   }
 
@@ -53,18 +60,20 @@ public final class RefactoringDriver {
   public List<SuggestedFix> drive() {
     JsFlumeCallback callback = new JsFlumeCallback(scanner, null);
     NodeTraversal.traverse(compiler, rootNode, callback);
-    return callback.getFixes();
+    List<SuggestedFix> fixes = callback.getFixes();
+    fixes.addAll(scanner.processAllMatches(callback.getMatches()));
+    return fixes;
   }
 
   public Compiler getCompiler() {
     return compiler;
   }
 
-  private Compiler createCompiler(List<SourceFile> inputs, List<SourceFile> externs) {
-    CompilerOptions options = getCompilerOptions();
+  private Compiler createCompiler(
+      List<SourceFile> inputs, List<SourceFile> externs, CompilerOptions compilerOptions) {
     Compiler compiler = new Compiler();
     compiler.disableThreads();
-    compiler.compile(externs, inputs, options);
+    compiler.compile(externs, inputs, compilerOptions);
     return compiler;
   }
 
@@ -76,12 +85,14 @@ public final class RefactoringDriver {
     deps.setDependencySorting(true);
     options.setDependencyOptions(deps);
 
-    options.ideMode = true;
-    options.checkSuspiciousCode = true;
-    options.checkSymbols = true;
-    options.checkTypes = true;
-    options.closurePass = true;
-    options.preserveGoogRequires = true;
+    options.setIdeMode(true);
+    options.setCheckSuspiciousCode(true);
+    options.setCheckSymbols(true);
+    options.setCheckTypes(true);
+    options.setClosurePass(true);
+    options.setPreserveGoogRequires(true);
+
+    options.setWarningLevel(DiagnosticGroups.MISSING_REQUIRE, CheckLevel.ERROR);
 
     options.setAcceptConstKeyword(true);
 
@@ -99,6 +110,7 @@ public final class RefactoringDriver {
     private final Scanner scanner;
     private final ImmutableList.Builder<SourceFile> inputs = ImmutableList.builder();
     private final ImmutableList.Builder<SourceFile> externs = ImmutableList.builder();
+    private CompilerOptions compilerOptions = getCompilerOptions();
 
     public Builder(Scanner scanner) {
       this.scanner = scanner;
@@ -114,13 +126,13 @@ public final class RefactoringDriver {
       return this;
     }
 
-    public Builder addExterns(List<SourceFile> externs) {
+    public Builder addExterns(Iterable<SourceFile> externs) {
       this.externs.addAll(externs);
       return this;
     }
 
-    public Builder addExternsFromFile(List<String> externs) {
-      this.externs.addAll(Lists.transform(externs, TO_SOURCE_FILE_FN));
+    public Builder addExternsFromFile(Iterable<String> externs) {
+      this.externs.addAll(Lists.transform(ImmutableList.copyOf(externs), TO_SOURCE_FILE_FN));
       return this;
     }
 
@@ -134,18 +146,23 @@ public final class RefactoringDriver {
       return this;
     }
 
-    public Builder addInputs(List<SourceFile> inputs) {
+    public Builder addInputs(Iterable<SourceFile> inputs) {
       this.inputs.addAll(inputs);
       return this;
     }
 
-    public Builder addInputsFromFile(List<String> inputs) {
-      this.inputs.addAll(Lists.transform(inputs, TO_SOURCE_FILE_FN));
+    public Builder addInputsFromFile(Iterable<String> inputs) {
+      this.inputs.addAll(Lists.transform(ImmutableList.copyOf(inputs), TO_SOURCE_FILE_FN));
+      return this;
+    }
+
+    public Builder withCompilerOptions(CompilerOptions compilerOptions) {
+      this.compilerOptions = Preconditions.checkNotNull(compilerOptions);
       return this;
     }
 
     public RefactoringDriver build() {
-      return new RefactoringDriver(scanner, inputs.build(), externs.build());
+      return new RefactoringDriver(scanner, inputs.build(), externs.build(), compilerOptions);
     }
   }
 }

@@ -16,6 +16,7 @@
 
 package com.google.javascript.refactoring;
 
+import static com.google.javascript.refactoring.testing.SuggestedFixes.assertChanges;
 import static com.google.javascript.refactoring.testing.SuggestedFixes.assertReplacement;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -67,6 +68,63 @@ public class SuggestedFixTest {
         .delete(root.getFirstChild())
         .build();
     CodeReplacement replacement = new CodeReplacement(0, input.length(), "");
+    assertReplacement(fix, replacement);
+  }
+
+  @Test
+  public void testDelete_spaceBeforeNode() {
+    String before = "var foo = new Bar();";
+    String after = "\n\nvar baz = new Baz();";
+    String input = before + after;
+    Compiler compiler = getCompiler(input);
+    Node root = compileToScriptRoot(compiler);
+    SuggestedFix fix = new SuggestedFix.Builder()
+        .delete(root.getLastChild())
+        .build();
+    CodeReplacement replacement = new CodeReplacement(before.length(), after.length(), "");
+    assertReplacement(fix, replacement);
+  }
+
+  @Test
+  public void testDelete_dontDeleteSpaceBeforeNode() {
+    String before = "var foo = new Bar();\n\n";
+    String after = "var baz = new Baz();";
+    String input = before + after;
+    Compiler compiler = getCompiler(input);
+    Node root = compileToScriptRoot(compiler);
+    SuggestedFix fix = new SuggestedFix.Builder()
+        .deleteWithoutRemovingSurroundWhitespace(root.getLastChild())
+        .build();
+    CodeReplacement replacement = new CodeReplacement(before.length(), after.length(), "");
+    assertReplacement(fix, replacement);
+  }
+
+  @Test
+  public void testDelete_multipleVarDeclaration() {
+    String input = "var foo = 3, bar, baz;";
+    Compiler compiler = getCompiler(input);
+    Node root = compileToScriptRoot(compiler);
+
+    // Delete the 1st variable on the line. Make sure the deletion includes the assignment and the
+    // trailing comma.
+    SuggestedFix fix = new SuggestedFix.Builder()
+        .delete(root.getFirstChild().getFirstChild())
+        .build();
+    CodeReplacement replacement = new CodeReplacement(4, "foo = 3, ".length(), "");
+    assertReplacement(fix, replacement);
+
+    // Delete the 2nd variable.
+    fix = new SuggestedFix.Builder()
+        .delete(root.getFirstChild().getFirstChild().getNext())
+        .build();
+    replacement = new CodeReplacement(13, "bar, ".length(), "");
+    assertReplacement(fix, replacement);
+
+    // Delete the last variable. Make sure it removes the leading comma.
+    fix = new SuggestedFix.Builder()
+        .delete(root.getFirstChild().getLastChild())
+        .build();
+    replacement = new CodeReplacement(16, ", baz".length(), "");
     assertReplacement(fix, replacement);
   }
 
@@ -204,6 +262,7 @@ public class SuggestedFixTest {
   @Test
   public void testRemoveCast() {
     String input = "var x = /** @type {string} */ (y);";
+    String expectedCode = "var x = y;";
     Compiler compiler = getCompiler(input);
     Node root = compileToScriptRoot(compiler);
     Node castNode = root.getFirstChild().getFirstChild().getFirstChild();
@@ -212,9 +271,30 @@ public class SuggestedFixTest {
     SuggestedFix fix = new SuggestedFix.Builder()
         .removeCast(castNode, compiler)
         .build();
-    CodeReplacement replacement = new CodeReplacement(
-        "var x = ".length(), "/** @type {string} */ (y)".length(), "y");
-    assertReplacement(fix, replacement);
+    assertChanges(fix, "", input, expectedCode);
+  }
+
+  @Test
+  public void testRemoveCast_complexStatement() {
+    String input = ""
+        + "var x = /** @type {string} */ (function() {\n"
+        + "  // Inline comment that should be preserved.\n"
+        + "  var blah = bleh;\n"
+        + "});";
+    String expectedCode = ""
+        + "var x = function() {\n"
+        + "  // Inline comment that should be preserved.\n"
+        + "  var blah = bleh;\n"
+        + "};";
+    Compiler compiler = getCompiler(input);
+    Node root = compileToScriptRoot(compiler);
+    Node castNode = root.getFirstChild().getFirstChild().getFirstChild();
+    assertTrue(castNode.isCast());
+
+    SuggestedFix fix = new SuggestedFix.Builder()
+        .removeCast(castNode, compiler)
+        .build();
+    assertChanges(fix, "", input, expectedCode);
   }
 
   @Test

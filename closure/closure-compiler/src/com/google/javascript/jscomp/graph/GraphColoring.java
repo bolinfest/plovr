@@ -17,8 +17,8 @@
 package com.google.javascript.jscomp.graph;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -26,11 +26,11 @@ import java.util.List;
 
 /**
  * Annotates the graph with a color in a way that no connected node will have
- * the same color. Nodes of the same color cab then be partitioned together and
+ * the same color. Nodes of the same color can then be partitioned together and
  * be represented by a super node. This class will merely annotate the nodes
  * with a color using {@link GraphNode#setAnnotation(Annotation)} and provide
  * a node to super node mapping with {@link #getPartitionSuperNode(Object)}. The
- * give graph itself will not be modified.
+ * given graph itself will not be modified.
  *
  * <p>This algorithm is <b>NOT</b> deterministic by default. Passes that
  * requires deterministic output should provide a {@code Comparator} in the
@@ -127,8 +127,7 @@ public abstract class GraphColoring<N, E> {
 
     @Override
     public int color() {
-      graph.clearNodeAnnotations();
-      List<GraphNode<N, E>> worklist = Lists.newArrayList(graph.getNodes());
+      List<GraphNode<N, E>> worklist = new ArrayList<>(graph.getNodes());
 
       // Sort nodes by degree.
       Collections.sort(worklist, new Comparator<GraphNode<N, E>>() {
@@ -142,7 +141,7 @@ public abstract class GraphColoring<N, E> {
       });
 
       // Idea: From the highest to lowest degree, assign any uncolored node with
-      // a unique color if none of its neighbor has been assigned that color.
+      // a unique color if none of its neighbors has been assigned that color.
       int count = 0;
       do {
         Color color = new Color(count);

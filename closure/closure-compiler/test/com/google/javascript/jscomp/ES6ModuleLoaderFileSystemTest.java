@@ -16,11 +16,12 @@
 
 package com.google.javascript.jscomp;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.rhino.InputId;
 
-import junit.framework.Assert;
-
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -48,7 +49,7 @@ public class ES6ModuleLoaderFileSystemTest {
   public TemporaryFolder tempFolder = new TemporaryFolder();
 
   private void writeFile(File f, String s) throws IOException {
-    Files.write(f.toPath(), s.getBytes());
+    Files.write(f.toPath(), s.getBytes(UTF_8));
   }
 
   @Before
@@ -79,12 +80,12 @@ public class ES6ModuleLoaderFileSystemTest {
         ImmutableList.of(in1, in2, in3),
         new CompilerOptions());
 
-    rootPath = tempFolder.getRoot().getPath() + "/";
-    loader = ES6ModuleLoader.createNaiveLoader(compiler, rootPath);
+    rootPath = tempFolder.getRoot().getPath().replace(File.separatorChar, '/') + "/";
+    loader = new ES6ModuleLoader(compiler, rootPath);
   }
 
   private CompilerInput getInput(String s) {
-    return compiler.getInput(new InputId(rootPath + s));
+    return compiler.getInput(new InputId((rootPath + s).replace('/', File.separatorChar)));
   }
 
   @Test
@@ -95,5 +96,6 @@ public class ES6ModuleLoaderFileSystemTest {
     Assert.assertEquals("A/index.js", loader.getLoadAddress(inputA));
     Assert.assertEquals("A/index.js", loader.locate("../A", inputB));
     Assert.assertEquals("A/index.js", loader.locate("./A", inputApp));
+    Assert.assertEquals("A/index.js", loader.locate("A", inputApp));
   }
 }

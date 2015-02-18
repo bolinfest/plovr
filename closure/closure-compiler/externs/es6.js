@@ -21,6 +21,81 @@
  * @externs
  */
 
+// TODO(johnlenz): symbol should be a primitive type.
+/** @typedef {?} */
+var symbol;
+
+/**
+ * @param {string} description
+ * @return {symbol}
+ */
+function Symbol(description) {}
+
+/** @const {symbol} */
+Symbol.iterator;
+
+
+/**
+ * @interface
+ * @template VALUE
+ */
+function Iterable() {}
+
+// TODO(johnlenz): remove this when the compiler understands "symbol" natively
+/**
+ * @return {Iterator.<VALUE>}
+ * @suppress {externsValidation}
+ */
+Iterable.prototype[Symbol.iterator] = function() {};
+
+
+
+// TODO(johnlenz): Iterator should be a templated record type.
+/**
+ * @interface
+ * @template VALUE
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/The_Iterator_protocol
+ */
+function Iterator() {}
+
+/**
+ * @param {VALUE=} value
+ * @return {{value:VALUE, done:boolean}}
+ */
+Iterator.prototype.next;
+
+
+/**
+ * @constructor
+ * @see http://people.mozilla.org/~jorendorff/es6-draft.html#sec-generator-objects
+ * @implements {Iterator<VALUE>}
+ * @template VALUE
+ */
+var Generator = function() {};
+
+/**
+ * @param {?=} opt_value
+ * @return {{value:VALUE, done:boolean}}
+ * @override
+ */
+Generator.prototype.next = function(opt_value) {};
+
+/**
+ * @param {VALUE} value
+ * @return {{value:VALUE, done:boolean}}
+ */
+Generator.prototype.return = function(value) {};
+
+/**
+ * @param {?} exception
+ * @return {{value:VALUE, done:boolean}}
+ */
+Generator.prototype.throw = function(exception) {};
+
+
+// TODO(johnlenz): Array should be Iterable.
+
+
 
 /**
  * @param {number} value

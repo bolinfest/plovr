@@ -25,6 +25,7 @@ import com.google.common.base.Supplier;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.io.CharStreams;
@@ -49,12 +50,12 @@ import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
+import com.google.javascript.rhino.TypeIRegistry;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
-import java.io.Serializable;
 import java.nio.file.FileSystems;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -752,12 +753,6 @@ public class Compiler extends AbstractCompiler {
       return;
     }
 
-    if (options.nameAnonymousFunctionsOnly) {
-      // TODO(nicksantos): Move this into an instrument() phase maybe?
-      check();
-      return;
-    }
-
     if (!options.skipAllPasses) {
       check();
       if (hasErrors()) {
@@ -812,7 +807,7 @@ public class Compiler extends AbstractCompiler {
     // Important to check for null because if setPassConfig(null) is
     // called before this.passes is set, getPassConfig() will create a
     // new PassConfig object and use that, which is probably not what
-    // the client wanted since he or she probably meant to use their
+    // the client wanted since they probably meant to use their
     // own PassConfig object.
     Preconditions.checkNotNull(passes);
 
@@ -848,11 +843,6 @@ public class Compiler extends AbstractCompiler {
     phaseOptimizer.consume(getPassConfig().getChecks());
     phaseOptimizer.process(externsRoot, jsRoot);
     if (hasErrors()) {
-      return;
-    }
-
-    // TODO(nicksantos): clean this up. The flow here is too hard to follow.
-    if (options.nameAnonymousFunctionsOnly) {
       return;
     }
 
@@ -996,6 +986,9 @@ public class Compiler extends AbstractCompiler {
    * Returns the array of errors (never null).
    */
   public JSError[] getErrors() {
+    if (errorManager == null) {
+      return new JSError[] {};
+    }
     return errorManager.getErrors();
   }
 
@@ -1003,6 +996,9 @@ public class Compiler extends AbstractCompiler {
    * Returns the array of warnings (never null).
    */
   public JSError[] getWarnings() {
+    if (errorManager == null) {
+      return new JSError[] {};
+    }
     return errorManager.getWarnings();
   }
 
@@ -1203,6 +1199,11 @@ public class Compiler extends AbstractCompiler {
   }
 
   @Override
+  public TypeIRegistry getTypeIRegistry() {
+    return getTypeRegistry();
+  }
+
+  @Override
   public JSTypeRegistry getTypeRegistry() {
     if (typeRegistry == null) {
       typeRegistry = new JSTypeRegistry(oldErrorReporter);
@@ -1271,11 +1272,9 @@ public class Compiler extends AbstractCompiler {
   public ReverseAbstractInterpreter getReverseAbstractInterpreter() {
     if (abstractInterpreter == null) {
       ChainableReverseAbstractInterpreter interpreter =
-          new SemanticReverseAbstractInterpreter(
-              getCodingConvention(), getTypeRegistry());
+          new SemanticReverseAbstractInterpreter(getTypeRegistry());
       if (options.closurePass) {
-        interpreter = new ClosureReverseAbstractInterpreter(
-            getCodingConvention(), getTypeRegistry())
+        interpreter = new ClosureReverseAbstractInterpreter(getTypeRegistry())
             .append(interpreter).getFirst();
       }
       abstractInterpreter = interpreter;
@@ -1512,7 +1511,7 @@ public class Compiler extends AbstractCompiler {
       }
       new ProcessEs6Modules(
           this,
-          ES6ModuleLoader.createNaiveLoader(this, options.commonJSModulePathPrefix),
+          new ES6ModuleLoader(this, options.commonJSModulePathPrefix),
           true)
       .processFile(root);
     }
@@ -1542,8 +1541,8 @@ public class Compiler extends AbstractCompiler {
       if (options.processCommonJSModules) {
         ProcessCommonJSModules cjs = new ProcessCommonJSModules(
             this,
-            ES6ModuleLoader.createNaiveLoader(
-                this, options.commonJSModulePathPrefix), true);
+            new ES6ModuleLoader(this, options.commonJSModulePathPrefix),
+            true);
         cjs.process(null, root);
 
         JSModule m = new JSModule(cjs.inputToModuleName(input));
@@ -1587,9 +1586,7 @@ public class Compiler extends AbstractCompiler {
       throws CircularDependencyException, MissingProvideException, MissingModuleException {
     List<CompilerInput> inputs = new ArrayList<>();
     for (JSModule module : inputModules) {
-      for (CompilerInput input : module.getInputs()) {
-        inputs.add(input);
-      }
+      inputs.addAll(module.getInputs());
     }
 
     modules = new ArrayList<>();
@@ -1606,7 +1603,7 @@ public class Compiler extends AbstractCompiler {
 
     // The compiler expects a module tree, so add a dependency of all modules on
     // the first one.
-    JSModule firstModule = modules.size() > 0 ? modules.get(0) : null;
+    JSModule firstModule = Iterables.getFirst(modules, null);
     for (int i = 1; i < modules.size(); i++) {
       if (!modules.get(i).getDependencies().contains(firstModule)) {
         modules.get(i).addDependency(firstModule);
@@ -1985,18 +1982,6 @@ public class Compiler extends AbstractCompiler {
     return options.cssRenamingMap;
   }
 
-  /**
-   * Reprocesses the current defines over the AST.  This is used by GwtCompiler
-   * to generate N outputs for different targets from the same (checked) AST.
-   * For each target, we apply the target-specific defines by calling
-   * {@code processDefines} and then {@code optimize} to optimize the AST
-   * specifically for that target.
-   */
-  public void processDefines() {
-    (new DefaultPassConfig(options)).processDefines.create(this)
-        .process(externsRoot, jsRoot);
-  }
-
   /** Control Flow Analysis. */
   ControlFlowGraph<Node> computeCFG() {
     logger.fine("Computing Control Flow Graph");
@@ -2157,8 +2142,13 @@ public class Compiler extends AbstractCompiler {
           parserConfig = createConfig(Config.LanguageMode.ECMASCRIPT6_STRICT);
           externsParserConfig = parserConfig;
           break;
+        case ECMASCRIPT6_TYPED:
+          parserConfig = createConfig(Config.LanguageMode.ECMASCRIPT6_TYPED);
+          externsParserConfig = parserConfig;
+          break;
         default:
-          throw new IllegalStateException("unexpected language mode");
+          throw new IllegalStateException("unexpected language mode: "
+              + options.getLanguageIn());
       }
     }
     switch (context) {
@@ -2364,7 +2354,7 @@ public class Compiler extends AbstractCompiler {
     }
 
     List<CompilerInput> moduleInputs = module.getInputs();
-    if (moduleInputs.size() > 0) {
+    if (!moduleInputs.isEmpty()) {
       return moduleInputs.get(0).getAstRoot(this);
     }
     throw new IllegalStateException("Root module has no inputs");
@@ -2434,70 +2424,6 @@ public class Compiler extends AbstractCompiler {
    */
   List<CompilerInput> getExternsInOrder() {
     return Collections.unmodifiableList(externs);
-  }
-
-  /**
-   * Stores the internal compiler state just before optimization is performed.
-   * This can be saved and restored in order to efficiently optimize multiple
-   * different output targets without having to perform checking multiple times.
-   *
-   * NOTE: This does not include all parts of the compiler's internal state. In
-   * particular, SourceFiles and CompilerOptions are not recorded. In
-   * order to recreate a Compiler instance from scratch, you would need to
-   * call {@code init} with the same arguments as in the initial creation before
-   * restoring intermediate state.
-   */
-  public static class IntermediateState implements Serializable {
-    private static final long serialVersionUID = 1L;
-
-    Node externsRoot;
-    private Node jsRoot;
-    private List<CompilerInput> externs;
-    private List<CompilerInput> inputs;
-    private List<JSModule> modules;
-    private PassConfig.State passConfigState;
-    private JSTypeRegistry typeRegistry;
-    private AbstractCompiler.LifeCycleStage lifeCycleStage;
-    private Map<String, Node> injectedLibraries;
-
-    private IntermediateState() {}
-  }
-
-  /**
-   * Returns the current internal state, excluding the input files and modules.
-   */
-  public IntermediateState getState() {
-    IntermediateState state = new IntermediateState();
-    state.externsRoot = externsRoot;
-    state.jsRoot = jsRoot;
-    state.externs = externs;
-    state.inputs = inputs;
-    state.modules = modules;
-    state.passConfigState = getPassConfig().getIntermediateState();
-    state.typeRegistry = typeRegistry;
-    state.lifeCycleStage = getLifeCycleStage();
-    state.injectedLibraries = Maps.newLinkedHashMap(injectedLibraries);
-
-    return state;
-  }
-
-  /**
-   * Sets the internal state to the capture given.  Note that this assumes that
-   * the input files are already set up.
-   */
-  public void setState(IntermediateState state) {
-    externsRoot = state.externsRoot;
-    jsRoot = state.jsRoot;
-    externs = state.externs;
-    inputs = state.inputs;
-    modules = state.modules;
-    passes = createPassConfigInternal();
-    getPassConfig().setIntermediateState(state.passConfigState);
-    typeRegistry = state.typeRegistry;
-    setLifeCycleStage(state.lifeCycleStage);
-
-    injectedLibraries.clear();
-    injectedLibraries.putAll(state.injectedLibraries);
   }
 
   @VisibleForTesting

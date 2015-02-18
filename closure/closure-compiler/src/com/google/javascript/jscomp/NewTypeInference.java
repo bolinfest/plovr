@@ -37,6 +37,7 @@ import com.google.javascript.jscomp.newtypes.TypeEnv;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
+import com.google.javascript.rhino.jstype.StaticSourceFile;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -81,27 +82,27 @@ public class NewTypeInference implements CompilerPass {
 
   static final DiagnosticType RETURN_NONDECLARED_TYPE = DiagnosticType.warning(
       "JSC_RETURN_NONDECLARED_TYPE",
-      "Returned type does not match declared return type.\n " +
+      "Returned type does not match declared return type.\n" +
       "declared : {0}\n" +
       "found    : {1}\n");
 
   static final DiagnosticType INVALID_INFERRED_RETURN_TYPE =
       DiagnosticType.warning(
           "JSC_INVALID_INFERRED_RETURN_TYPE",
-          "Function called in context that expects incompatible type.\n " +
+          "Function called in context that expects incompatible type.\n" +
           "expected : {0}\n" +
           "found    : {1}\n");
 
   static final DiagnosticType INVALID_ARGUMENT_TYPE = DiagnosticType.warning(
       "JSC_INVALID_ARGUMENT_TYPE",
-      "Invalid type for parameter {0} of function {1}.\n " +
+      "Invalid type for parameter {0} of function {1}.\n" +
       "expected : {2}\n" +
       "found    : {3}\n");
 
   static final DiagnosticType CROSS_SCOPE_GOTCHA = DiagnosticType.warning(
       "JSC_CROSS_SCOPE_GOTCHA",
       "You thought we weren't going to notice? Guess again.\n" +
-      "Variable {0} typed inconsistently across scopes.\n " +
+      "Variable {0} typed inconsistently across scopes.\n" +
       "In outer scope : {1}\n" +
       "In inner scope : {2}\n");
 
@@ -113,7 +114,7 @@ public class NewTypeInference implements CompilerPass {
   static final DiagnosticType NULLABLE_DEREFERENCE =
       DiagnosticType.warning(
           "JSC_NULLABLE_DEREFERENCE",
-          "Attempt to access property of nullable type {0}.");
+          "Attempt to use nullable type {0}.");
 
   static final DiagnosticType PROPERTY_ACCESS_ON_NONOBJECT =
       DiagnosticType.warning(
@@ -231,13 +232,24 @@ public class NewTypeInference implements CompilerPass {
       TypeValidator.INVALID_CAST,
       TypeValidator.UNKNOWN_TYPEOF_VALUE);
 
+  private static String getFileWhereWarningOccurred(JSError warning) {
+    StaticSourceFile f = warning.node.getStaticSourceFile();
+    return f == null ? "" : f.getName();
+  }
+
   public static class WarningReporter {
     AbstractCompiler compiler;
     WarningReporter(AbstractCompiler compiler) { this.compiler = compiler; }
+
     void add(JSError warning) {
-      if (!JSType.mockToString) {
-        compiler.report(warning);
+      // We check the file name to avoid some warnings in code generated
+      // by the ES6 transpilation passes.
+      // TODO(dimvar): typecheck that code properly and remove this.
+      if (getFileWhereWarningOccurred(warning).startsWith(" [synthetic")
+          || JSType.mockToString) {
+        return;
       }
+      compiler.report(warning);
     }
   }
 
@@ -287,7 +299,6 @@ public class NewTypeInference implements CompilerPass {
     return symbolTable.getGlobalScope();
   }
 
-
   @Override
   public void process(Node externs, Node root) {
     try {
@@ -306,7 +317,7 @@ public class NewTypeInference implements CompilerPass {
     } catch (Exception unexpectedException) {
       String message = unexpectedException.getMessage();
       if (currentScope != null) {
-        message += "\nIn scope: " + currentScope.toString();
+        message += "\nIn scope: " + currentScope;
       }
       compiler.throwInternalError(message, unexpectedException);
     }
@@ -333,9 +344,9 @@ public class NewTypeInference implements CompilerPass {
     if (showDebuggingPrints) {
       StringBuilder b = new StringBuilder();
       for (Object obj : objs) {
-        b.append(String.valueOf(obj));
+        b.append(obj);
       }
-      System.out.println(b.toString());
+      System.out.println(b);
     }
   }
 
@@ -1088,9 +1099,14 @@ public class NewTypeInference implements CompilerPass {
       case Token.DEC:
         return analyzeIncDecFwd(expr, inEnv, requiredType);
       case Token.BITNOT:
-      case Token.POS:
       case Token.NEG:
         return analyzeUnaryNumFwd(expr, inEnv);
+      case Token.POS: {
+        // We are more permissive with +, because it is used to coerce to number
+        EnvTypePair pair = analyzeExprFwd(expr.getFirstChild(), inEnv);
+        pair.type = JSType.NUMBER;
+        return pair;
+      }
       case Token.TYPEOF: {
         EnvTypePair pair = analyzeExprFwd(expr.getFirstChild(), inEnv);
         pair.type = JSType.STRING;
@@ -1379,6 +1395,11 @@ public class NewTypeInference implements CompilerPass {
     EnvTypePair rhsPair = analyzeExprFwd(rhs, lhsPair.env, JSType.NUM_OR_STR);
     JSType lhsType = lhsPair.type;
     JSType rhsType = rhsPair.type;
+    if (lhsType.isString() || rhsType.isString()) {
+      // Don't warn, since '' + expr is used for type coercions
+      rhsPair.type = JSType.STRING;
+      return rhsPair;
+    }
     if (!commonTypes.isNumStrScalarOrObj(lhsType)) {
       warnInvalidOperand(lhs, expr.getType(), JSType.NUM_OR_STR, lhsType);
     }
@@ -1506,8 +1527,7 @@ public class NewTypeInference implements CompilerPass {
     if (!lhsType.isSubtypeOf(JSType.TOP_SCALAR) ||
         !rhsType.isSubtypeOf(JSType.TOP_SCALAR) ||
         !JSType.areCompatibleScalarTypes(lhsType, rhsType)) {
-      warnInvalidOperand(expr, expr.getType(), "matching scalar types",
-          lhsType.toString() + ", " + rhsType.toString());
+      warnInvalidOperand(expr, expr.getType(), "matching scalar types", lhsType + ", " + rhsType);
     }
     rhsPair.type = JSType.BOOLEAN;
     return rhsPair;
@@ -1545,6 +1565,8 @@ public class NewTypeInference implements CompilerPass {
     }
     EnvTypePair calleePair =
         analyzeExprFwd(callee, inEnv, commonTypes.topFunction());
+    calleePair = mayWarnAboutNullableReferenceAndTighten(
+        callee, calleePair.type, inEnv, commonTypes.topFunction());
     JSType calleeType = calleePair.type;
     if (!calleeType.isSubtypeOf(commonTypes.topFunction())) {
       warnings.add(JSError.make(
@@ -1755,8 +1777,9 @@ public class NewTypeInference implements CompilerPass {
       if (funType.isOptionalArg(i) && pair.type.equals(JSType.UNDEFINED)) {
         argTypeForDeferredCheck = null; // No deferred check needed.
       } else if (!pair.type.isSubtypeOf(formalType)) {
+        String fnName = getReadableCalleeName(call.getFirstChild());
         warnings.add(JSError.make(arg, INVALID_ARGUMENT_TYPE,
-                Integer.toString(i + 1), "",
+                Integer.toString(i + 1), fnName,
                 formalType.toString(), pair.type.toString()));
         argTypeForDeferredCheck = null; // No deferred check needed.
       }
@@ -1780,7 +1803,7 @@ public class NewTypeInference implements CompilerPass {
       return new EnvTypePair(env, JSType.UNKNOWN);
     }
     JSType assertedType =
-        assertionFunctionSpec.getAssertedNewType(callNode, currentScope);
+        (JSType) assertionFunctionSpec.getAssertedType(callNode, currentScope);
     if (assertedType.isUnknown()) {
       warnings.add(
           JSError.make(callNode, NewTypeInference.UNKNOWN_ASSERTION_TYPE));
@@ -1788,9 +1811,15 @@ public class NewTypeInference implements CompilerPass {
     EnvTypePair pair =
         analyzeExprFwd(assertedNode, env, JSType.UNKNOWN, assertedType);
     if (pair.type.isBottom()) {
-      warnings.add(JSError.make(assertedNode, NewTypeInference.ASSERT_FALSE));
-      pair.type = JSType.UNKNOWN;
-      pair.env = env;
+      JSType t = analyzeExprFwd(assertedNode, env)
+          .type.substituteGenericsWithUnknown();
+      if (t.isSubtypeOf(assertedType)) {
+        pair.type = t;
+      } else {
+        warnings.add(JSError.make(assertedNode, NewTypeInference.ASSERT_FALSE));
+        pair.type = JSType.UNKNOWN;
+        pair.env = env;
+      }
     }
     return pair;
   }
@@ -1801,8 +1830,8 @@ public class NewTypeInference implements CompilerPass {
     Node index = expr.getLastChild();
     JSType reqObjType = pickReqObjType(expr);
     EnvTypePair pair = analyzeExprFwd(receiver, inEnv, reqObjType);
-    pair =
-        mayWarnAboutNullableReferenceAndTighten(receiver, pair.type, pair.env);
+    pair = mayWarnAboutNullableReferenceAndTighten(
+        receiver, pair.type, pair.env, JSType.TOP_OBJECT);
     JSType recvType = pair.type.autobox(commonTypes);
     // TODO(dimvar): we don't know the prop name here so we're passing the
     // empty string. Consider improving the error msg.
@@ -2056,12 +2085,8 @@ public class NewTypeInference implements CompilerPass {
         // Unification may fail b/c of types irrelevant to generics, eg,
         // number vs string.
         // In this case, don't warn here; we'll show invalid-arg-type later.
-        HashMap<String, JSType> tmpTypeMap = new HashMap<>();
-        for (String typeParam : typeParameters) {
-          tmpTypeMap.put(typeParam, JSType.UNKNOWN);
-        }
         JSType targetAfterInstantiation =
-            unifTarget.substituteGenerics(tmpTypeMap);
+            unifTarget.substituteGenericsWithUnknown();
         if (!unifTarget.equals(targetAfterInstantiation)
             && unifSource.isSubtypeOf(targetAfterInstantiation)) {
           warnings.add(JSError.make(arg, FAILED_TO_UNIFY,
@@ -2451,11 +2476,19 @@ public class NewTypeInference implements CompilerPass {
     }
     pair = analyzeExprFwd(receiver, inEnv, recvReqType, recvSpecType);
     pair = mayWarnAboutNullableReferenceAndTighten(
-        receiver, pair.type, pair.env);
+        receiver, pair.type, pair.env, JSType.TOP_OBJECT);
     JSType recvType = pair.type.autobox(commonTypes);
     if (recvType.isUnknown() ||
         mayWarnAboutNonObject(receiver, pname, recvType, specializedType)) {
       return new EnvTypePair(pair.env, requiredType);
+    }
+    if (convention.isSuperClassReference(pname)) {
+      FunctionType ft = recvType.getFunTypeIfSingletonObj();
+      if (ft != null && ft.isConstructor()) {
+        JSType result = ft.getSuperPrototype();
+        pair.type = result != null ? result : JSType.UNDEFINED;
+        return pair;
+      }
     }
     if (propAccessNode.isGetProp() &&
         mayWarnAboutDictPropAccess(receiver, recvType)) {
@@ -2608,8 +2641,7 @@ public class NewTypeInference implements CompilerPass {
    */
   private EnvTypePair analyzeExprBwd(
       Node expr, TypeEnv outEnv, JSType requiredType) {
-    Preconditions.checkArgument(requiredType != null,
-        "Required type null at: " + expr);
+    Preconditions.checkArgument(requiredType != null, "Required type null at: %s", expr);
     Preconditions.checkArgument(!requiredType.isBottom());
     switch (expr.getType()) {
       case Token.EMPTY: // can be created by a FOR with empty condition
@@ -2639,9 +2671,13 @@ public class NewTypeInference implements CompilerPass {
       case Token.INC:
       case Token.DEC:
       case Token.BITNOT:
-      case Token.POS:
       case Token.NEG: // Unary operations on numbers
         return analyzeExprBwd(expr.getFirstChild(), outEnv, JSType.NUMBER);
+      case Token.POS: {
+        EnvTypePair pair = analyzeExprBwd(expr.getFirstChild(), outEnv);
+        pair.type = JSType.NUMBER;
+        return pair;
+      }
       case Token.TYPEOF: {
         EnvTypePair pair = analyzeExprBwd(expr.getFirstChild(), outEnv);
         pair.type = JSType.STRING;
@@ -3037,10 +3073,15 @@ public class NewTypeInference implements CompilerPass {
 
   private EnvTypePair analyzePropAccessBwd(
       Node receiver, String pname, TypeEnv outEnv, JSType requiredType) {
+    Node propAccessNode = receiver.getParent();
     QualifiedName qname = new QualifiedName(pname);
-    EnvTypePair pair = analyzeExprBwd(receiver, outEnv,
-        pickReqObjType(receiver.getParent()).withLoose()
-        .withProperty(qname, requiredType));
+    JSType reqObjType = pickReqObjType(propAccessNode).withLoose();
+    // In the BWD direction we don't have specialized types, so we use
+    // isPropertyTest to avoid spurious addition of properties to loose objects.
+    if (!NodeUtil.isPropertyTest(compiler, propAccessNode)) {
+      reqObjType = reqObjType.withProperty(qname, requiredType);
+    }
+    EnvTypePair pair = analyzeExprBwd(receiver, outEnv, reqObjType);
     JSType receiverType = pair.type;
     JSType propAccessType = receiverType.mayHaveProp(qname) ?
         receiverType.getProp(qname) : requiredType;
@@ -3336,13 +3377,12 @@ public class NewTypeInference implements CompilerPass {
   }
 
   private EnvTypePair mayWarnAboutNullableReferenceAndTighten(
-      Node obj, JSType recvType, TypeEnv inEnv) {
+      Node obj, JSType recvType, TypeEnv inEnv, JSType requiredType) {
     if (!recvType.isUnknown()
         && (JSType.NULL.isSubtypeOf(recvType)
             || JSType.UNDEFINED.isSubtypeOf(recvType))) {
       JSType minusNull = recvType.removeType(JSType.NULL_OR_UNDEF);
-      if (!minusNull.isBottom() && !minusNull.equals(recvType)
-          && minusNull.isSubtypeOf(JSType.TOP_OBJECT)) {
+      if (!minusNull.isBottom() && minusNull.isSubtypeOf(requiredType)) {
         warnings.add(JSError.make(
             obj, NULLABLE_DEREFERENCE, recvType.toString()));
         TypeEnv outEnv = inEnv;
@@ -3364,7 +3404,7 @@ public class NewTypeInference implements CompilerPass {
         pickReqObjType(obj.getParent()).withLoose().withProperty(pname, type);
     LValueResultFwd lvalue = analyzeLValueFwd(obj, inEnv, reqObjType, true);
     EnvTypePair pair = mayWarnAboutNullableReferenceAndTighten(
-        obj, lvalue.type, lvalue.env);
+        obj, lvalue.type, lvalue.env, JSType.TOP_OBJECT);
     TypeEnv lvalueEnv = pair.env;
     JSType lvalueType = pair.type.autobox(commonTypes);
     if (!lvalueType.isSubtypeOf(JSType.TOP_OBJECT)) {
@@ -3570,24 +3610,6 @@ public class NewTypeInference implements CompilerPass {
       return envPutType(env, RETVAL_ID, JSType.BOTTOM);
     }
     return env;
-  }
-
-  @VisibleForTesting // Only used from tests
-  JSType getFormalType(int argpos) {
-    Preconditions.checkState(summaries.size() == 1);
-    return summaries.values().iterator().next()
-        .getFunType().getFormalType(argpos);
-  }
-
-  @VisibleForTesting // Only used from tests
-  JSType getReturnType() {
-    Preconditions.checkState(summaries.size() == 1);
-    return summaries.values().iterator().next().getFunType().getReturnType();
-  }
-
-  @VisibleForTesting // Only used from tests
-  JSType getDeclaredType(String varName) {
-    return currentScope.getDeclaredTypeOf(varName);
   }
 
   private static class DeferredCheck {

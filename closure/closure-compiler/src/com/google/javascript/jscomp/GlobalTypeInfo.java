@@ -39,9 +39,13 @@ import com.google.javascript.jscomp.newtypes.NominalType;
 import com.google.javascript.jscomp.newtypes.NominalType.RawNominalType;
 import com.google.javascript.jscomp.newtypes.QualifiedName;
 import com.google.javascript.jscomp.newtypes.Typedef;
+import com.google.javascript.rhino.FunctionTypeI;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.ObjectTypeI;
 import com.google.javascript.rhino.Token;
+import com.google.javascript.rhino.TypeI;
+import com.google.javascript.rhino.jstype.JSTypeNative;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -182,7 +186,6 @@ class GlobalTypeInfo implements CompilerPass {
       STRUCTDICT_WITHOUT_CTOR,
       UNDECLARED_NAMESPACE,
       UNRECOGNIZED_TYPE_NAME,
-      RhinoErrorReporter.BAD_JSDOC_ANNOTATION,
       TypeCheck.CONFLICTING_EXTENDED_TYPE,
       TypeCheck.ENUM_NOT_CONSTANT,
       TypeCheck.INCOMPATIBLE_EXTENDED_PROPERTY_TYPE,
@@ -1058,7 +1061,7 @@ class GlobalTypeInfo implements CompilerPass {
 
         case Token.CAST:
           castTypes.put(n,
-              getTypeDeclarationFromJsdoc(n.getJSDocInfo(), currentScope));
+              getDeclaredTypeOfNode(n.getJSDocInfo(), currentScope));
           break;
 
         case Token.OBJECTLIT: {
@@ -1077,7 +1080,7 @@ class GlobalTypeInfo implements CompilerPass {
             for (Node prop : n.children()) {
               if (prop.getJSDocInfo() != null) {
                 declaredObjLitProps.put(prop,
-                    getTypeDeclarationFromJsdoc(
+                    getDeclaredTypeOfNode(
                         prop.getJSDocInfo(), currentScope));
               }
               if (isAnnotatedAsConst(prop)) {
@@ -1278,7 +1281,7 @@ class GlobalTypeInfo implements CompilerPass {
       RawNominalType rawNominalType = thisType.getRawNominalType();
       String pname = getProp.getLastChild().getString();
       // TODO(blickly): Support @param, @return style fun declarations here.
-      JSType declType = getTypeDeclarationFromJsdoc(
+      JSType declType = getDeclaredTypeOfNode(
           NodeUtil.getBestJSDocInfo(getProp), currentScope);
       boolean isConst = isConst(getProp);
       if (declType != null || isConst) {
@@ -1310,7 +1313,7 @@ class GlobalTypeInfo implements CompilerPass {
             currentScope.getScope(getFunInternalName(initializer))
             .getDeclaredType().toFunctionType());
       }
-      return getTypeDeclarationFromJsdoc(jsdoc, currentScope);
+      return getDeclaredTypeOfNode(jsdoc, currentScope);
     }
 
     boolean mayWarnAboutNoInit(Node constExpr) {
@@ -1424,11 +1427,17 @@ class GlobalTypeInfo implements CompilerPass {
           return simpleInferExprType(n.getLastChild());
         case Token.CALL:
         case Token.NEW: {
-          JSType ratorType = simpleInferExprType(n.getFirstChild());
-          if (ratorType == null) {
+          Node callee = n.getFirstChild();
+          // We special-case the function goog.getMsg, which is used by the
+          // compiler for i18n.
+          if (callee.matchesQualifiedName("goog.getMsg")) {
+            return JSType.STRING;
+          }
+          JSType calleeType = simpleInferExprType(callee);
+          if (calleeType == null) {
             return null;
           }
-          FunctionType funType = ratorType.getFunType();
+          FunctionType funType = calleeType.getFunType();
           if (funType == null) {
             return null;
           }
@@ -1606,13 +1615,13 @@ class GlobalTypeInfo implements CompilerPass {
       Preconditions.checkArgument(nameNode.getParent().isVar());
       Node varNode = nameNode.getParent();
       JSType varType =
-          getTypeDeclarationFromJsdoc(varNode.getJSDocInfo(), currentScope);
+          getDeclaredTypeOfNode(varNode.getJSDocInfo(), currentScope);
       if (varNode.getChildCount() > 1 && varType != null) {
         warnings.add(JSError.make(varNode, TypeCheck.MULTIPLE_VAR_DEF));
       }
       String varName = nameNode.getString();
       JSType nameNodeType =
-          getTypeDeclarationFromJsdoc(nameNode.getJSDocInfo(), currentScope);
+          getDeclaredTypeOfNode(nameNode.getJSDocInfo(), currentScope);
       if (nameNodeType != null) {
         if (varType != null) {
           warnings.add(JSError.make(nameNode, DUPLICATE_JSDOC, varName));
@@ -1661,7 +1670,7 @@ class GlobalTypeInfo implements CompilerPass {
           methodScope = null;
           methodType = null;
           propDeclType =
-              typeParser.getNodeTypeDeclaration(jsdoc, rawType, currentScope);
+              typeParser.getDeclaredTypeOfNode(jsdoc, rawType, currentScope);
         } else {
           methodScope = null;
           methodType = null;
@@ -1699,8 +1708,8 @@ class GlobalTypeInfo implements CompilerPass {
     }
   }
 
-  private JSType getTypeDeclarationFromJsdoc(JSDocInfo jsdoc, Scope s) {
-    return typeParser.getNodeTypeDeclaration(jsdoc, null, s);
+  private JSType getDeclaredTypeOfNode(JSDocInfo jsdoc, Scope s) {
+    return typeParser.getDeclaredTypeOfNode(jsdoc, null, s);
   }
 
   private FunctionType getDeclaredFunctionTypeOfCalleeIfAny(
@@ -2064,9 +2073,18 @@ class GlobalTypeInfo implements CompilerPass {
       return rawType.getInstanceAsJSType();
     }
 
-    // Only used during symbol-table construction, not during type inference.
     @Override
     public JSType lookupTypeByName(String name) {
+      // HACK: this function is called during type inference
+      // (when localClassDefs is null) in just one case: for goog.asserts
+      // functions assertFunction, assertArray, assertElement.
+      // For that case, the implementation below works, otherwise it will crash.
+      if (localClassDefs == null) {
+        return getDeclaredTypeOf(name)
+            .getFunTypeIfSingletonObj().getInstanceTypeOfCtor();
+      }
+
+      // This is the proper use during symbol-table construction
       if (name.contains(".")) {
         JSType type = lookupTypeByQname(QualifiedName.fromQname(name));
         return type != null ? type : getUnresolvedTypeByName(name);
@@ -2387,6 +2405,48 @@ class GlobalTypeInfo implements CompilerPass {
       localClassDefs = null;
       localTypedefs = null;
       localEnums = null;
+    }
+
+    @Override
+    public JSType getNativeType(JSTypeNative typeId) {
+      // For goog.asserts.assert. No suitable native type for true.
+      if (typeId == null) {
+        return JSType.TRUTHY;
+      }
+      // TODO(dimvar): finish it off for all native type names
+      if (typeId == JSTypeNative.NUMBER_TYPE) {
+        return JSType.NUMBER;
+      } else if (typeId == JSTypeNative.STRING_TYPE) {
+        return JSType.STRING;
+      } else if (typeId == JSTypeNative.OBJECT_TYPE) {
+        return JSType.TOP_OBJECT;
+      }
+      throw new UnsupportedOperationException("Unknown typeId: " + typeId);
+    }
+
+    @Override
+    public ObjectTypeI getNativeObjectType(JSTypeNative typeId) {
+      throw new UnsupportedOperationException(
+          "Scope#getNativeObjectType not implemented");
+    }
+
+    @Override
+    public JSType getType(String typeName) {
+      return lookupTypeByName(typeName);
+    }
+
+    @Override
+    public FunctionTypeI createFunctionTypeWithNewReturnType(
+        FunctionTypeI existingFunctionType, TypeI returnType) {
+      throw new UnsupportedOperationException(
+          "Scope#createFunctionTypeWithNewReturnType not implemented");
+    }
+
+    @Override
+    public JSType createTemplatizedType(
+        ObjectTypeI baseType, ImmutableList<? extends TypeI> templatizedTypes) {
+      throw new UnsupportedOperationException(
+          "Scope#createTemplatizedType not implemented");
     }
 
     @Override

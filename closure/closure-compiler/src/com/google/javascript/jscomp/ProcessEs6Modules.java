@@ -148,6 +148,7 @@ public class ProcessEs6Modules extends AbstractPostOrderCallback {
           }
         }
       } else {
+        // import * as ns from "mod"
         Preconditions.checkState(child.getType() == Token.IMPORT_STAR,
             "Expected an IMPORT_STAR node, but was: %s", child);
         importMap.put(
@@ -158,26 +159,13 @@ public class ProcessEs6Modules extends AbstractPostOrderCallback {
 
     Node script = NodeUtil.getEnclosingType(parent, Token.SCRIPT);
     // Emit goog.require call for the module.
-    if (!alreadyRequired.contains(moduleName)) {
-      alreadyRequired.add(moduleName);
-      Node require = IR.exprResult(IR.call(NodeUtil.newQName(
-          compiler, "goog.require"),
-          IR.string(moduleName)));
+    if (alreadyRequired.add(moduleName)) {
+      Node require = IR.exprResult(
+          IR.call(NodeUtil.newQName(compiler, "goog.require"), IR.string(moduleName)));
       require.copyInformationFromForTree(importDecl);
       script.addChildToFront(require);
       if (reportDependencies) {
         t.getInput().addRequire(moduleName);
-      }
-    }
-
-    for (String name : namesToRequire) {
-      Node require = IR.exprResult(IR.call(NodeUtil.newQName(
-          compiler, "goog.require"),
-          IR.string(moduleName + "." + name)));
-      require.copyInformationFromForTree(importDecl);
-      script.addChildToFront(require);
-      if (reportDependencies) {
-        t.getInput().addRequire(moduleName + "." + name);
       }
     }
 
@@ -187,10 +175,15 @@ public class ProcessEs6Modules extends AbstractPostOrderCallback {
 
   private void visitExport(NodeTraversal t, Node n, Node parent) {
     if (n.getBooleanProp(Node.EXPORT_DEFAULT)) {
+      // export default var Foo;
       Node var = IR.var(IR.name(DEFAULT_EXPORT_NAME), n.removeFirstChild());
+      var.useSourceInfoIfMissingFromForTree(n);
+      var.setJSDocInfo(n.getJSDocInfo());
+      n.setJSDocInfo(null);
       n.getParent().replaceChild(n, var);
       exportMap.put("default", DEFAULT_EXPORT_NAME);
     } else if (n.getBooleanProp(Node.EXPORT_ALL_FROM)) {
+      //   export * from 'moduleIdentifier';
       compiler.report(JSError.make(n, Es6ToEs3Converter.CANNOT_CONVERT_YET,
           "Wildcard export"));
     } else if (n.getChildCount() == 2) {
@@ -212,6 +205,7 @@ public class ProcessEs6Modules extends AbstractPostOrderCallback {
       parent.removeChild(n);
     } else {
       if (n.getFirstChild().getType() == Token.EXPORT_SPECS) {
+        //     export {Foo};
         for (Node exportSpec : n.getFirstChild().children()) {
           Node origName = exportSpec.getFirstChild();
           exportMap.put(
@@ -222,6 +216,9 @@ public class ProcessEs6Modules extends AbstractPostOrderCallback {
         }
         parent.removeChild(n);
       } else {
+        //    export var Foo;
+        //    export function Foo() {}
+        // etc.
         Node declaration = n.getFirstChild();
         for (int i = 0; i < declaration.getChildCount(); i++) {
           Node maybeName = declaration.getChildAtIndex(i);
@@ -229,7 +226,7 @@ public class ProcessEs6Modules extends AbstractPostOrderCallback {
             break;
           }
           // Break out on "B" in "class A extends B"
-          if (n.getFirstChild().isClass() && i > 0) {
+          if (declaration.isClass() && i > 0) {
             break;
           }
           String name = maybeName.getString();
@@ -246,7 +243,9 @@ public class ProcessEs6Modules extends AbstractPostOrderCallback {
             types.add(name);
           }
         }
-        parent.replaceChild(n, n.removeFirstChild());
+        declaration.setJSDocInfo(n.getJSDocInfo());
+        n.setJSDocInfo(null);
+        parent.replaceChild(n, declaration.detachFromParent());
       }
       compiler.reportCodeChange();
     }
@@ -259,6 +258,11 @@ public class ProcessEs6Modules extends AbstractPostOrderCallback {
     Preconditions.checkArgument(scriptNodeCount == 1,
         "ProcessEs6Modules supports only one invocation per "
         + "CompilerInput / script node");
+
+    // rewriteRequires is here (rather than being part of the main visit()
+    // method, because we only want to rewrite the requires if this is an
+    // ES6 module.
+    rewriteRequires(script);
 
     String moduleName = toModuleName(loader.getLoadAddress(t.getInput()));
 
@@ -303,30 +307,52 @@ public class ProcessEs6Modules extends AbstractPostOrderCallback {
       if (reportDependencies) {
         t.getInput().addProvide(moduleName);
       }
-
-      for (String name : exportMap.keySet()) {
-        String qualifiedName = moduleName + "." + name;
-        Node newGoogProvide = IR.exprResult(
-            IR.call(NodeUtil.newQName(compiler, "goog.provide"),
-                IR.string(qualifiedName)));
-        newGoogProvide.copyInformationFromForTree(script);
-        if (name.equals("default")) {
-          JSDocInfoBuilder jsDocInfo = script.getJSDocInfo() == null
-              ? new JSDocInfoBuilder(false)
-              : JSDocInfoBuilder.copyFrom(script.getJSDocInfo());
-          jsDocInfo.recordSuppressions(ImmutableSet.of("invalidProvide"));
-          script.setJSDocInfo(jsDocInfo.build(script));
-        }
-
-        script.addChildAfter(newGoogProvide, googProvide);
-        if (reportDependencies) {
-          t.getInput().addProvide(qualifiedName);
-        }
-      }
     }
+
+    JSDocInfoBuilder jsDocInfo = script.getJSDocInfo() == null
+        ? new JSDocInfoBuilder(false)
+        : JSDocInfoBuilder.copyFrom(script.getJSDocInfo());
+    if (!jsDocInfo.isPopulatedWithFileOverview()) {
+      jsDocInfo.recordFileOverview("");
+    }
+    // Don't check provides and requires, since most of them are auto-generated.
+    jsDocInfo.recordSuppressions(ImmutableSet.of("missingProvide", "missingRequire"));
+    script.setJSDocInfo(jsDocInfo.build(script));
 
     exportMap.clear();
     compiler.reportCodeChange();
+  }
+
+  private void rewriteRequires(Node script) {
+    NodeTraversal.traverse(compiler, script, new NodeTraversal.AbstractShallowCallback() {
+      public void visit(NodeTraversal t, Node n, Node parent) {
+        if (n.isCall()
+            && n.getFirstChild().matchesQualifiedName("goog.require")
+            && parent.isName()) {
+          visitRequire(n, parent);
+        }
+      }
+
+      private void visitRequire(Node requireCall, Node parent) {
+        // Rewrite
+        //
+        //   var foo = goog.require('bar.foo');
+        //
+        // to
+        //
+        //   goog.require('bar.foo');
+        //   var foo = bar.foo;
+
+        String namespace = requireCall.getLastChild().getString();
+
+        Node replacement = NodeUtil.newQName(compiler, namespace).srcrefTree(requireCall);
+        parent.replaceChild(requireCall, replacement);
+        Node varNode = parent.getParent();
+        varNode.getParent().addChildBefore(
+            IR.exprResult(requireCall).srcrefTree(requireCall),
+            varNode);
+      }
+    });
   }
 
   /**
@@ -382,9 +408,9 @@ public class ProcessEs6Modules extends AbstractPostOrderCallback {
             parent.putBooleanProp(Node.FREE_CALL, false);
           }
           ModuleOriginalNamePair pair = importMap.get(name);
-          if (pair.originalName.equals("")) {
-            n.getParent().replaceChild(n,
-                IR.name(pair.module).useSourceInfoIfMissingFromForTree(n));
+          if (pair.originalName.isEmpty()) {
+            n.getParent().replaceChild(
+                n, IR.name(pair.module).useSourceInfoIfMissingFromForTree(n));
           } else {
             n.getParent().replaceChild(n,
                 IR.getprop(IR.name(pair.module), IR.string(pair.originalName))
@@ -402,7 +428,7 @@ public class ProcessEs6Modules extends AbstractPostOrderCallback {
       if (typeNode.isString()) {
         String name = typeNode.getString();
         if (ES6ModuleLoader.isRelativeIdentifier(name)) {
-          int lastSlash = name.lastIndexOf("/");
+          int lastSlash = name.lastIndexOf('/');
           int endIndex = name.indexOf('.', lastSlash);
           String localTypeName = null;
           if (endIndex == -1) {
