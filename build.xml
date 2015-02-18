@@ -42,7 +42,8 @@
                        guava.jar,
                        json.jar,
                        jsr305.jar,
-                       protobuf-java.jar"
+                       protobuf-java.jar,
+                       truth.jar"
              />
     <fileset dir="${closure-templates.dir}/java/lib"
              includes="aopalliance.jar,

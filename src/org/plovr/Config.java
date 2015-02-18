@@ -684,10 +684,10 @@ public final class Config implements Comparable<Config> {
   private static Multimap<CustomPassExecutionTime, CompilerPass> getCustomPasses(
       PlovrCompilerOptions options) {
     Multimap<CustomPassExecutionTime, CompilerPass> customPasses =
-        options.customPasses;
+        options.getCustomPasses();
     if (customPasses == null) {
       customPasses = ArrayListMultimap.create();
-      options.customPasses = customPasses;
+      options.setCustomPasses(customPasses);
     }
     return customPasses;
   }

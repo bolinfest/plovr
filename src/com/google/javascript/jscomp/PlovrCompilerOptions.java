@@ -1,5 +1,7 @@
 package com.google.javascript.jscomp;
 
+import com.google.common.collect.Multimap;
+import com.google.javascript.jscomp.CustomPassExecutionTime;
 import java.nio.charset.Charset;
 
 /**
@@ -50,5 +52,13 @@ public class PlovrCompilerOptions extends CompilerOptions {
   @Override public void setWarningLevel(DiagnosticGroup group, CheckLevel level) {
     boolean escalateToError = treatWarningsAsErrors && level == CheckLevel.WARNING;
     super.setWarningLevel(group, escalateToError ? CheckLevel.ERROR : level);
+  }
+
+  public void setCustomPasses(Multimap<CustomPassExecutionTime, CompilerPass> passes) {
+    this.customPasses = passes;
+  }
+
+  public Multimap<CustomPassExecutionTime, CompilerPass> getCustomPasses() {
+    return this.customPasses;
   }
 }
