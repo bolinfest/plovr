@@ -65,12 +65,16 @@ var angular = {};
  */
 angular.bind = function(self, fn, args) {};
 
+/** @typedef {{strictDi: (boolean|undefined)}} */
+angular.BootstrapOptions;
+
 /**
  * @param {Element|HTMLDocument} element
  * @param {Array.<string|Function>=} opt_modules
+ * @param {angular.BootstrapOptions=} opt_config
  * @return {!angular.$injector}
  */
-angular.bootstrap = function(element, opt_modules) {};
+angular.bootstrap = function(element, opt_modules, opt_config) {};
 
 /**
  * @param {T} source
@@ -368,7 +372,9 @@ angular.LinkingFunctions.post = function(scope, iElement, iAttrs, controller) {
  *   require: (string|Array.<string>|undefined),
  *   restrict: (string|undefined),
  *   scope: (boolean|Object.<string, string>|undefined),
- *   template: (string|undefined),
+ *   template: (string|
+ *       function(!angular.JQLite=,!angular.Attributes=): string|
+ *       undefined),
  *   templateNamespace: (string|undefined),
  *   templateUrl: (string|
  *       function(!angular.JQLite=,!angular.Attributes=)|
@@ -435,8 +441,11 @@ angular.Directive.restrict;
 angular.Directive.scope;
 
 /**
- * @type {(string|undefined)}
- * TODO: This can also be a function which returns a string.
+ * @type {(
+ *   string|
+ *   function(!angular.JQLite=,!angular.Attributes=): string|
+ *   undefined
+ * )}
  */
 angular.Directive.template;
 
@@ -490,7 +499,7 @@ angular.Directive.transclude;
  *   remove: function(): !angular.JQLite,
  *   removeAttr: function(string): !angular.JQLite,
  *   removeClass: function(string): !angular.JQLite,
- *   removeData: function(): !angular.JQLite,
+ *   removeData: function(string=): !angular.JQLite,
  *   replaceWith: function(JQLiteSelector): !angular.JQLite,
  *   scope: function(): !angular.Scope,
  *   text: function(string=): (!angular.JQLite|string),
@@ -670,9 +679,10 @@ angular.JQLite.removeAttr = function(name) {};
 angular.JQLite.removeClass = function(name) {};
 
 /**
+ * @param {string=} opt_name
  * @return {!angular.JQLite}
  */
-angular.JQLite.removeData = function() {};
+angular.JQLite.removeData = function(opt_name) {};
 
 /**
  * @param {JQLiteSelector} element
@@ -727,7 +737,7 @@ angular.JQLite.wrap = function(element) {};
 /**
  * @typedef {{
  *   animation:
- *       function(string, function(...[*]):angular.Animation):!angular.Module,
+ *       function(string, function(...*):angular.Animation):!angular.Module,
  *   config: function((Function|Array.<string|Function>)):!angular.Module,
  *   constant: function(string, *):angular.Module,
  *   controller:
@@ -756,7 +766,7 @@ angular.Module;
 
 /**
  * @param {string} name
- * @param {function(...[*]):angular.Animation} animationFactory
+ * @param {function(...*):angular.Animation} animationFactory
  */
 angular.Module.animation = function(name, animationFactory) {};
 
@@ -843,15 +853,15 @@ angular.Module.requires;
  *   $$phase: string,
  *   $apply: function((string|function(!angular.Scope))=):*,
  *   $applyAsync: function((string|function(!angular.Scope))=),
- *   $broadcast: function(string, ...[*]),
+ *   $broadcast: function(string, ...*),
  *   $destroy: function(),
  *   $digest: function(),
- *   $emit: function(string, ...[*]),
+ *   $emit: function(string, ...*),
  *   $eval: function((string|function(!angular.Scope))=, Object=):*,
  *   $evalAsync: function((string|function())=),
  *   $id: string,
  *   $new: function(boolean=):!angular.Scope,
- *   $on: function(string, function(!angular.Scope.Event, ...[?])):function(),
+ *   $on: function(string, function(!angular.Scope.Event, ...?)):function(),
  *   $parent: !angular.Scope,
  *   $root: !angular.Scope,
  *   $watch: function(
@@ -912,7 +922,7 @@ angular.Scope.$new = function(opt_isolate) {};
 
 /**
  * @param {string} name
- * @param {function(!angular.Scope.Event, ...[?])} listener
+ * @param {function(!angular.Scope.Event, ...?)} listener
  * @return {function()}
  */
 angular.Scope.$on = function(name, listener) {};
@@ -1393,7 +1403,7 @@ angular.$http.Interceptor;
 /**
  * @typedef {{
  *   defaults: !angular.$http.Config,
- *   interceptors: !Array.<string|function(...[*]): !angular.$http.Interceptor>,
+ *   interceptors: !Array.<string|function(...*): !angular.$http.Interceptor>,
  *   useApplyAsync: function(boolean=):(boolean|!angular.$HttpProvider)
  * }}
  */
@@ -1403,6 +1413,11 @@ angular.$HttpProvider;
  * @type {angular.$http.Config}
  */
 angular.$HttpProvider.defaults;
+
+/**
+ * @type {!Array.<string|function(...*): !angular.$http.Interceptor>}
+ */
+angular.$HttpProvider.interceptors;
 
 /**
  * @param {boolean=} opt_value
@@ -1616,10 +1631,10 @@ angular.$locationProvider.html5Mode = function(opt_mode) {};
 
 /**
  * @typedef {{
- *   error: function(...[*]),
- *   info: function(...[*]),
- *   log: function(...[*]),
- *   warn: function(...[*])
+ *   error: function(...*),
+ *   info: function(...*),
+ *   log: function(...*),
+ *   warn: function(...*)
  *   }}
  */
 angular.$log;
@@ -1717,7 +1732,7 @@ angular.NgModelController.prototype.$viewChangeListeners;
 angular.NgModelController.prototype.$viewValue;
 
 /**
- * @type {!Object.<string, function(?):*>}
+ * @type {!Object.<string, function(?, ?):*>}
  */
 angular.NgModelController.prototype.$validators;
 
@@ -1834,6 +1849,11 @@ angular.FormController.prototype.$setDirty = function() {};
  * @type {function()}
  */
 angular.FormController.prototype.$setPristine = function() {};
+
+/**
+ * @type {function()}
+ */
+angular.FormController.prototype.$setUntouched = function() {};
 
 /**
  * @type {function()}
@@ -1960,6 +1980,11 @@ angular.$route;
 
 /** @type {function()} */
 angular.$route.reload = function() {};
+
+/**
+ * @param {!Object<string,string>} object
+ */
+angular.$route.updateParams = function(object) {};
 
 /** @type {!angular.$route.Route} */
 angular.$route.current;

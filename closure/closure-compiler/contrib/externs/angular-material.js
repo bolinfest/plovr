@@ -55,8 +55,34 @@ md.$dialog.options;
 
 
 /**
- * @param {md.$dialog.options} options
- * @return {angular.$q.Promise}
+ * @typedef {{
+ *   title: (function(string): md.$dialog.AlertConfig_),
+ *   content: (function(string): md.$dialog.AlertConfig_),
+ *   ariaLabel: (function(string): md.$dialog.AlertConfig_),
+ *   ok: (function(string): md.$dialog.AlertConfig_),
+ *   theme: (function(string): md.$dialog.AlertConfig_)
+ * }}
+ */
+md.$dialog.AlertConfig_;
+
+
+/**
+ * @typedef {{
+ *   title: (function(string): md.$dialog.ConfirmConfig_),
+ *   content: (function(string): md.$dialog.ConfirmConfig_),
+ *   ariaLabel: (function(string): md.$dialog.ConfirmConfig_),
+ *   ok: (function(string): md.$dialog.ConfirmConfig_),
+ *   cancel: (function(string): md.$dialog.ConfirmConfig_),
+ *   theme: (function(string): md.$dialog.ConfirmConfig_)
+ * }}
+ */
+md.$dialog.ConfirmConfig_;
+
+
+/**
+ * @param {md.$dialog.options|md.$dialog.ConfirmConfig_|
+ *     md.$dialog.AlertConfig_} options
+ * @return {!angular.$q.Promise}
  */
 md.$dialog.prototype.show = function(options) {};
 
@@ -71,6 +97,14 @@ md.$dialog.prototype.hide = function() {};
  * @type {function(*=)}
  */
 md.$dialog.prototype.cancel = function() {};
+
+
+/** @return {!md.$dialog.AlertConfig_} */
+md.$dialog.prototype.alert = function() {};
+
+
+/** @return {!md.$dialog.ConfirmConfig_} */
+md.$dialog.prototype.confirm = function() {};
 
 
 /******************************************************************************
@@ -115,6 +149,23 @@ md.$toast.prototype.hide = function() {};
  */
 md.$toast.prototype.cancel = function() {};
 
+/**
+ * @typedef {{
+ *   content: function(string):md.$toast.preset,
+ *   action: function(string):md.$toast.preset,
+ *   highlightAction: function(boolean):md.$toast.preset,
+ *   capsule: function(boolean):md.$toast.preset,
+ *   position: function(string):md.$toast.preset,
+ *   hidedelay: function(number):md.$toast.preset
+ * }}
+ */
+md.$toast.preset;
+
+
+/**
+ * @return {md.$toast.preset}
+ */
+md.$toast.prototype.simple = function() {};
 
 /******************************************************************************
  * $sidenav Service
@@ -138,3 +189,77 @@ md._sidenavService;
  * }
  */
 md.$sidenav;
+
+
+/******************************************************************************
+ * $mdThemingProvider Service
+ *****************************************************************************/
+
+/**
+ * @typedef {{
+ *   alwaysWatchTheme: function(boolean),
+ *   definePalette:
+ *       function(string, !Object<string,string>) : md.$mdThemingProvider,
+ *   extendPalette:
+ *       function(string, !Object<string,string>) : !Object<string,string>,
+ *   setDefaultTheme: function(string),
+ *   theme: function(string,string=) : md.$mdThemingProvider.Theme
+ * }}
+ */
+md.$mdThemingProvider;
+
+/*****************************************************************************/
+
+/**
+ * @param {string} name
+ * @constructor
+ */
+md.$mdThemingProvider.Theme = function(name) {};
+
+/** @type {string} */
+md.$mdThemingProvider.Theme.prototype.name;
+
+/** @type {!Object<string,string>} */
+md.$mdThemingProvider.Theme.prototype.colors;
+
+/**
+ * @param {string} primaryPalette
+ * @param {Object<string,string>=} opt_colors
+ * @return {md.$mdThemingProvider.Theme}
+ */
+md.$mdThemingProvider.Theme.prototype.primaryPalette =
+    function(primaryPalette, opt_colors) {};
+
+/**
+ * @param {string} accentPalette
+ * @param {Object<string,string>=} opt_colors
+ * @return {md.$mdThemingProvider.Theme}
+ */
+md.$mdThemingProvider.Theme.prototype.accentPalette =
+    function(accentPalette, opt_colors) {};
+
+/**
+ * @param {string} backgroundPalette
+ * @param {Object<string,string>=} opt_colors
+ * @return {md.$mdThemingProvider.Theme}
+ */
+md.$mdThemingProvider.Theme.prototype.backgroundPalette =
+    function(backgroundPalette, opt_colors) {};
+
+/**
+ * @param {string} warnPalette
+ * @return {md.$mdThemingProvider.Theme}
+ */
+md.$mdThemingProvider.Theme.prototype.warnPalette = function(warnPalette) {};
+
+/*****************************************************************************/
+
+
+/**
+ * @param {string} themeName
+ * @param {string=} opt_inheritFrom
+ * @return {md.$mdThemingProvider.Theme}
+ */
+md.$mdThemingProvider.prototype.theme = function(themeName, opt_inheritFrom) {};
+
+

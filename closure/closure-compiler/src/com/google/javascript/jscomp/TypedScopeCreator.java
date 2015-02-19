@@ -674,7 +674,7 @@ final class TypedScopeCreator implements ScopeCreator {
         JSType valueType = getDeclaredType(info, keyNode, value);
         JSType keyType =  objLitType.isEnumType() ?
             objLitType.toMaybeEnumType().getElementsType() :
-            NodeUtil.getObjectLitKeyTypeFromValueType(keyNode, valueType);
+            TypeCheck.getObjectLitKeyTypeFromValueType(keyNode, valueType);
 
         // Try to declare this property in the current scope if it
         // has an authoritative name.
@@ -1516,8 +1516,8 @@ final class TypedScopeCreator implements ScopeCreator {
           if (functionType != null) {
             FunctionType getterType =
                 typeRegistry.createFunctionType(objectType);
-            codingConvention.applySingletonGetter(functionType, getterType,
-                objectType);
+            codingConvention.applySingletonGetter(
+                functionType, getterType, objectType);
           }
         }
       }

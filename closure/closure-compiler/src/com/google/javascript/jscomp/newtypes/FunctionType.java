@@ -24,7 +24,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -190,6 +189,12 @@ public class FunctionType {
 
   public boolean isInterfaceDefinition() {
     return nominalType != null && nominalType.isInterface();
+  }
+
+  public JSType getSuperPrototype() {
+    Preconditions.checkState(isConstructor());
+    NominalType superClass = nominalType.getInstantiatedSuperclass();
+    return superClass == null ? null : superClass.getPrototype();
   }
 
   public boolean isQmarkFunction() {
@@ -365,7 +370,7 @@ public class FunctionType {
       }
       // NOTE(dimvar): This is a bug. The code that triggers this should be rare
       // and the fix is not trivial, so for now we decided to not fix.
-      // See unit tests in NewTypeInferenceTest#testGenericsSubtyping
+      // See unit tests in NewTypeInferenceTestES5OrLower#testGenericsSubtyping
       return instantiateGenericsWithUnknown(this).isSubtypeOf(other);
     }
 
@@ -638,11 +643,7 @@ public class FunctionType {
     if (!f.isGeneric()) {
       return f;
     }
-    HashMap<String, JSType> tmpTypeMap = new HashMap<>();
-    for (String typeParam : f.typeParameters) {
-      tmpTypeMap.put(typeParam, JSType.UNKNOWN);
-    }
-    return f.instantiateGenerics(tmpTypeMap);
+    return f.instantiateGenerics(JSType.MAP_TO_UNKNOWN);
   }
 
   /**
@@ -725,12 +726,59 @@ public class FunctionType {
     return builder.buildFunction();
   }
 
-  /**
-   * @param keepTypeParams See the two cases in substituteGenerics and
-   * instantiateGenerics.
-   */
-  private FunctionType applyInstantiation(
-      boolean keepTypeParams, Map<String, JSType> typeMap) {
+  private FunctionType substituteNominalGenerics(Map<String, JSType> typeMap) {
+    if (typeMap.isEmpty()) {
+      return this;
+    }
+    Map<String, JSType> reducedMap = typeMap;
+    if (typeParameters != null) {
+      boolean foundShadowedTypeParam = false;
+      for (String typeParam : typeParameters) {
+        if (typeMap.containsKey(typeParam)) {
+          foundShadowedTypeParam = true;
+          break;
+        }
+      }
+      if (foundShadowedTypeParam) {
+        ImmutableMap.Builder<String, JSType> builder = ImmutableMap.builder();
+        for (Map.Entry<String, JSType> entry : typeMap.entrySet()) {
+          if (!typeParameters.contains(entry.getKey())) {
+            builder.put(entry);
+          }
+        }
+        reducedMap = builder.build();
+      }
+    }
+    FunctionTypeBuilder builder = new FunctionTypeBuilder();
+    for (JSType reqFormal : requiredFormals) {
+      builder.addReqFormal(reqFormal.substituteGenerics(reducedMap));
+    }
+    for (JSType optFormal : optionalFormals) {
+      builder.addOptFormal(optFormal.substituteGenerics(reducedMap));
+    }
+    if (restFormals != null) {
+      builder.addRestFormals(restFormals.substituteGenerics(reducedMap));
+    }
+    builder.addRetType(returnType.substituteGenerics(reducedMap));
+    if (isLoose()) {
+      builder.addLoose();
+    }
+    if (nominalType != null) {
+      builder.addNominalType(nominalType.instantiateGenerics(typeMap));
+    }
+    if (receiverType != null) {
+      builder.addReceiverType(receiverType.instantiateGenerics(typeMap));
+    }
+    // TODO(blickly): Do we need instatiation here?
+    for (String var : outerVarPreconditions.keySet()) {
+      builder.addOuterVarPrecondition(var, outerVarPreconditions.get(var));
+    }
+    builder.addTypeParameters(this.typeParameters);
+    return builder.buildFunction();
+  }
+
+  private FunctionType substituteParametricGenerics(
+      Map<String, JSType> typeMap) {
     if (typeMap.isEmpty()) {
       return this;
     }
@@ -752,14 +800,26 @@ public class FunctionType {
       builder.addNominalType(nominalType.instantiateGenerics(typeMap));
     }
     if (receiverType != null) {
-      builder.addReceiverType(receiverType.instantiateGenerics(typeMap));
+      // NOTE(dimvar):
+      // We have no way of knowing if receiverType comes from an @this
+      // annotation, or because this type represents a method.
+      // In case 1, we would want to substitute in receiverType, in case 2 we
+      // don't, it's a different scope for the type variables.
+      // To properly track this we would need two separate fields instead of
+      // just receiverType.
+      // Instead, the IF test is a heuristic that works in most cases.
+      // In the else branch, we are substituting incorrectly when receiverType
+      // comes from a method declaration, but I have not been able to find a
+      // test that exposes the bug.
+      if (receiverType.isUninstantiatedGenericType()) {
+        builder.addReceiverType(receiverType);
+      } else {
+        builder.addReceiverType(receiverType.instantiateGenerics(typeMap));
+      }
     }
     // TODO(blickly): Do we need instatiation here?
     for (String var : outerVarPreconditions.keySet()) {
       builder.addOuterVarPrecondition(var, outerVarPreconditions.get(var));
-    }
-    if (keepTypeParams) {
-      builder.addTypeParameters(this.typeParameters);
     }
     return builder.buildFunction();
   }
@@ -781,18 +841,17 @@ public class FunctionType {
       }
       typeMap = builder.build();
     }
-    return applyInstantiation(true, typeMap);
+    return substituteNominalGenerics(typeMap);
   }
 
   public FunctionType instantiateGenerics(Map<String, JSType> typeMap) {
-    for (String typeParam : typeMap.keySet()) {
-      Preconditions.checkState(typeParameters.contains(typeParam));
-    }
-    return applyInstantiation(false, typeMap);
+    Preconditions.checkNotNull(typeParameters);
+    return substituteParametricGenerics(typeMap);
   }
 
   public FunctionType instantiateGenericsFromArgumentTypes(
       List<JSType> argTypes) {
+    Preconditions.checkNotNull(typeParameters);
     if (argTypes.size() < getMinArity() || argTypes.size() > getMaxArity()) {
       return null;
     }
@@ -811,7 +870,7 @@ public class FunctionType {
       }
       builder.put(typeParam, Iterables.getOnlyElement(types));
     }
-    return applyInstantiation(false, builder.build());
+    return substituteParametricGenerics(builder.build());
   }
 
   @Override

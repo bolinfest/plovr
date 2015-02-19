@@ -16,11 +16,14 @@
 
 package com.google.javascript.jscomp;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.CheckConformance.InvalidRequirementSpec;
 import com.google.javascript.jscomp.ConformanceRules.AbstractRule;
 import com.google.javascript.jscomp.ConformanceRules.ConformanceResult;
+import com.google.javascript.jscomp.testing.BlackHoleErrorManager;
 import com.google.javascript.rhino.Node;
 import com.google.protobuf.TextFormat;
 
@@ -1079,7 +1082,7 @@ public class CheckConformanceTest extends CompilerTestCase {
     builder.addRequirementBuilder().setExtends("a").addWhitelist("y").addWhitelistRegexp("n");
     List<Requirement> requirements =
         CheckConformance.mergeRequirements(compiler, ImmutableList.of(builder.build()));
-    assertEquals(1, requirements.size());
+    assertThat(requirements).hasSize(1);
     Requirement requirement = requirements.get(0);
     assertEquals(2, requirement.getWhitelistCount());
     assertEquals(2, requirement.getWhitelistRegexpCount());
@@ -1087,7 +1090,8 @@ public class CheckConformanceTest extends CompilerTestCase {
 
   public void testMergeRequirements_findsDuplicates() {
     Compiler compiler = createCompiler();
-    ErrorManager errorManager = new BlackHoleErrorManager(compiler);
+    ErrorManager errorManager = new BlackHoleErrorManager();
+    compiler.setErrorManager(errorManager);
     ConformanceConfig.Builder builder = ConformanceConfig.newBuilder();
     builder.addRequirementBuilder().addWhitelist("x").addWhitelist("x");
     CheckConformance.mergeRequirements(compiler, ImmutableList.of(builder.build()));

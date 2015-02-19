@@ -22,7 +22,7 @@ import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.jstype.JSType;
+import com.google.javascript.rhino.TypeI;
 
 import java.util.Set;
 
@@ -212,18 +212,14 @@ class StrictModeCheck extends AbstractPostOrderCallback
          key = key.getNext()) {
       if (!key.isSetterDef()) {
         // normal property and getter cases
-        if (getters.contains(key.getString())) {
+        if (!getters.add(key.getString())) {
           t.report(key, DUPLICATE_OBJECT_KEY);
-        } else {
-          getters.add(key.getString());
         }
       }
       if (!key.isGetterDef()) {
         // normal property and setter cases
-        if (setters.contains(key.getString())) {
+        if (!setters.add(key.getString())) {
           t.report(key, DUPLICATE_OBJECT_KEY);
-        } else {
-          setters.add(key.getString());
         }
       }
     }
@@ -270,7 +266,7 @@ class StrictModeCheck extends AbstractPostOrderCallback
   }
 
   private static boolean isFunctionType(Node n) {
-    JSType type = n.getJSType();
+    TypeI type = n.getTypeI();
     return (type != null && type.isFunctionType());
   }
 }

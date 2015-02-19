@@ -16,6 +16,7 @@
 
 package com.google.javascript.jscomp;
 
+import static com.google.common.truth.Truth.assertThat;
 import static com.google.javascript.jscomp.CheckRequiresForConstructors.MISSING_REQUIRE_WARNING;
 
 import com.google.common.base.Joiner;
@@ -27,9 +28,20 @@ import com.google.common.collect.ImmutableList;
  */
 
 public class CheckRequiresForConstructorsTest extends CompilerTestCase {
+  public CheckRequiresForConstructorsTest() {
+    super();
+    enableRewriteClosureCode();
+  }
+
+  @Override
+  protected CompilerOptions getOptions(CompilerOptions options) {
+    options.setWarningLevel(DiagnosticGroups.MISSING_REQUIRE, CheckLevel.WARNING);
+    return super.getOptions(options);
+  }
+
   @Override
   protected CompilerPass getProcessor(Compiler compiler) {
-    return new CheckRequiresForConstructors(compiler, CheckLevel.WARNING);
+    return new CheckRequiresForConstructors(compiler);
   }
 
   public void testPassWithNoNewNodes() {
@@ -101,6 +113,25 @@ public class CheckRequiresForConstructorsTest extends CompilerTestCase {
   public void testPassWithImplements() {
     String js = "goog.require('example.Foo');"
       + "/** @constructor @implements {example.Foo} */"
+      + "var Ctor = function() {};";
+    testSame(js);
+  }
+
+  public void testFailWithExtends() {
+    String[] js = new String[] {
+      "var goog = {};\n"
+      + "goog.provide('example.Foo');\n"
+      + "/** @constructor */ example.Foo = function() {};",
+
+      "/** @constructor @extends {example.Foo} */ var Ctor = function() {};"
+    };
+    String warning = "'example.Foo' used but not goog.require'd";
+    test(js, js, null, MISSING_REQUIRE_WARNING, warning);
+  }
+
+  public void testPassWithExtends() {
+    String js = "goog.require('example.Foo');"
+      + "/** @constructor @extends {example.Foo} */"
       + "var Ctor = function() {};";
     testSame(js);
   }
@@ -224,14 +255,13 @@ public class CheckRequiresForConstructorsTest extends CompilerTestCase {
     SourceFile input = SourceFile.fromCode("foo.js", js);
     Compiler compiler = new Compiler();
     CompilerOptions opts = new CompilerOptions();
-    opts.checkRequires = CheckLevel.WARNING;
-    opts.closurePass = true;
+    opts.setWarningLevel(DiagnosticGroups.MISSING_REQUIRE, CheckLevel.WARNING);
+    opts.setClosurePass(true);
 
-    Result result = compiler.compile(ImmutableList.<SourceFile>of(),
-        ImmutableList.of(input), opts);
+    Result result = compiler.compile(ImmutableList.<SourceFile>of(), ImmutableList.of(input), opts);
     JSError[] warnings = result.warnings;
     assertNotNull(warnings);
-    assertTrue(warnings.length > 0);
+    assertThat(warnings).isNotEmpty();
 
     String expectation = "'foo.bar.goo' used but not goog.require'd";
 
@@ -306,5 +336,169 @@ public class CheckRequiresForConstructorsTest extends CompilerTestCase {
     String js = "/** @type {function(new:Date)} */function bar() {}" +
         "new bar();";
     testSame(js);
+  }
+
+  public void testMissingGoogRequireNoRootScope() {
+    String good = ""
+        + "goog.provide('foo.Bar');\n"
+        + "/** @constructor */\n"
+        + "foo.Bar = function() {};\n";
+    String bad = ""
+        + "function someFn() {\n"
+        + "  var bar = new foo.Bar();\n"
+        + "}\n";
+    String[] js = new String[] {good, bad};
+    String warning = "'foo.Bar' used but not goog.require'd";
+    test(js, js, null, MISSING_REQUIRE_WARNING, warning);
+  }
+
+  public void testMissingGoogRequireFromGoogDefineClass() {
+    String good = ""
+        + "goog.provide('foo.Bar');\n"
+        + "foo.Bar = goog.defineClass(null, {\n"
+        + "  constructor: function() {}\n"
+        + "});\n";
+    String bad = ""
+        + "function someFn() {\n"
+        + "  var bar = new foo.Bar();\n"
+        + "}\n";
+    String[] js = new String[] {good, bad};
+    String warning = "'foo.Bar' used but not goog.require'd";
+    test(js, null, null, MISSING_REQUIRE_WARNING, warning);
+  }
+
+  public void testNoMissingGoogRequireFromGoogDefineClass() {
+    String good = ""
+        + "goog.provide('foo.Bar');\n"
+        + "foo.Bar = goog.defineClass(null, {\n"
+        + "  constructor: function() {}\n"
+        + "});\n";
+    String bad = ""
+        + "goog.require('foo.Bar');\n"
+        + "function someFn() {\n"
+        + "  var bar = new foo.Bar();\n"
+        + "}\n";
+    String[] js = new String[] {good, bad};
+    test(js, null);
+  }
+
+  public void testNoMissingGoogRequireFromGoogDefineClassSameFile() {
+    String js = ""
+        + "goog.provide('foo.Bar');\n"
+        + "foo.Bar = goog.defineClass(null, {\n"
+        + "  constructor: function() {}\n"
+        + "});\n"
+        + "function someFn() {\n"
+        + "  var bar = new foo.Bar();\n"
+        + "}\n";
+    test(js, null);
+  }
+
+  public void testAliasConstructorToPrivateVariable() {
+    String js = ""
+        + "var foo = {};\n"
+        + "/** @constructor */\n"
+        + "foo.Bar = function() {}\n"
+        + "/** @private */\n"
+        + "foo.Bar.baz_ = Date;\n"
+        + "function someFn() {\n"
+        + "  var qux = new foo.Bar.baz_();\n"
+        + "}";
+    testSame(js);
+  }
+
+  public void testMissingGoogRequireFromGoogScope() {
+    String good = ""
+        + "goog.provide('foo.bar.Baz');\n"
+        + "/** @constructor */\n"
+        + "foo.bar.Baz = function() {}\n";
+    String bad = ""
+        + "goog.scope(function() {\n"
+        + "  var bar = foo.bar;\n"
+        + "  function someFn() {\n"
+        + "    var qux = new bar.Baz();\n"
+        + "  }\n"
+        + "});\n";
+    String[] js = new String[] {good, bad};
+    String warning = "'foo.bar.Baz' used but not goog.require'd";
+    test(js, null, null, MISSING_REQUIRE_WARNING, warning);
+  }
+
+  public void testNoMissingGoogRequireFromGoogScope() {
+    String good = ""
+        + "goog.provide('foo.bar.Baz');\n"
+        + "/** @constructor */\n"
+        + "foo.bar.Baz = function() {}\n";
+    String alsoGood = ""
+        + "goog.require('foo.bar.Baz');\n"
+        + "goog.scope(function() {\n"
+        + "  var bar = foo.bar;\n"
+        + "  function someFn() {\n"
+        + "    var qux = new bar.Baz();\n"
+        + "  }\n"
+        + "});\n";
+    String[] js = new String[] {good, alsoGood};
+    test(js, null);
+  }
+
+  public void testNoMissingGoogRequireFromGoogScopeSameFile() {
+    String js = ""
+        + "goog.provide('foo.bar.Baz');\n"
+        + "/** @constructor */\n"
+        + "foo.bar.Baz = function() {}\n"
+        + "goog.scope(function() {\n"
+        + "  var bar = foo.bar;\n"
+        + "  function someFn() {\n"
+        + "    var qux = new bar.Baz();\n"
+        + "  }\n"
+        + "});\n";
+    test(js, null);
+  }
+
+  public void testMissingGoogRequireFromGoogModule() {
+    String good = ""
+        + "goog.module('foo');\n"
+        + "\n"
+        + "var Atom = goog.defineClass(null, {\n"
+        + "  constructor: function() {}\n"
+        + "});\n";
+    String bad = ""
+        + "goog.module('fooTest');"
+        + "function someFn() {\n"
+        + "  var bar = new foo.Atom();\n"
+        + "}\n";
+    String[] js = new String[] {good, bad};
+    String warning = "'foo.Atom' used but not goog.require'd";
+    test(js, null, null, MISSING_REQUIRE_WARNING, warning);
+  }
+
+  public void testNoMissingGoogRequireFromGoogModule() {
+    String good = ""
+        + "goog.module('foo.bar');\n"
+        + "\n"
+        + "var Atom = goog.defineClass(null, {\n"
+        + "  constructor: function() {}\n"
+        + "});\n";
+    String alsoGood = ""
+        + "goog.module('foo.barTest');\n"
+        + "var bar = goog.require('foo.bar');"
+        + "function someFn() {\n"
+        + "  var baz = new bar.Atom();\n"
+        + "}\n";
+    String[] js = new String[] {good, alsoGood};
+    test(js, null);
+  }
+
+  public void testNoMissingGoogRequireFromGoogModuleSameFile() {
+    String js = ""
+        + "goog.module('foo.bar');\n"
+        + "\n"
+        + "var Atom = goog.defineClass(null, {\n"
+        + "  constructor: function() {}\n"
+        + "});\n"
+        + "function someFn() {\n"
+        + "  var baz = new Atom();\n"
+        + "}\n";
+    test(js, null);
   }
 }

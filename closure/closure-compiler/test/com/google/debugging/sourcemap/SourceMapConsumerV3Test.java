@@ -16,6 +16,8 @@
 
 package com.google.debugging.sourcemap;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 
@@ -44,9 +46,9 @@ public class SourceMapConsumerV3Test extends TestCase {
 
     String[] sources = (String[]) consumer.getOriginalSources().toArray();
 
-    assertEquals(1, sources.length);
-    assertEquals(null, consumer.getSourceRoot());
-    assertEquals("testcode", sources[0]);
+    assertThat(sources).hasLength(1);
+    assertThat(consumer.getSourceRoot()).isEqualTo(null);
+    assertThat(sources[0]).isEqualTo("testcode");
   }
 
   public void testMap() throws Exception{
@@ -91,10 +93,10 @@ public class SourceMapConsumerV3Test extends TestCase {
 
     String[] sources = (String[]) consumer.getOriginalSources().toArray();
 
-    assertEquals(1, sources.length);
-    assertEquals("http://server/path/", consumer.getSourceRoot());
+    assertThat(sources).hasLength(1);
+    assertThat(consumer.getSourceRoot()).isEqualTo("http://server/path/");
     //By default sourceRoot is not prepended
-    assertEquals("testcode", sources[0]);
+    assertThat(sources[0]).isEqualTo("testcode");
   }
 
   public void testExtensions() throws Exception{
@@ -114,10 +116,9 @@ public class SourceMapConsumerV3Test extends TestCase {
 
     Map<String, Object> exts = consumer.getExtensions();
 
-    assertEquals(2, exts.size());
-    assertFalse(exts.containsKey("org_int"));
-    assertEquals(2, ((JsonElement) exts.get("x_org_int")).getAsInt());
-    assertEquals(0, ((JsonArray) exts.get("x_org_array")).size());
+    assertThat(exts).hasSize(2);
+    assertThat(exts).doesNotContainKey("org_int");
+    assertThat(((JsonElement) exts.get("x_org_int")).getAsInt()).isEqualTo(2);
+    assertThat(((JsonArray) exts.get("x_org_array")).size()).isEqualTo(0);
   }
-
 }

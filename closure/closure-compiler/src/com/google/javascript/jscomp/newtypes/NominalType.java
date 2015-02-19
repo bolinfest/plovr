@@ -111,19 +111,31 @@ public class NominalType {
       return this.rawType.wrappedAsNominal;
     }
     ImmutableMap.Builder<String, JSType> builder = ImmutableMap.builder();
+    ImmutableMap<String, JSType> resultMap;
     if (!typeMap.isEmpty()) {
       for (String oldKey : typeMap.keySet()) {
         builder.put(oldKey, typeMap.get(oldKey).substituteGenerics(newTypeMap));
       }
+      resultMap = builder.build();
     } else {
-      for (Map.Entry<String, JSType> newTypeEntry : newTypeMap.entrySet()) {
-        String newKey = newTypeEntry.getKey();
-        if (rawType.typeParameters.contains(newKey)) {
-          builder.put(newKey, newTypeEntry.getValue());
+      for (String newKey : rawType.typeParameters) {
+        if (newTypeMap.containsKey(newKey)) {
+          builder.put(newKey, newTypeMap.get(newKey));
         }
       }
+      resultMap = builder.build();
+      if (resultMap.isEmpty()) {
+        return this;
+      }
+      // This works around a bug in FunctionType, because we can't know where
+      // FunctionType#receiverType is coming from.
+      // If the condition is true, receiverType comes from a method declaration,
+      // and we should not create a new type here.
+      if (resultMap.size() < rawType.typeParameters.size()) {
+        return this;
+      }
     }
-    return new NominalType(builder.build(), this.rawType);
+    return new NominalType(resultMap, this.rawType);
   }
 
   // Methods that delegate to RawNominalType
@@ -163,6 +175,12 @@ public class NominalType {
       return null;
     }
     return rawType.superClass.instantiateGenerics(typeMap);
+  }
+
+  public JSType getPrototype() {
+    Preconditions.checkState(rawType.isFinalized);
+    return rawType.getCtorPropDeclaredType("prototype")
+        .substituteGenerics(typeMap);
   }
 
   public ImmutableSet<NominalType> getInstantiatedInterfaces() {

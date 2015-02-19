@@ -102,6 +102,10 @@ public final class JSTypeExpression implements Serializable {
     return type;
   }
 
+  public TypeI evaluateInEmptyScope(TypeIRegistry registry) {
+    return evaluate(null, (JSTypeRegistry) registry);
+  }
+
   @Override
   public boolean equals(Object other) {
     return other instanceof JSTypeExpression &&
@@ -119,5 +123,10 @@ public final class JSTypeExpression implements Serializable {
    */
   public Node getRoot() {
     return root;
+  }
+
+  @Override
+  public String toString() {
+    return "type: " + root.toString();
   }
 }

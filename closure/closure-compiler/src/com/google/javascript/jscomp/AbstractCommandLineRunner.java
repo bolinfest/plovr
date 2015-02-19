@@ -30,7 +30,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-
 import com.google.javascript.jscomp.CompilerOptions.TweakProcessing;
 import com.google.javascript.jscomp.deps.ClosureBundler;
 import com.google.javascript.jscomp.deps.SourceCodeEscapers;
@@ -240,8 +239,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
         .setDependencySorting(true)
         .setMoocherDropping(false)
         .setEntryPoints(closureEntryPoints);
-    } else if (manageClosureDependencies ||
-        closureEntryPoints.size() > 0) {
+    } else if (manageClosureDependencies || !closureEntryPoints.isEmpty()) {
       return new DependencyOptions()
           .setDependencyPruning(true)
           .setDependencySorting(true)
@@ -348,8 +346,8 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       if (languageMode != null) {
         options.setLanguageIn(languageMode);
       } else {
-        throw new FlagUsageException("Unknown language `" + config.languageIn +
-                                     "' specified.");
+        throw new FlagUsageException("Unknown language `" + config.languageIn
+                                     + "' specified.");
       }
     }
 
@@ -541,12 +539,12 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     Preconditions.checkState(!specs.isEmpty());
     Preconditions.checkState(jsFiles != null);
 
-    final int totalNumJsFiles = jsFiles.size();
-    int nextJsFileIndex = 0;
-
+    List<String> moduleNames = new ArrayList<>(specs.size());
     Map<String, JSModule> modulesByName = Maps.newLinkedHashMap();
+    Map<String, Integer> modulesFileCountMap = Maps.newLinkedHashMap();
+    int numJsFilesExpected = 0, minJsFilesRequired = 0;
+    boolean isFirstModule = true;
     for (String spec : specs) {
-
       // Format is "<name>:<num-js-files>[:[<dep>,...][:]]".
       String[] parts = spec.split(":");
       if (parts.length < 2 || parts.length > 4) {
@@ -558,34 +556,9 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
       String name = parts[0];
       checkModuleName(name);
       if (modulesByName.containsKey(name)) {
-              throw new FlagUsageException("Duplicate module name: " + name);
-          }
+        throw new FlagUsageException("Duplicate module name: " + name);
+      }
       JSModule module = new JSModule(name);
-
-      // Parse module inputs.
-      int numJsFiles = -1;
-      try {
-        numJsFiles = Integer.parseInt(parts[1]);
-      } catch (NumberFormatException ignored) {
-        numJsFiles = -1;
-      }
-
-      // We will allow modules of zero input.
-      if (numJsFiles < 0) {
-        throw new FlagUsageException("Invalid JS file count '" + parts[1]
-            + "' for module: " + name);
-      }
-      if (nextJsFileIndex + numJsFiles > totalNumJsFiles) {
-        throw new FlagUsageException("Not enough JS files specified. Expected "
-            + (nextJsFileIndex + numJsFiles - totalNumJsFiles)
-            + " more in module:" + name);
-      }
-      List<String> moduleJsFiles =
-          jsFiles.subList(nextJsFileIndex, nextJsFileIndex + numJsFiles);
-      for (SourceFile input : createInputs(moduleJsFiles, false)) {
-        module.add(input);
-      }
-      nextJsFileIndex += numJsFiles;
 
       if (parts.length > 2) {
         // Parse module dependencies.
@@ -604,12 +577,81 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
         }
       }
 
+      // Parse module inputs.
+      int numJsFiles = -1;
+      try {
+        numJsFiles = Integer.parseInt(parts[1]);
+      } catch (NumberFormatException ignored) {
+        numJsFiles = -1;
+      }
+
+      // We will allow modules of zero input.
+      if (numJsFiles < 0) {
+        // A size of 'auto' is only allowed on the base module if
+        // and it must also be the first module
+        if (parts.length == 2 && "auto".equals(parts[1])) {
+          if (isFirstModule) {
+            numJsFilesExpected = -1;
+          } else {
+            throw new FlagUsageException("Invalid JS file count '" + parts[1]
+                + "' for module: " + name + ". Only the first module may specify " +
+                "a size of 'auto' and it must have no dependencies.");
+          }
+        } else {
+          throw new FlagUsageException("Invalid JS file count '" + parts[1]
+              + "' for module: " + name);
+        }
+      } else {
+        minJsFilesRequired += numJsFiles;
+      }
+
+
+      if (numJsFilesExpected >= 0) {
+        numJsFilesExpected += numJsFiles;
+      }
+
+      // Add modules in reverse order so that source files are allocated to
+      // modules in reverse order. This allows the first module
+      // (presumably the base module) to have a size of 'auto'
+      moduleNames.add(0, name);
+      modulesFileCountMap.put(name, numJsFiles);
       modulesByName.put(name, module);
     }
 
-    if (nextJsFileIndex < totalNumJsFiles) {
-      throw new FlagUsageException("Too many JS files specified. Expected "
-          + nextJsFileIndex + " but found " + totalNumJsFiles);
+    final int totalNumJsFiles = jsFiles.size();
+
+    if (numJsFilesExpected >= 0 || minJsFilesRequired > totalNumJsFiles) {
+      if (minJsFilesRequired > totalNumJsFiles) {
+        numJsFilesExpected = minJsFilesRequired;
+      }
+
+      if (numJsFilesExpected > totalNumJsFiles) {
+        throw new FlagUsageException("Not enough JS files specified. Expected "
+            + numJsFilesExpected + " but found " + totalNumJsFiles);
+      } else if (numJsFilesExpected < totalNumJsFiles) {
+        throw new FlagUsageException("Too many JS files specified. Expected "
+                + numJsFilesExpected + " but found " + totalNumJsFiles);
+      }
+    }
+
+    int numJsFilesLeft = totalNumJsFiles, moduleIndex = 0;
+    for (String moduleName : moduleNames) {
+      // Parse module inputs.
+      int numJsFiles = modulesFileCountMap.get(moduleName);
+      JSModule module = modulesByName.get(moduleName);
+
+      // Check if the first module specified 'auto' for the number of files
+      if (moduleIndex == moduleNames.size() - 1 && numJsFiles == -1) {
+        numJsFiles = numJsFilesLeft;
+      }
+
+      List<String> moduleJsFiles =
+          jsFiles.subList(numJsFilesLeft - numJsFiles, numJsFilesLeft);
+      for (SourceFile input : createInputs(moduleJsFiles, false)) {
+        module.add(input);
+      }
+      numJsFilesLeft -= numJsFiles;
+      moduleIndex++;
     }
 
     return Lists.newArrayList(modulesByName.values());
@@ -906,10 +948,9 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
 
       // Output the externs if required.
       if (options.externExportsPath != null) {
-        Writer eeOut =
-            openExternExportsStream(options, config.jsOutputFile);
-        eeOut.append(result.externExport);
-        eeOut.close();
+        try (Writer eeOut = openExternExportsStream(options, config.jsOutputFile)) {
+          eeOut.append(result.externExport);
+        }
       }
 
       // Output the variable and property name maps if requested.
@@ -964,20 +1005,15 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
         mapOut = fileNameToOutputWriter2(expandSourceMapPath(options, m));
       }
 
-      Writer writer =
-          fileNameToLegacyOutputWriter(getModuleOutputFileName(m));
-
-      if (options.sourceMapOutputPath != null) {
-        compiler.getSourceMap().reset();
+      try (Writer writer = fileNameToLegacyOutputWriter(getModuleOutputFileName(m))) {
+        if (options.sourceMapOutputPath != null) {
+          compiler.getSourceMap().reset();
+        }
+        writeModuleOutput(writer, m);
+        if (options.sourceMapOutputPath != null) {
+          compiler.getSourceMap().appendTo(mapOut, m.getName());
+        }
       }
-
-      writeModuleOutput(writer, m);
-
-      if (options.sourceMapOutputPath != null) {
-        compiler.getSourceMap().appendTo(mapOut, m.getName());
-      }
-
-      writer.close();
 
       if (shouldGenerateMapPerModule(options) && mapOut != null) {
         mapOut.close();
@@ -1172,8 +1208,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
   private Writer streamToLegacyOutputWriter(OutputStream stream)
       throws IOException {
     if (legacyOutputCharset == null) {
-      return new BufferedWriter(
-          new OutputStreamWriter(stream));
+      return new BufferedWriter(new OutputStreamWriter(stream, UTF_8));
     } else {
       return new BufferedWriter(
           new OutputStreamWriter(stream, legacyOutputCharset));
@@ -1185,8 +1220,7 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
    */
   private Writer streamToOutputWriter2(OutputStream stream) {
     if (outputCharset2 == null) {
-      return new BufferedWriter(
-          new OutputStreamWriter(stream));
+      return new BufferedWriter(new OutputStreamWriter(stream, UTF_8));
     } else {
       return new BufferedWriter(
           new OutputStreamWriter(stream, outputCharset2));
@@ -1206,9 +1240,9 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
     }
 
     String outName = expandSourceMapPath(options, null);
-    Writer out = fileNameToOutputWriter2(outName);
-    compiler.getSourceMap().appendTo(out, associatedName);
-    out.close();
+    try (Writer out = fileNameToOutputWriter2(outName)) {
+      compiler.getSourceMap().appendTo(out, associatedName);
+    }
   }
 
   /**
@@ -1305,13 +1339,11 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
 
     if (functionInformationMapOutputPath != null) {
       if (compiler.getFunctionalInformationMap() != null) {
-        OutputStream file =
-            filenameToOutputStream(functionInformationMapOutputPath);
-        CodedOutputStream outputStream = CodedOutputStream.newInstance(file);
-        compiler.getFunctionalInformationMap().writeTo(outputStream);
-        outputStream.flush();
-        file.flush();
-        file.close();
+        try (final OutputStream file = filenameToOutputStream(functionInformationMapOutputPath)) {
+          CodedOutputStream outputStream = CodedOutputStream.newInstance(file);
+          compiler.getFunctionalInformationMap().writeTo(outputStream);
+          outputStream.flush();
+        }
       }
     }
   }
@@ -1422,30 +1454,28 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
         JSModuleGraph graph = compiler.getDegenerateModuleGraph();
         Iterable<JSModule> modules = graph.getAllModules();
         for (JSModule module : modules) {
-          Writer out = fileNameToOutputWriter2(
-              expandCommandLinePath(output, module));
-          if (isManifest) {
-            printManifestTo(module.getInputs(), out);
-          } else {
-            printBundleTo(module.getInputs(), out);
+          try (Writer out = fileNameToOutputWriter2(expandCommandLinePath(output, module))) {
+            if (isManifest) {
+              printManifestTo(module.getInputs(), out);
+            } else {
+              printBundleTo(module.getInputs(), out);
+            }
           }
-          out.close();
         }
       } else {
         // Generate a single file manifest or bundle.
-        Writer out = fileNameToOutputWriter2(
-            expandCommandLinePath(output, null));
-        if (config.module.isEmpty()) {
-          if (isManifest) {
-            printManifestTo(compiler.getInputsInOrder(), out);
+        try (Writer out = fileNameToOutputWriter2(expandCommandLinePath(output, null))) {
+          if (config.module.isEmpty()) {
+            if (isManifest) {
+              printManifestTo(compiler.getInputsInOrder(), out);
+            } else {
+              printBundleTo(compiler.getInputsInOrder(), out);
+            }
           } else {
-            printBundleTo(compiler.getInputsInOrder(), out);
+            printModuleGraphManifestOrBundleTo(
+                compiler.getDegenerateModuleGraph(), out, isManifest);
           }
-        } else {
-          printModuleGraphManifestOrBundleTo(
-              compiler.getDegenerateModuleGraph(), out, isManifest);
         }
-        out.close();
       }
     }
   }
@@ -1456,9 +1486,9 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
   private void outputModuleGraphJson() throws IOException {
     if (config.outputModuleDependencies != null &&
         config.outputModuleDependencies.length() != 0) {
-      Writer out = fileNameToOutputWriter2(config.outputModuleDependencies);
-      printModuleGraphJsonTo(out);
-      out.close();
+      try (Writer out = fileNameToOutputWriter2(config.outputModuleDependencies)) {
+        printModuleGraphJsonTo(out);
+      }
     }
   }
 
@@ -2115,13 +2145,6 @@ abstract class AbstractCommandLineRunner<A extends Compiler,
 
     CommandLineConfig setNewTypeInference(boolean useNewTypeInference) {
       this.useNewTypeInference = useNewTypeInference;
-      return this;
-    }
-
-    private String renamePrefixNamespace = null;
-    
-    CommandLineConfig setRenamePrefixNamespace(String renamePrefixNamespace) {
-      this.renamePrefixNamespace = renamePrefixNamespace;
       return this;
     }
   }

@@ -24,7 +24,7 @@ import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.jstype.JSType;
+import com.google.javascript.rhino.TypeI;
 
 import java.util.Map;
 import java.util.Set;
@@ -113,7 +113,7 @@ class ReplaceCssNames implements CompilerPass {
 
   private final Set<String> whitelist;
 
-  private final JSType nativeStringType;
+  private final TypeI nativeStringType;
 
   ReplaceCssNames(AbstractCompiler compiler,
       @Nullable Map<String, Integer> cssNames,
@@ -121,8 +121,8 @@ class ReplaceCssNames implements CompilerPass {
     this.compiler = compiler;
     this.cssNames = cssNames;
     this.whitelist = whitelist;
-    this.nativeStringType =  compiler.getTypeRegistry()
-        .getNativeType(STRING_TYPE);
+    this.nativeStringType =
+        compiler.getTypeIRegistry().getNativeType(STRING_TYPE);
   }
 
   @Override
@@ -181,7 +181,7 @@ class ReplaceCssNames implements CompilerPass {
                   IR.string("-" + second.getString())
                       .copyInformationFrom(second))
                   .copyInformationFrom(n);
-              replacement.setJSType(nativeStringType);
+              replacement.setTypeI(nativeStringType);
               parent.replaceChild(n, replacement);
               compiler.reportCodeChange();
             }
@@ -248,12 +248,12 @@ class ReplaceCssNames implements CompilerPass {
         // We still want to collect statistics even if we've already
         // done the full replace. The statistics are collected on a
         // per-part basis.
-        for (int i = 0; i < parts.length; i++) {
-          Integer count = cssNames.get(parts[i]);
+        for (String element : parts) {
+          Integer count = cssNames.get(element);
           if (count == null) {
             count = Integer.valueOf(0);
           }
-          cssNames.put(parts[i], count.intValue() + 1);
+          cssNames.put(element, count.intValue() + 1);
         }
       }
     }

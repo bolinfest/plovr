@@ -658,13 +658,6 @@ public final class JsDocInfoParser {
           }
           return eatUntilEOLIfNotAnnotation();
 
-        case NO_TYPE_CHECK:
-          if (!jsdocBuilder.recordNoTypeCheck()) {
-            parser.addParserWarning("msg.jsdoc.nocheck",
-                stream.getLineno(), stream.getCharno());
-          }
-          return eatUntilEOLIfNotAnnotation();
-
         case NOT_IMPLEMENTED:
           return eatUntilEOLIfNotAnnotation();
 
@@ -2013,10 +2006,10 @@ public final class JsDocInfoParser {
       // We use look-ahead 1 to determine whether it's unknown. Otherwise,
       // we assume it means nullable. There are 8 cases:
       // {?} - right curly
+      // ? - EOF (possible when the parseTypeString method is given a bare type expression)
       // {?=} - equals
       // {function(?, number)} - comma
       // {function(number, ?)} - right paren
-      // {function(number, ...[?])} - right bracket
       // {function(): ?|number} - pipe
       // {Array.<?>} - greater than
       // /** ? */ - EOC (inline types)
@@ -2030,7 +2023,8 @@ public final class JsDocInfoParser {
           || token == JsDocToken.RIGHT_PAREN
           || token == JsDocToken.PIPE
           || token == JsDocToken.RIGHT_ANGLE
-          || token == JsDocToken.EOC) {
+          || token == JsDocToken.EOC
+          || token == JsDocToken.EOF) {
         restoreLookAhead(token);
         return newNode(Token.QMARK);
       }
@@ -2260,25 +2254,8 @@ public final class JsDocInfoParser {
             paramType = newNode(Token.ELLIPSIS);
           } else {
             skipEOLs();
-
-            // Whether the optional square brackets are present.
-            // TODO(tbreisacher): Remove this option after no one is
-            // using the brackets anymore.
-            boolean squareBrackets = match(JsDocToken.LEFT_SQUARE);
-            if (squareBrackets) {
-              next();
-            }
-
-            skipEOLs();
             paramType = wrapNode(Token.ELLIPSIS, parseTypeExpression(next()));
             skipEOLs();
-            if (squareBrackets) {
-              if (match(JsDocToken.RIGHT_SQUARE)) {
-                next();
-              } else {
-                return reportTypeSyntaxWarning("msg.jsdoc.missing.rb");
-              }
-            }
           }
 
           isVarArgs = true;
@@ -2381,6 +2358,11 @@ public final class JsDocInfoParser {
       }
       next();
     }
+    if (union.getChildCount() == 1) {
+      Node firstChild = union.getFirstChild();
+      union.removeChild(firstChild);
+      return firstChild;
+    }
     return union;
   }
 
@@ -2412,6 +2394,8 @@ public final class JsDocInfoParser {
   private Node parseFieldTypeList(JsDocToken token) {
     Node fieldTypeList = newNode(Token.LB);
 
+    Set<String> names = new HashSet<>();
+
     do {
       Node fieldType = parseFieldType(token);
 
@@ -2419,7 +2403,14 @@ public final class JsDocInfoParser {
         return null;
       }
 
-      fieldTypeList.addChildToBack(fieldType);
+      String name = fieldType.isStringKey() ? fieldType.getString()
+          : fieldType.getFirstChild().getString();
+      if (names.add(name)) {
+        fieldTypeList.addChildToBack(fieldType);
+      } else {
+        parser.addTypeWarning(
+            "msg.jsdoc.type.record.duplicate", name, stream.getLineno(), stream.getCharno());
+      }
 
       skipEOLs();
       if (!match(JsDocToken.COMMA)) {
@@ -2646,10 +2637,6 @@ public final class JsDocInfoParser {
    */
   private boolean hasParsedFileOverviewDocInfo() {
     return jsdocBuilder.isPopulatedWithFileOverview();
-  }
-
-  boolean hasParsedJSDocInfo() {
-    return jsdocBuilder.isPopulated();
   }
 
   JSDocInfo retrieveAndResetParsedJSDocInfo() {

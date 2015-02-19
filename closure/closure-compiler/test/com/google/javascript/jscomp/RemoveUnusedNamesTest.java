@@ -56,7 +56,6 @@ public class RemoveUnusedNamesTest extends CompilerTestCase {
       public void process(Node externs, Node root) {
         new TypeCheck(compiler,
             new SemanticReverseAbstractInterpreter(
-                compiler.getCodingConvention(),
                 compiler.getTypeRegistry()),
             compiler.getTypeRegistry(),
             CheckLevel.ERROR).processForTesting(externs, root);
@@ -131,7 +130,7 @@ public class RemoveUnusedNamesTest extends CompilerTestCase {
   public void testStatement() {
     test("/**\n" +
          " * @fileoverview\n" +
-         " * @notypecheck\n" +
+         " * @suppress {checkTypes} \n" +
          " */ \n" +
          "/** @constructor */" +
         "function e(){}" +

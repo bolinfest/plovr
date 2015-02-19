@@ -807,8 +807,8 @@ class TypeInference
       String memberName = NodeUtil.getObjectLitKeyName(name);
       if (memberName != null) {
         JSType rawValueType =  name.getFirstChild().getJSType();
-        JSType valueType = NodeUtil.getObjectLitKeyTypeFromValueType(
-            name, rawValueType);
+        JSType valueType =
+            TypeCheck.getObjectLitKeyTypeFromValueType(name, rawValueType);
         if (valueType == null) {
           valueType = unknownType;
         }
@@ -939,8 +939,8 @@ class TypeInference
     if (assertedNode == null) {
       return scope;
     }
-    JSType assertedType = assertionFunctionSpec.getAssertedOldType(
-        callNode, registry);
+    JSType assertedType =
+        (JSType) assertionFunctionSpec.getAssertedType(callNode, registry);
     String assertedNodeName = assertedNode.getQualifiedName();
 
     JSType narrowed;
@@ -1021,6 +1021,7 @@ class TypeInference
   /**
    * When "bind" is called on a function, we infer the type of the returned
    * "bound" function by looking at the number of parameters in the call site.
+   * We also infer the "this" type of the target, if it's a function expression.
    */
   private void updateBind(Node n) {
     CodingConvention.Bind bind =
@@ -1029,10 +1030,23 @@ class TypeInference
       return;
     }
 
-    FunctionType callTargetFn = getJSType(bind.target)
+    Node target = bind.target;
+    FunctionType callTargetFn = getJSType(target)
         .restrictByNotNullOrUndefined().toMaybeFunctionType();
     if (callTargetFn == null) {
       return;
+    }
+
+    if (bind.thisValue != null && target.isFunction()) {
+      JSType thisType = getJSType(bind.thisValue);
+      if (thisType.toObjectType() != null && !thisType.isUnknownType()
+          && callTargetFn.getTypeOfThis().isUnknownType()) {
+        callTargetFn = new FunctionBuilder(registry)
+            .copyFromOtherFunction(callTargetFn)
+            .withTypeOfThis(thisType.toObjectType())
+            .build();
+        target.setJSType(callTargetFn);
+      }
     }
 
     n.setJSType(
@@ -1184,23 +1198,16 @@ class TypeInference
       }
     } else if (paramType.isRecordType() && !paramType.isNominalType()) {
       // @param {{foo:T}}
-      if (!seenTypes.contains(paramType)) {
-        seenTypes.add(paramType);
+      if (seenTypes.add(paramType)) {
         ObjectType paramRecordType = paramType.toObjectType();
-        ObjectType argObjectType = argType.restrictByNotNullOrUndefined()
-            .toObjectType();
-        if (argObjectType != null
-            && !argObjectType.isUnknownType()
+        ObjectType argObjectType = argType.restrictByNotNullOrUndefined().toObjectType();
+        if (argObjectType != null && !argObjectType.isUnknownType()
             && !argObjectType.isEmptyType()) {
           Set<String> names = paramRecordType.getPropertyNames();
           for (String name : names) {
-            if (paramRecordType.hasOwnProperty(name)
-                && argObjectType.hasProperty(name)) {
-              maybeResolveTemplatedType(
-                  paramRecordType.getPropertyType(name),
-                  argObjectType.getPropertyType(name),
-                  resolvedTypes,
-                  seenTypes);
+            if (paramRecordType.hasOwnProperty(name) && argObjectType.hasProperty(name)) {
+              maybeResolveTemplatedType(paramRecordType.getPropertyType(name),
+                  argObjectType.getPropertyType(name), resolvedTypes, seenTypes);
             }
           }
         }
@@ -1301,7 +1308,7 @@ class TypeInference
    */
   private Map<String, JSType> buildTypeVariables(
       Map<TemplateType, JSType> inferredTypes) {
-    Map<String, JSType> typeVars = new HashMap<String, JSType>();
+    Map<String, JSType> typeVars = new HashMap<>();
     for (Entry<TemplateType, JSType> e : inferredTypes.entrySet()) {
       // Only add the template type that do not have a type transformation
       if (!e.getKey().isTypeTransformation()) {
@@ -1329,7 +1336,7 @@ class TypeInference
         if (ttlObj == null) {
           ttlObj = new TypeTransformation(compiler, syntacticScope);
           typeVars = buildTypeVariables(inferredTypes);
-          result = new HashMap<TemplateType, JSType>();
+          result = new HashMap<>();
         }
         // Evaluate the type transformation expression using the current
         // known types for the template type variables

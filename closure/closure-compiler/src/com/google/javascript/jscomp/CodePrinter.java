@@ -19,6 +19,7 @@ package com.google.javascript.jscomp;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.debugging.sourcemap.FilePosition;
+import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
@@ -332,14 +333,12 @@ public final class CodePrinter {
 
     @Override
     void appendOp(String op, boolean binOp) {
-      if (binOp) {
-        if (getLastChar() != ' ' && op.charAt(0) != ',') {
-          append(" ");
-        }
-        append(op);
+      if (getLastChar() != ' ' && binOp && op.charAt(0) != ',') {
         append(" ");
-      } else {
-        append(op);
+      }
+      append(op);
+      if (binOp) {
+        append(" ");
       }
     }
 
@@ -587,7 +586,7 @@ public final class CodePrinter {
      * @param prettyPrint If true, pretty printing will be used.
      */
     public Builder setPrettyPrint(boolean prettyPrint) {
-      options.prettyPrint = prettyPrint;
+      options.setPrettyPrint(prettyPrint);
       return this;
     }
 
@@ -596,7 +595,7 @@ public final class CodePrinter {
      * @param lineBreak If true, line breaking is done automatically.
      */
     public Builder setLineBreak(boolean lineBreak) {
-      options.lineBreak = lineBreak;
+      options.setLineBreak(lineBreak);
       return this;
     }
 
@@ -637,21 +636,25 @@ public final class CodePrinter {
             "Cannot build without root node being specified");
       }
 
-      Format outputFormat = outputTypes
-          ? Format.TYPED
-          : options.prettyPrint
-              ? Format.PRETTY
-              : Format.COMPACT;
-
-      return toSource(root, outputFormat, options, registry,
-          sourceMap, tagAsStrict);
+      return toSource(root, Format.fromOptions(options, outputTypes), options, registry,
+              sourceMap, tagAsStrict);
     }
   }
 
   enum Format {
     COMPACT,
     PRETTY,
-    TYPED
+    TYPED;
+
+    static Format fromOptions(CompilerOptions options, boolean outputTypes) {
+      if (options.getLanguageOut() == LanguageMode.ECMASCRIPT6_TYPED) {
+        return Format.PRETTY;
+      }
+      if (outputTypes) {
+        return Format.TYPED;
+      }
+      return options.prettyPrint ? Format.PRETTY : Format.COMPACT;
+    }
   }
 
   /**

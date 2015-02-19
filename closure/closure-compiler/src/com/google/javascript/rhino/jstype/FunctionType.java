@@ -44,12 +44,13 @@ import static com.google.javascript.rhino.jstype.JSTypeNative.U2U_CONSTRUCTOR_TY
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.javascript.rhino.ErrorReporter;
+import com.google.javascript.rhino.FunctionTypeI;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
+import com.google.javascript.rhino.TypeI;
 
 import java.util.Collections;
 import java.util.List;
@@ -63,7 +64,7 @@ import java.util.Set;
  * actual NAME node containing the parsed argument list (annotated with
  * JSDOC_TYPE_PROP's for the compile-time type of each argument.
  */
-public class FunctionType extends PrototypeObjectType {
+public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
   private static final long serialVersionUID = 1L;
 
   private enum Kind {
@@ -521,14 +522,18 @@ public class FunctionType extends PrototypeObjectType {
 
   /** Returns interfaces implemented directly by a class or its superclass. */
   public Iterable<ObjectType> getImplementedInterfaces() {
-    FunctionType superCtor = isConstructor() ?
-        getSuperClassConstructor() : null;
+    FunctionType superCtor =
+        isConstructor() ? getSuperClassConstructor() : null;
     if (superCtor == null) {
       return implementedInterfaces;
-    } else {
-      return Iterables.concat(
-          implementedInterfaces, superCtor.getImplementedInterfaces());
     }
+    ImmutableList.Builder<ObjectType> builder = ImmutableList.builder();
+    builder.addAll(implementedInterfaces);
+    while (superCtor != null) {
+      builder.addAll(superCtor.implementedInterfaces);
+      superCtor = superCtor.getSuperClassConstructor();
+    }
+    return builder.build();
   }
 
   /** Returns interfaces directly implemented by the class. */
@@ -1167,6 +1172,7 @@ public class FunctionType extends PrototypeObjectType {
    * for constructor functions, and may be null. This allows a downward
    * traversal of the subtype graph.
    */
+  @Override
   public List<FunctionType> getSubTypes() {
     return subTypes;
   }
@@ -1286,7 +1292,7 @@ public class FunctionType extends PrototypeObjectType {
   }
 
   /** Create a new constructor with the parameters and return type stripped. */
-  public FunctionType cloneWithoutArrowType() {
+  public FunctionType forgetParameterAndReturnTypes() {
     FunctionType result = new FunctionType(
         registry, getReferenceName(), source,
         registry.createArrowType(null, null), getInstanceType(),
@@ -1300,5 +1306,27 @@ public class FunctionType extends PrototypeObjectType {
     return getTemplateTypeMap().numUnfilledTemplateKeys() > 0
         || typeOfThis.hasAnyTemplateTypes()
         || call.hasAnyTemplateTypes();
+  }
+
+  @Override
+  public TypeI convertMethodToFunction() {
+    List<JSType> paramTypes = Lists.newArrayList();
+    paramTypes.add(getTypeOfThis());
+    for (Node param : getParameters()) {
+      paramTypes.add(param.getJSType());
+    }
+    return registry.createFunctionType(
+        registry.getNativeObjectType(JSTypeNative.UNKNOWN_TYPE),
+        getReturnType(),
+        paramTypes);
+
+  }
+
+  @Override
+  public boolean hasProperties() {
+    if (prototypeSlot != null) {
+      return true;
+    }
+    return !super.getOwnPropertyNames().isEmpty();
   }
 }

@@ -232,10 +232,7 @@ class JsDocTokenStream {
 
   final String getString() { return string; }
 
-  final boolean eof() { return hitEOF; }
-
   private String getStringFromBuffer() {
-    tokenEnd = cursor;
     String s = new String(stringBuffer, 0, stringBufferTop);
     return s.intern();
   }
@@ -261,7 +258,6 @@ class JsDocTokenStream {
   private boolean matchChar(int test) {
     int c = getCharIgnoreLineEnd();
     if (c == test) {
-      tokenEnd = cursor;
       return true;
     } else {
       ungetCharIgnoreLineEnd(c);
@@ -319,7 +315,7 @@ class JsDocTokenStream {
   }
 
   private static boolean isJSFormatChar(int c) {
-    return c > 127 && Character.getType((char) c) == Character.FORMAT;
+    return c > 127 && Character.getType(c) == Character.FORMAT;
   }
 
   /**
@@ -349,7 +345,6 @@ class JsDocTokenStream {
     for (;;) {
       int c;
       if (sourceCursor == sourceEnd) {
-        hitEOF = true;
         if (charno == -1) {
           charno = getOffset();
         }
@@ -405,7 +400,6 @@ class JsDocTokenStream {
     for (;;) {
       int c;
       if (sourceCursor == sourceEnd) {
-        hitEOF = true;
         if (charno == -1) {
           charno = getOffset();
         }
@@ -472,8 +466,6 @@ class JsDocTokenStream {
   private final int[] ungetBuffer = new int[3];
   private int ungetCursor;
 
-  private boolean hitEOF = false;
-
   private int lineStart = 0;
   private int lineEndChar = -1;
   int lineno;
@@ -492,8 +484,4 @@ class JsDocTokenStream {
   // source stream, tracking exactly how far scanning has progressed.
   // Its value is the index of the next character to be scanned.
   int cursor;
-
-  // Record start and end positions of last scanned token.
-  int tokenBeg;
-  int tokenEnd;
 }

@@ -65,6 +65,8 @@ public class ParseTree {
     return (ComputedPropertyGetterTree) this; }
   public ComputedPropertyMethodTree asComputedPropertyMethod() {
     return (ComputedPropertyMethodTree) this; }
+  public ComputedPropertyMemberVariableTree asComputedPropertyMemberVariable() {
+    return (ComputedPropertyMemberVariableTree) this; }
   public ComputedPropertySetterTree asComputedPropertySetter() {
     return (ComputedPropertySetterTree) this; }
   public ConditionalExpressionTree asConditionalExpression() {
@@ -95,6 +97,7 @@ public class ParseTree {
   public MemberExpressionTree asMemberExpression() { return (MemberExpressionTree) this; }
   public MemberLookupExpressionTree asMemberLookupExpression() {
     return (MemberLookupExpressionTree) this; }
+  public MemberVariableTree asMemberVariable() { return (MemberVariableTree) this; }
   public MissingPrimaryExpressionTree asMissingPrimaryExpression() {
     return (MissingPrimaryExpressionTree) this; }
   public ModuleImportTree asModuleImport() { return (ModuleImportTree) this; }
@@ -123,6 +126,10 @@ public class ParseTree {
   public ThisExpressionTree asThisExpression() { return (ThisExpressionTree) this; }
   public ThrowStatementTree asThrowStatement() { return (ThrowStatementTree) this; }
   public TryStatementTree asTryStatement() { return (TryStatementTree) this; }
+  public TypeNameTree asTypeName() { return (TypeNameTree) this; }
+  public TypedParameterTree asTypedParameter() { return (TypedParameterTree) this; }
+  public ParameterizedTypeTree asParameterizedType() { return (ParameterizedTypeTree) this; }
+  public ArrayTypeTree asArrayType() { return (ArrayTypeTree) this; }
   public UnaryExpressionTree asUnaryExpression() { return (UnaryExpressionTree) this; }
   public VariableDeclarationListTree asVariableDeclarationList() {
     return (VariableDeclarationListTree) this; }
@@ -133,10 +140,6 @@ public class ParseTree {
   public WithStatementTree asWithStatement() { return (WithStatementTree) this; }
   public YieldExpressionTree asYieldStatement() { return (YieldExpressionTree) this; }
 
-  public final boolean isNull() {
-    return this.type == ParseTreeType.NULL;
-  }
-
   public boolean isPattern() {
     ParseTree parseTree = this;
     while (parseTree.type == ParseTreeType.PAREN_EXPRESSION) {
@@ -146,31 +149,6 @@ public class ParseTree {
     switch (parseTree.type) {
       case ARRAY_PATTERN:
       case OBJECT_PATTERN:
-        return true;
-      default:
-        return false;
-    }
-  }
-
-  public boolean isLeftHandSideExpression() {
-    ParseTree parseTree = this;
-    while (parseTree.type == ParseTreeType.PAREN_EXPRESSION) {
-      parseTree = parseTree.asParenExpression().expression;
-    }
-
-    switch (parseTree.type) {
-      case THIS_EXPRESSION:
-      case SUPER_EXPRESSION:
-      case IDENTIFIER_EXPRESSION:
-      case LITERAL_EXPRESSION:
-      case ARRAY_LITERAL_EXPRESSION:
-      case OBJECT_LITERAL_EXPRESSION:
-      case NEW_EXPRESSION:
-      case MEMBER_EXPRESSION:
-      case MEMBER_LOOKUP_EXPRESSION:
-      case CALL_EXPRESSION:
-      case FUNCTION_DECLARATION:
-      case TEMPLATE_LITERAL_EXPRESSION:
         return true;
       default:
         return false;
@@ -223,66 +201,12 @@ public class ParseTree {
     }
   }
 
-  // ECMA 262 11.2:
-  // MemberExpression :
-  //    PrimaryExpression
-  //    FunctionExpression
-  //    MemberExpression [ Expression ]
-  //    MemberExpression . IdentifierName
-  //    new MemberExpression Arguments
-  public boolean isMemberExpression() {
-    switch (this.type) {
-      // PrimaryExpression
-      case THIS_EXPRESSION:
-      case SUPER_EXPRESSION:
-      case IDENTIFIER_EXPRESSION:
-      case LITERAL_EXPRESSION:
-      case ARRAY_LITERAL_EXPRESSION:
-      case OBJECT_LITERAL_EXPRESSION:
-      case PAREN_EXPRESSION:
-      case TEMPLATE_LITERAL_EXPRESSION:
-      // FunctionExpression
-      case FUNCTION_DECLARATION:
-      // MemberExpression [ Expression ]
-      case MEMBER_LOOKUP_EXPRESSION:
-      // MemberExpression . IdentifierName
-      case MEMBER_EXPRESSION:
-      // CallExpression:
-      //   CallExpression . IdentifierName
-      case CALL_EXPRESSION:
-        return true;
-
-      // new MemberExpression Arguments
-      case NEW_EXPRESSION:
-        return asNewExpression().arguments != null;
-    }
-
-    return false;
-  }
-
-  public boolean isExpression() {
-    return isAssignmentExpression()
-        || this.type == ParseTreeType.COMMA_EXPRESSION;
-  }
-
-  public boolean isAssignmentOrSpread() {
-    return isAssignmentExpression()
-        || this.type == ParseTreeType.SPREAD_EXPRESSION;
-  }
-
   public boolean isRestParameter() {
     return this.type == ParseTreeType.REST_PARAMETER;
   }
 
   public boolean isAssignmentRestElement() {
     return this.type == ParseTreeType.ASSIGNMENT_REST_ELEMENT;
-  }
-
-  /**
-   * In V8 any source element may appear where statement appears in the ECMA grammar.
-   */
-  public boolean isStatement() {
-    return isSourceElement();
   }
 
   /**

@@ -199,7 +199,7 @@ abstract class CodeConsumer {
       // is valid and should print like
       // / // / /
       append(" ");
-    } else if (c == '"' && isWordChar(getLastChar())) {
+    } else if ((c == '"' || c == '\'') && isWordChar(getLastChar())) {
       maybeInsertSpace();
     }
 
@@ -262,7 +262,7 @@ abstract class CodeConsumer {
         }
       }
       if (exp > 2) {
-        addConstant(Long.toString(mantissa) + "E" + Integer.toString(exp));
+        addConstant(mantissa + "E" + exp);
       } else {
         long valueAbs = Math.abs(value);
         if (valueAbs > 1000000000000L && // Values <1E12 are shorter in decimal

@@ -162,7 +162,7 @@ public class Token {
 
         CLASS          = 158, // classes
         CLASS_MEMBERS  = 159, // class member container
-        MEMBER_DEF     = 160,
+        MEMBER_FUNCTION_DEF     = 160,
         SUPER          = 161,
 
         LET            = 162, // block scoped vars
@@ -190,6 +190,27 @@ public class Token {
 
         DEFAULT_VALUE   = 178, // Formal parameter or destructuring element
                                // with a default value
+
+        // ECMAScript 6 Typed AST Nodes.
+
+        MEMBER_VARIABLE_DEF     = 179,
+
+        // Used by type declaration ASTs
+        STRING_TYPE        = 200,
+        BOOLEAN_TYPE       = 201,
+        NUMBER_TYPE        = 202,
+        FUNCTION_TYPE      = 203,
+        PARAMETERIZED_TYPE = 204,
+        UNION_TYPE         = 205,
+        ANY_TYPE           = 206,
+        NULLABLE_TYPE      = 208,
+        VOID_TYPE          = 209,
+        REST_PARAMETER_TYPE = 210,
+        NAMED_TYPE         = 211,
+        OPTIONAL_PARAMETER = 212,
+        RECORD_TYPE        = 213,
+        UNDEFINED_TYPE     = 214,
+        ARRAY_TYPE         = 215,
 
         // JSDoc-only tokens
         ANNOTATION     = 300,
@@ -314,12 +335,27 @@ public class Token {
           case LB:              return "LB";
           case LC:              return "LC";
           case COLON:           return "COLON";
+          case STRING_TYPE:     return "STRING_TYPE";
+          case ANY_TYPE:        return "ANY_TYPE";
+          case NULLABLE_TYPE:   return "NULLABLE_TYPE";
+          case VOID_TYPE:       return "VOID_TYPE";
+          case BOOLEAN_TYPE:       return "BOOLEAN_TYPE";
+          case NUMBER_TYPE:        return "NUMBER_TYPE";
+          case PARAMETERIZED_TYPE: return "PARAMETERIZED_TYPE";
+          case ARRAY_TYPE:         return "ARRAY_TYPE";
+          case UNION_TYPE:         return "UNION_TYPE";
+          case FUNCTION_TYPE:      return "FUNCTION_TYPE";
+          case REST_PARAMETER_TYPE: return "REST_PARAMETER_TYPE";
+          case NAMED_TYPE:         return "NAMED_TYPE";
+          case OPTIONAL_PARAMETER: return "OPTIONAL_PARAMETER";
+          case RECORD_TYPE:        return "RECORD_TYPE";
+          case UNDEFINED_TYPE:     return "UNDEFINED_TYPE";
 
           case ARRAY_PATTERN:   return "ARRAY_PATTERN";
           case OBJECT_PATTERN:  return "OBJECT_PATTERN";
           case CLASS:           return "CLASS";
           case CLASS_MEMBERS:   return "CLASS_MEMBERS";
-          case MEMBER_DEF:      return "MEMBER_DEF";
+          case MEMBER_FUNCTION_DEF:    return "MEMBER_FUNCTION_DEF";
           case SUPER:           return "SUPER";
           case LET:             return "LET";
           case FOR_OF:          return "FOR_OF";
@@ -336,6 +372,7 @@ public class Token {
           case SPREAD:          return "SPREAD";
           case COMPUTED_PROP:   return "COMPUTED_PROP";
           case DEFAULT_VALUE:   return "DEFAULT_VALUE";
+          case MEMBER_VARIABLE_DEF:    return "MEMBER_VARIABLE_DEF";
 
           case PLACEHOLDER1:        return "PLACEHOLDER1";
           case PLACEHOLDER2:        return "PLACEHOLDER2";
@@ -398,7 +435,7 @@ public class Token {
       case TEMPLATELIT_SUB: return 1;
       case TRY:             return -1;
       case CLASS:           return 3;
-      case MEMBER_DEF:      return 1;
+      case MEMBER_FUNCTION_DEF:      return 1;
       case PARAM_LIST:      return -1;
       case DEFAULT_VALUE:   return 2;
       case COMMA:           return 2;

@@ -16,6 +16,8 @@
 
 package com.google.javascript.jscomp;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
@@ -343,37 +345,29 @@ public class NormalizeTest extends CompilerTestCase {
   }
 
   public void testIssue166a() {
-    test("try { throw 1 } catch(e) { /** @suppress {duplicate} */ var e=2 }",
-         "try { throw 1 } catch(e) { var e=2 }",
+    testError("try { throw 1 } catch(e) { /** @suppress {duplicate} */ var e=2 }",
          Normalize.CATCH_BLOCK_VAR_ERROR);
   }
 
   public void testIssue166b() {
-    test("function a() {" +
+    testError("function a() {" +
          "try { throw 1 } catch(e) { /** @suppress {duplicate} */ var e=2 }" +
          "};",
-         "function a() {" +
-         "try { throw 1 } catch(e) { var e=2 }" +
-         "}",
          Normalize.CATCH_BLOCK_VAR_ERROR);
   }
 
   public void testIssue166c() {
-    test("var e = 0; try { throw 1 } catch(e) {" +
-             "/** @suppress {duplicate} */ var e=2 }",
-         "var e = 0; try { throw 1 } catch(e) { var e=2 }",
-         Normalize.CATCH_BLOCK_VAR_ERROR);
+    testError("var e = 0; try { throw 1 } catch(e) {" +
+        "/** @suppress {duplicate} */ var e=2 }",
+        Normalize.CATCH_BLOCK_VAR_ERROR);
   }
 
   public void testIssue166d() {
-    test("function a() {" +
-         "var e = 0; try { throw 1 } catch(e) {" +
-             "/** @suppress {duplicate} */ var e=2 }" +
-         "};",
-         "function a() {" +
-         "var e = 0; try { throw 1 } catch(e) { var e=2 }" +
-         "}",
-         Normalize.CATCH_BLOCK_VAR_ERROR);
+    testError("function a() {" +
+        "var e = 0; try { throw 1 } catch(e) {" +
+            "/** @suppress {duplicate} */ var e=2 }" +
+        "};",
+        Normalize.CATCH_BLOCK_VAR_ERROR);
   }
 
   public void testIssue166e() {
@@ -413,7 +407,7 @@ public class NormalizeTest extends CompilerTestCase {
     Node n = getLastCompiler().getRoot();
 
     Set<Node> constantNodes = findNodesWithProperty(n, Node.IS_CONSTANT_NAME);
-    assertEquals(2, constantNodes.size());
+    assertThat(constantNodes).hasSize(2);
     for (Node hasProp : constantNodes) {
       assertEquals("CONST", hasProp.getString());
     }
@@ -424,7 +418,7 @@ public class NormalizeTest extends CompilerTestCase {
     Node n = getLastCompiler().getRoot();
 
     Set<Node> constantNodes = findNodesWithProperty(n, Node.IS_CONSTANT_NAME);
-    assertEquals(2, constantNodes.size());
+    assertThat(constantNodes).hasSize(2);
     for (Node hasProp : constantNodes) {
       assertEquals("CONST", hasProp.getString());
     }
@@ -435,7 +429,7 @@ public class NormalizeTest extends CompilerTestCase {
     Node n = getLastCompiler().getRoot();
 
     Set<Node> constantNodes = findNodesWithProperty(n, Node.IS_CONSTANT_NAME);
-    assertEquals(2, constantNodes.size());
+    assertThat(constantNodes).hasSize(2);
     for (Node hasProp : constantNodes) {
       assertEquals("CONST", hasProp.getString());
     }
@@ -447,7 +441,7 @@ public class NormalizeTest extends CompilerTestCase {
     Node n = getLastCompiler().getRoot();
 
     Set<Node> constantNodes = findNodesWithProperty(n, Node.IS_CONSTANT_NAME);
-    assertEquals(2, constantNodes.size());
+    assertThat(constantNodes).hasSize(2);
     for (Node hasProp : constantNodes) {
       assertEquals("CONST", hasProp.getString());
     }
@@ -460,7 +454,7 @@ public class NormalizeTest extends CompilerTestCase {
     Node n = getLastCompiler().getRoot();
 
     Set<Node> constantNodes = findNodesWithProperty(n, Node.IS_CONSTANT_NAME);
-    assertEquals(2, constantNodes.size());
+    assertThat(constantNodes).hasSize(2);
     for (Node hasProp : constantNodes) {
       assertEquals("CONST", hasProp.getString());
     }
