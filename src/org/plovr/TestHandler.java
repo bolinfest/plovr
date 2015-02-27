@@ -47,7 +47,7 @@ public class TestHandler extends AbstractGetHandler {
    * @return the relative URL to load base.js for the specified {@link Config}
    */
   private static String getBaseJsUrl(Config config) {
-    return "/input/" + config.getId() +
+    return "/input/" + config.getId() + "/" +
         config.getManifest().getBaseJs().getName();
   }
 

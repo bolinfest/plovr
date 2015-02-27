@@ -22,7 +22,7 @@ public class DepsJsInputTest {
     DummyJsInput baseJs = new DummyJsInput("/closure/goog/base.js", "",
         ImmutableList.<String>of(), ImmutableList.<String>of());
     DepsJsInput depsJs = new DepsJsInput(baseJs, "source");
-    assertEquals("/closure/goog/deps.js", depsJs.getName());
+    assertEquals("closure/goog/deps.js", depsJs.getName());
     assertEquals("source", depsJs.getCode());
   }
 }

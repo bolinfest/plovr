@@ -74,32 +74,32 @@ public class ManifestTest {
     List<SourceFile> inputs = compilerArguments.getInputs();
 
     List<String> expectedNames = ImmutableList.of(
-        "/closure/goog/base.js",
-        "/closure/goog/deps.js",
-        "/closure/goog/debug/error.js",
-        "/closure/goog/dom/nodetype.js",
-        "/closure/goog/string/string.js",
-        "/closure/goog/asserts/asserts.js",
-        "/closure/goog/debug/entrypointregistry.js",
-        "/closure/goog/array/array.js",
-        "/closure/goog/labs/useragent/util.js",
-        "/closure/goog/object/object.js",
-        "/closure/goog/labs/useragent/browser.js",
-        "/closure/goog/labs/useragent/engine.js",
-        "/closure/goog/labs/useragent/platform.js",
-        "/closure/goog/useragent/useragent.js",
-        "/closure/goog/events/browserfeature.js",
-        "/closure/goog/disposable/idisposable.js",
-        "/closure/goog/disposable/disposable.js",
-        "/closure/goog/events/eventid.js",
-        "/closure/goog/events/event.js",
-        "/closure/goog/events/eventtype.js",
-        "/closure/goog/reflect/reflect.js",
-        "/closure/goog/events/browserevent.js",
-        "/closure/goog/events/listenable.js",
-        "/closure/goog/events/listener.js",
-        "/closure/goog/events/listenermap.js",
-        "/closure/goog/events/events.js",
+        "closure/goog/base.js",
+        "closure/goog/deps.js",
+        "closure/goog/debug/error.js",
+        "closure/goog/dom/nodetype.js",
+        "closure/goog/string/string.js",
+        "closure/goog/asserts/asserts.js",
+        "closure/goog/debug/entrypointregistry.js",
+        "closure/goog/array/array.js",
+        "closure/goog/labs/useragent/util.js",
+        "closure/goog/object/object.js",
+        "closure/goog/labs/useragent/browser.js",
+        "closure/goog/labs/useragent/engine.js",
+        "closure/goog/labs/useragent/platform.js",
+        "closure/goog/useragent/useragent.js",
+        "closure/goog/events/browserfeature.js",
+        "closure/goog/disposable/idisposable.js",
+        "closure/goog/disposable/disposable.js",
+        "closure/goog/events/eventid.js",
+        "closure/goog/events/event.js",
+        "closure/goog/events/eventtype.js",
+        "closure/goog/reflect/reflect.js",
+        "closure/goog/events/browserevent.js",
+        "closure/goog/events/listenable.js",
+        "closure/goog/events/listener.js",
+        "closure/goog/events/listenermap.js",
+        "closure/goog/events/events.js",
         "test/org/plovr/example.js"
     );
     assertEquals(expectedNames, Lists.transform(inputs, JS_SOURCE_FILE_TO_NAME));
@@ -155,8 +155,8 @@ public class ManifestTest {
     order = manifest.getInputsInCompilationOrder();
 
     List<String> expectedNames = ImmutableList.of(
-        "/closure/goog/base.js",
-        "/closure/goog/deps.js",
+        "closure/goog/base.js",
+        "closure/goog/deps.js",
         "c",
         "b",
         "a");
@@ -166,10 +166,10 @@ public class ManifestTest {
   @Test
   public void testGetAllDependencies() {
     testGetAllDependenciesContainsBaseJs(null /* closureLibraryDirectory */,
-        "/closure/goog/base.js");
+        "closure/goog/base.js");
 
     testGetAllDependenciesContainsBaseJs(new File("testdata/manifest/"),
-        "/closure/goog/base.js");
+        "closure/goog/base.js");
   }
 
   private void testGetAllDependenciesContainsBaseJs(

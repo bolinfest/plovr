@@ -1,6 +1,10 @@
 package org.plovr;
 
 import java.io.File;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.google.common.base.Preconditions;
 
@@ -27,4 +31,18 @@ public final class FileUtil {
 
     return false;
   }
+
+  public static String nomalizeName(String name) {
+    try {
+      name = new URI(name).normalize().getPath();
+      if (name.startsWith("/")) {
+        name = name.substring(1);
+      }
+      name = name.replaceAll(Pattern.quote("../"), Matcher.quoteReplacement("$$/"));
+      return name;
+    } catch (URISyntaxException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
 }

@@ -39,8 +39,8 @@ import com.google.javascript.jscomp.SourceFile;
  */
 public final class Manifest {
 
-  static final String BASE_JS_INPUT_NAME = "/closure/goog/base.js";
-  static final String DEPS_JS_INPUT_NAME = "/closure/goog/deps.js";
+  static final String BASE_JS_INPUT_NAME = "closure/goog/base.js";
+  static final String DEPS_JS_INPUT_NAME = "closure/goog/deps.js";
 
   private static final Logger logger = Logger.getLogger(Manifest.class.getName());
 
@@ -422,19 +422,11 @@ public final class Manifest {
       if (fileName.endsWith(".js") ||
           (!externsOnly && fileName.endsWith(".soy")) ||
           (!externsOnly && fileName.endsWith(".coffee"))) {
-        // Using "." as the value for "paths" in the config file results in ugly
-        // names for JsInputs because of the way the relative path is resolved,
-        // so strip the leading "./" from the JsInput name in this case.
         String name;
         if (file.equals(rootOfSearch.getFile())) {
           name = rootOfSearch.getName();
         } else {
-          name = getRelativePath.apply(file);
-          final String uglyPrefix = "./";
-          if (name.startsWith(uglyPrefix)) {
-            name = name.substring(uglyPrefix.length());
-          }
-          name = rootOfSearch.getName() + name;
+          name = rootOfSearch.getName() + getRelativePath.apply(file);
         }
         JsInput input = LocalFileJsInput.createForFileWithName(file, name,
             soyFileOptions);

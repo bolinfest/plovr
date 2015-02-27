@@ -33,7 +33,7 @@ public abstract class AbstractJsInput implements JsInput {
   protected List<String> requires;
 
   AbstractJsInput(String name) {
-    this.name = name;
+    this.name = FileUtil.nomalizeName(name);
   }
 
   @Override

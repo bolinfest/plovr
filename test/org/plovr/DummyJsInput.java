@@ -27,7 +27,7 @@ public class DummyJsInput implements JsInput {
 
   public DummyJsInput(String name, String code, List<String> provides,
       List<String> requires, boolean soyFile, String templateCode) {
-    this.name = name;
+    this.name = FileUtil.nomalizeName(name);
     this.code = code;
     if (provides != null) {
       this.provides = ImmutableList.copyOf(provides);

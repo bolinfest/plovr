@@ -114,7 +114,7 @@ public class ModuleConfigTest {
     assertEquals("Incorrect partition size", 5, partition.size());
     assertCorrectInputs(
         "a",
-        ImmutableList.of("/closure/goog/base.js", "/closure/goog/deps.js", "a"),
+        ImmutableList.of("closure/goog/base.js", "closure/goog/deps.js", "a"),
         partition.get("a"));
     assertCorrectInputs("b", ImmutableList.of("b"), partition.get("b"));
     assertCorrectInputs("c", ImmutableList.of("c"), partition.get("c"));
@@ -201,7 +201,7 @@ public class ModuleConfigTest {
     assertEquals("Incorrect partition size", 7, partition.size());
     assertCorrectInputs(
         "a",
-        ImmutableList.of("/closure/goog/base.js", "/closure/goog/deps.js", "a"),
+        ImmutableList.of("closure/goog/base.js", "closure/goog/deps.js", "a"),
         partition.get("a"));
     assertCorrectInputs("b", ImmutableList.of("b", "dep2"), partition.get("b"));
     assertCorrectInputs("c", ImmutableList.of("c"), partition.get("c"));
@@ -277,7 +277,7 @@ public class ModuleConfigTest {
     assertEquals("Incorrect partition size", 5, partition.size());
     assertCorrectInputs(
         "a",
-        ImmutableList.of("/closure/goog/base.js", "/closure/goog/deps.js", "a"),
+        ImmutableList.of("closure/goog/base.js", "closure/goog/deps.js", "a"),
         partition.get("a"));
     assertCorrectInputs("b", ImmutableList.of("b"), partition.get("b"));
     assertCorrectInputs("c", ImmutableList.of("dep1", "c"), partition.get("c"));
