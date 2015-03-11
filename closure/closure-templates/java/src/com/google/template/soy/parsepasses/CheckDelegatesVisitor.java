@@ -129,15 +129,6 @@ public class CheckDelegatesVisitor extends AbstractSoyNodeVisitor<Void> {
             } else {
               // Not first template encountered.
               Set<TemplateParam> currParamSet = Sets.newHashSet(delTemplate.getParams());
-              if (! currParamSet.equals(firstParamSet)) {
-                throw SoySyntaxExceptionUtils.createWithNode(
-                    String.format(
-                        "Found delegate template with same name '%s' but different param" +
-                            " declarations compared to the definition at %s.",
-                        firstDelTemplate.getDelTemplateName(),
-                        firstDelTemplate.getSourceLocation().toString()),
-                    delTemplate);
-              }
               if (delTemplate.getContentKind() != firstContentKind) {
                 // TODO: This is only *truly* a requirement if the strict mode deltemplates are
                 // being called by contextual templates. For a strict-to-strict call, everything
