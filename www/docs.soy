@@ -50,7 +50,7 @@ today.) The following is an example of a minimal (but functional) plovr config f
 
 An example of a more complex config file (that leverages the modules
 feature of the Compiler){sp}
-<a href="http://code.google.com/p/plovr/source/browse/testdata/modules/plovr-config.js">
+<a href="https://github.com/bolinfest/plovr/blob/master/testdata/modules/plovr-config.js">
 can be seen in the plovr repository</a>.
 A config file declares which files should be compiled,
 where its dependencies can be found, and which compilation options should be
@@ -113,7 +113,7 @@ that will facilitate this process.)
 <h2>More on Config Files</h2>
 
 Config options are enumerated in the Java source code in{sp}
-<a href="http://code.google.com/p/plovr/source/browse/src/org/plovr/ConfigOption.java">ConfigOption.java</a>.
+<a href="https://github.com/bolinfest/plovr/blob/master/src/org/plovr/ConfigOption.java">ConfigOption.java</a>.
 As plovr is evaluated by Closure developers, the names and JSON data types for
 these options may change, so until the API is frozen, the source code is the
 source of truth for what is expected.
@@ -152,9 +152,9 @@ follows:
 
 It is also possible to set the level for various types of Compiler checks with the{sp}
 <code>checks</code> property. Many of these checks are explained on the{sp}
-<a href="http://code.google.com/p/closure-compiler/wiki/Warnings">Closure
+<a href="https://github.com/google/closure-compiler/wiki/Warnings">Closure
 Compiler wiki</a>, though the <code>DIAGNOSTIC_GROUP_NAMES</code> variable in{sp}
-<a href="http://code.google.com/p/closure-compiler/source/browse/trunk/src/com/google/javascript/jscomp/DiagnosticGroups.java">DiagnosticGroups.java</a>
+<a href="https://github.com/google/closure-compiler/blob/master/src/com/google/javascript/jscomp/DiagnosticGroups.java">DiagnosticGroups.java</a>
 {sp}is the real source of truth:
 
 {literal}
@@ -165,7 +165,7 @@ Compiler wiki</a>, though the <code>DIAGNOSTIC_GROUP_NAMES</code> variable in{sp
   "mode": "ADVANCED",
   "level": "VERBOSE",
   "checks": {
-    <span style="color: #A00">// acceptable values are "ERROR", "WARNING", and "OFF"</span> 
+    <span style="color: #A00">// acceptable values are "ERROR", "WARNING", and "OFF"</span>
     "deprecated": "ERROR",
     "checkTypes": "ERROR",
     "nonStandardJsDocs": "WARNING"
@@ -181,12 +181,12 @@ but such comments <em>are</em> allowed in plovr config files.)
 
 Remember, the names and values of the config file have not been finalized, so
 it may be necessary to monitor the plovr source code as new versions are
-released.   
+released.
 
 <h2>Using plovr With Compiler Modules</h2>
 
 Currently, the best way to learn how to use the modules feature of plovr is to
-examine the <a href="http://code.google.com/p/plovr/source/browse/#hg/testdata/modules">
+examine the <a href="https://github.com/bolinfest/plovr/tree/master/testdata/modules">
 modules example in the plovr codebase</a>.
 It is based off of the example in the "Partitioning Compiled Code into Modules"
 section in Chapter 12 of <span class="book-title">Closure: The Definitive Guide</span>.
@@ -212,7 +212,7 @@ there are other URLs that plovr serves to provide additional information.
 Some of these are listed on the{sp}
 <a href="http://code.google.com/p/plovr/wiki/GettingStarted">plovr wiki page
 on Google Code</a>, though the best way to get the complete list is by{sp}
-<a href="http://code.google.com/p/plovr/source/browse/src/org/plovr/Handler.java">
+<a href="https://github.com/bolinfest/plovr/blob/master/src/org/plovr/Handler.java">
 exploring the plovr source code</a>.
 There is also more information on these features of plovr in Appendix C
 of <span class="book-title">Closure: The Definitive Guide</span>.
