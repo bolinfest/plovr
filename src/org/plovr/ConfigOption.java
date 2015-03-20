@@ -552,6 +552,29 @@ public enum ConfigOption {
     }
   }),
 
+  CUSTOM_WARNINGS_GUARDS("custom-warnings-guards", new ConfigUpdater() {
+    @Override
+    public void apply(String input, Config.Builder builder) {
+      builder.addCustomWarningsGuard(input);
+    }
+
+    @Override
+    public void apply(JsonArray inputs, Config.Builder builder) {
+      for (JsonElement item : inputs) {
+        String input = GsonUtil.stringOrNull(item);
+        if (input != null) {
+          apply(input, builder);
+        }
+      }
+    }
+
+    @Override
+    public boolean reset(Config.Builder builder) {
+      builder.resetCustomWarningsGuards();
+      return true;
+    }
+  }),
+
   SOY_FUNCTION_PLUGINS("soy-function-plugins", new ConfigUpdater() {
     @Override
     public void apply(String input, Config.Builder builder) {
