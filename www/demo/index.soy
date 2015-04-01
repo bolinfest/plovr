@@ -30,15 +30,15 @@
 <h1>plovr demo page</h1>
 
 This is a demo for{sp}
-<a href="http://code.google.com/p/plovr/">plovr</a>, a{sp}
-<a href="http://code.google.com/closure/">Closure</a> build tool.
+<a href="https://github.com/bolinfest/plovr">plovr</a>, a{sp}
+<a href="https://developers.google.com/closure/">Closure</a> build tool.
 
 <h2>About plovr</h2>
 
 <p>
 plovr is a bulid tool that dynamically recompiles JavaScript and
 Closure Template code. Once you create a <a
-href="http://code.google.com/p/plovr/source/browse/testdata/example/integration-test-config.js">simple
+href="https://github.com/bolinfest/plovr/blob/master/testdata/example/integration-test-config.js">simple
 configuration file</a> to tell plovr where the JS and Soy files to
 compile are on your local machine, simply run the plovr jar with the
 config file to start compiling your code. The output of
@@ -46,10 +46,10 @@ plovr can be included via a <code>&lt;script></code> tag.
 </p>
 
 <p>
-Visit the <a href="http://code.google.com/p/plovr/downloads/list">downloads
-page on code.google.com</a> to get the latest plovr binary, or <a
-href="http://code.google.com/p/plovr/source/checkout">check out the
-source</a> and build it yourself.
+Visit the <a href="https://github.com/bolinfest/plovr/releases">releases
+page on GitHub</a> to get the latest plovr binary, or <a
+href="https://github.com/bolinfest/plovr">check out the source</a> and build it
+yourself.
 </p>
 
 <h2>Live Examples</h2>
@@ -68,7 +68,7 @@ The <a href="demo-config.js">config file</a> tells plovr to
 compile <a href="example/main.js">example/main.js</a> and to look in{sp}
 <a href="example/">example</a> when searching for its JavaScript and Soy dependencies.
 By default, any JavaScript file in the Closure Library (as well as{sp}
-<a href="http://code.google.com/p/closure-templates/source/browse/trunk/javascript/soyutils_usegoog.js">soyutils_usegoog.js</a>)
+<a href="https://github.com/google/closure-templates/blob/master/javascript/soyutils_usegoog.js">soyutils_usegoog.js</a>)
 may also be transitively included as a dependency.
 
 </p>
@@ -103,7 +103,7 @@ and plovr will recompile the inputs!
     In <code>WHITESPACE</code> mode, after being topologically sorted,
     all input files are concatenated together into a single JavaScript
     file with all whitespace and comments removed using the{sp}
-    <a href="http://code.google.com/closure/compiler/docs/compilation_levels.html">
+    <a href="https://developers.google.com/closure/compiler/docs/compilation_levels">
     WHITESPACE_ONLY</a> mode of the Closure Compiler.
   </li>
   <li>
