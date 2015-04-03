@@ -126,6 +126,8 @@ public final class Config implements Comparable<Config> {
 
   private final ListMultimap<CustomPassExecutionTime, CompilerPassFactory> customPasses;
 
+  private final List<WarningsGuardFactory> customWarningsGuards;
+
   private final File documentationOutputDirectory;
 
   private final Set<String> stripNameSuffixes;
@@ -206,6 +208,7 @@ public final class Config implements Comparable<Config> {
       boolean treatWarningsAsErrors,
       Map<String, JsonPrimitive> defines,
       ListMultimap<CustomPassExecutionTime, CompilerPassFactory> customPasses,
+      List<WarningsGuardFactory> customWarningsGuards,
       File documentationOutputDirectory,
       Set<String> stripNameSuffixes,
       Set<String> stripTypePrefixes,
@@ -254,6 +257,7 @@ public final class Config implements Comparable<Config> {
     this.exportTestFunctions = exportTestFunctions;
     this.treatWarningsAsErrors = treatWarningsAsErrors;
     this.customPasses = customPasses;
+    this.customWarningsGuards = customWarningsGuards;
     this.documentationOutputDirectory = documentationOutputDirectory;
     this.defines = ImmutableMap.copyOf(defines);
     this.stripNameSuffixes = ImmutableSet.copyOf(stripNameSuffixes);
@@ -419,6 +423,11 @@ public final class Config implements Comparable<Config> {
   }
 
   @VisibleForTesting
+  List<WarningsGuardFactory> getCustomWarningsGuards() {
+    return customWarningsGuards;
+  }
+
+  @VisibleForTesting
   Map<String, JsonPrimitive> getDefines() {
     return defines;
   }
@@ -574,6 +583,11 @@ public final class Config implements Comparable<Config> {
       options.setLanguageOut(languageOut);
     }
     options.setNewTypeInference(newTypeInference);
+
+    // Instantiate custom warnings guards.
+    for (WarningsGuardFactory factory : customWarningsGuards) {
+      options.addWarningsGuard(factory.createWarningsGuard());
+    }
 
     // Instantiate the custom compiler passes and register any DiagnosticGroups
     // from those passes.
@@ -892,6 +906,8 @@ public final class Config implements Comparable<Config> {
 
     private ListMultimap<CustomPassExecutionTime, CompilerPassFactory> customPasses = ImmutableListMultimap.of();
 
+    private ImmutableList.Builder<WarningsGuardFactory> customWarningsGuards = ImmutableList.builder();
+
     private File documentationOutputDirectory = null;
 
     private boolean customExternsOnly = false;
@@ -1014,6 +1030,8 @@ public final class Config implements Comparable<Config> {
           : null;
       this.soyUseInjectedData = config.soyUseInjectedData;
       this.customPasses = config.customPasses;
+      this.customWarningsGuards = new ImmutableList.Builder<WarningsGuardFactory>()
+        .addAll(config.customWarningsGuards);
       this.documentationOutputDirectory = config.documentationOutputDirectory;
       this.compilationMode = config.compilationMode;
       this.warningLevel = config.warningLevel;
@@ -1220,6 +1238,20 @@ public final class Config implements Comparable<Config> {
 
     public void resetCustomPasses() {
       this.customPasses = null;
+    }
+
+    public void addCustomWarningsGuard(String className) {
+      Class<?> clazz;
+      try {
+        clazz = Class.forName(className);
+      } catch (ClassNotFoundException e) {
+        throw new RuntimeException(e);
+      }
+      this.customWarningsGuards.add(new WarningsGuardFactory(clazz));
+    }
+
+    public void resetCustomWarningsGuards() {
+      this.customWarningsGuards = ImmutableList.builder();
     }
 
     /**
@@ -1500,6 +1532,7 @@ public final class Config implements Comparable<Config> {
           treatWarningsAsErrors,
           defines,
           customPasses,
+          customWarningsGuards.build(),
           documentationOutputDirectory,
           stripNameSuffixes,
           stripTypePrefixes,

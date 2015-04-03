@@ -498,6 +498,31 @@ window.console.log(z.c());
     your <code>CustomPass</code>, make sure to include the <code>.class</code> file
     for your <code>CustomPass</code> (and any of its dependencies) on the
     classpath, as well.
+  {case 'custom-warnings-guards'}
+    You can add custom warning and error suppression rules to the Closure
+    Compiler by adding your own warnings guard. The standard way to do this is
+    to create a Java class that extends the{sp}
+    <a href="https://github.com/google/closure-compiler/blob/master/src/com/google/javascript/jscomp/WarningsGuard.java">WarningsGuard</a>
+    {sp}abstract class and registering it via the{sp}
+    <a href="https://github.com/google/closure-compiler/blob/master/src/com/google/javascript/jscomp/CompilerOptions.java#L1329">
+    <code>addWarningsGuard()</code> method of the Closure Compiler</a>. With
+    plovr, you still need to extend <code>WarningsGuard</code>, but you register
+    it by listing it in your plovr config. An example:
+{literal}<pre>"custom-warnings-guards": [
+    "info.persistent.react.jscomp.ReactWarningsGuard"
+  ],
+  <code class="comment">// Because "custom-warnings-guards" is a list, you can add
+  // as many passes as you like. </code>
+]</pre>{/literal}
+    <p>
+    Note that when developing a <code>WarningsGuard</code> in Java, plovr has
+    all of the Closure Compiler classes that you need to compile against to
+    create your pass, so include <code>plovr.jar</code> on your classpath when
+    developing your <code>WarningsGuard</code>. Further, when running plovr with
+    your <code>WarningsGuard</code>, make sure to include the
+    <code>.class</code> file for your <code>WarningsGuard</code> (and any of its
+    dependencies) on the
+    classpath, as well.
   {case 'variable-map-output-file'}
     If specified, when the <code>build</code> command is used, plovr will write
     the used variable map to this file.
