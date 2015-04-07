@@ -4,6 +4,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Throwables;
 import com.google.javascript.jscomp.AbstractCompiler;
 import com.google.javascript.jscomp.CompilerPass;
 
@@ -56,12 +57,8 @@ public class CompilerPassFactory {
         if (params.length == 0) {
           return (CompilerPass) ctor.newInstance();
         }
-      } catch (InstantiationException e) {
-        throw new RuntimeException(e);
-      } catch (IllegalAccessException e) {
-        throw new RuntimeException(e);
-      } catch (InvocationTargetException e) {
-        throw new RuntimeException(e);
+      } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+        throw Throwables.propagate(e);
       }
     }
     throw new RuntimeException("Could not find a valid constructor for: " + clazz);
