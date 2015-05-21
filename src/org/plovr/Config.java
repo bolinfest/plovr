@@ -527,6 +527,10 @@ public final class Config implements Comparable<Config> {
     return null;
   }
 
+  LanguageMode getLanguageIn() {
+    return languageIn;
+  }
+
   public PlovrCompilerOptions getCompilerOptions(
       PlovrClosureCompiler compiler) {
     Preconditions.checkArgument(compilationMode != CompilationMode.RAW,
@@ -1050,9 +1054,9 @@ public final class Config implements Comparable<Config> {
       this.idGenerators = config.idGenerators;
       this.ambiguateProperties = config.ambiguateProperties;
       this.disambiguateProperties = config.disambiguateProperties;
-      this.languageIn = languageIn;
-      this.languageOut = languageOut;
-      this.newTypeInference = newTypeInference;
+      this.languageIn = config.languageIn;
+      this.languageOut = config.languageOut;
+      this.newTypeInference = config.newTypeInference;
       this.experimentalCompilerOptions = config.experimentalCompilerOptions;
       this.globalScopeName = config.globalScopeName;
       this.variableMapInputFile = config.variableMapInputFile;
