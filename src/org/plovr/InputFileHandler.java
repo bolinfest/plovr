@@ -170,7 +170,14 @@ public class InputFileHandler extends AbstractGetHandler {
     }
 
     // Find the code for the requested input.
-    String code = null;;
+    String code = null;
+
+    // Add 'use strict' headers if we're in strict mode.
+    String prefix = "";
+    if (config.getLanguageIn() != null && config.getLanguageIn().isStrict()) {
+      prefix = "'use strict';";
+    }
+
     try {
       if (requestedInput != null && requestedInput.supportsEtags()) {
         // Set/check an ETag, if appropriate.
@@ -189,7 +196,7 @@ public class InputFileHandler extends AbstractGetHandler {
         } else {
           Headers headers = exchange.getResponseHeaders();
           headers.set("ETag", eTag);
-          code = codeWithEtag.code;
+          code = prefix + codeWithEtag.code;
         }
       } else {
         // Do not set cache headers if the logic for ETags has not been defined
@@ -197,7 +204,7 @@ public class InputFileHandler extends AbstractGetHandler {
         // modified time for a file has been observed to cause resources to be
         // cached incorrectly by IE6.
         super.setCacheHeaders(exchange.getResponseHeaders());
-        code = requestedInput.getCode();
+        code = prefix + requestedInput.getCode();
       }
     } catch (UncheckedCompilationException e) {
       StringBuilder builder = new StringBuilder();

@@ -3,5 +3,6 @@
   "id": "demo",
   "paths": "example",
   "inputs": "example/main.js",
-  "css-inputs": "demo.css"
+  "css-inputs": "demo.css",
+  "language-in": "ECMASCRIPT5_STRICT"
 }
