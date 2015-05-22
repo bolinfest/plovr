@@ -26,21 +26,15 @@ import java.nio.charset.Charset;
 /**
  * A utility class to assist in creating JS bundle files.
  */
-public class ClosureBundler {
+public final class ClosureBundler {
   private boolean useEval = false;
   private String sourceUrl = null;
-  private boolean useStrict = false;
 
   public ClosureBundler() {
   }
 
   public final ClosureBundler useEval(boolean useEval) {
     this.useEval = useEval;
-    return this;
-  }
-
-  public final ClosureBundler forceStrict(boolean useStrict) {
-    this.useStrict = useStrict;
     return this;
   }
 
@@ -89,9 +83,6 @@ public class ClosureBundler {
       throws IOException {
     if (useEval) {
       out.append("(0,eval(\"");
-      if (useStrict) {
-        appendEscaped(out, "'use strict';");
-      }
       append(out, Mode.ESCAPED, contents);
       appendSourceUrl(out, Mode.ESCAPED);
       out.append("\"));");

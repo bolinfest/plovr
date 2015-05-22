@@ -19,7 +19,6 @@ package com.google.javascript.jscomp;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfoBuilder;
@@ -52,8 +51,7 @@ import java.util.Map;
  *
  * @author johnlenz@google.com (John Lenz)
  */
-public class ClosureRewriteModule
-    implements NodeTraversal.Callback, HotSwapCompilerPass {
+final class ClosureRewriteModule implements NodeTraversal.Callback, HotSwapCompilerPass {
 
   // TODO(johnlenz): Don't use goog.scope as an intermediary; add type checker
   // support instead.
@@ -314,27 +312,29 @@ public class ClosureRewriteModule
           JSDocInfo info = v.getJSDocInfo();
           if (info != null && info.hasTypedefType()) {
             JSDocInfoBuilder builder = JSDocInfoBuilder.copyFrom(info);
-            target.setJSDocInfo(builder.build(target));
+            target.setJSDocInfo(builder.build());
             return;
           }
         }
       }
     }
 
+    // Don't add @const on class declarations, @const on classes has a
+    // different meaning (it means "not subclassable").
+    // "goog.defineClass" hasn't been rewritten yet, so check for that
+    // explicitly.
+    JSDocInfo info = target.getJSDocInfo();
+    if ((info != null && (info.isConstructor() || info.isInterface())
+        || isCallTo(value, "goog.defineClass"))) {
+      return;
+    }
+
     // Not a known typedef export, simple declare the props to be @const,
     // this is valid because we freeze module export objects.
-    JSDocInfo info = target.getJSDocInfo();
-    if (info == null) {
-      JSDocInfoBuilder builder = new JSDocInfoBuilder(false);
-      builder.recordConstancy();
-      target.setJSDocInfo(builder.build(target));
-    } else if (!info.isConstant() && !info.hasTypedefType()) {
-      JSDocInfoBuilder builder = JSDocInfoBuilder.copyFrom(info);
-      builder.recordConstancy();
-      target.setJSDocInfo(builder.build(target));
-    }
+    JSDocInfoBuilder builder = JSDocInfoBuilder.maybeCopyFrom(info);
+    builder.recordConstancy();
+    target.setJSDocInfo(builder.build());
   }
-
 
   /**
    * @return Whether the getprop is used as an assignment target, and that

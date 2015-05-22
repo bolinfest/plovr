@@ -19,11 +19,8 @@ package com.google.javascript.jscomp;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.Node;
 
 import java.util.ArrayList;
@@ -89,7 +86,7 @@ final class RenameVars implements CompilerPass {
 
   // Logic for bleeding functions, where the name leaks into the outer
   // scope on IE but not on other browsers.
-  private final Set<Var> localBleedingFunctions = Sets.newHashSet();
+  private final Set<Var> localBleedingFunctions = new HashSet<>();
   private final ArrayListMultimap<Scope, Var> localBleedingFunctionsPerScope =
       ArrayListMultimap.create();
 
@@ -169,7 +166,7 @@ final class RenameVars implements CompilerPass {
     this.localRenamingOnly = localRenamingOnly;
     this.preserveFunctionExpressionNames = preserveFunctionExpressionNames;
     if (generatePseudoNames) {
-      this.pseudoNameMap = Maps.newHashMap();
+      this.pseudoNameMap = new HashMap<>();
     } else {
       this.pseudoNameMap = null;
     }
@@ -178,9 +175,9 @@ final class RenameVars implements CompilerPass {
     this.shouldShadow = shouldShadow;
     this.preferStableNames = preferStableNames;
     if (reservedNames == null) {
-      this.reservedNames = Sets.newHashSet();
+      this.reservedNames = new HashSet<>();
     } else {
-      this.reservedNames = Sets.newHashSet(reservedNames);
+      this.reservedNames = new HashSet<>(reservedNames);
     }
     this.nameGeneratorGiven = nameGenerator;
   }
@@ -253,7 +250,7 @@ final class RenameVars implements CompilerPass {
       // Bleeding functions should be treated as part of their outer
       // scope, because IE has bugs in how it handles bleeding
       // functions.
-      Scope.Var var = t.getScope().getVar(name);
+      Var var = t.getScope().getVar(name);
       boolean local = (var != null) && var.isLocal() &&
           (!var.scope.getParent().isGlobal() ||
            !var.isBleedingFunction());

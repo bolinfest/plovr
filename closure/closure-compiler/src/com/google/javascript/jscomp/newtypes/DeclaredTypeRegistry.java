@@ -16,22 +16,16 @@
 
 package com.google.javascript.jscomp.newtypes;
 
-import com.google.javascript.rhino.TypeIRegistry;
-
 /** A registry capable of translating names into JSTypes. */
-public interface DeclaredTypeRegistry extends TypeIRegistry {
+public interface DeclaredTypeRegistry {
 
   /**
-   * Returns the named type from a given potentially qualified type name,
+   * Returns the declaration of the given qualified name,
    * or null if the name is not defined.
+   * If {@code includeTypes} is true, include definitions that are not in code,
+   * such as @template parameters and forward declarations.
    */
-  JSType lookupTypeByName(String name);
-
-  /** Returns the instance of the typedef named {@code name} */
-  Typedef getTypedef(String name);
-
-  /** Returns the instance of the enum named {@code name} */
-  EnumType getEnum(String name);
+  Declaration getDeclaration(QualifiedName qname, boolean includeTypes);
 
   /**
    * Returns the declared JSType of the given identifier,

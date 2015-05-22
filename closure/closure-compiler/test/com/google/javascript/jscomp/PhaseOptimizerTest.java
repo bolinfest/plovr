@@ -18,7 +18,7 @@ package com.google.javascript.jscomp;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.collect.Lists;
+import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.CompilerOptions.TracerMode;
 import com.google.javascript.jscomp.PhaseOptimizer.Loop;
 import com.google.javascript.rhino.Node;
@@ -26,6 +26,7 @@ import com.google.javascript.rhino.Token;
 
 import junit.framework.TestCase;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
@@ -33,8 +34,8 @@ import java.util.Random;
  * Tests for {@link PhaseOptimizer}.
  * @author nicksantos@google.com (Nick Santos)
  */
-public class PhaseOptimizerTest extends TestCase {
-  private final List<String> passesRun = Lists.newArrayList();
+public final class PhaseOptimizerTest extends TestCase {
+  private final List<String> passesRun = new ArrayList<>();
   private final Node dummyRoot = new Node(Token.BLOCK);
   private PhaseOptimizer optimizer;
   private Compiler compiler;
@@ -104,7 +105,7 @@ public class PhaseOptimizerTest extends TestCase {
 
   public void testSchedulingOfAnyKindOfPasses2() {
     optimizer.consume(
-        Lists.newArrayList(
+        ImmutableList.of(
             createPassFactory("a", 0, true),
             createPassFactory("b", 1, false),
             createPassFactory("c", 2, false),
@@ -118,7 +119,7 @@ public class PhaseOptimizerTest extends TestCase {
 
   public void testSchedulingOfAnyKindOfPasses3() {
     optimizer.consume(
-        Lists.newArrayList(
+        ImmutableList.of(
             createPassFactory("a", 2, false),
             createPassFactory("b", 1, true),
             createPassFactory("c", 1, false)));
@@ -127,7 +128,7 @@ public class PhaseOptimizerTest extends TestCase {
 
   public void testSchedulingOfAnyKindOfPasses4() {
     optimizer.consume(
-        Lists.newArrayList(
+        ImmutableList.of(
             createPassFactory("a", 2, true),
             createPassFactory("b", 0, false),
             createPassFactory("c", 0, false)));
@@ -147,7 +148,7 @@ public class PhaseOptimizerTest extends TestCase {
 
   public void testPassOrdering() {
     Loop loop = optimizer.addFixedPointLoop();
-    List<String> optimalOrder = Lists.newArrayList(
+    List<String> optimalOrder = new ArrayList<>(
         PhaseOptimizer.OPTIMAL_ORDER);
     Random random = new Random();
     while (!optimalOrder.isEmpty()) {
@@ -159,7 +160,7 @@ public class PhaseOptimizerTest extends TestCase {
   }
 
   public void testProgress() {
-    final List<Double> progressList = Lists.newArrayList();
+    final List<Double> progressList = new ArrayList<>();
     compiler = new Compiler() {
       @Override void setProgress(double p, String name) {
         progressList.add(p);
@@ -182,7 +183,7 @@ public class PhaseOptimizerTest extends TestCase {
 
   public void assertPasses(String ... names) {
     optimizer.process(null, dummyRoot);
-    assertEquals(Lists.newArrayList(names), passesRun);
+    assertEquals(ImmutableList.copyOf(names), passesRun);
   }
 
   private void addOneTimePass(String name) {

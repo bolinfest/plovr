@@ -18,9 +18,9 @@ package com.google.javascript.jscomp;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.collect.Lists;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Ordering;
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.SymbolTable.Reference;
 import com.google.javascript.jscomp.SymbolTable.Symbol;
 import com.google.javascript.jscomp.SymbolTable.SymbolScope;
@@ -31,6 +31,8 @@ import com.google.javascript.rhino.Token;
 
 import junit.framework.TestCase;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -38,7 +40,7 @@ import java.util.Set;
  * @author nicksantos@google.com (Nick Santos)
  */
 
-public class SymbolTableTest extends TestCase {
+public final class SymbolTableTest extends TestCase {
 
   private static final String EXTERNS = CompilerTypeTestCase.DEFAULT_EXTERNS +
       "var Number;" +
@@ -333,11 +335,11 @@ public class SymbolTableTest extends TestCase {
     Symbol fooPrototype = getGlobalVar(table, "Foo.prototype");
     Symbol fn = getGlobalVar(table, "Function");
     assertEquals(
-        Lists.newArrayList(foo, bar), table.getAllSymbolsForTypeOf(x));
+        ImmutableList.of(foo, bar), table.getAllSymbolsForTypeOf(x));
     assertEquals(
-        Lists.newArrayList(fn), table.getAllSymbolsForTypeOf(foo));
+        ImmutableList.of(fn), table.getAllSymbolsForTypeOf(foo));
     assertEquals(
-        Lists.newArrayList(foo), table.getAllSymbolsForTypeOf(fooPrototype));
+        ImmutableList.of(foo), table.getAllSymbolsForTypeOf(fooPrototype));
     assertEquals(
         foo,
         table.getSymbolDeclaredBy(
@@ -501,7 +503,7 @@ public class SymbolTableTest extends TestCase {
     Symbol fooPrototype = getGlobalVar(table, "Foo.prototype");
     assertNotNull(fooPrototype);
 
-    List<Reference> refs = Lists.newArrayList(
+    List<Reference> refs = ImmutableList.copyOf(
         table.getReferences(fooPrototype));
     assertThat(refs).hasSize(1);
     assertEquals(Token.GETPROP, refs.get(0).getNode().getType());
@@ -1100,7 +1102,7 @@ public class SymbolTableTest extends TestCase {
 
   /** Returns all non-extern vars. */
   private List<Symbol> getVars(SymbolTable table) {
-    List<Symbol> result = Lists.newArrayList();
+    List<Symbol> result = new ArrayList<>();
     for (Symbol symbol : table.getAllSymbols()) {
       if (symbol.getDeclaration() != null &&
           !symbol.getDeclaration().getNode().isFromExterns()) {
@@ -1111,9 +1113,9 @@ public class SymbolTableTest extends TestCase {
   }
 
   private SymbolTable createSymbolTable(String input) {
-    List<SourceFile> inputs = Lists.newArrayList(
+    List<SourceFile> inputs = ImmutableList.of(
         SourceFile.fromCode("in1", input));
-    List<SourceFile> externs = Lists.newArrayList(
+    List<SourceFile> externs = ImmutableList.of(
         SourceFile.fromCode("externs1", EXTERNS));
 
     Compiler compiler = new Compiler();
@@ -1127,7 +1129,8 @@ public class SymbolTableTest extends TestCase {
    * Returns the same table for easy chaining.
    */
   private SymbolTable assertSymbolTableValid(SymbolTable table) {
-    Set<Symbol> allSymbols = Sets.newHashSet(table.getAllSymbols());
+    Set<Symbol> allSymbols = new HashSet<>();
+    Iterables.addAll(allSymbols, table.getAllSymbols());
     for (Symbol sym : table.getAllSymbols()) {
       // Make sure that grabbing the symbol's scope and looking it up
       // again produces the same symbol.

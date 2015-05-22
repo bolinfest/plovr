@@ -28,9 +28,9 @@ import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,7 +40,7 @@ import java.util.Set;
  * @author blickly@google.com (Ben Lickly)
  * @author dimvar@google.com (Dimitris Vardoulakis)
  */
-public class JSTypeCreatorFromJSDoc {
+public final class JSTypeCreatorFromJSDoc {
   public static final DiagnosticType INVALID_GENERICS_INSTANTIATION =
       DiagnosticType.warning(
         "JSC_INVALID_GENERICS_INSTANTIATION",
@@ -98,8 +98,7 @@ public class JSTypeCreatorFromJSDoc {
   // Used to communicate state between methods when resolving enum types
   private int howmanyTypeVars = 0;
 
-  private static final JSType OBJECT_OR_NULL =
-      JSType.join(JSType.TOP_OBJECT, JSType.NULL);
+  private final JSType objectOrNull;
 
   /** Exception for when unrecognized type names are encountered */
   public static class UnknownTypeException extends Exception {
@@ -108,16 +107,17 @@ public class JSTypeCreatorFromJSDoc {
     }
   }
 
-  private Set<JSError> warnings = new HashSet<>();
+  private Set<JSError> warnings = new LinkedHashSet<>();
   // Unknown type names indexed by JSDoc AST node at which they were found.
-  private Map<Node, String> unknownTypeNames = new HashMap<>();
+  private Map<Node, String> unknownTypeNames = new LinkedHashMap<>();
 
   public JSTypeCreatorFromJSDoc(CodingConvention convention) {
+    this.objectOrNull = JSType.join(JSType.TOP_OBJECT, JSType.NULL);
+    this.qmarkFunctionDeclared = FunctionTypeBuilder.qmarkFunctionBuilder().buildDeclaration();
     this.convention = convention;
   }
 
-  private static DeclaredFunctionType qmarkFunctionDeclared =
-      FunctionTypeBuilder.qmarkFunctionBuilder().buildDeclaration();
+  private DeclaredFunctionType qmarkFunctionDeclared;
   private JSType qmarkFunctionOrNull = null;
 
   private JSType getQmarkFunctionOrNull(JSTypes commonTypes) {
@@ -249,7 +249,7 @@ public class JSTypeCreatorFromJSDoc {
   private JSType getRecordTypeHelper(Node n, DeclaredTypeRegistry registry,
       ImmutableList<String> typeParameters)
       throws UnknownTypeException {
-    Map<String, JSType> fields = new HashMap<>();
+    Map<String, JSType> fields = new LinkedHashMap<>();
     // For each of the fields in the record type.
     for (Node fieldTypeNode = n.getFirstChild().getFirstChild();
          fieldTypeNode != null;
@@ -289,37 +289,38 @@ public class JSTypeCreatorFromJSDoc {
       case "Function":
         return getQmarkFunctionOrNull(registry.getCommonTypes());
       case "Object":
-        return OBJECT_OR_NULL;
-      default: {
-        if (outerTypeParameters.contains(typeName)) {
-          return JSType.fromTypeVar(typeName);
-        } else {
-          // It's either a typedef, an enum, a type variable or a nominal type
-          Typedef td = registry.getTypedef(typeName);
-          if (td != null) {
-            return getTypedefType(td, registry);
-          }
-          EnumType e = registry.getEnum(typeName);
-          if (e != null) {
-            return getEnumPropType(e, registry);
-          }
-          JSType namedType = registry.lookupTypeByName(typeName);
-          if (namedType == null) {
-            unknownTypeNames.put(n, typeName);
-            throw new UnknownTypeException("Unhandled type: " + typeName);
-          }
-          if (namedType.isTypeVariable()) {
-            howmanyTypeVars++;
-            return namedType;
-          }
-          if (namedType.isUnknown()) {
-            return namedType;
-          }
-          return getNominalTypeHelper(
-              namedType, n, registry, outerTypeParameters);
-        }
-      }
+        return objectOrNull;
+      default:
+        return lookupTypeByName(typeName, n, registry, outerTypeParameters);
     }
+  }
+
+  private JSType lookupTypeByName(String name,
+      Node n, DeclaredTypeRegistry registry, ImmutableList<String> outerTypeParameters)
+      throws UnknownTypeException {
+    if (outerTypeParameters.contains(name)) {
+      return JSType.fromTypeVar(name);
+    }
+    Declaration decl = registry.getDeclaration(QualifiedName.fromQname(name), true);
+    if (decl == null) {
+      unknownTypeNames.put(n, name);
+      throw new UnknownTypeException("Unhandled type: " + name);
+    }
+    // It's either a typedef, an enum, a type variable or a nominal type
+    if (decl.getTypedef() != null) {
+      return getTypedefType(decl.getTypedef(), registry);
+    }
+    if (decl.getEnum() != null) {
+      return getEnumPropType(decl.getEnum(), registry);
+    }
+    if (decl.isTypeVar()) {
+      howmanyTypeVars++;
+      return decl.getTypeOfSimpleDecl();
+    }
+    if (decl.getNominal() != null) {
+      return getNominalTypeHelper(decl.getNominal(), n, registry, outerTypeParameters);
+    }
+    return JSType.UNKNOWN;
   }
 
   private JSType getTypedefType(Typedef td, DeclaredTypeRegistry registry) {
@@ -382,11 +383,10 @@ public class JSTypeCreatorFromJSDoc {
     e.resolveEnum(enumeratedType);
   }
 
-  private JSType getNominalTypeHelper(JSType namedType, Node n,
+  private JSType getNominalTypeHelper(RawNominalType rawType, Node n,
       DeclaredTypeRegistry registry, ImmutableList<String> outerTypeParameters)
       throws UnknownTypeException {
-    NominalType uninstantiated = namedType.getNominalTypeIfUnique();
-    RawNominalType rawType = uninstantiated.getRawNominalType();
+    NominalType uninstantiated = rawType.getAsNominalType();
     if (!rawType.isGeneric() && !n.hasChildren()) {
       return rawType.getInstanceAsNullableJSType();
     }
@@ -499,7 +499,7 @@ public class JSTypeCreatorFromJSDoc {
   private NominalType getNominalType(Node n,
       DeclaredTypeRegistry registry, ImmutableList<String> typeParameters) {
     return getTypeFromComment(n, registry, typeParameters)
-        .getNominalTypeIfUnique();
+        .removeType(JSType.NULL).getNominalTypeIfSingletonObj();
   }
 
   private ImmutableSet<NominalType> getImplementedInterfaces(
@@ -525,14 +525,14 @@ public class JSTypeCreatorFromJSDoc {
       JSType interfaceType =
           getMaybeTypeFromComment(expRoot, registry, typeParameters);
       if (interfaceType != null) {
-        NominalType nt = interfaceType.getNominalTypeIfUnique();
+        NominalType nt = interfaceType.getNominalTypeIfSingletonObj();
         if (nt != null && nt.isInterface()) {
           builder.add(nt);
         } else {
           String errorMsg = implementedIntfs ?
               "Cannot implement non-interface" :
               "Cannot extend non-interface";
-          warn(errorMsg, jsdoc.getAssociatedNode());
+          warn(errorMsg, expRoot);
         }
       }
     }
@@ -698,8 +698,15 @@ public class JSTypeCreatorFromJSDoc {
   }
 
   private static class ParamIterator {
+    /** The parameter names from the JSDocInfo. Only set if 'params' is null. */
     Iterator<String> paramNames;
+
+    /**
+     * The PARAM_LIST node containing the function parameters. Only set if
+     * 'paramNames' is null.
+     */
     Node params;
+
     int index = -1;
 
     ParamIterator(Node params, JSDocInfo jsdoc) {
@@ -808,7 +815,7 @@ public class JSTypeCreatorFromJSDoc {
       // people use other types as well: unions, records, etc.
       // Decide what to do about those.
       NominalType thisTypeAsNominal = thisType == null
-          ? null : thisType.getNominalTypeIfUnique();
+          ? null : thisType.getNominalTypeIfSingletonObj();
       builder.addReceiverType(thisTypeAsNominal);
     }
 
@@ -831,8 +838,7 @@ public class JSTypeCreatorFromJSDoc {
               param.getJSDocInfo(), registry, typeParameters);
       boolean isRequired = true;
       boolean isRestFormals = false;
-      JSTypeExpression texp =
-          jsdoc == null ? null : jsdoc.getParameterType(pname);
+      JSTypeExpression texp = jsdoc == null ? null : jsdoc.getParameterType(pname);
       Node jsdocNode = texp == null ? null : texp.getRoot();
       if (param != null) {
         if (convention.isOptionalParameter(param)) {
@@ -918,7 +924,7 @@ public class JSTypeCreatorFromJSDoc {
     if (extendedType == null) {
       return null;
     }
-    NominalType parentClass = extendedType.getNominalTypeIfUnique();
+    NominalType parentClass = extendedType.getNominalTypeIfSingletonObj();
     if (parentClass != null && parentClass.isClass()) {
       return parentClass;
     }

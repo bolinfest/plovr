@@ -18,12 +18,11 @@ package com.google.javascript.jscomp;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Supplier;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeUtil.Visitor;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -113,7 +112,7 @@ class FunctionArgumentInjector {
       Node fnNode, Node callNode, Supplier<String> safeNameIdSupplier) {
     // Create an argName -> expression map
     // NOTE: A linked map is created here to provide ordering.
-    LinkedHashMap<String, Node> argMap = Maps.newLinkedHashMap();
+    LinkedHashMap<String, Node> argMap = new LinkedHashMap<>();
 
     // CALL NODE: [ NAME, ARG1, ARG2, ... ]
     Node cArg = callNode.getFirstChild().getNext();
@@ -167,7 +166,7 @@ class FunctionArgumentInjector {
    */
   static Set<String> findModifiedParameters(Node fnNode) {
     Set<String> names = getFunctionParameterSet(fnNode);
-    Set<String> unsafeNames = Sets.newHashSet();
+    Set<String> unsafeNames = new HashSet<>();
     return findModifiedParameters(
         fnNode.getLastChild(), null, names, unsafeNames, false);
   }
@@ -196,10 +195,8 @@ class FunctionArgumentInjector {
       boolean inInnerFunction) {
     Preconditions.checkArgument(unsafe != null);
     if (n.isName()) {
-      if (names.contains(n.getString())) {
-        if (inInnerFunction || canNameValueChange(n, parent)) {
-          unsafe.add(n.getString());
-        }
+      if (names.contains(n.getString()) && (inInnerFunction || canNameValueChange(n, parent))) {
+        unsafe.add(n.getString());
       }
     } else if (n.isFunction()) {
       // A function parameter can not be replaced with a direct inlined value
@@ -326,7 +323,7 @@ class FunctionArgumentInjector {
       Set<String> parameters, Node root) {
 
     // TODO(johnlenz): Consider using scope for this.
-    Set<String> locals = Sets.newHashSet(parameters);
+    Set<String> locals = new HashSet<>(parameters);
     gatherLocalNames(root, locals);
 
     ReferencedAfterSideEffect collector = new ReferencedAfterSideEffect(
@@ -363,7 +360,7 @@ class FunctionArgumentInjector {
     private final Set<String> parameters;
     private final Set<String> locals;
     private boolean sideEffectSeen = false;
-    private Set<String> parametersReferenced = Sets.newHashSet();
+    private Set<String> parametersReferenced = new HashSet<>();
     private int loopsEntered = 0;
 
     ReferencedAfterSideEffect(Set<String> parameters, Set<String> locals) {
@@ -493,7 +490,7 @@ class FunctionArgumentInjector {
    * Get a set of function parameter names.
    */
   private static Set<String> getFunctionParameterSet(Node fnNode) {
-    Set<String> set = Sets.newHashSet();
+    Set<String> set = new HashSet<>();
     for (Node n : NodeUtil.getFunctionParameters(fnNode).children()) {
       set.add(n.getString());
     }

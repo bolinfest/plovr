@@ -17,7 +17,6 @@
 package com.google.javascript.jscomp;
 
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.Node;
 
 import java.util.HashMap;
@@ -32,7 +31,7 @@ import java.util.Set;
  *
  * @author moz@google.com (Michael Zhou)
  */
-public class Es6RenameVariablesInParamLists extends AbstractPostOrderCallback
+public final class Es6RenameVariablesInParamLists extends AbstractPostOrderCallback
     implements HotSwapCompilerPass {
 
   private final AbstractCompiler compiler;

@@ -16,9 +16,12 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
 import com.google.common.base.Splitter;
+import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.NodeTraversal.Callback;
+import com.google.javascript.jscomp.NodeUtil.Visitor;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
@@ -35,6 +38,17 @@ import java.util.Set;
  * 'goog.require' nodes. It reconciles these Collections, creating a
  * warning for each discrepancy.
  *
+ * <p>The rules on when a warning is reported are: <ul>
+ * <li>Type is referenced in code -> goog.require is required
+ *     (missingRequires check fails if it's not there)
+ * <li>Type is referenced in an @extends or @implements -> goog.require is required
+ *     (missingRequires check fails if it's not there)
+ * <li>Type is referenced in other JsDoc (@type etc) -> goog.require is optional
+ *     (don't warn, regardless of if it is there)
+ * <li>Type is not referenced at all -> goog.require is forbidden
+ *     (extraRequires check fails if it is there)
+ * </ul>
+ *
  */
 class CheckRequiresForConstructors implements HotSwapCompilerPass {
   private final AbstractCompiler compiler;
@@ -44,6 +58,13 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass {
   static final DiagnosticType MISSING_REQUIRE_WARNING = DiagnosticType.disabled(
       "JSC_MISSING_REQUIRE_WARNING",
       "''{0}'' used but not goog.require''d");
+
+  static final DiagnosticType EXTRA_REQUIRE_WARNING = DiagnosticType.disabled(
+      "JSC_EXTRA_REQUIRE_WARNING",
+      "''{0}'' goog.require''d but not used");
+
+  private static final Set<String> DEFAULT_EXTRA_NAMESPACES = ImmutableSet.of(
+    "goog.testing.asserts", "goog.testing.jsunit");
 
   CheckRequiresForConstructors(AbstractCompiler compiler) {
     this.compiler = compiler;
@@ -57,14 +78,15 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass {
   @Override
   public void process(Node externs, Node root) {
     Callback callback = new CheckRequiresForConstructorsCallback();
-    new NodeTraversal(compiler, callback).traverseRoots(externs, root);
+    NodeTraversal.traverseRootsTyped(compiler, callback, externs, root);
   }
 
   @Override
   public void hotSwapScript(Node scriptRoot, Node originalRoot) {
     Callback callback = new CheckRequiresForConstructorsCallback();
-    new NodeTraversal(compiler, callback).traverseWithScope(scriptRoot,
-        SyntacticScopeCreator.generateUntypedTopScope(compiler));
+    Scope globalScope =
+        SyntacticScopeCreator.makeTyped(compiler).createScope(scriptRoot, null);
+    new NodeTraversal(compiler, callback).traverseWithScope(scriptRoot, globalScope);
   }
 
   // Return true if the name is a class name (starts with an uppercase
@@ -95,8 +117,15 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass {
    */
   private class CheckRequiresForConstructorsCallback implements Callback {
     private final Set<String> constructors = new HashSet<>();
-    private final Set<String> requires = new HashSet<>();
+    private final Map<String, Node> requires = new HashMap<>();
+
+    // Adding an entry to usages indicates that the name is used and should be required.
     private final Map<String, Node> usages = new HashMap<>();
+
+    // Adding an entry to weakUsages indicates that the name is used, but in a way which may not
+    // require a goog.require, such as in a @type annotation. If the only usages of a name are
+    // in weakUsages, don't give a missingRequire warning, nor an extraRequire warning.
+    private final Map<String, Node> weakUsages = new HashMap<>();
 
     @Override
     public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
@@ -105,6 +134,7 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass {
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
+      maybeAddJsDocUsages(t, n);
       switch (n.getType()) {
         case Token.ASSIGN:
         case Token.VAR:
@@ -115,7 +145,9 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass {
           if (NodeUtil.isStatement(n)) {
             maybeAddConstructor(t, n);
           }
-          maybeAddJsDocUsages(t, n);
+          break;
+        case Token.GETPROP:
+          visitGetProp(n);
           break;
         case Token.CALL:
           visitCallNode(n, parent);
@@ -130,6 +162,8 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass {
 
     private void visitScriptNode(NodeTraversal t) {
       Set<String> classNames = new HashSet<>();
+
+      // For every usage, check that there is a goog.require, and warn if not.
       for (Map.Entry<String, Node> entry : usages.entrySet()) {
         String className = entry.getKey();
         Node node = entry.getValue();
@@ -148,9 +182,9 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass {
             (constructors == null
             || (!constructors.contains(className) && !constructors.contains(outermostClassName)));
         boolean notProvidedByRequires =
-            (requires == null || (!requires.contains(className)
-                                  && !requires.contains(outermostClassName)
-                                  && !requires.contains(parentNamespace)));
+            (requires == null || (!requires.containsKey(className)
+                                  && !requires.containsKey(outermostClassName)
+                                  && !requires.containsKey(parentNamespace)));
         if (notProvidedByConstructors && notProvidedByRequires
             && !classNames.contains(className)) {
           // TODO(mknichel): If the symbol is not explicitly provided, find the next best
@@ -159,22 +193,68 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass {
           classNames.add(className);
         }
       }
+
+      // For every goog.require, check that there is a usage (in either usages or weakUsages)
+      // and warn if there is not.
+      for (Map.Entry<String, Node> entry : requires.entrySet()) {
+        String require = entry.getKey();
+        Node call = entry.getValue();
+        Node parent = call.getParent();
+        if (parent.isAssign()) {
+          // var baz = goog.require('foo.bar.baz');
+          // Assume that the var 'baz' is used somewhere, and don't warn.
+          continue;
+        }
+        if (!usages.containsKey(require) && !weakUsages.containsKey(require)) {
+          reportExtraRequireWarning(call, require);
+        }
+      }
+
       // for the next script, if there is one, we don't want the new, ctor, and
       // require nodes to spill over.
       this.usages.clear();
+      this.weakUsages.clear();
       this.requires.clear();
       this.constructors.clear();
     }
 
-    private void visitCallNode(Node n, Node parent) {
-      String required = codingConvention.extractClassNameIfRequire(n, parent);
+    private void reportExtraRequireWarning(Node call, String require) {
+      if (DEFAULT_EXTRA_NAMESPACES.contains(require)) {
+        return;
+      }
+      JSDocInfo jsDoc = call.getJSDocInfo();
+      if (jsDoc != null && jsDoc.getSuppressions().contains("extraRequire")) {
+        // There is a @suppress {extraRequire} on the call node. Even though the compiler generally
+        // doesn't understand @suppress in that position, respect it in this case,
+        // since lots of people put it there to suppress the closure-linter's extraRequire check.
+        return;
+      }
+      compiler.report(JSError.make(call, EXTRA_REQUIRE_WARNING, require));
+    }
+
+    private void visitCallNode(Node call, Node parent) {
+      String required = codingConvention.extractClassNameIfRequire(call, parent);
       if (required != null) {
-        requires.add(required);
+        requires.put(required, call);
+      }
+
+      Node callee = call.getFirstChild();
+      if (callee.isName()) {
+        weakUsages.put(callee.getString(), callee);
       }
     }
 
-    private void visitNewNode(NodeTraversal t, Node n) {
-      Node qNameNode = n.getFirstChild();
+    private void visitGetProp(Node getprop) {
+      // For "foo.bar.baz.qux" add weak usages for "foo.bar.baz.qux", foo.bar.baz",
+      // "foo.bar", and "foo" because those might all be goog.provide'd in different files,
+      // so it doesn't make sense to require the user to goog.require all of them.
+      for (; getprop != null; getprop = getprop.getFirstChild()) {
+        weakUsages.put(getprop.getQualifiedName(), getprop);
+      }
+    }
+
+    private void visitNewNode(NodeTraversal t, Node newNode) {
+      Node qNameNode = newNode.getFirstChild();
 
       // If the ctor is something other than a qualified name, ignore it.
       if (!qNameNode.isQualifiedName()) {
@@ -191,11 +271,18 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass {
       }
 
       String name = root.getString();
-      Scope.Var var = t.getScope().getVar(name);
+      TypedVar var = t.getTypedScope().getVar(name);
       if (var != null && (var.isLocal() || var.isExtern())) {
         return;
       }
-      usages.put(n.getFirstChild().getQualifiedName(), n);
+      usages.put(qNameNode.getQualifiedName(), newNode);
+
+      // for "new foo.bar.Baz.Qux" add weak usages for "foo.bar.Baz", "foo.bar", and "foo"
+      // because those might be goog.provide'd from a different file than foo.bar.Baz.Qux,
+      // so it doesn't make sense to require the user to goog.require all of them.
+      for (; qNameNode != null; qNameNode = qNameNode.getFirstChild()) {
+        weakUsages.put(qNameNode.getQualifiedName(), qNameNode);
+      }
     }
 
     private void maybeAddConstructor(NodeTraversal t, Node n) {
@@ -207,7 +294,7 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass {
         } else {
           JSTypeExpression typeExpr = info.getType();
           if (typeExpr != null) {
-            JSType type = typeExpr.evaluate(t.getScope(), compiler.getTypeRegistry());
+            JSType type = typeExpr.evaluate(t.getTypedScope(), compiler.getTypeIRegistry());
             if (type.isConstructor()) {
               constructors.add(ctorName);
             }
@@ -216,31 +303,105 @@ class CheckRequiresForConstructors implements HotSwapCompilerPass {
       }
     }
 
-    private void maybeAddJsDocUsages(NodeTraversal t, Node n) {
-      JSDocInfo info = NodeUtil.getBestJSDocInfo(n);
-      if (info != null) {
-        for (JSTypeExpression expr : info.getImplementedInterfaces()) {
-          maybeAddJsDocUsage(t, n, expr);
-        }
-        if (info.getBaseType() != null) {
-          maybeAddJsDocUsage(t, n, info.getBaseType());
-        }
+    /**
+     * If this returns true, check for @extends and @implements annotations on this node.
+     * Otherwise, it's probably an alias for an existing class, so skip those annotations.
+     *
+     * @return Whether the given node declares a function. True for the following forms:
+     *      <li><pre>function foo() {}</pre>
+     *      <li><pre>var foo = function() {};</pre>
+     *      <li><pre>foo.bar = function() {};</pre>
+     */
+    private boolean declaresFunction(Node n) {
+      if (n.isFunction()) {
+        return true;
       }
+
+      if (n.isAssign() && n.getLastChild().isFunction()) {
+        return true;
+      }
+
+      if (NodeUtil.isNameDeclaration(n) && n.getFirstChild().hasChildren()
+          && n.getFirstChild().getFirstChild().isFunction()) {
+        return true;
+      }
+
+      return false;
     }
 
-    private void maybeAddJsDocUsage(NodeTraversal t, Node n, JSTypeExpression expr) {
-      Node typeNode = expr.getRoot();
-      Preconditions.checkState(typeNode.getType() == Token.BANG);
-      Node child = typeNode.getFirstChild();
-      Preconditions.checkState(child.isString());
-
-      String rootName = Splitter.on('.').split(child.getString()).iterator().next();
-      Scope.Var var = t.getScope().getVar(rootName);
-      if (var != null && var.isExtern()) {
+    private void maybeAddJsDocUsages(NodeTraversal t, Node n) {
+      JSDocInfo info = n.getJSDocInfo();
+      if (info == null) {
         return;
       }
 
-      usages.put(child.getString(), n);
+      if (declaresFunction(n)) {
+        for (JSTypeExpression expr : info.getImplementedInterfaces()) {
+          maybeAddUsage(t, n, expr);
+        }
+        if (info.getBaseType() != null) {
+          maybeAddUsage(t, n, info.getBaseType());
+        }
+      }
+
+      for (Node typeNode : info.getTypeNodes()) {
+        maybeAddWeakUsage(t, n, typeNode);
+      }
+    }
+
+    /**
+     * Adds a weak usage for the given type expression (unless it references a variable that is
+     * defined in the externs, in which case no goog.require() is needed). When a "weak usage"
+     * is added, it means that a goog.require for that type is optional: No
+     * warning is given whether the require is there or not.
+     */
+    private void maybeAddWeakUsage(NodeTraversal t, Node n, Node typeNode) {
+      maybeAddUsage(t, n, typeNode, this.weakUsages, Predicates.<Node>alwaysTrue());
+    }
+
+    /**
+     * Adds a usage for the given type expression (unless it references a variable that is
+     * defined in the externs, in which case no goog.require() is needed). When a usage is
+     * added, it means that there should be a goog.require for that type.
+     */
+    private void maybeAddUsage(NodeTraversal t, Node n, final JSTypeExpression expr) {
+      // Just look at the root node, don't traverse.
+      Predicate<Node> pred = new Predicate<Node>() {
+        public boolean apply(Node n) {
+          return n == expr.getRoot();
+        }
+      };
+      maybeAddUsage(t, n, expr.getRoot(), this.usages, pred);
+    }
+
+    private void maybeAddUsage(final NodeTraversal t, final Node n, Node rootTypeNode,
+        final Map<String, Node> usagesMap, Predicate<Node> pred) {
+      Visitor visitor = new Visitor() {
+        public void visit(Node typeNode) {
+          if (typeNode.isString()) {
+            String typeString = typeNode.getString();
+            String rootName = Splitter.on('.').split(typeString).iterator().next();
+            TypedVar var = t.getTypedScope().getVar(rootName);
+            if (var == null || !var.isExtern()) {
+              usagesMap.put(typeString, n);
+
+              // Regardless of whether we're adding a weak or strong usage here, add weak usages for
+              // the prefixes of the namespace, like we do for GETPROP nodes. Otherwise we get an
+              // extra require warning for cases like:
+              //
+              //     goog.require('foo.bar.SomeService');
+              //
+              //     /** @constructor @extends {foo.bar.SomeService.Handler} */
+              //     var MyHandler = function() {};
+              Node getprop = NodeUtil.newQName(compiler, typeString);
+              getprop.useSourceInfoIfMissingFromForTree(typeNode);
+              visitGetProp(getprop);
+            }
+          }
+        }
+      };
+
+      NodeUtil.visitPreOrder(rootTypeNode, visitor, pred);
     }
   }
 }

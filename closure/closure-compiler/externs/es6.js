@@ -221,6 +221,18 @@ Number.prototype.toLocaleString = function(opt_locales, opt_options) {};
 
 
 /**
+ * Repeats the string the given number of times.
+ *
+ * @param {number} count The number of times the string is repeated.
+ * @this {String|string}
+ * @return {string}
+ * @nosideeffects
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/repeat
+ */
+String.prototype.repeat = function(count) {};
+
+
+/**
  * @see http://dev.w3.org/html5/postmsg/
  * @interface
  */
@@ -262,6 +274,12 @@ ArrayBufferView.prototype.byteOffset;
 
 /** @type {number} */
 ArrayBufferView.prototype.byteLength;
+
+
+/**
+ * @typedef {!ArrayBuffer|!ArrayBufferView}
+ */
+var BufferSource;
 
 
 /**
@@ -766,7 +784,7 @@ DataView.prototype.setFloat64 = function(
 
 /**
  * @see https://github.com/promises-aplus/promises-spec
- * @typedef {{then: !Function}}
+ * @typedef {{then: ?}}
  */
 var Thenable;
 
@@ -783,11 +801,23 @@ var IThenable = function() {};
 
 
 /**
- * @param {?(function(TYPE):
- *             (RESULT|IThenable.<RESULT>|Thenable))=} opt_onFulfilled
+ * @param {?(function(TYPE):VALUE)=} opt_onFulfilled
  * @param {?(function(*): *)=} opt_onRejected
- * @return {!IThenable.<RESULT>}
- * @template RESULT
+ * @return {RESULT}
+ * @template VALUE
+ *
+ * When a Promise (or thenable) is returned from the fulfilled callback,
+ * the result is the payload of that promise, not the promise itself.
+ *
+ * @template RESULT := type('IThenable',
+ *     cond(isUnknown(VALUE), unknown(),
+ *       mapunion(VALUE, (V) =>
+ *         cond(isTemplatized(V) && sub(rawTypeOf(V), 'IThenable'),
+ *           templateTypeOf(V, 0),
+ *           cond(sub(V, 'Thenable'),
+ *              unknown(),
+ *              V)))))
+ * =:
  */
 IThenable.prototype.then = function(opt_onFulfilled, opt_onRejected) {};
 
@@ -838,11 +868,23 @@ Promise.race = function(iterable) {};
 
 
 /**
- * @param {?(function(TYPE):
- *             (RESULT|IThenable.<RESULT>|Thenable))=} opt_onFulfilled
+ * @param {?(function(TYPE):VALUE)=} opt_onFulfilled
  * @param {?(function(*): *)=} opt_onRejected
- * @return {!Promise.<RESULT>}
- * @template RESULT
+ * @return {RESULT}
+ * @template VALUE
+ *
+ * When a Promise (or thenable) is returned from the fulfilled callback,
+ * the result is the payload of that promise, not the promise itself.
+ *
+ * @template RESULT := type('Promise',
+ *     cond(isUnknown(VALUE), unknown(),
+ *       mapunion(VALUE, (V) =>
+ *         cond(isTemplatized(V) && sub(rawTypeOf(V), 'IThenable'),
+ *           templateTypeOf(V, 0),
+ *           cond(sub(V, 'Thenable'),
+ *              unknown(),
+ *              V)))))
+ * =:
  * @override
  */
 Promise.prototype.then = function(opt_onFulfilled, opt_onRejected) {};

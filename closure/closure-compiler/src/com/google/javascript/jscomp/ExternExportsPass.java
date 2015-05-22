@@ -20,15 +20,16 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
+import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -158,7 +159,7 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
      */
     private List<String> computePathPrefixes(String path) {
       List<String> pieces = Splitter.on('.').splitToList(path);
-      List<String> pathPrefixes = Lists.newArrayList();
+      List<String> pathPrefixes = new ArrayList<>();
 
       for (int i = 0; i < pieces.size(); i++) {
         pathPrefixes.add(Joiner.on(".").join(Iterables.limit(pieces, i + 1)));
@@ -219,6 +220,12 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
       return externFunction;
     }
 
+    private JSDocInfo buildEmptyJSDoc() {
+      // TODO(johnlenz): share the JSDocInfo here rather than building
+      // a new one each time.
+      return new JSDocInfoBuilder(false).build(true);
+    }
+
     /**
      * Given an object literal to export, create an object lit with all its
      * string properties. We don't care what the values of those properties
@@ -230,7 +237,7 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
 
       // This is an indirect way of telling the typed code generator
       // "print the type of this"
-      lit.setJSDocInfo(new JSDocInfo());
+      lit.setJSDocInfo(buildEmptyJSDoc());
 
       int index = 1;
       for (Node child = exportedObjectLit.getFirstChild();
@@ -356,20 +363,20 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
    * Creates an instance.
    */
   ExternExportsPass(AbstractCompiler compiler) {
-    this.exports = Lists.newArrayList();
+    this.exports = new ArrayList<>();
     this.compiler = compiler;
-    this.definitionMap = Maps.newHashMap();
+    this.definitionMap = new HashMap<>();
     this.externsRoot = IR.block();
     this.externsRoot.setIsSyntheticBlock(true);
-    this.alreadyExportedPaths = Sets.newHashSet();
-    this.mappedPaths = Maps.newHashMap();
+    this.alreadyExportedPaths = new HashSet<>();
+    this.mappedPaths = new HashMap<>();
 
     initExportMethods();
   }
 
   private void initExportMethods() {
-    exportSymbolFunctionNames = Lists.newArrayList();
-    exportPropertyFunctionNames = Lists.newArrayList();
+    exportSymbolFunctionNames = new ArrayList<>();
+    exportPropertyFunctionNames = new ArrayList<>();
 
     // From Closure:
     // goog.exportSymbol = function(publicName, symbol)
@@ -412,7 +419,7 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
     CodePrinter.Builder builder = new CodePrinter.Builder(externsRoot)
       .setPrettyPrint(true)
       .setOutputTypes(true)
-      .setTypeRegistry(compiler.getTypeRegistry());
+      .setTypeRegistry(compiler.getTypeIRegistry());
 
     return builder.build();
   }

@@ -34,7 +34,7 @@ import junit.framework.TestCase;
  * styles is in
  * {@link com.google.javascript.jscomp.parsing.TypeDeclarationsIRFactoryTest}
  */
-public class ConvertToTypedES6Test extends TestCase {
+public final class ConvertToTypedES6Test extends TestCase {
 
   private Compiler compiler;
 
@@ -47,6 +47,16 @@ public class ConvertToTypedES6Test extends TestCase {
     assertIdentifierHasType(
         compile("/** @type {string} */ var s;"),
         "s", stringType());
+  }
+
+  public void testPropertyDeclaration() throws Exception {
+    assertIdentifierHasType(compile("/** @type {number} */ this.prop;"),
+        "this.prop", numberType());
+  }
+
+  public void testPropertyDeclarationByAssignment() throws Exception {
+    assertIdentifierHasType(compile("/** @type {number} */ this.prop = 1;"),
+        "this.prop", numberType());
   }
 
   public void testFunction() throws Exception {

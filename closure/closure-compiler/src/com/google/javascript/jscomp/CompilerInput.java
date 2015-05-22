@@ -18,16 +18,16 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.deps.DependencyInfo;
 import com.google.javascript.jscomp.deps.JsFileParser;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -37,8 +37,7 @@ import java.util.Set;
  * whether the input is an extern. Also calculates provided and required types.
  *
  */
-public class CompilerInput
-    implements SourceAst, DependencyInfo {
+public class CompilerInput implements SourceAst, DependencyInfo {
 
   private static final long serialVersionUID = 1L;
 
@@ -51,8 +50,8 @@ public class CompilerInput
 
   private boolean isModuleFile = false;
   // Provided and required symbols.
-  private final Set<String> provides = Sets.newHashSet();
-  private final Set<String> requires = Sets.newHashSet();
+  private final Set<String> provides = new HashSet<>();
+  private final Set<String> requires = new HashSet<>();
   private boolean generatedDependencyInfoFromSource = false;
 
   // An AbstractCompiler for doing parsing.
@@ -176,12 +175,19 @@ public class CompilerInput
 
   // TODO(nicksantos): Remove addProvide/addRequire/removeRequire once
   // there is better support for discovering non-closure dependencies.
-  void addProvide(String provide) {
+
+  /**
+   * Registers a type that this input defines.
+   */
+  public void addProvide(String provide) {
     getProvides();
     provides.add(provide);
   }
 
-  void addRequire(String require) {
+  /**
+   * Registers a type that this input depends on.
+   */
+  public void addRequire(String require) {
     getRequires();
     requires.add(require);
   }
@@ -239,8 +245,8 @@ public class CompilerInput
 
   private static class DepsFinder {
     private boolean isModuleFile;
-    private final List<String> provides = Lists.newArrayList();
-    private final List<String> requires = Lists.newArrayList();
+    private final List<String> provides = new ArrayList<>();
+    private final List<String> requires = new ArrayList<>();
     private final CodingConvention codingConvention =
         new ClosureCodingConvention();
 

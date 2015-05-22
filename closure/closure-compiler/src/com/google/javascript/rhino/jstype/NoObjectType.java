@@ -101,6 +101,11 @@ public class NoObjectType extends FunctionType {
   }
 
   @Override
+  public boolean hasReferenceName() {
+    return false;
+  }
+
+  @Override
   public boolean matchesNumberContext() {
     return true;
   }
@@ -157,7 +162,7 @@ public class NoObjectType extends FunctionType {
   }
 
   @Override
-  JSType resolveInternal(ErrorReporter t, StaticScope<JSType> scope) {
+  JSType resolveInternal(ErrorReporter t, StaticTypedScope<JSType> scope) {
     return this;
   }
 }

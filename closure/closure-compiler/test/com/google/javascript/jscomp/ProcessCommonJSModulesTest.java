@@ -17,15 +17,15 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Unit tests for {@link ProcessCommonJSModules}
  */
 
-public class ProcessCommonJSModulesTest extends CompilerTestCase {
+public final class ProcessCommonJSModulesTest extends CompilerTestCase {
 
   public ProcessCommonJSModulesTest() {
     compareJsDoc = false;
@@ -187,11 +187,11 @@ public class ProcessCommonJSModulesTest extends CompilerTestCase {
     compiler.initCompilerOptionsIfTesting();
     compiler.getOptions().setProcessCommonJSModules(true);
     compiler.getOptions().dependencyOptions.setEntryPoints(
-        Lists.newArrayList(ProcessCommonJSModules.toModuleName("a")));
-    compiler.compile(Lists.newArrayList(SourceFile.fromCode("externs.js", "")),
+        ImmutableList.of(ProcessCommonJSModules.toModuleName("a")));
+    compiler.compile(ImmutableList.of(SourceFile.fromCode("externs.js", "")),
         shuffled, compiler.getOptions());
 
-    List<SourceFile> result = Lists.newArrayList();
+    List<SourceFile> result = new ArrayList<>();
     for (JSModule m : compiler.getModuleGraph().getAllModules()) {
       for (CompilerInput i : m.getInputs()) {
         result.add(i.getSourceFile());

@@ -56,12 +56,14 @@ enum Annotation {
   MEANING,
   MODIFIES,
   NO_ALIAS,
+  NO_COLLAPSE,
   NO_COMPILE,
   NO_SIDE_EFFECTS,
   NOT_IMPLEMENTED,
   OVERRIDE,
   PACKAGE,
   PARAM,
+  POLYMER_BEHAVIOR,
   PRESERVE, // same as license
   PRESERVE_TRY,
   PRIVATE,
@@ -118,12 +120,14 @@ enum Annotation {
       put("meaning", Annotation.MEANING).
       put("modifies", Annotation.MODIFIES).
       put("noalias", Annotation.NO_ALIAS).
+      put("nocollapse", Annotation.NO_COLLAPSE).
       put("nocompile", Annotation.NO_COMPILE).
       put("nosideeffects", Annotation.NO_SIDE_EFFECTS).
       put("override", Annotation.OVERRIDE).
       put("owner", Annotation.AUTHOR).
       put("package", Annotation.PACKAGE).
       put("param", Annotation.PARAM).
+      put("polymerBehavior", Annotation.POLYMER_BEHAVIOR).
       put("preserve", Annotation.PRESERVE).
       put("preserveTry", Annotation.PRESERVE_TRY).
       put("private", Annotation.PRIVATE).

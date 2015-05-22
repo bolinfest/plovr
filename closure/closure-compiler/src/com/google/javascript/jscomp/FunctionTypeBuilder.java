@@ -28,10 +28,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultiset;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Multiset;
-import com.google.common.collect.Sets;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSTypeExpression;
@@ -44,6 +41,7 @@ import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
 import com.google.javascript.rhino.jstype.TemplateType;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -75,7 +73,7 @@ final class FunctionTypeBuilder {
   private final CodingConvention codingConvention;
   private final JSTypeRegistry typeRegistry;
   private final Node errorRoot;
-  private final Scope scope;
+  private final TypedScope scope;
 
   private FunctionContents contents = UnknownFunctionContents.get();
 
@@ -208,7 +206,7 @@ final class FunctionTypeBuilder {
    * @param scope The syntactic scope.
    */
   FunctionTypeBuilder(String fnName, AbstractCompiler compiler,
-      Node errorRoot, Scope scope) {
+      Node errorRoot, TypedScope scope) {
     Preconditions.checkNotNull(errorRoot);
 
     this.fnName = fnName == null ? "" : fnName;
@@ -345,15 +343,13 @@ final class FunctionTypeBuilder {
       // Class template types, which can be used in the scope of a constructor
       // definition.
       ImmutableList<String> typeParameters = info.getTemplateTypeNames();
-      if (!typeParameters.isEmpty()) {
-        if (isConstructor || isInterface) {
-          ImmutableList.Builder<TemplateType> builder = ImmutableList.builder();
-          for (String typeParameter : typeParameters) {
-            builder.add(typeRegistry.createTemplateType(typeParameter));
-          }
-          classTemplateTypeNames = builder.build();
-          typeRegistry.setTemplateTypeNames(classTemplateTypeNames);
+      if (!typeParameters.isEmpty() && (isConstructor || isInterface)) {
+        ImmutableList.Builder<TemplateType> builder = ImmutableList.builder();
+        for (String typeParameter : typeParameters) {
+          builder.add(typeRegistry.createTemplateType(typeParameter));
         }
+        classTemplateTypeNames = builder.build();
+        typeRegistry.setTemplateTypeNames(classTemplateTypeNames);
       }
 
       // base type
@@ -373,7 +369,7 @@ final class FunctionTypeBuilder {
       // Implemented interfaces (for constructors only).
       if (info.getImplementedInterfaceCount() > 0) {
         if (isConstructor) {
-          implementedInterfaces = Lists.newArrayList();
+          implementedInterfaces = new ArrayList<>();
           Set<JSType> baseInterfaces = new HashSet<>();
           for (JSTypeExpression t : info.getImplementedInterfaces()) {
             JSType maybeInterType = t.evaluate(scope, typeRegistry);
@@ -405,7 +401,7 @@ final class FunctionTypeBuilder {
       // extended interfaces (for interfaces only)
       // We've already emitted a warning if this is not an interface.
       if (isInterface) {
-        extendedInterfaces = Lists.newArrayList();
+        extendedInterfaces = new ArrayList<>();
         for (JSTypeExpression t : info.getExtendedInterfaces()) {
           JSType maybeInterfaceType = t.evaluate(scope, typeRegistry);
           if (maybeInterfaceType != null &&
@@ -493,8 +489,8 @@ final class FunctionTypeBuilder {
     FunctionParamBuilder builder = new FunctionParamBuilder(typeRegistry);
     boolean warnedAboutArgList = false;
     Set<String> allJsDocParams = (info == null) ?
-        Sets.<String>newHashSet() :
-        Sets.newHashSet(info.getParameterNames());
+         new HashSet<String>() :
+         new HashSet<>(info.getParameterNames());
     boolean isVarArgs = false;
     for (Node arg : argsParent.children()) {
       String argumentName = arg.getString();
@@ -820,11 +816,11 @@ final class FunctionTypeBuilder {
    * to be declared in a scope. Notice that TypedScopeCreator takes
    * care of most scope-declaring.
    */
-  private Scope getScopeDeclaredIn() {
+  private TypedScope getScopeDeclaredIn() {
     int dotIndex = fnName.indexOf('.');
     if (dotIndex != -1) {
       String rootVarName = fnName.substring(0, dotIndex);
-      Var rootVar = scope.getVar(rootVarName);
+      TypedVar rootVar = scope.getVar(rootVarName);
       if (rootVar != null) {
         return rootVar.getScope();
       }
@@ -970,7 +966,7 @@ final class FunctionTypeBuilder {
 
     void recordEscapedVarName(String name) {
       if (escapedVarNames == null) {
-        escapedVarNames = Sets.newHashSet();
+        escapedVarNames = new HashSet<>();
       }
       escapedVarNames.add(name);
     }
@@ -983,7 +979,7 @@ final class FunctionTypeBuilder {
 
     void recordEscapedQualifiedName(String name) {
       if (escapedQualifiedNames == null) {
-        escapedQualifiedNames = Sets.newHashSet();
+        escapedQualifiedNames = new HashSet<>();
       }
       escapedQualifiedNames.add(name);
     }

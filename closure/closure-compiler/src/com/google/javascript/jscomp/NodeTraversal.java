@@ -22,11 +22,9 @@ import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
 import java.util.ArrayDeque;
-import java.util.Arrays;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -231,7 +229,7 @@ public class NodeTraversal {
   public NodeTraversal(AbstractCompiler compiler, Callback cb) {
     this(compiler, cb, compiler.getLanguageMode().isEs6OrHigher()
         ? new Es6SyntacticScopeCreator(compiler)
-        : new SyntacticScopeCreator(compiler));
+        : SyntacticScopeCreator.makeUntyped(compiler));
   }
 
   /**
@@ -295,17 +293,9 @@ public class NodeTraversal {
     }
   }
 
-  public void traverseRoots(Node... roots) {
-    traverseRoots(Arrays.asList(roots));
-  }
-
-  public void traverseRoots(List<Node> roots) {
-    if (roots.isEmpty()) {
-      return;
-    }
-
+  void traverseRoots(Node externs, Node root) {
     try {
-      Node scopeRoot = roots.get(0).getParent();
+      Node scopeRoot = externs.getParent();
       Preconditions.checkState(scopeRoot != null);
 
       inputId = NodeUtil.getInputId(scopeRoot);
@@ -313,10 +303,9 @@ public class NodeTraversal {
       curNode = scopeRoot;
       pushScope(scopeRoot);
 
-      for (Node root : roots) {
-        Preconditions.checkState(root.getParent() == scopeRoot);
-        traverseBranch(root, scopeRoot);
-      }
+      traverseBranch(externs, scopeRoot);
+      Preconditions.checkState(root.getParent() == scopeRoot);
+      traverseBranch(root, scopeRoot);
 
       popScope();
     } catch (Exception unexpectedException) {
@@ -395,7 +384,7 @@ public class NodeTraversal {
    * @param scope The scope the function is contained in. Does not fire enter/exit
    *     callback events for this scope.
    */
-  void traverseFunctionOutOfBand(Node node, Scope scope) {
+  public void traverseFunctionOutOfBand(Node node, Scope scope) {
     Preconditions.checkNotNull(scope);
     Preconditions.checkState(node.isFunction());
     Preconditions.checkState(scope.getRootNode() != null);
@@ -534,25 +523,25 @@ public class NodeTraversal {
   /**
    * Traverses a node recursively.
    */
-  public static void traverse(
-      AbstractCompiler compiler, Node root, Callback cb) {
+  public static void traverse(AbstractCompiler compiler, Node root, Callback cb) {
     NodeTraversal t = new NodeTraversal(compiler, cb);
     t.traverse(root);
   }
 
-  /**
-   * Traverses a list of node trees.
-   */
-  public static void traverseRoots(
-      AbstractCompiler compiler, List<Node> roots, Callback cb) {
-    NodeTraversal t = new NodeTraversal(compiler, cb);
-    t.traverseRoots(roots);
+  public static void traverseTyped(AbstractCompiler compiler, Node root, Callback cb) {
+    NodeTraversal t = new NodeTraversal(compiler, cb, SyntacticScopeCreator.makeTyped(compiler));
+    t.traverse(root);
   }
 
   public static void traverseRoots(
-      AbstractCompiler compiler, Callback cb, Node ... roots) {
+      AbstractCompiler compiler, Callback cb, Node externs, Node root) {
     NodeTraversal t = new NodeTraversal(compiler, cb);
-    t.traverseRoots(roots);
+    t.traverseRoots(externs, root);
+  }
+
+  static void traverseRootsTyped(AbstractCompiler compiler, Callback cb, Node externs, Node root) {
+    NodeTraversal t = new NodeTraversal(compiler, cb, SyntacticScopeCreator.makeTyped(compiler));
+    t.traverseRoots(externs, root);
   }
 
   /**
@@ -714,6 +703,13 @@ public class NodeTraversal {
     scopeRoots.clear();
     // No need to call compiler.setScope; the top scopeRoot is now the top scope
     return scope;
+  }
+
+  public TypedScope getTypedScope() {
+    Scope s = getScope();
+    Preconditions.checkState(s instanceof TypedScope,
+        "getTypedScope called for untyped traversal");
+    return (TypedScope) s;
   }
 
   /** Gets the control flow graph for the current JS scope. */

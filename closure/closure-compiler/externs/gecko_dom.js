@@ -92,6 +92,12 @@ Window.prototype.frames;
 Window.prototype.fullScreen;
 
 /**
+ * @return {!Promise<!BatteryManager>}
+ * @see http://www.w3.org/TR/battery-status/
+ */
+Navigator.prototype.getBattery = function() {};
+
+/**
  * @see https://developer.mozilla.org/en/DOM/Storage#globalStorage
  */
 Window.prototype.globalStorage;
@@ -226,7 +232,7 @@ Window.prototype.alert = function(message) {};
  * @see https://developer.mozilla.org/en/DOM/window.atob
  * @nosideeffects
  */
-Window.prototype.atob = function(encodedData) {};
+function atob(encodedData) {}
 
 /** @see https://developer.mozilla.org/en/DOM/window.back */
 Window.prototype.back = function() {};
@@ -240,7 +246,7 @@ Window.prototype.blur = function() {};
  * @see https://developer.mozilla.org/en/DOM/window.btoa
  * @nosideeffects
  */
-Window.prototype.btoa = function(stringToEncode) {};
+function btoa(stringToEncode) {}
 
 /** @deprecated */
 Window.prototype.captureEvents;
@@ -259,14 +265,6 @@ Window.prototype.forward = function() {};
 
 /** @see https://developer.mozilla.org/en/DOM/window.getAttention */
 Window.prototype.getAttention = function() {};
-
-/**
- * @param {Element} element
- * @param {?string=} pseudoElt
- * @return {CSSStyleDeclaration}
- * @nosideeffects
- */
-Window.prototype.getComputedStyle = function(element, pseudoElt) {};
 
 /**
  * @return {Selection}
@@ -1117,3 +1115,12 @@ HTMLImageElement.prototype.naturalWidth;
  * @see http://www.google.com/codesearch/p?hl=en#eksvcKKj5Ng/mozilla/dom/public/idl/html/nsIDOMNSHTMLImageElement.idl&q=naturalHeight
  */
 HTMLImageElement.prototype.naturalHeight;
+
+
+/**
+ * @param {Element} element
+ * @param {?string=} pseudoElt
+ * @return {CSSStyleDeclaration}
+ * @nosideeffects
+ */
+function getComputedStyle(element, pseudoElt) {}

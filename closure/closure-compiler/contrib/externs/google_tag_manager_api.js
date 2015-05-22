@@ -17,6 +17,7 @@
 /**
  * @fileoverview Externs used by Google Tag Manager which
  * the Closure compiler needs to be aware of during minification.
+ * @externs
  */
 
 // Google Tag Manager

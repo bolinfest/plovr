@@ -20,7 +20,7 @@ package com.google.javascript.jscomp;
  * Unit tests for {@link RescopeGlobalSymbols}
  *
  */
-public class RescopeGlobalSymbolsTest extends CompilerTestCase {
+public final class RescopeGlobalSymbolsTest extends CompilerTestCase {
 
   private static final String NAMESPACE = "_";
 
@@ -67,6 +67,12 @@ public class RescopeGlobalSymbolsTest extends CompilerTestCase {
     testSame("var x;");
     testSame("var a, b = 1;");
   }
+
+  public void testVarDeclarations_export() {
+    assumeCrossModuleNames = false;
+    test("var _dumpException = 1;", "_._dumpException = 1");
+  }
+
 
   public void testVarDeclarations_acrossModules() {
     assumeCrossModuleNames = false;

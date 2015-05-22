@@ -26,14 +26,12 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.io.CharStreams;
 import com.google.debugging.sourcemap.proto.Mapping.OriginalMapping;
 import com.google.javascript.jscomp.CompilerOptions.DevMode;
 import com.google.javascript.jscomp.JSModuleGraph.MissingModuleException;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceCollection;
-import com.google.javascript.jscomp.Scope.Var;
+import com.google.javascript.jscomp.TypeValidator.TypeMismatch;
 import com.google.javascript.jscomp.deps.SortedDependencies;
 import com.google.javascript.jscomp.deps.SortedDependencies.CircularDependencyException;
 import com.google.javascript.jscomp.deps.SortedDependencies.MissingProvideException;
@@ -60,6 +58,7 @@ import java.nio.file.FileSystems;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
@@ -142,7 +141,7 @@ public class Compiler extends AbstractCompiler {
 
   // Compile-time injected libraries. The node points to the last node of
   // the library, so code can be inserted after.
-  private final Map<String, Node> injectedLibraries = Maps.newLinkedHashMap();
+  private final Map<String, Node> injectedLibraries = new LinkedHashMap<>();
 
   // Parse tree root nodes
   Node externsRoot;
@@ -169,7 +168,7 @@ public class Compiler extends AbstractCompiler {
       = new ConcurrentHashMap<>();
 
   // Map from filenames to lists of all the comments in each file.
-  private Map<String, List<Comment>> commentsPerFile = Maps.newHashMap();
+  private Map<String, List<Comment>> commentsPerFile = new HashMap<>();
 
   /** The source code map */
   private SourceMap sourceMap;
@@ -412,7 +411,9 @@ public class Compiler extends AbstractCompiler {
       module.add(input);
     }
 
-    initModules(externs, Lists.newArrayList(module), options);
+    List<JSModule> modules = new ArrayList<>(1);
+    modules.add(module);
+    initModules(externs, modules, options);
   }
 
   /**
@@ -533,7 +534,7 @@ public class Compiler extends AbstractCompiler {
   private static List<CompilerInput> getAllInputsFromModules(
       List<JSModule> modules) {
     List<CompilerInput> inputs = new ArrayList<>();
-    Map<String, JSModule> inputMap = Maps.newHashMap();
+    Map<String, JSModule> inputMap = new HashMap<>();
     for (JSModule module : modules) {
       for (CompilerInput input : module.getInputs()) {
         String inputName = input.getName();
@@ -604,7 +605,7 @@ public class Compiler extends AbstractCompiler {
 
   public Result compile(
       SourceFile extern, SourceFile input, CompilerOptions options) {
-    return compile(Lists.newArrayList(extern), Lists.newArrayList(input), options);
+    return compile(ImmutableList.of(extern), ImmutableList.of(input), options);
   }
 
   /**
@@ -760,7 +761,7 @@ public class Compiler extends AbstractCompiler {
       }
 
       // IDE-mode is defined to stop here, before the heavy rewriting begins.
-      if (!options.ideMode) {
+      if (!options.checksOnly && !options.ideMode) {
         optimize();
       }
     }
@@ -1100,7 +1101,7 @@ public class Compiler extends AbstractCompiler {
 
   CompilerInput putCompilerInput(InputId id, CompilerInput input) {
     if (inputsById == null) {
-      inputsById = Maps.newHashMap();
+      inputsById = new HashMap<>();
     }
     input.setCompiler(this);
     return inputsById.put(id, input);
@@ -1212,6 +1213,7 @@ public class Compiler extends AbstractCompiler {
   }
 
   @Override
+  // Only used by jsdev
   public MemoizedScopeCreator getTypedScopeCreator() {
     return getPassConfig().getTypedScopeCreator();
   }
@@ -1264,7 +1266,7 @@ public class Compiler extends AbstractCompiler {
   }
 
   @Override
-  public Scope getTopScope() {
+  public TypedScope getTopScope() {
     return getPassConfig().getTopScope();
   }
 
@@ -1283,11 +1285,17 @@ public class Compiler extends AbstractCompiler {
   }
 
   @Override
+  // Only used by passes in the old type checker.
   TypeValidator getTypeValidator() {
     if (typeValidator == null) {
       typeValidator = new TypeValidator(this);
     }
     return typeValidator;
+  }
+
+  @Override
+  Iterable<TypeMismatch> getTypeMismatches() {
+    return getTypeValidator().getMismatches();
   }
 
   @Override
@@ -1338,7 +1346,7 @@ public class Compiler extends AbstractCompiler {
         externsRoot.addChildToBack(n);
       }
 
-      if (options.rewriteEs6Modules) {
+      if (options.lowerFromEs6()) {
         processEs6Modules();
       }
 
@@ -1523,8 +1531,8 @@ public class Compiler extends AbstractCompiler {
    * on the way.
    */
   void processAMDAndCommonJSModules() {
-    Map<String, JSModule> modulesByProvide = Maps.newLinkedHashMap();
-    Map<CompilerInput, JSModule> modulesByInput = Maps.newLinkedHashMap();
+    Map<String, JSModule> modulesByProvide = new LinkedHashMap<>();
+    Map<CompilerInput, JSModule> modulesByInput = new LinkedHashMap<>();
     // TODO(nicksantos): Refactor module dependency resolution to work nicely
     // with multiple ways to express dependencies. Directly support JSModules
     // that are equivalent to a single file and which express their deps
@@ -1656,7 +1664,7 @@ public class Compiler extends AbstractCompiler {
     CompilerInput input = new CompilerInput(
         SourceFile.fromCode("[testcode]", js));
     if (inputsById == null) {
-      inputsById = Maps.newHashMap();
+      inputsById = new HashMap<>();
     }
     putCompilerInput(input.getInputId(), input);
     return input.getAstRoot(this);
@@ -1857,7 +1865,7 @@ public class Compiler extends AbstractCompiler {
    * map info.
    */
   @Override
-  String toSource(Node n) {
+  public String toSource(Node n) {
     initCompilerOptionsIfTesting();
     return toSource(n, null, true);
   }
@@ -2162,16 +2170,11 @@ public class Compiler extends AbstractCompiler {
   protected Config createConfig(Config.LanguageMode mode) {
     return ParserRunner.createConfig(
         isIdeMode(),
+        options.isParseJsDocDocumentation(),
         mode,
         acceptConstKeyword(),
         options.extraAnnotationNames);
   }
-
-  @Override
-  public boolean isTypeCheckingEnabled() {
-    return options.checkTypes;
-  }
-
 
   //------------------------------------------------------------------------
   // Error reporting

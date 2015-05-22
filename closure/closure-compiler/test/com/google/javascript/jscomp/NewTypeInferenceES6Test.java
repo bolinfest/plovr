@@ -26,7 +26,7 @@ import static com.google.javascript.jscomp.CompilerOptions.LanguageMode;
  * @author dimvar@google.com (Dimitris Vardoulakis)
  */
 
-public class NewTypeInferenceES6Test extends NewTypeInferenceTestBase {
+public final class NewTypeInferenceES6Test extends NewTypeInferenceTestBase {
 
   @Override
   protected void setUp() {
@@ -58,8 +58,6 @@ public class NewTypeInferenceES6Test extends NewTypeInferenceTestBase {
   public void testClassInheritance() {
     typeCheck(
         "class Foo {}\n"
-        + "class Bar extends Foo {}",
-        // TODO(dimvar): must know about the .base property
-        TypeCheck.INEXISTENT_PROPERTY);
+        + "class Bar extends Foo {}");
   }
 }

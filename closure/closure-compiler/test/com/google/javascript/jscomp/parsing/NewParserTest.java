@@ -18,6 +18,7 @@ package com.google.javascript.jscomp.parsing;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.javascript.jscomp.parsing.IRFactory.MISPLACED_FUNCTION_ANNOTATION;
+import static com.google.javascript.jscomp.parsing.IRFactory.MISPLACED_MSG_ANNOTATION;
 import static com.google.javascript.jscomp.parsing.IRFactory.MISPLACED_TYPE_ANNOTATION;
 import static com.google.javascript.jscomp.testing.NodeSubject.assertNode;
 
@@ -27,15 +28,15 @@ import com.google.javascript.jscomp.parsing.Config.LanguageMode;
 import com.google.javascript.jscomp.parsing.ParserRunner.ParseResult;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.SimpleSourceFile;
+import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.jstype.SimpleSourceFile;
-import com.google.javascript.rhino.jstype.StaticSourceFile;
 import com.google.javascript.rhino.testing.BaseJSTypeTestCase;
 import com.google.javascript.rhino.testing.TestErrorReporter;
 
 import java.util.List;
 
-public class NewParserTest extends BaseJSTypeTestCase {
+public final class NewParserTest extends BaseJSTypeTestCase {
   private static final String SUSPICIOUS_COMMENT_WARNING =
       IRFactory.SUSPICIOUS_COMMENT_WARNING;
 
@@ -63,6 +64,9 @@ public class NewParserTest extends BaseJSTypeTestCase {
       "and '-->' are treated as a '//' " +
       "for legacy reasons. Removing this from your code is " +
       "safe for all browsers currently in use.";
+
+  private static final String ANNOTATION_DEPRECATED_WARNING =
+      "The %s annotation is deprecated.%s";
 
   private Config.LanguageMode mode;
   private boolean isIdeMode = false;
@@ -654,10 +658,10 @@ public class NewParserTest extends BaseJSTypeTestCase {
 
   public void testJSDocAttachment17() {
     Node fn =
-        parse(
+        parseWarning(
             "function f() { " +
             "  return /** @type {string} */ (g(1 /** @desc x */));" +
-            "};").getFirstChild();
+            "};", MISPLACED_MSG_ANNOTATION).getFirstChild();
     assertThat(fn.getType()).isEqualTo(Token.FUNCTION);
     Node cast = fn.getLastChild().getFirstChild().getFirstChild();
     assertThat(cast.getType()).isEqualTo(Token.CAST);
@@ -774,6 +778,22 @@ public class NewParserTest extends BaseJSTypeTestCase {
         createRecordTypeBuilder().addProperty("attr", NUMBER_TYPE, null).build(), info.getType());
   }
 
+  public void testInlineJSDocWithOptionalType() {
+    Node fn = parse("function f(/** string= */ x) {}").getFirstChild();
+    assertThat(fn.isFunction()).isTrue();
+
+    JSDocInfo info = fn.getFirstChild().getNext().getFirstChild().getJSDocInfo();
+    assertThat(info.getType().isOptionalArg()).isTrue();
+  }
+
+  public void testInlineJSDocWithVarArgs() {
+    Node fn = parse("function f(/** ...string */ x) {}").getFirstChild();
+    assertThat(fn.isFunction()).isTrue();
+
+    JSDocInfo info = fn.getFirstChild().getNext().getFirstChild().getJSDocInfo();
+    assertThat(info.getType().isVarArgs()).isTrue();
+  }
+
   public void testIncorrectJSDocDoesNotAlterJSParsing1() throws Exception {
     assertNodeEquality(
         parse("var a = [1,2]"),
@@ -846,6 +866,24 @@ public class NewParserTest extends BaseJSTypeTestCase {
               "C.prototype.say=function(nums) {alert(nums.join(','));};",
               "illegal use of unknown JSDoc tag \"someillegaltag\";"
               + " ignoring it"));
+  }
+
+  public void testMisplacedDescAnnotation_noWarning() {
+    parse("/** @desc Foo. */ var MSG_BAR = goog.getMsg('hello');");
+    parse("/** @desc Foo. */ x.y.z.MSG_BAR = goog.getMsg('hello');");
+    parse("/** @desc Foo. */ MSG_BAR = goog.getMsg('hello');");
+    parse("var msgs = {/** @desc x */ MSG_X: goog.getMsg('x')}");
+  }
+
+  public void testMisplacedDescAnnotation() {
+    parseWarning("/** @desc Foo. */ var bar = goog.getMsg('hello');",
+        MISPLACED_MSG_ANNOTATION);
+    parseWarning("/** @desc Foo. */ x.y.z.bar = goog.getMsg('hello');",
+        MISPLACED_MSG_ANNOTATION);
+    parseWarning("var msgs = {/** @desc x */ x: goog.getMsg('x')}",
+        MISPLACED_MSG_ANNOTATION);
+    parseWarning("/** @desc Foo. */ bar = goog.getMsg('x');",
+        MISPLACED_MSG_ANNOTATION);
   }
 
   public void testUnescapedSlashInRegexpCharClass() {
@@ -1556,7 +1594,7 @@ public class NewParserTest extends BaseJSTypeTestCase {
     parseWarning("function foo(x, x) {}", "Duplicate parameter name \"x\"");
   }
 
-  public void testLet() {
+  public void testLetAsIdentifier() {
     mode = LanguageMode.ECMASCRIPT3;
     parse("var let");
 
@@ -1571,6 +1609,24 @@ public class NewParserTest extends BaseJSTypeTestCase {
 
     mode = LanguageMode.ECMASCRIPT6_STRICT;
     parseError("var let", "'identifier' expected");
+  }
+
+  public void testLet() {
+    mode = LanguageMode.ECMASCRIPT6;
+
+    parse("let x;");
+    parse("let x = 1;");
+    parse("let x, y = 2;");
+    parse("let x = 1, y = 2;");
+  }
+
+  public void testConst() {
+    mode = LanguageMode.ECMASCRIPT6;
+
+    parseError("const x;", "const variables must have an initializer");
+    parse("const x = 1;");
+    parseError("const x, y = 2;", "const variables must have an initializer");
+    parse("const x = 1, y = 2;");
   }
 
   public void testYield1() {
@@ -2368,6 +2424,32 @@ public class NewParserTest extends BaseJSTypeTestCase {
     parseError("f( (x,y)\n=>2)", "No newline allowed before '=>'");
   }
 
+  public void testFor_ES5() {
+    parse("for (var x; x != 10; x = next()) {}");
+    parse("for (var x; x != 10; x = next());");
+    parse("for (var x = 0; x != 10; x++) {}");
+    parse("for (var x = 0; x != 10; x++);");
+
+    parse("var x; for (x; x != 10; x = next()) {}");
+    parse("var x; for (x; x != 10; x = next());");
+
+    parseError("for (x in {};;) {}", "')' expected");
+  }
+
+  public void testFor_ES6() {
+    mode = LanguageMode.ECMASCRIPT6;
+
+    parse("for (let x; x != 10; x = next()) {}");
+    parse("for (let x; x != 10; x = next());");
+    parse("for (let x = 0; x != 10; x++) {}");
+    parse("for (let x = 0; x != 10; x++);");
+
+    parseError("for (const x; x != 10; x = next()) {}", "const variables must have an initializer");
+    parseError("for (const x; x != 10; x = next());", "const variables must have an initializer");
+    parse("for (const x = 0; x != 10; x++) {}");
+    parse("for (const x = 0; x != 10; x++);");
+  }
+
   public void testForIn_ES6() {
     mode = LanguageMode.ECMASCRIPT6;
 
@@ -2375,6 +2457,14 @@ public class NewParserTest extends BaseJSTypeTestCase {
     parse("for (var a in b) c;");
     parse("for (let a in b) c;");
     parse("for (const a in b) c;");
+
+    parseError("for (a,b in c) d;", "';' expected");
+    parseError("for (var a,b in c) d;",
+        "for-in statement may not have more than one variable declaration");
+    parseError("for (let a,b in c) d;",
+        "for-in statement may not have more than one variable declaration");
+    parseError("for (const a,b in c) d;",
+        "for-in statement may not have more than one variable declaration");
 
     parseError("for (a=1 in b) c;", "';' expected");
     parseError("for (let a=1 in b) c;",
@@ -2436,6 +2526,7 @@ public class NewParserTest extends BaseJSTypeTestCase {
     mode = LanguageMode.ECMASCRIPT6;
 
     parse("for(a of b) c;");
+    parse("for(var a of b) c;");
     parse("for(let a of b) c;");
     parse("for(const a of b) c;");
   }
@@ -2444,10 +2535,53 @@ public class NewParserTest extends BaseJSTypeTestCase {
     mode = LanguageMode.ECMASCRIPT6;
 
     parseError("for(a=1 of b) c;", "';' expected");
+    parseError("for(var a=1 of b) c;",
+        "for-of statement may not have initializer");
     parseError("for(let a=1 of b) c;",
         "for-of statement may not have initializer");
     parseError("for(const a=1 of b) c;",
         "for-of statement may not have initializer");
+  }
+
+  public void testForOf3() {
+    mode = LanguageMode.ECMASCRIPT6;
+
+    parseError("for(var a, b of c) d;",
+        "for-of statement may not have more than one variable declaration");
+    parseError("for(let a, b of c) d;",
+        "for-of statement may not have more than one variable declaration");
+    parseError("for(const a, b of c) d;",
+        "for-of statement may not have more than one variable declaration");
+  }
+
+  public void testForOf4() {
+    mode = LanguageMode.ECMASCRIPT6;
+
+    parseError("for(a, b of c) d;", "';' expected");
+  }
+
+  public void testDestructuringInForLoops() {
+    mode = LanguageMode.ECMASCRIPT6;
+
+    // Destructuring forbids an initializer in for-in/for-of
+    parseError("for (var {x: y} = foo() in bar()) {}",
+        "for-in statement may not have initializer");
+    parseError("for (let {x: y} = foo() in bar()) {}",
+        "for-in statement may not have initializer");
+    parseError("for (const {x: y} = foo() in bar()) {}",
+        "for-in statement may not have initializer");
+
+    parseError("for (var {x: y} = foo() of bar()) {}",
+        "for-of statement may not have initializer");
+    parseError("for (let {x: y} = foo() of bar()) {}",
+        "for-of statement may not have initializer");
+    parseError("for (const {x: y} = foo() of bar()) {}",
+        "for-of statement may not have initializer");
+
+    // but requires it in a vanilla for loop
+    parseError("for (var {x: y};;) {}", "destructuring must have an initializer");
+    parseError("for (let {x: y};;) {}", "destructuring must have an initializer");
+    parseError("for (const {x: y};;) {}", "const variables must have an initializer");
   }
 
   public void testInvalidDestructuring() {
@@ -2544,6 +2678,27 @@ public class NewParserTest extends BaseJSTypeTestCase {
     assertThat(stop - start).named("runtime").isLessThan(5000L);
   }
 
+  public void testInvalidHandling1() {
+    parse(""
+        + "/**\n"
+        + " * @fileoverview Definition.\n"
+        + " * @mods {ns.bar}\n"
+        + " * @modName mod\n"
+        + " *\n"
+        + " * @extends {ns.bar}\n"
+        + " * @author someone\n"
+        + " */\n"
+        + "\n"
+        + "goog.provide('ns.foo');\n"
+        + "");
+  }
+
+  public void testExposeDeprecated() {
+    parseWarning("/** @expose */ var x = 0;",
+        String.format(ANNOTATION_DEPRECATED_WARNING, "@expose",
+            " Use @nocollapse or @export instead."));
+  }
+
   private Node script(Node stmt) {
     Node n = new Node(Token.SCRIPT, stmt);
     n.setIsSyntheticBlock(true);
@@ -2572,8 +2727,8 @@ public class NewParserTest extends BaseJSTypeTestCase {
     Node script = result.ast;
 
     // verifying that all errors were seen
-    assertThat(testErrorReporter.hasEncounteredAllErrors()).isTrue();
-    assertThat(testErrorReporter.hasEncounteredAllWarnings()).isTrue();
+    testErrorReporter.assertHasEncounteredAllErrors();
+    testErrorReporter.assertHasEncounteredAllWarnings();
 
     return script;
   }
@@ -2585,16 +2740,16 @@ public class NewParserTest extends BaseJSTypeTestCase {
    */
   private Node parseWarning(String string, String... warnings) {
     TestErrorReporter testErrorReporter = new TestErrorReporter(null, warnings);
-    Node script = null;
     StaticSourceFile file = new SimpleSourceFile("input", false);
-    script = ParserRunner.parse(file,
-      string,
-      ParserRunner.createConfig(isIdeMode, mode, false, null),
-      testErrorReporter).ast;
+    Node script = ParserRunner.parse(
+        file,
+        string,
+        ParserRunner.createConfig(isIdeMode, mode, false, null),
+        testErrorReporter).ast;
 
     // verifying that all warnings were seen
-    assertThat(testErrorReporter.hasEncounteredAllErrors()).isTrue();
-    assertThat(testErrorReporter.hasEncounteredAllWarnings()).isTrue();
+    testErrorReporter.assertHasEncounteredAllErrors();
+    testErrorReporter.assertHasEncounteredAllWarnings();
 
     return script;
   }

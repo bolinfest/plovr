@@ -16,18 +16,18 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.collect.Maps;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
 /**
  * @author agrieve@google.com (Andrew Grieve)
  */
-public class ProcessTweaksTest extends CompilerTestCase {
+public final class ProcessTweaksTest extends CompilerTestCase {
 
   Map<String, Node> defaultValueOverrides;
   boolean stripTweaks;
@@ -39,7 +39,7 @@ public class ProcessTweaksTest extends CompilerTestCase {
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    defaultValueOverrides = Maps.newHashMap();
+    defaultValueOverrides = new HashMap<>();
     stripTweaks = false;
   }
 

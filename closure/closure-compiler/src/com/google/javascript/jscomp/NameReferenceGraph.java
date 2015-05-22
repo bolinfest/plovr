@@ -18,8 +18,6 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.javascript.jscomp.DefinitionsRemover.AssignmentDefinition;
 import com.google.javascript.jscomp.DefinitionsRemover.Definition;
@@ -32,6 +30,8 @@ import com.google.javascript.rhino.jstype.JSTypeNative;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -67,7 +67,7 @@ class NameReferenceGraph extends
       referenceMap = HashMultimap.create();
 
   // Given a qualified name, provides the Name object.
-  private Map<String, Name> nameMap = Maps.newHashMap();
+  private Map<String, Name> nameMap = new HashMap<>();
 
   // The following are some implicit nodes of the graph.
 
@@ -90,8 +90,7 @@ class NameReferenceGraph extends
     // Initialize builtins.
     unknown = new Name("{UNKNOWN}", true);
     unknown.isAliased = true;
-    unknown.type = compiler.getTypeRegistry().getNativeType(
-        JSTypeNative.NO_TYPE);
+    unknown.type = compiler.getTypeIRegistry().getNativeType(JSTypeNative.NO_TYPE);
     this.createNode(unknown);
 
     main = new Name("{Global Main}", true);
@@ -132,7 +131,7 @@ class NameReferenceGraph extends
       return null;
     }
 
-    List<Definition> result = Lists.newArrayList();
+    List<Definition> result = new ArrayList<>();
     for (Name nameRef : nameRefs) {
       List<Definition> decls = nameRef.getDeclarations();
       if (!decls.isEmpty()) {
@@ -173,7 +172,7 @@ class NameReferenceGraph extends
     private JSType type;
 
     // A list (re)declarations
-    private List<Definition> declarations = Lists.newLinkedList();
+    private List<Definition> declarations = new LinkedList<>();
 
     final boolean isExtern;
 
@@ -197,8 +196,7 @@ class NameReferenceGraph extends
       int lastDot = qName.lastIndexOf('.');
       String name = (lastDot == -1) ? qName : qName.substring(lastDot + 1);
       this.isExported = compiler.getCodingConvention().isExported(name);
-      this.type = compiler.getTypeRegistry().getNativeType(
-          JSTypeNative.UNKNOWN_TYPE);
+      this.type = compiler.getTypeIRegistry().getNativeType(JSTypeNative.UNKNOWN_TYPE);
     }
 
     public JSType getType() {
@@ -221,23 +219,12 @@ class NameReferenceGraph extends
       declarations.add(new NamedFunctionDefinition(node, isExtern));
     }
 
-    public boolean isExtern() {
-      return isExtern;
-    }
-
     public void markExported() {
       this.isExported = true;
     }
 
     public boolean isExported() {
       return isExported;
-    }
-
-    /** Removes all of the declarations of this name. */
-    public final void remove() {
-      for (Definition declaration : getDeclarations()) {
-        declaration.remove();
-      }
     }
 
     /**
@@ -301,10 +288,6 @@ class NameReferenceGraph extends
 
     public Reference(Node site) {
       this.site = site;
-    }
-
-    public JSModule getModule() {
-      return module;
     }
 
     /**

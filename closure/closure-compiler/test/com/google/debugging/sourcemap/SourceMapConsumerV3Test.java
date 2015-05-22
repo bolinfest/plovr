@@ -29,7 +29,7 @@ import java.util.Map;
  * Tests for {@link SourceMapConsumerV3}
  *
  */
-public class SourceMapConsumerV3Test extends TestCase {
+public final class SourceMapConsumerV3Test extends TestCase {
 
   public void testSources() throws Exception{
     String sourceMap =  "{\n" +
@@ -47,7 +47,7 @@ public class SourceMapConsumerV3Test extends TestCase {
     String[] sources = (String[]) consumer.getOriginalSources().toArray();
 
     assertThat(sources).hasLength(1);
-    assertThat(consumer.getSourceRoot()).isEqualTo(null);
+    assertThat(consumer.getSourceRoot()).isNull();
     assertThat(sources[0]).isEqualTo("testcode");
   }
 

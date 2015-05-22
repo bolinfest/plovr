@@ -20,16 +20,17 @@ import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.Token;
+import com.google.javascript.rhino.TypeIRegistry;
 import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.ObjectType;
-import com.google.javascript.rhino.jstype.StaticSourceFile;
+import com.google.javascript.rhino.jstype.Property;
 
 import java.util.ArrayDeque;
 
@@ -132,7 +133,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
           "Declared access conflicts with access convention.");
 
   private final AbstractCompiler compiler;
-  private final TypeValidator validator;
+  private final TypeIRegistry typeRegistry;
   private final boolean enforceCodingConventions;
 
   // State about the current traversal.
@@ -147,11 +148,10 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
   CheckAccessControls(
       AbstractCompiler compiler, boolean enforceCodingConventions) {
     this.compiler = compiler;
-    this.validator = compiler.getTypeValidator();
+    this.typeRegistry = compiler.getTypeIRegistry();
     this.initializedConstantProperties = HashMultimap.create();
     this.enforceCodingConventions = enforceCodingConventions;
-    this.noTypeSentinel = compiler.getTypeRegistry()
-        .getNativeType(JSTypeNative.NO_TYPE);
+    this.noTypeSentinel = typeRegistry.getNativeType(JSTypeNative.NO_TYPE);
   }
 
   @Override
@@ -160,8 +160,8 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
         new CollectFileOverviewVisibility(compiler);
     collectPass.process(externs, root);
     defaultVisibilityForFiles = collectPass.getFileOverviewVisibilityMap();
-    NodeTraversal.traverse(compiler, externs, this);
-    NodeTraversal.traverse(compiler, root, this);
+    NodeTraversal.traverseTyped(compiler, externs, this);
+    NodeTraversal.traverseTyped(compiler, root, this);
   }
 
   @Override
@@ -170,7 +170,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
         new CollectFileOverviewVisibility(compiler);
     collectPass.hotSwapScript(scriptRoot, originalRoot);
     defaultVisibilityForFiles = collectPass.getFileOverviewVisibilityMap();
-    NodeTraversal.traverse(compiler, scriptRoot, this);
+    NodeTraversal.traverseTyped(compiler, scriptRoot, this);
   }
 
   @Override
@@ -330,12 +330,11 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
       return;
     }
 
-    Scope.Var var = t.getScope().getVar(n.getString());
+    TypedVar var = t.getTypedScope().getVar(n.getString());
     JSDocInfo docInfo = var == null ? null : var.getJSDocInfo();
 
     if (docInfo != null && docInfo.isDeprecated() &&
         shouldEmitDeprecationWarning(t, n, parent)) {
-
       if (docInfo.getDeprecationReason() != null) {
         compiler.report(
             t.makeError(n, DEPRECATED_NAME_REASON, n.getString(),
@@ -371,12 +370,12 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
         if (!deprecationInfo.isEmpty()) {
           compiler.report(
               t.makeError(n, DEPRECATED_PROP_REASON, propertyName,
-                  validator.getReadableJSTypeName(n.getFirstChild(), true),
+                  typeRegistry.getReadableTypeName(n.getFirstChild()),
                   deprecationInfo));
         } else {
           compiler.report(
               t.makeError(n, DEPRECATED_PROP, propertyName,
-                  validator.getReadableJSTypeName(n.getFirstChild(), true)));
+                  typeRegistry.getReadableTypeName(n.getFirstChild())));
         }
       }
     }
@@ -425,7 +424,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
    * @param name The name node.
    */
   private void checkNameVisibility(NodeTraversal t, Node name, Node parent) {
-    Var var = t.getScope().getVar(name.getString());
+    TypedVar var = t.getTypedScope().getVar(name.getString());
     if (var == null) {
       return;
     }
@@ -473,7 +472,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
     return v;
   }
 
-  private static boolean isPrivateAccessAllowed(Var var, Node name, Node parent) {
+  private static boolean isPrivateAccessAllowed(TypedVar var, Node name, Node parent) {
     StaticSourceFile varSrc = var.getSourceFile();
     StaticSourceFile refSrc = name.getStaticSourceFile();
     JSDocInfo docInfo = var.getJSDocInfo();
@@ -487,7 +486,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
     }
   }
 
-  private boolean isPackageAccessAllowed(Var var, Node name) {
+  private boolean isPackageAccessAllowed(TypedVar var, Node name) {
     StaticSourceFile varSrc = var.getSourceFile();
     StaticSourceFile refSrc = name.getStaticSourceFile();
     CodingConvention codingConvention = compiler.getCodingConvention();
@@ -613,11 +612,8 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
       // Add the prototype when we're looking at an instance object
       if (objectType.isInstanceType()) {
         ObjectType prototype = objectType.getImplicitPrototype();
-        if (prototype != null) {
-          if (prototype.hasProperty(propertyName)) {
-            initializedConstantProperties.put(prototype,
-                propertyName);
-          }
+        if (prototype != null && prototype.hasProperty(propertyName)) {
+          initializedConstantProperties.put(prototype, propertyName);
         }
       }
     }
@@ -674,12 +670,15 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
       }
     }
 
-
-
     if (objectType != null) {
-      JSDocInfo docInfo = objectType.getOwnPropertyJSDocInfo(propertyName);
-      definingSource = docInfo.getStaticSourceFile();
-      isClassType = docInfo.isConstructor();
+      Property p = objectType.getOwnSlot(propertyName);
+      Node node = p.getNode();
+      if (node == null) {
+        // Assume the property is public.
+        return;
+      }
+      definingSource = node.getStaticSourceFile();
+      isClassType = p.getJSDocInfo().isConstructor();
     } else if (isPrivateByConvention) {
       // We can only check visibility references if we know what file
       // it was defined in.
@@ -851,8 +850,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
       compiler.report(
           t.makeError(getprop, BAD_PACKAGE_PROPERTY_ACCESS,
               propertyName,
-              validator.getReadableJSTypeName(
-                  getprop.getFirstChild(), true)));
+              typeRegistry.getReadableTypeName(getprop.getFirstChild())));
       }
   }
 
@@ -883,7 +881,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
     JSType accessedType = getprop.getFirstChild().getJSType();
     String propertyName = getprop.getLastChild().getString();
     String readableTypeName = ownerType.equals(accessedType)
-        ? validator.getReadableJSTypeName(getprop.getFirstChild(), true)
+        ? typeRegistry.getReadableTypeName(getprop.getFirstChild())
         : ownerType.toString();
     compiler.report(
         t.makeError(getprop,
@@ -907,8 +905,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
       compiler.report(
           t.makeError(getprop,  BAD_PROTECTED_PROPERTY_ACCESS,
               propertyName,
-              validator.getReadableJSTypeName(
-                  getprop.getFirstChild(), true)));
+              typeRegistry.getReadableTypeName(getprop.getFirstChild())));
     }
   }
 
@@ -982,7 +979,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
       // Case #1
       (deprecatedDepth > 0) ||
       // Case #2
-      (getTypeDeprecationInfo(t.getScope().getTypeOfThis()) != null) ||
+      (getTypeDeprecationInfo(t.getTypedScope().getTypeOfThis()) != null) ||
         // Case #3
       (scopeRootParent != null && scopeRootParent.isAssign() &&
        getTypeDeprecationInfo(

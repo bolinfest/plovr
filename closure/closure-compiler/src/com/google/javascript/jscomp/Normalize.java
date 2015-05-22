@@ -16,19 +16,17 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.AbstractCompiler.LifeCycleStage;
 import com.google.javascript.jscomp.MakeDeclaredNamesUnique.BoilerplateRenamer;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeTraversal.Callback;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -158,7 +156,7 @@ class Normalize implements CompilerPass {
    * Find all the @expose annotations.
    */
   private static class FindExposeAnnotations extends AbstractPostOrderCallback {
-    private final Set<String> exposedProperties = Sets.newHashSet();
+    private final Set<String> exposedProperties = new HashSet<>();
 
     @Override public void visit(NodeTraversal t, Node n, Node parent) {
       if (NodeUtil.isExprAssign(n)) {
@@ -283,12 +281,10 @@ class Normalize implements CompilerPass {
       Node externsAndJs = root.getParent();
       Preconditions.checkState(externsAndJs != null);
       Preconditions.checkState(externsAndJs.hasChild(externs));
-
-      NodeTraversal.traverseRoots(
-          compiler, Lists.newArrayList(externs, root), this);
+      NodeTraversal.traverseRoots(compiler, this, externs, root);
     }
 
-    private Map<String, Boolean> constantMap = Maps.newHashMap();
+    private Map<String, Boolean> constantMap = new HashMap<>();
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
@@ -707,7 +703,7 @@ class Normalize implements CompilerPass {
    */
   private void removeDuplicateDeclarations(Node externs, Node root) {
     Callback tickler = new ScopeTicklingCallback();
-    ScopeCreator scopeCreator =  new SyntacticScopeCreator(
+    ScopeCreator scopeCreator =  SyntacticScopeCreator.makeUntypedWithRedeclHandler(
         compiler, new DuplicateDeclarationHandler());
     NodeTraversal t = new NodeTraversal(compiler, tickler, scopeCreator);
     t.traverseRoots(externs, root);
@@ -719,7 +715,7 @@ class Normalize implements CompilerPass {
   private final class DuplicateDeclarationHandler implements
       SyntacticScopeCreator.RedeclarationHandler {
 
-    private Set<Var> hasOkDuplicateDeclaration = Sets.newHashSet();
+    private Set<Var> hasOkDuplicateDeclaration = new HashSet<>();
 
     /**
      * Remove duplicate VAR declarations encountered discovered during
@@ -767,7 +763,7 @@ class Normalize implements CompilerPass {
       } else if (v != null && parent.isFunction()) {
         if (v.getParentNode().isVar()) {
           s.undeclare(v);
-          s.declare(name, n, n.getJSType(), v.input);
+          s.declare(name, n, v.input);
           replaceVarWithAssignment(v.getNameNode(), v.getParentNode(),
               v.getParentNode().getParent());
         }

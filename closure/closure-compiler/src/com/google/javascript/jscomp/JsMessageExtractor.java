@@ -17,10 +17,9 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
-
 import java.io.IOException;
 import java.util.Collection;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -45,25 +44,28 @@ import java.util.List;
  * across all JS files.
  *
  */
-public class JsMessageExtractor {
+public final class JsMessageExtractor {
 
   private final JsMessage.Style style;
   private final JsMessage.IdGenerator idGenerator;
   private final CompilerOptions options;
+  private final boolean extractExternalMessages;
 
   public JsMessageExtractor(
       JsMessage.IdGenerator idGenerator,
       JsMessage.Style style) {
-    this(idGenerator, style, new CompilerOptions());
+    this(idGenerator, style, new CompilerOptions(), false /* extractExternalMessages */);
   }
 
   public JsMessageExtractor(
       JsMessage.IdGenerator idGenerator,
       JsMessage.Style style,
-      CompilerOptions options) {
+      CompilerOptions options,
+      boolean extractExternalMessages) {
     this.idGenerator = idGenerator;
     this.style = style;
     this.options = options;
+    this.extractExternalMessages = extractExternalMessages;
   }
 
   /**
@@ -75,16 +77,16 @@ public class JsMessageExtractor {
     // Take into account that messages with the same id could be present in the
     // result list. Message could have the same id only in case if they are
     // unnamed and have the same text but located in different source files.
-    private final List<JsMessage> messages = Lists.newLinkedList();
+    private final List<JsMessage> messages = new LinkedList<>();
 
     private ExtractMessagesVisitor(AbstractCompiler compiler) {
       super(compiler, true, style, idGenerator);
     }
 
     @Override
-    void processJsMessage(JsMessage message,
+    protected void processJsMessage(JsMessage message,
         JsMessageDefinition definition) {
-      if (!message.isExternal()) {
+      if (extractExternalMessages || !message.isExternal()) {
         messages.add(message);
       }
     }
@@ -121,7 +123,7 @@ public class JsMessageExtractor {
     Compiler compiler = new Compiler();
     compiler.init(
         ImmutableList.<SourceFile>of(),
-        Lists.newArrayList(inputs),
+        ImmutableList.copyOf(inputs),
         options);
     compiler.parseInputs();
 

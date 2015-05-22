@@ -28,7 +28,7 @@ import static com.google.javascript.jscomp.CompilerOptions.LanguageMode;
  * @author dimvar@google.com (Dimitris Vardoulakis)
  */
 
-public class NewTypeInferenceES6TypedTest extends NewTypeInferenceTestBase {
+public final class NewTypeInferenceES6TypedTest extends NewTypeInferenceTestBase {
 
   @Override
   protected void setUp() {
@@ -89,5 +89,37 @@ public class NewTypeInferenceES6TypedTest extends NewTypeInferenceTestBase {
         + "class Bar {}\n"
         + "var x: Bar = new Foo;",
         NewTypeInference.MISTYPED_ASSIGN_RHS);
+  }
+
+  public void testClassPropertyDeclarations() {
+    typeCheck(
+        "class Foo {\n"
+        + "  prop: number;\n"
+        + "  constructor() { this.prop = 'asdf'; }\n"
+        + "}\n",
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck(
+        "class Foo {\n"
+        + "  prop: string;\n"
+        + "}\n"
+        + "(new Foo).prop - 5;\n",
+        NewTypeInference.INVALID_OPERAND_TYPE);
+
+    typeCheck(
+        "class Foo {\n"
+        + "  static prop: number;\n"
+        + "}\n"
+        + "Foo.prop = 'asdf';\n",
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    // TODO(dimvar): up to ES5, prop decls use dot.
+    // Should we start allowing [] for @unrestricted classes?
+    typeCheck(
+        "/** @unrestricted */ class Foo {\n"
+        + "  ['prop']: string;\n"
+        + "}\n"
+        + "(new Foo).prop - 5;\n",
+        TypeCheck.INEXISTENT_PROPERTY);
   }
 }

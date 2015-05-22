@@ -19,12 +19,12 @@ package com.google.javascript.jscomp.deps;
 import static com.google.javascript.jscomp.deps.DefaultDependencyResolver.CLOSURE_BASE;
 import static com.google.javascript.jscomp.deps.DefaultDependencyResolver.CLOSURE_BASE_PROVIDE;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.ErrorManager;
 import com.google.javascript.jscomp.LoggerErrorManager;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
@@ -34,10 +34,10 @@ import java.util.logging.Logger;
  * another SourceFile such that a VirtualFile, LocalFile or RemoteFile can be
  * used.
  */
-public class DependencyFile implements SourceFile {
+public final class DependencyFile implements SourceFile {
 
   /** Map of name spaces to their dependency info. */
-  private final Map<String, DependencyInfo> dependencies = Maps.newHashMap();
+  private final Map<String, DependencyInfo> dependencies = new HashMap<>();
 
   /** A source file to delegate functionality too. */
   private final SourceFile delegate;
@@ -114,10 +114,14 @@ public class DependencyFile implements SourceFile {
         dependencies.put(provide, depInfo);
       }
     }
+
+    List<String> provides = new ArrayList<>();
+    provides.add(CLOSURE_BASE_PROVIDE);
+
     // Add implicit base.js entry.
     dependencies.put(CLOSURE_BASE_PROVIDE,
         new SimpleDependencyInfo(CLOSURE_BASE, CLOSURE_BASE,
-            Lists.newArrayList(CLOSURE_BASE_PROVIDE),
+            provides,
             Collections.<String>emptyList(), false));
     errorManager.generateReport();
 

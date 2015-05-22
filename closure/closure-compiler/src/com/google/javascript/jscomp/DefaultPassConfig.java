@@ -22,9 +22,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
 import com.google.javascript.jscomp.AbstractCompiler.LifeCycleStage;
 import com.google.javascript.jscomp.CompilerOptions.ExtractPrototypeMemberDeclarationsMode;
@@ -34,6 +32,7 @@ import com.google.javascript.jscomp.ExtractPrototypeMemberDeclarations.Pattern;
 import com.google.javascript.jscomp.NodeTraversal.Callback;
 import com.google.javascript.jscomp.lint.CheckEnums;
 import com.google.javascript.jscomp.lint.CheckInterfaces;
+import com.google.javascript.jscomp.lint.CheckJSDoc;
 import com.google.javascript.jscomp.lint.CheckNullableReturn;
 import com.google.javascript.jscomp.lint.CheckPrototypeProperties;
 import com.google.javascript.jscomp.parsing.ParserRunner;
@@ -43,9 +42,11 @@ import com.google.javascript.rhino.Node;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -59,7 +60,7 @@ import java.util.Set;
 // is to satisfy the existing API. Some of it is because passes really do
 // need to share state in non-trivial ways. This should be audited and
 // cleaned up.
-public class DefaultPassConfig extends PassConfig {
+public final class DefaultPassConfig extends PassConfig {
 
   /* For the --mark-as-compiled pass */
   private static final String COMPILED_CONSTANT_NAME = "COMPILED";
@@ -70,11 +71,6 @@ public class DefaultPassConfig extends PassConfig {
   static final DiagnosticType CANNOT_USE_PROTOTYPE_AND_VAR =
       DiagnosticType.error("JSC_CANNOT_USE_PROTOTYPE_AND_VAR",
           "Rename prototypes and inline variables cannot be used together.");
-
-  static final DiagnosticType CANNOT_USE_EXPORT_LOCALS_AND_EXTERN_PROP_REMOVAL =
-      DiagnosticType.error("JSC_CANNOT_USE_EXPORT_LOCALS_AND_EXTERN_PROP_REMOVAL",
-          "remove_unused_prototype_properties_in_externs " +
-          "and export_local_property_definitions cannot be used together.");
 
   // Miscellaneous errors.
   static final DiagnosticType REPORT_PATH_IO_ERROR =
@@ -106,8 +102,6 @@ public class DefaultPassConfig extends PassConfig {
   /** Names exported by goog.exportSymbol. */
   private Set<String> exportedNames = null;
 
-  /** Shared name generator that remembers character encoding bias */
-  private NameGenerator nameGenerator = null;
   /**
    * Ids for cross-module method stubbing, so that each method has
    * a unique id.
@@ -158,7 +152,7 @@ public class DefaultPassConfig extends PassConfig {
   @Override
   protected State getIntermediateState() {
     return new State(
-        cssNames == null ? null : Maps.newHashMap(cssNames),
+        cssNames == null ? null : new HashMap<>(cssNames),
         exportedNames == null ? null :
             Collections.unmodifiableSet(exportedNames),
         crossModuleIdGenerator, variableMap, propertyMap,
@@ -168,9 +162,9 @@ public class DefaultPassConfig extends PassConfig {
   @Override
   protected void setIntermediateState(State state) {
     this.cssNames = state.cssNames == null ? null :
-        Maps.newHashMap(state.cssNames);
+         new HashMap<>(state.cssNames);
     this.exportedNames = state.exportedNames == null ? null :
-        Sets.newHashSet(state.exportedNames);
+         new HashSet<>(state.exportedNames);
     this.crossModuleIdGenerator = state.crossModuleIdGenerator;
     this.variableMap = state.variableMap;
     this.propertyMap = state.propertyMap;
@@ -200,13 +194,23 @@ public class DefaultPassConfig extends PassConfig {
 
   @Override
   protected List<PassFactory> getChecks() {
-    List<PassFactory> checks = Lists.newArrayList();
+    List<PassFactory> checks = new ArrayList<>();
 
     checks.add(createEmptyPass("beforeStandardChecks"));
 
     if (options.closurePass) {
       checks.add(closureRewriteModule);
     }
+
+    // ES6 compatible passes.
+
+    if (!options.transpileOnly) {
+      if (options.declaredGlobalExternsOnWindow) {
+        checks.add(declaredGlobalExternsOnWindow);
+      }
+    }
+
+    // ES6 transpilation passes.
 
     if (options.lowerFromEs6() || options.aggressiveVarCheck.isOn()) {
       checks.add(checkVariableReferences);
@@ -248,9 +252,7 @@ public class DefaultPassConfig extends PassConfig {
 
     checks.add(convertStaticInheritance);
 
-    if (options.declaredGlobalExternsOnWindow) {
-      checks.add(declaredGlobalExternsOnWindow);
-    }
+    // End of ES6 transpilation passes.
 
     if (options.closurePass) {
       checks.add(closureGoogScopeAliases);
@@ -265,6 +267,10 @@ public class DefaultPassConfig extends PassConfig {
       checks.add(angularPass);
     }
 
+    if (options.polymerPass) {
+      checks.add(polymerPass);
+    }
+
     checks.add(checkSideEffects);
 
     if (options.checkSuspiciousCode ||
@@ -273,7 +279,8 @@ public class DefaultPassConfig extends PassConfig {
       checks.add(suspiciousCode);
     }
 
-    if (options.enables(DiagnosticGroups.MISSING_REQUIRE)) {
+    if (options.enables(DiagnosticGroups.MISSING_REQUIRE)
+        || options.enables(DiagnosticGroups.EXTRA_REQUIRE)) {
       checks.add(checkRequires);
     }
 
@@ -338,7 +345,7 @@ public class DefaultPassConfig extends PassConfig {
 
       // We assume that only IDE-mode clients will try to query the
       // typed scope creator after the compile job.
-      if (!options.ideMode && !options.saveDataStructures) {
+      if (!options.ideMode) {
         checks.add(clearTypedScopePass);
       }
     }
@@ -423,7 +430,7 @@ public class DefaultPassConfig extends PassConfig {
 
   @Override
   protected List<PassFactory> getOptimizations() {
-    List<PassFactory> passes = Lists.newArrayList();
+    List<PassFactory> passes = new ArrayList<>();
 
     if (options.transpileOnly) {
       return passes;
@@ -644,14 +651,7 @@ public class DefaultPassConfig extends PassConfig {
     // The mapped name anonymous function pass makes use of information that
     // the extract prototype member declarations pass removes so the former
     // happens before the latter.
-    //
-    // Extracting prototype properties screws up the heuristic renaming
-    // policies, so never run it when those policies are requested.
-    if (options.extractPrototypeMemberDeclarations !=
-            ExtractPrototypeMemberDeclarationsMode.OFF
-        && (options.propertyRenaming != PropertyRenamingPolicy.HEURISTIC
-            && options.propertyRenaming !=
-               PropertyRenamingPolicy.AGGRESSIVE_HEURISTIC)) {
+    if (options.extractPrototypeMemberDeclarations != ExtractPrototypeMemberDeclarationsMode.OFF) {
       passes.add(extractPrototypeMemberDeclarations);
     }
 
@@ -660,7 +660,7 @@ public class DefaultPassConfig extends PassConfig {
       passes.add(ambiguateProperties);
     }
 
-    if (options.propertyRenaming != PropertyRenamingPolicy.OFF) {
+    if (options.propertyRenaming == PropertyRenamingPolicy.ALL_UNQUOTED) {
       passes.add(renameProperties);
     }
 
@@ -776,7 +776,7 @@ public class DefaultPassConfig extends PassConfig {
 
   /** Creates the passes for the main optimization loop. */
   private List<PassFactory> getMainOptimizationLoop() {
-    List<PassFactory> passes = Lists.newArrayList();
+    List<PassFactory> passes = new ArrayList<>();
     if (options.inlineGetters) {
       passes.add(inlineSimpleMethods);
     }
@@ -812,8 +812,8 @@ public class DefaultPassConfig extends PassConfig {
 
   /** Creates several passes aimed at removing code. */
   private List<PassFactory> getCodeRemovingPasses() {
-    List<PassFactory> passes = Lists.newArrayList();
-    if (options.collapseObjectLiterals && !isInliningForbidden()) {
+    List<PassFactory> passes = new ArrayList<>();
+    if (options.collapseObjectLiterals) {
       passes.add(collapseObjectLiterals);
     }
 
@@ -837,7 +837,7 @@ public class DefaultPassConfig extends PassConfig {
       passes.add(removeUnusedPrototypeProperties);
     }
 
-    if (options.removeUnusedClassProperties && !isInliningForbidden()) {
+    if (options.removeUnusedClassProperties) {
       passes.add(removeUnusedClassProperties);
     }
 
@@ -876,7 +876,7 @@ public class DefaultPassConfig extends PassConfig {
       new HotSwapPassFactory("suspiciousCode", true) {
     @Override
     protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
-      List<Callback> sharedCallbacks = Lists.newArrayList();
+      List<Callback> sharedCallbacks = new ArrayList<>();
       if (options.checkSuspiciousCode) {
         sharedCallbacks.add(new CheckSuspiciousCode());
       }
@@ -936,12 +936,6 @@ public class DefaultPassConfig extends PassConfig {
   private final PassFactory generateExports = new PassFactory("generateExports", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
-      if (options.removeUnusedPrototypePropertiesInExterns
-          && options.exportLocalPropertyDefinitions) {
-        return new ErrorPass(
-            compiler, CANNOT_USE_EXPORT_LOCALS_AND_EXTERN_PROP_REMOVAL);
-      }
-
       CodingConvention convention = compiler.getCodingConvention();
       if (convention.getExportSymbolFunction() != null &&
           convention.getExportPropertyFunction() != null) {
@@ -984,7 +978,7 @@ public class DefaultPassConfig extends PassConfig {
         public void process(Node externs, Node root) {
           pass.process(externs, root);
           if (exportedNames == null) {
-            exportedNames = Sets.newHashSet();
+            exportedNames = new HashSet<>();
           }
           exportedNames.addAll(pass.getExportedVariableNames());
         }
@@ -1240,7 +1234,7 @@ public class DefaultPassConfig extends PassConfig {
         public void process(Node externs, Node jsRoot) {
           Map<String, Integer> newCssNames = null;
           if (options.gatherCssNames) {
-            newCssNames = Maps.newHashMap();
+            newCssNames = new HashMap<>();
           }
           ReplaceCssNames pass = new ReplaceCssNames(
               compiler,
@@ -1485,7 +1479,7 @@ public class DefaultPassConfig extends PassConfig {
       new HotSwapPassFactory("checkControlFlow", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
-      List<Callback> callbacks = Lists.newArrayList();
+      List<Callback> callbacks = new ArrayList<>();
       if (!options.disables(DiagnosticGroups.CHECK_USELESS_CODE)) {
         callbacks.add(new CheckUnreachableCode(compiler));
       }
@@ -1514,6 +1508,7 @@ public class DefaultPassConfig extends PassConfig {
       return combineChecks(compiler, ImmutableList.<Callback>of(
           new CheckEnums(compiler),
           new CheckInterfaces(compiler),
+          new CheckJSDoc(compiler),
           new CheckNullableReturn(compiler),
           new CheckPrototypeProperties(compiler),
           new ImplicitNullabilityCheck(compiler)));
@@ -1768,7 +1763,7 @@ public class DefaultPassConfig extends PassConfig {
       new PassFactory("collapseProperties", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
-      return new CollapseProperties(compiler, !isInliningForbidden());
+      return new CollapseProperties(compiler);
     }
   };
 
@@ -1886,23 +1881,15 @@ public class DefaultPassConfig extends PassConfig {
       new PassFactory("inlineVariables", false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
-      if (isInliningForbidden()) {
-        // In old renaming schemes, inlining a variable can change whether
-        // or not a property is renamed. This is bad, and those old renaming
-        // schemes need to die.
-        return new ErrorPass(compiler, CANNOT_USE_PROTOTYPE_AND_VAR);
+      InlineVariables.Mode mode;
+      if (options.inlineVariables) {
+        mode = InlineVariables.Mode.ALL;
+      } else if (options.inlineLocalVariables) {
+        mode = InlineVariables.Mode.LOCALS_ONLY;
       } else {
-        InlineVariables.Mode mode;
-        if (options.inlineVariables) {
-          mode = InlineVariables.Mode.ALL;
-        } else if (options.inlineLocalVariables) {
-          mode = InlineVariables.Mode.LOCALS_ONLY;
-        } else {
-          throw new IllegalStateException("No variable inlining option set.");
-        }
-
-        return new InlineVariables(compiler, mode, true);
+        throw new IllegalStateException("No variable inlining option set.");
       }
+      return new InlineVariables(compiler, mode, true);
     }
   };
 
@@ -2043,13 +2030,12 @@ public class DefaultPassConfig extends PassConfig {
       new PassFactory("inlineFunctions", false) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
-      boolean enableBlockInlining = !isInliningForbidden();
       return new InlineFunctions(
           compiler,
           compiler.getUniqueNameIdSupplier(),
           options.inlineFunctions,
           options.inlineLocalFunctions,
-          enableBlockInlining,
+          true,
           options.assumeStrictThis()
               || options.getLanguageIn() == LanguageMode.ECMASCRIPT5_STRICT,
           options.assumeClosuresOnlyCaptureReferences,
@@ -2108,7 +2094,8 @@ public class DefaultPassConfig extends PassConfig {
           compiler, crossModuleIdGenerator,
           // Only move properties in externs if we're not treating
           // them as exports.
-          options.removeUnusedPrototypePropertiesInExterns);
+          options.removeUnusedPrototypePropertiesInExterns,
+          options.crossModuleCodeMotionNoStubMethods);
     }
   };
 
@@ -2326,46 +2313,20 @@ public class DefaultPassConfig extends PassConfig {
       new PassFactory("renameProperties", true) {
     @Override
     protected CompilerPass create(final AbstractCompiler compiler) {
+      Preconditions.checkState(options.propertyRenaming == PropertyRenamingPolicy.ALL_UNQUOTED);
       final VariableMap prevPropertyMap = options.inputPropertyMap;
       return new CompilerPass() {
         @Override public void process(Node externs, Node root) {
-          propertyMap = runPropertyRenaming(
-              compiler, prevPropertyMap, externs, root);
+          char[] reservedChars = options.anonymousFunctionNaming.getReservedCharacters();
+          RenameProperties rprop = new RenameProperties(
+              compiler, options.generatePseudoNames,
+              prevPropertyMap, reservedChars);
+          rprop.process(externs, root);
+          propertyMap = rprop.getPropertyMap();
         }
       };
     }
   };
-
-  private VariableMap runPropertyRenaming(
-      AbstractCompiler compiler, VariableMap prevPropertyMap,
-      Node externs, Node root) {
-    char[] reservedChars =
-        options.anonymousFunctionNaming.getReservedCharacters();
-    switch (options.propertyRenaming) {
-      case HEURISTIC:
-        RenamePrototypes rproto = new RenamePrototypes(compiler, false,
-            reservedChars, prevPropertyMap);
-        rproto.process(externs, root);
-        return rproto.getPropertyMap();
-
-      case AGGRESSIVE_HEURISTIC:
-        RenamePrototypes rproto2 = new RenamePrototypes(compiler, true,
-            reservedChars, prevPropertyMap);
-        rproto2.process(externs, root);
-        return rproto2.getPropertyMap();
-
-      case ALL_UNQUOTED:
-        RenameProperties rprop = new RenameProperties(
-            compiler, options.generatePseudoNames,
-            prevPropertyMap, reservedChars);
-        rprop.process(externs, root);
-        return rprop.getPropertyMap();
-
-      default:
-        throw new IllegalStateException(
-            "Unrecognized property renaming policy");
-    }
-  }
 
   /** Renames variables. */
   private final PassFactory renameVars = new PassFactory("renameVars", true) {
@@ -2388,7 +2349,7 @@ public class DefaultPassConfig extends PassConfig {
         options.anonymousFunctionNaming.getReservedCharacters();
     boolean preserveAnonymousFunctionNames =
         options.anonymousFunctionNaming != AnonymousFunctionNamingPolicy.OFF;
-    Set<String> reservedNames = Sets.newHashSet();
+    Set<String> reservedNames = new HashSet<>();
     if (options.renamePrefixNamespace != null) {
       // don't use the prefix name as a global symbol.
       reservedNames.add(options.renamePrefixNamespace);
@@ -2514,19 +2475,9 @@ public class DefaultPassConfig extends PassConfig {
     };
   }
 
-  /**
-   * All inlining is forbidden in heuristic renaming mode, because inlining
-   * will ruin the invariants that it depends on.
-   */
-  private boolean isInliningForbidden() {
-    return options.propertyRenaming == PropertyRenamingPolicy.HEURISTIC ||
-        options.propertyRenaming ==
-            PropertyRenamingPolicy.AGGRESSIVE_HEURISTIC;
-  }
-
   /** Create a compiler pass that runs the given passes in serial. */
   private static CompilerPass runInSerial(final CompilerPass ... passes) {
-    return runInSerial(Lists.newArrayList(passes));
+    return runInSerial(ImmutableSet.copyOf(passes));
   }
 
   /** Create a compiler pass that runs the given passes in serial. */
@@ -2544,7 +2495,7 @@ public class DefaultPassConfig extends PassConfig {
   @VisibleForTesting
   static Map<String, Node> getAdditionalReplacements(
       CompilerOptions options) {
-    Map<String, Node> additionalReplacements = Maps.newHashMap();
+    Map<String, Node> additionalReplacements = new HashMap<>();
 
     if (options.markAsCompiled || options.closurePass) {
       additionalReplacements.put(COMPILED_CONSTANT_NAME, IR.trueNode());
@@ -2608,6 +2559,15 @@ public class DefaultPassConfig extends PassConfig {
           }
         }
       };
+    }
+  };
+
+  /** Rewrites Polymer({}) */
+  private final HotSwapPassFactory polymerPass =
+      new HotSwapPassFactory("polymerPass", true) {
+    @Override
+    protected HotSwapCompilerPass create(AbstractCompiler compiler) {
+      return new PolymerPass(compiler);
     }
   };
 

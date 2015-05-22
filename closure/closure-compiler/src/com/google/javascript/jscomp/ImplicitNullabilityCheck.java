@@ -21,8 +21,8 @@ import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
+import com.google.javascript.rhino.TypeIRegistry;
 import com.google.javascript.rhino.jstype.JSType;
-import com.google.javascript.rhino.jstype.JSTypeRegistry;
 
 /**
  * Warn about types in JSDoc that are implicitly nullable.
@@ -59,7 +59,7 @@ public final class ImplicitNullabilityCheck extends AbstractPostOrderCallback
     if (info == null) {
       return;
     }
-    final JSTypeRegistry registry = compiler.getTypeRegistry();
+    final TypeIRegistry registry = compiler.getTypeIRegistry();
 
     for (Node typeRoot : info.getTypeNodes()) {
       NodeUtil.visitPreOrder(typeRoot, new NodeUtil.Visitor() {
@@ -75,13 +75,26 @@ public final class ImplicitNullabilityCheck extends AbstractPostOrderCallback
               case Token.THIS:  // The names inside function(this:Foo) and
               case Token.NEW:   // function(new:Bar) are already non-null.
                 return;
+              case Token.PIPE: { // Inside a union
+                Node gp = parent.getParent();
+                if (gp != null && gp.getType() == Token.QMARK) {
+                  return; // Inside an explicitly nullable union
+                }
+                for (Node child : parent.children()) {
+                  if (child.isString() && child.getString().equals("null")
+                      || child.getType() == Token.QMARK) {
+                    return; // Inside a union that contains null or nullable type
+                  }
+                }
+                break;
+              }
             }
           }
           String typeName = node.getString();
           if (typeName.equals("null") || registry.getType(typeName) == null) {
             return;
           }
-          JSType type = registry.createFromTypeNodes(node, "[internal]", null);
+          JSType type = (JSType) registry.createTypeFromCommentNode(node, "[internal]", null);
           if (type.isNullable()) {
             reportWarning(t, node, typeName);
           }

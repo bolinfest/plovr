@@ -17,11 +17,11 @@
 package com.google.javascript.jscomp.deps;
 
 import com.google.common.base.CharMatcher;
-import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.ErrorManager;
 
 import java.io.Reader;
 import java.io.StringReader;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -33,7 +33,7 @@ import java.util.regex.Pattern;
  *
  * @author agrieve@google.com (Andrew Grieve)
  */
-public class JsFileParser extends JsFileLineParser {
+public final class JsFileParser extends JsFileLineParser {
 
   private static Logger logger = Logger.getLogger(JsFileParser.class.getName());
 
@@ -101,8 +101,8 @@ public class JsFileParser extends JsFileLineParser {
 
   private DependencyInfo parseReader(String filePath,
       String closureRelativePath, Reader fileContents) {
-    provides = Lists.newArrayList();
-    requires = Lists.newArrayList();
+    provides = new ArrayList<>();
+    requires = new ArrayList<>();
     fileHasProvidesOrRequires = false;
     fileIsModule = false;
 

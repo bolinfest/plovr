@@ -47,6 +47,14 @@ HTMLCollection.prototype.length;
 HTMLCollection.prototype.item = function(index) {};
 
 /**
+ * @param {string} name
+ * @return {?Node}
+ * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-21069976
+ * @nosideeffects
+ */
+HTMLCollection.prototype.namedItem = function(name) {};
+
+/**
  * @constructor
  * @see http://www.w3.org/TR/DOM-Level-2-HTML/html.html#HTMLOptionsCollection
  */
@@ -728,7 +736,7 @@ HTMLSelectElement.prototype.length;
 HTMLSelectElement.prototype.form;
 
 /**
- * @type {HTMLOptionsCollection}
+ * @type {!HTMLOptionsCollection}
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-30606413
  */
 HTMLSelectElement.prototype.options;
@@ -1287,6 +1295,7 @@ HTMLDirectoryElement.prototype.compact;
  * @constructor
  * @extends {HTMLElement}
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-72509186
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#the-menu-element
  */
 function HTMLMenuElement() {}
 

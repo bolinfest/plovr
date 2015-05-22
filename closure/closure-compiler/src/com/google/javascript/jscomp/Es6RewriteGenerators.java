@@ -36,7 +36,7 @@ import java.util.Set;
  *
  * @author mattloring@google.com (Matthew Loring)
  */
-public class Es6RewriteGenerators extends NodeTraversal.AbstractPostOrderCallback
+public final class Es6RewriteGenerators extends NodeTraversal.AbstractPostOrderCallback
     implements HotSwapCompilerPass {
   private final AbstractCompiler compiler;
 
@@ -52,8 +52,6 @@ public class Es6RewriteGenerators extends NodeTraversal.AbstractPostOrderCallbac
 
   // The current statement being translated.
   private Node currentStatement;
-
-  private static final String ITER_KEY = "$$iterator";
 
   // The name of the variable that holds the state at which the generator
   // should resume execution after a call to yield or return.
@@ -191,7 +189,6 @@ public class Es6RewriteGenerators extends NodeTraversal.AbstractPostOrderCallbac
             NodeUtil.newQName(compiler, Es6ToEs3Converter.MAKE_ITER),
             n.removeFirstChild()));
     Node entryDecl = IR.var(IR.name(GENERATOR_YIELD_ALL_ENTRY));
-    compiler.needsEs6Runtime = true;
 
     Node assignIterResult = IR.assign(
         IR.name(GENERATOR_YIELD_ALL_ENTRY),
@@ -232,6 +229,7 @@ public class Es6RewriteGenerators extends NodeTraversal.AbstractPostOrderCallbac
   }
 
   private void visitGenerator(Node n, Node parent) {
+    compiler.needsEs6Runtime = true;
     hasTranslatedTry = false;
     Node genBlock = compiler.parseSyntheticCode(Joiner.on('\n').join(
       "function generatorBody() {",
@@ -244,11 +242,13 @@ public class Es6RewriteGenerators extends NodeTraversal.AbstractPostOrderCallbac
       "        return {value: undefined, done: true};",
       "    }",
       "  }",
-      "  return {",
-      "    " + ITER_KEY + ": function() { return this; },",
+      "  var iterator = {",
       "    next: function(arg){ return $jscomp$generator$impl(arg, undefined); },",
       "    throw: function(arg){ return $jscomp$generator$impl(undefined, arg); },",
-      "  }",
+      "  };",
+      "  $jscomp.initSymbolIterator();",
+      "  iterator[Symbol.iterator] = function() {return this;};",
+      "  return iterator;",
       "}"
     )).getFirstChild().getLastChild().detachFromParent();
     generatorCaseCount++;
@@ -259,24 +259,18 @@ public class Es6RewriteGenerators extends NodeTraversal.AbstractPostOrderCallbac
 
     //TODO(mattloring): remove this suppression once we can optimize the switch statement to
     // remove unused cases.
-    JSDocInfoBuilder builder;
-    if (n.getJSDocInfo() == null) {
-      builder = new JSDocInfoBuilder(true);
-    } else {
-      builder = JSDocInfoBuilder.copyFrom(n.getJSDocInfo());
-    }
+    JSDocInfoBuilder builder = JSDocInfoBuilder.maybeCopyFrom(n.getJSDocInfo());
     //TODO(mattloring): copy existing suppressions.
     builder.recordSuppressions(ImmutableSet.of("uselessCode"));
-    JSDocInfo info = builder.build(n);
+    JSDocInfo info = builder.build();
     n.setJSDocInfo(info);
-
 
     // Set state to the default after the body of the function has completed.
     originalGeneratorBody.addChildToBack(
         IR.exprResult(IR.assign(IR.name(GENERATOR_STATE), IR.number(-1))));
 
     enclosingBlock = getUnique(genBlock, Token.CASE).getLastChild();
-    hoistRoot = getUnique(genBlock, Token.VAR);
+    hoistRoot = genBlock.getFirstChild();
 
     if (NodeUtil.isNameReferenced(originalGeneratorBody, GENERATOR_ARGUMENTS)) {
       hoistRoot.getParent().addChildAfter(
@@ -921,7 +915,7 @@ public class Es6RewriteGenerators extends NodeTraversal.AbstractPostOrderCallbac
   private Node getUnique(Node node, int type) {
     List<Node> matches = new ArrayList<>();
     insertAll(node, type, matches);
-    Preconditions.checkState(matches.size() == 1);
+    Preconditions.checkState(matches.size() == 1, matches);
     return matches.get(0);
   }
 
@@ -956,7 +950,7 @@ public class Es6RewriteGenerators extends NodeTraversal.AbstractPostOrderCallbac
    *  return temp$$0
    * </pre>
    *
-   * This uses the {@link #ExpressionDecomposer} class
+   * This uses the {@link ExpressionDecomposer} class
    */
   class DecomposeYields extends NodeTraversal.AbstractPreOrderCallback {
 

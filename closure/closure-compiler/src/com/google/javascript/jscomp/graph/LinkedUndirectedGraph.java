@@ -18,11 +18,11 @@ package com.google.javascript.jscomp.graph;
 
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
-import com.google.common.collect.Maps;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -35,18 +35,14 @@ import java.util.Map;
  * @param <N> Value type that the graph node stores.
  * @param <E> Value type that the graph edge stores.
  */
-public class LinkedUndirectedGraph<N, E>
+public final class LinkedUndirectedGraph<N, E>
     extends UndiGraph<N, E> implements GraphvizGraph {
   protected final Map<N, LinkedUndirectedGraphNode<N, E>> nodes =
-      Maps.newHashMap();
+       new HashMap<>();
 
   @Override
   public SubGraph<N, E> newSubGraph() {
     return new SimpleSubGraph<>(this);
-  }
-
-  public static <N, E> LinkedUndirectedGraph<N, E> createWithoutAnnotations() {
-    return new LinkedUndirectedGraph<>(false, false);
   }
 
   public static <N, E> LinkedUndirectedGraph<N, E> create() {

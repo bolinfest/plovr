@@ -21,9 +21,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.TypeValidator.TypeMismatch;
 import com.google.javascript.jscomp.graph.AdjacencyGraph;
@@ -43,6 +40,8 @@ import com.google.javascript.rhino.jstype.ObjectType;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -78,18 +77,18 @@ class AmbiguateProperties implements CompilerPass {
 
   private final AbstractCompiler compiler;
 
-  private final List<Node> stringNodesToRename = Lists.newArrayList();
+  private final List<Node> stringNodesToRename = new ArrayList<>();
   // Can't use these as property names.
   private final char[] reservedCharacters;
 
   /** Map from property name to Property object */
-  private final Map<String, Property> propertyMap = Maps.newHashMap();
+  private final Map<String, Property> propertyMap = new HashMap<>();
 
   /** Property names that don't get renamed */
   private final Set<String> externedNames;
 
   /** Names to which properties shouldn't be renamed, to avoid name conflicts */
-  private final Set<String> quotedNames = Sets.newHashSet();
+  private final Set<String> quotedNames = new HashSet<>();
 
   /** Map from original property name to new name. Only used by tests. */
   private Map<String, String> renamingMap = null;
@@ -116,7 +115,7 @@ class AmbiguateProperties implements CompilerPass {
    * A map from JSType to JSTypeBitSet representing the types related
    * to the type.
    */
-  private Map<JSType, JSTypeBitSet> relatedBitsets = Maps.newHashMap();
+  private Map<JSType, JSTypeBitSet> relatedBitsets = new HashMap<>();
 
   /** A set of types that invalidate properties from ambiguation. */
   private final Set<JSType> invalidatingTypes;
@@ -134,7 +133,7 @@ class AmbiguateProperties implements CompilerPass {
     this.reservedCharacters = reservedCharacters;
 
     JSTypeRegistry r = compiler.getTypeRegistry();
-    invalidatingTypes = Sets.newHashSet(
+    invalidatingTypes = new HashSet<>(ImmutableSet.of(
         r.getNativeType(JSTypeNative.ALL_TYPE),
         r.getNativeType(JSTypeNative.FUNCTION_FUNCTION_TYPE),
         r.getNativeType(JSTypeNative.FUNCTION_INSTANCE_TYPE),
@@ -143,9 +142,9 @@ class AmbiguateProperties implements CompilerPass {
         r.getNativeType(JSTypeNative.OBJECT_TYPE),
         r.getNativeType(JSTypeNative.OBJECT_PROTOTYPE),
         r.getNativeType(JSTypeNative.OBJECT_FUNCTION_TYPE),
-        r.getNativeType(JSTypeNative.TOP_LEVEL_PROTOTYPE));
+        r.getNativeType(JSTypeNative.TOP_LEVEL_PROTOTYPE)));
 
-    for (TypeMismatch mis : compiler.getTypeValidator().getMismatches()) {
+    for (TypeMismatch mis : compiler.getTypeMismatches()) {
       addInvalidatingType(mis.typeA);
       addInvalidatingType(mis.typeB);
     }
@@ -157,7 +156,7 @@ class AmbiguateProperties implements CompilerPass {
       AbstractCompiler compiler, char[] reservedCharacters) {
     AmbiguateProperties ap =
         new AmbiguateProperties(compiler, reservedCharacters);
-    ap.renamingMap = Maps.newHashMap();
+    ap.renamingMap = new HashMap<>();
     return ap;
   }
 
@@ -621,7 +620,7 @@ class AmbiguateProperties implements CompilerPass {
     public String toString() {
       int from = 0;
       int current = 0;
-      List<String> types = Lists.newArrayList();
+      List<String> types = new ArrayList<>();
       while (-1 != (current = nextSetBit(from))) {
         types.add(intForType.inverse().get(current).toString());
         from = current + 1;

@@ -44,8 +44,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.javascript.rhino.jstype.JSType;
-import com.google.javascript.rhino.jstype.SimpleSourceFile;
-import com.google.javascript.rhino.jstype.StaticSourceFile;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -128,9 +126,12 @@ public class Node implements Cloneable, Serializable {
                                   // GlobalTypeInfo and NewTypeInference.
                                   // We use this to tag getprop nodes that
                                   // declare properties.
-      DECLARED_TYPE_EXPR = 78;    // Used to attach TypeDeclarationNode ASTs to
+      DECLARED_TYPE_EXPR = 78,    // Used to attach TypeDeclarationNode ASTs to
                                   // Nodes which represent a typed NAME or
                                   // FUNCTION.
+                                  //
+      TYPE_BEFORE_CAST = 79;      // The type of an expression before the cast.
+                                  // This will be present only if the expression is casted.
 
 
   public static final int   // flags for INCRDECR_PROP
@@ -182,6 +183,7 @@ public class Node implements Cloneable, Serializable {
         case ANALYZED_DURING_GTI:  return "analyzed_during_gti";
         case CONSTANT_PROPERTY_DEF: return "constant_property_def";
         case DECLARED_TYPE_EXPR: return "declared_type_expr";
+        case TYPE_BEFORE_CAST: return "type_before_cast";
         default:
           throw new IllegalStateException("unexpected prop id " + propType);
       }
@@ -954,6 +956,14 @@ public class Node implements Cloneable, Serializable {
     return new IntPropListItem(propType, value, next);
   }
 
+  /**
+   * Returns the type of this node before casting. This annotation will only exist on the first
+   * child of a CAST node after type checking.
+   */
+  public JSType getJSTypeBeforeCast() {
+    return (JSType) getProp(TYPE_BEFORE_CAST);
+  }
+
   // Gets all the property types, in sorted order.
   private int[] getSortedPropTypes() {
     int count = 0;
@@ -1631,7 +1641,7 @@ public class Node implements Cloneable, Serializable {
       return false;
     }
 
-    if (compareType && !JSType.isEquivalent((JSType) typei, node.getJSType())) {
+    if (compareType && !JSType.isEquivalent(getJSType(), node.getJSType())) {
       return false;
     }
 
@@ -1979,6 +1989,7 @@ public class Node implements Cloneable, Serializable {
     putProp(ORIGINALNAME_PROP, other.getProp(ORIGINALNAME_PROP));
     putProp(STATIC_SOURCE_FILE, other.getProp(STATIC_SOURCE_FILE));
     sourcePosition = other.sourcePosition;
+    setLength(other.getLength());
     return this;
   }
 
@@ -2016,6 +2027,7 @@ public class Node implements Cloneable, Serializable {
     if (getProp(STATIC_SOURCE_FILE) == null) {
       putProp(STATIC_SOURCE_FILE, other.getProp(STATIC_SOURCE_FILE));
       sourcePosition = other.sourcePosition;
+      setLength(other.getLength());
     }
 
     return this;
@@ -2044,48 +2056,20 @@ public class Node implements Cloneable, Serializable {
    * specified type.
    */
   public JSType getJSType() {
-    return (JSType) typei;
+    return typei instanceof JSType ? (JSType) typei : null;
   }
 
   public void setJSType(JSType jsType) {
-      this.typei = jsType;
+    this.typei = jsType;
   }
 
   public TypeI getTypeI() {
-    return typei;
+    // For the time being, we only want to return the type iff it's an old type.
+    return getJSType();
   }
 
   public void setTypeI(TypeI type) {
     this.typei = type;
-  }
-
-  public FileLevelJsDocBuilder getJsDocBuilderForNode() {
-    return new FileLevelJsDocBuilder();
-  }
-
-  /**
-   * An inner class that provides back-door access to the license
-   * property of the JSDocInfo property for this node. This is only
-   * meant to be used for top-level script nodes where the
-   * {@link com.google.javascript.jscomp.parsing.JsDocInfoParser} needs to
-   * be able to append directly to the top-level node, not just the
-   * current node.
-   */
-  public class FileLevelJsDocBuilder {
-    public void append(String fileLevelComment) {
-      JSDocInfo jsDocInfo = getJSDocInfo();
-      if (jsDocInfo == null) {
-        // TODO(user): Is there a way to determine whether to
-        // parse the JsDoc documentation from here?
-        jsDocInfo = new JSDocInfo(false);
-      }
-      String license = jsDocInfo.getLicense();
-      if (license == null) {
-        license = "";
-      }
-      jsDocInfo.setLicense(license + fileLevelComment);
-      setJSDocInfo(jsDocInfo);
-    }
   }
 
   /**
@@ -2180,17 +2164,6 @@ public class Node implements Cloneable, Serializable {
   @SuppressWarnings("unchecked")
   public Set<String> getDirectives() {
     return (Set<String>) getProp(DIRECTIVES);
-  }
-
-  /**
-   * Adds a warning to be suppressed. This is indistinguishable
-   * from having a {@code @suppress} tag in the code.
-   */
-  public void addSuppression(String warning) {
-    if (getJSDocInfo() == null) {
-      setJSDocInfo(new JSDocInfo(false));
-    }
-    getJSDocInfo().addSuppression(warning);
   }
 
   /**

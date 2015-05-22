@@ -22,7 +22,6 @@ import com.google.common.collect.Multimap;
 import com.google.javascript.jscomp.NameReferenceGraph.Name;
 import com.google.javascript.jscomp.NameReferenceGraph.Reference;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.graph.GraphNode;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -74,16 +73,7 @@ class NameReferenceGraphConstruction implements CompilerPass {
 
   @Override
   public void process(Node externs, Node root) {
-    // Use the MemoizedScopeCreator instance from TypeCheck if available
-    // as FunctionTypeBuilder warns about existing types if TypedScopeCreator is
-    // ran a second time.
-    ScopeCreator scopeCreator = compiler.getTypedScopeCreator();
-    if (scopeCreator == null) {
-      // The TypedScopeCreator gives us correct handling of namespaces,
-      // while the default NodeTraversal only gives us a
-      // SyntacticScopeCreator.
-      scopeCreator = new MemoizedScopeCreator(new TypedScopeCreator(compiler));
-    }
+    ScopeCreator scopeCreator = new MemoizedScopeCreator(new TypedScopeCreator(compiler));
     NodeTraversal externsTraversal = new NodeTraversal(compiler,
         new Traversal(true), scopeCreator);
     NodeTraversal codeTraversal = new NodeTraversal(compiler,
@@ -408,8 +398,8 @@ class NameReferenceGraphConstruction implements CompilerPass {
         className = classType.getReferenceName();
       } else {
         // We'll guess it is a constructor even if it didn't have @constructor
-        classType = compiler.getTypeRegistry().getNativeFunctionType(
-            JSTypeNative.U2U_CONSTRUCTOR_TYPE);
+        classType = compiler.getTypeIRegistry()
+            .getNativeFunctionType(JSTypeNative.U2U_CONSTRUCTOR_TYPE);
         className = NodeUtil.getPrototypeClassName(qName).getQualifiedName();
       }
       // In case we haven't seen the function yet.
@@ -571,8 +561,7 @@ class NameReferenceGraphConstruction implements CompilerPass {
       if (CONSERVATIVE) {
         throw new RuntimeException("Type system failed us :(");
       } else {
-        return compiler.getTypeRegistry().getNativeType(
-            JSTypeNative.UNKNOWN_TYPE);
+        return compiler.getTypeIRegistry().getNativeType(JSTypeNative.UNKNOWN_TYPE);
       }
     }
     // Null-ability does not affect the name graph's result.

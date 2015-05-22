@@ -46,9 +46,9 @@ import static com.google.javascript.rhino.jstype.JSTypeNative.UNKNOWN_TYPE;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -59,7 +59,7 @@ import java.util.List;
  *
  * @author nicksantos@google.com (Nick Santos)
  */
-class UnionTypeBuilder implements Serializable {
+public class UnionTypeBuilder implements Serializable {
   private static final long serialVersionUID = 1L;
 
   // If the best we can do is say "this object is one of thirty things",
@@ -67,7 +67,7 @@ class UnionTypeBuilder implements Serializable {
   private static final int DEFAULT_MAX_UNION_SIZE = 30;
 
   private final JSTypeRegistry registry;
-  private final List<JSType> alternates = Lists.newArrayList();
+  private final List<JSType> alternates = new ArrayList<>();
   private boolean isAllType = false;
   private boolean isNativeUnknownType = false;
   private boolean areAllUnknownsChecked = true;
@@ -96,7 +96,7 @@ class UnionTypeBuilder implements Serializable {
   // Memoize the result, in case build() is called multiple times.
   private JSType result = null;
 
-  UnionTypeBuilder(JSTypeRegistry registry) {
+  public UnionTypeBuilder(JSTypeRegistry registry) {
     this(registry, DEFAULT_MAX_UNION_SIZE);
   }
 
@@ -117,7 +117,7 @@ class UnionTypeBuilder implements Serializable {
    * Adds an alternate to the union type under construction. Returns this
    * for easy chaining.
    */
-  UnionTypeBuilder addAlternate(JSType alternate) {
+  public UnionTypeBuilder addAlternate(JSType alternate) {
     // build() returns the bottom type by default, so we can
     // just bail out early here.
     if (alternate.isNoType()) {
@@ -313,7 +313,7 @@ class UnionTypeBuilder implements Serializable {
    * @return A UnionType if it has two or more alternates, the
    *    only alternate if it has one and otherwise {@code NO_TYPE}.
    */
-  JSType build() {
+  public JSType build() {
     if (result == null) {
       result = reduceAlternatesWithoutUnion();
       if (result == null) {

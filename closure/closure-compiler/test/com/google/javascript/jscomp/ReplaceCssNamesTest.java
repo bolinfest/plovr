@@ -21,9 +21,9 @@ import static com.google.javascript.jscomp.ReplaceCssNames.UNKNOWN_SYMBOL_WARNIN
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Maps;
 import com.google.javascript.rhino.Node;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -31,7 +31,7 @@ import java.util.Set;
  * Tests for ReplaceCssNames.java.
  *
  */
-public class ReplaceCssNamesTest extends CompilerTestCase {
+public final class ReplaceCssNamesTest extends CompilerTestCase {
   /** Whether to pass the map of replacements as opposed to null */
   boolean useReplacementMap;
 
@@ -95,7 +95,7 @@ public class ReplaceCssNamesTest extends CompilerTestCase {
   protected void setUp() throws Exception {
     super.setUp();
     super.enableLineNumberCheck(true);
-    cssNames = Maps.newHashMap();
+    cssNames = new HashMap<>();
     useReplacementMap = true;
     renamingMap = getPartialMap();
   }

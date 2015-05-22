@@ -17,16 +17,15 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
 import com.google.javascript.jscomp.RenameVars.Assignment;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.Node;
 
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.SortedSet;
 
@@ -74,8 +73,7 @@ class ShadowVariables implements CompilerPass {
   // Make sure of scope memorization to minimize scope creation cost.
   private final Multimap<Node, String> scopeUpRefMap = HashMultimap.create();
 
-  // Maps all local Scope.Var to all of its referencing NAME node
-  // in any scope.
+  // Maps each local variable to all of its referencing NAME nodes in any scope.
   private final Multimap<Var, Node> varToNameUsage = HashMultimap.create();
 
   private final AbstractCompiler compiler;
@@ -102,7 +100,7 @@ class ShadowVariables implements CompilerPass {
     this.assignments = assignments;
     this.varsByFrequency = varsByFrequency;
     this.oldPseudoNameMap = pseudoNameMap;
-    this.deltaPseudoNameMap = Maps.newLinkedHashMap();
+    this.deltaPseudoNameMap = new LinkedHashMap<>();
   }
 
   @Override

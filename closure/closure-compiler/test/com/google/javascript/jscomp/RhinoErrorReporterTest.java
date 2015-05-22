@@ -18,16 +18,16 @@ package com.google.javascript.jscomp;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
 import junit.framework.TestCase;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
  * Tests for error message filtering.
  * @author nicksantos@google.com (Nick Santos)
  */
-public class RhinoErrorReporterTest extends TestCase {
+public final class RhinoErrorReporterTest extends TestCase {
 
   private boolean reportMisplacedTypeAnnotations;
   private boolean reportEs3Props;
@@ -100,6 +100,19 @@ public class RhinoErrorReporterTest extends TestCase {
     assertEquals(10, error.getCharno());
   }
 
+  public void testAnnotationDeprecated() throws Exception {
+    String message =
+        "The @expose annotation is deprecated. Use @nocollapse or @export "
+        + "instead.";
+    JSError error = assertWarning(
+        "/** @expose */ var x = 1;",
+        RhinoErrorReporter.ANNOTATION_DEPRECATED,
+        message);
+
+    assertEquals(1, error.getLineNumber());
+    assertEquals(15, error.getCharno());
+  }
+
   /**
    * Verifies that the compiler emits an error for the given code.
    */
@@ -118,7 +131,7 @@ public class RhinoErrorReporterTest extends TestCase {
     assertEquals("Expected error", 1, compiler.getErrorCount());
 
     JSError error =
-        Iterables.getOnlyElement(Lists.newArrayList(compiler.getErrors()));
+        Iterables.getOnlyElement(Arrays.asList(compiler.getErrors()));
     assertEquals(type, error.getType());
     assertEquals(description, error.description);
     return error;
@@ -133,7 +146,7 @@ public class RhinoErrorReporterTest extends TestCase {
     assertEquals("Expected warning", 1, compiler.getWarningCount());
 
     JSError error =
-        Iterables.getOnlyElement(Lists.newArrayList(compiler.getWarnings()));
+        Iterables.getOnlyElement(Arrays.asList(compiler.getWarnings()));
     assertEquals(type, error.getType());
     assertEquals(description, error.description);
     return error;

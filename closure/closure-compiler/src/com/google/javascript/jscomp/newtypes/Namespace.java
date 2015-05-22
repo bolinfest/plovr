@@ -18,8 +18,9 @@ package com.google.javascript.jscomp.newtypes;
 
 import com.google.common.base.Preconditions;
 import com.google.javascript.jscomp.newtypes.NominalType.RawNominalType;
+import com.google.javascript.rhino.Node;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -36,6 +37,7 @@ public abstract class Namespace {
   protected Map<String, NamespaceLit> namespaces = null;
   // Non-namespace properties
   protected Map<String, Typedef> typedefs = null;
+  protected Map<String, DeclaredTypeRegistry> scopes = null;
   protected PersistentMap<String, Property> otherProps = PersistentMap.create();
 
   public boolean isDefined(QualifiedName qname) {
@@ -55,6 +57,7 @@ public abstract class Namespace {
         || ns.enums != null && ns.enums.containsKey(name)
         || ns.namespaces != null && ns.namespaces.containsKey(name)
         || ns.typedefs != null && ns.typedefs.containsKey(name)
+        || ns.scopes != null && ns.scopes.containsKey(name)
         || ns.otherProps.containsKey(name);
   }
 
@@ -62,17 +65,37 @@ public abstract class Namespace {
     Preconditions.checkState(!isDefined(qname));
     Namespace ns = getReceiverNamespace(qname);
     if (ns.namespaces == null) {
-      ns.namespaces = new HashMap<>();
+      ns.namespaces = new LinkedHashMap<>();
     }
     String name = qname.getRightmostName();
     ns.namespaces.put(name, new NamespaceLit());
   }
 
+  public void addScope(QualifiedName qname, DeclaredTypeRegistry scope) {
+//     Preconditions.checkState(!isDefined(qname));  // Scopes+nominals can overlap
+    Namespace ns = getReceiverNamespace(qname);
+    if (ns.scopes == null) {
+      ns.scopes = new LinkedHashMap<>();
+    }
+    String name = qname.getRightmostName();
+    ns.scopes.put(name, scope);
+  }
+
+  public DeclaredTypeRegistry getScope(QualifiedName qname) {
+    Namespace ns = getReceiverNamespace(qname);
+    if (ns == null || ns.scopes == null) {
+      return null;
+    }
+    String name = qname.getRightmostName();
+    return ns.scopes.get(name);
+  }
+
+
   public void addNominalType(QualifiedName qname, RawNominalType rawNominalType) {
     Preconditions.checkState(!isDefined(qname));
     Namespace ns = getReceiverNamespace(qname);
     if (ns.nominals == null) {
-      ns.nominals = new HashMap<>();
+      ns.nominals = new LinkedHashMap<>();
     }
     String name = qname.getRightmostName();
     ns.nominals.put(name, rawNominalType);
@@ -82,7 +105,7 @@ public abstract class Namespace {
     Preconditions.checkState(!isDefined(qname));
     Namespace ns = getReceiverNamespace(qname);
     if (ns.typedefs == null) {
-      ns.typedefs = new HashMap<>();
+      ns.typedefs = new LinkedHashMap<>();
     }
     String name = qname.getRightmostName();
     ns.typedefs.put(name, td);
@@ -92,7 +115,7 @@ public abstract class Namespace {
     Preconditions.checkState(!isDefined(qname));
     Namespace ns = getReceiverNamespace(qname);
     if (ns.enums == null) {
-      ns.enums = new HashMap<>();
+      ns.enums = new LinkedHashMap<>();
     }
     String name = qname.getRightmostName();
     ns.enums.put(name, e);
@@ -171,23 +194,25 @@ public abstract class Namespace {
   }
 
   /** Add a new non-optional declared property to this namespace */
-  public void addProperty(String pname, JSType type, boolean isConstant) {
+  public void addProperty(String pname, Node defSite, JSType type, boolean isConstant) {
     if (type == null && isConstant) {
       type = JSType.UNKNOWN;
     }
-    otherProps = otherProps.with(pname, isConstant ?
-        Property.makeConstant(type, type) : Property.make(type, type));
+    otherProps = otherProps.with(pname, isConstant
+        ? Property.makeConstant(defSite, type, type)
+        : Property.makeWithDefsite(defSite, type, type));
   }
 
   /** Add a new undeclared property to this namespace */
   public void addUndeclaredProperty(
-      String pname, JSType t, boolean isConstant) {
+      String pname, Node defSite, JSType t, boolean isConstant) {
     if (otherProps.containsKey(pname)
         && !otherProps.get(pname).getType().isUnknown()) {
       return;
     }
-    otherProps = otherProps.with(pname, isConstant ?
-        Property.makeConstant(t, null) : Property.make(t, null));
+    otherProps = otherProps.with(pname, isConstant
+        ? Property.makeConstant(defSite, t, null)
+        : Property.makeWithDefsite(defSite, t, null));
   }
 
   public JSType getPropDeclaredType(String pname) {

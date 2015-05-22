@@ -66,6 +66,10 @@ class RhinoErrorReporter {
       DiagnosticType.warning("JSC_MISPLACED_FUNCTION_ANNOTATION",
           "Misplaced function annotation.");
 
+  static final DiagnosticType MISPLACED_MSG_ANNOTATION =
+      DiagnosticType.disabled("JSC_MISPLACED_MSG_ANNOTATION",
+          "Misplaced message annotation.");
+
   static final DiagnosticType INVALID_ES3_PROP_NAME = DiagnosticType.warning(
       "JSC_INVALID_ES3_PROP_NAME",
       "Keywords and reserved words are not allowed as unquoted property " +
@@ -85,6 +89,9 @@ class RhinoErrorReporter {
       DiagnosticType.error("ES6_FEATURE",
           "{0}. Use --language_in=ECMASCRIPT6 or ECMASCRIPT6_STRICT " +
           "to enable ES6 features.");
+
+  static final DiagnosticType ANNOTATION_DEPRECATED =
+      DiagnosticType.warning("JSC_ANNOTATION_DEPRECATED", "{0}");
 
   // A map of Rhino messages to their DiagnosticType.
   private final Map<Pattern, DiagnosticType> typeMap;
@@ -134,6 +141,10 @@ class RhinoErrorReporter {
         .put(Pattern.compile("^This JSDoc is not attached to a function node.*"),
             MISPLACED_FUNCTION_ANNOTATION)
 
+        // Unexpected @desc JsDoc
+        .put(Pattern.compile("^@desc, @hidden, and @meaning annotations.*"),
+            MISPLACED_MSG_ANNOTATION)
+
         .put(Pattern.compile("^Keywords and reserved words" +
             " are not allowed as unquoted property.*"),
             INVALID_ES3_PROP_NAME)
@@ -153,6 +164,10 @@ class RhinoErrorReporter {
 
         .put(Pattern.compile("^this language feature is only supported in es6 mode.*"),
             ES6_FEATURE)
+
+        // Deprecated annotations
+        .put(Pattern.compile("^The @[a-z]+ annotation is deprecated\\..*"),
+            ANNOTATION_DEPRECATED)
 
         .build();
   }

@@ -18,12 +18,12 @@ package com.google.javascript.jscomp;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.collect.Sets;
+import com.google.common.collect.ImmutableSet;
 
 /**
  * Test case for {@link GatherExternProperties}.
  */
-public class GatherExternPropertiesTest extends CompilerTestCase {
+public final class GatherExternPropertiesTest extends CompilerTestCase {
   public GatherExternPropertiesTest() {
     super();
     enableTypeCheck(CheckLevel.WARNING);
@@ -180,7 +180,7 @@ public class GatherExternPropertiesTest extends CompilerTestCase {
 
   private void assertExternProperties(String externs, String... properties) {
     testSame(externs, "", null);
-    assertEquals(Sets.newHashSet(properties),
+    assertEquals(ImmutableSet.copyOf(properties),
         getLastCompiler().getExternProperties());
   }
 }

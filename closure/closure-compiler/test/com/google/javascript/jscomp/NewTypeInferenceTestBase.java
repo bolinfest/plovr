@@ -17,7 +17,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Joiner;
-import com.google.common.collect.Lists;
+import com.google.common.collect.ImmutableList;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
@@ -36,37 +36,53 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
 
   protected static final String CLOSURE_BASE = "var goog;";
   protected static final String DEFAULT_EXTERNS =
-      CompilerTypeTestCase.DEFAULT_EXTERNS + "/** @return {string} */\n"
-      + "String.prototype.toString = function() { return '' };\n"
-      + "/**\n"
-      + " * @constructor\n"
-      + " * @param {*=} arg\n"
-      + " * @return {number}\n"
-      + " */\n"
-      + "function Number(arg) {}\n"
-      + "/** @return {string} */\n"
-      + "Number.prototype.toString = function() { return '' };\n"
-      + "/**\n"
-      + " * @constructor\n"
-      + " * @param {*=} arg\n"
-      + " * @return {boolean}\n"
-      + " */\n"
-      + "function Boolean(arg) {}\n"
-      + "/** @return {string} */\n"
-      + "Boolean.prototype.toString = function() { return '' };\n"
-      + "/**\n"
-      + " * @param {?=} opt_begin\n"
-      + " * @param {?=} opt_end\n"
-      + " * @return {!Array.<T>}\n"
-      + " * @this {{length: number}|string}\n"
-      + " * @template T\n"
-      + " */\n"
-      + "Array.prototype.slice = function(opt_begin, opt_end) {};\n"
-      + "/**\n"
-      + " * @param {...?} var_args\n"
-      + " * @return {!Array.<?>}\n"
-      + " */\n"
-      + "Array.prototype.concat = function(var_args) {};\n";
+      CompilerTypeTestCase.DEFAULT_EXTERNS + Joiner.on('\n').join(
+          "/** @return {string} */",
+          "String.prototype.toString = function() { return '' };",
+          "/**",
+          " * @constructor",
+          " * @param {*=} arg",
+          " * @return {number}",
+          " */",
+          "function Number(arg) {}",
+          "/** @return {string} */",
+          "Number.prototype.toString = function() { return '' };",
+          "/**",
+          " * @constructor",
+          " * @param {*=} arg",
+          " * @return {boolean}",
+          " */",
+          "function Boolean(arg) {}",
+          "/** @return {string} */",
+          "Boolean.prototype.toString = function() { return '' };",
+          "/**",
+          " * @param {?=} opt_begin",
+          " * @param {?=} opt_end",
+          " * @return {!Array.<T>}",
+          " * @this {{length: number}|string}",
+          " * @template T",
+          " */",
+          "Array.prototype.slice = function(opt_begin, opt_end) {};",
+          "/**",
+          " * @param {...?} var_args",
+          " * @return {!Array.<?>}",
+          " */",
+          "Array.prototype.concat = function(var_args) {};",
+          "/** @interface */",
+          "function IThenable () {}",
+          "IThenable.prototype.then = function(onFulfilled) {};",
+          "/**",
+          " * @template T",
+          " * @constructor",
+          " * @implements {IThenable}",
+          " */",
+          "function Promise(resolver) {};",
+          "/**",
+          " * @template RESULT",
+          " * @param {function(): RESULT} onFulfilled",
+          " * @return {RESULT}",
+          " */",
+          "Promise.prototype.then = function(onFulfilled) {};");
 
   @Override
   protected void setUp() {
@@ -91,6 +107,8 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
             new Es6SplitVariableDeclarations(compiler)));
     passes.add(makePassFactory("es6ConvertSuper",
             new Es6ConvertSuper(compiler)));
+    passes.add(makePassFactory("convertEs6TypedToEs6",
+            new Es6TypedToEs6Converter(compiler)));
     passes.add(makePassFactory("convertEs6",
             new Es6ToEs3Converter(compiler)));
     passes.add(makePassFactory("Es6RewriteLetConst",
@@ -108,8 +126,8 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
     final CompilerOptions options = compiler.getOptions();
     options.setClosurePass(true);
     compiler.init(
-        Lists.newArrayList(SourceFile.fromCode("[externs]", externs)),
-        Lists.newArrayList(SourceFile.fromCode("[testcode]", js)),
+        ImmutableList.of(SourceFile.fromCode("[externs]", externs)),
+        ImmutableList.of(SourceFile.fromCode("[testcode]", js)),
         options);
 
     Node externsRoot = IR.block();
@@ -150,14 +168,11 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
     typeCheck(externs, js, warningKinds);
   }
 
-  protected final void typeCheck(
+  private final void typeCheck(
       String externs, String js, DiagnosticType... warningKinds) {
     parseAndTypeCheck(externs, js);
-    if (compiler.getErrors().length > 0) {
-      fail("Expected no errors, but found: "
-          + Arrays.toString(compiler.getErrors()));
-    }
     JSError[] warnings = compiler.getWarnings();
+    JSError[] errors = compiler.getErrors();
     String errorMessage =
         "Expected warning of type:\n"
         + "================================================================\n"
@@ -168,11 +183,16 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
         + Arrays.toString(warnings) + "\n"
         + "----------------------------------------------------------------\n";
     assertEquals(
-        errorMessage + "Warning count", warningKinds.length, warnings.length);
+        errorMessage + "Warning count", warningKinds.length, warnings.length + errors.length);
     for (JSError warning : warnings) {
       assertTrue(
           "Wrong warning type\n" + errorMessage,
           Arrays.asList(warningKinds).contains(warning.getType()));
+    }
+    for (JSError error : errors) {
+      assertTrue(
+          "Wrong warning type\n" + errorMessage,
+          Arrays.asList(warningKinds).contains(error.getType()));
     }
   }
 }

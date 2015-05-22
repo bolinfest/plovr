@@ -39,11 +39,11 @@
 package com.google.javascript.rhino.testing;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Maps;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.SimpleSlot;
-import com.google.javascript.rhino.jstype.StaticSlot;
+import com.google.javascript.rhino.jstype.StaticTypedSlot;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -51,7 +51,7 @@ import java.util.Map;
  * @author nicksantos@google.com (Nick Santos)
  */
 public class MapBasedScope extends AbstractStaticScope<JSType> {
-  private final Map<String, StaticSlot<JSType>> slots = Maps.newHashMap();
+  private final Map<String, StaticTypedSlot<JSType>> slots = new HashMap<>();
 
   public MapBasedScope(Map<String, ? extends JSType> namesToTypes) {
     for (Map.Entry<String, ? extends JSType> entry : namesToTypes.entrySet()) {
@@ -66,7 +66,7 @@ public class MapBasedScope extends AbstractStaticScope<JSType> {
   }
 
   @Override
-  public StaticSlot<JSType> getSlot(String name) {
+  public StaticTypedSlot<JSType> getSlot(String name) {
     return slots.get(name);
   }
 }

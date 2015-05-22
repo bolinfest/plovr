@@ -16,11 +16,13 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
-import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import static com.google.javascript.jscomp.MarkNoSideEffectCalls.INVALID_NO_SIDE_EFFECT_ANNOTATION;
+
+import com.google.common.collect.ImmutableList;
+import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.Node;
+
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -28,8 +30,8 @@ import java.util.List;
  * Tests for {@link MarkNoSideEffectCalls}
  *
  */
-public class MarkNoSideEffectCallsTest extends CompilerTestCase {
-  List<String> noSideEffectCalls = Lists.newArrayList();
+public final class MarkNoSideEffectCallsTest extends CompilerTestCase {
+  List<String> noSideEffectCalls = new ArrayList<>();
 
   private static String kExterns =
       "function externSef1(){}" +

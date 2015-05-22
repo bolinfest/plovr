@@ -18,11 +18,12 @@ package com.google.javascript.jscomp;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.Node;
+
 import junit.framework.TestCase;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -30,7 +31,7 @@ import java.util.List;
  * Tests for {@link MaybeReachingVariableUse}.
  *
  */
-public class MaybeReachingVariableUseTest extends TestCase {
+public final class MaybeReachingVariableUseTest extends TestCase {
 
   private MaybeReachingVariableUse useDef = null;
   private Node def = null;
@@ -145,14 +146,14 @@ public class MaybeReachingVariableUseTest extends TestCase {
     src = "function _FUNCTION(param1, param2){" + src + "}";
     Node n = compiler.parseTestCode(src).getFirstChild();
     assertEquals(0, compiler.getErrorCount());
-    Scope scope = new SyntacticScopeCreator(compiler).createScope(n, null);
+    Scope scope = SyntacticScopeCreator.makeUntyped(compiler).createScope(n, null);
     ControlFlowAnalysis cfa = new ControlFlowAnalysis(compiler, false, true);
     cfa.process(null, n);
     ControlFlowGraph<Node> cfg = cfa.getCfg();
     useDef = new MaybeReachingVariableUse(cfg, scope, compiler);
     useDef.analyze();
     def = null;
-    uses = Lists.newArrayList();
+    uses = new ArrayList<>();
     new NodeTraversal(compiler,new LabelFinder()).traverse(n);
     assertNotNull("Code should have an instruction labeled D", def);
     assertFalse("Code should have an instruction labeled starting withing U",

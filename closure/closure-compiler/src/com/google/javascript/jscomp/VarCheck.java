@@ -17,15 +17,15 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.SyntacticScopeCreator.RedeclarationHandler;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
+import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -87,7 +87,7 @@ class VarCheck extends AbstractPostOrderCallback implements
   // Vars that still need to be declared in externs. These will be declared
   // at the end of the pass, or when we see the equivalent var declared
   // in the normal code.
-  private final Set<String> varsToDeclareInExterns = Sets.newHashSet();
+  private final Set<String> varsToDeclareInExterns = new HashSet<>();
 
   private final AbstractCompiler compiler;
 
@@ -118,9 +118,10 @@ class VarCheck extends AbstractPostOrderCallback implements
       // Redeclaration check is handled in VariableReferenceCheck for ES6
       return new Es6SyntacticScopeCreator(compiler);
     } else if (sanityCheck) {
-      return new SyntacticScopeCreator(compiler);
+      return SyntacticScopeCreator.makeUntyped(compiler);
     } else {
-      return new SyntacticScopeCreator(compiler, new RedeclarationCheckHandler());
+      return SyntacticScopeCreator.makeUntypedWithRedeclHandler(
+          compiler, new RedeclarationCheckHandler());
     }
   }
 
@@ -137,7 +138,7 @@ class VarCheck extends AbstractPostOrderCallback implements
     }
 
     NodeTraversal t = new NodeTraversal(compiler, this, scopeCreator);
-    t.traverseRoots(Lists.newArrayList(externs, root));
+    t.traverseRoots(externs, root);
     for (String varName : varsToDeclareInExterns) {
       createSynthesizedExternVar(varName);
     }
@@ -177,12 +178,14 @@ class VarCheck extends AbstractPostOrderCallback implements
         varsToDeclareInExterns.contains(varName)) {
       createSynthesizedExternVar(varName);
 
-      n.addSuppression("duplicate");
+      JSDocInfoBuilder builder = JSDocInfoBuilder.maybeCopyFrom(n.getJSDocInfo());
+      builder.addSuppression("duplicate");
+      n.setJSDocInfo(builder.build());
     }
 
     // Check that the var has been declared.
     Scope scope = t.getScope();
-    Scope.Var var = scope.getVar(varName);
+    Var var = scope.getVar(varName);
     if (var == null) {
       if (NodeUtil.isFunctionExpression(parent)) {
         // e.g. [ function foo() {} ], it's okay if "foo" isn't defined in the
@@ -198,8 +201,7 @@ class VarCheck extends AbstractPostOrderCallback implements
           throw new IllegalStateException("Unexpected variable " + varName);
         } else {
           createSynthesizedExternVar(varName);
-          scope.getGlobalScope().declare(varName, n,
-              null, compiler.getSynthesizedExternsInput());
+          scope.getGlobalScope().declare(varName, n, compiler.getSynthesizedExternsInput());
         }
       }
       return;
@@ -281,7 +283,7 @@ class VarCheck extends AbstractPostOrderCallback implements
           case Token.GETPROP:
             if (n == parent.getFirstChild()) {
               Scope scope = t.getScope();
-              Scope.Var var = scope.getVar(n.getString());
+              Var var = scope.getVar(n.getString());
               if (var == null) {
                 t.report(n, UNDEFINED_EXTERN_VAR_ERROR, n.getString());
                 varsToDeclareInExterns.add(n.getString());
@@ -300,7 +302,7 @@ class VarCheck extends AbstractPostOrderCallback implements
             t.report(n, NAME_REFERENCE_IN_EXTERNS_ERROR, n.getString());
 
             Scope scope = t.getScope();
-            Scope.Var var = scope.getVar(n.getString());
+            Var var = scope.getVar(n.getString());
             if (var == null) {
               varsToDeclareInExterns.add(n.getString());
             }
@@ -317,7 +319,7 @@ class VarCheck extends AbstractPostOrderCallback implements
    * @return Whether duplicated declarations warnings should be suppressed
    *     for the given node.
    */
-  static boolean hasDuplicateDeclarationSuppression(Node n, Scope.Var origVar) {
+  static boolean hasDuplicateDeclarationSuppression(Node n, Var origVar) {
     Preconditions.checkState(n.isName() || n.isRest() || n.isStringKey());
     Node parent = n.getParent();
     Node origParent = origVar.getParentNode();
@@ -348,7 +350,7 @@ class VarCheck extends AbstractPostOrderCallback implements
 
       // Don't allow multiple variables to be declared at the top-level scope
       if (s.isGlobal()) {
-        Scope.Var origVar = s.getVar(name);
+        Var origVar = s.getVar(name);
         Node origParent = origVar.getParentNode();
         if (origParent.isCatch() &&
             parent.isCatch()) {

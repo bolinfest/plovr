@@ -16,16 +16,15 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.AbstractShallowCallback;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.BasicBlock;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.Behavior;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.Reference;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceCollection;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceMap;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.Node;
 
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -50,7 +49,7 @@ class VariableReferenceCheck implements HotSwapCompilerPass {
       "Redeclared variable: {0}");
 
   static final DiagnosticType AMBIGUOUS_FUNCTION_DECL =
-    DiagnosticType.disabled("AMBIGUOUS_FUNCTION_DECL",
+    DiagnosticType.error("AMBIGUOUS_FUNCTION_DECL",
         "Ambiguous use of a named function: {0}.");
 
   static final DiagnosticType EARLY_REFERENCE_ERROR = DiagnosticType.error(
@@ -78,7 +77,7 @@ class VariableReferenceCheck implements HotSwapCompilerPass {
 
   // NOTE(nicksantos): It's a lot faster to use a shared Set that
   // we clear after each method call, because the Set never gets too big.
-  private final Set<BasicBlock> blocksWithDeclarations = Sets.newHashSet();
+  private final Set<BasicBlock> blocksWithDeclarations = new HashSet<>();
 
   public VariableReferenceCheck(AbstractCompiler compiler,
       CheckLevel checkLevel) {
@@ -252,15 +251,10 @@ class VariableReferenceCheck implements HotSwapCompilerPass {
           }
         }
 
-        if (!shadowDetected && isDeclaration
-            && (letConstShadowsVar || shadowCatchVar)) {
-          if (v.getScope() == reference.getScope()) {
-            compiler.report(
-                JSError.make(
-                    referenceNode,
-                    checkLevel,
-                    REDECLARED_VARIABLE_ERROR, v.name));
-          }
+        if (!shadowDetected && isDeclaration && (letConstShadowsVar || shadowCatchVar)
+            && v.getScope() == reference.getScope()) {
+          compiler.report(
+              JSError.make(referenceNode, checkLevel, REDECLARED_VARIABLE_ERROR, v.name));
         }
 
         if (isUnhoistedNamedFunction && !isDeclaration && isDeclaredInScope) {
