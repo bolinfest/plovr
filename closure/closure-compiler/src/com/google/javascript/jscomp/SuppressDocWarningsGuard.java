@@ -16,15 +16,21 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.collect.Maps;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Filters warnings based on in-code {@code @suppress} annotations.
+ *
+ * <p> Works by looking at the AST node associated with the warning, and looking
+ * at parents of the node until it finds a function or a script.
+ * For this reason, it doesn't work for warnings without an associated AST node,
+ * eg, the ones in parsing/IRFactory. They can be turned off with jscomp_off.
+ *
  * @author nicksantos@google.com (Nick Santos)
  */
 class SuppressDocWarningsGuard extends WarningsGuard {
@@ -32,7 +38,7 @@ class SuppressDocWarningsGuard extends WarningsGuard {
 
   /** Warnings guards for each suppressible warnings group, indexed by name. */
   private final Map<String, DiagnosticGroupWarningsGuard> suppressors =
-      Maps.newHashMap();
+       new HashMap<>();
 
   /**
    * The suppressible groups, indexed by name.

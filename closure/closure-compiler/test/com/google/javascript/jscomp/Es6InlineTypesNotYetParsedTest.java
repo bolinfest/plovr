@@ -36,7 +36,7 @@ import com.google.javascript.rhino.Node;
  * @author alexeagle@google.com (Alex Eagle)
  */
 
-public class Es6InlineTypesNotYetParsedTest extends CompilerTestCase {
+public final class Es6InlineTypesNotYetParsedTest extends CompilerTestCase {
 
   private Compiler compiler;
 
@@ -118,6 +118,16 @@ public class Es6InlineTypesNotYetParsedTest extends CompilerTestCase {
         .transpilesTo("var s: Object<string, number>;");
     assertSource("/** @type {Object.<number>}  */ var s;")
         .transpilesTo("var s: Object<number>;");
+  }
+
+  public void testParameterizedTypeWithVoid() throws Exception {
+    assertSource("/** @return {!goog.async.Deferred.<void>} */ f = function() {};")
+        .transpilesTo("f = function(): goog.async.Deferred {\n};");
+  }
+
+  public void testOptionalParameterTypeWithUndefined() throws Exception {
+    assertSource("/** @param {(null|undefined)=} opt_ignored */ f = function(opt_ignored) {};")
+        .transpilesTo("f = function(opt_ignored) {\n};");
   }
 
   private SourceTranslationSubject assertSource(String... s) {

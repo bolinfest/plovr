@@ -16,11 +16,11 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.DefinitionsRemover.Definition;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.Node;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -29,7 +29,7 @@ import java.util.List;
  * {@link DefinitionsRemover}.
  *
  */
-public class DefinitionsRemoverTest extends CompilerTestCase {
+public final class DefinitionsRemoverTest extends CompilerTestCase {
   public void testRemoveFunction() {
     testSame("{(function (){bar()})}");
     test("{function a(){bar()}}", "{}");
@@ -80,7 +80,7 @@ public class DefinitionsRemoverTest extends CompilerTestCase {
    * Gather all possible definition objects.
    */
   private static class DefinitionsGatherer extends AbstractPostOrderCallback {
-    final List<Definition> definitions = Lists.newArrayList();
+    final List<Definition> definitions = new ArrayList<>();
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       Definition def = DefinitionsRemover.getDefinition(n, false);

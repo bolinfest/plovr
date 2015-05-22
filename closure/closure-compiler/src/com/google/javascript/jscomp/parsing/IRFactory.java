@@ -20,7 +20,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import com.google.common.collect.UnmodifiableIterator;
 import com.google.javascript.jscomp.parsing.Config.LanguageMode;
 import com.google.javascript.jscomp.parsing.parser.IdentifierToken;
@@ -112,12 +111,15 @@ import com.google.javascript.jscomp.parsing.parser.util.SourceRange;
 import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
+import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Node.TypeDeclarationNode;
+import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TokenStream;
-import com.google.javascript.rhino.jstype.StaticSourceFile;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -146,6 +148,9 @@ class IRFactory {
 
   static final String MISPLACED_FUNCTION_ANNOTATION =
       "This JSDoc is not attached to a function node. Are you missing parentheses?";
+
+  static final String MISPLACED_MSG_ANNOTATION =
+      "@desc, @hidden, and @meaning annotations should only be on message nodes.";
 
   static final String INVALID_ES3_PROP_NAME =
       "Keywords and reserved words are not allowed as unquoted property " +
@@ -193,6 +198,9 @@ class IRFactory {
 
   static final String UNDEFINED_LABEL = "undefined label \"%s\"";
 
+  static final String ANNOTATION_DEPRECATED =
+      "The %s annotation is deprecated.%s";
+
   private final String sourceString;
   private final List<Integer> newlines;
   private final StaticSourceFile sourceFile;
@@ -216,13 +224,11 @@ class IRFactory {
           "public", "static", "yield");
 
   private final Set<String> reservedKeywords;
-  private final Set<Comment> parsedComments = Sets.newHashSet();
+  private final Set<Comment> parsedComments = new HashSet<>();
 
   // @license text gets appended onto the fileLevelJsDocBuilder as found,
   // and stored in JSDocInfo for placeholder node.
-  Node rootNodeJsDocHolder = new Node(Token.SCRIPT);
-  Node.FileLevelJsDocBuilder fileLevelJsDocBuilder =
-      rootNodeJsDocHolder.getJsDocBuilderForNode();
+  JSDocInfoBuilder fileLevelJsDocBuilder;
   JSDocInfo fileOverviewInfo = null;
 
   // Use a template node for properties set on all nodes to minimize the
@@ -245,8 +251,10 @@ class IRFactory {
     this.sourceString = sourceString;
     this.nextCommentIter = comments.iterator();
     this.currentComment = nextCommentIter.hasNext() ? nextCommentIter.next() : null;
-    this.newlines = Lists.newArrayList();
+    this.newlines = new ArrayList<>();
     this.sourceFile = sourceFile;
+    this.fileLevelJsDocBuilder = new JSDocInfoBuilder(
+        config.parseJsDocDocumentation);
 
     // Pre-generate all the newlines in the file.
     for (int charNo = 0; true; charNo++) {
@@ -466,6 +474,63 @@ class IRFactory {
   private void validateJsDoc(Node n) {
     validateTypeAnnotations(n);
     validateFunctionJsDoc(n);
+    validateMsgJsDoc(n);
+    validateDeprecatedJsDoc(n);
+  }
+
+  /**
+   * Checks that deprecated annotations such as @expose are not present
+   */
+  private void validateDeprecatedJsDoc(Node n) {
+    JSDocInfo info = n.getJSDocInfo();
+    if (info == null) {
+      return;
+    }
+    if (info.isExpose()) {
+      errorReporter.warning(
+          String.format(ANNOTATION_DEPRECATED, "@expose",
+              " Use @nocollapse or @export instead."),
+          sourceName,
+          n.getLineno(), n.getCharno());
+    }
+  }
+
+  /**
+   * Checks that annotations for messages ({@code @desc}, {@code @hidden}, and {@code @meaning})
+   * are in the proper place, namely on names starting with MSG_ which indicates they should be
+   * extracted for translation. A later pass checks that the right side is a call to goog.getMsg.
+   */
+  private void validateMsgJsDoc(Node n) {
+    JSDocInfo info = n.getJSDocInfo();
+    if (info == null) {
+      return;
+    }
+    if (info.getDescription() != null || info.isHidden() || info.getMeaning() != null) {
+      boolean descOkay = false;
+      switch (n.getType()) {
+        case Token.ASSIGN: {
+          Node lhs = n.getFirstChild();
+          if (lhs.isName()) {
+            descOkay = lhs.getString().startsWith("MSG_");
+          } else if (lhs.isQualifiedName()) {
+            descOkay = lhs.getLastChild().getString().startsWith("MSG_");
+          }
+          break;
+        }
+        case Token.VAR:
+        case Token.LET:
+        case Token.CONST:
+          descOkay = n.getFirstChild().getString().startsWith("MSG_");
+          break;
+        case Token.STRING_KEY:
+          descOkay = n.getString().startsWith("MSG_");
+          break;
+      }
+      if (!descOkay) {
+        errorReporter.warning(MISPLACED_MSG_ANNOTATION,
+            sourceName, n.getLineno(), n.getCharno());
+      }
+    }
   }
 
   private JSDocInfo recordJsDoc(SourceRange location, JSDocInfo info) {
@@ -618,19 +683,19 @@ class IRFactory {
     // Only after we've seen all @fileoverview entries, attach the
     // last one to the root node, and copy the found license strings
     // to that node.
-    JSDocInfo rootNodeJsDoc = rootNodeJsDocHolder.getJSDocInfo();
+    JSDocInfo rootNodeJsDoc = fileLevelJsDocBuilder.build();
     if (rootNodeJsDoc != null) {
       irNode.setJSDocInfo(rootNodeJsDoc);
-      rootNodeJsDoc.setAssociatedNode(irNode);
     }
 
     if (fileOverviewInfo != null) {
       if ((irNode.getJSDocInfo() != null) &&
           (irNode.getJSDocInfo().getLicense() != null)) {
-        fileOverviewInfo.setLicense(irNode.getJSDocInfo().getLicense());
+        JSDocInfoBuilder builder = JSDocInfoBuilder.copyFrom(fileOverviewInfo);
+        builder.recordLicense(irNode.getJSDocInfo().getLicense());
+        fileOverviewInfo = builder.build();
       }
       irNode.setJSDocInfo(fileOverviewInfo);
-      fileOverviewInfo.setAssociatedNode(irNode);
     }
   }
 
@@ -799,15 +864,10 @@ class IRFactory {
     Node node = justTransform(tree);
     if (info != null) {
       node = maybeInjectCastNode(tree, info, node);
-      attachJSDoc(info, node);
+      node.setJSDocInfo(info);
     }
     setSourceInfo(node, tree);
     return node;
-  }
-
-  private static void attachJSDoc(JSDocInfo info, Node n) {
-    info.setAssociatedNode(n);
-    n.setJSDocInfo(info);
   }
 
   private Node maybeInjectCastNode(ParseTree node, JSDocInfo info, Node irNode) {
@@ -956,7 +1016,6 @@ class IRFactory {
                                charno + numOpeningChars),
           comment,
           position,
-          null,
           sourceFile,
           config,
           errorReporter);
@@ -983,7 +1042,6 @@ class IRFactory {
               charno + numOpeningChars),
           comment,
           node.location.start.offset,
-          null,
           sourceFile,
           config,
           errorReporter);
@@ -1106,10 +1164,9 @@ class IRFactory {
       while (isDirective(node.getFirstChild())) {
         String directive = node.removeFirstChild().getFirstChild().getString();
         if (directives == null) {
-          directives = Sets.newHashSet(directive);
-        } else {
-          directives.add(directive);
+          directives = new HashSet<>();
         }
+        directives.add(directive);
       }
 
       if (directives != null) {
@@ -1433,7 +1490,7 @@ class IRFactory {
         }
         node = newStringNode(Token.NAME, identifierToken.value);
         if (info != null) {
-          attachJSDoc(info, node);
+          node.setJSDocInfo(info);
         }
       }
       setSourceInfo(node, identifierToken);
@@ -1470,7 +1527,7 @@ class IRFactory {
       }
       Node node = newStringNode(Token.NAME, identifierToken.toString());
       if (info != null) {
-        attachJSDoc(info, node);
+        node.setJSDocInfo(info);
       }
       setSourceInfo(node, identifierToken);
       return node;

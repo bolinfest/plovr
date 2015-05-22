@@ -17,15 +17,14 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.Reference;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceCollection;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceMap;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -50,7 +49,7 @@ class GlobalVarReferenceMap implements ReferenceMap {
    * @param inputs The ordered list of all inputs for the compiler.
    */
   GlobalVarReferenceMap(List<CompilerInput> inputs, List<CompilerInput> externs) {
-    inputOrder = Maps.newHashMap();
+    inputOrder = new HashMap<>();
     int ind = 0;
     for (CompilerInput extern : externs) {
       inputOrder.put(extern.getInputId(), ind);
@@ -78,7 +77,7 @@ class GlobalVarReferenceMap implements ReferenceMap {
    */
   private void resetGlobalVarReferences(
       Map<Var, ReferenceCollection> globalRefMap) {
-    refMap = Maps.newHashMap();
+    refMap = new HashMap<>();
     for (Entry<Var, ReferenceCollection> entry : globalRefMap.entrySet()) {
       Var var = entry.getKey();
       if (var.isGlobal()) {
@@ -133,7 +132,7 @@ class GlobalVarReferenceMap implements ReferenceMap {
       }
       List<Reference> oldRefs = collection.references;
       SourceRefRange range = findSourceRefRange(oldRefs, inputId);
-      List<Reference> newRefs = Lists.newArrayList(range.refsBefore());
+      List<Reference> newRefs = new ArrayList<>(range.refsBefore());
       newRefs.addAll(range.refsAfter());
       collection.references = newRefs;
     }
@@ -217,8 +216,7 @@ class GlobalVarReferenceMap implements ReferenceMap {
    */
   public void updateReferencesWithGlobalScope(Scope globalScope) {
     for (ReferenceCollection collection : refMap.values()) {
-      List<Reference> newRefs =
-          Lists.newArrayListWithCapacity(collection.references.size());
+      List<Reference> newRefs = new ArrayList<>(collection.references.size());
       for (Reference ref : collection.references) {
         if (ref.getScope() != globalScope) {
           newRefs.add(ref.cloneWithNewScope(globalScope));

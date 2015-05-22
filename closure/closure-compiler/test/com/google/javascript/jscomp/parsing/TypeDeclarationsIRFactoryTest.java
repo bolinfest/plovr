@@ -40,7 +40,6 @@ import static com.google.javascript.rhino.Token.REST_PARAMETER_TYPE;
 import static com.google.javascript.rhino.Token.STRING_TYPE;
 import static java.util.Arrays.asList;
 
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.parsing.Config.LanguageMode;
 import com.google.javascript.jscomp.testing.NodeSubject;
 import com.google.javascript.rhino.IR;
@@ -50,6 +49,7 @@ import com.google.javascript.rhino.Node.TypeDeclarationNode;
 
 import junit.framework.TestCase;
 
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 
 /**
@@ -58,7 +58,7 @@ import java.util.LinkedHashMap;
  *
  * @author alexeagle@google.com (Alex Eagle)
  */
-public class TypeDeclarationsIRFactoryTest extends TestCase {
+public final class TypeDeclarationsIRFactoryTest extends TestCase {
 
   public void testConvertSimpleTypes() {
     assertParseTypeAndConvert("?").hasType(ANY_TYPE);
@@ -201,8 +201,8 @@ public class TypeDeclarationsIRFactoryTest extends TestCase {
     // think it reached premature EOL
     jsDoc = jsDoc + " */";
     Config config = new Config(
-        Sets.<String>newHashSet(),
-        Sets.<String>newHashSet(),
+        new HashSet<String>(),
+         new HashSet<String>(),
         false,
         LanguageMode.ECMASCRIPT3,
         false);
@@ -210,7 +210,6 @@ public class TypeDeclarationsIRFactoryTest extends TestCase {
         new JsDocTokenStream(jsDoc),
         jsDoc,
         0,
-        null,
         null,
         config,
         NullErrorReporter.forOldRhino());

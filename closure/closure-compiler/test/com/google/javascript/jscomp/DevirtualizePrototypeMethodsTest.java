@@ -18,26 +18,26 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.JSType;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Tests for {@link DevirtualizePrototypeMethods}
  *
  */
-public class DevirtualizePrototypeMethodsTest extends CompilerTestCase {
+public final class DevirtualizePrototypeMethodsTest extends CompilerTestCase {
   private static final String EXTERNAL_SYMBOLS =
       "var extern;extern.externalMethod";
   private final List<String> typeInformation;
 
   public DevirtualizePrototypeMethodsTest() {
     super(EXTERNAL_SYMBOLS);
-    typeInformation = Lists.newArrayList();
+    typeInformation = new ArrayList<>();
   }
 
   @Override

@@ -16,13 +16,13 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.CodingConvention.SubclassRelationship;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
+import java.util.HashSet;
 import java.util.Set;
 
 import javax.annotation.Nullable;
@@ -51,7 +51,7 @@ class StripCode implements CompilerPass {
   private final Set<String> stripNameSuffixes;
   private final Set<String> stripTypePrefixes;
   private final Set<String> stripNamePrefixes;
-  private final Set<Scope.Var> varsToRemove;
+  private final Set<Var> varsToRemove;
 
   static final DiagnosticType STRIP_TYPE_INHERIT_ERROR = DiagnosticType.error(
       "JSC_STRIP_TYPE_INHERIT_ERROR",
@@ -73,11 +73,11 @@ class StripCode implements CompilerPass {
             Set<String> stripNamePrefixes) {
 
     this.compiler = compiler;
-    this.stripTypes = Sets.newHashSet(stripTypes);
-    this.stripNameSuffixes = Sets.newHashSet(stripNameSuffixes);
-    this.stripTypePrefixes = Sets.newHashSet(stripTypePrefixes);
-    this.stripNamePrefixes = Sets.newHashSet(stripNamePrefixes);
-    this.varsToRemove = Sets.newHashSet();
+    this.stripTypes = new HashSet<>(stripTypes);
+    this.stripNameSuffixes = new HashSet<>(stripNameSuffixes);
+    this.stripTypePrefixes = new HashSet<>(stripTypePrefixes);
+    this.stripNamePrefixes = new HashSet<>(stripNamePrefixes);
+    this.varsToRemove = new HashSet<>();
   }
 
   /**
@@ -461,7 +461,7 @@ class StripCode implements CompilerPass {
     boolean isReferenceToRemovedVar(NodeTraversal t, Node n) {
       String name = n.getString();
       Scope scope = t.getScope();
-      Scope.Var var = scope.getVar(name);
+      Var var = scope.getVar(name);
       return varsToRemove.contains(var);
     }
 

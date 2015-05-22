@@ -140,6 +140,7 @@ public class ConfigParserTest {
         "/closure/goog/string/const.js",
         "/closure/goog/html/safestyle.js",
         "/closure/goog/html/safestylesheet.js",
+        "/closure/goog/fs/url.js",
         "/closure/goog/i18n/bidi.js",
         "/closure/goog/html/safeurl.js",
         "/closure/goog/html/trustedresourceurl.js",

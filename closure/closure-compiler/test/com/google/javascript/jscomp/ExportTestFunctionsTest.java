@@ -19,7 +19,7 @@ package com.google.javascript.jscomp;
  * Tests for ExportTestFunctions.
  *
  */
-public class ExportTestFunctionsTest extends CompilerTestCase {
+public final class ExportTestFunctionsTest extends CompilerTestCase {
 
   private static final String EXTERNS =
       "function google_exportSymbol(a, b) {}; "
@@ -152,5 +152,12 @@ public class ExportTestFunctionsTest extends CompilerTestCase {
          + "{ var testBaz = function() {}};"
          + "google_exportProperty(Foo.baz.prototype, 'testBar', "
          + "Foo.baz.prototype.testBar);");
+  }
+
+  public void testExportTestSuite() {
+    testSame("goog.testing.testSuite({'a': function() {}, 'b': function() {}});");
+    test(
+        "goog.testing.testSuite({a: function() {}, b: function() {}});",
+        "goog.testing.testSuite({'a': function() {}, 'b': function() {}});");
   }
 }

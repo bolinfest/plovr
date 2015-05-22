@@ -19,6 +19,8 @@ package com.google.javascript.jscomp.newtypes;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
+import com.google.common.collect.Sets;
+import com.google.javascript.rhino.Node;
 
 import java.util.List;
 import java.util.Map;
@@ -31,7 +33,7 @@ import java.util.TreeSet;
  * @author blickly@google.com (Ben Lickly)
  * @author dimvar@google.com (Dimitris Vardoulakis)
  */
-public class ObjectType implements TypeWithProperties {
+public final class ObjectType implements TypeWithProperties {
   // TODO(dimvar): currently, we can't distinguish between an obj at the top of
   // the proto chain (nominalType = null) and an obj for which we can't figure
   // out its class
@@ -175,7 +177,7 @@ public class ObjectType implements TypeWithProperties {
       // It's wrong to warn about a possibly absent property on loose objects.
       newProps = newProps.with(pname, prop.withRequired());
     }
-    // No need to call makeObjectType because we know new object is inhabitable
+    // No need to call makeObjectType; we know new object is not inhabitable.
     return new ObjectType(
         nominalType, newProps, fn, true, this.objectKind);
   }
@@ -224,7 +226,7 @@ public class ObjectType implements TypeWithProperties {
       } else {
         newProps = newProps.with(pname,
             isConstant ?
-            Property.makeConstant(type, declType) :
+            Property.makeConstant(null, type, declType) :
             Property.make(type, isDeclared ? declType : null));
       }
     } else { // This has a nested object
@@ -241,7 +243,7 @@ public class ObjectType implements TypeWithProperties {
           objProp.getType().withProperty(innerProps, type);
       JSType declared = objProp.getDeclaredType();
       newProps = newProps.with(objName, objProp.isOptional() ?
-          Property.makeOptional(inferred, declared) :
+          Property.makeOptional(null, inferred, declared) :
           Property.make(inferred, declared));
     }
     return ObjectType.makeObjectType(
@@ -357,24 +359,35 @@ public class ObjectType implements TypeWithProperties {
     return props.without(pname);
   }
 
-  private static PersistentMap<String, Property> joinProps(
-      Map<String, Property> props1, Map<String, Property> props2) {
-    PersistentMap<String, Property> newProps = PersistentMap.create();
-    for (Map.Entry<String, Property> propsEntry : props1.entrySet()) {
-      String pname = propsEntry.getKey();
-      if (!props2.containsKey(pname)) {
-        newProps = newProps.with(pname, propsEntry.getValue().withOptional());
-      }
+  private static Property getProp(Map<String, Property> props, NominalType nom, String pname) {
+    if (props.containsKey(pname)) {
+      return props.get(pname);
+    } else if (nom != null) {
+      return nom.getProp(pname);
     }
-    for (Map.Entry<String, Property> propsEntry : props2.entrySet()) {
-      String pname = propsEntry.getKey();
-      Property prop2 = propsEntry.getValue();
-      if (props1.containsKey(pname)) {
-        newProps = newProps.with(
-            pname, Property.join(props1.get(pname), prop2));
+    return null;
+  }
+
+  // This method needs the nominal types because otherwise a property may become
+  // optional by mistake after the join.
+  // joinPropsLoosely doesn't need that, because we don't create optional props
+  // on loose types.
+  private static PersistentMap<String, Property> joinProps(
+      Map<String, Property> props1, Map<String, Property> props2,
+      NominalType nom1, NominalType nom2) {
+    PersistentMap<String, Property> newProps = PersistentMap.create();
+    for (String pname : Sets.union(props1.keySet(), props2.keySet())) {
+      Property prop1 = getProp(props1, nom1, pname);
+      Property prop2 = getProp(props2, nom2, pname);
+      Property newProp = null;
+      if (prop1 == null) {
+        newProp = prop2.withOptional();
+      } else if (prop2 == null) {
+        newProp = prop1.withOptional();
       } else {
-        newProps = newProps.with(pname, prop2.withOptional());
+        newProp = Property.join(prop1, prop2);
       }
+      newProps = newProps.with(pname, newProp);
     }
     return newProps;
   }
@@ -445,7 +458,7 @@ public class ObjectType implements TypeWithProperties {
 
     if ((this.nominalType == null && obj2.nominalType != null)
         || this.nominalType != null && obj2.nominalType != null &&
-        !this.nominalType.isSubclassOf(obj2.nominalType)) {
+        !this.nominalType.isSubtypeOf(obj2.nominalType)) {
       return false;
     }
 
@@ -581,8 +594,10 @@ public class ObjectType implements TypeWithProperties {
   }
 
   static ObjectType join(ObjectType obj1, ObjectType obj2) {
-    Preconditions.checkState(
-        areRelatedClasses(obj1.nominalType, obj2.nominalType));
+    NominalType nom1 = obj1.nominalType;
+    NominalType nom2 = obj2.nominalType;
+    Preconditions.checkState(areRelatedClasses(nom1, nom2));
+
     if (obj1.equals(obj2)) {
       return obj1;
     }
@@ -593,10 +608,9 @@ public class ObjectType implements TypeWithProperties {
       fn = fn == null ? null : fn.withLoose();
       props = joinPropsLoosely(obj1.props, obj2.props);
     } else {
-      props = joinProps(obj1.props, obj2.props);
+      props = joinProps(obj1.props, obj2.props, nom1, nom2);
     }
-    NominalType nominal =
-        NominalType.pickSuperclass(obj1.nominalType, obj2.nominalType);
+    NominalType nominal = NominalType.pickSuperclass(nom1, nom2);
     // TODO(blickly): Split TOP_OBJECT from empty object and remove this case
     if (nominal == null || !nominal.isFunction()) {
       fn = null;
@@ -611,9 +625,9 @@ public class ObjectType implements TypeWithProperties {
 
   static ImmutableSet<ObjectType> joinSets(
       ImmutableSet<ObjectType> objs1, ImmutableSet<ObjectType> objs2) {
-    if (objs1 == null) {
+    if (objs1.isEmpty()) {
       return objs2;
-    } else if (objs2 == null) {
+    } else if (objs2.isEmpty()) {
       return objs1;
     }
     ObjectType[] objs1Arr = objs1.toArray(new ObjectType[0]);
@@ -626,16 +640,18 @@ public class ObjectType implements TypeWithProperties {
         NominalType nominalType1 = obj1.nominalType;
         NominalType nominalType2 = obj2.nominalType;
         if (areRelatedClasses(nominalType1, nominalType2)) {
-          if (nominalType2 == null && nominalType1 != null &&
-              !obj1.isSubtypeOf(obj2) ||
-              nominalType1 == null && nominalType2 != null &&
-              !obj2.isSubtypeOf(obj1)) {
+          if (nominalType2 == null && nominalType1 != null && !obj1.isSubtypeOf(obj2)
+              || nominalType1 == null && nominalType2 != null && !obj2.isSubtypeOf(obj1)) {
             // Don't merge other classes with record types
             break;
           }
           keptFrom1[i] = null;
-          newObjs.add(join(obj1, obj2));
           addedObj2 = true;
+          // obj1 and obj2 may be in a subtype relation.
+          // Even then, we want to join them because we don't want to forget
+          // any extra properties in the subtype object.
+          newObjs.add(join(obj1, obj2));
+
           break;
         }
       }
@@ -655,19 +671,16 @@ public class ObjectType implements TypeWithProperties {
     if (c1 == null || c2 == null) {
       return true;
     }
-    return c1.isSubclassOf(c2) || c2.isSubclassOf(c1);
+    return c1.isSubtypeOf(c2) || c2.isSubtypeOf(c1);
   }
 
   // TODO(dimvar): handle greatest lower bound of interface types.
   // If we do that, we need to normalize the output, otherwise it could contain
   // two object types that are in a subtype relation, eg, see
-  // NewTypeInferenceTestES5OrLower#testDifficultObjectSpecialization.
+  // NewTypeInferenceES5OrLowerTest#testDifficultObjectSpecialization.
   static ImmutableSet<ObjectType> meetSetsHelper(
       boolean specializeObjs1,
       Set<ObjectType> objs1, Set<ObjectType> objs2) {
-    if (objs1 == null || objs2 == null) {
-      return null;
-    }
     ImmutableSet.Builder<ObjectType> newObjs = ImmutableSet.builder();
     for (ObjectType obj2 : objs2) {
       for (ObjectType obj1 : objs1) {
@@ -702,8 +715,15 @@ public class ObjectType implements TypeWithProperties {
     return fn;
   }
 
-  NominalType getNominalType() {
+  public NominalType getNominalType() {
     return nominalType;
+  }
+
+  public ImmutableSet<String> getAllOwnProps() {
+    // Used by the type conversion pass.
+    // The implementation works only for object literals.
+    Preconditions.checkState(this.nominalType == null);
+    return ImmutableSet.copyOf(props.keySet());
   }
 
   @Override
@@ -726,6 +746,11 @@ public class ObjectType implements TypeWithProperties {
       return p.isDeclared() ? p.getDeclaredType() : null;
     }
     return p.getType().getDeclaredProp(qname.getAllButLeftmost());
+  }
+
+  public Node getPropDefsite(QualifiedName qname) {
+    Preconditions.checkArgument(qname.isIdentifier());
+    return getLeftmostProp(qname).getDefsite();
   }
 
   private Property getLeftmostProp(QualifiedName qname) {
@@ -800,16 +825,16 @@ public class ObjectType implements TypeWithProperties {
    * {@code typeMultimap} to add any new template varaible type bindings.
    * @return Whether unification succeeded
    */
-  boolean unifyWith(ObjectType other, List<String> typeParameters,
+  boolean unifyWithSubtype(ObjectType other, List<String> typeParameters,
       Multimap<String, JSType> typeMultimap) {
     if (fn != null) {
       if (other.fn == null ||
-          !fn.unifyWith(other.fn, typeParameters, typeMultimap)) {
+          !fn.unifyWithSubtype(other.fn, typeParameters, typeMultimap)) {
         return false;
       }
     }
     if (nominalType != null && other.nominalType != null) {
-      return nominalType.unifyWith(
+      return nominalType.unifyWithSubtype(
           other.nominalType, typeParameters, typeMultimap);
     }
     if (nominalType != null || other.nominalType != null) {
@@ -819,7 +844,7 @@ public class ObjectType implements TypeWithProperties {
       Property thisProp = props.get(propName);
       Property otherProp = other.props.get(propName);
       if (otherProp == null ||
-          !thisProp.unifyWith(otherProp, typeParameters, typeMultimap)) {
+          !thisProp.unifyWithSubtype(otherProp, typeParameters, typeMultimap)) {
         return false;
       }
     }
@@ -851,7 +876,7 @@ public class ObjectType implements TypeWithProperties {
     return appendTo(new StringBuilder()).toString();
   }
 
-  public StringBuilder appendTo(StringBuilder builder) {
+  StringBuilder appendTo(StringBuilder builder) {
     if (props.isEmpty()
         || (props.size() == 1 && props.containsKey("prototype"))) {
       if (fn != null) {

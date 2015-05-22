@@ -17,11 +17,9 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
+import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.ControlFlowGraph.Branch;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.jscomp.graph.Annotation;
 import com.google.javascript.jscomp.graph.DiGraph.DiGraphNode;
 import com.google.javascript.jscomp.graph.LatticeElement;
@@ -30,9 +28,11 @@ import com.google.javascript.rhino.Node;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * A framework to help writing static program analysis. A subclass of
@@ -123,9 +123,9 @@ abstract class DataFlowAnalysis<N, L extends LatticeElement> {
     Comparator<DiGraphNode<N, Branch>> nodeComparator =
       cfg.getOptionalNodeComparator(isForward());
     if (nodeComparator != null) {
-      this.orderedWorkSet = Sets.newTreeSet(nodeComparator);
+      this.orderedWorkSet = new TreeSet<>(nodeComparator);
     } else {
-      this.orderedWorkSet = Sets.newLinkedHashSet();
+      this.orderedWorkSet = new LinkedHashSet<>();
     }
   }
 
@@ -150,7 +150,7 @@ abstract class DataFlowAnalysis<N, L extends LatticeElement> {
 
   @SuppressWarnings("unchecked")
   protected L join(L latticeA, L latticeB) {
-    return joinOp.apply(Lists.newArrayList(latticeA, latticeB));
+    return joinOp.apply(ImmutableList.of(latticeA, latticeB));
   }
 
   /**
@@ -394,7 +394,7 @@ abstract class DataFlowAnalysis<N, L extends LatticeElement> {
       orderedWorkSet.clear();
       for (DiGraphNode<N, Branch> node : getCfg().getDirectedGraphNodes()) {
         int outEdgeCount = getCfg().getOutEdges(node.getValue()).size();
-        List<L> outLattices = Lists.newArrayList();
+        List<L> outLattices = new ArrayList<>();
         for (int i = 0; i < outEdgeCount; i++) {
           outLattices.add(createInitialEstimateLattice());
         }

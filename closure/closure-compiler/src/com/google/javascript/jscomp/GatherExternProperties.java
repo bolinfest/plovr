@@ -33,6 +33,8 @@ import com.google.javascript.rhino.jstype.TemplateType;
 import com.google.javascript.rhino.jstype.TemplatizedType;
 import com.google.javascript.rhino.jstype.UnionType;
 import com.google.javascript.rhino.jstype.Visitor;
+
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -40,7 +42,7 @@ import java.util.Set;
  */
 class GatherExternProperties extends AbstractPostOrderCallback
     implements CompilerPass {
-  private final Set<String> externProperties = Sets.newHashSet();
+  private final Set<String> externProperties = new HashSet<>();
   private final AbstractCompiler compiler;
   private final ExtractRecordTypePropertyNames typeVisitor =
       new ExtractRecordTypePropertyNames();
@@ -89,8 +91,7 @@ class GatherExternProperties extends AbstractPostOrderCallback
       JSDocInfo jsDoc = NodeUtil.getBestJSDocInfo(n);
       if (jsDoc != null && jsDoc.hasTypedefType()) {
         // Get the corresponding type by looking at the type registry.
-        JSType typedefType =
-            compiler.getTypeRegistry().getType(n.getQualifiedName());
+        JSType typedefType = compiler.getTypeIRegistry().getType(n.getQualifiedName());
         if (typedefType != null) {
           typeVisitor.visitOnce(typedefType);
         }
@@ -265,4 +266,3 @@ class GatherExternProperties extends AbstractPostOrderCallback
     }
   }
 }
-

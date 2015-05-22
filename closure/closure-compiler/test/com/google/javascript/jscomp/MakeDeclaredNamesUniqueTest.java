@@ -16,14 +16,13 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.MakeDeclaredNamesUnique.InlineRenamer;
 import com.google.javascript.rhino.Node;
 
 /**
  * @author johnlenz@google.com (John Lenz)
  */
-public class MakeDeclaredNamesUniqueTest extends CompilerTestCase {
+public final class MakeDeclaredNamesUniqueTest extends CompilerTestCase {
 
   private boolean useDefaultRenamer = false;
   private boolean invert = false;
@@ -37,19 +36,14 @@ public class MakeDeclaredNamesUniqueTest extends CompilerTestCase {
         @Override
         public void process(Node externs, Node root) {
           compiler.resetUniqueNameId();
-          MakeDeclaredNamesUnique renamer = null;
+          MakeDeclaredNamesUnique renamer;
           if (useDefaultRenamer) {
             renamer = new MakeDeclaredNamesUnique();
           } else {
-            renamer = new MakeDeclaredNamesUnique(
-                new InlineRenamer(
-                    compiler.getCodingConvention(),
-                    compiler.getUniqueNameIdSupplier(),
-                    localNamePrefix,
-                    removeConst));
+            renamer = new MakeDeclaredNamesUnique(new InlineRenamer(compiler.getCodingConvention(),
+                compiler.getUniqueNameIdSupplier(), localNamePrefix, removeConst));
           }
-          NodeTraversal.traverseRoots(
-              compiler, Lists.newArrayList(externs, root), renamer);
+          NodeTraversal.traverseRoots(compiler, renamer, externs, root);
         }
       };
     } else {

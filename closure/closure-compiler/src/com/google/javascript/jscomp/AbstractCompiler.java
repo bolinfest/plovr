@@ -19,7 +19,7 @@ package com.google.javascript.jscomp;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableMap;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceCollection;
-import com.google.javascript.jscomp.Scope.Var;
+import com.google.javascript.jscomp.TypeValidator.TypeMismatch;
 import com.google.javascript.jscomp.parsing.Config;
 import com.google.javascript.jscomp.parsing.parser.trees.Comment;
 import com.google.javascript.jscomp.type.ReverseAbstractInterpreter;
@@ -110,14 +110,14 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
   public abstract TypeIRegistry getTypeIRegistry();
 
   /**
-   * Gets a memoized scope creator with type information.
+   * Gets a memoized scope creator with type information. Only used by jsdev.
    */
   abstract ScopeCreator getTypedScopeCreator();
 
   /**
    * Gets the top scope.
    */
-  public abstract Scope getTopScope();
+  public abstract TypedScope getTopScope();
 
   /**
    * Report an error or warning.
@@ -171,9 +171,14 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
   abstract Node getNodeForCodeInsertion(JSModule module);
 
   /**
-   * Gets the central registry of type violations.
+   * Only used by passes in the old type checker.
    */
   abstract TypeValidator getTypeValidator();
+
+  /**
+   * Gets the central registry of type violations.
+   */
+  abstract Iterable<TypeMismatch> getTypeMismatches();
 
   /**
    * Used only by the new type inference
@@ -200,7 +205,7 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
   /**
    * Prints a node to source code.
    */
-  abstract String toSource(Node root);
+  public abstract String toSource(Node root);
 
   /**
    * Gets a default error reporter for injecting into Rhino.
@@ -287,11 +292,6 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
    * Returns the parser configuration for the specified context.
    */
   abstract Config getParserConfig(ConfigContext context);
-
-  /**
-   * Returns true if type checking is enabled.
-   */
-  abstract boolean isTypeCheckingEnabled();
 
   /**
    * Normalizes the types of AST nodes in the given tree, and

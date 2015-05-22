@@ -40,13 +40,14 @@
 package com.google.javascript.rhino.jstype;
 
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.StaticSourceFile;
 
 /**
  * A simple immutable reference.
  * @author nicksantos@google.com (Nick Santos)
  */
-public class SimpleReference<T extends StaticSlot<JSType>>
-    implements StaticReference<JSType> {
+public class SimpleReference<T extends StaticTypedSlot<JSType>>
+    implements StaticTypedRef<JSType> {
   private final T symbol;
   private final Node node;
 

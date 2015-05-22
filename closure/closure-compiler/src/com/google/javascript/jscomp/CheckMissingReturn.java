@@ -31,6 +31,10 @@ import com.google.javascript.rhino.jstype.TernaryValue;
  * expected for functions with return type information. Functions with empty
  * bodies are ignored.
  *
+ *
+ * NOTE(dimvar):
+ * Do not convert this pass to use TypeI. The pass is only used with the old type checker.
+ * The new type inference checks missing returns on its own.
  */
 class CheckMissingReturn implements ScopedCallback {
 
@@ -200,8 +204,7 @@ class CheckMissingReturn implements ScopedCallback {
    *     containing void or unknown
    */
   private boolean isVoidOrUnknown(JSType returnType) {
-    final JSType voidType =
-        compiler.getTypeRegistry().getNativeType(JSTypeNative.VOID_TYPE);
+    final JSType voidType = compiler.getTypeIRegistry().getNativeType(JSTypeNative.VOID_TYPE);
     return voidType.isSubtype(returnType);
   }
 }

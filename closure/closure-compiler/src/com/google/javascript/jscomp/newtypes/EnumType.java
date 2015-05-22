@@ -33,7 +33,7 @@ import java.util.Collection;
  * - We represent the object literal that defined the enum as an ObjectType.
  * - We represent an element of the enum by using this class in JSType.
  */
-public class EnumType extends Namespace implements TypeWithProperties {
+public final class EnumType extends Namespace implements TypeWithProperties {
 
   private enum State {
     NOT_RESOLVED,
@@ -82,6 +82,7 @@ public class EnumType extends Namespace implements TypeWithProperties {
     return enumPropType;
   }
 
+  @Override
   public JSType toJSType() {
     Preconditions.checkState(state == State.RESOLVED);
     if (enumObjType == null) {
@@ -129,7 +130,7 @@ public class EnumType extends Namespace implements TypeWithProperties {
     PersistentMap<String, Property> propMap = otherProps;
     for (String s : props) {
       propMap = propMap.with(s,
-          Property.makeConstant(enumPropType, enumPropType));
+          Property.makeConstant(null, enumPropType, enumPropType));
     }
     return withNamedTypes(
         ObjectType.makeObjectType(
@@ -168,9 +169,6 @@ public class EnumType extends Namespace implements TypeWithProperties {
   }
 
   static boolean hasNonScalar(ImmutableSet<EnumType> enums) {
-    if (enums == null) {
-      return false;
-    }
     for (EnumType e : enums) {
       if (e.declaredType.hasNonScalar()) {
         return true;
@@ -181,10 +179,10 @@ public class EnumType extends Namespace implements TypeWithProperties {
 
   static ImmutableSet<EnumType> union(
       ImmutableSet<EnumType> s1, ImmutableSet<EnumType> s2) {
-    if (s1 == null) {
+    if (s1.isEmpty()) {
       return s2;
     }
-    if (s2 == null || s1.equals(s2)) {
+    if (s2.isEmpty() || s1.equals(s2)) {
       return s1;
     }
     return Sets.union(s1, s2).immutableCopy();

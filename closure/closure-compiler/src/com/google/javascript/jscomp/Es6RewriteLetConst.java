@@ -18,11 +18,9 @@ package com.google.javascript.jscomp;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.LinkedHashMultimap;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.Normalize.NormalizeStatements;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfoBuilder;
@@ -42,7 +40,7 @@ import java.util.Set;
  *
  * @author moz@google.com (Michael Zhou)
  */
-public class Es6RewriteLetConst extends AbstractPostOrderCallback
+public final class Es6RewriteLetConst extends AbstractPostOrderCallback
     implements HotSwapCompilerPass {
 
   private final AbstractCompiler compiler;
@@ -83,7 +81,7 @@ public class Es6RewriteLetConst extends AbstractPostOrderCallback
           : oldName;
       Var oldVar = scope.getVar(oldName);
       scope.undeclare(oldVar);
-      hoistScope.declare(newName, nameNode, null, oldVar.input);
+      hoistScope.declare(newName, nameNode, oldVar.input);
       if (doRename) {
         nameNode.setString(newName);
         Node scopeRoot = scope.getRootNode();
@@ -101,19 +99,16 @@ public class Es6RewriteLetConst extends AbstractPostOrderCallback
 
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverseRoots(
-        compiler, Lists.newArrayList(externs, root), new CollectUndeclaredNames());
-    NodeTraversal.traverseRoots(compiler, Lists.newArrayList(externs, root), this);
-    NodeTraversal.traverseRoots(
-        compiler, Lists.newArrayList(externs, root), new RenameReferences());
+    NodeTraversal.traverseRoots(compiler, new CollectUndeclaredNames(), externs, root);
+    NodeTraversal.traverseRoots(compiler, this, externs, root);
+    NodeTraversal.traverseRoots(compiler, new RenameReferences(), externs, root);
 
     LoopClosureTransformer transformer = new LoopClosureTransformer();
-    NodeTraversal.traverseRoots(
-        compiler, Lists.newArrayList(externs, root), transformer);
+    NodeTraversal.traverseRoots(compiler, transformer, externs, root);
     transformer.transformLoopClosure();
     varify();
-    NodeTraversal.traverseRoots(compiler, Lists.newArrayList(externs, root),
-        new RewriteBlockScopedFunctionDeclaration());
+    NodeTraversal.traverseRoots(
+        compiler, new RewriteBlockScopedFunctionDeclaration(), externs, root);
   }
 
   @Override
@@ -133,12 +128,9 @@ public class Es6RewriteLetConst extends AbstractPostOrderCallback
     if (!blockScopedDeclarations.isEmpty()) {
       for (Node n : blockScopedDeclarations) {
         if (n.isConst()) {
-          JSDocInfoBuilder builder = (n.getJSDocInfo() == null)
-              ? new JSDocInfoBuilder(true)
-              : JSDocInfoBuilder.copyFrom(n.getJSDocInfo());
+          JSDocInfoBuilder builder = JSDocInfoBuilder.maybeCopyFrom(n.getJSDocInfo());
           builder.recordConstancy();
-          JSDocInfo info = builder.build(n);
-          info.setAssociatedNode(n);
+          JSDocInfo info = builder.build();
           n.setJSDocInfo(info);
         }
         n.setType(Token.VAR);
@@ -152,10 +144,8 @@ public class Es6RewriteLetConst extends AbstractPostOrderCallback
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (n.isFunction()) {
-        if (NormalizeStatements.maybeNormalizeFunctionDeclaration(n)) {
-          compiler.reportCodeChange();
-        }
+      if (n.isFunction() && NormalizeStatements.maybeNormalizeFunctionDeclaration(n)) {
+        compiler.reportCodeChange();
       }
     }
   }

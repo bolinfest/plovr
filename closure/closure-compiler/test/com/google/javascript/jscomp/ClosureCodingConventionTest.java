@@ -28,7 +28,7 @@ import junit.framework.TestCase;
 /**
  * Test class for {@link GoogleCodingConvention}.
  */
-public class ClosureCodingConventionTest extends TestCase {
+public final class ClosureCodingConventionTest extends TestCase {
   private ClosureCodingConvention conv = new ClosureCodingConvention();
 
   public void testVarAndOptionalParams() {
@@ -150,6 +150,14 @@ public class ClosureCodingConventionTest extends TestCase {
 
   public void testInheritanceDetection14() {
     assertNotClassDefining("goog$mixin((function(){}).prototype)");
+  }
+
+  public void testInheritanceDetection15() {
+    assertDefinesClasses("$jscomp.inherits(A, B)", "A", "B");
+  }
+
+  public void testInheritanceDetection16() {
+    assertDefinesClasses("$jscomp$inherits(A, B)", "A", "B");
   }
 
   public void testInheritanceDetectionPostCollapseProperties() {

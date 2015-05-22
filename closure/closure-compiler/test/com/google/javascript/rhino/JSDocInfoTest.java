@@ -48,7 +48,7 @@ import static com.google.javascript.rhino.jstype.JSTypeNative.NUMBER_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.STRING_TYPE;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Sets;
+import com.google.common.collect.ImmutableSet;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
@@ -187,7 +187,7 @@ public class JSDocInfoTest extends TestCase {
     } catch (IllegalStateException e) {}
 
     try {
-      info.setTypedefType(fromString("string"));
+      info.declareTypedefType(fromString("string"));
       fail("Expected exception");
     } catch (IllegalStateException e) {}
 
@@ -214,7 +214,7 @@ public class JSDocInfoTest extends TestCase {
     } catch (IllegalStateException e) {}
 
     try {
-      info.setTypedefType(fromString("string"));
+      info.declareTypedefType(fromString("string"));
       fail("Expected exception");
     } catch (IllegalStateException e) {}
 
@@ -241,7 +241,7 @@ public class JSDocInfoTest extends TestCase {
     } catch (IllegalStateException e) {}
 
     try {
-      info.setTypedefType(fromString("string"));
+      info.declareTypedefType(fromString("string"));
       fail("Expected exception");
     } catch (IllegalStateException e) {}
 
@@ -254,7 +254,7 @@ public class JSDocInfoTest extends TestCase {
 
   public void testSetTypedefType() {
     JSDocInfo info = new JSDocInfo();
-    info.setTypedefType(fromString("boolean"));
+    info.declareTypedefType(fromString("boolean"));
 
     assertTypeEquals(BOOLEAN_TYPE,
         resolve(info.getTypedefType()));
@@ -337,6 +337,14 @@ public class JSDocInfoTest extends TestCase {
     assertTrue(info.isExport());
   }
 
+  public void testSetPolymerBehavior() {
+    JSDocInfo info = new JSDocInfo();
+    assertFalse(info.isPolymerBehavior());
+    info.setPolymerBehavior(true);
+
+    assertTrue(info.isPolymerBehavior());
+  }
+
   public void testSetNoAlias() {
     JSDocInfo info = new JSDocInfo();
     info.setNoAlias(true);
@@ -395,6 +403,43 @@ public class JSDocInfoTest extends TestCase {
     assertTrue(info.shouldPreserveTry());
   }
 
+  public void testClone() {
+    JSDocInfo info = new JSDocInfo();
+    info.setDescription("The source info");
+    info.setConstant(true);
+    info.setConstructor(true);
+    info.setHidden(true);
+    info.setBaseType(
+        new JSTypeExpression(
+            new Node(Token.BANG, Node.newString("Number")), ""));
+    info.setReturnType(fromString("string"));
+
+    JSDocInfo cloned = info.clone();
+
+    assertTypeEquals(NUMBER_OBJECT_TYPE, resolve(cloned.getBaseType()));
+    assertEquals("The source info", cloned.getDescription());
+    assertTypeEquals(STRING_TYPE, resolve(cloned.getReturnType()));
+    assertTrue(cloned.isConstant());
+    assertTrue(cloned.isConstructor());
+    assertTrue(cloned.isHidden());
+
+    cloned.setDescription("The cloned info");
+    cloned.setHidden(false);
+    cloned.setBaseType(fromString("string"));
+
+    assertTypeEquals(STRING_TYPE, resolve(cloned.getBaseType()));
+    assertEquals("The cloned info", cloned.getDescription());
+    assertFalse(cloned.isHidden());
+
+    // Original info should be unchanged.
+    assertTypeEquals(NUMBER_OBJECT_TYPE, resolve(info.getBaseType()));
+    assertEquals("The source info", info.getDescription());
+    assertTypeEquals(STRING_TYPE, resolve(info.getReturnType()));
+    assertTrue(info.isConstant());
+    assertTrue(info.isConstructor());
+    assertTrue(info.isHidden());
+  }
+
   public void testSetFileOverviewWithDocumentationOff() {
     JSDocInfo info = new JSDocInfo();
     info.documentFileOverview("hi bob");
@@ -409,18 +454,18 @@ public class JSDocInfoTest extends TestCase {
 
   public void testSetSuppressions() {
     JSDocInfo info = new JSDocInfo(true);
-    info.setSuppressions(Sets.newHashSet("sam", "bob"));
-    assertEquals(Sets.newHashSet("bob", "sam"), info.getSuppressions());
+    info.setSuppressions(ImmutableSet.of("sam", "bob"));
+    assertEquals(ImmutableSet.of("bob", "sam"), info.getSuppressions());
   }
 
   public void testSetModifies() {
     JSDocInfo info = new JSDocInfo(true);
-    info.setModifies(Sets.newHashSet("this"));
-    assertEquals(Sets.newHashSet("this"), info.getModifies());
+    info.setModifies(ImmutableSet.of("this"));
+    assertEquals(ImmutableSet.of("this"), info.getModifies());
 
     info = new JSDocInfo(true);
-    info.setModifies(Sets.newHashSet("arguments"));
-    assertEquals(Sets.newHashSet("arguments"), info.getModifies());
+    info.setModifies(ImmutableSet.of("arguments"));
+    assertEquals(ImmutableSet.of("arguments"), info.getModifies());
   }
 
   public void testAddSingleTemplateTypeName(){

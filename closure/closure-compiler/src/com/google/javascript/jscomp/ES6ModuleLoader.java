@@ -16,11 +16,10 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.collect.Maps;
-
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -29,7 +28,7 @@ import java.util.Map;
  * @see Section 26.3.3.18.2 of the ES6 spec
  * @see http://wiki.commonjs.org/wiki/Modules/1.1
  */
-class ES6ModuleLoader {
+public final class ES6ModuleLoader {
   /**
    * According to the spec, the forward slash should be the delimiter on all
    * platforms.
@@ -53,17 +52,30 @@ class ES6ModuleLoader {
       "JSC_ES6_MODULE_LOAD_ERROR",
       "Failed to load module \"{0}\"");
 
-  private final Map<String, CompilerInput> inputsByAddress = Maps.newHashMap();
+  private final Map<String, CompilerInput> inputsByAddress = new HashMap<>();
   private final String moduleRoot;
   private final URI moduleRootURI;
+  private final AbstractCompiler compiler;
 
-  ES6ModuleLoader(AbstractCompiler compiler, String moduleRoot) {
+  /**
+   * Creates an instance of the module loader which can be used to locate
+   * ES6 and CommonJS modules.
+   *
+   * @param compiler The compiler
+   * @param moduleRoot Path to a directory which can be used to locate modules
+   */
+  public ES6ModuleLoader(AbstractCompiler compiler, String moduleRoot) {
     this.moduleRoot = moduleRoot;
     this.moduleRootURI = createUri(moduleRoot);
+    this.compiler = compiler;
+  }
 
-    // Precompute the module name of each source file.
-    for (CompilerInput input : compiler.getInputsInOrder()) {
-      inputsByAddress.put(getLoadAddress(input), input);
+  private void initInputs() {
+    if (inputsByAddress.isEmpty()) {
+      // Precompute the module name of each source file.
+      for (CompilerInput input : compiler.getInputsInOrder()) {
+        inputsByAddress.put(getLoadAddress(input), input);
+      }
     }
   }
 
@@ -93,6 +105,7 @@ class ES6ModuleLoader {
    * an input, or fail softly (by returning null), or throw an error.
    */
   CompilerInput load(String name) throws LoadFailedException {
+    initInputs();
     return inputsByAddress.get(name);
   }
 

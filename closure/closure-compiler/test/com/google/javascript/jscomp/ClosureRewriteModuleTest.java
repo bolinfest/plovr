@@ -26,7 +26,7 @@ import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
  * Unit tests for ClosureRewriteModule
  * @author johnlenz@google.com (John Lenz)
  */
-public class ClosureRewriteModuleTest extends CompilerTestCase {
+public final class ClosureRewriteModuleTest extends CompilerTestCase {
 
   @Override
   protected CompilerPass getProcessor(Compiler compiler) {
@@ -323,6 +323,29 @@ public class ClosureRewriteModuleTest extends CompilerTestCase {
         + "goog.scope(function(){"
         + "  /** @typedef {string} */ var x;"
         + "  /** @const */ ns.a = { /** @typedef {string} */ something: x };"
+        + "});");
+  }
+
+  public void testExport7() {
+    test(
+        "goog.module('ns.a');"
+        + "/** @constructor */"
+        + "exports = function() {};",
+
+        "goog.provide('ns.a');"
+        + "goog.scope(function(){"
+        + "  /** @constructor */ ns.a = function() {};"
+        + "});");
+  }
+
+  public void testExport8() {
+    test(
+        "goog.module('ns.a');"
+        + "exports = goog.defineClass({});",
+
+        "goog.provide('ns.a');"
+        + "goog.scope(function(){"
+        + "  ns.a = goog.defineClass({});"
         + "});");
   }
 

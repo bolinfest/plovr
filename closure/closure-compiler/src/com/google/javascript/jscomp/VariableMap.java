@@ -21,6 +21,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.io.Files;
 
 import java.io.ByteArrayOutputStream;
@@ -36,10 +37,10 @@ import java.util.Map;
  * Stores the mapping from original variable name to new variable names.
  * @see RenameVars
  */
-public class VariableMap {
+public final class VariableMap {
 
   /** Maps original source name to new name */
-  private final ImmutableMap<String, String> map;
+  private final ImmutableSortedMap<String, String> map;
 
   /** Maps new name to source name, lazily initialized */
   private ImmutableMap<String, String> reverseMap = null;
@@ -47,7 +48,7 @@ public class VariableMap {
   private static final char SEPARATOR = ':';
 
   VariableMap(Map<String, String> map) {
-    this.map = ImmutableMap.copyOf(map);
+    this.map = ImmutableSortedMap.copyOf(map);
   }
 
   /**

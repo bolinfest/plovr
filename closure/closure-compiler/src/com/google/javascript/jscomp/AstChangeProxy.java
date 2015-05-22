@@ -17,11 +17,12 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
+import com.google.common.collect.ImmutableList;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -46,7 +47,7 @@ class AstChangeProxy {
   private final List<ChangeListener> listeners;
 
   AstChangeProxy() {
-    listeners = Lists.newArrayList();
+    listeners = new ArrayList<>();
   }
 
   /**
@@ -85,7 +86,7 @@ class AstChangeProxy {
    * Replaces a node from the parent's child list.
    */
   final void replaceWith(Node parent, Node node, Node replacement) {
-    replaceWith(parent, node, Lists.newArrayList(replacement));
+    replaceWith(parent, node, ImmutableList.of(replacement));
   }
 
   /**

@@ -16,12 +16,12 @@
 
 package com.google.javascript.jscomp.deps;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.ErrorManager;
 import com.google.javascript.jscomp.LoggerErrorManager;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -36,7 +36,7 @@ import java.util.logging.Logger;
  * {@link #getDependencies(Collection)}.
  *
  */
-public class DefaultDependencyResolver implements DependencyResolver  {
+public final class DefaultDependencyResolver implements DependencyResolver  {
 
   /** Filename for Closure's base.js file which is always added. */
   static final String CLOSURE_BASE = "base.js";
@@ -80,7 +80,7 @@ public class DefaultDependencyResolver implements DependencyResolver  {
   @Override
   public List<String> getDependencies(Collection<String> symbols)
       throws ServiceException {
-    return getDependencies(symbols, Sets.<String> newHashSet());
+    return getDependencies(symbols, new HashSet<String>());
   }
 
   /**
@@ -107,7 +107,7 @@ public class DefaultDependencyResolver implements DependencyResolver  {
   @Override
   public List<String> getDependencies(Collection<String> symbols,
       Set<String> seen) throws ServiceException {
-    List<String> list = Lists.newArrayList();
+    List<String> list = new ArrayList<>();
     for (DependencyFile depsFile : depsFiles) {
       depsFile.ensureUpToDate();
     }
@@ -150,7 +150,7 @@ public class DefaultDependencyResolver implements DependencyResolver  {
     JsFileParser parser = new JsFileParser(errorManager);
     DependencyInfo deps =
         parser.parseFile("<unknown path>", "<unknown path>", code);
-    List<String> requires = Lists.newArrayList();
+    List<String> requires = new ArrayList<>();
     if (addClosureBase) {
       requires.add(CLOSURE_BASE_PROVIDE);
     }

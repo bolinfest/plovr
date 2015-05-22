@@ -22,7 +22,7 @@ import static com.google.javascript.jscomp.TypeValidator.TYPE_MISMATCH_WARNING;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Sets;
+import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -33,7 +33,7 @@ import com.google.javascript.rhino.Token;
  * @author nicksantos@google.com (Nick Santos)
  */
 
-public class IntegrationTest extends IntegrationTestCase {
+public final class IntegrationTest extends IntegrationTestCase {
 
   @Override public void setUp() {
     super.setUp();
@@ -332,11 +332,36 @@ public class IntegrationTest extends IntegrationTestCase {
     testSame(createCompilerOptions(), "/** @export */ function f() {}");
   }
 
-  public void testGenerateExportsOn() {
+  public void testExportTestFunctionsOn1() {
     CompilerOptions options = createCompilerOptions();
-    options.setGenerateExports(true);
-    test(options, "/** @export */ function f() {}",
-        "/** @export */ function f() {} goog.exportSymbol('f', f);");
+    options.exportTestFunctions = true;
+    test(options, "function testFoo() {}",
+        "/** @export */ function testFoo() {}"
+        + "goog.exportSymbol('testFoo', testFoo);");
+  }
+
+  public void testExportTestFunctionsOn2() {
+    CompilerOptions options = createCompilerOptions();
+    options.setExportTestFunctions(true);
+    options.setClosurePass(true);
+    options.setRenamingPolicy(
+        VariableRenamingPolicy.ALL, PropertyRenamingPolicy.ALL_UNQUOTED);
+    options.setGeneratePseudoNames(true);
+    options.setCollapseProperties(true);
+    test(options,
+        new String[] {
+          "var goog = {};",
+          "goog.provide('goog.testing.testSuite');\n"
+          + "goog.testing.testSuite = function(a) {};\n",
+          " goog.module('testing');\n"
+          + "var testSuite = goog.require('goog.testing.testSuite');\n"
+          + "testSuite({testMethod:function(){}});\n"
+        },
+        new String[] {
+          "",
+          "var $goog$testing$testSuite$$=function($a$$){};",
+          "$goog$testing$testSuite$$({\"testMethod\":function(){}})"
+        });
   }
 
   public void testAngularPassOff() {
@@ -376,22 +401,26 @@ public class IntegrationTest extends IntegrationTestCase {
     CompilationLevel.ADVANCED_OPTIMIZATIONS
         .setOptionsForCompilationLevel(options);
     test(options,
-         "var x = {eeny: 1, /** @expose */ meeny: 2};" +
-         "/** @constructor */ var Foo = function() {};" +
-         "/** @expose */  Foo.prototype.miny = 3;" +
-         "Foo.prototype.moe = 4;" +
-         "/** @expose */  Foo.prototype.tiger;" +
-         "function moe(a, b) { return a.meeny + b.miny + a.tiger; }" +
-         "window['x'] = x;" +
-         "window['Foo'] = Foo;" +
-         "window['moe'] = moe;",
-         "function a(){}" +
-         "a.prototype.miny=3;" +
-         "window.x={a:1,meeny:2};" +
-         "window.Foo=a;" +
-         "window.moe=function(b,c){" +
-         "  return b.meeny+c.miny+b.tiger" +
-         "}");
+        new String[] {"var x = {eeny: 1, /** @expose */ meeny: 2};" +
+            "/** @constructor */ var Foo = function() {};" +
+            "/** @expose */  Foo.prototype.miny = 3;" +
+            "Foo.prototype.moe = 4;" +
+            "/** @expose */  Foo.prototype.tiger;" +
+            "function moe(a, b) { return a.meeny + b.miny + a.tiger; }" +
+            "window['x'] = x;" +
+            "window['Foo'] = Foo;" +
+            "window['moe'] = moe;"},
+        new String[] {"function a(){}" +
+            "a.prototype.miny=3;" +
+            "window.x={a:1,meeny:2};" +
+            "window.Foo=a;" +
+            "window.moe=function(b,c){" +
+            "  return b.meeny+c.miny+b.tiger" +
+            "}"},
+        new DiagnosticType[]{
+            RhinoErrorReporter.PARSE_ERROR,
+            RhinoErrorReporter.PARSE_ERROR,
+            RhinoErrorReporter.PARSE_ERROR});
   }
 
   public void testCheckSymbolsOff() {
@@ -603,7 +632,7 @@ public class IntegrationTest extends IntegrationTestCase {
     CompilerOptions options = createCompilerOptions();
     testSame(options, code);
 
-    options.setIdGenerators(Sets.newHashSet("f"));
+    options.setIdGenerators(ImmutableSet.of("f"));
     test(options, code, "function f() {} 'a';");
   }
 
@@ -782,7 +811,7 @@ public class IntegrationTest extends IntegrationTestCase {
 
   public void testExtraAnnotationNames() {
     CompilerOptions options = createCompilerOptions();
-    options.setExtraAnnotationNames(Sets.newHashSet("TagA", "TagB"));
+    options.setExtraAnnotationNames(ImmutableSet.of("TagA", "TagB"));
     test(
         options,
         "/** @TagA */ var f = new Foo(); /** @TagB */ f.bar();",
@@ -1048,9 +1077,6 @@ public class IntegrationTest extends IntegrationTestCase {
 
     options.setInlineVariables(true);
     test(options, code, "(function foo() {})(3);");
-
-    options.setPropertyRenaming(PropertyRenamingPolicy.HEURISTIC);
-    test(options, code, DefaultPassConfig.CANNOT_USE_PROTOTYPE_AND_VAR);
   }
 
   public void testInlineConstants() {
@@ -1442,10 +1468,6 @@ public class IntegrationTest extends IntegrationTestCase {
     options.setExtractPrototypeMemberDeclarations(true);
     options.setVariableRenaming(VariableRenamingPolicy.ALL);
     test(options, code, expected);
-
-    options.setPropertyRenaming(PropertyRenamingPolicy.HEURISTIC);
-    options.setVariableRenaming(VariableRenamingPolicy.OFF);
-    testSame(options, code);
   }
 
   public void testDevirtualizationAndExtractPrototypeMemberDeclarations() {
@@ -1515,23 +1537,10 @@ public class IntegrationTest extends IntegrationTestCase {
     String code =
         "function f() { return this.foo + this['bar'] + this.Baz; }" +
         "f.prototype.bar = 3; f.prototype.Baz = 3;";
-    String heuristic =
-        "function f() { return this.foo + this['bar'] + this.a; }" +
-        "f.prototype.bar = 3; f.prototype.a = 3;";
-    String aggHeuristic =
-        "function f() { return this.foo + this['b'] + this.a; } " +
-        "f.prototype.b = 3; f.prototype.a = 3;";
     String all =
         "function f() { return this.c + this['bar'] + this.a; }" +
         "f.prototype.b = 3; f.prototype.a = 3;";
     testSame(options, code);
-
-    options.setPropertyRenaming(PropertyRenamingPolicy.HEURISTIC);
-    test(options, code, heuristic);
-
-    options.setPropertyRenaming(PropertyRenamingPolicy.AGGRESSIVE_HEURISTIC);
-    test(options, code, aggHeuristic);
-
     options.setPropertyRenaming(PropertyRenamingPolicy.ALL_UNQUOTED);
     test(options, code, all);
   }
@@ -2867,6 +2876,67 @@ public class IntegrationTest extends IntegrationTestCase {
     compile(options, code);
   }
 
+  // Tests that unused classes are removed, even if they are passed to $jscomp.inherits.
+  private void testES6UnusedClassesAreRemoved(CodingConvention convention) {
+    CompilerOptions options = createCompilerOptions();
+    options.setLanguageIn(LanguageMode.ECMASCRIPT6_STRICT);
+    options.setLanguageOut(LanguageMode.ECMASCRIPT3);
+    options.setCodingConvention(convention);
+    CompilationLevel.ADVANCED_OPTIMIZATIONS.setOptionsForCompilationLevel(options);
+    Compiler compiler = compile(options, Joiner.on('\n').join(
+        "class Base {}",
+        "class Sub extends Base {}",
+        "alert(1);"));
+    String result = compiler.toSource(compiler.getJsRoot());
+    assertThat(result).isEqualTo("alert(1)");
+  }
+
+  public void testES6UnusedClassesAreRemoved() {
+    testES6UnusedClassesAreRemoved(CodingConventions.getDefault());
+    testES6UnusedClassesAreRemoved(new ClosureCodingConvention());
+    testES6UnusedClassesAreRemoved(new GoogleCodingConvention());
+  }
+
+  /**
+   * @param js A snippet of JavaScript in which alert('No one ever calls me'); is called
+   *     in a method which is never called. Verifies that the method is stripped out by
+   *     asserting that the result does not contain the string 'No one ever calls me'.
+   */
+  private void testES6StaticsAreRemoved(String js) {
+    CompilerOptions options = createCompilerOptions();
+    options.setLanguageIn(LanguageMode.ECMASCRIPT6_STRICT);
+    options.setLanguageOut(LanguageMode.ECMASCRIPT3);
+    CompilationLevel.ADVANCED_OPTIMIZATIONS.setOptionsForCompilationLevel(options);
+    Compiler compiler = compile(options, js);
+    String result = compiler.toSource(compiler.getJsRoot());
+    assertThat(result).isNotEmpty();
+    assertThat(result).doesNotContain("No one ever calls me");
+  }
+
+  public void testES6StaticsAreRemoved1() {
+    testES6StaticsAreRemoved(Joiner.on('\n').join(
+        "class Base {",
+        "  static called() { alert('I am called'); }",
+        "  static notCalled() { alert('No one ever calls me'); }",
+        "}",
+        "class Sub extends Base {",
+        "  static called() { super.called(); alert('I am called too'); }",
+        "  static notCalled() { alert('No one ever calls me'); }",
+        "}",
+        "Sub.called();"));
+  }
+
+  public void failing_testES6StaticsAreRemoved2() {
+    testES6StaticsAreRemoved(Joiner.on('\n').join(
+        "class Base {",
+        "  static calledInSubclassOnly() { alert('No one ever calls me'); }",
+        "}",
+        "class Sub extends Base {",
+        "  static calledInSubclassOnly() { alert('I am called'); }",
+        "}",
+        "Sub.calledInSubclassOnly();"));
+  }
+
   public void testIssue787() {
     CompilerOptions options = createCompilerOptions();
     CompilationLevel level = CompilationLevel.SIMPLE_OPTIMIZATIONS;
@@ -3003,12 +3073,6 @@ public class IntegrationTest extends IntegrationTestCase {
         FindExportableNodes.NON_GLOBAL_ERROR);
 
     options.exportLocalPropertyDefinitions = true;
-
-    // Local exports enabled, but removeUnusedPrototypePropertiesInExterns not
-    // disabled.
-    test(options, code,
-        DefaultPassConfig.CANNOT_USE_EXPORT_LOCALS_AND_EXTERN_PROP_REMOVAL);
-
     options.setRemoveUnusedPrototypePropertiesInExterns(false);
 
     // property name preserved due to export

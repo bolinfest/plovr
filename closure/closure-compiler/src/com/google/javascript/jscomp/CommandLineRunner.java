@@ -25,7 +25,6 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.Files;
 import com.google.javascript.jscomp.SourceMap.LocationMapping;
@@ -299,13 +298,13 @@ public class CommandLineRunner extends
         hidden = true,
         usage = "Source map location mapping separated by a '|' " +
         "(i.e. filesystem-path|webserver-path)")
-    private List<String> sourceMapLocationMapping = Lists.newArrayList();
+    private List<String> sourceMapLocationMapping = new ArrayList<>();
 
     @Option(name = "--source_map_input",
         hidden = true,
         usage = "Source map locations for input files, separated by a '|', " +
         "(i.e. input-file-path|input-source-map)")
-    private List<String> sourceMapInputs = Lists.newArrayList();
+    private List<String> sourceMapInputs = new ArrayList<>();
 
     // Used to define the flag, values are stored by the handler.
     @SuppressWarnings("unused")
@@ -359,12 +358,17 @@ public class CommandLineRunner extends
     private String compilationLevel = "SIMPLE";
     private CompilationLevel compilationLevelParsed = null;
 
+    @Option(name = "--checks-only",
+        usage = "Don't generate output. Run checks, but no compiler passes.")
+    private boolean checksOnly = false;
+
     @Option(name = "--use_types_for_optimization",
         hidden = true,
-        usage = "Experimental: perform additional optimizations " +
-        "based on available information. Inaccurate type annotations " +
+        handler = BooleanOptionHandler.class,
+        usage = "Enable or disable the optimizations " +
+        "based on available type information. Inaccurate type annotations " +
         "may result in incorrect results.")
-    private boolean useTypesForOptimization = false;
+    private boolean useTypesForOptimization = true;
 
     @Option(name = "--warning_level",
         aliases = {"-W"},
@@ -407,11 +411,6 @@ public class CommandLineRunner extends
         hidden = true,
         usage = "Process CommonJS modules to a concatenable form.")
     private boolean processCommonJsModules = false;
-
-    @Option(name = "--rewrite_es6_modules",
-        hidden = true,
-        usage = "Rewrite ES6 modules to a concatenable form.")
-    private boolean rewriteEs6Modules = false;
 
     @Option(name = "--transpile_only",
         hidden = true,
@@ -487,6 +486,12 @@ public class CommandLineRunner extends
         + "annotated with @ngInject")
     private boolean angularPass = false;
 
+    @Option(name = "--polymer_pass",
+        hidden = true,
+        handler = BooleanOptionHandler.class,
+        usage = "Rewrite Polymer classes to be compiler-friendly.")
+    private boolean polymerPass = false;
+
     @Option(name = "--output_manifest",
         hidden = true,
         usage = "Prints out a list of all the files in the compilation. "
@@ -520,7 +525,7 @@ public class CommandLineRunner extends
         hidden = true,
         usage = "Sets what language spec the output should conform to. "
         + " If omitted, defaults to the value of language_in. "
-        + "Options: ECMASCRIPT3, ECMASCRIPT5, ECMASCRIPT5_STRICT"
+        + "Options: ECMASCRIPT3, ECMASCRIPT5, ECMASCRIPT5_STRICT, "
         + "ECMASCRIPT6_TYPED (experimental)")
     private String languageOut = "";
 
@@ -528,7 +533,8 @@ public class CommandLineRunner extends
         hidden = true,
         usage = "Experimental: Allows ES6 language_out, for compiling "
         + "ES6 to ES6 as well as transpiling to ES6 from lower versions. "
-        + "Enabling this flag may cause the compiler to crash.")
+        + "Enabling this flag may cause the compiler to crash or produce "
+        + "incorrect output.")
     private boolean allowEs6Out = false;
 
     @Option(name = "--version",
@@ -589,7 +595,7 @@ public class CommandLineRunner extends
     private List<String> conformanceConfigs = new ArrayList<>();
 
     @Argument
-    private final List<String> arguments = new ArrayList<>();
+    private List<String> arguments = new ArrayList<>();
     private final CmdLineParser parser;
 
     private static final Map<String, CompilationLevel> COMPILATION_LEVEL_MAP =
@@ -1014,7 +1020,7 @@ public class CommandLineRunner extends
       if (flags.commonJsEntryModule == null) {
         reportError("Please specify --common_js_entry_module.");
       }
-      flags.closureEntryPoint = Lists.newArrayList(
+      flags.closureEntryPoint = ImmutableList.of(
           ProcessCommonJSModules.toModuleName(flags.commonJsEntryModule));
     }
 
@@ -1090,7 +1096,6 @@ public class CommandLineRunner extends
           .setLanguageIn(flags.languageIn)
           .setLanguageOut(flags.languageOut)
           .setProcessCommonJSModules(flags.processCommonJsModules)
-          .setRewriteEs6Modules(flags.rewriteEs6Modules)
           .setTranspileOnly(flags.transpileOnly)
           .setCommonJSModulePathPrefix(flags.commonJsPathPrefix)
           .setTransformAMDToCJSModules(flags.transformAmdModules)
@@ -1127,6 +1132,8 @@ public class CommandLineRunner extends
       level.setDebugOptionsForCompilationLevel(options);
     }
 
+    options.setChecksOnly(flags.checksOnly);
+
     if (flags.useTypesForOptimization) {
       level.setTypeBasedOptimizationOptions(options);
     }
@@ -1151,6 +1158,8 @@ public class CommandLineRunner extends
         flags.processJqueryPrimitives;
 
     options.angularPass = flags.angularPass;
+
+    options.polymerPass = flags.polymerPass;
 
     options.renamePrefixNamespace = flags.renamePrefixNamespace;
 
@@ -1270,6 +1279,7 @@ public class CommandLineRunner extends
     "chrome.js",
 
     "deprecated.js",
+    "fetchapi.js",
     "fileapi.js",
     "flash.js",
     "gecko_xml.js",
@@ -1277,9 +1287,12 @@ public class CommandLineRunner extends
     "ie_vml.js",
     "iphone.js",
     "mediasource.js",
+    "page_visibility.js",
     "v8.js",
     "webstorage.js",
     "w3c_anim_timing.js",
+    "w3c_audio.js",
+    "w3c_batterystatus.js",
     "w3c_encoding.js",
     "w3c_css3d.js",
     "w3c_elementtraversal.js",
@@ -1289,6 +1302,8 @@ public class CommandLineRunner extends
     "w3c_range.js",
     "w3c_rtc.js",
     "w3c_selectors.js",
+    "w3c_serviceworker.js",
+    "w3c_webcrypto.js",
     "w3c_xml.js",
     "window.js",
     "webkit_notifications.js",

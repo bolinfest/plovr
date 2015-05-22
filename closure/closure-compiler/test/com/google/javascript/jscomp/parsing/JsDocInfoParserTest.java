@@ -20,7 +20,7 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Sets;
+import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.SourceFile;
 import com.google.javascript.jscomp.parsing.Config.LanguageMode;
 import com.google.javascript.jscomp.parsing.ParserRunner.ParseResult;
@@ -28,13 +28,14 @@ import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Marker;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
+import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.SimpleSourceFile;
+import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.ObjectType;
-import com.google.javascript.rhino.jstype.SimpleSourceFile;
-import com.google.javascript.rhino.jstype.StaticSourceFile;
 import com.google.javascript.rhino.jstype.TemplateType;
 import com.google.javascript.rhino.testing.BaseJSTypeTestCase;
 import com.google.javascript.rhino.testing.TestErrorReporter;
@@ -45,15 +46,16 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public class JsDocInfoParserTest extends BaseJSTypeTestCase {
+public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
 
   private Set<String> extraAnnotations;
   private Set<String> extraSuppressions;
-  private Node.FileLevelJsDocBuilder fileLevelJsDocBuilder = null;
+  private JSDocInfoBuilder fileLevelJsDocBuilder = null;
 
   @Override
   public void setUp() throws Exception {
     super.setUp();
+    fileLevelJsDocBuilder = null;
     extraAnnotations = new HashSet<>(ParserRunner.createConfig(
         true, LanguageMode.ECMASCRIPT3, false, null)
             .annotationNames.keySet());
@@ -1467,35 +1469,35 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
   }
 
   public void testParsePreserve() throws Exception {
-    Node node = new Node(1);
-    this.fileLevelJsDocBuilder = node.getJsDocBuilderForNode();
+    this.fileLevelJsDocBuilder = new JSDocInfoBuilder(false);
     String comment = "@preserve Foo\nBar\n\nBaz*/";
     parse(comment);
-    assertThat(node.getJSDocInfo().getLicense()).isEqualTo(" Foo\nBar\n\nBaz");
+    JSDocInfo info = this.fileLevelJsDocBuilder.build(true);
+    assertThat(info.getLicense()).isEqualTo(" Foo\nBar\n\nBaz");
   }
 
   public void testParseLicense() throws Exception {
-    Node node = new Node(1);
-    this.fileLevelJsDocBuilder = node.getJsDocBuilderForNode();
+    this.fileLevelJsDocBuilder = new JSDocInfoBuilder(false);
     String comment = "@license Foo\nBar\n\nBaz*/";
     parse(comment);
-    assertThat(node.getJSDocInfo().getLicense()).isEqualTo(" Foo\nBar\n\nBaz");
+    JSDocInfo info = this.fileLevelJsDocBuilder.build(true);
+    assertThat(info.getLicense()).isEqualTo(" Foo\nBar\n\nBaz");
   }
 
   public void testParseLicenseAscii() throws Exception {
-    Node node = new Node(1);
-    this.fileLevelJsDocBuilder = node.getJsDocBuilderForNode();
+    this.fileLevelJsDocBuilder = new JSDocInfoBuilder(false);
     String comment = "@license Foo\n *   Bar\n\n  Baz*/";
     parse(comment);
-    assertThat(node.getJSDocInfo().getLicense()).isEqualTo(" Foo\n   Bar\n\n  Baz");
+    JSDocInfo info = this.fileLevelJsDocBuilder.build(true);
+    assertThat(info.getLicense()).isEqualTo(" Foo\n   Bar\n\n  Baz");
   }
 
   public void testParseLicenseWithAnnotation() throws Exception {
-    Node node = new Node(1);
-    this.fileLevelJsDocBuilder = node.getJsDocBuilderForNode();
+    this.fileLevelJsDocBuilder = new JSDocInfoBuilder(false);
     String comment = "@license Foo \n * @author Charlie Brown */";
     parse(comment);
-    assertThat(node.getJSDocInfo().getLicense()).isEqualTo(" Foo \n @author Charlie Brown ");
+    JSDocInfo info = this.fileLevelJsDocBuilder.build(true);
+    assertThat(info.getLicense()).isEqualTo(" Foo \n @author Charlie Brown ");
   }
 
   public void testParseDefine1() throws Exception {
@@ -1989,6 +1991,16 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
         "type annotation incompatible with other annotations");
   }
 
+  public void testInvalidTemplatedTypedef1() throws Exception {
+    parse("@template T \n * @typedef {Object<T,T>} */",
+          "Bad type annotation. type annotation incompatible with other annotations");
+  }
+
+  public void testInvalidTemplatedTypedef2() throws Exception {
+    parse("@typedef {Array<T>} \n * @template T */",
+          "Bad type annotation. Type name(s) for @template annotation declared twice");
+  }
+
   public void testParseImplements() throws Exception {
     List<JSTypeExpression> interfaces = parse("@implements {SomeInterface}*/")
         .getImplementedInterfaces();
@@ -2179,17 +2191,17 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
 
   public void testSuppress1() throws Exception {
     JSDocInfo info = parse("@suppress {x} */");
-    assertThat(info.getSuppressions()).isEqualTo(Sets.newHashSet("x"));
+    assertThat(info.getSuppressions()).isEqualTo(ImmutableSet.of("x"));
   }
 
   public void testSuppress2() throws Exception {
     JSDocInfo info = parse("@suppress {x|y|x|z} */");
-    assertThat(info.getSuppressions()).isEqualTo(Sets.newHashSet("x", "y", "z"));
+    assertThat(info.getSuppressions()).isEqualTo(ImmutableSet.of("x", "y", "z"));
   }
 
   public void testSuppress3() throws Exception {
     JSDocInfo info = parse("@suppress {x,y} */");
-    assertThat(info.getSuppressions()).isEqualTo(Sets.newHashSet("x", "y"));
+    assertThat(info.getSuppressions()).isEqualTo(ImmutableSet.of("x", "y"));
   }
 
   public void testBadSuppress1() throws Exception {
@@ -2223,22 +2235,22 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
 
   public void testModifies1() throws Exception {
     JSDocInfo info = parse("@modifies {this} */");
-    assertThat(info.getModifies()).isEqualTo(Sets.newHashSet("this"));
+    assertThat(info.getModifies()).isEqualTo(ImmutableSet.of("this"));
   }
 
   public void testModifies2() throws Exception {
     JSDocInfo info = parse("@modifies {arguments} */");
-    assertThat(info.getModifies()).isEqualTo(Sets.newHashSet("arguments"));
+    assertThat(info.getModifies()).isEqualTo(ImmutableSet.of("arguments"));
   }
 
   public void testModifies3() throws Exception {
     JSDocInfo info = parse("@modifies {this|arguments} */");
-    assertThat(info.getModifies()).isEqualTo(Sets.newHashSet("this", "arguments"));
+    assertThat(info.getModifies()).isEqualTo(ImmutableSet.of("this", "arguments"));
   }
 
   public void testModifies4() throws Exception {
     JSDocInfo info = parse("@param {*} x\n * @modifies {x} */");
-    assertThat(info.getModifies()).isEqualTo(Sets.newHashSet("x"));
+    assertThat(info.getModifies()).isEqualTo(ImmutableSet.of("x"));
   }
 
   public void testModifies5() throws Exception {
@@ -2246,7 +2258,7 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
         "@param {*} x\n"
         + " * @param {*} y\n"
         + " * @modifies {x} */");
-    assertThat(info.getModifies()).isEqualTo(Sets.newHashSet("x"));
+    assertThat(info.getModifies()).isEqualTo(ImmutableSet.of("x"));
   }
 
   public void testModifies6() throws Exception {
@@ -2254,7 +2266,7 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
         "@param {*} x\n"
         + " * @param {*} y\n"
         + " * @modifies {x|y} */");
-    assertThat(info.getModifies()).isEqualTo(Sets.newHashSet("x", "y"));
+    assertThat(info.getModifies()).isEqualTo(ImmutableSet.of("x", "y"));
   }
 
 
@@ -2413,11 +2425,6 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
   public void testSeeMissing() throws Exception {
     parse("* @see */", true,
           "@see tag missing description");
-  }
-
-  public void testSourceName() throws Exception {
-    JSDocInfo jsdoc = parse("@deprecated */", true);
-    assertThat(jsdoc.getAssociatedNode().getSourceFileName()).isEqualTo("testcode");
   }
 
   public void testParseBlockComment() throws Exception {
@@ -4013,6 +4020,14 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
     parse("@jaggerProvidePromise \n@jaggerProvidePromise*/", "extra @jaggerProvidePromise tag");
   }
 
+  public void testParsePolymerBehavior() throws Exception {
+    assertThat(parse("@polymerBehavior*/").isPolymerBehavior()).isTrue();
+  }
+
+  public void testParsePolymerBehaviorExtra() throws Exception {
+    parse("@polymerBehavior \n@polymerBehavior*/", "extra @polymerBehavior tag");
+  }
+
 
   public void testParseWizaction1() throws Exception {
     assertThat(parse("@wizaction*/").isWizaction()).isTrue();
@@ -4064,6 +4079,11 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
   public void testTextExtents() {
     parse("@return {@code foo} bar \n *    baz. */",
         true, "Bad type annotation. type not recognized due to syntax error");
+  }
+
+  public void testParseDuplicateNoCollapse() throws Exception {
+    parse("@nocollapse \n * @nocollapse \n * @type {Object}*/",
+        "extra @nocollapse tag");
   }
 
   /**
@@ -4225,8 +4245,7 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
     ParseResult result = ParserRunner.parse(
         new SimpleSourceFile("source", false), code, config, testErrorReporter);
 
-    assertTrue("some expected warnings were not reported",
-        testErrorReporter.hasEncounteredAllWarnings());
+    testErrorReporter.assertHasEncounteredAllWarnings();
     return result.ast;
   }
 
@@ -4264,7 +4283,6 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
         stream(comment),
         comment,
         0,
-        associatedNode,
         file,
         config,
         errorReporter);
@@ -4275,8 +4293,7 @@ public class JsDocInfoParserTest extends BaseJSTypeTestCase {
 
     jsdocParser.parse();
 
-    assertTrue("expected warnings were not reported",
-        errorReporter.hasEncounteredAllWarnings());
+    errorReporter.assertHasEncounteredAllWarnings();
 
     if (parseFileOverview) {
       return jsdocParser.getFileOverviewJSDocInfo();

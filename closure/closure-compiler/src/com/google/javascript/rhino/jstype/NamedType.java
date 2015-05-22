@@ -41,10 +41,10 @@ package com.google.javascript.rhino.jstype;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
-import com.google.common.collect.Lists;
 import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.Node;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -118,7 +118,7 @@ public class NamedType extends ProxyObjectType {
       // If this is an unresolved object type, we need to save all its
       // properties and define them when it is resolved.
       if (propertyContinuations == null) {
-        propertyContinuations = Lists.newArrayList();
+        propertyContinuations = new ArrayList<>();
       }
       propertyContinuations.add(
           new PropertyContinuation(
@@ -181,7 +181,7 @@ public class NamedType extends ProxyObjectType {
    * Resolve the referenced type within the enclosing scope.
    */
   @Override
-  JSType resolveInternal(ErrorReporter t, StaticScope<JSType> enclosing) {
+  JSType resolveInternal(ErrorReporter t, StaticTypedScope<JSType> enclosing) {
     // TODO(user): Investigate whether it is really necessary to keep two
     // different mechanisms for resolving named types, and if so, which order
     // makes more sense. Now, resolution via registry is first in order to
@@ -230,7 +230,7 @@ public class NamedType extends ProxyObjectType {
    * parsed and a symbol table constructed.
    */
   private void resolveViaProperties(ErrorReporter reporter,
-                                    StaticScope<JSType> enclosing) {
+                                    StaticTypedScope<JSType> enclosing) {
     JSType value = lookupViaProperties(reporter, enclosing);
     // last component of the chain
     if (value != null && value.isFunctionType() &&
@@ -262,12 +262,12 @@ public class NamedType extends ProxyObjectType {
    * @return The type of the symbol, or null if the type could not be found.
    */
   private JSType lookupViaProperties(ErrorReporter reporter,
-      StaticScope<JSType> enclosing) {
+      StaticTypedScope<JSType> enclosing) {
     String[] componentNames = reference.split("\\.", -1);
     if (componentNames[0].length() == 0) {
       return null;
     }
-    StaticSlot<JSType> slot = enclosing.getSlot(componentNames[0]);
+    StaticTypedSlot<JSType> slot = enclosing.getSlot(componentNames[0]);
     if (slot == null) {
       return null;
     }
@@ -356,7 +356,7 @@ public class NamedType extends ProxyObjectType {
     }
   }
 
-  private JSType getTypedefType(ErrorReporter t, StaticSlot<JSType> slot) {
+  private JSType getTypedefType(ErrorReporter t, StaticTypedSlot<JSType> slot) {
     JSType type = slot.getType();
     if (type != null) {
       return type;

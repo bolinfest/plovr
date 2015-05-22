@@ -18,20 +18,20 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.HashMultiset;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multiset;
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.CompilerOptions.AliasTransformation;
 import com.google.javascript.jscomp.CompilerOptions.AliasTransformationHandler;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.SourcePosition;
 import com.google.javascript.rhino.Token;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -141,9 +141,9 @@ class ScopedAliases implements HotSwapCompilerPass {
 
       // Apply the aliases.
       List<AliasUsage> aliasWorkQueue =
-          Lists.newArrayList(traversal.getAliasUsages());
+           new ArrayList<>(traversal.getAliasUsages());
       while (!aliasWorkQueue.isEmpty()) {
-        List<AliasUsage> newQueue = Lists.newArrayList();
+        List<AliasUsage> newQueue = new ArrayList<>();
         for (AliasUsage aliasUsage : aliasWorkQueue) {
           if (aliasUsage.referencesOtherAlias()) {
             newQueue.add(aliasUsage);
@@ -251,17 +251,17 @@ class ScopedAliases implements HotSwapCompilerPass {
     // The job of this class is to collect these three data sets.
 
     // The order of this list determines the order that aliases are applied.
-    private final List<Node> aliasDefinitionsInOrder = Lists.newArrayList();
+    private final List<Node> aliasDefinitionsInOrder = new ArrayList<>();
 
-    private final List<Node> scopeCalls = Lists.newArrayList();
+    private final List<Node> scopeCalls = new ArrayList<>();
 
-    private final List<AliasUsage> aliasUsages = Lists.newArrayList();
+    private final List<AliasUsage> aliasUsages = new ArrayList<>();
 
     // This map is temporary and cleared for each scope.
-    private final Map<String, Var> aliases = Maps.newHashMap();
+    private final Map<String, Var> aliases = new HashMap<>();
 
     // Also temporary and cleared for each scope.
-    private final Set<Node> injectedDecls = Sets.newHashSet();
+    private final Set<Node> injectedDecls = new HashSet<>();
 
     // Suppose you create an alias.
     // var x = goog.x;
@@ -273,7 +273,9 @@ class ScopedAliases implements HotSwapCompilerPass {
     // normalization (before optimizations). We run it here on a limited
     // set of variables, but only as a last resort (because this will screw
     // up warning messages downstream).
-    private final Set<String> forbiddenLocals = Sets.newHashSet("$jscomp");
+    private final Set<String> forbiddenLocals = new HashSet<>(
+        ImmutableSet.of("$jscomp"));
+
     private boolean hasNamespaceShadows = false;
 
     private boolean hasErrors = false;
@@ -369,9 +371,7 @@ class ScopedAliases implements HotSwapCompilerPass {
         } else if (isVar || isFunctionDecl) {
           boolean isHoisted = NodeUtil.isHoistedFunctionDeclaration(parent);
           Node grandparent = parent.getParent();
-          Node value = v.getInitialValue() != null ?
-              v.getInitialValue() :
-              null;
+          Node value = v.getInitialValue();
           Node varNode = null;
 
           // Grab the docinfo before we do any AST manipulation.
@@ -584,13 +584,8 @@ class ScopedAliases implements HotSwapCompilerPass {
         // we only process that jsdoc once.
         JSDocInfo info = n.getJSDocInfo();
         if (info != null && !injectedDecls.contains(n)) {
-          if (parent.isStringKey() && info == parent.getJSDocInfo()) {
-            // Also skip this one, to avoid processing the same JSDocInfo twice:
-            // https://github.com/google/closure-compiler/issues/400
-          } else {
-            for (Node node : info.getTypeNodes()) {
-              fixTypeNode(node);
-            }
+          for (Node node : info.getTypeNodes()) {
+            fixTypeNode(node);
           }
         }
 

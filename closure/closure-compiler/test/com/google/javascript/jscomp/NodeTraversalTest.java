@@ -32,7 +32,7 @@ import java.util.Set;
 /**
  * Tests for {@link NodeTraversal}.
  */
-public class NodeTraversalTest extends TestCase {
+public final class NodeTraversalTest extends TestCase {
   public void testPruningCallbackShouldTraverse1() {
     PruningCallback include =
       new PruningCallback(ImmutableSet.of(Token.SCRIPT, Token.VAR), true);
@@ -223,7 +223,7 @@ public class NodeTraversalTest extends TestCase {
 
   public void testGetCurrentNode() {
     Compiler compiler = new Compiler();
-    ScopeCreator creator = new SyntacticScopeCreator(compiler);
+    ScopeCreator creator = SyntacticScopeCreator.makeUntyped(compiler);
     ExpectNodeOnEnterScope callback = new ExpectNodeOnEnterScope();
     NodeTraversal t = new NodeTraversal(compiler, callback, creator);
 

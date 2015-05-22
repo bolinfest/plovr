@@ -17,10 +17,12 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Maps;
+import com.google.common.collect.ImmutableSet;
 import com.google.javascript.rhino.IR;
+import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -53,7 +55,7 @@ class CoverageInstrumentationPass implements CompilerPass {
       CoverageReach reach) {
     this.compiler = compiler;
     this.reach = reach;
-    instrumentationData = Maps.newLinkedHashMap();
+    instrumentationData = new LinkedHashMap<>();
   }
 
   /**
@@ -101,7 +103,10 @@ class CoverageInstrumentationPass implements CompilerPass {
         IR.or(
             IR.name(name),
             IR.arraylit()));
-    var.addSuppression("duplicate");
+
+    JSDocInfoBuilder builder = new JSDocInfoBuilder(false);
+    builder.recordSuppressions(ImmutableSet.of("duplicate"));
+    var.setJSDocInfo(builder.build());
     return var;
   }
 }

@@ -21,7 +21,7 @@ package com.google.javascript.jscomp;
  * Generate exports unit test.
  *
  */
-public class GenerateExportsTest extends CompilerTestCase {
+public final class GenerateExportsTest extends CompilerTestCase {
 
   private static final String EXTERNS =
       "function google_exportSymbol(a, b) {}; " +
@@ -72,6 +72,15 @@ public class GenerateExportsTest extends CompilerTestCase {
          "google_exportSymbol(\"foo\",foo);" +
          "foo.prototype.bar=function(){};" +
          "goog.exportProperty(foo.prototype,\"bar\",foo.prototype.bar)");
+  }
+
+  public void testExportPrototypeProperty() {
+    test("function Foo() {}\n" +
+         "/** @export */ Foo.prototype.bar = function() {};",
+
+         "function Foo() {}\n" +
+         "Foo.prototype.bar = function(){};\n" +
+         "goog.exportProperty(Foo.prototype, 'bar', Foo.prototype.bar);");
   }
 
   public void testExportSymbolAndConstantProperties() {

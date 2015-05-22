@@ -17,14 +17,13 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPreOrderCallback;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -37,7 +36,7 @@ import java.util.regex.Pattern;
  * goog.provide and goog.require are emitted for closure compiler automatic
  * ordering.
  */
-public class ProcessCommonJSModules implements CompilerPass {
+public final class ProcessCommonJSModules implements CompilerPass {
   public static final String DEFAULT_FILENAME_PREFIX =
       "." + ES6ModuleLoader.MODULE_SLASH;
 
@@ -50,11 +49,30 @@ public class ProcessCommonJSModules implements CompilerPass {
   private final ES6ModuleLoader loader;
   private final boolean reportDependencies;
 
-  ProcessCommonJSModules(Compiler compiler, ES6ModuleLoader loader) {
+  /**
+   * Creates a new ProcessCommonJSModules instance which can be used to
+   * rewrite CommonJS modules to a concatenable form.
+   *
+   * @param compiler The compiler
+   * @param loader The module loader which is used to locate CommonJS modules
+   */
+  public ProcessCommonJSModules(Compiler compiler, ES6ModuleLoader loader) {
     this(compiler, loader, true);
   }
 
-  ProcessCommonJSModules(Compiler compiler, ES6ModuleLoader loader,
+  /**
+   * Creates a new ProcessCommonJSModules instance which can be used to
+   * rewrite CommonJS modules to a concatenable form.
+   *
+   * @param compiler The compiler
+   * @param loader The module loader which is used to locate CommonJS modules
+   * @param reportDependencies Whether the rewriter should report dependency
+   *     information to the Closure dependency manager. This needs to be true
+   *     if we want to sort CommonJS module inputs correctly. Note that goog.provide
+   *     and goog.require calls will still be generated if this argument is
+   *     false.
+   */
+  public ProcessCommonJSModules(Compiler compiler, ES6ModuleLoader loader,
       boolean reportDependencies) {
     this.compiler = compiler;
     this.loader = loader;
@@ -132,8 +150,8 @@ public class ProcessCommonJSModules implements CompilerPass {
       AbstractPostOrderCallback {
 
     private int scriptNodeCount = 0;
-    private List<Node> moduleExportRefs = Lists.newArrayList();
-    private List<Node> exportRefs = Lists.newArrayList();
+    private List<Node> moduleExportRefs = new ArrayList<>();
+    private List<Node> exportRefs = new ArrayList<>();
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
@@ -257,7 +275,7 @@ public class ProcessCommonJSModules implements CompilerPass {
         // it's an alias, and if it is, copy the annotation over.
         // This is a common idiom to export a set of constructors.
         if (rhsValue.isObjectLit()) {
-          Scope globalScope = new SyntacticScopeCreator(compiler)
+          Scope globalScope = SyntacticScopeCreator.makeUntyped(compiler)
               .createScope(script, null);
           for (Node key = rhsValue.getFirstChild();
                key != null; key = key.getNext()) {
@@ -411,7 +429,7 @@ public class ProcessCommonJSModules implements CompilerPass {
           return;
         }
 
-        Scope.Var var = t.getScope().getVar(name);
+        Var var = t.getScope().getVar(name);
         if (var != null && var.isGlobal()) {
           n.setString(name + "$$" + suffix);
           n.putProp(Node.ORIGINALNAME_PROP, name);
@@ -453,7 +471,7 @@ public class ProcessCommonJSModules implements CompilerPass {
             endIndex = name.length();
           }
           String baseName = name.substring(0, endIndex);
-          Scope.Var var = t.getScope().getVar(baseName);
+          Var var = t.getScope().getVar(baseName);
           if (var != null && var.isGlobal()) {
             typeNode.setString(baseName + "$$" + suffix + name.substring(endIndex));
             typeNode.putProp(Node.ORIGINALNAME_PROP, name);

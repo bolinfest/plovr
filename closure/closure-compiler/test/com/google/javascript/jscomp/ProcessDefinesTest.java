@@ -18,17 +18,17 @@ package com.google.javascript.jscomp;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.GlobalNamespace.Name;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
  * @author nicksantos@google.com (Nick Santos)
  */
-public class ProcessDefinesTest extends CompilerTestCase {
+public final class ProcessDefinesTest extends CompilerTestCase {
 
   public ProcessDefinesTest() {
     super("var externMethod;");
@@ -38,7 +38,7 @@ public class ProcessDefinesTest extends CompilerTestCase {
     allowSourcelessWarnings();
   }
 
-  private Map<String, Node> overrides = Maps.newHashMap();
+  private Map<String, Node> overrides = new HashMap<>();
   private GlobalNamespace namespace;
 
   @Override
@@ -281,21 +281,17 @@ public class ProcessDefinesTest extends CompilerTestCase {
   }
 
   public void testNamespacedDefine2b() {
-    // TODO(johnlenz): We should either reject the define as invalid
-    // or replace its value.
     overrides.put("a.B", new Node(Token.TRUE));
     test("var a = { /** @define {boolean} */ B : false };",
-         "var a = {B : false};",
-         null, ProcessDefines.UNKNOWN_DEFINE_WARNING);
+         null,
+         ProcessDefines.INVALID_DEFINE_INIT_ERROR, null);
   }
 
   public void testNamespacedDefine2c() {
-    // TODO(johnlenz): We should either reject the define as invalid
-    // or replace its value.
     overrides.put("a.B", new Node(Token.TRUE));
     test("var a = { /** @define {boolean} */ get B() { return false } };",
-      "var a = {get B() { return false } };",
-      null, ProcessDefines.UNKNOWN_DEFINE_WARNING);
+      null,
+      ProcessDefines.INVALID_DEFINE_INIT_ERROR, null);
   }
 
   public void testNamespacedDefine3() {

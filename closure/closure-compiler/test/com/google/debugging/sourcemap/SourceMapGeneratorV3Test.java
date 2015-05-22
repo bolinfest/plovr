@@ -18,8 +18,7 @@ package com.google.debugging.sourcemap;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
+import com.google.common.collect.ImmutableList;
 import com.google.debugging.sourcemap.SourceMapGeneratorV3.ExtensionMergeAction;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -31,13 +30,14 @@ import com.google.javascript.jscomp.SourceMap.Format;
 import java.io.File;
 import java.io.IOException;
 import java.io.StringWriter;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
  * @author johnlenz@google.com (John Lenz)
  */
-public class SourceMapGeneratorV3Test extends SourceMapTestCase {
+public final class SourceMapGeneratorV3Test extends SourceMapTestCase {
 
   public SourceMapGeneratorV3Test() {
   }
@@ -345,7 +345,7 @@ public class SourceMapGeneratorV3Test extends SourceMapTestCase {
   public void testWriteMetaMap() throws IOException {
     StringWriter out = new StringWriter();
     String name = "./app.js";
-    List<SourceMapSection> appSections = Lists.newArrayList(
+    List<SourceMapSection> appSections = ImmutableList.of(
         SourceMapSection.forURL("src1", 0, 0),
         SourceMapSection.forURL("src2", 100, 10),
         SourceMapSection.forURL("src3", 150, 5));
@@ -393,7 +393,7 @@ public class SourceMapGeneratorV3Test extends SourceMapTestCase {
   public void testWriteMetaMap2() throws IOException {
     StringWriter out = new StringWriter();
     String name = "./app.js";
-    List<SourceMapSection> appSections = Lists.newArrayList(
+    List<SourceMapSection> appSections = ImmutableList.of(
         // Map and URLs can be mixed.
         SourceMapSection.forMap(getEmptyMapFor("./part.js"), 0, 0),
         SourceMapSection.forURL("src2", 100, 10));
@@ -435,7 +435,7 @@ public class SourceMapGeneratorV3Test extends SourceMapTestCase {
   public void testParseSourceMetaMap() throws Exception {
     final String INPUT1 = "file1";
     final String INPUT2 = "file2";
-    LinkedHashMap<String, String> inputs = Maps.newLinkedHashMap();
+    LinkedHashMap<String, String> inputs = new LinkedHashMap<>();
     inputs.put(INPUT1, "var __FOO__ = 1;");
     inputs.put(INPUT2, "var __BAR__ = 2;");
     RunResult result1 = compile(inputs.get(INPUT1), INPUT1);
@@ -443,11 +443,11 @@ public class SourceMapGeneratorV3Test extends SourceMapTestCase {
 
     final String MAP1 = "map1";
     final String MAP2 = "map2";
-    final LinkedHashMap<String, String> maps = Maps.newLinkedHashMap();
+    final LinkedHashMap<String, String> maps = new LinkedHashMap<>();
     maps.put(MAP1, result1.sourceMapFileContent);
     maps.put(MAP2, result2.sourceMapFileContent);
 
-    List<SourceMapSection> sections = Lists.newArrayList();
+    List<SourceMapSection> sections = new ArrayList<>();
 
     StringBuilder output = new StringBuilder();
     FilePosition offset = appendAndCount(output, result1.generatedSource);
@@ -471,7 +471,7 @@ public class SourceMapGeneratorV3Test extends SourceMapTestCase {
   public void testSourceMapMerging() throws Exception {
     final String INPUT1 = "file1";
     final String INPUT2 = "file2";
-    LinkedHashMap<String, String> inputs = Maps.newLinkedHashMap();
+    LinkedHashMap<String, String> inputs = new LinkedHashMap<>();
     inputs.put(INPUT1, "var __FOO__ = 1;");
     inputs.put(INPUT2, "var __BAR__ = 2;");
     RunResult result1 = compile(inputs.get(INPUT1), INPUT1);

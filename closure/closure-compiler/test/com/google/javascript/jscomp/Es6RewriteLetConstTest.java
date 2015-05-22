@@ -24,7 +24,7 @@ import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
  *
  * @author moz@google.com (Michael Zhou)
  */
-public class Es6RewriteLetConstTest extends CompilerTestCase {
+public final class Es6RewriteLetConstTest extends CompilerTestCase {
   @Override
   public void setUp() {
     setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
@@ -744,16 +744,33 @@ public class Es6RewriteLetConstTest extends CompilerTestCase {
         "while (true) {",
         "  /** @type {number} */ let x = 5;",
         "  (function() { x++; })();",
-        "  x = 'str';",
+        "  x = 7;",
         "}"
-    ), null, null, TypeValidator.TYPE_MISMATCH_WARNING);
+    ), null);
+
+    test(Joiner.on('\n').join(
+        "for (/** @type {number} */ let x = 5;;) {",
+        "  (function() { x++; })();",
+        "  x = 7;",
+        "}"
+    ), null);
+
+    // Ideally, these final two would give TYPE_MISMATCH_WARNINGS, but since transpilation
+    // changes these identifiers to properties, we lose the type annotations and warnings.
+    test(Joiner.on('\n').join(
+        "while (true) {",
+        "  /** @type {number} */ let x = 5;",
+        "  (function() { x++; })();",
+        "  x = 5;",
+        "}"
+    ), null);
 
     test(Joiner.on('\n').join(
         "for (/** @type {number} */ let x = 5;;) {",
         "  (function() { x++; })();",
         "  x = 'str';",
         "}"
-    ), null, null, TypeValidator.TYPE_MISMATCH_WARNING);
+    ), null);
   }
 
   public void testLetForInitializers() {

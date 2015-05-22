@@ -19,7 +19,6 @@ package com.google.javascript.jscomp;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -28,6 +27,7 @@ import com.google.javascript.rhino.TokenStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -40,7 +40,7 @@ class CodeGenerator {
   private static final String GT_ESCAPED = "\\x3e";
 
   // A memoizer for formatting strings as JS strings.
-  private final Map<String, String> escapedJsStrings = Maps.newHashMap();
+  private final Map<String, String> escapedJsStrings = new HashMap<>();
 
   private static final char[] HEX_CHARS
       = { '0', '1', '2', '3', '4', '5', '6', '7',
@@ -113,10 +113,8 @@ class CodeGenerator {
       return;
     }
 
-    if (preserveTypeAnnotations) {
-      if (n.getJSDocInfo() != null) {
-        add(JSDocInfoPrinter.print(n.getJSDocInfo()));
-      }
+    if (preserveTypeAnnotations && n.getJSDocInfo() != null) {
+      add(JSDocInfoPrinter.print(n.getJSDocInfo()));
     }
 
     int type = n.getType();
@@ -593,7 +591,7 @@ class CodeGenerator {
           add(c, Context.STATEMENT);
 
           // VAR doesn't include ';' since it gets used in expressions
-          if (c.isVar() || c.isLet() || c.isConst()) {
+          if (NodeUtil.isNameDeclaration(c)) {
             cc.endStatement();
           }
 
@@ -618,7 +616,7 @@ class CodeGenerator {
           add("for");
           cc.maybeInsertSpace();
           add("(");
-          if (first.isVar() || first.isLet() || first.isConst()) {
+          if (NodeUtil.isNameDeclaration(first)) {
             add(first, Context.IN_FOR_INIT_CLAUSE);
           } else {
             addExpr(first, 0, Context.IN_FOR_INIT_CLAUSE);
@@ -1356,11 +1354,53 @@ class CodeGenerator {
     }
   }
 
+  /**
+   * Determines whether the given child of a destructuring pattern is the initializer for
+   * that pattern. If the pattern is in a var/let/const statement, then the last child of the
+   * pattern is the initializer, e.g. the tree for
+   * {@code var {x:y} = z} looks like:
+   * <pre>
+   * VAR
+   *   OBJECT_PATTERN
+   *     STRING_KEY x
+   *       NAME y
+   *     NAME z
+   * </pre>
+   * The exception is when the var/let/const is the first child of a for-in or for-of loop, in
+   * which case all the children belong to the pattern itself, e.g. the VAR node in
+   * {@code for (var {x: y, z} of []);} looks like
+   * <pre>
+   * VAR
+   *   OBJECT_PATTERN
+   *     STRING_KEY x
+   *       NAME y
+   *     STRING_KEY z
+   * </pre>
+   * and the "z" node is *not* an initializer.
+   */
+  private boolean isPatternInitializer(Node n) {
+    Node parent = n.getParent();
+    Preconditions.checkState(parent.isDestructuringPattern());
+    if (n != parent.getLastChild()) {
+      return false;
+    }
+    Node decl = parent.getParent();
+
+    if (!NodeUtil.isNameDeclaration(decl)) {
+      return false;
+    }
+    if (NodeUtil.isEnhancedFor(decl.getParent()) && decl == decl.getParent().getFirstChild()) {
+      return false;
+    }
+    return true;
+  }
+
   void addArrayPattern(Node n) {
+    boolean hasInitializer = false;
     add("[");
     for (Node child = n.getFirstChild(); child != null; child = child.getNext()) {
-      if (child == n.getLastChild()
-          && (n.getParent().isVar() || n.getParent().isLet() || n.getParent().isConst())) {
+      if (isPatternInitializer(child)) {
+        hasInitializer = true;
         add("]");
         add("=");
       } else if (child != n.getFirstChild()) {
@@ -1369,12 +1409,13 @@ class CodeGenerator {
 
       add(child);
     }
-    if (!(n.getParent().isVar() || n.getParent().isLet() || n.getParent().isConst())) {
+    if (!hasInitializer) {
       add("]");
     }
   }
 
   void addObjectPattern(Node n, Context context) {
+    boolean hasInitializer = false;
     boolean needsParens = (context == Context.START_OF_EXPR);
     if (needsParens) {
       add("(");
@@ -1382,8 +1423,8 @@ class CodeGenerator {
 
     add("{");
     for (Node child = n.getFirstChild(); child != null; child = child.getNext()) {
-      if (child == n.getLastChild()
-          && (n.getParent().isVar() || n.getParent().isLet() || n.getParent().isConst())) {
+      if (isPatternInitializer(child)) {
+        hasInitializer = true;
         add("}");
         add("=");
       } else if (child != n.getFirstChild()) {
@@ -1392,7 +1433,7 @@ class CodeGenerator {
 
       add(child);
     }
-    if (!(n.getParent().isVar() || n.getParent().isLet() || n.getParent().isConst())) {
+    if (!hasInitializer) {
       add("}");
     }
 

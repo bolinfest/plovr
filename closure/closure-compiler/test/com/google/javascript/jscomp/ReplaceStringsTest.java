@@ -18,9 +18,9 @@ package com.google.javascript.jscomp;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.ReplaceStrings.Result;
 import com.google.javascript.rhino.Node;
 
@@ -34,13 +34,13 @@ import java.util.Set;
  * Tests for {@link ReplaceStrings}.
  *
  */
-public class ReplaceStringsTest extends CompilerTestCase {
+public final class ReplaceStringsTest extends CompilerTestCase {
   private ReplaceStrings pass;
   private Set<String> reserved;
   private VariableMap previous;
   private boolean runDisambiguateProperties = false;
 
-  private final List<String> functionsToInspect = Lists.newArrayList(
+  private final ImmutableList<String> defaultFunctionsToInspect = ImmutableList.of(
       "Error(?)",
       "goog.debug.Trace.startTracer(*)",
       "goog.debug.Logger.getLogger(?)",
@@ -49,6 +49,8 @@ public class ReplaceStringsTest extends CompilerTestCase {
       "goog.log.info(,?)",
       "goog.log.multiString(,?,?,)"
       );
+
+  private ImmutableList<String> functionsToInspect;
 
   private static final String EXTERNS =
     "var goog = {};\n" +
@@ -90,6 +92,7 @@ public class ReplaceStringsTest extends CompilerTestCase {
     super.setUp();
     super.enableLineNumberCheck(false);
     super.enableTypeCheck(CheckLevel.WARNING);
+    functionsToInspect = defaultFunctionsToInspect;
     reserved = Collections.emptySet();
     previous = null;
   }
@@ -105,7 +108,7 @@ public class ReplaceStringsTest extends CompilerTestCase {
           Map<String, CheckLevel> propertiesToErrorFor = new HashMap<>();
           propertiesToErrorFor.put("foobar", CheckLevel.ERROR);
 
-          new CollapseProperties(compiler, true).process(externs, js);
+          new CollapseProperties(compiler).process(externs, js);
           if (runDisambiguateProperties) {
             SourceInformationAnnotator sia =
                 new SourceInformationAnnotator(
@@ -457,8 +460,12 @@ public class ReplaceStringsTest extends CompilerTestCase {
 
   public void testWithDisambiguateProperties() throws Exception {
     runDisambiguateProperties = true;
-    functionsToInspect.add("A.prototype.f(?)");
-    functionsToInspect.add("C.prototype.f(?)");
+
+    ImmutableList.Builder<String> builder = ImmutableList.builder();
+    builder.addAll(defaultFunctionsToInspect);
+    builder.add("A.prototype.f(?)");
+    builder.add("C.prototype.f(?)");
+    functionsToInspect = builder.build();
 
     String js =
         "/** @constructor */function A() {}\n"

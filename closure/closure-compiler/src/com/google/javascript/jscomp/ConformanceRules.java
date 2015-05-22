@@ -33,12 +33,12 @@ import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.jstype.Property;
+import com.google.javascript.rhino.TypeIRegistry;
 import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
-import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
+import com.google.javascript.rhino.jstype.Property;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -308,7 +308,7 @@ public final class ConformanceRules {
 
     private ConformanceResult checkConformance(NodeTraversal t, Node n, Property prop) {
       if (isCandidatePropUse(n, prop)) {
-        JSTypeRegistry registry = t.getCompiler().getTypeRegistry();
+        TypeIRegistry registry = t.getCompiler().getTypeIRegistry();
         JSType methodClassType = registry.getType(prop.type);
         Node lhs = n.getFirstChild();
         if (methodClassType != null && lhs.getJSType() != null) {
@@ -393,7 +393,7 @@ public final class ConformanceRules {
       }
       JSTypeExpression typeExpr = new JSTypeExpression(
           typeNodes, "conformance");
-      return typeExpr.evaluate(null, compiler.getTypeRegistry());
+      return typeExpr.evaluate(null, compiler.getTypeIRegistry());
     }
 
     /**
@@ -497,7 +497,7 @@ public final class ConformanceRules {
     }
 
     static JSType getNativeType(AbstractCompiler compiler, JSTypeNative typeId) {
-      return compiler.getTypeRegistry().getNativeType(typeId);
+      return compiler.getTypeIRegistry().getNativeType(typeId);
     }
 
   }
@@ -661,7 +661,7 @@ public final class ConformanceRules {
 
     private ConformanceResult checkConformance(
         NodeTraversal t, Node n, Restriction r, boolean isCallInvocation) {
-      JSTypeRegistry registry = t.getCompiler().getTypeRegistry();
+      TypeIRegistry registry = t.getCompiler().getTypeIRegistry();
       JSType methodClassType = registry.getType(r.type);
       Node lhs = isCallInvocation
           ? n.getFirstChild().getFirstChild()
@@ -898,7 +898,7 @@ public final class ConformanceRules {
     public BanThrowOfNonErrorTypes(AbstractCompiler compiler, Requirement requirement)
         throws InvalidRequirementSpec {
       super(compiler, requirement);
-      errorObjType = compiler.getTypeRegistry().getType("Error");
+      errorObjType = compiler.getTypeIRegistry().getType("Error");
     }
 
     @Override
@@ -918,6 +918,32 @@ public final class ConformanceRules {
       return ConformanceResult.CONFORMANCE;
     }
   }
+
+
+  /**
+   * Banned dereferencing null or undefined types.
+   */
+  public static final class BanNullDeref extends AbstractRule {
+    public BanNullDeref(AbstractCompiler compiler, Requirement requirement)
+        throws InvalidRequirementSpec {
+      super(compiler, requirement);
+    }
+
+    @Override
+    protected ConformanceResult checkConformance(NodeTraversal t, Node n) {
+      if (n.isGetProp() || n.isGetElem() || n.isNew() || n.isCall()) {
+        JSType targetType = n.getFirstChild().getJSType();
+        if (targetType != null
+            && !(targetType.isUnknownType()
+                || targetType.isEmptyType())
+            && (targetType.isNullable() || targetType.isVoidable())) {
+          return ConformanceResult.VIOLATION;
+        }
+      }
+      return ConformanceResult.CONFORMANCE;
+    }
+  }
+
 
   /**
    * Banned unknown "this" types.
@@ -964,6 +990,122 @@ public final class ConformanceRules {
       return false;
     }
   }
+
+  /**
+   * Banned unknown type references of the form "this.prop" unless
+   *  - it is immediately cast,
+   *  - it is a @template type (until template type
+   * restricts are enabled) or
+   *  - the value is unused.
+   *  - the "this" type is unknown (as this is expected to be used with
+   * BanUnknownThis which would have already reported the root cause).
+   */
+  public static final class BanUnknownDirectThisPropsReferences extends AbstractRule {
+    private final ImmutableList<AssertionFunctionSpec> assertions;
+    public BanUnknownDirectThisPropsReferences(AbstractCompiler compiler, Requirement requirement)
+        throws InvalidRequirementSpec {
+      super(compiler, requirement);
+      assertions = ImmutableList.copyOf(
+          compiler.getCodingConvention().getAssertionFunctions());
+    }
+
+    @Override
+    protected ConformanceResult checkConformance(NodeTraversal t, Node n) {
+      if (n.isGetProp()
+          && isKnownThis(n.getFirstChild()) // not a cascading unknown
+          && isUnknown(n)
+          && !isTemplateType(n)
+          && isUsed(n)  // skip most assignements, etc
+          && !isWhiteListed(n)) {
+        return ConformanceResult.VIOLATION;
+      }
+      return ConformanceResult.CONFORMANCE;
+    }
+
+    private boolean isKnownThis(Node n) {
+      return n.isThis() && !isUnknown(n);
+    }
+
+    private boolean isUnknown(Node n) {
+      JSType type = n.getJSType();
+      return (type != null && type.isUnknownType());
+    }
+
+    private boolean isTemplateType(Node n) {
+      JSType type = n.getJSType().restrictByNotNullOrUndefined();
+      return (type != null && type.isTemplateType());
+    }
+
+    private boolean isUsed(Node n) {
+      return (NodeUtil.isAssignmentOp(n.getParent()))
+           ? NodeUtil.isExpressionResultUsed(n.getParent())
+           : NodeUtil.isExpressionResultUsed(n);
+    }
+
+    private boolean isWhiteListed(Node n) {
+      Node parent = n.getParent();
+      return n.getParent().isCast()
+          || isAssertionCall(n.getParent())
+          || (n.getParent().isAssign() && n.getFirstChild() == n);
+    }
+
+    private boolean isAssertionCall(Node n) {
+      if (n.isCall() && n.getFirstChild().isQualifiedName()) {
+        Node target = n.getFirstChild();
+        for (int i = 0; i < assertions.size(); i++) {
+          if (target.matchesQualifiedName(
+              assertions.get(i).getFunctionName())) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Banned accessing properties from objects that are unresolved
+   * forward-declared type names. For legacy reasons this is allowed but
+   * causes unexpected weaknesses in the type inference.
+   */
+  public static final class BanUnresolvedType extends AbstractRule {
+    public BanUnresolvedType(AbstractCompiler compiler, Requirement requirement)
+        throws InvalidRequirementSpec {
+      super(compiler, requirement);
+    }
+
+    @Override
+    protected ConformanceResult checkConformance(NodeTraversal t, Node n) {
+      if (n.isGetProp()) {
+        Node target = n.getFirstChild();
+        JSType type = target.getJSType();
+        if (type != null && !conforms(type) && !isWhiteListed(n)) {
+          return ConformanceResult.VIOLATION;
+        }
+      }
+      return ConformanceResult.CONFORMANCE;
+    }
+
+    private boolean conforms(JSType type) {
+      if (type.isUnionType()) {
+        // unwrap union types which might contain unresolved type name
+        // references for example {Foo|undefined}
+        for (JSType part : type.toMaybeUnionType().getAlternates()) {
+          if (!conforms(part)) {
+            return false;
+          }
+        }
+        return true;
+      } else {
+        return !type.isNoResolvedType();
+      }
+    }
+
+    private boolean isWhiteListed(Node n) {
+      return n.getParent().isCast();
+    }
+  }
+
 
   /**
    * Banned global var declarations.

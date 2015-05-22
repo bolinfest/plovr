@@ -28,8 +28,6 @@ import static com.google.javascript.rhino.jstype.JSTypeNative.UNKNOWN_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.VOID_TYPE;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.jstype.FunctionType;
@@ -37,12 +35,13 @@ import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
-import com.google.javascript.rhino.jstype.StaticSlot;
+import com.google.javascript.rhino.jstype.StaticTypedSlot;
 import com.google.javascript.rhino.jstype.TemplateTypeMap;
 import com.google.javascript.rhino.jstype.TemplateTypeMapReplacer;
 import com.google.javascript.rhino.jstype.UnknownType;
 
 import java.text.MessageFormat;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
@@ -70,7 +69,7 @@ class TypeValidator {
   // TODO(nicksantos): Provide accessors to better filter the list of type
   // mismatches. For example, if we pass (Cake|null) where only Cake is
   // allowed, that doesn't mean we should invalidate all Cakes.
-  private final List<TypeMismatch> mismatches = Lists.newArrayList();
+  private final List<TypeMismatch> mismatches = new ArrayList<>();
 
   // User warnings
   private static final String FOUND_REQUIRED =
@@ -162,7 +161,7 @@ class TypeValidator {
   /**
    * Utility function for getting a function type from a var.
    */
-  static FunctionType getFunctionType(@Nullable Var v) {
+  static FunctionType getFunctionType(@Nullable TypedVar v) {
     JSType t = v == null ? null : v.getType();
     ObjectType o = t == null ? null : t.dereference();
     return JSType.toMaybeFunctionType(o);
@@ -172,7 +171,7 @@ class TypeValidator {
    * Utility function for getting an instance type from a var pointing
    * to the constructor.
    */
-  static ObjectType getInstanceOfCtor(@Nullable Var v) {
+  static ObjectType getInstanceOfCtor(@Nullable TypedVar v) {
     FunctionType ctor = getFunctionType(v);
     if (ctor != null && ctor.isConstructor()) {
       return ctor.getInstanceType();
@@ -185,6 +184,11 @@ class TypeValidator {
    *
    * For each violation, one element is the expected type and the other is
    * the type that is actually found. Order is not significant.
+   *
+   * NOTE(dimvar): Even though TypeMismatch is a pair, the passes that call this
+   * method never use it as a pair; they just add both its elements to a set
+   * of invalidating types. Consider just maintaining a set of types here
+   * instead of a set of type pairs.
    */
   Iterable<TypeMismatch> getMismatches() {
     return mismatches;
@@ -414,7 +418,7 @@ class TypeValidator {
 
       mismatch(t, n,
           "assignment to property " + propName + " of " +
-          getReadableJSTypeName(owner, true),
+          typeRegistry.getReadableTypeName(owner),
           rightType, leftType);
       return false;
     }
@@ -458,7 +462,7 @@ class TypeValidator {
       mismatch(t, n,
           String.format("actual parameter %d of %s does not match " +
               "formal parameter", ordinal,
-              getReadableJSTypeName(callNode.getFirstChild(), false)),
+              typeRegistry.getReadableTypeNameNoDeref(callNode.getFirstChild())),
           argType, paramType);
     }
   }
@@ -556,9 +560,9 @@ class TypeValidator {
    *     be {@code var}, but in some rare cases we will need to declare
    *     a new var with new source info.
    */
-  Var expectUndeclaredVariable(String sourceName, CompilerInput input,
-      Node n, Node parent, Var var, String variableName, JSType newType) {
-    Var newVar = var;
+  TypedVar expectUndeclaredVariable(String sourceName, CompilerInput input,
+      Node n, Node parent, TypedVar var, String variableName, JSType newType) {
+    TypedVar newVar = var;
     boolean allowDupe = false;
     if (n.isGetProp() ||
         NodeUtil.isObjectLitKey(n)) {
@@ -585,7 +589,7 @@ class TypeValidator {
       // was made in TypedScopeCreator#createInitialScope and is a
       // native type. We should redeclare it at the new input site.
       if (var.input == null) {
-        Scope s = var.getScope();
+        TypedScope s = var.getScope();
         s.undeclare(var);
         newVar = s.declare(variableName, n, varType, input, false);
 
@@ -648,7 +652,7 @@ class TypeValidator {
    */
   private void expectInterfaceProperty(NodeTraversal t, Node n,
       ObjectType instance, ObjectType implementedInterface, String prop) {
-    StaticSlot<JSType> propSlot = instance.getSlot(prop);
+    StaticTypedSlot<JSType> propSlot = instance.getSlot(prop);
     if (propSlot == null) {
       // Not implemented
       String sourceName = n.getSourceFileName();
@@ -755,71 +759,6 @@ class TypeValidator {
       requiredStr = required.toAnnotationString();
     }
     return MessageFormat.format(FOUND_REQUIRED, description, foundStr, requiredStr);
-  }
-
-  /**
-   * Given a node, get a human-readable name for the type of that node so
-   * that will be easy for the programmer to find the original declaration.
-   *
-   * For example, if SubFoo's property "bar" might have the human-readable
-   * name "Foo.prototype.bar".
-   *
-   * @param n The node.
-   * @param dereference If true, the type of the node will be dereferenced
-   *     to an Object type, if possible.
-   */
-  String getReadableJSTypeName(Node n, boolean dereference) {
-    JSType type = getJSType(n);
-    if (dereference) {
-      ObjectType dereferenced = type.dereference();
-      if (dereferenced != null) {
-        type = dereferenced;
-      }
-    }
-
-    // The best type name is the actual type name.
-    if (type.isFunctionPrototypeType() ||
-        (type.toObjectType() != null &&
-         type.toObjectType().getConstructor() != null)) {
-      return type.toString();
-    }
-
-    // If we're analyzing a GETPROP, the property may be inherited by the
-    // prototype chain. So climb the prototype chain and find out where
-    // the property was originally defined.
-    if (n.isGetProp()) {
-      ObjectType objectType = getJSType(n.getFirstChild()).dereference();
-      if (objectType != null) {
-        String propName = n.getLastChild().getString();
-        if (objectType.getConstructor() != null &&
-            objectType.getConstructor().isInterface()) {
-          objectType = FunctionType.getTopDefiningInterface(
-              objectType, propName);
-        } else {
-          // classes
-          while (objectType != null && !objectType.hasOwnProperty(propName)) {
-            objectType = objectType.getImplicitPrototype();
-          }
-        }
-
-        // Don't show complex function names or anonymous types.
-        // Instead, try to get a human-readable type name.
-        if (objectType != null &&
-            (objectType.getConstructor() != null ||
-             objectType.isFunctionPrototypeType())) {
-          return objectType + "." + propName;
-        }
-      }
-    }
-
-    if (n.isQualifiedName()) {
-      return n.getQualifiedName();
-    } else if (type.isFunctionType()) {
-      // Don't show complex function names.
-      return "function";
-    } else {
-      return type.toString();
-    }
   }
 
   /**

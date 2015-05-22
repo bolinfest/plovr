@@ -17,7 +17,6 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.FunctionInjector.CanInlineResult;
 import com.google.javascript.jscomp.FunctionInjector.InliningMode;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
@@ -28,6 +27,7 @@ import com.google.javascript.rhino.Token;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -131,7 +131,7 @@ class InlineFunctions implements CompilerPass {
     // This pass already assumes these are constants, so this is safe for anyone
     // using function inlining.
     //
-    Set<String> fnNames = Sets.newHashSet(fns.keySet());
+    Set<String> fnNames = new HashSet<>(fns.keySet());
     injector.setKnownConstants(fnNames);
 
     trimCandidatesUsingOnCost();
@@ -331,10 +331,8 @@ class InlineFunctions implements CompilerPass {
       }
 
       // Check if block inlining is allowed.
-      if (fs.canInline() && !fs.canInlineDirectly()) {
-        if (!blockFunctionInliningEnabled) {
-          fs.setInline(false);
-        }
+      if (fs.canInline() && !fs.canInlineDirectly() && !blockFunctionInliningEnabled) {
+        fs.setInline(false);
       }
     }
   }
@@ -520,11 +518,9 @@ class InlineFunctions implements CompilerPass {
         return;
       }
 
-      boolean referenceAdded = false;
       InliningMode mode = fs.canInlineDirectly()
            ? InliningMode.DIRECT : InliningMode.BLOCK;
-      referenceAdded = maybeAddReferenceUsingMode(
-          t, fs, callNode, module, mode);
+      boolean referenceAdded = maybeAddReferenceUsingMode(t, fs, callNode, module, mode);
       if (!referenceAdded &&
           mode == InliningMode.DIRECT && blockFunctionInliningEnabled) {
         // This reference can not be directly inlined, see if
@@ -792,7 +788,7 @@ class InlineFunctions implements CompilerPass {
    * This functions that may be called directly.
    */
   private Set<String> findCalledFunctions(Node node) {
-    Set<String> changed = Sets.newHashSet();
+    Set<String> changed = new HashSet<>();
     findCalledFunctions(NodeUtil.getFunctionBody(node), changed);
     return changed;
   }
@@ -804,10 +800,8 @@ class InlineFunctions implements CompilerPass {
       Node node, Set<String> changed) {
     Preconditions.checkArgument(changed != null);
     // For each referenced function, add a new reference
-    if (node.isName()) {
-      if (isCandidateUsage(node)) {
-        changed.add(node.getString());
-      }
+    if (node.isName() && isCandidateUsage(node)) {
+      changed.add(node.getString());
     }
 
     for (Node c = node.getFirstChild(); c != null; c = c.getNext()) {

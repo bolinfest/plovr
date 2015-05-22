@@ -34,37 +34,41 @@ import java.util.List;
 /**
  * Parses a javascript file.
  *
- * The various parseX() methods never return null - even when parse errors are encountered.
+ * <p>The various parseX() methods never return null - even when parse errors are encountered.
  * Typically parseX() will return a XTree ParseTree. Each ParseTree that is created includes its
  * source location. The typical pattern for a parseX() method is:
  *
+ * <pre>
  * XTree parseX() {
  *   SourcePosition start = getTreeStartLocation();
  *   parse X grammar element and its children
  *   return new XTree(getTreeLocation(start), children);
  * }
+ * </pre>
  *
- * parseX() methods must consume at least 1 token - even in error cases. This prevents infinite
+ * <p>parseX() methods must consume at least 1 token - even in error cases. This prevents infinite
  * loops in the parser.
  *
- * Many parseX() methods are matched by a 'boolean peekX()' method which will return true if
+ * <p>Many parseX() methods are matched by a 'boolean peekX()' method which will return true if
  * the beginning of an X appears at the current location. There are also peek() methods which
  * examine the next token. peek() methods must not consume any tokens.
  *
- * The eat() method consumes a token and reports an error if the consumed token is not of the
+ * <p>The eat() method consumes a token and reports an error if the consumed token is not of the
  * expected type. The eatOpt() methods consume the next token iff the next token is of the expected
  * type and return the consumed token or null if no token was consumed.
  *
- * When parse errors are encountered, an error should be reported and the parse should return a
+ * <p>When parse errors are encountered, an error should be reported and the parse should return a
  * best guess at the current parse tree.
  *
- * When parsing lists, the preferred pattern is:
+ * <p>When parsing lists, the preferred pattern is:
+ * <pre>
  *   eat(LIST_START);
- *   ImmutableList.Builder<ParseTree> elements = ImmutableList.<ParseTree>builder();
+ *   ImmutableList.Builder&lt;ParseTree> elements = ImmutableList.builder();
  *   while (peekListElement()) {
  *     elements.add(parseListElement());
  *   }
  *   eat(LIST_END);
+ * </pre>
  */
 public class Parser {
   private final Scanner scanner;
@@ -1008,13 +1012,10 @@ public class Parser {
     if (peek(TokenType.EQUAL)) {
       initializer = parseInitializer(expressionIn);
     } else if (expressionIn != Expression.NO_IN) {
-      // TODO(johnlenz): this is a bit of a hack, for-in and for-of
-      // disallow "in" and by chance, must not allow initializers
-      if (binding == TokenType.CONST) {  //?
-        reportError("const variables must have an initializer");
-      } else if (lvalue.isPattern()) {
-        reportError("destructuring must have an initializer");
-      }
+      // NOTE(blickly): this is a bit of a hack, declarations outside of for statements allow "in",
+      // and by chance, also must have initializers for const/destructuring. Vanilla for loops
+      // also require intializers, but are handled separately in checkVanillaForInitializers
+      maybeReportNoInitializer(binding, lvalue);
     }
     return new VariableDeclarationTree(getTreeLocation(start), lvalue, typeAnnotation, initializer);
   }
@@ -1125,8 +1126,8 @@ public class Parser {
 
         return parseForOfStatement(start, variables);
       } else {
-        // for statement: let and const must have initializers
-        checkInitializers(variables);
+        // "Vanilla" for statement: const/destructuring must have initializer
+        checkVanillaForInitializers(variables);
         return parseForStatement(start, variables);
       }
     }
@@ -1148,7 +1149,8 @@ public class Parser {
         : parseExpressionNoIn();
 
     if (peek(TokenType.IN) || peekPredefinedString(PredefinedName.OF)) {
-      if (initializer.type != ParseTreeType.BINARY_OPERATOR) {
+      if (initializer.type != ParseTreeType.BINARY_OPERATOR
+          && initializer.type != ParseTreeType.COMMA_EXPRESSION) {
         if (peek(TokenType.IN)) {
           return parseForInStatement(start, initializer);
         } else {
@@ -1172,16 +1174,21 @@ public class Parser {
         getTreeLocation(start), initializer, collection, body);
   }
 
-  /** Checks variable declaration in variable and for statements. */
-  private void checkInitializers(VariableDeclarationListTree variables) {
-    if (variables.declarationType == TokenType.LET
-        || variables.declarationType == TokenType.CONST) {
-      for (VariableDeclarationTree declaration : variables.declarations) {
-        if (declaration.initializer == null) {
-          reportError("let/const in for statement must have an initializer");
-          break;
-        }
+  /** Checks variable declarations in for statements. */
+  private void checkVanillaForInitializers(VariableDeclarationListTree variables) {
+    for (VariableDeclarationTree declaration : variables.declarations) {
+      if (declaration.initializer == null) {
+        maybeReportNoInitializer(variables.declarationType, declaration.lvalue);
       }
+    }
+  }
+
+  /** Reports if declaration requires an initializer, assuming initializer is absent. */
+  private void maybeReportNoInitializer(TokenType token, ParseTree lvalue) {
+    if (token == TokenType.CONST) {
+      reportError("const variables must have an initializer");
+    } else if (lvalue.isPattern()) {
+      reportError("destructuring must have an initializer");
     }
   }
 
@@ -1203,7 +1210,7 @@ public class Parser {
     }
     eat(TokenType.SEMI_COLON);
 
-    ParseTree condition = null;
+    ParseTree condition;
     if (!peek(TokenType.SEMI_COLON)) {
       condition = parseExpression();
     } else {
@@ -1211,7 +1218,7 @@ public class Parser {
     }
     eat(TokenType.SEMI_COLON);
 
-    ParseTree increment = null;
+    ParseTree increment;
     if (!peek(TokenType.CLOSE_PAREN)) {
       increment = parseExpression();
     } else {
@@ -1468,7 +1475,7 @@ public class Parser {
    * calls the function foo() with the template literal as the argument (with extra
    * handling). In this case, operand would be "foo", which is the callsite.
    *
-   * We store this operand in the TemplateLiteralExpressionTree and
+   * <p>We store this operand in the TemplateLiteralExpressionTree and
    * generate a CALL node if it's not null later when transpiling.
    *
    * @param operand A non-null value would represent the callsite
@@ -2377,7 +2384,7 @@ public class Parser {
   /**
    * Whether we have a spread expression or an assignment next.
    *
-   * This does not peek the operand for the spread expression. This means that
+   * <p>This does not peek the operand for the spread expression. This means that
    * {@link #parseAssignmentOrSpread} might still fail when this returns true.
    */
   private boolean peekAssignmentOrSpread() {
@@ -2811,7 +2818,7 @@ public class Parser {
    * TokenType.END_OF_FILE at the end of the file so callers don't have to check for EOF
    * explicitly.
    *
-   * Tokenizing is contextual. nextToken() will never return a regular expression literal.
+   * <p>Tokenizing is contextual. nextToken() will never return a regular expression literal.
    */
   private Token nextToken() {
     lastToken = scanner.nextToken();

@@ -17,12 +17,12 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Maps;
 import com.google.javascript.jscomp.CodingConvention.AssertionFunctionSpec;
 import com.google.javascript.jscomp.NodeTraversal.AbstractScopedCallback;
 import com.google.javascript.jscomp.type.ReverseAbstractInterpreter;
 import com.google.javascript.rhino.Node;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -37,19 +37,19 @@ class TypeInferencePass implements CompilerPass {
 
   private final AbstractCompiler compiler;
   private final ReverseAbstractInterpreter reverseInterpreter;
-  private final Scope topScope;
+  private final TypedScope topScope;
   private final MemoizedScopeCreator scopeCreator;
   private final Map<String, AssertionFunctionSpec> assertionFunctionsMap;
 
   TypeInferencePass(AbstractCompiler compiler,
       ReverseAbstractInterpreter reverseInterpreter,
-      Scope topScope, MemoizedScopeCreator scopeCreator) {
+      TypedScope topScope, MemoizedScopeCreator scopeCreator) {
     this.compiler = compiler;
     this.reverseInterpreter = reverseInterpreter;
     this.topScope = topScope;
     this.scopeCreator = scopeCreator;
 
-    assertionFunctionsMap = Maps.newHashMap();
+    assertionFunctionsMap = new HashMap<>();
     for (AssertionFunctionSpec assertionFunction :
         compiler.getCodingConvention().getAssertionFunctions()) {
       assertionFunctionsMap.put(assertionFunction.getFunctionName(),
@@ -102,7 +102,7 @@ class TypeInferencePass implements CompilerPass {
         compiler, new FirstScopeBuildingCallback(), scopeCreator))
         .traverseWithScope(node, topScope);
 
-    for (Scope s : scopeCreator.getAllMemoizedScopes()) {
+    for (TypedScope s : scopeCreator.getAllMemoizedScopes()) {
       s.resolveTypes();
     }
 
@@ -111,7 +111,7 @@ class TypeInferencePass implements CompilerPass {
         .traverseWithScope(node, topScope);
   }
 
-  void inferScope(Node n, Scope scope) {
+  void inferScope(Node n, TypedScope scope) {
     TypeInference typeInference =
         new TypeInference(
             compiler, computeCfg(n), reverseInterpreter, scope,
@@ -130,7 +130,7 @@ class TypeInferencePass implements CompilerPass {
   private static class FirstScopeBuildingCallback extends AbstractScopedCallback {
     @Override
     public void enterScope(NodeTraversal t) {
-      t.getScope();
+      t.getTypedScope();
     }
 
     @Override
@@ -145,7 +145,7 @@ class TypeInferencePass implements CompilerPass {
       // Only infer the entry root, rather than the scope root.
       // This ensures that incremental compilation only touches the root
       // that's been swapped out.
-      inferScope(t.getCurrentNode(), t.getScope());
+      inferScope(t.getCurrentNode(), t.getTypedScope());
     }
 
     @Override

@@ -277,9 +277,10 @@ CanvasRenderingContext2D.prototype.arc = function(
     x, y, radius, startAngle, endAngle, opt_anticlockwise) {};
 
 /**
+ * @param {string=} opt_fillRule
  * @return {undefined}
  */
-CanvasRenderingContext2D.prototype.fill = function() {};
+CanvasRenderingContext2D.prototype.fill = function(opt_fillRule) {};
 
 /**
  * @return {undefined}
@@ -287,17 +288,20 @@ CanvasRenderingContext2D.prototype.fill = function() {};
 CanvasRenderingContext2D.prototype.stroke = function() {};
 
 /**
+ * @param {string=} opt_fillRule
  * @return {undefined}
  */
-CanvasRenderingContext2D.prototype.clip = function() {};
+CanvasRenderingContext2D.prototype.clip = function(opt_fillRule) {};
 
 /**
  * @param {number} x
  * @param {number} y
+ * @param {string=} opt_fillRule
  * @return {boolean}
  * @nosideeffects
  */
-CanvasRenderingContext2D.prototype.isPointInPath = function(x, y) {};
+CanvasRenderingContext2D.prototype.isPointInPath = function(
+    x, y, opt_fillRule) {};
 
 /**
  * @param {string} text
@@ -1000,9 +1004,16 @@ SharedWorker.prototype.onerror;
 
 /**
  * @see http://dev.w3.org/html5/workers/
+ * @see http://www.w3.org/TR/url-1/#dom-urlutilsreadonly
  * @interface
  */
 function WorkerLocation() {}
+
+/** @type {string} */
+WorkerLocation.prototype.href;
+
+/** @type {string} */
+WorkerLocation.prototype.origin;
 
 /** @type {string} */
 WorkerLocation.prototype.protocol;
@@ -1156,6 +1167,12 @@ HTMLElement.prototype.webkitCreateShadowRoot;
 HTMLElement.prototype.shadowRoot;
 
 /**
+ * @see http://www.w3.org/TR/shadow-dom/
+ * @return {!NodeList}
+ */
+HTMLElement.prototype.getDestinationInsertionPoints = function() {};
+
+/**
  * @see http://www.w3.org/TR/components-intro/
  * @type {function()}
  */
@@ -1215,6 +1232,12 @@ HTMLAreaElement.prototype.ping;
  * @see http://www.w3.org/TR/html-markup/iframe.html#iframe.attrs.srcdoc
  */
 HTMLIFrameElement.prototype.srcdoc;
+
+/**
+ * @type {?string}
+ * @see http://www.w3.org/TR/2012/WD-html5-20121025/the-iframe-element.html#attr-iframe-sandbox
+ */
+HTMLIFrameElement.prototype.sandbox;
 
 /** @type {string} */
 HTMLInputElement.prototype.autocomplete;
@@ -1427,6 +1450,12 @@ HTMLMediaElement.prototype.addTextTrack =
 /** @type {TextTrackList} */
 HTMLMediaElement.prototype.textTracks;
 
+
+/**
+ * @see http://www.w3.org/TR/shadow-dom/
+ * @return {!NodeList}
+ */
+Text.prototype.getDestinationInsertionPoints = function() {};
 
 
 /**
@@ -2308,6 +2337,7 @@ HTMLElement.prototype.dataset;
 
 /**
  * @constructor
+ * @see https://dom.spec.whatwg.org/#interface-domtokenlist
  */
 function DOMTokenList() {}
 
@@ -2332,14 +2362,14 @@ DOMTokenList.prototype.item = function(index) {};
 DOMTokenList.prototype.contains = function(token) {};
 
 /**
- * @param {string} token The CSS class to add to this element.
+ * @param {...string} var_args The CSS class(es) to add to this element.
  */
-DOMTokenList.prototype.add = function(token) {};
+DOMTokenList.prototype.add = function(var_args) {};
 
 /**
- * @param {string} token The CSS class to remove from this element.
+ * @param {...string} var_args The CSS class(es) to remove from this element.
  */
-DOMTokenList.prototype.remove = function(token) {};
+DOMTokenList.prototype.remove = function(var_args) {};
 
 /**
  * @param {string} token The CSS class to toggle from this element.
@@ -2366,22 +2396,6 @@ DOMTokenList.prototype.toString = function() {};
  * @const
  */
 HTMLElement.prototype.classList;
-
-/**
- * Web Cryptography API
- * @see http://www.w3.org/TR/WebCryptoAPI/
- */
-
-/** @see https://developer.mozilla.org/en/DOM/window.crypto */
-Window.prototype.crypto;
-
-/**
- * @see https://developer.mozilla.org/en/DOM/window.crypto.getRandomValues
- * @param {!ArrayBufferView} typedArray
- * @return {!ArrayBufferView}
- * @throws {Error}
- */
-Window.prototype.crypto.getRandomValues = function(typedArray) {};
 
 /**
  * Constraint Validation API properties and methods
@@ -2714,29 +2728,18 @@ Element.ALLOW_KEYBOARD_INPUT = 1;
 Element.prototype.ALLOW_KEYBOARD_INPUT = 1;
 
 
-/** @constructor */
-function MutationObserverInit() {}
-
-/** @type {boolean} */
-MutationObserverInit.prototype.childList;
-
-/** @type {boolean} */
-MutationObserverInit.prototype.attributes;
-
-/** @type {boolean} */
-MutationObserverInit.prototype.characterData;
-
-/** @type {boolean} */
-MutationObserverInit.prototype.subtree;
-
-/** @type {boolean} */
-MutationObserverInit.prototype.attributeOldValue;
-
-/** @type {boolean} */
-MutationObserverInit.prototype.characterDataOldValue;
-
-/** @type {Array.<string>} */
-MutationObserverInit.prototype.attributeFilter;
+/**
+ * @typedef {{
+ *   childList: (boolean|undefined),
+ *   attributes: (boolean|undefined),
+ *   characterData: (boolean|undefined),
+ *   subtree: (boolean|undefined),
+ *   attributeOldValue: (boolean|undefined),
+ *   characterDataOldValue: (boolean|undefined),
+ *   attributeFilter: (!Array<string>|undefined)
+ * }}
+ */
+var MutationObserverInit;
 
 
 /** @constructor */
@@ -2798,7 +2801,7 @@ Window.prototype.MozMutationObserver;
 
 /**
  * @see http://www.w3.org/TR/page-visibility/
- * @type {string}
+ * @type {VisibilityState}
  */
 Document.prototype.visibilityState;
 
@@ -2861,6 +2864,11 @@ Document.prototype.register;
  */
 Document.prototype.fonts;
 
+
+/**
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/Document/currentScript
+ */
+Document.prototype.currentScript;
 
 /**
  * Definition of ShadowRoot interface,
@@ -2949,6 +2957,12 @@ ShadowRoot.prototype.activeElement;
 
 
 /**
+ * @type {?ShadowRoot}
+ */
+ShadowRoot.prototype.olderShadowRoot;
+
+
+/**
  * @type {string}
  */
 ShadowRoot.prototype.innerHTML;
@@ -2959,6 +2973,37 @@ ShadowRoot.prototype.innerHTML;
  */
 ShadowRoot.prototype.styleSheets;
 
+
+
+/**
+ * @see http://www.w3.org/TR/shadow-dom/#the-content-element
+ * @constructor
+ * @extends {HTMLElement}
+ */
+function HTMLContentElement() {}
+
+/**
+ * @type {!string}
+ */
+HTMLContentElement.prototype.select;
+
+/**
+ * @return {!NodeList}
+ */
+HTMLContentElement.prototype.getDistributedNodes = function() {};
+
+
+/**
+ * @see http://www.w3.org/TR/shadow-dom/#the-shadow-element
+ * @constructor
+ * @extends {HTMLElement}
+ */
+function HTMLShadowElement() {}
+
+/**
+ * @return {!NodeList}
+ */
+HTMLShadowElement.prototype.getDistributedNodes = function() {};
 
 
 /**
@@ -3047,3 +3092,159 @@ HTMLImageElement.prototype.sizes;
 
 /** @type {string} */
 HTMLImageElement.prototype.srcset;
+
+
+/**
+ * 4.11 Interactive elements
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html
+ */
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#the-details-element
+ * @constructor
+ * @extends {HTMLElement}
+ */
+function HTMLDetailsElement() {}
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-details-open
+ * @type {boolean}
+ */
+HTMLDetailsElement.prototype.open;
+
+
+// As of 2/20/2015, <summary> has no special web IDL interface nor global
+// constructor (i.e. HTMLSummaryElement).
+
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-menu-type
+ * @type {string}
+ */
+HTMLMenuElement.prototype.type;
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-menu-label
+ * @type {string}
+ */
+HTMLMenuElement.prototype.label;
+
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#the-menuitem-element
+ * @constructor
+ * @extends {HTMLElement}
+ */
+function HTMLMenuItemElement() {}
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-menuitem-type
+ * @type {string}
+ */
+HTMLMenuItemElement.prototype.type;
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-menuitem-label
+ * @type {string}
+ */
+HTMLMenuItemElement.prototype.label;
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-menuitem-icon
+ * @type {string}
+ */
+HTMLMenuItemElement.prototype.icon;
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-menuitem-disabled
+ * @type {boolean}
+ */
+HTMLMenuItemElement.prototype.disabled;
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-menuitem-checked
+ * @type {boolean}
+ */
+HTMLMenuItemElement.prototype.checked;
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-menuitem-radiogroup
+ * @type {string}
+ */
+HTMLMenuItemElement.prototype.radiogroup;
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-menuitem-default
+ * @type {boolean}
+ */
+HTMLMenuItemElement.prototype.default;
+
+// TODO(dbeam): add HTMLMenuItemElement.prototype.command if it's implemented.
+
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#relatedevent
+ * @param {string} type
+ * @param {{relatedTarget: (EventTarget|undefined)}=} opt_eventInitDict
+ * @constructor
+ * @extends {Event}
+ */
+function RelatedEvent(type, opt_eventInitDict) {}
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-relatedevent-relatedtarget
+ * @type {EventTarget|undefined}
+ */
+RelatedEvent.prototype.relatedTarget;
+
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#the-dialog-element
+ * @constructor
+ * @extends {HTMLElement}
+ */
+function HTMLDialogElement() {}
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-dialog-open
+ * @type {boolean}
+ */
+HTMLDialogElement.prototype.open;
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-dialog-returnvalue
+ * @type {string}
+ */
+HTMLDialogElement.prototype.returnValue;
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-dialog-show
+ * @param {(MouseEvent|Element)=} opt_anchor
+ */
+HTMLDialogElement.prototype.show = function(opt_anchor) {};
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-dialog-showmodal
+ * @param {(MouseEvent|Element)=} opt_anchor
+ */
+HTMLDialogElement.prototype.showModal = function(opt_anchor) {};
+
+/**
+ * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-dialog-close
+ * @param {string=} opt_returnValue
+ */
+HTMLDialogElement.prototype.close = function(opt_returnValue) {};
+
+
+/**
+ * @see https://html.spec.whatwg.org/multipage/scripting.html#the-template-element
+ * @constructor
+ * @extends {HTMLElement}
+ */
+function HTMLTemplateElement() {}
+
+/**
+ * @see https://html.spec.whatwg.org/multipage/scripting.html#the-template-element
+ * @type {!DocumentFragment}
+ */
+HTMLTemplateElement.prototype.content;

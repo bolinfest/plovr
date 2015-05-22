@@ -21,15 +21,15 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.javascript.jscomp.parsing.Config.LanguageMode;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.SimpleSourceFile;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.jstype.SimpleSourceFile;
 import com.google.javascript.rhino.testing.BaseJSTypeTestCase;
 import com.google.javascript.rhino.testing.TestErrorReporter;
 
 /**
  * Ported from rhino/testsrc/org/mozilla/javascript/tests/AttachJsDocsTest.java
  */
-public class AttachJsdocsTest extends BaseJSTypeTestCase {
+public final class AttachJsdocsTest extends BaseJSTypeTestCase {
   private Config.LanguageMode mode;
 
   @Override
@@ -789,8 +789,8 @@ public class AttachJsdocsTest extends BaseJSTypeTestCase {
         testErrorReporter).ast;
 
     // verifying that all warnings were seen
-    assertThat(testErrorReporter.hasEncounteredAllErrors()).isTrue();
-    assertThat(testErrorReporter.hasEncounteredAllWarnings()).isTrue();
+    testErrorReporter.assertHasEncounteredAllErrors();
+    testErrorReporter.assertHasEncounteredAllWarnings();
 
     return script;
   }

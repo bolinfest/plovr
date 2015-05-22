@@ -25,7 +25,7 @@ import com.google.javascript.rhino.Token;
  *
  * @author johnlenz@google.com (John Lenz)
  */
-public class AstValidator implements CompilerPass {
+public final class AstValidator implements CompilerPass {
 
   // Possible enhancements:
   // * verify NAME, LABEL_NAME, GETPROP property name and unquoted
@@ -786,7 +786,7 @@ public class AstValidator implements CompilerPass {
   }
 
   private void validateVarOrAssignmentTarget(Node n) {
-    if (n.isVar() || n.isLet() || n.isConst()) {
+    if (NodeUtil.isNameDeclaration(n)) {
       // Only one NAME can be declared for FOR-IN expressions.
       validateChildCount(n, 1);
       validateNameDeclarationHelper(n.getType(), n);

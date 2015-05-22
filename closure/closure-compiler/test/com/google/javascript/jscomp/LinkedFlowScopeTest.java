@@ -16,7 +16,7 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.collect.Lists;
+import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.type.FlowScope;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -27,14 +27,14 @@ import com.google.javascript.rhino.jstype.JSType;
  * @author nicksantos@google.com (Nick Santos)
  */
 
-public class LinkedFlowScopeTest extends CompilerTypeTestCase {
+public final class LinkedFlowScopeTest extends CompilerTypeTestCase {
 
   private final Node blockNode = new Node(Token.BLOCK);
   private final Node functionNode = new Node(Token.FUNCTION);
   private final int LONG_CHAIN_LENGTH = 1050;
 
-  private Scope globalScope;
-  private Scope localScope;
+  private TypedScope globalScope;
+  private TypedScope localScope;
   @SuppressWarnings("unused")
   private FlowScope globalEntry;
   private FlowScope localEntry;
@@ -43,11 +43,11 @@ public class LinkedFlowScopeTest extends CompilerTypeTestCase {
   public void setUp() {
     super.setUp();
 
-    globalScope = Scope.createGlobalScope(blockNode);
+    globalScope = TypedScope.createGlobalScope(blockNode);
     globalScope.declare("globalA", null, null, null);
     globalScope.declare("globalB", null, null, null);
 
-    localScope = new Scope(globalScope, functionNode);
+    localScope = new TypedScope(globalScope, functionNode);
     localScope.declare("localA", null, null, null);
     localScope.declare("localB", null, null, null);
 
@@ -320,6 +320,6 @@ public class LinkedFlowScopeTest extends CompilerTypeTestCase {
   @SuppressWarnings("unchecked")
   private FlowScope join(FlowScope a, FlowScope b) {
     return (new LinkedFlowScope.FlowScopeJoinOp()).apply(
-        Lists.newArrayList(a, b));
+        ImmutableList.of(a, b));
   }
 }

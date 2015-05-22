@@ -21,8 +21,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.LinkedHashMultimap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
@@ -30,7 +28,9 @@ import com.google.javascript.rhino.SourcePosition;
 
 import java.io.Serializable;
 import java.nio.charset.Charset;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -81,12 +81,15 @@ public class CompilerOptions implements Serializable, Cloneable {
    */
   private boolean allowEs6Out;
 
-  /** */
+  /**
+   * Allow ES6 as the output language.
+   * WARNING: Enabling this option may cause the compiler to crash
+   *     or produce incorrect output.
+   */
   public void setAllowEs6Out(boolean value) {
     allowEs6Out = value;
   }
 
-  /** */
   public boolean getAllowEs6Out() {
     return allowEs6Out;
   }
@@ -149,7 +152,7 @@ public class CompilerOptions implements Serializable, Cloneable {
    */
   public boolean ideMode;
 
-  boolean saveDataStructures = false;
+  private boolean parseJsDocDocumentation = false;
 
   /**
    * Even if checkTypes is disabled, clients might want to still infer types.
@@ -347,6 +350,16 @@ public class CompilerOptions implements Serializable, Cloneable {
   public boolean crossModuleCodeMotion;
 
   /**
+   * Don't generate stub functions when moving methods deeper.
+   *
+   * Note, switching on this option may break existing code that depends on
+   * enumerating prototype methods for mixin behavior, such as goog.mixin or
+   * goog.object.extend, since the prototype assignments will be removed from
+   * the parent module and moved to a later module.
+   **/
+  boolean crossModuleCodeMotionNoStubMethods;
+
+  /**
    * Whether when module B depends on module A and module B declares a symbol,
    * this symbol can be seen in A after B has been loaded. This is often true,
    * but may not be true when loading code using nested eval.
@@ -512,7 +525,7 @@ public class CompilerOptions implements Serializable, Cloneable {
   public VariableRenamingPolicy variableRenaming;
 
   /** Controls which properties get renamed. */
-  public PropertyRenamingPolicy propertyRenaming;
+  PropertyRenamingPolicy propertyRenaming;
 
   /** Controls label renaming. */
   public boolean labelRenaming;
@@ -606,7 +619,17 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Input anonymous function renaming map. */
   VariableMap inputAnonymousFunctionNamingMap;
 
-  /** Input variable renaming map. */
+  /**
+   * Input variable renaming map.
+   * <p>During renaming, the compiler uses this map and the inputPropertyMap to
+   * try to preserve renaming mappings from a previous compilation.
+   * The application is delta encoding: keeping the diff between consecutive
+   * versions of one's code small.
+   * The compiler does NOT guarantee to respect these maps; projects should not
+   * use these maps to prevent renaming or to select particular names.
+   * Point questioners to this post:
+   * http://closuretools.blogspot.com/2011/01/property-by-any-other-name-part-3.html
+   */
   VariableMap inputVariableMap;
 
   /** Input property renaming map. */
@@ -678,6 +701,9 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Processes AngularJS-specific annotations */
   boolean angularPass;
 
+  /** Processes Polymer calls */
+  boolean polymerPass;
+
   /** Remove goog.abstractMethod assignments. */
   boolean removeAbstractMethods;
 
@@ -734,6 +760,8 @@ public class CompilerOptions implements Serializable, Cloneable {
   /** Record function information */
   public boolean recordFunctionInformation;
 
+  public boolean checksOnly;
+
   public boolean generateExports;
 
   boolean exportLocalPropertyDefinitions;
@@ -777,9 +805,6 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   /** Rewrite CommonJS modules so that they can be concatenated together. */
   boolean processCommonJSModules = false;
-
-  /** Rewrite ES6 modules so that they can be concatenated together. */
-  boolean rewriteEs6Modules = false;
 
   /** CommonJS module prefix. */
   String commonJSModulePathPrefix =
@@ -1059,6 +1084,7 @@ public class CompilerOptions implements Serializable, Cloneable {
     preserveGoogRequires = false;
     jqueryPass = false;
     angularPass = false;
+    polymerPass = false;
     removeAbstractMethods = true;
     removeClosureAsserts = false;
     stripTypes = Collections.emptySet();
@@ -1067,12 +1093,13 @@ public class CompilerOptions implements Serializable, Cloneable {
     stripTypePrefixes = Collections.emptySet();
     customPasses = null;
     markNoSideEffectCalls = false;
-    defineReplacements = Maps.newHashMap();
+    defineReplacements = new HashMap<>();
     tweakProcessing = TweakProcessing.OFF;
-    tweakReplacements = Maps.newHashMap();
+    tweakReplacements = new HashMap<>();
     moveFunctionDeclarations = false;
     appNameStr = "";
     recordFunctionInformation = false;
+    checksOnly = false;
     generateExports = false;
     exportLocalPropertyDefinitions = false;
     cssRenamingMap = null;
@@ -1082,7 +1109,7 @@ public class CompilerOptions implements Serializable, Cloneable {
     replaceStringsFunctionDescriptions = Collections.emptyList();
     replaceStringsPlaceholderToken = "";
     replaceStringsReservedStrings = Collections.emptySet();
-    propertyInvalidationErrors = Maps.newHashMap();
+    propertyInvalidationErrors = new HashMap<>();
     inputSourceMaps = ImmutableMap.of();
 
     // Instrumentation
@@ -1159,7 +1186,7 @@ public class CompilerOptions implements Serializable, Cloneable {
    */
   private static Map<String, Node> getReplacementsHelper(
       Map<String, Object> source) {
-    Map<String, Node> map = Maps.newHashMap();
+    Map<String, Node> map = new HashMap<>();
     for (Map.Entry<String, Object> entry : source.entrySet()) {
       String name = entry.getKey();
       Object value = entry.getValue();
@@ -1457,7 +1484,7 @@ public class CompilerOptions implements Serializable, Cloneable {
       String placeholderToken, List<String> functionDescriptors) {
     this.replaceStringsPlaceholderToken = placeholderToken;
     this.replaceStringsFunctionDescriptions =
-        Lists.newArrayList(functionDescriptors);
+         new ArrayList<>(functionDescriptors);
   }
 
   public void setRemoveAbstractMethods(boolean remove) {
@@ -1505,6 +1532,10 @@ public class CompilerOptions implements Serializable, Cloneable {
     this.runtimeTypeCheck = false;
   }
 
+  public void setChecksOnly(boolean checksOnly) {
+    this.checksOnly = checksOnly;
+  }
+
   public void setGenerateExports(boolean generateExports) {
     this.generateExports = generateExports;
   }
@@ -1515,6 +1546,10 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   public void setAngularPass(boolean angularPass) {
     this.angularPass = angularPass;
+  }
+
+  public void setPolymerPass(boolean polymerPass) {
+    this.polymerPass = polymerPass;
   }
 
   public void setCodingConvention(CodingConvention codingConvention) {
@@ -1761,7 +1796,7 @@ public class CompilerOptions implements Serializable, Cloneable {
   public void setPropertyInvalidationErrors(
       Map<String, CheckLevel> propertyInvalidationErrors) {
     this.propertyInvalidationErrors =
-        Maps.newHashMap(propertyInvalidationErrors);
+         new HashMap<>(propertyInvalidationErrors);
   }
 
   public void setIdeMode(boolean ideMode) {
@@ -1769,11 +1804,23 @@ public class CompilerOptions implements Serializable, Cloneable {
   }
 
   /**
-   * Whether to keep internal data structures around after we're
-   * finished compiling. We do this by default when IDE mode is on.
+   * Enables or disables the parsing of JSDoc documentation. When IDE mode is
+   * enabled then documentation is always parsed.
+   *
+   * @param parseJsDocDocumentation
+   *           True to enable JSDoc documentation parsing, false to disable it.
    */
-  public void setSaveDataStructures(boolean save) {
-    this.saveDataStructures = save;
+  public void setParseJsDocDocumentation(boolean parseJsDocDocumentation) {
+    this.parseJsDocDocumentation = parseJsDocDocumentation;
+  }
+
+  /**
+   * Checks JSDoc documentation will be parsed.
+   *
+   * @return True when JSDoc documentation will be parsed, false if not.
+   */
+  public boolean isParseJsDocDocumentation() {
+    return this.ideMode || this.parseJsDocDocumentation;
   }
 
   public void setSkipAllPasses(boolean skipAllPasses) {
@@ -1837,6 +1884,11 @@ public class CompilerOptions implements Serializable, Cloneable {
 
   public void setCrossModuleCodeMotion(boolean crossModuleCodeMotion) {
     this.crossModuleCodeMotion = crossModuleCodeMotion;
+  }
+
+  public void setCrossModuleCodeMotionNoStubMethods(boolean
+      crossModuleCodeMotionNoStubMethods) {
+    this.crossModuleCodeMotionNoStubMethods = crossModuleCodeMotionNoStubMethods;
   }
 
   public void setParentModuleCanSeeSymbolsDeclaredInChildren(
@@ -2216,6 +2268,10 @@ public class CompilerOptions implements Serializable, Cloneable {
     this.lineLengthThreshold = lineLengthThreshold;
   }
 
+  public int getLineLengthThreshold() {
+    return this.lineLengthThreshold;
+  }
+
   public void setExternExports(boolean externExports) {
     this.externExports = externExports;
   }
@@ -2254,14 +2310,6 @@ public class CompilerOptions implements Serializable, Cloneable {
    */
   public void setProcessCommonJSModules(boolean processCommonJSModules) {
     this.processCommonJSModules = processCommonJSModules;
-  }
-
-  /**
-   * Rewrites ES6 modules so that modules can be concatenated together,
-   * by renaming all globals to avoid conflicting with other modules.
-   */
-  public void setRewriteEs6Modules(boolean rewriteEs6Modules) {
-    this.rewriteEs6Modules = rewriteEs6Modules;
   }
 
   /**

@@ -21,20 +21,18 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
-import com.google.javascript.jscomp.Scope.Var;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.StaticRef;
+import com.google.javascript.rhino.StaticSourceFile;
+import com.google.javascript.rhino.StaticSymbolTable;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.jstype.JSType;
-import com.google.javascript.rhino.jstype.StaticReference;
-import com.google.javascript.rhino.jstype.StaticSourceFile;
-import com.google.javascript.rhino.jstype.StaticSymbolTable;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -58,12 +56,12 @@ class ReferenceCollectingCallback implements ScopedCallback,
    * name).
    */
   private final Map<Var, ReferenceCollection> referenceMap =
-      Maps.newLinkedHashMap();
+       new LinkedHashMap<>();
 
   /**
    * The stack of basic blocks and scopes the current traversal is in.
    */
-  private List<BasicBlock> blockStack = Lists.newArrayList();
+  private List<BasicBlock> blockStack = new ArrayList<>();
 
   /**
    * Source of behavior at various points in the traversal.
@@ -84,8 +82,8 @@ class ReferenceCollectingCallback implements ScopedCallback,
    * Traverse hoisted functions where they're referenced, not
    * where they're declared.
    */
-  private final Set<Var> startedFunctionTraverse = Sets.newHashSet();
-  private final Set<Var> finishedFunctionTraverse = Sets.newHashSet();
+  private final Set<Var> startedFunctionTraverse = new HashSet<>();
+  private final Set<Var> finishedFunctionTraverse = new HashSet<>();
   private Scope narrowScope;
 
   /**
@@ -114,8 +112,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
    */
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverseRoots(
-        compiler, Lists.newArrayList(externs, root), this);
+    NodeTraversal.traverseRoots(compiler, this, externs, root);
   }
 
   /**
@@ -209,11 +206,12 @@ class ReferenceCollectingCallback implements ScopedCallback,
     // CollapseProperties.
     List<BasicBlock> newBlockStack = null;
     if (containingScope.isGlobal()) {
-      newBlockStack = Lists.newArrayList(blockStack.get(0));
+      newBlockStack = new ArrayList<>();
+      newBlockStack.add(blockStack.get(0));
     } else {
       for (int i = 0; i < blockStack.size(); i++) {
         if (blockStack.get(i).root == containingScope.getRootNode()) {
-          newBlockStack = Lists.newArrayList(blockStack.subList(0, i + 1));
+          newBlockStack = new ArrayList<>(blockStack.subList(0, i + 1));
         }
       }
     }
@@ -378,7 +376,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
    */
   static class ReferenceCollection implements Iterable<Reference> {
 
-    List<Reference> references = Lists.newArrayList();
+    List<Reference> references = new ArrayList<>();
 
     @Override
     public Iterator<Reference> iterator() {
@@ -574,7 +572,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
   /**
    * Represents a single declaration or reference to a variable.
    */
-  static final class Reference implements StaticReference<JSType> {
+  static final class Reference implements StaticRef {
 
     private static final Set<Integer> DECLARATION_PARENTS =
         ImmutableSet.of(Token.VAR, Token.LET, Token.CONST, Token.PARAM_LIST,
@@ -589,6 +587,11 @@ class ReferenceCollectingCallback implements ScopedCallback,
     Reference(Node nameNode, NodeTraversal t,
         BasicBlock basicBlock) {
       this(nameNode, basicBlock, t.getScope(), t.getInput().getInputId());
+    }
+
+    @Override
+    public String toString() {
+      return nameNode.toString();
     }
 
     /**
@@ -646,6 +649,11 @@ class ReferenceCollectingCallback implements ScopedCallback,
 
       // Special case for class B extends A, A is not a redeclaration.
       if (parent.isClass() && node != parent.getFirstChild()) {
+        return false;
+      }
+
+      // This condition can be true during InlineVariables.
+      if (parent.getParent() == null) {
         return false;
       }
 

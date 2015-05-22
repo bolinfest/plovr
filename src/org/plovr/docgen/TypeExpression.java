@@ -5,9 +5,9 @@ import java.util.List;
 import com.google.common.collect.Lists;
 import com.google.javascript.jscomp.AbstractCompiler;
 import com.google.javascript.rhino.JSTypeExpression;
+import com.google.javascript.rhino.StaticScope;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
-import com.google.javascript.rhino.jstype.StaticScope;
 import com.google.javascript.rhino.jstype.UnionType;
 
 public class TypeExpression {
@@ -61,9 +61,8 @@ public class TypeExpression {
 
     public Builder setType(JSTypeExpression type, AbstractCompiler compiler) {
       if (type != null) {
-        StaticScope<JSType> scope = null;
         JSTypeRegistry registry = compiler.getTypeRegistry();
-        JSType jsType = type.evaluate(scope, registry);
+        JSType jsType = type.evaluate(null, registry);
         paramName = jsType.getDisplayName();
         if (paramName == null) {
           if (jsType.isUnionType()) {

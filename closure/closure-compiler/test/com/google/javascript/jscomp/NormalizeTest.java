@@ -18,18 +18,18 @@ package com.google.javascript.jscomp;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.Node;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
  * @author johnlenz@google.com (John Lenz)
  *
  */
-public class NormalizeTest extends CompilerTestCase {
+public final class NormalizeTest extends CompilerTestCase {
 
   private static final String EXTERNS = "var window;";
 
@@ -392,8 +392,8 @@ public class NormalizeTest extends CompilerTestCase {
   public void testNormalizeSyntheticCode() {
     Compiler compiler = new Compiler();
     compiler.init(
-        Lists.<SourceFile>newArrayList(),
-        Lists.<SourceFile>newArrayList(), new CompilerOptions());
+        new ArrayList<SourceFile>(),
+         new ArrayList<SourceFile>(), new CompilerOptions());
     String code = "function f(x) {} function g(x) {}";
     Node ast = compiler.parseSyntheticCode(code);
     Normalize.normalizeSyntheticCode(compiler, ast, "prefix_");
@@ -461,11 +461,13 @@ public class NormalizeTest extends CompilerTestCase {
   }
 
   public void testExposeSimple() {
+    setExpectParseWarningsThisTest();
     test("var x = {}; /** @expose */ x.y = 3; x.y = 5;",
          "var x = {}; x['y'] = 3; x['y'] = 5;");
   }
 
   public void testExposeComplex() {
+    setExpectParseWarningsThisTest();
     test(
         "var x = {/** @expose */ a: 1, b: 2};"
         + "x.a = 3; /** @expose */ x.b = 5;",
@@ -474,7 +476,7 @@ public class NormalizeTest extends CompilerTestCase {
   }
 
   private Set<Node> findNodesWithProperty(Node root, final int prop) {
-    final Set<Node> set = Sets.newHashSet();
+    final Set<Node> set = new HashSet<>();
     NodeTraversal.traverse(
         getLastCompiler(), root, new AbstractPostOrderCallback() {
         @Override
@@ -535,7 +537,7 @@ public class NormalizeTest extends CompilerTestCase {
       return new CompilerPass() {
         @Override
         public void process(Node externs, Node root) {
-          new CollapseProperties(compiler, true).process(externs, root);
+          new CollapseProperties(compiler).process(externs, root);
         }
       };
     }

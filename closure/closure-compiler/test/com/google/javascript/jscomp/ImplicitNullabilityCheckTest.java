@@ -17,7 +17,7 @@
 package com.google.javascript.jscomp;
 
 /** Unit tests for {@link ImplicitNullabilityCheck}. */
-public class ImplicitNullabilityCheckTest extends CompilerTestCase {
+public final class ImplicitNullabilityCheckTest extends CompilerTestCase {
 
   @Override
   protected void setUp() throws Exception {
@@ -43,6 +43,14 @@ public class ImplicitNullabilityCheckTest extends CompilerTestCase {
     noWarning("/** @type {function(new:Object)} */ function f(){}");
     noWarning("/** @type {function(this:Object)} */ function f(){}");
     noWarning("/** @typedef {!Object} */ var Obj; var /** Obj */ x;");
+  }
+
+  public void testExplicitlyNullableUnion() {
+    noWarning("/** @type {(Object|null)} */ var x;");
+    noWarning("/** @type {(Object|number)?} */ var x;");
+    noWarning("/** @type {?(Object|number)} */ var x;");
+    noWarning("/** @type {(Object|?number)} */ var x;");
+    warnImplicitlyNullable("/** @type {(Object|number)} */ var x;");
   }
 
   public void testJsdocPositions() {
