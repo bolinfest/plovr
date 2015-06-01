@@ -357,6 +357,43 @@ public final class Config implements Comparable<Config> {
     return outputWrapper;
   }
 
+  /**
+   * @return A complete output wrapper, including the wrapper for global re-scoping.
+   */
+  public String getOutputAndGlobalScopeWrapper(boolean isRootModule, String sourceUrl) {
+    String outputWrapper = getOutputWrapper();
+    String outputWrapperMarker = getOutputWrapperMarker();
+    if (Strings.isNullOrEmpty(outputWrapper)) {
+      outputWrapper = outputWrapperMarker;
+    }
+
+    boolean hasGlobalScopeName =
+        !Strings.isNullOrEmpty(getGlobalScopeName()) &&
+        getCompilationMode() != CompilationMode.WHITESPACE;
+
+    if (hasGlobalScopeName) {
+      // Initialize the global scope if not initialized yet.
+      String globalScopeNameWrapper = "";
+      if (isRootModule) {
+        globalScopeNameWrapper += "var " + getGlobalScopeName() + "={};";
+      }
+      globalScopeNameWrapper +=
+          "(function(" + GLOBAL_SCOPE_NAME + "){\n" +
+          outputWrapperMarker +
+          "}).call(this, " + getGlobalScopeName() + ");";
+      outputWrapper = outputWrapper.replace(outputWrapperMarker, globalScopeNameWrapper);
+    }
+
+    // http://code.google.com/p/closure-library/issues/detail?id=196
+    // http://blog.getfirebug.com/2009/08/11/give-your-eval-a-name-with-sourceurl/
+    // non-root modules are loaded with eval, give it a sourceURL for better debugging
+    if (!isRootModule && !Strings.isNullOrEmpty(sourceUrl)) {
+      outputWrapper += "\n//@ sourceURL=" + sourceUrl;
+    }
+
+    return outputWrapper;
+  }
+
   public Charset getOutputCharset() {
     return outputCharset;
   }
@@ -614,15 +651,16 @@ public final class Config implements Comparable<Config> {
     if (moduleConfig != null) {
       options.crossModuleCodeMotion = true;
       options.crossModuleMethodMotion = true;
-      if (!Strings.isNullOrEmpty(globalScopeName)) {
-        Preconditions.checkState(
-            options.collapseAnonymousFunctions == true ||
-            level != CompilationLevel.ADVANCED_OPTIMIZATIONS,
-            "For reasons unknown, setting this to false ends up " +
-            "with a fairly larger final output, even though we just go " +
-            "and re-anonymize the functions a few steps later.");
-        options.renamePrefixNamespace = GLOBAL_SCOPE_NAME;
-      }
+    }
+
+    if (!Strings.isNullOrEmpty(globalScopeName)) {
+      Preconditions.checkState(
+          options.collapseAnonymousFunctions == true ||
+          level != CompilationLevel.ADVANCED_OPTIMIZATIONS,
+          "For reasons unknown, setting this to false ends up " +
+          "with a fairly larger final output, even though we just go " +
+          "and re-anonymize the functions a few steps later.");
+      options.renamePrefixNamespace = GLOBAL_SCOPE_NAME;
     }
 
     // Now that custom passes have registered with the PlovrDiagnosticGroups,
