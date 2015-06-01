@@ -151,21 +151,10 @@ public final class Compilation {
 
     String compiledCode = inputJsConcatenatedInOrder != null ?
         inputJsConcatenatedInOrder : compiler.toSource();
-    String outputWrapper = config.getOutputWrapper();
-    if (outputWrapper != null) {
-      String outputWrapperMarker = config.getOutputWrapperMarker();
-      int pos = outputWrapper.indexOf(outputWrapperMarker);
-      if (pos >= 0) {
-        compiledCode = outputWrapper.substring(0, pos) +
-            compiledCode +
-            outputWrapper.substring(pos + outputWrapperMarker.length());
-      } else {
-        throw new RuntimeException(
-            "output-wrapper did not contain placeholder: " +
-            outputWrapperMarker);
-      }
-    }
-    return compiledCode;
+
+    String sourceUrl = config.getOutputFile() == null ? "" : config.getOutputFile().toString();
+    String outputWrapper = config.getOutputAndGlobalScopeWrapper(true, sourceUrl);
+    return interpolateOutputWrapper(compiledCode, outputWrapper);
   }
 
   public String getRootModuleName() {
@@ -202,10 +191,27 @@ public final class Compilation {
     Preconditions.checkState(modules != null,
         "This compilation does not use modules");
 
-    StringBuilder builder = new StringBuilder();
+    JSModule module = nameToModule.get(moduleName);
+    String moduleCode = compiler.toSource(module);
+
+    String outputWrapper = getModuleOutputWrapper(moduleName, isDebugMode, moduleNameToUri);
+    String result = interpolateOutputWrapper(moduleCode, outputWrapper);
+
+    if (resetSourceMap) {
+      SourceMap sourceMap = compiler.getSourceMap();
+      if (sourceMap != null) sourceMap.reset();
+    }
+
+    return result;
+  }
+
+  String getModuleOutputWrapper(
+      String moduleName,
+      boolean isDebugMode,
+      Function<String, String> moduleNameToUri) {
+    StringBuilder rootModuleInfoBuilder = new StringBuilder();
     ModuleConfig moduleConfig = config.getModuleConfig();
     String rootModule = moduleConfig.getRootModule();
-
     boolean isRootModule = rootModule.equals(moduleName);
 
     if (isRootModule) {
@@ -226,7 +232,7 @@ public final class Compilation {
       // which (as much as it pains me) is why "var" is omitted.
       if (!moduleConfig.excludeModuleInfoFromRootModule()) {
         try {
-          appendRootModuleInfo(builder, isDebugMode, moduleNameToUri);
+          appendRootModuleInfo(rootModuleInfoBuilder, isDebugMode, moduleNameToUri);
         } catch (IOException e) {
           // This should not occur because data is being appended to an
           // in-memory StringBuilder rather than a file.
@@ -234,47 +240,31 @@ public final class Compilation {
         }
       }
     }
+    String sourceUrl = moduleNameToUri.apply(moduleName);
+    return rootModuleInfoBuilder.toString() +
+        config.getOutputAndGlobalScopeWrapper(isRootModule, sourceUrl);
+  }
 
-    JSModule module = nameToModule.get(moduleName);
-    String moduleCode = compiler.toSource(module);
-
-    boolean hasGlobalScopeName =
-        !Strings.isNullOrEmpty(config.getGlobalScopeName()) &&
-        config.getCompilationMode() != CompilationMode.WHITESPACE;
-
-    // Optionally wrap the module in an anonymous function, with the
-    // requisite wrapper to make it work.
-    if (hasGlobalScopeName) {
-      if (isRootModule) {
-        // Initialize the global scope in the root module.
-        builder.append(config.getGlobalScopeName());
-        builder.append("={};");
-      }
-      builder.append("(function(");
-      builder.append(Config.GLOBAL_SCOPE_NAME);
-      // Including a newline makes the offset into the source map easier to calculate.
-      builder.append("){\n");
-    }
-    builder.append(moduleCode);
-    if (hasGlobalScopeName) {
-      builder.append("})(");
-      builder.append(config.getGlobalScopeName());
-      builder.append(");");
+  private String interpolateOutputWrapper(String code, String outputWrapper) {
+    String outputWrapperMarker = config.getOutputWrapperMarker();
+    if (outputWrapper.equals(outputWrapperMarker)) {
+      return code;
     }
 
-    if (resetSourceMap) {
+    int pos = outputWrapper.indexOf(outputWrapperMarker);
+    if (pos >= 0) {
+      String prefix = outputWrapper.substring(0, pos);
+      String suffix = outputWrapper.substring(pos + outputWrapperMarker.length());
       SourceMap sourceMap = compiler.getSourceMap();
-      if (sourceMap != null) sourceMap.reset();
+      if (sourceMap != null) {
+        sourceMap.setWrapperPrefix(prefix);
+      }
+      return prefix + code + suffix;
+    } else {
+      throw new RuntimeException(
+          "output-wrapper did not contain placeholder: " +
+          outputWrapperMarker);
     }
-
-    // http://code.google.com/p/closure-library/issues/detail?id=196
-    // http://blog.getfirebug.com/2009/08/11/give-your-eval-a-name-with-sourceurl/
-    // non-root modules are loaded with eval, give it a sourceURL for better debugging
-    if (!isRootModule) {
-        builder.append("\n//@ sourceURL=" + moduleNameToUri.apply(moduleName));
-    }
-
-    return builder.toString();
   }
 
   public void appendRootModuleInfo(Appendable appendable, boolean isDebugMode,
