@@ -24,14 +24,20 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.template.soy.data.SanitizedContent;
 import com.google.template.soy.data.SanitizedContentOperator;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.shared.restricted.SoyPrintDirective;
+import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.AutoescapeMode;
+import com.google.template.soy.soytree.CallParamContentNode;
+import com.google.template.soy.soytree.LetContentNode;
 import com.google.template.soy.soytree.SoyFileNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
+import com.google.template.soy.soytree.SoyNode;
+import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
+import com.google.template.soy.soytree.SoyNode.RenderUnitNode;
 import com.google.template.soy.soytree.TemplateBasicNode;
 import com.google.template.soy.soytree.TemplateDelegateNode;
 import com.google.template.soy.soytree.TemplateNode;
-import com.google.template.soy.soytree.Visibility;
 
 import java.util.Collection;
 import java.util.List;
@@ -70,6 +76,9 @@ public final class ContextualAutoescaper {
   /** Maps print directive names to the content kinds they consume and produce. */
   private final Map<String, SanitizedContent.ContentKind> sanitizedContentOperators;
 
+  /** For reporting errors. */
+  private final ErrorReporter errorReporter;
+
   /** The conclusions drawn by the last {@link #rewrite}. */
   private Inferences inferences;
 
@@ -84,9 +93,11 @@ public final class ContextualAutoescaper {
    * @param soyDirectivesMap Map of all SoyPrintDirectives (name to directive) such that
    *     {@code soyDirectivesMap.get(key).getName().equals(key)} for all key in
    *     {@code soyDirectivesMap.keySet()}.
+   * @param errorReporter For reporting errors.
    */
   @Inject
-  ContextualAutoescaper(final Map<String, SoyPrintDirective> soyDirectivesMap) {
+  ContextualAutoescaper(
+      final Map<String, SoyPrintDirective> soyDirectivesMap, ErrorReporter errorReporter) {
     // Compute the set of directives that are escaping directives.
     this(ImmutableSet.copyOf(Collections2.filter(
         soyDirectivesMap.keySet(),
@@ -96,7 +107,8 @@ public final class ContextualAutoescaper {
             return soyDirectivesMap.get(directiveName).shouldCancelAutoescape();
           }
         })),
-        makeOperatorKindMap(soyDirectivesMap));
+        makeOperatorKindMap(soyDirectivesMap),
+        errorReporter);
   }
 
   /**
@@ -106,10 +118,12 @@ public final class ContextualAutoescaper {
    *     consume and produce.
    */
   public ContextualAutoescaper(
-      Iterable<? extends String> autoescapeCancellingDirectives,
-      Map<? extends String, ? extends SanitizedContent.ContentKind> sanitizedContentOperators) {
+      Iterable<String> autoescapeCancellingDirectives,
+      Map<String, SanitizedContent.ContentKind> sanitizedContentOperators,
+      ErrorReporter errorReporter) {
     this.autoescapeCancellingDirectives = ImmutableSet.copyOf(autoescapeCancellingDirectives);
     this.sanitizedContentOperators = ImmutableMap.copyOf(sanitizedContentOperators);
+    this.errorReporter = errorReporter;
   }
 
 
@@ -144,7 +158,7 @@ public final class ContextualAutoescaper {
     ImmutableList.Builder<SlicedRawTextNode> slicedRawTextNodesBuilder = ImmutableList.builder();
 
     Collection<TemplateNode> allTemplates = inferences.getAllTemplates();
-    TemplateCallGraph callGraph = new TemplateCallGraph(templatesByName);
+    TemplateCallGraph callGraph = new TemplateCallGraph(templatesByName, errorReporter);
     // Generate a call graph, creating a dummy root that calls all non-private template in
     // Context.PCDATA, and then type the minimal ancestor set needed to reach all contextual
     // templates whether private or not.
@@ -162,8 +176,12 @@ public final class ContextualAutoescaper {
           Context.getStartContextForContentKind(templateNode.getContentKind()) :
           Context.HTML_PCDATA;
       InferenceEngine.inferTemplateEndContext(
-          templateNode, startContext, inferences, autoescapeCancellingDirectives,
-          slicedRawTextNodesBuilder);
+          templateNode,
+          startContext,
+          inferences,
+          autoescapeCancellingDirectives,
+          slicedRawTextNodesBuilder,
+          errorReporter);
     }
 
     // Store inferences so that after processing, clients can access the output contexts for
@@ -173,8 +191,10 @@ public final class ContextualAutoescaper {
     // Store context boundaries so that later passes can make use of element/attribute boundaries.
     this.slicedRawTextNodes = slicedRawTextNodesBuilder.build();
 
+    new NonContextualTypedRenderUnitNodesVisitor().exec(fileSet);
+
     // Now that we know we don't fail with exceptions, apply the changes to the given files.
-    return new Rewriter(inferences, sanitizedContentOperators).rewrite(fileSet);
+    return new Rewriter(inferences, sanitizedContentOperators, errorReporter).rewrite(fileSet);
   }
 
 
@@ -187,13 +207,6 @@ public final class ContextualAutoescaper {
    */
   public Context getTemplateEndContext(String templateName) {
     return inferences.getTemplateEndContext(templateName);
-  }
-
-  /**
-   * For each print node, maps its node ID to the context in which it starts.
-   */
-  public Map<Integer, Context> getPrintNodeStartContexts() {
-    return inferences.getPrintNodeStartContexts();
   }
 
   /**
@@ -246,11 +259,15 @@ public final class ContextualAutoescaper {
       = new Predicate<TemplateNode>() {
         @Override
         public boolean apply(TemplateNode templateNode) {
-          // All strict templates should be inferred, since inference doesn't descend into strict
-          // templates.
+          // All strict and contextual. With strict, every template establishes its own context.
+          // With contextual, even if we don't see any callers in the call graph, it still might be
+          // called from another file.  This used to skip private templates, but private supposedly
+          // only means the template can only be called by other templates, and even then, it is
+          // not really enforced strongly by the Closure JS Compiler. (Prior to changing this,
+          // there were a few templates that weren't contextually autoescaped because they were
+          // private, but were still being called directly from JS.)
           return templateNode.getAutoescapeMode() == AutoescapeMode.STRICT ||
-              (templateNode.getAutoescapeMode() == AutoescapeMode.CONTEXTUAL &&
-                  templateNode.getVisibility() != Visibility.LEGACY_PRIVATE);
+              templateNode.getAutoescapeMode() == AutoescapeMode.CONTEXTUAL;
         }
   };
 
@@ -266,5 +283,55 @@ public final class ContextualAutoescaper {
       }
     }
     return operatorKindMapBuilder.build();
+  }
+
+  private final class NonContextualTypedRenderUnitNodesVisitor
+      extends AbstractSoyNodeVisitor<Void> {
+
+    NonContextualTypedRenderUnitNodesVisitor() {
+      super(ContextualAutoescaper.this.errorReporter);
+    }
+
+    @Override protected void visitTemplateNode(TemplateNode node) {
+      if (node.getAutoescapeMode() == AutoescapeMode.TRUE) {
+        visitChildren(node);
+      }
+    }
+
+    @Override protected void visitLetContentNode(LetContentNode node) {
+      visitRenderUnitNode(node);
+    }
+
+    @Override protected void visitCallParamContentNode(CallParamContentNode node) {
+      visitRenderUnitNode(node);
+    }
+
+    protected void visitRenderUnitNode(RenderUnitNode node) {
+      if (node.getContentKind() != null) {
+        // Not visiting children in this block.
+        // In processing a strict block (any block with a kind), contextualAutoescaper will
+        // automatically go into the children.
+        // Secondly, CheckEscapingSanityVisitor makes sure that all the children {let} or {param}
+        // blocks of a strict {let} or {param} block are also strict.
+        ImmutableList.Builder<SlicedRawTextNode> slicedRawTextNodesBuilder =
+            ImmutableList.builder();
+        InferenceEngine.inferStrictRenderUnitNode(
+            // As this visitor visits only non-contextual templates.
+            AutoescapeMode.TRUE,
+            node,
+            inferences,
+            autoescapeCancellingDirectives,
+            slicedRawTextNodesBuilder,
+            errorReporter);
+      } else {
+        visitChildren(node);
+      }
+    }
+
+    @Override protected void visitSoyNode(SoyNode node) {
+      if (node instanceof ParentSoyNode<?>) {
+        visitChildren((ParentSoyNode<?>) node);
+      }
+    }
   }
 }

@@ -18,17 +18,21 @@ package com.google.template.soy.soytree;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.base.internal.IdGenerator;
+import com.google.template.soy.basetree.Node;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
+import com.google.template.soy.exprtree.ExprNode;
+import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
 import com.google.template.soy.soytree.SoyNode.ExprHolderNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.annotation.Nullable;
-
 
 /**
  * Shared utilities for the 'soytree' package.
@@ -50,7 +54,7 @@ public class SoytreeUtils {
    * @param classObject The class whose instances to search for, including subclasses.
    * @return The nodes in the order they appear.
    */
-  public static <T extends SoyNode> List<T> getAllNodesOfType(
+  public static <T extends Node> List<T> getAllNodesOfType(
       SoyNode rootSoyNode, final Class<T> classObject) {
     return getAllNodesOfType(rootSoyNode, classObject, true);
   }
@@ -66,23 +70,46 @@ public class SoytreeUtils {
    *     more nodes of the given type.
    * @return The nodes in the order they appear.
    */
-  public static <T extends SoyNode> List<T> getAllNodesOfType(
+  public static <T extends Node> List<T> getAllNodesOfType(
       SoyNode rootSoyNode, final Class<T> classObject,
       final boolean doSearchSubtreesOfMatchedNodes) {
 
     final ImmutableList.Builder<T> matchedNodesBuilder = ImmutableList.builder();
 
-    AbstractSoyNodeVisitor<Void> visitor = new AbstractSoyNodeVisitor<Void>() {
-      @SuppressWarnings("unchecked") // Casting safe after isAssignableFrom check.
-      @Override public void visitSoyNode(SoyNode soyNode) {
-        if (classObject.isAssignableFrom(soyNode.getClass())) {
-          matchedNodesBuilder.add((T) soyNode);
-          if (! doSearchSubtreesOfMatchedNodes) {
+    final AbstractExprNodeVisitor<Void> exprVisitor =
+        new AbstractExprNodeVisitor<Void>(ExplodingErrorReporter.get()) {
+          @Override protected void visitExprNode(ExprNode exprNode) {
+            if (classObject.isInstance(exprNode)) {
+              matchedNodesBuilder.add(classObject.cast(exprNode));
+              if (!doSearchSubtreesOfMatchedNodes) {
+                return;
+              }
+            }
+            if (exprNode instanceof ParentExprNode) {
+              visitChildren((ParentExprNode) exprNode);
+            }
+          }
+        };
+
+    AbstractSoyNodeVisitor<Void> visitor = new AbstractSoyNodeVisitor<Void>(
+        ExplodingErrorReporter.get()) {
+      @Override
+      public void visitSoyNode(SoyNode soyNode) {
+        if (classObject.isInstance(soyNode)) {
+          matchedNodesBuilder.add(classObject.cast(soyNode));
+          if (!doSearchSubtreesOfMatchedNodes) {
             return;
           }
         }
         if (soyNode instanceof ParentSoyNode<?>) {
           visitChildren((ParentSoyNode<?>) soyNode);
+        }
+        if (ExprNode.class.isAssignableFrom(classObject) && soyNode instanceof ExprHolderNode) {
+          for (ExprUnion exprUnion : ((ExprHolderNode) soyNode).getAllExprUnions()) {
+            if (exprUnion.getExpr() != null) {
+              exprVisitor.exec(exprUnion.getExpr());
+            }
+          }
         }
       }
     };
@@ -105,11 +132,14 @@ public class SoytreeUtils {
    * @param <R> The ExprNode visitor's return type.
    * @param node The root of the subtree to visit all expressions in.
    * @param exprNodeVisitor The visitor to execute on all expressions.
+   * @param errorReporter For reporting errors during the visit.
    */
   public static <R> void execOnAllV2Exprs(
-      SoyNode node, AbstractExprNodeVisitor<R> exprNodeVisitor) {
-
-    execOnAllV2ExprsShortcircuitably(node, exprNodeVisitor, null);
+      SoyNode node,
+      AbstractExprNodeVisitor<R> exprNodeVisitor,
+      ErrorReporter errorReporter) {
+    execOnAllV2ExprsShortcircuitably(
+        node, exprNodeVisitor, null /* shortcircuiter */, errorReporter);
   }
 
 
@@ -126,12 +156,15 @@ public class SoytreeUtils {
    * @param node The root of the subtree to visit all expressions in.
    * @param exprNodeVisitor The visitor to execute on all expressions.
    * @param shortcircuiter The Shortcircuiter to tell us when to shortcircuit the pass.
+   * @param errorReporter For reporting errors during the visit.
    * @see Shortcircuiter
    */
   public static <R> void execOnAllV2ExprsShortcircuitably(
-      SoyNode node, AbstractExprNodeVisitor<R> exprNodeVisitor, Shortcircuiter<R> shortcircuiter) {
-
-    (new VisitAllV2ExprsVisitor<R>(exprNodeVisitor, shortcircuiter)).exec(node);
+      SoyNode node,
+      AbstractExprNodeVisitor<R> exprNodeVisitor,
+      Shortcircuiter<R> shortcircuiter,
+      ErrorReporter errorReporter) {
+    new VisitAllV2ExprsVisitor<>(exprNodeVisitor, shortcircuiter, errorReporter).exec(node);
   }
 
 
@@ -159,14 +192,17 @@ public class SoytreeUtils {
    *
    * @param <R> The ExprNode visitor's return type.
    */
-  private static class VisitAllV2ExprsVisitor<R> extends AbstractSoyNodeVisitor<R> {
+  private static final class VisitAllV2ExprsVisitor<R> extends AbstractSoyNodeVisitor<R> {
 
     private final AbstractExprNodeVisitor<R> exprNodeVisitor;
 
     private final Shortcircuiter<R> shortcircuiter;
 
-    public VisitAllV2ExprsVisitor(
-        AbstractExprNodeVisitor<R> exprNodeVisitor, @Nullable Shortcircuiter<R> shortcircuiter) {
+    private VisitAllV2ExprsVisitor(
+        AbstractExprNodeVisitor<R> exprNodeVisitor,
+        @Nullable Shortcircuiter<R> shortcircuiter,
+        ErrorReporter errorReporter) {
+      super(errorReporter);
       this.exprNodeVisitor = exprNodeVisitor;
       this.shortcircuiter = shortcircuiter;
     }
@@ -254,11 +290,7 @@ public class SoytreeUtils {
       List<T> origNodes, IdGenerator nodeIdGen) {
 
     Preconditions.checkNotNull(origNodes);
-    if (origNodes.size() == 0) {
-      return Lists.newArrayListWithCapacity(0);
-    }
-
-    List<T> clones = Lists.newArrayListWithCapacity(origNodes.size());
+    List<T> clones = new ArrayList<>(origNodes.size());
     for (T origNode : origNodes) {
       @SuppressWarnings("unchecked")
       T clone = (T) origNode.clone();
@@ -282,6 +314,7 @@ public class SoytreeUtils {
      * @param nodeIdGen The generator for new node ids.
      */
     public GenNewIdsVisitor(IdGenerator nodeIdGen) {
+      super(ExplodingErrorReporter.get());
       this.nodeIdGen = nodeIdGen;
     }
 
@@ -291,5 +324,16 @@ public class SoytreeUtils {
         visitChildren((ParentSoyNode<?>) node);
       }
     }
+  }
+
+
+  /** Returns true if {@code node} is a descendant of {@code ancestor}. */
+  public static boolean isDescendantOf(SoyNode node, SoyNode ancestor) {
+    for (; node != null; node = node.getParent()) {
+      if (ancestor == node) {
+        return true;
+      }
+    }
+    return false;
   }
 }

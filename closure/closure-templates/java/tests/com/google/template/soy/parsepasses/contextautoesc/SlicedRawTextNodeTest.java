@@ -16,10 +16,15 @@
 
 package com.google.template.soy.parsepasses.contextautoesc;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableMap;
-import com.google.template.soy.shared.internal.SharedTestUtils;
+import com.google.template.soy.SoyFileSetParserBuilder;
+import com.google.template.soy.base.SourceLocation;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.shared.restricted.SoyPrintDirective;
 import com.google.template.soy.soytree.RawTextNode;
 import com.google.template.soy.soytree.SoyFileNode;
@@ -31,9 +36,8 @@ import junit.framework.TestCase;
 import java.util.List;
 import java.util.Map;
 
-
 /**
- * Test for {@link SLicedRawTextNode}.
+ * Test for {@link SlicedRawTextNode}.
  *
  */
 public final class SlicedRawTextNodeTest extends TestCase {
@@ -41,7 +45,7 @@ public final class SlicedRawTextNodeTest extends TestCase {
   /** Custom print directives used in tests below. */
   private static final Map<String, SoyPrintDirective> SOY_PRINT_DIRECTIVES = ImmutableMap.of();
 
-  public final void testTrivialTemplate() throws Exception {
+  public void testTrivialTemplate() throws Exception {
     assertInjected(
         join(
             "{template foo}\n",
@@ -53,7 +57,7 @@ public final class SlicedRawTextNodeTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testOneScriptWithBody() throws Exception {
+  public void testOneScriptWithBody() throws Exception {
     assertInjected(
         join(
             "{template foo}\n",
@@ -65,7 +69,7 @@ public final class SlicedRawTextNodeTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testOneSrcedScript() throws Exception {
+  public void testOneSrcedScript() throws Exception {
     assertInjected(
         join(
             "{template foo}\n",
@@ -77,7 +81,7 @@ public final class SlicedRawTextNodeTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testManyScripts() throws Exception {
+  public void testManyScripts() throws Exception {
     assertInjected(
         join(
             "{template foo}\n",
@@ -97,7 +101,7 @@ public final class SlicedRawTextNodeTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testFakeScripts() throws Exception {
+  public void testFakeScripts() throws Exception {
     assertInjected(
         join(
             "{template foo}\n",
@@ -121,7 +125,7 @@ public final class SlicedRawTextNodeTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testPrintDirectiveInScriptTag() throws Exception {
+  public void testPrintDirectiveInScriptTag() throws Exception {
     assertInjected(
         join(
             "{template foo}\n",
@@ -135,7 +139,7 @@ public final class SlicedRawTextNodeTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testContextAssumptionsUpheld() throws Exception {
+  public void testContextAssumptionsUpheld() throws Exception {
     try {
       parseAndInjectIntoScriptTags(
                                    join(
@@ -144,28 +148,25 @@ public final class SlicedRawTextNodeTest extends TestCase {
                                         "{/template}"),
                                    " title='unclosed");
     } catch (SoyAutoescapeException ex) {
-      assertEquals(
-          "In file no-path:4, template foo:"
+      assertThat(ex).hasMessage("In file no-path:4:1, template foo:"
           + " Inserting ` title='unclosed` would cause text node to end in context"
           + " (Context HTML_NORMAL_ATTR_VALUE SCRIPT PLAIN_TEXT SINGLE_QUOTE) instead of"
-          + " (Context HTML_PCDATA)",
-          ex.getMessage());
+          + " (Context HTML_PCDATA)");
       return;
     }
     fail("Expected SoyAutoescapeException");
   }
 
-  public final void testMergeAdjacentSlicesWithSameContext() throws Exception {
-    String rawText = "Hello, <World>!";
+  public void testMergeAdjacentSlicesWithSameContext() throws Exception {
     // Insert slices in a way that we end up with multiple adjacent slices with the
     // same context arranged thus:
     // Index   0 1 2 3 4 5 6 7 8 9 A B C D E F
     // Char    H e l l o ,   < W o r l d > !
     // Slice   0 0 0 0 1 1 1 2 2 2 2 3 5 5 6
     // Context a a a a a a a b b b b b b b a
-    RawTextNode rawTextNode = new RawTextNode(0, "Hello, <World>!");
+    RawTextNode rawTextNode = new RawTextNode(0, "Hello, <World>!", SourceLocation.UNKNOWN);
     Context a = Context.HTML_PCDATA;
-    Context b = Context.HTML_TAG_NAME;
+    Context b = Context.HTML_PCDATA.derive(Context.State.HTML_TAG_NAME);
     SlicedRawTextNode slicedNode = new SlicedRawTextNode(rawTextNode, a);
     slicedNode.insertSlice(0, a, 4);  // "Hell"
     slicedNode.insertSlice(1, a, 3);  // "o, "
@@ -176,25 +177,23 @@ public final class SlicedRawTextNodeTest extends TestCase {
     slicedNode.insertSlice(6, a, 1);  // "!"
     slicedNode.setEndContext(a);
 
-    assertEquals(7, slicedNode.getSlices().size());
-    assertEquals(
-        "\"Hell\"#0:HTML_PCDATA, "
-        + "\"o, \"#0:HTML_PCDATA, "
-        + "\"<Wor\"#0:HTML_TAG_NAME, "
-        + "\"l\"#0:HTML_TAG_NAME, "
-        + "\"\"#0:HTML_TAG_NAME, "
-        + "\"d>\"#0:HTML_TAG_NAME, "
-        + "\"!\"#0:HTML_PCDATA",
-        slicesToString(slicedNode.getSlices()));
+    assertThat(slicedNode.getSlices()).hasSize(7);
+    assertThat(slicesToString(slicedNode.getSlices()))
+        .isEqualTo("\"Hell\"#0:HTML_PCDATA, "
+            + "\"o, \"#0:HTML_PCDATA, "
+            + "\"<Wor\"#0:HTML_TAG_NAME, "
+            + "\"l\"#0:HTML_TAG_NAME, "
+            + "\"\"#0:HTML_TAG_NAME, "
+            + "\"d>\"#0:HTML_TAG_NAME, "
+            + "\"!\"#0:HTML_PCDATA");
 
     slicedNode.mergeAdjacentSlicesWithSameContext();
 
-    assertEquals(3, slicedNode.getSlices().size());
-    assertEquals(
-        "\"Hello, \"#0:HTML_PCDATA, "
-        + "\"<World>\"#0:HTML_TAG_NAME, "
-        + "\"!\"#0:HTML_PCDATA",
-        slicesToString(slicedNode.getSlices()));
+    assertThat(slicedNode.getSlices()).hasSize(3);
+    assertThat(slicesToString(slicedNode.getSlices()))
+        .isEqualTo("\"Hello, \"#0:HTML_PCDATA, "
+            + "\"<World>\"#0:HTML_TAG_NAME, "
+            + "\"!\"#0:HTML_PCDATA");
   }
 
   /**
@@ -220,9 +219,13 @@ public final class SlicedRawTextNodeTest extends TestCase {
 
   private SoyFileSetNode parseAndInjectIntoScriptTags(String input, String toInject) {
     String namespace = "{namespace ns autoescape=\"deprecated-contextual\"}\n\n";
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(namespace + input);
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(namespace + input)
+        .errorReporter(boom)
+        .parse();
 
-    ContextualAutoescaper contextualAutoescaper = new ContextualAutoescaper(SOY_PRINT_DIRECTIVES);
+    ContextualAutoescaper contextualAutoescaper
+        = new ContextualAutoescaper(SOY_PRINT_DIRECTIVES, boom);
     List<TemplateNode> extras = contextualAutoescaper.rewrite(soyTree);
 
     SoyFileNode file = soyTree.getChild(soyTree.numChildren() - 1);
@@ -249,7 +252,7 @@ public final class SlicedRawTextNodeTest extends TestCase {
       output = output.substring(output.indexOf('}') + 1).trim();
     }
 
-    assertEquals(expectedOutput, output);
+    assertThat(output).isEqualTo(expectedOutput);
   }
 
   private static void insertTextAtEndOfScriptOpenTag(
@@ -280,7 +283,7 @@ public final class SlicedRawTextNodeTest extends TestCase {
            SlicedRawTextNode.find(slicedRawTextNodes, null, inScriptTag, inScriptBody)) {
       String rawText = slice.getRawText();
       int rawTextLen = rawText.length();
-      assertEquals('>', rawText.charAt(rawTextLen - 1));
+      assertThat(rawText.charAt(rawTextLen - 1)).isEqualTo('>');
       int insertionPoint = rawTextLen - 1;
       // Do not insert in the middle of a "/>" tag terminator.
       if (insertionPoint - 1 >= 0 && rawText.charAt(insertionPoint - 1) == '/') {

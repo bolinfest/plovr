@@ -18,6 +18,7 @@ package com.google.template.soy.exprtree;
 
 import com.google.template.soy.basetree.AbstractReturningNodeVisitor;
 import com.google.template.soy.basetree.ParentNode;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.ExprNode.OperatorNode;
 import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
 import com.google.template.soy.exprtree.ExprNode.PrimitiveNode;
@@ -40,7 +41,6 @@ import com.google.template.soy.exprtree.OperatorNodes.PlusOpNode;
 import com.google.template.soy.exprtree.OperatorNodes.TimesOpNode;
 
 import java.util.List;
-
 
 /**
  * Abstract base class for all ExprNode visitors. A visitor is basically a function implemented for
@@ -72,12 +72,15 @@ import java.util.List;
 public abstract class AbstractReturningExprNodeVisitor<R>
     extends AbstractReturningNodeVisitor<ExprNode, R> {
 
+  protected AbstractReturningExprNodeVisitor(ErrorReporter errorReporter) {
+    super(errorReporter);
+  }
 
   @Override protected R visit(ExprNode node) {
 
     switch (node.getKind()) {
 
-      case EXPR_ROOT_NODE: return visitExprRootNode((ExprRootNode<?>) node);
+      case EXPR_ROOT_NODE: return visitExprRootNode((ExprRootNode) node);
 
       case NULL_NODE: return visitNullNode((NullNode) node);
       case BOOLEAN_NODE: return visitBooleanNode((BooleanNode) node);
@@ -132,26 +135,11 @@ public abstract class AbstractReturningExprNodeVisitor<R>
   }
 
 
-  /**
-   * Helper to visit all the children of a node, in order.
-   *
-   * This method differs from {@code visitChildren} in that we are iterating through a copy of the
-   * children. Thus, concurrent modification of the list of children is allowed.
-   *
-   * @param node The parent node whose children to visit.
-   * @return The list of return values from visiting the children.
-   * @see #visitChildren
-   */
-  protected List<R> visitChildrenAllowingConcurrentModification(ParentExprNode node) {
-    return visitChildrenAllowingConcurrentModification((ParentNode<ExprNode>) node);
-  }
-
-
   // -----------------------------------------------------------------------------------------------
   // Implementations for misc nodes.
 
 
-  protected R visitExprRootNode(ExprRootNode<?> node) {
+  protected R visitExprRootNode(ExprRootNode node) {
     return visitExprNode(node);
   }
 

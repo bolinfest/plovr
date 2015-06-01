@@ -16,7 +16,12 @@
 
 package com.google.template.soy.sharedpasses;
 
-import com.google.template.soy.shared.internal.SharedTestUtils;
+import static com.google.common.truth.Truth.assertThat;
+
+import com.google.template.soy.SoyFileSetParserBuilder;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
+import com.google.template.soy.shared.SharedTestUtils;
 import com.google.template.soy.soytree.PrintNode;
 import com.google.template.soy.soytree.RawTextNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
@@ -24,12 +29,11 @@ import com.google.template.soy.soytree.TemplateNode;
 
 import junit.framework.TestCase;
 
-
 /**
  * Unit tests for RemoveHtmlCommentsVisitor.
  *
  */
-public class RemoveHtmlCommentsVisitorTest extends TestCase {
+public final class RemoveHtmlCommentsVisitorTest extends TestCase {
 
 
   public void testRemoveHtmlComments() {
@@ -48,21 +52,24 @@ public class RemoveHtmlCommentsVisitorTest extends TestCase {
         "  <!-- comment 5 -->\n" +
         "{/template}\n";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(
-        false /* doRunInitialParsingPasses */, testFileContent);
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(testFileContent)
+        .errorReporter(boom)
+        .doRunInitialParsingPasses(false)
+        .parse();
     TemplateNode template = (TemplateNode) SharedTestUtils.getNode(soyTree);
 
     // Before.
-    assertEquals(7, template.numChildren());
+    assertThat(template.numChildren()).isEqualTo(7);
 
-    (new RemoveHtmlCommentsVisitor()).exec(soyTree);
+    new RemoveHtmlCommentsVisitor(boom).exec(soyTree);
 
     // After.
-    assertEquals(4, template.numChildren());
-    assertEquals("$boo", ((PrintNode) template.getChild(0)).getExprText());
-    assertEquals("Blah blah.", ((RawTextNode) template.getChild(1)).getRawText());
-    assertEquals("$boo", ((PrintNode) template.getChild(2)).getExprText());
-    assertEquals("$boo", ((PrintNode) template.getChild(3)).getExprText());
+    assertThat(template.numChildren()).isEqualTo(4);
+    assertThat(((PrintNode) template.getChild(0)).getExprText()).isEqualTo("$boo");
+    assertThat(((RawTextNode) template.getChild(1)).getRawText()).isEqualTo("Blah blah.");
+    assertThat(((PrintNode) template.getChild(2)).getExprText()).isEqualTo("$boo");
+    assertThat(((PrintNode) template.getChild(3)).getExprText()).isEqualTo("$boo");
   }
 
 }

@@ -21,6 +21,7 @@ import com.google.common.collect.Lists;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.basetree.SyntaxVersion;
 import com.google.template.soy.basetree.SyntaxVersionBound;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
@@ -37,7 +38,6 @@ import com.google.template.soy.soytree.SoySyntaxExceptionUtils;
 
 import java.util.List;
 
-
 /**
  * Visitor for asserting that all the nodes in a parse tree or subtree conform to the user-declared
  * syntax version.
@@ -49,7 +49,7 @@ import java.util.List;
  * user-declared syntax version.
  *
  */
-public class ReportSyntaxVersionErrorsVisitor extends AbstractSoyNodeVisitor<Void> {
+public final class ReportSyntaxVersionErrorsVisitor extends AbstractSoyNodeVisitor<Void> {
 
 
   /** The required minimum syntax version to check for. */
@@ -67,8 +67,11 @@ public class ReportSyntaxVersionErrorsVisitor extends AbstractSoyNodeVisitor<Voi
    * @param requiredSyntaxVersion The required minimum syntax version to check for.
    * @param isDeclared True if the required syntax version that we're checking for is user-declared.
    *     False if it is inferred.
+   * @param errorReporter For reporting errors.
    */
-  public ReportSyntaxVersionErrorsVisitor(SyntaxVersion requiredSyntaxVersion, boolean isDeclared) {
+  public ReportSyntaxVersionErrorsVisitor(
+      SyntaxVersion requiredSyntaxVersion, boolean isDeclared, ErrorReporter errorReporter) {
+    super(errorReporter);
     this.requiredSyntaxVersion = requiredSyntaxVersion;
     this.isDeclared = isDeclared;
     this.syntaxExceptions = null;
@@ -196,24 +199,25 @@ public class ReportSyntaxVersionErrorsVisitor extends AbstractSoyNodeVisitor<Voi
   // -----------------------------------------------------------------------------------------------
 
 
-  private class ReportSyntaxVersionErrorsExprVisitor extends AbstractExprNodeVisitor<Void> {
+  private final class ReportSyntaxVersionErrorsExprVisitor extends AbstractExprNodeVisitor<Void> {
 
 
     /** The ExprHolderNode that this visitor was created for. */
     private final ExprHolderNode exprHolder;
 
     /** The root of the expression that we're traversing (during a pass). */
-    private ExprRootNode<?> exprRoot;
+    private ExprRootNode exprRoot;
 
 
-    public ReportSyntaxVersionErrorsExprVisitor(ExprHolderNode exprHolder) {
+    ReportSyntaxVersionErrorsExprVisitor(ExprHolderNode exprHolder) {
+      super(ReportSyntaxVersionErrorsVisitor.this.errorReporter);
       this.exprHolder = exprHolder;
     }
 
 
     @Override public Void exec(ExprNode node) {
 
-      Preconditions.checkArgument(node instanceof ExprRootNode<?>);
+      Preconditions.checkArgument(node instanceof ExprRootNode);
       exprRoot = (ExprRootNode) node;
       visit(node);
       exprRoot = null;

@@ -18,6 +18,7 @@ package com.google.template.soy.exprtree;
 
 import com.google.template.soy.basetree.AbstractNodeVisitor;
 import com.google.template.soy.basetree.ParentNode;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.ExprNode.OperatorNode;
 import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
 import com.google.template.soy.exprtree.ExprNode.PrimitiveNode;
@@ -38,7 +39,6 @@ import com.google.template.soy.exprtree.OperatorNodes.NullCoalescingOpNode;
 import com.google.template.soy.exprtree.OperatorNodes.OrOpNode;
 import com.google.template.soy.exprtree.OperatorNodes.PlusOpNode;
 import com.google.template.soy.exprtree.OperatorNodes.TimesOpNode;
-
 
 /**
  * Abstract base class for all ExprNode visitors. A visitor is basically a function implemented for
@@ -69,12 +69,15 @@ import com.google.template.soy.exprtree.OperatorNodes.TimesOpNode;
  */
 public abstract class AbstractExprNodeVisitor<R> extends AbstractNodeVisitor<ExprNode, R> {
 
+  public AbstractExprNodeVisitor(ErrorReporter errorReporter) {
+    super(errorReporter);
+  }
 
-  @Override protected void visit(ExprNode node) {
+  @Override protected final void visit(ExprNode node) {
 
     switch (node.getKind()) {
 
-      case EXPR_ROOT_NODE: visitExprRootNode((ExprRootNode<?>) node); break;
+      case EXPR_ROOT_NODE: visitExprRootNode((ExprRootNode) node); break;
 
       case NULL_NODE: visitNullNode((NullNode) node); break;
       case BOOLEAN_NODE: visitBooleanNode((BooleanNode) node); break;
@@ -117,7 +120,6 @@ public abstract class AbstractExprNodeVisitor<R> extends AbstractNodeVisitor<Exp
     }
   }
 
-
   /**
    * Helper to visit all the children of a node, in order.
    * @param node The parent node whose children to visit.
@@ -146,7 +148,7 @@ public abstract class AbstractExprNodeVisitor<R> extends AbstractNodeVisitor<Exp
   // Implementations for misc nodes.
 
 
-  protected void visitExprRootNode(ExprRootNode<?> node) {
+  protected void visitExprRootNode(ExprRootNode node) {
     visitExprNode(node);
   }
 

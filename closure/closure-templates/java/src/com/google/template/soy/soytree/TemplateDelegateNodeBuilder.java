@@ -19,11 +19,13 @@ package com.google.template.soy.soytree;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.base.internal.BaseUtils;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.data.internalutils.NodeContentKinds;
-import com.google.template.soy.exprparse.ExprParseUtils;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.exprparse.ExpressionParser;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.exprtree.GlobalNode;
@@ -37,7 +39,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 
 /**
  * Builder for TemplateDelegateNode.
@@ -68,7 +69,7 @@ public class TemplateDelegateNodeBuilder extends TemplateNodeBuilder {
   private String delTemplateVariant = null;
 
   /** Expression that will evaluate to the value of a delegate template variant. */
-  private ExprRootNode<?> delTemplateVariantExpr = null;
+  private ExprRootNode delTemplateVariantExpr = null;
 
   /** The delegate template key (name and variant). */
   private DelTemplateKey delTemplateKey;
@@ -78,17 +79,25 @@ public class TemplateDelegateNodeBuilder extends TemplateNodeBuilder {
 
   /**
    * @param soyFileHeaderInfo Info from the containing Soy file's header declarations.
+   * @param sourceLocation The template's source location.
    */
-  public TemplateDelegateNodeBuilder(SoyFileHeaderInfo soyFileHeaderInfo) {
-    super(soyFileHeaderInfo, null);
+  public TemplateDelegateNodeBuilder(
+      SoyFileHeaderInfo soyFileHeaderInfo,
+      SourceLocation sourceLocation,
+      ErrorReporter errorReporter) {
+    super(soyFileHeaderInfo, sourceLocation, errorReporter, null /* typeRegistry */);
   }
 
   /**
    * @param soyFileHeaderInfo Info from the containing Soy file's header declarations.
+   * @param sourceLocation The template's source location.
    */
   public TemplateDelegateNodeBuilder(
-      SoyFileHeaderInfo soyFileHeaderInfo, SoyTypeRegistry typeRegistry) {
-    super(soyFileHeaderInfo, typeRegistry);
+      SoyFileHeaderInfo soyFileHeaderInfo,
+      SourceLocation sourceLocation,
+      ErrorReporter errorReporter,
+      SoyTypeRegistry typeRegistry) {
+    super(soyFileHeaderInfo, sourceLocation, errorReporter, typeRegistry);
   }
 
   @Override public TemplateDelegateNodeBuilder setId(int id) {
@@ -111,26 +120,26 @@ public class TemplateDelegateNodeBuilder extends TemplateNodeBuilder {
           "Invalid delegate template name \"" + delTemplateName + "\".");
     }
 
-    Map<String, String> attributes = ATTRIBUTES_PARSER.parse(matcher.group(2).trim());
+    Map<String, String> attributes = ATTRIBUTES_PARSER.parse(
+        matcher.group(2).trim(), errorReporter, sourceLocation);
 
     String variantExprText = attributes.get("variant");
     if (variantExprText == null) {
       this.delTemplateVariant = "";
     } else {
-      ExprRootNode<?> variantExpr = ExprParseUtils.parseExprElseThrowSoySyntaxException(
-          variantExprText,
-          String.format("Invalid variant expression \"%s\" in 'deltemplate'.", variantExprText));
-      ExprNode child = variantExpr.getChild(0);
-      if (child instanceof StringNode) {
+      ExprNode variantExpr = new ExpressionParser(variantExprText, sourceLocation, errorReporter)
+          .parseExpression();
+      if (variantExpr instanceof StringNode) {
         // A string literal is being used as template variant, so the expression value can
         // immediately be evaluated.
-        this.delTemplateVariant = ((StringNode) child).getValue();
+        this.delTemplateVariant = ((StringNode) variantExpr).getValue();
         TemplateDelegateNode.verifyVariantName(delTemplateVariant);
-      } else if (child instanceof GlobalNode) {
+      } else if (variantExpr instanceof GlobalNode) {
         // A global expression was used as template variant. The expression will be stored and later
         // resolved into a value when the global expressions are resolved.
-        delTemplateVariantExpr = variantExpr;
-        this.templateNameForUserMsgs = delTemplateName + ":" + (((GlobalNode) child).getName());
+        delTemplateVariantExpr = new ExprRootNode(variantExpr);
+        this.templateNameForUserMsgs = delTemplateName + ":"
+            + (((GlobalNode) variantExpr).getName());
       } else {
         throw SoySyntaxException.createWithoutMetaInfo(
             "Invalid variant expression \"" + variantExprText + "\" in 'deltemplate'" +
@@ -141,7 +150,7 @@ public class TemplateDelegateNodeBuilder extends TemplateNodeBuilder {
     if (delTemplateVariant != null) {
       // The variant value is already available (i.e. we either have a string literal or no variant
       // was defined). In these cases we can already define a template key.
-      this.delTemplateKey = new DelTemplateKey(delTemplateName, delTemplateVariant);
+      this.delTemplateKey = DelTemplateKey.create(delTemplateName, delTemplateVariant);
       this.templateNameForUserMsgs = delTemplateKey.toString();
     }
 
@@ -188,7 +197,7 @@ public class TemplateDelegateNodeBuilder extends TemplateNodeBuilder {
 
     this.delTemplateName = delTemplateName;
     this.delTemplateVariant = delTemplateVariant;
-    this.delTemplateKey = new DelTemplateKey(delTemplateName, delTemplateVariant);
+    this.delTemplateKey = DelTemplateKey.create(delTemplateName, delTemplateVariant);
     this.templateNameForUserMsgs = delTemplateKey.toString();
     this.delPriority = delPriority;
     setAutoescapeInfo(autoescapeMode, contentKind);
@@ -223,6 +232,8 @@ public class TemplateDelegateNodeBuilder extends TemplateNodeBuilder {
     // the intended usage of the Soy compiler, but some projects use it this way). Note that the
     // node id is also included in the generated name, which is already sufficient for guaranteeing
     // unique names in the case where all Soy files are compiled together at once.
+    // TODO(lukes): why calculate a hash? just cat the bits together to get a
+    // reasonable and unique string?  is this for client obfuscation?
     String delPackageAndDelTemplateStr =
         (soyFileHeaderInfo.delPackageName == null ? "" : soyFileHeaderInfo.delPackageName) +
             "~" + delTemplateName + "~" + delTemplateVariant;

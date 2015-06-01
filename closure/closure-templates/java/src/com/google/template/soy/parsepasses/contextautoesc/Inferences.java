@@ -23,8 +23,10 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.template.soy.base.internal.IdGenerator;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.shared.restricted.SoyPrintDirective;
 import com.google.template.soy.soytree.CallNode;
+import com.google.template.soy.soytree.MsgFallbackGroupNode;
 import com.google.template.soy.soytree.PrintDirectiveNode;
 import com.google.template.soy.soytree.PrintNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
@@ -196,7 +198,10 @@ final class Inferences {
    */
   public void setEscapingDirectives(
       SoyNode node, Context startContext, List<EscapingMode> escapingModes) {
-    Preconditions.checkArgument((node instanceof PrintNode) || (node instanceof CallNode),
+    Preconditions.checkArgument(
+        (node instanceof PrintNode)
+            || (node instanceof CallNode)
+            || (node instanceof MsgFallbackGroupNode),
         "Escaping directives may only be set for {print} or {call} nodes");
     int id = node.getId();
     idToStartContext.put(id, startContext);
@@ -262,18 +267,17 @@ final class Inferences {
       boolean useAttrStyleForName = tn.getCommandText().contains("name=");
 
       if (tn instanceof TemplateBasicNode) {
-        TemplateBasicNode tbn = (TemplateBasicNode) tn;
         String derivedPartialName = (tn.getPartialTemplateName() != null) ?
             derivedName.substring(soyFileHeaderInfo.namespace.length()) : null;
-        clone =
-            (new TemplateBasicNodeBuilder(soyFileHeaderInfo))
-                .setId(cloneId)
-                .setCmdTextInfo(
-                    derivedName, derivedPartialName, useAttrStyleForName, tbn.isOverride(),
-                    tn.getVisibility(), tn.getAutoescapeMode(), tn.getContentKind(),
-                    tn.getRequiredCssNamespaces())
-                .setSoyDoc(tn.getSoyDoc())
-                .build();
+        clone = new TemplateBasicNodeBuilder(
+            soyFileHeaderInfo, tn.getSourceLocation(), ExplodingErrorReporter.get())
+            .setId(cloneId)
+            .setCmdTextInfo(
+                derivedName, derivedPartialName, useAttrStyleForName,
+                tn.getVisibility(), tn.getAutoescapeMode(), tn.getContentKind(),
+                tn.getRequiredCssNamespaces())
+            .setSoyDoc(tn.getSoyDoc())
+            .build();
 
         if (! (derivedName.equals(clone.getTemplateName()) &&
             Objects.equals(derivedPartialName, clone.getPartialTemplateName()))) {
@@ -282,14 +286,14 @@ final class Inferences {
 
       } else if (tn instanceof TemplateDelegateNode) {
         TemplateDelegateNode tdn = (TemplateDelegateNode) tn;
-        clone =
-            (new TemplateDelegateNodeBuilder(soyFileHeaderInfo))
-                .setId(cloneId)
-                .setCmdTextInfo(
-                    derivedName, tdn.getDelTemplateVariant(), tdn.getDelPriority(),
-                    tn.getAutoescapeMode(), tn.getContentKind(), tn.getRequiredCssNamespaces())
-                .setSoyDoc(tn.getSoyDoc())
-                .build();
+        clone = new TemplateDelegateNodeBuilder(
+            soyFileHeaderInfo, tn.getSourceLocation(), ExplodingErrorReporter.get())
+            .setId(cloneId)
+            .setCmdTextInfo(
+                derivedName, tdn.getDelTemplateVariant(), tdn.getDelPriority(),
+                tn.getAutoescapeMode(), tn.getContentKind(), tn.getRequiredCssNamespaces())
+            .setSoyDoc(tn.getSoyDoc())
+            .build();
         if (! (derivedName.equals(((TemplateDelegateNode) clone).getDelTemplateName()))) {
           throw new AssertionError();
         }
@@ -304,7 +308,6 @@ final class Inferences {
       while (tnIterator.hasNext()) {
         cloneIterator.next().setLocalVariableIndex(tnIterator.next().localVariableIndex());
       }
-      clone.setSourceLocation(tn.getSourceLocation());
 
       for (StandaloneNode child : tn.getChildren()) {
         clone.addChild(SoytreeUtils.cloneWithNewIds(child, idGen));

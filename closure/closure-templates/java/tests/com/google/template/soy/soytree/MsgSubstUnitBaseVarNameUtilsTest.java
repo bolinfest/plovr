@@ -16,15 +16,18 @@
 
 package com.google.template.soy.soytree;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.common.collect.ImmutableList;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.SoySyntaxException;
-import com.google.template.soy.exprparse.ExprParseUtils;
-import com.google.template.soy.exprtree.ExprRootNode;
+import com.google.template.soy.error.ExplodingErrorReporter;
+import com.google.template.soy.exprparse.ExpressionParser;
+import com.google.template.soy.exprtree.ExprNode;
 
 import junit.framework.TestCase;
 
 import java.util.List;
-
 
 /**
  * Unit tests for MsgSubstUnitBaseVarNameUtils.
@@ -94,7 +97,9 @@ public class MsgSubstUnitBaseVarNameUtilsTest extends TestCase {
    * Private helper for {@code testGenBaseNames()}.
    */
   private void assertNaiveBaseNameForExpr(String expected, String exprText) {
-    ExprRootNode<?> exprRoot = ExprParseUtils.parseExprElseThrowSoySyntaxException(exprText, "");
+    ExprNode exprRoot = new ExpressionParser(
+        exprText, SourceLocation.UNKNOWN, ExplodingErrorReporter.get())
+        .parseExpression();
     String actual = MsgSubstUnitBaseVarNameUtils.genNaiveBaseNameForExpr(exprRoot, "FALLBACK");
     MsgNodeTest.assertEquals(expected, actual);
   }
@@ -104,8 +109,11 @@ public class MsgSubstUnitBaseVarNameUtilsTest extends TestCase {
    * Private helper for {@code testGenBaseNames()}.
    */
   private void assertShortestBaseNameForExpr(String expected, String exprText) {
-    ExprRootNode<?> exprRoot = ExprParseUtils.parseExprElseThrowSoySyntaxException(exprText, "");
-    String actual = MsgSubstUnitBaseVarNameUtils.genShortestBaseNameForExpr(exprRoot, "FALLBACK");
+    ExprNode exprRoot = new ExpressionParser(
+        exprText, SourceLocation.UNKNOWN, ExplodingErrorReporter.get())
+        .parseExpression();
+    String actual = MsgSubstUnitBaseVarNameUtils.genShortestBaseNameForExpr(
+        exprRoot, "FALLBACK");
     MsgNodeTest.assertEquals(expected, actual);
   }
 
@@ -114,8 +122,11 @@ public class MsgSubstUnitBaseVarNameUtilsTest extends TestCase {
    * Private helper for {@code testGenBaseNames()}.
    */
   private void assertCandidateBaseNamesForExpr(List<String> expected, String exprText) {
-    ExprRootNode<?> exprRoot = ExprParseUtils.parseExprElseThrowSoySyntaxException(exprText, "");
-    List<String> actual = MsgSubstUnitBaseVarNameUtils.genCandidateBaseNamesForExpr(exprRoot);
+    ExprNode exprRoot = new ExpressionParser(
+        exprText, SourceLocation.UNKNOWN, ExplodingErrorReporter.get())
+        .parseExpression();
+    List<String> actual = MsgSubstUnitBaseVarNameUtils.genCandidateBaseNamesForExpr(
+        exprRoot);
     MsgNodeTest.assertEquals(expected, actual);
   }
 
@@ -154,8 +165,9 @@ public class MsgSubstUnitBaseVarNameUtilsTest extends TestCase {
    * Private helper for {@code testGenNoncollidingBaseNames()}.
    */
   private void assertNoncollidingBaseNamesForExprs(List<String> expected, String exprListText) {
-    List<ExprRootNode<?>> exprRoots =
-        ExprParseUtils.parseExprListElseThrowSoySyntaxException(exprListText, "");
+    List<ExprNode> exprRoots =
+        new ExpressionParser(exprListText, SourceLocation.UNKNOWN, ExplodingErrorReporter.get())
+            .parseExpressionList();
     List<String> actual =
         MsgSubstUnitBaseVarNameUtils.genNoncollidingBaseNamesForExprs(exprRoots, "FALLBACK");
     MsgNodeTest.assertEquals(expected, actual);
@@ -167,13 +179,14 @@ public class MsgSubstUnitBaseVarNameUtilsTest extends TestCase {
    */
   private void assertErrorMsgWhenGenNoncollidingBaseNamesForExprs(
       String expectedErrorMsg, String exprListText) {
-    List<ExprRootNode<?>> exprRoots =
-        ExprParseUtils.parseExprListElseThrowSoySyntaxException(exprListText, "");
+    List<ExprNode> exprRoots =
+        new ExpressionParser(exprListText, SourceLocation.UNKNOWN, ExplodingErrorReporter.get())
+            .parseExpressionList();
     try {
       MsgSubstUnitBaseVarNameUtils.genNoncollidingBaseNamesForExprs(exprRoots, "FALLBACK");
       MsgNodeTest.fail();
     } catch (SoySyntaxException sse) {
-      MsgNodeTest.assertTrue(sse.getMessage().contains(expectedErrorMsg));
+      assertThat(sse.getMessage()).contains(expectedErrorMsg);
     }
   }
 

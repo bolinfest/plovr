@@ -18,6 +18,7 @@ package com.google.template.soy.jssrc.internal;
 
 import com.google.common.collect.Lists;
 import com.google.template.soy.base.internal.IdGenerator;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.msgs.internal.MsgUtils;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.MsgFallbackGroupNode;
@@ -31,7 +32,6 @@ import com.google.template.soy.soytree.jssrc.GoogMsgRefNode;
 
 import java.util.List;
 
-
 /**
  * Visitor for replacing {@code MsgFallbackGroupNode}s with corresponding pairs of
  * {@code GoogMsgDefNode}s and {@code GoogMsgRefNode}s.
@@ -39,12 +39,14 @@ import java.util.List;
  * <p> {@link #exec} must be called on a full parse tree.
  *
  */
-class ReplaceMsgsWithGoogMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
-
+final class ReplaceMsgsWithGoogMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
 
   /** The list of MsgFallbackGroupNodes found in the given node's subtree. */
   private List<MsgFallbackGroupNode> msgFbGrpNodes;
 
+  public ReplaceMsgsWithGoogMsgsVisitor(ErrorReporter errorReporter) {
+    super(errorReporter);
+  }
 
   @Override public Void exec(SoyNode node) {
     msgFbGrpNodes = Lists.newArrayList();
@@ -103,8 +105,11 @@ class ReplaceMsgsWithGoogMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
     }
     GoogMsgDefNode googMsgDefNode =
         new GoogMsgDefNode(nodeIdGen.genId(), msgFbGrpNode, childMsgIds);
-    GoogMsgRefNode googMsgRefNode =
-        new GoogMsgRefNode(nodeIdGen.genId(), googMsgDefNode.getRenderedGoogMsgVarName());
+    GoogMsgRefNode googMsgRefNode = new GoogMsgRefNode(
+        nodeIdGen.genId(),
+        msgFbGrpNode.getSourceLocation(),
+        googMsgDefNode.getRenderedGoogMsgVarName(),
+        msgFbGrpNode.getEscapingDirectiveNames());
 
     BlockNode parent = msgFbGrpNode.getParent();
     int index = parent.getChildIndex(msgFbGrpNode);

@@ -17,7 +17,6 @@
 package com.google.template.soy.bidifunctions;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.inject.Singleton;
 import com.google.template.soy.data.Dir;
 import com.google.template.soy.data.SanitizedContent;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
@@ -26,12 +25,15 @@ import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.internal.i18n.BidiUtils;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.SoyJsSrcFunction;
+import com.google.template.soy.pysrc.restricted.PyExpr;
+import com.google.template.soy.pysrc.restricted.SoyPySrcFunction;
 import com.google.template.soy.shared.restricted.SoyJavaFunction;
 
 import java.util.List;
 import java.util.Set;
 
 import javax.inject.Inject;
+import javax.inject.Singleton;
 
 /**
  * Soy function that gets the bidi directionality of a text string (1 for LTR, -1 for RTL, or
@@ -39,7 +41,7 @@ import javax.inject.Inject;
  *
  */
 @Singleton
-class BidiTextDirFunction implements SoyJavaFunction, SoyJsSrcFunction {
+class BidiTextDirFunction implements SoyJavaFunction, SoyJsSrcFunction, SoyPySrcFunction {
 
 
   @Inject
@@ -50,11 +52,9 @@ class BidiTextDirFunction implements SoyJavaFunction, SoyJsSrcFunction {
     return "bidiTextDir";
   }
 
-
   @Override public Set<Integer> getValidArgsSizes() {
     return ImmutableSet.of(1, 2);
   }
-
 
   @Override public SoyValue computeForJava(List<SoyValue> args) {
     SoyValue value = args.get(0);
@@ -75,7 +75,6 @@ class BidiTextDirFunction implements SoyJavaFunction, SoyJsSrcFunction {
     return IntegerData.forValue(valueDir.ord);
   }
 
-
   @Override public JsExpr computeForJsSrc(List<JsExpr> args) {
     JsExpr value = args.get(0);
     JsExpr isHtml = (args.size() == 2) ? args.get(1) : null;
@@ -86,4 +85,13 @@ class BidiTextDirFunction implements SoyJavaFunction, SoyJsSrcFunction {
     return new JsExpr(callText, Integer.MAX_VALUE);
   }
 
+  @Override public PyExpr computeForPySrc(List<PyExpr> args) {
+    PyExpr value = args.get(0);
+    PyExpr isHtml = (args.size() == 2) ? args.get(1) : null;
+
+    String callText = (isHtml != null) ?
+        "bidi.text_dir(" + value.getText() + ", " + isHtml.getText() + ")" :
+        "bidi.text_dir(" + value.getText() + ")";
+    return new PyExpr(callText, Integer.MAX_VALUE);
+  }
 }

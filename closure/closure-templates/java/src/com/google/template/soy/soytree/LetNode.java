@@ -17,10 +17,12 @@
 package com.google.template.soy.soytree;
 
 import com.google.common.base.Preconditions;
-import com.google.template.soy.base.SoySyntaxException;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.data.internalutils.NodeContentKinds;
-import com.google.template.soy.exprparse.ExprParseUtils;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.SoyError;
+import com.google.template.soy.exprparse.ExpressionParser;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.soytree.CommandTextAttributesParser.Attribute;
 import com.google.template.soy.soytree.SoyNode.LocalVarInlineNode;
@@ -43,6 +45,7 @@ import javax.annotation.Nullable;
 public abstract class LetNode extends AbstractCommandNode
     implements StandaloneNode, StatementNode, LocalVarInlineNode {
 
+  public static final SoyError INVALID_COMMAND_TEXT = SoyError.of("Invalid ''let'' command text.");
 
   /**
    * Return value for {@code parseCommandTextHelper()}.
@@ -50,14 +53,14 @@ public abstract class LetNode extends AbstractCommandNode
   protected static class CommandTextParseResult {
 
     /** The parsed local var name (without '$'). */
-    public final String localVarName;
+    final String localVarName;
     /** The parsed value expr, or null if none. */
-    @Nullable public final ExprRootNode<?> valueExpr;
+    @Nullable final ExprRootNode valueExpr;
     /** The parsed param's content kind, or null if none. */
-    @Nullable public final ContentKind contentKind;
+    @Nullable final ContentKind contentKind;
 
     private CommandTextParseResult(
-        String localVarName, @Nullable ExprRootNode<?> valueExpr,
+        String localVarName, @Nullable ExprRootNode valueExpr,
         @Nullable ContentKind contentKind) {
       this.localVarName = localVarName;
       this.valueExpr = valueExpr;
@@ -81,23 +84,18 @@ public abstract class LetNode extends AbstractCommandNode
           new Attribute("kind", NodeContentKinds.getAttributeValues(), null));
 
 
-  /** Whether the local var name is already unique (e.g. node id has already been appended). */
-  private final boolean isVarNameUnique;
-
-
   /** The local variable defined by this node. */
-  protected LocalVar var;
+  protected final LocalVar var;
 
 
   /**
    * @param id The id for this node.
-   * @param isVarNameUnique Whether the local var name is already unique (e.g. node id has already
-   *     been appended).
    * @param commandText The command text.
    */
-  protected LetNode(int id, boolean isVarNameUnique, String commandText) {
-    super(id, "let", commandText);
-    this.isVarNameUnique = isVarNameUnique;
+  protected LetNode(
+      int id, SourceLocation sourceLocation, String localVarName, String commandText) {
+    super(id, sourceLocation, "let", commandText);
+    this.var = new LocalVar(localVarName, this, null /* type */);
   }
 
 
@@ -107,7 +105,6 @@ public abstract class LetNode extends AbstractCommandNode
    */
   protected LetNode(LetNode orig) {
     super(orig);
-    this.isVarNameUnique = orig.isVarNameUnique;
     this.var = orig.var.clone();
   }
 
@@ -116,36 +113,34 @@ public abstract class LetNode extends AbstractCommandNode
    * Helper used by subclass constructors to parse the command text.
    * @param commandText The command text.
    * @return An info object containing the parse results.
-   * @throws SoySyntaxException If a syntax error is found.
    */
-  protected CommandTextParseResult parseCommandTextHelper(String commandText)
-      throws SoySyntaxException {
+  protected static CommandTextParseResult parseCommandTextHelper(
+      String commandText, ErrorReporter errorReporter, SourceLocation sourceLocation) {
 
     Matcher matcher = COMMAND_TEXT_PATTERN.matcher(commandText);
     if (!matcher.matches()) {
-      throw SoySyntaxException.createWithoutMetaInfo(
-          "Invalid 'let' command text \"" + commandText + "\".");
+      errorReporter.report(sourceLocation, INVALID_COMMAND_TEXT);
+      return new CommandTextParseResult("error", null, null);
     }
 
-    String localVarName;
-    localVarName = ExprParseUtils.parseVarNameElseThrowSoySyntaxException(
-        matcher.group(1), "Invalid variable name in 'let' command text \"" + commandText + "\".");
+    String localVarName = new ExpressionParser(
+        matcher.group(1), sourceLocation, errorReporter)
+        .parseVariable()
+        .getName();
 
-    ExprRootNode<?> valueExpr;
-    if (matcher.group(2 /* value expression */) != null) {
-      valueExpr = ExprParseUtils.parseExprElseThrowSoySyntaxException(
-          matcher.group(2),
-          "Invalid value expression in 'let' command text \"" + commandText + "\".");
-    } else {
-      valueExpr = null;
-    }
+    String valueExprString = matcher.group(2);
+    ExprRootNode valueExpr = valueExprString != null
+        ? new ExprRootNode(
+            new ExpressionParser(valueExprString, sourceLocation, errorReporter).parseExpression())
+        : null;
 
     ContentKind contentKind;
     if (matcher.group(3 /* optional attributes */) != null) {
       Preconditions.checkState(matcher.group(2) == null,
           "Match groups for value expression and optional attributes should be mutually exclusive");
       // Parse optional attributes
-      Map<String, String> attributes = ATTRIBUTES_PARSER.parse(matcher.group(3));
+      Map<String, String> attributes
+          = ATTRIBUTES_PARSER.parse(matcher.group(3), errorReporter, sourceLocation);
       contentKind = (attributes.get("kind") != null)
           ? NodeContentKinds.forAttributeValue(attributes.get("kind")) : null;
     } else {
@@ -160,7 +155,7 @@ public abstract class LetNode extends AbstractCommandNode
    * Gets a unique version of the local var name (e.g. appending "__soy##" if necessary).
    */
   public String getUniqueVarName() {
-    return isVarNameUnique ? getVarName() : getVarName() + "__soy" + getId();
+    return getVarName() + "__soy" + getId();
   }
 
 
@@ -174,14 +169,5 @@ public abstract class LetNode extends AbstractCommandNode
    */
   public final LocalVar getVar() {
     return var;
-  }
-
-
-  /**
-   * Set the local variable defined by this node.
-   * @param var the variable to set
-   */
-  protected final void setVar(LocalVar var) {
-    this.var = var;
   }
 }

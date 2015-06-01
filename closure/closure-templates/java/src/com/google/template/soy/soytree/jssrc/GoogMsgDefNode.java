@@ -37,7 +37,7 @@ import java.util.List;
  * <p> All children are {@code MsgNode}s.
  *
  */
-public class GoogMsgDefNode extends AbstractParentSoyNode<MsgNode>
+public final class GoogMsgDefNode extends AbstractParentSoyNode<MsgNode>
     implements StandaloneNode, SplitLevelTopNode<MsgNode>, LocalVarInlineNode {
 
 
@@ -62,8 +62,11 @@ public class GoogMsgDefNode extends AbstractParentSoyNode<MsgNode>
    * @param childMsgIds The list of child msg ids (must correspond to children of origMsgFbGrpNode
    *     by index).
    */
-  public GoogMsgDefNode(int id, MsgFallbackGroupNode origMsgFbGrpNode, List<Long> childMsgIds) {
-    super(id);
+  public GoogMsgDefNode(
+      int id,
+      MsgFallbackGroupNode origMsgFbGrpNode,
+      List<Long> childMsgIds) {
+    super(id, origMsgFbGrpNode.getSourceLocation());
 
     int numChildren = origMsgFbGrpNode.numChildren();
     Preconditions.checkArgument(childMsgIds.size() == numChildren);
@@ -87,7 +90,7 @@ public class GoogMsgDefNode extends AbstractParentSoyNode<MsgNode>
    * Copy constructor.
    * @param orig The node to copy.
    */
-  protected GoogMsgDefNode(GoogMsgDefNode orig) {
+  private GoogMsgDefNode(GoogMsgDefNode orig) {
     super(orig);
     this.childToMsgIdMap = orig.childToMsgIdMap;  // immutable
     this.renderedGoogMsgVarName = orig.renderedGoogMsgVarName;

@@ -12,7 +12,7 @@ if (typeof soy.examples.simple == 'undefined') { soy.examples.simple = {}; }
 
 
 soy.examples.simple.helloWorld = function(opt_data, opt_ignored) {
-  return 'Zhello zworld!';
+  return soydata.VERY_UNSAFE.ordainSanitizedHtml('Zhello zworld!');
 };
 if (goog.DEBUG) {
   soy.examples.simple.helloWorld.soyTemplateName = 'soy.examples.simple.helloWorld';
@@ -21,7 +21,7 @@ if (goog.DEBUG) {
 
 soy.examples.simple.helloName = function(opt_data, opt_ignored) {
   opt_data = opt_data || {};
-  return '' + ((opt_data.name) ? 'Zhello ' + soy.$$escapeHtml(opt_data.name) + '!' : soy.examples.simple.helloWorld(null));
+  return soydata.VERY_UNSAFE.ordainSanitizedHtml((opt_data.name) ? 'Zhello ' + soy.$$escapeHtml(opt_data.name) + '!' : soy.examples.simple.helloWorld(null));
 };
 if (goog.DEBUG) {
   soy.examples.simple.helloName.soyTemplateName = 'soy.examples.simple.helloName';
@@ -30,17 +30,17 @@ if (goog.DEBUG) {
 
 soy.examples.simple.helloNames = function(opt_data, opt_ignored) {
   var output = '';
-  var nameList18 = opt_data.names;
-  var nameListLen18 = nameList18.length;
-  if (nameListLen18 > 0) {
-    for (var nameIndex18 = 0; nameIndex18 < nameListLen18; nameIndex18++) {
-      var nameData18 = nameList18[nameIndex18];
-      output += soy.examples.simple.helloName({name: nameData18}) + ((! (nameIndex18 == nameListLen18 - 1)) ? '<br>' : '');
+  var nameList24 = opt_data.names;
+  var nameListLen24 = nameList24.length;
+  if (nameListLen24 > 0) {
+    for (var nameIndex24 = 0; nameIndex24 < nameListLen24; nameIndex24++) {
+      var nameData24 = nameList24[nameIndex24];
+      output += soy.examples.simple.helloName({name: nameData24}) + ((! (nameIndex24 == nameListLen24 - 1)) ? '<br>' : '');
     }
   } else {
     output += soy.examples.simple.helloWorld(null);
   }
-  return output;
+  return soydata.VERY_UNSAFE.ordainSanitizedHtml(output);
 };
 if (goog.DEBUG) {
   soy.examples.simple.helloNames.soyTemplateName = 'soy.examples.simple.helloNames';

@@ -16,14 +16,18 @@
 
 package com.google.template.soy.soytree;
 
+import com.google.common.collect.ImmutableList;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.soytree.SoyNode.SplitLevelTopNode;
 import com.google.template.soy.soytree.SoyNode.StandaloneNode;
 import com.google.template.soy.soytree.SoyNode.StatementNode;
 
-
 /**
- * Represents a group of one or more messages. If more than one message, then they form a fallback
- * list (first message that has a translation will be shown).
+ * Represents one message or a pair of message and fallback message.
+ *
+ * <p>Only one {@code fallbackmsg} is allowed by the parser.
+ * {@link com.google.template.soy.soyparse.TemplateParserTest.java#testRecognizeCommands}
+ * TODO(user): fix the grammar.
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
@@ -32,15 +36,22 @@ import com.google.template.soy.soytree.SoyNode.StatementNode;
  * special structure for messages).
  *
  */
-public class MsgFallbackGroupNode extends AbstractParentSoyNode<MsgNode>
+public final class MsgFallbackGroupNode extends AbstractParentSoyNode<MsgNode>
     implements StandaloneNode, SplitLevelTopNode<MsgNode>, StatementNode {
 
+  /**
+   * Escaping directives names (including the vertical bar) to apply to the return value. With
+   * strict autoescape, the result of each call site is escaped, which is potentially a no-op if
+   * the template's return value is the correct SanitizedContent object.
+   */
+  private ImmutableList<String> escapingDirectiveNames = ImmutableList.of();
 
   /**
    * @param id The id for this node.
+   * @param sourceLocation The node's source location.
    */
-  public MsgFallbackGroupNode(int id) {
-    super(id);
+  public MsgFallbackGroupNode(int id, SourceLocation sourceLocation) {
+    super(id, sourceLocation);
   }
 
 
@@ -48,8 +59,9 @@ public class MsgFallbackGroupNode extends AbstractParentSoyNode<MsgNode>
    * Copy constructor.
    * @param orig The node to copy.
    */
-  protected MsgFallbackGroupNode(MsgFallbackGroupNode orig) {
+  private MsgFallbackGroupNode(MsgFallbackGroupNode orig) {
     super(orig);
+    this.escapingDirectiveNames = orig.escapingDirectiveNames;
   }
 
 
@@ -76,4 +88,19 @@ public class MsgFallbackGroupNode extends AbstractParentSoyNode<MsgNode>
     return new MsgFallbackGroupNode(this);
   }
 
+  /**
+   * Sets the inferred escaping directives from the contextual engine.
+   */
+  public void setEscapingDirectiveNames(ImmutableList<String> escapingDirectiveNames) {
+    this.escapingDirectiveNames = escapingDirectiveNames;
+  }
+
+  /**
+   * Returns the escaping directives, applied from left to right.
+   *
+   * <p>It is an error to call this before the contextual rewriter has been run.
+   */
+  public ImmutableList<String> getEscapingDirectiveNames() {
+    return escapingDirectiveNames;
+  }
 }

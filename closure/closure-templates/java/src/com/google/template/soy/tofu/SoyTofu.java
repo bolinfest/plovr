@@ -236,6 +236,8 @@ public interface SoyTofu {
      * <p>Checks the content kind of the template. Non-strict and kind="html" templates are
      * allowed, unless setContentKind was called. The goal is to prevent accidental rendering
      * of unescaped kind="text" in contexts where that could XSS.
+     *
+     * @throws SoyTofuException if an error occurs during rendering.
      */
     public String render();
 
@@ -249,6 +251,7 @@ public interface SoyTofu {
      *
      * @throws IllegalArgumentException If the template is non-strict, or the kind doesn't match
      *     the expected kind (from setContentKind, or the default of HTML).
+     * @throws SoyTofuException if an error occurs during rendering.
      */
     public SanitizedContent renderStrict();
 
@@ -259,6 +262,8 @@ public interface SoyTofu {
      * <p>Checks the content kind of the template. Non-strict and kind="html" templates are
      * allowed, unless setContentKind was called. The goal is to prevent accidental rendering
      * of unescaped kind="text" in contexts where that could XSS.
+     *
+     * @throws SoyTofuException if an error occurs during rendering.
      */
     public SanitizedContent.ContentKind render(Appendable out);
   }
@@ -266,29 +271,6 @@ public interface SoyTofu {
 
   // -----------------------------------------------------------------------------------------------
   // Old render methods.
-
-
-  /**
-   * Renders a template.
-   *
-   * <p> Note: If you call this method instead of
-   * {@link #render(SoyTemplateInfo, SoyRecord, SoyMsgBundle)},
-   * your template data will be converted to a {@code SoyRecord} object on each call. This may not
-   * be a big deal if you only need to use the data object once. But if you need to reuse the same
-   * data object for multiple calls, it's more efficient to build your own {@code SoyRecord} object
-   * and reuse it with {@link #render(SoyTemplateInfo, SoyRecord, SoyMsgBundle)}.
-   *
-   * @param templateInfo Info for the template to render.
-   * @param data The data to call the template with. Can be null if the template has no parameters.
-   * @param msgBundle The bundle of translated messages, or null to use the messages from the
-   *     Soy source.
-   * @return The rendered text.
-   * @deprecated Use {@link #newRenderer(SoyTemplateInfo)}.
-   */
-  @Deprecated
-  public String render(
-      SoyTemplateInfo templateInfo, @Nullable Map<String, ?> data,
-      @Nullable SoyMsgBundle msgBundle);
 
 
   /**

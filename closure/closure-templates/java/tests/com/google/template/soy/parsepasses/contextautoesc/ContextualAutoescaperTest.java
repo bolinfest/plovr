@@ -16,24 +16,26 @@
 
 package com.google.template.soy.parsepasses.contextautoesc;
 
+import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.truth.Truth.assertWithMessage;
+
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
+import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.base.internal.SoyFileKind;
 import com.google.template.soy.base.internal.SoyFileSupplier;
 import com.google.template.soy.basetree.SyntaxVersion;
 import com.google.template.soy.data.SanitizedContent;
 import com.google.template.soy.data.SanitizedContentOperator;
-import com.google.template.soy.shared.internal.SharedTestUtils;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.shared.restricted.SoyPrintDirective;
-import com.google.template.soy.soyparse.SoyFileSetParser;
 import com.google.template.soy.soytree.CallNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.SoytreeUtils;
 import com.google.template.soy.soytree.TemplateNode;
-import com.google.template.soy.types.SoyTypeRegistry;
 
 import junit.framework.ComparisonFailure;
 import junit.framework.TestCase;
@@ -44,7 +46,6 @@ import java.util.Set;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-
 
 public final class ContextualAutoescaperTest extends TestCase {
 
@@ -88,7 +89,7 @@ public final class ContextualAutoescaperTest extends TestCase {
 
   public void testStrictModeIsDefault() {
     assertRewriteFails(
-        "In file no-path:4, template main: " +
+        "In file no-path:4:4, template main: " +
         "noAutoescape is not allowed in strict autoescaping mode. Instead, pass in a {param} " +
         "with kind=\"html\" or SanitizedContent.",
         join(
@@ -98,7 +99,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testTrivialTemplate() throws Exception {
+  public void testTrivialTemplate() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -112,7 +113,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testPrintInText() throws Exception {
+  public void testPrintInText() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -126,7 +127,21 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testPrintInTextAndLink() throws Exception {
+  public void testPrivateTemplate() throws Exception {
+    assertContextualRewriting(
+        join(
+            "{namespace ns}\n\n",
+            "{template .privateFoo autoescape=\"deprecated-contextual\" private=\"true\"}\n",
+            "Hello, {$world |escapeHtml}!\n",
+            "{/template}"),
+        join(
+            "{namespace ns}\n\n",
+            "{template .privateFoo autoescape=\"deprecated-contextual\" private=\"true\"}\n",
+            "Hello, {$world}!\n",
+            "{/template}"));
+  }
+
+  public void testPrintInTextAndLink() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -146,7 +161,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}\n"));
   }
 
-  public final void testObscureUrlAttributes() throws Exception {
+  public void testObscureUrlAttributes() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -173,7 +188,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}\n"));
   }
 
-  public final void testConditional() throws Exception {
+  public void testConditional() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -201,7 +216,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testConditionalEndsInDifferentContext() throws Exception {
+  public void testConditionalEndsInDifferentContext() throws Exception {
     // Make sure that branches that ends in consistently different contexts transition to
     // that different context.
     assertContextualRewriting(
@@ -237,9 +252,9 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testBrokenConditional() throws Exception {
+  public void testBrokenConditional() throws Exception {
     assertRewriteFails(
-        "In file no-path:7, template bar: " +
+        "In file no-path:7:1, template bar: " +
         "{if} command branch ends in a different context than preceding branches: " +
         "{elseif $x == 2}<script>foo({$z})//</scrpit>",
         join(
@@ -256,7 +271,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testSwitch() throws Exception {
+  public void testSwitch() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -286,9 +301,9 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testBrokenSwitch() throws Exception {
+  public void testBrokenSwitch() throws Exception {
     assertRewriteFails(
-        "In file no-path:8, template bar: " +
+        "In file no-path:8:3, template bar: " +
         "{switch} command case ends in a different context than preceding cases: " +
         "{case 2}<script>foo({$z})//</scrpit>",
         join(
@@ -307,7 +322,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testPrintInsideScript() throws Exception {
+  public void testPrintInsideScript() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -332,9 +347,9 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testPrintInsideJsCommentRejected() throws Exception {
+  public void testPrintInsideJsCommentRejected() throws Exception {
     assertRewriteFails(
-        "In file no-path:4, template foo: " +
+        "In file no-path:4:12, template foo: " +
         "Don't put {print} or {call} inside comments : {$x}",
         join(
             "{namespace ns}\n\n",
@@ -343,9 +358,9 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testJsStringInsideQuotesRejected() throws Exception {
+  public void testJsStringInsideQuotesRejected() throws Exception {
     assertRewriteFails(
-        "In file no-path:4, template foo: " +
+        "In file no-path:4:22, template foo: " +
         "Escaping modes [ESCAPE_JS_VALUE] not compatible with" +
         " (Context JS_SQ_STRING) : {$world |escapeJsValue}",
         join(
@@ -355,7 +370,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testLiteral() throws Exception {
+  public void testLiteral() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -373,7 +388,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testForLoop() throws Exception {
+  public void testForLoop() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -399,9 +414,9 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testBrokenForLoop() throws Exception {
+  public void testBrokenForLoop() throws Exception {
     assertRewriteFails(
-        "In file no-path:5, template bar: " +
+        "In file no-path:5:5, template bar: " +
         "{for} command changes context so it cannot be reentered : " +
         "{for $i in range($n)}.foo{$i |filterCssValue}:before " +
         "{lb}content: '{$i |escapeCssString}{rb}{/for}",
@@ -418,7 +433,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testForeachLoop() throws Exception {
+  public void testForeachLoop() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -440,9 +455,9 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testBrokenForeachLoop() throws Exception {
+  public void testBrokenForeachLoop() throws Exception {
     assertRewriteFails(
-        "In file no-path:5, template baz: " +
+        "In file no-path:5:5, template baz: " +
         "{foreach} body changes context : " +
         "{foreach $x in $foo}<li class={$x}{/foreach}",
         join(
@@ -456,7 +471,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testForeachLoopWithIfempty() throws Exception {
+  public void testForeachLoopWithIfempty() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -482,7 +497,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testCall() throws Exception {
+  public void testCall() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -502,7 +517,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testCallWithParams() throws Exception {
+  public void testCallWithParams() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -522,7 +537,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testSameTemplateCalledInDifferentContexts() throws Exception {
+  public void testSameTemplateCalledInDifferentContexts() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -551,7 +566,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testRecursiveTemplateGuessWorks() throws Exception {
+  public void testRecursiveTemplateGuessWorks() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -584,7 +599,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testTemplateWithUnknownJsSlash() throws Exception {
+  public void testTemplateWithUnknownJsSlash() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -627,9 +642,9 @@ public final class ContextualAutoescaperTest extends TestCase {
 
   }
 
-  public final void testTemplateUnknownJsSlashMatters() throws Exception {
+  public void testTemplateUnknownJsSlashMatters() throws Exception {
     assertRewriteFails(
-        "In file no-path:7, template foo: " +
+        "In file no-path:7:1, template foo: " +
         "Slash (/) cannot follow the preceding branches since it is unclear whether the slash " +
         "is a RegExp literal or division operator." +
         "  Please add parentheses in the branches leading to `/ 2  </script>`",
@@ -652,7 +667,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testUrlContextJoining() throws Exception {
+  public void testUrlContextJoining() throws Exception {
     // This is fine.  The ambiguity about
     assertContextualRewritingNoop(
         join(
@@ -667,7 +682,7 @@ public final class ContextualAutoescaperTest extends TestCase {
               "\">\n",
             "{/template}"));
     assertRewriteFails(
-        "In file no-path:4, template foo: Cannot determine which part of the URL {$x} is in.",
+        "In file no-path:4:49, template foo: Cannot determine which part of the URL {$x} is in.",
         join(
             "{namespace ns}\n\n",
             "{template foo autoescape=\"deprecated-contextual\"}\n",
@@ -682,9 +697,9 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testRecursiveTemplateGuessFails() throws Exception {
+  public void testRecursiveTemplateGuessFails() throws Exception {
     assertRewriteFails(
-        "In file no-path:10, template quot__C13: " +
+        "In file no-path:10:5, template quot__C13: " +
         "{if} command without {else} changes context : " +
         "{if Math.random() lt 0.5}{call quot data=\"all\" /}{/if}",
         join(
@@ -699,7 +714,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testUris() throws Exception {
+  public void testUris() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -732,7 +747,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testCss() throws Exception {
+  public void testCss() throws Exception {
     assertContextualRewritingNoop(
         join(
             "{namespace ns}\n\n",
@@ -741,7 +756,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testXid() throws Exception {
+  public void testXid() throws Exception {
     assertContextualRewritingNoop(
         join(
             "{namespace ns}\n\n",
@@ -750,7 +765,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testAlreadyEscaped() throws Exception {
+  public void testAlreadyEscaped() throws Exception {
     assertContextualRewritingNoop(
         join(
             "{namespace ns}\n\n",
@@ -759,7 +774,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testExplicitNoescapeNoop() throws Exception {
+  public void testExplicitNoescapeNoop() throws Exception {
     assertContextualRewritingNoop(
         join(
             "{namespace ns}\n\n",
@@ -768,7 +783,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testCustomDirectives() throws Exception {
+  public void testCustomDirectives() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -782,7 +797,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testNoInterferenceWithNonContextualTemplates() throws Exception {
+  public void testNoInterferenceWithNonContextualTemplates() throws Exception {
     // If a broken template calls a contextual template, object.
     assertRewriteFails(
         null,
@@ -813,7 +828,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testExternTemplates() throws Exception {
+  public void testExternTemplates() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -833,7 +848,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testNonContextualCallers() throws Exception {
+  public void testNonContextualCallers() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -871,7 +886,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testUnquotedAttributes() throws Exception {
+  public void testUnquotedAttributes() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -886,7 +901,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testMessagesWithEmbeddedTags() throws Exception {
+  public void testMessagesWithEmbeddedTags() throws Exception {
     assertContextualRewritingNoop(
         join(
             "{namespace ns}\n\n",
@@ -895,7 +910,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testNamespaces() throws Exception {
+  public void testNamespaces() throws Exception {
     // Test calls in namespaced files.
     assertContextualRewriting(
         join(
@@ -914,7 +929,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             " * @param pageCount Total count of pages.  Strictly greater than pageIndex.\n",
             " */\n",
             "{template .pagenum autoescape=\"deprecated-contextual\" private=\"true\"}\n",
-              "{$pageIndex} of {$pageCount}\n",
+              "{$pageIndex |escapeHtml} of {$pageCount |escapeHtml}\n",
             "{/template}\n\n",
             "/**\n",
             " * @param pageIndex 0-indexed index of the current page.\n",
@@ -949,7 +964,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testConditionalAttributes() throws Exception {
+  public void testConditionalAttributes() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -963,7 +978,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testExtraSpacesInTag() throws Exception {
+  public void testExtraSpacesInTag() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -977,7 +992,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testOptionalAttributes() throws Exception {
+  public void testOptionalAttributes() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -1030,7 +1045,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testDynamicAttrName() throws Exception {
+  public void testDynamicAttrName() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -1044,7 +1059,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testDynamicAttritubes() throws Exception {
+  public void testDynamicAttritubes() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -1058,7 +1073,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testDynamicElementName() throws Exception {
+  public void testDynamicElementName() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -1073,7 +1088,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testOptionalValuelessAttributes() throws Exception {
+  public void testOptionalValuelessAttributes() throws Exception {
     assertContextualRewritingNoop(
         join(
             "{namespace ns}\n\n",
@@ -1083,7 +1098,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testDirectivesOrderedProperly() throws Exception {
+  public void testDirectivesOrderedProperly() throws Exception {
     // The |bidiSpanWrap directive takes HTML and produces HTML, so the |escapeHTML
     // should appear first.
     assertContextualRewriting(
@@ -1112,7 +1127,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
   }
 
-  public final void testDelegateTemplatesAreEscaped() throws Exception {
+  public void testDelegateTemplatesAreEscaped() throws Exception {
     assertContextualRewriting(
         join(
             "{delpackage dp}\n",
@@ -1130,7 +1145,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/deltemplate}"));
   }
 
-  public final void testDelegateTemplateCalledInNonPcdataContexts()
+  public void testDelegateTemplateCalledInNonPcdataContexts()
       throws Exception {
     assertContextualRewriting(
         join(
@@ -1159,10 +1174,10 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/deltemplate}"));
   }
 
-  public final void testDelegateTemplatesReturnTypesUnioned()
+  public void testDelegateTemplatesReturnTypesUnioned()
       throws Exception {
     assertRewriteFails(
-        "In file no-path-0:7, template main: " +
+        "In file no-path-0:7:1, template main: " +
         "Slash (/) cannot follow the preceding branches since it is unclear whether the slash " +
         "is a RegExp literal or division operator.  " +
         "Please add parentheses in the branches leading to " +
@@ -1195,7 +1210,7 @@ public final class ContextualAutoescaperTest extends TestCase {
   }
 
 
-  public final void testTypedLetBlockIsContextuallyEscaped() {
+  public void testTypedLetBlockIsContextuallyEscaped() {
     assertContextualRewriting(
         join(
             "{template t autoescape=\"deprecated-contextual\"}\n",
@@ -1218,7 +1233,7 @@ public final class ContextualAutoescaperTest extends TestCase {
   }
 
 
-  public final void testUntypedLetBlockIsContextuallyEscaped() {
+  public void testUntypedLetBlockIsContextuallyEscaped() {
     // Test that the behavior for let blocks without kind attribute is unchanged (i.e., they are
     // contextually escaped in the context the {let} command appears in).
     assertContextualRewriting(
@@ -1241,9 +1256,9 @@ public final class ContextualAutoescaperTest extends TestCase {
   }
 
 
-  public final void testTypedLetBlockMustEndInStartContext() {
+  public void testTypedLetBlockMustEndInStartContext() {
     assertRewriteFails(
-        "In file no-path:2, template t: " +
+        "In file no-path:2:1, template t: " +
         "A strict block of kind=\"html\" cannot end in context (Context JS REGEX). " +
         "Likely cause is an unclosed script block or attribute: " +
         "{let $l kind=\"html\"}",
@@ -1256,9 +1271,9 @@ public final class ContextualAutoescaperTest extends TestCase {
   }
 
 
-  public final void testTypedLetBlockIsStrictModeAutoescaped() {
+  public void testTypedLetBlockIsStrictModeAutoescaped() {
     assertRewriteFails(
-        "In file no-path:5, template t: " +
+        "In file no-path:5:4, template t: " +
         "Autoescape-cancelling print directives like |customEscapeDirective are only allowed in " +
         "kind=\"text\" blocks. If you really want to over-escape, try using a let block: " +
         "{let $foo kind=\"text\"}{$y |customEscapeDirective}{/let}{$foo}.",
@@ -1271,7 +1286,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
 
     assertRewriteFails(
-        "In file no-path:5, template t: " +
+        "In file no-path:5:4, template t: " +
         "noAutoescape is not allowed in strict autoescaping mode. Instead, pass in a {param} " +
         "with kind=\"html\" or SanitizedContent.",
         join(
@@ -1284,7 +1299,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
 
     assertRewriteFails(
-        "In file no-path:5, template t: " +
+        "In file no-path:5:9, template t: " +
         "noAutoescape is not allowed in strict autoescaping mode. Instead, pass in a {param} " +
         "with kind=\"js\" or SanitizedContent.",
         join(
@@ -1299,7 +1314,7 @@ public final class ContextualAutoescaperTest extends TestCase {
 
 
     assertRewriteFails(
-        "In file no-path:5, template t: " +
+        "In file no-path:5:4, template t: " +
         "Soy strict autoescaping currently forbids calls to non-strict templates, unless the " +
         "context is kind=\"text\", since there's no guarantee the callee is safe: " +
         "{call .other data=\"all\" /}",
@@ -1315,7 +1330,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
 
     assertRewriteFails(
-        "In file no-path:5, template t: " +
+        "In file no-path:5:4, template t: " +
         "Soy strict autoescaping currently forbids calls to non-strict templates, unless the " +
         "context is kind=\"text\", since there's no guarantee the callee is safe: " +
         "{call .other data=\"all\" /}",
@@ -1349,23 +1364,9 @@ public final class ContextualAutoescaperTest extends TestCase {
   }
 
 
-  public final void testTypedLetBlockNotAllowedInNonContextualTemplate() {
+  public void testNonTypedParamMustEndInHtmlContextButWasAttribute() throws Exception {
     assertRewriteFails(
-        "In file no-path:2, template t: " +
-        "{let} node with 'kind' attribute is only permitted in contextually autoescaped " +
-        "templates: {let $l kind=\"html\"}<b>{$y}</b>{/let}",
-        join(
-            "{template t autoescape=\"deprecated-noncontextual\"}\n",
-            "{let $l kind=\"html\"}",
-              "<b>{$y}</b>",
-            "{/let}\n",
-            "{/template}"));
-  }
-
-
-  public final void testNonTypedParamMustEndInHtmlContextButWasAttribute() throws Exception {
-    assertRewriteFails(
-        "In file no-path:5, template caller: " +
+        "In file no-path:5:5, template caller: " +
         "Blocks should start and end in HTML context: {param foo}",
         join(
             "{namespace ns}\n\n",
@@ -1380,9 +1381,9 @@ public final class ContextualAutoescaperTest extends TestCase {
   }
 
 
-  public final void testNonTypedParamMustEndInHtmlContextButWasScript() throws Exception {
+  public void testNonTypedParamMustEndInHtmlContextButWasScript() throws Exception {
     assertRewriteFails(
-        "In file no-path:5, template caller: " +
+        "In file no-path:5:5, template caller: " +
         "Blocks should start and end in HTML context: {param foo}",
         join(
             "{namespace ns}\n\n",
@@ -1397,7 +1398,7 @@ public final class ContextualAutoescaperTest extends TestCase {
   }
 
 
-  public final void testNonTypedParamGetsContextuallyAutoescaped() throws Exception {
+  public void testNonTypedParamGetsContextuallyAutoescaped() throws Exception {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -1432,7 +1433,7 @@ public final class ContextualAutoescaperTest extends TestCase {
   }
 
 
-  public final void testTypedParamBlockIsContextuallyEscaped() {
+  public void testTypedParamBlockIsContextuallyEscaped() {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -1463,9 +1464,9 @@ public final class ContextualAutoescaperTest extends TestCase {
   }
 
 
-  public final void testTypedParamBlockMustEndInStartContext() {
+  public void testTypedParamBlockMustEndInStartContext() {
     assertRewriteFails(
-        "In file no-path:4, template caller: " +
+        "In file no-path:4:19, template caller: " +
         "A strict block of kind=\"html\" cannot end in context (Context JS REGEX). " +
         "Likely cause is an unclosed script block or attribute: " +
         "{param x kind=\"html\"}",
@@ -1482,9 +1483,9 @@ public final class ContextualAutoescaperTest extends TestCase {
   }
 
 
-  public final void testTypedParamBlockIsStrictModeAutoescaped() {
+  public void testTypedParamBlockIsStrictModeAutoescaped() {
     assertRewriteFails(
-        "In file no-path:4, template caller: " +
+        "In file no-path:4:43, template caller: " +
         "Autoescape-cancelling print directives like |customEscapeDirective are only allowed in " +
         "kind=\"text\" blocks. If you really want to over-escape, try using a let block: " +
         "{let $foo kind=\"text\"}{$y |customEscapeDirective}{/let}{$foo}.",
@@ -1503,7 +1504,7 @@ public final class ContextualAutoescaperTest extends TestCase {
 
     // noAutoescape has a special error message.
     assertRewriteFails(
-        "In file no-path:4, template caller: " +
+        "In file no-path:4:43, template caller: " +
         "noAutoescape is not allowed in strict autoescaping mode. Instead, pass in a {param} " +
         "with kind=\"html\" or SanitizedContent.",
         join(
@@ -1521,7 +1522,7 @@ public final class ContextualAutoescaperTest extends TestCase {
 
     // NOTE: This error only works for non-extern templates.
     assertRewriteFails(
-        "In file no-path:4, template caller: " +
+        "In file no-path:4:40, template caller: " +
         "Soy strict autoescaping currently forbids calls to non-strict templates, unless the " +
         "context is kind=\"text\", since there's no guarantee the callee is safe: " +
         "{call subCallee data=\"all\" /}",
@@ -1570,7 +1571,7 @@ public final class ContextualAutoescaperTest extends TestCase {
   }
 
 
-  public final void testTransitionalTypedParamBlock() {
+  public void testTransitionalTypedParamBlock() {
     // In non-strict contextual templates, param blocks employ "transitional" strict autoescaping,
     // which permits noAutoescape. This helps teams migrate the callees to strict even if not all
     // the callers can be fixed.
@@ -1602,7 +1603,7 @@ public final class ContextualAutoescaperTest extends TestCase {
 
     // Other escape-cancelling directives are still not allowed.
     assertRewriteFails(
-        "In file no-path:4, template caller: " +
+        "In file no-path:4:43, template caller: " +
         "Autoescape-cancelling print directives like |customEscapeDirective are only allowed in " +
         "kind=\"text\" blocks. If you really want to over-escape, try using a let block: " +
         "{let $foo kind=\"text\"}{$y |customEscapeDirective}{/let}{$foo}.",
@@ -1621,7 +1622,7 @@ public final class ContextualAutoescaperTest extends TestCase {
 
     // NOTE: This error only works for non-extern templates.
     assertRewriteFails(
-        "In file no-path:4, template caller: " +
+        "In file no-path:4:40, template caller: " +
         "Soy strict autoescaping currently forbids calls to non-strict templates, unless the " +
         "context is kind=\"text\", since there's no guarantee the callee is safe: " +
         "{call subCallee data=\"all\" /}",
@@ -1670,25 +1671,7 @@ public final class ContextualAutoescaperTest extends TestCase {
   }
 
 
-  public final void testTypedParamBlockNotAllowedInNonContextualTemplate() {
-    assertRewriteFails(
-        "In file no-path:4, template caller: " +
-        "{param} node with 'kind' attribute is only permitted in contextually autoescaped " +
-        "templates: {param x kind=\"html\"}<b>{$y}</b>;{/param}",
-        join(
-            "{namespace ns}\n\n",
-            "{template caller autoescape=\"deprecated-noncontextual\"}\n",
-              "<div>",
-                "{call callee}{param x kind=\"html\"}<b>{$y}</b>;{/param}{/call}",
-              "</div>\n",
-            "{/template}\n\n",
-            "{template callee autoescape=\"deprecated-contextual\" private=\"true\"}\n",
-              "<b>{$x}</b>\n",
-            "{/template}"));
-  }
-
-
-  public final void testTypedTextParamBlock() {
+  public void testTypedTextParamBlock() {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -1721,7 +1704,7 @@ public final class ContextualAutoescaperTest extends TestCase {
   }
 
 
-  public final void testTypedTextLetBlock() {
+  public void testTypedTextLetBlock() {
     assertContextualRewriting(
         join(
             "{namespace ns}\n\n",
@@ -1744,7 +1727,7 @@ public final class ContextualAutoescaperTest extends TestCase {
 
   public void testStrictModeRejectsAutoescapeCancellingDirectives() {
     assertRewriteFails(
-        "In file no-path:4, template main: " +
+        "In file no-path:4:4, template main: " +
         "Autoescape-cancelling print directives like |customEscapeDirective are only allowed in " +
         "kind=\"text\" blocks. If you really want to over-escape, try using a let block: " +
         "{let $foo kind=\"text\"}{$foo |customEscapeDirective}{/let}{$foo}.",
@@ -1755,7 +1738,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
 
     assertRewriteFails(
-        "In file no-path:4, template main: " +
+        "In file no-path:4:4, template main: " +
         "noAutoescape is not allowed in strict autoescaping mode. Instead, pass in a {param} " +
         "with kind=\"html\" or SanitizedContent.",
         join(
@@ -1765,7 +1748,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
 
     assertRewriteFails(
-        "In file no-path:4, template main: " +
+        "In file no-path:4:10, template main: " +
         "noAutoescape is not allowed in strict autoescaping mode. Instead, pass in a {param} " +
         "with kind=\"uri\" or SanitizedContent.",
         join(
@@ -1775,7 +1758,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
 
     assertRewriteFails(
-        "In file no-path:4, template main: " +
+        "In file no-path:4:6, template main: " +
         "noAutoescape is not allowed in strict autoescaping mode. Instead, pass in a {param} " +
         "with kind=\"attributes\" or SanitizedContent.",
         join(
@@ -1785,7 +1768,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
 
     assertRewriteFails(
-        "In file no-path:4, template main: " +
+        "In file no-path:4:9, template main: " +
         "noAutoescape is not allowed in strict autoescaping mode. Instead, pass in a {param} " +
         "with kind=\"js\" or SanitizedContent.",
         join(
@@ -1796,7 +1779,7 @@ public final class ContextualAutoescaperTest extends TestCase {
 
     // NOTE: There's no recommended context for textarea, since it's really essentially text.
     assertRewriteFails(
-        "In file no-path:4, template main: " +
+        "In file no-path:4:11, template main: " +
         "noAutoescape is not allowed in strict autoescaping mode. Instead, pass in a {param} " +
         "with appropriate kind=\"...\" or SanitizedContent.",
         join(
@@ -1809,7 +1792,7 @@ public final class ContextualAutoescaperTest extends TestCase {
 
   public void testStrictModeRejectsNonStrictCalls() {
     assertRewriteFails(
-        "In file no-path:4, template main: " +
+        "In file no-path:4:4, template main: " +
         "Soy strict autoescaping currently forbids calls to non-strict templates, unless the " +
         "context is kind=\"text\", since there's no guarantee the callee is safe: " +
         "{call bar data=\"all\" /}",
@@ -1822,7 +1805,7 @@ public final class ContextualAutoescaperTest extends TestCase {
               "Hello World\n",
             "{/template}"));
     assertRewriteFails(
-        "In file no-path-0:4, template main: " +
+        "In file no-path-0:4:1, template main: " +
         "Soy strict autoescaping currently forbids calls to non-strict templates, unless the " +
         "context is kind=\"text\", since there's no guarantee the callee is safe: " +
         "{delcall foo}",
@@ -1853,7 +1836,7 @@ public final class ContextualAutoescaperTest extends TestCase {
   public void testContextualCannotCallStrictOfWrongContext() {
     // Can't call a text template from a strict context.
     assertRewriteFails(
-        "In file no-path:4, template main: " +
+        "In file no-path:4:1, template main: " +
         "Cannot call strictly autoescaped template foo of kind=\"text\" from incompatible " +
         "context (Context HTML_PCDATA). Strict templates generate extra code to safely call " +
         "templates of other content kinds, but non-strict templates do not: " +
@@ -1869,7 +1852,7 @@ public final class ContextualAutoescaperTest extends TestCase {
               "<b>{$x}</b>\n",
             "{/template}"));
     assertRewriteFails(
-        "In file no-path-0:4, template main: " +
+        "In file no-path-0:4:1, template main: " +
         "Cannot call strictly autoescaped template foo of kind=\"text\" from incompatible " +
         "context (Context HTML_PCDATA). Strict templates generate extra code to safely call " +
         "templates of other content kinds, but non-strict templates do not: " +
@@ -1899,23 +1882,21 @@ public final class ContextualAutoescaperTest extends TestCase {
 
 
   public void testStrictModeAllowsNonAutoescapeCancellingDirectives() {
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(join(
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(join(
         "{template main autoescape=\"strict\"}\n",
-          "<b>{$foo |customOtherDirective}</b>\n",
-        "{/template}"));
+        "<b>{$foo |customOtherDirective}</b>\n",
+        "{/template}"))
+        .parse();
     String rewrittenTemplate = rewrittenSource(soyTree);
-    assertEquals(
-        join(
-            "{template main autoescape=\"strict\"}\n",
-              "<b>{$foo |customOtherDirective |escapeHtml}</b>\n",
-            "{/template}"),
-        rewrittenTemplate.trim());
+    assertThat(rewrittenTemplate.trim())
+        .isEqualTo(join("{template main autoescape=\"strict\"}\n",
+            "<b>{$foo |customOtherDirective |escapeHtml}</b>\n", "{/template}"));
   }
 
 
   public void testTextDirectiveBanned() {
     assertRewriteFails(
-        "In file no-path:2, template main: " +
+        "In file no-path:2:1, template main: " +
         "Print directive |text is only for internal use by the Soy compiler.",
         join(
             "{template main autoescape=\"deprecated-contextual\"}\n",
@@ -1926,7 +1907,7 @@ public final class ContextualAutoescaperTest extends TestCase {
 
   public void testStrictModeDoesNotYetHaveDefaultParamKind() {
     assertRewriteFails(
-        "In file no-path:4, template main: " +
+        "In file no-path:4:1, template main: " +
         "In strict templates, {let}...{/let} blocks require an explicit kind=\"<type>\". " +
         "This restriction will be lifted soon once a reasonable default is chosen. " +
         "(Note that {let $x: $y /} is NOT subject to this restriction). " +
@@ -1937,7 +1918,7 @@ public final class ContextualAutoescaperTest extends TestCase {
               "{let $x}No Kind{/let}\n",
             "{/template}"));
     assertRewriteFails(
-        "In file no-path:4, template main: " +
+        "In file no-path:4:11, template main: " +
         "In strict templates, {param}...{/param} blocks require an explicit kind=\"<type>\". " +
         "This restriction will be lifted soon once a reasonable default is chosen. " +
         "(Note that {param x: $y /} is NOT subject to this restriction). " +
@@ -1949,7 +1930,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{/template}"));
     // Test with a non-strict template but in a strict block.
     assertRewriteFails(
-        "In file no-path:4, template main: " +
+        "In file no-path:4:21, template main: " +
         "In strict templates, {let}...{/let} blocks require an explicit kind=\"<type>\". " +
         "This restriction will be lifted soon once a reasonable default is chosen. " +
         "(Note that {let $x: $y /} is NOT subject to this restriction). " +
@@ -1970,7 +1951,7 @@ public final class ContextualAutoescaperTest extends TestCase {
 
   public void testStrictModeRequiresStartAndEndToBeCompatible() {
     assertRewriteFails(
-        "In file no-path:3, template main: " +
+        "In file no-path:3:1, template main: " +
         "A strict block of kind=\"html\" cannot end in context (Context JS_SQ_STRING). " +
         "Likely cause is an unterminated string literal: " +
         "{template main autoescape=\"strict\"}",
@@ -1984,7 +1965,7 @@ public final class ContextualAutoescaperTest extends TestCase {
 
   public void testStrictUriMustNotBeEmpty() {
     assertRewriteFails(
-        "In file no-path:3, template main: " +
+        "In file no-path:3:1, template main: " +
         "A strict block of kind=\"uri\" cannot end in context (Context URI START). " +
         "Likely cause is an unterminated or empty URI: " +
         "{template main autoescape=\"strict\" kind=\"uri\"}",
@@ -2046,7 +2027,7 @@ public final class ContextualAutoescaperTest extends TestCase {
   public void testStrictAttributesMustBeTerminated() {
     // Basic "forgot to close attribute" issue.
     assertRewriteFails(
-        "In file no-path:3, template ns.foo: " +
+        "In file no-path:3:1, template ns.foo: " +
         "A strict block of kind=\"attributes\" cannot end in context " +
         "(Context HTML_NORMAL_ATTR_VALUE PLAIN_TEXT DOUBLE_QUOTE). " +
         "Likely cause is an unterminated attribute value, or ending with an unquoted attribute: " +
@@ -2059,11 +2040,64 @@ public final class ContextualAutoescaperTest extends TestCase {
   }
 
 
+  // Tests that non-contextual templates don't call strict templates with kind=text attribute.
+  public void testTypedTextStrictCallsNotAllowedInNonContextualTemplate() {
+    assertRewriteFails(
+        "In file no-path:4:6, template caller: " +
+        "Calls to strict templates with 'kind=\"text\"' attribute is not permitted in " +
+        "non-contextually autoescaped templates: {call callee /}",
+        join(
+            "{namespace ns}\n\n",
+            "{template caller autoescape=\"deprecated-noncontextual\"}\n",
+              "<div>",
+                "{call callee/}",
+              "</div>\n",
+            "{/template}\n\n",
+            "{template callee autoescape=\"strict\" private=\"true\" kind=\"text\"}\n",
+              "title={$x}\n",
+            "{/template}"));
+  }
+
+
+  // Tests that noautoescape templates don't have let nodes with kind attribute.
+  public void testTypedLetBlockNotAllowedInNoAutoescapeTemplate() {
+    assertRewriteFails(
+        "In file no-path:2:1, template t: " +
+        "{let} node with 'kind' attribute is not permitted in non-autoescaped " +
+        "templates: {let $l kind=\"html\"}<b>{$y}</b>{/let}",
+        join(
+            "{template t autoescape=\"deprecated-noautoescape\"}\n",
+            "{let $l kind=\"html\"}",
+              "<b>{$y}</b>",
+            "{/let}\n",
+            "{/template}"));
+  }
+
+
+  // Tests that noautoescape templates don't have param nodes with kind attribute.
+  public void testTypedParamBlockNotAllowedInNoAutoescapeTemplate() {
+    assertRewriteFails(
+        "In file no-path:4:19, template caller: " +
+        "{param} node with 'kind' attribute is not permitted in non-autoescaped " +
+        "templates: {param x kind=\"html\"}<b>{$y}</b>;{/param}",
+        join(
+            "{namespace ns}\n\n",
+            "{template caller autoescape=\"deprecated-noautoescape\"}\n",
+              "<div>",
+                "{call callee}{param x kind=\"html\"}<b>{$y}</b>;{/param}{/call}",
+              "</div>\n",
+            "{/template}\n\n",
+            "{template callee autoescape=\"deprecated-contextual\" private=\"true\"}\n",
+              "<b>{$x}</b>\n",
+            "{/template}"));
+  }
+
+
   public void testStrictAttributesMustNotEndInUnquotedAttributeValue() {
     // Ensure that any final attribute-value pair is quoted -- otherwise, if the use site of the
     // value forgets to add spaces, the next attribute will be swallowed.
     assertRewriteFails(
-        "In file no-path:3, template ns.foo: " +
+        "In file no-path:3:1, template ns.foo: " +
         "A strict block of kind=\"attributes\" cannot end in context " +
         "(Context JS SCRIPT SPACE_OR_TAG_END DIV_OP). " +
         "Likely cause is an unterminated attribute value, or ending with an unquoted attribute: " +
@@ -2075,7 +2109,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "\n{/template}"));
 
     assertRewriteFails(
-        "In file no-path:3, template ns.foo: " +
+        "In file no-path:3:1, template ns.foo: " +
         "A strict block of kind=\"attributes\" cannot end in context " +
         "(Context HTML_NORMAL_ATTR_VALUE PLAIN_TEXT SPACE_OR_TAG_END). " +
         "Likely cause is an unterminated attribute value, or ending with an unquoted attribute: " +
@@ -2144,22 +2178,29 @@ public final class ContextualAutoescaperTest extends TestCase {
           "foo()" +
         "\n{/template}";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(source);
-    new CheckEscapingSanityVisitor().exec(soyTree);
-    new ContextualAutoescaper(SOY_PRINT_DIRECTIVES).rewrite(soyTree);
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(source)
+        .errorReporter(boom)
+        .parse();
+    new CheckEscapingSanityVisitor(boom).exec(soyTree);
+    new ContextualAutoescaper(SOY_PRINT_DIRECTIVES, boom).rewrite(soyTree);
     TemplateNode mainTemplate = soyTree.getChild(0).getChild(0);
-    assertEquals("Sanity check", "ns.main", mainTemplate.getTemplateName());
+    assertWithMessage("Sanity check").that(mainTemplate.getTemplateName()).isEqualTo("ns.main");
     final List<CallNode> callNodes = SoytreeUtils.getAllNodesOfType(
         mainTemplate, CallNode.class);
-    assertEquals(4, callNodes.size());
-    assertEquals("HTML->HTML escaping should be pruned",
-        ImmutableList.of(), callNodes.get(0).getEscapingDirectiveNames());
-    assertEquals("JS -> HTML call should be escaped",
-        ImmutableList.of("|escapeJsValue"), callNodes.get(1).getEscapingDirectiveNames());
-    assertEquals("JS -> JS pruned",
-        ImmutableList.of(), callNodes.get(2).getEscapingDirectiveNames());
-    assertEquals("HTML -> extern call should be escaped",
-        ImmutableList.of("|escapeHtml"), callNodes.get(3).getEscapingDirectiveNames());
+    assertThat(callNodes).hasSize(4);
+    assertWithMessage("HTML->HTML escaping should be pruned")
+        .that(callNodes.get(0).getEscapingDirectiveNames())
+        .isEqualTo(ImmutableList.of());
+    assertWithMessage("JS -> HTML call should be escaped")
+        .that(callNodes.get(1).getEscapingDirectiveNames())
+        .isEqualTo(ImmutableList.of("|escapeJsValue"));
+    assertWithMessage("JS -> JS pruned")
+        .that(callNodes.get(2).getEscapingDirectiveNames())
+        .isEqualTo(ImmutableList.of());
+    assertWithMessage("HTML -> extern call should be escaped")
+        .that(callNodes.get(3).getEscapingDirectiveNames())
+        .isEqualTo(ImmutableList.of("|escapeHtml"));
   }
 
 
@@ -2179,20 +2220,133 @@ public final class ContextualAutoescaperTest extends TestCase {
           "Hello World" +
         "\n{/deltemplate}";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(source);
-    new CheckEscapingSanityVisitor().exec(soyTree);
-    new ContextualAutoescaper(SOY_PRINT_DIRECTIVES).rewrite(soyTree);
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(source)
+        .errorReporter(boom)
+        .parse();
+    new CheckEscapingSanityVisitor(boom).exec(soyTree);
+    new ContextualAutoescaper(SOY_PRINT_DIRECTIVES, boom).rewrite(soyTree);
     TemplateNode mainTemplate = soyTree.getChild(0).getChild(0);
-    assertEquals("Sanity check", "ns.main", mainTemplate.getTemplateName());
+    assertWithMessage("Sanity check").that(mainTemplate.getTemplateName()).isEqualTo("ns.main");
     final List<CallNode> callNodes = SoytreeUtils.getAllNodesOfType(
         mainTemplate, CallNode.class);
-    assertEquals(2, callNodes.size());
-    assertEquals("We're compiling a complete set; we can optimize based on usages.",
-        ImmutableList.of(), callNodes.get(0).getEscapingDirectiveNames());
-    assertEquals("HTML -> TEXT requires escaping",
-        ImmutableList.of("|escapeHtml"), callNodes.get(1).getEscapingDirectiveNames());
+    assertThat(callNodes).hasSize(2);
+    assertWithMessage("We're compiling a complete set; we can optimize based on usages.")
+        .that(callNodes.get(0).getEscapingDirectiveNames())
+        .isEqualTo(ImmutableList.of());
+    assertWithMessage("HTML -> TEXT requires escaping")
+        .that(callNodes.get(1).getEscapingDirectiveNames())
+        .isEqualTo(ImmutableList.of("|escapeHtml"));
   }
 
+  private String getForbiddenMsgError(String path, String template, String context) {
+    return "In file " + path + ", template " + template + ": "
+        + "Messages are not supported in this context, because it would mean asking translators to "
+        + "write source code: (Context " + context + ")";
+  }
+
+  public void testMsgForbiddenUriStartContext() {
+    assertRewriteFails(
+        getForbiddenMsgError("no-path:4:12", "main", "URI NORMAL URI DOUBLE_QUOTE START"),
+        join(
+            "{namespace ns}\n\n",
+            "{template main}\n",
+            "  <a href=\"{msg desc=\"foo\"}message{/msg}\">test</a>\n",
+            "{/template}"));
+    assertRewriteFails(
+        getForbiddenMsgError("no-path:4:12", "main", "URI NORMAL URI DOUBLE_QUOTE START"),
+        join(
+            "{namespace ns}\n\n",
+            "{template main autoescape=\"deprecated-contextual\"}\n",
+            "  <a href=\"{msg desc=\"foo\"}message{/msg}\">test</a>\n",
+            "{/template}"));
+    assertRewriteFails(
+        getForbiddenMsgError("no-path:4:3", "main", "URI START"),
+        join(
+            "{namespace ns}\n\n",
+            "{template main kind=\"uri\"}\n",
+            "  {msg desc=\"foo\"}message{/msg}\n",
+            "{/template}"));
+  }
+
+  public void testMsgForbiddenJsContext() {
+    assertRewriteFails(
+        getForbiddenMsgError("no-path:4:11", "main", "JS REGEX"),
+        join(
+            "{namespace ns}\n\n",
+            "{template main}\n",
+            "  <script>{msg desc=\"foo\"}message{/msg}</script>\n",
+            "{/template}"));
+    assertRewriteFails(
+        getForbiddenMsgError("no-path:4:11", "main", "JS REGEX"),
+        join(
+            "{namespace ns}\n\n",
+            "{template main autoescape=\"deprecated-contextual\"}\n",
+            "  <script>{msg desc=\"foo\"}message{/msg}</script>\n",
+            "{/template}"));
+    assertRewriteFails(
+        getForbiddenMsgError("no-path:4:3", "main", "JS REGEX"),
+        join(
+            "{namespace ns}\n\n",
+            "{template main kind=\"js\"}\n",
+            "  {msg desc=\"foo\"}message{/msg}\n",
+            "{/template}"));
+  }
+
+  public void testMsgForbiddenHtmlContexts() {
+    assertRewriteFails(
+        getForbiddenMsgError("no-path:4:8", "main", "HTML_TAG NORMAL"),
+        join(
+            "{namespace ns}\n\n",
+            "{template main}\n",
+            "  <div {msg desc=\"foo\"}attributes{/msg}>Test</div>\n",
+            "{/template}"));
+    assertRewriteFails(
+        getForbiddenMsgError("no-path:4:4", "main", "HTML_BEFORE_TAG_NAME"),
+        join(
+            "{namespace ns}\n\n",
+            "{template main autoescape=\"deprecated-contextual\"}\n",
+            "  <{msg desc=\"foo\"}tagname{/msg}>\n",
+            "{/template}"));
+    assertRewriteFails(
+        getForbiddenMsgError("no-path:4:5", "main", "HTML_BEFORE_TAG_NAME"),
+        join(
+            "{namespace ns}\n\n",
+            "{template main autoescape=\"deprecated-contextual\"}\n",
+            "  </{msg desc=\"foo\"}tagname{/msg}>\n",
+            "{/template}"));
+    assertRewriteFails(
+        getForbiddenMsgError("no-path:4:3", "main", "HTML_TAG"),
+        join(
+            "{namespace ns}\n\n",
+            "{template main kind=\"attributes\"}\n",
+            "  {msg desc=\"foo\"}message{/msg}\n",
+            "{/template}"));
+  }
+
+  public void testMsgForbiddenCssContext() {
+    assertRewriteFails(
+        getForbiddenMsgError("no-path:4:10", "main", "CSS"),
+        join(
+            "{namespace ns}\n\n",
+            "{template main}\n",
+            "  <style>{msg desc=\"foo\"}message{/msg}</style>\n",
+            "{/template}"));
+    assertRewriteFails(
+        getForbiddenMsgError("no-path:4:10", "main", "CSS"),
+        join(
+            "{namespace ns}\n\n",
+            "{template main autoescape=\"deprecated-contextual\"}\n",
+            "  <style>{msg desc=\"foo\"}message{/msg}</style>\n",
+            "{/template}"));
+    assertRewriteFails(
+        getForbiddenMsgError("no-path:4:3", "main", "CSS"),
+        join(
+            "{namespace ns}\n\n",
+            "{template main kind=\"css\"}\n",
+            "  {msg desc=\"foo\"}message{/msg}\n",
+            "{/template}"));
+  }
 
   // TODO: Tests for dynamic attributes: <a on{$name}="...">,
   // <div data-{$name}={$value}>
@@ -2209,7 +2363,9 @@ public final class ContextualAutoescaperTest extends TestCase {
   private String rewrittenSource(SoyFileSetNode soyTree)
       throws SoyAutoescapeException {
 
-    List<TemplateNode> tmpls = new ContextualAutoescaper(SOY_PRINT_DIRECTIVES).rewrite(soyTree);
+    List<TemplateNode> tmpls
+        = new ContextualAutoescaper(SOY_PRINT_DIRECTIVES, ExplodingErrorReporter.get())
+        .rewrite(soyTree);
 
     StringBuilder src = new StringBuilder();
     src.append(soyTree.getChild(0).toSourceString());
@@ -2222,15 +2378,18 @@ public final class ContextualAutoescaperTest extends TestCase {
   private void assertContextualRewriting(String expectedOutput, String... inputs)
       throws SoyAutoescapeException {
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(inputs);
-    new CheckEscapingSanityVisitor().exec(soyTree);
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(inputs)
+        .errorReporter(boom)
+        .parse();
+    new CheckEscapingSanityVisitor(boom).exec(soyTree);
 
     String source = rewrittenSource(soyTree);
-    assertEquals(expectedOutput, source.trim());
+    assertThat(source.trim()).isEqualTo(expectedOutput);
 
     // Make sure that the transformation is idempotent.
     if (!source.contains("__C")) {  // Skip if there are extern extra templates.
-      assertEquals(expectedOutput, rewrittenSource(soyTree).trim());
+      assertThat(rewrittenSource(soyTree).trim()).isEqualTo(expectedOutput);
     }
 
     // And idempotent from a normalized input if the templates are not
@@ -2240,9 +2399,10 @@ public final class ContextualAutoescaperTest extends TestCase {
         .replaceAll("\\s+autoescape\\s*=\\s*\"(deprecated-contextual|strict)\"",
             " autoescape=\"deprecated-noncontextual\"")
         .replaceAll("\\s+kind\\s*=\\s*\"([a-z]*)\"", "");
-    SoyFileSetNode soyTree2 = SharedTestUtils.parseSoyFiles(inputWithoutAutoescape);
+    SoyFileSetNode soyTree2
+        = SoyFileSetParserBuilder.forFileContents(inputWithoutAutoescape).parse();
     String original = soyTree2.getChild(0).toSourceString();
-    assertEquals(original, rewrittenSource(soyTree2));
+    assertThat(rewrittenSource(soyTree2)).isEqualTo(original);
   }
 
   private void assertContextualRewritingNoop(String expectedOutput) throws SoyAutoescapeException {
@@ -2256,19 +2416,19 @@ public final class ContextualAutoescaperTest extends TestCase {
   private void assertRewriteFails(
       @Nullable String msg,
       String... inputs) {
-    List<SoyFileSupplier> soyFileSuppliers = Lists.newArrayList();
+    SoyFileSupplier[] soyFileSuppliers = new SoyFileSupplier[inputs.length];
     for (int i = 0; i < inputs.length; ++i) {
-      soyFileSuppliers.add(SoyFileSupplier.Factory.create(
-          inputs[i], SoyFileKind.SRC, inputs.length == 1 ? "no-path" : "no-path-" + i));
+      soyFileSuppliers[i] = SoyFileSupplier.Factory.create(
+          inputs[i], SoyFileKind.SRC, inputs.length == 1 ? "no-path" : "no-path-" + i);
     }
-    SoyFileSetNode soyTree =
-        (new SoyFileSetParser(new SoyTypeRegistry(), null, SyntaxVersion.V1_0, soyFileSuppliers))
-            .setDoRunInitialParsingPasses(true)
-            .setDoRunCheckingPasses(true)
-            .parse();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forSuppliers(soyFileSuppliers)
+        .declaredSyntaxVersion(SyntaxVersion.V1_0)
+        .doRunInitialParsingPasses(true)
+        .doRunCheckingPasses(true)
+        .parse();
 
     try {
-      new CheckEscapingSanityVisitor().exec(soyTree);
+      new CheckEscapingSanityVisitor(ExplodingErrorReporter.get()).exec(soyTree);
       rewrittenSource(soyTree);
     } catch (SoyAutoescapeException ex) {
       // Find the root cause; during contextualization, we re-wrap exceptions on the path to a

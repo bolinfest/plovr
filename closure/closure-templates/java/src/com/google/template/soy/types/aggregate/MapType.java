@@ -29,8 +29,7 @@ import java.util.Objects;
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
-public class MapType implements SoyType {
-
+public final class MapType implements SoyType {
 
   /** The declared type of item keys in this map. */
   private final SoyType keyType;
@@ -86,6 +85,10 @@ public class MapType implements SoyType {
 
   @Override public boolean isInstance(SoyValue value) {
     return value instanceof SoyMap;
+  }
+
+  @Override public Class<? extends SoyValue> javaType() {
+    return SoyMap.class;
   }
 
 

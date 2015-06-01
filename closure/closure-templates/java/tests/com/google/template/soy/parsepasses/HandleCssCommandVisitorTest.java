@@ -16,8 +16,15 @@
 
 package com.google.template.soy.parsepasses;
 
+import static com.google.common.truth.Truth.assertThat;
+
+import com.google.common.collect.Iterables;
+import com.google.template.soy.FormattingErrorReporter;
+import com.google.template.soy.SoyFileSetParserBuilder;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
+import com.google.template.soy.shared.SharedTestUtils;
 import com.google.template.soy.shared.SoyGeneralOptions.CssHandlingScheme;
-import com.google.template.soy.shared.internal.SharedTestUtils;
 import com.google.template.soy.soytree.PrintNode;
 import com.google.template.soy.soytree.RawTextNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
@@ -25,34 +32,45 @@ import com.google.template.soy.soytree.SoyNode;
 
 import junit.framework.TestCase;
 
-
 /**
  * Unit tests for HandleCssCommandVisitor.
  *
  */
-public class HandleCssCommandVisitorTest extends TestCase {
+public final class HandleCssCommandVisitorTest extends TestCase {
 
+  private static final ErrorReporter FAIL = ExplodingErrorReporter.get();
 
   public void testHandleLiteral() {
-
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyCode("{css selected-option}");
-    (new HandleCssCommandVisitor(CssHandlingScheme.LITERAL)).exec(soyTree);
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents("{css selected-option}")
+        .parse();
+    new HandleCssCommandVisitor(CssHandlingScheme.LITERAL, FAIL).exec(soyTree);
     SoyNode soyNode = SharedTestUtils.getNode(soyTree, 0);
-    assertEquals("selected-option", ((RawTextNode) soyNode).getRawText());
+    assertThat(((RawTextNode) soyNode).getRawText()).isEqualTo("selected-option");
   }
 
-
   public void testHandleReference() {
-
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyCode("{css $cssSelectedOption}");
-    (new HandleCssCommandVisitor(CssHandlingScheme.REFERENCE)).exec(soyTree);
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents("{css $cssSelectedOption}")
+        .parse();
+    new HandleCssCommandVisitor(CssHandlingScheme.REFERENCE, FAIL).exec(soyTree);
     SoyNode soyNode = SharedTestUtils.getNode(soyTree, 0);
-    assertEquals("$cssSelectedOption", ((PrintNode) soyNode).getExprText());
+    assertThat(((PrintNode) soyNode).getExprText()).isEqualTo("$cssSelectedOption");
 
-    soyTree = SharedTestUtils.parseSoyCode("{css CSS_SELECTED_OPTION}");
-    (new HandleCssCommandVisitor(CssHandlingScheme.REFERENCE)).exec(soyTree);
+    soyTree = SoyFileSetParserBuilder.forTemplateContents("{css CSS_SELECTED_OPTION}")
+        .parse();
+    new HandleCssCommandVisitor(CssHandlingScheme.REFERENCE, FAIL).exec(soyTree);
     soyNode = SharedTestUtils.getNode(soyTree, 0);
-    assertEquals("CSS_SELECTED_OPTION", ((PrintNode) soyNode).getExprText());
+    assertThat(((PrintNode) soyNode).getExprText()).isEqualTo("CSS_SELECTED_OPTION");
+  }
+
+  public void testInvalidReference() {
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents("{css 'blah'}")
+        .errorReporter(FAIL)
+        .parse();
+    FormattingErrorReporter errorReporter = new FormattingErrorReporter();
+    new HandleCssCommandVisitor(CssHandlingScheme.REFERENCE, errorReporter).exec(soyTree);
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(Iterables.getOnlyElement(errorReporter.getErrorMessages())).contains(
+        "The css-handling scheme is 'reference', but {css} tag does not contain a valid reference");
   }
 
 }

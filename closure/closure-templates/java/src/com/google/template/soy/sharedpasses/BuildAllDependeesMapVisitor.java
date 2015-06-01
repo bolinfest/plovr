@@ -20,6 +20,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
@@ -50,7 +51,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
-
 
 /**
  * Visitor for building a map from each node to its list of dependees (ordered by nearest dependee
@@ -84,7 +84,7 @@ import javax.annotation.Nullable;
  *     which would be incorrect.
  *
  */
-public class BuildAllDependeesMapVisitor
+public final class BuildAllDependeesMapVisitor
     extends AbstractSoyNodeVisitor<Map<SoyNode, List<SoyNode>>> {
 
 
@@ -95,6 +95,9 @@ public class BuildAllDependeesMapVisitor
    *  (nearest dependee is first). */
   private Map<SoyNode, List<SoyNode>> allDependeesMap;
 
+  public BuildAllDependeesMapVisitor(ErrorReporter errorReporter) {
+    super(errorReporter);
+  }
 
   @Override public Map<SoyNode, List<SoyNode>> exec(SoyNode node) {
 
@@ -123,8 +126,7 @@ public class BuildAllDependeesMapVisitor
 
 
   @Override protected void visitTemplateNode(TemplateNode node) {
-
-    potentialDependeeFrames = new ArrayDeque<List<SoyNode>>();
+    potentialDependeeFrames = new ArrayDeque<>();
 
     // Note: Add to potential dependees while visiting children because descendents can't be moved
     // out of the template.
@@ -208,7 +210,7 @@ public class BuildAllDependeesMapVisitor
     }
 
     allDependeesMap.put(node, allDependees);
-    if (allDependees.size() == 0) {
+    if (allDependees.isEmpty()) {
       throw new AssertionError();
     }
   }
@@ -282,11 +284,11 @@ public class BuildAllDependeesMapVisitor
    * @param exprUnion The expression (V1 or V2 syntax).
    * @return The set of top-level references in the given expression.
    */
-  private static Set<String> getTopLevelRefsInExpr(ExprUnion exprUnion) {
+  private Set<String> getTopLevelRefsInExpr(ExprUnion exprUnion) {
 
     if (exprUnion.getExpr() != null) {
       // V2 expression.
-      return (new GetTopLevelRefsInExprVisitor()).exec(exprUnion.getExpr());
+      return new GetTopLevelRefsInExprVisitor(errorReporter).exec(exprUnion.getExpr());
     } else {
       // V1 expression.
       return getTopLevelRefsInV1Expr(exprUnion.getExprText());
@@ -298,9 +300,14 @@ public class BuildAllDependeesMapVisitor
    * Helper for getTopLevelRefsInExpr() to get top-level references from a Soy V2 expression.
    * Returns the set of top-level references in the given expression.
    */
-  private static class GetTopLevelRefsInExprVisitor extends AbstractExprNodeVisitor<Set<String>> {
+  private static final class GetTopLevelRefsInExprVisitor
+      extends AbstractExprNodeVisitor<Set<String>> {
 
     private Set<String> topLevelRefs;
+
+    GetTopLevelRefsInExprVisitor(ErrorReporter errorReporter) {
+      super(errorReporter);
+    }
 
     @Override public Set<String> exec(ExprNode node) {
       topLevelRefs = Sets.newHashSet();

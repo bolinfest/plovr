@@ -24,11 +24,12 @@ import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.data.restricted.NullData;
 import com.google.template.soy.data.restricted.PrimitiveData;
 import com.google.template.soy.data.restricted.StringData;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
 import com.google.template.soy.exprtree.BooleanNode;
 import com.google.template.soy.exprtree.ExprNode;
-import com.google.template.soy.exprtree.ExprNode.ConstantNode;
 import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
+import com.google.template.soy.exprtree.ExprNode.PrimitiveNode;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.exprtree.FloatNode;
 import com.google.template.soy.exprtree.FunctionNode;
@@ -51,7 +52,7 @@ import javax.inject.Inject;
  * Package-private helper for {@link SimplifyVisitor}.
  *
  */
-class SimplifyExprVisitor extends AbstractExprNodeVisitor<Void> {
+final class SimplifyExprVisitor extends AbstractExprNodeVisitor<Void> {
 
 
   /** The PreevalVisitor for this instance (can reuse). */
@@ -59,7 +60,9 @@ class SimplifyExprVisitor extends AbstractExprNodeVisitor<Void> {
 
 
   @Inject
-  SimplifyExprVisitor(PreevalVisitorFactory preevalVisitorFactory) {
+  SimplifyExprVisitor(
+      PreevalVisitorFactory preevalVisitorFactory, ErrorReporter errorReporter) {
+    super(errorReporter);
     this.preevalVisitor = preevalVisitorFactory.create(Environment.prerenderingEnvironment());
   }
 
@@ -68,8 +71,8 @@ class SimplifyExprVisitor extends AbstractExprNodeVisitor<Void> {
   // Implementation for root node.
 
 
-  @Override protected void visitExprRootNode(ExprRootNode<?> node) {
-    visit(node.getChild(0));
+  @Override protected void visitExprRootNode(ExprRootNode node) {
+    visit(node.getRoot());
   }
 
 
@@ -194,7 +197,7 @@ class SimplifyExprVisitor extends AbstractExprNodeVisitor<Void> {
     // If all children are constants, we attempt to preevaluate this node and replace it with a
     // constant.
     for (ExprNode child : nodeAsParent.getChildren()) {
-      if (! (child instanceof ConstantNode)) {
+      if (! (child instanceof PrimitiveNode)) {
         return;  // cannot preevaluate
       }
     }
@@ -225,7 +228,7 @@ class SimplifyExprVisitor extends AbstractExprNodeVisitor<Void> {
       return;  // failed to preevaluate
     }
 
-    ConstantNode newNode =
+    PrimitiveNode newNode =
         InternalValueUtils.convertPrimitiveDataToExpr((PrimitiveData) preevalResult);
     node.getParent().replaceChild(node, newNode);
   }

@@ -17,12 +17,13 @@
 package com.google.template.soy.basicfunctions;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.inject.Singleton;
 import com.google.template.soy.data.SoyList;
 import com.google.template.soy.data.SoyValue;
 import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.SoyJsSrcFunction;
+import com.google.template.soy.pysrc.restricted.PyExpr;
+import com.google.template.soy.pysrc.restricted.SoyPySrcFunction;
 import com.google.template.soy.shared.restricted.SoyJavaFunction;
 import com.google.template.soy.shared.restricted.SoyPureFunction;
 
@@ -30,6 +31,7 @@ import java.util.List;
 import java.util.Set;
 
 import javax.inject.Inject;
+import javax.inject.Singleton;
 
 /**
  * Soy function that gets the length of a list.
@@ -37,7 +39,7 @@ import javax.inject.Inject;
  */
 @Singleton
 @SoyPureFunction
-class LengthFunction implements SoyJavaFunction, SoyJsSrcFunction {
+class LengthFunction implements SoyJavaFunction, SoyJsSrcFunction, SoyPySrcFunction {
 
 
   @Inject
@@ -48,11 +50,9 @@ class LengthFunction implements SoyJavaFunction, SoyJsSrcFunction {
     return "length";
   }
 
-
   @Override public Set<Integer> getValidArgsSizes() {
     return ImmutableSet.of(1);
   }
-
 
   @Override public SoyValue computeForJava(List<SoyValue> args) {
     SoyValue arg = args.get(0);
@@ -68,7 +68,6 @@ class LengthFunction implements SoyJavaFunction, SoyJsSrcFunction {
     return IntegerData.forValue(((SoyList) arg).length());
   }
 
-
   @Override public JsExpr computeForJsSrc(List<JsExpr> args) {
     JsExpr arg = args.get(0);
 
@@ -77,4 +76,9 @@ class LengthFunction implements SoyJavaFunction, SoyJsSrcFunction {
     return new JsExpr(exprText, Integer.MAX_VALUE);
   }
 
+  @Override public PyExpr computeForPySrc(List<PyExpr> args) {
+    PyExpr arg = args.get(0);
+
+    return new PyExpr("len(" + arg.getText() + ")", Integer.MAX_VALUE);
+  }
 }

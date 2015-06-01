@@ -16,6 +16,7 @@
 
 package com.google.template.soy.exprtree;
 
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.types.SoyType;
 
 
@@ -29,7 +30,9 @@ import com.google.template.soy.types.SoyType;
  * explicitly parse an input as a variable using ExpressionParser.parseVariable().
  *
  */
-public class VarNode extends AbstractExprNode {
+public final class VarNode extends AbstractExprNode {
+
+  public static final VarNode ERROR = new VarNode("error", SourceLocation.UNKNOWN);
 
 
   /** The variable name (without the dollar sign). */
@@ -38,8 +41,10 @@ public class VarNode extends AbstractExprNode {
 
   /**
    * @param name The variable name (without the dollar sign).
+   * @param sourceLocation The node's source location.
    */
-  public VarNode(String name) {
+  public VarNode(String name, SourceLocation sourceLocation) {
+    super(sourceLocation);
     this.name = name;
   }
 
@@ -48,7 +53,7 @@ public class VarNode extends AbstractExprNode {
    * Copy constructor.
    * @param orig The node to copy.
    */
-  protected VarNode(VarNode orig) {
+  private VarNode(VarNode orig) {
     super(orig);
     this.name = orig.name;
   }

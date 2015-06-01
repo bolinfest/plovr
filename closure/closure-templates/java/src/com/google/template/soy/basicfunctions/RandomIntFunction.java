@@ -18,26 +18,28 @@ package com.google.template.soy.basicfunctions;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-import com.google.inject.Singleton;
 import com.google.template.soy.data.SoyValue;
 import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.exprtree.Operator;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.SoyJsCodeUtils;
 import com.google.template.soy.jssrc.restricted.SoyJsSrcFunction;
+import com.google.template.soy.pysrc.restricted.PyExpr;
+import com.google.template.soy.pysrc.restricted.SoyPySrcFunction;
 import com.google.template.soy.shared.restricted.SoyJavaFunction;
 
 import java.util.List;
 import java.util.Set;
 
 import javax.inject.Inject;
+import javax.inject.Singleton;
 
 /**
  * Soy function that generates a random integer in the range [0, n-1].
  *
  */
 @Singleton
-class RandomIntFunction implements SoyJavaFunction, SoyJsSrcFunction {
+class RandomIntFunction implements SoyJavaFunction, SoyJsSrcFunction, SoyPySrcFunction {
 
 
   @Inject
@@ -48,18 +50,15 @@ class RandomIntFunction implements SoyJavaFunction, SoyJsSrcFunction {
     return "randomInt";
   }
 
-
   @Override public Set<Integer> getValidArgsSizes() {
     return ImmutableSet.of(1);
   }
-
 
   @Override public SoyValue computeForJava(List<SoyValue> args) {
     SoyValue arg = args.get(0);
 
     return IntegerData.forValue((long) Math.floor(Math.random() * arg.longValue()));
   }
-
 
   @Override public JsExpr computeForJsSrc(List<JsExpr> args) {
     JsExpr arg = args.get(0);
@@ -70,4 +69,9 @@ class RandomIntFunction implements SoyJavaFunction, SoyJsSrcFunction {
     return new JsExpr("Math.floor(" + randomTimesArg.getText() + ")", Integer.MAX_VALUE);
   }
 
+  @Override public PyExpr computeForPySrc(List<PyExpr> args) {
+    PyExpr arg = args.get(0);
+    // Subtract 1 from the argument as the python randint function is inclusive on both sides.
+    return new PyExpr("random.randint(0, " + arg.getText() + " - 1)", Integer.MAX_VALUE);
+  }
 }

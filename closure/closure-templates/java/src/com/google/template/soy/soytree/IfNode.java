@@ -16,6 +16,7 @@
 
 package com.google.template.soy.soytree;
 
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.soytree.SoyNode.SplitLevelTopNode;
 import com.google.template.soy.soytree.SoyNode.StandaloneNode;
 import com.google.template.soy.soytree.SoyNode.StatementNode;
@@ -27,15 +28,15 @@ import com.google.template.soy.soytree.SoyNode.StatementNode;
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
-public class IfNode extends AbstractParentSoyNode<SoyNode>
+public final class IfNode extends AbstractParentSoyNode<SoyNode>
     implements StandaloneNode, SplitLevelTopNode<SoyNode>, StatementNode {
 
 
   /**
    * @param id The id for this node.
    */
-  public IfNode(int id) {
-    super(id);
+  public IfNode(int id, SourceLocation sourceLocation) {
+    super(id, sourceLocation);
   }
 
 
@@ -43,7 +44,7 @@ public class IfNode extends AbstractParentSoyNode<SoyNode>
    * Copy constructor.
    * @param orig The node to copy.
    */
-  protected IfNode(IfNode orig) {
+  private IfNode(IfNode orig) {
     super(orig);
   }
 

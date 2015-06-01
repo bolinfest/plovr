@@ -16,7 +16,7 @@
 
 package com.google.template.soy.soytree.defn;
 
-import com.google.template.soy.soytree.SoyNode;
+import com.google.template.soy.soytree.SoyNode.LocalVarNode;
 import com.google.template.soy.types.SoyType;
 
 /**
@@ -25,14 +25,14 @@ import com.google.template.soy.types.SoyType;
  */
 public class LocalVar extends AbstractVarDefn {
 
-  private final SoyNode declaringNode;
+  private final LocalVarNode declaringNode;
 
   /**
    * @param name The variable name.
    * @param declaringNode The statement in which this variable is defined.
    * @param type The data type of the variable.
    */
-  public LocalVar(String name, SoyNode declaringNode, SoyType type) {
+  public LocalVar(String name, LocalVarNode declaringNode, SoyType type) {
     super(name, type);
     this.declaringNode = declaringNode;
   }
@@ -48,15 +48,6 @@ public class LocalVar extends AbstractVarDefn {
     return Kind.LOCAL_VAR;
   }
 
-
-  /**
-   * @return The node in which this variable was defined; This is used
-   *     during analysis to infer the variable type.
-   */
-  public SoyNode declaringNode() {
-    return declaringNode;
-  }
-
   /**
    * Setter for the type - this is necessary because sometimes we don't know
    * the variable type until after analysis.
@@ -68,5 +59,9 @@ public class LocalVar extends AbstractVarDefn {
 
   @Override public LocalVar clone() {
     return new LocalVar(this);
+  }
+
+  public LocalVarNode declaringNode() {
+    return declaringNode;
   }
 }

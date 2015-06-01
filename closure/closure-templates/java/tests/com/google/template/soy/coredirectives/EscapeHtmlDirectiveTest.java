@@ -16,10 +16,13 @@
 
 package com.google.template.soy.coredirectives;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.common.collect.ImmutableList;
 import com.google.template.soy.data.SanitizedContent;
 import com.google.template.soy.data.UnsafeSanitizedContentOrdainer;
 import com.google.template.soy.jssrc.restricted.JsExpr;
+import com.google.template.soy.pysrc.restricted.PyExpr;
 import com.google.template.soy.shared.AbstractSoyPrintDirectiveTestCase;
 
 /**
@@ -28,10 +31,9 @@ import com.google.template.soy.shared.AbstractSoyPrintDirectiveTestCase;
  */
 public class EscapeHtmlDirectiveTest extends AbstractSoyPrintDirectiveTestCase {
 
-
   public void testApplyForTofu() {
-
     EscapeHtmlDirective escapeHtmlDirective = new EscapeHtmlDirective();
+
     assertTofuOutput("", "", escapeHtmlDirective);
     assertTofuOutput("a&amp;b &gt; c", "a&b > c", escapeHtmlDirective);
     assertTofuOutput(
@@ -57,13 +59,17 @@ public class EscapeHtmlDirectiveTest extends AbstractSoyPrintDirectiveTestCase {
         escapeHtmlDirective);
   }
 
-
   public void testApplyForJsSrc() {
-
     EscapeHtmlDirective escapeHtmlDirective = new EscapeHtmlDirective();
     JsExpr dataRef = new JsExpr("opt_data.myKey", Integer.MAX_VALUE);
-    assertEquals("soy.$$escapeHtml(opt_data.myKey)",
-                 escapeHtmlDirective.applyForJsSrc(dataRef, ImmutableList.<JsExpr>of()).getText());
+    assertThat(escapeHtmlDirective.applyForJsSrc(dataRef, ImmutableList.<JsExpr>of()).getText())
+        .isEqualTo("soy.$$escapeHtml(opt_data.myKey)");
   }
 
+  public void testApplyForPySrc() {
+    EscapeHtmlDirective escapeHtmlDirective = new EscapeHtmlDirective();
+    PyExpr data = new PyExpr("'data'", Integer.MAX_VALUE);
+    assertThat(escapeHtmlDirective.applyForPySrc(data, ImmutableList.<PyExpr>of()).getText())
+        .isEqualTo("sanitize.escape_html('data')");
+  }
 }

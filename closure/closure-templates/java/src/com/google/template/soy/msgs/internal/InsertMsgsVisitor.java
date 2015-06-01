@@ -18,6 +18,7 @@ package com.google.template.soy.msgs.internal;
 
 import com.google.common.collect.Lists;
 import com.google.template.soy.base.internal.IdGenerator;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.msgs.restricted.SoyMsg;
 import com.google.template.soy.msgs.restricted.SoyMsgPart;
@@ -41,7 +42,6 @@ import java.util.List;
 
 import javax.annotation.Nullable;
 
-
 /**
  * Visitor for inserting translated messages into Soy tree. This pass replaces the
  * MsgFallbackGroupNodes in the tree with sequences of RawTextNodes and other nodes. The only
@@ -60,8 +60,7 @@ import javax.annotation.Nullable;
  * this pass.
  *
  */
-public class InsertMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
-
+public final class InsertMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
 
   /**
    * Exception thrown when a plural or select message is encountered.
@@ -98,7 +97,11 @@ public class InsertMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
    *     will throw an {@link EncounteredPlrselMsgException} when encountering a plural or
    *     select message.
    */
-  public InsertMsgsVisitor(@Nullable SoyMsgBundle msgBundle, boolean dontErrorOnPlrselMsgs) {
+  public InsertMsgsVisitor(
+      @Nullable SoyMsgBundle msgBundle,
+      boolean dontErrorOnPlrselMsgs,
+      ErrorReporter errorReporter) {
+    super(errorReporter);
     this.msgBundle = msgBundle;
     this.dontErrorOnPlrselMsgs = dontErrorOnPlrselMsgs;
   }
@@ -171,7 +174,8 @@ public class InsertMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
       if (msgPart instanceof SoyMsgRawTextPart) {
         // Append a new RawTextNode to the currReplacementNodes list.
         String rawText = ((SoyMsgRawTextPart) msgPart).getRawText();
-        currReplacementNodes.add(new RawTextNode(nodeIdGen.genId(), rawText));
+        currReplacementNodes.add(
+            new RawTextNode(nodeIdGen.genId(), rawText, msg.getSourceLocation()));
 
       } else if (msgPart instanceof SoyMsgPlaceholderPart) {
         // Get the representative placeholder node and iterate through its contents.
@@ -228,10 +232,7 @@ public class InsertMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
 
 
   @Override protected void visitMsgHtmlTagNode(MsgHtmlTagNode node) {
-
-    for (StandaloneNode child : node.getChildren()) {
-      currReplacementNodes.add(child);
-    }
+    currReplacementNodes.addAll(node.getChildren());
   }
 
 

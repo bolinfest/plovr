@@ -18,12 +18,12 @@ package com.google.template.soy.soytree;
 
 import com.google.template.soy.basetree.AbstractNodeVisitor;
 import com.google.template.soy.basetree.ParentNode;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.soytree.SoyNode.LoopNode;
 import com.google.template.soy.soytree.SoyNode.MsgSubstUnitNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 import com.google.template.soy.soytree.jssrc.GoogMsgDefNode;
 import com.google.template.soy.soytree.jssrc.GoogMsgRefNode;
-
 
 /**
  * Abstract base class for all SoyNode visitors. A visitor is basically a function implemented for
@@ -54,8 +54,11 @@ import com.google.template.soy.soytree.jssrc.GoogMsgRefNode;
  */
 public abstract class AbstractSoyNodeVisitor<R> extends AbstractNodeVisitor<SoyNode, R> {
 
+  public AbstractSoyNodeVisitor(ErrorReporter errorReporter) {
+    super(errorReporter);
+  }
 
-  @Override protected void visit(SoyNode node) {
+  @Override protected final void visit(SoyNode node) {
 
     switch (node.getKind()) {
 

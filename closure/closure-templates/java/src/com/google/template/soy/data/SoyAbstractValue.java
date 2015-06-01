@@ -16,6 +16,11 @@
 
 package com.google.template.soy.data;
 
+import com.google.template.soy.jbcsrc.api.AdvisingAppendable;
+import com.google.template.soy.jbcsrc.api.RenderResult;
+
+import java.io.IOException;
+
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
 
@@ -35,22 +40,18 @@ public abstract class SoyAbstractValue implements SoyValue {
     return this;
   }
 
-
-  /**
-   * Note: Even though we provide a default implementation for equals(SoyValueProvider), subclasses
-   * must still implement equals(SoyValue).
-   *
-   * {@inheritDoc}
-   */
-  @Override public boolean equals(SoyValueProvider other) {
-    if (other instanceof SoyValue) {
-      return this.equals((SoyValue) other);
-    } else {
-      // Since 'other' is an unresolved SoyValueProvider, we let it decide how to handle equals(),
-      // e.g. it may decide to resolve itself before doing the comparison.
-      return other.equals(this);
-    }
+  @Override @Nonnull public RenderResult status() {
+    return RenderResult.done();
   }
+
+  @Override public RenderResult renderAndResolve(AdvisingAppendable appendable, boolean isLast)
+      throws IOException {
+    render(appendable);
+    return RenderResult.done();
+  }
+
+  // Force subtypes to implement equals
+  @Override public abstract boolean equals(Object other);
 
 
   @Override public boolean booleanValue() {
@@ -86,5 +87,4 @@ public abstract class SoyAbstractValue implements SoyValue {
     throw new SoyDataException(
         "Expecting string value but instead encountered type " + getClass().getSimpleName());
   }
-
 }

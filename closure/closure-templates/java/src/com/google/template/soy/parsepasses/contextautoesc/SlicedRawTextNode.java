@@ -75,14 +75,13 @@ public final class SlicedRawTextNode {
       return startOffset;
     }
 
-    /** The end offset (exclusive) into the text node's text. */
-    public int getEndOffset() {
-      return endOffset;
-    }
-
     /** The length of the slice in {@code char}s. */
     public int getLength() {
       return endOffset - startOffset;
+    }
+
+    public SlicedRawTextNode getSlicedRawTextNode() {
+      return slicedRawTextNode;
     }
 
     /**
@@ -140,8 +139,8 @@ public final class SlicedRawTextNode {
       String originalText = rawTextNode.getRawText();
       String replacementText =
         originalText.substring(0, insertionOffset) + text + originalText.substring(insertionOffset);
-      RawTextNode replacementNode = new RawTextNode(rawTextNode.getId(), replacementText);
-      replacementNode.setSourceLocation(rawTextNode.getSourceLocation());
+      RawTextNode replacementNode = new RawTextNode(
+          rawTextNode.getId(), replacementText, rawTextNode.getSourceLocation());
 
       // Rerun the context update algo so that we can figure out the context of the inserted slices
       // and ensure that the inserted text does not invalidate any of the security assumptions made
@@ -222,11 +221,6 @@ public final class SlicedRawTextNode {
 
   public List<RawTextSlice> getSlices() {
     return Collections.unmodifiableList(slices);
-  }
-
-  /** The context in which the text node starts. */
-  public Context getStartContext() {
-    return startContext;
   }
 
   /** The context in which the text node ends. */

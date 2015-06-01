@@ -16,24 +16,26 @@
 
 package com.google.template.soy.soytree;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.common.collect.ImmutableList;
-import com.google.template.soy.base.SoySyntaxException;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.basetree.SyntaxVersion;
+import com.google.template.soy.error.ExplodingErrorReporter;
 
 import junit.framework.TestCase;
-
 
 /**
  * Unit tests for CallNode.
  *
  */
-public class CallNodeTest extends TestCase {
+public final class CallNodeTest extends TestCase {
 
 
   /** Escaping list of directive names. */
   private static final ImmutableList<String> NO_ESCAPERS = ImmutableList.of();
 
-  public void testCommandText() throws SoySyntaxException {
+  public void testCommandText() {
 
     checkCommandText("function=\"bar.foo\"");
     checkCommandText("foo");
@@ -43,15 +45,17 @@ public class CallNodeTest extends TestCase {
     try {
       checkCommandText(".foo.bar data=\"$x\"");
       fail();
-    } catch (SoySyntaxException e) {
+    } catch (IllegalStateException e) {
       // Test passes.
     }
   }
 
 
-  public void testSetEscapingDirectiveNames() throws SoySyntaxException {
-    CallBasicNode callNode = new CallBasicNode(0, ".foo", null);
-    assertEquals(ImmutableList.<String>of(), callNode.getEscapingDirectiveNames());
+  public void testSetEscapingDirectiveNames() {
+    CallBasicNode callNode = new CallBasicNode.Builder(0, SourceLocation.UNKNOWN)
+        .commandText(".foo")
+        .build(ExplodingErrorReporter.get());
+    assertThat(callNode.getEscapingDirectiveNames()).isEmpty();
     callNode.setEscapingDirectiveNames(ImmutableList.of("hello", "world"));
     assertEquals(ImmutableList.of("hello", "world"), callNode.getEscapingDirectiveNames());
     callNode.setEscapingDirectiveNames(ImmutableList.of("bye", "world"));
@@ -66,24 +70,30 @@ public class CallNodeTest extends TestCase {
 
   private void checkCommandText(String commandText, String expectedCommandText) {
 
-    CallBasicNode callNode = new CallBasicNode(0, commandText, null);
+    CallBasicNode callNode = new CallBasicNode.Builder(0, SourceLocation.UNKNOWN)
+        .commandText(commandText)
+        .build(ExplodingErrorReporter.get());
     if (callNode.getCalleeName() == null) {
       callNode.setCalleeName("testNamespace" + callNode.getSrcCalleeName());
     }
 
-    CallBasicNode normCallNode = new CallBasicNode(
-        0, callNode.getCalleeName(), callNode.getSrcCalleeName(), false,
-        ! callNode.couldHaveSyntaxVersionAtLeast(SyntaxVersion.V2_0),
-        callNode.isPassingData(), callNode.isPassingAllData(), callNode.getDataExpr(),
-        callNode.getUserSuppliedPhName(), callNode.getSyntaxVersionBound(), NO_ESCAPERS);
+    boolean useV1FunctionAttrForCalleeName
+        = !callNode.couldHaveSyntaxVersionAtLeast(SyntaxVersion.V2_0);
 
-    assertEquals(expectedCommandText, normCallNode.getCommandText());
+    CallBasicNode normCallNode = new CallBasicNode.Builder(0, SourceLocation.UNKNOWN)
+        .calleeName(callNode.getCalleeName())
+        .sourceCalleeName(callNode.getSrcCalleeName())
+        .useV1FunctionAttrForCalleeName(useV1FunctionAttrForCalleeName)
+        .dataAttribute(callNode.dataAttribute())
+        .userSuppliedPlaceholderName(callNode.getUserSuppliedPhName())
+        .syntaxVersionBound(callNode.getSyntaxVersionBound())
+        .escapingDirectiveNames(NO_ESCAPERS)
+        .build(ExplodingErrorReporter.get());
 
-    assertEquals(callNode.getSyntaxVersionBound(), normCallNode.getSyntaxVersionBound());
-    assertEquals(callNode.getCalleeName(), normCallNode.getCalleeName());
-    assertEquals(callNode.isPassingData(), normCallNode.isPassingData());
-    assertEquals(callNode.isPassingAllData(), normCallNode.isPassingAllData());
-    assertEquals(callNode.getDataExpr(), normCallNode.getDataExpr());
+    assertThat(normCallNode.getCommandText()).isEqualTo(expectedCommandText);
+    assertThat(normCallNode.getSyntaxVersionBound()).isEqualTo(callNode.getSyntaxVersionBound());
+    assertThat(normCallNode.getCalleeName()).isEqualTo(callNode.getCalleeName());
+    assertThat(normCallNode.dataAttribute()).isEqualTo(callNode.dataAttribute());
   }
 
 }

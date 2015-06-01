@@ -20,9 +20,11 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.collect.Lists;
 import com.google.common.io.Resources;
+import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.base.internal.SoyFileKind;
 import com.google.template.soy.base.internal.SoyFileSupplier;
-import com.google.template.soy.basetree.SyntaxVersion;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.msgs.SoyMsgBundleHandler.OutputFileOptions;
 import com.google.template.soy.msgs.internal.ExtractMsgsVisitor;
@@ -30,32 +32,28 @@ import com.google.template.soy.msgs.restricted.SoyMsg;
 import com.google.template.soy.msgs.restricted.SoyMsgPart;
 import com.google.template.soy.msgs.restricted.SoyMsgPlaceholderPart;
 import com.google.template.soy.msgs.restricted.SoyMsgRawTextPart;
-import com.google.template.soy.soyparse.SoyFileSetParser;
 import com.google.template.soy.soytree.SoyFileSetNode;
-import com.google.template.soy.types.SoyTypeRegistry;
 
 import junit.framework.TestCase;
 
 import java.net.URL;
 import java.util.List;
 
-
 /**
  * Unit tests for XliffMsgPlugin.
  *
  */
-public class XliffMsgPluginTest extends TestCase {
-
+public final class XliffMsgPluginTest extends TestCase {
 
   public void testGenerateExtractedMsgsFile() throws Exception {
 
     URL testSoyFile = Resources.getResource(XliffMsgPluginTest.class, "test_data/test-v2.soy");
-    SoyFileSetNode soyTree =
-        (new SoyFileSetParser(
-            new SoyTypeRegistry(), null, SyntaxVersion.V2_0,
-            SoyFileSupplier.Factory.create(testSoyFile, SoyFileKind.SRC)))
-            .parse();
-    SoyMsgBundle msgBundle = (new ExtractMsgsVisitor()).exec(soyTree);
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forSuppliers(
+        SoyFileSupplier.Factory.create(testSoyFile, SoyFileKind.SRC))
+        .errorReporter(boom)
+        .parse();
+    SoyMsgBundle msgBundle = new ExtractMsgsVisitor(boom).exec(soyTree);
 
     XliffMsgPlugin msgPlugin = new XliffMsgPlugin();
 

@@ -74,9 +74,6 @@ public interface SoyType {
     ENUM,       // An enumeration type.
     UNION,      // Used to indicate a parameter that can accept multiple
                 // alternatives, e.g. a|b.
-    SPECIALIZED // A specialization of a generic type, containing a reference
-                // to the generic type and a list of type arguments. (Note that
-                // maps and lists are already implicitly specialized.)
   }
 
 
@@ -110,4 +107,9 @@ public interface SoyType {
    * @return True if the value is an instance of this type.
    */
   boolean isInstance(SoyValue value);
+
+  /**
+   * Returns the java class for the the SoyValue subclass that is used to represent this type.
+   */
+  Class<? extends SoyValue> javaType();
 }

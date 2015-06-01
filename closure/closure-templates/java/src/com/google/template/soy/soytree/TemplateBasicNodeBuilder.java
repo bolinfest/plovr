@@ -19,12 +19,14 @@ package com.google.template.soy.soytree;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.base.internal.BaseUtils;
 import com.google.template.soy.basetree.SyntaxVersion;
 import com.google.template.soy.basetree.SyntaxVersionBound;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.data.internalutils.NodeContentKinds;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.soytree.CommandTextAttributesParser.Attribute;
 import com.google.template.soy.soytree.TemplateNode.SoyFileHeaderInfo;
 import com.google.template.soy.types.SoyTypeRegistry;
@@ -35,7 +37,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
-
 
 /**
  * Builder for TemplateBasicNode.
@@ -54,31 +55,34 @@ public class TemplateBasicNodeBuilder extends TemplateNodeBuilder {
       new CommandTextAttributesParser("template",
           new Attribute("name", Attribute.ALLOW_ALL_VALUES, null),  // V2.1-
           new Attribute("private", Attribute.BOOLEAN_VALUES, "false"),
-          new Attribute("override", Attribute.BOOLEAN_VALUES, null),  // V1.0
           new Attribute("autoescape", AutoescapeMode.getAttributeValues(), null),
           new Attribute("kind", NodeContentKinds.getAttributeValues(), null),
           new Attribute("requirecss", Attribute.ALLOW_ALL_VALUES, null),
           new Attribute("cssbase", Attribute.ALLOW_ALL_VALUES, null),
           new Attribute("visibility", Visibility.getAttributeValues(), null));
 
-
-  /** Whether this template overrides another (always false for syntax version V2). */
-  private Boolean isOverride;
-
   /**
    * @param soyFileHeaderInfo Info from the containing Soy file's header declarations.
+   * @param sourceLocation The template's source location.
    */
-  public TemplateBasicNodeBuilder(SoyFileHeaderInfo soyFileHeaderInfo) {
-    super(soyFileHeaderInfo, null);
+  public TemplateBasicNodeBuilder(
+      SoyFileHeaderInfo soyFileHeaderInfo,
+      SourceLocation sourceLocation,
+      ErrorReporter errorReporter) {
+    super(soyFileHeaderInfo, sourceLocation, errorReporter, null /* typeRegistry */);
   }
 
   /**
    * @param soyFileHeaderInfo Info from the containing Soy file's header declarations.
+   * @param sourceLocation The template's source location.
    * @param typeRegistry Type registry used for parsing type expressions.
    */
   public TemplateBasicNodeBuilder(
-      SoyFileHeaderInfo soyFileHeaderInfo, SoyTypeRegistry typeRegistry) {
-    super(soyFileHeaderInfo, typeRegistry);
+      SoyFileHeaderInfo soyFileHeaderInfo,
+      SourceLocation sourceLocation,
+      ErrorReporter errorReporter,
+      SoyTypeRegistry typeRegistry) {
+    super(soyFileHeaderInfo, sourceLocation, errorReporter, typeRegistry);
   }
 
   @Override public TemplateBasicNodeBuilder setId(int id) {
@@ -100,7 +104,8 @@ public class TemplateBasicNodeBuilder extends TemplateNodeBuilder {
       commandTextForParsing = commandTextForParsing.substring(ntnMatcher.end()).trim();
     }
 
-    Map<String, String> attributes = ATTRIBUTES_PARSER.parse(commandTextForParsing);
+    Map<String, String> attributes = ATTRIBUTES_PARSER.parse(
+        commandTextForParsing, errorReporter, sourceLocation);
 
     if (nameAttr == null) {
       nameAttr = attributes.get("name");
@@ -145,17 +150,6 @@ public class TemplateBasicNodeBuilder extends TemplateNodeBuilder {
 
     this.templateNameForUserMsgs = getTemplateName();
 
-    String overrideAttr = attributes.get("override");
-    if (overrideAttr == null) {
-      this.isOverride = false;
-    } else {
-      SyntaxVersionBound newSyntaxVersionBound = new SyntaxVersionBound(
-          SyntaxVersion.V2_0, "The 'override' attribute in a 'template' tag is a Soy V1 artifact.");
-      this.syntaxVersionBound =
-          SyntaxVersionBound.selectLower(this.syntaxVersionBound, newSyntaxVersionBound);
-      this.isOverride = overrideAttr.equals("true");
-    }
-
     // See go/soy-visibility for why this is considered "legacy private".
     if (attributes.get("private").equals("true")) {
       visibility = Visibility.LEGACY_PRIVATE;
@@ -197,7 +191,6 @@ public class TemplateBasicNodeBuilder extends TemplateNodeBuilder {
    * @param partialTemplateName This template's partial name. Only applicable for V2; null for V1.
    * @param useAttrStyleForName Whether to use an attribute to specify the name. This is purely
    *     cosmetic for the generated cmdText string.
-   * @param isOverride Whether this template overrides another.
    * @param visibility Visibility of this template.
    * @param autoescapeMode The mode of autoescaping for this template.
    * @param contentKind Strict mode context. Nonnull iff autoescapeMode is strict.
@@ -206,7 +199,7 @@ public class TemplateBasicNodeBuilder extends TemplateNodeBuilder {
    */
   public TemplateBasicNodeBuilder setCmdTextInfo(
       String templateName, @Nullable String partialTemplateName, boolean useAttrStyleForName,
-      boolean isOverride, Visibility visibility, AutoescapeMode autoescapeMode,
+      Visibility visibility, AutoescapeMode autoescapeMode,
       ContentKind contentKind, ImmutableList<String> requiredCssNamespaces) {
 
     Preconditions.checkState(this.cmdText == null);
@@ -217,7 +210,6 @@ public class TemplateBasicNodeBuilder extends TemplateNodeBuilder {
 
     setTemplateNames(templateName, partialTemplateName);
     this.templateNameForUserMsgs = templateName;
-    this.isOverride = isOverride;
     this.visibility = visibility;
     setAutoescapeInfo(autoescapeMode, contentKind);
     setRequiredCssNamespaces(requiredCssNamespaces);
@@ -233,9 +225,6 @@ public class TemplateBasicNodeBuilder extends TemplateNodeBuilder {
     cmdTextBuilder.append(" autoescape=\"").append(autoescapeMode.getAttributeValue()).append('"');
     if (contentKind != null) {
       cmdTextBuilder.append(" kind=\"" + NodeContentKinds.toAttributeValue(contentKind) + '"');
-    }
-    if (isOverride) {
-      cmdTextBuilder.append(" override=\"true\"");
     }
     if (visibility == Visibility.LEGACY_PRIVATE) {
       // TODO(brndn): generate code for other visibility levels. b/15190131
@@ -259,6 +248,6 @@ public class TemplateBasicNodeBuilder extends TemplateNodeBuilder {
 
   @Override public TemplateBasicNode build() {
     Preconditions.checkState(id != null && isSoyDocSet && cmdText != null);
-    return new TemplateBasicNode(this, soyFileHeaderInfo, isOverride, visibility, params);
+    return new TemplateBasicNode(this, soyFileHeaderInfo, visibility, params);
   }
 }

@@ -38,12 +38,12 @@ public final class RecordType implements SoyObjectType {
   private final ImmutableSortedMap<String, SoyType> members;
 
 
-  private RecordType(Map<String, SoyType> members) {
+  private RecordType(Map<String, ? extends SoyType> members) {
     this.members = ImmutableSortedMap.copyOf(members);
   }
 
 
-  public static RecordType of(Map<String, SoyType> members) {
+  public static RecordType of(Map<String, ? extends SoyType> members) {
     return new RecordType(members);
   }
 
@@ -74,6 +74,9 @@ public final class RecordType implements SoyObjectType {
     return value instanceof SoyRecord;
   }
 
+  @Override public Class<? extends SoyValue> javaType() {
+    return SoyRecord.class;
+  }
 
   @Override public String getName() {
     return "Record";
@@ -96,9 +99,10 @@ public final class RecordType implements SoyObjectType {
   }
 
 
-  @Override public String getFieldAccessor(String fieldName, SoyBackendKind backendKind) {
+  @Override public String getFieldAccessExpr(
+      String fieldContainerExpr, String fieldName, SoyBackendKind backendKind) {
     if (backendKind == SoyBackendKind.JS_SRC) {
-      return "." + fieldName;
+      return fieldContainerExpr + "." + fieldName;
     } else {
       throw new UnsupportedOperationException();
     }
@@ -122,7 +126,7 @@ public final class RecordType implements SoyObjectType {
       }
       sb.append(entry.getKey());
       sb.append(": ");
-      sb.append(entry.getValue().toString());
+      sb.append(entry.getValue());
     }
     sb.append("]");
     return sb.toString();

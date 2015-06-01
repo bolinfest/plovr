@@ -16,21 +16,26 @@
 
 package com.google.template.soy.sharedpasses;
 
+import static com.google.common.truth.Truth.assertThat;
+
+import com.google.template.soy.SoyFileSetParserBuilder;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
+import com.google.template.soy.shared.SharedTestUtils;
 import com.google.template.soy.shared.SoyCssRenamingMap;
-import com.google.template.soy.shared.internal.SharedTestUtils;
 import com.google.template.soy.soytree.CssNode;
 import com.google.template.soy.soytree.PrintNode;
 import com.google.template.soy.soytree.RawTextNode;
+import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.TemplateNode;
 
 import junit.framework.TestCase;
-
 
 /**
  * Unit tests for RenameCssVisitor.
  *
  */
-public class RenameCssVisitorTest extends TestCase {
+public final class RenameCssVisitorTest extends TestCase {
 
 
   private static final String TEST_FILE_CONTENT =
@@ -43,48 +48,52 @@ public class RenameCssVisitorTest extends TestCase {
 
 
   public void testWithoutCssRenamingMap() {
-
-    TemplateNode template =
-        (TemplateNode) SharedTestUtils.getNode(SharedTestUtils.parseSoyFiles(TEST_FILE_CONTENT));
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(TEST_FILE_CONTENT)
+        .errorReporter(boom)
+        .parse();
+    TemplateNode template = (TemplateNode) SharedTestUtils.getNode(soyTree);
 
     // Before.
-    assertEquals(9, template.numChildren());
+    assertThat(template.numChildren()).isEqualTo(9);
     CssNode cn1 = (CssNode) template.getChild(1);
-    assertEquals("AAA", cn1.getSelectorText());
+    assertThat(cn1.getSelectorText()).isEqualTo("AAA");
     CssNode cn7 = (CssNode) template.getChild(7);
-    assertEquals("$goo", cn7.getComponentNameText());
-    assertEquals("BBB", cn7.getSelectorText());
+    assertThat(cn7.getComponentNameText()).isEqualTo("$goo");
+    assertThat(cn7.getSelectorText()).isEqualTo("BBB");
 
-    (new RenameCssVisitor(null)).exec(template);
-    (new CombineConsecutiveRawTextNodesVisitor()).exec(template);
+    new RenameCssVisitor(null /* cssRenamingMap */, boom).exec(template);
+    new CombineConsecutiveRawTextNodesVisitor(boom).exec(template);
 
     // After.
-    assertEquals(5, template.numChildren());
+    assertThat(template.numChildren()).isEqualTo(5);
     RawTextNode rtn0 = (RawTextNode) template.getChild(0);
-    assertEquals("<div class=\"AAA ", rtn0.getRawText());
+    assertThat(rtn0.getRawText()).isEqualTo("<div class=\"AAA ");
     PrintNode pn1 = (PrintNode) template.getChild(1);
-    assertEquals("$goo", pn1.getExprText());
+    assertThat(pn1.getExprText()).isEqualTo("$goo");
     RawTextNode rtn2 = (RawTextNode) template.getChild(2);
-    assertEquals("-AAA BBB ", rtn2.getRawText());
+    assertThat(rtn2.getRawText()).isEqualTo("-AAA BBB ");
     PrintNode pn3 = (PrintNode) template.getChild(3);
-    assertEquals("$goo", pn3.getExprText());
+    assertThat(pn3.getExprText()).isEqualTo("$goo");
     RawTextNode rtn4 = (RawTextNode) template.getChild(4);
-    assertEquals("-BBB\">", rtn4.getRawText());
+    assertThat(rtn4.getRawText()).isEqualTo("-BBB\">");
   }
 
 
   public void testWithCssRenamingMap() {
-
-    TemplateNode template =
-        (TemplateNode) SharedTestUtils.getNode(SharedTestUtils.parseSoyFiles(TEST_FILE_CONTENT));
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(TEST_FILE_CONTENT)
+        .errorReporter(boom)
+        .parse();
+    TemplateNode template = (TemplateNode) SharedTestUtils.getNode(soyTree);
 
     // Before.
-    assertEquals(9, template.numChildren());
+    assertThat(template.numChildren()).isEqualTo(9);
     CssNode cn1 = (CssNode) template.getChild(1);
-    assertEquals("AAA", cn1.getSelectorText());
+    assertThat(cn1.getSelectorText()).isEqualTo("AAA");
     CssNode cn7 = (CssNode) template.getChild(7);
-    assertEquals("$goo", cn7.getComponentNameText());
-    assertEquals("BBB", cn7.getSelectorText());
+    assertThat(cn7.getComponentNameText()).isEqualTo("$goo");
+    assertThat(cn7.getSelectorText()).isEqualTo("BBB");
 
     // Use a CSS renaming map that only renames 'AAA'.
     SoyCssRenamingMap cssRenamingMap =
@@ -94,21 +103,21 @@ public class RenameCssVisitorTest extends TestCase {
           }
         };
 
-    (new RenameCssVisitor(cssRenamingMap)).exec(template);
-    (new CombineConsecutiveRawTextNodesVisitor()).exec(template);
+    new RenameCssVisitor(cssRenamingMap, boom).exec(template);
+    new CombineConsecutiveRawTextNodesVisitor(boom).exec(template);
 
     // After.
-    assertEquals(5, template.numChildren());
+    assertThat(template.numChildren()).isEqualTo(5);
     RawTextNode rtn0 = (RawTextNode) template.getChild(0);
-    assertEquals("<div class=\"XXX ", rtn0.getRawText());
+    assertThat(rtn0.getRawText()).isEqualTo("<div class=\"XXX ");
     PrintNode pn1 = (PrintNode) template.getChild(1);
-    assertEquals("$goo", pn1.getExprText());
+    assertThat(pn1.getExprText()).isEqualTo("$goo");
     RawTextNode rtn2 = (RawTextNode) template.getChild(2);
-    assertEquals("-XXX BBB ", rtn2.getRawText());
+    assertThat(rtn2.getRawText()).isEqualTo("-XXX BBB ");
     PrintNode pn3 = (PrintNode) template.getChild(3);
-    assertEquals("$goo", pn3.getExprText());
+    assertThat(pn3.getExprText()).isEqualTo("$goo");
     RawTextNode rtn4 = (RawTextNode) template.getChild(4);
-    assertEquals("-BBB\">", rtn4.getRawText());
+    assertThat(rtn4.getRawText()).isEqualTo("-BBB\">");
   }
 
 }

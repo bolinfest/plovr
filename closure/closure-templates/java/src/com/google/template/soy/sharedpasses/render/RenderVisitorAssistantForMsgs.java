@@ -16,14 +16,14 @@
 
 package com.google.template.soy.sharedpasses.render;
 
-import com.google.common.collect.ImmutableList;
 import com.google.template.soy.data.SoyDataException;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.ExprRootNode;
-import com.google.template.soy.internal.base.Pair;
 import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.msgs.internal.MsgUtils;
 import com.google.template.soy.msgs.restricted.SoyMsg;
 import com.google.template.soy.msgs.restricted.SoyMsgPart;
+import com.google.template.soy.msgs.restricted.SoyMsgPart.Case;
 import com.google.template.soy.msgs.restricted.SoyMsgPlaceholderPart;
 import com.google.template.soy.msgs.restricted.SoyMsgPluralCaseSpec;
 import com.google.template.soy.msgs.restricted.SoyMsgPluralPart;
@@ -54,8 +54,7 @@ import java.util.List;
  * Assistant visitor for RenderVisitor to handle messages.
  *
  */
-class RenderVisitorAssistantForMsgs extends AbstractSoyNodeVisitor<Void> {
-
+final class RenderVisitorAssistantForMsgs extends AbstractSoyNodeVisitor<Void> {
 
   /** Master instance of RenderVisitor. */
   private final RenderVisitor master;
@@ -71,8 +70,11 @@ class RenderVisitorAssistantForMsgs extends AbstractSoyNodeVisitor<Void> {
    * @param master The master RenderVisitor instance.
    * @param msgBundle The bundle of translated messages, or null to use the messages from the Soy
    *     source.
+   * @param errorReporter For reporting errors.
    */
-  RenderVisitorAssistantForMsgs(RenderVisitor master, SoyMsgBundle msgBundle) {
+  RenderVisitorAssistantForMsgs(
+      RenderVisitor master, SoyMsgBundle msgBundle, ErrorReporter errorReporter) {
+    super(errorReporter);
     this.master = master;
     this.msgBundle = msgBundle;
     this.currPluralRemainderValue = -1;
@@ -123,7 +125,7 @@ class RenderVisitorAssistantForMsgs extends AbstractSoyNodeVisitor<Void> {
 
     List<SoyMsgPart> msgParts = translation.getParts();
 
-    if (msgParts.size() > 0) {
+    if (!msgParts.isEmpty()) {
       SoyMsgPart firstPart = msgParts.get(0);
 
       if (firstPart instanceof SoyMsgPluralPart) {
@@ -169,16 +171,16 @@ class RenderVisitorAssistantForMsgs extends AbstractSoyNodeVisitor<Void> {
 
 
   @Override protected void visitMsgPluralNode(MsgPluralNode node) {
-    ExprRootNode<?> pluralExpr = node.getExpr();
+    ExprRootNode pluralExpr = node.getExpr();
     double pluralValue;
     try {
       pluralValue = master.evalForUseByAssistants(pluralExpr, node).numberValue();
     } catch (SoyDataException e) {
-      throw new RenderException(
-          String.format("Plural expression \"%s\" doesn't evaluate to number.",
-              pluralExpr.toSourceString()),
-          e)
-          .addPartialStackTraceElement(node.getSourceLocation());
+      throw RenderException.createWithSource(
+          String.format(
+              "Plural expression \"%s\" doesn't evaluate to number.", pluralExpr.toSourceString()),
+          e,
+          node);
     }
 
     currPluralRemainderValue = pluralValue - node.getOffset();
@@ -210,16 +212,16 @@ class RenderVisitorAssistantForMsgs extends AbstractSoyNodeVisitor<Void> {
 
 
   @Override protected void visitMsgSelectNode(MsgSelectNode node) {
-    ExprRootNode<?> selectExpr = node.getExpr();
+    ExprRootNode selectExpr = node.getExpr();
     String selectValue;
     try {
       selectValue = master.evalForUseByAssistants(selectExpr, node).stringValue();
     } catch (SoyDataException e) {
-      throw new RenderException(
-          String.format("Select expression \"%s\" doesn't evaluate to string.",
-              selectExpr.toSourceString()),
-          e)
-          .addPartialStackTraceElement(node.getSourceLocation());
+      throw RenderException.createWithSource(
+          String.format(
+              "Select expression \"%s\" doesn't evaluate to string.", selectExpr.toSourceString()),
+          e,
+          node);
     }
 
     // Check each case.
@@ -300,26 +302,27 @@ class RenderVisitorAssistantForMsgs extends AbstractSoyNodeVisitor<Void> {
 
       // Associate the select variable with the value.
       String correctSelectValue;
-      ExprRootNode<?> selectExpr = repSelectNode.getExpr();
+      ExprRootNode selectExpr = repSelectNode.getExpr();
       try {
         correctSelectValue = master.evalForUseByAssistants(selectExpr, repSelectNode).stringValue();
       } catch (SoyDataException e) {
-        throw new RenderException(
-            String.format("Select expression \"%s\" doesn't evaluate to string.",
+        throw RenderException.createWithSource(
+            String.format(
+                "Select expression \"%s\" doesn't evaluate to string.",
                 selectExpr.toSourceString()),
-            e)
-            .addPartialStackTraceElement(repSelectNode.getSourceLocation());
+            e,
+            repSelectNode);
       }
 
       List<SoyMsgPart> caseParts = null;
       List<SoyMsgPart> defaultParts = null;
 
       // Handle cases.
-      for (Pair<String, ImmutableList<SoyMsgPart>> case0 : selectPart.getCases()) {
-        if (case0.first == null) {
-          defaultParts = case0.second;
-        } else if (case0.first.equals(correctSelectValue)) {
-          caseParts = case0.second;
+      for (Case<String> case0 : selectPart.getCases()) {
+        if (case0.spec() == null) {
+          defaultParts = case0.parts();
+        } else if (case0.spec().equals(correctSelectValue)) {
+          caseParts = case0.parts();
           break;
         }
       }
@@ -342,12 +345,12 @@ class RenderVisitorAssistantForMsgs extends AbstractSoyNodeVisitor<Void> {
             visitPart((SoyMsgPlaceholderPart) casePart);
 
           } else if (casePart instanceof SoyMsgRawTextPart) {
-            visitPart((SoyMsgRawTextPart) casePart);
+            appendRawTextPart((SoyMsgRawTextPart) casePart);
 
           } else {
-            throw new RenderException("Unsupported part of type " + casePart.getClass().getName() +
+            throw RenderException.create("Unsupported part of type " + casePart.getClass().getName() +
                 " under a select case.")
-                .addPartialStackTraceElement(repSelectNode.getSourceLocation());
+                .addStackTraceElement(repSelectNode);
 
           }
         }
@@ -367,16 +370,17 @@ class RenderVisitorAssistantForMsgs extends AbstractSoyNodeVisitor<Void> {
 
       MsgPluralNode repPluralNode = msgNode.getRepPluralNode(pluralPart.getPluralVarName());
       double correctPluralValue;
-      ExprRootNode<?> pluralExpr = repPluralNode.getExpr();
+      ExprRootNode pluralExpr = repPluralNode.getExpr();
       try {
         correctPluralValue =
             master.evalForUseByAssistants(pluralExpr, repPluralNode).numberValue();
       } catch (SoyDataException e) {
-        throw new RenderException(
-            String.format("Plural expression \"%s\" doesn't evaluate to number.",
+        throw RenderException.createWithSource(
+            String.format(
+                "Plural expression \"%s\" doesn't evaluate to number.",
                 pluralExpr.toSourceString()),
-            e)
-            .addPartialStackTraceElement(repPluralNode.getSourceLocation());
+            e,
+            repPluralNode);
       }
 
       currentPluralRemainderValue = correctPluralValue - repPluralNode.getOffset();
@@ -387,18 +391,18 @@ class RenderVisitorAssistantForMsgs extends AbstractSoyNodeVisitor<Void> {
       // Check whether the plural value matches any explicit numeric value.
       boolean hasNonExplicitCases = false;
       List<SoyMsgPart> otherCaseParts = null;
-      for (Pair<SoyMsgPluralCaseSpec, ImmutableList<SoyMsgPart>> case0 : pluralPart.getCases()) {
+      for (Case<SoyMsgPluralCaseSpec> case0 : pluralPart.getCases()) {
 
-        SoyMsgPluralCaseSpec pluralCaseSpec = case0.first;
+        SoyMsgPluralCaseSpec pluralCaseSpec = case0.spec();
         SoyMsgPluralCaseSpec.Type caseType = pluralCaseSpec.getType();
         if (caseType == SoyMsgPluralCaseSpec.Type.EXPLICIT) {
           if (pluralCaseSpec.getExplicitValue() == correctPluralValue) {
-            caseParts = case0.second;
+            caseParts = case0.parts();
             break;
           }
 
         } else if (caseType == SoyMsgPluralCaseSpec.Type.OTHER) {
-          otherCaseParts = case0.second;
+          otherCaseParts = case0.parts();
 
         } else {
           hasNonExplicitCases = true;
@@ -414,10 +418,10 @@ class RenderVisitorAssistantForMsgs extends AbstractSoyNodeVisitor<Void> {
 
 
         // Iterate the cases once again for non-numeric keywords.
-        for (Pair<SoyMsgPluralCaseSpec, ImmutableList<SoyMsgPart>> case0 : pluralPart.getCases()) {
+        for (Case<SoyMsgPluralCaseSpec> case0 : pluralPart.getCases()) {
 
-          if (case0.first.getType() == correctCaseType) {
-            caseParts = case0.second;
+          if (case0.spec().getType() == correctCaseType) {
+            caseParts = case0.parts();
             break;
           }
         }
@@ -435,16 +439,16 @@ class RenderVisitorAssistantForMsgs extends AbstractSoyNodeVisitor<Void> {
           visitPart((SoyMsgPlaceholderPart) casePart);
 
         } else if (casePart instanceof SoyMsgRawTextPart) {
-          visitPart((SoyMsgRawTextPart) casePart);
+          appendRawTextPart((SoyMsgRawTextPart) casePart);
 
         } else if (casePart instanceof SoyMsgPluralRemainderPart) {
-          visitPart((SoyMsgPluralRemainderPart) casePart);
+          appendPluralRemainder();
 
         } else {
           // Plural parts will not have nested plural/select parts.  So, this is an error.
-          throw new RenderException("Unsupported part of type " + casePart.getClass().getName() +
+          throw RenderException.create("Unsupported part of type " + casePart.getClass().getName() +
               " under a plural case.")
-              .addPartialStackTraceElement(repPluralNode.getSourceLocation());
+              .addStackTraceElement(repPluralNode);
 
         }
       }
@@ -455,10 +459,8 @@ class RenderVisitorAssistantForMsgs extends AbstractSoyNodeVisitor<Void> {
      * Processes a {@code SoyMsgPluralRemainderPart} and appends the rendered output to
      * the {@code StringBuilder} object in {@code RenderVisitor}.  Since this is precomputed
      * when visiting the {@code SoyMsgPluralPart} object, it is directly used here.
-     * @param remainderPart The {@code SoyMsgPluralRemainderPart} object.
      */
-    @SuppressWarnings("UnusedDeclaration")  // for IntelliJ
-    private void visitPart(SoyMsgPluralRemainderPart remainderPart) {
+    private void appendPluralRemainder() {
       RenderVisitor.append(master.getCurrOutputBufForUseByAssistants(),
           String.valueOf(currentPluralRemainderValue));
     }
@@ -481,7 +483,7 @@ class RenderVisitorAssistantForMsgs extends AbstractSoyNodeVisitor<Void> {
      * the {@code StringBuilder} object in {@code RenderVisitor}.
      * @param rawTextPart The raw text part.
      */
-    private void visitPart(SoyMsgRawTextPart rawTextPart) {
+    private void appendRawTextPart(SoyMsgRawTextPart rawTextPart) {
       RenderVisitor.append(master.getCurrOutputBufForUseByAssistants(), rawTextPart.getRawText());
     }
 

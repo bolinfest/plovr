@@ -16,12 +16,12 @@
 
 package com.google.template.soy.exprtree;
 
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.basetree.MixinParentNode;
 import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
 import com.google.template.soy.types.SoyType;
 
 import java.util.List;
-
 
 /**
  * Abstract implementation of a ParentExprNode.
@@ -43,13 +43,14 @@ public abstract class AbstractParentExprNode extends AbstractExprNode implements
   private SoyType type;
 
 
-  protected AbstractParentExprNode() {
-    this((SoyType) null);
+  protected AbstractParentExprNode(SourceLocation sourceLocation) {
+    this(null /* type */, sourceLocation);
   }
 
 
-  protected AbstractParentExprNode(SoyType type) {
-    parentMixin = new MixinParentNode<ExprNode>(this);
+  protected AbstractParentExprNode(SoyType type, SourceLocation sourceLocation) {
+    super(sourceLocation);
+    parentMixin = new MixinParentNode<>(this);
     this.type = type;
   }
 
@@ -60,7 +61,7 @@ public abstract class AbstractParentExprNode extends AbstractExprNode implements
    */
   protected AbstractParentExprNode(AbstractParentExprNode orig) {
     super(orig);
-    this.parentMixin = new MixinParentNode<ExprNode>(orig.parentMixin, this);
+    this.parentMixin = new MixinParentNode<>(orig.parentMixin, this);
     this.type = orig.type;
   }
 

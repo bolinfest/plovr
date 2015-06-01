@@ -36,11 +36,15 @@ public final class FieldAccessNode extends DataAccessNode {
    *     and returns null instead of causing an invalid dereference.
    */
   public FieldAccessNode(ExprNode base, String fieldName, boolean isNullSafe) {
-    super(base, isNullSafe);
+    super(base, base.getSourceLocation(), isNullSafe);
     Preconditions.checkArgument(fieldName != null);
     this.fieldName = fieldName;
   }
 
+  private FieldAccessNode(FieldAccessNode orig) {
+    super(orig);
+    this.fieldName = orig.fieldName;
+  }
 
   @Override public Kind getKind() {
     return Kind.FIELD_ACCESS_NODE;
@@ -63,9 +67,8 @@ public final class FieldAccessNode extends DataAccessNode {
   }
 
 
-  @Override
-  public ExprNode clone() {
-    return new FieldAccessNode(getChild(0).clone(), fieldName, isNullSafe);
+  @Override public FieldAccessNode clone() {
+    return new FieldAccessNode(this);
   }
 
 

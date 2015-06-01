@@ -17,6 +17,7 @@
 package com.google.template.soy.sharedpasses;
 
 import com.google.template.soy.base.internal.IdGenerator;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.RawTextNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
@@ -25,7 +26,6 @@ import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 
 /**
  * Visitor for removing HTML comments from raw text. Note that this is a best-effort process.
@@ -58,7 +58,8 @@ public class RemoveHtmlCommentsVisitor extends AbstractSoyNodeVisitor<Void> {
   /**
    * Constructor when working on tree fragments that are not part of a SoyFileSet.
    */
-  public RemoveHtmlCommentsVisitor(IdGenerator nodeIdGen) {
+  public RemoveHtmlCommentsVisitor(IdGenerator nodeIdGen, ErrorReporter errorReporter) {
+    super(errorReporter);
     explicitNodeIdGen = nodeIdGen;
   }
 
@@ -66,8 +67,8 @@ public class RemoveHtmlCommentsVisitor extends AbstractSoyNodeVisitor<Void> {
   /**
    * Constructor when working with full soy file sets.
    */
-  public RemoveHtmlCommentsVisitor() {
-    this(null);
+  public RemoveHtmlCommentsVisitor(ErrorReporter errorReporter) {
+    this(null, errorReporter);
   }
 
 
@@ -106,7 +107,8 @@ public class RemoveHtmlCommentsVisitor extends AbstractSoyNodeVisitor<Void> {
     // If the new raw text string is nonempty, then create a new RawTextNode to replace this node,
     // else simply remove this node.
     if (newRawText.length() > 0) {
-      RawTextNode newRawTextNode = new RawTextNode(nodeIdGen.genId(), newRawText.toString());
+      RawTextNode newRawTextNode
+          = new RawTextNode(nodeIdGen.genId(), newRawText.toString(), node.getSourceLocation());
       node.getParent().replaceChild(node, newRawTextNode);
 
     } else {

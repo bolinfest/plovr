@@ -16,60 +16,95 @@
 
 package com.google.template.soy.soytree;
 
-import com.google.common.collect.Lists;
-import com.google.template.soy.base.SoySyntaxException;
+import static com.google.common.truth.Truth.assertThat;
+
+import com.google.common.collect.ImmutableList;
+import com.google.template.soy.ErrorReporterImpl;
+import com.google.template.soy.base.SourceLocation;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ErrorReporter.Checkpoint;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.soytree.SoyNode.StandaloneNode;
 
 import junit.framework.TestCase;
-
 
 /**
  * Unit tests for MsgHtmlTagNode.
  *
  */
-public class MsgHtmlTagNodeTest extends TestCase {
+public final class MsgHtmlTagNodeTest extends TestCase {
 
+  private static final SourceLocation X = SourceLocation.UNKNOWN;
+  private static final ErrorReporter FAIL = ExplodingErrorReporter.get();
 
-  public void testPlaceholderMethods() throws SoySyntaxException {
-
-    MsgHtmlTagNode mhtn =
-        new MsgHtmlTagNode(0, Lists.<StandaloneNode>newArrayList(new RawTextNode(0, "<b>")));
-    assertEquals("START_BOLD", mhtn.genBasePhName());
-    assertTrue(
-        mhtn.genSamenessKey().equals(
-            (new MsgHtmlTagNode(4, Lists.<StandaloneNode>newArrayList(new RawTextNode(0, "<b>"))))
-                .genSamenessKey()));
-    assertFalse(
-        mhtn.genSamenessKey().equals(
-            (new MsgHtmlTagNode(4, Lists.<StandaloneNode>newArrayList(new RawTextNode(0, "</b>"))))
-                .genSamenessKey()));
-    assertEquals("<b>", mhtn.toSourceString());
-
-    mhtn = new MsgHtmlTagNode(0, Lists.<StandaloneNode>newArrayList(new RawTextNode(0, "<br />")));
-    assertEquals("BREAK", mhtn.genBasePhName());
-    assertFalse(
-        mhtn.genSamenessKey().equals(
-            (new MsgHtmlTagNode(4, Lists.<StandaloneNode>newArrayList(new RawTextNode(0, "<br/>"))))
-                .genSamenessKey()));
-    assertEquals("<br />", mhtn.toSourceString());
-
-    mhtn = new MsgHtmlTagNode(
-        1,
-        Lists.<StandaloneNode>newArrayList(
-            new RawTextNode(0, "<div class=\""),
-            new PrintNode(0, true, "$cssClass", null),
-            new RawTextNode(0, "\">")));
-    assertEquals("START_DIV", mhtn.genBasePhName());
-    assertFalse(
-        mhtn.genSamenessKey().equals(
-            (new MsgHtmlTagNode(
-                2,
-                Lists.<StandaloneNode>newArrayList(
-                    new RawTextNode(0, "<div class=\""),
-                    new PrintNode(0, true, "$cssClass", null),
-                    new RawTextNode(0, "\">"))))
-                .genSamenessKey()));
-    assertEquals("<div class=\"{$cssClass}\">", mhtn.toSourceString());
+  public void testPlaceholderBold() {
+    MsgHtmlTagNode mhtn = new MsgHtmlTagNode.Builder(
+        0, ImmutableList.<StandaloneNode>of(new RawTextNode(0, "<b>", X)), X)
+        .build(FAIL);
+    assertThat(mhtn.genBasePhName()).isEqualTo("START_BOLD");
+    assertThat(mhtn.genSamenessKey()).isEqualTo(new MsgHtmlTagNode.Builder(
+        4, ImmutableList.<StandaloneNode>of(new RawTextNode(0, "<b>", X)), X)
+        .build(FAIL)
+        .genSamenessKey());
+    assertThat(mhtn.genSamenessKey()).isNotEqualTo(new MsgHtmlTagNode.Builder(
+        4, ImmutableList.<StandaloneNode>of(new RawTextNode(0, "</b>", X)), X)
+        .build(FAIL)
+        .genSamenessKey());
+    assertThat(mhtn.toSourceString()).isEqualTo("<b>");
   }
 
+  public void testPlaceholderBreak() {
+    MsgHtmlTagNode mhtn = new MsgHtmlTagNode.Builder(
+        0, ImmutableList.<StandaloneNode>of(new RawTextNode(0, "<br />", X)), X)
+        .build(FAIL);
+    assertThat(mhtn.genBasePhName()).isEqualTo("BREAK");
+    assertThat(mhtn.genSamenessKey()).isNotEqualTo(new MsgHtmlTagNode.Builder(
+        4, ImmutableList.<StandaloneNode>of(new RawTextNode(0, "<br/>", X)), X)
+        .build(FAIL)
+        .genSamenessKey());
+    assertThat(mhtn.toSourceString()).isEqualTo("<br />");
+  }
+
+  public void testPlaceholderDiv() {
+    MsgHtmlTagNode mhtn = new MsgHtmlTagNode.Builder(
+        1,
+        ImmutableList.<StandaloneNode>of(
+            new RawTextNode(0, "<div class=\"", X),
+            new PrintNode.Builder(0, true /* isImplicit */, X)
+                .exprText("$cssClass")
+                .build(FAIL),
+            new RawTextNode(0, "\">", X)),
+        X)
+        .build(FAIL);
+    assertThat(mhtn.genBasePhName()).isEqualTo("START_DIV");
+    assertThat(mhtn.genSamenessKey()).isNotEqualTo(new MsgHtmlTagNode.Builder(
+        2,
+        ImmutableList.<StandaloneNode>of(
+            new RawTextNode(0, "<div class=\"", X),
+            new PrintNode.Builder(0, true /* isImplicit */, X)
+                .exprText("$cssClass")
+                .build(FAIL),
+            new RawTextNode(0, "\">", X)),
+        X)
+        .build(FAIL)
+        .genSamenessKey());
+    assertThat(mhtn.toSourceString()).isEqualTo("<div class=\"{$cssClass}\">");
+  }
+
+  public void testUserSuppliedPlaceholderName() {
+    MsgHtmlTagNode mhtn = new MsgHtmlTagNode.Builder(
+        1, ImmutableList.<StandaloneNode>of(new RawTextNode(0, "<div phname=\"foo\" />", X)), X)
+        .build(FAIL);
+    assertThat(mhtn.getUserSuppliedPhName()).isEqualTo("foo");
+  }
+
+  public void testErrorNodeReturnedWhenPhNameAttrIsMalformed() {
+    ErrorReporterImpl errorReporter = new ErrorReporterImpl();
+    Checkpoint checkpoint = errorReporter.checkpoint();
+    MsgHtmlTagNode mhtn = new MsgHtmlTagNode.Builder(
+        1, ImmutableList.<StandaloneNode>of(new RawTextNode(0, "<div phname=\".+\" />", X)), X)
+        .build(errorReporter);
+    assertThat(mhtn.getUserSuppliedPhName()).isNull();
+    assertThat(errorReporter.errorsSince(checkpoint)).isTrue();
+  }
 }

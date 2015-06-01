@@ -33,10 +33,8 @@ import java.util.Objects;
  */
 public final class ItemAccessNode extends DataAccessNode {
 
-
   /** Whether the source code uses dot access (i.e. $x.0 instead of $x[0]). */
   private final boolean isDotSyntax;
-
 
   /**
    * @param base The base expression, that is a reference to the object
@@ -49,7 +47,7 @@ public final class ItemAccessNode extends DataAccessNode {
    *     $foo.0, that is an integer after the dot.
    */
   public ItemAccessNode(ExprNode base, ExprNode key, boolean isNullSafe, boolean isDotSyntax) {
-    super(base, isNullSafe);
+    super(base, base.getSourceLocation(), isNullSafe);
     this.isDotSyntax = isDotSyntax;
     if (isDotSyntax) {
       maybeSetSyntaxVersionBound(new SyntaxVersionBound(
@@ -60,6 +58,10 @@ public final class ItemAccessNode extends DataAccessNode {
     addChild(key); // Key is child 1, Base is child 0.
   }
 
+  private ItemAccessNode(ItemAccessNode orig) {
+    super(orig);
+    this.isDotSyntax = orig.isDotSyntax;
+  }
 
   @Override public Kind getKind() {
     return Kind.ITEM_ACCESS_NODE;
@@ -85,8 +87,8 @@ public final class ItemAccessNode extends DataAccessNode {
   }
 
 
-  @Override public ExprNode clone() {
-    return new ItemAccessNode(getChild(0).clone(), getChild(1).clone(), isNullSafe, isDotSyntax);
+  @Override public ItemAccessNode clone() {
+    return new ItemAccessNode(this);
   }
 
 

@@ -17,14 +17,11 @@
 package com.google.template.soy.soytree;
 
 import com.google.template.soy.basetree.AbstractReturningNodeVisitor;
-import com.google.template.soy.basetree.ParentNode;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.soytree.SoyNode.LoopNode;
 import com.google.template.soy.soytree.SoyNode.MsgSubstUnitNode;
-import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 import com.google.template.soy.soytree.jssrc.GoogMsgDefNode;
 import com.google.template.soy.soytree.jssrc.GoogMsgRefNode;
-
-import java.util.List;
 
 
 /**
@@ -57,6 +54,9 @@ import java.util.List;
 public abstract class AbstractReturningSoyNodeVisitor<R>
     extends AbstractReturningNodeVisitor<SoyNode, R> {
 
+  protected AbstractReturningSoyNodeVisitor(ErrorReporter errorReporter) {
+    super(errorReporter);
+  }
 
   @Override protected R visit(SoyNode node) {
 
@@ -118,32 +118,6 @@ public abstract class AbstractReturningSoyNodeVisitor<R>
 
       default: throw new UnsupportedOperationException();
     }
-  }
-
-
-  /**
-   * Helper to visit all the children of a node, in order.
-   * @param node The parent node whose children to visit.
-   * @return The list of return values from visiting the children.
-   * @see #visitChildrenAllowingConcurrentModification
-   */
-  protected List<R> visitChildren(ParentSoyNode<?> node) {
-    return visitChildren((ParentNode<? extends SoyNode>) node);
-  }
-
-
-  /**
-   * Helper to visit all the children of a node, in order.
-   *
-   * This method differs from {@code visitChildren} in that we are iterating through a copy of the
-   * children. Thus, concurrent modification of the list of children is allowed.
-   *
-   * @param node The parent node whose children to visit.
-   * @return The list of return values from visiting the children.
-   * @see #visitChildren
-   */
-  protected List<R> visitChildrenAllowingConcurrentModification(ParentSoyNode<?> node) {
-    return visitChildrenAllowingConcurrentModification((ParentNode<? extends SoyNode>) node);
   }
 
 

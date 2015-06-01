@@ -17,10 +17,12 @@
 package com.google.template.soy.parsepasses;
 
 import com.google.common.collect.Lists;
-import com.google.inject.Inject;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.internal.IdGenerator;
 import com.google.template.soy.coredirectives.EscapeHtmlDirective;
 import com.google.template.soy.coredirectives.NoAutoescapeDirective;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.SoyError;
 import com.google.template.soy.shared.restricted.SoyPrintDirective;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.AutoescapeMode;
@@ -29,11 +31,11 @@ import com.google.template.soy.soytree.PrintNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.SoyNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
-import com.google.template.soy.soytree.SoySyntaxExceptionUtils;
 import com.google.template.soy.soytree.TemplateNode;
 
 import java.util.Map;
 
+import javax.inject.Inject;
 
 /**
  * Visitor for performing autoescape (for templates that have autoescape turned on, ensure there is
@@ -45,8 +47,10 @@ import java.util.Map;
  * modified. There is no return value.
  *
  */
-public class PerformAutoescapeVisitor extends AbstractSoyNodeVisitor<Void> {
+public final class PerformAutoescapeVisitor extends AbstractSoyNodeVisitor<Void> {
 
+  private static final SoyError UNKNOWN_PRINT_DIRECTIVE = SoyError.of(
+      "Unknown print directive ''{0}''.");
 
   /** Map of all SoyPrintDirectives (name to directive). */
   private final Map<String, SoyPrintDirective> soyDirectivesMap;
@@ -62,7 +66,9 @@ public class PerformAutoescapeVisitor extends AbstractSoyNodeVisitor<Void> {
    * @param soyDirectivesMap Map of all SoyPrintDirectives (name to directive).
    */
   @Inject
-  public PerformAutoescapeVisitor(Map<String, SoyPrintDirective> soyDirectivesMap) {
+  public PerformAutoescapeVisitor(
+      Map<String, SoyPrintDirective> soyDirectivesMap, ErrorReporter errorReporter) {
+    super(errorReporter);
     this.soyDirectivesMap = soyDirectivesMap;
   }
 
@@ -91,10 +97,9 @@ public class PerformAutoescapeVisitor extends AbstractSoyNodeVisitor<Void> {
     for (PrintDirectiveNode directiveNode : Lists.newArrayList(node.getChildren()) /*copy*/) {
       SoyPrintDirective directive = soyDirectivesMap.get(directiveNode.getName());
       if (directive == null) {
-        throw SoySyntaxExceptionUtils.createWithNode(
-            "Failed to find SoyPrintDirective with name '" + directiveNode.getName() + "'" +
-                " (tag " + node.toSourceString() + ")",
-            directiveNode);
+        errorReporter.report(
+            directiveNode.getSourceLocation(), UNKNOWN_PRINT_DIRECTIVE, directiveNode.getName());
+        continue; // Proceeding would cause NullPointerExceptions.
       }
       if (directive.shouldCancelAutoescape()) {
         shouldCancelAutoescape = true;
@@ -111,8 +116,9 @@ public class PerformAutoescapeVisitor extends AbstractSoyNodeVisitor<Void> {
     // If appropriate, apply autoescape by adding an |escapeHtml directive (should be applied first
     // because other directives may add HTML tags).
     if (currTemplateShouldAutoescape && !shouldCancelAutoescape) {
-      PrintDirectiveNode newEscapeHtmlDirectiveNode =
-          new PrintDirectiveNode(nodeIdGen.genId(), EscapeHtmlDirective.NAME, "");
+      PrintDirectiveNode newEscapeHtmlDirectiveNode = new PrintDirectiveNode.Builder(
+          nodeIdGen.genId(), EscapeHtmlDirective.NAME, "", SourceLocation.UNKNOWN)
+          .build(errorReporter);
       node.addChild(0, newEscapeHtmlDirectiveNode);
     }
   }

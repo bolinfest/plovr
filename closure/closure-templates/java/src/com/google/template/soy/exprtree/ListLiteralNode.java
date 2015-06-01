@@ -16,6 +16,8 @@
 
 package com.google.template.soy.exprtree;
 
+import com.google.template.soy.base.SourceLocation;
+
 import java.util.List;
 
 
@@ -25,13 +27,13 @@ import java.util.List;
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
-public class ListLiteralNode extends AbstractParentExprNode {
-
+public final class ListLiteralNode extends AbstractParentExprNode {
 
   /**
    * @param items The expressions for the items in this list.
    */
-  public ListLiteralNode(List<ExprNode> items) {
+  public ListLiteralNode(List<ExprNode> items, SourceLocation sourceLocation) {
+    super(sourceLocation);
     addChildren(items);
   }
 
@@ -40,7 +42,7 @@ public class ListLiteralNode extends AbstractParentExprNode {
    * Copy constructor.
    * @param orig The node to copy.
    */
-  protected ListLiteralNode(ListLiteralNode orig) {
+  private ListLiteralNode(ListLiteralNode orig) {
     super(orig);
   }
 

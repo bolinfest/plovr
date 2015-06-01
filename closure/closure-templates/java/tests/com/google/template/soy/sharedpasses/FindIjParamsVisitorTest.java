@@ -16,8 +16,12 @@
 
 package com.google.template.soy.sharedpasses;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.common.collect.ImmutableMap;
-import com.google.template.soy.shared.internal.SharedTestUtils;
+import com.google.template.soy.SoyFileSetParserBuilder;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.sharedpasses.FindIjParamsVisitor.IjParamsInfo;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.TemplateNode;
@@ -25,13 +29,13 @@ import com.google.template.soy.soytree.TemplateRegistry;
 
 import junit.framework.TestCase;
 
-
 /**
  * Unit tests for FindIjParamsVisitor.
  *
  */
-public class FindIjParamsVisitorTest extends TestCase {
+public final class FindIjParamsVisitorTest extends TestCase {
 
+  private static final ErrorReporter FAIL = ExplodingErrorReporter.get();
 
   public void testSimple() {
 
@@ -59,8 +63,8 @@ public class FindIjParamsVisitorTest extends TestCase {
         "  {$ij.boo} {$ij.moo} {round($ij.zoo)}\n" +
         "{/template}\n";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(fileContent);
-    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree);
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(fileContent).parse();
+    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree, FAIL);
 
     TemplateNode aaa = soyTree.getChild(0).getChild(0);
     TemplateNode bbb = soyTree.getChild(0).getChild(1);
@@ -69,29 +73,29 @@ public class FindIjParamsVisitorTest extends TestCase {
 
     // Test with exec(aaa).
     // Exercises: processCalleeHelper case 5 with incorporateCalleeVisitInfo case 1 (aaa -> bbb).
-    FindIjParamsVisitor visitor = new FindIjParamsVisitor(templateRegistry);
+    FindIjParamsVisitor visitor = new FindIjParamsVisitor(templateRegistry, FAIL);
     visitor.exec(aaa);
-    assertEquals(3, visitor.exec(ddd).ijParamToCalleesMultimap.size());
-    assertEquals(3, visitor.exec(ccc).ijParamToCalleesMultimap.size());
-    assertEquals(5, visitor.exec(bbb).ijParamToCalleesMultimap.size());
-    assertEquals(4, visitor.exec(bbb).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(10, visitor.exec(aaa).ijParamToCalleesMultimap.size());
-    assertEquals(6, visitor.exec(aaa).ijParamToCalleesMultimap.keySet().size());
+    assertThat(visitor.exec(ddd).ijParamToCalleesMultimap).hasSize(3);
+    assertThat(visitor.exec(ccc).ijParamToCalleesMultimap).hasSize(3);
+    assertThat(visitor.exec(bbb).ijParamToCalleesMultimap).hasSize(5);
+    assertThat(visitor.exec(bbb).ijParamToCalleesMultimap.keySet()).hasSize(4);
+    assertThat(visitor.exec(aaa).ijParamToCalleesMultimap).hasSize(10);
+    assertThat(visitor.exec(aaa).ijParamToCalleesMultimap.keySet()).hasSize(6);
 
     // Test with exec(bbb) then exec(aaa).
     // Exercises: processCalleeHelper case 1 (aaa -> bbb).
-    visitor = new FindIjParamsVisitor(templateRegistry);
+    visitor = new FindIjParamsVisitor(templateRegistry, FAIL);
     visitor.exec(bbb);
-    assertEquals(3, visitor.exec(ddd).ijParamToCalleesMultimap.size());
-    assertEquals(5, visitor.exec(bbb).ijParamToCalleesMultimap.size());
-    assertEquals(4, visitor.exec(bbb).ijParamToCalleesMultimap.keySet().size());
+    assertThat(visitor.exec(ddd).ijParamToCalleesMultimap).hasSize(3);
+    assertThat(visitor.exec(bbb).ijParamToCalleesMultimap).hasSize(5);
+    assertThat(visitor.exec(bbb).ijParamToCalleesMultimap.keySet()).hasSize(4);
     visitor.exec(aaa);
-    assertEquals(3, visitor.exec(ddd).ijParamToCalleesMultimap.size());
-    assertEquals(3, visitor.exec(ccc).ijParamToCalleesMultimap.size());
-    assertEquals(5, visitor.exec(bbb).ijParamToCalleesMultimap.size());
-    assertEquals(4, visitor.exec(bbb).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(10, visitor.exec(aaa).ijParamToCalleesMultimap.size());
-    assertEquals(6, visitor.exec(aaa).ijParamToCalleesMultimap.keySet().size());
+    assertThat(visitor.exec(ddd).ijParamToCalleesMultimap).hasSize(3);
+    assertThat(visitor.exec(ccc).ijParamToCalleesMultimap).hasSize(3);
+    assertThat(visitor.exec(bbb).ijParamToCalleesMultimap).hasSize(5);
+    assertThat(visitor.exec(bbb).ijParamToCalleesMultimap.keySet()).hasSize(4);
+    assertThat(visitor.exec(aaa).ijParamToCalleesMultimap).hasSize(10);
+    assertThat(visitor.exec(aaa).ijParamToCalleesMultimap.keySet()).hasSize(6);
   }
 
 
@@ -116,8 +120,8 @@ public class FindIjParamsVisitorTest extends TestCase {
         "  {$ij.boo} {$ij.moo + $ij.woo} {call .bbb /}\n" +
         "{/template}\n";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(fileContent);
-    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree);
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(fileContent).parse();
+    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree, FAIL);
 
     TemplateNode aaa = soyTree.getChild(0).getChild(0);
     TemplateNode bbb = soyTree.getChild(0).getChild(1);
@@ -125,13 +129,13 @@ public class FindIjParamsVisitorTest extends TestCase {
 
     // Test with exec(aaa).
     // Exercises: processCalleeHelper case 4 with incorporateCalleeVisitInfo case 1 (ccc -> bbb).
-    FindIjParamsVisitor visitor = new FindIjParamsVisitor(templateRegistry);
+    FindIjParamsVisitor visitor = new FindIjParamsVisitor(templateRegistry, FAIL);
     visitor.exec(aaa);
-    assertEquals(2, visitor.exec(bbb).ijParamToCalleesMultimap.size());
-    assertEquals(5, visitor.exec(ccc).ijParamToCalleesMultimap.size());
-    assertEquals(4, visitor.exec(ccc).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(7, visitor.exec(aaa).ijParamToCalleesMultimap.size());
-    assertEquals(5, visitor.exec(aaa).ijParamToCalleesMultimap.keySet().size());
+    assertThat(visitor.exec(bbb).ijParamToCalleesMultimap).hasSize(2);
+    assertThat(visitor.exec(ccc).ijParamToCalleesMultimap).hasSize(5);
+    assertThat(visitor.exec(ccc).ijParamToCalleesMultimap.keySet()).hasSize(4);
+    assertThat(visitor.exec(aaa).ijParamToCalleesMultimap).hasSize(7);
+    assertThat(visitor.exec(aaa).ijParamToCalleesMultimap.keySet()).hasSize(5);
   }
 
 
@@ -158,8 +162,8 @@ public class FindIjParamsVisitorTest extends TestCase {
         "  {$ij.boo} {call .bbb /} {$ij.moo}\n" +
         "{/template}\n";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(fileContent);
-    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree);
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(fileContent).parse();
+    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree, FAIL);
 
     TemplateNode aaa = soyTree.getChild(0).getChild(0);
     TemplateNode bbb = soyTree.getChild(0).getChild(1);
@@ -169,14 +173,14 @@ public class FindIjParamsVisitorTest extends TestCase {
     // Exercises: processCalleeHelper case 2 (bbb -> bbb).
     // Exercises: processCalleeHelper case 3 (ccc -> bbb).
     // Exercises: processCalleeHelper case 5 with incorporateCalleeVisitInfo case 2 (bbb -> ccc).
-    FindIjParamsVisitor visitor = new FindIjParamsVisitor(templateRegistry);
+    FindIjParamsVisitor visitor = new FindIjParamsVisitor(templateRegistry, FAIL);
     visitor.exec(aaa);
-    assertEquals(4, visitor.exec(ccc).ijParamToCalleesMultimap.size());
-    assertEquals(3, visitor.exec(ccc).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(4, visitor.exec(bbb).ijParamToCalleesMultimap.size());
-    assertEquals(3, visitor.exec(bbb).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(6, visitor.exec(aaa).ijParamToCalleesMultimap.size());
-    assertEquals(4, visitor.exec(aaa).ijParamToCalleesMultimap.keySet().size());
+    assertThat(visitor.exec(ccc).ijParamToCalleesMultimap).hasSize(4);
+    assertThat(visitor.exec(ccc).ijParamToCalleesMultimap.keySet()).hasSize(3);
+    assertThat(visitor.exec(bbb).ijParamToCalleesMultimap).hasSize(4);
+    assertThat(visitor.exec(bbb).ijParamToCalleesMultimap.keySet()).hasSize(3);
+    assertThat(visitor.exec(aaa).ijParamToCalleesMultimap).hasSize(6);
+    assertThat(visitor.exec(aaa).ijParamToCalleesMultimap.keySet()).hasSize(4);
   }
 
 
@@ -203,8 +207,8 @@ public class FindIjParamsVisitorTest extends TestCase {
         "  {call .aaa /} {$ij.moo} {$ij.boo}\n" +
         "{/template}\n";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(fileContent);
-    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree);
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(fileContent).parse();
+    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree, FAIL);
 
     TemplateNode aaa = soyTree.getChild(0).getChild(0);
     TemplateNode bbb = soyTree.getChild(0).getChild(1);
@@ -214,14 +218,14 @@ public class FindIjParamsVisitorTest extends TestCase {
     // Exercises: processCalleeHelper case 3 (ccc-> aaa).
     // Exercises: processCalleeHelper case 5 with incorporateCalleeVisitInfo case 3 (bbb -> ccc).
     // Exercises: processCalleeHelper case 5 with incorporateCalleeVisitInfo case 2 (aaa -> bbb).
-    FindIjParamsVisitor visitor = new FindIjParamsVisitor(templateRegistry);
+    FindIjParamsVisitor visitor = new FindIjParamsVisitor(templateRegistry, FAIL);
     visitor.exec(aaa);
-    assertEquals(6, visitor.exec(ccc).ijParamToCalleesMultimap.size());
-    assertEquals(4, visitor.exec(ccc).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(6, visitor.exec(bbb).ijParamToCalleesMultimap.size());
-    assertEquals(4, visitor.exec(bbb).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(6, visitor.exec(aaa).ijParamToCalleesMultimap.size());
-    assertEquals(4, visitor.exec(aaa).ijParamToCalleesMultimap.keySet().size());
+    assertThat(visitor.exec(ccc).ijParamToCalleesMultimap).hasSize(6);
+    assertThat(visitor.exec(ccc).ijParamToCalleesMultimap.keySet()).hasSize(4);
+    assertThat(visitor.exec(bbb).ijParamToCalleesMultimap).hasSize(6);
+    assertThat(visitor.exec(bbb).ijParamToCalleesMultimap.keySet()).hasSize(4);
+    assertThat(visitor.exec(aaa).ijParamToCalleesMultimap).hasSize(6);
+    assertThat(visitor.exec(aaa).ijParamToCalleesMultimap.keySet()).hasSize(4);
   }
 
 
@@ -251,8 +255,8 @@ public class FindIjParamsVisitorTest extends TestCase {
         "  {$ij.boo} {$ij.too} {call .bbb /}\n" +
         "{/template}\n";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(fileContent);
-    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree);
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(fileContent).parse();
+    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree, FAIL);
 
     TemplateNode aaa = soyTree.getChild(0).getChild(0);
     TemplateNode bbb = soyTree.getChild(0).getChild(1);
@@ -261,16 +265,16 @@ public class FindIjParamsVisitorTest extends TestCase {
 
     // Test with exec(aaa).
     // Exercises: processCalleeHelper case 4 with incorporateCalleeVisitInfo case 4 (ccc -> ddd).
-    FindIjParamsVisitor visitor = new FindIjParamsVisitor(templateRegistry);
+    FindIjParamsVisitor visitor = new FindIjParamsVisitor(templateRegistry, FAIL);
     visitor.exec(aaa);
-    assertEquals(4, visitor.exec(bbb).ijParamToCalleesMultimap.size());
-    assertEquals(3, visitor.exec(bbb).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(4, visitor.exec(ddd).ijParamToCalleesMultimap.size());
-    assertEquals(3, visitor.exec(ddd).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(6, visitor.exec(ccc).ijParamToCalleesMultimap.size());
-    assertEquals(4, visitor.exec(ccc).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(8, visitor.exec(aaa).ijParamToCalleesMultimap.size());
-    assertEquals(5, visitor.exec(aaa).ijParamToCalleesMultimap.keySet().size());
+    assertThat(visitor.exec(bbb).ijParamToCalleesMultimap).hasSize(4);
+    assertThat(visitor.exec(bbb).ijParamToCalleesMultimap.keySet()).hasSize(3);
+    assertThat(visitor.exec(ddd).ijParamToCalleesMultimap).hasSize(4);
+    assertThat(visitor.exec(ddd).ijParamToCalleesMultimap.keySet()).hasSize(3);
+    assertThat(visitor.exec(ccc).ijParamToCalleesMultimap).hasSize(6);
+    assertThat(visitor.exec(ccc).ijParamToCalleesMultimap.keySet()).hasSize(4);
+    assertThat(visitor.exec(aaa).ijParamToCalleesMultimap).hasSize(8);
+    assertThat(visitor.exec(aaa).ijParamToCalleesMultimap.keySet()).hasSize(5);
   }
 
 
@@ -295,8 +299,8 @@ public class FindIjParamsVisitorTest extends TestCase {
         "  {$ij.moo} {$ij.boo} {call .bbb /}\n" +
         "{/template}\n";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(fileContent);
-    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree);
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(fileContent).parse();
+    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree, FAIL);
 
     TemplateNode aaa = soyTree.getChild(0).getChild(0);
     TemplateNode bbb = soyTree.getChild(0).getChild(1);
@@ -304,14 +308,14 @@ public class FindIjParamsVisitorTest extends TestCase {
 
     // Test with exec(aaa).
     // Exercises: processCalleeHelper case 4 with incorporateCalleeVisitInfo case 3 (ccc -> bbb).
-    FindIjParamsVisitor visitor = new FindIjParamsVisitor(templateRegistry);
+    FindIjParamsVisitor visitor = new FindIjParamsVisitor(templateRegistry, FAIL);
     visitor.exec(aaa);
-    assertEquals(6, visitor.exec(ccc).ijParamToCalleesMultimap.size());
-    assertEquals(4, visitor.exec(ccc).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(6, visitor.exec(bbb).ijParamToCalleesMultimap.size());
-    assertEquals(4, visitor.exec(bbb).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(6, visitor.exec(aaa).ijParamToCalleesMultimap.size());
-    assertEquals(4, visitor.exec(aaa).ijParamToCalleesMultimap.keySet().size());
+    assertThat(visitor.exec(ccc).ijParamToCalleesMultimap).hasSize(6);
+    assertThat(visitor.exec(ccc).ijParamToCalleesMultimap.keySet()).hasSize(4);
+    assertThat(visitor.exec(bbb).ijParamToCalleesMultimap).hasSize(6);
+    assertThat(visitor.exec(bbb).ijParamToCalleesMultimap.keySet()).hasSize(4);
+    assertThat(visitor.exec(aaa).ijParamToCalleesMultimap).hasSize(6);
+    assertThat(visitor.exec(aaa).ijParamToCalleesMultimap.keySet()).hasSize(4);
   }
 
 
@@ -341,7 +345,8 @@ public class FindIjParamsVisitorTest extends TestCase {
         "  {$ij.boo} {$ij.moo} {round($ij.zoo)}\n" +
         "{/template}\n";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(fileContent);
+
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(fileContent).parse();
 
     TemplateNode bbb = soyTree.getChild(0).getChild(0);
     TemplateNode aaa = soyTree.getChild(0).getChild(1);
@@ -349,14 +354,14 @@ public class FindIjParamsVisitorTest extends TestCase {
     TemplateNode ddd = soyTree.getChild(0).getChild(3);
 
     ImmutableMap<TemplateNode, IjParamsInfo> templateToIjParamsInfoMap =
-        (new FindIjParamsVisitor(null)).execOnAllTemplates(soyTree);
-    assertEquals(4, templateToIjParamsInfoMap.size());
-    assertEquals(3, templateToIjParamsInfoMap.get(ddd).ijParamToCalleesMultimap.size());
-    assertEquals(3, templateToIjParamsInfoMap.get(ccc).ijParamToCalleesMultimap.size());
-    assertEquals(5, templateToIjParamsInfoMap.get(bbb).ijParamToCalleesMultimap.size());
-    assertEquals(4, templateToIjParamsInfoMap.get(bbb).ijParamToCalleesMultimap.keySet().size());
-    assertEquals(10, templateToIjParamsInfoMap.get(aaa).ijParamToCalleesMultimap.size());
-    assertEquals(6, templateToIjParamsInfoMap.get(aaa).ijParamToCalleesMultimap.keySet().size());
+        new FindIjParamsVisitor(null /* templateRegistry */, FAIL).execOnAllTemplates(soyTree);
+    assertThat(templateToIjParamsInfoMap).hasSize(4);
+    assertThat(templateToIjParamsInfoMap.get(ddd).ijParamToCalleesMultimap).hasSize(3);
+    assertThat(templateToIjParamsInfoMap.get(ccc).ijParamToCalleesMultimap).hasSize(3);
+    assertThat(templateToIjParamsInfoMap.get(bbb).ijParamToCalleesMultimap).hasSize(5);
+    assertThat(templateToIjParamsInfoMap.get(bbb).ijParamToCalleesMultimap.keySet()).hasSize(4);
+    assertThat(templateToIjParamsInfoMap.get(aaa).ijParamToCalleesMultimap).hasSize(10);
+    assertThat(templateToIjParamsInfoMap.get(aaa).ijParamToCalleesMultimap.keySet()).hasSize(6);
   }
 
 }

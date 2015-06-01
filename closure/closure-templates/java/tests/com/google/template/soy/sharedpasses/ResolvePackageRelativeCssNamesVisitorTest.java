@@ -16,11 +16,17 @@
 
 package com.google.template.soy.sharedpasses;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.common.collect.Lists;
+import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.base.SoySyntaxException;
-import com.google.template.soy.shared.internal.SharedTestUtils;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
+import com.google.template.soy.shared.SharedTestUtils;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.CssNode;
+import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.SoyNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 import com.google.template.soy.soytree.TemplateNode;
@@ -35,9 +41,12 @@ import java.util.List;
 public class ResolvePackageRelativeCssNamesVisitorTest extends TestCase {
 
   public List<CssNode> compileTemplate(String templateText) {
-    TemplateNode template = (TemplateNode) SharedTestUtils.getNode(
-        SharedTestUtils.parseSoyFiles(templateText));
-    new ResolvePackageRelativeCssNamesVisitor().exec(template);
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(templateText)
+        .errorReporter(boom)
+        .parse();
+    TemplateNode template = (TemplateNode) SharedTestUtils.getNode(soyTree);
+    new ResolvePackageRelativeCssNamesVisitor(boom).exec(template);
     return getCssNodes(template);
   }
 
@@ -49,7 +58,7 @@ public class ResolvePackageRelativeCssNamesVisitorTest extends TestCase {
         "  <div class=\"{css %AAA}\">\n" +
         "{/template}\n");
 
-    assertEquals("someTestPackageAAA", cssNodes.get(0).getSelectorText());
+    assertThat(cssNodes.get(0).getSelectorText()).isEqualTo("someTestPackageAAA");
   }
 
   public void testBaseCssOnTemplate() {
@@ -60,7 +69,7 @@ public class ResolvePackageRelativeCssNamesVisitorTest extends TestCase {
         "  <div class=\"{css %AAA}\">\n" +
         "{/template}\n");
 
-    assertEquals("someTestPackageAAA", cssNodes.get(0).getSelectorText());
+    assertThat(cssNodes.get(0).getSelectorText()).isEqualTo("someTestPackageAAA");
   }
 
   public void testRequireCssOnNamespace() {
@@ -71,7 +80,7 @@ public class ResolvePackageRelativeCssNamesVisitorTest extends TestCase {
         "  <div class=\"{css %AAA}\">\n" +
         "{/template}\n");
 
-    assertEquals("someTestPackageAAA", cssNodes.get(0).getSelectorText());
+    assertThat(cssNodes.get(0).getSelectorText()).isEqualTo("someTestPackageAAA");
   }
 
   public void testUnprefixedNode() {
@@ -82,7 +91,7 @@ public class ResolvePackageRelativeCssNamesVisitorTest extends TestCase {
         "  <div class=\"{css AAA}\">\n" +
         "{/template}\n");
 
-    assertEquals("AAA", cssNodes.get(0).getSelectorText());
+    assertThat(cssNodes.get(0).getSelectorText()).isEqualTo("AAA");
   }
 
   public void testMissingCssBase() {
@@ -95,7 +104,7 @@ public class ResolvePackageRelativeCssNamesVisitorTest extends TestCase {
           "{/template}\n");
       fail("Exception expected");
     } catch (SoySyntaxException e) {
-      assertTrue(e.getMessage().contains("No CSS package"));
+      assertThat(e.getMessage()).contains("No CSS package");
     }
   }
 
@@ -109,7 +118,7 @@ public class ResolvePackageRelativeCssNamesVisitorTest extends TestCase {
           "{/template}\n");
       fail("Exception expected");
     } catch (SoySyntaxException e) {
-      assertTrue(e.getMessage().contains("component expression"));
+      assertThat(e.getMessage()).contains("component expression");
     }
   }
 
@@ -118,7 +127,8 @@ public class ResolvePackageRelativeCssNamesVisitorTest extends TestCase {
    * @return A list of CSS nodes.
    */
   private <T extends SoyNode> List<T> getCssNodes(SoyNode root) {
-    CollectNodesVisitor visitor = new CollectNodesVisitor(CssNode.class);
+    CollectNodesVisitor visitor
+        = new CollectNodesVisitor(CssNode.class, ExplodingErrorReporter.get());
     visitor.exec(root);
     return (List<T>) visitor.getNodes();
   }
@@ -131,7 +141,8 @@ public class ResolvePackageRelativeCssNamesVisitorTest extends TestCase {
     private final List<SoyNode> nodes = Lists.newArrayList();
     private final Class<?> nodeType;
 
-    CollectNodesVisitor(Class<?> nodeType) {
+    CollectNodesVisitor(Class<?> nodeType, ErrorReporter errorReporter) {
+      super(errorReporter);
       this.nodeType = nodeType;
     }
 

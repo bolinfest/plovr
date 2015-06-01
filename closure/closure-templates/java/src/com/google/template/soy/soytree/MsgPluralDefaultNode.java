@@ -16,6 +16,7 @@
 
 package com.google.template.soy.soytree;
 
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.soytree.SoyNode.MsgBlockNode;
 
 
@@ -25,14 +26,15 @@ import com.google.template.soy.soytree.SoyNode.MsgBlockNode;
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
-public class MsgPluralDefaultNode extends CaseOrDefaultNode implements MsgBlockNode {
+public final class MsgPluralDefaultNode extends CaseOrDefaultNode implements MsgBlockNode {
 
 
   /**
    * @param id The id for this node.
+   * @param sourceLocation The node's source location.
    */
-  public MsgPluralDefaultNode(int id) {
-    super(id, "default", "");
+  public MsgPluralDefaultNode(int id, SourceLocation sourceLocation) {
+    super(id, sourceLocation, "default", "");
   }
 
 
@@ -40,7 +42,7 @@ public class MsgPluralDefaultNode extends CaseOrDefaultNode implements MsgBlockN
    * Copy constructor.
    * @param orig The node to copy.
    */
-  protected MsgPluralDefaultNode(MsgPluralDefaultNode orig) {
+  private MsgPluralDefaultNode(MsgPluralDefaultNode orig) {
     super(orig);
   }
 

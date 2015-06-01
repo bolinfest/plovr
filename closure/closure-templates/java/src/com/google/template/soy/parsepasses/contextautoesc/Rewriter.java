@@ -20,10 +20,12 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.CallBasicNode;
 import com.google.template.soy.soytree.CallDelegateNode;
 import com.google.template.soy.soytree.CallNode;
+import com.google.template.soy.soytree.MsgFallbackGroupNode;
 import com.google.template.soy.soytree.PrintDirectiveNode;
 import com.google.template.soy.soytree.PrintNode;
 import com.google.template.soy.soytree.RawTextNode;
@@ -37,7 +39,6 @@ import com.google.template.soy.soytree.TemplateNode;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 
 /**
  * Applies changes specified in {@link Inferences} to a Soy parse tree.
@@ -57,9 +58,16 @@ final class Rewriter {
   /** Maps print directive names to the content kinds they consume and produce. */
   private final Map<String, ContentKind> sanitizedContentOperators;
 
-  public Rewriter(Inferences inferences, Map<String, ContentKind> sanitizedContentOperators) {
+  /** For reporting errors. */
+  private final ErrorReporter errorReporter;
+
+  Rewriter(
+      Inferences inferences,
+      Map<String, ContentKind> sanitizedContentOperators,
+      ErrorReporter errorReporter) {
     this.inferences = inferences;
     this.sanitizedContentOperators = sanitizedContentOperators;
+    this.errorReporter = errorReporter;
   }
 
   /**
@@ -89,7 +97,11 @@ final class Rewriter {
   /**
    * A visitor that applies the changes in Inferences to a Soy tree.
    */
-  final class RewriterVisitor extends AbstractSoyNodeVisitor<Void> {
+  private final class RewriterVisitor extends AbstractSoyNodeVisitor<Void> {
+
+    public RewriterVisitor() {
+      super(Rewriter.this.errorReporter);
+    }
 
     /**
      * Keep track of template nodes so we know which are derived and which aren't.
@@ -107,9 +119,12 @@ final class Rewriter {
       int id = printNode.getId();
       ImmutableList<EscapingMode> escapingModes = inferences.getEscapingModesForId(id);
       for (EscapingMode escapingMode : escapingModes) {
-        PrintDirectiveNode newPrintDirective = new PrintDirectiveNode(
-            inferences.getIdGenerator().genId(), escapingMode.directiveName, "");
-        newPrintDirective.setSourceLocation(printNode.getSourceLocation());
+        PrintDirectiveNode newPrintDirective = new PrintDirectiveNode.Builder(
+            inferences.getIdGenerator().genId(),
+            escapingMode.directiveName,
+            "",
+            printNode.getSourceLocation())
+            .build(errorReporter);
 
         // Figure out where to put the new directive.
         // Normally they go at the end to ensure that the value printed is of the appropriate type,
@@ -138,6 +153,25 @@ final class Rewriter {
     }
 
     /**
+     * Grabs the inferred escaping directives from the node in string form.
+     */
+    private ImmutableList<String> getDirectiveNamesForNode(SoyNode node) {
+      ImmutableList.Builder<String> escapingDirectiveNames = new ImmutableList.Builder<>();
+      for (EscapingMode escapingMode : inferences.getEscapingModesForId(node.getId())) {
+        escapingDirectiveNames.add(escapingMode.directiveName);
+      }
+      return escapingDirectiveNames.build();
+    }
+
+    /**
+     * Sets the escaping directives we inferred on the node.
+     */
+    @Override protected void visitMsgFallbackGroupNode(MsgFallbackGroupNode node) {
+      node.setEscapingDirectiveNames(getDirectiveNamesForNode(node));
+      visitChildren(node);
+    }
+
+    /**
      * Rewrite call targets.
      *
      * Note that this processing is only applicable for CallBasicNodes. The reason is that
@@ -155,22 +189,26 @@ final class Rewriter {
         CallNode newCallNode;
         if (callNode instanceof CallBasicNode) {
           // For simplicity, use the full callee name as the source callee name.
-          newCallNode = new CallBasicNode(
-              callNode.getId(), derivedCalleeName, derivedCalleeName, false, false,
-              callNode.isPassingData(), callNode.isPassingAllData(), callNode.getDataExpr(),
-              callNode.getUserSuppliedPhName(), callNode.getSyntaxVersionBound(),
-              callNode.getEscapingDirectiveNames());
+          newCallNode = new CallBasicNode.Builder(callNode.getId(), callNode.getSourceLocation())
+              .calleeName(derivedCalleeName)
+              .sourceCalleeName(derivedCalleeName)
+              .dataAttribute(callNode.dataAttribute())
+              .userSuppliedPlaceholderName(callNode.getUserSuppliedPhName())
+              .syntaxVersionBound(callNode.getSyntaxVersionBound())
+              .escapingDirectiveNames(callNode.getEscapingDirectiveNames())
+              .build(errorReporter);
         } else {
           CallDelegateNode callNodeCast = (CallDelegateNode) callNode;
-          newCallNode = new CallDelegateNode(
-              callNode.getId(), derivedCalleeName, callNodeCast.getDelCalleeVariantExpr(), false,
-              callNodeCast.allowsEmptyDefault(), callNode.isPassingData(),
-              callNode.isPassingAllData(), callNode.getDataExpr(),
-              callNode.getUserSuppliedPhName(),
-              callNode.getEscapingDirectiveNames());
+          newCallNode = new CallDelegateNode.Builder(callNode.getId(), callNode.getSourceLocation())
+              .delCalleeName(derivedCalleeName)
+              .delCalleeVariantExpr(callNodeCast.getDelCalleeVariantExpr())
+              .allowEmptyDefault(callNodeCast.allowsEmptyDefault())
+              .dataAttribute(callNode.dataAttribute())
+              .userSuppliedPlaceholderName(callNode.getUserSuppliedPhName())
+              .escapingDirectiveNames(callNode.getEscapingDirectiveNames())
+              .build(errorReporter);
         }
         if (!callNode.getCommandText().equals(newCallNode.getCommandText())) {
-          newCallNode.setSourceLocation(callNode.getSourceLocation());
           moveChildrenTo(callNode, newCallNode);
           replaceChild(callNode, newCallNode);
         }
@@ -179,11 +217,7 @@ final class Rewriter {
       }
 
       // For strict templates, set any necessary escaping directives.
-      ImmutableList.Builder<String> escapingDirectiveNames = new ImmutableList.Builder<String>();
-      for (EscapingMode escapingMode : inferences.getEscapingModesForId(callNode.getId())) {
-        escapingDirectiveNames.add(escapingMode.directiveName);
-      }
-      callNode.setEscapingDirectiveNames(escapingDirectiveNames.build());
+      callNode.setEscapingDirectiveNames(getDirectiveNamesForNode(callNode));
 
       visitChildrenAllowingConcurrentModification(callNode);
     }

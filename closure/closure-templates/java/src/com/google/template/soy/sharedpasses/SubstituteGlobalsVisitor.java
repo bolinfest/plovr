@@ -21,6 +21,7 @@ import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.data.internalutils.InternalValueUtils;
 import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.data.restricted.PrimitiveData;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
@@ -35,7 +36,6 @@ import java.util.Map;
 
 import javax.annotation.Nullable;
 
-
 /**
  * Visitor for substituting values of compile-time globals and/or for checking that all globals are
  * defined by the compile-time globals map.
@@ -46,7 +46,7 @@ import javax.annotation.Nullable;
  * constructor. To do substitution and checking, set  {@code shouldAssertNoUnboundGlobals} to true.
  *
  */
-public class SubstituteGlobalsVisitor {
+public final class SubstituteGlobalsVisitor {
 
   /** Map from compile-time global name to value. */
   private Map<String, PrimitiveData> compileTimeGlobals;
@@ -57,6 +57,8 @@ public class SubstituteGlobalsVisitor {
   /** Type registry used to look up enum values. */
   private final SoyTypeRegistry typeRegistry;
 
+  private final ErrorReporter errorReporter;
+
   /**
    * @param compileTimeGlobals Map from compile-time global name to value.
    * @param shouldAssertNoUnboundGlobals Whether to throw an exception if we encounter an unbound
@@ -65,15 +67,17 @@ public class SubstituteGlobalsVisitor {
   public SubstituteGlobalsVisitor(
       @Nullable Map<String, PrimitiveData> compileTimeGlobals,
       @Nullable SoyTypeRegistry typeRegistry,
-      boolean shouldAssertNoUnboundGlobals) {
+      boolean shouldAssertNoUnboundGlobals,
+      ErrorReporter errorReporter) {
     this.compileTimeGlobals = compileTimeGlobals;
     this.typeRegistry = typeRegistry;
     this.shouldAssertNoUnboundGlobals = shouldAssertNoUnboundGlobals;
+    this.errorReporter = errorReporter;
   }
 
   /** Runs this pass on the given Soy tree. */
   public void exec(SoyFileSetNode soyTree) {
-    SoytreeUtils.execOnAllV2Exprs(soyTree, new SubstituteGlobalsInExprVisitor());
+    SoytreeUtils.execOnAllV2Exprs(soyTree, new SubstituteGlobalsInExprVisitor(), errorReporter);
   }
 
   /**
@@ -81,7 +85,11 @@ public class SubstituteGlobalsVisitor {
    * This class does the real work.
    */
   @VisibleForTesting
-  class SubstituteGlobalsInExprVisitor extends AbstractExprNodeVisitor<Void> {
+  final class SubstituteGlobalsInExprVisitor extends AbstractExprNodeVisitor<Void> {
+
+    SubstituteGlobalsInExprVisitor() {
+      super(SubstituteGlobalsVisitor.this.errorReporter);
+    }
 
     @Override protected void visitGlobalNode(GlobalNode node) {
 
@@ -117,7 +125,7 @@ public class SubstituteGlobalsVisitor {
       }
       String enumTypeName = name.substring(0, lastDot);
       SoyType type = typeRegistry.getType(enumTypeName);
-      if (type != null && type instanceof SoyEnumType) {
+      if (type instanceof SoyEnumType) {
         SoyEnumType enumType = (SoyEnumType) type;
         String enumValueName = name.substring(lastDot + 1);
         Integer enumValue = enumType.getValue(enumValueName);
