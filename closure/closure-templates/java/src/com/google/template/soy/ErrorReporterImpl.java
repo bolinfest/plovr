@@ -73,7 +73,7 @@ public final class ErrorReporterImpl implements ErrorReporter {
    * <p>This should only be used for entry points that cannot be converted to pretty-print
    * the {@link SoyError}s directly (example: {@link SoyFileSet#compileToTofu()}).
    */
-  void throwIfErrorsPresent() throws SoySyntaxException {
+  public void throwIfErrorsPresent() throws SoySyntaxException {
     if (!errors.isEmpty()) {
       SoySyntaxException combined = new SoySyntaxException("errors during Soy compilation");
       for (SoySyntaxException e : errors) {

@@ -22,12 +22,14 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 import com.google.inject.Injector;
+import com.google.template.soy.ErrorReporterImpl;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.base.internal.IncrementingIdGenerator;
 import com.google.template.soy.base.internal.SoyFileKind;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.data.SoyData;
 import com.google.template.soy.data.restricted.StringData;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.soyparse.ParseException;
 import com.google.template.soy.soyparse.SoyFileParser;
 import com.google.template.soy.soyparse.TokenMgrError;
@@ -119,13 +121,17 @@ public class SoyRequestHandler implements HttpHandler {
       return;
     }
 
+    ErrorReporterImpl errorReporter = new ErrorReporterImpl();
     SoyFileParser parser = new SoyFileParser(
         new SoyTypeRegistry(),
         new IncrementingIdGenerator(),
         Files.newReader(soyFile, Charsets.UTF_8),
         SoyFileKind.SRC,
-        relativePath);
+        relativePath,
+        errorReporter);
     SoyFileNode node = parser.parseSoyFile();
+
+    errorReporter.throwIfErrorsPresent();
 
     String namespace = node.getNamespace();
     String templateName = namespace + "." + templateToRender;
