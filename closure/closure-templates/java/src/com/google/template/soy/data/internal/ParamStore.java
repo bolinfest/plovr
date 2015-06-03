@@ -17,7 +17,6 @@
 package com.google.template.soy.data.internal;
 
 import com.google.template.soy.data.SoyAbstractRecord;
-import com.google.template.soy.data.SoyValue;
 import com.google.template.soy.data.SoyValueProvider;
 
 import java.io.IOException;
@@ -39,7 +38,7 @@ public abstract class ParamStore extends SoyAbstractRecord {
    * @param name The field name to set.
    * @param valueProvider A provider of the field value.
    */
-  public abstract void setField(String name, @Nonnull SoyValueProvider valueProvider);
+  public abstract ParamStore setField(String name, @Nonnull SoyValueProvider valueProvider);
 
 
   @Override public boolean coerceToBoolean() {
@@ -55,7 +54,7 @@ public abstract class ParamStore extends SoyAbstractRecord {
     throw new UnsupportedOperationException();
   }
 
-  @Override public boolean equals(SoyValue other) {
+  @Override public boolean equals(Object other) {
     throw new UnsupportedOperationException();
   }
 
@@ -66,7 +65,7 @@ public abstract class ParamStore extends SoyAbstractRecord {
 
   public static final ParamStore EMPTY_INSTANCE = new ParamStore() {
 
-    @Override public void setField(String name, @Nonnull SoyValueProvider valueProvider) {
+    @Override public ParamStore setField(String name, @Nonnull SoyValueProvider valueProvider) {
       throw new UnsupportedOperationException();
     }
 

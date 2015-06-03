@@ -16,24 +16,28 @@
 
 package com.google.template.soy.parsepasses;
 
+import static com.google.common.truth.Truth.assertThat;
+
+import com.google.common.collect.Iterables;
+import com.google.template.soy.FormattingErrorReporter;
+import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.base.SoySyntaxException;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.msgs.internal.MsgUtils;
-import com.google.template.soy.shared.internal.SharedTestUtils;
+import com.google.template.soy.shared.SharedTestUtils;
 import com.google.template.soy.soytree.MsgNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
 
 import junit.framework.TestCase;
 
-
 /**
  * Unit tests for RewriteGenderMsgsVisitor.
  *
  */
-public class RewriteGenderMsgsVisitorTest extends TestCase {
-
+public final class RewriteGenderMsgsVisitorTest extends TestCase {
 
   public void testCannotMixGendersAndSelect() {
-
     String soyCode = "" +
         "{msg genders=\"$userGender\" desc=\"Button text.\"}\n" +
         "  {select $targetGender}\n" +
@@ -42,14 +46,13 @@ public class RewriteGenderMsgsVisitorTest extends TestCase {
         "    {default}Reply to them\n" +
         "  {/select}\n" +
         "{/msg}\n";
-    try {
-      SharedTestUtils.parseSoyCode(soyCode);
-      fail();
-    } catch (SoySyntaxException sse) {
-      assertTrue(sse.getMessage().contains(
-          "Cannot mix 'genders' attribute with 'select' command in the same message. Please use" +
-              " one or the other only."));
-    }
+    FormattingErrorReporter errorReporter = new FormattingErrorReporter();
+    SoyFileSetParserBuilder.forTemplateContents(soyCode)
+        .errorReporter(errorReporter)
+        .parse();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(Iterables.getOnlyElement(errorReporter.getErrorMessages()))
+        .contains("Cannot mix 'genders' attribute with 'select' command in the same message.");
   }
 
 
@@ -60,35 +63,32 @@ public class RewriteGenderMsgsVisitorTest extends TestCase {
         "  You joined {$owner}'s community.\n" +
         "{/msg}\n";
     try {
-      SharedTestUtils.parseSoyCode(soyCode);
+      SoyFileSetParserBuilder.forTemplateContents(soyCode).parse();
       fail();
     } catch (SoySyntaxException sse) {
-      assertTrue(sse.getMessage().contains(
-          "Cannot generate noncolliding base names for msg placeholders and/or vars:" +
-              " found colliding expressions \"$gender\" and \"$userGender\"."));
+      assertThat(sse.getMessage())
+          .contains("Cannot generate noncolliding base names for msg placeholders and/or vars:"
+              + " found colliding expressions \"$gender\" and \"$userGender\".");
     }
   }
 
 
   public void testMaxThreeGenders() {
-
     String soyCode = "" +
         "{msg genders=\"$userGender, $targetGender1, $targetGender2, $groupOwnerGender\"" +
         "    desc=\"...\"}\n" +
         "  You added {$targetName1} and {$targetName2} to {$groupOwnerName}'s group.\n" +
         "{/msg}\n";
     try {
-      SharedTestUtils.parseSoyCode(soyCode);
+      SoyFileSetParserBuilder.forTemplateContents(soyCode).parse();
       fail();
-    } catch (SoySyntaxException sse) {
-      assertTrue(sse.getMessage().contains(
-          "Attribute 'genders' does not contain exactly 1-3 expressions"));
+    } catch (IllegalStateException e) {
+      assertThat(e.getMessage()).contains("Attribute 'genders' does not contain 1-3 expressions");
     }
   }
 
 
   public void testMaxTwoGendersWithPlural() {
-
     String soyCode = "" +
         "{msg genders=\"$userGender, $gender1, $gender2\" desc=\"\"}\n" +
         "  {plural $numPhotos}\n" +
@@ -96,14 +96,14 @@ public class RewriteGenderMsgsVisitorTest extends TestCase {
         "    {default}Find {$name1}'s face in {$name2}'s photos\n" +
         "  {/plural}\n" +
         "{/msg}\n";
-    try {
-      SharedTestUtils.parseSoyCode(soyCode);
-      fail();
-    } catch (SoySyntaxException sse) {
-      assertTrue(sse.getMessage().contains(
-          "In a msg with 'plural', the 'genders' attribute can contain at most 2 expressions" +
-              " (otherwise, combinatorial explosion would cause a gigantic generated message)."));
-    }
+    FormattingErrorReporter errorReporter = new FormattingErrorReporter();
+    SoyFileSetParserBuilder.forTemplateContents(soyCode)
+        .errorReporter(errorReporter)
+        .parse();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(Iterables.getOnlyElement(errorReporter.getErrorMessages())).contains(
+        "In a msg with 'plural', the 'genders' attribute can contain at most 2 expressions"
+            + " (otherwise, combinatorial explosion would cause a gigantic generated message).");
   }
 
 
@@ -114,17 +114,19 @@ public class RewriteGenderMsgsVisitorTest extends TestCase {
         "  Save\n" +
         "{/msg}\n";
 
-    SoyFileSetNode soyTree =
-        SharedTestUtils.parseSoyCode(false /*don't run initial parsing passes*/, soyCode);
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyCode)
+        .errorReporter(boom)
+        .doRunInitialParsingPasses(false)
+        .parse();
 
     // Before.
     MsgNode msgBeforeRewrite = (MsgNode) SharedTestUtils.getNode(soyTree, 0, 0);
-    assertEquals(
-        "{msg genders=\"$userGender\" desc=\"Button text.\"}Save",
-        msgBeforeRewrite.toSourceString());
+    assertThat(msgBeforeRewrite.toSourceString())
+        .isEqualTo("{msg genders=\"$userGender\" desc=\"Button text.\"}Save");
 
     // Rewrite.
-    (new RewriteGenderMsgsVisitor(soyTree.getNodeIdGenerator())).exec(soyTree);
+    new RewriteGenderMsgsVisitor(soyTree.getNodeIdGenerator(), boom).exec(soyTree);
 
     // After.
     MsgNode msgAfterRewrite = (MsgNode) SharedTestUtils.getNode(soyTree, 0, 0);
@@ -144,11 +146,11 @@ public class RewriteGenderMsgsVisitorTest extends TestCase {
         "    {default}Save\n" +
         "  {/select}\n" +
         "{/msg}\n";
-    SoyFileSetNode soyTreeUsingSelect = SharedTestUtils.parseSoyCode(soyCodeUsingSelect);
+    SoyFileSetNode soyTreeUsingSelect =
+        SoyFileSetParserBuilder.forTemplateContents(soyCodeUsingSelect).parse();
     MsgNode msgUsingSelect = (MsgNode) SharedTestUtils.getNode(soyTreeUsingSelect, 0, 0);
-    assertEquals(
-        MsgUtils.computeMsgIdForDualFormat(msgUsingSelect),
-        MsgUtils.computeMsgIdForDualFormat(msgAfterRewrite));
+    assertThat(MsgUtils.computeMsgIdForDualFormat(msgAfterRewrite))
+        .isEqualTo(MsgUtils.computeMsgIdForDualFormat(msgUsingSelect));
   }
 
 
@@ -159,18 +161,20 @@ public class RewriteGenderMsgsVisitorTest extends TestCase {
         "  {plural $num}{case 1}Send it{default}Send {$num}{/plural}\n" +
         "{/msg}\n";
 
-    SoyFileSetNode soyTree =
-        SharedTestUtils.parseSoyCode(false /*don't run initial parsing passes*/, soyCode);
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyCode)
+        .errorReporter(boom)
+        .doRunInitialParsingPasses(false)
+        .parse();
 
     // Before.
     MsgNode msgBeforeRewrite = (MsgNode) SharedTestUtils.getNode(soyTree, 0, 0);
-    assertEquals(
-        "{msg genders=\"$userGender\" desc=\"...\"}" +
-            "{plural $num}{case 1}Send it{default}Send {$num}{/plural}",
-        msgBeforeRewrite.toSourceString());
+    assertThat(msgBeforeRewrite.toSourceString())
+        .isEqualTo("{msg genders=\"$userGender\" desc=\"...\"}"
+            + "{plural $num}{case 1}Send it{default}Send {$num}{/plural}");
 
     // Rewrite.
-    (new RewriteGenderMsgsVisitor(soyTree.getNodeIdGenerator())).exec(soyTree);
+    new RewriteGenderMsgsVisitor(soyTree.getNodeIdGenerator(), boom).exec(soyTree);
 
     // After.
     MsgNode msgAfterRewrite = (MsgNode) SharedTestUtils.getNode(soyTree, 0, 0);
@@ -194,11 +198,11 @@ public class RewriteGenderMsgsVisitorTest extends TestCase {
         "    {default}{plural $num}{case 1}Send it{default}Send {$num}{/plural}\n" +
         "  {/select}\n" +
         "{/msg}\n";
-    SoyFileSetNode soyTreeUsingSelect = SharedTestUtils.parseSoyCode(soyCodeUsingSelect);
+    SoyFileSetNode soyTreeUsingSelect =
+        SoyFileSetParserBuilder.forTemplateContents(soyCodeUsingSelect).parse();
     MsgNode msgUsingSelect = (MsgNode) SharedTestUtils.getNode(soyTreeUsingSelect, 0, 0);
-    assertEquals(
-        MsgUtils.computeMsgIdForDualFormat(msgUsingSelect),
-        MsgUtils.computeMsgIdForDualFormat(msgAfterRewrite));
+    assertThat(MsgUtils.computeMsgIdForDualFormat(msgAfterRewrite))
+        .isEqualTo(MsgUtils.computeMsgIdForDualFormat(msgUsingSelect));
   }
 
 
@@ -209,18 +213,21 @@ public class RewriteGenderMsgsVisitorTest extends TestCase {
         "  You starred {$target[0].name}'s photo in {$target[1].name}'s album.\n" +
         "{/msg}\n";
 
-    SoyFileSetNode soyTree =
-        SharedTestUtils.parseSoyCode(false /*don't run initial parsing passes*/, soyCode);
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyCode)
+        .errorReporter(boom)
+        .doRunInitialParsingPasses(false)
+        .parse();
 
     // Before.
     MsgNode msgBeforeRewrite = (MsgNode) SharedTestUtils.getNode(soyTree, 0, 0);
-    assertEquals(
-        "{msg genders=\"$ij.userGender, $target[0].gender, $target[1].gender\" desc=\"...\"}" +
-            "You starred {$target[0].name}'s photo in {$target[1].name}'s album.",
-        msgBeforeRewrite.toSourceString());
+    assertThat(msgBeforeRewrite.toSourceString())
+        .isEqualTo(
+            "{msg genders=\"$ij.userGender, $target[0].gender, $target[1].gender\" desc=\"...\"}"
+            + "You starred {$target[0].name}'s photo in {$target[1].name}'s album.");
 
     // Rewrite.
-    (new RewriteGenderMsgsVisitor(soyTree.getNodeIdGenerator())).exec(soyTree);
+    new RewriteGenderMsgsVisitor(soyTree.getNodeIdGenerator(), boom).exec(soyTree);
 
     // After.
     MsgNode msgAfterRewrite = (MsgNode) SharedTestUtils.getNode(soyTree, 0, 0);
@@ -254,7 +261,7 @@ public class RewriteGenderMsgsVisitorTest extends TestCase {
                 "{default}" + expectedInnerSelectSrc +
               "{/select}" +
           "{/select}";
-    assertEquals(expectedMsgSrc, msgAfterRewrite.toSourceString());
+    assertThat(msgAfterRewrite.toSourceString()).isEqualTo(expectedMsgSrc);
   }
 
 }

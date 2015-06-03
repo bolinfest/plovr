@@ -16,15 +16,20 @@
 
 package com.google.template.soy.sharedpasses;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.SoyBackendKind;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.data.SoyValue;
 import com.google.template.soy.data.restricted.PrimitiveData;
 import com.google.template.soy.data.restricted.StringData;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.exprparse.ExpressionParser;
-import com.google.template.soy.exprtree.ExprRootNode;
+import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.GlobalNode;
 import com.google.template.soy.exprtree.IntegerNode;
 import com.google.template.soy.exprtree.OperatorNodes.PlusOpNode;
@@ -40,7 +45,6 @@ import java.util.Map;
 
 import javax.annotation.Nullable;
 
-
 /**
  * Unit tests for SubstituteGlobalsVisitor.
  *
@@ -48,34 +52,43 @@ import javax.annotation.Nullable;
 public class SubstituteGlobalsVisitorTest extends TestCase {
 
 
-  public void testSubstituteGlobals() throws Exception {
-
-    ExprRootNode<?> expr = (new ExpressionParser("BOO + 'aaa' + foo.GOO")).parseExpression();
-    PlusOpNode plus0 = (PlusOpNode) expr.getChild(0);
+  public void testSubstituteGlobals() {
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    ExprNode expr
+        = new ExpressionParser("BOO + 'aaa' + foo.GOO", SourceLocation.UNKNOWN, boom)
+        .parseExpression();
+    PlusOpNode plus0 = (PlusOpNode) expr;
     PlusOpNode plus1 = (PlusOpNode) plus0.getChild(0);
 
-    assertEquals("BOO", ((GlobalNode) plus1.getChild(0)).getName());
-    assertEquals("foo.GOO", ((GlobalNode) plus0.getChild(1)).getName());
+    assertThat(((GlobalNode) plus1.getChild(0)).getName()).isEqualTo("BOO");
+    assertThat(((GlobalNode) plus0.getChild(1)).getName()).isEqualTo("foo.GOO");
 
     Map<String, PrimitiveData> globals =
         ImmutableMap.<String, PrimitiveData>of(
             "BOO", StringData.forValue("boo"), "foo.GOO", StringData.forValue("goo"),
             "foo.MOO", StringData.forValue("moo"));
-    ((new SubstituteGlobalsVisitor(globals, null, false)).new SubstituteGlobalsInExprVisitor())
+    new SubstituteGlobalsVisitor(
+        globals,
+        null /* typeRegistry */,
+        false /* shouldAssertNoUnboundGlobals */,
+        boom)
+        .new SubstituteGlobalsInExprVisitor()
         .exec(expr);
 
-    assertEquals("boo", ((StringNode) plus1.getChild(0)).getValue());
-    assertEquals("goo", ((StringNode) plus0.getChild(1)).getValue());
+    assertThat(((StringNode) plus1.getChild(0)).getValue()).isEqualTo("boo");
+    assertThat(((StringNode) plus0.getChild(1)).getValue()).isEqualTo("goo");
   }
 
 
   public void testSubstituteGlobalsFromType() throws Exception {
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    ExprNode expr
+        = new ExpressionParser("foo.BOO + foo.GOO", SourceLocation.UNKNOWN, boom)
+        .parseExpression();
+    PlusOpNode plus0 = (PlusOpNode) expr;
 
-    ExprRootNode<?> expr = (new ExpressionParser("foo.BOO + foo.GOO")).parseExpression();
-    PlusOpNode plus0 = (PlusOpNode) expr.getChild(0);
-
-    assertEquals("foo.BOO", ((GlobalNode) plus0.getChild(0)).getName());
-    assertEquals("foo.GOO", ((GlobalNode) plus0.getChild(1)).getName());
+    assertThat(((GlobalNode) plus0.getChild(0)).getName()).isEqualTo("foo.BOO");
+    assertThat(((GlobalNode) plus0.getChild(1)).getName()).isEqualTo("foo.GOO");
 
     // Fake enum type
     final SoyEnumType enumType = new SoyEnumType() {
@@ -105,6 +118,10 @@ public class SubstituteGlobalsVisitorTest extends TestCase {
       @Override @Nullable public Integer getValue(String memberName) {
         return values.get(memberName);
       }
+
+      @Override public Class<? extends SoyValue> javaType() {
+        throw new UnsupportedOperationException();
+      }
     };
 
     // Fake type provider
@@ -119,19 +136,25 @@ public class SubstituteGlobalsVisitorTest extends TestCase {
     };
 
     // Create a registry with the enum type
-    SoyTypeRegistry typeRegistry = new SoyTypeRegistry(
-        ImmutableSet.<SoyTypeProvider>of(enumTypeProvider));
-    ((new SubstituteGlobalsVisitor(null, typeRegistry, false)).new SubstituteGlobalsInExprVisitor())
+    SoyTypeRegistry typeRegistry = new SoyTypeRegistry(ImmutableSet.of(enumTypeProvider));
+    new SubstituteGlobalsVisitor(
+        null /* compileTimeGlobals */,
+        typeRegistry,
+        false /* shouldAssertNoUnboundGlobals */,
+        boom)
+        .new SubstituteGlobalsInExprVisitor()
         .exec(expr);
 
-    assertEquals(1, ((IntegerNode) plus0.getChild(0)).getValue());
-    assertEquals(2, ((IntegerNode) plus0.getChild(1)).getValue());
+    assertThat(((IntegerNode) plus0.getChild(0)).getValue()).isEqualTo(1);
+    assertThat(((IntegerNode) plus0.getChild(1)).getValue()).isEqualTo(2);
   }
 
 
   public void testAssertNoUnboundGlobals() throws Exception {
-
-    ExprRootNode<?> expr = (new ExpressionParser("BOO + 'aaa' + foo.GOO")).parseExpression();
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    ExprNode expr
+        = new ExpressionParser("BOO + 'aaa' + foo.GOO", SourceLocation.UNKNOWN, boom)
+        .parseExpression();
 
     Map<String, PrimitiveData> globals =
         ImmutableMap.<String, PrimitiveData>of(
@@ -139,11 +162,15 @@ public class SubstituteGlobalsVisitorTest extends TestCase {
             "foo.MOO", StringData.forValue("moo"));
 
     try {
-      ((new SubstituteGlobalsVisitor(globals, null, true)).new SubstituteGlobalsInExprVisitor())
+      new SubstituteGlobalsVisitor(
+          globals, null /* typeRegistry */,
+          true /* shouldAssertNoUnboundGlobals */,
+          boom)
+          .new SubstituteGlobalsInExprVisitor()
           .exec(expr);
       fail();
     } catch (SoySyntaxException sse) {
-      assertTrue(sse.getMessage().contains("Found unbound global 'foo.GOO'."));
+      assertThat(sse.getMessage()).contains("Found unbound global 'foo.GOO'.");
     }
   }
 

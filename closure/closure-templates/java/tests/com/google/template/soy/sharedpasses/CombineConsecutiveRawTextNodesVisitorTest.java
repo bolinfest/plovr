@@ -16,23 +16,25 @@
 
 package com.google.template.soy.sharedpasses;
 
-import com.google.template.soy.shared.internal.SharedTestUtils;
+import static com.google.common.truth.Truth.assertThat;
+
+import com.google.template.soy.SoyFileSetParserBuilder;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
+import com.google.template.soy.shared.SharedTestUtils;
 import com.google.template.soy.soytree.RawTextNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.TemplateNode;
 
 import junit.framework.TestCase;
 
-
 /**
  * Unit tests for CombineConsecutiveRawTextNodesVisitor.
  *
  */
-public class CombineConsecutiveRawTextNodesVisitorTest extends TestCase {
-
+public final class CombineConsecutiveRawTextNodesVisitorTest extends TestCase {
 
   public void testCombineConsecutiveRawTextNodes() {
-
     String testFileContent =
         "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
@@ -41,18 +43,21 @@ public class CombineConsecutiveRawTextNodesVisitorTest extends TestCase {
         "  Blah{$goo}blah\n" +
         "{/template}\n";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(testFileContent);
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(testFileContent)
+        .errorReporter(boom)
+        .parse();
     TemplateNode template = (TemplateNode) SharedTestUtils.getNode(soyTree);
-    template.addChild(new RawTextNode(0, "bleh"));
-    template.addChild(new RawTextNode(0, "bluh"));
+    template.addChild(new RawTextNode(0, "bleh", template.getSourceLocation()));
+    template.addChild(new RawTextNode(0, "bluh", template.getSourceLocation()));
 
-    assertEquals(5, template.numChildren());
+    assertThat(template.numChildren()).isEqualTo(5);
 
-    (new CombineConsecutiveRawTextNodesVisitor()).exec(soyTree);
+    new CombineConsecutiveRawTextNodesVisitor(boom).exec(soyTree);
 
-    assertEquals(3, template.numChildren());
-    assertEquals("Blah", ((RawTextNode) template.getChild(0)).getRawText());
-    assertEquals("blahblehbluh", ((RawTextNode) template.getChild(2)).getRawText());
+    assertThat(template.numChildren()).isEqualTo(3);
+    assertThat(((RawTextNode) template.getChild(0)).getRawText()).isEqualTo("Blah");
+    assertThat(((RawTextNode) template.getChild(2)).getRawText()).isEqualTo("blahblehbluh");
   }
 
 }

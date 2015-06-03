@@ -25,7 +25,7 @@ import com.google.template.soy.soytree.SoyNode.MsgSubstUnitNode;
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
-public class MsgPluralRemainderNode extends AbstractSoyNode implements MsgSubstUnitNode {
+public final class MsgPluralRemainderNode extends AbstractSoyNode implements MsgSubstUnitNode {
 
 
   /** The source string. */
@@ -36,7 +36,7 @@ public class MsgPluralRemainderNode extends AbstractSoyNode implements MsgSubstU
    * @param origPrintNode The print node containing "remainder".
    */
   public MsgPluralRemainderNode(PrintNode origPrintNode) {
-    super(origPrintNode.getId());
+    super(origPrintNode.getId(), origPrintNode.getSourceLocation());
     this.sourceString = origPrintNode.toSourceString();
   }
 
@@ -45,7 +45,7 @@ public class MsgPluralRemainderNode extends AbstractSoyNode implements MsgSubstU
    * Copy constructor.
    * @param orig The node to copy.
    */
-  protected MsgPluralRemainderNode(MsgPluralRemainderNode orig) {
+  private MsgPluralRemainderNode(MsgPluralRemainderNode orig) {
     super(orig);
     this.sourceString = orig.sourceString;
   }

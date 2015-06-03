@@ -18,6 +18,7 @@ package com.google.template.soy.parsepasses;
 
 import com.google.template.soy.basetree.SyntaxVersion;
 import com.google.template.soy.basetree.SyntaxVersionBound;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
 import com.google.template.soy.exprtree.BooleanNode;
 import com.google.template.soy.exprtree.ExprNode;
@@ -28,7 +29,6 @@ import com.google.template.soy.soytree.ExprUnion;
 import com.google.template.soy.soytree.SoyNode;
 import com.google.template.soy.soytree.SoyNode.ExprHolderNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
-
 
 /**
  * Visitor for replacing hasData() function with boolean 'true'.
@@ -44,7 +44,9 @@ public class ReplaceHasDataFunctionVisitor extends AbstractSoyNodeVisitor<Void> 
 
   private final SyntaxVersion declaredSyntaxVersion;
 
-  public ReplaceHasDataFunctionVisitor(SyntaxVersion declaredSyntaxVersion) {
+  public ReplaceHasDataFunctionVisitor(
+      SyntaxVersion declaredSyntaxVersion, ErrorReporter errorReporter) {
+    super(errorReporter);
     this.declaredSyntaxVersion = declaredSyntaxVersion;
   }
 
@@ -73,12 +75,13 @@ public class ReplaceHasDataFunctionVisitor extends AbstractSoyNodeVisitor<Void> 
    * Private helper class for ReplaceHasDataFunctionVisitor to visit expressions.
    * This class does the real work.
    */
-  private class ReplaceHasDataFunctionInExprVisitor extends AbstractExprNodeVisitor<Void> {
+  private final class ReplaceHasDataFunctionInExprVisitor extends AbstractExprNodeVisitor<Void> {
 
     /** The SoyNode that holds the expression being visited. */
     private final ExprHolderNode holder;
 
-    public ReplaceHasDataFunctionInExprVisitor(ExprHolderNode holder) {
+    ReplaceHasDataFunctionInExprVisitor(ExprHolderNode holder) {
+      super(ReplaceHasDataFunctionVisitor.this.errorReporter);
       this.holder = holder;
     }
 
@@ -86,7 +89,7 @@ public class ReplaceHasDataFunctionVisitor extends AbstractSoyNodeVisitor<Void> 
       if (node.getFunctionName().equals("hasData")) {
         // Function hasData() is only allowed for syntax version 2.1 and below.
         if (declaredSyntaxVersion.num < SyntaxVersion.V2_2.num) {
-          node.getParent().replaceChild(node, new BooleanNode(true));
+          node.getParent().replaceChild(node, new BooleanNode(true, node.getSourceLocation()));
         }
         // Always set the bound, regardless of declaredSyntaxVersion, because we might later
         // determine a higher required syntax version for the Soy file containing this node, due to

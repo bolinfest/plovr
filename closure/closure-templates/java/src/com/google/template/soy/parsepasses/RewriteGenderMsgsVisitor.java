@@ -21,6 +21,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.base.internal.IdGenerator;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.SoyError;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.MsgNode;
@@ -39,14 +41,18 @@ import java.util.List;
 
 import javax.annotation.Nullable;
 
-
 /**
  * Visitor for rewriting 'msg' nodes with 'genders' attribute into 'msg' nodes with one or more
  * levels of 'select'.
  *
  */
-public class RewriteGenderMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
+public final class RewriteGenderMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
 
+  private static final SoyError GENDER_AND_SELECT_NOT_ALLOWED = SoyError.of(
+      "Cannot mix ''genders'' attribute with ''select'' command in the same message.");
+  private static final SoyError MORE_THAN_TWO_GENDER_EXPRS = SoyError.of(
+      "In a msg with ''plural'', the ''genders'' attribute can contain at most 2 expressions "
+      + "(otherwise, combinatorial explosion would cause a gigantic generated message).");
 
   /** Fallback base select var name. */
   public static final String FALLBACK_BASE_SELECT_VAR_NAME = "GENDER";
@@ -61,7 +67,8 @@ public class RewriteGenderMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
    *
    * @param nodeIdGen The same node ID generator used to generate the existing tree nodes.
    */
-  public RewriteGenderMsgsVisitor(IdGenerator nodeIdGen) {
+  public RewriteGenderMsgsVisitor(IdGenerator nodeIdGen, ErrorReporter errorReporter) {
+    super(errorReporter);
     this.nodeIdGen = Preconditions.checkNotNull(nodeIdGen);
   }
 
@@ -72,25 +79,20 @@ public class RewriteGenderMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
 
   @Override protected void visitMsgNode(MsgNode msg) {
 
-    List<ExprRootNode<?>> genderExprs = msg.getAndRemoveGenderExprs();
+    List<ExprRootNode> genderExprs = msg.getAndRemoveGenderExprs();
     if (genderExprs == null) {
       return;  // not a msg that this pass should rewrite
     }
 
     // Check that 'genders' attribute and 'select' command are not used together.
     if (msg.getChild(0) instanceof MsgSelectNode) {
-      throw SoySyntaxExceptionUtils.createWithNode(
-          "Cannot mix 'genders' attribute with 'select' command in the same message. Please use" +
-              " one or the other only.",
-          msg);
+      errorReporter.report(
+          msg.getChild(0).getSourceLocation(), GENDER_AND_SELECT_NOT_ALLOWED);
     }
 
     // If plural msg, check that there are max 2 genders.
     if (msg.getChild(0) instanceof MsgPluralNode && genderExprs.size() > 2) {
-      throw SoySyntaxExceptionUtils.createWithNode(
-          "In a msg with 'plural', the 'genders' attribute can contain at most 2 expressions" +
-              " (otherwise, combinatorial explosion would cause a gigantic generated message).",
-          msg);
+      errorReporter.report(msg.getSourceLocation(), MORE_THAN_TWO_GENDER_EXPRS);
     }
 
     // ------ Do the rewrite. ------
@@ -103,22 +105,22 @@ public class RewriteGenderMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
     try {
       baseSelectVarNames =
           MsgSubstUnitBaseVarNameUtils.genNoncollidingBaseNamesForExprs(
-              genderExprs, FALLBACK_BASE_SELECT_VAR_NAME);
+              ExprRootNode.unwrap(genderExprs), FALLBACK_BASE_SELECT_VAR_NAME);
     } catch (SoySyntaxException sse) {
       throw SoySyntaxExceptionUtils.associateNode(sse, msg);
     }
 
     for (int i = 0; i < genderExprs.size(); i++) {
-      ExprRootNode<?> genderExpr = genderExprs.get(i);
+      ExprRootNode genderExpr = genderExprs.get(i);
       String baseSelectVarName = baseSelectVarNames.get(i);
 
       // Check whether the generated base name would be the same (both for the old naive algorithm
       // and the new algorithm). If so, then there's no need to specify the baseSelectVarName.
       if (MsgSubstUnitBaseVarNameUtils.genNaiveBaseNameForExpr(
-              genderExpr, FALLBACK_BASE_SELECT_VAR_NAME)
-              .equals(baseSelectVarName) &&
-          MsgSubstUnitBaseVarNameUtils.genShortestBaseNameForExpr(
-              genderExpr, FALLBACK_BASE_SELECT_VAR_NAME)
+          genderExpr.getRoot(), FALLBACK_BASE_SELECT_VAR_NAME)
+              .equals(baseSelectVarName)
+          && MsgSubstUnitBaseVarNameUtils.genShortestBaseNameForExpr(
+              genderExpr.getRoot(), FALLBACK_BASE_SELECT_VAR_NAME)
               .equals(baseSelectVarName)) {
         baseSelectVarName = null;
       }
@@ -137,19 +139,25 @@ public class RewriteGenderMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
    *     from the gender expression.
    */
   private void splitMsgForGender(
-      MsgNode msg, ExprRootNode<?> genderExpr, @Nullable String baseSelectVarName) {
+      MsgNode msg, ExprRootNode genderExpr, @Nullable String baseSelectVarName) {
 
     List<StandaloneNode> origChildren = ImmutableList.copyOf(msg.getChildren());
     msg.clearChildren();
 
-    MsgSelectCaseNode femaleCase = new MsgSelectCaseNode(nodeIdGen.genId(), "'female'");
+    MsgSelectCaseNode femaleCase
+        = new MsgSelectCaseNode.Builder(nodeIdGen.genId(), "'female'", msg.getSourceLocation())
+            .build(errorReporter);
     femaleCase.addChildren(SoytreeUtils.cloneListWithNewIds(origChildren, nodeIdGen));
-    MsgSelectCaseNode maleCase = new MsgSelectCaseNode(nodeIdGen.genId(), "'male'");
+    MsgSelectCaseNode maleCase
+        = new MsgSelectCaseNode.Builder(nodeIdGen.genId(), "'male'", msg.getSourceLocation())
+            .build(errorReporter);
     maleCase.addChildren(SoytreeUtils.cloneListWithNewIds(origChildren, nodeIdGen));
-    MsgSelectDefaultNode defaultCase = new MsgSelectDefaultNode(nodeIdGen.genId());
+    MsgSelectDefaultNode defaultCase
+        = new MsgSelectDefaultNode(nodeIdGen.genId(), msg.getSourceLocation());
     defaultCase.addChildren(SoytreeUtils.cloneListWithNewIds(origChildren, nodeIdGen));
 
-    MsgSelectNode selectNode = new MsgSelectNode(nodeIdGen.genId(), genderExpr, baseSelectVarName);
+    MsgSelectNode selectNode = new MsgSelectNode(
+        nodeIdGen.genId(), msg.getSourceLocation(), genderExpr, baseSelectVarName);
     selectNode.addChild(femaleCase);
     selectNode.addChild(maleCase);
     selectNode.addChild(defaultCase);

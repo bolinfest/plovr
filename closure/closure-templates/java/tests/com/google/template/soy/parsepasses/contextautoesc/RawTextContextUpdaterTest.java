@@ -16,15 +16,17 @@
 
 package com.google.template.soy.parsepasses.contextautoesc;
 
-import java.util.Arrays;
-import java.util.Queue;
+import static com.google.common.truth.Truth.assertWithMessage;
 
-import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.soytree.RawTextNode;
 
 import junit.framework.TestCase;
+
+import java.util.Arrays;
+import java.util.Queue;
 
 public class RawTextContextUpdaterTest extends TestCase {
   // The letter 'M' repeated 1500 times.
@@ -517,64 +519,91 @@ public class RawTextContextUpdaterTest extends TestCase {
     assertTransition("TEXT", "<a href='", "TEXT");
   }
 
+  public final void testTemplateElementNesting() throws Exception {
+    assertTransition("HTML_PCDATA", "<template>", "HTML_PCDATA templateNestDepth=1");
+    assertTransition("HTML_PCDATA", "<template id='i'>foo", "HTML_PCDATA templateNestDepth=1");
+    assertTransition("HTML_PCDATA", "<template>foo<template>", "HTML_PCDATA templateNestDepth=2");
+    assertTransition("HTML_PCDATA", "<template>foo</template>", "HTML_PCDATA");
+    assertTransition("HTML_PCDATA", "<template>foo<template></template>",
+                     "HTML_PCDATA templateNestDepth=1");
+    assertTransition("HTML_PCDATA", "<template>foo<script>//</template></script>",
+                     "HTML_PCDATA templateNestDepth=1");
+    assertTransition("HTML_PCDATA", "<template>foo<!--</template>-->",
+                     "HTML_PCDATA templateNestDepth=1");
+    assertTransition("HTML_PCDATA", "</template>", "ERROR");
+    assertTransition("HTML_PCDATA", "<template>foo</template></template>", "ERROR");
+    assertTransition("HTML_PCDATA templateNestDepth=4", "</template>",
+                     "HTML_PCDATA templateNestDepth=3");
+    assertTransition("HTML_PCDATA templateNestDepth=4", "</TempLate>",
+                     "HTML_PCDATA templateNestDepth=3");
+  }
+
   private static void assertTransition(String from, String rawText, String to) throws Exception {
     Context after = RawTextContextUpdater.processRawText(
-        new RawTextNode(0, rawText), parseContext(from)).getEndContext();
+        new RawTextNode(0, rawText, SourceLocation.UNKNOWN), parseContext(from)).getEndContext();
     // Assert against the toString() for simpler test authoring -- if a developer misspells the
     // "to" context, they'll see a useful string-based diff.
-    assertEquals(rawText, "(Context " + to + ")", after.toString());
+    assertWithMessage(rawText).that(after.toString()).isEqualTo("(Context " + to + ")");
   }
 
   private static Context parseContext(String text) {
     Queue<String> parts = Lists.newLinkedList(Arrays.asList(text.split(" ")));
-    Context.State state = Context.State.valueOf(parts.remove());
-    Context.ElementType el = Context.ElementType.NONE;
-    Context.AttributeType attr = Context.AttributeType.NONE;
-    Context.AttributeEndDelimiter delim = Context.AttributeEndDelimiter.NONE;
-    Context.JsFollowingSlash slash = Context.JsFollowingSlash.NONE;
-    Context.UriPart uriPart = Context.UriPart.NONE;
+    Context.Builder builder = Context.ERROR.toBuilder();
+    builder.withState(Context.State.valueOf(parts.remove()));
     if (!parts.isEmpty()) {
       try {
-        el = Context.ElementType.valueOf(parts.element());
+        builder.withElType(Context.ElementType.valueOf(parts.element()));
         parts.remove();
       } catch (IllegalArgumentException ex) {
         // OK
       }
       if (!parts.isEmpty()) {
         try {
-          attr = Context.AttributeType.valueOf(parts.element());
+          builder.withAttrType(Context.AttributeType.valueOf(parts.element()));
           parts.remove();
         } catch (IllegalArgumentException ex) {
           // OK
         }
         if (!parts.isEmpty()) {
           try {
-            delim = Context.AttributeEndDelimiter.valueOf(parts.element());
+            builder.withDelimType(Context.AttributeEndDelimiter.valueOf(parts.element()));
             parts.remove();
           } catch (IllegalArgumentException ex) {
             // OK
           }
           if (!parts.isEmpty()) {
             try {
-              slash = Context.JsFollowingSlash.valueOf(parts.element());
+              builder.withSlashType(Context.JsFollowingSlash.valueOf(parts.element()));
               parts.remove();
             } catch (IllegalArgumentException ex) {
               // OK
             }
             if (!parts.isEmpty()) {
               try {
-                uriPart = Context.UriPart.valueOf(parts.element());
+                builder.withUriPart(Context.UriPart.valueOf(parts.element()));
                 parts.remove();
               } catch (IllegalArgumentException ex) {
                 // OK
+              }
+              if (!parts.isEmpty()) {
+                String part = parts.element();
+                String prefix = "templateNestDepth=";
+                if (part.startsWith(prefix)) {
+                  try {
+                    builder.withTemplateNestDepth(
+                        Integer.parseInt(part.substring(prefix.length())));
+                    parts.remove();
+                  } catch (NumberFormatException ex) {
+                    // OK
+                  }
+                }
               }
             }
           }
         }
       }
     }
-    assertTrue(
-        "Got [" + text + "] but didn't use [" + Joiner.on(' ').join(parts) + "]", parts.isEmpty());
-    return new Context(state, el, attr, delim, slash, uriPart);
+    assertWithMessage("Got [" + text + "]").that(parts).isEmpty();
+    return builder.build();
   }
 }

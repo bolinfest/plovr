@@ -32,7 +32,7 @@ public final class PlovrSoySyntaxException extends UncheckedCompilationException
     this.soySyntaxException = e;
     this.input = input;
 
-    String soyErrorMsg = soySyntaxException.getOriginalMessage();
+    String soyErrorMsg = soySyntaxException.getMessage();
     Matcher matcher = PlovrSoySyntaxException.LINE_AND_CHAR_NO.matcher(
         soyErrorMsg);
     if (matcher.find()) {
@@ -47,7 +47,12 @@ public final class PlovrSoySyntaxException extends UncheckedCompilationException
   @Override
   public String getMessage() {
     String templateName = getTemplateName();
-    String soyErrorMsg = soySyntaxException.getOriginalMessage();
+    String soyErrorMsg = soySyntaxException.getMessage();
+    if (soyErrorMsg.startsWith("In file ")) {
+      // New-style soy errors already have the line data.
+      return soyErrorMsg.substring("In file ".length());
+    }
+
     String message;
     if (templateName == null) {
       message = soyErrorMsg;

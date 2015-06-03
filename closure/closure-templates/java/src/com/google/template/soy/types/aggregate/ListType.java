@@ -30,8 +30,7 @@ import java.util.Objects;
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
-public class ListType implements SoyType {
-
+public final class ListType implements SoyType {
 
   private final SoyType elementType;
 
@@ -71,6 +70,9 @@ public class ListType implements SoyType {
     return value instanceof SoyList;
   }
 
+  @Override public Class<? extends SoyValue> javaType() {
+    return SoyList.class;
+  }
 
   @Override public String toString() {
     return "list<" + elementType + ">";

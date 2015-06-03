@@ -16,6 +16,8 @@
 
 package com.google.template.soy.parsepasses;
 
+import com.google.template.soy.base.SourceLocation;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.exprtree.FunctionNode;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
@@ -24,7 +26,6 @@ import com.google.template.soy.soytree.PrintNode;
 import com.google.template.soy.soytree.SoyNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 import com.google.template.soy.soytree.SoySyntaxExceptionUtils;
-
 
 /**
  * Visitor for finding 'print' nodes that are actually 'remainder' nodes, and replacing them with
@@ -39,12 +40,15 @@ import com.google.template.soy.soytree.SoySyntaxExceptionUtils;
  * <p> {@link #exec} should be called on a full parse tree. There is no return value.
  *
  */
-public class RewriteRemainderNodesVisitor extends AbstractSoyNodeVisitor<Void> {
+public final class RewriteRemainderNodesVisitor extends AbstractSoyNodeVisitor<Void> {
 
 
   /** The MsgPluralNode most recently visited. */
   private MsgPluralNode currPluralNode;
 
+  public RewriteRemainderNodesVisitor(ErrorReporter errorReporter) {
+    super(errorReporter);
+  }
 
   // -----------------------------------------------------------------------------------------------
   // Implementations for specific nodes.
@@ -52,14 +56,14 @@ public class RewriteRemainderNodesVisitor extends AbstractSoyNodeVisitor<Void> {
 
   @Override protected void visitPrintNode(PrintNode node) {
 
-    ExprRootNode<?> exprRootNode = node.getExprUnion().getExpr();
+    ExprRootNode exprRootNode = node.getExprUnion().getExpr();
     if (exprRootNode == null) {
       return;
     }
 
     // Check for the function node with the function "remainder()".
-    if (exprRootNode.getChild(0) instanceof FunctionNode) {
-      FunctionNode functionNode = (FunctionNode) exprRootNode.getChild(0);
+    if (exprRootNode.getRoot() instanceof FunctionNode) {
+      FunctionNode functionNode = (FunctionNode) exprRootNode.getRoot();
       if (functionNode.getFunctionName().equals("remainder")) {
 
         if (currPluralNode == null) {
@@ -102,7 +106,10 @@ public class RewriteRemainderNodesVisitor extends AbstractSoyNodeVisitor<Void> {
         // Now rewrite the PrintNode (reusing the old node id).
         String newExprText =
             "(" + currPluralNode.getExpr().toSourceString() + ") - " + currPluralNode.getOffset();
-        PrintNode newPrintNode = new PrintNode(node.getId(), node.isImplicit(), newExprText, null);
+        PrintNode newPrintNode
+            = new PrintNode.Builder(node.getId(), node.isImplicit(), SourceLocation.UNKNOWN)
+                .exprText(newExprText)
+                .build(errorReporter);
         newPrintNode.addChildren(node.getChildren());
         node.getParent().replaceChild(node, newPrintNode);
       }

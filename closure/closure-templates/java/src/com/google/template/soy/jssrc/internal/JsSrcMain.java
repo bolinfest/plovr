@@ -19,15 +19,13 @@ package com.google.template.soy.jssrc.internal;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.common.io.Files;
 import com.google.inject.Key;
-import com.google.inject.Provider;
 import com.google.template.soy.base.SoySyntaxException;
-import com.google.template.soy.base.internal.BaseUtils;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.internal.i18n.BidiGlobalDir;
 import com.google.template.soy.internal.i18n.SoyBidiUtils;
 import com.google.template.soy.jssrc.SoyJsSrcOptions;
@@ -52,6 +50,7 @@ import java.util.List;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
+import javax.inject.Provider;
 
 /**
  * Main entry point for the JS Src backend (output target).
@@ -74,6 +73,9 @@ public class JsSrcMain {
   /** Provider for getting an instance of GenJsCodeVisitor. */
   private final Provider<GenJsCodeVisitor> genJsCodeVisitorProvider;
 
+  /** For reporting errors during code generation. */
+  private final ErrorReporter errorReporter;
+
 
   /**
    * @param apiCallScope The scope object that manages the API call scope.
@@ -84,13 +86,16 @@ public class JsSrcMain {
    */
   @Inject
   public JsSrcMain(
-      @ApiCall GuiceSimpleScope apiCallScope, SimplifyVisitor simplifyVisitor,
+      @ApiCall GuiceSimpleScope apiCallScope,
+      SimplifyVisitor simplifyVisitor,
       Provider<OptimizeBidiCodeGenVisitor> optimizeBidiCodeGenVisitorProvider,
-      Provider<GenJsCodeVisitor> genJsCodeVisitorProvider) {
+      Provider<GenJsCodeVisitor> genJsCodeVisitorProvider,
+      ErrorReporter errorReporter) {
     this.apiCallScope = apiCallScope;
     this.simplifyVisitor = simplifyVisitor;
     this.optimizeBidiCodeGenVisitorProvider = optimizeBidiCodeGenVisitorProvider;
     this.genJsCodeVisitorProvider = genJsCodeVisitorProvider;
+    this.errorReporter = errorReporter;
   }
 
 
@@ -107,13 +112,15 @@ public class JsSrcMain {
    * @throws SoySyntaxException If a syntax error is found.
    */
   public List<String> genJsSrc(
-      SoyFileSetNode soyTree, SoyJsSrcOptions jsSrcOptions, @Nullable SoyMsgBundle msgBundle)
+      SoyFileSetNode soyTree,
+      SoyJsSrcOptions jsSrcOptions,
+      @Nullable SoyMsgBundle msgBundle)
       throws SoySyntaxException {
 
     // Generate code with the opt_ijData param if either (a) the user specified the compiler flag
     // --isUsingIjData or (b) any of the Soy code in the file set references injected data.
-    boolean isUsingIjData =
-        jsSrcOptions.isUsingIjData() || (new IsUsingIjDataVisitor()).exec(soyTree);
+    boolean isUsingIjData = jsSrcOptions.isUsingIjData()
+        || new IsUsingIjDataVisitor(errorReporter).exec(soyTree);
 
     // Make sure that we don't try to use goog.i18n.bidi when we aren't supposed to use Closure.
     Preconditions.checkState(
@@ -128,15 +135,15 @@ public class JsSrcMain {
       // Seed the scoped parameters.
       apiCallScope.seed(SoyJsSrcOptions.class, jsSrcOptions);
       apiCallScope.seed(Key.get(Boolean.class, IsUsingIjData.class), isUsingIjData);
-      BidiGlobalDir bidiGlobalDir = SoyBidiUtils.decodeBidiGlobalDirFromOptions(
+      BidiGlobalDir bidiGlobalDir = SoyBidiUtils.decodeBidiGlobalDirFromJsOptions(
           jsSrcOptions.getBidiGlobalDir(),
           jsSrcOptions.getUseGoogIsRtlForBidiGlobalDir());
       ApiCallScopeUtils.seedSharedParams(apiCallScope, msgBundle, bidiGlobalDir);
 
       // Replace MsgNodes.
       if (jsSrcOptions.shouldGenerateGoogMsgDefs()) {
-        (new ReplaceMsgsWithGoogMsgsVisitor()).exec(soyTree);
-        (new MoveGoogMsgDefNodesEarlierVisitor()).exec(soyTree);
+        new ReplaceMsgsWithGoogMsgsVisitor(errorReporter).exec(soyTree);
+        new MoveGoogMsgDefNodesEarlierVisitor(errorReporter).exec(soyTree);
         Preconditions.checkState(
             bidiGlobalDir != null,
             "If enabling shouldGenerateGoogMsgDefs, must also set bidi global directionality.");
@@ -145,7 +152,8 @@ public class JsSrcMain {
             bidiGlobalDir == null || bidiGlobalDir.isStaticValue(),
             "If using bidiGlobalIsRtlCodeSnippet, must also enable shouldGenerateGoogMsgDefs.");
         try {
-          (new InsertMsgsVisitor(msgBundle, false)).exec(soyTree);
+          new InsertMsgsVisitor(msgBundle, false /* dontErrorOnPlrselMsgs */, errorReporter)
+              .exec(soyTree);
         } catch (EncounteredPlrselMsgException e) {
           throw SoySyntaxExceptionUtils.createWithNode(
               "JS code generation currently only supports plural/select messages when" +
@@ -180,8 +188,12 @@ public class JsSrcMain {
    * @throws IOException If there is an error in opening/writing an output JS file.
    */
   public void genJsFiles(
-      SoyFileSetNode soyTree, SoyJsSrcOptions jsSrcOptions, @Nullable String locale,
-      @Nullable SoyMsgBundle msgBundle, String outputPathFormat, String inputPathsPrefix)
+      SoyFileSetNode soyTree,
+      SoyJsSrcOptions jsSrcOptions,
+      @Nullable String locale,
+      @Nullable SoyMsgBundle msgBundle,
+      String outputPathFormat,
+      String inputPathsPrefix)
       throws SoySyntaxException, IOException {
 
     List<String> jsFileContents = genJsSrc(soyTree, jsSrcOptions, msgBundle);
@@ -194,8 +206,8 @@ public class JsSrcMain {
           srcsToCompile.size(), jsFileContents.size()));
     }
 
-    Multimap<String, Integer> outputs =
-        mapOutputsToSrcs(locale, outputPathFormat, inputPathsPrefix, srcsToCompile);
+    Multimap<String, Integer> outputs = MainEntryPointUtils.mapOutputsToSrcs(
+        locale, outputPathFormat, inputPathsPrefix, srcsToCompile);
 
     for (String outputFilePath : outputs.keySet()) {
       Writer out = Files.newWriter(new File(outputFilePath), UTF_8);
@@ -216,29 +228,5 @@ public class JsSrcMain {
         out.close();
       }
     }
-  }
-
-  /**
-   * Maps output paths to indices of inputs that should be emitted to them.
-   */
-  private Multimap<String, Integer> mapOutputsToSrcs(String locale, String outputPathFormat,
-      String inputPathsPrefix, ImmutableList<SoyFileNode> fileNodes) {
-    Multimap<String, Integer> outputs = ArrayListMultimap.create();
-
-    // First, check that the parent directories for all output files exist, and group the output
-    // files by the inputs that go there.
-    // This means that the compiled source from multiple input files might be written to a single
-    // output file, as is the case when there are multiple inputs, and the output format string
-    // contains no wildcards.
-    for (int i = 0; i < fileNodes.size(); ++i) {
-      SoyFileNode inputFile = fileNodes.get(i);
-      String inputFilePath = inputFile.getFilePath();
-      String outputFilePath = MainEntryPointUtils.buildFilePath(
-          outputPathFormat, locale, inputFilePath, inputPathsPrefix);
-
-      BaseUtils.ensureDirsExistInPath(outputFilePath);
-      outputs.put(outputFilePath, i);
-    }
-    return outputs;
   }
 }

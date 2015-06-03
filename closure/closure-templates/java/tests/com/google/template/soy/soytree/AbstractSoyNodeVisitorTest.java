@@ -16,51 +16,72 @@
 
 package com.google.template.soy.soytree;
 
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.base.internal.SoyFileKind;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 import com.google.template.soy.soytree.TemplateNode.SoyFileHeaderInfo;
 
 import junit.framework.TestCase;
 
-
 /**
  * Unit tests for AbstractSoyNodeVisitor.
  *
  */
-public class AbstractSoyNodeVisitorTest extends TestCase {
+public final class AbstractSoyNodeVisitorTest extends TestCase {
 
+  private static final ErrorReporter FAIL = ExplodingErrorReporter.get();
 
   public void testUsingIncompleteOutputVisitor() throws SoySyntaxException {
 
     SoyFileSetNode soyTree = new SoyFileSetNode(0, null);
 
-    SoyFileNode soyFile = new SoyFileNode(0, SoyFileKind.SRC, null, "boo", null);
+    SoyFileNode soyFile = new SoyFileNode(0, "", SoyFileKind.SRC, null, "boo", null);
     soyTree.addChild(soyFile);
 
     SoyFileHeaderInfo testSoyFileHeaderInfo = new SoyFileHeaderInfo("testNs");
 
     TemplateNode template1 =
-        (new TemplateBasicNodeBuilder(testSoyFileHeaderInfo))
-            .setId(0).setCmdText("name=\".foo\"").setSoyDoc("/** @param goo */").build();
+        new TemplateBasicNodeBuilder(testSoyFileHeaderInfo, SourceLocation.UNKNOWN, FAIL)
+            .setId(0)
+            .setCmdText("name=\".foo\"")
+            .setSoyDoc("/** @param goo */")
+            .build();
     soyFile.addChild(template1);
-    template1.addChild(new PrintNode(0, true, "$goo", null));
-    template1.addChild(new PrintNode(0, true, "2 + 2", null));
+    template1.addChild(
+        new PrintNode.Builder(0, true /* isImplicit */, SourceLocation.UNKNOWN)
+            .exprText("$goo")
+            .build(FAIL));
+    template1.addChild(
+        new PrintNode.Builder(0, true /* isImplicit */, SourceLocation.UNKNOWN)
+            .exprText("2 + 2")
+            .build(FAIL));
 
     TemplateNode template2 =
-        (new TemplateBasicNodeBuilder(testSoyFileHeaderInfo))
-            .setId(0).setCmdText("name=\".moo\"").setSoyDoc(null).build();
+        new TemplateBasicNodeBuilder(testSoyFileHeaderInfo, SourceLocation.UNKNOWN, FAIL)
+            .setId(0)
+            .setCmdText("name=\".moo\"")
+            .setSoyDoc(null)
+            .build();
     soyFile.addChild(template2);
-    template2.addChild(new PrintNode(0, true, "'moo'", null));
+    template2.addChild(
+        new PrintNode.Builder(0, true /* isImplicit */, SourceLocation.UNKNOWN)
+            .exprText("'moo'")
+            .build(FAIL));
 
-    IncompleteOutputVisitor iov = new IncompleteOutputVisitor();
+    IncompleteOutputVisitor iov = new IncompleteOutputVisitor(FAIL);
     assertEquals("[Parent][SoyFile][Parent][Print][Print][Parent][Print]", iov.exec(soyTree));
   }
-
 
   private static class IncompleteOutputVisitor extends AbstractSoyNodeVisitor<String> {
 
     private StringBuilder outputSb;
+
+    private IncompleteOutputVisitor(ErrorReporter errorReporter) {
+      super(errorReporter);
+    }
 
     @Override public String exec(SoyNode node) {
       outputSb = new StringBuilder();

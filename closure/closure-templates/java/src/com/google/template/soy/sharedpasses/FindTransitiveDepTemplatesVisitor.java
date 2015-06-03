@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.sharedpasses.FindTransitiveDepTemplatesVisitor.TransitiveDepTemplatesInfo;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.CallBasicNode;
@@ -46,7 +47,6 @@ import java.util.Set;
 
 import javax.annotation.Nullable;
 
-
 /**
  * Visitor for finding the set of templates transitively called by a given template.
  *
@@ -59,9 +59,8 @@ import javax.annotation.Nullable;
  * results from previous calls to exec.
  *
  */
-public class FindTransitiveDepTemplatesVisitor
+public final class FindTransitiveDepTemplatesVisitor
     extends AbstractSoyNodeVisitor<TransitiveDepTemplatesInfo> {
-
 
   /**
    * Return value for {@code FindTransitiveDepTemplatesVisitor}.
@@ -303,8 +302,11 @@ public class FindTransitiveDepTemplatesVisitor
 
   /**
    * @param templateRegistry Map from template name to TemplateNode to use during the pass.
+   * @param errorReporter For reporting errors.
    */
-  public FindTransitiveDepTemplatesVisitor(@Nullable TemplateRegistry templateRegistry) {
+  public FindTransitiveDepTemplatesVisitor(
+      @Nullable TemplateRegistry templateRegistry, ErrorReporter errorReporter) {
+    super(errorReporter);
     this.templateRegistry = templateRegistry;
     templateToFinishedInfoMap = Maps.newHashMap();
   }
@@ -324,7 +326,7 @@ public class FindTransitiveDepTemplatesVisitor
     // Build templateRegistry and initialize templateToFinishedInfoMap if necessary.
     if (templateRegistry == null) {
       SoyFileSetNode soyTree = rootTemplateCast.getParent().getParent();
-      templateRegistry = new TemplateRegistry(soyTree);
+      templateRegistry = new TemplateRegistry(soyTree, errorReporter);
     }
 
     // If finished in a previous pass (previous call to exec), just return the finished info.
@@ -334,13 +336,13 @@ public class FindTransitiveDepTemplatesVisitor
 
     // Initialize vars for the pass.
     currTemplateVisitInfo = null;
-    activeTemplateVisitInfoStack = new ArrayDeque<TemplateVisitInfo>();
+    activeTemplateVisitInfoStack = new ArrayDeque<>();
     activeTemplateSet = Sets.newHashSet();
     visitedTemplateToInfoMap = Maps.newHashMap();
 
     visit(rootTemplateCast);
 
-    if (activeTemplateVisitInfoStack.size() != 0 || activeTemplateSet.size() != 0) {
+    if (!activeTemplateVisitInfoStack.isEmpty() || !activeTemplateSet.isEmpty()) {
       throw new AssertionError();
     }
 
@@ -461,13 +463,11 @@ public class FindTransitiveDepTemplatesVisitor
     currTemplateVisitInfo.hasDelCalls = true;
 
     // Visit all the possible callee templates.
-    Set<DelegateTemplateDivision> delTemplateDivisions =
+    ImmutableSet<DelegateTemplateDivision> delTemplateDivisions =
         templateRegistry.getDelTemplateDivisionsForAllVariants(node.getDelCalleeName());
-    if (delTemplateDivisions != null) {
-      for (DelegateTemplateDivision division : delTemplateDivisions) {
-        for (TemplateDelegateNode delCallee : division.delPackageNameToDelTemplateMap.values()) {
-          processCalleeHelper(delCallee);
-        }
+    for (DelegateTemplateDivision division : delTemplateDivisions) {
+      for (TemplateDelegateNode delCallee : division.delPackageNameToDelTemplateMap.values()) {
+        processCalleeHelper(delCallee);
       }
     }
   }

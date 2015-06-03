@@ -16,10 +16,10 @@
 
 package com.google.template.soy.jssrc.internal;
 
-import com.google.inject.Inject;
 import com.google.template.soy.base.internal.IdGenerator;
 import com.google.template.soy.basetree.SyntaxVersion;
 import com.google.template.soy.coredirectives.CoreDirectiveUtils;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.FunctionNode;
 import com.google.template.soy.internal.i18n.BidiGlobalDir;
@@ -37,6 +37,7 @@ import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 
 import java.util.Map;
 
+import javax.inject.Inject;
 
 /**
  * Visitor for replacing any {@code PrintNode} whose expression is a single call to
@@ -75,10 +76,14 @@ class OptimizeBidiCodeGenVisitor extends AbstractSoyNodeVisitor<Void> {
   /**
    * @param soyJsSrcFunctionsMap Map of all SoyJsSrcFunctions (name to function).
    * @param bidiGlobalDir The bidi global directionality.
+   * @param errorReporter For reporting errors.
    */
   @Inject
   public OptimizeBidiCodeGenVisitor(
-      Map<String, SoyJsSrcFunction> soyJsSrcFunctionsMap, BidiGlobalDir bidiGlobalDir) {
+      Map<String, SoyJsSrcFunction> soyJsSrcFunctionsMap,
+      BidiGlobalDir bidiGlobalDir,
+      ErrorReporter errorReporter) {
+    super(errorReporter);
     this.soyJsSrcFunctionsMap = soyJsSrcFunctionsMap;
     this.bidiGlobalDir = bidiGlobalDir;
   }
@@ -106,7 +111,7 @@ class OptimizeBidiCodeGenVisitor extends AbstractSoyNodeVisitor<Void> {
 
     // If we made any replacements, we may have created consecutive RawTextNodes, so clean them up.
     if (madeReplacement) {
-      (new CombineConsecutiveRawTextNodesVisitor()).exec(node);
+      new CombineConsecutiveRawTextNodesVisitor(errorReporter).exec(node);
     }
   }
 
@@ -130,7 +135,7 @@ class OptimizeBidiCodeGenVisitor extends AbstractSoyNodeVisitor<Void> {
       return;  // don't replace this node
     }
 
-    ExprNode expr = node.getExprUnion().getExpr().getChild(0);
+    ExprNode expr = node.getExprUnion().getExpr().getRoot();
     if (!(expr instanceof FunctionNode)) {
       return;  // don't replace this node
     }
@@ -158,7 +163,8 @@ class OptimizeBidiCodeGenVisitor extends AbstractSoyNodeVisitor<Void> {
     }
 
     // Replace this node with a RawTextNode.
-    parent.replaceChild(node, new RawTextNode(nodeIdGen.genId(), rawText));
+    parent.replaceChild(
+        node, new RawTextNode(nodeIdGen.genId(), rawText, node.getSourceLocation()));
     madeReplacement = true;
   }
 

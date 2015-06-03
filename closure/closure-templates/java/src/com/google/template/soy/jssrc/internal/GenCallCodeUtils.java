@@ -18,6 +18,7 @@ package com.google.template.soy.jssrc.internal;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.jssrc.SoyJsSrcOptions;
 import com.google.template.soy.jssrc.internal.GenJsExprsVisitor.GenJsExprsVisitorFactory;
@@ -63,6 +64,8 @@ class GenCallCodeUtils {
   /** Factory for creating an instance of GenJsExprsVisitor. */
   private final GenJsExprsVisitorFactory genJsExprsVisitorFactory;
 
+  /** For reporting errors. */
+  private final ErrorReporter errorReporter;
 
   /**
    * @param jsSrcOptions The options for generating JS source code.
@@ -70,19 +73,22 @@ class GenCallCodeUtils {
    * @param jsExprTranslator Instance of JsExprTranslator to use.
    * @param isComputableAsJsExprsVisitor The IsComputableAsJsExprsVisitor to be used.
    * @param genJsExprsVisitorFactory Factory for creating an instance of GenJsExprsVisitor.
+   * @param errorReporter For reporting errors.
    */
   @Inject
   GenCallCodeUtils(
       Map<String, SoyJsSrcPrintDirective> soyJsSrcDirectivesMap, SoyJsSrcOptions jsSrcOptions,
       @IsUsingIjData boolean isUsingIjData, JsExprTranslator jsExprTranslator,
       IsComputableAsJsExprsVisitor isComputableAsJsExprsVisitor,
-      GenJsExprsVisitorFactory genJsExprsVisitorFactory) {
+      GenJsExprsVisitorFactory genJsExprsVisitorFactory,
+      ErrorReporter errorReporter) {
     this.jsSrcOptions = jsSrcOptions;
     this.isUsingIjData = isUsingIjData;
     this.jsExprTranslator = jsExprTranslator;
     this.isComputableAsJsExprsVisitor = isComputableAsJsExprsVisitor;
     this.genJsExprsVisitorFactory = genJsExprsVisitorFactory;
     this.soyJsSrcDirectivesMap = soyJsSrcDirectivesMap;
+    this.errorReporter = errorReporter;
   }
 
 
@@ -196,7 +202,7 @@ class GenCallCodeUtils {
       CallDelegateNode callDelegateNode = (CallDelegateNode) callNode;
       String calleeIdExprText =
           "soy.$$getDelTemplateId('" + callDelegateNode.getDelCalleeName() + "')";
-      ExprRootNode<?> variantSoyExpr = callDelegateNode.getDelCalleeVariantExpr();
+      ExprRootNode variantSoyExpr = callDelegateNode.getDelCalleeVariantExpr();
       String variantJsExprText;
       if (variantSoyExpr == null) {
         // Case 2a: Delegate call with empty variant.
@@ -229,8 +235,8 @@ class GenCallCodeUtils {
     // In strict mode, escaping directives may apply to the call site.
     for (String directiveName : callNode.getEscapingDirectiveNames()) {
       SoyJsSrcPrintDirective directive = soyJsSrcDirectivesMap.get(directiveName);
-      Preconditions.checkNotNull(directive,
-          "Contextual autoescaping produced a bogus directive: " + directiveName);
+      Preconditions.checkNotNull(
+          directive, "Contextual autoescaping produced a bogus directive: %s", directiveName);
       result = directive.applyForJsSrc(result, ImmutableList.<JsExpr>of());
     }
 
@@ -281,11 +287,11 @@ class GenCallCodeUtils {
 
     // ------ Generate the expression for the original data to pass ------
     JsExpr dataToPass;
-    if (callNode.isPassingAllData()) {
+    if (callNode.dataAttribute().isPassingAllData()) {
       dataToPass = new JsExpr("opt_data", Integer.MAX_VALUE);
-    } else if (callNode.isPassingData()) {
+    } else if (callNode.dataAttribute().isPassingData()) {
       dataToPass = jsExprTranslator.translateToJsExpr(
-          callNode.getDataExpr(), null, localVarTranslations);
+          callNode.dataAttribute().dataExpr(), null /* exprText */, localVarTranslations);
     } else {
       dataToPass = new JsExpr("null", Integer.MAX_VALUE);
     }
@@ -350,10 +356,9 @@ class GenCallCodeUtils {
     paramsObjSb.append('}');
 
     // ------ Cases 2 and 3: Additional params with and without original data to pass ------
-    if (callNode.isPassingData()) {
+    if (callNode.dataAttribute().isPassingData()) {
       return new JsExpr(
-          "soy.$$augmentMap(" + dataToPass.getText() + ", " + paramsObjSb.toString() + ")",
-          Integer.MAX_VALUE);
+          "soy.$$augmentMap(" + dataToPass.getText() + ", " + paramsObjSb + ")", Integer.MAX_VALUE);
     } else {
       return new JsExpr(paramsObjSb.toString(), Integer.MAX_VALUE);
     }

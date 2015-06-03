@@ -17,27 +17,30 @@
 package com.google.template.soy.bidifunctions;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.inject.Provider;
-import com.google.inject.Singleton;
 import com.google.template.soy.data.SoyValue;
 import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.exprtree.Operator;
 import com.google.template.soy.internal.i18n.BidiGlobalDir;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.SoyJsSrcFunction;
+import com.google.template.soy.pysrc.restricted.PyExpr;
+import com.google.template.soy.pysrc.restricted.PyExprUtils;
+import com.google.template.soy.pysrc.restricted.SoyPySrcFunction;
 import com.google.template.soy.shared.restricted.SoyJavaFunction;
 
 import java.util.List;
 import java.util.Set;
 
 import javax.inject.Inject;
+import javax.inject.Provider;
+import javax.inject.Singleton;
 
 /**
  * Soy function that returns the current global bidi directionality (1 for LTR or -1 for RTL).
  *
  */
 @Singleton
-class BidiGlobalDirFunction implements SoyJavaFunction, SoyJsSrcFunction {
+class BidiGlobalDirFunction implements SoyJavaFunction, SoyJsSrcFunction, SoyPySrcFunction {
 
 
   /** Provider for the current bidi global directionality. */
@@ -57,24 +60,24 @@ class BidiGlobalDirFunction implements SoyJavaFunction, SoyJsSrcFunction {
     return "bidiGlobalDir";
   }
 
-
   @Override public Set<Integer> getValidArgsSizes() {
     return ImmutableSet.of(0);
   }
 
-
   @Override public SoyValue computeForJava(List<SoyValue> args) {
-
     return IntegerData.forValue(bidiGlobalDirProvider.get().getStaticValue());
   }
 
-
   @Override public JsExpr computeForJsSrc(List<JsExpr> args) {
-
     BidiGlobalDir bidiGlobalDir = bidiGlobalDirProvider.get();
     return new JsExpr(
-        bidiGlobalDirProvider.get().getCodeSnippet(),
+        bidiGlobalDir.getCodeSnippet(),
         bidiGlobalDir.isStaticValue() ? Integer.MAX_VALUE : Operator.CONDITIONAL.getPrecedence());
   }
 
+  @Override public PyExpr computeForPySrc(List<PyExpr> args) {
+    return new PyExpr(
+        bidiGlobalDirProvider.get().getCodeSnippet(),
+        PyExprUtils.pyPrecedenceForOperator(Operator.CONDITIONAL));
+  }
 }

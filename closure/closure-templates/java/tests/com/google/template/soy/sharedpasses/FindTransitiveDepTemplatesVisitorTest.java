@@ -16,9 +16,13 @@
 
 package com.google.template.soy.sharedpasses;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.template.soy.shared.internal.SharedTestUtils;
+import com.google.template.soy.SoyFileSetParserBuilder;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.sharedpasses.FindTransitiveDepTemplatesVisitor.TransitiveDepTemplatesInfo;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.TemplateNode;
@@ -28,13 +32,13 @@ import junit.framework.TestCase;
 
 import java.util.Map;
 
-
 /**
  * Unit tests for FindTransitiveDepTemplatesVisitor.
  *
  */
-public class FindTransitiveDepTemplatesVisitorTest extends TestCase {
+public final class FindTransitiveDepTemplatesVisitorTest extends TestCase {
 
+  private static final ErrorReporter FAIL = ExplodingErrorReporter.get();
 
   public void testSimple() {
 
@@ -62,8 +66,10 @@ public class FindTransitiveDepTemplatesVisitorTest extends TestCase {
         "  {$ij.boo} {$ij.moo} {round($ij.zoo)}\n" +
         "{/template}\n";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(fileContent);
-    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree);
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(fileContent)
+        .errorReporter(FAIL)
+        .parse();
+    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree, FAIL);
 
     TemplateNode aaa = soyTree.getChild(0).getChild(0);
     TemplateNode bbb = soyTree.getChild(0).getChild(1);
@@ -73,30 +79,32 @@ public class FindTransitiveDepTemplatesVisitorTest extends TestCase {
     // Test with exec(aaa).
     // Exercises: processCalleeHelper case 5 with incorporateCalleeVisitInfo case 1 (aaa -> bbb).
     FindTransitiveDepTemplatesVisitor visitor =
-        new FindTransitiveDepTemplatesVisitor(templateRegistry);
+        new FindTransitiveDepTemplatesVisitor(templateRegistry, FAIL);
     Map<TemplateNode, TransitiveDepTemplatesInfo> memoizedInfoMap =
         visitor.templateToFinishedInfoMap;
     visitor.exec(aaa);
-    assertEquals(4, memoizedInfoMap.size());
-    assertEquals(ImmutableSet.of(ddd), memoizedInfoMap.get(ddd).depTemplateSet);
-    assertEquals(ImmutableSet.of(ccc), memoizedInfoMap.get(ccc).depTemplateSet);
-    assertEquals(ImmutableSet.of(bbb, ddd), memoizedInfoMap.get(bbb).depTemplateSet);
-    assertEquals(ImmutableSet.of(aaa, bbb, ccc, ddd), memoizedInfoMap.get(aaa).depTemplateSet);
+    assertThat(memoizedInfoMap).hasSize(4);
+    assertThat(memoizedInfoMap.get(ddd).depTemplateSet).isEqualTo(ImmutableSet.of(ddd));
+    assertThat(memoizedInfoMap.get(ccc).depTemplateSet).isEqualTo(ImmutableSet.of(ccc));
+    assertThat(memoizedInfoMap.get(bbb).depTemplateSet).isEqualTo(ImmutableSet.of(bbb, ddd));
+    assertThat(memoizedInfoMap.get(aaa).depTemplateSet)
+        .isEqualTo(ImmutableSet.of(aaa, bbb, ccc, ddd));
 
     // Test with exec(bbb) then exec(aaa).
     // Exercises: processCalleeHelper case 1 (aaa -> bbb).
-    visitor = new FindTransitiveDepTemplatesVisitor(templateRegistry);
+    visitor = new FindTransitiveDepTemplatesVisitor(templateRegistry, FAIL);
     memoizedInfoMap = visitor.templateToFinishedInfoMap;
     visitor.exec(bbb);
-    assertEquals(2, memoizedInfoMap.size());
-    assertEquals(ImmutableSet.of(ddd), memoizedInfoMap.get(ddd).depTemplateSet);
-    assertEquals(ImmutableSet.of(bbb, ddd), memoizedInfoMap.get(bbb).depTemplateSet);
+    assertThat(memoizedInfoMap).hasSize(2);
+    assertThat(memoizedInfoMap.get(ddd).depTemplateSet).isEqualTo(ImmutableSet.of(ddd));
+    assertThat(memoizedInfoMap.get(bbb).depTemplateSet).isEqualTo(ImmutableSet.of(bbb, ddd));
     visitor.exec(aaa);
-    assertEquals(4, memoizedInfoMap.size());
-    assertEquals(ImmutableSet.of(ddd), memoizedInfoMap.get(ddd).depTemplateSet);
-    assertEquals(ImmutableSet.of(ccc), memoizedInfoMap.get(ccc).depTemplateSet);
-    assertEquals(ImmutableSet.of(bbb, ddd), memoizedInfoMap.get(bbb).depTemplateSet);
-    assertEquals(ImmutableSet.of(aaa, bbb, ccc, ddd), memoizedInfoMap.get(aaa).depTemplateSet);
+    assertThat(memoizedInfoMap).hasSize(4);
+    assertThat(memoizedInfoMap.get(ddd).depTemplateSet).isEqualTo(ImmutableSet.of(ddd));
+    assertThat(memoizedInfoMap.get(ccc).depTemplateSet).isEqualTo(ImmutableSet.of(ccc));
+    assertThat(memoizedInfoMap.get(bbb).depTemplateSet).isEqualTo(ImmutableSet.of(bbb, ddd));
+    assertThat(memoizedInfoMap.get(aaa).depTemplateSet)
+        .isEqualTo(ImmutableSet.of(aaa, bbb, ccc, ddd));
   }
 
 
@@ -121,8 +129,10 @@ public class FindTransitiveDepTemplatesVisitorTest extends TestCase {
         "  {$ij.boo} {$ij.moo + $ij.woo} {call .bbb /}\n" +
         "{/template}\n";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(fileContent);
-    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree);
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(fileContent)
+        .errorReporter(FAIL)
+        .parse();
+    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree, FAIL);
 
     TemplateNode aaa = soyTree.getChild(0).getChild(0);
     TemplateNode bbb = soyTree.getChild(0).getChild(1);
@@ -131,14 +141,14 @@ public class FindTransitiveDepTemplatesVisitorTest extends TestCase {
     // Test with exec(aaa).
     // Exercises: processCalleeHelper case 4 with incorporateCalleeVisitInfo case 1 (ccc -> bbb).
     FindTransitiveDepTemplatesVisitor visitor =
-        new FindTransitiveDepTemplatesVisitor(templateRegistry);
+        new FindTransitiveDepTemplatesVisitor(templateRegistry, FAIL);
     Map<TemplateNode, TransitiveDepTemplatesInfo> memoizedInfoMap =
         visitor.templateToFinishedInfoMap;
     visitor.exec(aaa);
-    assertEquals(3, memoizedInfoMap.size());
-    assertEquals(ImmutableSet.of(bbb), memoizedInfoMap.get(bbb).depTemplateSet);
-    assertEquals(ImmutableSet.of(ccc, bbb), memoizedInfoMap.get(ccc).depTemplateSet);
-    assertEquals(ImmutableSet.of(aaa, bbb, ccc), memoizedInfoMap.get(aaa).depTemplateSet);
+    assertThat(memoizedInfoMap).hasSize(3);
+    assertThat(memoizedInfoMap.get(bbb).depTemplateSet).isEqualTo(ImmutableSet.of(bbb));
+    assertThat(memoizedInfoMap.get(ccc).depTemplateSet).isEqualTo(ImmutableSet.of(ccc, bbb));
+    assertThat(memoizedInfoMap.get(aaa).depTemplateSet).isEqualTo(ImmutableSet.of(aaa, bbb, ccc));
   }
 
 
@@ -165,8 +175,10 @@ public class FindTransitiveDepTemplatesVisitorTest extends TestCase {
         "  {$ij.boo} {call .bbb /} {$ij.moo}\n" +
         "{/template}\n";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(fileContent);
-    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree);
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(fileContent)
+        .errorReporter(FAIL)
+        .parse();
+    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree, FAIL);
 
     TemplateNode aaa = soyTree.getChild(0).getChild(0);
     TemplateNode bbb = soyTree.getChild(0).getChild(1);
@@ -177,14 +189,14 @@ public class FindTransitiveDepTemplatesVisitorTest extends TestCase {
     // Exercises: processCalleeHelper case 3 (ccc -> bbb).
     // Exercises: processCalleeHelper case 5 with incorporateCalleeVisitInfo case 2 (bbb -> ccc).
     FindTransitiveDepTemplatesVisitor visitor =
-        new FindTransitiveDepTemplatesVisitor(templateRegistry);
+        new FindTransitiveDepTemplatesVisitor(templateRegistry, FAIL);
     Map<TemplateNode, TransitiveDepTemplatesInfo> memoizedInfoMap =
         visitor.templateToFinishedInfoMap;
     visitor.exec(aaa);
-    assertEquals(3, memoizedInfoMap.size());
-    assertEquals(ImmutableSet.of(ccc, bbb), memoizedInfoMap.get(ccc).depTemplateSet);
-    assertEquals(ImmutableSet.of(bbb, ccc), memoizedInfoMap.get(bbb).depTemplateSet);
-    assertEquals(ImmutableSet.of(aaa, bbb, ccc), memoizedInfoMap.get(aaa).depTemplateSet);
+    assertThat(memoizedInfoMap).hasSize(3);
+    assertThat(memoizedInfoMap.get(ccc).depTemplateSet).isEqualTo(ImmutableSet.of(ccc, bbb));
+    assertThat(memoizedInfoMap.get(bbb).depTemplateSet).isEqualTo(ImmutableSet.of(bbb, ccc));
+    assertThat(memoizedInfoMap.get(aaa).depTemplateSet).isEqualTo(ImmutableSet.of(aaa, bbb, ccc));
   }
 
 
@@ -211,8 +223,10 @@ public class FindTransitiveDepTemplatesVisitorTest extends TestCase {
         "  {call .aaa /} {$ij.moo} {$ij.boo}\n" +
         "{/template}\n";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(fileContent);
-    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree);
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(fileContent)
+        .errorReporter(FAIL)
+        .parse();
+    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree, FAIL);
 
     TemplateNode aaa = soyTree.getChild(0).getChild(0);
     TemplateNode bbb = soyTree.getChild(0).getChild(1);
@@ -223,14 +237,14 @@ public class FindTransitiveDepTemplatesVisitorTest extends TestCase {
     // Exercises: processCalleeHelper case 5 with incorporateCalleeVisitInfo case 3 (bbb -> ccc).
     // Exercises: processCalleeHelper case 5 with incorporateCalleeVisitInfo case 2 (aaa -> bbb).
     FindTransitiveDepTemplatesVisitor visitor =
-        new FindTransitiveDepTemplatesVisitor(templateRegistry);
+        new FindTransitiveDepTemplatesVisitor(templateRegistry, FAIL);
     Map<TemplateNode, TransitiveDepTemplatesInfo> memoizedInfoMap =
         visitor.templateToFinishedInfoMap;
     visitor.exec(aaa);
-    assertEquals(3, memoizedInfoMap.size());
-    assertEquals(ImmutableSet.of(ccc, aaa, bbb), memoizedInfoMap.get(ccc).depTemplateSet);
-    assertEquals(ImmutableSet.of(bbb, ccc, aaa), memoizedInfoMap.get(bbb).depTemplateSet);
-    assertEquals(ImmutableSet.of(aaa, bbb, ccc), memoizedInfoMap.get(aaa).depTemplateSet);
+    assertThat(memoizedInfoMap).hasSize(3);
+    assertThat(memoizedInfoMap.get(ccc).depTemplateSet).isEqualTo(ImmutableSet.of(ccc, aaa, bbb));
+    assertThat(memoizedInfoMap.get(bbb).depTemplateSet).isEqualTo(ImmutableSet.of(bbb, ccc, aaa));
+    assertThat(memoizedInfoMap.get(aaa).depTemplateSet).isEqualTo(ImmutableSet.of(aaa, bbb, ccc));
   }
 
 
@@ -260,8 +274,10 @@ public class FindTransitiveDepTemplatesVisitorTest extends TestCase {
         "  {$ij.boo} {$ij.too} {call .bbb /}\n" +
         "{/template}\n";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(fileContent);
-    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree);
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(fileContent)
+        .errorReporter(FAIL)
+        .parse();
+    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree, FAIL);
 
     TemplateNode aaa = soyTree.getChild(0).getChild(0);
     TemplateNode bbb = soyTree.getChild(0).getChild(1);
@@ -271,15 +287,16 @@ public class FindTransitiveDepTemplatesVisitorTest extends TestCase {
     // Test with exec(aaa).
     // Exercises: processCalleeHelper case 4 with incorporateCalleeVisitInfo case 4 (ccc -> ddd).
     FindTransitiveDepTemplatesVisitor visitor =
-        new FindTransitiveDepTemplatesVisitor(templateRegistry);
+        new FindTransitiveDepTemplatesVisitor(templateRegistry, FAIL);
     Map<TemplateNode, TransitiveDepTemplatesInfo> memoizedInfoMap =
         visitor.templateToFinishedInfoMap;
     visitor.exec(aaa);
-    assertEquals(4, memoizedInfoMap.size());
-    assertEquals(ImmutableSet.of(bbb, ddd), memoizedInfoMap.get(bbb).depTemplateSet);
-    assertEquals(ImmutableSet.of(ddd, bbb), memoizedInfoMap.get(ddd).depTemplateSet);
-    assertEquals(ImmutableSet.of(ccc, ddd, bbb), memoizedInfoMap.get(ccc).depTemplateSet);
-    assertEquals(ImmutableSet.of(aaa, bbb, ccc, ddd), memoizedInfoMap.get(aaa).depTemplateSet);
+    assertThat(memoizedInfoMap).hasSize(4);
+    assertThat(memoizedInfoMap.get(bbb).depTemplateSet).isEqualTo(ImmutableSet.of(bbb, ddd));
+    assertThat(memoizedInfoMap.get(ddd).depTemplateSet).isEqualTo(ImmutableSet.of(ddd, bbb));
+    assertThat(memoizedInfoMap.get(ccc).depTemplateSet).isEqualTo(ImmutableSet.of(ccc, ddd, bbb));
+    assertThat(memoizedInfoMap.get(aaa).depTemplateSet)
+        .isEqualTo(ImmutableSet.of(aaa, bbb, ccc, ddd));
   }
 
 
@@ -304,8 +321,10 @@ public class FindTransitiveDepTemplatesVisitorTest extends TestCase {
         "  {$ij.moo} {$ij.boo} {call .bbb /}\n" +
         "{/template}\n";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(fileContent);
-    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree);
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(fileContent)
+        .errorReporter(FAIL)
+        .parse();
+    TemplateRegistry templateRegistry = new TemplateRegistry(soyTree, FAIL);
 
     TemplateNode aaa = soyTree.getChild(0).getChild(0);
     TemplateNode bbb = soyTree.getChild(0).getChild(1);
@@ -314,14 +333,14 @@ public class FindTransitiveDepTemplatesVisitorTest extends TestCase {
     // Test with exec(aaa).
     // Exercises: processCalleeHelper case 4 with incorporateCalleeVisitInfo case 3 (ccc -> bbb).
     FindTransitiveDepTemplatesVisitor visitor =
-        new FindTransitiveDepTemplatesVisitor(templateRegistry);
+        new FindTransitiveDepTemplatesVisitor(templateRegistry, FAIL);
     Map<TemplateNode, TransitiveDepTemplatesInfo> memoizedInfoMap =
         visitor.templateToFinishedInfoMap;
     visitor.exec(aaa);
-    assertEquals(3, memoizedInfoMap.size());
-    assertEquals(ImmutableSet.of(ccc, bbb, aaa), memoizedInfoMap.get(ccc).depTemplateSet);
-    assertEquals(ImmutableSet.of(bbb, aaa, ccc), memoizedInfoMap.get(bbb).depTemplateSet);
-    assertEquals(ImmutableSet.of(aaa, bbb, ccc), memoizedInfoMap.get(aaa).depTemplateSet);
+    assertThat(memoizedInfoMap).hasSize(3);
+    assertThat(memoizedInfoMap.get(ccc).depTemplateSet).isEqualTo(ImmutableSet.of(ccc, bbb, aaa));
+    assertThat(memoizedInfoMap.get(bbb).depTemplateSet).isEqualTo(ImmutableSet.of(bbb, aaa, ccc));
+    assertThat(memoizedInfoMap.get(aaa).depTemplateSet).isEqualTo(ImmutableSet.of(aaa, bbb, ccc));
   }
 
 
@@ -351,7 +370,9 @@ public class FindTransitiveDepTemplatesVisitorTest extends TestCase {
         "  {$ij.boo} {$ij.moo} {round($ij.zoo)}\n" +
         "{/template}\n";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(fileContent);
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(fileContent)
+        .errorReporter(FAIL)
+        .parse();
 
     TemplateNode bbb = soyTree.getChild(0).getChild(0);
     TemplateNode aaa = soyTree.getChild(0).getChild(1);
@@ -359,12 +380,13 @@ public class FindTransitiveDepTemplatesVisitorTest extends TestCase {
     TemplateNode ddd = soyTree.getChild(0).getChild(3);
 
     ImmutableMap<TemplateNode, TransitiveDepTemplatesInfo> resultMap =
-        (new FindTransitiveDepTemplatesVisitor(null)).execOnAllTemplates(soyTree);
-    assertEquals(4, resultMap.size());
-    assertEquals(ImmutableSet.of(ddd), resultMap.get(ddd).depTemplateSet);
-    assertEquals(ImmutableSet.of(ccc), resultMap.get(ccc).depTemplateSet);
-    assertEquals(ImmutableSet.of(bbb, ddd), resultMap.get(bbb).depTemplateSet);
-    assertEquals(ImmutableSet.of(aaa, bbb, ccc, ddd), resultMap.get(aaa).depTemplateSet);
+        new FindTransitiveDepTemplatesVisitor(null /* templateRegistry */, FAIL)
+            .execOnAllTemplates(soyTree);
+    assertThat(resultMap).hasSize(4);
+    assertThat(resultMap.get(ddd).depTemplateSet).isEqualTo(ImmutableSet.of(ddd));
+    assertThat(resultMap.get(ccc).depTemplateSet).isEqualTo(ImmutableSet.of(ccc));
+    assertThat(resultMap.get(bbb).depTemplateSet).isEqualTo(ImmutableSet.of(bbb, ddd));
+    assertThat(resultMap.get(aaa).depTemplateSet).isEqualTo(ImmutableSet.of(aaa, bbb, ccc, ddd));
   }
 
 }

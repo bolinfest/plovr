@@ -20,18 +20,18 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-import com.google.template.soy.base.SoySyntaxException;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.basetree.SyntaxVersion;
 import com.google.template.soy.basetree.SyntaxVersionBound;
-import com.google.template.soy.exprparse.ExprParseUtils;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.exprparse.ExpressionParser;
+import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.soytree.SoyNode.ExprHolderNode;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 
 /**
  * Node representing a 'print' directive.
@@ -39,7 +39,7 @@ import java.util.Set;
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
-public class PrintDirectiveNode extends AbstractSoyNode implements ExprHolderNode {
+public final class PrintDirectiveNode extends AbstractSoyNode implements ExprHolderNode {
 
 
   /** Set of directive names only recognized in V1. */
@@ -64,46 +64,25 @@ public class PrintDirectiveNode extends AbstractSoyNode implements ExprHolderNod
   private final String argsText;
 
   /** The parsed args. */
-  private final ImmutableList<ExprRootNode<?>> args;
+  private final ImmutableList<ExprRootNode> args;
 
-
-  /**
-   * @param id The id for this node.
-   * @param srcName The directive name in source code (including vertical bar).
-   * @param argsText The text of all the args, or empty string if none (usually empty string).
-   * @throws SoySyntaxException If a syntax error is found.
-   */
-  public PrintDirectiveNode(int id, String srcName, String argsText) throws SoySyntaxException {
-    super(id);
-
+  private PrintDirectiveNode(
+      int id,
+      String name,
+      String srcName,
+      ImmutableList<ExprRootNode> args,
+      String argsText,
+      SourceLocation sourceLocation) {
+    super(id, sourceLocation);
+    this.name = name;
     this.srcName = srcName;
-
-    String translatedDirectiveName = DEPRECATED_DIRECTIVE_NAMES.get(srcName);
-    if (translatedDirectiveName == null) {
-      // Not a deprecated directive name.
-      this.name = srcName;
-    } else {
-      // Use the undeprecated name since the supporting Java and JavaScript code only contains
-      // support functions for undeprecated directives.
-      this.name = translatedDirectiveName;
-
-      // If this name is part of the V1 syntax, then maybe set the syntax version.
-      if (V1_DIRECTIVE_NAMES.contains(srcName)) {
-        maybeSetSyntaxVersionBound(new SyntaxVersionBound(
-            SyntaxVersion.V2_1, "Print directive '" + srcName + "' is from Soy V1.0."));
-      }
-    }
-
+    this.args = args;
     this.argsText = argsText;
-
-    List<ExprRootNode<?>> tempArgs;
-    if (this.argsText.length() > 0) {
-      tempArgs = ExprParseUtils.parseExprListElseThrowSoySyntaxException(
-          argsText, "Invalid arguments for print directive \"" + toSourceString() + "\".");
-    } else {
-      tempArgs = Collections.emptyList();
+    // If this name is part of the V1 syntax, then maybe set the syntax version.
+    if (V1_DIRECTIVE_NAMES.contains(srcName)) {
+      maybeSetSyntaxVersionBound(new SyntaxVersionBound(
+          SyntaxVersion.V2_1, "Print directive '" + srcName + "' is from Soy V1.0."));
     }
-    this.args = ImmutableList.copyOf(tempArgs);
   }
 
 
@@ -111,13 +90,13 @@ public class PrintDirectiveNode extends AbstractSoyNode implements ExprHolderNod
    * Copy constructor.
    * @param orig The node to copy.
    */
-  protected PrintDirectiveNode(PrintDirectiveNode orig) {
+  private PrintDirectiveNode(PrintDirectiveNode orig) {
     super(orig);
     this.srcName = orig.srcName;
     this.name = orig.name;
     this.argsText = orig.argsText;
-    List<ExprRootNode<?>> tempArgs = Lists.newArrayListWithCapacity(orig.args.size());
-    for (ExprRootNode<?> origArg : orig.args) {
+    List<ExprRootNode> tempArgs = Lists.newArrayListWithCapacity(orig.args.size());
+    for (ExprRootNode origArg : orig.args) {
       tempArgs.add(origArg.clone());
     }
     this.args = ImmutableList.copyOf(tempArgs);
@@ -135,14 +114,8 @@ public class PrintDirectiveNode extends AbstractSoyNode implements ExprHolderNod
   }
 
 
-  /** The text of all the args. */
-  public String getArgsText() {
-    return argsText;
-  }
-
-
   /** The parsed args. */
-  public List<ExprRootNode<?>> getArgs() {
+  public List<ExprRootNode> getArgs() {
     return args;
   }
 
@@ -159,6 +132,63 @@ public class PrintDirectiveNode extends AbstractSoyNode implements ExprHolderNod
 
   @Override public PrintDirectiveNode clone() {
     return new PrintDirectiveNode(this);
+  }
+
+  /**
+   * Builder for {@link PrintDirectiveNode}.
+   */
+  public static final class Builder {
+    private final int id;
+    private final String srcName;
+    private final String argsText;
+    private final SourceLocation sourceLocation;
+
+    /**
+     * @param id The node's id.
+     * @param srcName The directive name in source code (including vertical bar).
+     * @param argsText The text of all the args, or empty string if none (usually empty string).
+     * @param sourceLocation The node's source location.
+     */
+    public Builder(int id, String srcName, String argsText, SourceLocation sourceLocation) {
+      this.id = id;
+      this.srcName = srcName;
+      this.argsText = argsText;
+      this.sourceLocation = sourceLocation;
+    }
+
+    /**
+     * Returns a new {@link PrintDirectiveNode} from the state of this builder, reporting syntax
+     * errors to the given {@link ErrorReporter}.
+     */
+    public PrintDirectiveNode build(ErrorReporter errorReporter) {
+      String name = parseName();
+      ImmutableList<ExprRootNode> args = parseArgs(errorReporter);
+      return new PrintDirectiveNode(id, name, srcName, args, argsText, sourceLocation);
+    }
+
+    private String parseName() {
+      String translatedDirectiveName = DEPRECATED_DIRECTIVE_NAMES.get(srcName);
+      if (translatedDirectiveName == null) {
+        // Not a deprecated directive name.
+        return srcName;
+      } else {
+        // Use the undeprecated name since the supporting Java and JavaScript code only contains
+        // support functions for undeprecated directives.
+        return translatedDirectiveName;
+      }
+    }
+
+    private ImmutableList<ExprRootNode> parseArgs(ErrorReporter errorReporter) {
+      if (this.argsText.isEmpty()) {
+        return ImmutableList.of();
+      }
+      ImmutableList.Builder<ExprRootNode> args = ImmutableList.builder();
+      for (ExprNode expr : new ExpressionParser(argsText, sourceLocation, errorReporter)
+          .parseExpressionList()) {
+        args.add(new ExprRootNode(expr));
+      }
+      return args.build();
+    }
   }
 
 }

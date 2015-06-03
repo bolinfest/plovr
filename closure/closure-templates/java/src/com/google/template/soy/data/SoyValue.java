@@ -20,7 +20,6 @@ import java.io.IOException;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
-
 /**
  * Superinterface of all Soy value interfaces/classes. Replaces the old SoyData.
  *
@@ -37,7 +36,7 @@ public interface SoyValue extends SoyValueProvider {
    * @param other The other value to compare against.
    * @return True if this value is equal to the other in the sense of Soy.
    */
-  public boolean equals(SoyValue other);
+  @Override public boolean equals(Object other);
 
 
   /**
@@ -63,7 +62,6 @@ public interface SoyValue extends SoyValueProvider {
    * @throws IOException
    */
   public void render(Appendable appendable) throws IOException;
-
 
   // -----------------------------------------------------------------------------------------------
   // Convenience methods for retrieving a known primitive type.

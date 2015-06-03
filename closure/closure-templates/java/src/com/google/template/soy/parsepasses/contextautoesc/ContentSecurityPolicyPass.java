@@ -20,11 +20,13 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.internal.IdGenerator;
-import com.google.template.soy.exprtree.ExprNode;
-import com.google.template.soy.exprtree.ExprRootNode;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.exprtree.VarDefn;
 import com.google.template.soy.exprtree.VarRefNode;
+import com.google.template.soy.parsepasses.contextautoesc.Context.State;
+import com.google.template.soy.parsepasses.contextautoesc.SlicedRawTextNode.RawTextSlice;
 import com.google.template.soy.soytree.ExprUnion;
 import com.google.template.soy.soytree.IfCondNode;
 import com.google.template.soy.soytree.IfNode;
@@ -139,6 +141,18 @@ public final class ContentSecurityPolicyPass {
 
 
   /**
+   * True immediately before an HTML attribute value.
+   */
+  public static final Predicate<? super Context> HTML_BEFORE_ATTRIBUTE_VALUE =
+      new Predicate<Context>() {
+        @Override
+        public boolean apply(Context c) {
+          return c.state == State.HTML_BEFORE_ATTRIBUTE_VALUE;
+        }
+      };
+
+
+  /**
    * True inside an inline event handler value or style attribute.
    * {@code [START]} and {@code [END]} mark ranges of positions for which this predicate is true.
    * {@code <a onclick="[START]foo()"[END]>}.
@@ -220,9 +234,12 @@ public final class ContentSecurityPolicyPass {
     @Override
     void addNodesToInject(
         IdGenerator idGenerator, ImmutableList.Builder<? super SoyNode.StandaloneNode> out) {
-      out.add(new RawTextNode(idGenerator.genId(), NONCE_ATTR_BEFORE_VALUE));
+      out.add(
+          new RawTextNode(
+              idGenerator.genId(), NONCE_ATTR_BEFORE_VALUE, rawTextNode.getSourceLocation()));
       out.add(makeInjectedCspNoncePrintNode(idGenerator));
-      out.add(new RawTextNode(idGenerator.genId(), ATTR_AFTER_VALUE));
+      out.add(
+          new RawTextNode(idGenerator.genId(), ATTR_AFTER_VALUE, rawTextNode.getSourceLocation()));
     }
 
   }
@@ -263,11 +280,11 @@ public final class ContentSecurityPolicyPass {
     void addNodesToInject(
         IdGenerator idGenerator, ImmutableList.Builder<? super SoyNode.StandaloneNode> out) {
       // We re-use the CSP nonce as the inline-event-handler secret.
-      out.add(new RawTextNode(idGenerator.genId(), "/*"));
+      out.add(new RawTextNode(idGenerator.genId(), "/*", rawTextNode.getSourceLocation()));
       out.add(makeInjectedCspNoncePrintNode(idGenerator));
       // Nonces may contain '/' but not '*' so the nonce will not be truncated as long as the nonce
       // generator produces valid nonces instead of arbitrary ASCII.
-      out.add(new RawTextNode(idGenerator.genId(), "*/"));
+      out.add(new RawTextNode(idGenerator.genId(), "*/", rawTextNode.getSourceLocation()));
     }
   }
 
@@ -362,15 +379,18 @@ public final class ContentSecurityPolicyPass {
 
 
   /**
-   * Handles steps 1 and 2 by finding event handler attributes that appear entirely within a raw
-   * text node and creating a {@link CspVerifierAttrGenerator} instance for each one.
+   * Handles steps 1 and 2 by finding event handler attributes that appear entirely within
+   * a raw text node.
    */
   private static void findCompleteInlineEventHandlers(
       Iterable<? extends SlicedRawTextNode> slicedRawTextNodes,
       ImmutableList.Builder<InjectedSoyGenerator> out) {
 
-    List<SlicedRawTextNode.RawTextSlice> valueSlices = SlicedRawTextNode.find(
-        slicedRawTextNodes, null, IN_SCRIPT_OR_STYLE_ATTR_VALUE, null);
+    Iterable<RawTextSlice> valueSlices = SlicedRawTextNode.find(
+        slicedRawTextNodes,
+        HTML_BEFORE_ATTRIBUTE_VALUE,
+        IN_SCRIPT_OR_STYLE_ATTR_VALUE,
+        null /* nextContextPredicate */);
 
     // Step 1: identify the beginning of an inline event handler.
     for (SlicedRawTextNode.RawTextSlice valueSlice : valueSlices) {
@@ -493,7 +513,9 @@ public final class ContentSecurityPolicyPass {
         int offset = generator.offset;
         if (offset != textStart) {
           RawTextNode textBefore = new RawTextNode(
-              idGenerator.genId(), rawText.substring(textStart, offset));
+              idGenerator.genId(),
+              rawText.substring(textStart, offset),
+              rawTextNode.getSourceLocation());
           parent.addChild(childIndex, textBefore);
           ++childIndex;
           textStart = offset;
@@ -501,10 +523,12 @@ public final class ContentSecurityPolicyPass {
 
         // Step 7: add an {if $ij.csp_nonce}...{/if} to prevent generation of CSP nonce when the
         // template is applied without a secret.
-        IfNode ifNode = new IfNode(idGenerator.genId());
+        IfNode ifNode = new IfNode(idGenerator.genId(), rawTextNode.getSourceLocation());
         IfCondNode ifCondNode = new IfCondNode(
-            idGenerator.genId(), "if",
-            new ExprUnion(new ExprRootNode<ExprNode>(makeReferenceToInjectedCspNonce())));
+            idGenerator.genId(),
+            rawTextNode.getSourceLocation(),
+            "if",
+            new ExprUnion(makeReferenceToInjectedCspNonce()));
         parent.addChild(childIndex, ifNode);
         ++childIndex;
         ifNode.addChild(ifCondNode);
@@ -516,7 +540,10 @@ public final class ContentSecurityPolicyPass {
       }
 
       if (textStart != rawText.length()) {
-        RawTextNode textTail = new RawTextNode(idGenerator.genId(), rawText.substring(textStart));
+        RawTextNode textTail = new RawTextNode(
+            idGenerator.genId(),
+            rawText.substring(textStart),
+            rawTextNode.getSourceLocation());
         parent.addChild(childIndex, textTail);
       }
     }
@@ -532,7 +559,11 @@ public final class ContentSecurityPolicyPass {
    */
   private static VarRefNode makeReferenceToInjectedCspNonce() {
     return new VarRefNode(
-        CSP_NONCE_VARIABLE_NAME, true /*injected*/, false, ImplicitCspNonceDefn.SINGLETON);
+        CSP_NONCE_VARIABLE_NAME,
+        SourceLocation.UNKNOWN,
+        true /*injected*/,
+        true /* nullSafeInjected */,
+        ImplicitCspNonceDefn.SINGLETON);
   }
 
 
@@ -540,11 +571,12 @@ public final class ContentSecurityPolicyPass {
    * Builds the Soy command {@code {$ij.csp_nonce}}.
    */
   private static PrintNode makeInjectedCspNoncePrintNode(IdGenerator idGenerator) {
-    return new PrintNode(
+    return new PrintNode.Builder(
         idGenerator.genId(),
         true,  // Implicit.  {$ij.csp_nonce} not {print $ij.csp_nonce}
-        new ExprUnion(new ExprRootNode<ExprNode>(makeReferenceToInjectedCspNonce())),
-        null);
+        SourceLocation.UNKNOWN)
+        .exprUnion(new ExprUnion(makeReferenceToInjectedCspNonce()))
+        .build(ExplodingErrorReporter.get());
   }
 
 
@@ -576,7 +608,7 @@ public final class ContentSecurityPolicyPass {
      * distinguish between human readable strings, strings in various structured languages, and
      * opaque identifiers.
      */
-    public StringType type() {
+    @Override public StringType type() {
       return StringType.getInstance();
     }
 

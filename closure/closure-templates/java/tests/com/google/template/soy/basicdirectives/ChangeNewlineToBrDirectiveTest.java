@@ -16,8 +16,11 @@
 
 package com.google.template.soy.basicdirectives;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.common.collect.ImmutableList;
 import com.google.template.soy.jssrc.restricted.JsExpr;
+import com.google.template.soy.pysrc.restricted.PyExpr;
 import com.google.template.soy.shared.AbstractSoyPrintDirectiveTestCase;
 
 
@@ -27,9 +30,7 @@ import com.google.template.soy.shared.AbstractSoyPrintDirectiveTestCase;
  */
 public class ChangeNewlineToBrDirectiveTest extends AbstractSoyPrintDirectiveTestCase {
 
-
   public void testApplyForTofu() {
-
     ChangeNewlineToBrDirective directive = new ChangeNewlineToBrDirective();
     assertTofuOutput("", "", directive);
     assertTofuOutput("a<br>b", "a\rb", directive);
@@ -38,13 +39,17 @@ public class ChangeNewlineToBrDirectiveTest extends AbstractSoyPrintDirectiveTes
     assertTofuOutput("abc<br>def<br>xyz", "abc\rdef\nxyz", directive);
   }
 
-
   public void testApplyForJsSrc() {
-
     ChangeNewlineToBrDirective directive = new ChangeNewlineToBrDirective();
     JsExpr dataRef = new JsExpr("opt_data.myKey", Integer.MAX_VALUE);
-    assertEquals("soy.$$changeNewlineToBr(opt_data.myKey)",
-                 directive.applyForJsSrc(dataRef, ImmutableList.<JsExpr>of()).getText());
+    assertThat(directive.applyForJsSrc(dataRef, ImmutableList.<JsExpr>of()).getText())
+        .isEqualTo("soy.$$changeNewlineToBr(opt_data.myKey)");
   }
 
+  public void testApplyForPySrc() {
+    ChangeNewlineToBrDirective directive = new ChangeNewlineToBrDirective();
+    PyExpr data = new PyExpr("'data'", Integer.MAX_VALUE);
+    assertThat(directive.applyForPySrc(data, ImmutableList.<PyExpr>of()).getText())
+        .isEqualTo("sanitize.change_newline_to_br('data')");
+  }
 }

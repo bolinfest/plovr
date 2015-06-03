@@ -17,10 +17,18 @@
 package com.google.template.soy.sharedpasses.render;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.template.soy.shared.internal.SharedRuntime.dividedBy;
+import static com.google.template.soy.shared.internal.SharedRuntime.equal;
+import static com.google.template.soy.shared.internal.SharedRuntime.lessThan;
+import static com.google.template.soy.shared.internal.SharedRuntime.lessThanOrEqual;
+import static com.google.template.soy.shared.internal.SharedRuntime.minus;
+import static com.google.template.soy.shared.internal.SharedRuntime.negative;
+import static com.google.template.soy.shared.internal.SharedRuntime.plus;
+import static com.google.template.soy.shared.internal.SharedRuntime.times;
 
 import com.google.common.collect.Lists;
-import com.google.template.soy.data.SanitizedContent;
 import com.google.template.soy.data.SoyAbstractValue;
+import com.google.template.soy.data.SoyDataException;
 import com.google.template.soy.data.SoyEasyDict;
 import com.google.template.soy.data.SoyMap;
 import com.google.template.soy.data.SoyRecord;
@@ -30,9 +38,9 @@ import com.google.template.soy.data.restricted.BooleanData;
 import com.google.template.soy.data.restricted.FloatData;
 import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.data.restricted.NullData;
-import com.google.template.soy.data.restricted.NumberData;
 import com.google.template.soy.data.restricted.StringData;
 import com.google.template.soy.data.restricted.UndefinedData;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.AbstractReturningExprNodeVisitor;
 import com.google.template.soy.exprtree.BooleanNode;
 import com.google.template.soy.exprtree.DataAccessNode;
@@ -59,6 +67,7 @@ import com.google.template.soy.exprtree.OperatorNodes.ModOpNode;
 import com.google.template.soy.exprtree.OperatorNodes.NegativeOpNode;
 import com.google.template.soy.exprtree.OperatorNodes.NotEqualOpNode;
 import com.google.template.soy.exprtree.OperatorNodes.NotOpNode;
+import com.google.template.soy.exprtree.OperatorNodes.NullCoalescingOpNode;
 import com.google.template.soy.exprtree.OperatorNodes.OrOpNode;
 import com.google.template.soy.exprtree.OperatorNodes.PlusOpNode;
 import com.google.template.soy.exprtree.OperatorNodes.TimesOpNode;
@@ -122,9 +131,12 @@ public class EvalVisitor extends AbstractReturningExprNodeVisitor<SoyValue> {
    * @param env The current environment.
    */
   protected EvalVisitor(
-      SoyValueHelper valueHelper, @Nullable Map<String, SoyJavaFunction> soyJavaFunctionsMap,
-      @Nullable SoyRecord ijData, Environment env) {
-
+      SoyValueHelper valueHelper,
+      @Nullable Map<String, SoyJavaFunction> soyJavaFunctionsMap,
+      @Nullable SoyRecord ijData,
+      Environment env,
+      ErrorReporter errorReporter) {
+    super(errorReporter);
     this.valueHelper = valueHelper;
     this.soyJavaFunctionsMap = soyJavaFunctionsMap;
     this.ijData = ijData;
@@ -136,8 +148,8 @@ public class EvalVisitor extends AbstractReturningExprNodeVisitor<SoyValue> {
   // Implementation for a dummy root node.
 
 
-  @Override protected SoyValue visitExprRootNode(ExprRootNode<?> node) {
-    return visit(node.getChild(0));
+  @Override protected SoyValue visitExprRootNode(ExprRootNode node) {
+    return visit(node.getRoot());
   }
 
 
@@ -207,7 +219,7 @@ public class EvalVisitor extends AbstractReturningExprNodeVisitor<SoyValue> {
 
     } else {
       // TODO: Support map literals with nonstring keys.
-      throw new RenderException(String.format(
+      throw RenderException.create(String.format(
           "Currently, map literals must have string keys (key \"%s\" in map %s does not evaluate" +
               " to a string). Support for nonstring keys is a todo.",
           firstNonstringKeyNode.toSourceString(), node.toSourceString()));
@@ -294,7 +306,7 @@ public class EvalVisitor extends AbstractReturningExprNodeVisitor<SoyValue> {
         if (varRef.isNullSafeInjected()) {
           return NullSafetySentinel.INSTANCE;
         } else {
-          throw new RenderException(
+          throw RenderException.create(
               "Injected data not provided, yet referenced (" + varRef.toSourceString() + ").");
         }
       }
@@ -335,7 +347,7 @@ public class EvalVisitor extends AbstractReturningExprNodeVisitor<SoyValue> {
           // Return the sentinel value that indicates that a null-safety check failed.
           return NullSafetySentinel.INSTANCE;
         } else {
-          throw new RenderException(String.format(
+          throw RenderException.create(String.format(
               "While evaluating \"%s\", encountered non-%s just before accessing \"%s\".",
               dataAccess.toSourceString(), expectedTypeNameForErrorMsg,
               dataAccess.getSourceStringSuffix()));
@@ -351,7 +363,7 @@ public class EvalVisitor extends AbstractReturningExprNodeVisitor<SoyValue> {
     } else if (dataAccess.getType() != null &&
         value != null &&
         !dataAccess.getType().isInstance(value)) {
-      throw new RenderException(String.format("Expected value of type '" +
+      throw RenderException.create(String.format("Expected value of type '" +
           dataAccess.getType() + "', but actual types was '" +
           value.getClass().getSimpleName() + "'."));
     }
@@ -365,13 +377,7 @@ public class EvalVisitor extends AbstractReturningExprNodeVisitor<SoyValue> {
 
 
   @Override protected SoyValue visitNegativeOpNode(NegativeOpNode node) {
-
-    SoyValue operand = visit(node.getChild(0));
-    if (operand instanceof IntegerData) {
-      return convertResult( - operand.longValue() );
-    } else {
-      return convertResult( - operand.floatValue() );
-    }
+    return negative(visit(node.getChild(0)));
   }
 
 
@@ -383,24 +389,12 @@ public class EvalVisitor extends AbstractReturningExprNodeVisitor<SoyValue> {
 
 
   @Override protected SoyValue visitTimesOpNode(TimesOpNode node) {
-
-    SoyValue operand0 = visit(node.getChild(0));
-    SoyValue operand1 = visit(node.getChild(1));
-    if (operand0 instanceof IntegerData && operand1 instanceof IntegerData) {
-      return convertResult(operand0.longValue() * operand1.longValue());
-    } else {
-      return convertResult(operand0.numberValue() * operand1.numberValue());
-    }
+    return times(visit(node.getChild(0)), visit(node.getChild(1)));
   }
 
 
   @Override protected SoyValue visitDivideByOpNode(DivideByOpNode node) {
-
-    SoyValue operand0 = visit(node.getChild(0));
-    SoyValue operand1 = visit(node.getChild(1));
-    // Note: Soy always performs floating-point division, even on two integers (like JavaScript).
-    // Note that this *will* lose precision for longs.
-    return convertResult(operand0.numberValue() / operand1.numberValue());
+    return FloatData.forValue(dividedBy(visit(node.getChild(0)), visit(node.getChild(1))));
   }
 
 
@@ -413,133 +407,44 @@ public class EvalVisitor extends AbstractReturningExprNodeVisitor<SoyValue> {
 
 
   @Override protected SoyValue visitPlusOpNode(PlusOpNode node) {
-
-    SoyValue operand0 = visit(node.getChild(0));
-    SoyValue operand1 = visit(node.getChild(1));
-    if (operand0 instanceof IntegerData && operand1 instanceof IntegerData) {
-      return convertResult(operand0.longValue() + operand1.longValue());
-    } else if (operand0 instanceof StringData || operand1 instanceof StringData) {
-      // String concatenation. Note we're calling toString() instead of stringValue() in case one
-      // of the operands needs to be coerced to a string.
-      return convertResult(operand0.toString() + operand1.toString());
-    } else {
-      return convertResult(operand0.numberValue() + operand1.numberValue());
-    }
+    return plus(visit(node.getChild(0)), visit(node.getChild(1)));
   }
 
 
   @Override protected SoyValue visitMinusOpNode(MinusOpNode node) {
-
-    SoyValue operand0 = visit(node.getChild(0));
-    SoyValue operand1 = visit(node.getChild(1));
-    if (operand0 instanceof IntegerData && operand1 instanceof IntegerData) {
-      return convertResult(operand0.longValue() - operand1.longValue());
-    } else {
-      return convertResult(operand0.numberValue() - operand1.numberValue());
-    }
+    return minus(visit(node.getChild(0)), visit(node.getChild(1)));
   }
 
 
   @Override protected SoyValue visitLessThanOpNode(LessThanOpNode node) {
-
-    SoyValue operand0 = visit(node.getChild(0));
-    SoyValue operand1 = visit(node.getChild(1));
-    if (operand0 instanceof IntegerData && operand1 instanceof IntegerData) {
-      return convertResult(operand0.longValue() < operand1.longValue());
-    } else {
-      return convertResult(operand0.numberValue() < operand1.numberValue());
-    }
+    return BooleanData.forValue(lessThan(visit(node.getChild(0)), visit(node.getChild(1))));
   }
 
 
   @Override protected SoyValue visitGreaterThanOpNode(GreaterThanOpNode node) {
-
-    SoyValue operand0 = visit(node.getChild(0));
-    SoyValue operand1 = visit(node.getChild(1));
-    if (operand0 instanceof IntegerData && operand1 instanceof IntegerData) {
-      return convertResult(operand0.longValue() > operand1.longValue());
-    } else {
-      return convertResult(operand0.numberValue() > operand1.numberValue());
-    }
+    // note the argument reversal
+    return BooleanData.forValue(lessThan(visit(node.getChild(1)), visit(node.getChild(0))));
   }
 
 
   @Override protected SoyValue visitLessThanOrEqualOpNode(LessThanOrEqualOpNode node) {
-
-    SoyValue operand0 = visit(node.getChild(0));
-    SoyValue operand1 = visit(node.getChild(1));
-    if (operand0 instanceof IntegerData && operand1 instanceof IntegerData) {
-      return convertResult(operand0.longValue() <= operand1.longValue());
-    } else {
-      return convertResult(operand0.numberValue() <= operand1.numberValue());
-    }
+    return BooleanData.forValue(lessThanOrEqual(visit(node.getChild(0)), visit(node.getChild(1))));
   }
 
 
   @Override protected SoyValue visitGreaterThanOrEqualOpNode(GreaterThanOrEqualOpNode node) {
-
-    SoyValue operand0 = visit(node.getChild(0));
-    SoyValue operand1 = visit(node.getChild(1));
-    if (operand0 instanceof IntegerData && operand1 instanceof IntegerData) {
-      return convertResult(operand0.longValue() >= operand1.longValue());
-    } else {
-      return convertResult(operand0.numberValue() >= operand1.numberValue());
-    }
+    // note the argument reversal
+    return BooleanData.forValue(lessThanOrEqual(visit(node.getChild(1)), visit(node.getChild(0))));
   }
-
-
-  /**
-   * Determines if the operand's string form can be equality-compared with a string.
-   */
-  private boolean compareString(StringData stringData, SoyValue other) {
-    // This follows similarly to the Javascript specification, to ensure similar operation
-    // over Javascript and Java: http://www.ecma-international.org/ecma-262/5.1/#sec-11.9.3
-    if (other instanceof StringData || other instanceof SanitizedContent) {
-      return stringData.stringValue().equals(other.toString());
-    }
-    if (other instanceof NumberData) {
-      try {
-        // Parse the string as a number.
-        return Double.parseDouble(stringData.stringValue()) == other.numberValue();
-      } catch (NumberFormatException nfe) {
-        // Didn't parse as a number.
-        return false;
-      }
-    }
-    return false;
-  }
-
-
-  /**
-   * Custom equality operator that smooths out differences between different Soy runtimes.
-   *
-   * This approximates Javascript's behavior, but is much easier to understand.
-   */
-  private boolean equals(SoyValue operand0, SoyValue operand1) {
-    // Treat the case where either is a string specially.
-    if (operand0 instanceof StringData) {
-      return compareString((StringData) operand0, operand1);
-    }
-    if (operand1 instanceof StringData) {
-      return compareString((StringData) operand1, operand0);
-    }
-    return operand0.equals(operand1);
-  }
-
 
   @Override protected SoyValue visitEqualOpNode(EqualOpNode node) {
 
-    SoyValue operand0 = visit(node.getChild(0));
-    SoyValue operand1 = visit(node.getChild(1));
-    return convertResult(equals(operand0, operand1));
+    return convertResult(equal(visit(node.getChild(0)), visit(node.getChild(1))));
   }
 
 
   @Override protected SoyValue visitNotEqualOpNode(NotEqualOpNode node) {
-
-    SoyValue operand0 = visit(node.getChild(0));
-    SoyValue operand1 = visit(node.getChild(1));
-    return convertResult(!equals(operand0, operand1));
+    return convertResult(!equal(visit(node.getChild(0)), visit(node.getChild(1))));
   }
 
 
@@ -580,6 +485,14 @@ public class EvalVisitor extends AbstractReturningExprNodeVisitor<SoyValue> {
     }
   }
 
+  @Override protected SoyValue visitNullCoalescingOpNode(NullCoalescingOpNode node) {
+    SoyValue operand0 = visit(node.getChild(0));
+    // identical to the implementation of isNonnull
+    if (operand0 instanceof NullData || operand0 instanceof UndefinedData) {
+      return visit(node.getChild(1));
+    }
+    return operand0;
+  }
 
   // -----------------------------------------------------------------------------------------------
   // Implementations for functions.
@@ -601,6 +514,8 @@ public class EvalVisitor extends AbstractReturningExprNodeVisitor<SoyValue> {
           return visitIndexFunction(node);
         case QUOTE_KEYS_IF_JS:
           return visitMapLiteralNode((MapLiteralNode) node.getChild(0));
+        case CHECK_NOT_NULL:
+          return visitCheckNotNull(node.getChild(0));
         default:
           throw new AssertionError();
       }
@@ -610,12 +525,19 @@ public class EvalVisitor extends AbstractReturningExprNodeVisitor<SoyValue> {
     List<SoyValue> args = this.visitChildren(node);
     SoyJavaFunction fn = soyJavaFunctionsMap.get(fnName);
     if (fn == null) {
-      throw new RenderException(
-          "Failed to find Soy function with name '" + fnName + "'" +
-          " (function call \"" + node.toSourceString() + "\").");
+      throw RenderException.create("Failed to find Soy function with name '" + fnName + "'" +
+      " (function call \"" + node.toSourceString() + "\").");
     }
     // Note: Arity has already been checked by CheckFunctionCallsVisitor.
     return computeFunctionHelper(fn, args, node);
+  }
+
+  private SoyValue visitCheckNotNull(ExprNode child) {
+    SoyValue childValue = visit(child);
+    if (childValue instanceof NullData || childValue instanceof UndefinedData) {
+      throw new SoyDataException(child.toSourceString() + " is null");
+    }
+    return childValue;
   }
 
 
@@ -634,7 +556,7 @@ public class EvalVisitor extends AbstractReturningExprNodeVisitor<SoyValue> {
     try {
       return fn.computeForJava(args);
     } catch (Exception e) {
-      throw new RenderException(
+      throw RenderException.create(
           "While computing function \"" + fnNode.toSourceString() + "\": " + e.getMessage(), e);
     }
   }
@@ -647,9 +569,8 @@ public class EvalVisitor extends AbstractReturningExprNodeVisitor<SoyValue> {
       VarRefNode dataRef = (VarRefNode) node.getChild(0);
       localVarIndex = env.getIndex((LoopVar) dataRef.getDefnDecl());
     } catch (Exception e) {
-      throw new RenderException(
-          "Failed to evaluate function call " + node.toSourceString() + ".",
-          e);
+      throw RenderException.create(
+          "Failed to evaluate function call " + node.toSourceString() + ".", e);
     }
     return convertResult(localVarIndex == 0);
   }
@@ -662,9 +583,8 @@ public class EvalVisitor extends AbstractReturningExprNodeVisitor<SoyValue> {
       VarRefNode dataRef = (VarRefNode) node.getChild(0);
       isLast = env.isLast((LoopVar) dataRef.getDefnDecl());
     } catch (Exception e) {
-      throw new RenderException(
-          "Failed to evaluate function call " + node.toSourceString() + ".",
-          e);
+      throw RenderException.create(
+          "Failed to evaluate function call " + node.toSourceString() + ".", e);
     }
     return convertResult(isLast);
   }
@@ -677,9 +597,8 @@ public class EvalVisitor extends AbstractReturningExprNodeVisitor<SoyValue> {
       VarRefNode dataRef = (VarRefNode) node.getChild(0);
       localVarIndex = env.getIndex((LoopVar) dataRef.getDefnDecl());
     } catch (Exception e) {
-      throw new RenderException(
-          "Failed to evaluate function call " + node.toSourceString() + ".",
-          e);
+      throw RenderException.create(
+          "Failed to evaluate function call " + node.toSourceString() + ".", e);
     }
     return convertResult(localVarIndex);
   }
@@ -737,7 +656,7 @@ public class EvalVisitor extends AbstractReturningExprNodeVisitor<SoyValue> {
 
     private NullSafetySentinel() {}
 
-    @Override public boolean equals(SoyValue other) {
+    @Override public boolean equals(Object other) {
       return other == INSTANCE;
     }
 

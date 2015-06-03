@@ -45,8 +45,10 @@ public class SoySyntaxException extends RuntimeException {
    *
    * @param message The error message.
    * @return The new SoySyntaxException object.
+   * @deprecated Prefer {@link #createWithMetaInfo}. There's no good reason for not knowing
+   *     where an error comes from.
    */
-  @SuppressWarnings({"deprecation"})
+  @Deprecated
   public static SoySyntaxException createWithoutMetaInfo(String message) {
     return new SoySyntaxException(message);
   }
@@ -58,8 +60,10 @@ public class SoySyntaxException extends RuntimeException {
    * @param message The error message, or null to use the message from the cause.
    * @param cause The cause of this exception.
    * @return The new SoySyntaxException object.
+   * @deprecated Prefer {@link #createCausedWithMetaInfo}. There's no good reason for not knowing
+   *     where an error came from.
    */
-  @SuppressWarnings({"deprecation"})
+  @Deprecated
   public static SoySyntaxException createCausedWithoutMetaInfo(
       @Nullable String message, Throwable cause) {
 
@@ -69,6 +73,18 @@ public class SoySyntaxException extends RuntimeException {
     } else {
       return new SoySyntaxException(cause);
     }
+  }
+
+  /**
+   * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
+   *
+   * @param message The error message.
+   * @param srcLoc The source location of the error, or null if unknown.
+   * @return The new SoySyntaxException object.
+   */
+  public static SoySyntaxException createWithMetaInfo(String message, SourceLocation srcLoc) {
+    return createWithoutMetaInfo(message)
+        .associateMetaInfo(srcLoc, null /* filePath */, null /* templateName */);
   }
 
 
@@ -88,28 +104,6 @@ public class SoySyntaxException extends RuntimeException {
       @Nullable String templateName) {
 
     return createWithoutMetaInfo(message).associateMetaInfo(srcLoc, filePath, templateName);
-  }
-
-
-  /**
-   * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
-   *
-   * @param message The error message, or null to use the message from the cause.
-   * @param cause The cause of this exception.
-   * @param srcLoc The source location of the error, or null if unknown. At most one of srcLoc and
-   *     filePath may be nonnull (prefer srcLoc since it contains more info).
-   * @param filePath The file path of the file containing the error. At most one of srcLoc and
-   *     filePath may be nonnull (prefer srcLoc since it contains more info).
-   * @param templateName The name of the template containing the error, or null if not available.
-   * @return The new SoySyntaxException object.
-   */
-  public static SoySyntaxException createCausedWithMetaInfo(
-      @Nullable String message, Throwable cause, @Nullable SourceLocation srcLoc,
-      @Nullable String filePath, @Nullable String templateName) {
-
-    Preconditions.checkNotNull(cause);
-    return createCausedWithoutMetaInfo(message, cause)
-        .associateMetaInfo(srcLoc, filePath, templateName);
   }
 
 
@@ -170,10 +164,10 @@ public class SoySyntaxException extends RuntimeException {
       }
     }
     if (filePath != null) {
-      // If srcLoc not yet set, then set it (with line number 0), else assert existing file path
+      // If srcLoc not yet set, then set it (with line number -1), else assert existing file path
       // equals new file path.
       if (this.srcLoc == SourceLocation.UNKNOWN) {
-        this.srcLoc = new SourceLocation(filePath, 0);
+        this.srcLoc = new SourceLocation(filePath);
       } else {
         Preconditions.checkState(this.srcLoc.getFilePath().equals(filePath));
       }
@@ -223,15 +217,6 @@ public class SoySyntaxException extends RuntimeException {
     } else {
       return message;
     }
-  }
-
-
-  /**
-   * @return The original error message from the Soy compiler without any
-   *     metadata about the location where the error appears.
-   */
-  public String getOriginalMessage() {
-    return super.getMessage();
   }
 
 }

@@ -28,6 +28,7 @@ import com.google.template.soy.base.internal.BaseUtils;
 import com.google.template.soy.base.internal.SoyFileKind;
 import com.google.template.soy.basetree.SyntaxVersion;
 import com.google.template.soy.basetree.SyntaxVersionBound;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.soytree.CommandTextAttributesParser.Attribute;
 import com.google.template.soy.soytree.SoyNode.SplitLevelTopNode;
 
@@ -38,14 +39,13 @@ import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
-
 /**
  * Node representing a Soy file.
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
-public class SoyFileNode extends AbstractParentSoyNode<TemplateNode>
+public final class SoyFileNode extends AbstractParentSoyNode<TemplateNode>
     implements SplitLevelTopNode<TemplateNode> {
 
 
@@ -104,6 +104,7 @@ public class SoyFileNode extends AbstractParentSoyNode<TemplateNode>
 
   /**
    * @param id The id for this node.
+   * @param filePath The path to the Soy source file.
    * @param soyFileKind The kind of this Soy file.
    * @param delpackageCmdText This Soy file's delegate package, or null if none.
    * @param namespaceCmdText This Soy file's namespace and attributes. Nullable for backwards
@@ -112,10 +113,14 @@ public class SoyFileNode extends AbstractParentSoyNode<TemplateNode>
    * @throws SoySyntaxException If a syntax error is found.
    */
   public SoyFileNode(
-      int id, SoyFileKind soyFileKind, @Nullable String delpackageCmdText,
-      @Nullable String namespaceCmdText, @Nullable List<String> aliasCmdTexts)
+      int id,
+      String filePath,
+      SoyFileKind soyFileKind,
+      @Nullable String delpackageCmdText,
+      @Nullable String namespaceCmdText,
+      @Nullable List<String> aliasCmdTexts)
       throws SoySyntaxException {
-    super(id);
+    super(id, new SourceLocation(filePath));
 
     this.soyFileKind = soyFileKind;
 
@@ -141,7 +146,8 @@ public class SoyFileNode extends AbstractParentSoyNode<TemplateNode>
         String attributeText = nctMatcher.group(2);
         if (attributeText != null) {
           attributeText = attributeText.trim();
-          Map<String, String> attributes = ATTRIBUTES_PARSER.parse(attributeText);
+          Map<String, String> attributes = ATTRIBUTES_PARSER.parse(
+              attributeText, ExplodingErrorReporter.get(), getSourceLocation());
           if (attributes.containsKey("autoescape")) {
             defaultAutoescapeMode = AutoescapeMode.forAttributeValue(attributes.get("autoescape"));
           }
@@ -212,7 +218,7 @@ public class SoyFileNode extends AbstractParentSoyNode<TemplateNode>
    * Copy constructor.
    * @param orig The node to copy.
    */
-  protected SoyFileNode(SoyFileNode orig) {
+  private SoyFileNode(SoyFileNode orig) {
     super(orig);
     this.soyFileKind = orig.soyFileKind;
     this.delPackageName = orig.delPackageName;
@@ -272,17 +278,6 @@ public class SoyFileNode extends AbstractParentSoyNode<TemplateNode>
   }
 
 
-  @Override public void setSourceLocation(SourceLocation srcLoc) {
-    super.setSourceLocation(srcLoc);
-  }
-
-
-  /** @param filePath The path to the source Soy file. */
-  public void setFilePath(String filePath) {
-    setSourceLocation(new SourceLocation(filePath, 0));
-  }
-
-
   /** Returns the path to the source Soy file ("unknown" if not supplied). */
   public String getFilePath() {
     return getSourceLocation().getFilePath();
@@ -312,7 +307,7 @@ public class SoyFileNode extends AbstractParentSoyNode<TemplateNode>
       sb.append("}\n");
     }
 
-    if (aliasToNamespaceMap.size() > 0) {
+    if (!aliasToNamespaceMap.isEmpty()) {
       sb.append("\n");
       for (Map.Entry<String, String> entry : aliasToNamespaceMap.entrySet()) {
         String alias = entry.getKey();

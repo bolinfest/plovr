@@ -16,6 +16,8 @@
 
 package com.google.template.soy.data;
 
+import com.google.template.soy.jbcsrc.api.RenderResult;
+
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
@@ -72,11 +74,9 @@ public final class SoyFutureValueProvider extends SoyAbstractCachingValueProvide
     this.future = future;
   }
 
-  /** Returns true if the wrapped future is done. */
-  public boolean isDone() {
-    return future.isDone();
+  @Override public RenderResult status() {
+    return future.isDone() ? RenderResult.done() : RenderResult.continueAfter(future);
   }
-
 
   /**
    * Calls Future.get() and then converts the result to SoyValue. Note that
@@ -90,9 +90,9 @@ public final class SoyFutureValueProvider extends SoyAbstractCachingValueProvide
       }
       return valueHelper.convert(future.get()).resolve();
     } catch (ExecutionException e) {
-      throw new SoyDataException("Error dereferencing future", e.getCause());
-    } catch (Exception e) {
-      throw new SoyDataException("Error dereferencing future", e);
+      throw new SoyFutureException(e.getCause());
+    } catch (Throwable e) {
+      throw new SoyFutureException(e);
     }
   }
 }

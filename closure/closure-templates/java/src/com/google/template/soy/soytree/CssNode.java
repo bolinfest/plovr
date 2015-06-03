@@ -17,11 +17,12 @@
 package com.google.template.soy.soytree;
 
 import com.google.common.collect.ImmutableList;
-import com.google.template.soy.base.SoySyntaxException;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.internal.BaseUtils;
 import com.google.template.soy.basetree.SyntaxVersion;
 import com.google.template.soy.basetree.SyntaxVersionBound;
-import com.google.template.soy.exprparse.ExprParseUtils;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.exprparse.ExpressionParser;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.internal.base.Pair;
 import com.google.template.soy.shared.SoyCssRenamingMap;
@@ -35,7 +36,6 @@ import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
-
 /**
  * Node representing a 'css' statement.
  *
@@ -45,7 +45,7 @@ import javax.annotation.Nullable;
 // TODO: Figure out why the CSS @component syntax doesn't support
 // injected data ($ij.foo).  It looks like Soy is not checking CssNodes for
 // injected data.
-public class CssNode extends AbstractCommandNode
+public final class CssNode extends AbstractCommandNode
     implements StandaloneNode, StatementNode, ExprHolderNode {
 
 
@@ -62,7 +62,7 @@ public class CssNode extends AbstractCommandNode
    * In the example <code>{css $componentName, SUFFIX}</code>, this would be
    * $componentName.
    */
-  @Nullable private final ExprRootNode<?> componentNameExpr;
+  @Nullable private final ExprRootNode componentNameExpr;
 
   /**
    * The selector text.  Either the entire command text of the CSS command, or
@@ -81,28 +81,17 @@ public class CssNode extends AbstractCommandNode
    */
   Pair<SoyCssRenamingMap, String> renameCache;
 
+  private CssNode(
+      int id,
+      String commandText,
+      @Nullable ExprRootNode componentNameExpr,
+      String selectorText,
+      SourceLocation sourceLocation) {
+    super(id, sourceLocation, "css", commandText);
+    this.componentNameExpr = componentNameExpr;
+    this.selectorText = selectorText;
 
-  /**
-   * @param id The id for this node.
-   * @param commandText The command text.
-   */
-  public CssNode(int id, String commandText) throws SoySyntaxException {
-    super(id, "css", commandText);
-
-    int delimPos = commandText.lastIndexOf(',');
-    if (delimPos != -1) {
-      String componentNameText = commandText.substring(0, delimPos).trim();
-      componentNameExpr = ExprParseUtils.parseExprElseThrowSoySyntaxException(
-          componentNameText,
-          "Invalid component name expression in 'css' command text \"" +
-              componentNameText + "\".");
-      selectorText = commandText.substring(delimPos + 1).trim();
-    } else {
-      componentNameExpr = null;
-      selectorText = commandText;
-    }
-
-    if (! SELECTOR_TEXT_PATTERN.matcher(selectorText).matches()) {
+    if (!SELECTOR_TEXT_PATTERN.matcher(selectorText).matches()) {
       maybeSetSyntaxVersionBound(new SyntaxVersionBound(
           SyntaxVersion.V2_1, "Invalid 'css' command text."));
     }
@@ -113,7 +102,7 @@ public class CssNode extends AbstractCommandNode
    * Copy constructor.
    * @param orig The node to copy.
    */
-  protected CssNode(CssNode orig) {
+  private CssNode(CssNode orig) {
     super(orig);
     //noinspection ConstantConditions IntelliJ
     this.componentNameExpr =
@@ -140,7 +129,7 @@ public class CssNode extends AbstractCommandNode
 
 
   /** Returns the parsed component name expression, or null if this node has no expression. */
-  @Nullable public ExprRootNode<?> getComponentNameExpr() {
+  @Nullable public ExprRootNode getComponentNameExpr() {
     return componentNameExpr;
   }
 
@@ -192,4 +181,42 @@ public class CssNode extends AbstractCommandNode
     return new CssNode(this);
   }
 
+  /**
+   * Builder for {@link CssNode}.
+   */
+  public static final class Builder {
+    private final int id;
+    private final String commandText;
+    private final SourceLocation sourceLocation;
+
+    /**
+     * @param id The node's id.
+     * @param commandText The node's command text.
+     * @param sourceLocation The node's source location.
+     */
+    public Builder(int id, String commandText, SourceLocation sourceLocation) {
+      this.id = id;
+      this.commandText = commandText;
+      this.sourceLocation = sourceLocation;
+    }
+
+    /**
+     * Returns a new {@link CssNode} built from the builder's state, reporting syntax errors
+     * to the given {@link ErrorReporter}.
+     */
+    public CssNode build(ErrorReporter errorReporter) {
+      int delimPos = commandText.lastIndexOf(',');
+      ExprRootNode componentNameExpr = null;
+      String selectorText = commandText;
+      if (delimPos != -1) {
+        String componentNameText = commandText.substring(0, delimPos).trim();
+        componentNameExpr = new ExprRootNode(
+            new ExpressionParser(componentNameText, sourceLocation, errorReporter)
+                .parseExpression());
+        selectorText = commandText.substring(delimPos + 1).trim();
+      }
+      return new CssNode(id, commandText, componentNameExpr, selectorText,
+          sourceLocation);
+    }
+  }
 }

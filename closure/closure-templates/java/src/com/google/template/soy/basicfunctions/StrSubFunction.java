@@ -18,7 +18,6 @@ package com.google.template.soy.basicfunctions;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
-import com.google.inject.Singleton;
 import com.google.template.soy.data.SanitizedContent;
 import com.google.template.soy.data.SoyValue;
 import com.google.template.soy.data.restricted.IntegerData;
@@ -26,6 +25,9 @@ import com.google.template.soy.data.restricted.StringData;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.JsExprUtils;
 import com.google.template.soy.jssrc.restricted.SoyJsSrcFunction;
+import com.google.template.soy.pysrc.restricted.PyExpr;
+import com.google.template.soy.pysrc.restricted.PyStringExpr;
+import com.google.template.soy.pysrc.restricted.SoyPySrcFunction;
 import com.google.template.soy.shared.restricted.SoyJavaFunction;
 import com.google.template.soy.shared.restricted.SoyPureFunction;
 
@@ -33,6 +35,7 @@ import java.util.List;
 import java.util.Set;
 
 import javax.inject.Inject;
+import javax.inject.Singleton;
 
 /**
  * A function that returns a substring of a given string.
@@ -51,7 +54,7 @@ import javax.inject.Inject;
  */
 @Singleton
 @SoyPureFunction
-class StrSubFunction implements SoyJavaFunction, SoyJsSrcFunction {
+class StrSubFunction implements SoyJavaFunction, SoyJsSrcFunction, SoyPySrcFunction {
 
 
   @Inject
@@ -66,7 +69,6 @@ class StrSubFunction implements SoyJavaFunction, SoyJsSrcFunction {
   @Override public Set<Integer> getValidArgsSizes() {
     return ImmutableSet.of(2, 3);
   }
-
 
   @Override public SoyValue computeForJava(List<SoyValue> args) {
     SoyValue arg0 = args.get(0);
@@ -94,7 +96,6 @@ class StrSubFunction implements SoyJavaFunction, SoyJsSrcFunction {
     }
   }
 
-
   @Override public JsExpr computeForJsSrc(List<JsExpr> args) {
     // Coerce SanitizedContent args to strings.
     String arg0 = JsExprUtils.toString(args.get(0)).getText();
@@ -105,4 +106,13 @@ class StrSubFunction implements SoyJavaFunction, SoyJsSrcFunction {
         + (arg2 != null ? "," + arg2.getText() : "") + ")", Integer.MAX_VALUE);
   }
 
+  @Override public PyExpr computeForPySrc(List<PyExpr> args) {
+    // Coerce SanitizedContent args to strings.
+    String base = args.get(0).toPyString().getText();
+    PyExpr start = args.get(1);
+    PyExpr end = args.size() == 3 ? args.get(2) : null;
+
+    return new PyStringExpr("(" + base + ")[" + start.getText() + ":"
+        + (end != null ? end.getText() : "") + "]");
+  }
 }

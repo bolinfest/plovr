@@ -27,11 +27,12 @@ import com.google.common.collect.Lists;
 import com.google.inject.AbstractModule;
 import com.google.inject.BindingAnnotation;
 import com.google.inject.Provides;
-import com.google.inject.Singleton;
 import com.google.inject.multibindings.Multibinder;
+import com.google.template.soy.ErrorReporterImpl;
 import com.google.template.soy.coredirectives.CoreDirectivesModule;
 import com.google.template.soy.data.SoyData;
 import com.google.template.soy.data.SoyValue;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.internal.i18n.BidiGlobalDir;
 import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.shared.restricted.ApiCallScopeBindingAnnotations.ApiCall;
@@ -52,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import javax.inject.Singleton;
 
 /**
  * Guice module for shared classes.
@@ -211,6 +213,12 @@ public class SharedModule extends AbstractModule {
             return new SoyJavaRuntimePrintDirectiveAdapter(input);
           }
         });
+  }
+
+  @Provides
+  @Singleton
+  ErrorReporter provideErrorReporter() {
+    return new ErrorReporterImpl();
   }
 
 

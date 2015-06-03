@@ -19,6 +19,7 @@ package com.google.template.soy.sharedpasses.opti;
 import com.google.template.soy.data.SoyValue;
 import com.google.template.soy.data.SoyValueHelper;
 import com.google.template.soy.data.restricted.UndefinedData;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.FunctionNode;
 import com.google.template.soy.exprtree.VarRefNode;
 import com.google.template.soy.shared.restricted.SoyJavaFunction;
@@ -41,19 +42,21 @@ import java.util.Map;
  * {@code SoyValue} object.
  *
  */
-class PreevalVisitor extends EvalVisitor {
+final class PreevalVisitor extends EvalVisitor {
 
 
   /**
    * @param valueHelper Instance of SoyValueHelper to use.
    * @param soyJavaFunctionsMap Map of all SoyJavaFunctions (name to function).
    * @param env The current environment.
+   * @param errorReporter For reporting errors.
    */
   PreevalVisitor(
-      SoyValueHelper valueHelper, Map<String, SoyJavaFunction> soyJavaFunctionsMap,
-      Environment env) {
-
-    super(valueHelper, soyJavaFunctionsMap, null, env);
+      SoyValueHelper valueHelper,
+      Map<String, SoyJavaFunction> soyJavaFunctionsMap,
+      Environment env,
+      ErrorReporter errorReporter) {
+    super(valueHelper, soyJavaFunctionsMap, null /* ijData */, env, errorReporter);
   }
 
 
@@ -65,14 +68,14 @@ class PreevalVisitor extends EvalVisitor {
 
     // Cannot preevaluate injected data.
     if (node.isInjected()) {
-      throw new RenderException("Cannot preevaluate reference to ijData.");
+      throw RenderException.create("Cannot preevaluate reference to ijData.");
     }
 
     // Otherwise, super method can handle it.
     SoyValue value = super.visitVarRefNode(node);
 
     if (value instanceof UndefinedData) {
-      throw new RenderException("Encountered undefined reference during preevaluation.");
+      throw RenderException.create("Encountered undefined reference during preevaluation.");
     }
 
     return value;
@@ -83,7 +86,7 @@ class PreevalVisitor extends EvalVisitor {
       SoyJavaFunction fn, List<SoyValue> args, FunctionNode fnNode) {
 
     if (! fn.getClass().isAnnotationPresent(SoyPureFunction.class)) {
-      throw new RenderException("Cannot preevaluate impure function.");
+      throw RenderException.create("Cannot preevaluate impure function.");
     }
 
     return super.computeFunctionHelper(fn, args, fnNode);

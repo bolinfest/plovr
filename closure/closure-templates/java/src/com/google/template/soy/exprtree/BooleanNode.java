@@ -16,6 +16,7 @@
 
 package com.google.template.soy.exprtree;
 
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.types.SoyType;
 import com.google.template.soy.types.primitive.BoolType;
 
@@ -25,7 +26,7 @@ import com.google.template.soy.types.primitive.BoolType;
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
-public class BooleanNode extends AbstractPrimitiveNode {
+public final class BooleanNode extends AbstractPrimitiveNode {
 
 
   /** The boolean value. */
@@ -34,8 +35,10 @@ public class BooleanNode extends AbstractPrimitiveNode {
 
   /**
    * @param value The boolean value.
+   * @param sourceLocation The node's source location.
    */
-  public BooleanNode(boolean value) {
+  public BooleanNode(boolean value, SourceLocation sourceLocation) {
+    super(sourceLocation);
     this.value = value;
   }
 
@@ -44,7 +47,7 @@ public class BooleanNode extends AbstractPrimitiveNode {
    * Copy constructor.
    * @param orig The node to copy.
    */
-  protected BooleanNode(BooleanNode orig) {
+  private BooleanNode(BooleanNode orig) {
     super(orig);
     this.value = orig.value;
   }

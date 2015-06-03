@@ -1,5 +1,5 @@
 /*
- * Copyright 2009 Google Inc.
+ * Copyright 2015 Google Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,4 +64,28 @@ public class ApiCallScopeBindingAnnotations {
   @Retention(RUNTIME)
   public @interface LocaleString {}
 
+
+  /**
+   * Annotation for the runtimePath parameter in the ApiCallScope.
+   */
+  @BindingAnnotation
+  @Target({FIELD, PARAMETER, METHOD})
+  @Retention(RUNTIME)
+  public @interface PyRuntimePath {}
+
+  /**
+   * Annotation for the bidiIsRtlFn parameter in the ApiCallScope.
+   */
+  @BindingAnnotation
+  @Target({FIELD, PARAMETER, METHOD})
+  @Retention(RUNTIME)
+  public @interface PyBidiIsRtlFn {}
+
+  /**
+   * Annotation for the translationClass parameter in the ApiCallScope.
+   */
+  @BindingAnnotation
+  @Target({FIELD, PARAMETER, METHOD})
+  @Retention(RUNTIME)
+  public @interface PyTranslationClass {}
 }

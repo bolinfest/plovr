@@ -32,6 +32,7 @@ import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.base.internal.BaseUtils;
 import com.google.template.soy.base.internal.IndentedLinesBuilder;
 import com.google.template.soy.base.internal.SoyFileKind;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
@@ -92,7 +93,8 @@ import java.util.regex.Pattern;
  * </pre>
  *
  */
-public class GenerateParseInfoVisitor extends AbstractSoyNodeVisitor<ImmutableMap<String, String>> {
+public final class GenerateParseInfoVisitor
+    extends AbstractSoyNodeVisitor<ImmutableMap<String, String>> {
 
   /**
    * Represents the source of the generated Java class names.
@@ -218,20 +220,29 @@ public class GenerateParseInfoVisitor extends AbstractSoyNodeVisitor<ImmutableMa
    * @param javaPackage The Java package for the generated classes.
    * @param javaClassNameSource Source of the generated class names. Must be one of "filename",
    *     "namespace", or "generic".
+   * @param errorReporter For reporting errors.
    */
-  public GenerateParseInfoVisitor(String javaPackage, String javaClassNameSource) {
+  public GenerateParseInfoVisitor(
+      String javaPackage,
+      String javaClassNameSource,
+      ErrorReporter errorReporter) {
+    super(errorReporter);
     this.javaPackage = javaPackage;
 
-    if (javaClassNameSource.equals("filename")) {
-      this.javaClassNameSource = JavaClassNameSource.SOY_FILE_NAME;
-    } else if (javaClassNameSource.equals("namespace")) {
-      this.javaClassNameSource = JavaClassNameSource.SOY_NAMESPACE_LAST_PART;
-    } else if (javaClassNameSource.equals("generic")) {
-      this.javaClassNameSource = JavaClassNameSource.GENERIC;
-    } else {
-      throw new IllegalArgumentException(
-          "Invalid value for javaClassNameSource \"" + javaClassNameSource + "\"" +
-          " (valid values are \"filename\", \"namespace\", and \"generic\").");
+    switch (javaClassNameSource) {
+      case "filename":
+        this.javaClassNameSource = JavaClassNameSource.SOY_FILE_NAME;
+        break;
+      case "namespace":
+        this.javaClassNameSource = JavaClassNameSource.SOY_NAMESPACE_LAST_PART;
+        break;
+      case "generic":
+        this.javaClassNameSource = JavaClassNameSource.GENERIC;
+        break;
+      default:
+        throw new IllegalArgumentException("Invalid value for javaClassNameSource \""
+            + javaClassNameSource + "\""
+            + " (valid values are \"filename\", \"namespace\", and \"generic\").");
     }
   }
 
@@ -272,7 +283,7 @@ public class GenerateParseInfoVisitor extends AbstractSoyNodeVisitor<ImmutableMa
     }
 
     // Build template registry.
-    templateRegistry = new TemplateRegistry(node);
+    templateRegistry = new TemplateRegistry(node, errorReporter);
 
     // Run the pass.
     for (SoyFileNode soyFile : node.getChildren()) {
@@ -325,7 +336,7 @@ public class GenerateParseInfoVisitor extends AbstractSoyNodeVisitor<ImmutableMa
           findProtoTypesRecurse(paramType, protoTypes);
         }
       }
-      new FindUsedProtoTypesVisitor(protoTypes).exec(template);
+      new FindUsedProtoTypesVisitor(protoTypes, errorReporter).exec(template);
     }
     // allParamKeysMap is a map from upper-underscore key to original key.
     SortedMap<String, String> allParamKeysMap = Maps.newTreeMap();
@@ -379,9 +390,7 @@ public class GenerateParseInfoVisitor extends AbstractSoyNodeVisitor<ImmutableMa
       ilb.increaseIndent();
       // Note we use fully-qualified names instead of imports to avoid potential collisions.
       List<String> defaultInstances = Lists.newArrayList();
-      for (String protoTypeName : protoTypes) {
-        defaultInstances.add(protoTypeName);
-      }
+      defaultInstances.addAll(protoTypes);
       appendListOrSetHelper(ilb, "return ImmutableList.<Object>of", defaultInstances);
       ilb.appendLineEnd(";");
       ilb.decreaseIndent();
@@ -474,14 +483,13 @@ public class GenerateParseInfoVisitor extends AbstractSoyNodeVisitor<ImmutableMa
 
     // Templates.
     itemSnippets = Lists.newArrayList();
-    for (String upperUnderscoreTemplateName : publicBasicTemplateMap.keySet()) {
-      itemSnippets.add(upperUnderscoreTemplateName);
-    }
+    itemSnippets.addAll(publicBasicTemplateMap.keySet());
     appendImmutableList(ilb, "<SoyTemplateInfo>", itemSnippets);
     ilb.appendLineEnd(",");
 
     // CSS names.
-    SortedMap<String, CssTagsPrefixPresence> cssNameMap = (new CollectCssNamesVisitor()).exec(node);
+    SortedMap<String, CssTagsPrefixPresence> cssNameMap
+        = new CollectCssNamesVisitor(errorReporter).exec(node);
     List<Pair<String, String>> entrySnippetPairs = Lists.newArrayList();
     for (Map.Entry<String, CssTagsPrefixPresence> entry : cssNameMap.entrySet()) {
       entrySnippetPairs.add(Pair.of(
@@ -534,7 +542,7 @@ public class GenerateParseInfoVisitor extends AbstractSoyNodeVisitor<ImmutableMa
 
     // Indirect params.
     IndirectParamsInfo indirectParamsInfo =
-        (new FindIndirectParamsVisitor(templateRegistry)).exec(node);
+        new FindIndirectParamsVisitor(templateRegistry, errorReporter).exec(node);
     for (TemplateParam param : indirectParamsInfo.indirectParams.values()) {
       TemplateParam existingParam = transitiveParamMap.get(param.name());
       if (existingParam == null) {
@@ -544,7 +552,7 @@ public class GenerateParseInfoVisitor extends AbstractSoyNodeVisitor<ImmutableMa
     }
 
     // Get info on injected params.
-    IjParamsInfo ijParamsInfo = (new FindIjParamsVisitor(templateRegistry)).exec(node);
+    IjParamsInfo ijParamsInfo = new FindIjParamsVisitor(templateRegistry, errorReporter).exec(node);
 
     @SuppressWarnings("ConstantConditions")  // for IntelliJ
     String upperUnderscoreName =
@@ -631,7 +639,7 @@ public class GenerateParseInfoVisitor extends AbstractSoyNodeVisitor<ImmutableMa
     ilb.increaseIndent(2);
     ilb.appendLine("\"", node.getTemplateName(), "\",");
 
-    if (transitiveParamMap.size() > 0) {
+    if (!transitiveParamMap.isEmpty()) {
       List<Pair<String, String>> entrySnippetPairs = Lists.newArrayList();
       for (TemplateParam param : transitiveParamMap.values()) {
         entrySnippetPairs.add(Pair.of(
@@ -877,8 +885,7 @@ public class GenerateParseInfoVisitor extends AbstractSoyNodeVisitor<ImmutableMa
    */
   private static void appendListOrSetHelper(
       IndentedLinesBuilder ilb, String creationFunctionSnippet, Collection<String> itemSnippets) {
-
-    if (itemSnippets.size() == 0) {
+    if (itemSnippets.isEmpty()) {
       ilb.appendLineStart(creationFunctionSnippet, "()");
 
     } else {
@@ -907,8 +914,7 @@ public class GenerateParseInfoVisitor extends AbstractSoyNodeVisitor<ImmutableMa
   private static void appendImmutableMap(
       IndentedLinesBuilder ilb, String typeParamSnippet,
       Collection<Pair<String, String>> entrySnippetPairs) {
-
-    if (entrySnippetPairs.size() == 0) {
+    if (entrySnippetPairs.isEmpty()) {
       ilb.appendLineStart("ImmutableMap.", typeParamSnippet, "of()");
 
     } else {
@@ -935,7 +941,8 @@ public class GenerateParseInfoVisitor extends AbstractSoyNodeVisitor<ImmutableMa
     /** Map from each CSS name to its CssTagsPrefixPresence state. */
     private SortedMap<String, CssTagsPrefixPresence> cssNamesMap;
 
-    public CollectCssNamesVisitor() {
+    private CollectCssNamesVisitor(ErrorReporter errorReporter) {
+      super(errorReporter);
       cssNamesMap = Maps.newTreeMap();
     }
 
@@ -978,7 +985,8 @@ public class GenerateParseInfoVisitor extends AbstractSoyNodeVisitor<ImmutableMa
   private static class FindUsedProtoTypesVisitor extends AbstractSoyNodeVisitor<Void> {
     private final SortedSet<String> protoTypes;
 
-    public FindUsedProtoTypesVisitor(SortedSet<String> protoTypes) {
+    private FindUsedProtoTypesVisitor(SortedSet<String> protoTypes, ErrorReporter errorReporter) {
+      super(errorReporter);
       this.protoTypes = protoTypes;
     }
 
@@ -998,7 +1006,8 @@ public class GenerateParseInfoVisitor extends AbstractSoyNodeVisitor<ImmutableMa
     }
 
     private void visitExpressions(ExprHolderNode node) {
-      FindUsedProtoTypesExprVisitor exprVisitor = new FindUsedProtoTypesExprVisitor(protoTypes);
+      FindUsedProtoTypesExprVisitor exprVisitor
+          = new FindUsedProtoTypesExprVisitor(protoTypes, errorReporter);
       for (ExprUnion exprUnion : node.getAllExprUnions()) {
         if (exprUnion.getExpr() != null) {
           exprVisitor.exec(exprUnion.getExpr());
@@ -1011,20 +1020,17 @@ public class GenerateParseInfoVisitor extends AbstractSoyNodeVisitor<ImmutableMa
    * Private helper class to collect all of the proto extension types used in
    * an expression.
    */
-  private static class FindUsedProtoTypesExprVisitor extends AbstractExprNodeVisitor<Void> {
+  private static final class FindUsedProtoTypesExprVisitor extends AbstractExprNodeVisitor<Void> {
     private final SortedSet<String> protoTypes;
 
-    public FindUsedProtoTypesExprVisitor(SortedSet<String> protoTypes) {
+    FindUsedProtoTypesExprVisitor(SortedSet<String> protoTypes, ErrorReporter errorReporter) {
+      super(errorReporter);
       this.protoTypes = protoTypes;
     }
 
-    @Override protected void visit(ExprNode node) {
-      super.visit(node);
-    }
-
-    @Override protected void visitExprRootNode(ExprRootNode<?> node) {
+    @Override protected void visitExprRootNode(ExprRootNode node) {
       visitChildren(node);
-      ExprNode expr = node.getChild(0);
+      ExprNode expr = node.getRoot();
       node.setType(expr.getType());
     }
 

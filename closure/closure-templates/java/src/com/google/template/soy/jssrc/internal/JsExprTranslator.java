@@ -17,6 +17,7 @@
 package com.google.template.soy.jssrc.internal;
 
 import com.google.common.base.Preconditions;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
@@ -29,6 +30,7 @@ import com.google.template.soy.shared.internal.NonpluginFunction;
 import java.util.Deque;
 import java.util.Map;
 
+import javax.annotation.Nullable;
 import javax.inject.Inject;
 
 /**
@@ -44,6 +46,7 @@ class JsExprTranslator {
   /** Factory for creating an instance of TranslateToJsExprVisitor. */
   private final TranslateToJsExprVisitorFactory translateToJsExprVisitorFactory;
 
+  private final ErrorReporter errorReporter;
 
   /**
    * @param soyJsSrcFunctionsMap Map of all SoyJsSrcFunctions (name to function).
@@ -53,9 +56,11 @@ class JsExprTranslator {
   @Inject
   JsExprTranslator(
       Map<String, SoyJsSrcFunction> soyJsSrcFunctionsMap,
-      TranslateToJsExprVisitorFactory translateToJsExprVisitorFactory) {
+      TranslateToJsExprVisitorFactory translateToJsExprVisitorFactory,
+      ErrorReporter errorReporter) {
     this.soyJsSrcFunctionsMap = soyJsSrcFunctionsMap;
     this.translateToJsExprVisitorFactory = translateToJsExprVisitorFactory;
+    this.errorReporter = errorReporter;
   }
 
 
@@ -72,11 +77,12 @@ class JsExprTranslator {
    * @return The built JS expression.
    */
   public JsExpr translateToJsExpr(
-      ExprNode expr, String exprText, Deque<Map<String, JsExpr>> localVarTranslations) {
+      @Nullable ExprNode expr, @Nullable String exprText,
+      Deque<Map<String, JsExpr>> localVarTranslations) {
 
     if (expr != null &&
         (exprText == null ||
-         (new CheckAllFunctionsSupportedVisitor(soyJsSrcFunctionsMap)).exec(expr))) {
+         new CheckAllFunctionsSupportedVisitor(soyJsSrcFunctionsMap, errorReporter).exec(expr))) {
       // V2 expression.
       return translateToJsExprVisitorFactory.create(localVarTranslations).exec(expr);
     } else {
@@ -99,7 +105,9 @@ class JsExprTranslator {
     /** Whether all functions in the expression are supported. */
     private boolean areAllFunctionsSupported;
 
-    public CheckAllFunctionsSupportedVisitor(Map<String, SoyJsSrcFunction> soyJsSrcFunctionsMap) {
+    private CheckAllFunctionsSupportedVisitor(
+        Map<String, SoyJsSrcFunction> soyJsSrcFunctionsMap, ErrorReporter errorReporter) {
+      super(errorReporter);
       this.soyJsSrcFunctionsMap = soyJsSrcFunctionsMap;
     }
 

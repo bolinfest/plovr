@@ -17,6 +17,7 @@
 package com.google.template.soy.jssrc.internal;
 
 import com.google.common.collect.Lists;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.sharedpasses.BuildAllDependeesMapVisitor;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.SoyFileSetNode;
@@ -30,7 +31,6 @@ import com.google.template.soy.soytree.jssrc.GoogMsgDefNode;
 import java.util.List;
 import java.util.Map;
 
-
 /**
  * Visitor for moving {@code GoogMsgDefNode}s to earlier locations in the template. This allows for
  * more efficient code generation because the associated {@code GoogMsgRefNode}s can then be
@@ -39,12 +39,14 @@ import java.util.Map;
  * <p> {@link #exec} must be called on a full parse tree.
  *
  */
-class MoveGoogMsgDefNodesEarlierVisitor extends AbstractSoyNodeVisitor<Void> {
-
+final class MoveGoogMsgDefNodesEarlierVisitor extends AbstractSoyNodeVisitor<Void> {
 
   /** The list of GoogMsgDefNodes found. */
   private List<GoogMsgDefNode> googMsgDefNodes;
 
+  MoveGoogMsgDefNodesEarlierVisitor(ErrorReporter errorReporter) {
+    super(errorReporter);
+  }
 
   @Override public Void exec(SoyNode node) {
     googMsgDefNodes = Lists.newArrayList();
@@ -66,7 +68,8 @@ class MoveGoogMsgDefNodesEarlierVisitor extends AbstractSoyNodeVisitor<Void> {
     visitChildren(node);
 
     // Move each GoogMsgDefNode to the earliest point it can go.
-    Map<SoyNode, List<SoyNode>> allDependeesMap = (new BuildAllDependeesMapVisitor()).exec(node);
+    Map<SoyNode, List<SoyNode>> allDependeesMap
+        = new BuildAllDependeesMapVisitor(errorReporter).exec(node);
     for (GoogMsgDefNode googMsgDefNode : googMsgDefNodes) {
       moveGoogMsgDefNodeEarlierHelper(
           googMsgDefNode, allDependeesMap.get(googMsgDefNode));

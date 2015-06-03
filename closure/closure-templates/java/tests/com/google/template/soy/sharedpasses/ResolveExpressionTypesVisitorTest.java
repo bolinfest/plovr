@@ -16,13 +16,20 @@
 
 package com.google.template.soy.sharedpasses;
 
+import static com.google.common.truth.Truth.assertThat;
+import static com.google.template.soy.types.SoyTypes.makeNullable;
+
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.template.soy.FormattingErrorReporter;
+import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.basetree.SyntaxVersion;
-import com.google.template.soy.shared.internal.SharedTestUtils;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.PrintNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
@@ -50,7 +57,7 @@ import java.util.List;
  * Unit tests for ResolveNamesVisitor.
  *
  */
-public class ResolveExpressionTypesVisitorTest extends TestCase {
+public final class ResolveExpressionTypesVisitorTest extends TestCase {
 
   private static final SoyTypeProvider typeProvider =
       new SoyTypeProvider() {
@@ -72,7 +79,7 @@ public class ResolveExpressionTypesVisitorTest extends TestCase {
 
   private static ResolveNamesVisitor createResolveNamesVisitor(
       SyntaxVersion declaredSyntaxVersion) {
-    return new ResolveNamesVisitor(declaredSyntaxVersion);
+    return new ResolveNamesVisitor(declaredSyntaxVersion, ExplodingErrorReporter.get());
   }
 
   private static ResolveExpressionTypesVisitor
@@ -82,26 +89,28 @@ public class ResolveExpressionTypesVisitorTest extends TestCase {
 
   private static ResolveExpressionTypesVisitor createResolveExpressionTypesVisitor(
       SyntaxVersion declaredSyntaxVersion) {
-    return new ResolveExpressionTypesVisitor(typeRegistry, declaredSyntaxVersion);
+    return new ResolveExpressionTypesVisitor(
+        typeRegistry, declaredSyntaxVersion, ExplodingErrorReporter.get());
   }
 
   public void testOptionalParamTypes() {
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(constructTemplateSource(
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(constructTemplateSource(
         "{@param? pa: bool}",
         "{@param? pb: list<int>}",
         "{$pa}",
-        "{$pb}"));
+        "{$pb}"))
+        .parse();
     createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
     createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
     List<SoyType> types = getPrintStatementTypes(soyTree);
-    assertEquals(UnionType.of(BoolType.getInstance(), NullType.getInstance()), types.get(0));
-    assertEquals(
-        UnionType.of(ListType.of(IntType.getInstance()), NullType.getInstance()),
-        types.get(1));
+    assertThat(types.get(0))
+        .isEqualTo(makeNullable(BoolType.getInstance()));
+    assertThat(types.get(1))
+        .isEqualTo(makeNullable(ListType.of(IntType.getInstance())));
   }
 
   public void testDataRefTypes() {
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(constructTemplateSource(
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(constructTemplateSource(
         "{@param pa: bool}",
         "{@param pb: list<int>}",
         "{@param pe: map<int, map<int, string>>}",
@@ -110,37 +119,37 @@ public class ResolveExpressionTypesVisitorTest extends TestCase {
         "{$pb[0]}",
         "{$pe}",
         "{$pe[0]}",
-        "{$pe[1 + 1][2]}"));
+        "{$pe[1 + 1][2]}"))
+        .parse();
     createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
     createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
     List<SoyType> types = getPrintStatementTypes(soyTree);
-    assertEquals(BoolType.getInstance(), types.get(0));
-    assertEquals(ListType.of(IntType.getInstance()), types.get(1));
-    assertEquals(IntType.getInstance(), types.get(2));
-    assertEquals(
-        MapType.of(
-            IntType.getInstance(),
-            MapType.of(IntType.getInstance(), StringType.getInstance())),
-        types.get(3));
-    assertEquals(MapType.of(IntType.getInstance(), StringType.getInstance()), types.get(4));
-    assertEquals(StringType.getInstance(), types.get(5));
+    assertThat(types.get(0)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(1)).isEqualTo(ListType.of(IntType.getInstance()));
+    assertThat(types.get(2)).isEqualTo(IntType.getInstance());
+    assertThat(types.get(3))
+        .isEqualTo(MapType.of(
+            IntType.getInstance(), MapType.of(IntType.getInstance(), StringType.getInstance())));
+    assertThat(types.get(4)).isEqualTo(MapType.of(IntType.getInstance(), StringType.getInstance()));
+    assertThat(types.get(5)).isEqualTo(StringType.getInstance());
   }
 
   public void testRecordTypes() {
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(constructTemplateSource(
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(constructTemplateSource(
         "{@param pa: [a:int, b:string]}",
         "{$pa.a}",
-        "{$pa.b}"));
+        "{$pa.b}"))
+        .parse();
     createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
     createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
     List<SoyType> types = getPrintStatementTypes(soyTree);
-    assertEquals(IntType.getInstance(), types.get(0));
-    assertEquals(StringType.getInstance(), types.get(1));
+    assertThat(types.get(0)).isEqualTo(IntType.getInstance());
+    assertThat(types.get(1)).isEqualTo(StringType.getInstance());
   }
 
   public void testDataRefTypesWithUnknown() {
     // Test that data with the 'unknown' type is allowed to function as a map or list.
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(typeRegistry, SyntaxVersion.V2_0, false,
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(
         constructTemplateSource(
             "{@param pa: unknown}",
             "{@param pb: map<string, float>}",
@@ -149,15 +158,19 @@ public class ResolveExpressionTypesVisitorTest extends TestCase {
             "{$pa.xxx}",
             "{$pa.xxx.yyy}",
             "{$pb[$pa]}",
-            "{$pc[$pa]}"));
+            "{$pc[$pa]}"))
+        .declaredSyntaxVersion(SyntaxVersion.V2_0)
+        .doRunInitialParsingPasses(false)
+        .typeRegistry(typeRegistry)
+        .parse();
     createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
     createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
     List<SoyType> types = getPrintStatementTypes(soyTree);
-    assertEquals(UnknownType.getInstance(), types.get(0));
-    assertEquals(UnknownType.getInstance(), types.get(1));
-    assertEquals(UnknownType.getInstance(), types.get(2));
-    assertEquals(FloatType.getInstance(), types.get(3));
-    assertEquals(StringType.getInstance(), types.get(4));
+    assertThat(types.get(0)).isEqualTo(UnknownType.getInstance());
+    assertThat(types.get(1)).isEqualTo(UnknownType.getInstance());
+    assertThat(types.get(2)).isEqualTo(UnknownType.getInstance());
+    assertThat(types.get(3)).isEqualTo(FloatType.getInstance());
+    assertThat(types.get(4)).isEqualTo(StringType.getInstance());
   }
 
   public void testDataRefTypesError() {
@@ -187,7 +200,7 @@ public class ResolveExpressionTypesVisitorTest extends TestCase {
   }
 
   public void testArithmeticOps() {
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(typeRegistry, SyntaxVersion.V2_0, false,
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(
         constructTemplateSource(
             "{@param pa: unknown}",
             "{@param pi: int}",
@@ -209,28 +222,62 @@ public class ResolveExpressionTypesVisitorTest extends TestCase {
             "{$pf % $pf}",
             "{-$pa}",
             "{-$pi}",
-            "{-$pf}"));
+            "{-$pf}"))
+        .declaredSyntaxVersion(SyntaxVersion.V2_0)
+        .doRunInitialParsingPasses(false)
+        .typeRegistry(typeRegistry)
+        .parse();
     createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
     createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
     List<SoyType> types = getPrintStatementTypes(soyTree);
-    assertEquals(UnknownType.getInstance(), types.get(0));
-    assertEquals(IntType.getInstance(), types.get(1));
-    assertEquals(FloatType.getInstance(), types.get(2));
-    assertEquals(UnknownType.getInstance(), types.get(3));
-    assertEquals(IntType.getInstance(), types.get(4));
-    assertEquals(FloatType.getInstance(), types.get(5));
-    assertEquals(UnknownType.getInstance(), types.get(6));
-    assertEquals(IntType.getInstance(), types.get(7));
-    assertEquals(FloatType.getInstance(), types.get(8));
-    assertEquals(UnknownType.getInstance(), types.get(9));
-    assertEquals(IntType.getInstance(), types.get(10));
-    assertEquals(FloatType.getInstance(), types.get(11));
-    assertEquals(UnknownType.getInstance(), types.get(12));
-    assertEquals(IntType.getInstance(), types.get(13));
-    assertEquals(FloatType.getInstance(), types.get(14));
-    assertEquals(UnknownType.getInstance(), types.get(15));
-    assertEquals(IntType.getInstance(), types.get(16));
-    assertEquals(FloatType.getInstance(), types.get(17));
+    assertThat(types.get(0)).isEqualTo(UnknownType.getInstance());
+    assertThat(types.get(1)).isEqualTo(IntType.getInstance());
+    assertThat(types.get(2)).isEqualTo(FloatType.getInstance());
+    assertThat(types.get(3)).isEqualTo(UnknownType.getInstance());
+    assertThat(types.get(4)).isEqualTo(IntType.getInstance());
+    assertThat(types.get(5)).isEqualTo(FloatType.getInstance());
+    assertThat(types.get(6)).isEqualTo(UnknownType.getInstance());
+    assertThat(types.get(7)).isEqualTo(IntType.getInstance());
+    assertThat(types.get(8)).isEqualTo(FloatType.getInstance());
+    assertThat(types.get(9)).isEqualTo(UnknownType.getInstance());
+    assertThat(types.get(10)).isEqualTo(IntType.getInstance());
+    assertThat(types.get(11)).isEqualTo(FloatType.getInstance());
+    assertThat(types.get(12)).isEqualTo(UnknownType.getInstance());
+    assertThat(types.get(13)).isEqualTo(IntType.getInstance());
+    assertThat(types.get(14)).isEqualTo(FloatType.getInstance());
+    assertThat(types.get(15)).isEqualTo(UnknownType.getInstance());
+    assertThat(types.get(16)).isEqualTo(IntType.getInstance());
+    assertThat(types.get(17)).isEqualTo(FloatType.getInstance());
+  }
+
+  public void testStringConcatenation() {
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(
+        constructTemplateSource(
+            "{@param ps: string}",
+            "{@param pi: int}",
+            "{@param pf: float}",
+            "{@param pb: bool}",
+            "{$ps + $ps}",
+            "{$ps + $pi}",
+            "{$ps + $pf}",
+            "{$ps + $pb}",
+            "{$pi + $ps}",
+            "{$pf + $ps}",
+            "{$pb + $ps}"))
+        .declaredSyntaxVersion(SyntaxVersion.V2_0)
+        .doRunInitialParsingPasses(false)
+        .typeRegistry(typeRegistry)
+        .parse();
+    createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
+    createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
+    List<SoyType> types = getPrintStatementTypes(soyTree);
+    assertThat(types.get(0)).isEqualTo(StringType.getInstance());
+    assertThat(types.get(1)).isEqualTo(StringType.getInstance());
+    assertThat(types.get(2)).isEqualTo(StringType.getInstance());
+    assertThat(types.get(3)).isEqualTo(StringType.getInstance());
+    assertThat(types.get(4)).isEqualTo(StringType.getInstance());
+    assertThat(types.get(5)).isEqualTo(StringType.getInstance());
+    assertThat(types.get(6)).isEqualTo(StringType.getInstance());
   }
 
   public void testLogicalOps() {
@@ -248,39 +295,45 @@ public class ResolveExpressionTypesVisitorTest extends TestCase {
         "{not $pi}",
         "{not $pf}");
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(
-        typeRegistry, SyntaxVersion.V2_0, false, testTemplateContent);
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(testTemplateContent)
+        .declaredSyntaxVersion(SyntaxVersion.V2_0)
+        .doRunInitialParsingPasses(false)
+        .typeRegistry(typeRegistry)
+        .parse();
     createResolveNamesVisitor(SyntaxVersion.V2_0).exec(soyTree);
     createResolveExpressionTypesVisitor(SyntaxVersion.V2_0).exec(soyTree);
     List<SoyType> types = getPrintStatementTypes(soyTree);
-    assertEquals(UnknownType.getInstance(), types.get(0));
-    assertEquals(UnknownType.getInstance(), types.get(1));
-    assertEquals(UnknownType.getInstance(), types.get(2));
-    assertEquals(UnknownType.getInstance(), types.get(3));
-    assertEquals(UnknownType.getInstance(), types.get(4));
-    assertEquals(UnknownType.getInstance(), types.get(5));
-    assertEquals(BoolType.getInstance(), types.get(6));
-    assertEquals(BoolType.getInstance(), types.get(7));
-    assertEquals(BoolType.getInstance(), types.get(8));
+    assertThat(types.get(0)).isEqualTo(UnknownType.getInstance());
+    assertThat(types.get(1)).isEqualTo(UnknownType.getInstance());
+    assertThat(types.get(2)).isEqualTo(UnknownType.getInstance());
+    assertThat(types.get(3)).isEqualTo(UnknownType.getInstance());
+    assertThat(types.get(4)).isEqualTo(UnknownType.getInstance());
+    assertThat(types.get(5)).isEqualTo(UnknownType.getInstance());
+    assertThat(types.get(6)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(7)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(8)).isEqualTo(BoolType.getInstance());
 
-    soyTree = SharedTestUtils.parseSoyFiles(
-        typeRegistry, SyntaxVersion.V2_3, false, testTemplateContent);
+    soyTree = SoyFileSetParserBuilder.forFileContents(testTemplateContent)
+        .declaredSyntaxVersion(SyntaxVersion.V2_3)
+        .doRunInitialParsingPasses(false)
+        .typeRegistry(typeRegistry)
+        .parse();
     createResolveNamesVisitor(SyntaxVersion.V2_3).exec(soyTree);
     createResolveExpressionTypesVisitor(SyntaxVersion.V2_3).exec(soyTree);
     types = getPrintStatementTypes(soyTree);
-    assertEquals(BoolType.getInstance(), types.get(0));
-    assertEquals(BoolType.getInstance(), types.get(1));
-    assertEquals(BoolType.getInstance(), types.get(2));
-    assertEquals(BoolType.getInstance(), types.get(3));
-    assertEquals(BoolType.getInstance(), types.get(4));
-    assertEquals(BoolType.getInstance(), types.get(5));
-    assertEquals(BoolType.getInstance(), types.get(6));
-    assertEquals(BoolType.getInstance(), types.get(7));
-    assertEquals(BoolType.getInstance(), types.get(8));
+    assertThat(types.get(0)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(1)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(2)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(3)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(4)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(5)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(6)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(7)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(8)).isEqualTo(BoolType.getInstance());
   }
 
   public void testComparisonOps() {
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(typeRegistry, SyntaxVersion.V2_0, false,
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(
         constructTemplateSource(
             "{@param pa: unknown}",
             "{@param pi: int}",
@@ -302,83 +355,156 @@ public class ResolveExpressionTypesVisitorTest extends TestCase {
             "{$pf == $pf}",
             "{$pa != $pa}",
             "{$pi != $pi}",
-            "{$pf != $pf}"));
+            "{$pf != $pf}"))
+        .declaredSyntaxVersion(SyntaxVersion.V2_0)
+        .doRunInitialParsingPasses(false)
+        .typeRegistry(typeRegistry)
+        .parse();
     createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
     createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
-    List<SoyType> types = getPrintStatementTypes(soyTree);
-    for (SoyType type : types) {
-      assertEquals(BoolType.getInstance(), type);
-    }
+    ImmutableSet<SoyType> types = ImmutableSet.copyOf(getPrintStatementTypes(soyTree));
+    assertThat(types).containsExactly(BoolType.getInstance());
   }
 
   public void testNullCoalescingAndConditionalOps() {
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(typeRegistry, SyntaxVersion.V2_0, false,
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(
         constructTemplateSource(
             "{@param pa: unknown}",
             "{@param pi: int}",
             "{@param pf: float}",
+            "{@param? ni: int}",
             "{$pa ?: $pi}",
             "{$pi ?: $pf}",
-            "{$pa ? $pi : $pf}"));
+            "{$pa ? $pi : $pf}",
+            "{$ni ?: 0}"))
+        .declaredSyntaxVersion(SyntaxVersion.V2_0)
+        .doRunInitialParsingPasses(false)
+        .typeRegistry(typeRegistry)
+        .parse();
     createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
     createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
     List<SoyType> types = getPrintStatementTypes(soyTree);
-    assertEquals(UnknownType.getInstance(), types.get(0));
-    assertEquals(UnionType.of(IntType.getInstance(), FloatType.getInstance()), types.get(1));
-    assertEquals(UnionType.of(IntType.getInstance(), FloatType.getInstance()), types.get(2));
+    assertThat(types.get(0)).isEqualTo(UnknownType.getInstance());
+    assertThat(types.get(1))
+        .isEqualTo(UnionType.of(IntType.getInstance(), FloatType.getInstance()));
+    assertThat(types.get(2))
+        .isEqualTo(UnionType.of(IntType.getInstance(), FloatType.getInstance()));
+    assertThat(types.get(3)).isEqualTo(IntType.getInstance());
+  }
+
+  public void testNullCoalescingAndConditionalOps_complexCondition() {
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(
+        constructTemplateSource(
+            "{@param? l: [a :int]}",
+            "{$l?.a ?: 0}"))
+        .declaredSyntaxVersion(SyntaxVersion.V2_0)
+        .doRunInitialParsingPasses(false)
+        .typeRegistry(typeRegistry)
+        .parse();
+    createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
+    createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
+    List<SoyType> types = getPrintStatementTypes(soyTree);
+    assertThat(types.get(0)).isEqualTo(IntType.getInstance());
   }
 
   public void testListLiteral() {
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(typeRegistry, SyntaxVersion.V2_0, false,
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(
         constructTemplateSource(
             "{@param pi: int}",
             "{@param pf: float}",
             "{let $list: [$pi, $pf]/}",
             "{$list}",
-            "{$list.length}"));
+            "{$list.length}"))
+        .declaredSyntaxVersion(SyntaxVersion.V2_0)
+        .doRunInitialParsingPasses(false)
+        .typeRegistry(typeRegistry)
+        .parse();
     createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
     createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
     List<SoyType> types = getPrintStatementTypes(soyTree);
-    assertEquals(ListType.of(
-        UnionType.of(IntType.getInstance(), FloatType.getInstance())), types.get(0));
-    assertEquals(IntType.getInstance(), types.get(1));
+    assertThat(types.get(0))
+        .isEqualTo(ListType.of(UnionType.of(IntType.getInstance(), FloatType.getInstance())));
+    assertThat(types.get(1)).isEqualTo(IntType.getInstance());
   }
 
   public void testMapLiteral() {
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(typeRegistry, SyntaxVersion.V2_0, false,
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(
         constructTemplateSource(
             "{@param pi: int}",
             "{@param pf: float}",
             "{let $map: [1: $pi, 2:$pf]/}",
-            "{$map}"));
+            "{$map}"))
+        .declaredSyntaxVersion(SyntaxVersion.V2_0)
+        .doRunInitialParsingPasses(false)
+        .typeRegistry(typeRegistry)
+        .parse();
     createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
     createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
-    List<SoyType> types = getPrintStatementTypes(soyTree);
-    assertEquals(MapType.of(
-        IntType.getInstance(),
-        UnionType.of(IntType.getInstance(), FloatType.getInstance())), types.get(0));
+    SoyType type = Iterables.getOnlyElement(getPrintStatementTypes(soyTree));
+    assertThat(type)
+        .isEqualTo(MapType.of(
+            IntType.getInstance(), UnionType.of(IntType.getInstance(), FloatType.getInstance())));
+  }
+
+  public void testMapLiteralWithStringKeysAsMap() {
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(
+        constructTemplateSource(
+            "{@param v1: int}",
+            "{@param v2: string}",
+            "{@param k1: string}",
+            "{let $map: [$k1: $v1, 'b': $v2] /}",
+            "{$map}"))
+        .declaredSyntaxVersion(SyntaxVersion.V2_0)
+        .doRunInitialParsingPasses(false)
+        .typeRegistry(typeRegistry)
+        .parse();
+    createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
+    createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
+    SoyType type = Iterables.getOnlyElement(getPrintStatementTypes(soyTree));
+    assertThat(type)
+        .isEqualTo(
+            MapType.of(
+                StringType.getInstance(),
+                UnionType.of(StringType.getInstance(), IntType.getInstance())));
   }
 
   public void testMapLiteralAsRecord() {
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(typeRegistry, SyntaxVersion.V2_0, false,
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(
         constructTemplateSource(
             "{@param pi: int}",
             "{@param pf: float}",
             "{let $map: ['a': $pi, 'b':$pf]/}",
-            "{$map}"));
+            "{$map}"))
+        .declaredSyntaxVersion(SyntaxVersion.V2_0)
+        .doRunInitialParsingPasses(false)
+        .typeRegistry(typeRegistry)
+        .parse();
     createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
     createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
     List<SoyType> types = getPrintStatementTypes(soyTree);
-    assertEquals(RecordType.of(
-        ImmutableMap.<String, SoyType>of(
-            "a", IntType.getInstance(),
-            "b", FloatType.getInstance())),
-        types.get(0));
+    assertThat(types.get(0))
+        .isEqualTo(RecordType.of(ImmutableMap.<String, SoyType>of(
+            "a", IntType.getInstance(), "b", FloatType.getInstance())));
+  }
+
+  public void testMapLiteralAsRecord_duplicateKeys() {
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(
+        constructTemplateSource(
+            "{let $map: ['a': 1, 'a': 2]/}"))
+        .declaredSyntaxVersion(SyntaxVersion.V2_0)
+        .doRunInitialParsingPasses(false)
+        .typeRegistry(typeRegistry)
+        .parse();
+    createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
+    FormattingErrorReporter reporter = new FormattingErrorReporter();
+    new ResolveExpressionTypesVisitor(typeRegistry, SyntaxVersion.V9_9, reporter).exec(soyTree);
+    assertThat(Iterables.getOnlyElement(reporter.getErrorMessages()))
+        .isEqualTo("Record literals with duplicate keys are not allowed.  Duplicate key: 'a'");
   }
 
   public void testDataFlowTypeNarrowing() {
-    SoyType boolOrNullType = UnionType.of(BoolType.getInstance(), NullType.getInstance());
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(constructTemplateSource(
+    SoyType boolOrNullType = makeNullable(BoolType.getInstance());
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(constructTemplateSource(
         "{@param pa: bool|null}",
         "{@param pb: bool}",
         "{if $pa != null}",
@@ -413,9 +539,9 @@ public class ResolveExpressionTypesVisitorTest extends TestCase {
         "{/if}",
         "{if $pa}", // Chained conditions
         "{elseif $pb}",
-        "  {$pa}", // #11 must be null
+        "  {$pa}", // #11 must be falsy
         "{else}",
-        "  {$pa}", // #12 must be null
+        "  {$pa}", // #12 must be falsy
         "{/if}",
         "{if $pa}", // Nested if
         "  {if $pa}",
@@ -426,32 +552,101 @@ public class ResolveExpressionTypesVisitorTest extends TestCase {
         "  {$pa}", // #14 must be non-null
         "{else}",
         "  {$pa}", // #15 must be null
-        "{/if}"));
+        "{/if}",
+        "{if $pb or $pa == null}",
+        "  {$pa}",  // #16 don't know
+        "{else}",
+        "  {$pa}",  // #17 must be null
+        "{/if}",
+        ""))
+        .parse();
     createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
     createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
     List<SoyType> types = getPrintStatementTypes(soyTree);
-    assertEquals(BoolType.getInstance(), types.get(0));
-    assertEquals(NullType.getInstance(), types.get(1));
-    assertEquals(BoolType.getInstance(), types.get(2));
-    assertEquals(boolOrNullType, types.get(3));
-    assertEquals(BoolType.getInstance(), types.get(4));
-    assertEquals(NullType.getInstance(), types.get(5));
-    assertEquals(boolOrNullType, types.get(6));
-    assertEquals(BoolType.getInstance(), types.get(7));
-    assertEquals(BoolType.getInstance(), types.get(8));
-    assertEquals(BoolType.getInstance(), types.get(9));
-    assertEquals(BoolType.getInstance(), types.get(10));
-    assertEquals(NullType.getInstance(), types.get(11));
-    assertEquals(NullType.getInstance(), types.get(12));
-    assertEquals(BoolType.getInstance(), types.get(13));
-    assertEquals(BoolType.getInstance(), types.get(14));
-    assertEquals(NullType.getInstance(), types.get(15));
+    assertThat(types.get(0)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(1)).isEqualTo(NullType.getInstance());
+    assertThat(types.get(2)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(3)).isEqualTo(boolOrNullType);
+    assertThat(types.get(4)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(5)).isEqualTo(NullType.getInstance());
+    assertThat(types.get(6)).isEqualTo(boolOrNullType);
+    assertThat(types.get(7)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(8)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(9)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(10)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(11)).isEqualTo(makeNullable(BoolType.getInstance()));
+    assertThat(types.get(12)).isEqualTo(makeNullable(BoolType.getInstance()));
+    assertThat(types.get(13)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(14)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(15)).isEqualTo(NullType.getInstance());
+
+    assertThat(types.get(16))
+        .isEqualTo(makeNullable(BoolType.getInstance()));
+    assertThat(types.get(17)).isEqualTo(BoolType.getInstance());
+  }
+
+  public void testDataFlowTypeNarrowing_complexExpressions() {
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(constructTemplateSource(
+        "{@param map: map<string, int|null>}",
+        "{@param record: [a : [nullableInt : int|null, nullableBool : bool|null]|null]}",
+        "{@param pb: bool}",
+        "{if $map['a']}",
+        "  {$map['a']}",
+        "{/if}",
+        "{if $record.a?.nullableInt}",
+        "  {$record.a?.nullableInt}",
+        "{/if}",
+        ""))
+        .parse();
+    createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
+    createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
+    List<SoyType> types = getPrintStatementTypes(soyTree);
+    assertThat(types.get(0)).isEqualTo(IntType.getInstance());
+    assertThat(types.get(1)).isEqualTo(IntType.getInstance());
+  }
+
+  public void testDataFlowTypeNarrowing_deadExpression() {
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(constructTemplateSource(
+        "{@param record: ?}",
+        "{if $record.unknownField}",
+        "  {$record.unknownField}",
+        "{else}",
+        "  {if $record.unknownField}",
+        "    {$record.unknownField}",  // This code is dead, but we can't prove it
+        "  {/if}",
+        "{/if}",
+        ""))
+        .parse();
+    createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
+    createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
+    List<SoyType> types = getPrintStatementTypes(soyTree);
+    assertThat(types.get(0)).isEqualTo(UnknownType.getInstance());
+    assertThat(types.get(1)).isEqualTo(UnknownType.getInstance());
+  }
+
+  public void testDataFlowTypeNarrowing_logicalExpressions() {
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(constructTemplateSource(
+        "{@param? record: [active : bool|null]}",
+        "{@param? selected: map<string,bool>}",
+        "{$selected and $selected['a']}",
+        "{$selected == null or $selected['a']}",
+        "{if isNonnull($record.active) and (not $record.active)}",
+        "  {$record.active}",
+        "{/if}",
+        ""))
+        .parse();
+    createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
+    createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
+    List<SoyType> types = getPrintStatementTypes(soyTree);
+    assertThat(types.get(0)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(1)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(2)).isEqualTo(BoolType.getInstance());
   }
 
   public void testDataFlowTypeNarrowingFailure() {
     // Test for places where type narrowing shouldn't work
-    SoyType boolOrNullType = UnionType.of(BoolType.getInstance(), NullType.getInstance());
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(constructTemplateSource(
+    SoyType boolOrNullType = makeNullable(BoolType.getInstance());;
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(constructTemplateSource(
         "{@param pa: bool|null}",
         "{@param pb: bool}",
         "{if ($pa != null) != ($pb != null)}",
@@ -464,44 +659,71 @@ public class ResolveExpressionTypesVisitorTest extends TestCase {
         "{/if}",
         "{if $pb ? $pa : false}",
         "  {$pa}", // #3 don't know
-        "{/if}"));
+        "{/if}"))
+        .parse();
     createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
     createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
     List<SoyType> types = getPrintStatementTypes(soyTree);
-    assertEquals(boolOrNullType, types.get(0));
-    assertEquals(boolOrNullType, types.get(1));
-    assertEquals(boolOrNullType, types.get(2));
-    assertEquals(boolOrNullType, types.get(3));
+    assertThat(types.get(0)).isEqualTo(boolOrNullType);
+    assertThat(types.get(1)).isEqualTo(boolOrNullType);
+    assertThat(types.get(2)).isEqualTo(boolOrNullType);
+    assertThat(types.get(3)).isEqualTo(boolOrNullType);
   }
 
   public void testConditionalOperatorDataFlowTypeNarrowing() {
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(constructTemplateSource(
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(constructTemplateSource(
         "{@param pa: bool|null}",
         "{@param pb: bool}",
+        "{@param pc: [a : int|null]}",
         "{$pa ? $pa : $pb}", // #0 must be non-null
         "{$pa != null ?: $pb}", // #1 must be non-null
-        "{$pa ?: $pb}")); // #2 must be non-null (re-written to (isNonnull($pa) ? $pa : $pb))
+        "{$pa ?: $pb}",
+        "{$pc.a ? $pc.a : 0}",
+        "{if not $pc.a}{$pc.a}{/if}"))
+        .parse(); // #2 must be non-null (re-written to (isNonnull($pa) ? $pa : $pb))
     createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
     createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
     List<SoyType> types = getPrintStatementTypes(soyTree);
-    assertEquals(BoolType.getInstance(), types.get(0));
-    assertEquals(BoolType.getInstance(), types.get(1));
-    assertEquals(BoolType.getInstance(), types.get(2));
+    assertThat(types.get(0)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(1)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(2)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(3)).isEqualTo(IntType.getInstance());
+    assertThat(types.get(4)).isEqualTo(makeNullable(IntType.getInstance()));
+  }
+
+  public void testFunctionTyping() {
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(constructTemplateSource(
+        "{@inject list: list<int|null>}",
+        "{foreach $item in $list}",
+        "   {index($item)}",
+        "   {isLast($item)}",
+        "   {isFirst($item)}",
+        "   {$item}",
+        "   {checkNotNull($item)}",
+        "{/foreach}"))
+        .parse();
+    createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
+    createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
+    List<SoyType> types = getPrintStatementTypes(soyTree);
+    assertThat(types.get(0)).isEqualTo(IntType.getInstance());
+    assertThat(types.get(1)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(2)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(3)).isEqualTo(makeNullable(IntType.getInstance()));
+    assertThat(types.get(4)).isEqualTo(IntType.getInstance());
   }
 
   public void testInjectedParamTypes() {
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(constructTemplateSource(
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(constructTemplateSource(
         "{@inject pa: bool}",
         "{@inject? pb: list<int>}",
         "{$pa}",
-        "{$pb}"));
+        "{$pb}"))
+        .parse();
     createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
     createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
     List<SoyType> types = getPrintStatementTypes(soyTree);
-    assertEquals(BoolType.getInstance(), types.get(0));
-    assertEquals(
-        UnionType.of(ListType.of(IntType.getInstance()), NullType.getInstance()),
-        types.get(1));
+    assertThat(types.get(0)).isEqualTo(BoolType.getInstance());
+    assertThat(types.get(1)).isEqualTo(makeNullable(ListType.of(IntType.getInstance())));
   }
 
   /**
@@ -527,14 +749,17 @@ public class ResolveExpressionTypesVisitorTest extends TestCase {
    * @param expectedError The expected failure message (a substring).
    */
   private void assertResolveExpressionTypesFails(String expectedError, String fileContent) {
-    SoyFileSetNode soyTree =
-        SharedTestUtils.parseSoyFiles(typeRegistry, SyntaxVersion.V2_0, false, fileContent);
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(fileContent)
+        .declaredSyntaxVersion(SyntaxVersion.V2_0)
+        .doRunInitialParsingPasses(false)
+        .typeRegistry(typeRegistry)
+        .parse();
     createResolveNamesVisitorForMaxSyntaxVersion().exec(soyTree);
     try {
       createResolveExpressionTypesVisitorForMaxSyntaxVersion().exec(soyTree);
       fail("Expected SoySyntaxException");
     } catch (SoySyntaxException e) {
-      assertTrue(e.getMessage().contains(expectedError));
+      assertThat(e.getMessage()).contains(expectedError);
     }
   }
 
@@ -546,7 +771,8 @@ public class ResolveExpressionTypesVisitorTest extends TestCase {
    * @return A list of expression types.
    */
   private List<SoyType> getPrintStatementTypes(SoyNode node) {
-    CollectPrintStatementTypesVisitor visitor = new CollectPrintStatementTypesVisitor();
+    CollectPrintStatementTypesVisitor visitor = new CollectPrintStatementTypesVisitor(
+        ExplodingErrorReporter.get());
     visitor.exec(node);
     return visitor.getTypes();
   }
@@ -557,6 +783,10 @@ public class ResolveExpressionTypesVisitorTest extends TestCase {
    */
   public static class CollectPrintStatementTypesVisitor extends AbstractSoyNodeVisitor<Void> {
     private final List<SoyType> types = Lists.newArrayList();
+
+    public CollectPrintStatementTypesVisitor(ErrorReporter errorReporter) {
+      super(errorReporter);
+    }
 
     public List<SoyType> getTypes() {
       return types;

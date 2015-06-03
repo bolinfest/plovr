@@ -16,24 +16,26 @@
 
 package com.google.template.soy.parsepasses;
 
-import com.google.template.soy.base.SoySyntaxException;
+import static com.google.common.truth.Truth.assertThat;
+
+import com.google.common.collect.Iterables;
+import com.google.template.soy.FormattingErrorReporter;
+import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.basetree.SyntaxVersion;
-import com.google.template.soy.shared.internal.SharedTestUtils;
-import com.google.template.soy.sharedpasses.CheckSoyDocVisitor;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
+import com.google.template.soy.sharedpasses.CheckTemplateParamsVisitor;
 import com.google.template.soy.soytree.SoyFileSetNode;
 
 import junit.framework.TestCase;
-
 
 /**
  * Unit tests for CheckDelegatesVisitor.
  *
  */
-public class CheckDelegatesVisitorTest extends TestCase {
-
+public final class CheckDelegatesVisitorTest extends TestCase {
 
   public void testRecognizeValidDelegatePackage() {
-
     assertValidSoyFiles(
         "" +
             "{namespace ns1 autoescape=\"deprecated-noncontextual\"}\n" +
@@ -52,9 +54,7 @@ public class CheckDelegatesVisitorTest extends TestCase {
             "{/template}\n");
   }
 
-
   public void testRecognizeValidDelegateTemplate() {
-
     assertValidSoyFiles(
         "" +
             "{namespace ns1 autoescape=\"deprecated-noncontextual\"}\n" +
@@ -78,9 +78,7 @@ public class CheckDelegatesVisitorTest extends TestCase {
             "{/deltemplate}\n");
   }
 
-
   public void testRecognizeValidDelegateCall() {
-
     assertValidSoyFiles(
         "" +
             "{namespace ns1 autoescape=\"deprecated-noncontextual\"}\n" +
@@ -104,11 +102,9 @@ public class CheckDelegatesVisitorTest extends TestCase {
             "{/deltemplate}\n");
   }
 
-
   public void testErrorReusedTemplateName() {
-
     assertInvalidSoyFiles(
-        "Found template name [ns1.boo] being reused for both basic and delegate templates.",
+        "Found template name ns1.boo being reused for both basic and delegate templates.",
         "" +
             "{namespace ns1 autoescape=\"deprecated-noncontextual\"}\n" +
             "\n" +
@@ -126,13 +122,11 @@ public class CheckDelegatesVisitorTest extends TestCase {
             "{/deltemplate}\n");
   }
 
-
   public void testErrorParamsMismatch() {
-
     assertInvalidSoyFiles(
-        "In file no-path:9, template MagicButton: " +
             "Found delegate template with same name 'MagicButton' " +
-            "but different param declarations compared to the definition at no-path-2:5.",
+            "but different param declarations compared to the " +
+            "definition at no-path-2:5:1.",
         "" +
             "{namespace ns1 autoescape=\"deprecated-noncontextual\"}\n" +
             "\n" +
@@ -155,8 +149,8 @@ public class CheckDelegatesVisitorTest extends TestCase {
             "{/deltemplate}\n");
 
     assertInvalidSoyFiles(
-        "Found delegate template with same name 'MagicButton' but different param declarations" +
-            " compared to the definition at no-path-2:5.",
+        "Found delegate template with same name 'MagicButton' but different param " +
+            "declarations compared to the definition at no-path-2:5:1.",
         "" +
             "{namespace ns1 autoescape=\"deprecated-noncontextual\"}\n" +
             "\n" +
@@ -179,13 +173,10 @@ public class CheckDelegatesVisitorTest extends TestCase {
             "{/deltemplate}\n");
   }
 
-
   public void testErrorParamsMismatchAcrossVariants() {
-
     assertInvalidSoyFiles(
-        "In file no-path:8, template MagicButton:something: " +
             "Found delegate template with same name 'MagicButton' " +
-            "but different param declarations compared to the definition at no-path:4.",
+            "but different param declarations compared to the definition at no-path:4:1.",
         "" +
             "{namespace ns1 autoescape=\"deprecated-noncontextual\"}\n" +
             "\n" +
@@ -199,9 +190,24 @@ public class CheckDelegatesVisitorTest extends TestCase {
             "{/deltemplate}\n");
   }
 
+  public void testOkNonRequiredParamsMismatchAcrossVariants() {
+
+    assertValidSoyFiles(
+        "" +
+            "{namespace ns1 autoescape=\"deprecated-noncontextual\"}\n" +
+            "\n" +
+            "/***/\n" +  // no params
+            "{deltemplate MagicButton}\n" +
+            "  vanilla\n" +
+            "{/deltemplate}\n" +
+            "/** @param? foo */\n" +  // an optional param
+            "{deltemplate MagicButton variant=\"'something'\"}\n" +
+            "  something\n" +
+            "{/deltemplate}\n");
+  }
+
 
   public void testAllowPublicBasicTemplateInDelegatePackage() {
-
     assertValidSoyFiles(
         "" +
             "{namespace ns1 autoescape=\"deprecated-noncontextual\"}\n" +
@@ -220,12 +226,9 @@ public class CheckDelegatesVisitorTest extends TestCase {
             "{/template}\n");
   }
 
-
   public void testErrorBasicCallToDelegateTemplate() {
-
     assertInvalidSoyFiles(
-        "In template 'ns1.boo', found a 'call' referencing a delegate template 'MagicButton'" +
-            " (expected 'delcall').",
+        "'call' to delegate template 'MagicButton' (expected 'delcall').",
         "" +
             "{namespace ns1 autoescape=\"deprecated-noncontextual\"}\n" +
             "\n" +
@@ -248,9 +251,7 @@ public class CheckDelegatesVisitorTest extends TestCase {
             "{/deltemplate}\n");
   }
 
-
   public void testErrorBasicDepFromNonDelpackageOnOtherDelegatePackage() {
-
     assertInvalidSoyFiles(
         "Found illegal call from 'ns1.boo' to 'ns2.foo', which is in a different delegate package.",
         "" +
@@ -270,9 +271,7 @@ public class CheckDelegatesVisitorTest extends TestCase {
             "{/template}\n");
   }
 
-
   public void testErrorBasicDepOnOtherDelegatePackage() {
-
     assertInvalidSoyFiles(
         "Found illegal call from 'ns1.boo' to 'ns2.foo', which is in a different delegate package.",
         "" +
@@ -293,12 +292,9 @@ public class CheckDelegatesVisitorTest extends TestCase {
             "{/template}\n");
   }
 
-
   public void testErrorDelegateCallToBasicTemplate() {
-
     assertInvalidSoyFiles(
-        "In template 'ns1.boo', found a 'delcall' referencing a basic template 'ns2.foo'" +
-            " (expected 'call').",
+        "'delcall' to basic template 'ns2.foo' (expected 'call').",
         "" +
             "{namespace ns1 autoescape=\"deprecated-noncontextual\"}\n" +
             "\n" +
@@ -315,15 +311,12 @@ public class CheckDelegatesVisitorTest extends TestCase {
             "{/template}\n");
   }
 
-
   public void testStrictModeContentKindMatches() {
-
     // One is strict and the other is not.
     assertInvalidSoyFiles(
-        "In file no-path-3:5, template foo: " +
             "If one deltemplate has strict autoescaping, all its peers must also be strictly " +
             "autoescaped with the same content kind: null != HTML. " +
-            "Conflicting definition at no-path-2:5.",
+            "Conflicting definition at no-path-2:5:1.",
         "" +
             "{namespace ns}\n\n" +
             "/***/\n" +
@@ -349,10 +342,9 @@ public class CheckDelegatesVisitorTest extends TestCase {
 
     // Both are strict, but have non-matching kinds.
     assertInvalidSoyFiles(
-        "In file no-path-2:4, template foo: " +
             "If one deltemplate has strict autoescaping, all its peers must also be strictly " +
             "autoescaped with the same content kind: TEXT != HTML. " +
-            "Conflicting definition at no-path-3:5.",
+            "Conflicting definition at no-path-3:5:1.",
         "" +
             "{namespace ns}\n\n" +
             "/***/\n" +
@@ -376,27 +368,27 @@ public class CheckDelegatesVisitorTest extends TestCase {
             "{/deltemplate}");
   }
 
-
   private void assertValidSoyFiles(String... soyFileContents) {
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(soyFileContents);
-    (new CheckSoyDocVisitor(SyntaxVersion.V2_0)).exec(soyTree);
-    (new CheckDelegatesVisitor()).exec(soyTree);
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(soyFileContents)
+        .errorReporter(boom)
+        .parse();
+    new CheckTemplateParamsVisitor(SyntaxVersion.V2_0, boom).exec(soyTree);
+    FormattingErrorReporter errorReporter = new FormattingErrorReporter();
+    new CheckDelegatesVisitor(errorReporter).exec(soyTree);
+    assertThat(errorReporter.getErrorMessages()).isEmpty();
   }
-
 
   private void assertInvalidSoyFiles(String expectedErrorMsgSubstr, String... soyFileContents) {
-
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(soyFileContents);
-    (new CheckSoyDocVisitor(SyntaxVersion.V2_0)).exec(soyTree);
-    try {
-      (new CheckDelegatesVisitor()).exec(soyTree);
-    } catch (SoySyntaxException sse) {
-      assertTrue(
-          "Message [" + sse.getMessage() + "] should contain [" + expectedErrorMsgSubstr + "]",
-          sse.getMessage().contains(expectedErrorMsgSubstr));
-      return;  // test passes
-    }
-    fail();
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(soyFileContents)
+        .errorReporter(boom)
+        .parse();
+    new CheckTemplateParamsVisitor(SyntaxVersion.V2_0, boom).exec(soyTree);
+    FormattingErrorReporter errorReporter = new FormattingErrorReporter();
+    new CheckDelegatesVisitor(errorReporter).exec(soyTree);
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(Iterables.getOnlyElement(errorReporter.getErrorMessages()))
+        .contains(expectedErrorMsgSubstr);
   }
-
 }

@@ -107,7 +107,8 @@ public class JsSrcUtils {
         return "*";
 
       case UNKNOWN:
-        return "?";
+        // Add parens to avoid confusion w/ the leading ? of a nullable type
+        return "(?)";
 
       case NULL:
         return "null";
@@ -127,23 +128,26 @@ public class JsSrcUtils {
         if (listType.getElementType().getKind() == SoyType.Kind.ANY) {
           return nonNullablePrefix + "Array";
         }
-        return nonNullablePrefix +
-            "Array.<" + getJsTypeExpr(listType.getElementType(), false, true) + ">";
+        return nonNullablePrefix
+            + "Array<" + getJsTypeExpr(listType.getElementType(), false, true) + ">";
       }
 
       case MAP: {
         MapType mapType = (MapType) type;
-        if (mapType.getKeyType().getKind() == SoyType.Kind.ANY &&
-            mapType.getValueType().getKind() == SoyType.Kind.ANY) {
-          return nonNullablePrefix + "Object.<?,?>";
+        if (mapType.getKeyType().getKind() == SoyType.Kind.ANY
+            && mapType.getValueType().getKind() == SoyType.Kind.ANY) {
+          return nonNullablePrefix + "Object<?,?>";
         }
         String keyTypeName = getJsTypeExpr(mapType.getKeyType(), false, true);
         String valueTypeName = getJsTypeExpr(mapType.getValueType(), false, true);
-        return nonNullablePrefix + "Object.<" + keyTypeName + "," + valueTypeName + ">";
+        return nonNullablePrefix + "Object<" + keyTypeName + "," + valueTypeName + ">";
       }
 
       case RECORD: {
         RecordType recordType = (RecordType) type;
+        if (recordType.getMembers().isEmpty()) {
+          return "!Object";
+        }
         List<String> members = Lists.newArrayListWithExpectedSize(recordType.getMembers().size());
         for (Map.Entry<String, SoyType> member : recordType.getMembers().entrySet()) {
           members.add(member.getKey() + ": " + getJsTypeExpr(member.getValue(), true, true));
@@ -169,7 +173,11 @@ public class JsSrcUtils {
           if (JsSrcUtils.isDefaultOptional(memberType)) {
             hasNullableMember = true;
           }
-          typeNames.add(getJsTypeExpr(memberType, false, !isNullable));
+          String typeExpr = getJsTypeExpr(memberType, false, !isNullable);
+          if (typeExpr.equals("?")) {
+            throw new IllegalStateException("Type: " + unionType + " contains an unknown");
+          }
+          typeNames.add(typeExpr);
         }
         if (isNullable && !hasNullableMember) {
           typeNames.add("null");

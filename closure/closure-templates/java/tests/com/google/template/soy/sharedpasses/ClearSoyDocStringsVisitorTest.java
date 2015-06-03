@@ -16,18 +16,22 @@
 
 package com.google.template.soy.sharedpasses;
 
-import com.google.template.soy.shared.internal.SharedTestUtils;
+import static com.google.common.truth.Truth.assertThat;
+
+import com.google.template.soy.SoyFileSetParserBuilder;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
+import com.google.template.soy.shared.SharedTestUtils;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.TemplateNode;
 
 import junit.framework.TestCase;
 
-
 /**
  * Unit tests for ClearSoyDocStringsVisitor.
  *
  */
-public class ClearSoyDocStringsVisitorTest extends TestCase {
+public final class ClearSoyDocStringsVisitorTest extends TestCase {
 
 
   public void testClearSoyDocStrings() {
@@ -44,18 +48,21 @@ public class ClearSoyDocStringsVisitorTest extends TestCase {
         "  {$goo}\n" +
         "{/template}\n";
 
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(testFileContent);
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(testFileContent)
+        .errorReporter(boom)
+        .parse();
     TemplateNode template = (TemplateNode) SharedTestUtils.getNode(soyTree);
 
-    assertTrue(template.getSoyDoc().contains("blah"));
-    assertTrue(template.getSoyDocDesc().contains("blah"));
-    assertTrue(template.getParams().get(0).desc().contains("blah"));
+    assertThat(template.getSoyDoc()).contains("blah");
+    assertThat(template.getSoyDocDesc()).contains("blah");
+    assertThat(template.getParams().get(0).desc()).contains("blah");
 
-    (new ClearSoyDocStringsVisitor()).exec(soyTree);
+    new ClearSoyDocStringsVisitor(boom).exec(soyTree);
 
-    assertNull(template.getSoyDoc());
-    assertNull(template.getSoyDocDesc());
-    assertNull(template.getParams().get(0).desc());
+    assertThat(template.getSoyDoc()).isNull();
+    assertThat(template.getSoyDocDesc()).isNull();
+    assertThat(template.getParams().get(0).desc()).isNull();
   }
 
 }

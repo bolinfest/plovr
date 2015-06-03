@@ -17,23 +17,25 @@
 package com.google.template.soy.exprtree;
 
 
+import com.google.template.soy.base.SourceLocation;
+
 /**
  * A node representing a function (with args as children).
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
-public class FunctionNode extends AbstractParentExprNode {
-
+public final class FunctionNode extends AbstractParentExprNode {
 
   /** The function name. */
   private final String functionName;
 
-
   /**
    * @param functionName The function name.
+   * @param sourceLocation The node's source location.
    */
-  public FunctionNode(String functionName) {
+  public FunctionNode(String functionName, SourceLocation sourceLocation) {
+    super(sourceLocation);
     this.functionName = functionName;
   }
 
@@ -42,7 +44,7 @@ public class FunctionNode extends AbstractParentExprNode {
    * Copy constructor.
    * @param orig The node to copy.
    */
-  protected FunctionNode(FunctionNode orig) {
+  private FunctionNode(FunctionNode orig) {
     super(orig);
     this.functionName = orig.functionName;
   }

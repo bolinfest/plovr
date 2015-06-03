@@ -58,6 +58,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       } catch (CompilationException e) {
         e.printStackTrace();
         compilation = null;
+        return 1;
       }
       boolean isSuccess = processResult(compilation, config, options.getSourceMapPath(), config.getId());
       if (!isSuccess) {

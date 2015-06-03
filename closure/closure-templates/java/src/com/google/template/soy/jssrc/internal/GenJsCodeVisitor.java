@@ -23,17 +23,17 @@ import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.inject.Inject;
 import com.google.template.soy.base.SoyBackendKind;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.base.internal.SoyFileKind;
 import com.google.template.soy.data.internalutils.NodeContentKinds;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
-import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.exprtree.FieldAccessNode;
 import com.google.template.soy.exprtree.Operator;
+import com.google.template.soy.exprtree.OperatorNodes.NullCoalescingOpNode;
 import com.google.template.soy.jssrc.SoyJsSrcOptions;
 import com.google.template.soy.jssrc.SoyJsSrcOptions.CodeStyle;
 import com.google.template.soy.jssrc.internal.GenJsExprsVisitor.GenJsExprsVisitorFactory;
@@ -52,6 +52,7 @@ import com.google.template.soy.soytree.CallParamContentNode;
 import com.google.template.soy.soytree.CallParamNode;
 import com.google.template.soy.soytree.DebuggerNode;
 import com.google.template.soy.soytree.ForNode;
+import com.google.template.soy.soytree.ForNode.RangeArgs;
 import com.google.template.soy.soytree.ForeachNode;
 import com.google.template.soy.soytree.ForeachNonemptyNode;
 import com.google.template.soy.soytree.IfCondNode;
@@ -74,13 +75,11 @@ import com.google.template.soy.soytree.SoytreeUtils;
 import com.google.template.soy.soytree.SwitchCaseNode;
 import com.google.template.soy.soytree.SwitchDefaultNode;
 import com.google.template.soy.soytree.SwitchNode;
-import com.google.template.soy.soytree.TemplateBasicNode;
 import com.google.template.soy.soytree.TemplateDelegateNode;
 import com.google.template.soy.soytree.TemplateNode;
 import com.google.template.soy.soytree.TemplateRegistry;
 import com.google.template.soy.soytree.Visibility;
 import com.google.template.soy.soytree.XidNode;
-import com.google.template.soy.soytree.defn.HeaderParam;
 import com.google.template.soy.soytree.defn.TemplateParam;
 import com.google.template.soy.soytree.jssrc.GoogMsgDefNode;
 import com.google.template.soy.types.SoyObjectType;
@@ -102,6 +101,8 @@ import java.util.SortedSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.inject.Inject;
+
 /**
  * Visitor for generating full JS code (i.e. statements) for parse tree nodes.
  *
@@ -112,7 +113,7 @@ import java.util.regex.Pattern;
  * generated JS file (corresponding to one Soy file).
  *
  */
-class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
+final class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
 
 
   /** Regex pattern to look for dots in a template name. */
@@ -177,17 +178,6 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
   /** Type operators. */
   private final SoyTypeOps typeOps;
 
-  /**
-   * @param jsSrcOptions The options for generating JS source code.
-   * @param isUsingIjData Whether any of the Soy code uses injected data.
-   * @param jsExprTranslator Instance of JsExprTranslator to use.
-   * @param genCallCodeUtils Instance of GenCallCodeUtils to use.
-   * @param isComputableAsJsExprsVisitor The IsComputableAsJsExprsVisitor to use.
-   * @param canInitOutputVarVisitor The CanInitOutputVarVisitor to use.
-   * @param genJsExprsVisitorFactory Factory for creating an instance of GenJsExprsVisitor.
-   * @param genDirectivePluginRequiresVisitor Instance of GenDirectivePluginRequiresVisitor.
-   * @param genFunctionPluginRequiresVisitor Instance of GenFunctionPluginRequiresVisitor.
-   */
   @Inject
   GenJsCodeVisitor(
       SoyJsSrcOptions jsSrcOptions, @IsUsingIjData boolean isUsingIjData,
@@ -197,7 +187,9 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
       GenJsExprsVisitorFactory genJsExprsVisitorFactory,
       GenDirectivePluginRequiresVisitor genDirectivePluginRequiresVisitor,
       GenFunctionPluginRequiresVisitor genFunctionPluginRequiresVisitor,
-      SoyTypeOps typeOps) {
+      SoyTypeOps typeOps,
+      ErrorReporter errorReporter) {
+    super(errorReporter);
     this.jsSrcOptions = jsSrcOptions;
     this.isUsingIjData = isUsingIjData;
     this.jsExprTranslator = jsExprTranslator;
@@ -229,8 +221,8 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
   }
 
   @VisibleForTesting
-  @Override protected void visit(SoyNode node) {
-    super.visit(node);
+  void visitForTesting(SoyNode node) {
+    visit(node);
   }
 
   @Override protected void visitChildren(ParentSoyNode<?> node) {
@@ -253,7 +245,7 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
 
         // First add the JsExprs from preceding consecutive siblings that are computable as JS
         // expressions (if any).
-        if (consecChildrenJsExprs.size() > 0) {
+        if (!consecChildrenJsExprs.isEmpty()) {
           jsCodeBuilder.addToOutputVar(consecChildrenJsExprs);
           consecChildrenJsExprs.clear();
         }
@@ -264,7 +256,7 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
     }
 
     // Add the JsExprs from the last few children (if any).
-    if (consecChildrenJsExprs.size() > 0) {
+    if (!consecChildrenJsExprs.isEmpty()) {
       jsCodeBuilder.addToOutputVar(consecChildrenJsExprs);
       consecChildrenJsExprs.clear();
     }
@@ -276,7 +268,7 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
   @Override protected void visitSoyFileSetNode(SoyFileSetNode node) {
 
     // Build templateRegistry.
-    templateRegistry = new TemplateRegistry(node);
+    templateRegistry = new TemplateRegistry(node, errorReporter);
 
     for (SoyFileNode soyFile : node.getChildren()) {
       try {
@@ -430,9 +422,6 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
 
     SortedSet<String> templateNames = Sets.newTreeSet();
     for (TemplateNode template : soyFile.getChildren()) {
-      if (template instanceof TemplateBasicNode && ((TemplateBasicNode) template).isOverride()) {
-        continue;  // generated function name already provided
-      }
       templateNames.add(template.getTemplateName());
     }
     for (String templateName : templateNames) {
@@ -480,10 +469,12 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
     SortedSet<String> requiredObjectTypes = ImmutableSortedSet.of();
     if (hasStrictParams(soyFile)) {
       requiredObjectTypes = getRequiredObjectTypes(soyFile);
+      jsCodeBuilder.appendLine("/** @suppress {extraRequire} */");
       jsCodeBuilder.appendLine("goog.require('goog.asserts');");
     }
 
     if (jsSrcOptions.getUseGoogIsRtlForBidiGlobalDir()) {
+      jsCodeBuilder.appendLine("/** @suppress {extraRequire} */");
       jsCodeBuilder.appendLine("goog.require('", GOOG_IS_RTL_NAMESPACE, "');");
     }
 
@@ -518,7 +509,7 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
 
     String prevCalleeNamespace = null;
     Set<String> calleeNamespaces = Sets.newTreeSet();
-    for (String calleeNotInFile : (new FindCalleesNotInFileVisitor()).exec(soyFile)) {
+    for (String calleeNotInFile : new FindCalleesNotInFileVisitor(errorReporter).exec(soyFile)) {
       int lastDotIndex = calleeNotInFile.lastIndexOf('.');
       if (lastDotIndex == -1) {
         throw SoySyntaxExceptionUtils.createWithNode(
@@ -543,7 +534,7 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
    */
   private void addCodeToRequireJsFunctions(SoyFileNode soyFile) {
 
-    for (String calleeNotInFile : (new FindCalleesNotInFileVisitor()).exec(soyFile)) {
+    for (String calleeNotInFile : new FindCalleesNotInFileVisitor(errorReporter).exec(soyFile)) {
       jsCodeBuilder.appendLine("goog.require('", calleeNotInFile, "');");
     }
   }
@@ -564,7 +555,7 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
     boolean isCodeStyleStringbuilder = jsSrcOptions.getCodeStyle() == CodeStyle.STRINGBUILDER;
     boolean useStrongTyping = hasStrictParams(node);
 
-    localVarTranslations = new ArrayDeque<Map<String, JsExpr>>();
+    localVarTranslations = new ArrayDeque<>();
     genJsExprsVisitor = genJsExprsVisitorFactory.create(localVarTranslations);
     assistantForMsgs = null;
 
@@ -580,7 +571,7 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
       if (useStrongTyping) {
         genParamsRecordType(node);
       } else {
-        jsCodeBuilder.appendLine(" * @param {Object.<string, *>=} opt_data");
+        jsCodeBuilder.appendLine(" * @param {Object<string, *>=} opt_data");
       }
       if (isCodeStyleStringbuilder) {
         jsCodeBuilder.appendLine(" * @param {soy.StringBuilder=} opt_sb");
@@ -588,7 +579,7 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
         jsCodeBuilder.appendLine(" * @param {(null|undefined)=} opt_ignored");
       }
       if (isUsingIjData) {
-        jsCodeBuilder.appendLine(" * @param {Object.<string, *>=} opt_ijData");
+        jsCodeBuilder.appendLine(" * @param {Object<string, *>=} opt_ijData");
       }
       // For strict autoescaping templates, the result is actually a typesafe wrapper.
       // We prepend "!" to indicate it is non-nullable.
@@ -597,10 +588,6 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
           : "!" + NodeContentKinds.toJsSanitizedContentCtorName(node.getContentKind());
       jsCodeBuilder.appendLine(" * @return {", returnType, "}");
       String suppressions = "checkTypes";
-      if (node instanceof TemplateBasicNode &&
-          ((TemplateBasicNode) node).isOverride()) {
-        suppressions += "|duplicate";
-      }
       jsCodeBuilder.appendLine(" * @suppress {" + suppressions + "}");
       if (node.getVisibility() == Visibility.PRIVATE) {
         jsCodeBuilder.appendLine(" * @private");
@@ -614,6 +601,11 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
         (isCodeStyleStringbuilder ? ", opt_sb" : ", opt_ignored"),
         (isUsingIjData ? ", opt_ijData" : ""), ") {");
     jsCodeBuilder.increaseIndent();
+    // If there are any null coalescing operators then we need to generate an additional temporary
+    // variable.
+    if (!SoytreeUtils.getAllNodesOfType(node, NullCoalescingOpNode.class).isEmpty()) {
+      jsCodeBuilder.appendLine("var $$temp;");
+    }
 
     // ------ Generate function body. ------
     generateFunctionBody(node);
@@ -653,7 +645,7 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
     localVarTranslations.push(Maps.<String, JsExpr>newHashMap());
 
     // Generate statement to ensure data is defined, if necessary.
-    if ((new ShouldEnsureDataIsDefinedVisitor()).exec(node)) {
+    if (new ShouldEnsureDataIsDefinedVisitor(errorReporter).exec(node)) {
       jsCodeBuilder.appendLine("opt_data = opt_data || {};");
     }
 
@@ -735,8 +727,15 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
   @Override protected void visitGoogMsgDefNode(GoogMsgDefNode node) {
     if (assistantForMsgs == null) {
       assistantForMsgs = new GenJsCodeVisitorAssistantForMsgs(
-          this, jsSrcOptions, jsExprTranslator, genCallCodeUtils, isComputableAsJsExprsVisitor,
-          jsCodeBuilder, localVarTranslations, genJsExprsVisitor);
+          this /* master */,
+          jsSrcOptions,
+          jsExprTranslator,
+          genCallCodeUtils,
+          isComputableAsJsExprsVisitor,
+          jsCodeBuilder,
+          localVarTranslations,
+          genJsExprsVisitor,
+          errorReporter);
     }
     assistantForMsgs.visitForUseByMaster(node);
   }
@@ -969,7 +968,8 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
   @Override protected void visitForeachNode(ForeachNode node) {
 
     // Build some local variable names.
-    String baseVarName = node.getVarName();
+    ForeachNonemptyNode nonEmptyNode = (ForeachNonemptyNode) node.getChild(0);
+    String baseVarName = nonEmptyNode.getVarName();
     String nodeId = Integer.toString(node.getId());
     String listVarName = baseVarName + "List" + nodeId;
     String listLenVarName = baseVarName + "ListLen" + nodeId;
@@ -988,7 +988,7 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
     }
 
     // Generate code for nonempty case.
-    visit(node.getChild(0));
+    visit(nonEmptyNode);
 
     // If has 'ifempty' node, add the 'else' block of the wrapper 'if' statement.
     if (hasIfemptyNode) {
@@ -1084,19 +1084,17 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
     String nodeId = Integer.toString(node.getId());
 
     // Get the JS expression text for the init/limit/increment values.
-    List<ExprRootNode<?>> rangeArgs = Lists.newArrayList(node.getRangeArgs());
-    String incrementJsExprText =
-        (rangeArgs.size() == 3) ?
-        jsExprTranslator.translateToJsExpr(rangeArgs.remove(2), null, localVarTranslations)
-            .getText() :
-        "1" /* default */;
-    String initJsExprText =
-        (rangeArgs.size() == 2) ?
-        jsExprTranslator.translateToJsExpr(rangeArgs.remove(0), null, localVarTranslations)
-            .getText() :
-        "0" /* default */;
+    RangeArgs range = node.getRangeArgs();
+    String incrementJsExprText = range.increment().isPresent()
+        ? jsExprTranslator.translateToJsExpr(range.increment().get(), null, localVarTranslations)
+            .getText()
+        : "1" /* default */;
+    String initJsExprText = range.start().isPresent()
+        ? jsExprTranslator.translateToJsExpr(range.start().get(), null, localVarTranslations)
+            .getText()
+        : "0" /* default */;
     String limitJsExprText =
-        jsExprTranslator.translateToJsExpr(rangeArgs.get(0), null, localVarTranslations).getText();
+        jsExprTranslator.translateToJsExpr(range.limit(), null, localVarTranslations).getText();
 
     // If any of the JS expressions for init/limit/increment isn't an integer, precompute its value.
     String initCode;
@@ -1328,7 +1326,8 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
     // inferred from the indirect params, then the explicit type wins.
     // Also note that indirect param types may not be inferrable if the target
     // is not in the current compilation file set.
-    IndirectParamsInfo ipi = (new FindIndirectParamsVisitor(templateRegistry)).exec(node);
+    IndirectParamsInfo ipi
+        = new FindIndirectParamsVisitor(templateRegistry, errorReporter).exec(node);
     // If there are any calls outside of the file set, then we can't know
     // the complete types of any indirect params. In such a case, we can simply
     // omit the indirect params from the function type signature, since record
@@ -1378,12 +1377,13 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
       if (param.declLoc() != TemplateParam.DeclLoc.HEADER) {
         continue;
       }
-      String paramName = ((HeaderParam) param).name();
-      String paramVal = (param.isInjected() ? "opt_ijData" : "opt_data") +
-          TranslateToJsExprVisitor.genCodeForKeyAccess(paramName);
+      String paramName = param.name();
+      SoyType paramType = param.type();
+      String paramVal = TranslateToJsExprVisitor.genCodeForParamAccess(
+          paramName, param.isInjected(), paramType);
       String paramAlias = genParamAlias(paramName);
       boolean isAliasedLocalVar = false;
-      switch (param.type().getKind()) {
+      switch (paramType.getKind()) {
         case ANY:
         case UNKNOWN:
           // Do nothing
@@ -1391,7 +1391,7 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
 
         case STRING:
           genParamTypeChecksUsingGeneralAssert(
-              paramName, paramAlias, paramVal, param.isInjected(),
+              paramName, paramAlias, paramVal, param.isInjected(), paramType,
               "goog.isString({0}) || ({0} instanceof goog.soy.data.SanitizedContent)",
               "string|goog.soy.data.SanitizedContent");
           isAliasedLocalVar = true;
@@ -1399,7 +1399,7 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
 
         case BOOL:
           genParamTypeChecksUsingGeneralAssert(
-              paramName, paramAlias, "!!" + paramVal, param.isInjected(),
+              paramName, paramAlias, "!!" + paramVal, param.isInjected(), paramType,
               "goog.isBoolean({0}) || {0} === 1 || {0} === 0",
               "boolean");
           isAliasedLocalVar = true;
@@ -1431,9 +1431,9 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
           }
 
           jsCodeBuilder.appendLine(
-              "var " + paramAlias + " = " + assertionFunction + "(" + paramVal +
-              ", \"expected parameter '" + paramName + "' of type " + param.type().toString() +
-              ".\");");
+              "var " + paramAlias + " = " + assertionFunction
+              + "(" + paramVal + ", \"expected parameter '" + paramName + "' of type "
+              + param.type() + ".\");");
           isAliasedLocalVar = true;
           break;
         }
@@ -1453,9 +1453,9 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
 
         case ENUM:
           jsCodeBuilder.appendLine(
-              "var " + paramAlias + " = goog.asserts.assertNumber(" + paramVal +
-              ", \"expected param '" + paramName + "' of type " + param.type().toString()
-              + ".\");");
+              "var " + paramAlias + " = goog.asserts.assertNumber("
+              + paramVal + ", \"expected param '" + paramName + "' of type "
+              + param.type() + ".\");");
           isAliasedLocalVar = true;
           break;
 
@@ -1465,7 +1465,7 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
             paramVal = extractProtoFromMap(paramVal);
           }
           genParamTypeChecksUsingGeneralAssert(
-              paramName, paramAlias, paramVal, param.isInjected(),
+              paramName, paramAlias, paramVal, param.isInjected(), paramType,
               genUnionTypeTests(unionType),
               JsSrcUtils.getJsTypeExpr(param.type(), false, false));
           isAliasedLocalVar = true;
@@ -1478,7 +1478,7 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
             // sanitized type is specified - it just means that the text will
             // be escaped.
             genParamTypeChecksUsingGeneralAssert(
-                paramName, paramAlias, paramVal, param.isInjected(),
+                paramName, paramAlias, paramVal, param.isInjected(), paramType,
                 "({0} instanceof " + typeName +
                 ") || ({0} instanceof soydata.UnsanitizedText) || goog.isString({0})",
                 typeName);
@@ -1517,7 +1517,7 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
           break;
 
         case BOOL:
-          typeTests.add("goog.isBoolean({0})");
+          typeTests.add("goog.isBoolean({0}) || {0} === 1 || {0} === 0");
           break;
 
         case STRING:
@@ -1588,8 +1588,10 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
    * function instead of type-specific asserts.
    * @param paramName The Soy name of the parameter.
    * @param paramAlias The name of the local variable which stores the value of the param.
-   * @param paramValue The value expression of the parameter, which might be
+   * @param paramVal The value expression of the parameter, which might be
    *     an expression in some cases but will usually be opt_params.somename.
+   * @param isInjected True iff the parameter is on the {@code $ij} injected data map.
+   * @param paramType The type of the parameter.
    * @param typePredicate JS which tests whether the parameter is the correct type.
    *     This is a format string - the {0} format field will be replaced with the
    *     parameter value.
@@ -1597,13 +1599,16 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
    *     succeeds.
    */
   private void genParamTypeChecksUsingGeneralAssert(
-      String paramName, String paramAlias, String paramVal, boolean isInjected,
+      String paramName, String paramAlias, String paramVal, boolean isInjected, SoyType paramType,
       String typePredicate, String jsDocTypeExpr) {
     // The opt_param.name value that will be type-tested.
-    String paramAccessVal = TranslateToJsExprVisitor.genCodeForParamAccess(paramName, isInjected);
+    String paramAccessVal = TranslateToJsExprVisitor.genCodeForParamAccess(
+        paramName, isInjected, paramType);
     jsCodeBuilder.appendLine(
-        "goog.asserts.assert(" + MessageFormat.format(typePredicate, paramAccessVal) +
-        ", \"expected param '" + paramName + "' of type " + jsDocTypeExpr + ".\");");
+        "soy.asserts.assertType(" + MessageFormat.format(typePredicate, paramAccessVal) +
+        ", '" + paramName + "', " + paramAccessVal + ", " +
+        "'" + jsDocTypeExpr + "');");
+
     // The type-cast expression.
     jsCodeBuilder.appendLine(
         "var " + paramAlias + " = /** @type {" + jsDocTypeExpr + "} */ (" + paramVal + ");");
@@ -1634,7 +1639,7 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
   // of generic types.
   @SuppressWarnings({"rawtypes", "unchecked"})
   private boolean hasNodeTypes(SoyFileNode soyFile, Class... nodeTypes) {
-    return new HasNodeTypesVisitor(nodeTypes).exec(soyFile);
+    return new HasNodeTypesVisitor(nodeTypes, errorReporter).exec(soyFile);
   }
 
   /**
@@ -1685,9 +1690,10 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
    */
   private SortedSet<String> getRequiredObjectTypes(SoyFileNode soyFile) {
     SortedSet<String> requiredObjectTypes = Sets.newTreeSet();
-    FieldImportsVisitor fieldImportsVisitor = new FieldImportsVisitor(requiredObjectTypes);
+    FieldImportsVisitor fieldImportsVisitor
+        = new FieldImportsVisitor(requiredObjectTypes, errorReporter);
     for (TemplateNode template : soyFile.getChildren()) {
-      SoytreeUtils.execOnAllV2Exprs(template, fieldImportsVisitor);
+      SoytreeUtils.execOnAllV2Exprs(template, fieldImportsVisitor, errorReporter);
       for (TemplateParam param : template.getAllParams()) {
         if (param.declLoc() != TemplateParam.DeclLoc.HEADER) {
           continue;
@@ -1711,10 +1717,11 @@ class GenJsCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
    * Helper class to visit all field reference expressions that result in
    * additional goog.require imports.
    */
-  private static class FieldImportsVisitor extends AbstractExprNodeVisitor<Void> {
+  private static final class FieldImportsVisitor extends AbstractExprNodeVisitor<Void> {
     private final SortedSet<String> imports;
 
-    public FieldImportsVisitor(SortedSet<String> imports) {
+    FieldImportsVisitor(SortedSet<String> imports, ErrorReporter errorReporter) {
+      super(errorReporter);
       this.imports = imports;
     }
 

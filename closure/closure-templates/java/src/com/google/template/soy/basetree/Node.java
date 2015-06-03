@@ -16,6 +16,8 @@
 
 package com.google.template.soy.basetree;
 
+import com.google.template.soy.base.SourceLocation;
+
 import javax.annotation.Nullable;
 
 
@@ -57,6 +59,12 @@ public interface Node {
    * @param syntaxVersionCutoff The syntax version cutoff to check.
    */
   public boolean couldHaveSyntaxVersionAtLeast(SyntaxVersion syntaxVersionCutoff);
+
+
+  /**
+   * Returns the source location (file path and line number) for this node.
+   */
+  public SourceLocation getSourceLocation();
 
 
   /**
@@ -116,7 +124,26 @@ public interface Node {
 
 
   /**
-   * Clones this node. The clone's parent pointer is set to null.
+   * Copies this node. The clone's parent pointer is set to null.
+   *
+   * <p>All clone() overrides should follow this contract:
+   * <ul>
+   *     <li>only leaf classes (in the class hierarchy) should have non-abstract clone methods
+   *     <li>all leaf classes should be final
+   *     <li>all leaf copy constructors should be private
+   *     <li>all clone methods should look exactly like: <pre>{@code
+   *    {@literal @}Override public T clone() {
+   *      return new T(this);
+   *    }
+   * }</pre>
+   *     <li>all non-leaf copy constructors should be protected
+   * </ul>
+   *
+   * <p>NOTE: this means we do not ultimately delegate to Object.clone(), ever.
+   *
+   * <p>TODO(lukes): The usecases for a clone method are few and far between.  Making the AST nodes
+   * immutable (or at least unmodifiable) would be preferable to maintaining our clone() methods.
+   *
    * @return A clone of this code.
    */
   public Node clone();

@@ -23,12 +23,14 @@ import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.base.internal.BaseUtils;
 import com.google.template.soy.basetree.SyntaxVersion;
 import com.google.template.soy.basetree.SyntaxVersionBound;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.data.internalutils.NodeContentKinds;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.soytree.TemplateNode.SoyFileHeaderInfo;
 import com.google.template.soy.soytree.defn.HeaderParam;
 import com.google.template.soy.soytree.defn.SoyDocParam;
@@ -84,6 +86,9 @@ public abstract class TemplateNodeBuilder {
   /** Info from the containing Soy file's header declarations. */
   protected final SoyFileHeaderInfo soyFileHeaderInfo;
 
+  /** For reporting parse errors. */
+  protected final ErrorReporter errorReporter;
+
   /** The registry of named types. */
   private final SoyTypeRegistry typeRegistry;
 
@@ -136,13 +141,20 @@ public abstract class TemplateNodeBuilder {
   /** The params from template header and/or SoyDoc. Null if no decls and no SoyDoc. */
   @Nullable protected ImmutableList<TemplateParam> params;
 
+  final SourceLocation sourceLocation;
+
   /**
    * @param soyFileHeaderInfo Info from the containing Soy file's header declarations.
    * @param typeRegistry Type registry used in parsing type declarations.
    */
   protected TemplateNodeBuilder(
-      SoyFileHeaderInfo soyFileHeaderInfo, @Nullable SoyTypeRegistry typeRegistry) {
+      SoyFileHeaderInfo soyFileHeaderInfo,
+      SourceLocation sourceLocation,
+      ErrorReporter errorReporter,
+      @Nullable SoyTypeRegistry typeRegistry) {
     this.soyFileHeaderInfo = soyFileHeaderInfo;
+    this.sourceLocation = sourceLocation;
+    this.errorReporter = errorReporter;
     this.typeRegistry = typeRegistry;
     this.syntaxVersionBound = null;
     this.isSoyDocSet = false;
@@ -354,27 +366,27 @@ public abstract class TemplateNodeBuilder {
   }
 
   /** @return the id for this node. */
-  public Integer getId() {
+  Integer getId() {
     return id;
   }
 
   /** @return The lowest known syntax version bound. */
-  public SyntaxVersionBound getSyntaxVersionBound() {
+  SyntaxVersionBound getSyntaxVersionBound() {
     return syntaxVersionBound;
   }
 
   /** @return The command text. */
-  public String getCmdText() {
+  String getCmdText() {
     return cmdText;
   }
 
   /** @return The full SoyDoc, including the start/end tokens, or null. */
-  public String getSoyDoc() {
+  String getSoyDoc() {
     return soyDoc;
   }
 
   /** @return The description portion of the SoyDoc (before declarations), or null. */
-  public String getSoyDocDesc() {
+  String getSoyDocDesc() {
     return soyDocDesc;
   }
 

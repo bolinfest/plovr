@@ -16,8 +16,9 @@
 
 package com.google.template.soy.sharedpasses;
 
-import com.google.common.collect.Lists;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.internal.IdGenerator;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.RawTextNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
@@ -26,8 +27,8 @@ import com.google.template.soy.soytree.SoyNode.BlockNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 import com.google.template.soy.soytree.SoyNode.StandaloneNode;
 
+import java.util.ArrayList;
 import java.util.List;
-
 
 /**
  * Visitor for combining any consecutive sequences of {@code RawTextNode}s into one equivalent
@@ -36,12 +37,14 @@ import java.util.List;
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
-public class CombineConsecutiveRawTextNodesVisitor extends AbstractSoyNodeVisitor<Void> {
-
+public final class CombineConsecutiveRawTextNodesVisitor extends AbstractSoyNodeVisitor<Void> {
 
   /** The node id generator for the parse tree. Retrieved from the root SoyFileSetNode. */
   private IdGenerator nodeIdGen;
 
+  public CombineConsecutiveRawTextNodesVisitor(ErrorReporter errorReporter) {
+    super(errorReporter);
+  }
 
   @Override public Void exec(SoyNode node) {
 
@@ -79,10 +82,10 @@ public class CombineConsecutiveRawTextNodesVisitor extends AbstractSoyNodeVisito
     }
 
     // Rebuild the list of children, combining consecutive RawTextNodes into one.
-    List<StandaloneNode> copyOfOrigChildren = Lists.newArrayList(nodeAsBlock.getChildren());
+    List<StandaloneNode> copyOfOrigChildren = new ArrayList<>(nodeAsBlock.getChildren());
     nodeAsBlock.clearChildren();
 
-    List<RawTextNode> consecutiveRawTextNodes = Lists.newArrayList();
+    List<RawTextNode> consecutiveRawTextNodes = new ArrayList<>();
     for (StandaloneNode origChild : copyOfOrigChildren) {
 
       if (origChild instanceof RawTextNode) {
@@ -117,20 +120,28 @@ public class CombineConsecutiveRawTextNodesVisitor extends AbstractSoyNodeVisito
    */
   private void addConsecutiveRawTextNodesAsOneNodeHelper(
       BlockNode parent, List<RawTextNode> consecutiveRawTextNodes) {
-
-    if (consecutiveRawTextNodes.size() == 0) {
+    // Nothing to do.
+    if (consecutiveRawTextNodes.isEmpty()) {
       return;
-    } else if (consecutiveRawTextNodes.size() == 1) {
-      // Simply add the one RawTextNode.
-      parent.addChild(consecutiveRawTextNodes.get(0));
-    } else {
-      // Create a new combined RawTextNode.
-      StringBuilder rawText = new StringBuilder();
-      for (RawTextNode rtn : consecutiveRawTextNodes) {
-        rawText.append(rtn.getRawText());
-      }
-      parent.addChild(new RawTextNode(nodeIdGen.genId(), rawText.toString()));
     }
+
+    // Simply add the one RawTextNode.
+    if (consecutiveRawTextNodes.size() == 1) {
+      parent.addChild(consecutiveRawTextNodes.get(0));
+      return;
+    }
+
+    // Create a new combined RawTextNode.
+    StringBuilder rawText = new StringBuilder();
+    SourceLocation sourceLocation = null;
+    for (RawTextNode rtn : consecutiveRawTextNodes) {
+      rawText.append(rtn.getRawText());
+      sourceLocation = (sourceLocation == null)
+          ? rtn.getSourceLocation()
+          : sourceLocation.extend(rtn.getSourceLocation());
+    }
+    parent.addChild(
+        new RawTextNode(nodeIdGen.genId(), rawText.toString(), sourceLocation));
   }
 
 }

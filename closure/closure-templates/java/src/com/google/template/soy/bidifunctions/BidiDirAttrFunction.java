@@ -17,8 +17,6 @@
 package com.google.template.soy.bidifunctions;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.inject.Provider;
-import com.google.inject.Singleton;
 import com.google.template.soy.data.Dir;
 import com.google.template.soy.data.SanitizedContent;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
@@ -30,12 +28,16 @@ import com.google.template.soy.internal.i18n.BidiUtils;
 import com.google.template.soy.internal.i18n.SoyBidiUtils;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.SoyJsSrcFunction;
+import com.google.template.soy.pysrc.restricted.PyExpr;
+import com.google.template.soy.pysrc.restricted.SoyPySrcFunction;
 import com.google.template.soy.shared.restricted.SoyJavaFunction;
 
 import java.util.List;
 import java.util.Set;
 
 import javax.inject.Inject;
+import javax.inject.Provider;
+import javax.inject.Singleton;
 
 /**
  * Soy function that maybe inserts an HTML attribute for bidi directionality ('dir=ltr' or
@@ -46,7 +48,7 @@ import javax.inject.Inject;
  *
  */
 @Singleton
-class BidiDirAttrFunction implements SoyJavaFunction, SoyJsSrcFunction {
+class BidiDirAttrFunction implements SoyJavaFunction, SoyJsSrcFunction, SoyPySrcFunction {
 
 
   /** Provider for the current bidi global directionality. */
@@ -66,11 +68,9 @@ class BidiDirAttrFunction implements SoyJavaFunction, SoyJsSrcFunction {
     return "bidiDirAttr";
   }
 
-
   @Override public Set<Integer> getValidArgsSizes() {
     return ImmutableSet.of(1, 2);
   }
-
 
   @Override public SoyValue computeForJava(List<SoyValue> args) {
     SoyValue value = args.get(0);
@@ -95,7 +95,6 @@ class BidiDirAttrFunction implements SoyJavaFunction, SoyJsSrcFunction {
     return UnsafeSanitizedContentOrdainer.ordainAsSafe(dirAttr, ContentKind.ATTRIBUTES);
   }
 
-
   @Override public JsExpr computeForJsSrc(List<JsExpr> args) {
     JsExpr value = args.get(0);
     JsExpr isHtml = (args.size() == 2) ? args.get(1) : null;
@@ -107,4 +106,14 @@ class BidiDirAttrFunction implements SoyJavaFunction, SoyJsSrcFunction {
     return new JsExpr(callText, Integer.MAX_VALUE);
   }
 
+  @Override public PyExpr computeForPySrc(List<PyExpr> args) {
+    PyExpr value = args.get(0);
+    PyExpr isHtml = (args.size() == 2) ? args.get(1) : null;
+
+    String callText =
+        "bidi.dir_attr(" + bidiGlobalDirProvider.get().getCodeSnippet() + ", " +
+        value.getText() + (isHtml != null ? ", " + isHtml.getText() : "") + ")";
+
+    return new PyExpr(callText, Integer.MAX_VALUE);
+  }
 }

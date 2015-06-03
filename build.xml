@@ -47,6 +47,8 @@
              />
     <fileset dir="${closure-templates.dir}/java/lib"
              includes="aopalliance.jar,
+                       asm*.jar,
+                       auto-value*.jar,
                        guice-3.0.jar,
                        guice-assistedinject-3.0.jar,
                        guice-multibindings-3.0.jar,
@@ -102,7 +104,20 @@
            classpathref="plovr.classpath"
            debug="on"
            deprecation="on"
-           fork="true"
+           target="1.7"
+           source="1.7"
+           includeantruntime="true"
+           encoding="UTF-8"
+           > 
+      <src path="${closure-compiler.dir}/src" />
+      <src path="${closure-compiler.dir}/gen" />
+      <src path="${closure-templates.dir}/java/src" />
+      <src path="${closure-templates.dir}/build/genfiles" />
+    </javac>
+    <javac destdir="${classes.dir}"
+           classpathref="plovr.classpath"
+           debug="on"
+           deprecation="on"
            target="1.7"
            source="1.7"
            includeantruntime="true"
@@ -110,10 +125,6 @@
            > 
       <src path="${src.dir}" />
       <src path="${test.dir}" />
-      <src path="${closure-compiler.dir}/src" />
-      <src path="${closure-compiler.dir}/gen" />
-      <src path="${closure-templates.dir}/java/src" />
-      <src path="${closure-templates.dir}/build/genfiles" />
     </javac>
 
     <!-- Move Messages.properties where ScriptRuntime.java expects it. -->
@@ -265,6 +276,8 @@
                        />
       <zipgroupfileset dir="${closure-templates.dir}/java/lib"
                        includes="aopalliance.jar,
+                                 asm*.jar,
+                                 auto-value*.jar,
                                  guice-3.0.jar,
                                  guice-assistedinject-3.0.jar,
                                  guice-multibindings-3.0.jar,

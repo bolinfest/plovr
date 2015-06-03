@@ -17,6 +17,7 @@
 package com.google.template.soy.sharedpasses;
 
 import com.google.common.collect.Sets;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
@@ -24,20 +25,19 @@ import com.google.template.soy.exprtree.VarRefNode;
 
 import java.util.Set;
 
-
 /**
  * Package-private helper for FindIjParamsVisitor and IsUsingIjDataVisitor to find the set of
  * injected params used in an expression.
  *
  */
-class FindIjParamsInExprHelperVisitor extends AbstractExprNodeVisitor<Set<String>> {
-
+final class FindIjParamsInExprHelperVisitor extends AbstractExprNodeVisitor<Set<String>> {
 
   /** The set of used injected params found so far. */
   private final Set<String> usedIjParamsInExpr;
 
 
-  public FindIjParamsInExprHelperVisitor() {
+  public FindIjParamsInExprHelperVisitor(ErrorReporter errorReporter) {
+    super(errorReporter);
     // Must initialize values here instead of in setup() since we call exec() multiple times on
     // one instance of this class, and we need to keep state across those calls to exec().
     usedIjParamsInExpr = Sets.newHashSet();

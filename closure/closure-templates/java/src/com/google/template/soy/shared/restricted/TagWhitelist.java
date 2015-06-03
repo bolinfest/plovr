@@ -25,6 +25,7 @@ import com.google.common.collect.Sets;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -77,13 +78,13 @@ public final class TagWhitelist {
         };
 
     private static final ImmutableMap<String, OptionalSafeTag> OPTIONAL_SAFE_TAGS_BY_TAG_NAME =
-        Maps.uniqueIndex(ImmutableSet.copyOf(OptionalSafeTag.values()), TO_TAG_NAME);
+        Maps.uniqueIndex(EnumSet.allOf(OptionalSafeTag.class), TO_TAG_NAME);
   }
 
   /** Contains lower-case names of innocuous HTML elements. */
   private final ImmutableSet<String> safeTagNames;
 
-  TagWhitelist(Collection<? extends String> tagNames) {
+  TagWhitelist(Collection<String> tagNames) {
     this.safeTagNames = ImmutableSet.copyOf(tagNames);
     assert requireLowerCaseTagNames(this.safeTagNames);
   }
@@ -124,7 +125,7 @@ public final class TagWhitelist {
 
   public Set<String> asSet() { return safeTagNames; }
 
-  private static boolean requireLowerCaseTagNames(Iterable<? extends String> strs) {
+  private static boolean requireLowerCaseTagNames(Iterable<String> strs) {
     for (String str : strs) {
       assert str.equals(str.toLowerCase(Locale.ENGLISH))
           && VALID_TAG_NAME.matcher(str).matches()

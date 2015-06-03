@@ -18,7 +18,6 @@ package com.google.template.soy.basicfunctions;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
-import com.google.inject.Singleton;
 import com.google.template.soy.data.SoyDict;
 import com.google.template.soy.data.SoyEasyDict;
 import com.google.template.soy.data.SoyMap;
@@ -26,6 +25,9 @@ import com.google.template.soy.data.SoyValue;
 import com.google.template.soy.data.SoyValueHelper;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.SoyJsSrcFunction;
+import com.google.template.soy.pysrc.restricted.PyExpr;
+import com.google.template.soy.pysrc.restricted.PyFunctionExprBuilder;
+import com.google.template.soy.pysrc.restricted.SoyPySrcFunction;
 import com.google.template.soy.shared.restricted.SoyJavaFunction;
 import com.google.template.soy.shared.restricted.SoyPureFunction;
 
@@ -33,6 +35,7 @@ import java.util.List;
 import java.util.Set;
 
 import javax.inject.Inject;
+import javax.inject.Singleton;
 
 /**
  * Soy function that creates a new map equivalent to augmenting an existing map with additional
@@ -41,7 +44,7 @@ import javax.inject.Inject;
  */
 @Singleton
 @SoyPureFunction
-class AugmentMapFunction implements SoyJavaFunction, SoyJsSrcFunction {
+class AugmentMapFunction implements SoyJavaFunction, SoyJsSrcFunction, SoyPySrcFunction {
 
 
   /** The SoyValueHelper instance to use internally. */
@@ -58,11 +61,9 @@ class AugmentMapFunction implements SoyJavaFunction, SoyJsSrcFunction {
     return "augmentMap";
   }
 
-
   @Override public Set<Integer> getValidArgsSizes() {
     return ImmutableSet.of(2);
   }
-
 
   @SuppressWarnings("ConstantConditions")  // IntelliJ
   @Override public SoyValue computeForJava(List<SoyValue> args) {
@@ -88,7 +89,6 @@ class AugmentMapFunction implements SoyJavaFunction, SoyJsSrcFunction {
     return resultDict;
   }
 
-
   @Override public JsExpr computeForJsSrc(List<JsExpr> args) {
     JsExpr arg0 = args.get(0);
     JsExpr arg1 = args.get(1);
@@ -97,4 +97,9 @@ class AugmentMapFunction implements SoyJavaFunction, SoyJsSrcFunction {
     return new JsExpr(exprText, Integer.MAX_VALUE);
   }
 
+  @Override public PyExpr computeForPySrc(List<PyExpr> args) {
+    PyFunctionExprBuilder fnBuilder = new PyFunctionExprBuilder("dict");
+    fnBuilder.addArg(args.get(0)).setUnpackedKwargs(args.get(1));
+    return fnBuilder.asPyExpr();
+  }
 }

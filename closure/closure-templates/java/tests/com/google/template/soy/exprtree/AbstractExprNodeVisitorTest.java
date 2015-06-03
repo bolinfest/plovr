@@ -17,7 +17,9 @@
 package com.google.template.soy.exprtree;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.SoySyntaxException;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.exprtree.ExprNode.OperatorNode;
 import com.google.template.soy.exprtree.OperatorNodes.MinusOpNode;
 
@@ -27,17 +29,17 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Map;
 
-
 /**
  * Unit tests for AbstractExprNodeVisitor.
  *
  */
-public class AbstractExprNodeVisitorTest extends TestCase {
+public final class AbstractExprNodeVisitorTest extends TestCase {
 
+  private static final SourceLocation LOC = SourceLocation.UNKNOWN;
 
   public void testConcreteImplementation() throws SoySyntaxException {
 
-    IntegerNode expr = new IntegerNode(17);
+    IntegerNode expr = new IntegerNode(17, LOC);
 
     IncompleteEvalVisitor iev = new IncompleteEvalVisitor(null);
     assertEquals(17.0, iev.exec(expr));
@@ -46,16 +48,16 @@ public class AbstractExprNodeVisitorTest extends TestCase {
 
   public void testInterfaceImplementation() throws SoySyntaxException {
 
-    MinusOpNode expr = new MinusOpNode();
-    expr.addChild(new IntegerNode(17));
+    MinusOpNode expr = new MinusOpNode(LOC);
+    expr.addChild(new IntegerNode(17, LOC));
 
-    VarRefNode dataRef = new VarRefNode("boo", false, false, null);
+    VarRefNode dataRef = new VarRefNode("boo", LOC, false, false, null);
     expr.addChild(dataRef);
 
     IncompleteEvalVisitor iev = new IncompleteEvalVisitor(ImmutableMap.of("boo", 13.0));
     assertEquals(4.0, iev.exec(expr));
 
-    expr.replaceChild(0, new IntegerNode(34));
+    expr.replaceChild(0, new IntegerNode(34, LOC));
 
     assertEquals(21.0, iev.exec(expr));
   }
@@ -63,10 +65,10 @@ public class AbstractExprNodeVisitorTest extends TestCase {
 
   public void testNotImplemented() throws SoySyntaxException {
 
-    MinusOpNode expr = new MinusOpNode();
-    expr.addChild(new FloatNode(17.0));
+    MinusOpNode expr = new MinusOpNode(LOC);
+    expr.addChild(new FloatNode(17.0, LOC));
 
-    VarRefNode dataRef = new VarRefNode("boo", false, false, null);
+    VarRefNode dataRef = new VarRefNode("boo", LOC, false, false, null);
     expr.addChild(dataRef);
 
     IncompleteEvalVisitor iev = new IncompleteEvalVisitor(ImmutableMap.of("boo", 13.0));
@@ -80,18 +82,19 @@ public class AbstractExprNodeVisitorTest extends TestCase {
   }
 
 
-  private static class IncompleteEvalVisitor extends AbstractExprNodeVisitor<Double> {
+  private static final class IncompleteEvalVisitor extends AbstractExprNodeVisitor<Double> {
 
     private final Map<String, Double> env;
 
     private Deque<Double> resultStack;
 
-    public IncompleteEvalVisitor(Map<String, Double> env) {
+    IncompleteEvalVisitor(Map<String, Double> env) {
+      super(ExplodingErrorReporter.get());
       this.env = env;
     }
 
     @Override public Double exec(ExprNode node) {
-      resultStack = new ArrayDeque<Double>();
+      resultStack = new ArrayDeque<>();
       visit(node);
       return resultStack.peek();
     }

@@ -24,6 +24,7 @@ import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.sharedpasses.FindIndirectParamsVisitor.IndirectParamsInfo;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.CallBasicNode;
@@ -49,7 +50,6 @@ import java.util.Set;
 import java.util.SortedMap;
 
 import javax.annotation.Nullable;
-
 
 /**
  * Visitor for finding the indirect params of a given template.
@@ -232,8 +232,11 @@ public class FindIndirectParamsVisitor extends AbstractSoyNodeVisitor<IndirectPa
 
   /**
    * @param templateRegistry Map from template name to TemplateNode to use during the pass.
+   * @param errorReporter For reporting errors.
    */
-  public FindIndirectParamsVisitor(@Nullable TemplateRegistry templateRegistry) {
+  public FindIndirectParamsVisitor(
+      @Nullable TemplateRegistry templateRegistry, ErrorReporter errorReporter) {
+    super(errorReporter);
     this.templateRegistry = templateRegistry;
   }
 
@@ -245,7 +248,7 @@ public class FindIndirectParamsVisitor extends AbstractSoyNodeVisitor<IndirectPa
     isStartOfPass = true;
     visitedCallSituations = Sets.newHashSet();
     currTemplate = null;
-    callerStack = new ArrayDeque<CallerFrame>();
+    callerStack = new ArrayDeque<>();
     callerStack.add(
         new CallerFrame(null, ImmutableSet.<TemplateNode>of(), ImmutableSet.<String>of()));
     indirectParams = Maps.newHashMap();
@@ -272,7 +275,7 @@ public class FindIndirectParamsVisitor extends AbstractSoyNodeVisitor<IndirectPa
     // Build templateRegistry if necessary.
     if (templateRegistry == null) {
       SoyFileSetNode soyTree = node.getParent().getParent();
-      templateRegistry = new TemplateRegistry(soyTree);
+      templateRegistry = new TemplateRegistry(soyTree, errorReporter);
     }
 
     if (isStartOfPass) {
@@ -312,7 +315,7 @@ public class FindIndirectParamsVisitor extends AbstractSoyNodeVisitor<IndirectPa
     visitChildren(node);
 
     // We only want to recurse on calls that pass all data.
-    if (!node.isPassingAllData()) {
+    if (!node.dataAttribute().isPassingAllData()) {
       return;
     }
 
@@ -336,7 +339,7 @@ public class FindIndirectParamsVisitor extends AbstractSoyNodeVisitor<IndirectPa
     visitChildren(node);
 
     // We only want to recurse on calls that pass all data.
-    if (!node.isPassingAllData()) {
+    if (!node.dataAttribute().isPassingAllData()) {
       return;
     }
 
@@ -345,13 +348,11 @@ public class FindIndirectParamsVisitor extends AbstractSoyNodeVisitor<IndirectPa
     mayHaveIndirectParamsInExternalDelCalls = true;
 
     // Visit all the possible callee templates.
-    Set<DelegateTemplateDivision> delTemplateDivisions =
+    ImmutableSet<DelegateTemplateDivision> delTemplateDivisions =
         templateRegistry.getDelTemplateDivisionsForAllVariants(node.getDelCalleeName());
-    if (delTemplateDivisions != null) {
-      for (DelegateTemplateDivision division : delTemplateDivisions) {
-        for (TemplateDelegateNode delCallee : division.delPackageNameToDelTemplateMap.values()) {
-          visitCalleeHelper(node, delCallee);
-        }
+    for (DelegateTemplateDivision division : delTemplateDivisions) {
+      for (TemplateDelegateNode delCallee : division.delPackageNameToDelTemplateMap.values()) {
+        visitCalleeHelper(node, delCallee);
       }
     }
   }
@@ -376,7 +377,7 @@ public class FindIndirectParamsVisitor extends AbstractSoyNodeVisitor<IndirectPa
       }
     }
     Set<String> newAllCallParamKeys;
-    if (additionalCallParamKeys.size() > 0) {
+    if (!additionalCallParamKeys.isEmpty()) {
       newAllCallParamKeys = Sets.newHashSet(prevAllCallParamKeys);
       newAllCallParamKeys.addAll(additionalCallParamKeys);
     } else {

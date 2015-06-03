@@ -31,8 +31,8 @@ public class PlovrSoySyntaxExceptionTest {
   @Test
   public void testErrorMessageWithLineInformationWithBrackets() {
     String errorMessage = "Left brace '{' not allowed within a Soy tag " +
-    		"delimited by single braces (consider using double braces to delimit " +
-    		"the Soy tag) [line 13, column 1].";
+        "delimited by single braces (consider using double braces to delimit " +
+        "the Soy tag) [line 13, column 1].";
     Matcher matcher = PlovrSoySyntaxException.LINE_AND_CHAR_NO.matcher(
         errorMessage);
     assertTrue(matcher.find());
@@ -43,7 +43,7 @@ public class PlovrSoySyntaxExceptionTest {
   @Test
   public void testErrorMessageWithLineInformationNoBrackets() {
     String errorMessage = "template .base: Encountered \"<EOF>\" at line 55, " +
-    		"column 7.\nWas expecting one of...";
+        "column 7.\nWas expecting one of...";
     Matcher matcher = PlovrSoySyntaxException.LINE_AND_CHAR_NO.matcher(
         errorMessage);
     assertTrue(matcher.find());
@@ -58,7 +58,7 @@ public class PlovrSoySyntaxExceptionTest {
         "the Soy tag) [line 13, column 1].";
     SoySyntaxException soySyntaxException = SoySyntaxException.createWithMetaInfo(
         errorMessage,
-        new SourceLocation("src/org/plovr/plovr.js", /* lineNumber */ 13),
+        new SourceLocation("src/org/plovr/plovr.soy", /* lineNumber */ 13, 1, 13, 2),
         /* filePath */ null, // Must not be specified when SourceLocation is set.
         /* templateName */ ".base");
     PlovrSoySyntaxException exception = new PlovrSoySyntaxException(
@@ -66,10 +66,10 @@ public class PlovrSoySyntaxExceptionTest {
     assertEquals(
         "Message must be formed so it will be auto-formatted by " +
         "src/org/plovr/plovr.js",
-        "dummy.soy:13: ERROR - template .base: " +
+        "src/org/plovr/plovr.soy:13:1, template .base: " +
         "Left brace '{' not allowed within a " +
-    		"Soy tag delimited by single braces (consider using double braces to " +
-    		"delimit the Soy tag) [line 13, column 1].",
+        "Soy tag delimited by single braces (consider using double braces to " +
+        "delimit the Soy tag) [line 13, column 1].",
         exception.getMessage());
     assertEquals(13, exception.getLineNumber());
     assertEquals(1, exception.getCharNumber());
@@ -81,7 +81,7 @@ public class PlovrSoySyntaxExceptionTest {
   @SuppressWarnings("deprecation")
   public void testSoyExceptionWithoutLineNumber() {
     String errorMessage = "Found references to data keys that are not" +
-    		" declared in SoyDoc: [weekdays]";
+        " declared in SoyDoc: [weekdays]";
     PlovrSoySyntaxException exception = new PlovrSoySyntaxException(
         new SoySyntaxException(errorMessage),
         input);

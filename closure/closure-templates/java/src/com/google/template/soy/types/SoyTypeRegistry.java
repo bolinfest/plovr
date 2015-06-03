@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Interner;
 import com.google.common.collect.Interners;
-import com.google.inject.Singleton;
 import com.google.template.soy.types.aggregate.ListType;
 import com.google.template.soy.types.aggregate.MapType;
 import com.google.template.soy.types.aggregate.RecordType;
@@ -38,11 +37,13 @@ import com.google.template.soy.types.primitive.SanitizedType.JsType;
 import com.google.template.soy.types.primitive.SanitizedType.UriType;
 import com.google.template.soy.types.primitive.StringType;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 
 import javax.inject.Inject;
+import javax.inject.Singleton;
 
 /**
  * Registry of types which can be looked up by name.
@@ -143,8 +144,12 @@ public final class SoyTypeRegistry {
    * @param members The members of the union.
    * @return The union type.
    */
-  public UnionType getOrCreateUnionType(Collection<SoyType> members) {
-    return unionTypes.intern(UnionType.of(members));
+  public SoyType getOrCreateUnionType(Collection<SoyType> members) {
+    SoyType type = UnionType.of(members);
+    if (type instanceof UnionType) {
+      type = unionTypes.intern((UnionType) type);
+    }
+    return type;
   }
 
 
@@ -155,8 +160,8 @@ public final class SoyTypeRegistry {
    * @param members The members of the union.
    * @return The union type.
    */
-  public UnionType getOrCreateUnionType(SoyType... members) {
-    return unionTypes.intern(UnionType.of(members));
+  public SoyType getOrCreateUnionType(SoyType... members) {
+    return getOrCreateUnionType(Arrays.asList(members));
   }
 
 

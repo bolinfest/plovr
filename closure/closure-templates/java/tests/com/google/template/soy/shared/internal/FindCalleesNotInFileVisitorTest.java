@@ -16,13 +16,17 @@
 
 package com.google.template.soy.shared.internal;
 
+import static com.google.common.truth.Truth.assertThat;
+
+import com.google.template.soy.SoyFileSetParserBuilder;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.soytree.SoyFileNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
 
 import junit.framework.TestCase;
 
 import java.util.Set;
-
 
 /**
  * Unit tests for FindCalleesNotInFileVisitor.
@@ -62,17 +66,19 @@ public class FindCalleesNotInFileVisitorTest extends TestCase {
         "  {call boo.hoo.roo data=\"all\" /}\n" +  // not defined in this file
         "{/deltemplate}\n";
 
-
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(testFileContent);
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(testFileContent)
+        .errorReporter(boom)
+        .parse();
     SoyFileNode soyFile = soyTree.getChild(0);
 
-    Set<String> calleesNotInFile = (new FindCalleesNotInFileVisitor()).exec(soyFile);
-    assertFalse(calleesNotInFile.contains("boo.foo.goo"));
-    assertFalse(calleesNotInFile.contains("boo.foo.moo"));
-    assertTrue(calleesNotInFile.contains("boo.woo.hoo"));
-    assertTrue(calleesNotInFile.contains("boo.foo.too"));
-    assertTrue(calleesNotInFile.contains("boo.foo.zoo"));
-    assertTrue(calleesNotInFile.contains("boo.hoo.roo"));
+    Set<String> calleesNotInFile = new FindCalleesNotInFileVisitor(boom).exec(soyFile);
+    assertThat(calleesNotInFile).doesNotContain("boo.foo.goo");
+    assertThat(calleesNotInFile).doesNotContain("boo.foo.moo");
+    assertThat(calleesNotInFile).contains("boo.woo.hoo");
+    assertThat(calleesNotInFile).contains("boo.foo.too");
+    assertThat(calleesNotInFile).contains("boo.foo.zoo");
+    assertThat(calleesNotInFile).contains("boo.hoo.roo");
   }
 
 }

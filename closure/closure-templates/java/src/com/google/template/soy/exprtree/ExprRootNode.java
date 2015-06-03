@@ -17,7 +17,9 @@
 package com.google.template.soy.exprtree;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 
+import java.util.List;
 
 /**
  * Dummy node that serves as the root of an expression tree so that the tree can be arbitrarily
@@ -28,14 +30,29 @@ import com.google.common.base.Preconditions;
  * <p> This node should always have exactly one child.
  *
  */
-public class ExprRootNode<N extends ExprNode> extends AbstractParentExprNode {
+public final class ExprRootNode extends AbstractParentExprNode {
+  public static List<ExprNode> unwrap(Iterable<ExprRootNode> exprs) {
+    ImmutableList.Builder<ExprNode> builder = ImmutableList.builder();
+    for (ExprRootNode expr : exprs) {
+      builder.add(expr.getRoot());
+    }
+    return builder.build();
+  }
 
+  public static List<ExprRootNode> wrap(Iterable<? extends ExprNode> exprs) {
+    ImmutableList.Builder<ExprRootNode> builder = ImmutableList.builder();
+    for (ExprNode expr : exprs) {
+      builder.add(new ExprRootNode(expr));
+    }
+    return builder.build();
+  }
 
   /**
    * Creates a new instance with the given node as the child.
    * @param child The child to add to the new node.
    */
-  public ExprRootNode(N child) {
+  public ExprRootNode(ExprNode child) {
+    super(child.getSourceLocation());
     this.addChild(child);
   }
 
@@ -44,7 +61,7 @@ public class ExprRootNode<N extends ExprNode> extends AbstractParentExprNode {
    * Copy constructor.
    * @param orig The node to copy.
    */
-  protected ExprRootNode(ExprRootNode<N> orig) {
+  private ExprRootNode(ExprRootNode orig) {
     super(orig);
   }
 
@@ -53,22 +70,23 @@ public class ExprRootNode<N extends ExprNode> extends AbstractParentExprNode {
     return Kind.EXPR_ROOT_NODE;
   }
 
+  public ExprNode getRoot() {
+    return getChild(0);
+  }
 
-  @Override public N getChild(int index) {
+  @Override public ExprNode getChild(int index) {
     Preconditions.checkArgument(index == 0);
-    @SuppressWarnings("unchecked")
-    N child = (N) super.getChild(0);
-    return child;
+    return super.getChild(0);
   }
 
 
   @Override public String toSourceString() {
-    return getChild(0).toSourceString();
+    return getRoot().toSourceString();
   }
 
 
-  @Override public ExprRootNode<N> clone() {
-    return new ExprRootNode<N>(this);
+  @Override public ExprRootNode clone() {
+    return new ExprRootNode(this);
   }
 
 }

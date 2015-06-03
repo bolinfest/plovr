@@ -17,6 +17,11 @@
 package com.google.template.soy.data;
 
 import com.google.common.base.Preconditions;
+import com.google.template.soy.jbcsrc.api.AdvisingAppendable;
+import com.google.template.soy.jbcsrc.api.RenderResult;
+import com.google.template.soy.jbcsrc.api.RenderResult.Type;
+
+import java.io.IOException;
 
 import javax.annotation.Nullable;
 
@@ -70,23 +75,15 @@ public abstract class SoyAbstractCachingValueProvider implements SoyValueProvide
     return localResolvedValue;
   }
 
-
-  @Override public boolean equals(SoyValueProvider other) {
-    // NOTE: The identity check is essential. If the underlying SoyValue type requires instance
-    // equality, and resolve() is called by two different threads, it's possible that resolve()
-    // will return two different instances.
-    return this == other || (other != null && resolve().equals(other.resolve()));
-  }
-
-
-  @Override public boolean equals(Object other) {
-    if (other instanceof SoyValueProvider) {
-      return equals((SoyValueProvider) other);
-    } else {
-      return false;
+  @Override public RenderResult renderAndResolve(
+      AdvisingAppendable appendable, boolean isLast) throws IOException {
+    // Gives a reasonable default implementation, if subclasses can do better they can override.
+    RenderResult result = status();
+    if (result.type() == Type.DONE) {
+      resolve().render(appendable);
     }
+    return result;
   }
-
 
   @Override public int hashCode() {
     throw new UnsupportedOperationException(

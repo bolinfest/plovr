@@ -20,7 +20,6 @@ import com.google.common.collect.Lists;
 
 import java.util.List;
 
-
 /**
  * Mixin implementation of the parent-specific aspect of the ParentNode interface.
  * Requires the master to be a ParentNode.
@@ -77,25 +76,6 @@ public final class MixinParentNode<N extends Node> {
       this.children.add(newChild);
       newChild.setParent(this.master);
     }
-  }
-
-
-  /**
-   * Sets whether this node needs an env frame when the template is being interpreted.
-   * @param needsEnvFrameDuringInterp Whether this node needs an env frame during interpretation,
-   *     or null if unknown.
-   */
-  public void setNeedsEnvFrameDuringInterp(Boolean needsEnvFrameDuringInterp) {
-    this.needsEnvFrameDuringInterp = needsEnvFrameDuringInterp;
-  }
-
-
-  /**
-   * Returns whether this node needs an env frame during interpretation, or null if unknown.
-   * @return Whether this node needs an env frame during interpretation, or null if unknown.
-   */
-  public Boolean needsEnvFrameDuringInterp() {
-    return needsEnvFrameDuringInterp;
   }
 
 
@@ -277,7 +257,7 @@ public final class MixinParentNode<N extends Node> {
    */
   public String toTreeString(int indent) {
     StringBuilder sb = new StringBuilder();
-    sb.append(SPACES.substring(0, indent)).append("[").append(master.toString()).append("]\n");
+    sb.append(SPACES, 0, indent).append("[").append(master).append("]\n");
     appendTreeStringForChildren(sb, indent);
     return sb.toString();
   }

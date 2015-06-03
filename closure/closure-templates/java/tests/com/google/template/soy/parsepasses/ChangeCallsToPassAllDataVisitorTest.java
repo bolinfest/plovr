@@ -16,47 +16,54 @@
 
 package com.google.template.soy.parsepasses;
 
+import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.truth.Truth.assertWithMessage;
+
 import com.google.common.collect.ImmutableList;
-import com.google.template.soy.shared.internal.SharedTestUtils;
+import com.google.template.soy.SoyFileSetParserBuilder;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
+import com.google.template.soy.shared.SharedTestUtils;
 import com.google.template.soy.soytree.CallNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
 
 import junit.framework.TestCase;
 
-
 /**
  * Unit tests for ChangeCallsToPassAllDataVisitor,
  *
  */
-public class ChangeCallsToPassAllDataVisitorTest extends TestCase {
+public final class ChangeCallsToPassAllDataVisitorTest extends TestCase {
 
+  private static final ErrorReporter FAIL = ExplodingErrorReporter.get();
 
-  public void testChangedCall() throws Exception {
-
+  public void testChangedCall() {
     String callCode =
         "{call .foo}\n" +
         "  {param xxx: $xxx /}\n" +
         "  {param yyyZzz: $yyyZzz /}\n" +
         "{/call}\n";
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyCode(callCode);
-    (new ChangeCallsToPassAllDataVisitor()).exec(soyTree);
-    assertEquals(
-        "{call .foo data=\"all\" /}",
-        SharedTestUtils.getNode(soyTree, 0).toSourceString());
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(callCode)
+        .errorReporter(FAIL)
+        .parse();
+    new ChangeCallsToPassAllDataVisitor(FAIL).exec(soyTree);
+    assertThat(SharedTestUtils.getNode(soyTree, 0).toSourceString())
+        .isEqualTo("{call .foo data=\"all\" /}");
 
     callCode =
         "{call .foo data=\"all\"}\n" +
         "  {param xxx: $xxx /}\n" +
         "{/call}\n";
-    soyTree = SharedTestUtils.parseSoyCode(callCode);
-    (new ChangeCallsToPassAllDataVisitor()).exec(soyTree);
-    assertEquals(
-        "{call .foo data=\"all\" /}",
-        SharedTestUtils.getNode(soyTree, 0).toSourceString());
+    soyTree = SoyFileSetParserBuilder.forTemplateContents(callCode)
+        .errorReporter(FAIL)
+        .parse();
+    new ChangeCallsToPassAllDataVisitor(FAIL).exec(soyTree);
+    assertThat(SharedTestUtils.getNode(soyTree, 0).toSourceString())
+        .isEqualTo("{call .foo data=\"all\" /}");
   }
 
 
-  public void testUnchangedCall() throws Exception {
+  public void testUnchangedCall() {
 
     String callCode =
         "{call .foo /}\n";
@@ -124,22 +131,22 @@ public class ChangeCallsToPassAllDataVisitorTest extends TestCase {
   }
 
 
-  private void testUnchangedCallHelper(String callCode) throws Exception {
-
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyCode(callCode);
+  private void testUnchangedCallHelper(String callCode) {
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(callCode)
+        .errorReporter(FAIL)
+        .parse();
     CallNode callNodeBeforePass = (CallNode) SharedTestUtils.getNode(soyTree, 0);
     callNodeBeforePass.setEscapingDirectiveNames(ImmutableList.of("|escapeHtml"));
-    (new ChangeCallsToPassAllDataVisitor()).exec(soyTree);
+    new ChangeCallsToPassAllDataVisitor(FAIL).exec(soyTree);
     CallNode callNodeAfterPass = (CallNode) SharedTestUtils.getNode(soyTree, 0);
-    assertEquals(callNodeBeforePass, callNodeAfterPass);
-    assertEquals("Escaping directives should be preserved",
-        ImmutableList.of("|escapeHtml"),
-        callNodeAfterPass.getEscapingDirectiveNames());
+    assertThat(callNodeAfterPass).isEqualTo(callNodeBeforePass);
+    assertWithMessage("Escaping directives should be preserved")
+        .that(callNodeAfterPass.getEscapingDirectiveNames())
+        .isEqualTo(ImmutableList.of("|escapeHtml"));
   }
 
 
-  public void testUnchangedCallWithLoopVar() throws Exception {
-
+  public void testUnchangedCallWithLoopVar() {
     String soyCode =
         "{call .foo}\n" +  // should be changed
         "  {param xxx: $xxx /}\n" +
@@ -149,16 +156,18 @@ public class ChangeCallsToPassAllDataVisitorTest extends TestCase {
         "    {param xxx: $xxx /}\n" +
         "  {/call}\n" +
         "{/foreach}";
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyCode(soyCode);
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyCode)
+        .errorReporter(FAIL)
+        .parse();
 
     CallNode callNodeOutsideLoopBeforePass = (CallNode) SharedTestUtils.getNode(soyTree, 0);
     CallNode callNodeInsideLoopBeforePass = (CallNode) SharedTestUtils.getNode(soyTree, 1, 0, 0);
-    (new ChangeCallsToPassAllDataVisitor()).exec(soyTree);
+    new ChangeCallsToPassAllDataVisitor(FAIL).exec(soyTree);
     CallNode callNodeOutsideLoopAfterPass = (CallNode) SharedTestUtils.getNode(soyTree, 0);
     CallNode callNodeInsideLoopAfterPass = (CallNode) SharedTestUtils.getNode(soyTree, 1, 0, 0);
 
-    assertNotSame(callNodeOutsideLoopBeforePass, callNodeOutsideLoopAfterPass);
-    assertSame(callNodeInsideLoopBeforePass, callNodeInsideLoopAfterPass);
+    assertThat(callNodeOutsideLoopAfterPass).isNotSameAs(callNodeOutsideLoopBeforePass);
+    assertThat(callNodeInsideLoopAfterPass).isSameAs(callNodeInsideLoopBeforePass);
   }
 
 }

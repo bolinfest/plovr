@@ -1,5 +1,5 @@
 /*
- * Copyright 2008 Google Inc.
+ * Copyright 2015 Google Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,74 +18,23 @@ package com.google.template.soy.jssrc.restricted;
 
 import com.google.template.soy.internal.targetexpr.TargetExpr;
 
-import java.util.Objects;
-
 /**
  * Value class to represent a JS expression. Includes the text of the expression as well as the
  * precedence of the top-most operator.
  *
  * <p> Important: This class may only be used in implementing plugins (e.g. functions, directives).
  *
- * <p> Note that even though the precedence numbers we use are for Soy (see
- * {@link com.google.template.soy.exprtree.Operator#getPrecedence}), the precedence ordering of
- * the Soy expression operators matches that of JS (as well as Java), so the precedence numbers are
- * correct when used for generating JS code as well.
+ * <p> Note that while all behavior of JsExpr matches TargetExpr, the class serves to differentiate
+ * between languages and retain plugin behavior.
  *
  */
-public class JsExpr implements TargetExpr {
-
-
-  /** The JS expression text. */
-  private final String text;
-
-  /** The precedence of the top-most operator, or Integer.MAX_VALUE. */
-  private final int precedence;
-
+public final class JsExpr extends TargetExpr {
 
   /**
    * @param text The JS expression text.
    * @param precedence The precedence of the top-most operator. Or Integer.MAX_VALUE.
    */
   public JsExpr(String text, int precedence) {
-    this.text = text;
-    this.precedence = precedence;
+    super(text, precedence);
   }
-
-
-  /** Returns the JS expression text. */
-  @Override public String getText() {
-    return text;
-  }
-
-  /** Returns the precedence of the top-most operator, or Integer.MAX_VALUE. */
-  @Override public int getPrecedence() {
-    return precedence;
-  }
-
-
-  @Override public String toString() {
-    return String.format("JsExpr{text=%s, precedence=%d}", text, precedence);
-  }
-
-
-  @Override public boolean equals(Object other) {
-    if (other == null || this.getClass() != other.getClass()) {
-      return false;
-    }
-    JsExpr otherCast = (JsExpr) other;
-    if (this.text.equals(otherCast.text)) {
-      if (this.precedence != otherCast.precedence) {
-        throw new AssertionError();  // if text is equal, precedence should also be equal
-      }
-      return true;
-    } else {
-      return false;
-    }
-  }
-
-
-  @Override public int hashCode() {
-    return Objects.hash(text, precedence);
-  }
-
 }

@@ -26,9 +26,10 @@ import com.google.template.soy.data.restricted.FloatData;
 import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.data.restricted.NullData;
 import com.google.template.soy.data.restricted.StringData;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.BooleanNode;
 import com.google.template.soy.exprtree.ExprNode;
-import com.google.template.soy.exprtree.ExprNode.ConstantNode;
+import com.google.template.soy.exprtree.ExprNode.PrimitiveNode;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.exprtree.FloatNode;
 import com.google.template.soy.exprtree.IntegerNode;
@@ -65,8 +66,7 @@ import javax.inject.Inject;
  * <p> {@link #exec} should be called on a full Soy tree.
  *
  */
-public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
-
+public final class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
 
   /** SimplifyExprVisitor instance used by this visitor. */
   private final SimplifyExprVisitor simplifyExprVisitor;
@@ -82,7 +82,10 @@ public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
 
   @Inject
   public SimplifyVisitor(
-      SimplifyExprVisitor simplifyExprVisitor, PrerenderVisitorFactory prerenderVisitorFactory) {
+      SimplifyExprVisitor simplifyExprVisitor,
+      PrerenderVisitorFactory prerenderVisitorFactory,
+      ErrorReporter errorReporter) {
+    super(errorReporter);
     this.simplifyExprVisitor = simplifyExprVisitor;
     this.prerenderVisitorFactory = prerenderVisitorFactory;
   }
@@ -94,11 +97,11 @@ public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
     SoyFileSetNode nodeAsRoot = (SoyFileSetNode) node;
 
     // First simplify all expressions in the subtree.
-    SoytreeUtils.execOnAllV2Exprs(nodeAsRoot, simplifyExprVisitor);
+    SoytreeUtils.execOnAllV2Exprs(nodeAsRoot, simplifyExprVisitor, errorReporter);
 
     // Setup.
     nodeIdGen = nodeAsRoot.getNodeIdGenerator();
-    templateRegistry = new TemplateRegistry(nodeAsRoot);
+    templateRegistry = new TemplateRegistry(nodeAsRoot, errorReporter);
 
     // Simpify the subtree.
     super.exec(nodeAsRoot);
@@ -135,7 +138,7 @@ public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
     }
 
     for (PrintDirectiveNode directive : node.getChildren()) {
-      for (ExprRootNode<?> arg : directive.getArgs()) {
+      for (ExprRootNode arg : directive.getArgs()) {
         if (! isConstant(arg)) {
           return;  // don't prerender
         }
@@ -152,7 +155,8 @@ public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
     }
 
     // Replace this node with a RawTextNode.
-    parent.replaceChild(node, new RawTextNode(nodeIdGen.genId(), prerenderOutputSb.toString()));
+    parent.replaceChild(node,
+        new RawTextNode(nodeIdGen.genId(), prerenderOutputSb.toString(), node.getSourceLocation()));
   }
 
 
@@ -170,7 +174,7 @@ public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
       if (child instanceof IfCondNode) {
         IfCondNode condNode = (IfCondNode) child;
 
-        ExprRootNode<?> condExpr = condNode.getExprUnion().getExpr();
+        ExprRootNode condExpr = condNode.getExprUnion().getExpr();
         if (! isConstant(condExpr)) {
           continue;  // cannot simplify this child
         }
@@ -183,7 +187,7 @@ public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
             node.removeChild(i);
           }
           // Replace this child with a new IfElseNode.
-          IfElseNode newElseNode = new IfElseNode(nodeIdGen.genId());
+          IfElseNode newElseNode = new IfElseNode(nodeIdGen.genId(), condNode.getSourceLocation());
           newElseNode.addChildren(condNode.getChildren());
           node.replaceChild(condIndex, newElseNode);
           // Stop processing.
@@ -231,7 +235,7 @@ public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
 
         boolean hasMatchingConstant = false;
         boolean hasAllNonmatchingConstants = true;
-        for (ExprRootNode<?> caseExpr : caseNode.getExprList()) {
+        for (ExprRootNode caseExpr : caseNode.getExprList()) {
           SoyValue caseExprValue = getConstantOrNull(caseExpr);
           if (caseExprValue == null) {
             hasAllNonmatchingConstants = false;
@@ -250,7 +254,8 @@ public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
             node.removeChild(i);
           }
           // Replace this child with a new SwitchDefaultNode.
-          SwitchDefaultNode newDefaultNode = new SwitchDefaultNode(nodeIdGen.genId());
+          SwitchDefaultNode newDefaultNode
+              = new SwitchDefaultNode(nodeIdGen.genId(), caseNode.getSourceLocation());
           newDefaultNode.addChildren(caseNode.getChildren());
           node.replaceChild(caseIndex, newDefaultNode);
           // Stop processing.
@@ -336,18 +341,18 @@ public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
   // Helpers.
 
 
-  private static boolean isConstant(ExprRootNode<?> exprRoot) {
-    return exprRoot != null && exprRoot.getChild(0) instanceof ConstantNode;
+  private static boolean isConstant(ExprRootNode exprRoot) {
+    return exprRoot != null && exprRoot.getRoot() instanceof PrimitiveNode;
   }
 
 
-  private static SoyValue getConstantOrNull(ExprRootNode<?> exprRoot) {
+  private static SoyValue getConstantOrNull(ExprRootNode exprRoot) {
 
     if (exprRoot == null) {
       return null;
     }
 
-    ExprNode expr = exprRoot.getChild(0);
+    ExprNode expr = exprRoot.getRoot();
     switch (expr.getKind()) {
       case NULL_NODE: return NullData.INSTANCE;
       case BOOLEAN_NODE: return BooleanData.forValue(((BooleanNode) expr).getValue());
@@ -373,8 +378,7 @@ public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
    */
   private void addConsecutiveRawTextNodesAsOneNodeHelper(
       BlockNode parent, List<RawTextNode> consecutiveRawTextNodes) {
-
-    if (consecutiveRawTextNodes.size() == 0) {
+    if (consecutiveRawTextNodes.isEmpty()) {
       return;
     } else if (consecutiveRawTextNodes.size() == 1) {
       // Simply add the one RawTextNode.
@@ -385,7 +389,8 @@ public class SimplifyVisitor extends AbstractSoyNodeVisitor<Void> {
       for (RawTextNode rtn : consecutiveRawTextNodes) {
         rawText.append(rtn.getRawText());
       }
-      parent.addChild(new RawTextNode(nodeIdGen.genId(), rawText.toString()));
+      parent.addChild(
+          new RawTextNode(nodeIdGen.genId(), rawText.toString(), parent.getSourceLocation()));
     }
   }
 

@@ -18,6 +18,7 @@ package com.google.template.soy.data;
 
 import com.google.template.soy.data.SoyAbstractCachingValueProvider.ValueAssertion;
 import com.google.template.soy.data.restricted.IntegerData;
+import com.google.template.soy.jbcsrc.api.RenderResult;
 
 import junit.framework.TestCase;
 
@@ -44,6 +45,10 @@ public class SoyAbstractCachingValueProviderTest extends TestCase {
       computedAlready = true;
       return IntegerData.forValue(number);
     }
+
+    @Override public RenderResult status() {
+      return RenderResult.done();
+    }
   }
 
   public void testRepeatedCalls() {
@@ -53,13 +58,6 @@ public class SoyAbstractCachingValueProviderTest extends TestCase {
     assertEquals(1, value.resolve().integerValue());
     assertTrue(value.isComputed());
     assertEquals(1, value.resolve().integerValue());
-  }
-
-  public void testEquals() {
-    assertTrue(new TestValueProvider(1).equals(new TestValueProvider(1)));
-    assertFalse(new TestValueProvider(1).equals(new TestValueProvider(2)));
-    assertFalse(new TestValueProvider(1).equals(null));
-    assertFalse(new TestValueProvider(1).equals(new Object()));
   }
 
   public void testValueAssertions() {

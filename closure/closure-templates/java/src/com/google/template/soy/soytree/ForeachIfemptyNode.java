@@ -16,6 +16,7 @@
 
 package com.google.template.soy.soytree;
 
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.soytree.SoyNode.ConditionalBlockNode;
 
 
@@ -25,14 +26,16 @@ import com.google.template.soy.soytree.SoyNode.ConditionalBlockNode;
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
-public class ForeachIfemptyNode extends AbstractBlockCommandNode implements ConditionalBlockNode {
+public final class ForeachIfemptyNode extends AbstractBlockCommandNode
+    implements ConditionalBlockNode {
 
 
   /**
    * @param id The id for this node.
+   * @param sourceLocation The node's source location.
    */
-  public ForeachIfemptyNode(int id) {
-    super(id, "ifempty", "");
+  public ForeachIfemptyNode(int id, SourceLocation sourceLocation) {
+    super(id, sourceLocation, "ifempty", "");
   }
 
 
@@ -40,7 +43,7 @@ public class ForeachIfemptyNode extends AbstractBlockCommandNode implements Cond
    * Copy constructor.
    * @param orig The node to copy.
    */
-  protected ForeachIfemptyNode(ForeachIfemptyNode orig) {
+  private ForeachIfemptyNode(ForeachIfemptyNode orig) {
     super(orig);
   }
 

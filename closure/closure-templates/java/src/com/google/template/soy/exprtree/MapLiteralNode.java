@@ -16,6 +16,8 @@
 
 package com.google.template.soy.exprtree;
 
+import com.google.template.soy.base.SourceLocation;
+
 import java.util.List;
 
 
@@ -25,13 +27,13 @@ import java.util.List;
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
-public class MapLiteralNode extends AbstractParentExprNode {
-
+public final class MapLiteralNode extends AbstractParentExprNode {
 
   /**
    * @param alternatingKeysAndValues The keys and values (alternating) in this map.
    */
-  public MapLiteralNode(List<ExprNode> alternatingKeysAndValues) {
+  public MapLiteralNode(List<ExprNode> alternatingKeysAndValues, SourceLocation sourceLocation) {
+    super(sourceLocation);
     addChildren(alternatingKeysAndValues);
   }
 
@@ -40,7 +42,7 @@ public class MapLiteralNode extends AbstractParentExprNode {
    * Copy constructor.
    * @param orig The node to copy.
    */
-  protected MapLiteralNode(MapLiteralNode orig) {
+  private MapLiteralNode(MapLiteralNode orig) {
     super(orig);
   }
 

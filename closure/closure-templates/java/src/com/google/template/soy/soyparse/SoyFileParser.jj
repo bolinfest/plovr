@@ -46,9 +46,10 @@ import com.google.common.collect.Lists;
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.base.internal.IdGenerator;
-import com.google.template.soy.base.internal.IncrementingIdGenerator;
 import com.google.template.soy.base.internal.SoyFileKind;
-import com.google.template.soy.internal.base.Pair;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.ErrorReporterImpl;
+import com.google.template.soy.error.SoyError;
 import com.google.template.soy.soytree.SoyFileNode;
 import com.google.template.soy.soytree.SoyNode.StandaloneNode;
 import com.google.template.soy.soytree.TemplateBasicNodeBuilder;
@@ -144,6 +145,8 @@ public class SoyFileParser {
   private static final Pattern ERROR_MSG_LINE_NUM_PAT =
       Pattern.compile("(?<=line )\\d+(?=, column )");
 
+  private static final SoyError UNCATEGORIZED = SoyError.of("In file {0}, template {1}: {2}");
+
 
   /** Type registry for resolving type names. */
   private SoyTypeRegistry typeRegistry;
@@ -157,6 +160,7 @@ public class SoyFileParser {
   /** Path of source being parsed. This is descriptive, not a means to refetch source. */
   private String filePath = SourceLocation.UNKNOWN.getFilePath();
 
+  private ErrorReporter errorReporter;
 
   /**
    * Constructor that takes a reader object providing the input.
@@ -165,10 +169,15 @@ public class SoyFileParser {
    * @param input The input to parse.
    * @param soyFileKind The kind of this Soy file.
    * @param filePath The path of the source being parsed. Used for reporting.
+   * @param errorReporter For reporting parse errors.
    */
   public SoyFileParser(
-      SoyTypeRegistry typeRegistry, IdGenerator nodeIdGen, Reader input, SoyFileKind soyFileKind,
-      String filePath) {
+      SoyTypeRegistry typeRegistry,
+      IdGenerator nodeIdGen,
+      Reader input,
+      SoyFileKind soyFileKind,
+      String filePath,
+      ErrorReporter errorReporter) {
     this(input);
     Preconditions.checkNotNull(typeRegistry);
     Preconditions.checkNotNull(nodeIdGen);
@@ -176,8 +185,27 @@ public class SoyFileParser {
     this.nodeIdGen = nodeIdGen;
     this.soyFileKind = soyFileKind;
     this.filePath = filePath;
+    this.errorReporter = errorReporter;
   }
 
+  /**
+   * Constructor that takes a string input.
+   * @param typeRegistry The type registry for resolving type names.
+   * @param nodeIdGen The node id generator for the tree being built.
+   * @param input The input to parse.
+   * @param soyFileKind The kind of this Soy file.
+   * @param filePath The path of the source being parsed. Used for reporting.
+   * @param errorReporter For reporting parse errors.
+   */
+  public SoyFileParser(
+      SoyTypeRegistry typeRegistry,
+      IdGenerator nodeIdGen,
+      String input,
+      SoyFileKind soyFileKind,
+      String filePath,
+      ErrorReporter errorReporter) {
+    this(typeRegistry, nodeIdGen, new StringReader(input), soyFileKind, filePath, errorReporter);
+  }
 
   /**
    * Constructor that takes a string input.
@@ -188,45 +216,35 @@ public class SoyFileParser {
    * @param filePath The path of the source being parsed. Used for reporting.
    */
   public SoyFileParser(
-      SoyTypeRegistry typeRegistry, IdGenerator nodeIdGen, String input, SoyFileKind soyFileKind,
+      SoyTypeRegistry typeRegistry,
+      IdGenerator nodeIdGen,
+      String input,
+      SoyFileKind soyFileKind,
       String filePath) {
-    this(typeRegistry, nodeIdGen, new StringReader(input), soyFileKind, filePath);
+    this(typeRegistry, nodeIdGen, input, soyFileKind, filePath, new ErrorReporterImpl());
   }
-
-
-  /**
-   * Attempts to parse STDIN as a Soy file in UTF-8 encoding. If successful, prints "Valid input."
-   * to STDOUT. If unsuccessful, throws an exception.
-   * @param args This executable does not take any args.
-   * @throws TokenMgrError When the input from STDIN has a token error.
-   * @throws ParseException When the input from STDIN has a parse error.
-   * @throws SoySyntaxException When the input from STDIN has a syntax error.
-   */
-  public static void main(String[] args) throws SoySyntaxException, TokenMgrError, ParseException {
-    Reader stdinReader;
-    try {
-      stdinReader = new InputStreamReader(System.in, "UTF-8");
-    } catch (UnsupportedEncodingException e) {
-      throw new AssertionError();
-    }
-    (new SoyFileParser(
-        new SoyTypeRegistry(), new IncrementingIdGenerator(), stdinReader, SoyFileKind.SRC,
-        "stdin"))
-        .SoyFile();
-    System.out.println("Valid input.");
-  }
-
 
   /**
    * Attempts to parse the given input as a Soy file.
-   * @throws TokenMgrError When the input has a token error.
-   * @throws ParseException When the input has a parse error.
-   * @throws SoySyntaxException When the input from STDIN has a syntax error.
    */
-  public SoyFileNode parseSoyFile() throws SoySyntaxException, TokenMgrError, ParseException {
+  public SoyFileNode parseSoyFile() {
     Preconditions.checkNotNull(typeRegistry);
     Preconditions.checkNotNull(nodeIdGen);
-    return SoyFile();
+
+    SoyFileNode soyFileNode = null;
+    try {
+        soyFileNode = SoyFile();
+    } catch (ParseException e) {
+        errorReporter.report(SourceLocation.UNKNOWN, UNCATEGORIZED, filePath, "", e.getMessage());
+    } catch (SoySyntaxException e) {
+        errorReporter.report(SourceLocation.UNKNOWN, UNCATEGORIZED, filePath, "", e.getMessage());
+    } catch (TokenMgrError e) {
+        errorReporter.report(SourceLocation.UNKNOWN, UNCATEGORIZED, filePath, "", e.getMessage());
+    } catch (NullPointerException e) {
+        errorReporter.report(SourceLocation.UNKNOWN, UNCATEGORIZED, filePath, "", e.getMessage());
+    }
+
+    return soyFileNode;
   }
 
 
@@ -632,8 +650,12 @@ private SoyFileNode SoyFile() :
   )*
 
   { SoyFileNode soyFileNode = new SoyFileNode(
-        nodeIdGen.genId(), soyFileKind, delpackageCmdText, namespaceCmdText, aliasCmdTexts);
-    soyFileNode.setFilePath(filePath);
+        nodeIdGen.genId(),
+        filePath,
+        soyFileKind,
+        delpackageCmdText,
+        namespaceCmdText,
+        aliasCmdTexts);
     SoyFileHeaderInfo soyFileHeaderInfo = new SoyFileHeaderInfo(soyFileNode);
   }
 
@@ -659,12 +681,22 @@ private TemplateNode Template(SoyFileHeaderInfo soyFileHeaderInfo) :
 }
 {
   templateTag = <ANY_TEMPLATE_TAG>
+  templateContent = <TEMPLATE_CONTENT>
 
   { boolean isBasicTemplate = templateTag.image.startsWith("{template");
 
-    TemplateNodeBuilder templateNodeBuilder = isBasicTemplate ?
-        new TemplateBasicNodeBuilder(soyFileHeaderInfo, typeRegistry) :
-        new TemplateDelegateNodeBuilder(soyFileHeaderInfo, typeRegistry);
+    SourceLocation srcLocation = new SourceLocation(
+        filePath,
+        templateTag.beginLine,
+        templateTag.beginColumn,
+        templateContent.endLine,
+        templateContent.endColumn);
+
+    TemplateNodeBuilder templateNodeBuilder = isBasicTemplate
+        ? new TemplateBasicNodeBuilder(
+            soyFileHeaderInfo, srcLocation, errorReporter, typeRegistry)
+        : new TemplateDelegateNodeBuilder(
+            soyFileHeaderInfo, srcLocation, errorReporter, typeRegistry);
 
     templateNodeBuilder.setId(nodeIdGen.genId());
 
@@ -696,26 +728,42 @@ private TemplateNode Template(SoyFileHeaderInfo soyFileHeaderInfo) :
     templateNodeBuilder.setSoyDoc(soyDoc);
   }
 
-  templateContent = <TEMPLATE_CONTENT>
-  { List<DeclInfo> templateHeaderDecls;
-    List<StandaloneNode> templateBodyNodes;
+  {
+    List<DeclInfo> templateHeaderDecls = null;
+    List<StandaloneNode> templateBodyNodes = null;
     try {
-      Pair<List<DeclInfo>, List<StandaloneNode>> templateHeaderAndBody =
-          (new TemplateParser(
-              nodeIdGen, templateContent.image, filePath, templateContent.beginLine))
-              .parseTemplateContent();
-      templateHeaderDecls = templateHeaderAndBody.first;
-      templateBodyNodes = templateHeaderAndBody.second;
+      TemplateParseResult result = new TemplateParser(
+            nodeIdGen,
+            templateContent.image,
+            filePath,
+            templateContent.beginLine,
+            errorReporter)
+            .parseTemplateContent();
+      templateHeaderDecls = result.getHeaderDecls();
+      templateBodyNodes = result.getBodyNodes();
     } catch (TokenMgrError tme) {
       String adjustedErrorMsg = adjustLineNumInErrorMsg(tme.getMessage(), templateTag.beginLine);
-      throw SoySyntaxException.createCausedWithMetaInfo(
-          adjustedErrorMsg, tme, null, filePath, templateNodeBuilder.getTemplateNameForUserMsgs());
+      errorReporter.report(
+          SourceLocation.UNKNOWN,
+          UNCATEGORIZED,
+          filePath,
+          templateNodeBuilder.getTemplateNameForUserMsgs(),
+          adjustedErrorMsg);
     } catch (ParseException pe) {
       String adjustedErrorMsg = adjustLineNumInErrorMsg(pe.getMessage(), templateTag.beginLine);
-      throw SoySyntaxException.createCausedWithMetaInfo(
-          adjustedErrorMsg, pe, null, filePath, templateNodeBuilder.getTemplateNameForUserMsgs());
+      errorReporter.report(
+          SourceLocation.UNKNOWN,
+          UNCATEGORIZED,
+          filePath,
+          templateNodeBuilder.getTemplateNameForUserMsgs(),
+          adjustedErrorMsg);
     } catch (SoySyntaxException sse) {
-      throw sse.associateMetaInfo(null, filePath, templateNodeBuilder.getTemplateNameForUserMsgs());
+      errorReporter.report(
+          SourceLocation.UNKNOWN,
+          UNCATEGORIZED,
+          filePath,
+          templateNodeBuilder.getTemplateNameForUserMsgs(),
+          sse.getMessage());
     }
   }
 
@@ -723,8 +771,9 @@ private TemplateNode Template(SoyFileHeaderInfo soyFileHeaderInfo) :
       templateNodeBuilder.setHeaderDecls(templateHeaderDecls);
     }
     TemplateNode templateNode = templateNodeBuilder.build();
-    templateNode.setSourceLocation(new SourceLocation(filePath, templateTag.beginLine));
-    templateNode.addChildren(templateBodyNodes);
+    if (templateBodyNodes != null) {
+        templateNode.addChildren(templateBodyNodes);
+    }
     return templateNode;
   }
 }

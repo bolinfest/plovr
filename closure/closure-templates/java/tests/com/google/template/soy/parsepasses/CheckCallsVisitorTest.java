@@ -16,26 +16,30 @@
 
 package com.google.template.soy.parsepasses;
 
-import com.google.template.soy.base.SoySyntaxException;
+import static com.google.common.truth.Truth.assertThat;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
+import com.google.template.soy.FormattingErrorReporter;
+import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.basetree.SyntaxVersion;
-import com.google.template.soy.shared.internal.SharedTestUtils;
-import com.google.template.soy.sharedpasses.CheckSoyDocVisitor;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ExplodingErrorReporter;
+import com.google.template.soy.sharedpasses.CheckTemplateParamsVisitor;
 import com.google.template.soy.soytree.SoyFileSetNode;
 
 import junit.framework.TestCase;
-
 
 /**
  * Unit tests for CheckCallsVisitor.
  *
  */
-public class CheckCallsVisitorTest extends TestCase {
-
+public final class CheckCallsVisitorTest extends TestCase {
 
   public void testMissingParam() {
 
     assertInvalidSoyFiles(
-        "template ns1.boo: Call to 'ns1.foo' is missing required params [goo, moo].",
+        "Call missing required params [goo, moo].",
         "" +
             "{namespace ns1 autoescape=\"deprecated-noncontextual\"}\n" +
             "\n" +
@@ -53,7 +57,7 @@ public class CheckCallsVisitorTest extends TestCase {
             "{/template}\n");
 
     assertInvalidSoyFiles(
-        "template ns1.boo: Call to 'ns2.foo_' is missing required param 'moo'.",
+        "Call missing required param 'moo'.",
         "" +
             "{namespace ns1 autoescape=\"deprecated-noncontextual\"}\n" +
             "\n" +
@@ -79,7 +83,7 @@ public class CheckCallsVisitorTest extends TestCase {
   public void testMissingParamInDelcall() {
 
     assertInvalidSoyFiles(
-        "template ns1.boo: Call to 'fooFoo' is missing required param 'moo'.",
+        "Call missing required param 'moo'.",
         "" +
             "{namespace ns1 autoescape=\"deprecated-noncontextual\"}\n" +
             "\n" +
@@ -99,7 +103,7 @@ public class CheckCallsVisitorTest extends TestCase {
             "{/deltemplate}\n");
 
     assertInvalidSoyFiles(
-        "template ns1.boo: Call to 'fooFoo' is missing required params [goo, moo].",
+        "Call missing required params [goo, moo].",
         "" +
             "{namespace ns1 autoescape=\"deprecated-noncontextual\"}\n" +
             "\n" +
@@ -164,23 +168,22 @@ public class CheckCallsVisitorTest extends TestCase {
 
 
   private void assertValidSoyFiles(String... soyFileContents) {
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(soyFileContents);
-    (new CheckSoyDocVisitor(SyntaxVersion.V2_0)).exec(soyTree);
-    (new CheckCallsVisitor()).exec(soyTree);
+    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(soyFileContents)
+        .errorReporter(boom)
+        .parse();
+    new CheckTemplateParamsVisitor(SyntaxVersion.V2_0, boom).exec(soyTree);
+    new CheckCallsVisitor(boom).exec(soyTree);
   }
 
 
   private void assertInvalidSoyFiles(String expectedErrorMsgSubstr, String... soyFileContents) {
-
-    SoyFileSetNode soyTree = SharedTestUtils.parseSoyFiles(soyFileContents);
-    (new CheckSoyDocVisitor(SyntaxVersion.V2_0)).exec(soyTree);
-    try {
-      (new CheckCallsVisitor()).exec(soyTree);
-    } catch (SoySyntaxException sse) {
-      assertTrue(sse.getMessage().contains(expectedErrorMsgSubstr));
-      return;  // test passes
-    }
-    fail();
+    FormattingErrorReporter errorReporter = new FormattingErrorReporter();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(soyFileContents).parse();
+    new CheckTemplateParamsVisitor(SyntaxVersion.V2_0, errorReporter).exec(soyTree);
+    new CheckCallsVisitor(errorReporter).exec(soyTree);
+    ImmutableList<String> errorMessages = errorReporter.getErrorMessages();
+    assertThat(errorMessages).hasSize(1);
+    assertThat(Iterables.getFirst(errorMessages, null)).contains(expectedErrorMsgSubstr);
   }
-
 }

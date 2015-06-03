@@ -17,11 +17,11 @@
 package com.google.template.soy.shared.internal;
 
 import com.google.common.base.Preconditions;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.SoyFileNode;
 import com.google.template.soy.soytree.SoyNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
-
 
 /**
  * Visitor for searching for nodes of any of the given types within a template file.
@@ -32,8 +32,7 @@ import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
  *
  *
  */
-public class HasNodeTypesVisitor extends AbstractSoyNodeVisitor<Boolean> {
-
+public final class HasNodeTypesVisitor extends AbstractSoyNodeVisitor<Boolean> {
 
   /**
    * Indicates whether a file has at least one template containing nodes of
@@ -46,7 +45,8 @@ public class HasNodeTypesVisitor extends AbstractSoyNodeVisitor<Boolean> {
   private final Class<? extends SoyNode>[] nodeTypes;
 
 
-  public HasNodeTypesVisitor(Class<? extends SoyNode>[] nodeTypes) {
+  public HasNodeTypesVisitor(Class<? extends SoyNode>[] nodeTypes, ErrorReporter errorReporter) {
+    super(errorReporter);
     this.nodeTypes = nodeTypes;
   }
 

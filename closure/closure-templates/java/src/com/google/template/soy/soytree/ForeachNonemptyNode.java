@@ -16,6 +16,7 @@
 
 package com.google.template.soy.soytree;
 
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.soytree.SoyNode.ConditionalBlockNode;
 import com.google.template.soy.soytree.SoyNode.LocalVarBlockNode;
@@ -28,15 +29,19 @@ import com.google.template.soy.soytree.defn.LoopVar;
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
-public class ForeachNonemptyNode extends AbstractBlockNode
+public final class ForeachNonemptyNode extends AbstractBlockNode
     implements ConditionalBlockNode, LoopNode, LocalVarBlockNode {
 
+  private final LoopVar var;
 
   /**
    * @param id The id for this node.
+   * @param varName The variable name of the loop index variable
+   * @param sourceLocation The node's source location.
    */
-  public ForeachNonemptyNode(int id) {
-    super(id);
+  public ForeachNonemptyNode(int id, String varName, SourceLocation sourceLocation) {
+    super(id, sourceLocation);
+    this.var = new LoopVar(varName, this, null);
   }
 
 
@@ -44,8 +49,9 @@ public class ForeachNonemptyNode extends AbstractBlockNode
    * Copy constructor.
    * @param orig The node to copy.
    */
-  protected ForeachNonemptyNode(ForeachNonemptyNode orig) {
+  private ForeachNonemptyNode(ForeachNonemptyNode orig) {
     super(orig);
+    this.var = orig.var.clone();
   }
 
 
@@ -60,12 +66,12 @@ public class ForeachNonemptyNode extends AbstractBlockNode
 
 
   public final LoopVar getVar() {
-    return getParent().getVar();
+    return var;
   }
 
 
   @Override public final String getVarName() {
-    return getParent().getVarName();
+    return var.name();
   }
 
 
@@ -76,7 +82,7 @@ public class ForeachNonemptyNode extends AbstractBlockNode
 
 
   /** Returns the expression we're iterating over. */
-  public ExprRootNode<?> getExpr() {
+  public ExprRootNode getExpr() {
     return getParent().getExpr();
   }
 

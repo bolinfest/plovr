@@ -16,7 +16,9 @@
 
 package com.google.template.soy.sharedpasses;
 
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.internal.IdGenerator;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.shared.SoyCssRenamingMap;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
@@ -32,7 +34,6 @@ import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 
 import javax.annotation.Nullable;
 
-
 /**
  * Visitor for renaming CSS selector text in a Soy parse tree. This pass replaces the CssNodes
  * in the parse tree with RawTextNodes and PrintNodes (PrintNodes needed iff some CssNodes contain
@@ -45,8 +46,7 @@ import javax.annotation.Nullable;
  * this pass.
  *
  */
-public class RenameCssVisitor extends AbstractSoyNodeVisitor<Void> {
-
+public final class RenameCssVisitor extends AbstractSoyNodeVisitor<Void> {
 
   /** The CSS renaming map to use for renaming selector text, or null to use the source text. */
   private final SoyCssRenamingMap cssRenamingMap;
@@ -54,12 +54,13 @@ public class RenameCssVisitor extends AbstractSoyNodeVisitor<Void> {
   /** The node id generator for the parse tree. Retrieved from the root SoyFileSetNode. */
   private IdGenerator nodeIdGen;
 
-
   /**
    * @param cssRenamingMap The CSS renaming map to use for renaming selector text, or null to use
    *     the source text.
+   * @param errorReporter For reporting errors.
    */
-  public RenameCssVisitor(@Nullable SoyCssRenamingMap cssRenamingMap) {
+  public RenameCssVisitor(@Nullable SoyCssRenamingMap cssRenamingMap, ErrorReporter errorReporter) {
+    super(errorReporter);
     this.cssRenamingMap = cssRenamingMap;
   }
 
@@ -88,11 +89,15 @@ public class RenameCssVisitor extends AbstractSoyNodeVisitor<Void> {
     parent.removeChild(indexInParent);
 
     // If this CssNode has componentName, add a PrintNode (with '|id' directive) to print it.
-    ExprRootNode<?> componentNameExpr = node.getComponentNameExpr();
+    ExprRootNode componentNameExpr = node.getComponentNameExpr();
     if (componentNameExpr != null) {
-      PrintNode pn =
-          new PrintNode(nodeIdGen.genId(), false, new ExprUnion(componentNameExpr), null);
-      pn.addChild(new PrintDirectiveNode(nodeIdGen.genId(), "|id", ""));
+      PrintNode pn
+          = new PrintNode.Builder(nodeIdGen.genId(), false /* isImplicit */, SourceLocation.UNKNOWN)
+          .exprUnion(new ExprUnion(componentNameExpr))
+          .build(errorReporter);
+      pn.addChild(new PrintDirectiveNode.Builder(
+          nodeIdGen.genId(), "|id", "", SourceLocation.UNKNOWN)
+      .build(errorReporter));
       parent.addChild(indexInParent, pn);
       indexInParent += 1;
     }
@@ -109,7 +114,9 @@ public class RenameCssVisitor extends AbstractSoyNodeVisitor<Void> {
     if (componentNameExpr != null) {
       selectorText = "-" + selectorText;
     }
-    parent.addChild(indexInParent, new RawTextNode(nodeIdGen.genId(), selectorText));
+    parent.addChild(
+        indexInParent,
+        new RawTextNode(nodeIdGen.genId(), selectorText, parent.getSourceLocation()));
   }
 
 

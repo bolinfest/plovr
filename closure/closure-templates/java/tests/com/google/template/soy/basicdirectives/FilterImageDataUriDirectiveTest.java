@@ -16,11 +16,14 @@
 
 package com.google.template.soy.basicdirectives;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.common.collect.ImmutableList;
 import com.google.template.soy.data.SanitizedContent;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.data.UnsafeSanitizedContentOrdainer;
 import com.google.template.soy.jssrc.restricted.JsExpr;
+import com.google.template.soy.pysrc.restricted.PyExpr;
 import com.google.template.soy.shared.AbstractSoyPrintDirectiveTestCase;
 
 
@@ -28,11 +31,6 @@ import com.google.template.soy.shared.AbstractSoyPrintDirectiveTestCase;
  * Unit tests for {@link FilterImageDataUriDirective}.
  */
 public class FilterImageDataUriDirectiveTest extends AbstractSoyPrintDirectiveTestCase {
-
-
-  private SanitizedContent sanitizedUri(String s) {
-    return UnsafeSanitizedContentOrdainer.ordainAsSafe(s, ContentKind.URI);
-  }
 
   public void testApplyForTofu() {
     FilterImageDataUriDirective directive = new FilterImageDataUriDirective();
@@ -45,8 +43,18 @@ public class FilterImageDataUriDirectiveTest extends AbstractSoyPrintDirectiveTe
   public void testApplyForJsSrc() {
     FilterImageDataUriDirective cleanHtml = new FilterImageDataUriDirective();
     JsExpr dataRef = new JsExpr("opt_data.myKey", Integer.MAX_VALUE);
-    assertEquals(
-        "soy.$$filterImageDataUri(opt_data.myKey)",
-        cleanHtml.applyForJsSrc(dataRef, ImmutableList.<JsExpr>of()).getText());
+    assertThat(cleanHtml.applyForJsSrc(dataRef, ImmutableList.<JsExpr>of()).getText())
+        .isEqualTo("soy.$$filterImageDataUri(opt_data.myKey)");
+  }
+
+  public void testApplyForPySrc() {
+    FilterImageDataUriDirective cleanHtml = new FilterImageDataUriDirective();
+    PyExpr data = new PyExpr("'data'", Integer.MAX_VALUE);
+    assertThat(cleanHtml.applyForPySrc(data, ImmutableList.<PyExpr>of()).getText())
+        .isEqualTo("sanitize.filter_image_data_uri('data')");
+  }
+
+  private SanitizedContent sanitizedUri(String s) {
+    return UnsafeSanitizedContentOrdainer.ordainAsSafe(s, ContentKind.URI);
   }
 }

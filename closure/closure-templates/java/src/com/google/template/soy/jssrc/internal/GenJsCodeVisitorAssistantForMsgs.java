@@ -22,6 +22,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.base.internal.BaseUtils;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.jssrc.SoyJsSrcOptions;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.JsExprUtils;
@@ -54,7 +55,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 
 /**
  * Assistant visitor for GenJsCodeVisitor to handle messages.
@@ -105,10 +105,16 @@ class GenJsCodeVisitorAssistantForMsgs extends AbstractSoyNodeVisitor<Void> {
    * @param genJsExprsVisitor The current GenJsExprsVisitor.
    */
   GenJsCodeVisitorAssistantForMsgs(
-      GenJsCodeVisitor master, SoyJsSrcOptions jsSrcOptions, JsExprTranslator jsExprTranslator,
-      GenCallCodeUtils genCallCodeUtils, IsComputableAsJsExprsVisitor isComputableAsJsExprsVisitor,
-      JsCodeBuilder jsCodeBuilder, Deque<Map<String, JsExpr>> localVarTranslations,
-      GenJsExprsVisitor genJsExprsVisitor) {
+      GenJsCodeVisitor master,
+      SoyJsSrcOptions jsSrcOptions,
+      JsExprTranslator jsExprTranslator,
+      GenCallCodeUtils genCallCodeUtils,
+      IsComputableAsJsExprsVisitor isComputableAsJsExprsVisitor,
+      JsCodeBuilder jsCodeBuilder,
+      Deque<Map<String, JsExpr>> localVarTranslations,
+      GenJsExprsVisitor genJsExprsVisitor,
+      ErrorReporter errorReporter) {
+    super(errorReporter);
     this.master = master;
     this.jsSrcOptions = jsSrcOptions;
     this.jsExprTranslator = jsExprTranslator;
@@ -294,7 +300,7 @@ class GenJsCodeVisitorAssistantForMsgs extends AbstractSoyNodeVisitor<Void> {
       jsCodeBuilder.appendLineEnd(googMsgContentStrCode, ");");
 
     } else {
-      if (googMsgCodeGenInfo.placeholderCodeBits.size() == 0) {
+      if (googMsgCodeGenInfo.placeholderCodeBits.isEmpty()) {
         // If no placeholders, we put the message text on the same line.
         jsCodeBuilder.appendLineEnd(googMsgContentStrCode, ");");
       } else {
@@ -459,8 +465,10 @@ class GenJsCodeVisitorAssistantForMsgs extends AbstractSoyNodeVisitor<Void> {
       } else if (child instanceof MsgPluralRemainderNode) {
         // nothing to do
       } else {
-        String nodeStringForErrorMsg = (parentNode instanceof CommandNode) ?
-            "Tag " + ((CommandNode) parentNode).getTagString() : "Node " + parentNode.toString();
+        String nodeStringForErrorMsg =
+            (parentNode instanceof CommandNode)
+                ? "Tag " + ((CommandNode) parentNode).getTagString()
+                : "Node " + parentNode;
         throw SoySyntaxException.createWithoutMetaInfo(
             nodeStringForErrorMsg + " is not allowed to be a direct child of a 'msg' tag.");
       }

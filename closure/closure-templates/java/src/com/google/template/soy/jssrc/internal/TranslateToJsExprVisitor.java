@@ -16,11 +16,13 @@
 
 package com.google.template.soy.jssrc.internal;
 
+import com.google.common.base.Preconditions;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import com.google.template.soy.base.SoyBackendKind;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.base.internal.BaseUtils;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.AbstractReturningExprNodeVisitor;
 import com.google.template.soy.exprtree.DataAccessNode;
 import com.google.template.soy.exprtree.ExprNode;
@@ -38,6 +40,7 @@ import com.google.template.soy.exprtree.MapLiteralNode;
 import com.google.template.soy.exprtree.Operator;
 import com.google.template.soy.exprtree.OperatorNodes.AndOpNode;
 import com.google.template.soy.exprtree.OperatorNodes.NotOpNode;
+import com.google.template.soy.exprtree.OperatorNodes.NullCoalescingOpNode;
 import com.google.template.soy.exprtree.OperatorNodes.OrOpNode;
 import com.google.template.soy.exprtree.StringNode;
 import com.google.template.soy.exprtree.VarDefn;
@@ -51,6 +54,7 @@ import com.google.template.soy.soytree.defn.TemplateParam;
 import com.google.template.soy.types.SoyObjectType;
 import com.google.template.soy.types.SoyType;
 import com.google.template.soy.types.aggregate.UnionType;
+import com.google.template.soy.types.primitive.UnknownType;
 
 import java.util.Deque;
 import java.util.List;
@@ -61,6 +65,49 @@ import java.util.Map;
  * equivalent JS expression.
  *
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
+ *
+ * <hr>
+ *
+ * <h3>Types and Dependencies</h3>
+ *
+ * Types are used to allow reflective access to protobuf values even after JSCompiler has
+ * rewritten field names.
+ *
+ * <p>
+ * For example, one might normally access field foo on a protocol buffer by calling
+ *    <pre>my_pb.getFoo()</pre>
+ * A Soy author can access the same by writing
+ *    <pre>{$my_pb.foo}</pre>
+ * But the relationship between "foo" and "getFoo" is not preserved by JSCompiler's renamer.
+ *
+ * <p>
+ * To avoid adding many spurious dependencies on all protocol buffers compiled with a Soy
+ * template, we make type-unsound (see CAVEAT below) assumptions:
+ * <ul>
+ *   <li>That the top-level inputs, opt_data and opt_ijData, do not need conversion.
+ *   <li>That we can enumerate the concrete types of a container when the default
+ *     field lookup strategy would fail.  For example, if an instance of {@code my.Proto}
+ *     can be passed to the param {@code $my_pb}, then {@code $my_pb}'s static type is a
+ *     super-type of {@code my.Proto}.</li>
+ *   <li>That the template contains enough information to determine types that need to be
+ *     converted.
+ *     <br>
+ *     Pluggable {@link SoyTypeRegistry SoyTypeRegistries} allow recognizing input coercion,
+ *     for example between {@code goog.html.type.SafeHtml} and Soy's {@code html} string
+ *     sub-type.
+ *     <br>
+ *     When the converted type is a protocol-buffer type, we assume that the expression to be
+ *     converted can be fully-typed by expressionTypesVisitor.
+ * </ul>
+ *
+ * <p>
+ * CAVEAT: These assumptions are unsound, but necessary to be able to deploy JavaScript
+ * binaries of acceptable size.
+ * <p>
+ * Type-failures are correctness issues but do not lead to increased exposure to XSS or
+ * otherwise compromise security or privacy since a failure to unpack a type leads to a
+ * value that coerces to a trivial value like {@code undefined} or {@code "[Object]"}.
+ * </p>
  *
  */
 public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<JsExpr> {
@@ -94,8 +141,11 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
    */
   @AssistedInject
   TranslateToJsExprVisitor(
-      Map<String, SoyJsSrcFunction> soyJsSrcFunctionsMap, SoyJsSrcOptions jsSrcOptions,
-      @Assisted Deque<Map<String, JsExpr>> localVarTranslations) {
+      Map<String, SoyJsSrcFunction> soyJsSrcFunctionsMap,
+      SoyJsSrcOptions jsSrcOptions,
+      @Assisted Deque<Map<String, JsExpr>> localVarTranslations,
+      ErrorReporter errorReporter) {
+    super(errorReporter);
     this.soyJsSrcFunctionsMap = soyJsSrcFunctionsMap;
     this.jsSrcOptions = jsSrcOptions;
     this.localVarTranslations = localVarTranslations;
@@ -105,17 +155,20 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
    * Method that returns code to access a named parameter.
    * @param paramName the name of the parameter.
    * @param isInjected true if this is an injected parameter.
+   * @param type the type of the parameter being accessed.
    * @return The code to access the value of that parameter.
    */
-  static String genCodeForParamAccess(String paramName, boolean isInjected) {
-    return (isInjected ? "opt_ijData" : "opt_data") + genCodeForKeyAccess(paramName);
+  static String genCodeForParamAccess(String paramName, boolean isInjected, SoyType type) {
+    return genCodeForKeyAccess(
+        UnknownType.getInstance(), type,
+        isInjected ? "opt_ijData" : "opt_data", paramName);
   }
 
   // -----------------------------------------------------------------------------------------------
   // Implementation for a dummy root node.
 
-  @Override protected JsExpr visitExprRootNode(ExprRootNode<?> node) {
-    return visit(node.getChild(0));
+  @Override protected JsExpr visitExprRootNode(ExprRootNode node) {
+    return visit(node.getRoot());
   }
 
   // -----------------------------------------------------------------------------------------------
@@ -235,10 +288,11 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
 
     String fullExprText;
     if (nonstrKeysEntriesSnippet.length() == 0) {
-      fullExprText = "{" + strKeysEntriesSnippet.toString() + "}";
+      fullExprText = "{" + strKeysEntriesSnippet + "}";
     } else {
-      fullExprText = "(function() { var map_s = {" + strKeysEntriesSnippet.toString() + "};" +
-          nonstrKeysEntriesSnippet.toString() + " return map_s; })()";
+      fullExprText =
+          "(function() { var map_s = {" + strKeysEntriesSnippet + "};" + nonstrKeysEntriesSnippet
+          + " return map_s; })()";
     }
 
     return new JsExpr(fullExprText, Integer.MAX_VALUE);
@@ -262,8 +316,7 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
     if (nullSafetyPrefix.length() == 0) {
       return new JsExpr(refText, Integer.MAX_VALUE);
     } else {
-      return new JsExpr(
-          nullSafetyPrefix.toString() + refText, Operator.CONDITIONAL.getPrecedence());
+      return new JsExpr(nullSafetyPrefix + refText, Operator.CONDITIONAL.getPrecedence());
     }
   }
 
@@ -277,7 +330,9 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
           if (varRef.isNullSafeInjected()) {
             nullSafetyPrefix.append("(opt_ijData == null) ? null : ");
           }
-          return "opt_ijData" + genCodeForKeyAccess(varRef.getName());
+          SoyType type = node.getType();
+          return genCodeForKeyAccess(
+              UnknownType.getInstance(), type, "opt_ijData", varRef.getName());
         } else {
           JsExpr translation = getLocalVarTranslation(varRef.getName());
           if (translation != null) {
@@ -290,7 +345,8 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
               scope = "opt_ijData";
             }
             // Case 3: Data reference.
-            return scope + genCodeForKeyAccess(varRef.getName());
+            SoyType type = node.getType();
+            return genCodeForKeyAccess(UnknownType.getInstance(), type, scope, varRef.getName());
           }
         }
       }
@@ -310,8 +366,9 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
         // Generate access to field
         if (node.getKind() == ExprNode.Kind.FIELD_ACCESS_NODE) {
           FieldAccessNode fieldAccess = (FieldAccessNode) node;
-          return refText + genCodeForFieldAccess(
-              fieldAccess.getBaseExprChild().getType(), fieldAccess.getFieldName());
+          return genCodeForFieldAccess(
+              fieldAccess.getBaseExprChild().getType(), node.getType(),
+              refText, fieldAccess.getFieldName());
         } else {
           // Generate access to item.
           ItemAccessNode itemAccess = (ItemAccessNode) node;
@@ -333,12 +390,20 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
 
 
   /**
-   * Private helper for {@code visitDataAccessNode()} to generate the code for a key access, e.g.
+   * Helper for {@code visitDataAccessNode()} to generate the code for a key access, e.g.
    * ".foo" or "['class']". Handles JS reserved words.
+   * @param containerType the type of the container whose key is being accessed.
+   * @param memberType the type of the value of the property being mentioned.
+   * @param containerExpr An expression that evaluates to the container of the named field.
+   *     This expression may have any operator precedence that binds more tightly than unary
+   *     operators.
    * @param key The key.
    */
-  static String genCodeForKeyAccess(String key) {
-    return JsSrcUtils.isReservedWord(key) ? "['" + key + "']" : "." + key;
+  static String genCodeForKeyAccess(
+      SoyType containerType, SoyType memberType, String containerExpr, String key) {
+    Preconditions.checkNotNull(containerType);
+    Preconditions.checkNotNull(memberType);
+    return containerExpr + (JsSrcUtils.isReservedWord(key) ? "['" + key + "']" : "." + key);
   }
 
   /**
@@ -347,39 +412,48 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
    * is an object type, then it delegates the generation of the JS code to the type
    * object.
    * @param baseType The type of the object that contains the field.
+   * @param fieldType The type of the field.
+   * @param containerExpr An expression that evaluates to the container of the named field.
+   *     This expression may have any operator precedence that binds more tightly than unary
+   *     operators.
    * @param fieldName The field name.
    */
-  private static String genCodeForFieldAccess(SoyType baseType, String fieldName) {
-    if (baseType != null) {
-      // For unions, attempt to generate the field access code for each member
-      // type, and then see if they all agree.
-      if (baseType.getKind() == SoyType.Kind.UNION) {
-        UnionType unionType = (UnionType) baseType;
-        String fieldAccessCode = null;
-        for (SoyType memberType : unionType.getMembers()) {
-          if (memberType.getKind() != SoyType.Kind.NULL) {
-            String fieldAccessForType = genCodeForFieldAccess(memberType, fieldName);
-            if (fieldAccessCode == null) {
-              fieldAccessCode = fieldAccessForType;
-            } else if (!fieldAccessCode.equals(fieldAccessForType)) {
-              throw SoySyntaxException.createWithoutMetaInfo(
-                  "Cannot access field '" + fieldName + "' of type'" + baseType.toString() +
-                  ", because the different union member types have different access methods.");
-            }
+  private static String genCodeForFieldAccess(
+      SoyType baseType, SoyType fieldType, String containerExpr, String fieldName) {
+    Preconditions.checkNotNull(baseType);
+    Preconditions.checkNotNull(fieldType);
+    // For unions, attempt to generate the field access code for each member
+    // type, and then see if they all agree.
+    if (baseType.getKind() == SoyType.Kind.UNION) {
+      // TODO(user): We will need to generate fallback code for each variant.
+      UnionType unionType = (UnionType) baseType;
+      String fieldAccessCode = null;
+      for (SoyType memberType : unionType.getMembers()) {
+        if (memberType.getKind() != SoyType.Kind.NULL) {
+          String fieldAccessForType = genCodeForFieldAccess(
+              memberType, fieldType, containerExpr, fieldName);
+          if (fieldAccessCode == null) {
+            fieldAccessCode = fieldAccessForType;
+          } else if (!fieldAccessCode.equals(fieldAccessForType)) {
+            throw SoySyntaxException.createWithoutMetaInfo("Cannot access field '" + fieldName
+                + "' of type'" + baseType
+                + ", because the different union member types have different access methods.");
           }
         }
-        return fieldAccessCode;
       }
+      return fieldAccessCode;
+    }
 
-      if (baseType.getKind() == SoyType.Kind.OBJECT) {
-        SoyObjectType objType = (SoyObjectType) baseType;
-        String accessExpr = objType.getFieldAccessor(fieldName, SoyBackendKind.JS_SRC);
-        if (accessExpr != null) {
-          return accessExpr;
-        }
+    if (baseType.getKind() == SoyType.Kind.OBJECT) {
+      SoyObjectType objType = (SoyObjectType) baseType;
+      String accessExpr = objType.getFieldAccessExpr(
+          containerExpr, fieldName, SoyBackendKind.JS_SRC);
+      if (accessExpr != null) {
+        return accessExpr;
       }
     }
-    return genCodeForKeyAccess(fieldName);
+
+    return genCodeForKeyAccess(baseType, fieldType, containerExpr, fieldName);
   }
 
   @Override protected JsExpr visitGlobalNode(GlobalNode node) {
@@ -402,6 +476,14 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
 
   @Override protected JsExpr visitOrOpNode(OrOpNode node) {
     return genJsExprUsingSoySyntaxWithNewToken(node, "||");
+  }
+
+  @Override protected JsExpr visitNullCoalescingOpNode(NullCoalescingOpNode node) {
+    List<JsExpr> operandJsExprs = visitChildren(node);
+    return new JsExpr(
+        "($$temp = " + operandJsExprs.get(0).getText() + ") == null ? "
+            + operandJsExprs.get(1).getText() + " : $$temp",
+        Operator.CONDITIONAL.getPrecedence());
   }
 
   @Override protected JsExpr visitOperatorNode(OperatorNode node) {
@@ -432,6 +514,8 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
           return visitIndexFunction(node);
         case QUOTE_KEYS_IF_JS:
           return visitMapLiteralNodeHelper((MapLiteralNode) node.getChild(0), true);
+        case CHECK_NOT_NULL:
+          return visitCheckNotNullFunction(node.getChild(0));
         default:
           throw new AssertionError();
       }
@@ -460,6 +544,9 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
             " (function call \"" + node.toSourceString() + "\").");
   }
 
+  private JsExpr visitCheckNotNullFunction(ExprNode child) {
+    return new JsExpr("soy.$$checkNotNull(" + visit(child).getText() + ")", Integer.MAX_VALUE);
+  }
 
   private JsExpr visitIsFirstFunction(FunctionNode node) {
     String varName = ((VarRefNode) node.getChild(0)).getName();
