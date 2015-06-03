@@ -64,7 +64,7 @@ public class SoyFile extends LocalFileJsInput {
   }
 
   @Override
-  public String getCode() {
+  public String generateCode() {
     SoyFileSet.Builder builder = injector.getInstance(SoyFileSet.Builder.class);
     builder.add(getSource());
     builder.setCssHandlingScheme(CssHandlingScheme.BACKEND_SPECIFIC);

@@ -17,7 +17,7 @@ public class JsSourceFile extends LocalFileJsInput {
   }
 
   @Override
-  public String getCode() {
+  public String generateCode() {
     try {
       return Files.toString(getSource());
     } catch (IOException e) {

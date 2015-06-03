@@ -19,7 +19,7 @@ class DepsJsInput extends AbstractJsInput {
   }
 
   @Override
-  public String getCode() {
+  public String generateCode() {
     return js;
   }
 

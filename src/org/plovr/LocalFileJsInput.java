@@ -115,14 +115,6 @@ public abstract class LocalFileJsInput extends AbstractJsInput {
   }
 
   /**
-   * If the underlying file changes, then remove all cached information.
-   */
-  void markDirty() {
-    this.provides = null;
-    this.requires = null;
-  }
-
-  /**
    * Gets a normalized path name for the source. This is important because the
    * same file may be both an "input" and a "path" for a config, but it may
    * be referenced via different File names because of how relative paths

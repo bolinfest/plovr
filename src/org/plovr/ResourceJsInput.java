@@ -52,7 +52,7 @@ public class ResourceJsInput extends AbstractJsInput {
   }
 
   @Override
-  public String getCode() {
+  public String generateCode() {
     return getCodeWithEtag().code;
   }
 

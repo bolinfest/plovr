@@ -18,7 +18,7 @@ public class AbstractJsInputTest {
     }
 
     @Override
-    public String getCode() {
+    public String generateCode() {
       return code;
     }
   }
