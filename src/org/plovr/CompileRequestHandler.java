@@ -64,7 +64,7 @@ public class CompileRequestHandler extends AbstractGetHandler {
           "Should not write errors to builder if output has already been written");
       String viewSourceUrl = getViewSourceUrlForExchange(exchange);
       reporter.newReport(config)
-          .withErrors(ImmutableList.of(e.createCompilationError()))
+          .withErrors(e.createCompilationErrors())
           .withViewSourceUrl(viewSourceUrl)
           .appendTo(builder);
     }
@@ -78,22 +78,6 @@ public class CompileRequestHandler extends AbstractGetHandler {
     Responses.writeJs(builder.toString(), config, exchange);
   }
 
-  public static Compilation compile(Config config)
-      throws CompilationException {
-    try {
-      Compilation compilation = config.getManifest().getCompilerArguments(
-          config.getModuleConfig());
-      compilation.compile(config);
-      return compilation;
-    } catch (SoySyntaxException e) {
-      throw new CheckedSoySyntaxException(e);
-    } catch (PlovrSoySyntaxException e) {
-      throw new CheckedSoySyntaxException(e);
-    } catch (PlovrCoffeeScriptCompilerException e) {
-      throw new CheckedCoffeeScriptCompilerException(e);
-    }
-  }
-
   /**
    * For modes other than RAW, compile the code and write the result to builder.
    * When modules are used, only the code for the initial module will be written,
@@ -105,10 +89,10 @@ public class CompileRequestHandler extends AbstractGetHandler {
     Compilation compilation;
     String viewSourceUrl = getViewSourceUrlForExchange(exchange);
     try {
-      compilation = compile(config);
+      compilation = Compilation.createAndCompile(config);
     } catch (CompilationException e) {
       reporter.newReport(config)
-          .withErrors(ImmutableList.of(e.createCompilationError()))
+          .withErrors(e.createCompilationErrors())
           .withViewSourceUrl(viewSourceUrl)
           .appendTo(appendable);
       return;

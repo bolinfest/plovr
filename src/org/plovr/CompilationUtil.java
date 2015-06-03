@@ -23,7 +23,7 @@ public final class CompilationUtil {
     Preconditions.checkState(config.getCompilationMode() != CompilationMode.RAW);
     Compilation compilation = server.getLastCompilation(config);
     if (compilation == null) {
-      compilation = CompileRequestHandler.compile(config);
+      compilation = Compilation.createAndCompile(config);
       if (recordCompilation) {
         server.recordCompilation(config, compilation);
       }
