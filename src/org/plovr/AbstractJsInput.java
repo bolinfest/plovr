@@ -28,16 +28,30 @@ public abstract class AbstractJsInput implements JsInput {
 
   private final String name;
 
-  protected List<String> provides;
-
-  protected List<String> requires;
+  private String code;
+  private List<String> provides;
+  private List<String> requires;
 
   AbstractJsInput(String name) {
     this.name = name;
   }
 
+  /**
+   * If the underlying file changes, then remove all cached information.
+   */
+  void markDirty() {
+    provides = null;
+    requires = null;
+    code = null;
+  }
+
   @Override
-  public abstract String getCode();
+  public final String getCode() {
+    cacheExpensiveValuesIfNecessary();
+    return code;
+  }
+
+  protected abstract String generateCode();
 
   @Override
   public boolean supportsEtags() {
@@ -79,17 +93,13 @@ public abstract class AbstractJsInput implements JsInput {
 
   @Override
   public List<String> getProvides() {
-    if (provides == null || hasInputChanged()) {
-      processProvidesAndRequires();
-    }
+    cacheExpensiveValuesIfNecessary();
     return provides;
   }
 
   @Override
   public List<String> getRequires() {
-    if (requires == null || hasInputChanged()) {
-      processProvidesAndRequires();
-    }
+    cacheExpensiveValuesIfNecessary();
     return requires;
   }
 
@@ -107,10 +117,16 @@ public abstract class AbstractJsInput implements JsInput {
     throw new UnsupportedOperationException("This does not represent a Soy file");
   }
 
-  protected void processProvidesAndRequires() {
+  private void cacheExpensiveValuesIfNecessary() {
+    if (code != null && !hasInputChanged()) {
+      return;
+    }
+
+    this.code = generateCode();
+
     List<String> provides = Lists.newArrayList();
     List<String> requires = Lists.newArrayList();
-    StringLineReader lineReader = new StringLineReader(getCode());
+    StringLineReader lineReader = new StringLineReader(code);
     String line;
     while ((line = lineReader.readLine()) != null) {
       Matcher matcher = GOOG_PROVIDE_OR_REQUIRE.matcher(line);

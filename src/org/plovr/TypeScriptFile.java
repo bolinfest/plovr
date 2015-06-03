@@ -12,7 +12,7 @@ public class TypeScriptFile extends LocalFileJsInput {
   }
 
   @Override
-  public String getCode() {
+  public String generateCode() {
     try {
       return TypeScriptCompiler.getInstance().compile(
           Files.toString(getSource()), getName());
