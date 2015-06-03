@@ -148,7 +148,7 @@ public class InputFileHandler extends AbstractGetHandler {
         builder.append(getCodeForDepsJs(manifest));
       } catch (UncheckedCompilationException e) {
         reporter.newReport(config)
-            .withErrors(ImmutableList.of(e.createCompilationError()))
+            .withErrors(e.createCompilationErrors())
             .appendTo(builder);
       }
       Responses.writeJs(builder.toString(), config, exchange);
@@ -209,7 +209,7 @@ public class InputFileHandler extends AbstractGetHandler {
     } catch (UncheckedCompilationException e) {
       StringBuilder builder = new StringBuilder();
       reporter.newReport(config)
-          .withErrors(ImmutableList.of(e.createCompilationError()))
+          .withErrors(e.createCompilationErrors())
           .appendTo(builder);
       code = builder.toString();
     }

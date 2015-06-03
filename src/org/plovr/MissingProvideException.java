@@ -4,7 +4,7 @@ import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.DiagnosticType;
 import com.google.javascript.jscomp.JSError;
 
-public final class MissingProvideException extends CompilationException {
+public final class MissingProvideException extends CompilationException.Single {
 
   private static final long serialVersionUID = 1L;
 

@@ -3,8 +3,10 @@ package org.plovr;
 import java.io.File;
 import java.io.IOException;
 import java.io.Writer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.annotation.Nullable;
 
@@ -15,6 +17,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
@@ -34,6 +37,7 @@ import com.google.javascript.jscomp.Result;
 import com.google.javascript.jscomp.SourceExcerptProvider;
 import com.google.javascript.jscomp.SourceFile;
 import com.google.javascript.jscomp.SourceMap;
+import com.google.template.soy.base.SoySyntaxException;
 
 /**
  * {@link Compilation} represents a compilation performed by the Closure
@@ -87,8 +91,46 @@ public final class Compilation {
     return new Compilation(externs, null, modules);
   }
 
-  public void compile(Config config) {
+  public static Compilation createAndCompile(Config config) throws CompilationException {
+    // Generate all the code upfront, and track any syntax errors in individual
+    // generated files.
+    Set<JsInput> allDependencies = config.getManifest().getAllDependencies();
+    List<CompilationException> errors = new ArrayList<>();
+    for (JsInput input : allDependencies) {
+      try {
+        input.getCode();
+      } catch (Throwable e) {
+        errors.add(toCheckedException(e));
+      }
+    }
+
+    if (!errors.isEmpty()) {
+      throw new CompilationException.Multi(errors);
+    }
+
+    try {
+      Compilation compilation = config.getManifest().getCompilerArguments(config.getModuleConfig());
+      compilation.compile(config);
+      return compilation;
+    } catch (Throwable e) {
+      throw toCheckedException(e);
+    }
+  }
+
+  private static CompilationException toCheckedException(Throwable e) {
+    if (e instanceof SoySyntaxException) {
+      return new CheckedSoySyntaxException((SoySyntaxException) e);
+    } else if (e instanceof PlovrSoySyntaxException) {
+      return new CheckedSoySyntaxException((PlovrSoySyntaxException) e);
+    } else if (e instanceof PlovrCoffeeScriptCompilerException) {
+      return new CheckedCoffeeScriptCompilerException((PlovrCoffeeScriptCompilerException) e);
+    }
+    throw Throwables.propagate(e);
+  }
+
+  public void compile(Config config) throws CompilationException {
     this.config = config;
+
     if (config.getCompilationMode() == CompilationMode.RAW) {
       compileRaw(config);
     } else {

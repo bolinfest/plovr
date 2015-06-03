@@ -5,7 +5,7 @@ import com.google.javascript.jscomp.DiagnosticType;
 import com.google.javascript.jscomp.JSError;
 import com.google.template.soy.base.SoySyntaxException;
 
-public final class CheckedSoySyntaxException extends CompilationException {
+public final class CheckedSoySyntaxException extends CompilationException.Single {
 
   private static final long serialVersionUID = 1L;
 

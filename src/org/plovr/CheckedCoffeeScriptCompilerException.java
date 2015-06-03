@@ -11,7 +11,7 @@ import com.google.javascript.jscomp.JSError;
  *
  * @author bolinfest@gmail.com (Michael Bolin)
  */
-public class CheckedCoffeeScriptCompilerException extends CompilationException {
+public class CheckedCoffeeScriptCompilerException extends CompilationException.Single {
 
   private static final long serialVersionUID = 1L;
 

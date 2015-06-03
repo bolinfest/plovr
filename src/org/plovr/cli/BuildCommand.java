@@ -54,10 +54,9 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
       Config config = ConfigParser.parseFile(new File(configFile));
       Compilation compilation;
       try {
-        compilation = CompileRequestHandler.compile(config);
+        compilation = Compilation.createAndCompile(config);
       } catch (CompilationException e) {
-        e.printStackTrace();
-        compilation = null;
+        e.print(System.err);
         return 1;
       }
       boolean isSuccess = processResult(compilation, config, options.getSourceMapPath(), config.getId());

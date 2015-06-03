@@ -48,7 +48,7 @@ public class ExtractCommand extends AbstractCommandRunner<ExtractCommandOptions>
     try {
       inputs = manifest.getInputsInCompilationOrder();
     } catch (CompilationException e) {
-      System.err.println(e.getMessage());
+      e.print(System.err);
       return 1;
     }
 

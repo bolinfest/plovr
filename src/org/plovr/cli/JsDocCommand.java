@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.plovr.Compilation;
 import org.plovr.CompilationException;
 import org.plovr.CompileRequestHandler;
 import org.plovr.CompilerPassFactory;
@@ -28,7 +29,7 @@ public class JsDocCommand extends AbstractCommandRunner<JsDocCommandOptions> {
   @Override
   String getUsageIntro() {
     return "Specify a single config to generate the documentation for " +
-    		"all of its source files.";
+        "all of its source files.";
   }
 
   @Override
@@ -64,9 +65,9 @@ public class JsDocCommand extends AbstractCommandRunner<JsDocCommandOptions> {
 
     Config config = builder.build();
     try {
-      CompileRequestHandler.compile(config);
+      Compilation.createAndCompile(config);
     } catch (CompilationException e) {
-      e.printStackTrace();
+      e.print(System.err);
       return 1;
     }
 
