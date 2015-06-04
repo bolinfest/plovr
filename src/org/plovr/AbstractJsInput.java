@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.io.LineReader;
@@ -39,7 +40,7 @@ public abstract class AbstractJsInput implements JsInput {
   /**
    * If the underlying file changes, then remove all cached information.
    */
-  void markDirty() {
+  synchronized void markDirty() {
     provides = null;
     requires = null;
     code = null;
@@ -48,7 +49,7 @@ public abstract class AbstractJsInput implements JsInput {
   @Override
   public final String getCode() {
     cacheExpensiveValuesIfNecessary();
-    return code;
+    return Preconditions.checkNotNull(code, getName());
   }
 
   protected abstract String generateCode();
@@ -94,13 +95,13 @@ public abstract class AbstractJsInput implements JsInput {
   @Override
   public List<String> getProvides() {
     cacheExpensiveValuesIfNecessary();
-    return provides;
+    return Preconditions.checkNotNull(provides, getName());
   }
 
   @Override
   public List<String> getRequires() {
     cacheExpensiveValuesIfNecessary();
-    return requires;
+    return Preconditions.checkNotNull(requires, getName());
   }
 
   protected boolean hasInputChanged() {
@@ -117,12 +118,12 @@ public abstract class AbstractJsInput implements JsInput {
     throw new UnsupportedOperationException("This does not represent a Soy file");
   }
 
-  private void cacheExpensiveValuesIfNecessary() {
+  private synchronized void cacheExpensiveValuesIfNecessary() {
     if (code != null && !hasInputChanged()) {
       return;
     }
 
-    this.code = generateCode();
+    code = generateCode();
 
     List<String> provides = Lists.newArrayList();
     List<String> requires = Lists.newArrayList();
