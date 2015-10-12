@@ -40,6 +40,7 @@ java_test(
   deps = [
     '//closure/closure-compiler:gson',
     ':junit',
+    ':mockito',
     ':plovr-lib',
     '//closure/closure-compiler:closure-compiler',
     '//closure/closure-compiler:jsr305',
@@ -74,6 +75,11 @@ prebuilt_jar(
   deps = [
     ':hamcrest-core',
   ],
+)
+
+prebuilt_jar(
+  name = 'mockito',
+  binary_jar = 'lib/mockito-core-1.10.19.jar',
 )
 
 prebuilt_jar(
