@@ -1,5 +1,10 @@
-java_library(
+java_binary(
   name = 'plovr',
+  deps = [':plovr-lib'],
+  main_class = 'org.plovr.cli.Main')
+
+java_library(
+  name = 'plovr-lib',
   srcs = glob(['src/**/*.java']),
   resources = glob([
     'src/**/*.js',
@@ -9,18 +14,17 @@ java_library(
   source = '7',
   target = '7',
   deps = [
-    ':gson',
-    ':guava',
+    '//closure/closure-compiler:gson',
     ':selenium',
     '//closure/closure-compiler:args4j',
     '//closure/closure-compiler:closure-compiler',
-    '//closure/closure-compiler:json',
+    '//closure/closure-compiler:guava',
     '//closure/closure-compiler:jsr305',
     '//closure/closure-compiler:protobuf',
-    '//closure/closure-compiler:rhino',
     '//closure/closure-stylesheets:closure-stylesheets',
     '//closure/closure-templates:closure-templates',
     '//closure/closure-templates:guice',
+    '//closure/closure-templates:guice-assistedinject',
     '//closure/closure-templates:guice-multibindings',
   ],
 )
@@ -28,27 +32,26 @@ java_library(
 java_test(
   name = 'test',
   srcs = glob(['test/**/*.java']),
-  resources = glob(['test/**/*.js']),
+  resources = glob(['test/**/*.js']) + [
+    'library_manifest.txt',
+    'third_party_manifest.txt',
+    'externs_manifest.txt',
+  ],
   deps = [
-    ':gson',
+    '//closure/closure-compiler:gson',
     ':junit',
-    ':plovr',
-    ':guava',
+    ':plovr-lib',
     '//closure/closure-compiler:closure-compiler',
     '//closure/closure-compiler:jsr305',
     '//closure/closure-stylesheets:closure-stylesheets',
     '//closure/closure-templates:closure-templates',
+    '//closure/closure-templates:guava',
   ],
 )
 
 prebuilt_jar(
   name = 'gson',
   binary_jar = 'lib/gson-2.2.2.jar',
-)
-
-prebuilt_jar(
-  name = 'guava',
-  binary_jar = 'lib/guava-15.0.jar',
 )
 
 prebuilt_jar(

@@ -22,3 +22,12 @@ fi
 
 set -ex
 git subtree pull --prefix="closure/${REPOSITORY}" "git@github.com:google/${REPOSITORY}" master
+
+if [ "$REPOSTIORY" = "closure-library" ]; then
+  ./listfiles.sh closure/closure-library/closure/goog > library_manifest.txt
+  ./listfiles.sh closure/closure-library/third_party/closure/goog > third_party_manifest.txt
+fi
+
+if [ "$REPOSTIORY" = "closure-compiler" ]; then
+  ./listfiles.sh closure/closure-compiler/externs > externs_manifest.txt
+fi
