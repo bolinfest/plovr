@@ -1,0 +1,106 @@
+java_library(
+  name = 'closure-compiler',
+  srcs = glob(
+      includes = [
+        'src/**/*.java',
+
+        # TODO(mbolin): Generate these files rather than relying on the versions
+        # checked in by the Closure Compiler project.
+        'gen/**/*.java',
+      ],
+      excludes = [
+        'src/com/google/javascript/jscomp/ant/**/*.java',
+        'src/com/google/javascript/jscomp/jsonml/**/*.java',
+        'src/com/google/javascript/jscomp/testing/**/*.java',
+        'src/com/google/javascript/refactoring/testing/**/*.java',
+        'src/com/google/javascript/jscomp/webservice/**/*.java',
+        'src/com/google/javascript/rhino/testing/**/*.java',
+      ]),
+  resources = glob(['closure/closure-compiler/contrib/externs/**/*.js']) + [
+    ':ParserConfig',
+    ':Messages',
+    ':externs',
+  ],
+  resources_root = '.',
+  deps = [
+    ':args4j',
+    ':gson',
+    ':guava',
+    ':jsr305',
+    ':protobuf',
+  ],
+  visibility = [ 'PUBLIC' ],
+)
+
+# This needs to end up at
+# rhino_ast/java/com/google/javascript/rhino/Messages.properties
+genrule(
+  name = 'Messages',
+  srcs = ['src/com/google/javascript/rhino/Messages.properties'],
+  cmd = 'mkdir -p `dirname $OUT` && cp $SRCS $OUT',
+  out = 'rhino_ast/java/com/google/javascript/rhino/Messages.properties',
+)
+
+# This needs to end up at
+# com/google/javascript/jscomp/parsing/ParserConfig.properties
+genrule(
+  name = 'ParserConfig',
+  srcs = ['src/com/google/javascript/jscomp/parsing/ParserConfig.properties'],
+  cmd = 'mkdir -p `dirname $OUT` && cp $SRCS $OUT',
+  out = 'com/google/javascript/jscomp/parsing/ParserConfig.properties',
+)
+
+genrule(
+  name = 'externs',
+  srcs = glob(['externs/*.js']),
+  cmd = 'zip -r $OUT $SRCS',
+  out = 'externs.zip',
+)
+
+prebuilt_jar(
+  name = 'ant',
+  binary_jar = 'lib/ant.jar',
+  visibility = [
+    'PUBLIC',
+  ],
+)
+
+prebuilt_jar(
+  name = 'args4j',
+  binary_jar = 'lib/args4j.jar',
+  visibility = [
+    'PUBLIC',
+  ],
+)
+
+prebuilt_jar(
+  name = 'gson',
+  binary_jar = 'lib/gson.jar',
+  visibility = [
+    'PUBLIC',
+  ],
+)
+
+prebuilt_jar(
+  name = 'guava',
+  binary_jar = 'lib/guava.jar',
+  visibility = [
+    'PUBLIC',
+  ],
+)
+
+prebuilt_jar(
+  name = 'jsr305',
+  binary_jar = 'lib/jsr305.jar',
+  visibility = [
+    'PUBLIC',
+  ],
+)
+
+prebuilt_jar(
+  name = 'protobuf',
+  binary_jar = 'lib/protobuf-java.jar',
+  visibility = [
+    'PUBLIC',
+  ],
+)
