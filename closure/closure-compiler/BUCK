@@ -98,6 +98,14 @@ prebuilt_jar(
 )
 
 prebuilt_jar(
+  name = 'junit',
+  binary_jar = 'lib/junit.jar',
+  visibility = [
+    'PUBLIC',
+  ],
+)
+
+prebuilt_jar(
   name = 'protobuf',
   binary_jar = 'lib/protobuf-java.jar',
   visibility = [

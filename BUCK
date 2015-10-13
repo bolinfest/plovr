@@ -39,41 +39,14 @@ java_test(
   ],
   deps = [
     '//closure/closure-compiler:gson',
-    ':junit',
     ':mockito',
     ':plovr-lib',
     '//closure/closure-compiler:closure-compiler',
     '//closure/closure-compiler:jsr305',
+    '//closure/closure-compiler:junit',
     '//closure/closure-stylesheets:closure-stylesheets',
     '//closure/closure-templates:closure-templates',
     '//closure/closure-templates:guava',
-  ],
-)
-
-prebuilt_jar(
-  name = 'gson',
-  binary_jar = 'lib/gson-2.2.2.jar',
-)
-
-prebuilt_jar(
-  name = 'junit',
-  binary_jar = 'lib/junit-4.11.jar',
-  deps = [
-    ':hamcrest-core',
-    ':hamcrest-library',
-  ],
-)
-
-prebuilt_jar(
-  name = 'hamcrest-core',
-  binary_jar = 'lib/hamcrest-core-1.3.jar',
-)
-
-prebuilt_jar(
-  name = 'hamcrest-library',
-  binary_jar = 'lib/hamcrest-library-1.3.jar',
-  deps = [
-    ':hamcrest-core',
   ],
 )
 
