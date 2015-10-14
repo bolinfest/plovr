@@ -10,7 +10,11 @@ java_library(
     'src/**/*.js',
     'src/**/*.soy',
     'src/**/*.ts',
-  ]),
+  ]) + [
+    'library_manifest.txt',
+    'third_party_manifest.txt',
+    'externs_manifest.txt',
+  ],
   source = '7',
   target = '7',
   deps = [
@@ -32,11 +36,7 @@ java_library(
 java_test(
   name = 'test',
   srcs = glob(['test/**/*.java']),
-  resources = glob(['test/**/*.js']) + [
-    'library_manifest.txt',
-    'third_party_manifest.txt',
-    'externs_manifest.txt',
-  ],
+  resources = glob(['test/**/*.js']),
   deps = [
     '//closure/closure-compiler:gson',
     ':mockito',
