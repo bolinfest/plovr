@@ -17,42 +17,38 @@ java_library(
         'src/com/google/javascript/jscomp/webservice/**/*.java',
         'src/com/google/javascript/rhino/testing/**/*.java',
       ]),
-  resources = glob(['closure/closure-compiler/contrib/externs/**/*.js']) + [
-    ':ParserConfig',
-    ':Messages',
-    ':externs',
-  ],
-  resources_root = '.',
   deps = [
     ':args4j',
     ':gson',
     ':guava',
     ':jsr305',
     ':protobuf',
+    ':externs_srcs',
+    ':support_srcs',
   ],
   visibility = [ 'PUBLIC' ],
 )
 
-# This needs to end up at
-# com/google/javascript/rhino/Messages.properties
-genrule(
-  name = 'Messages',
-  srcs = ['src/com/google/javascript/rhino/Messages.properties'],
-  cmd = 'mkdir -p `dirname $OUT` && cp $SRCS $OUT',
-  out = 'com/google/javascript/rhino/Messages.properties',
-)
+java_library(
+  name = 'externs_srcs',
+  resources = glob(includes=[
+    'externs/**/*.js',
+    'contrib/externs/**/*.js',
+  ]) + [
+    ':externs_zip',
+  ],
+  resources_root = '.')
 
-# This needs to end up at
-# com/google/javascript/jscomp/parsing/ParserConfig.properties
-genrule(
-  name = 'ParserConfig',
-  srcs = ['src/com/google/javascript/jscomp/parsing/ParserConfig.properties'],
-  cmd = 'mkdir -p `dirname $OUT` && cp $SRCS $OUT',
-  out = 'com/google/javascript/jscomp/parsing/ParserConfig.properties',
-)
+java_library(
+  name = 'support_srcs',
+  resources = glob(includes=[
+    'src/com/google/javascript/jscomp/js/*.js',
+    'src/**/*.properties'
+  ]),
+  resources_root = './src')
 
 genrule(
-  name = 'externs',
+  name = 'externs_zip',
   srcs = glob(['externs/*.js']),
   cmd = 'zip -r $OUT $SRCS',
   out = 'externs.zip',
