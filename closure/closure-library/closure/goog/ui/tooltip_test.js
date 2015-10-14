@@ -396,6 +396,10 @@ function testSetContent_guardedByGlobalFlag() {
       }).message);
 }
 
+function testSetElementNull() {
+  tt.setElement(null);
+}
+
 function testFocusBlurElementsInTooltip() {
   var anchorEl = dom.getElement('hovertarget');
   goog.dom.setFocusableTabIndex(anchorEl, true);

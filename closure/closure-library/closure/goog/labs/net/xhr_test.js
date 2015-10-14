@@ -20,8 +20,13 @@ goog.require('goog.labs.net.xhr');
 goog.require('goog.net.WrapperXmlHttpFactory');
 goog.require('goog.net.XmlHttp');
 goog.require('goog.testing.MockClock');
+goog.require('goog.testing.TestCase');
 goog.require('goog.testing.jsunit');
 goog.require('goog.userAgent');
+
+function setUpPage() {
+  goog.testing.TestCase.getActiveTestCase().promiseTimeout = 10000; // 10s
+}
 
 function stubXhrToReturn(status, opt_responseText, opt_latency) {
 
@@ -229,8 +234,18 @@ function testBadUrlDetectedAsError() {
 }
 
 function testBadOriginTriggersOnErrorHandler() {
+  // Disable tests when being run as a part of open-source. For some reason, the
+  // external Windows/IE VMs on Sauce Labs allow cross-origin requests.
+  // TODO(joeltine): Re-enable externally when cross-origin requests are
+  // properly blocked.
+  if (goog.userAgent.IE && /closure\/goog\/labs/.test(location.pathname)) {
+    return;
+  }
   return xhr.get('http://www.google.com').then(
-      fail /* opt_onFulfilled */,
+      function() {
+        fail('XHR to http://www.google.com should\'ve failed due to ' +
+            'same-origin policy.');
+      } /* opt_onFulfilled */,
       function(err) {
         // In IE this will be a goog.labs.net.xhr.Error since it is thrown
         //  when calling xhr.open(), other browsers will raise an HttpError.
