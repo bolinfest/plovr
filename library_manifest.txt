@@ -13,6 +13,8 @@ async/animationdelay.js
 async/animationdelay_test.js
 async/conditionaldelay.js
 async/conditionaldelay_test.js
+async/debouncer.js
+async/debouncer_test.js
 async/delay.js
 async/delay_test.js
 async/freelist.js
@@ -110,7 +112,6 @@ db/index.js
 db/indexeddb.js
 db/keyrange.js
 db/objectstore.js
-db/old_db_test.js
 db/transaction.js
 debug/console.js
 debug/console_test.js
@@ -138,7 +139,6 @@ debug/formatter.js
 debug/formatter_test.js
 debug/fpsdisplay.js
 debug/fpsdisplay_test.js
-debug/gcdiagnostics.js
 debug/logbuffer.js
 debug/logbuffer_test.js
 debug/logger.js
@@ -196,6 +196,7 @@ dom/fontsizemonitor_test.js
 dom/forms.js
 dom/forms_test.js
 dom/fullscreen.js
+dom/fullscreen_test.js
 dom/iframe.js
 dom/iframe_test.js
 dom/inputtype.js
@@ -429,6 +430,7 @@ graphics/abstractgraphics.js
 graphics/affinetransform.js
 graphics/canvaselement.js
 graphics/canvasgraphics.js
+graphics/canvasgraphics_test.js
 graphics/element.js
 graphics/ellipseelement.js
 graphics/ext/coordinates.js
@@ -759,6 +761,8 @@ net/crossdomainrpc.js
 net/crossdomainrpc_test.js
 net/errorcode.js
 net/eventtype.js
+net/fetchxmlhttpfactory.js
+net/fetchxmlhttpfactory_test.js
 net/filedownloader.js
 net/filedownloader_test.js
 net/httpstatus.js
@@ -782,6 +786,8 @@ net/multiiframeloadmonitor_test.js
 net/networkstatusmonitor.js
 net/networktester.js
 net/networktester_test.js
+net/streams/nodereadablestream.js
+net/streams/streamfactory.js
 net/testdata/jsloader_test1.js
 net/testdata/jsloader_test2.js
 net/testdata/jsloader_test3.js
@@ -793,6 +799,7 @@ net/wrapperxmlhttpfactory.js
 net/xhrio.js
 net/xhrio_test.js
 net/xhriopool.js
+net/xhriopool_test.js
 net/xhrlike.js
 net/xhrmanager.js
 net/xhrmanager_test.js
@@ -1033,6 +1040,7 @@ testing/functionmock_test.js
 testing/graphics.js
 testing/i18n/asserts.js
 testing/i18n/asserts_test.js
+testing/jstdtestcaseadapter.js
 testing/jsunit.js
 testing/loosemock.js
 testing/loosemock_test.js
@@ -1064,6 +1072,7 @@ testing/net/xhrio.js
 testing/net/xhrio_test.js
 testing/net/xhriopool.js
 testing/objectpropertystring.js
+testing/parallel_closure_test_suite.js
 testing/performancetable.js
 testing/performancetimer.js
 testing/performancetimer_test.js
@@ -1098,7 +1107,6 @@ testing/ui/rendererasserts_test.js
 testing/ui/rendererharness.js
 testing/ui/style.js
 testing/ui/style_test.js
-testing/watchers.js
 timer/timer.js
 timer/timer_test.js
 tweak/entries.js
