@@ -16,6 +16,8 @@
 
 package com.google.template.soy.shared.internal;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.inject.Key;
 import com.google.template.soy.internal.i18n.BidiGlobalDir;
 import com.google.template.soy.msgs.SoyMsgBundle;
@@ -31,6 +33,8 @@ import javax.annotation.Nullable;
  *
  */
 public class ApiCallScopeUtils {
+  private static final Key<String> LOCALE_STRING_KEY = Key.get(String.class, LocaleString.class);
+  private static final Key<BidiGlobalDir> GLOBAL_DIR_KEY = Key.get(BidiGlobalDir.class);
 
   private ApiCallScopeUtils() {}
 
@@ -40,13 +44,10 @@ public class ApiCallScopeUtils {
    *
    * @param apiCallScope The scope object that manages the API call scope.
    * @param msgBundle The bundle of translated messages, or null to use the messages from the Soy
-   * @param bidiGlobalDir The bidi global directionality (ltr=1, rtl=-1, or 0 to use a value derived
-   *     from the msgBundle locale, if any, otherwise ltr).
    */
-  public static void seedSharedParams(
-      GuiceSimpleScope apiCallScope, @Nullable SoyMsgBundle msgBundle, int bidiGlobalDir) {
-    seedSharedParams(apiCallScope, msgBundle,
-                     bidiGlobalDir == 0 ? null : BidiGlobalDir.forStaticIsRtl(bidiGlobalDir < 0));
+  public static void seedSharedParams(GuiceSimpleScope apiCallScope,
+      @Nullable SoyMsgBundle msgBundle) {
+    seedSharedParams(apiCallScope, msgBundle, null);
   }
 
 
@@ -67,9 +68,19 @@ public class ApiCallScopeUtils {
         bidiGlobalDir = BidiGlobalDir.forStaticLocale(localeString);
     }
 
-    apiCallScope.seed(SoyMsgBundle.class, msgBundle);
-    apiCallScope.seed(Key.get(String.class, LocaleString.class), localeString);
-    apiCallScope.seed(BidiGlobalDir.class, bidiGlobalDir);
+    seedSharedParams(apiCallScope, bidiGlobalDir, localeString);
   }
 
+  /**
+   * Helper utility to seed params shared by multiple backends.
+   *
+   * @param apiCallScope The scope object that manages the API call scope.
+   * @param bidiGlobalDir The bidi global directionality.
+   * @param localeString The current locale.
+   */
+  public static void seedSharedParams(
+      GuiceSimpleScope apiCallScope, BidiGlobalDir bidiGlobalDir, @Nullable String localeString) {
+    apiCallScope.seed(LOCALE_STRING_KEY, localeString);
+    apiCallScope.seed(GLOBAL_DIR_KEY, checkNotNull(bidiGlobalDir));
+  }
 }

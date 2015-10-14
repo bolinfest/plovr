@@ -21,21 +21,23 @@ import com.google.common.base.Preconditions;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.base.internal.SoyFileKind;
 import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.SoyError;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.Operator;
 import com.google.template.soy.internal.base.Pair;
 import com.google.template.soy.internal.i18n.SoyBidiUtils;
 import com.google.template.soy.pysrc.internal.GenPyExprsVisitor.GenPyExprsVisitorFactory;
+import com.google.template.soy.pysrc.internal.PyApiCallScopeBindingAnnotations.PyBidiIsRtlFn;
+import com.google.template.soy.pysrc.internal.PyApiCallScopeBindingAnnotations.PyEnvironmentModulePath;
+import com.google.template.soy.pysrc.internal.PyApiCallScopeBindingAnnotations.PyRuntimePath;
+import com.google.template.soy.pysrc.internal.PyApiCallScopeBindingAnnotations.PyTranslationClass;
 import com.google.template.soy.pysrc.internal.TranslateToPyExprVisitor.TranslateToPyExprVisitorFactory;
 import com.google.template.soy.pysrc.restricted.PyExpr;
 import com.google.template.soy.pysrc.restricted.PyExprUtils;
 import com.google.template.soy.pysrc.restricted.PyFunctionExprBuilder;
 import com.google.template.soy.shared.internal.FindCalleesNotInFileVisitor;
-import com.google.template.soy.shared.restricted.ApiCallScopeBindingAnnotations.PyBidiIsRtlFn;
-import com.google.template.soy.shared.restricted.ApiCallScopeBindingAnnotations.PyRuntimePath;
-import com.google.template.soy.shared.restricted.ApiCallScopeBindingAnnotations.PyTranslationClass;
-import com.google.template.soy.sharedpasses.ShouldEnsureDataIsDefinedVisitor;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
+import com.google.template.soy.soytree.CallBasicNode;
 import com.google.template.soy.soytree.CallNode;
 import com.google.template.soy.soytree.CallParamContentNode;
 import com.google.template.soy.soytree.CallParamNode;
@@ -63,6 +65,8 @@ import com.google.template.soy.soytree.TemplateNode;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 import javax.inject.Inject;
 
@@ -76,8 +80,14 @@ import javax.inject.Inject;
  */
 final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
 
+  private static final SoyError NON_NAMESPACED_TEMPLATE =
+      SoyError.of("Called template does not reside in a namespace.");
+
   /** The module path for the runtime libraries. */
   private final String runtimePath;
+
+  /** The module path for custom environment libraries. */
+  private final String environmentModulePath;
 
   /** The module and function name for the bidi isRtl function. */
   private final String bidiIsRtlFn;
@@ -99,6 +109,7 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
   private final TranslateToPyExprVisitorFactory translateToPyExprVisitorFactory;
 
   private final GenPyCallExprVisitor genPyCallExprVisitor;
+  private final ErrorReporter errorReporter;
 
   /**
    * @see LocalVariableStack
@@ -111,6 +122,7 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
    */
   @Inject
   GenPyCodeVisitor(@PyRuntimePath String runtimePath,
+      @PyEnvironmentModulePath String environmentModulePath,
       @PyBidiIsRtlFn String bidiIsRtlFn,
       @PyTranslationClass String translationClass,
       IsComputableAsPyExprVisitor isComputableAsPyExprVisitor,
@@ -118,8 +130,9 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
       TranslateToPyExprVisitorFactory translateToPyExprVisitorFactory,
       GenPyCallExprVisitor genPyCallExprVisitor,
       ErrorReporter errorReporter) {
-    super(errorReporter);
+    this.errorReporter = errorReporter;
     this.runtimePath = runtimePath;
+    this.environmentModulePath = environmentModulePath;
     this.bidiIsRtlFn = bidiIsRtlFn;
     this.translationClass = translationClass;
     this.isComputableAsPyExprVisitor = isComputableAsPyExprVisitor;
@@ -227,6 +240,8 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
     pyCodeBuilder.appendLine("\"\"\" This file was automatically generated from ",
         node.getFileName(), ".");
     pyCodeBuilder.appendLine("Please don't edit this file by hand.");
+    pyCodeBuilder.appendLine();
+    pyCodeBuilder.appendLine("SOY_NAMESPACE: '" + node.getNamespace() + "'.");
 
     // Output a section containing optionally-parsed compiler directives in comments.
     pyCodeBuilder.appendLine();
@@ -240,7 +255,6 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
     pyCodeBuilder.appendLine();
     addCodeToRequireGeneralDeps();
     addCodeToRequireSoyNamespaces(node);
-    addCodeToRegisterCurrentSoyNamespace(node);
     addCodeToFixUnicodeStrings();
 
     // Add code for each template.
@@ -262,7 +276,7 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
    *
    * <p>Example:
    * <pre>
-   * def myfunc(opt_data=None, opt_ijData=None):
+   * def myfunc(data, ijData):
    *   output = ''
    *   ...
    *   ...
@@ -277,7 +291,9 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
     pyCodeBuilder.appendLine(
         "def ",
         node.getPartialTemplateName().substring(1),
-        "(opt_data=None, opt_ijData=None):");
+        // These defaults are safe because soy only ever reads from these parameters.  If that
+        // changes, bad things could happen.
+        "(data={}, ijData={}):");
     pyCodeBuilder.increaseIndent();
 
     generateFunctionBody(node);
@@ -292,7 +308,7 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
    *
    * <p>Example:
    * <pre>
-   * def myfunc(opt_data=None, opt_ijData=None):
+   * def myfunc(data=None, ijData=None):
    *   ...
    * runtime.register_delegate_fn('delname', 'delvariant', 0, myfunc, 'myfunc')
    * </pre>
@@ -307,7 +323,7 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
     pyCodeBuilder.appendLine(
         "runtime.register_delegate_fn(",
         delTemplateIdExprText, ", ", delTemplateVariantExprText, ", ",
-        Integer.toString(node.getDelPriority()), ", ",
+        node.getDelPriority().toString(), ", ",
         node.getPartialTemplateName().substring(1), ", '",
         node.getPartialTemplateName().substring(1), "')");
   }
@@ -328,7 +344,7 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
    * </pre>
    * might generate
    * <pre>
-   *   if opt_data.get('boo') > 0:
+   *   if data.get('boo') > 0:
    *     ...
    * </pre>
    */
@@ -384,7 +400,7 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
    * </pre>
    * might generate
    * <pre>
-   *   switchValue = opt_data.get('boo')
+   *   switchValue = data.get('boo')
    *   if switchValue == 0:
    *     ...
    *   elif switchValue == 1:
@@ -455,7 +471,7 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
    * </pre>
    * might generate
    * <pre>
-   *   for i4 in xrange(1, opt_data.get('boo')):
+   *   for i4 in xrange(1, data.get('boo')):
    *     ...
    * </pre>
    */
@@ -504,7 +520,7 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
    * </pre>
    * might generate
    * <pre>
-   *   fooList2 = opt_data.get('boo')
+   *   fooList2 = data.get('boo')
    *   if fooList2:
    *     ...loop...
    *   else:
@@ -560,7 +576,7 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
    * </pre>
    * might generate
    * <pre>
-   *   fooList2 = opt_data.get('boo')
+   *   fooList2 = data.get('boo')
    *   for fooIndex2, fooData2 in enumerate(fooList2):
    *     ...
    * </pre>
@@ -611,7 +627,7 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
    * </pre>
    * might generate
    * <pre>
-   *   boo3 = opt_data.get('foo')['moo']
+   *   boo3 = data.get('foo')['moo']
    * </pre>
    */
   @Override protected void visitLetValueNode(LetValueNode node) {
@@ -642,7 +658,7 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
    * </pre>
    * might generate
    * <pre>
-   *   boo3 = sanitize.SanitizedHtml(''.join(['Hello ', sanitize.escape_html(opt_data.get('name'))])
+   *   boo3 = sanitize.SanitizedHtml(''.join(['Hello ', sanitize.escape_html(data.get('name'))])
    * </pre>
    */
   @Override protected void visitLetContentNode(LetContentNode node) {
@@ -730,8 +746,10 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
   private void addCodeToRequireGeneralDeps() {
     pyCodeBuilder.appendLine("from __future__ import unicode_literals");
 
+    pyCodeBuilder.appendLine("import collections");
     pyCodeBuilder.appendLine("import math");
     pyCodeBuilder.appendLine("import random");
+    pyCodeBuilder.appendLine("import sys");
 
     // TODO(dcphillips): limit this based on usage?
     pyCodeBuilder.appendLine("from ", runtimePath, " import bidi");
@@ -766,35 +784,34 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
    * Helper for visitSoyFileNode(SoyFileNode) to add code to require Soy namespaces.
    * @param soyFile The node we're visiting.
    */
-  private void addCodeToRequireSoyNamespaces(SoyFileNode soyFile) {
-    for (String calleeNotInFile : new FindCalleesNotInFileVisitor(errorReporter).exec(soyFile)) {
-      int lastDotIndex = calleeNotInFile.lastIndexOf('.');
-      if (lastDotIndex == -1) {
-        throw SoySyntaxExceptionUtils.createWithNode(
-            "Called template \"" + calleeNotInFile + "\" does not reside in a namespace.",
-            soyFile);
+    private void addCodeToRequireSoyNamespaces(SoyFileNode soyFile) {
+      SortedSet<String> calleeModules = new TreeSet<>();
+      for (CallBasicNode node : new FindCalleesNotInFileVisitor().exec(soyFile)) {
+        String calleeNotInFile = node.getCalleeName();
+        int lastDotIndex = calleeNotInFile.lastIndexOf('.');
+        if (lastDotIndex == -1) {
+          errorReporter.report(node.getSourceLocation(), NON_NAMESPACED_TEMPLATE);
+          continue;
+        }
+        String calleeModule = calleeNotInFile.substring(0, lastDotIndex);
+        if (!calleeModule.isEmpty()) {
+          calleeModules.add(calleeModule);
+        }
       }
-      String calleeModule = calleeNotInFile.substring(0, lastDotIndex);
-      if (!calleeModule.isEmpty()) {
-        Pair<String, String> nameSpaceAndName = namespaceAndNameFromModule(calleeModule);
-        String calleeNamespace = nameSpaceAndName.first;
-        String calleeName = nameSpaceAndName.second;
-        pyCodeBuilder.appendLine(calleeName, " = runtime.namespaced_import('", calleeName,
-             "', namespace='", calleeNamespace, "')");
-      }
-    }
-    pyCodeBuilder.appendLine();
-  }
 
-  /**
-   * Helper for visitSoyFileNode(SoyFileNode) to add module constant to register this module's
-   * Soy namespace.
-   * @param soyFile The node we're visiting.
-   */
-  private void addCodeToRegisterCurrentSoyNamespace(SoyFileNode soyFile) {
-    String namespace = soyFile.getNamespace();
-    pyCodeBuilder.appendLine("SOY_NAMESPACE = '" + namespace + "'");
-  }
+      for (String calleeModule : calleeModules) {
+          Pair<String, String> nameSpaceAndName = namespaceAndNameFromModule(calleeModule);
+          String calleeNamespace = nameSpaceAndName.first;
+          String calleeName = nameSpaceAndName.second;
+          pyCodeBuilder.appendLineStart(calleeName, " = runtime.namespaced_import('", calleeName,
+               "', namespace='", calleeNamespace, "'");
+          if (!environmentModulePath.isEmpty()) {
+            pyCodeBuilder.append(", environment_path='", environmentModulePath, "'");
+          }
+          pyCodeBuilder.appendLineEnd(")");
+        }
+      pyCodeBuilder.appendLine();
+    }
 
   /**
    * Helper to retrieve the namespace and name from a module name.
@@ -833,11 +850,6 @@ final class GenPyCodeVisitor extends AbstractSoyNodeVisitor<List<String>> {
   private void generateFunctionBody(TemplateNode node) {
     // Add a new frame for local variable translations.
     localVarExprs.pushFrame();
-
-    // Generate statement to ensure data exists as an object, if ever used.
-    if (new ShouldEnsureDataIsDefinedVisitor(errorReporter).exec(node)) {
-      pyCodeBuilder.appendLine("opt_data = opt_data or {}");
-    }
 
     pyCodeBuilder.pushOutputVar("output");
 

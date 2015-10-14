@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.internal.BaseUtils;
+import com.google.template.soy.basetree.CopyState;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.ErrorReporter.Checkpoint;
 import com.google.template.soy.error.ExplodingErrorReporter;
@@ -82,14 +83,13 @@ public final class CallDelegateNode extends CallNode {
     }
   }
 
-  /** Pattern for a callee name not listed as an attribute name="...". */
+  /** Pattern for a callee name. */
   private static final Pattern NONATTRIBUTE_CALLEE_NAME =
-      Pattern.compile("^ (?! name=\") [.\\w]+ (?= \\s | $)", Pattern.COMMENTS);
+      Pattern.compile("^\\s* ([.\\w]+) (?= \\s | $)", Pattern.COMMENTS);
 
   /** Parser for the command text. */
   private static final CommandTextAttributesParser ATTRIBUTES_PARSER =
       new CommandTextAttributesParser("delcall",
-          new Attribute("name", Attribute.ALLOW_ALL_VALUES, null),
           new Attribute("variant", Attribute.ALLOW_ALL_VALUES, null),
           new Attribute("data", Attribute.ALLOW_ALL_VALUES, null),
           new Attribute("allowemptydefault", Attribute.BOOLEAN_VALUES, null));
@@ -201,21 +201,21 @@ public final class CallDelegateNode extends CallNode {
 
       // Handle callee name not listed as an attribute.
       Matcher ncnMatcher = NONATTRIBUTE_CALLEE_NAME.matcher(commandTextWithoutPhnameAttr);
+      String delCalleeName;
       if (ncnMatcher.find()) {
-        commandTextWithoutPhnameAttr
-            = ncnMatcher.replaceFirst("name=\"" + ncnMatcher.group() + "\"");
+        delCalleeName = ncnMatcher.group(1);
+        if (!BaseUtils.isDottedIdentifier(delCalleeName)) {
+          errorReporter.report(sourceLocation, INVALID_DELEGATE_NAME, delCalleeName);
+        }
+        commandTextWithoutPhnameAttr =
+            commandTextWithoutPhnameAttr.substring(ncnMatcher.end()).trim();
+      } else {
+        delCalleeName = null;
+        errorReporter.report(sourceLocation, MISSING_CALLEE_NAME, commandText);
       }
 
       Map<String, String> attributes =
           ATTRIBUTES_PARSER.parse(commandTextWithoutPhnameAttr, errorReporter, sourceLocation);
-
-      String delCalleeName = attributes.get("name");
-      if (delCalleeName == null) {
-        errorReporter.report(sourceLocation, MISSING_CALLEE_NAME, commandText);
-      }
-      if (!BaseUtils.isDottedIdentifier(delCalleeName)) {
-        errorReporter.report(sourceLocation, INVALID_DELEGATE_NAME, delCalleeName);
-      }
 
       String variantExprText = attributes.get("variant");
       ExprRootNode delCalleeVariantExpr;
@@ -286,11 +286,11 @@ public final class CallDelegateNode extends CallNode {
    * @param orig The node to copy.
    */
   @SuppressWarnings("ConstantConditions")  // for IntelliJ
-  private CallDelegateNode(CallDelegateNode orig) {
-    super(orig);
+  private CallDelegateNode(CallDelegateNode orig, CopyState copyState) {
+    super(orig, copyState);
     this.delCalleeName = orig.delCalleeName;
     this.delCalleeVariantExpr =
-        (orig.delCalleeVariantExpr != null) ? orig.delCalleeVariantExpr.clone() : null;
+        (orig.delCalleeVariantExpr != null) ? orig.delCalleeVariantExpr.copy(copyState) : null;
     this.allowsEmptyDefault = orig.allowsEmptyDefault;
     this.paramsToRuntimeCheckByDelegate = orig.paramsToRuntimeCheckByDelegate;
   }
@@ -310,14 +310,6 @@ public final class CallDelegateNode extends CallNode {
   /** Returns the variant expression for the delegate being called, or null if it's a string. */
   @Nullable public ExprRootNode getDelCalleeVariantExpr() {
     return delCalleeVariantExpr;
-  }
-
-
-  /** Sets allowsEmptyDefault to the given default value if it wasn't already user-specified. */
-  public void maybeSetAllowsEmptyDefault(boolean defaultValueForAllowsEmptyDefault) {
-    if (allowsEmptyDefault == null) {
-      allowsEmptyDefault = defaultValueForAllowsEmptyDefault;
-    }
   }
 
   /**
@@ -342,7 +334,10 @@ public final class CallDelegateNode extends CallNode {
 
   /** Returns whether this delegate call defaults to empty string if there's no active impl. */
   public boolean allowsEmptyDefault() {
-    Preconditions.checkState(allowsEmptyDefault != null);
+    // Default to 'false' if not specified.
+    if (allowsEmptyDefault == null) {
+      return false;
+    }
     return allowsEmptyDefault;
   }
 
@@ -357,8 +352,8 @@ public final class CallDelegateNode extends CallNode {
   }
 
 
-  @Override public CallDelegateNode clone() {
-    return new CallDelegateNode(this);
+  @Override public CallDelegateNode copy(CopyState copyState) {
+    return new CallDelegateNode(this, copyState);
   }
 
 }

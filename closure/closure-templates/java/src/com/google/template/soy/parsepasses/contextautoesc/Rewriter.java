@@ -98,11 +98,6 @@ final class Rewriter {
    * A visitor that applies the changes in Inferences to a Soy tree.
    */
   private final class RewriterVisitor extends AbstractSoyNodeVisitor<Void> {
-
-    public RewriterVisitor() {
-      super(Rewriter.this.errorReporter);
-    }
-
     /**
      * Keep track of template nodes so we know which are derived and which aren't.
      */
@@ -194,7 +189,7 @@ final class Rewriter {
               .sourceCalleeName(derivedCalleeName)
               .dataAttribute(callNode.dataAttribute())
               .userSuppliedPlaceholderName(callNode.getUserSuppliedPhName())
-              .syntaxVersionBound(callNode.getSyntaxVersionBound())
+              .syntaxVersionBound(callNode.getSyntaxVersionUpperBound())
               .escapingDirectiveNames(callNode.getEscapingDirectiveNames())
               .build(errorReporter);
         } else {

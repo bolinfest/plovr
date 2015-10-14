@@ -19,15 +19,27 @@ package com.google.template.soy.jbcsrc;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.base.Optional;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.primitives.Ints;
-import com.google.common.primitives.Primitives;
-import com.google.template.soy.jbcsrc.Expression.SimpleExpression;
+import com.google.template.soy.data.SanitizedContent.ContentKind;
+import com.google.template.soy.data.SoyList;
+import com.google.template.soy.data.SoyRecord;
+import com.google.template.soy.data.SoyValue;
+import com.google.template.soy.data.SoyValueProvider;
+import com.google.template.soy.jbcsrc.Expression.Feature;
+import com.google.template.soy.jbcsrc.Expression.Features;
+import com.google.template.soy.jbcsrc.api.AdvisingAppendable;
+import com.google.template.soy.jbcsrc.api.AdvisingStringBuilder;
+import com.google.template.soy.jbcsrc.api.RenderResult;
+import com.google.template.soy.jbcsrc.shared.CompiledTemplate;
+import com.google.template.soy.jbcsrc.shared.RenderContext;
 
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.Label;
-import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.Method;
@@ -42,19 +54,109 @@ import java.util.List;
  * A set of utilities for generating simple expressions in bytecode
  */
 final class BytecodeUtils {
+  static final TypeInfo OBJECT = TypeInfo.create(Object.class);
+  static final Type STRING_TYPE = Type.getType(String.class);
+  static final Type ARRAY_LIST_TYPE = Type.getType(ArrayList.class);
+  static final Type ADVISING_APPENDABLE_TYPE = Type.getType(AdvisingAppendable.class);
+  static final Type ADVISING_BUILDER_TYPE = Type.getType(AdvisingStringBuilder.class);
+  static final Type RENDER_RESULT_TYPE = Type.getType(RenderResult.class);
+  static final Type NULL_POINTER_EXCEPTION_TYPE = Type.getType(NullPointerException.class);
+  static final Type RENDER_CONTEXT_TYPE = Type.getType(RenderContext.class);
+  static final Type SOY_RECORD_TYPE = Type.getType(SoyRecord.class);
+  static final Type LINKED_HASH_MAP_TYPE = Type.getType(LinkedHashMap.class);
+  static final Type SOY_VALUE_TYPE = Type.getType(SoyValue.class);
+  static final Type SOY_VALUE_PROVIDER_TYPE = Type.getType(SoyValueProvider.class);
+  static final Type THROWABLE_TYPE = Type.getType(Throwable.class);
+  static final Type SOY_LIST_TYPE = Type.getType(SoyList.class);
+  static final Type CONTENT_KIND_TYPE = Type.getType(ContentKind.class);
+  static final Type COMPILED_TEMPLATE_TYPE = Type.getType(CompiledTemplate.class);
+
   static final Method NULLARY_INIT = Method.getMethod("void <init>()");
   static final Method CLASS_INIT = Method.getMethod("void <clinit>()");
-  private static final ImmutableMap<String, Class<?>> PRIMITIVES_MAP;
 
-  static {
-    ImmutableMap.Builder<String, Class<?>> builder = ImmutableMap.builder();
-    for (Class<?> cl : Primitives.allPrimitiveTypes()) {
-      builder.put(cl.getName(), cl);
-    }
-    PRIMITIVES_MAP = builder.build();
-  }
+  private static final LoadingCache<Type, Optional<Class<?>>> objectTypeToClassCache = 
+      CacheBuilder.newBuilder()
+      .build(new CacheLoader<Type, Optional<Class<?>>>() {
+        @Override public Optional<Class<?>> load(Type key) throws Exception {
+          switch (key.getSort()) {
+            case Type.ARRAY:
+              Optional<Class<?>> elementType = 
+                  objectTypeToClassCache.getUnchecked(key.getElementType());
+              if (elementType.isPresent()) {
+                // The easiest way to generically get an array class.
+                return Optional.<Class<?>>of(Array.newInstance(elementType.get(), 0).getClass());
+              }
+              return Optional.absent();
+            case Type.VOID:
+              return Optional.<Class<?>>of(void.class);
+            case Type.BOOLEAN:
+              return Optional.<Class<?>>of(boolean.class);
+            case Type.BYTE:
+              return Optional.<Class<?>>of(byte.class);
+            case Type.CHAR:
+              return Optional.<Class<?>>of(char.class);
+            case Type.DOUBLE:
+              return Optional.<Class<?>>of(double.class);
+            case Type.INT:
+              return Optional.<Class<?>>of(int.class);
+            case Type.SHORT:
+              return Optional.<Class<?>>of(short.class);
+            case Type.LONG:
+              return Optional.<Class<?>>of(long.class);
+            case Type.FLOAT:
+              return Optional.<Class<?>>of(float.class);
+            case Type.OBJECT:
+              try {
+                return Optional.<Class<?>>of(
+                    Class.forName(key.getClassName(), false, BytecodeUtils.class.getClassLoader()));
+              } catch (ClassNotFoundException e) {
+                return Optional.absent();
+              }
+            default:
+              throw new IllegalArgumentException("unsupported type: " + key);
+          }
+        }
+      });
 
   private BytecodeUtils() {}
+
+  /** 
+   * Returns {@code true} if {@code left} is possibly assignable from {@code right}.
+   */
+  static boolean isPossiblyAssignableFrom(Type left, Type right) {
+    return doIsAssignableFrom(left, right, true);
+  }
+
+  /** Returns {@code true} if {@code left} is definitely assignable from {@code right}. */
+  static boolean isDefinitelyAssignableFrom(Type left, Type right) {
+    return doIsAssignableFrom(left, right, false);
+  }
+
+  /**
+   * Checks if {@code left} is assignable from {@code right}, however if we don't have information
+   * about one of the types then this returns {@code failOpen}.
+   */
+  private static boolean doIsAssignableFrom(Type left, Type right, boolean failOpen) {
+    if (left.equals(right)) {
+      return true;
+    }
+    if (left.getSort() != right.getSort()) {
+      return false;
+    }
+    if (left.getSort() != Type.OBJECT) {
+      return false;  // all other sorts require exact equality (even arrays)
+    }
+    // for object types we really need to know type hierarchy information to test for whether 
+    // right is assignable to left.
+    Optional<Class<?>> leftClass = objectTypeToClassCache.getUnchecked(left);
+    Optional<Class<?>> rightClass = objectTypeToClassCache.getUnchecked(right);
+    if (!leftClass.isPresent() || rightClass.isPresent()) {
+      // This means one of the types being compared is a generated object.  So we can't easily check
+      // it.  Just delegate responsibility to the verifier.
+      return failOpen;
+    }
+    return leftClass.get().isAssignableFrom(rightClass.get());
+  }
 
   /**
    * Returns the runtime class represented by the given type.
@@ -63,38 +165,37 @@ final class BytecodeUtils {
    *     method will only be called for types that have a runtime on the compilers classpath.
    */
   static Class<?> classFromAsmType(Type type) {
-    switch (type.getSort()) {
-      case Type.ARRAY:
-        Class<?> elementType = classFromAsmType(type.getElementType());
-        // The easiest way to generically get an array class.
-        Object array = Array.newInstance(elementType, 0);
-        return array.getClass();
-      case Type.OBJECT:
-        try {
-          return Class.forName(type.getClassName(), false, BytecodeUtils.class.getClassLoader());
-        } catch (ClassNotFoundException e) {
-          throw new IllegalArgumentException("Could not load " + type, e);
-        }
-      case Type.METHOD:
-        throw new IllegalArgumentException("Method types are not supported: " + type);
-      default:
-        // primitive, class.forname doesn't work on primitives
-        return PRIMITIVES_MAP.get(type.getClassName());
+    Optional<Class<?>> maybeClass = objectTypeToClassCache.getUnchecked(type);
+    if (!maybeClass.isPresent()) {
+      throw new IllegalArgumentException("Could not load: " + type);
     }
+    return maybeClass.get();
   }
 
+  private static final Expression FALSE =
+      new Expression(Type.BOOLEAN_TYPE, Feature.CHEAP) {
+        @Override
+        void doGen(CodeBuilder mv) {
+          mv.pushBoolean(false);
+        }
+      };
+
+  private static final Expression TRUE =
+      new Expression(Type.BOOLEAN_TYPE, Feature.CHEAP) {
+        @Override
+        void doGen(CodeBuilder mv) {
+          mv.pushBoolean(true);
+        }
+      };
+
   /** Returns an {@link Expression} that can load the given 'boolean' constant. */
-  static Expression constant(final boolean value) {
-    return new SimpleExpression(Type.BOOLEAN_TYPE, true) {
-      @Override void doGen(CodeBuilder mv) {
-        mv.pushBoolean(value);
-      }
-    };
+  static Expression constant(boolean value) {
+    return value ? TRUE : FALSE;
   }
 
   /** Returns an {@link Expression} that can load the given 'int' constant. */
   static Expression constant(final int value) {
-    return new SimpleExpression(Type.INT_TYPE, true) {
+    return new Expression(Type.INT_TYPE, Feature.CHEAP) {
       @Override void doGen(CodeBuilder mv) {
         mv.pushInt(value);
       }
@@ -103,7 +204,7 @@ final class BytecodeUtils {
   
   /** Returns an {@link Expression} that can load the given 'char' constant. */
   static Expression constant(final char value) {
-    return new SimpleExpression(Type.CHAR_TYPE, true) {
+    return new Expression(Type.CHAR_TYPE, Feature.CHEAP) {
       @Override void doGen(CodeBuilder mv) {
         mv.pushInt(value);
       }
@@ -112,7 +213,7 @@ final class BytecodeUtils {
 
   /** Returns an {@link Expression} that can load the given long constant. */
   static Expression constant(final long value) {
-    return new SimpleExpression(Type.LONG_TYPE, true) {
+    return new Expression(Type.LONG_TYPE, Feature.CHEAP) {
       @Override void doGen(CodeBuilder mv) {
         mv.pushLong(value);
       }
@@ -121,7 +222,7 @@ final class BytecodeUtils {
 
   /** Returns an {@link Expression} that can load the given double constant. */
   static Expression constant(final double value) {
-    return new SimpleExpression(Type.DOUBLE_TYPE, true) {
+    return new Expression(Type.DOUBLE_TYPE, Feature.CHEAP) {
       @Override void doGen(CodeBuilder mv) {
         mv.pushDouble(value);
       }
@@ -131,20 +232,23 @@ final class BytecodeUtils {
   /** Returns an {@link Expression} that can load the given String constant. */
   static Expression constant(final String value) {
     checkNotNull(value);
-    return new SimpleExpression(Type.getType(String.class), true) {
-      @Override void doGen(CodeBuilder mv) {
+    return new Expression(STRING_TYPE, Feature.CHEAP, Feature.NON_NULLABLE) {
+      @Override
+      void doGen(CodeBuilder mv) {
         mv.pushString(value);
       }
     };
   }
   
   /** Returns an {@link Expression} with the given type that always returns null. */
-  static Expression constantNull(final Class<?> clazz) {
-    Type type = Type.getType(clazz);
-    checkArgument(type.getSort() == Type.OBJECT || type.getSort() == Type.ARRAY, 
-        "%s is not a reference type", clazz);
-    return new SimpleExpression(type, true) {
-      @Override void doGen(CodeBuilder mv) {
+  static Expression constantNull(Type type) {
+    checkArgument(
+        type.getSort() == Type.OBJECT || type.getSort() == Type.ARRAY,
+        "%s is not a reference type",
+        type);
+    return new Expression(type, Feature.CHEAP) {
+      @Override
+      void doGen(CodeBuilder mv) {
         mv.visitInsn(Opcodes.ACONST_NULL);
       }
     };
@@ -164,7 +268,7 @@ final class BytecodeUtils {
     if (!isNumericPrimitive(to) || !isNumericPrimitive(expr.resultType())) {
       throw new IllegalArgumentException("Cannot convert from " + expr.resultType() + " to " + to);
     }
-    return new SimpleExpression(to, expr.isConstant()) {
+    return new Expression(to, expr.features()) {
       @Override void doGen(CodeBuilder adapter) {
         expr.gen(adapter);
         adapter.cast(expr.resultType(), to);
@@ -193,54 +297,26 @@ final class BytecodeUtils {
         throw new AssertionError("unexpected type " + type);
     }
   }
-
-  /**
-   * Returns an expression that calls an appropriate dup opcode for the given type.
-   */
-  static Expression dupExpr(final Type type) {
-    switch (type.getSize()) {
-      case 1:
-        return new SimpleExpression(type, false) {
-          @Override void doGen(CodeBuilder mv) {
-            mv.dup();
-          }
-        };
-      case 2:
-        return new SimpleExpression(type, false) {
-          @Override void doGen(CodeBuilder mv) {
-            mv.dup2();
-          }
-        };
-      default:
-        throw new AssertionError("cannot dup() " + type);
-    }
-  }
-
-  /** Loads the default value for the type onto the stack. Useful for initializing fields. */
-  static void loadDefault(MethodVisitor mv, Type type) {
+  
+  static boolean isPrimitive(Type type) {
     switch (type.getSort()) {
-        case Type.BOOLEAN:
-        case Type.CHAR:
-        case Type.BYTE:
-        case Type.SHORT:
-        case Type.INT:
-          mv.visitInsn(Opcodes.ICONST_0);
-          break;
-        case Type.FLOAT:
-          mv.visitInsn(Opcodes.FCONST_0);
-          break;
-        case Type.LONG:
-          mv.visitInsn(Opcodes.LCONST_0);
-          break;
-        case Type.DOUBLE:
-          mv.visitInsn(Opcodes.DCONST_0);
-          break;
-        case Type.ARRAY:
-        case Type.OBJECT:
-          mv.visitInsn(Opcodes.ACONST_NULL);
-          break;
-        default:
-          throw new AssertionError("unexpected sort for type: " + type);
+      case Type.OBJECT:
+      case Type.ARRAY:
+        return false;
+      case Type.BOOLEAN:
+      case Type.BYTE:
+      case Type.CHAR:
+      case Type.DOUBLE:
+      case Type.INT:
+      case Type.SHORT:
+      case Type.LONG:
+      case Type.FLOAT:
+        return true;
+      case Type.VOID:
+      case Type.METHOD:
+        throw new IllegalArgumentException("Invalid type: " + type);
+      default:
+        throw new AssertionError("unexpected type " + type);
     }
   }
 
@@ -254,11 +330,12 @@ final class BytecodeUtils {
    */
   static void defineDefaultConstructor(ClassVisitor cv, TypeInfo ownerType) {
     CodeBuilder mg = new CodeBuilder(Opcodes.ACC_PUBLIC, NULLARY_INIT, null, cv);
+    mg.visitCode();
     Label start = mg.mark();
     Label end = mg.newLabel();
     LocalVariable thisVar = LocalVariable.createThisVar(ownerType, start, end);
     thisVar.gen(mg);
-    mg.invokeConstructor(Type.getType(Object.class), NULLARY_INIT);
+    mg.invokeConstructor(OBJECT.type(), NULLARY_INIT);
     mg.returnValue();
     mg.mark(end);
     thisVar.tableEntry(mg);
@@ -272,7 +349,7 @@ final class BytecodeUtils {
   // that way we could save a branch.  Maybe these operators are a failed abstraction?
 
   /**
-   * Compares the two {@code double} valued expressions using the provided comparison operation.
+   * Compares the two primitive valued expressions using the provided comparison operation.
    */
   static Expression compare(final int comparisonOpcode, final Expression left, 
       final Expression right) {
@@ -280,7 +357,9 @@ final class BytecodeUtils {
         "left and right must have matching types, found %s and %s", left.resultType(), 
         right.resultType());
     checkIntComparisonOpcode(left.resultType(), comparisonOpcode);
-    return new SimpleExpression(Type.BOOLEAN_TYPE, left.isConstant() && right.isConstant()) {
+    Features features = 
+        Expression.areAllCheap(left, right) ? Features.of(Feature.CHEAP) : Features.of();
+    return new Expression(Type.BOOLEAN_TYPE, features) {
       @Override void doGen(CodeBuilder mv) {
         left.gen(mv);
         right.gen(mv);
@@ -321,7 +400,7 @@ final class BytecodeUtils {
   static Expression logicalNot(final Expression baseExpr) {
     baseExpr.checkAssignableTo(Type.BOOLEAN_TYPE);
     checkArgument(baseExpr.resultType().equals(Type.BOOLEAN_TYPE), "not a boolean expression");
-    return new SimpleExpression(Type.BOOLEAN_TYPE, baseExpr.isConstant()) {
+    return new Expression(Type.BOOLEAN_TYPE, baseExpr.features()) {
       @Override void doGen(CodeBuilder mv) {
         baseExpr.gen(mv);
         // Surprisingly, java bytecode uses a branch (instead of 'xor 1' or something) to implement
@@ -347,16 +426,17 @@ final class BytecodeUtils {
     // If either is a string, we run special logic so test for that first
     // otherwise we special case primitives and eventually fall back to our runtime.
     if (left.isKnownString()) {
-      return doEqualsString(left.convert(String.class), right);
+      return doEqualsString(left.unboxAs(String.class), right);
     }
     if (right.isKnownString()) {
-      return doEqualsString(right.convert(String.class), left);
+      return doEqualsString(right.unboxAs(String.class), left);
     }
     if (left.isKnownInt() && right.isKnownInt()) {
-      return compare(Opcodes.IFEQ, left.convert(long.class), right.convert(long.class));
+      return compare(Opcodes.IFEQ, left.unboxAs(long.class), right.unboxAs(long.class));
     }
-    if (left.isKnownNumber() && right.isKnownNumber()) {
-      return compare(Opcodes.IFEQ, left.convert(double.class), right.convert(double.class));
+    if (left.isKnownNumber() && right.isKnownNumber() 
+        && (left.isKnownFloat() || right.isKnownFloat())) {
+      return compare(Opcodes.IFEQ, left.coerceToDouble(), right.coerceToDouble());
     }
     return MethodRef.RUNTIME_EQUAL.invoke(left.box(), right.box());
   }
@@ -371,18 +451,15 @@ final class BytecodeUtils {
     // This is compatible with SharedRuntime.compareString, which interestingly makes == break
     // transitivity.  See b/21461181
     if (other.isKnownStringOrSanitizedContent()) {
-      SoyExpression strOther = other.convert(String.class);
-      return stringExpr.invoke(MethodRef.EQUALS, strOther);
+      return stringExpr.invoke(MethodRef.EQUALS, other.unboxAs(String.class));
     }
     if (other.isKnownNumber()) {
       // in this case, we actually try to convert stringExpr to a number
-      return MethodRef.RUNTIME_STRING_EQUALS_AS_NUMBER
-          .invoke(stringExpr, other.convert(double.class));
+      return MethodRef.RUNTIME_STRING_EQUALS_AS_NUMBER.invoke(stringExpr, other.coerceToDouble());
     }
-    // We don't know what other is, assume the worst and call out to our boxed implementation
-    // TODO(lukes): in this case we know that the first param is a string, maybe we can specialize
-    // the runtime to take advantage of this and avoid reboxing the string (and rechecking the type)
-    return MethodRef.RUNTIME_EQUAL.invoke(stringExpr.box(), other.box());
+    // We don't know what other is, assume the worst and call out to our boxed implementation for
+    // string comparisons.
+    return MethodRef.RUNTIME_COMPARE_STRING.invoke(stringExpr, other.box());
   }
 
   /**
@@ -392,8 +469,14 @@ final class BytecodeUtils {
   static Expression firstNonNull(final Expression left, final Expression right) {
     checkArgument(left.resultType().getSort() == Type.OBJECT);
     checkArgument(right.resultType().getSort() == Type.OBJECT);
-    return new SimpleExpression(left.resultType(), 
-        left.isConstant() && right.isConstant()) {
+    Features features = Features.of();
+    if (Expression.areAllCheap(left, right)) {
+      features = features.plus(Feature.CHEAP);
+    }
+    if (right.isNonNullable()) {
+      features = features.plus(Feature.NON_NULLABLE);
+    }
+    return new Expression(left.resultType(), features) {
       @Override void doGen(CodeBuilder cb) {
         Label leftIsNonNull = new Label();
         left.gen(cb);                   // Stack: L
@@ -416,8 +499,14 @@ final class BytecodeUtils {
       final Expression falseBranch) {
     checkArgument(condition.resultType().equals(Type.BOOLEAN_TYPE));
     checkArgument(trueBranch.resultType().getSort() == falseBranch.resultType().getSort());
-    return new SimpleExpression(trueBranch.resultType(), 
-        condition.isConstant() && trueBranch.isConstant() && falseBranch.isConstant()) {
+    Features features = Features.of();
+    if (Expression.areAllCheap(condition, trueBranch, falseBranch)) {
+      features = features.plus(Feature.CHEAP);
+    }
+    if (trueBranch.isNonNullable() && falseBranch.isNonNullable()) {
+      features = features.plus(Feature.NON_NULLABLE);
+    }
+    return new Expression(trueBranch.resultType(), features) {
       @Override void doGen(CodeBuilder mv) {
         condition.gen(mv);
         Label ifFalse = new Label();
@@ -474,7 +563,10 @@ final class BytecodeUtils {
       return expressions.get(0);
     }
 
-    return new SimpleExpression(Type.BOOLEAN_TYPE, Expression.areAllConstant(expressions)) {
+    return new Expression(Type.BOOLEAN_TYPE, 
+        Expression.areAllCheap(expressions) 
+            ? Features.of(Feature.CHEAP)
+            : Features.of()) {
       @Override void doGen(CodeBuilder adapter) {
         Label end = new Label();
         Label shortCircuit = new Label();
@@ -501,22 +593,21 @@ final class BytecodeUtils {
    */
   static Expression asList(Iterable<? extends Expression> items) {
     final ImmutableList<Expression> copy = ImmutableList.copyOf(items);
-    switch (copy.size()) {
-      case 0:
-        return MethodRef.IMMUTABLE_LIST_OF.invoke();
-      case 1:
-        return MethodRef.IMMUTABLE_LIST_OF_1.invoke(copy.get(0));
-      default: // fallthrough
+    if (copy.isEmpty()) {
+      return MethodRef.IMMUTABLE_LIST_OF.invoke();
     }
+    // Note, we cannot neccesarily use ImmutableList for anything besides the empty list because
+    // we may need to put a null in it.
     final Expression construct = ConstructorRef.ARRAY_LIST_SIZE.construct(constant(copy.size()));
-    return new SimpleExpression(Type.getType(ArrayList.class), false) {
-      @Override void doGen(CodeBuilder mv) {
+    return new Expression(ARRAY_LIST_TYPE, Feature.NON_NULLABLE) {
+      @Override
+      void doGen(CodeBuilder mv) {
         construct.gen(mv);
         for (Expression child : copy) {
           mv.dup();
           child.gen(mv);
           MethodRef.ARRAY_LIST_ADD.invokeUnchecked(mv);
-          mv.pop();  // pop the bool result of arraylist.add
+          mv.pop(); // pop the bool result of arraylist.add
         }
       }
     };
@@ -538,8 +629,9 @@ final class BytecodeUtils {
     }
     final Expression construct = ConstructorRef.LINKED_HASH_MAP_SIZE
         .construct(constant(hashMapCapacity(keysCopy.size())));
-    return new SimpleExpression(Type.getType(LinkedHashMap.class), false) {
-      @Override void doGen(CodeBuilder mv) {
+    return new Expression(LINKED_HASH_MAP_TYPE, Feature.NON_NULLABLE) {
+      @Override
+      void doGen(CodeBuilder mv) {
         construct.gen(mv);
         for (int i = 0; i < keysCopy.size(); i++) {
           Expression key = keysCopy.get(i);
@@ -548,7 +640,7 @@ final class BytecodeUtils {
           key.gen(mv);
           value.gen(mv);
           MethodRef.LINKED_HASH_MAP_PUT.invokeUnchecked(mv);
-          mv.pop();  // pop the Object result of map.put
+          mv.pop(); // pop the Object result of map.put
         }
       }
     };

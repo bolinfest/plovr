@@ -20,6 +20,8 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.util.concurrent.Futures.immediateFailedFuture;
 
 import com.google.common.base.Joiner;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.util.concurrent.Futures;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
@@ -27,8 +29,10 @@ import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.data.SoyEasyDict;
 import com.google.template.soy.data.SoyFutureException;
 import com.google.template.soy.data.SoyValueHelper;
-import com.google.template.soy.error.ExplodingErrorReporter;
-import com.google.template.soy.soytree.SoyFileSetNode;
+import com.google.template.soy.passes.SharedPassesModule;
+import com.google.template.soy.shared.internal.ErrorReporterModule;
+import com.google.template.soy.shared.internal.SharedModule;
+import com.google.template.soy.shared.restricted.SoyPrintDirective;
 import com.google.template.soy.tofu.SoyTofu;
 import com.google.template.soy.tofu.SoyTofuException;
 import com.google.template.soy.tofu.internal.BaseTofu.BaseTofuFactory;
@@ -40,7 +44,8 @@ import junit.framework.TestCase;
  */
 public final class TofuExceptionsTest extends TestCase {
   private static final SoyValueHelper VALUE_HELPER = SoyValueHelper.UNCUSTOMIZED_INSTANCE;
-  private static final Injector INJECTOR = Guice.createInjector(new TofuModule());
+  private static final Injector INJECTOR = Guice.createInjector(
+      new ErrorReporterModule(), new SharedModule(), new SharedPassesModule(), new TofuModule());
 
   private static final String SOY_FILE = Joiner.on('\n').join(
       "{namespace ns}",
@@ -71,9 +76,13 @@ public final class TofuExceptionsTest extends TestCase {
   private SoyTofu tofu;
 
   @Override protected void setUp() throws Exception {
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(SOY_FILE).parse();
-    tofu = INJECTOR.getInstance(BaseTofuFactory.class)
-        .create(soyTree, false /* isCaching */, ExplodingErrorReporter.get());
+    tofu =
+        INJECTOR
+            .getInstance(BaseTofuFactory.class)
+            .create(
+                SoyFileSetParserBuilder.forFileContents(SOY_FILE).parse().registry(),
+                ImmutableMap.<String, ImmutableSortedSet<String>>of(),
+                ImmutableMap.<String, SoyPrintDirective>of());
   }
 
   public void testExceptions_undefined() throws Exception {

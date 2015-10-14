@@ -18,8 +18,6 @@ package com.google.template.soy.jssrc;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.template.soy.jssrc.SoyJsSrcOptions;
-
 import junit.framework.TestCase;
 
 
@@ -27,8 +25,7 @@ import junit.framework.TestCase;
  * Unit tests for SoyJsSrcOptions.
  *
  */
-public class SoyJsSrcOptionsTest extends TestCase {
-
+public final class SoyJsSrcOptionsTest extends TestCase {
 
   public void testClone() {
 
@@ -42,7 +39,5 @@ public class SoyJsSrcOptionsTest extends TestCase {
         .isEqualTo(options.getUseGoogIsRtlForBidiGlobalDir());
     assertThat(clonedOptions.shouldGenerateGoogMsgDefs())
         .isEqualTo(options.shouldGenerateGoogMsgDefs());
-    assertThat(clonedOptions.getCodeStyle()).isEqualTo(options.getCodeStyle());
   }
-
 }

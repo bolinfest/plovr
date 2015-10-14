@@ -19,7 +19,6 @@ package com.google.template.soy.pysrc.internal;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.template.soy.SoyFileSetParserBuilder;
-import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.shared.SharedTestUtils;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.SoyNode;
@@ -34,43 +33,49 @@ public class IsComputableAsPyExprVisitorTest extends TestCase {
 
   public void testAlwaysTrueNodes() {
     runTestHelper("Blah blah.", true);
-    runTestHelper("{$boo.foo}", true);
+    runTestHelper("{@param boo:?}\n{$boo.foo}", true);
     // TODO(dcphillips): Add tests for other nodes (such as messages) when support is available.
   }
 
   public void testAlwaysFalseNodes() {
     runTestHelper("{let $data: 'foo'/}", false);
-    runTestHelper("{switch $boo}{case 0}Blah{case 1}Bleh{default}Bluh{/switch}", false);
-    runTestHelper("{foreach $boo in $booze}{$boo}{/foreach}", false);
+    runTestHelper(
+        "{@param boo:?}\n{switch $boo}{case 0}Blah{case 1}Bleh{default}Bluh{/switch}", false);
+    runTestHelper("{@param booze:?}\n{foreach $boo in $booze}{$boo}{/foreach}", false);
     runTestHelper("{for $i in range(4)}{$i + 1}{/for}", false);
   }
 
   public void testIfNode() {
-    runTestHelper("{if $boo}Blah{elseif $foo}Bleh{else}Bluh{/if}", true);
-    runTestHelper("{if $goo}{foreach $moo in $moose}{$moo}{/foreach}{/if}", false);
+    runTestHelper(
+        "{@param boo:?}\n{@param foo:?}\n{if $boo}Blah{elseif $foo}Bleh{else}Bluh{/if}", true);
+    runTestHelper(
+        "{@param goo:?}\n{@param moose:?}\n{if $goo}{foreach $moo in $moose}{$moo}{/foreach}{/if}",
+        false);
   }
 
   public void testCallNode() {
-    runTestHelper("{call name=\".foo\" data=\"all\" /}", true);
-    runTestHelper("{call name=\".foo\" data=\"$boo\"}{param key=\"goo\" value=\"$moo\" /}{/call}",
-                  true);
-    runTestHelper("{call name=\".foo\" data=\"$boo\"}{param key=\"goo\"}Blah{/param}{/call}",
-                  true);
+    runTestHelper("{call .foo data=\"all\" /}", true);
     runTestHelper(
-        "{call name=\".foo\" data=\"$boo\"}"
-        + "  {param key=\"goo\"}"
-        + "    {foreach $moo in $moose}"
-        + "      {$moo}"
-        + "    {/foreach}"
-        + "  {/param}"
-        + "{/call}",
+        "{@param boo:?}\n{@param moo:?}\n{call .foo data=\"$boo\"}{param goo : $moo /}{/call}",
+        true);
+    runTestHelper("{@param boo:?}\n{call .foo data=\"$boo\"}{param goo}Blah{/param}{/call}", true);
+    runTestHelper(
+        "{@param boo:?}\n"
+            + "{@param moose:?}\n"
+            + "{call .foo data=\"$boo\"}"
+            + "  {param goo}"
+            + "    {foreach $moo in $moose}"
+            + "      {$moo}"
+            + "    {/foreach}"
+            + "  {/param}"
+            + "{/call}",
         false);
   }
 
   private static void runTestHelper(String soyNodeCode, boolean expectedResult) {
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyNodeCode).parse();
+    SoyFileSetNode soyTree =
+        SoyFileSetParserBuilder.forTemplateContents(soyNodeCode).parse().fileSet();
     SoyNode node = SharedTestUtils.getNode(soyTree, 0);
-    assertThat(new IsComputableAsPyExprVisitor(ExplodingErrorReporter.get()).exec(node))
-        .isEqualTo(expectedResult);
+    assertThat(new IsComputableAsPyExprVisitor().exec(node)).isEqualTo(expectedResult);
   }
 }

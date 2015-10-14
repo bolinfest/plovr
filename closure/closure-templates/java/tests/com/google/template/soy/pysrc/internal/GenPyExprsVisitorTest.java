@@ -35,17 +35,27 @@ public final class GenPyExprsVisitorTest extends TestCase {
         new PyExpr("'I\\'m feeling lucky!'", Integer.MAX_VALUE));
   }
 
+  public void testCss() {
+    assertThatSoyExpr("{css primary}").compilesTo(
+        new PyExpr("runtime.get_css_name('primary')", Integer.MAX_VALUE));
+
+    assertThatSoyExpr("{@param foo:?}\n{css $foo, bar}")
+        .compilesTo(new PyExpr("runtime.get_css_name(data.get('foo'), 'bar')", Integer.MAX_VALUE));
+  }
+
   public void testIf() {
     String soyNodeCode =
-        "{if $boo}\n"
-      + "  Blah\n"
-      + "{elseif not $goo}\n"
-      + "  Bleh\n"
-      + "{else}\n"
-      + "  Bluh\n"
-      + "{/if}\n";
+        "{@param boo:?}\n"
+            + "{@param goo:?}\n"
+            + "{if $boo}\n"
+            + "  Blah\n"
+            + "{elseif not $goo}\n"
+            + "  Bleh\n"
+            + "{else}\n"
+            + "  Bluh\n"
+            + "{/if}\n";
     String expectedPyExprText =
-        "'Blah' if opt_data.get('boo') else 'Bleh' if not opt_data.get('goo') else 'Bluh'";
+        "'Blah' if data.get('boo') else 'Bleh' if not data.get('goo') else 'Bluh'";
 
     assertThatSoyExpr(soyNodeCode).compilesTo(
         new PyExpr(expectedPyExprText,
@@ -54,15 +64,17 @@ public final class GenPyExprsVisitorTest extends TestCase {
 
   public void testIf_nested() {
     String soyNodeCode =
-        "{if $boo}\n"
-      + "  {if $goo}\n"
-      + "    Blah\n"
-      + "  {/if}\n"
-      + "{else}\n"
-      + "  Bleh\n"
-      + "{/if}\n";
+        "{@param boo:?}\n"
+            + "{@param goo:?}\n"
+            + "{if $boo}\n"
+            + "  {if $goo}\n"
+            + "    Blah\n"
+            + "  {/if}\n"
+            + "{else}\n"
+            + "  Bleh\n"
+            + "{/if}\n";
     String expectedPyExprText =
-        "('Blah' if opt_data.get('goo') else '') if opt_data.get('boo') else 'Bleh'";
+        "('Blah' if data.get('goo') else '') if data.get('boo') else 'Bleh'";
 
     assertThatSoyExpr(soyNodeCode).compilesTo(
         new PyExpr(expectedPyExprText,
@@ -137,11 +149,29 @@ public final class GenPyExprsVisitorTest extends TestCase {
     assertThatSoyExpr(soyCode).compilesTo(new PyExpr(expectedPyCode, Integer.MAX_VALUE));
   }
 
+  public void testMsgOnlyLiteralWithApostrophe() {
+    // Should escape '\'' in format string.
+
+   String soyCode =
+        "{msg meaning=\"verb\" desc=\"The word 'Archive' used as a verb.\"}"
+          + "Archive's"
+      + "{/msg}\n";
+
+    String expectedPyCode =
+        "translator_impl.render_literal("
+        + "translator_impl.prepare_literal("
+          + "###, "
+          + "'Archive\\'s'))";
+
+    assertThatSoyExpr(soyCode).compilesTo(new PyExpr(expectedPyCode, Integer.MAX_VALUE));
+  }
+
   public void testMsgSimpleSoyExpression() {
     String soyCode =
-        "{msg desc=\"var placeholder\"}"
-        + "Hello {$username}"
-      + "{/msg}\n";
+        "{@param username:?}\n"
+            + "{msg desc=\"var placeholder\"}"
+            + "Hello {$username}"
+            + "{/msg}\n";
 
     String expectedPyCode =
         "translator_impl.render("
@@ -149,16 +179,18 @@ public final class GenPyExprsVisitorTest extends TestCase {
         + "###, "
         + "'Hello {USERNAME}', "
         + "('USERNAME',)), "
-        + "{'USERNAME': str(opt_data.get('username'))})";
+        + "{'USERNAME': str(data.get('username'))})";
 
     assertThatSoyExpr(soyCode).compilesTo(new PyExpr(expectedPyCode, Integer.MAX_VALUE));
   }
 
   public void testMsgMultipleSoyExpressions() {
     String soyCode =
-        "{msg desc=\"var placeholder\"}"
-        + "{$greet} {$username}"
-      + "{/msg}\n";
+        "{@param greet:?}\n"
+            + "{@param username:?}\n"
+            + "{msg desc=\"var placeholder\"}"
+            + "{$greet} {$username}"
+            + "{/msg}\n";
 
     String expectedPyCode =
         "translator_impl.render("
@@ -167,8 +199,8 @@ public final class GenPyExprsVisitorTest extends TestCase {
         + "'{GREET} {USERNAME}', "
         + "('GREET', 'USERNAME')), "
         + "{"
-          + "'GREET': str(opt_data.get('greet')), "
-          + "'USERNAME': str(opt_data.get('username'))"
+          + "'GREET': str(data.get('greet')), "
+          + "'USERNAME': str(data.get('username'))"
         + "})";
 
     assertThatSoyExpr(soyCode).compilesTo(new PyExpr(expectedPyCode, Integer.MAX_VALUE));
@@ -176,9 +208,11 @@ public final class GenPyExprsVisitorTest extends TestCase {
 
   public void testMsgMultipleSoyExpressionsWithBraces() {
     String soyCode =
-        "{msg desc=\"var placeholder\"}"
-        + "{$greet} {lb}{$username}{rb}"
-      + "{/msg}\n";
+        "{@param username:?}\n"
+            + "{@param greet:?}\n"
+            + "{msg desc=\"var placeholder\"}"
+            + "{$greet} {lb}{$username}{rb}"
+            + "{/msg}\n";
 
     String expectedPyCode =
         "translator_impl.render("
@@ -187,8 +221,8 @@ public final class GenPyExprsVisitorTest extends TestCase {
         + "'{GREET} {{{USERNAME}}}', "
         + "('GREET', 'USERNAME')), "
         + "{"
-          + "'GREET': str(opt_data.get('greet')), "
-          + "'USERNAME': str(opt_data.get('username'))"
+          + "'GREET': str(data.get('greet')), "
+          + "'USERNAME': str(data.get('username'))"
         + "})";
 
     assertThatSoyExpr(soyCode).compilesTo(new PyExpr(expectedPyCode, Integer.MAX_VALUE));
@@ -196,9 +230,10 @@ public final class GenPyExprsVisitorTest extends TestCase {
 
   public void testMsgNamespacedSoyExpression() {
     String soyCode =
-        "{msg desc=\"placeholder with namespace\"}"
-        + "Hello {$foo.bar}"
-      + "{/msg}\n";
+        "{@param foo:?}\n"
+            + "{msg desc=\"placeholder with namespace\"}"
+            + "Hello {$foo.bar}"
+            + "{/msg}\n";
 
     String expectedPyCode =
         "translator_impl.render("
@@ -206,15 +241,16 @@ public final class GenPyExprsVisitorTest extends TestCase {
         + "###, "
         + "'Hello {BAR}', "
         + "('BAR',)), "
-        + "{'BAR': str(opt_data.get('foo').get('bar'))})";
+        + "{'BAR': str(data.get('foo').get('bar'))})";
 
     assertThatSoyExpr(soyCode).compilesTo(new PyExpr(expectedPyCode, Integer.MAX_VALUE));
   }
   public void testMsgWithArithmeticExpression() {
     String soyCode =
-        "{msg desc=\"var placeholder\"}"
-        + "Hello {$username + 1}"
-      + "{/msg}\n";
+        "{@param username:?}\n"
+            + "{msg desc=\"var placeholder\"}"
+            + "Hello {$username + 1}"
+            + "{/msg}\n";
 
     String expectedPyCode =
         "translator_impl.render("
@@ -222,16 +258,17 @@ public final class GenPyExprsVisitorTest extends TestCase {
         + "###, "
         + "'Hello {XXX}', "
         + "('XXX',)), "
-        + "{'XXX': str(runtime.type_safe_add(opt_data.get('username'), 1))})";
+        + "{'XXX': str(runtime.type_safe_add(data.get('username'), 1))})";
 
     assertThatSoyExpr(soyCode).compilesTo(new PyExpr(expectedPyCode, Integer.MAX_VALUE));
   }
   public void testMsgWithHtmlNode() {
     // msg with HTML tags and raw texts
     String soyCode =
-        "{msg desc=\"with link\"}"
-        + "Please click <a href='{$url}'>here</a>."
-      + "{/msg}";
+        "{@param url:?}\n"
+            + "{msg desc=\"with link\"}"
+            + "Please click <a href='{$url}'>here</a>."
+            + "{/msg}";
 
     String expectedPyCode =
         "translator_impl.render("
@@ -240,7 +277,7 @@ public final class GenPyExprsVisitorTest extends TestCase {
           + "'Please click {START_LINK}here{END_LINK}.', "
           + "('START_LINK', 'END_LINK')), "
           + "{"
-            + "'START_LINK': ''.join(['<a href=\\'',str(opt_data.get('url')),'\\'>']), "
+            + "'START_LINK': ''.join(['<a href=\\'',str(data.get('url')),'\\'>']), "
             + "'END_LINK': '</a>'"
           + "})";
 
@@ -249,13 +286,14 @@ public final class GenPyExprsVisitorTest extends TestCase {
 
   public void testMsgWithPlural() {
     String soyCode =
-        "{msg desc=\"simple plural\"}"
-        + "{plural $numDrafts}"
-          + "{case 0}No drafts"
-          + "{case 1}1 draft"
-          + "{default}{$numDrafts} drafts"
-        + "{/plural}"
-      + "{/msg}";
+        "{@param numDrafts:?}\n"
+            + "{msg desc=\"simple plural\"}"
+            + "{plural $numDrafts}"
+            + "{case 0}No drafts"
+            + "{case 1}1 draft"
+            + "{default}{$numDrafts} drafts"
+            + "{/plural}"
+            + "{/msg}";
 
     String expectedPyCode =
         "translator_impl.render_plural("
@@ -267,10 +305,10 @@ public final class GenPyExprsVisitorTest extends TestCase {
             + "'other': '{NUM_DRAFTS_2} drafts'"
           + "}, "
           + "('NUM_DRAFTS_1', 'NUM_DRAFTS_2')), "
-        + "opt_data.get('numDrafts'), "
+        + "data.get('numDrafts'), "
         + "{"
-          + "'NUM_DRAFTS_1': opt_data.get('numDrafts'), "
-          + "'NUM_DRAFTS_2': str(opt_data.get('numDrafts'))"
+          + "'NUM_DRAFTS_1': data.get('numDrafts'), "
+          + "'NUM_DRAFTS_2': str(data.get('numDrafts'))"
         + "})";
 
     assertThatSoyExpr(soyCode).compilesTo(new PyExpr(expectedPyCode, Integer.MAX_VALUE));
@@ -278,13 +316,14 @@ public final class GenPyExprsVisitorTest extends TestCase {
 
   public void testMsgWithPluralAndOffset() {
     String soyCode =
-        "{msg desc=\"offset plural\"}"
-        + "{plural $numDrafts offset=\"2\"}"
-          + "{case 0}No drafts"
-          + "{case 1}1 draft"
-          + "{default}{remainder($numDrafts)} drafts"
-        + "{/plural}"
-      + "{/msg}";
+        "{@param numDrafts:?}\n"
+            + "{msg desc=\"offset plural\"}"
+            + "{plural $numDrafts offset=\"2\"}"
+            + "{case 0}No drafts"
+            + "{case 1}1 draft"
+            + "{default}{remainder($numDrafts)} drafts"
+            + "{/plural}"
+            + "{/msg}";
 
     String expectedPyCode =
         "translator_impl.render_plural("
@@ -296,10 +335,10 @@ public final class GenPyExprsVisitorTest extends TestCase {
             + "'other': '{XXX} drafts'"
           + "}, "
           + "('NUM_DRAFTS', 'XXX')), "
-        + "opt_data.get('numDrafts'), "
+        + "data.get('numDrafts'), "
         + "{"
-          + "'NUM_DRAFTS': opt_data.get('numDrafts'), "
-          + "'XXX': str(opt_data.get('numDrafts') - 2)"
+          + "'NUM_DRAFTS': data.get('numDrafts'), "
+          + "'XXX': str(data.get('numDrafts') - 2)"
         + "})";
 
     assertThatSoyExpr(soyCode).compilesTo(new PyExpr(expectedPyCode, Integer.MAX_VALUE));
@@ -307,22 +346,30 @@ public final class GenPyExprsVisitorTest extends TestCase {
 
   public void testMsgWithSelect() {
     String soyCode =
-        "{msg desc=\"...\"}\n"
-        + "  {select $userGender}\n"
-        + "    {case 'female'}\n"
-        + "      {select $targetGender}\n"
-        + "        {case 'female'}Reply to her.{case 'male'}Reply to him.{default}Reply to them.\n"
-        + "      {/select}\n"
-        + "    {case 'male'}\n"
-        + "      {select $targetGender}\n"
-        + "        {case 'female'}Reply to her.{case 'male'}Reply to him.{default}Reply to them.\n"
-        + "      {/select}\n"
-        + "    {default}\n"
-        + "      {select $targetGender}\n"
-        + "        {case 'female'}Reply to her.{case 'male'}Reply to him.{default}Reply to them.\n"
-        + "      {/select}\n"
-        + "   {/select}\n"
-        + "{/msg}\n";
+        "{@param userGender:?}\n"
+            + "{@param targetGender:?}\n"
+            + "{msg desc=\"...\"}\n"
+            + "  {select $userGender}\n"
+            + "    {case 'female'}\n"
+            + "      {select $targetGender}\n"
+            + "        {case 'female'}Reply to her.\n"
+            + "        {case 'male'}Reply to him.\n"
+            + "        {default}Reply to them.\n"
+            + "      {/select}\n"
+            + "    {case 'male'}\n"
+            + "      {select $targetGender}\n"
+            + "        {case 'female'}Reply to her.\n"
+            + "        {case 'male'}Reply to him.\n"
+            + "        {default}Reply to them.\n"
+            + "      {/select}\n"
+            + "    {default}\n"
+            + "      {select $targetGender}\n"
+            + "        {case 'female'}Reply to her.\n"
+            + "        {case 'male'}Reply to him.\n"
+            + "        {default}Reply to them.\n"
+            + "      {/select}\n"
+            + "   {/select}\n"
+            + "{/msg}\n";
 
     String expectedPyCode =
         "translator_impl.render_icu("
@@ -350,8 +397,8 @@ public final class GenPyExprsVisitorTest extends TestCase {
           + "}', "
           + "('USER_GENDER', 'TARGET_GENDER')), "
         + "{"
-        + "'USER_GENDER': opt_data.get('userGender'), "
-        + "'TARGET_GENDER': opt_data.get('targetGender')"
+        + "'USER_GENDER': data.get('userGender'), "
+        + "'TARGET_GENDER': data.get('targetGender')"
         + "})";
 
     assertThatSoyExpr(soyCode).compilesTo(new PyExpr(expectedPyCode, Integer.MAX_VALUE));
@@ -359,14 +406,15 @@ public final class GenPyExprsVisitorTest extends TestCase {
 
   public void testMsgWithPluralWithGender() {
     String soyCode =
-        "{msg genders=\"$people[0]?.gender, $people[1]?.gender\" desc=\"plural with offsets\"}\n"
-        + "  {plural length($people)}\n"
-        + "    {case 1}{$people[0].name} is attending\n"
-        + "    {case 2}{$people[0].name} and {$people[1]?.name} are attending\n"
-        + "    {case 3}{$people[0].name}, {$people[1]?.name}, and 1 other are attending\n"
-        + "    {default}{$people[0].name}, {$people[1]?.name}, and length($people) others\n"
-        + "  {/plural}\n"
-        + "{/msg}\n";
+        "{@param people:?}\n"
+            + "{msg genders=\"$people[0]?.gender, $people[1]?.gender\" desc=\"plural w offsets\"}\n"
+            + "  {plural length($people)}\n"
+            + "    {case 1}{$people[0].name} is attending\n"
+            + "    {case 2}{$people[0].name} and {$people[1]?.name} are attending\n"
+            + "    {case 3}{$people[0].name}, {$people[1]?.name}, and 1 other are attending\n"
+            + "    {default}{$people[0].name}, {$people[1]?.name}, and length($people) others\n"
+            + "  {/plural}\n"
+            + "{/msg}\n";
 
     String expectedPyCode = "translator_impl.render_icu"
         + "(translator_impl.prepare_icu"
@@ -436,16 +484,16 @@ public final class GenPyExprsVisitorTest extends TestCase {
             + "('PEOPLE_0_GENDER', 'PEOPLE_1_GENDER', 'NUM', 'NAME_1', 'NAME_2')), "
           + "{"
             + "'PEOPLE_0_GENDER': None "
-              + "if runtime.key_safe_data_access(opt_data.get('people'), 0) is None "
-              + "else runtime.key_safe_data_access(opt_data.get('people'), 0).get('gender'), "
+              + "if runtime.key_safe_data_access(data.get('people'), 0) is None "
+              + "else runtime.key_safe_data_access(data.get('people'), 0).get('gender'), "
             + "'PEOPLE_1_GENDER': None "
-              + "if runtime.key_safe_data_access(opt_data.get('people'), 1) is None "
-              + "else runtime.key_safe_data_access(opt_data.get('people'), 1).get('gender'), "
-            + "'NUM': len(opt_data.get('people')), "
-            + "'NAME_1': str(runtime.key_safe_data_access(opt_data.get('people'), 0).get('name')), "
+              + "if runtime.key_safe_data_access(data.get('people'), 1) is None "
+              + "else runtime.key_safe_data_access(data.get('people'), 1).get('gender'), "
+            + "'NUM': len(data.get('people')), "
+            + "'NAME_1': str(runtime.key_safe_data_access(data.get('people'), 0).get('name')), "
             + "'NAME_2': str(None "
-              + "if runtime.key_safe_data_access(opt_data.get('people'), 1) is None "
-              + "else runtime.key_safe_data_access(opt_data.get('people'), 1).get('name'))"
+              + "if runtime.key_safe_data_access(data.get('people'), 1) is None "
+              + "else runtime.key_safe_data_access(data.get('people'), 1).get('name'))"
           + "}"
         + ")";
 

@@ -43,11 +43,11 @@ public final class ContentSecurityPolicyPassTest extends TestCase {
   public void testTrivialTemplate() {
     assertInjected(
         join(
-            "{template foo}\n",
+            "{template .foo}\n",
             "Hello, World!\n",
             "{/template}"),
         join(
-            "{template foo}\n",
+            "{template .foo}\n",
             "Hello, World!\n",
             "{/template}"));
   }
@@ -55,11 +55,11 @@ public final class ContentSecurityPolicyPassTest extends TestCase {
   public void testOneScriptWithBody() {
     assertInjected(
         join(
-            "{template foo}\n",
+            "{template .foo}\n",
             "<script" + NONCE + ">alert('Hello, World!')</script>\n",
             "{/template}"),
         join(
-            "{template foo}\n",
+            "{template .foo}\n",
             "<script>alert('Hello, World!')</script>\n",
             "{/template}"));
   }
@@ -67,11 +67,11 @@ public final class ContentSecurityPolicyPassTest extends TestCase {
   public void testOneSrcedScript() {
     assertInjected(
         join(
-            "{template foo}\n",
+            "{template .foo}\n",
             "<script src=\"app.js\"" + NONCE + "></script>\n",
             "{/template}"),
         join(
-            "{template foo}\n",
+            "{template .foo}\n",
             "<script src=\"app.js\"></script>\n",
             "{/template}"));
   }
@@ -79,7 +79,7 @@ public final class ContentSecurityPolicyPassTest extends TestCase {
   public void testManyScripts() {
     assertInjected(
         join(
-            "{template foo}\n",
+            "{template .foo}\n",
             "<script src=\"one.js\"" + NONCE + "></script>",
             "<script src=two.js" + NONCE + "></script>",
             "<script src=three.js " + NONCE + "/></script>",
@@ -87,7 +87,7 @@ public final class ContentSecurityPolicyPassTest extends TestCase {
             "<script type='text/javascript'" + NONCE + ">main()</script>\n",
             "{/template}"),
         join(
-            "{template foo}\n",
+            "{template .foo}\n",
             "<script src=\"one.js\"></script>",
             "<script src=two.js></script>",
             "<script src=three.js /></script>",
@@ -99,7 +99,7 @@ public final class ContentSecurityPolicyPassTest extends TestCase {
   public void testFakeScripts() {
     assertInjected(
         join(
-            "{template foo}\n",
+            "{template .foo}\n",
             "<noscript></noscript>",
             "<script" + NONCE + ">alert('Hi');</script>",
             "<!-- <script>notAScript()</script> -->",
@@ -108,7 +108,7 @@ public final class ContentSecurityPolicyPassTest extends TestCase {
             "<a href=\"//google.com/search?q=<script>hi()</script>\">Link</a>\n",
             "{/template}"),
         join(
-            "{template foo}\n",
+            "{template .foo}\n",
             "<noscript></noscript>",
             // An actual script in a sea of imposters.
             "<script>alert('Hi');</script>",
@@ -123,13 +123,16 @@ public final class ContentSecurityPolicyPassTest extends TestCase {
   public void testPrintDirectiveInScriptTag() {
     assertInjected(
         join(
-            "{template foo}\n",
-            "<script src='{$appScriptUrl |filterNormalizeUri |escapeHtmlAttribute}'",
+            "{template .foo}\n",
+            "  {@param appScriptUrl: ?}\n",
+            "<script src=",
+            "'{$appScriptUrl |filterTrustedResourceUri |filterNormalizeUri |escapeHtmlAttribute}'",
             NONCE + ">",
             "alert('Hello, World!')</script>\n",
             "{/template}"),
         join(
-            "{template foo}\n",
+            "{template .foo}\n",
+            "  {@param appScriptUrl: ?}\n",
             "<script src='{$appScriptUrl}'>",
             "alert('Hello, World!')</script>\n",
             "{/template}"));
@@ -138,13 +141,13 @@ public final class ContentSecurityPolicyPassTest extends TestCase {
   public void testOneStyleTag() {
     assertInjected(
         join(
-            "{template foo}\n",
+            "{template .foo}\n",
             "<style type=text/css", NONCE, ">",
             "p {lb} color: purple {rb}",
             "</style>\n",
             "{/template}"),
         join(
-            "{template foo}\n",
+            "{template .foo}\n",
             "<style type=text/css>p {lb} color: purple {rb}</style>\n",
             "{/template}"));
   }
@@ -152,11 +155,11 @@ public final class ContentSecurityPolicyPassTest extends TestCase {
   public void testTrailingSlashes() {
     assertInjected(
         join(
-            "{template foo}\n",
+            "{template .foo}\n",
             "<script src=//example.com/unquoted/url/" + NONCE + "></script>\n",
             "{/template}"),
         join(
-            "{template foo}\n",
+            "{template .foo}\n",
             "<script src=//example.com/unquoted/url/></script>\n",
             "{/template}"));
   }
@@ -164,7 +167,7 @@ public final class ContentSecurityPolicyPassTest extends TestCase {
   public void testInlineEventHandlersAndStyles() {
     assertInjected(
         join(
-            "{template foo}\n",
+            "{template .foo}\n",
             "  {@param height: int}\n",
             "<a href='#' style='",
             "{if $ij?.csp_nonce}",
@@ -204,7 +207,7 @@ public final class ContentSecurityPolicyPassTest extends TestCase {
 
             "{/template}"),
         join(
-            "{template foo}\n",
+            "{template .foo}\n",
             "  {@param height: int}\n",
             "<a href='#' style='height:{$height}px;' onclick='foo() &amp;& bar(\"baz\")'>",
             "<a href='#' onmouseover=foo() style=color:red>",
@@ -221,9 +224,11 @@ public final class ContentSecurityPolicyPassTest extends TestCase {
   private SoyFileSetNode parseAndApplyCspPass(String input) {
     String namespace = "{namespace ns autoescape=\"deprecated-contextual\"}\n\n";
     ErrorReporter boom = ExplodingErrorReporter.get();
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(namespace + input)
-        .errorReporter(boom)
-        .parse();
+    SoyFileSetNode soyTree =
+        SoyFileSetParserBuilder.forFileContents(namespace + input)
+            .errorReporter(boom)
+            .parse()
+            .fileSet();
 
     ContextualAutoescaper contextualAutoescaper
         = new ContextualAutoescaper(ImmutableMap.<String, SoyPrintDirective>of(), boom);

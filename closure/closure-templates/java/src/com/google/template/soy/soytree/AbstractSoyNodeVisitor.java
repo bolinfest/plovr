@@ -18,7 +18,6 @@ package com.google.template.soy.soytree;
 
 import com.google.template.soy.basetree.AbstractNodeVisitor;
 import com.google.template.soy.basetree.ParentNode;
-import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.soytree.SoyNode.LoopNode;
 import com.google.template.soy.soytree.SoyNode.MsgSubstUnitNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
@@ -54,11 +53,7 @@ import com.google.template.soy.soytree.jssrc.GoogMsgRefNode;
  */
 public abstract class AbstractSoyNodeVisitor<R> extends AbstractNodeVisitor<SoyNode, R> {
 
-  public AbstractSoyNodeVisitor(ErrorReporter errorReporter) {
-    super(errorReporter);
-  }
-
-  @Override protected final void visit(SoyNode node) {
+  @Override protected void visit(SoyNode node) {
 
     switch (node.getKind()) {
 
@@ -78,8 +73,6 @@ public abstract class AbstractSoyNodeVisitor<R> extends AbstractNodeVisitor<SoyN
       case MSG_PLURAL_NODE: visitMsgPluralNode((MsgPluralNode) node); break;
       case MSG_PLURAL_CASE_NODE: visitMsgPluralCaseNode((MsgPluralCaseNode) node); break;
       case MSG_PLURAL_DEFAULT_NODE: visitMsgPluralDefaultNode((MsgPluralDefaultNode) node); break;
-      case MSG_PLURAL_REMAINDER_NODE:
-        visitMsgPluralRemainderNode((MsgPluralRemainderNode) node); break;
       case MSG_SELECT_NODE: visitMsgSelectNode((MsgSelectNode) node); break;
       case MSG_SELECT_CASE_NODE: visitMsgSelectCaseNode((MsgSelectCaseNode) node); break;
       case MSG_SELECT_DEFAULT_NODE: visitMsgSelectDefaultNode((MsgSelectDefaultNode) node); break;
@@ -117,7 +110,7 @@ public abstract class AbstractSoyNodeVisitor<R> extends AbstractNodeVisitor<SoyN
       case LOG_NODE: visitLogNode((LogNode) node); break;
       case DEBUGGER_NODE: visitDebuggerNode((DebuggerNode) node); break;
 
-      default: throw new UnsupportedOperationException();
+      default: visitSoyNode(node); break;
     }
   }
 
@@ -135,8 +128,8 @@ public abstract class AbstractSoyNodeVisitor<R> extends AbstractNodeVisitor<SoyN
   /**
    * Helper to visit all the children of a node, in order.
    *
-   * This method differs from {@code visitChildren} in that we are iterating through a copy of the
-   * children. Thus, concurrent modification of the list of children is allowed.
+   * <p>This method differs from {@code visitChildren} in that we are iterating through a copy of
+   * the children. Thus, concurrent modification of the list of children is allowed.
    *
    * @param node The parent node whose children to visit.
    * @see #visitChildren
@@ -200,10 +193,6 @@ public abstract class AbstractSoyNodeVisitor<R> extends AbstractNodeVisitor<SoyN
 
   protected void visitMsgPluralDefaultNode(MsgPluralDefaultNode node) {
     visitSoyNode(node);
-  }
-
-  protected void visitMsgPluralRemainderNode(MsgPluralRemainderNode node) {
-    visitMsgSubstUnitNode(node);
   }
 
   protected void visitMsgSelectNode(MsgSelectNode node) {
@@ -345,5 +334,4 @@ public abstract class AbstractSoyNodeVisitor<R> extends AbstractNodeVisitor<SoyN
   protected void visitSoyNode(SoyNode node) {
     throw new UnsupportedOperationException();
   }
-
 }

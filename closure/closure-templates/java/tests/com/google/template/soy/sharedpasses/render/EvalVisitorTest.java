@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-
 package com.google.template.soy.sharedpasses.render;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.template.soy.shared.SharedTestUtils.untypedTemplateBodyForExpression;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
@@ -40,16 +41,20 @@ import com.google.template.soy.data.restricted.StringData;
 import com.google.template.soy.data.restricted.UndefinedData;
 import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.exprparse.ExpressionParser;
-import com.google.template.soy.exprtree.ExprRootNode;
+import com.google.template.soy.exprtree.ExprNode;
+import com.google.template.soy.exprtree.FunctionNode;
+import com.google.template.soy.passes.SharedPassesModule;
 import com.google.template.soy.shared.SharedTestUtils;
+import com.google.template.soy.shared.internal.ErrorReporterModule;
 import com.google.template.soy.shared.internal.SharedModule;
-import com.google.template.soy.sharedpasses.SharedPassesModule;
+import com.google.template.soy.shared.restricted.SoyFunction;
 import com.google.template.soy.sharedpasses.render.EvalVisitor.EvalVisitorFactory;
 import com.google.template.soy.soytree.PrintNode;
 
 import junit.framework.TestCase;
 
 import java.util.Map;
+import java.util.Set;
 
 import javax.annotation.Nullable;
 
@@ -59,9 +64,12 @@ import javax.annotation.Nullable;
  */
 public class EvalVisitorTest extends TestCase {
 
-  private static final Injector INJECTOR =
-      Guice.createInjector(new SharedModule(), new SharedPassesModule(),
-          new BasicDirectivesModule(), new BasicFunctionsModule());
+  private static final Injector INJECTOR = Guice.createInjector(
+      new ErrorReporterModule(),
+      new SharedModule(),
+      new SharedPassesModule(),
+      new BasicDirectivesModule(),
+      new BasicFunctionsModule());
 
   protected static final SoyValueHelper VALUE_HELPER = INJECTOR.getInstance(SoyValueHelper.class);
 
@@ -77,7 +85,7 @@ public class EvalVisitorTest extends TestCase {
 
   @Override protected void setUp() {
     testData = createTestData();
-    SharedTestUtils.simulateNewApiCall(INJECTOR, null, 0);
+    SharedTestUtils.simulateNewApiCall(INJECTOR);
   }
 
   protected SoyRecord createTestData() {
@@ -99,15 +107,32 @@ public class EvalVisitorTest extends TestCase {
    */
   private SoyValue eval(String expression) throws Exception {
     PrintNode code =
-        (PrintNode) SoyFileSetParserBuilder.forTemplateContents("{" + expression + "}")
-            .parse()
-            .getChild(0)
-            .getChild(0)
-            .getChild(0);
-    ExprRootNode expr = code.getExprUnion().getExpr();
+        (PrintNode)
+            SoyFileSetParserBuilder.forTemplateContents(
+                    // wrap in a function so we don't run into the 'can't print bools' error message
+                    untypedTemplateBodyForExpression("fakeFunction(" + expression + ")"))
+                .addSoyFunction(
+                    new SoyFunction() {
+                      @Override
+                      public String getName() {
+                        return "fakeFunction";
+                      }
+
+                      @Override
+                      public Set<Integer> getValidArgsSizes() {
+                        return ImmutableSet.of(1);
+                      }
+                    })
+                .parse()
+                .fileSet()
+                .getChild(0)
+                .getChild(0)
+                .getChild(0);
+    ExprNode expr = ((FunctionNode) code.getExprUnion().getExpr().getChild(0)).getChild(0);
 
     EvalVisitor evalVisitor =
-        INJECTOR.getInstance(EvalVisitorFactory.class)
+        INJECTOR
+            .getInstance(EvalVisitorFactory.class)
             .create(TEST_IJ_DATA, TestingEnvironment.createForTest(testData, locals));
     return evalVisitor.exec(expr);
   }
@@ -314,7 +339,7 @@ public class EvalVisitorTest extends TestCase {
 
     assertEval("$boo", 8);
     assertEval("$foo.bar", "baz");
-    assertEval("$goo.2", 6);
+    assertEval("$goo[2]", 6);
 
     assertEval("$ij.ijBool", true);
     assertEval("$ij.ijInt", 26);
@@ -322,7 +347,7 @@ public class EvalVisitorTest extends TestCase {
 
     assertThat(eval("$too")).isInstanceOf(UndefinedData.class);
     assertThat(eval("$foo.too")).isInstanceOf(UndefinedData.class);
-    assertThat(eval("$foo.goo2.22")).isInstanceOf(UndefinedData.class);
+    assertThat(eval("$foo.goo2[22]")).isInstanceOf(UndefinedData.class);
     assertThat(eval("$ij.boo")).isInstanceOf(UndefinedData.class);
 
     // TODO: If enabling exception for undefined LHS (see EvalVisitor), uncomment tests below.
@@ -332,13 +357,9 @@ public class EvalVisitorTest extends TestCase {
     //assertRenderException(
     //    "$foo.baz.moo.tar", "encountered undefined LHS just before accessing \".moo\"");
     assertThat(eval("$foo.baz.moo.tar")).isInstanceOf(UndefinedData.class);
-    assertRenderException("$boo?.2", "encountered non-map/list just before accessing \"?.2\"");
+    assertRenderException("$boo?[2]", "encountered non-map/list just before accessing \"?[2]\"");
     assertRenderException(
         "$boo?['xyz']", "encountered non-map/list just before accessing \"?['xyz']\"");
-    assertDataException(
-        "$foo.2",
-        "SoyDict accessed with non-string key (got key type" +
-            " com.google.template.soy.data.restricted.IntegerData).");
     assertDataException(
         "$foo[2]",
         "SoyDict accessed with non-string key (got key type" +
@@ -364,10 +385,6 @@ public class EvalVisitorTest extends TestCase {
         "$foo?.bar?.moo.tar", "encountered non-record just before accessing \"?.moo\"");
     assertThat(eval("$foo?.baz?.moo.tar")).isInstanceOf(NullData.class);
     assertDataException(
-        "$foo.2",
-        "SoyDict accessed with non-string key (got key type" +
-            " com.google.template.soy.data.restricted.IntegerData).");
-    assertDataException(
         "$foo[2]",
         "SoyDict accessed with non-string key (got key type" +
             " com.google.template.soy.data.restricted.IntegerData).");
@@ -385,22 +402,22 @@ public class EvalVisitorTest extends TestCase {
 
     assertEval("-$boo", -8);
 
-    assertEval("$goo.3*3", 30);
+    assertEval("$goo[3]*3", 30);
     assertEval("2 * $moo", 6.28);
 
-    assertEval("$goo.0 / 4", 0.25);
+    assertEval("$goo[0] / 4", 0.25);
     assertEval("$woo/-0.8090", 2.0);
 
     assertEval("$boo % 3", 2);
 
     assertEval("-99+-111", -210);
-    assertEval("$moo + $goo.5", 24.14);
+    assertEval("$moo + $goo[5]", 24.14);
     assertEval("$ij.ijInt + $boo", 34);
     assertEval("'boo'+'hoo'", "boohoo");  // string concatenation
     assertEval("$foo.bar + $ij.ijStr", "bazinjected");  // string concatenation
     assertEval("8 + $zoo + 8.0", "8loo8");  // coercion to string type
 
-    assertEval("$goo.4 - $boo", 7);
+    assertEval("$goo[4] - $boo", 7);
     assertEval("1.002- $woo", 2.62);
 
     // Ensure longs work.
@@ -417,7 +434,7 @@ public class EvalVisitorTest extends TestCase {
     assertEval("$foo['bar']", "baz");
     assertEval("$goo[2]", 6);
     assertEval("$foo['goo' + 2][2+2]", 15);
-    assertEval("$foo['goo'+2].4", 15);
+    assertEval("$foo['goo'+2][4]", 15);
     assertEval("$foo.goo2[2 + 2]", 15);
   }
 
@@ -449,16 +466,16 @@ public class EvalVisitorTest extends TestCase {
     assertEval("1<1", false);
     assertEval("$woo < 0", true);
 
-    assertEval("$goo.0>0", true);
+    assertEval("$goo[0]>0", true);
     assertEval("$moo> 11.1111", false);
 
     assertEval("0 <= 0", true);
     assertEval("$moo <= -$woo", false);
 
-    assertEval("2 >= $goo.2", false);
+    assertEval("2 >= $goo[2]", false);
     assertEval("4 >=$moo", true);
 
-    assertEval("15==$goo.4", true);
+    assertEval("15==$goo[4]", true);
     assertEval("$woo == 1.61", false);
     assertEval("4.0 ==4", true);
     assertEval("$f == true", false);
@@ -470,7 +487,7 @@ public class EvalVisitorTest extends TestCase {
     assertEval("'22' == 22", true);
     assertEval("'22' == '' + 22", true);
 
-    assertEval("$goo.4!=15", false);
+    assertEval("$goo[4]!=15", false);
     assertEval("1.61 != $woo", true);
     assertEval("4 !=4.0", false);
     assertEval("true != $f", true);
@@ -519,7 +536,7 @@ public class EvalVisitorTest extends TestCase {
   public void testEvalConditionalOperator() throws Exception {
 
     assertEval("($f and 0)?4 : '4'", "4");
-    assertEval("$goo ? $goo.1:1", 3);
+    assertEval("$goo ? $goo[1]:1", 3);
   }
 
 

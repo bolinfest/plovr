@@ -17,9 +17,7 @@ import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.SoyModule;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.jssrc.SoyJsSrcOptions;
-import com.google.template.soy.jssrc.SoyJsSrcOptions.CodeStyle;
 import com.google.template.soy.msgs.SoyMsgBundle;
-import com.google.template.soy.shared.SoyGeneralOptions.CssHandlingScheme;
 
 /**
  * {@link JsSourceFile} represents a Soy file.
@@ -51,12 +49,6 @@ public class SoyFile extends LocalFileJsInput {
       value.setShouldProvideRequireSoyNamespaces(options.useClosureLibrary);
       value.setShouldDeclareTopLevelNamespaces(options.useClosureLibrary);
       value.setIsUsingIjData(options.isUsingInjectedData);
-
-      // TODO(mbolin): Make this configurable, though for now, prefer CONCAT
-      // because the return type in STRINGBUILDER mode is {string|undefined}
-      // whereas in CONCAT mode, it is simply {string}, which is much simplier
-      // to deal with in the context of the Closure Compiler's type system.
-      value.setCodeStyle(CodeStyle.CONCAT);
       jsSrcOptionsMap.put(options, value);
     }
 
@@ -67,7 +59,6 @@ public class SoyFile extends LocalFileJsInput {
   public String generateCode() {
     SoyFileSet.Builder builder = injector.getInstance(SoyFileSet.Builder.class);
     builder.add(getSource());
-    builder.setCssHandlingScheme(CssHandlingScheme.BACKEND_SPECIFIC);
     SoyFileSet fileSet = builder.build();
     final SoyMsgBundle msgBundle = null;
     try {

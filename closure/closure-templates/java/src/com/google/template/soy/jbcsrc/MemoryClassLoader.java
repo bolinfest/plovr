@@ -17,21 +17,16 @@
 package com.google.template.soy.jbcsrc;
 
 import com.google.common.base.Throwables;
-import com.google.common.primitives.Longs;
+import com.google.common.collect.ImmutableMap;
 
+import java.net.URL;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 /**
  * A {@link ClassLoader} that can load classes from a configured set of {@code byte[]}s. 
  */
 final class MemoryClassLoader extends ClassLoader {
-
-  private static final ClassData TOMBSTONE = 
-      ClassData.create(TypeInfo.create("not.a.real.Class"), Longs.toByteArray(0xdeadbeef));
-
   static {
     // Since we only override findClass(), we can call this method to get fine grained locking
     // support with no additional work. Our superclass will lock all calls to findClass with a per
@@ -68,21 +63,18 @@ final class MemoryClassLoader extends ClassLoader {
    * 
    * <p>The classloader will request classes via {@link #findClass(String)} as loading proceeds.
    */
-  private final ConcurrentMap<String, ClassData> classesByName;
+  private final ImmutableMap<String, ClassData> classesByName;
 
   private MemoryClassLoader(Map<String, ClassData> generatedClasses) {
     super(ClassLoader.getSystemClassLoader());
-    this.classesByName = new ConcurrentHashMap<>(generatedClasses);
+    this.classesByName = ImmutableMap.copyOf(generatedClasses);
   }
 
   @Override protected Class<?> findClass(String name) throws ClassNotFoundException {
     // replace so we don't hang onto the bytes for no reason
-    ClassData classDef = classesByName.put(name, TOMBSTONE);
+    ClassData classDef = classesByName.get(name);
     if (classDef == null) {
-      classesByName.remove(name);
       throw new ClassNotFoundException(name);
-    } else if (classDef == TOMBSTONE) {
-      throw new IllegalStateException("class already defined: " + name);
     }
     try {
       return super.defineClass(name, classDef.data(), 0, classDef.data().length);
@@ -92,5 +84,17 @@ final class MemoryClassLoader extends ClassLoader {
       Throwables.propagateIfInstanceOf(t, ClassNotFoundException.class);
       throw Throwables.propagate(t);
     }
+  }
+  
+  @Override protected URL findResource(final String name) {
+    if (!name.endsWith(".class")) {
+      return null;
+    }
+    String className = name.substring(0, name.length() - ".class".length()).replace('/', '.');
+    ClassData classDef = classesByName.get(className);
+    if (classDef == null) {
+      return null;
+    }
+    return classDef.asUrl();
   }
 }

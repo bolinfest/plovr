@@ -149,12 +149,18 @@ public final class PyExprUtils {
   /**
    * Wraps an expression with the proper SanitizedContent constructor.
    *
+   * <p>NOTE: The pyExpr provided must be properly escaped for the given ContentKind. Please talk to
+   * ISE (ise@) for any questions or concerns.
+   *
    * @param contentKind The kind of sanitized content.
    * @param pyExpr The expression to wrap.
    */
   public static PyExpr wrapAsSanitizedContent(ContentKind contentKind, PyExpr pyExpr) {
     String sanitizer = NodeContentKinds.toPySanitizedContentOrdainer(contentKind);
-    return new PyExpr(sanitizer + "(" + pyExpr.getText() + ")", Integer.MAX_VALUE);
+    String approval = "sanitize.IActuallyUnderstandSoyTypeSafetyAndHaveSecurityApproval("
+        + "'Internally created Sanitization.')";
+    return new PyExpr(sanitizer + "(" + pyExpr.getText() + ", approval=" + approval + ")",
+        Integer.MAX_VALUE);
   }
 
   /**
@@ -188,6 +194,23 @@ public final class PyExprUtils {
   }
 
   /**
+   * Convert a java Map to valid PyExpr as dict.
+   *
+   * @param dict A Map to be converted to PyExpr as a dictionary, both key and value should be
+   *        PyExpr.
+   */
+  public static PyExpr convertMapToOrderedDict(Map<PyExpr, PyExpr> dict) {
+    List<String> values = new ArrayList<>();
+
+    for (Map.Entry<PyExpr, PyExpr> entry : dict.entrySet()) {
+      values.add("(" + entry.getKey().getText() + ", " + entry.getValue().getText() + ")");
+    }
+
+    Joiner joiner = Joiner.on(", ");
+    return new PyExpr("collections.OrderedDict([" + joiner.join(values) + "])", Integer.MAX_VALUE);
+  }
+
+    /**
    * Convert a java Map to valid PyExpr as dict.
    *
    * @param dict A Map to be converted to PyExpr as a dictionary, both key and value should be

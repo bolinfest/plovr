@@ -34,11 +34,12 @@ public final class SoySyntaxExceptionUtilsTest extends TestCase {
         "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/** @param goo */\n" +
-        "{template name=\".foo\"}\n" +
+        "{template .foo}\n" +
         "  {$goo}\n" +
         "{/template}\n";
 
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(testFileContent).parse();
+    SoyFileSetNode soyTree =
+        SoyFileSetParserBuilder.forFileContents(testFileContent).parse().fileSet();
 
     String message = "Some error happened.";
     Throwable cause = new Throwable();
@@ -61,10 +62,11 @@ public final class SoySyntaxExceptionUtilsTest extends TestCase {
         "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
         "/** @param goo */\n" +
-        "{template name=\".foo\"}\n" +
+        "{template .foo}\n" +
         "  {$goo}\n" +
         "{/template}\n";
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(testFileContent).parse();
+    SoyFileSetNode soyTree =
+        SoyFileSetParserBuilder.forFileContents(testFileContent).parse().fileSet();
     PrintNode pn = (PrintNode) soyTree.getChild(0).getChild(0).getChild(0);
 
     // Before.

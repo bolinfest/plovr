@@ -17,19 +17,16 @@
 package com.google.template.soy.jssrc.internal;
 
 import com.google.common.collect.Sets;
-import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
 import com.google.template.soy.exprtree.FunctionNode;
 import com.google.template.soy.jssrc.restricted.SoyLibraryAssistedJsSrcFunction;
+import com.google.template.soy.shared.restricted.SoyFunction;
 import com.google.template.soy.soytree.SoyFileNode;
 import com.google.template.soy.soytree.SoytreeUtils;
 
-import java.util.Map;
 import java.util.SortedSet;
-
-import javax.inject.Inject;
 
 /**
  * A visitor to generate a set of Closure JS library names required by the function plugins used by
@@ -38,52 +35,31 @@ import javax.inject.Inject;
  */
 final class GenFunctionPluginRequiresVisitor {
 
-  /** Map of all SoyLibraryAssistedJsSrcFunctions */
-  private final Map<String, SoyLibraryAssistedJsSrcFunction> soyLibraryAssistedJsSrcFunctionsMap;
-
   /** Set storage for the i18n namespaces */
   private SortedSet<String> requiredJsLibNames;
 
-  private final ErrorReporter errorReporter;
-
-  @Inject
-  public GenFunctionPluginRequiresVisitor(
-      Map<String, SoyLibraryAssistedJsSrcFunction> soyLibraryAssistedJsSrcFunctionsMap,
-      ErrorReporter errorReporter) {
-    this.soyLibraryAssistedJsSrcFunctionsMap = soyLibraryAssistedJsSrcFunctionsMap;
-    this.errorReporter = errorReporter;
-  }
-
-
-  public SortedSet<String> exec(SoyFileNode soyFile) {
+  SortedSet<String> exec(SoyFileNode soyFile) {
     requiredJsLibNames = Sets.newTreeSet();
 
     GenFunctionPluginRequiresHelperVisitor helperVisitor =
         new GenFunctionPluginRequiresHelperVisitor();
 
-    SoytreeUtils.execOnAllV2Exprs(soyFile, helperVisitor, errorReporter);
+    SoytreeUtils.execOnAllV2Exprs(soyFile, helperVisitor);
 
     return requiredJsLibNames;
   }
 
-
   private final class GenFunctionPluginRequiresHelperVisitor
      extends AbstractExprNodeVisitor<SortedSet<String>> {
 
-    public GenFunctionPluginRequiresHelperVisitor() {
-      super(GenFunctionPluginRequiresVisitor.this.errorReporter);
-    }
-
     @Override protected void visitFunctionNode(FunctionNode node) {
-      String functionName = node.getFunctionName();
-      if (soyLibraryAssistedJsSrcFunctionsMap.containsKey(functionName)) {
+      SoyFunction soyFunction = node.getSoyFunction();
+      if (soyFunction instanceof SoyLibraryAssistedJsSrcFunction) {
         requiredJsLibNames.addAll(
-            soyLibraryAssistedJsSrcFunctionsMap.get(functionName).getRequiredJsLibNames());
+            ((SoyLibraryAssistedJsSrcFunction) soyFunction).getRequiredJsLibNames());
       }
-
       visitChildren(node);
     }
-
 
     @Override protected void visitExprNode(ExprNode node) {
       if (node instanceof ParentExprNode) {
@@ -91,6 +67,4 @@ final class GenFunctionPluginRequiresVisitor {
       }
     }
   }
-
-
 }

@@ -17,12 +17,10 @@
 package com.google.template.soy.soytree;
 
 import com.google.template.soy.basetree.AbstractReturningNodeVisitor;
-import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.soytree.SoyNode.LoopNode;
 import com.google.template.soy.soytree.SoyNode.MsgSubstUnitNode;
 import com.google.template.soy.soytree.jssrc.GoogMsgDefNode;
 import com.google.template.soy.soytree.jssrc.GoogMsgRefNode;
-
 
 /**
  * Abstract base class for all SoyNode visitors. A visitor is basically a function implemented for
@@ -54,10 +52,6 @@ import com.google.template.soy.soytree.jssrc.GoogMsgRefNode;
 public abstract class AbstractReturningSoyNodeVisitor<R>
     extends AbstractReturningNodeVisitor<SoyNode, R> {
 
-  protected AbstractReturningSoyNodeVisitor(ErrorReporter errorReporter) {
-    super(errorReporter);
-  }
-
   @Override protected R visit(SoyNode node) {
 
     switch (node.getKind()) {
@@ -77,8 +71,6 @@ public abstract class AbstractReturningSoyNodeVisitor<R>
       case MSG_PLURAL_NODE: return visitMsgPluralNode((MsgPluralNode) node);
       case MSG_PLURAL_CASE_NODE: return visitMsgPluralCaseNode((MsgPluralCaseNode) node);
       case MSG_PLURAL_DEFAULT_NODE: return visitMsgPluralDefaultNode((MsgPluralDefaultNode) node);
-      case MSG_PLURAL_REMAINDER_NODE:
-        return visitMsgPluralRemainderNode((MsgPluralRemainderNode) node);
       case MSG_SELECT_NODE: return visitMsgSelectNode((MsgSelectNode) node);
       case MSG_SELECT_CASE_NODE: return visitMsgSelectCaseNode((MsgSelectCaseNode) node);
       case MSG_SELECT_DEFAULT_NODE: return visitMsgSelectDefaultNode((MsgSelectDefaultNode) node);
@@ -116,7 +108,7 @@ public abstract class AbstractReturningSoyNodeVisitor<R>
       case LOG_NODE: return visitLogNode((LogNode) node);
       case DEBUGGER_NODE: return visitDebuggerNode((DebuggerNode) node);
 
-      default: throw new UnsupportedOperationException();
+      default: return visitSoyNode(node);
     }
   }
 
@@ -175,10 +167,6 @@ public abstract class AbstractReturningSoyNodeVisitor<R>
 
   protected R visitMsgPluralDefaultNode(MsgPluralDefaultNode node) {
     return visitSoyNode(node);
-  }
-
-  protected R visitMsgPluralRemainderNode(MsgPluralRemainderNode node) {
-    return visitMsgSubstUnitNode(node);
   }
 
   protected R visitMsgSelectNode(MsgSelectNode node) {
@@ -320,5 +308,4 @@ public abstract class AbstractReturningSoyNodeVisitor<R>
   protected R visitSoyNode(SoyNode node) {
     throw new UnsupportedOperationException();
   }
-
 }

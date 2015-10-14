@@ -15,6 +15,34 @@ The general strategy is to generate a new Java class for each Soy `{template}`.
 Full details on how different pieces of Soy syntax map to Java code are detailed
 below.
 
+##Package design
+
+The jbcsrc implementation is split across several packages.
+
+ * `com.google.template.soy.jbcsrc`
+
+   The base package contains the core compiler implementation and the public
+   compiler entry point: `BytecodeCompiler`
+
+ * `com.google.template.soy.jbcsrc.runtime`
+
+   This package contains helper classes and utility routines that are only
+   accessed by the generated code.  A lot of the `jbcsrc` runtime is actually
+   defined in other soy packages (such as
+   `com.google.template.soy.shared.internal.SharedRuntime` or
+   `com.google.template.soy.shared.data`), when it is possible to share with
+   Tofu.  So this package is really intended for jbcsrc specific functionality.
+
+ * `com.google.template.soy.jbcsrc.api`
+
+   This package contains the public api for rendering jbcsrc compiled templates
+   via the `SoySauce` class.
+
+ * `com.google.template.soy.jbcsrc.shared`
+
+   This package contains functionality that is shared by the compiler and
+   runtime, but is meant to be private to soy.
+
 Background
 ----------
 The Soy server side renderer is currently implemented as a
@@ -655,21 +683,26 @@ combination of explicit SoyType operations and the Java <b>instanceof</b>
 operator.  This will cause a variety of problems for the compiler:
 
   * Soy has a number of places where it checks types.  We will need to generate
-    code that performs these checks most likely by calling directly into the
-    matching SoyType objects.
+    code that performs these checks by generating `checkcast` instructions.
   * Soy has union types.  These are not (easily) representable in the Java type
     system, so every union typed variable will most likely by represented by a
-    static SoyValue type
-  * Soy has both <strong>null</strong> and <strong>undefined</strong> values!
+    static `SoyValue` type
+  * Soy has both `null` values and a `null` type
   * The Soy type system is pluggable (notably for protos).
+  * The soy type system is not completely accurate (e.g. nullability is not 
+    trustable)
 
-All this implies that we will not be able to rely solely on Java level cast
-instructions to enforce types.  Obvious future work would be to rewrite the
-runtime component of the SoyType system to be more compiler friendly.  For
-example, the jssrc backend can
-[generate exact type casts](https://github.com/google/closure-templates/blob/master/java/src/com/google/template/soy/jssrc/internal/JsSrcUtils.java)
-that that jscompiler understands, we should be able to do something similar for
-the Java runtime.
+Due to these issues we take a conservative approach to how we make use of the
+type system.  The key principals we will use are:
+
+  * If the user declared it, we should enforce it. (with `checkcast` operations)
+    This way type errors will get caught early and often.
+  * Nullability information from the type system cannot be relied on.  For 
+    example, if `map` contains integer values, then `$map['key]'` will be
+    assigned the type `int` by the type system, but `int|null` is probably more
+    accurate since we don't know whether or not the key exists.  So in general
+    we need to be careful when dealing with possibly null expressions.  To deal
+    with this we have our own concept of nullability (`Expression.isNullable()`).
 
 ## Non-Functional Requirements
 
@@ -695,22 +728,9 @@ Cross cutting architectural issues that influence overall design choices.
 ## Compatibility
 
 The new implementation will strive for full compatibility with the existing
-renderer behavior.  As part of launching we should consider experiments that
-compare the output of both renderers. However, we may select particular
-(legacy) corners of the language to <strong>not support. </strong>Including, but
-not limited to:
+renderer behavior, unless such compatibility requires reimplementing a bug.
 
-  * strict autoescaping is mandatory
-  * ...more to come...
-
-Additionally, there are some runtime differences around error behavior when
-migrating from ToFu:
-
-  * Missing non-optional template params are flagged as an error at call-time,
-    ToFu only flags this error when you access the param.
-  * ToFu throws SoyDataException for runtime errors in templates.  JbcSrc will
-    throw standard java exceptions (NullPointerException, ClassCastException)
-    as appropriate. 
+TODO(lukes): document known incompatiblities
 
 A Bytecode Primer
 -----------------

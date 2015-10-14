@@ -18,24 +18,32 @@ package com.google.template.soy.jbcsrc.runtime;
 
 import com.google.common.collect.ImmutableList;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
-import com.google.template.soy.data.SoyDataException;
 import com.google.template.soy.data.SoyMap;
 import com.google.template.soy.data.SoyRecord;
 import com.google.template.soy.data.SoyValue;
 import com.google.template.soy.data.SoyValueProvider;
 import com.google.template.soy.data.UnsafeSanitizedContentOrdainer;
+import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.data.restricted.NullData;
 import com.google.template.soy.data.restricted.StringData;
 import com.google.template.soy.jbcsrc.api.AdvisingAppendable;
 import com.google.template.soy.jbcsrc.api.AdvisingStringBuilder;
-import com.google.template.soy.jbcsrc.api.CompiledTemplate;
-import com.google.template.soy.jbcsrc.api.RenderContext;
 import com.google.template.soy.jbcsrc.api.RenderResult;
+import com.google.template.soy.jbcsrc.shared.CompiledTemplate;
+import com.google.template.soy.jbcsrc.shared.RenderContext;
+import com.google.template.soy.msgs.restricted.SoyMsg;
+import com.google.template.soy.msgs.restricted.SoyMsgPart;
+import com.google.template.soy.msgs.restricted.SoyMsgPlaceholderPart;
+import com.google.template.soy.msgs.restricted.SoyMsgPluralPart;
+import com.google.template.soy.msgs.restricted.SoyMsgPluralRemainderPart;
+import com.google.template.soy.msgs.restricted.SoyMsgRawTextPart;
+import com.google.template.soy.msgs.restricted.SoyMsgSelectPart;
 import com.google.template.soy.shared.restricted.SoyJavaFunction;
 import com.google.template.soy.shared.restricted.SoyJavaPrintDirective;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 import javax.annotation.Nullable;
 
@@ -81,10 +89,23 @@ public final class Runtime {
    */
   public static SoyValue resolveSoyValueProvider(SoyValueProvider provider) {
     SoyValue value = provider.resolve();
-    if (value == NullData.INSTANCE) {
+    if (value instanceof NullData) {
       return null;
     }
     return value;
+  }
+
+  /**
+   * Helper function to make SoyRecord.getFieldProvider a non-nullable function by returning
+   * {@link #NULL_PROVIDER} for missing fields.
+   */
+  public static SoyValueProvider getFieldProvider(SoyRecord record, String field) {
+    if (record == null) {
+      throw new NullPointerException("Attempted to access field '" + field + "' of null");
+    }
+    // TODO(lukes): ideally this would be the behavior of getFieldProvider, but Tofu relies on it
+    SoyValueProvider provider = record.getFieldProvider(field);
+    return provider == null | provider instanceof NullData ? NULL_PROVIDER : provider;
   }
 
   /**
@@ -154,6 +175,9 @@ public final class Runtime {
   }
 
   public static SoyValueProvider getSoyListItem(List<SoyValueProvider> list, long index) {
+    if (list == null) {
+      throw new NullPointerException("Attempted to access list item '" + index + "' of null");
+    }
     int size = list.size();
     if (index < size & index >= 0) {
       SoyValueProvider soyValueProvider = list.get((int) index);
@@ -163,14 +187,131 @@ public final class Runtime {
   }
 
   public static SoyValueProvider getSoyMapItem(SoyMap soyMap, SoyValue key) {
+    if (soyMap == null) {
+      throw new NullPointerException("Attempted to access map item '" + key + "' of null");
+    }
     SoyValueProvider soyValueProvider = soyMap.getItemProvider(key);
     return soyValueProvider == null ? NULL_PROVIDER : soyValueProvider;
   }
 
-  public void checkRequiredParam(SoyRecord params, String paramName) {
-    if (!params.hasField(paramName)) {
-      throw new SoyDataException("required param '$" + paramName + "' is undefined");
+  /**
+   * Render a 'complex' message containing with placeholders.
+   */
+  public static void renderSoyMsgWithPlaceholders(SoyMsg msg, Map<String, Object> placeholders,
+      Appendable out) throws IOException {
+    if (msg.getParts().isEmpty()) {
+      // TODO(lukes): RenderVisitorAssistantForMsgs does this... but this seems like a weird case
+      // investigate eliminating it
+      return;
     }
+    // TODO(lukes): the initial plural/select nesting structure of the SoyMsg is determined at
+    // compile time (though the number of cases varies per locale).
+    // We could allow the generated code to call renderSelect/renderPlural directly as a
+    // microoptimization.  This could potentially allow us to eliminate the hashmap entry+boxing for
+    // plural variables when rendering a direct plural tag.  ditto for selects, though that is
+    // more complicated due to the fact that selects can be nested.
+    SoyMsgPart firstPart = msg.getParts().get(0);
+    if (firstPart instanceof SoyMsgPluralPart) {
+      renderPlural(msg, (SoyMsgPluralPart) firstPart, placeholders, out);
+    } else if (firstPart instanceof SoyMsgSelectPart) {
+      renderSelect(msg, (SoyMsgSelectPart) firstPart, placeholders, out);
+    } else {
+      for (SoyMsgPart msgPart : msg.getParts()) {
+        if (msgPart instanceof SoyMsgRawTextPart) {
+          writeRawText((SoyMsgRawTextPart) msgPart, out);
+        } else if (msgPart instanceof SoyMsgPlaceholderPart) {
+          writePlaceholder((SoyMsgPlaceholderPart) msgPart, placeholders, out);
+        } else {
+          throw new AssertionError("unexpected part: " + msgPart);
+        }
+      }
+    }
+  }
+
+  /**
+   * Render a {@code {select}} part of a message.  Most of the complexity is handled by
+   * {@link SoyMsgSelectPart#lookupCase} all this needs to do is apply the placeholders to all the
+   * children.
+   */
+  private static void renderSelect(SoyMsg msg, SoyMsgSelectPart firstPart,
+      Map<String, Object> placeholders, Appendable out) throws IOException {
+    String selectCase = getSelectCase(placeholders, firstPart.getSelectVarName());
+    for (SoyMsgPart casePart : firstPart.lookupCase(selectCase)) {
+      if (casePart instanceof SoyMsgSelectPart) {
+        renderSelect(msg, (SoyMsgSelectPart) casePart, placeholders, out);
+      } else if (casePart instanceof SoyMsgPluralPart) {
+        renderPlural(msg, (SoyMsgPluralPart) casePart, placeholders, out);
+      } else if (casePart instanceof SoyMsgPlaceholderPart) {
+        writePlaceholder((SoyMsgPlaceholderPart) casePart, placeholders, out);
+      } else if (casePart instanceof SoyMsgRawTextPart) {
+        writeRawText((SoyMsgRawTextPart) casePart, out);
+      } else {
+        // select cannot directly contain remainder nodes.
+        throw new AssertionError("unexpected part: " + casePart);
+      }
+    }
+  }
+
+  /**
+   * Render a {@code {plural}} part of a message.  Most of the complexity is handled by
+   * {@link SoyMsgPluralPart#lookupCase} all this needs to do is apply the placeholders to all the
+   * children.
+   */
+  private static void renderPlural(SoyMsg msg, SoyMsgPluralPart plural,
+      Map<String, Object> placeholders, Appendable out) throws IOException {
+    int pluralValue = getPlural(placeholders, plural.getPluralVarName());
+    for (SoyMsgPart casePart : plural.lookupCase(pluralValue, msg.getLocale())) {
+      if (casePart instanceof SoyMsgPlaceholderPart) {
+        writePlaceholder((SoyMsgPlaceholderPart) casePart, placeholders, out);
+
+      } else if (casePart instanceof SoyMsgRawTextPart) {
+        writeRawText((SoyMsgRawTextPart) casePart, out);
+
+      } else if (casePart instanceof SoyMsgPluralRemainderPart) {
+        out.append(String.valueOf(pluralValue - plural.getOffset()));
+
+      } else {
+        // Plural parts will not have nested plural/select parts.  So, this is an error.
+        throw new AssertionError("unexpected part: " + casePart);
+      }
+    }
+  }
+
+  /** Returns the select case variable value. */
+  private static String getSelectCase(Map<String, Object> placeholders, String selectVarName) {
+    String selectCase = (String) placeholders.get(selectVarName);
+    if (selectCase == null) {
+      throw new IllegalArgumentException(
+          "No value provided for select: '" + selectVarName + "'");
+    }
+    return selectCase;
+  }
+
+  /** Returns the plural case variable value. */
+  private static int getPlural(Map<String, Object> placeholders, String pluralVarName) {
+    IntegerData pluralValue = (IntegerData) placeholders.get(pluralVarName);
+    if (pluralValue == null) {
+      throw new IllegalArgumentException(
+          "No value provided for plural: '" + pluralVarName + "'");
+    }
+    return pluralValue.integerValue();
+  }
+
+  /** Append the placeholder to the output stream. */
+  private static void writePlaceholder(SoyMsgPlaceholderPart placeholder,
+      Map<String, Object> placeholders, Appendable out) throws IOException {
+    String placeholderName = placeholder.getPlaceholderName();
+    String str = (String) placeholders.get(placeholderName);
+    if (str == null) {
+      throw new IllegalArgumentException(
+          "No value provided for placeholder: '" + placeholderName + "'");
+    }
+    out.append(str);
+  }
+
+  /** Append the raw text segment to the output stream. */
+  private static void writeRawText(SoyMsgRawTextPart msgPart, Appendable out) throws IOException {
+    out.append(msgPart.getRawText());
   }
 
   private static final AdvisingAppendable LOGGER = new AdvisingAppendable() {

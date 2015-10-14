@@ -18,14 +18,12 @@
 package com.google.template.soy.jssrc.internal;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.easymock.EasyMock.createMock;
 
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.base.SoyBackendKind;
-import com.google.template.soy.error.ErrorReporter;
-import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.internal.i18n.BidiGlobalDir;
+import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.SoyJsSrcFunction;
 import com.google.template.soy.shared.SharedTestUtils;
 import com.google.template.soy.soytree.PrintNode;
@@ -35,7 +33,8 @@ import com.google.template.soy.soytree.TemplateNode;
 
 import junit.framework.TestCase;
 
-import java.util.Map;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Unit tests for OptimizeBidiCodeGenVisitor.
@@ -43,36 +42,23 @@ import java.util.Map;
  */
 public final class OptimizeBidiCodeGenVisitorTest extends TestCase {
 
-
-  private static final SoyJsSrcFunction MOCK_FUNCTION = createMock(SoyJsSrcFunction.class);
-
-  private static final Map<String, SoyJsSrcFunction> SOY_JS_SRC_FUNCTIONS_MAP =
-      ImmutableMap.<String, SoyJsSrcFunction>builder()
-          .put("bidiDirAttr", MOCK_FUNCTION)
-          .put("bidiMark", MOCK_FUNCTION)
-          .put("bidiStartEdge", MOCK_FUNCTION)
-          .put("bidiEndEdge", MOCK_FUNCTION)
-          .build();
-
-  private static final BidiGlobalDir BIDI_GLOBAL_DIR_FOR_STATIC_LTR =
-      BidiGlobalDir.forStaticIsRtl(false);
-
   private static final BidiGlobalDir BIDI_GLOBAL_DIR_FOR_ISRTL_CODE_SNIPPET =
       BidiGlobalDir.forIsRtlCodeSnippet("IS_RTL", SoyBackendKind.JS_SRC);
-
-  private static final ErrorReporter FAIL = ExplodingErrorReporter.get();
 
   public void testOptimizeBidiCodeGenForStaticDir() {
 
     String soyCode =
-        // These 3 nodes should combine into one RawTextNode.
-        "{bidiMark()}{bidiStartEdge() |noAutoescape}{bidiEndEdge() |escapeHtml}\n" +
-        // These 4 nodes don't get replaced.
-        "{$goo}{bidiDirAttr($moo)}{bidiMark() |insertWordBreaks:5}{bidiStartEdge() |escapeUri}\n";
+        "{@param moo: ?}\n"
+            + "{@param goo: ?}\n"
+            +
+            // These 3 nodes should combine into one RawTextNode.
+            "{bidiMark()}{bidiStartEdge() |noAutoescape}{bidiEndEdge() |escapeHtml}\n"
+            +
+            // These 4 nodes don't get replaced.
+            "{$goo}{bidiDirAttr($moo)}{bidiMark() |insertWordBreaks:5}{bidiStartEdge() |escapeUri}";
 
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyCode).parse();
-    OptimizeBidiCodeGenVisitor optimizer = new OptimizeBidiCodeGenVisitor(
-        SOY_JS_SRC_FUNCTIONS_MAP, BIDI_GLOBAL_DIR_FOR_STATIC_LTR, FAIL);
+    SoyFileSetNode soyTree = parse(soyCode);
+    OptimizeBidiCodeGenVisitor optimizer = new OptimizeBidiCodeGenVisitor(BidiGlobalDir.LTR);
     optimizer.exec(soyTree);
     TemplateNode template = (TemplateNode) SharedTestUtils.getNode(soyTree);
 
@@ -88,13 +74,16 @@ public final class OptimizeBidiCodeGenVisitorTest extends TestCase {
   public void testOptimizeBidiCodeGenForCodeSnippetDir() {
 
     String soyCode =
-        // None of these nodes should get replaced.
-        "{bidiMark()}{bidiStartEdge() |noAutoescape}{bidiEndEdge() |escapeHtml}\n" +
-        "{$goo}{bidiDirAttr($moo)}{bidiMark() |insertWordBreaks:5}{bidiStartEdge() |escapeUri}\n";
+        "{@param moo: ?}\n"
+            + "{@param goo: ?}\n"
+            // None of these nodes should get replaced.
+            + "{bidiMark()}{bidiStartEdge() |noAutoescape}{bidiEndEdge() |escapeHtml}\n"
+            + "{$goo}{bidiDirAttr($moo)}"
+            + "{bidiMark() |insertWordBreaks:5}{bidiStartEdge() |escapeUri}";
 
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyCode).parse();
-    OptimizeBidiCodeGenVisitor optimizer = new OptimizeBidiCodeGenVisitor(
-        SOY_JS_SRC_FUNCTIONS_MAP, BIDI_GLOBAL_DIR_FOR_ISRTL_CODE_SNIPPET, FAIL);
+    SoyFileSetNode soyTree = parse(soyCode);
+    OptimizeBidiCodeGenVisitor optimizer =
+        new OptimizeBidiCodeGenVisitor(BIDI_GLOBAL_DIR_FOR_ISRTL_CODE_SNIPPET);
     optimizer.exec(soyTree);
     TemplateNode template = (TemplateNode) SharedTestUtils.getNode(soyTree);
 
@@ -108,4 +97,39 @@ public final class OptimizeBidiCodeGenVisitorTest extends TestCase {
     assertThat(((PrintNode) template.getChild(6)).getExprText()).isEqualTo("bidiStartEdge()");
   }
 
+
+  private SoyFileSetNode parse(String soyCode) {
+    return SoyFileSetParserBuilder.forTemplateContents(soyCode)
+        .addSoyFunction(new FakeJsSrcFunction("bidiDirAttr", 1))
+        .addSoyFunction(new FakeJsSrcFunction("bidiMark", 0))
+        .addSoyFunction(new FakeJsSrcFunction("bidiStartEdge", 0))
+        .addSoyFunction(new FakeJsSrcFunction("bidiEndEdge", 0))
+        .parse()
+        .fileSet();
+  }
+
+  private static final class FakeJsSrcFunction implements SoyJsSrcFunction {
+    final String name;
+    final int args;
+
+    FakeJsSrcFunction(String name, int args) {
+      this.name = name;
+      this.args = args;
+    }
+
+    @Override
+    public String getName() {
+      return name;
+    }
+
+    @Override
+    public Set<Integer> getValidArgsSizes() {
+      return ImmutableSet.of(args);
+    }
+
+    @Override
+    public JsExpr computeForJsSrc(List<JsExpr> args) {
+      throw new UnsupportedOperationException();
+    }
+  }
 }

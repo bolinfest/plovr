@@ -16,23 +16,31 @@
 
 package com.google.template.soy.soytree;
 
+import static com.google.common.base.Preconditions.checkState;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.base.internal.IdGenerator;
+import com.google.template.soy.basetree.AbstractNodeVisitor;
+import com.google.template.soy.basetree.CopyState;
 import com.google.template.soy.basetree.Node;
-import com.google.template.soy.error.ErrorReporter;
-import com.google.template.soy.error.ExplodingErrorReporter;
-import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
+import com.google.template.soy.basetree.NodeVisitor;
+import com.google.template.soy.basetree.ParentNode;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
+import com.google.template.soy.exprtree.ExprRootNode;
+import com.google.template.soy.exprtree.VarDefn;
+import com.google.template.soy.exprtree.VarRefNode;
 import com.google.template.soy.soytree.SoyNode.ExprHolderNode;
+import com.google.template.soy.soytree.SoyNode.LocalVarNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.IdentityHashMap;
 import java.util.List;
-
-import javax.annotation.Nullable;
+import java.util.Map;
 
 /**
  * Shared utilities for the 'soytree' package.
@@ -40,11 +48,38 @@ import javax.annotation.Nullable;
  * <p> Important: Do not use outside of Soy code (treat as superpackage-private).
  *
  */
-public class SoytreeUtils {
+public final class SoytreeUtils {
 
 
   private SoytreeUtils() {}
 
+  /**
+   * Runs the visitor on all nodes (including {@link ExprNode expr nodes}) reachable from the given
+   * node.  The order of visiting is undefined.
+   *
+   * <p>If the visitor return {@code false} from {@link NodeVisitor#exec(Node)} we will short
+   * circuit visiting.
+   */
+  public static void visitAllNodes(Node node, NodeVisitor<? super Node, Boolean> visitor) {
+    Deque<Node> queue = new ArrayDeque<>();
+    queue.add(node);
+    Node current;
+    while ((current = queue.pollLast()) != null) {
+      if (!visitor.exec(current)) {
+        return;
+      }
+      if (current instanceof ParentNode<?>) {
+        queue.addAll(((ParentNode<?>) current).getChildren());
+      }
+      if (current instanceof ExprHolderNode) {
+        for (ExprUnion union : ((ExprHolderNode) current).getAllExprUnions()) {
+          if (union.getExpr() != null) {
+            queue.add(union.getExpr());
+          }
+        }
+      }
+    }
+  }
 
   /**
    * Retrieves all nodes in a tree that are an instance of a particular class.
@@ -76,25 +111,26 @@ public class SoytreeUtils {
 
     final ImmutableList.Builder<T> matchedNodesBuilder = ImmutableList.builder();
 
-    final AbstractExprNodeVisitor<Void> exprVisitor =
-        new AbstractExprNodeVisitor<Void>(ExplodingErrorReporter.get()) {
-          @Override protected void visitExprNode(ExprNode exprNode) {
-            if (classObject.isInstance(exprNode)) {
-              matchedNodesBuilder.add(classObject.cast(exprNode));
-              if (!doSearchSubtreesOfMatchedNodes) {
-                return;
+    final boolean exploreExpressions = ExprNode.class.isAssignableFrom(classObject);
+    final AbstractNodeVisitor<ExprNode, Void> exprVisitor =
+        exploreExpressions
+            ? new AbstractNodeVisitor<ExprNode, Void>() {
+              @Override protected void visit(ExprNode exprNode) {
+                if (classObject.isInstance(exprNode)) {
+                  matchedNodesBuilder.add(classObject.cast(exprNode));
+                  if (!doSearchSubtreesOfMatchedNodes) {
+                    return;
+                  }
+                }
+                if (exprNode instanceof ParentExprNode) {
+                  visitChildren((ParentExprNode) exprNode);
+                }
               }
             }
-            if (exprNode instanceof ParentExprNode) {
-              visitChildren((ParentExprNode) exprNode);
-            }
-          }
-        };
+            : null;
 
-    AbstractSoyNodeVisitor<Void> visitor = new AbstractSoyNodeVisitor<Void>(
-        ExplodingErrorReporter.get()) {
-      @Override
-      public void visitSoyNode(SoyNode soyNode) {
+      AbstractNodeVisitor<SoyNode, Void> visitor = new AbstractNodeVisitor<SoyNode, Void>() {
+      @Override protected void visit(SoyNode soyNode) {
         if (classObject.isInstance(soyNode)) {
           matchedNodesBuilder.add(classObject.cast(soyNode));
           if (!doSearchSubtreesOfMatchedNodes) {
@@ -104,7 +140,7 @@ public class SoytreeUtils {
         if (soyNode instanceof ParentSoyNode<?>) {
           visitChildren((ParentSoyNode<?>) soyNode);
         }
-        if (ExprNode.class.isAssignableFrom(classObject) && soyNode instanceof ExprHolderNode) {
+        if (exploreExpressions && soyNode instanceof ExprHolderNode) {
           for (ExprUnion exprUnion : ((ExprHolderNode) soyNode).getAllExprUnions()) {
             if (exprUnion.getExpr() != null) {
               exprVisitor.exec(exprUnion.getExpr());
@@ -132,102 +168,37 @@ public class SoytreeUtils {
    * @param <R> The ExprNode visitor's return type.
    * @param node The root of the subtree to visit all expressions in.
    * @param exprNodeVisitor The visitor to execute on all expressions.
-   * @param errorReporter For reporting errors during the visit.
    */
   public static <R> void execOnAllV2Exprs(
       SoyNode node,
-      AbstractExprNodeVisitor<R> exprNodeVisitor,
-      ErrorReporter errorReporter) {
-    execOnAllV2ExprsShortcircuitably(
-        node, exprNodeVisitor, null /* shortcircuiter */, errorReporter);
+      AbstractNodeVisitor<ExprNode, R> exprNodeVisitor) {
+    new VisitAllV2ExprsVisitor<R>(exprNodeVisitor).exec(node);
   }
-
-
-  /**
-   * Given a Soy node and a visitor for expression trees, traverses the subtree of the node and
-   * executes the visitor on all expressions held by nodes in the subtree.
-   *
-   * <p> Only processes expressions in V2 syntax. Ignores all expressions in V1 syntax.
-   *
-   * <p> Same as {@code visitAllExprs} except that this pass can be shortcircuited by providing a
-   * {@link Shortcircuiter}.
-   *
-   * @param <R> The ExprNode visitor's return type.
-   * @param node The root of the subtree to visit all expressions in.
-   * @param exprNodeVisitor The visitor to execute on all expressions.
-   * @param shortcircuiter The Shortcircuiter to tell us when to shortcircuit the pass.
-   * @param errorReporter For reporting errors during the visit.
-   * @see Shortcircuiter
-   */
-  public static <R> void execOnAllV2ExprsShortcircuitably(
-      SoyNode node,
-      AbstractExprNodeVisitor<R> exprNodeVisitor,
-      Shortcircuiter<R> shortcircuiter,
-      ErrorReporter errorReporter) {
-    new VisitAllV2ExprsVisitor<>(exprNodeVisitor, shortcircuiter, errorReporter).exec(node);
-  }
-
-
-  /**
-   * Helper interface for {@code visitAllExprsShortcircuitably}.
-   *
-   * @param <R> The ExprNode visitor's return type.
-   */
-  public static interface Shortcircuiter<R> {
-
-    /**
-     * Called at various points during a pass initiated by visitAllExprsShortcircuitably.
-     * This method should return whether or not to shortcircuit the pass (at the current point in
-     * the pass).
-     *
-     * @param exprNodeVisitor The expression visitor being used by visitAllExprsShortcircuitably.
-     * @return Whether to shortcircuit the pass (at the current point in the pass).
-     */
-    public boolean shouldShortcircuit(AbstractExprNodeVisitor<R> exprNodeVisitor);
-  }
-
 
   /**
    * Private helper class for {@code visitAllExprs} and {@code visitAllExprsShortcircuitably}.
    *
    * @param <R> The ExprNode visitor's return type.
    */
-  private static final class VisitAllV2ExprsVisitor<R> extends AbstractSoyNodeVisitor<R> {
+  private static final class VisitAllV2ExprsVisitor<R> extends AbstractNodeVisitor<SoyNode, R> {
 
-    private final AbstractExprNodeVisitor<R> exprNodeVisitor;
+    private final AbstractNodeVisitor<ExprNode, R> exprNodeVisitor;
 
-    private final Shortcircuiter<R> shortcircuiter;
-
-    private VisitAllV2ExprsVisitor(
-        AbstractExprNodeVisitor<R> exprNodeVisitor,
-        @Nullable Shortcircuiter<R> shortcircuiter,
-        ErrorReporter errorReporter) {
-      super(errorReporter);
+    private VisitAllV2ExprsVisitor(AbstractNodeVisitor<ExprNode, R> exprNodeVisitor) {
       this.exprNodeVisitor = exprNodeVisitor;
-      this.shortcircuiter = shortcircuiter;
     }
 
-    @Override protected void visitSoyNode(SoyNode node) {
+    @Override protected void visit(SoyNode node) {
 
       if (node instanceof ParentSoyNode<?>) {
-        for (SoyNode child : ((ParentSoyNode<?>) node).getChildren()) {
-          visit(child);
-          if (shortcircuiter != null && shortcircuiter.shouldShortcircuit(exprNodeVisitor)) {
-            return;
-          }
-        }
+        visitChildren((ParentSoyNode<?>) node);
       }
 
       if (node instanceof ExprHolderNode) {
         for (ExprUnion exprUnion : ((ExprHolderNode) node).getAllExprUnions()) {
-          if (exprUnion.getExpr() == null) {
-            continue;
-          }
-
-          try {
-            exprNodeVisitor.exec(exprUnion.getExpr());
-          } catch (SoySyntaxException sse) {
-            throw SoySyntaxExceptionUtils.associateNode(sse, node);
+          ExprRootNode expr = exprUnion.getExpr();
+          if (expr != null) {
+            exprNodeVisitor.exec(expr);
           }
         }
       }
@@ -241,7 +212,7 @@ public class SoytreeUtils {
 
   /**
    * Clones the given node and then generates and sets new ids on all the cloned nodes (by default,
-   * SoyNode.clone() creates cloned nodes with the same ids as the original nodes).
+   * SoyNode.copy(copyState) creates cloned nodes with the same ids as the original nodes).
    *
    * <p> This function will use the original Soy tree's node id generator to generate the new node
    * ids for the cloned nodes. Thus, the original node to be cloned must be part of a full Soy tree.
@@ -259,8 +230,7 @@ public class SoytreeUtils {
   public static <T extends SoyNode> T cloneWithNewIds(T origNode, IdGenerator nodeIdGen) {
 
     // Clone the node.
-    @SuppressWarnings("unchecked")
-    T clone = (T) origNode.clone();
+    T clone = cloneNode(origNode);
 
     // Generate new ids.
     (new GenNewIdsVisitor(nodeIdGen)).exec(clone);
@@ -271,7 +241,7 @@ public class SoytreeUtils {
 
   /**
    * Clones the given list of nodes and then generates and sets new ids on all the cloned nodes (by
-   * default, SoyNode.clone() creates cloned nodes with the same ids as the original nodes).
+   * default, SoyNode.copy(copyState) creates cloned nodes with the same ids as the original nodes).
    *
    * <p> This function will use the original Soy tree's node id generator to generate the new node
    * ids for the cloned nodes. Thus, the original nodes to be cloned must be part of a full Soy
@@ -292,8 +262,7 @@ public class SoytreeUtils {
     Preconditions.checkNotNull(origNodes);
     List<T> clones = new ArrayList<>(origNodes.size());
     for (T origNode : origNodes) {
-      @SuppressWarnings("unchecked")
-      T clone = (T) origNode.clone();
+      T clone = cloneNode(origNode);
       (new GenNewIdsVisitor(nodeIdGen)).exec(clone);
       clones.add(clone);
     }
@@ -301,11 +270,48 @@ public class SoytreeUtils {
     return clones;
   }
 
+  /**
+   * Clones a SoyNode but unlike SoyNode.copy(copyState) keeps {@link VarRefNode#getDefnDecl()}
+   * pointing at the correct tree.
+   */
+  public static <T extends SoyNode> T cloneNode(T original) {
+    @SuppressWarnings("unchecked")  // this holds for all SoyNode types
+    // TODO(lukes): eliminate this method once all logic has been moved into copy state
+    T cloned = (T) original.copy(new CopyState());
+
+    // TODO(lukes):  this is not efficient but it is the only way to work around the limitations
+    // of the Object.copy(copyState) interface.  A better solution would be to introduce our own
+    // clone method which could take a parameter.  For nodes in the AST object graph that are the
+    // back edges in cycles (e.g. LocalVar) we could maintain an identity map which could be used to
+    // efficiently reconstruct the cycles.  For now we just fix it up after the fact.
+
+    // All vardefns in varrefs have been invalidated.  Currently we only reassign vardefns for
+    // LocalVarNodes because those have links (via declaringNode()) back up the tree, so we need to
+    // make sure that the declaringNode() links are correctly defined to point at the new tree
+    // instead of the previous one.
+    List<LocalVarNode> originalLocalVarNodes = getAllNodesOfType(original, LocalVarNode.class);
+    List<LocalVarNode> newLocalVarNodes = getAllNodesOfType(cloned, LocalVarNode.class);
+    Map<VarDefn, VarDefn> replacementMap = new IdentityHashMap<>();
+    for (int i = 0; i < newLocalVarNodes.size(); i++) {
+      VarDefn oldDefn = originalLocalVarNodes.get(i).getVar();
+      VarDefn newDefn = newLocalVarNodes.get(i).getVar();
+      checkState(oldDefn.name().equals(newDefn.name()));  // sanity check
+      replacementMap.put(oldDefn, newDefn);
+    }
+    // limiting this to just local vars would make sense.
+    for (VarRefNode varRef : getAllNodesOfType(cloned, VarRefNode.class)) {
+      VarDefn replacement = replacementMap.get(varRef.getDefnDecl());
+      if (replacement != null) {
+        varRef.setDefn(replacement);
+      }
+    }
+    return cloned;
+  }
 
   /**
    * Private helper for cloneWithNewIds() to set new ids on a cloned subtree.
    */
-  private static class GenNewIdsVisitor extends AbstractSoyNodeVisitor<Void> {
+  private static class GenNewIdsVisitor extends AbstractNodeVisitor<SoyNode, Void> {
 
     /** The generator for new node ids. */
     private IdGenerator nodeIdGen;
@@ -314,11 +320,10 @@ public class SoytreeUtils {
      * @param nodeIdGen The generator for new node ids.
      */
     public GenNewIdsVisitor(IdGenerator nodeIdGen) {
-      super(ExplodingErrorReporter.get());
       this.nodeIdGen = nodeIdGen;
     }
 
-    @Override protected void visitSoyNode(SoyNode node) {
+    @Override protected void visit(SoyNode node) {
       node.setId(nodeIdGen.genId());
       if (node instanceof ParentSoyNode<?>) {
         visitChildren((ParentSoyNode<?>) node);

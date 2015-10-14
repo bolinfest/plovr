@@ -25,11 +25,11 @@ import com.google.template.soy.bididirectives.BidiDirectivesModule;
 import com.google.template.soy.bidifunctions.BidiFunctionsModule;
 import com.google.template.soy.data.SoyValueHelper;
 import com.google.template.soy.i18ndirectives.I18nDirectivesModule;
+import com.google.template.soy.jbcsrc.api.SoySauceImpl;
 import com.google.template.soy.jssrc.internal.JsSrcModule;
-import com.google.template.soy.parsepasses.CheckFunctionCallsVisitor.CheckFunctionCallsVisitorFactory;
-import com.google.template.soy.parsepasses.PerformAutoescapeVisitor;
 import com.google.template.soy.parsepasses.contextautoesc.ContextualAutoescaper;
 import com.google.template.soy.pysrc.internal.PySrcModule;
+import com.google.template.soy.shared.internal.ErrorReporterModule;
 import com.google.template.soy.shared.internal.SharedModule;
 import com.google.template.soy.tofu.internal.TofuModule;
 import com.google.template.soy.types.SoyTypeOps;
@@ -44,6 +44,7 @@ public class SoyModule extends AbstractModule {
   @Override protected void configure() {
 
     // Install requisite modules.
+    install(new ErrorReporterModule());
     install(new SharedModule());
     install(new TofuModule());
     install(new JsSrcModule());
@@ -52,10 +53,10 @@ public class SoyModule extends AbstractModule {
     // Bindings for when explicit dependencies are required.
     // Note: We don't promise to support this. We actually frown upon requireExplicitBindings.
     bind(ContextualAutoescaper.class);
-    bind(PerformAutoescapeVisitor.class);
     bind(SoyFileSet.Builder.class);
     bind(SoyTypeOps.class);
     bind(SoyValueHelper.class);
+    bind(SoySauceImpl.Factory.class);
 
     // Install default directive and function modules.
     install(new BasicDirectivesModule());
@@ -65,7 +66,6 @@ public class SoyModule extends AbstractModule {
     install(new I18nDirectivesModule());
 
     // Bind providers of factories (created via assisted inject).
-    install((new FactoryModuleBuilder()).build(CheckFunctionCallsVisitorFactory.class));
     install((new FactoryModuleBuilder()).build(SoyFileSetFactory.class));
 
     // This requests "static" initialization as soon as whatever Injector we are in is created.  If

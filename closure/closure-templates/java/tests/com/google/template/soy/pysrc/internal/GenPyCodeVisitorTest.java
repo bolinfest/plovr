@@ -38,30 +38,59 @@ public final class GenPyCodeVisitorTest extends TestCase {
       + "\"\"\" This file was automatically generated from no-path.\n"
       + "Please don't edit this file by hand.\n"
       + "\n"
+      + "SOY_NAMESPACE: 'boo.foo'.\n"
+      + "\n"
       + "Templates in namespace boo.foo.\n"
       + "\"\"\"\n"
       + "\n"
       + "from __future__ import unicode_literals\n"
+      + "import collections\n"
       + "import math\n"
       + "import random\n"
+      + "import sys\n"
       + "from example.runtime import bidi\n"
       + "from example.runtime import directives\n"
       + "from example.runtime import runtime\n"
       + "from example.runtime import sanitize\n"
       + "\n"
       + "\n"
-      + "SOY_NAMESPACE = 'boo.foo'\n"
       + "try:\n"
       + "  str = unicode\n"
       + "except NameError:\n"
       + "  pass\n"
       + "\n";
 
+  private static final String SANITIZATION_APPROVAL =
+      "approval=sanitize.IActuallyUnderstandSoyTypeSafetyAndHaveSecurityApproval("
+      + "'Internally created Sanitization.')";
+
 
   public void testSoyFile() {
     assertThatSoyFile(SOY_NAMESPACE).compilesToSourceContaining(EXPECTED_PYFILE_START);
 
     // TODO(dcphillips): Add external template dependency import test once templates are supported.
+  }
+
+  public void testNamespacedImport() {
+    String soyFile = SOY_NAMESPACE
+        + "{template .helloWorld}\n"
+        + "  {call foo.bar.baz.quz /}\n"
+        + "{/template}\n";
+    String expectedImport = "namespaced_import('baz', namespace='foo.bar')";
+
+    assertThatSoyFile(soyFile).compilesToSourceContaining(expectedImport);
+  }
+
+  public void testEnvironmentConfiguration() {
+    String soyFile = SOY_NAMESPACE
+        + "{template .helloWorld}\n"
+        + "  {call foo.bar.baz.quz /}\n"
+        + "{/template}\n";
+    String expectedEnviromentConfirmation = "namespaced_import('baz', namespace='foo.bar', "
+        + "environment_path='runtime.custom_environment')";
+
+    assertThatSoyFile(soyFile).withEnvironmentModule("runtime.custom_environment")
+        .compilesToSourceContaining(expectedEnviromentConfirmation);
   }
 
   public void testBidiConfiguration() {
@@ -85,9 +114,9 @@ public final class GenPyCodeVisitorTest extends TestCase {
         + "{/template}\n";
 
     String expectedPyFile = EXPECTED_PYFILE_START + "\n\n"
-        + "def helloWorld(opt_data=None, opt_ijData=None):\n"
+        + "def helloWorld(data={}, ijData={}):\n"
         + "  output = []\n"
-        + "  return sanitize.SanitizedHtml(''.join(output))\n";
+        + "  return sanitize.SanitizedHtml(''.join(output), " + SANITIZATION_APPROVAL + ")\n";
 
     assertThatSoyFile(soyFile).compilesTo(expectedPyFile);
   }
@@ -99,52 +128,55 @@ public final class GenPyCodeVisitorTest extends TestCase {
         + "{/template}\n";
 
     String expectedPyFile = EXPECTED_PYFILE_START + "\n\n"
-        + "def helloWorld(opt_data=None, opt_ijData=None):\n"
+        + "def helloWorld(data={}, ijData={}):\n"
         + "  output = []\n"
         + "  output.append('Hello World!')\n"
-        + "  return sanitize.SanitizedHtml(''.join(output))\n";
+        + "  return sanitize.SanitizedHtml(''.join(output), " + SANITIZATION_APPROVAL + ")\n";
 
     assertThatSoyFile(soyFile).compilesTo(expectedPyFile);
   }
 
   public void testOutputScope() {
-    String soyFile = SOY_NAMESPACE
-        + "{template .helloWorld}\n"
-        + "  {if $foo}\n"
-        + "    {for $i in range(5)}\n"
-        + "      {$boo[$i]}\n"
-        + "    {/for}\n"
-        + "  {else}\n"
-        + "    Blah\n"
-        + "  {/if}\n"
-        + "{/template}\n";
+    String soyFile =
+        SOY_NAMESPACE
+            + "{template .helloWorld}\n"
+            + "  {@param foo : ?}\n"
+            + "  {@param boo : ?}\n"
+            + "  {if $foo}\n"
+            + "    {for $i in range(5)}\n"
+            + "      {$boo[$i]}\n"
+            + "    {/for}\n"
+            + "  {else}\n"
+            + "    Blah\n"
+            + "  {/if}\n"
+            + "{/template}\n";
 
     String expectedPyFile = EXPECTED_PYFILE_START + "\n\n"
-        + "def helloWorld(opt_data=None, opt_ijData=None):\n"
-        + "  opt_data = opt_data or {}\n"
+        + "def helloWorld(data={}, ijData={}):\n"
         + "  output = []\n"
-        + "  if opt_data.get('foo'):\n"
+        + "  if data.get('foo'):\n"
         + "    for i### in xrange(5):\n"
-        + "      output.append(str(runtime.key_safe_data_access(opt_data.get('boo'), i###)))\n"
+        + "      output.append(str(runtime.key_safe_data_access(data.get('boo'), i###)))\n"
         + "  else:\n"
         + "    output.append('Blah')\n"
-        + "  return sanitize.SanitizedHtml(''.join(output))\n";
+        + "  return sanitize.SanitizedHtml(''.join(output), " + SANITIZATION_APPROVAL + ")\n";
 
     assertThatSoyFile(soyFile).compilesTo(expectedPyFile);
   }
 
   public void testSwitch() {
     String soyCode =
-        "{switch $boo}\n"
-        + "  {case 0}\n"
-        + "     Hello\n"
-        + "  {case 1}\n"
-        + "     World\n"
-        + "  {default}\n"
-        + "     !\n"
-        + "{/switch}\n";
+        "{@param boo : ?}\n"
+            + "{switch $boo}\n"
+            + "  {case 0}\n"
+            + "     Hello\n"
+            + "  {case 1}\n"
+            + "     World\n"
+            + "  {default}\n"
+            + "     !\n"
+            + "{/switch}\n";
     String expectedPyCode =
-        "switchValue = opt_data.get('boo')\n"
+        "switchValue = data.get('boo')\n"
         + "if runtime.type_safe_eq(switchValue, 0):\n"
         + "  output.append('Hello')\n"
         + "elif runtime.type_safe_eq(switchValue, 1):\n"
@@ -156,137 +188,139 @@ public final class GenPyCodeVisitorTest extends TestCase {
 
   public void testSwitch_defaultOnly() {
     String soyCode =
-        "{switch $boo}\n"
-        + "  {default}\n"
-        + "     Hello World!\n"
-        + "{/switch}\n";
+        "{@param boo : ?}\n"
+            + "{switch $boo}\n"
+            + "  {default}\n"
+            + "     Hello World!\n"
+            + "{/switch}\n";
     String expectedPyCode =
-        "switchValue = opt_data.get('boo')\n"
+        "switchValue = data.get('boo')\n"
         + "output.append('Hello World!')\n";
     assertThatSoyCode(soyCode).compilesTo(expectedPyCode);
   }
 
   public void testFor() {
     String soyCode =
-        "{for $i in range(5)}\n"
-        + "  {$boo[$i]}\n"
-        + "{/for}\n";
+        "{@param boo : ?}\n" + "{for $i in range(5)}\n" + "  {$boo[$i]}\n" + "{/for}\n";
     String expectedPyCode =
         "for i### in xrange(5):\n"
-        + "  output.append(str(runtime.key_safe_data_access(opt_data.get('boo'), i###)))\n";
+        + "  output.append(str(runtime.key_safe_data_access(data.get('boo'), i###)))\n";
     assertThatSoyCode(soyCode).compilesTo(expectedPyCode);
 
-    soyCode =
-        "{for $i in range(5, 10)}\n"
-        + "  {$boo[$i]}\n"
-        + "{/for}\n";
+    soyCode = "{@param boo : ?}\n" + "{for $i in range(5, 10)}\n" + "  {$boo[$i]}\n" + "{/for}\n";
     expectedPyCode =
         "for i### in xrange(5, 10):\n"
-        + "  output.append(str(runtime.key_safe_data_access(opt_data.get('boo'), i###)))\n";
+        + "  output.append(str(runtime.key_safe_data_access(data.get('boo'), i###)))\n";
     assertThatSoyCode(soyCode).compilesTo(expectedPyCode);
 
     soyCode =
-        "{for $i in range($foo, $boo, $goo)}\n"
-        + "  {$boo[$i]}\n"
-        + "{/for}\n";
+        "  {@param boo : ?}\n"
+            + "  {@param goo : ?}\n"
+            + "  {@param foo : ?}\n"
+            + "{for $i in range($foo, $boo, $goo)}\n"
+            + "  {$boo[$i]}\n"
+            + "{/for}\n";
     expectedPyCode =
-        "for i### in xrange(opt_data.get('foo'), opt_data.get('boo'), opt_data.get('goo')):\n"
-        + "  output.append(str(runtime.key_safe_data_access(opt_data.get('boo'), i###)))\n";
+        "for i### in xrange(data.get('foo'), data.get('boo'), data.get('goo')):\n"
+        + "  output.append(str(runtime.key_safe_data_access(data.get('boo'), i###)))\n";
     assertThatSoyCode(soyCode).compilesTo(expectedPyCode);
   }
 
   public void testForeach() {
     String soyCode =
-        "{foreach $operand in $operands}\n"
-        + "  {$operand}\n"
-        + "{/foreach}\n";
+        "{@param operands : ?}\n"
+            + "{foreach $operand in $operands}\n"
+            + "  {$operand}\n"
+            + "{/foreach}\n";
 
     // There's no simple way to account for all instances of the id in these variables, so for now
     // we just hardcode '3'.
     String expectedPyCode =
-        "operandList### = opt_data.get('operands')\n"
+        "operandList### = data.get('operands')\n"
         + "for operandIndex###, operandData### in enumerate(operandList###):\n"
         + "  output.append(str(operandData###))\n";
 
     assertThatSoyCode(soyCode).compilesTo(expectedPyCode);
 
     soyCode =
-        "{foreach $operand in $operands}\n"
-        + "  {isFirst($operand)}\n"
-        + "  {isLast($operand)}\n"
-        + "  {index($operand)}\n"
-        + "{/foreach}\n";
+        "{@param operands : ?}\n"
+            + "{foreach $operand in $operands}\n"
+            + "  {isFirst($operand) ? 1 : 0}\n"
+            + "  {isLast($operand) ? 1 : 0}\n"
+            + "  {index($operand)}\n"
+            + "{/foreach}\n";
 
     expectedPyCode =
-        "operandList### = opt_data.get('operands')\n"
-        + "for operandIndex###, operandData### in enumerate(operandList###):\n"
-        + "  output.extend([str(operandIndex### == 0),"
-                         + "str(operandIndex### == len(operandList###) - 1),"
-                         + "str(operandIndex###)])\n";
+        "operandList### = data.get('operands')\n"
+            + "for operandIndex###, operandData### in enumerate(operandList###):\n"
+            + "  output.extend([str(1 if operandIndex### == 0 else 0),"
+            + "str(1 if operandIndex### == len(operandList###) - 1 else 0),"
+            + "str(operandIndex###)])\n";
 
     assertThatSoyCode(soyCode).compilesTo(expectedPyCode);
   }
 
   public void testForeach_ifempty() {
     String soyCode =
-        "{foreach $operand in $operands}\n"
-        + "  {$operand}\n"
-        + "{ifempty}\n"
-        + "  {$foo}"
-        + "{/foreach}\n";
+        "{@param operands : ?}\n"
+            + "{@param foo : ?}\n"
+            + "{foreach $operand in $operands}\n"
+            + "  {$operand}\n"
+            + "{ifempty}\n"
+            + "  {$foo}"
+            + "{/foreach}\n";
 
     String expectedPyCode =
-        "operandList### = opt_data.get('operands')\n"
+        "operandList### = data.get('operands')\n"
         + "if operandList###:\n"
         + "  for operandIndex###, operandData### in enumerate(operandList###):\n"
         + "    output.append(str(operandData###))\n"
         + "else:\n"
-        + "  output.append(str(opt_data.get('foo')))\n";
+        + "  output.append(str(data.get('foo')))\n";
 
     assertThatSoyCode(soyCode).compilesTo(expectedPyCode);
   }
 
   public void testLetValue() {
-    assertThatSoyCode("{let $foo: $boo /}\n").compilesTo("foo__soy### = opt_data.get('boo')\n");
+    assertThatSoyCode("{@param boo : ?}\n" + "{let $foo: $boo /}\n")
+        .compilesTo("foo__soy### = data.get('boo')\n");
   }
 
   public void testLetContent() {
     String soyCode =
-        "{let $foo kind=\"html\"}\n"
-        + "  Hello {$boo}\n"
-        + "{/let}\n";
+        "{@param boo : ?}\n" + "{let $foo kind=\"html\"}\n" + "  Hello {$boo}\n" + "{/let}\n";
 
     String expectedPyCode =
-        "foo__soy### = ['Hello ',str(opt_data.get('boo'))]\n"
-        + "foo__soy### = sanitize.SanitizedHtml(''.join(foo__soy###))\n";
+        "foo__soy### = ['Hello ',str(data.get('boo'))]\n"
+        + "foo__soy### = sanitize.SanitizedHtml(''.join(foo__soy###), "
+        + SANITIZATION_APPROVAL + ")\n";
 
     assertThatSoyCode(soyCode).compilesTo(expectedPyCode);
   }
 
   public void testLetContent_notComputableAsExpr() {
     String soyCode =
-        "{let $foo kind=\"html\"}\n"
-        + "  {for $num in range(5)}\n"
-        + "    {$num}\n"
-        + "  {/for}\n"
-        + "  Hello {$boo}\n"
-        + "{/let}\n";
+        "{@param boo : ?}\n"
+            + "{let $foo kind=\"html\"}\n"
+            + "  {for $num in range(5)}\n"
+            + "    {$num}\n"
+            + "  {/for}\n"
+            + "  Hello {$boo}\n"
+            + "{/let}\n";
 
     String expectedPyCode =
         "foo__soy### = []\n"
         + "for num### in xrange(5):\n"
         + "  foo__soy###.append(str(num###))\n"
-        + "foo__soy###.extend(['Hello ',str(opt_data.get('boo'))])\n"
-        + "foo__soy### = sanitize.SanitizedHtml(''.join(foo__soy###))\n";
+        + "foo__soy###.extend(['Hello ',str(data.get('boo'))])\n"
+        + "foo__soy### = sanitize.SanitizedHtml(''.join(foo__soy###), "
+        + SANITIZATION_APPROVAL + ")\n";
 
     assertThatSoyCode(soyCode).compilesTo(expectedPyCode);
   }
 
   public void testLetContent_noContentKind() {
-    String soyCode =
-        "{let $foo}\n"
-        + "  Hello {$boo}\n"
-        + "{/let}\n";
+    String soyCode = "{@param boo : ?}\n" + "{let $foo}\n" + "  Hello {$boo}\n" + "{/let}\n";
 
     assertThatSoyCode(soyCode).compilesWithException(SoySyntaxException.class);
   }
@@ -294,7 +328,7 @@ public final class GenPyCodeVisitorTest extends TestCase {
   public void testCallReturnsString() {
     String soyCode = "{call .foo data=\"all\" /}";
 
-    String expectedPyCode = "output.append(str(ns.foo(opt_data, opt_ijData)))\n";
+    String expectedPyCode = "output.append(str(ns.foo(data, ijData)))\n";
 
     assertThatSoyCode(soyCode).compilesTo(expectedPyCode);
   }

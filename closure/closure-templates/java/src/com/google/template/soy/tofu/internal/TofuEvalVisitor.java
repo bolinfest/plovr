@@ -18,12 +18,8 @@ package com.google.template.soy.tofu.internal;
 
 import com.google.template.soy.data.SoyRecord;
 import com.google.template.soy.data.SoyValueHelper;
-import com.google.template.soy.error.ErrorReporter;
-import com.google.template.soy.shared.restricted.SoyJavaFunction;
 import com.google.template.soy.sharedpasses.render.Environment;
 import com.google.template.soy.sharedpasses.render.EvalVisitor;
-
-import java.util.Map;
 
 import javax.annotation.Nullable;
 
@@ -40,17 +36,11 @@ final class TofuEvalVisitor extends EvalVisitor {
 
   /**
    * @param valueHelper Instance of SoyValueHelper to use.
-   * @param soyJavaFunctionsMap Map of all SoyJavaFunctions (name to function).
    * @param ijData The current injected data.
    * @param env The current environment.
-   * @param errorReporter For reporting errors.
    */
   protected TofuEvalVisitor(
-      SoyValueHelper valueHelper,
-      @Nullable Map<String, SoyJavaFunction> soyJavaFunctionsMap,
-      @Nullable SoyRecord ijData,
-      Environment env,
-      ErrorReporter errorReporter) {
-    super(valueHelper, soyJavaFunctionsMap, ijData, env, errorReporter);
+      SoyValueHelper valueHelper, @Nullable SoyRecord ijData, Environment env) {
+    super(valueHelper, ijData, env);
   }
 }

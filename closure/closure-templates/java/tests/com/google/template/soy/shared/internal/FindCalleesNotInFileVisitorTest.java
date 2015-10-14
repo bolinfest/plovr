@@ -18,25 +18,24 @@ package com.google.template.soy.shared.internal;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.common.base.Function;
+import com.google.common.collect.Iterables;
 import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.ExplodingErrorReporter;
+import com.google.template.soy.soytree.CallBasicNode;
 import com.google.template.soy.soytree.SoyFileNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
 
 import junit.framework.TestCase;
 
-import java.util.Set;
-
 /**
- * Unit tests for FindCalleesNotInFileVisitor.
+ * Unit tests for {@link FindCalleesNotInFileVisitor}.
  *
  */
-public class FindCalleesNotInFileVisitorTest extends TestCase {
-
+public final class FindCalleesNotInFileVisitorTest extends TestCase {
 
   public void testFindCalleesNotInFile() {
-
     String testFileContent = "" +
         "{namespace boo.foo autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
@@ -67,18 +66,25 @@ public class FindCalleesNotInFileVisitorTest extends TestCase {
         "{/deltemplate}\n";
 
     ErrorReporter boom = ExplodingErrorReporter.get();
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(testFileContent)
-        .errorReporter(boom)
-        .parse();
+    SoyFileSetNode soyTree =
+        SoyFileSetParserBuilder.forFileContents(testFileContent)
+            .errorReporter(boom)
+            .parse()
+            .fileSet();
     SoyFileNode soyFile = soyTree.getChild(0);
 
-    Set<String> calleesNotInFile = new FindCalleesNotInFileVisitor(boom).exec(soyFile);
-    assertThat(calleesNotInFile).doesNotContain("boo.foo.goo");
-    assertThat(calleesNotInFile).doesNotContain("boo.foo.moo");
-    assertThat(calleesNotInFile).contains("boo.woo.hoo");
-    assertThat(calleesNotInFile).contains("boo.foo.too");
-    assertThat(calleesNotInFile).contains("boo.foo.zoo");
-    assertThat(calleesNotInFile).contains("boo.hoo.roo");
+    Iterable<String> calleesNotInFile = Iterables.transform(
+        new FindCalleesNotInFileVisitor().exec(soyFile),
+        new Function<CallBasicNode, String>() {
+          @Override
+          public String apply(CallBasicNode node) {
+            return node.getCalleeName();
+          }
+        });
+    assertThat(calleesNotInFile).containsExactly(
+        "boo.woo.hoo",
+        "boo.foo.too",
+        "boo.foo.zoo",
+        "boo.hoo.roo");
   }
-
 }

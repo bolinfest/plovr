@@ -32,7 +32,6 @@ import com.google.template.soy.data.restricted.StringData;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.soyparse.ParseException;
 import com.google.template.soy.soyparse.SoyFileParser;
-import com.google.template.soy.soyparse.TokenMgrError;
 import com.google.template.soy.soytree.SoyFileNode;
 import com.google.template.soy.tofu.SoyTofu;
 import com.google.template.soy.types.SoyTypeRegistry;
@@ -90,7 +89,7 @@ public class SoyRequestHandler implements HttpHandler {
   }
 
   private void doHandle(HttpExchange exchange) throws IOException,
-      SoySyntaxException, TokenMgrError, ParseException {
+      SoySyntaxException, ParseException {
     URI uri = exchange.getRequestURI();
     String path = uri.getPath();
 
