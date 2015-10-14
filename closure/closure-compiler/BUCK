@@ -10,6 +10,7 @@ java_library(
       ],
       excludes = [
         'src/com/google/javascript/jscomp/ant/**/*.java',
+        'src/com/google/javascript/jscomp/gwt/**/*.java',
         'src/com/google/javascript/jscomp/jsonml/**/*.java',
         'src/com/google/javascript/jscomp/testing/**/*.java',
         'src/com/google/javascript/refactoring/testing/**/*.java',
@@ -33,12 +34,12 @@ java_library(
 )
 
 # This needs to end up at
-# rhino_ast/java/com/google/javascript/rhino/Messages.properties
+# com/google/javascript/rhino/Messages.properties
 genrule(
   name = 'Messages',
   srcs = ['src/com/google/javascript/rhino/Messages.properties'],
   cmd = 'mkdir -p `dirname $OUT` && cp $SRCS $OUT',
-  out = 'rhino_ast/java/com/google/javascript/rhino/Messages.properties',
+  out = 'com/google/javascript/rhino/Messages.properties',
 )
 
 # This needs to end up at
