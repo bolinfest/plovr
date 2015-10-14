@@ -65,7 +65,7 @@ class UnreachableCodeElimination implements CompilerPass {
   public void process(Node externs, Node toplevel) {
     NodeTraversal.traverseChangedFunctions(compiler, new FunctionCallback() {
         @Override
-        public void visit(AbstractCompiler compiler, Node root) {
+        public void enterFunction(AbstractCompiler compiler, Node root) {
           // Computes the control flow graph.
           ControlFlowAnalysis cfa =
               new ControlFlowAnalysis(compiler, false, false);
@@ -78,7 +78,7 @@ class UnreachableCodeElimination implements CompilerPass {
           }
           do {
             codeChanged = false;
-            NodeTraversal.traverse(compiler, root, new EliminationPass(cfg));
+            NodeTraversal.traverseEs6(compiler, root, new EliminationPass(cfg));
           } while (codeChanged);
         }
       });

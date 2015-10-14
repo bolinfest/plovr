@@ -18,10 +18,13 @@ package com.google.javascript.jscomp;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import com.google.common.annotations.GwtIncompatible;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Splitter;
+import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.io.Files;
 
 import java.io.ByteArrayOutputStream;
@@ -30,8 +33,9 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.text.ParseException;
+import java.util.Comparator;
 import java.util.Map;
-
+import java.util.Map.Entry;
 
 /**
  * Stores the mapping from original variable name to new variable names.
@@ -39,16 +43,21 @@ import java.util.Map;
  */
 public final class VariableMap {
 
-  /** Maps original source name to new name */
-  private final ImmutableSortedMap<String, String> map;
-
-  /** Maps new name to source name, lazily initialized */
-  private ImmutableMap<String, String> reverseMap = null;
-
   private static final char SEPARATOR = ':';
 
+  private static final Comparator<Map.Entry<String, String>> ENTRY_COMPARATOR =
+      new Comparator<Map.Entry<String, String>>() {
+    @Override
+    public int compare(Entry<String, String> e1, Entry<String, String> e2) {
+      return e1.getKey().compareTo(e2.getKey());
+    }
+  };
+
+  /** Maps between original source name to new name */
+  private final ImmutableBiMap<String, String> map;
+
   VariableMap(Map<String, String> map) {
-    this.map = ImmutableSortedMap.copyOf(map);
+    this.map = ImmutableBiMap.copyOf(map);
   }
 
   /**
@@ -64,41 +73,27 @@ public final class VariableMap {
    * if it's not found.
    */
   public String lookupSourceName(String newName) {
-    initReverseMap();
-    return reverseMap.get(newName);
-  }
-
-  /**
-   * Initializes the reverse map.
-   */
-  private synchronized void initReverseMap() {
-    if (reverseMap == null) {
-      ImmutableMap.Builder<String, String> rm = ImmutableMap.builder();
-      for (Map.Entry<String, String> entry : map.entrySet()) {
-        rm.put(entry.getValue(), entry.getKey());
-      }
-      reverseMap = rm.build();
-    }
+    return map.inverse().get(newName);
   }
 
   /**
    * Returns an unmodifiable mapping from original names to new names.
    */
   public Map<String, String> getOriginalNameToNewNameMap() {
-    return map;
+    return ImmutableSortedMap.copyOf(map);
   }
 
   /**
    * Returns an unmodifiable mapping from new names to original names.
    */
   public Map<String, String> getNewNameToOriginalNameMap() {
-    initReverseMap();
-    return reverseMap;
+    return map.inverse();
   }
 
   /**
    * Saves the variable map to a file.
    */
+  @GwtIncompatible("com.google.io.Files")
   public void save(String filename) throws IOException {
     Files.write(toBytes(), new File(filename));
   }
@@ -106,6 +101,7 @@ public final class VariableMap {
   /**
    * Reads the variable map from a file written via {@link #save(String)}.
    */
+  @GwtIncompatible("java.io.File")
   public static VariableMap load(String filename) throws IOException {
     try {
       return fromBytes(Files.toByteArray(new File(filename)));
@@ -118,11 +114,14 @@ public final class VariableMap {
   /**
    * Serializes the variable map to a byte array.
    */
+  @GwtIncompatible("java.io.ByteArrayOutputStream")
   public byte[] toBytes() {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     Writer writer = new OutputStreamWriter(baos, UTF_8);
     try {
-      for (Map.Entry<String, String> entry : map.entrySet()) {
+      // The output order should be stable.
+      for (Map.Entry<String, String> entry :
+          ImmutableSortedSet.copyOf(ENTRY_COMPARATOR, map.entrySet())) {
         writer.write(escape(entry.getKey()));
         writer.write(SEPARATOR);
         writer.write(escape(entry.getValue()));
@@ -137,6 +136,7 @@ public final class VariableMap {
     return baos.toByteArray();
   }
 
+  @GwtIncompatible("com.google.common.base.Splitter.onPattern()")
   private static final Splitter LINE_SPLITTER
       = Splitter.onPattern("\\r?\\n").omitEmptyStrings();
 
@@ -144,6 +144,7 @@ public final class VariableMap {
    * Deserializes the variable map from a byte array returned by
    * {@link #toBytes()}.
    */
+  @GwtIncompatible("com.google.common.base.Splitter.onPattern()")
   public static VariableMap fromBytes(byte[] bytes) throws ParseException {
     Iterable<String> lines = LINE_SPLITTER.split(
         new String(bytes, UTF_8));

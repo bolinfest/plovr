@@ -25,15 +25,52 @@
 /** The global object. */
 $jscomp.global = this;
 
+/**
+ * This is needed to make things work in IE11. Otherwise we get an error:
+ * "Variable undefined in strict mode"
+ * TODO(tbreisacher): Investigate.
+ * @suppress {duplicate}
+ */
+var Symbol;
+
+/**
+ * Initializes the Symbol function.
+ * @suppress {reportUnknownTypes}
+ */
+$jscomp.initSymbol = function() {
+  if (!$jscomp.global.Symbol) {
+    Symbol = $jscomp.Symbol;
+  }
+
+  // Only need to do this once. All future calls are no-ops.
+  $jscomp.initSymbol = function() {};
+};
+
+
+/** @private {number} */
+$jscomp.symbolCounter_ = 0;
+
+
+/**
+ * Produces "symbols" (actually just unique strings).
+ * @param {string} description
+ * @return {symbol}
+ * @suppress {reportUnknownTypes}
+ */
+$jscomp.Symbol = function(description) {
+  return /** @type {symbol} */ (
+      'jscomp_symbol_' + description + ($jscomp.symbolCounter_++));
+};
+
 
 /**
  * Initializes Symbol.iterator, if it's not already defined.
  * @suppress {reportUnknownTypes}
  */
 $jscomp.initSymbolIterator = function() {
-  Symbol = $jscomp.global.Symbol || {};
+  $jscomp.initSymbol();
   if (!Symbol.iterator) {
-    Symbol.iterator = '$jscomp$iterator';
+    Symbol.iterator = Symbol('iterator');
   }
 
   // Only need to do this once. All future calls are no-ops.
@@ -55,8 +92,9 @@ $jscomp.makeIterator = function(iterable) {
   if (iterable[Symbol.iterator]) {
     return iterable[Symbol.iterator]();
   }
-  if (!(iterable instanceof Array) && typeof iterable != 'string') {
-    throw new Error();
+  if (!(iterable instanceof Array) && typeof iterable != 'string' &&
+      !(iterable instanceof String)) {
+    throw new TypeError(iterable + ' is not iterable');
   }
   var index = 0;
   return /** @type {!Iterator} */ ({
@@ -73,36 +111,79 @@ $jscomp.makeIterator = function(iterable) {
   });
 };
 
+
 /**
- * Transfers properties on the from object onto the to object.
- *
- * @param {!Object} to
- * @param {!Object} from
+ * Copies the values from an Iterator into an Array. The important difference
+ * between this and $jscomp.arrayFromIterable is that if the iterator's
+ * next() method has already been called one or more times, this method returns
+ * only the values that haven't been yielded yet.
+ * @param {!Iterator<T>} iterator
+ * @return {!Array<T>}
+ * @template T
  */
-$jscomp.copyProperties = function(to, from) {
-  for (var p in from) {
-    to[p] = from[p];
+$jscomp.arrayFromIterator = function(iterator) {
+  var i, arr = [];
+  while (!(i = iterator.next()).done) {
+    arr.push(i.value);
+  }
+  return arr;
+};
+
+
+/**
+ * Copies the values from an Iterable into an Array.
+ * @param {string|!Array<T>|!Iterable<T>} iterable
+ * @return {!Array<T>}
+ * @template T
+ */
+$jscomp.arrayFromIterable = function(iterable) {
+  if (iterable instanceof Array) {
+    return iterable;
+  } else {
+    return $jscomp.arrayFromIterator($jscomp.makeIterator(iterable));
   }
 };
 
+
 /**
- * Inherit the prototype methods from one constructor into another.
+ * Copies the values from an Arguments object into an Array.
+ * @param {!Arguments} args
+ * @return {!Array}
+ */
+$jscomp.arrayFromArguments = function(args) {
+  var result = [];
+  for (var i = 0; i < args.length; i++) {
+    result.push(args[i]);
+  }
+  return result;
+};
+
+
+/**
+ * Inherit the prototype methods and static methods from one constructor
+ * into another.
  *
- * NOTE: This is a copy of goog.inherits moved here to remove dependency on
- * the closure library for Es6ToEs3 transpilation.
+ * This wires up the prototype chain (like goog.inherits) and copies static
+ * properties, for ES6-to-ES{3,5} transpilation.
  *
  * Usage:
  * <pre>
- * function ParentClass(a, b) { }
- * ParentClass.prototype.foo = function(a) { };
+ *   function ParentClass() {}
  *
- * function ChildClass(a, b, c) {
- *   ChildClass.base(this, 'constructor', a, b);
- * }
- * $jscomp$inherits(ChildClass, ParentClass);
+ *   // Regular method.
+ *   ParentClass.prototype.foo = function(a) {};
  *
- * var child = new ChildClass('a', 'b', 'see');
- * child.foo(); // This works.
+ *   // Static method.
+ *   ParentClass.bar = function() {};
+ *
+ *   function ChildClass() {
+ *     ParentClass.call(this);
+ *   }
+ *   $jscomp.inherits(ChildClass, ParentClass);
+ *
+ *   var child = new ChildClass();
+ *   child.foo();
+ *   ChildClass.bar();  // Static inheritance.
  * </pre>
  *
  * @param {!Function} childCtor Child class.
@@ -115,4 +196,18 @@ $jscomp.inherits = function(childCtor, parentCtor) {
   childCtor.prototype = new tempCtor();
   /** @override */
   childCtor.prototype.constructor = childCtor;
+
+  for (var p in parentCtor) {
+    if ($jscomp.global.Object.defineProperties) {
+      var descriptor = $jscomp.global.Object.getOwnPropertyDescriptor(
+          parentCtor, p);
+      // TODO(tbreisacher): Remove this check when Function.inherits is gone.
+      if (descriptor !== undefined) {
+        $jscomp.global.Object.defineProperty(childCtor, p, descriptor);
+      }
+    } else {
+      // Pre-ES5 browser. Just copy with an assignment.
+      childCtor[p] = parentCtor[p];
+    }
+  }
 };

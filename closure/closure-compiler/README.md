@@ -20,18 +20,14 @@ The [Closure Compiler](https://developers.google.com/closure/compiler/) is a too
 
 Note: The Closure Compiler requires [Java 7 or higher](http://www.java.com/).
 
-### Using [Ant](http://ant.apache.org/)
+### Using [Maven](http://maven.apache.org/)
 
-1. Download the [Ant build tool](http://ant.apache.org/bindownload.cgi).
+1. Download [Maven](http://maven.apache.org/download.cgi).
 
-2. At the root of the source tree, there is an Ant file named ```build.xml```.
-   To use it, navigate to the same directory and type the command
+2. Run `mvn -DskipTests` (omit the `-DskipTests` if you want to run all the
+unit tests too).
 
-    ```
-    ant jar
-    ```
-
-    This will produce a jar file called ```build/compiler.jar```.
+    This will produce a jar file called `target/closure-compiler-1.0-SNAPSHOT.jar`.
 
 ### Using [Eclipse](http://www.eclipse.org/)
 
@@ -342,7 +338,7 @@ options/arguments in your CUI application.</td>
 
   <tr>
     <td>URL</td>
-    <td>http://code.google.com/p/protobuf/</td>
+    <td>https://github.com/google/protobuf</td>
   </tr>
 
   <tr>
@@ -448,7 +444,7 @@ without make's wrinkles and with the full portability of pure java code.</td>
 
   <tr>
     <td>URL</td>
-    <td>https://code.google.com/p/google-gson/</td>
+    <td>https://github.com/google/gson</td>
   </tr>
 
   <tr>

@@ -274,9 +274,9 @@ class ProcessTweaks implements CompilerPass {
     Node objNode = IR.objectlit().srcref(sourceInformationNode);
     for (Entry<String, Node> entry : compilerDefaultValueOverrides.entrySet()) {
       Node objKeyNode = IR.stringKey(entry.getKey())
-          .copyInformationFrom(sourceInformationNode);
+          .useSourceInfoIfMissingFrom(sourceInformationNode);
       Node objValueNode = entry.getValue().cloneNode()
-          .copyInformationFrom(sourceInformationNode);
+          .useSourceInfoIfMissingFrom(sourceInformationNode);
       objKeyNode.addChildToBack(objValueNode);
       objNode.addChildToBack(objKeyNode);
     }
@@ -312,7 +312,7 @@ class ProcessTweaks implements CompilerPass {
    */
   private CollectTweaksResult collectTweaks(Node root) {
     CollectTweaks pass = new CollectTweaks();
-    NodeTraversal.traverse(compiler, root, pass);
+    NodeTraversal.traverseEs6(compiler, root, pass);
 
     Map<String, TweakInfo> tweakInfos = pass.allTweaks;
     for (TweakInfo tweakInfo : tweakInfos.values()) {
@@ -383,7 +383,7 @@ class ProcessTweaks implements CompilerPass {
           }
 
           // Ensure tweaks are registered in the global scope.
-          if (!t.inGlobalScope()) {
+          if (!t.inGlobalHoistScope()) {
             compiler.report(
                 t.makeError(n, NON_GLOBAL_TWEAK_INIT_ERROR, tweakId));
             break;

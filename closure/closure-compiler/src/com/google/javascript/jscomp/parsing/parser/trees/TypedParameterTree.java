@@ -27,7 +27,7 @@ public class TypedParameterTree extends ParseTree {
   public final ParseTree typeAnnotation;
 
   public TypedParameterTree(SourceRange location, ParseTree param, ParseTree typeAnnotation) {
-    super(ParseTreeType.TYPE_ANNOTATION, location);
+    super(ParseTreeType.TYPED_PARAMETER, location);
     this.param = param;
     this.typeAnnotation = typeAnnotation;
   }

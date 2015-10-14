@@ -80,6 +80,11 @@ class VarCheck extends AbstractPostOrderCallback implements
         "JSC_VAR_ARGUMENTS_SHADOWED_ERROR",
         "Shadowing \"arguments\" is not allowed");
 
+  static final DiagnosticType LET_CONST_MULTIPLY_DECLARED_ERROR =
+      DiagnosticType.error(
+          "JSC_LET_CONST_MULTIPLY_DECLARED_ERROR",
+          "Duplicate let / const declaration in the same scope is not allowed.");
+
   // The arguments variable is special, in that it's declared in every local
   // scope, but not explicitly declared.
   private static final String ARGUMENTS = "arguments";
@@ -114,14 +119,10 @@ class VarCheck extends AbstractPostOrderCallback implements
    * @return the SyntacticScopeCreator
    */
   private ScopeCreator createScopeCreator() {
-    if (compiler.getLanguageMode().isEs6OrHigher()) {
-      // Redeclaration check is handled in VariableReferenceCheck for ES6
+    if (sanityCheck) {
       return new Es6SyntacticScopeCreator(compiler);
-    } else if (sanityCheck) {
-      return SyntacticScopeCreator.makeUntyped(compiler);
     } else {
-      return SyntacticScopeCreator.makeUntypedWithRedeclHandler(
-          compiler, new RedeclarationCheckHandler());
+      return new Es6SyntacticScopeCreator(compiler, new RedeclarationCheckHandler());
     }
   }
 
@@ -276,7 +277,10 @@ class VarCheck extends AbstractPostOrderCallback implements
       if (n.isName()) {
         switch (parent.getType()) {
           case Token.VAR:
+          case Token.LET:
+          case Token.CONST:
           case Token.FUNCTION:
+          case Token.CLASS:
           case Token.PARAM_LIST:
             // These are okay.
             break;
@@ -299,7 +303,12 @@ class VarCheck extends AbstractPostOrderCallback implements
             }
             // fall through
           default:
-            t.report(n, NAME_REFERENCE_IN_EXTERNS_ERROR, n.getString());
+            // Don't warn for simple var assignments "/** @const */ var foo = bar;"
+            // They are used to infer the types of namespace aliases.
+            if (parent.getType() != Token.NAME || parent.getParent() == null ||
+                !NodeUtil.isNameDeclaration(parent.getParent())) {
+              t.report(n, NAME_REFERENCE_IN_EXTERNS_ERROR, n.getString());
+            }
 
             Scope scope = t.getScope();
             Var var = scope.getVar(n.getString());
@@ -324,18 +333,12 @@ class VarCheck extends AbstractPostOrderCallback implements
     Node parent = n.getParent();
     Node origParent = origVar.getParentNode();
 
-    JSDocInfo info = n.getJSDocInfo();
-    if (info == null) {
-      info = parent.getJSDocInfo();
-    }
+    JSDocInfo info = parent.getJSDocInfo();
     if (info != null && info.getSuppressions().contains("duplicate")) {
       return true;
     }
 
-    info = origVar.nameNode.getJSDocInfo();
-    if (info == null) {
-      info = origParent.getJSDocInfo();
-    }
+    info = origParent.getJSDocInfo();
     return (info != null && info.getSuppressions().contains("duplicate"));
   }
 
@@ -355,6 +358,13 @@ class VarCheck extends AbstractPostOrderCallback implements
         if (origParent.isCatch() &&
             parent.isCatch()) {
           // Okay, both are 'catch(x)' variables.
+          return;
+        }
+
+        if (parent.isLet() || parent.isConst() ||
+            origParent.isLet() || origParent.isConst()) {
+          compiler.report(
+              JSError.make(n, LET_CONST_MULTIPLY_DECLARED_ERROR));
           return;
         }
 

@@ -44,9 +44,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
+import java.util.HashSet;
 
 import java.io.Serializable;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -156,14 +156,6 @@ class PropertyMap implements Serializable {
     Set<String> props = new HashSet<>();
     collectPropertyNames(props);
     return props.size();
-  }
-
-  boolean hasOwnProperty(String propertyName) {
-    return properties.get(propertyName) != null;
-  }
-
-  boolean hasProperty(String propertyName) {
-    return getSlot(propertyName) != null;
   }
 
   Set<String> getOwnPropertyNames() {

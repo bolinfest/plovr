@@ -18,8 +18,9 @@ package com.google.javascript.jscomp;
 
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.rhino.Node;
+import com.google.protobuf.TextFormat;
 
-import java.io.StringReader;
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -35,7 +36,6 @@ public final class InstrumentFunctionsTest extends CompilerTestCase {
 
   @Override
   protected void setUp() {
-    super.enableLineNumberCheck(false);
     this.instrumentationPb = null;
   }
 
@@ -232,16 +232,6 @@ public final class InstrumentFunctionsTest extends CompilerTestCase {
          "return $$testExit(1, function(){return $$testExit(0, c);});}");
   }
 
-  public void testProtobuffParseFail() {
-    this.instrumentationPb = "not an ascii pb\n";
-    testError("function a(){b}", RhinoErrorReporter.PARSE_ERROR);
-  }
-
-  public void testInitJsParseFail() {
-    this.instrumentationPb = "init: \"= assignWithNoLhs();\"";
-    testError("function a(){b}", RhinoErrorReporter.PARSE_ERROR);
-  }
-
   private class NameAndInstrumentFunctions implements CompilerPass {
     private final Compiler compiler;
     NameAndInstrumentFunctions(Compiler compiler) {
@@ -253,10 +243,15 @@ public final class InstrumentFunctionsTest extends CompilerTestCase {
       FunctionNames functionNames = new FunctionNames(compiler);
       functionNames.process(externs, root);
 
-      InstrumentFunctions instrumentation =
-          new InstrumentFunctions(compiler, functionNames,
-                                  "test init code", "testfile.js",
-                                  new StringReader(instrumentationPb));
+      Instrumentation.Builder builder = Instrumentation.newBuilder();
+      try {
+        TextFormat.merge(instrumentationPb, builder);
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+
+      InstrumentFunctions instrumentation = new InstrumentFunctions(
+          compiler, functionNames, builder.build(), "testfile.js");
       instrumentation.process(externs, root);
     }
   }

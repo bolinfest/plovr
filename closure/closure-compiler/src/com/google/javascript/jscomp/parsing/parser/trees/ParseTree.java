@@ -41,8 +41,6 @@ public class ParseTree {
     this.type = type;
     this.location = location;
   }
-
-  public ArgumentListTree asArgumentList() { return (ArgumentListTree) this; }
   public ArrayLiteralExpressionTree asArrayLiteralExpression() {
     return (ArrayLiteralExpressionTree) this; }
   public ArrayPatternTree asArrayPattern() { return (ArrayPatternTree) this; }
@@ -128,8 +126,14 @@ public class ParseTree {
   public TryStatementTree asTryStatement() { return (TryStatementTree) this; }
   public TypeNameTree asTypeName() { return (TypeNameTree) this; }
   public TypedParameterTree asTypedParameter() { return (TypedParameterTree) this; }
+  public OptionalParameterTree asOptionalParameter() { return (OptionalParameterTree) this; }
   public ParameterizedTypeTree asParameterizedType() { return (ParameterizedTypeTree) this; }
   public ArrayTypeTree asArrayType() { return (ArrayTypeTree) this; }
+  public RecordTypeTree asRecordType() { return (RecordTypeTree) this; }
+  public UnionTypeTree asUnionType() { return (UnionTypeTree) this; }
+  public FunctionTypeTree asFunctionType() { return (FunctionTypeTree) this; }
+  public TypeQueryTree asTypeQuery() { return (TypeQueryTree) this; }
+  public GenericTypeListTree asGenericTypeList() { return (GenericTypeListTree) this; }
   public UnaryExpressionTree asUnaryExpression() { return (UnaryExpressionTree) this; }
   public VariableDeclarationListTree asVariableDeclarationList() {
     return (VariableDeclarationListTree) this; }
@@ -139,6 +143,17 @@ public class ParseTree {
   public WhileStatementTree asWhileStatement() { return (WhileStatementTree) this; }
   public WithStatementTree asWithStatement() { return (WithStatementTree) this; }
   public YieldExpressionTree asYieldStatement() { return (YieldExpressionTree) this; }
+  public InterfaceDeclarationTree asInterfaceDeclaration() {
+    return (InterfaceDeclarationTree) this;
+  }
+  public EnumDeclarationTree asEnumDeclaration() { return (EnumDeclarationTree) this; }
+  public TypeAliasTree asTypeAlias() { return (TypeAliasTree) this; }
+  public AmbientDeclarationTree asAmbientDeclaration() { return (AmbientDeclarationTree) this; }
+  public NamespaceDeclarationTree asNamespaceDeclaration() {
+    return (NamespaceDeclarationTree) this;
+  }
+  public IndexSignatureTree asIndexSignature() { return (IndexSignatureTree) this; }
+  public CallSignatureTree asCallSignature() { return (CallSignatureTree) this; }
 
   public boolean isPattern() {
     ParseTree parseTree = this;
@@ -171,33 +186,6 @@ public class ParseTree {
         return true;
       default:
         return false;
-    }
-  }
-
-  // TODO: enable classes and traits
-  public boolean isAssignmentExpression() {
-    switch (this.type) {
-    case FUNCTION_DECLARATION:
-    case BINARY_OPERATOR:
-    case THIS_EXPRESSION:
-    case IDENTIFIER_EXPRESSION:
-    case LITERAL_EXPRESSION:
-    case ARRAY_LITERAL_EXPRESSION:
-    case OBJECT_LITERAL_EXPRESSION:
-    case MISSING_PRIMARY_EXPRESSION:
-    case CONDITIONAL_EXPRESSION:
-    case UNARY_EXPRESSION:
-    case POSTFIX_EXPRESSION:
-    case MEMBER_EXPRESSION:
-    case NEW_EXPRESSION:
-    case CALL_EXPRESSION:
-    case MEMBER_LOOKUP_EXPRESSION:
-    case PAREN_EXPRESSION:
-    case SUPER_EXPRESSION:
-    case TEMPLATE_LITERAL_EXPRESSION:
-      return true;
-    default:
-      return false;
     }
   }
 
@@ -240,10 +228,6 @@ public class ParseTree {
     default:
       return false;
     }
-  }
-
-  public boolean isSourceElement() {
-    return isStatementStandard() || this.type == ParseTreeType.FUNCTION_DECLARATION;
   }
 
   @Override public String toString() {

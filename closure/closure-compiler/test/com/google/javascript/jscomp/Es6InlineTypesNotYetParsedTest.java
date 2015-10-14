@@ -20,7 +20,6 @@ import static com.google.common.truth.Truth.THROW_ASSERTION_ERROR;
 import static com.google.common.truth.Truth.assertThat;
 import static java.util.Arrays.asList;
 
-import com.google.common.base.Joiner;
 import com.google.common.truth.FailureStrategy;
 import com.google.common.truth.Subject;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
@@ -56,7 +55,7 @@ public final class Es6InlineTypesNotYetParsedTest extends CompilerTestCase {
 
   @Override
   public CompilerPass getProcessor(Compiler compiler) {
-    return new ConvertToTypedES6(compiler);
+    return new JsdocToEs6TypedConverter(compiler);
   }
 
   @Override
@@ -91,7 +90,7 @@ public final class Es6InlineTypesNotYetParsedTest extends CompilerTestCase {
 
   public void testFunctionType() {
     assertSource("/** @type {function(string,number):boolean} */ var n;")
-        .transpilesTo("var n: (p1:string, p2:number) => boolean;");
+        .transpilesTo("var n: (p1: string, p2: number) => boolean;");
   }
 
   public void testTypeUnion() {
@@ -108,7 +107,7 @@ public final class Es6InlineTypesNotYetParsedTest extends CompilerTestCase {
 
   public void testRecordType() {
     assertSource("/** @type {{myNum: number, myObject}} */ var s;")
-        .transpilesTo("var s: {myNum:number ; myObject};");
+        .transpilesTo("var s: {myNum:number, myObject};");
   }
 
   public void testParameterizedType() {
@@ -143,8 +142,9 @@ public final class Es6InlineTypesNotYetParsedTest extends CompilerTestCase {
     }
 
     private String doCompile(String... lines) {
-      compiler.init(externsInputs,
-          asList(SourceFile.fromCode("expected", Joiner.on("\n").join(lines))),
+      compiler.init(
+          externsInputs,
+          asList(SourceFile.fromCode("expected", LINE_JOINER.join(lines))),
           getOptions());
       compiler.setErrorManager(new TestErrorManager());
       Node root = compiler.parseInputs();
@@ -154,7 +154,7 @@ public final class Es6InlineTypesNotYetParsedTest extends CompilerTestCase {
 
     public void transpilesTo(String... lines) {
       assertThat(doCompile(getSubject()).trim())
-          .isEqualTo("'use strict';" + Joiner.on("\n").join(lines));
+          .isEqualTo("'use strict';" + LINE_JOINER.join(lines));
     }
   }
 }

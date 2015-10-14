@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
+import com.google.javascript.jscomp.parsing.parser.util.format.SimpleFormat;
 import com.google.javascript.rhino.FunctionTypeI;
 import com.google.javascript.rhino.ObjectTypeI;
 import com.google.javascript.rhino.TypeI;
@@ -44,6 +45,10 @@ public abstract class JSType implements TypeI {
   protected static final int TYPEVAR_MASK = 0x1;
   protected static final int NON_SCALAR_MASK = 0x2;
   protected static final int ENUM_MASK = 0x4;
+  // The less important use case for TRUE_MASK and FALSE_MASK is to type the
+  // values true and false precisely. But people don't write: if (true) {...}
+  // More importantly, these masks come up as the negation of TRUTHY_MASK and
+  // FALSY_MASK when the ! operator is used.
   protected static final int TRUE_MASK = 0x8;  // These two print out
   protected static final int FALSE_MASK = 0x10; // as 'boolean'
   protected static final int NULL_MASK = 0x20;
@@ -169,43 +174,6 @@ public abstract class JSType implements TypeI {
 
   protected abstract ImmutableSet<EnumType> getEnums();
 
-  // DO NOT USE THIS METHOD IN THIS FILE!
-  // It represents unions very inefficiently and is only used by client code to avoid exposing the
-  // internal representation which uses bitmaps.
-  // Also, this method stops distinguishing between true and false; it promotes to boolean.
-  public Collection<JSType> getAlternates() {
-    if (isTop() || isUnknown()) {
-      return ImmutableSet.of(this);
-    }
-    ImmutableSet.Builder<JSType> builder = ImmutableSet.builder();
-    int mask = getMask();
-    if ((mask & NUMBER_MASK) != 0) {
-      builder.add(NUMBER);
-    }
-    if ((mask & STRING_MASK) != 0) {
-      builder.add(STRING);
-    }
-    if (isBoolean()) {
-      builder.add(BOOLEAN);
-    }
-    if ((mask & NULL_MASK) != 0) {
-      builder.add(NULL);
-    }
-    if ((mask & UNDEFINED_MASK) != 0) {
-      builder.add(UNDEFINED);
-    }
-    if ((mask & TYPEVAR_MASK) != 0) {
-      builder.add(fromTypeVar(getTypeVar()));
-    }
-    for (ObjectType obj : getObjs()) {
-      builder.add(fromObjectType(obj));
-    }
-    for (EnumType e : getEnums()) {
-      builder.add(fromEnum(e));
-    }
-    return builder.build();
-  }
-
   // Factory method for wrapping a function in a JSType
   static JSType fromFunctionType(FunctionType fn, NominalType fnNominal) {
     return makeType(
@@ -291,16 +259,42 @@ public abstract class JSType implements TypeI {
     return BOTTOM_MASK == getMask();
   }
 
+  public boolean isUndefined() {
+    return UNDEFINED_MASK == getMask();
+  }
+
   public boolean isUnknown() {
     return UNKNOWN_MASK == getMask();
   }
 
-  public boolean isTruthy() {
+  public boolean isTrueOrTruthy() {
     return TRUTHY_MASK == getMask() || TRUE_MASK == getMask();
   }
 
-  public boolean isFalsy() {
+  private boolean hasTruthyMask() {
+    return TRUTHY_MASK == getMask();
+  }
+
+  public boolean isFalseOrFalsy() {
     return FALSY_MASK == getMask() || FALSE_MASK == getMask();
+  }
+
+  // Ignoring enums for simplicity
+  public boolean isAnyTruthyType() {
+    int mask = getMask();
+    int truthyMask = TRUTHY_MASK | TRUE_MASK | NON_SCALAR_MASK;
+    return mask != BOTTOM_MASK && (mask | truthyMask) == truthyMask;
+  }
+
+  // Ignoring enums for simplicity
+  public boolean isAnyFalsyType() {
+    int mask = getMask();
+    int falsyMask = FALSY_MASK | FALSE_MASK | NULL_MASK | UNDEFINED_MASK;
+    return mask != BOTTOM_MASK && (mask | falsyMask) == falsyMask;
+  }
+
+  private boolean hasFalsyMask() {
+    return FALSY_MASK == getMask();
   }
 
   public boolean isBoolean() {
@@ -347,10 +341,28 @@ public abstract class JSType implements TypeI {
   }
 
   public boolean isTypeVariable() {
-    return (getMask() & TYPEVAR_MASK) != 0 && (getMask() & ~TYPEVAR_MASK) == 0;
+    return getMask() == TYPEVAR_MASK;
+  }
+
+  public boolean hasTypeVariable() {
+    return (getMask() & TYPEVAR_MASK) != 0;
   }
 
   public boolean isStruct() {
+    if (isUnknown()) {
+      return false;
+    }
+    Preconditions.checkState(!getObjs().isEmpty(),
+        "Expected object type but found %s", this);
+    for (ObjectType objType : getObjs()) {
+      if (!objType.isStruct()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  public boolean mayBeStruct() {
     for (ObjectType objType : getObjs()) {
       if (objType.isStruct()) {
         return true;
@@ -378,6 +390,19 @@ public abstract class JSType implements TypeI {
   }
 
   public boolean isDict() {
+    if (isUnknown()) {
+      return false;
+    }
+    Preconditions.checkState(!getObjs().isEmpty());
+    for (ObjectType objType : getObjs()) {
+      if (!objType.isDict()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  public boolean mayBeDict() {
     for (ObjectType objType : getObjs()) {
       if (objType.isDict()) {
         return true;
@@ -396,6 +421,11 @@ public abstract class JSType implements TypeI {
       return false;
     }
     return !(getMask() == NON_SCALAR_MASK && getObjs().size() == 1);
+  }
+
+  public boolean isFunctionWithProperties() {
+    ObjectType obj = getObjTypeIfSingletonObj();
+    return obj != null && obj.isFunctionWithProperties();
   }
 
   public static boolean areCompatibleScalarTypes(JSType lhs, JSType rhs) {
@@ -417,7 +447,7 @@ public abstract class JSType implements TypeI {
       return this;
     }
     int mask = getMask();
-    if ((mask & (NUMBER_MASK | STRING_MASK | BOOLEAN_MASK)) == BOTTOM_MASK) {
+    if ((mask & (NUMBER_MASK | STRING_MASK | BOOLEAN_MASK | ENUM_MASK)) == BOTTOM_MASK) {
       return this;
     }
     switch (mask) {
@@ -444,9 +474,13 @@ public abstract class JSType implements TypeI {
     if ((mask & BOOLEAN_MASK) != 0) { // may have truthy or falsy
       builder.add(commonTypes.getBooleanInstanceObjType());
     }
-    return makeType(
+    JSType result = makeType(
         mask & ~(NUMBER_MASK | STRING_MASK | BOOLEAN_MASK),
-        builder.build(), getTypeVar(), getEnums());
+        builder.build(), getTypeVar(), ImmutableSet.<EnumType>of());
+    for (EnumType e : getEnums()) {
+      result = join(result, e.getEnumeratedType().autobox(commonTypes));
+    }
+    return result;
   }
 
   static JSType nullAcceptingJoin(JSType t1, JSType t2) {
@@ -464,12 +498,19 @@ public abstract class JSType implements TypeI {
     Preconditions.checkNotNull(rhs);
     if (lhs.isTop() || rhs.isTop()) {
       return TOP;
-    } else if (lhs.isUnknown() || rhs.isUnknown()) {
+    }
+    if (lhs.isUnknown() || rhs.isUnknown()) {
       return UNKNOWN;
-    } else if (lhs.isBottom()) {
+    }
+    if (lhs.isBottom()) {
       return rhs;
-    } else if (rhs.isBottom()) {
+    }
+    if (rhs.isBottom()) {
       return lhs;
+    }
+    if (lhs.hasTruthyMask() || lhs.hasFalsyMask()
+        || rhs.hasTruthyMask() || rhs.hasFalsyMask()) {
+      return UNKNOWN;
     }
     if (lhs.getTypeVar() != null && rhs.getTypeVar() != null
         && !lhs.getTypeVar().equals(rhs.getTypeVar())) {
@@ -659,10 +700,11 @@ public abstract class JSType implements TypeI {
           && getMask() == (getMask() | (other.getMask() & ~ENUM_MASK));
     } else {
       // this is (T | ...)
-      int templateMask = BOTTOM_MASK;
       int thisScalarBits = getMask() & ~NON_SCALAR_MASK & ~TYPEVAR_MASK;
-      int otherScalarBits = other.getMask() & ~NON_SCALAR_MASK;
-      templateMask |= otherScalarBits & ~thisScalarBits;
+      int templateMask = other.getMask() & ~thisScalarBits;
+      if (ununifiedObjs.isEmpty()) {
+        templateMask &= ~NON_SCALAR_MASK;
+      }
 
       if (templateMask == BOTTOM_MASK) {
         // nothing left in other to assign to thisTypevar, so don't update typemap
@@ -678,24 +720,33 @@ public abstract class JSType implements TypeI {
     }
   }
 
-  // TODO(dimvar): Now that we don't have locations, we may be able to combine
-  // specialize and meet into a single function.
-  // Specialize might still not be symmetric however, b/c of truthy/falsy.
-
   public JSType specialize(JSType other) {
     if (other.isTop() || other.isUnknown() || this == other) {
       return this;
-    } else if (other.isTruthy()) {
+    }
+    if (other.hasTruthyMask()) {
       return makeTruthy();
-    } else if (other.isFalsy()) {
+    }
+    if (hasTruthyMask()) {
+      return other.makeTruthy();
+    }
+    if (other.hasFalsyMask()) {
       return makeFalsy();
-    } else if (this.isTop() || this.isUnknown()) {
+    }
+    // NOTE(dimvar): I couldn't find a case where this.hasFalsyMask(). If the
+    // preconditions check breaks, add code analogous to the hasTruthyMask case.
+    Preconditions.checkState(!hasFalsyMask());
+    if (this.isTop() || this.isUnknown()) {
       return other;
     }
     int newMask = getMask() & other.getMask();
     String newTypevar;
     if (Objects.equals(getTypeVar(), other.getTypeVar())) {
       newTypevar = getTypeVar();
+    } else if (getTypeVar() != null && other.getTypeVar() == null) {
+      // Consider, e.g., function f(/** T|number */ x) { if (typeof x === 'string') { ... } }
+      // We want to specialize the T to string, rather than going to bottom.
+      return other;
     } else {
       newTypevar = null;
       newMask &= ~TYPEVAR_MASK;
@@ -790,6 +841,10 @@ public abstract class JSType implements TypeI {
     return makeType(newMask, newObjs, newTypevar, enumBuilder.build());
   }
 
+  public static boolean haveCommonSubtype(JSType lhs, JSType rhs) {
+    return lhs.isBottom() || rhs.isBottom() || !meet(lhs, rhs).isBottom();
+  }
+
   private JSType makeTruthy() {
     if (this.isTop() || this.isUnknown()) {
       return this;
@@ -828,18 +883,18 @@ public abstract class JSType implements TypeI {
     if (isTop() || isUnknown()) {
       return this;
     }
-    if (isTruthy()) {
+    if (isTrueOrTruthy()) {
       return FALSY;
-    } else if (isFalsy()) {
+    } else if (isFalseOrFalsy()) {
       return TRUTHY;
     }
     return UNKNOWN;
   }
 
   public JSType toBoolean() {
-    if (isTruthy()) {
+    if (isTrueOrTruthy()) {
       return TRUE_TYPE;
-    } else if (isFalsy()) {
+    } else if (isFalseOrFalsy()) {
       return FALSE_TYPE;
     }
     return BOOLEAN;
@@ -854,10 +909,15 @@ public abstract class JSType implements TypeI {
     return isSubtypeOfHelper(true, (JSType) other);
   }
 
-  private boolean isSubtypeOfHelper(
-      boolean keepLoosenessOfThis, JSType other) {
+  private boolean isSubtypeOfHelper(boolean keepLoosenessOfThis, JSType other) {
     if (isUnknown() || other.isUnknown() || other.isTop()) {
       return true;
+    }
+    if (hasTruthyMask()) {
+      return !other.makeTruthy().isBottom();
+    }
+    if (hasFalsyMask()) {
+      return !other.makeFalsy().isBottom();
     }
     if (!EnumType.areSubtypes(this, other)) {
       return false;
@@ -912,25 +972,36 @@ public abstract class JSType implements TypeI {
     return makeType(newMask, objsBuilder.build(), getTypeVar(), enumBuilder.build());
   }
 
-  public FunctionType getFunTypeIfSingletonObj() {
+  // Adds ft to this type, replacing the current function, if any.
+  public JSType withFunction(FunctionType ft, NominalType fnNominal) {
+    Preconditions.checkNotNull(ft);
+    ObjectType ot = getObjTypeIfSingletonObj();
+    // This method is used for a very narrow purpose, hence these checks.
+    Preconditions.checkNotNull(ot);
+    Preconditions.checkState(getMask() == NON_SCALAR_MASK);
+    return fromObjectType(ot.withFunction(ft, fnNominal));
+  }
+
+  public ObjectType getObjTypeIfSingletonObj() {
     if (getMask() != NON_SCALAR_MASK || getObjs().size() > 1) {
       return null;
     }
-    return Iterables.getOnlyElement(getObjs()).getFunType();
+    return Iterables.getOnlyElement(getObjs());
+  }
+
+  public FunctionType getFunTypeIfSingletonObj() {
+    ObjectType obj = getObjTypeIfSingletonObj();
+    return obj == null ? null : obj.getFunType();
   }
 
   public FunctionType getFunType() {
-    if (getObjs().isEmpty()) {
-      return null;
-    }
-    if (getObjs().size() == 1) { // The common case is fast
-      return Iterables.getOnlyElement(getObjs()).getFunType();
-    }
-    FunctionType result = FunctionType.TOP_FUNCTION;
     for (ObjectType obj : getObjs()) {
-      result = FunctionType.meet(result, obj.getFunType());
+      FunctionType ft = obj.getFunType();
+      if (ft != null) {
+        return ft;
+      }
     }
-    return result;
+    return null;
   }
 
   public NominalType getNominalTypeIfSingletonObj() {
@@ -938,13 +1009,6 @@ public abstract class JSType implements TypeI {
       return null;
     }
     return Iterables.getOnlyElement(getObjs()).getNominalType();
-  }
-
-  public ObjectType getObjectTypeIfSingletonObj() {
-    if (getMask() != NON_SCALAR_MASK || getObjs().size() > 1) {
-      return null;
-    }
-    return Iterables.getOnlyElement(getObjs());
   }
 
   public boolean isInterfaceDefinition() {
@@ -1152,7 +1216,7 @@ public abstract class JSType implements TypeI {
 
   @Override
   public boolean isFunctionType() {
-    return getFunType() != null;
+    return getFunTypeIfSingletonObj() != null;
   }
 
   @Override
@@ -1223,7 +1287,7 @@ final class UnionType extends JSType {
     this.mask = mask;
 
     if (!isValidType()) {
-      throw new IllegalStateException(String.format(
+      throw new IllegalStateException(SimpleFormat.format(
           "Cannot create type with bits <<<%x>>>, "
           + "objs <<<%s>>>, typeVar <<<%s>>>, enums <<<%s>>>",
           mask, objs, typeVar, enums));

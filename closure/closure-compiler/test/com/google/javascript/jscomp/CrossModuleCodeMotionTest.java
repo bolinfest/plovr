@@ -32,7 +32,6 @@ public final class CrossModuleCodeMotionTest extends CompilerTestCase {
   @Override
   public void setUp() {
     parentModuleCanSeeSymbolsDeclaredInChildren = false;
-    super.enableLineNumberCheck(true);
   }
 
   @Override
@@ -167,6 +166,25 @@ public final class CrossModuleCodeMotionTest extends CompilerTestCase {
       // m2
       "var f = function(n){return (n<1)?1:f(n-1)};" +
       "var a = f(4);",
+    });
+  }
+
+  public void testFunctionMovement5c() {
+    // Try moving a recursive function declared differently, in a nested block scope.
+    JSModule[] modules = createModuleStar(
+      // m1
+      "var f = function(n){if(true){if(true){return (n<1)?1:f(n-1)}}};",
+      // m2
+      "var a = f(4);"
+    );
+
+    test(modules, new String[] {
+      // m1
+      "",
+      // m2
+      LINE_JOINER.join(
+          "var f = function(n){if(true){if(true){return (n<1)?1:f(n-1)}}};",
+          "var a = f(4);")
     });
   }
 

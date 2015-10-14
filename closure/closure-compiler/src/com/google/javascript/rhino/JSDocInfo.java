@@ -45,6 +45,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -151,7 +152,6 @@ public class JSDocInfo implements Serializable {
           .toString();
     }
 
-    @Override
     protected LazilyInitializedInfo clone() {
       LazilyInitializedInfo other = new LazilyInitializedInfo();
       other.baseType = baseType;
@@ -207,7 +207,7 @@ public class JSDocInfo implements Serializable {
     String sourceComment = null;
     List<Marker> markers = null;
 
-    Map<String, String> parameters = null;
+    LinkedHashMap<String, String> parameters = null;
     Map<JSTypeExpression, String> throwsDescriptions = null;
     String blockDescription = null;
     String fileOverview = null;
@@ -426,6 +426,7 @@ public class JSDocInfo implements Serializable {
   private static final int MASK_STALBEIDGEN   = 0x01000000; // @stableIdGenerator
   private static final int MASK_MAPPEDIDGEN   = 0x02000000; // @idGenerator {mapped}
   private static final int MASK_NOCOLLAPSE    = 0x04000000; // @nocollapse
+  private static final int MASK_RECORD        = 0x08000000; // @record
 
   // 3 bit type field stored in the top 3 bits of the most significant
   // nibble.
@@ -446,7 +447,6 @@ public class JSDocInfo implements Serializable {
   // Visible for testing.
   JSDocInfo() {}
 
-  @Override
   public JSDocInfo clone() {
     JSDocInfo other = new JSDocInfo();
     other.info = this.info == null ? null : this.info.clone();
@@ -610,6 +610,10 @@ public class JSDocInfo implements Serializable {
     }
   }
 
+  void setImplicitMatch(boolean value) {
+    setFlag(value, MASK_RECORD);
+  }
+
   /**
    * @return whether the {@code @consistentIdGenerator} is present on
    * this {@link JSDocInfo}
@@ -640,12 +644,24 @@ public class JSDocInfo implements Serializable {
     return getFlag(MASK_CONSTANT) || isDefine();
   }
 
+  public boolean hasConstAnnotation() {
+    return getFlag(MASK_CONSTANT);
+  }
+
   /**
    * Returns whether the {@code @constructor} annotation is present on this
    * {@link JSDocInfo}.
    */
   public boolean isConstructor() {
     return getFlag(MASK_CONSTRUCTOR);
+  }
+
+  /**
+   * Returns whether the {@code @record} annotation is present on this
+   * {@link JSDocInfo}.
+   */
+  public boolean usesImplicitMatch() {
+    return getFlag(MASK_RECORD);
   }
 
   /**
@@ -726,7 +742,11 @@ public class JSDocInfo implements Serializable {
    * {@link JSDocInfo}.
    */
   public boolean isInterface() {
-    return getFlag(MASK_INTERFACE);
+    return getFlag(MASK_INTERFACE) || getFlag(MASK_RECORD);
+  }
+
+  public boolean isConstructorOrInterface() {
+    return isConstructor() || isInterface();
   }
 
   /**
@@ -811,7 +831,8 @@ public class JSDocInfo implements Serializable {
             | MASK_DEPRECATED
             | MASK_INTERFACE
             | MASK_IMPLICITCAST
-            | MASK_NOSIDEEFFECTS));
+            | MASK_NOSIDEEFFECTS
+            | MASK_RECORD));
   }
 
   /**
@@ -1194,7 +1215,7 @@ public class JSDocInfo implements Serializable {
   }
 
   /**
-   * Gets the parameter type.
+   * Gets the type of a given named parameter.
    * @param parameter the parameter's name
    * @return the parameter's type or {@code null} if this parameter is not
    *     defined or has a {@code null} type
@@ -1204,6 +1225,15 @@ public class JSDocInfo implements Serializable {
       return null;
     }
     return info.parameters.get(parameter);
+  }
+
+  /**
+   * Gets the type of the nth {@code @param} annotation. The iteration order
+   * is the order in which parameters are defined in the JSDoc, rather
+   * than the order in which the function declares them.
+   */
+  public JSTypeExpression getParameterType(int index) {
+    return info.parameters.get(getParameterNameAt(index));
   }
 
   /**
@@ -1239,6 +1269,18 @@ public class JSDocInfo implements Serializable {
       return ImmutableSet.of();
     }
     return ImmutableSet.copyOf(info.parameters.keySet());
+  }
+
+  /**
+   * Returns the nth name in the defined parameters. The iteration order
+   * is the order in which parameters are defined in the JSDoc, rather
+   * than the order in which the function declares them.
+   */
+  public String getParameterNameAt(int index) {
+    if (info == null || info.parameters == null) {
+      return null;
+    }
+    return ImmutableList.copyOf(info.parameters.keySet()).get(index);
   }
 
   /**

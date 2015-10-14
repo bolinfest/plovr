@@ -26,7 +26,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
-
 /**
  * Gives anonymous function names that are optimized to be small and provides a
  * mapping back to the original names. This makes it way easier to debug because
@@ -75,7 +74,7 @@ class NameAnonymousFunctionsMapped implements CompilerPass {
   public void process(Node externs, Node root) {
     AnonymousFunctionNamingCallback namingCallback =
         new AnonymousFunctionNamingCallback(new MappedFunctionNamer());
-    NodeTraversal.traverse(compiler, root, namingCallback);
+    NodeTraversal.traverseEs6(compiler, root, namingCallback);
     logger.fine("Named " + namedCount + " anon functions using " +
         bytesUsed + " bytes");
     if (namedCount > 0) {

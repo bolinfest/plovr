@@ -15,7 +15,6 @@
  */
 package com.google.javascript.jscomp;
 
-import static com.google.javascript.jscomp.Es6ToEs3Converter.CANNOT_CONVERT;
 import static com.google.javascript.jscomp.Es6ToEs3Converter.CANNOT_CONVERT_YET;
 
 import com.google.common.base.Joiner;
@@ -53,12 +52,6 @@ public final class Es6ConvertSuper implements NodeTraversal.Callback, HotSwapCom
       for (Node member = n.getLastChild().getFirstChild();
           member != null;
           member = member.getNext()) {
-        if (member.getBooleanProp(Node.COMPUTED_PROP_GETTER)
-            || member.getBooleanProp(Node.COMPUTED_PROP_SETTER)) {
-          compiler.report(JSError.make(member, CANNOT_CONVERT,
-              "computed getter or setter in class definition"));
-          return false;
-        }
         if (member.isMemberFunctionDef() && member.getString().equals("constructor")) {
           hasConstructor = true;
         }
@@ -90,10 +83,14 @@ public final class Es6ConvertSuper implements NodeTraversal.Callback, HotSwapCom
         // This will be reported as an error in Es6ToEs3Converter.
         return;
       }
-      Node body = IR.block(IR.exprResult(IR.call(
-              IR.getprop(superClass.cloneTree(), IR.string("apply")),
-              IR.thisNode(),
-              IR.name("arguments"))));
+      Node body = IR.block();
+      if (!classNode.isFromExterns()) {
+        Node exprResult = IR.exprResult(IR.call(
+            IR.getprop(superClass.cloneTree(), IR.string("apply")),
+            IR.thisNode(),
+            IR.name("arguments")));
+        body.addChildrenToFront(exprResult);
+      }
       Node constructor = IR.function(
           IR.name(""),
           IR.paramList(IR.name("var_args")),
@@ -111,7 +108,9 @@ public final class Es6ConvertSuper implements NodeTraversal.Callback, HotSwapCom
       enclosingCall = parent.getParent();
       potentialCallee = parent;
     }
-    if (!enclosingCall.isCall() || enclosingCall.getFirstChild() != potentialCallee) {
+    if (!enclosingCall.isCall()
+        || enclosingCall.getFirstChild() != potentialCallee
+        || enclosingCall.getFirstChild().isGetElem()) {
       compiler.report(JSError.make(node, CANNOT_CONVERT_YET,
           "Only calls to super or to a method of super are supported."));
       return;
@@ -188,11 +187,12 @@ public final class Es6ConvertSuper implements NodeTraversal.Callback, HotSwapCom
 
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverse(compiler, root, this);
+    NodeTraversal.traverseEs6(compiler, externs, this);
+    NodeTraversal.traverseEs6(compiler, root, this);
   }
 
   @Override
   public void hotSwapScript(Node scriptRoot, Node originalRoot) {
-    NodeTraversal.traverse(compiler, scriptRoot, this);
+    NodeTraversal.traverseEs6(compiler, scriptRoot, this);
   }
 }

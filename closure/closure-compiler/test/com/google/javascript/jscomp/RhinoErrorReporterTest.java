@@ -18,6 +18,7 @@ package com.google.javascript.jscomp;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+
 import junit.framework.TestCase;
 
 import java.util.Arrays;
@@ -29,13 +30,13 @@ import java.util.List;
  */
 public final class RhinoErrorReporterTest extends TestCase {
 
-  private boolean reportMisplacedTypeAnnotations;
   private boolean reportEs3Props;
+  private boolean reportLintWarnings;
 
   @Override
   protected void setUp() throws Exception {
-    reportMisplacedTypeAnnotations = false;
     reportEs3Props = true;
+    reportLintWarnings = true;
     super.setUp();
   }
 
@@ -60,25 +61,6 @@ public final class RhinoErrorReporterTest extends TestCase {
     assertEquals(8, error.getCharno());
   }
 
-  public void testMisplacedTypeAnnotation() throws Exception {
-    reportMisplacedTypeAnnotations = false;
-
-    assertNoWarningOrError("var x = /** @type {string} */ y;");
-
-    reportMisplacedTypeAnnotations = true;
-
-    String message =
-        "Type annotations are not allowed here. " +
-        "Are you missing parentheses?";
-    JSError error = assertWarning(
-        "var x = /** @type {string} */ y;",
-        RhinoErrorReporter.MISPLACED_TYPE_ANNOTATION,
-        message);
-
-    assertEquals(1, error.getLineNumber());
-    assertEquals(30, error.getCharno());
-  }
-
   public void testInvalidEs3Prop() throws Exception {
     reportEs3Props = false;
 
@@ -100,17 +82,23 @@ public final class RhinoErrorReporterTest extends TestCase {
     assertEquals(10, error.getCharno());
   }
 
-  public void testAnnotationDeprecated() throws Exception {
+
+  public void testMissingTypeWarnings() throws Exception {
+    reportLintWarnings = false;
+
+    assertNoWarningOrError("/** @return */ function f() {}");
+
+    reportLintWarnings = true;
+
     String message =
-        "The @expose annotation is deprecated. Use @nocollapse or @export "
-        + "instead.";
+        "Missing type declaration.";
     JSError error = assertWarning(
-        "/** @expose */ var x = 1;",
-        RhinoErrorReporter.ANNOTATION_DEPRECATED,
+        "/** @return */ function f() {}",
+        RhinoErrorReporter.JSDOC_MISSING_TYPE_WARNING,
         message);
 
     assertEquals(1, error.getLineNumber());
-    assertEquals(15, error.getCharno());
+    assertEquals(4, error.getCharno());
   }
 
   /**
@@ -155,16 +143,21 @@ public final class RhinoErrorReporterTest extends TestCase {
   private Compiler parseCode(String code) {
     Compiler compiler = new Compiler();
     CompilerOptions options = new CompilerOptions();
-    if (reportMisplacedTypeAnnotations) {
-      options.setWarningLevel(
-          DiagnosticGroups.MISPLACED_TYPE_ANNOTATION,
-          CheckLevel.WARNING);
-    }
 
     if (!reportEs3Props) {
       options.setWarningLevel(
           DiagnosticGroups.ES3,
           CheckLevel.OFF);
+    }
+
+    if (!reportLintWarnings) {
+      options.setWarningLevel(
+          DiagnosticGroups.LINT_CHECKS,
+          CheckLevel.OFF);
+    } else {
+      options.setWarningLevel(
+          DiagnosticGroups.LINT_CHECKS,
+          CheckLevel.WARNING);
     }
 
     List<SourceFile> externs = ImmutableList.of();

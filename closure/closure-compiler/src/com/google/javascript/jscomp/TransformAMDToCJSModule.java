@@ -28,7 +28,7 @@ import java.util.Iterator;
  * CommonJS module. See {@link ProcessCommonJSModules} for follow up processing
  * step.
  */
-class TransformAMDToCJSModule implements CompilerPass {
+public final class TransformAMDToCJSModule implements CompilerPass {
 
   @VisibleForTesting
   static final DiagnosticType UNSUPPORTED_DEFINE_SIGNATURE_ERROR =
@@ -52,13 +52,13 @@ class TransformAMDToCJSModule implements CompilerPass {
   private final AbstractCompiler compiler;
   private int renameIndex = 0;
 
-  TransformAMDToCJSModule(AbstractCompiler compiler) {
+  public TransformAMDToCJSModule(AbstractCompiler compiler) {
     this.compiler = compiler;
   }
 
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverse(compiler, root, new TransformAMDModulesCallback());
+    NodeTraversal.traverseEs6(compiler, root, new TransformAMDModulesCallback());
   }
 
   private static void unsupportedDefineError(NodeTraversal t, Node n) {
@@ -125,7 +125,7 @@ class TransformAMDToCJSModule implements CompilerPass {
         handleRequiresAndParamList(t, n, script, requiresNode, callback);
 
         Node callbackBlock = callback.getChildAtIndex(2);
-        NodeTraversal.traverse(compiler, callbackBlock,
+        NodeTraversal.traverseEs6(compiler, callbackBlock,
             new DefineCallbackReturnCallback());
 
         moveCallbackContentToTopLevel(parent, script, callbackBlock);
@@ -145,7 +145,7 @@ class TransformAMDToCJSModule implements CompilerPass {
               IR.assign(
                   NodeUtil.newQName(compiler, "module.exports"),
                   onlyExport))
-          .copyInformationFromForTree(onlyExport));
+          .useSourceInfoIfMissingFromForTree(onlyExport));
       compiler.reportCodeChange();
     }
 
@@ -187,7 +187,7 @@ class TransformAMDToCJSModule implements CompilerPass {
         while (true) {
           String renamed = aliasName + VAR_RENAME_SUFFIX + renameIndex;
           if (!globalScope.isDeclared(renamed, true)) {
-            NodeTraversal.traverse(compiler, callback,
+            NodeTraversal.traverseEs6(compiler, callback,
                 new RenameCallback(aliasName, renamed));
             aliasName = renamed;
             break;
@@ -202,10 +202,10 @@ class TransformAMDToCJSModule implements CompilerPass {
         call.putBooleanProp(Node.FREE_CALL, true);
         if (aliasName != null) {
           requireNode = IR.var(IR.name(aliasName), call)
-              .copyInformationFromForTree(aliasNode);
+              .useSourceInfoIfMissingFromForTree(aliasNode);
         } else {
           requireNode = IR.exprResult(call).
-              copyInformationFromForTree(modNode);
+              useSourceInfoIfMissingFromForTree(modNode);
         }
       } else {
         // ignore exports, require and module (because they are implicit
@@ -214,7 +214,7 @@ class TransformAMDToCJSModule implements CompilerPass {
           return;
         }
         requireNode = IR.var(IR.name(aliasName), IR.nullNode())
-            .copyInformationFromForTree(aliasNode);
+            .useSourceInfoIfMissingFromForTree(aliasNode);
       }
 
       script.addChildBefore(requireNode,

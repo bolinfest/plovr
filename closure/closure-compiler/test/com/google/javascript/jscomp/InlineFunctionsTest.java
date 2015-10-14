@@ -44,7 +44,6 @@ public final class InlineFunctionsTest extends CompilerTestCase {
   @Override
   protected void setUp() throws Exception {
     super.setUp();
-    super.enableLineNumberCheck(true);
     enableInferConsts(true);
     allowGlobalFunctionInlining = true;
     allowBlockInlining = true;
@@ -111,6 +110,11 @@ public final class InlineFunctionsTest extends CompilerTestCase {
     allowBlockInlining = false;
     testSame("function foo(){}" +
         "foo(x());");
+  }
+
+  public void testInlineEmptyFunction6() {
+    test("if (window) { f(); function f() {} }",
+        "if (window) { void 0; }");
   }
 
   public void testInlineFunctions1() {
@@ -2065,7 +2069,6 @@ public final class InlineFunctionsTest extends CompilerTestCase {
     @Override
     public void setUp() throws Exception {
       super.setUp();
-      super.enableLineNumberCheck(true);
       allowGlobalFunctionInlining = true;
     }
 
@@ -2213,7 +2216,15 @@ public final class InlineFunctionsTest extends CompilerTestCase {
   }
 
   public void testAnonymous2() {
-    testSame("(function(){eval();(function(){var b=a;a++;alert(b)})()})();");
+    testSame(LINE_JOINER.join(
+        "(function(){",
+        "  eval();",
+        "  (function(){",
+        "    var b=a;",
+        "    a++;",
+        "    alert(b)",
+        "  })()",
+        "})();"));
   }
 
   public void testAnonymous3() {

@@ -16,6 +16,7 @@
 
 package com.google.javascript.jscomp.deps;
 
+import com.google.common.annotations.GwtIncompatible;
 import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.DiagnosticType;
 import com.google.javascript.jscomp.ErrorManager;
@@ -35,11 +36,12 @@ import java.util.regex.Pattern;
  *
  * @author agrieve@google.com (Andrew Grieve)
  */
+@GwtIncompatible("java.io")
 public abstract class JsFileLineParser {
 
   static final DiagnosticType PARSE_WARNING = DiagnosticType.warning(
       "DEPS_PARSE_WARNING", "{0}\n{1}");
-  static final DiagnosticType PARSE_ERROR = DiagnosticType.error(
+  public static final DiagnosticType PARSE_ERROR = DiagnosticType.error(
       "DEPS_PARSE_ERROR", "{0}\n{1}");
 
   boolean shortcutMode = false;

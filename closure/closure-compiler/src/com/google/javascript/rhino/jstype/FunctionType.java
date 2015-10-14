@@ -44,6 +44,8 @@ import static com.google.javascript.rhino.jstype.JSTypeNative.U2U_CONSTRUCTOR_TY
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import java.util.HashSet;
 import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.FunctionTypeI;
 import com.google.javascript.rhino.Node;
@@ -52,9 +54,10 @@ import com.google.javascript.rhino.TypeI;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -115,6 +118,12 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
   private Node source;
 
   /**
+   * if this is an interface, indicate whether or not it supports
+   * structural interface matching
+   */
+  private boolean isStructuralInterface;
+
+  /**
    * The interfaces directly implemented by this function (for constructors)
    * It is only relevant for constructors. May not be {@code null}.
    */
@@ -158,6 +167,7 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
           registry.getNativeObjectType(JSTypeNative.UNKNOWN_TYPE);
     }
     this.call = arrowType;
+    this.isStructuralInterface = false;
   }
 
   /** Creates an instance for a function that is an interface. */
@@ -175,6 +185,7 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
     this.call = new ArrowType(registry, new Node(Token.PARAM_LIST), null);
     this.kind = Kind.INTERFACE;
     this.typeOfThis = new InstanceObjectType(registry, this);
+    this.isStructuralInterface = false;
   }
 
   /** Creates an instance for a function that is an interface. */
@@ -212,7 +223,7 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
    * explicitly annotated.
    */
   public boolean makesStructs() {
-    if (!isConstructor()) {
+    if (!hasInstanceType()) {
       return false;
     }
     if (propAccess == PropAccess.STRUCT) {
@@ -355,10 +366,10 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
     if (prototypeSlot == null) {
       return super.getOwnPropertyNames();
     } else {
-      Set<String> names = new HashSet<>();
+      ImmutableSet.Builder<String> names = ImmutableSet.builder();
       names.add("prototype");
       names.addAll(super.getOwnPropertyNames());
-      return names;
+      return names.build();
     }
   }
 
@@ -490,6 +501,35 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
   }
 
   /**
+   * check whether or not this function type has implemented
+   * the given interface
+   * if this function is an interface, check whether or not
+   * this interface has extended the given interface
+   * @param interfaceType the interface type
+   * @return true if implemented
+   */
+  public boolean explicitlyImplOrExtInterface(FunctionType interfaceType) {
+    Preconditions.checkArgument(interfaceType.isInterface());
+    for (ObjectType implementedInterface : getAllImplementedInterfaces()) {
+      FunctionType ctor = implementedInterface.getConstructor();
+      if (ctor != null && ctor.checkEquivalenceHelper(
+          interfaceType, EquivalenceMethod.IDENTITY)) {
+        return true;
+      }
+    }
+    for (ObjectType implementedInterface : getExtendedInterfaces()) {
+      FunctionType ctor = implementedInterface.getConstructor();
+      if (ctor != null && ctor.checkEquivalenceHelper(
+          interfaceType, EquivalenceMethod.IDENTITY)) {
+        return true;
+      } else if (ctor != null) {
+        return ctor.explicitlyImplOrExtInterface(interfaceType);
+      }
+    }
+    return false;
+  }
+
+  /**
    * Returns all interfaces implemented by a class or its superclass and any
    * superclasses for any of those interfaces. If this is called before all
    * types are resolved, it may return an incomplete set.
@@ -554,22 +594,6 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
     } else {
       throw new UnsupportedOperationException();
     }
-  }
-
-  /**
-   * Returns all extended interfaces declared by an interfaces or its super-
-   * interfaces. If this is called before all types are resolved, it may return
-   * an incomplete set.
-   */
-  public Iterable<ObjectType> getAllExtendedInterfaces() {
-    // Store them in a linked hash set, so that the compile job is
-    // deterministic.
-    Set<ObjectType> extendedInterfaces = new LinkedHashSet<>();
-
-    for (ObjectType interfaceType : getExtendedInterfaces()) {
-      addRelatedExtendedInterfaces(interfaceType, extendedInterfaces);
-    }
-    return extendedInterfaces;
   }
 
   private void addRelatedExtendedInterfaces(ObjectType instance,
@@ -820,7 +844,7 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
   private FunctionType tryMergeFunctionPiecewise(
       FunctionType other, boolean leastSuper) {
     Node newParamsNode = null;
-    if (call.hasEqualParameters(other.call, EquivalenceMethod.IDENTITY)) {
+    if (call.hasEqualParameters(other.call, EquivalenceMethod.IDENTITY, EqCache.create())) {
       newParamsNode = call.parameters;
     } else {
       // If the parameters are not equal, don't try to merge them.
@@ -912,7 +936,7 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
    * have signatures, two interfaces are equal if their names match.
    */
   boolean checkFunctionEquivalenceHelper(
-      FunctionType that, EquivalenceMethod eqMethod) {
+      FunctionType that, EquivalenceMethod eqMethod, EqCache eqCache) {
     if (isConstructor()) {
       if (that.isConstructor()) {
         return this == that;
@@ -921,7 +945,16 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
     }
     if (isInterface()) {
       if (that.isInterface()) {
-        return getReferenceName().equals(that.getReferenceName());
+        if (getReferenceName().equals(that.getReferenceName())) {
+          return true;
+        } else {
+          if (this.isStructuralInterface()
+              && that.isStructuralInterface()) {
+            return checkStructuralInterfaceEquivalenceHelper(
+                that, eqMethod, eqCache);
+          }
+          return false;
+        }
       }
       return false;
     }
@@ -929,8 +962,45 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
       return false;
     }
 
-    return typeOfThis.checkEquivalenceHelper(that.typeOfThis, eqMethod) &&
-        call.checkArrowEquivalenceHelper(that.call, eqMethod);
+    return typeOfThis.checkEquivalenceHelper(that.typeOfThis, eqMethod, eqCache) &&
+        call.checkArrowEquivalenceHelper(that.call, eqMethod, eqCache);
+  }
+
+  boolean checkStructuralInterfaceEquivalenceHelper(
+      final JSType that, EquivalenceMethod eqMethod, EqCache eqCache) {
+    Preconditions.checkState(eqCache.isStructuralTyping());
+    Preconditions.checkState(this.isStructuralInterface());
+    Preconditions.checkState(that.isRecordType() || that.isFunctionType());
+
+    MatchStatus result = eqCache.checkCache(this, that);
+    if (result != null) {
+      return result.subtypeValue();
+    }
+
+    if (this.hasAnyTemplateTypes() || that.hasAnyTemplateTypes()) {
+      return false;
+    }
+    Map<String, JSType> thisPropList = getPropertyTypeMap(this);
+    Map<String, JSType> thatPropList = that.isRecordType()
+        ? that.toMaybeRecordType().getOwnPropertyTypeMap()
+        : getPropertyTypeMap(that.toMaybeFunctionType());
+
+    if (thisPropList.size() != thatPropList.size()) {
+      eqCache.updateCache(this, that, MatchStatus.NOT_MATCH);
+      return false;
+    }
+    for (String propName : thisPropList.keySet()) {
+      JSType typeInInterface = thisPropList.get(propName);
+      JSType typeInFunction = thatPropList.get(propName);
+      if (typeInFunction == null
+          || !typeInFunction.checkEquivalenceHelper(
+              typeInInterface, eqMethod, eqCache)) {
+        eqCache.updateCache(this, that, MatchStatus.NOT_MATCH);
+        return false;
+      }
+    }
+    eqCache.updateCache(this, that, MatchStatus.MATCH);
+    return true;
   }
 
   @Override
@@ -940,7 +1010,7 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
 
   public boolean hasEqualCallType(FunctionType otherType) {
     return this.call.checkArrowEquivalenceHelper(
-        otherType.call, EquivalenceMethod.IDENTITY);
+        otherType.call, EquivalenceMethod.IDENTITY, EqCache.create());
   }
 
   /**
@@ -1032,7 +1102,13 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
    */
   @Override
   public boolean isSubtype(JSType that) {
-    if (JSType.isSubtypeHelper(this, that)) {
+    return isSubtype(that, ImplCache.create());
+  }
+
+  @Override
+  protected boolean isSubtype(JSType that,
+      ImplCache implicitImplCache) {
+    if (JSType.isSubtypeHelper(this, that, implicitImplCache)) {
       return true;
     }
 
@@ -1047,29 +1123,36 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
         return false;
       }
 
-      // If functionA is a subtype of functionB, then their "this" types
-      // should be contravariant. However, this causes problems because
-      // of the way we enforce overrides. Because function(this:SubFoo)
-      // is not a subtype of function(this:Foo), our override check treats
-      // this as an error. Let's punt on all this for now.
-      // TODO(nicksantos): fix this.
-      boolean treatThisTypesAsCovariant =
-        // An interface 'this'-type is non-restrictive.
-        // In practical terms, if C implements I, and I has a method m,
-        // then any m doesn't necessarily have to C#m's 'this'
-        // type doesn't need to match I.
-        (other.typeOfThis.toObjectType() != null &&
-             other.typeOfThis.toObjectType().getConstructor() != null &&
-             other.typeOfThis.toObjectType().getConstructor().isInterface()) ||
-
-        // If one of the 'this' types is covariant of the other,
-        // then we'll treat them as covariant (see comment above).
-        other.typeOfThis.isSubtype(this.typeOfThis) ||
-        this.typeOfThis.isSubtype(other.typeOfThis);
-      return treatThisTypesAsCovariant && this.call.isSubtype(other.call);
+      return treatThisTypesAsCovariant(other, implicitImplCache)
+          && this.call.isSubtype(other.call, implicitImplCache);
     }
 
-    return getNativeType(JSTypeNative.FUNCTION_PROTOTYPE).isSubtype(that);
+    return getNativeType(JSTypeNative.FUNCTION_PROTOTYPE)
+        .isSubtype(that, implicitImplCache);
+  }
+
+  protected boolean treatThisTypesAsCovariant(FunctionType other,
+      ImplCache implicitImplCache) {
+    // If functionA is a subtype of functionB, then their "this" types
+    // should be contravariant. However, this causes problems because
+    // of the way we enforce overrides. Because function(this:SubFoo)
+    // is not a subtype of function(this:Foo), our override check treats
+    // this as an error. Let's punt on all this for now.
+    // TODO(nicksantos): fix this.
+    boolean treatThisTypesAsCovariant =
+      // An interface 'this'-type is non-restrictive.
+      // In practical terms, if C implements I, and I has a method m,
+      // then any m doesn't necessarily have to C#m's 'this'
+      // type doesn't need to match I.
+      (other.typeOfThis.toObjectType() != null &&
+           other.typeOfThis.toObjectType().getConstructor() != null &&
+           other.typeOfThis.toObjectType().getConstructor().isInterface()) ||
+
+      // If one of the 'this' types is covariant of the other,
+      // then we'll treat them as covariant (see comment above).
+      other.typeOfThis.isSubtype(this.typeOfThis, implicitImplCache) ||
+      this.typeOfThis.isSubtype(other.typeOfThis, implicitImplCache);
+    return treatThisTypesAsCovariant;
   }
 
   @Override
@@ -1141,6 +1224,12 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
       }
     }
     this.source = source;
+  }
+
+  void addSubTypeIfNotPresent(FunctionType subType) {
+    if (subTypes == null || !subTypes.contains(subType)) {
+      addSubType(subType);
+    }
   }
 
   /** Adds a type to the list of subtypes for this type. */
@@ -1333,5 +1422,108 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
       return true;
     }
     return !super.getOwnPropertyNames().isEmpty();
+  }
+
+  /**
+   * sets the current interface type to support
+   * structural interface matching (abbr. SMI)
+   * @param flag indicates whether or not it should support SMI
+   */
+  public void setImplicitMatch(boolean flag) {
+    Preconditions.checkState(isInterface());
+    isStructuralInterface = flag;
+  }
+
+  @Override
+  public boolean isStructuralInterface() {
+    return isInterface() && isStructuralInterface;
+  }
+
+  @Override
+  public boolean isStructuralType() {
+    return isStructuralInterface();
+  }
+
+  /**
+   * get the map of properties to types covered in a function type
+   * @return a Map that maps the property's name to the property's type
+   */
+  @Override
+  public Map<String, JSType> getPropertyTypeMap() {
+    Map<String, JSType> propTypeMap = new LinkedHashMap<>();
+    updatePropertyTypeMap(this, propTypeMap, new HashSet<FunctionType>());
+    return propTypeMap;
+  }
+
+  // cache is added to prevent infinite recursion when retrieving
+  // the super type: see testInterfaceExtendsLoop in TypeCheckTest.java
+  private static void updatePropertyTypeMap(
+      FunctionType type, Map<String, JSType> propTypeMap,
+      HashSet<FunctionType> cache) {
+    if (type == null) { return; }
+    // retrieve all property types on the prototype of this class
+    ObjectType prototype = type.getPrototype();
+    if (prototype != null) {
+      Set<String> propNames = prototype.getOwnPropertyNames();
+      for (String name : propNames) {
+        if (!propTypeMap.containsKey(name)) {
+          JSType propType = prototype.getPropertyType(name);
+          propTypeMap.put(name, propType);
+        }
+      }
+    }
+    // retrieve all property types from its super class
+    Iterable<ObjectType> iterable = type.getExtendedInterfaces();
+    if (iterable != null) {
+      for (ObjectType interfaceType : iterable) {
+        FunctionType superConstructor = interfaceType.getConstructor();
+        if (superConstructor == null
+            || cache.contains(superConstructor)) { continue; }
+        cache.add(superConstructor);
+        updatePropertyTypeMap(superConstructor, propTypeMap, cache);
+        cache.remove(superConstructor);
+      }
+    }
+  }
+
+  /**
+   * check if there is a loop in the type extends chain
+   * @return an array of all functions in the loop chain if
+   * a loop exists, otherwise returns null
+   */
+  public List<FunctionType> checkExtendsLoop() {
+    return checkExtendsLoop(new HashSet<FunctionType>(),
+        new ArrayList<FunctionType>());
+  }
+
+  public List<FunctionType> checkExtendsLoop(HashSet<FunctionType> cache,
+      List<FunctionType> path) {
+    Iterable<ObjectType> iterable = this.getExtendedInterfaces();
+    if (iterable != null) {
+      for (ObjectType interfaceType : iterable) {
+        FunctionType superConstructor = interfaceType.getConstructor();
+        if (superConstructor == null) { continue; }
+        if (cache.contains(superConstructor)) {
+          // after detecting a loop, prune and return the path, e.g.,:
+          // A -> B -> C -> D -> C, will be pruned into:
+          // c -> D -> C
+          path.add(superConstructor);
+          while (path.get(0) != superConstructor) {
+            path.remove(0);
+          }
+          return path;
+        }
+        cache.add(superConstructor);
+        path.add(superConstructor);
+        List<FunctionType> result =
+            superConstructor.checkExtendsLoop(cache, path);
+        if (result != null) {
+          return result;
+        }
+        cache.remove(superConstructor);
+        path.remove(path.size() - 1);
+      }
+    }
+    return null;
   }
 }

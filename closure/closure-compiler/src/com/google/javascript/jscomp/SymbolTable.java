@@ -24,6 +24,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.Table;
+import com.google.javascript.jscomp.parsing.parser.util.format.SimpleFormat;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Marker;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
@@ -49,11 +50,9 @@ import com.google.javascript.rhino.jstype.UnionType;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeSet;
 import java.util.logging.Logger;
 
@@ -434,26 +433,26 @@ public final class SymbolTable {
     SymbolScope scope = symbol.scope;
     if (scope.isGlobalScope()) {
       builder.append(
-          String.format("'%s' : in global scope:\n", symbol.getName()));
+          SimpleFormat.format("'%s' : in global scope:\n", symbol.getName()));
     } else if (scope.getRootNode() != null) {
       builder.append(
-          String.format("'%s' : in scope %s:%d\n",
+          SimpleFormat.format("'%s' : in scope %s:%d\n",
               symbol.getName(),
               scope.getRootNode().getSourceFileName(),
               scope.getRootNode().getLineno()));
     } else if (scope.getSymbolForScope() != null) {
       builder.append(
-          String.format("'%s' : in scope %s\n", symbol.getName(),
+          SimpleFormat.format("'%s' : in scope %s\n", symbol.getName(),
               scope.getSymbolForScope().getName()));
     } else {
       builder.append(
-          String.format("'%s' : in unknown scope\n", symbol.getName()));
+          SimpleFormat.format("'%s' : in unknown scope\n", symbol.getName()));
     }
 
     int refCount = 0;
     for (Reference ref : getReferences(symbol)) {
       builder.append(
-          String.format("  Ref %d: %s:%d\n",
+          SimpleFormat.format("  Ref %d: %s:%d\n",
               refCount,
               ref.getNode().getSourceFileName(),
               ref.getNode().getLineno()));
@@ -959,10 +958,7 @@ public final class SymbolTable {
       if (instanceType.getOwnerFunction().hasInstanceType()) {
         // Merge the properties of "Foo.prototype" and "new Foo()" together.
         instanceType = instanceType.getOwnerFunction().getInstanceType();
-        Set<String> set = new HashSet<>();
-        Iterables.addAll(set, propNames);
-        set.addAll(instanceType.getOwnPropertyNames());
-        propNames = set;
+        propNames = Iterables.concat(propNames, instanceType.getOwnPropertyNames());
       }
     }
 
@@ -1098,15 +1094,6 @@ public final class SymbolTable {
     void setDeclaration(Reference ref) {
       Preconditions.checkState(this.declaration == null);
       this.declaration = ref;
-    }
-
-    public boolean inGlobalScope() {
-      return scope.isGlobalScope();
-    }
-
-    public boolean inExterns() {
-      Node n = getDeclarationNode();
-      return n == null ? false : n.isFromExterns();
     }
 
     public Node getDeclarationNode() {

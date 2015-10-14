@@ -20,7 +20,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.javascript.jscomp.newtypes.NominalType.RawNominalType;
 
 /**
  * This class contains commonly used types, accessible from the jscomp package.
@@ -50,7 +49,7 @@ public final class JSTypes {
   private JSType stringOrString;
   private JSType anyNumOrStr;
 
-  private JSType regexpType;
+  private JSType regexpInstance;
   private RawNominalType arrayType;
   private RawNominalType builtinObject;
   private RawNominalType builtinFunction;
@@ -111,7 +110,7 @@ public final class JSTypes {
   }
 
   public JSType getRegexpType() {
-    return regexpType != null ? regexpType : JSType.UNKNOWN;
+    return regexpInstance != null ? regexpInstance : JSType.UNKNOWN;
   }
 
   JSType getNumberInstance() {
@@ -155,14 +154,15 @@ public final class JSTypes {
 
   public void setObjectType(RawNominalType builtinObject) {
     this.builtinObject = builtinObject;
+    ObjectType.setObjectType(builtinObject.getAsNominalType());
   }
 
   public void setArrayType(RawNominalType arrayType) {
     this.arrayType = arrayType;
   }
 
-  public void setRegexpInstance(JSType regexpType) {
-    this.regexpType = regexpType;
+  public void setRegexpInstance(JSType regexpInstance) {
+    this.regexpInstance = regexpInstance;
   }
 
   public void setNumberInstance(JSType t) {

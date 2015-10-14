@@ -17,8 +17,11 @@
 package com.google.javascript.jscomp;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.javascript.jscomp.testing.NodeSubject.assertNode;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableSet;
+import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.jscomp.NodeTraversal.AbstractNodeTypePruningCallback;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -107,12 +110,11 @@ public final class NodeTraversalTest extends TestCase {
     };
 
     Compiler compiler = new Compiler();
-    NodeTraversal t = new NodeTraversal(compiler, cb);
-    String code = "function foo() {}";
-    Node tree = parse(compiler, code);
 
     try {
-      t.traverse(tree);
+      String code = "function foo() {}";
+      Node tree = parse(compiler, code);
+      NodeTraversal.traverseEs6(compiler, tree, cb);
       fail("Expected RuntimeException");
     } catch (RuntimeException e) {
       assertThat(e.getMessage())
@@ -125,14 +127,20 @@ public final class NodeTraversalTest extends TestCase {
 
   public void testGetScopeRoot() {
     Compiler compiler = new Compiler();
-    NodeTraversal t = new NodeTraversal(compiler,
+    String code = Joiner.on('\n').join(
+        "var a;",
+        "function foo() {",
+        "  var b",
+        "}");
+    Node tree = parse(compiler, code);
+    NodeTraversal.traverseEs6(compiler, tree,
         new NodeTraversal.ScopedCallback() {
 
           @Override
           public void enterScope(NodeTraversal t) {
             Node root1 = t.getScopeRoot();
             Node root2 = t.getScope().getRootNode();
-            assertEquals(root1, root2);
+            assertNode(root2).isEqualTo(root1);
           }
 
           @Override
@@ -149,20 +157,19 @@ public final class NodeTraversalTest extends TestCase {
           }
         }
     );
-
-    String code = "" +
-            "var a; " +
-            "function foo() {" +
-            "  var b" +
-            "}";
-    Node tree = parse(compiler, code);
-    t.traverse(tree);
   }
 
   public void testGetLineNoAndGetCharno() {
     Compiler compiler = new Compiler();
+    String code = ""
+        + "var a; \n"
+        + "function foo() {\n"
+        + "  var b;\n"
+        + "  if (a) { var c;}\n"
+        + "}";
+    Node tree = parse(compiler, code);
     final StringBuilder builder = new StringBuilder();
-    NodeTraversal t = new NodeTraversal(compiler,
+    NodeTraversal.traverseEs6(compiler, tree,
         new NodeTraversal.ScopedCallback() {
 
           @Override
@@ -191,15 +198,6 @@ public final class NodeTraversalTest extends TestCase {
         }
     );
 
-    String code = ""
-        + "var a; \n"
-        + "function foo() {\n"
-        + "  var b;\n"
-        + "  if (a) { var c;}\n"
-        + "}";
-    Node tree = parse(compiler, code);
-    t.traverse(tree);
-
     // Note the char numbers are 0-indexed but the line numbers are 1-indexed.
     String expectedResult = ""
         + "visit NAME a [source_file: [testcode]] @1:4\n"
@@ -227,11 +225,11 @@ public final class NodeTraversalTest extends TestCase {
     ExpectNodeOnEnterScope callback = new ExpectNodeOnEnterScope();
     NodeTraversal t = new NodeTraversal(compiler, callback, creator);
 
-    String code = "" +
-            "var a; " +
-            "function foo() {" +
-            "  var b;" +
-            "}";
+    String code = Joiner.on('\n').join(
+        "var a;",
+        "function foo() {",
+        "  var b;",
+        "}");
 
     Node tree = parse(compiler, code);
     Scope topScope = creator.createScope(tree, null);
@@ -255,10 +253,40 @@ public final class NodeTraversalTest extends TestCase {
     callback.assertEntered();
   }
 
+  public void testTraverseAtScopeWithBlockScope() {
+    Compiler compiler = new Compiler();
+    CompilerOptions options = new CompilerOptions();
+    options.setLanguageIn(LanguageMode.ECMASCRIPT6);
+    compiler.initOptions(options);
+    ScopeCreator creator = new Es6SyntacticScopeCreator(compiler);
+    ExpectNodeOnEnterScope callback = new ExpectNodeOnEnterScope();
+    NodeTraversal t = new NodeTraversal(compiler, callback, creator);
+
+    String code = Joiner.on('\n').join(
+        "function foo() {",
+        "  if (bar) {",
+        "    let x;",
+        "  }",
+        "}");
+
+    Node tree = parse(compiler, code);
+    Scope topScope = creator.createScope(tree, null);
+
+    Node innerBlock = tree  // script
+        .getFirstChild()    // function
+        .getLastChild()     // function body
+        .getFirstChild()    // if
+        .getLastChild();    // block
+
+    Scope blockScope = creator.createScope(innerBlock, topScope);
+    callback.expect(innerBlock, innerBlock);
+    t.traverseAtScope(blockScope);
+    callback.assertEntered();
+  }
 
   // Helper class used to test getCurrentNode
-  private static class ExpectNodeOnEnterScope implements
-      NodeTraversal.ScopedCallback {
+  private static class ExpectNodeOnEnterScope extends NodeTraversal.AbstractPreOrderCallback
+      implements NodeTraversal.ScopedCallback {
     private Node node;
     private Node scopeRoot;
     private boolean entered = false;
@@ -275,8 +303,8 @@ public final class NodeTraversalTest extends TestCase {
 
     @Override
     public void enterScope(NodeTraversal t) {
-      assertEquals(node, t.getCurrentNode());
-      assertEquals(scopeRoot, t.getScopeRoot());
+      assertNode(t.getCurrentNode()).isEqualTo(node);
+      assertNode(t.getScopeRoot()).isEqualTo(scopeRoot);
       entered = true;
     }
 
@@ -288,15 +316,11 @@ public final class NodeTraversalTest extends TestCase {
     public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
       return true;
     }
-
-    @Override
-    public void visit(NodeTraversal t, Node n, Node parent) {
-    }
   }
 
   private static Node parse(Compiler compiler, String js) {
     Node n = compiler.parseTestCode(js);
-    assertEquals(0, compiler.getErrorCount());
+    assertThat(compiler.getErrors()).isEmpty();
     return n;
   }
 }

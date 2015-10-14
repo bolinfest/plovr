@@ -33,7 +33,7 @@ angular.HttpCallback;
  * @constructor
  * @template T
  */
-angular.$http.Response;
+angular.$http.Response = function() {};
 
 /** @type {T} */
 angular.$http.Response.prototype.data;
@@ -52,33 +52,10 @@ angular.$http.Response.prototype.config;
 
 /**
  * @constructor
- * @extends angular.$q.Promise.<!angular.$http.Response.<T>>
+ * @extends {angular.$q.Promise.<!angular.$http.Response.<T>>}
  * @template T
  */
-angular.$http.HttpPromise;
-
-/**
- * @param {?(function(T):
- *             (RESULT|IThenable.<RESULT>|Thenable))=} opt_onFulfilled
- * @param {?(function(*): *)=} opt_onRejected
- * @param {?(function(*): *)=} opt_notifyCallback
- * @return {!angular.$http.HttpPromise.<RESULT>}
- * @template RESULT
- */
-angular.$http.HttpPromise.prototype.then =
-    function(opt_onFulfilled, opt_onRejected, opt_notifyCallback) {};
-
-/**
- * @param {?function(?)} callback
- * @return {!angular.$http.HttpPromise.<T>}
- */
-angular.$http.HttpPromise.prototype.catch = function(callback) {};
-
-/**
- * @param {?function(?)} callback
- * @return {!angular.$http.HttpPromise.<T>}
- */
-angular.$http.HttpPromise.prototype.finally = function(callback) {};
+angular.$http.HttpPromise = function() {};
 
 /**
  * @param {function(T, number, function(string=):

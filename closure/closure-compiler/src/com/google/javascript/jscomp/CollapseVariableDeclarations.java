@@ -112,7 +112,7 @@ class CollapseVariableDeclarations implements CompilerPass {
     collapses.clear();
     nodesToCollapse.clear();
 
-    NodeTraversal.traverse(compiler, root, new GatherCollapses());
+    NodeTraversal.traverseEs6(compiler, root, new GatherCollapses());
 
     if (!collapses.isEmpty()) {
       applyCollapses();
@@ -207,21 +207,22 @@ class CollapseVariableDeclarations implements CompilerPass {
 
       Var var = s.getVar(lhs.getString());
       return var != null
-          && var.getScope() == s
+          && (NodeUtil.getEnclosingFunction(var.getScope().getRootNode())
+              == NodeUtil.getEnclosingFunction(s.getRootNode()))
           && !isNamedParameter(var)
           && !blacklistedVars.contains(var);
     }
   }
 
   private static boolean isNamedParameter(Var v) {
-    return v.getParentNode().isParamList();
+    return v.isParam();
   }
 
   private void applyCollapses() {
     for (Collapse collapse : collapses) {
 
       Node var = new Node(Token.VAR);
-      var.copyInformationFrom(collapse.startNode);
+      var.useSourceInfoIfMissingFrom(collapse.startNode);
       collapse.parent.addChildBefore(var, collapse.startNode);
 
       boolean redeclaration = false;

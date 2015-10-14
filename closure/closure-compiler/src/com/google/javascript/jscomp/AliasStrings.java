@@ -18,6 +18,7 @@ package com.google.javascript.jscomp;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import com.google.common.annotations.GwtIncompatible;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
@@ -44,6 +45,7 @@ import java.util.zip.CRC32;
  * or occur on codepaths that get executed frequently.
  *
  */
+@GwtIncompatible("java.util.regex")
 class AliasStrings extends AbstractPostOrderCallback
     implements CompilerPass {
 
@@ -115,7 +117,7 @@ class AliasStrings extends AbstractPostOrderCallback
     logger.fine("Aliasing common strings");
 
     // Traverse the tree and collect strings
-    NodeTraversal.traverse(compiler, root, this);
+    NodeTraversal.traverseEs6(compiler, root, this);
 
     // 1st edit pass: replace some strings with aliases
     replaceStringsWithAliases();
@@ -154,7 +156,7 @@ class AliasStrings extends AbstractPostOrderCallback
         info.occurrences.add(occurrence);
         info.numOccurrences++;
 
-        if (t.inGlobalScope() || isInThrowExpression(n)) {
+        if (t.inGlobalHoistScope() || isInThrowExpression(n)) {
           info.numOccurrencesInfrequentlyExecuted++;
         }
 

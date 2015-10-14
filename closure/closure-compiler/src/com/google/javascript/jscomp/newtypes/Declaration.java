@@ -18,7 +18,6 @@ package com.google.javascript.jscomp.newtypes;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
-import com.google.javascript.jscomp.newtypes.NominalType.RawNominalType;
 
 /**
  * Represents a declaration of a javascript type.
@@ -33,49 +32,45 @@ public class Declaration {
   private EnumType enumType;
   private DeclaredTypeRegistry functionScope;
   private RawNominalType nominal;
-  private boolean isFormal;
   private boolean isTypeVar;
   private boolean isConstant;
-  private boolean isFromExterns;
-  private boolean isForwardDeclaration;
 
   public Declaration(JSType simpleType,
       Typedef typedef, NamespaceLit namespaceLit, EnumType enumType,
       DeclaredTypeRegistry functionScope, RawNominalType nominal,
-      boolean isFormal, boolean isTypeVar,
-      boolean isConstant, boolean isFromExterns, boolean isForwardDeclaration) {
+      boolean isTypeVar, boolean isConstant, boolean isForwardDeclaration) {
     this.simpleType = simpleType;
     this.typedef = typedef;
     this.namespaceLit = namespaceLit;
     this.enumType = enumType;
     this.functionScope = functionScope;
     this.nominal = nominal;
-    this.isFormal = isFormal;
     this.isTypeVar = isTypeVar;
     this.isConstant = isConstant;
-    this.isFromExterns = isFromExterns;
-    this.isForwardDeclaration = isForwardDeclaration;
     this.checkValid();
   }
 
   private void checkValid() {
     if (simpleType != null) {
-      Preconditions.checkState(typedef == null && namespaceLit == null && enumType == null
-          && functionScope == null && nominal == null);
+      Preconditions.checkState(typedef == null && namespaceLit == null
+          && enumType == null && nominal == null);
     }
     if (typedef != null) {
-      Preconditions.checkState(simpleType == null && namespaceLit == null && enumType == null
-          && functionScope == null && nominal == null);
+      Preconditions.checkState(simpleType == null && namespaceLit == null
+          && enumType == null && functionScope == null && nominal == null);
     }
     if (namespaceLit != null) {
-      Preconditions.checkState(simpleType == null && typedef == null && enumType == null
-          && functionScope == null && nominal == null);
+      Preconditions.checkState(simpleType == null && typedef == null
+          && enumType == null && nominal == null);
     }
     if (enumType != null) {
-      Preconditions.checkState(simpleType == null && typedef == null && namespaceLit == null
-          && functionScope == null && nominal == null);
+      Preconditions.checkState(simpleType == null && typedef == null
+          && namespaceLit == null && functionScope == null && nominal == null);
     }
-    if (functionScope != null || nominal != null) {
+    if (functionScope != null) {
+      Preconditions.checkState(typedef == null && enumType == null);
+    }
+    if (nominal != null) {
       // Note: Non-null nominal with null function is allowed. e.g. /** @ctor */ var Bar = Foo;
       Preconditions.checkState(simpleType == null
           && typedef == null && namespaceLit == null && enumType == null);
@@ -90,10 +85,6 @@ public class Declaration {
      return typedef;
   }
 
-  public NamespaceLit getNamespaceLit() {
-     return namespaceLit;
-  }
-
   public EnumType getEnum() {
      return enumType;
   }
@@ -106,24 +97,12 @@ public class Declaration {
      return nominal;
   }
 
-  public boolean isFormal() {
-     return isFormal;
-  }
-
   public boolean isTypeVar() {
      return isTypeVar;
   }
 
   public boolean isConstant() {
      return isConstant;
-  }
-
-  public boolean isFromExterns() {
-     return isFromExterns;
-  }
-
-  public boolean isForwardDeclaration() {
-     return isForwardDeclaration;
   }
 
   public Namespace getNamespace() {

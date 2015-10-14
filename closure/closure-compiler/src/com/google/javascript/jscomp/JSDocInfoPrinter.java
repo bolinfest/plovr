@@ -24,6 +24,8 @@ import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
+import java.util.Iterator;
+
 /**
  * Prints a JSDocInfo, used for preserving type annotations in ES6 transpilation.
  *
@@ -34,8 +36,11 @@ public final class JSDocInfoPrinter {
     if (info.isConstructor()) {
       sb.append("@constructor ");
     }
-    if (info.isInterface()) {
+    if (info.isInterface() && !info.usesImplicitMatch()) {
       sb.append("@interface ");
+    }
+    if (info.isInterface() && info.usesImplicitMatch()) {
+      sb.append("@record ");
     }
     if (info.makesDicts()) {
       sb.append("@dict ");
@@ -58,6 +63,9 @@ public final class JSDocInfoPrinter {
     if (info.isConstant()) {
       sb.append("@const ");
     }
+    if (info.isExport()) {
+      sb.append("@export ");
+    }
     if (info.isDeprecated()) {
       sb.append("@deprecated ");
       sb.append(info.getDeprecationReason() + " ");
@@ -67,8 +75,16 @@ public final class JSDocInfoPrinter {
       sb.append("@" + info.getVisibility().toString().toLowerCase() + " ");
     }
 
-    for (String suppression : info.getSuppressions()) {
-      sb.append("@suppress {" + suppression + "} ");
+    Iterator<String> suppressions = info.getSuppressions().iterator();
+    if (suppressions.hasNext()) {
+      sb.append("@suppress {");
+      while (suppressions.hasNext()) {
+        sb.append(suppressions.next());
+        if (suppressions.hasNext()) {
+          sb.append(",");
+        }
+      }
+      sb.append("} ");
     }
 
     ImmutableList<String> names = info.getTemplateTypeNames();
@@ -80,15 +96,20 @@ public final class JSDocInfoPrinter {
 
     if (info.getParameterCount() > 0) {
       for (String name : info.getParameterNames()) {
-        sb.append("@param {");
-        appendTypeNode(sb, info.getParameterType(name).getRoot());
-        sb.append("} " + name + "\n");
+        sb.append("@param ");
+        if (info.getParameterType(name) != null) {
+          sb.append("{");
+          appendTypeNode(sb, info.getParameterType(name).getRoot());
+          sb.append("} ");
+        }
+        sb.append(name);
+        sb.append(' ');
       }
     }
     if (info.hasReturnType()) {
       sb.append("@return {");
       appendTypeNode(sb, info.getReturnType().getRoot());
-      sb.append("}\n");
+      sb.append("} ");
     }
     if (info.hasThisType()) {
       sb.append("@this {");
@@ -98,7 +119,7 @@ public final class JSDocInfoPrinter {
       } else {
         appendTypeNode(sb, typeNode);
       }
-      sb.append("}\n");
+      sb.append("} ");
     }
     if (info.hasBaseType()) {
       sb.append("@extends {");
@@ -108,7 +129,17 @@ public final class JSDocInfoPrinter {
       } else {
         appendTypeNode(sb, typeNode);
       }
-      sb.append("}\n");
+      sb.append("} ");
+    }
+    for (JSTypeExpression type : info.getExtendedInterfaces()) {
+      sb.append("@extends {");
+      Node typeNode = type.getRoot();
+      if (typeNode.getType() == Token.BANG) {
+        appendTypeNode(sb, typeNode.getFirstChild());
+      } else {
+        appendTypeNode(sb, typeNode);
+      }
+      sb.append("} ");
     }
     for (JSTypeExpression type : info.getImplementedInterfaces()) {
       sb.append("@implements {");
@@ -118,12 +149,12 @@ public final class JSDocInfoPrinter {
       } else {
         appendTypeNode(sb, typeNode);
       }
-      sb.append("}\n");
+      sb.append("} ");
     }
     if (info.hasTypedefType()) {
       sb.append("@typedef {");
       appendTypeNode(sb, info.getTypedefType().getRoot());
-      sb.append("}\n");
+      sb.append("} ");
     }
     if (info.hasType()) {
       if (info.isInlineType()) {
@@ -133,18 +164,18 @@ public final class JSDocInfoPrinter {
       } else {
         sb.append("@type {");
         appendTypeNode(sb, info.getType().getRoot());
-        sb.append("}\n");
+        sb.append("} ");
       }
     }
     if (!info.getThrownTypes().isEmpty()) {
       sb.append("@throws {");
       appendTypeNode(sb, info.getThrownTypes().get(0).getRoot());
-      sb.append("}\n");
+      sb.append("} ");
     }
     if (info.hasEnumParameterType()) {
       sb.append("@enum {");
       appendTypeNode(sb, info.getEnumParameterType().getRoot());
-      sb.append("}\n");
+      sb.append("} ");
     }
     sb.append("*/");
     return sb.toString();
@@ -174,6 +205,9 @@ public final class JSDocInfoPrinter {
       sb.append("*");
     } else if (typeNode.getType() == Token.QMARK) {
       sb.append("?");
+      if (typeNode.hasChildren()) {
+        appendTypeNode(sb, typeNode.getFirstChild());
+      }
     } else if (typeNode.isFunction()) {
       appendFunctionNode(sb, typeNode);
     } else if (typeNode.getType() == Token.LC) {
@@ -181,13 +215,21 @@ public final class JSDocInfoPrinter {
       Node lb = typeNode.getFirstChild();
       for (int i = 0; i < lb.getChildCount() - 1; i++) {
         Node colon = lb.getChildAtIndex(i);
-        sb.append(colon.getFirstChild().getString() + ":");
-        appendTypeNode(sb, colon.getLastChild());
+        if (colon.hasChildren()) {
+          sb.append(colon.getFirstChild().getString() + ":");
+          appendTypeNode(sb, colon.getLastChild());
+        } else {
+          sb.append(colon.getString());
+        }
         sb.append(",");
       }
       Node lastColon = lb.getLastChild();
-      sb.append(lastColon.getFirstChild().getString() + ":");
-      appendTypeNode(sb, lastColon.getLastChild());
+      if (lastColon.hasChildren()) {
+        sb.append(lastColon.getFirstChild().getString() + ":");
+        appendTypeNode(sb, lastColon.getLastChild());
+      } else {
+        sb.append(lastColon.getString());
+      }
       sb.append("}");
     } else if (typeNode.getType() == Token.VOID) {
       sb.append("void");

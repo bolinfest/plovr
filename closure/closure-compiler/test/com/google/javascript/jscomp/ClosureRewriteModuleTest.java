@@ -15,28 +15,22 @@
  */
 package com.google.javascript.jscomp;
 
+import static com.google.javascript.jscomp.ClosureRewriteModule.INVALID_GET_ALIAS;
 import static com.google.javascript.jscomp.ClosureRewriteModule.INVALID_GET_CALL_SCOPE;
 import static com.google.javascript.jscomp.ClosureRewriteModule.INVALID_GET_IDENTIFIER;
 import static com.google.javascript.jscomp.ClosureRewriteModule.INVALID_MODULE_IDENTIFIER;
 import static com.google.javascript.jscomp.ClosureRewriteModule.INVALID_REQUIRE_IDENTIFIER;
-
-import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
+import static com.google.javascript.jscomp.deps.JsFileLineParser.PARSE_ERROR;
 
 /**
  * Unit tests for ClosureRewriteModule
  * @author johnlenz@google.com (John Lenz)
  */
-public final class ClosureRewriteModuleTest extends CompilerTestCase {
+public final class ClosureRewriteModuleTest extends Es6CompilerTestCase {
 
   @Override
   protected CompilerPass getProcessor(Compiler compiler) {
     return new ClosureRewriteModule(compiler);
-  }
-
-  @Override
-  protected void setUp() throws Exception {
-    super.setUp();
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT3);
   }
 
   @Override
@@ -69,6 +63,30 @@ public final class ClosureRewriteModuleTest extends CompilerTestCase {
         "});");
   }
 
+  public void testDestructuring() {
+    testEs6(
+        LINE_JOINER.join(
+            "goog.module('ns.a');",
+            "var {foo, bar} = goog.require('ns.b');"),
+        LINE_JOINER.join(
+            "goog.provide('ns.a');",
+            "goog.require('ns.b');",
+            "goog.scope(function(){",
+            "  var {foo, bar} = ns.b;",
+            "});"));
+
+    testEs6(
+        LINE_JOINER.join(
+            "goog.module('ns.a');",
+            "const {foo, bar} = goog.require('ns.b');"),
+        LINE_JOINER.join(
+            "goog.provide('ns.a');",
+            "goog.require('ns.b');",
+            "goog.scope(function(){",
+            "  const {foo, bar} = ns.b;",
+            "});"));
+  }
+
   public void testDeclareLegacyNamespace() {
     test(
         "goog.module('ns.a');"
@@ -84,93 +102,112 @@ public final class ClosureRewriteModuleTest extends CompilerTestCase {
 
   public void testBundle1() {
     test(
-        "goog.loadModule(function(exports) {" +
-        "goog.module('ns.a');" +
-        "var b = goog.require('ns.b');" +
-        "return exports;});",
+        LINE_JOINER.join(
+            "goog.loadModule(function(exports) {",
+            "  goog.module('ns.a');",
+            "  var b = goog.require('ns.b');",
+            "  return exports;",
+            "});"),
 
-        "goog.provide('ns.a');" +
-        "goog.require('ns.b');" +
-        "goog.scope(function(){" +
-        "  var b = ns.b;" +
-        "});");
+        LINE_JOINER.join(
+            "goog.provide('ns.a');",
+            "goog.require('ns.b');",
+            "goog.scope(function() {",
+            "  var b = ns.b;",
+            "});"));
   }
 
   public void testBundle2() {
     test(
-        "goog.loadModule(function(exports) {" +
-        "goog.module('ns.a');" +
-        "var b = goog.require('ns.b');" +
-        "return exports;});" +
-        "goog.loadModule(function(exports) {" +
-        "goog.module('ns.c');" +
-        "var b = goog.require('ns.b');" +
-        "return exports;});",
+        LINE_JOINER.join(
+            "goog.loadModule(function(exports) {",
+            "  goog.module('ns.a');",
+            "  var b = goog.require('ns.b');",
+            "  return exports;",
+            "});",
+            "goog.loadModule(function(exports) {",
+            "  goog.module('ns.c');",
+            "  var b = goog.require('ns.b');",
+            "  return exports;",
+            "});"),
 
-        "goog.provide('ns.a');" +
-        "goog.require('ns.b');" +
-        "goog.scope(function(){" +
-        "  var b = ns.b;" +
-        "});" +
-        "goog.provide('ns.c');" +
-        "goog.require('ns.b');" +
-        "goog.scope(function(){" +
-        "  var b = ns.b;" +
-        "});");
+        LINE_JOINER.join(
+            "goog.provide('ns.a');",
+            "goog.require('ns.b');",
+            "goog.scope(function() {",
+            "  var b = ns.b;",
+            "});",
+            "goog.provide('ns.c');",
+            "goog.require('ns.b');",
+            "goog.scope(function() {",
+            "  var b = ns.b;",
+            "});"));
   }
 
   public void testBundle3() {
     test(
-        "goog.loadModule(function(exports) {'use strict';" +
-        "goog.module('ns.a');" +
-        "goog.module.declareLegacyNamespace();" +
-        "var b = goog.require('ns.b');" +
-        "return exports;});",
+        LINE_JOINER.join(
+            "goog.loadModule(function(exports) {",
+            "  'use strict';",
+            "  goog.module('ns.a');",
+            "  goog.module.declareLegacyNamespace();",
+            "  var b = goog.require('ns.b');",
+            "  return exports;",
+            "});"),
 
-        "'use strict';" +
-        "goog.provide('ns.a');" +
-        "goog.require('ns.b');" +
-        "goog.scope(function(){" +
-        "  var b = ns.b;" +
-        "});");
+        LINE_JOINER.join(
+            "'use strict';",
+            "goog.provide('ns.a');",
+            "goog.require('ns.b');",
+            "goog.scope(function() {",
+            "  var b = ns.b;",
+            "});"));
   }
 
   public void testBundle4() {
     test(
-        "goog.loadModule(function(exports) {'use strict';" +
-        "goog.module('ns.a');" +
-        "var b = goog.require('goog.asserts');" +
-        "return exports;});",
+        LINE_JOINER.join(
+            "goog.loadModule(function(exports) {",
+            "  'use strict';",
+            "  goog.module('ns.a');",
+            "  var b = goog.require('goog.asserts');",
+            "  return exports;",
+            "});"),
 
-        "'use strict';" +
-        "goog.provide('ns.a');" +
-        "goog.require('goog.asserts');" +
-        "goog.scope(function(){" +
-        "  var b = goog.asserts;" +
-        "});");
+        LINE_JOINER.join(
+            "'use strict';",
+            "goog.provide('ns.a');",
+            "goog.require('goog.asserts');",
+            "goog.scope(function() {",
+            "  var b = goog.asserts;",
+            "});"));
   }
 
   public void testBundle5() {
     test(
-        "goog.loadModule(function(exports) {'use strict';" +
-        "goog.module('xid');" +
-        "" +
-        "goog.module.declareLegacyNamespace();" +
-        "" +
-        "var asserts = goog.require('goog.asserts');" +
-        "" +
-        "exports = function(id) {" +
-        "  return xid.internal_(id);" +
-        "};" +
-        "var xid = exports;" +
-        "return exports;});",
+        LINE_JOINER.join(
+            "goog.loadModule(function(exports) {",
+            "  'use strict';",
+            "  goog.module('xid');",
+            "  goog.module.declareLegacyNamespace();",
+            "  var asserts = goog.require('goog.asserts');",
+            "  exports = function(id) {",
+            "    return xid.internal_(id);",
+            "  };",
+            "  var xid = exports;",
+            "  return exports;",
+            "});"),
 
-        "goog.provide('xid');" +
-        "goog.require('goog.asserts');" +
-        "goog.scope(function(){" +
-        "var asserts=goog.asserts;" +
-        "/** @const */ xid=function(id){return xid_module.internal_(id)};" +
-        "var xid_module=xid})");
+        LINE_JOINER.join(
+            "goog.provide('xid');",
+            "goog.require('goog.asserts');",
+            "goog.scope(function() {",
+            "  var asserts = goog.asserts;",
+            "  /** @const */ xid = function(id) {",
+            "    return xid_module.internal_(id);",
+            "  };",
+            "  var xid_module = xid;",
+            "});"));
   }
 
   public void testAliasShadowsGlobal1() {
@@ -213,18 +250,16 @@ public final class ClosureRewriteModuleTest extends CompilerTestCase {
   }
 
   public void testInvalidModule() {
-    testSame(
-        "goog.module(a);",
-        INVALID_MODULE_IDENTIFIER, true);
+    // The ES6 path turns on DependencyOptions.needsManagement() which leads to JsFileLineParser
+    // execution that throws a different exception on some invalid goog.provide()s.
+    testError("goog.module(a);", INVALID_MODULE_IDENTIFIER, PARSE_ERROR);
   }
 
   public void testInvalidRequire() {
-    testSame(
-        "goog.module('ns.a');" +
-        "goog.require(a);",
-        INVALID_REQUIRE_IDENTIFIER, true);
+    // The ES6 path turns on DependencyOptions.needsManagement() which leads to JsFileLineParser
+    // execution that throws a different exception on some invalid goog.provide()s.
+    testError("goog.module('ns.a');" + "goog.require(a);", INVALID_REQUIRE_IDENTIFIER, PARSE_ERROR);
   }
-
 
   public void testGoogModuleGet1() {
     test(
@@ -238,20 +273,56 @@ public final class ClosureRewriteModuleTest extends CompilerTestCase {
         "function f() { var x = a.b.c; }");
   }
 
+  public void testAliasedGoogModuleGet1() {
+    test(
+        LINE_JOINER.join(
+          "goog.module('a');",
+          "",
+          "var x = goog.forwardDeclare('b');",
+          "function f() { x = goog.module.get('b'); }"),
+        LINE_JOINER.join(
+          "goog.provide('a'); goog.scope(function(){",
+          "  var x = b;",
+          "  function f() {}",
+          "});"));
+  }
+
+  public void testAliasedGoogModuleGet2() {
+    test(
+        LINE_JOINER.join(
+          "goog.module('a');",
+          "",
+          "var x = goog.forwardDeclare('x.y.z');",
+          "function f() { x = goog.module.get('x.y.z'); }"),
+        LINE_JOINER.join(
+          "goog.provide('a'); goog.scope(function(){",
+          "  var x = x.y.z;",
+          "  function f() {}",
+          "});"));
+  }
+
+  public void testInvalidGoogModeuleGetAlias() {
+    testError("goog.module('a'); x = goog.module.get('g');", INVALID_GET_ALIAS);
+
+    testError("goog.module('a'); var x; x = goog.module.get('g');", INVALID_GET_ALIAS);
+
+    testError(
+        "goog.module('a'); var x = goog.forwardDeclare(); x = goog.module.get('g');",
+        INVALID_GET_ALIAS);
+
+    testError(
+        "goog.module('a'); var x = goog.forwardDeclare('z'); x = goog.module.get('g');",
+        INVALID_GET_ALIAS);
+  }
+
 
   public void testInvalidGoogModuleGet1() {
-    testSame(
-        "function f() {"
-        + "goog.module.get(a);"
-        + "}",
-        INVALID_GET_IDENTIFIER, true);
+    testError("function f() {" + "goog.module.get(a);" + "}", INVALID_GET_IDENTIFIER);
   }
 
   public void testInvalidGoogModuleGet2() {
 
-    testSame(
-        "goog.module.get('a');",
-        INVALID_GET_CALL_SCOPE, true);
+    testError("goog.module.get('a');", INVALID_GET_CALL_SCOPE);
   }
 
   public void testExport1() {
@@ -347,6 +418,22 @@ public final class ClosureRewriteModuleTest extends CompilerTestCase {
         + "goog.scope(function(){"
         + "  ns.a = goog.defineClass({});"
         + "});");
+  }
+
+  public void testExportEnhancedObjectLiteral() {
+    testEs6(
+        "goog.module('ns.a');" +
+        "exports = { something };",
+
+        "goog.provide('ns.a');" +
+        "goog.scope(function(){" +
+        "  /** @const */ ns.a = { /** @const */ something };" +
+        "});");
+
+    testErrorEs6(
+        "goog.module('ns.a');" +
+        "exports = { [something]: 3 };",
+        ClosureRewriteModule.INVALID_EXPORT_COMPUTED_PROPERTY);
   }
 
   public void testRequiresRetainOrder() {

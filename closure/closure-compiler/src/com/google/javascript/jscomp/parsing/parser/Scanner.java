@@ -36,6 +36,7 @@ public class Scanner {
   private final LinkedList<Token> currentTokens = new LinkedList<>();
   private int index;
   private final CommentRecorder commentRecorder;
+  private int typeParameterLevel;
 
   public Scanner(ErrorReporter errorReporter, CommentRecorder commentRecorder,
       SourceFile source) {
@@ -48,6 +49,7 @@ public class Scanner {
     this.commentRecorder = commentRecorder;
     this.source = file;
     this.index = offset;
+    this.typeParameterLevel = 0;
   }
 
   public interface CommentRecorder {
@@ -66,6 +68,11 @@ public class Scanner {
     return currentTokens.isEmpty()
         ? index
         : peekToken().location.start.offset;
+  }
+
+  public void setOffset(int index) {
+    currentTokens.clear();
+    this.index = index;
   }
 
   public SourcePosition getPosition() {
@@ -436,6 +443,9 @@ public class Scanner {
           return createToken(TokenType.OPEN_ANGLE, beginToken);
         }
       case '>':
+        if (typeParameterLevel > 0) {
+          return createToken(TokenType.CLOSE_ANGLE, beginToken);
+        }
         switch (peekChar()) {
         case '>':
           nextChar();
@@ -1025,5 +1035,13 @@ public class Scanner {
 
   private void reportWarning(String format, Object... arguments) {
     errorReporter.reportWarning(getPosition(), format, arguments);
+  }
+
+  void incTypeParameterLevel() {
+    typeParameterLevel++;
+  }
+
+  void decTypeParameterLevel() {
+    typeParameterLevel--;
   }
 }

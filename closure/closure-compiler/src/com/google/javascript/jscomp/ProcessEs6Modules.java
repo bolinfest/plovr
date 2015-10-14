@@ -27,6 +27,7 @@ import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
+import java.net.URI;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -34,7 +35,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /**
  * Rewrites a ES6 module into a form that can be safely concatenated.
@@ -44,11 +44,12 @@ import java.util.regex.Pattern;
  * @author moz@google.com (Michael Zhou)
  */
 public final class ProcessEs6Modules extends AbstractPostOrderCallback {
-  private static final String MODULE_SLASH = ES6ModuleLoader.MODULE_SLASH;
-
-  private static final String MODULE_NAME_SEPARATOR = "\\$";
-  private static final String MODULE_NAME_PREFIX = "module$";
   private static final String DEFAULT_EXPORT_NAME = "$jscompDefaultExport";
+
+  static final DiagnosticType LHS_OF_GOOG_REQUIRE_MUST_BE_CONST =
+      DiagnosticType.error(
+          "JSC_LHS_OF_GOOG_REQUIRE_MUST_BE_CONST",
+          "The left side of a goog.require() must use ''const'' (not ''let'' or ''var'')");
 
   private final ES6ModuleLoader loader;
 
@@ -99,12 +100,12 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
 
   public void processFile(Node root) {
     FindGoogProvideOrGoogModule finder = new FindGoogProvideOrGoogModule();
-    NodeTraversal.traverse(compiler, root, finder);
+    NodeTraversal.traverseEs6(compiler, root, finder);
     if (finder.isFound()) {
       return;
     }
     isEs6Module = false;
-    NodeTraversal.traverse(compiler, root, this);
+    NodeTraversal.traverseEs6(compiler, root, this);
   }
 
   @Override
@@ -123,15 +124,13 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
 
   private void visitImport(NodeTraversal t, Node importDecl, Node parent) {
     String importName = importDecl.getLastChild().getString();
-    String loadAddress = loader.locate(importName, t.getInput());
-    try {
-      loader.load(loadAddress);
-    } catch (ES6ModuleLoader.LoadFailedException e) {
-      compiler.report(t.makeError(
-          importDecl, ES6ModuleLoader.LOAD_ERROR, importName));
+    URI loadAddress = loader.locateEs6Module(importName, t.getInput());
+    if (loadAddress == null) {
+      compiler.report(t.makeError(importDecl, ES6ModuleLoader.LOAD_ERROR, importName));
+      return;
     }
 
-    String moduleName = toModuleName(loadAddress);
+    String moduleName = ES6ModuleLoader.toModuleName(loadAddress);
     Set<String> namesToRequire = new LinkedHashSet<>();
     for (Node child : importDecl.children()) {
       if (child.isEmpty() || child.isString()) {
@@ -230,8 +229,14 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
       parent.addChildBefore(importNode, export);
       visit(t, importNode, parent);
 
-      String loadAddress = loader.locate(moduleIdentifier.getString(), t.getInput());
-      String moduleName = toModuleName(loadAddress);
+      URI loadAddress = loader.locateEs6Module(moduleIdentifier.getString(), t.getInput());
+      if (loadAddress == null) {
+        compiler.report(
+            t.makeError(
+                moduleIdentifier, ES6ModuleLoader.LOAD_ERROR, moduleIdentifier.getString()));
+        return;
+      }
+      String moduleName = ES6ModuleLoader.toModuleName(loadAddress);
 
       for (Node exportSpec : export.getFirstChild().children()) {
         String nameFromOtherModule = exportSpec.getFirstChild().getString();
@@ -304,16 +309,8 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
     // ES6 module.
     rewriteRequires(script);
 
-    String moduleName = toModuleName(loader.getLoadAddress(t.getInput()));
-
-    if (!exportMap.isEmpty()) {
-      // Creates an export object for this module.
-      // var moduleName = {};
-      Node objectlit = IR.objectlit();
-      Node varNode = IR.var(IR.name(moduleName), objectlit)
-          .useSourceInfoIfMissingFromForTree(script);
-      script.addChildToBack(varNode);
-    }
+    URI normalizedAddress = loader.normalizeInputAddress(t.getInput());
+    String moduleName = ES6ModuleLoader.toModuleName(normalizedAddress);
 
     for (Map.Entry<String, NameNodePair> entry : exportMap.entrySet()) {
       String exportedName = entry.getKey();
@@ -352,7 +349,7 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
     }
 
     // Rename vars to not conflict in global scope.
-    NodeTraversal.traverse(compiler, script, new RenameGlobalVars(moduleName));
+    NodeTraversal.traverseEs6(compiler, script, new RenameGlobalVars(moduleName));
 
     if (!exportMap.isEmpty()) {
       // Add goog.provide call.
@@ -380,50 +377,53 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
   }
 
   private void rewriteRequires(Node script) {
-    NodeTraversal.traverse(compiler, script, new NodeTraversal.AbstractShallowCallback() {
-      @Override
-      public void visit(NodeTraversal t, Node n, Node parent) {
-        if (n.isCall()
-            && n.getFirstChild().matchesQualifiedName("goog.require")
-            && parent.isName()) {
-          visitRequire(n, parent);
-        }
-      }
+    NodeTraversal.traverseEs6(
+        compiler,
+        script,
+        new NodeTraversal.AbstractShallowCallback() {
+          @Override
+          public void visit(NodeTraversal t, Node n, Node parent) {
+            if (n.isCall()
+                && n.getFirstChild().matchesQualifiedName("goog.require")
+                && NodeUtil.isNameDeclaration(parent.getParent())) {
+              visitRequire(n, parent);
+            }
+          }
 
-      private void visitRequire(Node requireCall, Node parent) {
-        // Rewrite
-        //
-        //   var foo = goog.require('bar.foo');
-        //
-        // to
-        //
-        //   goog.require('bar.foo');
-        //   var foo = bar.foo;
+          /**
+           * Rewrites
+           *   const foo = goog.require('bar.foo');
+           * to
+           *   goog.require('bar.foo');
+           *   const foo = bar.foo;
+           */
+          private void visitRequire(Node requireCall, Node parent) {
+            String namespace = requireCall.getLastChild().getString();
+            if (!parent.getParent().isConst()) {
+              compiler.report(JSError.make(parent.getParent(), LHS_OF_GOOG_REQUIRE_MUST_BE_CONST));
+            }
 
-        String namespace = requireCall.getLastChild().getString();
+            // If the LHS is a destructuring pattern with the "shorthand" syntax,
+            // desugar it because otherwise the renaming will not be done correctly.
+            //   const {x} = goog.require('y')
+            // becomes
+            //   const {x: x} = goog.require('y');
+            if (parent.isObjectPattern()) {
+              for (Node key = parent.getFirstChild(); key != null; key = key.getNext()) {
+                if (!key.hasChildren()) {
+                  key.addChildToBack(IR.name(key.getString()).useSourceInfoFrom(key));
+                }
+              }
+            }
 
-        Node replacement = NodeUtil.newQName(compiler, namespace).srcrefTree(requireCall);
-        parent.replaceChild(requireCall, replacement);
-        Node varNode = parent.getParent();
-        varNode.getParent().addChildBefore(
-            IR.exprResult(requireCall).srcrefTree(requireCall),
-            varNode);
-      }
-    });
-  }
-
-  /**
-   * Turns a filename into a JS identifier that is used for moduleNames in
-   * rewritten code. For example, "./foo.js" transformed to "foo".
-   */
-  public static String toModuleName(String filename) {
-    return MODULE_NAME_PREFIX
-        + filename.replaceAll("^\\." + Pattern.quote(MODULE_SLASH), "")
-            .replaceAll(Pattern.quote(MODULE_SLASH), MODULE_NAME_SEPARATOR)
-            .replaceAll(Pattern.quote("\\"), MODULE_NAME_SEPARATOR)
-            .replaceAll("\\.js$", "")
-            .replaceAll("-", "_")
-            .replaceAll("\\.", "");
+            Node replacement = NodeUtil.newQName(compiler, namespace).srcrefTree(requireCall);
+            parent.replaceChild(requireCall, replacement);
+            Node varNode = parent.getParent();
+            varNode.getParent().addChildBefore(
+                IR.exprResult(requireCall).srcrefTree(requireCall),
+                varNode);
+          }
+        });
   }
 
   /**
@@ -497,18 +497,16 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
           }
 
           String moduleName = name.substring(0, endIndex);
-          String loadAddress = loader.locate(moduleName, t.getInput());
+          URI loadAddress = loader.locateEs6Module(moduleName, t.getInput());
           if (loadAddress == null) {
             compiler.report(t.makeError(
                 typeNode, ES6ModuleLoader.LOAD_ERROR, moduleName));
             return;
           }
 
-          String globalModuleName = toModuleName(loadAddress);
+          String globalModuleName = ES6ModuleLoader.toModuleName(loadAddress);
           typeNode.setString(
-              localTypeName == null
-                  ? globalModuleName
-                  : globalModuleName + localTypeName);
+              localTypeName == null ? globalModuleName : globalModuleName + localTypeName);
         } else {
           List<String> splitted = Splitter.on('.').limit(2).splitToList(name);
           String baseName = splitted.get(0);

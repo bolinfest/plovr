@@ -54,6 +54,8 @@
   <property name="tools.dir" value="${basedir}/tools" />
   <property name="compiler-jarfile"
             value="${build.dir}/${ant.project.name}.jar" />
+  <property name="linter-jarfile"
+            value="${build.dir}/linter.jar" />
 
   <property name="webservice.dir" value="${basedir}/src/com/google/javascript/jscomp/webservice" />
   <property name="webservice-classes.dir" value = "${build.dir}/webservice-classes" />
@@ -135,27 +137,28 @@
     <mkdir dir="${classes.dir}" />
     <javac srcdir="${gen.dir}"
            destdir="${classes.dir}"
-           excludes=".svn,.git"
+           excludes=".svn,.git,**/gwt/**"
            debug="${javac.debug}"
            deprecation="on"
-           includeantruntime="false">
+           includeantruntime="false"
+           encoding="utf-8">
       <classpath refid="srcclasspath.path" />
       <compilerarg value="-Xlint:unchecked"/>
     </javac>
     <javac srcdir="${src.dir}"
            destdir="${classes.dir}"
-           excludes=".svn,.git,**/refactoring/**,**/webservice/**,**/testing/**"
+           excludes=".svn,.git,**/refactoring/**,**/webservice/**,**/testing/**,**/gwt/**"
            debug="${javac.debug}"
            deprecation="on"
-           includeantruntime="true">
+           includeantruntime="true"
+           encoding="utf-8">
       <classpath refid="srcclasspath.path" />
       <compilerarg value="-Xlint:unchecked"/>
     </javac>
 
     <!-- Move Messages.properties where ScriptRuntime.java expects it. -->
-    <mkdir dir="${classes.dir}/rhino_ast/java/com/google/javascript/rhino/" />
     <copy file="${src.dir}/com/google/javascript/rhino/Messages.properties"
-          todir="${classes.dir}/rhino_ast/java/com/google/javascript/rhino/" />
+          todir="${classes.dir}/com/google/javascript/rhino/" />
 
     <!-- Move ParserConfig.properties where ParserRunner.java expects it. -->
     <copy file="${src.dir}/com/google/javascript/jscomp/parsing/ParserConfig.properties"
@@ -173,15 +176,16 @@
     <copy todir="${classes.dir}/com/google/javascript/jscomp/js">
       <fileset dir="${src.dir}/com/google/javascript/jscomp/js" />
     </copy>
+
+    <!-- Zip the externs and move them to the classes folder -->
+    <zip destfile="${classes.dir}/externs.zip" basedir="${externs.dir}" includes="**/*.js" />
   </target>
 
   <target name="jar"
           depends="compile"
           description="package compiler as an executable jar">
-    <zip destfile="${build.dir}/externs.zip" basedir="${externs.dir}" includes="*.js" />
     <jar destfile="${compiler-jarfile}" update="true">
       <fileset dir="${classes.dir}" />
-      <fileset dir="${build.dir}" includes="externs.zip" />
       <zipfileset src="${lib.dir}/args4j.jar"/>
       <zipfileset src="${lib.dir}/guava.jar"/>
       <zipfileset src="${lib.dir}/gson.jar"/>
@@ -195,25 +199,45 @@
     </jar>
   </target>
 
+  <target name="linter"
+          depends="compile"
+          description="package linter as an executable jar">
+    <jar destfile="${linter-jarfile}" update="true">
+      <fileset dir="${classes.dir}" />
+      <zipfileset src="${lib.dir}/args4j.jar"/>
+      <zipfileset src="${lib.dir}/guava.jar"/>
+      <zipfileset src="${lib.dir}/gson.jar"/>
+      <zipfileset src="${lib.dir}/jsr305.jar"/>
+      <zipfileset src="${lib.dir}/protobuf-java.jar"/>
+
+      <manifest>
+        <attribute name="Main-Class"
+                   value="com.google.javascript.jscomp.Linter" />
+      </manifest>
+    </jar>
+  </target>
+
   <target name="compile-tests"
           depends="compile"
           description="compile the JUnit tests">
     <mkdir dir="${testClasses.dir}" />
     <javac srcdir="${src.dir}"
            destdir="${testClasses.dir}"
-           excludes=".svn,.git"
+           excludes=".svn,.git,**/gwt/**"
            debug="on"
            deprecation="on"
-           includeantruntime="false">
+           includeantruntime="false"
+           encoding="utf-8">
       <classpath refid="allclasspath.path" />
       <compilerarg value="-Xlint:unchecked"/>
     </javac>
     <javac srcdir="${test.dir}"
            destdir="${testClasses.dir}"
-           excludes=".svn,.git"
+           excludes=".svn,.git,**/gwt/**"
            debug="on"
            deprecation="on"
-           includeantruntime="false">
+           includeantruntime="false"
+           encoding="utf-8">
       <classpath refid="allclasspath.path" />
       <compilerarg value="-Xlint:unchecked"/>
     </javac>
@@ -333,7 +357,8 @@
            destdir="${webservice-classes.dir}"
            excludes=".svn,.git"
            debug="${javac.debug}"
-           deprecation="on">
+           deprecation="on"
+           encoding="utf-8">
       <classpath refid="webservice-classpath.path" />
     </javac>
   </target>
@@ -341,7 +366,6 @@
   <target name="webservice-jar"
           description="package the compiler and Webservice classes"
           depends="webservice-compile, compile">
-   <zip destfile="${build.dir}/externs.zip" basedir="${externs.dir}" includes="*.js" />
    <jar destfile="${webservice-jarfile}" update="true">
      <zipgroupfileset dir="${lib.dir}" includes="*.jar"/>
      <fileset dir="${classes.dir}" />
@@ -371,7 +395,8 @@
            destdir="${refasterjs-classes.dir}"
            excludes=".svn,.git"
            debug="${javac.debug}"
-           deprecation="on">
+           deprecation="on"
+           encoding="utf-8">
       <classpath refid="refasterjs-classpath.path" />
     </javac>
   </target>
@@ -379,7 +404,6 @@
   <target name="refasterjs-jar"
           description="Packages the compiler and RefasterJS classes"
           depends="refasterjs-compile, compile">
-   <zip destfile="${build.dir}/externs.zip" basedir="${externs.dir}" includes="*.js" />
    <jar destfile="${refasterjs-jarfile}" update="true">
      <zipgroupfileset dir="${lib.dir}" includes="*.jar"/>
      <fileset dir="${build.dir}" includes="externs.zip" />

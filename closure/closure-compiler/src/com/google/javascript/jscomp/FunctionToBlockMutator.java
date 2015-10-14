@@ -15,6 +15,7 @@
  */
 package com.google.javascript.jscomp;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.javascript.jscomp.FunctionArgumentInjector.THIS_MARKER;
 
 import com.google.common.base.Preconditions;
@@ -177,13 +178,15 @@ class FunctionToBlockMutator {
   private void makeLocalNamesUnique(Node fnNode, boolean isCallInLoop) {
     Supplier<String> idSupplier = compiler.getUniqueNameIdSupplier();
     // Make variable names unique to this instance.
-    NodeTraversal.traverse(
+    NodeTraversal.traverseEs6(
         compiler, fnNode, new MakeDeclaredNamesUnique(
             new InlineRenamer(
                 compiler.getCodingConvention(),
                 idSupplier,
                 "inline_",
-                isCallInLoop)));
+                isCallInLoop,
+                true,
+                null)));
     // Make label names unique to this instance.
     new RenameLabels(compiler, new LabelNameSupplier(idSupplier), false)
         .process(null, fnNode);
@@ -205,8 +208,8 @@ class FunctionToBlockMutator {
   /**
    * Create a unique label name.
    */
-  private String getLabelNameForFunction(String fnName){
-    String name = (fnName == null || fnName.isEmpty()) ? "anon" : fnName;
+  private String getLabelNameForFunction(String fnName) {
+    String name = (isNullOrEmpty(fnName)) ? "anon" : fnName;
     return "JSCompiler_inline_label_" + name + "_" + safeNameIdSupplier.get();
   }
 
@@ -266,7 +269,7 @@ class FunctionToBlockMutator {
               String newName = getUniqueThisName();
               Node newValue = entry.getValue().cloneTree();
               Node newNode = NodeUtil.newVarNode(newName, newValue)
-                  .copyInformationFromForTree(newValue);
+                  .useSourceInfoIfMissingFromForTree(newValue);
               newVars.add(0, newNode);
               // Remove the parameter from the list to replace.
               newArgMap.put(THIS_MARKER,
@@ -276,7 +279,7 @@ class FunctionToBlockMutator {
           } else {
             Node newValue = entry.getValue().cloneTree();
             Node newNode = NodeUtil.newVarNode(name, newValue)
-                .copyInformationFromForTree(newValue);
+                .useSourceInfoIfMissingFromForTree(newValue);
             newVars.add(0, newNode);
             // Remove the parameter from the list to replace.
             newArgMap.remove(name);
@@ -383,7 +386,7 @@ class FunctionToBlockMutator {
     Node srcLocation = node;
     Node retVal = NodeUtil.newUndefinedNode(srcLocation);
     Node resultNode = createAssignStatementNode(resultName, retVal);
-    resultNode.copyInformationFromForTree(node);
+    resultNode.useSourceInfoIfMissingFromForTree(node);
 
     node.addChildrenToBack(resultNode);
   }
@@ -405,7 +408,7 @@ class FunctionToBlockMutator {
     if (resultNode == null) {
       block.removeChild(ret);
     } else {
-      resultNode.copyInformationFromForTree(ret);
+      resultNode.useSourceInfoIfMissingFromForTree(ret);
       block.replaceChild(ret, resultNode);
     }
   }
@@ -491,10 +494,10 @@ class FunctionToBlockMutator {
       Node breakNode = IR.breakNode(IR.labelName(labelName));
 
       // Replace the node in parent, and reset current to the first new child.
-      breakNode.copyInformationFromForTree(current);
+      breakNode.useSourceInfoIfMissingFromForTree(current);
       parent.replaceChild(current, breakNode);
       if (resultNode != null) {
-        resultNode.copyInformationFromForTree(current);
+        resultNode.useSourceInfoIfMissingFromForTree(current);
         parent.addChildBefore(resultNode, breakNode);
       }
       current = breakNode;

@@ -16,10 +16,12 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.common.annotations.GwtIncompatible;
 import com.google.common.base.CaseFormat;
 import com.google.debugging.sourcemap.proto.Mapping.OriginalMapping;
 import com.google.javascript.jscomp.JsMessage.Builder;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.jscomp.parsing.parser.util.format.SimpleFormat;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -38,6 +40,7 @@ import javax.annotation.Nullable;
  *
  * @author anatol@google.com (Anatol Pomazau)
  */
+@GwtIncompatible("JsMessage, java.util.regex")
 public abstract class JsMessageVisitor extends AbstractPostOrderCallback
     implements CompilerPass {
 
@@ -77,7 +80,7 @@ public abstract class JsMessageVisitor extends AbstractPostOrderCallback
 
   static final DiagnosticType BAD_FALLBACK_SYNTAX =
       DiagnosticType.error("JSC_MSG_BAD_FALLBACK_SYNTAX",
-          String.format(
+          SimpleFormat.format(
               "Bad syntax. " +
               "Expected syntax: %s(MSG_1, MSG_2)",
               MSG_FALLBACK_FUNCTION_NAME));
@@ -184,7 +187,7 @@ public abstract class JsMessageVisitor extends AbstractPostOrderCallback
 
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverse(compiler, root, this);
+    NodeTraversal.traverseEs6(compiler, root, this);
 
     for (Node msgNode : googMsgNodes) {
       compiler.report(JSError.make(msgNode,
@@ -746,7 +749,7 @@ public abstract class JsMessageVisitor extends AbstractPostOrderCallback
       if (!phNames.contains(phName)) {
         throw new MalformedException(
             "Unrecognized message placeholder referenced: " + phName,
-            objLitNode);
+            node);
       }
     }
 
@@ -756,7 +759,7 @@ public abstract class JsMessageVisitor extends AbstractPostOrderCallback
       if (!usedPlaceholders.contains(phName)) {
         throw new MalformedException(
             "Unused message placeholder: " + phName,
-            objLitNode);
+            node);
       }
     }
   }

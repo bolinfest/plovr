@@ -72,20 +72,6 @@ public class SimpleErrorReporter implements ErrorReporter {
         errors.add(formatDetailedMessage(message, sourceName, line));
     }
 
-    /**
-     * Returns the list of errors, or {@code null} if there were none.
-     */
-    public List<String> errors() {
-        return errors;
-    }
-
-    /**
-     * Returns the list of warnings, or {@code null} if there were none.
-     */
-    public List<String> warnings() {
-        return warnings;
-    }
-
     private String formatDetailedMessage(
         String message, String sourceName, int lineNumber) {
       String details = message;
@@ -116,7 +102,7 @@ public class SimpleErrorReporter implements ErrorReporter {
 
     static String getMessage(String messageId, Object[] arguments) {
       final String defaultResource
-          = "rhino_ast.java.com.google.javascript.rhino.Messages";
+          = "com.google.javascript.rhino.Messages";
 
       Locale locale = Locale.getDefault();
 
@@ -125,7 +111,7 @@ public class SimpleErrorReporter implements ErrorReporter {
 
       String formatString;
       try {
-          formatString = rb.getString(messageId);
+        formatString = rb.getString(messageId);
       } catch (java.util.MissingResourceException mre) {
           throw new RuntimeException
               ("no message resource found for message property " + messageId);

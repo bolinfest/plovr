@@ -17,6 +17,7 @@ package com.google.javascript.jscomp;
 
 import com.google.javascript.jscomp.newtypes.DeclaredTypeRegistry;
 import com.google.javascript.jscomp.newtypes.JSType;
+import com.google.javascript.jscomp.newtypes.RawNominalType;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.jstype.FunctionType;
@@ -135,6 +136,14 @@ public interface CodingConvention extends Serializable {
   public SubclassRelationship getClassesDefinedByCall(Node callNode);
 
   /**
+   * Checks if the given method is a call to a class factory, such a factory returns a
+   * unique class.
+   *
+   * @param callNode A CALL node.
+   */
+  public boolean isClassFactoryCall(Node callNode);
+
+  /**
    * Returns true if passed a string referring to the superclass.  The string
    * will usually be from the string node at the right of a GETPROP, e.g.
    * this.superClass_.
@@ -213,8 +222,11 @@ public interface CodingConvention extends Serializable {
    * In many JS libraries, the function that adds a singleton getter to a class
    * adds properties to the class.
    */
-  public void applySingletonGetter(FunctionType functionType,
+  public void applySingletonGetterOld(FunctionType functionType,
       FunctionType getterType, ObjectType objectType);
+
+  public void applySingletonGetterNew(
+      RawNominalType rawType, JSType getInstanceType, JSType instanceType);
 
   /**
    * @return Whether the function is inlinable by convention.
