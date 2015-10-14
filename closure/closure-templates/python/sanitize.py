@@ -69,6 +69,18 @@ _NEWLINE_RE = re.compile('(\r\n|\r|\n)')
 # Regex for finding replacement tags.
 _REPLACEMENT_TAG_RE = re.compile(r'\[(\d+)\]')
 
+# Regex for finding patterns that could start a token which ends a
+# raw content block.
+_HTML_RAW_CONTENT_HAZARD_RE = re.compile(r'<\/|\]\]>')
+
+# Replacement strings for matches of _HTML_RAW_CONTENT_HAZARD_RE
+# that are semantically equivalent in CSS stylesheets.
+# See Sanitizers.java for a more detailed analysis.
+_HTML_RAW_CONTENT_HAZARD_REPLACEMENTS = {
+  '</': r'<\/',
+  ']]>': r']]\>'
+}
+
 
 #######################################
 # Soy public directives and functions #
@@ -79,7 +91,9 @@ def change_newline_to_br(value):
   result = _NEWLINE_RE.sub('<br>', str(value))
 
   if is_content_kind(value, CONTENT_KIND.HTML):
-    return SanitizedHtml(result, get_content_dir(value))
+    approval = IActuallyUnderstandSoyTypeSafetyAndHaveSecurityApproval(
+        'Persisting existing sanitization.')
+    return SanitizedHtml(result, get_content_dir(value), approval=approval)
 
   return result
 
@@ -91,8 +105,10 @@ def clean_html(value, safe_tags=None):
   if is_content_kind(value, CONTENT_KIND.HTML):
     return value
 
+  approval = IActuallyUnderstandSoyTypeSafetyAndHaveSecurityApproval(
+      'Escaped html is by nature sanitized.')
   return SanitizedHtml(_strip_html_tags(value, safe_tags),
-                       get_content_dir(value))
+                       get_content_dir(value), approval=approval)
 
 
 def escape_css_string(value):
@@ -103,8 +119,10 @@ def escape_html(value):
   if is_content_kind(value, CONTENT_KIND.HTML):
     return value
 
+  approval = IActuallyUnderstandSoyTypeSafetyAndHaveSecurityApproval(
+      'Escaped html is by nature sanitized.')
   return SanitizedHtml(generated_sanitize.escape_html_helper(value),
-                       get_content_dir(value))
+                       get_content_dir(value), approval=approval)
 
 
 def escape_html_attribute(value):
@@ -161,15 +179,12 @@ def escape_js_value(value):
 
 
 def escape_uri(value):
-  if is_content_kind(value, CONTENT_KIND.URI):
-    return normalize_uri(value)
-
   return generated_sanitize.escape_uri_helper(value)
 
 
 def filter_css_value(value):
   if is_content_kind(value, CONTENT_KIND.CSS):
-    return value.content
+    return _embed_css_into_html(value.content)
 
   if value is None:
     return ''
@@ -201,7 +216,10 @@ def filter_html_element_name(value):
 
 
 def filter_image_data_uri(value):
-  return SanitizedUri(generated_sanitize.filter_image_data_uri_helper(value))
+  approval = IActuallyUnderstandSoyTypeSafetyAndHaveSecurityApproval(
+      'Filtered URIs are by nature sanitized.')
+  return SanitizedUri(
+      generated_sanitize.filter_image_data_uri_helper(value), approval=approval)
 
 
 def filter_no_auto_escape(value):
@@ -216,6 +234,19 @@ def filter_normalize_uri(value):
     return normalize_uri(value)
 
   return generated_sanitize.filter_normalize_uri_helper(value)
+
+
+def filter_normalize_media_uri(value):
+  if is_content_kind(value, CONTENT_KIND.URI):
+    return normalize_uri(value)
+
+  return generated_sanitize.filter_normalize_media_uri_helper(value)
+
+
+def filter_trusted_resource_uri(value):
+  # TODO(shwetakarwa): This needs to be changed once all the legacy URLs are
+  # taken care of.
+  return value
 
 
 def normalize_html(value):
@@ -311,6 +342,24 @@ def _strip_html_tags(value, tag_whitelist=None):
   return html + final_close_tags
 
 
+def _embed_css_into_html(css):
+  """
+  Make sure that tag boundaries are not broken by Safe CSS when embedded in an
+  HTML <style> element.
+
+  Args:
+    css: Safe CSS content
+  Returns:
+    Embeddable safe CSS content
+  """
+  return _HTML_RAW_CONTENT_HAZARD_RE.sub(_defang_raw_content_hazard, css)
+
+
+def _defang_raw_content_hazard(match):
+  """Maps _HTML_RAW_CONTENT_HAZARD_RE matches to safe alternatives"""
+  return _HTML_RAW_CONTENT_HAZARD_REPLACEMENTS[match.group(0)]
+
+
 def _tag_sub_handler(tag_whitelist, tags, match):
   """Replace whitelisted tags with markers and update the tag list.
 
@@ -372,13 +421,23 @@ def _balance_tags(tags):
 #####################
 
 
+class IActuallyUnderstandSoyTypeSafetyAndHaveSecurityApproval:
+  justification = None
+
+  def __init__(self, justification=None):
+    if justification:
+      self.justification = justification
+
+
 class CONTENT_KIND:
-  HTML, JS, JS_STR_CHARS, URI, ATTRIBUTES, CSS, TEXT = range(1, 8)
+  (HTML, JS, JS_STR_CHARS, URI, TRUSTED_RESOURCE_URI, ATTRIBUTES, CSS,
+   TEXT) = range(1, 9)
 
   @staticmethod
   def decodeKind(i):
     i = i - 1;
-    return ['HTML', 'JS', 'JS_STR_CHARS', 'URI', 'ATTRIBUTES', 'CSS', 'TEXT'][i]
+    return ['HTML', 'JS', 'JS_STR_CHARS', 'URI', 'TRUSTED_RESOURCE_URI',
+            'ATTRIBUTES', 'CSS', 'TEXT'][i]
 
 
 class DIR:
@@ -390,11 +449,17 @@ class SanitizedContent(object):
 
   def __new__(cls, *args, **kwargs):
     if cls is SanitizedContent or not cls.content_kind:
-      raise TypeError('SanitizedContent cannot be instantiated directly. ' +
+      raise TypeError('SanitizedContent cannot be instantiated directly. '
                       'Instantiate a child class with a valid content_kind.')
-    return object.__new__(cls, *args, **kwargs)
+    return object.__new__(cls)
 
-  def __init__(self, content=None, content_dir=None):
+  def __init__(self, content=None, content_dir=None, approval=None):
+    if not isinstance(approval,
+                      IActuallyUnderstandSoyTypeSafetyAndHaveSecurityApproval):
+      raise TypeError('Caller does not have sanitization approval.')
+    elif not approval.justification or len(approval.justification) < 20:
+      raise TypeError('A justification of at least 20 characters must be'
+                      'provided with the approval.')
     self.content = content
     self.content_dir = content_dir
 
@@ -420,8 +485,8 @@ class SanitizedContent(object):
 class SanitizedCss(SanitizedContent):
   content_kind = CONTENT_KIND.CSS
 
-  def __init__(self, content=None):
-    super(SanitizedCss, self).__init__(content, DIR.LTR)
+  def __init__(self, content=None, approval=None):
+    super(SanitizedCss, self).__init__(content, DIR.LTR, approval)
 
 
 class SanitizedHtml(SanitizedContent):
@@ -431,15 +496,16 @@ class SanitizedHtml(SanitizedContent):
 class SanitizedHtmlAttribute(SanitizedContent):
   content_kind = CONTENT_KIND.ATTRIBUTES
 
-  def __init__(self, content=None):
-    super(SanitizedHtmlAttribute, self).__init__(content, DIR.LTR)
+  def __init__(self, content=None, approval=None):
+    super(SanitizedHtmlAttribute, self).__init__(
+        content, DIR.LTR, approval)
 
 
 class SanitizedJs(SanitizedContent):
   content_kind = CONTENT_KIND.JS
 
-  def __init__(self, content=None):
-    super(SanitizedJs, self).__init__(content, DIR.LTR)
+  def __init__(self, content=None, approval=None):
+    super(SanitizedJs, self).__init__(content, DIR.LTR, approval)
 
 
 class SanitizedJsStrChars(SanitizedContent):
@@ -449,12 +515,25 @@ class SanitizedJsStrChars(SanitizedContent):
 class SanitizedUri(SanitizedContent):
   content_kind = CONTENT_KIND.URI
 
-  def __init__(self, content=None):
-    super(SanitizedUri, self).__init__(content, DIR.LTR)
+  def __init__(self, content=None, approval=None):
+    super(SanitizedUri, self).__init__(content, DIR.LTR, approval)
+
+
+class SanitizedTrustedResourceUri(SanitizedContent):
+  content_kind = CONTENT_KIND.TRUSTED_RESOURCE_URI
+
+  def __init__(self, content=None, approval=None):
+    super(SanitizedTrustedResourceUri, self).__init__(content, DIR.LTR,
+                                                      approval)
 
 
 class UnsanitizedText(SanitizedContent):
   content_kind = CONTENT_KIND.TEXT
 
-  def __init__(self, content=None, content_dir=None):
-    super(UnsanitizedText, self).__init__(str(content), content_dir)
+  def __init__(self, content=None, content_dir=None, approval=None):
+    # approval is still in the api for consistency, but unsanitized text is
+    # always approved.
+    approval = IActuallyUnderstandSoyTypeSafetyAndHaveSecurityApproval(
+        'Unsanitized Text does not require approval.')
+    super(UnsanitizedText, self).__init__(str(content), content_dir,
+                                          approval=approval)

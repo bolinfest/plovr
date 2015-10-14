@@ -20,7 +20,9 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Sets;
 import com.google.template.soy.data.SanitizedContent;
+import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.data.SoyDict;
 import com.google.template.soy.data.SoyList;
 import com.google.template.soy.data.SoyMap;
@@ -46,11 +48,14 @@ import com.google.template.soy.types.primitive.SanitizedType.AttributesType;
 import com.google.template.soy.types.primitive.SanitizedType.CssType;
 import com.google.template.soy.types.primitive.SanitizedType.HtmlType;
 import com.google.template.soy.types.primitive.SanitizedType.JsType;
+import com.google.template.soy.types.primitive.SanitizedType.TrustedResourceUriType;
 import com.google.template.soy.types.primitive.SanitizedType.UriType;
 import com.google.template.soy.types.primitive.StringType;
 import com.google.template.soy.types.primitive.UnknownType;
 
 import junit.framework.TestCase;
+
+import java.util.Set;
 
 
 /**
@@ -71,6 +76,9 @@ public class SoyTypesTest extends TestCase {
       UnsafeSanitizedContentOrdainer.ordainAsSafe("css", SanitizedContent.ContentKind.CSS, null);
   private static final SanitizedContent URI_DATA =
       UnsafeSanitizedContentOrdainer.ordainAsSafe("uri", SanitizedContent.ContentKind.URI, null);
+  private static final SanitizedContent TRUSTED_RESOURCE_URI_DATA =
+      UnsafeSanitizedContentOrdainer.ordainAsSafe("trusted_resource_uri",
+          SanitizedContent.ContentKind.TRUSTED_RESOURCE_URI, null);
   private static final SanitizedContent JS_DATA =
       UnsafeSanitizedContentOrdainer.ordainAsSafe("js", SanitizedContent.ContentKind.JS, null);
   private static final SoyList LIST_DATA = SoyValueHelper.UNCUSTOMIZED_INSTANCE.newEasyList();
@@ -126,6 +134,8 @@ public class SoyTypesTest extends TestCase {
     assertThat(StringType.getInstance().isAssignableFrom(HtmlType.getInstance())).isTrue();
     assertThat(StringType.getInstance().isAssignableFrom(CssType.getInstance())).isTrue();
     assertThat(StringType.getInstance().isAssignableFrom(UriType.getInstance())).isTrue();
+    assertThat(StringType.getInstance().isAssignableFrom(
+        TrustedResourceUriType.getInstance())).isTrue();
     assertThat(StringType.getInstance().isAssignableFrom(AttributesType.getInstance())).isTrue();
     assertThat(StringType.getInstance().isAssignableFrom(JsType.getInstance())).isTrue();
 
@@ -140,6 +150,13 @@ public class SoyTypesTest extends TestCase {
     assertThat(UriType.getInstance().isAssignableFrom(UriType.getInstance())).isTrue();
     assertThat(UriType.getInstance().isAssignableFrom(IntType.getInstance())).isFalse();
     assertThat(UriType.getInstance().isAssignableFrom(HtmlType.getInstance())).isFalse();
+
+    assertThat(TrustedResourceUriType.getInstance().isAssignableFrom(
+        TrustedResourceUriType.getInstance())).isTrue();
+    assertThat(TrustedResourceUriType.getInstance().isAssignableFrom(
+        IntType.getInstance())).isFalse();
+    assertThat(TrustedResourceUriType.getInstance().isAssignableFrom(
+        HtmlType.getInstance())).isFalse();
 
     assertThat(AttributesType.getInstance().isAssignableFrom(AttributesType.getInstance()))
         .isTrue();
@@ -319,7 +336,7 @@ public class SoyTypesTest extends TestCase {
   public void testAnyTypeIsInstance() {
     assertIsInstance(AnyType.getInstance(),
         NULL_DATA, BOOLEAN_DATA, STRING_DATA, INTEGER_DATA, FLOAT_DATA,
-        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, JS_DATA,
+        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, TRUSTED_RESOURCE_URI_DATA, JS_DATA,
         LIST_DATA, MAP_DATA, DICT_DATA);
   }
 
@@ -327,7 +344,7 @@ public class SoyTypesTest extends TestCase {
   public void testUnknownTypeIsInstance() {
     assertIsInstance(UnknownType.getInstance(),
         NULL_DATA, BOOLEAN_DATA, STRING_DATA, INTEGER_DATA, FLOAT_DATA,
-        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, JS_DATA,
+        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, TRUSTED_RESOURCE_URI_DATA, JS_DATA,
         LIST_DATA, MAP_DATA, DICT_DATA);
   }
 
@@ -336,7 +353,7 @@ public class SoyTypesTest extends TestCase {
     assertIsInstance(NullType.getInstance(), NULL_DATA);
     assertIsNotInstance(NullType.getInstance(),
         BOOLEAN_DATA, STRING_DATA, INTEGER_DATA, FLOAT_DATA,
-        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, JS_DATA,
+        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, TRUSTED_RESOURCE_URI_DATA, JS_DATA,
         LIST_DATA, MAP_DATA, DICT_DATA);
   }
 
@@ -345,14 +362,15 @@ public class SoyTypesTest extends TestCase {
     assertIsInstance(BoolType.getInstance(), BOOLEAN_DATA);
     assertIsNotInstance(BoolType.getInstance(),
         NULL_DATA, STRING_DATA, INTEGER_DATA, FLOAT_DATA,
-        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, JS_DATA,
+        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, TRUSTED_RESOURCE_URI_DATA, JS_DATA,
         LIST_DATA, MAP_DATA, DICT_DATA);
   }
 
 
   public void testStringTypeIsInstance() {
     assertIsInstance(StringType.getInstance(),
-        STRING_DATA, HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, JS_DATA);
+        STRING_DATA, HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, TRUSTED_RESOURCE_URI_DATA,
+        JS_DATA);
     assertIsNotInstance(StringType.getInstance(),
         NULL_DATA, BOOLEAN_DATA, INTEGER_DATA,
         LIST_DATA, MAP_DATA, DICT_DATA);
@@ -363,7 +381,7 @@ public class SoyTypesTest extends TestCase {
     assertIsInstance(IntType.getInstance(), INTEGER_DATA);
     assertIsNotInstance(IntType.getInstance(),
         NULL_DATA, BOOLEAN_DATA, STRING_DATA, FLOAT_DATA,
-        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, JS_DATA,
+        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, TRUSTED_RESOURCE_URI_DATA, JS_DATA,
         LIST_DATA, MAP_DATA, DICT_DATA);
   }
 
@@ -372,7 +390,7 @@ public class SoyTypesTest extends TestCase {
     assertIsInstance(FloatType.getInstance(), FLOAT_DATA);
     assertIsNotInstance(FloatType.getInstance(),
         NULL_DATA, BOOLEAN_DATA, STRING_DATA, INTEGER_DATA,
-        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, JS_DATA,
+        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, TRUSTED_RESOURCE_URI_DATA, JS_DATA,
         LIST_DATA, MAP_DATA, DICT_DATA);
   }
 
@@ -381,41 +399,60 @@ public class SoyTypesTest extends TestCase {
     assertIsInstance(SanitizedType.HtmlType.getInstance(), HTML_DATA);
     assertIsNotInstance(SanitizedType.HtmlType.getInstance(),
         NULL_DATA, BOOLEAN_DATA, STRING_DATA, INTEGER_DATA, FLOAT_DATA,
-        ATTRIBUTES_DATA, CSS_DATA, URI_DATA, JS_DATA,
+        ATTRIBUTES_DATA, CSS_DATA, URI_DATA, TRUSTED_RESOURCE_URI_DATA, JS_DATA,
         LIST_DATA, MAP_DATA, DICT_DATA);
 
     assertIsInstance(SanitizedType.AttributesType.getInstance(), ATTRIBUTES_DATA);
     assertIsNotInstance(SanitizedType.AttributesType.getInstance(),
         NULL_DATA, BOOLEAN_DATA, STRING_DATA, INTEGER_DATA, FLOAT_DATA,
-        HTML_DATA, CSS_DATA, URI_DATA, JS_DATA,
+        HTML_DATA, CSS_DATA, URI_DATA, TRUSTED_RESOURCE_URI_DATA, JS_DATA,
         LIST_DATA, MAP_DATA, DICT_DATA);
 
     assertIsInstance(SanitizedType.CssType.getInstance(), CSS_DATA);
     assertIsNotInstance(SanitizedType.CssType.getInstance(),
         NULL_DATA, BOOLEAN_DATA, STRING_DATA, INTEGER_DATA, FLOAT_DATA,
-        HTML_DATA, ATTRIBUTES_DATA, URI_DATA, JS_DATA,
+        HTML_DATA, ATTRIBUTES_DATA, URI_DATA, TRUSTED_RESOURCE_URI_DATA, JS_DATA,
         LIST_DATA, MAP_DATA, DICT_DATA);
 
     assertIsInstance(SanitizedType.UriType.getInstance(), URI_DATA);
     assertIsNotInstance(SanitizedType.UriType.getInstance(),
         NULL_DATA, BOOLEAN_DATA, STRING_DATA, INTEGER_DATA, FLOAT_DATA,
-        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, JS_DATA,
+        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, TRUSTED_RESOURCE_URI_DATA, JS_DATA,
+        LIST_DATA, MAP_DATA, DICT_DATA);
+
+    assertIsInstance(SanitizedType.TrustedResourceUriType.getInstance(), TRUSTED_RESOURCE_URI_DATA);
+    assertIsNotInstance(SanitizedType.TrustedResourceUriType.getInstance(),
+        NULL_DATA, BOOLEAN_DATA, STRING_DATA, INTEGER_DATA, FLOAT_DATA,
+        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, JS_DATA,
         LIST_DATA, MAP_DATA, DICT_DATA);
 
     assertIsInstance(SanitizedType.JsType.getInstance(), JS_DATA);
     assertIsNotInstance(SanitizedType.JsType.getInstance(),
         NULL_DATA, BOOLEAN_DATA, STRING_DATA, INTEGER_DATA, FLOAT_DATA,
-        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA,
+        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, TRUSTED_RESOURCE_URI_DATA,
         LIST_DATA, MAP_DATA, DICT_DATA);
   }
 
+  public void testAllContentKindsCovered() {
+    Set<SoyType> types = Sets.newIdentityHashSet();
+    for (ContentKind kind : ContentKind.values()) {
+      SoyType typeForContentKind = SanitizedType.getTypeForContentKind(kind);
+      if (kind == ContentKind.TEXT) {
+        assertEquals(StringType.getInstance(), typeForContentKind);
+      } else {
+        assertEquals(kind, ((SanitizedType) typeForContentKind).getContentKind());
+      }
+      // ensure there is a unique SoyType for every ContentKind
+      assertTrue(types.add(typeForContentKind));
+    }
+  }
 
   public void testListTypeIsInstance() {
     ListType listOfString = ListType.of(StringType.getInstance());
     assertIsInstance(listOfString, LIST_DATA);
     assertIsNotInstance(listOfString,
         NULL_DATA, BOOLEAN_DATA, STRING_DATA, INTEGER_DATA, FLOAT_DATA,
-        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, JS_DATA,
+        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, TRUSTED_RESOURCE_URI_DATA, JS_DATA,
         MAP_DATA, DICT_DATA);
   }
 
@@ -425,7 +462,7 @@ public class SoyTypesTest extends TestCase {
     assertIsInstance(mapOfStringToAny, MAP_DATA, LIST_DATA);
     assertIsNotInstance(mapOfStringToAny,
         NULL_DATA, BOOLEAN_DATA, STRING_DATA, INTEGER_DATA, FLOAT_DATA,
-        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, JS_DATA);
+        HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, TRUSTED_RESOURCE_URI_DATA, JS_DATA);
   }
 
 
@@ -441,7 +478,8 @@ public class SoyTypesTest extends TestCase {
   public void testUnionTypeIsInstance() {
     SoyType utype = UnionType.of(IntType.getInstance(), StringType.getInstance());
     assertIsInstance(utype,
-        INTEGER_DATA, STRING_DATA, HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA, JS_DATA);
+        INTEGER_DATA, STRING_DATA, HTML_DATA, ATTRIBUTES_DATA, CSS_DATA, URI_DATA,
+        TRUSTED_RESOURCE_URI_DATA, JS_DATA);
     assertIsNotInstance(utype,
         NULL_DATA, BOOLEAN_DATA, FLOAT_DATA,
         LIST_DATA, MAP_DATA, DICT_DATA);

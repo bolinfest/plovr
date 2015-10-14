@@ -19,8 +19,7 @@ package com.google.template.soy.types.primitive;
 import com.google.template.soy.data.SanitizedContent;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.data.SoyValue;
-
-import javax.annotation.Nullable;
+import com.google.template.soy.types.SoyType;
 
 
 /**
@@ -31,11 +30,12 @@ import javax.annotation.Nullable;
  */
 public abstract class SanitizedType extends PrimitiveType {
 
+  /** Returns the content kind for this type.  Guaranteed to be non-null and also not TEXT. */
   public abstract ContentKind getContentKind();
 
   @Override public boolean isInstance(SoyValue value) {
-    return value instanceof SanitizedContent &&
-        ((SanitizedContent) value).getContentKind() == getContentKind();
+    return value instanceof SanitizedContent
+        && ((SanitizedContent) value).getContentKind() == getContentKind();
   }
 
   @Override public Class<? extends SoyValue> javaType() {
@@ -46,11 +46,13 @@ public abstract class SanitizedType extends PrimitiveType {
     return getContentKind().toString().toLowerCase();
   }
 
-  /** Given a content kind, return the corresponding soy type. */
-  public static SanitizedType getTypeForContentKind(@Nullable ContentKind contentKind) {
-    if (contentKind == null) {
-      return null;
-    }
+  /**
+   * Given a content kind, return the corresponding soy type.
+   *
+   * <p>For {@link ContentKind#TEXT} this returns {@link StringType}, for all other types it is a
+   * {@link SanitizedType}.
+   */
+  public static SoyType getTypeForContentKind(ContentKind contentKind) {
     switch (contentKind) {
       case ATTRIBUTES:
         return AttributesType.getInstance();
@@ -67,8 +69,14 @@ public abstract class SanitizedType extends PrimitiveType {
       case URI:
         return UriType.getInstance();
 
+      case TRUSTED_RESOURCE_URI:
+        return TrustedResourceUriType.getInstance();
+
+      case TEXT:
+        return StringType.getInstance();
+
       default:
-        return null;
+        throw new AssertionError("unexpected content kind " + contentKind);
     }
   }
 
@@ -137,6 +145,28 @@ public abstract class SanitizedType extends PrimitiveType {
 
     /** Return the single instance of this type. */
     public static UriType getInstance() {
+      return INSTANCE;
+    }
+  }
+
+  /** Type produced by templates whose kind is "trustedResourceUri". */
+  public static final class TrustedResourceUriType extends SanitizedType {
+
+    private static final TrustedResourceUriType INSTANCE = new TrustedResourceUriType();
+
+    // Not constructible - use getInstance().
+    private TrustedResourceUriType() {}
+
+    @Override public Kind getKind() {
+      return Kind.TRUSTED_RESOURCE_URI;
+    }
+
+    @Override public ContentKind getContentKind() {
+      return ContentKind.TRUSTED_RESOURCE_URI;
+    }
+
+    /** Return the single instance of this type. */
+    public static TrustedResourceUriType getInstance() {
       return INSTANCE;
     }
   }

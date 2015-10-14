@@ -9,12 +9,12 @@
  * @param cow Don't have one.
  * @param moose The moose to print info about.
  */
-{template name=".mooseTemplate"}
+{template .mooseTemplate}
 
   {foreach $moo in $moose}
     {if isFirst($moo)}
-      {call name=".mooHelper_"}
-        {param key="moo" value="$moo" /}
+      {call .mooHelper_}
+        {param moo : $moo /}
       {/call}
     {else}
       {call .mooHelper_}
@@ -23,7 +23,7 @@
     {/if}
   {/foreach}
   {msg desc="Tells what a moose says."}
-    Moose <i>also</i> says {$moose.0}.  // oops, "forgot" the noAutoescape directive
+    Moose <i>also</i> says {$moose[0]}.  // oops, "forgot" the noAutoescape directive
   {/msg}{\n}
 
   {if $cow > length($moose)}

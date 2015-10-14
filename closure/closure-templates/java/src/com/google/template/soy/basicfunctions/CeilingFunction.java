@@ -38,7 +38,7 @@ import javax.inject.Singleton;
  */
 @Singleton
 @SoyPureFunction
-class CeilingFunction implements SoyJavaFunction, SoyJsSrcFunction, SoyPySrcFunction {
+public final class CeilingFunction implements SoyJavaFunction, SoyJsSrcFunction, SoyPySrcFunction {
 
 
   @Inject
@@ -54,10 +54,16 @@ class CeilingFunction implements SoyJavaFunction, SoyJsSrcFunction, SoyPySrcFunc
   }
 
   @Override public SoyValue computeForJava(List<SoyValue> args) {
-    SoyValue arg = args.get(0);
+    return ceil(args.get(0));
+  }
 
+  /**
+   * Returns the smallest (closest to negative infinity) integer value that is greater than or equal
+   * to the argument.
+   */
+  public static IntegerData ceil(SoyValue arg) {
     if (arg instanceof IntegerData) {
-      return arg;
+      return (IntegerData) arg;
     } else {
       return IntegerData.forValue((int) Math.ceil(arg.floatValue()));
     }
@@ -72,6 +78,6 @@ class CeilingFunction implements SoyJavaFunction, SoyJsSrcFunction, SoyPySrcFunc
   @Override public PyExpr computeForPySrc(List<PyExpr> args) {
     PyExpr arg = args.get(0);
 
-    return new PyExpr("math.ceil(" + arg.getText() + ")", Integer.MAX_VALUE);
+    return new PyExpr("int(math.ceil(" + arg.getText() + "))", Integer.MAX_VALUE);
   }
 }

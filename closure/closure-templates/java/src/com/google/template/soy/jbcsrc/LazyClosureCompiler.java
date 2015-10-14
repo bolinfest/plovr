@@ -17,7 +17,10 @@
 package com.google.template.soy.jbcsrc;
 
 import static com.google.common.base.Predicates.notNull;
+import static com.google.template.soy.jbcsrc.BytecodeUtils.ADVISING_APPENDABLE_TYPE;
+import static com.google.template.soy.jbcsrc.BytecodeUtils.CONTENT_KIND_TYPE;
 import static com.google.template.soy.jbcsrc.BytecodeUtils.NULLARY_INIT;
+import static com.google.template.soy.jbcsrc.BytecodeUtils.constant;
 import static com.google.template.soy.jbcsrc.FieldRef.createField;
 import static com.google.template.soy.jbcsrc.LocalVariable.createLocal;
 import static com.google.template.soy.jbcsrc.LocalVariable.createThisVar;
@@ -31,9 +34,6 @@ import static com.google.template.soy.soytree.SoytreeUtils.isDescendantOf;
 import static java.util.Arrays.asList;
 
 import com.google.auto.value.AutoValue;
-import com.google.common.base.CaseFormat;
-import com.google.common.base.Converter;
-import com.google.common.base.Enums;
 import com.google.common.base.Optional;
 import com.google.common.collect.Iterables;
 import com.google.template.soy.data.SanitizedContent;
@@ -41,29 +41,27 @@ import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.data.SoyAbstractCachingValueProvider;
 import com.google.template.soy.data.internal.RenderableThunk;
 import com.google.template.soy.data.restricted.StringData;
-import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.ExprNode;
+import com.google.template.soy.jbcsrc.SoyNodeCompiler.CompiledMethodBody;
 import com.google.template.soy.jbcsrc.api.AdvisingAppendable;
-import com.google.template.soy.jbcsrc.api.RenderContext;
 import com.google.template.soy.jbcsrc.runtime.DetachableContentProvider;
 import com.google.template.soy.jbcsrc.runtime.DetachableSoyValueProvider;
+import com.google.template.soy.jbcsrc.shared.RenderContext;
 import com.google.template.soy.soytree.CallParamContentNode;
 import com.google.template.soy.soytree.CallParamValueNode;
 import com.google.template.soy.soytree.LetContentNode;
 import com.google.template.soy.soytree.LetValueNode;
+import com.google.template.soy.soytree.RawTextNode;
 import com.google.template.soy.soytree.SoyNode;
-import com.google.template.soy.soytree.SoyNode.Kind;
 import com.google.template.soy.soytree.SoyNode.RenderUnitNode;
+import com.google.template.soy.soytree.SoyNode.StandaloneNode;
 import com.google.template.soy.soytree.defn.LocalVar;
 import com.google.template.soy.soytree.defn.TemplateParam;
 
-import org.objectweb.asm.ClassVisitor;
-import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.Method;
-import org.objectweb.asm.util.CheckClassAdapter;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -128,6 +126,10 @@ final class LazyClosureCompiler {
   private static final Method DETACHABLE_CONTENT_PROVIDER_INIT;
   private static final FieldRef RESOLVED_VALUE = 
       FieldRef.instanceFieldReference(DetachableSoyValueProvider.class, "resolvedValue");
+  private static final TypeInfo DETACHABLE_CONTENT_PROVIDER_TYPE =
+      TypeInfo.create(DetachableContentProvider.class);
+  private static final TypeInfo DETACHABLE_VALUE_PROVIDER_TYPE =
+      TypeInfo.create(DetachableSoyValueProvider.class); 
 
   static {
     try {
@@ -142,71 +144,98 @@ final class LazyClosureCompiler {
     }
   }
 
-  private static final Converter<Kind, String> KIND_CLASS_FROMAT = 
-      Enums.stringConverter(Kind.class)
-          .reverse()
-          .andThen(CaseFormat.UPPER_UNDERSCORE.converterTo(CaseFormat.UPPER_CAMEL));
-  
   private final CompiledTemplateRegistry registry;
   private final InnerClasses innerClasses;
   private final VariableLookup parentVariables;
-  private final ErrorReporter errorReporter;
   private final ExpressionToSoyValueProviderCompiler expressionToSoyValueProviderCompiler;
 
   LazyClosureCompiler(
       CompiledTemplateRegistry registry, 
       InnerClasses innerClasses,
       VariableLookup parentVariables, 
-      ErrorReporter errorReporter,
       ExpressionToSoyValueProviderCompiler expressionToSoyValueProviderCompiler) {
     this.registry = registry;
     this.innerClasses = innerClasses;
     this.parentVariables = parentVariables;
-    this.errorReporter = errorReporter;
     this.expressionToSoyValueProviderCompiler = expressionToSoyValueProviderCompiler;
   }
   
-  Expression compileLazyExpression(SoyNode declaringNode, String varName, ExprNode exprNode) {
+  Expression compileLazyExpression(String namePrefix, SoyNode declaringNode, String varName,
+      ExprNode exprNode) {
     Optional<Expression> asSoyValueProvider =
         expressionToSoyValueProviderCompiler.compileAvoidingDetaches(exprNode);
     if (asSoyValueProvider.isPresent()) {
       return asSoyValueProvider.get();
     }
-    ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
-    ClassVisitor visitor = new CheckClassAdapter(writer, false);
     TypeInfo type = innerClasses.registerInnerClassWithGeneratedName(
-        getProposedName(declaringNode, varName),
+        getProposedName(namePrefix, varName),
         LAZY_CLOSURE_ACCESS);
-    Expression expr = 
-        new CompilationUnit(visitor, type, DetachableSoyValueProvider.class, declaringNode)
+    SoyClassWriter writer =
+        SoyClassWriter.builder(type)
+            .setAccess(LAZY_CLOSURE_ACCESS)
+            .extending(DETACHABLE_VALUE_PROVIDER_TYPE)
+            .sourceFileName(declaringNode.getSourceLocation().getFileName())
+            .build();
+    Expression expr =
+        new CompilationUnit(writer, type, DETACHABLE_VALUE_PROVIDER_TYPE, declaringNode)
             .compileExpression(exprNode);
-    
-    innerClasses.registerAsInnerClass(visitor, type);
-    innerClasses.add(ClassData.create(type, writer.toByteArray()));
-    visitor.visitEnd();
+
+    innerClasses.registerAsInnerClass(writer, type);
+    writer.visitEnd();
+    innerClasses.add(writer.toClassData());
     return expr;
   }
 
-  Expression compileLazyContent(RenderUnitNode renderUnit, String varName) {
-    // TODO(lukes): consider adding an optimization for renderUnits that only contain RawTextNodes
-    // they do exist!
-    ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
-    ClassVisitor visitor = new CheckClassAdapter(writer, false);
+  Expression compileLazyContent(String namePrefix, RenderUnitNode renderUnit, String varName) {
+    Optional<Expression> asRawText = asRawTextOnly(renderUnit);
+    if (asRawText.isPresent()) {
+      return asRawText.get();
+    }
     TypeInfo type = innerClasses.registerInnerClassWithGeneratedName(
-        getProposedName(renderUnit, varName),
+        getProposedName(namePrefix, varName),
         LAZY_CLOSURE_ACCESS);
-    Expression expr = 
-        new CompilationUnit(visitor, type, DetachableContentProvider.class, renderUnit)
+    SoyClassWriter writer =
+        SoyClassWriter.builder(type)
+            .setAccess(LAZY_CLOSURE_ACCESS)
+            .extending(DETACHABLE_CONTENT_PROVIDER_TYPE)
+            .sourceFileName(renderUnit.getSourceLocation().getFileName())
+            .build();
+    Expression expr =
+        new CompilationUnit(writer, type, DETACHABLE_CONTENT_PROVIDER_TYPE, renderUnit)
             .compileRenderable(renderUnit);
-    
-    innerClasses.registerAsInnerClass(visitor, type);
-    innerClasses.add(ClassData.create(type, writer.toByteArray()));
-    visitor.visitEnd();
+
+    innerClasses.registerAsInnerClass(writer, type);
+    writer.visitEnd();
+    innerClasses.add(writer.toClassData());
     return expr;
   }
 
-  private String getProposedName(SoyNode declaringNode, String varName) {
-    return KIND_CLASS_FROMAT.convert(declaringNode.getKind()) + "_" + varName;
+  private Optional<Expression> asRawTextOnly(RenderUnitNode renderUnit) {
+    StringBuilder builder = null;
+    for (StandaloneNode child : renderUnit.getChildren()) {
+      if (child instanceof RawTextNode) {
+        if (builder == null) { 
+          builder = new StringBuilder();
+        }
+        builder.append(((RawTextNode) child).getRawText());
+      } else {
+        return Optional.absent();
+      }
+    }
+    // TODO(lukes): ideally this would be a static final StringData field rather than reboxing each
+    // time, but we don't (yet) have a good mechanism for that.
+    ContentKind kind = renderUnit.getContentKind();
+    Expression constant = constant(builder == null ? "" : builder.toString());
+    if (kind == null) {
+      return Optional.<Expression>of(MethodRef.STRING_DATA_FOR_VALUE.invoke(constant));
+    } else {
+      return Optional.<Expression>of(
+          MethodRef.ORDAIN_AS_SAFE.invoke(constant, FieldRef.enumReference(kind).accessor()));
+    }
+  }
+
+  private String getProposedName(String prefix, String varName) {
+    return prefix + "_" + varName;
   }
 
   /**
@@ -217,19 +246,13 @@ final class LazyClosureCompiler {
     final TypeInfo type;
     final TypeInfo baseClass;
     final SoyNode node;
-    final ClassVisitor visitor;
+    final SoyClassWriter writer;
 
-    CompilationUnit(ClassVisitor visitor, TypeInfo type, Class<?> baseClass, SoyNode node) {
-      this.visitor = visitor;
+    CompilationUnit(SoyClassWriter writer, TypeInfo type, TypeInfo baseClass, SoyNode node) {
+      this.writer = writer;
       this.type = type;
-      this.baseClass = TypeInfo.create(baseClass);
+      this.baseClass = baseClass;
       this.node = node;
-      visitor.visit(Opcodes.V1_7, 
-          LAZY_CLOSURE_ACCESS,
-          type.internalName(), 
-          null, // not a generic type
-          this.baseClass.internalName(), // superclass
-          new String[] {});
     }
 
     Expression compileExpression(ExprNode exprNode) {
@@ -239,11 +262,13 @@ final class LazyClosureCompiler {
       VariableSet variableSet = new VariableSet(fieldNames, type, thisVar, DO_RESOLVE);
       LazyClosureVariableLookup lookup = 
           new LazyClosureVariableLookup(this, parentVariables, variableSet, thisVar);
-      SoyExpression expression = 
-          ExpressionCompiler.createBasicCompiler(lookup, errorReporter)
-              .compile(exprNode)
-              .box();
-      final Statement storeExpr = RESOLVED_VALUE.putInstanceField(thisVar, expression);
+      SoyExpression compile =
+          ExpressionCompiler.createBasicCompiler(lookup).compile(exprNode);
+      SoyExpression expression = compile.box();
+      final Statement storeExpr =
+          RESOLVED_VALUE
+              .putInstanceField(thisVar, expression)
+              .withSourceLocation(exprNode.getSourceLocation());
       final Statement returnDone = Statement.returnExpression(RENDER_RESULT_DONE.invoke());
       Statement doResolveImpl = new Statement() {
         @Override void doGen(CodeBuilder adapter) {
@@ -253,6 +278,7 @@ final class LazyClosureCompiler {
           adapter.mark(end);
         }
       };
+      Statement fieldInitializers = variableSet.defineFields(writer);
       Expression constructExpr = generateConstructor(
           new Statement() {
             @Override void doGen(CodeBuilder adapter) {
@@ -260,30 +286,32 @@ final class LazyClosureCompiler {
               adapter.invokeConstructor(baseClass.type(), NULLARY_INIT);
             }
           }, 
+          fieldInitializers,
           lookup.getCapturedFields());
 
-      doResolveImpl.writeMethod(Opcodes.ACC_PROTECTED, DO_RESOLVE, visitor);
-      variableSet.defineFields(visitor);
+      doResolveImpl.writeMethod(Opcodes.ACC_PROTECTED, DO_RESOLVE, writer);
       return constructExpr;
     }
 
     Expression compileRenderable(RenderUnitNode renderUnit) {
       FieldRef stateField = createField(type, STATE_FIELD, Type.INT_TYPE);
-      stateField.defineField(visitor);
+      stateField.defineField(writer);
       fieldNames.claimName(STATE_FIELD);
 
       final Label start = new Label();
       final Label end = new Label();
       final LocalVariable thisVar = createThisVar(type, start, end);
-      final LocalVariable appendableVar = 
-          createLocal("appendable", 1, Type.getType(AdvisingAppendable.class), start, end);
+      final LocalVariable appendableVar =
+          createLocal("appendable", 1, ADVISING_APPENDABLE_TYPE, start, end).asNonNullable();
 
       final VariableSet variableSet = new VariableSet(fieldNames, type, thisVar, DO_RENDER);
       LazyClosureVariableLookup lookup = 
           new LazyClosureVariableLookup(this, parentVariables, variableSet, thisVar);
       SoyNodeCompiler soyNodeCompiler = SoyNodeCompiler.create(registry, innerClasses, stateField,
-          thisVar, appendableVar, variableSet, lookup, errorReporter);
-      final Statement nodeBody = soyNodeCompiler.compileChildren(renderUnit);
+          thisVar, AppendableExpression.forLocal(appendableVar), variableSet, lookup);
+      CompiledMethodBody compileChildren = soyNodeCompiler.compileChildren(renderUnit);
+      writer.setNumDetachStates(compileChildren.numberOfDetachStates());
+      final Statement nodeBody = compileChildren.body();
       final Statement returnDone = returnExpression(MethodRef.RENDER_RESULT_DONE.invoke());
       Statement fullMethodBody = new Statement() {
         @Override void doGen(CodeBuilder adapter) {
@@ -297,11 +325,12 @@ final class LazyClosureCompiler {
           variableSet.generateTableEntries(adapter);
         }
       };
-
-      final Expression contentKind = 
-          renderUnit.getContentKind() == null 
-              ? BytecodeUtils.constantNull(ContentKind.class) 
-              : FieldRef.enumReference(renderUnit.getContentKind()).accessor();
+      ContentKind kind = renderUnit.getContentKind();
+      final Expression contentKind =
+          (kind == null)
+              ? BytecodeUtils.constantNull(CONTENT_KIND_TYPE)
+              : FieldRef.enumReference(kind).accessor();
+      Statement fieldInitializers = variableSet.defineFields(writer);
       Statement superClassContstructor = new Statement() {
         @Override void doGen(CodeBuilder adapter) {
           adapter.loadThis();
@@ -310,10 +339,11 @@ final class LazyClosureCompiler {
         }
       };
       Expression constructExpr = 
-          generateConstructor(superClassContstructor, lookup.getCapturedFields());
+          generateConstructor(superClassContstructor, 
+              fieldInitializers, 
+              lookup.getCapturedFields());
 
-      fullMethodBody.writeMethod(Opcodes.ACC_PROTECTED, DO_RENDER, visitor);
-      variableSet.defineFields(visitor);
+      fullMethodBody.writeMethod(Opcodes.ACC_PROTECTED, DO_RENDER, writer);
       return constructExpr;
     }
 
@@ -324,6 +354,7 @@ final class LazyClosureCompiler {
      * <p>This constructor is called by the generate factory classes.
      */
     Expression generateConstructor(final Statement superClassConstructorInvocation, 
+        final Statement fieldInitializers,
         Iterable<ParentCapture> captures) {
       final Label start = new Label();
       final Label end = new Label();
@@ -335,7 +366,7 @@ final class LazyClosureCompiler {
       int index = 1;  // start at 1 since 'this' occupied slot 0
       for (ParentCapture capture : captures) {
         FieldRef field = capture.field();
-        field.defineField(visitor);
+        field.defineField(writer);
         LocalVariable var = createLocal(field.name(), index, field.type(), start, end);
         assignments.add(field.putInstanceField(thisVar, var));
         argExpressions.add(capture.parentExpression());
@@ -345,24 +376,27 @@ final class LazyClosureCompiler {
       }
 
       Statement constructorBody = new Statement() {
-        @Override void doGen(CodeBuilder ga) {
-          ga.mark(start);
+        @Override void doGen(CodeBuilder cb) {
+          cb.mark(start);
           // call super()
-          superClassConstructorInvocation.gen(ga);
+          superClassConstructorInvocation.gen(cb);
+          // init fields
+          fieldInitializers.gen(cb);
+          // assign params to fields
           for (Statement assignment : assignments) {
-            assignment.gen(ga);
+            assignment.gen(cb);
           }
-          ga.returnValue();
-          ga.mark(end);
-          thisVar.tableEntry(ga);
+          cb.returnValue();
+          cb.mark(end);
+          thisVar.tableEntry(cb);
           for (LocalVariable local : params) {
-            local.tableEntry(ga);
+            local.tableEntry(cb);
           }
         }
       };
 
       ConstructorRef constructor = ConstructorRef.create(type, paramTypes);
-      constructorBody.writeMethod(Opcodes.ACC_PUBLIC, constructor.method(), visitor);
+      constructorBody.writeMethod(Opcodes.ACC_PUBLIC, constructor.method(), writer);
       return constructor.construct(argExpressions);
     }
   }
@@ -377,9 +411,11 @@ final class LazyClosureCompiler {
    */
   @AutoValue abstract static class ParentCapture {
     static ParentCapture create(TypeInfo owner, String name, Expression parentExpression) {
-      return new AutoValue_LazyClosureCompiler_ParentCapture(
-          FieldRef.createFinalField(owner, name, parentExpression.resultType()),
-          parentExpression);
+      FieldRef captureField = FieldRef.createFinalField(owner, name, parentExpression.resultType());
+      if (parentExpression.isNonNullable()) {
+        captureField = captureField.asNonNull();
+      }
+      return new AutoValue_LazyClosureCompiler_ParentCapture(captureField, parentExpression);
     }
 
     /** The field in the closure that stores the captured value. */

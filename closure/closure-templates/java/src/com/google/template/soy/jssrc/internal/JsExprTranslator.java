@@ -17,6 +17,7 @@
 package com.google.template.soy.jssrc.internal;
 
 import com.google.common.base.Preconditions;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
 import com.google.template.soy.exprtree.ExprNode;
@@ -25,7 +26,8 @@ import com.google.template.soy.exprtree.FunctionNode;
 import com.google.template.soy.jssrc.internal.TranslateToJsExprVisitor.TranslateToJsExprVisitorFactory;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.SoyJsSrcFunction;
-import com.google.template.soy.shared.internal.NonpluginFunction;
+import com.google.template.soy.shared.internal.BuiltinFunction;
+import com.google.template.soy.shared.restricted.SoyFunction;
 
 import java.util.Deque;
 import java.util.Map;
@@ -37,11 +39,7 @@ import javax.inject.Inject;
  * Translator of Soy expressions to their equivalent JS expressions.
  *
  */
-class JsExprTranslator {
-
-
-  /** Map of all SoyJsSrcFunctions (name to function). */
-  private final Map<String, SoyJsSrcFunction> soyJsSrcFunctionsMap;
+public final class JsExprTranslator {
 
   /** Factory for creating an instance of TranslateToJsExprVisitor. */
   private final TranslateToJsExprVisitorFactory translateToJsExprVisitorFactory;
@@ -49,16 +47,13 @@ class JsExprTranslator {
   private final ErrorReporter errorReporter;
 
   /**
-   * @param soyJsSrcFunctionsMap Map of all SoyJsSrcFunctions (name to function).
    * @param translateToJsExprVisitorFactory Factory for creating an instance of
    *     TranslateToJsExprVisitor.
    */
   @Inject
   JsExprTranslator(
-      Map<String, SoyJsSrcFunction> soyJsSrcFunctionsMap,
       TranslateToJsExprVisitorFactory translateToJsExprVisitorFactory,
       ErrorReporter errorReporter) {
-    this.soyJsSrcFunctionsMap = soyJsSrcFunctionsMap;
     this.translateToJsExprVisitorFactory = translateToJsExprVisitorFactory;
     this.errorReporter = errorReporter;
   }
@@ -82,34 +77,30 @@ class JsExprTranslator {
 
     if (expr != null &&
         (exprText == null ||
-         new CheckAllFunctionsSupportedVisitor(soyJsSrcFunctionsMap, errorReporter).exec(expr))) {
+         new CheckAllFunctionsSupportedVisitor().exec(expr))) {
       // V2 expression.
       return translateToJsExprVisitorFactory.create(localVarTranslations).exec(expr);
     } else {
       // V1 expression.
+      SourceLocation sourceLocation = expr != null
+          ? expr.getSourceLocation()
+          : SourceLocation.UNKNOWN;
       Preconditions.checkNotNull(exprText);
-      return V1JsExprTranslator.translateToJsExpr(exprText, localVarTranslations);
+      return V1JsExprTranslator.translateToJsExpr(
+          exprText, sourceLocation, localVarTranslations, errorReporter);
     }
   }
 
 
   /**
    * Private helper class to check whether all functions in an expression are supported
-   * (implemented by an available SoyJsSrcFunction).
+   * (implemented by an available {@link SoyJsSrcFunction}).
    */
-  private static class CheckAllFunctionsSupportedVisitor extends AbstractExprNodeVisitor<Boolean> {
-
-    /** Map of all SoyJsSrcFunctions (name to function). */
-    private final Map<String, SoyJsSrcFunction> soyJsSrcFunctionsMap;
+  private static final class CheckAllFunctionsSupportedVisitor
+      extends AbstractExprNodeVisitor<Boolean> {
 
     /** Whether all functions in the expression are supported. */
     private boolean areAllFunctionsSupported;
-
-    private CheckAllFunctionsSupportedVisitor(
-        Map<String, SoyJsSrcFunction> soyJsSrcFunctionsMap, ErrorReporter errorReporter) {
-      super(errorReporter);
-      this.soyJsSrcFunctionsMap = soyJsSrcFunctionsMap;
-    }
 
     @Override public Boolean exec(ExprNode node) {
       areAllFunctionsSupported = true;
@@ -118,14 +109,11 @@ class JsExprTranslator {
     }
 
     @Override protected void visitFunctionNode(FunctionNode node) {
-
-      String fnName = node.getFunctionName();
-      if (NonpluginFunction.forFunctionName(fnName) == null &&
-          ! soyJsSrcFunctionsMap.containsKey(fnName)) {
+      SoyFunction function = node.getSoyFunction();
+      if (!(function instanceof SoyJsSrcFunction) && !(function instanceof BuiltinFunction)) {
         areAllFunctionsSupported = false;
         return;  // already found an unsupported function, so don't keep looking
       }
-
       visitChildren(node);
     }
 

@@ -35,6 +35,35 @@ Closure Templates are precompiled into efficient JavaScript.
   of XSS.
 
 ## Getting Started
+* Download the latest [JavaScript compiler](http://dl.google.com/closure-templates/closure-templates-for-javascript-latest.zip)
+  or [Java compiler](http://dl.google.com/closure-templates/closure-templates-for-java-latest.zip).
 * Work through [Hello World Using JavaScript](https://developers.google.com/closure/templates/docs/helloworld_js).
 * Work through [Hello World Using Java](https://developers.google.com/closure/templates/docs/helloworld_java).
 * Read the [Documentation](https://developers.google.com/closure/templates/docs/overview).
+
+## Options for Getting Help
+1. Look through the [documentation](https://developers.google.com/closure/templates/docs/overview).
+2. Post a question to the [closure-templates-discuss](https://groups.google.com/forum/#!forum/closure-templates-discuss)
+   mailing list.
+
+## Using Closure Templates with other open source frameworks
+
+There are many Closure Template integrations with other popular open source
+frameworks. Here are a few options for getting started:
+
+* Node.js
+  * https://github.com/Medium/soynode
+* Gulp
+  * https://www.npmjs.com/package/gulp-soynode
+  * https://www.npmjs.com/package/gulp-soy
+* Grunt
+  * https://www.npmjs.com/package/grunt-closure-soy
+  * https://www.npmjs.com/package/grunt-soy
+* NPM
+  * https://www.npmjs.com/package/google-closure-templates
+* Maven
+  * http://mvnrepository.com/artifact/com.google.template/soy
+* Yeoman
+  * https://github.com/andrewpmckenzie/generator-closure-stack
+* Bazel
+  * https://github.com/mknichel/closure-templates-bazel

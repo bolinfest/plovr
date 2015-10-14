@@ -16,14 +16,19 @@
 
 package com.google.template.soy.parsepasses.contextautoesc;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
 
+import java.util.Arrays;
 import java.util.EnumMap;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.Queue;
 
 import javax.annotation.Nullable;
 
@@ -88,14 +93,17 @@ public final class Context {
   /** Determines how we encode interpolations in URI attributes and CSS {@code uri(...)}. */
   public final UriPart uriPart;
 
+  /** Determines the context in which this URI is being used. */
+  public final UriType uriType;
+
   /** The count of {@code <template>} elements entered and not subsequently exited. */
   public final int templateNestDepth;
 
 
   /** Use {@link Builder} to construct instances. */
   private Context(
-      State state, ElementType elType, AttributeType attrType,
-      AttributeEndDelimiter delimType, JsFollowingSlash slashType, UriPart uriPart,
+      State state, ElementType elType, AttributeType attrType, AttributeEndDelimiter delimType,
+      JsFollowingSlash slashType, UriPart uriPart, UriType uriType,
       int templateNestDepth) {
     this.state = state;
     this.elType = elType;
@@ -103,6 +111,13 @@ public final class Context {
     this.delimType = delimType;
     this.slashType = slashType;
     this.uriPart = uriPart;
+    this.uriType = uriType;
+    // NOTE: The constraint is one-way; once we see the src attribute we may set the UriType before
+    // we start actually parsing the URI.
+    Preconditions.checkArgument(
+        !(uriPart != UriPart.NONE && uriType == UriType.NONE),
+        "If in a URI, the type of URI must be specified. UriType = %s but UriPart = %s",
+        uriType, uriPart);
     this.templateNestDepth = templateNestDepth;
   }
 
@@ -111,7 +126,7 @@ public final class Context {
    */
   private Context(State state) {
     this(state, ElementType.NONE, AttributeType.NONE, AttributeEndDelimiter.NONE,
-         JsFollowingSlash.NONE, UriPart.NONE, 0);
+         JsFollowingSlash.NONE, UriPart.NONE, UriType.NONE, 0);
   }
 
   /**
@@ -119,10 +134,6 @@ public final class Context {
    * entity.
    */
   public static final Context HTML_PCDATA = new Context(State.HTML_PCDATA);
-
-
-  /** A special state transitioned to if the CSS/HTML/JS parser cannot compute the next context. */
-  public static final Context ERROR = new Context(State.ERROR);
 
 
   /** Returns a context that differs only in the state. */
@@ -149,13 +160,11 @@ public final class Context {
   /**
    * The context reached after escaping content using the given mode from this context.
    * This makes an optimistic assumption that the escaped string is not empty, but in practice this
-   * makes no difference except to minor differences such as that between {@link UriPart#START} and
-   * {@link UriPart#PRE_QUERY}.
+   * makes little difference, except {@link UriPart#START} and subsequent states, but it is
+   * the wildcard state {@link UriPart#MAYBE_VARIABLE_SCHEME}.
    */
-  public Context getContextAfterEscaping(@Nullable EscapingMode mode) {
-    if (mode == null) {
-      return ERROR;
-    }
+  public Context getContextAfterEscaping(EscapingMode mode) {
+    Preconditions.checkNotNull(mode);
     if (mode == EscapingMode.ESCAPE_JS_VALUE) {
       switch (slashType) {
         case DIV_OP:
@@ -167,8 +176,10 @@ public final class Context {
           break;  // Error out below.
       }
       throw new IllegalStateException(slashType.name());
-    } else if (state == State.HTML_BEFORE_TAG_NAME) {
-      return derive(State.HTML_TAG_NAME);
+    } else if (state == State.HTML_BEFORE_OPEN_TAG_NAME
+        || state == State.HTML_BEFORE_CLOSE_TAG_NAME) {
+      // We assume ElementType.NORMAL, because filterHtmlElementName filters dangerous tag names.
+      return toBuilder().withState(State.HTML_TAG_NAME).withElType(ElementType.NORMAL).build();
     } else if (state == State.HTML_TAG) {
       // To handle a substitution that starts an attribute name <tag {$attrName}=...>
       return toBuilder()
@@ -176,7 +187,11 @@ public final class Context {
           .withAttrType(AttributeType.PLAIN_TEXT)
           .build();
     } else if (uriPart == UriPart.START) {
-      return derive(UriPart.PRE_QUERY);
+      // TODO(gboyer): When we start enforcing strict URI syntax, make it an error to call this if
+      // we're already in MAYBE*_SCHEME, because it is possible in a non-strict contextual template
+      // that someone would use noAutoescape to try and get around the requirement of no print
+      // statements in MAYBE*_SCHEME.
+      return derive(UriPart.MAYBE_VARIABLE_SCHEME);
     }
     return this;
   }
@@ -200,7 +215,7 @@ public final class Context {
     // before an attribute value.
     if (state == State.HTML_BEFORE_ATTRIBUTE_VALUE) {
       return computeContextAfterAttributeDelimiter(
-          elType, attrType, AttributeEndDelimiter.SPACE_OR_TAG_END, templateNestDepth);
+          elType, attrType, AttributeEndDelimiter.SPACE_OR_TAG_END, uriType, templateNestDepth);
     }
     return this;
   }
@@ -217,33 +232,35 @@ public final class Context {
    */
   static Context computeContextAfterAttributeDelimiter(
       ElementType elType, AttributeType attrType, AttributeEndDelimiter delim,
-      int templateNestDepth) {
-    Context.State state;
-    Context.JsFollowingSlash slash = Context.JsFollowingSlash.NONE;
-    Context.UriPart uriPart = Context.UriPart.NONE;
+      UriType uriType, int templateNestDepth) {
+    State state;
+    JsFollowingSlash slash = JsFollowingSlash.NONE;
+    UriPart uriPart = UriPart.NONE;
     switch (attrType) {
       case PLAIN_TEXT:
-        state = Context.State.HTML_NORMAL_ATTR_VALUE;
+        state = State.HTML_NORMAL_ATTR_VALUE;
         break;
       case SCRIPT:
-        state = Context.State.JS;
+        state = State.JS;
         // Start a JS block in a regex state since
         //   /foo/.test(str) && doSideEffect();
         // which starts with a regular expression literal is a valid and possibly useful program,
         // but there is no valid program which starts with a division operator.
-        slash = Context.JsFollowingSlash.REGEX;
+        slash = JsFollowingSlash.REGEX;
         break;
       case STYLE:
-        state = Context.State.CSS;
+        state = State.CSS;
         break;
       case URI:
-        state = Context.State.URI;
-        uriPart = Context.UriPart.START;
+        state = State.URI;
+        uriPart = UriPart.START;
         break;
       // NONE is not a valid AttributeType inside an attribute value.
       default: throw new AssertionError("Unexpected attribute type " + attrType);
     }
-    return new Context(state, elType, attrType, delim, slash, uriPart, templateNestDepth);
+    Preconditions.checkArgument((uriType != UriType.NONE) == (attrType == AttributeType.URI),
+        "uriType=%s but attrType=%s", uriType, attrType);
+    return new Context(state, elType, attrType, delim, slash, uriPart, uriType, templateNestDepth);
   }
 
 
@@ -255,14 +272,23 @@ public final class Context {
   public ImmutableList<EscapingMode> getEscapingModes() {
     EscapingMode escapingMode = state.escapingMode;
 
-    // Short circuit on the error return case first.
+    // Short circuit on the error case first.
     if (escapingMode == null) {
-      return ImmutableList.<EscapingMode>of();
+      throw SoyAutoescapeException.createWithoutMetaInfo(state.errorMessage);
     }
 
     // Any additional mode that allows the primary escaping mode's output language to be
     // embedded in the specific quoting context in which it appears.
     EscapingMode extraEscapingMode = null;
+
+    // Keep track of whether an URI is a TrustedResource. We want some resource URIs like sources to
+    // be safe and not in attacker control. Hence, a restriction that these resouce URIs need to be
+    // compile time constasts is being set. To makes sure these are compile time constants these
+    // either need to be of type string or TrustedResourceUrl.
+    EscapingMode truMode = null;
+    if (uriType == UriType.TRUSTED_RESOURCE) {
+      truMode = EscapingMode.FILTER_TRUSTED_RESOURCE_URI;
+    }
 
     // Make sure we're using the right part for a URI context.
     switch (uriPart) {
@@ -275,7 +301,12 @@ public final class Context {
         if (escapingMode != EscapingMode.NORMALIZE_URI) {
           extraEscapingMode = escapingMode;
         }
-        escapingMode = EscapingMode.FILTER_NORMALIZE_URI;
+        // Use a different escaping mode depending on what kind of URL is being used.
+        if (uriType == UriType.MEDIA) {
+          escapingMode = EscapingMode.FILTER_NORMALIZE_MEDIA_URI;
+        } else {
+          escapingMode = EscapingMode.FILTER_NORMALIZE_URI;
+        }
         break;
       case UNKNOWN:
       case UNKNOWN_PRE_FRAGMENT:
@@ -289,7 +320,34 @@ public final class Context {
         //     {/else}
         //     {$baz}">
         // Is {$baz} part of a query or part of a path?
-        return ImmutableList.<EscapingMode>of();
+        // TODO(gboyer): In these unknown states, it might be interesting to indicate what the two
+        // contexts were.
+        throw SoyAutoescapeException.createWithoutMetaInfo(
+            "Cannot determine which part of the URL this dynamic value is in. Most likely, a"
+            + " preceding conditional block began a ?query or #fragment, but only on one branch.");
+      case MAYBE_VARIABLE_SCHEME:
+        // Is $y in the scheme, path, query, or fragment below?
+        //   <a href="{$x}{$y}">
+        throw SoyAutoescapeException.createWithoutMetaInfo(
+            "Soy can't prove this URI concatenation has a safe scheme at compile time."
+            + " Either combine adjacent print statements (e.g. {$x + $y} instead of {$x}{$y}),"
+            + " or introduce disambiguating characters"
+            + " (e.g. {$x}/{$y}, {$x}?y={$y}, {$x}&y={$y}, {$x}#{$y})");
+      case MAYBE_SCHEME:
+        // Could $x cause a bad scheme, e.g. if it's "script:deleteMyAccount()"?
+        //   <a href="java{$x}">
+        throw SoyAutoescapeException.createWithoutMetaInfo(
+            "Soy can't prove this URI has a safe scheme at compile time. Either make sure one of"
+            + " ':', '/', '?', or '#' comes before the dynamic value (e.g. foo/{$bar}), or move the"
+            + " print statement to the start of the URI to enable runtime validation"
+            + " (e.g. href=\"{'foo' + $bar}\" instead of href=\"foo{$bar}\").");
+      case DANGEROUS_SCHEME:
+        // After javascript: or other dangerous schemes.
+        throw SoyAutoescapeException.createWithoutMetaInfo(
+            "Soy can't properly escape for this URI scheme. For image sources, you can print full"
+            + " data and blob URIs directly (e.g. src=\"{$someDataUri}\")."
+            + " Otherwise, hardcode the full URI in the template or pass a complete"
+            + " SanitizedContent or SafeUri object.");
       default:
         break;
     }
@@ -304,8 +362,8 @@ public final class Context {
         //     <input name=was&#32;checked>
         // instead of
         //     <input name=was checked>
-        if (escapingMode == EscapingMode.ESCAPE_HTML_ATTRIBUTE ||
-            escapingMode == EscapingMode.NORMALIZE_URI) {
+        if (escapingMode == EscapingMode.ESCAPE_HTML_ATTRIBUTE
+            || escapingMode == EscapingMode.NORMALIZE_URI) {
           escapingMode = EscapingMode.ESCAPE_HTML_ATTRIBUTE_NOSPACE;
         } else {
           extraEscapingMode = EscapingMode.ESCAPE_HTML_ATTRIBUTE_NOSPACE;
@@ -335,8 +393,17 @@ public final class Context {
         break;
     }
 
-    return extraEscapingMode == null ?
-        ImmutableList.of(escapingMode) : ImmutableList.of(escapingMode, extraEscapingMode);
+    // Return and immutable list of (truMode, escapingMode, extraEscapingMode)
+    ImmutableList.Builder<EscapingMode> escapingListBuilder = new ImmutableList.Builder<>();
+    if (truMode != null) {
+      escapingListBuilder.add(truMode);
+    }
+    escapingListBuilder.add(escapingMode);
+    if (extraEscapingMode != null) {
+      escapingListBuilder.add(extraEscapingMode);
+    }
+
+    return escapingListBuilder.build();
   }
 
 
@@ -452,18 +519,10 @@ public final class Context {
 
 
   /**
-   * True if this context is in the {@link State#ERROR error} state.
-   * @see #ERROR
+   * Checks if two states are completely identical.
+   *
+   * <p>Note it's better to compare either states, or use predicates like isValidEndContext.
    */
-  public boolean isErrorContext() {
-    return state == State.ERROR;
-  }
-
-
-  /**
-   * @deprecated Prefer comparing states or predicates like isValidEndContext
-   */
-  @Deprecated
   @Override
   public boolean equals(Object o) {
     if (!(o instanceof Context)) {
@@ -476,6 +535,7 @@ public final class Context {
         && this.delimType == that.delimType
         && this.slashType == that.slashType
         && this.uriPart == that.uriPart
+        && this.uriType == that.uriType
         && this.templateNestDepth == that.templateNestDepth;
   }
 
@@ -490,8 +550,9 @@ public final class Context {
    * so do not use as a long-lived serialized form.
    */
   public int packedBits() {
-    return ((((((((((((
+    return ((((((((((((((
         templateNestDepth
+        << N_URI_TYPE_BITS) | uriType.ordinal())
         << N_URI_PART_BITS) | uriPart.ordinal())
         << N_JS_SLASH_BITS) | slashType.ordinal())
         << N_DELIM_BITS) | delimType.ordinal())
@@ -504,7 +565,7 @@ public final class Context {
   private static final int N_STATE_BITS = 5;
 
   /** The number of bits needed to store a {@link ElementType} value. */
-  private static final int N_ELEMENT_BITS = 3;
+  private static final int N_ELEMENT_BITS = 4;
 
   /** The number of bits needed to store a {@link AttributeType} value. */
   private static final int N_ATTR_BITS = 3;
@@ -516,22 +577,74 @@ public final class Context {
   private static final int N_JS_SLASH_BITS = 2;
 
   /** The number of bits needed to store a {@link UriPart} value. */
-  private static final int N_URI_PART_BITS = 3;
+  private static final int N_URI_PART_BITS = 4;
+
+  /** The number of bits needed to store a {@link UriType} value. */
+  private static final int N_URI_TYPE_BITS = 2;
 
   static {
     // We'd better have enough bits in an int.
     if ((N_STATE_BITS + N_ELEMENT_BITS + N_ATTR_BITS + N_DELIM_BITS + N_JS_SLASH_BITS +
-         N_URI_PART_BITS) > 32) {
+         N_URI_PART_BITS + N_URI_TYPE_BITS) > 32) {
       throw new AssertionError();
     }
     // And each enum's ordinals must fit in the bits allocated.
-    if ((1 << N_STATE_BITS) < State.values().length ||
-        (1 << N_ELEMENT_BITS) < ElementType.values().length ||
-        (1 << N_ATTR_BITS) < AttributeType.values().length ||
-        (1 << N_DELIM_BITS) < AttributeEndDelimiter.values().length ||
-        (1 << N_JS_SLASH_BITS) < JsFollowingSlash.values().length ||
-        (1 << N_URI_PART_BITS) < UriPart.values().length) {
+    if ((1 << N_STATE_BITS) < State.values().length
+        || (1 << N_ELEMENT_BITS) < ElementType.values().length
+        || (1 << N_ATTR_BITS) < AttributeType.values().length
+        || (1 << N_DELIM_BITS) < AttributeEndDelimiter.values().length
+        || (1 << N_JS_SLASH_BITS) < JsFollowingSlash.values().length
+        || (1 << N_URI_PART_BITS) < UriPart.values().length
+        || (1 << N_URI_TYPE_BITS) < UriType.values().length) {
       throw new AssertionError();
+    }
+  }
+
+  /**
+   * Determines the correct URI part if two branches are joined.
+   */
+  private static UriPart unionUriParts(UriPart a, UriPart b) {
+    Preconditions.checkArgument(a != b);
+    if (a == UriPart.DANGEROUS_SCHEME || b == UriPart.DANGEROUS_SCHEME) {
+      // Dangerous schemes (like javascript:) are poison -- if either side is dangerous, the whole
+      // thing is.
+      return UriPart.DANGEROUS_SCHEME;
+    } else if (a == UriPart.FRAGMENT || b == UriPart.FRAGMENT
+        || a == UriPart.UNKNOWN || b == UriPart.UNKNOWN) {
+      // UNKNOWN means one part is in the #fragment and one is not. This is the case if one is
+      // FRAGMENT and the other is not, or if one of the branches was UNKNOWN to begin with.
+      return UriPart.UNKNOWN;
+    } else if ((a == UriPart.MAYBE_VARIABLE_SCHEME || b == UriPart.MAYBE_VARIABLE_SCHEME)
+        && a != UriPart.UNKNOWN_PRE_FRAGMENT && b != UriPart.UNKNOWN_PRE_FRAGMENT) {
+      // This is the case you might see on a URL that starts with a print statement, and one
+      // branch has a slash or ampersand but the other doesn't.  Re-entering
+      // MAYBE_VARIABLE_SCHEME allows us to pretend that the last branch was just part of the
+      // leading print statement, which leaves us in a relatively-unknown state, but no more
+      // unknown had it just been completely opaque.
+      //
+      // Good Example 1: {$urlWithQuery}{if $a}&a={$a}{/if}{if $b}&b={$b}{/if}
+      // In this example, the first "if" statement has two branches:
+      // - "true": {$urlWithQuey}&a={$a} looks like a QUERY due to hueristics
+      // - "false": {$urlWithQuery} only, which Soy doesn't know at compile-time to actually
+      // have a query, and it remains in MAYBE_VARIABLE_SCHEME.
+      // Instead of yielding UNKNOWN, this yields MAYBE_VARIABLE_SCHEME, which the second
+      // {if $b} can safely deal with.
+      //
+      // Good Example 2: {$base}{if $a}/a{/if}{if $b}/b{/if}
+      // In this, one branch transitions definitely into an authority or path, but the other
+      // might not. However, we can remain in MAYBE_VARIABLE_SCHEME safely.
+      return UriPart.MAYBE_VARIABLE_SCHEME;
+    } else {
+      // The part is unknown, but we think it's before the fragment. In this case, it's clearly
+      // ambiguous at compile-time that it's not clear what to do. Examples:
+      //
+      // /foo/{if $cond}?a={/if}
+      // {$base}{if $cond}?a={$a}{else}/b{/if}
+      // {if $cond}{$base}{else}/a{if $cond2}?b=1{/if}{/if}
+      //
+      // Unlike MAYBE_VARIABLE_SCHEME, we don't need to try to gracefully recover here, because
+      // the template author can easily disambiguate this.
+      return UriPart.UNKNOWN_PRE_FRAGMENT;
     }
   }
 
@@ -539,60 +652,63 @@ public final class Context {
    * A context which is consistent with both contexts.
    * This should be used when multiple execution paths join, such as the path through the
    * then-clause of an <code>{if}</code> command and the path through the else-clause.
-   * @return {@link #ERROR} when there is no such context consistent with both.
+   * @return Optional.absent() when there is no such context consistent with both.
    */
-  public static Context union(Context a, Context b) {
-    // TODO(gboyer): Add a test that TEXT doesn't union with any other type.
-    if (a.equals(b)) {
-      return a;
+  static Optional<Context> union(Context a, Context b) {
+    // Try to reconcile each property one-by-one.
+    if (a.slashType != b.slashType) {
+      a = a.derive(JsFollowingSlash.UNKNOWN);
+      b = b.derive(JsFollowingSlash.UNKNOWN);
     }
 
-    if (a.templateNestDepth != b.templateNestDepth) {
-      return ERROR;
+    if (a.uriPart != b.uriPart) {
+      UriPart unionedUriPart = unionUriParts(a.uriPart, b.uriPart);
+      a = a.derive(unionedUriPart);
+      b = b.derive(unionedUriPart);
     }
 
-    if (a.equals(b.derive(a.slashType))) {
-      return a.derive(JsFollowingSlash.UNKNOWN);
-    }
+    if (a.state != b.state) {
+      // Order by state so that we don't have to duplicate tests below.
+      if (a.state.compareTo(b.state) > 0) {
+        Context swap = a;
+        a = b;
+        b = swap;
+      }
 
-    if (a.equals(b.derive(a.uriPart))) {
-      return a.derive(
-          // If the parts differ but neither could be in the fragment then a ? will conclusively
-          // transition into the query state, so use UKNNOWN_PRE_FRAGMENT to allow {print} commands
-          // after '?'.  With unknown, {print}s are only allowed after a '#'.
-          a.uriPart != UriPart.FRAGMENT && b.uriPart != UriPart.FRAGMENT &&
-          a.uriPart != UriPart.UNKNOWN && b.uriPart != UriPart.UNKNOWN ?
-          UriPart.UNKNOWN_PRE_FRAGMENT : UriPart.UNKNOWN);
-    }
+      // If we start in a tag name and end between attributes, then treat us as between attributes.
+      // This handles <b{if $bool} attrName="value"{/if}>.
+      if (a.state == State.HTML_TAG_NAME && b.state == State.HTML_TAG) {
+        // Note we only change the state; if the element type is different, we don't want it to
+        // join.
+        // TODO(gboyer): The withoutAttrContext() doesn't make any sense, since HTML_TAG_NAME can't
+        // have an attribute context.
+        a = a.toBuilder().withState(State.HTML_TAG).withoutAttrContext().build();
+      }
 
-    // Order by state so that we don't have to duplicate tests below.
-    if (a.state.compareTo(b.state) > 0) {
-      Context swap = a;
-      a = b;
-      b = swap;
-    }
-
-    // If we start in a tag name and end between attributes, then treat us as between attributes.
-    // This handles <b{if $bool} attrName="value"{/if}>.
-    if (a.state == State.HTML_TAG_NAME && b.state == State.HTML_TAG) {
-      // We do not need to compare a.elType and b.elType since in HTML_TAG_NAME,
-      // there is no tag name, so no loss of information.
-      return b;
-    }
-
-    if (a.state == State.HTML_TAG && a.elType == b.elType) {
-      // If one branch is waiting for an attribute name and the other is waiting for an equal sign
-      // before an attribute value, then commit to the view that the attribute name was a valueless
-      // attribute and transition to a state waiting for another attribute name or the end of a tag.
-      if (b.state == State.HTML_ATTRIBUTE_NAME ||
-          // In an attribute value ended by a delimiter.
-          b.delimType == AttributeEndDelimiter.SPACE_OR_TAG_END) {
-        // TODO: do we need to require a space before any new attribute name?
-        return a;
+      if (a.state == State.HTML_TAG && a.elType == b.elType) {
+        // If one branch is waiting for an attribute name, and the other is waiting for an equal
+        // sign before an attribute value OR the end of an unquoted attribute value, then commit to
+        // the view that the attribute name was a valueless attribute and transition to a state
+        // waiting for another attribute name or the end of a tag.
+        if (b.state == State.HTML_ATTRIBUTE_NAME ||
+            b.delimType == AttributeEndDelimiter.SPACE_OR_TAG_END) {
+          // TODO(gboyer): do we need to require a space before any new attribute name after an
+          // unquoted attribute?
+          b = b.toBuilder().withState(State.HTML_TAG).withoutAttrContext().build();
+        }
       }
     }
 
-    return ERROR;
+    return a.equals(b) ? Optional.of(a) : Optional.<Context>absent();
+  }
+
+  static Optional<Context> union(Iterable<Context> contexts) {
+    Iterator<Context> iterator = contexts.iterator();
+    Optional<Context> context = Optional.of(iterator.next());
+    while (iterator.hasNext() && context.isPresent()) {
+      context = union(context.get(), iterator.next());
+    }
+    return context;
   }
 
   @Override
@@ -613,10 +729,89 @@ public final class Context {
     if (uriPart != UriPart.NONE) {
       sb.append(' ').append(uriPart.name());
     }
+    if (uriType != UriType.NONE) {
+      sb.append(' ').append(uriType.name());
+    }
     if (templateNestDepth != 0) {
       sb.append(" templateNestDepth=").append(templateNestDepth);
     }
     return sb.append(')').toString();
+  }
+
+  /**
+   * Parses a condensed string version of a context, for use in tests.
+   */
+  @VisibleForTesting
+  static Context parse(String text) {
+    Queue<String> parts = Lists.newLinkedList(Arrays.asList(text.split(" ")));
+    Context.Builder builder = HTML_PCDATA.toBuilder();
+    builder.withState(State.valueOf(parts.remove()));
+    if (!parts.isEmpty()) {
+      try {
+        builder.withElType(ElementType.valueOf(parts.element()));
+        parts.remove();
+      } catch (IllegalArgumentException ex) {
+        // OK
+      }
+    }
+    if (!parts.isEmpty()) {
+      try {
+        builder.withAttrType(AttributeType.valueOf(parts.element()));
+        parts.remove();
+      } catch (IllegalArgumentException ex) {
+        // OK
+      }
+    }
+    if (!parts.isEmpty()) {
+      try {
+        builder.withDelimType(AttributeEndDelimiter.valueOf(parts.element()));
+        parts.remove();
+      } catch (IllegalArgumentException ex) {
+        // OK
+      }
+    }
+    if (!parts.isEmpty()) {
+      try {
+        builder.withSlashType(JsFollowingSlash.valueOf(parts.element()));
+        parts.remove();
+      } catch (IllegalArgumentException ex) {
+        // OK
+      }
+    }
+    if (!parts.isEmpty()) {
+      try {
+        builder.withUriPart(UriPart.valueOf(parts.element()));
+        parts.remove();
+      } catch (IllegalArgumentException ex) {
+        // OK
+      }
+    }
+    if (!parts.isEmpty()) {
+      try {
+        builder.withUriType(UriType.valueOf(parts.element()));
+        parts.remove();
+      } catch (IllegalArgumentException ex) {
+        // OK
+      }
+    }
+    if (!parts.isEmpty()) {
+      String part = parts.element();
+      String prefix = "templateNestDepth=";
+      if (part.startsWith(prefix)) {
+        try {
+          builder.withTemplateNestDepth(Integer.parseInt(part.substring(prefix.length())));
+          parts.remove();
+        } catch (NumberFormatException ex) {
+          // OK
+        }
+      }
+    }
+    if (!parts.isEmpty()) {
+      throw new IllegalArgumentException(
+          "Unable to parse context \"" + text + "\". Unparsed portion: " + parts);
+    }
+    Context result = builder.build();
+    return result;
   }
 
 
@@ -729,8 +924,9 @@ public final class Context {
         // Just ensure the state is JS -- don't worry about whether a regex is coming or not.
         return state == State.JS && elType == ElementType.NONE;
       case URI:
-        // Ensure that the URI content is non-empty.
-        return state == State.URI && uriPart != UriPart.START;
+        // Ensure that the URI content is non-empty and the URI type remains normal (which is
+        // the assumed type of the URI content kind).
+        return state == State.URI && uriType == UriType.NORMAL && uriPart != UriPart.START;
       case TEXT:
         return state == State.TEXT;
       default:
@@ -812,11 +1008,20 @@ public final class Context {
      */
     HTML_RCDATA(EscapingMode.ESCAPE_HTML_RCDATA),
 
-    /** Just before a tag name. */
-    HTML_BEFORE_TAG_NAME(EscapingMode.FILTER_HTML_ELEMENT_NAME),
+    /** Just before a tag name on an open tag. */
+    HTML_BEFORE_OPEN_TAG_NAME(EscapingMode.FILTER_HTML_ELEMENT_NAME),
 
-    /** Inside a tag name. */
-    HTML_TAG_NAME(EscapingMode.FILTER_HTML_ELEMENT_NAME),
+    /** Just before a tag name on an close tag. */
+    HTML_BEFORE_CLOSE_TAG_NAME(EscapingMode.FILTER_HTML_ELEMENT_NAME),
+
+    /**
+     * Just after a tag name, e.g. in ^ in <script^> or <div^>.
+     *
+     * <p>Note tag names must be printed all at once since we can't otherwise
+     * easily handle <s{if 1}cript{/if}>.
+     */
+    HTML_TAG_NAME("Dynamic values are not permitted in the middle of an HTML tag name;"
+        + " try adding a space before."),
 
     /** Before an HTML attribute or the end of a tag. */
     HTML_TAG(EscapingMode.FILTER_HTML_ATTRIBUTES),
@@ -826,7 +1031,7 @@ public final class Context {
     HTML_ATTRIBUTE_NAME(EscapingMode.FILTER_HTML_ATTRIBUTES),
 
     /** Following an equals sign (<tt>=</tt>) after an attribute name in an HTML tag. */
-    HTML_BEFORE_ATTRIBUTE_VALUE,
+    HTML_BEFORE_ATTRIBUTE_VALUE("(unexpected state)"),
 
     /** Inside an HTML comment. */
     HTML_COMMENT(EscapingMode.ESCAPE_HTML_RCDATA),
@@ -838,7 +1043,7 @@ public final class Context {
     CSS(EscapingMode.FILTER_CSS_VALUE),
 
     /** In CSS inside a comment. */
-    CSS_COMMENT,
+    CSS_COMMENT("CSS comments cannot contain dynamic values."),
 
     /** In CSS inside a double quoted string. */
     CSS_DQ_STRING(EscapingMode.ESCAPE_CSS_STRING),
@@ -859,10 +1064,10 @@ public final class Context {
     JS(EscapingMode.ESCAPE_JS_VALUE),
 
     /** In JavaScript inside a line comment. */
-    JS_LINE_COMMENT,
+    JS_LINE_COMMENT("JS comments cannot contain dynamic values."),
 
     /** In JavaScript inside a block comment. */
-    JS_BLOCK_COMMENT,
+    JS_BLOCK_COMMENT("JS comments cannot contain dynamic values."),
 
     /** In JavaScript inside a double quoted string. */
     JS_DQ_STRING(EscapingMode.ESCAPE_JS_STRING),
@@ -877,10 +1082,7 @@ public final class Context {
     URI(EscapingMode.NORMALIZE_URI),
 
     /** Plain text; no escaping. */
-    TEXT(EscapingMode.TEXT),
-
-    /** Not inside any valid HTML/CSS/JS construct. */
-    ERROR,
+    TEXT(EscapingMode.TEXT)
     ;
 
     /**
@@ -890,11 +1092,18 @@ public final class Context {
      */
     private final @Nullable EscapingMode escapingMode;
 
+    /**
+     * Error message to show when trying to print a dynamic value inside of this state.
+     */
+    private final @Nullable String errorMessage;
+
     State(EscapingMode escapingMode) {
       this.escapingMode = escapingMode;
+      this.errorMessage = null;
     }
 
-    State() {
+    State(String errorMessage) {
+      this.errorMessage = errorMessage;
       this.escapingMode = null;
     }
   }
@@ -920,11 +1129,11 @@ public final class Context {
     /** A title element whose content is encoded HTML but which cannot contain elements. */
     TITLE,
 
-    /** A listing element whose content is raw CDATA. */
-    LISTING,
-
     /** An XMP element whose content is raw CDATA. */
     XMP,
+
+    /** An image element, so that we can process the src attribute specially. */
+    MEDIA,
 
     /** An element whose content is normal mixed PCDATA and child elements. */
     NORMAL,
@@ -1039,11 +1248,41 @@ public final class Context {
     /** Not in a URI. */
     NONE,
 
-    /** Where a scheme might be seen.  At ^ in {@code ^http://host/path?k=v#frag}. */
+    /**
+     * At the absolute beginning of a URI.
+     *
+     * <p>At ^ in {@code ^http://host/path?k=v#frag} or {@code ^foo/bar?a=1}.
+     */
     START,
 
+    /**
+     * After a print statement in the beginning of a URI, where it's still possible to be in the
+     * scheme.
+     *
+     * <p>For example, after {@code href=&quot;&#123;$x&#125;}, it's hard to know what will happen.
+     * For example, if $x is "java" (a perfectly valid relative URI on its own), then
+     * "script:alert(1)" would execute as Javascript. But if $x is "java" followed by
+     * "/test.html", it's a relative URI.
+     *
+     * <p>This state is kept until we see anything that's hard-coded that makes it clear that we've
+     * left the scheme context; while remaining in this state, print statements and colons are
+     * forbidden, since we don't want what looks like a relative URI to set the scheme.
+     */
+    MAYBE_VARIABLE_SCHEME,
+
+    /**
+     * Still possibly in the scheme, though it could also be a relative path, but no print
+     * statements have been seen yet.
+     *
+     * <p>For example, between carets in {@code h^ttp^://host/path} or {@code f^oo^/bar.html}.
+     *
+     * <p>This is similar to MAYBE_VARIABLE_SCHEME in that print statements are forbidden; however,
+     * colons are allowed and transition to AUTHORITY_OR_PATH.
+     */
+    MAYBE_SCHEME,
+
     /** In the scheme, authority, or path.  Between ^s in {@code h^ttp://host/path^?k=v#frag}. */
-    PRE_QUERY,
+    AUTHORITY_OR_PATH,
 
     /** In the query portion.  Between ^s in {@code http://host/path?^k=v^#frag}*/
     QUERY,
@@ -1056,7 +1295,61 @@ public final class Context {
 
     /** Not {@link #NONE}, but unknown.  Used to join different contexts. */
     UNKNOWN,
+
+    /** A known-dangerous scheme where dynamic content is forbidden. */
+    DANGEROUS_SCHEME
     ;
+  }
+
+
+  /**
+   * Describes the type or context of a URI that is currently being or about to be parsed.
+   *
+   * <p>This distinguishes between the types of URI safety concerns, which vary between images,
+   * scripts, and other types.
+   */
+  public enum UriType {
+
+    /**
+     * Not in or about to be in a URI.
+     *
+     * <p>Note the URI type can be set even if we haven't entered the URI itself yet.
+     */
+    NONE,
+
+    /**
+     * General URI context suitable for most URI types.
+     *
+     * <p>The biggest use-case here is for anchors, where we want to prevent Javascript URLs that
+     * can cause XSS. However, this grabs other types of URIs such as stylesheets, prefetch,
+     * SEO metadata, and attributes that look like they're supposed to contain URIs but might just
+     * be harmless metadata because they end with "url".
+     *
+     * <p>It's expected that this will be split up over time to address the different safety levels
+     * of the different URI types.
+     */
+    NORMAL,
+
+    /**
+     * Image URL type.
+     *
+     * <p>Here, we can relax some some rules. For example, a data URI in an image is unlikely to
+     * do anything that loading an image from a 3rd party http/https site.
+     *
+     * <p>At present, note that Soy doesn't do anything to prevent referer[r]er leakage. At some
+     * future point, we may want to provide configuration options to avoid 3rd party or
+     * http-in-the-clear image loading.
+     *
+     * <p>In the future, this might also encompass video and audio, if we can find ways to reduce
+     * the risk of social engineering.
+     */
+    MEDIA,
+
+    /**
+     * A URI which loads resources. This is intended to be used in scrips, stylesheets, etc which
+     * should not be in attacker control.
+     */
+    TRUSTED_RESOURCE
   }
 
 
@@ -1070,6 +1363,7 @@ public final class Context {
     private AttributeEndDelimiter delimType;
     private JsFollowingSlash slashType;
     private UriPart uriPart;
+    private UriType uriType;
     private int templateNestDepth;
 
     private Builder(Context context) {
@@ -1079,6 +1373,7 @@ public final class Context {
       this.delimType = context.delimType;
       this.slashType = context.slashType;
       this.uriPart = context.uriPart;
+      this.uriType = context.uriType;
       this.templateNestDepth = context.templateNestDepth;
     }
 
@@ -1112,6 +1407,11 @@ public final class Context {
       return this;
     }
 
+    Builder withUriType(UriType uriType) {
+      this.uriType = Preconditions.checkNotNull(uriType);
+      return this;
+    }
+
     Builder withTemplateNestDepth(int templateNestDepth) {
       Preconditions.checkArgument(templateNestDepth >= 0);
       this.templateNestDepth = templateNestDepth;
@@ -1123,7 +1423,8 @@ public final class Context {
           .withAttrType(Context.AttributeType.NONE)
           .withDelimType(Context.AttributeEndDelimiter.NONE)
           .withSlashType(Context.JsFollowingSlash.NONE)
-          .withUriPart(Context.UriPart.NONE);
+          .withUriPart(Context.UriPart.NONE)
+          .withUriType(Context.UriType.NONE);
     }
 
     /**
@@ -1152,6 +1453,8 @@ public final class Context {
         case URI:
           withState(State.URI);
           withUriPart(UriPart.START);
+          // Assume a let block of kind="uri" is a "normal" URI.
+          withUriType(UriType.NORMAL);
           break;
         case TEXT:
           withState(State.TEXT);
@@ -1166,7 +1469,8 @@ public final class Context {
     }
 
     Context build() {
-      return new Context(state, elType, attrType, delimType, slashType, uriPart, templateNestDepth);
+      return new Context(state, elType, attrType, delimType, slashType, uriPart, uriType,
+          templateNestDepth);
     }
   }
 }

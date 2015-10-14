@@ -20,14 +20,13 @@ package com.google.template.soy.shared;
 import com.google.auto.value.AutoValue;
 import com.google.template.soy.base.internal.IdGenerator;
 import com.google.template.soy.base.internal.IncrementingIdGenerator;
-import com.google.template.soy.base.internal.SoyFileSupplier;
 import com.google.template.soy.base.internal.SoyFileSupplier.Version;
 import com.google.template.soy.soytree.SoyFileNode;
+import com.google.template.soy.soytree.SoytreeUtils;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 import javax.inject.Inject;
 
@@ -52,12 +51,12 @@ public final class SoyAstCache {
 
     VersionedFile() {}
 
-    @Nullable public abstract SoyFileNode file();
+    public abstract SoyFileNode file();
     public abstract Version version();
 
     /** Make a defensive copy. */
     private VersionedFile copy() {
-      return new AutoValue_SoyAstCache_VersionedFile(file().clone(), version());
+      return new AutoValue_SoyAstCache_VersionedFile(SoytreeUtils.cloneNode(file()), version());
     }
   }
 
@@ -75,12 +74,12 @@ public final class SoyAstCache {
    *
    * <p> Please treat this as superpackage-private for Soy internals.
    *
-   * @param supplier The supplier for the particular file to cache.
+   * @param fileName The name of the file.
    * @param versionedFile The compiled AST at the particular version. The node is defensively
    *     copied; the caller is free to modify it.
    */
-  public synchronized void put(SoyFileSupplier supplier, VersionedFile versionedFile) {
-    cache.put(getCacheKey(supplier), versionedFile.copy());
+  public synchronized void put(String fileName, VersionedFile versionedFile) {
+    cache.put(fileName, versionedFile.copy());
   }
 
   /**
@@ -88,20 +87,20 @@ public final class SoyAstCache {
    *
    * <p> Please treat this as superpackage-private for Soy internals.
    *
-   * @param supplier The supplier for the particular file to cache.
+   * @param fileName The name of the file
+   * @param version The current file version.
    * @return A fresh copy of the tree that may be modified by the caller, or null if no entry was
    *     found in the cache.
    */
-  public synchronized VersionedFile get(SoyFileSupplier supplier) {
-    String cacheKey = getCacheKey(supplier);
-    VersionedFile entry = cache.get(cacheKey);
+  public synchronized VersionedFile get(String fileName, Version version) {
+    VersionedFile entry = cache.get(fileName);
     if (entry != null) {
-      if (!supplier.hasChangedSince(entry.version())) {
+      if (entry.version().equals(version)) {
         // Make a defensive copy since the caller might run further passes on it.
         return entry.copy();
       } else {
         // Aggressively purge to save memory.
-        cache.remove(cacheKey);
+        cache.remove(fileName);
       }
     }
     return null;
@@ -118,12 +117,5 @@ public final class SoyAstCache {
    */
   public IdGenerator getNodeIdGenerator() {
     return idGenerator;
-  }
-
-  private static String getCacheKey(SoyFileSupplier supplier) {
-    // NOTE: We're using pathname because:
-    // - The client code might re-create SoyFileSuppliers instead of reusing them.
-    // - We don't want to prevent SoyFileSuppliers from getting garbage collected.
-    return supplier.getFilePath();
   }
 }

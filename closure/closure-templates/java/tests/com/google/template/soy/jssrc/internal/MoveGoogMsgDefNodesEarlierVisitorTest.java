@@ -49,17 +49,17 @@ public final class MoveGoogMsgDefNodesEarlierVisitorTest extends TestCase {
   public void testBasic() {
 
     String soyCode =
-        "{msg desc=\"msg1\"}blah{/msg}\n" +
-        "blah\n" +
-        "{msg desc=\"msg2\"}{$goo}{/msg}\n" +
-        "{$goo}\n" +
-        "{msg desc=\"msg3\"}blah{/msg}\n";
+        "{@param goo: ?}\n"
+            + "{msg desc=\"msg1\"}blah{/msg}\n"
+            + "blah\n"
+            + "{msg desc=\"msg2\"}{$goo}{/msg}\n"
+            + "{$goo}\n"
+            + "{msg desc=\"msg3\"}blah{/msg}\n";
 
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyCode)
-        .errorReporter(FAIL)
-        .parse();
-    new ReplaceMsgsWithGoogMsgsVisitor(FAIL).exec(soyTree);
-    new MoveGoogMsgDefNodesEarlierVisitor(FAIL).exec(soyTree);
+    SoyFileSetNode soyTree =
+        SoyFileSetParserBuilder.forTemplateContents(soyCode).errorReporter(FAIL).parse().fileSet();
+    new ReplaceMsgsWithGoogMsgsVisitor().exec(soyTree);
+    new MoveGoogMsgDefNodesEarlierVisitor().exec(soyTree);
     TemplateNode template = soyTree.getChild(0).getChild(0);
 
     // Expected:
@@ -83,22 +83,23 @@ public final class MoveGoogMsgDefNodesEarlierVisitorTest extends TestCase {
   public void testIf() {
 
     String soyCode =
-        "{if $goo1}\n" +
-        "  {msg desc=\"msg1\"}blah{/msg}\n" +
-        "  {msg desc=\"msg2\"}blah{/msg}\n" +
-        "{elseif $goo2}\n" +
-        "  {msg desc=\"msg3\"}blah{/msg}\n" +
-        "  {msg desc=\"msg4\"}blah{/msg}\n" +
-        "{else}\n" +
-        "  {msg desc=\"msg5\"}blah{/msg}\n" +
-        "  {msg desc=\"msg6\"}blah{/msg}\n" +
-        "{/if}\n";
+        "{@param goo1: ?}\n"
+            + "{@param goo2: ?}\n"
+            + "{if $goo1}\n"
+            + "  {msg desc=\"msg1\"}blah{/msg}\n"
+            + "  {msg desc=\"msg2\"}blah{/msg}\n"
+            + "{elseif $goo2}\n"
+            + "  {msg desc=\"msg3\"}blah{/msg}\n"
+            + "  {msg desc=\"msg4\"}blah{/msg}\n"
+            + "{else}\n"
+            + "  {msg desc=\"msg5\"}blah{/msg}\n"
+            + "  {msg desc=\"msg6\"}blah{/msg}\n"
+            + "{/if}\n";
 
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyCode)
-        .errorReporter(FAIL)
-        .parse();
-    new ReplaceMsgsWithGoogMsgsVisitor(FAIL).exec(soyTree);
-    new MoveGoogMsgDefNodesEarlierVisitor(FAIL).exec(soyTree);
+    SoyFileSetNode soyTree =
+        SoyFileSetParserBuilder.forTemplateContents(soyCode).errorReporter(FAIL).parse().fileSet();
+    new ReplaceMsgsWithGoogMsgsVisitor().exec(soyTree);
+    new MoveGoogMsgDefNodesEarlierVisitor().exec(soyTree);
     TemplateNode template = soyTree.getChild(0).getChild(0);
 
     // Expected:
@@ -141,23 +142,23 @@ public final class MoveGoogMsgDefNodesEarlierVisitorTest extends TestCase {
   public void testSwitch() {
 
     String soyCode =
-        "{switch $goo}\n" +
-        "  {case 0}\n" +
-        "    {msg desc=\"msg1\"}blah{/msg}\n" +
-        "    {msg desc=\"msg2\"}blah{/msg}\n" +
-        "  {case 1, 2, 3}\n" +
-        "    {msg desc=\"msg3\"}blah{/msg}\n" +
-        "    {msg desc=\"msg4\"}blah{/msg}\n" +
-        "  {default}\n" +
-        "    {msg desc=\"msg5\"}blah{/msg}\n" +
-        "    {msg desc=\"msg6\"}blah{/msg}\n" +
-        "{/switch}\n";
+        "{@param goo: ?}\n"
+            + "{switch $goo}\n"
+            + "  {case 0}\n"
+            + "    {msg desc=\"msg1\"}blah{/msg}\n"
+            + "    {msg desc=\"msg2\"}blah{/msg}\n"
+            + "  {case 1, 2, 3}\n"
+            + "    {msg desc=\"msg3\"}blah{/msg}\n"
+            + "    {msg desc=\"msg4\"}blah{/msg}\n"
+            + "  {default}\n"
+            + "    {msg desc=\"msg5\"}blah{/msg}\n"
+            + "    {msg desc=\"msg6\"}blah{/msg}\n"
+            + "{/switch}\n";
 
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyCode)
-        .errorReporter(FAIL)
-        .parse();
-    new ReplaceMsgsWithGoogMsgsVisitor(FAIL).exec(soyTree);
-    new MoveGoogMsgDefNodesEarlierVisitor(FAIL).exec(soyTree);
+    SoyFileSetNode soyTree =
+        SoyFileSetParserBuilder.forTemplateContents(soyCode).errorReporter(FAIL).parse().fileSet();
+    new ReplaceMsgsWithGoogMsgsVisitor().exec(soyTree);
+    new MoveGoogMsgDefNodesEarlierVisitor().exec(soyTree);
     TemplateNode template = soyTree.getChild(0).getChild(0);
 
     // Expected:
@@ -200,21 +201,24 @@ public final class MoveGoogMsgDefNodesEarlierVisitorTest extends TestCase {
   public void testForeach() {
 
     String soyCode =
-        "{foreach $goo in $goose}\n" +
-        "  {msg desc=\"msg1\"}blah{/msg}\n" +
-        "  {msg desc=\"msg2\"}{$goo}{/msg}\n" +  // dep on $goo
-        "  {msg desc=\"msg3\"}{$moo}{/msg}\n" +
-        "  {msg desc=\"msg4\"}{$goo}{/msg}\n" +  // dep on $goo
-        "{ifempty}\n" +
-        "  {msg desc=\"msg5\"}{$moo}{/msg}\n" +
-        "  {msg desc=\"msg6\"}blah{/msg}\n" +
-        "{/foreach}\n";
+        "{@param goose: ?}\n"
+            + "{@param moo: ?}\n"
+            + "{foreach $goo in $goose}\n"
+            + "  {msg desc=\"msg1\"}blah{/msg}\n"
+            + "  {msg desc=\"msg2\"}{$goo}{/msg}\n"
+            + // dep on $goo
+            "  {msg desc=\"msg3\"}{$moo}{/msg}\n"
+            + "  {msg desc=\"msg4\"}{$goo}{/msg}\n"
+            + // dep on $goo
+            "{ifempty}\n"
+            + "  {msg desc=\"msg5\"}{$moo}{/msg}\n"
+            + "  {msg desc=\"msg6\"}blah{/msg}\n"
+            + "{/foreach}\n";
 
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyCode)
-        .errorReporter(FAIL)
-        .parse();
-    new ReplaceMsgsWithGoogMsgsVisitor(FAIL).exec(soyTree);
-    new MoveGoogMsgDefNodesEarlierVisitor(FAIL).exec(soyTree);
+    SoyFileSetNode soyTree =
+        SoyFileSetParserBuilder.forTemplateContents(soyCode).errorReporter(FAIL).parse().fileSet();
+    new ReplaceMsgsWithGoogMsgsVisitor().exec(soyTree);
+    new MoveGoogMsgDefNodesEarlierVisitor().exec(soyTree);
     TemplateNode template = soyTree.getChild(0).getChild(0);
 
     // Expected:
@@ -254,18 +258,20 @@ public final class MoveGoogMsgDefNodesEarlierVisitorTest extends TestCase {
   public void testFor() {
 
     String soyCode =
-        "{for $i in range(3)}\n" +
-        "  {msg desc=\"msg1\"}blah{/msg}\n" +
-        "  {msg desc=\"msg2\"}{$i}{/msg}\n" +  // dep on $i
-        "  {msg desc=\"msg3\"}{$moo}{/msg}\n" +
-        "  {msg desc=\"msg4\"}{$i}{/msg}\n" +  // dep on $i
-        "{/for}\n";
+        "{@param moo: ?}\n"
+            + "{for $i in range(3)}\n"
+            + "  {msg desc=\"msg1\"}blah{/msg}\n"
+            + "  {msg desc=\"msg2\"}{$i}{/msg}\n"
+            + // dep on $i
+            "  {msg desc=\"msg3\"}{$moo}{/msg}\n"
+            + "  {msg desc=\"msg4\"}{$i}{/msg}\n"
+            + // dep on $i
+            "{/for}\n";
 
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyCode)
-        .errorReporter(FAIL)
-        .parse();
-    new ReplaceMsgsWithGoogMsgsVisitor(FAIL).exec(soyTree);
-    new MoveGoogMsgDefNodesEarlierVisitor(FAIL).exec(soyTree);
+    SoyFileSetNode soyTree =
+        SoyFileSetParserBuilder.forTemplateContents(soyCode).errorReporter(FAIL).parse().fileSet();
+    new ReplaceMsgsWithGoogMsgsVisitor().exec(soyTree);
+    new MoveGoogMsgDefNodesEarlierVisitor().exec(soyTree);
     TemplateNode template = soyTree.getChild(0).getChild(0);
 
     // Expected:
@@ -294,27 +300,35 @@ public final class MoveGoogMsgDefNodesEarlierVisitorTest extends TestCase {
   public void testNested() {
 
     String soyCode =
-        "{if $goo}\n" +
-        "  {foreach $moo in $moose}\n" +
-        "    {for $i in range(3)}\n" +
-        "      {msg desc=\"msg1\"}blah{/msg}\n" +
-        "      {msg desc=\"msg2\"}{$goo}{/msg}\n" +  // dep on $goo (irrelevant)
-        "      {msg desc=\"msg3\"}{$moo}{/msg}\n" +  // dep on $moo
-        "      {msg desc=\"msg4\"}{$i}{/msg}\n" +  // dep on $i
-        "      {msg desc=\"msg5\"}{$zoo}{/msg}\n" +
-        "      {msg desc=\"msg6\"}{$goo}{$moo}{/msg}\n" +  // dep on $goo (irrelevant) and $moo
-        "      {msg desc=\"msg7\"}{$goo}{$i}{/msg}\n" +  // dep on $goo (irrelevant) and $i
-        "      {msg desc=\"msg8\"}{$moo}{$i}{/msg}\n" +  // dep on $moo and $i
-        "    {/for}\n" +
-        "  {/foreach}\n" +
-        "{/if}\n" +
-        "{msg desc=\"msg9\"}{$goo}{/msg}\n";  // dep on $goo (irrelevant)
+        "{@param goo: ?}\n"
+            + "{@param moose: ?}\n"
+            + "{@param zoo: ?}\n"
+            + "{if $goo}\n"
+            + "  {foreach $moo in $moose}\n"
+            + "    {for $i in range(3)}\n"
+            + "      {msg desc=\"msg1\"}blah{/msg}\n"
+            + "      {msg desc=\"msg2\"}{$goo}{/msg}\n"
+            + // dep on $goo (irrelevant)
+            "      {msg desc=\"msg3\"}{$moo}{/msg}\n"
+            + // dep on $moo
+            "      {msg desc=\"msg4\"}{$i}{/msg}\n"
+            + // dep on $i
+            "      {msg desc=\"msg5\"}{$zoo}{/msg}\n"
+            + "      {msg desc=\"msg6\"}{$goo}{$moo}{/msg}\n"
+            + // dep on $goo (irrelevant) and $moo
+            "      {msg desc=\"msg7\"}{$goo}{$i}{/msg}\n"
+            + // dep on $goo (irrelevant) and $i
+            "      {msg desc=\"msg8\"}{$moo}{$i}{/msg}\n"
+            + // dep on $moo and $i
+            "    {/for}\n"
+            + "  {/foreach}\n"
+            + "{/if}\n"
+            + "{msg desc=\"msg9\"}{$goo}{/msg}\n"; // dep on $goo (irrelevant)
 
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyCode)
-        .errorReporter(FAIL)
-        .parse();
-    new ReplaceMsgsWithGoogMsgsVisitor(FAIL).exec(soyTree);
-    new MoveGoogMsgDefNodesEarlierVisitor(FAIL).exec(soyTree);
+    SoyFileSetNode soyTree =
+        SoyFileSetParserBuilder.forTemplateContents(soyCode).errorReporter(FAIL).parse().fileSet();
+    new ReplaceMsgsWithGoogMsgsVisitor().exec(soyTree);
+    new MoveGoogMsgDefNodesEarlierVisitor().exec(soyTree);
     TemplateNode template = soyTree.getChild(0).getChild(0);
 
     // Expected:

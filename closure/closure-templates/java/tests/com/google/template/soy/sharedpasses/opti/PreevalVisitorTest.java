@@ -24,7 +24,9 @@ import com.google.template.soy.data.SoyValue;
 import com.google.template.soy.data.SoyValueHelper;
 import com.google.template.soy.data.SoyValueProvider;
 import com.google.template.soy.exprtree.ExprRootNode;
-import com.google.template.soy.sharedpasses.SharedPassesModule;
+import com.google.template.soy.passes.SharedPassesModule;
+import com.google.template.soy.shared.internal.ErrorReporterModule;
+import com.google.template.soy.shared.internal.SharedModule;
 import com.google.template.soy.sharedpasses.render.RenderException;
 import com.google.template.soy.sharedpasses.render.TestingEnvironment;
 import com.google.template.soy.soytree.PrintNode;
@@ -37,10 +39,9 @@ import java.util.HashMap;
  * Unit tests for PreevalVisitor.
  *
  */
-public class PreevalVisitorTest extends TestCase {
+public final class PreevalVisitorTest extends TestCase {
 
-
-  public void testPreevalNoData() throws Exception {
+  public void testPreevalNoData() {
 
     assertEquals(-210, preeval("-99+-111").integerValue());
     assertEquals("-99-111", preeval("-99 + '-111'").stringValue());
@@ -64,12 +65,12 @@ public class PreevalVisitorTest extends TestCase {
   }
 
 
-  public void testPreevalWithData() throws Exception {
+  public void testPreevalWithData() {
 
-    assertEquals(8, preeval("$boo").integerValue());
-    assertEquals(2, preeval("$boo % 3").integerValue());
-    assertEquals(false, preeval("not $boo").booleanValue());
-    assertEquals("8", preeval("$boo + ''").stringValue());
+    assertEquals(8, preeval("$boo", "boo").integerValue());
+    assertEquals(2, preeval("$boo % 3", "boo").integerValue());
+    assertEquals(2, preeval("not $boo ? 1 : 2", "boo").integerValue());
+    assertEquals("8", preeval("$boo + ''", "boo").stringValue());
 
     // With functions.
     // TODO SOON: Uncomment these tests when basic functions have been changed to SoyJavaFunction.
@@ -79,7 +80,7 @@ public class PreevalVisitorTest extends TestCase {
 
     // With undefined data.
     try {
-      preeval("4 + $foo");
+      preeval("4 + $foo", "foo");
       fail();
     } catch (RenderException re) {
       // Test passes.
@@ -87,7 +88,7 @@ public class PreevalVisitorTest extends TestCase {
   }
 
 
-  public void testPreevalWithIjData() throws Exception {
+  public void testPreevalWithIjData() {
 
     try {
       preeval("6 + $ij.foo");
@@ -102,23 +103,30 @@ public class PreevalVisitorTest extends TestCase {
   // Helpers.
 
 
-  private static final Injector INJECTOR =
-      Guice.createInjector(new SharedPassesModule(), new BasicFunctionsModule());
-
+  private static final Injector INJECTOR = Guice.createInjector(
+      new ErrorReporterModule(),
+      new SharedModule(),
+      new SharedPassesModule(),
+      new BasicFunctionsModule());
 
   /**
    * Evaluates the given expression and returns the result.
    * @param expression The expression to preevaluate.
    * @return The expression result.
-   * @throws Exception If there's an error.
    */
-  private static SoyValue preeval(String expression) throws Exception {
+  private static SoyValue preeval(String expression, String... params) {
+    String header = "";
+    for (String param : params) {
+      header += "{@param " + param + " : ?}\n";
+    }
     PrintNode code =
-        (PrintNode) SoyFileSetParserBuilder.forTemplateContents("{" + expression + "}")
-            .parse()
-            .getChild(0)
-            .getChild(0)
-            .getChild(0);
+        (PrintNode)
+            SoyFileSetParserBuilder.forTemplateContents(header + "{" + expression + "}")
+                .parse()
+                .fileSet()
+                .getChild(0)
+                .getChild(0)
+                .getChild(0);
     ExprRootNode expr = code.getExprUnion().getExpr();
     PreevalVisitor preevalVisitor =
         INJECTOR.getInstance(PreevalVisitorFactory.class).create(

@@ -16,26 +16,20 @@
 
 package com.google.template.soy.soytree;
 
-import com.google.common.base.Optional;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.template.soy.base.SourceLocation;
-import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.base.internal.BaseUtils;
 import com.google.template.soy.base.internal.SoyFileKind;
-import com.google.template.soy.basetree.SyntaxVersion;
-import com.google.template.soy.basetree.SyntaxVersionBound;
-import com.google.template.soy.error.ExplodingErrorReporter;
-import com.google.template.soy.soytree.CommandTextAttributesParser.Attribute;
+import com.google.template.soy.basetree.CopyState;
+import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.SoyError;
 import com.google.template.soy.soytree.SoyNode.SplitLevelTopNode;
 
-import java.util.List;
+import java.util.Collection;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
@@ -48,27 +42,17 @@ import javax.annotation.Nullable;
 public final class SoyFileNode extends AbstractParentSoyNode<TemplateNode>
     implements SplitLevelTopNode<TemplateNode> {
 
+  private static final SoyError ALIAS_USED_WITHOUT_NAMESPACE =
+      SoyError.of(
+          "''{alias...'' can only be used in files with valid ''{namespace ...'' "
+              + "declarations");
 
-  /** Pattern for pre-trimmed 'namespace' cmd text. Group 1 = namespace, group 2 = attributes. */
-  private static final Pattern NAMESPACE_CMD_TEXT_PATTERN = Pattern.compile(
-      "(" + BaseUtils.DOTTED_IDENT_RE + ") (\\s .*)?", Pattern.COMMENTS | Pattern.DOTALL);
+  private static final SoyError INVALID_ALIAS_FOR_LAST_PART_OF_NAMESPACE =
+      SoyError.of("Not allowed to alias the last part of the file''s namespace ({0}) "
+          + "to another namespace ({1}).");
 
-  /** Pattern for pre-trimmed 'alias' cmd text. Group 1 = namespace, group 2 = alias (or null). */
-  private static final Pattern ALIAS_CMD_TEXT_PATTERN = Pattern.compile(
-      "(" + BaseUtils.DOTTED_IDENT_RE + ") (?: \\s+ as \\s+ (" + BaseUtils.IDENT_RE + ") )?",
-      Pattern.COMMENTS);
-
-  /** The default autoescape mode if none is specified in the command text. */
-  private static final AutoescapeMode DEFAULT_FILE_WIDE_DEFAULT_AUTOESCAPE_MODE =
-      AutoescapeMode.STRICT;
-
-  /** Parser for the command text besides the namespace. */
-  private static final CommandTextAttributesParser ATTRIBUTES_PARSER =
-      new CommandTextAttributesParser("namespace",
-          new Attribute("autoescape", AutoescapeMode.getAttributeValues(),
-              DEFAULT_FILE_WIDE_DEFAULT_AUTOESCAPE_MODE.getAttributeValue()),
-          new Attribute("requirecss", Attribute.ALLOW_ALL_VALUES, null),
-          new Attribute("cssbase", Attribute.ALLOW_ALL_VALUES, null));
+  private static final SoyError DIFFERENT_NAMESPACES_WITH_SAME_ALIAS =
+      SoyError.of("Found two namespaces with the same alias (''{0}'' and ''{1}'').");
 
   public static final Predicate<SoyFileNode> MATCH_SRC_FILENODE = new Predicate<SoyFileNode>() {
     @Override
@@ -84,133 +68,63 @@ public final class SoyFileNode extends AbstractParentSoyNode<TemplateNode>
   @Nullable private final String delPackageName;
 
   /** This Soy file's namespace, or null if syntax version V1. */
-  @Nullable private final String namespace;
-
-  /** The default autoescape mode declared by this file's namespace, if any. */
-  private final Optional<AutoescapeMode> namespaceAutoescapeMode;
-
-  /** CSS namespaces required by this file (usable in any template in this file). */
-  private final ImmutableList<String> requiredCssNamespaces;
-
-  /** CSS base package for package-relative selectors. */
-  private final String cssBaseNamespace;
+  private final NamespaceDeclaration namespaceDeclaration;
 
   /** Map from aliases to namespaces for this file. */
   private final ImmutableMap<String, String> aliasToNamespaceMap;
-
-  /** This Soy file's name (null if not supplied). */
-  @Nullable private String fileName;
-
 
   /**
    * @param id The id for this node.
    * @param filePath The path to the Soy source file.
    * @param soyFileKind The kind of this Soy file.
-   * @param delpackageCmdText This Soy file's delegate package, or null if none.
-   * @param namespaceCmdText This Soy file's namespace and attributes. Nullable for backwards
+   * @param errorReporter For reporting syntax errors.
+   * @param delPackageName This Soy file's delegate package, or null if none.
+   * @param namespaceDeclaration This Soy file's namespace and attributes. Nullable for backwards
    *     compatibility only.
-   * @param aliasCmdTexts The command texts of the 'alias' declarations. Allowed to be null.
-   * @throws SoySyntaxException If a syntax error is found.
+   * @param aliases The command texts of the 'alias' declarations. Allowed to be null.
    */
   public SoyFileNode(
       int id,
       String filePath,
       SoyFileKind soyFileKind,
-      @Nullable String delpackageCmdText,
-      @Nullable String namespaceCmdText,
-      @Nullable List<String> aliasCmdTexts)
-      throws SoySyntaxException {
+      ErrorReporter errorReporter,
+      @Nullable String delPackageName,
+      NamespaceDeclaration namespaceDeclaration,
+      Collection<AliasDeclaration> aliases) {
     super(id, new SourceLocation(filePath));
-
     this.soyFileKind = soyFileKind;
+    this.delPackageName = delPackageName;
+    this.namespaceDeclaration = namespaceDeclaration;
 
-    if (delpackageCmdText != null) {
-      this.delPackageName = delpackageCmdText;
-      if (! BaseUtils.isDottedIdentifier(delPackageName)) {
-        throw SoySyntaxException.createWithoutMetaInfo(
-            "Invalid delegate package name \"" + delPackageName + "\".");
+    Map<String, String> tempAliasToNamespaceMap = Maps.newLinkedHashMap();
+    String aliasForFileNamespace =
+        namespaceDeclaration.isDefined()
+            ? BaseUtils.extractPartAfterLastDot(namespaceDeclaration.getNamespace())
+            : null;
+    for (AliasDeclaration aliasDeclaration : aliases) {
+      if (!namespaceDeclaration.isDefined()) {
+        errorReporter.report(aliasDeclaration.getLocation(), ALIAS_USED_WITHOUT_NAMESPACE);
       }
-    } else {
-      this.delPackageName = null;
-    }
-
-    String namespace = null;
-    AutoescapeMode defaultAutoescapeMode = null;
-    ImmutableList<String> requiredCssNamespaces = ImmutableList.of();
-    String cssBaseNamespace = null;
-
-    if (namespaceCmdText != null) {
-      Matcher nctMatcher = NAMESPACE_CMD_TEXT_PATTERN.matcher(namespaceCmdText);
-      if (nctMatcher.matches()) {
-        namespace = nctMatcher.group(1);
-        String attributeText = nctMatcher.group(2);
-        if (attributeText != null) {
-          attributeText = attributeText.trim();
-          Map<String, String> attributes = ATTRIBUTES_PARSER.parse(
-              attributeText, ExplodingErrorReporter.get(), getSourceLocation());
-          if (attributes.containsKey("autoescape")) {
-            defaultAutoescapeMode = AutoescapeMode.forAttributeValue(attributes.get("autoescape"));
-          }
-          if (attributes.containsKey("requirecss")) {
-            requiredCssNamespaces =
-                RequirecssUtils.parseRequirecssAttr(attributes.get("requirecss"));
-          }
-          if (attributes.containsKey("cssbase")) {
-            cssBaseNamespace = attributes.get("cssbase");
-          }
-        }
-      } else {
-        throw SoySyntaxException.createWithoutMetaInfo(
-            "Invalid namespace command text \"" + namespaceCmdText + "\".");
+      String aliasNamespace = aliasDeclaration.getNamespace();
+      String alias = aliasDeclaration.getAlias();
+      if (alias.equals(aliasForFileNamespace)
+          && !aliasNamespace.equals(namespaceDeclaration.getNamespace())) {
+        errorReporter.report(
+            aliasDeclaration.getLocation(),
+            INVALID_ALIAS_FOR_LAST_PART_OF_NAMESPACE,
+            namespaceDeclaration.getNamespace(),
+            aliasNamespace);
       }
-    }
-
-    this.namespace = namespace;
-    this.namespaceAutoescapeMode = Optional.fromNullable(defaultAutoescapeMode);
-    this.requiredCssNamespaces = requiredCssNamespaces;
-    this.cssBaseNamespace = cssBaseNamespace;
-    if (namespace == null) {
-      maybeSetSyntaxVersionBound(new SyntaxVersionBound(
-          SyntaxVersion.V2_0, "Soy V2 files must have a namespace declaration."));
-    } else if (!BaseUtils.isDottedIdentifier(namespace)) {
-      throw SoySyntaxException.createWithoutMetaInfo(
-          "Invalid namespace name \"" + namespace + "\".");
-    }
-
-    if (aliasCmdTexts != null) {
-      Preconditions.checkNotNull(this.namespace);
-      String aliasForFileNamespace = BaseUtils.extractPartAfterLastDot(this.namespace);
-      Map<String, String> tempAliasToNamespaceMap = Maps.newLinkedHashMap();
-      for (String aliasCmdText : aliasCmdTexts) {
-        Matcher actMatcher = ALIAS_CMD_TEXT_PATTERN.matcher(aliasCmdText);
-        Preconditions.checkArgument(actMatcher.matches());
-        String aliasNamespace = actMatcher.group(1);
-        Preconditions.checkArgument(BaseUtils.isDottedIdentifier(aliasNamespace));
-        String alias = actMatcher.group(2) != null ?
-            actMatcher.group(2) : BaseUtils.extractPartAfterLastDot(aliasNamespace);
-        if (alias.equals("as")) {
-          throw SoySyntaxException.createWithoutMetaInfo(String.format(
-              "Not allowed to use the string 'as' as a namespace alias (found while aliasing" +
-                  " namespace \"%s\").",
-              aliasNamespace));
-        }
-        if (alias.equals(aliasForFileNamespace) && ! aliasNamespace.equals(this.namespace)) {
-          throw SoySyntaxException.createWithoutMetaInfo(String.format(
-              "Not allowed to alias the last part of the file's namespace to some other namespace" +
-                  " (file's namespace is \"%s\", while aliased namespace is \"%s\").",
-              this.namespace, aliasNamespace));
-        }
-        if (tempAliasToNamespaceMap.containsKey(alias)) {
-          throw SoySyntaxException.createWithoutMetaInfo(String.format(
-              "Found 2 namespaces with the same alias (\"%s\" and \"%s\").",
-              tempAliasToNamespaceMap.get(alias), aliasNamespace));
-        }
-        tempAliasToNamespaceMap.put(alias, aliasNamespace);
+      if (tempAliasToNamespaceMap.containsKey(alias)) {
+        errorReporter.report(
+            getSourceLocation(),
+            DIFFERENT_NAMESPACES_WITH_SAME_ALIAS,
+            tempAliasToNamespaceMap.get(alias),
+            aliasNamespace);
       }
-      aliasToNamespaceMap = ImmutableMap.copyOf(tempAliasToNamespaceMap);
-    } else {
-      aliasToNamespaceMap = ImmutableMap.of();
+      tempAliasToNamespaceMap.put(alias, aliasNamespace);
     }
+    this.aliasToNamespaceMap = ImmutableMap.copyOf(tempAliasToNamespaceMap);
   }
 
 
@@ -218,16 +132,12 @@ public final class SoyFileNode extends AbstractParentSoyNode<TemplateNode>
    * Copy constructor.
    * @param orig The node to copy.
    */
-  private SoyFileNode(SoyFileNode orig) {
-    super(orig);
+  private SoyFileNode(SoyFileNode orig, CopyState copyState) {
+    super(orig, copyState);
     this.soyFileKind = orig.soyFileKind;
     this.delPackageName = orig.delPackageName;
-    this.namespace = orig.namespace;
-    this.namespaceAutoescapeMode = orig.namespaceAutoescapeMode;
-    this.requiredCssNamespaces = orig.requiredCssNamespaces;  // immutable
-    this.cssBaseNamespace = orig.cssBaseNamespace;
-    this.aliasToNamespaceMap = orig.aliasToNamespaceMap;  // immutable
-    this.fileName = orig.fileName;
+    this.namespaceDeclaration = orig.namespaceDeclaration; // Immutable
+    this.aliasToNamespaceMap = orig.aliasToNamespaceMap; // immutable
   }
 
 
@@ -250,25 +160,25 @@ public final class SoyFileNode extends AbstractParentSoyNode<TemplateNode>
 
   /** Returns this Soy file's namespace, or null if syntax version V1. */
   @Nullable public String getNamespace() {
-    return namespace;
+    return namespaceDeclaration.getNamespace();
   }
 
 
   /** Returns the default autoescaping mode for contained templates. */
   public AutoescapeMode getDefaultAutoescapeMode() {
-    return namespaceAutoescapeMode.or(DEFAULT_FILE_WIDE_DEFAULT_AUTOESCAPE_MODE);
+    return namespaceDeclaration.getDefaultAutoescapeMode();
   }
 
 
   /** Returns the CSS namespaces required by this file (usable in any template in this file). */
   public ImmutableList<String> getRequiredCssNamespaces() {
-    return requiredCssNamespaces;
+    return namespaceDeclaration.getRequiredCssNamespaces();
   }
 
-
   /** Returns the CSS base namespace for this file (usable in any template in this file). */
+  @Nullable
   public String getCssBaseNamespace() {
-    return cssBaseNamespace;
+    return namespaceDeclaration.getCssBaseNamespace();
   }
 
 
@@ -297,11 +207,12 @@ public final class SoyFileNode extends AbstractParentSoyNode<TemplateNode>
     if (delPackageName != null) {
       sb.append("{delpackage ").append(delPackageName).append("}\n");
     }
-    if (namespace != null) {
-      sb.append("{namespace ").append(namespace);
-      if (this.namespaceAutoescapeMode.isPresent()) {
-        sb.append(" autoescape=\"")
-            .append(this.namespaceAutoescapeMode.get().getAttributeValue())
+    if (namespaceDeclaration.isDefined()) {
+      sb.append("{namespace ").append(namespaceDeclaration.getNamespace());
+      if (this.namespaceDeclaration.getAutoescapeMode().isPresent()) {
+        sb
+            .append(" autoescape=\"")
+            .append(this.namespaceDeclaration.getAutoescapeMode().get().getAttributeValue())
             .append("\"");
       }
       sb.append("}\n");
@@ -334,8 +245,8 @@ public final class SoyFileNode extends AbstractParentSoyNode<TemplateNode>
   }
 
 
-  @Override public SoyFileNode clone() {
-    return new SoyFileNode(this);
+  @Override public SoyFileNode copy(CopyState copyState) {
+    return new SoyFileNode(this, copyState);
   }
 
 }

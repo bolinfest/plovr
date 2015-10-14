@@ -22,6 +22,7 @@ import static com.google.template.soy.exprparse.ExpressionSubject.assertThatExpr
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.exprtree.BooleanNode;
 import com.google.template.soy.exprtree.ExprNode;
+import com.google.template.soy.exprtree.ExprNode.OperatorNode;
 import com.google.template.soy.exprtree.FieldAccessNode;
 import com.google.template.soy.exprtree.FloatNode;
 import com.google.template.soy.exprtree.FunctionNode;
@@ -31,6 +32,7 @@ import com.google.template.soy.exprtree.ItemAccessNode;
 import com.google.template.soy.exprtree.ListLiteralNode;
 import com.google.template.soy.exprtree.MapLiteralNode;
 import com.google.template.soy.exprtree.NullNode;
+import com.google.template.soy.exprtree.Operator;
 import com.google.template.soy.exprtree.OperatorNodes.ConditionalOpNode;
 import com.google.template.soy.exprtree.OperatorNodes.EqualOpNode;
 import com.google.template.soy.exprtree.OperatorNodes.MinusOpNode;
@@ -67,17 +69,19 @@ public class ExpressionParserTest extends TestCase {
 
   public void testRecognizeDataReference() {
     String[] dataRefs =
-        {"$aaa", "$ij.aaa", "$a0a0.b1b1", "$aaa.0.bbb.12", "$aaa[0].bbb['ccc'][$eee]",
+        {"$aaa", "$ij.aaa", "$a0a0.b1b1", "$aaa[0].bbb[12]", "$aaa[0].bbb['ccc'][$eee]",
          "$aaa?.bbb", "$aaa.bbb?[0]?.ccc?['ddd']", "$ij?.aaa",
-         "$aaa . 1 [2] .bbb [ 3 + 4 ]['ccc']. ddd [$eee * $fff]"};
+         "$aaa [1] [2] .bbb [ 3 + 4 ]['ccc']. ddd [$eee * $fff]",
+         "functionCall($arg).field",
+         "['a' : 'b'].a"};
     for (String dataRef : dataRefs) {
-      assertThatExpression(dataRef).isValidDataRef();
+      assertThatExpression(dataRef).isValidExpression();
     }
 
     String[] nonDataRefs =
-        {"$", "$ aaa", "aaa", "$1a1a", "$0", "$[12]", "$[$aaa]", "$aaa[]", "$ij[4]", "$aaa.?bbb"};
+        {"$", "$ aaa", "1aaa", "$1a1a", "$0", "$[12]", "$[$aaa]", "$aaa[]", "$ij[4]", "$aaa.?bbb"};
     for (String nonDataRef : nonDataRefs) {
-      assertThatExpression(nonDataRef).isNotValidDataRef();
+      assertThatExpression(nonDataRef).isNotValidExpression();
     }
   }
 
@@ -160,9 +164,9 @@ public class ExpressionParserTest extends TestCase {
   public void testRecognizeDataRefAsExpression() {
     assertThatExpression("$aaa").isValidExpression();
     assertThatExpression("$a0a0.b1b1").isValidExpression();
-    assertThatExpression("$aaa.0.bbb.12").isValidExpression();
+    assertThatExpression("$aaa[0].bbb[12]").isValidExpression();
     assertThatExpression("$aaa[0].bbb['ccc'][$eee]").isValidExpression();
-    assertThatExpression("$aaa . 1 [2] .bbb [ 3 + 4 ]['ccc']. ddd [$eee * $fff]").isValidExpression();
+    assertThatExpression("$aaa [1] [2] .bbb [ 3 + 4 ]['ccc']. ddd [$eee * $fff]").isValidExpression();
 
     assertThatExpression("$").isNotValidExpression();
     assertThatExpression("$ aaa").isNotValidExpression();
@@ -181,9 +185,10 @@ public class ExpressionParserTest extends TestCase {
 
     assertThatExpression("1a1a").isNotValidExpression();
     assertThatExpression("aaa.1a1a").isNotValidExpression();
-    assertThatExpression("aaa[33]").isNotValidExpression();
-    assertThatExpression("aaa[bbb]").isNotValidExpression();
-    assertThatExpression("aaa['bbb']").isNotValidExpression();
+    // These used to be rejected by the parser, now they will be rejected by the type checker.
+    assertThatExpression("aaa[33]").isValidExpression();
+    assertThatExpression("aaa[bbb]").isValidExpression();
+    assertThatExpression("aaa['bbb']").isValidExpression();
   }
 
 
@@ -191,7 +196,7 @@ public class ExpressionParserTest extends TestCase {
     assertThatExpression("isFirst($x)").isValidExpression();
     assertThatExpression("isLast($y)").isValidExpression();
     assertThatExpression("index($z)").isValidExpression();
-    assertThatExpression("hasData()").isValidExpression();
+    assertThatExpression("randomInt()").isValidExpression();
     assertThatExpression("length($x.y.z)").isValidExpression();
     assertThatExpression("round(3.14159)").isValidExpression();
     assertThatExpression("round(3.14159, 2)").isValidExpression();
@@ -272,12 +277,12 @@ public class ExpressionParserTest extends TestCase {
 
     SourceLocation loc = SourceLocation.UNKNOWN;
 
-    ExprNode dataRef = assertThatExpression("$boo").isValidDataRef();
+    ExprNode dataRef = assertThatExpression("$boo").isValidExpression();
     assertNodeEquals(
         new VarRefNode("boo", loc, false, false, null),
         dataRef);
 
-    dataRef = assertThatExpression("$boo.foo").isValidDataRef();
+    dataRef = assertThatExpression("$boo.foo").isValidExpression();
     assertNodeEquals(
         new FieldAccessNode(
             new VarRefNode("boo", loc, false, false, null),
@@ -285,39 +290,36 @@ public class ExpressionParserTest extends TestCase {
             false),
         dataRef);
 
-    dataRef = assertThatExpression("$boo.0[$foo]").isValidDataRef();
+    dataRef = assertThatExpression("$boo[0][$foo]").isValidExpression();
     assertNodeEquals(
         new ItemAccessNode(
             new ItemAccessNode(
                 new VarRefNode("boo", loc, false, false, null),
                 new IntegerNode(0, loc),
-                false, true),
+                false),
             new VarRefNode("foo", loc, false, false, null),
-            false,
             false),
         dataRef);
 
-    dataRef = assertThatExpression("$boo?.0?[$foo]").isValidDataRef();
+    dataRef = assertThatExpression("$boo?[0]?[$foo]").isValidExpression();
     assertNodeEquals(
         new ItemAccessNode(
             new ItemAccessNode(
                 new VarRefNode("boo", loc, false, false, null),
                 new IntegerNode(0, loc),
-                true, true),
+                true),
             new VarRefNode("foo", loc, false, false, null),
-            true,
-            false),
+            true),
         dataRef);
 
-    dataRef = assertThatExpression("$ij?.boo?.0[$ij.foo]").isValidDataRef();
+    dataRef = assertThatExpression("$ij?.boo?[0][$ij.foo]").isValidExpression();
     assertNodeEquals(
         new ItemAccessNode(
             new ItemAccessNode(
                 new VarRefNode("boo", loc, true, true, null),
                 new IntegerNode(0, loc),
-                true, true),
+                true),
             new VarRefNode("foo", loc, true, false, null),
-            false,
             false),
         dataRef);
   }
@@ -335,7 +337,7 @@ public class ExpressionParserTest extends TestCase {
     assertThat(expr).isInstanceOf(NullNode.class);
 
     expr = assertThatExpression("true").isValidExpression();
-    assertThat(((BooleanNode) expr).getValue()).isEqualTo(true);
+    assertThat(((BooleanNode) expr).getValue()).isTrue();
 
     expr = assertThatExpression("false").isValidExpression();
     assertThat(((BooleanNode) expr).getValue()).isFalse();
@@ -423,7 +425,7 @@ public class ExpressionParserTest extends TestCase {
 
     expr = assertThatExpression("not false").isValidExpression();
     NotOpNode notOp = (NotOpNode) expr;
-    assertThat(((BooleanNode) notOp.getChild(0)).getValue()).isEqualTo(false);
+    assertThat(((BooleanNode) notOp.getChild(0)).getValue()).isFalse();
 
     expr = assertThatExpression("90 -14.75").isValidExpression();
     MinusOpNode minusOp = (MinusOpNode) expr;
@@ -433,7 +435,7 @@ public class ExpressionParserTest extends TestCase {
     expr = assertThatExpression("$a or true").isValidExpression();
     OrOpNode orOp = (OrOpNode) expr;
     assertThat(orOp.getChild(0).toSourceString()).isEqualTo("$a");
-    assertThat(((BooleanNode) orOp.getChild(1)).getValue()).isEqualTo(true);
+    assertThat(((BooleanNode) orOp.getChild(1)).getValue()).isTrue();
 
     expr = assertThatExpression("$a ?: $b ?: $c").isValidExpression();
     NullCoalescingOpNode nullCoalOp0 = (NullCoalescingOpNode) expr;
@@ -455,11 +457,73 @@ public class ExpressionParserTest extends TestCase {
   public void testParseExpressionList() throws Exception {
     List<ExprNode> exprList
         = assertThatExpression("$aaa, $bbb.ccc + 1, index($ddd)").isValidExpressionList();
-    assertTrue(exprList.get(0) instanceof VarRefNode);
+    assertThat(exprList.get(0)).isInstanceOf(VarRefNode.class);
     assertThat(exprList.get(1)).isInstanceOf(PlusOpNode.class);
     assertThat(exprList.get(2)).isInstanceOf(FunctionNode.class);
   }
 
+  public void testOperatorPrecedence() throws Exception {
+    // + is left associative
+    assertThat(precedenceString("1 + 2")).isEqualTo("1 + 2");
+    assertThat(precedenceString("1 + 2 + 3")).isEqualTo("(1 + 2) + 3");
+    assertThat(precedenceString("1 + 2 + 3 + 4 + 5 + 6"))
+        .isEqualTo("((((1 + 2) + 3) + 4) + 5) + 6");
+
+    // ?: is right associative
+    assertThat(precedenceString("$a ?: $b ?: $c")).isEqualTo("$a ?: ($b ?: $c)");
+
+    // ternary is right associative (though still confusing)
+    assertThat(precedenceString("$a ? $b ? $c : $d : $e ? $f : $g"))
+        .isEqualTo("$a ? ($b ? $c : $d) : ($e ? $f : $g)");
+
+    // unary negation ?: is right associative
+    assertThat(precedenceString("- - $a")).isEqualTo("- (- $a)");
+
+    // all together now!
+    assertThat(precedenceString("1 + - 2 * 3 + 4 % 2 ?: 3"))
+        .isEqualTo("((1 + ((- 2) * 3)) + (4 % 2)) ?: 3");
+
+    assertThat(precedenceString("-$a.b > 0 ? $c.d : $c"))
+        .isEqualTo("((- $a.b) > 0) ? $c.d : $c");
+  }
+
+  // Parses the soy expression and then prints it with copious parens to indicate the associativity
+  private String precedenceString(String soyExpr) {
+    ExprNode node = assertThatExpression(soyExpr).isValidExpression();
+    return formatNode(node, true);
+  }
+
+  private String formatNode(ExprNode node, boolean outermost) {
+    if (node instanceof OperatorNode) {
+      OperatorNode opNode = (OperatorNode) node;
+      String formatted = formatOperator(opNode);
+      if (!outermost) {
+        return "(" + formatted + ")";
+      }
+      return formatted;
+    } else {
+      return node.toSourceString();
+    }
+  }
+
+  private String formatOperator(OperatorNode opNode) {
+    Operator op = opNode.getOperator();
+    switch (op) {
+      case NEGATIVE:
+      case NOT:
+        // unary
+        return op.getTokenString() + " " + formatNode(opNode.getChild(0), false);
+      case CONDITIONAL:
+        return formatNode(opNode.getChild(0), false)
+            + " ? " + formatNode(opNode.getChild(1), false)
+            + " : " + formatNode(opNode.getChild(2), false);
+      default:
+        // everything else is binary
+        assertEquals(2, op.getNumOperands());
+        return formatNode(opNode.getChild(0), false) + " " + op.getTokenString() + " "
+            + formatNode(opNode.getChild(1), false);
+    }
+  }
 
   // -----------------------------------------------------------------------------------------------
   // Helpers.

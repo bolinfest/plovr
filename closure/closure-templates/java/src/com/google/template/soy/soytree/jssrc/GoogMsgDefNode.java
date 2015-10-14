@@ -18,15 +18,16 @@ package com.google.template.soy.soytree.jssrc;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import com.google.template.soy.basetree.CopyState;
 import com.google.template.soy.soytree.AbstractParentSoyNode;
 import com.google.template.soy.soytree.MsgFallbackGroupNode;
 import com.google.template.soy.soytree.MsgNode;
-import com.google.template.soy.soytree.SoyNode.LocalVarInlineNode;
+import com.google.template.soy.soytree.SoyNode.BlockNode;
+import com.google.template.soy.soytree.SoyNode.Kind;
 import com.google.template.soy.soytree.SoyNode.SplitLevelTopNode;
 import com.google.template.soy.soytree.SoyNode.StandaloneNode;
 
 import java.util.List;
-
 
 /**
  * Represents a {@code goog.getMsg*} definition of a group of one or more messages. If more than one
@@ -38,7 +39,7 @@ import java.util.List;
  *
  */
 public final class GoogMsgDefNode extends AbstractParentSoyNode<MsgNode>
-    implements StandaloneNode, SplitLevelTopNode<MsgNode>, LocalVarInlineNode {
+    implements StandaloneNode, SplitLevelTopNode<MsgNode> {
 
 
   /** Map from child MsgNode to its msg id. */
@@ -90,8 +91,8 @@ public final class GoogMsgDefNode extends AbstractParentSoyNode<MsgNode>
    * Copy constructor.
    * @param orig The node to copy.
    */
-  private GoogMsgDefNode(GoogMsgDefNode orig) {
-    super(orig);
+  private GoogMsgDefNode(GoogMsgDefNode orig, CopyState copyState) {
+    super(orig, copyState);
     this.childToMsgIdMap = orig.childToMsgIdMap;  // immutable
     this.renderedGoogMsgVarName = orig.renderedGoogMsgVarName;
     this.sourceString = orig.sourceString;
@@ -115,7 +116,7 @@ public final class GoogMsgDefNode extends AbstractParentSoyNode<MsgNode>
   }
 
 
-  @Override public String getVarName() {
+  public String getVarName() {
     return getRenderedGoogMsgVarName();
   }
 
@@ -130,8 +131,8 @@ public final class GoogMsgDefNode extends AbstractParentSoyNode<MsgNode>
   }
 
 
-  @Override public GoogMsgDefNode clone() {
-    return new GoogMsgDefNode(this);
+  @Override public GoogMsgDefNode copy(CopyState copyState) {
+    return new GoogMsgDefNode(this, copyState);
   }
 
 }
