@@ -3,12 +3,27 @@
 # Use of this source code is governed by the Apache License, Version 2.0.
 # See the LICENSE file for details.
 
+# Use new container-based infrastructure.
+language: node_js
+sudo: false
+
+cache:
+  directories:
+    - node_modules
+
 install:
-  - cd ..
-  - git clone https://github.com/google/closure-compiler.git
-  - cd closure-compiler
-  - ant jar
-  - cd ../closure-library
+  - ./scripts/ci/install_closure_deps.sh
+
+before_script:
+  #- ./scripts/http/simple_http_server.py 2> /dev/null & sleep 5
+  #- ./scripts/ci/sauce_connect.sh
 
 script:
-  - java -jar ../closure-compiler/build/compiler.jar -O ADVANCED --js='**.js' --js='!**_test.js' --js='!**_perf.js' --js_output_file=$(mktemp)
+  - ./scripts/ci/compile_closure.sh
+  - ./scripts/ci/lint_pull_request.sh
+  #- travis_wait 30 ./scripts/ci/run_all_tests.sh
+
+env:
+  global:
+    - SAUCE_USERNAME=joeltine
+    - SAUCE_ACCESS_KEY=c1426ba29e28-d49b-e304-8559-3a85cd04

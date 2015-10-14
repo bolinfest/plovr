@@ -177,7 +177,7 @@ goog.pubsub.PubSub.prototype.unsubscribe = function(topic, fn, opt_context) {
     });
     // Zero is not a valid key.
     if (key) {
-      return this.unsubscribeByKey(/** @type {number} */ (key));
+      return this.unsubscribeByKey(key);
     }
   }
 
@@ -194,22 +194,24 @@ goog.pubsub.PubSub.prototype.unsubscribe = function(topic, fn, opt_context) {
  * @return {boolean} Whether a matching subscription was removed.
  */
 goog.pubsub.PubSub.prototype.unsubscribeByKey = function(key) {
-  if (this.publishDepth_ != 0) {
-    // Defer removal until after publishing is complete.
-    this.pendingKeys_.push(key);
-    return false;
-  }
-
   var topic = this.subscriptions_[key];
   if (topic) {
     // Subscription tuple found.
     var keys = this.topics_[topic];
-    if (keys) {
-      goog.array.remove(keys, key);
+
+    if (this.publishDepth_ != 0) {
+      // Defer removal until after publishing is complete, but replace the
+      // function with a no-op so it isn't called.
+      this.pendingKeys_.push(key);
+      this.subscriptions_[key + 1] = goog.nullFunction;
+    } else {
+      if (keys) {
+        goog.array.remove(keys, key);
+      }
+      delete this.subscriptions_[key];
+      delete this.subscriptions_[key + 1];
+      delete this.subscriptions_[key + 2];
     }
-    delete this.subscriptions_[key];
-    delete this.subscriptions_[key + 1];
-    delete this.subscriptions_[key + 2];
   }
 
   return !!topic;
@@ -243,22 +245,26 @@ goog.pubsub.PubSub.prototype.publish = function(topic, var_args) {
       args[i - 1] = arguments[i];
     }
 
-    // For each key in the list of subscription keys for the topic, apply the
-    // function to the arguments in the appropriate context.  The length of the
-    // array mush be fixed during the iteration, since subscribers may add new
-    // subscribers during publishing.
-    for (var i = 0, len = keys.length; i < len; i++) {
-      var key = keys[i];
-      this.subscriptions_[key + 1].apply(this.subscriptions_[key + 2], args);
-    }
+    try {
+      // For each key in the list of subscription keys for the topic, apply the
+      // function to the arguments in the appropriate context.  The length of
+      // the array must be fixed during the iteration, since subscribers may add
+      // new subscribers during publishing.
+      for (var i = 0, len = keys.length; i < len; i++) {
+        var key = keys[i];
+        this.subscriptions_[key + 1].apply(this.subscriptions_[key + 2], args);
+      }
+    } finally {
+      // Always unlock subscriptions, even if a subscribed method throws an
+      // uncaught exception. This makes it possible for users to catch
+      // exceptions themselves and unsubscribe remaining subscriptions.
+      this.publishDepth_--;
 
-    // Unlock subscriptions.
-    this.publishDepth_--;
-
-    if (this.pendingKeys_.length > 0 && this.publishDepth_ == 0) {
-      var pendingKey;
-      while ((pendingKey = this.pendingKeys_.pop())) {
-        this.unsubscribeByKey(pendingKey);
+      if (this.pendingKeys_.length > 0 && this.publishDepth_ == 0) {
+        var pendingKey;
+        while ((pendingKey = this.pendingKeys_.pop())) {
+          this.unsubscribeByKey(pendingKey);
+        }
       }
     }
 
@@ -294,7 +300,7 @@ goog.pubsub.PubSub.prototype.clear = function(opt_topic) {
 
 /**
  * Returns the number of subscriptions to the given topic (or all topics if
- * unspecified).
+ * unspecified). This number will not change while publishing any messages.
  * @param {string=} opt_topic The topic (all topics if unspecified).
  * @return {number} Number of subscriptions to the topic.
  */

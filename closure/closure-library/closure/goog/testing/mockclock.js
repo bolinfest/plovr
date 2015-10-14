@@ -28,7 +28,6 @@ goog.require('goog.async.run');
 goog.require('goog.testing.PropertyReplacer');
 goog.require('goog.testing.events');
 goog.require('goog.testing.events.Event');
-goog.require('goog.testing.watchers');
 
 
 
@@ -79,8 +78,7 @@ goog.testing.MockClock = function(opt_autoInstall) {
    * turn comes up.  The keys are the timeout keys that are cancelled, each
    * mapping to true.
    *
-   * @type {Object}
-   * @private
+   * @private {Object<number, boolean>}
    */
   this.deletedKeys_ = {};
 
@@ -126,15 +124,6 @@ goog.testing.MockClock.prototype.replacer_ = null;
 
 
 /**
- * Map of deleted keys.  These keys represents keys that were deleted in a
- * clearInterval, timeoutid -> object.
- * @type {Object}
- * @private
- */
-goog.testing.MockClock.prototype.deletedKeys_ = null;
-
-
-/**
  * The current simulated time in milliseconds.
  * @type {number}
  * @private
@@ -154,11 +143,27 @@ goog.testing.MockClock.prototype.timeoutDelay_ = 0;
 
 
 /**
+ * The real set timeout for reference.
+ * @const @private {!Function}
+ */
+goog.testing.MockClock.REAL_SETTIMEOUT_ = goog.global.setTimeout;
+
+
+/**
  * Installs the MockClock by overriding the global object's implementation of
  * setTimeout, setInterval, clearTimeout and clearInterval.
  */
 goog.testing.MockClock.prototype.install = function() {
   if (!this.replacer_) {
+    if (goog.testing.MockClock.REAL_SETTIMEOUT_ !== goog.global.setTimeout) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('Non default setTimeout detected. ' +
+            'Use of multiple MockClock instances or other clock mocking ' +
+            'should be avoided due to unspecified behavior and ' +
+            'the resulting fragility.');
+      }
+    }
+
     var r = this.replacer_ = new goog.testing.PropertyReplacer();
     r.set(goog.global, 'setTimeout', goog.bind(this.setTimeout_, this));
     r.set(goog.global, 'setInterval', goog.bind(this.setInterval_, this));
@@ -171,7 +176,8 @@ goog.testing.MockClock.prototype.install = function() {
     // default to setImmediate, which is replaced above. Note that we test for
     // the presence of goog.async.run.forceNextTick to be resilient to the case
     // where tests replace goog.async.run directly.
-    goog.async.run.forceNextTick && goog.async.run.forceNextTick();
+    goog.async.run.forceNextTick && goog.async.run.forceNextTick(
+        goog.testing.MockClock.REAL_SETTIMEOUT_);
 
     // Replace the requestAnimationFrame functions.
     this.replaceRequestAnimationFrame_();
@@ -229,7 +235,7 @@ goog.testing.MockClock.prototype.uninstall = function() {
     goog.now = this.oldGoogNow_;
   }
 
-  this.fireResetEvent();
+  this.resetAsyncQueue_();
 };
 
 
@@ -253,16 +259,16 @@ goog.testing.MockClock.prototype.reset = function() {
   this.timeoutsMade_ = 0;
   this.timeoutDelay_ = 0;
 
-  this.fireResetEvent();
+  this.resetAsyncQueue_();
 };
 
 
 /**
- * Signals that the mock clock has been reset, allowing objects that
- * maintain their own internal state to reset.
+ * Resets the async queue when this clock resets.
+ * @private
  */
-goog.testing.MockClock.prototype.fireResetEvent = function() {
-  goog.testing.watchers.signalClockReset();
+goog.testing.MockClock.prototype.resetAsyncQueue_ = function() {
+  goog.async.run.resetQueue();
 };
 
 
