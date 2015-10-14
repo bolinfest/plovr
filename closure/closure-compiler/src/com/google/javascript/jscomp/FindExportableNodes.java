@@ -72,6 +72,16 @@ class FindExportableNodes extends AbstractPostOrderCallback {
   public void visit(NodeTraversal t, Node n, Node parent) {
     JSDocInfo docInfo = n.getJSDocInfo();
     if (docInfo != null && docInfo.isExport()) {
+
+      if (parent.isAssign() && (n.isFunction() || n.isClass())) {
+        JSDocInfo parentInfo = parent.getJSDocInfo();
+        if (parentInfo != null && parentInfo.isExport()) {
+          // ScopedAliases produces export annotations on both the function/class
+          // node and assign node, we only want to visit the assign node.
+          return;
+        }
+      }
+
       String export = null;
       GenerateNodeContext context = null;
 
@@ -83,12 +93,24 @@ class FindExportableNodes extends AbstractPostOrderCallback {
           }
           break;
 
+        case Token.CLASS:
+          if (parent.isScript()) {
+            export = NodeUtil.getClassName(n);
+            context = new GenerateNodeContext(n, Mode.EXPORT);
+          }
+          break;
+
+        case Token.MEMBER_FUNCTION_DEF:
+          export = n.getString();
+          context = new GenerateNodeContext(n, Mode.EXPORT);
+          break;
+
         case Token.ASSIGN:
           Node grandparent = parent.getParent();
-          if (parent.isExprResult() &&
-              !n.getLastChild().isAssign()) {
-            if (grandparent != null && grandparent.isScript() &&
-                n.getFirstChild().isQualifiedName()) {
+          if (parent.isExprResult() && !n.getLastChild().isAssign()) {
+            if (grandparent != null
+                && grandparent.isScript()
+                && n.getFirstChild().isQualifiedName()) {
               export = n.getFirstChild().getQualifiedName();
               context = new GenerateNodeContext(n, Mode.EXPORT);
             } else if (allowLocalExports && n.getFirstChild().isGetProp()) {
@@ -100,6 +122,8 @@ class FindExportableNodes extends AbstractPostOrderCallback {
           break;
 
         case Token.VAR:
+        case Token.LET:
+        case Token.CONST:
           if (parent.isScript()) {
             if (n.getFirstChild().hasChildren() &&
                 !n.getFirstChild().getFirstChild().isAssign()) {

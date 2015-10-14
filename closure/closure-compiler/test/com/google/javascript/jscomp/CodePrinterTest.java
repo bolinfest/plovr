@@ -325,29 +325,29 @@ public final class CodePrinterTest extends CodePrinterTestBase {
 
   public void testPrintObjectPatternAssign() {
     languageMode = LanguageMode.ECMASCRIPT6;
-    assertPrintSame("({a})=foo()");
-    assertPrintSame("({a,b})=foo()");
-    assertPrintSame("({a:a,b:b})=foo()");
+    assertPrintSame("({a}=foo())");
+    assertPrintSame("({a,b}=foo())");
+    assertPrintSame("({a:a,b:b}=foo())");
   }
 
   public void testPrintNestedObjectPattern() {
     languageMode = LanguageMode.ECMASCRIPT6;
-    assertPrintSame("({a:{b,c}})=foo()");
-    assertPrintSame("({a:{b:{c:{d}}}})=foo()");
+    assertPrintSame("({a:{b,c}}=foo())");
+    assertPrintSame("({a:{b:{c:{d}}}}=foo())");
   }
 
   public void testPrintObjectPatternInitializer() {
     languageMode = LanguageMode.ECMASCRIPT6;
-    assertPrintSame("({a=1})=foo()");
-    assertPrintSame("({a:{b=2}})=foo()");
-    assertPrintSame("({a:b=2})=foo()");
-    assertPrintSame("({a,b:{c=2}})=foo()");
-    assertPrintSame("({a:{b=2},c})=foo()");
+    assertPrintSame("({a=1}=foo())");
+    assertPrintSame("({a:{b=2}}=foo())");
+    assertPrintSame("({a:b=2}=foo())");
+    assertPrintSame("({a,b:{c=2}}=foo())");
+    assertPrintSame("({a:{b=2},c}=foo())");
   }
 
   public void testPrintMixedDestructuring() {
     languageMode = LanguageMode.ECMASCRIPT6;
-    assertPrintSame("({a:[b,c]})=foo()");
+    assertPrintSame("({a:[b,c]}=foo())");
     assertPrintSame("[a,{b,c}]=foo()");
   }
 
@@ -1038,6 +1038,18 @@ public final class CodePrinterTest extends CodePrinterTestBase {
         + "a.Foo.prototype.foo = function(foo) {\n  return 3;\n};\n"
         + "/** @type {string} */\n"
         + "a.Foo.prototype.bar = \"\";\n");
+  }
+
+  public void testTypeAnnotationsMemberStub() {
+    // TODO(blickly): Investigate why the method's type isn't preserved.
+    assertTypeAnnotations("/** @interface */ function I(){};"
+        + "/** @return {undefined} @param {number} x */ I.prototype.method;",
+        "/**\n"
+        + " * @interface\n"
+        + " */\n"
+        + "function I() {\n"
+        + "}\n"
+        + "I.prototype.method;\n");
   }
 
   public void testTypeAnnotationsImplements() {
@@ -1863,12 +1875,12 @@ public final class CodePrinterTest extends CodePrinterTestBase {
 
   public void testPreserveTypeAnnotations() {
     preserveTypeAnnotations = true;
-    assertPrintSame("/**@type {foo}\n*/var bar");
+    assertPrintSame("/**@type {foo} */var bar");
     assertPrintSame(
         "function/** void */f(/** string */s,/** number */n){}");
 
     preserveTypeAnnotations = false;
-    assertPrint("/** @type {foo}\n*/\nvar bar;", "var bar");
+    assertPrint("/** @type {foo} */var bar;", "var bar");
   }
 
   public void testDefaultParameters() {
@@ -1904,6 +1916,18 @@ public final class CodePrinterTest extends CodePrinterTestBase {
     assertPrintSame("class C{static member(){}}");
     assertPrintSame("class C{member(){}get f(){}}");
     assertPrintSame("var x=class C{}");
+  }
+
+  public void testClassComputedProperties() {
+    languageMode = LanguageMode.ECMASCRIPT6;
+
+    assertPrintSame("class C{[x](){}}");
+    assertPrintSame("class C{get [x](){}}");
+    assertPrintSame("class C{set [x](val){}}");
+
+    assertPrintSame("class C{static [x](){}}");
+    assertPrintSame("class C{static get [x](){}}");
+    assertPrintSame("class C{static set [x](val){}}");
   }
 
   public void testClassPretty() {
@@ -1957,6 +1981,9 @@ public final class CodePrinterTest extends CodePrinterTestBase {
     assertPrint("(a=>b)(1)", "((a)=>b)(1)");
     assertPrintSame("var z={x:(a)=>1}");
     assertPrint("(a,b)=>b", "(a,b)=>b");
+    assertPrintSame("()=>(a,b)");
+    assertPrint("(()=>a),b", "()=>a,b");
+    assertPrint("()=>(a=b)", "()=>a=b");
   }
 
   public void testDeclarations() {
@@ -1996,10 +2023,12 @@ public final class CodePrinterTest extends CodePrinterTestBase {
     languageMode = LanguageMode.ECMASCRIPT6;
     // export declarations
     assertPrintSame("export var x=1");
+    assertPrintSame("export var x;export var y");
     assertPrintSame("export let x=1");
     assertPrintSame("export const x=1");
     assertPrintSame("export function f(){}");
     assertPrintSame("export class f{}");
+    assertPrintSame("export class f{}export class b{}");
 
     // export all from
     assertPrint("export * from 'a.b.c'", "export*from\"a.b.c\"");
@@ -2018,6 +2047,8 @@ public final class CodePrinterTest extends CodePrinterTestBase {
     // export default
     assertPrintSame("export default x");
     assertPrintSame("export default 1");
+    assertPrintSame("export default class Foo{}export function f(){}");
+    assertPrintSame("export function f(){}export default class Foo{}");
   }
 
   public void testTemplateLiteral() {
@@ -2025,6 +2056,10 @@ public final class CodePrinterTest extends CodePrinterTestBase {
     assertPrintSame("`hello`");
     assertPrint("`hel\rlo`", "`hel\nlo`");
     assertPrint("`hel\r\nlo`", "`hel\nlo`");
+    assertPrint("`hello`\n'world'", "`hello`;\"world\"");
+    assertPrint("`hello`\n`world`", "`hello``world`");
+    assertPrint("var x=`TestA`\n`TemplateB`", "var x=`TestA``TemplateB`");
+    assertPrintSame("`hello``world`");
 
     assertPrintSame("`hello${world}!`");
     assertPrintSame("`hello${world} ${name}!`");

@@ -16,6 +16,8 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.common.annotations.GwtIncompatible;
+
 import java.io.PrintStream;
 
 /**
@@ -27,6 +29,7 @@ import java.io.PrintStream;
  * {@link MessageFormatter} to display error messages with source context.</p>
  *
  */
+@GwtIncompatible("java.io.PrintStream")
 public class PrintStreamErrorManager extends BasicErrorManager {
   private final MessageFormatter formatter;
   private final PrintStream stream;

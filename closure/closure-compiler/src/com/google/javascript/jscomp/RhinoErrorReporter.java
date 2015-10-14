@@ -36,6 +36,19 @@ class RhinoErrorReporter {
   static final DiagnosticType TYPE_PARSE_ERROR =
       DiagnosticType.warning("JSC_TYPE_PARSE_ERROR", "{0}");
 
+  // This is separate from TYPE_PARSE_ERROR because there are many instances of this warning
+  // and it is unfeasible to fix them all right away.
+  static final DiagnosticType JSDOC_MISSING_BRACES_WARNING =
+      DiagnosticType.disabled("JSC_JSDOC_MISSING_BRACES_WARNING", "{0}");
+
+  // This is separate from TYPE_PARSE_ERROR because there are many instances of this warning
+  // and it is unfeasible to fix them all right away.
+  static final DiagnosticType JSDOC_MISSING_TYPE_WARNING =
+      DiagnosticType.disabled("JSC_JSDOC_MISSING_TYPE_WARNING", "{0}");
+
+  static final DiagnosticType TOO_MANY_TEMPLATE_PARAMS =
+      DiagnosticType.disabled("JSC_TOO_MANY_TEMPLATE_PARAMS", "{0}");
+
   // Special-cased errors, so that they can be configured via the
   // warnings API.
   static final DiagnosticType TRAILING_COMMA =
@@ -57,19 +70,6 @@ class RhinoErrorReporter {
   static final DiagnosticType JSDOC_IN_BLOCK_COMMENT =
       DiagnosticType.warning("JSC_JSDOC_IN_BLOCK_COMMENT", "Parse error. {0}");
 
-  static final DiagnosticType MISPLACED_TYPE_ANNOTATION =
-      DiagnosticType.warning("JSC_MISPLACED_TYPE_ANNOTATION",
-          "Type annotations are not allowed here. " +
-          "Are you missing parentheses?");
-
-  static final DiagnosticType MISPLACED_FUNCTION_ANNOTATION =
-      DiagnosticType.warning("JSC_MISPLACED_FUNCTION_ANNOTATION",
-          "Misplaced function annotation.");
-
-  static final DiagnosticType MISPLACED_MSG_ANNOTATION =
-      DiagnosticType.disabled("JSC_MISPLACED_MSG_ANNOTATION",
-          "Misplaced message annotation.");
-
   static final DiagnosticType INVALID_ES3_PROP_NAME = DiagnosticType.warning(
       "JSC_INVALID_ES3_PROP_NAME",
       "Keywords and reserved words are not allowed as unquoted property " +
@@ -90,8 +90,14 @@ class RhinoErrorReporter {
           "{0}. Use --language_in=ECMASCRIPT6 or ECMASCRIPT6_STRICT " +
           "to enable ES6 features.");
 
-  static final DiagnosticType ANNOTATION_DEPRECATED =
-      DiagnosticType.warning("JSC_ANNOTATION_DEPRECATED", "{0}");
+  static final DiagnosticType ES6_TYPED =
+      DiagnosticType.error("ES6_TYPED",
+          "{0}. Use --language_in=ECMASCRIPT6_TYPED " +
+          "to enable ES6 typed features.");
+
+  static final DiagnosticType MISPLACED_TYPE_SYNTAX =
+      DiagnosticType.error("MISPLACED_TYPE_SYNTAX",
+          "Can only have JSDoc or inline type annotations, not both");
 
   // A map of Rhino messages to their DiagnosticType.
   private final Map<Pattern, DiagnosticType> typeMap;
@@ -110,66 +116,66 @@ class RhinoErrorReporter {
 
   private RhinoErrorReporter(AbstractCompiler compiler) {
     this.compiler = compiler;
-    typeMap = ImmutableMap.<Pattern, DiagnosticType>builder()
-        // Trailing comma
-        .put(replacePlaceHolders(
-            "Trailing comma is not legal in an ECMA-262 object initializer"),
-            TRAILING_COMMA)
+    typeMap =
+        ImmutableMap.<Pattern, DiagnosticType>builder()
+            // Trailing comma
+            .put(
+                replacePlaceHolders(
+                    "Trailing comma is not legal in an ECMA-262 object initializer"),
+                TRAILING_COMMA)
 
-        // Duplicate parameter
-        .put(replacePlaceHolders(
-            "Duplicate parameter name \"{0}\""),
-            DUPLICATE_PARAM)
+            // Duplicate parameter
+            .put(replacePlaceHolders("Duplicate parameter name \"{0}\""), DUPLICATE_PARAM)
 
-        .put(Pattern.compile("^invalid param name.*"), INVALID_PARAM)
+            .put(Pattern.compile("^invalid param name.*"), INVALID_PARAM)
 
-        // Unknown @annotations.
-        .put(replacePlaceHolders(
-            SimpleErrorReporter.getMessage0("msg.bad.jsdoc.tag")),
-            BAD_JSDOC_ANNOTATION)
+            // Unknown @annotations.
+            .put(
+                replacePlaceHolders(SimpleErrorReporter.getMessage0("msg.bad.jsdoc.tag")),
+                BAD_JSDOC_ANNOTATION)
 
-        .put(Pattern.compile(
-            "^\\QNon-JSDoc comment has annotations. " +
-            "Did you mean to start it with '/**'?\\E"),
-            JSDOC_IN_BLOCK_COMMENT)
+            .put(
+                Pattern.compile("^" + Pattern.quote(
+                    "Non-JSDoc comment has annotations. "
+                        + "Did you mean to start it with '/**'?")),
+                JSDOC_IN_BLOCK_COMMENT)
 
-        // Unexpected @type annotations
-        .put(Pattern.compile("^Type annotations are not allowed here.*"),
-            MISPLACED_TYPE_ANNOTATION)
+            .put(
+                Pattern.compile(
+                    "^Keywords and reserved words" + " are not allowed as unquoted property.*"),
+                INVALID_ES3_PROP_NAME)
 
-        // Unexpected function JsDoc
-        .put(Pattern.compile("^This JSDoc is not attached to a function node.*"),
-            MISPLACED_FUNCTION_ANNOTATION)
+            .put(Pattern.compile("^Too many template parameters"), TOO_MANY_TEMPLATE_PARAMS)
 
-        // Unexpected @desc JsDoc
-        .put(Pattern.compile("^@desc, @hidden, and @meaning annotations.*"),
-            MISPLACED_MSG_ANNOTATION)
+            // Type annotation warnings.
+            .put(
+                replacePlaceHolders(
+                    "Bad type annotation. Type annotations should have curly braces."),
+                JSDOC_MISSING_BRACES_WARNING)
 
-        .put(Pattern.compile("^Keywords and reserved words" +
-            " are not allowed as unquoted property.*"),
-            INVALID_ES3_PROP_NAME)
+            .put(replacePlaceHolders("Missing type declaration."), JSDOC_MISSING_TYPE_WARNING)
 
-        // Type annotation errors.
-        .put(Pattern.compile("^Bad type annotation.*"),
-            TYPE_PARSE_ERROR)
+            // Type annotation errors.
+            .put(
+                Pattern.compile(
+                    "^Bad type annotation.*(?!Type annotations should have curly braces\\.)"),
+                TYPE_PARSE_ERROR)
 
-        // Parse tree too deep.
-        .put(replacePlaceHolders(
-            "Too deep recursion while parsing"),
-            PARSE_TREE_TOO_DEEP)
+            // Parse tree too deep.
+            .put(replacePlaceHolders("Too deep recursion while parsing"), PARSE_TREE_TOO_DEEP)
 
-        // Octal literals
-        .put(Pattern.compile("^Octal .*literal.*"),
-            INVALID_OCTAL_LITERAL)
+            // Octal literals
+            .put(Pattern.compile("^Octal .*literal.*"), INVALID_OCTAL_LITERAL)
 
-        .put(Pattern.compile("^this language feature is only supported in es6 mode.*"),
-            ES6_FEATURE)
+            .put(
+                Pattern.compile("^this language feature is only supported in es6 mode.*"),
+                ES6_FEATURE)
 
-        // Deprecated annotations
-        .put(Pattern.compile("^The @[a-z]+ annotation is deprecated\\..*"),
-            ANNOTATION_DEPRECATED)
+            .put(Pattern.compile("^type syntax is only supported in ES6 typed mode.*"), ES6_TYPED)
 
-        .build();
+            .put(Pattern.compile("^Can only have JSDoc or inline type.*"), MISPLACED_TYPE_SYNTAX)
+
+            .build();
   }
 
   public static ErrorReporter forOldRhino(AbstractCompiler compiler) {

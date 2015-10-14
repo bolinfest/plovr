@@ -49,7 +49,7 @@ class ChainCalls implements CompilerPass {
     defFinder = new SimpleDefinitionFinder(compiler);
     defFinder.process(externs, root);
 
-    NodeTraversal.traverse(compiler, root, new GatherCallSites());
+    NodeTraversal.traverseEs6(compiler, root, new GatherCallSites());
 
     for (CallSite callSite : callSites) {
       callSite.parent.removeChild(callSite.n);
@@ -133,7 +133,9 @@ class ChainCalls implements CompilerPass {
           return;
         }
         if (!goodFunctionNodes.contains(rValue)) {
-          NodeTraversal.traverse(compiler, rValue, gatherFunctions);
+          new NodeTraversal(compiler, gatherFunctions, new Es6SyntacticScopeCreator(compiler))
+              .traverseInnerNode(
+                  rValue, rValue.getParent(), t.getClosestHoistScope().getParent());
           if (badFunctionNodes.contains(rValue)) {
             return;
           }

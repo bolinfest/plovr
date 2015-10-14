@@ -385,11 +385,11 @@ class ExpressionDecomposer {
     } else {
       ifNode = IR.ifNode(cond, trueExpr);
     }
-    ifNode.copyInformationFrom(expr);
+    ifNode.useSourceInfoIfMissingFrom(expr);
 
     if (needResult) {
       Node tempVarNode = NodeUtil.newVarNode(tempName, null)
-          .copyInformationFromForTree(expr);
+          .useSourceInfoIfMissingFromForTree(expr);
       Node injectionPointParent = injectionPoint.getParent();
       injectionPointParent.addChildBefore(tempVarNode, injectionPoint);
       injectionPointParent.addChildAfter(ifNode, tempVarNode);
@@ -401,8 +401,8 @@ class ExpressionDecomposer {
       // Only conditionals that are the direct child of an expression statement
       // don't need results, for those simply replace the expression statement.
       Preconditions.checkArgument(parent.isExprResult());
-      Node gramps = parent.getParent();
-      gramps.replaceChild(parent, ifNode);
+      Node grandparent = parent.getParent();
+      grandparent.replaceChild(parent, ifNode);
     }
 
     return ifNode;
@@ -478,7 +478,7 @@ class ExpressionDecomposer {
       Preconditions.checkState(expr.isName() || NodeUtil.isGet(expr));
       // Transform "x += 2" into "x = temp + 2"
       Node opNode = new Node(NodeUtil.getOpFromAssignmentOp(parent))
-          .copyInformationFrom(parent);
+          .useSourceInfoIfMissingFrom(parent);
 
       Node rightOperand = parent.getLastChild();
 

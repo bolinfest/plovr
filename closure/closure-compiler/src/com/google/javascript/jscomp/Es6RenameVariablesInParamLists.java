@@ -22,6 +22,7 @@ import com.google.javascript.rhino.Node;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -49,7 +50,7 @@ public final class Es6RenameVariablesInParamLists extends AbstractPostOrderCallb
 
     Node paramList = n.getChildAtIndex(1);
     final CollectReferences collector = new CollectReferences();
-    NodeTraversal.traverse(compiler, paramList, new NodeTraversal.AbstractPreOrderCallback() {
+    NodeTraversal.traverseEs6(compiler, paramList, new NodeTraversal.AbstractPreOrderCallback() {
       @Override
       public final boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
         if (parent == null) {
@@ -58,7 +59,7 @@ public final class Es6RenameVariablesInParamLists extends AbstractPostOrderCallb
 
         if (parent.isDefaultValue() && n == parent.getLastChild()
             || parent.isComputedProp() && n == parent.getFirstChild()) {
-          NodeTraversal.traverse(compiler, n, collector);
+          NodeTraversal.traverseEs6(compiler, n, collector);
           return false;
         }
         return true;
@@ -79,19 +80,21 @@ public final class Es6RenameVariablesInParamLists extends AbstractPostOrderCallb
             oldName, oldName + "$" + compiler.getUniqueNameIdSupplier().get());
       }
     }
-    new NodeTraversal(compiler,
-        new RenameReferences(fBlockScope, currFuncRenameMap))
+    Map<Node, Map<String, String>> renameMap = new LinkedHashMap<>();
+    renameMap.put(fBlockScope.rootNode, currFuncRenameMap);
+    new NodeTraversal(compiler, new Es6RenameReferences(renameMap))
         .traverseInnerNode(block, block.getParent(), fScope);
   }
 
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverse(compiler, root, this);
+    NodeTraversal.traverseEs6(compiler, externs, this);
+    NodeTraversal.traverseEs6(compiler, root, this);
   }
 
   @Override
   public void hotSwapScript(Node scriptRoot, Node originalRoot) {
-    NodeTraversal.traverse(compiler, scriptRoot, this);
+    NodeTraversal.traverseEs6(compiler, scriptRoot, this);
   }
 
   /**
@@ -107,40 +110,6 @@ public final class Es6RenameVariablesInParamLists extends AbstractPostOrderCallb
         return;
       }
       currFuncReferences.add(n.getString());
-    }
-  }
-
-  /**
-   * Renames declarations / references when necessary.
-   *
-   * TODO(moz): See if we can just use the one in Es6RewriteLetConst.
-   */
-  private class RenameReferences extends AbstractPostOrderCallback {
-
-    private final Scope fBlockScope;
-    private final Map<String, String> currParamListMap;
-
-    private RenameReferences(Scope scope, Map<String, String> map) {
-      fBlockScope = scope;
-      currParamListMap = map;
-    }
-
-    @Override
-    public void visit(NodeTraversal t, Node n, Node parent) {
-      if (!NodeUtil.isReferenceName(n)) {
-        return;
-      }
-
-      Scope scope = t.getScope();
-      String oldName = n.getString();
-      if (scope.getRootNode() != fBlockScope.getRootNode()
-          && scope.isDeclared(oldName, false)) {
-        return;
-      }
-      if (currParamListMap.containsKey(oldName)) {
-        n.setString(currParamListMap.get(oldName));
-        compiler.reportCodeChange();
-      }
     }
   }
 }

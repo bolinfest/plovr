@@ -22,10 +22,7 @@ import com.google.javascript.jscomp.graph.DiGraph.DiGraphNode;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-import com.google.protobuf.TextFormat;
 
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -58,7 +55,6 @@ class InstrumentFunctions implements CompilerPass {
 
   private final AbstractCompiler compiler;
   private final FunctionNames functionNames;
-  private final String templateFilename;
   private final String appNameStr;
   private final String initCodeSource;
   private final String definedFunctionName;
@@ -72,38 +68,16 @@ class InstrumentFunctions implements CompilerPass {
    *
    * @param compiler          The JSCompiler
    * @param functionNames     Assigned function identifiers.
-   * @param templateFilename  Template filename; for use during error
-   *                          reporting only.
+   * @param template          Instrumentation template; for use during error reporting only.
    * @param appNameStr        String to pass to appNameSetter.
-   * @param readable          Instrumentation template protobuf text.
    */
   InstrumentFunctions(AbstractCompiler compiler,
                       FunctionNames functionNames,
-                      String templateFilename,
-                      String appNameStr,
-                      Readable readable) {
+                      Instrumentation template,
+                      String appNameStr) {
     this.compiler = compiler;
     this.functionNames = functionNames;
-    this.templateFilename = templateFilename;
     this.appNameStr = appNameStr;
-
-    Instrumentation.Builder builder = Instrumentation.newBuilder();
-    try {
-      TextFormat.merge(readable, builder);
-    } catch (IOException e) {
-      compiler.report(JSError.make(RhinoErrorReporter.PARSE_ERROR,
-          "Error reading instrumentation template protobuf at " +
-          templateFilename));
-      this.initCodeSource = "";
-      this.definedFunctionName = "";
-      this.reportFunctionName = "";
-      this.reportFunctionExitName = "";
-      this.appNameSetter = "";
-      this.declarationsToRemove = new ArrayList<>();
-      return;
-    }
-
-    Instrumentation template = builder.build();
 
     StringBuilder initCodeSourceBuilder = new StringBuilder();
     for (String line : template.getInitList()) {
@@ -125,7 +99,7 @@ class InstrumentFunctions implements CompilerPass {
     Node initCode = null;
     if (!initCodeSource.isEmpty()) {
       Node initCodeRoot = compiler.parseSyntheticCode(
-          templateFilename + ":init", initCodeSource);
+          "template:init", initCodeSource);
       if (initCodeRoot != null && initCodeRoot.getFirstChild() != null) {
         initCode = initCodeRoot.removeChildren();
       } else {
@@ -133,9 +107,9 @@ class InstrumentFunctions implements CompilerPass {
       }
     }
 
-    NodeTraversal.traverse(compiler, root,
+    NodeTraversal.traverseEs6(compiler, root,
                            new RemoveCallback(declarationsToRemove));
-    NodeTraversal.traverse(compiler, root, new InstrumentCallback());
+    NodeTraversal.traverseEs6(compiler, root, new InstrumentCallback());
 
     if (!appNameSetter.isEmpty()) {
       Node call = IR.call(
@@ -145,7 +119,7 @@ class InstrumentFunctions implements CompilerPass {
       Node expr = IR.exprResult(call);
 
       Node addingRoot = compiler.getNodeForCodeInsertion(null);
-      addingRoot.addChildrenToFront(expr);
+      addingRoot.addChildrenToFront(expr.useSourceInfoIfMissingFromForTree(addingRoot));
       compiler.reportCodeChange();
     }
 
@@ -220,14 +194,15 @@ class InstrumentFunctions implements CompilerPass {
     }
 
     /**
-     * @param body  body of function with id == this.functionId
+     * @param function function with id == this.functionId
      */
-    void process(Node body) {
-      NodeTraversal.traverse(compiler, body, this);
+    void process(Node function) {
+      Node body = function.getLastChild();
+      NodeTraversal.traverseEs6(compiler, body, this);
 
-      if (!allPathsReturn(body)) {
-        Node call = newReportFunctionExitNode();
-        Node expr = IR.exprResult(call);
+      if (!allPathsReturn(function)) {
+        Node call = newReportFunctionExitNode(function);
+        Node expr = IR.exprResult(call).useSourceInfoIfMissingFromForTree(function);
         body.addChildToBack(expr);
         compiler.reportCodeChange();
       }
@@ -244,7 +219,7 @@ class InstrumentFunctions implements CompilerPass {
         return;
       }
 
-      Node call = newReportFunctionExitNode();
+      Node call = newReportFunctionExitNode(n);
       Node returnRhs = n.removeFirstChild();
       if (returnRhs != null) {
         call.addChildToBack(returnRhs);
@@ -253,22 +228,23 @@ class InstrumentFunctions implements CompilerPass {
       compiler.reportCodeChange();
     }
 
-    private Node newReportFunctionExitNode() {
+    private Node newReportFunctionExitNode(Node infoNode) {
       Node call = IR.call(
           IR.name(reportFunctionExitName),
           IR.number(functionId));
       call.putBooleanProp(Node.FREE_CALL, true);
+      call.useSourceInfoFromForTree(infoNode);
       return call;
     }
 
     /**
      * @return true if all paths from block must exit with an explicit return.
      */
-    private boolean allPathsReturn(Node block) {
+    private boolean allPathsReturn(Node function) {
       // Computes the control flow graph.
       ControlFlowAnalysis cfa = new ControlFlowAnalysis(
           compiler, false, false);
-      cfa.process(null, block);
+      cfa.process(null, function);
       ControlFlowGraph<Node> cfg = cfa.getCfg();
 
       Node returnPathsParent = cfg.getImplicitReturn().getValue();
@@ -297,19 +273,19 @@ class InstrumentFunctions implements CompilerPass {
       }
 
       if (!reportFunctionName.isEmpty()) {
-        Node body = n.getFirstChild().getNext().getNext();
+        Node body = n.getLastChild();
         Node call = IR.call(
             IR.name(reportFunctionName),
             IR.number(id));
         call.putBooleanProp(Node.FREE_CALL, true);
         Node expr = IR.exprResult(call);
+        expr.useSourceInfoFromForTree(n);
         body.addChildToFront(expr);
         compiler.reportCodeChange();
       }
 
       if (!reportFunctionExitName.isEmpty()) {
-        Node body = n.getFirstChild().getNext().getNext();
-        (new InstrumentReturns(id)).process(body);
+        (new InstrumentReturns(id)).process(n);
       }
 
       if (!definedFunctionName.isEmpty()) {
@@ -317,6 +293,7 @@ class InstrumentFunctions implements CompilerPass {
             IR.name(definedFunctionName),
             IR.number(id));
         call.putBooleanProp(Node.FREE_CALL, true);
+        call.useSourceInfoFromForTree(n);
         Node expr = NodeUtil.newExpr(call);
 
         Node addingRoot = null;

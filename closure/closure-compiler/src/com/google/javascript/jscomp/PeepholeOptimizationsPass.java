@@ -57,13 +57,13 @@ class PeepholeOptimizationsPass implements CompilerPass {
     beginTraversal();
     NodeTraversal.traverseChangedFunctions(compiler, new FunctionCallback() {
         @Override
-        public void visit(AbstractCompiler compiler, Node root) {
+        public void enterFunction(AbstractCompiler compiler, Node root) {
           if (root.isFunction()) {
             root = root.getLastChild();
           }
           do {
             handler.reset();
-            NodeTraversal.traverse(compiler, root, new PeepCallback());
+            NodeTraversal.traverseEs6(compiler, root, new PeepCallback());
           } while (retraverseOnChange && handler.hasCodeChanged());
         }
       });

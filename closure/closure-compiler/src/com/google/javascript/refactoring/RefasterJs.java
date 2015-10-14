@@ -19,10 +19,9 @@ package com.google.javascript.refactoring;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
-import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.CommandLineRunner;
+import com.google.javascript.jscomp.CompilerOptions;
 import com.google.javascript.jscomp.ErrorManager;
-import com.google.javascript.jscomp.SourceFile;
 
 import org.kohsuke.args4j.Argument;
 import org.kohsuke.args4j.CmdLineParser;
@@ -67,9 +66,10 @@ final class RefasterJs {
       usage = "Location of the JS file to use as the RefasterJS template.")
   private String refasterJsTemplate = null;
 
-  @Option(name = "--include_default_externs",
-      usage = "Whether to include the standard JavaScript externs. Defaults to true.")
-  private boolean includeDefaultExterns = true;
+  @Option(name = "--env",
+      usage = "Which set of externs to include. Defaults to BROWSER.")
+  private CompilerOptions.Environment environment =
+      CompilerOptions.Environment.BROWSER;
 
   @Option(name = "--dry_run",
       usage = "Use this to display what changes would be made without applying the changes.")
@@ -108,10 +108,11 @@ final class RefasterJs {
 
     RefasterJsScanner scanner = new RefasterJsScanner();
     scanner.loadRefasterJsTemplate(refasterJsTemplate);
+    CompilerOptions options = new CompilerOptions();
+    options.setEnvironment(environment);
     RefactoringDriver driver = new RefactoringDriver.Builder(scanner)
-        .addExterns(includeDefaultExterns
-            ? CommandLineRunner.getDefaultExterns() : ImmutableList.<SourceFile>of())
-        .addExternsFromFile(externs)
+        .addExterns(CommandLineRunner.getBuiltinExterns(options))
+        .addExternsFromFile(getExterns())
         .addInputsFromFile(fileInputs)
         .build();
     System.out.println("Compiling JavaScript code and searching for suggested fixes.");
@@ -148,6 +149,17 @@ final class RefasterJs {
       patterns.addAll(commaSplitter.splitToList(input));
     }
     patterns.addAll(arguments);
+    return CommandLineRunner.findJsFiles(patterns);
+  }
+
+  private List<String> getExterns() throws IOException {
+    Set<String> patterns = new HashSet<>();
+    // The args4j library can't handle multiple files provided within the same flag option,
+    // like --externs=file1.js,file2.js so handle that here.
+    Splitter commaSplitter = Splitter.on(',');
+    for (String extern : externs) {
+      patterns.addAll(commaSplitter.splitToList(extern));
+    }
     return CommandLineRunner.findJsFiles(patterns);
   }
 

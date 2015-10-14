@@ -16,8 +16,7 @@
 
 package com.google.javascript.jscomp;
 
-import static com.google.javascript.jscomp.CompilerOptions.LanguageMode;
-
+import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 
 /**
  * Tests for the new type inference on transpiled ES6 code.
@@ -59,5 +58,13 @@ public final class NewTypeInferenceES6Test extends NewTypeInferenceTestBase {
     typeCheck(
         "class Foo {}\n"
         + "class Bar extends Foo {}");
+  }
+
+  public void testTaggedTemplateLitGlobalThisRef() {
+    typeCheck("taggedTemp`${this.a}TaggedTemp`", NewTypeInference.GLOBAL_THIS);
+  }
+
+  public void testConstEmptyArrayNoWarning() {
+    typeCheck("const x = [];");
   }
 }

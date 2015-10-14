@@ -20,7 +20,6 @@ import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.javascript.jscomp.newtypes.NominalType.RawNominalType;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -176,6 +175,14 @@ public final class DeclaredFunctionType {
       }
     }
     return false;
+  }
+
+  public DeclaredFunctionType withReceiverType(NominalType newReceiver) {
+    return new DeclaredFunctionType(
+        this.requiredFormals, this.optionalFormals,
+        this.restFormals, this.returnType, this.nominalType,
+        newReceiver,
+        this.typeParameters);
   }
 
   public DeclaredFunctionType withTypeInfoFromSuper(

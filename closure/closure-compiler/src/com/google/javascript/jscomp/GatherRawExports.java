@@ -51,7 +51,7 @@ class GatherRawExports extends AbstractPostOrderCallback
   @Override
   public void process(Node externs, Node root) {
     Preconditions.checkState(compiler.getLifeCycleStage().isNormalized());
-    NodeTraversal.traverse(compiler, root, this);
+    NodeTraversal.traverseEs6(compiler, root, this);
   }
 
   @Override
@@ -65,7 +65,7 @@ class GatherRawExports extends AbstractPostOrderCallback
 
   private static boolean isGlobalThisObject(NodeTraversal t, Node n) {
     if (n.isThis()) {
-      return t.inGlobalScope();
+      return t.inGlobalHoistScope();
     } else if (n.isQualifiedName()) {
       int items = GLOBAL_THIS_NAMES.length;
       for (int i = 0; i < items; i++) {

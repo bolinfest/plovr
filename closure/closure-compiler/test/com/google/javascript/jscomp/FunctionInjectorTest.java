@@ -465,6 +465,15 @@ public final class FunctionInjectorTest extends TestCase {
         "foo", INLINE_BLOCK);
   }
 
+  public void testCanInlineReferenceToFunction52() {
+    // Don't inline functions with var declarations into a scope with inner functions
+    helperCanInlineReferenceToFunction(
+        CanInlineResult.NO,
+        "function foo() { var a = 3; return a; }"
+        + "function bar() { function baz() {} if (true) { foo(); } }",
+        "foo", INLINE_BLOCK);
+  }
+
   public void testCanInlineReferenceToFunctionInExpression1() {
     // Call in if condition
     helperCanInlineReferenceToFunction(CanInlineResult.AFTER_PREPARATION,
@@ -1409,7 +1418,7 @@ public final class FunctionInjectorTest extends TestCase {
 
     compiler.resetUniqueNameId();
     TestCallback test = new TestCallback(fnName, tester);
-    NodeTraversal.traverse(compiler, tree, test);
+    NodeTraversal.traverseEs6(compiler, tree, test);
   }
 
   public void helperInlineReferenceToFunction(
@@ -1506,7 +1515,7 @@ public final class FunctionInjectorTest extends TestCase {
 
     compiler.resetUniqueNameId();
     TestCallback test = new TestCallback(fnName, tester);
-    NodeTraversal.traverse(compiler, tree, test);
+    NodeTraversal.traverseEs6(compiler, tree, test);
   }
 
   interface Method {

@@ -18,7 +18,6 @@ package com.google.javascript.jscomp;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 
-
 /**
  * Splits variable declarations that declare multiple variables into
  * separate declarations, if at least one of the declarations is a
@@ -46,12 +45,13 @@ public final class Es6SplitVariableDeclarations extends
 
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverse(compiler, root, this);
+    NodeTraversal.traverseEs6(compiler, externs, this);
+    NodeTraversal.traverseEs6(compiler, root, this);
   }
 
   @Override
   public void hotSwapScript(Node scriptRoot, Node originalRoot) {
-    NodeTraversal.traverse(compiler, scriptRoot, this);
+    NodeTraversal.traverseEs6(compiler, scriptRoot, this);
   }
 
   @Override

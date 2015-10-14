@@ -112,11 +112,11 @@ class InlineFunctions implements CompilerPass {
   public void process(Node externs, Node root) {
     Preconditions.checkState(compiler.getLifeCycleStage().isNormalized());
 
-    NodeTraversal.traverse(compiler, root, new FindCandidateFunctions());
+    NodeTraversal.traverseEs6(compiler, root, new FindCandidateFunctions());
     if (fns.isEmpty()) {
       return;  // Nothing left to do.
     }
-    NodeTraversal.traverse(compiler, root,
+    NodeTraversal.traverseEs6(compiler, root,
        new FindCandidatesReferences(fns, anonFns));
     trimCandidatesNotMeetingMinimumRequirements();
     if (fns.isEmpty()) {
@@ -140,7 +140,7 @@ class InlineFunctions implements CompilerPass {
     }
     resolveInlineConflicts();
     decomposeExpressions();
-    NodeTraversal.traverse(compiler, root,
+    NodeTraversal.traverseEs6(compiler, root,
         new CallVisitor(fns, anonFns, new Inline(injector)));
 
     removeInlinedFunctions();
@@ -156,7 +156,7 @@ class InlineFunctions implements CompilerPass {
 
   private boolean targetSizeAfterInlineExceedsLimit(
       NodeTraversal t, FunctionState fs) {
-    Node containingFunction = getContainingFunction(t);
+    Node containingFunction = t.getEnclosingFunction();
     // Always inline at the top level,
     // unless maybeAddFunction has marked fs as not inlinable.
     if (containingFunction == null) {
@@ -184,13 +184,13 @@ class InlineFunctions implements CompilerPass {
         NodeTraversal nodeTraversal, Node n, Node parent) {
       // Don't traverse into function bodies
       // if we aren't inlining local functions.
-      return inlineLocalFunctions || nodeTraversal.inGlobalScope();
+      return inlineLocalFunctions || nodeTraversal.inGlobalHoistScope();
     }
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if ((t.inGlobalScope() && inlineGlobalFunctions)
-          || (!t.inGlobalScope() && inlineLocalFunctions)) {
+      if ((t.inGlobalHoistScope() && inlineGlobalFunctions)
+          || (!t.inGlobalHoistScope() && inlineLocalFunctions)) {
         findNamedFunctions(t, n, parent);
 
         findFunctionExpressions(t, n);
@@ -351,14 +351,6 @@ class InlineFunctions implements CompilerPass {
   }
 
   /**
-   * Returns the function the traversal is currently traversing, or null
-   * if in the global scope.
-   */
-  private static Node getContainingFunction(NodeTraversal t) {
-    return (t.inGlobalScope()) ? null : t.getScopeRoot();
-  }
-
-  /**
    * Checks if the given function matches the criteria for an inlinable
    * function.
    */
@@ -475,9 +467,9 @@ class InlineFunctions implements CompilerPass {
          && name == parent.getFirstChild()
          && name.getNext().isString()
          && name.getNext().getString().equals("call")) {
-      Node gramps = name.getAncestor(2);
-      if (gramps.isCall()
-          && gramps.getFirstChild() == parent) {
+      Node grandparent = name.getAncestor(2);
+      if (grandparent.isCall()
+          && grandparent.getFirstChild() == parent) {
         // Yep, a ".call".
         return true;
       }

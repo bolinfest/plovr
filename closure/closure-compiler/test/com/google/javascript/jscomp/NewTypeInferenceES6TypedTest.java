@@ -16,9 +16,10 @@
 
 package com.google.javascript.jscomp;
 
-import static com.google.javascript.jscomp.CompilerOptions.LanguageMode;
+import static com.google.javascript.jscomp.CompilerTestCase.LINE_JOINER;
 
-
+import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
+import com.google.javascript.jscomp.newtypes.JSTypeCreatorFromJSDoc;
 /**
  * Tests for the new type inference on transpiled ES6 code that includes
  * type annotations in the language syntax.
@@ -34,8 +35,8 @@ public final class NewTypeInferenceES6TypedTest extends NewTypeInferenceTestBase
   protected void setUp() {
     super.setUp();
     compiler.getOptions().setLanguageIn(LanguageMode.ECMASCRIPT6_TYPED);
-    passes.add(makePassFactory("convertDeclaredTypesToJSDoc",
-            new ConvertDeclaredTypesToJSDoc(compiler)));
+    passes.add(makePassFactory("convertEs6TypedToEs6",
+            new Es6TypedToEs6Converter(compiler)));
     addES6TranspilationPasses();
   }
 
@@ -50,76 +51,166 @@ public final class NewTypeInferenceES6TypedTest extends NewTypeInferenceTestBase
 
     typeCheck("function f(): void { return undefined; }");
 
-    typeCheck(
-        "class Foo {}\n"
-        + "var x: Foo = new Foo;");
+    typeCheck(LINE_JOINER.join(
+        "class Foo {}",
+        "var x: Foo = new Foo;"));
+
+    typeCheck("var x: {p: string; q: number};");
+
+    typeCheck("type Foo = number; var x: Foo = 3;");
   }
 
   public void testSimpleAnnotationsWarnings() {
-    typeCheck(
-        "var x: number[] = ['hello'];",
+    typeCheck("var x: number[] = ['hello'];", NewTypeInference.MISTYPED_ASSIGN_RHS);
+    typeCheck("var x: {p: string; q: number}; x = {p: 3, q: 3}",
         NewTypeInference.MISTYPED_ASSIGN_RHS);
+    typeCheck("type Foo = number; var x: Foo = '3';", NewTypeInference.MISTYPED_ASSIGN_RHS);
   }
 
   public void testSimpleFunctions() {
-    typeCheck(
-        "function f(x: number) {}\n"
-        + "f(123);");
+    typeCheck(LINE_JOINER.join(
+        "function f(x: number) {}",
+        "f(123);"));
 
-    typeCheck(
-        "function f(x: number) {}\n"
-        + "f('asdf');",
+    typeCheck(LINE_JOINER.join(
+        "function f(x: number) {}",
+        "f('asdf');"),
         NewTypeInference.INVALID_ARGUMENT_TYPE);
 
-    typeCheck(
-        "function f(x): string { return x; }\n"
-        + "f(123);",
+    typeCheck(LINE_JOINER.join(
+        "function f(x): string { return x; }",
+        "f(123);"),
         NewTypeInference.INVALID_ARGUMENT_TYPE);
   }
 
   public void testSimpleClasses() {
-    typeCheck(
-        "class Foo {}\n"
+    typeCheck(LINE_JOINER.join(
+        "class Foo {}",
         // Nominal types are non-nullable by default
-        + "var x: Foo = null;",
+        "var x: Foo = null;"),
         NewTypeInference.MISTYPED_ASSIGN_RHS);
 
-    typeCheck(
-        "class Foo {}\n"
-        + "class Bar {}\n"
-        + "var x: Bar = new Foo;",
+    typeCheck(LINE_JOINER.join(
+        "class Foo {}",
+        "class Bar {}",
+        "var x: Bar = new Foo;"),
         NewTypeInference.MISTYPED_ASSIGN_RHS);
   }
 
   public void testClassPropertyDeclarations() {
-    typeCheck(
-        "class Foo {\n"
-        + "  prop: number;\n"
-        + "  constructor() { this.prop = 'asdf'; }\n"
-        + "}\n",
+    typeCheck(LINE_JOINER.join(
+        "class Foo {",
+        "  prop: number;",
+        "  constructor() { this.prop = 'asdf'; }",
+        "}"),
         NewTypeInference.MISTYPED_ASSIGN_RHS);
 
-    typeCheck(
-        "class Foo {\n"
-        + "  prop: string;\n"
-        + "}\n"
-        + "(new Foo).prop - 5;\n",
+    typeCheck(LINE_JOINER.join(
+        "class Foo {",
+        "  prop: string;",
+        "}",
+        "(new Foo).prop - 5;"),
         NewTypeInference.INVALID_OPERAND_TYPE);
 
-    typeCheck(
-        "class Foo {\n"
-        + "  static prop: number;\n"
-        + "}\n"
-        + "Foo.prop = 'asdf';\n",
+    typeCheck(LINE_JOINER.join(
+        "class Foo {",
+        "  static prop: number;",
+        "}",
+        "Foo.prop = 'asdf';"),
         NewTypeInference.MISTYPED_ASSIGN_RHS);
 
     // TODO(dimvar): up to ES5, prop decls use dot.
     // Should we start allowing [] for @unrestricted classes?
-    typeCheck(
-        "/** @unrestricted */ class Foo {\n"
-        + "  ['prop']: string;\n"
-        + "}\n"
-        + "(new Foo).prop - 5;\n",
-        TypeCheck.INEXISTENT_PROPERTY);
+    typeCheck(LINE_JOINER.join(
+        "/** @unrestricted */ class Foo {",
+        "  ['prop']: string;",
+        "}",
+        "(new Foo).prop - 5;"),
+        NewTypeInference.INEXISTENT_PROPERTY);
+  }
+
+  public void testOptionalParameter() {
+    typeCheck(LINE_JOINER.join(
+        "function foo(p1?: string) {}",
+        "foo(); foo('str');"));
+
+    typeCheck(LINE_JOINER.join(
+        "function foo(p0, p1?: string) {}",
+        "foo('2', 3)"),
+        NewTypeInference.INVALID_ARGUMENT_TYPE);
+  }
+
+  public void testRestParameter() {
+    typeCheck(LINE_JOINER.join(
+        "function foo(...p1: number[]) {}",
+        "foo(); foo(3); foo(3, 4);"));
+
+    typeCheck(LINE_JOINER.join(
+        "function foo(...p1: number[]) {}",
+        "foo('3')"),
+        NewTypeInference.INVALID_ARGUMENT_TYPE);
+
+    typeCheck("function foo(...p1: number[]) { var s:string = p1[0]; }",
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck("function foo(...p1: number[]) { p1 = ['3']; }",
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+  }
+
+  public void testClass() {
+    typeCheck(LINE_JOINER.join(
+        "class Foo {",
+        "  prop: number;",
+        "}",
+        "class Bar extends Foo {",
+        "}",
+        "(new Bar).prop = '3'"),
+        NewTypeInference.MISTYPED_ASSIGN_RHS);
+
+    typeCheck("class Foo extends Foo {}",
+        JSTypeCreatorFromJSDoc.INHERITANCE_CYCLE);
+  }
+
+  public void testInterface() {
+    typeCheck(LINE_JOINER.join(
+        "interface Foo {}",
+        "(new Foo);"),
+        NewTypeInference.NOT_A_CONSTRUCTOR);
+
+    typeCheck(LINE_JOINER.join(
+        "interface Foo {",
+        "  prop: number;",
+        "}",
+        "class Bar implements Foo {",
+        "}"),
+        GlobalTypeInfo.INTERFACE_METHOD_NOT_IMPLEMENTED);
+
+    typeCheck(LINE_JOINER.join(
+        "interface Foo {",
+        "  prop: number;",
+        "}",
+        "class Bar extends Foo {",
+        "}"),
+        JSTypeCreatorFromJSDoc.CONFLICTING_EXTENDED_TYPE);
+
+    typeCheck("interface Foo extends Foo {}",
+        JSTypeCreatorFromJSDoc.INHERITANCE_CYCLE);
+
+    typeCheck(LINE_JOINER.join(
+        "interface Foo {",
+        "  prop: number;",
+        "}",
+        "interface Bar {",
+        "  prop: string;",
+        "}",
+        "interface Baz extends Foo, Bar {}"),
+        GlobalTypeInfo.SUPER_INTERFACES_HAVE_INCOMPATIBLE_PROPERTIES);
+  }
+
+  public void testAmbientDeclaration() {
+    typeCheck("declare var x: number;");
+    typeCheck("declare function f(): number;");
+    typeCheck("declare class C { constructor(); }");
+    typeCheck("declare enum Foo { BAR }");
   }
 }

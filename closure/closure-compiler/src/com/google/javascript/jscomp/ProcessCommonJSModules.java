@@ -23,9 +23,9 @@ import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
 
 /**
  * Rewrites a CommonJS module http://wiki.commonjs.org/wiki/Modules/1.1.1
@@ -37,13 +37,8 @@ import java.util.regex.Pattern;
  * ordering.
  */
 public final class ProcessCommonJSModules implements CompilerPass {
-  public static final String DEFAULT_FILENAME_PREFIX =
-      "." + ES6ModuleLoader.MODULE_SLASH;
-
-  private static final String MODULE_NAME_SEPARATOR = "\\$";
-  private static final String MODULE_NAME_PREFIX = "module$";
-
   private static final String EXPORTS = "exports";
+  private static final String MODULE = "module";
 
   private final Compiler compiler;
   private final ES6ModuleLoader loader;
@@ -82,32 +77,16 @@ public final class ProcessCommonJSModules implements CompilerPass {
   @Override
   public void process(Node externs, Node root) {
     FindGoogProvideOrGoogModule finder = new FindGoogProvideOrGoogModule();
-    NodeTraversal.traverse(compiler, root, finder);
+    NodeTraversal.traverseEs6(compiler, root, finder);
     if (finder.found) {
       return;
     }
     NodeTraversal
-        .traverse(compiler, root, new ProcessCommonJsModulesCallback());
+        .traverseEs6(compiler, root, new ProcessCommonJsModulesCallback());
   }
 
   String inputToModuleName(CompilerInput input) {
-    return toModuleName(loader.getLoadAddress(input));
-  }
-
-  /**
-   * Turns a filename into a JS identifier that is used for moduleNames in
-   * rewritten code. Removes leading ./, replaces / with $, removes trailing .js
-   * and replaces - with _. All moduleNames get a "module$" prefix.
-   */
-  public static String toModuleName(String filename) {
-    return MODULE_NAME_PREFIX +
-        filename.replaceAll("^\\." + Pattern.quote(ES6ModuleLoader.MODULE_SLASH), "")
-            .replaceAll(Pattern.quote(ES6ModuleLoader.MODULE_SLASH), MODULE_NAME_SEPARATOR)
-            .replaceAll(Pattern.quote("\\"), MODULE_NAME_SEPARATOR)
-            .replaceAll("\\.js$", "")
-            .replaceAll("-", "_")
-            .replaceAll(":", "_")
-            .replaceAll("\\.", "");
+    return ES6ModuleLoader.toModuleName(loader.normalizeInputAddress(input));
   }
 
   /**
@@ -144,6 +123,54 @@ public final class ProcessCommonJSModules implements CompilerPass {
   }
 
   /**
+   * This class detects the UMD pattern by checking if a node includes
+   * a "module.exports" or "exports" statement.
+   */
+  static class FindModuleExportStatements extends AbstractPreOrderCallback {
+
+    private boolean found;
+
+    boolean isFound() {
+      return found;
+    }
+
+    @Override
+    public boolean shouldTraverse(NodeTraversal nodeTraversal, Node n, Node parent) {
+      if ((n.isGetProp() &&
+           "module.exports".equals(n.getQualifiedName())) ||
+          (n.isName() &&
+           EXPORTS.equals(n.getString()))) {
+        found = true;
+      }
+
+      return true;
+    }
+  }
+
+  /**
+   * This class detects the UMD pattern by checking if a node includes
+   * a "define.amd" statement.
+   */
+  static class FindDefineAmdStatements extends AbstractPreOrderCallback {
+
+    private boolean found;
+
+    boolean isFound() {
+      return found;
+    }
+
+    @Override
+    public boolean shouldTraverse(NodeTraversal nodeTraversal, Node n, Node parent) {
+      if (n.isGetProp() &&
+          "define.amd".equals(n.getQualifiedName())) {
+        found = true;
+      }
+
+      return true;
+    }
+  }
+
+  /**
    * Visits require, every "script" and special module.exports assignments.
    */
   private class ProcessCommonJsModulesCallback extends
@@ -161,6 +188,48 @@ public final class ProcessCommonJSModules implements CompilerPass {
         visitRequireCall(t, n, parent);
       }
 
+
+      // Detects UMD pattern, by checking for CommonJS exports and AMD define
+      // statements in if-conditions and rewrites the if-then-else block as
+      // follows to make sure the CommonJS exports can be reached:
+      // 1. When detecting a CommonJS exports statement, it removes the
+      // if-condition and the else-branch and adds the then-branch directly
+      // to the current parent node:
+      //
+      // if (typeof module == "object" && module.exports) {
+      //   module.exports = foobar;
+      // } else if (typeof define === "function" && define.amd) {...}
+      //
+      // will be rewritten to:
+      //
+      // module.exports = foobar;
+      //
+      // 2. When detecting an AMD define statement, it removes the if-condition and
+      // the then-branch and adds the else-branch directly to the current parent node:
+      //
+      // if (typeof define === "function" && define.amd) {
+      // ...} else if (typeof module == "object" && module.exports) {...}
+      //
+      // will be rewritten to:
+      //
+      // if (typeof module == "object" && module.exports) {...}
+      if (n.isIf()) {
+        FindModuleExportStatements commonjsFinder = new FindModuleExportStatements();
+        Node condition = n.getFirstChild();
+        NodeTraversal.traverseEs6(compiler, condition, commonjsFinder);
+
+        if (commonjsFinder.isFound()) {
+          visitCommonJSIfStatement(n);
+        } else {
+          FindDefineAmdStatements amdFinder = new FindDefineAmdStatements();
+          NodeTraversal.traverseEs6(compiler, condition, amdFinder);
+
+          if (amdFinder.isFound()) {
+            visitAMDIfStatement(n);
+          }
+        }
+      }
+
       if (n.isScript()) {
         scriptNodeCount++;
         visitScript(t, n);
@@ -168,7 +237,13 @@ public final class ProcessCommonJSModules implements CompilerPass {
 
       if (n.isGetProp() &&
           "module.exports".equals(n.getQualifiedName())) {
-        moduleExportRefs.add(n);
+        Var v = t.getScope().getVar(MODULE);
+        // only rewrite "module.exports" if "module" is a free variable,
+        // meaning it is not defined in the current scope as a local
+        // variable or function parameter
+        if (v == null) {
+          moduleExportRefs.add(n);
+        }
       }
 
       if (n.isName() && EXPORTS.equals(n.getString())) {
@@ -185,14 +260,13 @@ public final class ProcessCommonJSModules implements CompilerPass {
      */
     private void visitRequireCall(NodeTraversal t, Node require, Node parent) {
       String requireName = require.getChildAtIndex(1).getString();
-      String loadAddress = loader.locate(requireName, t.getInput());
-      try {
-        loader.load(loadAddress);
-      } catch (ES6ModuleLoader.LoadFailedException e) {
-        t.makeError(require, ES6ModuleLoader.LOAD_ERROR, requireName);
+      URI loadAddress = loader.locateCommonJsModule(requireName, t.getInput());
+      if (loadAddress == null) {
+        compiler.report(t.makeError(require, ES6ModuleLoader.LOAD_ERROR, requireName));
+        return;
       }
 
-      String moduleName = toModuleName(loadAddress);
+      String moduleName = ES6ModuleLoader.toModuleName(loadAddress);
       Node moduleRef = IR.name(moduleName).srcref(require);
       parent.replaceChild(require, moduleRef);
       Node script = getCurrentScriptNode(parent);
@@ -202,7 +276,7 @@ public final class ProcessCommonJSModules implements CompilerPass {
       // Rewrite require("name").
       script.addChildToFront(IR.exprResult(
           IR.call(IR.getprop(IR.name("goog"), IR.string("require")),
-              IR.string(moduleName))).copyInformationFromForTree(require));
+              IR.string(moduleName))).useSourceInfoIfMissingFromForTree(require));
       compiler.reportCodeChange();
     }
 
@@ -218,7 +292,7 @@ public final class ProcessCommonJSModules implements CompilerPass {
       String moduleName = inputToModuleName(t.getInput());
 
       // Rename vars to not conflict in global scope.
-      NodeTraversal.traverse(compiler, script, new SuffixVarsCallback(
+      NodeTraversal.traverseEs6(compiler, script, new SuffixVarsCallback(
           moduleName));
 
       // Replace all refs to module.exports and exports
@@ -233,11 +307,52 @@ public final class ProcessCommonJSModules implements CompilerPass {
       }
       script.addChildToFront(IR.exprResult(
           IR.call(IR.getprop(IR.name("goog"), IR.string("provide")),
-              IR.string(moduleName))).copyInformationFromForTree(script));
+              IR.string(moduleName))).useSourceInfoIfMissingFromForTree(script));
 
       compiler.reportCodeChange();
     }
 
+    /**
+     * Rewrites CommonJS part of UMD pattern by removing the if-condition and the
+     * else-branch and adds the then-branch directly to the current parent node.
+     */
+    private void visitCommonJSIfStatement(Node n) {
+      Node p = n.getParent();
+      if (p != null) {
+        // pull out then-branch
+        replaceIfStatementWithBranch(n, n.getChildAtIndex(1));
+      }
+    }
+
+    /**
+     * Rewrites AMD part of UMD pattern by removing the if-condition and the
+     * then-branch and adds the else-branch directly to the current parent node.
+     */
+    private void visitAMDIfStatement(Node n) {
+      Node p = n.getParent();
+      if (p != null) {
+        if (n.getChildCount() == 3) {
+          // pull out else-branch
+          replaceIfStatementWithBranch(n, n.getChildAtIndex(2));
+        } else {
+          // remove entire if-statement if it doesn't have an else-branch
+          p.removeChild(n);
+        }
+      }
+    }
+
+    private void replaceIfStatementWithBranch(Node ifStatement, Node branch) {
+      Node p = ifStatement.getParent();
+      Node newNode = branch;
+      // Remove redundant block node. Not strictly necessary, but makes tests more legible.
+      if (branch.isBlock() && branch.getChildCount() == 1) {
+        newNode = branch.getFirstChild();
+        branch.detachChildren();
+      } else {
+        ifStatement.detachChildren();
+      }
+      p.replaceChild(ifStatement, newNode);
+    }
 
     /**
      * Process all references to module.exports and exports.
@@ -260,16 +375,14 @@ public final class ProcessCommonJSModules implements CompilerPass {
     private void processExports(Node script, String moduleName) {
       if (hasOneTopLevelModuleExportAssign()) {
         // One top-level assign: transform to
-        // /** @const */ var moduleName = rhs
+        // moduleName = rhs
         Node ref = moduleExportRefs.get(0);
         Node newName = IR.name(moduleName);
         newName.putProp(Node.ORIGINALNAME_PROP, ref.getQualifiedName());
 
-        Node newVar = IR.var(newName)
-            .copyInformationFromForTree(ref.getParent());
         Node rhsValue = ref.getNext().detachFromParent();
-        newVar.getFirstChild().addChildToFront(rhsValue);
-        newVar.setJSDocInfo(NodeUtil.createConstantJsDoc());
+        Node newExprResult = IR.exprResult(IR.assign(newName, rhsValue)
+          .useSourceInfoIfMissingFromForTree(ref.getParent()));
 
         // If the rValue is an object literal, check each property to see if
         // it's an alias, and if it is, copy the annotation over.
@@ -295,62 +408,41 @@ public final class ProcessCommonJSModules implements CompilerPass {
 
         Node assign = ref.getParent();
         Node exprResult = assign.getParent();
-        script.replaceChild(exprResult, newVar);
+        script.replaceChild(exprResult, newExprResult);
         return;
       }
 
       if (!hasExportLValues()) {
         // Transform to:
         //
-        // /** @const */ var moduleName = {};
         // moduleName.prop0 = 0; // etc.
-        //
-        // We consider the 0-ref case a special case of this.
-        Node newVar = injectExportsObject(script, moduleName);
-        newVar.setJSDocInfo(NodeUtil.createConstantJsDoc());
-
         for (Node ref : Iterables.concat(moduleExportRefs, exportRefs)) {
-          Node newRef = IR.name(moduleName).copyInformationFrom(ref);
+          Node newRef = IR.name(moduleName).useSourceInfoIfMissingFrom(ref);
           newRef.putProp(Node.ORIGINALNAME_PROP, ref.getQualifiedName());
           ref.getParent().replaceChild(ref, newRef);
         }
         return;
       }
 
-      // The general case:
-      // At the beginning, add the stanza:
-      // var moduleName = {}; var moduleName$$exports = moduleName;
       // Transform module.exports to moduleName
-      // Transform exports to moduleName$$exports
-      Node exportsNode = injectExportsObject(script, moduleName);
-
       for (Node ref : moduleExportRefs) {
-        Node newRef = IR.name(moduleName).copyInformationFrom(ref);
+        Node newRef = IR.name(moduleName).useSourceInfoIfMissingFrom(ref);
         ref.getParent().replaceChild(ref, newRef);
       }
 
+      // Transform exports to exports$$moduleName and set to point
+      // to module namespace: exports$$moduleName = moduleName;
       if (!exportRefs.isEmpty()) {
         String aliasName = "exports$$" + moduleName;
         Node aliasNode = IR.var(IR.name(aliasName), IR.name(moduleName))
-            .copyInformationFromForTree(script);
-        script.addChildAfter(aliasNode, exportsNode);
+            .useSourceInfoIfMissingFromForTree(script);
+        script.addChildToFront(aliasNode);
 
         for (Node ref : exportRefs) {
           ref.putProp(Node.ORIGINALNAME_PROP, ref.getString());
           ref.setString(aliasName);
         }
       }
-    }
-
-    /**
-     * Creates an exports object for this module.
-     * var moduleName = {};
-     */
-    private Node injectExportsObject(Node script, String moduleName) {
-      Node varNode = IR.var(IR.name(moduleName), IR.objectlit())
-          .copyInformationFromForTree(script);
-      script.addChildToFront(varNode);
-      return varNode;
     }
 
     /**
@@ -454,17 +546,15 @@ public final class ProcessCommonJSModules implements CompilerPass {
           }
 
           String moduleName = name.substring(0, endIndex);
-          String loadAddress = loader.locate(moduleName, t.getInput());
+          URI loadAddress = loader.locateCommonJsModule(moduleName, t.getInput());
           if (loadAddress == null) {
             t.makeError(typeNode, ES6ModuleLoader.LOAD_ERROR, moduleName);
             return;
           }
 
-          String globalModuleName = toModuleName(loadAddress);
+          String globalModuleName = ES6ModuleLoader.toModuleName(loadAddress);
           typeNode.setString(
-              localTypeName == null ?
-              globalModuleName :
-              globalModuleName + localTypeName);
+              localTypeName == null ? globalModuleName : globalModuleName + localTypeName);
         } else {
           int endIndex = name.indexOf('.');
           if (endIndex == -1) {

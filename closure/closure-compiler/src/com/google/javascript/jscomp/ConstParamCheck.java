@@ -22,6 +22,8 @@ import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
+import javax.annotation.Nullable;
+
 /**
  * Enforces that invocations of the method {@code goog.string.Const.from} are
  * done with an argument which is a string literal.
@@ -36,10 +38,10 @@ import com.google.javascript.rhino.Token;
  * literal or concatenation thereof.
  * </ol>
  */
-class ConstParamCheck extends AbstractPostOrderCallback
-    implements CompilerPass {
+class ConstParamCheck extends AbstractPostOrderCallback implements CompilerPass {
 
   private static final String CONST_FUNCTION_NAME = "goog.string.Const.from";
+  private static final String CONST_FUNCTION_NAME_COLLAPSED = "goog$string$Const$from";
 
   @VisibleForTesting
   static final DiagnosticType CONST_NOT_STRING_LITERAL_ERROR =
@@ -62,7 +64,7 @@ class ConstParamCheck extends AbstractPostOrderCallback
   @Override
   public void process(Node externs, Node root) {
     Preconditions.checkState(compiler.getLifeCycleStage().isNormalized());
-    NodeTraversal.traverse(compiler, root, this);
+    NodeTraversal.traverseEs6(compiler, root, this);
   }
 
   /**
@@ -83,7 +85,8 @@ class ConstParamCheck extends AbstractPostOrderCallback
         return;
       }
 
-      if (name.isName()) {
+      // Detect calls to an aliased goog.string.Const.
+      if (name.isName() && !name.matchesQualifiedName(CONST_FUNCTION_NAME_COLLAPSED)) {
         Scope scope = traversal.getScope();
         Var var = scope.getVar(name.getString());
         if (var == null) {
@@ -95,8 +98,8 @@ class ConstParamCheck extends AbstractPostOrderCallback
         }
       }
 
-      // goog.string.Const.from('constant')
-      if (name.matchesQualifiedName(CONST_FUNCTION_NAME)) {
+      if (name.matchesQualifiedName(CONST_FUNCTION_NAME)
+          || name.matchesQualifiedName(CONST_FUNCTION_NAME_COLLAPSED)) {
         checkArgumentConstant(traversal, argument);
       }
     }
@@ -146,7 +149,10 @@ class ConstParamCheck extends AbstractPostOrderCallback
    * Returns true iff the value associated with the node is a JS string literal,
    * or a concatenation thereof.
    */
-  private static boolean isStringLiteralValue(Node node) {
+  private static boolean isStringLiteralValue(@Nullable Node node) {
+    if (node == null) {
+      return false;
+    }
     if (node.getType() == Token.STRING) {
       return true;
     } else if (node.getType() == Token.ADD) {

@@ -52,7 +52,7 @@ class CheckProvides implements HotSwapCompilerPass {
   public void hotSwapScript(Node scriptRoot, Node originalRoot) {
     CheckProvidesCallback callback =
         new CheckProvidesCallback(codingConvention);
-    new NodeTraversal(compiler, callback).traverse(scriptRoot);
+    NodeTraversal.traverseEs6(compiler, scriptRoot, callback);
   }
 
   private class CheckProvidesCallback extends AbstractShallowCallback {
@@ -75,7 +75,13 @@ class CheckProvides implements HotSwapCompilerPass {
           }
           break;
         case Token.FUNCTION:
-          visitFunctionNode(n, parent);
+          // Arrow function can't be constructors
+          if (!n.isArrowFunction()) {
+            visitFunctionNode(n, parent);
+          }
+          break;
+        case Token.CLASS:
+          visitClassNode(n);
           break;
         case Token.SCRIPT:
           visitScriptNode();
@@ -83,6 +89,7 @@ class CheckProvides implements HotSwapCompilerPass {
     }
 
     private void visitFunctionNode(Node n, Node parent) {
+      // TODO(user): Use NodeUtil.getBestJSDocInfo/getFunctionName to recognize all functions.
       Node name = null;
       JSDocInfo info = parent.getJSDocInfo();
       if (info != null && info.isConstructor()) {
@@ -102,6 +109,13 @@ class CheckProvides implements HotSwapCompilerPass {
             ctors.put(qualifiedName, name);
           }
         }
+      }
+    }
+
+    private void visitClassNode(Node classNode) {
+      String name = NodeUtil.getClassName(classNode);
+      if (name != null) {
+        ctors.put(name, classNode);
       }
     }
 

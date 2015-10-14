@@ -112,6 +112,54 @@ public final class IntegrationTest extends IntegrationTestCase {
         "(function() {})('goog.CONSTANT', 1);");
   }
 
+  /**
+   * Tests that calls to goog.string.Const.from() with non-constant arguments
+   * are detected with and without collapsed properties.
+   */
+  public void testBug22684459() {
+    String source =
+        ""
+            + "var goog = {};"
+            + "goog.string = {};"
+            + "goog.string.Const = {};"
+            + "goog.string.Const.from = function(x) {};"
+            + "var x = window.document.location;"
+            + "goog.string.Const.from(x);";
+
+    // Without collapsed properties.
+    CompilerOptions options = createCompilerOptions();
+    test(options, source, ConstParamCheck.CONST_NOT_ASSIGNED_STRING_LITERAL_ERROR);
+
+    // With collapsed properties.
+    options.setCollapseProperties(true);
+    test(options, source, ConstParamCheck.CONST_NOT_ASSIGNED_STRING_LITERAL_ERROR);
+  }
+
+  /**
+   * Tests that calls to goog.string.Const.from() with non-constant arguments
+   * are detected with and without collapsed properties, even when
+   * goog.string.Const.from has been aliased.
+   */
+  public void testBug22684459_aliased() {
+    String source =
+        ""
+            + "var goog = {};"
+            + "goog.string = {};"
+            + "goog.string.Const = {};"
+            + "goog.string.Const.from = function(x) {};"
+            + "var mkConst = goog.string.Const.from;"
+            + "var x = window.document.location;"
+            + "mkConst(x);";
+
+    // Without collapsed properties.
+    CompilerOptions options = createCompilerOptions();
+    test(options, source, ConstParamCheck.CONST_NOT_ASSIGNED_STRING_LITERAL_ERROR);
+
+    // With collapsed properties.
+    options.setCollapseProperties(true);
+    test(options, source, ConstParamCheck.CONST_NOT_ASSIGNED_STRING_LITERAL_ERROR);
+  }
+
   public void testBug2410122() {
     CompilerOptions options = createCompilerOptions();
     options.setGenerateExports(true);
@@ -158,6 +206,27 @@ public final class IntegrationTest extends IntegrationTestCase {
          "(new ClassB).fn(3);\n" +
          "",
          TypeValidator.TYPE_MISMATCH_WARNING);
+  }
+
+  public void testForwardDeclaredTypeInTemplate() {
+    CompilerOptions options = createCompilerOptions();
+    WarningLevel.VERBOSE.setOptionsForWarningLevel(options);
+    options.setClosurePass(true);
+    options.setWarningLevel(DiagnosticGroups.LINT_CHECKS, CheckLevel.WARNING);
+
+    test(
+        options,
+        Joiner.on('\n').join(
+            "var goog = {};",
+            "goog.forwardDeclare = function(typeName) {};",
+            "goog.forwardDeclare('fwd.declared.Type');",
+            "",
+            "/** @type {!fwd.declared.Type<string>} */",
+            "var x;",
+            "",
+            "/** @type {!fwd.declared.Type<string, number>} */",
+            "var y;"),
+        "var goog={};goog.forwardDeclare=function(typeName){};var x;var y");
   }
 
   public void testIssue90() {
@@ -418,9 +487,9 @@ public final class IntegrationTest extends IntegrationTestCase {
             "  return b.meeny+c.miny+b.tiger" +
             "}"},
         new DiagnosticType[]{
-            RhinoErrorReporter.PARSE_ERROR,
-            RhinoErrorReporter.PARSE_ERROR,
-            RhinoErrorReporter.PARSE_ERROR});
+            CheckJSDoc.ANNOTATION_DEPRECATED,
+            CheckJSDoc.ANNOTATION_DEPRECATED,
+            CheckJSDoc.ANNOTATION_DEPRECATED});
   }
 
   public void testCheckSymbolsOff() {
@@ -442,7 +511,6 @@ public final class IntegrationTest extends IntegrationTestCase {
   public void testCheckReferencesOn() {
     CompilerOptions options = createCompilerOptions();
     options.setCheckSymbols(true);
-    options.setAggressiveVarCheck(CheckLevel.ERROR);
     test(options, "x = 3; var x = 5;", VariableReferenceCheck.EARLY_REFERENCE);
   }
 
@@ -850,7 +918,6 @@ public final class IntegrationTest extends IntegrationTestCase {
     options.syntheticBlockStartMarker = "synStart";
     options.syntheticBlockEndMarker = "synEnd";
     options.setCheckSymbols(true);
-    options.setAggressiveVarCheck(CheckLevel.ERROR);
     options.processObjectPropertyString = true;
     options.setCollapseProperties(true);
     test(options, CLOSURE_BOILERPLATE, CLOSURE_COMPILED);
@@ -1077,6 +1144,9 @@ public final class IntegrationTest extends IntegrationTestCase {
 
     options.setInlineVariables(true);
     test(options, code, "(function foo() {})(3);");
+
+    options.setPropertyRenaming(PropertyRenamingPolicy.HEURISTIC);
+    test(options, code, DefaultPassConfig.CANNOT_USE_PROTOTYPE_AND_VAR);
   }
 
   public void testInlineConstants() {
@@ -1370,6 +1440,18 @@ public final class IntegrationTest extends IntegrationTestCase {
         });
   }
 
+  public void testCrossModuleDepCheck() {
+    CompilerOptions options = createCompilerOptions();
+    String[] code = new String[] {
+      "var goog = {}; new goog.Foo();",
+      "/** @constructor */ goog.Foo = function() {};",
+    };
+    testSame(options, code);
+
+    WarningLevel.VERBOSE.setOptionsForWarningLevel(options);
+    test(options, code, code, CheckGlobalNames.STRICT_MODULE_DEP_QNAME);
+  }
+
   public void testFlowSensitiveInlineVariables1() {
     CompilerOptions options = createCompilerOptions();
     String code = "function f() { var x = 3; x = 5; return x; }";
@@ -1468,6 +1550,10 @@ public final class IntegrationTest extends IntegrationTestCase {
     options.setExtractPrototypeMemberDeclarations(true);
     options.setVariableRenaming(VariableRenamingPolicy.ALL);
     test(options, code, expected);
+
+    options.setPropertyRenaming(PropertyRenamingPolicy.HEURISTIC);
+    options.setVariableRenaming(VariableRenamingPolicy.OFF);
+    testSame(options, code);
   }
 
   public void testDevirtualizationAndExtractPrototypeMemberDeclarations() {
@@ -1537,10 +1623,23 @@ public final class IntegrationTest extends IntegrationTestCase {
     String code =
         "function f() { return this.foo + this['bar'] + this.Baz; }" +
         "f.prototype.bar = 3; f.prototype.Baz = 3;";
+    String heuristic =
+        "function f() { return this.foo + this['bar'] + this.a; }"
+            + "f.prototype.bar = 3; f.prototype.a = 3;";
+    String aggHeuristic =
+        "function f() { return this.foo + this['b'] + this.a; } "
+            + "f.prototype.b = 3; f.prototype.a = 3;";
     String all =
-        "function f() { return this.c + this['bar'] + this.a; }" +
-        "f.prototype.b = 3; f.prototype.a = 3;";
+        "function f() { return this.c + this['bar'] + this.a; }"
+            + "f.prototype.b = 3; f.prototype.a = 3;";
     testSame(options, code);
+
+    options.setPropertyRenaming(PropertyRenamingPolicy.HEURISTIC);
+    test(options, code, heuristic);
+
+    options.setPropertyRenaming(PropertyRenamingPolicy.AGGRESSIVE_HEURISTIC);
+    test(options, code, aggHeuristic);
+
     options.setPropertyRenaming(PropertyRenamingPolicy.ALL_UNQUOTED);
     test(options, code, all);
   }
@@ -1580,18 +1679,6 @@ public final class IntegrationTest extends IntegrationTestCase {
     testSame(options, code);
 
     options.setAliasAllStrings(true);
-    test(options, code, expected);
-  }
-
-  public void testAliasExterns() {
-    CompilerOptions options = createCompilerOptions();
-    String code = "function f() { return window + window + window + window; }";
-    String expected = "var GLOBAL_window = window;" +
-        "function f() { return GLOBAL_window + GLOBAL_window + " +
-        "               GLOBAL_window + GLOBAL_window; }";
-    testSame(options, code);
-
-    options.setAliasExternals(true);
     test(options, code, expected);
   }
 
@@ -1663,7 +1750,7 @@ public final class IntegrationTest extends IntegrationTestCase {
     CompilerOptions options = createCompilerOptions();
     String code = "var a;";
 
-    options.skipAllPasses = true;
+    options.skipNonTranspilationPasses = true;
     options.sourceMapOutputPath = "./src.map";
 
     Compiler compiler = compile(options, code);
@@ -1883,7 +1970,6 @@ public final class IntegrationTest extends IntegrationTestCase {
     // are de-duped before that happens.
     CompilerOptions options = createCompilerOptions();
 
-    options.setAliasExternals(true);
     externs = ImmutableList.of(SourceFile.fromCode("externs", "extern.foo"));
 
     test(options,
@@ -1904,11 +1990,10 @@ public final class IntegrationTest extends IntegrationTestCase {
 
   public void testLanguageMode() {
     CompilerOptions options = createCompilerOptions();
-    options.setLanguageIn(LanguageMode.ECMASCRIPT3);
-    options.setLanguageOut(LanguageMode.ECMASCRIPT3);
 
     String code = "var a = {get f(){}}";
 
+    options.setLanguageIn(LanguageMode.ECMASCRIPT3);
     Compiler compiler = compile(options, code);
     checkUnexpectedErrorsOrWarnings(compiler, 1);
     assertEquals(
@@ -1920,39 +2005,31 @@ public final class IntegrationTest extends IntegrationTestCase {
         compiler.getErrors()[0].toString());
 
     options.setLanguageIn(LanguageMode.ECMASCRIPT5);
-    options.setLanguageOut(LanguageMode.ECMASCRIPT5);
-
     testSame(options, code);
 
     options.setLanguageIn(LanguageMode.ECMASCRIPT5_STRICT);
-    options.setLanguageOut(LanguageMode.ECMASCRIPT5_STRICT);
-
     testSame(options, code);
   }
 
   public void testLanguageMode2() {
     CompilerOptions options = createCompilerOptions();
-    options.setLanguageIn(LanguageMode.ECMASCRIPT3);
-    options.setLanguageOut(LanguageMode.ECMASCRIPT3);
     options.setWarningLevel(DiagnosticGroups.ES5_STRICT, CheckLevel.OFF);
 
     String code = "var a  = 2; delete a;";
 
+    options.setLanguageIn(LanguageMode.ECMASCRIPT3);
     testSame(options, code);
 
     options.setLanguageIn(LanguageMode.ECMASCRIPT5);
-    options.setLanguageOut(LanguageMode.ECMASCRIPT5);
-
     testSame(options, code);
 
     options.setLanguageIn(LanguageMode.ECMASCRIPT5_STRICT);
-    options.setLanguageOut(LanguageMode.ECMASCRIPT5_STRICT);
-
     test(options,
         code,
         code,
         StrictModeCheck.DELETE_VARIABLE);
   }
+
 
   public void testIssue598() {
     CompilerOptions options = createCompilerOptions();
@@ -2527,7 +2604,7 @@ public final class IntegrationTest extends IntegrationTestCase {
     CompilationLevel.SIMPLE_OPTIMIZATIONS.setOptionsForCompilationLevel(
         options);
     options.setRenamePrefixNamespace("_");
-    test(options, code, "_.x = null; try { +_.x.FOO; } catch (e) {}");
+    test(options, code, "_.x = null; try { +_.x.FOO; } catch (a) {}");
   }
 
   public void testRenameCollision() {
@@ -2595,7 +2672,6 @@ public final class IntegrationTest extends IntegrationTestCase {
     CompilerOptions options = createCompilerOptions();
     CompilationLevel.ADVANCED_OPTIMIZATIONS
         .setOptionsForCompilationLevel(options);
-    options.setAliasExternals(true);
     String code =
         "window.offsetWidth;";
     String result =
@@ -2867,9 +2943,9 @@ public final class IntegrationTest extends IntegrationTestCase {
 
   public void testES5toES6() throws Exception {
     CompilerOptions options = createCompilerOptions();
-    options.setAllowEs6Out(true);
     options.setLanguageIn(LanguageMode.ECMASCRIPT5_STRICT);
     options.setLanguageOut(LanguageMode.ECMASCRIPT6_STRICT);
+    options.setSkipTranspilationAndCrash(true);
     CompilationLevel.SIMPLE_OPTIMIZATIONS
         .setOptionsForCompilationLevel(options);
     String code = "f = function(c) { for (var i = 0; i < c.length; i++) {} };";
@@ -3131,22 +3207,6 @@ public final class IntegrationTest extends IntegrationTestCase {
     } catch (CompilerOptionsPreprocessor.InvalidOptionsException expected) {}
   }
 
-  public void testManyAdds() {
-    CompilerOptions options = createCompilerOptions();
-    CompilationLevel level = CompilationLevel.SIMPLE_OPTIMIZATIONS;
-    level.setOptionsForCompilationLevel(options);
-    WarningLevel warnings = WarningLevel.VERBOSE;
-    warnings.setOptionsForWarningLevel(options);
-
-    int numAdds = 4400;
-    StringBuilder original = new StringBuilder("var x = 0");
-    for (int i = 0; i < numAdds; i++) {
-      original.append(" + 1");
-    }
-    original.append(";");
-    test(options, original.toString(), "var x = " + numAdds + ";");
-  }
-
   // isEquivalentTo returns false for alpha-equivalent nodes
   public void testIsEquivalentTo() {
     String[] input1 = {"function f(z) { return z; }"};
@@ -3155,6 +3215,13 @@ public final class IntegrationTest extends IntegrationTestCase {
     Node out1 = parse(input1, options, false);
     Node out2 = parse(input2, options, false);
     assertFalse(out1.isEquivalentTo(out2));
+  }
+
+  public void testEs6OutDoesntCrash() {
+    CompilerOptions options = new CompilerOptions();
+    options.setLanguageIn(LanguageMode.ECMASCRIPT6);
+    options.setSkipTranspilationAndCrash(true);
+    test(options, "function f(x) { if (x) var x=5; }", "function f(x) { if (x) x=5; }");
   }
 
   /** Creates a CompilerOptions object with google coding conventions. */

@@ -27,7 +27,7 @@ public final class Es6InlineTypesTest extends CompilerTestCase {
 
   @Override
   public void setUp() {
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
+    setAcceptedLanguage(LanguageMode.ECMASCRIPT6_TYPED);
     enableAstValidation(true);
     compareJsDoc = false;
   }
@@ -41,7 +41,7 @@ public final class Es6InlineTypesTest extends CompilerTestCase {
 
   @Override
   public CompilerPass getProcessor(Compiler compiler) {
-    return new ConvertToTypedES6(compiler);
+    return new JsdocToEs6TypedConverter(compiler);
   }
 
   @Override

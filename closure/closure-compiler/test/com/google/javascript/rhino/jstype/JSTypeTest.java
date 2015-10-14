@@ -2775,9 +2775,8 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertFalse(record.isSubtype(supertypeProp));
 
     ObjectType declaredSubtypeProp = registry.createAnonymousObjectType(null);
-    declaredSubtypeProp.defineDeclaredProperty("a", googSubSubBarInst,
-        null);
-    assertFalse(declaredSubtypeProp.isSubtype(record));
+    declaredSubtypeProp.defineDeclaredProperty("a", googSubSubBarInst, null);
+    assertTrue(declaredSubtypeProp.isSubtype(record));
     assertFalse(record.isSubtype(declaredSubtypeProp));
   }
 
@@ -2939,6 +2938,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertTypeEquals(NO_OBJECT_TYPE,
                  recordType.getGreatestSubtype(U2U_CONSTRUCTOR_TYPE));
   }
+
   public void testRecordTypeGreatestSubType8() {
     RecordTypeBuilder builder = new RecordTypeBuilder(registry);
     builder.addProperty("xyz", UNKNOWN_TYPE, null);
@@ -2962,6 +2962,110 @@ public class JSTypeTest extends BaseJSTypeTestCase {
                  recordType.getGreatestSubtype(googBarInst));
     assertTypeEquals(NO_OBJECT_TYPE,
                  googBarInst.getGreatestSubtype(recordType));
+  }
+
+  public void testRecordTypeGreatestSubType9() {
+    RecordTypeBuilder builder = new RecordTypeBuilder(registry);
+    builder.addProperty("d", googBar.getPrototype(), null);
+    builder.addProperty("e", STRING_TYPE, null);
+    builder.addProperty("f", STRING_TYPE, null);
+
+    JSType recordType1 = builder.build();
+
+
+    builder = new RecordTypeBuilder(registry);
+    builder.addProperty("d", googBar.getInstanceType(), null);
+    builder.addProperty("e", STRING_TYPE, null);
+    builder.addProperty("f", STRING_TYPE, null);
+
+    JSType recordType2 = builder.build();
+
+    JSType subtype = recordType1.getGreatestSubtype(recordType2);
+
+    builder = new RecordTypeBuilder(registry);
+    builder.addProperty("d", googBar.getInstanceType(), null);
+    builder.addProperty("e", STRING_TYPE, null);
+    builder.addProperty("f", STRING_TYPE, null);
+
+    assertTypeEquals(subtype, builder.build());
+  }
+
+  public void testRecordTypeGreatestSubType10() {
+    RecordTypeBuilder builder = new RecordTypeBuilder(registry);
+    builder.addProperty("d", googBar.getPrototype(), null);
+    builder.addProperty("e", STRING_TYPE, null);
+
+    JSType recordType1 = builder.build();
+
+
+    builder = new RecordTypeBuilder(registry);
+    builder.addProperty("d", googBar.getInstanceType(), null);
+    builder.addProperty("e", STRING_TYPE, null);
+    builder.addProperty("f", STRING_TYPE, null);
+
+    JSType recordType2 = builder.build();
+
+    JSType subtype = recordType2.getGreatestSubtype(recordType1);
+
+    builder = new RecordTypeBuilder(registry);
+    builder.addProperty("d", googBar.getInstanceType(), null);
+    builder.addProperty("e", STRING_TYPE, null);
+    builder.addProperty("f", STRING_TYPE, null);
+
+    assertTypeEquals(subtype, builder.build());
+  }
+
+  public void testRecordTypeGreatestSubType11() {
+    RecordTypeBuilder builder = new RecordTypeBuilder(registry);
+    builder.addProperty("d", createUnionType(NUMBER_TYPE, STRING_TYPE), null);
+    builder.addProperty("e", STRING_TYPE, null);
+
+    JSType recordType1 = builder.build();
+
+    builder = new RecordTypeBuilder(registry);
+    builder.addProperty("d", createUnionType(NUMBER_TYPE, BOOLEAN_TYPE), null);
+    builder.addProperty("e", STRING_TYPE, null);
+    builder.addProperty("f", STRING_TYPE, null);
+
+    JSType recordType2 = builder.build();
+
+    JSType subtype = recordType2.getGreatestSubtype(recordType1);
+
+    builder = new RecordTypeBuilder(registry);
+    builder.addProperty("d", NUMBER_TYPE, null);
+    builder.addProperty("e", STRING_TYPE, null);
+    builder.addProperty("f", STRING_TYPE, null);
+
+    assertTypeEquals(subtype, builder.build());
+  }
+
+  public void testRecordTypeGreatestSubType12() {
+    RecordTypeBuilder builder = new RecordTypeBuilder(registry);
+    builder.addProperty("d", googBar.getPrototype(), null);
+    builder.addProperty("e", STRING_TYPE, null);
+
+    JSType recordType1 = builder.build();
+
+
+    FunctionType googBarArgConstructor = registry.createConstructorType(
+        "barArg", null, registry.createParameters(googBar), null, null);
+
+    builder = new RecordTypeBuilder(registry);
+    builder.addProperty("d", googBarArgConstructor, null);
+    builder.addProperty("e", STRING_TYPE, null);
+    builder.addProperty("f", STRING_TYPE, null);
+
+    JSType recordType2 = builder.build();
+
+    JSType subtype = recordType2.getGreatestSubtype(recordType1);
+
+    builder = new RecordTypeBuilder(registry);
+    builder.addProperty("d", registry.getNativeObjectType(
+        JSTypeNative.NO_OBJECT_TYPE), null);
+    builder.addProperty("e", STRING_TYPE, null);
+    builder.addProperty("f", STRING_TYPE, null);
+
+    assertTypeEquals(subtype, builder.build());
   }
 
   /**
@@ -5431,12 +5535,33 @@ public class JSTypeTest extends BaseJSTypeTestCase {
           assertTrue("Proxy " + typeI + " should equal itself",
               proxyTypeI.isEquivalentTo(proxyTypeI));
         } else {
-          assertFalse(typeI + " should not equal " + typeJ,
-              typeI.isEquivalentTo(typeJ));
-          assertFalse("Named " + typeI + " should not equal " + typeJ,
-              namedTypeI.isEquivalentTo(namedTypeJ));
-          assertFalse("Proxy " + typeI + " should not equal " + typeJ,
-              proxyTypeI.isEquivalentTo(proxyTypeJ));
+          boolean shouldCheck = true;
+          // due to structural interface matching and its updated equivalence
+          // checking, a subtype interface could be considered as equivalent
+          // to its super type interface (if they are structurally the same)
+          // when this happens, the following checks are skipped.
+          ObjectType objectI = typeI.toObjectType();
+          ObjectType objectJ = typeJ.toObjectType();
+          if (objectI != null && objectJ != null) {
+            FunctionType constructorI = objectI.getConstructor();
+            FunctionType constructorJ = objectJ.getConstructor();
+            if (constructorI != null && constructorJ != null
+                && constructorI.isStructuralInterface()
+                && constructorJ.isStructuralInterface()) {
+              if (constructorI.checkEquivalenceHelper(constructorJ,
+                  EquivalenceMethod.IDENTITY)) {
+                shouldCheck = false;
+              }
+            }
+          }
+          if (shouldCheck) {
+            assertFalse(typeI + " should not equal " + typeJ,
+                typeI.isEquivalentTo(typeJ));
+            assertFalse("Named " + typeI + " should not equal " + typeJ,
+                namedTypeI.isEquivalentTo(namedTypeJ));
+            assertFalse("Proxy " + typeI + " should not equal " + typeJ,
+                proxyTypeI.isEquivalentTo(proxyTypeJ));
+          }
         }
 
         assertTrue(typeJ + " should be castable to " + typeI,
@@ -5465,6 +5590,13 @@ public class JSTypeTest extends BaseJSTypeTestCase {
         assertTrue(
             "Proxy " + typeJ + " should be castable to Proxy " + typeI,
             proxyTypeJ.canCastTo(proxyTypeI));
+
+        // due to structural interface matching, a subtype could be considered
+        // as the super type of its super type (if they are structurally the same)
+        // when this happens, the following checks are skipped.
+        if (typeI.isSubtype(typeJ) && typeJ.isSubtype(typeI)) {
+          continue;
+        }
 
         if (checkSubtyping) {
           if (i <= j) {
@@ -5879,7 +6011,7 @@ public class JSTypeTest extends BaseJSTypeTestCase {
         "e", NUMBER_TYPE, null);
     anonymous.defineDeclaredProperty(
         "f", NUMBER_TYPE, null);
-    assertEquals("{a: number, b: number, c: number, d: number, ...}",
+    assertEquals("{a: number, b: number, c: number, d: number, e: number, f: number}",
         anonymous.toString());
   }
 
