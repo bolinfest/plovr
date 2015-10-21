@@ -4,6 +4,7 @@ java_library(
   resources = [
     'javascript/soyutils_usegoog.js',
   ],
+  resources_root = '.',
   annotation_processors = ['com.google.auto.value.processor.AutoValueProcessor'],
   annotation_processor_deps = [':auto-value'],
   deps = [
