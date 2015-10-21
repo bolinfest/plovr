@@ -1,0 +1,12 @@
+
+java_library(
+  name = 'closure-library',
+  srcs = [],
+  resources = glob(includes=[
+    '**/*.js'
+  ]),
+  resources_root = '.',
+  visibility = [
+    'PUBLIC',
+  ],
+)

@@ -18,18 +18,19 @@ java_library(
   source = '7',
   target = '7',
   deps = [
-    '//closure/closure-compiler:gson',
-    ':selenium',
     '//closure/closure-compiler:args4j',
     '//closure/closure-compiler:closure-compiler',
+    '//closure/closure-compiler:gson',
     '//closure/closure-compiler:guava',
     '//closure/closure-compiler:jsr305',
     '//closure/closure-compiler:protobuf',
+    '//closure/closure-library:closure-library',
     '//closure/closure-stylesheets:closure-stylesheets',
     '//closure/closure-templates:closure-templates',
     '//closure/closure-templates:guice',
     '//closure/closure-templates:guice-assistedinject',
     '//closure/closure-templates:guice-multibindings',
+    ':selenium',
   ],
 )
 
@@ -38,15 +39,15 @@ java_test(
   srcs = glob(['test/**/*.java']),
   resources = glob(['test/**/*.js']),
   deps = [
-    '//closure/closure-compiler:gson',
-    ':mockito',
-    ':plovr-lib',
     '//closure/closure-compiler:closure-compiler',
     '//closure/closure-compiler:jsr305',
     '//closure/closure-compiler:junit',
     '//closure/closure-stylesheets:closure-stylesheets',
     '//closure/closure-templates:closure-templates',
     '//closure/closure-templates:guava',
+    ':mockito',
+    ':plovr-lib',
+    '//closure/closure-compiler:gson',
   ],
 )
 
