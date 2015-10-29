@@ -363,6 +363,10 @@ public final class Compilation {
         outputFile = new File(outputFile.getParentFile(), fileName);
       }
 
+      if ( config.getAddSourceMapUrl() ) {
+        moduleCode += "\n//# sourceMappingURL=" + sourceMapPath + "_" + moduleName + "\n";
+      }
+
       Files.write(moduleCode, outputFile);
 
       // It turns out that the SourceMap will not be populated until after the

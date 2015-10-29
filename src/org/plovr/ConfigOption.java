@@ -208,6 +208,20 @@ public enum ConfigOption {
     }
   }),
 
+//  ADD_SOURCEMAP_URL("add-sourcemap-url", new ConfigUpdater() {
+//    @Override
+//    public void apply(boolean addSourceMapUrl, Config.Builder builder) {
+//      builder.setAddSourceMapUrl(addSourceMapUrl);
+//    }
+//
+//    @Override
+//    public boolean update(String addSourceMapUrlParam, Config.Builder builder) {
+//      boolean addSourceMapUrl = Boolean.valueOf(addSourceMapUrlParam);
+//      builder.setAddSourceMapUrl(addSourceMapUrl);
+//      return true;
+//    }
+//  }),
+
   PRINT_INPUT_DELIMITER("print-input-delimiter", new ConfigUpdater() {
     @Override
     public void apply(boolean printInputDelimiter, Config.Builder builder) {
