@@ -16,18 +16,27 @@
 
 package com.google.template.soy;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import com.google.inject.Guice;
+import com.google.inject.Key;
+import com.google.template.soy.SoyFileSetParser.ParseResult;
 import com.google.template.soy.base.internal.SoyFileKind;
 import com.google.template.soy.base.internal.SoyFileSupplier;
 import com.google.template.soy.basetree.SyntaxVersion;
+import com.google.template.soy.basicfunctions.BasicFunctionsModule;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.ExplodingErrorReporter;
+import com.google.template.soy.passes.PassManager;
 import com.google.template.soy.shared.AutoEscapingType;
 import com.google.template.soy.shared.SharedTestUtils;
 import com.google.template.soy.shared.SoyAstCache;
-import com.google.template.soy.sharedpasses.CheckTemplateParamsVisitor;
-import com.google.template.soy.soytree.SoyFileSetNode;
+import com.google.template.soy.shared.SoyGeneralOptions;
+import com.google.template.soy.shared.internal.SharedModule;
+import com.google.template.soy.shared.restricted.SoyFunction;
 import com.google.template.soy.types.SoyTypeRegistry;
 
 import java.util.Arrays;
@@ -43,12 +52,16 @@ import javax.annotation.Nullable;
 public final class SoyFileSetParserBuilder {
 
   private final ImmutableList<SoyFileSupplier> soyFileSuppliers;
-  private boolean doRunCheckingPasses = false;
   private boolean doRunInitialParsingPasses = true; // Non-standard default
   private SoyTypeRegistry typeRegistry = new SoyTypeRegistry();
   private SyntaxVersion declaredSyntaxVersion = SyntaxVersion.V2_0;
   @Nullable private SoyAstCache astCache = null;
   private ErrorReporter errorReporter = ExplodingErrorReporter.get(); // See #parse for discussion.
+  private boolean allowUnboundGlobals;
+  private ImmutableMap<String, ? extends SoyFunction> soyFunctionMap =
+      Guice.createInjector(new SharedModule(), new BasicFunctionsModule())
+          .getInstance(new Key<ImmutableMap<String, ? extends SoyFunction>>() {});
+  private SoyGeneralOptions options = new SoyGeneralOptions();
 
   /**
    * Returns a builder that gets its Soy inputs from the given strings, treating each string
@@ -104,61 +117,44 @@ public final class SoyFileSetParserBuilder {
   }
 
   /**
-   * Turns the parser's checking passes on or off. Returns this object, for chaining.
-   *
-   * <p>The checking passes include:
-   * <ul>
-   *   <li>{@link com.google.template.soy.parsepasses.CheckCallsVisitor}</li>
-   *   <li>{@link com.google.template.soy.parsepasses.CheckDelegatesVisitor}</li>
-   *   <li>{@link com.google.template.soy.parsepasses.InferRequiredSyntaxVersionVisitor}</li>
-   *   <li>{@link com.google.template.soy.parsepasses.VerifyPhnameAttrOnlyOnPlaceholdersVisitor}
-   *   </li>
-   *   <li>{@link com.google.template.soy.sharedpasses.CheckCallingParamTypesVisitor}</li>
-   *   <li>{@link  com.google.template.soy.sharedpasses.CheckTemplateParamsVisitor}</li>
-   *   <li>{@link com.google.template.soy.sharedpasses.CheckTemplateVisibility}</li>
-   *   <li>{@link com.google.template.soy.sharedpasses.ReportSyntaxVersionErrorsVisitor}</li>
-   * </ul>
+   * Turns the parser's initial parsing passes on or off, see {@link PassManager}.
+   * 
+   * @deprecated There should be no reason to need this.  All tests that wish to run a subset of
+   * passes should be able to demonstrate similar behavior by running all passes.  (If you cannot
+   * then the thing you are trying to test doesn't make sense).
    */
-  public SoyFileSetParserBuilder doRunCheckingPasses(boolean doRunCheckingPasses) {
-    this.doRunCheckingPasses = doRunCheckingPasses;
-    return this;
-  }
-
-  /**
-   * Turns the parser's initial parsing passes on or off. Returns this object, for chaining.
-   *
-   * <p>The initial parsing passes include:
-   * <ul>
-   *   <li>{@link com.google.template.soy.parsepasses.RewriteGenderMsgsVisitor}</li>
-   *   <li>{@link com.google.template.soy.parsepasses.ReplaceHasDataFunctionVisitor}</li>
-   *   <li>{@link com.google.template.soy.parsepasses.RewriteRemainderNodesVisitor}</li>
-   *   <li>{@link com.google.template.soy.parsepasses.RewriteNullCoalescingOpVisitor}</li>
-   *   <li>{@link com.google.template.soy.parsepasses.SetDefaultForDelcallAllowsEmptyDefaultVisitor}
-   *   <li>{@link com.google.template.soy.parsepasses.SetFullCalleeNamesVisitor}</li>
-   *   </li>
-   *   <li>{@link com.google.template.soy.sharedpasses.RemoveHtmlCommentsVisitor}</li>
-   *   <li>{@link com.google.template.soy.sharedpasses.ResolveExpressionTypesVisitor}</li>
-   *   <li>{@link com.google.template.soy.sharedpasses.ResolveNamesVisitor}</li>
-   * </ul>
-   */
+  @Deprecated
   public SoyFileSetParserBuilder doRunInitialParsingPasses(boolean doRunInitialParsingPasses) {
     this.doRunInitialParsingPasses = doRunInitialParsingPasses;
     return this;
   }
 
-  /**
-   * Sets the parser's error reporter. Returns this object, for chaining.
-   */
   public SoyFileSetParserBuilder errorReporter(ErrorReporter errorReporter) {
     this.errorReporter = errorReporter;
     return this;
   }
+  
+  public SoyFileSetParserBuilder addSoyFunction(SoyFunction function) {
+    this.soyFunctionMap =
+        ImmutableMap.<String, SoyFunction>builder()
+            .putAll(soyFunctionMap)
+            .put(function.getName(), function)
+            .build();
+    return this;
+  }
 
-  /**
-   * Sets the parser's type registry. Returns this object, for chaining.
-   */
+  public SoyFileSetParserBuilder options(SoyGeneralOptions options) {
+    this.options = checkNotNull(options);
+    return this;
+  }
+
   public SoyFileSetParserBuilder typeRegistry(SoyTypeRegistry typeRegistry) {
     this.typeRegistry = typeRegistry;
+    return this;
+  }
+  
+  public SoyFileSetParserBuilder allowUnboundGlobals(boolean allowUnboundGlobals) {
+    this.allowUnboundGlobals = allowUnboundGlobals;
     return this;
   }
 
@@ -184,15 +180,27 @@ public final class SoyFileSetParserBuilder {
    * errors encountered during compilation), pass a different {@link ErrorReporter} implementation
    * to {@link #errorReporter}.
    */
-  public SoyFileSetNode parse() {
+  public ParseResult parse() {
+    PassManager passManager = null;
+    if (doRunInitialParsingPasses) {
+      PassManager.Builder builder =
+          new PassManager.Builder()
+              .setDeclaredSyntaxVersion(declaredSyntaxVersion)
+              .setSoyFunctionMap(soyFunctionMap)
+              .setErrorReporter(errorReporter)
+              .setTypeRegistry(typeRegistry)
+              .setGeneralOptions(options);
+      if (allowUnboundGlobals) {
+        builder.allowUnknownGlobals();
+      }
+      passManager = builder.build();
+    }
     return new SoyFileSetParser(
-        typeRegistry,
-        astCache,
-        declaredSyntaxVersion,
-        soyFileSuppliers,
-        errorReporter,
-        doRunInitialParsingPasses,
-        doRunCheckingPasses)
+            typeRegistry,
+            astCache,
+            soyFileSuppliers,
+            passManager,
+            errorReporter)
         .parse();
   }
 }

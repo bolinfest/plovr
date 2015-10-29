@@ -644,7 +644,6 @@ class FunctionInjector {
       Reference ref, final Node fnNode,
       Set<String> namesToAlias) {
     final boolean assumeMinimumCapture = this.assumeMinimumCapture;
-
     // Note: functions that contain function definitions are filtered out
     // in isCandidateFunction.
 
@@ -660,9 +659,8 @@ class FunctionInjector {
         new NodeUtil.MatchDeclaration(),
         new NodeUtil.MatchShallowStatement());
     boolean forbidTemps = false;
-    if (!ref.scope.isGlobal()) {
-      Node fnCaller = ref.scope.getRootNode();
-      Node fnCallerBody = fnCaller.getLastChild();
+    if (!ref.scope.getClosestHoistScope().isGlobal()) {
+      Node fnCallerBody = ref.scope.getClosestHoistScope().getRootNode();
 
       // Don't allow any new vars into a scope that contains eval or one
       // that contains functions (excluding the function being inlined).
@@ -678,8 +676,7 @@ class FunctionInjector {
           return false;
         }
       };
-      forbidTemps = NodeUtil.has(fnCallerBody,
-          match, NodeUtil.MATCH_NOT_FUNCTION);
+      forbidTemps = NodeUtil.has(fnCallerBody, match, NodeUtil.MATCH_NOT_FUNCTION);
     }
 
     if (fnContainsVars && forbidTemps) {

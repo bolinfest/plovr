@@ -18,6 +18,7 @@ package com.google.template.soy.sharedpasses.render;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.template.soy.data.LazySanitizedContents;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
@@ -39,13 +40,13 @@ import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.data.restricted.NullData;
 import com.google.template.soy.data.restricted.StringData;
 import com.google.template.soy.data.restricted.UndefinedData;
-import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.jbcsrc.api.RenderResult;
 import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.shared.SoyCssRenamingMap;
 import com.google.template.soy.shared.SoyIdRenamingMap;
+import com.google.template.soy.shared.internal.SharedRuntime;
 import com.google.template.soy.shared.restricted.SoyJavaPrintDirective;
 import com.google.template.soy.sharedpasses.render.EvalVisitor.EvalVisitorFactory;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
@@ -96,7 +97,6 @@ import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.Nullable;
@@ -112,7 +112,7 @@ import javax.annotation.Nullable;
 public class RenderVisitor extends AbstractSoyNodeVisitor<Void> {
 
   /** Map of all SoyJavaPrintDirectives (name to directive). */
-  protected final Map<String, SoyJavaPrintDirective> soyJavaDirectivesMap;
+  protected final ImmutableMap<String, ? extends SoyJavaPrintDirective> soyJavaDirectivesMap;
 
   /** Factory for creating an instance of EvalVisitor. */
   protected final EvalVisitorFactory evalVisitorFactory;
@@ -179,10 +179,9 @@ public class RenderVisitor extends AbstractSoyNodeVisitor<Void> {
    * @param xidRenamingMap The 'xid' renaming map, or null if not applicable.
    */
   protected RenderVisitor(
-      Map<String, SoyJavaPrintDirective> soyJavaDirectivesMap,
+      ImmutableMap<String, ? extends SoyJavaPrintDirective> soyJavaDirectivesMap,
       EvalVisitorFactory evalVisitorFactory,
       Appendable outputBuf,
-      ErrorReporter errorReporter,
       @Nullable TemplateRegistry templateRegistry,
       SoyRecord data,
       @Nullable SoyRecord ijData,
@@ -190,7 +189,6 @@ public class RenderVisitor extends AbstractSoyNodeVisitor<Void> {
       @Nullable SoyMsgBundle msgBundle,
       @Nullable SoyIdRenamingMap xidRenamingMap,
       @Nullable SoyCssRenamingMap cssRenamingMap) {
-    super(errorReporter);
     Preconditions.checkNotNull(data);
 
     this.soyJavaDirectivesMap = soyJavaDirectivesMap;
@@ -244,7 +242,6 @@ public class RenderVisitor extends AbstractSoyNodeVisitor<Void> {
         soyJavaDirectivesMap,
         evalVisitorFactory,
         outputBuf,
-        errorReporter,
         templateRegistry,
         data,
         ijData,
@@ -289,7 +286,7 @@ public class RenderVisitor extends AbstractSoyNodeVisitor<Void> {
 
   @Override protected void visitMsgFallbackGroupNode(MsgFallbackGroupNode node) {
     if (assistantForMsgs == null) {
-      assistantForMsgs = new RenderVisitorAssistantForMsgs(this, msgBundle, errorReporter);
+      assistantForMsgs = new RenderVisitorAssistantForMsgs(this, msgBundle);
     }
     if (!node.getEscapingDirectiveNames().isEmpty()) {
       // The entire message needs to be escaped, so we need to render to a temporary buffer.
@@ -416,7 +413,7 @@ public class RenderVisitor extends AbstractSoyNodeVisitor<Void> {
       if (child instanceof SwitchCaseNode) {
         SwitchCaseNode scn = (SwitchCaseNode) child;
         for (ExprNode caseExpr : scn.getExprList()) {
-          if (switchValue.equals(eval(caseExpr, scn))) {
+          if (SharedRuntime.equal(switchValue, eval(caseExpr, scn))) {
             visit(scn);
             return;
           }

@@ -25,6 +25,7 @@ goog.require('goog.labs.userAgent.engine');
 goog.require('goog.labs.userAgent.platform');
 goog.require('goog.string');
 goog.require('goog.testing.PropertyReplacer');
+goog.require('goog.testing.TestCase');
 goog.require('goog.testing.jsunit');
 goog.require('goog.window');
 
@@ -47,6 +48,7 @@ function setUpPage() {
               goog.dom.getTextContent(e.target), {'noreferrer': true});
         });
   }
+  goog.testing.TestCase.getActiveTestCase().promiseTimeout = 60000; // 60s
 }
 
 
@@ -229,6 +231,30 @@ function testOpenBlankReturnsNullPopupBlocker() {
   };
   var win = goog.window.openBlank('', {noreferrer: true}, mockWin);
   assertNull(win);
+}
+
+
+function testOpenBlankEscapesSafely() {
+  // Opening a window with javascript: and then reading from its document.body
+  // is problematic because in some browsers the document.body won't have been
+  // updated yet, and in some IE versions the parent window does not have
+  // access to document.body in new blank window.
+  var navigatedUrl;
+  var mockWin = {
+    open: function(url) {
+      navigatedUrl = url;
+    }
+  };
+
+  // Test string determines that all necessary escaping transformations happen,
+  // and that they happen in the right order (HTML->JS->URI).
+  // - " which would be escaped by HTML escaping and JS string escaping. It
+  //     should be HTML escaped.
+  // - \ which would be escaped by JS string escaping and percent-encoded
+  //     by encodeURI(). It gets JS string escaped first (to two '\') and then
+  //     percent-encoded.
+  var win = goog.window.openBlank('"\\', {}, mockWin);
+  assertEquals('javascript:"&quot;%5C%5C"', navigatedUrl);
 }
 
 

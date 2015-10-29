@@ -57,7 +57,7 @@ class MoveFunctionDeclarations implements Callback, CompilerPass {
 
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverse(compiler, root, this);
+    NodeTraversal.traverseEs6(compiler, root, this);
     for (Entry<JSModule, List<Node>> entry : functions.entrySet()) {
       JSModule module = entry.getKey();
       Node addingRoot = compiler.getNodeForCodeInsertion(module);
@@ -69,8 +69,8 @@ class MoveFunctionDeclarations implements Callback, CompilerPass {
 
   @Override
   public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
-    Node gramps = n.getAncestor(2);
-    return gramps == null || !gramps.isScript();
+    Node grandparent = n.getAncestor(2);
+    return grandparent == null || !grandparent.isScript();
   }
 
   @Override

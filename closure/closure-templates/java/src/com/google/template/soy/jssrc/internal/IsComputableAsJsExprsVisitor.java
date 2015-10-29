@@ -16,11 +16,16 @@
 
 package com.google.template.soy.jssrc.internal;
 
-import com.google.template.soy.error.ErrorReporter;
-import com.google.template.soy.jssrc.SoyJsSrcOptions;
-import com.google.template.soy.jssrc.SoyJsSrcOptions.CodeStyle;
+import com.google.template.soy.html.AbstractReturningHtmlSoyNodeVisitor;
+import com.google.template.soy.html.HtmlAttributeNode;
+import com.google.template.soy.html.HtmlCloseTagNode;
+import com.google.template.soy.html.HtmlOpenTagEndNode;
+import com.google.template.soy.html.HtmlOpenTagNode;
+import com.google.template.soy.html.HtmlOpenTagStartNode;
+import com.google.template.soy.html.HtmlPrintNode;
+import com.google.template.soy.html.HtmlTextNode;
+import com.google.template.soy.html.HtmlVoidTagNode;
 import com.google.template.soy.shared.internal.ApiCallScope;
-import com.google.template.soy.soytree.AbstractReturningSoyNodeVisitor;
 import com.google.template.soy.soytree.CallNode;
 import com.google.template.soy.soytree.CallParamContentNode;
 import com.google.template.soy.soytree.CallParamValueNode;
@@ -50,7 +55,6 @@ import java.util.Map;
 
 import javax.inject.Inject;
 
-
 /**
  * Visitor to determine whether the output string for the subtree rooted at a given node is
  * computable as the concatenation of one or more JS expressions. If this is false, it means the
@@ -66,24 +70,15 @@ import javax.inject.Inject;
  *
  */
 @ApiCallScope
-class IsComputableAsJsExprsVisitor extends AbstractReturningSoyNodeVisitor<Boolean> {
-
-
-  /** The options for generating JS source code. */
-  private final SoyJsSrcOptions jsSrcOptions;
+public
+class IsComputableAsJsExprsVisitor extends AbstractReturningHtmlSoyNodeVisitor<Boolean> {
 
   /** The memoized results of past visits to nodes. */
   private final Map<SoyNode, Boolean> memoizedResults;
 
 
-  /**
-   * @param jsSrcOptions The options for generating JS source code.
-   * @param errorReporter For reporting errors.
-   */
   @Inject
-  IsComputableAsJsExprsVisitor(SoyJsSrcOptions jsSrcOptions, ErrorReporter errorReporter) {
-    super(errorReporter);
-    this.jsSrcOptions = jsSrcOptions;
+  IsComputableAsJsExprsVisitor() {
     memoizedResults = new HashMap<>();
   }
 
@@ -197,7 +192,7 @@ class IsComputableAsJsExprsVisitor extends AbstractReturningSoyNodeVisitor<Boole
 
 
   @Override protected Boolean visitCallNode(CallNode node) {
-    return jsSrcOptions.getCodeStyle() == CodeStyle.CONCAT && areChildrenComputableAsJsExprs(node);
+    return areChildrenComputableAsJsExprs(node);
   }
 
 
@@ -220,6 +215,37 @@ class IsComputableAsJsExprsVisitor extends AbstractReturningSoyNodeVisitor<Boole
     return false;
   }
 
+  @Override protected Boolean visitHtmlAttributeNode(HtmlAttributeNode node) {
+    return false;
+  }
+
+  @Override protected Boolean visitHtmlOpenTagNode(HtmlOpenTagNode node) {
+    return false;
+  }
+
+  @Override protected Boolean visitHtmlCloseTagNode(HtmlCloseTagNode node) {
+    return false;
+  }
+
+  @Override protected Boolean visitHtmlOpenTagStartNode(HtmlOpenTagStartNode node) {
+    return false;
+  }
+
+  @Override protected Boolean visitHtmlOpenTagEndNode(HtmlOpenTagEndNode node) {
+    return false;
+  }
+
+  @Override protected Boolean visitHtmlVoidTagNode(HtmlVoidTagNode node) {
+    return false;
+  }
+
+  @Override protected Boolean visitHtmlTextNode(HtmlTextNode node) {
+    return false;
+  }
+
+  @Override protected Boolean visitHtmlPrintNode(HtmlPrintNode node) {
+    return false;
+  }
 
   // -----------------------------------------------------------------------------------------------
   // Private helpers.

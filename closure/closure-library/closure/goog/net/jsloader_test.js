@@ -114,14 +114,18 @@ function testLoadMany() {
 
   // Load test #3 and then #1.
   window.test1 = null;
+  window.test4 = null;
   var testUrls1 = ['testdata/jsloader_test3.js', 'testdata/jsloader_test1.js'];
-  goog.net.jsloader.loadMany(testUrls1);
+  var result = goog.net.jsloader.loadMany(testUrls1);
 
   window.test3Callback = function(msg) {
     testCase.continueTesting();
 
     // Check that the 1st test was not loaded yet.
     assertEquals('verification object', null, window.test1);
+
+    // check that result has not fired yet
+    assertFalse('deferred has fired', result.hasFired());
 
     // Load test #4, which is supposed to wait for #1 to load.
     testCase.waitForAsync('testLoadMany');
@@ -134,5 +138,52 @@ function testLoadMany() {
 
     // Check that the 1st test was already loaded.
     assertEquals('verification object', 'Test #1 loaded', window.test1);
+
+    // all scripts loaded - verify that result has fired
+    assertTrue('deferred has fired', result.hasFired());
+
+    // on last script loaded, set variable
+    window.test4 = msg;
+
+    testCase.waitForAsync('testLoadMany');
   };
+
+  result.addCallback(function() {
+    testCase.continueTesting();
+
+    // verify that the last loaded script callback has executed
+    assertEquals('verification object', 'Test #4 loaded', window.test4);
+  });
+}
+
+
+// Test the load function with additional options.
+function testLoadWithOptions() {
+  testCase.waitForAsync('testLoadWithOptions');
+
+  var testUrl = 'testdata/jsloader_test1.js';
+  var options = {
+    attributes: {
+      'data-attr1' : 'enabled',
+      'data-attr2' : 'disabled',
+    },
+    timeout: undefined,  // Use default
+    cleanupWhenDone: undefined,  // Use default
+    document: undefined  // Use default
+  };
+  var result = goog.net.jsloader.load(testUrl, options);
+  result.addCallback(function() {
+    testCase.continueTesting();
+
+    var script = result.defaultScope_.script_;
+
+    // Check that the URI matches ours.
+    assertTrue('server URI', script.src.indexOf(testUrl) >= 0);
+
+    // Check that the attributes specified are set on the script tag.
+    assertEquals('attribute option not applied for attr1',
+        'enabled', script.getAttribute('data-attr1'));
+    assertEquals('attribute option not applied for attr2',
+        'disabled', script.getAttribute('data-attr2'));
+  });
 }

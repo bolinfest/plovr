@@ -17,7 +17,6 @@
 package com.google.javascript.jscomp.parsing;
 
 import com.google.common.base.Preconditions;
-import com.google.common.math.DoubleMath;
 import com.google.javascript.jscomp.parsing.Config.LanguageMode;
 import com.google.javascript.jscomp.parsing.ParserRunner.ParseResult;
 import com.google.javascript.rhino.ErrorReporter;
@@ -250,7 +249,7 @@ public final class TypeTransformationParser {
    */
   public boolean parseTypeTransformation() {
     Config config = new Config(new HashSet<String>(),
-        new HashSet<String>(), true, LanguageMode.ECMASCRIPT6, false);
+        new HashSet<String>(), true, LanguageMode.ECMASCRIPT6);
     // TODO(lpino): ParserRunner reports errors if the expression is not
     // ES6 valid. We need to abort the validation of the type transformation
     // whenever an error is reported.
@@ -385,7 +384,7 @@ public final class TypeTransformationParser {
       return false;
     }
     double index = getCallArgument(expr, 1).getDouble();
-    if (!DoubleMath.isMathematicalInteger(index) || index < 0) {
+    if (index < 0 || index % 1 != 0) {
       warnInvalid("index", expr);
       warnInvalidInside(Keywords.TEMPLATETYPEOF.name, expr);
       return false;

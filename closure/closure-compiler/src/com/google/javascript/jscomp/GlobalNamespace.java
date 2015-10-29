@@ -19,9 +19,7 @@ package com.google.javascript.jscomp;
 import static com.google.javascript.rhino.jstype.JSTypeNative.GLOBAL_THIS;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.CodingConvention.SubclassRelationship;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
@@ -34,14 +32,13 @@ import com.google.javascript.rhino.jstype.StaticTypedRef;
 import com.google.javascript.rhino.jstype.StaticTypedScope;
 import com.google.javascript.rhino.jstype.StaticTypedSlot;
 
-import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
-import java.util.TreeSet;
 
 /**
  * Builds a global namespace of all the objects and their properties in
@@ -185,6 +182,20 @@ class GlobalNamespace
       this.scope = scope;
       this.node = node;
     }
+
+    @Override
+    public boolean equals(Object obj) {
+      Preconditions.checkState(obj instanceof AstChange);
+      AstChange other = (AstChange) obj;
+      return Objects.equals(this.module, other.module)
+          && Objects.equals(this.scope, other.scope)
+          && Objects.equals(this.node, other.node);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(this.module, this.scope, this.node);
+    }
   }
 
   /**
@@ -192,7 +203,7 @@ class GlobalNamespace
    * to see if they've added any references to the global namespace.
    * @param newNodes New nodes to check.
    */
-  void scanNewNodes(List<AstChange> newNodes) {
+  void scanNewNodes(Set<AstChange> newNodes) {
     BuildGlobalNamespace builder = new BuildGlobalNamespace();
 
     for (AstChange info : newNodes) {
@@ -218,11 +229,11 @@ class GlobalNamespace
   private void process() {
     if (externsRoot != null) {
       inExterns = true;
-      NodeTraversal.traverse(compiler, externsRoot, new BuildGlobalNamespace());
+      NodeTraversal.traverseEs6(compiler, externsRoot, new BuildGlobalNamespace());
     }
     inExterns = false;
 
-    NodeTraversal.traverse(compiler, root, new BuildGlobalNamespace());
+    NodeTraversal.traverseEs6(compiler, root, new BuildGlobalNamespace());
     generated = true;
   }
 
@@ -305,16 +316,20 @@ class GlobalNamespace
         case Token.GETTER_DEF:
         case Token.SETTER_DEF:
         case Token.STRING_KEY:
+        case Token.MEMBER_FUNCTION_DEF:
           // This may be a key in an object literal declaration.
           name = null;
           if (parent != null && parent.isObjectLit()) {
             name = getNameForObjLitKey(n);
+          } else if (parent != null && parent.isClassMembers()) {
+            name = getNameForClassMembers(n);
           }
           if (name == null) {
             return;
           }
           isSet = true;
           switch (n.getType()) {
+            case Token.MEMBER_FUNCTION_DEF:
             case Token.STRING_KEY:
               type = getValueType(n.getFirstChild());
               break;
@@ -333,6 +348,8 @@ class GlobalNamespace
           if (parent != null) {
             switch (parent.getType()) {
               case Token.VAR:
+              case Token.LET:
+              case Token.CONST:
                 isSet = true;
                 Node rvalue = n.getFirstChild();
                 type = rvalue == null ? Name.Type.OTHER : getValueType(rvalue);
@@ -346,8 +363,8 @@ class GlobalNamespace
               case Token.GETPROP:
                 return;
               case Token.FUNCTION:
-                Node gramps = parent.getParent();
-                if (gramps == null || NodeUtil.isFunctionExpression(parent)) {
+                Node grandparent = parent.getParent();
+                if (grandparent == null || NodeUtil.isFunctionExpression(parent)) {
                   return;
                 }
                 isSet = true;
@@ -358,6 +375,10 @@ class GlobalNamespace
               case Token.DEC:
                 isSet = true;
                 type = Name.Type.OTHER;
+                break;
+              case Token.CLASS:
+                isSet = true;
+                type = Name.Type.CLASS;
                 break;
               default:
                 if (NodeUtil.isAssignmentOp(parent) &&
@@ -409,6 +430,7 @@ class GlobalNamespace
         return;
       }
 
+      scope = scope.getClosestHoistScope();
       if (isSet) {
         if (scope.isGlobal()) {
           handleSetFromGlobal(module, scope, n, parent, name, isPropAssign, type);
@@ -440,40 +462,40 @@ class GlobalNamespace
       Node parent = n.getParent();
       Preconditions.checkState(parent.isObjectLit());
 
-      Node gramps = parent.getParent();
-      if (gramps == null) {
+      Node grandparent = parent.getParent();
+      if (grandparent == null) {
         return null;
       }
 
-      Node greatGramps = gramps.getParent();
+      Node greatGrandparent = grandparent.getParent();
       String name;
-      switch (gramps.getType()) {
+      switch (grandparent.getType()) {
         case Token.NAME:
           // VAR
-          //   NAME (gramps)
+          //   NAME (grandparent)
           //     OBJLIT (parent)
           //       STRING (n)
-          if (greatGramps == null || !greatGramps.isVar()) {
+          if (greatGrandparent == null || !NodeUtil.isNameDeclaration(greatGrandparent)) {
             return null;
           }
-          name = gramps.getString();
+          name = grandparent.getString();
           break;
         case Token.ASSIGN:
-          // ASSIGN (gramps)
+          // ASSIGN (grandparent)
           //   NAME|GETPROP
           //   OBJLIT (parent)
           //     STRING (n)
-          Node lvalue = gramps.getFirstChild();
+          Node lvalue = grandparent.getFirstChild();
           name = lvalue.getQualifiedName();
           break;
         case Token.STRING_KEY:
           // OBJLIT
-          //   STRING (gramps)
+          //   STRING (grandparent)
           //     OBJLIT (parent)
           //       STRING (n)
-          if (greatGramps != null &&
-              greatGramps.isObjectLit()) {
-            name = getNameForObjLitKey(gramps);
+          if (greatGrandparent != null &&
+              greatGrandparent.isObjectLit()) {
+            name = getNameForObjLitKey(grandparent);
           } else {
             return null;
           }
@@ -491,13 +513,41 @@ class GlobalNamespace
     }
 
     /**
+     * Gets the fully qualified name corresponding to an class member function,
+     * as long as it and its prefix property names are valid JavaScript
+     * identifiers.
+     *
+     * For example, if called with node {@code n} representing "y" in any of
+     * the following expressions, the result would be "x.y":
+     * <code> class x{y(){}}; </code>
+     * <code> var x = class{y(){}}; </code>
+     * <code> var x; x = class{y(){}}; </code>
+     *
+     * @param n A child of an CLASS_MEMBERS node
+     * @return The global name, or null if {@code n} doesn't correspond to
+     *   a class member function that can be named
+     */
+    String getNameForClassMembers(Node n) {
+      Node parent = n.getParent();
+      Preconditions.checkState(parent.isClassMembers());
+      String className = NodeUtil.getClassName(parent.getParent());
+      return className == null ? null : className + '.' + n.getString();
+    }
+
+    /**
      * Gets the type of a value or simple expression.
      *
      * @param n An r-value in an assignment or variable declaration (not null)
      * @return A {@link Name.Type}
      */
     Name.Type getValueType(Node n) {
+      // Shorthand assignment of extended object literal
+      if (n == null) {
+        return Name.Type.OTHER;
+      }
       switch (n.getType()) {
+        case Token.CLASS:
+          return Name.Type.CLASS;
         case Token.OBJECTLIT:
           return Name.Type.OBJECTLIT;
         case Token.FUNCTION:
@@ -631,7 +681,6 @@ class GlobalNamespace
       if (parent != null) {
         switch (parent.getType()) {
           case Token.EXPR_RESULT:
-            break;
           case Token.IF:
           case Token.INSTANCEOF:
           case Token.TYPEOF:
@@ -652,9 +701,7 @@ class GlobalNamespace
             }
             break;
           case Token.NEW:
-            type = n == parent.getFirstChild()
-                   ? Ref.Type.DIRECT_GET
-                   : Ref.Type.ALIASING_GET;
+            type = n == parent.getFirstChild() ? Ref.Type.DIRECT_GET : Ref.Type.ALIASING_GET;
             break;
           case Token.OR:
           case Token.AND:
@@ -719,6 +766,8 @@ class GlobalNamespace
           case Token.INSTANCEOF:
           case Token.EXPR_RESULT:
           case Token.VAR:
+          case Token.LET:
+          case Token.CONST:
           case Token.IF:
           case Token.WHILE:
           case Token.FOR:
@@ -877,6 +926,7 @@ class GlobalNamespace
    */
   static class Name implements StaticTypedSlot<TypeI> {
     enum Type {
+      CLASS,
       OBJECTLIT,
       FUNCTION,
       GET,
@@ -954,7 +1004,6 @@ class GlobalNamespace
 
     void addRef(Ref ref) {
       addRefInternal(ref);
-      JSDocInfo info;
       switch (ref.type) {
         case SET_FROM_GLOBAL:
           if (declaration == null) {
@@ -965,7 +1014,7 @@ class GlobalNamespace
           break;
         case SET_FROM_LOCAL:
           localSets++;
-          info = ref.getNode() == null ? null :
+          JSDocInfo info = ref.getNode() == null ? null :
               NodeUtil.getBestJSDocInfo(ref.getNode());
           if (info != null && info.isNoCollapse()) {
             localSetsWithNoCollapse++;
@@ -973,6 +1022,10 @@ class GlobalNamespace
           break;
         case PROTOTYPE_GET:
         case DIRECT_GET:
+          Node node = ref.getNode();
+          if (node != null && node.isGetProp() && node.getParent().isExprResult()) {
+            docInfo = node.getJSDocInfo();
+          }
           totalGets++;
           break;
         case ALIASING_GET:
@@ -1077,11 +1130,6 @@ class GlobalNamespace
     }
 
     boolean isCollapsingExplicitlyDenied() {
-      // Enum keys are always collapsed. @nocollapse annotations are ignored
-      if (isDescendantOfEnum()) {
-        return false;
-      }
-
       if (docInfo == null) {
         Ref ref = getDeclaration();
         if (ref != null) {
@@ -1090,6 +1138,34 @@ class GlobalNamespace
       }
 
       return docInfo != null && docInfo.isNoCollapse();
+    }
+
+    boolean isInlinableGlobalAlias() {
+      // Only simple aliases with direct usage are inlinable.
+      if (inExterns || globalSets != 1 || localSets != 0 || !canCollapse()) {
+        return false;
+      }
+
+      // Only allow inlining of simple references.
+      for (Ref ref : getRefs()) {
+        switch (ref.type) {
+          case SET_FROM_GLOBAL:
+            // Expect one global set
+            continue;
+          case SET_FROM_LOCAL:
+            throw new IllegalStateException();
+          case ALIASING_GET:
+          case DIRECT_GET:
+          case PROTOTYPE_GET:
+          case CALL_GET:
+            continue;
+          case DELETE_PROP:
+            return false;
+          default:
+            throw new IllegalStateException();
+        }
+      }
+      return true;
     }
 
     boolean canCollapse() {
@@ -1192,24 +1268,6 @@ class GlobalNamespace
       return parent == null;
     }
 
-    /**
-     * Determines whether a node is a property of an enum.
-     * This is recursive because static properties can be added to enums after
-     * declaration.
-     */
-    boolean isDescendantOfEnum() {
-      if (parent == null) {
-        return false;
-      }
-
-      if (parent.type == Type.OBJECTLIT && parent.docInfo != null &&
-          parent.docInfo.hasEnumParameterType()) {
-        return true;
-      }
-
-      return parent.isDescendantOfEnum();
-    }
-
     @Override public String toString() {
       return getFullName() + " (" + type + "): globalSets=" + globalSets +
           ", localSets=" + localSets + ", totalGets=" + totalGets +
@@ -1227,11 +1285,18 @@ class GlobalNamespace
     private static JSDocInfo getDocInfoForDeclaration(Ref ref) {
       if (ref.node != null) {
         Node refParent = ref.node.getParent();
+        if (refParent == null) {
+          // May happen when inlineAliases removes refs from the AST.
+          return null;
+        }
         switch (refParent.getType()) {
           case Token.FUNCTION:
           case Token.ASSIGN:
+          case Token.CLASS:
             return refParent.getJSDocInfo();
           case Token.VAR:
+          case Token.LET:
+          case Token.CONST:
             return ref.node == refParent.getFirstChild() ?
                 refParent.getJSDocInfo() : ref.node.getJSDocInfo();
           case Token.OBJECTLIT:
@@ -1363,64 +1428,6 @@ class GlobalNamespace
     @Override
     public String toString() {
       return node.toString();
-    }
-  }
-
-
-  /**
-   * An experimental compiler pass for tracking what symbols were added/removed
-   * at each stage of compilation.
-   *
-   * When "global namespace tracker" mode is on, we rebuild the global namespace
-   * after each pass, and diff it against the last namespace built.
-   */
-  static class Tracker implements CompilerPass {
-    private final AbstractCompiler compiler;
-    private final PrintStream stream;
-    private final Predicate<String> isInterestingSymbol;
-
-    private Set<String> previousSymbolsInTree = ImmutableSet.of();
-
-    /**
-       @param stream The stream to print logs to.
-     * @param isInterestingSymbol A predicate to determine which symbols
-     *     we care about.
-     */
-    Tracker(AbstractCompiler compiler, PrintStream stream,
-        Predicate<String> isInterestingSymbol) {
-      this.compiler = compiler;
-      this.stream = stream;
-      this.isInterestingSymbol = isInterestingSymbol;
-    }
-
-    @Override public void process(Node externs, Node root) {
-      GlobalNamespace namespace = new GlobalNamespace(compiler, externs, root);
-
-      Set<String> currentSymbols = new TreeSet<>();
-      for (String name : namespace.getNameIndex().keySet()) {
-        if (isInterestingSymbol.apply(name)) {
-          currentSymbols.add(name);
-        }
-      }
-
-      String passName = compiler.getLastPassName();
-      if (passName == null) {
-        passName = "[Unknown pass]";
-      }
-
-      for (String sym : currentSymbols) {
-        if (!previousSymbolsInTree.contains(sym)) {
-          stream.printf("%s: Added by %s%n", sym, passName);
-        }
-      }
-
-      for (String sym : previousSymbolsInTree) {
-        if (!currentSymbols.contains(sym)) {
-          stream.printf("%s: Removed by %s%n", sym, passName);
-        }
-      }
-
-      previousSymbolsInTree = currentSymbols;
     }
   }
 }

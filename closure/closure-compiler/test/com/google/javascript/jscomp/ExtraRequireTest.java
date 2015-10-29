@@ -16,14 +16,13 @@
 
 package com.google.javascript.jscomp;
 
+import static com.google.javascript.jscomp.CheckRequiresForConstructors.DUPLICATE_REQUIRE_WARNING;
 import static com.google.javascript.jscomp.CheckRequiresForConstructors.EXTRA_REQUIRE_WARNING;
-
-import com.google.common.base.Joiner;
 
 /**
  * Tests for the "extra requires" check in {@link CheckRequiresForConstructors}.
  */
-public final class ExtraRequireTest extends CompilerTestCase {
+public final class ExtraRequireTest extends Es6CompilerTestCase {
   public ExtraRequireTest() {
     super();
     enableRewriteClosureCode();
@@ -42,26 +41,30 @@ public final class ExtraRequireTest extends CompilerTestCase {
 
   public void testNoWarning() {
     testSame("goog.require('foo.Bar'); var x = new foo.Bar();");
+    testSameEs6("goog.require('foo.Bar'); let x = new foo.Bar();");
+    testSameEs6("goog.require('foo.Bar'); const x = new foo.Bar();");
     testSame("goog.require('foo.Bar'); /** @type {foo.Bar} */ var x;");
     testSame("goog.require('foo.Bar'); /** @type {Array<foo.Bar>} */ var x;");
     testSame("goog.require('foo.Bar'); var x = new foo.Bar.Baz();");
     testSame("goog.require('foo.bar'); var x = foo.bar();");
-    testSame("goog.require('foo.bar'); var x = /** @type foo.bar */ (null);");
+    testSame("goog.require('foo.bar'); var x = /** @type {foo.bar} */ (null);");
     testSame("goog.require('foo.bar'); function f(/** foo.bar */ x) {}");
     testSame("goog.require('foo.bar'); alert(foo.bar.baz);");
     testSame("/** @suppress {extraRequire} */ goog.require('foo.bar');");
     test("goog.require('foo.bar'); goog.scope(function() { var bar = foo.bar; alert(bar); });",
         "goog.require('foo.bar'); alert(foo.bar);");
     testSame("goog.require('foo'); foo();");
+    testSame("/** @suppress {extraRequire} */ var bar = goog.require('foo.bar');");
   }
 
   public void testNoWarning_InnerClassInExtends() {
-    String js = Joiner.on('\n').join(
-        "var goog = {};",
-        "goog.require('goog.foo.Bar');",
-        "",
-        "/** @constructor @extends {goog.foo.Bar.Inner} */",
-        "function SubClass() {}");
+    String js =
+        LINE_JOINER.join(
+            "var goog = {};",
+            "goog.require('goog.foo.Bar');",
+            "",
+            "/** @constructor @extends {goog.foo.Bar.Inner} */",
+            "function SubClass() {}");
     testSame(js);
   }
 
@@ -70,6 +73,22 @@ public final class ExtraRequireTest extends CompilerTestCase {
     // The local var "bar" is unused so after goog.scope rewriting, foo.bar is unused.
     testError("goog.require('foo.bar'); goog.scope(function() { var bar = foo.bar; });",
         EXTRA_REQUIRE_WARNING);
+
+    testErrorEs6(LINE_JOINER.join(
+        "goog.require('Bar');",
+        "function func( {a} ){}",
+        "func( {a: 1} );"), EXTRA_REQUIRE_WARNING);
+    testErrorEs6(LINE_JOINER.join(
+        "goog.require('Bar');",
+        "function func( a = 1 ){}",
+        "func(42);"), EXTRA_REQUIRE_WARNING);
+
+    testError(
+        LINE_JOINER.join(
+            "goog.require('Bar');",
+            "goog.require('Bar');",
+            "var b = new Bar();"),
+        DUPLICATE_REQUIRE_WARNING);
   }
 
   public void testNoWarningMultipleFiles() {

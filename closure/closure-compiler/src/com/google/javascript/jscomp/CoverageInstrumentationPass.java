@@ -16,6 +16,7 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.common.annotations.GwtIncompatible;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.javascript.rhino.IR;
@@ -31,6 +32,7 @@ import java.util.Map;
  * @author praveenk@google.com (Praveen Kumashi)
  *
  */
+@GwtIncompatible("FileInstrumentationData")
 class CoverageInstrumentationPass implements CompilerPass {
 
   final AbstractCompiler compiler;
@@ -86,7 +88,7 @@ class CoverageInstrumentationPass implements CompilerPass {
   @Override
   public void process(Node externsNode, Node rootNode) {
     if (rootNode.hasChildren()) {
-      NodeTraversal.traverse(compiler, rootNode,
+      NodeTraversal.traverseEs6(compiler, rootNode,
           new CoverageInstrumentationCallback(instrumentationData, reach));
 
       Node firstScript = rootNode.getFirstChild();

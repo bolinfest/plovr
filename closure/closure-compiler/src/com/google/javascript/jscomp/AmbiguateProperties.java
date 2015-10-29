@@ -166,7 +166,7 @@ class AmbiguateProperties implements CompilerPass {
   private void addInvalidatingType(JSType type) {
     type = type.restrictByNotNullOrUndefined();
     if (type.isUnionType()) {
-      for (JSType alt : type.toMaybeUnionType().getAlternates()) {
+      for (JSType alt : type.toMaybeUnionType().getAlternatesWithoutStructuralTyping()) {
         addInvalidatingType(alt);
       }
     }
@@ -201,7 +201,7 @@ class AmbiguateProperties implements CompilerPass {
   public void process(Node externs, Node root) {
     // Find all property references and record the types on which they occur.
     // Populate stringNodesToRename, propertyMap, quotedNames.
-    NodeTraversal.traverse(compiler, root, new ProcessProperties());
+    NodeTraversal.traverseEs6(compiler, root, new ProcessProperties());
 
     ImmutableSet.Builder<String> reservedNames = ImmutableSet.<String>builder()
         .addAll(externedNames)
@@ -429,9 +429,8 @@ class AmbiguateProperties implements CompilerPass {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public <A extends Annotation> A getAnnotation() {
-      return (A) annotation;
+    public Annotation getAnnotation() {
+      return annotation;
     }
 
     @Override
@@ -579,7 +578,7 @@ class AmbiguateProperties implements CompilerPass {
       if (newType.isUnionType()) {
         newType = newType.restrictByNotNullOrUndefined();
         if (newType.isUnionType()) {
-          for (JSType alt : newType.toMaybeUnionType().getAlternates()) {
+          for (JSType alt : newType.toMaybeUnionType().getAlternatesWithoutStructuralTyping()) {
             addNonUnionType(alt);
           }
           return;

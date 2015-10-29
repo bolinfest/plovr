@@ -16,6 +16,7 @@
 
 package com.google.template.soy.soytree;
 
+import static com.google.common.truth.Truth.assertThat;
 import static com.google.template.soy.types.SoyTypes.makeNullable;
 
 import com.google.common.collect.ImmutableList;
@@ -24,12 +25,15 @@ import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.ExplodingErrorReporter;
+import com.google.template.soy.error.FormattingErrorReporter;
 import com.google.template.soy.exprtree.BooleanNode;
 import com.google.template.soy.exprtree.GlobalNode;
 import com.google.template.soy.exprtree.IntegerNode;
 import com.google.template.soy.exprtree.StringNode;
 import com.google.template.soy.soytree.TemplateNode.SoyFileHeaderInfo;
 import com.google.template.soy.soytree.TemplateNodeBuilder.DeclInfo;
+import com.google.template.soy.soytree.TemplateNodeBuilder.DeclInfo.OptionalStatus;
+import com.google.template.soy.soytree.TemplateNodeBuilder.DeclInfo.Type;
 import com.google.template.soy.soytree.defn.HeaderParam;
 import com.google.template.soy.soytree.defn.SoyDocParam;
 import com.google.template.soy.soytree.defn.TemplateParam;
@@ -102,12 +106,34 @@ public class TemplateNodeTest extends TestCase {
 
   public void testParseHeaderDecls() {
     TemplateNode tn = templateBasicNode()
-        .setId(0).setCmdText(".boo").setSoyDoc("/** @param foo */")
-        .setHeaderDecls(ImmutableList.of(
-            new DeclInfo("@param", "goo   :   list<int>", null, false),
-            new DeclInfo("@param", "moo: string", "Something milky.", false),
-            new DeclInfo("@param", "boo: string", "Something scary.", true),
-            new DeclInfo("@inject", "zoo: string", "Something else.", false)))
+        .setId(0)
+        .setCmdText(".boo")
+        .setSoyDoc("/** @param foo */")
+        .setHeaderDecls(
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "goo   :   list<int>",
+                null /* soyDoc */,
+                SourceLocation.UNKNOWN),
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "moo: string",
+                "Something milky.",
+                SourceLocation.UNKNOWN),
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.OPTIONAL,
+                "boo: string",
+                "Something scary.",
+                SourceLocation.UNKNOWN),
+            new DeclInfo(
+                Type.INJECTED_PARAM,
+                OptionalStatus.REQUIRED,
+                "zoo: string",
+                "Something else.",
+                SourceLocation.UNKNOWN))
         .build();
 
     List<TemplateParam> params = tn.getParams();
@@ -154,160 +180,212 @@ public class TemplateNodeTest extends TestCase {
     assertEquals(5, ImmutableList.copyOf(tn.getAllParams()).size());
   }
 
-  public void testInvalidHeaderDecls() {
-    try {
-      templateBasicNode()
-          .setId(0)
-          .setCmdText(".boo")
-          .setHeaderDecls(ImmutableList.of(new DeclInfo("@param", "33: int", null, false)))
-          .build();
-      fail();
-    } catch (SoySyntaxException sse) {
-      assertTrue(sse.getMessage().contains("Invalid @param key '33' (must be an identifier)."));
-    }
+  public void testInvalidParamNames() {
+    FormattingErrorReporter errorReporter = new FormattingErrorReporter();
+    templateBasicNode(errorReporter)
+        .setId(0)
+        .setCmdText(".boo")
+        .setHeaderDecls(
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "33: int",
+                null /* soyDoc */,
+                SourceLocation.UNKNOWN))
+        .build();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).contains("Invalid @param name '33'");
 
-    try {
-      templateBasicNode()
-          .setId(0).setCmdText(".boo")
-          .setHeaderDecls(ImmutableList.of(new DeclInfo("@param", "f-oo: int", null, false)))
-          .build();
-      fail();
-    } catch (SoySyntaxException sse) {
-      assertTrue(sse.getMessage().contains("Invalid @param key 'f-oo' (must be an identifier)."));
-    }
+    errorReporter = new FormattingErrorReporter();
+    templateBasicNode(errorReporter)
+        .setId(0)
+        .setCmdText(".boo")
+        .setHeaderDecls(
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "f-oo: int",
+                null /* soyDoc */,
+                SourceLocation.UNKNOWN))
+        .build();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).contains("Invalid @param name 'f-oo'");
 
-    try {
-      templateBasicNode()
-          .setId(0).setCmdText(".boo")
-          .setHeaderDecls(ImmutableList.of(new DeclInfo("@param", "foo", null, false)))
-          .build();
-      fail();
-    } catch (SoySyntaxException sse) {
-      assertTrue(sse.getMessage().contains("Invalid @param declaration command text \"foo\""));
-    }
+    errorReporter = new FormattingErrorReporter();
+    templateBasicNode(errorReporter)
+        .setId(0).setCmdText(".boo")
+        .setSoyDoc("/** @param ij */")
+        .build();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).contains(
+        "Invalid param name 'ij' ('ij' is for injected data).");
 
-    try {
-      templateBasicNode()
-          .setId(0).setCmdText(".boo")
-          .setHeaderDecls(ImmutableList.of(new DeclInfo("@param", "foo:", null, false)))
-          .build();
-      fail();
-    } catch (SoySyntaxException sse) {
-      assertTrue(sse.getMessage().contains("Invalid @param declaration command text \"foo:\""));
-    }
-
-    try {
-      templateBasicNode()
-          .setId(0).setCmdText(".boo")
-          .setHeaderDecls(ImmutableList.of(new DeclInfo("@param", ": int", null, false)))
-          .build();
-      fail();
-    } catch (SoySyntaxException sse) {
-      assertTrue(sse.getMessage().contains("Invalid @param declaration command text \": int\""));
-    }
-
-    try {
-      templateBasicNode()
-          .setId(0).setCmdText(".boo")
-          .setHeaderDecls(ImmutableList.of(new DeclInfo("@param", "foo int", null, false)))
-          .build();
-      fail();
-    } catch (SoySyntaxException sse) {
-      assertTrue(sse.getMessage().contains("Invalid @param declaration command text \"foo int\""));
-    }
+    errorReporter = new FormattingErrorReporter();
+    templateBasicNode(errorReporter)
+        .setId(0)
+        .setCmdText(".boo")
+        .setHeaderDecls(
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "ij: int",
+                null /* soyDoc */,
+                SourceLocation.UNKNOWN))
+        .build();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).contains(
+        "Invalid param name 'ij' ('ij' is for injected data).");
   }
 
-  public void testParamChecks() {
-    try {
-      templateBasicNode()
-          .setId(0).setCmdText(".boo")
-          .setSoyDoc("/** @param ij */")
-          .build();
-      fail();
-    } catch (SoySyntaxException sse) {
-      assertTrue(
-          sse.getMessage().contains("Invalid param name 'ij' ('ij' is for injected data ref)."));
-    }
+  public void testInvalidParamTexts() {
+    FormattingErrorReporter errorReporter = new FormattingErrorReporter();
+    templateBasicNode(errorReporter)
+        .setId(0)
+        .setCmdText(".boo")
+        .setHeaderDecls(
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "foo",
+                null /* soyDoc */,
+                SourceLocation.UNKNOWN))
+        .build();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).contains("Invalid @param text 'foo'");
 
-    try {
-      templateBasicNode()
-          .setId(0).setCmdText(".boo")
-          .setHeaderDecls(ImmutableList.of(new DeclInfo("@param", "ij: int", null, false)))
-          .build();
-      fail();
-    } catch (SoySyntaxException sse) {
-      assertTrue(
-          sse.getMessage().contains("Invalid param name 'ij' ('ij' is for injected data ref)."));
-    }
+    errorReporter = new FormattingErrorReporter();
+    templateBasicNode(errorReporter)
+        .setId(0)
+        .setCmdText(".boo")
+        .setHeaderDecls(
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "foo:",
+                null /* soyDoc */,
+                SourceLocation.UNKNOWN))
+        .build();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).contains("Invalid @param text 'foo:'");
 
-    try {
-      templateBasicNode()
-          .setId(0)
-          .setCmdText(".boo")
-          .setSoyDoc("/** @param foo @param goo @param? foo */")
-          .build();
-      fail();
-    } catch (SoySyntaxException sse) {
-      assertTrue(sse.getMessage().contains("Duplicate declaration of param 'foo'."));
-    }
+    errorReporter = new FormattingErrorReporter();
+    templateBasicNode(errorReporter)
+        .setId(0)
+        .setCmdText(".boo")
+        .setHeaderDecls(
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                ": int",
+                null /* soyDoc */,
+                SourceLocation.UNKNOWN))
+        .build();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).contains("Invalid @param text ': int'");
 
-    try {
-      templateBasicNode()
-          .setId(0).setCmdText(".boo")
-          .setHeaderDecls(ImmutableList.of(
-              new DeclInfo("@param", "goo: null", "Something slimy.", false),
-              new DeclInfo("@param", "foo: string", "Something random.", false),
-              new DeclInfo("@param", "foo: int", null, false)))
-          .build();
-      fail();
-    } catch (SoySyntaxException sse) {
-      assertTrue(sse.getMessage().contains("Duplicate declaration of param 'foo'."));
-    }
+    errorReporter = new FormattingErrorReporter();
+    templateBasicNode(errorReporter)
+        .setId(0)
+        .setCmdText(".boo")
+        .setHeaderDecls(
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "foo int",
+                null /* soyDoc */,
+                SourceLocation.UNKNOWN))
+        .build();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).contains("Invalid @param text 'foo int'");
+  }
 
-    try {
-      templateBasicNode()
-          .setId(0).setCmdText(".boo")
-          .setSoyDoc("/** @param? foo Something. */")
-          .setHeaderDecls(ImmutableList.of(
-              new DeclInfo("@param", "foo: string", "Something else.", false)))
-          .build();
-      fail();
-    } catch (SoySyntaxException sse) {
-      assertTrue(sse.getMessage().contains("Duplicate declaration of param 'foo'."));
-    }
+  public void testParamsAlreadyDeclared() {
+    FormattingErrorReporter errorReporter = new FormattingErrorReporter();
+    templateBasicNode(errorReporter)
+        .setId(0)
+        .setCmdText(".boo")
+        .setSoyDoc("/** @param foo @param goo @param? foo */")
+        .build();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).contains("Param 'foo' already declared");
+
+    errorReporter = new FormattingErrorReporter();
+    templateBasicNode(errorReporter)
+        .setId(0)
+        .setCmdText(".boo")
+        .setHeaderDecls(
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "goo: null",
+                "Something slimy.",
+                SourceLocation.UNKNOWN),
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "foo: string",
+                "Something random.",
+                SourceLocation.UNKNOWN),
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "foo: int",
+                null /* soyDoc */,
+                SourceLocation.UNKNOWN))
+        .build();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).contains("Param 'foo' already declared");
+
+    errorReporter = new FormattingErrorReporter();
+    templateBasicNode(errorReporter)
+        .setId(0)
+        .setCmdText(".boo")
+        .setSoyDoc("/** @param? foo Something. */")
+        .setHeaderDecls(
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "foo: string",
+                "Something else.",
+                SourceLocation.UNKNOWN))
+        .build();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).contains("Param 'foo' already declared");
   }
 
   public void testCommandTextErrors() {
+    FormattingErrorReporter errorReporter = new FormattingErrorReporter();
     try {
-      templateBasicNode()
-          .setId(0).setCmdText("autoescape=\"deprecated-noncontextual\"")
+      new TemplateBasicNodeBuilder(
+          SIMPLE_FILE_HEADER_INFO, SourceLocation.UNKNOWN, errorReporter, TYPE_REGISTRY)
+          .setId(0)
+          .setCmdText("autoescape=\"deprecated-noncontextual\"")
           .setSoyDoc("/***/")
           .build();
-      fail();
-    } catch (SoySyntaxException sse) {
-      assertTrue(sse.getMessage().contains(
-          "Invalid 'template' command missing template name: "
-          + "{template autoescape=\"deprecated-noncontextual\"}."));
-    }
-
-    try {
-      templateBasicNode()
-          .setId(0).setCmdText(".foo name=\"x.foo\" autoescape=\"deprecated-noncontextual\"")
-          .setSoyDoc("/***/")
-          .build();
-      fail();
-    } catch (SoySyntaxException sse) {
-      assertTrue(sse.getMessage().contains(
-          "Invalid 'template' command with template name declared multiple times (.foo, x.foo)."));
-    }
-
-    try {
-      templateBasicNode()
-          .setId(0).setCmdText("autoescape=\"true").setSoyDoc("/***/").build();
       fail();
     } catch (IllegalStateException e) {
-      assertTrue(e.getMessage().contains(
-          "Malformed attributes in 'template' command text (autoescape=\"true)."));
+      assertThat(errorReporter.getErrorMessages()).hasSize(1);
+      assertThat(errorReporter.getErrorMessages().get(0)).contains("Missing template name");
+    }
+
+    try {
+      templateBasicNode()
+          .setId(0).setCmdText(".foo autoescape=\"strict").setSoyDoc("/***/").build();
+      fail();
+    } catch (IllegalStateException e) {
+      assertThat(e.getMessage()).contains(
+          "Malformed attributes in 'template' command text (autoescape=\"strict).");
+    }
+    try {
+      templateBasicNode()
+          .setId(0).setCmdText(".foo autoescape=\"false\"").setSoyDoc("/***/").build();
+      fail();
+    } catch (IllegalStateException e) {
+      assertThat(e.getMessage()).contains(
+          "Invalid value for attribute 'autoescape' in 'template' command text "
+              + "(autoescape=\"false\"). Valid values are "
+              + "[deprecated-noautoescape, deprecated-noncontextual, deprecated-contextual, "
+              + "strict].");
     }
   }
 
@@ -338,17 +416,15 @@ public class TemplateNodeTest extends TestCase {
   }
 
   public void testInvalidStrictTemplates() {
-    try {
-      templateBasicNode()
+    FormattingErrorReporter errorReporter = new FormattingErrorReporter();
+      templateBasicNode(errorReporter)
           .setId(0)
           .setCmdText(".boo kind=\"text\"")
           .setSoyDoc("/** Strict template. */")
           .build();
-      fail("Should be a syntax error");
-    } catch (SoySyntaxException sse) {
-      assertTrue(sse.getMessage().contains(
-          "kind=\"...\" attribute is only valid with autoescape=\"strict\"."));
-    }
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).contains(
+        "kind=\"...\" attribute is only valid with autoescape=\"strict\".");
   }
 
   public void testValidRequiredCss() {
@@ -520,11 +596,29 @@ public class TemplateNodeTest extends TestCase {
     }
   }
 
+
+  public void testNamespaceRelativeTemplateNameButNoNamespaceDecl() {
+    try {
+      new TemplateBasicNodeBuilder(
+          new SoyFileHeaderInfo(null /* namespace */),
+          SourceLocation.UNKNOWN,
+          FAIL,
+          TYPE_REGISTRY)
+          .setId(0)
+          .setCmdText(".foo")
+          .build();
+      fail();
+    } catch (SoySyntaxException e) {
+      assertThat(e).hasMessage(
+          "Template has namespace-relative name, but file has no namespace declaration.");
+    }
+  }
+
   public void testToSourceString() {
     ErrorReporter boom = ExplodingErrorReporter.get();
     TemplateNode tn = templateBasicNode()
         .setId(0)
-        .setCmdText("name=\".boo\"")
+        .setCmdText(".boo")
         .setSoyDoc("" +
             "/**\n" +
             " * Test template.\n" +
@@ -533,9 +627,19 @@ public class TemplateNodeTest extends TestCase {
             " * @param goo\n" +
             " *     Goo to print.\n" +
             " */")
-        .setHeaderDecls(ImmutableList.of(
-            new DeclInfo("@param", "moo: bool", "Something milky.", false),
-            new DeclInfo("@param", "too   :   string|null", null, false)))
+        .setHeaderDecls(
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "moo: bool",
+                "Something milky.",
+                SourceLocation.UNKNOWN),
+            new DeclInfo(
+                Type.PARAM,
+                OptionalStatus.REQUIRED,
+                "too   :   string|null",
+                null /* soyDoc */,
+                SourceLocation.UNKNOWN))
         .build();
     tn.addChild(new RawTextNode(0, "  ", SourceLocation.UNKNOWN));  // 2 spaces
     tn.addChild(
@@ -556,17 +660,21 @@ public class TemplateNodeTest extends TestCase {
             " * @param goo\n" +
             " *     Goo to print.\n" +
             " */\n" +
-            "{template name=\".boo\"}\n" +
+            "{template .boo}\n" +
             "  {@param moo: bool}  /** Something milky. */\n" +
-            "  {@param too: string|null}\n" +
+            "  {@param? too: string|null}\n" +
             "{sp} {$foo}{$goo} {sp}\n" +
             "{/template}\n",
         tn.toSourceString());
   }
 
   private static TemplateBasicNodeBuilder templateBasicNode() {
+    return templateBasicNode(FAIL);
+  }
+
+  private static TemplateBasicNodeBuilder templateBasicNode(ErrorReporter errorReporter) {
     return new TemplateBasicNodeBuilder(
-        SIMPLE_FILE_HEADER_INFO, SourceLocation.UNKNOWN, FAIL, TYPE_REGISTRY);
+        SIMPLE_FILE_HEADER_INFO, SourceLocation.UNKNOWN, errorReporter, TYPE_REGISTRY);
   }
 
   private static TemplateDelegateNodeBuilder templateDelegateNode() {

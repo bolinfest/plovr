@@ -36,6 +36,7 @@ import com.google.template.soy.types.primitive.SanitizedType.HtmlType;
 import com.google.template.soy.types.primitive.SanitizedType.JsType;
 import com.google.template.soy.types.primitive.SanitizedType.UriType;
 import com.google.template.soy.types.primitive.StringType;
+import com.google.template.soy.types.primitive.UnknownType;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -54,21 +55,32 @@ import javax.inject.Singleton;
 @Singleton
 public final class SoyTypeRegistry {
 
+  /** A type registry that defaults all unknown types to the 'unknown' type. */
+  public static final SoyTypeRegistry DEFAULT_UNKNOWN =
+      new SoyTypeRegistry(
+          ImmutableSet.<SoyTypeProvider>of(
+              new SoyTypeProvider() {
+                @Override
+                public SoyType getType(String typeName, SoyTypeRegistry typeRegistry) {
+                  return UnknownType.getInstance();
+                }
+              }));
 
-  private static final Map<String, SoyType> BUILTIN_TYPES = ImmutableMap.<String, SoyType>builder()
-      .put("any", AnyType.getInstance())
-      .put("null", NullType.getInstance())
-      .put("bool", BoolType.getInstance())
-      .put("int", IntType.getInstance())
-      .put("float", FloatType.getInstance())
-      .put("string", StringType.getInstance())
-      .put("number", UnionType.of(IntType.getInstance(), FloatType.getInstance()))
-      .put("html", HtmlType.getInstance())
-      .put("attributes", AttributesType.getInstance())
-      .put("css", CssType.getInstance())
-      .put("uri", UriType.getInstance())
-      .put("js", JsType.getInstance())
-      .build();
+  private static final Map<String, SoyType> BUILTIN_TYPES =
+      ImmutableMap.<String, SoyType>builder()
+          .put("any", AnyType.getInstance())
+          .put("null", NullType.getInstance())
+          .put("bool", BoolType.getInstance())
+          .put("int", IntType.getInstance())
+          .put("float", FloatType.getInstance())
+          .put("string", StringType.getInstance())
+          .put("number", SoyTypes.NUMBER_TYPE)
+          .put("html", HtmlType.getInstance())
+          .put("attributes", AttributesType.getInstance())
+          .put("css", CssType.getInstance())
+          .put("uri", UriType.getInstance())
+          .put("js", JsType.getInstance())
+          .build();
 
 
   private final ImmutableSet<SoyTypeProvider> typeProviders;

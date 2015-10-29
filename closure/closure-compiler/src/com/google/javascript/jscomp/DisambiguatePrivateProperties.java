@@ -41,7 +41,7 @@ class DisambiguatePrivateProperties
 
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverse(compiler, root, this);
+    NodeTraversal.traverseEs6(compiler, root, this);
   }
 
   @Override
@@ -61,6 +61,7 @@ class DisambiguatePrivateProperties
       case Token.STRING_KEY:
       case Token.GETTER_DEF:
       case Token.SETTER_DEF:
+      case Token.MEMBER_FUNCTION_DEF:
         maybeRename(n);
         break;
     }

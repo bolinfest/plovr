@@ -335,22 +335,19 @@ import java.util.Set;
 
     int indexOfChildInParent = siblings.indexOf(child);
 
-    switch(parent.getType()) {
+    switch (parent.getType()) {
       case Token.IF:
       case Token.HOOK:
         return (indexOfChildInParent == 1 || indexOfChildInParent == 2);
-      case Token.WHILE:
-      case Token.DO:
-        return true;
       case Token.FOR:
         // Only initializer is not control dependent
         return indexOfChildInParent != 0;
       case Token.SWITCH:
-          return indexOfChildInParent > 0;
+        return indexOfChildInParent > 0;
+      case Token.WHILE:
+      case Token.DO:
       case Token.AND:
-        return true;
       case Token.OR:
-        return true;
       case Token.FUNCTION:
         return true;
 
@@ -397,7 +394,7 @@ import java.util.Set;
     return NodeUtil.has(node, new Predicate<Node>() {
       @Override
       public boolean apply(Node input) {
-        return input.isCall() || input.isNew();
+        return input.isCall() || input.isNew() || input.isTaggedTemplateLit();
       }},
       NOT_FUNCTION_PREDICATE);
   }
@@ -776,7 +773,7 @@ import java.util.Set;
     private Set<Node> findStorageLocationReferences(Node root) {
       final Set<Node> references = new HashSet<>();
 
-      NodeTraversal.traverse(compiler, root, new AbstractShallowCallback() {
+      NodeTraversal.traverseEs6(compiler, root, new AbstractShallowCallback() {
         @Override
         public void visit(NodeTraversal t, Node n, Node parent) {
           if (NodeUtil.isGet(n)
@@ -960,7 +957,7 @@ import java.util.Set;
         new ReferenceCollectingCallback(compiler,
             ReferenceCollectingCallback.DO_NOTHING_BEHAVIOR);
 
-      NodeTraversal.traverse(compiler, root, callback);
+      NodeTraversal.traverseEs6(compiler, root, callback);
 
       for (Var variable : callback.getAllSymbols()) {
         ReferenceCollection referenceCollection =

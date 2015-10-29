@@ -29,10 +29,6 @@ public class PlovrCompilerOptions extends CompilerOptions {
     return processObjectPropertyString;
   }
 
-  public boolean getAcceptConstKeyword() {
-    return acceptConstKeyword;
-  }
-
   /** Expand the visibility of this method from package-private to public. */
   @Override
   public Charset getOutputCharset() {

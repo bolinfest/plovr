@@ -69,15 +69,15 @@ String.prototype.trimRight = function() {};
  * Note: not a real constructor.
  * @constructor
  */
-var ObjectPropertyDescriptor = function(){};
+function ObjectPropertyDescriptor() {}
 
 /** @type {*} */
 ObjectPropertyDescriptor.prototype.value;
 
-/** @type {(function():?)||undefined} */
+/** @type {(function():?)|undefined} */
 ObjectPropertyDescriptor.prototype.get;
 
-/** @type {(function(?):void)||undefined} */
+/** @type {(function(?):void)|undefined} */
 ObjectPropertyDescriptor.prototype.set;
 
 /** @type {boolean|undefined} */
@@ -131,7 +131,7 @@ Object.getOwnPropertyDescriptor = function(obj, prop) {};
 
 /**
  * @param {!Object} obj
- * @return {!Array.<string>}
+ * @return {!Array<string>}
  * @nosideeffects
  * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/keys
  */
@@ -140,7 +140,7 @@ Object.keys = function(obj) {};
 
 /**
  * @param {!Object} obj
- * @return {!Array.<string>}
+ * @return {!Array<string>}
  * @nosideeffects
  * @see https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/getOwnPropertyNames
  */
@@ -238,7 +238,7 @@ Date.prototype.toJSON = function(opt_ignoredKey) {};
  * A fake type to model the JSON object.
  * @constructor
  */
-var JSONType = function() {};
+function JSONType() {}
 
 
 /**
@@ -253,7 +253,7 @@ JSONType.prototype.parse = function(jsonStr, opt_reviver) {};
 
 /**
  * @param {*} jsonObj Input object.
- * @param {(Array.<string>|(function(string, *) : *)|null)=} opt_replacer
+ * @param {(Array<string>|(function(string, *) : *)|null)=} opt_replacer
  * @param {(number|string)=} opt_space
  * @return {string} JSON string which represents jsonObj.
  * @throws {Error}

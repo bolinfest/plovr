@@ -40,6 +40,23 @@ public final class HttpUtil {
   }
 
   /**
+   * @return The Host header, parsed into a string so that we can
+   * get the hostname and port.
+   */
+  public static URI getHost(HttpExchange exchange) {
+    Headers headers = exchange.getRequestHeaders();
+    String host = headers.getFirst("Host");
+    if (host != null) {
+      try {
+        return new URI("http://" + host);
+      } catch (URISyntaxException e) {
+        // OK
+      }
+    }
+    return null;
+  }
+
+  /**
    * Returns a 400 with no message.
    */
   public static void writeNullResponse(HttpExchange exchange) throws IOException {

@@ -24,11 +24,17 @@ from __future__ import unicode_literals
 
 __author__ = 'dcphillips@google.com (David Phillips)'
 
-import imp
 import importlib
 import os
 import re
 import sys
+
+from . import environment
+
+try:
+  import scandir
+except ImportError:
+  scandir = None
 
 # To allow the rest of the file to assume Python 3 strings, we will assign str
 # to unicode for Python 2. This will error in 3 and be ignored.
@@ -45,6 +51,54 @@ _DELEGATE_REGISTRY = {}
 
 # All number types for use during custom type functions.
 _NUMBER_TYPES = (int, long, float)
+
+
+# The mapping of css class names for get_css_name.
+_css_name_mapping = None
+
+
+def get_css_name(class_name, modifier=None):
+  """Return the mapped css class name with modifier.
+
+  Following the pattern of goog.getCssName in closure, this function maps a css
+  class name to its proper name, and applies an optional modifier.
+
+  If no mapping is present, the class_name and modifier are joined with hyphens
+  and returned directly.
+
+  If a mapping is present, the resulting css name will be retrieved from the
+  mapping and returned.
+
+  If one argument is passed it will be processed, if two are passed only the
+  modifier will be processed, as it is assumed the first argument was generated
+  as a result of calling goog.getCssName.
+
+  Args:
+    class_name: The class name to look up.
+    modifier: An optional modifier to append to the class_name.
+
+  Returns:
+    A mapped class name with optional modifier.
+  """
+  pieces = [class_name]
+  if modifier:
+    pieces.append(modifier)
+
+  if _css_name_mapping:
+    # Only map the last piece of the name.
+    pieces[-1] = _css_name_mapping.get(pieces[-1], pieces[-1])
+
+  return '-'.join(pieces)
+
+
+def set_css_name_mapping(mapping):
+  """Set the mapping of css names.
+
+  Args:
+    mapping: A dictionary of original class names to mapped class names.
+  """
+  global _css_name_mapping
+  _css_name_mapping = mapping
 
 
 def get_delegate_fn(template_id, variant, allow_empty_default):
@@ -104,7 +158,7 @@ def merge_into_dict(original, secondary):
   return original
 
 
-def namespaced_import(name, namespace=None):
+def namespaced_import(name, namespace=None, environment_path=None):
   """A function to import compiled soy modules using the Soy namespace.
 
   This function attempts to first import the module directly. If it isn't found
@@ -124,6 +178,8 @@ def namespaced_import(name, namespace=None):
   Args:
     name: The name of the module to import.
     namespace: The namespace of the module to import.
+    environment_path: A custom environment module path for interacting with the
+        runtime environment.
 
   Returns:
     The Module object.
@@ -135,20 +191,32 @@ def namespaced_import(name, namespace=None):
   except ImportError:
     # If the module isn't found, search without the namespace and check the
     # namespaces.
-    # TODO(dcphillips): After namespace sharing limits are in place, remove the
-    # logic to combine modules (b/16628735).
     if namespace:
-      full_module = imp.new_module(full_namespace)
-      found = False
-      for path, f in _find_modules(name):
-        module = getattr(__import__(path, globals(), locals(), [f], -1), f)
-        if getattr(module, 'SOY_NAMESPACE', None) == full_namespace:
-          full_module.__dict__.update(module.__dict__)
-          found = True
-      if found:
+      namespace_key = "SOY_NAMESPACE: '%s'." % full_namespace
+      module = None
+      if environment_path:
+        file_loader = importlib.import_module(environment_path).file_loader
+      else:
+        file_loader = environment.file_loader
+      for sys_path, f_path, f_name in _find_modules(name):
+        # Verify the file namespace by comparing the 5th line.
+        with file_loader(f_path, f_name, 'r') as f:
+          for _ in range(4):
+            next(f)
+          if namespace_key != next(f).rstrip():
+            continue
+
+        # Strip the root path and the file extension.
+        module_path = os.path.relpath(f_path, sys_path).replace('/', '.')
+        module_name = os.path.splitext(f_name)[0]
+        module = getattr(
+            __import__(module_path, globals(), locals(), [module_name], -1),
+            module_name)
+        break
+      if module:
         # Add this to the global modules list for faster loading in the future.
-        _cache_module(full_namespace, full_module)
-        return full_module
+        _cache_module(full_namespace, module)
+        return module
     raise
 
 
@@ -201,6 +269,20 @@ def register_delegate_fn(template_id, variant, priority, fn, fn_name):
     raise RuntimeError(
         'Encountered two active delegates with the same priority (%s:%s:%s).' %
         (template_id, variant, priority))
+
+
+def simplify_num(value, precision):
+  """Convert the given value to an int if the precision is below 1.
+
+  Args:
+    value: A number value (int, float, etc.).
+    precision: The desired precision.
+  Returns:
+    A number typed as an int if the precision is low enough.
+  """
+  if precision <= 0:
+    return int(value)
+  return value
 
 
 def type_safe_add(*args):
@@ -362,26 +444,26 @@ def _find_modules(name):
   """Walks the sys path and looks for modules that start with 'name'.
 
   This function yields all results which match the pattern in the sys path.
-  It can be treated similar to os.walk(), but yields a path and file name
-  (minus the .py extension). These are meant to be used for traditional import
+  It can be treated similar to os.walk(), but yields only files which match
+  the pattern. These are meant to be used for traditional import
   syntax. Bad paths are ignored and skipped.
 
   Args:
     name: The name to match against the beginning of the module name.
   Yields:
-    A tuple containing the path (with dots instead of slashes), and the file
-    name with the python extension stripped.
+    A tuple containing the path, the base system path, and the file name.
   """
   # TODO(dcphillips): Allow for loading of compiled source once namespaces are
   # limited to one file (b/16628735).
-  module_file_name = re.compile(r'^%s.*\.(?:py|pyc)$' % name)
+  module_file_name = re.compile(r'^%s.*\.py$' % name)
+  # If scandir is available, it offers 5-20x improvement of walk performance.
+  walk = scandir.walk if scandir else os.walk
   for path in sys.path:
     try:
-      for root, _, files in os.walk(path):
+      for root, _, files in walk(path):
         for f in files:
           if module_file_name.match(f):
-            module_path = root[len(path) + 1:]
-            yield module_path.replace('/', '.'), os.path.splitext(f)[0]
+            yield path, root, f
     except OSError:
       # Ignore bad paths
       pass

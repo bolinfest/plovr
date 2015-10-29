@@ -16,6 +16,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
+import com.google.javascript.jscomp.parsing.parser.util.format.SimpleFormat;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 
@@ -70,7 +71,7 @@ class ExportTestFunctions implements CompilerPass {
           if (isTestFunction(functionName)) {
             exportTestFunctionAsSymbol(functionName, n, parent);
           }
-        } else if (isVarDeclaredFunction(n)) {
+        } else if (isNameDeclaredFunction(n)) {
           // Check for a test function expression.
           Node functionNode = n.getFirstChild().getFirstChild();
           String functionName = NodeUtil.getFunctionName(functionNode);
@@ -90,13 +91,23 @@ class ExportTestFunctions implements CompilerPass {
         }
       } else if (n.isObjectLit()
           && isCallTargetQName(n.getParent(), "goog.testing.testSuite")) {
-        for (Node c = n.getFirstChild(); c != null; c = c.getNext()) {
+        for (Node c : n.children()) {
           if (c.isStringKey() && !c.isQuotedString()) {
             c.setQuotedString();
             compiler.reportCodeChange();
+          } else if (c.isMemberFunctionDef()) {
+            rewriteMemberDefInObjLit(c, n);
           }
         }
       }
+    }
+
+    private void rewriteMemberDefInObjLit(Node memberDef, Node objLit) {
+      String name = memberDef.getString();
+      Node stringKey = IR.stringKey(name, memberDef.getFirstChild().detachFromParent());
+      objLit.replaceChild(memberDef, stringKey);
+      stringKey.setQuotedString();
+      compiler.reportCodeChange();
     }
 
     // TODO(johnlenz): move test suite declaration into the
@@ -106,18 +117,18 @@ class ExportTestFunctions implements CompilerPass {
     }
 
     /**
-     * Whether node corresponds to a function expression declared with var,
-     * which is of the form:
+     * Whether node corresponds to a function expression declared with var, let
+     * or const which is of the form:
      * <pre>
-     * var functionName = function() {
+     * var/let/const functionName = function() {
      *   // Implementation
      * };
      * </pre>
-     * This has the AST structure VAR -> NAME -> FUNCTION
+     * This has the AST structure VAR/LET/CONST -> NAME -> FUNCTION
      * @param node
      */
-    private boolean isVarDeclaredFunction(Node node) {
-      if (!node.isVar()) {
+    private boolean isNameDeclaredFunction(Node node) {
+      if (!NodeUtil.isNameDeclaration(node)) {
         return false;
       }
       Node grandchild = node.getFirstChild().getFirstChild();
@@ -127,7 +138,7 @@ class ExportTestFunctions implements CompilerPass {
 
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverse(compiler, root, new ExportTestFunctionsNodes());
+    NodeTraversal.traverseEs6(compiler, root, new ExportTestFunctionsNodes());
   }
 
   // Adds exportSymbol(testFunctionName, testFunction);
@@ -159,7 +170,7 @@ class ExportTestFunctions implements CompilerPass {
         NodeUtil.getPrototypePropertyName(node.getFirstChild());
     String objectName = fullyQualifiedFunctionName.substring(0,
         fullyQualifiedFunctionName.lastIndexOf('.'));
-    String exportCallStr = String.format("%s(%s, '%s', %s);",
+    String exportCallStr = SimpleFormat.format("%s(%s, '%s', %s);",
         exportPropertyFunction, objectName, testFunctionName,
         fullyQualifiedFunctionName);
 

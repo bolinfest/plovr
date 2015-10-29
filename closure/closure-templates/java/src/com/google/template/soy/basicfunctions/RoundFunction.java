@@ -21,6 +21,7 @@ import com.google.common.collect.Lists;
 import com.google.template.soy.data.SoyValue;
 import com.google.template.soy.data.restricted.FloatData;
 import com.google.template.soy.data.restricted.IntegerData;
+import com.google.template.soy.data.restricted.NumberData;
 import com.google.template.soy.exprtree.Operator;
 import com.google.template.soy.internal.targetexpr.TargetExpr;
 import com.google.template.soy.jssrc.restricted.JsExpr;
@@ -44,7 +45,7 @@ import javax.inject.Singleton;
  */
 @Singleton
 @SoyPureFunction
-class RoundFunction implements SoyJavaFunction, SoyJsSrcFunction, SoyPySrcFunction {
+public final class RoundFunction implements SoyJavaFunction, SoyJsSrcFunction, SoyPySrcFunction {
 
 
   @Inject
@@ -62,21 +63,35 @@ class RoundFunction implements SoyJavaFunction, SoyJsSrcFunction, SoyPySrcFuncti
   @Override public SoyValue computeForJava(List<SoyValue> args) {
     SoyValue value = args.get(0);
     int numDigitsAfterPt = (args.size() == 2) ? args.get(1).integerValue() : 0 /* default */;
+    return round(value, numDigitsAfterPt);
+  }
 
-    if (numDigitsAfterPt == 0) {
-      if (value instanceof IntegerData) {
-        return IntegerData.forValue(value.longValue());
-      } else {
-        return IntegerData.forValue((int) Math.round(value.numberValue()));
-      }
-    } else if (numDigitsAfterPt > 0) {
+  /**
+   * Rounds the given value to the closest decimal point left (negative numbers) or right
+   * (positive numbers) of the decimal point
+   */
+  public static NumberData round(SoyValue value, int numDigitsAfterPoint) {
+    // NOTE: for more accurate rounding, this should really be using BigDecimal which can do correct
+    // decimal arithmetic.  However, for compatibility with js, that probably isn't an option.
+    if (numDigitsAfterPoint == 0) {
+      return IntegerData.forValue(round(value));
+    } else if (numDigitsAfterPoint > 0) {
       double valueDouble = value.numberValue();
-      double shift = Math.pow(10, numDigitsAfterPt);
+      double shift = Math.pow(10, numDigitsAfterPoint);
       return FloatData.forValue(Math.round(valueDouble * shift) / shift);
     } else {
       double valueDouble = value.numberValue();
-      double shift = Math.pow(10, -numDigitsAfterPt);
+      double shift = Math.pow(10, -numDigitsAfterPoint);
       return IntegerData.forValue((int) (Math.round(valueDouble / shift) * shift));
+    }
+  }
+
+  /** Rounds the given value to the closest integer. */
+  public static long round(SoyValue value) {
+    if (value instanceof IntegerData) {
+      return value.longValue();
+    } else {
+      return Math.round(value.numberValue());
     }
   }
 
@@ -129,17 +144,20 @@ class RoundFunction implements SoyJavaFunction, SoyJsSrcFunction, SoyPySrcFuncti
     boolean isLiteral = precisionAsInt != Integer.MIN_VALUE;
 
     if (precisionAsInt >= -12 && precisionAsInt <= 12 || !isLiteral) {
+      // Python rounds ties away from 0 instead of towards infinity as JS and Java do. So to make
+      // the behavior consistent, we add the smallest possible float amount to break ties towards
+      // infinity.
+      String floatBreakdown = "math.frexp(" + value.getText() + ")";
+      String precisionValue = isLiteral ? precisionAsInt + "" : precision.getText();
       StringBuilder roundedValue = new StringBuilder("round(")
-          .append(value.getText())
+          .append("(" + floatBreakdown + "[0]")
+          .append(" + sys.float_info.epsilon)*2**" + floatBreakdown + "[1]")
           .append(", ")
-          .append(isLiteral ? precisionAsInt : precision.getText())
+          .append(precisionValue)
           .append(")");
       // The precision is less than 1. Convert to an int to prevent extraneous decimals in display.
-      if (isLiteral && precisionAsInt <= 0) {
-        return new PyExpr("int(" + roundedValue + ")", Integer.MAX_VALUE);
-      } else {
-        return new PyExpr(roundedValue.toString(), Integer.MAX_VALUE);
-      }
+      return new PyExpr("runtime.simplify_num(" + roundedValue + ", " + precisionValue + ")",
+          Integer.MAX_VALUE);
     } else {
       throw new IllegalArgumentException(
           "Second argument to round() function is " + precisionAsInt +

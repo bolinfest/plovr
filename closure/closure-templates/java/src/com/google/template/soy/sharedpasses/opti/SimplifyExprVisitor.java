@@ -24,7 +24,6 @@ import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.data.restricted.NullData;
 import com.google.template.soy.data.restricted.PrimitiveData;
 import com.google.template.soy.data.restricted.StringData;
-import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
 import com.google.template.soy.exprtree.BooleanNode;
 import com.google.template.soy.exprtree.ExprNode;
@@ -40,7 +39,7 @@ import com.google.template.soy.exprtree.OperatorNodes.AndOpNode;
 import com.google.template.soy.exprtree.OperatorNodes.ConditionalOpNode;
 import com.google.template.soy.exprtree.OperatorNodes.OrOpNode;
 import com.google.template.soy.exprtree.StringNode;
-import com.google.template.soy.shared.internal.NonpluginFunction;
+import com.google.template.soy.shared.internal.BuiltinFunction;
 import com.google.template.soy.sharedpasses.render.Environment;
 import com.google.template.soy.sharedpasses.render.RenderException;
 
@@ -60,9 +59,7 @@ final class SimplifyExprVisitor extends AbstractExprNodeVisitor<Void> {
 
 
   @Inject
-  SimplifyExprVisitor(
-      PreevalVisitorFactory preevalVisitorFactory, ErrorReporter errorReporter) {
-    super(errorReporter);
+  SimplifyExprVisitor(PreevalVisitorFactory preevalVisitorFactory) {
     this.preevalVisitor = preevalVisitorFactory.create(Environment.prerenderingEnvironment());
   }
 
@@ -171,7 +168,8 @@ final class SimplifyExprVisitor extends AbstractExprNodeVisitor<Void> {
   @Override protected void visitFunctionNode(FunctionNode node) {
 
     // Cannot simplify nonplugin functions.
-    if (NonpluginFunction.forFunctionName(node.getFunctionName()) != null) {
+    // TODO(brndn): we can actually simplify checkNotNull and quoteKeysIfJs.
+    if (node.getSoyFunction() instanceof BuiltinFunction) {
       return;
     }
 

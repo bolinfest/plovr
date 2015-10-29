@@ -16,6 +16,8 @@
 
 package com.google.javascript.jscomp;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
@@ -23,6 +25,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
+import com.google.common.io.Files;
 import com.google.javascript.jscomp.CodingConvention.SubclassRelationship;
 import com.google.javascript.jscomp.GatherSideEffectSubexpressionsCallback.GetReplacementSideEffectSubexpressions;
 import com.google.javascript.jscomp.GatherSideEffectSubexpressionsCallback.SideEffectAccumulator;
@@ -35,6 +38,8 @@ import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -120,6 +125,9 @@ final class NameAnalyzer implements CompilerPass {
   /** Whether to remove unreferenced variables in main pass */
   private final boolean removeUnreferenced;
 
+  /** The path of the report file */
+  private final String reportPath;
+
   /** Names that refer to the global scope */
   private final Set<String> globalNames;
 
@@ -137,6 +145,10 @@ final class NameAnalyzer implements CompilerPass {
    * call them aliases. Store a map from each alias name to the alias set.
    */
   private final Map<String, AliasSet> aliases = new HashMap<>();
+
+  static final DiagnosticType REPORT_PATH_IO_ERROR =
+      DiagnosticType.error("JSC_REPORT_PATH_IO_ERROR",
+          "Error writing compiler report to {0}");
 
   /**
    * All the aliases in a program form a graph, where each global name is
@@ -336,13 +348,13 @@ final class NameAnalyzer implements CompilerPass {
     }
 
     @Override public void remove() {
-      Node gramps = parent.getParent();
-      if (gramps.isExprResult()) {
+      Node grandparent = parent.getParent();
+      if (grandparent.isExprResult()) {
         // name.prototype.foo = function() { ... };
-        changeProxy.removeChild(gramps.getParent(), gramps);
+        changeProxy.removeChild(grandparent.getParent(), grandparent);
       } else {
         // ... name.prototype.foo = function() { ... } ...
-        changeProxy.replaceWith(gramps, parent,
+        changeProxy.replaceWith(grandparent, parent,
                                 parent.getLastChild().detachFromParent());
       }
     }
@@ -378,7 +390,7 @@ final class NameAnalyzer implements CompilerPass {
       return node.getParent();
     }
 
-    Node getGramps() {
+    Node getGrandparent() {
       return node.getParent() == null ? null : node.getParent().getParent();
     }
   }
@@ -406,7 +418,7 @@ final class NameAnalyzer implements CompilerPass {
       Preconditions.checkState(node.isCall());
       Node parent = getParent();
       if (parent.isExprResult()) {
-        changeProxy.removeChild(getGramps(), parent);
+        changeProxy.removeChild(getGrandparent(), parent);
       } else {
         changeProxy.replaceWith(parent, node, IR.voidNode(IR.number(0)));
       }
@@ -433,7 +445,7 @@ final class NameAnalyzer implements CompilerPass {
 
     @Override
     public void remove() {
-      changeProxy.replaceWith(getGramps(), getParent(), IR.falseNode());
+      changeProxy.replaceWith(getGrandparent(), getParent(), IR.falseNode());
     }
   }
 
@@ -481,7 +493,7 @@ final class NameAnalyzer implements CompilerPass {
   private class FindDependencyScopes extends AbstractPostOrderCallback {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (!t.inGlobalScope()) {
+      if (!t.inGlobalHoistScope()) {
         return;
       }
 
@@ -493,7 +505,7 @@ final class NameAnalyzer implements CompilerPass {
       } else if (NodeUtil.isVarDeclaration(n)) {
         NameInformation ns = createNameInformation(t, n);
         recordDepScope(n, ns);
-      } else if (NodeUtil.isFunctionDeclaration(n)) {
+      } else if (NodeUtil.isFunctionDeclaration(n) && t.inGlobalScope()) {
         NameInformation ns = createNameInformation(t, n.getFirstChild());
         recordDepScope(n, ns);
       } else if (NodeUtil.isExprCall(n)) {
@@ -613,12 +625,12 @@ final class NameAnalyzer implements CompilerPass {
     public void visit(NodeTraversal t, Node n, Node parent) {
 
       // Record global variable and function declarations
-      if (t.inGlobalScope()) {
+      if (t.inGlobalHoistScope()) {
         if (NodeUtil.isVarDeclaration(n)) {
           NameInformation ns = createNameInformation(t, n);
           Preconditions.checkNotNull(ns);
           recordSet(ns.name, n);
-        } else if (NodeUtil.isFunctionDeclaration(n)) {
+        } else if (NodeUtil.isFunctionDeclaration(n) && t.inGlobalScope()) {
           Node nameNode = n.getFirstChild();
           NameInformation ns = createNameInformation(t, nameNode);
           if (ns != null) {
@@ -753,10 +765,8 @@ final class NameAnalyzer implements CompilerPass {
     }
 
     private void addSimplifiedChildren(Node n) {
-      NodeTraversal.traverse(
-          compiler, n,
-          new GatherSideEffectSubexpressionsCallback(
-              compiler, new NodeAccumulator()));
+      NodeTraversal.traverseEs6(
+          compiler, n, new GatherSideEffectSubexpressionsCallback(compiler, new NodeAccumulator()));
     }
 
     private void addSimplifiedExpression(Node n, Node parent) {
@@ -1090,21 +1100,33 @@ final class NameAnalyzer implements CompilerPass {
    * @param removeUnreferenced If true, remove unreferenced variables during
    *        process()
    */
-  NameAnalyzer(AbstractCompiler compiler, boolean removeUnreferenced) {
+  NameAnalyzer(
+      AbstractCompiler compiler,
+      boolean removeUnreferenced,
+      String reportPath) {
     this.compiler = compiler;
     this.removeUnreferenced = removeUnreferenced;
+    this.reportPath = reportPath;
     this.globalNames = DEFAULT_GLOBAL_NAMES;
     this.changeProxy = new AstChangeProxy();
   }
 
+  static void createEmptyReport(AbstractCompiler compiler, String reportPath) {
+    Preconditions.checkNotNull(reportPath);
+    try {
+      Files.write("", new File(reportPath), UTF_8);
+    } catch (IOException e) {
+      compiler.report(JSError.make(REPORT_PATH_IO_ERROR, reportPath));
+    }
+  }
+
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverse(compiler, externs, new ProcessExternals());
-    NodeTraversal.traverse(compiler, root, new FindDependencyScopes());
-    NodeTraversal.traverse(
-        compiler, root, new HoistVariableAndFunctionDeclarations());
-    NodeTraversal.traverse(compiler, root, new FindDeclarationsAndSetters());
-    NodeTraversal.traverse(compiler, root, new FindReferences());
+    NodeTraversal.traverseEs6(compiler, externs, new ProcessExternals());
+    NodeTraversal.traverseEs6(compiler, root, new FindDependencyScopes());
+    NodeTraversal.traverseEs6(compiler, root, new HoistVariableAndFunctionDeclarations());
+    NodeTraversal.traverseEs6(compiler, root, new FindDeclarationsAndSetters());
+    NodeTraversal.traverseEs6(compiler, root, new FindReferences());
 
     // Create bi-directional references between parent names and their
     // descendants. This may create new names.
@@ -1115,6 +1137,14 @@ final class NameAnalyzer implements CompilerPass {
     referenceAliases();
 
     calculateReferences();
+
+    if (reportPath != null) {
+      try {
+        Files.append(getHtmlReport(), new File(reportPath), UTF_8);
+      } catch (IOException e) {
+        compiler.report(JSError.make(REPORT_PATH_IO_ERROR, reportPath));
+      }
+    }
 
     if (removeUnreferenced) {
       removeUnreferenced();
@@ -1476,7 +1506,7 @@ final class NameAnalyzer implements CompilerPass {
 
     // Check whether this is a class-defining call. Classes may only be defined
     // in the global scope.
-    if (parent.isCall() && t.inGlobalScope()) {
+    if (parent.isCall() && t.inGlobalHoistScope()) {
       CodingConvention convention = compiler.getCodingConvention();
       SubclassRelationship classes = convention.getClassesDefinedByCall(parent);
       if (classes != null) {
@@ -1518,7 +1548,7 @@ final class NameAnalyzer implements CompilerPass {
         return createNameInformation(
             rootNameNode.getString() + name, t.getScope(), rootNameNode);
       case Token.THIS:
-        if (t.inGlobalScope()) {
+        if (t.inGlobalHoistScope()) {
           NameInformation nameInfo = new NameInformation();
           if (name.indexOf('.') == 0) {
             nameInfo.name = name.substring(1);  // strip leading "."
@@ -1729,12 +1759,11 @@ final class NameAnalyzer implements CompilerPass {
    */
   private List<Node> getSideEffectNodes(Node n) {
     List<Node> subexpressions = new ArrayList<>();
-    NodeTraversal.traverse(
-        compiler, n,
+    NodeTraversal.traverseEs6(
+        compiler,
+        n,
         new GatherSideEffectSubexpressionsCallback(
-            compiler,
-            new GetReplacementSideEffectSubexpressions(
-                compiler, subexpressions)));
+            compiler, new GetReplacementSideEffectSubexpressions(compiler, subexpressions)));
 
     List<Node> replacements = new ArrayList<>(subexpressions.size());
     for (Node subexpression : subexpressions) {
@@ -1856,17 +1885,20 @@ final class NameAnalyzer implements CompilerPass {
       case Token.NAME:
       case Token.RETURN:
         return true;
+
       case Token.AND:
       case Token.OR:
       case Token.HOOK:
-        return parent.getFirstChild() == n;
-      case Token.FOR:
-        return parent.getFirstChild().getNext() == n;
       case Token.IF:
       case Token.WHILE:
         return parent.getFirstChild() == n;
+
+      case Token.FOR:
+        return parent.getFirstChild().getNext() == n;
+
       case Token.DO:
         return parent.getLastChild() == n;
+
       default:
         return false;
     }

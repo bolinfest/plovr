@@ -32,6 +32,8 @@ import java.util.Set;
  * <li> No re-declarations or assignments of "eval" or arguments.
  * <li> No use of arguments.callee
  * <li> No use of arguments.caller
+ * <li> Class: Always under strict mode
+ * <li>   In addition, no duplicate class method names
  * </ol>
  *
  */
@@ -41,9 +43,6 @@ class StrictModeCheck extends AbstractPostOrderCallback
   static final DiagnosticType USE_OF_WITH = DiagnosticType.warning(
       "JSC_USE_OF_WITH",
       "The 'with' statement cannot be used in ES5 strict mode.");
-
-  static final DiagnosticType UNKNOWN_VARIABLE = DiagnosticType.warning(
-      "JSC_UNKNOWN_VARIABLE", "unknown variable {0}");
 
   static final DiagnosticType EVAL_DECLARATION = DiagnosticType.warning(
       "JSC_EVAL_DECLARATION",
@@ -88,42 +87,37 @@ class StrictModeCheck extends AbstractPostOrderCallback
       "JSC_DUPLICATE_OBJECT_KEY",
       "object literals cannot contain duplicate keys in ES5 strict mode");
 
+  static final DiagnosticType DUPLICATE_CLASS_METHODS = DiagnosticType.error(
+      "JSC_DUPLICATE_CLASS_METHODS",
+      "Classes cannot contain duplicate method names");
+
   static final DiagnosticType BAD_FUNCTION_DECLARATION = DiagnosticType.error(
       "JSC_BAD_FUNCTION_DECLARATION",
-      "functions can only be declared at top level or immediately within " +
-      "another function in ES5 strict mode");
+      "functions can only be declared at top level or immediately within"
+      + " another function in ES5 strict mode");
 
   private final AbstractCompiler compiler;
-  private final boolean noVarCheck;
 
   StrictModeCheck(AbstractCompiler compiler) {
-    this(compiler, false);
-  }
-
-  StrictModeCheck(
-      AbstractCompiler compiler, boolean noVarCheck) {
     this.compiler = compiler;
-    this.noVarCheck = noVarCheck;
   }
 
   @Override public void process(Node externs, Node root) {
     NodeTraversal.traverseRoots(compiler, this, externs, root);
-    NodeTraversal.traverse(compiler, root, new NonExternChecks());
+    NodeTraversal.traverseEs6(compiler, root, new NonExternChecks());
   }
 
   @Override public void visit(NodeTraversal t, Node n, Node parent) {
     if (n.isFunction()) {
       checkFunctionUse(t, n);
-    } else if (n.isName()) {
-      if (!isDeclaration(n)) {
-        checkNameUse(t, n);
-      }
     } else if (n.isAssign()) {
       checkAssignment(t, n);
     } else if (n.isDelProp()) {
       checkDelete(t, n);
     } else if (n.isObjectLit()) {
-      checkObjectLiteral(t, n);
+      checkObjectLiteralOrClass(t, n);
+    } else if (n.isClass()) {
+      checkObjectLiteralOrClass(t, n.getLastChild());
     } else if (n.isWith()) {
       checkWith(t, n);
     }
@@ -152,6 +146,8 @@ class StrictModeCheck extends AbstractPostOrderCallback
    */
   private static boolean isDeclaration(Node n) {
     switch (n.getParent().getType()) {
+      case Token.LET:
+      case Token.CONST:
       case Token.VAR:
       case Token.FUNCTION:
       case Token.CATCH:
@@ -162,18 +158,6 @@ class StrictModeCheck extends AbstractPostOrderCallback
 
       default:
         return false;
-    }
-  }
-
-  /** Checks that the given name is used legally. */
-  private void checkNameUse(NodeTraversal t, Node n) {
-    Var v = t.getScope().getVar(n.getString());
-    if (v == null) {
-      // In particular, this prevents creating a global variable by assigning
-      // to it without a declaration.
-      if (!noVarCheck) {
-        t.report(n, UNKNOWN_VARIABLE, n.getString());
-      }
     }
   }
 
@@ -200,8 +184,8 @@ class StrictModeCheck extends AbstractPostOrderCallback
     }
   }
 
-  /** Checks that object literal keys are valid. */
-  private static void checkObjectLiteral(NodeTraversal t, Node n) {
+  /** Checks that object literal keys or class method names are valid. */
+  private static void checkObjectLiteralOrClass(NodeTraversal t, Node n) {
     Set<String> getters = new HashSet<>();
     Set<String> setters = new HashSet<>();
     for (Node key = n.getFirstChild();
@@ -210,13 +194,21 @@ class StrictModeCheck extends AbstractPostOrderCallback
       if (!key.isSetterDef()) {
         // normal property and getter cases
         if (!getters.add(key.getString())) {
-          t.report(key, DUPLICATE_OBJECT_KEY);
+          if (n.isClassMembers()) {
+            t.report(key, DUPLICATE_CLASS_METHODS);
+          } else {
+            t.report(key, DUPLICATE_OBJECT_KEY);
+          }
         }
       }
       if (!key.isGetterDef()) {
         // normal property and setter cases
         if (!setters.add(key.getString())) {
-          t.report(key, DUPLICATE_OBJECT_KEY);
+          if (n.isClassMembers()) {
+            t.report(key, DUPLICATE_CLASS_METHODS);
+          } else {
+            t.report(key, DUPLICATE_OBJECT_KEY);
+          }
         }
       }
     }

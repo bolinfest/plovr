@@ -46,6 +46,7 @@ angular.$q.Promise;
  * @param {?(function(*): *)=} opt_notifyCallback
  * @return {!angular.$q.Promise.<RESULT>}
  * @template RESULT
+ * @override
  */
 angular.$q.Promise.prototype.then =
     function(opt_onFulfilled, opt_onRejected, opt_notifyCallback) {};
@@ -92,10 +93,10 @@ angular.$q.prototype.all = function(promises) {};
 angular.$q.prototype.defer = function() {};
 
 /**
- * @param {*} reason
+ * @param {*=} opt_reason
  * @return {!angular.$q.Promise}
  */
-angular.$q.prototype.reject = function(reason) {};
+angular.$q.prototype.reject = function(opt_reason) {};
 
 /**
  * @param {RESULT} value

@@ -24,7 +24,8 @@ import com.google.common.collect.Iterables;
 import com.google.template.soy.data.SoyRecord;
 import com.google.template.soy.data.internal.AugmentedParamStore;
 import com.google.template.soy.data.internal.BasicParamStore;
-import com.google.template.soy.jbcsrc.Expression.SimpleExpression;
+import com.google.template.soy.jbcsrc.Expression.Feature;
+import com.google.template.soy.jbcsrc.api.AdvisingStringBuilder;
 
 import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.Method;
@@ -79,9 +80,10 @@ import java.util.LinkedHashMap;
 
   static final ConstructorRef ARRAY_LIST_SIZE = create(ArrayList.class, int.class);
   static final ConstructorRef LINKED_HASH_MAP_SIZE = create(LinkedHashMap.class, int.class);
-  static final ConstructorRef AUGMENTED_PARAM_STORE = 
+  static final ConstructorRef AUGMENTED_PARAM_STORE =
       create(AugmentedParamStore.class, SoyRecord.class, int.class);
   static final ConstructorRef BASIC_PARAM_STORE = create(BasicParamStore.class, int.class);
+  static final ConstructorRef ADVISING_STRING_BUILDER = create(AdvisingStringBuilder.class);
 
   abstract TypeInfo instanceClass();
   abstract Method method();
@@ -101,7 +103,7 @@ import java.util.LinkedHashMap;
    */
   Expression construct(final Iterable<? extends Expression> args) {
     Expression.checkTypes(argTypes(), args);
-    return new SimpleExpression(instanceClass().type(), false) {
+    return new Expression(instanceClass().type(), Feature.NON_NULLABLE) {
       @Override void doGen(CodeBuilder mv) {
         mv.newInstance(instanceClass().type());
         // push a second reference onto the stack so there is still a reference to the new object

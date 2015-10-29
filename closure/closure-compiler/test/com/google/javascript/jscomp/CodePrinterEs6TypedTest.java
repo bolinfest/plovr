@@ -18,11 +18,12 @@ package com.google.javascript.jscomp;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 
 /**
- * Round-trip test for Typescript-style inline type syntax.  Each expression is parsed and then
- * printed, and we assert that the pretty-printed result is identical to the input.
+ * Round-trip test for TypeScript-style inline type syntax.  Each expression is
+ * parsed and then printed, and we assert that the pretty-printed result is identical
+ * to the input.
  *
- * <p>See {@link Es6InlineTypesTest} for tests which start from closure-style JSDoc type declaration
- * syntax.
+ * <p>See {@link JsdocToEs6TypedConverterTest} for tests which start from
+ * closure-style JSDoc type declaration syntax.
  */
 public final class CodePrinterEs6TypedTest extends CodePrinterTestBase {
 
@@ -61,7 +62,7 @@ public final class CodePrinterEs6TypedTest extends CodePrinterTestBase {
     assertPrettyPrintSame("function foo(x: string = 'hello') {\n}");
   }
 
-  public void testFunctionParamDeclaration_arrow() {
+  public void disabled_testFunctionParamDeclaration_arrow() {
     assertPrettyPrintSame("(x: string) => 'hello' + x;");
   }
 
@@ -69,7 +70,7 @@ public final class CodePrinterEs6TypedTest extends CodePrinterTestBase {
     assertPrettyPrintSame("function foo(): string {\n  return 'hello';\n}");
   }
 
-  public void testFunctionReturn_arrow() {
+  public void disabled_testFunctionReturn_arrow() {
     assertPrettyPrintSame("(): string => 'hello';");
   }
 

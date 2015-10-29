@@ -17,6 +17,8 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
+import com.google.javascript.jscomp.SyntacticScopeCreator.DefaultRedeclarationHandler;
+import com.google.javascript.jscomp.SyntacticScopeCreator.RedeclarationHandler;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -99,6 +101,9 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
 
       // Since we create a separate scope for body, stop scanning here
     } else if (n.isBlock() || n.isFor() || n.isForOf()) {
+      if (scope.getParent() != null) {
+        inputId = NodeUtil.getInputId(n);
+      }
       scanVars(n);
     } else {
       // It's the global block
@@ -122,7 +127,8 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
       declareLHS(declarationScope, lhs.getFirstChild());
     } else if (lhs.isArrayPattern() || lhs.isObjectPattern()) {
       for (Node child = lhs.getFirstChild(); child != null; child = child.getNext()) {
-        if (NodeUtil.isNameDeclaration(lhs.getParent()) && child.getNext() == null) {
+        if (NodeUtil.isNameDeclaration(lhs.getParent()) && child.getNext() == null
+            && !lhs.getParent().getParent().isForOf()) {
           // If the pattern is a direct child of the var/let/const node,
           // then its last child is the RHS of the assignment, not a variable to
           // be declared.
@@ -194,6 +200,8 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
         if (isNodeAtCurrentLexicalScope(n)) {
           declareLHS(scope, exception);
         }
+        // A new scope is not created for this BLOCK because there is a scope
+        // created for the BLOCK above the CATCH
         scanVars(block);
         return;  // only one child to scan
 
@@ -213,23 +221,6 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
         child = next;
       }
     }
-  }
-
-  /**
-   * Interface for injectable duplicate handling.
-   */
-  interface RedeclarationHandler {
-    void onRedeclaration(
-        Scope s, String name, Node n, CompilerInput input);
-  }
-
-  /**
-   * The default handler for duplicate declarations.
-   */
-  private static class DefaultRedeclarationHandler implements RedeclarationHandler {
-    @Override
-    public void onRedeclaration(
-        Scope s, String name, Node n, CompilerInput input) {}
   }
 
   private void declareVar(Node n) {

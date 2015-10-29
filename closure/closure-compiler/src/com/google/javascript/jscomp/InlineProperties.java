@@ -113,7 +113,7 @@ final class InlineProperties implements CompilerPass {
   private void addInvalidatingType(JSType type) {
     type = type.restrictByNotNullOrUndefined();
     if (type.isUnionType()) {
-      for (JSType alt : type.toMaybeUnionType().getAlternates()) {
+      for (JSType alt : type.toMaybeUnionType().getAlternatesWithoutStructuralTyping()) {
         addInvalidatingType(alt);
       }
     }
@@ -130,7 +130,7 @@ final class InlineProperties implements CompilerPass {
     if (type.isUnionType()) {
       type = type.restrictByNotNullOrUndefined();
       if (type.isUnionType()) {
-        for (JSType alt : type.toMaybeUnionType().getAlternates()) {
+        for (JSType alt : type.toMaybeUnionType().getAlternatesWithoutStructuralTyping()) {
           if (isInvalidatingType(alt)) {
             return true;
           }
@@ -164,8 +164,8 @@ final class InlineProperties implements CompilerPass {
   @Override
   public void process(Node externs, Node root) {
     // Find and replace the properties in non-extern AST.
-    NodeTraversal.traverse(compiler, root, new GatherCandidates());
-    NodeTraversal.traverse(compiler, root, new ReplaceCandidates());
+    NodeTraversal.traverseEs6(compiler, root, new GatherCandidates());
+    NodeTraversal.traverseEs6(compiler, root, new ReplaceCandidates());
   }
 
   class GatherCandidates extends AbstractPostOrderCallback {
@@ -221,7 +221,7 @@ final class InlineProperties implements CompilerPass {
           isCandidate = maybeStoreCandidateValue(
               getJSType(src), propName, value);
         }
-      } else if (t.inGlobalScope()
+      } else if (t.inGlobalHoistScope()
           && src.isGetProp()
           && src.getLastChild().getString().equals("prototype")) {
         // This is a prototype assignment like:
@@ -262,7 +262,10 @@ final class InlineProperties implements CompilerPass {
     }
 
     private boolean inConstructor(NodeTraversal t) {
-      Node root = t.getScopeRoot();
+      Node root = t.getEnclosingFunction();
+      if (root == null) {
+        return false;
+      }
       JSDocInfo info = NodeUtil.getBestJSDocInfo(root);
       return info != null && info.isConstructor();
     }

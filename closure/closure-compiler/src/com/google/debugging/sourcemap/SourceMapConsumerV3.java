@@ -16,6 +16,7 @@
 
 package com.google.debugging.sourcemap;
 
+import com.google.common.annotations.GwtIncompatible;
 import com.google.common.base.Preconditions;
 import com.google.debugging.sourcemap.Base64VLQ.CharIterator;
 import com.google.debugging.sourcemap.proto.Mapping.OriginalMapping;
@@ -41,6 +42,7 @@ import java.util.Map;
  * http://code.google.com/p/closure-compiler/wiki/SourceMaps
  * @author johnlenz@google.com (John Lenz)
  */
+@GwtIncompatible("com.google.gson")
 public final class SourceMapConsumerV3 implements SourceMapConsumer,
     SourceMappingReversable {
   static final int UNMAPPED = -1;
@@ -87,13 +89,6 @@ public final class SourceMapConsumerV3 implements SourceMapConsumer,
     } catch (JsonParseException ex) {
       throw new SourceMapParseException("JSON parse exception: " + ex);
     }
-  }
-
-  /**
-   * Parses the given contents containing a source map.
-   */
-  public void parse(JsonObject sourceMapRoot) throws SourceMapParseException {
-    parse(sourceMapRoot, null);
   }
 
   /**

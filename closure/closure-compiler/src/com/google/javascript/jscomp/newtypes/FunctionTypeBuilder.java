@@ -60,6 +60,20 @@ public final class FunctionTypeBuilder {
     return builder;
   }
 
+  /**
+   * Used when the order of required/optional/rest formals in a function jsdoc is wrong.
+   */
+  public FunctionTypeBuilder addPlaceholderFormal() {
+    if (restFormals != null) {
+      // Nothing to do here, since there is no way to add a placeholder.
+    } else if (!optionalFormals.isEmpty()) {
+      optionalFormals.add(JSType.UNKNOWN);
+    } else {
+      requiredFormals.add(JSType.UNKNOWN);
+    }
+    return this;
+  }
+
   public FunctionTypeBuilder addReqFormal(JSType t)
       throws WrongParameterOrderException {
     if (!optionalFormals.isEmpty() || restFormals != null) {
@@ -78,10 +92,8 @@ public final class FunctionTypeBuilder {
     }
     if (t == null) {
       optionalFormals.add(null);
-    } else if (t.isBottom()) {
-      // We keep bottom to warn about CALL_FUNCTION_WITH_BOTTOM_FORMAL.
-      optionalFormals.add(JSType.BOTTOM);
     } else {
+      Preconditions.checkArgument(!t.isBottom());
       optionalFormals.add(JSType.join(t, JSType.UNDEFINED));
     }
     return this;

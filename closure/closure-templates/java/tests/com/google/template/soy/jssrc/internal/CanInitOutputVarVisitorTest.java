@@ -18,11 +18,10 @@ package com.google.template.soy.jssrc.internal;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.common.base.Joiner;
 import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.ExplodingErrorReporter;
-import com.google.template.soy.jssrc.SoyJsSrcOptions;
-import com.google.template.soy.jssrc.SoyJsSrcOptions.CodeStyle;
 import com.google.template.soy.shared.SharedTestUtils;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.SoyNode;
@@ -35,15 +34,6 @@ import junit.framework.TestCase;
  */
 public class CanInitOutputVarVisitorTest extends TestCase {
 
-
-  private static SoyJsSrcOptions jsSrcOptions;
-
-
-  @Override protected void setUp() {
-    jsSrcOptions = new SoyJsSrcOptions();
-  }
-
-
   public void testSameValueAsIsComputableAsJsExprsVisitor() {
 
     runTestHelper("Blah blah.", true);
@@ -52,52 +42,67 @@ public class CanInitOutputVarVisitorTest extends TestCase {
 
     runTestHelper("{msg desc=\"\"}Blah{/msg}", true, 1);  // GoogMsgRefNode
 
-    runTestHelper("{msg desc=\"\"}<a href=\"{$url}\">Click here</a>{/msg}",
-                  true, 0, 0, 0);  // MsgHtmlTagNode
+    runTestHelper(
+        "{@param url: ? }\n{msg desc=\"\"}<a href=\"{$url}\">Click here</a>{/msg}",
+        true,
+        0,
+        0,
+        0); // MsgHtmlTagNode
 
-    runTestHelper("{msg desc=\"\"}<a href=\"{$url}\">Click here</a>{/msg}",
-                  true, 0, 0, 2);  // MsgHtmlTagNode
+    runTestHelper(
+        "{@param url: ? }\n{msg desc=\"\"}<a href=\"{$url}\">Click here</a>{/msg}",
+        true,
+        0,
+        0,
+        2); // MsgHtmlTagNode
 
     runTestHelper("{msg desc=\"\"}<span id=\"{for $i in range(3)}{$i}{/for}\">{/msg}",
                   true, 0, 0, 0);  // MsgHtmlTagNode
 
-    runTestHelper("{$boo.foo}", true);
+    runTestHelper("{@param boo: ? }\n{$boo.foo}", true);
 
     runTestHelper("{xid selected-option}", true);
 
     runTestHelper("{css selected-option}", true);
 
-    runTestHelper("{switch $boo}{case 0}Blah{case 1}Bleh{default}Bluh{/switch}", true);
+    runTestHelper(
+        "{@param boo: ? }\n{switch $boo}{case 0}Blah{case 1}Bleh{default}Bluh{/switch}", true);
 
-    runTestHelper("{foreach $boo in $booze}{$boo}{/foreach}", true);
+    runTestHelper("{@param booze: ? }\n{foreach $boo in $booze}{$boo}{/foreach}", true);
 
     runTestHelper("{for $i in range(4)}{$i + 1}{/for}", true);
 
-    runTestHelper("{if $boo}Blah{elseif $foo}Bleh{else}Bluh{/if}", true);
+    runTestHelper(
+        "{@param boo: ?}\n{@param foo: ?}\n{if $boo}Blah{elseif $foo}Bleh{else}Bluh{/if}", true);
 
-    runTestHelper("{if $goo}{foreach $moo in $moose}{$moo}{/foreach}{/if}", true);
+    runTestHelper(
+        "{@param goo: ?}\n"
+            + "{@param moose: ?}\n"
+            + "{if $goo}{foreach $moo in $moose}{$moo}{/foreach}{/if}",
+        true);
 
-    // Note: Default code style is 'stringbuilder'.
-    runTestHelper("{call name=\".foo\" data=\"all\" /}", true);
+    runTestHelper("{call .foo data=\"all\" /}", true);
 
-    jsSrcOptions.setCodeStyle(CodeStyle.CONCAT);
-    runTestHelper("{call name=\".foo\" data=\"all\" /}", true);
+    runTestHelper(
+        "{@param boo: ?}\n"
+            + "{@param moo: ?}\n"
+            + "{call .foo data=\"$boo\"}{param goo : $moo /}{/call}",
+        true);
 
-    runTestHelper("{call name=\".foo\" data=\"$boo\"}{param key=\"goo\" value=\"$moo\" /}{/call}",
-                  true);
-
-    runTestHelper("{call name=\".foo\" data=\"$boo\"}{param key=\"goo\"}Blah{/param}{/call}",
-                  true);
+    runTestHelper("{@param boo: ?}\n{call .foo data=\"$boo\"}{param goo}Blah{/param}{/call}", true);
   }
 
 
   public void testNotSameValueAsIsComputableAsJsExprsVisitor() {
-
-    jsSrcOptions.setCodeStyle(CodeStyle.CONCAT);
-    runTestHelper("{call name=\".foo\" data=\"$boo\"}" +
-                  "{param key=\"goo\"}{foreach $moo in $moose}{$moo}{/foreach}{/param}" +
-                  "{/call}",
-                  false);
+    runTestHelper(
+        Joiner.on('\n')
+            .join(
+                "{@param boo : ?}",
+                "{@param moose : ?}",
+                "{call .foo data=\"$boo\"}",
+                "{param goo}{foreach $moo in $moose}{$moo}{/foreach}{/param}",
+                "{/call}"),
+        false);
   }
 
 
@@ -113,14 +118,13 @@ public class CanInitOutputVarVisitorTest extends TestCase {
   private static void runTestHelper(
       String soyCode, boolean isSameValueAsIsComputableAsJsExprsVisitor, int... indicesToNode) {
     ErrorReporter boom = ExplodingErrorReporter.get();
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyCode)
-        .errorReporter(boom)
-        .parse();
-    new ReplaceMsgsWithGoogMsgsVisitor(boom).exec(soyTree);
+    SoyFileSetNode soyTree =
+        SoyFileSetParserBuilder.forTemplateContents(soyCode).errorReporter(boom).parse().fileSet();
+    new ReplaceMsgsWithGoogMsgsVisitor().exec(soyTree);
     SoyNode node = SharedTestUtils.getNode(soyTree, indicesToNode);
 
-    IsComputableAsJsExprsVisitor icajev = new IsComputableAsJsExprsVisitor(jsSrcOptions, boom);
-    CanInitOutputVarVisitor ciovv = new CanInitOutputVarVisitor(jsSrcOptions, icajev, boom);
+    IsComputableAsJsExprsVisitor icajev = new IsComputableAsJsExprsVisitor();
+    CanInitOutputVarVisitor ciovv = new CanInitOutputVarVisitor(icajev);
     assertThat(ciovv.exec(node) == icajev.exec(node))
         .isEqualTo(isSameValueAsIsComputableAsJsExprsVisitor);
   }

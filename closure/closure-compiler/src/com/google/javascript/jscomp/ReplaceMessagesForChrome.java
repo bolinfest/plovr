@@ -16,6 +16,7 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.common.annotations.GwtIncompatible;
 import com.google.common.collect.Ordering;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
@@ -32,6 +33,7 @@ import java.util.List;
  *
  * @author tbreisacher@google.com (Tyler Breisacher)
  */
+@GwtIncompatible("JsMessage")
 class ReplaceMessagesForChrome extends JsMessageVisitor {
 
   ReplaceMessagesForChrome(AbstractCompiler compiler,
@@ -53,7 +55,7 @@ class ReplaceMessagesForChrome extends JsMessageVisitor {
     try {
       Node msgNode = definition.getMessageNode();
       Node newValue = getNewValueNode(msgNode, message);
-      newValue.copyInformationFromForTree(msgNode);
+      newValue.useSourceInfoIfMissingFromForTree(msgNode);
 
       msgNode.getParent().replaceChild(msgNode, newValue);
       compiler.reportCodeChange();
@@ -88,7 +90,7 @@ class ReplaceMessagesForChrome extends JsMessageVisitor {
       newValueNode.addChildToBack(placeholderValueArray);
     }
 
-    newValueNode.copyInformationFromForTree(origNode);
+    newValueNode.useSourceInfoIfMissingFromForTree(origNode);
     return newValueNode;
   }
 

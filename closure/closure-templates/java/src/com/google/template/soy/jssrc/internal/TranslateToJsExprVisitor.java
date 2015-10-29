@@ -16,13 +16,15 @@
 
 package com.google.template.soy.jssrc.internal;
 
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import com.google.template.soy.base.SoyBackendKind;
-import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.base.internal.BaseUtils;
 import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.ErrorReporter.Checkpoint;
+import com.google.template.soy.error.SoyError;
 import com.google.template.soy.exprtree.AbstractReturningExprNodeVisitor;
 import com.google.template.soy.exprtree.DataAccessNode;
 import com.google.template.soy.exprtree.ExprNode;
@@ -49,7 +51,8 @@ import com.google.template.soy.jssrc.SoyJsSrcOptions;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.SoyJsCodeUtils;
 import com.google.template.soy.jssrc.restricted.SoyJsSrcFunction;
-import com.google.template.soy.shared.internal.NonpluginFunction;
+import com.google.template.soy.shared.internal.BuiltinFunction;
+import com.google.template.soy.shared.restricted.SoyFunction;
 import com.google.template.soy.soytree.defn.TemplateParam;
 import com.google.template.soy.types.SoyObjectType;
 import com.google.template.soy.types.SoyType;
@@ -92,9 +95,9 @@ import java.util.Map;
  *   <li>That the template contains enough information to determine types that need to be
  *     converted.
  *     <br>
- *     Pluggable {@link SoyTypeRegistry SoyTypeRegistries} allow recognizing input coercion,
- *     for example between {@code goog.html.type.SafeHtml} and Soy's {@code html} string
- *     sub-type.
+ *     Pluggable {@link com.google.template.soy.types.SoyTypeRegistry SoyTypeRegistries}
+ *     allow recognizing input coercion, for example between {@code goog.html.type.SafeHtml}
+ *     and Soy's {@code html} string sub-type.
  *     <br>
  *     When the converted type is a protocol-buffer type, we assume that the expression to be
  *     converted can be fully-typed by expressionTypesVisitor.
@@ -112,20 +115,40 @@ import java.util.Map;
  */
 public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<JsExpr> {
 
+  private static final SoyError CONSTANT_USED_AS_KEY_IN_MAP_LITERAL =
+      SoyError.of("Keys in map literals cannot be constants (found constant ''{0}'').");
+  private static final SoyError EXPR_IN_MAP_LITERAL_REQUIRES_QUOTE_KEYS_IF_JS =
+      SoyError.of("Expression key ''{0}'' in map literal must be wrapped in quoteKeysIfJs().");
+  private static final SoyError MAP_LITERAL_WITH_NON_ID_KEY_REQUIRES_QUOTE_KEYS_IF_JS =
+      SoyError.of("Map literal with non-identifier key {0} must be wrapped in quoteKeysIfJs().");
+  private static final SoyError SOY_JS_SRC_FUNCTION_NOT_FOUND =
+      SoyError.of("Failed to find SoyJsSrcFunction ''{0}''.");
+  private static final SoyError UNION_ACCESSOR_MISMATCH =
+      SoyError.of("Cannot access field ''{0}'' of type ''{1}'', "
+          + "because the different union member types have different access methods.");
+
+  /**
+   * Errors in this visitor generate JS source that immediately explodes.
+   * Users of Soy are expected to check the error reporter before using the gencode;
+   * if they don't, this should apprise them.
+   * TODO(brndn): consider changing the visitor to return {@code Optional<JsExpr>}
+   * and returning {@link Optional#absent()} on error.
+   */
+  private static final JsExpr ERROR = new JsExpr(
+      "(function() { throw new Error('Soy compilation failed'); })();",
+      Integer.MAX_VALUE);
+
   /**
    * Injectable factory for creating an instance of this class.
    */
-  public static interface TranslateToJsExprVisitorFactory {
+  public interface TranslateToJsExprVisitorFactory {
 
     /**
      * @param localVarTranslations The current stack of replacement JS expressions for the local
      *     variables (and foreach-loop special functions) current in scope.
      */
-    public TranslateToJsExprVisitor create(Deque<Map<String, JsExpr>> localVarTranslations);
+    TranslateToJsExprVisitor create(Deque<Map<String, JsExpr>> localVarTranslations);
   }
-
-  /** Map of all SoyJsSrcFunctions (name to function). */
-  private final Map<String, SoyJsSrcFunction> soyJsSrcFunctionsMap;
 
   /** The options for generating JS source code. */
   private final SoyJsSrcOptions jsSrcOptions;
@@ -133,20 +156,18 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
   /** The current stack of replacement JS expressions for the local variables (and foreach-loop
    *  special functions) current in scope. */
   private final Deque<Map<String, JsExpr>> localVarTranslations;
+  private final ErrorReporter errorReporter;
 
   /**
-   * @param soyJsSrcFunctionsMap Map of all SoyJsSrcFunctions (name to function).
    * @param localVarTranslations The current stack of replacement JS expressions for the local
    *     variables (and foreach-loop special functions) current in scope.
    */
   @AssistedInject
   TranslateToJsExprVisitor(
-      Map<String, SoyJsSrcFunction> soyJsSrcFunctionsMap,
       SoyJsSrcOptions jsSrcOptions,
       @Assisted Deque<Map<String, JsExpr>> localVarTranslations,
       ErrorReporter errorReporter) {
-    super(errorReporter);
-    this.soyJsSrcFunctionsMap = soyJsSrcFunctionsMap;
+    this.errorReporter = errorReporter;
     this.jsSrcOptions = jsSrcOptions;
     this.localVarTranslations = localVarTranslations;
   }
@@ -238,6 +259,8 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
         jsSrcOptions.shouldProvideRequireSoyNamespaces() ||
         jsSrcOptions.shouldProvideRequireJsFunctions();
 
+    Checkpoint checkpoint = errorReporter.checkpoint();
+
     for (int i = 0, n = node.numChildren(); i < n; i += 2) {
       ExprNode keyNode = node.getChild(i);
       ExprNode valueNode = node.getChild(i + 1);
@@ -252,15 +275,13 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
           String key = ((StringNode) keyNode).getValue();
           if (BaseUtils.isIdentifier(key)) {
             strKeysEntriesSnippet.append(key);
+          } else if (isProbablyUsingClosureCompiler) {
+            errorReporter.report(
+                keyNode.getSourceLocation(),
+                MAP_LITERAL_WITH_NON_ID_KEY_REQUIRES_QUOTE_KEYS_IF_JS,
+                keyNode.toSourceString());
           } else {
-            if (isProbablyUsingClosureCompiler) {
-              throw SoySyntaxException.createWithoutMetaInfo(
-                  "Map literal with non-identifier key must be wrapped in quoteKeysIfJs()" +
-                      " (found non-identifier key \"" + keyNode.toSourceString() +
-                      "\" in map literal \"" + node.toSourceString() + "\").");
-            } else {
-              strKeysEntriesSnippet.append(visit(keyNode).getText());
-            }
+            strKeysEntriesSnippet.append(visit(keyNode).getText());
           }
         }
         strKeysEntriesSnippet.append(": ").append(visit(valueNode).getText());
@@ -268,18 +289,17 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
       } else if (keyNode instanceof ConstantNode) {
         // TODO: Support map literal with nonstring key. We can probably just remove this case and
         // roll it into the next case.
-        throw SoySyntaxException.createWithoutMetaInfo(
-            "Map literal must have keys that are strings or expressions that will evaluate to" +
-                " strings at render time (found non-string key \"" + keyNode.toSourceString() +
-                "\" in map literal \"" + node.toSourceString() + "\").");
-
+        errorReporter.report(
+            keyNode.getSourceLocation(),
+            CONSTANT_USED_AS_KEY_IN_MAP_LITERAL,
+            keyNode.toSourceString());
+      } else if (isProbablyUsingClosureCompiler && !doQuoteKeys) {
+        errorReporter.report(
+            keyNode.getSourceLocation(),
+            EXPR_IN_MAP_LITERAL_REQUIRES_QUOTE_KEYS_IF_JS,
+            keyNode.toSourceString());
+        return ERROR;
       } else {
-        if (isProbablyUsingClosureCompiler && ! doQuoteKeys) {
-          throw SoySyntaxException.createWithoutMetaInfo(
-              "Map literal with expression key must be wrapped in quoteKeysIfJs()" +
-                  " (found expression key \"" + keyNode.toSourceString() +
-                  "\" in map literal \"" + node.toSourceString() + "\").");
-        }
         nonstrKeysEntriesSnippet
             .append(" map_s[soy.$$checkMapKey(").append(visit(keyNode).getText()).append(")] = ")
             .append(visit(valueNode).getText()).append(';');
@@ -295,7 +315,9 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
           + " return map_s; })()";
     }
 
-    return new JsExpr(fullExprText, Integer.MAX_VALUE);
+    return errorReporter.errorsSince(checkpoint)
+        ? ERROR
+        : new JsExpr(fullExprText, Integer.MAX_VALUE);
   }
 
   // -----------------------------------------------------------------------------------------------
@@ -367,8 +389,10 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
         if (node.getKind() == ExprNode.Kind.FIELD_ACCESS_NODE) {
           FieldAccessNode fieldAccess = (FieldAccessNode) node;
           return genCodeForFieldAccess(
-              fieldAccess.getBaseExprChild().getType(), node.getType(),
-              refText, fieldAccess.getFieldName());
+              fieldAccess.getBaseExprChild().getType(),
+              fieldAccess,
+              refText,
+              fieldAccess.getFieldName());
         } else {
           // Generate access to item.
           ItemAccessNode itemAccess = (ItemAccessNode) node;
@@ -412,15 +436,16 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
    * is an object type, then it delegates the generation of the JS code to the type
    * object.
    * @param baseType The type of the object that contains the field.
-   * @param fieldType The type of the field.
+   * @param fieldAccessNode The field access node.
    * @param containerExpr An expression that evaluates to the container of the named field.
    *     This expression may have any operator precedence that binds more tightly than unary
    *     operators.
    * @param fieldName The field name.
    */
-  private static String genCodeForFieldAccess(
-      SoyType baseType, SoyType fieldType, String containerExpr, String fieldName) {
+  private String genCodeForFieldAccess(
+      SoyType baseType, FieldAccessNode fieldAccessNode, String containerExpr, String fieldName) {
     Preconditions.checkNotNull(baseType);
+    SoyType fieldType = fieldAccessNode.getType();
     Preconditions.checkNotNull(fieldType);
     // For unions, attempt to generate the field access code for each member
     // type, and then see if they all agree.
@@ -431,13 +456,15 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
       for (SoyType memberType : unionType.getMembers()) {
         if (memberType.getKind() != SoyType.Kind.NULL) {
           String fieldAccessForType = genCodeForFieldAccess(
-              memberType, fieldType, containerExpr, fieldName);
+              memberType, fieldAccessNode, containerExpr, fieldName);
           if (fieldAccessCode == null) {
             fieldAccessCode = fieldAccessForType;
           } else if (!fieldAccessCode.equals(fieldAccessForType)) {
-            throw SoySyntaxException.createWithoutMetaInfo("Cannot access field '" + fieldName
-                + "' of type'" + baseType
-                + ", because the different union member types have different access methods.");
+            errorReporter.report(
+                fieldAccessNode.getSourceLocation(),
+                UNION_ACCESSOR_MISMATCH,
+                fieldName,
+                baseType);
           }
         }
       }
@@ -494,18 +521,9 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
   // Implementations for functions.
 
   @Override protected JsExpr visitFunctionNode(FunctionNode node) {
-    String fnName = node.getFunctionName();
-    int numArgs = node.numChildren();
-
-    // Handle nonplugin functions.
-    NonpluginFunction nonpluginFn = NonpluginFunction.forFunctionName(fnName);
-    if (nonpluginFn != null) {
-      if (numArgs != nonpluginFn.getNumArgs()) {
-        throw SoySyntaxException.createWithoutMetaInfo(
-            "Function '" + fnName + "' called with the wrong number of arguments" +
-                " (function call \"" + node.toSourceString() + "\").");
-      }
-      switch (nonpluginFn) {
+    SoyFunction soyFunction = node.getSoyFunction();
+    if (soyFunction instanceof BuiltinFunction) {
+      switch ((BuiltinFunction) soyFunction) {
         case IS_FIRST:
           return visitIsFirstFunction(node);
         case IS_LAST:
@@ -519,29 +537,14 @@ public class TranslateToJsExprVisitor extends AbstractReturningExprNodeVisitor<J
         default:
           throw new AssertionError();
       }
-    }
-
-    // Handle plugin functions.
-    SoyJsSrcFunction fn = soyJsSrcFunctionsMap.get(fnName);
-    if (fn != null) {
-      if (! fn.getValidArgsSizes().contains(numArgs)) {
-        throw SoySyntaxException.createWithoutMetaInfo(
-            "Function '" + fnName + "' called with the wrong number of arguments" +
-                " (function call \"" + node.toSourceString() + "\").");
-      }
+    } else if (soyFunction instanceof SoyJsSrcFunction) {
       List<JsExpr> args = visitChildren(node);
-      try {
-        return fn.computeForJsSrc(args);
-      } catch (Exception e) {
-        throw SoySyntaxException.createCausedWithoutMetaInfo(
-            "Error in function call \"" + node.toSourceString() + "\": " + e.getMessage(), e);
-      }
+      return ((SoyJsSrcFunction) soyFunction).computeForJsSrc(args);
+    } else {
+      errorReporter.report(
+          node.getSourceLocation(), SOY_JS_SRC_FUNCTION_NOT_FOUND, node.getFunctionName());
+      return ERROR;
     }
-
-    // Function not found.
-    throw SoySyntaxException.createWithoutMetaInfo(
-        "Failed to find SoyJsSrcFunction with name '" + fnName + "'" +
-            " (function call \"" + node.toSourceString() + "\").");
   }
 
   private JsExpr visitCheckNotNullFunction(ExprNode child) {

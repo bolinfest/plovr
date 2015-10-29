@@ -16,10 +16,12 @@
 
 package com.google.template.soy.soytree;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.template.soy.base.SourceLocation;
+import com.google.template.soy.basetree.CopyState;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.soytree.SoyNode.RenderUnitNode;
 import com.google.template.soy.soytree.defn.HeaderParam;
@@ -39,8 +41,24 @@ import javax.annotation.concurrent.Immutable;
  */
 public abstract class TemplateNode extends AbstractBlockCommandNode implements RenderUnitNode {
 
-  /** Priorities range from 0 to MAX_PRIORITY, inclusive. */
-  public static final int MAX_PRIORITY = 1;
+  /**
+   * Priority for delegate templates.
+   */
+  public enum Priority {
+    STANDARD(0),
+    HIGH_PRIORITY(1);
+
+    private final int value;
+
+    Priority(int value) {
+      this.value = value;
+    }
+
+    @Override
+    public String toString() {
+      return Integer.toString(value);
+    }
+  }
 
   /**
    * Info from the containing Soy file's {@code delpackage} and {@code namespace} declarations.
@@ -56,23 +74,24 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
   public static class SoyFileHeaderInfo {
 
     @Nullable public final String delPackageName;
-    public final int defaultDelPriority;
+    final Priority priority;
     @Nullable public final String namespace;
     public final AutoescapeMode defaultAutoescapeMode;
 
-    public SoyFileHeaderInfo(SoyFileNode soyFileNode) {
-      this(soyFileNode.getDelPackageName(), soyFileNode.getNamespace(),
-          soyFileNode.getDefaultAutoescapeMode());
-    }
-
-    public SoyFileHeaderInfo(String namespace) {
-      this(null, namespace, AutoescapeMode.TRUE);
-    }
-
     public SoyFileHeaderInfo(
+        @Nullable String delpackageName, NamespaceDeclaration soyFileNode) {
+      this(delpackageName, soyFileNode.getNamespace(), soyFileNode.getDefaultAutoescapeMode());
+    }
+
+    @VisibleForTesting
+    public SoyFileHeaderInfo(String namespace) {
+      this(null, namespace, AutoescapeMode.NONCONTEXTUAL);
+    }
+
+    private SoyFileHeaderInfo(
         @Nullable String delPackageName, String namespace, AutoescapeMode defaultAutoescapeMode) {
       this.delPackageName = delPackageName;
-      this.defaultDelPriority = (delPackageName == null) ? 0 : 1;
+      this.priority = (delPackageName == null) ? Priority.STANDARD : Priority.HIGH_PRIORITY;
       this.namespace = namespace;
       this.defaultAutoescapeMode = defaultAutoescapeMode;
     }
@@ -139,7 +158,7 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
       Visibility visibility,
       @Nullable ImmutableList<TemplateParam> params) {
     super(nodeBuilder.getId(), nodeBuilder.sourceLocation, cmdName, nodeBuilder.getCmdText());
-    maybeSetSyntaxVersionBound(nodeBuilder.getSyntaxVersionBound());
+    maybeSetSyntaxVersionUpperBound(nodeBuilder.getSyntaxVersionBound());
     this.soyFileHeaderInfo = soyFileHeaderInfo;
     this.templateName = nodeBuilder.getTemplateName();
     this.partialTemplateName = nodeBuilder.getPartialTemplateName();
@@ -174,8 +193,8 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
    * Copy constructor.
    * @param orig The node to copy.
    */
-  protected TemplateNode(TemplateNode orig) {
-    super(orig);
+  protected TemplateNode(TemplateNode orig, CopyState copyState) {
+    super(orig, copyState);
     this.soyFileHeaderInfo = orig.soyFileHeaderInfo;  // immutable
     this.templateName = orig.templateName;
     this.partialTemplateName = orig.partialTemplateName;
@@ -187,6 +206,8 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
     this.cssBaseNamespace = orig.cssBaseNamespace;
     this.soyDoc = orig.soyDoc;
     this.soyDocDesc = orig.soyDocDesc;
+    // TODO(lukes): params and injectedParams are not really immutable, just mostly.  Consider
+    // cloning them here and modifying SoytreeUtils.cloneNode to reassign these as well.
     this.params = orig.params;  // immutable
     this.injectedParams = orig.injectedParams;
     this.maxLocalVariableTableSize = orig.maxLocalVariableTableSize;
@@ -275,18 +296,18 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
     assert params != null;  // prevent warnings
     List<TemplateParam> newParams = Lists.newArrayListWithCapacity(params.size());
     for (TemplateParam origParam : params) {
-      newParams.add(origParam.cloneEssential());
+      newParams.add(origParam.copyEssential());
     }
     params = ImmutableList.copyOf(newParams);
   }
 
   /** Returns the SoyDoc, or null. */
-  public String getSoyDoc() {
+  @Nullable public String getSoyDoc() {
     return soyDoc;
   }
 
   /** Returns the description portion of the SoyDoc (before @param tags), or null. */
-  public String getSoyDocDesc() {
+  @Nullable public String getSoyDocDesc() {
     return soyDocDesc;
   }
 
@@ -327,7 +348,11 @@ public abstract class TemplateNode extends AbstractBlockCommandNode implements R
           continue;
         }
         HeaderParam headerParam = (HeaderParam) param;
-        sb.append("  {@param ").append(headerParam.name()).append(": ")
+        sb.append("  {@param");
+        if (!headerParam.isRequired()) {
+          sb.append('?');
+        }
+        sb.append(' ').append(headerParam.name()).append(": ")
             .append(headerParam.typeSrc()).append("}");
         if (headerParam.desc() != null) {
           sb.append("  /** ").append(headerParam.desc()).append(" */");

@@ -34,38 +34,41 @@ public final class GenPyCallExprVisitorTest extends TestCase {
       + "  %s\n"
       + "{/template}\n";
 
+  private static final String SANITIZED_APPROVAL =
+      "approval=sanitize.IActuallyUnderstandSoyTypeSafetyAndHaveSecurityApproval("
+      + "'Internally created Sanitization.')";
+
 
   public void testBasicCall() {
     String soyCode = "{call .goo data=\"all\" /}";
-    String expectedPyCode = "goo(opt_data, opt_ijData)";
+    String expectedPyCode = "goo(data, ijData)";
 
     assertThatSoyFile(String.format(SOY_BASE, soyCode)).compilesToSourceContaining(expectedPyCode);
 
 
-    soyCode = "{call .goo data=\"$bar\" /}";
-    expectedPyCode = "goo(opt_data.get('bar'), opt_ijData)";
+    soyCode = "{@param bar : ?}\n" + "{call .goo data=\"$bar\" /}";
+    expectedPyCode = "goo(data.get('bar'), ijData)";
 
     assertThatSoyFile(String.format(SOY_BASE, soyCode)).compilesToSourceContaining(expectedPyCode);
   }
 
   public void testBasicCall_external() {
     String soyCode = "{call external.library.boo data=\"all\" /}";
-    String expectedPyCode = "library.boo(opt_data, opt_ijData)";
+    String expectedPyCode = "library.boo(data, ijData)";
 
     assertThatSoyFile(String.format(SOY_BASE, soyCode)).compilesToSourceContaining(expectedPyCode);
 
 
-    soyCode = "{call external.library.boo data=\"$bar\" /}";
-    expectedPyCode = "library.boo(opt_data.get('bar'), opt_ijData)";
+    soyCode = "{@param bar : ?}\n" + "{call external.library.boo data=\"$bar\" /}";
+    expectedPyCode = "library.boo(data.get('bar'), ijData)";
 
     assertThatSoyFile(String.format(SOY_BASE, soyCode)).compilesToSourceContaining(expectedPyCode);
   }
 
   public void testBasicCall_params() {
-    String soyCode = "{call .goo}\n"
-        + "  {param goo: $moo /}\n"
-        + "{/call}\n";
-    String expectedPyCode = "goo({'goo': opt_data.get('moo')}, opt_ijData)";
+    String soyCode =
+        "{@param moo : ?}\n" + "{call .goo}\n" + "  {param goo: $moo /}\n" + "{/call}\n";
+    String expectedPyCode = "goo({'goo': data.get('moo')}, ijData)";
 
     assertThatSoyFile(String.format(SOY_BASE, soyCode)).compilesToSourceContaining(expectedPyCode);
 
@@ -73,27 +76,34 @@ public final class GenPyCallExprVisitorTest extends TestCase {
     soyCode = "{call .goo}\n"
         + "  {param goo kind=\"text\"}Hello{/param}\n"
         + "{/call}\n";
-    expectedPyCode = "goo({'goo': sanitize.UnsanitizedText('Hello')}, opt_ijData)";
+    expectedPyCode =
+        "goo({'goo': sanitize.UnsanitizedText('Hello', " + SANITIZED_APPROVAL + ")}, ijData)";
 
     assertThatSoyFile(String.format(SOY_BASE, soyCode)).compilesToSourceContaining(expectedPyCode);
 
 
-    soyCode = "{call .goo}\n"
-        + "  {param goo: $moo /}\n"
-        + "  {param moo kind=\"text\"}Hello{/param}\n"
-        + "{/call}\n";
+    soyCode =
+        "{@param moo : ?}\n"
+            + "{call .goo}\n"
+            + "  {param goo: $moo /}\n"
+            + "  {param moo kind=\"text\"}Hello{/param}\n"
+            + "{/call}\n";
     expectedPyCode =
-        "goo({'goo': opt_data.get('moo'), 'moo': sanitize.UnsanitizedText('Hello')}, opt_ijData)";
+        "goo({'goo': data.get('moo'), 'moo': sanitize.UnsanitizedText('Hello', "
+        + SANITIZED_APPROVAL + ")}, ijData)";
 
     assertThatSoyFile(String.format(SOY_BASE, soyCode)).compilesToSourceContaining(expectedPyCode);
 
 
-    soyCode = "{call .goo data=\"$bar\"}"
-        + "  {param goo: $moo /}\n"
-        + "{/call}\n";
+    soyCode =
+        "{@param moo : ?}\n"
+            + "{@param bar : ?}\n"
+            + "{call .goo data=\"$bar\"}"
+            + "  {param goo: $moo /}\n"
+            + "{/call}\n";
     expectedPyCode =
-        "goo(runtime.merge_into_dict({'goo': opt_data.get('moo')}, opt_data.get('bar')), "
-                                  + "opt_ijData)";
+        "goo(runtime.merge_into_dict(dict(data.get('bar')), {'goo': data.get('moo')}), "
+                                  + "ijData)";
 
     assertThatSoyFile(String.format(SOY_BASE, soyCode)).compilesToSourceContaining(expectedPyCode);
   }
@@ -104,29 +114,30 @@ public final class GenPyCallExprVisitorTest extends TestCase {
         + "    {for $i in range(3)}{$i}{/for}\n"
         + "  {/param}\n"
         + "{/call}\n";
-    String expectedPyCode = "goo({'moo': sanitize.UnsanitizedText(''.join(param###))}, opt_ijData)";
+    String expectedPyCode =
+        "goo({'moo': sanitize.UnsanitizedText(''.join(param###), "
+        + SANITIZED_APPROVAL + ")}, ijData)";
 
     assertThatSoyFile(String.format(SOY_BASE, soyCode)).compilesToSourceContaining(expectedPyCode);
   }
 
   public void testDelegateCall() {
-    String soyCode = "{delcall moo.goo data=\"$bar\" /}";
-    String expectedPyCode =
-        "runtime.get_delegate_fn('moo.goo', '', True)(opt_data.get('bar'), opt_ijData)";
+    String soyCode = "{@param bar : ?}\n" + "{delcall moo.goo data=\"$bar\" /}";
+    String expectedPyCode = "runtime.get_delegate_fn('moo.goo', '', False)(data.get('bar'), ijData)";
 
     assertThatSoyFile(String.format(SOY_BASE, soyCode)).compilesToSourceContaining(expectedPyCode);
 
 
-    soyCode = "{delcall moo.goo data=\"$bar\" variant=\"'beta'\" /}";
-    expectedPyCode =
-        "runtime.get_delegate_fn('moo.goo', 'beta', True)(opt_data.get('bar'), opt_ijData)";
+    soyCode = "{@param bar : ?}\n" + "{delcall moo.goo data=\"$bar\" variant=\"'beta'\" /}";
+    expectedPyCode = "runtime.get_delegate_fn('moo.goo', 'beta', False)(data.get('bar'), ijData)";
 
     assertThatSoyFile(String.format(SOY_BASE, soyCode)).compilesToSourceContaining(expectedPyCode);
 
 
-    soyCode = "{delcall moo.goo data=\"$bar\" variant=\"'beta'\" allowemptydefault=\"false\" /}";
-    expectedPyCode =
-        "runtime.get_delegate_fn('moo.goo', 'beta', False)(opt_data.get('bar'), opt_ijData)";
+    soyCode =
+        "{@param bar : ?}\n"
+            + "{delcall moo.goo data=\"$bar\" variant=\"'beta'\" allowemptydefault=\"true\" /}";
+    expectedPyCode = "runtime.get_delegate_fn('moo.goo', 'beta', True)(data.get('bar'), ijData)";
 
     assertThatSoyFile(String.format(SOY_BASE, soyCode)).compilesToSourceContaining(expectedPyCode);
   }

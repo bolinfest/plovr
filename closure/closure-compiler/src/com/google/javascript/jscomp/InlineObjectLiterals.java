@@ -158,7 +158,7 @@ class InlineObjectLiterals implements CompilerPass {
       for (Reference ref : refs) {
         Node name = ref.getNode();
         Node parent = ref.getParent();
-        Node gramps = ref.getGrandparent();
+        Node grandparent = ref.getGrandparent();
 
         // Ignore most indirect references, like x.y (but not x.y(),
         // since the function referenced by y might reference 'this').
@@ -166,14 +166,14 @@ class InlineObjectLiterals implements CompilerPass {
         if (parent.isGetProp()) {
           Preconditions.checkState(parent.getFirstChild() == name);
           // A call target may be using the object as a 'this' value.
-          if (gramps.isCall()
-              && gramps.getFirstChild() == parent) {
+          if (grandparent.isCall()
+              && grandparent.getFirstChild() == parent) {
             return false;
           }
 
           // Deleting a property has different semantics from deleting
           // a variable, so deleted properties should not be inlined.
-          if (gramps.isDelProp()) {
+          if (grandparent.isDelProp()) {
             return false;
           }
 
@@ -187,7 +187,7 @@ class InlineObjectLiterals implements CompilerPass {
           // isn't a perfect algorithm, but it should catch most cases.
           String propName = parent.getLastChild().getString();
           if (!validProperties.contains(propName)) {
-            if (NodeUtil.isVarOrSimpleAssignLhs(parent, gramps)) {
+            if (NodeUtil.isVarOrSimpleAssignLhs(parent, grandparent)) {
               validProperties.add(propName);
             } else {
               return false;
@@ -382,7 +382,7 @@ class InlineObjectLiterals implements CompilerPass {
       }
 
       Node replace = ref.getParent();
-      replacement.copyInformationFromForTree(replace);
+      replacement.useSourceInfoIfMissingFromForTree(replace);
 
       if (replace.isVar()) {
         replace.getParent().replaceChild(
@@ -423,7 +423,7 @@ class InlineObjectLiterals implements CompilerPass {
         Node varnode = NodeUtil.newVarNode(entry.getValue(), val);
         if (val == null) {
           // is this right?
-          varnode.copyInformationFromForTree(vnode);
+          varnode.useSourceInfoIfMissingFromForTree(vnode);
         } else {
           blacklistVarReferencesInTree(val, v.scope);
         }
@@ -464,7 +464,7 @@ class InlineObjectLiterals implements CompilerPass {
 
           // Replace the GETPROP node with a NAME.
           Node replacement = IR.name(varmap.get(var));
-          replacement.copyInformationFrom(getprop);
+          replacement.useSourceInfoIfMissingFrom(getprop);
           ref.getGrandparent().replaceChild(ref.getParent(), replacement);
         }
       }

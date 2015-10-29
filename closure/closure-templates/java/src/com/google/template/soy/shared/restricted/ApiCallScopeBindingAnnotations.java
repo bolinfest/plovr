@@ -63,29 +63,4 @@ public class ApiCallScopeBindingAnnotations {
   @Target({FIELD, PARAMETER, METHOD})
   @Retention(RUNTIME)
   public @interface LocaleString {}
-
-
-  /**
-   * Annotation for the runtimePath parameter in the ApiCallScope.
-   */
-  @BindingAnnotation
-  @Target({FIELD, PARAMETER, METHOD})
-  @Retention(RUNTIME)
-  public @interface PyRuntimePath {}
-
-  /**
-   * Annotation for the bidiIsRtlFn parameter in the ApiCallScope.
-   */
-  @BindingAnnotation
-  @Target({FIELD, PARAMETER, METHOD})
-  @Retention(RUNTIME)
-  public @interface PyBidiIsRtlFn {}
-
-  /**
-   * Annotation for the translationClass parameter in the ApiCallScope.
-   */
-  @BindingAnnotation
-  @Target({FIELD, PARAMETER, METHOD})
-  @Retention(RUNTIME)
-  public @interface PyTranslationClass {}
 }

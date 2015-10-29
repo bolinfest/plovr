@@ -37,11 +37,12 @@ public final class SharedRuntime {
    */
   public static boolean equal(SoyValue operand0, SoyValue operand1) {
     // Treat the case where either is a string specially.
+    // TODO(gboyer): This should probably handle SanitizedContent == SanitizedContent, even though
     if (operand0 instanceof StringData) {
-      return compareString((StringData) operand0, operand1);
+      return compareString(operand0.stringValue(), operand1);
     }
     if (operand1 instanceof StringData) {
-      return compareString((StringData) operand1, operand0);
+      return compareString(operand1.stringValue(), operand0);
     }
     return Objects.equals(operand0, operand1);
   }
@@ -50,15 +51,14 @@ public final class SharedRuntime {
    * Performs the {@code +} operator on the two values.
    */
   public static SoyValue plus(SoyValue operand0, SoyValue operand1) {
-    // Treat the case where either is a string specially.
     if (operand0 instanceof IntegerData && operand1 instanceof IntegerData) {
       return IntegerData.forValue(operand0.longValue() + operand1.longValue());
-    } else if (operand0 instanceof StringData || operand1 instanceof StringData) {
-      // String concatenation. Note we're calling toString() instead of stringValue() in case one
-      // of the operands needs to be coerced to a string.
-      return StringData.forValue(operand0.toString() + operand1);
-    } else {
+    } else if (operand0 instanceof NumberData && operand1 instanceof NumberData) {
       return FloatData.forValue(operand0.numberValue() + operand1.numberValue());
+    } else {
+      // String concatenation is the fallback for other types (like in JS). Use the implemented
+      // coerceToString() for the type.
+      return StringData.forValue(operand0.coerceToString() + operand1.coerceToString());
     }
   }
 
@@ -123,16 +123,16 @@ public final class SharedRuntime {
   /**
    * Determines if the operand's string form can be equality-compared with a string.
    */
-  private static boolean compareString(StringData stringData, SoyValue other) {
+  public static boolean compareString(String string, SoyValue other) {
     // This follows similarly to the Javascript specification, to ensure similar operation
     // over Javascript and Java: http://www.ecma-international.org/ecma-262/5.1/#sec-11.9.3
     if (other instanceof StringData || other instanceof SanitizedContent) {
-      return stringData.stringValue().equals(other.toString());
+      return string.equals(other.toString());
     }
     if (other instanceof NumberData) {
       try {
         // Parse the string as a number.
-        return Double.parseDouble(stringData.stringValue()) == other.numberValue();
+        return Double.parseDouble(string) == other.numberValue();
       } catch (NumberFormatException nfe) {
         // Didn't parse as a number.
         return false;

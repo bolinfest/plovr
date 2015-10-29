@@ -49,6 +49,9 @@ class SimpleDefinitionFinder implements CompilerPass, DefinitionProvider {
   private final Map<Node, DefinitionSite> definitionSiteMap;
   private final Multimap<String, Definition> nameDefinitionMultimap;
   private final Multimap<String, UseSite> nameUseSiteMultimap;
+  // The same defFinder can be used by multiple passes, but its process method
+  // must be run only once
+  private boolean hasProcessBeenRun = false;
 
   public SimpleDefinitionFinder(AbstractCompiler compiler) {
     this.compiler = compiler;
@@ -103,11 +106,15 @@ class SimpleDefinitionFinder implements CompilerPass, DefinitionProvider {
 
   @Override
   public void process(Node externs, Node source) {
-    NodeTraversal.traverse(
+    if (this.hasProcessBeenRun) {
+      return;
+    }
+    this.hasProcessBeenRun = true;
+    NodeTraversal.traverseEs6(
         compiler, externs, new DefinitionGatheringCallback(true));
-    NodeTraversal.traverse(
+    NodeTraversal.traverseEs6(
         compiler, source, new DefinitionGatheringCallback(false));
-    NodeTraversal.traverse(
+    NodeTraversal.traverseEs6(
         compiler, source, new UseSiteGatheringCallback());
   }
 
@@ -382,7 +389,7 @@ class SimpleDefinitionFinder implements CompilerPass, DefinitionProvider {
    */
   static boolean isSimpleFunctionDeclaration(Node fn) {
     Node parent = fn.getParent();
-    Node gramps = parent.getParent();
+    Node grandparent = parent.getParent();
 
     // Simple definition finder doesn't provide useful results in some
     // cases, specifically:
@@ -412,7 +419,7 @@ class SimpleDefinitionFinder implements CompilerPass, DefinitionProvider {
     // example: a = function(){};
     // example: var a = function(){};
     return fn.getFirstChild().getString().isEmpty()
-        && (NodeUtil.isExprAssign(gramps) || parent.isName());
+        && (NodeUtil.isExprAssign(grandparent) || parent.isName());
   }
 
   /**

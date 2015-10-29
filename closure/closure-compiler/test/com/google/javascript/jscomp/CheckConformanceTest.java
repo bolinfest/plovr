@@ -37,35 +37,38 @@ public final class CheckConformanceTest extends CompilerTestCase {
   private String configuration;
 
   private static final String EXTERNS =
-      "/** @constructor */ var Window;\n" +
-      "/** @type {Window} */ var window;\n" +
-      "var Object;\n" +
-      "/** @constructor */ var Arguments;\n" +
-      "Arguments.prototype.callee;\n" +
-      "Arguments.prototype.caller;\n" +
-      "/** @type {Arguments} */ var arguments;\n" +
-      "/** @constructor \n" +
-      " * @param {*=} opt_message\n" +
-      " * @param {*=} opt_file\n" +
-      " * @param {*=} opt_line\n" +
-      " * @return {!Error} \n" +
-      "*/" +
-      "var Error;" +
-      "var alert;" +
-      "var unknown;";
+      LINE_JOINER.join(
+          "/** @constructor */ var Window;",
+          "/** @type {Window} */ var window;",
+          "var Object;",
+          "/** @constructor */ var Arguments;",
+          "Arguments.prototype.callee;",
+          "Arguments.prototype.caller;",
+          "/** @type {Arguments} */ var arguments;",
+          "/** @constructor ",
+          " * @param {*=} opt_message",
+          " * @param {*=} opt_file",
+          " * @param {*=} opt_line",
+          " * @return {!Error}",
+          "*/",
+          "var Error;",
+          "var alert;",
+          "var unknown;",
+          "/** @constructor */ var ObjectWithNoProps;");
 
   private static final String DEFAULT_CONFORMANCE =
-      "requirement: {\n" +
-      "  type: BANNED_NAME\n" +
-      "  value: 'eval'\n" +
-      "   error_message: 'eval is not allowed'\n" +
-      "}\n" +
-      "" +
-      "requirement: {\n" +
-      "  type: BANNED_PROPERTY\n" +
-      "  value: 'Arguments.prototype.callee'\n" +
-      "  error_message: 'Arguments.prototype.callee is not allowed'\n" +
-      "}\n";
+      LINE_JOINER.join(
+          "requirement: {",
+          "  type: BANNED_NAME",
+          "  value: 'eval'",
+          "   error_message: 'eval is not allowed'",
+          "}",
+          "",
+          "requirement: {",
+          "  type: BANNED_PROPERTY",
+          "  value: 'Arguments.prototype.callee'",
+          "  error_message: 'Arguments.prototype.callee is not allowed'",
+          "}");
 
   public CheckConformanceTest() {
     super(EXTERNS, true);
@@ -76,8 +79,7 @@ public final class CheckConformanceTest extends CompilerTestCase {
 
   @Override
   protected CompilerOptions getOptions() {
-    CompilerOptions options = new CompilerOptions();
-    super.getOptions(options);
+    CompilerOptions options = super.getOptions();
     options.setWarningLevel(
         DiagnosticGroups.MISSING_PROPERTIES, CheckLevel.OFF);
     options.setCodingConvention(getCodingConvention());
@@ -87,7 +89,7 @@ public final class CheckConformanceTest extends CompilerTestCase {
   @Override
   protected void setUp() throws Exception {
     super.setUp();
-    super.enableTypeCheck(CheckLevel.OFF);
+    super.enableTypeCheck();
     super.enableClosurePass();
     configuration = DEFAULT_CONFORMANCE;
   }
@@ -323,7 +325,8 @@ public final class CheckConformanceTest extends CompilerTestCase {
         EXTERNS,
         "foo.blink();",
         CheckConformance.CONFORMANCE_POSSIBLE_VIOLATION,
-        "Possible violation: blink is annoying");
+        "Possible violation: blink is annoying\n"
+        + "The type information available for this expression is too loose to ensure conformance.");
   }
 
   public void testBannedDep1() {
@@ -341,39 +344,99 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "Violation: testcode is not allowed");
   }
 
-  public void testBannedProperty() {
-    configuration =
-        "requirement: {\n" +
-        "  type: BANNED_PROPERTY\n" +
-        "  value: 'C.prototype.p'\n" +
-        "  error_message: 'C.p is not allowed'\n" +
-        "}";
+  private void testConformance(String src1, String src2) {
+    testConformance(src1, src2, null);
+  }
 
-    String declarations =
-        "/** @constructor */ function C() {}\n" +
-        "/** @type {string} */\n" +
-        "C.prototype.p;\n" +
-        "/** @constructor */ function D() {}\n" +
-        "/** @type {string} */\n" +
-        "D.prototype.p;\n";
+  private void testConformance(String src1, String src2, DiagnosticType warning) {
+    ImmutableList<SourceFile> input = ImmutableList.of(
+            SourceFile.fromCode("SRC1", src1),
+            SourceFile.fromCode("SRC2", src2));
+    test(input, input, null, warning);
+  }
 
-    testSame(
-        declarations + "var d = new D(); d.p = 'boo';");
+  public void testBannedProperty0() {
+    configuration = LINE_JOINER.join(
+        "requirement: {",
+        "  type: BANNED_PROPERTY",
+        "  value: 'C.prototype.p'",
+        "  error_message: 'C.p is not allowed'",
+        "  whitelist: 'SRC1'",
+        "}");
 
-    testSame(
-        declarations + "var c = new C(); c.p = 'boo';",
+    String cDecl = LINE_JOINER.join(
+        "/** @constructor */",
+        "function C() {}",
+        "/** @type {string} */",
+        "C.prototype.p;");
+
+    String dDecl = LINE_JOINER.join(
+        "/** @constructor */ function D() {}",
+        "/** @type {string} */",
+        "D.prototype.p;");
+
+    testConformance(cDecl, dDecl);
+  }
+
+  public void testBannedProperty1() {
+    configuration = LINE_JOINER.join(
+        "requirement: {",
+        "  type: BANNED_PROPERTY",
+        "  value: 'C.prototype.p'",
+        "  error_message: 'C.p is not allowed'",
+        "  whitelist: 'SRC1'",
+        "}");
+
+    String cDecl = LINE_JOINER.join(
+        "/** @constructor */",
+        "function C() {",
+        "  this.p = 'str';",
+        "}");
+
+    String dDecl = LINE_JOINER.join(
+        "/** @constructor */",
+        "function D() {",
+        "  this.p = 'str';",
+        "}");
+
+    testConformance(cDecl, dDecl);
+  }
+
+  public void testBannedProperty2() {
+    configuration = LINE_JOINER.join(
+        "requirement: {",
+        "  type: BANNED_PROPERTY",
+        "  value: 'C.prototype.p'",
+        "  error_message: 'C.p is not allowed'",
+        "  whitelist: 'SRC1'",
+        "}");
+
+    String declarations = LINE_JOINER.join(
+        "/** @constructor */ function SC() {}",
+        "/** @constructor @extends {SC} */",
+        "function C() {}",
+        "/** @type {string} */",
+        "C.prototype.p;",
+        "/** @constructor */ function D() {}",
+        "/** @type {string} */",
+        "D.prototype.p;");
+
+    testConformance(declarations, "var d = new D(); d.p = 'boo';");
+
+    testConformance(declarations, "var c = new C(); c.p = 'boo';",
         CheckConformance.CONFORMANCE_VIOLATION);
 
-    testSame(
-        declarations + "var c = new C(); var foo = c.p;",
+    // Accessing property through a super type is possibily a violation.
+    testConformance(declarations, "var sc = new SC(); sc.p = 'boo';",
+        CheckConformance.CONFORMANCE_POSSIBLE_VIOLATION);
+
+    testConformance(declarations, "var c = new C(); var foo = c.p;",
         CheckConformance.CONFORMANCE_VIOLATION);
 
-    testSame(
-        declarations + "var c = new C(); var foo = 'x' + c.p;",
+    testConformance(declarations, "var c = new C(); var foo = 'x' + c.p;",
         CheckConformance.CONFORMANCE_VIOLATION);
 
-    testSame(
-        declarations + "var c = new C(); c['p'] = 'boo';",
+    testConformance(declarations, "var c = new C(); c['p'] = 'boo';",
         CheckConformance.CONFORMANCE_VIOLATION);
   }
 
@@ -918,16 +981,23 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "function f() {goog.asserts.assertInstanceof(this, Error);}");
   }
 
-  private String config(String rule, String message) {
-    return "requirement: {\n"
+  private String config(String rule, String message, String... fields) {
+    String result = "requirement: {\n"
         + "  type: CUSTOM\n"
-        + "  java_class: '" + rule + "'\n"
-        + "  error_message: '" + message + "'\n"
-        + "}";
+        + "  java_class: '" + rule + "'\n";
+    for (String field : fields) {
+      result += field;
+    }
+    result += "  error_message: '" + message + "'\n" + "}";
+    return result;
   }
 
   private String rule(String rule) {
     return "com.google.javascript.jscomp.ConformanceRules$" + rule;
+  }
+
+  private String value(String value) {
+    return "  value: '" + value + "'\n";
   }
 
   public void testCustomBanUnknownThisProp1() {
@@ -948,6 +1018,72 @@ public final class CheckConformanceTest extends CompilerTestCase {
         EXTERNS,
         "/** @constructor */ function f() {}"
         + "f.prototype.method = function() { this.prop = foo; };",
+        null);
+  }
+
+  public void testCustomBanUnknownProp1() {
+    configuration =
+        config(rule("BanUnknownTypedClassPropsReferences"), "My rule message", value("String"));
+
+    testSame(
+        EXTERNS,
+        "/** @constructor */ function f() {};"
+            + "f.prototype.method = function() { alert(this.prop); }",
+        CheckConformance.CONFORMANCE_VIOLATION,
+        "Violation: My rule message\nThe property \"prop\" on type \"f\"");
+  }
+
+  public void testCustomBanUnknownProp2() {
+    configuration =
+        config(rule("BanUnknownTypedClassPropsReferences"), "My rule message", value("String"));
+
+    testSame(
+        EXTERNS,
+        LINE_JOINER.join(
+            "/** @param {ObjectWithNoProps} a */", "function f(a) { alert(a.foobar); };"),
+        CheckConformance.CONFORMANCE_VIOLATION,
+        "Violation: My rule message\nThe property \"foobar\" on type \"(ObjectWithNoProps|null)\"");
+  }
+
+  public void testCustomBanUnknownProp3() {
+    configuration =
+        config(rule("BanUnknownTypedClassPropsReferences"), "My rule message", value("String"));
+
+    testSame(
+        EXTERNS,
+        "/** @constructor */ function f() {}"
+            + "f.prototype.method = function() { this.prop = foo; };",
+        null);
+  }
+
+  public void testCustomBanUnknownInterfaceProp1() {
+    configuration =
+        config(rule("BanUnknownTypedClassPropsReferences"), "My rule message", value("String"));
+
+    testSame(
+        EXTERNS,
+        LINE_JOINER.join(
+            "/** @interface */ function I() {}",
+            "I.prototype.method = function() {};",
+            "/** @param {!I} a */ function f(a) {",
+            "  a.gak();",
+            "}"),
+        CheckConformance.CONFORMANCE_VIOLATION,
+        "Violation: My rule message\nThe property \"gak\" on type \"I\"");
+  }
+
+  public void testCustomBanUnknownInterfaceProp2() {
+    configuration =
+        config(rule("BanUnknownTypedClassPropsReferences"), "My rule message", value("String"));
+
+    testSame(
+        EXTERNS,
+        LINE_JOINER.join(
+            "/** @interface */ function I() {}",
+            "I.prototype.method = function() {};",
+            "/** @param {I} a */ function f(a) {",
+            "  a.method();",
+            "}"),
         null);
   }
 
@@ -1161,6 +1297,12 @@ public final class CheckConformanceTest extends CompilerTestCase {
     testSame(
         EXTERNS,
         "/** @param {string|null} n */ function f(n) { alert(n['prop']); }",
+        CheckConformance.CONFORMANCE_VIOLATION,
+        "Violation: My rule message");
+
+    testSame(
+        EXTERNS,
+        "/** @param {string|null} n */ function f(n) { alert('prop' in n); }",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: My rule message");
 

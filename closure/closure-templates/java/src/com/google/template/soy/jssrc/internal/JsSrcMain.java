@@ -31,17 +31,16 @@ import com.google.template.soy.internal.i18n.SoyBidiUtils;
 import com.google.template.soy.jssrc.SoyJsSrcOptions;
 import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.msgs.internal.InsertMsgsVisitor;
-import com.google.template.soy.msgs.internal.InsertMsgsVisitor.EncounteredPlrselMsgException;
+import com.google.template.soy.passes.IjDataQueries;
 import com.google.template.soy.shared.internal.ApiCallScopeUtils;
 import com.google.template.soy.shared.internal.GuiceSimpleScope;
+import com.google.template.soy.shared.internal.GuiceSimpleScope.WithScope;
 import com.google.template.soy.shared.internal.MainEntryPointUtils;
 import com.google.template.soy.shared.restricted.ApiCallScopeBindingAnnotations.ApiCall;
 import com.google.template.soy.shared.restricted.ApiCallScopeBindingAnnotations.IsUsingIjData;
-import com.google.template.soy.sharedpasses.IsUsingIjDataVisitor;
 import com.google.template.soy.sharedpasses.opti.SimplifyVisitor;
 import com.google.template.soy.soytree.SoyFileNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
-import com.google.template.soy.soytree.SoySyntaxExceptionUtils;
 
 import java.io.File;
 import java.io.IOException;
@@ -109,18 +108,14 @@ public class JsSrcMain {
    *     source.
    * @return A list of strings where each string represents the JS source code that belongs in one
    *     JS file. The generated JS files correspond one-to-one to the original Soy source files.
-   * @throws SoySyntaxException If a syntax error is found.
    */
   public List<String> genJsSrc(
-      SoyFileSetNode soyTree,
-      SoyJsSrcOptions jsSrcOptions,
-      @Nullable SoyMsgBundle msgBundle)
-      throws SoySyntaxException {
+      SoyFileSetNode soyTree, SoyJsSrcOptions jsSrcOptions, @Nullable SoyMsgBundle msgBundle) {
 
     // Generate code with the opt_ijData param if either (a) the user specified the compiler flag
     // --isUsingIjData or (b) any of the Soy code in the file set references injected data.
     boolean isUsingIjData = jsSrcOptions.isUsingIjData()
-        || new IsUsingIjDataVisitor(errorReporter).exec(soyTree);
+        || IjDataQueries.isUsingIj(soyTree);
 
     // Make sure that we don't try to use goog.i18n.bidi when we aren't supposed to use Closure.
     Preconditions.checkState(
@@ -130,8 +125,7 @@ public class JsSrcMain {
         "Do not specify useGoogIsRtlForBidiGlobalDir without either" +
         " shouldProvideRequireSoyNamespaces or shouldProvideRequireJsFunctions.");
 
-    apiCallScope.enter();
-    try {
+    try (WithScope withScope = apiCallScope.enter()) {
       // Seed the scoped parameters.
       apiCallScope.seed(SoyJsSrcOptions.class, jsSrcOptions);
       apiCallScope.seed(Key.get(Boolean.class, IsUsingIjData.class), isUsingIjData);
@@ -142,8 +136,8 @@ public class JsSrcMain {
 
       // Replace MsgNodes.
       if (jsSrcOptions.shouldGenerateGoogMsgDefs()) {
-        new ReplaceMsgsWithGoogMsgsVisitor(errorReporter).exec(soyTree);
-        new MoveGoogMsgDefNodesEarlierVisitor(errorReporter).exec(soyTree);
+        new ReplaceMsgsWithGoogMsgsVisitor().exec(soyTree);
+        new MoveGoogMsgDefNodesEarlierVisitor().exec(soyTree);
         Preconditions.checkState(
             bidiGlobalDir != null,
             "If enabling shouldGenerateGoogMsgDefs, must also set bidi global directionality.");
@@ -151,24 +145,13 @@ public class JsSrcMain {
         Preconditions.checkState(
             bidiGlobalDir == null || bidiGlobalDir.isStaticValue(),
             "If using bidiGlobalIsRtlCodeSnippet, must also enable shouldGenerateGoogMsgDefs.");
-        try {
-          new InsertMsgsVisitor(msgBundle, false /* dontErrorOnPlrselMsgs */, errorReporter)
-              .exec(soyTree);
-        } catch (EncounteredPlrselMsgException e) {
-          throw SoySyntaxExceptionUtils.createWithNode(
-              "JS code generation currently only supports plural/select messages when" +
-                  " shouldGenerateGoogMsgDefs is true.",
-              e.msgNode);
-        }
+        new InsertMsgsVisitor(msgBundle, errorReporter).exec(soyTree);
       }
 
       // Do the code generation.
       optimizeBidiCodeGenVisitorProvider.get().exec(soyTree);
       simplifyVisitor.exec(soyTree);
       return genJsCodeVisitorProvider.get().exec(soyTree);
-
-    } finally {
-      apiCallScope.exit();
     }
   }
 

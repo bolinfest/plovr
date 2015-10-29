@@ -22,7 +22,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import com.google.template.soy.base.internal.BaseUtils;
-import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.exprtree.Operator;
 import com.google.template.soy.msgs.internal.MsgUtils;
@@ -35,6 +34,7 @@ import com.google.template.soy.pysrc.restricted.SoyPySrcPrintDirective;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.CallNode;
 import com.google.template.soy.soytree.CallParamContentNode;
+import com.google.template.soy.soytree.CssNode;
 import com.google.template.soy.soytree.IfCondNode;
 import com.google.template.soy.soytree.IfElseNode;
 import com.google.template.soy.soytree.IfNode;
@@ -86,6 +86,7 @@ public class GenPyExprsVisitor extends AbstractSoyNodeVisitor<List<PyExpr>> {
   private List<PyExpr> pyExprs;
 
 
+
   /**
    * @param soyPySrcDirectivesMap Map of all SoyPySrcPrintDirectives (name to directive).
    */
@@ -97,9 +98,7 @@ public class GenPyExprsVisitor extends AbstractSoyNodeVisitor<List<PyExpr>> {
       MsgFuncGeneratorFactory msgFuncGeneratorFactory,
       TranslateToPyExprVisitorFactory translateToPyExprVisitorFactory,
       GenPyCallExprVisitor genPyCallExprVisitor,
-      ErrorReporter errorReporter,
       @Assisted LocalVariableStack localVarExprs) {
-    super(errorReporter);
     this.soyPySrcDirectivesMap = soyPySrcDirectivesMap;
     this.isComputableAsPyExprVisitor = isComputableAsPyExprVisitor;
     this.genPyExprsVisitorFactory = genPyExprsVisitorFactory;
@@ -162,8 +161,8 @@ public class GenPyExprsVisitor extends AbstractSoyNodeVisitor<List<PyExpr>> {
    * </pre>
    * might generate
    * <pre>
-   *   sanitize.change_newline_to_br(opt_data.get('boo'))
-   *   opt_data.get('goo') + 5
+   *   sanitize.change_newline_to_br(data.get('boo'))
+   *   data.get('goo') + 5
    * </pre>
    */
   @Override protected void visitPrintNode(PrintNode node) {
@@ -206,21 +205,21 @@ public class GenPyExprsVisitor extends AbstractSoyNodeVisitor<List<PyExpr>> {
   }
 
   @Override protected void visitMsgFallbackGroupNode(MsgFallbackGroupNode node) {
-    PyExpr msg = msgFuncGeneratorFactory.create(node.getChild(0), localVarExprs).getPyExpr();
+    PyExpr msg = msgFuncGeneratorFactory.create(node.getMsg(), localVarExprs).getPyExpr();
 
     // MsgFallbackGroupNode could only have one child or two children. See MsgFallbackGroupNode.
-    if (node.numChildren() > 1) {
+    if (node.hasFallbackMsg()) {
       StringBuilder pyExprTextSb = new StringBuilder();
       PyExpr fallbackMsg = msgFuncGeneratorFactory.create(
-          node.getChild(1), localVarExprs).getPyExpr();
+          node.getFallbackMsg(), localVarExprs).getPyExpr();
 
       // Build Python ternary expression: a if cond else c
       pyExprTextSb.append(msg.getText()).append(" if ");
 
       // The fallback message is only used if the first message is not available, but the fallback
       // is. So availability of both messages must be tested.
-      long firstId = MsgUtils.buildMsgPartsAndComputeMsgIdForDualFormat(node.getChild(0)).id;
-      long secondId = MsgUtils.buildMsgPartsAndComputeMsgIdForDualFormat(node.getChild(1)).id;
+      long firstId = MsgUtils.computeMsgIdForDualFormat(node.getMsg());
+      long secondId = MsgUtils.computeMsgIdForDualFormat(node.getFallbackMsg());
       pyExprTextSb.append(PyExprUtils.TRANSLATOR_NAME + ".is_msg_available(" + firstId + ")")
           .append(" or not ")
           .append(PyExprUtils.TRANSLATOR_NAME + ".is_msg_available(" + secondId + ")");
@@ -238,6 +237,20 @@ public class GenPyExprsVisitor extends AbstractSoyNodeVisitor<List<PyExpr>> {
       msg = directive.applyForPySrc(msg, ImmutableList.<PyExpr>of());
     }
     pyExprs.add(msg);
+  }
+
+  @Override protected void visitCssNode(CssNode node) {
+    StringBuilder sb = new StringBuilder("runtime.get_css_name(");
+
+    ExprRootNode componentNameExpr = node.getComponentNameExpr();
+    if (componentNameExpr != null) {
+      TranslateToPyExprVisitor translator = translateToPyExprVisitorFactory.create(localVarExprs);
+      PyExpr basePyExpr = translator.exec(componentNameExpr);
+      sb.append(basePyExpr.getText()).append(", ");
+    }
+
+    sb.append("'").append(node.getSelectorText()).append("')");
+    pyExprs.add(new PyExpr(sb.toString(), Integer.MAX_VALUE));
   }
 
   /**

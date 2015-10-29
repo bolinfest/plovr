@@ -59,8 +59,7 @@ final class ArrowType extends JSType {
   // Whether the return type is inferred.
   final boolean returnTypeInferred;
 
-  ArrowType(JSTypeRegistry registry, Node parameters,
-      JSType returnType) {
+  ArrowType(JSTypeRegistry registry, Node parameters, JSType returnType) {
     this(registry, parameters, returnType, false);
   }
 
@@ -77,7 +76,13 @@ final class ArrowType extends JSType {
   }
 
   @Override
-  public boolean isSubtype(JSType other) {
+  public boolean isSubtype(JSType that) {
+    return isSubtype(that, ImplCache.create());
+  }
+
+  @Override
+  protected boolean isSubtype(JSType other,
+      ImplCache implicitImplCache) {
     if (!(other instanceof ArrowType)) {
       return false;
     }
@@ -88,7 +93,7 @@ final class ArrowType extends JSType {
     // Section 3.4.7: Subtyping Function Types.
 
     // this.returnType <: that.returnType (covariant)
-    if (!this.returnType.isSubtype(that.returnType)) {
+    if (!this.returnType.isSubtype(that.returnType, implicitImplCache)) {
       return false;
     }
 
@@ -118,7 +123,7 @@ final class ArrowType extends JSType {
       JSType thatParamType = thatParam.getJSType();
       if (thisParamType != null) {
         if (thatParamType == null ||
-            !thatParamType.isSubtype(thisParamType)) {
+            !thatParamType.isSubtype(thisParamType, implicitImplCache)) {
           return false;
         }
       }
@@ -169,7 +174,7 @@ final class ArrowType extends JSType {
    * @return True if our parameter spec is equal to {@code that}'s parameter
    *     spec.
    */
-  boolean hasEqualParameters(ArrowType that, EquivalenceMethod eqMethod) {
+  boolean hasEqualParameters(ArrowType that, EquivalenceMethod eqMethod, EqCache eqCache) {
     Node thisParam = parameters.getFirstChild();
     Node otherParam = that.parameters.getFirstChild();
     while (thisParam != null && otherParam != null) {
@@ -178,8 +183,7 @@ final class ArrowType extends JSType {
       if (thisParamType != null) {
         // Both parameter lists give a type for this param, it should be equal
         if (otherParamType != null &&
-            !thisParamType.checkEquivalenceHelper(
-                otherParamType, eqMethod)) {
+            !thisParamType.checkEquivalenceHelper(otherParamType, eqMethod, eqCache)) {
           return false;
         }
       } else {
@@ -206,12 +210,13 @@ final class ArrowType extends JSType {
   }
 
   boolean checkArrowEquivalenceHelper(
-      ArrowType that, EquivalenceMethod eqMethod) {
+      ArrowType that, EquivalenceMethod eqMethod, EqCache eqCache) {
     // Please keep this method in sync with the hashCode() method below.
-    if (!returnType.checkEquivalenceHelper(that.returnType, eqMethod)) {
+    if (!returnType.checkEquivalenceHelper(
+        that.returnType, eqMethod, eqCache)) {
       return false;
     }
-    return hasEqualParameters(that, eqMethod);
+    return hasEqualParameters(that, eqMethod, eqCache);
   }
 
   @Override

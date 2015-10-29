@@ -41,6 +41,7 @@ goog.provide('soydata.SanitizedHtml');
 goog.provide('soydata.SanitizedHtmlAttribute');
 goog.provide('soydata.SanitizedJs');
 goog.provide('soydata.SanitizedJsStrChars');
+goog.provide('soydata.SanitizedTrustedResourceUri');
 goog.provide('soydata.SanitizedUri');
 goog.provide('soydata.VERY_UNSAFE');
 
@@ -52,6 +53,7 @@ goog.require('goog.format');
 goog.require('goog.html.SafeHtml');
 goog.require('goog.html.SafeStyle');
 goog.require('goog.html.SafeUrl');
+goog.require('goog.html.TrustedResourceUrl');
 goog.require('goog.html.uncheckedconversions');
 goog.require('goog.i18n.BidiFormatter');
 goog.require('goog.i18n.bidi');
@@ -59,6 +61,7 @@ goog.require('goog.object');
 goog.require('goog.soy');
 goog.require('goog.soy.data.SanitizedContent');
 goog.require('goog.soy.data.SanitizedContentKind');
+goog.require('goog.soy.data.UnsanitizedText');
 goog.require('goog.string');
 goog.require('goog.string.Const');
 goog.require('goog.string.StringBuffer');
@@ -229,6 +232,28 @@ soydata.SanitizedUri.prototype.contentKind = soydata.SanitizedContentKind.URI;
 /** @override */
 soydata.SanitizedUri.prototype.contentDir = goog.i18n.bidi.Dir.LTR;
 
+/**
+ * Content of type {@link soydata.SanitizedContentKind.TRUSTED_RESOURCE_URI}.
+ *
+ * The content is a TrustedResourceUri chunk that is not under attacker control.
+ * The content direction is LTR.
+ *
+ * @constructor
+ * @extends {goog.soy.data.SanitizedContent}
+ */
+soydata.SanitizedTrustedResourceUri = function() {
+  goog.soy.data.SanitizedContent.call(this);  // Throws an exception.
+};
+goog.inherits(soydata.SanitizedTrustedResourceUri,
+    goog.soy.data.SanitizedContent);
+
+/** @override */
+soydata.SanitizedTrustedResourceUri.prototype.contentKind =
+    soydata.SanitizedContentKind.TRUSTED_RESOURCE_URI;
+
+/** @override */
+soydata.SanitizedTrustedResourceUri.prototype.contentDir =
+    goog.i18n.bidi.Dir.LTR;
 
 /**
  * Content of type {@link soydata.SanitizedContentKind.ATTRIBUTES}.
@@ -285,14 +310,14 @@ soydata.SanitizedCss.prototype.contentDir = goog.i18n.bidi.Dir.LTR;
  * @param {?goog.i18n.bidi.Dir=} opt_contentDir The content direction; null if
  *     unknown and thus to be estimated when necessary. Default: null.
  * @constructor
- * @extends {goog.soy.data.SanitizedContent}
+ * @extends {goog.soy.data.UnsanitizedText}
  */
 soydata.UnsanitizedText = function(content, opt_contentDir) {
   /** @override */
   this.content = String(content);
   this.contentDir = opt_contentDir != null ? opt_contentDir : null;
 };
-goog.inherits(soydata.UnsanitizedText, goog.soy.data.SanitizedContent);
+goog.inherits(soydata.UnsanitizedText, goog.soy.data.UnsanitizedText);
 
 /** @override */
 soydata.UnsanitizedText.prototype.contentKind =
@@ -473,6 +498,24 @@ soydata.VERY_UNSAFE.ordainSanitizedJs =
 soydata.VERY_UNSAFE.ordainSanitizedUri =
     soydata.$$makeSanitizedContentFactoryWithDefaultDirOnly_(
         soydata.SanitizedUri);
+
+
+/**
+ * Takes a leap of faith that the provided content is "safe" to use as a
+ * TrustedResourceUri in a Soy template.
+ *
+ * This creates a Soy SanitizedContent object which indicates to Soy there is
+ * no need to filter it when printed as a TrustedResourceUri.
+ *
+ * @param {*} content A chunk of TrustedResourceUri such as that the caller
+ *     knows is safe to emit in a template.
+ * @return {!soydata.SanitizedTrustedResourceUri} Sanitized content wrapper that
+ *     indicates to Soy not to escape or filter when printed in
+ *     TrustedResourceUri context.
+ */
+soydata.VERY_UNSAFE.ordainSanitizedTrustedResourceUri =
+    soydata.$$makeSanitizedContentFactoryWithDefaultDirOnly_(
+        soydata.SanitizedTrustedResourceUri);
 
 
 /**
@@ -941,6 +984,18 @@ soydata.VERY_UNSAFE.$$ordainSanitizedJsForInternalBlocks =
 
 
 /**
+ * Creates kind="trustedResourceUri" block contents (internal use only).
+ *
+ * @param {*} content Text.
+ * @return {soydata.SanitizedTrustedResourceUri|soydata.$$EMPTY_STRING_} Wrapped
+ *     result.
+ */
+soydata.VERY_UNSAFE.$$ordainSanitizedTrustedResourceUriForInternalBlocks =
+    soydata.$$makeSanitizedContentFactoryWithDefaultDirOnlyForInternalBlocks_(
+        soydata.SanitizedTrustedResourceUri);
+
+
+/**
  * Creates kind="uri" block contents (internal use only).
  *
  * @param {*} content Text.
@@ -1172,6 +1227,20 @@ soy.$$stripHtmlTags = function(value, opt_tagWhitelist) {
 
 
 /**
+ * Make sure that tag boundaries are not broken by Safe CSS when embedded in a
+ * {@code <style>} element.
+ * @param {string} css
+ * @return {string}
+ * @private
+ */
+soy.$$embedCssIntoHtml_ = function(css) {
+  // Port of a method of the same name in
+  // com.google.template.soy.shared.restricted.Sanitizers
+  return css.replace(/<\//g, '<\\/').replace(/\]\]>/g, ']]\\>');
+};
+
+
+/**
  * Throw out any close tags that don't correspond to start tags.
  * If {@code <table>} is used for formatting, embedded HTML shouldn't be able
  * to use a mismatched {@code </table>} to break page layout.
@@ -1395,13 +1464,12 @@ soy.$$pctEncode_ = function(ch) {
  * @return {string} An escaped version of value.
  */
 soy.$$escapeUri = function(value) {
-  if (soydata.isContentKind(value, soydata.SanitizedContentKind.URI)) {
-    goog.asserts.assert(value.constructor === soydata.SanitizedUri);
-    return soy.$$normalizeUri(value);
-  }
-  if (value instanceof goog.html.SafeUrl) {
-    return soy.$$normalizeUri(goog.html.SafeUrl.unwrap(value));
-  }
+  // NOTE: We don't check for SanitizedUri or SafeUri, because just because
+  // something is already a valid complete URL doesn't mean we don't want to
+  // encode it as a component.  For example, it would be bad if
+  // ?redirect={$url} didn't escape ampersands, because in that template, the
+  // continue URL should be treated as a single unit.
+
   // Apostophes and parentheses are not matched by encodeURIComponent.
   // They are technically special in URIs, but only appear in the obsolete mark
   // production in Appendix D.2 of RFC 3986, so can be encoded without changing
@@ -1443,7 +1511,49 @@ soy.$$filterNormalizeUri = function(value) {
   if (value instanceof goog.html.SafeUrl) {
     return soy.$$normalizeUri(goog.html.SafeUrl.unwrap(value));
   }
+  if (value instanceof goog.html.TrustedResourceUrl) {
+    return soy.$$normalizeUri(goog.html.TrustedResourceUrl.unwrap(value));
+  }
   return soy.esc.$$filterNormalizeUriHelper(value);
+};
+
+
+/**
+ * Vets a URI for usage as an image source.
+ *
+ * @param {*} value The value to filter. Might not be a string, but the value
+ *     will be coerced to a string.
+ * @return {string} An escaped version of value.
+ */
+soy.$$filterNormalizeMediaUri = function(value) {
+  // Image URIs are filtered strictly more loosely than other types of URIs.
+  if (soydata.isContentKind(value, soydata.SanitizedContentKind.URI)) {
+    goog.asserts.assert(value.constructor === soydata.SanitizedUri);
+    return soy.$$normalizeUri(value);
+  }
+  if (value instanceof goog.html.SafeUrl) {
+    return soy.$$normalizeUri(goog.html.SafeUrl.unwrap(value));
+  }
+  if (value instanceof goog.html.TrustedResourceUrl) {
+    return soy.$$normalizeUri(goog.html.TrustedResourceUrl.unwrap(value));
+  }
+  return soy.esc.$$filterNormalizeMediaUriHelper(value);
+};
+
+
+/**
+ * Vets a URI for usage as a resource.
+ *
+ * @param {*} value The value to filter. Might not be a string, but the value
+ *     will be coerced to a string.
+ * @return {*} current just the value.
+ */
+soy.$$filterTrustedResourceUri = function(value) {
+  // Makes sure this is a compile time constant or a TrustedResouce not in
+  // attacker's control.
+  // TODO(shwetakarwa): This needs to be changed once all the legacy URLs are
+  // taken care of.
+  return value;
 };
 
 
@@ -1483,14 +1593,14 @@ soy.$$escapeCssString = function(value) {
 soy.$$filterCssValue = function(value) {
   if (soydata.isContentKind(value, soydata.SanitizedContentKind.CSS)) {
     goog.asserts.assert(value.constructor === soydata.SanitizedCss);
-    return value.getContent();
+    return soy.$$embedCssIntoHtml_(value.getContent());
   }
   // Uses == to intentionally match null and undefined for Java compatibility.
   if (value == null) {
     return '';
   }
   if (value instanceof goog.html.SafeStyle) {
-    return goog.html.SafeStyle.unwrap(value);
+    return soy.$$embedCssIntoHtml_(goog.html.SafeStyle.unwrap(value));
   }
   return soy.esc.$$filterCssValueHelper(value);
 };
@@ -2023,7 +2133,7 @@ soy.esc.$$REPLACER_FOR_ESCAPE_CSS_STRING_ = function(ch) {
  * Maps characters to the escaped versions for the named escape directives.
  * @private {!Object<string, string>}
  */
-soy.esc.$$ESCAPE_MAP_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_ = {
+soy.esc.$$ESCAPE_MAP_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI__AND__FILTER_NORMALIZE_MEDIA_URI_ = {
   '\x00': '%00',
   '\x01': '%01',
   '\x02': '%02',
@@ -2097,8 +2207,8 @@ soy.esc.$$ESCAPE_MAP_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_ = {
  * @return {string} A token in the output language.
  * @private
  */
-soy.esc.$$REPLACER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_ = function(ch) {
-  return soy.esc.$$ESCAPE_MAP_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_[ch];
+soy.esc.$$REPLACER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI__AND__FILTER_NORMALIZE_MEDIA_URI_ = function(ch) {
+  return soy.esc.$$ESCAPE_MAP_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI__AND__FILTER_NORMALIZE_MEDIA_URI_[ch];
 };
 
 /**
@@ -2141,7 +2251,7 @@ soy.esc.$$MATCHER_FOR_ESCAPE_CSS_STRING_ = /[\x00\x08-\x0d\x22\x26-\x2a\/\x3a-\x
  * Matches characters that need to be escaped for the named directives.
  * @private {!RegExp}
  */
-soy.esc.$$MATCHER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_ = /[\x00- \x22\x27-\x29\x3c\x3e\\\x7b\x7d\x7f\x85\xa0\u2028\u2029\uff01\uff03\uff04\uff06-\uff0c\uff0f\uff1a\uff1b\uff1d\uff1f\uff20\uff3b\uff3d]/g;
+soy.esc.$$MATCHER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI__AND__FILTER_NORMALIZE_MEDIA_URI_ = /[\x00- \x22\x27-\x29\x3c\x3e\\\x7b\x7d\x7f\x85\xa0\u2028\u2029\uff01\uff03\uff04\uff06-\uff0c\uff0f\uff1a\uff1b\uff1d\uff1f\uff20\uff3b\uff3d]/g;
 
 /**
  * A pattern that vets values produced by the named directives.
@@ -2159,13 +2269,19 @@ soy.esc.$$FILTER_FOR_FILTER_NORMALIZE_URI_ = /^(?![^#?]*\/(?:\.|%2E){2}(?:[\/?#]
  * A pattern that vets values produced by the named directives.
  * @private {!RegExp}
  */
+soy.esc.$$FILTER_FOR_FILTER_NORMALIZE_MEDIA_URI_ = /^[^&:\/?#]*(?:[\/?#]|$)|^https?:|^data:image\/[a-z0-9+]+;base64,[a-z0-9+\/]+=*$|^blob:/i;
+
+/**
+ * A pattern that vets values produced by the named directives.
+ * @private {!RegExp}
+ */
 soy.esc.$$FILTER_FOR_FILTER_IMAGE_DATA_URI_ = /^data:image\/(?:bmp|gif|jpe?g|png|tiff|webp);base64,[a-z0-9+\/]+=*$/i;
 
 /**
  * A pattern that vets values produced by the named directives.
  * @private {!RegExp}
  */
-soy.esc.$$FILTER_FOR_FILTER_HTML_ATTRIBUTES_ = /^(?!style|on|action|archive|background|cite|classid|codebase|data|dsync|href|longdesc|src|usemap)(?:[a-z0-9_$:-]*)$/i;
+soy.esc.$$FILTER_FOR_FILTER_HTML_ATTRIBUTES_ = /^(?!on|src|(?:style|action|archive|background|cite|classid|codebase|data|dsync|href|longdesc|usemap)\s*$)(?:[a-z0-9_$:-]*)$/i;
 
 /**
  * A pattern that vets values produced by the named directives.
@@ -2267,8 +2383,8 @@ soy.esc.$$filterCssValueHelper = function(value) {
 soy.esc.$$normalizeUriHelper = function(value) {
   var str = String(value);
   return str.replace(
-      soy.esc.$$MATCHER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_,
-      soy.esc.$$REPLACER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_);
+      soy.esc.$$MATCHER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI__AND__FILTER_NORMALIZE_MEDIA_URI_,
+      soy.esc.$$REPLACER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI__AND__FILTER_NORMALIZE_MEDIA_URI_);
 };
 
 /**
@@ -2283,8 +2399,24 @@ soy.esc.$$filterNormalizeUriHelper = function(value) {
     return '#zSoyz';
   }
   return str.replace(
-      soy.esc.$$MATCHER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_,
-      soy.esc.$$REPLACER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_);
+      soy.esc.$$MATCHER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI__AND__FILTER_NORMALIZE_MEDIA_URI_,
+      soy.esc.$$REPLACER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI__AND__FILTER_NORMALIZE_MEDIA_URI_);
+};
+
+/**
+ * A helper for the Soy directive |filterNormalizeMediaUri
+ * @param {*} value Can be of any type but will be coerced to a string.
+ * @return {string} The escaped text.
+ */
+soy.esc.$$filterNormalizeMediaUriHelper = function(value) {
+  var str = String(value);
+  if (!soy.esc.$$FILTER_FOR_FILTER_NORMALIZE_MEDIA_URI_.test(str)) {
+    goog.asserts.fail('Bad value `%s` for |filterNormalizeMediaUri', [str]);
+    return 'about:invalid#zSoyz';
+  }
+  return str.replace(
+      soy.esc.$$MATCHER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI__AND__FILTER_NORMALIZE_MEDIA_URI_,
+      soy.esc.$$REPLACER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI__AND__FILTER_NORMALIZE_MEDIA_URI_);
 };
 
 /**
