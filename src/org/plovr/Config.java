@@ -178,6 +178,8 @@ public final class Config implements Comparable<Config> {
 
   private final PrintStream errorStream;
 
+  private final List<LocationMapping> locationMappings;
+
   /**
    * @param id Unique identifier for the configuration. This is used as an
    *        argument to the &lt;script> tag that loads the compiled code.
@@ -232,7 +234,8 @@ public final class Config implements Comparable<Config> {
       String gssFunctionMapProviderClassName,
       File cssOutputFile,
       JobDescription.OutputFormat cssOutputFormat,
-      PrintStream errorStream) {
+      PrintStream errorStream,
+      List<LocationMapping> locationMappings) {
     Preconditions.checkNotNull(defines);
 
     this.id = id;
@@ -285,6 +288,7 @@ public final class Config implements Comparable<Config> {
     this.cssOutputFile = cssOutputFile;
     this.cssOutputFormat = cssOutputFormat;
     this.errorStream = Preconditions.checkNotNull(errorStream);
+    this.locationMappings = locationMappings;
   }
 
   public static Builder builder(File relativePathBase, File configFile,
@@ -717,10 +721,6 @@ public final class Config implements Comparable<Config> {
     options.setExternExports(true);
 
     // Add location mapping for paths in source map.
-    // TODO: Allow an option for generating the "sourceRoot" member in source
-    // maps. See http://code.google.com/p/closure-compiler/issues/detail?id=770
-    List<LocationMapping> locationMappings = Arrays.asList(
-        new LocationMapping("", "/input/" + getId() + "/"));
     options.setSourceMapLocationMappings(locationMappings);
 
     if (getTreatWarningsAsErrors()) {
@@ -1028,6 +1028,8 @@ public final class Config implements Comparable<Config> {
 
     private PrintStream errorStream = System.err;
 
+    private List<LocationMapping> locationMappings = Lists.newArrayList();
+
     /**
      * Pattern to validate a config id. A config id may not contain funny
      * characters, such as slashes, because ids are used in RESTful URLs, so
@@ -1123,7 +1125,7 @@ public final class Config implements Comparable<Config> {
     public void setId(String id) {
       Preconditions.checkNotNull(id);
       Preconditions.checkArgument(ID_PATTERN.matcher(id).matches(),
-          String.format("Not a valid config id: %s", id));
+              String.format("Not a valid config id: %s", id));
       this.id = id;
     }
 
@@ -1343,6 +1345,18 @@ public final class Config implements Comparable<Config> {
 
     public void setFingerprintJsFiles(boolean fingerprint) {
       this.fingerprintJsFiles = fingerprint;
+    }
+
+    public void setLocationMappings(JsonObject locationMappings) {
+      if ( locationMappings != null ) {
+        Set<Map.Entry<String, JsonElement>> entries = locationMappings.entrySet();
+        for (Map.Entry<String, JsonElement> entry : entries) {
+          String prefix = entry.getKey();
+          String replacement = entry.getValue().getAsString();
+          replacement = replacement.replace("%s", id);
+          this.locationMappings.add(new LocationMapping(prefix, replacement));
+        }
+      }
     }
 
     /**
@@ -1598,7 +1612,8 @@ public final class Config implements Comparable<Config> {
           gssFunctionMapProviderClassName,
           cssOutputFile,
           cssOutputFormat,
-          errorStream);
+          errorStream,
+          locationMappings);
 
       return config;
     }
