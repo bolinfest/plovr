@@ -208,17 +208,10 @@ public enum ConfigOption {
     }
   }),
 
-  ADD_SOURCEMAP_URL("add-sourcemap-url", new ConfigUpdater() {
+  SOURCE_MAP_BASE_URL("source-map-base-url", new ConfigUpdater() {
     @Override
-    public void apply(boolean addSourceMapUrl, Config.Builder builder) {
-      builder.setAddSourceMapUrl(addSourceMapUrl);
-  }
-
-    @Override
-    public boolean update(String addSourceMapUrlParam, Config.Builder builder) {
-      boolean addSourceMapUrl = Boolean.valueOf(addSourceMapUrlParam);
-      builder.setAddSourceMapUrl(addSourceMapUrl);
-      return true;
+    public void apply(String sourceMapBaseUrl, Config.Builder builder) {
+      builder.setSourceMapBaseUrl(sourceMapBaseUrl);
     }
   }),
 

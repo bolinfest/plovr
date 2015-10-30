@@ -494,7 +494,7 @@ public final class ModuleConfig {
 
     private List<String> topologicalSort;
 
-    private String sourceMapName = "%s";
+    private String sourceMapName = "%s.map";
 
     // Either moduleInfoPath will be assigned in the constructor, or
     // infoPath will be defined later and will be used to create a

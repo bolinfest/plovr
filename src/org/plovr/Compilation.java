@@ -364,8 +364,8 @@ public final class Compilation {
       }
 
       String sourceMapFileName = config.getModuleConfig().getSourceMapName().replace("%s", moduleName);
-      if ( config.getAddSourceMapUrl() ) {
-        moduleCode += "\n//# sourceMappingURL=" + sourceMapFileName + "\n";
+      if ( config.getSourceMapBaseUrl() != null ) {
+        moduleCode += "\n//# sourceMappingURL=" + config.getSourceMapBaseUrl() + sourceMapFileName + "\n";
       }
 
       Files.write(moduleCode, outputFile);
