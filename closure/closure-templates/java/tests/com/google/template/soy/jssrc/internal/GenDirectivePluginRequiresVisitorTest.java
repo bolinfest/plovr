@@ -18,10 +18,10 @@ package com.google.template.soy.jssrc.internal;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.template.soy.SoyFileSetParserBuilder;
-import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.SoyLibraryAssistedJsSrcPrintDirective;
 import com.google.template.soy.shared.SharedTestUtils;
@@ -41,7 +41,7 @@ public class GenDirectivePluginRequiresVisitorTest extends TestCase {
 
 
   private static class TestPrintDirective implements SoyLibraryAssistedJsSrcPrintDirective {
-    public ImmutableSet<String> getRequiredJsLibNames() {
+    @Override public ImmutableSet<String> getRequiredJsLibNames() {
       return ImmutableSet.of("test.closure.name");
     }
 
@@ -64,7 +64,7 @@ public class GenDirectivePluginRequiresVisitorTest extends TestCase {
 
 
   private static class AnotherTestPrintDirective implements SoyLibraryAssistedJsSrcPrintDirective {
-    public ImmutableSet<String> getRequiredJsLibNames() {
+    @Override public ImmutableSet<String> getRequiredJsLibNames() {
       return ImmutableSet.of("another.closure.name");
     }
 
@@ -92,32 +92,32 @@ public class GenDirectivePluginRequiresVisitorTest extends TestCase {
 
 
   public void testUnmatchedDirective() {
-    assertGeneratedLibs(
-        ImmutableSet.<String>of(),
-        "{$boo |goosfraba}\n");
+    assertGeneratedLibs(ImmutableSet.<String>of(), "{@param boo : ?}", "{$boo |goosfraba}\n");
   }
 
 
   public void testSingleDirective() {
-    assertGeneratedLibs(
-        ImmutableSet.of("test.closure.name"),
-        "{$boo |test}\n");
+    assertGeneratedLibs(ImmutableSet.of("test.closure.name"), "{@param boo : ?}", "{$boo |test}\n");
   }
 
 
   public void testMultipleDirectives() {
     assertGeneratedLibs(
         ImmutableSet.of("test.closure.name", "another.closure.name"),
+        "{@param boo : ?}",
+        "{@param goo : ?}",
         "{$boo |test}\n{$goo |another}\n");
   }
 
 
-  private static void assertGeneratedLibs(
-      Set<String> expectedLibs, String soyCode) {
-    SoyNode node = SharedTestUtils.getNode(
-        SoyFileSetParserBuilder.forTemplateContents(soyCode).parse());
-    GenDirectivePluginRequiresVisitor gdprv = new GenDirectivePluginRequiresVisitor(
-        testDirectivesMap, ExplodingErrorReporter.get());
+  private static void assertGeneratedLibs(Set<String> expectedLibs, String... soyCodeLines) {
+    SoyNode node =
+        SharedTestUtils.getNode(
+            SoyFileSetParserBuilder.forTemplateContents(Joiner.on('\n').join(soyCodeLines))
+                .parse()
+                .fileSet());
+    GenDirectivePluginRequiresVisitor gdprv =
+        new GenDirectivePluginRequiresVisitor(testDirectivesMap);
     Set<String> actualLibs = gdprv.exec(node);
     assertThat(expectedLibs).isEqualTo(actualLibs);
   }

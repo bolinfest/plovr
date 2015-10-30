@@ -17,6 +17,7 @@
 package com.google.template.soy.soytree;
 
 import com.google.template.soy.base.SourceLocation;
+import com.google.template.soy.basetree.CopyState;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.soytree.SoyNode.ConditionalBlockNode;
 import com.google.template.soy.soytree.SoyNode.LocalVarBlockNode;
@@ -49,9 +50,9 @@ public final class ForeachNonemptyNode extends AbstractBlockNode
    * Copy constructor.
    * @param orig The node to copy.
    */
-  private ForeachNonemptyNode(ForeachNonemptyNode orig) {
-    super(orig);
-    this.var = orig.var.clone();
+  private ForeachNonemptyNode(ForeachNonemptyNode orig, CopyState copyState) {
+    super(orig, copyState);
+    this.var = new LoopVar(orig.var, this);
   }
 
 
@@ -65,7 +66,7 @@ public final class ForeachNonemptyNode extends AbstractBlockNode
   }
 
 
-  public final LoopVar getVar() {
+  @Override public final LoopVar getVar() {
     return var;
   }
 
@@ -99,8 +100,8 @@ public final class ForeachNonemptyNode extends AbstractBlockNode
   }
 
 
-  @Override public ForeachNonemptyNode clone() {
-    return new ForeachNonemptyNode(this);
+  @Override public ForeachNonemptyNode copy(CopyState copyState) {
+    return new ForeachNonemptyNode(this, copyState);
   }
 
 }

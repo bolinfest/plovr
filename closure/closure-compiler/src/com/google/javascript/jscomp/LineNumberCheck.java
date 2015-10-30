@@ -32,7 +32,7 @@ class LineNumberCheck implements Callback, CompilerPass {
       "No source location information associated with {0}.\n" +
       "Most likely a Node has been created with settings the source file " +
       "and line/column location.  Usually this is done using " +
-      "Node.copyInformationFrom and supplying a Node from the source AST.");
+      "Node.useSourceInfoIfMissingFrom and supplying a Node from the source AST.");
 
   private final AbstractCompiler compiler;
   private boolean requiresLineNumbers = false;
@@ -44,14 +44,14 @@ class LineNumberCheck implements Callback, CompilerPass {
   public void setCheckSubTree(Node root) {
     requiresLineNumbers = true;
 
-    NodeTraversal.traverse(compiler, root, this);
+    NodeTraversal.traverseEs6(compiler, root, this);
   }
 
   @Override
   public void process(Node externs, Node root) {
     requiresLineNumbers = false;
 
-    NodeTraversal.traverse(compiler, root, this);
+    NodeTraversal.traverseEs6(compiler, root, this);
   }
 
   @Override

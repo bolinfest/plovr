@@ -7,5 +7,5 @@ function testBasic() {
 }
 
 function testSoyTemplate() {
-  assertEquals('<h1>Title</h1>', example.templates.header({heading: 'Title'}))
+  assertEquals('<h1>Title</h1>', String(example.templates.header({heading: 'Title'})))
 }

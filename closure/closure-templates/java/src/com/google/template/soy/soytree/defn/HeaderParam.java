@@ -30,6 +30,7 @@ import javax.annotation.concurrent.Immutable;
  */
 @Immutable
 public final class HeaderParam extends TemplateParam {
+  // TODO(brndn): this should have SourceLocation information
 
   /** The original source string for the param type. May be null if unavailable. */
   @Nullable private final String typeSrc;
@@ -46,11 +47,6 @@ public final class HeaderParam extends TemplateParam {
     this.typeSrc = typeSrc;
   }
 
-  private HeaderParam(HeaderParam param) {
-    super(param);
-    this.typeSrc = param.typeSrc;
-  }
-
   @Override public DeclLoc declLoc() {
     return DeclLoc.HEADER;
   }
@@ -60,7 +56,7 @@ public final class HeaderParam extends TemplateParam {
     return typeSrc;
   }
 
-  @Override public HeaderParam cloneEssential() {
+  @Override public HeaderParam copyEssential() {
     // Note: 'typeSrc' and 'desc' are nonessential.
     HeaderParam headerParam = new HeaderParam(name(), null, type, isRequired(), isInjected(), null);
     headerParam.setLocalVariableIndex(localVariableIndex());
@@ -78,9 +74,5 @@ public final class HeaderParam extends TemplateParam {
   @Override public int hashCode() {
     // Note: 'typeSrc' is nonessential.
     return super.abstractHashCode() * 31 + type.hashCode();
-  }
-
-  @Override public HeaderParam clone() {
-    return new HeaderParam(this);
   }
 }

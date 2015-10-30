@@ -19,13 +19,14 @@ package com.google.template.soy.jbcsrc;
 import static com.google.template.soy.jbcsrc.SyntheticVarName.foreachLoopIndex;
 import static com.google.template.soy.jbcsrc.SyntheticVarName.foreachLoopLength;
 
-import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.AbstractReturningExprNodeVisitor;
+import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.FunctionNode;
 import com.google.template.soy.exprtree.MapLiteralNode;
 import com.google.template.soy.exprtree.VarDefn;
 import com.google.template.soy.exprtree.VarRefNode;
-import com.google.template.soy.shared.internal.NonpluginFunction;
+import com.google.template.soy.shared.internal.BuiltinFunction;
+import com.google.template.soy.shared.restricted.SoyFunction;
 import com.google.template.soy.soytree.ForeachNonemptyNode;
 import com.google.template.soy.soytree.SoyNode.LocalVarNode;
 import com.google.template.soy.soytree.defn.InjectedParam;
@@ -38,8 +39,15 @@ import com.google.template.soy.soytree.defn.TemplateParam;
  */
 abstract class EnhancedAbstractExprNodeVisitor<T> extends AbstractReturningExprNodeVisitor<T> {
 
-  protected EnhancedAbstractExprNodeVisitor(ErrorReporter errorReporter) {
-    super(errorReporter);
+  @Override protected final T visit(ExprNode node) {
+    try {
+      return super.visit(node);
+    } catch (UnexpectedCompilerFailureException e) {
+      e.addLocation(node.getSourceLocation());
+      throw e;
+    } catch (Throwable t) {
+      throw new UnexpectedCompilerFailureException(node.getSourceLocation(), t);
+    }
   }
 
   @Override protected final T visitVarRefNode(VarRefNode node) {
@@ -71,14 +79,15 @@ abstract class EnhancedAbstractExprNodeVisitor<T> extends AbstractReturningExprN
   }
 
   @Override protected final T visitFunctionNode(FunctionNode node) {
-    NonpluginFunction nonpluginFn = NonpluginFunction.forFunctionName(node.getFunctionName());
-    if (nonpluginFn != null) {
-      if (nonpluginFn == NonpluginFunction.QUOTE_KEYS_IF_JS) {
+    SoyFunction function = node.getSoyFunction();
+    if (function instanceof BuiltinFunction) {
+      BuiltinFunction nonpluginFn = (BuiltinFunction) function;
+      if (nonpluginFn == BuiltinFunction.QUOTE_KEYS_IF_JS) {
         // this function is a no-op in non JS backends, the CheckFunctionCallsVisitor ensures that
         // there is only one child and it is a MapLiteralNode
         return visitMapLiteralNode((MapLiteralNode) node.getChild(0));
       }
-      if (nonpluginFn == NonpluginFunction.CHECK_NOT_NULL) {
+      if (nonpluginFn == BuiltinFunction.CHECK_NOT_NULL) {
         return visitCheckNotNullFunction(node);
       }
       // the rest of the builtins all deal with indexing operations on foreach variables.
@@ -94,7 +103,7 @@ abstract class EnhancedAbstractExprNodeVisitor<T> extends AbstractReturningExprN
         case INDEX:
           return visitIndexFunction(node, foreachLoopIndex(declaringNode));
         case CHECK_NOT_NULL:  // handled before the switch above
-        case QUOTE_KEYS_IF_JS:  
+        case QUOTE_KEYS_IF_JS:
         default:
           throw new AssertionError();
       }

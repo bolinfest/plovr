@@ -20,6 +20,7 @@ import static com.google.javascript.refactoring.testing.SuggestedFixes.assertCha
 import static com.google.javascript.refactoring.testing.SuggestedFixes.assertReplacement;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
@@ -184,6 +185,36 @@ public class SuggestedFixTest {
     String fnName = "goog.dom.classes.add";
     String newFnName = "goog.dom.classlist.add";
     String input = fnName + "(foo, bar);";
+    Compiler compiler = getCompiler(input);
+    Node root = compileToScriptRoot(compiler);
+    SuggestedFix fix = new SuggestedFix.Builder()
+        .rename(root.getFirstChild().getFirstChild(), newFnName, true)
+        .build();
+    CodeReplacement replacement = new CodeReplacement(0, fnName.length(), newFnName);
+    assertReplacement(fix, replacement);
+  }
+
+  @Test
+  public void testRenameTaggedTemplate_justFunctionName() {
+    String prefix = "prt.";
+    String fnName = "oldTaggedTemp";
+    String newFnName = "newTaggedTemp";
+    String input = prefix + fnName + "`${Foo}Bar`;";
+    Compiler compiler = getCompiler(input);
+    Node root = compileToScriptRoot(compiler);
+    SuggestedFix fix = new SuggestedFix.Builder()
+        .rename(root.getFirstChild().getFirstChild(), newFnName)
+        .build();
+    CodeReplacement replacement = new CodeReplacement(prefix.length(),
+        fnName.length(), newFnName);
+    assertReplacement(fix, replacement);
+  }
+
+  @Test
+  public void testRenameTaggedTemplate_entireName() {
+    String fnName = "goog.dom.classes.oldTaggedTemp";
+    String newFnName = "goog.dom.classesList.newTaggedTemp";
+    String input = fnName + "`${Foo}Bar`;";
     Compiler compiler = getCompiler(input);
     Node root = compileToScriptRoot(compiler);
     SuggestedFix fix = new SuggestedFix.Builder()
@@ -414,6 +445,147 @@ public class SuggestedFixTest {
         .build();
     CodeReplacement replacement = new CodeReplacement(before.length(), 0, ", baz");
     assertReplacement(fix, replacement);
+  }
+
+  @Test
+  public void testInsertArguments_castInArguments() {
+    String originalCode = "goog.dom.classes.add(foo, /** @type {String} */ (bar));";
+    String expectedCode = "goog.dom.classes.add(foo, baz, /** @type {String} */ (bar));";
+    Compiler compiler = getCompiler(originalCode);
+    Node root = compileToScriptRoot(compiler);
+    SuggestedFix fix = new SuggestedFix.Builder()
+        .insertArguments(root.getFirstChild().getFirstChild(), 1, "baz")
+        .build();
+    assertChanges(fix, "", originalCode, expectedCode);
+  }
+
+  @Test
+  public void testDeleteArgumentFirst() {
+    String originalCode = "f(a, b, c);";
+    String expectedCode = "f(b, c);";
+
+    Compiler compiler = getCompiler(originalCode);
+    Node root = compileToScriptRoot(compiler);
+    SuggestedFix fix = new SuggestedFix.Builder()
+        .deleteArgument(root.getFirstChild().getFirstChild(), 0)
+        .build();
+
+    assertChanges(fix, "", originalCode, expectedCode);
+  }
+
+  @Test
+  public void testDeleteArgumentMiddle() {
+    String originalCode = "f(a, b, c);";
+    String expectedCode = "f(a, c);";
+
+    Compiler compiler = getCompiler(originalCode);
+    Node root = compileToScriptRoot(compiler);
+    SuggestedFix fix = new SuggestedFix.Builder()
+        .deleteArgument(root.getFirstChild().getFirstChild(), 1)
+        .build();
+
+    assertChanges(fix, "", originalCode, expectedCode);
+  }
+
+  @Test
+  public void testDeleteArgumentLast() {
+    String originalCode = "f(a, b, c);";
+    String expectedCode = "f(a, b);";
+
+    Compiler compiler = getCompiler(originalCode);
+    Node root = compileToScriptRoot(compiler);
+    SuggestedFix fix = new SuggestedFix.Builder()
+        .deleteArgument(root.getFirstChild().getFirstChild(), 2)
+        .build();
+
+    assertChanges(fix, "", originalCode, expectedCode);
+  }
+
+  @Test
+  public void testDeleteFirstArgumentWithPrefixComment() {
+    String originalCode = "f(/** @type {number} */ (a), b, c);";
+    String expectedCode = "f(b, c);";
+
+    Compiler compiler = getCompiler(originalCode);
+    Node root = compileToScriptRoot(compiler);
+    SuggestedFix fix = new SuggestedFix.Builder()
+        .deleteArgument(root.getFirstChild().getFirstChild(), 0)
+        .build();
+
+    assertChanges(fix, "", originalCode, expectedCode);
+  }
+
+  @Test
+  public void testDeleteFirstArgumentWithPostfixComment() {
+    String originalCode = "f(a /** foo */, b, c);";
+    String expectedCode = "f(b, c);";
+
+    Compiler compiler = getCompiler(originalCode);
+    Node root = compileToScriptRoot(compiler);
+    SuggestedFix fix = new SuggestedFix.Builder()
+        .deleteArgument(root.getFirstChild().getFirstChild(), 0)
+        .build();
+
+    assertChanges(fix, "", originalCode, expectedCode);
+  }
+
+  @Test
+  public void testDeleteArgumentWithPrefixComment() {
+    String originalCode = "f(a, /** @type {number} */ (b), c);";
+    String expectedCode = "f(a, c);";
+
+    Compiler compiler = getCompiler(originalCode);
+    Node root = compileToScriptRoot(compiler);
+    SuggestedFix fix = new SuggestedFix.Builder()
+        .deleteArgument(root.getFirstChild().getFirstChild(), 1)
+        .build();
+
+    assertChanges(fix, "", originalCode, expectedCode);
+  }
+
+  @Test
+  public void testDeleteArgumentIndexTooLarge() {
+    String fnCall = "f(a, b, c);";
+    Compiler compiler = getCompiler(fnCall);
+    Node root = compileToScriptRoot(compiler);
+    try {
+      new SuggestedFix.Builder()
+          .deleteArgument(root.getFirstChild().getFirstChild(), 3)
+          .build();
+      fail("An exception should have been thrown for an invalid index");
+    } catch (IllegalArgumentException e) {
+      // Success, an exception was thrown for an invalid index.
+    }
+  }
+
+  @Test
+  public void testDeleteArgumentIndexTooSmall() {
+    String fnCall = "f(a);";
+    Compiler compiler = getCompiler(fnCall);
+    Node root = compileToScriptRoot(compiler);
+    try {
+      new SuggestedFix.Builder()
+          .deleteArgument(root.getFirstChild().getFirstChild(), -1)
+          .build();
+      fail("An exception should have been thrown for an invalid index");
+    } catch (IllegalArgumentException e) {
+      // Success, an exception was thrown for an invalid index.
+    }
+  }
+
+  @Test
+  public void testDeleteArgumentWithNoArguments() {
+    String fnCall = "f();";
+    Compiler compiler = getCompiler(fnCall);
+    Node root = compileToScriptRoot(compiler);
+    try {
+      new SuggestedFix.Builder()
+          .deleteArgument(root.getFirstChild().getFirstChild(), 0)
+          .build();
+      fail("An exception should have been thrown for an invalid index");
+    } catch (IllegalStateException e) {
+      // Success, an exception was thrown for an invalid index.
+    }
   }
 
   @Test

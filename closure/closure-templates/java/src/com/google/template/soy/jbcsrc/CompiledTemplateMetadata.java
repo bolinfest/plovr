@@ -16,12 +16,13 @@
 
 package com.google.template.soy.jbcsrc;
 
+import static com.google.template.soy.jbcsrc.BytecodeUtils.SOY_RECORD_TYPE;
+
 import com.google.auto.value.AutoValue;
-import com.google.template.soy.data.SoyRecord;
 import com.google.template.soy.jbcsrc.api.AdvisingAppendable;
-import com.google.template.soy.jbcsrc.api.CompiledTemplate;
-import com.google.template.soy.jbcsrc.api.RenderContext;
-import com.google.template.soy.jbcsrc.runtime.Names;
+import com.google.template.soy.jbcsrc.shared.CompiledTemplate;
+import com.google.template.soy.jbcsrc.shared.Names;
+import com.google.template.soy.jbcsrc.shared.RenderContext;
 import com.google.template.soy.soytree.TemplateNode;
 
 import org.objectweb.asm.Type;
@@ -38,9 +39,9 @@ import org.objectweb.asm.commons.Method;
    * The {@link Method} signature of all generated constructors for the {@link CompiledTemplate}
    * classes.
    */
-  private static final Method GENERATED_CONSTRUCTOR = new Method("<init>",
-      Type.getMethodDescriptor(Type.VOID_TYPE, 
-          Type.getType(SoyRecord.class), Type.getType(SoyRecord.class)));
+  private static final Method GENERATED_CONSTRUCTOR =
+      new Method(
+          "<init>", Type.getMethodDescriptor(Type.VOID_TYPE, SOY_RECORD_TYPE, SOY_RECORD_TYPE));
 
   /** 
    * The {@link Method} signature of the 
@@ -65,7 +66,7 @@ import org.objectweb.asm.commons.Method;
     TypeInfo type = TypeInfo.create(className);
     return new AutoValue_CompiledTemplateMetadata(
         ConstructorRef.create(type, GENERATED_CONSTRUCTOR),
-        MethodRef.createInstanceMethod(type, RENDER_METHOD),
+        MethodRef.createInstanceMethod(type, RENDER_METHOD).asNonNullable(),
         type, 
         node);
   }
@@ -74,7 +75,7 @@ import org.objectweb.asm.commons.Method;
    * The template constructor.
    * 
    * <p>The constructor has the same interface as 
-   * {@link com.google.template.soy.jbcsrc.api.CompiledTemplate.Factory#create}
+   * {@link com.google.template.soy.jbcsrc.shared.CompiledTemplate.Factory#create}
    */
   abstract ConstructorRef constructor();
   

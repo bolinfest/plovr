@@ -31,6 +31,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * A pass the uses a {@link DefinitionProvider} to compute a call graph for an
@@ -54,6 +55,7 @@ import java.util.Map;
  * return true.
  *
  * <p>TODO(dcc): Have CallGraph (optionally?) include functions for externs.
+ * <p>TODO(huajiewu): Add support of tagged template in call graph.
  *
  * @author dcc@google.com (Devin Coughlin)
  */
@@ -183,15 +185,7 @@ public final class CallGraph implements CompilerPass {
             new Predicate<Function>() {
               @Override
               public boolean apply(Function function) {
-
-                String functionName = function.getName();
-                // Anonymous functions will have null names,
-                // so it is important to handle that correctly here
-                if (functionName != null && desiredName != null) {
-                  return desiredName.equals(functionName);
-                } else {
-                  return desiredName == functionName;
-                }
+                return Objects.equals(desiredName, function.getName());
               }
             }
         );
@@ -231,7 +225,7 @@ public final class CallGraph implements CompilerPass {
     // Create fake function representing global execution
     mainFunction = createFunction(jsRoot);
 
-    NodeTraversal.traverse(compiler, jsRoot, new AbstractPostOrderCallback() {
+    NodeTraversal.traverseEs6(compiler, jsRoot, new AbstractPostOrderCallback() {
       @Override
       public void visit(NodeTraversal t, Node n, Node parent) {
         int nodeType = n.getType();
@@ -239,7 +233,11 @@ public final class CallGraph implements CompilerPass {
         if (nodeType == Token.CALL || nodeType == Token.NEW) {
           Callsite callsite = createCallsite(n);
 
-          Node containingFunctionNode = t.getScopeRoot();
+          Node containingFunctionNode = NodeUtil.getEnclosingFunction(t.getScopeRoot());
+          if (containingFunctionNode == null) {
+            containingFunctionNode = t.getClosestHoistScope().getRootNode();
+          }
+
 
           Function containingFunction =
               functionsByNode.get(containingFunctionNode);
@@ -377,9 +375,9 @@ public final class CallGraph implements CompilerPass {
       // but we have to check for using them in .call and .apply.
 
       if (useParent.isGetProp()) {
-        Node gramps = useParent.getParent();
-        if (NodeUtil.isFunctionObjectApply(gramps) ||
-            NodeUtil.isFunctionObjectCall(gramps)) {
+        Node grandparent = useParent.getParent();
+        if (NodeUtil.isFunctionObjectApply(grandparent) ||
+            NodeUtil.isFunctionObjectCall(grandparent)) {
           function.isExposedToCallOrApply = true;
         }
       }

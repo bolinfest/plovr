@@ -232,12 +232,6 @@ public abstract class PassConfig {
   protected abstract State getIntermediateState();
 
   /**
-   * Set the intermediate state for a pass config, to restart
-   * a compilation process that had been previously paused.
-   */
-  protected abstract void setIntermediateState(State state);
-
-  /**
    * An implementation of PassConfig that just proxies all its method calls
    * into an inner class.
    */
@@ -269,10 +263,6 @@ public abstract class PassConfig {
     @Override protected State getIntermediateState() {
       return delegate.getIntermediateState();
     }
-
-    @Override protected void setIntermediateState(State state) {
-      delegate.setIntermediateState(state);
-    }
   }
 
   /**
@@ -282,8 +272,6 @@ public abstract class PassConfig {
     private static final long serialVersionUID = 1L;
 
     final Map<String, Integer> cssNames;
-    final Set<String> exportedNames;
-    final CrossModuleMethodMotion.IdGenerator crossModuleIdGenerator;
     final VariableMap variableMap;
     final VariableMap propertyMap;
     final VariableMap anonymousFunctionNameMap;
@@ -298,8 +286,6 @@ public abstract class PassConfig {
         VariableMap stringMap, FunctionNames functionNames,
         String idGeneratorMap) {
       this.cssNames = cssNames;
-      this.exportedNames = exportedNames;
-      this.crossModuleIdGenerator = crossModuleIdGenerator;
       this.variableMap = variableMap;
       this.propertyMap = propertyMap;
       this.anonymousFunctionNameMap = anonymousFunctionNameMap;

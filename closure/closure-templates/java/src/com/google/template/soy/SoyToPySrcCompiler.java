@@ -22,7 +22,6 @@ import com.google.template.soy.MainClassUtils.Main;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.basetree.SyntaxVersion;
 import com.google.template.soy.pysrc.SoyPySrcOptions;
-import com.google.template.soy.shared.SoyGeneralOptions.CssHandlingScheme;
 
 import org.kohsuke.args4j.Argument;
 import org.kohsuke.args4j.CmdLineParser;
@@ -63,6 +62,12 @@ public final class SoyToPySrcCompiler {
           usage = "[Required] The module path used to find the python runtime libraries. This"
               + " should be in dot notation format.")
   private String runtimePath = "";
+
+  @Option(name = "--environmentModulePath",
+          usage = "A custom python module which will override the environment.py module if custom"
+              + " functionality is required for interacting with your runtime environment. This"
+              + " module must implement all functions of the environment module if provided.")
+  private String environmentModulePath = "";
 
   @Option(name = "--inputPrefix",
           usage = "If provided, this path prefix will be prepended to each input file path"
@@ -108,14 +113,6 @@ public final class SoyToPySrcCompiler {
   @Option(name = "--syntaxVersion",
           usage = "User-declared syntax version for the Soy file bundle (e.g. 2.2, 2.3).")
   private String syntaxVersion = "";
-
-  @Option(name = "--cssHandlingScheme",
-          usage = "The scheme to use for handling 'css' commands. Specifying 'literal' will"
-                  + " cause command text to be inserted as literal text. Specifying 'reference'"
-                  + " will cause command text to be evaluated as a data or global reference."
-                  + " The 'goog' scheme is not supported in Python. This option has no effect if"
-                  + " the Soy code does not contain 'css' commands.")
-  private String cssHandlingScheme = "literal";
 
   @Option(name = "--compileTimeGlobalsFile",
           usage = "The path to a file containing the mappings for global names to be substituted"
@@ -186,8 +183,8 @@ public final class SoyToPySrcCompiler {
         indirectDeps, exitWithErrorFn);
     if (syntaxVersion.length() > 0) {
       SyntaxVersion parsedVersion = SyntaxVersion.forName(syntaxVersion);
-      if (parsedVersion.num < SyntaxVersion.V2_2.num) {
-        exitWithErrorFn.apply("Declared syntax version must be 2.2 or greater.");
+      if (parsedVersion.num < SyntaxVersion.V2_0.num) {
+        exitWithErrorFn.apply("Declared syntax version must be 2.0 or greater.");
       }
       sfsBuilder.setDeclaredSyntaxVersionName(syntaxVersion);
     }
@@ -195,19 +192,14 @@ public final class SoyToPySrcCompiler {
     sfsBuilder.setAllowExternalCalls(false);
     // Require strict templates in Python.
     sfsBuilder.setStrictAutoescapingRequired(true);
-    // Setup the CSS handling scheme.
-    String cssHandlingSchemeUc = cssHandlingScheme.toUpperCase();
-    if (cssHandlingSchemeUc.equals("GOOG")) {
-      exitWithErrorFn.apply("CSS handling scheme 'GOOG' is not support in Python.");
-    }
-    sfsBuilder.setCssHandlingScheme(CssHandlingScheme.valueOf(cssHandlingSchemeUc));
     if (compileTimeGlobalsFile.length() > 0) {
       sfsBuilder.setCompileTimeGlobals(new File(compileTimeGlobalsFile));
     }
     SoyFileSet sfs = sfsBuilder.build();
 
     // Create SoyPySrcOptions.
-    SoyPySrcOptions pySrcOptions = new SoyPySrcOptions(runtimePath, bidiIsRtlFn, translationClass);
+    SoyPySrcOptions pySrcOptions = new SoyPySrcOptions(runtimePath, environmentModulePath,
+        bidiIsRtlFn, translationClass);
 
     // Compile.
     return sfs.compileToPySrcFiles(outputPathFormat, inputPrefix, pySrcOptions);

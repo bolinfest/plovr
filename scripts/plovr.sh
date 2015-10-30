@@ -2,9 +2,9 @@
 
 # Script that is designed to run plovr "unpacked."
 #
-# IMPORTANT: `ant compile` must be run once before running this script.
+# IMPORTANT: `buick build plovr` must be run once before running this script.
 #
-# Running `ant compile` does three important things:
+# Running `buck build plovr` does three important things:
 #
 # (1) It generates files, such as the .java files generated from Soy's grammar.
 # (2) It copies static resources, such as externs, to the place where Ant
@@ -58,27 +58,5 @@ cd $ORIGINAL_PWD
 # Java code.
 java \
 -classpath \
-${PLOVR_DIR}/build/classes:\
-${PLOVR_DIR}/lib/gson-2.2.2.jar:\
-${PLOVR_DIR}/lib/hamcrest-core-1.3.jar:\
-${PLOVR_DIR}/lib/hamcrest-library-1.3.jar:\
-${PLOVR_DIR}/lib/junit-4.11.jar:\
-${PLOVR_DIR}/lib/selenium-java-2.21.0.jar:\
-${PLOVR_DIR}/closure/closure-compiler/lib/args4j.jar:\
-${PLOVR_DIR}/closure/closure-compiler/lib/guava.jar:\
-${PLOVR_DIR}/closure/closure-compiler/lib/json.jar:\
-${PLOVR_DIR}/closure/closure-compiler/lib/jsr305.jar:\
-${PLOVR_DIR}/closure/closure-compiler/lib/protobuf-java.jar:\
-${PLOVR_DIR}/closure/closure-compiler/build/lib/rhino.jar:\
-${PLOVR_DIR}/closure/closure-templates/java/lib/aopalliance.jar:\
-${PLOVR_DIR}/closure/closure-templates/java/lib/guice-3.0.jar:\
-${PLOVR_DIR}/closure/closure-templates/java/lib/guice-assistedinject-3.0.jar:\
-${PLOVR_DIR}/closure/closure-templates/java/lib/guice-multibindings-3.0.jar:\
-${PLOVR_DIR}/closure/closure-templates/java/lib/icu4j-core.jar:\
-${PLOVR_DIR}/closure/closure-templates/java/lib/javax.inject.jar:\
-${PLOVR_DIR}/build/soy-resources/:\
-${PLOVR_DIR}/closure/closure-compiler/:\
-${PLOVR_DIR}/closure/closure-templates/javascript/:\
-${PLOVR_DIR}/closure/closure-library/:\
-${PLOVR_DIR}/lib/closure-stylesheets-20130106.jar \
+${PLOVR_DIR}/buck-out/gen/plovr.jar \
 org.plovr.cli.Main "$@"

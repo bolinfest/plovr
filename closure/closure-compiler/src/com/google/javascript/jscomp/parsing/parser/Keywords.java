@@ -23,7 +23,7 @@ import java.util.EnumMap;
 import java.util.Map;
 
 /**
- * The javascript keywords.
+ * The JavaScript keywords.
  */
 public enum Keywords {
 
@@ -78,7 +78,13 @@ public enum Keywords {
     //7.8 Literals
     NULL("null", TokenType.NULL),
     TRUE("true", TokenType.TRUE),
-    FALSE("false", TokenType.FALSE);
+    FALSE("false", TokenType.FALSE),
+
+    // TypeScript
+    DECLARE("declare", TokenType.DECLARE),
+    TYPE("type", TokenType.TYPE),
+    MODULE("module", TokenType.MODULE), // Only accepted as alias for namespaces.
+    NAMESPACE("namespace", TokenType.NAMESPACE);
 
   private static final Map<String, Keywords> KEYWORDS_BY_NAME;
   private static final Map<TokenType, Keywords> KEYWORDS_BY_TYPE;
@@ -115,9 +121,21 @@ public enum Keywords {
     return get(token) != null;
   }
 
+  public static boolean isTypeScriptSpecificKeyword(String value) {
+    switch (value) {
+      case "declare":
+      case "type":
+      case "module":
+      case "namespace":
+        return true;
+      default:
+        return false;
+    }
+  }
+
   /**
    * Returns true if {@code token} is a "future reserved word" which can
-   * be used as a variable identifer, but only in non-strict mode.
+   * be used as a variable identifier, but only in non-strict mode.
    */
   public static boolean isStrictKeyword(TokenType token) {
     switch(token) {

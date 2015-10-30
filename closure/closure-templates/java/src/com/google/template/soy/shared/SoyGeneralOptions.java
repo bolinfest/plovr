@@ -40,16 +40,7 @@ import javax.annotation.Nullable;
  * Compilation options applicable to the Soy frontend and/or to multiple Soy backends.
  *
  */
-public class SoyGeneralOptions implements Cloneable {
-
-
-  /**
-   * Schemes for handling {@code css} commands.
-   */
-  public static enum CssHandlingScheme {
-    LITERAL, REFERENCE, BACKEND_SPECIFIC
-  }
-
+public final class SoyGeneralOptions implements Cloneable {
 
   /** User-declared syntax version, or null if not set. */
   @Nullable private SyntaxVersion declaredSyntaxVersion;
@@ -60,30 +51,18 @@ public class SoyGeneralOptions implements Cloneable {
   /** Whether Strict autoescaping is required. */
   private boolean strictAutoescapingRequired;
 
-  /** Scheme for handling 'css' commands. */
-  private CssHandlingScheme cssHandlingScheme;
-
   /** Map from compile-time global name to value. */
   private ImmutableMap<String, PrimitiveData> compileTimeGlobals;
 
   /** Whether to automatically mark scripts that appear literally in templates as allowed to run. */
   private boolean supportContentSecurityPolicy;
 
-
-  public SoyGeneralOptions() {
-    declaredSyntaxVersion = null;
-    allowExternalCalls = null;
-    strictAutoescapingRequired = false;
-    cssHandlingScheme = CssHandlingScheme.LITERAL;
-    compileTimeGlobals = null;
-    supportContentSecurityPolicy = false;
-  }
+  public SoyGeneralOptions() {}
 
   private SoyGeneralOptions(SoyGeneralOptions orig) {
     this.declaredSyntaxVersion = orig.declaredSyntaxVersion;
     this.allowExternalCalls = orig.allowExternalCalls;
     this.strictAutoescapingRequired = orig.strictAutoescapingRequired;
-    this.cssHandlingScheme = orig.cssHandlingScheme;
     this.compileTimeGlobals = orig.compileTimeGlobals;
     this.supportContentSecurityPolicy = orig.supportContentSecurityPolicy;
   }
@@ -138,22 +117,6 @@ public class SoyGeneralOptions implements Cloneable {
    */
   public boolean isStrictAutoescapingRequired() {
     return strictAutoescapingRequired;
-  }
-
-  /**
-   * Sets the scheme for handling {@code css} commands.
-   *
-   * @param cssHandlingScheme The css-handling scheme to set.
-   */
-  public void setCssHandlingScheme(CssHandlingScheme cssHandlingScheme) {
-    this.cssHandlingScheme = cssHandlingScheme;
-  }
-
-  /**
-   * Returns the scheme for handling {@code css} commands.
-   */
-  public CssHandlingScheme getCssHandlingScheme() {
-    return cssHandlingScheme;
   }
 
   /**
@@ -231,7 +194,9 @@ public class SoyGeneralOptions implements Cloneable {
    * Returns the map from compile-time global name to value.
    */
   public ImmutableMap<String, PrimitiveData> getCompileTimeGlobals() {
-    return compileTimeGlobals;
+    return compileTimeGlobals == null
+        ? ImmutableMap.<String, PrimitiveData>of()
+        : compileTimeGlobals;
   }
 
   /**

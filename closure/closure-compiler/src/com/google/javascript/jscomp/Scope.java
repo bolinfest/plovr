@@ -47,7 +47,10 @@ public class Scope implements StaticScope {
    */
   Scope(Scope parent, Node rootNode) {
     Preconditions.checkNotNull(parent);
-    Preconditions.checkArgument(rootNode != parent.rootNode);
+    Preconditions.checkNotNull(rootNode);
+    Preconditions.checkArgument(
+        rootNode != parent.rootNode,
+        "Root node: %s\nParent's root node: %s", rootNode, parent.rootNode);
 
     this.parent = parent;
     this.rootNode = rootNode;
@@ -55,9 +58,15 @@ public class Scope implements StaticScope {
   }
 
   protected Scope(Node rootNode) {
+    Preconditions.checkNotNull(rootNode);
     this.parent = null;
     this.rootNode = rootNode;
     this.depth = 0;
+  }
+
+  @Override
+  public String toString() {
+    return "Scope@" + rootNode;
   }
 
   static Scope createGlobalScope(Node rootNode) {
@@ -141,6 +150,9 @@ public class Scope implements StaticScope {
       if (var != null) {
         return var;
       }
+      if ("arguments".equals(name) && NodeUtil.isVanillaFunction(scope.getRootNode())) {
+        return scope.getArgumentsVar();
+      }
       // Recurse up the parent Scope
       scope = scope.parent;
     }
@@ -166,7 +178,11 @@ public class Scope implements StaticScope {
       if (scope.vars.containsKey(name)) {
         return true;
       }
-      if (scope.parent != null && recurse) {
+
+      // In ES6, we create a separate "function parameter scope" above the function block scope to
+      // handle default parameters. Since nothing in the function block scope is allowed to shadow
+      // the variables in the function scope, we treat the two scopes as one in this method.
+      if (scope.isFunctionBlockScope() || (scope.parent != null && recurse)) {
         scope = scope.parent;
         continue;
       }
@@ -185,7 +201,8 @@ public class Scope implements StaticScope {
   }
 
   /**
-   * Return an iterable over all of the variables declared in this scope.
+   * Return an iterable over all of the variables declared in this scope
+   * (except the special 'arguments' variable).
    */
   Iterable<Var> getVarIterable() {
     return vars.values();
@@ -196,7 +213,7 @@ public class Scope implements StaticScope {
   }
 
   /**
-   * Returns number of variables in this scope
+   * Returns number of variables in this scope (excluding the special 'arguments' variable)
    */
   public int getVarCount() {
     return vars.size();
@@ -220,27 +237,25 @@ public class Scope implements StaticScope {
     return NodeUtil.createsBlockScope(rootNode);
   }
 
-  /**
-   * A hoist scope is the hoist target for enclosing var declarations. It is
-   * either the top-level block of a function, a global scope, or a module scope.
-   *
-   * TODO(moz): Module scopes are not global, but are also hoist targets.
-   * Support them once module is implemented.
-   *
-   * @return Whether the scope is a hoist target for var declarations.
-   */
-  public boolean isHoistScope() {
-    return isFunctionBlockScope() || isGlobal();
-  }
-
   public boolean isFunctionBlockScope() {
     return isBlockScope() && parent != null && parent.getRootNode().isFunction();
   }
 
+  public boolean isFunctionScope() {
+    return getRootNode().isFunction();
+  }
+
+  /**
+   * If a var were declared in this scope, return the scope it would be hoisted to.
+   *
+   * For function scopes, we return back the scope itself, since even though there is no way
+   * to declare a var inside function parameters, it would make even less sense to say that
+   * such declarations would be "hoisted" somewhere else.
+   */
   public Scope getClosestHoistScope() {
     Scope current = this;
     while (current != null) {
-      if (current.isHoistScope()) {
+      if (current.isFunctionScope() || current.isFunctionBlockScope() || current.isGlobal()) {
         return current;
       }
       current = current.parent;

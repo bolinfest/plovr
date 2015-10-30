@@ -287,7 +287,7 @@ public enum ConfigOption {
     @Override
     public void apply(String mode, Config.Builder builder) {
       try {
-        builder.setLanguageIn(LanguageMode.valueOf(mode));
+        builder.setLanguageOut(LanguageMode.valueOf(mode));
       } catch (IllegalArgumentException e) {
         throw Throwables.propagate(e);
       }

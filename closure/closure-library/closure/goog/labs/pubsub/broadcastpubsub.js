@@ -62,7 +62,6 @@ goog.require('goog.userAgent');
  *
  *
  * @constructor @struct @extends {goog.Disposable}
- * @suppress {checkStructDictInheritance}
  */
 goog.labs.pubsub.BroadcastPubSub = function() {
   goog.labs.pubsub.BroadcastPubSub.base(this, 'constructor');
@@ -308,7 +307,7 @@ goog.labs.pubsub.BroadcastPubSub.prototype.subscribeOnce =
 
 /**
  * Returns the number of subscriptions to the given topic (or all topics if
- * unspecified).
+ * unspecified). This number will not change while publishing any messages.
  * @param {string=} opt_topic The topic (all topics if unspecified).
  * @return {number} Number of subscriptions to the topic.
  */

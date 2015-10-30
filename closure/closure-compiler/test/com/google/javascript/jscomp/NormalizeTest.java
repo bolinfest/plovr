@@ -35,7 +35,6 @@ public final class NormalizeTest extends CompilerTestCase {
 
   public NormalizeTest() {
     super(EXTERNS);
-    super.enableLineNumberCheck(true);
     compareJsDoc = false;
   }
 
@@ -461,13 +460,11 @@ public final class NormalizeTest extends CompilerTestCase {
   }
 
   public void testExposeSimple() {
-    setExpectParseWarningsThisTest();
     test("var x = {}; /** @expose */ x.y = 3; x.y = 5;",
          "var x = {}; x['y'] = 3; x['y'] = 5;");
   }
 
   public void testExposeComplex() {
-    setExpectParseWarningsThisTest();
     test(
         "var x = {/** @expose */ a: 1, b: 2};"
         + "x.a = 3; /** @expose */ x.b = 5;",
@@ -477,7 +474,7 @@ public final class NormalizeTest extends CompilerTestCase {
 
   private Set<Node> findNodesWithProperty(Node root, final int prop) {
     final Set<Node> set = new HashSet<>();
-    NodeTraversal.traverse(
+    NodeTraversal.traverseEs6(
         getLastCompiler(), root, new AbstractPostOrderCallback() {
         @Override
         public void visit(NodeTraversal t, Node node, Node parent) {
@@ -492,7 +489,9 @@ public final class NormalizeTest extends CompilerTestCase {
   public void testRenamingConstantProperties() {
     // In order to detect that foo.BAR is a constant, we need collapse
     // properties to run first so that we can tell if the initial value is
-    // non-null and immutable.
+    // non-null and immutable. The Normalize pass doesn't modify the code
+    // in these examples, it just infers const-ness of some variables, so
+    // we call enableNormalize to make the Normalize.VerifyConstants pass run.
     new WithCollapse().testConstantProperties();
   }
 
@@ -502,28 +501,25 @@ public final class NormalizeTest extends CompilerTestCase {
     }
 
     private void testConstantProperties() {
-      test("var a={}; a.ACONST = 4;var b = a.ACONST;",
-           "var a$ACONST = 4; var b = a$ACONST;");
+      test("var a={}; a.ACONST = 4;var b = 1; b = a.ACONST;",
+          "var a$ACONST = 4; var b = 1; b = a$ACONST;");
 
-      test("var a={b:{}}; a.b.ACONST = 4;var b = a.b.ACONST;",
-           "var a$b$ACONST = 4;var b = a$b$ACONST;");
+      test("var a={b:{}}; a.b.ACONST = 4;var b = 1; b = a.b.ACONST;",
+          "var a$b$ACONST = 4;var b = 1; b = a$b$ACONST;");
 
-      test("var a = {FOO: 1};var b = a.FOO;",
-           "var a$FOO = 1; var b = a$FOO;");
+      test("var a = {FOO: 1};var b = 1; b = a.FOO;",
+          "var a$FOO = 1; var b = 1; b = a$FOO;");
 
-      test("var EXTERN; var ext; ext.FOO;", "var b = EXTERN; var c = ext.FOO",
-           "var b = EXTERN; var c = ext.FOO", null, null);
+      testSame("var EXTERN; var ext; ext.FOO;", "var b = EXTERN; var c = ext.FOO", null);
 
-      test("var a={}; a.ACONST = 4; var b = a.ACONST;",
-           "var a$ACONST = 4; var b = a$ACONST;");
+      test("var a={}; a.ACONST = 4; var b = 1; b = a.ACONST;",
+          "var a$ACONST = 4; var b = 1; b = a$ACONST;");
 
-      test("var a = {}; function foo() { var d = a.CONST; };" +
-           "(function(){a.CONST=4})();",
-           "var a$CONST;function foo(){var d = a$CONST;};" +
-           "(function(){a$CONST = 4})();");
+      test("var a = {}; function foo() { var d = a.CONST; }; (function(){a.CONST=4})();",
+          "var a$CONST;function foo(){var d = a$CONST;}; (function(){a$CONST = 4})();");
 
-      test("var a = {}; a.ACONST = new Foo(); var b = a.ACONST;",
-           "var a$ACONST = new Foo(); var b = a$ACONST;");
+      test("var a = {}; a.ACONST = new Foo(); var b = 1; b = a.ACONST;",
+          "var a$ACONST = new Foo(); var b = 1; b = a$ACONST;");
     }
 
     @Override
@@ -533,13 +529,8 @@ public final class NormalizeTest extends CompilerTestCase {
     }
 
     @Override
-    public CompilerPass getProcessor(final Compiler compiler) {
-      return new CompilerPass() {
-        @Override
-        public void process(Node externs, Node root) {
-          new CollapseProperties(compiler).process(externs, root);
-        }
-      };
+    public CompilerPass getProcessor(Compiler compiler) {
+      return new CollapseProperties(compiler, true);
     }
   }
 }

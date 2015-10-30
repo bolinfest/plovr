@@ -72,8 +72,12 @@ jasmine.Clock.prototype.uninstall = function() {};
 jasmine.Clock.prototype.tick = function(ms) {};
 
 
+/** @param {!Date} date */
+jasmine.Clock.prototype.mockDate = function(date) {};
 
-/** @constructor */
+
+
+/** @constructor @template T */
 jasmine.Matchers = function() {};
 
 
@@ -81,7 +85,7 @@ jasmine.Matchers = function() {};
 jasmine.Matchers.prototype.not;
 
 
-/** @type {*} */
+/** @type {T} */
 jasmine.Matchers.prototype.actual;
 
 
@@ -147,6 +151,14 @@ jasmine.Matchers.prototype.toMatch = function(pattern) {};
 
 /** @param {Error=} opt_expected */
 jasmine.Matchers.prototype.toThrow = function(opt_expected) {};
+
+
+/**
+ * @param {(!Function|string|!RegExp)} errorTypeOrMessageOrPattern
+ * @param {(string|RegExp)=} opt_messageOrPattern
+ */
+jasmine.Matchers.prototype.toThrowError = function(
+    errorTypeOrMessageOrPattern, opt_messageOrPattern) {};
 
 
 /**
@@ -351,12 +363,12 @@ jasmine.Env.prototype.beforeEach = function(handler) {};
 jasmine.getEnv = function() {};
 
 
-/** @param {function(this:jasmine.Spec)} handler */
+/** @param {function(this:jasmine.Spec, function())} handler */
 function afterEach(handler) {}
 
 
-/** @param {function(this:jasmine.Spec, function()=)} handler */
-function beforeEach(handler, opt_done) {}
+/** @param {function(this:jasmine.Spec, function())} handler */
+function beforeEach(handler) {}
 
 
 /**
@@ -370,7 +382,7 @@ function describe(description, handler) {}
  * @param {string} description
  * @param {function(this:jasmine.Suite)} handler
  */
-function ddescribe(description, handler) {}
+function fdescribe(description, handler) {}
 
 
 /**
@@ -382,16 +394,16 @@ function expect(expectedValue) {}
 
 /**
  * @param {string} description
- * @param {function(this:jasmine.Spec, function()=)} handler
+ * @param {function(this:jasmine.Spec, function())} handler
  */
 function it(description, handler) {}
 
 
 /**
  * @param {string} description
- * @param {function(this:jasmine.Spec, function()=)} handler
+ * @param {function(this:jasmine.Spec, function())} handler
  */
-function iit(description, handler) {}
+function fit(description, handler) {}
 
 
 /**

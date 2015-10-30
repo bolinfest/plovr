@@ -45,6 +45,11 @@ public final class Config {
   final boolean parseJsDocDocumentation;
 
   /**
+   * Whether to preserve whitespace when extracting text from JsDoc comments.
+   */
+  final boolean preserveJsDocWhitespace;
+
+  /**
    * Whether we're in IDE mode.
    */
   final boolean isIdeMode;
@@ -65,27 +70,20 @@ public final class Config {
    */
   final LanguageMode languageMode;
 
-  /**
-   * Accept `const' keyword.
-   */
-  final boolean acceptConstKeyword;
-
   Config(Set<String> annotationWhitelist, Set<String> suppressionNames,
-      boolean isIdeMode, LanguageMode languageMode,
-      boolean acceptConstKeyword) {
-    this(annotationWhitelist, suppressionNames, isIdeMode, isIdeMode,
-        languageMode, acceptConstKeyword);
+      boolean isIdeMode, LanguageMode languageMode) {
+    this(annotationWhitelist, suppressionNames, isIdeMode, isIdeMode, false, languageMode);
   }
 
   Config(Set<String> annotationWhitelist, Set<String> suppressionNames,
-      boolean isIdeMode, boolean parseJsDocDocumentation, LanguageMode languageMode,
-      boolean acceptConstKeyword) {
+      boolean isIdeMode, boolean parseJsDocDocumentation, boolean preserveJsDocWhitespace,
+      LanguageMode languageMode) {
     this.annotationNames = buildAnnotationNames(annotationWhitelist);
     this.parseJsDocDocumentation = parseJsDocDocumentation;
+    this.preserveJsDocWhitespace = preserveJsDocWhitespace;
     this.suppressionNames = suppressionNames;
     this.isIdeMode = isIdeMode;
     this.languageMode = languageMode;
-    this.acceptConstKeyword = acceptConstKeyword;
   }
 
   /**

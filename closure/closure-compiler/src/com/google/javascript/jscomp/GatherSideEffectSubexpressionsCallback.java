@@ -151,7 +151,7 @@ class GatherSideEffectSubexpressionsCallback implements Callback {
         Node simplified = new Node(
             type, condition.detachFromParent(),
             simplifyShortCircuitBranch(body))
-            .copyInformationFrom(hook);
+            .useSourceInfoIfMissingFrom(hook);
         keepSubTree(simplified);
       } else {
         throw new IllegalArgumentException(
@@ -161,7 +161,7 @@ class GatherSideEffectSubexpressionsCallback implements Callback {
 
     private Node simplifyShortCircuitBranch(Node node) {
       List<Node> parts = new ArrayList<>();
-      NodeTraversal.traverse(
+      NodeTraversal.traverseEs6(
           compiler, node,
           new GatherSideEffectSubexpressionsCallback(
               compiler,

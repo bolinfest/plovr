@@ -129,7 +129,7 @@ final class RescopeGlobalSymbols implements CompilerPass {
     // (If necessary the 4 traversals could be combined. They are left
     // separate for readability reasons.)
     // 1. turning global named function statements into var assignments.
-    NodeTraversal.traverse(
+    NodeTraversal.traverseEs6(
         compiler,
         root,
         new RewriteGlobalFunctionStatementsToVarAssignmentsCallback());
@@ -142,15 +142,15 @@ final class RescopeGlobalSymbols implements CompilerPass {
     CombinedCompilerPass.traverse(compiler, root, nonMutatingPasses);
     // 3. rewriting all references to be property accesses of the single symbol.
     RewriteScopeCallback rewriteScope = new RewriteScopeCallback();
-    NodeTraversal.traverse(compiler, root, rewriteScope);
+    NodeTraversal.traverseEs6(compiler, root, rewriteScope);
     // 4. removing the var from statements in global scope if the declared names
     //    have been rewritten in the previous pass.
-    NodeTraversal.traverse(compiler, root, new RemoveGlobalVarCallback());
+    NodeTraversal.traverseEs6(compiler, root, new RemoveGlobalVarCallback());
     rewriteScope.declareModuleGlobals();
 
     // Extra pass which makes all extern global symbols reference window
     // explicitly.
-    NodeTraversal.traverse(
+    NodeTraversal.traverseEs6(
         compiler,
         root,
         new MakeExternsReferenceWindowExplicitly());
@@ -398,7 +398,8 @@ final class RescopeGlobalSymbols implements CompilerPass {
      */
     void declareModuleGlobals() {
       for (ModuleGlobal global : preDeclarations) {
-        if (global.root.getFirstChild().isVar()) {
+        if (global.root.getFirstChild() != null
+            && global.root.getFirstChild().isVar()) {
           global.root.getFirstChild().addChildToBack(global.name);
         } else {
           global.root.addChildToFront(
@@ -489,7 +490,7 @@ final class RescopeGlobalSymbols implements CompilerPass {
       Node comma = commas.get(0);
       for (int i = 1; i < commas.size(); i++) {
         Node nextComma = IR.comma(comma, commas.get(i));
-        nextComma.copyInformationFrom(source);
+        nextComma.useSourceInfoIfMissingFrom(source);
         comma = nextComma;
       }
       return comma;

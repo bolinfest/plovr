@@ -135,8 +135,8 @@ public final class CompilerTest extends TestCase {
     assertEquals(3, graph.getModuleCount());
     List<CompilerInput> result = graph.manageDependencies(entryPoints,
         compiler.getInputsForTesting());
-    assertEquals("[module$tonic]", result.get(0).getName());
-    assertEquals("[module$gin]", result.get(1).getName());
+    assertEquals("module$tonic$fillFile", result.get(0).getName());
+    assertEquals("module$gin$fillFile", result.get(1).getName());
     assertEquals("tonic.js", result.get(2).getName());
     assertEquals("gin.js", result.get(3).getName());
     assertEquals("mix.js", result.get(4).getName());
@@ -152,12 +152,11 @@ public final class CompilerTest extends TestCase {
     String error = compiler.getErrorManager().getErrors()[0].toString();
     assertTrue(
         "Unexpected error: " + error,
-        error.contains(
-            "required entry point \"module$missing\" never provided"));
+        error.contains("Failed to load module \"missing\" at gin.js"));
   }
 
   private String normalize(String path) {
-    return path.replace("/", File.separator);
+    return path.replace(File.separator, "/");
   }
 
   public void testInputSourceMaps() throws Exception {
@@ -494,6 +493,43 @@ public final class CompilerTest extends TestCase {
         " 1;};\n",
         "/*\n Your favorite license goes here */\n" ,
         null);
+  }
+
+  public void testMultipleUniqueLicenses() throws Exception {
+    String js1 = "/** @license One license here */\n"
+                 + "var x;";
+    String js2 = "/** @license Another license here */\n"
+                 + "var y;";
+    String expected = "/*\n One license here */\n"
+                      + "/*\n Another license here */\n";
+
+    Compiler compiler = new Compiler();
+    CompilerOptions options = createNewFlagBasedOptions();
+    List<SourceFile> inputs = ImmutableList.of(
+        SourceFile.fromCode("testcode1", js1),
+        SourceFile.fromCode("testcode2", js2));
+    Result result = compiler.compile(EMPTY_EXTERNS, inputs, options);
+
+    assertTrue(Joiner.on(",").join(result.errors), result.success);
+    assertEquals(expected, compiler.toSource());
+  }
+
+  public void testMultipleIndenticalLicenses() throws Exception {
+    String js1 = "/** @license Identical license here */\n"
+                 + "var x;";
+    String js2 = "/** @license Identical license here */\n"
+                 + "var y;";
+    String expected = "/*\n Identical license here */\n";
+
+    Compiler compiler = new Compiler();
+    CompilerOptions options = createNewFlagBasedOptions();
+    List<SourceFile> inputs = ImmutableList.of(
+        SourceFile.fromCode("testcode1", js1),
+        SourceFile.fromCode("testcode2", js2));
+    Result result = compiler.compile(EMPTY_EXTERNS, inputs, options);
+
+    assertTrue(Joiner.on(",").join(result.errors), result.success);
+    assertEquals(expected, compiler.toSource());
   }
 
   public void testDefineNoOverriding() throws Exception {

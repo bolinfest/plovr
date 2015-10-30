@@ -132,11 +132,11 @@ public class NamedType extends ProxyObjectType {
 
   private void finishPropertyContinuations() {
     ObjectType referencedObjType = getReferencedObjTypeInternal();
-    if (referencedObjType != null && !referencedObjType.isUnknownType()) {
-      if (propertyContinuations != null) {
-        for (PropertyContinuation c : propertyContinuations) {
-          c.commit(this);
-        }
+    if (referencedObjType != null
+        && !referencedObjType.isUnknownType()
+        && propertyContinuations != null) {
+      for (PropertyContinuation c : propertyContinuations) {
+        c.commit(this);
       }
     }
     propertyContinuations = null;
@@ -163,8 +163,8 @@ public class NamedType extends ProxyObjectType {
   }
 
   @Override
-  boolean isNamedType() {
-    return true;
+  public NamedType toMaybeNamedType() {
+    return this;
   }
 
   @Override

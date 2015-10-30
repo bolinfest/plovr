@@ -48,6 +48,7 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
       "JSC_READ_ERROR", "Cannot read: {0}");
 
   boolean needsEs6Runtime = false;
+  boolean needsEs6DartRuntime = false;
 
   /**
    * Will be called before each pass runs.
@@ -108,6 +109,8 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
   public abstract JSTypeRegistry getTypeRegistry();
 
   public abstract TypeIRegistry getTypeIRegistry();
+
+  abstract void forwardDeclareType(String typeName);
 
   /**
    * Gets a memoized scope creator with type information. Only used by jsdev.
@@ -181,11 +184,27 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
   abstract Iterable<TypeMismatch> getTypeMismatches();
 
   /**
+   * Gets all types that are used implicitly as a
+   * matching structural interface type. These are
+   * recorded as TypeMismatchs only for convenience
+   */
+  abstract Iterable<TypeMismatch> getImplicitInterfaceUses();
+
+  /**
    * Used only by the new type inference
    */
   abstract GlobalTypeInfo getSymbolTable();
 
   abstract void setSymbolTable(GlobalTypeInfo symbolTable);
+
+  /**
+   * Used by three passes that run in sequence (optimize-returns,
+   * optimize-parameters, remove-unused-variables), to avoid having them
+   * recompute it independently.
+   */
+  abstract SimpleDefinitionFinder getSimpleDefinitionFinder();
+
+  abstract void setSimpleDefinitionFinder(SimpleDefinitionFinder defFinder);
 
   /**
    * Parses code for injecting.
@@ -261,16 +280,6 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
    * Returns true if compiling in IDE mode.
    */
   abstract boolean isIdeMode();
-
-  /**
-   * @return Whether the compiler is in ES5Mode.
-   */
-  abstract boolean acceptEcmaScript5();
-
-  /**
-   * @return Whether the compiler accepts `const' keyword.
-   */
-  abstract boolean acceptConstKeyword();
 
   /**
    * Represents the different contexts for which the compiler could have

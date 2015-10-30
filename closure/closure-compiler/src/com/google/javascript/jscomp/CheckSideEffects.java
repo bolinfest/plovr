@@ -67,9 +67,9 @@ final class CheckSideEffects extends AbstractPostOrderCallback
 
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverse(compiler, externs, new GetNoSideEffectExterns());
+    NodeTraversal.traverseEs6(compiler, externs, new GetNoSideEffectExterns());
 
-    NodeTraversal.traverse(compiler, root, this);
+    NodeTraversal.traverseEs6(compiler, root, this);
 
     // Code with hidden side-effect code is common, for example
     // accessing "el.offsetWidth" forces a reflow in browsers, to allow this
@@ -84,7 +84,7 @@ final class CheckSideEffects extends AbstractPostOrderCallback
 
   @Override
   public void hotSwapScript(Node scriptRoot, Node originalRoot) {
-    NodeTraversal.traverse(compiler, scriptRoot, this);
+    NodeTraversal.traverseEs6(compiler, scriptRoot, this);
   }
 
   @Override
@@ -120,7 +120,7 @@ final class CheckSideEffects extends AbstractPostOrderCallback
     if (!isResultUsed) {
       if (isSimpleOp || !NodeUtil.mayHaveSideEffects(n, t.getCompiler())) {
         String msg = "This code lacks side-effects. Is there a bug?";
-        if (n.isString()) {
+        if (n.isString() || n.isTemplateLit()) {
           msg = "Is there a missing '+' on the previous line?";
         } else if (isSimpleOp) {
           msg = "The result of the '" + Token.name(n.getType()).toLowerCase() +
@@ -192,6 +192,8 @@ final class CheckSideEffects extends AbstractPostOrderCallback
     builder.recordNoAlias();
     var.setJSDocInfo(builder.build());
     CompilerInput input = compiler.getSynthesizedExternsInput();
+    name.setStaticSourceFile(input.getSourceFile());
+    var.setStaticSourceFile(input.getSourceFile());
     input.getAstRoot(compiler).addChildrenToBack(var);
     compiler.reportCodeChange();
   }
@@ -209,7 +211,7 @@ final class CheckSideEffects extends AbstractPostOrderCallback
 
     @Override
     public void process(Node externs, Node root) {
-      NodeTraversal.traverse(compiler, root, this);
+      NodeTraversal.traverseEs6(compiler, root, this);
     }
 
     @Override

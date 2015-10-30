@@ -29,16 +29,11 @@ public final class DeadAssignmentsEliminationTest extends CompilerTestCase {
   }
 
   @Override
-  public void setUp() {
-    super.enableLineNumberCheck(true);
-  }
-
-  @Override
   public CompilerPass getProcessor(final Compiler compiler) {
     return new CompilerPass() {
       @Override
       public void process(Node externs, Node js) {
-        NodeTraversal.traverse(
+        NodeTraversal.traverseEs6(
             compiler, js, new DeadAssignmentsElimination(compiler));
       }
     };

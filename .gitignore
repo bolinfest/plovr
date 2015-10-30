@@ -3,6 +3,7 @@ build/
 
 /buck-out/
 /.nobuckcheck
+.buckd/
 
 package/node_modules
 package/bin/plovr.jar

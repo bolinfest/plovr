@@ -144,11 +144,11 @@ class AnalyzePrototypeProperties implements CompilerPass {
   @Override
   public void process(Node externRoot, Node root) {
     if (!canModifyExterns) {
-      NodeTraversal.traverse(compiler, externRoot,
+      NodeTraversal.traverseEs6(compiler, externRoot,
           new ProcessExternProperties());
     }
 
-    NodeTraversal.traverse(compiler, root, new ProcessProperties());
+    NodeTraversal.traverseEs6(compiler, root, new ProcessProperties());
 
     FixedPointGraphTraversal<NameInfo, JSModule> t =
         FixedPointGraphTraversal.newTraversal(new PropagateReferences());
@@ -200,31 +200,37 @@ class AnalyzePrototypeProperties implements CompilerPass {
     @Override
     public void enterScope(NodeTraversal t) {
       Node n = t.getCurrentNode();
-      if (n.isFunction()) {
+      Scope scope = t.getScope();
+      Node root = scope.getRootNode();
+      if (root.isFunction()) {
         String propName = getPrototypePropertyNameFromRValue(n);
         if (propName != null) {
           symbolStack.push(
               new NameContext(
                   getNameInfoForName(propName, PROPERTY),
-                  t.getScope()));
+                  scope));
         } else if (isGlobalFunctionDeclaration(t, n)) {
           Node parent = n.getParent();
           String name = parent.isName() ?
               parent.getString() /* VAR */ :
               n.getFirstChild().getString() /* named function */;
           symbolStack.push(
-              new NameContext(getNameInfoForName(name, VAR), t.getScope()));
+              new NameContext(getNameInfoForName(name, VAR), scope.getClosestHoistScope()));
         } else {
           // NOTE(nicksantos): We use the same anonymous node for all
           // functions that do not have reasonable names. I can't remember
           // at the moment why we do this. I think it's because anonymous
           // nodes can never have in-edges. They're just there as a placeholder
           // for scope information, and do not matter in the edge propagation.
-          symbolStack.push(new NameContext(anonymousNode, t.getScope()));
+          symbolStack.push(new NameContext(anonymousNode, scope));
         }
+      } else if (t.inGlobalScope()) {
+        symbolStack.push(new NameContext(globalNode, scope));
       } else {
-        Preconditions.checkState(t.inGlobalScope());
-        symbolStack.push(new NameContext(globalNode, t.getScope()));
+        // TODO(moz): It's not yet clear if we need another kind of NameContext for block scopes
+        // in ES6, use anonymous node for now and investigate later.
+        Preconditions.checkState(NodeUtil.createsBlockScope(root), scope);
+        symbolStack.push(new NameContext(anonymousNode, scope));
       }
     }
 
@@ -298,7 +304,7 @@ class AnalyzePrototypeProperties implements CompilerPass {
           if (var.isGlobal()) {
             if (var.getInitialValue() != null &&
                 var.getInitialValue().isFunction()) {
-              if (t.inGlobalScope()) {
+              if (t.inGlobalHoistScope()) {
                 if (!processGlobalFunctionDeclaration(t, n, var)) {
                   addGlobalUseOfSymbol(name, t.getModule(), VAR);
                 }
@@ -310,7 +316,7 @@ class AnalyzePrototypeProperties implements CompilerPass {
           // If it is not a global, it might be accessing a local of the outer
           // scope. If that's the case the functions between the variable's
           // declaring scope and the variable reference scope cannot be moved.
-          } else if (var.getScope() != t.getScope()){
+          } else if (var.getScope() != t.getScope()) {
             for (int i = symbolStack.size() - 1; i >= 0; i--) {
               NameContext context = symbolStack.get(i);
               if (context.scope == var.getScope()) {
@@ -360,16 +366,16 @@ class AnalyzePrototypeProperties implements CompilerPass {
      * declaration.
      */
     private boolean isGlobalFunctionDeclaration(NodeTraversal t, Node n) {
-      // Make sure we're either in the global scope, or the function
-      // we're looking at is the root of the current local scope.
-      Scope s = t.getScope();
-      if (!(s.isGlobal() ||
-            s.getDepth() == 1 && s.getRootNode() == n)) {
+      // Make sure we're not in a function scope, or if we are then the function we're looking at
+      // is defined in the global scope.
+      if (!(t.inGlobalHoistScope()
+            || n.isFunction() && t.getScopeRoot() == n
+               && t.getScope().getParent().getClosestHoistScope().isGlobal())) {
         return false;
       }
 
-      return NodeUtil.isFunctionDeclaration(n) ||
-          n.isFunction() && n.getParent().isName();
+      return NodeUtil.isFunctionDeclaration(n)
+          || n.isFunction() && n.getParent().isName();
     }
 
     /**

@@ -27,10 +27,10 @@ import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.exprtree.Operator;
 import com.google.template.soy.jssrc.SoyJsSrcOptions;
-import com.google.template.soy.jssrc.SoyJsSrcOptions.CodeStyle;
 import com.google.template.soy.jssrc.internal.GenJsExprsVisitor.GenJsExprsVisitorFactory;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.shared.SharedTestUtils;
+import com.google.template.soy.shared.internal.ErrorReporterModule;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.SoyNode;
 
@@ -47,8 +47,8 @@ import java.util.Map;
  */
 public final class GenJsExprsVisitorTest extends TestCase {
 
-
-  private static final Injector INJECTOR = Guice.createInjector(new JsSrcModule());
+  private static final Injector INJECTOR =
+      Guice.createInjector(new ErrorReporterModule(), new JsSrcModule());
 
   private static final Deque<Map<String, JsExpr>> LOCAL_VAR_TRANSLATIONS =
       new ArrayDeque<Map<String, JsExpr>>();
@@ -97,33 +97,37 @@ public final class GenJsExprsVisitorTest extends TestCase {
   public void testMsgHtmlTag() {
 
     assertGeneratedJsExprs(
-        "{msg desc=\"\"}<a href=\"{$url}\">Click here</a>{/msg}",
+        "{@param url : ?}\n" + "{msg desc=\"\"}<a href=\"{$url}\">Click here</a>{/msg}",
         ImmutableList.of(
             new JsExpr("'<a href=\"'", Integer.MAX_VALUE),
             new JsExpr("opt_data.url", Integer.MAX_VALUE),
             new JsExpr("'\">'", Integer.MAX_VALUE)),
-        0, 0, 0);
+        0,
+        0,
+        0);
 
     assertGeneratedJsExprs(
-        "{msg desc=\"\"}<a href=\"{$url}\">Click here</a>{/msg}",
+        "{@param url : ?}\n" + "{msg desc=\"\"}<a href=\"{$url}\">Click here</a>{/msg}",
         ImmutableList.of(new JsExpr("'</a>'", Integer.MAX_VALUE)),
-        0, 0, 2);
+        0,
+        0,
+        2);
   }
 
 
   public void testPrint() {
 
     assertGeneratedJsExprs(
-        "{$boo.foo}",
+        "{@param boo : ?}\n" + "{$boo.foo}",
         ImmutableList.of(new JsExpr("opt_data.boo.foo", Integer.MAX_VALUE)));
 
     assertGeneratedJsExprs(
-        "{$goo.moo}",
+        "{@param goo : ?}\n" + "{$goo.moo}",
         ImmutableList.of(new JsExpr("gooData8.moo", Integer.MAX_VALUE)));
 
     assertGeneratedJsExprs(
-        "{index($goo)+1}",
-        ImmutableList.of(new JsExpr("gooIndex8 + 1", Operator.PLUS.getPrecedence())));
+        "{@param goo : ?}\n" + "{isNonnull($goo)+1}",
+        ImmutableList.of(new JsExpr("(gooData8 != null) + 1", Operator.PLUS.getPrecedence())));
   }
 
 
@@ -144,22 +148,24 @@ public final class GenJsExprsVisitorTest extends TestCase {
         ImmutableList.of(new JsExpr("goog.getCssName('selected-option')", Integer.MAX_VALUE)));
 
     assertGeneratedJsExprs(
-        "{css $foo, bar}",
+        "{@param foo : ?}\n" + "{css $foo, bar}",
         ImmutableList.of(new JsExpr("goog.getCssName(opt_data.foo, 'bar')", Integer.MAX_VALUE)));
   }
 
   public void testIf() {
 
     String soyNodeCode =
-        "{if $boo}\n" +
-        "  Blah\n" +
-        "{elseif not isFirst($goo)}\n" +
-        "  Bleh\n" +
-        "{else}\n" +
-        "  Bluh\n" +
-        "{/if}\n";
+        "{@param boo : ?}\n"
+            + "{@param goo : ?}\n"
+            + "{if $boo}\n"
+            + "  Blah\n"
+            + "{elseif not isNonnull($goo)}\n"
+            + "  Bleh\n"
+            + "{else}\n"
+            + "  Bluh\n"
+            + "{/if}\n";
     String expectedJsExprText =
-        "(opt_data.boo) ? 'Blah' : (! (gooIndex8 == 0)) ? 'Bleh' : 'Bluh'";
+        "(opt_data.boo) ? 'Blah' : (! (gooData8 != null)) ? 'Bleh' : 'Bluh'";
     assertGeneratedJsExprs(
         soyNodeCode,
         ImmutableList.of(new JsExpr(expectedJsExprText, Operator.CONDITIONAL.getPrecedence())));
@@ -167,55 +173,47 @@ public final class GenJsExprsVisitorTest extends TestCase {
 
 
   public void testCall() {
-
-    jsSrcOptions.setCodeStyle(CodeStyle.CONCAT);
-
     assertGeneratedJsExprs(
-        "{call name=\"some.func\" data=\"all\" /}",
+        "{call some.func data=\"all\" /}",
         ImmutableList.of(new JsExpr("some.func(opt_data)", Integer.MAX_VALUE)));
 
     assertGeneratedJsExprs(
-        "{call name=\"some.func\" data=\"$boo.foo\" /}",
+        "{@param boo : ?}\n" + "{call some.func data=\"$boo.foo\" /}",
         ImmutableList.of(new JsExpr("some.func(opt_data.boo.foo)", Integer.MAX_VALUE)));
 
     String soyNodeCode =
-        "{call name=\"some.func\"}" +
-        "  {param key=\"goo\" value=\"$moo\" /}" +
-        "{/call}";
+        "{@param moo : ?}\n" + "{call some.func}" + "  {param goo: $moo /}" + "{/call}";
     assertGeneratedJsExprs(
         soyNodeCode,
         ImmutableList.of(new JsExpr("some.func({goo: opt_data.moo})", Integer.MAX_VALUE)));
 
     soyNodeCode =
-        "{call name=\"some.func\" data=\"$boo\"}" +
-        "  {param key=\"goo\"}Blah{/param}" +
-        "{/call}";
+        "{@param boo : ?}\n"
+            + "{call some.func data=\"$boo\"}"
+            + "  {param goo}Blah{/param}"
+            + "{/call}";
     assertGeneratedJsExprs(
         soyNodeCode,
-        ImmutableList.of(new JsExpr(
-            "some.func(soy.$$augmentMap(opt_data.boo, {goo: 'Blah'}))", Integer.MAX_VALUE)));
+        ImmutableList.of(
+            new JsExpr(
+                "some.func(soy.$$augmentMap(opt_data.boo, {goo: 'Blah'}))", Integer.MAX_VALUE)));
   }
 
 
   public void testBlocks() {
 
-    String soyNodeCode =
-        "{if $boo}\n" +
-        "  Blah {$boo} bleh.\n" +
-        "{/if}\n";
-    String expectedJsExprText =
-        "(opt_data.boo) ? 'Blah ' + opt_data.boo + ' bleh.' : ''";
+    String soyNodeCode = "{@param boo : ?}\n" + "{if $boo}\n" + "  Blah {$boo} bleh.\n" + "{/if}\n";
+    String expectedJsExprText = "(opt_data.boo) ? 'Blah ' + opt_data.boo + ' bleh.' : ''";
     assertGeneratedJsExprs(
         soyNodeCode,
         ImmutableList.of(new JsExpr(expectedJsExprText, Operator.CONDITIONAL.getPrecedence())));
 
-    jsSrcOptions.setCodeStyle(CodeStyle.CONCAT);
     soyNodeCode =
-        "{call name=\"some.func\"}" +
-        "  {param key=\"goo\"}{lb}{index($goo)}{rb} is {$goo.moo}{/param}" +
-        "{/call}";
-    expectedJsExprText =
-        "some.func({goo: '{' + gooIndex8 + '} is ' + gooData8.moo})";
+        "{@param goo : ?}\n"
+            + "{call some.func}"
+            + "  {param goo}{lb}{isNonnull($goo)}{rb} is {$goo.moo}{/param}"
+            + "{/call}";
+    expectedJsExprText = "some.func({goo: '{' + (gooData8 != null) + '} is ' + gooData8.moo})";
     assertGeneratedJsExprs(
         soyNodeCode,
         ImmutableList.of(new JsExpr(expectedJsExprText, Integer.MAX_VALUE)));
@@ -233,15 +231,14 @@ public final class GenJsExprsVisitorTest extends TestCase {
   private static void assertGeneratedJsExprs(
       String soyCode, List<JsExpr> expectedJsExprs, int... indicesToNode) {
     ErrorReporter boom = ExplodingErrorReporter.get();
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyCode)
-        .errorReporter(boom)
-        .parse();
+    SoyFileSetNode soyTree =
+        SoyFileSetParserBuilder.forTemplateContents(soyCode).errorReporter(boom).parse().fileSet();
     // Required by testPrintGoogMsg.
-    new ReplaceMsgsWithGoogMsgsVisitor(boom).exec(soyTree);
+    new ReplaceMsgsWithGoogMsgsVisitor().exec(soyTree);
     SoyNode node = SharedTestUtils.getNode(soyTree, indicesToNode);
 
     GenJsExprsVisitor gjev = INJECTOR.getInstance(GenJsExprsVisitorFactory.class)
-        .create(LOCAL_VAR_TRANSLATIONS);
+        .create(LOCAL_VAR_TRANSLATIONS, AliasUtils.IDENTITY_ALIASES);
     List<JsExpr> actualJsExprs = gjev.exec(node);
 
     assertThat(actualJsExprs).hasSize(expectedJsExprs.size());

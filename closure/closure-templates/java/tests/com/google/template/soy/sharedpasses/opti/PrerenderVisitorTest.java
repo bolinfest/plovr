@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 
-
 package com.google.template.soy.sharedpasses.opti;
 
 import com.google.inject.Guice;
 import com.google.inject.Injector;
+import com.google.template.soy.SoyFileSetParser.ParseResult;
 import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.basicdirectives.BasicDirectivesModule;
 import com.google.template.soy.bididirectives.BidiDirectivesModule;
-import com.google.template.soy.error.ExplodingErrorReporter;
-import com.google.template.soy.sharedpasses.SharedPassesModule;
+import com.google.template.soy.passes.SharedPassesModule;
+import com.google.template.soy.shared.internal.ErrorReporterModule;
+import com.google.template.soy.shared.internal.SharedModule;
 import com.google.template.soy.sharedpasses.render.RenderException;
-import com.google.template.soy.soytree.SoyFileSetNode;
-import com.google.template.soy.soytree.TemplateRegistry;
 
 import junit.framework.TestCase;
 
@@ -111,10 +110,7 @@ public class PrerenderVisitorTest extends TestCase {
   public void testPrerenderWithUndefinedData() throws Exception {
 
     String templateBody =
-        "{let $boo: 8 /}\n" +
-        "{if $boo > 4}\n" +
-        "  {$foo}\n" +
-        "{/if}\n";
+        "{@param foo : ? }\n" + "{let $boo: 8 /}\n" + "{if $boo > 4}\n" + "  {$foo}\n" + "{/if}\n";
     try {
       prerender(templateBody);
       fail();
@@ -124,11 +120,12 @@ public class PrerenderVisitorTest extends TestCase {
 
     // This should work because the if-condition is false, thus skipping the undefined data.
     templateBody =
-        "{let $boo: 8 /}\n" +
-        "{$boo}\n" +
-        "{if $boo < 4}\n" +
-        "  {$foo}\n" +
-        "{/if}\n";
+        "{@param foo : ? }\n"
+            + "{let $boo: 8 /}\n"
+            + "{$boo}\n"
+            + "{if $boo < 4}\n"
+            + "  {$foo}\n"
+            + "{/if}\n";
     assertEquals("8", prerender(templateBody));
   }
 
@@ -150,7 +147,11 @@ public class PrerenderVisitorTest extends TestCase {
 
 
   private static final Injector INJECTOR = Guice.createInjector(
-      new SharedPassesModule(), new BasicDirectivesModule(), new BidiDirectivesModule());
+      new ErrorReporterModule(),
+      new SharedModule(),
+      new SharedPassesModule(),
+      new BasicDirectivesModule(),
+      new BidiDirectivesModule());
 
 
   /**
@@ -160,14 +161,12 @@ public class PrerenderVisitorTest extends TestCase {
    * @throws Exception If there's an error.
    */
   private static String prerender(String input) throws Exception {
-    SoyFileSetNode fileSet = SoyFileSetParserBuilder.forTemplateContents(input).parse();
+    ParseResult result = SoyFileSetParserBuilder.forTemplateContents(input).parse();
 
     StringBuilder outputSb = new StringBuilder();
     PrerenderVisitor prerenderVisitor =
-        INJECTOR.getInstance(PrerenderVisitorFactory.class).create(
-            outputSb,
-            new TemplateRegistry(fileSet, ExplodingErrorReporter.get()));
-    prerenderVisitor.exec(fileSet.getChild(0).getChild(0));
+        INJECTOR.getInstance(PrerenderVisitorFactory.class).create(outputSb, result.registry());
+    prerenderVisitor.exec(result.fileSet().getChild(0).getChild(0));
     return outputSb.toString();
   }
 

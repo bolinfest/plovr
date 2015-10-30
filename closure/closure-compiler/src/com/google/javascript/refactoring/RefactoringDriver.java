@@ -59,7 +59,7 @@ public final class RefactoringDriver {
    */
   public List<SuggestedFix> drive() {
     JsFlumeCallback callback = new JsFlumeCallback(scanner, null);
-    NodeTraversal.traverse(compiler, rootNode, callback);
+    NodeTraversal.traverseEs6(compiler, rootNode, callback);
     List<SuggestedFix> fixes = callback.getFixes();
     fixes.addAll(scanner.processAllMatches(callback.getMatches()));
     return fixes;
@@ -93,8 +93,6 @@ public final class RefactoringDriver {
     options.setPreserveGoogRequires(true);
 
     options.setWarningLevel(DiagnosticGroups.MISSING_REQUIRE, CheckLevel.ERROR);
-
-    options.setAcceptConstKeyword(true);
 
     return options;
   }
@@ -142,7 +140,11 @@ public final class RefactoringDriver {
     }
 
     public Builder addInputsFromCode(String code) {
-      inputs.add(SourceFile.fromCode("input", code));
+      return addInputsFromCode(code, "input");
+    }
+
+    public Builder addInputsFromCode(String code, String filename) {
+      inputs.add(SourceFile.fromCode(filename, code));
       return this;
     }
 

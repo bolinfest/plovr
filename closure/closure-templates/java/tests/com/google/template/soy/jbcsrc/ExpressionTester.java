@@ -17,8 +17,6 @@
 package com.google.template.soy.jbcsrc;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
-import static org.objectweb.asm.ClassWriter.COMPUTE_MAXS;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Objects;
@@ -28,10 +26,9 @@ import com.google.common.truth.SubjectFactory;
 import com.google.common.truth.Truth;
 
 import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Label;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
-import org.objectweb.asm.commons.GeneratorAdapter;
 import org.objectweb.asm.commons.Method;
 import org.objectweb.asm.util.CheckClassAdapter;
 
@@ -168,7 +165,22 @@ public final class ExpressionTester {
       }
       return this;
     }
-
+    
+    ExpressionSubject evaluatesToInstanceOf(Class<?> expected) {
+      compile();
+      Object actual;
+      try {
+        actual = ((ObjectInvoker) invoker).invoke();
+      } catch (Throwable t) {
+        failWithBadResults("evalutes to instance of", expected, "fails with", t);
+        return this;
+      }
+      if (!expected.isInstance(actual)) {
+        failWithBadResults("evaluates to instance of", expected, "evaluates to", actual);
+      }
+      return this;
+    }
+    
     ExpressionSubject throwsException(Class<? extends Throwable> clazz) {
       return throwsException(clazz, null);
     }
@@ -251,13 +263,11 @@ public final class ExpressionTester {
     TypeInfo generatedType = TypeInfo.create(
         ExpressionTester.class.getPackage().getName() + "." + targetInterface.getSimpleName() 
             + "Impl");
-    ClassWriter cw = new ClassWriter(COMPUTE_FRAMES | COMPUTE_MAXS);
-    cw.visit(Opcodes.V1_7, 
-        Opcodes.ACC_PUBLIC + Opcodes.ACC_SUPER + Opcodes.ACC_FINAL,
-        generatedType.type().getInternalName(), 
-        null, // not a generic type
-        Type.getInternalName(Object.class), // super class
-        new String[] {Type.getInternalName(targetInterface) });
+    SoyClassWriter cw =
+        SoyClassWriter.builder(generatedType)
+            .setAccess(Opcodes.ACC_FINAL | Opcodes.ACC_SUPER | Opcodes.ACC_PUBLIC)
+            .implementing(TypeInfo.create(targetInterface))
+            .build();
     BytecodeUtils.defineDefaultConstructor(cw, generatedType);
     Method invoke = Method.getMethod(invokeMethod);
     Statement.returnExpression(expr).writeMethod(Opcodes.ACC_PUBLIC, invoke, cw);
@@ -268,13 +278,18 @@ public final class ExpressionTester {
     } catch (NoSuchMethodException | SecurityException e) {
       throw new RuntimeException(e);  // this method definitely exists
     }
-    GeneratorAdapter generator = 
-        new GeneratorAdapter(Opcodes.ACC_PUBLIC, voidInvoke, null, null, cw);
-    generator.loadThis();
-    generator.invokeVirtual(generatedType.type(), invoke);
-    generator.visitInsn(Opcodes.RETURN);
-    generator.endMethod();
-    ClassData data = ClassData.create(generatedType, cw.toByteArray());
+    Statement.concat(
+            LocalVariable.createThisVar(generatedType, new Label(), new Label())
+                .invoke(MethodRef.create(invokeMethod))
+                .toStatement(),
+            new Statement() {
+              @Override
+              void doGen(CodeBuilder adapter) {
+                adapter.visitInsn(Opcodes.RETURN);
+              }
+            })
+        .writeMethod(Opcodes.ACC_PUBLIC, voidInvoke, cw);
+    ClassData data = cw.toClassData();
     checkClassData(data);
     return data;
   }

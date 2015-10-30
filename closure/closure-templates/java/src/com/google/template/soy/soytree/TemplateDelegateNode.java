@@ -23,6 +23,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.base.internal.BaseUtils;
+import com.google.template.soy.basetree.CopyState;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.exprtree.GlobalNode;
@@ -54,6 +55,9 @@ public final class TemplateDelegateNode extends TemplateNode implements ExprHold
       return create(name, checkNotNull(variant), null);
     }
 
+    // TODO(lukes): we should be able to remove this now that the substitute globals pass is always
+    // run prior to when the first TemplateRegistry is created.  furthermore we can assert that
+    // all globals in variant expressions are always substituted.
     /**
      * This constructor adds support a temporary solution to using globals as deltemplate variants.
      * During parsing, TemplateRegistry instances must be built for validation, but the expression
@@ -61,8 +65,8 @@ public final class TemplateDelegateNode extends TemplateNode implements ExprHold
      * allows a partial validation, but this should be removed once TemplateRegistry is refactored
      * to support this.
      */
-    private static DelTemplateKey create(String name, @Nullable String variant,
-        @Nullable String variantExpr) {
+    private static DelTemplateKey create(
+        String name, @Nullable String variant, @Nullable String variantExpr) {
       return new AutoValue_TemplateDelegateNode_DelTemplateKey(name, variant, variantExpr);
     }
 
@@ -91,7 +95,7 @@ public final class TemplateDelegateNode extends TemplateNode implements ExprHold
   private DelTemplateKey delTemplateKey;
 
   /** The delegate priority. */
-  private final int delPriority;
+  private final Priority delPriority;
 
   /**
    * Main constructor. This is package-private because TemplateDelegateNode instances should be
@@ -109,7 +113,7 @@ public final class TemplateDelegateNode extends TemplateNode implements ExprHold
   TemplateDelegateNode(
       TemplateDelegateNodeBuilder nodeBuilder,
       SoyFileHeaderInfo soyFileHeaderInfo, String delTemplateName, String delTemplateVariant,
-      ExprRootNode delTemplateVariantExpr, DelTemplateKey delTemplateKey, int delPriority,
+      ExprRootNode delTemplateVariantExpr, DelTemplateKey delTemplateKey, Priority delPriority,
       ImmutableList<TemplateParam> params) {
 
     super(nodeBuilder, "deltemplate", soyFileHeaderInfo,
@@ -126,8 +130,8 @@ public final class TemplateDelegateNode extends TemplateNode implements ExprHold
    * Copy constructor.
    * @param orig The node to copy.
    */
-  private TemplateDelegateNode(TemplateDelegateNode orig) {
-    super(orig);
+  private TemplateDelegateNode(TemplateDelegateNode orig, CopyState copyState) {
+    super(orig, copyState);
     this.delTemplateName = orig.delTemplateName;
     this.delTemplateVariant = orig.delTemplateVariant;
     this.delTemplateVariantExpr = orig.delTemplateVariantExpr;
@@ -173,13 +177,13 @@ public final class TemplateDelegateNode extends TemplateNode implements ExprHold
 
 
   /** Returns the delegate priority. */
-  public int getDelPriority() {
+  public Priority getDelPriority() {
     return delPriority;
   }
 
 
-  @Override public TemplateDelegateNode clone() {
-    return new TemplateDelegateNode(this);
+  @Override public TemplateDelegateNode copy(CopyState copyState) {
+    return new TemplateDelegateNode(this, copyState);
   }
 
 

@@ -1,27 +1,36 @@
-java_library(
+java_binary(
   name = 'plovr',
+  deps = [':plovr-lib'],
+  main_class = 'org.plovr.cli.Main')
+
+java_library(
+  name = 'plovr-lib',
   srcs = glob(['src/**/*.java']),
   resources = glob([
     'src/**/*.js',
     'src/**/*.soy',
     'src/**/*.ts',
-  ]),
+  ]) + [
+    'library_manifest.txt',
+    'third_party_manifest.txt',
+    'externs_manifest.txt',
+  ],
   source = '7',
   target = '7',
   deps = [
-    ':gson',
-    ':guava',
-    ':selenium',
     '//closure/closure-compiler:args4j',
     '//closure/closure-compiler:closure-compiler',
-    '//closure/closure-compiler:json',
+    '//closure/closure-compiler:gson',
+    '//closure/closure-compiler:guava',
     '//closure/closure-compiler:jsr305',
     '//closure/closure-compiler:protobuf',
-    '//closure/closure-compiler:rhino',
+    '//closure/closure-library:closure-library',
     '//closure/closure-stylesheets:closure-stylesheets',
     '//closure/closure-templates:closure-templates',
     '//closure/closure-templates:guice',
+    '//closure/closure-templates:guice-assistedinject',
     '//closure/closure-templates:guice-multibindings',
+    ':selenium',
   ],
 )
 
@@ -30,47 +39,21 @@ java_test(
   srcs = glob(['test/**/*.java']),
   resources = glob(['test/**/*.js']),
   deps = [
-    ':gson',
-    ':junit',
-    ':plovr',
-    ':guava',
     '//closure/closure-compiler:closure-compiler',
     '//closure/closure-compiler:jsr305',
+    '//closure/closure-compiler:junit',
     '//closure/closure-stylesheets:closure-stylesheets',
     '//closure/closure-templates:closure-templates',
+    '//closure/closure-templates:guava',
+    ':mockito',
+    ':plovr-lib',
+    '//closure/closure-compiler:gson',
   ],
 )
 
 prebuilt_jar(
-  name = 'gson',
-  binary_jar = 'lib/gson-2.2.2.jar',
-)
-
-prebuilt_jar(
-  name = 'guava',
-  binary_jar = 'lib/guava-15.0.jar',
-)
-
-prebuilt_jar(
-  name = 'junit',
-  binary_jar = 'lib/junit-4.11.jar',
-  deps = [
-    ':hamcrest-core',
-    ':hamcrest-library',
-  ],
-)
-
-prebuilt_jar(
-  name = 'hamcrest-core',
-  binary_jar = 'lib/hamcrest-core-1.3.jar',
-)
-
-prebuilt_jar(
-  name = 'hamcrest-library',
-  binary_jar = 'lib/hamcrest-library-1.3.jar',
-  deps = [
-    ':hamcrest-core',
-  ],
+  name = 'mockito',
+  binary_jar = 'lib/mockito-core-1.10.19.jar',
 )
 
 prebuilt_jar(

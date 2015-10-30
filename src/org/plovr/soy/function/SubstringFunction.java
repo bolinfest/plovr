@@ -8,20 +8,18 @@ import java.util.Set;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import com.google.template.soy.data.SoyData;
+import com.google.template.soy.data.SoyValue;
 import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.data.restricted.StringData;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.jssrc.restricted.SoyJsSrcFunction;
-import com.google.template.soy.tofu.restricted.SoyAbstractTofuFunction;
-import com.google.template.soy.tofu.restricted.SoyTofuFunction;
+import com.google.template.soy.shared.restricted.SoyJavaFunction;
 
 /**
  * From "Defining a Custom Function" in "Closure: The Definitive Guide"
  */
 @Singleton
-public class SubstringFunction extends SoyAbstractTofuFunction
-    implements SoyJsSrcFunction, SoyTofuFunction {
+public class SubstringFunction implements SoyJsSrcFunction, SoyJavaFunction {
 
   @Inject
   SubstringFunction() {}
@@ -57,7 +55,7 @@ public class SubstringFunction extends SoyAbstractTofuFunction
 
 
   @Override
-  public SoyData compute(final List<SoyData> args) {
+  public SoyValue computeForJava(final List<SoyValue> args) {
     StringData str = (StringData) args.get(0);
     IntegerData start = (IntegerData) args.get(1);
 

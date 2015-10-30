@@ -18,10 +18,11 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.javascript.jscomp.newtypes.JSType;
+import com.google.javascript.jscomp.newtypes.RawNominalType;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.jstype.FunctionType;
-import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
 import com.google.javascript.rhino.jstype.StaticTypedScope;
@@ -117,6 +118,11 @@ public final class CodingConventions {
     }
 
     @Override
+    public boolean isClassFactoryCall(Node callNode) {
+      return nextConvention.isClassFactoryCall(callNode);
+    }
+
+    @Override
     public boolean isSuperClassReference(String propertyName) {
       return nextConvention.isSuperClassReference(propertyName);
     }
@@ -169,10 +175,16 @@ public final class CodingConventions {
     }
 
     @Override
-    public void applySingletonGetter(FunctionType functionType,
+    public void applySingletonGetterOld(FunctionType functionType,
         FunctionType getterType, ObjectType objectType) {
-      nextConvention.applySingletonGetter(
+      nextConvention.applySingletonGetterOld(
           functionType, getterType, objectType);
+    }
+
+    @Override
+    public void applySingletonGetterNew(
+        RawNominalType rawType, JSType getInstanceType, JSType instanceType) {
+      nextConvention.applySingletonGetterNew(rawType, getInstanceType, instanceType);
     }
 
     @Override
@@ -209,7 +221,8 @@ public final class CodingConventions {
 
     @Override
     public void defineDelegateProxyPrototypeProperties(
-        JSTypeRegistry registry, StaticTypedScope<JSType> scope,
+        JSTypeRegistry registry,
+        StaticTypedScope<com.google.javascript.rhino.jstype.JSType> scope,
         List<ObjectType> delegateProxyPrototypes,
         Map<String, String> delegateCallingConventions) {
       nextConvention.defineDelegateProxyPrototypeProperties(
@@ -341,6 +354,11 @@ public final class CodingConventions {
     }
 
     @Override
+    public boolean isClassFactoryCall(Node callNode) {
+      return false;
+    }
+
+    @Override
     public boolean isSuperClassReference(String propertyName) {
       return false;
     }
@@ -395,8 +413,14 @@ public final class CodingConventions {
     }
 
     @Override
-    public void applySingletonGetter(FunctionType functionType,
+    public void applySingletonGetterOld(FunctionType functionType,
         FunctionType getterType, ObjectType objectType) {
+      // do nothing.
+    }
+
+    @Override
+    public void applySingletonGetterNew(
+        RawNominalType rawType, JSType getInstanceType, JSType instanceType) {
       // do nothing.
     }
 
@@ -432,7 +456,8 @@ public final class CodingConventions {
 
     @Override
     public void defineDelegateProxyPrototypeProperties(
-        JSTypeRegistry registry, StaticTypedScope<JSType> scope,
+        JSTypeRegistry registry,
+        StaticTypedScope<com.google.javascript.rhino.jstype.JSType> scope,
         List<ObjectType> delegateProxyPrototypes,
         Map<String, String> delegateCallingConventions) {
       // do nothing.
@@ -492,7 +517,8 @@ public final class CodingConventions {
       if (callTarget.isGetProp()
           && callTarget.getLastChild().getString().equals("bind")) {
         Node maybeFn = callTarget.getFirstChild();
-        JSType maybeFnType = maybeFn.getJSType();
+        com.google.javascript.rhino.jstype.JSType maybeFnType =
+            maybeFn.getJSType();
         FunctionType fnType = null;
         if (iCheckTypes && maybeFnType != null) {
           fnType = maybeFnType.restrictByNotNullOrUndefined()

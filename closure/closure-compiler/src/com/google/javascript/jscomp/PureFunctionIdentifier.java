@@ -110,8 +110,8 @@ class PureFunctionIdentifier implements CompilerPass {
     externs = externsAst;
     root = srcAst;
 
-    NodeTraversal.traverse(compiler, externs, new FunctionAnalyzer(true));
-    NodeTraversal.traverse(compiler, root, new FunctionAnalyzer(false));
+    NodeTraversal.traverseEs6(compiler, externs, new FunctionAnalyzer(true));
+    NodeTraversal.traverseEs6(compiler, root, new FunctionAnalyzer(false));
 
     propagateSideEffects();
 
@@ -444,8 +444,7 @@ class PureFunctionIdentifier implements CompilerPass {
               // Variable definition are not side effects.
               // Just check that the name appears in the context of a
               // variable declaration.
-              Preconditions.checkArgument(
-                  NodeUtil.isVarDeclaration(node));
+              Preconditions.checkArgument(NodeUtil.isVarDeclaration(node));
               Node value = node.getFirstChild();
               // Assignment to local, if the value isn't a safe local value,
               // new object creation or literal or known primitive result
@@ -481,14 +480,22 @@ class PureFunctionIdentifier implements CompilerPass {
 
     @Override
     public void exitScope(NodeTraversal t) {
-      if (t.inGlobalScope()) {
+      if (!(t.getScope().isFunctionBlockScope()
+          || t.getScope().isFunctionScope())) {
+        return;
+      }
+
+      Node function = NodeUtil.getEnclosingFunction(t.getScopeRoot());
+      if (function == null) {
         return;
       }
 
       // Handle deferred local variable modifications:
       //
-      FunctionInformation sideEffectInfo =
-        functionSideEffectMap.get(t.getScopeRoot());
+      FunctionInformation sideEffectInfo = functionSideEffectMap.get(function);
+      if (sideEffectInfo == null) {
+        return;
+      }
       if (sideEffectInfo.mutatesGlobalState()){
         sideEffectInfo.resetLocalVars();
         return;
@@ -525,10 +532,22 @@ class PureFunctionIdentifier implements CompilerPass {
         }
       }
 
-      sideEffectInfo.taintedLocals = Collections.emptySet();
-      sideEffectInfo.blacklisted = Collections.emptySet();
+      if (t.getScopeRoot().isFunction()) {
+        sideEffectInfo.resetLocalVars();
+      }
     }
 
+    private boolean varDeclaredInDifferentFunction(Var v, Scope scope) {
+      if (v == null) {
+        return true;
+      } else if (v.scope != scope) {
+        Node declarationRoot = NodeUtil.getEnclosingFunction(v.scope.rootNode);
+        Node scopeRoot = NodeUtil.getEnclosingFunction(scope.rootNode);
+        return declarationRoot != scopeRoot;
+      } else {
+        return false;
+      }
+    }
 
     /**
      * Record information about the side effects caused by an
@@ -545,7 +564,7 @@ class PureFunctionIdentifier implements CompilerPass {
         Scope scope, Node op, Node lhs, Node rhs) {
       if (lhs.isName()) {
         Var var = scope.getVar(lhs.getString());
-        if (var == null || var.scope != scope) {
+        if (varDeclaredInDifferentFunction(var, scope)) {
           sideEffectInfo.setTaintsGlobalState();
         } else {
           // Assignment to local, if the value isn't a safe local value,
@@ -572,7 +591,7 @@ class PureFunctionIdentifier implements CompilerPass {
           if (objectNode.isName()) {
             var = scope.getVar(objectNode.getString());
           }
-          if (var == null || var.scope != scope) {
+          if (varDeclaredInDifferentFunction(var, scope)) {
             sideEffectInfo.setTaintsUnknown();
           } else {
             // Maybe a local object modification.  We won't know for sure until

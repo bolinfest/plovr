@@ -84,9 +84,9 @@ class Normalize implements CompilerPass {
 
   static void normalizeSyntheticCode(
       AbstractCompiler compiler, Node js, String prefix) {
-    NodeTraversal.traverse(compiler, js,
+    NodeTraversal.traverseEs6(compiler, js,
         new Normalize.NormalizeStatements(compiler, false));
-    NodeTraversal.traverse(
+    NodeTraversal.traverseEs6(
         compiler, js,
         new MakeDeclaredNamesUnique(
             new BoilerplateRenamer(
@@ -98,7 +98,7 @@ class Normalize implements CompilerPass {
   static Node parseAndNormalizeTestCode(
       AbstractCompiler compiler, String code) {
     Node js = compiler.parseTestCode(code);
-    NodeTraversal.traverse(compiler, js,
+    NodeTraversal.traverseEs6(compiler, js,
         new Normalize.NormalizeStatements(compiler, false));
     return js;
   }
@@ -140,9 +140,9 @@ class Normalize implements CompilerPass {
         .process(externs, root);
 
     FindExposeAnnotations findExposeAnnotations = new FindExposeAnnotations();
-    NodeTraversal.traverse(compiler, root, findExposeAnnotations);
+    NodeTraversal.traverseEs6(compiler, root, findExposeAnnotations);
     if (!findExposeAnnotations.exposedProperties.isEmpty()) {
-      NodeTraversal.traverse(compiler, root,
+      NodeTraversal.traverseEs6(compiler, root,
           new RewriteExposedProperties(
               findExposeAnnotations.exposedProperties));
     }
@@ -379,7 +379,7 @@ class Normalize implements CompilerPass {
             Node expr = n.getFirstChild();
             n.setType(Token.FOR);
             Node empty = IR.empty();
-            empty.copyInformationFrom(n);
+            empty.useSourceInfoIfMissingFrom(n);
             n.addChildBefore(empty, expr);
             n.addChildAfter(empty.cloneNode(), expr);
             reportCodeChange("WHILE node");
@@ -550,7 +550,7 @@ class Normalize implements CompilerPass {
           return;
         default:
           Node block = IR.block();
-          block.copyInformationFrom(last);
+          block.useSourceInfoIfMissingFrom(last);
           n.replaceChild(last, block);
           block.addChildToFront(last);
           reportCodeChange("LABEL normalization");
@@ -598,7 +598,7 @@ class Normalize implements CompilerPass {
             } else if (!c.getFirstChild().isEmpty()) {
               Node init = c.getFirstChild();
               Node empty = IR.empty();
-              empty.copyInformationFrom(c);
+              empty.useSourceInfoIfMissingFrom(c);
               c.replaceChild(init, empty);
 
               Node newStatement;
@@ -728,7 +728,7 @@ class Normalize implements CompilerPass {
       Node parent = n.getParent();
       Var v = s.getVar(name);
 
-      if (v != null && s.isGlobal()) {
+      if (s.isGlobal()) {
         // We allow variables to be duplicate declared if one
         // declaration appears in source and the other in externs.
         // This deals with issues where a browser built-in is declared
@@ -740,8 +740,7 @@ class Normalize implements CompilerPass {
         }
       }
 
-      // If name is "arguments", Var maybe null.
-      if (v != null && v.getParentNode().isCatch()) {
+      if (v.isCatch()) {
         // Redeclaration of a catch expression variable is hard to model
         // without support for "with" expressions.
         // The ECMAScript spec (section 12.14), declares that a catch
@@ -760,7 +759,7 @@ class Normalize implements CompilerPass {
         name = MakeDeclaredNamesUnique.ContextualRenameInverter.getOriginalName(
             name);
         compiler.report(JSError.make(n, CATCH_BLOCK_VAR_ERROR, name));
-      } else if (v != null && parent.isFunction()) {
+      } else if (parent.isFunction()) {
         if (v.getParentNode().isVar()) {
           s.undeclare(v);
           s.declare(name, n, v.input);
@@ -790,7 +789,7 @@ class Normalize implements CompilerPass {
      *      the scope creator, as the next node of interest is the parent's
      *      next sibling.
      */
-    private void replaceVarWithAssignment(Node n, Node parent, Node gramps) {
+    private void replaceVarWithAssignment(Node n, Node parent, Node grandparent) {
       if (n.hasChildren()) {
         // The  *  is being initialize, preserve the new value.
         parent.removeChild(n);
@@ -799,20 +798,20 @@ class Normalize implements CompilerPass {
         n.removeChild(value);
         Node replacement = IR.assign(n, value);
         replacement.setJSDocInfo(parent.getJSDocInfo());
-        replacement.copyInformationFrom(parent);
-        gramps.replaceChild(parent, NodeUtil.newExpr(replacement));
+        replacement.useSourceInfoIfMissingFrom(parent);
+        grandparent.replaceChild(parent, NodeUtil.newExpr(replacement));
       } else {
         // It is an empty reference remove it.
-        if (NodeUtil.isStatementBlock(gramps)) {
-          gramps.removeChild(parent);
-        } else if (gramps.isFor()) {
+        if (NodeUtil.isStatementBlock(grandparent)) {
+          grandparent.removeChild(parent);
+        } else if (grandparent.isFor()) {
           // This is the "for (var a in b)..." case.  We don't need to worry
           // about initializers in "for (var a;;)..." as those are moved out
           // as part of the other normalizations.
           parent.removeChild(n);
-          gramps.replaceChild(parent, n);
+          grandparent.replaceChild(parent, n);
         } else {
-          Preconditions.checkState(gramps.isLabel());
+          Preconditions.checkState(grandparent.isLabel());
           // We should never get here. LABELs with a single VAR statement should
           // already have been normalized to have a BLOCK.
           throw new IllegalStateException("Unexpected LABEL");

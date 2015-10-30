@@ -17,6 +17,7 @@
 package com.google.template.soy.data;
 
 import com.google.template.soy.data.internal.RenderableThunk;
+import com.google.template.soy.data.restricted.SoyString;
 
 import java.io.IOException;
 
@@ -30,7 +31,7 @@ import javax.annotation.concurrent.Immutable;
  */
 @ParametersAreNonnullByDefault
 @Immutable
-public abstract class SanitizedContent extends SoyData {
+public abstract class SanitizedContent extends SoyData implements SoyString {
   /**
    * Creates a SanitizedContent object.
    *
@@ -86,6 +87,9 @@ public abstract class SanitizedContent extends SoyData {
     /** A properly encoded portion of a URI. */
     URI,
 
+    /** Resource URIs used in scrips sources, stylesheets, etc which are not in attacker control. */
+    TRUSTED_RESOURCE_URI,
+
     /** An attribute name and value, such as {@code dir="ltr"}. */
     ATTRIBUTES,
 
@@ -101,6 +105,8 @@ public abstract class SanitizedContent extends SoyData {
      * This is effectively the "null" entry of this enum, and is sometimes used to explicitly mark
      * content that should never be used unescaped. Since any string is safe to use as text, being
      * of ContentKind.TEXT makes no guarantees about its safety in any other context such as HTML.
+     *
+     * <p>In the soy type system, {@code TEXT} is equivalent to the string type.
      */
     TEXT
     ;
@@ -161,7 +167,7 @@ public abstract class SanitizedContent extends SoyData {
   /**
    * Returns the string value.
    *
-   * In contexts where a string value is required, SanitizedCOntent is permitted.
+   * <p>In contexts where a string value is required, SanitizedContent is permitted.
    */
   @Override
   public String stringValue() {
@@ -171,10 +177,10 @@ public abstract class SanitizedContent extends SoyData {
 
   @Override
   public boolean equals(@Nullable Object other) {
-    return other instanceof SanitizedContent &&
-        this.contentKind == ((SanitizedContent) other).contentKind &&
-        this.contentDir == ((SanitizedContent) other).contentDir &&
-        this.getContent().equals(((SanitizedContent) other).getContent());
+    return other instanceof SanitizedContent
+        && this.contentKind == ((SanitizedContent) other).contentKind
+        && this.contentDir == ((SanitizedContent) other).contentDir
+        && this.getContent().equals(((SanitizedContent) other).getContent());
   }
 
 

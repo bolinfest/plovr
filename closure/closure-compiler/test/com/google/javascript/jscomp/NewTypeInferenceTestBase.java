@@ -34,19 +34,33 @@ import java.util.List;
 public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
   protected List<PassFactory> passes;
 
-  protected static final String CLOSURE_BASE = "var goog;";
+  protected static final String CLOSURE_BASE =
+      Joiner.on('\n').join(
+          "/** @const */ var goog = {};",
+          "/** @return {void} */",
+          "goog.nullFunction = function() {};");
   protected static final String DEFAULT_EXTERNS =
       CompilerTypeTestCase.DEFAULT_EXTERNS + Joiner.on('\n').join(
           "/** @return {string} */",
-          "String.prototype.toString = function() { return '' };",
+          "Object.prototype.toString = function() {};",
+          "/**",
+          " * @param {*} propertyName",
+          " * @return {boolean}",
+          " */",
+          "Object.prototype.hasOwnProperty = function(propertyName) {};",
+          "/** @return {string} */",
+          "String.prototype.toString = function() {};",
           "/**",
           " * @constructor",
           " * @param {*=} arg",
           " * @return {number}",
           " */",
           "function Number(arg) {}",
-          "/** @return {string} */",
-          "Number.prototype.toString = function() { return '' };",
+          "/**",
+          " @param {number=} opt_radix",
+          " @return {string}",
+          "*/",
+          "Number.prototype.toString = function(opt_radix) {};",
           "/**",
           " * @constructor",
           " * @param {*=} arg",
@@ -54,7 +68,7 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           " */",
           "function Boolean(arg) {}",
           "/** @return {string} */",
-          "Boolean.prototype.toString = function() { return '' };",
+          "Boolean.prototype.toString = function() {};",
           "/**",
           " * @param {?=} opt_begin",
           " * @param {?=} opt_end",
@@ -82,7 +96,17 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           " * @param {function(): RESULT} onFulfilled",
           " * @return {RESULT}",
           " */",
-          "Promise.prototype.then = function(onFulfilled) {};");
+          "Promise.prototype.then = function(onFulfilled) {};",
+          "/**",
+          " * @constructor",
+          " * @param {*=} opt_message",
+          " * @param {*=} opt_file",
+          " * @param {*=} opt_line",
+          " * @return {!Error}",
+          " */",
+          "function Error(opt_message, opt_file, opt_line) {}",
+          "/** @type {string} */",
+          "Error.prototype.stack;");
 
   @Override
   protected void setUp() {
@@ -107,12 +131,10 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
             new Es6SplitVariableDeclarations(compiler)));
     passes.add(makePassFactory("es6ConvertSuper",
             new Es6ConvertSuper(compiler)));
-    passes.add(makePassFactory("convertEs6TypedToEs6",
-            new Es6TypedToEs6Converter(compiler)));
     passes.add(makePassFactory("convertEs6",
             new Es6ToEs3Converter(compiler)));
-    passes.add(makePassFactory("Es6RewriteLetConst",
-            new Es6RewriteLetConst(compiler)));
+    passes.add(makePassFactory("Es6RewriteBlockScopedDeclaration",
+            new Es6RewriteBlockScopedDeclaration(compiler)));
     passes.add(makePassFactory("rewriteGenerators",
             new Es6RewriteGenerators(compiler)));
     passes.add(makePassFactory("Es6RuntimeLibrary",
@@ -121,10 +143,12 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
             new Es6ToEs3ClassSideInheritance(compiler)));
   }
 
-  protected final void parseAndTypeCheck(String externs, String js) {
+  private final void parseAndTypeCheck(String externs, String js) {
     setUp();
     final CompilerOptions options = compiler.getOptions();
     options.setClosurePass(true);
+    options.setNewTypeInference(true);
+    options.setWarningLevel(DiagnosticGroups.NEW_CHECK_TYPES_ALL_CHECKS, CheckLevel.WARNING);
     compiler.init(
         ImmutableList.of(SourceFile.fromCode("[externs]", externs)),
         ImmutableList.of(SourceFile.fromCode("[testcode]", js)),
@@ -145,14 +169,19 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
         "parsing warning: " + Joiner.on(", ").join(compiler.getWarnings()), 0,
         compiler.getWarningCount());
 
-    // Create common parent of externs and ast; needed by Es6RewriteLetConst.
-    IR.block(externsRoot, astRoot).setIsSyntheticBlock(true);
 
-    GlobalTypeInfo symbolTable = new GlobalTypeInfo(compiler);
-    passes.add(makePassFactory("GlobalTypeInfo", symbolTable));
-    compiler.setSymbolTable(symbolTable);
-    passes.add(makePassFactory("NewTypeInference",
-            new NewTypeInference(compiler, options.closurePass)));
+    // Create common parent of externs and ast; needed by Es6RewriteLetConst.
+    Node block = IR.block(externsRoot, astRoot);
+    block.setIsSyntheticBlock(true);
+
+    // Run ASTValidator
+    (new AstValidator(compiler)).validateRoot(block);
+
+    ProcessClosurePrimitives closurePass =
+        new ProcessClosurePrimitives(compiler, null, CheckLevel.ERROR, false);
+    passes.add(makePassFactory("ProcessClosurePrimitives", closurePass));
+    passes.add(makePassFactory("GlobalTypeInfo", compiler.getSymbolTable()));
+    passes.add(makePassFactory("NewTypeInference", new NewTypeInference(compiler)));
 
     PhaseOptimizer phaseopt = new PhaseOptimizer(compiler, null, null);
     phaseopt.consume(passes);
@@ -180,7 +209,7 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
         + "================================================================\n"
         + "but found:\n"
         + "----------------------------------------------------------------\n"
-        + Arrays.toString(warnings) + "\n"
+        + Arrays.toString(errors) + Arrays.toString(warnings) + "\n"
         + "----------------------------------------------------------------\n";
     assertEquals(
         errorMessage + "Warning count", warningKinds.length, warnings.length + errors.length);

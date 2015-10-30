@@ -394,7 +394,7 @@ final class MustBeReachingVariableDef extends
   }
 
   private static boolean isParameter(Var v) {
-    return v.getParentNode().isParamList();
+    return v.isParam();
   }
 
   /**
@@ -402,7 +402,7 @@ final class MustBeReachingVariableDef extends
    * in the def's depends set.
    */
   private void computeDependence(final Definition def, Node rValue) {
-    NodeTraversal.traverse(compiler, rValue,
+    NodeTraversal.traverseEs6(compiler, rValue,
         new AbstractCfgNodeTraversalCallback() {
       @Override
       public void visit(NodeTraversal t, Node n, Node parent) {

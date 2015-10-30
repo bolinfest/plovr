@@ -17,13 +17,13 @@ package com.google.javascript.jscomp;
 
 import static com.google.javascript.jscomp.CheckProvides.MISSING_PROVIDE_WARNING;
 
-import com.google.javascript.jscomp.CheckLevel;
+import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 
 /**
  * Tests for {@link CheckProvides}.
  *
  */
-public final class CheckProvidesTest extends CompilerTestCase {
+public final class CheckProvidesTest extends Es6CompilerTestCase {
   @Override
   protected CompilerPass getProcessor(Compiler compiler) {
     return new CheckProvides(compiler, CheckLevel.WARNING);
@@ -40,6 +40,26 @@ public final class CheckProvidesTest extends CompilerTestCase {
   public void testHarmless() {
     String js = "goog.provide('X'); /** @constructor */ X = function(){};";
     testSame(js);
+  }
+
+  public void testHarmlessEs6Class() {
+    testSameEs6("goog.provide('X'); var X = class {};");
+    testSameEs6("goog.provide('X'); class X {};");
+    testSameEs6("goog.provide('foo.bar.X'); foo.bar.X = class {};");
+  }
+
+  public void testMissingProvideEs6Class() {
+    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
+    String js = "class X {};";
+    String warning = "missing goog.provide('X')";
+    test(js, js, null, MISSING_PROVIDE_WARNING, warning);
+
+    js = "var X = class {};";
+    test(js, js, null, MISSING_PROVIDE_WARNING, warning);
+
+    js = "foo.bar.X = class {};";
+    warning = "missing goog.provide('foo.bar.X')";
+    test(js, js, null, MISSING_PROVIDE_WARNING, warning);
   }
 
   public void testNoProvideInnerClass() {
@@ -92,5 +112,9 @@ public final class CheckProvidesTest extends CompilerTestCase {
   public void testIgnorePrivatelyAnnotatedConstructor() {
     testSame("/** @private\n@constructor */ X = function(){};");
     testSame("/** @constructor\n@private */ X = function(){};");
+  }
+
+  public void testArrowFunction() {
+    testSameEs6("/** @constructor*/ X = ()=>{};");
   }
 }

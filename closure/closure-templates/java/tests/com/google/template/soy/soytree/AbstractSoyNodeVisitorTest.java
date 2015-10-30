@@ -16,6 +16,7 @@
 
 package com.google.template.soy.soytree;
 
+import com.google.common.collect.ImmutableList;
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.base.internal.SoyFileKind;
@@ -38,7 +39,15 @@ public final class AbstractSoyNodeVisitorTest extends TestCase {
 
     SoyFileSetNode soyTree = new SoyFileSetNode(0, null);
 
-    SoyFileNode soyFile = new SoyFileNode(0, "", SoyFileKind.SRC, null, "boo", null);
+    SoyFileNode soyFile =
+        new SoyFileNode(
+            0,
+            "",
+            SoyFileKind.SRC,
+            FAIL,
+            null /* delpackageCmdText */,
+            new NamespaceDeclaration("boo", ImmutableList.<NameAttributePair>of(), FAIL),
+            ImmutableList.<AliasDeclaration>of() /* aliasCmdTexts */);
     soyTree.addChild(soyFile);
 
     SoyFileHeaderInfo testSoyFileHeaderInfo = new SoyFileHeaderInfo("testNs");
@@ -46,7 +55,7 @@ public final class AbstractSoyNodeVisitorTest extends TestCase {
     TemplateNode template1 =
         new TemplateBasicNodeBuilder(testSoyFileHeaderInfo, SourceLocation.UNKNOWN, FAIL)
             .setId(0)
-            .setCmdText("name=\".foo\"")
+            .setCmdText(".foo")
             .setSoyDoc("/** @param goo */")
             .build();
     soyFile.addChild(template1);
@@ -62,7 +71,7 @@ public final class AbstractSoyNodeVisitorTest extends TestCase {
     TemplateNode template2 =
         new TemplateBasicNodeBuilder(testSoyFileHeaderInfo, SourceLocation.UNKNOWN, FAIL)
             .setId(0)
-            .setCmdText("name=\".moo\"")
+            .setCmdText(".moo")
             .setSoyDoc(null)
             .build();
     soyFile.addChild(template2);
@@ -71,17 +80,13 @@ public final class AbstractSoyNodeVisitorTest extends TestCase {
             .exprText("'moo'")
             .build(FAIL));
 
-    IncompleteOutputVisitor iov = new IncompleteOutputVisitor(FAIL);
+    IncompleteOutputVisitor iov = new IncompleteOutputVisitor();
     assertEquals("[Parent][SoyFile][Parent][Print][Print][Parent][Print]", iov.exec(soyTree));
   }
 
   private static class IncompleteOutputVisitor extends AbstractSoyNodeVisitor<String> {
 
     private StringBuilder outputSb;
-
-    private IncompleteOutputVisitor(ErrorReporter errorReporter) {
-      super(errorReporter);
-    }
 
     @Override public String exec(SoyNode node) {
       outputSb = new StringBuilder();

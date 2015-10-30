@@ -23,7 +23,6 @@ import com.google.debugging.sourcemap.SourceMapGenerator;
 import com.google.debugging.sourcemap.SourceMapGeneratorFactory;
 import com.google.javascript.rhino.Node;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -42,6 +41,9 @@ import java.util.Map;
  */
 public final class SourceMap {
 
+  /**
+   * An enumeration of available source map formats
+   */
   public static enum Format {
      DEFAULT {
        @Override SourceMap getInstance() {
@@ -79,11 +81,16 @@ public final class SourceMap {
             || node.isName()
             || NodeUtil.isGet(node)
             || NodeUtil.isObjectLitKey(node)
-            || (node.isString() && NodeUtil.isGet(node.getParent()));
+            || (node.isString() && NodeUtil.isGet(node.getParent()))
+            || node.isTaggedTemplateLit();
       }
     }
   }
 
+  /**
+   * A simple pair of path prefixes to the desired "destination" location to use within the
+   * source map.
+   */
   public static class LocationMapping {
     final String prefix;
     final String replacement;
@@ -138,11 +145,6 @@ public final class SourceMap {
    * @return a remapped source file.
    */
   private String fixupSourceLocation(String sourceFile) {
-    // Replace backslashes (the file separator used on Windows systems).
-    if (File.separatorChar == '\\') {
-      sourceFile = sourceFile.replace('\\', '/');
-    }
-
     if (prefixMappings.isEmpty()) {
       return sourceFile;
     }

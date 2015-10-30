@@ -305,6 +305,39 @@ public abstract class BasicEscapeDirective
 
 
   /**
+   * Implements the |filterNormalizeMediaUri directive.
+   */
+  @Singleton
+  @SoyPurePrintDirective
+  static final class FilterNormalizeMediaUri extends BasicEscapeDirective {
+
+    FilterNormalizeMediaUri() {
+      super("|filterNormalizeMediaUri");
+    }
+
+    @Override protected String escape(SoyValue value) {
+      return Sanitizers.filterNormalizeMediaUri(value);
+    }
+  }
+
+  /**
+   * Implements the |filterTrustedResourceUri directive.
+   */
+  @Singleton
+  @SoyPurePrintDirective
+  static final class FilterTrustedResourceUri extends BasicEscapeDirective {
+
+    FilterTrustedResourceUri() {
+      super("|filterTrustedResourceUri");
+    }
+
+    @Override protected String escape(SoyValue value) {
+      return Sanitizers.filterTrustedResourceUri(value);
+    }
+  }
+
+
+  /**
    * Implements the |normalizeUri directive.
    */
   @Singleton

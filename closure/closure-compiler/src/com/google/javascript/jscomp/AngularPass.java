@@ -20,6 +20,8 @@ import com.google.common.base.Preconditions;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
+import com.google.javascript.rhino.JSDocInfo.Visibility;
+import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
@@ -92,9 +94,14 @@ class AngularPass extends AbstractPostOrderCallback
           "@ngInject can only be used when defining a function or " +
           "assigning a function expression.");
 
-  static final DiagnosticType FUNCTION_NAME_ERROR =
-      DiagnosticType.error("JSC_FUNCTION_NAME_ERROR",
-          "Unable to determine target function name for @ngInject.");
+  static final DiagnosticType INJECTED_FUNCTION_HAS_DESTRUCTURED_PARAM =
+      DiagnosticType.error("JSC_INJECTED_FUNCTION_HAS_DESTRUCTURED_PARAM",
+          "@ngInject cannot be used on functions containing "
+          + "destructured parameter.");
+
+  static final DiagnosticType INJECTED_FUNCTION_HAS_DEFAULT_VALUE =
+      DiagnosticType.error("JSC_INJECTED_FUNCTION_HAS_DEFAULT_VALUE",
+          "@ngInject cannot be used on functions containing default value.");
 
   @Override
   public void process(Node externs, Node root) {
@@ -104,14 +111,14 @@ class AngularPass extends AbstractPostOrderCallback
   @Override
   public void hotSwapScript(Node scriptRoot, Node originalRoot) {
     // Traverses AST looking for nodes annotated with @ngInject.
-    NodeTraversal.traverse(compiler, scriptRoot, this);
+    NodeTraversal.traverseEs6(compiler, scriptRoot, this);
     boolean codeChanged = false;
     // iterates through annotated nodes adding $inject property to elements.
     for (NodeContext entry : injectables) {
       String name = entry.getName();
       Node fn = entry.getFunctionNode();
       List<Node> dependencies = createDependenciesList(fn);
-      // skips entry if it does have any dependencies.
+      // skips entry if it does not have any dependencies.
       if (dependencies.isEmpty()) {
         continue;
       }
@@ -127,6 +134,10 @@ class AngularPass extends AbstractPostOrderCallback
           )
       );
       NodeUtil.setDebugInformation(statement, entry.getNode(), name);
+      // Set the visibility of the newly created property.
+      JSDocInfoBuilder newPropertyDoc = new JSDocInfoBuilder(false);
+      newPropertyDoc.recordVisibility(Visibility.PUBLIC);
+      statement.getFirstChild().setJSDocInfo(newPropertyDoc.build());
 
       // adds `something.$inject = [...]` node after the annotated node or the following
       // goog.inherits call.
@@ -154,7 +165,7 @@ class AngularPass extends AbstractPostOrderCallback
    * @param n the FUNCTION node.
    * @return STRING nodes.
    */
-  private static List<Node> createDependenciesList(Node n) {
+  private List<Node> createDependenciesList(Node n) {
     Preconditions.checkArgument(n.isFunction());
     Node params = NodeUtil.getFunctionParameters(n);
     if (params != null) {
@@ -168,11 +179,21 @@ class AngularPass extends AbstractPostOrderCallback
    * @param params PARAM_LIST node.
    * @return array of STRING nodes.
    */
-  private static List<Node> createStringsFromParamList(Node params) {
+  private List<Node> createStringsFromParamList(Node params) {
     Node param = params.getFirstChild();
     ArrayList<Node> names = new ArrayList<>();
-    while (param != null && param.isName()) {
-      names.add(IR.string(param.getString()).srcref(param));
+    while (param != null) {
+      if (param.isName()) {
+        names.add(IR.string(param.getString()).srcref(param));
+      } else if (param.isDestructuringPattern()) {
+        compiler.report(JSError.make(param,
+            INJECTED_FUNCTION_HAS_DESTRUCTURED_PARAM));
+        return new ArrayList<>();
+      } else if (param.isDefaultValue()) {
+        compiler.report(JSError.make(param,
+            INJECTED_FUNCTION_HAS_DEFAULT_VALUE));
+        return new ArrayList<>();
+      }
       param = param.getNext();
     }
     return names;
@@ -222,18 +243,43 @@ class AngularPass extends AbstractPostOrderCallback
       // var a = function() {}
       // var a = b = function() {}
       case Token.VAR:
+      case Token.LET:
+      case Token.CONST:
         name = n.getFirstChild().getString();
         // looks for a function node.
         fn = getDeclarationRValue(n);
         target = n;
         break;
+
+      // handles class method case:
+      // class clName(){
+      //   constructor(){}
+      //   someMethod(){} <===
+      // }
+      case Token.MEMBER_FUNCTION_DEF:
+        Node parent = n.getParent();
+        if (parent.isClassMembers()){
+          Node classNode = parent.getParent();
+          String midPart = n.isStaticMember() ? "." : ".prototype.";
+          name = NodeUtil.getClassName(classNode) + midPart + n.getString();
+          if (n.getString().equals("constructor")) {
+            name = NodeUtil.getClassName(classNode);
+          }
+          fn = n.getFirstChild();
+          if (classNode.getParent().isAssign() || classNode.getParent().isName()) {
+            target = classNode.getParent().getParent();
+          } else {
+            target = classNode;
+          }
+        }
+        break;
     }
-    // checks that it is a function declaration.
+
     if (fn == null || !fn.isFunction()) {
       compiler.report(t.makeError(n, INJECT_NON_FUNCTION_ERROR));
       return;
     }
-    // checks that the declaration took place in a block or in a global scope.
+    // report an error if the function declaration did not take place in a block or global scope
     if (!target.getParent().isScript() && !target.getParent().isBlock()) {
       compiler.report(t.makeError(n, INJECT_IN_NON_GLOBAL_OR_BLOCK_ERROR));
       return;
@@ -260,7 +306,7 @@ class AngularPass extends AbstractPostOrderCallback
    */
   private static Node getDeclarationRValue(Node n) {
     Preconditions.checkNotNull(n);
-    Preconditions.checkArgument(n.isVar());
+    Preconditions.checkArgument(NodeUtil.isNameDeclaration(n));
     n = n.getFirstChild().getFirstChild();
     if (n == null) {
       return null;

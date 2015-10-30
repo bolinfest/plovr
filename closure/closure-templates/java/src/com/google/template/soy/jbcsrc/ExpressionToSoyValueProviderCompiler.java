@@ -21,7 +21,6 @@ import static com.google.template.soy.jbcsrc.BytecodeUtils.constant;
 
 import com.google.common.base.Optional;
 import com.google.template.soy.data.SoyValueProvider;
-import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.DataAccessNode;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprRootNode;
@@ -68,21 +67,17 @@ final class ExpressionToSoyValueProviderCompiler {
    */
   static ExpressionToSoyValueProviderCompiler create(
       ExpressionCompiler exprCompiler,
-      VariableLookup variables,
-      ErrorReporter errorReporter) {
-    return new ExpressionToSoyValueProviderCompiler(exprCompiler, variables, errorReporter);
+      VariableLookup variables) {
+    return new ExpressionToSoyValueProviderCompiler(exprCompiler, variables);
   }
 
   private final VariableLookup variables;
-  private final ErrorReporter reporter;
   private final ExpressionCompiler exprCompiler;
 
   private ExpressionToSoyValueProviderCompiler(
       ExpressionCompiler exprCompiler,
-      VariableLookup variables,
-      ErrorReporter errorReporter) {
+      VariableLookup variables) {
     this.exprCompiler = exprCompiler;
-    this.reporter = errorReporter;
     this.variables = variables;
   }
 
@@ -96,8 +91,7 @@ final class ExpressionToSoyValueProviderCompiler {
    */
   Optional<Expression> compileAvoidingBoxing(ExprNode node, Label reattachPoint) {
     checkNotNull(node);
-    return new CompilerVisitor(
-        reporter, variables, null, exprCompiler.asBasicCompiler(reattachPoint))
+    return new CompilerVisitor(variables, null, exprCompiler.asBasicCompiler(reattachPoint))
         .exec(node);
   }
 
@@ -111,8 +105,7 @@ final class ExpressionToSoyValueProviderCompiler {
    */
   Optional<Expression> compileAvoidingDetaches(ExprNode node) {
     checkNotNull(node);
-    return new CompilerVisitor(reporter, variables, exprCompiler, null)
-        .exec(node);
+    return new CompilerVisitor(variables, exprCompiler, null).exec(node);
   }
 
   private static final class CompilerVisitor
@@ -123,9 +116,8 @@ final class ExpressionToSoyValueProviderCompiler {
     @Nullable final ExpressionCompiler exprCompiler;
     @Nullable final BasicExpressionCompiler detachingExprCompiler;
 
-    CompilerVisitor(ErrorReporter errorReporter, VariableLookup variables,
+    CompilerVisitor(VariableLookup variables,
         ExpressionCompiler exprCompiler,  BasicExpressionCompiler detachingExprCompiler) {
-      super(errorReporter);
       this.variables = variables;
       checkArgument((exprCompiler == null) != (detachingExprCompiler == null));
       this.exprCompiler = exprCompiler;
@@ -182,8 +174,7 @@ final class ExpressionToSoyValueProviderCompiler {
         if (!trueBranch.isPresent() || !falseBranch.isPresent()) {
           return Optional.absent();
         }
-        Expression condition = 
-            detachingExprCompiler.compile(node.getChild(0)).convert(boolean.class);
+        Expression condition = detachingExprCompiler.compile(node.getChild(0)).coerceToBoolean();
         return Optional.of(BytecodeUtils.ternary(condition, trueBranch.get(), falseBranch.get()));
       }
       return visitExprNode(node);
@@ -199,8 +190,9 @@ final class ExpressionToSoyValueProviderCompiler {
 
     @Override Optional<Expression> visitIjParam(VarRefNode node, InjectedParam ij) {
       return Optional.of(
-          variables.getIjRecord()
-              .invoke(MethodRef.SOY_RECORD_GET_FIELD_PROVIDER, constant(ij.name())));
+          MethodRef.RUNTIME_GET_FIELD_PROVIDER.invoke(
+              variables.getIjRecord(),
+              constant(ij.name())));
     }
 
     @Override Optional<Expression> visitLetNodeVar(VarRefNode varRef, LocalVar local) {

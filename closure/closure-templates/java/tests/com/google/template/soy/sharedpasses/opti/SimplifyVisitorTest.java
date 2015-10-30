@@ -21,7 +21,9 @@ import com.google.inject.Injector;
 import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.basicdirectives.BasicDirectivesModule;
-import com.google.template.soy.sharedpasses.SharedPassesModule;
+import com.google.template.soy.passes.SharedPassesModule;
+import com.google.template.soy.shared.internal.ErrorReporterModule;
+import com.google.template.soy.shared.internal.SharedModule;
 import com.google.template.soy.soytree.ForNode;
 import com.google.template.soy.soytree.MsgFallbackGroupNode;
 import com.google.template.soy.soytree.MsgNode;
@@ -43,11 +45,12 @@ public class SimplifyVisitorTest extends TestCase {
   public void testCombineConsecutiveRawTextNodes() throws Exception {
 
     String soyCode =
-        "blah{$boo}blah" +
-        "{for $i in range(5)}" +
-        "  blah{$boo}blah" +
-        "{/for}";
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyCode).parse();
+        "{@param boo : ?}\n"
+            + "blah{$boo}blah"
+            + "{for $i in range(5)}"
+            + "  blah{$boo}blah"
+            + "{/for}";
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyCode).parse().fileSet();
 
     TemplateNode template = soyTree.getChild(0).getChild(0);
     ForNode forNode = (ForNode) template.getChild(3);
@@ -74,7 +77,6 @@ public class SimplifyVisitorTest extends TestCase {
     String soyFileContent =
         "{namespace boo autoescape=\"deprecated-noncontextual\"}\n" +
         "\n" +
-        "/** @param x */\n" +
         "{template .foo}\n" +
         "\n" +
         "  {msg desc=\"\"}\n" +
@@ -122,7 +124,7 @@ public class SimplifyVisitorTest extends TestCase {
     assertEquals("&lt;b&gt;&amp;&lt;<wbr>/b&gt;", simplifySoyCode(soyCode).get(0).toSourceString());
 
     // Doesn't simplify PrintNode with non-constant expression (but expression is simplified).
-    soyCode = "{1 + 3 + $boo}";
+    soyCode = "{@param boo : ?}\n" + "{1 + 3 + $boo}";
     assertEquals("{4 + $boo}", simplifySoyCode(soyCode).get(0).toSourceString());
 
     // formatNum is not annotated as a SoyPurePrintDirective, so it should not be simplified.
@@ -130,10 +132,9 @@ public class SimplifyVisitorTest extends TestCase {
     assertEquals("{5 |formatNum}", simplifySoyCode(soyCode).get(0).toSourceString());
 
     // Doesn't simplify PrintNode with non-constant directive arg.
-    soyCode = "{'0123456789' |insertWordBreaks:$boo}";
+    soyCode = "{@param boo : ?}\n" + "{'0123456789' |insertWordBreaks:$boo}";
     assertEquals(
-        "{'0123456789' |insertWordBreaks:$boo}",
-        simplifySoyCode(soyCode).get(0).toSourceString());
+        "{'0123456789' |insertWordBreaks:$boo}", simplifySoyCode(soyCode).get(0).toSourceString());
   }
 
 
@@ -171,42 +172,40 @@ public class SimplifyVisitorTest extends TestCase {
     assertEquals("222", simplifySoyCode(soyCode).get(0).toSourceString());
 
     soyCode =
-        "{if false}\n" +
-        "  111\n" +
-        "{elseif $boo}\n" +
-        "  222\n" +
-        "{elseif true}\n" +
-        "  333\n" +
-        "{else}\n" +
-        "  444\n" +
-        "{/if}\n";
-    assertEquals(
-        "{if $boo}222{else}333{/if}",
-        simplifySoyCode(soyCode).get(0).toSourceString());
+        "{@param boo : ?}\n"
+            + "{if false}\n"
+            + "  111\n"
+            + "{elseif $boo}\n"
+            + "  222\n"
+            + "{elseif true}\n"
+            + "  333\n"
+            + "{else}\n"
+            + "  444\n"
+            + "{/if}\n";
+    assertEquals("{if $boo}222{else}333{/if}", simplifySoyCode(soyCode).get(0).toSourceString());
 
     soyCode =
-        "{if 0}\n" +
-        "  111\n" +
-        "{elseif 1}\n" +
-        "  {if true}\n" +
-        "    {if $boo}\n" +
-        "      222\n" +
-        "    {elseif ''}\n" +
-        "      333\n" +
-        "    {elseif 'blah'}\n" +
-        "      444\n" +
-        "    {else}\n" +
-        "      555\n" +
-        "    {/if}\n" +
-        "  {else}\n" +
-        "    666\n" +
-        "  {/if}\n" +
-        "{else}\n" +
-        "  777\n" +
-        "{/if}\n";
-    assertEquals(
-        "{if $boo}222{else}444{/if}",
-        simplifySoyCode(soyCode).get(0).toSourceString());
+        "{@param boo : ?}\n"
+            + "{if 0}\n"
+            + "  111\n"
+            + "{elseif 1}\n"
+            + "  {if true}\n"
+            + "    {if $boo}\n"
+            + "      222\n"
+            + "    {elseif ''}\n"
+            + "      333\n"
+            + "    {elseif 'blah'}\n"
+            + "      444\n"
+            + "    {else}\n"
+            + "      555\n"
+            + "    {/if}\n"
+            + "  {else}\n"
+            + "    666\n"
+            + "  {/if}\n"
+            + "{else}\n"
+            + "  777\n"
+            + "{/if}\n";
+    assertEquals("{if $boo}222{else}444{/if}", simplifySoyCode(soyCode).get(0).toSourceString());
   }
 
 
@@ -215,12 +214,13 @@ public class SimplifyVisitorTest extends TestCase {
     String soyCode;
 
     soyCode =
-        "{switch 1 + 2}\n" +
-        "  {case 1}111\n" +
-        "  {case 2, 3}222333\n" +
-        "  {case $boo}444\n" +
-        "  {default}goo\n" +
-        "{/switch}\n";
+        "{@param boo : ?}\n"
+            + "{switch 1 + 2}\n"
+            + "  {case 1}111\n"
+            + "  {case 2, 3}222333\n"
+            + "  {case $boo}444\n"
+            + "  {default}goo\n"
+            + "{/switch}\n";
     assertEquals("222333", simplifySoyCode(soyCode).get(0).toSourceString());
 
     soyCode =
@@ -232,12 +232,13 @@ public class SimplifyVisitorTest extends TestCase {
     assertEquals("333", simplifySoyCode(soyCode).get(0).toSourceString());
 
     soyCode =
-        "{switch 1 + 2}\n" +
-        "  {case $boo}111\n" +
-        "  {case 2}222\n" +
-        "  {case 3}333\n" +
-        "  {default}444\n" +
-        "{/switch}\n";
+        "{@param boo : ?}\n"
+            + "{switch 1 + 2}\n"
+            + "  {case $boo}111\n"
+            + "  {case 2}222\n"
+            + "  {case 3}333\n"
+            + "  {default}444\n"
+            + "{/switch}\n";
     assertEquals(
         "{switch 3}{case $boo}111{default}333{/switch}",
         simplifySoyCode(soyCode).get(0).toSourceString());
@@ -248,13 +249,16 @@ public class SimplifyVisitorTest extends TestCase {
   // Helpers.
 
 
-  private static final Injector INJECTOR =
-      Guice.createInjector(new SharedPassesModule(), new BasicDirectivesModule());
+  private static final Injector INJECTOR = Guice.createInjector(
+      new ErrorReporterModule(),
+      new SharedModule(),
+      new SharedPassesModule(),
+      new BasicDirectivesModule());
 
 
   private static List<StandaloneNode> simplifySoyCode(String soyCode) throws Exception {
 
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyCode).parse();
+    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forTemplateContents(soyCode).parse().fileSet();
     SimplifyVisitor simplifyVisitor = INJECTOR.getInstance(SimplifyVisitor.class);
     simplifyVisitor.exec(soyTree);
     return soyTree.getChild(0).getChild(0).getChildren();
@@ -263,7 +267,8 @@ public class SimplifyVisitorTest extends TestCase {
 
   private static SoyFileSetNode simplifySoyFiles(String... soyFileContents) throws Exception {
 
-    SoyFileSetNode soyTree = SoyFileSetParserBuilder.forFileContents(soyFileContents).parse();
+    SoyFileSetNode soyTree =
+        SoyFileSetParserBuilder.forFileContents(soyFileContents).parse().fileSet();
     SimplifyVisitor simplifyVisitor = INJECTOR.getInstance(SimplifyVisitor.class);
     simplifyVisitor.exec(soyTree);
     return soyTree;
