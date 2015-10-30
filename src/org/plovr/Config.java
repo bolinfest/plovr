@@ -159,7 +159,7 @@ public final class Config implements Comparable<Config> {
 
   private final File propertyMapOutputFile;
 
-  private final boolean addSourceMapUrl;
+  private final String sourceMapBaseUrl;
 
   private List<FileWithLastModified> configFileInheritanceChain =
       Lists.newArrayList();
@@ -227,7 +227,7 @@ public final class Config implements Comparable<Config> {
       File variableMapOutputFile,
       File propertyMapInputFile,
       File propertyMapOutputFile,
-      boolean addSourceMapUrl,
+      String sourceMapBaseUrl,
       List<File> cssInputs,
       Set<String> cssDefines,
       List<String> allowedUnrecognizedProperties,
@@ -278,7 +278,7 @@ public final class Config implements Comparable<Config> {
     this.variableMapOutputFile = variableMapOutputFile;
     this.propertyMapInputFile = propertyMapInputFile;
     this.propertyMapOutputFile = propertyMapOutputFile;
-    this.addSourceMapUrl = addSourceMapUrl;
+    this.sourceMapBaseUrl = sourceMapBaseUrl;
     this.cssInputs = ImmutableList.copyOf(cssInputs);
     this.cssDefines = ImmutableSet.copyOf(cssDefines);
     this.allowedUnrecognizedProperties = ImmutableList.copyOf(
@@ -503,7 +503,7 @@ public final class Config implements Comparable<Config> {
     return propertyMapOutputFile;
   }
 
-  public boolean getAddSourceMapUrl() { return addSourceMapUrl; }
+  public String getSourceMapBaseUrl() { return sourceMapBaseUrl; }
 
   public File getTestTemplate() {
     return testTemplate;
@@ -1014,7 +1014,7 @@ public final class Config implements Comparable<Config> {
 
     private File propertyMapOutputFile;
 
-    private boolean addSourceMapUrl;
+    private String sourceMapBaseUrl;
 
     private final Map<String, JsonPrimitive> defines;
 
@@ -1109,7 +1109,7 @@ public final class Config implements Comparable<Config> {
       this.variableMapOutputFile = config.variableMapOutputFile;
       this.propertyMapInputFile = config.propertyMapInputFile;
       this.propertyMapOutputFile = config.propertyMapOutputFile;
-      this.addSourceMapUrl = config.addSourceMapUrl;
+      this.sourceMapBaseUrl = config.sourceMapBaseUrl;
       this.defines = Maps.newHashMap(config.defines);
       this.cssInputs = Lists.newArrayList(config.cssInputs);
       this.cssDefines = Sets.newHashSet(config.cssDefines);
@@ -1463,7 +1463,7 @@ public final class Config implements Comparable<Config> {
       this.propertyMapOutputFile = file;
     }
 
-    public void setAddSourceMapUrl(boolean addSourceMapUrl) { this.addSourceMapUrl = addSourceMapUrl; }
+    public void setSourceMapBaseUrl(String sourceMapBaseUrl) { this.sourceMapBaseUrl = sourceMapBaseUrl; }
 
     public void addCssInput(File cssInput) {
       Preconditions.checkNotNull(cssInput);
@@ -1602,7 +1602,7 @@ public final class Config implements Comparable<Config> {
           variableMapOutputFile,
           propertyMapInputFile,
           propertyMapOutputFile,
-              addSourceMapUrl,
+          sourceMapBaseUrl,
           cssInputs,
           cssDefines,
           allowedUnrecognizedProperties,
