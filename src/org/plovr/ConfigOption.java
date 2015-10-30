@@ -208,19 +208,19 @@ public enum ConfigOption {
     }
   }),
 
-//  ADD_SOURCEMAP_URL("add-sourcemap-url", new ConfigUpdater() {
-//    @Override
-//    public void apply(boolean addSourceMapUrl, Config.Builder builder) {
-//      builder.setAddSourceMapUrl(addSourceMapUrl);
-//    }
-//
-//    @Override
-//    public boolean update(String addSourceMapUrlParam, Config.Builder builder) {
-//      boolean addSourceMapUrl = Boolean.valueOf(addSourceMapUrlParam);
-//      builder.setAddSourceMapUrl(addSourceMapUrl);
-//      return true;
-//    }
-//  }),
+  ADD_SOURCEMAP_URL("add-sourcemap-url", new ConfigUpdater() {
+    @Override
+    public void apply(boolean addSourceMapUrl, Config.Builder builder) {
+      builder.setAddSourceMapUrl(addSourceMapUrl);
+  }
+
+    @Override
+    public boolean update(String addSourceMapUrlParam, Config.Builder builder) {
+      boolean addSourceMapUrl = Boolean.valueOf(addSourceMapUrlParam);
+      builder.setAddSourceMapUrl(addSourceMapUrl);
+      return true;
+    }
+  }),
 
   PRINT_INPUT_DELIMITER("print-input-delimiter", new ConfigUpdater() {
     @Override
@@ -331,6 +331,14 @@ public enum ConfigOption {
     public void apply(String outputPath, Config.Builder builder) {
       ModuleConfig.Builder moduleConfigBuilder = builder.getModuleConfigBuilder();
       moduleConfigBuilder.setOutputPath(outputPath);
+    }
+  }),
+
+  MODULE_SOURCE_MAP_NAME("module-source-map-name", new ConfigUpdater() {
+    @Override
+    public void apply(String moduleSourceMapName, Config.Builder builder) {
+      ModuleConfig.Builder moduleConfigBuilder = builder.getModuleConfigBuilder();
+      moduleConfigBuilder.setSourceMapName(moduleSourceMapName);
     }
   }),
 
