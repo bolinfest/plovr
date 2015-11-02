@@ -195,7 +195,7 @@ public final class Compilation {
         inputJsConcatenatedInOrder : compiler.toSource();
 
     String sourceUrl = config.getOutputFile() == null ? "" : config.getOutputFile().toString();
-    String outputWrapper = config.getOutputAndGlobalScopeWrapper(true, sourceUrl);
+    String outputWrapper = config.getOutputAndGlobalScopeWrapper(true, "", sourceUrl);
     return interpolateOutputWrapper(compiledCode, outputWrapper);
   }
 
@@ -284,7 +284,7 @@ public final class Compilation {
     }
     String sourceUrl = moduleNameToUri.apply(moduleName);
     return rootModuleInfoBuilder.toString() +
-        config.getOutputAndGlobalScopeWrapper(isRootModule, sourceUrl);
+        config.getOutputAndGlobalScopeWrapper(isRootModule, moduleName, sourceUrl);
   }
 
   private String interpolateOutputWrapper(String code, String outputWrapper) {
@@ -363,11 +363,6 @@ public final class Compilation {
         outputFile = new File(outputFile.getParentFile(), fileName);
       }
 
-      String sourceMapFileName = config.getModuleConfig().getSourceMapName().replace("%s", moduleName);
-      if ( config.getSourceMapBaseUrl() != null ) {
-        moduleCode += "\n//# sourceMappingURL=" + config.getSourceMapBaseUrl() + sourceMapFileName + "\n";
-      }
-
       Files.write(moduleCode, outputFile);
 
       // It turns out that the SourceMap will not be populated until after the
@@ -375,8 +370,9 @@ public final class Compilation {
       // it should only be written out to a file after the compiled code has
       // been generated.
       if (sourceMapPath != null) {
+        String sourceMapFileName = config.getSourceMapOutputName().replace("%s", moduleName);
         Writer writer = Streams.createFileWriter(
-            sourceMapPath + sourceMapFileName, config);
+            new File(sourceMapPath, sourceMapFileName).getPath(), config);
         // This is safe because getCodeForModule() was just called, which has
         // the side-effect of calling compiler.toSource(module).
         SourceMap sourceMap = compiler.getSourceMap();
