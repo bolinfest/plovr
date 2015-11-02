@@ -62,22 +62,37 @@ public class ConfigTest {
     builder.setCompilationMode(CompilationMode.ADVANCED);
 
     assertEquals("(function () { %output% })()",
-                 builder.build().getOutputAndGlobalScopeWrapper(false, ""));
-    assertEquals("(function () { %output% })()\n//@ sourceURL=foo.js",
-                 builder.build().getOutputAndGlobalScopeWrapper(false, "foo.js"));
+                 builder.build().getOutputAndGlobalScopeWrapper(false, "", ""));
+    assertEquals("(function () { %output% })()\n//# sourceURL=foo.js",
+                 builder.build().getOutputAndGlobalScopeWrapper(false, "", "foo.js"));
 
     builder.setOutputWrapper("");
     builder.setGlobalScopeName("_mdm");
 
     assertEquals("(function(z){\n%output%}).call(this, _mdm);",
-                 builder.build().getOutputAndGlobalScopeWrapper(false, ""));
+                 builder.build().getOutputAndGlobalScopeWrapper(false, "", ""));
     assertEquals("var _mdm={};(function(z){\n%output%}).call(this, _mdm);",
-                 builder.build().getOutputAndGlobalScopeWrapper(true, ""));
+                 builder.build().getOutputAndGlobalScopeWrapper(true, "", ""));
 
     builder.setOutputWrapper("(function () { %output% })()");
     builder.setGlobalScopeName("_mdm");
 
     assertEquals("(function () { (function(z){\n%output%}).call(this, _mdm); })()",
-                 builder.build().getOutputAndGlobalScopeWrapper(false, ""));
+                 builder.build().getOutputAndGlobalScopeWrapper(false, "", ""));
+  }
+
+  @Test
+  public void testSourceMapUrl() {
+    Config.Builder builder = Config.builderForTesting();
+    builder.setId("id");
+    builder.addInput(new File("fake-input.js"), "fake-input.js");
+
+    builder.setSourceMapBaseUrl("http://plovr.org/");
+    assertEquals("%output%\n//# sourceMappingURL=http://plovr.org/id.map",
+                 builder.build().getOutputAndGlobalScopeWrapper(false, "", ""));
+
+    builder.setSourceMapBaseUrl("http://plovr.org/path/");
+    assertEquals("%output%\n//# sourceMappingURL=http://plovr.org/path/id.map",
+                 builder.build().getOutputAndGlobalScopeWrapper(false, "", ""));
   }
 }

@@ -1,25 +1,5 @@
 package org.plovr;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.PrintStream;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.nio.charset.Charset;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.logging.Logger;
-import java.util.regex.Pattern;
-
-import javax.annotation.Nullable;
-
-import org.plovr.util.Pair;
-import org.plovr.webdriver.WebDriverFactory;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
 import com.google.common.base.Function;
@@ -54,6 +34,28 @@ import com.google.javascript.jscomp.StrictWarningsGuard;
 import com.google.javascript.jscomp.VariableMap;
 import com.google.javascript.jscomp.WarningLevel;
 import com.google.template.soy.xliffmsgplugin.XliffMsgPluginModule;
+
+import org.plovr.util.Pair;
+import org.plovr.webdriver.WebDriverFactory;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.Charset;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.logging.Logger;
+import java.util.regex.Pattern;
+
+import javax.annotation.Nullable;
 
 
 public final class Config implements Comparable<Config> {
@@ -161,6 +163,8 @@ public final class Config implements Comparable<Config> {
 
   private final String sourceMapBaseUrl;
 
+  private final String sourceMapOutputName;
+
   private List<FileWithLastModified> configFileInheritanceChain =
       Lists.newArrayList();
 
@@ -228,6 +232,7 @@ public final class Config implements Comparable<Config> {
       File propertyMapInputFile,
       File propertyMapOutputFile,
       String sourceMapBaseUrl,
+      String sourceMapOutputName,
       List<File> cssInputs,
       Set<String> cssDefines,
       List<String> allowedUnrecognizedProperties,
@@ -279,6 +284,7 @@ public final class Config implements Comparable<Config> {
     this.propertyMapInputFile = propertyMapInputFile;
     this.propertyMapOutputFile = propertyMapOutputFile;
     this.sourceMapBaseUrl = sourceMapBaseUrl;
+    this.sourceMapOutputName = sourceMapOutputName;
     this.cssInputs = ImmutableList.copyOf(cssInputs);
     this.cssDefines = ImmutableSet.copyOf(cssDefines);
     this.allowedUnrecognizedProperties = ImmutableList.copyOf(
@@ -364,7 +370,7 @@ public final class Config implements Comparable<Config> {
   /**
    * @return A complete output wrapper, including the wrapper for global re-scoping.
    */
-  public String getOutputAndGlobalScopeWrapper(boolean isRootModule, String sourceUrl) {
+  public String getOutputAndGlobalScopeWrapper(boolean isRootModule, String moduleName, String sourceUrl) {
     String outputWrapper = getOutputWrapper();
     String outputWrapperMarker = getOutputWrapperMarker();
     if (Strings.isNullOrEmpty(outputWrapper)) {
@@ -392,7 +398,17 @@ public final class Config implements Comparable<Config> {
     // http://blog.getfirebug.com/2009/08/11/give-your-eval-a-name-with-sourceurl/
     // non-root modules are loaded with eval, give it a sourceURL for better debugging
     if (!isRootModule && !Strings.isNullOrEmpty(sourceUrl)) {
-      outputWrapper += "\n//@ sourceURL=" + sourceUrl;
+      outputWrapper += "\n//# sourceURL=" + sourceUrl;
+    }
+
+    String sourceMapFileName = getSourceMapOutputName().replace("%s", moduleName);
+    if (!Strings.isNullOrEmpty(getSourceMapBaseUrl())) {
+      try {
+        outputWrapper += "\n//# sourceMappingURL=" +
+            new URI(getSourceMapBaseUrl()).resolve(sourceMapFileName).toString();
+      } catch (URISyntaxException e) {
+        // ignore
+      }
     }
 
     return outputWrapper;
@@ -503,7 +519,20 @@ public final class Config implements Comparable<Config> {
     return propertyMapOutputFile;
   }
 
-  public String getSourceMapBaseUrl() { return sourceMapBaseUrl; }
+  public String getSourceMapBaseUrl() {
+    return sourceMapBaseUrl;
+  }
+
+  public String getSourceMapOutputName() {
+    if (Strings.isNullOrEmpty(sourceMapOutputName)) {
+      if (hasModules()) {
+        return getId() + "_%s.map";
+      } else {
+        return getId() + ".map";
+      }
+    }
+    return sourceMapOutputName;
+  }
 
   public File getTestTemplate() {
     return testTemplate;
@@ -1016,6 +1045,8 @@ public final class Config implements Comparable<Config> {
 
     private String sourceMapBaseUrl;
 
+    private String sourceMapOutputName;
+
     private final Map<String, JsonPrimitive> defines;
 
     /************************* CSS OPTIONS *************************/
@@ -1110,6 +1141,7 @@ public final class Config implements Comparable<Config> {
       this.propertyMapInputFile = config.propertyMapInputFile;
       this.propertyMapOutputFile = config.propertyMapOutputFile;
       this.sourceMapBaseUrl = config.sourceMapBaseUrl;
+      this.sourceMapOutputName = config.sourceMapOutputName;
       this.defines = Maps.newHashMap(config.defines);
       this.cssInputs = Lists.newArrayList(config.cssInputs);
       this.cssDefines = Sets.newHashSet(config.cssDefines);
@@ -1463,7 +1495,13 @@ public final class Config implements Comparable<Config> {
       this.propertyMapOutputFile = file;
     }
 
-    public void setSourceMapBaseUrl(String sourceMapBaseUrl) { this.sourceMapBaseUrl = sourceMapBaseUrl; }
+    public void setSourceMapBaseUrl(String sourceMapBaseUrl) {
+      this.sourceMapBaseUrl = sourceMapBaseUrl;
+    }
+
+    public void setSourceMapOutputName(String sourceMapOutputName) {
+      this.sourceMapOutputName = sourceMapOutputName;
+    }
 
     public void addCssInput(File cssInput) {
       Preconditions.checkNotNull(cssInput);
@@ -1603,6 +1641,7 @@ public final class Config implements Comparable<Config> {
           propertyMapInputFile,
           propertyMapOutputFile,
           sourceMapBaseUrl,
+          sourceMapOutputName,
           cssInputs,
           cssDefines,
           allowedUnrecognizedProperties,
