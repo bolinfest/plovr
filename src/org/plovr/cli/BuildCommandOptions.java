@@ -10,7 +10,7 @@ import com.google.common.collect.Lists;
 public class BuildCommandOptions extends AbstractCommandOptions {
 
   @Option(name = "--create_source_map",
-      usage = "Specifies where the source map for the compilation should be written")
+      usage = "Specifies the path where the source map for the compilation should be written")
   private String sourceMapPath = null;
 
   @Argument

@@ -59,7 +59,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
         e.print(System.err);
         return 1;
       }
-      boolean isSuccess = processResult(compilation, config, options.getSourceMapPath(), config.getId());
+      boolean isSuccess = processResult(compilation, config, options.getSourceMapPath());
       if (!isSuccess) {
         return 1;
       }
@@ -74,7 +74,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
   }
 
   private boolean processResult(Compilation compilation, Config config,
-      String sourceMapPath, String sourceMapName) throws IOException {
+      String sourceMapPath) throws IOException {
     Preconditions.checkNotNull(compilation);
     Result result = compilation.getResult();
     boolean success = (result.success && result.errors.length == 0);
@@ -108,9 +108,10 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
         // it should only be written out to a file after the compiled code has
         // been generated.
         if (sourceMapPath != null) {
-          try (Writer writer = Streams.createFileWriter(sourceMapPath, config)) {
-            result.sourceMap.appendTo(writer, sourceMapName);
-          }
+          String sourceMapName = config.getSourceMapOutputName();
+          Writer writer = Streams.createFileWriter(
+              new File(sourceMapPath, sourceMapName), config);
+          result.sourceMap.appendTo(writer, sourceMapName);
         }
       } else {
         Function<String, String> moduleNameToUri = moduleConfig.

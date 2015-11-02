@@ -24,6 +24,9 @@
   // output_path, but for a production system, they would likely be different.
   "module-production-uri": "../../build/module-example/module_%s.js",
 
+  "source-map-output-name": "%s.map",
+  "source-map-base-url": "http://plovr.org/sourcemaps/",
+
   // This enables an experimental modules feature, and may not be
   // appropriate for most users. Be sure you understand what this does
   // before enabling it: http://plovr.com/options.html#global-scope-name
