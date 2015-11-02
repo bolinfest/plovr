@@ -363,6 +363,11 @@ public final class Compilation {
         outputFile = new File(outputFile.getParentFile(), fileName);
       }
 
+      String sourceMapFileName = config.getModuleConfig().getSourceMapName().replace("%s", moduleName);
+      if ( config.getSourceMapBaseUrl() != null ) {
+        moduleCode += "\n//# sourceMappingURL=" + config.getSourceMapBaseUrl() + sourceMapFileName + "\n";
+      }
+
       Files.write(moduleCode, outputFile);
 
       // It turns out that the SourceMap will not be populated until after the
@@ -371,7 +376,7 @@ public final class Compilation {
       // been generated.
       if (sourceMapPath != null) {
         Writer writer = Streams.createFileWriter(
-            sourceMapPath + "_" + moduleName, config);
+            sourceMapPath + sourceMapFileName, config);
         // This is safe because getCodeForModule() was just called, which has
         // the side-effect of calling compiler.toSource(module).
         SourceMap sourceMap = compiler.getSourceMap();

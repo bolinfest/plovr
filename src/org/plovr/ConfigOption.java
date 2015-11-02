@@ -208,6 +208,13 @@ public enum ConfigOption {
     }
   }),
 
+  SOURCE_MAP_BASE_URL("source-map-base-url", new ConfigUpdater() {
+    @Override
+    public void apply(String sourceMapBaseUrl, Config.Builder builder) {
+      builder.setSourceMapBaseUrl(sourceMapBaseUrl);
+    }
+  }),
+
   PRINT_INPUT_DELIMITER("print-input-delimiter", new ConfigUpdater() {
     @Override
     public void apply(boolean printInputDelimiter, Config.Builder builder) {
@@ -317,6 +324,14 @@ public enum ConfigOption {
     public void apply(String outputPath, Config.Builder builder) {
       ModuleConfig.Builder moduleConfigBuilder = builder.getModuleConfigBuilder();
       moduleConfigBuilder.setOutputPath(outputPath);
+    }
+  }),
+
+  MODULE_SOURCE_MAP_NAME("module-source-map-name", new ConfigUpdater() {
+    @Override
+    public void apply(String moduleSourceMapName, Config.Builder builder) {
+      ModuleConfig.Builder moduleConfigBuilder = builder.getModuleConfigBuilder();
+      moduleConfigBuilder.setSourceMapName(moduleSourceMapName);
     }
   }),
 

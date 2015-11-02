@@ -2,5 +2,5 @@
 
 cd ../..
 rm -rf build/module-example/
-ant jar
-java -jar build/plovr.jar build testdata/modules/plovr-config.js
+buck build plovr
+java -jar buck-out/gen/plovr.jar build testdata/modules/plovr-config.js

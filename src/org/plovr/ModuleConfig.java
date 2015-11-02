@@ -48,12 +48,14 @@ public final class ModuleConfig {
 
   private final File moduleInfoPath;
 
+  private final String sourceMapName;
+
   private ModuleConfig(String rootModule,
       Map<String, List<String>> invertedDependencyTree,
       Map<String, ModuleInfo> moduleInfo,
       List<String> topologicalSort,
       Map<String, File> moduleToOutputPath, File moduleInfoPath,
-      String productionUri) {
+      String productionUri, String sourceMapName) {
     this.rootModule = rootModule;
     this.invertedDependencyTree = invertedDependencyTree;
     this.moduleInfoMap = moduleInfo;
@@ -61,6 +63,7 @@ public final class ModuleConfig {
     this.moduleToOutputPath = moduleToOutputPath;
     this.moduleInfoPath = moduleInfoPath;
     this.productionUri = productionUri;
+    this.sourceMapName = sourceMapName;
   }
 
   public String getRootModule() {
@@ -99,6 +102,10 @@ public final class ModuleConfig {
 
   public String getProductionUri() {
     return productionUri;
+  }
+
+  public String getSourceMapName() {
+    return sourceMapName;
   }
 
   public File getModuleInfoPath() {
@@ -487,6 +494,8 @@ public final class ModuleConfig {
 
     private List<String> topologicalSort;
 
+    private String sourceMapName = "%s.map";
+
     // Either moduleInfoPath will be assigned in the constructor, or
     // infoPath will be defined later and will be used to create a
     // moduleInfoPath when build() is invoked.
@@ -721,6 +730,11 @@ public final class ModuleConfig {
       this.topologicalSort = topologicalSort;
     }
 
+    public void setSourceMapName(String sourceMapName) {
+      ConfigOption.assertContainsModuleNamePlaceholder(sourceMapName);
+      this.sourceMapName = sourceMapName;
+    }
+
     public void setProductionUri(String productionUri) {
       ConfigOption.assertContainsModuleNamePlaceholder(productionUri);
       this.productionUri = productionUri;
@@ -769,7 +783,7 @@ public final class ModuleConfig {
       }
 
       return new ModuleConfig(rootModule, dependencyTree, moduleInfo,
-          topologicalSort, moduleToOutputPath, moduleInfoPath, productionUri);
+          topologicalSort, moduleToOutputPath, moduleInfoPath, productionUri, sourceMapName);
     }
   }
 
