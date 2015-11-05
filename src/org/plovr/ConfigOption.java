@@ -308,6 +308,13 @@ public enum ConfigOption {
     }
   }),
 
+  LOCATION_MAPPING("location-mapping", new ConfigUpdater() {
+    @Override
+    public void apply(JsonObject locationMapping, Config.Builder builder) {
+      builder.setLocationMappings(locationMapping);
+    }
+  }),
+
   MODULES("modules", new ConfigUpdater() {
     @Override
     public void apply(JsonObject modules, Config.Builder builder) {
