@@ -30,16 +30,14 @@ import java.util.Map;
  */
 class CheckProvides implements HotSwapCompilerPass {
   private final AbstractCompiler compiler;
-  private final CheckLevel checkLevel;
   private final CodingConvention codingConvention;
 
-  static final DiagnosticType MISSING_PROVIDE_WARNING = DiagnosticType.disabled(
+  static final DiagnosticType MISSING_PROVIDE_WARNING = DiagnosticType.warning(
       "JSC_MISSING_PROVIDE",
       "missing goog.provide(''{0}'')");
 
-  CheckProvides(AbstractCompiler compiler, CheckLevel checkLevel) {
+  CheckProvides(AbstractCompiler compiler) {
     this.compiler = compiler;
-    this.checkLevel = checkLevel;
     this.codingConvention = compiler.getCodingConvention();
   }
 
@@ -89,7 +87,7 @@ class CheckProvides implements HotSwapCompilerPass {
     }
 
     private void visitFunctionNode(Node n, Node parent) {
-      // TODO(user): Use NodeUtil.getBestJSDocInfo/getFunctionName to recognize all functions.
+      // TODO(user): Use isPrivate method below to recognize all functions.
       Node name = null;
       JSDocInfo info = parent.getJSDocInfo();
       if (info != null && info.isConstructor()) {
@@ -114,9 +112,17 @@ class CheckProvides implements HotSwapCompilerPass {
 
     private void visitClassNode(Node classNode) {
       String name = NodeUtil.getClassName(classNode);
-      if (name != null) {
+      if (name != null && !isPrivate(classNode)) {
         ctors.put(name, classNode);
       }
+    }
+
+    private boolean isPrivate(Node classOrFn) {
+      JSDocInfo info = NodeUtil.getBestJSDocInfo(classOrFn);
+      if (info != null && info.getVisibility().equals(JSDocInfo.Visibility.PRIVATE)) {
+        return true;
+      }
+      return compiler.getCodingConvention().isPrivate(NodeUtil.getName(classOrFn));
     }
 
     private void visitScriptNode() {
@@ -141,8 +147,7 @@ class CheckProvides implements HotSwapCompilerPass {
         if (!found) {
           Node n = ctorEntry.getValue();
           compiler.report(
-              JSError.make(n,
-                  checkLevel, MISSING_PROVIDE_WARNING, ctorEntry.getKey()));
+              JSError.make(n, MISSING_PROVIDE_WARNING, ctorEntry.getKey()));
         }
       }
       provides.clear();

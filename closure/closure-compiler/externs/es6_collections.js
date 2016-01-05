@@ -23,7 +23,7 @@
 // TODO(johnlenz): Use Tuples for the Map and Set iterators where appropriate.
 
 /**
- * @constructor
+ * @constructor @struct
  * @param {Iterable<!Array<KEY|VALUE>>|!Array<!Array<KEY|VALUE>>=} opt_iterable
  * @implements {Iterable<!Array<KEY|VALUE>>}
  * @template KEY, VALUE
@@ -41,7 +41,7 @@ Map.prototype.clear;
 Map.prototype.delete;
 
 /**
- * @return {!Iterator<!Array<KEY|VALUE>>}
+ * @return {!IteratorIterable<!Array<KEY|VALUE>>}
  * @nosideeffects
  */
 Map.prototype.entries;
@@ -69,7 +69,7 @@ Map.prototype.get;
 Map.prototype.has;
 
 /**
- * @return {!Iterator<KEY>}
+ * @return {!IteratorIterable<KEY>}
  */
 Map.prototype.keys;
 
@@ -89,7 +89,7 @@ Map.prototype.set;
 Map.prototype.size;
 
 /**
- * @return {!Iterator<VALUE>}
+ * @return {!IteratorIterable<VALUE>}
  * @nosideeffects
  */
 Map.prototype.values;
@@ -101,7 +101,7 @@ Map.prototype[Symbol.iterator] = function() {};
 
 
 /**
- * @constructor
+ * @constructor @struct
  * @param {Iterable<!Array<KEY|VALUE>>|!Array<!Array<KEY|VALUE>>=} opt_iterable
  * @template KEY, VALUE
  * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/WeakMap
@@ -143,7 +143,7 @@ WeakMap.prototype.set;
 
 
 /**
- * @constructor
+ * @constructor @struct
  * @param {Iterable<VALUE>|Array<VALUE>=} opt_iterable
  * @implements {Iterable<VALUE>}
  * @template VALUE
@@ -171,7 +171,7 @@ Set.prototype.clear;
 Set.prototype.delete;
 
 /**
- * @return {!Iterator<!Array<VALUE>>} Where each array has two entries:
+ * @return {!IteratorIterable<!Array<VALUE>>} Where each array has two entries:
  *     [value, value]
  * @nosideeffects
  */
@@ -198,13 +198,13 @@ Set.prototype.has;
 Set.prototype.size;
 
 /**
- * @return {!Iterator<VALUE>}
+ * @return {!IteratorIterable<VALUE>}
  * @nosideeffects
  */
 Set.prototype.keys;
 
 /**
- * @return {!Iterator<VALUE>}
+ * @return {!IteratorIterable<VALUE>}
  * @nosideeffects
  */
 Set.prototype.values;
@@ -217,7 +217,7 @@ Set.prototype[Symbol.iterator] = function() {};
 
 
 /**
- * @constructor
+ * @constructor @struct
  * @param {Iterable<VALUE>|Array<VALUE>=} opt_iterable
  * @template VALUE
  * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Set

@@ -27,7 +27,7 @@ import com.google.javascript.rhino.Token;
  *
  * @author chadkillingsworth@gmail.com (Chad Killingsworth)
  */
-final class CheckJSDoc extends AbstractPostOrderCallback implements CompilerPass {
+final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompilerPass {
 
   public static final DiagnosticType MISPLACED_MSG_ANNOTATION =
       DiagnosticType.disabled("JSC_MISPLACED_MSG_ANNOTATION",
@@ -64,6 +64,11 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements CompilerPass
   public void process(Node externs, Node root) {
     NodeTraversal.traverseEs6(compiler, externs, this);
     NodeTraversal.traverseEs6(compiler, root, this);
+  }
+
+  @Override
+  public void hotSwapScript(Node scriptRoot, Node originalRoot) {
+    NodeTraversal.traverseEs6(compiler, scriptRoot, this);
   }
 
   @Override
@@ -144,8 +149,7 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements CompilerPass
   /**
    * Checks that deprecated annotations such as @expose are not present
    */
-  private void validateDeprecatedJsDoc(Node n,
-      JSDocInfo info) {
+  private void validateDeprecatedJsDoc(Node n, JSDocInfo info) {
     if (info != null && info.isExpose()) {
       report(n, ANNOTATION_DEPRECATED, "@expose",
               "Use @nocollapse or @export instead.");
@@ -153,11 +157,10 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements CompilerPass
   }
 
   /**
-   * Warns when nocollapse annotations are pressent on nodes
-   * which are not eligible for property collapsing .
+   * Warns when nocollapse annotations are present on nodes
+   * which are not eligible for property collapsing.
    */
-  private void validateNoCollapse(Node n,
-      JSDocInfo info) {
+  private void validateNoCollapse(Node n, JSDocInfo info) {
     if (n.isFromExterns()) {
       if (info != null && info.isNoCollapse()) {
         // @nocollapse has no effect in externs
@@ -301,11 +304,14 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements CompilerPass
           valid = true;
           break;
         // Property assignments are valid, if at the root of an expression.
-        case Token.ASSIGN:
-          valid =
-              n.getParent().isExprResult()
-                  && (n.getFirstChild().isGetProp() || n.getFirstChild().isGetElem());
+        case Token.ASSIGN: {
+          Node lvalue = n.getFirstChild();
+          valid = n.getParent().isExprResult()
+              && (lvalue.isGetProp()
+                  || lvalue.isGetElem()
+                  || lvalue.matchesQualifiedName("exports"));
           break;
+        }
         case Token.GETPROP:
           valid = n.getParent().isExprResult() && n.isQualifiedName();
           break;

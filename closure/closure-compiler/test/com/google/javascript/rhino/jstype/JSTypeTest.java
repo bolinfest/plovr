@@ -6011,7 +6011,16 @@ public class JSTypeTest extends BaseJSTypeTestCase {
         "e", NUMBER_TYPE, null);
     anonymous.defineDeclaredProperty(
         "f", NUMBER_TYPE, null);
-    assertEquals("{a: number, b: number, c: number, d: number, e: number, f: number}",
+    assertEquals(
+        LINE_JOINER.join(
+            "{",
+            "  a: number, ",
+            "  b: number, ",
+            "  c: number, ",
+            "  d: number, ",
+            "  e: number, ",
+            "  f: number",
+            "}"),
         anonymous.toString());
   }
 
@@ -6274,9 +6283,9 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertTrue(templateTypeMap.hasTemplateKey(keyB));
     assertFalse(templateTypeMap.hasTemplateKey(unknownKey));
 
-    assertEquals(NUMBER_TYPE, templateTypeMap.getTemplateType(keyA));
-    assertEquals(STRING_TYPE, templateTypeMap.getTemplateType(keyB));
-    assertEquals(UNKNOWN_TYPE, templateTypeMap.getTemplateType(unknownKey));
+    assertEquals(NUMBER_TYPE, templateTypeMap.getResolvedTemplateType(keyA));
+    assertEquals(STRING_TYPE, templateTypeMap.getResolvedTemplateType(keyB));
+    assertEquals(UNKNOWN_TYPE, templateTypeMap.getResolvedTemplateType(unknownKey));
 
     assertEquals("TestingType<number,string>", templatizedInstance.toString());
   }
@@ -6304,9 +6313,9 @@ public class JSTypeTest extends BaseJSTypeTestCase {
     assertTrue(templateTypeMap.hasTemplateKey(keyB));
     assertFalse(templateTypeMap.hasTemplateKey(unknownKey));
 
-    assertEquals(NUMBER_TYPE, templateTypeMap.getTemplateType(keyA));
-    assertEquals(UNKNOWN_TYPE, templateTypeMap.getTemplateType(keyB));
-    assertEquals(UNKNOWN_TYPE, templateTypeMap.getTemplateType(unknownKey));
+    assertEquals(NUMBER_TYPE, templateTypeMap.getResolvedTemplateType(keyA));
+    assertEquals(UNKNOWN_TYPE, templateTypeMap.getResolvedTemplateType(keyB));
+    assertEquals(UNKNOWN_TYPE, templateTypeMap.getResolvedTemplateType(unknownKey));
 
     assertEquals("TestingType<number,?>", templatizedInstance.toString());
   }

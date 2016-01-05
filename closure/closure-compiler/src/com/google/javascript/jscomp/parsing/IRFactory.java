@@ -228,8 +228,10 @@ class IRFactory {
   private final ErrorReporter errorReporter;
   private final TransformDispatcher transformDispatcher;
 
+  private static final ImmutableSet<String> USE_STRICT_ONLY = ImmutableSet.of("use strict");
+
   private static final ImmutableSet<String> ALLOWED_DIRECTIVES =
-      ImmutableSet.of("use strict");
+      USE_STRICT_ONLY;
 
   private static final ImmutableSet<String> ES5_RESERVED_KEYWORDS =
       ImmutableSet.of(
@@ -281,7 +283,7 @@ class IRFactory {
       if (charNo == -1) {
         break;
       }
-      newlines.add(Integer.valueOf(charNo));
+      newlines.add(charNo);
     }
 
     // Sometimes this will be null in tests.
@@ -987,17 +989,22 @@ class IRFactory {
      */
     private void parseDirectives(Node node) {
       // Remove all the directives, and encode them in the AST.
-      Set<String> directives = null;
+      ImmutableSet.Builder<String> directives = null;
       while (isDirective(node.getFirstChild())) {
         String directive = node.removeFirstChild().getFirstChild().getString();
         if (directives == null) {
-          directives = new HashSet<>();
+          directives = new ImmutableSet.Builder<>();
         }
         directives.add(directive);
       }
 
       if (directives != null) {
-        node.setDirectives(directives);
+        ImmutableSet<String> result = directives.build();
+        if (result.size() == 1 && result.contains("use strict")) {
+          // Use a shared set.
+          result = USE_STRICT_ONLY;
+        }
+        node.setDirectives(result);
       }
     }
 
@@ -1511,6 +1518,7 @@ class IRFactory {
       Node value = newNode(Token.FUNCTION, dummyName, paramList, body);
       setSourceInfo(value, tree.body);
       key.addChildToFront(value);
+      maybeProcessType(value, tree.returnType);
       key.setStaticMember(tree.isStatic);
       return key;
     }
@@ -1524,6 +1532,7 @@ class IRFactory {
       Node paramList = IR.paramList(
           safeProcessName(tree.parameter));
       setSourceInfo(paramList, tree.parameter);
+      maybeProcessType(paramList.getFirstChild(), tree.type);
       Node value = newNode(Token.FUNCTION, dummyName, paramList, body);
       setSourceInfo(value, tree.body);
       key.addChildToFront(value);
@@ -1785,6 +1794,8 @@ class IRFactory {
               msg,
               sourceName,
               operand.getLineno(), 0);
+        } else if (type == Token.INC || type == Token.DEC) {
+          return createIncrDecrNode(type, false, operand);
         }
 
         return newNode(type, operand);
@@ -1793,8 +1804,26 @@ class IRFactory {
 
     Node processPostfixExpression(PostfixExpressionTree exprNode) {
       int type = transformPostfixTokenType(exprNode.operator.type);
-      Node node = newNode(type, transform(exprNode.operand));
-      node.putBooleanProp(Node.INCRDECR_PROP, true);
+      Node operand = transform(exprNode.operand);
+      if (type == Token.INC || type == Token.DEC) {
+        return createIncrDecrNode(type, true, operand);
+      }
+      Node node = newNode(type, operand);
+      return node;
+    }
+
+    private Node createIncrDecrNode(int type, boolean postfix, Node operand) {
+      if (!operand.isValidAssignmentTarget()) {
+        errorReporter.error(
+            SimpleFormat.format("Invalid %s %s operand.",
+                (postfix ? "postfix" : "prefix"),
+                (type == Token.INC ? "increment" : "decrement")),
+            sourceName,
+            operand.getLineno(),
+            operand.getCharno());
+      }
+      Node node = newNode(type, operand);
+      node.putBooleanProp(Node.INCRDECR_PROP, postfix);
       return node;
     }
 
@@ -2048,6 +2077,7 @@ class IRFactory {
       Node secondChild = (tree.nameSpaceImportIdentifier != null)
           ? newStringNode(Token.IMPORT_STAR, tree.nameSpaceImportIdentifier.value)
           : transformListOrEmpty(Token.IMPORT_SPECS, tree.importSpecifierList);
+      setSourceInfo(secondChild, tree);
       Node thirdChild = processString(tree.moduleSpecifier);
 
       return newNode(Token.IMPORT, firstChild, secondChild, thirdChild);
@@ -2662,7 +2692,7 @@ class IRFactory {
     String value = token.value;
     if (templateLiteral) {
       // <CR><LF> and <CR> are normalized as <LF> for raw string value
-      value = value.replaceAll("(?<!\\\\)\r(\n)?", "\n");
+      value = value.replaceAll("\r\n?", "\n");
     }
     int start = templateLiteral ? 0 : 1; // skip the leading quote
     int cur = value.indexOf('\\');

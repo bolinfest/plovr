@@ -374,7 +374,7 @@ public final class JSDocInfoBuilder {
    * Records a thrown type.
    */
   public boolean recordThrowType(JSTypeExpression type) {
-    if (!hasAnySingletonTypeTags()) {
+    if (type != null && !hasAnySingletonTypeTags()) {
       currentInfo.declareThrows(type);
       populated = true;
       return true;
@@ -498,6 +498,13 @@ public final class JSDocInfoBuilder {
     } else {
       return false;
     }
+  }
+
+  /**
+   * Returns whether a deprecation reason has been recorded.
+   */
+  public boolean isDeprecationReasonRecorded() {
+    return currentInfo.getDeprecationReason() != null;
   }
 
   /**

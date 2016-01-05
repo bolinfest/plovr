@@ -2119,7 +2119,7 @@ Element.prototype.getClientRects = function() {};
 Element.prototype.getBoundingClientRect = function() {};
 
 /**
- * @param {boolean=} opt_top
+ * @param {(boolean|{behavior: string, block: string})=} opt_top
  * @see http://www.w3.org/TR/cssom-view/#dom-element-scrollintoview
  */
 Element.prototype.scrollIntoView = function(opt_top) {};
@@ -2356,6 +2356,14 @@ ClientRect.prototype.height;
  * http://www.w3.org/TR/css3-conditional/#CSS-interface
  */
 function CSSInterface() {}
+
+/**
+ * @param {string} ident
+ * @return {string}
+ * @see http://www.w3.org/TR/cssom/#the-css.escape()-method
+ * @throws DOMException {@see DOMException.INVALID_CHARACTER_ERR}
+ */
+CSSInterface.prototype.escape = function(ident) {};
 
 /**
  * @param {string} property

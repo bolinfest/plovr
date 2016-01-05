@@ -75,13 +75,25 @@ public abstract class CompilerTestCase extends TestCase {
   /** Whether to rewrite Closure code before the test is run. */
   private boolean rewriteClosureCode = false;
 
-  /** True iff type checking pass runs before pass being tested. */
+  /**
+   * If true, run type checking together with the pass being tested. A separate
+   * flag controls whether type checking runs before or after the pass.
+   */
   private boolean typeCheckEnabled = false;
+
+  /**
+   * If true, run NTI together with the pass being tested. A separate
+   * flag controls whether NTI runs before or after the pass.
+   */
+  private boolean newTypeInferenceEnabled = false;
 
   @Deprecated private CheckLevel reportMissingOverrideCheckLevel = CheckLevel.WARNING;
 
-  /** Whether to the test compiler pass before the type check. */
+  /** Whether to test the compiler pass before the type check. */
   protected boolean runTypeCheckAfterProcessing = false;
+
+  /** Whether to test the compiler pass before NTI. */
+  protected boolean runNTIAfterProcessing = false;
 
   /** Whether to scan externs for property names. */
   private boolean gatherExternPropertiesEnabled = false;
@@ -124,6 +136,8 @@ public abstract class CompilerTestCase extends TestCase {
    * Whether to accept ES6, ES5 or ES3 source.
    */
   private LanguageMode acceptedLanguage = LanguageMode.ECMASCRIPT5;
+
+  private LanguageMode languageOut = LanguageMode.ECMASCRIPT5;
 
   /**
    * Whether externs changes should be allowed for this pass.
@@ -248,10 +262,22 @@ public abstract class CompilerTestCase extends TestCase {
   }
 
   /**
-   * What language to allow in source parsing.
+   * What language to allow in source parsing. Also sets the output language.
    */
-  protected void setAcceptedLanguage(LanguageMode acceptedLanguage) {
-    this.acceptedLanguage = acceptedLanguage;
+  protected void setAcceptedLanguage(LanguageMode lang) {
+    setLanguage(lang, lang);
+  }
+
+  /**
+   * Sets the input and output language modes..
+   */
+  protected void setLanguage(LanguageMode langIn, LanguageMode langOut) {
+    this.acceptedLanguage = langIn;
+    setLanguageOut(langOut);
+  }
+
+  protected void setLanguageOut(LanguageMode acceptedLanguage) {
+    this.languageOut = acceptedLanguage;
   }
 
   /**
@@ -293,6 +319,13 @@ public abstract class CompilerTestCase extends TestCase {
     typeCheckEnabled = true;
   }
 
+  // Run the new type inference after the test pass. Useful for testing passes
+  // that rewrite the AST prior to typechecking, eg, AngularPass or PolymerPass.
+  void enableNewTypeInference() {
+    this.newTypeInferenceEnabled = true;
+    this.runNTIAfterProcessing = true;
+  }
+
   /**
    * Check to make sure that line numbers were preserved.
    */
@@ -307,6 +340,10 @@ public abstract class CompilerTestCase extends TestCase {
    */
   void disableTypeCheck() {
     typeCheckEnabled = false;
+  }
+
+  void disableNewTypeInference() {
+    this.newTypeInferenceEnabled = false;
   }
 
   /**
@@ -410,6 +447,13 @@ public abstract class CompilerTestCase extends TestCase {
         new SemanticReverseAbstractInterpreter(compiler.getTypeRegistry());
 
     return new TypeCheck(compiler, rai, compiler.getTypeRegistry(), level);
+  }
+
+  private static void runNewTypeInference(Compiler compiler, Node externs, Node js) {
+    GlobalTypeInfo gti = compiler.getSymbolTable();
+    gti.process(externs, js);
+    NewTypeInference nti = new NewTypeInference(compiler);
+    nti.process(externs, js);
   }
 
   /**
@@ -577,6 +621,8 @@ public abstract class CompilerTestCase extends TestCase {
     CompilerOptions options = getOptions();
 
     options.setLanguageIn(acceptedLanguage);
+    options.setLanguageOut(languageOut);
+
     // Note that in this context, turning on the checkTypes option won't
     // actually cause the type check to run.
     options.setCheckTypes(parseTypeInfo);
@@ -1026,6 +1072,9 @@ public abstract class CompilerTestCase extends TestCase {
       assert_().withFailureMessage("Unexpected parse error(s): " + errorMsg)
           .that(actualError.getType())
           .isEqualTo(error);
+      if (description != null) {
+        assertThat(actualError.description).isEqualTo(description);
+      }
       return;
     }
     assert_().withFailureMessage("Unexpected parse error(s): " + errorMsg).that(root).isNotNull();
@@ -1082,6 +1131,10 @@ public abstract class CompilerTestCase extends TestCase {
         if (!runTypeCheckAfterProcessing && typeCheckEnabled && i == 0) {
           TypeCheck check = createTypeCheck(compiler, reportMissingOverrideCheckLevel);
           check.processForTesting(externsRoot, mainRoot);
+        } else if (!this.runNTIAfterProcessing
+            && this.newTypeInferenceEnabled
+            && i == 0) {
+          runNewTypeInference(compiler, externsRoot, mainRoot);
         }
 
         // Only run the normalize pass once, if asked.
@@ -1121,6 +1174,10 @@ public abstract class CompilerTestCase extends TestCase {
         if (runTypeCheckAfterProcessing && typeCheckEnabled && i == 0) {
           TypeCheck check = createTypeCheck(compiler, reportMissingOverrideCheckLevel);
           check.processForTesting(externsRoot, mainRoot);
+        } else if (this.runNTIAfterProcessing
+            && this.newTypeInferenceEnabled
+            && i == 0) {
+          runNewTypeInference(compiler, externsRoot, mainRoot);
         }
 
         hasCodeChanged = hasCodeChanged || recentChange.hasCodeChanged();
@@ -1136,10 +1193,7 @@ public abstract class CompilerTestCase extends TestCase {
     }
 
     if (error == null) {
-      assertEquals(
-          "Unexpected error(s): " + LINE_JOINER.join(compiler.getErrors()),
-          0,
-          compiler.getErrorCount());
+      assertEquals("Unexpected error(s): " + errorMsg, 0, compiler.getErrorCount());
 
       // Verify the symbol table.
       ErrorManager symbolTableErrorManager = new BlackHoleErrorManager();
@@ -1240,7 +1294,8 @@ public abstract class CompilerTestCase extends TestCase {
               fail("\nExpected: "
                   + expectedAsSource
                   + "\nResult:   "
-                  + mainAsSource);
+                  + mainAsSource
+                  + "\n" + explanation);
             }
           }
         } else if (expected != null) {
@@ -1293,14 +1348,13 @@ public abstract class CompilerTestCase extends TestCase {
       }
     } else {
       assertNull("expected must be null if error != null", expected);
-      String errors = "";
-      for (JSError actualError : compiler.getErrors()) {
-        errors += actualError.description + "\n";
-      }
-      assertEquals("There should be one error. " + errors, 1, compiler.getErrorCount());
+      assertEquals("There should be one error. " + errorMsg, 1, compiler.getErrorCount());
       JSError actualError = compiler.getErrors()[0];
-      assertEquals(errors, error, actualError.getType());
+      assertEquals(errorMsg, error, actualError.getType());
       validateSourceLocation(actualError);
+      if (description != null) {
+        assertThat(actualError.description).isEqualTo(description);
+      }
 
       if (warning != null) {
         String warnings = "";
@@ -1393,7 +1447,7 @@ public abstract class CompilerTestCase extends TestCase {
     Node externs = externsAndJs.getFirstChild();
 
     Node expected = compiler.parseTestCode(expectedExtern);
-    assertThat(compiler.hasErrors()).isFalse();
+    assertThat(compiler.getErrors()).isEmpty();
 
     (getProcessor(compiler)).process(externs, root);
 

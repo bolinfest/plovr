@@ -188,7 +188,7 @@ class VarCheck extends AbstractPostOrderCallback implements
     Scope scope = t.getScope();
     Var var = scope.getVar(varName);
     if (var == null) {
-      if (NodeUtil.isFunctionExpression(parent)) {
+      if (NodeUtil.isFunctionExpression(parent) || NodeUtil.isClassExpression(parent)) {
         // e.g. [ function foo() {} ], it's okay if "foo" isn't defined in the
         // current scope.
       } else {
@@ -333,6 +333,10 @@ class VarCheck extends AbstractPostOrderCallback implements
     Node parent = n.getParent();
     Node origParent = origVar.getParentNode();
 
+    if (isExternNamespace(n)) {
+      return true;
+    }
+
     JSDocInfo info = parent.getJSDocInfo();
     if (info != null && info.getSuppressions().contains("duplicate")) {
       return true;
@@ -340,6 +344,10 @@ class VarCheck extends AbstractPostOrderCallback implements
 
     info = origParent.getJSDocInfo();
     return (info != null && info.getSuppressions().contains("duplicate"));
+  }
+
+  private static boolean isExternNamespace(Node n) {
+    return n.getParent().isVar() && n.isFromExterns() && NodeUtil.isNamespaceDecl(n);
   }
 
   /**
@@ -369,7 +377,11 @@ class VarCheck extends AbstractPostOrderCallback implements
         }
 
         boolean allowDupe = hasDuplicateDeclarationSuppression(n, origVar);
-
+        if (isExternNamespace(n)) {
+          parent.getParent().removeChild(parent);
+          compiler.reportCodeChange();
+          return;
+        }
         if (!allowDupe) {
           compiler.report(
               JSError.make(n,

@@ -939,6 +939,43 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     }
   }
 
+  public void testPostfixExpression() {
+    parse("a++");
+    parse("a.b--");
+    parse("a[0]++");
+
+    parseError("a()++", "Invalid postfix increment operand.");
+    parseError("(new C)--", "Invalid postfix decrement operand.");
+    parseError("this++", "Invalid postfix increment operand.");
+    parseError("(a--)++", "Invalid postfix increment operand.");
+    parseError("(+a)++", "Invalid postfix increment operand.");
+    parseError("[1,2]++", "Invalid postfix increment operand.");
+    parseError("'literal'++", "Invalid postfix increment operand.");
+  }
+
+  public void testUnaryExpression() {
+    mode = LanguageMode.ECMASCRIPT6;
+    parse("delete a.b");
+    parse("delete a[0]");
+    parse("void f()");
+    parse("typeof new C");
+    parse("++a[0]");
+    parse("--a.b");
+    parse("+{a: 1}");
+    parse("-[1,2]");
+    parse("~'42'");
+    parse("!super.a");
+
+    parseError("delete f()", "Invalid delete operand. Only properties can be deleted.");
+    parseError("++a++", "Invalid prefix increment operand.");
+    parseError("--{a: 1}", "Invalid prefix decrement operand.");
+    parseError("++this", "Invalid prefix increment operand.");
+    parseError("++(-a)", "Invalid prefix increment operand.");
+    parseError("++{a: 1}", "Invalid prefix increment operand.");
+    parseError("++'literal'", "Invalid prefix increment operand.");
+    parseError("++delete a.b", "Invalid prefix increment operand.");
+  }
+
   public void testAutomaticSemicolonInsertion() {
     // var statements
     assertNodeEquality(
@@ -1706,6 +1743,14 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     return parse(s);
   }
 
+  private void assertSimpleTemplateLiteral(String expectedContents, String literal) {
+    Node node = testTemplateLiteral(literal).getFirstChild().getFirstChild();
+    assertNode(node).hasType(Token.TEMPLATELIT);
+    assertThat(node.getChildCount()).isEqualTo(1);
+    assertNode(node.getFirstChild()).hasType(Token.STRING);
+    assertThat(node.getFirstChild().getString()).isEqualTo(expectedContents);
+  }
+
   public void testUseTemplateLiteral() {
     testTemplateLiteral("f`hello world`;");
     testTemplateLiteral("`hello ${name} ${world}`.length;");
@@ -1721,6 +1766,16 @@ public final class NewParserTest extends BaseJSTypeTestCase {
     testTemplateLiteral("`string containing \\`escaped\\` backticks`;");
     testTemplateLiteral("{ `in block` }");
     testTemplateLiteral("{ `in ${block}` }");
+  }
+
+  public void testTemplateLiteralWithNewline() {
+    assertSimpleTemplateLiteral("hello\nworld", "`hello\nworld`");
+    assertSimpleTemplateLiteral("\n", "`\r`");
+    assertSimpleTemplateLiteral("\n", "`\r\n`");
+    assertSimpleTemplateLiteral("\\\n", "`\\\\\n`");
+    assertSimpleTemplateLiteral("\\\n", "`\\\\\r\n`");
+    assertSimpleTemplateLiteral("\r\n", "`\\r\\n`"); // template literals support explicit escapes
+    assertSimpleTemplateLiteral("\\r\\n", "`\\\\r\\\\n`"); // note: no actual newlines here
   }
 
   public void testTemplateLiteralWithLineContinuation() {

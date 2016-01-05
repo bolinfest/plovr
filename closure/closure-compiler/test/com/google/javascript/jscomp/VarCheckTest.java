@@ -167,6 +167,12 @@ public final class VarCheckTest extends Es6CompilerTestCase {
     testErrorEs6("class x{ } let x;", VarCheck.LET_CONST_MULTIPLY_DECLARED_ERROR);
   }
 
+  public void testNamedClass() {
+    testSameEs6("class x {}");
+    testSameEs6("var x = class x {};");
+    testSameEs6("var y = class x {};");
+  }
+
   public void testVarReferenceInExterns() {
     testSame("asdf;", "var asdf;", VarCheck.NAME_REFERENCE_IN_EXTERNS_ERROR);
   }
@@ -182,6 +188,15 @@ public final class VarCheckTest extends Es6CompilerTestCase {
 
   public void testVarAssignmentInExterns() {
     testSame("/** @type{{foo:string}} */ var foo; var asdf = foo;", "asdf.foo;", null);
+  }
+
+  public void testDuplicateNamespaceInExterns() {
+    this.compareJsDoc = true;
+    testExternChanges(
+        "/** @const */ var ns = {}; /** @const */ var ns = {};",
+        "",
+        "/** @const */ var ns = {};");
+    this.compareJsDoc = false;
   }
 
   public void testLetDeclarationInExterns() {
@@ -519,7 +534,7 @@ public final class VarCheckTest extends Es6CompilerTestCase {
 
     @Override
     public void process(Node externs, Node root) {
-      NodeTraversal.traverseRoots(compiler,
+      NodeTraversal.traverseRootsEs6(compiler,
           new AbstractPostOrderCallback() {
             @Override
             public void visit(NodeTraversal t, Node n, Node parent) {

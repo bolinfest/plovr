@@ -29,7 +29,7 @@ public final class CheckSideEffectsTest extends Es6CompilerTestCase {
 
   @Override
   protected CompilerPass getProcessor(Compiler compiler) {
-    return new CheckSideEffects(compiler, CheckLevel.WARNING, true);
+    return new CheckSideEffects(compiler, true, true);
   }
 
   private final DiagnosticType e = CheckSideEffects.USELESS_CODE_ERROR;
@@ -164,10 +164,14 @@ public final class CheckSideEffectsTest extends Es6CompilerTestCase {
   }
 
   public void testJSDocComments() {
-    testSame("function A() { /** This is a JsDoc comment */ this.foo; }");
-    testWarning("function A() { /* This is a normal comment */ this.foo; }",
-         "function A() { " +
-         " /* This is a normal comment */ JSCOMPILER_PRESERVE(this.foo); }", e);
+    testSame("function A() { /** @type {?} JSDoc comment. */ this.foo; }");
+    testSame("function A() { /** @private */ this.foo; }");
+    testSame("/** @param {string} x */ SomeInterface.prototype.foo;");
+
+    testWarning("function A() { /* Normal comment */ this.foo; }",
+         "function A() { /* Normal comment */ JSCOMPILER_PRESERVE(this.foo); }", e);
+    testWarning("function A() { /** JSDoc with no declaration. */ this.foo; }",
+         "function A() { JSCOMPILER_PRESERVE(/** JSDoc with no declaration. */ this.foo); }", e);
   }
 
   public void testIssue80() {

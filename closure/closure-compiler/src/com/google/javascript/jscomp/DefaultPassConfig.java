@@ -218,7 +218,7 @@ public final class DefaultPassConfig extends PassConfig {
 
     checks.add(checkSideEffects);
 
-    if (options.checkProvides.isOn() || options.enables(DiagnosticGroups.MISSING_PROVIDE)) {
+    if (options.enables(DiagnosticGroups.MISSING_PROVIDE)) {
       checks.add(checkProvides);
     }
 
@@ -230,7 +230,8 @@ public final class DefaultPassConfig extends PassConfig {
       checks.add(angularPass);
     }
 
-    if (options.generateExports && !options.skipNonTranspilationPasses) {
+    if (!options.generateExportsAfterTypeChecking
+        && options.generateExports && !options.skipNonTranspilationPasses) {
       checks.add(generateExports);
     }
 
@@ -309,6 +310,10 @@ public final class DefaultPassConfig extends PassConfig {
       checks.add(convertEs6ToEs3);
       checks.add(rewriteBlockScopedDeclaration);
       checks.add(rewriteGenerators);
+      if (!options.getLanguageOut().isEs6OrHigher() && options.rewritePolyfills) {
+        // TODO(sdh): output version check unnecessary?!?
+        checks.add(rewritePolyfills);
+      }
       checks.add(markTranspilationDone);
     }
 
@@ -316,12 +321,13 @@ public final class DefaultPassConfig extends PassConfig {
       checks.add(convertToTypedES6);
     }
 
-    if (options.skipNonTranspilationPasses) {
-      return checks;
+    if ((options.getLanguageIn().isEs6OrHigher() && !options.skipNonTranspilationPasses)
+        || !options.forceLibraryInjection.isEmpty()) {
+      checks.add(es6RuntimeLibrary);
     }
 
-    if (options.getLanguageIn().isEs6OrHigher()) {
-      checks.add(es6RuntimeLibrary);
+    if (options.skipNonTranspilationPasses) {
+      return checks;
     }
 
     checks.add(convertStaticInheritance);
@@ -330,20 +336,17 @@ public final class DefaultPassConfig extends PassConfig {
 
     checks.add(createEmptyPass("beforeTypeChecking"));
 
-    if (options.useNewTypeInference) {
+    if (options.getNewTypeInference()) {
       checks.add(symbolTableForNewTypeInference);
       checks.add(newTypeInference);
     }
 
     checks.add(inlineTypeAliases);
 
-    if (options.checkTypes || options.inferTypes
-        // With NTI, we still need OTI to run because the later passes that use
-        // types only understand OTI types at the moment.
-        || options.useNewTypeInference) {
+    if (options.checkTypes || options.inferTypes) {
       checks.add(resolveTypes);
       checks.add(inferTypes);
-      if (options.checkTypes || options.useNewTypeInference) {
+      if (options.checkTypes) {
         checks.add(checkTypes);
       } else {
         checks.add(inferJsDocInfo);
@@ -356,8 +359,12 @@ public final class DefaultPassConfig extends PassConfig {
       }
     }
 
+    if (options.generateExportsAfterTypeChecking && options.generateExports) {
+      checks.add(generateExports);
+    }
+
     if (!options.disables(DiagnosticGroups.CHECK_USELESS_CODE) ||
-        options.checkMissingReturn.isOn()) {
+        (!options.getNewTypeInference() && !options.disables(DiagnosticGroups.MISSING_RETURN))) {
       checks.add(checkControlFlow);
     }
 
@@ -458,6 +465,15 @@ public final class DefaultPassConfig extends PassConfig {
 
     if (options.runtimeTypeCheck) {
       passes.add(runtimeTypeCheck);
+    }
+
+    // Inlines functions that perform dynamic accesses to static properties of parameters that are
+    // typed as {Function}.
+    //
+    // Inlining these functions turns a dynamic access to a static property of a class definition
+    // into a fully qualified access and in so doing enables better dead code stripping.
+    if (options.j2clPass) {
+      passes.add(j2clPass);
     }
 
     passes.add(createEmptyPass("beforeStandardOptimizations"));
@@ -662,12 +678,7 @@ public final class DefaultPassConfig extends PassConfig {
     // The mapped name anonymous function pass makes use of information that
     // the extract prototype member declarations pass removes so the former
     // happens before the latter.
-    //
-    // Extracting prototype properties screws up the heuristic renaming
-    // policies, so never run it when those policies are requested.
-    if (options.extractPrototypeMemberDeclarations != ExtractPrototypeMemberDeclarationsMode.OFF
-        && (options.propertyRenaming != PropertyRenamingPolicy.HEURISTIC
-            && options.propertyRenaming != PropertyRenamingPolicy.AGGRESSIVE_HEURISTIC)) {
+    if (options.extractPrototypeMemberDeclarations != ExtractPrototypeMemberDeclarationsMode.OFF) {
       passes.add(extractPrototypeMemberDeclarations);
     }
 
@@ -676,7 +687,7 @@ public final class DefaultPassConfig extends PassConfig {
       passes.add(ambiguateProperties);
     }
 
-    if (options.propertyRenaming != PropertyRenamingPolicy.OFF) {
+    if (options.propertyRenaming == PropertyRenamingPolicy.ALL_UNQUOTED) {
       passes.add(renameProperties);
     }
 
@@ -837,7 +848,7 @@ public final class DefaultPassConfig extends PassConfig {
   /** Creates several passes aimed at removing code. */
   private List<PassFactory> getCodeRemovingPasses() {
     List<PassFactory> passes = new ArrayList<>();
-    if (options.collapseObjectLiterals && !isInliningForbidden()) {
+    if (options.collapseObjectLiterals) {
       passes.add(collapseObjectLiterals);
     }
 
@@ -861,7 +872,7 @@ public final class DefaultPassConfig extends PassConfig {
       passes.add(removeUnusedPrototypeProperties);
     }
 
-    if (options.removeUnusedClassProperties && !isInliningForbidden()) {
+    if (options.removeUnusedClassProperties) {
       passes.add(removeUnusedClassProperties);
     }
 
@@ -876,9 +887,8 @@ public final class DefaultPassConfig extends PassConfig {
       new HotSwapPassFactory("checkSideEffects", true) {
     @Override
     protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
-      return new CheckSideEffects(compiler,
-          options.checkSuspiciousCode ? CheckLevel.WARNING : CheckLevel.OFF,
-              protectHiddenSideEffects);
+      return new CheckSideEffects(
+          compiler, options.checkSuspiciousCode, protectHiddenSideEffects);
     }
   };
 
@@ -972,7 +982,8 @@ public final class DefaultPassConfig extends PassConfig {
       new HotSwapPassFactory("checkRequires", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
-      return new CheckRequiresForConstructors(compiler);
+      return new CheckRequiresForConstructors(compiler,
+          CheckRequiresForConstructors.Mode.FULL_COMPILE);
     }
   };
 
@@ -981,7 +992,7 @@ public final class DefaultPassConfig extends PassConfig {
       new HotSwapPassFactory("checkProvides", true) {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
-      return new CheckProvides(compiler, options.checkProvides);
+      return new CheckProvides(compiler);
     }
   };
 
@@ -992,9 +1003,9 @@ public final class DefaultPassConfig extends PassConfig {
           "functions are set.");
 
   /** Verifies JSDoc annotations are used properly. */
-  private final PassFactory checkJsDoc = new PassFactory("checkJsDoc", true) {
+  private final HotSwapPassFactory checkJsDoc = new HotSwapPassFactory("checkJsDoc", true) {
     @Override
-    protected CompilerPass create(AbstractCompiler compiler) {
+    protected HotSwapCompilerPass create(AbstractCompiler compiler) {
       return new CheckJSDoc(compiler);
     }
   };
@@ -1006,10 +1017,21 @@ public final class DefaultPassConfig extends PassConfig {
       CodingConvention convention = compiler.getCodingConvention();
       if (convention.getExportSymbolFunction() != null &&
           convention.getExportPropertyFunction() != null) {
-        return new GenerateExports(compiler,
+        final GenerateExports pass = new GenerateExports(compiler,
             options.exportLocalPropertyDefinitions,
             convention.getExportSymbolFunction(),
             convention.getExportPropertyFunction());
+        return new CompilerPass() {
+          @Override
+          public void process(Node externs, Node root) {
+            pass.process(externs, root);
+            if (exportedNames == null) {
+              exportedNames = new HashSet<>();
+            }
+
+            exportedNames.addAll(pass.getExportedVariableNames());
+          }
+        };
       } else {
         return new ErrorPass(compiler, GENERATE_EXPORTS_ERROR);
       }
@@ -1149,10 +1171,10 @@ public final class DefaultPassConfig extends PassConfig {
     }
   };
 
-  private final PassFactory es6RewriteDestructuring =
-      new PassFactory("Es6RewriteDestructuring", true) {
+  private final HotSwapPassFactory es6RewriteDestructuring =
+      new HotSwapPassFactory("Es6RewriteDestructuring", true) {
         @Override
-        protected CompilerPass create(final AbstractCompiler compiler) {
+        protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
           return new Es6RewriteDestructuring(compiler);
         }
       };
@@ -1165,11 +1187,19 @@ public final class DefaultPassConfig extends PassConfig {
         }
       };
 
-  private final PassFactory es6RewriteArrowFunction =
-      new PassFactory("Es6RewriteArrowFunction", true) {
+  private final HotSwapPassFactory es6RewriteArrowFunction =
+      new HotSwapPassFactory("Es6RewriteArrowFunction", true) {
         @Override
-        protected CompilerPass create(final AbstractCompiler compiler) {
+        protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
           return new Es6RewriteArrowFunction(compiler);
+        }
+      };
+
+  private final HotSwapPassFactory rewritePolyfills =
+      new HotSwapPassFactory("RewritePolyfills", true) {
+        @Override
+        protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
+          return new RewritePolyfills(compiler);
         }
       };
 
@@ -1566,9 +1596,9 @@ public final class DefaultPassConfig extends PassConfig {
       if (!options.disables(DiagnosticGroups.CHECK_USELESS_CODE)) {
         callbacks.add(new CheckUnreachableCode(compiler));
       }
-      if (options.checkMissingReturn.isOn()) {
+      if (!options.getNewTypeInference() && !options.disables(DiagnosticGroups.MISSING_RETURN)) {
         callbacks.add(
-            new CheckMissingReturn(compiler, options.checkMissingReturn));
+            new CheckMissingReturn(compiler));
       }
       return combineChecks(compiler, callbacks);
     }
@@ -1858,7 +1888,7 @@ public final class DefaultPassConfig extends PassConfig {
       new PassFactory("collapseProperties", true) {
         @Override
         protected CompilerPass create(AbstractCompiler compiler) {
-          return new CollapseProperties(compiler, !isInliningForbidden());
+          return new CollapseProperties(compiler);
         }
       };
 
@@ -1886,8 +1916,8 @@ public final class DefaultPassConfig extends PassConfig {
       new PassFactory("disambiguateProperties", true) {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
-      return DisambiguateProperties.forJSTypeSystem(compiler,
-          options.propertyInvalidationErrors);
+      return new DisambiguateProperties(
+          compiler, options.propertyInvalidationErrors);
     }
   };
 
@@ -1964,23 +1994,15 @@ public final class DefaultPassConfig extends PassConfig {
       new PassFactory("inlineVariables", false) {
         @Override
         protected CompilerPass create(AbstractCompiler compiler) {
-          if (isInliningForbidden()) {
-            // In old renaming schemes, inlining a variable can change whether
-            // or not a property is renamed. This is bad, and those old renaming
-            // schemes need to die.
-            return new ErrorPass(compiler, CANNOT_USE_PROTOTYPE_AND_VAR);
+          InlineVariables.Mode mode;
+          if (options.inlineVariables) {
+            mode = InlineVariables.Mode.ALL;
+          } else if (options.inlineLocalVariables) {
+            mode = InlineVariables.Mode.LOCALS_ONLY;
           } else {
-            InlineVariables.Mode mode;
-            if (options.inlineVariables) {
-              mode = InlineVariables.Mode.ALL;
-            } else if (options.inlineLocalVariables) {
-              mode = InlineVariables.Mode.LOCALS_ONLY;
-            } else {
-              throw new IllegalStateException("No variable inlining option set.");
-            }
-
-            return new InlineVariables(compiler, mode, true);
+            throw new IllegalStateException("No variable inlining option set.");
           }
+          return new InlineVariables(compiler, mode, true);
         }
       };
 
@@ -2101,13 +2123,12 @@ public final class DefaultPassConfig extends PassConfig {
       new PassFactory("inlineFunctions", false) {
         @Override
         protected CompilerPass create(AbstractCompiler compiler) {
-          boolean enableBlockInlining = !isInliningForbidden();
           return new InlineFunctions(
               compiler,
               compiler.getUniqueNameIdSupplier(),
               options.inlineFunctions,
               options.inlineLocalFunctions,
-              enableBlockInlining,
+              true,
               options.assumeStrictThis()
                   || options.getLanguageIn() == LanguageMode.ECMASCRIPT5_STRICT,
               options.assumeClosuresOnlyCaptureReferences,
@@ -2367,43 +2388,25 @@ public final class DefaultPassConfig extends PassConfig {
       new PassFactory("renameProperties", true) {
         @Override
         protected CompilerPass create(final AbstractCompiler compiler) {
+          Preconditions.checkState(options.propertyRenaming == PropertyRenamingPolicy.ALL_UNQUOTED);
           final VariableMap prevPropertyMap = options.inputPropertyMap;
           return new CompilerPass() {
             @Override
             public void process(Node externs, Node root) {
-              propertyMap = runPropertyRenaming(compiler, prevPropertyMap, externs, root);
+              char[] reservedChars = options.anonymousFunctionNaming.getReservedCharacters();
+              RenameProperties rprop =
+                  new RenameProperties(
+                      compiler,
+                      options.generatePseudoNames,
+                      prevPropertyMap,
+                      reservedChars,
+                      options.nameGenerator);
+              rprop.process(externs, root);
+              propertyMap = rprop.getPropertyMap();
             }
           };
         }
       };
-
-  private VariableMap runPropertyRenaming(
-      AbstractCompiler compiler, VariableMap prevPropertyMap, Node externs, Node root) {
-    char[] reservedChars = options.anonymousFunctionNaming.getReservedCharacters();
-    switch (options.propertyRenaming) {
-      case HEURISTIC:
-        RenamePrototypes rproto =
-            new RenamePrototypes(compiler, false, reservedChars, prevPropertyMap);
-        rproto.process(externs, root);
-        return rproto.getPropertyMap();
-
-      case AGGRESSIVE_HEURISTIC:
-        RenamePrototypes rproto2 =
-            new RenamePrototypes(compiler, true, reservedChars, prevPropertyMap);
-        rproto2.process(externs, root);
-        return rproto2.getPropertyMap();
-
-      case ALL_UNQUOTED:
-        RenameProperties rprop =
-            new RenameProperties(
-                compiler, options.generatePseudoNames, prevPropertyMap, reservedChars);
-        rprop.process(externs, root);
-        return rprop.getPropertyMap();
-
-      default:
-        throw new IllegalStateException("Unrecognized property renaming policy");
-    }
-  }
 
   /** Renames variables. */
   private final PassFactory renameVars = new PassFactory("renameVars", true) {
@@ -2445,7 +2448,8 @@ public final class DefaultPassConfig extends PassConfig {
         options.preferStableNames,
         prevVariableMap,
         reservedChars,
-        reservedNames);
+        reservedNames,
+        options.nameGenerator);
     rn.process(externs, root);
     return rn.getVariableMap();
   }
@@ -2535,15 +2539,6 @@ public final class DefaultPassConfig extends PassConfig {
         return runInSerial(options.customPasses.get(executionTime));
       }
     };
-  }
-
-  /**
-   * All inlining is forbidden in heuristic renaming mode, because inlining
-   * will ruin the invariants that it depends on.
-   */
-  private boolean isInliningForbidden() {
-    return options.propertyRenaming == PropertyRenamingPolicy.HEURISTIC
-        || options.propertyRenaming == PropertyRenamingPolicy.AGGRESSIVE_HEURISTIC;
   }
 
   /** Create a compiler pass that runs the given passes in serial. */
@@ -2650,6 +2645,15 @@ public final class DefaultPassConfig extends PassConfig {
       return new DartSuperAccessorsPass(compiler);
     }
   };
+
+  /** Rewrites J2CL constructs to be more optimizable. */
+  private final PassFactory j2clPass =
+      new PassFactory("j2clPass", true) {
+        @Override
+        protected CompilerPass create(AbstractCompiler compiler) {
+          return new J2clPass(compiler);
+        }
+      };
 
   /**
    * A pass-factory that is good for {@code HotSwapCompilerPass} passes.

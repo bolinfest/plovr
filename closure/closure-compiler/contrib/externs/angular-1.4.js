@@ -22,9 +22,7 @@
  *     $cookieStore
  *     $document
  *     $httpBackend
- *     $interpolate
  *     $locale
- *     $resource
  *     $rootElement
  *     $rootScope
  *     $rootScopeProvider
@@ -191,6 +189,12 @@ angular.isUndefined = function(value) {};
  * @return {string}
  */
 angular.lowercase = function(s) {};
+
+/**
+ * @param {Object} dest
+ * @param {...Object} srcs
+ */
+angular.merge = function(dest, srcs) {};
 
 angular.mock = {};
 
@@ -678,11 +682,11 @@ angular.JQLite.prototype.text = function(opt_value) {};
 angular.JQLite.prototype.toggleClass = function(name, opt_condition) {};
 
 /**
- * @param {string} type
+ * @param {string|!Event} typeOrEvent
  * @param {*=} opt_value
  * @return {!angular.JQLite}
  */
-angular.JQLite.prototype.triggerHandler = function(type, opt_value) {};
+angular.JQLite.prototype.triggerHandler = function(typeOrEvent, opt_value) {};
 
 /**
  * @param {string=} opt_type
@@ -1193,9 +1197,9 @@ angular.$compileProvider.prototype.imgSrcSanitizationWhitelist = function(
 angular.$cacheFactory;
 
 /**
- * @typedef {function(string): ?angular.$cacheFactory.Cache}
+ * @return {!angular.$cacheFactory.Cache|undefined}
  */
-angular.$cacheFactory.get;
+angular.$cacheFactory.prototype.get = function() {};
 
 /** @typedef {{capacity: (number|undefined)}} */
 angular.$cacheFactory.Options;
@@ -1522,7 +1526,7 @@ angular.$HttpProvider = function() {};
 angular.$HttpProvider.prototype.defaults;
 
 /**
- * @type {!Array.<string|function(...*): !angular.$http.Interceptor>}
+ * @type {!Array.<string|function(...?): !angular.$http.Interceptor>}
  */
 angular.$HttpProvider.prototype.interceptors;
 
@@ -1531,6 +1535,13 @@ angular.$HttpProvider.prototype.interceptors;
  * @return {boolean|!angular.$HttpProvider}
  */
 angular.$HttpProvider.prototype.useApplyAsync = function(opt_value) {};
+
+/**
+ * @param {boolean=} opt_value
+ * @return {boolean|!angular.$HttpProvider}
+ */
+angular.$HttpProvider.prototype.useLegacyPromiseExtensions = function(
+    opt_value) {};
 
 /******************************************************************************
  * $injector Service
@@ -1588,6 +1599,15 @@ angular.$interpolateProvider.prototype.startSymbol;
 
 /** @type {function(string)} */
 angular.$interpolateProvider.prototype.endSymbol;
+
+/******************************************************************************
+ * $interpolate Service
+ *****************************************************************************/
+
+/**
+ * @typedef {function(string, boolean=, string=, boolean=):?function(Object):*}
+ */
+angular.$interpolate;
 
 /******************************************************************************
  * $interval Service
@@ -1703,6 +1723,19 @@ angular.$locationProvider.prototype.hashPrefix = function(opt_prefix) {};
  * @return {boolean|!angular.$locationProvider}
  */
 angular.$locationProvider.prototype.html5Mode = function(opt_mode) {};
+
+/******************************************************************************
+ * $logProvider Service
+ *****************************************************************************/
+
+/** @constructor */
+angular.$logProvider = function() {};
+
+/**
+ * @param {boolean=} opt_debugEnabled
+ * @return {*}
+ */
+angular.$logProvider.prototype.debugEnabled = function(opt_debugEnabled) {};
 
 /******************************************************************************
  * $log Service
@@ -2108,30 +2141,21 @@ angular.$routeParams;
  * $routeProvider Service
  *****************************************************************************/
 
-/**
- * @typedef {{
- *   otherwise:
- *       function(
- *           (string|!angular.$routeProvider.Params)): !angular.$routeProvider,
- *   when:
- *       function(
- *           string, angular.$routeProvider.Params): !angular.$routeProvider
- *   }}
- */
-angular.$routeProvider;
+/** @constructor */
+angular.$routeProvider = function() {};
 
 /**
  * @param {(string|!angular.$routeProvider.Params)} params
  * @return {!angular.$routeProvider}
  */
-angular.$routeProvider.otherwise = function(params) {};
+angular.$routeProvider.prototype.otherwise = function(params) {};
 
 /**
  * @param {string} path
  * @param {angular.$routeProvider.Params} route
  * @return {!angular.$routeProvider}
  */
-angular.$routeProvider.when = function(path, route) {};
+angular.$routeProvider.prototype.when = function(path, route) {};
 
 /**
  * @typedef {{
@@ -2418,7 +2442,7 @@ angular.$templateCache;
  *****************************************************************************/
 
 /**
- * @typedef {function(Function, number=, boolean=, ...*):!angular.$q.Promise}
+ * @typedef {function(Function=, number=, boolean=, ...*):!angular.$q.Promise}
  */
 angular.$timeout;
 

@@ -21,6 +21,7 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.CheckConformance.InvalidRequirementSpec;
+import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.jscomp.ConformanceRules.AbstractRule;
 import com.google.javascript.jscomp.ConformanceRules.ConformanceResult;
 import com.google.javascript.jscomp.testing.BlackHoleErrorManager;
@@ -75,6 +76,8 @@ public final class CheckConformanceTest extends CompilerTestCase {
     enableNormalize();
     enableClosurePass();
     enableClosurePassForExpected();
+    enableRewriteClosureCode();
+    setLanguage(LanguageMode.ECMASCRIPT6_STRICT, LanguageMode.ECMASCRIPT5_STRICT);
   }
 
   @Override
@@ -438,6 +441,75 @@ public final class CheckConformanceTest extends CompilerTestCase {
 
     testConformance(declarations, "var c = new C(); c['p'] = 'boo';",
         CheckConformance.CONFORMANCE_VIOLATION);
+  }
+
+  public void testBanndedProperty3() {
+    configuration = LINE_JOINER.join(
+        "requirement: {",
+        "  type: BANNED_PROPERTY",
+        "  value: 'C.prototype.p'",
+        "  error_message: 'C.p is not allowed'",
+        "  whitelist: 'SRC1'",
+        "}");
+
+    String cdecl = LINE_JOINER.join(
+        "/** @constructor */ function SC() {}",
+        "/** @constructor @extends {SC} */",
+        "function C() {}",
+        "/** @type {string} */",
+        "C.prototype.p;");
+    String ddecl = LINE_JOINER.join(
+        "/** @constructor @template T */ function D() {}",
+        "/** @param {T} a */",
+        "D.prototype.method = function(a) {",
+        "  use(a.p);",
+        "};");
+
+    testConformance(cdecl, ddecl,
+        CheckConformance.CONFORMANCE_POSSIBLE_VIOLATION);
+  }
+
+  public void testBanndedProperty4() {
+    configuration = LINE_JOINER.join(
+        "requirement: {",
+        "  type: BANNED_PROPERTY",
+        "  value: 'C.prototype.p'",
+        "  error_message: 'C.p is not allowed'",
+        "  whitelist: 'SRC1'",
+        "}");
+
+    String cdecl = LINE_JOINER.join(
+        "/** @constructor */ function SC() {}",
+        "/** @constructor @extends {SC} */",
+        "function C() {}",
+        "/** @type {string} */",
+        "C.prototype.p;",
+        "",
+        "/**",
+        " * @param {!K} key",
+        " * @param {V=} opt_value",
+        " * @constructor",
+        " * @struct",
+        " * @template K, V",
+        " * @private",
+        " */",
+        "var Entry_ = function(key, opt_value) {",
+        "  /** @const {K} */",
+        "  this.key = key;",
+        "  /** @type {V} */",
+        "  this.value = opt_value;",
+        "};");
+
+    String ddecl = LINE_JOINER.join(
+        "/** @constructor @template T */ function D() {}",
+        "/** @param {T} a */",
+        "D.prototype.method = function(a) {",
+        "  var entry = new Entry('key');",
+        "  use(entry.value.p);",
+        "};");
+
+    testConformance(cdecl, ddecl,
+        CheckConformance.CONFORMANCE_POSSIBLE_VIOLATION);
   }
 
   public void testBannedPropertyWrite() {
@@ -1331,5 +1403,51 @@ public final class CheckConformanceTest extends CompilerTestCase {
     testSame(
         EXTERNS,
         "/** @param {?} n */ function f(n) { alert(n.prop); }", null);
+  }
+
+  public void testRequireUseStrict0() {
+    configuration = config(rule("RequireUseStrict"), "My rule message");
+
+    testSame(
+        EXTERNS,
+        "anything;",
+        CheckConformance.CONFORMANCE_VIOLATION,
+        "Violation: My rule message");
+  }
+
+  public void testRequireUseStrict1() {
+    configuration = config(rule("RequireUseStrict"), "My rule message");
+
+    testSame(
+        EXTERNS,
+        "'use strict';",
+        null);
+  }
+
+  public void testRequireUseStrict2() {
+    configuration = config(rule("RequireUseStrict"), "My rule message");
+
+    test(
+        EXTERNS,
+        "goog.module('foo');",
+        "'use strict'; /** @const */ var foo={};",
+        null, null);
+  }
+
+  public void testRequireUseStrict3() {
+    configuration = config(rule("RequireUseStrict"), "My rule message");
+
+    test(
+        EXTERNS,
+        "export var x = 2;",
+        "/** \n"
+        + "* @fileoverview \n"
+        + "* @suppress {missingProvide,missingRequire}\n"
+        + "*/\n"
+        + ""
+        + "'use strict';"
+        + " /** @const */ var module$testcode={};"
+        + "var x$$module$testcode=2;module$testcode.x=x$$module$testcode;",
+        null, null);
   }
 }

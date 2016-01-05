@@ -41,10 +41,6 @@ import java.util.Set;
  */
 public class CompilerOptions {
 
-  // Unused. For people using reflection to circumvent access control.
-  @SuppressWarnings("unused")
-  private boolean manageClosureDependencies = false;
-
   /**
    * A common enum for compiler passes that can run either globally or locally.
    */
@@ -94,11 +90,6 @@ public class CompilerOptions {
   }
 
   /**
-   * Whether the compiler accepts type syntax ({@code var foo: string;}).
-   */
-  boolean acceptTypeSyntax;
-
-  /**
    * Whether to infer consts. This should not be configurable by
    * external clients. This is a transitional flag for a new type
    * of const analysis.
@@ -142,7 +133,7 @@ public class CompilerOptions {
    */
   boolean inferTypes;
 
-  boolean useNewTypeInference;
+  private boolean useNewTypeInference;
 
   /**
    * Configures the compiler to skip as many passes as possible.
@@ -206,11 +197,16 @@ public class CompilerOptions {
     setWarningLevel(DiagnosticGroups.MISSING_REQUIRE, level);
   }
 
+  @Deprecated
   public CheckLevel checkProvides;
 
-  /** Checks for missing goog.provides() calls **/
+  /**
+   * Checks for missing goog.provides() calls.
+   * @deprecated Use setWarningLevel(DiagnosticGroups.MISSING_PROVIDE, level)
+   */
+  @Deprecated
   public void setCheckProvides(CheckLevel level) {
-    checkProvides = level;
+    setWarningLevel(DiagnosticGroups.MISSING_PROVIDE, level);
   }
 
   public CheckLevel checkGlobalNamesLevel;
@@ -223,9 +219,14 @@ public class CompilerOptions {
     checkGlobalNamesLevel = level;
   }
 
+  @Deprecated
   public CheckLevel brokenClosureRequiresLevel;
 
-  /** Sets the check level for bad Closure require calls. */
+  /**
+   * Sets the check level for bad Closure require calls.
+   * Do not use; this should always be an error.
+   */
+  @Deprecated
   public void setBrokenClosureRequiresLevel(CheckLevel level) {
     brokenClosureRequiresLevel = level;
   }
@@ -285,6 +286,20 @@ public class CompilerOptions {
     return checkEventfulObjectDisposalPolicy;
   }
 
+  /**
+   * Used for projects that are not well maintained, but are still used.
+   * Does not allow promoting warnings to errors, and disables some potentially
+   * risky optimizations.
+   */
+  boolean legacyCodeCompile = false;
+
+  public boolean getLegacyCodeCompile() {
+    return this.legacyCodeCompile;
+  }
+
+  public void setLegacyCodeCompile(boolean legacy) {
+    this.legacyCodeCompile = legacy;
+  }
 
   //--------------------------------
   // Optimizations
@@ -368,13 +383,6 @@ public class CompilerOptions {
 
   /** Removes code that will never execute */
   public boolean removeDeadCode;
-
-  public CheckLevel checkMissingReturn;
-
-  /** Checks for missing return statements */
-  public void setCheckMissingReturn(CheckLevel level) {
-    this.checkMissingReturn = level;
-  }
 
   public enum ExtractPrototypeMemberDeclarationsMode {
     OFF,
@@ -589,6 +597,9 @@ public class CompilerOptions {
   /** Whether to declare globals declared in externs as properties on window */
   boolean declaredGlobalExternsOnWindow;
 
+  /** Shared name generator */
+  NameGenerator nameGenerator;
+
   //--------------------------------
   // Special-purpose alterations
   //--------------------------------
@@ -655,6 +666,9 @@ public class CompilerOptions {
   /** Processes the output of the Dart Dev Compiler */
   boolean dartPass;
 
+  /** Processes the output of J2CL */
+  boolean j2clPass;
+
   /** Remove goog.abstractMethod assignments. */
   boolean removeAbstractMethods;
 
@@ -715,6 +729,11 @@ public class CompilerOptions {
 
   public boolean generateExports;
 
+  // TODO(dimvar): generate-exports should always run after typechecking.
+  // If it runs before, it adds a bunch of properties to Object, which masks
+  // many type warnings. Cleanup all clients and remove this.
+  boolean generateExportsAfterTypeChecking;
+
   boolean exportLocalPropertyDefinitions;
 
   /** Map used in the renaming of CSS class names. */
@@ -759,6 +778,15 @@ public class CompilerOptions {
 
   /** CommonJS module prefix. */
   List<String> moduleRoots = ImmutableList.of(ES6ModuleLoader.DEFAULT_FILENAME_PREFIX);
+
+  /** Rewrite polyfills. */
+  boolean rewritePolyfills = false;
+
+  /** Runtime libraries to always inject. */
+  List<String> forceLibraryInjection = ImmutableList.of();
+
+  /** Runtime libraries to never inject. */
+  Set<String> preventLibraryInjection = ImmutableSet.of();
 
 
   //--------------------------------
@@ -807,6 +835,9 @@ public class CompilerOptions {
   }
 
   String reportPath;
+
+  // Should only be used when debugging compiler bugs using small JS inputs.
+  boolean printSourceAfterEachPass;
 
   /** Where to save a report of global name usage */
   public void setReportPath(String reportPath) {
@@ -942,9 +973,6 @@ public class CompilerOptions {
     // Which environment to use
     environment = Environment.BROWSER;
 
-    // Language variation
-    acceptTypeSyntax = false;
-
     // Checks
     skipNonTranspilationPasses = false;
     devMode = DevMode.OFF;
@@ -957,7 +985,6 @@ public class CompilerOptions {
     checkGlobalNamesLevel = CheckLevel.OFF;
     brokenClosureRequiresLevel = CheckLevel.ERROR;
     checkGlobalThisLevel = CheckLevel.OFF;
-    checkMissingReturn = CheckLevel.OFF;
     checkMissingGetCssNameLevel = CheckLevel.OFF;
     checkMissingGetCssNameBlacklist = null;
     computeFunctionSideEffects = false;
@@ -1020,6 +1047,7 @@ public class CompilerOptions {
     anonymousFunctionNaming = AnonymousFunctionNamingPolicy.OFF;
     exportTestFunctions = false;
     declaredGlobalExternsOnWindow = true;
+    nameGenerator = new DefaultNameGenerator();
 
     // Alterations
     runtimeTypeCheck = false;
@@ -1034,6 +1062,7 @@ public class CompilerOptions {
     angularPass = false;
     polymerPass = false;
     dartPass = false;
+    j2clPass = false;
     removeAbstractMethods = true;
     removeClosureAsserts = false;
     stripTypes = Collections.emptySet();
@@ -1050,6 +1079,7 @@ public class CompilerOptions {
     recordFunctionInformation = false;
     checksOnly = false;
     generateExports = false;
+    generateExportsAfterTypeChecking = true;
     exportLocalPropertyDefinitions = false;
     cssRenamingMap = null;
     cssRenamingWhitelist = null;
@@ -1084,6 +1114,7 @@ public class CompilerOptions {
     // Debugging
     aliasHandler = NULL_ALIAS_TRANSFORMATION_HANDLER;
     errorHandler = null;
+    printSourceAfterEachPass = false;
     useDebugLog = false;
   }
 
@@ -1159,7 +1190,7 @@ public class CompilerOptions {
    * to a boolean literal.
    */
   public void setDefineToBooleanLiteral(String defineName, boolean value) {
-    defineReplacements.put(defineName, new Boolean(value));
+    defineReplacements.put(defineName, value);
   }
 
   /**
@@ -1175,7 +1206,7 @@ public class CompilerOptions {
    * number literal.
    */
   public void setDefineToNumberLiteral(String defineName, int value) {
-    defineReplacements.put(defineName, new Integer(value));
+    defineReplacements.put(defineName, value);
   }
 
   /**
@@ -1183,7 +1214,7 @@ public class CompilerOptions {
    * number literal.
    */
   public void setDefineToDoubleLiteral(String defineName, double value) {
-    defineReplacements.put(defineName, new Double(value));
+    defineReplacements.put(defineName, value);
   }
 
   /**
@@ -1191,7 +1222,7 @@ public class CompilerOptions {
    * to a boolean literal.
    */
   public void setTweakToBooleanLiteral(String tweakId, boolean value) {
-    tweakReplacements.put(tweakId, new Boolean(value));
+    tweakReplacements.put(tweakId, value);
   }
 
   /**
@@ -1207,7 +1238,7 @@ public class CompilerOptions {
    * number literal.
    */
   public void setTweakToNumberLiteral(String tweakId, int value) {
-    tweakReplacements.put(tweakId, new Integer(value));
+    tweakReplacements.put(tweakId, value);
   }
 
   /**
@@ -1215,7 +1246,7 @@ public class CompilerOptions {
    * number literal.
    */
   public void setTweakToDoubleLiteral(String tweakId, double value) {
-    tweakReplacements.put(tweakId, new Double(value));
+    tweakReplacements.put(tweakId, value);
   }
 
   /**
@@ -1230,7 +1261,7 @@ public class CompilerOptions {
    * group of warnings.
    */
   boolean enables(DiagnosticGroup type) {
-    return warningsGuard.enables(type);
+    return this.warningsGuard.enables(type);
   }
 
   /**
@@ -1238,7 +1269,7 @@ public class CompilerOptions {
    * group of warnings.
    */
   boolean disables(DiagnosticGroup type) {
-    return warningsGuard.disables(type);
+    return this.warningsGuard.disables(type);
   }
 
   /**
@@ -1260,14 +1291,14 @@ public class CompilerOptions {
   }
 
   WarningsGuard getWarningsGuard() {
-    return warningsGuard;
+    return this.warningsGuard;
   }
 
   /**
    * Reset the warnings guard.
    */
   public void resetWarningsGuard() {
-    warningsGuard = new ComposeWarningsGuard();
+    this.warningsGuard = new ComposeWarningsGuard();
   }
 
   /**
@@ -1275,14 +1306,18 @@ public class CompilerOptions {
    * warnings guards.
    */
   void useEmergencyFailSafe() {
-    warningsGuard = warningsGuard.makeEmergencyFailSafeGuard();
+    this.warningsGuard = this.warningsGuard.makeEmergencyFailSafeGuard();
+  }
+
+  void useNonStrictWarningsGuard() {
+    this.warningsGuard = this.warningsGuard.makeNonStrict();
   }
 
   /**
    * Add a guard to the set of warnings guards.
    */
   public void addWarningsGuard(WarningsGuard guard) {
-    warningsGuard.addGuard(guard);
+    this.warningsGuard.addGuard(guard);
   }
 
   /**
@@ -1499,6 +1534,10 @@ public class CompilerOptions {
     this.dartPass = dartPass;
   }
 
+  public void setJ2clPass(boolean j2clPass) {
+    this.j2clPass = j2clPass;
+  }
+
   public void setCodingConvention(CodingConvention codingConvention) {
     this.codingConvention = codingConvention;
   }
@@ -1530,7 +1569,6 @@ public class CompilerOptions {
     dependencyOptions.setDependencyPruning(
         newVal || dependencyOptions.shouldPruneDependencies());
     dependencyOptions.setMoocherDropping(false);
-    manageClosureDependencies = newVal;
   }
 
   /**
@@ -1710,11 +1748,11 @@ public class CompilerOptions {
   }
 
   public boolean getNewTypeInference() {
-    return useNewTypeInference;
+    return this.useNewTypeInference;
   }
 
   public void setNewTypeInference(boolean enable) {
-    useNewTypeInference = enable;
+    this.useNewTypeInference = enable;
   }
 
   /**
@@ -2311,6 +2349,20 @@ public class CompilerOptions {
   }
 
   /**
+   * Sets list of libraries to always inject, even if not needed.
+   */
+  public void setForceLibraryInjection(Iterable<String> libraries) {
+    this.forceLibraryInjection = ImmutableList.copyOf(libraries);
+  }
+
+  /**
+   * Sets the set of libraries to never inject, even if required.
+   */
+  public void setPreventLibraryInjection(Iterable<String> libraries) {
+    this.preventLibraryInjection = ImmutableSet.copyOf(libraries);
+  }
+
+  /**
    * Set whether or not code should be modified to provide coverage
    * information.
    */
@@ -2590,5 +2642,31 @@ public class CompilerOptions {
      * Only language externs are loaded.
      */
     CUSTOM
+  }
+
+  /**
+   * Whether standard input or standard output should be an array of
+   * JSON encoded files
+   */
+  static enum JsonStreamMode {
+    /**
+     * stdin/out are both single files.
+     */
+    NONE,
+
+    /**
+     * stdin is a json stream.
+     */
+    IN,
+
+    /**
+     * stdout is a json stream.
+     */
+    OUT,
+
+    /**
+     * stdin and stdout are both json streams.
+     */
+    BOTH
   }
 }

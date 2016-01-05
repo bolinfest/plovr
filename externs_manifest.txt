@@ -18,6 +18,7 @@ browser/iphone.js
 browser/mediasource.js
 browser/page_visibility.js
 browser/streamsapi.js
+browser/url.js
 browser/v8.js
 browser/w3c_anim_timing.js
 browser/w3c_audio.js

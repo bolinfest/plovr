@@ -1588,7 +1588,9 @@ public final class NameAnalyzerTest extends CompilerTestCase {
         "this.x = Foo.getInstance();");
   }
 
-
+  public void testObjectDefinePropertiesOnNamespaceThatEscapes() {
+    testSame("var a = foo(); Object.defineProperties(a, {prop: {value: 5}});");
+  }
 
   public void testNoRemoveWindowPropertyAlias1() {
      testSame(

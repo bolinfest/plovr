@@ -357,18 +357,8 @@ public final class ClosureCodingConvention extends CodingConventions.Proxy {
 
   @Override
   public boolean isFunctionCallThatAlwaysThrows(Node n) {
-    if (n.isExprResult()) {
-      if (!n.getFirstChild().isCall()) {
-        return false;
-      }
-    } else if (!n.isCall()) {
-      return false;
-    }
-    if (n.isExprResult()) {
-      n = n.getFirstChild();
-    }
-    // n is a call
-    return n.getFirstChild().matchesQualifiedName("goog.asserts.fail");
+    return CodingConventions.defaultIsFunctionCallThatAlwaysThrows(
+        n, "goog.asserts.fail");
   }
 
   @Override
@@ -513,7 +503,7 @@ public final class ClosureCodingConvention extends CodingConventions.Proxy {
             }
             com.google.javascript.jscomp.newtypes.FunctionType ctorType =
                 functionType.getFunTypeIfSingletonObj();
-            if (ctorType != null && ctorType.isConstructor()) {
+            if (ctorType != null && ctorType.isUniqueConstructor()) {
               return ctorType.getInstanceTypeOfCtor();
             }
           }

@@ -53,6 +53,7 @@ SourceInfo.prototype.facing;
 
 /**
  * @interface
+ * @extends {EventTarget}
  * @see http://www.w3.org/TR/mediacapture-streams/#mediastreamtrack
  */
 function MediaStreamTrack() {}
@@ -84,6 +85,18 @@ MediaStreamTrack.prototype.label;
  * @type {boolean}
  */
 MediaStreamTrack.prototype.enabled;
+
+/**
+ * @type {boolean}
+ * @const
+ */
+MediaStreamTrack.prototype.muted;
+
+/**
+ * @type {boolean}
+ * @const
+ */
+MediaStreamTrack.prototype.remote;
 
 /**
  * @type {MediaStreamTrackState}
@@ -181,6 +194,11 @@ MediaStream.prototype.getAudioTracks = function() {};
 MediaStream.prototype.getVideoTracks = function() {};
 
 /**
+ * @return {!Array<!MediaStreamTrack>}
+ */
+MediaStream.prototype.getTracks = function() {};
+
+/**
  * @param {string} trackId
  * @return {MediaStreamTrack}
  */
@@ -197,14 +215,36 @@ MediaStream.prototype.addTrack = function(track) {};
 MediaStream.prototype.removeTrack = function(track) {};
 
 /**
+ * @return {!MediaStream}
+ */
+MediaStream.prototype.clone = function() {};
+
+/**
+ * @deprecated
  * @type {boolean}
  */
 MediaStream.prototype.ended;
 
 /**
+ * @deprecated
  * @type {?function(!Event)}
  */
 MediaStream.prototype.onended;
+
+/**
+ * @type {boolean}
+ */
+MediaStream.prototype.active;
+
+/**
+ * @type {?function(!Event)}
+ */
+MediaStream.prototype.onactive;
+
+/**
+ * @type {?function(!Event)}
+ */
+MediaStream.prototype.oninactive;
 
 /**
  * @type {?function(!MediaStreamTrackEvent)}

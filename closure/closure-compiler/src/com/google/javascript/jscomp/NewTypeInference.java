@@ -107,6 +107,8 @@ final class NewTypeInference implements CompilerPass {
           "JSC_NTI_POSSIBLY_INEXISTENT_PROPERTY",
           "Property {0} may not be present on {1}.");
 
+  // Not part of ALL_DIAGNOSTICS because it should not be enabled with
+  // --jscomp_error=newCheckTypes. It should only be enabled explicitly.
   static final DiagnosticType NULLABLE_DEREFERENCE =
       DiagnosticType.disabled(
           "JSC_NTI_NULLABLE_DEREFERENCE",
@@ -287,7 +289,6 @@ final class NewTypeInference implements CompilerPass {
       NOT_A_CONSTRUCTOR,
       NOT_CALLABLE,
       NOT_UNIQUE_INSTANTIATION,
-      NULLABLE_DEREFERENCE,
       POSSIBLY_INEXISTENT_PROPERTY,
       PROPERTY_ACCESS_ON_NONOBJECT,
       RETURN_NONDECLARED_TYPE,
@@ -501,7 +502,7 @@ final class NewTypeInference implements CompilerPass {
     for (String fnName : currentScope.getLocalFunDefs()) {
       JSType summaryType = getSummaryOfLocalFunDef(fnName);
       FunctionType fnType = summaryType.getFunType();
-      if (fnType.isConstructor() || fnType.isInterfaceDefinition()) {
+      if (fnType.isUniqueConstructor() || fnType.isInterfaceDefinition()) {
         summaryType = fnType.getConstructorObject();
       }
       entryEnv = envPutType(entryEnv, fnName, summaryType);
@@ -543,7 +544,7 @@ final class NewTypeInference implements CompilerPass {
     for (String fnName : currentScope.getLocalFunDefs()) {
       JSType summaryType = getSummaryOfLocalFunDef(fnName);
       FunctionType fnType = summaryType.getFunType();
-      if (fnType.isConstructor() || fnType.isInterfaceDefinition()) {
+      if (fnType.isUniqueConstructor() || fnType.isInterfaceDefinition()) {
         summaryType = fnType.getConstructorObject();
       }
       env = envPutType(env, fnName, summaryType);
@@ -567,7 +568,8 @@ final class NewTypeInference implements CompilerPass {
     FunctionType funType = declType.getFunTypeIfSingletonObj();
     if (funType == null) {
       return declType;
-    } else if (funType.isConstructor() || funType.isInterfaceDefinition()) {
+    } else if (funType.isUniqueConstructor()
+        || funType.isInterfaceDefinition()) {
       // TODO(dimvar): when declType is a union, consider also creating
       // appropriate ctor objs. (This is going to be rare.)
       return funType.getConstructorObject();
@@ -1389,6 +1391,20 @@ final class NewTypeInference implements CompilerPass {
       // For now, we don't warn for global variables
       return new EnvTypePair(inEnv, JSType.UNKNOWN);
     }
+
+    // For known functions, we want to use the summary type, if any.
+    // It is wrong to use the context to specialize the type;
+    // a function can correctly be used in two contexts whose types
+    // are incompatible.
+    // NOTE(dimvar): To stop specialization of known functions declared as
+    // properties, we end up stopping specialization of all namespace props.
+    // This reduces precision but it helps performance; namespaces have a lot of
+    // properties, so type operations on them are expensive.
+    if (currentScope.isKnownFunction(varName)
+        || maybeIsNamespace(varName, inferredType)) {
+      return new EnvTypePair(inEnv, inferredType);
+    }
+
     println(varName, "'s inferredType: ", inferredType,
         " requiredType:  ", requiredType,
         " specializedType:  ", specializedType);
@@ -1425,6 +1441,14 @@ final class NewTypeInference implements CompilerPass {
       preciseType = preciseType.withLoose();
     }
     return EnvTypePair.addBinding(inEnv, varName, preciseType);
+  }
+
+  // A heuristic to detect if a variable is a namespace during NTI.
+  // NOTE(dimvar): consider keeping around Namespace.java instances during NTI.
+  // (But if we keep them around, they need to be finalized during GTI.)
+  private boolean maybeIsNamespace(String varName, JSType inferredType) {
+    return currentScope.isConstVar(varName)
+        && inferredType.isSubtypeOf(JSType.TOP_OBJECT);
   }
 
   private EnvTypePair analyzeLogicalOpFwd(
@@ -1541,14 +1565,17 @@ final class NewTypeInference implements CompilerPass {
     ctorPair = analyzeExprFwd(ctor, objPair.env, commonTypes.topFunction());
     JSType ctorType = ctorPair.type;
     FunctionType ctorFunType = ctorType.getFunType();
-    if (!ctorType.isUnknown() &&
-        (!ctorType.isSubtypeOf(commonTypes.topFunction()) ||
-            !ctorFunType.isQmarkFunction() && !ctorFunType.isConstructor())) {
+    if (!ctorType.isUnknown()
+        && (!ctorType.isSubtypeOf(commonTypes.topFunction())
+            || (!ctorFunType.isQmarkFunction()
+                && !ctorFunType.isSomeConstructorOrInterface()))) {
       warnInvalidOperand(
           ctor, Token.INSTANCEOF, "a constructor function", ctorType);
     }
-    if (ctorFunType == null || !ctorFunType.isConstructor() ||
-        (!specializedType.isTrueOrTruthy() && !specializedType.isFalseOrFalsy())) {
+    if (ctorFunType == null
+        || !ctorFunType.isUniqueConstructor()
+        || (!specializedType.isTrueOrTruthy()
+            && !specializedType.isFalseOrFalsy())) {
       ctorPair.type = JSType.BOOLEAN;
       return ctorPair;
     }
@@ -1754,13 +1781,15 @@ final class NewTypeInference implements CompilerPass {
       return analyzeCallNodeArgsFwdWhenError(expr, inEnv);
     } else if (funType.isLoose()) {
       return analyzeLooseCallNodeFwd(expr, inEnv, requiredType);
-    } else if (expr.isCall() && funType.isConstructor()
+    } else if (expr.isCall()
+        && funType.isSomeConstructorOrInterface()
         && funType.getReturnType().isUnknown()) {
       warnings.add(JSError.make(expr, CONSTRUCTOR_NOT_CALLABLE, funType.toString()));
       return analyzeCallNodeArgsFwdWhenError(expr, inEnv);
-    } else if (expr.isNew() && !funType.isConstructor()) {
-      warnings.add(JSError.make(
-          expr, NOT_A_CONSTRUCTOR, funType.toString()));
+    } else if (expr.isNew()
+        && (!funType.isSomeConstructorOrInterface()
+            || funType.isInterfaceDefinition())) {
+      warnings.add(JSError.make(expr, NOT_A_CONSTRUCTOR, funType.toString()));
       return analyzeCallNodeArgsFwdWhenError(expr, inEnv);
     }
     int maxArity = funType.getMaxArity();
@@ -1777,7 +1806,9 @@ final class NewTypeInference implements CompilerPass {
     FunctionType origFunType = funType; // save for later
     if (funType.isGeneric()) {
       Map<String, JSType> typeMap = calcTypeInstantiationFwd(
-          expr, expr.getChildAtIndex(1), funType, inEnv);
+          expr,
+          callee.isGetProp() ? callee.getFirstChild() : null,
+          expr.getChildAtIndex(1), funType, inEnv);
       funType = funType.instantiateGenerics(typeMap);
       println("Instantiated function type: " + funType);
     }
@@ -1831,7 +1862,7 @@ final class NewTypeInference implements CompilerPass {
 
   private EnvTypePair analyzeFunctionBindFwd(Node call, TypeEnv inEnv) {
     Preconditions.checkArgument(call.isCall());
-    Bind bindComponents = convention.describeFunctionBind(call, true, false);
+    Bind bindComponents = this.convention.describeFunctionBind(call, true, false);
     Node boundFunNode = bindComponents.target;
     EnvTypePair pair = analyzeExprFwd(boundFunNode, inEnv);
     TypeEnv env = pair.env;
@@ -1846,7 +1877,7 @@ final class NewTypeInference implements CompilerPass {
         || boundFunType.isLoose()) {
       return analyzeCallNodeArgsFwdWhenError(call, env);
     }
-    if (boundFunType.isConstructor()) {
+    if (boundFunType.isSomeConstructorOrInterface()) {
       warnings.add(JSError.make(call, CANNOT_BIND_CTOR));
       return new EnvTypePair(env, JSType.UNKNOWN);
     }
@@ -1875,37 +1906,16 @@ final class NewTypeInference implements CompilerPass {
     // can completely calculate the type instantiation at the .bind call site.
     // We don't support splitting the instantiation between call sites.
     //
-    // Also, we don't use the THIS argument when calculating the instantiation
-    // of a .bind call.
-    // See the following snippet:
-    // /**
-    //  * @constructor
-    //  * @template T
-    //  * @param {T} x
-    //  */
-    // function Foo(x) {}
-    // /**
-    //  * @template T
-    //  * @param {T} x
-    //  */
-    // Foo.prototype.f = function(x) {};
-    // Foo.prototype.f.bind(new Foo(123), 'asdf');
-    //
-    // Here, the receiver type of f is Foo<T>, but the T is the class's T,
-    // not the T of f's template declaration.
-    // Otoh, if f had an @this annotation that contained T, T would refer to
-    // f's T. There is no way of knowing what's the scope of the type variables
-    // in the receiver of the function type, that's why we don't use it here.
+    Node receiver = bindComponents.thisValue;
     if (boundFunType.isGeneric()) {
       Map<String, JSType> typeMap = calcTypeInstantiationFwd(
-          call, bindComponents.parameters, boundFunType, env);
+          call, receiver, bindComponents.parameters, boundFunType, env);
       boundFunType = boundFunType.instantiateGenerics(typeMap);
     }
     FunctionTypeBuilder builder = new FunctionTypeBuilder();
-    Node receiver = bindComponents.thisValue;
     if (receiver != null) {// receiver is null for goog.partial
       JSType reqThisType = boundFunType.getThisType();
-      if (reqThisType == null || boundFunType.isConstructor()) {
+      if (reqThisType == null || boundFunType.isSomeConstructorOrInterface()) {
         reqThisType = JSType.join(JSType.NULL, JSType.TOP_OBJECT);
       }
       pair = analyzeExprFwd(receiver, env, reqThisType);
@@ -2216,14 +2226,14 @@ final class NewTypeInference implements CompilerPass {
   }
 
   private Map<String, JSType> calcTypeInstantiationFwd(
-      Node callNode, Node firstArg, FunctionType funType, TypeEnv typeEnv) {
-    return calcTypeInstantiation(callNode, firstArg, funType, typeEnv, true);
+      Node callNode, Node receiver, Node firstArg, FunctionType funType, TypeEnv typeEnv) {
+    return calcTypeInstantiation(callNode, receiver, firstArg, funType, typeEnv, true);
   }
 
   private Map<String, JSType> calcTypeInstantiationBwd(
       Node callNode, FunctionType funType, TypeEnv typeEnv) {
     return calcTypeInstantiation(
-        callNode, callNode.getChildAtIndex(1), funType, typeEnv, false);
+        callNode, null, callNode.getChildAtIndex(1), funType, typeEnv, false);
   }
 
   /*
@@ -2235,30 +2245,53 @@ final class NewTypeInference implements CompilerPass {
    * 2) It's hard to give good error messages in cases like: id('str') - 5
    *    We want an invalid-operand-type, not a not-unique-instantiation.
    *
+   *
    * We don't take the arg evaluation order into account during instantiation.
+   *
+   *
+   * When calculating the instantiation, when do we use the receiver type?
+   * See the following snippet:
+   * /**
+   *  * @constructor
+   *  * @template T
+   *  * @param {T} x
+   *  * /
+   * function Foo(x) {}
+   * /**
+   *  * @template T
+   *  * @param {T} x
+   *  * /
+   * Foo.prototype.f = function(x) {};
+   * Foo.prototype.f.bind(new Foo(123), 'asdf');
+   *
+   * Here, the receiver type of f is Foo<T>, but the T is the class's T,
+   * not the T of f's template declaration.
+   * OTOH, if f had a @this annotation that contained T, T would refer to
+   * f's T. There is no way of knowing what's the scope of the type variables
+   * in the receiver of the function type.
+   * But when THIS comes from the class, it is always a singleton object. So,
+   * we use a heuristic: if THIS is not a singleton obj, we know it comes from
+   * @this, and we use it for the instantiation.
    */
   private ImmutableMap<String, JSType> calcTypeInstantiation(Node callNode,
-      Node firstArg, FunctionType funType, TypeEnv typeEnv, boolean isFwd) {
+      Node receiver, Node firstArg, FunctionType funType, TypeEnv typeEnv, boolean isFwd) {
+    Preconditions.checkState(receiver == null || isFwd);
     List<String> typeParameters = funType.getTypeParameters();
     Multimap<String, JSType> typeMultimap = LinkedHashMultimap.create();
+    JSType funRecvType = funType.getThisType();
+    if (receiver != null && funRecvType != null && !funRecvType.isSingletonObj()) {
+      EnvTypePair pair = analyzeExprFwd(receiver, typeEnv);
+      unifyWithSubtypeWarnIfFail(funRecvType, pair.type, typeParameters,
+          typeMultimap, receiver, isFwd);
+      typeEnv = pair.env;
+    }
     Node arg = firstArg;
     int i = 0;
     while (arg != null) {
       EnvTypePair pair =
           isFwd ? analyzeExprFwd(arg, typeEnv) : analyzeExprBwd(arg, typeEnv);
-      JSType formalType = funType.getFormalType(i);
-      JSType passedArgType = pair.type;
-      if (!formalType.unifyWithSubtype(passedArgType, typeParameters, typeMultimap)) {
-        // Unification may fail b/c of types irrelevant to generics, eg,
-        // number vs string.
-        // In this case, don't warn here; we'll show invalid-arg-type later.
-        JSType formalAfterInstantiation = formalType.substituteGenericsWithUnknown();
-        if (!formalType.equals(formalAfterInstantiation)
-            && passedArgType.isSubtypeOf(formalAfterInstantiation)) {
-          warnings.add(JSError.make(arg, FAILED_TO_UNIFY,
-                  formalType.toString(), passedArgType.toString()));
-        }
-      }
+      unifyWithSubtypeWarnIfFail(funType.getFormalType(i), pair.type,
+          typeParameters, typeMultimap, arg, isFwd);
       arg = arg.getNext();
       typeEnv = pair.env;
       i++;
@@ -2281,6 +2314,22 @@ final class NewTypeInference implements CompilerPass {
       }
     }
     return builder.build();
+  }
+
+  private void unifyWithSubtypeWarnIfFail(JSType genericType, JSType concreteType,
+      List<String> typeParameters, Multimap<String, JSType> typeMultimap,
+      Node toWarnOn, boolean isFwd) {
+    if (!genericType.unifyWithSubtype(concreteType, typeParameters, typeMultimap) && isFwd) {
+      // Unification may fail b/c of types irrelevant to generics, eg,
+      // number vs string.
+      // In this case, don't warn here; we'll show invalid-arg-type later.
+      JSType afterInstantiation = genericType.substituteGenericsWithUnknown();
+      if (!genericType.equals(afterInstantiation)
+          && concreteType.isSubtypeOf(afterInstantiation)) {
+        warnings.add(JSError.make(toWarnOn, FAILED_TO_UNIFY,
+                genericType.toString(), concreteType.toString()));
+      }
+    }
   }
 
   private EnvTypePair analyzeNonStrictComparisonFwd(
@@ -2688,8 +2737,8 @@ final class NewTypeInference implements CompilerPass {
     JSType recvReqType, recvSpecType;
 
     // First, analyze the receiver object.
-    if (specializedType.isTrueOrTruthy()
-        || propAccessNode.getParent().isTypeOf()) {
+    if (NodeUtil.isPropertyTest(compiler, propAccessNode)
+        && !specializedType.isFalseOrFalsy()) {
       recvReqType = reqObjType;
       recvSpecType = reqObjType.withProperty(propQname, specializedType);
     } else if (specializedType.isFalseOrFalsy()) {
@@ -2714,8 +2763,8 @@ final class NewTypeInference implements CompilerPass {
       return new EnvTypePair(pair.env,
           commonTypes.fromFunctionType(ft.transformByApplyProperty(commonTypes)));
     }
-    if (convention.isSuperClassReference(pname)) {
-      if (ft != null && ft.isConstructor()) {
+    if (this.convention.isSuperClassReference(pname)) {
+      if (ft != null && ft.isUniqueConstructor()) {
         JSType result = ft.getSuperPrototype();
         pair.type = result != null ? result : JSType.UNDEFINED;
         return pair;
@@ -3035,6 +3084,10 @@ final class NewTypeInference implements CompilerPass {
     if (inferredType == null) {
       return new EnvTypePair(outEnv, JSType.UNKNOWN);
     }
+    if (currentScope.isKnownFunction(varName)
+        || maybeIsNamespace(varName, inferredType)) {
+      return new EnvTypePair(outEnv, inferredType);
+    }
     JSType preciseType = inferredType.specialize(requiredType);
     if (currentScope.isUndeclaredFormal(varName)
         && preciseType.hasNonScalar()) {
@@ -3176,8 +3229,8 @@ final class NewTypeInference implements CompilerPass {
       return analyzeCallNodeArgumentsBwd(expr, outEnv);
     } else if (funType.isLoose()) {
       return analyzeLooseCallNodeBwd(expr, outEnv, requiredType);
-    } else if (expr.isCall() && funType.isConstructor() ||
-        expr.isNew() && !funType.isConstructor()) {
+    } else if (expr.isCall() && funType.isSomeConstructorOrInterface()
+        || expr.isNew() && !funType.isSomeConstructorOrInterface()) {
       return analyzeCallNodeArgumentsBwd(expr, outEnv);
     } else if (funType.isTopFunction()) {
       return analyzeCallNodeArgumentsBwd(expr, outEnv);
@@ -3308,8 +3361,6 @@ final class NewTypeInference implements CompilerPass {
     Node propAccessNode = receiver.getParent();
     QualifiedName qname = new QualifiedName(pname);
     JSType reqObjType = pickReqObjType(propAccessNode).withLoose();
-    // In the BWD direction we don't have specialized types, so we use
-    // isPropertyTest to avoid spurious addition of properties to loose objects.
     if (!NodeUtil.isPropertyTest(compiler, propAccessNode)) {
       reqObjType = reqObjType.withProperty(qname, requiredType);
     }
@@ -3378,7 +3429,7 @@ final class NewTypeInference implements CompilerPass {
       return false;
     }
     return expr.getFirstChild().isQualifiedName()
-        && convention.isPropertyTestFunction(expr);
+        && this.convention.isPropertyTestFunction(expr);
   }
 
   private boolean isFunctionBind(Node expr, TypeEnv env, boolean isFwd) {
@@ -3814,10 +3865,6 @@ final class NewTypeInference implements CompilerPass {
       case Token.GETPROP:
         return JSType.TOP_STRUCT;
       case Token.GETELEM:
-      case Token.IN:
-        return JSType.TOP_DICT;
-      case Token.FOR:
-        Preconditions.checkState(NodeUtil.isForIn(expr));
         return JSType.TOP_DICT;
       case Token.OBJECTLIT: {
         JSDocInfo jsdoc = expr.getJSDocInfo();
@@ -3829,6 +3876,11 @@ final class NewTypeInference implements CompilerPass {
         }
         return JSType.TOP_OBJECT;
       }
+      case Token.FOR:
+        Preconditions.checkState(NodeUtil.isForIn(expr));
+        return JSType.TOP_OBJECT;
+      case Token.IN:
+        return JSType.TOP_OBJECT;
       default:
         throw new RuntimeException(
             "Unhandled node for pickReqObjType: " + Token.name(exprKind));

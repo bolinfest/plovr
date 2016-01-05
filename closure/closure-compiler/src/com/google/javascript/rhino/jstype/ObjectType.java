@@ -42,6 +42,7 @@ package com.google.javascript.rhino.jstype;
 import static com.google.javascript.rhino.jstype.TernaryValue.FALSE;
 import static com.google.javascript.rhino.jstype.TernaryValue.UNKNOWN;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -478,7 +479,7 @@ public abstract class ObjectType
   @Override
   public boolean isStructuralType() {
     FunctionType constructor = this.getConstructor();
-    return constructor != null && constructor.isStructuralType();
+    return constructor != null && constructor.isStructuralInterface();
   }
 
   /**
@@ -499,6 +500,83 @@ public abstract class ObjectType
    */
   public int getPropertiesCount() {
     return getPropertyMap().getPropertiesCount();
+  }
+
+  /**
+   * Check for structural equivalence with {@code that}.
+   * (e.g. two @record types with the same prototype properties)
+   */
+  boolean checkStructuralEquivalenceHelper(
+      ObjectType otherObject, EquivalenceMethod eqMethod, EqCache eqCache) {
+    if (this.isTemplatizedType() && this.toMaybeTemplatizedType().wrapsSameRawType(otherObject)) {
+      return this.getTemplateTypeMap().checkEquivalenceHelper(
+          otherObject.getTemplateTypeMap(), eqMethod, eqCache);
+    }
+
+    MatchStatus result = eqCache.checkCache(this, otherObject);
+    if (result != null) {
+      return result.subtypeValue();
+    }
+    Set<String> keySet = getPropertyNames();
+    Set<String> otherKeySet = otherObject.getPropertyNames();
+    if (!otherKeySet.equals(keySet)) {
+      eqCache.updateCache(this, otherObject, MatchStatus.NOT_MATCH);
+      return false;
+    }
+    for (String key : keySet) {
+      if (!otherObject.getPropertyType(key).checkEquivalenceHelper(
+              getPropertyType(key), eqMethod, eqCache)) {
+        eqCache.updateCache(this, otherObject, MatchStatus.NOT_MATCH);
+        return false;
+      }
+    }
+    eqCache.updateCache(this, otherObject, MatchStatus.MATCH);
+    return true;
+  }
+
+  private static boolean isStructuralSubtypeHelper(
+      ObjectType typeA, ObjectType typeB, ImplCache implicitImplCache) {
+
+    // typeA is a subtype of record type typeB iff:
+    // 1) typeA has all the non-optional properties declared in typeB.
+    // 2) And for each property of typeB, its type must be
+    //    a super type of the corresponding property of typeA.
+    for (String property : typeB.getPropertyNames()) {
+      JSType propB = typeB.getPropertyType(property);
+      if (!typeA.hasProperty(property)) {
+        // Currently, any type including undefined (other than ?) is considered optional.
+        if (propB.isVoidable() && !propB.isUnknownType()) {
+          continue;
+        }
+        return false;
+      }
+      JSType propA = typeA.getPropertyType(property);
+      if (!propA.isSubtype(propB, implicitImplCache)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Determine if {@code this} is a an implicit subtype of {@code superType}.
+   */
+  boolean isStructuralSubtype(ObjectType superType, ImplCache implicitImplCache) {
+    // Union types should be handled by isSubtype already
+    Preconditions.checkArgument(!this.isUnionType());
+    Preconditions.checkArgument(!superType.isUnionType());
+    Preconditions.checkArgument(superType.isStructuralType(),
+        "isStructuralSubtype should be called with structural supertype. Found %s", superType);
+
+    MatchStatus cachedResult = implicitImplCache.checkCache(this, superType);
+    if (cachedResult != null) {
+      return cachedResult.subtypeValue();
+    }
+
+    boolean result = isStructuralSubtypeHelper(this, superType, implicitImplCache);
+    implicitImplCache.updateCache(
+        this, superType, result ? MatchStatus.MATCH : MatchStatus.NOT_MATCH);
+    return result;
   }
 
   /**

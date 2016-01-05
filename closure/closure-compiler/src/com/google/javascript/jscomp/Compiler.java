@@ -317,6 +317,12 @@ public class Compiler extends AbstractCompiler {
 
     reconcileOptionsWithGuards();
 
+    if (options.legacyCodeCompile) {
+      options.disambiguateProperties = false;
+      options.ambiguateProperties = false;
+      options.useNonStrictWarningsGuard();
+    }
+
     // Initialize the warnings guard.
     this.warningsGuard =
         new ComposeWarningsGuard(
@@ -342,6 +348,16 @@ public class Compiler extends AbstractCompiler {
           DiagnosticGroup.forType(
               RhinoErrorReporter.TYPE_PARSE_ERROR),
           CheckLevel.OFF);
+    }
+    // With NTI, we still need OTI to run because the later passes that use
+    // types only understand OTI types at the moment.
+    // But we do not want to see the warnings from OTI.
+    if (options.getNewTypeInference()) {
+      options.checkTypes = true;
+      options.setWarningLevel(DiagnosticGroups.OLD_CHECK_TYPES, CheckLevel.OFF);
+      options.setWarningLevel(
+          DiagnosticGroup.forType(RhinoErrorReporter.TYPE_PARSE_ERROR),
+          CheckLevel.WARNING);
     }
 
     if (options.checkGlobalThisLevel.isOn() &&
@@ -1134,7 +1150,7 @@ public class Compiler extends AbstractCompiler {
     // provide types for the remaining passes.
     // TODO(dimvar): change this when we stop running OTI after NTI.
     getTypeRegistry().forwardDeclareType(typeName);
-    if (this.options.useNewTypeInference) {
+    if (this.options.getNewTypeInference()) {
       getSymbolTable().addUnknownTypeName(typeName);
     }
   }
@@ -1816,6 +1832,7 @@ public class Compiler extends AbstractCompiler {
    */
   private String toSource(Node n, SourceMap sourceMap, boolean firstOutput) {
     CodePrinter.Builder builder = new CodePrinter.Builder(n);
+    builder.setTypeRegistry(this.typeRegistry);
     builder.setCompilerOptions(options);
     builder.setSourceMap(sourceMap);
     builder.setTagAsStrict(firstOutput && options.getLanguageOut().isStrict());
@@ -2512,7 +2529,8 @@ public class Compiler extends AbstractCompiler {
   @Override
   Node ensureLibraryInjected(String resourceName,
       boolean normalizeAndUniquifyNames) {
-    if (injectedLibraries.containsKey(resourceName)) {
+    if (injectedLibraries.containsKey(resourceName)
+        || options.preventLibraryInjection.contains(resourceName)) {
       return null;
     }
 
@@ -2527,7 +2545,7 @@ public class Compiler extends AbstractCompiler {
     Node lastChild = firstChild.getLastSibling();
 
     Node parent = getNodeForCodeInsertion(null);
-    if (isBase) {
+    if (isBase || options.preventLibraryInjection.contains("base")) {
       parent.addChildrenToFront(firstChild);
     } else {
       parent.addChildrenAfter(
