@@ -99,34 +99,150 @@ md.$dialog = function() {};
 md.$dialog.options;
 
 
-/**
- * @typedef {{
- *   title: (function(string): !md.$dialog.AlertConfig_),
- *   content: (function(string): !md.$dialog.AlertConfig_),
- *   ariaLabel: (function(string): !md.$dialog.AlertConfig_),
- *   ok: (function(string): !md.$dialog.AlertConfig_),
- *   theme: (function(string): !md.$dialog.AlertConfig_)
- * }}
- */
+/** @constructor */
 md.$dialog.AlertConfig_;
 
+/**
+ * @param {string} title
+ * @return {!md.$dialog.AlertConfig_}
+ */
+md.$dialog.AlertConfig_.prototype.title = function(title) {};
 
 /**
- * @typedef {{
- *   title: (function(string): !md.$dialog.ConfirmConfig_),
- *   content: (function(string): !md.$dialog.ConfirmConfig_),
- *   ariaLabel: (function(string): !md.$dialog.ConfirmConfig_),
- *   ok: (function(string): !md.$dialog.ConfirmConfig_),
- *   cancel: (function(string): !md.$dialog.ConfirmConfig_),
- *   theme: (function(string): !md.$dialog.ConfirmConfig_)
- * }}
+ * @deprecated `$mdDialog.alert().content` is deprecated!
+ *     Use textContent or htmlContent instead.
+ * @param {?string} textContent
+ * @return {!md.$dialog.AlertConfig_}
  */
+md.$dialog.AlertConfig_.prototype.content = function(textContent) {};
+
+/**
+ * @param {?string} textContent
+ * @return {!md.$dialog.AlertConfig_}
+ */
+md.$dialog.AlertConfig_.prototype.textContent = function(textContent) {};
+
+/**
+ * @param {string} htmlContent
+ * @return {!md.$dialog.AlertConfig_}
+ */
+md.$dialog.AlertConfig_.prototype.htmlContent = function(htmlContent) {};
+
+/**
+ * @param {string} ariaLabel
+ * @return {!md.$dialog.AlertConfig_}
+ */
+md.$dialog.AlertConfig_.prototype.ariaLabel = function(ariaLabel) {};
+
+/**
+ * @param {string} ok
+ * @return {!md.$dialog.AlertConfig_}
+ */
+md.$dialog.AlertConfig_.prototype.ok = function(ok) {};
+
+/**
+ * @param {string} theme
+ * @return {!md.$dialog.AlertConfig_}
+ */
+md.$dialog.AlertConfig_.prototype.theme = function(theme) {};
+
+/**
+ * @param {boolean} close
+ * @return {!md.$dialog.AlertConfig_}
+ */
+md.$dialog.AlertConfig_.prototype.clickOutsideToClose = function(close) {};
+
+/**
+ * @param {Object|undefined} event
+ * @return {!md.$dialog.AlertConfig_}
+ */
+md.$dialog.AlertConfig_.prototype.targetEvent = function(event) {};
+
+
+/**
+ * @param {angular.JQLite|Element|undefined} parent
+ * @return {!md.$dialog.AlertConfig_}
+ */
+md.$dialog.AlertConfig_.prototype.parent = function(parent) {};
+
+
+/** @constructor */
 md.$dialog.ConfirmConfig_;
 
+/**
+ * @param {string} title
+ * @return {!md.$dialog.ConfirmConfig_}
+ */
+md.$dialog.ConfirmConfig_.prototype.title = function(title) {};
 
 /**
- * @param {!md.$dialog.options|!md.$dialog.ConfirmConfig_|
- *     !md.$dialog.AlertConfig_} options
+ * @deprecated `$mdDialog.confirm().content` is deprecated!
+ *     Use textContent or htmlContent instead.
+ * @param {?string} textContent
+ * @return {!md.$dialog.ConfirmConfig_}
+ */
+md.$dialog.ConfirmConfig_.prototype.content = function(textContent) {};
+
+/**
+ * @param {?string} textContent
+ * @return {!md.$dialog.ConfirmConfig_}
+ */
+md.$dialog.ConfirmConfig_.prototype.textContent = function(textContent) {};
+
+/**
+ * @param {string} htmlContent
+ * @return {!md.$dialog.ConfirmConfig_}
+ */
+md.$dialog.ConfirmConfig_.prototype.htmlContent = function(htmlContent) {};
+
+/**
+ * @param {string} ariaLabel
+ * @return {!md.$dialog.ConfirmConfig_}
+ */
+md.$dialog.ConfirmConfig_.prototype.ariaLabel = function(ariaLabel) {};
+
+/**
+ * @param {string} ok
+ * @return {!md.$dialog.ConfirmConfig_}
+ */
+md.$dialog.ConfirmConfig_.prototype.ok = function(ok) {};
+
+/**
+ * @param {string} cancel
+ * @return {!md.$dialog.ConfirmConfig_}
+ */
+md.$dialog.ConfirmConfig_.prototype.cancel = function(cancel) {};
+
+/**
+ * @param {string} theme
+ * @return {!md.$dialog.ConfirmConfig_}
+ */
+md.$dialog.ConfirmConfig_.prototype.theme = function(theme) {};
+
+/**
+ * @param {boolean} close
+ * @return {!md.$dialog.ConfirmConfig_}
+ */
+md.$dialog.ConfirmConfig_.prototype.clickOutsideToClose = function(close) {};
+
+/**
+ * @param {Object|undefined} event
+ * @return {!md.$dialog.ConfirmConfig_}
+ */
+md.$dialog.ConfirmConfig_.prototype.targetEvent = function(event) {};
+
+/**
+ * @param {angular.JQLite|Element|undefined} parent
+ * @return {!md.$dialog.ConfirmConfig_}
+ */
+md.$dialog.ConfirmConfig_.prototype.parent = function(parent) {};
+
+/** @typedef {!md.$dialog.options|!md.$dialog.ConfirmConfig_|
+ *     !md.$dialog.AlertConfig_} */
+md.$dialog.Config;
+
+/**
+ * @param {!md.$dialog.Config} options
  * @return {!angular.$q.Promise}
  */
 md.$dialog.prototype.show = function(options) {};
@@ -246,23 +362,55 @@ md.$sidenav;
 
 
 /******************************************************************************
- * $mdThemingProvider Service
+ * $mdThemingProvider
  *****************************************************************************/
 
-/**
- * @typedef {{
- *   alwaysWatchTheme: function(boolean),
- *   definePalette:
- *       function(string, !Object<string,string>) : md.$mdThemingProvider,
- *   extendPalette:
- *       function(string, !Object<string,string>) : !Object<string,string>,
- *   setDefaultTheme: function(string),
- *   theme: function(string,string=) : md.$mdThemingProvider.Theme
- * }}
- */
-md.$mdThemingProvider;
+/** @constructor */
+md.$mdThemingProvider = function() {};
 
-/*****************************************************************************/
+/** @param {boolean} alwaysWatch */
+md.$mdThemingProvider.prototype.alwaysWatchTheme = function(alwaysWatch) {};
+
+/** @param {boolean} onDemand */
+md.$mdThemingProvider.prototype.generateThemesOnDemand = function(onDemand) {};
+
+/**
+ * @param {string} name
+ * @param {!Object<string,string>} palette
+ * @return {md.$mdThemingProvider}
+ */
+md.$mdThemingProvider.prototype.definePalette = function(name, palette) {};
+
+/**
+ * @param {string} name
+ * @param {!Object<string,string>} extension
+ * @return {!Object<string,string>}
+ */
+md.$mdThemingProvider.prototype.extendPalette = function(name, extension) {};
+
+/** @param {string} name */
+md.$mdThemingProvider.prototype.setDefaultTheme = function(name) {};
+
+/**
+ * @param {string} name
+ * @param {string=} opt_parentTheme
+ * @return {!md.$mdThemingProvider.Theme}
+ */
+md.$mdThemingProvider.prototype.theme = function(name, opt_parentTheme) {};
+
+/******************************************************************************
+ * $mdTheming service
+ *****************************************************************************/
+
+/** @constructor */
+md.$mdTheming = function() {};
+
+
+/** @param {string} name */
+md.$mdTheming.prototype.generateTheme = function(name) {}
+
+/******************************************************************************/
+
 
 /**
  * @param {string} name
@@ -312,16 +460,6 @@ md.$mdThemingProvider.Theme.prototype.warnPalette = function(warnPalette) {};
  */
 md.$mdThemingProvider.Theme.prototype.dark = function(isDark) {};
 
-/*****************************************************************************/
-
-
-/**
- * @param {string} themeName
- * @param {string=} opt_inheritFrom
- * @return {md.$mdThemingProvider.Theme}
- */
-md.$mdThemingProvider.prototype.theme = function(themeName, opt_inheritFrom) {};
-
 
 /******************************************************************************
  * $mdIconProvider Service
@@ -364,3 +502,106 @@ md.$mdIconProvider.prototype.defaultIconSize = function(iconSize) {};
  * @return {md.$mdIconProvider}
  */
 md.$mdIconProvider.prototype.defaultFontSet = function(name) {};
+
+
+/******************************************************************************
+ * $mdDateLocaleProvider
+ *****************************************************************************/
+
+/** @constructor */
+md.$mdDateLocaleProvider = function() {};
+
+/** @type {Array<string>} */
+md.$mdDateLocaleProvider.prototype.months = [];
+
+/** @type {Array<string>} */
+md.$mdDateLocaleProvider.prototype.shortMonths = [];
+
+/** @type {Array<string>} */
+md.$mdDateLocaleProvider.prototype.days = [];
+
+/** @type {Array<string>} */
+md.$mdDateLocaleProvider.prototype.shortDays = [];
+
+/** @type {number} */
+md.$mdDateLocaleProvider.prototype.firstDayOfWeek = 1;
+
+/** @type {Array<string|number>} */
+md.$mdDateLocaleProvider.prototype.dates = [];
+
+/** @type {string} */
+md.$mdDateLocaleProvider.prototype.msgCalendar = '';
+
+/** @type {string} */
+md.$mdDateLocaleProvider.prototype.msgOpenCalendar = '';
+
+// The functions on $mdDateLocaleProvider are defined as fields because
+// they are meant to be directly set by consuming code.
+
+/** @type {function(string): Date} */
+md.$mdDateLocaleProvider.prototype.parseDate = function(dateString) {};
+
+/** @type {function(Date): string} */
+md.$mdDateLocaleProvider.prototype.formatDate = function(date) {};
+
+/** @type {function(Date): string} */
+md.$mdDateLocaleProvider.prototype.monthHeaderFormatter = function(date) {};
+
+/** @type {function(number): string} */
+md.$mdDateLocaleProvider.prototype.weekNumberFormatter = function(weekNum) {};
+
+/** @type {function(Date): string} */
+md.$mdDateLocaleProvider.prototype.longDateFormatter = function(date) {};
+
+
+/******************************************************************************
+ * $mdGestureProvider
+ *****************************************************************************/
+
+/** @constructor */
+md.$mdGestureProvider = function() {};
+
+/**
+ * @return {boolean}
+ */
+md.$mdGestureProvider.prototype.skipClickHijack = function() {};
+
+
+/******************************************************************************
+ * VirtualRepeatContainerController
+ *****************************************************************************/
+
+/** @constructor */
+md.VirtualRepeatContainerController = function() {};
+
+/** @return {boolean} */
+md.VirtualRepeatContainerController.prototype.isHorizontal = function() {};
+
+/** @return {number} */
+md.VirtualRepeatContainerController.prototype.getSize = function() {};
+
+/** @return {number} */
+md.VirtualRepeatContainerController.prototype.getScrollSize = function() {};
+
+/** @return {number} */
+md.VirtualRepeatContainerController.prototype.getScrollOffset = function() {};
+
+/** @param {number} position */
+md.VirtualRepeatContainerController.prototype.scrollTo = function(position) {};
+
+/** @param {number} index */
+md.VirtualRepeatContainerController.prototype.scrollToIndex =
+    function(index) {};
+
+md.VirtualRepeatContainerController.prototype.resetScroll = function() {};
+
+
+/******************************************************************************
+ * VirtualRepeatController
+ *****************************************************************************/
+
+/** @constructor */
+md.VirtualRepeatController = function() {};
+
+/** @return {?number} */
+md.VirtualRepeatController.prototype.getItemSize = function() {};

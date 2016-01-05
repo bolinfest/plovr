@@ -48,13 +48,16 @@ abstract class IntegrationTestCase extends TestCase {
         + "function alert(message) {}"
         + "function Object() {}"
         + "Object.seal;"
+        + "Object.defineProperties;"
         + "/**\n"
         + " * @param {...*} var_args\n"
         + " * @constructor\n"
         + " */\n"
         + "function Function(var_args) {}\n"
         + "/** @param {...*} var_args */\n"
-        + "Function.prototype.call = function (var_args) {};"));
+        + "Function.prototype.call = function (var_args) {};\n"
+        + "/** @constructor */\n"
+        + "function Arguments() {}"));
 
   protected List<SourceFile> externs = DEFAULT_EXTERNS;
 

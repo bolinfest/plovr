@@ -823,11 +823,14 @@ public class JSDocInfo implements Serializable {
         || hasTypedefType()
         || hasThisType()
         || getParameterCount() > 0
+        || visibility != Visibility.INHERITED
         || getFlag(MASK_CONSTANT
             | MASK_CONSTRUCTOR
             | MASK_DEFINE
             | MASK_OVERRIDE
             | MASK_NOALIAS
+            | MASK_EXPORT
+            | MASK_EXPOSE
             | MASK_DEPRECATED
             | MASK_INTERFACE
             | MASK_IMPLICITCAST
@@ -1228,15 +1231,6 @@ public class JSDocInfo implements Serializable {
   }
 
   /**
-   * Gets the type of the nth {@code @param} annotation. The iteration order
-   * is the order in which parameters are defined in the JSDoc, rather
-   * than the order in which the function declares them.
-   */
-  public JSTypeExpression getParameterType(int index) {
-    return info.parameters.get(getParameterNameAt(index));
-  }
-
-  /**
    * Returns whether the parameter is defined.
    */
   public boolean hasParameter(String parameter) {
@@ -1335,6 +1329,17 @@ public class JSDocInfo implements Serializable {
       return ImmutableList.of();
     }
     return Collections.unmodifiableList(info.thrownTypes);
+  }
+
+  /**
+   * Get the message for a given thrown type.
+   */
+  public String getThrowsDescriptionForType(JSTypeExpression type) {
+    if (documentation == null || documentation.throwsDescriptions == null) {
+      return null;
+    }
+
+    return documentation.throwsDescriptions.get(type);
   }
 
   /**

@@ -23,9 +23,7 @@
  *     $cookieStore
  *     $document
  *     $httpBackend
- *     $interpolate
  *     $locale
- *     $resource
  *     $rootElement
  *     $rootScope
  *     $rootScopeProvider
@@ -1549,7 +1547,7 @@ angular.$http.Interceptor;
 /**
  * @typedef {{
  *   defaults: !angular.$http.Config,
- *   interceptors: !Array.<string|function(...*): !angular.$http.Interceptor>,
+ *   interceptors: !Array.<string|function(...?): !angular.$http.Interceptor>,
  *   useApplyAsync: function(boolean=):(boolean|!angular.$HttpProvider)
  * }}
  */
@@ -1561,7 +1559,7 @@ angular.$HttpProvider;
 angular.$HttpProvider.defaults;
 
 /**
- * @type {!Array.<string|function(...*): !angular.$http.Interceptor>}
+ * @type {!Array.<string|function(...?): !angular.$http.Interceptor>}
  */
 angular.$HttpProvider.interceptors;
 
@@ -1636,6 +1634,15 @@ angular.$interpolateProvider.startSymbol;
 
 /** @type {function(string)} */
 angular.$interpolateProvider.endSymbol;
+
+/******************************************************************************
+ * $interpolate Service
+ *****************************************************************************/
+
+/**
+ * @typedef {function(string, boolean=, string=, boolean=):?function(Object):*}
+ */
+angular.$interpolate;
 
 /******************************************************************************
  * $interval Service
@@ -1769,6 +1776,19 @@ angular.$locationProvider.hashPrefix = function(opt_prefix) {};
  * @return {boolean|!angular.$locationProvider}
  */
 angular.$locationProvider.html5Mode = function(opt_mode) {};
+
+/******************************************************************************
+ * $logProvider Service
+ *****************************************************************************/
+
+/** @constructor */
+angular.$logProvider = function() {};
+
+/**
+ * @param {boolean=} opt_debugEnabled
+ * @return {*}
+ */
+angular.$logProvider.prototype.debugEnabled = function(opt_debugEnabled) {};
 
 /******************************************************************************
  * $log Service

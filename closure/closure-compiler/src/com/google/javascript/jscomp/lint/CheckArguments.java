@@ -30,9 +30,11 @@ import com.google.javascript.rhino.Node;
  * and which we cannot transpile correctly.
  */
 public final class CheckArguments extends AbstractPostOrderCallback implements CompilerPass {
-  public static final DiagnosticType BAD_ARGUMENTS_USAGE = DiagnosticType.warning(
-      "JSC_BAD_ARGUMENTS_USAGE",
-      "This use of the 'arguments' object is discouraged.");
+  public static final DiagnosticType BAD_ARGUMENTS_USAGE =
+      DiagnosticType.warning(
+          "JSC_BAD_ARGUMENTS_USAGE",
+          "This use of the 'arguments' object is discouraged. See "
+              + "https://github.com/google/closure-compiler/wiki/Lint-warning-about-%60arguments%60");
 
   private final AbstractCompiler compiler;
 
@@ -63,9 +65,18 @@ public final class CheckArguments extends AbstractPostOrderCallback implements C
         || (parent.isForOf() && arguments == parent.getFirstChild().getNext())
         || (parent.isGetElem() && arguments == parent.getFirstChild())) {
       // No warning.
-    } else {
-      report(arguments);
+      return;
     }
+
+    if (parent.isCall() && arguments == parent.getLastChild()) {
+      Node callee = parent.getFirstChild();
+      if (callee.isGetProp() && callee.getLastChild().getString().equals("apply")) {
+        // Probably a call to Function.apply(), so don't warn.
+        return;
+      }
+    }
+
+    report(arguments);
   }
 
   private void report(Node arguments) {

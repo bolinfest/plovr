@@ -176,6 +176,7 @@ public final class PeepholeFoldConstantsTest extends CompilerTestCase {
     foldSame("x == undefined");
   }
 
+
   public void testUndefinedComparison2() {
     fold("\"123\" !== void 0", "true");
     fold("\"123\" === void 0", "false");
@@ -772,6 +773,17 @@ public final class PeepholeFoldConstantsTest extends CompilerTestCase {
     fold("!0 === null", "false");
   }
 
+  public void testFoldComparison4() {
+    foldSame("[] == false");  // true
+    foldSame("[] == true");   // false
+    foldSame("[0] == false"); // true
+    foldSame("[0] == true");  // false
+    foldSame("[1] == false"); // false
+    foldSame("[1] == true");  // true
+    foldSame("({}) == false");  // false
+    foldSame("({}) == true");   // true
+  }
+
   public void testFoldGetElem() {
     fold("x = [,10][0]", "x = void 0");
     fold("x = [10, 20][0]", "x = 10");
@@ -1140,6 +1152,12 @@ public final class PeepholeFoldConstantsTest extends CompilerTestCase {
 
   public void testIssue522() {
     testSame("[][1] = 1;");
+  }
+
+  public void foldDefineProperties1() {
+    test("Object.defineProperties({}, {})", "{}");
+    test("Object.defineProperties(a, {})", "a");
+    testSame("Object.defineProperties(a, {anything:1})");
   }
 
   private static final List<String> LITERAL_OPERANDS =

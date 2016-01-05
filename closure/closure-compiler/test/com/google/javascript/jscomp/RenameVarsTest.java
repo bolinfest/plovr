@@ -44,7 +44,9 @@ public final class RenameVarsTest extends CompilerTestCase {
   private boolean shouldShadow = false;
   private boolean preferStableNames = false;
   private boolean withNormalize = false;
-  private NameGenerator nameGenerator = null;
+
+  // NameGenerator to use, or null for a default.
+  private DefaultNameGenerator nameGenerator = null;
 
   @Override
   protected CodingConvention getCodingConvention() {
@@ -60,11 +62,16 @@ public final class RenameVarsTest extends CompilerTestCase {
     CompilerPass pass;
     if (withClosurePass) {
       pass = new ClosurePassAndRenameVars(compiler);
-    } else {
+    } else if (nameGenerator != null) {
       pass =  renameVars = new RenameVars(compiler, prefix,
           localRenamingOnly, preserveFunctionExpressionNames,
           generatePseudoNames, shouldShadow, preferStableNames,
           previouslyUsedMap, null, null, nameGenerator);
+    } else {
+      pass =  renameVars = new RenameVars(compiler, prefix,
+          localRenamingOnly, preserveFunctionExpressionNames,
+          generatePseudoNames, shouldShadow, preferStableNames,
+          previouslyUsedMap, null, null, new DefaultNameGenerator());
     }
 
     if (withNormalize) {
@@ -599,7 +606,7 @@ public final class RenameVarsTest extends CompilerTestCase {
   }
 
   public void testBias() {
-    nameGenerator = new NameGenerator(new HashSet<String>(0), "", null);
+    nameGenerator = new DefaultNameGenerator(new HashSet<String>(), "", null);
     nameGenerator.favors("AAAAAAAAHH");
     test("var x, y", "var A, H");
   }
@@ -707,7 +714,8 @@ public final class RenameVarsTest extends CompilerTestCase {
       closurePass.process(externs, root);
       renameVars = new RenameVars(compiler, prefix,
           false, false, false, false, false, previouslyUsedMap, null,
-          closurePass.getExportedVariableNames(), null);
+          closurePass.getExportedVariableNames(),
+          new DefaultNameGenerator());
       renameVars.process(externs, root);
     }
   }

@@ -41,7 +41,8 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
 
   @Override
   protected CompilerPass getProcessor(Compiler compiler) {
-    return new CheckRequiresForConstructors(compiler);
+    return new CheckRequiresForConstructors(compiler,
+        CheckRequiresForConstructors.Mode.FULL_COMPILE);
   }
 
   public void testPassWithNoNewNodes() {
@@ -179,7 +180,7 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
     testSame(js);
   }
 
-  public void testFailWithExtends() {
+  public void testFailWithExtends1() {
     String[] js = new String[] {
       "var goog = {};\n"
       + "goog.provide('example.Foo');\n"
@@ -188,6 +189,18 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
       "/** @constructor @extends {example.Foo} */ var Ctor = function() {};"
     };
     String warning = "'example.Foo' used but not goog.require'd";
+    test(js, js, null, MISSING_REQUIRE_WARNING, warning);
+  }
+
+  public void testFailWithExtends2() {
+    String[] js = new String[] {
+      "var goog = {};\n"
+      + "goog.provide('Foo');\n"
+      + "/** @constructor */ var Foo = function() {};",
+
+      "/** @constructor @extends {Foo} */ var Ctor = function() {};"
+    };
+    String warning = "'Foo' used but not goog.require'd";
     test(js, js, null, MISSING_REQUIRE_WARNING, warning);
   }
 
@@ -281,6 +294,12 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
   public void testIgnoresNativeObject() {
     String externs = "/** @constructor */ function String(val) {}";
     String js = "var str = new String('4');";
+    test(externs, js, js, null, null);
+  }
+
+  public void testPassExterns() {
+    String externs = "/** @const */ var google = {};";
+    String js = "var ll = new google.maps.LatLng();";
     test(externs, js, js, null, null);
   }
 
@@ -633,5 +652,24 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
         "/** @constructor */ var Bar = function(){};",
         "function func( a = new Bar() ){}",
         "func();"));
+  }
+
+  public void testPassModule() {
+    testSameEs6(
+        LINE_JOINER.join(
+            "import {Foo} from 'bar';",
+            "new Foo();"));
+  }
+
+  // Check to make sure that we still get warnings when processing a non-module after processing
+  // a module.
+  public void testFailAfterModule() {
+    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
+
+    String module = "import {Foo} from 'bar';";
+    String script = "var x = new example.X()";
+    String[] js = new String[] {module, script};
+    String warning = "'example.X' used but not goog.require'd";
+    test(js, null, null, MISSING_REQUIRE_WARNING, warning);
   }
 }

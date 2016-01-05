@@ -16,6 +16,7 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.NodeTraversal.AbstractShallowCallback;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.BasicBlock;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.Behavior;
@@ -181,6 +182,7 @@ class VariableReferenceCheck implements HotSwapCompilerPass {
      */
     private void checkVar(Var v, List<Reference> references) {
       blocksWithDeclarations.clear();
+      ImmutableSet<Reference> referenceSet = ImmutableSet.copyOf(references);
       boolean isDeclaredInScope = false;
       boolean isUnhoistedNamedFunction = false;
       boolean hasErrors = false;
@@ -227,23 +229,33 @@ class VariableReferenceCheck implements HotSwapCompilerPass {
           for (BasicBlock declaredBlock : blocksWithDeclarations) {
             if (declaredBlock.provablyExecutesBefore(basicBlock)) {
               shadowDetected = true;
-              // TODO(johnlenz): Fix AST generating clients that so they would
-              // have property StaticSourceFile attached at each node. Or
-              // better yet, make sure the generated code never violates
-              // the requirement to pass aggressive var check!
               DiagnosticType diagnosticType;
+              Node warningNode = referenceNode;
               if (v.isLet() || v.isConst() || v.isClass()
                   || letConstShadowsVar || shadowCatchVar || shadowParam) {
+                // These cases are all hard errors that violate ES6 semantics
                 diagnosticType = REDECLARED_VARIABLE_ERROR;
               } else if (reference.getNode().getParent().isCatch() || allowDupe) {
                 return;
               } else {
-                diagnosticType = REDECLARED_VARIABLE;
+                // These diagnostics are for valid, but suspicious, code, and are suppressible.
+                // For vars defined in the global scope, give the same error as VarCheck
+                diagnosticType = v.getScope().isGlobal()
+                    ? VarCheck.VAR_MULTIPLY_DECLARED_ERROR : REDECLARED_VARIABLE;
+                // Since we skip hoisted functions, we would have the wrong warning node in cases
+                // where the redeclaration is a function declaration. Check for that case.
+                if (referenceNode == v.getNode()
+                    && hoistedFn != null
+                    && v.name.equals(hoistedFn.getNode().getString())) {
+                  warningNode = hoistedFn.getNode();
+                }
               }
               compiler.report(
                   JSError.make(
-                      referenceNode,
-                      diagnosticType, v.name));
+                      warningNode,
+                      diagnosticType,
+                      v.name,
+                      v.input != null ? v.input.getName() : "??"));
               hasErrors = true;
               break;
             }
@@ -275,6 +287,10 @@ class VariableReferenceCheck implements HotSwapCompilerPass {
               && !decl.getNode().isFromExterns()
               && !lhsOfForInLoop) {
             unusedAssignment = reference;
+          }
+          if ((reference.getParent().isDec() || reference.getParent().isInc())
+              && NodeUtil.isExpressionResultUsed(reference.getNode())) {
+            isRead = true;
           }
         } else {
           isRead = true;
@@ -339,9 +355,30 @@ class VariableReferenceCheck implements HotSwapCompilerPass {
         }
       }
 
-      // Only check for unused local if there are no other errors.
+      // Only check for unused local if there are no other errors, and if not in a goog.scope
+      // function.
+      // TODO(tbreisacher): Consider moving UNUSED_LOCAL_ASSIGNMENT into its own check pass, so
+      // that we can run it after goog.scope processing, and get rid of the inGoogScope check.
       if (unusedAssignment != null && !isRead && !hasErrors) {
-        compiler.report(JSError.make(unusedAssignment.getNode(), UNUSED_LOCAL_ASSIGNMENT, v.name));
+        boolean inGoogScope = false;
+        Scope s = v.getScope();
+        Node function = null;
+        if (s.isFunctionBlockScope()) {
+          function = s.getRootNode().getParent();
+        } else if (s.isFunctionScope()) {
+          // TODO(tbreisacher): Remove this branch when everything is switched to
+          // Es6SyntacticScopeCreator.
+          function = s.getRootNode();
+        }
+        if (function != null) {
+          Node callee = function.getParent().getChildBefore(function);
+          inGoogScope = callee != null && callee.matchesQualifiedName("goog.scope");
+        }
+
+        if (!inGoogScope) {
+          compiler.report(
+              JSError.make(unusedAssignment.getNode(), UNUSED_LOCAL_ASSIGNMENT, v.name));
+        }
       }
     }
   }

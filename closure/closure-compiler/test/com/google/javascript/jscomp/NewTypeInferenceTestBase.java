@@ -35,12 +35,12 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
   protected List<PassFactory> passes;
 
   protected static final String CLOSURE_BASE =
-      Joiner.on('\n').join(
+      LINE_JOINER.join(
           "/** @const */ var goog = {};",
           "/** @return {void} */",
           "goog.nullFunction = function() {};");
   protected static final String DEFAULT_EXTERNS =
-      CompilerTypeTestCase.DEFAULT_EXTERNS + Joiner.on('\n').join(
+      CompilerTypeTestCase.DEFAULT_EXTERNS + LINE_JOINER.join(
           "/** @return {string} */",
           "Object.prototype.toString = function() {};",
           "/**",
@@ -106,7 +106,13 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           " */",
           "function Error(opt_message, opt_file, opt_line) {}",
           "/** @type {string} */",
-          "Error.prototype.stack;");
+          "Error.prototype.stack;",
+          "/** @constructor */",
+          "function Window() {}",
+          "/** @type {boolean} */",
+          "Window.prototype.closed;",
+          "/** @type {!Window} */",
+          "var window;");
 
   @Override
   protected void setUp() {

@@ -203,6 +203,10 @@ final class NameAnalyzer implements CompilerPass {
 
     /** Whether this is a call that only affects the class definition */
     boolean onlyAffectsClassDef = false;
+
+    public String toString() {
+      return "NameInformation:" + name;
+    }
   }
 
   /**
@@ -326,6 +330,10 @@ final class NameAnalyzer implements CompilerPass {
           // If we remove object lit keys, then we will need to also
           // create dependency scopes for them.
           break;
+        default:
+          throw new IllegalArgumentException(
+              "Unsupported parent node type in JsNameRefNode.remove: "
+                  + Token.name(parent.getType()));
       }
     }
   }
@@ -566,7 +574,7 @@ final class NameAnalyzer implements CompilerPass {
           } else {
             recordDepScope(nameNode, ns);
           }
-        } else if (!(parent.isCall() && parent.getFirstChild() == n)) {
+        } else if (!parent.isCall() || n != parent.getFirstChild()) {
           // The rhs of the assignment is the caller, so it's used by the
           // context. Don't associate it w/ the lhs.
           // FYI: this fixes only the specific case where the assignment is the
@@ -782,8 +790,7 @@ final class NameAnalyzer implements CompilerPass {
         for (Node child : n.children()) {
           addSimplifiedChildren(child);
         }
-      } else if (n.isCall() &&
-                 parent.isExprResult()) {
+      } else if (n.isCall() && parent.isExprResult()) {
         addSimplifiedChildren(n);
       } else {
         addAllChildren(n);
@@ -841,7 +848,7 @@ final class NameAnalyzer implements CompilerPass {
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      if (!(n.isName() || (NodeUtil.isGet(n) && !parent.isGetProp()))) {
+      if (!n.isName() && (!NodeUtil.isGet(n) || parent.isGetProp())) {
         // This is not a simple or qualified name.
         return;
       }

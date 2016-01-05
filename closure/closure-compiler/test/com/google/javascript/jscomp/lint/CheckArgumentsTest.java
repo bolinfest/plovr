@@ -35,6 +35,11 @@ public final class CheckArgumentsTest extends Es6CompilerTestCase {
     testSameEs6("function f() { for (var i=0; i<arguments.length; i++) alert(arguments[i]); }");
   }
 
+  public void testCheckArguments_exceptionForApply() {
+    testSameEs6("function f() { g.apply(this, arguments); }");
+    testSameEs6("function f() { Function.prototype.call.apply(arguments); }");
+  }
+
   public void testCheckArguments_warning() {
     testWarning("function f() { g(arguments); }", BAD_ARGUMENTS_USAGE);
     testWarning("function f() { var args = arguments; }", BAD_ARGUMENTS_USAGE);

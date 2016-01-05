@@ -10,6 +10,7 @@ java_library(
       ],
       excludes = [
         'src/com/google/javascript/jscomp/ant/**/*.java',
+        'src/com/google/javascript/jscomp/debugger/**/*.java',
         'src/com/google/javascript/jscomp/gwt/**/*.java',
         'src/com/google/javascript/jscomp/jsonml/**/*.java',
         'src/com/google/javascript/jscomp/testing/**/*.java',

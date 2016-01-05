@@ -50,20 +50,11 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
           "$jscomp.inherits = function(x,y) {};",
           "$jscomp.arrayFromIterable = function(x) {};");
 
-  private LanguageMode languageOut;
-
   @Override
   public void setUp() {
     setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
-    languageOut = LanguageMode.ECMASCRIPT3;
+    setLanguageOut(LanguageMode.ECMASCRIPT3);
     runTypeCheckAfterProcessing = true;
-  }
-
-  @Override
-  protected CompilerOptions getOptions() {
-    CompilerOptions options = super.getOptions();
-    options.setLanguageOut(languageOut);
-    return options;
   }
 
   protected final PassFactory makePassFactory(
@@ -210,6 +201,18 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
     test(
         "/** @dict */ class C { }",
         "/** @constructor @dict */ var C = function() {};");
+
+    test(
+        "/** @template T */ class C { }",
+        "/** @constructor @struct @template T */ var C = function() {};");
+
+    test(
+        "/** @final */ class C { }",
+        "/** @constructor @struct @final */ var C = function() {};");
+
+    test(
+        "/** @private */ class C { }",
+        "/** @constructor @struct @private */ var C = function() {};");
   }
 
   public void testInterfaceWithJsDoc() {
@@ -250,6 +253,36 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
             " * @struct",
             " */",
             "var C = function(b) {};"));
+
+    test(
+        "class C { /** @throws {Error} */ constructor() {} }",
+        LINE_JOINER.join(
+            "/**",
+            " * @throws {Error}",
+            " * @constructor",
+            " * @struct",
+            " */",
+            "var C = function() {};"));
+
+    test(
+        "class C { /** @private */ constructor() {} }",
+        LINE_JOINER.join(
+            "/**",
+            " * @private",
+            " * @constructor",
+            " * @struct",
+            " */",
+            "var C = function() {};"));
+
+    test(
+        "class C { /** @deprecated */ constructor() {} }",
+        LINE_JOINER.join(
+            "/**",
+            " * @deprecated",
+            " * @constructor",
+            " * @struct",
+            " */",
+            "var C = function() {};"));
   }
 
   public void testMemberWithJsDoc() {
@@ -813,7 +846,7 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
    * if the output language is ES5.
    */
   public void testEs5GettersAndSettersClasses() {
-    languageOut = LanguageMode.ECMASCRIPT5;
+    setLanguageOut(LanguageMode.ECMASCRIPT5);
 
     test(
         "class C { get value() { return 0; } }",
@@ -925,7 +958,7 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
    * Check that the types from the getter/setter are copied to the declaration on the prototype.
    */
   public void testEs5GettersAndSettersClassesWithTypes() {
-    languageOut = LanguageMode.ECMASCRIPT5;
+    setLanguageOut(LanguageMode.ECMASCRIPT5);
 
     test(
         "class C { /** @return {number} */ get value() { return 0; } }",
@@ -982,7 +1015,8 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
 
   public void testClassEs5GetterSetterIncorrectTypes() {
     enableTypeCheck();
-    languageOut = LanguageMode.ECMASCRIPT5;
+    setLanguageOut(LanguageMode.ECMASCRIPT5);
+
 
     // Using @type instead of @return on a getter.
     test(
@@ -1029,7 +1063,7 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
    * @bug 20536614
    */
   public void testStaticGetterSetter() {
-    languageOut = LanguageMode.ECMASCRIPT5;
+    setLanguageOut(LanguageMode.ECMASCRIPT5);
 
     test(
         "class C { static get foo() {} }",
@@ -1071,7 +1105,7 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
   }
 
   public void testStaticSetter() {
-    languageOut = LanguageMode.ECMASCRIPT5;
+    setLanguageOut(LanguageMode.ECMASCRIPT5);
     test(
         "class C { static set foo(x) {} }",
         LINE_JOINER.join(
@@ -1156,7 +1190,7 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
   }
 
   public void testClassComputedPropGetter() {
-    languageOut = LanguageMode.ECMASCRIPT5;
+    setLanguageOut(LanguageMode.ECMASCRIPT5);
 
     test(
         "/** @unrestricted */ class C { /** @return {number} */ get [foo]() { return 4; }}",
@@ -1179,7 +1213,7 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
   }
 
   public void testClassComputedPropSetter() {
-    languageOut = LanguageMode.ECMASCRIPT5;
+    setLanguageOut(LanguageMode.ECMASCRIPT5);
 
     test(
         "/** @unrestricted */ class C { /** @param {string} val */ set [foo](val) {}}",
@@ -1202,14 +1236,14 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
   }
 
   public void testClassStaticComputedProps() {
-    languageOut = LanguageMode.ECMASCRIPT5;
+    setLanguageOut(LanguageMode.ECMASCRIPT5);
 
     testError("/** @unrestricted */ class C { static set [foo](val) {}}", CANNOT_CONVERT_YET);
     testError("/** @unrestricted */ class C { static get [foo]() {}}", CANNOT_CONVERT_YET);
   }
 
   public void testClassComputedPropGetterAndSetter() {
-    languageOut = LanguageMode.ECMASCRIPT5;
+    setLanguageOut(LanguageMode.ECMASCRIPT5);
 
     test(
         LINE_JOINER.join(
@@ -1261,7 +1295,7 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
    * ES5 getters and setters on object literals should be left alone if the languageOut is ES5.
    */
   public void testEs5GettersAndSettersObjLit_es5() {
-    languageOut = LanguageMode.ECMASCRIPT5;
+    setLanguageOut(LanguageMode.ECMASCRIPT5);
     testSame("var x = { get y() {} };");
     testSame("var x = { set y(value) {} };");
   }
@@ -1626,7 +1660,7 @@ public final class Es6ToEs3ConverterTest extends CompilerTestCase {
   }
 
   public void testComputedPropGetterSetter() {
-    languageOut = LanguageMode.ECMASCRIPT5;
+    setLanguageOut(LanguageMode.ECMASCRIPT5);
 
     testSame("var obj = {get latest () {return undefined;}}");
     testSame("var obj = {set latest (str) {}}");

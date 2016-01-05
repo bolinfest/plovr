@@ -100,7 +100,7 @@ public final class JsDocInfoParser {
         charno);
   }
 
-  private void addMissingTypeWarning(String annotation, int lineno, int charno) {
+  private void addMissingTypeWarning(int lineno, int charno) {
     errorReporter.warning("Missing type declaration.", getSourceName(), lineno, charno);
   }
 
@@ -748,7 +748,7 @@ public final class JsDocInfoParser {
             addTypeWarning("msg.missing.variable.name", lineno, charno);
           } else {
             if (!hasParamType) {
-              addMissingTypeWarning(annotationName, stream.getLineno(), stream.getCharno());
+              addMissingTypeWarning(stream.getLineno(), stream.getCharno());
             }
 
             name = stream.getString();
@@ -1034,7 +1034,7 @@ public final class JsDocInfoParser {
           type = null;
 
           if (annotation == Annotation.RETURN && !hasType) {
-            addMissingTypeWarning(annotationName, stream.getLineno(), stream.getCharno());
+            addMissingTypeWarning(stream.getLineno(), stream.getCharno());
           }
 
           if (hasType || !canSkipTypeAnnotation) {
@@ -1692,16 +1692,23 @@ public final class JsDocInfoParser {
           if (ignoreStar) {
             // Mark the position after the star as the new start of the line.
             lineStartChar = stream.getCharno() + 1;
+            ignoreStar = false;
           } else {
             // The star is part of the comment.
-            if (builder.length() > 0) {
-              builder.append(' ');
-            }
-
+            padLine(builder, lineStartChar, option);
+            lineStartChar = -1;
             builder.append('*');
           }
 
           token = next();
+          while (token == JsDocToken.STAR) {
+            if (lineStartChar != -1) {
+              padLine(builder, lineStartChar, option);
+              lineStartChar = -1;
+            }
+            builder.append('*');
+            token = next();
+          }
           continue;
 
         case EOL:
@@ -1720,17 +1727,8 @@ public final class JsDocInfoParser {
 
           boolean isEOC = token == JsDocToken.EOC;
           if (!isEOC) {
-            if (lineStartChar != -1 && option == WhitespaceOption.PRESERVE) {
-              int numSpaces = stream.getCharno() - lineStartChar;
-              for (int i = 0; i < numSpaces; i++) {
-                builder.append(' ');
-              }
-              lineStartChar = -1;
-            } else if (builder.length() > 0
-                && builder.charAt(builder.length() - 1) != '\n') {
-              // All tokens must be separated by a space.
-              builder.append(' ');
-            }
+            padLine(builder, lineStartChar, option);
+            lineStartChar = -1;
           }
 
           if (token == JsDocToken.EOC ||
@@ -1766,6 +1764,19 @@ public final class JsDocInfoParser {
           token = next();
       }
     } while (true);
+  }
+
+  private void padLine(StringBuilder builder, int lineStartChar, WhitespaceOption option) {
+    if (lineStartChar != -1 && option == WhitespaceOption.PRESERVE) {
+      int numSpaces = stream.getCharno() - lineStartChar;
+      for (int i = 0; i < numSpaces; i++) {
+        builder.append(' ');
+      }
+    } else if (builder.length() > 0) {
+      if (builder.charAt(builder.length() - 1) != '\n' || option == WhitespaceOption.PRESERVE) {
+        builder.append(' ');
+      }
+    }
   }
 
   /**
@@ -2381,8 +2392,14 @@ public final class JsDocInfoParser {
       // Move to the comma token.
       next();
 
-      // Move to the token passed the comma.
+      // Move to the token past the comma
       skipEOLs();
+
+      if (match(JsDocToken.RIGHT_CURLY)) {
+        // Allow trailing comma (ie, right curly following the comma)
+        break;
+      }
+
       token = next();
     } while (true);
 

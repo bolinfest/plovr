@@ -72,14 +72,14 @@ public final class NominalType {
   }
 
   boolean isClassy() {
-    return !isFunction() && !isObject();
+    return !isFunction() && !isBuiltinObject();
   }
 
   boolean isFunction() {
     return "Function".equals(rawType.name);
   }
 
-  private boolean isObject() {
+  boolean isBuiltinObject() {
     return "Object".equals(rawType.name);
   }
 
@@ -232,8 +232,8 @@ public final class NominalType {
     return p != null && p.isConstant();
   }
 
-  static JSType getConstructorObject(FunctionType ctorFn) {
-    return ctorFn.nominalType.rawType.getConstructorObject(ctorFn);
+  JSType getConstructorObject(FunctionType ctorFn) {
+    return this.rawType.getConstructorObject(ctorFn);
   }
 
   boolean isSubtypeOf(NominalType other) {
@@ -283,6 +283,43 @@ public final class NominalType {
     return true;
   }
 
+  /**
+   * Unify the two types symmetrically, given that we have already instantiated
+   * the type variables of interest in {@code nt1} and {@code nt2}, treating
+   * JSType.UNKNOWN as a "hole" to be filled.
+   * @return The unified type, or null if unification fails
+   */
+  static NominalType unifyUnknowns(NominalType nt1, NominalType nt2) {
+    if (!nt1.rawType.equals(nt2.rawType)) {
+      return null;
+    }
+    Map<String, JSType> m1 = nt1.typeMap;
+    Map<String, JSType> m2 = nt2.typeMap;
+    if (m1.isEmpty() && m2.isEmpty()) {
+      return nt1;
+    } else if (m1.isEmpty() || m2.isEmpty()) {
+      return null;
+    }
+    ImmutableMap.Builder<String, JSType> builder = ImmutableMap.builder();
+    for (Map.Entry<String, JSType> entry : m1.entrySet()) {
+      String typeVar = entry.getKey();
+      JSType t1 = entry.getValue();
+      JSType t2 = m2.get(typeVar);
+      if (t1.isUnknown()) {
+        builder.put(typeVar, t2);
+      } else if (t2.isUnknown()) {
+        builder.put(typeVar, t1);
+      } else {
+        JSType newType = JSType.unifyUnknowns(t1, t2);
+        if (newType == null) {
+          return null;
+        }
+        builder.put(typeVar, newType);
+      }
+    }
+    return new NominalType(builder.build(), nt1.rawType);
+  }
+
   private static boolean allowCovariantGenerics(NominalType nt) {
     // TODO(dimvar): Add Object here when we handle parameterized Object.
     return nt.rawType.name.equals("Array");
@@ -319,7 +356,8 @@ public final class NominalType {
   static NominalType pickSubclass(NominalType c1, NominalType c2) {
     if (c1 == null) {
       return c2;
-    } else if (c2 == null) {
+    }
+    if (c2 == null) {
       return c1;
     }
     if (c1.isSubtypeOf(c2)) {

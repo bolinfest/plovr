@@ -31,7 +31,6 @@
  *     $httpBackendDecorator
  *     $RootScopeDecorator
  *     angular.mock.module
- *     angular.mock.inject
  */
 
 angular.mock = {};
@@ -58,6 +57,10 @@ angular.mock.$httpBackend.RequestHandler = function() {};
 angular.mock.$httpBackend.RequestHandler.prototype.respond = function(
     statusOrDataOrFunction, opt_dataOrHeaders, opt_headersOrStatusText,
     opt_statusText) {};
+
+
+/** @return {!angular.mock.$httpBackend.RequestHandler} */
+angular.mock.$httpBackend.RequestHandler.prototype.passThrough = function() {};
 
 
 /**
@@ -241,3 +244,11 @@ angular.mock.animate = function() {};
 
 
 angular.mock.animate.prototype.flush = function() {};
+
+
+/** @typedef {function((!Function|string), !Object, Object=): !Object} */
+angular.mock.$controller;
+
+
+/** @param {!Array|!Function} injectable */
+angular.mock.inject = function(injectable) {};

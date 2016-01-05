@@ -44,7 +44,6 @@ import org.kohsuke.args4j.spi.StringOptionHandler;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.PrintStream;
@@ -190,6 +189,7 @@ public class CommandLineRunner extends
     private List<String> js = new ArrayList<>();
 
     @Option(name = "--jszip",
+        hidden = true,
         usage = "The JavaScript zip filename. You may specify multiple.")
     private List<String> jszip = new ArrayList<>();
 
@@ -360,6 +360,8 @@ public class CommandLineRunner extends
     private CompilationLevel compilationLevelParsed = null;
 
     @Option(name = "--checks-only",
+        hidden = true,
+        handler = BooleanOptionHandler.class,
         usage = "Don't generate output. Run checks, but no compiler passes.")
     private boolean checksOnly = false;
 
@@ -404,6 +406,7 @@ public class CommandLineRunner extends
 
     @Option(name = "--process_common_js_modules",
         hidden = true,
+        handler = BooleanOptionHandler.class,
         usage = "Process CommonJS modules to a concatenable form.")
     private boolean processCommonJsModules = false;
 
@@ -429,6 +432,7 @@ public class CommandLineRunner extends
 
     @Option(name = "--transform_amd_modules",
         hidden = true,
+        handler = BooleanOptionHandler.class,
         usage = "Transform AMD to CommonJS modules.")
     private boolean transformAmdModules = false;
 
@@ -496,6 +500,12 @@ public class CommandLineRunner extends
         usage = "Rewrite Dart Dev Compiler output to be compiler-friendly.")
     private boolean dartPass = false;
 
+    @Option(name = "--j2cl_pass",
+        hidden = true,
+        handler = BooleanOptionHandler.class,
+        usage = "Rewrite J2CL output to be compiler-friendly.")
+    private boolean j2clPass = false;
+
     @Option(name = "--output_manifest",
         hidden = true,
         usage = "Prints out a list of all the files in the compilation. "
@@ -511,22 +521,22 @@ public class CommandLineRunner extends
         usage = "Prints out a JSON file of dependencies between modules.")
     private String outputModuleDependencies = "";
 
-    // TODO(tbreisacher): Remove the "(experimental)" for ES6 when it's stable enough.
-    @Option(name = "--language_in",
-        hidden = true,
-        usage = "Sets what language spec that input sources conform. "
-        + "Options: ECMASCRIPT3 (default), ECMASCRIPT5, ECMASCRIPT5_STRICT, "
-        + "ECMASCRIPT6 (experimental), ECMASCRIPT6_STRICT (experimental), "
-        + "ECMASCRIPT6_TYPED (experimental)")
-    private String languageIn = "ECMASCRIPT3";
+    @Option(
+      name = "--language_in",
+      hidden = true,
+      usage =
+          "Sets what language spec that input sources conform. "
+              + "Options: ECMASCRIPT3, ECMASCRIPT5, ECMASCRIPT5_STRICT, "
+              + "ECMASCRIPT6 (default), ECMASCRIPT6_STRICT, ECMASCRIPT6_TYPED (experimental)"
+    )
+    private String languageIn = "ECMASCRIPT6";
 
     @Option(name = "--language_out",
         hidden = true,
         usage = "Sets what language spec the output should conform to. "
-        + " If omitted, defaults to the value of language_in. "
-        + "Options: ECMASCRIPT3, ECMASCRIPT5, ECMASCRIPT5_STRICT, "
+        + "Options: ECMASCRIPT3 (default), ECMASCRIPT5, ECMASCRIPT5_STRICT, "
         + "ECMASCRIPT6_TYPED (experimental)")
-    private String languageOut = "";
+    private String languageOut = "ECMASCRIPT3";
 
     @Option(name = "--version",
         hidden = true,
@@ -558,6 +568,12 @@ public class CommandLineRunner extends
             "<file-name>:<line-number>?  <warning-description>")
     private String warningsWhitelistFile = "";
 
+    @Option(name = "--hide_warnings_for",
+        hidden = true,
+        usage = "If specified, files whose path contains this string will "
+            + "have their warnings hidden. You may specify multiple.")
+    private List<String> hideWarningsFor = new ArrayList<>();
+
     @Option(name = "--extra_annotation_name",
         hidden = true,
         usage = "A whitelist of tag names in JSDoc. You may specify multiple")
@@ -572,10 +588,12 @@ public class CommandLineRunner extends
 
     @Option(name = "--new_type_inf",
         hidden = true,
+        handler = BooleanOptionHandler.class,
         usage = "Checks for type errors using the new type inference algorithm.")
     private boolean useNewTypeInference = false;
 
     @Option(name = "--rename_prefix_namespace",
+        hidden = true,
         usage = "Specifies the name of an object that will be used to store all "
         + "non-extern globals")
     private String renamePrefixNamespace = null;
@@ -598,6 +616,15 @@ public class CommandLineRunner extends
             usage = "A file containing an instrumentation template.")
         private String instrumentationFile = "";
 
+    @Option(name = "--json_streams",
+        hidden = true,
+        usage = "Specifies whether standard input and output streams will be "
+            + "a JSON array of sources. Each source will be an object of the "
+            + "form {path: filename, src: file_contents, srcmap: srcmap_contents }. "
+            + "Intended for use by stream-based build systems such as gulpjs. "
+            + "Options: NONE, IN, OUT, BOTH. Defaults to NONE.")
+    private CompilerOptions.JsonStreamMode jsonStreamMode =
+        CompilerOptions.JsonStreamMode.NONE;
 
     @Argument
     private List<String> arguments = new ArrayList<>();
@@ -1112,10 +1139,12 @@ public class CommandLineRunner extends
           .setModuleRoots(moduleRoots)
           .setTransformAMDToCJSModules(flags.transformAmdModules)
           .setWarningsWhitelistFile(flags.warningsWhitelistFile)
+          .setHideWarningsFor(flags.hideWarningsFor)
           .setAngularPass(flags.angularPass)
           .setTracerMode(flags.tracerMode)
           .setInstrumentationTemplateFile(flags.instrumentationFile)
-          .setNewTypeInference(flags.useNewTypeInference);
+          .setNewTypeInference(flags.useNewTypeInference)
+          .setJsonStreamMode(flags.jsonStreamMode);
     }
     errorStream = null;
   }
@@ -1177,6 +1206,8 @@ public class CommandLineRunner extends
 
     options.setDartPass(flags.dartPass);
 
+    options.setJ2clPass(flags.j2clPass);
+
     options.renamePrefixNamespace = flags.renamePrefixNamespace;
 
     if (!flags.translationsFile.isEmpty()) {
@@ -1203,26 +1234,27 @@ public class CommandLineRunner extends
     options.setConformanceConfigs(loadConformanceConfigs(flags.conformanceConfigs));
 
     if (!flags.instrumentationFile.isEmpty()) {
-        String instrumentationPb;
-        Instrumentation.Builder builder = Instrumentation.newBuilder();
-        try (BufferedReader br = new BufferedReader(new FileReader(flags.instrumentationFile))) {
-            StringBuilder sb = new StringBuilder();
-            String line = br.readLine();
+      String instrumentationPb;
+      Instrumentation.Builder builder = Instrumentation.newBuilder();
+      try (BufferedReader br =
+          new BufferedReader(Files.newReader(new File(flags.instrumentationFile), UTF_8))) {
+        StringBuilder sb = new StringBuilder();
+        String line = br.readLine();
 
-            while (line != null) {
-                sb.append(line);
-                sb.append(System.lineSeparator());
-                line = br.readLine();
-            }
-            instrumentationPb = sb.toString();
-            TextFormat.merge(instrumentationPb, builder);
-
-            // Setting instrumentation template
-            options.instrumentationTemplate = builder.build();
-
-        } catch (IOException e) {
-            throw new RuntimeException("Error reading instrumentation template", e);
+        while (line != null) {
+          sb.append(line);
+          sb.append(System.lineSeparator());
+          line = br.readLine();
         }
+        instrumentationPb = sb.toString();
+        TextFormat.merge(instrumentationPb, builder);
+
+        // Setting instrumentation template
+        options.instrumentationTemplate = builder.build();
+
+      } catch (IOException e) {
+        throw new RuntimeException("Error reading instrumentation template", e);
+      }
     }
 
     return options;

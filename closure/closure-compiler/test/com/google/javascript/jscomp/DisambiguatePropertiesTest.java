@@ -37,7 +37,7 @@ import java.util.TreeSet;
  */
 
 public final class DisambiguatePropertiesTest extends CompilerTestCase {
-  private DisambiguateProperties<?> lastPass;
+  private DisambiguateProperties lastPass;
 
   public DisambiguatePropertiesTest() {
     parseTypeInfo = true;
@@ -61,8 +61,7 @@ public final class DisambiguatePropertiesTest extends CompilerTestCase {
 
         // This must be created after type checking is run as it depends on
         // any mismatches found during checking.
-        lastPass = DisambiguateProperties.forJSTypeSystem(
-            compiler, propertiesToErrorFor);
+        lastPass = new DisambiguateProperties(compiler, propertiesToErrorFor);
 
         lastPass.process(externs, root);
       }
@@ -1044,6 +1043,19 @@ public final class DisambiguatePropertiesTest extends CompilerTestCase {
     testSets(js, "{a=[[Foo.prototype, I.prototype]]}");
   }
 
+  public void testInterfaceOfSuperclass2() {
+    String js = LINE_JOINER.join(
+        "/** @const */ var goog = {};",
+        "goog.abstractMethod = function(var_args) {};",
+        "/** @interface */ function I() {}",
+        "I.prototype.a = function(x) {};",
+        "/** @constructor @implements {I} */ function Foo() {}",
+        "/** @override */ Foo.prototype.a = goog.abstractMethod;",
+        "/** @constructor @extends Foo */ function Bar() {}",
+        "/** @override */ Bar.prototype.a = function(x) {};");
+    testSets(js, "{a=[[Foo.prototype, I.prototype]]}");
+  }
+
   public void testTwoInterfacesWithSomeInheritance() {
     String js = ""
         + "/** @interface */ function I() {};\n"
@@ -1659,8 +1671,7 @@ public final class DisambiguatePropertiesTest extends CompilerTestCase {
 
   public void runFindHighestTypeInChain() {
     // Check that this doesn't go into an infinite loop.
-    DisambiguateProperties.forJSTypeSystem(new Compiler(),
-         new HashMap<String, CheckLevel>())
+    new DisambiguateProperties(new Compiler(), new HashMap<String, CheckLevel>())
         .getTypeWithProperty("no",
             new JSTypeRegistry(new TestErrorReporter(null, null))
             .getNativeType(JSTypeNative.OBJECT_PROTOTYPE));
