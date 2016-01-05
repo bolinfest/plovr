@@ -14,6 +14,7 @@
 
 /**
  * @fileoverview Protocol Buffer Message base class.
+ * @suppress {unusedPrivateMembers} For descriptor_ declaration.
  */
 
 goog.provide('goog.proto2.Message');
@@ -677,7 +678,7 @@ goog.proto2.Message.prototype.checkFieldType_ = function(field, value) {
   if (field.getFieldType() == goog.proto2.FieldDescriptor.FieldType.ENUM) {
     goog.asserts.assertNumber(value);
   } else {
-    goog.asserts.assert(value.constructor == field.getNativeType());
+    goog.asserts.assert(Object(value).constructor == field.getNativeType());
   }
 };
 

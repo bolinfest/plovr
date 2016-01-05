@@ -30,7 +30,55 @@ var testSuite = goog.require('goog.testing.testSuite');
 
 var testRunner;
 
-testSuite({
+
+/**
+ * @typedef {{
+ *   totalTests: number,
+ *   totalFailures: number,
+ *   failureReports: string,
+ *   allResults: !Object<string, !Array<string>>
+ * }}
+ */
+var ParallelTestResults;
+
+
+/**
+ * Processes the test results returned from MultiTestRunner and creates a
+ * consolidated result object that the test runner understands.
+ * @param {!Array<!Object<string,!Array<string>>>} testResults The list of
+ *     individual test results from MultiTestRunner.
+ * @return {!ParallelTestResults} Flattened test report for all tests.
+ */
+function processAllTestResults(testResults) {
+  var totalTests = 0;
+  var totalFailed = 0;
+  var allResults = {};
+  var failureReports = '';
+
+  for (var i = 0; i < testResults.length; i++) {
+    var result = testResults[i];
+    for (var testName in result) {
+      totalTests++;
+      allResults[testName] = result[testName];
+      var failures = result[testName];
+      if (failures.length) {
+        totalFailed++;
+        for (var j = 0; j < failures.length; j++) {
+          failureReports += failures[j] + '\n';
+        }
+      }
+    }
+  }
+
+  return {
+    totalTests: totalTests,
+    totalFailures: totalFailed,
+    failureReports: failureReports,
+    allResults: allResults
+  };
+}
+
+var testObj = {
   setUpPage: function() {
     // G_parallelTestRunner is exported in gen_parallel_test_html.py.
     var timeout = goog.global['G_parallelTestRunner']['testTimeout'];
@@ -45,12 +93,17 @@ testSuite({
                      .setBasePath('/google3/')
                      .setPoolSize(parallelFrames)
                      .setStatsBucketSizes(5, 500)
-                     .setTimeout(parallelTimeout * 1000)
+                     .setTimeout(timeout * 1000)
                      .addTests(allTests);
 
     testRunner.render(document.getElementById('runner'));
 
-    TestCase.getActiveTestCase().promiseTimeout = timeout * 1000;
+    // There's only a single test method that runs all the tests, so this
+    // promiseTimeout is effectively the timeout of the entire test suite
+    TestCase.getActiveTestCase().promiseTimeout = parallelTimeout * 1000;
+
+    // Return testRunner for testing purposes.
+    return testRunner;
   },
 
   testRunAllTests: function() {
@@ -60,12 +113,32 @@ testSuite({
 
     testRunner.start();
 
+    var allResults = {};
+    // TestPoller.java invokes this to get test results for sponge. We override
+    // it and return the results of each individual test instead of the
+    // containing "testRunAllTests".
+    window['G_testRunner']['getTestResults'] = function() {
+      return allResults;
+    };
+
     return failurePromise.then(function(failures) {
-      var totalFailed = failures['failureReports'].length;
-      if (totalFailed) {
-        fail(totalFailed + ' of ' + failures['totalTests'] +
-             ' test(s) failed!\n ' + failures['failureReports'].join('\n\n'));
+      var testResults = processAllTestResults(failures['allTestResults']);
+      allResults = testResults.allResults;
+      if (testResults.totalFailures) {
+        fail(testResults.totalFailures + ' of ' + testResults.totalTests +
+             ' test(s) failed!\n\n' + testResults.failureReports);
       }
     });
   }
-});
+};
+
+// G_parallelTestRunner should only be present when being run from a parallel
+// closure_test_suite target. If it's not present, we're including this file
+// to be unit tested.
+if (goog.global['G_parallelTestRunner']) {
+  testSuite(testObj);
+}
+
+// Export test methods/vars so they can also be tested.
+testObj['processAllTestResults'] = processAllTestResults;
+exports = testObj;

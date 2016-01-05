@@ -24,11 +24,9 @@
  * {'dataKey': 'value', 'otherDataKey': 'otherValue'}
  * </pre>
  *
- * To use injected data, you need to enable the soy-to-js compiler
- * option {@code --isUsingIjData}. The injected data can then be
- * referred to in any soy templates as part of a magic "ij"
- * parameter. For example, {@code $ij.dataKey} will evaluate to
- * 'value' with the above injected data.
+ * The injected data can then be referred to in any soy templates as
+ * part of a magic "ij" parameter. For example, {@code $ij.dataKey}
+ * will evaluate to 'value' with the above injected data.
  *
  * @author henrywong@google.com (Henry Wong)
  * @author chrishenry@google.com (Chris Henry)
@@ -207,7 +205,7 @@ goog.soy.Renderer.prototype.renderText = function(template, opt_templateData) {
  *     defaults to goog.soy.data.SanitizedContentKind.HTML).
  * @return {RETURN_TYPE} The SanitizedContent object. This return type is
  *     generic based on the return type of the template, such as
- *     soy.SanitizedHtml.
+ *     soydata.SanitizedHtml.
  * @template ARG_TYPES, RETURN_TYPE
  */
 goog.soy.Renderer.prototype.renderStrict = function(
@@ -278,7 +276,7 @@ goog.soy.Renderer.prototype.saveTemplateRender_ = function(
   if (goog.DEBUG) {
     this.savedTemplateRenders_.push({
       template: template.soyTemplateName,
-      data: opt_templateData,
+      data: opt_templateData || null,
       ijData: this.getInjectedData_()
     });
   }

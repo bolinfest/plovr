@@ -36,6 +36,7 @@ goog.require('goog.math.Coordinate');
 goog.require('goog.math.Rect');
 goog.require('goog.math.Size');
 goog.require('goog.object');
+goog.require('goog.reflect');
 goog.require('goog.string');
 goog.require('goog.userAgent');
 
@@ -758,6 +759,13 @@ goog.style.getFramedPageOffset = function(el, relativeWin) {
   // Iterate up the ancestor frame chain, keeping track of the current window
   // and the current element in that window.
   var currentWin = goog.dom.getWindow(goog.dom.getOwnerDocument(el));
+
+  // MS Edge throws when accessing "parent" if el's containing iframe has been
+  // deleted.
+  if (!goog.reflect.canAccessProperty(currentWin, 'parent')) {
+    return position;
+  }
+
   var currentEl = el;
   do {
     // if we're at the top window, we want to get the page offset.
@@ -881,8 +889,8 @@ goog.style.setPageOffset = function(el, x, opt_y) {
   // require us to manually transform between different units
 
   // Work out deltas
-  var dx = x - cur.x;
-  var dy = opt_y - cur.y;
+  var dx = goog.asserts.assertNumber(x) - cur.x;
+  var dy = Number(opt_y) - cur.y;
 
   // Set position to current left/top + delta
   goog.style.setPosition(el, /** @type {!HTMLElement} */ (el).offsetLeft + dx,
@@ -1111,6 +1119,7 @@ goog.style.toSelectorCase = function(selector) {
  *     if the opacity is not set.
  */
 goog.style.getOpacity = function(el) {
+  goog.asserts.assert(el);
   var style = el.style;
   var result = '';
   if ('opacity' in style) {
@@ -1134,6 +1143,7 @@ goog.style.getOpacity = function(el) {
  *     {@code ''} to clear the opacity.
  */
 goog.style.setOpacity = function(el, alpha) {
+  goog.asserts.assert(el);
   var style = el.style;
   if ('opacity' in style) {
     style.opacity = alpha;
@@ -1144,7 +1154,7 @@ goog.style.setOpacity = function(el, alpha) {
     if (alpha === '') {
       style.filter = '';
     } else {
-      style.filter = 'alpha(opacity=' + alpha * 100 + ')';
+      style.filter = 'alpha(opacity=' + (Number(alpha) * 100) + ')';
     }
   }
 };
@@ -1267,8 +1277,8 @@ goog.style.isElementShown = function(el) {
 
 
 /**
- * Installs the styles string into the window that contains opt_element.  If
- * opt_element is null, the main window is used.
+ * Installs the styles string into the window that contains opt_node.  If
+ * opt_node is null, the main window is used.
  * @param {string} stylesString The style string to install.
  * @param {Node=} opt_node Node whose parent document should have the
  *     styles installed.
@@ -1403,13 +1413,14 @@ goog.style.isRightToLeft = function(el) {
 /**
  * The CSS style property corresponding to an element being
  * unselectable on the current browser platform (null if none).
- * Opera and IE instead use a DOM attribute 'unselectable'.
+ * Opera and IE instead use a DOM attribute 'unselectable'. MS Edge uses
+ * the Webkit prefix.
  * @type {?string}
  * @private
  */
 goog.style.unselectableStyle_ =
     goog.userAgent.GECKO ? 'MozUserSelect' :
-    goog.userAgent.WEBKIT ? 'WebkitUserSelect' :
+    goog.userAgent.WEBKIT || goog.userAgent.EDGE ? 'WebkitUserSelect' :
     null;
 
 
@@ -1707,7 +1718,7 @@ goog.style.getMarginBox = function(element) {
 
 /**
  * A map used to map the border width keywords to a pixel width.
- * @type {Object}
+ * @type {!Object}
  * @private
  */
 goog.style.ieBorderWidthKeywords_ = {
@@ -1830,7 +1841,7 @@ goog.style.getLengthUnits = function(value) {
 
 /**
  * Map of absolute CSS length units
- * @type {Object}
+ * @type {!Object}
  * @private
  */
 goog.style.ABSOLUTE_CSS_LENGTH_UNITS_ = {
@@ -1846,7 +1857,7 @@ goog.style.ABSOLUTE_CSS_LENGTH_UNITS_ = {
  * Map of relative CSS length units that can be accurately converted to px
  * font-size values using getIePixelValue_. Only units that are defined in
  * relation to a font size are convertible (%, small, etc. are not).
- * @type {Object}
+ * @type {!Object}
  * @private
  */
 goog.style.CONVERTIBLE_RELATIVE_CSS_UNITS_ = {

@@ -324,7 +324,8 @@ goog.debug.Logger.Level.getPredefinedLevelByValue = function(value) {
     goog.debug.Logger.Level.createPredefinedLevelsCache_();
   }
 
-  if (value in goog.debug.Logger.Level.predefinedLevelsCache_) {
+  if (value in /** @type {!Object} */ (
+      goog.debug.Logger.Level.predefinedLevelsCache_)) {
     return goog.debug.Logger.Level.predefinedLevelsCache_[value];
   }
 
@@ -350,7 +351,7 @@ goog.debug.Logger.Level.getPredefinedLevelByValue = function(value) {
  * name and should normally be based on the package name or class name of the
  * subsystem, such as goog.net.BrowserChannel.
  * @return {!goog.debug.Logger} The named logger.
- * @deprecated use goog.log instead. http://go/goog-debug-logger-deprecated
+ * @deprecated use {@link goog.log} instead.
  */
 goog.debug.Logger.getLogger = function(name) {
   return goog.debug.LogManager.getLogger(name);

@@ -15,15 +15,15 @@ install:
   - ./scripts/ci/install_closure_deps.sh
 
 before_script:
-  #- ./scripts/http/simple_http_server.py 2> /dev/null & sleep 5
-  #- ./scripts/ci/sauce_connect.sh
+  - ./scripts/http/simple_http_server.py 2> /dev/null & sleep 5
+  - ./scripts/ci/sauce_connect.sh
 
 script:
   - ./scripts/ci/compile_closure.sh
   - ./scripts/ci/lint_pull_request.sh
-  #- travis_wait 30 ./scripts/ci/run_all_tests.sh
+  - travis_wait 30 ./scripts/ci/run_all_tests.sh
 
 env:
   global:
-    - SAUCE_USERNAME=joeltine
-    - SAUCE_ACCESS_KEY=c1426ba29e28-d49b-e304-8559-3a85cd04
+    - SAUCE_USERNAME=closure-sauce
+    - SAUCE_ACCESS_KEY=dfd98f70a612-e69a-ad34-6149-3ca056f8

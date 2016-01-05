@@ -481,6 +481,7 @@ goog.forwardDeclare = function(name) {};
  * and thus block property disambiguation.
  */
 goog.forwardDeclare('Document');
+goog.forwardDeclare('HTMLScriptElement');
 goog.forwardDeclare('XMLHttpRequest');
 
 
@@ -596,9 +597,10 @@ goog.addDependency = function(relPath, provides, requires, opt_isModule) {
 // will not load until some point after the current script.  If a namespace is
 // needed at runtime, it needs to be defined in a previous script, or loaded via
 // require() with its registered dependencies.
-// User-defined namespaces may need their own deps file.  See http://go/js_deps,
-// http://go/genjsdeps, or, externally, DepsWriter.
-// https://developers.google.com/closure/library/docs/depswriter
+//
+// User-defined namespaces may need their own deps file. For a reference on
+// creating a deps file, see:
+// Externally: https://developers.google.com/closure/library/docs/depswriter
 //
 // Because of legacy clients, the DOM loader can't be easily removed from
 // base.js.  Work is being done to make it disableable or replaceable for
@@ -1036,6 +1038,33 @@ if (goog.DEPENDENCIES_ENABLED) {
 
 
   /**
+   * Load a goog.module from the provided URL.  This is not a general purpose
+   * code loader and does not support late loading code, that is it should only
+   * be used during page load. This method exists to support unit tests and
+   * "debug" loaders that would otherwise have inserted script tags. Under the
+   * hood this needs to use a synchronous XHR and is not recommeneded for
+   * production code.
+   *
+   * The module's goog.requires must have already been satisified; an exception
+   * will be thrown if this is not the case. This assumption is that no
+   * "deps.js" file exists, so there is no way to discover and locate the
+   * module-to-be-loaded's dependencies and no attempt is made to do so.
+   *
+   * There should only be one attempt to load a module.  If
+   * "goog.loadModuleFromUrl" is called for an already loaded module, an
+   * exception will be throw.
+   *
+   * @param {string} url The URL from which to attempt to load the goog.module.
+   */
+  goog.loadModuleFromUrl = function(url) {
+    // Because this executes synchronously, we don't need to do any additional
+    // bookkeeping. When "goog.loadModule" the namespace will be marked as
+    // having been provided which is sufficient.
+    goog.retrieveAndExecModule_(url);
+  };
+
+
+  /**
    * @param {function(?):?|string} moduleDef The module definition.
    */
   goog.loadModule = function(moduleDef) {
@@ -1081,6 +1110,10 @@ if (goog.DEPENDENCIES_ENABLED) {
 
   /**
    * @private @const {function(string):?}
+   *
+   * The new type inference warns because this function has no formal
+   * parameters, but its jsdoc says that it takes one argument.
+   * (The argument is used via arguments[0], but NTI does not detect this.)
    * @suppress {newCheckTypes}
    */
   goog.loadModuleFromSource_ = function() {
@@ -1129,7 +1162,8 @@ if (goog.DEPENDENCIES_ENABLED) {
   goog.appendScriptSrcNode_ = function(src) {
     /** @type {Document} */
     var doc = goog.global.document;
-    var scriptEl = doc.createElement('script');
+    var scriptEl = /** @type {HTMLScriptElement} */ (
+        doc.createElement('script'));
     scriptEl.type = 'text/javascript';
     scriptEl.src = src;
     scriptEl.defer = false;
@@ -1149,7 +1183,7 @@ if (goog.DEPENDENCIES_ENABLED) {
    */
   goog.writeScriptTag_ = function(src, opt_sourceText) {
     if (goog.inHtmlDocument_()) {
-      /** @type {Document} */
+      /** @type {!HTMLDocument} */
       var doc = goog.global.document;
 
       // If the user tries to require a new symbol after document load,
@@ -1419,7 +1453,7 @@ goog.typeOf = function(value) {
       // Check these first, so we can avoid calling Object.prototype.toString if
       // possible.
       //
-      // IE improperly marshals tyepof across execution contexts, but a
+      // IE improperly marshals typeof across execution contexts, but a
       // cross-context object will still return false for "instanceof Object".
       if (value instanceof Array) {
         return 'array';
@@ -1662,7 +1696,7 @@ goog.removeUid = function(obj) {
 
   // In IE, DOM nodes are not instances of Object and throw an exception if we
   // try to delete.  Instead we try to use removeAttribute.
-  if ('removeAttribute' in /** @type {!Object} */ (obj)) {
+  if (obj !== null && 'removeAttribute' in obj) {
     obj.removeAttribute(goog.UID_PROPERTY_);
   }
   /** @preserveTry */
@@ -1921,7 +1955,8 @@ goog.globalEval = function(script) {
     } else {
       /** @type {Document} */
       var doc = goog.global.document;
-      var scriptElt = doc.createElement('SCRIPT');
+      var scriptElt = /** @type {!HTMLScriptElement} */ (
+          doc.createElement('SCRIPT'));
       scriptElt.type = 'text/javascript';
       scriptElt.defer = false;
       // Note(user): can't use .innerHTML since "t('<test>')" will fail and
@@ -2188,7 +2223,7 @@ goog.exportProperty = function(object, publicName, symbol) {
  */
 goog.inherits = function(childCtor, parentCtor) {
   /** @constructor */
-  function tempCtor() {};
+  function tempCtor() {}
   tempCtor.prototype = parentCtor.prototype;
   childCtor.superClass_ = parentCtor.prototype;
   childCtor.prototype = new tempCtor();
@@ -2330,7 +2365,6 @@ if (!COMPILED) {
 }
 
 
-
 //==============================================================================
 // goog.defineClass implementation
 //==============================================================================
@@ -2391,10 +2425,10 @@ goog.defineClass = function(superClass, def) {
 
 
 /**
- * @typedef {
- *     !Object|
- *     {constructor:!Function}|
- *     {constructor:!Function, statics:(Object|function(Function):void)}}
+ * @typedef {{
+ *   constructor: (!Function|undefined),
+ *   statics: (Object|undefined|function(Function):void)
+ * }}
  * @suppress {missingProvide}
  */
 goog.defineClass.ClassDescriptor;

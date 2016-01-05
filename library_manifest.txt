@@ -373,6 +373,7 @@ labs/net/webchanneltransport.js
 labs/net/webchanneltransportfactory.js
 labs/net/xhr.js
 labs/object/object.js
+labs/promise/promise.js
 labs/pubsub/broadcastpubsub.js
 labs/storage/boundedcollectablestorage.js
 labs/structs/map.js
@@ -383,6 +384,7 @@ labs/testing/assertthat.js
 labs/testing/decoratormatcher.js
 labs/testing/dictionarymatcher.js
 labs/testing/environment.js
+labs/testing/json_fuzzing.js
 labs/testing/logicmatcher.js
 labs/testing/matcher.js
 labs/testing/numbermatcher.js
@@ -481,8 +483,13 @@ net/mockiframeio.js
 net/multiiframeloadmonitor.js
 net/networkstatusmonitor.js
 net/networktester.js
+net/streams/jsonstreamparser.js
 net/streams/nodereadablestream.js
+net/streams/pbstreamparser.js
 net/streams/streamfactory.js
+net/streams/streamparser.js
+net/streams/xhrnodereadablestream.js
+net/streams/xhrstreamreader.js
 net/testdata/jsloader_test1.js
 net/testdata/jsloader_test2.js
 net/testdata/jsloader_test3.js
