@@ -107,6 +107,13 @@ abstract class AbstractJavaScriptBasedCompiler<T extends Exception> {
       return message;
     }
 
+    // OpenJDK 8.
+    message = tryExtractMessageFromMysteryResultTypeNashorn(result,
+        "jdk.nashorn.api.scripting.ScriptObjectMirror");
+    if (message != null) {
+      return message;
+    }
+
     return null;
   }
 
@@ -130,6 +137,30 @@ abstract class AbstractJavaScriptBasedCompiler<T extends Exception> {
     } catch (SecurityException e) {
       return null;
     } catch (ClassNotFoundException e) {
+      return null;
+    } catch (IllegalAccessException e) {
+      return null;
+    } catch (IllegalArgumentException e) {
+      return null;
+    } catch (InvocationTargetException e) {
+      return null;
+    }
+  }
+
+  @Nullable
+  private static String tryExtractMessageFromMysteryResultTypeNashorn(
+      Object result,
+      String resultClassName) {
+    if (!result.getClass().getName().equals(resultClassName)) {
+      return null;
+    }
+
+    try {
+      Method method = result.getClass().getMethod("get", Object.class);
+      return method.invoke(result, "message").toString();
+    } catch (NoSuchMethodException e) {
+      return null;
+    } catch (SecurityException e) {
       return null;
     } catch (IllegalAccessException e) {
       return null;
