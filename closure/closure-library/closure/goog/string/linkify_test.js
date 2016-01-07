@@ -16,6 +16,7 @@ goog.provide('goog.string.linkifyTest');
 goog.setTestOnly('goog.string.linkifyTest');
 
 goog.require('goog.dom.TagName');
+goog.require('goog.html.SafeHtml');
 goog.require('goog.string');
 goog.require('goog.string.linkify');
 goog.require('goog.testing.dom');
@@ -23,10 +24,15 @@ goog.require('goog.testing.jsunit');
 
 var div = document.createElement(goog.dom.TagName.DIV);
 
-function assertLinkify(comment, input, expected) {
+function assertLinkify(comment, input, expected, opt_preserveNewlines) {
   assertEquals(
       comment, expected,
-      goog.string.linkify.linkifyPlainText(input, {rel: '', target: ''}));
+      goog.string.linkify.linkifyPlainText(
+          input, {rel: '', target: ''}, opt_preserveNewlines));
+  assertEquals(
+      comment, expected,
+      goog.html.SafeHtml.unwrap(goog.string.linkify.linkifyPlainTextAsHtml(
+          input, {rel: '', target: ''}, opt_preserveNewlines)));
 }
 
 function testContainsNoLink() {
@@ -211,6 +217,12 @@ function testEmailUsernameWithSpecialChars() {
       'Send mail to bolin-fest+for.um@google.com',
       'Send mail to <a href="mailto:bolin-fest+for.um@google.com">' +
           'bolin-fest+for.um@google.com<\/a>');
+  assertLinkify(
+      'Email with all special characters in the user name',
+      'Send mail to muad\'dib!#$%&\*/=?^_`{|}~@google.com',
+      'Send mail to ' +
+          '<a href="mailto:muad&#39;dib!#$%&amp;\*/=?^_`{|}~@google.com">' +
+          'muad&#39;dib!#$%&amp;\*/=?^_`{|}~@google.com<\/a>');
 }
 
 function testEmailWithUnderscoreInvalid() {
@@ -464,6 +476,14 @@ function testEndsWithPunctuation_angles() {
           'http://www.google.com/<\/a>&gt;');
 }
 
+function testEndsWithPunctuation_curlies() {
+  assertLinkify(
+      'Link inside curly brackets',
+      '{http://www.google.com/}',
+      '{<a href="http://www.google.com/">' +
+          'http://www.google.com/<\/a>}');
+}
+
 function testEndsWithPunctuation_closingPairThenSingle() {
   assertLinkify(
       'Link followed by closing punctuation pair then singular punctuation',
@@ -495,10 +515,42 @@ function testUrlWithExclamation() {
       'This is awesome <a href="http://www.google.com">www.google.com<\/a>!');
 }
 
+function testSpecialCharactersInUrl() {
+  assertLinkify(
+      'Link with characters that are neither reserved nor unreserved as per' +
+          'RFC 3986 but that are recognized by other Google properties.',
+      'https://www.google.com/?q=\`{|}recognized',
+      '<a href="https://www.google.com/?q=\`{|}recognized">' +
+          'https://www.google.com/?q=\`{|}recognized<\/a>');
+}
+
+function testUsuallyUnrecognizedCharactersAreNotInUrl() {
+  assertLinkify(
+      'Link with characters that are neither reserved nor unreserved as per' +
+          'RFC 3986 and which are not recognized by other Google properties.',
+      'https://www.google.com/?q=<^>"',
+      '<a href="https://www.google.com/?q=">' +
+          'https://www.google.com/?q=<\/a>&lt;^&gt;&quot;');
+}
+
 function testIpv6Url() {
   assertLinkify(
       'IPv6 URL',
       'http://[::FFFF:129.144.52.38]:80/index.html',
       '<a href="http://[::FFFF:129.144.52.38]:80/index.html">' +
       'http://[::FFFF:129.144.52.38]:80/index.html<\/a>');
+}
+
+function testPreserveNewlines() {
+  assertLinkify(
+      'Preserving newlines',
+      'Example:\nhttp://www.google.com/',
+      'Example:<br>' +
+          '<a href="http://www.google.com/">http://www.google.com/<\/a>',
+      /* preserveNewlines */ true);
+  assertLinkify(
+      'Preserving newlines with no links',
+      'Line 1\nLine 2',
+      'Line 1<br>Line 2',
+      /* preserveNewlines */ true);
 }

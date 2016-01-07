@@ -33,37 +33,42 @@ goog.require('goog.string');
 /**
  * Datetime formatting functions following the pattern specification as defined
  * in JDK, ICU and CLDR, with minor modification for typical usage in JS.
- * Pattern specification: (Refer to JDK/ICU/CLDR)
+ * Pattern specification:
+ * {@link http://userguide.icu-project.org/formatparse/datetime}
  * <pre>
- * Symbol Meaning Presentation        Example
- * ------   -------                 ------------        -------
- * G        era designator          (Text)              AD
- * y#       year                    (Number)            1996
- * Y*       year (week of year)     (Number)            1997
- * u*       extended year           (Number)            4601
- * M        month in year           (Text & Number)     July & 07
- * d        day in month            (Number)            10
- * h        hour in am/pm (1~12)    (Number)            12
- * H        hour in day (0~23)      (Number)            0
- * m        minute in hour          (Number)            30
- * s        second in minute        (Number)            55
- * S        fractional second       (Number)            978
- * E        day of week             (Text)              Tuesday
- * e*       day of week (local 1~7) (Number)            2
- * D*       day in year             (Number)            189
- * F*       day of week in month    (Number)            2 (2nd Wed in July)
- * w        week in year            (Number)            27
- * W*       week in month           (Number)            2
- * a        am/pm marker            (Text)              PM
- * k        hour in day (1~24)      (Number)            24
- * K        hour in am/pm (0~11)    (Number)            0
- * z        time zone               (Text)              Pacific Standard Time
- * Z        time zone (RFC 822)     (Number)            -0800
- * v        time zone (generic)     (Text)              Pacific Time
- * g*       Julian day              (Number)            2451334
- * A*       milliseconds in day     (Number)            69540000
- * '        escape for text         (Delimiter)         'Date='
- * ''       single quote            (Literal)           'o''clock'
+ * Symbol   Meaning                    Presentation       Example
+ * ------   -------                    ------------       -------
+ * G#       era designator             (Text)             AD
+ * y#       year                       (Number)           1996
+ * Y*       year (week of year)        (Number)           1997
+ * u*       extended year              (Number)           4601
+ * Q#       quarter                    (Text)             Q3 & 3rd quarter
+ * M        month in year              (Text & Number)    July & 07
+ * L        month in year (standalone) (Text & Number)    July & 07
+ * d        day in month               (Number)           10
+ * h        hour in am/pm (1~12)       (Number)           12
+ * H        hour in day (0~23)         (Number)           0
+ * m        minute in hour             (Number)           30
+ * s        second in minute           (Number)           55
+ * S        fractional second          (Number)           978
+ * E#       day of week                (Text)             Tue & Tuesday
+ * e*       day of week (local 1~7)    (Number)           2
+ * c#       day of week (standalone)   (Text & Number)    2 & Tues & Tuesday & T
+ * D*       day in year                (Number)           189
+ * F*       day of week in month       (Number)           2 (2nd Wed in July)
+ * w        week in year               (Number)           27
+ * W*       week in month              (Number)           2
+ * a        am/pm marker               (Text)             PM
+ * k        hour in day (1~24)         (Number)           24
+ * K        hour in am/pm (0~11)       (Number)           0
+ * z        time zone                  (Text)             Pacific Standard Time
+ * Z#       time zone (RFC 822)        (Number)           -0800
+ * v#       time zone (generic)        (Text)             America/Los_Angeles
+ * V#       time zone                  (Text)             Los Angeles Time
+ * g*       Julian day                 (Number)           2451334
+ * A*       milliseconds in day        (Number)           69540000
+ * '        escape for text            (Delimiter)        'Date='
+ * ''       single quote               (Literal)          'o''clock'
  *
  * Item marked with '*' are not supported yet.
  * Item marked with '#' works different than java
@@ -78,7 +83,7 @@ goog.require('goog.string');
  * 2 digits. (e.g., if "yyyy" produces "1997", "yy" produces "97".) Unlike other
  * fields, fractional seconds are padded on the right with zero.
  *
- * (Text & Number): 3 or over, use text, otherwise use number. (e.g., "M"
+ * :(Text & Number) 3 or over, use text, otherwise use number. (e.g., "M"
  * produces "1", "MM" produces "01", "MMM" produces "Jan", and "MMMM" produces
  * "January".)
  *
@@ -89,13 +94,11 @@ goog.require('goog.string');
  * </pre>
  */
 
-
-
 /**
  * Construct a DateTimeFormat object based on current locale.
  * @constructor
  * @param {string|number} pattern pattern specification or pattern type.
- * @param {!Object=} opt_dateTimeSymbols Optional symbols to use use for this
+ * @param {!Object=} opt_dateTimeSymbols Optional symbols to use for this
  *     instance rather than the global symbols.
  * @final
  */
@@ -110,10 +113,10 @@ goog.i18n.DateTimeFormat = function(pattern, opt_dateTimeSymbols) {
   /**
    * Data structure that with all the locale info needed for date formatting.
    * (day/month names, most common patterns, rules for week-end, etc.)
-   * @type {!Object}
-   * @private
+   * @private {!goog.i18n.DateTimeSymbolsType}
    */
-  this.dateTimeSymbols_ = opt_dateTimeSymbols || goog.i18n.DateTimeSymbols;
+  this.dateTimeSymbols_ = /** @type {!goog.i18n.DateTimeSymbolsType} */ (
+      opt_dateTimeSymbols || goog.i18n.DateTimeSymbols);
   if (typeof pattern == 'number') {
     this.applyStandardPattern_(pattern);
   } else {
@@ -166,6 +169,15 @@ goog.i18n.DateTimeFormat.PartTypes_ = {
   QUOTED_STRING: 0,
   FIELD: 1,
   LITERAL: 2
+};
+
+
+/**
+ * @param {!goog.date.DateLike} date
+ * @private
+ */
+goog.i18n.DateTimeFormat.getHours_ = function(date) {
+  return date.getHours ? date.getHours() : 0;
 };
 
 
@@ -367,7 +379,7 @@ goog.i18n.DateTimeFormat.isEnforceAsciiDigits = function() {
  * Localizes a string potentially containing numbers, replacing ASCII digits
  * with native digits if specified so by the locale. Leaves other characters.
  * @param {number|string} input the string to be localized, using ASCII digits.
- * @param {!Object=} opt_dateTimeSymbols Optional symbols to use use rather than
+ * @param {!Object=} opt_dateTimeSymbols Optional symbols to use rather than
  *     the global symbols.
  * @return {string} localized string, potentially using native digits.
  */
@@ -488,8 +500,8 @@ goog.i18n.DateTimeFormat.validateDateHasTime_ = function(date) {
 goog.i18n.DateTimeFormat.prototype.format24Hours_ =
     function(count, date) {
   goog.i18n.DateTimeFormat.validateDateHasTime_(date);
-  return this.localizeNumbers_(
-      goog.string.padNumber(date.getHours() || 24, count));
+  var hours = goog.i18n.DateTimeFormat.getHours_(date) || 24;
+  return this.localizeNumbers_(goog.string.padNumber(hours, count));
 };
 
 
@@ -542,7 +554,7 @@ goog.i18n.DateTimeFormat.prototype.formatDayOfWeek_ =
  */
 goog.i18n.DateTimeFormat.prototype.formatAmPm_ = function(count, date) {
   goog.i18n.DateTimeFormat.validateDateHasTime_(date);
-  var hours = date.getHours();
+  var hours = goog.i18n.DateTimeFormat.getHours_(date);
   return this.dateTimeSymbols_.AMPMS[hours >= 12 && hours < 24 ? 1 : 0];
 };
 
@@ -559,8 +571,8 @@ goog.i18n.DateTimeFormat.prototype.formatAmPm_ = function(count, date) {
 goog.i18n.DateTimeFormat.prototype.format1To12Hours_ =
     function(count, date) {
   goog.i18n.DateTimeFormat.validateDateHasTime_(date);
-  return this.localizeNumbers_(
-      goog.string.padNumber(date.getHours() % 12 || 12, count));
+  var hours = goog.i18n.DateTimeFormat.getHours_(date) % 12 || 12;
+  return this.localizeNumbers_(goog.string.padNumber(hours, count));
 };
 
 
@@ -576,8 +588,8 @@ goog.i18n.DateTimeFormat.prototype.format1To12Hours_ =
 goog.i18n.DateTimeFormat.prototype.format0To11Hours_ =
     function(count, date) {
   goog.i18n.DateTimeFormat.validateDateHasTime_(date);
-  return this.localizeNumbers_(
-      goog.string.padNumber(date.getHours() % 12, count));
+  var hours = goog.i18n.DateTimeFormat.getHours_(date) % 12;
+  return this.localizeNumbers_(goog.string.padNumber(hours, count));
 };
 
 
@@ -593,7 +605,8 @@ goog.i18n.DateTimeFormat.prototype.format0To11Hours_ =
 goog.i18n.DateTimeFormat.prototype.format0To23Hours_ =
     function(count, date) {
   goog.i18n.DateTimeFormat.validateDateHasTime_(date);
-  return this.localizeNumbers_(goog.string.padNumber(date.getHours(), count));
+  var hours = goog.i18n.DateTimeFormat.getHours_(date);
+  return this.localizeNumbers_(goog.string.padNumber(hours, count));
 };
 
 
@@ -690,7 +703,8 @@ goog.i18n.DateTimeFormat.prototype.formatDate_ = function(count, date) {
 goog.i18n.DateTimeFormat.prototype.formatMinutes_ =
     function(count, date) {
   goog.i18n.DateTimeFormat.validateDateHasTime_(date);
-  return this.localizeNumbers_(goog.string.padNumber(date.getMinutes(), count));
+  return this.localizeNumbers_(goog.string.padNumber(
+    /** @type {!goog.date.DateTime} */ (date).getMinutes(), count));
 };
 
 
@@ -706,7 +720,8 @@ goog.i18n.DateTimeFormat.prototype.formatMinutes_ =
 goog.i18n.DateTimeFormat.prototype.formatSeconds_ =
     function(count, date) {
   goog.i18n.DateTimeFormat.validateDateHasTime_(date);
-  return this.localizeNumbers_(goog.string.padNumber(date.getSeconds(), count));
+  return this.localizeNumbers_(goog.string.padNumber(
+    /** @type {!goog.date.DateTime} */ (date).getSeconds(), count));
 };
 
 
@@ -844,4 +859,3 @@ goog.i18n.DateTimeFormat.prototype.formatField_ =
     default: return '';
   }
 };
-

@@ -73,7 +73,7 @@ goog.require('goog.dom.safe');
 goog.require('goog.events');
 goog.require('goog.events.EventTarget');
 goog.require('goog.events.EventType');
-goog.require('goog.html.legacyconversions');
+goog.require('goog.html.SafeHtml');
 goog.require('goog.json');
 goog.require('goog.log');
 goog.require('goog.net.EventType');
@@ -85,11 +85,6 @@ goog.require('goog.userAgent');
 
 /**
  * Creates a new instance of cross domain RPC.
- *
- * This class makes use of goog.html.legacyconversions and provides no
- * HTML-type-safe alternative. As such, it is not compatible with
- * code that sets goog.html.legacyconversions.ALLOW_LEGACY_CONVERSIONS to
- * false.
  *
  * @extends {goog.events.EventTarget}
  * @constructor
@@ -169,7 +164,7 @@ goog.net.CrossDomainRpc.isInResponseIframe_ = function() {
  *    response iframe.
  */
 if (goog.net.CrossDomainRpc.isInResponseIframe_()) {
-  if (goog.userAgent.IE) {
+  if (goog.userAgent.EDGE_OR_IE) {
     document.execCommand('Stop');
   } else if (goog.userAgent.GECKO) {
     window.stop();
@@ -252,26 +247,11 @@ goog.net.CrossDomainRpc.logger_ =
  * Creates the HTML of an input element
  * @param {string} name Name of input element.
  * @param {*} value Value of input element.
- * @return {string} HTML of input element with that name and value.
+ * @return {!goog.html.SafeHtml} HTML of input element with that name and value.
  * @private
  */
 goog.net.CrossDomainRpc.createInputHtml_ = function(name, value) {
-  return '<textarea name="' + name + '">' +
-      goog.net.CrossDomainRpc.escapeAmpersand_(value) + '</textarea>';
-};
-
-
-/**
- * Escapes ampersand so that XML/HTML entities are submitted as is because
- * browser unescapes them when they are put into a text area.
- * @param {*} value Value to escape.
- * @return {*} Value with ampersand escaped, if value is a string;
- *     otherwise the value itself is returned.
- * @private
- */
-goog.net.CrossDomainRpc.escapeAmpersand_ = function(value) {
-  return value && (goog.isString(value) || value.constructor == String) ?
-      value.replace(/&/g, '&amp;') : value;
+  return goog.html.SafeHtml.create('textarea', {'name': name}, String(value));
 };
 
 
@@ -319,7 +299,7 @@ goog.net.CrossDomainRpc.getDummyResourceUri_ = function() {
         'No suitable dummy resource specified or detected for this page');
   }
 
-  if (goog.userAgent.IE) {
+  if (goog.userAgent.EDGE_OR_IE) {
     // use this page as the dummy resource; remove hash from URL if any
     return goog.net.CrossDomainRpc.removeHash_(window.location.href);
   } else {
@@ -408,7 +388,8 @@ goog.net.CrossDomainRpc.REQUEST_MARKER_ = 'xdrq';
 /**
  * Sends a request across domain.
  * @param {string} uri Uri to make request to.
- * @param {string=} opt_method Method of request. Default is POST.
+ * @param {string=} opt_method Method of request, 'GET' or 'POST' (uppercase).
+ *     Default is 'POST'.
  * @param {Object=} opt_params Parameters. Each property is turned into a
  *     request parameter.
  * @param {Object=} opt_headers Map of headers of the request.
@@ -459,11 +440,11 @@ goog.net.CrossDomainRpc.prototype.sendRequest =
     }
   }
 
-  var requestFrameContent = '<body><form method="' +
-      (opt_method == 'GET' ? 'GET' : 'POST') + '" action="' +
-      uri + '">' + inputs.join('') + '</form></body>';
-  var requestFrameContentHtml = goog.html.legacyconversions.safeHtmlFromString(
-      requestFrameContent);
+  var requestFrameContentHtml = goog.html.SafeHtml.create('body', {},
+      goog.html.SafeHtml.create('form', {
+        'method': opt_method == 'GET' ? 'GET' : 'POST',
+        'action': uri
+      }, inputs));
   var requestFrameDoc = goog.dom.getFrameContentDocument(requestFrame);
   requestFrameDoc.open();
   goog.dom.safe.documentWrite(requestFrameDoc, requestFrameContentHtml);
@@ -559,7 +540,7 @@ goog.net.CrossDomainRpc.prototype.detectResponse_ =
 
     var responseData = chunks.join('');
     // Payload is not encoded to begin with on IE. Decode in other cases only.
-    if (!goog.userAgent.IE) {
+    if (!goog.userAgent.EDGE_OR_IE) {
       responseData = decodeURIComponent(responseData);
     }
 
@@ -696,7 +677,7 @@ goog.net.CrossDomainRpc.RESPONSE_INFO_MARKER_ =
  * @private
  */
 goog.net.CrossDomainRpc.MAX_CHUNK_SIZE_ =
-    goog.userAgent.IE ? 4095 : 1024 * 1024;
+    goog.userAgent.EDGE_OR_IE ? 4095 : 1024 * 1024;
 
 
 /**
@@ -775,7 +756,7 @@ goog.net.CrossDomainRpc.sendResponse =
    * Note(*): IE actually does encode only space to %20 and decodes that
    *   automatically when you do location.href or location.hash.
    */
-  if (!goog.userAgent.IE) {
+  if (!goog.userAgent.EDGE_OR_IE) {
     data = encodeURIComponent(data);
   }
 

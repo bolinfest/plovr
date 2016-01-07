@@ -25,11 +25,11 @@ goog.require('goog.html.SafeUrl');
 goog.require('goog.html.TrustedResourceUrl');
 goog.require('goog.html.testing');
 goog.require('goog.i18n.bidi.Dir');
+goog.require('goog.object');
 goog.require('goog.string.Const');
 goog.require('goog.testing.jsunit');
 
 goog.setTestOnly('goog.html.safeHtmlTest');
-
 
 
 function testSafeHtml() {
@@ -54,20 +54,25 @@ function testSafeHtml() {
 
   // Pre-defined constant.
   assertSameHtml('', goog.html.SafeHtml.EMPTY);
+  assertSameHtml('<br>', goog.html.SafeHtml.BR);
 }
 
 
 /** @suppress {checkTypes} */
 function testUnwrap() {
+  var privateFieldName = 'privateDoNotAccessOrElseSafeHtmlWrappedValue_';
+  var markerFieldName = 'SAFE_HTML_TYPE_MARKER_GOOG_HTML_SECURITY_PRIVATE_';
+  var propNames = goog.object.getKeys(goog.html.SafeHtml.htmlEscape(''));
+  assertContains(privateFieldName, propNames);
+  assertContains(markerFieldName, propNames);
   var evil = {};
-  evil.safeHtmlValueWithSecurityContract__googHtmlSecurityPrivate_ =
-      '<script>evil()</script';
-  evil.SAFE_HTML_TYPE_MARKER_GOOG_HTML_SECURITY_PRIVATE_ = {};
+  evil[privateFieldName] = '<script>evil()</script';
+  evil[markerFieldName] = {};
 
   var exception = assertThrows(function() {
     goog.html.SafeHtml.unwrap(evil);
   });
-  assertTrue(exception.message.indexOf('expected object of type SafeHtml') > 0);
+  assertContains('expected object of type SafeHtml', exception.message);
 }
 
 
@@ -164,6 +169,31 @@ function testSafeHtmlCreate() {
   assertThrows(function() {
     goog.html.SafeHtml.create('a', {'title="" href': ''});
   });
+
+  assertThrows(function() {
+    goog.html.SafeHtml.create('applet');
+  });
+
+  assertThrows(function() {
+    goog.html.SafeHtml.create('applet', {'code': 'kittens.class'});
+  });
+
+  assertThrows(function() {
+    goog.html.SafeHtml.create('base');
+  });
+
+  assertThrows(function() {
+    goog.html.SafeHtml.create('base', {'href': 'http://example.org'});
+  });
+
+  assertThrows(function() {
+    goog.html.SafeHtml.create('math');
+  });
+
+  assertThrows(function() {
+    goog.html.SafeHtml.create('svg');
+  });
+
 }
 
 
@@ -232,7 +262,7 @@ function testSafeHtmlCreateIframe() {
   assertSameHtml(
       '<iframe src="https://google.com/trusted&lt;"></iframe>',
       goog.html.SafeHtml.createIframe(url, null, {'sandbox': null}));
-  var srcdoc = goog.html.SafeHtml.create('br');
+  var srcdoc = goog.html.SafeHtml.BR;
   assertSameHtml(
       '<iframe srcdoc="&lt;br&gt;"></iframe>',
       goog.html.SafeHtml.createIframe(null, srcdoc, {'sandbox': null}));
@@ -260,6 +290,46 @@ function testSafeHtmlCreateIframe() {
       goog.html.SafeHtml.createIframe(null, null, {'sandbox': null}, '<'));
 }
 
+function testSafeHtmlCreateMeta() {
+  var url = goog.html.SafeUrl.fromConstant(
+      goog.string.Const.from('https://google.com/trusted<'));
+
+  // SafeUrl with no timeout gets properly escaped.
+  assertSameHtml(
+      '<meta http-equiv="refresh" ' +
+          'content="0; url=https://google.com/trusted&lt;">',
+      goog.html.SafeHtml.createMetaRefresh(url));
+
+  // SafeUrl with 0 timeout also gets properly escaped.
+  assertSameHtml(
+      '<meta http-equiv="refresh" ' +
+          'content="0; url=https://google.com/trusted&lt;">',
+      goog.html.SafeHtml.createMetaRefresh(url, 0));
+
+  // Positive timeouts are supported.
+  assertSameHtml(
+      '<meta http-equiv="refresh" ' +
+          'content="1337; url=https://google.com/trusted&lt;">',
+      goog.html.SafeHtml.createMetaRefresh(url, 1337));
+
+  // Negative timeouts are also kept, though they're not correct HTML.
+  assertSameHtml(
+      '<meta http-equiv="refresh" ' +
+          'content="-1337; url=https://google.com/trusted&lt;">',
+      goog.html.SafeHtml.createMetaRefresh(url, -1337));
+
+  // String-based URLs work out of the box.
+  assertSameHtml(
+      '<meta http-equiv="refresh" ' +
+          'content="0; url=https://google.com/trusted&lt;">',
+      goog.html.SafeHtml.createMetaRefresh('https://google.com/trusted<'));
+
+  // Sanitization happens.
+  assertSameHtml(
+      '<meta http-equiv="refresh" ' +
+          'content="0; url=about:invalid#zClosurez">',
+      goog.html.SafeHtml.createMetaRefresh('javascript:alert(1)'));
+}
 
 function testSafeHtmlCreateStyle() {
   var styleSheet = goog.html.SafeStyleSheet.fromConstant(

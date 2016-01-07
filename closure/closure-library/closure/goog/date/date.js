@@ -433,7 +433,7 @@ goog.date.setIso8601TimeOnly_ = function(d, formatted) {
   var offset = 0; // local time if no timezone info
   if (parts) {
     if (parts[0] != 'Z') {
-      offset = parts[2] * 60 + Number(parts[3]);
+      offset = Number(parts[2]) * 60 + Number(parts[3]);
       offset *= parts[1] == '-' ? 1 : -1;
     }
     offset -= d.getTimezoneOffset();
@@ -449,7 +449,7 @@ goog.date.setIso8601TimeOnly_ = function(d, formatted) {
   d.setHours(Number(parts[1]));
   d.setMinutes(Number(parts[2]) || 0);
   d.setSeconds(Number(parts[3]) || 0);
-  d.setMilliseconds(parts[4] ? parts[4] * 1000 : 0);
+  d.setMilliseconds(parts[4] ? Number(parts[4]) * 1000 : 0);
 
   if (offset != 0) {
     // adjust the date and time according to the specified timezone
@@ -1345,7 +1345,8 @@ goog.date.DateTime = function(opt_year, opt_month, opt_date, opt_hours,
         opt_hours || 0, opt_minutes || 0, opt_seconds || 0,
         opt_milliseconds || 0);
   } else {
-    this.date = new Date(opt_year ? opt_year.getTime() : goog.now());
+    this.date = new Date(opt_year && opt_year.getTime ?
+        opt_year.getTime() : goog.now());
   }
 };
 goog.inherits(goog.date.DateTime, goog.date.Date);
@@ -1566,13 +1567,13 @@ goog.date.DateTime.prototype.add = function(interval) {
   goog.date.Date.prototype.add.call(this, interval);
 
   if (interval.hours) {
-    this.setHours(this.date.getHours() + interval.hours);
+    this.setUTCHours(this.date.getUTCHours() + interval.hours);
   }
   if (interval.minutes) {
-    this.setMinutes(this.date.getMinutes() + interval.minutes);
+    this.setUTCMinutes(this.date.getUTCMinutes() + interval.minutes);
   }
   if (interval.seconds) {
-    this.setSeconds(this.date.getSeconds() + interval.seconds);
+    this.setUTCSeconds(this.date.getUTCSeconds() + interval.seconds);
   }
 };
 
