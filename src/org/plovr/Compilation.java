@@ -343,6 +343,11 @@ public final class Compilation {
     Map<String, File> moduleToOutputPath = moduleConfig.getModuleToOutputPath();
     final Map<String, String> moduleNameToFingerprint = Maps.newHashMap();
     final boolean isDebugMode = false;
+
+    if (sourceMapPath != null) {
+        new File(sourceMapPath).mkdirs();
+    }
+
     for (JSModule module : modules) {
       String moduleName = module.getName();
       File outputFile = moduleToOutputPath.get(moduleName);
