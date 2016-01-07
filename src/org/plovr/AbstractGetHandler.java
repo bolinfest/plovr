@@ -116,6 +116,10 @@ abstract class AbstractGetHandler implements HttpHandler {
     headers.set("Expires", "Fri, 01 Jan 1990 00:00:00 GMT");
     headers.set("Pragma", "no-cache");
     headers.set("Cache-control", "no-cache, must-revalidate");
+
+    // It should not be possible to serve secrets that need domain sandboxing
+    // with Plovr, so make the CORS headers as permissive as possible.
+    headers.set("Access-Control-Allow-Origin", "*");
   }
 
   /**

@@ -3,7 +3,8 @@
 # ant clean jar
 
 # This will run the plovr demo.
-ant run-demo &
+buck build plovr
+java -classpath buck-out/gen/plovr.jar org.plovr.cli.Main serve www/demo/demo-config.js testdata/modules/plovr-config.js
 
 # This was used to debug http://code.google.com/p/chromium/issues/detail?id=105824
 # PLOVR_JAR=/www/bolinfest.com/plovr/plovr-with-etags.jar
