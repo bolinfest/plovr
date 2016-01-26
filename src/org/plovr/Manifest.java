@@ -1,22 +1,12 @@
 package org.plovr;
 
-import java.io.File;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.SortedSet;
-import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
-
-import javax.annotation.Nullable;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -26,8 +16,22 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.gson.Gson;
+import com.google.javascript.jscomp.AbstractCommandLineRunner;
+import com.google.javascript.jscomp.CompilerOptions;
 import com.google.javascript.jscomp.JSModule;
 import com.google.javascript.jscomp.SourceFile;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
+
+import javax.annotation.Nullable;
 
 
 /**
@@ -198,11 +202,15 @@ public final class Manifest {
    * @throws CompilationException
    */
   public Compilation getCompilerArguments(
-      @Nullable ModuleConfig moduleConfig) throws CompilationException {
+      @Nullable ModuleConfig moduleConfig, CompilerOptions options) throws CompilationException {
     // Build up the list of externs to use in the compilation.
     ImmutableList.Builder<SourceFile> builder = ImmutableList.builder();
     if (!customExternsOnly) {
-      builder.addAll(getDefaultExterns());
+      try {
+        builder.addAll(AbstractCommandLineRunner.getBuiltinExterns(options));
+      } catch (IOException e) {
+        throw Throwables.propagate(e);
+      }
     }
     if (this.externs != null) {
       builder.addAll(Lists.transform(getExternInputs(), inputToSourceFile));
@@ -221,11 +229,6 @@ public final class Manifest {
       List<JSModule> modules = moduleConfig.getModules(this);
       return Compilation.createForModules(externs, modules);
     }
-  }
-
-  private List<SourceFile> getDefaultExterns() {
-    logger.fine("Using default externs");
-    return ResourceReader.getDefaultExterns();
   }
 
   public List<JsInput> getInputsInCompilationOrder() throws CompilationException {

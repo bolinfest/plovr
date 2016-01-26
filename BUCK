@@ -12,8 +12,7 @@ java_library(
     'src/**/*.ts',
   ]) + [
     'library_manifest.txt',
-    'third_party_manifest.txt',
-    'externs_manifest.txt',
+    'third_party_manifest.txt'
   ],
   source = '7',
   target = '7',

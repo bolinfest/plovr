@@ -25,6 +25,7 @@ java_library(
     ':jsr305',
     ':protobuf',
     ':externs_srcs',
+    ':externs_zip',
     ':support_srcs',
   ],
   visibility = [ 'PUBLIC' ],
@@ -50,8 +51,8 @@ java_library(
 
 genrule(
   name = 'externs_zip',
-  srcs = glob(['externs/*.js']),
-  cmd = 'zip -r $OUT $SRCS',
+  srcs = glob(['externs/**/*.js']),
+  cmd = 'cd externs && zip -r $OUT *',
   out = 'externs.zip',
 )
 

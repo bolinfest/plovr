@@ -1,8 +1,14 @@
 package org.plovr;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
+import com.google.common.base.Function;
+import com.google.common.base.Predicate;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
+import com.google.javascript.jscomp.CompilerOptions;
+import com.google.javascript.jscomp.SourceFile;
+
+import org.junit.Test;
 
 import java.io.File;
 import java.util.Collection;
@@ -11,14 +17,9 @@ import java.util.Set;
 
 import javax.annotation.Nullable;
 
-import org.junit.Test;
-
-import com.google.common.base.Function;
-import com.google.common.base.Predicate;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
-import com.google.javascript.jscomp.SourceFile;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
 
 /**
  * {@link ManifestTest} is a unit test for {@link Manifest}.
@@ -70,7 +71,8 @@ public class ManifestTest {
         customExternsOnly);
 
     final ModuleConfig moduleConfig = null;
-    Compilation compilerArguments = manifest.getCompilerArguments(moduleConfig);
+
+    Compilation compilerArguments = manifest.getCompilerArguments(moduleConfig, new CompilerOptions());
     List<SourceFile> inputs = compilerArguments.getInputs();
 
     List<String> expectedNames = ImmutableList.of(
