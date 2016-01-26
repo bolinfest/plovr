@@ -109,7 +109,9 @@ public final class Compilation {
     }
 
     try {
-      Compilation compilation = config.getManifest().getCompilerArguments(config.getModuleConfig());
+      PlovrClosureCompiler dummyCompiler = new PlovrClosureCompiler(config.getErrorStream());
+      Compilation compilation = config.getManifest().getCompilerArguments(
+          config.getModuleConfig(), config.getCompilerOptions(dummyCompiler));
       compilation.compile(config);
       return compilation;
     } catch (Throwable e) {

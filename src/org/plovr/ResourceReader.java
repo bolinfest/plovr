@@ -76,13 +76,6 @@ class ResourceReader {
     }
   }
 
-  /**
-   * @return a SourceFile for each externs file bundled with plovr
-   */
-  static List<SourceFile> getDefaultExterns() {
-    return ExternsHolder.instance.externs;
-  }
-
   private static final Function<String, SourceFile> INPUT_TO_JS_SOURCE_FILE =
     new Function<String, SourceFile>() {
       @Override
@@ -91,28 +84,6 @@ class ResourceReader {
         return SourceFile.fromGenerator(path, generator);
       }
   };
-
-  private static class ExternsHolder {
-    private static final ExternsHolder instance = new ExternsHolder();
-
-    final List<SourceFile> externs;
-
-    private ExternsHolder() {
-      List<SourceFile> externs;
-      try {
-        externs = loadExternsFromManifest();
-      } catch (IOException e) {
-        logger.severe(e.getMessage());
-        throw new RuntimeException(e);
-      }
-      this.externs = externs;
-    }
-
-    static List<SourceFile> loadExternsFromManifest() throws IOException {
-      return loadFromManifest("/externs_manifest.txt", "/externs/",
-          INPUT_TO_JS_SOURCE_FILE);
-    }
-  }
 
   /**
    * Loads a list of resources from a jar file using a manifest file which is
