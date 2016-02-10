@@ -1,6 +1,6 @@
 {
     "name": "plovr",
-    "version": "5.0.0",
+    "version": "5.0.1",
     "keywords":
         ["javascript", "compiler", "closure", "build"],
     "description":
