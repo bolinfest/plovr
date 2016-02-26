@@ -16,4 +16,4 @@ The Plovr build requires [Buck](https://buckbuild.com/).
 
 To test, `buck test`.
 
-To build, `buck plovr`. The output will be in `buck-out/gen/plovr.jar`
+To build, `buck build plovr`. The output will be in `buck-out/gen/plovr.jar`
