@@ -778,14 +778,22 @@ public final class Config implements Comparable<Config> {
     	try {
     		File[] files = translationsDirectory.listFiles(new FilenameFilter() {
     			@Override public boolean accept(File dir, String name) {
-    				return name.startsWith(language) && name.endsWith(".xtb");
+    				return name.startsWith(language) && (
+    						name.endsWith(".xtb") ||
+    						name.endsWith(".xliff") ||
+    						name.endsWith(".xlf"));
     			}
     	    });
     	    if (files.length == 0) {
     	    	logger.severe("Unable to find translations file for " + language);
     	    } else {
-    	    	options.setMessageBundle(
-    	    		new XtbMessageBundle(new FileInputStream(files[0]), null));
+    	    	if (files[0].getName().endsWith(".xtb")) {
+    	    		options.setMessageBundle(
+    	    				new XtbMessageBundle(new FileInputStream(files[0]), null));
+    	    	} else {
+    	    		options.setMessageBundle(
+    	    				new XliffMessageBundle(new FileInputStream(files[0]), null));
+    	    	}
     	    }
     	} catch (IOException e) {
     		logger.severe("Unable to load translations file: " + e.getMessage());
