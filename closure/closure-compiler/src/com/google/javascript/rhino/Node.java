@@ -64,6 +64,7 @@ public class Node implements Serializable {
 
   public static final int
       JSDOC_INFO_PROP   = 29,     // contains a TokenStream.JSDocInfo object
+
       VAR_ARGS_NAME     = 30,     // the name node is a variable length
                                   // argument placeholder.
       INCRDECR_PROP      = 32,    // whether incrdecr is pre (false) or post (true)
@@ -108,7 +109,6 @@ public class Node implements Serializable {
       GENERATOR_MARKER   = 65,    // Used by the ES6-to-ES3 translator.
       GENERATOR_SAFE     = 66,    // Used by the ES6-to-ES3 translator.
 
-      COOKED_STRING      = 70,    // Used to support ES6 tagged template literal.
       RAW_STRING_VALUE   = 71,    // Used to support ES6 tagged template literal.
       COMPUTED_PROP_METHOD = 72,  // A computed property that has the method
                                   // syntax ( [prop]() {...} ) rather than the
@@ -137,12 +137,14 @@ public class Node implements Serializable {
       GENERIC_TYPE_LIST = 81,     // Generic type list in ES6 typed syntax.
       IMPLEMENTS = 82,            // "implements" clause in ES6 typed syntax.
       CONSTRUCT_SIGNATURE = 83,   // This node is a TypeScript ConstructSignature
-      ACCESS_MODIFIER = 84;       // TypeScript accessibility modifiers (public, protected, private)
+      ACCESS_MODIFIER = 84,       // TypeScript accessibility modifiers (public, protected, private)
+      NON_INDEXABLE = 85,         // Indicates the node should not be indexed by analysis tools.
+      PARSE_RESULTS = 86;         // Parse results stored on SCRIPT nodes to allow replaying
+                                  // parse warnings/errors when cloning cached ASTs.
 
   private static final String propToString(int propType) {
       switch (propType) {
         case VAR_ARGS_NAME:      return "var_args_name";
-
         case JSDOC_INFO_PROP:    return "jsdoc_info";
 
         case INCRDECR_PROP:      return "incrdecr";
@@ -175,7 +177,6 @@ public class Node implements Serializable {
         case IS_CONSTANT_VAR:    return "is_constant_var";
         case GENERATOR_MARKER:   return "is_generator_marker";
         case GENERATOR_SAFE:     return "is_generator_safe";
-        case COOKED_STRING:      return "cooked_string";
         case RAW_STRING_VALUE:   return "raw_string_value";
         case COMPUTED_PROP_METHOD: return "computed_prop_method";
         case COMPUTED_PROP_GETTER: return "computed_prop_getter";
@@ -190,6 +191,8 @@ public class Node implements Serializable {
         case IMPLEMENTS:       return "implements";
         case CONSTRUCT_SIGNATURE: return "construct_signature";
         case ACCESS_MODIFIER: return "access_modifier";
+        case NON_INDEXABLE:      return "non_indexable";
+        case PARSE_RESULTS:      return "parse_results";
         default:
           throw new IllegalStateException("unexpected prop id " + propType);
       }
@@ -521,7 +524,7 @@ public class Node implements Serializable {
     sourcePosition = -1;
   }
 
-  public Node(int nodeType, Node left, Node mid, Node mid2, Node right) {
+  Node(int nodeType, Node left, Node mid, Node mid2, Node right) {
     Preconditions.checkArgument(left.parent == null);
     Preconditions.checkArgument(left.next == null);
     Preconditions.checkArgument(mid.parent == null);
@@ -554,54 +557,6 @@ public class Node implements Serializable {
   public Node(int nodeType, Node child, int lineno, int charno) {
     this(nodeType, child);
     sourcePosition = mergeLineCharNo(lineno, charno);
-  }
-
-  public Node(int nodeType, Node left, Node right, int lineno, int charno) {
-    this(nodeType, left, right);
-    sourcePosition = mergeLineCharNo(lineno, charno);
-  }
-
-  public Node(int nodeType, Node left, Node mid, Node right,
-      int lineno, int charno) {
-    this(nodeType, left, mid, right);
-    sourcePosition = mergeLineCharNo(lineno, charno);
-  }
-
-  public Node(int nodeType, Node left, Node mid, Node mid2, Node right,
-      int lineno, int charno) {
-    this(nodeType, left, mid, mid2, right);
-    sourcePosition = mergeLineCharNo(lineno, charno);
-  }
-
-  public Node(int nodeType, Node[] children, int lineno, int charno) {
-    this(nodeType, children);
-    sourcePosition = mergeLineCharNo(lineno, charno);
-  }
-
-  public Node(int nodeType, Node[] children) {
-    this.type = nodeType;
-    parent = null;
-    if (children.length != 0) {
-      this.first = children[0];
-      this.last = children[children.length - 1];
-
-      for (int i = 1; i < children.length; i++) {
-        if (null != children[i - 1].next) {
-          // fail early on loops. implies same node in array twice
-          throw new IllegalArgumentException("duplicate child");
-        }
-        children[i - 1].next = children[i];
-        Preconditions.checkArgument(children[i - 1].parent == null);
-        children[i - 1].parent = this;
-      }
-      Preconditions.checkArgument(children[children.length - 1].parent == null);
-      children[children.length - 1].parent = this;
-
-      if (null != this.last.next) {
-        // fail early on loops. implies same node in array twice
-        throw new IllegalArgumentException("duplicate child");
-      }
-    }
   }
 
   public static Node newNumber(double number) {
@@ -642,6 +597,14 @@ public class Node implements Serializable {
 
   public Node getFirstChild() {
     return first;
+  }
+
+  public Node getFirstFirstChild() {
+    return first == null ? null : first.first;
+  }
+
+  public Node getSecondChild() {
+    return first.next;
   }
 
   public Node getLastChild() {
@@ -1120,13 +1083,7 @@ public class Node implements Serializable {
         sb.append(" [");
         sb.append(propToString(type));
         sb.append(": ");
-        String value;
-        switch (type) {
-          default:
-            value = x.toString();
-            break;
-        }
-        sb.append(value);
+        sb.append(x);
         sb.append(']');
       }
     }
@@ -1256,6 +1213,26 @@ public class Node implements Serializable {
    */
   public InputId getInputId() {
     return ((InputId) this.getProp(INPUT_ID));
+  }
+
+  /** The original name of this node, if the node has been renamed. */
+  public String getOriginalName() {
+    return (String) this.getProp(ORIGINALNAME_PROP);
+  }
+
+  public void setOriginalName(String originalName) {
+    this.putProp(ORIGINALNAME_PROP, originalName);
+  }
+
+  /**
+   * Whether this node should be indexed by static analysis / code indexing tools.
+   */
+  public boolean isIndexable() {
+    return !this.getBooleanProp(NON_INDEXABLE);
+  }
+
+  public void makeNonIndexable() {
+    this.putBooleanProp(NON_INDEXABLE, true);
   }
 
   public boolean isFromExterns() {
@@ -1462,6 +1439,10 @@ public class Node implements Serializable {
     return parent;
   }
 
+  public Node getGrandparent() {
+    return parent == null ? null : parent.parent;
+  }
+
   /**
    * Gets the ancestor node relative to this.
    *
@@ -1605,7 +1586,7 @@ public class Node implements Serializable {
 
           return "Node tree inequality:" +
               "\nTree:\n" + toStringTree() +
-              "\n\nJSDoc differs on subtree: " + diff.nodeActual +
+              "\n\nJSDoc differs on subtree: " + diff.nodeExpected +
               "\nExpected JSDoc: " + jsDocExpected +
               "\nActual JSDoc  : " + jsDocActual;
         }
@@ -1804,6 +1785,7 @@ public class Node implements Serializable {
 
     switch (getType()) {
       case Token.NAME:
+      case Token.MEMBER_FUNCTION_DEF:
         String name = getString();
         return start == 0 && !name.isEmpty() &&
            name.length() == endIndex && qname.startsWith(name);
@@ -1993,8 +1975,8 @@ public class Node implements Serializable {
       putProp(ORIGINALNAME_PROP, other.getProp(ORIGINALNAME_PROP));
     }
 
-    if (getProp(STATIC_SOURCE_FILE) == null) {
-      putProp(STATIC_SOURCE_FILE, other.getProp(STATIC_SOURCE_FILE));
+    if (getStaticSourceFile() == null) {
+      setStaticSourceFile(other.getStaticSourceFile());
       sourcePosition = other.sourcePosition;
     }
 
@@ -2023,7 +2005,7 @@ public class Node implements Serializable {
    */
   public Node useSourceInfoFrom(Node other) {
     putProp(ORIGINALNAME_PROP, other.getProp(ORIGINALNAME_PROP));
-    putProp(STATIC_SOURCE_FILE, other.getProp(STATIC_SOURCE_FILE));
+    setStaticSourceFile(other.getStaticSourceFile());
     sourcePosition = other.sourcePosition;
     setLength(other.getLength());
     return this;
@@ -2060,8 +2042,8 @@ public class Node implements Serializable {
       putProp(ORIGINALNAME_PROP, other.getProp(ORIGINALNAME_PROP));
     }
 
-    if (getProp(STATIC_SOURCE_FILE) == null) {
-      putProp(STATIC_SOURCE_FILE, other.getProp(STATIC_SOURCE_FILE));
+    if (getStaticSourceFile() == null) {
+      setStaticSourceFile(other.getStaticSourceFile());
       sourcePosition = other.sourcePosition;
       setLength(other.getLength());
     }
@@ -2502,7 +2484,7 @@ public class Node implements Serializable {
   /**
    * returns true if all the flags are set in value.
    */
-  private boolean areBitFlagsSet(int value, int flags) {
+  private static boolean areBitFlagsSet(int value, int flags) {
     return (value & flags) == flags;
   }
 
@@ -2698,6 +2680,10 @@ public class Node implements Serializable {
 
   public boolean isImport() {
     return this.getType() == Token.IMPORT;
+  }
+
+  public boolean isImportSpec() {
+    return this.getType() == Token.IMPORT_SPEC;
   }
 
   public boolean isIn() {

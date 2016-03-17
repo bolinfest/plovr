@@ -19,6 +19,10 @@ package com.google.javascript.jscomp;
 import static com.google.javascript.jscomp.CheckRequiresForConstructors.DUPLICATE_REQUIRE_WARNING;
 import static com.google.javascript.jscomp.CheckRequiresForConstructors.EXTRA_REQUIRE_WARNING;
 
+import com.google.common.collect.ImmutableList;
+
+import java.util.List;
+
 /**
  * Tests for the "extra requires" check in {@link CheckRequiresForConstructors}.
  */
@@ -57,6 +61,20 @@ public final class ExtraRequireTest extends Es6CompilerTestCase {
     testSame("goog.require('foo'); foo();");
     testSame("goog.require('foo'); new foo();");
     testSame("/** @suppress {extraRequire} */ var bar = goog.require('foo.bar');");
+  }
+
+  public void testNoWarning_externsJsDoc() {
+    String js = "goog.require('ns.Foo'); /** @type {ns.Foo} */ var f;";
+    List<SourceFile> externs = ImmutableList.of(SourceFile.fromCode("externs",
+        "/** @const */ var ns;"));
+    test(externs, js, js, null, null, null);
+  }
+
+  public void testNoWarning_externsNew() {
+    String js = "goog.require('ns.Foo'); new ns.Foo();";
+    List<SourceFile> externs = ImmutableList.of(SourceFile.fromCode("externs",
+        "/** @const */ var ns;"));
+    test(externs, js, js, null, null, null);
   }
 
   public void testNoWarning_InnerClassInExtends() {
@@ -106,13 +124,47 @@ public final class ExtraRequireTest extends Es6CompilerTestCase {
         LINE_JOINER.join(
             "import {Foo} from 'bar';",
             "new Foo();"));
+
+    testSameEs6(
+        LINE_JOINER.join(
+            "import Bar from 'bar';",
+            "new Bar();"));
+
+    testSameEs6(
+        LINE_JOINER.join(
+            "import {CoolFeature as Foo} from 'bar';",
+            "new Foo();"));
+
+    testSameEs6(
+        LINE_JOINER.join(
+            "import Bar, {CoolFeature as Foo, OtherThing as Baz} from 'bar';",
+            "new Foo(); new Bar(); new Baz();"));
   }
 
   public void testFailModule() {
-    // TODO(tbreisacher): Re-enable this check on ES6 modules, and make sure this reports a warning.
-    testSameEs6(
+    testErrorEs6(
+        "import {Foo} from 'bar';",
+        EXTRA_REQUIRE_WARNING);
+
+    testErrorEs6(
         LINE_JOINER.join(
             "import {Foo} from 'bar';",
-            "goog.require('example.ExtraRequire');"));
+            "import {Bar as Foo} from 'bar';",
+            "new Foo;"),
+            DUPLICATE_REQUIRE_WARNING);
+
+    testErrorEs6(
+        LINE_JOINER.join(
+            "import Foo from 'bar';",
+            "import {Bar as Foo} from 'bar';",
+            "new Foo;"),
+            DUPLICATE_REQUIRE_WARNING);
+
+    testErrorEs6(
+        LINE_JOINER.join(
+            "import {Foo} from 'bar';",
+            "goog.require('example.ExtraRequire');",
+            "new Foo;"),
+            EXTRA_REQUIRE_WARNING);
   }
 }

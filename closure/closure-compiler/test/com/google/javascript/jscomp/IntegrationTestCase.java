@@ -16,6 +16,8 @@
 
 package com.google.javascript.jscomp;
 
+import static com.google.javascript.jscomp.testing.JSErrorSubject.assertError;
+
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.testing.BlackHoleErrorManager;
@@ -32,32 +34,112 @@ import java.util.List;
  * @author nicksantos@google.com (Nick Santos)
  */
 abstract class IntegrationTestCase extends TestCase {
+  protected static final Joiner LINE_JOINER = Joiner.on('\n');
 
   /** Externs for the test */
-  protected final List<SourceFile> DEFAULT_EXTERNS = ImmutableList.of(
-    SourceFile.fromCode("externs",
-        "var arguments;\n"
-        + "/** @constructor */ function Window() {}\n"
-        + "/** @type {string} */ Window.prototype.name;\n"
-        + "/** @type {string} */ Window.prototype.offsetWidth;\n"
-        + "/** @type {Window} */ var window;\n"
-        + "/** @nosideeffects */ function noSideEffects() {}\n"
-        + "/** @constructor\n * @nosideeffects */ function Widget() {}\n"
-        + "/** @modifies {this} */ Widget.prototype.go = function() {};\n"
-        + "/** @return {string} */ var widgetToken = function() {};\n"
-        + "function alert(message) {}"
-        + "function Object() {}"
-        + "Object.seal;"
-        + "Object.defineProperties;"
-        + "/**\n"
-        + " * @param {...*} var_args\n"
-        + " * @constructor\n"
-        + " */\n"
-        + "function Function(var_args) {}\n"
-        + "/** @param {...*} var_args */\n"
-        + "Function.prototype.call = function (var_args) {};\n"
-        + "/** @constructor */\n"
-        + "function Arguments() {}"));
+  protected static final List<SourceFile> DEFAULT_EXTERNS =
+      ImmutableList.of(SourceFile.fromCode("externs", LINE_JOINER.join(
+          "var arguments;",
+          "var undefined;",
+          "var Math;",
+          "var isNaN;",
+          "var Infinity;",
+          "/** @interface */",
+          "var Iterator;",
+          "/** @interface */",
+          "var Iterable;",
+          "/** @interface @extends {Iterator} @extends {Iterable} */",
+          "var IteratorIterable;",
+          "/** @interface */",
+          "function IArrayLike() {};",
+          "/** @constructor */",
+          "var Map;",
+          "",
+          "/** @constructor */ function Window() {}",
+          "/** @type {string} */ Window.prototype.name;",
+          "/** @type {string} */ Window.prototype.offsetWidth;",
+          "/** @type {Window} */ var window;",
+          "",
+          "/** @nosideeffects */ function noSideEffects() {}",
+          "",
+          "/**",
+          " * @constructor",
+          " * @nosideeffects",
+          " */",
+          "function Widget() {}",
+          "/** @modifies {this} */ Widget.prototype.go = function() {};",
+          "/** @return {string} */ var widgetToken = function() {};",
+          "",
+          "function alert(message) {}",
+          "",
+          "/**",
+          " * @constructor",
+          " * @implements {IArrayLike}",
+          " * @return {!Array}",
+          " * @param {...*} var_args",
+          " */",
+          "function Array(var_args) {}",
+          "",
+          "/**",
+          " * @constructor",
+          " * @return {number}",
+          " * @param {*=} opt_n",
+          " */",
+          "function Number(opt_n) {}",
+          "",
+          "/**",
+          " * @constructor",
+          " * @return {string}",
+          " * @param {*=} opt_s",
+          " */",
+          "function String(opt_s) {}",
+          "",
+          "/**",
+          " * @constructor",
+          " * @return {boolean}",
+          " * @param {*=} opt_b",
+          " */",
+          "function Boolean(opt_b) {}",
+          "",
+          "/**",
+          " * @constructor",
+          " * @return {!TypeError}",
+          " * @param {*=} opt_message",
+          " * @param {*=} opt_file",
+          " * @param {*=} opt_line",
+          " */",
+          "function TypeError(opt_message, opt_file, opt_line) {}",
+          "",
+          "/**",
+          " * @constructor",
+          " * @param {*=} opt_value",
+          " * @return {!Object}",
+          " */",
+          "function Object(opt_value) {}",
+          "Object.seal;",
+          "Object.defineProperties;",
+          "/** @type {!Function} */",
+          "Object.prototype.constructor;",
+          "",
+          "/** @typedef {?} */",
+          "var symbol;",
+          "",
+          "/**",
+          " * @param {string} s",
+          " * @return {symbol}",
+          " */",
+          "function Symbol(s) {}",
+          "",
+          "/**",
+          " * @param {...*} var_args",
+          " * @constructor",
+          " */",
+          "function Function(var_args) {}",
+          "/** @param {...*} var_args */",
+          "Function.prototype.call = function (var_args) {};",
+          "",
+          "/** @constructor */",
+          "function Arguments() {}")));
 
   protected List<SourceFile> externs = DEFAULT_EXTERNS;
 
@@ -105,9 +187,11 @@ abstract class IntegrationTestCase extends TestCase {
     Node root = compiler.getRoot().getLastChild();
     Node expectedRoot = parseExpectedCode(compiled, options, normalizeResults);
     String explanation = expectedRoot.checkTreeEquals(root);
-    assertNull("\nExpected: " + compiler.toSource(expectedRoot) +
-        "\nResult: " + compiler.toSource(root) +
-        "\n" + explanation, explanation);
+    assertNull("\n"
+        + "Expected: " + compiler.toSource(expectedRoot) + "\n"
+        + "Result:   " + compiler.toSource(root) + "\n"
+        + explanation,
+        explanation);
   }
 
   /**
@@ -141,9 +225,9 @@ abstract class IntegrationTestCase extends TestCase {
     assertEquals("Expected exactly one warning or error",
         1, compiler.getErrors().length + compiler.getWarnings().length);
     if (compiler.getErrors().length > 0) {
-      assertEquals(warning, compiler.getErrors()[0].getType());
+      assertError(compiler.getErrors()[0]).hasType(warning);
     } else {
-      assertEquals(warning, compiler.getWarnings()[0].getType());
+      assertError(compiler.getWarnings()[0]).hasType(warning);
     }
 
     if (compiled != null) {
@@ -231,10 +315,6 @@ abstract class IntegrationTestCase extends TestCase {
   protected Compiler compile(CompilerOptions options, String[] original) {
     Compiler compiler = lastCompiler = new Compiler();
     BlackHoleErrorManager.silence(compiler);
-    List<SourceFile> inputs = new ArrayList<>();
-    for (int i = 0; i < original.length; i++) {
-      inputs.add(SourceFile.fromCode("input" + i, original[i]));
-    }
     compiler.compileModules(
         externs, ImmutableList.copyOf(CompilerTestCase.createModuleChain(original)),
         options);

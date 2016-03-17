@@ -27,7 +27,7 @@ import java.util.regex.Pattern;
  * by the test runner, even if the code is compiled.
  *
  */
-class ExportTestFunctions implements CompilerPass {
+public class ExportTestFunctions implements CompilerPass {
 
   private static final Pattern TEST_FUNCTIONS_NAME_PATTERN =
       Pattern.compile(
@@ -67,14 +67,14 @@ class ExportTestFunctions implements CompilerPass {
       if (parent.isScript()) {
         if (NodeUtil.isFunctionDeclaration(n)) {
           // Check for a test function statement.
-          String functionName = NodeUtil.getFunctionName(n);
+          String functionName = NodeUtil.getName(n);
           if (isTestFunction(functionName)) {
             exportTestFunctionAsSymbol(functionName, n, parent);
           }
         } else if (isNameDeclaredFunction(n)) {
           // Check for a test function expression.
-          Node functionNode = n.getFirstChild().getFirstChild();
-          String functionName = NodeUtil.getFunctionName(functionNode);
+          Node functionNode = n.getFirstFirstChild();
+          String functionName = NodeUtil.getName(functionNode);
           if (isTestFunction(functionName)) {
             exportTestFunctionAsSymbol(functionName, n, parent);
           }
@@ -131,7 +131,7 @@ class ExportTestFunctions implements CompilerPass {
       if (!NodeUtil.isNameDeclaration(node)) {
         return false;
       }
-      Node grandchild = node.getFirstChild().getFirstChild();
+      Node grandchild = node.getFirstFirstChild();
       return grandchild != null && grandchild.isFunction();
     }
   }
@@ -191,7 +191,7 @@ class ExportTestFunctions implements CompilerPass {
    * @param functionName The name of the function
    * @return {@code true} if the function is recognized as a test function.
    */
-  private static boolean isTestFunction(String functionName) {
+  public static boolean isTestFunction(String functionName) {
     return functionName != null
         && TEST_FUNCTIONS_NAME_PATTERN.matcher(functionName).matches();
   }

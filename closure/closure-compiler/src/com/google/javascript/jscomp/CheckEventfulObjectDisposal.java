@@ -357,7 +357,7 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
         if (!parentScopeType.isGlobalThisType()) {
           key = parentScopeType + "~" + key;
         }
-        key = NodeUtil.getFunctionName(scopeNode) + "=" + key;
+        key = NodeUtil.getName(scopeNode) + "=" + key;
       }
     } else {
       /*
@@ -584,7 +584,7 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
          *   n.firstChild -> "dispose"
          *   n.firstChild.firstChild -> object
          */
-        return n.getFirstChild().getFirstChild().getJSType();
+        return n.getFirstFirstChild().getJSType();
       }
     }
 
@@ -683,7 +683,7 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
        * TypedScope entered is a function definition
        */
       if (n.isFunction()) {
-        functionName = NodeUtil.getFunctionName(n);
+        functionName = NodeUtil.getName(n);
 
         /*
          *  Skip anonymous functions
@@ -763,7 +763,7 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
 
       Node listener = n.getChildAtIndex(3);
 
-      Node objectWithListener = n.getChildAtIndex(1);
+      Node objectWithListener = n.getSecondChild();
       if (!objectWithListener.isQualifiedName()) {
         return;
       }
@@ -1140,8 +1140,7 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
             paramNode = paramNode.getNext();
           }
         }
-        addDisposeCall(NodeUtil.getFunctionName(n),
-            positionalDisposedParameters);
+        addDisposeCall(NodeUtil.getName(n), positionalDisposedParameters);
       }
     }
 
@@ -1173,7 +1172,7 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
 
         JSDocInfo di = n.getJSDocInfo();
         ObjectType objectType =
-            ObjectType.cast(dereference(n.getFirstChild().getFirstChild()
+            ObjectType.cast(dereference(n.getFirstFirstChild()
                 .getJSType()));
         String propertyName = n.getFirstChild().getLastChild().getString();
 

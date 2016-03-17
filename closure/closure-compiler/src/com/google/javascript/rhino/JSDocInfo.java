@@ -51,6 +51,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -108,26 +109,26 @@ public class JSDocInfo implements Serializable {
     private static final long serialVersionUID = 1L;
 
     // Function information
-    JSTypeExpression baseType = null;
-    List<JSTypeExpression> extendedInterfaces = null;
-    List<JSTypeExpression> implementedInterfaces = null;
-    Map<String, JSTypeExpression> parameters = null;
-    List<JSTypeExpression> thrownTypes = null;
-    List<String> templateTypeNames = null;
-    Set<String> disposedParameters = null;
-    Map<String, Node> typeTransformations = null;
+    private JSTypeExpression baseType;
+    private List<JSTypeExpression> extendedInterfaces;
+    private List<JSTypeExpression> implementedInterfaces;
+    private Map<String, JSTypeExpression> parameters;
+    private List<JSTypeExpression> thrownTypes;
+    private List<String> templateTypeNames;
+    private Set<String> disposedParameters;
+    private Map<String, Node> typeTransformations;
 
     // Other information
-    String description = null;
-    String meaning = null;
-    String deprecated = null;
-    String license = null;
-    ImmutableSet<String> suppressions = null;
-    ImmutableSet<String> modifies = null;
-    String lendsName = null;
+    private String description;
+    private String meaning;
+    private String deprecated;
+    private String license;
+    private ImmutableSet<String> suppressions;
+    private ImmutableSet<String> modifies;
+    private String lendsName;
 
     // Bit flags for properties.
-    private int propertyBitField = 0;
+    private int propertyBitField;
 
     @Override
     public String toString() {
@@ -204,18 +205,18 @@ public class JSDocInfo implements Serializable {
   }
 
   private static final class LazilyInitializedDocumentation {
-    String sourceComment = null;
-    List<Marker> markers = null;
+    private String sourceComment;
+    private List<Marker> markers;
 
-    LinkedHashMap<String, String> parameters = null;
-    Map<JSTypeExpression, String> throwsDescriptions = null;
-    String blockDescription = null;
-    String fileOverview = null;
-    String returnDescription = null;
-    String version = null;
+    private LinkedHashMap<String, String> parameters;
+    private Map<JSTypeExpression, String> throwsDescriptions;
+    private String blockDescription;
+    private String fileOverview;
+    private String returnDescription;
+    private String version;
 
-    List<String> authors = null;
-    List<String> sees = null;
+    private List<String> authors;
+    private List<String> sees;
   }
 
   /**
@@ -223,6 +224,21 @@ public class JSDocInfo implements Serializable {
    * with a string.
    */
   public static class StringPosition extends SourcePosition<String> {
+    static boolean areEquivalent(StringPosition p1, StringPosition p2) {
+      if (p1 == null && p2 == null) {
+        return true;
+      }
+
+      if ((p1 == null && p2 != null) || (p1 != null && p2 == null)) {
+        return false;
+      }
+
+      return Objects.equals(p1.getItem(), p2.getItem())
+          && p1.getStartLine() == p2.getStartLine()
+          && p1.getPositionOnStartLine() == p2.getPositionOnStartLine()
+          && p1.getEndLine() == p2.getEndLine()
+          && p1.getPositionOnEndLine() == p2.getPositionOnEndLine();
+    }
   }
 
   /**
@@ -242,7 +258,29 @@ public class JSDocInfo implements Serializable {
    * A piece of information (found in a marker) which contains a position
    * with a name node.
    */
-  public static class NamePosition extends SourcePosition<Node> {}
+  public static class NamePosition extends SourcePosition<Node> {
+    static boolean areEquivalent(NamePosition p1, NamePosition p2) {
+      if (p1 == null && p2 == null) {
+        return true;
+      }
+
+      if ((p1 == null && p2 != null) || (p1 != null && p2 == null)) {
+        return false;
+      }
+
+      if ((p1.getItem() == null && p2.getItem() != null)
+          || (p1.getItem() != null && p2.getItem() == null)) {
+        return false;
+      }
+
+      return (p1.getItem() == null && p2.getItem() == null
+              || p1.getItem().isEquivalentTo(p2.getItem()))
+          && p1.getStartLine() == p2.getStartLine()
+          && p1.getPositionOnStartLine() == p2.getPositionOnStartLine()
+          && p1.getEndLine() == p2.getEndLine()
+          && p1.getPositionOnEndLine() == p2.getPositionOnEndLine();
+    }
+  }
 
   /**
    * A piece of information (found in a marker) which contains a position
@@ -259,6 +297,29 @@ public class JSDocInfo implements Serializable {
     void setHasBrackets(boolean newVal) {
       brackets = newVal;
     }
+
+    static boolean areEquivalent(TypePosition p1, TypePosition p2) {
+      if (p1 == null && p2 == null) {
+        return true;
+      }
+
+      if ((p1 == null && p2 != null) || (p1 != null && p2 == null)) {
+        return false;
+      }
+
+      if ((p1.getItem() == null && p2.getItem() != null)
+          || (p1.getItem() != null && p2.getItem() == null)) {
+        return false;
+      }
+
+      return (p1.getItem() == null && p2.getItem() == null
+              || p1.getItem().isEquivalentTo(p2.getItem()))
+          && p1.getStartLine() == p2.getStartLine()
+          && p1.getPositionOnStartLine() == p2.getPositionOnStartLine()
+          && p1.getEndLine() == p2.getEndLine()
+          && p1.getPositionOnEndLine() == p2.getPositionOnEndLine()
+          && p1.brackets == p2.brackets;
+    }
   }
 
   /**
@@ -272,11 +333,11 @@ public class JSDocInfo implements Serializable {
    * if documentation collection is turned on.
    */
   public static final class Marker {
-    private TrimmedStringPosition annotation = null;
-    private TrimmedStringPosition name = null;
-    private SourcePosition<Node> nameNode = null;
-    private StringPosition description = null;
-    private TypePosition type = null;
+    private TrimmedStringPosition annotation;
+    private TrimmedStringPosition name;
+    private NamePosition nameNode;
+    private StringPosition description;
+    private TypePosition type;
 
     /**
      * Gets the position information for the annotation name. (e.g., "param")
@@ -307,11 +368,11 @@ public class JSDocInfo implements Serializable {
      * Gets the position information for the name found
      * in an @param tag.
      */
-    public SourcePosition<Node> getNameNode() {
+    public NamePosition getNameNode() {
       return nameNode;
     }
 
-    void setNameNode(SourcePosition<Node> p) {
+    void setNameNode(NamePosition p) {
       nameNode = p;
     }
 
@@ -338,13 +399,29 @@ public class JSDocInfo implements Serializable {
     void setType(TypePosition p) {
       type = p;
     }
+
+    private static boolean areEquivalent(Marker m1, Marker m2) {
+      if (m1 == null && m2 == null) {
+        return true;
+      }
+
+      if ((m1 == null && m2 != null) || (m1 != null && m2 == null)) {
+        return false;
+      }
+
+      return TrimmedStringPosition.areEquivalent(m1.annotation, m2.annotation)
+          && TrimmedStringPosition.areEquivalent(m1.name, m2.name)
+          && NamePosition.areEquivalent(m1.nameNode, m2.nameNode)
+          && StringPosition.areEquivalent(m1.description, m2.description)
+          && TypePosition.areEquivalent(m1.type, m2.type);
+    }
   }
 
-  private LazilyInitializedInfo info = null;
+  private LazilyInitializedInfo info;
 
-  private LazilyInitializedDocumentation documentation = null;
+  private LazilyInitializedDocumentation documentation;
 
-  private Visibility visibility = null;
+  private Visibility visibility;
 
   /**
    * The {@link #isConstant()}, {@link #isConstructor()}, {@link #isInterface},
@@ -357,7 +434,7 @@ public class JSDocInfo implements Serializable {
    * @see #setType(JSTypeExpression, int)
    * @see #getType(int)
    */
-  private int bitset = 0x00;
+  private int bitset;
 
   /**
    * The type for {@link #getType()}, {@link #getReturnType()} or
@@ -367,24 +444,24 @@ public class JSDocInfo implements Serializable {
    * @see #setType(JSTypeExpression, int)
    * @see #getType(int)
    */
-  private JSTypeExpression type = null;
+  private JSTypeExpression type;
 
   /**
    * The type for {@link #getThisType()}.
    */
-  private JSTypeExpression thisType = null;
+  private JSTypeExpression thisType;
 
   /**
    * Whether the type annotation was inlined.
    */
-  private boolean inlineType = false;
+  private boolean inlineType;
 
   /**
    * Whether to include documentation.
    *
    * @see JSDocInfo.LazilyInitializedDocumentation
    */
-  private boolean includeDocumentation = false;
+  private boolean includeDocumentation;
 
   /**
    * Position of the original comment.
@@ -478,6 +555,17 @@ public class JSDocInfo implements Serializable {
       }
     }
 
+    if (jsDoc1.getMarkers().size() != jsDoc2.getMarkers().size()) {
+      return false;
+    }
+    Iterator<Marker> it1 = jsDoc1.getMarkers().iterator();
+    Iterator<Marker> it2 = jsDoc2.getMarkers().iterator();
+    while (it1.hasNext()) {
+      if (!Marker.areEquivalent(it1.next(), it2.next())) {
+        return false;
+      }
+    }
+
     return Objects.equals(jsDoc1.getAuthors(), jsDoc2.getAuthors())
         && Objects.equals(jsDoc1.getBaseType(), jsDoc2.getBaseType())
         && Objects.equals(jsDoc1.getBlockDescription(), jsDoc2.getBlockDescription())
@@ -487,7 +575,6 @@ public class JSDocInfo implements Serializable {
         && Objects.equals(jsDoc1.getExtendedInterfaces(), jsDoc2.getExtendedInterfaces())
         && Objects.equals(jsDoc1.getLendsName(), jsDoc2.getLendsName())
         && Objects.equals(jsDoc1.getLicense(), jsDoc2.getLicense())
-        && Objects.equals(jsDoc1.getMarkers(), jsDoc2.getMarkers())
         && Objects.equals(jsDoc1.getMeaning(), jsDoc2.getMeaning())
         && Objects.equals(jsDoc1.getModifies(), jsDoc2.getModifies())
         && Objects.equals(jsDoc1.getOriginalCommentString(), jsDoc2.getOriginalCommentString())
@@ -848,7 +935,7 @@ public class JSDocInfo implements Serializable {
         || hasThisType()
         || getParameterCount() > 0
         || getFlag(MASK_CONSTRUCTOR)
-        || (getFlag(MASK_NOSIDEEFFECTS) && (!hasType() || hasFunctionType));
+        || (getFlag(MASK_NOSIDEEFFECTS) && !hasType());
   }
 
   private boolean getFlag(int mask) {

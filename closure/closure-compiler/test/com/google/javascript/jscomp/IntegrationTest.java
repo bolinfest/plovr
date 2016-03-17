@@ -19,7 +19,6 @@ package com.google.javascript.jscomp;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.javascript.jscomp.TypeValidator.TYPE_MISMATCH_WARNING;
 
-import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -34,11 +33,6 @@ import com.google.javascript.rhino.Token;
  */
 
 public final class IntegrationTest extends IntegrationTestCase {
-
-  @Override public void setUp() {
-    super.setUp();
-  }
-
   private static final String CLOSURE_BOILERPLATE =
       "/** @define {boolean} */ var COMPILED = false; var goog = {};" +
       "goog.exportSymbol = function() {};";
@@ -56,6 +50,71 @@ public final class IntegrationTest extends IntegrationTestCase {
         + " * @constructor\n"
         + " */ Foo = /** @type {function(new:Foo)} */ (AyncTestCase());",
         RhinoErrorReporter.PARSE_ERROR);
+  }
+
+  // b/27531865
+  public void testLetInSwitch() {
+    CompilerOptions options = createCompilerOptions();
+    options.setLanguageIn(LanguageMode.ECMASCRIPT6_STRICT);
+    options.setLanguageOut(LanguageMode.ECMASCRIPT3);
+    options.setWarningLevel(DiagnosticGroups.CHECK_VARIABLES, CheckLevel.ERROR);
+    String before = LINE_JOINER.join(
+        "var a = 0;",
+        "switch (a) {",
+        "  case 0:",
+        "    let x = 1;",
+        "  case 1:",
+        "    x = 2;",
+        "}");
+    String after = LINE_JOINER.join(
+        "var a = 0;",
+        "switch (a) {",
+        "  case 0:",
+        "    var x = 1;",
+        "  case 1:",
+        "    x = 2;",
+        "}");
+    test(options, before, after);
+
+    before = LINE_JOINER.join(
+        "var a = 0;",
+        "switch (a) {",
+        "  case 0:",
+        "  default:",
+        "    let x = 1;",
+        "}");
+    after = LINE_JOINER.join(
+        "var a = 0;",
+        "switch (a) {",
+        "  case 0:",
+        "  default:",
+        "    var x = 1;",
+        "}");
+    test(options, before, after);
+  }
+
+  public void testExplicitBlocksInSwitch() {
+    CompilerOptions options = createCompilerOptions();
+    options.setLanguageIn(LanguageMode.ECMASCRIPT6_STRICT);
+    options.setLanguageOut(LanguageMode.ECMASCRIPT3);
+    options.setWarningLevel(DiagnosticGroups.CHECK_VARIABLES, CheckLevel.ERROR);
+    String before = LINE_JOINER.join(
+        "var a = 0;",
+        "switch (a) {",
+        "  case 0:",
+        "    { const x = 3; break; }",
+        "  case 1:",
+        "    { const x = 5; break; }",
+        "}");
+    String after = LINE_JOINER.join(
+        "var a = 0;",
+        "switch (a) {",
+        "  case 0:",
+        "    { var x = 3; break; }",
+        "  case 1:",
+        "    { var x$0 = 5; break; }",
+        "}");
+    test(options, before, after);
   }
 
   public void testBug1949424() {
@@ -208,6 +267,20 @@ public final class IntegrationTest extends IntegrationTestCase {
          TypeValidator.TYPE_MISMATCH_WARNING);
   }
 
+  public void testWindowIsTypedEs6() {
+    CompilerOptions options = createCompilerOptions();
+    CompilationLevel.ADVANCED_OPTIMIZATIONS.setOptionsForCompilationLevel(options);
+    options.setLanguageIn(LanguageMode.ECMASCRIPT6_STRICT);
+    options.setLanguageOut(LanguageMode.ECMASCRIPT5);
+    options.setCheckTypes(true);
+    test(
+        options,
+        LINE_JOINER.join(
+            "for (var x of []);",  // Force injection of es6_runtime.js
+            "var /** number */ y = window;"),
+        TypeValidator.TYPE_MISMATCH_WARNING);
+  }
+
   public void testForwardDeclaredTypeInTemplate() {
     CompilerOptions options = createCompilerOptions();
     WarningLevel.VERBOSE.setOptionsForWarningLevel(options);
@@ -216,9 +289,9 @@ public final class IntegrationTest extends IntegrationTestCase {
 
     test(
         options,
-        Joiner.on('\n').join(
+        LINE_JOINER.join(
             "var goog = {};",
-            "goog.forwardDeclare = function(typeName) {};",
+            "goog.forwardDeclare = function(/** string */ typeName) {};",
             "goog.forwardDeclare('fwd.declared.Type');",
             "",
             "/** @type {!fwd.declared.Type<string>} */",
@@ -508,7 +581,7 @@ public final class IntegrationTest extends IntegrationTestCase {
     options.setCheckTypes(true);
     externs = ImmutableList.of(SourceFile.fromCode(
         "externs",
-        Joiner.on('\n').join(
+        LINE_JOINER.join(
             "/** @const */",
             "var ns = {};",
             "/** @type {number} */",
@@ -537,14 +610,15 @@ public final class IntegrationTest extends IntegrationTestCase {
     options.setCheckTypes(false);
     options.setClosurePass(true);
 
-    test(options, CLOSURE_BOILERPLATE + "goog.provide('Foo'); /** @enum */ Foo = {a: 3};",
-        TypeCheck.ENUM_NOT_CONSTANT);
-    assertEquals(0.0, lastCompiler.getErrorManager().getTypedPercent());
+    test(options,
+        CLOSURE_BOILERPLATE + "goog.provide('Foo'); /** @enum */ Foo = {a: 3};",
+        "var COMPILED=true;var goog={};goog.exportSymbol=function(){};var Foo={a:3}");
+    assertThat(lastCompiler.getErrorManager().getTypedPercent()).isEqualTo(0.0);
 
     // This does not generate a warning.
     test(options, "/** @type {number} */ var n = window.name;",
         "var n = window.name;");
-    assertEquals(0.0, lastCompiler.getErrorManager().getTypedPercent());
+    assertThat(lastCompiler.getErrorManager().getTypedPercent()).isEqualTo(0.0);
   }
 
   public void testTypeCheckAndInference() {
@@ -622,7 +696,7 @@ public final class IntegrationTest extends IntegrationTestCase {
     CompilerOptions options = createCompilerOptions();
     options.setCheckTypes(true);
     options.setNewTypeInference(true);
-    test(options, Joiner.on('\n').join(
+    test(options, LINE_JOINER.join(
         "/** @param {(boolean|number} x */",
         "function f(x) {}"),
         RhinoErrorReporter.TYPE_PARSE_ERROR);
@@ -655,7 +729,7 @@ public final class IntegrationTest extends IntegrationTestCase {
     options.setDisambiguateProperties(true);
     options.setLegacyCodeCompile(true);
     testSame(options,
-        Joiner.on('\n').join(
+        LINE_JOINER.join(
             "/** @constructor */",
             "function Foo() {",
             "  this.p = 123;",
@@ -931,7 +1005,7 @@ public final class IntegrationTest extends IntegrationTestCase {
     options.setDisambiguateProperties(true);
     options.setRemoveDeadCode(true);
     test(options,
-        Joiner.on('\n').join(
+        LINE_JOINER.join(
             "/** @const */ var goog = {};",
             "/** @interface */ function I() {}",
             "I.prototype.a = function(x) {};",
@@ -939,7 +1013,7 @@ public final class IntegrationTest extends IntegrationTestCase {
             "/** @override */ Foo.prototype.a = goog.abstractMethod;",
             "/** @constructor @extends Foo */ function Bar() {}",
             "/** @override */ Bar.prototype.a = function(x) {};"),
-        Joiner.on('\n').join(
+        LINE_JOINER.join(
             "var goog={};",
             "function I(){}",
             "I.prototype.a=function(x){};",
@@ -1096,9 +1170,8 @@ public final class IntegrationTest extends IntegrationTestCase {
         "var COMPILED=true;var goog={};goog.exportSymbol=function(){};"
         + "var Foo=function(){};var x=new Foo");
     test(options,
-         CLOSURE_BOILERPLATE +
-         "goog.provide('Foo'); /** @enum */ Foo = {a: 3};",
-         TypeCheck.ENUM_NOT_CONSTANT);
+        CLOSURE_BOILERPLATE + "goog.provide('Foo'); /** @enum */ Foo = {a: 3};",
+        "var COMPILED=true;var goog={};goog.exportSymbol=function(){};var Foo={a:3}");
   }
 
   public void testProvidedNamespaceIsConst() {
@@ -1333,6 +1406,18 @@ public final class IntegrationTest extends IntegrationTestCase {
     test(options, code, "");
   }
 
+  public void testClassWithGettersIsRemoved() {
+    CompilerOptions options = createCompilerOptions();
+    String code =
+        "class Foo { get x() {}; set y(v) {}; static get init() {}; static set prop(v) {} }";
+
+    options.setLanguageIn(LanguageMode.ECMASCRIPT6);
+    options.setLanguageOut(LanguageMode.ECMASCRIPT5);
+    options.setSmartNameRemoval(true);
+    options.setRemoveDeadCode(true);
+    test(options, code, "");
+  }
+
   public void testSmartNamePassBug11163486() {
     CompilerOptions options = createCompilerOptions();
 
@@ -1451,9 +1536,18 @@ public final class IntegrationTest extends IntegrationTestCase {
     CompilerOptions options = createCompilerOptions();
     options.setCheckTypes(true);
 
-    String code = Joiner.on('\n').join("/** @constructor @template T */", "function F() {}", "",
-        "/** @return {?T} */", "F.prototype.foo = function() {", "  return null;", "}", "",
-        "/** @type {F<string>} */", "var f = new F;", "/** @type {string} */",
+    String code = LINE_JOINER.join(
+        "/** @constructor @template T */",
+        "function F() {}",
+        "",
+        "/** @return {?T} */",
+        "F.prototype.foo = function() {",
+        "  return null;",
+        "}",
+        "",
+        "/** @type {F<string>} */",
+        "var f = new F;",
+        "/** @type {string} */",
         "var s = f.foo(); // Type error: f.foo() has type {?string}.");
 
     test(options, code, TYPE_MISMATCH_WARNING);
@@ -1463,9 +1557,17 @@ public final class IntegrationTest extends IntegrationTestCase {
     CompilerOptions options = createCompilerOptions();
     options.setCheckTypes(true);
 
-    String code = Joiner.on('\n').join("/** @constructor @template T */", "function F() {}", "",
-        "/** @param {T} t */", "F.prototype.foo = function(t) {", "}", "",
-        "/** @type {F<string>} */", "var f = new F;", "/** @type {?string} */", "var s = null;",
+    String code = LINE_JOINER.join("/** @constructor @template T */",
+        "function F() {}",
+        "",
+        "/** @param {T} t */",
+        "F.prototype.foo = function(t) {",
+        "}",
+        "",
+        "/** @type {F<string>} */",
+        "var f = new F;",
+        "/** @type {?string} */",
+        "var s = null;",
         "f.foo(s); // Type error: f.foo() takes a {string}, not a {?string}");
 
     test(options, code, TYPE_MISMATCH_WARNING);
@@ -1586,6 +1688,22 @@ public final class IntegrationTest extends IntegrationTestCase {
         "function f () {\n" +
         "    alert('0-');\n" +
         "}");
+  }
+
+  // Github issue #1540: https://github.com/google/closure-compiler/issues/1540
+  public void testFlowSensitiveInlineVariablesUnderAdvanced() {
+    CompilerOptions options = createCompilerOptions();
+    CompilationLevel level = CompilationLevel.ADVANCED_OPTIMIZATIONS;
+    level.setOptionsForCompilationLevel(options);
+    test(options,
+        LINE_JOINER.join(
+            "function f(x) {",
+            "  var a = x + 1;",
+            "  var b = x + 1;",
+            "  window.c = x > 5 ? a : b;",
+            "}",
+            "f(g);"),
+            "window.a = g + 1;");
   }
 
   public void testCollapseAnonymousFunctions() {
@@ -2445,8 +2563,7 @@ public final class IntegrationTest extends IntegrationTestCase {
         + "  a = a + 'y';\n"
         + "  return a;\n"
         + "}",
-        // This should eventually get inlined completely.
-        "function f(a) { a += 'x'; return a += 'y'; }");
+        "function f(a) { return a += 'xy'; }");
   }
 
   public void testIssue1168() {
@@ -2454,12 +2571,10 @@ public final class IntegrationTest extends IntegrationTestCase {
     CompilationLevel.SIMPLE_OPTIMIZATIONS
         .setOptionsForCompilationLevel(options);
     options.setWarningLevel(DiagnosticGroups.CHECK_USELESS_CODE, CheckLevel.OFF);
-    test(options,
-        "while (function () {\n" +
-        " function f(){};\n" +
-        " L: while (void(f += 3)) {}\n" +
-        "}) {}",
-        "for( ; function(){} ; );");
+    test(
+        options,
+        "while (function () {\n" + " function f(){};\n" + " L: while (void(f += 3)) {}\n" + "}) {}",
+        "for( ; ; );");
   }
 
   public void testIssue1198() throws Exception {
@@ -3048,7 +3163,7 @@ public final class IntegrationTest extends IntegrationTestCase {
     options.setLanguageOut(LanguageMode.ECMASCRIPT3);
     options.setCodingConvention(convention);
     CompilationLevel.ADVANCED_OPTIMIZATIONS.setOptionsForCompilationLevel(options);
-    Compiler compiler = compile(options, Joiner.on('\n').join(
+    Compiler compiler = compile(options, LINE_JOINER.join(
         "class Base {}",
         "class Sub extends Base {}",
         "alert(1);"));
@@ -3073,13 +3188,15 @@ public final class IntegrationTest extends IntegrationTestCase {
     options.setLanguageOut(LanguageMode.ECMASCRIPT3);
     CompilationLevel.ADVANCED_OPTIMIZATIONS.setOptionsForCompilationLevel(options);
     Compiler compiler = compile(options, js);
+
+    assertThat(compiler.getErrors()).isEmpty();
     String result = compiler.toSource(compiler.getJsRoot());
     assertThat(result).isNotEmpty();
     assertThat(result).doesNotContain("No one ever calls me");
   }
 
   public void testES6StaticsAreRemoved1() {
-    testES6StaticsAreRemoved(Joiner.on('\n').join(
+    testES6StaticsAreRemoved(LINE_JOINER.join(
         "class Base {",
         "  static called() { alert('I am called'); }",
         "  static notCalled() { alert('No one ever calls me'); }",
@@ -3092,7 +3209,7 @@ public final class IntegrationTest extends IntegrationTestCase {
   }
 
   public void failing_testES6StaticsAreRemoved2() {
-    testES6StaticsAreRemoved(Joiner.on('\n').join(
+    testES6StaticsAreRemoved(LINE_JOINER.join(
         "class Base {",
         "  static calledInSubclassOnly() { alert('No one ever calls me'); }",
         "}",

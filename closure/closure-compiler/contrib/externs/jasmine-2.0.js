@@ -331,9 +331,21 @@ jasmine.Suite.prototype.beforeEach = function(beforeEachFunction) {};
 
 
 /**
+ * @param {function(this:jasmine.Spec)} beforeAllFunction
+ */
+jasmine.Suite.prototype.beforeAll = function(beforeAllFunction) {};
+
+
+/**
  * @param {function(this:jasmine.Spec)} afterEachFunction
  */
 jasmine.Suite.prototype.afterEach = function(afterEachFunction) {};
+
+
+/**
+ * @param {function(this:jasmine.Spec)} afterAllFunction
+ */
+jasmine.Suite.prototype.afterAll = function(afterAllFunction) {};
 
 
 
@@ -350,11 +362,19 @@ jasmine.Env.prototype.execute = function() {};
 
 
 /** @param {function(this:jasmine.Spec)} handler */
+jasmine.Env.prototype.beforeEach = function(handler) {};
+
+
+/** @param {function(this:jasmine.Spec)} handler */
+jasmine.Env.prototype.beforeAll = function(handler) {};
+
+
+/** @param {function(this:jasmine.Spec)} handler */
 jasmine.Env.prototype.afterEach = function(handler) {};
 
 
 /** @param {function(this:jasmine.Spec)} handler */
-jasmine.Env.prototype.beforeEach = function(handler) {};
+jasmine.Env.prototype.afterAll = function(handler) {};
 
 
 /**
@@ -364,11 +384,19 @@ jasmine.getEnv = function() {};
 
 
 /** @param {function(this:jasmine.Spec, function())} handler */
+function beforeEach(handler) {}
+
+
+/** @param {function(this:jasmine.Spec, function())} handler */
+function beforeAll(handler) {}
+
+
+/** @param {function(this:jasmine.Spec, function())} handler */
 function afterEach(handler) {}
 
 
 /** @param {function(this:jasmine.Spec, function())} handler */
-function beforeEach(handler) {}
+function afterAll(handler) {}
 
 
 /**
@@ -409,7 +437,7 @@ function fit(description, handler) {}
 /**
  * @param {Object} spiedOnObject
  * @param {string} methodName
- * @return {jasmine.Spy} spy
+ * @return {!jasmine.Spy} spy
  */
 function spyOn(spiedOnObject, methodName) {}
 
@@ -433,26 +461,3 @@ function xit(description, handler) {}
  * @type {jasmine.Spec}
  */
 var currentSpec;
-
-
-/**
- * Provided by angular-mocks.js.
- * @type {angular.$injector}
- */
-jasmine.Spec.prototype.$injector;
-
-
-/**
- * Provided by angular-mocks.js.
- * @param {...(Function|Array<string|Function>)} var_args
- */
-function inject(var_args) {}
-
-
-/**
- * Provided by angular-mocks.js.
- * @param {...(string|Function|Array<string|Function>)} var_args
- * @suppress {checkTypes}
- */
-function module(var_args) {}
-

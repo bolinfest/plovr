@@ -15,13 +15,14 @@
  */
 package com.google.javascript.jscomp;
 
-import static com.google.javascript.jscomp.PolymerPass.POLYMER_DESCRIPTOR_NOT_VALID;
-import static com.google.javascript.jscomp.PolymerPass.POLYMER_INVALID_PROPERTY;
-import static com.google.javascript.jscomp.PolymerPass.POLYMER_MISSING_IS;
-import static com.google.javascript.jscomp.PolymerPass.POLYMER_SHORTHAND_NOT_SUPPORTED;
-import static com.google.javascript.jscomp.PolymerPass.POLYMER_UNANNOTATED_BEHAVIOR;
-import static com.google.javascript.jscomp.PolymerPass.POLYMER_UNEXPECTED_PARAMS;
-import static com.google.javascript.jscomp.PolymerPass.POLYMER_UNQUALIFIED_BEHAVIOR;
+import static com.google.javascript.jscomp.PolymerPassErrors.POLYMER_DESCRIPTOR_NOT_VALID;
+import static com.google.javascript.jscomp.PolymerPassErrors.POLYMER_INVALID_DECLARATION;
+import static com.google.javascript.jscomp.PolymerPassErrors.POLYMER_INVALID_PROPERTY;
+import static com.google.javascript.jscomp.PolymerPassErrors.POLYMER_MISSING_IS;
+import static com.google.javascript.jscomp.PolymerPassErrors.POLYMER_SHORTHAND_NOT_SUPPORTED;
+import static com.google.javascript.jscomp.PolymerPassErrors.POLYMER_UNANNOTATED_BEHAVIOR;
+import static com.google.javascript.jscomp.PolymerPassErrors.POLYMER_UNEXPECTED_PARAMS;
+import static com.google.javascript.jscomp.PolymerPassErrors.POLYMER_UNQUALIFIED_BEHAVIOR;
 import static com.google.javascript.jscomp.TypeValidator.TYPE_MISMATCH_WARNING;
 
 /**
@@ -180,11 +181,19 @@ public class PolymerPassTest extends Es6CompilerTestCase {
 
   public void testLetTarget() {
     disableTypeCheck();
-    testErrorEs6(
+    testEs6(
         LINE_JOINER.join(
             "let X = Polymer({",
             "  is: 'x-element',",
-            "});"), PolymerPass.POLYMER_INVALID_DECLARATION);
+            "});"),
+        LINE_JOINER.join(
+            "/**",
+            " * @constructor",
+            " * @implements {PolymerXInterface}",
+            " * @extends {PolymerElement}",
+            " */",
+            "var X = function() {};",
+            "X = Polymer(/** @lends {X.prototype} */ {is:'x-element'});"));
   }
 
   public void testConstTarget() {
@@ -193,7 +202,7 @@ public class PolymerPassTest extends Es6CompilerTestCase {
         LINE_JOINER.join(
             "const X = Polymer({",
             "  is: 'x-element',",
-            "});"), PolymerPass.POLYMER_INVALID_DECLARATION);
+            "});"), POLYMER_INVALID_DECLARATION);
   }
 
   public void testDefaultTypeNameTarget() {
@@ -1750,6 +1759,10 @@ public class PolymerPassTest extends Es6CompilerTestCase {
     testExternChanges(EXTERNS, js, BEHAVIOR_READONLY_EXTERNS);
   }
 
+  /**
+   * Behaviors whose declarations are not in the global scope may contain references to
+   * symbols which do not exist in the element's scope. Only copy a function stub.
+   */
   public void testBehaviorInIIFE() {
     test(
         LINE_JOINER.join(

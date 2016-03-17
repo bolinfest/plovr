@@ -275,6 +275,11 @@ public final class CodingConventions {
     }
 
     @Override
+    public Cache describeCachingCall(Node node) {
+      return nextConvention.describeCachingCall(node);
+    }
+
+    @Override
     public boolean isPropertyTestFunction(Node call) {
       return nextConvention.isPropertyTestFunction(call);
     }
@@ -449,7 +454,7 @@ public final class CodingConventions {
 
     @Override
     public boolean isInlinableFunction(Node n) {
-      Preconditions.checkState(n.isFunction());
+      Preconditions.checkState(n.isFunction(), n);
       return true;
     }
 
@@ -493,7 +498,7 @@ public final class CodingConventions {
 
     @Override
     public boolean isPropertyTestFunction(Node call) {
-      return false;
+      return "Array.isArray".equals(call.getFirstChild().getQualifiedName());
     }
 
     @Override
@@ -556,6 +561,11 @@ public final class CodingConventions {
         }
       }
 
+      return null;
+    }
+
+    @Override
+    public Cache describeCachingCall(Node node) {
       return null;
     }
 

@@ -274,7 +274,7 @@ final class MustBeReachingVariableDef extends
 
       case Token.HOOK:
         computeMustDef(n.getFirstChild(), cfgNode, output, conditional);
-        computeMustDef(n.getFirstChild().getNext(), cfgNode, output, true);
+        computeMustDef(n.getSecondChild(), cfgNode, output, true);
         computeMustDef(n.getLastChild(), cfgNode, output, true);
         return;
 
@@ -299,7 +299,7 @@ final class MustBeReachingVariableDef extends
           } else if (NodeUtil.isGet(n.getFirstChild())) {
             // Treat all assignments to arguments as redefining the
             // parameters itself.
-            Node obj = n.getFirstChild().getFirstChild();
+            Node obj = n.getFirstFirstChild();
             if (obj.isName() && "arguments".equals(obj.getString())) {
               // TODO(user): More accuracy can be introduced
               // i.e. We know exactly what arguments[x] is if x is a constant

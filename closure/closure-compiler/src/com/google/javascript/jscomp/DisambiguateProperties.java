@@ -198,8 +198,6 @@ class DisambiguateProperties implements CompilerPass {
 
     /**
      * Record that this property is referenced from this type.
-     * @return true if the type was recorded for this property, else false,
-     *     which would happen if the type was invalidating.
      */
     void addType(JSType type, JSType relatedType) {
       checkState(!skipRenaming, "Attempt to record skipped property: %s", name);
@@ -431,7 +429,7 @@ class DisambiguateProperties implements CompilerPass {
         String field = n.getLastChild().getString();
         JSType type = getType(n.getFirstChild());
         Property prop = getProperty(field);
-        if (isInvalidatingType(type)) {
+        if (isInvalidatingType(type) || isStructuralInterfacePrototype(type)) {
           prop.invalidate();
         } else if (!prop.skipRenaming) {
           prop.addTypeToSkip(type);
@@ -444,6 +442,11 @@ class DisambiguateProperties implements CompilerPass {
           }
         }
       }
+    }
+
+    private boolean isStructuralInterfacePrototype(JSType type) {
+      return type.isFunctionPrototypeType()
+          && type.toObjectType().getOwnerFunction().isStructuralInterface();
     }
   }
 

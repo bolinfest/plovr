@@ -92,21 +92,34 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
       // Args: Declare function variables
       Preconditions.checkState(args.isParamList());
       for (Node a = args.getFirstChild(); a != null; a = a.getNext()) {
-        if (a.isDefaultValue()) {
+        if (a.isDefaultValue() || a.isRest()) {
           declareLHS(scope, a.getFirstChild());
         } else {
           declareLHS(scope, a);
         }
       }
-
       // Since we create a separate scope for body, stop scanning here
-    } else if (n.isBlock() || n.isFor() || n.isForOf()) {
+
+    } else if (n.isClass()) {
+      if (scope.getParent() != null) {
+        inputId = NodeUtil.getInputId(n);
+      }
+
+      final Node classNameNode = n.getFirstChild();
+      // Bleed the class name into the scope, if it hasn't
+      // been declared in the outer scope.
+      if (!classNameNode.isEmpty()) {
+        if (NodeUtil.isClassExpression(n)) {
+          declareVar(classNameNode);
+        }
+      }
+    } else if (n.isBlock() || n.isFor() || n.isForOf() || n.isSwitch()) {
       if (scope.getParent() != null) {
         inputId = NodeUtil.getInputId(n);
       }
       scanVars(n);
     } else {
-      // It's the global block
+      // n is the global SCRIPT node
       Preconditions.checkState(scope.getParent() == null);
       scanVars(n);
     }
@@ -121,14 +134,14 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
       }
     } else if (lhs.isComputedProp()) {
       declareLHS(declarationScope, lhs.getLastChild());
-    } else if (lhs.isName() || lhs.isRest()) {
+    } else if (lhs.isName()) {
       declareVar(declarationScope, lhs);
-    } else if (lhs.isDefaultValue()) {
+    } else if (lhs.isDefaultValue() || lhs.isRest()) {
       declareLHS(declarationScope, lhs.getFirstChild());
     } else if (lhs.isArrayPattern() || lhs.isObjectPattern()) {
       for (Node child = lhs.getFirstChild(); child != null; child = child.getNext()) {
         if (NodeUtil.isNameDeclaration(lhs.getParent()) && child.getNext() == null
-            && !lhs.getParent().getParent().isForOf()) {
+            && !lhs.getGrandparent().isForOf()) {
           // If the pattern is a direct child of the var/let/const node,
           // then its last child is the RHS of the assignment, not a variable to
           // be declared.
@@ -190,7 +203,7 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
         return;  // should not examine class's children
 
       case Token.CATCH:
-        Preconditions.checkState(n.getChildCount() == 2);
+        Preconditions.checkState(n.getChildCount() == 2, n);
         // the first child is the catch var and the second child
         // is the code block
 
@@ -234,7 +247,7 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
    * @param n The node corresponding to the variable name.
    */
   private void declareVar(Scope s, Node n) {
-    Preconditions.checkState(n.isName() || n.isRest() || n.isStringKey(),
+    Preconditions.checkState(n.isName() || n.isStringKey(),
         "Invalid node for declareVar: %s", n);
 
     String name = n.getString();
@@ -255,19 +268,25 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
   /**
    * Determines whether the name should be declared at current lexical scope.
    * Assume the parent node is a BLOCK, FOR, FOR_OF, SCRIPT or LABEL.
-   * TODO(moz): Make sure this assumption holds.
    *
    * @param n The declaration node to be checked
    * @return whether the name should be declared at current lexical scope
    */
   private boolean isNodeAtCurrentLexicalScope(Node n) {
     Node parent = n.getParent();
-    Preconditions.checkState(parent.isBlock() || parent.isFor()
-        || parent.isForOf() || parent.isScript() || parent.isLabel());
+    Node grandparent = parent.getParent();
+    Preconditions.checkState(parent.isBlock() || parent.isFor() || parent.isForOf()
+        || parent.isScript() || parent.isLabel(), parent);
+
+    if (parent.isSyntheticBlock()
+        && grandparent != null && (grandparent.isCase() || grandparent.isDefaultCase())) {
+      Node switchNode = grandparent.getParent();
+      return scope.getRootNode() == switchNode;
+    }
 
     if (parent == scope.getRootNode() || parent.isScript()
-        || (parent.getParent().isCatch()
-            && parent.getParent().getParent() == scope.getRootNode())) {
+        || (grandparent.isCatch()
+            && parent.getGrandparent() == scope.getRootNode())) {
       return true;
     }
 

@@ -147,7 +147,6 @@ class ScopedAliases implements HotSwapCompilerPass {
     NodeTraversal.traverseEs6(compiler, root, traversal);
 
     if (!traversal.hasErrors()) {
-
       // Apply the aliases.
       List<AliasUsage> aliasWorkQueue =
            new ArrayList<>(traversal.getAliasUsages());
@@ -344,7 +343,7 @@ class ScopedAliases implements HotSwapCompilerPass {
      *     in a goog.scope() call.
      */
     private Node findScopeMethodCall(Node scopeRoot) {
-      Node n = scopeRoot.getParent().getParent();
+      Node n = scopeRoot.getGrandparent();
       if (isCallToScopeMethod(n)) {
         return n;
       }
@@ -398,13 +397,6 @@ class ScopedAliases implements HotSwapCompilerPass {
             // Disallow block-scoped function declarations that leak into the goog.scope
             // function body. Technically they shouldn't leak in ES6 but the browsers don't agree
             // on that yet.
-            report(t, v.getNode(), GOOG_SCOPE_INVALID_VARIABLE, v.getName());
-          }
-        }
-        if (scopeRoot.hasChildren() && scopeRoot.getFirstChild().isCatch()) {
-          for (Var v : t.getClosestHoistScope().getVarIterable()) {
-            // Disallow variables declared in catch blocks that leak into the goog.scope
-            // function body.
             report(t, v.getNode(), GOOG_SCOPE_INVALID_VARIABLE, v.getName());
           }
         }
@@ -473,7 +465,7 @@ class ScopedAliases implements HotSwapCompilerPass {
           int nameCount = scopedAliasNames.count(name);
           scopedAliasNames.add(name);
           String globalName =
-              "$jscomp.scope." + name + (nameCount == 0 ? "" : ("$" + nameCount));
+              "$jscomp.scope." + name + (nameCount == 0 ? "" : ("$jscomp$" + nameCount));
 
           compiler.ensureLibraryInjected("base", true);
 
@@ -520,7 +512,7 @@ class ScopedAliases implements HotSwapCompilerPass {
                 varDocInfo)
                 .useSourceInfoIfMissingFromForTree(n);
             NodeUtil.setDebugInformation(
-                newDecl.getFirstChild().getFirstChild(), n, name);
+                newDecl.getFirstFirstChild(), n, name);
 
             if (isHoisted) {
               grandparent.addChildToFront(newDecl);
@@ -611,9 +603,9 @@ class ScopedAliases implements HotSwapCompilerPass {
         // child is the "goog.scope" and the second should be the parameter.
         report(t, n, GOOG_SCOPE_HAS_BAD_PARAMETERS);
       } else {
-        Node anonymousFnNode = n.getChildAtIndex(1);
+        Node anonymousFnNode = n.getSecondChild();
         if (!anonymousFnNode.isFunction()
-            || NodeUtil.getFunctionName(anonymousFnNode) != null
+            || NodeUtil.getName(anonymousFnNode) != null
             || NodeUtil.getFunctionParameters(anonymousFnNode).hasChildren()) {
           report(t, anonymousFnNode, GOOG_SCOPE_HAS_BAD_PARAMETERS);
         } else {

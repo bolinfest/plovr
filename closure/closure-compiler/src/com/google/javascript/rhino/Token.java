@@ -54,9 +54,7 @@ public class Token {
   /**
    * Token types.
    */
-  public final static int
-      ERROR = -1,
-
+  public static final int
       RETURN = 4,
       BITOR = 9,
       BITXOR = 10,
@@ -244,8 +242,6 @@ public class Token {
 
   public static String name(int token) {
     switch (token) {
-      case ERROR:
-        return "ERROR";
       case RETURN:
         return "RETURN";
       case BITOR:
@@ -568,7 +564,6 @@ public class Token {
   /** If the arity isn't always the same, this function returns -1 */
   public static int arity(int token) {
     switch (token) {
-      case ERROR:
       case RETURN:
       case NEW:
       case CALL:
@@ -601,6 +596,7 @@ public class Token {
       case LC:
       case COLON:
       case YIELD:
+      case REST:
         return -1;
       case NAME:
       case LABEL_NAME:
@@ -611,7 +607,6 @@ public class Token {
       case FALSE:
       case TRUE:
       case EMPTY:
-      case REST:
       case IMPORT_STAR:
       case MEMBER_VARIABLE_DEF:
         return 0;

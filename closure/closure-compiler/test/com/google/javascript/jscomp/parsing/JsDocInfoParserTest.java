@@ -24,7 +24,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.SourceFile;
 import com.google.javascript.jscomp.parsing.Config.LanguageMode;
 import com.google.javascript.jscomp.parsing.ParserRunner.ParseResult;
-import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Marker;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
@@ -275,12 +274,6 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
         createTemplatizedType(ARRAY_TYPE, NUMBER_TYPE), info.getType());
   }
 
-  public void testParseTemplatizedType3() throws Exception {
-    JSDocInfo info = parse("@type {!Array.<(number,null)>}*/");
-    assertTypeEquals(
-        createTemplatizedType(ARRAY_TYPE, createUnionType(NUMBER_TYPE, NULL_TYPE)), info.getType());
-  }
-
   public void testParseTemplatizedType4() throws Exception {
     JSDocInfo info = parse("@type {!Array.<(number|null)>}*/");
     assertTypeEquals(
@@ -368,28 +361,9 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
     assertTypeEquals(createTemplatizedType(ARRAY_TYPE, UNKNOWN_TYPE), info.getType());
   }
 
-  public void testParseUnionType1() throws Exception {
-    JSDocInfo info = parse("@type {(boolean,null)}*/");
-    assertTypeEquals(createUnionType(BOOLEAN_TYPE, NULL_TYPE), info.getType());
-  }
-
   public void testParseUnionType2() throws Exception {
     JSDocInfo info = parse("@type {boolean|null}*/");
     assertTypeEquals(createUnionType(BOOLEAN_TYPE, NULL_TYPE), info.getType());
-  }
-
-  public void testParseUnionType4() throws Exception {
-    JSDocInfo info = parse("@type {(Array.<boolean>,null)}*/");
-    assertTypeEquals(createUnionType(
-        createTemplatizedType(
-            ARRAY_TYPE, BOOLEAN_TYPE), NULL_TYPE), info.getType());
-  }
-
-  public void testParseUnionType5() throws Exception {
-    JSDocInfo info = parse("@type {(null, Array.<boolean>)}*/");
-    assertTypeEquals(createUnionType(
-        createTemplatizedType(
-            ARRAY_TYPE, BOOLEAN_TYPE), NULL_TYPE), info.getType());
   }
 
   public void testParseUnionType6() throws Exception {
@@ -411,26 +385,18 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
         "Bad type annotation. type not recognized due to syntax error");
   }
 
-  public void testParseUnionType11() throws Exception {
-    parse("@type {(string,)}*/",
-        "Bad type annotation. type not recognized due to syntax error");
-  }
-
   public void testParseUnionType12() throws Exception {
     parse("@type {()}*/",
         "Bad type annotation. type not recognized due to syntax error");
   }
 
   public void testParseUnionType13() throws Exception {
-    testParseType(
-        "(function(this:Date),function(this:String):number)",
-        "Function");
+    testParseType("(function(this:Date)|function(this:String):number)", "Function");
   }
 
   public void testParseUnionType14() throws Exception {
     testParseType(
-        "(function(...(function(number):boolean)):number)|" +
-        "function(this:String, string):number",
+        "(function(...(function(number):boolean)):number)|function(this:String, string):number",
         "Function");
   }
 
@@ -446,18 +412,9 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
     testParseType("string|number|*", "*");
   }
 
-  public void testParseUnionType18() throws Exception {
-    testParseType("(string,*,number)", "*");
-  }
-
   public void testParseUnionType19() throws Exception {
     JSDocInfo info = parse("@type {(?)} */");
     assertTypeEquals(UNKNOWN_TYPE, info.getType());
-  }
-
-  public void testParseUnionTypeError1() throws Exception {
-    parse("@type {(string,|number)} */",
-        "Bad type annotation. type not recognized due to syntax error");
   }
 
   public void testParseUnionTypeError2() throws Exception {
@@ -689,11 +646,6 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
         "Bad type annotation. type not recognized due to syntax error");
   }
 
-  public void testParseArrayTypeError4() throws Exception {
-    parse("@type {(number,boolean,[Object?)]}*/",
-        "Bad type annotation. type not recognized due to syntax error");
-  }
-
   public void testParseArrayTypeError5() throws Exception {
     parse("@type {[Object]}*/",
         "Bad type annotation. type not recognized due to syntax error");
@@ -732,27 +684,6 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
     JSDocInfo info = parse("@type {Array.<boolean>?}*/");
     assertTypeEquals(
         createNullableType(createTemplatizedType(ARRAY_TYPE, BOOLEAN_TYPE)),
-        info.getType());
-  }
-
-  public void testParseNullableModifiers4() throws Exception {
-    JSDocInfo info = parse("@type {(string,boolean)?}*/");
-    assertTypeEquals(
-        createNullableType(createUnionType(STRING_TYPE, BOOLEAN_TYPE)),
-        info.getType());
-  }
-
-  public void testParseNullableModifiers5() throws Exception {
-    JSDocInfo info = parse("@type {(string?,boolean)}*/");
-    assertTypeEquals(
-        createUnionType(createNullableType(STRING_TYPE), BOOLEAN_TYPE),
-        info.getType());
-  }
-
-  public void testParseNullableModifiers6() throws Exception {
-    JSDocInfo info = parse("@type {(string,boolean?)}*/");
-    assertTypeEquals(
-        createUnionType(STRING_TYPE, createNullableType(BOOLEAN_TYPE)),
         info.getType());
   }
 
@@ -797,12 +728,6 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
     assertTypeEquals(createTemplatizedType(ARRAY_TYPE, NUMBER_TYPE), info.getType());
   }
 
-  public void testParseNewline3() throws Exception {
-    JSDocInfo info = parse("@type {!Array.<(number,\n* null)>}*/");
-    assertTypeEquals(
-        createTemplatizedType(ARRAY_TYPE, createUnionType(NUMBER_TYPE, NULL_TYPE)), info.getType());
-  }
-
   public void testParseNewline4() throws Exception {
     JSDocInfo info = parse("@type {!Array.<(number|\n* null)>}*/");
     assertTypeEquals(
@@ -827,8 +752,7 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
   }
 
   public void testParseReturnType2() throws Exception {
-    JSDocInfo info =
-        parse("@returns {null|(string,Array.<boolean>)}*/");
+    JSDocInfo info = parse("@returns {null|(string|Array.<boolean>)}*/");
     assertTypeEquals(
         createUnionType(createTemplatizedType(ARRAY_TYPE, BOOLEAN_TYPE),
             NULL_TYPE, STRING_TYPE),
@@ -836,8 +760,7 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
   }
 
   public void testParseReturnType3() throws Exception {
-    JSDocInfo info =
-        parse("@return {((null|Array.<boolean>,string),boolean)}*/");
+    JSDocInfo info = parse("@return {((null|Array.<boolean>|string)|boolean)}*/");
     assertTypeEquals(
         createUnionType(createTemplatizedType(ARRAY_TYPE, BOOLEAN_TYPE),
             NULL_TYPE, STRING_TYPE, BOOLEAN_TYPE),
@@ -1038,6 +961,19 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
         "@param {string} foo.bar\n * @param {string} baz */", "invalid param name \"foo.bar\"");
     assertThat(info.getParameterCount()).isEqualTo(1);
     assertTypeEquals(STRING_TYPE, info.getParameterType("baz"));
+  }
+
+  public void testParseParam26() throws Exception {
+    JSDocInfo info = parse(
+        "@param {{a: number, b: number}} {a, b}\n*/",
+        "Bad type annotation. expecting a variable name in a @param tag");
+    assertThat(info).isNull();
+  }
+
+  public void testParseParam27() throws Exception {
+    JSDocInfo info = parse(
+        "@param {{a: number, b: number}} '{a, b}'\n*/", "invalid param name \"'\"");
+    assertThat(info).isNull();
   }
 
   public void testParseThrows1() throws Exception {
@@ -1257,6 +1193,21 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
         STRING_TYPE,
         parse("@enum string*/", "Bad type annotation. Type annotations should have curly braces.")
             .getEnumParameterType());
+  }
+
+  public void testParseEnum4() throws Exception {
+    JSDocInfo jsdoc = parse(" @enum {Foo} */");
+    Node enumTypeNode = jsdoc.getEnumParameterType().getRoot();
+    assertThat(enumTypeNode.getType()).isEqualTo(Token.BANG);
+  }
+
+  public void testParseBadEnumNoCrash() throws Exception {
+    assertTypeEquals(
+        NUMBER_TYPE,
+        parse("@enum {@enum {string}}*/",
+            "Bad type annotation. type not recognized due to syntax error",
+            "Bad type annotation. type annotation incompatible with other annotations")
+        .getEnumParameterType());
   }
 
   public void testParseJsDocAfterEnum() throws Exception {
@@ -2155,7 +2106,7 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
    * test structural interface matching
    */
   public void testBadTypeDefInterfaceAndStructuralTyping4() throws Exception {
-    JSDocInfo jsdoc = parse("@interface\n@record*/",
+    parse("@interface\n@record*/",
         "Bad type annotation. conflicting @record tag");
   }
 
@@ -4463,9 +4414,6 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
     Config config = new Config(extraAnnotations, extraSuppressions,
         isIdeMode, parseDocumentation, preserveWhitespace, LanguageMode.ECMASCRIPT3);
     StaticSourceFile file = new SimpleSourceFile("testcode", false);
-    Node associatedNode = new Node(Token.SCRIPT);
-    associatedNode.setInputId(new InputId(file.getName()));
-    associatedNode.setStaticSourceFile(file);
 
     JsDocInfoParser jsdocParser = new JsDocInfoParser(
         stream(comment),
@@ -4494,7 +4442,7 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
     return JsDocInfoParser.parseTypeString(typeComment);
   }
 
-  private JsDocTokenStream stream(String source) {
+  private static JsDocTokenStream stream(String source) {
     return new JsDocTokenStream(source, 0);
   }
 

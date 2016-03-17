@@ -115,14 +115,15 @@ public final class EnumType extends Namespace implements TypeWithProperties {
    */
   @Override
   protected JSType computeJSType(JSTypes commonTypes) {
-    Preconditions.checkState(enumPropType != null);
-    PersistentMap<String, Property> propMap = otherProps;
-    for (String s : props) {
+    Preconditions.checkNotNull(enumPropType);
+    Preconditions.checkState(this.namespaceType == null);
+    PersistentMap<String, Property> propMap = PersistentMap.create();
+    for (String s : this.props) {
       propMap = propMap.with(s,
           Property.makeConstant(null, enumPropType, enumPropType));
     }
-    ObjectType obj = ObjectType.makeObjectType(null, propMap, null, false, ObjectKind.UNRESTRICTED);
-    return withNamedTypes(commonTypes, obj);
+    return JSType.fromObjectType(ObjectType.makeObjectType(
+        null, propMap, null, this, false, ObjectKind.UNRESTRICTED));
   }
 
   @Override
@@ -190,7 +191,7 @@ public final class EnumType extends Namespace implements TypeWithProperties {
       ImmutableSet<EnumType> newEnums, JSType joinWithoutEnums) {
     boolean recreateEnums = false;
     for (EnumType e : newEnums) {
-      if (e.declaredType.isSubtypeOf(joinWithoutEnums)) {
+      if (e.declaredType.isSubtypeOf(joinWithoutEnums, SubtypeCache.create())) {
         recreateEnums = true;
         break;
       }
@@ -200,14 +201,14 @@ public final class EnumType extends Namespace implements TypeWithProperties {
     }
     ImmutableSet.Builder<EnumType> builder = ImmutableSet.builder();
     for (EnumType e : newEnums) {
-      if (!e.declaredType.isSubtypeOf(joinWithoutEnums)) {
+      if (!e.declaredType.isSubtypeOf(joinWithoutEnums, SubtypeCache.create())) {
         builder.add(e);
       }
     }
     return builder.build();
   }
 
-  static boolean areSubtypes(JSType t1, JSType t2) {
+  static boolean areSubtypes(JSType t1, JSType t2, SubtypeCache subSuperMap) {
     ImmutableSet<EnumType> s1 = t1.getEnums();
     if (s1 == null) {
       return true;
@@ -217,7 +218,7 @@ public final class EnumType extends Namespace implements TypeWithProperties {
       if (s2 != null && s2.contains(e)) {
         continue;
       }
-      if (!e.declaredType.isSubtypeOf(t2)) {
+      if (!e.declaredType.isSubtypeOf(t2, subSuperMap)) {
         return false;
       }
     }

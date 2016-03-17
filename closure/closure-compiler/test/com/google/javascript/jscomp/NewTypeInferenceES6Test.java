@@ -31,7 +31,6 @@ public final class NewTypeInferenceES6Test extends NewTypeInferenceTestBase {
   protected void setUp() {
     super.setUp();
     compiler.getOptions().setLanguageIn(LanguageMode.ECMASCRIPT6);
-    addES6TranspilationPasses();
   }
 
   public void testSimpleClasses() {
@@ -66,5 +65,140 @@ public final class NewTypeInferenceES6Test extends NewTypeInferenceTestBase {
 
   public void testConstEmptyArrayNoWarning() {
     typeCheck("const x = [];");
+  }
+
+  public void testFunctionSubtypingForReceiverType() {
+    typeCheck(LINE_JOINER.join(
+        "class Foo {",
+        "  method() {}",
+        "}",
+        "class Bar extends Foo {}",
+        "function f(/** function(this:Bar) */ x) {}",
+        "f(Foo.prototype.method);"));
+
+    typeCheck(LINE_JOINER.join(
+        "class Foo {",
+        "  method() { return 123; }",
+        "}",
+        "class Bar extends Foo {}",
+        "/**",
+        " * @template T",
+         " * @param {function(this:Bar):T} x",
+        " */",
+        "function f(x) {}",
+        "f(Foo.prototype.method);"));
+
+    typeCheck(LINE_JOINER.join(
+        "class Controller {}",
+        "class SubController extends Controller {",
+        "  method() {}",
+        "}",
+        "/** @param {{always: function(this:Controller)}} spec */",
+        "function vsyncMethod(spec) {}",
+        "vsyncMethod({always: (new SubController).method});"));
+  }
+
+  public void testDetectPropertyDefinitionOnNullableObject() {
+    typeCheck(LINE_JOINER.join(
+        "/** @unrestricted */",
+        "class Foo {}",
+        "function f(/** ?Foo */ x) {",
+        "  /** @type {number} */",
+        "  x.prop = 123;",
+        "}",
+        "function g(/** !Foo */ x) {",
+        "  return x.prop - 5;",
+        "}"),
+        NewTypeInference.NULLABLE_DEREFERENCE);
+  }
+
+  public void testDetectPropertyDefinitionOnQualifiedName() {
+    typeCheck(LINE_JOINER.join(
+        "/** @unrestricted */",
+        "class A {}",
+        "/** @unrestricted */",
+        "class B {}",
+        "function f(/** !B */ x) {",
+        "  return x.prop;",
+        "}",
+        "/** @type {!A} */",
+        "var a = new A;",
+        "/** @type {!B} */",
+        "a.b = new B;",
+        "/** @type {number} */",
+        "a.b.prop = 123;"));
+  }
+
+  public void testThisIsNull() {
+    typeCheck(LINE_JOINER.join(
+        "class Foo {",
+        "  method() {}",
+        "}",
+        "/**",
+        " * @param {function(this:null)} x",
+        " */",
+        "function f(x) {}",
+        "f((new Foo).method);"),
+        NewTypeInference.INVALID_ARGUMENT_TYPE);
+  }
+
+  public void testFunctionsWithUntypecheckedArguments() {
+    typeCheck(LINE_JOINER.join(
+        "class Foo {}",
+        "/**",
+        " * @param {function(function(new:Foo, ...?))} f1",
+        " * @param {function(new:Foo, ?)} f2",
+        " */",
+        "function f(f1, f2) {",
+        "  f1(f2);",
+        "}"));
+
+    typeCheck(LINE_JOINER.join(
+        "class Foo {}",
+        "/**",
+        " * @template T",
+        " * @param {function(...?):T} x",
+        " * @return {T}",
+        " */",
+        "function f(x) {",
+        "  return x();",
+        "}",
+        "/** @type {function(?):!Foo} */",
+        "function g(x) { return new Foo; }",
+        "f(g) - 5;"),
+        NewTypeInference.INVALID_OPERAND_TYPE);
+  }
+
+  public void testMethodOverridesWithoutJsdoc() {
+    typeCheck(LINE_JOINER.join(
+        "class A {  someMethod(x) {}  }",
+        "class B extends A {  someMethod() {}  }"));
+
+    typeCheck(LINE_JOINER.join(
+        "class A {  someMethod(x) {}  }",
+        "class B extends A {  someMethod(x, y) { return y + 1; }  }"),
+        GlobalTypeInfo.INVALID_PROP_OVERRIDE);
+
+    typeCheck(LINE_JOINER.join(
+        "class Foo {",
+        "  /** @param {...number} var_args */",
+        "  method(var_args) {}",
+        "}",
+        "class Bar extends Foo {",
+        "  method(x) {}",
+        "}",
+        "(new Bar).method('str');"),
+        NewTypeInference.INVALID_ARGUMENT_TYPE);
+
+    typeCheck(LINE_JOINER.join(
+        "class Foo {",
+        "  /** @param {...number} var_args */",
+        "  method(var_args) {}",
+        "}",
+        "class Bar extends Foo {",
+        "  method(x,y,z) {}",
+        "}",
+        "(new Bar).method('str');"),
+        NewTypeInference.WRONG_ARGUMENT_COUNT);
   }
 }

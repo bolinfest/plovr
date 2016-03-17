@@ -465,15 +465,23 @@ class ClosureRewriteClass extends AbstractPostOrderCallback
       def.value.setJSDocInfo(null);
 
       // example: ctr.prototype.prop = value
-      block.addChildToBack(
-          fixupSrcref(IR.exprResult(
-          fixupSrcref(IR.assign(
-              IR.getprop(
-                  fixupSrcref(IR.getprop(cls.name.cloneTree(),
-                      IR.string("prototype").srcref(def.name))),
-                  IR.string(def.name.getString()).srcref(def.name))
-                  .srcref(def.name),
-              def.value)).setJSDocInfo(def.info))));
+      Node exprResult =
+          IR.exprResult(
+              IR.assign(
+                      NodeUtil.newQName(
+                          compiler,
+                          cls.name.getQualifiedName() + ".prototype." + def.name.getString()),
+                      def.value)
+                  .setJSDocInfo(def.info));
+      exprResult.useSourceInfoIfMissingFromForTree(def.name);
+      
+      // The length needs to be set explicitly to include the string key node and the function node.
+      // If we just used the length of def.name or def.value alone, then refactorings which try to
+      // delete the method would not work correctly.
+      exprResult.setLength(
+          def.value.getSourceOffset() + def.value.getLength() - def.name.getSourceOffset());
+      block.addChildToBack(exprResult);
+
       // Handle inner class definitions.
       maybeRewriteClassDefinition(block.getLastChild());
     }
@@ -487,7 +495,7 @@ class ClosureRewriteClass extends AbstractPostOrderCallback
       // The cls parameter is unused, but leave it there so that it
       // matches the JsDoc.
       // TODO(tbreisacher): Add a warning if the param is shadowed or reassigned.
-      Node argList = cls.classModifier.getFirstChild().getNext();
+      Node argList = cls.classModifier.getSecondChild();
       Node arg = argList.getFirstChild();
       final String argName = arg.getString();
       NodeTraversal.traverseEs6(compiler, cls.classModifier.getLastChild(),
@@ -617,7 +625,11 @@ class ClosureRewriteClass extends AbstractPostOrderCallback
     // @constructor is implied, @interface must be explicit
     boolean isInterface = classInfo.isInterface() || ctorInfo.isInterface();
     if (isInterface) {
-      mergedInfo.recordInterface();
+      if (classInfo.usesImplicitMatch() || ctorInfo.usesImplicitMatch()) {
+        mergedInfo.recordImplicitMatch();
+      } else {
+        mergedInfo.recordInterface();
+      }
       List<JSTypeExpression> extendedInterfaces = null;
       if (classInfo.getExtendedInterfacesCount() > 0) {
         extendedInterfaces = classInfo.getExtendedInterfaces();

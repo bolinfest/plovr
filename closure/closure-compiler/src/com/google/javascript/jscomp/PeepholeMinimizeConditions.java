@@ -113,7 +113,7 @@ class PeepholeMinimizeConditions
     Node block = n.getLastChild();
     Node maybeIf = block.getFirstChild();
     if (maybeIf != null && maybeIf.isIf()) {
-      Node thenBlock = maybeIf.getChildAtIndex(1);
+      Node thenBlock = maybeIf.getSecondChild();
       Node maybeBreak = thenBlock.getFirstChild();
       if (maybeBreak != null && maybeBreak.isBreak()
           && !maybeBreak.hasChildren()) {
@@ -382,8 +382,7 @@ class PeepholeMinimizeConditions
 
   static boolean isExceptionPossible(Node n) {
     // TODO(johnlenz): maybe use ControlFlowAnalysis.mayThrowException?
-    Preconditions.checkState(n.isReturn()
-        || n.isThrow());
+    Preconditions.checkState(n.isReturn() || n.isThrow(), n);
     return n.isThrow()
         || (n.hasChildren()
             && !NodeUtil.isLiteralValue(n.getLastChild(), true));
@@ -466,7 +465,7 @@ class PeepholeMinimizeConditions
     Node placeholder = minCond.getPlaceholder();
     if (mNode.getNode().isNot()) {
       // Swap the HOOK
-      Node thenBranch = n.getFirstChild().getNext();
+      Node thenBranch = n.getSecondChild();
       n.replaceChild(placeholder, mNode.getNode().removeFirstChild());
       n.removeChild(thenBranch);
       n.addChildToBack(thenBranch);
@@ -757,7 +756,7 @@ class PeepholeMinimizeConditions
    * @param n The IF node to examine.
    */
   private void tryRemoveRepeatedStatements(Node n) {
-    Preconditions.checkState(n.isIf());
+    Preconditions.checkState(n.isIf(), n);
 
     Node parent = n.getParent();
     if (!NodeUtil.isStatementBlock(parent)) {
@@ -802,7 +801,7 @@ class PeepholeMinimizeConditions
           // We try to detect this case, and not fold EXPR_RESULTs
           // into other expressions.
           if (maybeExpr.getFirstChild().isCall()) {
-            Node calledFn = maybeExpr.getFirstChild().getFirstChild();
+            Node calledFn = maybeExpr.getFirstFirstChild();
 
             // We only have to worry about methods with an implicit 'this'
             // param, or this doesn't happen.
@@ -878,7 +877,7 @@ class PeepholeMinimizeConditions
    */
   private static Node getBlockReturnExpression(Node n) {
     Preconditions.checkState(isReturnExpressBlock(n));
-    return n.getFirstChild().getFirstChild();
+    return n.getFirstFirstChild();
   }
 
   /**
@@ -1061,7 +1060,7 @@ class PeepholeMinimizeConditions
 
       case Token.HOOK: {
         Node condition = n.getFirstChild();
-        Node trueNode = n.getFirstChild().getNext();
+        Node trueNode = n.getSecondChild();
         Node falseNode = n.getLastChild();
 
         // Because the expression is in a boolean context minimize

@@ -22,6 +22,8 @@ import static com.google.javascript.jscomp.CheckRequiresForConstructors.MISSING_
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 
+import java.util.List;
+
 /**
  * Tests for the "missing requires" check in {@link CheckRequiresForConstructors}.
  *
@@ -53,7 +55,6 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
   public void testPassWithOneNew() {
     String js =
         LINE_JOINER.join(
-            "var goog = {};",
             "goog.require('foo.bar.goo');",
             "var bar = new foo.bar.goo();");
     testSame(js);
@@ -72,7 +73,6 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
   public void testPassWithOneNewOuterClass() {
     String js =
         LINE_JOINER.join(
-            "var goog = {};",
             "goog.require('goog.foo.Bar');",
             "var bar = new goog.foo.Bar.Baz();");
     testSame(js);
@@ -81,22 +81,25 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
   public void testPassWithOneNewOuterClassWithUpperPrefix() {
     String js =
         LINE_JOINER.join(
-            "var goog = {};",
             "goog.require('goog.foo.IDBar');",
             "var bar = new goog.foo.IDBar.Baz();");
     testSame(js);
   }
 
+  public void testSuppression() {
+    testSame("/** @suppress {missingRequire} */ var x = new foo.Bar();");
+    testSame("/** @suppress {missingRequire} */ function f() { var x = new foo.Bar(); }");
+  }
+
   public void testFailWithOneNew() {
-    String[] js = new String[] {"var foo = {}; var bar = new foo.bar();"};
-    String warning = "'foo.bar' used but not goog.require'd";
+    String[] js = new String[] {"goog.provide('foo'); var bar = new foo.bar();"};
+    String warning = "'foo.bar' used but not required";
     test(js, js, null, MISSING_REQUIRE_WARNING, warning);
   }
 
   public void testPassWithTwoNewNodes() {
     String js =
         LINE_JOINER.join(
-            "var goog = {};",
             "goog.require('goog.foo.Bar');",
             "goog.require('goog.foo.Baz');",
             "var str = new goog.foo.Bar('g4'),",
@@ -107,7 +110,6 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
   public void testPassWithNestedNewNodes() {
     String js =
         LINE_JOINER.join(
-            "var goog = {};",
             "goog.require('goog.foo.Bar');",
             "var str = new goog.foo.Bar(new goog.foo.Bar('5'));");
     testSame(js);
@@ -116,7 +118,6 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
   public void testPassWithInnerClassInExtends() {
     String js =
         LINE_JOINER.join(
-            "var goog = {};",
             "goog.require('goog.foo.Bar');",
             "",
             "/** @constructor @extends {goog.foo.Bar.Inner} */",
@@ -127,25 +128,71 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
   public void testPassEs6ClassExtends() {
     String js =
         LINE_JOINER.join(
-            "var goog = {};",
             "goog.require('goog.foo.Bar');",
             "",
             "class SubClass extends goog.foo.Bar.Inner {}");
     testSameEs6(js);
   }
 
+  public void testPassPolymer() {
+    testSame(
+        LINE_JOINER.join(
+            "var Example = Polymer({});",
+            "new Example();"));
+    testSame(
+        LINE_JOINER.join(
+            "foo.bar.Example = Polymer({});",
+            "new foo.bar.Example();"));
+  }
+
+  public void testPassGoogDefineClass() {
+    testSameEs6(
+        LINE_JOINER.join(
+            "var Example = goog.defineClass(null, {constructor() {}});",
+            "new Example();"));
+    testSameEs6(
+        LINE_JOINER.join(
+            "foo.bar.Example = goog.defineClass(null, {constructor() {}});",
+            "new foo.bar.Example();"));
+  }
+
   public void testFailEs6ClassExtends() {
     setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
     String js = "var goog = {}; class SubClass extends goog.foo.Bar.Inner {}";
-    String warning = "'goog.foo.Bar.Inner' used but not goog.require'd";
+    String warning = "'goog.foo.Bar.Inner' used but not required";
     test(js, js, null, MISSING_REQUIRE_WARNING, warning);
+  }
+
+  public void testFailEs6ClassExtendsSomethingWithoutNS() {
+    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
+    String js = "var goog = {}; class SubClass extends SomethingWithoutNS {}";
+    String warning = "'SomethingWithoutNS' used but not required";
+    test(js, js, null, MISSING_REQUIRE_WARNING, warning);
+  }
+
+  public void testEs6ClassExtendsSomethingInExterns() {
+    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
+    String js = "var goog = {}; class SubClass extends SomethingInExterns {}";
+    List<SourceFile> externs = ImmutableList.of(SourceFile.fromCode("externs",
+        "/** @constructor */ var SomethingInExterns;"));
+    test(externs, js, js, null, null, null);
+  }
+
+  public void testEs6ClassExtendsSomethingInExternsWithNS() {
+    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
+    String js = "var goog = {}; class SubClass extends MyExterns.SomethingInExterns {}";
+    List<SourceFile> externs = ImmutableList.of(SourceFile.fromCode("externs",
+        "var MyExterns;\n"
+        + "/** @constructor */ MyExterns.SomethingInExterns;"));
+    test(externs, js, js, null, null, null);
   }
 
   public void testFailWithNestedNewNodes() {
     String[] js =
-        new String[] {"var goog = {}; goog.require('goog.foo.Bar'); "
-            + "var str = new goog.foo.Bar(new goog.foo.Baz('5')); "};
-    String warning = "'goog.foo.Baz' used but not goog.require'd";
+        new String[] {
+          "goog.require('goog.foo.Bar'); var str = new goog.foo.Bar(new goog.foo.Baz('5'));"
+        };
+    String warning = "'goog.foo.Baz' used but not required";
     test(js, js, null, MISSING_REQUIRE_WARNING, warning);
   }
 
@@ -156,7 +203,7 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
 
       "/** @constructor @implements {example.Foo} */ var Ctor = function() {};"
     };
-    String warning = "'example.Foo' used but not goog.require'd";
+    String warning = "'example.Foo' used but not required";
     test(js, js, null, MISSING_REQUIRE_WARNING, warning);
   }
 
@@ -169,7 +216,7 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
             " */",
             "function AnInterface() {}");
 
-    String warning = "'some.other.Interface' used but not goog.require'd";
+    String warning = "'some.other.Interface' used but not required";
     test(js, js, null, MISSING_REQUIRE_WARNING, warning);
   }
 
@@ -188,7 +235,7 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
 
       "/** @constructor @extends {example.Foo} */ var Ctor = function() {};"
     };
-    String warning = "'example.Foo' used but not goog.require'd";
+    String warning = "'example.Foo' used but not required";
     test(js, js, null, MISSING_REQUIRE_WARNING, warning);
   }
 
@@ -200,7 +247,7 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
 
       "/** @constructor @extends {Foo} */ var Ctor = function() {};"
     };
-    String warning = "'Foo' used but not goog.require'd";
+    String warning = "'Foo' used but not required";
     test(js, js, null, MISSING_REQUIRE_WARNING, warning);
   }
 
@@ -241,7 +288,7 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
             "  var foo = new tempCtor();",
             "}");
     String[] js = new String[] {localVar, " var foo = new tempCtor();"};
-    String warning = "'tempCtor' used but not goog.require'd";
+    String warning = "'tempCtor' used but not required";
     test(js, js, null, MISSING_REQUIRE_WARNING, warning);
   }
 
@@ -258,7 +305,6 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
   public void testNewNodesMeta() {
     String js =
         LINE_JOINER.join(
-            "var goog = {};",
             "/** @constructor */",
             "goog.ui.Option = function() {};",
             "goog.ui.Option.optionDecorator = function() {",
@@ -275,7 +321,7 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
             + "Bar.prototype.bar = function(){return new Bar();};";
     String bad = "/** @constructor */ function Foo(){ var bar = new Bar();}";
     String[] js = new String[] {good, bad};
-    String warning = "'Bar' used but not goog.require'd";
+    String warning = "'Bar' used but not required";
     test(js, js, null, MISSING_REQUIRE_WARNING, warning);
   }
 
@@ -287,7 +333,7 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
           + "Baz.prototype.bar = function(){return new Baz();};";
     String bad = "var baz = new Baz()";
     String[] js = new String[] {good, bad};
-    String warning = "'Baz' used but not goog.require'd";
+    String warning = "'Baz' used but not required";
     test(js, js, null, MISSING_REQUIRE_WARNING, warning);
   }
 
@@ -308,7 +354,6 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
     String[] js =
         new String[] {
           LINE_JOINER.join(
-              "var goog = {};",
               "/** @constructor */",
               "function Bar() {}",
               "/** @suppress {extraRequire} */",
@@ -316,14 +361,14 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
 
           "var bar = new Bar();"
         };
-    String warning = "'Bar' used but not goog.require'd";
+    String warning = "'Bar' used but not required";
     test(js, js, null, MISSING_REQUIRE_WARNING, warning);
   }
 
   public void testPassWithoutWarningsAndMultipleFiles() {
     String[] js =
         new String[] {
-          LINE_JOINER.join("var goog = {};", "goog.require('Foo');", "var foo = new Foo();"),
+          LINE_JOINER.join("goog.require('Foo');", "var foo = new Foo();"),
 
           "goog.require('Bar'); var bar = new Bar();"
         };
@@ -335,7 +380,7 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
     String[] js =
         new String[] {
           LINE_JOINER.join(
-              "var goog = {};",
+
               "/** @constructor */",
               "function Bar() {}",
               "/** @suppress {extraRequire} */",
@@ -343,7 +388,7 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
 
           "var bar = new Bar();"
         };
-    String warning = "'Bar' used but not goog.require'd";
+    String warning = "'Bar' used but not required";
     test(js, js, null, MISSING_REQUIRE_WARNING, warning);
   }
 
@@ -356,7 +401,7 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
   }
 
   public void testRequiresAreCaughtBeforeProcessed() {
-    String js = "var foo = {}; var bar = new foo.bar.goo();";
+    String js = "goog.provide('foo'); var bar = new foo.bar.goo();";
     SourceFile input = SourceFile.fromCode("foo.js", js);
     Compiler compiler = new Compiler();
     CompilerOptions opts = new CompilerOptions();
@@ -368,7 +413,7 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
     assertNotNull(warnings);
     assertThat(warnings).isNotEmpty();
 
-    String expectation = "'foo.bar.goo' used but not goog.require'd";
+    String expectation = "'foo.bar.goo' used but not required";
 
     for (JSError warning : warnings) {
       if (expectation.equals(warning.description)) {
@@ -382,7 +427,6 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
   public void testNoWarningsForThisConstructor() {
     String js =
         LINE_JOINER.join(
-            "var goog = {};",
             "/** @constructor */goog.Foo = function() {};",
             "goog.Foo.bar = function() {",
             "  return new this.constructor;",
@@ -393,7 +437,6 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
   public void testBug2062487() {
     testSame(
         LINE_JOINER.join(
-            "var goog = {};",
             "/** @constructor */",
             "goog.Foo = function() {",
             "  /** @constructor */",
@@ -407,7 +450,6 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
     String[] js =
         new String[] {
           LINE_JOINER.join(
-              "var goog = {};",
               "/** @constructor */",
               "goog.Foo = function() {};",
               "goog.Foo.bar = function(){",
@@ -415,7 +457,7 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
               "  var second = new goog.Forgot();",
               "};")
         };
-    String warning = "'goog.Forgot' used but not goog.require'd";
+    String warning = "'goog.Forgot' used but not required";
     test(js, js, null, MISSING_REQUIRE_WARNING, warning);
   }
 
@@ -476,7 +518,7 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
         + "  var bar = new foo.Bar();\n"
         + "}\n";
     String[] js = new String[] {good, bad};
-    String warning = "'foo.Bar' used but not goog.require'd";
+    String warning = "'foo.Bar' used but not required";
     test(js, js, null, MISSING_REQUIRE_WARNING, warning);
   }
 
@@ -491,7 +533,7 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
         + "  var bar = new foo.Bar();\n"
         + "}\n";
     String[] js = new String[] {good, bad};
-    String warning = "'foo.Bar' used but not goog.require'd";
+    String warning = "'foo.Bar' used but not required";
     test(js, null, null, MISSING_REQUIRE_WARNING, warning);
   }
 
@@ -548,7 +590,7 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
         + "  }\n"
         + "});\n";
     String[] js = new String[] {good, bad};
-    String warning = "'foo.bar.Baz' used but not goog.require'd";
+    String warning = "'foo.bar.Baz' used but not required";
     test(js, null, null, MISSING_REQUIRE_WARNING, warning);
   }
 
@@ -596,7 +638,7 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
         + "  var bar = new foo.Atom();\n"
         + "}\n";
     String[] js = new String[] {good, bad};
-    String warning = "'foo.Atom' used but not goog.require'd";
+    String warning = "'foo.Atom' used but not required";
     test(js, null, null, MISSING_REQUIRE_WARNING, warning);
   }
 
@@ -628,6 +670,23 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
         + "  var baz = new Atom();\n"
         + "}\n";
     test(js, null);
+  }
+
+  public void testNoMissingGoogRequireFromSameFile() {
+    String js = LINE_JOINER.join(
+        "var Atom = constructorFactory();",
+        "function someFn() {",
+        "  var baz = new Atom();",
+        "}");
+    test(js, null);
+  }
+
+  public void testReferenceToLocalNamespace() {
+    testSame(
+        LINE_JOINER.join(
+            "/** @constructor */ function FooBar() {};",
+            "FooBar.Subclass = constructorFactory();",
+            "new FooBar.Subclass();"));
   }
 
   public void testReferenceInDestructuringParam() {
@@ -669,7 +728,7 @@ public final class MissingRequireTest extends Es6CompilerTestCase {
     String module = "import {Foo} from 'bar';";
     String script = "var x = new example.X()";
     String[] js = new String[] {module, script};
-    String warning = "'example.X' used but not goog.require'd";
+    String warning = "'example.X' used but not required";
     test(js, null, null, MISSING_REQUIRE_WARNING, warning);
   }
 }

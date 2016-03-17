@@ -16,6 +16,8 @@
 
 package com.google.javascript.jscomp;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.parsing.JsDocInfoParser;
 import com.google.javascript.rhino.IR;
@@ -48,7 +50,7 @@ public final class JSDocInfoPrinterTest extends TestCase {
     assertEquals("/**@constructor */", JSDocInfoPrinter.print(info));
     builder.recordSuppressions(ImmutableSet.of("globalThis", "uselessCode"));
     info = builder.buildAndReset();
-    assertEquals("/**@suppress {globalThis,uselessCode} */",
+    assertEquals("/**@suppress {globalThis,uselessCode}\n*/",
         JSDocInfoPrinter.print(info));
   }
 
@@ -299,5 +301,32 @@ public final class JSDocInfoPrinterTest extends TestCase {
         JsDocInfoParser.parseTypeString("string"), ""));
     JSDocInfo info = builder.buildAndReset();
     assertEquals("/**@define {string} */", JSDocInfoPrinter.print(info));
+  }
+
+  public void testDeprecated() {
+    builder.recordDeprecated();
+    builder.recordDeprecationReason("See {@link otherClass} for more info.");
+    builder.recordType(new JSTypeExpression(
+        JsDocInfoParser.parseTypeString("string"), ""));
+    JSDocInfo info = builder.buildAndReset();
+    assertEquals(
+        "/**@deprecated See {@link otherClass} for more info.\n@type {string} */",
+        JSDocInfoPrinter.print(info));
+  }
+
+  public void testExport() {
+    testSame("/**@export */");
+  }
+
+  private void testSame(String jsdoc) {
+    test(jsdoc, jsdoc);
+  }
+
+  private void test(String input, String output) {
+    assertThat(input).startsWith("/**");
+    String contents = input.substring("/**".length());
+    JSDocInfo info = JsDocInfoParser.parseJsdoc(contents);
+    assertNotNull("Parse error on parsing JSDoc: " + input, info);
+    assertThat(JSDocInfoPrinter.print(info)).isEqualTo(output);
   }
 }

@@ -207,7 +207,7 @@ public final class Manifest {
     ImmutableList.Builder<SourceFile> builder = ImmutableList.builder();
     if (!customExternsOnly) {
       try {
-        builder.addAll(AbstractCommandLineRunner.getBuiltinExterns(options));
+        builder.addAll(AbstractCommandLineRunner.getBuiltinExterns(options.getEnvironment()));
       } catch (IOException e) {
         throw Throwables.propagate(e);
       }

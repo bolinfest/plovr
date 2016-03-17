@@ -38,6 +38,7 @@
 
 package com.google.javascript.rhino;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import junit.framework.TestCase;
 
@@ -45,6 +46,7 @@ import junit.framework.TestCase;
  * @author johnlenz@google.com (John Lenz)
  */
 public class IRTest extends TestCase {
+  private static final Joiner LINE_JOINER = Joiner.on('\n');
 
   public void testEmpty() {
     testIR(IR.empty(), "EMPTY\n");
@@ -202,13 +204,34 @@ public class IRTest extends TestCase {
   public void testAdd() {
     testIR(
         IR.add(
-            IR.cast(IR.number(1)),
+            IR.cast(IR.number(1), null),
             IR.number(2)),
         "ADD\n" +
         "    CAST\n" +
         "        NUMBER 1.0\n" +
         "    NUMBER 2.0\n");
 
+  }
+
+  public void testVarWithTemplateLitOnRHS() {
+    testIR(
+        IR.var(IR.name("x"), new Node(Token.TEMPLATELIT, IR.string(""))),
+        LINE_JOINER.join(
+            "VAR",
+            "    NAME x",
+            "        TEMPLATELIT",
+            "            STRING ",
+            ""));
+
+    testIR(
+        IR.var(IR.name("x"), new Node(Token.TAGGED_TEMPLATELIT, IR.name("y"), IR.string(""))),
+        LINE_JOINER.join(
+            "VAR",
+            "    NAME x",
+            "        TAGGED_TEMPLATELIT",
+            "            NAME y",
+            "            STRING ",
+            ""));
   }
 
   private void testIR(Node node, String expectedStructure) {

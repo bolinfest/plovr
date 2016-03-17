@@ -21,11 +21,6 @@ package com.google.javascript.jscomp;
  */
 public final class AngularPassTest extends Es6CompilerTestCase {
 
-  public AngularPassTest() {
-    super();
-    compareJsDoc = false;
-  }
-
   @Override
   protected CompilerPass getProcessor(Compiler compiler) {
     return new AngularPass(compiler);
@@ -473,5 +468,35 @@ public final class AngularPassTest extends Es6CompilerTestCase {
         AngularPass.INJECTED_FUNCTION_HAS_DEFAULT_VALUE);
     testErrorEs6("/** @ngInject */ function fn(a, [b, c] = [1, 2]){}",
         AngularPass.INJECTED_FUNCTION_HAS_DEFAULT_VALUE);
+  }
+
+  public void testInGoogModule() {
+    enableRewriteClosureCode();
+    test(
+        LINE_JOINER.join(
+            "goog.module('my.module');",
+            "/** @ngInject */",
+            "function fn(a, b) {}"),
+        LINE_JOINER.join(
+            "goog.module('my.module');",
+            "/** @ngInject */",
+            "function fn(a, b) {}",
+            "/** @public */ fn['$inject'] = ['a', 'b'];"));
+  }
+
+  public void testInGoogScope() {
+    enableRewriteClosureCode();
+    test(
+        LINE_JOINER.join(
+            "goog.scope(function() {",
+            "/** @ngInject */",
+            "function fn(a, b) {}",
+            "});"),
+        LINE_JOINER.join(
+            "goog.scope(function() {",
+            "/** @ngInject */",
+            "function fn(a, b) {}",
+            "/** @public */ fn['$inject'] = ['a', 'b'];",
+            "});"));
   }
 }

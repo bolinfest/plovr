@@ -44,7 +44,7 @@ public final class JSTypeCreatorFromJSDoc {
   public static final DiagnosticType INVALID_GENERICS_INSTANTIATION =
       DiagnosticType.warning(
         "JSC_NTI_INVALID_GENERICS_INSTANTIATION",
-        "Invalid generics instantiation for {0}.\n"
+        "Invalid generics instantiation{0}.\n"
         + "Expected {1} type argument(s), but found {2}");
 
   public static final DiagnosticType EXTENDS_NON_OBJECT =
@@ -192,6 +192,7 @@ public final class JSTypeCreatorFromJSDoc {
       WRONG_PARAMETER_ORDER);
 
   private final CodingConvention convention;
+  private final UniqueNameGenerator nameGen;
 
   // Used to communicate state between methods when resolving enum types
   private int howmanyTypeVars = 0;
@@ -207,10 +208,12 @@ public final class JSTypeCreatorFromJSDoc {
   // Unknown type names indexed by JSDoc AST node at which they were found.
   private Map<Node, String> unknownTypeNames = new LinkedHashMap<>();
 
-  public JSTypeCreatorFromJSDoc(CodingConvention convention) {
+  public JSTypeCreatorFromJSDoc(
+      CodingConvention convention, UniqueNameGenerator nameGen) {
     this.qmarkFunctionDeclared = new FunctionAndSlotType(
         null, FunctionTypeBuilder.qmarkFunctionBuilder().buildDeclaration());
     this.convention = convention;
+    this.nameGen = nameGen;
   }
 
   private FunctionAndSlotType qmarkFunctionDeclared;
@@ -363,10 +366,9 @@ public final class JSTypeCreatorFromJSDoc {
   }
 
   private JSType getRecordTypeHelper(Node n, DeclaredTypeRegistry registry,
-      ImmutableList<String> typeParameters)
-      throws UnknownTypeException {
+      ImmutableList<String> typeParameters) throws UnknownTypeException {
     Map<String, Property> props = new LinkedHashMap<>();
-    for (Node propNode = n.getFirstChild().getFirstChild();
+    for (Node propNode = n.getFirstFirstChild();
          propNode != null;
          propNode = propNode.getNext()) {
       boolean isPropDeclared = propNode.getType() == Token.COLON;
@@ -396,17 +398,23 @@ public final class JSTypeCreatorFromJSDoc {
     String typeName = n.getString();
     switch (typeName) {
       case "boolean":
+        checkInvalidGenericsInstantiation(n);
         return JSType.BOOLEAN;
       case "null":
+        checkInvalidGenericsInstantiation(n);
         return JSType.NULL;
       case "number":
+        checkInvalidGenericsInstantiation(n);
         return JSType.NUMBER;
       case "string":
+        checkInvalidGenericsInstantiation(n);
         return JSType.STRING;
       case "undefined":
       case "void":
+        checkInvalidGenericsInstantiation(n);
         return JSType.UNDEFINED;
       case "Function":
+        checkInvalidGenericsInstantiation(n);
         return maybeMakeNullable(registry.getCommonTypes().qmarkFunction());
       case "Object":
         // We don't generally handle parameterized Object<...>, but we want to
@@ -418,31 +426,38 @@ public final class JSTypeCreatorFromJSDoc {
     }
   }
 
-  private JSType lookupTypeByName(String name,
-      Node n, DeclaredTypeRegistry registry, ImmutableList<String> outerTypeParameters)
+  private JSType lookupTypeByName(String name, Node n,
+      DeclaredTypeRegistry registry, ImmutableList<String> outerTypeParameters)
       throws UnknownTypeException {
-    if (outerTypeParameters.contains(name)) {
-      return JSType.fromTypeVar(name);
+    String tvar = UniqueNameGenerator.findGeneratedName(name, outerTypeParameters);
+    if (tvar != null) {
+      checkInvalidGenericsInstantiation(n);
+      return JSType.fromTypeVar(tvar);
     }
     Declaration decl = registry.getDeclaration(QualifiedName.fromQualifiedString(name), true);
     if (decl == null) {
       unknownTypeNames.put(n, name);
       throw new UnknownTypeException("Unhandled type: " + name);
     }
-    // It's either a typedef, an enum, a type variable or a nominal type
+    // It's either a typedef, an enum, a type variable, a nominal type, or a
+    // forward-declared type.
     if (decl.getTypedef() != null) {
+      checkInvalidGenericsInstantiation(n);
       return getTypedefType(decl.getTypedef(), registry);
     }
     if (decl.getEnum() != null) {
+      checkInvalidGenericsInstantiation(n);
       return getEnumPropType(decl.getEnum(), registry);
     }
     if (decl.isTypeVar()) {
+      checkInvalidGenericsInstantiation(n);
       howmanyTypeVars++;
       return decl.getTypeOfSimpleDecl();
     }
     if (decl.getNominal() != null) {
       return getNominalTypeHelper(decl.getNominal(), n, registry, outerTypeParameters);
     }
+    // Forward-declared type
     return JSType.UNKNOWN;
   }
 
@@ -504,6 +519,14 @@ public final class JSTypeCreatorFromJSDoc {
     e.resolveEnum(enumeratedType);
   }
 
+  private void checkInvalidGenericsInstantiation(Node n) {
+    if (n.hasChildren()) {
+      Preconditions.checkState(n.getFirstChild().isBlock(), n);
+      warnings.add(JSError.make(n, INVALID_GENERICS_INSTANTIATION,
+              "", "0", String.valueOf(n.getFirstChild().getChildCount())));
+    }
+  }
+
   private JSType getNominalTypeHelper(RawNominalType rawType, Node n,
       DeclaredTypeRegistry registry, ImmutableList<String> outerTypeParameters)
       throws UnknownTypeException {
@@ -514,7 +537,7 @@ public final class JSTypeCreatorFromJSDoc {
     ImmutableList.Builder<JSType> typeList = ImmutableList.builder();
     if (n.hasChildren()) {
       // Compute instantiation of polymorphic class/interface.
-      Preconditions.checkState(n.getFirstChild().isBlock());
+      Preconditions.checkState(n.getFirstChild().isBlock(), n);
       for (Node child : n.getFirstChild().children()) {
         typeList.add(
             getTypeFromCommentHelper(child, registry, outerTypeParameters));
@@ -531,7 +554,8 @@ public final class JSTypeCreatorFromJSDoc {
       if (typeArgsSize > typeParamsSize) {
         warnings.add(JSError.make(
             n, INVALID_GENERICS_INSTANTIATION,
-            uninstantiated.getName(), String.valueOf(typeParamsSize),
+            " for type " + uninstantiated.getName(),
+            String.valueOf(typeParamsSize),
             String.valueOf(typeArgsSize)));
       }
       return maybeMakeNullable(JSType.fromObjectType(ObjectType.fromNominalType(
@@ -617,7 +641,8 @@ public final class JSTypeCreatorFromJSDoc {
 
   private JSType getThisOrNewType(Node n,
       DeclaredTypeRegistry registry, ImmutableList<String> typeParameters) {
-    return getTypeFromComment(n, registry, typeParameters).removeType(JSType.NULL);
+    JSType t = getTypeFromComment(n, registry, typeParameters);
+    return t.isSingletonObjWithNull() ? t.removeType(JSType.NULL) : t;
   }
 
   private ImmutableSet<NominalType> getImplementedInterfaces(
@@ -764,7 +789,7 @@ public final class JSTypeCreatorFromJSDoc {
       JSDocInfo jsdoc, String functionName, Node funNode,
       RawNominalType constructorType, RawNominalType ownerType,
       DeclaredTypeRegistry registry, FunctionTypeBuilder builder) {
-    ImmutableList.Builder<String> typeParamsBuilder = new ImmutableList.Builder<>();;
+    ImmutableList.Builder<String> typeParamsBuilder = ImmutableList.builder();
     ImmutableList<String> typeParameters = ImmutableList.of();
     Node parent = funNode.getParent();
 
@@ -774,10 +799,20 @@ public final class JSTypeCreatorFromJSDoc {
 
     boolean ignoreJsdoc = false;
     if (jsdoc != null) {
-      typeParamsBuilder.addAll(jsdoc.getTemplateTypeNames());
+      if (constructorType != null) {
+        // We have created new names for these type variables in GTI, don't
+        // create new ones here.
+        typeParamsBuilder.addAll(constructorType.getTypeParameters());
+      } else {
+        for (String typeParam : jsdoc.getTemplateTypeNames()) {
+          typeParamsBuilder.add(this.nameGen.getNextName(typeParam));
+        }
+      }
       // We don't properly support the type transformation language; we treat
       // its type variables as ordinary type variables.
-      typeParamsBuilder.addAll(jsdoc.getTypeTransformations().keySet());
+      for (String typeParam : jsdoc.getTypeTransformations().keySet()) {
+        typeParamsBuilder.add(this.nameGen.getNextName(typeParam));
+      }
       typeParameters = typeParamsBuilder.build();
       if (!typeParameters.isEmpty()) {
         if (parent.isSetterDef() || parent.isGetterDef()) {
@@ -837,7 +872,7 @@ public final class JSTypeCreatorFromJSDoc {
       DeclaredTypeRegistry registry, FunctionTypeBuilder builder,
       boolean ignoreJsdoc /* for when the jsdoc is malformed */) {
     boolean ignoreFunNode  = !funNode.isFunction();
-    Node params = ignoreFunNode ? null : funNode.getFirstChild().getNext();
+    Node params = ignoreFunNode ? null : funNode.getSecondChild();
     ParamIterator iterator = new ParamIterator(params, jsdoc);
     while (iterator.hasNext()) {
       String pname = iterator.nextString();
@@ -974,8 +1009,12 @@ public final class JSTypeCreatorFromJSDoc {
       warnings.add(JSError.make(
           funNode, CONFLICTING_IMPLEMENTED_TYPE, functionName));
     }
+    ImmutableSet<NominalType> extendedInterfaces =
+        getExtendedInterfaces(jsdoc, registry, typeParameters);
     boolean noCycles = constructorType.addInterfaces(
-        getExtendedInterfaces(jsdoc, registry, typeParameters));
+        extendedInterfaces.isEmpty()
+        ? ImmutableSet.of(registry.getCommonTypes().getObjectType())
+        : extendedInterfaces);
     if (!noCycles) {
       warnings.add(JSError.make(
           funNode, INHERITANCE_CYCLE, constructorType.toString()));

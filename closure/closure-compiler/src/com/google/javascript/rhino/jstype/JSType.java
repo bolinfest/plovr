@@ -331,7 +331,7 @@ public abstract class JSType implements TypeI, Serializable {
    *
    * For the purposes of this function, we define a MaybeFunctionType as any
    * type in the sub-lattice
-   * { x | LEAST_FUNCTION_TYPE <= x <= GREATEST_FUNCTION_TYPE }
+   * { x | LEAST_FUNCTION_TYPE &lt;= x &lt;= GREATEST_FUNCTION_TYPE }
    * This definition excludes bottom types like NoType and NoObjectType.
    *
    * This definition is somewhat arbitrary and axiomatic, but this is the
@@ -910,6 +910,14 @@ public abstract class JSType implements TypeI, Serializable {
   }
 
   /**
+   * Tests whether this type explicitly allows undefined, as opposed to ? or *. This is required for
+   * a property to be optional.
+   */
+  public boolean isExplicitlyVoidable() {
+    return false;
+  }
+
+  /**
    * Gets the least supertype of this that's not a union.
    */
   public JSType collapseUnion() {
@@ -1090,7 +1098,7 @@ public abstract class JSType implements TypeI, Serializable {
    * for this type. The {@code ToBoolean} predicate is defined by the ECMA-262
    * standard, 3<sup>rd</sup> edition. Its behavior for simple types can be
    * summarized by the following table:
-   * <table>
+   * <table summary="">
    * <tr><th>type</th><th>result</th></tr>
    * <tr><td>{@code undefined}</td><td>{false}</td></tr>
    * <tr><td>{@code null}</td><td>{false}</td></tr>
@@ -1270,7 +1278,7 @@ public abstract class JSType implements TypeI, Serializable {
    * @param implicitImplCache a cache that records the checked
    * or currently checking type pairs, for example, if previous
    * checking found that constructor C is a subtype of interface I,
-   * then in the cache, table key <I,C> maps to IMPLEMENT status.
+   * then in the cache, table key {@code <I,C>} maps to IMPLEMENT status.
    * @param that
    */
   protected boolean isSubtype(JSType that,
@@ -1474,6 +1482,12 @@ public abstract class JSType implements TypeI, Serializable {
    */
   public final String toAnnotationString() {
     return toStringHelper(true);
+  }
+
+  public final String toNonNullAnnotationString() {
+    return !isUnknownType() && !isTemplateType() && !isRecordType() && isObject()
+        ? "!" + toAnnotationString()
+        : toAnnotationString();
   }
 
   /**

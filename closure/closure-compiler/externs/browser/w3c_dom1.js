@@ -133,13 +133,13 @@ Node.prototype.removeEventListener = function(type, listener, opt_useCapture) {}
 Node.prototype.dispatchEvent = function(evt) {};
 
 /**
- * @type {NamedNodeMap}
+ * @type {NamedNodeMap<!Attr>}
  * @see http://www.w3.org/TR/1998/REC-DOM-Level-1-19981001/level-one-core.html#attribute-attributes
  */
 Node.prototype.attributes;
 
 /**
- * @type {!NodeList}
+ * @type {!NodeList<!Node>}
  * @see http://www.w3.org/TR/1998/REC-DOM-Level-1-19981001/level-one-core.html#attribute-childNodes
  */
 Node.prototype.childNodes;
@@ -426,16 +426,16 @@ Document.prototype.createTextNode = function(data) {};
 
 /**
  * @param {string} tagname
- * @return {!NodeList}
+ * @return {!NodeList<!Element>}
  * @see http://www.w3.org/TR/1998/REC-DOM-Level-1-19981001/level-one-core.html#ID-A6C9094
  * @nosideeffects
  */
 Document.prototype.getElementsByTagName = function(tagname) {};
 
-// TODO(johnlenz): NodeList should be IArrayLike<Node>
 /**
  * @constructor
- * @implements {IArrayLike<?>}
+ * @implements {IArrayLike<T>}
+ * @template T
  * @see http://www.w3.org/TR/1998/REC-DOM-Level-1-19981001/level-one-core.html#ID-536297177
  */
 function NodeList() {}
@@ -448,13 +448,16 @@ NodeList.prototype.length;
 
 /**
  * @param {number} index
- * @return {Node}
+ * @return {T|null}
  * @see http://www.w3.org/TR/1998/REC-DOM-Level-1-19981001/level-one-core.html#ID-844377136
  */
 NodeList.prototype.item = function(index) {};
 
 /**
  * @constructor
+ * @implements {IObject<(string|number), T>}
+ * @implements {IArrayLike<T>}
+ * @template T
  * @see http://www.w3.org/TR/1998/REC-DOM-Level-1-19981001/level-one-core.html#ID-1780488922
  */
 function NamedNodeMap() {}
@@ -594,6 +597,17 @@ function Element() {}
 Element.prototype.tagName;
 
 /**
+ * @implicitCast
+ * @type {?}
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/Element/className
+ *    We type it as ? even though it is a string, because some SVG elements have
+ *    className that is an object, which isn't a subtype of string.
+ *    Alternative: TypeScript types this as string and types className on
+ *    SVGElement as ?.
+ */
+Element.prototype.className;
+
+/**
  * @param {string} name
  * @param {number?=} opt_flags
  * @return {string}
@@ -613,7 +627,7 @@ Element.prototype.getAttributeNode = function(name) {};
 
 /**
  * @param {string} tagname
- * @return {!NodeList}
+ * @return {!NodeList<!Element>}
  * @see http://www.w3.org/TR/1998/REC-DOM-Level-1-19981001/level-one-core.html#ID-1938918D
  * @nosideeffects
  */
@@ -728,7 +742,7 @@ function CDATASection() {}
 function DocumentType() {}
 
 /**
- * @type {NamedNodeMap}
+ * @type {NamedNodeMap<!Entity>}
  * @see http://www.w3.org/TR/1998/REC-DOM-Level-1-19981001/level-one-core.html#ID-1788794630
  */
 DocumentType.prototype.entities;
@@ -740,7 +754,7 @@ DocumentType.prototype.entities;
 DocumentType.prototype.name;
 
 /**
- * @type {NamedNodeMap}
+ * @type {NamedNodeMap<!Notation>}
  * @see http://www.w3.org/TR/1998/REC-DOM-Level-1-19981001/level-one-core.html#ID-D46829EF
  */
 DocumentType.prototype.notations;

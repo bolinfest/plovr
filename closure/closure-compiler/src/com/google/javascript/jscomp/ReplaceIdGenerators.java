@@ -345,7 +345,7 @@ class ReplaceIdGenerators implements CompilerPass {
         }
       }
 
-      Node arg = n.getFirstChild().getNext();
+      Node arg = n.getSecondChild();
       if (arg == null) {
         compiler.report(t.makeError(n, INVALID_GENERATOR_PARAMETER));
       } else if (arg.isString()) {
@@ -413,7 +413,7 @@ class ReplaceIdGenerators implements CompilerPass {
   }
 
   static String getIdForGeneratorNode(boolean consistent, Node n) {
-    Preconditions.checkState(n.isString() || n.isStringKey());
+    Preconditions.checkState(n.isString() || n.isStringKey(), n);
     if (consistent) {
       return n.getString();
     } else {

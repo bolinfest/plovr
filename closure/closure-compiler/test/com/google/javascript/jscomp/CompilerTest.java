@@ -123,39 +123,23 @@ public final class CompilerTest extends TestCase {
     compiler.compile(externs, input, options);
   }
 
-  public void testCommonJSProvidesAndRequire() throws Exception {
-    List<SourceFile> inputs = ImmutableList.of(
-        SourceFile.fromCode("gin.js", "require('tonic')"),
-        SourceFile.fromCode("tonic.js", ""),
-        SourceFile.fromCode("mix.js", "require('gin'); require('tonic');"));
-    List<String> entryPoints = ImmutableList.of("module$mix");
-
-    Compiler compiler = initCompilerForCommonJS(inputs, entryPoints);
-    JSModuleGraph graph = compiler.getModuleGraph();
-    assertEquals(3, graph.getModuleCount());
-    List<CompilerInput> result = graph.manageDependencies(entryPoints,
-        compiler.getInputsForTesting());
-    assertEquals("module$tonic$fillFile", result.get(0).getName());
-    assertEquals("module$gin$fillFile", result.get(1).getName());
-    assertEquals("tonic.js", result.get(2).getName());
-    assertEquals("gin.js", result.get(3).getName());
-    assertEquals("mix.js", result.get(4).getName());
-  }
-
   public void testCommonJSMissingRequire() throws Exception {
     List<SourceFile> inputs = ImmutableList.of(
-        SourceFile.fromCode("gin.js", "require('missing')"));
+        SourceFile.fromCode("/gin.js", "require('missing')"));
     Compiler compiler = initCompilerForCommonJS(
-        inputs, ImmutableList.of("module$gin"));
+        inputs, ImmutableList.of(ModuleIdentifier.forFile("/gin")));
 
-    assertEquals(1, compiler.getErrorManager().getErrorCount());
-    String error = compiler.getErrorManager().getErrors()[0].toString();
-    assertTrue(
-        "Unexpected error: " + error,
-        error.contains("Failed to load module \"missing\" at gin.js"));
+    ErrorManager manager = compiler.getErrorManager();
+    if (manager.getErrorCount() > 0) {
+      String error = manager.getErrors()[0].toString();
+      assertTrue(
+          "Unexpected error: " + error,
+          error.contains("Failed to load module \"missing\" at /gin.js"));
+    }
+    assertEquals(1, manager.getErrorCount());
   }
 
-  private String normalize(String path) {
+  private static String normalize(String path) {
     return path.replace(File.separator, "/");
   }
 
@@ -217,12 +201,14 @@ public final class CompilerTest extends TestCase {
   }
 
   private Compiler initCompilerForCommonJS(
-      List<SourceFile> inputs, List<String> entryPoints)
+      List<SourceFile> inputs, List<ModuleIdentifier> entryPoints)
       throws Exception {
     CompilerOptions options = new CompilerOptions();
     options.setIdeMode(true);
-    options.setManageClosureDependencies(entryPoints);
-    options.setClosurePass(true);
+    options.dependencyOptions.setDependencyPruning(true);
+    options.dependencyOptions.setMoocherDropping(true);
+    options.dependencyOptions.setEntryPoints(entryPoints);
+    options.dependencyOptions.setEs6ModuleOrder(true);
     options.setProcessCommonJSModules(true);
     Compiler compiler = new Compiler();
     compiler.init(new ArrayList<SourceFile>(), inputs, options);
@@ -811,6 +797,33 @@ public final class CompilerTest extends TestCase {
     Node ast = input.getAstRoot(compiler);
     CompilerInput newInput = (CompilerInput) deserialize(serialize(input));
     assertTrue(ast.isEquivalentTo(newInput.getAstRoot(compiler)));
+  }
+
+  public void testEs6ModuleEntryPoint() throws Exception {
+    List<SourceFile> inputs = ImmutableList.of(
+        SourceFile.fromCode(
+            "/index.js", "import foo from './foo'; foo('hello');"),
+        SourceFile.fromCode("/foo.js",
+            "export default (foo) => { alert(foo); }"));
+
+    List<ModuleIdentifier> entryPoints = ImmutableList.of(
+        ModuleIdentifier.forFile("/index"));
+
+    CompilerOptions options = createNewFlagBasedOptions();
+    options.setLanguageIn(CompilerOptions.LanguageMode.ECMASCRIPT6);
+    options.setLanguageOut(CompilerOptions.LanguageMode.ECMASCRIPT5);
+    options.dependencyOptions.setDependencyPruning(true);
+    options.dependencyOptions.setDependencySorting(true);
+    options.dependencyOptions.setEntryPoints(entryPoints);
+
+    List<SourceFile> externs =
+        AbstractCommandLineRunner.getBuiltinExterns(options.getEnvironment());
+
+    Compiler compiler = new Compiler();
+    compiler.compile(externs, inputs, options);
+
+    Result result = compiler.getResult();
+    assertThat(result.errors).isEmpty();
   }
 
   public void testGetEmptyResult() {

@@ -187,10 +187,37 @@ public enum CompilationLevel {
         options.disambiguateProperties = true;
         options.ambiguateProperties = true;
         options.inlineProperties = true;
+        options.useTypesForOptimization = true;
         break;
       case SIMPLE_OPTIMIZATIONS:
-        // TODO(johnlenz): enable peephole type based optimization.
+        options.useTypesForOptimization = true;
         break;
+      case WHITESPACE_ONLY:
+        break;
+    }
+  }
+
+  /**
+   * Enable additional optimizations that operate on global declarations. Advanced mode does
+   * this by default, but this isn't valid in simple mode in the general case and should only
+   * be enabled when code is self contained (such as when it is enclosed by a function wrapper.
+   *
+   * @param options The CompilerOptions object to set the options on.
+   */
+  public void setWrappedOutputOptimizations(CompilerOptions options) {
+    // Global variables and properties names can't conflict.
+    options.reserveRawExports = false;
+    switch (this) {
+      case SIMPLE_OPTIMIZATIONS:
+        // Enable global variable optimizations (but not property optimizations)
+        options.setVariableRenaming(VariableRenamingPolicy.ALL);
+        options.setCollapseAnonymousFunctions(true);
+        options.setInlineConstantVars(true);
+        options.setInlineFunctions(Reach.ALL);
+        options.setInlineVariables(Reach.ALL);
+        options.setRemoveUnusedVariables(Reach.ALL);
+        break;
+      case ADVANCED_OPTIMIZATIONS:
       case WHITESPACE_ONLY:
         break;
     }

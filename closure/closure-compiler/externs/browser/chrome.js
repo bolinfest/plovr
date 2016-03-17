@@ -477,8 +477,6 @@ chrome.runtime.sendMessage = function(
  * on the object do not change and the function must be called again to get
  * up-to-date data.
  *
- * @see http://goto.google.com/chromeloadtimesextension
- *
  * @return {!ChromeLoadTimes}
  */
 chrome.loadTimes = function() {};

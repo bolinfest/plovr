@@ -351,6 +351,8 @@ public class IR {
   }
 
   public static Node name(String name) {
+    Preconditions.checkState(name.indexOf('.') == -1,
+        "Invalid name. Did you mean to use NodeUtil.newQName?");
     return Node.newString(Token.NAME, name);
   }
 
@@ -420,7 +422,7 @@ public class IR {
   }
 
   /**
-   * "<"
+   * "&lt;"
    */
   public static Node lt(Node expr1, Node expr2) {
     return binaryOp(Token.LT, expr1, expr2);
@@ -466,8 +468,10 @@ public class IR {
     return unaryOp(Token.POS, expr1);
   }
 
-  public static Node cast(Node expr1) {
-    return unaryOp(Token.CAST, expr1);
+  public static Node cast(Node expr1, JSDocInfo jsdoc) {
+    Node op = unaryOp(Token.CAST, expr1);
+    op.setJSDocInfo(jsdoc);
+    return op;
   }
 
   public static Node inc(Node exp, boolean isPost) {
@@ -559,7 +563,7 @@ public class IR {
   }
 
   public static Node rest(String name) {
-    return Node.newString(Token.REST, name);
+    return new Node(Token.REST, name(name));
   }
 
   public static Node spread(Node expr) {
@@ -736,6 +740,7 @@ public class IR {
       case Token.SUB:
       case Token.SUPER:
       case Token.TEMPLATELIT:
+      case Token.TAGGED_TEMPLATELIT:
       case Token.THIS:
       case Token.TYPEOF:
       case Token.TRUE:

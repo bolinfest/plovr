@@ -20,10 +20,10 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.google.javascript</groupId>
-  <artifactId>closure-compiler</artifactId>
-  <packaging>jar</packaging>
+  <artifactId>closure-compiler-main</artifactId>
+  <packaging>pom</packaging>
 
-  <name>Closure Compiler</name>
+  <name>Closure Compiler Main</name>
   <version>1.0-SNAPSHOT</version>
 
   <url>https://developers.google.com/closure/compiler/</url>
@@ -54,6 +54,11 @@
     <relativePath>pom.xml</relativePath>
   </parent>
 
+  <modules>
+    <module>pom-main-unshaded.xml</module>
+    <module>pom-main-shaded.xml</module>
+  </modules>
+
   <dependencies>
     <dependency>
       <groupId>com.google.javascript</groupId>
@@ -70,7 +75,7 @@
     <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
-      <version>18.0</version>
+      <version>20.0-SNAPSHOT</version>
     </dependency>
 
     <dependency>
@@ -209,6 +214,7 @@
         <configuration>
           <!-- <parallel>classes</parallel>
           <threadCount>4</threadCount> -->
+          <argLine>-Xmx1G</argLine>
         </configuration>
       </plugin>
 
@@ -225,6 +231,7 @@
             <link>http://docs.oracle.com/javase/7/docs/api/</link>
           </links>
           <detectLinks>true</detectLinks>
+          <excludePackageNames>*.gwt.*:*.testing.*:*.debugger.*:*.webservice.*:*.debugging.*:*.ant.*</excludePackageNames>
         </configuration>
       </plugin>
 
@@ -238,26 +245,6 @@
             <goals>
               <goal>jar-no-fork</goal>
             </goals>
-          </execution>
-        </executions>
-      </plugin>
-
-     <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-shade-plugin</artifactId>
-        <version>2.4.1</version>
-        <executions>
-          <execution>
-            <goals>
-              <goal>shade</goal>
-            </goals>
-            <configuration>
-              <transformers>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>com.google.javascript.jscomp.CommandLineRunner</mainClass>
-                </transformer>
-              </transformers>
-            </configuration>
           </execution>
         </executions>
       </plugin>

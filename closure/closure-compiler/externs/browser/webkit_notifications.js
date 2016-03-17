@@ -21,7 +21,8 @@
 /**
  * @typedef {{dir: (string|undefined), lang: (string|undefined),
  *            body: (string|undefined), tag: (string|undefined),
- *            icon: (string|undefined)}}
+ *            icon: (string|undefined),
+ *            requireInteraction: (boolean|undefined)}}
  * @see http://notifications.spec.whatwg.org/#notificationoptions
  */
 var NotificationOptions;
@@ -33,12 +34,14 @@ var NotificationOptions;
 var GetNotificationOptions;
 
 /** @interface */
-var NotificationOptionsInterface_;
+var NotificationOptionsInterface_ = function() {}
 /** @type {string} */ NotificationOptionsInterface_.prototype.dir;
 /** @type {string} */ NotificationOptionsInterface_.prototype.lang;
 /** @type {string} */ NotificationOptionsInterface_.prototype.body;
 /** @type {string} */ NotificationOptionsInterface_.prototype.tag;
 /** @type {string} */ NotificationOptionsInterface_.prototype.icon;
+/** @type {boolean} */
+  NotificationOptionsInterface_.prototype.requireInteraction;
 
 /**
  * @param {string} title

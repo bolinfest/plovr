@@ -18,8 +18,10 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.javascript.jscomp.deps.DependencyInfo;
 import com.google.javascript.jscomp.deps.JsFileParser;
+import com.google.javascript.jscomp.parsing.parser.FeatureSet;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
 
@@ -27,9 +29,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * A class for the internal representation of an input to the compiler.
@@ -38,6 +40,9 @@ import java.util.Set;
  *
  */
 public class CompilerInput implements SourceAst, DependencyInfo {
+
+  static final DiagnosticType MODULE_CONFLICT = DiagnosticType.warning(
+      "JSC_MODULE_CONFLICT", "File has both goog.module and ES6 modules: {0}");
 
   private static final long serialVersionUID = 1L;
 
@@ -48,11 +53,12 @@ public class CompilerInput implements SourceAst, DependencyInfo {
   // The AST.
   private final SourceAst ast;
 
-  private boolean isModuleFile = false;
   // Provided and required symbols.
-  private final Set<String> provides = new HashSet<>();
-  private final Set<String> requires = new HashSet<>();
+  private final Map<String, String> loadFlags = new TreeMap<>();
+  private final List<String> provides = new ArrayList<>();
+  private final List<String> requires = new ArrayList<>();
   private boolean generatedDependencyInfoFromSource = false;
+  private boolean generatedLoadFlags = false;
 
   // An AbstractCompiler for doing parsing.
   // We do not want to persist this across serialized state.
@@ -151,7 +157,7 @@ public class CompilerInput implements SourceAst, DependencyInfo {
     checkErrorManager();
     try {
       regenerateDependencyInfoIfNecessary();
-      return Collections.unmodifiableSet(requires);
+      return Collections.unmodifiableList(requires);
     } catch (IOException e) {
       compiler.getErrorManager().report(CheckLevel.ERROR,
           JSError.make(AbstractCompiler.READ_ERROR, getName()));
@@ -165,7 +171,7 @@ public class CompilerInput implements SourceAst, DependencyInfo {
     checkErrorManager();
     try {
       regenerateDependencyInfoIfNecessary();
-      return Collections.unmodifiableSet(provides);
+      return Collections.unmodifiableList(provides);
     } catch (IOException e) {
       compiler.getErrorManager().report(CheckLevel.ERROR,
           JSError.make(AbstractCompiler.READ_ERROR, getName()));
@@ -219,9 +225,10 @@ public class CompilerInput implements SourceAst, DependencyInfo {
       // compilation scheme. The API needs to be fixed so callers aren't
       // doing weird things like this, and then we should get rid of the
       // multiple-scan strategy.
-      isModuleFile = finder.isModuleFile;
+      loadFlags.putAll(finder.loadFlags);
       provides.addAll(finder.provides);
       requires.addAll(finder.requires);
+      generatedLoadFlags = true;
     } else {
       // Otherwise, look at the source code.
       if (!generatedDependencyInfoFromSource) {
@@ -234,7 +241,7 @@ public class CompilerInput implements SourceAst, DependencyInfo {
             .setIncludeGoogBase(true)
             .parseFile(getName(), getName(), getCode());
 
-        isModuleFile = info.isModule();
+        loadFlags.putAll(info.getLoadFlags());
         provides.addAll(info.getProvides());
         requires.addAll(info.getRequires());
 
@@ -243,8 +250,31 @@ public class CompilerInput implements SourceAst, DependencyInfo {
     }
   }
 
+  /**
+   * Parses the file to determine the {@linkplain DependencyInfo#getLoadFlags
+   * load flags} if necessary, which includes the module type and the language
+   * version.  This calls {@link #regenerateDependencyInfoIfNecessary} since
+   * non-{@link JsAst} inputs don't need any additional parsing, and either
+   * case may add some pre-parse load flags, anyway.
+   */
+  private void determineLoadFlagsIfNecessary() throws IOException {
+    regenerateDependencyInfoIfNecessary();
+    if (!generatedLoadFlags) {
+      FeatureSet features = ((JsAst) ast).getFeatures(compiler);
+      if (features.hasEs6Modules()) {
+        if (loadFlags.containsKey("module")) {
+          compiler.getErrorManager().report(CheckLevel.WARNING,
+              JSError.make(MODULE_CONFLICT, getName()));
+        }
+        loadFlags.put("module", "es6");
+      }
+      loadFlags.put("lang", features.version());
+      generatedLoadFlags = true;
+    }
+  }
+
   private static class DepsFinder {
-    private boolean isModuleFile;
+    private final Map<String, String> loadFlags = new TreeMap<>();
     private final List<String> provides = new ArrayList<>();
     private final List<String> requires = new ArrayList<>();
     private final CodingConvention codingConvention =
@@ -257,8 +287,9 @@ public class CompilerInput implements SourceAst, DependencyInfo {
     void visitSubtree(Node n, Node parent) {
       if (n.isCall()) {
         boolean isModuleDetected =  codingConvention.extractIsModuleFile(n, parent);
+
         if (isModuleDetected) {
-          this.isModuleFile = true;
+          loadFlags.put("module", "goog");
         }
 
         String require =
@@ -273,9 +304,7 @@ public class CompilerInput implements SourceAst, DependencyInfo {
           provides.add(provide);
         }
         return;
-      } else if (parent != null &&
-          !parent.isExprResult() &&
-          !parent.isScript()) {
+      } else if (parent != null && !parent.isExprResult() && !parent.isScript()) {
         return;
       }
 
@@ -337,15 +366,20 @@ public class CompilerInput implements SourceAst, DependencyInfo {
   }
 
   @Override
-  public boolean isModule() {
+  public ImmutableMap<String, String> getLoadFlags() {
     checkErrorManager();
     try {
-      regenerateDependencyInfoIfNecessary();
-      return isModuleFile;
+      determineLoadFlagsIfNecessary();
+      return ImmutableMap.copyOf(loadFlags);
     } catch (IOException e) {
       compiler.getErrorManager().report(CheckLevel.ERROR,
           JSError.make(AbstractCompiler.READ_ERROR, getName()));
-      return false;
+      return ImmutableMap.of();
     }
+  }
+
+  @Override
+  public boolean isModule() {
+    return "goog".equals(getLoadFlags().get("module"));
   }
 }

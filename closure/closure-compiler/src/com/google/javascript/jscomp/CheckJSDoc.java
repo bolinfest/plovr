@@ -83,6 +83,7 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
     validateArrowFunction(n);
     validateDefaultValue(n, info);
     validateTempates(n, info);
+    validateNoSideEffects(n, info);
   }
 
   private void validateTempates(Node n, JSDocInfo info) {
@@ -105,8 +106,8 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
 
   private boolean isFunctionDecl(Node n) {
     return n.isFunction()
-        || (n.isVar() && n.getFirstChild().getFirstChild() != null
-            && n.getFirstChild().getFirstChild().isFunction())
+        || (n.isVar() && n.getFirstFirstChild() != null
+            && n.getFirstFirstChild().isFunction())
         || n.isAssign() && n.getFirstChild().isQualifiedName() && n.getLastChild().isFunction();
   }
 
@@ -363,6 +364,15 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
       if (typeNode.getType() != Token.EQUALS) {
         report(typeNode, DEFAULT_PARAM_MUST_BE_MARKED_OPTIONAL);
       }
+    }
+  }
+
+  /**
+   * Check that @nosideeeffects annotations are only present in externs.
+   */
+  private void validateNoSideEffects(Node n, JSDocInfo info) {
+    if (info != null && info.isNoSideEffects() && !n.isFromExterns()) {
+      reportMisplaced(n, "nosideeffects", "@nosideeffects is only supported in externs.");
     }
   }
 }

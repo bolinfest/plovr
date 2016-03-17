@@ -95,6 +95,7 @@ public final class VariableReferenceCheckTest extends Es6CompilerTestCase {
 
   public void testUnreferencedBleedingFunction() {
     assertNoWarning("var x = function y() {}");
+    assertNoWarning("var x = function y() {}; var y = 1;");
   }
 
   public void testReferencedBleedingFunction() {
@@ -235,6 +236,11 @@ public final class VariableReferenceCheckTest extends Es6CompilerTestCase {
   public void testUsedInInnerFunction() {
     enableUnusedLocalAssignmentCheck = true;
     assertNoWarning("function f() { var x = 1; function g() { use(x); } }");
+  }
+
+  public void testUsedInShorthandObjLit() {
+    enableUnusedLocalAssignmentCheck = true;
+    testSameEs6("function f() { var x = 1; return {x}; }");
   }
 
   public void testUnusedCatch() {

@@ -232,6 +232,133 @@ public final class ConformanceRules {
     }
   }
 
+
+  abstract static class AbstractTypeRestrictionRule extends AbstractRule {
+    private final JSType nativeObjectType;
+    private final JSType whitelistedTypes;
+    private final ImmutableList<AssertionFunctionSpec> assertions;
+
+
+    public AbstractTypeRestrictionRule(AbstractCompiler compiler, Requirement requirement)
+        throws InvalidRequirementSpec {
+      super(compiler, requirement);
+      nativeObjectType = compiler.getTypeRegistry().getNativeType(JSTypeNative.OBJECT_TYPE);
+      List<String> whitelistedTypeNames = requirement.getValueList();
+      whitelistedTypes = union(whitelistedTypeNames);
+      assertions = ImmutableList.copyOf(compiler.getCodingConvention().getAssertionFunctions());
+    }
+
+    protected boolean isWhitelistedType(Node n) {
+      if (whitelistedTypes != null && n.getJSType() != null) {
+        JSType targetType = n.getJSType().restrictByNotNullOrUndefined();
+        if (targetType.isSubtype(whitelistedTypes)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    protected boolean isKnown(Node n) {
+      return !isUnknown(n)
+          && !isEmptyType(n)
+          && !isTemplateType(n); // TODO(johnlenz): Remove this restriction
+    }
+
+    protected boolean isNativeObjectType(Node n) {
+      JSType type = n.getJSType().restrictByNotNullOrUndefined();
+      return type.isEquivalentTo(nativeObjectType);
+    }
+
+    protected boolean isAllType(Node n) {
+      JSType type = n.getJSType();
+      return type != null && type.isAllType();
+    }
+
+    protected boolean isUnknown(Node n) {
+      JSType type = n.getJSType();
+      return (type == null || type.isUnknownType());
+    }
+
+    protected boolean isTemplateType(Node n) {
+      JSType type = n.getJSType().restrictByNotNullOrUndefined();
+      return type.isTemplateType();
+    }
+
+    private boolean isEmptyType(Node n) {
+      JSType type = n.getJSType().restrictByNotNullOrUndefined();
+      return type.isEmptyType();
+    }
+
+    protected JSType union(List<String> typeNames) {
+      JSTypeRegistry registry = compiler.getTypeRegistry();
+      List<JSType> types = new ArrayList<>();
+
+      for (String typeName : typeNames) {
+        JSType type = registry.getType(typeName);
+        if (type != null) {
+          types.add(type);
+        }
+      }
+      if (types.isEmpty()) {
+        return null;
+      } else {
+        JSType[] variants = types.toArray(new JSType[0]);
+        return registry.createUnionType(variants);
+      }
+    }
+
+    protected boolean isAssertionCall(Node n) {
+      if (n.isCall() && n.getFirstChild().isQualifiedName()) {
+        Node target = n.getFirstChild();
+        for (int i = 0; i < assertions.size(); i++) {
+          if (target.matchesQualifiedName(assertions.get(i).getFunctionName())) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    protected boolean wasCast(Node n) {
+      return n.getJSTypeBeforeCast() != null;
+    }
+
+    protected boolean isTypeImmediatelyTightened(Node n) {
+      Node parent = n.getParent();
+      return wasCast(n) || isAssertionCall(parent);
+    }
+
+    protected boolean isUsed(Node n) {
+      return (NodeUtil.isAssignmentOp(n.getParent()))
+           ? NodeUtil.isExpressionResultUsed(n.getParent())
+           : NodeUtil.isExpressionResultUsed(n);
+    }
+  }
+
+  /**
+   * Check that variables annotated as @const have an inferred type, if there is
+   * no type given explicitly.
+   */
+  static class InferredConstCheck extends AbstractRule {
+    public InferredConstCheck(AbstractCompiler compiler, Requirement requirement)
+        throws InvalidRequirementSpec {
+      super(compiler, requirement);
+    }
+
+    @Override
+    protected ConformanceResult checkConformance(NodeTraversal t, Node n) {
+      JSDocInfo jsDoc = n.getJSDocInfo();
+      if (jsDoc != null && jsDoc.isConstant() && jsDoc.getType() == null) {
+        JSType type = n.getJSType();
+        if (type != null && type.isUnknownType()) {
+          return ConformanceResult.VIOLATION;
+        }
+      }
+
+      return ConformanceResult.CONFORMANCE;
+    }
+  }
+
   /**
    * Banned dependency rule
    */
@@ -487,8 +614,8 @@ public final class ConformanceRules {
       }
 
       Node thisNode = isCallInvocation
-          ? callOrNew.getFirstChild().getNext()
-          : callOrNew.getFirstChild().getFirstChild();
+          ? callOrNew.getSecondChild()
+          : callOrNew.getFirstFirstChild();
       JSType thisNodeType =
           thisNode.getJSType().restrictByNotNullOrUndefined();
       return thisNodeType.isSubtype(thisType);
@@ -724,7 +851,7 @@ public final class ConformanceRules {
       TypeIRegistry registry = t.getCompiler().getTypeIRegistry();
       JSType methodClassType = registry.getType(r.type);
       Node lhs = isCallInvocation
-          ? n.getFirstChild().getFirstChild()
+          ? n.getFirstFirstChild()
           : n.getFirstChild();
       if (methodClassType != null && lhs.getJSType() != null) {
         JSType targetType = lhs.getJSType().restrictByNotNullOrUndefined();
@@ -891,12 +1018,11 @@ public final class ConformanceRules {
     private Constructor<?> getRuleConstructor(Class<Rule> cls)
         throws InvalidRequirementSpec {
       for (Constructor<?> ctor : cls.getConstructors()) {
-        Class<?> paramClasses[] = ctor.getParameterTypes();
+        Class<?>[] paramClasses = ctor.getParameterTypes();
         if (paramClasses.length == 2) {
           TypeToken<?> param1 = TypeToken.of(paramClasses[0]);
           TypeToken<?> param2 = TypeToken.of(paramClasses[1]);
-          if (param1.isAssignableFrom(COMPILER_TYPE)
-              && param2.isAssignableFrom(REQUIREMENT_TYPE)) {
+          if (param1.isSupertypeOf(COMPILER_TYPE) && param2.isSupertypeOf(REQUIREMENT_TYPE)) {
             return ctor;
           }
         }
@@ -922,7 +1048,7 @@ public final class ConformanceRules {
       } catch (ClassNotFoundException e) {
         throw new InvalidRequirementSpec("JavaClass not found.");
       }
-      if (RULE_TYPE.isAssignableFrom(TypeToken.of(customClass))) {
+      if (RULE_TYPE.isSupertypeOf(TypeToken.of(customClass))) {
         @SuppressWarnings("unchecked") // Assignable to Rule;
         Class<Rule> ruleClass = (Class<Rule>) customClass;
         return ruleClass;
@@ -1008,7 +1134,7 @@ public final class ConformanceRules {
   /**
    * Banned dereferencing null or undefined types.
    */
-  public static final class BanNullDeref extends AbstractRule {
+  public static final class BanNullDeref extends AbstractTypeRestrictionRule {
     public BanNullDeref(AbstractCompiler compiler, Requirement requirement)
         throws InvalidRequirementSpec {
       super(compiler, requirement);
@@ -1016,33 +1142,37 @@ public final class ConformanceRules {
 
     @Override
     protected ConformanceResult checkConformance(NodeTraversal t, Node n) {
-      boolean valid;
+      boolean violation;
 
       switch (n.getType()) {
           case Token.GETPROP:
           case Token.GETELEM:
           case Token.NEW:
           case Token.CALL:
-             valid = maybeValidDerefType(n.getFirstChild());
-             break;
+            violation = report(n.getFirstChild());
+            break;
           case Token.IN:
-             valid = maybeValidDerefType(n.getLastChild());
-             break;
+            violation = report(n.getLastChild());
+            break;
           default:
-             valid = true;
-             break;
+            violation = false;
+            break;
       }
 
-      return valid ? ConformanceResult.CONFORMANCE : ConformanceResult.VIOLATION;
+      return violation ? ConformanceResult.VIOLATION : ConformanceResult.CONFORMANCE;
     }
 
-    // Whether the type is known to be valid.
-    private boolean maybeValidDerefType(Node n) {
+    boolean report(Node n) {
+      return n.getJSType() != null
+          && isKnown(n)
+          && invalidDeref(n)
+          && !isWhitelistedType(n);
+    }
+
+    // Whether the type is known to be invalid to dereference.
+    private boolean invalidDeref(Node n) {
       JSType type = n.getJSType();
-      return type == null
-          || type.isUnknownType()
-          || type.isEmptyType()
-          || (!type.isNullable() && !type.isVoidable());
+      return type.isNullable() || type.isVoidable();
     }
   }
 
@@ -1050,21 +1180,18 @@ public final class ConformanceRules {
   /**
    * Banned unknown "this" types.
    */
-  public static final class BanUnknownThis extends AbstractRule {
+  public static final class BanUnknownThis extends AbstractTypeRestrictionRule {
     private final Set<Node> reports = Sets.newIdentityHashSet();
-    private final ImmutableList<AssertionFunctionSpec> assertions;
     public BanUnknownThis(AbstractCompiler compiler, Requirement requirement)
         throws InvalidRequirementSpec {
       super(compiler, requirement);
-      assertions = ImmutableList.copyOf(
-          compiler.getCodingConvention().getAssertionFunctions());
     }
 
     @Override
     protected ConformanceResult checkConformance(NodeTraversal t, Node n) {
       if (n.isThis()) {
         JSType type = n.getJSType();
-        if (type != null && type.isUnknownType() && !isWhiteListed(n)) {
+        if (type != null && type.isUnknownType() && !isTypeImmediatelyTightened(n)) {
           Node root = t.getScopeRoot();
           if (!reports.contains(root)) {
             reports.add(root);
@@ -1073,23 +1200,6 @@ public final class ConformanceRules {
         }
       }
       return ConformanceResult.CONFORMANCE;
-    }
-
-    private boolean isWhiteListed(Node n) {
-      return n.getParent().isCast() || isAssertionCall(n.getParent());
-    }
-
-    private boolean isAssertionCall(Node n) {
-      if (n.isCall() && n.getFirstChild().isQualifiedName()) {
-        Node target = n.getFirstChild();
-        for (int i = 0; i < assertions.size(); i++) {
-          if (target.matchesQualifiedName(
-              assertions.get(i).getFunctionName())) {
-            return true;
-          }
-        }
-      }
-      return false;
     }
   }
 
@@ -1102,13 +1212,11 @@ public final class ConformanceRules {
    *  - the "this" type is unknown (as this is expected to be used with
    * BanUnknownThis which would have already reported the root cause).
    */
-  public static final class BanUnknownDirectThisPropsReferences extends AbstractRule {
-    private final ImmutableList<AssertionFunctionSpec> assertions;
+  public static final class BanUnknownDirectThisPropsReferences
+      extends AbstractTypeRestrictionRule {
     public BanUnknownDirectThisPropsReferences(AbstractCompiler compiler, Requirement requirement)
         throws InvalidRequirementSpec {
       super(compiler, requirement);
-      assertions = ImmutableList.copyOf(
-          compiler.getCodingConvention().getAssertionFunctions());
     }
 
     @Override
@@ -1118,7 +1226,7 @@ public final class ConformanceRules {
           && isUnknown(n)
           && !isTemplateType(n)
           && isUsed(n) // skip most assignments, etc
-          && !isWhiteListed(n)) {
+          && !isTypeImmediatelyTightened(n)) {
         return ConformanceResult.VIOLATION;
       }
       return ConformanceResult.CONFORMANCE;
@@ -1127,70 +1235,34 @@ public final class ConformanceRules {
     private boolean isKnownThis(Node n) {
       return n.isThis() && !isUnknown(n);
     }
-
-    private boolean isUnknown(Node n) {
-      JSType type = n.getJSType();
-      return (type != null && type.isUnknownType());
-    }
-
-    private boolean isTemplateType(Node n) {
-      JSType type = n.getJSType().restrictByNotNullOrUndefined();
-      return (type != null && type.isTemplateType());
-    }
-
-    private boolean isUsed(Node n) {
-      return (NodeUtil.isAssignmentOp(n.getParent()))
-           ? NodeUtil.isExpressionResultUsed(n.getParent())
-           : NodeUtil.isExpressionResultUsed(n);
-    }
-
-    private boolean isWhiteListed(Node n) {
-      Node parent = n.getParent();
-      return parent.isCast() || isAssertionCall(parent);
-    }
-
-    private boolean isAssertionCall(Node n) {
-      if (n.isCall() && n.getFirstChild().isQualifiedName()) {
-        Node target = n.getFirstChild();
-        for (int i = 0; i < assertions.size(); i++) {
-          if (target.matchesQualifiedName(
-              assertions.get(i).getFunctionName())) {
-            return true;
-          }
-        }
-      }
-      return false;
-    }
   }
 
   /**
    * Banned unknown type references of the form "instance.prop" unless
-   * (a) it is immediately cast, or
+   * (a) it is immediately cast/asserted, or
    * (b) it is a @template type (until template type restrictions are enabled), or
    * (c) the value is unused, or
-   * (d) the source object type is unknown (to avoid error cascades), or
-   * (e) it is a whitelisted type
+   * (d) the source object type is unknown (to avoid error cascades)
    */
-  public static final class BanUnknownTypedClassPropsReferences extends AbstractRule {
-    final JSType nativeObjectType;
-    private final ImmutableList<AssertionFunctionSpec> assertions;
-    private final JSType whitelistedTypes;
+  public static final class BanUnknownTypedClassPropsReferences
+      extends AbstractTypeRestrictionRule {
 
     public BanUnknownTypedClassPropsReferences(AbstractCompiler compiler, Requirement requirement)
         throws InvalidRequirementSpec {
       super(compiler, requirement);
-      assertions = ImmutableList.copyOf(compiler.getCodingConvention().getAssertionFunctions());
-      nativeObjectType = compiler.getTypeRegistry().getNativeType(JSTypeNative.OBJECT_TYPE);
-      List<String> whitelistedTypeNames = requirement.getValueList();
-      whitelistedTypes = union(whitelistedTypeNames);
     }
 
     @Override
     protected ConformanceResult checkConformance(NodeTraversal t, Node n) {
+      // TODO(tbreisacher): Figure out how to remove this restriction after b/26884264 is fixed.
+      if (n.getSourceFileName() != null && n.getSourceFileName().startsWith(" [synthetic:")) {
+        return ConformanceResult.CONFORMANCE;
+      }
+
       if (n.isGetProp()
           && isUnknown(n)
           && isUsed(n) // skip most assignments, etc
-          && !isWhiteListed(n)
+          && !isTypeImmediatelyTightened(n)
           && isCheckablePropertySource(n.getFirstChild()) // not a cascading unknown
           && !isTemplateType(n)
           && !isDeclaredUnknown(n)) {
@@ -1208,24 +1280,6 @@ public final class ConformanceRules {
           && isClassType(n)
           && !isNativeObjectType(n)
           && !isWhitelistedType(n);
-    }
-
-    private JSType union(List<String> typeNames) {
-      JSTypeRegistry registry = compiler.getTypeRegistry();
-      List<JSType> types = new ArrayList<>();
-
-      for (String typeName : typeNames) {
-        JSType type = registry.getType(typeName);
-        if (type != null) {
-          types.add(type);
-        }
-      }
-      if (types.isEmpty()) {
-        return null;
-      } else {
-        JSType[] variants = types.toArray(new JSType[0]);
-        return registry.createUnionType(variants);
-      }
     }
 
     private boolean isClassType(Node n) {
@@ -1252,74 +1306,9 @@ public final class ConformanceRules {
           if (info != null && info.hasType()) {
             JSTypeExpression expr = info.getType();
             Node typeExprNode = expr.getRoot();
-            if (typeExprNode.getType() == Token.QMARK) {
+            if (typeExprNode.getType() == Token.QMARK && !typeExprNode.hasChildren()) {
               return true;
             }
-          }
-        }
-      }
-      return false;
-    }
-
-    private boolean isKnown(Node n) {
-      return !isUnknown(n)
-          && !isNoResolvedType(n)
-          && !isTemplateType(n); // TODO(johnlenz): Remove this restriction
-    }
-
-    private boolean isNativeObjectType(Node n) {
-      JSType type = n.getJSType().restrictByNotNullOrUndefined();
-      return type != null && type.isEquivalentTo(nativeObjectType);
-    }
-
-    private boolean isAllType(Node n) {
-      JSType type = n.getJSType();
-      return type != null && type.isAllType();
-    }
-
-    private boolean isUnknown(Node n) {
-      JSType type = n.getJSType();
-      return (type == null || type.isUnknownType());
-    }
-
-    private boolean isTemplateType(Node n) {
-      JSType type = n.getJSType().restrictByNotNullOrUndefined();
-      return (type != null && type.isTemplateType());
-    }
-
-    private boolean isNoResolvedType(Node n) {
-      JSType type = n.getJSType().restrictByNotNullOrUndefined();
-      return (type != null && type.isNoResolvedType());
-    }
-
-    private boolean isUsed(Node n) {
-      return (NodeUtil.isAssignmentOp(n.getParent()))
-          ? NodeUtil.isExpressionResultUsed(n.getParent())
-          : NodeUtil.isExpressionResultUsed(n);
-    }
-
-    // TODO(johnlenz): allow simple existence checks?
-    private boolean isWhiteListed(Node n) {
-      Node parent = n.getParent();
-      return parent.isCast() || isAssertionCall(parent);
-    }
-
-    private boolean isWhitelistedType(Node n) {
-      if (whitelistedTypes != null && n.getJSType() != null) {
-        JSType targetType = n.getJSType().restrictByNotNullOrUndefined();
-        if (targetType.isSubtype(whitelistedTypes)) {
-          return true;
-        }
-      }
-      return false;
-    }
-
-    private boolean isAssertionCall(Node n) {
-      if (n.isCall() && n.getFirstChild().isQualifiedName()) {
-        Node target = n.getFirstChild();
-        for (int i = 0; i < assertions.size(); i++) {
-          if (target.matchesQualifiedName(assertions.get(i).getFunctionName())) {
-            return true;
           }
         }
       }
@@ -1333,7 +1322,7 @@ public final class ConformanceRules {
    * forward-declared type names. For legacy reasons this is allowed but
    * causes unexpected weaknesses in the type inference.
    */
-  public static final class BanUnresolvedType extends AbstractRule {
+  public static final class BanUnresolvedType extends AbstractTypeRestrictionRule {
     public BanUnresolvedType(AbstractCompiler compiler, Requirement requirement)
         throws InvalidRequirementSpec {
       super(compiler, requirement);
@@ -1344,7 +1333,7 @@ public final class ConformanceRules {
       if (n.isGetProp()) {
         Node target = n.getFirstChild();
         JSType type = target.getJSType();
-        if (type != null && !conforms(type) && !isWhiteListed(n)) {
+        if (type != null && !conforms(type) && !isTypeImmediatelyTightened(n)) {
           return ConformanceResult.VIOLATION;
         }
       }
@@ -1364,10 +1353,6 @@ public final class ConformanceRules {
       } else {
         return !type.isNoResolvedType();
       }
-    }
-
-    private boolean isWhiteListed(Node n) {
-      return n.getParent().isCast();
     }
   }
 
@@ -1399,7 +1384,11 @@ public final class ConformanceRules {
     }
 
     private boolean isWhitelisted(Node n) {
-      return n.isVar() && n.getFirstChild().getString().equals("$jscomp");
+      return n.isVar() && isWhitelistedName(n.getFirstChild().getString());
+    }
+
+    private boolean isWhitelistedName(String name) {
+      return name.equals("$jscomp") || name.startsWith("$jscomp$compprop");
     }
   }
 

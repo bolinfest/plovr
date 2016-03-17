@@ -296,7 +296,7 @@ class RemoveUnusedVars
           // If arguments is escaped, we just assume the worst and continue
           // on all the parameters.
           if ("arguments".equals(n.getString()) && scope.isLocal()) {
-            Node lp = scope.getRootNode().getFirstChild().getNext();
+            Node lp = scope.getRootNode().getSecondChild();
             for (Node a = lp.getFirstChild(); a != null; a = a.getNext()) {
               markReferencedVar(scope.getVar(a.getString()));
             }
@@ -349,12 +349,11 @@ class RemoveUnusedVars
    * no need to treat CATCH blocks differently like we do functions.
    */
   private void traverseFunction(Node n, Scope parentScope) {
-    Preconditions.checkState(n.getChildCount() == 3);
-    Preconditions.checkState(n.isFunction());
+    Preconditions.checkState(n.getChildCount() == 3, n);
+    Preconditions.checkState(n.isFunction(), n);
 
     final Node body = n.getLastChild();
-    Preconditions.checkState(body.getNext() == null &&
-            body.isBlock());
+    Preconditions.checkState(body.getNext() == null && body.isBlock(), body);
 
     Scope fnScope = SyntacticScopeCreator.makeUntyped(compiler).createScope(n, parentScope);
     traverseNode(body, n, fnScope);
@@ -429,7 +428,7 @@ class RemoveUnusedVars
    * @return the LP node containing the function parameters.
    */
   private static Node getFunctionArgList(Node function) {
-    return function.getFirstChild().getNext();
+    return function.getSecondChild();
   }
 
   private static class CallSiteOptimizer {

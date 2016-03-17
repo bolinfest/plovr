@@ -48,6 +48,12 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           " * @return {boolean}",
           " */",
           "Object.prototype.hasOwnProperty = function(propertyName) {};",
+          "/**",
+          " * @this {!String|string}",
+          " * @param {!RegExp} regexp",
+          " * @return {!Array<string>}",
+          " */",
+          "String.prototype.match = function(regexp) {};",
           "/** @return {string} */",
           "String.prototype.toString = function() {};",
           "/**",
@@ -82,6 +88,12 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           " * @return {!Array.<?>}",
           " */",
           "Array.prototype.concat = function(var_args) {};",
+          "/**",
+          " * @this {{length: number}|Array<T>}",
+          " * @return {T}",
+          " * @template T",
+          " */",
+          "Array.prototype.shift = function() {};",
           "/** @interface */",
           "function IThenable () {}",
           "IThenable.prototype.then = function(onFulfilled) {};",
@@ -91,6 +103,12 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           " * @implements {IThenable}",
           " */",
           "function Promise(resolver) {};",
+          "/**",
+          " * @param {VALUE} value",
+          " * @return {!Promise<VALUE>}",
+          " * @template VALUE",
+          " */",
+          "Promise.resolve = function(value) {};",
           "/**",
           " * @template RESULT",
           " * @param {function(): RESULT} onFulfilled",
@@ -107,6 +125,13 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           "function Error(opt_message, opt_file, opt_line) {}",
           "/** @type {string} */",
           "Error.prototype.stack;",
+          "/**",
+          " * @constructor",
+          " * @param {?=} opt_pattern",
+          " * @param {?=} opt_flags",
+          " * @return {!RegExp}",
+          " */",
+          "function RegExp(opt_pattern, opt_flags) {}",
           "/** @constructor */",
           "function Window() {}",
           "/** @type {boolean} */",
@@ -128,25 +153,6 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
         return pass;
       }
     };
-  }
-
-  protected final void addES6TranspilationPasses() {
-    passes.add(makePassFactory("Es6RenameVariablesInParamLists",
-            new Es6RenameVariablesInParamLists(compiler)));
-    passes.add(makePassFactory("Es6SplitVariableDeclarations",
-            new Es6SplitVariableDeclarations(compiler)));
-    passes.add(makePassFactory("es6ConvertSuper",
-            new Es6ConvertSuper(compiler)));
-    passes.add(makePassFactory("convertEs6",
-            new Es6ToEs3Converter(compiler)));
-    passes.add(makePassFactory("Es6RewriteBlockScopedDeclaration",
-            new Es6RewriteBlockScopedDeclaration(compiler)));
-    passes.add(makePassFactory("rewriteGenerators",
-            new Es6RewriteGenerators(compiler)));
-    passes.add(makePassFactory("Es6RuntimeLibrary",
-            new InjectEs6RuntimeLibrary(compiler)));
-    passes.add(makePassFactory("Es6StaticInheritance",
-            new Es6ToEs3ClassSideInheritance(compiler)));
   }
 
   private final void parseAndTypeCheck(String externs, String js) {
@@ -175,17 +181,41 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
         "parsing warning: " + Joiner.on(", ").join(compiler.getWarnings()), 0,
         compiler.getWarningCount());
 
-
-    // Create common parent of externs and ast; needed by Es6RewriteLetConst.
+    // Create common parent of externs and ast; needed by Es6RewriteBlockScopedDeclaration.
     Node block = IR.block(externsRoot, astRoot);
     block.setIsSyntheticBlock(true);
 
     // Run ASTValidator
     (new AstValidator(compiler)).validateRoot(block);
 
+    DeclaredGlobalExternsOnWindow rewriteExterns =
+        new DeclaredGlobalExternsOnWindow(compiler);
+    passes.add(makePassFactory("globalExternsOnWindow", rewriteExterns));
     ProcessClosurePrimitives closurePass =
         new ProcessClosurePrimitives(compiler, null, CheckLevel.ERROR, false);
     passes.add(makePassFactory("ProcessClosurePrimitives", closurePass));
+    if (options.getLanguageIn() == CompilerOptions.LanguageMode.ECMASCRIPT6_TYPED) {
+      passes.add(makePassFactory("convertEs6TypedToEs6",
+              new Es6TypedToEs6Converter(compiler)));
+    }
+    if (options.getLanguageIn().isEs6OrHigher()) {
+      passes.add(makePassFactory("Es6RenameVariablesInParamLists",
+              new Es6RenameVariablesInParamLists(compiler)));
+      passes.add(makePassFactory("Es6SplitVariableDeclarations",
+              new Es6SplitVariableDeclarations(compiler)));
+      passes.add(makePassFactory("es6ConvertSuper",
+              new Es6ConvertSuper(compiler)));
+      passes.add(makePassFactory("convertEs6",
+              new Es6ToEs3Converter(compiler)));
+      passes.add(makePassFactory("Es6RewriteBlockScopedDeclaration",
+              new Es6RewriteBlockScopedDeclaration(compiler)));
+      passes.add(makePassFactory("rewriteGenerators",
+              new Es6RewriteGenerators(compiler)));
+      passes.add(makePassFactory("Es6RuntimeLibrary",
+              new InjectEs6RuntimeLibrary(compiler)));
+      passes.add(makePassFactory("Es6StaticInheritance",
+              new Es6ToEs3ClassSideInheritance(compiler)));
+    }
     passes.add(makePassFactory("GlobalTypeInfo", compiler.getSymbolTable()));
     passes.add(makePassFactory("NewTypeInference", new NewTypeInference(compiler)));
 

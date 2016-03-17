@@ -29,16 +29,13 @@ public final class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCas
   // Needed for testFoldLiteralObjectConstructors(),
   // testFoldLiteralArrayConstructors() and testFoldRegExp...()
   private static final String FOLD_CONSTANTS_TEST_EXTERNS =
+      "var window = {};\n" +
       "var Object = function f(){};\n" +
       "var RegExp = function f(a){};\n" +
-      "var Array = function f(a){};\n";
+      "var Array = function f(a){};\n" +
+      "window.foo = null;\n";
 
   private boolean late = true;
-
-  // TODO(user): Remove this when we no longer need to do string comparison.
-  private PeepholeSubstituteAlternateSyntaxTest(boolean compareAsTree) {
-    super(FOLD_CONSTANTS_TEST_EXTERNS, compareAsTree);
-  }
 
   public PeepholeSubstituteAlternateSyntaxTest() {
     super(FOLD_CONSTANTS_TEST_EXTERNS);
@@ -46,8 +43,8 @@ public final class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCas
 
   @Override
   public void setUp() throws Exception {
-    late = true;
     super.setUp();
+    late = true;
     disableNormalize();
   }
 
@@ -70,25 +67,6 @@ public final class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCas
 
   private void fold(String js, String expected) {
     test(js, expected);
-  }
-
-  void assertResultString(String js, String expected) {
-    assertResultString(js, expected, false);
-  }
-
-  // TODO(user): This is same as fold() except it uses string comparison. Any
-  // test that needs tell us where a folding is constructing an invalid AST.
-  void assertResultString(String js, String expected, boolean normalize) {
-    PeepholeSubstituteAlternateSyntaxTest scTest
-        = new PeepholeSubstituteAlternateSyntaxTest(false);
-
-    if (normalize) {
-      scTest.enableNormalize();
-    } else {
-      scTest.disableNormalize();
-    }
-
-    scTest.test(js, expected);
   }
 
   public void testFoldRegExpConstructor() {
@@ -150,9 +128,8 @@ public final class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCas
   }
 
   public void testFoldRegExpConstructorStringCompare() {
-    // Might have something to do with the internal representation of \n and how
-    // it is used in node comparison.
-    assertResultString("x=new RegExp(\"\\n\", \"i\")", "x=/\\n/i", true);
+    enableNormalize();
+    test("x = new RegExp(\"\\n\", \"i\")", "x = /\\n/i");
   }
 
   public void testContainsUnicodeEscape() throws Exception {
@@ -189,6 +166,27 @@ public final class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCas
     // Cannot fold, the constructor being used is actually a local function
     foldSame("x = " +
          "(function f(){function Object(){this.x=4};return new Object();})();");
+  }
+
+  public void testFoldLiteralObjectConstructors_onWindow() {
+    enableNormalize();
+
+    // Can fold when normalized
+    fold("x = new window.Object", "x = ({})");
+    fold("x = new window.Object()", "x = ({})");
+    fold("x = window.Object()", "x = ({})");
+
+    disableNormalize();
+    // Cannot fold above when not normalized
+    foldSame("x = new window.Object");
+    foldSame("x = new window.Object()");
+    foldSame("x = window.Object()");
+
+    enableNormalize();
+
+    // Can fold, the window namespace ensures it's not a conflict with the local Object.
+    fold("x = (function f(){function Object(){this.x=4};return new window.Object;})();",
+        "x = (function f(){function Object(){this.x=4};return {};})();");
   }
 
   public void testFoldLiteralArrayConstructors() {
@@ -252,6 +250,30 @@ public final class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCas
         "Object(), Array(\"abc\", Object(), Array(Array())))");
     foldSame("x = new Array(" +
         "Object(), Array(\"abc\", Object(), Array(Array())))");
+  }
+
+  public void testRemoveWindowRefs() {
+    enableNormalize();
+    fold("x = window.Object", "x = Object");
+    fold("x = window.Object.keys", "x = Object.keys");
+    fold("if (window.Object) {}", "if (Object) {}");
+    fold("x = window.Object", "x = Object");
+    fold("x = window.Array", "x = Array");
+    fold("x = window.Error", "x = Error");
+
+    // Not currently handled by the pass but should be folded in the future.
+    foldSame("x = window.String");
+
+    // Don't fold properties on the window.
+    foldSame("x = window.foo");
+
+    disableNormalize();
+    foldSame("x = window.Object");
+    foldSame("x = window.Object.keys");
+
+    enableNormalize();
+    foldSame("var x = "
+        + "(function f(){var window = {Object: function() {}};return new window.Object;})();");
   }
 
   public void testFoldStandardConstructors() {
@@ -458,11 +480,21 @@ public final class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCas
     new StringCompareTestCase().testBindToCall3();
   }
 
-  public void testSimpleFunctionCall() {
+  public void testSimpleFunctionCall1() {
     test("var a = String(23)", "var a = '' + 23");
     test("var a = String('hello')", "var a = '' + 'hello'");
     testSame("var a = String('hello', bar());");
     testSame("var a = String({valueOf: function() { return 1; }});");
+  }
+
+  public void testSimpleFunctionCall2() {
+    test("var a = Boolean(true)", "var a = !0");
+    test("var a = Boolean(false)", "var a = !1");
+    test("var a = Boolean(1)", "var a = !!1");
+    test("var a = Boolean(x)", "var a = !!x");
+    test("var a = Boolean({})", "var a = !!{}");
+    testSame("var a = Boolean()");
+    testSame("var a = Boolean(!0, !1);");
   }
 
   public void testRotateAssociativeOperators() {

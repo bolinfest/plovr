@@ -72,7 +72,7 @@ public final class Es6ConvertSuper implements NodeTraversal.Callback, HotSwapCom
   }
 
   private void addSyntheticConstructor(Node classNode) {
-    Node superClass = classNode.getFirstChild().getNext();
+    Node superClass = classNode.getSecondChild();
     Node classMembers = classNode.getLastChild();
     Node memberDef;
     if (superClass.isEmpty()) {
@@ -120,14 +120,14 @@ public final class Es6ConvertSuper implements NodeTraversal.Callback, HotSwapCom
       compiler.report(JSError.make(node, NO_SUPERTYPE));
       return;
     }
-    if (NodeUtil.getClassNameNode(clazz) == null) {
+    if (NodeUtil.getNameNode(clazz) == null) {
       // Unnamed classes of the form:
       //   f(class extends D { ... });
       // will be rejected when the class is processed.
       return;
     }
 
-    Node superName = clazz.getFirstChild().getNext();
+    Node superName = clazz.getSecondChild();
     if (!superName.isQualifiedName()) {
       // This will be reported as an error in Es6ToEs3Converter.
       return;

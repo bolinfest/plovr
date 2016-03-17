@@ -119,7 +119,7 @@ public final class NodeUtilTest extends TestCase {
     assertPureBooleanUnknown("`${indefinite}Length`");
 
     assertPureBooleanTrue("class Klass{}");
-
+    assertPureBooleanTrue("new Date()");
   }
 
   private void assertPureBooleanTrue(String val) {
@@ -196,6 +196,7 @@ public final class NodeUtilTest extends TestCase {
 
     assertImpureBooleanTrue("{a:foo()}");
     assertImpureBooleanTrue("[foo()]");
+    assertImpureBooleanTrue("new Date()");
   }
 
   private void assertImpureBooleanTrue(String val) {
@@ -273,7 +274,7 @@ public final class NodeUtilTest extends TestCase {
     options.setLanguageIn(LanguageMode.ECMASCRIPT5);
     compiler.initOptions(options);
     Node root = compiler.parseTestCode(js);
-    return root.getFirstChild().getFirstChild();
+    return root.getFirstFirstChild();
   }
 
   private void testIsObjectLiteralKey(Node node, boolean expected) {
@@ -290,7 +291,7 @@ public final class NodeUtilTest extends TestCase {
   public void testGetFunctionName2() throws Exception {
     Compiler compiler = new Compiler();
     Node parent = compiler.parseTestCode("var name = function(){}")
-        .getFirstChild().getFirstChild();
+        .getFirstFirstChild();
 
     testGetFunctionName(parent.getFirstChild(), "name");
   }
@@ -298,7 +299,7 @@ public final class NodeUtilTest extends TestCase {
   public void testGetFunctionName3() throws Exception {
     Compiler compiler = new Compiler();
     Node parent = compiler.parseTestCode("qualified.name = function(){}")
-        .getFirstChild().getFirstChild();
+        .getFirstFirstChild();
 
     testGetFunctionName(parent.getLastChild(), "qualified.name");
   }
@@ -306,7 +307,7 @@ public final class NodeUtilTest extends TestCase {
   public void testGetFunctionName4() throws Exception {
     Compiler compiler = new Compiler();
     Node parent = compiler.parseTestCode("var name2 = function name1(){}")
-        .getFirstChild().getFirstChild();
+        .getFirstFirstChild();
 
     testGetFunctionName(parent.getFirstChild(), "name2");
   }
@@ -314,7 +315,7 @@ public final class NodeUtilTest extends TestCase {
   public void testGetFunctionName5() throws Exception {
     Compiler compiler = new Compiler();
     Node n = compiler.parseTestCode("qualified.name2 = function name1(){}");
-    Node parent = n.getFirstChild().getFirstChild();
+    Node parent = n.getFirstFirstChild();
 
     testGetFunctionName(parent.getLastChild(), "qualified.name2");
   }
@@ -334,7 +335,7 @@ public final class NodeUtilTest extends TestCase {
     compiler.initOptions(options);
 
     Node parent = compiler.parseTestCode("var obj = {memFunc(){}}")
-        .getFirstChild().getFirstChild().getFirstChild().getFirstChild();
+        .getFirstFirstChild().getFirstFirstChild();
 
     assertEquals("memFunc",
         NodeUtil.getNearestFunctionName(parent.getLastChild()));
@@ -343,7 +344,7 @@ public final class NodeUtilTest extends TestCase {
 
   private void testGetFunctionName(Node function, String name) {
     assertEquals(Token.FUNCTION, function.getType());
-    assertEquals(name, NodeUtil.getFunctionName(function));
+    assertEquals(name, NodeUtil.getName(function));
   }
 
   public void testContainsFunctionDeclaration() {
@@ -389,6 +390,7 @@ public final class NodeUtilTest extends TestCase {
     assertSideEffect(true, "a + c - d()");
 
     assertSideEffect(true, "function foo() {}");
+    assertSideEffect(true, "class Foo {}");
     assertSideEffect(true, "while(true);");
     assertSideEffect(true, "if(true){a()}");
 
@@ -396,6 +398,10 @@ public final class NodeUtilTest extends TestCase {
     assertSideEffect(false, "(function() { })");
     assertSideEffect(false, "(function() { i++ })");
     assertSideEffect(false, "[function a(){}]");
+    assertSideEffect(false, "(class { })");
+    assertSideEffect(false, "(class { method() { i++ } })");
+    assertSideEffect(false, "(class Foo extends Bar { })");
+    assertSideEffect(true, "(class extends foo() { })");
 
     assertSideEffect(false, "a");
     assertSideEffect(false, "[b, c [d, [e]]]");
@@ -516,6 +522,11 @@ public final class NodeUtilTest extends TestCase {
     // in combination with a RegExp instance "exec" method.
     assertSideEffect(true, "''.match(a)", true);
     assertSideEffect(true, "''.match(a)", false);
+  }
+
+  public void testRegExpSideEffect2() {
+    assertSideEffect(true, "'a'.replace(/a/, function (s) {alert(s)})", false);
+    assertSideEffect(false, "'a'.replace(/a/, 'x')", false);
   }
 
   private void assertMutableState(boolean se, String js) {
@@ -756,7 +767,7 @@ public final class NodeUtilTest extends TestCase {
     Node ifNode = root.getFirstChild();
 
     Node ifCondition = ifNode.getFirstChild();
-    Node ifCase = ifNode.getFirstChild().getNext();
+    Node ifCase = ifNode.getSecondChild();
     Node elseCase = ifNode.getLastChild();
 
     assertFalse(NodeUtil.isControlStructureCodeBlock(ifNode, ifCondition));
@@ -831,7 +842,7 @@ public final class NodeUtilTest extends TestCase {
     Node actual = parse("try {foo()} catch(e) {} finally {}");
 
     Node tryNode = actual.getFirstChild();
-    Node catchBlocks = tryNode.getFirstChild().getNext();
+    Node catchBlocks = tryNode.getSecondChild();
     Node catchBlock = catchBlocks.getFirstChild();
 
     NodeUtil.removeChild(catchBlocks, catchBlock);
@@ -847,7 +858,7 @@ public final class NodeUtilTest extends TestCase {
     Node actual = parse("try {foo()} catch(e) {} finally {}");
 
     Node tryNode = actual.getFirstChild();
-    Node catchBlocks = tryNode.getFirstChild().getNext();
+    Node catchBlocks = tryNode.getSecondChild();
 
     NodeUtil.removeChild(tryNode, catchBlocks);
     String expected = "try {foo()} finally {}";
@@ -861,7 +872,7 @@ public final class NodeUtilTest extends TestCase {
     Node actual = parse("try {foo()} catch(e) {} finally {}");
 
     Node tryNode = actual.getFirstChild();
-    Node catchBlocks = tryNode.getFirstChild().getNext();
+    Node catchBlocks = tryNode.getSecondChild();
     Node catchBlock = catchBlocks.getFirstChild();
 
     NodeUtil.removeChild(catchBlocks, catchBlock);
@@ -891,7 +902,7 @@ public final class NodeUtilTest extends TestCase {
     actual = parse("var foo, goo, hoo");
 
     varNode = actual.getFirstChild();
-    nameNode = varNode.getFirstChild().getNext();
+    nameNode = varNode.getSecondChild();
 
     NodeUtil.removeChild(varNode, nameNode);
     expected = "var foo, hoo";
@@ -904,7 +915,7 @@ public final class NodeUtilTest extends TestCase {
     actual = parse("var foo, hoo");
 
     varNode = actual.getFirstChild();
-    nameNode = varNode.getFirstChild().getNext();
+    nameNode = varNode.getSecondChild();
 
     NodeUtil.removeChild(varNode, nameNode);
     expected = "var foo";
@@ -974,7 +985,7 @@ public final class NodeUtilTest extends TestCase {
     actual = parse("for(var a=0;a<0;a++)foo()");
 
     forNode = actual.getFirstChild();
-    child = forNode.getFirstChild().getNext();
+    child = forNode.getSecondChild();
 
     NodeUtil.removeChild(forNode, child);
     expected = "for(var a=0;;a++)foo()";
@@ -986,7 +997,7 @@ public final class NodeUtilTest extends TestCase {
     actual = parse("for(var a=0;a<0;a++)foo()");
 
     forNode = actual.getFirstChild();
-    child = forNode.getFirstChild().getNext().getNext();
+    child = forNode.getSecondChild().getNext();
 
     NodeUtil.removeChild(forNode, child);
     expected = "for(var a=0;a<0;)foo()";
@@ -1094,13 +1105,12 @@ public final class NodeUtilTest extends TestCase {
     assertTrue(testLocalValue("[x]"));
     assertTrue(testLocalValue("{'a':x}"));
 
-    // Pre-increment results in primitive number
+    // increment/decrement results in primitive number, the previous value is
+    // always coersed to a number (even in the post.
     assertTrue(testLocalValue("++x"));
     assertTrue(testLocalValue("--x"));
-
-    // Post-increment, the previous value matters.
-    assertFalse(testLocalValue("x++"));
-    assertFalse(testLocalValue("x--"));
+    assertTrue(testLocalValue("x++"));
+    assertTrue(testLocalValue("x--"));
 
     // The left side of an only assign matters if it is an alias or mutable.
     assertTrue(testLocalValue("x=1"));
@@ -1209,7 +1219,7 @@ public final class NodeUtilTest extends TestCase {
     Node callExpr = getNode("new x().method()");
     assertTrue(NodeUtil.functionCallHasSideEffects(callExpr));
 
-    Node newExpr = callExpr.getFirstChild().getFirstChild();
+    Node newExpr = callExpr.getFirstFirstChild();
     Preconditions.checkState(newExpr.isNew());
     Node.SideEffectFlags flags = new Node.SideEffectFlags();
 
@@ -1454,6 +1464,15 @@ public final class NodeUtilTest extends TestCase {
     assertTrue(NodeUtil.isNumericResult(getNode("a ? 2 : 3")));
     assertTrue(NodeUtil.isNumericResult(getNode("a,1")));
     assertTrue(NodeUtil.isNumericResult(getNode("a=1")));
+
+    assertFalse(NodeUtil.isNumericResult(getNode("a += 1")));
+
+    assertTrue(NodeUtil.isNumericResult(getNode("a -= 1")));
+    assertTrue(NodeUtil.isNumericResult(getNode("a *= 1")));
+    assertTrue(NodeUtil.isNumericResult(getNode("--a")));
+    assertTrue(NodeUtil.isNumericResult(getNode("++a")));
+    assertTrue(NodeUtil.isNumericResult(getNode("a++")));
+    assertTrue(NodeUtil.isNumericResult(getNode("a--")));
   }
 
   public void testIsBooleanResult() {
@@ -1565,6 +1584,9 @@ public final class NodeUtilTest extends TestCase {
     assertTrue(NodeUtil.mayBeString(getNode("(1+{})")));
     assertTrue(NodeUtil.mayBeString(getNode("([]+1)")));
     assertTrue(NodeUtil.mayBeString(getNode("(1+[])")));
+
+    assertTrue(NodeUtil.mayBeString(getNode("a += 'x'")));
+    assertTrue(NodeUtil.mayBeString(getNode("a += 1")));
   }
 
   public void test1() {
@@ -1628,6 +1650,8 @@ public final class NodeUtilTest extends TestCase {
     assertFalse(NodeUtil.isStringResult(getNode("(1+{})")));
     assertFalse(NodeUtil.isStringResult(getNode("([]+1)")));
     assertFalse(NodeUtil.isStringResult(getNode("(1+[])")));
+
+    assertTrue(NodeUtil.isStringResult(getNode("a += 'x'")));
   }
 
   public void testIsObjectResult() {
@@ -1820,11 +1844,12 @@ public final class NodeUtilTest extends TestCase {
   }
 
   public void testIsLValue() {
-    assertLValueNamedX(parse("var x;").getFirstChild().getFirstChild());
+    assertLValueNamedX(parse("var x;").getFirstFirstChild());
     assertLValueNamedX(parse("var w, x;").getFirstChild().getLastChild());
-    assertLValueNamedX(parse("var [...x] = y;").getFirstChild().getFirstChild().getFirstChild());
-    assertLValueNamedX(parse("var x = y;").getFirstChild().getFirstChild());
-    assertLValueNamedX(parse("x++;").getFirstChild().getFirstChild().getFirstChild());
+    assertLValueNamedX(
+        parse("var [...x] = y;").getFirstFirstChild().getFirstFirstChild());
+    assertLValueNamedX(parse("var x = y;").getFirstFirstChild());
+    assertLValueNamedX(parse("x++;").getFirstFirstChild().getFirstChild());
     assertLValueNamedX(
        NodeUtil.getFunctionParameters(parse("function f(x) {}").getFirstChild()).getFirstChild());
 
@@ -1834,9 +1859,9 @@ public final class NodeUtilTest extends TestCase {
     assertLValueNamedX(x);
 
     assertLValueNamedX(
-        parse("({x} = obj)").getFirstChild().getFirstChild().getFirstChild().getFirstChild());
+        parse("({x} = obj)").getFirstFirstChild().getFirstFirstChild());
     assertLValueNamedX(
-        parse("([x] = obj)").getFirstChild().getFirstChild().getFirstChild().getFirstChild());
+        parse("([x] = obj)").getFirstFirstChild().getFirstFirstChild());
   }
 
   private void assertNotLValueNamedX(Node n) {
@@ -1845,7 +1870,7 @@ public final class NodeUtilTest extends TestCase {
   }
 
   public void testIsNotLValue() {
-    assertNotLValueNamedX(parse("var a = x;").getFirstChild().getFirstChild().getFirstChild());
+    assertNotLValueNamedX(parse("var a = x;").getFirstFirstChild().getFirstChild());
 
     Node x = parse("f(...x);")  // script
         .getFirstChild()  // expr result
@@ -1865,7 +1890,7 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring1() {
     Node root = parse("var [a, b] = obj;");
-    Node destructPat = root.getFirstChild().getFirstChild();
+    Node destructPat = root.getFirstFirstChild();
     Preconditions.checkArgument(destructPat.isArrayPattern());
 
     Node nameNodeA = destructPat.getFirstChild();
@@ -1882,7 +1907,7 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring1b() {
     Node root = parse("var {a: c, b: d} = obj;");
-    Node destructPat = root.getFirstChild().getFirstChild();
+    Node destructPat = root.getFirstFirstChild();
     Preconditions.checkArgument(destructPat.isObjectPattern());
 
     Node strKeyNodeA = destructPat.getFirstChild();
@@ -1905,7 +1930,7 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring1c() {
     Node root = parse("var {a, b} = obj;");
-    Node destructPat = root.getFirstChild().getFirstChild();
+    Node destructPat = root.getFirstFirstChild();
     Preconditions.checkArgument(destructPat.isObjectPattern());
 
     Node strKeyNodeA = destructPat.getFirstChild();
@@ -1922,7 +1947,7 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring2() {
     Node root = parse("var [a, [b, c]] = obj;");
-    Node destructPat = root.getFirstChild().getFirstChild();
+    Node destructPat = root.getFirstFirstChild();
     Preconditions.checkArgument(destructPat.isArrayPattern());
 
     Node nameNodeA = destructPat.getFirstChild();
@@ -1942,12 +1967,12 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring2b() {
     Node root = parse("var {a: e, b: {c: f, d: g}} = obj;");
-    Node destructPat = root.getFirstChild().getFirstChild();
+    Node destructPat = root.getFirstFirstChild();
     Preconditions.checkArgument(destructPat.isObjectPattern());
 
     Node strKeyNodeA = destructPat.getFirstChild();
     Node strKeyNodeB = strKeyNodeA.getNext();
-    Node strKeyNodeC = strKeyNodeB.getFirstChild().getFirstChild();
+    Node strKeyNodeC = strKeyNodeB.getFirstFirstChild();
     Node strKeyNodeD = strKeyNodeC.getNext();
     Node nameNodeE = strKeyNodeA.getFirstChild();
     Node nameNodeF = strKeyNodeC.getFirstChild();
@@ -1974,7 +1999,7 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring3() {
     Node root = parse("var [a, b] = [c, d];");
-    Node destructPat = root.getFirstChild().getFirstChild();
+    Node destructPat = root.getFirstFirstChild();
     Preconditions.checkArgument(destructPat.isArrayPattern());
 
     Node nameNodeA = destructPat.getFirstChild();
@@ -1994,7 +2019,7 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring3b() {
     Node root = parse("var {a: c, b: d} = {a: 1, b: 2};");
-    Node destructPat = root.getFirstChild().getFirstChild();
+    Node destructPat = root.getFirstFirstChild();
     Preconditions.checkArgument(destructPat.isObjectPattern());
 
     Node strKeyNodeA = destructPat.getFirstChild();
@@ -2014,7 +2039,7 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring4() {
     Node root = parse("for ([a, b] of X){}");
-    Node destructPat = root.getFirstChild().getFirstChild();
+    Node destructPat = root.getFirstFirstChild();
     Preconditions.checkArgument(destructPat.isArrayPattern());
 
     Node nameNodeA = destructPat.getFirstChild();
@@ -2028,8 +2053,8 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring5() {
     Node root = parse("function fn([a, b] = [c, d]){}");
-    Node destructPat = root.getFirstChild().getFirstChild().getNext()
-        .getFirstChild().getFirstChild();
+    Node destructPat = root.getFirstChild().getSecondChild()
+        .getFirstFirstChild();
     Preconditions.checkArgument(destructPat.isArrayPattern());
 
     Node nameNodeA = destructPat.getFirstChild();
@@ -2049,7 +2074,7 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring6() {
     Node root = parse("for ([{a: b}] of c) {}");
-    Node destructPat = root.getFirstChild().getFirstChild().getFirstChild();
+    Node destructPat = root.getFirstFirstChild().getFirstChild();
     Preconditions.checkArgument(destructPat.isObjectPattern()
         && destructPat.getParent().isArrayPattern());
 
@@ -2067,7 +2092,7 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring6b() {
     Node root = parse("for ([{a: b}] in c) {}");
-    Node destructPat = root.getFirstChild().getFirstChild().getFirstChild();
+    Node destructPat = root.getFirstFirstChild().getFirstChild();
     Preconditions.checkArgument(destructPat.isObjectPattern()
         && destructPat.getParent().isArrayPattern());
 
@@ -2085,8 +2110,8 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring6c() {
     Node root = parse("for (var [{a: b}] = [{a: 1}];;) {}");
-    Node destructPat = root.getFirstChild().getFirstChild()
-        .getFirstChild().getFirstChild();
+    Node destructPat = root.getFirstFirstChild()
+        .getFirstFirstChild();
     Preconditions.checkArgument(destructPat.isObjectPattern()
         && destructPat.getParent().isArrayPattern());
 
@@ -2101,7 +2126,7 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring7() {
     Node root = parse("for ([a] of c) {}");
-    Node destructPat = root.getFirstChild().getFirstChild();
+    Node destructPat = root.getFirstFirstChild();
     Preconditions.checkArgument(destructPat.isArrayPattern());
 
     Node nameNodeA = destructPat.getFirstChild();
@@ -2115,7 +2140,7 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring7b() {
     Node root = parse("for ([a] in c) {}");
-    Node destructPat = root.getFirstChild().getFirstChild();
+    Node destructPat = root.getFirstFirstChild();
     Preconditions.checkArgument(destructPat.isArrayPattern());
 
     Node nameNodeA = destructPat.getFirstChild();
@@ -2129,7 +2154,7 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring7c() {
     Node root = parse("for (var [a] = [1];;) {}");
-    Node destructPat = root.getFirstChild().getFirstChild().getFirstChild();
+    Node destructPat = root.getFirstFirstChild().getFirstChild();
     Preconditions.checkArgument(destructPat.isArrayPattern());
 
     Node nameNodeA = destructPat.getFirstChild();
@@ -2140,7 +2165,7 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring7d() {
     Node root = parse("for (let [a] = [1];;) {}");
-    Node destructPat = root.getFirstChild().getFirstChild().getFirstChild();
+    Node destructPat = root.getFirstFirstChild().getFirstChild();
     Preconditions.checkArgument(destructPat.isArrayPattern());
 
     Node nameNodeA = destructPat.getFirstChild();
@@ -2151,7 +2176,7 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring7e() {
     Node root = parse("for (const [a] = [1];;) {}");
-    Node destructPat = root.getFirstChild().getFirstChild().getFirstChild();
+    Node destructPat = root.getFirstFirstChild().getFirstChild();
     Preconditions.checkArgument(destructPat.isArrayPattern());
 
     Node nameNodeA = destructPat.getFirstChild();
@@ -2198,6 +2223,20 @@ public final class NodeUtilTest extends TestCase {
 
     classNode = getClassNode("/** @export */ var Foo = class {}");
     assertTrue(NodeUtil.getBestJSDocInfo(classNode).isExport());
+  }
+
+  public void testGetBestJsDocInfoExport() {
+    Node classNode = getClassNode("/** @constructor */ export class Foo {}");
+    assertTrue(NodeUtil.getBestJSDocInfo(classNode).isConstructor());
+
+    Node function = getFunctionNode("/** @constructor */ export function Foo() {}");
+    assertTrue(NodeUtil.getBestJSDocInfo(function).isConstructor());
+
+    function = getFunctionNode("/** @constructor */ export var Foo = function() {}");
+    assertTrue(NodeUtil.getBestJSDocInfo(function).isConstructor());
+
+    function = getFunctionNode("/** @constructor */ export let Foo = function() {}");
+    assertTrue(NodeUtil.getBestJSDocInfo(function).isConstructor());
   }
 
   private boolean executedOnceTestCase(String code) {
