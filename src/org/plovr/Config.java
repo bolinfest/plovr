@@ -33,12 +33,15 @@ import com.google.javascript.jscomp.SourceMap.LocationMapping;
 import com.google.javascript.jscomp.StrictWarningsGuard;
 import com.google.javascript.jscomp.VariableMap;
 import com.google.javascript.jscomp.WarningLevel;
+import com.google.javascript.jscomp.XtbMessageBundle;
 import com.google.template.soy.xliffmsgplugin.XliffMsgPluginModule;
 
 import org.plovr.util.Pair;
 import org.plovr.webdriver.WebDriverFactory;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.lang.reflect.Field;
@@ -179,6 +182,10 @@ public final class Config implements Comparable<Config> {
   private final String gssFunctionMapProviderClassName;
 
   private final File cssOutputFile;
+  
+  private final File translationsDirectory;
+  
+  private final String language;
 
   private final JobDescription.OutputFormat cssOutputFormat;
 
@@ -243,7 +250,9 @@ public final class Config implements Comparable<Config> {
       File cssOutputFile,
       JobDescription.OutputFormat cssOutputFormat,
       PrintStream errorStream,
-      List<LocationMapping> locationMappings) {
+      List<LocationMapping> locationMappings,
+      File translationsDirectory,
+      String language) {
     Preconditions.checkNotNull(defines);
 
     this.id = id;
@@ -299,6 +308,8 @@ public final class Config implements Comparable<Config> {
     this.cssOutputFormat = cssOutputFormat;
     this.errorStream = Preconditions.checkNotNull(errorStream);
     this.locationMappings = locationMappings;
+    this.translationsDirectory = translationsDirectory;
+    this.language = language;
   }
 
   public static Builder builder(File relativePathBase, File configFile,
@@ -581,6 +592,14 @@ public final class Config implements Comparable<Config> {
   public List<WebDriverFactory> getWebDriverFactories() {
     return ImmutableList.copyOf(testDrivers);
   }
+  
+  public File getTranslationsDirectory() {
+	  return translationsDirectory;
+  }
+  
+  public String getLanguage() {
+	  return language;
+  }
 
   /**
    * @param path a relative path, such as "foo/bar_test.js" or
@@ -754,6 +773,32 @@ public final class Config implements Comparable<Config> {
     }
 
     options.setExternExports(true);
+    
+    if (translationsDirectory != null && language != null) {
+    	try {
+    		File[] files = translationsDirectory.listFiles(new FilenameFilter() {
+    			@Override public boolean accept(File dir, String name) {
+    				return name.startsWith(language) && (
+    						name.endsWith(".xtb") ||
+    						name.endsWith(".xliff") ||
+    						name.endsWith(".xlf"));
+    			}
+    	    });
+    	    if (files.length == 0) {
+    	    	logger.severe("Unable to find translations file for " + language);
+    	    } else {
+    	    	if (files[0].getName().endsWith(".xtb")) {
+    	    		options.setMessageBundle(
+    	    				new XtbMessageBundle(new FileInputStream(files[0]), null));
+    	    	} else {
+    	    		options.setMessageBundle(
+    	    				new XliffMessageBundle(new FileInputStream(files[0]), null));
+    	    	}
+    	    }
+    	} catch (IOException e) {
+    		logger.severe("Unable to load translations file: " + e.getMessage());
+    	}
+    }
 
     // Add location mapping for paths in source map.
     options.setSourceMapLocationMappings(locationMappings);
@@ -1069,6 +1114,10 @@ public final class Config implements Comparable<Config> {
 
     private File cssOutputFile = null;
 
+    private File translationsDirectory = null;
+
+    private String language = null;
+
     private JobDescription.OutputFormat cssOutputFormat = JobDescription.OutputFormat.PRETTY_PRINTED;
 
     private PrintStream errorStream = System.err;
@@ -1160,6 +1209,8 @@ public final class Config implements Comparable<Config> {
       this.gssFunctionMapProviderClassName = config.
           gssFunctionMapProviderClassName;
       this.cssOutputFile = config.cssOutputFile;
+      this.translationsDirectory = config.translationsDirectory;
+      this.language = config.language;
       this.cssOutputFormat = config.cssOutputFormat;
       this.errorStream = config.errorStream;
     }
@@ -1568,6 +1619,14 @@ public final class Config implements Comparable<Config> {
     public void setCssOutputFile(File cssOutputFile) {
       this.cssOutputFile = cssOutputFile;
     }
+    
+    public void setTranslationsDirectory(File translationsDirectory) {
+    	this.translationsDirectory = translationsDirectory;
+    }
+
+    public void setLanguage(String language) {
+    	this.language = language;
+    }
 
     public void setCssOutputFormat(JobDescription.OutputFormat cssOutputFormat) {
       this.cssOutputFormat = cssOutputFormat;
@@ -1670,7 +1729,9 @@ public final class Config implements Comparable<Config> {
           cssOutputFile,
           cssOutputFormat,
           errorStream,
-          locationMappings);
+          locationMappings,
+          translationsDirectory,
+          language);
 
       return config;
     }
