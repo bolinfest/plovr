@@ -16,11 +16,14 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Multiset;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPreOrderCallback;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
+import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
 
 import java.net.URI;
@@ -78,11 +81,8 @@ public final class ProcessCommonJSModules implements CompilerPass {
   public void process(Node externs, Node root) {
     FindGoogProvideOrGoogModule finder = new FindGoogProvideOrGoogModule();
     NodeTraversal.traverseEs6(compiler, root, finder);
-    if (finder.found) {
-      return;
-    }
     NodeTraversal
-        .traverseEs6(compiler, root, new ProcessCommonJsModulesCallback());
+        .traverseEs6(compiler, root, new ProcessCommonJsModulesCallback(!finder.found));
   }
 
   String inputToModuleName(CompilerInput input) {
@@ -104,11 +104,15 @@ public final class ProcessCommonJSModules implements CompilerPass {
 
     @Override
     public boolean shouldTraverse(NodeTraversal nodeTraversal, Node n, Node parent) {
-      // Shallow traversal, since we don't need to inspect within function declarations.
-      if (parent == null || !parent.isFunction()
-          || n == parent.getFirstChild()) {
+      if (found) {
+        return false;
+      }
+      // Shallow traversal, since we don't need to inspect within functions or expressions.
+      if (parent == null
+          || NodeUtil.isControlStructure(parent)
+          || NodeUtil.isStatementBlock(parent)) {
         if (n.isExprResult()) {
-          Node maybeGetProp = n.getFirstChild().getFirstChild();
+          Node maybeGetProp = n.getFirstFirstChild();
           if (maybeGetProp != null
               && (maybeGetProp.matchesQualifiedName("goog.provide")
                   || maybeGetProp.matchesQualifiedName("goog.module"))) {
@@ -179,12 +183,18 @@ public final class ProcessCommonJSModules implements CompilerPass {
     private int scriptNodeCount = 0;
     private List<Node> moduleExportRefs = new ArrayList<>();
     private List<Node> exportRefs = new ArrayList<>();
+    Multiset<String> propertyExportRefCount = HashMultiset.create();
+    private final boolean allowFullRewrite;
+
+    public ProcessCommonJsModulesCallback(boolean allowFullRewrite) {
+      this.allowFullRewrite = allowFullRewrite;
+    }
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       if (n.isCall() && n.getChildCount() == 2 &&
           n.getFirstChild().matchesQualifiedName("require") &&
-          n.getChildAtIndex(1).isString()) {
+          n.getSecondChild().isString()) {
         visitRequireCall(t, n, parent);
       }
 
@@ -213,7 +223,7 @@ public final class ProcessCommonJSModules implements CompilerPass {
       // will be rewritten to:
       //
       // if (typeof module == "object" && module.exports) {...}
-      if (n.isIf()) {
+      if (allowFullRewrite && n.isIf()) {
         FindModuleExportStatements commonjsFinder = new FindModuleExportStatements();
         Node condition = n.getFirstChild();
         NodeTraversal.traverseEs6(compiler, condition, commonjsFinder);
@@ -235,7 +245,7 @@ public final class ProcessCommonJSModules implements CompilerPass {
         visitScript(t, n);
       }
 
-      if (n.isGetProp() &&
+      if (allowFullRewrite &&  n.isGetProp() &&
           "module.exports".equals(n.getQualifiedName())) {
         Var v = t.getScope().getVar(MODULE);
         // only rewrite "module.exports" if "module" is a free variable,
@@ -243,15 +253,49 @@ public final class ProcessCommonJSModules implements CompilerPass {
         // variable or function parameter
         if (v == null) {
           moduleExportRefs.add(n);
+          maybeAddReferenceCount(n);
         }
       }
 
-      if (n.isName() && EXPORTS.equals(n.getString())) {
+      if (allowFullRewrite && n.isName() && EXPORTS.equals(n.getString())) {
         Var v = t.getScope().getVar(n.getString());
         if (v == null || v.isGlobal()) {
           exportRefs.add(n);
+          maybeAddReferenceCount(n);
         }
       }
+    }
+
+    private Node getBaseQualifiedNameNode(Node n) {
+      Node refParent = n;
+      while (refParent.getParent() != null && refParent.getParent().isQualifiedName()) {
+        refParent = refParent.getParent();
+      }
+
+      if (refParent == null || !refParent.getParent().isAssign()) {
+        return null;
+      }
+
+      return refParent;
+    }
+
+    private void maybeAddReferenceCount(Node n) {
+      Node refParent = getBaseQualifiedNameNode(n);
+
+      if (refParent == null) {
+        return;
+      }
+
+      String qName = refParent.getQualifiedName();
+      if (qName.startsWith("module.exports.")) {
+        qName = qName.substring("module.exports.".length());
+      } else if (qName.startsWith("exports.")) {
+        qName = qName.substring("exports.".length());
+      } else {
+        return;
+      }
+
+      propertyExportRefCount.add(qName);
     }
 
     /**
@@ -259,7 +303,7 @@ public final class ProcessCommonJSModules implements CompilerPass {
      * to be a direct reference to name of require module.
      */
     private void visitRequireCall(NodeTraversal t, Node require, Node parent) {
-      String requireName = require.getChildAtIndex(1).getString();
+      String requireName = require.getSecondChild().getString();
       URI loadAddress = loader.locateCommonJsModule(requireName, t.getInput());
       if (loadAddress == null) {
         compiler.report(t.makeError(require, ES6ModuleLoader.LOAD_ERROR, requireName));
@@ -291,9 +335,18 @@ public final class ProcessCommonJSModules implements CompilerPass {
 
       String moduleName = inputToModuleName(t.getInput());
 
-      // Rename vars to not conflict in global scope.
-      NodeTraversal.traverseEs6(compiler, script, new SuffixVarsCallback(
-          moduleName));
+      boolean hasExports = !(moduleExportRefs.isEmpty() && exportRefs.isEmpty());
+
+      // Rename vars to not conflict in global scope - but only if the script exports something.
+      // If there are no exports, we still need to rewrite type annotations which
+      // are module paths
+      NodeTraversal.traverseEs6(compiler, script,
+          new SuffixVarsCallback(moduleName, hasExports));
+
+      // If the script has no exports, we don't want to output a goog.provide statement
+      if (!hasExports) {
+        return;
+      }
 
       // Replace all refs to module.exports and exports
       processExports(script, moduleName);
@@ -320,7 +373,7 @@ public final class ProcessCommonJSModules implements CompilerPass {
       Node p = n.getParent();
       if (p != null) {
         // pull out then-branch
-        replaceIfStatementWithBranch(n, n.getChildAtIndex(1));
+        replaceIfStatementWithBranch(n, n.getSecondChild());
       }
     }
 
@@ -377,58 +430,89 @@ public final class ProcessCommonJSModules implements CompilerPass {
         // One top-level assign: transform to
         // moduleName = rhs
         Node ref = moduleExportRefs.get(0);
-        Node newName = IR.name(moduleName);
-        newName.putProp(Node.ORIGINALNAME_PROP, ref.getQualifiedName());
+        Node newName = IR.name(moduleName).srcref(ref);
+        newName.setOriginalName(ref.getQualifiedName());
+        Node rhsValue = ref.getNext();
 
-        Node rhsValue = ref.getNext().detachFromParent();
-        Node newExprResult = IR.exprResult(IR.assign(newName, rhsValue)
-          .useSourceInfoIfMissingFromForTree(ref.getParent()));
-
-        // If the rValue is an object literal, check each property to see if
-        // it's an alias, and if it is, copy the annotation over.
-        // This is a common idiom to export a set of constructors.
         if (rhsValue.isObjectLit()) {
-          Scope globalScope = SyntacticScopeCreator.makeUntyped(compiler)
-              .createScope(script, null);
-          for (Node key = rhsValue.getFirstChild();
-               key != null; key = key.getNext()) {
-            if (key.getJSDocInfo() == null &&
-                (key.getFirstChild() == null || key.getFirstChild().isName())) {
-              String aliasedVarName = key.getFirstChild() == null ?
-                  key.getString() : key.getFirstChild().getString();
-              Var aliasedVar = globalScope.getVar(aliasedVarName);
-              JSDocInfo info =
-                  aliasedVar == null ? null : aliasedVar.getJSDocInfo();
-              if (info != null &&
-                  info.getVisibility() != JSDocInfo.Visibility.PRIVATE) {
-                key.setJSDocInfo(info);
-              }
+          addConstToObjLitKeys(rhsValue);
+        }
+
+        Node assign = ref.getParent();
+        assign.replaceChild(ref, newName);
+        JSDocInfoBuilder builder = new JSDocInfoBuilder(true);
+        builder.recordConstancy();
+        JSDocInfo info = builder.build();
+        assign.setJSDocInfo(info);
+        return;
+      }
+
+      Iterable<Node> exports;
+      boolean hasLValues = hasExportLValues();
+      if (hasLValues) {
+        exports = moduleExportRefs;
+      } else {
+        exports = Iterables.concat(moduleExportRefs, exportRefs);
+      }
+
+      // Transform to:
+      //
+      // moduleName.prop0 = 0; // etc.
+      boolean declaredModuleExports = false;
+      for (Node ref : exports) {
+        // If there is a module exports assignment at this point, we need to
+        // add a variable declaration for the module name, because otherwise
+        // the default declaration for the goog.provide is a constant and the
+        // assignment would violate that constant.
+        // Note that the hasOneTopLevelModuleExportAssign() case handles the
+        // more common case of assigning to module.exports on the top level,
+        // but CommonJS code also sometimes assigns to module.exports inside
+        // of more complex expressions.
+        if (ref.getParent().isAssign()
+            && !ref.getGrandparent().isExprResult()
+            && !declaredModuleExports) {
+          // Adds "var moduleName" to front of the current file.
+          script.addChildToFront(
+              IR.var(IR.name(moduleName))
+                  .useSourceInfoIfMissingFromForTree(ref));
+          declaredModuleExports = true;
+        }
+
+        String qName = null;
+        if (ref.isQualifiedName()) {
+          Node baseName = getBaseQualifiedNameNode(ref);
+          if (baseName != null) {
+            qName = baseName.getQualifiedName();
+            if (qName.startsWith("module.exports.")) {
+              qName = qName.substring("module.exports.".length());
+            } else {
+              qName = qName.substring("exports.".length());
             }
           }
         }
 
-        Node assign = ref.getParent();
-        Node exprResult = assign.getParent();
-        script.replaceChild(exprResult, newExprResult);
-        return;
-      }
+        Node rhsValue = ref.getNext();
+        Node newName = IR.name(moduleName).srcref(ref);
+        newName.setOriginalName(qName);
 
-      if (!hasExportLValues()) {
-        // Transform to:
-        //
-        // moduleName.prop0 = 0; // etc.
-        for (Node ref : Iterables.concat(moduleExportRefs, exportRefs)) {
-          Node newRef = IR.name(moduleName).useSourceInfoIfMissingFrom(ref);
-          newRef.putProp(Node.ORIGINALNAME_PROP, ref.getQualifiedName());
-          ref.getParent().replaceChild(ref, newRef);
+        Node parent = ref.getParent();
+        parent.replaceChild(ref, newName);
+
+        // If the property was assigned to exactly once, add an @const annotation
+        if (parent.isAssign() && qName != null &&  propertyExportRefCount.count(qName) == 1) {
+          if (rhsValue != null && rhsValue.isObjectLit()) {
+            addConstToObjLitKeys(rhsValue);
+          }
+
+          JSDocInfoBuilder builder = new JSDocInfoBuilder(true);
+          builder.recordConstancy();
+          JSDocInfo info = builder.build();
+          parent.setJSDocInfo(info);
         }
-        return;
       }
 
-      // Transform module.exports to moduleName
-      for (Node ref : moduleExportRefs) {
-        Node newRef = IR.name(moduleName).useSourceInfoIfMissingFrom(ref);
-        ref.getParent().replaceChild(ref, newRef);
+      if(!hasLValues) {
+        return;
       }
 
       // Transform exports to exports$$moduleName and set to point
@@ -440,8 +524,24 @@ public final class ProcessCommonJSModules implements CompilerPass {
         script.addChildToFront(aliasNode);
 
         for (Node ref : exportRefs) {
-          ref.putProp(Node.ORIGINALNAME_PROP, ref.getString());
+          ref.setOriginalName(ref.getString());
           ref.setString(aliasName);
+        }
+      }
+    }
+
+    /**
+     * Add an @const annotation to each key of an object literal
+     */
+    private void addConstToObjLitKeys(Node n) {
+      Preconditions.checkState(n.isObjectLit());
+      for (Node key = n.getFirstChild();
+           key != null; key = key.getNext()) {
+        if (key.getJSDocInfo() == null) {
+          JSDocInfoBuilder builder = new JSDocInfoBuilder(true);
+          builder.recordConstancy();
+          JSDocInfo info = builder.build();
+          key.setJSDocInfo(info);
         }
       }
     }
@@ -459,7 +559,7 @@ public final class ProcessCommonJSModules implements CompilerPass {
       Node parent = n.getParent();
       return parent.isAssign() && n == parent.getFirstChild() &&
           parent.getParent().isExprResult() &&
-          parent.getParent().getParent().isScript();
+          parent.getGrandparent().isScript();
     }
 
     /**
@@ -492,9 +592,11 @@ public final class ProcessCommonJSModules implements CompilerPass {
    */
   private class SuffixVarsCallback extends AbstractPostOrderCallback {
     private final String suffix;
+    private final boolean fullRewrite;
 
-    SuffixVarsCallback(String suffix) {
+    SuffixVarsCallback(String suffix, boolean fullRewrite) {
       this.suffix = suffix;
+      this.fullRewrite = fullRewrite;
     }
 
     @Override
@@ -506,9 +608,11 @@ public final class ProcessCommonJSModules implements CompilerPass {
         }
       }
 
-      if (n.isName()) {
+      boolean isShorthandObjLitKey = n.isStringKey() && !n.hasChildren();
+      if (fullRewrite && n.isName() || isShorthandObjLitKey) {
         String name = n.getString();
         if (suffix.equals(name)) {
+          // TODO(moz): Investigate whether we need to return early in this unlikely situation.
           return;
         }
 
@@ -524,8 +628,14 @@ public final class ProcessCommonJSModules implements CompilerPass {
 
         Var var = t.getScope().getVar(name);
         if (var != null && var.isGlobal()) {
-          n.setString(name + "$$" + suffix);
-          n.putProp(Node.ORIGINALNAME_PROP, name);
+          String newName = name + "$$" + suffix;
+          if (isShorthandObjLitKey) {
+            // Change {a} to {a: a$$module$foo}
+            n.addChildToBack(IR.name(newName).useSourceInfoIfMissingFrom(n));
+          } else {
+            n.setString(newName);
+            n.setOriginalName(name);
+          }
         }
       }
     }
@@ -556,7 +666,7 @@ public final class ProcessCommonJSModules implements CompilerPass {
           String globalModuleName = ES6ModuleLoader.toModuleName(loadAddress);
           typeNode.setString(
               localTypeName == null ? globalModuleName : globalModuleName + localTypeName);
-        } else {
+        } else if (fullRewrite) {
           int endIndex = name.indexOf('.');
           if (endIndex == -1) {
             endIndex = name.length();
@@ -565,7 +675,7 @@ public final class ProcessCommonJSModules implements CompilerPass {
           Var var = t.getScope().getVar(baseName);
           if (var != null && var.isGlobal()) {
             typeNode.setString(baseName + "$$" + suffix + name.substring(endIndex));
-            typeNode.putProp(Node.ORIGINALNAME_PROP, name);
+            typeNode.setOriginalName(name);
           }
         }
       }

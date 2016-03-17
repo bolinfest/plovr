@@ -149,6 +149,11 @@ class AmbiguateProperties implements CompilerPass {
       addInvalidatingType(mis.typeB);
     }
 
+    for (TypeMismatch mis : compiler.getImplicitInterfaceUses()) {
+      addInvalidatingType(mis.typeA);
+      addInvalidatingType(mis.typeB);
+    }
+
     externedNames = compiler.getExternProperties();
   }
 
@@ -445,7 +450,7 @@ class AmbiguateProperties implements CompilerPass {
     public void visit(NodeTraversal t, Node n, Node parent) {
       switch (n.getType()) {
         case Token.GETPROP: {
-          Node propNode = n.getFirstChild().getNext();
+          Node propNode = n.getSecondChild();
           JSType jstype = getJSType(n.getFirstChild());
           maybeMarkCandidate(propNode, jstype);
           break;

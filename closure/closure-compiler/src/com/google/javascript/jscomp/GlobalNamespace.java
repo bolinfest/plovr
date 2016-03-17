@@ -530,7 +530,7 @@ class GlobalNamespace
     String getNameForClassMembers(Node n) {
       Node parent = n.getParent();
       Preconditions.checkState(parent.isClassMembers());
-      String className = NodeUtil.getClassName(parent.getParent());
+      String className = NodeUtil.getName(parent.getParent());
       return className == null ? null : className + '.' + n.getString();
     }
 
@@ -561,7 +561,7 @@ class GlobalNamespace
           return getValueType(n.getLastChild());
         case Token.HOOK:
           // The same line of reasoning used for the OR case applies here.
-          Node second = n.getFirstChild().getNext();
+          Node second = n.getSecondChild();
           Name.Type t = getValueType(second);
           if (t != Name.Type.OTHER) {
             return t;
@@ -617,7 +617,6 @@ class GlobalNamespace
      * to a name, a variable declaration, or an object literal key mapping.
      *
      * @param n The node that represents the name being set
-     * @param parent Parent node of {@code n} (an ASSIGN, VAR, or OBJLIT node)
      * @return Whether the set operation is either a constructor or enum
      *     declaration
      */

@@ -130,7 +130,12 @@ public final class SuggestedFix {
      * Inserts a new node before the provided node.
      */
     public Builder insertBefore(Node nodeToInsertBefore, Node n, AbstractCompiler compiler) {
-      return insertBefore(nodeToInsertBefore, generateCode(compiler, n));
+      return insertBefore(nodeToInsertBefore, n, compiler, "");
+    }
+
+    private Builder insertBefore(
+        Node nodeToInsertBefore, Node n, AbstractCompiler compiler, String sortKey) {
+      return insertBefore(nodeToInsertBefore, generateCode(compiler, n), sortKey);
     }
 
     /**
@@ -139,6 +144,10 @@ public final class SuggestedFix {
      * printing comments.
      */
     public Builder insertBefore(Node nodeToInsertBefore, String content) {
+      return insertBefore(nodeToInsertBefore, content, "");
+    }
+
+    private Builder insertBefore(Node nodeToInsertBefore, String content, String sortKey) {
       int startPosition = nodeToInsertBefore.getSourceOffset();
       JSDocInfo jsDoc = NodeUtil.getBestJSDocInfo(nodeToInsertBefore);
       if (jsDoc != null) {
@@ -148,7 +157,7 @@ public final class SuggestedFix {
           "No source file name for node: %s", nodeToInsertBefore);
       replacements.put(
           nodeToInsertBefore.getSourceFileName(),
-          new CodeReplacement(startPosition, 0, content));
+          new CodeReplacement(startPosition, 0, content, sortKey));
       return this;
     }
 
@@ -172,7 +181,12 @@ public final class SuggestedFix {
      */
     private Builder delete(Node n, boolean deleteWhitespaceBefore) {
       int startPosition = n.getSourceOffset();
-      int length = n.getLength();
+      int length;
+      if (n.getNext() != null && NodeUtil.getBestJSDocInfo(n.getNext()) == null) {
+        length = n.getNext().getSourceOffset() - startPosition;
+      } else {
+        length = n.getLength();
+      }
       JSDocInfo jsDoc = NodeUtil.getBestJSDocInfo(n);
       if (jsDoc != null) {
         length += (startPosition - jsDoc.getOriginalCommentPosition());
@@ -262,7 +276,7 @@ public final class SuggestedFix {
       } else if (n.isStringKey()) {
         nodeToRename = n;
       } else if (n.isString()) {
-        Preconditions.checkState(n.getParent().isGetProp());
+        Preconditions.checkState(n.getParent().isGetProp(), n);
         nodeToRename = n;
       } else {
         // TODO(mknichel): Implement the rest of this function.
@@ -414,7 +428,7 @@ public final class SuggestedFix {
       Preconditions.checkArgument(
           n.isCall(), "insertArguments is only applicable to function call nodes.");
       int startPosition;
-      Node argument = n.getFirstChild().getNext();
+      Node argument = n.getSecondChild();
       int i = 0;
       while (argument != null && i < position) {
         argument = argument.getNext();
@@ -461,7 +475,7 @@ public final class SuggestedFix {
           "deleteArgument() cannot be used on a function call with no arguments");
       Preconditions.checkArgument(position >= 0 && position < numArguments,
           "The specified position must be less than the number of arguments.");
-      Node argument = n.getFirstChild().getNext();
+      Node argument = n.getSecondChild();
 
       // Points at the first position in the code we will remove.
       int startOfArgumentToRemove = -1;
@@ -579,7 +593,8 @@ public final class SuggestedFix {
         }
       }
 
-      return insertBefore(nodeToInsertBefore, googRequireNode, m.getMetadata().getCompiler());
+      return insertBefore(
+          nodeToInsertBefore, googRequireNode, m.getMetadata().getCompiler(), namespace);
     }
 
     /**
@@ -622,6 +637,8 @@ public final class SuggestedFix {
       CompilerOptions compilerOptions = new CompilerOptions();
       compilerOptions.setPreferSingleQuotes(true);
       compilerOptions.setLineLengthThreshold(80);
+      // We're refactoring existing code, so no need to escape values inside strings.
+      compilerOptions.setTrustedStrings(true);
       return new CodePrinter.Builder(node)
           .setCompilerOptions(compilerOptions)
           .setTypeRegistry(compiler.getTypeRegistry())

@@ -109,7 +109,9 @@ final class CheckSideEffects extends AbstractPostOrderCallback
       return;
     }
 
-    if (n.isQualifiedName() && n.getJSDocInfo() != null && n.getJSDocInfo().containsDeclaration()) {
+    // This no-op statement was there so that JSDoc information could
+    // be attached to the name. This check should not complain about it.
+    if (n.isQualifiedName() && n.getJSDocInfo() != null) {
       return;
     }
 
@@ -239,7 +241,7 @@ final class CheckSideEffects extends AbstractPostOrderCallback
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       if (n.isFunction()) {
-        String name = NodeUtil.getFunctionName(n);
+        String name = NodeUtil.getName(n);
         JSDocInfo jsDoc = NodeUtil.getBestJSDocInfo(n);
         if (jsDoc != null && jsDoc.isNoSideEffects()) {
           noSideEffectExterns.put(name, null);

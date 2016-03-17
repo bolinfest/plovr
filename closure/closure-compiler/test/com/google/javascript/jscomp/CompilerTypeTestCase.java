@@ -19,7 +19,6 @@ package com.google.javascript.jscomp;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.base.Joiner;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.testing.BaseJSTypeTestCase;
 
@@ -65,12 +64,9 @@ abstract class CompilerTypeTestCase extends BaseJSTypeTestCase {
       "goog.asserts = {};" +
       "/** @return {*} */ goog.asserts.assert = function(x) { return x; };";
 
-  /** A default set of externs for testing structural interface matching*/
-  private static final Joiner lineJoiner = Joiner.on("\n");
-
   /** A default set of externs for testing. */
   static final String DEFAULT_EXTERNS =
-      lineJoiner.join(
+      LINE_JOINER.join(
           "/**",
           " * @interface",
           " * @template KEY1, VALUE1",
@@ -99,6 +95,8 @@ abstract class CompilerTypeTestCase extends BaseJSTypeTestCase {
           "/** @type {!Function} */ Function.prototype.apply;",
           "/** @type {!Function} */ Function.prototype.bind;",
           "/** @type {!Function} */ Function.prototype.call;",
+          "/** @type {number} */",
+          "Function.prototype.length;",
           "/** @constructor",
           " * @param {*=} arg",
           " * @return {string} */",
@@ -108,7 +106,8 @@ abstract class CompilerTypeTestCase extends BaseJSTypeTestCase {
           "/** @type {number} */ String.prototype.length;",
           "/**",
           " * @template T",
-          " * @constructor @implements {IArrayLike<T>}",
+          " * @constructor ",
+          " * @implements {IArrayLike<T>} ",
           " * @param {*} var_args",
           " * @return {!Array.<?>}",
           " */",
@@ -122,7 +121,11 @@ abstract class CompilerTypeTestCase extends BaseJSTypeTestCase {
           " * @modifies {this}",
           " */",
           "Array.prototype.push = function(var_args) {};",
-          "/** @constructor */",
+          "/**",
+          " * @constructor",
+          " * @template T",
+          " * @implements {IArrayLike<T>}",
+          " */",
           "function Arguments() {}",
           "/** @type {number} */",
           "Arguments.prototype.length;",
@@ -162,7 +165,7 @@ abstract class CompilerTypeTestCase extends BaseJSTypeTestCase {
       }
     }
     if (warnings.length > 0) {
-      fail("unexpected warnings(s):\n" + Joiner.on("\n").join(warnings));
+      fail("unexpected warnings(s):\n" + LINE_JOINER.join(warnings));
     }
   }
 

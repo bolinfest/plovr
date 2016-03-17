@@ -255,7 +255,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
 
         case Token.DO:
           // Only traverse the body of the do-while.
-          return n != parent.getFirstChild().getNext();
+          return n != parent.getSecondChild();
 
         // Skip conditions, and only traverse the body of the cases
         case Token.IF:
@@ -358,7 +358,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
   }
 
   private void handleIf(Node node) {
-    Node thenBlock = node.getFirstChild().getNext();
+    Node thenBlock = node.getSecondChild();
     Node elseBlock = thenBlock.getNext();
     createEdge(node, Branch.ON_TRUE, computeFallThrough(thenBlock));
 
@@ -375,7 +375,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
   private void handleWhile(Node node) {
     // Control goes to the first statement if the condition evaluates to true.
     createEdge(node, Branch.ON_TRUE,
-        computeFallThrough(node.getFirstChild().getNext()));
+        computeFallThrough(node.getSecondChild()));
 
     // Control goes to the follow() if the condition evaluates to false.
     createEdge(node, Branch.ON_FALSE,
@@ -441,12 +441,12 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
     // Transfer to the first non-DEFAULT CASE. if there are none, transfer
     // to the DEFAULT or the EMPTY node.
     Node next = getNextSiblingOfType(
-        node.getFirstChild().getNext(), Token.CASE, Token.EMPTY);
+        node.getSecondChild(), Token.CASE, Token.EMPTY);
     if (next != null) { // Has at least one CASE or EMPTY
       createEdge(node, Branch.UNCOND, next);
     } else { // Has no CASE but possibly a DEFAULT
-      if (node.getFirstChild().getNext() != null) {
-        createEdge(node, Branch.UNCOND, node.getFirstChild().getNext());
+      if (node.getSecondChild() != null) {
+        createEdge(node, Branch.UNCOND, node.getSecondChild());
       } else { // No CASE, no DEFAULT
         createEdge(node, Branch.UNCOND, computeFollowNode(node, this));
       }
@@ -457,7 +457,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
   private void handleCase(Node node) {
     // Case is a bit tricky....First it goes into the body if condition is true.
     createEdge(node, Branch.ON_TRUE,
-        node.getFirstChild().getNext());
+        node.getSecondChild());
     // Look for the next CASE, skipping over DEFAULT.
     Node next = getNextSiblingOfType(node.getNext(), Token.CASE);
     if (next != null) { // Found a CASE
@@ -466,7 +466,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
     } else { // No more CASE found, go back and search for a DEFAULT.
       Node parent = node.getParent();
       Node deflt = getNextSiblingOfType(
-        parent.getFirstChild().getNext(), Token.DEFAULT_CASE);
+        parent.getSecondChild(), Token.DEFAULT_CASE);
       if (deflt != null) { // Has a DEFAULT
         createEdge(node, Branch.ON_FALSE, deflt);
       } else { // No DEFAULT found, go to the follow of the SWITCH.
@@ -615,10 +615,9 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
     Node lastJump;
 
     // Similar to handBreak's logic with a few minor variation.
-    Node parent = node.getParent();
     for (cur = node, lastJump = node;
-        !isContinueTarget(cur, parent, label);
-        cur = parent, parent = parent.getParent()) {
+        !isContinueTarget(cur, label);
+        cur = cur.getParent()) {
       if (cur.isTry() && NodeUtil.hasFinally(cur)
           && cur.getLastChild() != previous) {
         if (lastJump == node) {
@@ -628,12 +627,12 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
         }
         lastJump = cur;
       }
-      Preconditions.checkState(parent != null, "Cannot find continue target.");
+      Preconditions.checkState(cur.getParent() != null, "Cannot find continue target.");
       previous = cur;
     }
     Node iter = cur;
     if (cur.getChildCount() == 4) {
-      iter = cur.getFirstChild().getNext().getNext();
+      iter = cur.getSecondChild().getNext();
     }
 
     if (lastJump == node) {
@@ -732,7 +731,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
         // case, without having to go to the case condition.
         if (parent.getNext() != null) {
           if (parent.getNext().isCase()) {
-            return parent.getNext().getFirstChild().getNext();
+            return parent.getNext().getSecondChild();
           } else if (parent.getNext().isDefaultCase()) {
             return parent.getNext().getFirstChild();
           } else {
@@ -746,7 +745,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
         if (parent.isForOf() || NodeUtil.isForIn(parent)) {
           return parent;
         } else {
-          return parent.getFirstChild().getNext().getNext();
+          return parent.getSecondChild().getNext();
         }
       case Token.WHILE:
       case Token.DO:
@@ -806,7 +805,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
       case Token.FOR:
       case Token.FOR_OF:
         if (n.isForOf() || NodeUtil.isForIn(n)) {
-          return n.getFirstChild().getNext();
+          return n.getSecondChild();
         }
         return computeFallThrough(n.getFirstChild());
       case Token.LABEL:
@@ -901,10 +900,11 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
    * Checks if target is actually the continue target of labeled continue. The
    * label can be null if it is an unlabeled continue.
    */
-  private static boolean isContinueTarget(
-      Node target, Node parent, String label) {
-    return isContinueStructure(target) && matchLabel(parent, label);
+  static boolean isContinueTarget(
+      Node target, String label) {
+    return isContinueStructure(target) && matchLabel(target.getParent(), label);
   }
+
   /**
    * Check if label is actually referencing the target control structure. If
    * label is null, it always returns true.

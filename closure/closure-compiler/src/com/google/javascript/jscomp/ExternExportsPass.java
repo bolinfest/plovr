@@ -207,7 +207,7 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
       // Use the original parameter names so that the externs look pretty.
       Node param = paramList.getFirstChild();
       while (param != null && param.isName()) {
-        String originalName = (String) param.getProp(Node.ORIGINALNAME_PROP);
+        String originalName = param.getOriginalName();
         if (originalName != null) {
           param.setString(originalName);
         }
@@ -526,7 +526,7 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
       return;
     }
 
-    String constructorName = NodeUtil.getFunctionName(constructorNode);
+    String constructorName = NodeUtil.getName(constructorNode);
     String propertyName = definitionNode.getLastChild().getString();
     String prototypeName = constructorName + ".prototype";
     Node propertyNameNode = NodeUtil.newQName(compiler, "this." + propertyName);

@@ -34,7 +34,7 @@
 function IObject() {}
 
 /**
- * @interface
+ * @record
  * @extends {IObject<number, VALUE2>}
  * @template VALUE2
  */
@@ -45,7 +45,8 @@ IArrayLike.prototype.length;
 
 /**
  * @constructor
- * @implements {IArrayLike<?>}
+ * @implements {IArrayLike<T>}
+ * @template T
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions_and_function_scope/arguments
  */
 function Arguments() {}
@@ -450,6 +451,7 @@ Function.prototype.toString = function() {};
 
 /**
  * @constructor
+ * @implements {IArrayLike<T>}
  * @param {...*} var_args
  * @return {!Array<?>}
  * @nosideeffects
@@ -479,7 +481,7 @@ Array.prototype.concat = function(var_args) {};
  *     array. The separator is converted to a string if necessary. If omitted,
  *     the array elements are separated with a comma.
  * @return {string}
- * @this {{length: number}|string}
+ * @this {IArrayLike<?>|string}
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/join
  */
@@ -489,7 +491,7 @@ Array.prototype.join = function(opt_separator) {};
  * Removes the last element from an array and returns that element.
  *
  * @return {T}
- * @this {{length: number}|Array<T>}
+ * @this {IArrayLike<T>}
  * @modifies {this}
  * @template T
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/pop
@@ -502,7 +504,7 @@ Array.prototype.pop = function() {};
  *
  * @param {...T} var_args
  * @return {number} The new length of the array.
- * @this {{length: number}|Array<T>}
+ * @this {IArrayLike<T>}
  * @template T
  * @modifies {this}
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/push
@@ -511,9 +513,11 @@ Array.prototype.push = function(var_args) {};
 
 /**
  * Transposes the elements of an array in place: the first array element becomes the
- * last and the last becomes the first.
+ * last and the last becomes the first. The mutated array is also returned.
  *
- * @this {{length: number}}
+ * @return {THIS} A reference to the original modified array.
+ * @this {THIS}
+ * @template THIS
  * @modifies {this}
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/reverse
  */
@@ -523,7 +527,7 @@ Array.prototype.reverse = function() {};
  * Removes the first element from an array and returns that element. This
  * method changes the length of the array.
  *
- * @this {{length: number}|Array<T>}
+ * @this {IArrayLike<T>}
  * @modifies {this}
  * @return {T}
  * @template T
@@ -539,7 +543,7 @@ Array.prototype.shift = function() {};
  * @param {*=} opt_end Zero-based index at which to end extraction.  slice
  *     extracts up to but not including end.
  * @return {!Array<T>}
- * @this {{length: number}|Array<T>|string}
+ * @this {IArrayLike<T>|string}
  * @template T
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/slice
@@ -551,7 +555,7 @@ Array.prototype.slice = function(opt_begin, opt_end) {};
  *
  * @param {function(T,T):number=} opt_compareFunction Specifies a function that
  *     defines the sort order.
- * @this {{length: number}|Array<T>}
+ * @this {IArrayLike<T>}
  * @template T
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort
  */
@@ -568,7 +572,7 @@ Array.prototype.sort = function(opt_compareFunction) {};
  *     to remove.
  * @param {...T} var_args
  * @return {!Array<T>}
- * @this {{length: number}|Array<T>}
+ * @this {IArrayLike<T>}
  * @modifies {this}
  * @template T
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/splice
@@ -597,7 +601,7 @@ Array.prototype.toString = function() {};
  *
  * @param {...*} var_args
  * @return {number} The new length of the array
- * @this {{length: number}}
+ * @this {IArrayLike<?>}
  * @modifies {this}
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/unshift
  */
@@ -610,7 +614,7 @@ Array.prototype.unshift = function(var_args) {};
  * @param {?function(?, T, number, !Array<T>) : R} callback
  * @param {*=} opt_initialValue
  * @return {R}
- * @this {{length: number}|Array<T>|string}
+ * @this {IArrayLike<T>|string}
  * @template T,R
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/reduce
  */
@@ -623,7 +627,7 @@ Array.prototype.reduce = function(callback, opt_initialValue) {};
  * @param {?function(?, T, number, !Array<T>) : R} callback
  * @param {*=} opt_initialValue
  * @return {R}
- * @this {{length: number}|Array<T>|string}
+ * @this {IArrayLike<T>|string}
  * @template T,R
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/reduceRight
  */
@@ -634,7 +638,7 @@ Array.prototype.reduceRight = function(callback, opt_initialValue) {};
  * @param {?function(this:S, T, number, !Array<T>): ?} callback
  * @param {S=} opt_thisobj
  * @return {boolean}
- * @this {{length: number}|Array<T>|string}
+ * @this {IArrayLike<T>|string}
  * @template T,S
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/every
  */
@@ -645,7 +649,7 @@ Array.prototype.every = function(callback, opt_thisobj) {};
  * @param {?function(this:S, T, number, !Array<T>): ?} callback
  * @param {S=} opt_thisobj
  * @return {!Array<T>}
- * @this {{length: number}|Array<T>|string}
+ * @this {IArrayLike<T>|string}
  * @template T,S
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/filter
  */
@@ -655,7 +659,7 @@ Array.prototype.filter = function(callback, opt_thisobj) {};
  * Available in ECMAScript 5, Mozilla 1.6+.
  * @param {?function(this:S, T, number, !Array<T>): ?} callback
  * @param {S=} opt_thisobj
- * @this {{length: number}|Array<T>|string}
+ * @this {IArrayLike<T>|string}
  * @template T,S
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/forEach
  */
@@ -666,7 +670,7 @@ Array.prototype.forEach = function(callback, opt_thisobj) {};
  * @param {T} obj
  * @param {number=} opt_fromIndex
  * @return {number}
- * @this {{length: number}|Array<T>|string}
+ * @this {IArrayLike<T>|string}
  * @nosideeffects
  * @template T
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/indexOf
@@ -678,7 +682,7 @@ Array.prototype.indexOf = function(obj, opt_fromIndex) {};
  * @param {T} obj
  * @param {number=} opt_fromIndex
  * @return {number}
- * @this {{length: number}|Array<T>|string}
+ * @this {IArrayLike<T>|string}
  * @nosideeffects
  * @template T
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/lastIndexOf
@@ -690,7 +694,7 @@ Array.prototype.lastIndexOf = function(obj, opt_fromIndex) {};
  * @param {?function(this:S, T, number, !Array<T>): R} callback
  * @param {S=} opt_thisobj
  * @return {!Array<R>}
- * @this {{length: number}|Array<T>|string}
+ * @this {IArrayLike<T>|string}
  * @template T,S,R
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/map
  */
@@ -701,7 +705,7 @@ Array.prototype.map = function(callback, opt_thisobj) {};
  * @param {?function(this:S, T, number, !Array<T>): ?} callback
  * @param {S=} opt_thisobj
  * @return {boolean}
- * @this {{length: number}|Array<T>|string}
+ * @this {IArrayLike<T>|string}
  * @template T,S
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/some
  */
@@ -726,7 +730,7 @@ Array.prototype.input;
 Array.prototype.length;
 
 /**
- * @param {{length: number}|Array<T>} arr
+ * @param {IArrayLike<T>} arr
  * @param {?function(this:S, T, number, ?) : ?} callback
  * @param {S=} opt_context
  * @return {boolean}
@@ -735,7 +739,7 @@ Array.prototype.length;
 Array.every = function(arr, callback, opt_context) {};
 
 /**
- * @param {{length: number}|Array<T>} arr
+ * @param {IArrayLike<T>} arr
  * @param {?function(this:S, T, number, ?) : ?} callback
  * @param {S=} opt_context
  * @return {!Array<T>}
@@ -744,7 +748,7 @@ Array.every = function(arr, callback, opt_context) {};
 Array.filter = function(arr, callback, opt_context) {};
 
 /**
- * @param {{length: number}|Array<T>} arr
+ * @param {IArrayLike<T>} arr
  * @param {?function(this:S, T, number, ?) : ?} callback
  * @param {S=} opt_context
  * @template T,S
@@ -753,7 +757,7 @@ Array.forEach = function(arr, callback, opt_context) {};
 
 /**
  * Mozilla 1.6+ only.
- * @param {{length: number}|Array<T>} arr
+ * @param {IArrayLike<T>} arr
  * @param {T} obj
  * @param {number=} opt_fromIndex
  * @return {number}
@@ -765,7 +769,7 @@ Array.indexOf = function(arr, obj, opt_fromIndex) {};
 
 /**
  * Mozilla 1.6+ only.
- * @param {{length: number}|Array<T>} arr
+ * @param {IArrayLike<T>} arr
  * @param {T} obj
  * @param {number=} opt_fromIndex
  * @return {number}
@@ -776,7 +780,7 @@ Array.indexOf = function(arr, obj, opt_fromIndex) {};
 Array.lastIndexOf = function(arr, obj, opt_fromIndex) {};
 
 /**
- * @param {{length: number}|Array<T>} arr
+ * @param {IArrayLike<T>} arr
  * @param {?function(this:S, T, number, !Array<T>): R} callback
  * @param {S=} opt_context
  * @return {!Array<R>}
@@ -785,7 +789,7 @@ Array.lastIndexOf = function(arr, obj, opt_fromIndex) {};
 Array.map = function(arr, callback, opt_context) {};
 
 /**
- * @param {{length: number}|Array<T>} arr
+ * @param {IArrayLike<T>} arr
  * @param {?function(this:S, T, number, ?) : ?} callback
  * @param {S=} opt_context
  * @return {boolean}
@@ -913,7 +917,7 @@ Number.POSITIVE_INFINITY;
 var Math = {};
 
 /**
- * @param {*} x
+ * @param {?} x
  * @return {number}
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/abs
@@ -921,7 +925,7 @@ var Math = {};
 Math.abs = function(x) {};
 
 /**
- * @param {*} x
+ * @param {?} x
  * @return {number}
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/acos
@@ -929,7 +933,7 @@ Math.abs = function(x) {};
 Math.acos = function(x) {};
 
 /**
- * @param {*} x
+ * @param {?} x
  * @return {number}
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/asin
@@ -937,7 +941,7 @@ Math.acos = function(x) {};
 Math.asin = function(x) {};
 
 /**
- * @param {*} x
+ * @param {?} x
  * @return {number}
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/atan
@@ -945,8 +949,8 @@ Math.asin = function(x) {};
 Math.atan = function(x) {};
 
 /**
- * @param {*} y
- * @param {*} x
+ * @param {?} y
+ * @param {?} x
  * @return {number}
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/atan2
@@ -954,7 +958,7 @@ Math.atan = function(x) {};
 Math.atan2 = function(y, x) {};
 
 /**
- * @param {*} x
+ * @param {?} x
  * @return {number}
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/ceil
@@ -962,7 +966,7 @@ Math.atan2 = function(y, x) {};
 Math.ceil = function(x) {};
 
 /**
- * @param {*} x
+ * @param {?} x
  * @return {number}
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/cos
@@ -970,7 +974,7 @@ Math.ceil = function(x) {};
 Math.cos = function(x) {};
 
 /**
- * @param {*} x
+ * @param {?} x
  * @return {number}
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/exp
@@ -978,7 +982,7 @@ Math.cos = function(x) {};
 Math.exp = function(x) {};
 
 /**
- * @param {*} x
+ * @param {?} x
  * @return {number}
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/floor
@@ -986,7 +990,7 @@ Math.exp = function(x) {};
 Math.floor = function(x) {};
 
 /**
- * @param {*} x
+ * @param {?} x
  * @return {number}
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/log
@@ -994,7 +998,7 @@ Math.floor = function(x) {};
 Math.log = function(x) {};
 
 /**
- * @param {...*} var_args
+ * @param {...?} var_args
  * @return {number}
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/max
@@ -1002,7 +1006,7 @@ Math.log = function(x) {};
 Math.max = function(var_args) {};
 
 /**
- * @param {...*} var_args
+ * @param {...?} var_args
  * @return {number}
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/min
@@ -1010,8 +1014,8 @@ Math.max = function(var_args) {};
 Math.min = function(var_args) {};
 
 /**
- * @param {*} x
- * @param {*} y
+ * @param {?} x
+ * @param {?} y
  * @return {number}
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/pow
@@ -1026,7 +1030,7 @@ Math.pow = function(x, y) {};
 Math.random = function() {};
 
 /**
- * @param {*} x
+ * @param {?} x
  * @return {number}
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/round
@@ -1034,7 +1038,7 @@ Math.random = function() {};
 Math.round = function(x) {};
 
 /**
- * @param {*} x
+ * @param {?} x
  * @return {number}
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/sin
@@ -1042,7 +1046,7 @@ Math.round = function(x) {};
 Math.sin = function(x) {};
 
 /**
- * @param {*} x
+ * @param {?} x
  * @return {number}
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/sqrt
@@ -1050,7 +1054,7 @@ Math.sin = function(x) {};
 Math.sqrt = function(x) {};
 
 /**
- * @param {*} x
+ * @param {?} x
  * @return {number}
  * @nosideeffects
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/tan
@@ -1563,7 +1567,6 @@ Date.prototype.valueOf;
  * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String
  */
 function String(opt_str) {}
-// Functions:
 
 /**
  * @param {...number} var_args

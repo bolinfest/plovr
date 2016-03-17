@@ -224,19 +224,19 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
       Node child = export.getFirstChild();
       String name = null;
 
-      if (child.isFunction()) {
-        name = NodeUtil.getFunctionName(child);
-      } else if (child.isClass()) {
-        name = NodeUtil.getClassName(child);
+      if (child.isFunction() || child.isClass()) {
+        name = NodeUtil.getName(child);
       }
 
       if (name != null) {
         Node decl = child.cloneTree();
-        decl.setJSDocInfo(export.getJSDocInfo());
+        decl.setJSDocInfo(child.getJSDocInfo());
         parent.replaceChild(export, decl);
         exportMap.put("default", new NameNodePair(name, child));
       } else {
         Node var = IR.var(IR.name(DEFAULT_EXPORT_NAME), export.removeFirstChild());
+        var.setJSDocInfo(child.getJSDocInfo());
+        child.setJSDocInfo(null);
         var.useSourceInfoIfMissingFromForTree(export);
         parent.replaceChild(export, var);
         exportMap.put("default", new NameNodePair(DEFAULT_EXPORT_NAME, child));
@@ -308,12 +308,10 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
           if (declaration.isClass()) {
             classes.add(name);
           }
-          if (export.getJSDocInfo() != null && export.getJSDocInfo().hasTypedefType()) {
+          if (declaration.getJSDocInfo() != null && declaration.getJSDocInfo().hasTypedefType()) {
             typedefs.add(name);
           }
         }
-        declaration.setJSDocInfo(export.getJSDocInfo());
-        export.setJSDocInfo(null);
         parent.replaceChild(export, declaration.detachFromParent());
       }
       compiler.reportCodeChange();
@@ -404,7 +402,7 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
   }
 
   private static void checkStrictModeDirective(NodeTraversal t, Node n) {
-    Preconditions.checkState(n.isScript());
+    Preconditions.checkState(n.isScript(), n);
     Set<String> directives = n.getDirectives();
     if (directives != null && directives.contains("use strict")) {
       t.report(n, USELESS_USE_STRICT_DIRECTIVE);
@@ -493,17 +491,25 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
         }
       }
 
-      if (n.isName()) {
+      boolean isShorthandObjLitKey = n.isStringKey() && !n.hasChildren();
+      if (n.isName() || isShorthandObjLitKey) {
         String name = n.getString();
         if (suffix.equals(name)) {
+          // TODO(moz): Investigate whether we need to return early in this unlikely situation.
           return;
         }
 
         Var var = t.getScope().getVar(name);
         if (var != null && var.isGlobal()) {
           // Avoid polluting the global namespace.
-          n.setString(name + "$$" + suffix);
-          n.putProp(Node.ORIGINALNAME_PROP, name);
+          String newName = name + "$$" + suffix;
+          if (isShorthandObjLitKey) {
+            // Change {a} to {a: a$$module$foo}
+            n.addChildToBack(IR.name(newName).useSourceInfoIfMissingFrom(n));
+          } else {
+            n.setString(newName);
+            n.setOriginalName(name);
+          }
         } else if (var == null && importMap.containsKey(name)) {
           // Change to property access on the imported module object.
           if (parent.isCall() && parent.getFirstChild() == n) {
@@ -570,7 +576,7 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
               typeNode.setString(baseName + "$$" + pair.module + rest);
             }
           }
-          typeNode.putProp(Node.ORIGINALNAME_PROP, name);
+          typeNode.setOriginalName(name);
         }
       }
 

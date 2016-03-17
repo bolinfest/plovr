@@ -179,7 +179,7 @@ public final class Es6RewriteGenerators
     Node enclosingStatement = NodeUtil.getEnclosingStatement(n);
     Node generator = IR.var(
         IR.name(GENERATOR_YIELD_ALL_NAME),
-        makeIterator(t, compiler, n.removeFirstChild()));
+        makeIterator(compiler, n.removeFirstChild()));
     Node entryDecl = IR.var(IR.name(GENERATOR_YIELD_ALL_ENTRY));
     Node assignIterResult =
         IR.assign(
@@ -223,8 +223,7 @@ public final class Es6RewriteGenerators
   private void visitGenerator(Node n, Node parent) {
     compiler.needsEs6Runtime = true;
     hasTranslatedTry = false;
-    Node genBlock = compiler
-        .parseSyntheticCode(Joiner.on('\n').join(
+    Node genBlock = compiler.parseSyntheticCode(Joiner.on('\n').join(
             "function generatorBody() {",
             "  var " + GENERATOR_STATE + " = " + generatorCaseCount + ";",
             "  function $jscomp$generator$impl(" + GENERATOR_NEXT_ARG + ", ",
@@ -235,16 +234,21 @@ public final class Es6RewriteGenerators
             "        return {value: undefined, done: true};",
             "    }",
             "  }",
-            "  var iterator = {",
+            // TODO(tbreisacher): Remove this cast if we start returning an actual Generator object.
+            "  var iterator = /** @type {!Generator<?>} */ ({",
             "    next: function(arg) { return $jscomp$generator$impl(arg, undefined); },",
             "    throw: function(arg) { return $jscomp$generator$impl(undefined, arg); },",
-            "  };",
+            // TODO(tbreisacher): Implement Generator.return:
+            // http://www.ecma-international.org/ecma-262/6.0/#sec-generator.prototype.return
+            "    return: function(arg) { throw Error('Not yet implemented'); },",
+            "  });",
             "  $jscomp.initSymbolIterator();",
+            "  /** @this {!Generator<?>} */",
             "  iterator[Symbol.iterator] = function() { return this; };",
             "  return iterator;",
             "}"))
-        .getFirstChild()
-        .getLastChild()
+        .getFirstChild() // function
+        .getLastChild() // function body
         .detachFromParent();
     generatorCaseCount++;
 
@@ -294,7 +298,7 @@ public final class Es6RewriteGenerators
         Node newCase = IR.caseNode(IR.number(caseNumber), IR.block());
         enclosingBlock = newCase.getLastChild();
         if (oldCase.isTry()) {
-          oldCase = oldCase.getParent().getParent();
+          oldCase = oldCase.getGrandparent();
           if (!currentExceptionContext.isEmpty()) {
             Node newTry =
                 IR.tryCatch(IR.block(), currentExceptionContext.get(0).catchBlock.cloneTree());
@@ -457,7 +461,7 @@ public final class Es6RewriteGenerators
     catchBody.addChildToFront(IR.var(caughtError, IR.name(GENERATOR_ERROR)));
 
     if (enclosingBlock.getParent().isTry()) {
-      enclosingBlock = enclosingBlock.getParent().getParent();
+      enclosingBlock = enclosingBlock.getGrandparent();
     }
 
     enclosingBlock.addChildToBack(IR.tryCatch(IR.block(), newCatch));
@@ -1016,12 +1020,12 @@ public final class Es6RewriteGenerators
       if (enclosingFunc == null || !enclosingFunc.isGeneratorFunction() || NodeUtil.isForIn(n)) {
         return;
       }
-      Node enclosingBlock = NodeUtil.getEnclosingType(n, Token.BLOCK);
+      Node enclosingBlock = NodeUtil.getEnclosingBlock(n);
       Node guard = null;
       Node incr = null;
       switch (n.getType()) {
         case Token.FOR:
-          guard = n.getFirstChild().getNext();
+          guard = n.getSecondChild();
           incr = guard.getNext();
           break;
         case Token.WHILE:

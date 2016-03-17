@@ -16,7 +16,6 @@
 
 package com.google.javascript.jscomp;
 
-import static com.google.javascript.jscomp.TypeCheck.ENUM_NOT_CONSTANT;
 import static com.google.javascript.jscomp.TypeCheck.MULTIPLE_VAR_DEF;
 import static com.google.javascript.rhino.jstype.JSTypeNative.ARRAY_FUNCTION_TYPE;
 import static com.google.javascript.rhino.jstype.JSTypeNative.ARRAY_TYPE;
@@ -140,11 +139,6 @@ final class TypedScopeCreator implements ScopeCreator {
           "JSC_LENDS_ON_NON_OBJECT",
           "May only lend properties to object types. {0} has type {1}.");
 
-  static final DiagnosticType CANNOT_INFER_CONST_TYPE =
-      DiagnosticType.disabled(
-          "JSC_CANNOT_INFER_CONST_TYPE",
-          "Unable to infer type of constant.");
-
   static final DiagnosticGroup ALL_DIAGNOSTICS = new DiagnosticGroup(
       DELEGATE_PROXY_SUFFIX,
       MALFORMED_TYPEDEF,
@@ -153,8 +147,7 @@ final class TypedScopeCreator implements ScopeCreator {
       IFACE_INITIALIZER,
       CONSTRUCTOR_EXPECTED,
       UNKNOWN_LENDS,
-      LENDS_ON_NON_OBJECT,
-      CANNOT_INFER_CONST_TYPE);
+      LENDS_ON_NON_OBJECT);
 
   private final AbstractCompiler compiler;
   private final ErrorReporter typeParsingErrorReporter;
@@ -213,7 +206,7 @@ final class TypedScopeCreator implements ScopeCreator {
   }
 
   private void report(JSError error) {
-    if (!this.runsAfterNTI) {
+    if (!this.runsAfterNTI || compiler.getOptions().reportOTIErrorsUnderNTI) {
       compiler.report(error);
     }
   }
@@ -762,7 +755,7 @@ final class TypedScopeCreator implements ScopeCreator {
      */
     void assertDefinitionNode(Node n, int type) {
       Preconditions.checkState(sourceName != null);
-      Preconditions.checkState(n.getType() == type);
+      Preconditions.checkState(n.getType() == type, n);
     }
 
     /**
@@ -912,7 +905,7 @@ final class TypedScopeCreator implements ScopeCreator {
             rValue != null && rValue.isFunction();
         Node fnRoot = isFnLiteral ? rValue : null;
         Node parametersNode = isFnLiteral ?
-            rValue.getFirstChild().getNext() : null;
+            rValue.getSecondChild() : null;
 
         if (info != null && info.hasType()) {
           JSType type = info.getType().evaluate(scope, typeRegistry);
@@ -1074,8 +1067,6 @@ final class TypedScopeCreator implements ScopeCreator {
      * @param rValue The node of the enum.
      * @param name The enum's name
      * @param info The {@link JSDocInfo} attached to the enum definition.
-     * @param lValueNode The node where this function is being
-     *     assigned.
      */
     private EnumType createEnumTypeFromNodes(Node rValue, String name, JSDocInfo info) {
       Preconditions.checkNotNull(info);
@@ -1099,15 +1090,9 @@ final class TypedScopeCreator implements ScopeCreator {
           // collect enum elements
           Node key = rValue.getFirstChild();
           while (key != null) {
-            String keyName = NodeUtil.getStringValue(key);
-            if (keyName == null) {
-              // GET and SET don't have a String value;
-              report(JSError.make(key, ENUM_NOT_CONSTANT, keyName));
-            } else if (!codingConvention.isValidEnumKey(keyName)) {
-              report(JSError.make(key, ENUM_NOT_CONSTANT, keyName));
-            } else {
-              enumType.defineElement(keyName, key);
-            }
+            String keyName = key.getString();
+            Preconditions.checkNotNull(keyName, "Invalid enum key: %s", key);
+            enumType.defineElement(keyName, key);
             key = key.getNext();
           }
         }
@@ -1376,16 +1361,7 @@ final class TypedScopeCreator implements ScopeCreator {
               compiler.getCodingConvention(), info, lValue)) {
         if (rValue != null) {
           JSType rValueType = getDeclaredRValueType(lValue, rValue);
-          if (rValueType == null) {
-            // Only warn if the user has explicitly declared a value as
-            // const and they have explicitly not provided a type.
-            boolean isTypelessConstDecl = info != null
-                && info.isConstant()
-                && !info.hasType();
-            if (isTypelessConstDecl) {
-              report(JSError.make(lValue, CANNOT_INFER_CONST_TYPE));
-            }
-          } else {
+          if (rValueType != null) {
             return rValueType;
           }
         }
@@ -2081,7 +2057,7 @@ final class TypedScopeCreator implements ScopeCreator {
      * Declares all of a function's arguments.
      */
     private void declareArguments(Node functionNode) {
-      Node astParameters = functionNode.getFirstChild().getNext();
+      Node astParameters = functionNode.getSecondChild();
       Node iifeArgumentNode = null;
 
       if (NodeUtil.isCallOrNewTarget(functionNode)) {

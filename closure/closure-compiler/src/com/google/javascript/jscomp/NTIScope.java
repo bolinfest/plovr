@@ -24,6 +24,7 @@ import com.google.javascript.jscomp.newtypes.Declaration;
 import com.google.javascript.jscomp.newtypes.DeclaredFunctionType;
 import com.google.javascript.jscomp.newtypes.DeclaredTypeRegistry;
 import com.google.javascript.jscomp.newtypes.EnumType;
+import com.google.javascript.jscomp.newtypes.FunctionNamespace;
 import com.google.javascript.jscomp.newtypes.JSType;
 import com.google.javascript.jscomp.newtypes.JSTypeCreatorFromJSDoc;
 import com.google.javascript.jscomp.newtypes.JSTypes;
@@ -52,7 +53,7 @@ final class NTIScope implements DeclaredTypeRegistry {
   // Name on the function AST node; null for top scope & anonymous functions
   private final String name;
   private final JSTypes commonTypes;
-  // Becomes true after removeTmpData is run; so it's true during NTI.
+  // Becomes true after finalizeScope is run; so it's true during NTI.
   private boolean isFinalized = false;
 
   // A local w/out declared type is mapped to null, not to JSType.UNKNOWN.
@@ -60,20 +61,20 @@ final class NTIScope implements DeclaredTypeRegistry {
   private final Map<String, JSType> externs;
   private final Set<String> constVars = new LinkedHashSet<>();
   private final List<String> formals;
+  // Variables that are defined in this scope and used in inner scopes.
+  private Set<String> escapedVars = new LinkedHashSet<>();
   // outerVars are the variables that appear free in this scope
-  // and are defined in an enclosing scope.
+  // and are defined in an outer scope.
   private final Set<String> outerVars = new LinkedHashSet<>();
   // When a function is also used as a namespace, we add entries to both
-  // localFunDefs and localNamespaces. After removeTmpData (when NTI runs),
+  // localFunDefs and localNamespaces. After finalizeScope (when NTI runs),
   // the function has an entry in localFunDefs, and in locals or externs.
   private final Map<String, NTIScope> localFunDefs = new LinkedHashMap<>();
   private ImmutableSet<String> unknownTypeNames = ImmutableSet.of();
-  private Map<String, RawNominalType> localClassDefs = new LinkedHashMap<>();
   private Map<String, Typedef> localTypedefs = new LinkedHashMap<>();
-  private Map<String, EnumType> localEnums = new LinkedHashMap<>();
-  private Map<String, NamespaceLit> localNamespaces = new LinkedHashMap<>();
-  // The set qualifiedEnums is used for enum resolution, and then discarded.
-  private Set<EnumType> qualifiedEnums = new LinkedHashSet<>();
+  private Map<String, Namespace> localNamespaces = new LinkedHashMap<>();
+  // The set localEnums is used for enum resolution, and then discarded.
+  private Set<EnumType> localEnums = new LinkedHashSet<>();
 
   // declaredType is null for top level, but never null for functions,
   // even those without jsdoc.
@@ -111,7 +112,7 @@ final class NTIScope implements DeclaredTypeRegistry {
   /** Used only for error messages; null for top scope */
   String getReadableName() {
     // TODO(dimvar): don't return null for anonymous functions
-    return isTopLevel() ? null : NodeUtil.getFunctionName(root);
+    return isTopLevel() ? null : NodeUtil.getName(root);
   }
 
   String getName() {
@@ -127,8 +128,9 @@ final class NTIScope implements DeclaredTypeRegistry {
     }
   }
 
+  @Override
   public DeclaredFunctionType getDeclaredFunctionType() {
-    return declaredType;
+    return this.declaredType;
   }
 
   boolean isFunction() {
@@ -181,7 +183,7 @@ final class NTIScope implements DeclaredTypeRegistry {
     if (d == null || d.getFunctionScope() == null || d.getTypeOfSimpleDecl() == null) {
       return false;
     }
-    return d.getTypeOfSimpleDecl().getObjTypeIfSingletonObj() != null;
+    return d.getTypeOfSimpleDecl().isNamespace();
   }
 
   // In other languages, type names and variable names are in distinct
@@ -193,13 +195,11 @@ final class NTIScope implements DeclaredTypeRegistry {
     Preconditions.checkState(!name.contains("."));
     if (locals.containsKey(name)
         || formals.contains(name)
-        || localClassDefs.containsKey(name)
+        || localNamespaces.containsKey(name)
         || localFunDefs.containsKey(name)
         || "this".equals(name)
         || externs.containsKey(name)
-        || localNamespaces.containsKey(name)
-        || localTypedefs.containsKey(name)
-        || localEnums.containsKey(name)) {
+        || localTypedefs.containsKey(name)) {
       return true;
     }
     if (includeTypes) {
@@ -209,6 +209,8 @@ final class NTIScope implements DeclaredTypeRegistry {
     return false;
   }
 
+  // For variables it is the same as isDefinedLocally; for properties it looks
+  // for a definition in any scope.
   boolean isDefined(Node qnameNode) {
     Preconditions.checkArgument(qnameNode.isQualifiedName());
     if (qnameNode.isName()) {
@@ -301,13 +303,21 @@ final class NTIScope implements DeclaredTypeRegistry {
     return outerVars.contains(name);
   }
 
-  boolean hasThis() {
-    return isFunction() && getDeclaredFunctionType().getThisType() != null;
+  boolean isUndeclaredOuterVar(String name) {
+    return outerVars.contains(name) && getDeclaredTypeOf(name) == null;
   }
 
-  RawNominalType getNominalType(QualifiedName qname) {
-    Declaration decl = getDeclaration(qname, false);
-    return decl == null ? null : decl.getNominal();
+  boolean isEscapedVar(String name) {
+    return this.escapedVars.contains(name);
+  }
+
+  boolean hasThis() {
+    if (!isFunction()) {
+      return false;
+    }
+    DeclaredFunctionType dft = getDeclaredFunctionType();
+    // dft is null for function scopes early during GlobalTypeInfo
+    return dft != null && dft.getThisType() != null;
   }
 
   @Override
@@ -423,28 +433,60 @@ final class NTIScope implements DeclaredTypeRegistry {
     }
   }
 
-  void addNamespaceLit(Node qnameNode) {
-    addNamespaceLit(qnameNode, new NamespaceLit(qnameNode.getQualifiedName()));
+  static void mayRecordEscapedVar(NTIScope s, String name) {
+    if (s.isDefinedLocally(name, false)) {
+      return;
+    }
+    while (s != null) {
+      if (s.isDefinedLocally(name, false)) {
+        s.escapedVars.add(name);
+        return;
+      }
+      s = s.parent;
+    }
   }
 
-  private void addNamespaceLit(Node qnameNode, NamespaceLit nslit) {
+  RawNominalType getNominalType(QualifiedName qname) {
+    Declaration decl = getDeclaration(qname, false);
+    return decl == null ? null : decl.getNominal();
+  }
+
+  Typedef getTypedef(String name) {
+    Preconditions.checkState(!name.contains("."));
+    Declaration decl = getDeclaration(name, false);
+    return decl == null ? null : decl.getTypedef();
+  }
+
+  EnumType getEnum(QualifiedName qname) {
+    Declaration decl = getDeclaration(qname, false);
+    return decl == null ? null : decl.getEnum();
+  }
+
+  Namespace getNamespace(String name) {
+    Preconditions.checkArgument(!name.contains("."));
+    Declaration decl = getDeclaration(name, false);
+    return decl == null ? null : decl.getNamespace();
+  }
+
+  void addFunNamespace(Node qnameNode) {
     if (qnameNode.isName()) {
       String varName = qnameNode.getString();
-      Preconditions.checkArgument(
-          !isDefinedLocally(varName, false) || !isNamespace(qnameNode));
-      localNamespaces.put(varName, nslit);
-      if (qnameNode.isFromExterns() && !externs.containsKey(varName)) {
-        // We don't know the full type of a namespace until after we see all
-        // its properties. But we want to add it to the externs, otherwise it
-        // is treated as a local and initialized to the wrong thing in NTI.
-        externs.put(qnameNode.getString(), null);
-      }
+      Preconditions.checkArgument(isDefinedLocally(varName, false));
+      Preconditions.checkState(!this.localNamespaces.containsKey(varName));
+      NTIScope s = Preconditions.checkNotNull(this.localFunDefs.get(varName));
+      this.localNamespaces.put(varName, new FunctionNamespace(varName, s));
     } else {
       Preconditions.checkArgument(!isNamespace(qnameNode));
       QualifiedName qname = QualifiedName.fromNode(qnameNode);
       Namespace ns = getNamespace(qname.getLeftmostName());
-      ns.addSubnamespace(qname.getAllButLeftmost(), nslit);
+      NTIScope s = (NTIScope) ns.getDeclaration(qname).getFunctionScope();
+      ns.addNamespace(qname.getAllButLeftmost(),
+          new FunctionNamespace(qname.toString(), s));
     }
+  }
+
+  void addNamespaceLit(Node qnameNode) {
+    addNamespace(qnameNode, new NamespaceLit(qnameNode.getQualifiedName()));
   }
 
   void updateType(String name, JSType newDeclType) {
@@ -462,18 +504,6 @@ final class NTIScope implements DeclaredTypeRegistry {
     outerVars.add(name);
   }
 
-  void addNominalType(Node qnameNode, RawNominalType rawNominalType) {
-    if (qnameNode.isName()) {
-      Preconditions.checkState(!localClassDefs.containsKey(qnameNode.getString()));
-      localClassDefs.put(qnameNode.getString(), rawNominalType);
-    } else {
-      Preconditions.checkArgument(!isDefined(qnameNode));
-      QualifiedName qname = QualifiedName.fromNode(qnameNode);
-      Namespace ns = getNamespace(qname.getLeftmostName());
-      ns.addNominalType(qname.getAllButLeftmost(), rawNominalType);
-    }
-  }
-
   void addTypedef(Node qnameNode, Typedef td) {
     if (qnameNode.isName()) {
       Preconditions.checkState(
@@ -487,45 +517,26 @@ final class NTIScope implements DeclaredTypeRegistry {
     }
   }
 
-  Typedef getTypedef(String name) {
-    Preconditions.checkState(!name.contains("."));
-    Declaration decl = getDeclaration(name, false);
-    return decl == null ? null : decl.getTypedef();
-  }
-
-  void addEnum(Node qnameNode, EnumType e) {
+  void addNamespace(Node qnameNode, Namespace ns) {
+    if (ns instanceof EnumType) {
+      this.localEnums.add((EnumType) ns);
+    }
     if (qnameNode.isName()) {
-      Preconditions.checkState(
-          !localEnums.containsKey(qnameNode.getString()));
-      localEnums.put(qnameNode.getString(), e);
+      String varName = qnameNode.getString();
+      Preconditions.checkState(!this.localNamespaces.containsKey(varName));
+      this.localNamespaces.put(varName, ns);
+      if (qnameNode.isFromExterns() && !this.externs.containsKey(varName)) {
+        // We don't know the full type of a namespace until after we see all
+        // its properties. But we want to add it to the externs, otherwise it
+        // is treated as a local and initialized to the wrong thing in NTI.
+        this.externs.put(qnameNode.getString(), null);
+      }
     } else {
       Preconditions.checkState(!isDefined(qnameNode));
       QualifiedName qname = QualifiedName.fromNode(qnameNode);
-      Namespace ns = getNamespace(qname.getLeftmostName());
-      ns.addEnum(qname.getAllButLeftmost(), e);
-      qualifiedEnums.add(e);
+      Namespace rootns = getNamespace(qname.getLeftmostName());
+      rootns.addNamespace(qname.getAllButLeftmost(), ns);
     }
-  }
-
-  void addNamespace(Node qnameNode, Namespace ns) {
-    if (ns instanceof RawNominalType) {
-      addNominalType(qnameNode, (RawNominalType) ns);
-    } else if (ns instanceof EnumType) {
-      addEnum(qnameNode, (EnumType) ns);
-    } else {
-      addNamespaceLit(qnameNode, (NamespaceLit) ns);
-    }
-  }
-
-  EnumType getEnum(QualifiedName qname) {
-    Declaration decl = getDeclaration(qname, false);
-    return decl == null ? null : decl.getEnum();
-  }
-
-  Namespace getNamespace(String name) {
-    Preconditions.checkArgument(!name.contains("."));
-    Declaration decl = getDeclaration(name, false);
-    return decl == null ? null : decl.getNamespace();
   }
 
   Namespace getNamespace(QualifiedName qname) {
@@ -540,9 +551,10 @@ final class NTIScope implements DeclaredTypeRegistry {
       return null;
     }
     JSType type = null;
-    boolean isForwardDeclaration = false;
     boolean isTypeVar = false;
-    if (locals.containsKey(name)) {
+    if ("this".equals(name)) {
+      type = getDeclaredTypeOf("this");
+    } else if (locals.containsKey(name)) {
       type = locals.get(name);
     } else if (formals.contains(name)) {
       int formalIndex = formals.indexOf(name);
@@ -558,29 +570,20 @@ final class NTIScope implements DeclaredTypeRegistry {
       if (isFinalized && externs.containsKey(name)) {
         type = externs.get(name);
       }
-    } else if (localTypedefs.containsKey(name) || localNamespaces.containsKey(name)
-        || localEnums.containsKey(name) || localClassDefs.containsKey(name)) {
+    } else if (localTypedefs.containsKey(name) || localNamespaces.containsKey(name)) {
       // Any further declarations are shadowed
     } else if (declaredType != null && declaredType.isTypeVariableDefinedLocally(name)) {
       isTypeVar = true;
-      type = JSType.fromTypeVar(name);
+      type = JSType.fromTypeVar(declaredType.getTypeVariableDefinedLocally(name));
     } else if (externs.containsKey(name)) {
       type = externs.get(name);
-    } else if (unknownTypeNames.contains(name)) {
-      isForwardDeclaration = true;
     }
-    return new Declaration(
-        type,
-        localTypedefs.get(name),
-        localNamespaces.get(name),
-        localEnums.get(name),
-        localFunDefs.get(name),
-        localClassDefs.get(name),
-        isTypeVar,
-        constVars.contains(name),
-        isForwardDeclaration);
+    return new Declaration(type, localTypedefs.get(name),
+        localNamespaces.get(name), localFunDefs.get(name), isTypeVar,
+        constVars.contains(name));
   }
 
+  @Override
   public Declaration getDeclaration(QualifiedName qname, boolean includeTypes) {
     if (qname.isIdentifier()) {
       return getDeclaration(qname.getLeftmostName(), includeTypes);
@@ -601,8 +604,7 @@ final class NTIScope implements DeclaredTypeRegistry {
       globalScope = globalScope.parent;
     }
     if (globalScope.unknownTypeNames.contains(qname)) {
-      return new Declaration(
-          JSType.UNKNOWN, null, null, null, null, null, false, false, true);
+      return new Declaration(JSType.UNKNOWN, null, null, null, false, false);
     }
     return null;
   }
@@ -625,17 +627,12 @@ final class NTIScope implements DeclaredTypeRegistry {
   }
 
   void resolveEnums(JSTypeCreatorFromJSDoc typeParser) {
-    for (EnumType e : localEnums.values()) {
+    for (EnumType e : localEnums) {
       if (!e.isResolved()) {
         typeParser.resolveEnum(e, this);
       }
     }
-    for (EnumType e : qualifiedEnums) {
-      if (!e.isResolved()) {
-        typeParser.resolveEnum(e, this);
-      }
-    }
-    qualifiedEnums = null;
+    localEnums = null;
   }
 
   void finalizeScope() {
@@ -643,51 +640,38 @@ final class NTIScope implements DeclaredTypeRegistry {
     JSTypes commonTypes = getCommonTypes();
     // For now, we put types of namespaces directly into the locals.
     // Alternatively, we could move this into NewTypeInference.initEdgeEnvs
-    for (Map.Entry<String, NamespaceLit> entry : localNamespaces.entrySet()) {
+    for (Map.Entry<String, Namespace> entry : localNamespaces.entrySet()) {
       String name = entry.getKey();
-      NamespaceLit nslit = entry.getValue();
-      JSType objToInclude = null;
-      // If it's a function namespace, add the function type to the result
-      if (localFunDefs.containsKey(name)) {
-        objToInclude = commonTypes.fromFunctionType(
-            localFunDefs.get(name).getDeclaredFunctionType().toFunctionType());
+      Namespace ns = entry.getValue();
+      JSType t;
+      if (ns instanceof NamespaceLit) {
+        constVars.add(name);
+        NamespaceLit nslit = (NamespaceLit) ns;
+        // The argument to maybeSetWindowInstance should only be non-null for
+        // window, but we don't check here to avoid hard-coding the name.
+        // Enforced in GlobalTypeInfo.
+        nslit.maybeSetWindowInstance(externs.get(name));
+        t = nslit.toJSType(commonTypes);
       } else {
-        // Should only be non-null for window, but we don't check here to avoid
-        // hard-coding the name. Enforced in GlobalTypeInfo.
-        objToInclude = externs.get(name);
+        t = ns.toJSType(commonTypes);
       }
-      JSType t = nslit.toJSTypeIncludingObject(commonTypes, objToInclude);
-      constVars.add(name);
       if (externs.containsKey(name)) {
         externs.put(name, t);
       } else {
         locals.put(name, t);
       }
     }
-    for (Map.Entry<String, EnumType> entry : localEnums.entrySet()) {
-      locals.put(entry.getKey(), entry.getValue().toJSType(commonTypes));
-    }
     for (String typedefName : localTypedefs.keySet()) {
       locals.put(typedefName, JSType.UNDEFINED);
     }
-    for (Map.Entry<String, RawNominalType> entry : localClassDefs.entrySet()) {
-      String name = entry.getKey();
-      // localClassDefs may contain aliased nominal types; these aren't stored
-      // in localFunDefs like the other nominal types.
-      if (!localFunDefs.containsKey(name)) {
-        locals.put(name, entry.getValue().toJSType(commonTypes));
-      }
-    }
     copyOuterVarsTransitively(this);
-
     localNamespaces = ImmutableMap.of();
-    localClassDefs = ImmutableMap.of();
     localTypedefs = ImmutableMap.of();
-    localEnums = ImmutableMap.of();
+    escapedVars = ImmutableSet.of();
     isFinalized = true;
   }
 
-  // A scope must know about the free variables used in enclosing scopes,
+  // A scope must know about the free variables used in outer scopes,
   // otherwise we end up with invalid type envs.
   private static void copyOuterVarsTransitively(NTIScope s) {
     if (s.isTopLevel()) {

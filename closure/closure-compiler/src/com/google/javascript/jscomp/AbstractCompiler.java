@@ -53,20 +53,14 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
   /**
    * Will be called before each pass runs.
    */
-  void beforePass(String passName) {}
+  abstract void beforePass(String passName);
 
   /**
    * Will be called after each pass finishes.
    */
-  void afterPass(String passName) {}
+  abstract void afterPass(String passName);
 
   private LifeCycleStage stage = LifeCycleStage.RAW;
-
-  // For passes that traverse a list of functions rather than the AST.
-  // If false, the pass will analyze all functions, even those that didn't
-  // change since the last time it ran.
-  // Intended for use by the compiler only; not accessed by compiler users.
-  protected boolean analyzeChangedScopesOnly = true;
 
   // TODO(nicksantos): Decide if all of these are really necessary.
   // Many of them are just accessors that should be passed to the
@@ -82,14 +76,6 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
    * Looks up a source file by name. May return null.
    */
   abstract SourceFile getSourceFileByName(String sourceName);
-
-  /**
-   * Creates a new externs file.
-   * @param name A name for the new externs file.
-   * @throws IllegalArgumentException If the name of the externs file conflicts
-   *     with a pre-existing externs file.
-   */
-  abstract CompilerInput newExternInput(String name);
 
   /**
    * Gets the module graph. May return null if there aren't at least two
@@ -416,10 +402,16 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
   abstract GlobalVarReferenceMap getGlobalVarReferences();
 
   /**
-   * @return a CompilerInput that can be modified to add addition extern
-   * definitions;
+   * @return a CompilerInput that can be modified to add additional extern
+   * definitions to the beginning of the externs AST
    */
   abstract CompilerInput getSynthesizedExternsInput();
+
+  /**
+   * @return a CompilerInput that can be modified to add additional extern
+   * definitions to the end of the externs AST
+   */
+  abstract CompilerInput getSynthesizedExternsInputAtEnd();
 
   /**
    * @return a number in [0,1] range indicating an approximate progress of the

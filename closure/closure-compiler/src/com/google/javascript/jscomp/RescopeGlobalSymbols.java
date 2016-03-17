@@ -38,7 +38,11 @@ import java.util.Set;
  *
  * This allows splitting code into modules that depend on each other's
  * global symbols, without using polluting JavaScript's global scope with those
- * symbols.
+ * symbols. You typically define just a single global symbol, wrap each module
+ * in a function wrapper, and pass the global symbol around, eg,
+ * <pre> var uniqueNs = uniqueNs || {}; </pre>
+ * <pre> (function (NS) { ...your module code here... })(uniqueNs); </pre>
+ *
  *
  * <p>This compile step requires moveFunctionDeclarations to be turned on
  * to guarantee semantics.
@@ -112,8 +116,7 @@ final class RescopeGlobalSymbols implements CompilerPass {
 
   private void addExternForGlobalSymbolNamespace() {
     Node varNode = IR.var(IR.name(globalSymbolNamespace));
-    CompilerInput input = compiler.newExternInput(
-        "{RescopeGlobalSymbolsNamespaceVar}");
+    CompilerInput input = compiler.getSynthesizedExternsInput();
     input.getAstRoot(compiler).addChildrenToBack(varNode);
     compiler.reportCodeChange();
   }
@@ -171,7 +174,7 @@ final class RescopeGlobalSymbols implements CompilerPass {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       if (NodeUtil.isFunctionDeclaration(n)) {
-        String name = NodeUtil.getFunctionName(n);
+        String name = NodeUtil.getName(n);
         n.getFirstChild().setString("");
         Node prev = parent.getChildBefore(n);
         n.detachFromParent();

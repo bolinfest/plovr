@@ -36,28 +36,28 @@ import java.util.List;
  * @see http://docs.angularjs.org/tutorial/step_05#a-note-on-minification
  *
  * <p>For example, the following code:</p>
- * <pre>{@code
+ * <pre><code>
  *
  * /** @ngInject * /
  * function Controller(dependency1, dependency2) {
  *   // do something
  * }
  *
- * }</pre>
+ * </code></pre>
  *
  * <p>will be transformed into:
- * <pre>{@code
+ * <pre><code>
  *
  * function Controller(dependency1, dependency2) {
  *   // do something
  * }
  * Controller.$inject = ['dependency1', 'dependency2'];
  *
- * }</pre>
+ * </code></pre>
  *
  * <p> This pass also supports assignments of function expressions to variables
  * like:
- * <pre>{@code
+ * <pre><code>
  *
  * /** @ngInject * /
  * var filter = function(a, b) {};
@@ -69,7 +69,7 @@ import java.util.List;
  * /** @ngInject * /
  * var shorthand = ns.method2 = function(a,b,c,) {}
  *
- * }</pre>
+ * </code></pre>
  */
 class AngularPass extends AbstractPostOrderCallback
     implements HotSwapCompilerPass {
@@ -122,8 +122,7 @@ class AngularPass extends AbstractPostOrderCallback
       if (dependencies.isEmpty()) {
         continue;
       }
-      Node dependenciesArray = IR.arraylit(dependencies.toArray(
-          new Node[dependencies.size()]));
+      Node dependenciesArray = IR.arraylit(dependencies.toArray(new Node[0]));
       // creates `something.$inject = ['param1', 'param2']` node.
       Node statement = IR.exprResult(
           IR.assign(
@@ -234,9 +233,16 @@ class AngularPass extends AbstractPostOrderCallback
       // handles function case:
       // function fnName() {}
       case Token.FUNCTION:
-        name = NodeUtil.getFunctionName(n);
+        name = NodeUtil.getName(n);
         fn = n;
         target = n;
+        if (n.getParent().isAssign()
+            && n.getParent().getJSDocInfo().isNgInject()) {
+          // This is a function assigned into a symbol, e.g. a regular function
+          // declaration in a goog.module or goog.scope.
+          // Skip in this traversal, it is handled when visiting the assign.
+          return;
+        }
         break;
 
       // handles var declaration cases like:
@@ -261,13 +267,13 @@ class AngularPass extends AbstractPostOrderCallback
         if (parent.isClassMembers()){
           Node classNode = parent.getParent();
           String midPart = n.isStaticMember() ? "." : ".prototype.";
-          name = NodeUtil.getClassName(classNode) + midPart + n.getString();
+          name = NodeUtil.getName(classNode) + midPart + n.getString();
           if (n.getString().equals("constructor")) {
-            name = NodeUtil.getClassName(classNode);
+            name = NodeUtil.getName(classNode);
           }
           fn = n.getFirstChild();
           if (classNode.getParent().isAssign() || classNode.getParent().isName()) {
-            target = classNode.getParent().getParent();
+            target = classNode.getGrandparent();
           } else {
             target = classNode;
           }
@@ -295,11 +301,11 @@ class AngularPass extends AbstractPostOrderCallback
   /**
    * Given a VAR node (variable declaration) returns the node of initial value.
    *
-   * <pre>{@code
+   * <pre><code>
    * var x;  // null
    * var y = "value"; // STRING "value" node
    * var z = x = y = function() {}; // FUNCTION node
-   * }</pre>
+   * <code></pre>
    * @param n VAR node.
    * @return the assigned initial value, or the rightmost rvalue of an assignment
    * chain, or null.
@@ -307,7 +313,7 @@ class AngularPass extends AbstractPostOrderCallback
   private static Node getDeclarationRValue(Node n) {
     Preconditions.checkNotNull(n);
     Preconditions.checkArgument(NodeUtil.isNameDeclaration(n));
-    n = n.getFirstChild().getFirstChild();
+    n = n.getFirstFirstChild();
     if (n == null) {
       return null;
     }

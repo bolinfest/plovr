@@ -290,7 +290,7 @@ class CollapseProperties implements CompilerPass {
           } else if (NodeUtil.isObjectLitKey(target)) {
             // Object literal key definitions are a little trickier, as we
             // need to find the assignment target
-            Node gparent = target.getParent().getParent();
+            Node gparent = target.getGrandparent();
             if (gparent.isAssign()) {
               target = gparent.getFirstChild();
             } else {
@@ -1098,8 +1098,8 @@ class CollapseProperties implements CompilerPass {
    */
   private int addStubsForUndeclaredProperties(
       Name n, String alias, Node parent, Node addAfter) {
-    Preconditions.checkState(n.canCollapseUnannotatedChildNames());
-    Preconditions.checkArgument(NodeUtil.isStatementBlock(parent));
+    Preconditions.checkState(n.canCollapseUnannotatedChildNames(), n);
+    Preconditions.checkArgument(NodeUtil.isStatementBlock(parent), parent);
     Preconditions.checkNotNull(addAfter);
     if (n.props == null) {
       return 0;

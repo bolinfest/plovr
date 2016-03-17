@@ -36,13 +36,15 @@ import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
- * Rewrites all the library polyfills.
+ * Rewrites calls to ES6 library functions to use compiler-provided polyfills,
+ * e.g., <code>var m = new Map();</code> becomes
+ * <code>$jscomp.Map$install(); var m = new $jscomp.Map();</code>
  */
 public class RewritePolyfills implements HotSwapCompilerPass {
 
   static final DiagnosticType INSUFFICIENT_OUTPUT_VERSION_ERROR = DiagnosticType.warning(
       "JSC_INSUFFICIENT_OUTPUT_VERSION",
-      "Built-in '{0}' not supported in output version {1}: set --language_out to at least {2}");
+      "Built-in ''{0}'' not supported in output version {1}: set --language_out to at least {2}");
 
   // Also polyfill references to e.g. goog.global.Map or window.Map.
   private static final String GLOBAL = "goog.global.";
@@ -252,25 +254,25 @@ public class RewritePolyfills implements HotSwapCompilerPass {
       // ($jscomp or $jscomp.*) will replace the empty string argument indicating that the
       // polyfill should actually be used.
 
-      // (Soon-to-be) Implemented classes.
-      .addClasses(ES6_IMPL, ES6_IMPL, "", "Map", "Set")
-      // (Soon-to-be implemented) Math methods.
-      .addStatics(ES6_IMPL, ES6_IMPL, "", "Math",
+      // Implemented classes.
+      .addClasses(ES6_IMPL, ES3, "$jscomp", "Map", "Set")
+      // Math methods.
+      .addStatics(ES6_IMPL, ES3, "$jscomp.math", "Math",
           "clz32", "imul", "sign", "log2", "log10", "log1p", "expm1", "cosh", "sinh", "tanh",
           "acosh", "asinh", "atanh", "hypot", "trunc", "cbrt")
-      // (Soon-to-be implemented) Number methods.
-      .addStatics(ES6_IMPL, ES6_IMPL, "", "Number",
+      // Number methods.
+      .addStatics(ES6_IMPL, ES3, "$jscomp.number", "Number",
           "isFinite", "isInteger", "isNaN", "isSafeInteger",
           "EPSILON", "MAX_SAFE_INTEGER", "MIN_SAFE_INTEGER")
-      // (Soon-to-be implemented) Object methods.
-      .addStatics(ES6_IMPL, ES6_IMPL, "", "Object", "assign", "is")
-      // (Soon-to-be implemented) String methods.
-      .addStatics(ES6_IMPL, ES6_IMPL, "", "String", "fromCodePoint")
-      .addMethods(ES6_IMPL, ES6_IMPL, "",
+      // Object methods.
+      .addStatics(ES6_IMPL, ES3, "$jscomp.object", "Object", "assign", "is")
+      // String methods.
+      .addStatics(ES6_IMPL, ES3, "$jscomp.string", "String", "fromCodePoint")
+      .addMethods(ES6_IMPL, ES3, "$jscomp.string",
           "repeat", "codePointAt", "includes", "startsWith", "endsWith")
-      // (Soon-to-be implemented) Array methods.
-      .addStatics(ES6_IMPL, ES6_IMPL, "", "Array", "from", "of")
-      .addMethods(ES6_IMPL, ES6_IMPL, "",
+      // Array methods.
+      .addStatics(ES6_IMPL, ES3, "$jscomp.array", "Array", "from", "of")
+      .addMethods(ES6_IMPL, ES3, "$jscomp.array",
           "entries", "keys", "values", "copyWithin", "fill", "find", "findIndex")
       .build();
 
@@ -300,6 +302,9 @@ public class RewritePolyfills implements HotSwapCompilerPass {
 
   @Override
   public void process(Node externs, Node root) {
+    if (languageOutIsAtLeast(ES6) || !compiler.getOptions().rewritePolyfills) {
+      return; // no rewriting in this case.
+    }
     this.globals = new GlobalNamespace(compiler, externs, root);
     hotSwapScript(root, null);
   }
@@ -356,7 +361,7 @@ public class RewritePolyfills implements HotSwapCompilerPass {
                 INSUFFICIENT_OUTPUT_VERSION_ERROR,
                 name,
                 compiler.getOptions().getLanguageOut().toString(),
-                polyfill.polyfillVersion.toString());
+                polyfill.polyfillVersion.toLanguageModeString());
           }
           if (!languageOutIsAtLeast(polyfill.nativeVersion)) {
 
@@ -459,25 +464,25 @@ public class RewritePolyfills implements HotSwapCompilerPass {
         enclosingScript.addChildrenToFront(installer);
       }
     }
+  }
 
-    private boolean languageOutIsAtLeast(LanguageMode mode) {
-      return compiler.getOptions().getLanguageOut().compareTo(mode) >= 0;
-    }
+  private boolean languageOutIsAtLeast(LanguageMode mode) {
+    return compiler.getOptions().getLanguageOut().compareTo(mode) >= 0;
+  }
 
-    private boolean languageOutIsAtLeast(FeatureSet features) {
-      switch (features.version()) {
-        case "ts":
-          return languageOutIsAtLeast(LanguageMode.ECMASCRIPT6_TYPED);
-        case "es6":
-        case "es6-impl": // TODO(sdh): support a separate language mode for es6-impl?
-          return languageOutIsAtLeast(LanguageMode.ECMASCRIPT6);
-        case "es5":
-          return languageOutIsAtLeast(LanguageMode.ECMASCRIPT5);
-        case "es3":
-          return languageOutIsAtLeast(LanguageMode.ECMASCRIPT3);
-        default:
-          return false;
-      }
+  private boolean languageOutIsAtLeast(FeatureSet features) {
+    switch (features.version()) {
+      case "ts":
+        return languageOutIsAtLeast(LanguageMode.ECMASCRIPT6_TYPED);
+      case "es6":
+      case "es6-impl": // TODO(sdh): support a separate language mode for es6-impl?
+        return languageOutIsAtLeast(LanguageMode.ECMASCRIPT6);
+      case "es5":
+        return languageOutIsAtLeast(LanguageMode.ECMASCRIPT5);
+      case "es3":
+        return languageOutIsAtLeast(LanguageMode.ECMASCRIPT3);
+      default:
+        return false;
     }
   }
 

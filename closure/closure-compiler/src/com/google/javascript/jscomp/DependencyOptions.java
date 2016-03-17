@@ -16,6 +16,8 @@
 
 package com.google.javascript.jscomp;
 
+import static com.google.common.base.MoreObjects.toStringHelper;
+
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashSet;
@@ -41,8 +43,11 @@ public final class DependencyOptions implements Serializable {
   private boolean sortDependencies = false;
   private boolean pruneDependencies = false;
   private boolean dropMoochers = false;
+
+  // TODO(tbreisacher): Set this to true unconditionally, and get rid of the flag,
+  // once we check to make sure this won't break anyone.
   private boolean es6ModuleOrder = false;
-  private final Set<String> entryPoints = new HashSet<>();
+  private final Set<ModuleIdentifier> entryPoints = new HashSet<>();
 
   /**
    * Enables or disables dependency sorting mode.
@@ -124,7 +129,7 @@ public final class DependencyOptions implements Serializable {
    *
    * @return this for easy chaining.
    */
-  public DependencyOptions setEntryPoints(Collection<String> symbols) {
+  public DependencyOptions setEntryPoints(Collection<ModuleIdentifier> symbols) {
     entryPoints.clear();
     entryPoints.addAll(symbols);
     return this;
@@ -151,7 +156,18 @@ public final class DependencyOptions implements Serializable {
     return pruneDependencies && dropMoochers;
   }
 
-  Collection<String> getEntryPoints() {
+  Collection<ModuleIdentifier> getEntryPoints() {
     return entryPoints;
+  }
+
+  @Override
+  public String toString() {
+    return toStringHelper(this)
+        .add("sortDependencies", sortDependencies)
+        .add("pruneDependencies", pruneDependencies)
+        .add("dropMoochers", dropMoochers)
+        .add("es6ModuleOrder", es6ModuleOrder)
+        .add("entryPoints", entryPoints)
+        .toString();
   }
 }

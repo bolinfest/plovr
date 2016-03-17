@@ -20,15 +20,33 @@
  * @externs
  */
 
+/**
+ * @typedef {{
+ *   identifier: number,
+ *   target: !EventTarget,
+ *   clientX: (number|undefined),
+ *   clientY: (number|undefined),
+ *   screenX: (number|undefined),
+ *   screenY: (number|undefined),
+ *   pageX: (number|undefined),
+ *   pageY: (number|undefined),
+ *   radiusX: (number|undefined),
+ *   radiusY: (number|undefined),
+ *   rotationAngle: (number|undefined),
+ *   force: (number|undefined)
+ * }}
+ */
+var TouchInitDict;
 
 /**
  * The Touch class represents a single touch on the surface. A touch is the
  * presence or movement of a finger that is part of a unique multi-touch
  * sequence.
  * @see http://www.w3.org/TR/touch-events/#touch-interface
+ * @param {!TouchInitDict} touchInitDict
  * @constructor
  */
-function Touch() {}
+function Touch(touchInitDict) {}
 
 /**
  * The x-coordinate of the touch's location relative to the window's viewport.
@@ -98,6 +116,13 @@ Touch.prototype.radiusY;
 
 
 /**
+ * @type {number}
+ * @see http://www.w3.org/TR/2011/WD-touch-events-20110505/#widl-Touch-rotationAngle
+ */
+Touch.prototype.rotationAngle;
+
+
+/**
  * Creates a new Touch object.
  * @see http://www.w3.org/TR/touch-events/#widl-Document-createTouch-Touch-WindowProxy-view-EventTarget-target-long-identifier-long-pageX-long-pageY-long-screenX-long-screenY
  * @param {Window} view
@@ -117,6 +142,7 @@ Document.prototype.createTouch = function(view, target, identifier, pageX,
  * The TouchList class is used to represent a collection of Touch objects.
  * @see http://www.w3.org/TR/touch-events/#touchlist-interface
  * @constructor
+ * @implements {IArrayLike<!Touch>}
  */
 function TouchList() {}
 
@@ -148,6 +174,19 @@ TouchList.prototype.identifiedTouch = function(identifier) {};
  */
 Document.prototype.createTouchList = function(touches) {};
 
+/**
+ * @typedef {{
+ *   bubbles: (boolean|undefined),
+ *   cancelable: (boolean|undefined),
+ *   view: (Window|undefined),
+ *   detail: (number|undefined),
+ *   relatedTarget: (EventTarget|undefined),
+ *   touches: (!Array<Touch>|undefined),
+ *   targetTouches: (!Array<Touch>|undefined),
+ *   changedTouches: (!Array<Touch>|undefined)
+ * }}
+ */
+var TouchEventInit;
 
 /**
  * The TouchEvent class encapsulates information about a touch event.
@@ -173,10 +212,12 @@ Document.prototype.createTouchList = function(touches) {};
  * objects that are also sent during a multi-touch sequence.</p>
  *
  * @see http://www.w3.org/TR/touch-events/#touchevent-interface
+ * @param {string} type
+ * @param {!TouchEventInit=} opt_eventInitDict
  * @extends {UIEvent}
  * @constructor
  */
-function TouchEvent() {}
+function TouchEvent(type, opt_eventInitDict) {}
 
 /**
  * A collection of Touch objects representing all touches associated with this

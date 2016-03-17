@@ -42,18 +42,65 @@ public final class SingleFileCheckRequiresTest extends Es6CompilerTestCase {
     testSame("new Error();");
   }
 
-  public void testExtendsSingleName() {
+  public void testCtorExtendsSingleName() {
     testSame("/** @constructor @extends {Foo} */ function MyFoo() {}");
     testSame("/** @constructor @extends {Error} */ function MyError() {}");
     testSame("/** @constructor @extends {Array} */ function MyArray() {}");
   }
 
+  public void testClassExtendsSingleName() {
+    testSameEs6("class MyFoo extends Foo {}");
+    testSameEs6("class MyError extends Error {}");
+    testSameEs6("class MyArray extends Array {}");
+  }
+
   public void testReferenceToQualifiedName() {
-    testErrorEs6("new bar.Foo();", MISSING_REQUIRE_WARNING);
+    testErrorEs6(
+        LINE_JOINER.join(
+            "goog.require('x.y.z');",
+            "new x.y.z();",
+            "new bar.Foo();"),
+        MISSING_REQUIRE_WARNING);
+  }
+
+  public void testReferenceToUnqualifiedName() {
+    testSameEs6(
+        LINE_JOINER.join(
+            "goog.module('a.b.c');",
+            "var z = goog.require('x.y.z');",
+            "",
+            "exports = { foobar : z };"));
+
+    testSameEs6(
+        LINE_JOINER.join(
+            "goog.module('a.b.c');",
+            "var {z} = goog.require('x.y');",
+            "",
+            "exports = { foobar : z };"));
+
+    testSameEs6(
+        LINE_JOINER.join(
+            "import {z} from 'x.y'",
+            "",
+            "export var foobar = z;"));
+
+    testSameEs6(
+        LINE_JOINER.join(
+            "import z from 'x.y.z'",
+            "",
+            "export var foobar = z;"));
   }
 
   public void testExtraRequire() {
     testErrorEs6("goog.require('foo.Bar');", EXTRA_REQUIRE_WARNING);
+  }
+
+  public void testUnqualifiedRequireUsedInJSDoc() {
+    testSameEs6("goog.require('Bar'); /** @type {Bar} */ var x;");
+  }
+
+  public void testUnqualifiedImportUsedInJSDoc() {
+    testSameEs6("import { Something } from 'somewhere'; /** @type {Something} */ var x;");
   }
 
   public void testReferenceToSingleNameWithRequire() {

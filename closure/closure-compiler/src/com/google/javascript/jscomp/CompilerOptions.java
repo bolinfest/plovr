@@ -54,13 +54,6 @@ public class CompilerOptions {
   // package-private, and have a public setter.
 
   /**
-   * The warning classes that are available.
-   */
-  protected DiagnosticGroups getDiagnosticGroups() {
-    return new DiagnosticGroups();
-  }
-
-  /**
    * The JavaScript language version accepted.
    */
   private LanguageMode languageIn;
@@ -134,6 +127,15 @@ public class CompilerOptions {
   boolean inferTypes;
 
   private boolean useNewTypeInference;
+
+  /**
+   * Relevant only when {@link #useNewTypeInference} is true, where we normally disable OTI errors.
+   * If you want both NTI and OTI errors in this case, set to true.
+   * E.g. if using using a warnings guard to filter NTI or OTI warnings in new or legacy code,
+   * respectively.
+   * This will be removed when NTI entirely replaces OTI.
+   */
+  boolean reportOTIErrorsUnderNTI = false;
 
   /**
    * Configures the compiler to skip as many passes as possible.
@@ -444,7 +446,7 @@ public class CompilerOptions {
   /** Print string usage as part of the compilation log. */
   boolean outputJsStringUsage;
 
-  /** Converts quoted property accesses to dot syntax (a['b'] -> a.b) */
+  /** Converts quoted property accesses to dot syntax (a['b'] &rarr; a.b) */
   public boolean convertToDottedProperties;
 
   /** Reduces the size of common function expressions. */
@@ -472,6 +474,9 @@ public class CompilerOptions {
 
   /** Chains calls to functions that return this. */
   boolean chainCalls;
+
+  /** Use type information to enable additional optimization opportunities. */
+  boolean useTypesForOptimization;
 
   //--------------------------------
   // Renaming
@@ -614,11 +619,11 @@ public class CompilerOptions {
   public void setReplaceMessagesWithChromeI18n(
       boolean replaceMessagesWithChromeI18n,
       String tcProjectId) {
-    if (replaceMessagesWithChromeI18n &&
-        messageBundle != null &&
-        !(messageBundle instanceof EmptyMessageBundle)) {
-      throw new RuntimeException("When replacing messages with " +
-          "chrome.i18n.getMessage, a message bundle should not be specified.");
+    if (replaceMessagesWithChromeI18n
+        && messageBundle != null
+        && !(messageBundle instanceof EmptyMessageBundle)) {
+    throw new RuntimeException("When replacing messages with"
+          + " chrome.i18n.getMessage, a message bundle should not be specified.");
     }
 
     this.replaceMessagesWithChromeI18n = replaceMessagesWithChromeI18n;
@@ -839,6 +844,10 @@ public class CompilerOptions {
   // Should only be used when debugging compiler bugs using small JS inputs.
   boolean printSourceAfterEachPass;
 
+  public void setPrintSourceAfterEachPass(boolean printSource) {
+    this.printSourceAfterEachPass = printSource;
+  }
+
   /** Where to save a report of global name usage */
   public void setReportPath(String reportPath) {
     this.reportPath = reportPath;
@@ -917,10 +926,8 @@ public class CompilerOptions {
 
   /**
    * Charset to use when generating code.  If null, then output ASCII.
-   * This is a string because CompilerOptions used to be serializable.
-   * TODO(tbreisacher): Switch to java.nio.Charset.
    */
-  String outputCharset;
+  Charset outputCharset;
 
   /**
    * Transitional option.
@@ -1279,17 +1286,6 @@ public class CompilerOptions {
     addWarningsGuard(new DiagnosticGroupWarningsGuard(type, level));
   }
 
-  /**
-   * Configure the given type of warning to the given level.
-   */
-  public void setWarningLevel(String groupName, CheckLevel level) {
-    DiagnosticGroup type = getDiagnosticGroups().forName(groupName);
-    if (type == null) {
-      throw new RuntimeException("Unknown DiagnosticGroup name: " + groupName);
-    }
-    setWarningLevel(type, level);
-  }
-
   WarningsGuard getWarningsGuard() {
     return this.warningsGuard;
   }
@@ -1551,7 +1547,7 @@ public class CompilerOptions {
    * This supersedes manageClosureDependencies.
    */
   public void setDependencyOptions(DependencyOptions options) {
-    Preconditions.checkNotNull(options);
+    options.setEs6ModuleOrder(this.languageIn.isEs6OrHigher());
     this.dependencyOptions = options;
   }
 
@@ -1583,7 +1579,14 @@ public class CompilerOptions {
   public void setManageClosureDependencies(List<String> entryPoints) {
     Preconditions.checkNotNull(entryPoints);
     setManageClosureDependencies(true);
-    dependencyOptions.setEntryPoints(entryPoints);
+
+    List<ModuleIdentifier> normalizedEntryPoints = new ArrayList<>();
+
+    for (String entryPoint : entryPoints) {
+      normalizedEntryPoints.add(ModuleIdentifier.forClosure(entryPoint));
+    }
+
+    dependencyOptions.setEntryPoints(normalizedEntryPoints);
   }
 
   /**
@@ -1614,17 +1617,17 @@ public class CompilerOptions {
   }
 
   /**
-   * Sets the output charset by name.
+   * Sets the output charset.
    */
-  public void setOutputCharset(String charsetName) {
+  public void setOutputCharset(Charset charsetName) {
     this.outputCharset = charsetName;
   }
 
   /**
-   * Gets the output charset as a rich object.
+   * Gets the output charset.
    */
   Charset getOutputCharset() {
-    return outputCharset == null ? null : Charset.forName(outputCharset);
+    return outputCharset;
   }
 
   /**
@@ -1755,7 +1758,12 @@ public class CompilerOptions {
     this.useNewTypeInference = enable;
   }
 
-  /**
+  // Not dead code; used by the open-source users of the compiler.
+  public void setReportOTIErrorsUnderNTI(boolean enable) {
+    this.reportOTIErrorsUnderNTI = enable;
+  }
+
+/**
    * @return Whether assumeStrictThis is set.
    */
   public boolean assumeStrictThis() {
@@ -1820,8 +1828,8 @@ public class CompilerOptions {
 
   /**
    * Enables or disables the preservation of all whitespace and formatting within a JSDoc
-   * comment. By default, whitespace is collapsed for all comments except @license and
-   * @preserve blocks,
+   * comment. By default, whitespace is collapsed for all comments except {@literal @license} and
+   * {@literal @preserve} blocks,
    *
    * <p>Setting this option has no effect if {@link #isParseJsDocDocumentation()}
    * returns false.
@@ -2349,6 +2357,13 @@ public class CompilerOptions {
   }
 
   /**
+   * Sets whether to rewrite polyfills.
+   */
+  public void setRewritePolyfills(boolean rewritePolyfills) {
+    this.rewritePolyfills = rewritePolyfills;
+  }
+
+  /**
    * Sets list of libraries to always inject, even if not needed.
    */
   public void setForceLibraryInjection(Iterable<String> libraries) {
@@ -2668,5 +2683,28 @@ public class CompilerOptions {
      * stdin and stdout are both json streams.
      */
     BOTH
+  }
+
+  static enum DependencyMode {
+    /**
+     * All files will be included in the compilation
+     */
+    NONE,
+
+    /**
+     * Files must be discoverable from specified entry points. Files
+     * which do not goog.provide a namespace and and are not either
+     * an ES6 or CommonJS module will be automatically treated as entry points.
+     * Module files will be included only if referenced from an entry point.
+     */
+    LOOSE,
+
+    /**
+     * Files must be discoverable from specified entry points. Files which
+     * do not goog.provide a namespace and are neither
+     * an ES6 or CommonJS module will be dropped. Module files will be included
+     * only if referenced from an entry point.
+     */
+    STRICT
   }
 }

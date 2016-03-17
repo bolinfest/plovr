@@ -17,13 +17,14 @@ package com.google.javascript.jscomp;
 
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.NodeTraversal.Callback;
-import com.google.javascript.jscomp.lint.CheckArguments;
+import com.google.javascript.jscomp.lint.CheckDuplicateCase;
 import com.google.javascript.jscomp.lint.CheckEmptyStatements;
 import com.google.javascript.jscomp.lint.CheckEnums;
 import com.google.javascript.jscomp.lint.CheckInterfaces;
 import com.google.javascript.jscomp.lint.CheckJSDocStyle;
 import com.google.javascript.jscomp.lint.CheckPrototypeProperties;
 import com.google.javascript.jscomp.lint.CheckRequiresAndProvidesSorted;
+import com.google.javascript.jscomp.lint.CheckUselessBlocks;
 
 import java.util.List;
 
@@ -42,6 +43,7 @@ class LintPassConfig extends PassConfig.PassConfigDelegate {
   @Override protected List<PassFactory> getChecks() {
     return ImmutableList.of(
         checkRequiresAndProvidesSorted,
+        jsdocChecks,
         closureRewriteModule,
         closureGoogScopeAliases,
         closureRewriteClass,
@@ -85,6 +87,18 @@ class LintPassConfig extends PassConfig.PassConfigDelegate {
         }
       };
 
+    private final PassFactory jsdocChecks =
+      new PassFactory("jsdocChecks", true) {
+        @Override
+        protected CompilerPass create(AbstractCompiler compiler) {
+          return new CombinedCompilerPass(
+              compiler,
+              ImmutableList.<Callback>of(
+                  new CheckJSDocStyle(compiler),
+                  new CheckJSDoc(compiler)));
+        }
+      };
+
   private final PassFactory lintChecks =
       new PassFactory("lintChecks", true) {
         @Override
@@ -92,13 +106,12 @@ class LintPassConfig extends PassConfig.PassConfigDelegate {
           return new CombinedCompilerPass(
               compiler,
               ImmutableList.<Callback>of(
-                  new CheckArguments(compiler),
+                  new CheckDuplicateCase(compiler),
                   new CheckEmptyStatements(compiler),
                   new CheckEnums(compiler),
                   new CheckInterfaces(compiler),
-                  new CheckJSDocStyle(compiler),
-                  new CheckJSDoc(compiler),
-                  new CheckPrototypeProperties(compiler)));
+                  new CheckPrototypeProperties(compiler),
+                  new CheckUselessBlocks(compiler)));
         }
       };
 

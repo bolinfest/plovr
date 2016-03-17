@@ -210,13 +210,13 @@ class MaybeReachingVariableUse extends
 
       case Token.HOOK:
         computeMayUse(n.getLastChild(), cfgNode, output, true);
-        computeMayUse(n.getFirstChild().getNext(), cfgNode, output, true);
+        computeMayUse(n.getSecondChild(), cfgNode, output, true);
         computeMayUse(n.getFirstChild(), cfgNode, output, conditional);
         return;
 
       case Token.VAR:
         Node varName = n.getFirstChild();
-        Preconditions.checkState(n.hasChildren(), "AST should be normalized");
+        Preconditions.checkState(n.hasChildren(), "AST should be normalized", n);
 
         if (varName.hasChildren()) {
           computeMayUse(varName.getFirstChild(), cfgNode, output, conditional);

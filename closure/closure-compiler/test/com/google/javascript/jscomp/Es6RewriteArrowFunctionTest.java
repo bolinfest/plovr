@@ -15,9 +15,6 @@
  */
 package com.google.javascript.jscomp;
 
-import static com.google.javascript.jscomp.Es6RewriteArrowFunction.
-    THIS_REFERENCE_IN_ARROWFUNC_OF_OBJLIT;
-
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 
 public class Es6RewriteArrowFunctionTest extends CompilerTestCase {
@@ -42,11 +39,6 @@ public class Es6RewriteArrowFunctionTest extends CompilerTestCase {
   @Override
   protected Es6RewriteArrowFunction getProcessor(Compiler compiler) {
     return new Es6RewriteArrowFunction(compiler);
-  }
-
-  @Override
-  protected int getNumRepetitions() {
-    return 1;
   }
 
   public void testArrowFunction() {
@@ -83,9 +75,47 @@ public class Es6RewriteArrowFunctionTest extends CompilerTestCase {
     test(
         "switch(a) { case b: (() => { this; })(); }",
         LINE_JOINER.join(
+            "const $jscomp$this = this;",
             "switch(a) {",
             "  case b:",
-            "    const $jscomp$this = this;",
+            "    (function() { $jscomp$this; })();",
+            "}"));
+
+    test(
+        LINE_JOINER.join(
+            "switch(a) {",
+            "  case b:",
+            "    (() => { this; })();",
+            "  case c:",
+            "    (() => { this; })();",
+            "}"),
+        LINE_JOINER.join(
+            "const $jscomp$this = this;",
+            "switch(a) {",
+            "  case b:",
+            "    (function() { $jscomp$this; })();",
+            "  case c:",
+            "    (function() { $jscomp$this; })();",
+            "}"));
+
+   test(
+        LINE_JOINER.join(
+            "switch(a) {",
+            "  case b:",
+            "    (() => { this; })();",
+            "}",
+            "switch (c) {",
+            "  case d:",
+            "    (() => { this; })();",
+            "}"),
+        LINE_JOINER.join(
+            "const $jscomp$this = this;",
+            "switch(a) {",
+            "  case b:",
+            "    (function() { $jscomp$this; })();",
+            "}",
+            "switch (c) {",
+            "  case d:",
             "    (function() { $jscomp$this; })();",
             "}"));
   }
@@ -241,35 +271,6 @@ public class Es6RewriteArrowFunctionTest extends CompilerTestCase {
             "var f = function(x) {",
             "  var g = function(y) {",
             "    $jscomp$this.foo();",
-            "  }",
-            "}"));
-  }
-
-  public void testArrowFuncInObjLitWithThis1() {
-    testWarning("var f = {wThis: () => this.whatIsThis}",
-        THIS_REFERENCE_IN_ARROWFUNC_OF_OBJLIT);
-  }
-
-  public void testArrowFuncInObjLitWithThis2() {
-    test(
-        LINE_JOINER.join(
-            "var f = {",
-            "  ultiObj: () => ({",
-            "    ulti: 42,",
-            "    showUlti: function() {",
-            "      return this.ulti;",
-            "    }",
-            "  })",
-            "}"),
-        LINE_JOINER.join(
-            "var f = {",
-            "  ultiObj: function() {",
-            "    return {",
-            "      ulti: 42,",
-            "      showUlti: function() {",
-            "        return this.ulti;",
-            "      }",
-            "    }",
             "  }",
             "}"));
   }

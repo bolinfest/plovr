@@ -47,7 +47,7 @@ import java.util.ResourceBundle;
 
 /**
  * A simple {@link ErrorReporter} that collects warnings and errors and makes
- * them accessible via {@link #errors()} and {@link #warnings()}.
+ * them accessible via {@link #errors} and {@link #warnings}.
  *
  */
 public class SimpleErrorReporter implements ErrorReporter {
@@ -72,7 +72,7 @@ public class SimpleErrorReporter implements ErrorReporter {
         errors.add(formatDetailedMessage(message, sourceName, line));
     }
 
-    private String formatDetailedMessage(
+    private static String formatDetailedMessage(
         String message, String sourceName, int lineNumber) {
       String details = message;
       if (sourceName == null || lineNumber <= 0) {

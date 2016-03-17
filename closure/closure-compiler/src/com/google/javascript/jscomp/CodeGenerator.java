@@ -347,7 +347,7 @@ class CodeGenerator {
       }
       case Token.REST:
         add("...");
-        add(n.getString());
+        add(first.getString());
         maybeAddTypeDecl(n);
         break;
 
@@ -514,12 +514,12 @@ class CodeGenerator {
           switch (type) {
             case Token.GETTER_DEF:
               // Get methods have no parameters.
-              Preconditions.checkState(!first.getChildAtIndex(1).hasChildren());
+              Preconditions.checkState(!first.getSecondChild().hasChildren());
               add("get ");
               break;
             case Token.SETTER_DEF:
               // Set methods have one parameter.
-              Preconditions.checkState(first.getChildAtIndex(1).hasOneChild());
+              Preconditions.checkState(first.getSecondChild().hasOneChild());
               add("set ");
               break;
             case Token.MEMBER_FUNCTION_DEF:
@@ -542,7 +542,7 @@ class CodeGenerator {
             Preconditions.checkState(first.getFirstChild().getString().isEmpty());
 
             Node fn = first;
-            Node parameters = fn.getChildAtIndex(1);
+            Node parameters = fn.getSecondChild();
             Node body = fn.getLastChild();
 
             // Add the property name.
@@ -709,7 +709,8 @@ class CodeGenerator {
 
       case Token.GETELEM:
         Preconditions.checkState(
-            childCount == 2, "Bad GETELEM: expected 2 children but got %s", childCount);
+            childCount == 2,
+            "Bad GETELEM node: Expected 2 children but got %s. For node: %s", childCount, n);
         addExpr(first, NodeUtil.precedence(type), context);
         add("[");
         add(first.getNext());
@@ -898,12 +899,7 @@ class CodeGenerator {
 
       case Token.STRING:
         Preconditions.checkState(childCount == 0, "A string may not have children");
-        // The string is already processed, don't escape it.
-        if (n.getBooleanProp(Node.COOKED_STRING)) {
-          add("\"" + n.getString() + "\"");
-        } else {
-          addJsString(n);
-        }
+        addJsString(n);
         break;
 
       case Token.DELPROP:
@@ -963,7 +959,7 @@ class CodeGenerator {
             || n.getBooleanProp(Node.COMPUTED_PROP_GETTER)
             || n.getBooleanProp(Node.COMPUTED_PROP_SETTER)) {
           Node function = first.getNext();
-          Node params = function.getFirstChild().getNext();
+          Node params = function.getSecondChild();
           Node body = function.getLastChild();
 
           add(params);
@@ -981,7 +977,7 @@ class CodeGenerator {
           } else {
             // Computed properties must either have an initializer or be computed member-variable
             // properties that exist for their type declaration.
-            Preconditions.checkState(n.getBooleanProp(Node.COMPUTED_PROP_VARIABLE));
+            Preconditions.checkState(n.getBooleanProp(Node.COMPUTED_PROP_VARIABLE), n);
           }
         }
         break;
@@ -1310,7 +1306,7 @@ class CodeGenerator {
     do {
       current = current.getParent();
       cc.addOp(opStr, true);
-      addExpr(current.getFirstChild().getNext(), rightPrecedence, rhsContext);
+      addExpr(current.getSecondChild(), rightPrecedence, rhsContext);
     } while (current != n);
   }
 

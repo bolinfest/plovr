@@ -1,6 +1,8 @@
 build/
+dependency-reduced-pom.xml
 TESTS-TestSuites.xml
 junit*.properties
 target/
 *~
+.checkstyle
 .settings

@@ -127,7 +127,7 @@ class TypeInference
    */
   private void inferArguments(TypedScope functionScope) {
     Node functionNode = functionScope.getRootNode();
-    Node astParameters = functionNode.getFirstChild().getNext();
+    Node astParameters = functionNode.getSecondChild();
     Node iifeArgumentNode = null;
 
     if (NodeUtil.isCallOrNewTarget(functionNode)) {
@@ -641,7 +641,7 @@ class TypeInference
         //    where Foo.prototype is a struct and the assignment happens at the
         //    top level and the constructor Foo is defined in the same file.
         boolean staticPropCreation = false;
-        Node maybeAssignStm = getprop.getParent().getParent();
+        Node maybeAssignStm = getprop.getGrandparent();
         if (syntacticScope.isGlobal() &&
             NodeUtil.isPrototypePropertyDeclaration(maybeAssignStm)) {
           String propCreationFilename = maybeAssignStm.getSourceFileName();
@@ -1163,7 +1163,7 @@ class TypeInference
     if (call.hasMoreThanOneChild()) {
       maybeResolveTemplateTypeFromNodes(
           fnType.getParameters(),
-          call.getChildAtIndex(1).siblings(),
+          call.getSecondChild().siblings(),
           resolvedTypes,
           seenTypes);
     }
@@ -1222,13 +1222,14 @@ class TypeInference
         seenTypes.remove(paramType);
       }
     } else if (paramType.isTemplatizedType()) {
-      // @param {Array.<T>}
+      // @param {Array<T>}
       ObjectType referencedParamType = paramType
           .toMaybeTemplatizedType()
           .getReferencedType();
       JSType argObjectType = argType
           .restrictByNotNullOrUndefined()
           .collapseUnion();
+
 
       if (argObjectType.isSubtype(referencedParamType)) {
         // If the argument type is a subtype of the parameter type, resolve any
@@ -1372,8 +1373,7 @@ class TypeInference
     }
 
     // Try to infer the template types
-    Map<TemplateType, JSType> rawInferrence = inferTemplateTypesFromParameters(
-        fnType, n);
+    Map<TemplateType, JSType> rawInferrence = inferTemplateTypesFromParameters(fnType, n);
     Map<TemplateType, JSType> inferred = Maps.newIdentityHashMap();
     for (TemplateType key : keys) {
       JSType type = rawInferrence.get(key);

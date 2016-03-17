@@ -18,7 +18,6 @@ package com.google.javascript.jscomp;
 import com.google.common.base.Preconditions;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 
 /**
  * Helper class for transpiling ES6 template literals.
@@ -54,7 +53,7 @@ class Es6TemplateLiterals {
             } else if (i == 2 && first.getString().isEmpty()) {
               // So that `${hello} world` gets translated into (hello + " world")
               // instead of ("" + hello + " world").
-              add = add.getChildAtIndex(1).detachFromParent();
+              add = add.getSecondChild().detachFromParent();
             }
           }
           add = IR.add(add, child.isString() ? child : child.removeFirstChild());
@@ -88,7 +87,7 @@ class Es6TemplateLiterals {
     Node callsiteId = IR.name(
         TEMPLATELIT_VAR + t.getCompiler().getUniqueNameIdSupplier().get());
     Node var = IR.var(callsiteId, cooked).useSourceInfoIfMissingFromForTree(n);
-    Node script = NodeUtil.getEnclosingType(n, Token.SCRIPT);
+    Node script = NodeUtil.getEnclosingScript(n);
     script.addChildrenToFront(var);
 
     // Define the "raw" property on the introduced variable.
@@ -125,7 +124,6 @@ class Es6TemplateLiterals {
     for (Node child = n.getFirstChild(); child != null; child = child.getNext()) {
       if (child.isString()) {
         Node string = IR.string(cookString((String) child.getProp(Node.RAW_STRING_VALUE)));
-        string.putBooleanProp(Node.COOKED_STRING, true);
         array.addChildToBack(string);
       }
     }
@@ -141,49 +139,47 @@ class Es6TemplateLiterals {
     StringBuilder sb = new StringBuilder();
     for (int i = 0; i < s.length();) {
       char c = s.charAt(i++);
-      switch (c) {
-        case '\\':
-          char c2 = s.charAt(i++);
-          switch (c2) {
-            // Strip line continuation.
-            case '\n':
-            case '\u2028':
-            case '\u2029':
-              break;
-            case '\r':
-              // \ \r \n should be stripped as one
-              if (s.charAt(i + 1) == '\n') {
-                i++;
-              }
-              break;
+      if (c == '\\') {
+        char c2 = s.charAt(i++);
+        switch (c2) {
+          case 't':
+            sb.append('\t');
+            break;
+          case 'n':
+            sb.append('\n');
+            break;
+          case 'r':
+            sb.append('\r');
+            break;
+          case 'f':
+            sb.append('\f');
+            break;
+          case 'b':
+            sb.append('\b');
+            break;
+          case 'u':
+            int unicodeValue = Integer.parseInt(s.substring(i, i + 4), 16);
+            sb.append((char) unicodeValue);
+            i += 4;
+            break;
+          // Strip line continuation.
+          case '\n':
+          case '\u2028':
+          case '\u2029':
+            break;
+          case '\r':
+            // \ \r \n should be stripped as one
+            if (s.charAt(i + 1) == '\n') {
+              i++;
+            }
+            break;
 
-            default:
-              sb.append(c);
-              sb.append(c2);
-          }
-          break;
-
-        // Whitespace
-        case '\n':
-          sb.append("\\n");
-          break;
-        // <CR><LF> and <CR> LineTerminatorSequences are normalized to <LF>
-        // for both TV and TRV.
-        case '\r':
-          if (s.charAt(i) == '\n') {
-            i++;
-          }
-          sb.append("\\n");
-          break;
-        case '\u2028':
-          sb.append("\\u2028");
-          break;
-        case '\u2029':
-          sb.append("\\u2029");
-          break;
-
-        default:
-          sb.append(c);
+          default:
+            sb.append(c);
+            sb.append(c2);
+        }
+      } else {
+        sb.append(c);
       }
     }
     return sb.toString();

@@ -104,6 +104,12 @@ public final class CodePrinterTest extends CodePrinterTestBase {
     // this case should be fixed
     assertPrint("new A.B('w').a()", "(new A.B(\"w\")).a()");
 
+    // calling new on the result of a call
+    assertPrintSame("new (a())");
+    assertPrint("new (a())()", "new (a())");
+    assertPrintSame("new (a.b())");
+    assertPrint("new (a.b())()", "new (a.b())");
+
     // Operators: make sure we don't convert binary + and unary + into ++
     assertPrint("x + +y", "x+ +y");
     assertPrint("x - (-y)", "x- -y");
@@ -950,6 +956,26 @@ public final class CodePrinterTest extends CodePrinterTestBase {
         + "function Foo() {\n}\n");
   }
 
+  public void testNonNullTypes() {
+    assertTypeAnnotations(
+        Joiner.on("\n").join(
+            "/** @constructor */",
+            "function Foo() {}",
+            "/** @return {!Foo} */",
+            "Foo.prototype.f = function() { return new Foo; };"),
+        Joiner.on("\n").join(
+            "/**",
+            " * @constructor",
+            " */",
+            "function Foo() {\n}",
+            "/**",
+            " * @return {!Foo}",
+            " */",
+            "Foo.prototype.f = function() {",
+            "  return new Foo;",
+            "};\n"));
+  }
+
   public void testTypeAnnotationsTypeDef() {
     // TODO(johnlenz): It would be nice if there were some way to preserve
     // typedefs but currently they are resolved into the basic types in the
@@ -1156,6 +1182,36 @@ public final class CodePrinterTest extends CodePrinterTestBase {
         "/** @type {(Object|{})} */\ngoog.Enum2 = goog.x ? {} : goog.Enum;\n");
   }
 
+  public void testClosureLibraryTypeAnnotationExamples() {
+    assertTypeAnnotations(
+        LINE_JOINER.join(
+            "/** @param {Object} obj */goog.removeUid = function(obj) {};",
+            "/** @param {Object} obj The object to remove the field from. */",
+            "goog.removeHashCode = goog.removeUid;"),
+        LINE_JOINER.join(
+            "/**",
+            " * @param {(Object|null)} obj",
+            " * @return {undefined}",
+            " */",
+            "goog.removeUid = function(obj) {",
+            "};",
+            "/**",
+            " * @param {(Object|null)} p0",
+            " * @return {undefined}",
+            " */",
+            "goog.removeHashCode = goog.removeUid;",
+            ""));
+  }
+
+  public void testDeprecatedAnnotationIncludesNewline() {
+    String js = LINE_JOINER.join(
+        "/**@deprecated See {@link replacementClass} for more details.",
+        "@type {number} */var x;",
+        "");
+
+    assertPrettyPrint(js, js);
+  }
+
   private void assertPrettyPrint(String js, String expected) {
     assertPrettyPrint(js, expected, new CompilerOptionBuilder() {
       @Override void setOptions(CompilerOptions options) { /* no-op */ }
@@ -1169,6 +1225,7 @@ public final class CodePrinterTest extends CodePrinterTestBase {
           @Override
           void setOptions(CompilerOptions options) {
             options.setPrettyPrint(true);
+            options.setPreserveTypeAnnotations(true);
             options.setLineBreak(false);
             options.setLineLengthThreshold(CodePrinter.DEFAULT_LINE_LENGTH_THRESHOLD);
             optionBuilder.setOptions(options);
@@ -1436,7 +1493,7 @@ public final class CodePrinterTest extends CodePrinterTestBase {
   public void testIndirectEval() {
     Node n = parse("eval('1');");
     assertPrintNode("eval(\"1\")", n);
-    n.getFirstChild().getFirstChild().getFirstChild().putBooleanProp(
+    n.getFirstFirstChild().getFirstChild().putBooleanProp(
         Node.DIRECT_EVAL, false);
     assertPrintNode("(0,eval)(\"1\")", n);
   }
@@ -1449,7 +1506,7 @@ public final class CodePrinterTest extends CodePrinterTestBase {
   public void testFreeCall2() {
     Node n = parse("foo(a);");
     assertPrintNode("foo(a)", n);
-    Node call =  n.getFirstChild().getFirstChild();
+    Node call =  n.getFirstFirstChild();
     assertTrue(call.isCall());
     call.putBooleanProp(Node.FREE_CALL, true);
     assertPrintNode("foo(a)", n);
@@ -1458,7 +1515,7 @@ public final class CodePrinterTest extends CodePrinterTestBase {
   public void testFreeCall3() {
     Node n = parse("x.foo(a);");
     assertPrintNode("x.foo(a)", n);
-    Node call =  n.getFirstChild().getFirstChild();
+    Node call =  n.getFirstFirstChild();
     assertTrue(call.isCall());
     call.putBooleanProp(Node.FREE_CALL, true);
     assertPrintNode("(0,x.foo)(a)", n);

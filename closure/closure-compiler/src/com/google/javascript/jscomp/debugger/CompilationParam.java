@@ -19,6 +19,7 @@ package com.google.javascript.jscomp.debugger;
 import com.google.javascript.jscomp.AnonymousFunctionNamingPolicy;
 import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.CompilerOptions;
+import com.google.javascript.jscomp.DiagnosticGroup;
 import com.google.javascript.jscomp.DiagnosticGroups;
 import com.google.javascript.jscomp.PropertyRenamingPolicy;
 import com.google.javascript.jscomp.VariableRenamingPolicy;
@@ -37,8 +38,8 @@ enum CompilationParam {
     @Override
     void apply(CompilerOptions options, boolean value) {
       if (value) {
-        for (String groupName : new DiagnosticGroups().getRegisteredGroups().keySet()) {
-          options.setWarningLevel(groupName, CheckLevel.WARNING);
+        for (DiagnosticGroup group : new DiagnosticGroups().getRegisteredGroups().values()) {
+          options.setWarningLevel(group, CheckLevel.WARNING);
         }
       }
     }
@@ -57,7 +58,7 @@ enum CompilationParam {
   /**
    * If true, the input language is ES6. If false, it's ES5.
    */
-  LANG_IN_IS_ES6(false) {
+  LANG_IN_IS_ES6(true) {
     @Override
     void apply(CompilerOptions options, boolean value) {
       options.setLanguageIn(value ?
@@ -69,7 +70,7 @@ enum CompilationParam {
   /**
    * If true, the output language is ES5. If false, we skip transpilation.
    */
-  TRANSPILE {
+  TRANSPILE(true) {
     @Override
     void apply(CompilerOptions options, boolean value) {
       options.setLanguageOut(value ?
@@ -114,7 +115,8 @@ enum CompilationParam {
   CHECK_MISSING_RETURN {
     @Override
     void apply(CompilerOptions options, boolean value) {
-      options.setWarningLevel("missingReturn", value ? CheckLevel.WARNING : CheckLevel.OFF);
+      options.setWarningLevel(
+          DiagnosticGroups.MISSING_RETURN, value ? CheckLevel.WARNING : CheckLevel.OFF);
     }
   },
 
@@ -370,6 +372,14 @@ enum CompilationParam {
     @Override
     void apply(CompilerOptions options, boolean value) {
       options.setRemoveUnusedPrototypeProperties(value);
+    }
+  },
+
+  /** Removes unused static class prototypes */
+  REMOVE_UNUSED_CLASS_PROPERTIES {
+    @Override
+    void apply(CompilerOptions options, boolean value) {
+      options.setRemoveUnusedClassProperties(value);
     }
   },
 
@@ -673,7 +683,7 @@ enum CompilationParam {
       }
     });
 
-    return values.toArray(new CompilationParam[values.size()]);
+    return values.toArray(new CompilationParam[0]);
   }
 
   /** Applies a CGI parameter to the options. */

@@ -16,7 +16,6 @@
 
 package com.google.javascript.jscomp.newtypes;
 
-import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -59,6 +58,7 @@ public final class DeclaredFunctionType {
       JSType nominalType,
       JSType receiverType,
       ImmutableList<String> typeParameters) {
+    Preconditions.checkArgument(retType == null || !retType.isBottom());
     this.requiredFormals = requiredFormals;
     this.optionalFormals = optionalFormals;
     this.restFormals = restFormals;
@@ -127,6 +127,19 @@ public final class DeclaredFunctionType {
     return requiredFormals.size() + optionalFormals.size();
   }
 
+  public int getMaxArity() {
+    if (this.restFormals != null) {
+      return Integer.MAX_VALUE; // "Infinite" arity
+    } else {
+      return this.getOptionalArity();
+    }
+  }
+
+  private int getSyntacticArity() {
+    return this.getOptionalArity()
+        + (this.restFormals == null ? 0 : 1);
+  }
+
   public boolean hasRestFormals() {
     return restFormals != null;
   }
@@ -165,8 +178,13 @@ public final class DeclaredFunctionType {
   }
 
   public boolean isTypeVariableDefinedLocally(String tvar) {
-    if (this.typeParameters.contains(tvar)) {
-      return true;
+    return getTypeVariableDefinedLocally(tvar) != null;
+  }
+
+  public String getTypeVariableDefinedLocally(String tvar) {
+    String tmp = UniqueNameGenerator.findGeneratedName(tvar, this.typeParameters);
+    if (tmp != null) {
+      return tmp;
     }
     // We don't look at this.nominalType, b/c if this function is a generic
     // constructor, then typeParameters contains the relevant type variables.
@@ -174,12 +192,13 @@ public final class DeclaredFunctionType {
       NominalType recvType = this.receiverType.getNominalTypeIfSingletonObj();
       if (recvType != null && recvType.isUninstantiatedGenericType()) {
         RawNominalType rawType = recvType.getRawNominalType();
-        if (rawType.getTypeParameters().contains(tvar)) {
-          return true;
+        tmp = UniqueNameGenerator.findGeneratedName(tvar, rawType.getTypeParameters());
+        if (tmp != null) {
+          return tmp;
         }
       }
     }
-    return false;
+    return null;
   }
 
   public DeclaredFunctionType withReceiverType(JSType newReceiverType) {
@@ -194,7 +213,8 @@ public final class DeclaredFunctionType {
     // getsTypeInfoFromParentMethod is true when a method w/out jsdoc overrides
     // a parent method. In this case, the parent may be declaring some formals
     // as optional and we want to preserve that type information here.
-    if (getsTypeInfoFromParentMethod) {
+    if (getsTypeInfoFromParentMethod
+        && getSyntacticArity() == superType.getSyntacticArity()) {
       NominalType nt = superType.nominalType == null
           ? null : superType.nominalType.getNominalTypeIfSingletonObj();
       // Only keep this.receiverType from the current type
@@ -316,8 +336,11 @@ public final class DeclaredFunctionType {
       builder.addRestFormals(
           nullAcceptingJoin(f1.restFormals, f2.restFormals));
     }
-    builder.addRetType(
-        nullAcceptingMeet(f1.returnType, f2.returnType));
+    JSType retType = nullAcceptingMeet(f1.returnType, f2.returnType);
+    if (JSType.BOTTOM.equals(retType)) {
+      return null;
+    }
+    builder.addRetType(retType);
     return builder.buildDeclaration();
   }
 
@@ -343,11 +366,6 @@ public final class DeclaredFunctionType {
 
   @Override
   public String toString() {
-    return MoreObjects.toStringHelper(this)
-        .add("Required formals", requiredFormals)
-        .add("Optional formals", optionalFormals)
-        .add("Varargs formals", restFormals)
-        .add("Return", returnType)
-        .add("Nominal type", nominalType).toString();
+    return toFunctionType().toString();
   }
 }

@@ -183,7 +183,7 @@ class OptimizeArgumentsArray implements CompilerPass, ScopedCallback {
    */
   private boolean tryReplaceArguments(Scope scope) {
 
-    Node parametersList = scope.getRootNode().getFirstChild().getNext();
+    Node parametersList = scope.getRootNode().getSecondChild();
     Preconditions.checkState(parametersList.isParamList());
 
     // Keep track of rather this function modified the AST and needs to be
@@ -273,7 +273,7 @@ class OptimizeArgumentsArray implements CompilerPass, ScopedCallback {
 
       // Unnamed parameter.
       if (value >= numNamedParameter) {
-        ref.getParent().getParent().replaceChild(ref.getParent(),
+        ref.getGrandparent().replaceChild(ref.getParent(),
             IR.name(argNames[value - numNamedParameter]));
       } else {
 
@@ -287,7 +287,7 @@ class OptimizeArgumentsArray implements CompilerPass, ScopedCallback {
         for (int i = 0; i < value; i++) {
           name = name.getNext();
         }
-        ref.getParent().getParent().replaceChild(ref.getParent(),
+        ref.getGrandparent().replaceChild(ref.getParent(),
             IR.name(name.getString()));
       }
       changed = true;

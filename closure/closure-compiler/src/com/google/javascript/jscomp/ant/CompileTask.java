@@ -71,10 +71,11 @@ import java.util.logging.Level;
 public final class CompileTask
     extends Task {
   private CompilerOptions.LanguageMode languageIn;
+  private CompilerOptions.LanguageMode languageOut;
   private WarningLevel warningLevel;
   private boolean debugOptions;
   private String encoding = "UTF-8";
-  private String outputEncoding = "UTF-8";
+  private Charset outputEncoding = UTF_8;
   private CompilationLevel compilationLevel;
   private CompilerOptions.Environment environment;
   private boolean manageDependencies;
@@ -100,7 +101,8 @@ public final class CompileTask
   private String sourceMapLocationMapping;
 
   public CompileTask() {
-    this.languageIn = CompilerOptions.LanguageMode.ECMASCRIPT3;
+    this.languageIn = CompilerOptions.LanguageMode.ECMASCRIPT6;
+    this.languageOut = CompilerOptions.LanguageMode.ECMASCRIPT3;
     this.warningLevel = WarningLevel.DEFAULT;
     this.debugOptions = false;
     this.compilationLevel = CompilationLevel.SIMPLE_OPTIMIZATIONS;
@@ -122,37 +124,45 @@ public final class CompileTask
     this.warnings = new LinkedList<>();
   }
 
+  private static CompilerOptions.LanguageMode parseLanguageMode(String value) {
+    switch (value) {
+      case "ECMASCRIPT6_STRICT":
+      case "ES6_STRICT":
+        return CompilerOptions.LanguageMode.ECMASCRIPT6_STRICT;
+      case "ECMASCRIPT6":
+      case "ES6":
+        return CompilerOptions.LanguageMode.ECMASCRIPT6;
+      case "ECMASCRIPT5_STRICT":
+      case "ES5_STRICT":
+        return CompilerOptions.LanguageMode.ECMASCRIPT5_STRICT;
+      case "ECMASCRIPT5":
+      case "ES5":
+        return CompilerOptions.LanguageMode.ECMASCRIPT5;
+      case "ECMASCRIPT3":
+      case "ES3":
+        return CompilerOptions.LanguageMode.ECMASCRIPT3;
+      default:
+        throw new BuildException(
+            "Unrecognized 'languageIn' option value (" + value + ")");
+    }
+  }
+
   /**
    * Set the language to which input sources conform.
    * @param value The name of the language.
    *     (ECMASCRIPT3, ECMASCRIPT5, ECMASCRIPT5_STRICT).
    */
   public void setLanguageIn(String value) {
-    switch (value) {
-      case "ECMASCRIPT6_STRICT":
-      case "ES6_STRICT":
-        this.languageIn = CompilerOptions.LanguageMode.ECMASCRIPT6_STRICT;
-        break;
-      case "ECMASCRIPT6":
-      case "ES6":
-        this.languageIn = CompilerOptions.LanguageMode.ECMASCRIPT6;
-        break;
-      case "ECMASCRIPT5_STRICT":
-      case "ES5_STRICT":
-        this.languageIn = CompilerOptions.LanguageMode.ECMASCRIPT5_STRICT;
-        break;
-      case "ECMASCRIPT5":
-      case "ES5":
-        this.languageIn = CompilerOptions.LanguageMode.ECMASCRIPT5;
-        break;
-      case "ECMASCRIPT3":
-      case "ES3":
-        this.languageIn = CompilerOptions.LanguageMode.ECMASCRIPT3;
-        break;
-      default:
-        throw new BuildException(
-            "Unrecognized 'languageIn' option value (" + value + ")");
-    }
+    this.languageIn = parseLanguageMode(value);
+  }
+
+  /**
+   * Set the language to which output sources conform.
+   * @param value The name of the language.
+   *     (ECMASCRIPT3, ECMASCRIPT5, ECMASCRIPT5_STRICT).
+   */
+  public void setLanguageOut(String value) {
+    this.languageOut = parseLanguageMode(value);
   }
 
   /**
@@ -267,7 +277,7 @@ public final class CompileTask
    * Set output file encoding
    */
   public void setOutputEncoding(String outputEncoding) {
-    this.outputEncoding = outputEncoding;
+    this.outputEncoding = Charset.forName(outputEncoding);
   }
 
   /**
@@ -319,7 +329,7 @@ public final class CompileTask
   }
 
   /**
-   * Adds a <warning/> entry
+   * Adds a {@code <warning/>} entry
    *
    * Each warning entry must have two attributes, group and level. Group must
    * contain one of the constants from DiagnosticGroups (e.g.,
@@ -331,7 +341,7 @@ public final class CompileTask
   }
 
   /**
-   * Adds a <entrypoint/> entry
+   * Adds a {@code <entrypoint/>} entry
    *
    * Each entrypoint entry must have one attribute, name.
    */
@@ -441,6 +451,7 @@ public final class CompileTask
     options.setGenerateExports(this.generateExports);
 
     options.setLanguageIn(this.languageIn);
+    options.setLanguageOut(this.languageOut);
     options.setOutputCharset(this.outputEncoding);
 
     this.warningLevel.setOptionsForWarningLevel(options);
@@ -471,7 +482,7 @@ public final class CompileTask
     }
 
     if (!Strings.isNullOrEmpty(sourceMapLocationMapping)) {
-      String tokens[] = sourceMapLocationMapping.split("\\|", -1);
+      String[] tokens = sourceMapLocationMapping.split("\\|", -1);
       LocationMapping lm = new LocationMapping(tokens[0], tokens[1]);
       options.setSourceMapLocationMappings(Arrays.asList(lm));
     }
@@ -662,7 +673,7 @@ public final class CompileTask
    */
   private List<SourceFile> getBuiltinExterns(CompilerOptions options) {
     try {
-      return CommandLineRunner.getBuiltinExterns(options);
+      return CommandLineRunner.getBuiltinExterns(options.getEnvironment());
     } catch (IOException e) {
       throw new BuildException(e);
     }
@@ -740,7 +751,7 @@ public final class CompileTask
   /**
    * Returns the last modified timestamp of the given File.
    */
-  private long getLastModifiedTime(File file) {
+  private static long getLastModifiedTime(File file) {
     long fileLastModified = file.lastModified();
     // If the file is absent, we don't know if it changed (maybe was deleted),
     // so assume it has just changed.

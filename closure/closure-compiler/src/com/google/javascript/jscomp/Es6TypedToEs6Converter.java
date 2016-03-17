@@ -236,7 +236,7 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
       n.removeProp(Node.IMPLEMENTS);
     }
 
-    Node superType = n.getChildAtIndex(1);
+    Node superType = n.getSecondChild();
     Node newSuperType = maybeGetQualifiedNameNode(superType);
     if (newSuperType != superType) {
       n.replaceChild(superType, newSuperType);
@@ -345,10 +345,9 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
     member.detachFromParent();
     className = maybePrependCurrNamespace(className);
     Node nameAccess = NodeUtil.newQName(compiler, className);
-    Node prototypeAcess = NodeUtil.newPropertyAccess(compiler, nameAccess, "prototype");
-    Node qualifiedMemberAccess =
-        Es6ToEs3Converter.getQualifiedMemberAccess(compiler, member, nameAccess,
-            prototypeAcess);
+    Node prototypeAccess = NodeUtil.newPropertyAccess(compiler, nameAccess, "prototype");
+    Node qualifiedMemberAccess = getQualifiedMemberAccess(
+        compiler, member, nameAccess, prototypeAccess);
     // Copy type information.
     maybeVisitColonType(member, member);
     maybeAddVisibility(member);
@@ -356,6 +355,24 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
     qualifiedMemberAccess.setJSDocInfo(member.getJSDocInfo());
     Node newNode = NodeUtil.newExpr(qualifiedMemberAccess);
     return newNode.useSourceInfoIfMissingFromForTree(member);
+  }
+
+  /**
+   * Constructs a Node that represents an access to the given class member, qualified by either the
+   * static or the instance access context, depending on whether the member is static.
+   *
+   * <p><b>WARNING:</b> {@code member} may be modified/destroyed by this method, do not use it
+   * afterwards.
+   */
+  private static Node getQualifiedMemberAccess(AbstractCompiler compiler, Node member,
+      Node staticAccess, Node instanceAccess) {
+    Node context = member.isStaticMember() ? staticAccess : instanceAccess;
+    context = context.cloneTree();
+    if (member.isComputedProp()) {
+      return IR.getelem(context, member.removeFirstChild());
+    } else {
+      return NodeUtil.newPropertyAccess(compiler, context, member.getString());
+    }
   }
 
   private void visitEnum(Node n, Node parent) {
@@ -409,7 +426,7 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
       if (!processedOverloads.contains(overloadStack)) {
         Node original = overloadStack.peek().get(name);
         processedOverloads.add(original);
-        Node paramList = original.getChildAtIndex(1);
+        Node paramList = original.getSecondChild();
         paramList.removeChildren();
         Node originalParent = original.getParent();
         Node originalJsDocNode = originalParent.isMemberFunctionDef() || originalParent.isAssign()
@@ -548,7 +565,7 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
       replaceWithNodes(n, n.children());
     } else if (n.hasMoreThanOneChild()) {
       Node insertPoint = n;
-      for (Node c = n.getFirstChild().getNext(); c != null; c = c.getNext()) {
+      for (Node c = n.getSecondChild(); c != null; c = c.getNext()) {
         Node toAdd;
         if (!c.isExprResult()) {
           toAdd = n.cloneNode();
@@ -788,7 +805,7 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
       String restName = null;
       TypeDeclarationNode restType = null;
 
-      for (Node param : function.getFirstChild().getNext().children()) {
+      for (Node param : function.getSecondChild().children()) {
         if (param.isName()) {
           if (param.isOptionalEs6Typed()) {
             optional.put(param.getString(), param.getDeclaredTypeExpression());
@@ -796,7 +813,7 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
             required.put(param.getString(), param.getDeclaredTypeExpression());
           }
         } else if (param.isRest()) {
-          restName = param.getString();
+          restName = param.getFirstChild().getString();
           restType = param.getDeclaredTypeExpression();
         }
       }
@@ -847,7 +864,7 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
         case Token.DECLARE:
         case Token.EXPORT:
           if (parent.getParent().getType() == Token.EXPORT) {
-            parentModuleRoot = grandParent.getParent().getParent();
+            parentModuleRoot = grandParent.getGrandparent();
           } else {
             parentModuleRoot = grandParent.getParent();
           }

@@ -371,7 +371,7 @@ class DeadAssignmentsElimination extends AbstractPostOrderCallback implements
 
     if (n.isName() && variable.equals(n.getString())) {
       if (NodeUtil.isVarOrSimpleAssignLhs(n, n.getParent())) {
-        Preconditions.checkState(n.getParent().isAssign());
+        Preconditions.checkState(n.getParent().isAssign(), n.getParent());
         // The expression to which the assignment is made is evaluated before
         // the RHS is evaluated (normal left to right evaluation) but the KILL
         // occurs after the RHS is evaluated.
@@ -410,7 +410,7 @@ class DeadAssignmentsElimination extends AbstractPostOrderCallback implements
           return first;
         }
         return checkHookBranchReadBeforeKill(
-            n.getFirstChild().getNext(), n.getLastChild(), variable);
+            n.getSecondChild(), n.getLastChild(), variable);
 
       default:
         // Expressions are evaluated left-right, depth first.

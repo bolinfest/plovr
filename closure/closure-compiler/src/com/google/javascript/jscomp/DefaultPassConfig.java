@@ -16,13 +16,13 @@
 
 package com.google.javascript.jscomp;
 
+import static com.google.javascript.jscomp.PassFactory.createEmptyPass;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
 import com.google.javascript.jscomp.AbstractCompiler.LifeCycleStage;
 import com.google.javascript.jscomp.CompilerOptions.ExtractPrototypeMemberDeclarationsMode;
@@ -30,7 +30,8 @@ import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.jscomp.CoverageInstrumentationPass.CoverageReach;
 import com.google.javascript.jscomp.ExtractPrototypeMemberDeclarations.Pattern;
 import com.google.javascript.jscomp.NodeTraversal.Callback;
-import com.google.javascript.jscomp.lint.CheckArguments;
+import com.google.javascript.jscomp.PassFactory.HotSwapPassFactory;
+import com.google.javascript.jscomp.lint.CheckDuplicateCase;
 import com.google.javascript.jscomp.lint.CheckEmptyStatements;
 import com.google.javascript.jscomp.lint.CheckEnums;
 import com.google.javascript.jscomp.lint.CheckForInOverArray;
@@ -39,6 +40,7 @@ import com.google.javascript.jscomp.lint.CheckJSDocStyle;
 import com.google.javascript.jscomp.lint.CheckNullableReturn;
 import com.google.javascript.jscomp.lint.CheckPrototypeProperties;
 import com.google.javascript.jscomp.lint.CheckRequiresAndProvidesSorted;
+import com.google.javascript.jscomp.lint.CheckUselessBlocks;
 import com.google.javascript.jscomp.parsing.ParserRunner;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
@@ -185,6 +187,10 @@ public final class DefaultPassConfig extends PassConfig {
     // Verify JsDoc annotations
     checks.add(checkJsDoc);
 
+    if (options.enables(DiagnosticGroups.LINT_CHECKS)) {
+      checks.add(lintChecks);
+    }
+
     if (!options.skipNonTranspilationPasses && options.closurePass
         && options.enables(DiagnosticGroups.LINT_CHECKS)) {
       checks.add(checkRequiresAndProvidesSorted);
@@ -192,6 +198,7 @@ public final class DefaultPassConfig extends PassConfig {
 
     // goog.module rewrite must happen even if options.skipNonTranspilationPasses is set.
     if (options.closurePass) {
+      checks.add(closureCheckModule);
       checks.add(closureRewriteModule);
     }
 
@@ -284,36 +291,19 @@ public final class DefaultPassConfig extends PassConfig {
       checks.add(objectPropertyStringPreprocess);
     }
 
-    // Early ES6 transpilation.
-    // Includes ES6 features that are straightforward to transpile.
-    // We won't handle them natively in the rest of the compiler, so we always
-    // transpile them, even if the output language is also ES6.
     if (options.getLanguageIn().isEs6OrHigher() && !options.skipTranspilationAndCrash) {
-      checks.add(es6RewriteArrowFunction);
-      checks.add(es6RenameVariablesInParamLists);
-      checks.add(es6SplitVariableDeclarations);
-      checks.add(es6RewriteDestructuring);
+      checks.add(es6ExternsCheck);
+      TranspilationPasses.addEs6EarlyPasses(checks);
     }
 
-    // It's important that the Dart super accessors pass run *before*
-    // es6ConvertSuper. This is enforced in the assertValidOrder method.
+    // It's important that the Dart super accessors pass run *before* es6ConvertSuper,
+    // which is a "late" ES6 pass. This is enforced in the assertValidOrder method.
     if (options.dartPass && !options.getLanguageOut().isEs6OrHigher()) {
       checks.add(dartSuperAccessorsPass);
     }
 
-    // Late ES6 transpilation.
-    // Includes ES6 features that are best handled natively by the compiler.
-    // As we convert more passes to handle these features, we will be moving the transpilation
-    // later in the compilation, and eventually only transpiling when the output is lower than ES6.
     if (options.getLanguageIn().isEs6OrHigher() && !options.skipTranspilationAndCrash) {
-      checks.add(es6ConvertSuper);
-      checks.add(convertEs6ToEs3);
-      checks.add(rewriteBlockScopedDeclaration);
-      checks.add(rewriteGenerators);
-      if (!options.getLanguageOut().isEs6OrHigher() && options.rewritePolyfills) {
-        // TODO(sdh): output version check unnecessary?!?
-        checks.add(rewritePolyfills);
-      }
+      TranspilationPasses.addEs6LatePasses(checks);
       checks.add(markTranspilationDone);
     }
 
@@ -375,9 +365,9 @@ public final class DefaultPassConfig extends PassConfig {
       checks.add(checkAccessControls);
     }
 
-    // Lint checks must be run after typechecking.
-    if (options.enables(DiagnosticGroups.LINT_CHECKS)) {
-      checks.add(lintChecks);
+    // Analyzer checks must be run after typechecking.
+    if (options.enables(DiagnosticGroups.ANALYZER_CHECKS)) {
+      checks.add(analyzerChecks);
     }
 
     if (options.checkEventfulObjectDisposalPolicy !=
@@ -474,6 +464,7 @@ public final class DefaultPassConfig extends PassConfig {
     // into a fully qualified access and in so doing enables better dead code stripping.
     if (options.j2clPass) {
       passes.add(j2clPass);
+      passes.add(j2clPropertyInlinerPass);
     }
 
     passes.add(createEmptyPass("beforeStandardOptimizations"));
@@ -620,6 +611,13 @@ public final class DefaultPassConfig extends PassConfig {
     }
 
     passes.add(createEmptyPass("beforeMainOptimizations"));
+
+    // Because FlowSensitiveInlineVariables does not operate on the global scope due to compilation
+    // time, we need to run it once before InlineFunctions so that we don't miss inlining
+    // opportunities when a function will be inlined into the global scope.
+    if (options.flowSensitiveInlineVariables) {
+      passes.add(flowSensitiveInlineVariables);
+    }
 
     passes.addAll(getMainOptimizationLoop());
 
@@ -913,6 +911,7 @@ public final class DefaultPassConfig extends PassConfig {
       List<Callback> sharedCallbacks = new ArrayList<>();
       if (options.checkSuspiciousCode) {
         sharedCallbacks.add(new CheckSuspiciousCode());
+        sharedCallbacks.add(new CheckDuplicateCase(compiler));
       }
 
       if (options.enables(DiagnosticGroups.GLOBAL_THIS)) {
@@ -951,7 +950,7 @@ public final class DefaultPassConfig extends PassConfig {
   private void assertValidOrder(List<PassFactory> checks) {
     int polymerIndex = checks.indexOf(polymerPass);
     int dartSuperAccessorsIndex = checks.indexOf(dartSuperAccessorsPass);
-    int es6ConvertSuperIndex = checks.indexOf(es6ConvertSuper);
+    int es6ConvertSuperIndex = checks.indexOf(TranspilationPasses.es6ConvertSuper);
     int closureIndex = checks.indexOf(closurePrimitives);
     int suspiciousCodeIndex = checks.indexOf(suspiciousCode);
     int checkVarsIndex = checks.indexOf(checkVariableReferences);
@@ -1171,74 +1170,13 @@ public final class DefaultPassConfig extends PassConfig {
     }
   };
 
-  private final HotSwapPassFactory es6RewriteDestructuring =
-      new HotSwapPassFactory("Es6RewriteDestructuring", true) {
+  private final PassFactory es6ExternsCheck =
+      new PassFactory("es6ExternsCheck", true) {
         @Override
-        protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
-          return new Es6RewriteDestructuring(compiler);
+        protected CompilerPass create(final AbstractCompiler compiler) {
+          return new Es6ExternsCheck(compiler);
         }
       };
-
-  private final HotSwapPassFactory es6RenameVariablesInParamLists =
-      new HotSwapPassFactory("Es6RenameVariablesInParamLists", true) {
-        @Override
-        protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
-          return new Es6RenameVariablesInParamLists(compiler);
-        }
-      };
-
-  private final HotSwapPassFactory es6RewriteArrowFunction =
-      new HotSwapPassFactory("Es6RewriteArrowFunction", true) {
-        @Override
-        protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
-          return new Es6RewriteArrowFunction(compiler);
-        }
-      };
-
-  private final HotSwapPassFactory rewritePolyfills =
-      new HotSwapPassFactory("RewritePolyfills", true) {
-        @Override
-        protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
-          return new RewritePolyfills(compiler);
-        }
-      };
-
-  private final HotSwapPassFactory es6SplitVariableDeclarations =
-      new HotSwapPassFactory("Es6SplitVariableDeclarations", true) {
-        @Override
-        protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
-          return new Es6SplitVariableDeclarations(compiler);
-        }
-      };
-
-  private final HotSwapPassFactory es6ConvertSuper =
-      new HotSwapPassFactory("es6ConvertSuper", true) {
-    @Override
-    protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
-      return new Es6ConvertSuper(compiler);
-    }
-  };
-
-  /**
-   * Does the main ES6 to ES3 conversion.
-   * There are a few other passes which run before or after this one,
-   * to convert constructs which are not converted by this pass.
-   */
-  private final HotSwapPassFactory convertEs6ToEs3 =
-      new HotSwapPassFactory("convertEs6", true) {
-    @Override
-    protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
-      return new Es6ToEs3Converter(compiler);
-    }
-  };
-
-  private final HotSwapPassFactory rewriteBlockScopedDeclaration =
-      new HotSwapPassFactory("Es6RewriteBlockScopedDeclaration", true) {
-    @Override
-    protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
-      return new Es6RewriteBlockScopedDeclaration(compiler);
-    }
-  };
 
   /**
    * Desugars ES6_TYPED features into ES6 code.
@@ -1248,14 +1186,6 @@ public final class DefaultPassConfig extends PassConfig {
     @Override
     protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
       return new Es6TypedToEs6Converter(compiler);
-    }
-  };
-
-  private final HotSwapPassFactory rewriteGenerators =
-      new HotSwapPassFactory("rewriteGenerators", true) {
-    @Override
-    protected HotSwapCompilerPass create(final AbstractCompiler compiler) {
-      return new Es6RewriteGenerators(compiler);
     }
   };
 
@@ -1270,7 +1200,7 @@ public final class DefaultPassConfig extends PassConfig {
   private final PassFactory inlineTypeAliases =
       new PassFactory("inlineTypeAliases", true) {
     @Override
-    CompilerPass create(AbstractCompiler compiler) {
+    protected CompilerPass create(AbstractCompiler compiler) {
       return new InlineAliases(compiler);
     }
   };
@@ -1278,7 +1208,7 @@ public final class DefaultPassConfig extends PassConfig {
   private final PassFactory convertToTypedES6 =
       new PassFactory("ConvertToTypedES6", true) {
     @Override
-    CompilerPass create(AbstractCompiler compiler) {
+    protected CompilerPass create(AbstractCompiler compiler) {
       return new JsdocToEs6TypedConverter(compiler);
     }
   };
@@ -1311,6 +1241,15 @@ public final class DefaultPassConfig extends PassConfig {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
       return new ClosureRewriteClass(compiler);
+    }
+  };
+
+  /** Checks of correct usage of goog.module */
+  private final HotSwapPassFactory closureCheckModule =
+      new HotSwapPassFactory("closureCheckModule", true) {
+    @Override
+    protected HotSwapCompilerPass create(AbstractCompiler compiler) {
+      return new ClosureCheckModule(compiler);
     }
   };
 
@@ -1411,7 +1350,7 @@ public final class DefaultPassConfig extends PassConfig {
             new PeepholeSubstituteAlternateSyntax(late),
             new PeepholeReplaceKnownMethods(late),
             new PeepholeRemoveDeadCode(),
-            new PeepholeFoldConstants(late),
+            new PeepholeFoldConstants(late, options.useTypesForOptimization),
             new PeepholeCollectPropertyAssignments());
     }
   };
@@ -1428,7 +1367,7 @@ public final class DefaultPassConfig extends PassConfig {
             new PeepholeMinimizeConditions(late),
             new PeepholeSubstituteAlternateSyntax(late),
             new PeepholeReplaceKnownMethods(late),
-            new PeepholeFoldConstants(late),
+            new PeepholeFoldConstants(late, options.useTypesForOptimization),
             new ReorderConstantExpression());
     }
   };
@@ -1619,15 +1558,24 @@ public final class DefaultPassConfig extends PassConfig {
     @Override
     protected HotSwapCompilerPass create(AbstractCompiler compiler) {
       ImmutableList.Builder<Callback> callbacks = ImmutableList.<Callback>builder()
-          .add(new CheckArguments(compiler))
           .add(new CheckEmptyStatements(compiler))
           .add(new CheckEnums(compiler))
           .add(new CheckInterfaces(compiler))
           .add(new CheckJSDocStyle(compiler))
-          .add(new CheckNullableReturn(compiler))
-          .add(new CheckForInOverArray(compiler))
           .add(new CheckPrototypeProperties(compiler))
           .add(new CheckUnusedPrivateProperties(compiler))
+          .add(new CheckUselessBlocks(compiler));
+      return combineChecks(compiler, callbacks.build());
+    }
+  };
+
+  private final HotSwapPassFactory analyzerChecks =
+      new HotSwapPassFactory("analyzerChecks", true) {
+    @Override
+    protected HotSwapCompilerPass create(AbstractCompiler compiler) {
+      ImmutableList.Builder<Callback> callbacks = ImmutableList.<Callback>builder()
+          .add(new CheckNullableReturn(compiler))
+          .add(new CheckForInOverArray(compiler))
           .add(new ImplicitNullabilityCheck(compiler));
       return combineChecks(compiler, callbacks.build());
     }
@@ -2517,18 +2465,6 @@ public final class DefaultPassConfig extends PassConfig {
       };
 
   /**
-   * Create a no-op pass that can only run once. Used to break up loops.
-   */
-  static PassFactory createEmptyPass(String name) {
-    return new PassFactory(name, true) {
-      @Override
-      protected CompilerPass create(final AbstractCompiler compiler) {
-        return runInSerial();
-      }
-    };
-  }
-
-  /**
    * Runs custom passes that are designated to run at a particular time.
    */
   private PassFactory getCustomPasses(
@@ -2539,11 +2475,6 @@ public final class DefaultPassConfig extends PassConfig {
         return runInSerial(options.customPasses.get(executionTime));
       }
     };
-  }
-
-  /** Create a compiler pass that runs the given passes in serial. */
-  private static CompilerPass runInSerial(final CompilerPass ... passes) {
-    return runInSerial(ImmutableSet.copyOf(passes));
   }
 
   /** Create a compiler pass that runs the given passes in serial. */
@@ -2655,23 +2586,14 @@ public final class DefaultPassConfig extends PassConfig {
         }
       };
 
-  /**
-   * A pass-factory that is good for {@code HotSwapCompilerPass} passes.
-   */
-  abstract static class HotSwapPassFactory extends PassFactory {
-
-    HotSwapPassFactory(String name, boolean isOneTimePass) {
-      super(name, isOneTimePass);
-    }
-
-    @Override
-    protected abstract HotSwapCompilerPass create(AbstractCompiler compiler);
-
-    @Override
-    HotSwapCompilerPass getHotSwapPass(AbstractCompiler compiler) {
-      return this.create(compiler);
-    }
-  }
+  /** Rewrites J2CL constructs to be more optimizable. */
+  private final PassFactory j2clPropertyInlinerPass =
+      new PassFactory("j2clES6Pass", true) {
+        @Override
+        protected CompilerPass create(AbstractCompiler compiler) {
+          return new J2clPropertyInlinerPass(compiler);
+        }
+      };
 
   private final PassFactory checkConformance =
       new PassFactory("checkConformance", true) {
