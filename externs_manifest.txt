@@ -30,7 +30,6 @@ browser/w3c_dom1.js
 browser/w3c_dom2.js
 browser/w3c_dom3.js
 browser/w3c_elementtraversal.js
-browser/w3c_encoding.js
 browser/w3c_event.js
 browser/w3c_event3.js
 browser/w3c_geolocation.js
@@ -49,6 +48,7 @@ browser/webkit_dom.js
 browser/webkit_event.js
 browser/webkit_notifications.js
 browser/webstorage.js
+browser/whatwg_encoding.js
 browser/window.js
 es3.js
 es5.js
