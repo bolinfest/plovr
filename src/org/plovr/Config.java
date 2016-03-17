@@ -628,7 +628,7 @@ public final class Config implements Comparable<Config> {
     if (printInputDelimiter) {
       options.inputDelimiter = "// Input %num%: %name%";
     }
-    options.setOutputCharset(getOutputCharset().name());
+    options.setOutputCharset(getOutputCharset());
 
     // Apply this.defines.
     for (Map.Entry<String, JsonPrimitive> entry : defines.entrySet()) {
@@ -859,10 +859,16 @@ public final class Config implements Comparable<Config> {
             setter.invoke(options, primitive.getAsString());
             continue;
           } catch (NoSuchMethodException e) {
-            // Ignore exception and try setting value as an enum instead.
-            if (setCompilerOptionToEnumValue(
-                options, setterName, primitive.getAsString())) {
+            try {
+              Method setter = PlovrCompilerOptions.class.getMethod(setterName, Charset.class);
+              setter.invoke(options, Charset.forName(primitive.getAsString()));
               continue;
+            } catch (NoSuchMethodException e2) {
+              // Ignore exception and try setting value as an enum instead.
+              if (setCompilerOptionToEnumValue(
+                      options, setterName, primitive.getAsString())) {
+                continue;
+              }
             }
           }
         }
