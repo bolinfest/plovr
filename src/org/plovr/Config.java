@@ -182,9 +182,9 @@ public final class Config implements Comparable<Config> {
   private final String gssFunctionMapProviderClassName;
 
   private final File cssOutputFile;
-  
+
   private final File translationsDirectory;
-  
+
   private final String language;
 
   private final JobDescription.OutputFormat cssOutputFormat;
@@ -592,13 +592,13 @@ public final class Config implements Comparable<Config> {
   public List<WebDriverFactory> getWebDriverFactories() {
     return ImmutableList.copyOf(testDrivers);
   }
-  
+
   public File getTranslationsDirectory() {
-	  return translationsDirectory;
+    return translationsDirectory;
   }
-  
+
   public String getLanguage() {
-	  return language;
+    return language;
   }
 
   /**
@@ -773,31 +773,31 @@ public final class Config implements Comparable<Config> {
     }
 
     options.setExternExports(true);
-    
+
     if (translationsDirectory != null && language != null) {
-    	try {
-    		File[] files = translationsDirectory.listFiles(new FilenameFilter() {
-    			@Override public boolean accept(File dir, String name) {
-    				return name.startsWith(language) && (
-    						name.endsWith(".xtb") ||
-    						name.endsWith(".xliff") ||
-    						name.endsWith(".xlf"));
-    			}
-    	    });
-    	    if (files.length == 0) {
-    	    	logger.severe("Unable to find translations file for " + language);
-    	    } else {
-    	    	if (files[0].getName().endsWith(".xtb")) {
-    	    		options.setMessageBundle(
-    	    				new XtbMessageBundle(new FileInputStream(files[0]), null));
-    	    	} else {
-    	    		options.setMessageBundle(
-    	    				new XliffMessageBundle(new FileInputStream(files[0]), null));
-    	    	}
-    	    }
-    	} catch (IOException e) {
-    		logger.severe("Unable to load translations file: " + e.getMessage());
-    	}
+      try {
+        File[] files = translationsDirectory.listFiles(new FilenameFilter() {
+          @Override public boolean accept(File dir, String name) {
+            return name.startsWith(language) && (
+                name.endsWith(".xtb") ||
+                name.endsWith(".xliff") ||
+                name.endsWith(".xlf"));
+          }
+          });
+          if (files.length == 0) {
+            logger.severe("Unable to find translations file for " + language);
+          } else {
+            if (files[0].getName().endsWith(".xtb")) {
+              options.setMessageBundle(
+                  new XtbMessageBundle(new FileInputStream(files[0]), null));
+            } else {
+              options.setMessageBundle(
+                  new XliffMessageBundle(new FileInputStream(files[0]), null));
+            }
+          }
+      } catch (IOException e) {
+        logger.severe("Unable to load translations file: " + e.getMessage());
+      }
     }
 
     // Add location mapping for paths in source map.
@@ -1619,13 +1619,13 @@ public final class Config implements Comparable<Config> {
     public void setCssOutputFile(File cssOutputFile) {
       this.cssOutputFile = cssOutputFile;
     }
-    
+
     public void setTranslationsDirectory(File translationsDirectory) {
-    	this.translationsDirectory = translationsDirectory;
+      this.translationsDirectory = translationsDirectory;
     }
 
     public void setLanguage(String language) {
-    	this.language = language;
+      this.language = language;
     }
 
     public void setCssOutputFormat(JobDescription.OutputFormat cssOutputFormat) {
