@@ -272,6 +272,16 @@ public enum ConfigOption {
     }
   }),
 
+
+  CACHE_OUTPUT_FILE("cache-output-file", new ConfigUpdater() {
+    @Override
+    public void apply(String outputFilePath, Config.Builder builder) {
+      File outputFile = (outputFilePath == null) ? null :
+        new File(maybeResolvePath(outputFilePath, builder));
+      builder.setCacheOutputFile(outputFile);
+    }
+  }),
+
   LANGUAGE_IN("language-in", new ConfigUpdater() {
     @Override
     public void apply(String mode, Config.Builder builder) {

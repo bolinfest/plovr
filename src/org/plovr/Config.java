@@ -119,6 +119,8 @@ public final class Config implements Comparable<Config> {
 
   private final Charset outputCharset;
 
+  private final File cacheOutputFile;
+
   private final boolean fingerprintJsFiles;
 
   private final Map<String, CheckLevel> checkLevelsForDiagnosticGroups;
@@ -217,6 +219,7 @@ public final class Config implements Comparable<Config> {
       @Nullable File outputFile,
       @Nullable String outputWrapper,
       Charset outputCharset,
+      @Nullable File cacheOutputFile,
       boolean fingerprintJsFiles,
       Map<String, CheckLevel> checkLevelsForDiagnosticGroups,
       boolean exportTestFunctions,
@@ -272,6 +275,7 @@ public final class Config implements Comparable<Config> {
     this.outputFile = outputFile;
     this.outputWrapper = outputWrapper;
     this.outputCharset = outputCharset;
+    this.cacheOutputFile = cacheOutputFile;
     this.fingerprintJsFiles = fingerprintJsFiles;
     this.checkLevelsForDiagnosticGroups = checkLevelsForDiagnosticGroups;
     this.exportTestFunctions = exportTestFunctions;
@@ -373,6 +377,10 @@ public final class Config implements Comparable<Config> {
 
   public File getOutputFile() {
     return outputFile;
+  }
+
+  public File getCacheOutputFile() {
+      return cacheOutputFile;
   }
 
   /**
@@ -1052,6 +1060,8 @@ public final class Config implements Comparable<Config> {
 
     private File outputFile = null;
 
+    private File cacheOutputFile = null;
+
     private String outputWrapper = null;
 
     private Charset outputCharset = Charsets.US_ASCII;
@@ -1179,6 +1189,7 @@ public final class Config implements Comparable<Config> {
       this.outputFile = config.outputFile;
       this.outputWrapper = config.outputWrapper;
       this.outputCharset = config.outputCharset;
+      this.cacheOutputFile = config.cacheOutputFile;
       this.fingerprintJsFiles = config.fingerprintJsFiles;
       this.checkLevelsForDiagnosticGroups = config.checkLevelsForDiagnosticGroups;
       this.exportTestFunctions = config.exportTestFunctions;
@@ -1431,6 +1442,10 @@ public final class Config implements Comparable<Config> {
 
     public void setOutputFile(File outputFile) {
       this.outputFile = outputFile;
+    }
+
+    public void setCacheOutputFile(File cacheOutputFile) {
+      this.cacheOutputFile = cacheOutputFile;
     }
 
     public void setOutputWrapper(String outputWrapper) {
@@ -1696,6 +1711,7 @@ public final class Config implements Comparable<Config> {
           outputFile,
           outputWrapper,
           outputCharset,
+          cacheOutputFile,
           fingerprintJsFiles,
           checkLevelsForDiagnosticGroups,
           exportTestFunctions,
