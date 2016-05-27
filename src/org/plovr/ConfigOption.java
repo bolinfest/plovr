@@ -276,9 +276,15 @@ public enum ConfigOption {
   CACHE_OUTPUT_FILE("cache-output-file", new ConfigUpdater() {
     @Override
     public void apply(String outputFilePath, Config.Builder builder) {
-      File outputFile = (outputFilePath == null) ? null :
-        new File(maybeResolvePath(outputFilePath, builder));
-      builder.setCacheOutputFile(outputFile);
+      // If the outputFilePath value is "none", disable use of the
+      // cache.
+      if ("none".equals(outputFilePath)) {
+        builder.setUseCacheOutputFile(false);
+      } else {
+        File outputFile = (outputFilePath == null) ? null :
+          new File(maybeResolvePath(outputFilePath, builder));
+        builder.setCacheOutputFile(outputFile);
+      }
     }
   }),
 

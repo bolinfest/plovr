@@ -639,7 +639,6 @@ public final class Config implements Comparable<Config> {
     Preconditions.checkArgument(compilationMode != CompilationMode.RAW,
         "Cannot compile using RAW mode");
     CompilationLevel level = compilationMode.getCompilationLevel();
-    logger.info("Compiling with level: " + level);
     PlovrCompilerOptions options = new PlovrCompilerOptions();
 
     options.setTreatWarningsAsErrors(getTreatWarningsAsErrors());
@@ -1060,6 +1059,8 @@ public final class Config implements Comparable<Config> {
 
     private File outputFile = null;
 
+    private boolean useCacheOutputFile = true;
+
     private File cacheOutputFile = null;
 
     private String outputWrapper = null;
@@ -1189,6 +1190,7 @@ public final class Config implements Comparable<Config> {
       this.outputFile = config.outputFile;
       this.outputWrapper = config.outputWrapper;
       this.outputCharset = config.outputCharset;
+      this.useCacheOutputFile = config.cacheOutputFile != null;
       this.cacheOutputFile = config.cacheOutputFile;
       this.fingerprintJsFiles = config.fingerprintJsFiles;
       this.checkLevelsForDiagnosticGroups = config.checkLevelsForDiagnosticGroups;
@@ -1448,6 +1450,10 @@ public final class Config implements Comparable<Config> {
       this.cacheOutputFile = cacheOutputFile;
     }
 
+    public void setUseCacheOutputFile(boolean useCacheOutputFile) {
+      this.useCacheOutputFile = useCacheOutputFile;
+    }
+
     public void setOutputWrapper(String outputWrapper) {
       this.outputWrapper = outputWrapper;
     }
@@ -1691,6 +1697,14 @@ public final class Config implements Comparable<Config> {
             customExternsOnly);
       } else {
         manifest = this.manifest;
+      }
+
+      // For the plovr serve command, create a default
+      // cache-output-file if none has been assigned UNLESS the user
+      // has specifically suppressed this with the
+      // 'cache-output-file=none' configuration.
+      if (cacheOutputFile == null && useCacheOutputFile) {
+        cacheOutputFile = FileUtil.getTmpFile("plovr-serve-cache.js");
       }
 
       Config config = new Config(

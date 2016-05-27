@@ -99,6 +99,7 @@ public class CompileRequestHandler extends AbstractGetHandler {
       Appendable appendable) throws IOException, CompilationException {
     Compilation compilation;
     String viewSourceUrl = getViewSourceUrlForExchange(exchange);
+
     try {
       compilation = Compilation.createAndCompile(config);
     } catch (CompilationException e) {

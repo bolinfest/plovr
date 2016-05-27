@@ -32,8 +32,6 @@ public final class FileUtil {
   /**
    * Return true if the file argument is non-null and has a
    * last-modified date greater than the given lastModified time.
-   *
-   * @author pcj@pubref.org (Paul Johnston)
    */
   public static boolean isNewer(File file, long lastModified) {
     if (file == null) {
@@ -44,7 +42,6 @@ public final class FileUtil {
 
 
   /**
-   * @author pcj@pubref.org (Paul Johnston)
    * @see http://stackoverflow.com/questions/3758606/how-to-convert-byte-size-into-human-readable-format-in-java
    */
   public static String humanReadableByteCount(long bytes, boolean si) {
@@ -57,5 +54,13 @@ public final class FileUtil {
     return String.format("%.1f %sB", bytes / Math.pow(unit, exp), pre);
   }
 
+
+  /**
+   * Return a File in the <code>java.io.tmpdir</code> having the given
+   * name.
+   */
+  public static File getTmpFile(String filename) {
+    return new File(System.getProperty("java.io.tmpdir"), filename);
+  }
 
 }
