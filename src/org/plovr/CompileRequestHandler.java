@@ -4,6 +4,7 @@ import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.io.Files;
 import com.google.common.io.Resources;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -17,6 +18,7 @@ import com.sun.net.httpserver.HttpExchange;
 
 import org.plovr.io.Responses;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.util.List;
@@ -51,13 +53,22 @@ public class CompileRequestHandler extends AbstractGetHandler {
     StringBuilder builder = new StringBuilder();
 
     try {
+      Manifest manifest = config.getManifest();
       if (config.getCompilationMode() == CompilationMode.RAW) {
-        Manifest manifest = config.getManifest();
         String js = InputFileHandler.getJsToLoadManifest(
-            server, config, manifest, exchange);
+          server, config, manifest, exchange);
         builder.append(js);
       } else {
-        compile(config, exchange, builder);
+        if (needsRecompile(config)) {
+          compile(config, exchange, builder);
+        } else {
+          File tmp = config.getCacheOutputFile();
+          String cachedJs = Files.toString(tmp, config.getOutputCharset());
+          builder.append(cachedJs);
+          logger.info("JS Recompile skipped. Served "
+                      + FileUtil.humanReadableByteCount(tmp.length(), true)
+                      + " from cache <" + tmp + '>');
+        }
       }
     } catch (CompilationException e) {
       Preconditions.checkState(builder.length() == 0,
@@ -88,6 +99,7 @@ public class CompileRequestHandler extends AbstractGetHandler {
       Appendable appendable) throws IOException, CompilationException {
     Compilation compilation;
     String viewSourceUrl = getViewSourceUrlForExchange(exchange);
+
     try {
       compilation = Compilation.createAndCompile(config);
     } catch (CompilationException e) {
@@ -130,6 +142,15 @@ public class CompileRequestHandler extends AbstractGetHandler {
       } else {
         appendable.append(compilation.getCompiledCode());
       }
+
+      // Here at the end of a successful compilation.  If the
+      // cache-output-file has been defined, save compiled js out to it.
+      File cacheOutputFile = config.getCacheOutputFile();
+      if (cacheOutputFile != null) {
+          cacheOutputFile.getParentFile().mkdirs();
+          Files.write(appendable.toString(), cacheOutputFile, config.getOutputCharset());
+      }
+
     }
 
     // TODO(bolinfest): Check whether writing out the plovr library confuses the
@@ -149,4 +170,54 @@ public class CompileRequestHandler extends AbstractGetHandler {
   private String getViewSourceUrlForExchange(HttpExchange exchange) {
     return server.getServerForExchange(exchange) + "view";
   }
+
+  /**
+   * Return true if (1) the tmp file does not exist, (2) the config
+   * file or any local file dependencies are newer than the tmp file.
+   *
+   * @author Paul Johnston (pcj@pubref.org)
+   */
+  protected boolean needsRecompile(Config config) throws CompilationException {
+    File cacheOutputFile = config.getCacheOutputFile();
+
+    if (cacheOutputFile == null) {
+      return true;
+    }
+
+    if (!cacheOutputFile.exists()) {
+      logger.info("JS Recompile required (cache-output-file not found): " + cacheOutputFile);
+      return true;
+    }
+
+    long lastModified = cacheOutputFile.lastModified();
+
+    if (config.isOutOfDate() || FileUtil.isNewer(config.getConfigFile(), lastModified)) {
+      logger.info("JS Recompile required (config-file newer): " + config.getConfigFile());
+      return true;
+    }
+
+    Manifest manifest = config.getManifest();
+    List<JsInput> inputs = manifest.getInputsInCompilationOrder();
+    for (JsInput input : inputs) {
+      if (input instanceof LocalFileJsInput) {
+        File source = ((LocalFileJsInput)input).getSource();
+        if (FileUtil.isNewer(source, lastModified)) {
+          logger.info("JS Recompile required (found newer file): " + source);
+          return true;
+        }
+      } else if (input instanceof ResourceJsInput) {
+        // assume these are up to date.
+        continue;
+      } else if (input.toString().startsWith("/closure/goog")) {
+        // assume these are up to date.
+        continue;
+      } else {
+        logger.info("JS Recompile required (found non-localfile-input): " + input + " of type " + input.getClass().getName());
+        return true;
+      }
+    }
+
+    return false;
+  }
+
 }

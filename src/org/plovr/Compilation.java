@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
 
@@ -46,6 +47,8 @@ import com.google.template.soy.base.SoySyntaxException;
  * @author bolinfest@gmail.com (Michael Bolin)
  */
 public final class Compilation {
+
+  private static final Logger logger = Logger.getLogger("org.plovr.Compilation");
 
   private final List<SourceFile> externs;
   private final List<SourceFile> inputs;
@@ -112,6 +115,8 @@ public final class Compilation {
       PlovrClosureCompiler dummyCompiler = new PlovrClosureCompiler(config.getErrorStream());
       Compilation compilation = config.getManifest().getCompilerArguments(
           config.getModuleConfig(), config.getCompilerOptions(dummyCompiler));
+      logger.info("Compiling " + allDependencies.size()
+                  + " dependencies using mode: " + config.getCompilationMode());
       compilation.compile(config);
       return compilation;
     } catch (Throwable e) {
