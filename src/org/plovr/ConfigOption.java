@@ -272,19 +272,18 @@ public enum ConfigOption {
     }
   }),
 
-
+  /**
+   * If specified, keeps an on-disk cache of the compilation output.
+   *
+   * Note that if this cache is used, it won't account for any query parameters
+   * or request headers in the compilation request.
+   */
   CACHE_OUTPUT_FILE("cache-output-file", new ConfigUpdater() {
     @Override
     public void apply(String outputFilePath, Config.Builder builder) {
-      // If the outputFilePath value is "none", disable use of the
-      // cache.
-      if ("none".equals(outputFilePath)) {
-        builder.setUseCacheOutputFile(false);
-      } else {
-        File outputFile = (outputFilePath == null) ? null :
+      File outputFile = (outputFilePath == null) ? null :
           new File(maybeResolvePath(outputFilePath, builder));
-        builder.setCacheOutputFile(outputFile);
-      }
+      builder.setCacheOutputFile(outputFile);
     }
   }),
 

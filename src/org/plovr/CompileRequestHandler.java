@@ -17,6 +17,7 @@ import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 
 import org.plovr.io.Responses;
+import org.plovr.ClientErrorReporter.Report;
 
 import java.io.File;
 import java.io.IOException;
@@ -40,10 +41,12 @@ public class CompileRequestHandler extends AbstractGetHandler {
   }
 
   private final ClientErrorReporter reporter;
+  private final CompilationCache compilationCache;
 
   public CompileRequestHandler(CompilationServer server) {
     super(server);
     this.reporter = new ClientErrorReporter();
+    this.compilationCache = new CompilationCache();
   }
 
   @Override
@@ -51,6 +54,9 @@ public class CompileRequestHandler extends AbstractGetHandler {
     // Update these fields as they are responsible for the response that will be
     // written.
     StringBuilder builder = new StringBuilder();
+    String viewSourceUrl = getViewSourceUrlForExchange(exchange);
+    Report report = reporter.newReport(config)
+        .withViewSourceUrl(viewSourceUrl);
 
     try {
       Manifest manifest = config.getManifest();
@@ -59,24 +65,21 @@ public class CompileRequestHandler extends AbstractGetHandler {
           server, config, manifest, exchange);
         builder.append(js);
       } else {
-        if (needsRecompile(config)) {
-          compile(config, exchange, builder);
-        } else {
-          File tmp = config.getCacheOutputFile();
-          String cachedJs = Files.toString(tmp, config.getOutputCharset());
+        String cachedJs = compilationCache.getIfUpToDate(config);
+        if (cachedJs != null) {
           builder.append(cachedJs);
-          logger.info("JS recompile of " + config.getId() + " skipped. Served "
-                      + FileUtil.humanReadableByteCount(tmp.length(), true)
-                      + " from cache <" + tmp + '>');
+        } else {
+          long startTime = System.currentTimeMillis();
+          Function<String, String> moduleNameToUri = ModuleHandler.
+              createModuleNameToUriConverter(server, exchange, config.getId());
+          compile(config, moduleNameToUri, report, builder);
+          compilationCache.put(config, builder.toString(), startTime);
         }
       }
     } catch (CompilationException e) {
       Preconditions.checkState(builder.length() == 0,
           "Should not write errors to builder if output has already been written");
-      String viewSourceUrl = getViewSourceUrlForExchange(exchange);
-      reporter.newReport(config)
-          .withErrors(e.createCompilationErrors())
-          .withViewSourceUrl(viewSourceUrl)
+      report.withErrors(e.createCompilationErrors())
           .appendTo(builder);
     }
 
@@ -94,22 +97,10 @@ public class CompileRequestHandler extends AbstractGetHandler {
    * When modules are used, only the code for the initial module will be written,
    * along with the requisite bootstrapping code for the remaining modules.
    */
-  private void compile(Config config,
-      HttpExchange exchange,
-      Appendable appendable) throws IOException, CompilationException {
-    Compilation compilation;
-    String viewSourceUrl = getViewSourceUrlForExchange(exchange);
-
-    try {
-      compilation = Compilation.createAndCompile(config);
-    } catch (CompilationException e) {
-      reporter.newReport(config)
-          .withErrors(e.createCompilationErrors())
-          .withViewSourceUrl(viewSourceUrl)
-          .appendTo(appendable);
-      return;
-    }
-
+  private void compile(
+      Config config, Function<String, String> moduleNameToUri, Report report, Appendable appendable)
+      throws IOException, CompilationException {
+    Compilation compilation = Compilation.createAndCompile(config);
     server.recordCompilation(config, compilation);
     Result result = compilation.getResult();
 
@@ -120,8 +111,6 @@ public class CompileRequestHandler extends AbstractGetHandler {
 
       if (compilation.usesModules()) {
         final boolean isDebugMode = true;
-        Function<String, String> moduleNameToUri = ModuleHandler.
-            createModuleNameToUriConverter(server, exchange, config.getId());
         ModuleConfig moduleConfig = config.getModuleConfig();
         if (moduleConfig.excludeModuleInfoFromRootModule()) {
           // If the module info is excluded from the root module, then the
@@ -142,15 +131,6 @@ public class CompileRequestHandler extends AbstractGetHandler {
       } else {
         appendable.append(compilation.getCompiledCode());
       }
-
-      // Here at the end of a successful compilation.  If the
-      // cache-output-file has been defined, save compiled js out to it.
-      File cacheOutputFile = config.getCacheOutputFile();
-      if (cacheOutputFile != null) {
-          cacheOutputFile.getParentFile().mkdirs();
-          Files.write(appendable.toString(), cacheOutputFile, config.getOutputCharset());
-      }
-
     }
 
     // TODO(bolinfest): Check whether writing out the plovr library confuses the
@@ -160,53 +140,12 @@ public class CompileRequestHandler extends AbstractGetHandler {
     // Write out the plovr library, even if there are no warnings.
     // It is small, and it exports some symbols that may be of use to
     // developers.
-    reporter.newReport(config)
-        .withErrors(compilation.getCompilationErrors())
+    report.withErrors(compilation.getCompilationErrors())
         .withWarnings(compilation.getCompilationWarnings())
-        .withViewSourceUrl(viewSourceUrl)
         .appendTo(appendable);
   }
 
   private String getViewSourceUrlForExchange(HttpExchange exchange) {
     return server.getServerForExchange(exchange) + "view";
-  }
-
-  /**
-   * Return true if (1) the tmp file does not exist, (2) the config
-   * file or any local file dependencies are newer than the tmp file.
-   *
-   * @author Paul Johnston (pcj@pubref.org)
-   */
-  protected boolean needsRecompile(Config config) throws CompilationException {
-    File cacheOutputFile = config.getCacheOutputFile();
-
-    if (cacheOutputFile == null) {
-      return true;
-    }
-
-    if (!cacheOutputFile.exists()) {
-      logger.info("JS recompile of " + config.getId() + " required (cache-output-file not found): " + cacheOutputFile);
-      return true;
-    }
-
-    return haveInputsChangedSince(config, cacheOutputFile.lastModified());
-  }
-
-  boolean haveInputsChangedSince(Config config, long timestamp) throws CompilationException {
-    if (config.isOutOfDate() || config.hasChangedSince(timestamp)) {
-      logger.info("JS recompile of " + config.getId() + " required (config-file newer)");
-      return true;
-    }
-
-    Manifest manifest = config.getManifest();
-    List<JsInput> inputs = manifest.getInputsInCompilationOrder();
-    for (JsInput input : inputs) {
-      if (input.getLastModified() > timestamp) {
-        logger.info("JS recompile of " + config.getId() + " required (found newer file): " + input);
-        return true;
-      }
-    }
-
-    return false;
   }
 }
