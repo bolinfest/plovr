@@ -23,6 +23,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.css.JobDescription;
 import com.google.common.css.compiler.ast.GssError;
 import com.google.common.css.compiler.ast.GssParserException;
+import com.google.common.io.Closeables;
 import com.google.common.io.Files;
 import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.Result;
@@ -117,6 +118,7 @@ public class BuildCommand extends AbstractCommandRunner<BuildCommandOptions> {
           Writer writer = Streams.createFileWriter(
               new File(sourceMapPath, sourceMapName), config);
           result.sourceMap.appendTo(writer, sourceMapName);
+          Closeables.close(writer, false);
         }
       } else {
         Function<String, String> moduleNameToUri = moduleConfig.
