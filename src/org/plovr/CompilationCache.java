@@ -40,7 +40,9 @@ public class CompilationCache {
         !haveInputsChangedSince(config, cacheOutputFile.lastModified())) {
       try {
         String cachedJs = Files.toString(cacheOutputFile, config.getOutputCharset());
-        logger.info("JS recompile of " + config.getId() + " fetched from file cache");
+        logger.info("JS recompile of " + config.getId() +
+                    " fetched from file cache <" + cacheOutputFile + ">. Size: " +
+                    FileUtil.humanReadableByteCount(cacheOutputFile.length(), true));
         return cachedJs;
       } catch (IOException e) {
         logger.log(Level.WARNING, "Error loading JS from disk cache", e);
