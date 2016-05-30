@@ -65,7 +65,7 @@ public class CompileRequestHandler extends AbstractGetHandler {
           File tmp = config.getCacheOutputFile();
           String cachedJs = Files.toString(tmp, config.getOutputCharset());
           builder.append(cachedJs);
-          logger.info("JS Recompile skipped. Served "
+          logger.info("JS recompile of " + config.getId() + " skipped. Served "
                       + FileUtil.humanReadableByteCount(tmp.length(), true)
                       + " from cache <" + tmp + '>');
         }
@@ -185,39 +185,28 @@ public class CompileRequestHandler extends AbstractGetHandler {
     }
 
     if (!cacheOutputFile.exists()) {
-      logger.info("JS Recompile required (cache-output-file not found): " + cacheOutputFile);
+      logger.info("JS recompile of " + config.getId() + " required (cache-output-file not found): " + cacheOutputFile);
       return true;
     }
 
-    long lastModified = cacheOutputFile.lastModified();
+    return haveInputsChangedSince(config, cacheOutputFile.lastModified());
+  }
 
-    if (config.isOutOfDate() || FileUtil.isNewer(config.getConfigFile(), lastModified)) {
-      logger.info("JS Recompile required (config-file newer): " + config.getConfigFile());
+  boolean haveInputsChangedSince(Config config, long timestamp) throws CompilationException {
+    if (config.isOutOfDate() || config.hasChangedSince(timestamp)) {
+      logger.info("JS recompile of " + config.getId() + " required (config-file newer)");
       return true;
     }
 
     Manifest manifest = config.getManifest();
     List<JsInput> inputs = manifest.getInputsInCompilationOrder();
     for (JsInput input : inputs) {
-      if (input instanceof LocalFileJsInput) {
-        File source = ((LocalFileJsInput)input).getSource();
-        if (FileUtil.isNewer(source, lastModified)) {
-          logger.info("JS Recompile required (found newer file): " + source);
-          return true;
-        }
-      } else if (input instanceof ResourceJsInput) {
-        // assume these are up to date.
-        continue;
-      } else if (input.toString().startsWith("/closure/goog")) {
-        // assume these are up to date.
-        continue;
-      } else {
-        logger.info("JS Recompile required (found non-localfile-input): " + input + " of type " + input.getClass().getName());
+      if (input.getLastModified() > timestamp) {
+        logger.info("JS recompile of " + config.getId() + " required (found newer file): " + input);
         return true;
       }
     }
 
     return false;
   }
-
 }

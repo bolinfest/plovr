@@ -60,4 +60,9 @@ public class ResourceJsInput extends AbstractJsInput {
   public boolean supportsEtags() {
     return true;
   }
+
+  @Override
+  public long getLastModified() {
+    return 0L;
+  }
 }

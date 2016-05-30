@@ -148,4 +148,9 @@ public abstract class LocalFileJsInput extends AbstractJsInput {
     return getCanonicalPath().hashCode();
   }
 
+  @Override
+  public long getLastModified() {
+    return source.lastModified();
+  }
+
 }

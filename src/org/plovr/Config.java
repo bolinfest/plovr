@@ -479,6 +479,19 @@ public final class Config implements Comparable<Config> {
   }
 
   /**
+   * Check if any of the files in the ancestor chain have changed
+   * since this timestamp.
+   */
+  public boolean hasChangedSince(long timestamp) {
+    for (FileWithLastModified file : configFileInheritanceChain) {
+      if (file.file.lastModified() > timestamp) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * @return true if the last modified time for the underlying config file
    *     (or any of the config files that it inherited) has changed since this
    *     config was originally created
@@ -1026,6 +1039,7 @@ public final class Config implements Comparable<Config> {
 
     /** List of (file, path) pairs for inputs */
     private final List<Pair<File, String>> inputs = Lists.newArrayList();
+    private final List<JsInput> jsInputs = Lists.newArrayList();
 
     private List<String> externs = null;
 
@@ -1253,6 +1267,10 @@ public final class Config implements Comparable<Config> {
       Preconditions.checkNotNull(file);
       Preconditions.checkNotNull(name);
       inputs.add(Pair.of(file, name));
+    }
+
+    public void addInput(JsInput input) {
+      jsInputs.add(input);
     }
 
     public void addInputByName(String name) {
@@ -1776,6 +1794,8 @@ public final class Config implements Comparable<Config> {
         jsInputs.add(
             LocalFileJsInput.createForFileWithName(file, name, soyFileOptions));
       }
+
+      jsInputs.addAll(this.jsInputs);
 
       return jsInputs;
     }
