@@ -19,6 +19,11 @@ public class DummyJsInput implements JsInput {
   private List<String> requires;
   private boolean soyFile;
   private String templateCode;
+  long lastModified = 0L;
+
+  public DummyJsInput(String name, String code) {
+    this(name, code, null, null, false, null);
+  }
 
   public DummyJsInput(String name, String code, List<String> provides,
       List<String> requires) {
@@ -85,5 +90,10 @@ public class DummyJsInput implements JsInput {
   @Override
   public CodeWithEtag getCodeWithEtag() {
     throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public long getLastModified() {
+    return lastModified;
   }
 }

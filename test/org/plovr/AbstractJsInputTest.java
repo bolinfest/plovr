@@ -21,6 +21,11 @@ public class AbstractJsInputTest {
     public String generateCode() {
       return code;
     }
+
+    @Override
+    public long getLastModified() {
+      return 0L;
+    }
   }
 
   @Test

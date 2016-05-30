@@ -30,18 +30,6 @@ public final class FileUtil {
 
 
   /**
-   * Return true if the file argument is non-null and has a
-   * last-modified date greater than the given lastModified time.
-   */
-  public static boolean isNewer(File file, long lastModified) {
-    if (file == null) {
-      return false;
-    }
-    return file.lastModified() > lastModified;
-  }
-
-
-  /**
    * @see http://stackoverflow.com/questions/3758606/how-to-convert-byte-size-into-human-readable-format-in-java
    */
   public static String humanReadableByteCount(long bytes, boolean si) {

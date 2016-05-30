@@ -23,6 +23,11 @@ class DepsJsInput extends AbstractJsInput {
     return js;
   }
 
+  @Override
+  public long getLastModified() {
+    return 0L;
+  }
+
   private static String createParallelDepsJsNameForBaseJs(JsInput baseJs) {
     String baseJsName = baseJs.getName();
     if ("base.js".equals(baseJsName)) {

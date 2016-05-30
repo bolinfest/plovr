@@ -64,6 +64,13 @@ public interface JsInput extends Generator {
    */
   public CodeWithEtag getCodeWithEtag();
 
+  /**
+   * Gets lastModified date, expressed as milliseconds since the unix epoch.
+   *
+   * If this is an immutable resource, may return 0.
+   */
+  public long getLastModified();
+
   static final class CodeWithEtag {
     public final String code;
     public final String eTag;
