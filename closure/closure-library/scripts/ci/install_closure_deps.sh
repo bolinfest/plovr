@@ -3,7 +3,7 @@
 # Script to install all necessary dependencies for running Closure tests,
 # linting, formatting and compiling.
 
-declare -r CLANG_VERSION="3.7.0"
+declare -r CLANG_VERSION="3.7.1"
 declare -r CLANG_BUILD="clang+llvm-${CLANG_VERSION}-x86_64-linux-gnu-ubuntu-14.04"
 declare -r CLANG_TAR="${CLANG_BUILD}.tar.xz"
 declare -r CLANG_URL="http://llvm.org/releases/${CLANG_VERSION}/${CLANG_TAR}"
@@ -19,7 +19,9 @@ mv $CLANG_BUILD clang
 rm -f $CLANG_TAR
 
 # Install closure compiler and linter.
-git clone --depth 1 https://github.com/google/closure-compiler.git
+if [ ! -d "closure-compiler" ]; then
+  git clone --depth 1 https://github.com/google/closure-compiler.git
+fi
 cd closure-compiler
 ant jar
 ant linter

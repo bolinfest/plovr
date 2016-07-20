@@ -29,6 +29,7 @@ crypt/blockcipher.js
 crypt/bytestring_perf.js
 crypt/cbc.js
 crypt/crypt.js
+crypt/ctr.js
 crypt/hash.js
 crypt/hash32.js
 crypt/hashtester.js
@@ -104,6 +105,7 @@ dom/abstractrange.js
 dom/animationframe/animationframe.js
 dom/animationframe/polyfill.js
 dom/annotate.js
+dom/attr.js
 dom/browserfeature.js
 dom/browserrange/abstractrange.js
 dom/browserrange/browserrange.js
@@ -297,10 +299,16 @@ history/html5history.js
 html/flash.js
 html/legacyconversions.js
 html/safehtml.js
+html/safehtmlformatter.js
 html/safescript.js
 html/safestyle.js
 html/safestylesheet.js
 html/safeurl.js
+html/sanitizer/attributewhitelist.js
+html/sanitizer/csssanitizer.js
+html/sanitizer/htmlsanitizer.js
+html/sanitizer/tagblacklist.js
+html/sanitizer/tagwhitelist.js
 html/silverlight.js
 html/testing.js
 html/trustedresourceurl.js
@@ -312,7 +320,7 @@ i18n/charlistdecompressor.js
 i18n/charpickerdata.js
 i18n/collation.js
 i18n/compactnumberformatsymbols.js
-i18n/compactnumberformatsymbols_ext.js
+i18n/compactnumberformatsymbolsext.js
 i18n/currency.js
 i18n/currencycodemap.js
 i18n/datetimeformat.js
@@ -347,14 +355,12 @@ labs/dom/pagevisibilitymonitor.js
 labs/events/nondisposableeventtarget.js
 labs/events/touch.js
 labs/format/csv.js
-labs/html/attribute_rewriter.js
-labs/html/sanitizer.js
-labs/html/scrubber.js
 labs/i18n/listformat.js
 labs/i18n/listsymbols.js
 labs/i18n/listsymbolsext.js
 labs/iterable/iterable.js
 labs/mock/mock.js
+labs/mock/verificationmode.js
 labs/net/image.js
 labs/net/webchannel/basetestchannel.js
 labs/net/webchannel/channel.js
@@ -372,7 +378,6 @@ labs/net/webchannel.js
 labs/net/webchanneltransport.js
 labs/net/webchanneltransportfactory.js
 labs/net/xhr.js
-labs/object/object.js
 labs/promise/promise.js
 labs/pubsub/broadcastpubsub.js
 labs/storage/boundedcollectablestorage.js
@@ -396,6 +401,7 @@ labs/useragent/engine.js
 labs/useragent/platform.js
 labs/useragent/test_agents.js
 labs/useragent/util.js
+labs/useragent/verifier.js
 locale/countries.js
 locale/defaultlocalenameconstants.js
 locale/genericfontnames.js
@@ -418,6 +424,7 @@ math/interpolator/interpolator1.js
 math/interpolator/linear1.js
 math/interpolator/pchip1.js
 math/interpolator/spline1.js
+math/irect.js
 math/line.js
 math/long.js
 math/math.js
@@ -473,6 +480,7 @@ net/eventtype.js
 net/fetchxmlhttpfactory.js
 net/filedownloader.js
 net/httpstatus.js
+net/httpstatusname.js
 net/iframeio.js
 net/iframeloadmonitor.js
 net/imageloader.js
@@ -642,6 +650,7 @@ testing/fs/progressevent.js
 testing/functionmock.js
 testing/graphics.js
 testing/i18n/asserts.js
+testing/jstdasyncwrapper.js
 testing/jstdtestcaseadapter.js
 testing/jsunit.js
 testing/loosemock.js
@@ -659,6 +668,7 @@ testing/mockrandom.js
 testing/mockrange.js
 testing/mockstorage.js
 testing/mockuseragent.js
+testing/mockutil.js
 testing/multitestrunner.js
 testing/net/xhrio.js
 testing/net/xhriopool.js
@@ -685,6 +695,7 @@ testing/ui/rendererasserts.js
 testing/ui/rendererharness.js
 testing/ui/style.js
 timer/timer.js
+transpile.js
 tweak/entries.js
 tweak/registry.js
 tweak/testhelpers.js
@@ -894,8 +905,6 @@ vec/mat3f.js
 vec/mat4.js
 vec/mat4d.js
 vec/mat4f.js
-vec/matrix3.js
-vec/matrix4.js
 vec/quaternion.js
 vec/ray.js
 vec/vec.js
