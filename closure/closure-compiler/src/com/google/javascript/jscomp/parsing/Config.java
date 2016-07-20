@@ -17,8 +17,9 @@
 package com.google.javascript.jscomp.parsing;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.javascript.jscomp.parsing.parser.FeatureSet;
 
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -29,60 +30,121 @@ import java.util.Set;
  */
 public final class Config {
 
+  /**
+   * Level of language strictness required for the input source code.
+   */
+  public enum StrictMode {
+    STRICT, SLOPPY;
+  }
+
   /** JavaScript mode */
   public enum LanguageMode {
-    ECMASCRIPT3,
-    ECMASCRIPT5,
-    ECMASCRIPT5_STRICT,
-    ECMASCRIPT6,
-    ECMASCRIPT6_STRICT,
-    ECMASCRIPT6_TYPED,  // Implies STRICT.
+
+    // Note that minimumRequiredFor() relies on these being defined in order from fewest features to
+    // most features, and _STRICT versions should be supplied after unspecified strictness.
+    ECMASCRIPT3(FeatureSet.ES3, StrictMode.SLOPPY),
+    ECMASCRIPT5(FeatureSet.ES5, StrictMode.SLOPPY),
+    ECMASCRIPT5_STRICT(FeatureSet.ES5, StrictMode.STRICT),
+    ECMASCRIPT6(FeatureSet.ES6_MODULES, StrictMode.SLOPPY),
+    ECMASCRIPT6_STRICT(FeatureSet.ES6_MODULES, StrictMode.STRICT),
+    ECMASCRIPT7(FeatureSet.ES7_MODULES, StrictMode.STRICT),
+    ECMASCRIPT8(FeatureSet.ES8_MODULES, StrictMode.STRICT),
+    // TODO(bradfordcsmith): This should be renamed so it doesn't seem tied to es6
+    ECMASCRIPT6_TYPED(FeatureSet.TYPESCRIPT, StrictMode.STRICT),
+    ;
+
+    public final FeatureSet featureSet;
+    public final StrictMode strictMode;
+
+    LanguageMode(FeatureSet featureSet, StrictMode strictMode) {
+      this.featureSet = featureSet;
+      this.strictMode = strictMode;
+    }
+
+    /**
+     * Returns the lowest {@link LanguageMode} that supports the specified feature.
+     */
+    public static LanguageMode minimumRequiredFor(FeatureSet.Feature feature) {
+      // relies on the LanguageMode enums being in the right order
+      for (LanguageMode mode : LanguageMode.values()) {
+        if (mode.featureSet.contains(feature)) {
+          return mode;
+        }
+      }
+      throw new IllegalStateException("No input language mode supports feature: " + feature);
+    }
   }
 
   /**
    * Whether to parse the descriptions of JsDoc comments.
    */
-  final boolean parseJsDocDocumentation;
+  public enum JsDocParsing {
+    TYPES_ONLY,
+    INCLUDE_DESCRIPTIONS_NO_WHITESPACE,
+    INCLUDE_DESCRIPTIONS_WITH_WHITESPACE;
+
+    boolean shouldParseDescriptions() {
+      return this != TYPES_ONLY;
+    }
+  }
+  final JsDocParsing parseJsDocDocumentation;
 
   /**
-   * Whether to preserve whitespace when extracting text from JsDoc comments.
+   * Whether to keep detailed source location information such as the exact length of every node.
    */
-  final boolean preserveJsDocWhitespace;
+  public enum SourceLocationInformation {
+    DISCARD,
+    PRESERVE,
+  }
+  final SourceLocationInformation preserveDetailedSourceInfo;
 
   /**
-   * Whether we're in IDE mode.
+   * Whether to keep going after encountering a parse error.
    */
-  final boolean isIdeMode;
+  public enum RunMode {
+    STOP_AFTER_ERROR,
+    KEEP_GOING,
+  }
+  final RunMode keepGoing;
 
   /**
    * Recognized JSDoc annotations, mapped from their name to their internal
    * representation.
    */
-  final Map<String, Annotation> annotationNames;
+  final ImmutableMap<String, Annotation> annotationNames;
 
   /**
    * Recognized names in a {@code @suppress} tag.
    */
-  final Set<String> suppressionNames;
+  final ImmutableSet<String> suppressionNames;
 
   /**
    * Accept ECMAScript5 syntax, such as getter/setter.
    */
   final LanguageMode languageMode;
 
-  Config(Set<String> annotationWhitelist, Set<String> suppressionNames,
-      boolean isIdeMode, LanguageMode languageMode) {
-    this(annotationWhitelist, suppressionNames, isIdeMode, isIdeMode, false, languageMode);
+  Config(Set<String> annotationWhitelist, Set<String> suppressionNames, LanguageMode languageMode) {
+    this(
+        annotationWhitelist,
+        JsDocParsing.TYPES_ONLY,
+        SourceLocationInformation.DISCARD,
+        RunMode.STOP_AFTER_ERROR,
+        suppressionNames,
+        languageMode);
   }
 
-  Config(Set<String> annotationWhitelist, Set<String> suppressionNames,
-      boolean isIdeMode, boolean parseJsDocDocumentation, boolean preserveJsDocWhitespace,
+  Config(
+      Set<String> annotationWhitelist,
+      JsDocParsing parseJsDocDocumentation,
+      SourceLocationInformation preserveDetailedSourceInfo,
+      RunMode keepGoing,
+      Set<String> suppressionNames,
       LanguageMode languageMode) {
     this.annotationNames = buildAnnotationNames(annotationWhitelist);
     this.parseJsDocDocumentation = parseJsDocDocumentation;
-    this.preserveJsDocWhitespace = preserveJsDocWhitespace;
-    this.suppressionNames = suppressionNames;
-    this.isIdeMode = isIdeMode;
+    this.preserveDetailedSourceInfo = preserveDetailedSourceInfo;
+    this.keepGoing = keepGoing;
+    this.suppressionNames = ImmutableSet.copyOf(suppressionNames);
     this.languageMode = languageMode;
   }
 
@@ -90,13 +152,14 @@ public final class Config {
    * Create the annotation names from the user-specified
    * annotation whitelist.
    */
-  private static Map<String, Annotation> buildAnnotationNames(
+  private static ImmutableMap<String, Annotation> buildAnnotationNames(
       Set<String> annotationWhitelist) {
     ImmutableMap.Builder<String, Annotation> annotationBuilder =
         ImmutableMap.builder();
     annotationBuilder.putAll(Annotation.recognizedAnnotations);
     for (String unrecognizedAnnotation : annotationWhitelist) {
-      if (!Annotation.recognizedAnnotations.containsKey(
+      if (!unrecognizedAnnotation.isEmpty()
+          && !Annotation.recognizedAnnotations.containsKey(
               unrecognizedAnnotation)) {
         annotationBuilder.put(
             unrecognizedAnnotation, Annotation.NOT_IMPLEMENTED);

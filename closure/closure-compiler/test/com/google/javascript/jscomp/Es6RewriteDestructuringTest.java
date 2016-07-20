@@ -15,6 +15,7 @@
  */
 package com.google.javascript.jscomp;
 
+import static com.google.common.truth.Truth.assertThat;
 import static com.google.javascript.jscomp.TypeValidator.TYPE_MISMATCH_WARNING;
 
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
@@ -52,6 +53,7 @@ public class Es6RewriteDestructuringTest extends CompilerTestCase {
             "var $jscomp$destructuring$var0 = foo();",
             "var b = $jscomp$destructuring$var0.a;",
             "var d = $jscomp$destructuring$var0.c;"));
+    assertThat(getLastCompiler().injected).isEmpty();
 
     test(
         "var {a,b} = foo();",
@@ -190,6 +192,7 @@ public class Es6RewriteDestructuringTest extends CompilerTestCase {
             "  var y = $jscomp$destructuring$var2.next().value;",
             "  var z = $jscomp$destructuring$var2.next().value;",
             "}"));
+    assertThat(getLastCompiler().injected).containsExactly("es6/util/makeiterator");
 
     test(
         "function f({key: x = 5}) {}",
@@ -346,6 +349,8 @@ public class Es6RewriteDestructuringTest extends CompilerTestCase {
             "var $jscomp$destructuring$var0 = $jscomp.makeIterator(f());",
             "let one = $jscomp$destructuring$var0.next().value;",
             "let others = $jscomp.arrayFromIterator($jscomp$destructuring$var0);"));
+    assertThat(getLastCompiler().injected)
+        .containsExactly("es6/util/arrayfromiterator", "es6/util/makeiterator");
 
     test(
         "function f([first, ...rest]) {}",
@@ -355,6 +360,36 @@ public class Es6RewriteDestructuringTest extends CompilerTestCase {
             "  var first = $jscomp$destructuring$var1.next().value;",
             "  var rest = $jscomp.arrayFromIterator($jscomp$destructuring$var1);",
             "}"));
+  }
+
+  public void testRestParamDestructuring() {
+    test(
+        "function f(first, ...[re, st, ...{length: num_left}]) {}",
+        LINE_JOINER.join(
+            "function f(first, ...$jscomp$destructuring$var0) {",
+            "  var $jscomp$destructuring$var1 = $jscomp.makeIterator($jscomp$destructuring$var0);",
+            "  var re = $jscomp$destructuring$var1.next().value;",
+            "  var st = $jscomp$destructuring$var1.next().value;",
+            "  var $jscomp$destructuring$var2 = "
+                + "$jscomp.arrayFromIterator($jscomp$destructuring$var1);",
+            "  var num_left = $jscomp$destructuring$var2.length;",
+            "}"));
+  }
+
+  public void testArrayDestructuringMixedRest() {
+    test(
+        "let [first, ...[re, st, ...{length: num_left}]] = f();",
+        LINE_JOINER.join(
+            "var $jscomp$destructuring$var0 = $jscomp.makeIterator(f());",
+            "let first = $jscomp$destructuring$var0.next().value;",
+            "var $jscomp$destructuring$var1 = "
+                + "$jscomp.makeIterator("
+                + "$jscomp.arrayFromIterator($jscomp$destructuring$var0));",
+            "let re = $jscomp$destructuring$var1.next().value;",
+            "let st = $jscomp$destructuring$var1.next().value;",
+            "var $jscomp$destructuring$var2 = "
+                + "$jscomp.arrayFromIterator($jscomp$destructuring$var1);",
+            "let num_left = $jscomp$destructuring$var2.length;"));
   }
 
   public void testArrayDestructuringArguments() {
@@ -392,7 +427,7 @@ public class Es6RewriteDestructuringTest extends CompilerTestCase {
     test(
         "for ({x} of y) { console.log(x); }",
         LINE_JOINER.join(
-            "for (let $jscomp$destructuring$var0 of y) {",
+            "for (var $jscomp$destructuring$var0 of y) {",
             "   var $jscomp$destructuring$var1 = $jscomp$destructuring$var0;",
             "   x = $jscomp$destructuring$var1.x;",
             "   console.log(x);",
@@ -520,6 +555,26 @@ public class Es6RewriteDestructuringTest extends CompilerTestCase {
             "  var $jscomp$destructuring$var0 = obj;",
             "  var x = $jscomp$destructuring$var0.x;",
             "}"));
+
+    test(
+        "ns.f = function({x} = {x: 0}) {};",
+        LINE_JOINER.join(
+            "ns.f = function($jscomp$destructuring$var0) {",
+            "  var $jscomp$destructuring$var1 =",
+            "      $jscomp$destructuring$var0 === undefined ? {x:0} : $jscomp$destructuring$var0;",
+            "  var x = $jscomp$destructuring$var1.x",
+            "};"));
+
+    test(
+        LINE_JOINER.join(
+            "/** @param {{x: number}=} obj */",
+            "ns.f = function({x} = {x: 0}) {};"),
+        LINE_JOINER.join(
+            "/** @param {{x: number}=} obj */",
+            "ns.f = function(obj) {",
+            "  var $jscomp$destructuring$var0 = obj===undefined ? {x:0} : obj;",
+            "  var x = $jscomp$destructuring$var0.x",
+            "};"));
   }
 
   public void testTypeCheck_inlineAnnotations() {
@@ -540,4 +595,13 @@ public class Es6RewriteDestructuringTest extends CompilerTestCase {
         TYPE_MISMATCH_WARNING);
   }
 
+  @Override
+  protected Compiler createCompiler() {
+    return new NoninjectingCompiler();
+  }
+
+  @Override
+  NoninjectingCompiler getLastCompiler() {
+    return (NoninjectingCompiler) super.getLastCompiler();
+  }
 }

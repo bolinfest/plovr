@@ -19,12 +19,12 @@ package com.google.javascript.jscomp;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -116,8 +116,18 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
             || (alreadyExportedPaths.contains(pathPrefix)
                 && !isCompletePathPrefix);
 
+        boolean exportedValueDefinesNewType = false;
+
+        if (valueToExport != null) {
+          JSDocInfo jsdoc = NodeUtil.getBestJSDocInfo(valueToExport);
+          if (jsdoc != null && jsdoc.containsTypeDefinition()) {
+            exportedValueDefinesNewType = true;
+          }
+        }
+
         if (!skipPathPrefix) {
            Node initializer;
+           JSDocInfo jsdoc = null;
 
           /* Namespaces get initialized to {}, functions to
            * externed versions of their value, and if we can't
@@ -138,11 +148,16 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
               Preconditions.checkState(valueToExport.isObjectLit());
               initializer = createExternObjectLit(valueToExport);
             }
+          } else if (!isCompletePathPrefix && exportedValueDefinesNewType) {
+            jsdoc = buildNamespaceJSDoc();
+            initializer = createExternObjectLit(IR.objectlit());
+            // Don't add the empty jsdoc here
+            initializer.setJSDocInfo(null);
           } else {
             initializer = IR.empty();
           }
 
-          appendPathDefinition(pathPrefix, initializer);
+          appendPathDefinition(pathPrefix, initializer, jsdoc);
         }
       }
     }
@@ -168,7 +183,8 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
       return pathPrefixes;
     }
 
-    private void appendPathDefinition(String path, Node initializer) {
+    private void appendPathDefinition(
+        String path, Node initializer, JSDocInfo jsdoc) {
       Node pathDefinition;
 
       if (!path.contains(".")) {
@@ -184,6 +200,14 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
         } else {
           pathDefinition = NodeUtil.newExpr(
               IR.assign(qualifiedPath, initializer));
+        }
+      }
+      if (jsdoc != null) {
+        if (pathDefinition.isExprResult()) {
+          pathDefinition.getFirstChild().setJSDocInfo(jsdoc);
+        } else {
+          Preconditions.checkState(pathDefinition.isVar());
+          pathDefinition.setJSDocInfo(jsdoc);
         }
       }
 
@@ -215,15 +239,36 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
       }
       Node externFunction = IR.function(IR.name(""), paramList, IR.block());
 
-      externFunction.setJSType(exportedFunction.getJSType());
+      if (exportedFunction.getJSType() != null) {
+        externFunction.setJSType(exportedFunction.getJSType());
+        // When this function is printed, it will have a regular jsdoc, so we
+        // don't want inline jsdocs as well
+        deleteInlineJsdocs(externFunction);
+      }
 
       return externFunction;
+    }
+
+    private void deleteInlineJsdocs(Node fn) {
+      Preconditions.checkArgument(fn.isFunction());
+      for (Node param : NodeUtil.getFunctionParameters(fn).children()) {
+        param.setJSDocInfo(null);
+      }
+      // Delete the inline return as well, if any
+      fn.getFirstChild().setJSDocInfo(null);
     }
 
     private JSDocInfo buildEmptyJSDoc() {
       // TODO(johnlenz): share the JSDocInfo here rather than building
       // a new one each time.
       return new JSDocInfoBuilder(false).build(true);
+    }
+
+    private JSDocInfo buildNamespaceJSDoc() {
+      JSDocInfoBuilder builder = new JSDocInfoBuilder(false);
+      builder.recordConstancy();
+      builder.recordSuppressions(ImmutableSet.of("const", "duplicate"));
+      return builder.build();
     }
 
     /**
@@ -274,13 +319,13 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
       Node definition;
 
       switch (definitionParent.getType()) {
-        case Token.ASSIGN:
+        case ASSIGN:
           definition = definitionParent.getLastChild();
           break;
-        case Token.VAR:
+        case VAR:
           definition = definitionParent.getLastChild().getLastChild();
           break;
-        case Token.FUNCTION:
+        case FUNCTION:
           if (NodeUtil.isFunctionDeclaration(definitionParent)) {
             definition = definitionParent;
           } else {
@@ -421,15 +466,20 @@ final class ExternExportsPass extends NodeTraversal.AbstractPostOrderCallback
       .setOutputTypes(true)
       .setTypeRegistry(compiler.getTypeIRegistry());
 
-    return builder.build();
+    return "/**"
+        + "\n * @fileoverview Generated externs."
+        + "\n * @externs"
+        + "\n */"
+        + "\n"
+        + builder.build();
   }
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
     switch (n.getType()) {
 
-      case Token.NAME:
-      case Token.GETPROP:
+      case NAME:
+      case GETPROP:
         String name = n.getQualifiedName();
         if (name == null) {
           return;

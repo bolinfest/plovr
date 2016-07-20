@@ -41,6 +41,9 @@ angular.$http.Response.prototype.data;
 /** @type {number} */
 angular.$http.Response.prototype.status;
 
+/** @type {string} */
+angular.$http.Response.prototype.statusText;
+
 /**
  * @param {string=} name
  * @return {string|Object}
@@ -61,6 +64,7 @@ angular.$http.HttpPromise = function() {};
  * @param {function(T, number, function(string=):
  *     (string|Object|null), angular.$http.Config)} callback
  * @return {!angular.$http.HttpPromise.<T>} Promise for chaining.
+ * @deprecated Use the standard #then method instead.
  */
 angular.$http.HttpPromise.prototype.success = function(callback) {};
 
@@ -68,5 +72,6 @@ angular.$http.HttpPromise.prototype.success = function(callback) {};
  * @param {function(?, number, function(string=):
  *     (string|Object|null), angular.$http.Config)} callback
  * @return {!angular.$http.HttpPromise.<T>} Promise for chaining.
+ * @deprecated Use the standard #then method instead.
  */
 angular.$http.HttpPromise.prototype.error = function(callback) {};

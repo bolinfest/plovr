@@ -43,6 +43,10 @@ public final class ProcessCommonJSModules implements CompilerPass {
   private static final String EXPORTS = "exports";
   private static final String MODULE = "module";
 
+  private static final DiagnosticType LOAD_ERROR = DiagnosticType.error(
+      "JSC_COMMONJS_MODULE_LOAD_ERROR",
+      "Failed to load module \"{0}\"");
+
   private final Compiler compiler;
   private final ES6ModuleLoader loader;
   private final boolean reportDependencies;
@@ -198,6 +202,28 @@ public final class ProcessCommonJSModules implements CompilerPass {
         visitRequireCall(t, n, parent);
       }
 
+      // Finds calls to require.ensure which is a method to allow async loading of
+      // CommonJS modules:
+      //
+      // require.ensure(['/path/to/module1', '/path/to/module2'], function(require) {
+      //    var module1 = require('/path/to/module1');
+      //    var module2 = require('/path/to/module2');
+      // });
+      //
+      // will be rewritten as an IIFE
+      //
+      // (function() {
+      //   var module1 = require('/path/to/module1');
+      //   var module2 = require('/path/to/module2');
+      // })()
+      //
+      // See http://wiki.commonjs.org/wiki/Modules/Async/A
+      //     http://www.injectjs.com/docs/0.7.x/cjs/require.ensure.html
+      if (n.isCall()
+          && n.getChildCount() == 3
+          && n.getFirstChild().matchesQualifiedName("require.ensure")) {
+        visitRequireEnsureCall(n);
+      }
 
       // Detects UMD pattern, by checking for CommonJS exports and AMD define
       // statements in if-conditions and rewrites the if-then-else block as
@@ -306,14 +332,25 @@ public final class ProcessCommonJSModules implements CompilerPass {
       String requireName = require.getSecondChild().getString();
       URI loadAddress = loader.locateCommonJsModule(requireName, t.getInput());
       if (loadAddress == null) {
-        compiler.report(t.makeError(require, ES6ModuleLoader.LOAD_ERROR, requireName));
+        compiler.report(t.makeError(require, LOAD_ERROR, requireName));
         return;
       }
 
       String moduleName = ES6ModuleLoader.toModuleName(loadAddress);
-      Node moduleRef = IR.name(moduleName).srcref(require);
-      parent.replaceChild(require, moduleRef);
       Node script = getCurrentScriptNode(parent);
+
+      // When require("name") is used as a standalone statement (the result isn't used)
+      // it indicates that a module is being loaded for the side effects it produces.
+      // In this case the require statement should just be removed as the goog.require
+      // call inserted will import the module.
+      if (!NodeUtil.isExpressionResultUsed(require)
+          && parent.isExprResult()
+          && NodeUtil.isStatementBlock(parent.getParent())) {
+        parent.getParent().removeChild(parent);
+      } else {
+        Node moduleRef = IR.name(moduleName).srcref(require);
+        parent.replaceChild(require, moduleRef);
+      }
       if (reportDependencies) {
         t.getInput().addRequire(moduleName);
       }
@@ -321,6 +358,35 @@ public final class ProcessCommonJSModules implements CompilerPass {
       script.addChildToFront(IR.exprResult(
           IR.call(IR.getprop(IR.name("goog"), IR.string("require")),
               IR.string(moduleName))).useSourceInfoIfMissingFromForTree(require));
+      compiler.reportCodeChange();
+    }
+
+    /**
+     * Visit require.ensure calls. Replace the call with an IIFE.
+     */
+    private void visitRequireEnsureCall(Node n) {
+      Preconditions.checkState(n.getChildCount() == 3);
+      Node callbackFunction = n.getChildAtIndex(2);
+
+      // We only support the form where the first argument is an array literal and
+      // the the second a callback function which has a single argument
+      // with the name "require".
+      if (!(n.getSecondChild().isArrayLit()
+          && callbackFunction.isFunction()
+          && callbackFunction.getChildCount() == 3
+          && callbackFunction.getSecondChild().getChildCount() == 1
+          && callbackFunction.getSecondChild().getFirstChild().matchesQualifiedName("require"))) {
+        return;
+      }
+
+      callbackFunction.detachFromParent();
+
+      // Remove the "require" argument from the parameter list.
+      callbackFunction.getSecondChild().removeChildren();
+      n.removeChildren();
+      n.putBooleanProp(Node.FREE_CALL, true);
+      n.addChildrenToFront(callbackFunction);
+
       compiler.reportCodeChange();
     }
 
@@ -646,7 +712,8 @@ public final class ProcessCommonJSModules implements CompilerPass {
     private void fixTypeNode(NodeTraversal t, Node typeNode) {
       if (typeNode.isString()) {
         String name = typeNode.getString();
-        if (ES6ModuleLoader.isRelativeIdentifier(name)) {
+        if (ES6ModuleLoader.isRelativeIdentifier(name)
+            || ES6ModuleLoader.isAbsoluteIdentifier(name)) {
           int lastSlash = name.lastIndexOf('/');
           int endIndex = name.indexOf('.', lastSlash);
           String localTypeName = null;
@@ -659,7 +726,7 @@ public final class ProcessCommonJSModules implements CompilerPass {
           String moduleName = name.substring(0, endIndex);
           URI loadAddress = loader.locateCommonJsModule(moduleName, t.getInput());
           if (loadAddress == null) {
-            t.makeError(typeNode, ES6ModuleLoader.LOAD_ERROR, moduleName);
+            t.makeError(typeNode, LOAD_ERROR, moduleName);
             return;
           }
 

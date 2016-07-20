@@ -29,7 +29,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -211,10 +210,10 @@ class RemoveUnusedVars
    * and traverse them lazily.
    */
   private void traverseNode(Node n, Node parent, Scope scope) {
-    int type = n.getType();
+    Token type = n.getType();
     Var var = null;
     switch (type) {
-      case Token.FUNCTION:
+      case FUNCTION:
         // If this function is a removable var, then create a continuation
         // for it instead of traversing immediately.
         if (NodeUtil.isFunctionDeclaration(n)) {
@@ -228,7 +227,7 @@ class RemoveUnusedVars
         }
         return;
 
-      case Token.ASSIGN:
+      case ASSIGN:
         Assign maybeAssign = Assign.maybeCreateAssign(n);
         if (maybeAssign != null) {
           // Put this in the assign map. It might count as a reference,
@@ -250,7 +249,7 @@ class RemoveUnusedVars
         }
         break;
 
-      case Token.CALL:
+      case CALL:
         Var modifiedVar = null;
 
         // Look for calls to inheritance-defining calls (such as goog.inherits).
@@ -279,7 +278,7 @@ class RemoveUnusedVars
         }
         break;
 
-      case Token.NAME:
+      case NAME:
         var = scope.getVar(n.getString());
         if (parent.isVar()) {
           Node value = n.getFirstChild();
@@ -367,8 +366,7 @@ class RemoveUnusedVars
    * for yet, add it to the list of variables to check later.
    */
   private void collectMaybeUnreferencedVars(Scope scope) {
-    for (Iterator<Var> it = scope.getVars(); it.hasNext(); ) {
-      Var var = it.next();
+    for (Var var : scope.getVarIterable()) {
       if (isRemovableVar(var)) {
         maybeUnreferenced.add(var);
       }

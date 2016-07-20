@@ -427,6 +427,7 @@ public final class InlineVariablesTest extends CompilerTestCase {
   }
 
   public void testInlineIntoNestedNonHoistedNamedFunctions() {
+    setAcceptedLanguage(CompilerOptions.LanguageMode.ECMASCRIPT6);
     test("f(); var x = false; if (false) function f() { alert(x); };",
          "f(); if (false) function f() { alert(false); };");
   }
@@ -1157,5 +1158,19 @@ public final class InlineVariablesTest extends CompilerTestCase {
     testSame("function x_64(){var x_7;for(;;);var x_68=x_7=x_7;}");
     testSame("function x_64(){var x_7;for(;;);var x_68=x_7=x_7++;}");
     testSame("function x_64(){var x_7;for(;;);var x_68=x_7=x_7*2;}");
+  }
+
+  // GitHub issue #1234: https://github.com/google/closure-compiler/issues/1234
+  public void testSwitchGithubIssue1234() {
+    testSame(LINE_JOINER.join(
+      "var x;",
+      "switch ('a') {",
+      "  case 'a':",
+      "    break;",
+      "  default:",
+      "    x = 1;",
+      "    break;",
+      "}",
+      "use(x);"));
   }
 }

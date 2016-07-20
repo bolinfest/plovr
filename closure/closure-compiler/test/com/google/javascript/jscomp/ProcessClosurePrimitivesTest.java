@@ -37,7 +37,6 @@ import static com.google.javascript.jscomp.ProcessClosurePrimitives.NULL_ARGUMEN
 import static com.google.javascript.jscomp.ProcessClosurePrimitives.TOO_MANY_ARGUMENTS_ERROR;
 import static com.google.javascript.jscomp.ProcessClosurePrimitives.WEAK_NAMESPACE_TYPE;
 import static com.google.javascript.jscomp.ProcessClosurePrimitives.XMODULE_REQUIRE_ERROR;
-import static com.google.javascript.jscomp.deps.JsFileLineParser.PARSE_ERROR;
 
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.Node;
@@ -51,14 +50,14 @@ public final class ProcessClosurePrimitivesTest extends Es6CompilerTestCase {
   private String additionalCode;
   private String additionalEndCode;
   private boolean addAdditionalNamespace;
-  private boolean preserveGoogRequires;
+  private boolean preserveGoogProvidesAndRequires;
   private boolean banGoogBase;
 
   @Override protected void setUp() {
     additionalCode = null;
     additionalEndCode = null;
     addAdditionalNamespace = false;
-    preserveGoogRequires = false;
+    preserveGoogProvidesAndRequires = false;
     banGoogBase = false;
   }
 
@@ -77,14 +76,14 @@ public final class ProcessClosurePrimitivesTest extends Es6CompilerTestCase {
   @Override public CompilerPass getProcessor(final Compiler compiler) {
     if ((additionalCode == null) && (additionalEndCode == null)) {
       return new ProcessClosurePrimitives(
-          compiler, null, CheckLevel.ERROR, preserveGoogRequires);
+          compiler, null, CheckLevel.ERROR, preserveGoogProvidesAndRequires);
     } else {
       return new CompilerPass() {
         @Override
         public void process(Node externs, Node root) {
           // Process the original code.
           new ProcessClosurePrimitives(
-              compiler, null, CheckLevel.OFF, preserveGoogRequires)
+              compiler, null, CheckLevel.OFF, preserveGoogProvidesAndRequires)
               .process(externs, root);
 
           // Inject additional code at the beginning.
@@ -123,7 +122,7 @@ public final class ProcessClosurePrimitivesTest extends Es6CompilerTestCase {
 
           // Process the tree a second time.
           new ProcessClosurePrimitives(
-              compiler, null, CheckLevel.ERROR, preserveGoogRequires)
+              compiler, null, CheckLevel.ERROR, preserveGoogProvidesAndRequires)
               .process(externs, root);
         }
       };
@@ -367,20 +366,18 @@ public final class ProcessClosurePrimitivesTest extends Es6CompilerTestCase {
   }
 
   public void testProvideErrorCases() {
-    // The ES6 path turns on DependencyOptions.needsManagement() which leads to JsFileLineParser
-    // execution that throws a different exception on some invalid goog.provide()s.
-    testError("goog.provide();", NULL_ARGUMENT_ERROR, PARSE_ERROR);
-    testError("goog.provide(5);", INVALID_ARGUMENT_ERROR, PARSE_ERROR);
-    testError("goog.provide([]);", INVALID_ARGUMENT_ERROR, PARSE_ERROR);
-    testError("goog.provide({});", INVALID_ARGUMENT_ERROR, PARSE_ERROR);
-    testError("goog.provide('foo', 'bar');", TOO_MANY_ARGUMENTS_ERROR, PARSE_ERROR);
+    testError("goog.provide();", NULL_ARGUMENT_ERROR);
+    testError("goog.provide(5);", INVALID_ARGUMENT_ERROR);
+    testError("goog.provide([]);", INVALID_ARGUMENT_ERROR);
+    testError("goog.provide({});", INVALID_ARGUMENT_ERROR);
+    testError("goog.provide('foo', 'bar');", TOO_MANY_ARGUMENTS_ERROR);
     testError("goog.provide('foo'); goog.provide('foo');", DUPLICATE_NAMESPACE_ERROR);
     testError("goog.provide('foo.bar'); goog.provide('foo'); goog.provide('foo');",
         DUPLICATE_NAMESPACE_ERROR);
 
-    testErrorEs6("goog.provide(`template`);", PARSE_ERROR);
-    testErrorEs6("goog.provide(tagged`template`);", PARSE_ERROR);
-    testErrorEs6("goog.provide(`${template}Sub`);", PARSE_ERROR);
+    testErrorEs6("goog.provide(`template`);", INVALID_ARGUMENT_ERROR);
+    testErrorEs6("goog.provide(tagged`template`);", INVALID_ARGUMENT_ERROR);
+    testErrorEs6("goog.provide(`${template}Sub`);", INVALID_ARGUMENT_ERROR);
   }
 
   public void testProvideErrorCases2() {
@@ -418,26 +415,24 @@ public final class ProcessClosurePrimitivesTest extends Es6CompilerTestCase {
   }
 
   public void testPreserveGoogRequires() {
-    preserveGoogRequires = true;
+    preserveGoogProvidesAndRequires = true;
     test(
         "goog.provide('foo'); goog.require('foo');",
-        "/** @const */ var foo={}; goog.require('foo');");
+        "/** @const */ var foo={}; goog.provide('foo'); goog.require('foo');");
     test(
         "goog.provide('foo'); goog.require('foo'); var a = {};",
-        "/** @const */ var foo = {}; goog.require('foo'); var a = {};");
+        "/** @const */ var foo = {}; goog.provide('foo'); goog.require('foo'); var a = {};");
   }
 
   public void testRequireErrorCases() {
-    // The ES6 path turns on DependencyOptions.needsManagement() which leads to JsFileLineParser
-    // execution that throws a different exception on some invalid goog.provide()s.
-    testError("goog.require();", NULL_ARGUMENT_ERROR, PARSE_ERROR);
-    testError("goog.require(5);", INVALID_ARGUMENT_ERROR, PARSE_ERROR);
-    testError("goog.require([]);", INVALID_ARGUMENT_ERROR, PARSE_ERROR);
-    testError("goog.require({});", INVALID_ARGUMENT_ERROR, PARSE_ERROR);
+    testError("goog.require();", NULL_ARGUMENT_ERROR);
+    testError("goog.require(5);", INVALID_ARGUMENT_ERROR);
+    testError("goog.require([]);", INVALID_ARGUMENT_ERROR);
+    testError("goog.require({});", INVALID_ARGUMENT_ERROR);
 
-    testErrorEs6("goog.require(`template`);", PARSE_ERROR);
-    testErrorEs6("goog.require(tagged`template`);", PARSE_ERROR);
-    testErrorEs6("goog.require(`${template}Sub`);", PARSE_ERROR);
+    testErrorEs6("goog.require(`template`);", INVALID_ARGUMENT_ERROR);
+    testErrorEs6("goog.require(tagged`template`);", INVALID_ARGUMENT_ERROR);
+    testErrorEs6("goog.require(`${template}Sub`);", INVALID_ARGUMENT_ERROR);
   }
 
   public void testLateProvides() {

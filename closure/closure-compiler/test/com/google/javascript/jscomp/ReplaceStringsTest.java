@@ -21,6 +21,7 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.ReplaceStrings.Result;
 import com.google.javascript.rhino.Node;
 
@@ -38,7 +39,8 @@ public final class ReplaceStringsTest extends CompilerTestCase {
   private ReplaceStrings pass;
   private Set<String> reserved;
   private VariableMap previous;
-  private boolean runDisambiguateProperties = false;
+  private boolean runDisambiguateProperties;
+  private boolean rename;
 
   private final ImmutableList<String> defaultFunctionsToInspect = ImmutableList.of(
       "Error(?)",
@@ -90,11 +92,35 @@ public final class ReplaceStringsTest extends CompilerTestCase {
   @Override
   protected void setUp() throws Exception {
     super.setUp();
-    super.enableLineNumberCheck(false);
     super.enableTypeCheck();
     functionsToInspect = defaultFunctionsToInspect;
     reserved = Collections.emptySet();
     previous = null;
+    runDisambiguateProperties = false;
+    rename = false;
+  }
+
+  private static class Renamer extends AbstractPostOrderCallback {
+    final AbstractCompiler compiler;
+
+    Renamer(AbstractCompiler compiler) {
+      this.compiler = compiler;
+    }
+
+    @Override
+    public void visit(NodeTraversal t, Node n, Node parent) {
+      if (n.isName()) {
+        String originalName = n.getString();
+        n.setOriginalName(originalName);
+        n.setString("renamed_" + originalName);
+        compiler.reportCodeChange();
+      } else if (n.isGetProp()) {
+        String originalName = n.getLastChild().getString();
+        n.getLastChild().setOriginalName(originalName);
+        n.getLastChild().setString("renamed_" + originalName);
+        compiler.reportCodeChange();
+      }
+    }
   }
 
   @Override
@@ -108,6 +134,9 @@ public final class ReplaceStringsTest extends CompilerTestCase {
         Map<String, CheckLevel> propertiesToErrorFor = new HashMap<>();
         propertiesToErrorFor.put("foobar", CheckLevel.ERROR);
 
+        if (rename) {
+          NodeTraversal.traverseEs6(compiler, js, new Renamer(compiler));
+        }
         new CollapseProperties(compiler).process(externs, js);
         if (runDisambiguateProperties) {
           SourceInformationAnnotator sia =
@@ -152,6 +181,22 @@ public final class ReplaceStringsTest extends CompilerTestCase {
         "Error('xyz');",
         "Error('b');",
         (new String[] { "b", "xyz" }));
+  }
+
+  public void testRenameName() {
+    rename = true;
+    testDebugStrings(
+        "Error('xyz');",
+        "renamed_Error('a');",
+        (new String[] { "a", "xyz" }));
+  }
+
+  public void testRenameStaticProp() {
+    rename = true;
+    testDebugStrings(
+        "goog.debug.Trace.startTracer('HistoryManager.updateHistory');",
+        "renamed_goog.renamed_debug.renamed_Trace.renamed_startTracer('a');",
+        (new String[] { "a", "HistoryManager.updateHistory" }));
   }
 
   public void testThrowError1() {

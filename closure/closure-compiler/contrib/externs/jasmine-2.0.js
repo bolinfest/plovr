@@ -144,6 +144,8 @@ jasmine.Matchers.prototype.toHaveBeenCalled = function() {};
 /** @param {...*} var_args */
 jasmine.Matchers.prototype.toHaveBeenCalledWith = function(var_args) {};
 
+/** @param {number} num */
+jasmine.Matchers.prototype.toHaveBeenCalledTimes = function(num) {};
 
 /** @param {(string|RegExp)} pattern */
 jasmine.Matchers.prototype.toMatch = function(pattern) {};
@@ -167,6 +169,10 @@ jasmine.Matchers.prototype.toThrowError = function(
  */
 jasmine.any = function(clazz) {};
 
+/**
+ * @return {!jasmine.Matchers}
+ */
+jasmine.anything = function() {};
 
 /**
  * @param {!Object} sample

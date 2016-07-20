@@ -22,6 +22,8 @@ import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 
+import javax.annotation.Nullable;
+
 /**
  * Checks for misplaced, misused or deprecated JSDoc annotations.
  *
@@ -82,17 +84,25 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
     validateClassLevelJsDoc(n, info);
     validateArrowFunction(n);
     validateDefaultValue(n, info);
-    validateTempates(n, info);
+    validateTemplates(n, info);
+    validateTypedefs(n, info);
     validateNoSideEffects(n, info);
+    validateAbstractJsDoc(n, info);
   }
 
-  private void validateTempates(Node n, JSDocInfo info) {
+  private void validateTypedefs(Node n, JSDocInfo info) {
+    if (info != null && info.getTypedefType() != null && isClassDecl(n)) {
+      reportMisplaced(n, "typedef", "@typedef does not make sense on a class declaration.");
+    }
+  }
+
+  private void validateTemplates(Node n, JSDocInfo info) {
     if (info != null
         && !info.getTemplateTypeNames().isEmpty()
         && !info.isConstructorOrInterface()
         && !isClassDecl(n)
         && !info.containsFunctionDeclaration()) {
-      if (isFunctionDecl(n)) {
+      if (getFunctionDecl(n) != null) {
         reportMisplaced(n, "template",
             "The template variable is unused."
             + " Please remove the @template annotation.");
@@ -104,11 +114,29 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
     }
   }
 
-  private boolean isFunctionDecl(Node n) {
-    return n.isFunction()
-        || (n.isVar() && n.getFirstFirstChild() != null
-            && n.getFirstFirstChild().isFunction())
-        || n.isAssign() && n.getFirstChild().isQualifiedName() && n.getLastChild().isFunction();
+  /**
+   * @return The function node associated with the function declaration associated with the
+   *     specified node, no null if no such function exists.
+   */
+  @Nullable
+  private Node getFunctionDecl(Node n) {
+    if (n.isFunction()) {
+      return n;
+    }
+    if (n.isMemberFunctionDef()) {
+      return n.getFirstChild();
+    }
+    if (n.isVar()
+        && n.getFirstFirstChild() != null
+        && n.getFirstFirstChild().isFunction()) {
+      return n.getFirstFirstChild();
+    }
+
+    if (n.isAssign() && n.getFirstChild().isQualifiedName() && n.getLastChild().isFunction()) {
+      return n.getLastChild();
+    }
+
+    return null;
   }
 
   private boolean isClassDecl(Node n) {
@@ -122,13 +150,10 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
     return n != null && n.isName() && n.hasChildren() && isClass(n.getFirstChild());
   }
 
-
-
   private boolean isClass(Node n) {
     return n.isClass()
         || (n.isCall() && compiler.getCodingConvention().isClassFactoryCall(n));
   }
-
 
   /**
    * Checks that class-level annotations like @interface/@extends are not used on member functions.
@@ -137,6 +162,50 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
     if (info != null && n.isMemberFunctionDef()
         && hasClassLevelJsDoc(info)) {
       report(n, DISALLOWED_MEMBER_JSDOC);
+    }
+  }
+
+  private void validateAbstractJsDoc(Node n, JSDocInfo info) {
+    if (info == null || !info.isAbstract()) {
+      return;
+    }
+    if (n.isClass()) {
+      return;
+    }
+
+    Node functionNode = getFunctionDecl(n);
+
+    if (functionNode == null) {
+      // @abstract annotation on a non-function
+      report(n, MISPLACED_ANNOTATION, "@abstract", "only functions or methods can be abstract");
+      return;
+    }
+
+    if (NodeUtil.getFunctionBody(functionNode).hasChildren()) {
+      // @abstract annotation on a function with a non-empty body
+      report(n, MISPLACED_ANNOTATION, "@abstract",
+          "function with a non-empty body cannot be abstract");
+      return;
+    }
+
+    if (n.isMemberFunctionDef() && "constructor".equals(n.getString())) {
+      // @abstract annotation on an ES6 constructor
+      report(n, MISPLACED_ANNOTATION, "@abstract", "constructors cannot be abstract");
+      return;
+    }
+
+    if (!info.isConstructor()
+        && !n.isMemberFunctionDef()
+        && !NodeUtil.isPrototypeMethod(functionNode)) {
+      // @abstract annotation on a non-method (or static method) in ES5
+      report(n, MISPLACED_ANNOTATION, "@abstract", "only functions or methods can be abstract");
+      return;
+    }
+
+    if (n.isStaticMember()) {
+      // @abstract annotation on a static method in ES6
+      report(n, MISPLACED_ANNOTATION, "@abstract", "static methods cannot be abstract");
+      return;
     }
   }
 
@@ -191,24 +260,24 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
       // This JSDoc should be attached to a FUNCTION node, or an assignment
       // with a function as the RHS, etc.
       switch (n.getType()) {
-        case Token.FUNCTION:
-        case Token.VAR:
-        case Token.LET:
-        case Token.CONST:
-        case Token.GETTER_DEF:
-        case Token.SETTER_DEF:
-        case Token.MEMBER_FUNCTION_DEF:
-        case Token.STRING_KEY:
-        case Token.COMPUTED_PROP:
-        case Token.EXPORT:
+        case FUNCTION:
+        case VAR:
+        case LET:
+        case CONST:
+        case GETTER_DEF:
+        case SETTER_DEF:
+        case MEMBER_FUNCTION_DEF:
+        case STRING_KEY:
+        case COMPUTED_PROP:
+        case EXPORT:
           return;
-        case Token.GETELEM:
-        case Token.GETPROP:
+        case GETELEM:
+        case GETPROP:
           if (n.getFirstChild().isQualifiedName()) {
             return;
           }
           break;
-        case Token.ASSIGN: {
+        case ASSIGN: {
           // TODO(tbreisacher): Check that the RHS of the assignment is a
           // function. Note that it can be a FUNCTION node, but it can also be
           // a call to goog.abstractMethod, goog.functions.constant, etc.
@@ -238,7 +307,7 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
     if (info.getDescription() != null || info.isHidden() || info.getMeaning() != null) {
       boolean descOkay = false;
       switch (n.getType()) {
-        case Token.ASSIGN: {
+        case ASSIGN: {
           Node lhs = n.getFirstChild();
           if (lhs.isName()) {
             descOkay = lhs.getString().startsWith("MSG_");
@@ -247,12 +316,12 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
           }
           break;
         }
-        case Token.VAR:
-        case Token.LET:
-        case Token.CONST:
+        case VAR:
+        case LET:
+        case CONST:
           descOkay = n.getFirstChild().getString().startsWith("MSG_");
           break;
-        case Token.STRING_KEY:
+        case STRING_KEY:
           descOkay = n.getString().startsWith("MSG_");
           break;
       }
@@ -270,42 +339,42 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
       boolean valid = false;
       switch (n.getType()) {
         // Function declarations are valid
-        case Token.FUNCTION:
+        case FUNCTION:
           valid = NodeUtil.isFunctionDeclaration(n);
           break;
         // Object literal properties, catch declarations and variable
         // initializers are valid.
-        case Token.NAME:
-        case Token.DEFAULT_VALUE:
-        case Token.ARRAY_PATTERN:
-        case Token.OBJECT_PATTERN:
+        case NAME:
+        case DEFAULT_VALUE:
+        case ARRAY_PATTERN:
+        case OBJECT_PATTERN:
           Node parent = n.getParent();
           switch (parent.getType()) {
-            case Token.GETTER_DEF:
-            case Token.SETTER_DEF:
-            case Token.CATCH:
-            case Token.FUNCTION:
-            case Token.VAR:
-            case Token.LET:
-            case Token.CONST:
-            case Token.PARAM_LIST:
+            case GETTER_DEF:
+            case SETTER_DEF:
+            case CATCH:
+            case FUNCTION:
+            case VAR:
+            case LET:
+            case CONST:
+            case PARAM_LIST:
               valid = true;
               break;
           }
           break;
         // Casts, variable declarations, exports, and Object literal properties are valid.
-        case Token.CAST:
-        case Token.VAR:
-        case Token.LET:
-        case Token.CONST:
-        case Token.EXPORT:
-        case Token.STRING_KEY:
-        case Token.GETTER_DEF:
-        case Token.SETTER_DEF:
+        case CAST:
+        case VAR:
+        case LET:
+        case CONST:
+        case EXPORT:
+        case STRING_KEY:
+        case GETTER_DEF:
+        case SETTER_DEF:
           valid = true;
           break;
         // Property assignments are valid, if at the root of an expression.
-        case Token.ASSIGN: {
+        case ASSIGN: {
           Node lvalue = n.getFirstChild();
           valid = n.getParent().isExprResult()
               && (lvalue.isGetProp()
@@ -313,10 +382,10 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
                   || lvalue.matchesQualifiedName("exports"));
           break;
         }
-        case Token.GETPROP:
+        case GETPROP:
           valid = n.getParent().isExprResult() && n.isQualifiedName();
           break;
-        case Token.CALL:
+        case CALL:
           valid = info.isDefine();
           break;
         default:

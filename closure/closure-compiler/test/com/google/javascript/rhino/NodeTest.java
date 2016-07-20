@@ -66,36 +66,36 @@ public class NodeTest extends TestCase {
   }
 
   public void testCheckTreeEqualsImplSame() {
-    Node node1 = new Node(1, new Node(2));
-    Node node2 = new Node(1, new Node(2));
+    Node node1 = new Node(Token.LET, new Node(Token.VAR));
+    Node node2 = new Node(Token.LET, new Node(Token.VAR));
     assertEquals(null, node1.checkTreeEqualsImpl(node2));
   }
 
   public void testCheckTreeEqualsImplDifferentType() {
-    Node node1 = new Node(1, new Node(2));
-    Node node2 = new Node(2, new Node(2));
+    Node node1 = new Node(Token.LET, new Node(Token.VAR));
+    Node node2 = new Node(Token.VAR, new Node(Token.VAR));
     assertEquals(new NodeMismatch(node1, node2),
         node1.checkTreeEqualsImpl(node2));
   }
 
   public void testCheckTreeEqualsImplDifferentChildCount() {
-    Node node1 = new Node(1, new Node(2));
-    Node node2 = new Node(1);
+    Node node1 = new Node(Token.LET, new Node(Token.VAR));
+    Node node2 = new Node(Token.LET);
     assertEquals(new NodeMismatch(node1, node2),
         node1.checkTreeEqualsImpl(node2));
   }
 
   public void testCheckTreeEqualsImplDifferentChild() {
-    Node child1 = new Node(1);
-    Node child2 = new Node(2);
-    Node node1 = new Node(1, child1);
-    Node node2 = new Node(1, child2);
+    Node child1 = new Node(Token.LET);
+    Node child2 = new Node(Token.VAR);
+    Node node1 = new Node(Token.LET, child1);
+    Node node2 = new Node(Token.LET, child2);
     assertEquals(new NodeMismatch(child1, child2),
         node1.checkTreeEqualsImpl(node2));
   }
 
   public void testCheckTreeEqualsSame() {
-    Node node1 = new Node(1);
+    Node node1 = new Node(Token.LET);
     assertEquals(null, node1.checkTreeEquals(node1));
   }
 
@@ -106,13 +106,13 @@ public class NodeTest extends TestCase {
   }
 
   public void testCheckTreeEqualsBooleanSame() {
-    Node node1 = new Node(1);
+    Node node1 = new Node(Token.LET);
     assertEquals(true, node1.isEquivalentTo(node1));
   }
 
   public void testCheckTreeEqualsBooleanDifferent() {
-    Node node1 = new Node(1);
-    Node node2 = new Node(2);
+    Node node1 = new Node(Token.LET);
+    Node node2 = new Node(Token.VAR);
     assertEquals(false, node1.isEquivalentTo(node2));
   }
 
@@ -166,17 +166,17 @@ public class NodeTest extends TestCase {
   }
 
   public void testVarArgs1() {
-    assertFalse(new Node(1).isVarArgs());
+    assertFalse(new Node(Token.LET).isVarArgs());
   }
 
   public void testVarArgs2() {
-    Node n = new Node(1);
+    Node n = new Node(Token.LET);
     n.setVarArgs(false);
     assertFalse(n.isVarArgs());
   }
 
   public void testVarArgs3() {
-    Node n = new Node(1);
+    Node n = new Node(Token.LET);
     n.setVarArgs(true);
     assertTrue(n.isVarArgs());
   }
@@ -527,6 +527,67 @@ public class NodeTest extends TestCase {
     assertNull(
         IR.getprop(IR.call(IR.name("a")), IR.string("b")).getQualifiedName());
   }
+
+  public void testJSDocInfoClone() {
+    Node original = IR.var(IR.name("varName"));
+    JSDocInfoBuilder builder = new JSDocInfoBuilder(false);
+    builder.recordType(new JSTypeExpression(IR.name("TypeName"), "blah"));
+    JSDocInfo info = builder.build();
+    original.getFirstChild().setJSDocInfo(info);
+
+    // By default the JSDocInfo and JSTypeExpression objects are not cloned
+    Node clone = original.cloneTree();
+    assertSame(original.getFirstChild().getJSDocInfo(), clone.getFirstChild().getJSDocInfo());
+    assertSame(
+        original.getFirstChild().getJSDocInfo().getType(),
+        clone.getFirstChild().getJSDocInfo().getType());
+    assertSame(
+        original.getFirstChild().getJSDocInfo().getType().getRoot(),
+        clone.getFirstChild().getJSDocInfo().getType().getRoot());
+
+    // If requested the JSDocInfo and JSTypeExpression objects are cloned.
+    // This is required because compiler classes are modifying the type expressions in place
+    clone = original.cloneTree(true);
+    assertNotSame(original.getFirstChild().getJSDocInfo(), clone.getFirstChild().getJSDocInfo());
+    assertNotSame(
+        original.getFirstChild().getJSDocInfo().getType(),
+        clone.getFirstChild().getJSDocInfo().getType());
+    assertNotSame(
+        original.getFirstChild().getJSDocInfo().getType().getRoot(),
+        clone.getFirstChild().getJSDocInfo().getType().getRoot());
+  }
+
+  public void testAddChildToFrontWithSingleNode() {
+    Node root = new Node(Token.SCRIPT);
+    Node nodeToAdd = new Node(Token.SCRIPT);
+
+    root.addChildToFront(nodeToAdd);
+
+    assertEquals(root, nodeToAdd.parent);
+    assertEquals(root.getFirstChild(), nodeToAdd);
+    assertEquals(root.getLastChild(), nodeToAdd);
+    assertNull(nodeToAdd.previous);
+    assertNull(nodeToAdd.next);
+  }
+
+  public void testAddChildToFrontWithLargerTree() {
+    Node left = Node.newString("left");
+    Node m1 = Node.newString("m1");
+    Node m2 = Node.newString("m2");
+    Node right = Node.newString("right");
+    Node root = new Node(Token.SCRIPT, left, m1, m2, right);
+    Node nodeToAdd = new Node(Token.SCRIPT);
+
+    root.addChildToFront(nodeToAdd);
+
+    assertEquals(root, nodeToAdd.parent);
+    assertEquals(root.getFirstChild(), nodeToAdd);
+    assertEquals(root.getLastChild(), right);
+    assertNull(nodeToAdd.previous);
+    assertEquals(left, nodeToAdd.next);
+    assertEquals(nodeToAdd, left.previous);
+  }
+
 
   private static Node getVarRef(String name) {
     return Node.newString(Token.NAME, name);

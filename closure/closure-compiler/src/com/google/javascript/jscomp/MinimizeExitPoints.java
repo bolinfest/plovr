@@ -17,7 +17,8 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
-import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.jscomp.NodeTraversal.AbstractShallowCallback;
+import com.google.javascript.jscomp.NodeTraversal.FunctionCallback;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
@@ -31,10 +32,7 @@ import javax.annotation.Nullable;
  *
  * @author johnlenz@google.com (John Lenz)
  */
-class MinimizeExitPoints
-    extends AbstractPostOrderCallback
-    implements CompilerPass {
-
+class MinimizeExitPoints extends AbstractShallowCallback implements CompilerPass {
   AbstractCompiler compiler;
 
   MinimizeExitPoints(AbstractCompiler compiler) {
@@ -43,24 +41,31 @@ class MinimizeExitPoints
 
   @Override
   public void process(Node externs, Node root) {
-    // TODO(johnlenz): only inspect changed functions
-    NodeTraversal.traverseEs6(compiler, root, this);
+    NodeTraversal.traverseChangedFunctions(compiler, new FunctionCallback() {
+        @Override
+        public void enterFunction(AbstractCompiler compiler, Node root) {
+          if (root.isFunction()) {
+            root = root.getLastChild();
+          }
+          NodeTraversal.traverseEs6(compiler, root, MinimizeExitPoints.this);
+        }
+    });
   }
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
     switch (n.getType()) {
-      case Token.LABEL:
+      case LABEL:
         tryMinimizeExits(
             n.getLastChild(), Token.BREAK, n.getFirstChild().getString());
         break;
 
-      case Token.FOR:
-      case Token.WHILE:
+      case FOR:
+      case WHILE:
         tryMinimizeExits(NodeUtil.getLoopCodeBlock(n), Token.CONTINUE, null);
         break;
 
-      case Token.DO:
+      case DO:
         tryMinimizeExits(NodeUtil.getLoopCodeBlock(n), Token.CONTINUE, null);
 
         Node cond = NodeUtil.getConditionExpression(n);
@@ -72,14 +77,15 @@ class MinimizeExitPoints
         }
         break;
 
-      case Token.FUNCTION:
-        // FYI: the function will be analyzed w/out a call to
-        // NodeTraversal/pushScope. Bypassing pushScope could cause a bug if
-        // there is code that relies on NodeTraversal knowing the correct scope.
-        tryMinimizeExits(n.getLastChild(), Token.RETURN, null);
+      case BLOCK:
+        // The traversal starts at the function block so `parent` will be null, so we use
+        // getParent here.
+        if (n.getParent() != null && n.getParent().isFunction()) {
+          tryMinimizeExits(n, Token.RETURN, null);
+        }
         break;
 
-      case Token.SWITCH:
+      case SWITCH:
         tryMinimizeSwitchExits(n, Token.BREAK, null);
         break;
 
@@ -115,7 +121,7 @@ class MinimizeExitPoints
    * @param labelName If parent is a label the name of the label to look for,
    *   null otherwise. Non-null only for breaks within labels.
    */
-  void tryMinimizeExits(Node n, int exitType, @Nullable String labelName) {
+  void tryMinimizeExits(Node n, Token exitType, @Nullable String labelName) {
 
     // Just an 'exit'.
     if (matchingExitNode(n, exitType, labelName)) {
@@ -165,7 +171,7 @@ class MinimizeExitPoints
     }
 
     // The rest assumes a block with at least one child, bail on anything else.
-    if (!n.isBlock() || n.getLastChild() == null) {
+    if (!n.isBlock() || !n.hasChildren()) {
       return;
     }
 
@@ -173,8 +179,7 @@ class MinimizeExitPoints
     // Convert "if (blah) break;  if (blah2) break; other_stmt;" to
     // become "if (blah); else { if (blah2); else { other_stmt; } }"
     // which will get converted to "if (!blah && !blah2) { other_stmt; }".
-    for (Node c : n.children()) {
-
+    for (Node c = n.getFirstChild(); c != null; c = c.getNext()) {
       // An 'if' block to process below.
       if (c.isIf()) {
         Node ifTree = c;
@@ -212,7 +217,7 @@ class MinimizeExitPoints
     }
   }
 
-  void tryMinimizeSwitchExits(Node n, int exitType, @Nullable String labelName) {
+  void tryMinimizeSwitchExits(Node n, Token exitType, @Nullable String labelName) {
     Preconditions.checkState(n.isSwitch());
     // Skipping the switch condition, visit all the children.
     for (Node c = n.getSecondChild(); c != null; c = c.getNext()) {
@@ -229,7 +234,7 @@ class MinimizeExitPoints
    * Attempt to remove explicit exits from switch cases that also occur implicitly
    * after the switch.
    */
-  void tryMinimizeSwitchCaseExits(Node n, int exitType, @Nullable String labelName) {
+  void tryMinimizeSwitchCaseExits(Node n, Token exitType, @Nullable String labelName) {
     Preconditions.checkState(NodeUtil.isSwitchCase(n));
 
     Preconditions.checkState(n != n.getParent().getLastChild());
@@ -242,12 +247,12 @@ class MinimizeExitPoints
 
     // Now try to minimize the exits of the last child before the break, if it is removed
     // look at what has become the child before the break.
-    Node childBeforeBreak = block.getChildBefore(maybeBreak);
+    Node childBeforeBreak = maybeBreak.getPrevious();
     while (childBeforeBreak != null) {
       Node c = childBeforeBreak;
       tryMinimizeExits(c, exitType, labelName);
       // If the node is still the last child, we are done.
-      childBeforeBreak = block.getChildBefore(maybeBreak);
+      childBeforeBreak = maybeBreak.getPrevious();
       if (c == childBeforeBreak) {
         break;
       }
@@ -267,7 +272,7 @@ class MinimizeExitPoints
    *     named-break associated with a label.
    */
   private void tryMinimizeIfBlockExits(Node srcBlock, Node destBlock,
-      Node ifNode, int exitType, @Nullable String labelName) {
+      Node ifNode, Token exitType, @Nullable String labelName) {
     Node exitNodeParent = null;
     Node exitNode = null;
 
@@ -326,7 +331,7 @@ class MinimizeExitPoints
    *     non-null only for breaks associated with labels.
    * @return Whether the node matches the specified block-exit type.
    */
-  private static boolean matchingExitNode(Node n, int type, @Nullable String labelName) {
+  private static boolean matchingExitNode(Node n, Token type, @Nullable String labelName) {
     if (n.getType() == type) {
       if (type == Token.RETURN) {
         // only returns without expressions.

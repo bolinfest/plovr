@@ -22,7 +22,10 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.SourceFile;
+import com.google.javascript.jscomp.parsing.Config.JsDocParsing;
 import com.google.javascript.jscomp.parsing.Config.LanguageMode;
+import com.google.javascript.jscomp.parsing.Config.RunMode;
+import com.google.javascript.jscomp.parsing.Config.SourceLocationInformation;
 import com.google.javascript.jscomp.parsing.ParserRunner.ParseResult;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Marker;
@@ -59,10 +62,10 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
     super.setUp();
     fileLevelJsDocBuilder = null;
     extraAnnotations = new HashSet<>(ParserRunner.createConfig(
-        true, LanguageMode.ECMASCRIPT3, null)
+        LanguageMode.ECMASCRIPT3, null)
             .annotationNames.keySet());
     extraSuppressions = new HashSet<>(ParserRunner.createConfig(
-        true, LanguageMode.ECMASCRIPT3, null).suppressionNames);
+        LanguageMode.ECMASCRIPT3, null).suppressionNames);
 
     extraSuppressions.add("x");
     extraSuppressions.add("y");
@@ -1324,6 +1327,62 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
   public void testParseLends7() throws Exception {
     parse("@type {string} \n * @lends {string} */",
         "Bad type annotation. @lends tag incompatible with other annotations");
+  }
+
+  public void testParseAbstract() throws Exception {
+    JSDocInfo info = parse("@abstract */");
+    assertThat(info.isAbstract()).isTrue();
+  }
+
+  public void testParseAbstract_alreadyAbstract() throws Exception {
+    parse("@abstract \n * @abstract */",
+        "Bad type annotation. type annotation incompatible with other annotations");
+  }
+
+  public void testParseAbstract_typedefBeforeAbstract() throws Exception {
+    parse("@typedef {Object<T,T>} \n * @abstract */",
+        "Bad type annotation. type annotation incompatible with other annotations");
+  }
+
+  public void testParseAbstract_typeBeforeAbstract() throws Exception {
+    parse("* @type {Object<T,T>} \n * @abstract */",
+        "Bad type annotation. type annotation incompatible with other annotations");
+  }
+
+  public void testParseAbstract_interfaceBeforeAbstract() throws Exception {
+    parse("* @interface \n * @abstract */",
+        "Bad type annotation. type annotation incompatible with other annotations");
+  }
+
+  public void testParseAbstract_abstractBeforeTypedef() throws Exception {
+    parse("@abstract \n * @typedef {Object<T,T>} */",
+        "Bad type annotation. type annotation incompatible with other annotations");
+  }
+
+  public void testParseAbstract_abstractBeforeType() throws Exception {
+    parse("* @abstract \n * @type {Object<T,T>} */",
+        "Bad type annotation. type annotation incompatible with other annotations");
+  }
+
+  public void testParseAbstract_abstractBeforeInterface() throws Exception {
+    parse("* @abstract \n * @interface */",
+        "Bad type annotation. type annotation incompatible with other annotations");
+  }
+
+  public void testParseAbstract_abstractAndNotPrivate() throws Exception {
+    JSDocInfo info1 = parse("* @public \n * @abstract */");
+    assertTrue(info1.isAbstract());
+
+    JSDocInfo info2 = parse("* @protected \n * @abstract */");
+    assertTrue(info2.isAbstract());
+
+    JSDocInfo info3 = parse("* @package \n * @abstract */");
+    assertTrue(info3.isAbstract());
+  }
+
+  public void testParseAbstract_abstractAndPrivate() throws Exception {
+    parse("* @private \n * @abstract */",
+        "Bad type annotation. type annotation incompatible with other annotations");
   }
 
   public void testStackedAnnotation() throws Exception {
@@ -2804,30 +2863,55 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
     parse("@export {string}\n * @public */", "extra visibility tag");
   }
 
+  public void testStableIdGenerator() throws Exception {
+    JSDocInfo info = parse("/**\n"
+        + " * @stableIdGenerator\n"
+        + " */\n"
+        + "function getId() {}");
+    assertThat(info.isStableIdGenerator()).isTrue();
+  }
+
   public void testStableIdGeneratorConflict() throws Exception {
-    parse("/**\n" +
-          " * @stableIdGenerator\n" +
-          " * @stableIdGenerator\n" +
-          " */\n" +
-          "function getId() {}",
-          "extra @stableIdGenerator tag");
+    parse("/**\n"
+        + " * @stableIdGenerator\n"
+        + " * @stableIdGenerator\n"
+        + " */\n"
+        + "function getId() {}",
+        "extra @stableIdGenerator tag");
+  }
+
+  public void testXidGenerator() throws Exception {
+    JSDocInfo info = parse("/**\n"
+        + " * @idGenerator {xid}\n"
+        + " */\n"
+        + "function getId() {}");
+    assertThat(info.isXidGenerator()).isTrue();
+  }
+
+  public void testXidGeneratorConflict() throws Exception {
+    parse("/**\n"
+        + " * @idGenerator {xid}\n"
+        + " * @idGenerator {xid}\n"
+        + " */\n"
+        + "function getId() {}",
+        "extra @idGenerator tag");
   }
 
   public void testIdGenerator() throws Exception {
-    JSDocInfo info = parse("/**\n" +
-          " * @idGenerator\n" +
-          " */\n" +
-          "function getId() {}");
+    JSDocInfo info = parse("/**\n"
+        + " * @idGenerator\n"
+        + " */\n"
+        + "function getId() {}");
     assertThat(info.isIdGenerator()).isTrue();
   }
 
   public void testIdGeneratorConflict() throws Exception {
-    parse("/**\n" +
-          " * @idGenerator\n" +
-          " * @idGenerator\n" +
-          " */\n" +
-          "function getId() {}",
-          "extra @idGenerator tag");
+    parse("/**\n"
+        + " * @idGenerator\n"
+        + " * @idGenerator\n"
+        + " */\n"
+        + "function getId() {}",
+        "extra @idGenerator tag");
   }
 
   public void testIdGenerator1() throws Exception {
@@ -2846,6 +2930,11 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
   }
 
   public void testIdGenerator4() throws Exception {
+    JSDocInfo info = parse("@idGenerator {xid} */");
+    assertThat(info.isXidGenerator()).isTrue();
+  }
+
+  public void testIdGenerator5() throws Exception {
     JSDocInfo info = parse("@idGenerator {mapped} */");
     assertThat(info.isMappedIdGenerator()).isTrue();
   }
@@ -4374,7 +4463,13 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
   private Node parseFull(String code, String... warnings) {
     TestErrorReporter testErrorReporter = new TestErrorReporter(null, warnings);
     Config config =
-        new Config(extraAnnotations, extraSuppressions, true, LanguageMode.ECMASCRIPT3);
+        new Config(
+            extraAnnotations,
+            JsDocParsing.INCLUDE_DESCRIPTIONS_NO_WHITESPACE,
+            SourceLocationInformation.PRESERVE,
+            RunMode.KEEP_GOING,
+            extraSuppressions,
+            LanguageMode.ECMASCRIPT3);
 
     ParseResult result = ParserRunner.parse(
         new SimpleSourceFile("source", false), code, config, testErrorReporter);
@@ -4384,35 +4479,49 @@ public final class JsDocInfoParserTest extends BaseJSTypeTestCase {
   }
 
   @SuppressWarnings("unused")
-  private JSDocInfo parseFileOverviewWithoutDoc(String comment,
-                                                String... warnings) {
-    return parse(comment, false, true, false, warnings);
+  private JSDocInfo parseFileOverviewWithoutDoc(String comment, String... warnings) {
+    return parse(comment, JsDocParsing.INCLUDE_DESCRIPTIONS_NO_WHITESPACE, warnings);
   }
 
   private JSDocInfo parseFileOverview(String comment, String... warnings) {
-    return parse(comment, true, true, false, warnings);
+    return parse(comment, JsDocParsing.INCLUDE_DESCRIPTIONS_NO_WHITESPACE, true, warnings);
   }
 
   private JSDocInfo preserveWhitespaceParse(String comment, String... warnings) {
-    return parse(comment, true, false, true, warnings);
+    return parse(comment, JsDocParsing.INCLUDE_DESCRIPTIONS_WITH_WHITESPACE, warnings);
   }
 
   private JSDocInfo parse(String comment, String... warnings) {
-    return parse(comment, false, false, false, warnings);
+    return parse(comment, JsDocParsing.TYPES_ONLY, warnings);
   }
 
   private JSDocInfo parse(String comment, boolean parseDocumentation,
                           String... warnings) {
-    return parse(comment, parseDocumentation, false, false, warnings);
+    return parse(
+        comment,
+        parseDocumentation
+            ? Config.JsDocParsing.INCLUDE_DESCRIPTIONS_NO_WHITESPACE
+            : Config.JsDocParsing.TYPES_ONLY,
+        warnings);
   }
 
-  private JSDocInfo parse(String comment, boolean parseDocumentation,
-      boolean parseFileOverview, boolean preserveWhitespace, String... warnings) {
+  private JSDocInfo parse(String comment, JsDocParsing parseDocumentation, String... warnings) {
+    return parse(comment, parseDocumentation, false, warnings);
+  }
+
+  private JSDocInfo parse(String comment, JsDocParsing parseDocumentation,
+      boolean parseFileOverview, String... warnings) {
     TestErrorReporter errorReporter = new TestErrorReporter(null, warnings);
 
-    boolean isIdeMode = parseDocumentation;
-    Config config = new Config(extraAnnotations, extraSuppressions,
-        isIdeMode, parseDocumentation, preserveWhitespace, LanguageMode.ECMASCRIPT3);
+    Config config =
+        new Config(
+            extraAnnotations,
+            parseDocumentation,
+            SourceLocationInformation.DISCARD,
+            RunMode.STOP_AFTER_ERROR,
+            extraSuppressions,
+            LanguageMode.ECMASCRIPT3);
+
     StaticSourceFile file = new SimpleSourceFile("testcode", false);
 
     JsDocInfoParser jsdocParser = new JsDocInfoParser(

@@ -130,9 +130,19 @@ public final class CodingConventions {
       return isExported(name, false) || isExported(name, true);
     }
 
+     @Override
+    public boolean blockRenamingForProperty(String name) {
+      return  nextConvention.blockRenamingForProperty(name);
+    }
+
     @Override
     public boolean isPrivate(String name) {
       return nextConvention.isPrivate(name);
+    }
+
+    @Override
+    public boolean hasPrivacyConvention() {
+      return nextConvention.hasPrivacyConvention();
     }
 
     @Override
@@ -285,6 +295,11 @@ public final class CodingConventions {
     }
 
     @Override
+    public boolean isPropertyRenameFunction(String name) {
+      return nextConvention.isPropertyRenameFunction(name);
+    }
+
+    @Override
     public boolean isPrototypeAlias(Node getProp) {
       return false;
     }
@@ -361,7 +376,17 @@ public final class CodingConventions {
     }
 
     @Override
+    public boolean blockRenamingForProperty(String name) {
+      return false;
+    }
+
+    @Override
     public boolean isPrivate(String name) {
+      return false;
+    }
+
+    @Override
+    public boolean hasPrivacyConvention() {
       return false;
     }
 
@@ -499,6 +524,11 @@ public final class CodingConventions {
     @Override
     public boolean isPropertyTestFunction(Node call) {
       return "Array.isArray".equals(call.getFirstChild().getQualifiedName());
+    }
+
+    @Override
+    public boolean isPropertyRenameFunction(String name) {
+      return NodeUtil.JSC_PROPERTY_NAME_FN.equals(name);
     }
 
     @Override

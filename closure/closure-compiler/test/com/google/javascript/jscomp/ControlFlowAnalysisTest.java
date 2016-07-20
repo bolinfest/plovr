@@ -32,7 +32,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-
 /**
  * Tests {@link ControlFlowAnalysis}.
  *
@@ -68,7 +67,7 @@ public final class ControlFlowAnalysisTest extends TestCase {
    * some node with the second token.
    */
   private static List<DiGraphEdge<Node, Branch>> getAllEdges(
-      ControlFlowGraph<Node> cfg, int startToken, int endToken) {
+      ControlFlowGraph<Node> cfg, Token startToken, Token endToken) {
     List<DiGraphEdge<Node, Branch>> edges = getAllEdges(cfg);
     Iterator<DiGraphEdge<Node, Branch>> it = edges.iterator();
     while (it.hasNext()) {
@@ -88,7 +87,7 @@ public final class ControlFlowAnalysisTest extends TestCase {
    * first token to some node with the second token.
    */
   private static List<DiGraphEdge<Node, Branch>> getAllEdges(
-      ControlFlowGraph<Node> cfg, int startToken, int endToken, Branch type) {
+      ControlFlowGraph<Node> cfg, Token startToken, Token endToken, Branch type) {
     List<DiGraphEdge<Node, Branch>> edges =
         getAllEdges(cfg, startToken, endToken);
     Iterator<DiGraphEdge<Node, Branch>> it = edges.iterator();
@@ -118,7 +117,7 @@ public final class ControlFlowAnalysisTest extends TestCase {
    * This edge must flow from a parent to one of its descendants.
    */
   private static List<DiGraphEdge<Node, Branch>> getAllDownEdges(
-      ControlFlowGraph<Node> cfg, int startToken, int endToken, Branch type) {
+      ControlFlowGraph<Node> cfg, Token startToken, Token endToken, Branch type) {
     List<DiGraphEdge<Node, Branch>> edges =
         getAllEdges(cfg, startToken, endToken, type);
     Iterator<DiGraphEdge<Node, Branch>> it = edges.iterator();
@@ -138,8 +137,8 @@ public final class ControlFlowAnalysisTest extends TestCase {
    * Assert that there exists a control flow edge of the given type
    * from some node with the first token to some node with the second token.
    */
-  private static void assertNoEdge(ControlFlowGraph<Node> cfg, int startToken,
-      int endToken) {
+  private static void assertNoEdge(ControlFlowGraph<Node> cfg, Token startToken,
+      Token endToken) {
     assertThat(getAllEdges(cfg, startToken, endToken)).isEmpty();
   }
 
@@ -149,7 +148,7 @@ public final class ControlFlowAnalysisTest extends TestCase {
    * This edge must flow from a parent to one of its descendants.
    */
   private static void assertDownEdge(ControlFlowGraph<Node> cfg,
-      int startToken, int endToken, Branch type) {
+      Token startToken, Token endToken, Branch type) {
     assertTrue("No down edge found",
         0 != getAllDownEdges(cfg, startToken, endToken, type).size());
   }
@@ -160,7 +159,7 @@ public final class ControlFlowAnalysisTest extends TestCase {
    * This edge must flow from a node to one of its ancestors.
    */
   private static void assertUpEdge(ControlFlowGraph<Node> cfg,
-      int startToken, int endToken, Branch type) {
+      Token startToken, Token endToken, Branch type) {
     assertTrue("No up edge found",
         0 != getAllDownEdges(cfg, endToken, startToken, type).size());
   }
@@ -171,7 +170,7 @@ public final class ControlFlowAnalysisTest extends TestCase {
    * This edge must flow between two nodes that are not in the same subtree.
    */
   private static void assertCrossEdge(ControlFlowGraph<Node> cfg,
-      int startToken, int endToken, Branch type) {
+      Token startToken, Token endToken, Branch type) {
     int numDownEdges = getAllDownEdges(cfg, startToken, endToken, type).size();
     int numUpEdges = getAllDownEdges(cfg, endToken, startToken, type).size();
     int numEdges = getAllEdges(cfg, startToken, endToken, type).size();
@@ -183,7 +182,7 @@ public final class ControlFlowAnalysisTest extends TestCase {
    * from some node with the first token to the return node.
    */
   private static void assertReturnEdge(ControlFlowGraph<Node> cfg,
-      int startToken) {
+      Token startToken) {
     List<DiGraphEdge<Node, Branch>> edges = getAllEdges(cfg);
     for (DiGraphEdge<Node, Branch> edge : edges) {
       Node source = edge.getSource().getValue();
@@ -202,7 +201,7 @@ public final class ControlFlowAnalysisTest extends TestCase {
    * from some node with the first token to the return node.
    */
   private static void assertNoReturnEdge(ControlFlowGraph<Node> cfg,
-      int startToken) {
+      Token startToken) {
     List<DiGraphEdge<Node, Branch>> edges = getAllEdges(cfg);
     for (DiGraphEdge<Node, Branch> edge : edges) {
       Node source = edge.getSource().getValue();
@@ -917,7 +916,7 @@ public final class ControlFlowAnalysisTest extends TestCase {
 
   public void testFunctionWithinTry() {
     // Make sure we don't search for the handler outside of the function.
-    String src = "try { function f() {throw 1;} } catch (e) { }";
+    String src = "try { var f = function() {throw 1;} } catch (e) { }";
     String expected = "digraph AST {\n"
         + "  node [color=lightblue2, style=filled];\n"
         + "  node0 [label=\"SCRIPT\"];\n"
@@ -925,37 +924,39 @@ public final class ControlFlowAnalysisTest extends TestCase {
         + "  node0 -> node1 [weight=1];\n"
         + "  node2 [label=\"BLOCK\"];\n"
         + "  node1 -> node2 [weight=1];\n"
-        + "  node3 [label=\"FUNCTION\"];\n"
+        + "  node3 [label=\"VAR\"];\n"
         + "  node2 -> node3 [weight=1];\n"
         + "  node4 [label=\"NAME\"];\n"
         + "  node3 -> node4 [weight=1];\n"
-        + "  node5 [label=\"PARAM_LIST\"];\n"
-        + "  node3 -> node5 [weight=1];\n"
-        + "  node6 [label=\"BLOCK\"];\n"
-        + "  node3 -> node6 [weight=1];\n"
-        + "  node7 [label=\"THROW\"];\n"
-        + "  node6 -> node7 [weight=1];\n"
-        + "  node8 [label=\"NUMBER\"];\n"
-        + "  node7 -> node8 [weight=1];\n"
-        + "  node6 -> node7 [label=\"UNCOND\", " +
-                "fontcolor=\"red\", weight=0.01, color=\"red\"];\n"
-        + "  node3 -> node6 [label=\"UNCOND\", " +
-                "fontcolor=\"red\", weight=0.01, color=\"red\"];\n"
-        + "  node2 -> RETURN [label=\"UNCOND\", " +
-                "fontcolor=\"red\", weight=0.01, color=\"red\"];\n"
-        + "  node9 [label=\"BLOCK\"];\n"
-        + "  node1 -> node9 [weight=1];\n"
-        + "  node10 [label=\"CATCH\"];\n"
+        + "  node5 [label=\"FUNCTION\"];\n"
+        + "  node4 -> node5 [weight=1];\n"
+        + "  node6 [label=\"NAME\"];\n"
+        + "  node5 -> node6 [weight=1];\n"
+        + "  node7 [label=\"PARAM_LIST\"];\n"
+        + "  node5 -> node7 [weight=1];\n"
+        + "  node8 [label=\"BLOCK\"];\n"
+        + "  node5 -> node8 [weight=1];\n"
+        + "  node9 [label=\"THROW\"];\n"
+        + "  node8 -> node9 [weight=1];\n"
+        + "  node10 [label=\"NUMBER\"];\n"
         + "  node9 -> node10 [weight=1];\n"
-        + "  node11 [label=\"NAME\"];\n"
-        + "  node10 -> node11 [weight=1];\n"
-        + "  node12 [label=\"BLOCK\"];\n"
-        + "  node10 -> node12 [weight=1];\n"
-        + "  node12 -> RETURN [label=\"UNCOND\", " +
+        + "  node3 -> RETURN [label=\"UNCOND\", " +
                 "fontcolor=\"red\", weight=0.01, color=\"red\"];\n"
-        + "  node10 -> node12 [label=\"UNCOND\", " +
+        + "  node2 -> node3 [label=\"UNCOND\", " +
                 "fontcolor=\"red\", weight=0.01, color=\"red\"];\n"
-        + "  node9 -> node10 [label=\"UNCOND\", " +
+        + "  node11 [label=\"BLOCK\"];\n"
+        + "  node1 -> node11 [weight=1];\n"
+        + "  node12 [label=\"CATCH\"];\n"
+        + "  node11 -> node12 [weight=1];\n"
+        + "  node13 [label=\"NAME\"];\n"
+        + "  node12 -> node13 [weight=1];\n"
+        + "  node14 [label=\"BLOCK\"];\n"
+        + "  node12 -> node14 [weight=1];\n"
+        + "  node14 -> RETURN [label=\"UNCOND\", " +
+                "fontcolor=\"red\", weight=0.01, color=\"red\"];\n"
+        + "  node12 -> node14 [label=\"UNCOND\", " +
+                "fontcolor=\"red\", weight=0.01, color=\"red\"];\n"
+        + "  node11 -> node12 [label=\"UNCOND\", " +
                 "fontcolor=\"red\", weight=0.01, color=\"red\"];\n"
         + "  node1 -> node2 [label=\"UNCOND\", " +
                 "fontcolor=\"red\", weight=0.01, color=\"red\"];\n"
@@ -1458,7 +1459,7 @@ public final class ControlFlowAnalysisTest extends TestCase {
    * @param nodeTypes The expected node types, in order.
    */
   private void assertNodeOrder(ControlFlowGraph<Node> cfg,
-      List<Integer> nodeTypes) {
+      List<Token> nodeTypes) {
     List<DiGraphNode<Node, Branch>> cfgNodes =
         Ordering.from(cfg.getOptionalNodeComparator(true)).sortedCopy(cfg.getDirectedGraphNodes());
 
@@ -1470,13 +1471,9 @@ public final class ControlFlowAnalysisTest extends TestCase {
     assertEquals("Wrong number of CFG nodes",
         nodeTypes.size(), cfgNodes.size());
     for (int i = 0; i < cfgNodes.size(); i++) {
-      int expectedType = nodeTypes.get(i);
-      int actualType = cfgNodes.get(i).getValue().getType();
-      assertEquals(
-          "node type mismatch at " + i + ".\n" +
-          "found   : " + Token.name(actualType) + "\n" +
-          "required: " + Token.name(expectedType) + "\n",
-          expectedType, actualType);
+      Token expectedType = nodeTypes.get(i);
+      Token actualType = cfgNodes.get(i).getValue().getType();
+      assertEquals("node type mismatch at " + i, expectedType, actualType);
     }
   }
 }

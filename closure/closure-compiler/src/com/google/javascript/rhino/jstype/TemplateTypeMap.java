@@ -42,6 +42,7 @@ package com.google.javascript.rhino.jstype;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.rhino.jstype.JSType.EqCache;
+import com.google.javascript.rhino.jstype.JSType.SubtypingMode;
 
 import java.io.Serializable;
 
@@ -63,7 +64,7 @@ public class TemplateTypeMap implements Serializable {
   // These values have been iteratively type-resolved using this TemplateTypeMap
   // instance. These fully-resolved values are necessary for determining the
   // equivalence of two TemplateTypeMap instances.
-  private final ImmutableList<JSType> resolvedTemplateValues;
+  private final JSType[] resolvedTemplateValues;
   private boolean inRecursiveEquivalenceCheck = false;
   final JSTypeRegistry registry;
 
@@ -72,23 +73,28 @@ public class TemplateTypeMap implements Serializable {
                   ImmutableList<JSType> templateValues) {
     Preconditions.checkNotNull(templateKeys);
     Preconditions.checkNotNull(templateValues);
+    Preconditions.checkArgument(templateValues.size() <= templateKeys.size());
 
     this.registry = registry;
     this.templateKeys = templateKeys;
-
-    int nKeys = templateKeys.size();
-    this.templateValues = templateValues.size() > nKeys ?
-        templateValues.subList(0, nKeys) : templateValues;
+    this.templateValues = templateValues;
 
     // Iteratively resolve any JSType values that refer to the TemplateType keys
     // of this TemplateTypeMap.
-    TemplateTypeMapReplacer replacer = new TemplateTypeMapReplacer(
-        registry, this);
-    ImmutableList.Builder<JSType> builder = ImmutableList.builder();
-    for (JSType templateValue : this.templateValues) {
-      builder.add(templateValue.visit(replacer));
+    TemplateTypeMapReplacer replacer = new TemplateTypeMapReplacer(registry, this);
+
+    int nValues = this.templateValues.size();
+    JSType[] resolvedValues = null;
+    if (nValues > 0) {
+      resolvedValues = new JSType[nValues];
+      for (int i = 0; i < nValues; i++) {
+        TemplateType templateKey = this.templateKeys.get(i);
+        replacer.setKeyType(templateKey);
+        JSType templateValue = this.templateValues.get(i);
+        resolvedValues[i] = templateValue.visit(replacer);
+      }
     }
-    this.resolvedTemplateValues = builder.build();
+    this.resolvedTemplateValues = resolvedValues;
   }
 
   /**
@@ -180,7 +186,7 @@ public class TemplateTypeMap implements Serializable {
     TemplateTypeMap resolvedMap = this.addUnknownValues();
     int index = resolvedMap.getTemplateTypeIndex(key);
     return (index == -1) ? registry.getNativeType(JSTypeNative.UNKNOWN_TYPE) :
-         resolvedMap.resolvedTemplateValues.get(index);
+         resolvedMap.resolvedTemplateValues[index];
   }
 
   /**
@@ -196,20 +202,20 @@ public class TemplateTypeMap implements Serializable {
    * types.
    */
   public boolean checkEquivalenceHelper(
-      TemplateTypeMap that, EquivalenceMethod eqMethod) {
-    return checkEquivalenceHelper(that, eqMethod, EqCache.create());
+      TemplateTypeMap that, EquivalenceMethod eqMethod, SubtypingMode subtypingMode) {
+    return checkEquivalenceHelper(that, eqMethod, EqCache.create(), subtypingMode);
   }
 
   public boolean checkEquivalenceHelper(TemplateTypeMap that,
-      EquivalenceMethod eqMethod, EqCache eqCache) {
+      EquivalenceMethod eqMethod, EqCache eqCache, SubtypingMode subtypingMode) {
     boolean result = false;
     if (!this.inRecursiveEquivalenceCheck &&
         !that.inRecursiveEquivalenceCheck) {
       this.inRecursiveEquivalenceCheck = true;
       that.inRecursiveEquivalenceCheck = true;
 
-      result = checkEquivalenceHelper(eqMethod, this, that, eqCache)
-          && checkEquivalenceHelper(eqMethod, that, this, eqCache);
+      result = checkEquivalenceHelper(eqMethod, this, that, eqCache, subtypingMode)
+          && checkEquivalenceHelper(eqMethod, that, this, eqCache, subtypingMode);
 
       this.inRecursiveEquivalenceCheck = false;
       that.inRecursiveEquivalenceCheck = false;
@@ -218,7 +224,8 @@ public class TemplateTypeMap implements Serializable {
   }
 
   private static boolean checkEquivalenceHelper(EquivalenceMethod eqMethod,
-    TemplateTypeMap thisMap, TemplateTypeMap thatMap, EqCache eqCache) {
+      TemplateTypeMap thisMap, TemplateTypeMap thatMap,
+      EqCache eqCache, SubtypingMode subtypingMode) {
     ImmutableList<TemplateType> thisKeys = thisMap.getTemplateKeys();
     ImmutableList<TemplateType> thatKeys = thatMap.getTemplateKeys();
 
@@ -237,6 +244,10 @@ public class TemplateTypeMap implements Serializable {
         if (thisKey == thatKey) {
           EquivalenceMatch newMatchType = EquivalenceMatch.VALUE_MISMATCH;
           if (thisType.checkEquivalenceHelper(thatType, eqMethod, eqCache)) {
+            newMatchType = EquivalenceMatch.VALUE_MATCH;
+          } else if (subtypingMode == SubtypingMode.IGNORE_NULL_UNDEFINED
+              && thisType.isSubtypeModuloNullUndefined(thatType)
+              && thatType.isSubtypeModuloNullUndefined(thatType)) {
             newMatchType = EquivalenceMatch.VALUE_MATCH;
           }
 
@@ -330,9 +341,11 @@ public class TemplateTypeMap implements Serializable {
   }
 
   boolean hasAnyTemplateTypesInternal() {
-    for (JSType templateValue : addUnknownValues().resolvedTemplateValues) {
-      if (templateValue.hasAnyTemplateTypes()) {
-        return true;
+    if (resolvedTemplateValues != null) {
+      for (JSType templateValue : addUnknownValues().resolvedTemplateValues) {
+        if (templateValue.hasAnyTemplateTypes()) {
+          return true;
+        }
       }
     }
     return false;
@@ -342,16 +355,17 @@ public class TemplateTypeMap implements Serializable {
   public String toString() {
     String s = "";
 
-    int len = Math.max(Math.max(templateKeys.size(), templateValues.size()),
-        resolvedTemplateValues.size());
+    int len = templateKeys.size();
     s += "{ ";
     for (int i = 0; i < len; i++) {
       s += "(";
-      s += (i < templateKeys.size()) ? templateKeys.get(i) : "";
+      s += templateKeys.get(i);
       s += ",";
       s += (i < templateValues.size()) ? templateValues.get(i) : "";
       s += ",";
-      s += (i < resolvedTemplateValues.size()) ? resolvedTemplateValues.get(i) : "";
+      s += (resolvedTemplateValues != null && i < resolvedTemplateValues.length)
+          ? resolvedTemplateValues[i]
+          : "";
       s += ") ";
     }
     s += "}";

@@ -62,7 +62,6 @@ HTMLCanvasElement.prototype.height;
  * @param {...*} var_args
  * @return {string}
  * @throws {Error}
- * @nosideeffects
  */
 HTMLCanvasElement.prototype.toDataURL = function(opt_type, var_args) {};
 
@@ -79,7 +78,7 @@ HTMLCanvasElement.prototype.getContext = function(contextId, opt_args) {};
  */
 function CanvasRenderingContext2D() {}
 
-/** @type {HTMLCanvasElement} */
+/** @type {!HTMLCanvasElement} */
 CanvasRenderingContext2D.prototype.canvas;
 
 /**
@@ -143,7 +142,6 @@ CanvasRenderingContext2D.prototype.setTransform = function(
  * @param {number} y1
  * @return {CanvasGradient}
  * @throws {Error}
- * @nosideeffects
  */
 CanvasRenderingContext2D.prototype.createLinearGradient = function(
     x0, y0, x1, y1) {};
@@ -157,7 +155,6 @@ CanvasRenderingContext2D.prototype.createLinearGradient = function(
  * @param {number} r1
  * @return {CanvasGradient}
  * @throws {Error}
- * @nosideeffects
  */
 CanvasRenderingContext2D.prototype.createRadialGradient = function(
     x0, y0, r0, x1, y1, r1) {};
@@ -167,7 +164,6 @@ CanvasRenderingContext2D.prototype.createRadialGradient = function(
  * @param {string} repetition
  * @return {CanvasPattern}
  * @throws {Error}
- * @nosideeffects
  */
 CanvasRenderingContext2D.prototype.createPattern = function(
     image, repetition) {};
@@ -277,6 +273,22 @@ CanvasRenderingContext2D.prototype.arc = function(
     x, y, radius, startAngle, endAngle, opt_anticlockwise) {};
 
 /**
+ * @param {number} x
+ * @param {number} y
+ * @param {number} radiusX
+ * @param {number} radiusY
+ * @param {number} rotation
+ * @param {number} startAngle
+ * @param {number} endAngle
+ * @param {boolean=} opt_anticlockwise
+ * @return {undefined}
+ * @see http://developer.mozilla.org/en/docs/Web/API/CanvasRenderingContext2D/ellipse
+ */
+CanvasRenderingContext2D.prototype.ellipse = function(
+    x, y, radiusX, radiusY, rotation, startAngle, endAngle, opt_anticlockwise) {
+};
+
+/**
  * @param {string=} opt_fillRule
  * @return {undefined}
  */
@@ -374,7 +386,6 @@ CanvasRenderingContext2D.prototype.createImageData = function(sw, sh) {};
  * @param {number} sh
  * @return {ImageData}
  * @throws {Error}
- * @nosideeffects
  */
 CanvasRenderingContext2D.prototype.getImageData = function(sx, sy, sw, sh) {};
 
@@ -1697,10 +1708,10 @@ HTMLVideoElement.prototype.webkitExitFullscreen = function() {};
  */
 HTMLVideoElement.prototype.webkitExitFullScreen = function() {};
 
-/** @type {string} */
+/** @type {number} */
 HTMLVideoElement.prototype.width;
 
-/** @type {string} */
+/** @type {number} */
 HTMLVideoElement.prototype.height;
 
 /** @type {number} */
@@ -2095,13 +2106,37 @@ DataTransferItemList.prototype.clear = function() {};
 /** @type {!DataTransferItemList} */
 DataTransfer.prototype.items;
 
+/**
+ * @typedef {{
+ *   bubbles: (boolean|undefined),
+ *   cancelable: (boolean|undefined),
+ *   view: (Window|undefined),
+ *   detail: (number|undefined),
+ *   screenX: (number|undefined),
+ *   screenY: (number|undefined),
+ *   clientX: (number|undefined),
+ *   clientY: (number|undefined),
+ *   ctrlKey: (boolean|undefined),
+ *   shiftKey: (boolean|undefined),
+ *   altKey: (boolean|undefined),
+ *   metaKey: (boolean|undefined),
+ *   button: (number|undefined),
+ *   buttons: (number|undefined),
+ *   relatedTarget: (EventTarget|undefined),
+ *   dataTransfer: (DataTransfer|undefined)
+ * }}
+ */
+var DragEventInit;
+
 
 /**
  * @see http://www.whatwg.org/specs/web-apps/current-work/multipage/dnd.html#the-dragevent-interface
  * @constructor
  * @extends {MouseEvent}
+ * @param {string} type
+ * @param {DragEventInit=} opt_eventInitDict
  */
-function DragEvent() {}
+function DragEvent(type, opt_eventInitDict) {}
 
 /** @type {DataTransfer} */
 DragEvent.prototype.dataTransfer;
@@ -2267,6 +2302,11 @@ WebSocket.prototype.binaryType;
 
 // HTML5 History
 /**
+ * @constructor
+ */
+function History() {};
+
+/**
  * Pushes a new state into the session history.
  * @see http://www.w3.org/TR/html5/history.html#the-history-interface
  * @param {*} data New state.
@@ -2380,6 +2420,7 @@ PageTransitionEvent.prototype.initPageTransitionEvent = function(typeArg,
 
 /**
  * @constructor
+ * @implements {IArrayLike<!File>}
  */
 function FileList() {}
 
@@ -2423,8 +2464,8 @@ XMLHttpRequest.prototype.overrideMimeType = function(mimeType) {};
 XMLHttpRequest.prototype.responseType;
 
 /**
- * @type {*}
- * @see http://dev.w3.org/2006/webapi/XMLHttpRequest-2/#the-responsetype-attribute
+ * @type {?(ArrayBuffer|Blob|Document|Object|string)}
+ * @see http://dev.w3.org/2006/webapi/XMLHttpRequest-2/#the-response-attribute
  */
 XMLHttpRequest.prototype.response;
 
@@ -2945,7 +2986,7 @@ MutationRecord.prototype.addedNodes;
 MutationRecord.prototype.removedNodes;
 
 /** @type {Node} */
-MutationRecord.prototype.previouSibling;
+MutationRecord.prototype.previousSibling;
 
 /** @type {Node} */
 MutationRecord.prototype.nextSibling;
@@ -3495,3 +3536,334 @@ HTMLFieldSetElement.prototype.validity;
  * @see https://www.w3.org/TR/html5/forms.html#the-fieldset-element
  */
 HTMLFieldSetElement.prototype.willValidate;
+
+/**
+ * @constructor
+ * @extends {NodeList<T>}
+ * @template T
+ * @see https://html.spec.whatwg.org/multipage/infrastructure.html#radionodelist
+ */
+function RadioNodeList() {}
+
+
+
+/**
+ * @see https://html.spec.whatwg.org/multipage/forms.html#the-datalist-element
+ * @constructor
+ * @extends {HTMLElement}
+ */
+function HTMLDataListElement() {}
+
+
+/** @type {HTMLCollection<!HTMLOptionElement>} */
+HTMLDataListElement.prototype.options;
+
+
+
+/**
+ * @see https://html.spec.whatwg.org/multipage/forms.html#the-output-element
+ * @constructor
+ * @extends {HTMLElement}
+ */
+function HTMLOutputElement() {}
+
+// TODO(jakubvrana): Add HTMLOutputElement properties.
+
+
+
+/**
+ * @see https://html.spec.whatwg.org/multipage/forms.html#the-progress-element
+ * @constructor
+ * @extends {HTMLElement}
+ */
+function HTMLProgressElement() {}
+
+
+/** @type {number} */
+HTMLProgressElement.prototype.value;
+
+
+/** @type {number} */
+HTMLProgressElement.prototype.max;
+
+
+/** @type {number} */
+HTMLProgressElement.prototype.position;
+
+
+/** @type {NodeList<!Node>} */
+HTMLProgressElement.prototype.labels;
+
+
+
+/**
+ * @see https://html.spec.whatwg.org/multipage/embedded-content.html#the-track-element
+ * @constructor
+ * @extends {HTMLElement}
+ */
+function HTMLTrackElement() {}
+
+
+/** @type {string} */
+HTMLTrackElement.prototype.kind;
+
+
+/** @type {string} */
+HTMLTrackElement.prototype.src;
+
+
+/** @type {string} */
+HTMLTrackElement.prototype.srclang;
+
+
+/** @type {string} */
+HTMLTrackElement.prototype.label;
+
+
+/** @type {boolean} */
+HTMLTrackElement.prototype.default;
+
+
+/** @const {number} */
+HTMLTrackElement.prototype.readyState;
+
+
+/** @const {TextTrack} */
+HTMLTrackElement.prototype.track;
+
+
+
+/**
+ * @see https://html.spec.whatwg.org/multipage/forms.html#the-meter-element
+ * @constructor
+ * @extends {HTMLElement}
+ */
+function HTMLMeterElement() {}
+
+
+/** @type {number} */
+HTMLMeterElement.prototype.value;
+
+
+/** @type {number} */
+HTMLMeterElement.prototype.min;
+
+
+/** @type {number} */
+HTMLMeterElement.prototype.max;
+
+
+/** @type {number} */
+HTMLMeterElement.prototype.low;
+
+
+/** @type {number} */
+HTMLMeterElement.prototype.high;
+
+
+/** @type {number} */
+HTMLMeterElement.prototype.optimum;
+
+
+/** @type {NodeList<!Node>} */
+HTMLMeterElement.prototype.labels;
+
+
+/**
+ * @constructor
+ * @see https://www.w3.org/TR/html5/webappapis.html#navigator
+ */
+function Navigator() {}
+/**
+ * @type {string}
+ * @see https://www.w3.org/TR/html5/webappapis.html#dom-navigator-appcodename
+ */
+Navigator.prototype.appCodeName;
+
+/**
+ * @type {string}
+ * @see https://www.w3.org/TR/html5/webappapis.html#dom-navigator-appname
+ */
+Navigator.prototype.appName;
+
+/**
+ * @type {string}
+ * @see https://www.w3.org/TR/html5/webappapis.html#dom-navigator-appversion
+ */
+Navigator.prototype.appVersion;
+
+/**
+ * @type {string}
+ * @see https://www.w3.org/TR/html5/webappapis.html#dom-navigator-platform
+ */
+Navigator.prototype.platform;
+
+/**
+ * @type {string}
+ * @see https://www.w3.org/TR/html5/webappapis.html#dom-navigator-product
+ */
+Navigator.prototype.product;
+
+/**
+ * @type {string}
+ * @see https://www.w3.org/TR/html5/webappapis.html#dom-navigator-useragent
+ */
+Navigator.prototype.userAgent;
+
+/**
+ * @return {boolean}
+ * @see https://www.w3.org/TR/html5/webappapis.html#dom-navigator-taintenabled
+ */
+Navigator.prototype.taintEnabled = function() {};
+
+/**
+ * @type {string}
+ * @see https://www.w3.org/TR/html5/webappapis.html#dom-navigator-language
+ */
+Navigator.prototype.language;
+
+/**
+ * @type {boolean}
+ * @see https://www.w3.org/TR/html5/browsers.html#navigatoronline
+ */
+Navigator.prototype.onLine;
+
+/**
+ * @type {boolean}
+ * @see https://www.w3.org/TR/html5/webappapis.html#dom-navigator-cookieenabled
+ */
+Navigator.prototype.cookieEnabled;
+
+/**
+ * @param {string} scheme
+ * @param {string} url
+ * @param {string} title
+ */
+Navigator.prototype.registerProtocolHandler = function(scheme, url, title) {}
+
+/**
+ * @param {string} mimeType
+ * @param {string} url
+ * @param {string} title
+ */
+Navigator.prototype.registerContentHandler = function(mimeType, url, title) {}
+
+/**
+ * @param {string} scheme
+ * @param {string} url
+ */
+Navigator.prototype.unregisterProtocolHandler = function(scheme, url) {}
+
+/**
+ * @param {string} mimeType
+ * @param {string} url
+ */
+Navigator.prototype.unregisterContentHandler = function(mimeType, url) {}
+
+/**
+ * @type {MimeTypeArray}
+ * @see https://www.w3.org/TR/html5/webappapis.html#dom-navigator-mimetypes
+ */
+Navigator.prototype.mimeTypes;
+
+/**
+ * @type {PluginArray}
+ * @see https://www.w3.org/TR/html5/webappapis.html#dom-navigator-plugins
+ */
+Navigator.prototype.plugins;
+
+/**
+ * @return {boolean}
+ * @see https://www.w3.org/TR/html5/webappapis.html#dom-navigator-javaenabled
+ * @nosideeffects
+ */
+Navigator.prototype.javaEnabled = function() {};
+
+/**
+ * @constructor
+ * @implements {IObject<(string|number),!Plugin>}
+ * @implements {IArrayLike<!Plugin>}
+ * @see https://www.w3.org/TR/html5/webappapis.html#pluginarray
+ */
+function PluginArray() {}
+
+/** @type {number} */
+PluginArray.prototype.length;
+
+/**
+ * @param {number} index
+ * @return {Plugin}
+ */
+PluginArray.prototype.item = function(index) {};
+
+/**
+ * @param {string} name
+ * @return {Plugin}
+ */
+PluginArray.prototype.namedItem = function(name) {};
+
+/** @param {boolean=} reloadDocuments */
+PluginArray.prototype.refresh = function(reloadDocuments) {};
+
+/**
+ * @constructor
+ * @implements {IObject<(string|number),!MimeType>}
+ * @implements {IArrayLike<!MimeType>}
+ * @see https://www.w3.org/TR/html5/webappapis.html#mimetypearray
+ */
+function MimeTypeArray() {}
+
+/**
+ * @param {number} index
+ * @return {MimeType}
+ */
+MimeTypeArray.prototype.item = function(index) {};
+
+/**
+ * @type {number}
+ * @see https://developer.mozilla.org/en/DOM/window.navigator.mimeTypes
+ */
+MimeTypeArray.prototype.length;
+
+/**
+ * @param {string} name
+ * @return {MimeType}
+ */
+MimeTypeArray.prototype.namedItem = function(name) {};
+
+/**
+ * @constructor
+ * @see https://www.w3.org/TR/html5/webappapis.html#mimetype
+ */
+function MimeType() {}
+
+/** @type {string} */
+MimeType.prototype.description;
+
+/** @type {Plugin} */
+MimeType.prototype.enabledPlugin;
+
+/** @type {string} */
+MimeType.prototype.suffixes;
+
+/** @type {string} */
+MimeType.prototype.type;
+
+/**
+ * @constructor
+ * @see https://www.w3.org/TR/html5/webappapis.html#dom-plugin
+ */
+function Plugin() {}
+
+/** @type {string} */
+Plugin.prototype.description;
+
+/** @type {string} */
+Plugin.prototype.filename;
+
+/** @type {number} */
+Plugin.prototype.length;
+
+/** @type {string} */
+Plugin.prototype.name;
+

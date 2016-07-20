@@ -23,7 +23,6 @@ import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -102,6 +101,10 @@ class AngularPass extends AbstractPostOrderCallback
   static final DiagnosticType INJECTED_FUNCTION_HAS_DEFAULT_VALUE =
       DiagnosticType.error("JSC_INJECTED_FUNCTION_HAS_DEFAULT_VALUE",
           "@ngInject cannot be used on functions containing default value.");
+
+  static final DiagnosticType INJECTED_FUNCTION_ON_NON_QNAME =
+      DiagnosticType.error("JSC_INJECTED_FUNCTION_ON_NON_QNAME",
+          "@ngInject can only be used on qualified names.");
 
   @Override
   public void process(Node externs, Node root) {
@@ -220,8 +223,12 @@ class AngularPass extends AbstractPostOrderCallback
       // handles assignment cases like:
       // a = function() {}
       // a = b = c = function() {}
-      case Token.ASSIGN:
+      case ASSIGN:
         name = n.getFirstChild().getQualifiedName();
+        if (name == null) {
+          compiler.report(t.makeError(n, INJECTED_FUNCTION_ON_NON_QNAME));
+          return;
+        }
         // last node of chained assignment.
         fn = n;
         while (fn.isAssign()) {
@@ -232,7 +239,7 @@ class AngularPass extends AbstractPostOrderCallback
 
       // handles function case:
       // function fnName() {}
-      case Token.FUNCTION:
+      case FUNCTION:
         name = NodeUtil.getName(n);
         fn = n;
         target = n;
@@ -248,9 +255,9 @@ class AngularPass extends AbstractPostOrderCallback
       // handles var declaration cases like:
       // var a = function() {}
       // var a = b = function() {}
-      case Token.VAR:
-      case Token.LET:
-      case Token.CONST:
+      case VAR:
+      case LET:
+      case CONST:
         name = n.getFirstChild().getString();
         // looks for a function node.
         fn = getDeclarationRValue(n);
@@ -262,7 +269,7 @@ class AngularPass extends AbstractPostOrderCallback
       //   constructor(){}
       //   someMethod(){} <===
       // }
-      case Token.MEMBER_FUNCTION_DEF:
+      case MEMBER_FUNCTION_DEF:
         Node parent = n.getParent();
         if (parent.isClassMembers()){
           Node classNode = parent.getParent();

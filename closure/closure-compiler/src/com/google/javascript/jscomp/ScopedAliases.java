@@ -467,7 +467,7 @@ class ScopedAliases implements HotSwapCompilerPass {
           String globalName =
               "$jscomp.scope." + name + (nameCount == 0 ? "" : ("$jscomp$" + nameCount));
 
-          compiler.ensureLibraryInjected("base", true);
+          compiler.ensureLibraryInjected("base", false);
 
           // First, we need to free up the function expression (EXPR)
           // to be used in another expression.
@@ -624,7 +624,7 @@ class ScopedAliases implements HotSwapCompilerPass {
         return;
       }
 
-      int type = n.getType();
+      Token type = n.getType();
       boolean isObjLitShorthand = type == Token.STRING_KEY && !n.hasChildren();
       Var aliasVar = null;
       if (type == Token.NAME || isObjLitShorthand) {

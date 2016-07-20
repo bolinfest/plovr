@@ -25,7 +25,7 @@ import com.google.javascript.rhino.Node;
  * @see CodePrinter
  * @see InlineCostEstimator
  */
-abstract class CodeConsumer {
+public abstract class CodeConsumer {
   boolean statementNeedsEnded = false;
   boolean statementStarted = false;
   boolean sawFunction = false;
@@ -284,7 +284,7 @@ abstract class CodeConsumer {
   }
 
   static boolean isNegativeZero(double x) {
-    return x == 0.0 && Math.copySign(1, x) == -1.0;
+    return x == 0.0 && 1 / x < 0;
   }
 
   static boolean isWordChar(char ch) {

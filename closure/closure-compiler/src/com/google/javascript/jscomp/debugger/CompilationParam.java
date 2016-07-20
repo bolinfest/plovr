@@ -43,6 +43,10 @@ enum CompilationParam {
         }
       }
     }
+    @Override
+    String getJavaInfo() {
+      return "Sets all registered DiagnosticGroups to CheckLevel.WARNING";
+    }
   },
 
   /**
@@ -65,6 +69,10 @@ enum CompilationParam {
           CompilerOptions.LanguageMode.ECMASCRIPT6 :
           CompilerOptions.LanguageMode.ECMASCRIPT5);
     }
+    @Override
+    String getJavaInfo() {
+      return "options.setLanguageIn(LanguageMode.ECMASCRIPT6)";
+    }
   },
 
   /**
@@ -76,6 +84,10 @@ enum CompilationParam {
       options.setLanguageOut(value ?
           CompilerOptions.LanguageMode.ECMASCRIPT5 :
           CompilerOptions.LanguageMode.NO_TRANSPILE);
+    }
+    @Override
+    String getJavaInfo() {
+      return "options.setLanguageOut(LanguageMode.ECMASCRIPT5)";
     }
   },
 
@@ -101,6 +113,10 @@ enum CompilationParam {
         options.setWarningLevel(DiagnosticGroups.LINT_CHECKS, CheckLevel.WARNING);
       }
     }
+    @Override
+    String getJavaInfo() {
+      return diagGroupWarningInfo("LINT_CHECKS");
+    }
   },
 
   /** Checks that all symbols are defined */
@@ -117,6 +133,10 @@ enum CompilationParam {
     void apply(CompilerOptions options, boolean value) {
       options.setWarningLevel(
           DiagnosticGroups.MISSING_RETURN, value ? CheckLevel.WARNING : CheckLevel.OFF);
+    }
+    @Override
+    String getJavaInfo() {
+      return diagGroupWarningInfo("MISSING_RETURN");
     }
   },
 
@@ -142,6 +162,10 @@ enum CompilationParam {
     void apply(CompilerOptions options, boolean value) {
       options.setNewTypeInference(value);
     }
+    @Override
+    String getJavaInfo() {
+      return "options.setNewTypeInference(true)";
+    }
   },
 
   /** Checks for missing properties */
@@ -151,6 +175,10 @@ enum CompilationParam {
       options.setWarningLevel(
           DiagnosticGroups.MISSING_PROPERTIES,
           value ? CheckLevel.WARNING : CheckLevel.OFF);
+    }
+    @Override
+    String getJavaInfo() {
+      return diagGroupWarningInfo("MISSING_PROPERTIES");
     }
   },
 
@@ -164,6 +192,10 @@ enum CompilationParam {
       options.setReportMissingOverride(value ?
           CheckLevel.WARNING : CheckLevel.OFF);
     }
+    @Override
+    String getJavaInfo() {
+      return "options.setReportMissingOverride(CheckLevel.WARNING)";
+    }
   },
 
   /** Checks for missing goog.require() calls **/
@@ -173,13 +205,22 @@ enum CompilationParam {
     options.setWarningLevel(DiagnosticGroups.MISSING_REQUIRE,
         value ? CheckLevel.WARNING : CheckLevel.OFF);
     }
+    @Override
+    String getJavaInfo() {
+      return diagGroupWarningInfo("MISSING_REQUIRE");
+    }
   },
 
   /** Checks for missing goog.provides() calls **/
   CHECK_PROVIDES {
     @Override
     void apply(CompilerOptions options, boolean value) {
-      options.setCheckProvides(value ? CheckLevel.WARNING : CheckLevel.OFF);
+      options.setWarningLevel(
+          DiagnosticGroups.MISSING_PROVIDE, value ? CheckLevel.WARNING : CheckLevel.OFF);
+    }
+    @Override
+    String getJavaInfo() {
+      return diagGroupWarningInfo("MISSING_PROVIDE");
     }
   },
 
@@ -193,6 +234,10 @@ enum CompilationParam {
       options.setCheckGlobalNamesLevel(value ?
           CheckLevel.WARNING : CheckLevel.OFF);
     }
+    @Override
+    String getJavaInfo() {
+      return "options.setCheckGlobalNamesLevel(CheckLevel.WARNING)";
+    }
   },
 
   /**
@@ -203,6 +248,10 @@ enum CompilationParam {
     void apply(CompilerOptions options, boolean value) {
       options.setWarningLevel(DiagnosticGroups.DEPRECATED,
           value ? CheckLevel.WARNING : CheckLevel.OFF);
+    }
+    @Override
+    String getJavaInfo() {
+      return diagGroupWarningInfo("DEPRECATED");
     }
   },
 
@@ -215,6 +264,10 @@ enum CompilationParam {
       options.setWarningLevel(DiagnosticGroups.VISIBILITY,
           value ? CheckLevel.WARNING : CheckLevel.OFF);
     }
+    @Override
+    String getJavaInfo() {
+      return diagGroupWarningInfo("VISIBILITY");
+    }
   },
 
   /**
@@ -226,6 +279,10 @@ enum CompilationParam {
       options.setWarningLevel(DiagnosticGroups.CONST,
           value ? CheckLevel.WARNING : CheckLevel.OFF);
     }
+    @Override
+    String getJavaInfo() {
+      return diagGroupWarningInfo("CONST");
+    }
   },
 
   /**
@@ -236,6 +293,10 @@ enum CompilationParam {
     void apply(CompilerOptions options, boolean value) {
       options.setWarningLevel(DiagnosticGroups.ES5_STRICT,
           value ? CheckLevel.WARNING : CheckLevel.OFF);
+    }
+    @Override
+    String getJavaInfo() {
+      return diagGroupWarningInfo("ES5_STRICT");
     }
   },
 
@@ -249,6 +310,10 @@ enum CompilationParam {
     void apply(CompilerOptions options, boolean value) {
       options.setCheckGlobalThisLevel(value ?
           CheckLevel.WARNING : CheckLevel.OFF);
+    }
+    @Override
+    String getJavaInfo() {
+      return "options.setCheckGlobalThisLevel(CheckLevel.WARNING)";
     }
   },
 
@@ -284,6 +349,10 @@ enum CompilationParam {
     void apply(CompilerOptions options, boolean value) {
       options.setInlineConstantVars(value);
     }
+    @Override
+    String getJavaInfo() {
+      return "options.setInlineConstantVars(true)";
+    }
   },
 
   /** Inlines functions */
@@ -293,6 +362,10 @@ enum CompilationParam {
       options.setInlineFunctions(value);
       options.setInlineLocalFunctions(value);
     }
+    @Override
+    String getJavaInfo() {
+      return "options.setInlineFunctions(true) + options.setInlineLocalFunctions(true)";
+    }
   },
 
   /** Merge two variables together as one. */
@@ -300,14 +373,6 @@ enum CompilationParam {
     @Override
     void apply(CompilerOptions options, boolean value) {
       options.setCoalesceVariableNames(value);
-    }
-  },
-
-  /** Inlines trivial getters */
-  INLINE_GETTERS {
-    @Override
-    void apply(CompilerOptions options, boolean value) {
-      options.setInlineGetters(value);
     }
   },
 
@@ -356,6 +421,10 @@ enum CompilationParam {
     void apply(CompilerOptions options, boolean value) {
       options.setWarningLevel(DiagnosticGroups.CHECK_USELESS_CODE, value ?
           CheckLevel.WARNING : CheckLevel.OFF);
+    }
+    @Override
+    String getJavaInfo() {
+      return diagGroupWarningInfo("CHECK_USELESS_CODE");
     }
   },
 
@@ -436,6 +505,10 @@ enum CompilationParam {
     void apply(CompilerOptions options, boolean value) {
       options.setConvertToDottedProperties(value);
     }
+    @Override
+    String getJavaInfo() {
+      return "options.setConvertToDottedProperties(true)";
+    }
   },
 
   //--------------------------------
@@ -502,6 +575,10 @@ enum CompilationParam {
             AnonymousFunctionNamingPolicy.UNMAPPED);
       }
     }
+    @Override
+    String getJavaInfo() {
+      return "options.setAnonymousFunctionNaming(AnonymousFunctionNamingPolicy.UNMAPPED)";
+    }
   },
 
   /** Give anonymous functions mapped names for easier debugging */
@@ -513,6 +590,10 @@ enum CompilationParam {
             AnonymousFunctionNamingPolicy.MAPPED);
       }
     }
+    @Override
+    String getJavaInfo() {
+      return "options.setAnonymousFunctionNaming(AnonymousFunctionNamingPolicy.MAPPED)";
+    }
   },
 
   /** If true, rename all variables */
@@ -523,6 +604,10 @@ enum CompilationParam {
           VariableRenamingPolicy.ALL :
           VariableRenamingPolicy.OFF);
     }
+    @Override
+    String getJavaInfo() {
+      return "options.setVariableRenaming(VariableRenamingPolicy.ALL)";
+    }
   },
 
   PROPERTY_RENAMING {
@@ -531,6 +616,10 @@ enum CompilationParam {
       options.setPropertyRenaming(value ?
           PropertyRenamingPolicy.ALL_UNQUOTED :
           PropertyRenamingPolicy.OFF);
+    }
+    @Override
+    String getJavaInfo() {
+      return "options.setPropertyRenaming(PropertyRenamingPolicy.ALL_UNQUOTED)";
     }
   },
 
@@ -560,7 +649,7 @@ enum CompilationParam {
   //--------------------------------
 
   /** Processes goog.provide() and goog.require() calls */
-  CLOSURE_PASS {
+  CLOSURE_PASS(true) {
     @Override
     void apply(CompilerOptions options, boolean value) {
       options.setClosurePass(value);
@@ -586,6 +675,10 @@ enum CompilationParam {
     @Override
     void apply(CompilerOptions options, boolean value) {
       options.setExportLocalPropertyDefinitions(value);
+    }
+    @Override
+    String getJavaInfo() {
+      return "options.setExportLocalPropertyDefinitions(true)";
     }
   },
 
@@ -620,6 +713,11 @@ enum CompilationParam {
         options.setSyntheticBlockStartMarker(null);
         options.setSyntheticBlockEndMarker(null);
       }
+    }
+    @Override
+    String getJavaInfo() {
+      return "options.setSyntheticBlockStartMarker(\"start\") + "
+          + "options.setSyntheticBlockEndMarker(\"end\")";
     }
   },
 
@@ -670,6 +768,22 @@ enum CompilationParam {
   /** Returns the default value. */
   boolean getDefaultValue() {
     return defaultValue;
+  }
+
+  /**
+   * Optionally returns a hint about the Java API methods/options this param affects,
+   * currently implemented for all params where the enum name doesn't directly match to a
+   * camel case method CompilerOptions.setSomethingOrOther(true), such as for diagnostic groups
+   * or where the option method name has changed.
+   * To assist external developers who are trying to correlate their own Java API driven
+   * compilation options to the debugger's options when creating reproducible issue reports.
+   */
+  String getJavaInfo() {
+    return null;
+  }
+
+  private static String diagGroupWarningInfo(String diagGroupsMember) {
+    return "options.setWarningLevel(DiagnosticGroups." + diagGroupsMember + ", CheckLevel.WARNING)";
   }
 
   static CompilationParam[] getSortedValues() {

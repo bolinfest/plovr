@@ -18,8 +18,11 @@ package com.google.javascript.jscomp.lint;
 
 import static com.google.javascript.jscomp.lint.CheckUselessBlocks.USELESS_BLOCK;
 
+import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.Compiler;
+import com.google.javascript.jscomp.CompilerOptions;
 import com.google.javascript.jscomp.CompilerPass;
+import com.google.javascript.jscomp.DiagnosticGroups;
 import com.google.javascript.jscomp.Es6CompilerTestCase;
 
 /**
@@ -31,6 +34,13 @@ public final class CheckUselessBlocksTest extends Es6CompilerTestCase {
     return new CheckUselessBlocks(compiler);
   }
 
+  @Override
+  protected CompilerOptions getOptions(CompilerOptions options) {
+    super.getOptions(options);
+    options.setWarningLevel(DiagnosticGroups.LINT_CHECKS, CheckLevel.WARNING);
+    return options;
+  }
+
   public void testCheckUselessBlocks_noWarning() {
     testSame("while (foo) { bar(); }");
     testSame("if (true) { var x = 1; }");
@@ -40,7 +50,7 @@ public final class CheckUselessBlocksTest extends Es6CompilerTestCase {
     testSame("blah: { break blah; }");
     // TODO(moz): For block-scoped function declaration, we should technically
     // warn if we are in non-strict mode and the language mode is ES5 or below.
-    testSame("{ function foo() {} }");
+    testSameEs6("{ function foo() {} }");
     testSameEs6("let x = 1;");
     testSameEs6("{ let x = 1; }");
     testSameEs6("if (true) { let x = 1; }");

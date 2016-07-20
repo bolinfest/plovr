@@ -217,6 +217,7 @@ public final class DevirtualizePrototypeMethodsTest extends CompilerTestCase {
   }
 
   public void testNoRewriteIfNotInGlobalScope1() throws Exception {
+    setAcceptedLanguage(CompilerOptions.LanguageMode.ECMASCRIPT6);
     testSame("if(true){" + NoRewriteIfNotInGlobalScopeTestInput.INPUT + "}");
   }
 
@@ -657,7 +658,7 @@ public final class DevirtualizePrototypeMethodsTest extends CompilerTestCase {
     }
 
     public String getNameString(Node n) {
-      int type = n.getType();
+      Token type = n.getType();
       if (type == Token.NAME) {
         return n.getString();
       } else if (type == Token.GETPROP) {
@@ -701,12 +702,8 @@ public final class DevirtualizePrototypeMethodsTest extends CompilerTestCase {
         if (nameNode != null) {
           JSType type = node.getJSType();
           typeInformation.add(
-              Joiner.on("").join(
-                        Token.name(node.getType()),
-                        " ",
-                        getNameString(nameNode),
-                        " = ",
-                        String.valueOf(type)));
+              Joiner.on("")
+                  .join(node.getType(), " ", getNameString(nameNode), " = ", String.valueOf(type)));
         }
 
         if (node.isGetProp()) {
@@ -714,12 +711,8 @@ public final class DevirtualizePrototypeMethodsTest extends CompilerTestCase {
           if (child.isName() && child.getString().endsWith("$self")) {
             JSType type = child.getJSType();
             typeInformation.add(
-                Joiner.on("").join(
-                    Token.name(child.getType()),
-                    " ",
-                    child.getString(),
-                    " = ",
-                    String.valueOf(type)));
+                Joiner.on("")
+                    .join(child.getType(), " ", child.getString(), " = ", String.valueOf(type)));
           }
         }
       }

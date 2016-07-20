@@ -115,7 +115,7 @@ public final class JsDocInfoParser {
   private static final Set<String> modifiesAnnotationKeywords =
       ImmutableSet.of("this", "arguments");
   private static final Set<String> idGeneratorAnnotationKeywords =
-      ImmutableSet.of("unique", "consistent", "stable", "mapped");
+      ImmutableSet.of("unique", "consistent", "stable", "mapped", "xid");
 
   private JSDocInfoBuilder fileLevelJsDocBuilder;
 
@@ -156,14 +156,16 @@ public final class JsDocInfoParser {
 
     this.sourceFile = sourceFile;
 
-    this.jsdocBuilder = new JSDocInfoBuilder(config.parseJsDocDocumentation);
+    boolean parseDocumentation = config.parseJsDocDocumentation.shouldParseDescriptions();
+    this.jsdocBuilder = new JSDocInfoBuilder(parseDocumentation);
     if (comment != null) {
       this.jsdocBuilder.recordOriginalCommentString(comment);
       this.jsdocBuilder.recordOriginalCommentPosition(commentPosition);
     }
     this.annotationNames = config.annotationNames;
     this.suppressionNames = config.suppressionNames;
-    this.preserveWhitespace = config.preserveJsDocWhitespace;
+    this.preserveWhitespace =
+        config.parseJsDocDocumentation == Config.JsDocParsing.INCLUDE_DESCRIPTIONS_WITH_WHITESPACE;
 
     this.errorReporter = errorReporter;
     this.templateNode = this.createTemplateNode();
@@ -227,7 +229,6 @@ public final class JsDocInfoParser {
     Config config = new Config(
         new HashSet<String>(),
         new HashSet<String>(),
-        false,
         LanguageMode.ECMASCRIPT3);
     JsDocInfoParser parser = new JsDocInfoParser(
         new JsDocTokenStream(toParse),
@@ -346,7 +347,7 @@ public final class JsDocInfoParser {
 
     String annotationName = stream.getString();
     Annotation annotation = annotationNames.get(annotationName);
-    if (annotation == null) {
+    if (annotation == null || annotationName.isEmpty()) {
       addParserWarning("msg.bad.jsdoc.tag", annotationName);
     } else {
       // Mark the beginning of the annotation.
@@ -390,6 +391,12 @@ public final class JsDocInfoParser {
             addParserWarning("msg.jsdoc.jaggerProvidePromise.extra");
           } else {
             jsdocBuilder.recordJaggerProvidePromise(true);
+          }
+          return eatUntilEOLIfNotAnnotation();
+
+        case ABSTRACT:
+          if (!jsdocBuilder.recordAbstract()) {
+            addTypeWarning("msg.jsdoc.incompat.type");
           }
           return eatUntilEOLIfNotAnnotation();
 
@@ -1379,6 +1386,11 @@ public final class JsDocInfoParser {
         break;
       case "stable":
         if (!jsdocBuilder.recordStableIdGenerator()) {
+          addParserWarning("msg.jsdoc.idgen.duplicate");
+        }
+        break;
+      case "xid":
+        if (!jsdocBuilder.recordXidGenerator()) {
           addParserWarning("msg.jsdoc.idgen.duplicate");
         }
         break;
@@ -2479,13 +2491,13 @@ public final class JsDocInfoParser {
     }
   }
 
-  private Node wrapNode(int type, Node n) {
+  private Node wrapNode(Token type, Node n) {
     return n == null ? null :
         new Node(type, n, n.getLineno(),
             n.getCharno()).clonePropsFrom(templateNode);
   }
 
-  private Node newNode(int type) {
+  private Node newNode(Token type) {
     return new Node(type, stream.getLineno(),
         stream.getCharno()).clonePropsFrom(templateNode);
   }

@@ -52,6 +52,8 @@ public interface TypeI {
 
   boolean isConstructor();
 
+  boolean isOriginalConstructor();
+
   boolean isEquivalentTo(TypeI type);
 
   boolean isFunctionType();
@@ -60,11 +62,37 @@ public interface TypeI {
 
   boolean isSubtypeOf(TypeI type);
 
+  boolean containsArray();
+
   boolean isUnknownType();
 
+  boolean isNullable();
+
+  boolean isPrototypeObject();
+
+  boolean isInstanceofObject();
+
+  ObjectTypeI autoboxAndGetObject();
+
+  JSDocInfo getJSDocInfo();
+
+  /**
+   * If this is a union type, returns a union type that does not include
+   * the null or undefined type.
+   */
   TypeI restrictByNotNullOrUndefined();
 
+  /**
+   * Downcasts this to a FunctionTypeI, or returns null if this is not
+   * a function.
+   */
   FunctionTypeI toMaybeFunctionType();
 
+  /**
+   * If this type is a single object, downcast it to ObjectTypeI.
+   * If it is a non-object or a union of objects, return null.
+   */
   ObjectTypeI toMaybeObjectType();
+
+  String getDisplayName();
 }

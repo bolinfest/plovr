@@ -23,7 +23,6 @@ import com.google.javascript.jscomp.graph.FixedPointGraphTraversal;
 import com.google.javascript.jscomp.graph.FixedPointGraphTraversal.EdgeCallback;
 import com.google.javascript.jscomp.graph.LinkedDirectedGraph;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -462,7 +461,7 @@ class AnalyzePrototypeProperties implements CompilerPass {
       Node n = ref.getParent();
       switch (n.getType()) {
         // Foo.prototype.getBar = function() { ... }
-        case Token.GETPROP:
+        case GETPROP:
           Node dest = n.getSecondChild();
           Node parent = n.getParent();
           Node grandParent = parent.getParent();
@@ -481,7 +480,7 @@ class AnalyzePrototypeProperties implements CompilerPass {
           break;
 
         // Foo.prototype = { "getBar" : function() { ... } }
-        case Token.ASSIGN:
+        case ASSIGN:
           Node map = n.getSecondChild();
           if (map.isObjectLit()) {
             for (Node key = map.getFirstChild();
@@ -730,7 +729,7 @@ class AnalyzePrototypeProperties implements CompilerPass {
    * The context of the current name. This includes the NameInfo and the scope
    * if it is a scope defining name (function).
    */
-  private class NameContext {
+  private static class NameContext {
     final NameInfo name;
 
     // If this is a function context, then scope will be the scope of the

@@ -260,6 +260,8 @@ public final class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCas
     fold("x = window.Object", "x = Object");
     fold("x = window.Array", "x = Array");
     fold("x = window.Error", "x = Error");
+    fold("x = window.RegExp", "x = RegExp");
+    fold("x = window.Math", "x = Math");
 
     // Not currently handled by the pass but should be folded in the future.
     foldSame("x = window.String");
@@ -326,7 +328,7 @@ public final class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCas
   public void testUndefined() {
     foldSame("var x = undefined");
     foldSame("function f(f) {var undefined=2;var x = undefined;}");
-    this.enableNormalize();
+    enableNormalize();
     fold("var x = undefined", "var x=void 0");
     foldSame(
         "var undefined = 1;" +
@@ -335,7 +337,10 @@ public final class PeepholeSubstituteAlternateSyntaxTest extends CompilerTestCas
     foldSame("try {} catch(undefined) {}");
     foldSame("for (undefined in {}) {}");
     foldSame("undefined++;");
-    fold("undefined += undefined;", "undefined += void 0;");
+    disableNormalize();
+    foldSame("undefined += undefined;");
+    enableNormalize();
+    fold("undefined += undefined;", "undefined = void 0 + void 0;");
   }
 
   public void testSplitCommaExpressions() {

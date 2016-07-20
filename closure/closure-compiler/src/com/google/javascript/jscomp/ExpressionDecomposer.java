@@ -71,7 +71,7 @@ class ExpressionDecomposer {
   }
 
   // An arbitrary limit to prevent catch infinite recursion.
-  private static final int MAX_INTERATIONS = 100;
+  private static final int MAX_ITERATIONS = 100;
 
   /**
    * If required, rewrite the statement containing the expression.
@@ -84,10 +84,9 @@ class ExpressionDecomposer {
     while (DecompositionType.DECOMPOSABLE == canExposeExpression(expression)) {
       exposeExpression(expression);
       i++;
-      if (i > MAX_INTERATIONS) {
+      if (i > MAX_ITERATIONS) {
         throw new IllegalStateException(
-            "DecomposeExpression depth exceeded on :\n" +
-            expression.toStringTree());
+            "DecomposeExpression depth exceeded on :\n" + expression.toStringTree());
       }
     }
   }
@@ -105,8 +104,8 @@ class ExpressionDecomposer {
   }
 
   // TODO(johnlenz): This is not currently used by the function inliner,
-  // as moving the call out of the expression before the actual function
-  // results in additional variables being introduced.  As the variable
+  // as moving the call out of the expression before the actual function call
+  // causes additional variables to be introduced.  As the variable
   // inliner is improved, this might be a viable option.
   /**
    * Extract the specified expression from its parent expression.
@@ -166,7 +165,7 @@ class ExpressionDecomposer {
          grandchild = child,
              child = parent,
              parent = child.getParent()) {
-      int parentType = parent.getType();
+      Token parentType = parent.getType();
       Preconditions.checkState(
           !isConditionalOp(parent) || child == parent.getFirstChild());
       if (parentType == Token.ASSIGN) {
@@ -184,7 +183,7 @@ class ExpressionDecomposer {
           } else {
             // Alias "next()" in "next().foo"
             Node left = parent.getFirstChild();
-            int type = left.getType();
+            Token type = left.getType();
             if (left != child) {
               Preconditions.checkState(NodeUtil.isGet(left));
               if (type == Token.GETELEM) {
@@ -287,8 +286,7 @@ class ExpressionDecomposer {
    * @param key The object literal key.
    * @param stopNode A node after which to stop iterating.
    */
-  private void decomposeObjectLiteralKeys(
-      Node key, Node stopNode, DecompositionState state) {
+  private void decomposeObjectLiteralKeys(Node key, Node stopNode, DecompositionState state) {
     if (key == null || key == stopNode) {
       return;
     }
@@ -300,8 +298,7 @@ class ExpressionDecomposer {
    * @param n The node with which to start iterating.
    * @param stopNode A node after which to stop iterating.
    */
-  private void decomposeSubExpressions(
-      Node n, Node stopNode, DecompositionState state) {
+  private void decomposeSubExpressions(Node n, Node stopNode, DecompositionState state) {
     if (n == null || n == stopNode) {
       return;
     }
@@ -313,8 +310,7 @@ class ExpressionDecomposer {
     // determining if the any of the children following have side-effects.
     // If they do we need to be more aggressive about removing values
     // from the expression.
-    decomposeSubExpressions(
-        n.getNext(), stopNode, state);
+    decomposeSubExpressions(n.getNext(), stopNode, state);
 
     // Now this node.
     // TODO(johnlenz): Move "safety" code to a shared class.
@@ -336,8 +332,7 @@ class ExpressionDecomposer {
    * @return The node that contains the logic of the expression after
    *     extraction.
    */
-  private Node extractConditional(
-      Node expr, Node injectionPoint, boolean needResult) {
+  private Node extractConditional(Node expr, Node injectionPoint, boolean needResult) {
     Node parent = expr.getParent();
     String tempName = getTempValueName();
 
@@ -354,7 +349,7 @@ class ExpressionDecomposer {
     Node trueExpr = IR.block().srcref(expr);
     Node falseExpr = IR.block().srcref(expr);
     switch (expr.getType()) {
-      case Token.HOOK:
+      case HOOK:
         // a = x?y:z --> if (x) {a=y} else {a=z}
         cond = first;
         trueExpr.addChildToFront(NodeUtil.newExpr(
@@ -362,13 +357,13 @@ class ExpressionDecomposer {
         falseExpr.addChildToFront(NodeUtil.newExpr(
             buildResultExpression(last, needResult, tempName)));
         break;
-      case Token.AND:
+      case AND:
         // a = x&&y --> if (a=x) {a=y} else {}
         cond = buildResultExpression(first, needResult, tempName);
         trueExpr.addChildToFront(NodeUtil.newExpr(
             buildResultExpression(last, needResult, tempName)));
         break;
-      case Token.OR:
+      case OR:
         // a = x||y --> if (a=x) {} else {a=y}
         cond = buildResultExpression(first, needResult, tempName);
         falseExpr.addChildToFront(NodeUtil.newExpr(
@@ -430,8 +425,8 @@ class ExpressionDecomposer {
 
   private boolean isConstantNameNode(Node n, Set<String> knownConstants) {
     // Non-constant names values may have been changed.
-    return n.isName() && (NodeUtil.isConstantVar(n, scope)
-        || knownConstants.contains(n.getString()));
+    return n.isName()
+        && (NodeUtil.isConstantVar(n, scope) || knownConstants.contains(n.getString()));
   }
 
   /**
@@ -643,9 +638,9 @@ class ExpressionDecomposer {
    */
   private static boolean isConditionalOp(Node n) {
     switch(n.getType()) {
-      case Token.HOOK:
-      case Token.AND:
-      case Token.OR:
+      case HOOK:
+      case AND:
+      case OR:
         return true;
       default:
         return false;
@@ -660,30 +655,32 @@ class ExpressionDecomposer {
   static Node findExpressionRoot(Node subExpression) {
     Node child = subExpression;
     for (Node parent : child.getAncestors()) {
-      int parentType = parent.getType();
+      Token parentType = parent.getType();
       switch (parentType) {
         // Supported expression roots:
         // SWITCH and IF can have multiple children, but the CASE, DEFAULT,
         // or BLOCK will be encountered first for any of the children other
         // than the condition.
-        case Token.EXPR_RESULT:
-        case Token.IF:
-        case Token.SWITCH:
-        case Token.RETURN:
-        case Token.THROW:
-        case Token.VAR:
+        case EXPR_RESULT:
+        case IF:
+        case SWITCH:
+        case RETURN:
+        case THROW:
+        case VAR:
+        case CONST:
+        case LET:
           Preconditions.checkState(child == parent.getFirstChild());
           return parent;
         // Any of these indicate an unsupported expression:
-        case Token.FOR:
+        case FOR:
           if (!NodeUtil.isForIn(parent) && child == parent.getFirstChild()) {
             return parent;
           }
-        case Token.SCRIPT:
-        case Token.BLOCK:
-        case Token.LABEL:
-        case Token.CASE:
-        case Token.DEFAULT_CASE:
+        case SCRIPT:
+        case BLOCK:
+        case LABEL:
+        case CASE:
+        case DEFAULT_CASE:
           return null;
       }
       child = parent;
@@ -693,10 +690,10 @@ class ExpressionDecomposer {
   }
 
   /**
-   * Determine whether a expression is movable, or can be be made movable be
+   * Determine whether a expression is movable, or can be be made movable after
    * decomposing the containing expression.
    *
-   * An subExpression is MOVABLE if it can be replaced with a temporary holding
+   * A subexpression is MOVABLE if it can be replaced with a temporary holding
    * its results and moved to immediately before the root of the expression.
    * There are three conditions that must be met for this to occur:
    * 1) There must be a location to inject a statement for the expression.  For
@@ -727,16 +724,16 @@ class ExpressionDecomposer {
 
   /**
    * Walk the AST from the call site to the expression root and verify that
-   * the portions of the expression that are evaluated before the call are:
-   * 1) Unaffected by the the side-effects, if any, of the call.
-   * 2) That there are no side-effects, that may influence the call.
+   * the portions of the expression that are evaluated before the call:
+   * 1) are unaffected by the side-effects, if any, of the call.
+   * 2) have no side-effects, that may influence the call.
    *
    * For example, if x has side-effects:
    *   a = 1 + x();
-   * the call to x can be moved because "a" final value of a can not be
+   * the call to x can be moved because the final value of "a" can not be
    * influenced by x(), but in:
    *   a = b + x();
-   * the call to x can not be moved because the value of b may be modified
+   * the call to x cannot be moved because the value of "b" may be modified
    * by the call to x.
    *
    * If x is without side-effects in:
@@ -747,9 +744,8 @@ class ExpressionDecomposer {
    * by x().  Note: this is true even if b is a local variable; the object that
    * b refers to may have a global alias.
    *
-   * @return UNDECOMPOSABLE if the expression can not be moved, DECOMPOSABLE if
-   * decomposition is required before the expression can be moved, otherwise
-   * MOVABLE.
+   * @return UNDECOMPOSABLE if the expression cannot be moved, DECOMPOSABLE if
+   * decomposition is required before the expression can be moved, otherwise MOVABLE.
    */
   private DecompositionType isSubexpressionMovable(
       Node expressionRoot, Node subExpression) {
@@ -762,9 +758,7 @@ class ExpressionDecomposer {
       if (parent == expressionRoot) {
         // Done. The walk back to the root of the expression is complete, and
         // nothing was encountered that blocks the call from being moved.
-        return requiresDecomposition
-            ? DecompositionType.DECOMPOSABLE
-            : DecompositionType.MOVABLE;
+        return requiresDecomposition ? DecompositionType.DECOMPOSABLE : DecompositionType.MOVABLE;
       }
 
       if (isConditionalOp(parent)) {
@@ -801,8 +795,7 @@ class ExpressionDecomposer {
               break;
             }
 
-            if (isExpressionTreeUnsafe(
-                n, seenSideEffects)) {
+            if (isExpressionTreeUnsafe(n, seenSideEffects)) {
               seenSideEffects = true;
               requiresDecomposition = true;
             }
@@ -824,9 +817,7 @@ class ExpressionDecomposer {
           // type information.
           //
           Node first = parent.getFirstChild();
-          if (requiresDecomposition
-              && parent.isCall()
-              && NodeUtil.isGet(first)) {
+          if (requiresDecomposition && parent.isCall() && NodeUtil.isGet(first)) {
             if (maybeExternMethod(first)) {
               return DecompositionType.UNDECOMPOSABLE;
             } else {
@@ -868,11 +859,11 @@ class ExpressionDecomposer {
     if (n.isAssign()) {
       Node lhs = n.getFirstChild();
       switch (lhs.getType()) {
-        case Token.NAME:
+        case NAME:
           return true;
-        case Token.GETPROP:
+        case GETPROP:
           return !isExpressionTreeUnsafe(lhs.getFirstChild(), seenSideEffects);
-        case Token.GETELEM:
+        case GETELEM:
           return !isExpressionTreeUnsafe(lhs.getFirstChild(), seenSideEffects)
               && !isExpressionTreeUnsafe(lhs.getLastChild(), seenSideEffects);
       }

@@ -30,7 +30,6 @@ import com.google.javascript.jscomp.graph.GraphColoring.GreedyGraphColoring;
 import com.google.javascript.jscomp.graph.GraphNode;
 import com.google.javascript.jscomp.graph.SubGraph;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
@@ -420,7 +419,7 @@ class AmbiguateProperties implements CompilerPass {
     }
   }
 
-  class PropertyGraphNode implements GraphNode<Property, Void> {
+  static class PropertyGraphNode implements GraphNode<Property, Void> {
     Property property;
     protected Annotation annotation;
 
@@ -449,17 +448,85 @@ class AmbiguateProperties implements CompilerPass {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       switch (n.getType()) {
-        case Token.GETPROP: {
+        case GETPROP: {
           Node propNode = n.getSecondChild();
           JSType jstype = getJSType(n.getFirstChild());
           maybeMarkCandidate(propNode, jstype);
           break;
         }
-        case Token.OBJECTLIT:
+        case CALL: {
+          Node target = n.getFirstChild();
+            if (!target.isQualifiedName()) {
+            break;
+          }
+
+            String renameFunctionName = target.getOriginalQualifiedName();
+            if (renameFunctionName != null
+                && compiler.getCodingConvention().isPropertyRenameFunction(renameFunctionName)) {
+
+              if (n.getChildCount() != 2 && n.getChildCount() != 3) {
+                compiler.report(
+                    JSError.make(
+                        n,
+                        DisambiguateProperties.Warnings.INVALID_RENAME_FUNCTION,
+                        renameFunctionName,
+                        " Must be called with 1 or 2 arguments."));
+                break;
+              }
+
+              Node propName = n.getSecondChild();
+              if (!propName.isString()) {
+                compiler.report(
+                    JSError.make(
+                        n,
+                        DisambiguateProperties.Warnings.INVALID_RENAME_FUNCTION,
+                        renameFunctionName,
+                        " The first argument must be a string literal."));
+                break;
+              }
+
+              if (propName.getString().contains(".")) {
+                compiler.report(
+                    JSError.make(
+                        n,
+                        DisambiguateProperties.Warnings.INVALID_RENAME_FUNCTION,
+                        renameFunctionName,
+                        " The first argument must not be a property path."));
+                break;
+              }
+
+              JSType jstype = getJSType(n.getSecondChild());
+
+              maybeMarkCandidate(propName, jstype);
+            } else if (NodeUtil.isObjectDefinePropertiesDefinition(n)) {
+              Node typeObj = n.getSecondChild();
+              JSType jstype = getJSType(typeObj);
+              Node objectLiteral = typeObj.getNext();
+
+              if (!objectLiteral.isObjectLit()) {
+                break;
+              }
+
+              for (Node key : objectLiteral.children()) {
+                if (key.isQuotedString()) {
+                  quotedNames.add(key.getString());
+                } else {
+                  maybeMarkCandidate(key, jstype);
+                }
+              }
+            }
+          break;
+        }
+        case OBJECTLIT:
+          // Object.defineProperties literals are handled at the CALL node.
+          if (n.getParent().isCall()
+              && NodeUtil.isObjectDefinePropertiesDefinition(n.getParent())) {
+            break;
+          }
+
           // The children of an OBJECTLIT node are keys, where the values
           // are the children of the keys.
-          for (Node key = n.getFirstChild(); key != null;
-               key = key.getNext()) {
+          for (Node key = n.getFirstChild(); key != null; key = key.getNext()) {
             // We only want keys that were unquoted.
             // Keys are STRING, GET, SET
             if (!key.isQuotedString()) {
@@ -472,7 +539,7 @@ class AmbiguateProperties implements CompilerPass {
             }
           }
           break;
-        case Token.GETELEM:
+        case GETELEM:
           // If this is a quoted property access (e.g. x['myprop']), we need to
           // ensure that we never rename some other property in a way that
           // could conflict with this quoted name.
@@ -542,14 +609,17 @@ class AmbiguateProperties implements CompilerPass {
    * present.
    */
   private JSType getJSType(Node n) {
+    if (n == null) {
+      return compiler.getTypeRegistry().getNativeType(JSTypeNative.UNKNOWN_TYPE);
+    }
+
     JSType jsType = n.getJSType();
     if (jsType == null) {
       // TODO(user): This branch indicates a compiler bug, not worthy of
       // halting the compilation but we should log this and analyze to track
       // down why it happens. This is not critical and will be resolved over
       // time as the type checker is extended.
-      return compiler.getTypeRegistry().getNativeType(
-          JSTypeNative.UNKNOWN_TYPE);
+      return compiler.getTypeRegistry().getNativeType(JSTypeNative.UNKNOWN_TYPE);
     } else {
       return jsType;
     }

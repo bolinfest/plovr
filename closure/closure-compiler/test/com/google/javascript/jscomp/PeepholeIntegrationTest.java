@@ -33,7 +33,7 @@ public class PeepholeIntegrationTest extends CompilerTestCase {
   public CompilerPass getProcessor(final Compiler compiler) {
     PeepholeOptimizationsPass peepholePass =
       new PeepholeOptimizationsPass(compiler,
-        new PeepholeMinimizeConditions(late),
+        new PeepholeMinimizeConditions(late, false /* useTypes */),
         new PeepholeSubstituteAlternateSyntax(late),
         new PeepholeRemoveDeadCode(),
         new PeepholeFoldConstants(late, false)
@@ -270,9 +270,10 @@ public class PeepholeIntegrationTest extends CompilerTestCase {
   }
 
   public void testNoNormalizeLabeledExpr() {
-    enableNormalize(true);
+    enableNormalize();
     foldSame("var x; foo:{x = 3;}");
     foldSame("var x; foo:x = 3;");
+    disableNormalize();
   }
 
   public void testShortCircuit1() {

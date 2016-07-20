@@ -15,7 +15,7 @@
  */
 
 /**
- * @fileoverview Externs for the Google Maps v3.23 API.
+ * @fileoverview Externs for the Google Maps v3 API.
  * @see http://code.google.com/apis/maps/documentation/javascript/reference.html
  * @externs
  */
@@ -2226,12 +2226,14 @@ google.maps.ImageMapType.prototype.getOpacity = function() {};
  * @param {number} zoom
  * @param {Document} ownerDocument
  * @return {Node}
+ * @override
  */
 google.maps.ImageMapType.prototype.getTile = function(tileCoord, zoom, ownerDocument) {};
 
 /**
  * @param {Node} tileDiv
  * @return {undefined}
+ * @override
  */
 google.maps.ImageMapType.prototype.releaseTile = function(tileDiv) {};
 
@@ -2630,11 +2632,13 @@ google.maps.LatLng.prototype.lng = function() {};
 
 /**
  * @return {google.maps.LatLngLiteral}
+ * @override
  */
 google.maps.LatLng.prototype.toJSON = function() {};
 
 /**
  * @return {string}
+ * @override
  */
 google.maps.LatLng.prototype.toString = function() {};
 
@@ -2700,6 +2704,7 @@ google.maps.LatLngBounds.prototype.isEmpty = function() {};
 
 /**
  * @return {google.maps.LatLngBoundsLiteral}
+ * @override
  */
 google.maps.LatLngBounds.prototype.toJSON = function() {};
 
@@ -2710,6 +2715,7 @@ google.maps.LatLngBounds.prototype.toSpan = function() {};
 
 /**
  * @return {string}
+ * @override
  */
 google.maps.LatLngBounds.prototype.toString = function() {};
 
@@ -2953,6 +2959,12 @@ google.maps.Map.prototype.getCenter = function() {};
 
 /**
  * @nosideeffects
+ * @return {boolean}
+ */
+google.maps.Map.prototype.getClickableIcons = function() {};
+
+/**
+ * @nosideeffects
  * @return {Element}
  */
 google.maps.Map.prototype.getDiv = function() {};
@@ -3017,6 +3029,12 @@ google.maps.Map.prototype.panToBounds = function(latLngBounds) {};
  * @return {undefined}
  */
 google.maps.Map.prototype.setCenter = function(latlng) {};
+
+/**
+ * @param {boolean} value
+ * @return {undefined}
+ */
+google.maps.Map.prototype.setClickableIcons = function(value) {};
 
 /**
  * @param {number} heading
@@ -3110,6 +3128,11 @@ google.maps.MapOptions.prototype.center;
 /**
  * @type {boolean}
  */
+google.maps.MapOptions.prototype.clickableIcons;
+
+/**
+ * @type {boolean}
+ */
 google.maps.MapOptions.prototype.disableDefaultUI;
 
 /**
@@ -3186,16 +3209,6 @@ google.maps.MapOptions.prototype.minZoom;
  * @type {boolean}
  */
 google.maps.MapOptions.prototype.noClear;
-
-/**
- * @type {boolean}
- */
-google.maps.MapOptions.prototype.overviewMapControl;
-
-/**
- * @type {google.maps.OverviewMapControlOptions|Object.<string>}
- */
-google.maps.MapOptions.prototype.overviewMapControlOptions;
 
 /**
  * @type {boolean}
@@ -3946,16 +3959,6 @@ google.maps.OverlayView.prototype.setMap = function(map) {};
 /**
  * @interface
  */
-google.maps.OverviewMapControlOptions = function() {};
-
-/**
- * @type {boolean}
- */
-google.maps.OverviewMapControlOptions.prototype.opened;
-
-/**
- * @interface
- */
 google.maps.PanControlOptions = function() {};
 
 /**
@@ -4023,6 +4026,7 @@ google.maps.Point.prototype.equals = function(other) {};
 
 /**
  * @return {string}
+ * @override
  */
 google.maps.Point.prototype.toString = function() {};
 
@@ -4614,6 +4618,7 @@ google.maps.Size.prototype.equals = function(other) {};
 
 /**
  * @return {string}
+ * @override
  */
 google.maps.Size.prototype.toString = function() {};
 
@@ -5078,6 +5083,7 @@ google.maps.StrokePosition = {
 /**
  * @param {Array<google.maps.MapTypeStyle>} styles
  * @param {(google.maps.StyledMapTypeOptions|Object.<string>)=} opt_options
+ * @implements {google.maps.MapType}
  * @extends {google.maps.MVCObject}
  * @constructor
  */
@@ -5117,6 +5123,22 @@ google.maps.StyledMapType.prototype.radius;
  * @type {google.maps.Size}
  */
 google.maps.StyledMapType.prototype.tileSize;
+
+/**
+ * @param {google.maps.Point} tileCoord
+ * @param {number} zoom
+ * @param {Document} ownerDocument
+ * @return {Node}
+ * @override
+ */
+google.maps.StyledMapType.prototype.getTile = function(tileCoord, zoom, ownerDocument) {};
+
+/**
+ * @param {Node} tile
+ * @return {undefined}
+ * @override
+ */
+google.maps.StyledMapType.prototype.releaseTile = function(tile) {};
 
 /**
  * @interface
@@ -5230,10 +5252,11 @@ google.maps.Time.prototype.time_zone;
 google.maps.Time.prototype.value;
 
 /**
+ * @param {(google.maps.TrafficLayerOptions|Object.<string>)=} opt_opts
  * @extends {google.maps.MVCObject}
  * @constructor
  */
-google.maps.TrafficLayer = function() {};
+google.maps.TrafficLayer = function(opt_opts) {};
 
 /**
  * @nosideeffects
@@ -5246,6 +5269,22 @@ google.maps.TrafficLayer.prototype.getMap = function() {};
  * @return {undefined}
  */
 google.maps.TrafficLayer.prototype.setMap = function(map) {};
+
+/**
+ * @param {google.maps.TrafficLayerOptions|Object.<string>} options
+ * @return {undefined}
+ */
+google.maps.TrafficLayer.prototype.setOptions = function(options) {};
+
+/**
+ * @interface
+ */
+google.maps.TrafficLayerOptions = function() {};
+
+/**
+ * @type {google.maps.Map}
+ */
+google.maps.TrafficLayerOptions.prototype.map;
 
 /**
  * @enum {string}
@@ -5501,20 +5540,6 @@ google.maps.ZoomControlOptions = function() {};
  */
 google.maps.ZoomControlOptions.prototype.position;
 
-/**
- * @type {google.maps.ZoomControlStyle}
- */
-google.maps.ZoomControlOptions.prototype.style;
-
-/**
- * @enum {number}
- */
-google.maps.ZoomControlStyle = {
-  DEFAULT: 0,
-  LARGE: 1,
-  SMALL: 2
-};
-
 /** @const */
 google.maps.drawing = {};
 
@@ -5652,7 +5677,7 @@ google.maps.event = {};
 /**
  * @param {Object} instance
  * @param {string} eventName
- * @param {?function(?)} handler
+ * @param {!Function} handler
  * @param {boolean=} opt_capture
  * @return {google.maps.MapsEventListener}
  */
@@ -5661,7 +5686,7 @@ google.maps.event.addDomListener = function(instance, eventName, handler, opt_ca
 /**
  * @param {Object} instance
  * @param {string} eventName
- * @param {function(?)} handler
+ * @param {!Function} handler
  * @param {boolean=} opt_capture
  * @return {google.maps.MapsEventListener}
  */
@@ -5670,7 +5695,7 @@ google.maps.event.addDomListenerOnce = function(instance, eventName, handler, op
 /**
  * @param {Object} instance
  * @param {string} eventName
- * @param {?Function} handler
+ * @param {!Function} handler
  * @return {google.maps.MapsEventListener}
  */
 google.maps.event.addListener = function(instance, eventName, handler) {};
@@ -5678,7 +5703,7 @@ google.maps.event.addListener = function(instance, eventName, handler) {};
 /**
  * @param {Object} instance
  * @param {string} eventName
- * @param {?Function} handler
+ * @param {!Function} handler
  * @return {google.maps.MapsEventListener}
  */
 google.maps.event.addListenerOnce = function(instance, eventName, handler) {};

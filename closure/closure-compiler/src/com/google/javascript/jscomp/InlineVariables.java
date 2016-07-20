@@ -166,8 +166,7 @@ class InlineVariables implements CompilerPass {
     private void collectAliasCandidates(NodeTraversal t,
         ReferenceMap referenceMap) {
       if (mode != Mode.CONSTANTS_ONLY) {
-        for (Iterator<Var> it = t.getScope().getVars(); it.hasNext();) {
-          Var v = it.next();
+        for (Var v : t.getScope().getVarIterable()) {
           ReferenceCollection referenceInfo = referenceMap.getReferences(v);
 
           // NOTE(nicksantos): Don't handle variables that are never used.
@@ -195,9 +194,7 @@ class InlineVariables implements CompilerPass {
 
       boolean maybeModifiedArguments =
           maybeEscapedOrModifiedArguments(t.getScope(), referenceMap);
-      for (Iterator<Var> it = t.getScope().getVars(); it.hasNext();) {
-        Var v = it.next();
-
+      for (Var v : t.getScope().getVarIterable()) {
         ReferenceCollection referenceInfo = referenceMap.getReferences(v);
 
         // referenceInfo will be null if we're in constants-only mode
@@ -345,10 +342,12 @@ class InlineVariables implements CompilerPass {
       // 2) A reference to the variable has been inlined. We're downstream
       //    of the mechanism that creates variable references, so we don't
       //    have a good way to update the reference. Just punt on it.
-      // 3) Don't inline the special RENAME_PROPERTY_FUNCTION_NAME
+      // 3) Don't inline the special property rename functions.
       return var.isExtern()
           || compiler.getCodingConvention().isExported(var.name)
-          || RenameProperties.RENAME_PROPERTY_FUNCTION_NAME.equals(var.name)
+          || compiler
+              .getCodingConvention()
+              .isPropertyRenameFunction(var.nameNode.getOriginalQualifiedName())
           || staleVars.contains(var);
     }
 

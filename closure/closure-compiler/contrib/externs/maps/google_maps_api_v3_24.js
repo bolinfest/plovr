@@ -2226,12 +2226,14 @@ google.maps.ImageMapType.prototype.getOpacity = function() {};
  * @param {number} zoom
  * @param {Document} ownerDocument
  * @return {Node}
+ * @override
  */
 google.maps.ImageMapType.prototype.getTile = function(tileCoord, zoom, ownerDocument) {};
 
 /**
  * @param {Node} tileDiv
  * @return {undefined}
+ * @override
  */
 google.maps.ImageMapType.prototype.releaseTile = function(tileDiv) {};
 
@@ -2630,11 +2632,13 @@ google.maps.LatLng.prototype.lng = function() {};
 
 /**
  * @return {google.maps.LatLngLiteral}
+ * @override
  */
 google.maps.LatLng.prototype.toJSON = function() {};
 
 /**
  * @return {string}
+ * @override
  */
 google.maps.LatLng.prototype.toString = function() {};
 
@@ -2700,6 +2704,7 @@ google.maps.LatLngBounds.prototype.isEmpty = function() {};
 
 /**
  * @return {google.maps.LatLngBoundsLiteral}
+ * @override
  */
 google.maps.LatLngBounds.prototype.toJSON = function() {};
 
@@ -2710,6 +2715,7 @@ google.maps.LatLngBounds.prototype.toSpan = function() {};
 
 /**
  * @return {string}
+ * @override
  */
 google.maps.LatLngBounds.prototype.toString = function() {};
 
@@ -2778,6 +2784,7 @@ google.maps.LocationElevationRequest.prototype.locations;
 /**
  * @param {Array=} opt_array
  * @extends {google.maps.MVCObject}
+ * @template T
  * @constructor
  */
 google.maps.MVCArray = function(opt_array) {};
@@ -2801,7 +2808,7 @@ google.maps.MVCArray.prototype.getArray = function() {};
 
 /**
  * @param {number} i
- * @return {?}
+ * @return {T}
  */
 google.maps.MVCArray.prototype.getAt = function(i) {};
 
@@ -2813,31 +2820,31 @@ google.maps.MVCArray.prototype.getLength = function() {};
 
 /**
  * @param {number} i
- * @param {?} elem
+ * @param {T} elem
  * @return {undefined}
  */
 google.maps.MVCArray.prototype.insertAt = function(i, elem) {};
 
 /**
- * @return {?}
+ * @return {T}
  */
 google.maps.MVCArray.prototype.pop = function() {};
 
 /**
- * @param {?} elem
+ * @param {T} elem
  * @return {number}
  */
 google.maps.MVCArray.prototype.push = function(elem) {};
 
 /**
  * @param {number} i
- * @return {?}
+ * @return {T}
  */
 google.maps.MVCArray.prototype.removeAt = function(i) {};
 
 /**
  * @param {number} i
- * @param {?} elem
+ * @param {T} elem
  * @return {undefined}
  */
 google.maps.MVCArray.prototype.setAt = function(i, elem) {};
@@ -2953,6 +2960,12 @@ google.maps.Map.prototype.getCenter = function() {};
 
 /**
  * @nosideeffects
+ * @return {boolean}
+ */
+google.maps.Map.prototype.getClickableIcons = function() {};
+
+/**
+ * @nosideeffects
  * @return {Element}
  */
 google.maps.Map.prototype.getDiv = function() {};
@@ -3017,6 +3030,12 @@ google.maps.Map.prototype.panToBounds = function(latLngBounds) {};
  * @return {undefined}
  */
 google.maps.Map.prototype.setCenter = function(latlng) {};
+
+/**
+ * @param {boolean} value
+ * @return {undefined}
+ */
+google.maps.Map.prototype.setClickableIcons = function(value) {};
 
 /**
  * @param {number} heading
@@ -3106,6 +3125,11 @@ google.maps.MapOptions.prototype.backgroundColor;
  * @type {google.maps.LatLng}
  */
 google.maps.MapOptions.prototype.center;
+
+/**
+ * @type {boolean}
+ */
+google.maps.MapOptions.prototype.clickableIcons;
 
 /**
  * @type {boolean}
@@ -4003,6 +4027,7 @@ google.maps.Point.prototype.equals = function(other) {};
 
 /**
  * @return {string}
+ * @override
  */
 google.maps.Point.prototype.toString = function() {};
 
@@ -4594,6 +4619,7 @@ google.maps.Size.prototype.equals = function(other) {};
 
 /**
  * @return {string}
+ * @override
  */
 google.maps.Size.prototype.toString = function() {};
 
@@ -5058,6 +5084,7 @@ google.maps.StrokePosition = {
 /**
  * @param {Array<google.maps.MapTypeStyle>} styles
  * @param {(google.maps.StyledMapTypeOptions|Object.<string>)=} opt_options
+ * @implements {google.maps.MapType}
  * @extends {google.maps.MVCObject}
  * @constructor
  */
@@ -5097,6 +5124,22 @@ google.maps.StyledMapType.prototype.radius;
  * @type {google.maps.Size}
  */
 google.maps.StyledMapType.prototype.tileSize;
+
+/**
+ * @param {google.maps.Point} tileCoord
+ * @param {number} zoom
+ * @param {Document} ownerDocument
+ * @return {Node}
+ * @override
+ */
+google.maps.StyledMapType.prototype.getTile = function(tileCoord, zoom, ownerDocument) {};
+
+/**
+ * @param {Node} tile
+ * @return {undefined}
+ * @override
+ */
+google.maps.StyledMapType.prototype.releaseTile = function(tile) {};
 
 /**
  * @interface

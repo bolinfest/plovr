@@ -88,7 +88,7 @@ public final class SuggestedFix {
   @Override public String toString() {
     StringBuilder sb = new StringBuilder();
     for (Map.Entry<String, Collection<CodeReplacement>> entry : replacements.asMap().entrySet()) {
-      sb.append("Replacements for file: " + entry.getKey() + "\n");
+      sb.append("Replacements for file: ").append(entry.getKey()).append("\n");
       Joiner.on("\n\n").appendTo(sb, entry.getValue());
     }
     return sb.toString();
@@ -123,6 +123,17 @@ public final class SuggestedFix {
       replacements.put(
           parentNode.getSourceFileName(),
           new CodeReplacement(startPosition, 0, "\n" + content));
+      return this;
+    }
+
+    /**
+     * Inserts the text after the given node
+     */
+    public Builder insertAfter(Node node, String text) {
+      int position = node.getSourceOffset() + node.getLength();
+      replacements.put(
+          node.getSourceFileName(),
+          new CodeReplacement(position, 0, text));
       return this;
     }
 
@@ -207,7 +218,7 @@ public final class SuggestedFix {
           length = (child.getSourceOffset() + child.getLength()) - startPosition;
         }
         if (n.getParent().getLastChild() == n && n != n.getParent().getFirstChild()) {
-          Node previousSibling = n.getParent().getChildBefore(n);
+          Node previousSibling = n.getPrevious();
           if (previousSibling.hasChildren()) {
             Node child = previousSibling.getFirstChild();
             int startPositionDiff = startPosition - (child.getSourceOffset() + child.getLength());
@@ -226,7 +237,7 @@ public final class SuggestedFix {
       if (deleteWhitespaceBefore
           && parent != null
           && (parent.isScript() || parent.isBlock())) {
-        Node previousSibling = parent.getChildBefore(n);
+        Node previousSibling = n.getPrevious();
         if (previousSibling != null) {
           int previousSiblingEndPosition =
               previousSibling.getSourceOffset() + previousSibling.getLength();
@@ -637,6 +648,7 @@ public final class SuggestedFix {
       CompilerOptions compilerOptions = new CompilerOptions();
       compilerOptions.setPreferSingleQuotes(true);
       compilerOptions.setLineLengthThreshold(80);
+      compilerOptions.setUseOriginalNamesInOutput(true);
       // We're refactoring existing code, so no need to escape values inside strings.
       compilerOptions.setTrustedStrings(true);
       return new CodePrinter.Builder(node)

@@ -22,11 +22,9 @@ import com.google.javascript.jscomp.ControlFlowGraph.Branch;
 import com.google.javascript.jscomp.graph.GraphNode;
 import com.google.javascript.jscomp.graph.LatticeElement;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -126,10 +124,9 @@ final class MustBeReachingVariableDef extends
       reachingDef = new HashMap<>();
     }
 
-    public MustDef(Iterator<Var> vars) {
+    public MustDef(Iterable<? extends Var> vars) {
       this();
-      while (vars.hasNext()) {
-        Var var = vars.next();
+      for (Var var : vars) {
         // Every variable in the scope is defined once in the beginning of the
         // function: all the declared variables are undefined, all functions
         // have been assigned and all arguments has its value from the caller.
@@ -209,7 +206,7 @@ final class MustBeReachingVariableDef extends
 
   @Override
   MustDef createEntryLattice() {
-    return new MustDef(jsScope.getVars());
+    return new MustDef(jsScope.getVarIterable());
   }
 
   @Override
@@ -238,18 +235,18 @@ final class MustBeReachingVariableDef extends
       Node n, Node cfgNode, MustDef output, boolean conditional) {
     switch (n.getType()) {
 
-      case Token.BLOCK:
-      case Token.FUNCTION:
+      case BLOCK:
+      case FUNCTION:
         return;
 
-      case Token.WHILE:
-      case Token.DO:
-      case Token.IF:
+      case WHILE:
+      case DO:
+      case IF:
         computeMustDef(
             NodeUtil.getConditionExpression(n), cfgNode, output, conditional);
         return;
 
-      case Token.FOR:
+      case FOR:
         if (!NodeUtil.isForIn(n)) {
           computeMustDef(
               NodeUtil.getConditionExpression(n), cfgNode, output, conditional);
@@ -266,19 +263,19 @@ final class MustBeReachingVariableDef extends
         }
         return;
 
-      case Token.AND:
-      case Token.OR:
+      case AND:
+      case OR:
         computeMustDef(n.getFirstChild(), cfgNode, output, conditional);
         computeMustDef(n.getLastChild(), cfgNode, output, true);
         return;
 
-      case Token.HOOK:
+      case HOOK:
         computeMustDef(n.getFirstChild(), cfgNode, output, conditional);
         computeMustDef(n.getSecondChild(), cfgNode, output, true);
         computeMustDef(n.getLastChild(), cfgNode, output, true);
         return;
 
-      case Token.VAR:
+      case VAR:
         for (Node c = n.getFirstChild(); c != null; c = c.getNext()) {
           if (c.hasChildren()) {
             computeMustDef(c.getFirstChild(), cfgNode, output, conditional);
@@ -370,8 +367,7 @@ final class MustBeReachingVariableDef extends
   }
 
   private void escapeParameters(MustDef output) {
-    for (Iterator<Var> i = jsScope.getVars(); i.hasNext();) {
-      Var v = i.next();
+    for (Var v : jsScope.getVarIterable()) {
       if (isParameter(v)) {
         // Assume we no longer know where the parameter comes from
         // anymore.

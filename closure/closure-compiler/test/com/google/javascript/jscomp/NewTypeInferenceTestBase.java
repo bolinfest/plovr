@@ -18,6 +18,7 @@ package com.google.javascript.jscomp;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
+import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
@@ -32,7 +33,8 @@ import java.util.List;
  * @author dimvar@google.com (Dimitris Vardoulakis)
  */
 public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
-  protected List<PassFactory> passes;
+
+  protected CompilerOptions compilerOptions;
 
   protected static final String CLOSURE_BASE =
       LINE_JOINER.join(
@@ -41,6 +43,8 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           "goog.nullFunction = function() {};");
   protected static final String DEFAULT_EXTERNS =
       CompilerTypeTestCase.DEFAULT_EXTERNS + LINE_JOINER.join(
+          "/** @const {undefined} */",
+          "var undefined;",
           "/** @return {string} */",
           "Object.prototype.toString = function() {};",
           "/**",
@@ -48,6 +52,8 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           " * @return {boolean}",
           " */",
           "Object.prototype.hasOwnProperty = function(propertyName) {};",
+          "/** @type {?Function} */",
+          "Object.prototype.constructor = function() {};",
           "/**",
           " * @this {!String|string}",
           " * @param {!RegExp} regexp",
@@ -56,6 +62,9 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           "String.prototype.match = function(regexp) {};",
           "/** @return {string} */",
           "String.prototype.toString = function() {};",
+          "/** @return {string} */",
+          "String.prototype.toLowerCase = function() {};",
+          "String.prototype.startsWith = function(s) {};",
           "/**",
           " * @constructor",
           " * @param {*=} arg",
@@ -67,6 +76,11 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           " @return {string}",
           "*/",
           "Number.prototype.toString = function(opt_radix) {};",
+          "/**",
+          " * @param {number=} opt_fractionDigits",
+          " * @return {string}",
+          " */",
+          "Number.prototype.toExponential = function(opt_fractionDigits) {};",
           "/**",
           " * @constructor",
           " * @param {*=} arg",
@@ -137,12 +151,41 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           "/** @type {boolean} */",
           "Window.prototype.closed;",
           "/** @type {!Window} */",
-          "var window;");
+          "var window;",
+          "",
+          "/**",
+          " * @constructor",
+          " * @extends {Array<string>}",
+          " */",
+          "var ITemplateArray = function() {};",
+          "",
+          "/** @type {!Array<string>} */",
+          "ITemplateArray.prototype.raw;",
+          "",
+          "/**",
+          " * @param {!ITemplateArray} template",
+          " * @param {...*} var_args",
+          " * @return {string}",
+          " */",
+          "String.raw = function(template, var_args) {};",
+          "");
 
   @Override
-  protected void setUp() {
+  protected void setUp() throws Exception {
     super.setUp();
-    passes = new ArrayList<>();
+    compilerOptions = getDefaultOptions();
+  }
+
+  @Override
+  protected CompilerOptions getDefaultOptions() {
+    CompilerOptions compilerOptions = super.getDefaultOptions();
+    compilerOptions.setClosurePass(true);
+    compilerOptions.setNewTypeInference(true);
+    compilerOptions.setWarningLevel(
+        DiagnosticGroups.NEW_CHECK_TYPES_ALL_CHECKS, CheckLevel.WARNING);
+    // EC5 is the highest language level that type inference understands.
+    compilerOptions.setLanguage(LanguageMode.ECMASCRIPT5);
+    return compilerOptions;
   }
 
   protected final PassFactory makePassFactory(
@@ -156,15 +199,11 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
   }
 
   private final void parseAndTypeCheck(String externs, String js) {
-    setUp();
-    final CompilerOptions options = compiler.getOptions();
-    options.setClosurePass(true);
-    options.setNewTypeInference(true);
-    options.setWarningLevel(DiagnosticGroups.NEW_CHECK_TYPES_ALL_CHECKS, CheckLevel.WARNING);
+    initializeNewCompiler(compilerOptions);
     compiler.init(
         ImmutableList.of(SourceFile.fromCode("[externs]", externs)),
         ImmutableList.of(SourceFile.fromCode("[testcode]", js)),
-        options);
+        compilerOptions);
 
     Node externsRoot = IR.block();
     externsRoot.setIsSyntheticBlock(true);
@@ -190,31 +229,19 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
 
     DeclaredGlobalExternsOnWindow rewriteExterns =
         new DeclaredGlobalExternsOnWindow(compiler);
+    List<PassFactory> passes = new ArrayList<>();
     passes.add(makePassFactory("globalExternsOnWindow", rewriteExterns));
     ProcessClosurePrimitives closurePass =
         new ProcessClosurePrimitives(compiler, null, CheckLevel.ERROR, false);
     passes.add(makePassFactory("ProcessClosurePrimitives", closurePass));
-    if (options.getLanguageIn() == CompilerOptions.LanguageMode.ECMASCRIPT6_TYPED) {
+    if (compilerOptions.getLanguageIn() == LanguageMode.ECMASCRIPT6_TYPED) {
       passes.add(makePassFactory("convertEs6TypedToEs6",
               new Es6TypedToEs6Converter(compiler)));
     }
-    if (options.getLanguageIn().isEs6OrHigher()) {
-      passes.add(makePassFactory("Es6RenameVariablesInParamLists",
-              new Es6RenameVariablesInParamLists(compiler)));
-      passes.add(makePassFactory("Es6SplitVariableDeclarations",
-              new Es6SplitVariableDeclarations(compiler)));
-      passes.add(makePassFactory("es6ConvertSuper",
-              new Es6ConvertSuper(compiler)));
-      passes.add(makePassFactory("convertEs6",
-              new Es6ToEs3Converter(compiler)));
-      passes.add(makePassFactory("Es6RewriteBlockScopedDeclaration",
-              new Es6RewriteBlockScopedDeclaration(compiler)));
-      passes.add(makePassFactory("rewriteGenerators",
-              new Es6RewriteGenerators(compiler)));
-      passes.add(makePassFactory("Es6RuntimeLibrary",
-              new InjectEs6RuntimeLibrary(compiler)));
-      passes.add(makePassFactory("Es6StaticInheritance",
-              new Es6ToEs3ClassSideInheritance(compiler)));
+    if (compilerOptions.getLanguageIn().isEs6OrHigher()
+        && !compilerOptions.getLanguageOut().isEs6OrHigher()) {
+      TranspilationPasses.addEs6EarlyPasses(passes);
+      TranspilationPasses.addEs6LatePasses(passes);
     }
     passes.add(makePassFactory("GlobalTypeInfo", compiler.getSymbolTable()));
     passes.add(makePassFactory("NewTypeInference", new NewTypeInference(compiler)));
@@ -238,17 +265,19 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
     parseAndTypeCheck(externs, js);
     JSError[] warnings = compiler.getWarnings();
     JSError[] errors = compiler.getErrors();
-    String errorMessage =
-        "Expected warning of type:\n"
-        + "================================================================\n"
-        + Arrays.toString(warningKinds)
-        + "================================================================\n"
-        + "but found:\n"
-        + "----------------------------------------------------------------\n"
-        + Arrays.toString(errors) + Arrays.toString(warnings) + "\n"
-        + "----------------------------------------------------------------\n";
+    String errorMessage = LINE_JOINER.join(
+        "Expected warning of type:",
+        "================================================================",
+        LINE_JOINER.join(warningKinds),
+        "================================================================",
+        "but found:",
+        "----------------------------------------------------------------",
+        LINE_JOINER.join(errors) + "\n" + LINE_JOINER.join(warnings),
+        "----------------------------------------------------------------\n");
     assertEquals(
-        errorMessage + "Warning count", warningKinds.length, warnings.length + errors.length);
+        errorMessage + "Warning count",
+        warningKinds.length,
+        warnings.length + errors.length);
     for (JSError warning : warnings) {
       assertTrue(
           "Wrong warning type\n" + errorMessage,
@@ -259,5 +288,45 @@ public abstract class NewTypeInferenceTestBase extends CompilerTypeTestCase {
           "Wrong warning type\n" + errorMessage,
           Arrays.asList(warningKinds).contains(error.getType()));
     }
+  }
+
+  // Used only in the cases where we provide extra details in the error message.
+  // Don't use in other cases.
+  // It is deliberately less general; no custom externs and only a single
+  // warning per test.
+  protected final void typeCheckMessageContents(
+      String js, DiagnosticType warningKind, String warningMsg) {
+    parseAndTypeCheck(DEFAULT_EXTERNS, js);
+    JSError[] warnings = compiler.getWarnings();
+    JSError[] errors = compiler.getErrors();
+    assertEquals(
+        "Expected no errors, but found:\n" + Arrays.toString(errors),
+        0, errors.length);
+    assertEquals(
+        "Expected one warning, but found:\n" + Arrays.toString(warnings),
+        1, warnings.length);
+    JSError warning = warnings[0];
+    assertEquals(LINE_JOINER.join(
+        "Wrong warning type",
+        "Expected warning of type:",
+        "================================================================",
+        warningKind.toString(),
+        "================================================================",
+        "but found:",
+        "----------------------------------------------------------------",
+        warning.toString(),
+        "----------------------------------------------------------------\n"),
+        warningKind, warning.getType());
+    assertEquals(LINE_JOINER.join(
+        "Wrong warning message",
+        "Expected:",
+        "================================================================",
+        warningMsg,
+        "================================================================",
+        "but found:",
+        "----------------------------------------------------------------",
+        warning.description,
+        "----------------------------------------------------------------\n"),
+        warningMsg, warning.description);
   }
 }

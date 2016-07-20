@@ -54,7 +54,8 @@ public class ErrorToFixMapperTest {
     options = RefactoringDriver.getCompilerOptions();
     options.setWarningLevel(DiagnosticGroups.DEBUGGER_STATEMENT_PRESENT, ERROR);
     options.setWarningLevel(DiagnosticGroups.LINT_CHECKS, ERROR);
-    options.setWarningLevel(DiagnosticGroups.UNNECESSARY_CASTS, ERROR);
+    options.setWarningLevel(DiagnosticGroups.STRICT_MISSING_REQUIRE, ERROR);
+    options.setWarningLevel(DiagnosticGroups.EXTRA_REQUIRE, ERROR);
   }
 
   @Test
@@ -71,9 +72,16 @@ public class ErrorToFixMapperTest {
   }
 
   @Test
-  public void testRemoveCast() {
-    String code = "var x = /** @type {string} */ ('foo');";
-    String expectedCode = "var x = 'foo';";
+  public void testInsertSemicolon1() {
+    String code = "var x = 3";
+    String expectedCode = "var x = 3;";
+    assertChanges(code, expectedCode);
+  }
+
+  @Test
+  public void testInsertSemicolon2() {
+    String code = "function f() { return 'it' }";
+    String expectedCode = "function f() { return 'it'; }";
     assertChanges(code, expectedCode);
   }
 
@@ -81,7 +89,10 @@ public class ErrorToFixMapperTest {
   public void testRequiresSorted1() {
     assertChanges(
         LINE_JOINER.join(
-            "/** @fileoverview foo */",
+            "/**",
+            " * @fileoverview",
+            " * @suppress {extraRequire}",
+            " */",
             "",
             "",
             "goog.require('b');",
@@ -91,7 +102,10 @@ public class ErrorToFixMapperTest {
             "",
             "alert(1);"),
         LINE_JOINER.join(
-            "/** @fileoverview foo */",
+            "/**",
+            " * @fileoverview",
+            " * @suppress {extraRequire}",
+            " */",
             "",
             "",
             "goog.require('a');",
@@ -106,6 +120,10 @@ public class ErrorToFixMapperTest {
   public void testRequiresSorted2() {
     assertChanges(
         LINE_JOINER.join(
+            "/**",
+            " * @fileoverview",
+            " * @suppress {extraRequire}",
+            " */",
             "goog.provide('x');",
             "",
             "/** @suppress {extraRequire} */",
@@ -114,6 +132,10 @@ public class ErrorToFixMapperTest {
             "",
             "alert(1);"),
         LINE_JOINER.join(
+            "/**",
+            " * @fileoverview",
+            " * @suppress {extraRequire}",
+            " */",
             "goog.provide('x');",
             "",
             "goog.require('a');",
@@ -167,6 +189,34 @@ public class ErrorToFixMapperTest {
             "",
             "",
             "alert(1);"));
+  }
+
+  @Test
+  public void testExtraRequire() {
+    assertChanges(
+        LINE_JOINER.join(
+            "goog.require('goog.object');",
+            "goog.require('goog.string');",
+            "",
+            "alert(goog.string.parseInt('7'));"),
+        LINE_JOINER.join(
+            "goog.require('goog.string');",
+            "",
+            "alert(goog.string.parseInt('7'));"));
+  }
+
+  @Test
+  public void testDuplicateRequire() {
+    assertChanges(
+        LINE_JOINER.join(
+            "goog.require('goog.string');",
+            "goog.require('goog.string');",
+            "",
+            "alert(goog.string.parseInt('7'));"),
+        LINE_JOINER.join(
+            "goog.require('goog.string');",
+            "",
+            "alert(goog.string.parseInt('7'));"));
   }
 
   private void assertChanges(String originalCode, String expectedCode) {

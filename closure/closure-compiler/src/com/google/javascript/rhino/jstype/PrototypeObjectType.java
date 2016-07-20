@@ -301,10 +301,12 @@ public class PrototypeObjectType extends ObjectType {
       int i = 0;
       for (String property : propertyNames) {
         if (i > 0) {
-          sb.append(", ");
+          sb.append(",");
         }
         if (useNewlines) {
           sb.append("\n  ");
+        } else if (i > 0) {
+          sb.append(" ");
         }
 
         sb.append(property);
@@ -380,14 +382,19 @@ public class PrototypeObjectType extends ObjectType {
   }
 
   @Override
+  public boolean isInstanceofObject() {
+    return isAnonymous();
+  }
+
+  @Override
   public boolean isSubtype(JSType that) {
-    return isSubtype(that, ImplCache.create());
+    return isSubtype(that, ImplCache.create(), SubtypingMode.NORMAL);
   }
 
   @Override
   protected boolean isSubtype(JSType that,
-      ImplCache implicitImplCache) {
-    if (JSType.isSubtypeHelper(this, that, implicitImplCache)) {
+      ImplCache implicitImplCache, SubtypingMode subtypingMode) {
+    if (JSType.isSubtypeHelper(this, that, implicitImplCache, subtypingMode)) {
       return true;
     }
 
@@ -400,7 +407,8 @@ public class PrototypeObjectType extends ObjectType {
 
     // record types
     if (that.isRecordType()) {
-      return PrototypeObjectType.isSubtype(this, that.toMaybeRecordType(), implicitImplCache);
+      return PrototypeObjectType.isSubtype(
+          this, that.toMaybeRecordType(), implicitImplCache, subtypingMode);
     }
 
     // Interfaces
@@ -411,14 +419,14 @@ public class PrototypeObjectType extends ObjectType {
 
     if (getConstructor() != null && getConstructor().isInterface()) {
       for (ObjectType thisInterface : getCtorExtendedInterfaces()) {
-        if (thisInterface.isSubtype(that, implicitImplCache)) {
+        if (thisInterface.isSubtype(that, implicitImplCache, subtypingMode)) {
           return true;
         }
       }
     } else if (thatCtor != null && thatCtor.isInterface()) {
       Iterable<ObjectType> thisInterfaces = getCtorImplementedInterfaces();
       for (ObjectType thisInterface : thisInterfaces) {
-        if (thisInterface.isSubtype(that, implicitImplCache)) {
+        if (thisInterface.isSubtype(that, implicitImplCache, subtypingMode)) {
           return true;
         }
       }
@@ -435,7 +443,8 @@ public class PrototypeObjectType extends ObjectType {
   }
 
   /** Determines if typeA is a subtype of typeB */
-  static boolean isSubtype(ObjectType typeA, RecordType typeB, ImplCache implicitImplCache) {
+  private static boolean isSubtype(ObjectType typeA, RecordType typeB,
+      ImplCache implicitImplCache, SubtypingMode subtypingMode) {
     // typeA is a subtype of record type typeB iff:
     // 1) typeA has all the properties declared in typeB.
     // 2) And for each property of typeB, its type must be
@@ -446,7 +455,7 @@ public class PrototypeObjectType extends ObjectType {
       }
       JSType propA = typeA.getPropertyType(property);
       JSType propB = typeB.getPropertyType(property);
-      if (!propA.isSubtype(propB, implicitImplCache)) {
+      if (!propA.isSubtype(propB, implicitImplCache, subtypingMode)) {
         return false;
       }
     }

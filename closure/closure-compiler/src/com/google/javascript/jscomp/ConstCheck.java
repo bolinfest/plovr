@@ -16,11 +16,9 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.base.Preconditions;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -32,11 +30,13 @@ import java.util.Set;
  * XX++;      // error!
  *
  */
+// TODO(tbreisacher): Consider merging this with CheckAccessControls so that all
+// const-related checks are in the same place.
 class ConstCheck extends AbstractPostOrderCallback
     implements CompilerPass {
 
   static final DiagnosticType CONST_REASSIGNED_VALUE_ERROR =
-      DiagnosticType.error(
+      DiagnosticType.warning(
           "JSC_CONSTANT_REASSIGNED_VALUE_ERROR",
           "constant {0} assigned a value more than once.\n" +
           "Original definition at {1}");
@@ -54,14 +54,13 @@ class ConstCheck extends AbstractPostOrderCallback
 
   @Override
   public void process(Node externs, Node root) {
-    Preconditions.checkState(compiler.getLifeCycleStage().isNormalized());
     NodeTraversal.traverseRootsEs6(compiler, this, externs, root);
   }
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
     switch (n.getType()) {
-      case Token.NAME:
+      case NAME:
         if (parent != null &&
             parent.isVar()) {
           String name = n.getString();
@@ -80,18 +79,18 @@ class ConstCheck extends AbstractPostOrderCallback
         }
         break;
 
-      case Token.ASSIGN:
-      case Token.ASSIGN_BITOR:
-      case Token.ASSIGN_BITXOR:
-      case Token.ASSIGN_BITAND:
-      case Token.ASSIGN_LSH:
-      case Token.ASSIGN_RSH:
-      case Token.ASSIGN_URSH:
-      case Token.ASSIGN_ADD:
-      case Token.ASSIGN_SUB:
-      case Token.ASSIGN_MUL:
-      case Token.ASSIGN_DIV:
-      case Token.ASSIGN_MOD: {
+      case ASSIGN:
+      case ASSIGN_BITOR:
+      case ASSIGN_BITXOR:
+      case ASSIGN_BITAND:
+      case ASSIGN_LSH:
+      case ASSIGN_RSH:
+      case ASSIGN_URSH:
+      case ASSIGN_ADD:
+      case ASSIGN_SUB:
+      case ASSIGN_MUL:
+      case ASSIGN_DIV:
+      case ASSIGN_MOD: {
         Node lhs = n.getFirstChild();
         if (lhs.isName()) {
           String name = lhs.getString();
@@ -103,8 +102,8 @@ class ConstCheck extends AbstractPostOrderCallback
         break;
       }
 
-      case Token.INC:
-      case Token.DEC: {
+      case INC:
+      case DEC: {
         Node lhs = n.getFirstChild();
         if (lhs.isName()) {
           String name = lhs.getString();

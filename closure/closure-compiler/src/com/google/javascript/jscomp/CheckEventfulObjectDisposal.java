@@ -17,13 +17,16 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Multimaps;
+import com.google.common.collect.SetMultimap;
+import com.google.javascript.jscomp.CompilerOptions.DisposalCheckingPolicy;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TypeIRegistry;
 import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
@@ -59,6 +62,7 @@ import java.util.Stack;
  *
  *
  */
+ // TODO(tbreisacher): Find out if anyone is still using this pass. Delete if not.
  // TODO(user): Pass needs to be updated for listenable interfaces.
 public final class CheckEventfulObjectDisposal implements CompilerPass {
 
@@ -82,26 +86,6 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
         "JSC_UNLISTEN_WITH_ANONBOUND",
         "an unlisten call with an anonymous or bound function does not result "
         + "in the event being unlisted to");
-
-  /**
-   * Policies to determine the disposal checking level.
-   */
-  public enum DisposalCheckingPolicy {
-    /**
-     * Don't check any disposal.
-     */
-    OFF,
-
-    /**
-     * Default/conservative disposal checking.
-     */
-    ON,
-
-    /**
-     * Aggressive disposal checking.
-     */
-    AGGRESSIVE,
-  }
 
   // Seed types
   private static final String DISPOSABLE_INTERFACE_TYPE_NAME =
@@ -159,7 +143,7 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
   /*
    * Eventize DAG represented using adjacency lists.
    */
-  private Map<String, Set<String>> eventizes;
+  private SetMultimap<String, String> eventizes;
 
   /*
    * Maps from eventful object name to state.
@@ -481,13 +465,13 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
     /*
      * Topological order of Eventize DAG
      */
-    String[] order = new String[eventizes.size()];
+    String[] order = new String[eventizes.keySet().size()];
 
     /*
      * Perform topological sort
      */
     int white = 0, gray = 1, black = 2;
-    int last = eventizes.size() - 1;
+    int last = eventizes.keySet().size() - 1;
     Map<String, Integer> color = new HashMap<>();
     Stack<String> dfsStack = new Stack<>();
 
@@ -496,7 +480,7 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
      * Some types are only on one or the other side of the
      * inference.
      */
-    for (Map.Entry<String, Set<String>> eventizesEntry : eventizes.entrySet()) {
+    for (Map.Entry<String, Set<String>> eventizesEntry : Multimaps.asMap(eventizes).entrySet()) {
       color.put(eventizesEntry.getKey(), white);
       for (String s : eventizesEntry.getValue()) {
         color.put(s, white);
@@ -607,7 +591,7 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
     public ComputeEventizeTraversal() {
       isConstructorStack = new Stack<>();
       isDisposalStack = new Stack<>();
-      eventizes = new HashMap<>();
+      eventizes = HashMultimap.create();
     }
 
     private Boolean inConstructorScope() {
@@ -663,13 +647,7 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
 
     private void addEventizeClass(String className, JSType thatType) {
       String propertyJsTypeName = thatType.getDisplayName();
-
-      Set<String> eventize = eventizes.get(propertyJsTypeName);
-      if (eventize == null) {
-        eventize = new HashSet<>();
-        eventizes.put(propertyJsTypeName, eventize);
-      }
-      eventize.add(className);
+      eventizes.put(propertyJsTypeName, className);
     }
 
     @Override
@@ -829,7 +807,7 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       switch (n.getType()) {
-        case Token.CALL:
+        case CALL:
           visitCall(t, n);
           break;
         default:
@@ -1252,6 +1230,16 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
 
     @Override
     public void enterScope(NodeTraversal t) {
+      TypedScope scope = t.getTypedScope();
+      if (scope.getVarCount() > LiveVariablesAnalysis.MAX_VARIABLES_TO_ANALYZE) {
+        // Too many variables to analyze, so just assume that all eventful objects are
+        // disposed. This will miss some errors but only in very large scopes.
+        for (TypedVar v : scope.getVarIterable()) {
+          eventfulObjectDisposed(t, v.getNode());
+        }
+        return;
+      }
+
       /*
        * Local variables captured in scope are filtered at present.
        * LiveVariableAnalysis used to filter such variables.
@@ -1273,19 +1261,19 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       switch (n.getType()) {
-        case Token.ASSIGN:
+        case ASSIGN:
           visitAssign(t, n);
           break;
-        case Token.CALL:
+        case CALL:
           visitCall(t, n);
           break;
-        case Token.FUNCTION:
+        case FUNCTION:
           visitFunction(t, n);
           break;
-        case Token.NEW:
+        case NEW:
           visitNew(t, n, parent);
           break;
-        case Token.RETURN:
+        case RETURN:
           visitReturn(t, n);
           break;
         default:

@@ -53,10 +53,10 @@ public final class Es6RewriteDestructuring implements NodeTraversal.Callback, Ho
   @Override
   public boolean shouldTraverse(NodeTraversal nodeTraversal, Node n, Node parent) {
     switch (n.getType()) {
-      case Token.PARAM_LIST:
+      case PARAM_LIST:
         visitParamList(n, parent);
         break;
-      case Token.FOR_OF:
+      case FOR_OF:
         visitForOf(n);
         break;
     }
@@ -65,11 +65,14 @@ public final class Es6RewriteDestructuring implements NodeTraversal.Callback, Ho
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
+    if (parent != null && parent.isDestructuringLhs()) {
+      parent = parent.getParent();
+    }
     switch (n.getType()) {
-      case Token.ARRAY_PATTERN:
+      case ARRAY_PATTERN:
         visitArrayPattern(t, n, parent);
         break;
-      case Token.OBJECT_PATTERN:
+      case OBJECT_PATTERN:
         visitObjectPattern(t, n, parent);
         break;
     }
@@ -112,7 +115,7 @@ public final class Es6RewriteDestructuring implements NodeTraversal.Callback, Ho
           newParam =
               nameOrPattern.isName()
                   ? nameOrPattern
-                  : IR.name(DESTRUCTURING_TEMP_VAR + (destructuringVarCounter++));
+                  : IR.name(getTempParameterName(function, i));
           Node lhs = nameOrPattern.cloneTree();
           Node rhs = defaultValueHook(newParam.cloneTree(), defaultValue);
           Node newStatement =
@@ -128,42 +131,83 @@ public final class Es6RewriteDestructuring implements NodeTraversal.Callback, Ho
 
         compiler.reportCodeChange();
       } else if (param.isDestructuringPattern()) {
-        String tempVarName;
-        JSDocInfo fnJSDoc = NodeUtil.getBestJSDocInfo(function);
-        if (fnJSDoc != null && fnJSDoc.getParameterNameAt(i) != null) {
-          tempVarName = fnJSDoc.getParameterNameAt(i);
-        } else {
-          tempVarName = DESTRUCTURING_TEMP_VAR + (destructuringVarCounter++);
-        }
-        Preconditions.checkState(TokenStream.isJSIdentifier(tempVarName));
-
-        Node newParam = IR.name(tempVarName);
-        newParam.setJSDocInfo(param.getJSDocInfo());
-        paramList.replaceChild(param, newParam);
-        Node newDecl = IR.var(param, IR.name(tempVarName));
-        body.addChildAfter(newDecl, insertSpot);
-        insertSpot = newDecl;
+        insertSpot =
+            replacePatternParamWithTempVar(
+                function, insertSpot, param, getTempParameterName(function, i));
+        compiler.reportCodeChange();
+      } else if (param.isRest() && param.getFirstChild().isDestructuringPattern()) {
+        insertSpot =
+            replacePatternParamWithTempVar(
+                function, insertSpot, param.getFirstChild(), getTempParameterName(function, i));
         compiler.reportCodeChange();
       }
     }
   }
 
+  /**
+   * Replace a destructuring pattern parameter with a a temporary parameter name and add a new
+   * local variable declaration to the function assigning the temporary parameter to the pattern.
+   *
+   * <p> Note: Rewrites of variable declaration destructuring will happen later to rewrite
+   * this declaration as non-destructured code.
+   * @param function
+   * @param insertSpot The local variable declaration will be inserted after this statement.
+   * @param patternParam
+   * @param tempVarName the name to use for the temporary variable
+   * @return the declaration statement that was generated for the local variable
+   */
+  private Node replacePatternParamWithTempVar(
+      Node function, Node insertSpot, Node patternParam, String tempVarName) {
+    Node newParam = IR.name(tempVarName);
+    newParam.setJSDocInfo(patternParam.getJSDocInfo());
+    patternParam.getParent().replaceChild(patternParam, newParam);
+    Node newDecl = IR.var(patternParam, IR.name(tempVarName));
+    function.getLastChild().addChildAfter(newDecl, insertSpot);
+    return newDecl;
+  }
+
+  /**
+   * Find or create the best name to use for a parameter we need to rewrite.
+   *
+   * <ol>
+   * <li> Use the JS Doc function parameter name at the given index, if possible.
+   * <li> Otherwise, build one of our own.
+   * </ol>
+   * @param function
+   * @param parameterIndex
+   * @return name to use for the given parameter
+   */
+  private String getTempParameterName(Node function, int parameterIndex) {
+    String tempVarName;
+    JSDocInfo fnJSDoc = NodeUtil.getBestJSDocInfo(function);
+    if (fnJSDoc != null && fnJSDoc.getParameterNameAt(parameterIndex) != null) {
+      tempVarName = fnJSDoc.getParameterNameAt(parameterIndex);
+    } else {
+      tempVarName = DESTRUCTURING_TEMP_VAR + (destructuringVarCounter++);
+    }
+    Preconditions.checkState(TokenStream.isJSIdentifier(tempVarName));
+    return tempVarName;
+  }
+
   private void visitForOf(Node node) {
-    Node pattern = node.getFirstChild();
-    if (pattern.isDestructuringPattern()) {
-      visitDestructuringPatternInEnhancedFor(pattern);
+    Node lhs = node.getFirstChild();
+    if (lhs.isDestructuringLhs()) {
+      visitDestructuringPatternInEnhancedFor(lhs.getFirstChild());
     }
   }
 
   private void visitObjectPattern(NodeTraversal t, Node objectPattern, Node parent) {
     Node rhs, nodeToDetach;
     if (NodeUtil.isNameDeclaration(parent) && !NodeUtil.isEnhancedFor(parent.getParent())) {
-      rhs = objectPattern.getLastChild();
+      rhs = objectPattern.getNext();
       nodeToDetach = parent;
     } else if (parent.isAssign() && parent.getParent().isExprResult()) {
       rhs = parent.getLastChild();
       nodeToDetach = parent.getParent();
-    } else if (parent.isStringKey() || parent.isArrayPattern() || parent.isDefaultValue()) {
+    } else if (parent.isRest()
+        || parent.isStringKey()
+        || parent.isArrayPattern()
+        || parent.isDefaultValue()) {
       // Nested object pattern; do nothing. We will visit it after rewriting the parent.
       return;
     } else if (NodeUtil.isEnhancedFor(parent) || NodeUtil.isEnhancedFor(parent.getParent())) {
@@ -266,16 +310,16 @@ public final class Es6RewriteDestructuring implements NodeTraversal.Callback, Ho
   private void visitArrayPattern(NodeTraversal t, Node arrayPattern, Node parent) {
     Node rhs, nodeToDetach;
     if (NodeUtil.isNameDeclaration(parent) && !NodeUtil.isEnhancedFor(parent.getParent())) {
-      // The array pattern is the only child, because Es6SplitVariableDeclarations
-      // has already run.
-      Preconditions.checkState(arrayPattern.getNext() == null);
-      rhs = arrayPattern.getLastChild();
+      rhs = arrayPattern.getNext();
       nodeToDetach = parent;
     } else if (parent.isAssign()) {
       rhs = arrayPattern.getNext();
       nodeToDetach = parent.getParent();
       Preconditions.checkState(nodeToDetach.isExprResult());
-    } else if (parent.isArrayPattern() || parent.isDefaultValue() || parent.isStringKey()) {
+    } else if (parent.isArrayPattern()
+        || parent.isRest()
+        || parent.isDefaultValue()
+        || parent.isStringKey()) {
       // This is a nested array pattern. Don't do anything now; we'll visit it
       // after visiting the parent.
       return;
@@ -299,6 +343,7 @@ public final class Es6RewriteDestructuring implements NodeTraversal.Callback, Ho
         makeIterator(compiler, rhs.detachFromParent()));
     tempDecl.useSourceInfoIfMissingFromForTree(arrayPattern);
     nodeToDetach.getParent().addChildBefore(tempDecl, nodeToDetach);
+    boolean needsRuntime = false;
 
     for (Node child = arrayPattern.getFirstChild(), next; child != null; child = next) {
       next = child.getNext();
@@ -338,6 +383,7 @@ public final class Es6RewriteDestructuring implements NodeTraversal.Callback, Ho
             IR.call(
                 NodeUtil.newQName(compiler, "$jscomp.arrayFromIterator"),
                 IR.name(tempVarName));
+        needsRuntime = true;
       } else {
         // LHS is just a name (or a nested pattern).
         //   var [x] = rhs;
@@ -364,32 +410,36 @@ public final class Es6RewriteDestructuring implements NodeTraversal.Callback, Ho
       visit(t, newLHS, newLHS.getParent());
     }
     nodeToDetach.detachFromParent();
+
+    if (needsRuntime) {
+      compiler.ensureLibraryInjected("es6/util/arrayfromiterator", false);
+    }
     compiler.reportCodeChange();
   }
 
   private void visitDestructuringPatternInEnhancedFor(Node pattern) {
-    Node forNode;
-    int declarationType;
-    if (NodeUtil.isEnhancedFor(pattern.getParent())) {
-      forNode = pattern.getParent();
-      declarationType = Token.ASSIGN;
-    } else {
-      forNode = pattern.getGrandparent();
-      declarationType = pattern.getParent().getType();
-      Preconditions.checkState(NodeUtil.isEnhancedFor(forNode));
-    }
+    Preconditions.checkArgument(pattern.isDestructuringPattern());
     String tempVarName = DESTRUCTURING_TEMP_VAR + (destructuringVarCounter++);
-    Node block = forNode.getLastChild();
-    if (declarationType == Token.ASSIGN) {
-      Node decl = IR.declaration(IR.name(tempVarName), Token.LET);
+    if (NodeUtil.isEnhancedFor(pattern.getParent())) {
+      Node forNode = pattern.getParent();
+      Node block = forNode.getLastChild();
+      Node decl = IR.var(IR.name(tempVarName));
       decl.useSourceInfoIfMissingFromForTree(pattern);
-      pattern.getParent().replaceChild(pattern, decl);
+      forNode.replaceChild(pattern, decl);
       Node exprResult = IR.exprResult(IR.assign(pattern, IR.name(tempVarName)));
       exprResult.useSourceInfoIfMissingFromForTree(pattern);
       block.addChildToFront(exprResult);
     } else {
-      pattern.getParent().replaceChild(pattern, IR.name(tempVarName).useSourceInfoFrom(pattern));
-      Node decl = IR.declaration(pattern, IR.name(tempVarName), declarationType);
+      Node destructuringLhs = pattern.getParent();
+      Preconditions.checkState(destructuringLhs.isDestructuringLhs());
+      Node declarationNode = destructuringLhs.getParent();
+      Node forNode = declarationNode.getParent();
+      Preconditions.checkState(NodeUtil.isEnhancedFor(forNode));
+      Node block = forNode.getLastChild();
+      declarationNode.replaceChild(
+          destructuringLhs, IR.name(tempVarName).useSourceInfoFrom(pattern));
+      Token declarationType = declarationNode.getType();
+      Node decl = IR.declaration(pattern.detachFromParent(), IR.name(tempVarName), declarationType);
       decl.useSourceInfoIfMissingFromForTree(pattern);
       block.addChildToFront(decl);
     }
