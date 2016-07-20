@@ -44,7 +44,8 @@ java_library(
 java_library(
   name = 'support_srcs',
   resources = glob(includes=[
-    'src/com/google/javascript/jscomp/js/*.js',
+    'src/com/google/javascript/jscomp/js/**/*.js',
+    'src/com/google/javascript/jscomp/js/polyfills.txt',
     'src/**/*.properties'
   ]),
   resources_root = './src')
