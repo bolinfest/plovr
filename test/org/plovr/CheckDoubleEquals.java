@@ -61,7 +61,7 @@ public class CheckDoubleEquals implements CompilerPass, DiagnosticGroupRegistrar
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      final int type = n.getType();
+      final Token type = n.getType();
       if (type == Token.EQ || type == Token.NE) {
         JSDocInfo info = n.getJSDocInfo();
         if (info != null && info.getSuppressions().contains("double-equals")) {
