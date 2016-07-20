@@ -52,8 +52,15 @@ abstract class IntegrationTestCase extends TestCase {
           "var IteratorIterable;",
           "/** @interface */",
           "function IArrayLike() {};",
+          // TODO(sdh): See if we can remove IIterableResult and Set once polyfills are split
+          "/** @interface */",
+          "var IIterableResult;",
           "/** @constructor */",
           "var Map;",
+          "/** @constructor */",
+          "var Set;",
+          "/** @constructor */",
+          "function ObjectPropertyDescriptor() {};",
           "",
           "/** @constructor */ function Window() {}",
           "/** @type {string} */ Window.prototype.name;",
@@ -180,7 +187,7 @@ abstract class IntegrationTestCase extends TestCase {
       String[] original, String[] compiled) {
     Compiler compiler = compile(options, original);
     assertEquals("Expected no warnings or errors\n" +
-        "Errors: \n" + Joiner.on("\n").join(compiler.getErrors()) +
+        "Errors: \n" + Joiner.on("\n").join(compiler.getErrors()) + "\n" +
         "Warnings: \n" + Joiner.on("\n").join(compiler.getWarnings()),
         0, compiler.getErrors().length + compiler.getWarnings().length);
 

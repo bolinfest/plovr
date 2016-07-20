@@ -35,6 +35,7 @@ import com.google.gson.Gson;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
 import com.google.javascript.jscomp.CompilerOptions.JsonStreamMode;
+import com.google.javascript.jscomp.CompilerOptions.OutputJs;
 import com.google.javascript.jscomp.CompilerOptions.TweakProcessing;
 import com.google.javascript.jscomp.deps.ClosureBundler;
 import com.google.javascript.jscomp.deps.SourceCodeEscapers;
@@ -155,6 +156,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     "browser/w3c_dom1.js",
     "browser/w3c_dom2.js",
     "browser/w3c_dom3.js",
+    "browser/w3c_dom4.js",
     "browser/gecko_dom.js",
     "browser/ie_dom.js",
     "browser/webkit_dom.js",
@@ -317,20 +319,14 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
   protected abstract void addWhitelistWarningsGuard(
       CompilerOptions options, File whitelistFile);
 
-  /**
-   * Sets options based on the configurations set flags API.
-   * Called during the run() run() method.
-   * If you want to ignore the flags API, or interpret flags your own way,
-   * then you should override this method.
-   */
-  protected void setRunOptions(CompilerOptions options) throws IOException {
-    DiagnosticGroups diagnosticGroups = getDiagnosticGroups();
-
-    if (config.warningGuards != null) {
-      for (FlagEntry<CheckLevel> entry : config.warningGuards) {
+  protected static void setWarningGuardOptions(
+      CompilerOptions options,
+      ArrayList<FlagEntry<CheckLevel>> warningGuards,
+      DiagnosticGroups diagnosticGroups) {
+    if (warningGuards != null) {
+      for (FlagEntry<CheckLevel> entry : warningGuards) {
         if ("*".equals(entry.value)) {
-          Set<String> groupNames =
-              diagnosticGroups.getRegisteredGroups().keySet();
+          Set<String> groupNames = diagnosticGroups.getRegisteredGroups().keySet();
           for (String groupName : groupNames) {
             if (!DiagnosticGroups.wildcardExcludedGroups.contains(groupName)) {
               diagnosticGroups.setWarningLevel(options, groupName, entry.flag);
@@ -341,6 +337,18 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
         }
       }
     }
+  }
+
+  /**
+   * Sets options based on the configurations set flags API.
+   * Called during the run() run() method.
+   * If you want to ignore the flags API, or interpret flags your own way,
+   * then you should override this method.
+   */
+  protected void setRunOptions(CompilerOptions options) throws IOException {
+    DiagnosticGroups diagnosticGroups = getDiagnosticGroups();
+
+    setWarningGuardOptions(options, config.warningGuards, diagnosticGroups);
 
     if (!config.warningsWhitelistFile.isEmpty()) {
       addWhitelistWarningsGuard(options, new File(config.warningsWhitelistFile));
@@ -445,7 +453,6 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     options.tracer = config.tracerMode;
     options.setNewTypeInference(config.useNewTypeInference);
     options.instrumentationTemplateFile = config.instrumentationTemplateFile;
-    options.setPrintSourceAfterEachPass(config.printSourceAfterEachPass);
   }
 
   protected final A getCompiler() {
@@ -620,13 +627,24 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
    * with the same path inside different zips are considered duplicate inputs.
    * Parameter {@code sourceFiles} may be modified if duplicates are removed.
    */
-  public static List<JSError> removeDuplicateZipEntries(List<SourceFile> sourceFiles)
-      throws IOException {
+  public static List<JSError> removeDuplicateZipEntries(
+      List<SourceFile> sourceFiles, List<JsModuleSpec> jsModuleSpecs) throws IOException {
     ImmutableList.Builder<JSError> errors = ImmutableList.builder();
     Map<String, SourceFile> sourceFilesByName = new HashMap<>();
-    Iterator<SourceFile> fileIterator = sourceFiles.listIterator();
+    Iterator<SourceFile> fileIterator = sourceFiles.iterator();
+    int currentFileIndex = 0;
+    Iterator<JsModuleSpec> moduleIterator = jsModuleSpecs.iterator();
+    // Tracks the total number of js files for current module and all the previous modules.
+    int cumulatedJsFileNum = 0;
+    JsModuleSpec currentModule  = null;
     while (fileIterator.hasNext()) {
       SourceFile sourceFile = fileIterator.next();
+      currentFileIndex++;
+      // Check whether we reached the next module.
+      if (moduleIterator.hasNext() && currentFileIndex > cumulatedJsFileNum) {
+        currentModule = moduleIterator.next();
+        cumulatedJsFileNum += currentModule.numJsFiles;
+      }
       String fullPath = sourceFile.getName();
       if (!fullPath.contains("!/")) {
         // Not a zip file
@@ -641,6 +659,9 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
           errors.add(JSError.make(
               SourceFile.DUPLICATE_ZIP_CONTENTS, firstSourceFile.getName(), sourceFile.getName()));
           fileIterator.remove();
+          if (currentModule != null) {
+            currentModule.numJsFiles--;
+          }
         } else {
           errors.add(JSError.make(
               CONFLICTING_DUPLICATE_ZIP_CONTENTS, firstSourceFile.getName(), sourceFile.getName()));
@@ -723,7 +744,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
         inputs.add(SourceFile.fromCode(jsonFile.getPath(), jsonFile.getSrc()));
       }
     }
-    for (JSError error : removeDuplicateZipEntries(inputs)) {
+    for (JSError error : removeDuplicateZipEntries(inputs, jsModuleSpecs)) {
       compiler.report(error);
     }
     return inputs;
@@ -953,6 +974,12 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
       String wrapper, String codePlaceholder,
       @Nullable Function<String, String> escaper)
       throws IOException {
+    if (compiler.getOptions().outputJs == OutputJs.SENTINEL) {
+      out.append("// No JS output because the compiler was run in checks-only mode.\n");
+      return;
+    }
+    Preconditions.checkState(compiler.getOptions().outputJs == OutputJs.NORMAL);
+
     int pos = wrapper.indexOf(codePlaceholder);
     if (pos != -1) {
       String prefix = "";
@@ -1090,14 +1117,14 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
 
       if (config.skipNormalOutputs) {
         compiler.initModules(externs, modules, options);
-        compiler.orderInputs();
+        compiler.orderInputsWithLargeStack();
       } else {
         result = compiler.compileModules(externs, modules, options);
       }
     } else {
       if (config.skipNormalOutputs) {
         compiler.init(externs, inputs, options);
-        compiler.orderInputs();
+        compiler.orderInputsWithLargeStack();
       } else {
         result = compiler.compile(externs, inputs, options);
       }
@@ -1175,7 +1202,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
       outputBundle();
       outputModuleGraphJson();
       return 0;
-    } else if (!options.checksOnly && result.success) {
+    } else if (options.outputJs != OutputJs.NONE && result.success) {
       outputModuleGraphJson();
       if (modules == null) {
         outputSingleBinary(options);
@@ -1203,6 +1230,9 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
 
       // Output the variable and property name maps if requested.
       outputNameMaps();
+
+      // Output the ReplaceStrings map if requested
+      outputStringMap();
 
       // Output the manifest and bundle files if requested.
       outputManifest();
@@ -1678,11 +1708,20 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
   }
 
   /**
+   * Outputs the string map generated by the {@link ReplaceStrings} pass if an output path exists.
+   */
+  private void outputStringMap() throws IOException {
+    if (!config.stringMapOutputPath.isEmpty() && compiler.getStringMap() != null) {
+      compiler.getStringMap().save(config.stringMapOutputPath);
+    }
+  }
+
+  /**
    * Create a map of constant names to constant values from a textual
    * description of the map.
    *
    * @param definitions A list of overriding definitions for defines in
-   *     the form <name>[=<val>], where <val> is a number, boolean, or
+   *     the form {@code <name>[=<val>]}, where {@code <val>} is a number, boolean, or
    *     single-quoted string without single quotes.
    */
   @VisibleForTesting
@@ -1733,6 +1772,15 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
             continue;
           } catch (NumberFormatException e) {
             // do nothing, it will be caught at the end
+          }
+
+          if (defValue.length() > 0) {
+            if (tweaks) {
+              options.setTweakToStringLiteral(defName, defValue);
+            } else {
+              options.setDefineToStringLiteral(defName, defValue);
+            }
+            continue;
           }
         }
       }
@@ -1940,7 +1988,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
    * By design, these configurations must match one-to-one with
    * command-line flags.
    */
-  static class CommandLineConfig {
+  protected static class CommandLineConfig {
     private boolean printTree = false;
 
     /** Prints out the parse tree and exits */
@@ -1955,7 +2003,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
      * Prints a dot file describing the internal abstract syntax tree
      * and exits
      */
-    CommandLineConfig setPrintAst(boolean printAst) {
+    public CommandLineConfig setPrintAst(boolean printAst) {
       this.printAst = printAst;
       return this;
     }
@@ -1963,7 +2011,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     private boolean printPassGraph = false;
 
     /** Prints a dot file describing the passes that will get run and exits */
-    CommandLineConfig setPrintPassGraph(boolean printPassGraph) {
+    public CommandLineConfig setPrintPassGraph(boolean printPassGraph) {
       this.printPassGraph = printPassGraph;
       return this;
     }
@@ -1971,7 +2019,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     private CompilerOptions.DevMode jscompDevMode = CompilerOptions.DevMode.OFF;
 
     /** Turns on extra sanity checks */
-    CommandLineConfig setJscompDevMode(CompilerOptions.DevMode jscompDevMode) {
+    public CommandLineConfig setJscompDevMode(CompilerOptions.DevMode jscompDevMode) {
       this.jscompDevMode = jscompDevMode;
       return this;
     }
@@ -1983,7 +2031,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
      * values) for Compiler progress. Does not control errors or
      * warnings for the JavaScript code under compilation
      */
-    CommandLineConfig setLoggingLevel(String loggingLevel) {
+    public CommandLineConfig setLoggingLevel(String loggingLevel) {
       this.loggingLevel = loggingLevel;
       return this;
     }
@@ -1993,7 +2041,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * The file containing JavaScript externs. You may specify multiple.
      */
-    CommandLineConfig setExterns(List<String> externs) {
+    public CommandLineConfig setExterns(List<String> externs) {
       this.externs.clear();
       this.externs.addAll(externs);
       return this;
@@ -2004,7 +2052,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * The JavaScript filename. You may specify multiple.
      */
-    CommandLineConfig setJs(List<String> js) {
+    public CommandLineConfig setJs(List<String> js) {
       this.js.clear();
       this.js.addAll(js);
       return this;
@@ -2015,7 +2063,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * The JavaScript zip filename. You may specify multiple.
      */
-    CommandLineConfig setJsZip(List<String> zip) {
+    public CommandLineConfig setJsZip(List<String> zip) {
       this.jsZip.clear();
       this.jsZip.addAll(zip);
       return this;
@@ -2028,7 +2076,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
      * The JavaScript source file names, including .js and .zip files. You may
      * specify multiple.
      */
-    CommandLineConfig setMixedJsSources(
+    public CommandLineConfig setMixedJsSources(
         List<FlagEntry<JsSourceType>> mixedJsSources) {
       this.mixedJsSources.clear();
       this.mixedJsSources.addAll(mixedJsSources);
@@ -2040,7 +2088,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * Primary output filename. If not specified, output is written to stdout
      */
-    CommandLineConfig setJsOutputFile(String jsOutputFile) {
+    public CommandLineConfig setJsOutputFile(String jsOutputFile) {
       this.jsOutputFile = jsOutputFile;
       return this;
     }
@@ -2049,13 +2097,13 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
 
     /**
      * A JavaScript module specification. The format is
-     * <name>:<num-js-files>[:[<dep>,...][:]]]. Module names must be
+     * {@code <name>:<num-js-files>[:[<dep>,...][:]]]}. Module names must be
      * unique. Each dep is the name of a module that this module
      * depends on. Modules must be listed in dependency order, and JS
      * source files must be listed in the corresponding order. Where
      * --module flags occur in relation to --js flags is unimportant
      */
-    CommandLineConfig setModule(List<String> module) {
+    public CommandLineConfig setModule(List<String> module) {
       this.module.clear();
       this.module.addAll(module);
       return this;
@@ -2063,7 +2111,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
 
     private Map<String, String> sourceMapInputFiles = new HashMap<>();
 
-    CommandLineConfig setSourceMapInputFiles(
+    public CommandLineConfig setSourceMapInputFiles(
         Map<String, String> sourceMapInputFiles) {
       this.sourceMapInputFiles = sourceMapInputFiles;
       return this;
@@ -2075,7 +2123,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
      * File containing the serialized version of the variable renaming
      * map produced by a previous compilation
      */
-    CommandLineConfig setVariableMapInputFile(String variableMapInputFile) {
+    public CommandLineConfig setVariableMapInputFile(String variableMapInputFile) {
       this.variableMapInputFile = variableMapInputFile;
       return this;
     }
@@ -2086,7 +2134,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
      * File containing the serialized version of the property renaming
      * map produced by a previous compilation
      */
-    CommandLineConfig setPropertyMapInputFile(String propertyMapInputFile) {
+    public CommandLineConfig setPropertyMapInputFile(String propertyMapInputFile) {
       this.propertyMapInputFile = propertyMapInputFile;
       return this;
     }
@@ -2097,7 +2145,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
      * File where the serialized version of the variable renaming map
      * produced should be saved
      */
-    CommandLineConfig setVariableMapOutputFile(String variableMapOutputFile) {
+    public CommandLineConfig setVariableMapOutputFile(String variableMapOutputFile) {
       this.variableMapOutputFile = variableMapOutputFile;
       return this;
     }
@@ -2111,7 +2159,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
      * in conjunction with either variable_map_output_file or
      * property_map_output_file
      */
-    CommandLineConfig setCreateNameMapFiles(boolean createNameMapFiles) {
+    public CommandLineConfig setCreateNameMapFiles(boolean createNameMapFiles) {
       this.createNameMapFiles = createNameMapFiles;
       return this;
     }
@@ -2122,8 +2170,20 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
      * File where the serialized version of the property renaming map
      * produced should be saved
      */
-    CommandLineConfig setPropertyMapOutputFile(String propertyMapOutputFile) {
+    public CommandLineConfig setPropertyMapOutputFile(String propertyMapOutputFile) {
       this.propertyMapOutputFile = propertyMapOutputFile;
+      return this;
+    }
+
+
+    private String stringMapOutputPath = "";
+
+    /**
+     * File where the serialized version of the string map produced by the ReplaceStrings pass
+     * should be saved.
+     */
+    public CommandLineConfig setStringMapOutputFile(String stringMapOutputPath) {
+      this.stringMapOutputPath = stringMapOutputPath;
       return this;
     }
 
@@ -2132,7 +2192,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * Sets rules and conventions to enforce.
      */
-    CommandLineConfig setCodingConvention(CodingConvention codingConvention) {
+    public CommandLineConfig setCodingConvention(CodingConvention codingConvention) {
       this.codingConvention = codingConvention;
       return this;
     }
@@ -2146,7 +2206,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
      * see --check_types), 3 (always print summary). The default level
      * is 1
      */
-    CommandLineConfig setSummaryDetailLevel(int summaryDetailLevel) {
+    public CommandLineConfig setSummaryDetailLevel(int summaryDetailLevel) {
       this.summaryDetailLevel = summaryDetailLevel;
       return this;
     }
@@ -2157,7 +2217,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
      * Interpolate output into this string at the place denoted
      * by the marker token %output%, or %output|jsstring%
      */
-    CommandLineConfig setOutputWrapper(String outputWrapper) {
+    public CommandLineConfig setOutputWrapper(String outputWrapper) {
       this.outputWrapper = outputWrapper;
       return this;
     }
@@ -2168,7 +2228,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
      * An output wrapper for a JavaScript module (optional). See the flag
      * description for formatting requirements.
      */
-    CommandLineConfig setModuleWrapper(List<String> moduleWrapper) {
+    public CommandLineConfig setModuleWrapper(List<String> moduleWrapper) {
       this.moduleWrapper.clear();
       this.moduleWrapper.addAll(moduleWrapper);
       return this;
@@ -2178,10 +2238,10 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
 
     /**
      * Prefix for filenames of compiled JS modules.
-     * <module-name>.js will be appended to this prefix. Directories
+     * {@code <module-name>.js} will be appended to this prefix. Directories
      * will be created as needed. Use with --module
      */
-    CommandLineConfig setModuleOutputPathPrefix(String moduleOutputPathPrefix) {
+    public CommandLineConfig setModuleOutputPathPrefix(String moduleOutputPathPrefix) {
       this.moduleOutputPathPrefix = moduleOutputPathPrefix;
       return this;
     }
@@ -2195,7 +2255,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
      * expand to the name of the output file that the source map
      * corresponds to.
      */
-    CommandLineConfig setCreateSourceMap(String createSourceMap) {
+    public CommandLineConfig setCreateSourceMap(String createSourceMap) {
       this.createSourceMap = createSourceMap;
       return this;
     }
@@ -2206,7 +2266,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * The detail supplied in the source map file, if generated.
      */
-    CommandLineConfig setSourceMapDetailLevel(SourceMap.DetailLevel level) {
+    public CommandLineConfig setSourceMapDetailLevel(SourceMap.DetailLevel level) {
       this.sourceMapDetailLevel = level;
       return this;
     }
@@ -2217,7 +2277,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * The source map format to use, if generated.
      */
-    CommandLineConfig setSourceMapFormat(SourceMap.Format format) {
+    public CommandLineConfig setSourceMapFormat(SourceMap.Format format) {
       this.sourceMapFormat = format;
       return this;
     }
@@ -2228,7 +2288,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * The source map location mappings to use, if generated.
      */
-    CommandLineConfig setSourceMapLocationMappings(
+    public CommandLineConfig setSourceMapLocationMappings(
         List<SourceMap.LocationMapping> locationMappings) {
 
       this.sourceMapLocationMappings = ImmutableList.copyOf(locationMappings);
@@ -2240,7 +2300,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * Add warning guards.
      */
-    CommandLineConfig setWarningGuards(List<FlagEntry<CheckLevel>> warningGuards) {
+    public CommandLineConfig setWarningGuards(List<FlagEntry<CheckLevel>> warningGuards) {
       this.warningGuards.clear();
       this.warningGuards.addAll(warningGuards);
       return this;
@@ -2249,13 +2309,13 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     private final List<String> define = new ArrayList<>();
 
     /**
-     * Override the value of a variable annotated @define.
-     * The format is <name>[=<val>], where <name> is the name of a @define
-     * variable and <val> is a boolean, number, or a single-quoted string
-     * that contains no single quotes. If [=<val>] is omitted,
-     * the variable is marked true
+     * Override the value of a variable annotated @define.  The format
+     * is {@code <name>[=<val>]}, where {@code <name>} is the name of
+     * a @define variable and {@code <val>} is a boolean, number, or a
+     * single-quoted string that contains no single quotes. If
+     * {@code [=<val>]} is omitted, the variable is marked true
      */
-    CommandLineConfig setDefine(List<String> define) {
+    public CommandLineConfig setDefine(List<String> define) {
       this.define.clear();
       this.define.addAll(define);
       return this;
@@ -2265,11 +2325,12 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
 
     /**
      * Override the default value of a registered tweak. The format is
-     * <name>[=<val>], where <name> is the ID of a tweak and <val> is a boolean,
-     * number, or a single-quoted string that contains no single quotes. If
-     * [=<val>] is omitted, then true is assumed.
+     * {@code <name>[=<val>]}, where {@code <name>} is the ID of a
+     * tweak and {@code <val>} is a boolean, number, or a
+     * single-quoted string that contains no single quotes. If
+     * {@code [=<val>]} is omitted, then true is assumed.
      */
-    CommandLineConfig setTweak(List<String> tweak) {
+    public CommandLineConfig setTweak(List<String> tweak) {
       this.tweak.clear();
       this.tweak.addAll(tweak);
       return this;
@@ -2280,7 +2341,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * Sets the kind of processing to do for goog.tweak functions.
      */
-    CommandLineConfig setTweakProcessing(TweakProcessing tweakProcessing) {
+    public CommandLineConfig setTweakProcessing(TweakProcessing tweakProcessing) {
       this.tweakProcessing = tweakProcessing;
       return this;
     }
@@ -2290,7 +2351,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * Input charset for all files.
      */
-    CommandLineConfig setCharset(String charset) {
+    public CommandLineConfig setCharset(String charset) {
       this.charset = charset;
       return this;
     }
@@ -2301,7 +2362,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
      * Sets whether to sort files by their goog.provide/require deps,
      * and prune inputs that are not required.
      */
-    CommandLineConfig setDependencyMode(CompilerOptions.DependencyMode newVal) {
+    public CommandLineConfig setDependencyMode(CompilerOptions.DependencyMode newVal) {
       this.dependencyMode = newVal;
       return this;
     }
@@ -2312,7 +2373,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
      * Set module entry points, which makes the compiler only include
      * those files and sort them in dependency order.
      */
-    CommandLineConfig setEntryPoints(List<ModuleIdentifier> entryPoints) {
+    public CommandLineConfig setEntryPoints(List<ModuleIdentifier> entryPoints) {
       Preconditions.checkNotNull(entryPoints);
       this.entryPoints = entryPoints;
       return this;
@@ -2352,7 +2413,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
      * Sets whether to print output manifest files.
      * Filter out empty file names.
      */
-    CommandLineConfig setOutputManifest(List<String> outputManifests) {
+    public CommandLineConfig setOutputManifest(List<String> outputManifests) {
       this.outputManifests = new ArrayList<>();
       for (String manifestName : outputManifests) {
         if (!manifestName.isEmpty()) {
@@ -2369,7 +2430,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
      * Sets whether a JSON file representing the dependencies between modules
      * should be created.
      */
-    CommandLineConfig setOutputModuleDependencies(String
+    public CommandLineConfig setOutputModuleDependencies(String
         outputModuleDependencies) {
       this.outputModuleDependencies = outputModuleDependencies;
       return this;
@@ -2380,7 +2441,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * Sets whether to print output bundle files.
      */
-    CommandLineConfig setOutputBundle(List<String> outputBundles) {
+    public CommandLineConfig setOutputBundle(List<String> outputBundles) {
       this.outputBundles = outputBundles;
       return this;
     }
@@ -2390,7 +2451,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * Sets whether the normal outputs of compilation should be skipped.
      */
-    CommandLineConfig setSkipNormalOutputs(boolean skipNormalOutputs) {
+    public CommandLineConfig setSkipNormalOutputs(boolean skipNormalOutputs) {
       this.skipNormalOutputs = skipNormalOutputs;
       return this;
     }
@@ -2400,7 +2461,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * Sets the execPath:rootRelativePath mappings
      */
-    CommandLineConfig setManifestMaps(List<String> manifestMaps) {
+    public CommandLineConfig setManifestMaps(List<String> manifestMaps) {
       this.manifestMaps = manifestMaps;
       return this;
     }
@@ -2411,7 +2472,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * Set whether to transform AMD to CommonJS modules.
      */
-    CommandLineConfig setTransformAMDToCJSModules(
+    public CommandLineConfig setTransformAMDToCJSModules(
         boolean transformAMDToCJSModules) {
       this.transformAMDToCJSModules = transformAMDToCJSModules;
       return this;
@@ -2422,7 +2483,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * Sets whether to process CommonJS modules.
      */
-    CommandLineConfig setProcessCommonJSModules(
+    public CommandLineConfig setProcessCommonJSModules(
         boolean processCommonJSModules) {
       this.processCommonJSModules = processCommonJSModules;
       return this;
@@ -2433,7 +2494,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * Sets the module roots.
      */
-    CommandLineConfig setModuleRoots(List<String> jsModuleRoots) {
+    public CommandLineConfig setModuleRoots(List<String> jsModuleRoots) {
       this.moduleRoots = jsModuleRoots;
       return this;
     }
@@ -2443,7 +2504,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * Sets a whitelist file that suppresses warnings.
      */
-    CommandLineConfig setWarningsWhitelistFile(String fileName) {
+    public CommandLineConfig setWarningsWhitelistFile(String fileName) {
       this.warningsWhitelistFile = fileName;
       return this;
     }
@@ -2453,7 +2514,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * Sets the paths for which warnings will be hidden.
      */
-    CommandLineConfig setHideWarningsFor(List<String> hideWarningsFor) {
+    public CommandLineConfig setHideWarningsFor(List<String> hideWarningsFor) {
       this.hideWarningsFor = hideWarningsFor;
       return this;
     }
@@ -2463,7 +2524,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     /**
      * Sets whether to process AngularJS-specific annotations.
      */
-    CommandLineConfig setAngularPass(boolean angularPass) {
+    public CommandLineConfig setAngularPass(boolean angularPass) {
       this.angularPass = angularPass;
       return this;
     }
@@ -2471,35 +2532,28 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     private CompilerOptions.TracerMode tracerMode =
         CompilerOptions.TracerMode.OFF;
 
-    CommandLineConfig setTracerMode(CompilerOptions.TracerMode tracerMode) {
+    public CommandLineConfig setTracerMode(CompilerOptions.TracerMode tracerMode) {
       this.tracerMode = tracerMode;
       return this;
     }
 
     private boolean useNewTypeInference = false;
 
-    CommandLineConfig setNewTypeInference(boolean useNewTypeInference) {
+    public CommandLineConfig setNewTypeInference(boolean useNewTypeInference) {
       this.useNewTypeInference = useNewTypeInference;
-      return this;
-    }
-
-    private boolean printSourceAfterEachPass = false;
-
-    CommandLineConfig setPrintSourceAfterEachPass(boolean printSource) {
-      this.printSourceAfterEachPass = printSource;
       return this;
     }
 
     private String instrumentationTemplateFile = "";
 
-    CommandLineConfig setInstrumentationTemplateFile(String fileName) {
+    public CommandLineConfig setInstrumentationTemplateFile(String fileName) {
         this.instrumentationTemplateFile = fileName;
         return this;
     }
 
     private JsonStreamMode jsonStreamMode = JsonStreamMode.NONE;
 
-    CommandLineConfig setJsonStreamMode(JsonStreamMode mode) {
+    public CommandLineConfig setJsonStreamMode(JsonStreamMode mode) {
       this.jsonStreamMode = mode;
       return this;
     }
@@ -2509,19 +2563,19 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
   /**
    * Representation of a source file from an encoded json stream input
    */
-  private class JsonFileSpec {
+  protected static class JsonFileSpec {
     private final String src;
     private final String path;
-    private String source_map;
+    private String sourceMap;
 
     public JsonFileSpec(String src, String path) {
       this(src, path, null);
     }
 
-    public JsonFileSpec(String src, String path, String source_map) {
+    public JsonFileSpec(String src, String path, String sourceMap) {
       this.src = src;
       this.path = path;
-      this.source_map = source_map;
+      this.sourceMap = sourceMap;
     }
 
     public String getSrc() {
@@ -2532,10 +2586,12 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
       return this.path;
     }
 
-    public String getSourceMap() { return this.source_map; }
+    public String getSourceMap() {
+      return this.sourceMap;
+    }
 
     public void setSourceMap(String map) {
-      this.source_map = map;
+      this.sourceMap = map;
     }
   }
 
@@ -2559,10 +2615,8 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
    * A pair from flag to its value.
    */
   protected static class FlagEntry<T> {
-    @VisibleForTesting
-    final T flag;
-    @VisibleForTesting
-    final String value;
+    private final T flag;
+    private final String value;
 
     protected FlagEntry(T flag, String value) {
       this.flag = flag;
@@ -2583,20 +2637,28 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     public int hashCode() {
       return flag.hashCode() + value.hashCode();
     }
+
+    public T getFlag() {
+      return flag;
+    }
+
+    public String getValue() {
+      return value;
+    }
   }
 
   /**
    * Represents a specification for a js module.
    */
-  static class JsModuleSpec {
+  public static class JsModuleSpec {
     private final String name;
     // Number of input files, including js and zip files.
     private final int numInputs;
-    private final String[] deps;
-    // Number of input js files. All zip files should be expended.
+    private final ImmutableList<String> deps;
+    // Number of input js files. All zip files should be expanded.
     private int numJsFiles;
 
-    private JsModuleSpec(String name, int numInputs, String[] deps) {
+    private JsModuleSpec(String name, int numInputs, ImmutableList<String> deps) {
       this.name = name;
       this.numInputs = numInputs;
       this.deps = deps;
@@ -2651,7 +2713,23 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
         }
       }
 
-      return new JsModuleSpec(name, numInputs, deps);
+      return new JsModuleSpec(name, numInputs, ImmutableList.copyOf(deps));
+    }
+
+    public String getName() {
+      return name;
+    }
+
+    public int getNumInputs() {
+      return numInputs;
+    }
+
+    public ImmutableList<String> getDeps() {
+      return deps;
+    }
+
+    public int getNumJsFiles() {
+      return numJsFiles;
     }
   }
 }

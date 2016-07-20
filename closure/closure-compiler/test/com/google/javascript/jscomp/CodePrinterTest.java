@@ -17,6 +17,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Joiner;
+import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
@@ -45,9 +46,6 @@ public final class CodePrinterTest extends CodePrinterTestBase {
     // Safari: needs ';' at the end of a throw statement
     assertPrint("function foo(){throw 'error';}",
         "function foo(){throw\"error\";}");
-    // Safari 3 needs a "{" around a single function
-    assertPrint("if (true) function foo(){return}",
-        "if(true){function foo(){return}}");
 
     assertPrint("var x = 10; { var y = 20; }", "var x=10;var y=20");
 
@@ -238,6 +236,13 @@ public final class CodePrinterTest extends CodePrinterTestBase {
     assertPrint("if(x)if(y);", "if(x)if(y);");
     assertPrint("if(x){if(y);}", "if(x)if(y);");
     assertPrint("if(x){if(y){};;;}", "if(x)if(y);");
+  }
+
+  public void testPrintBlockScopedFunctions() {
+    languageMode = LanguageMode.ECMASCRIPT6;
+    // Safari 3 needs a "{" around a single function
+    assertPrint("if (true) function foo(){return}",
+        "if(true){function foo(){return}}");
     assertPrint("if(x){;;function y(){};;}", "if(x){function y(){}}");
   }
 
@@ -368,6 +373,12 @@ public final class CodePrinterTest extends CodePrinterTestBase {
     assertPrintSame("function f({a,b}=c()){}");
     assertPrintSame("function f([a,{b,c}]){}");
     assertPrintSame("function f({a,b:[c,d]}){}");
+  }
+
+  public void testPrintDestructuringInRestParam() {
+    languageMode = LanguageMode.ECMASCRIPT6;
+    assertPrintSame("function f(...[a,b]){}");
+    assertPrintSame("function f(...{length:num_params}){}");
   }
 
   public void testDestructuringForInLoops() {
@@ -626,7 +637,7 @@ public final class CodePrinterTest extends CodePrinterTestBase {
           void setOptions(CompilerOptions options) {
             options.setPrettyPrint(false);
             options.setLineBreak(true);
-            options.setLineLengthThreshold(CodePrinter.DEFAULT_LINE_LENGTH_THRESHOLD);
+            options.setLineLengthThreshold(CompilerOptions.DEFAULT_LINE_LENGTH_THRESHOLD);
           }
         })));
   }
@@ -1205,8 +1216,11 @@ public final class CodePrinterTest extends CodePrinterTestBase {
 
   public void testDeprecatedAnnotationIncludesNewline() {
     String js = LINE_JOINER.join(
-        "/**@deprecated See {@link replacementClass} for more details.",
-        "@type {number} */var x;",
+        "/**",
+        " @type {number}",
+        " @deprecated See {@link replacementClass} for more details.",
+        " */",
+        "var x;",
         "");
 
     assertPrettyPrint(js, js);
@@ -1227,7 +1241,7 @@ public final class CodePrinterTest extends CodePrinterTestBase {
             options.setPrettyPrint(true);
             options.setPreserveTypeAnnotations(true);
             options.setLineBreak(false);
-            options.setLineLengthThreshold(CodePrinter.DEFAULT_LINE_LENGTH_THRESHOLD);
+            options.setLineLengthThreshold(CompilerOptions.DEFAULT_LINE_LENGTH_THRESHOLD);
             optionBuilder.setOptions(options);
           }
         })));
@@ -1241,7 +1255,7 @@ public final class CodePrinterTest extends CodePrinterTestBase {
               void setOptions(CompilerOptions options) {
                 options.setPrettyPrint(true);
                 options.setLineBreak(false);
-                options.setLineLengthThreshold(CodePrinter.DEFAULT_LINE_LENGTH_THRESHOLD);
+                options.setLineLengthThreshold(CompilerOptions.DEFAULT_LINE_LENGTH_THRESHOLD);
               }
             }))
             .setOutputTypes(true)
@@ -1415,6 +1429,7 @@ public final class CodePrinterTest extends CodePrinterTestBase {
 
   public void testFunctionSafariCompatibility() {
     // Functions within IFs cause syntax errors on Safari.
+    languageMode = LanguageMode.ECMASCRIPT6;
     assertPrint("function f(){if(e1){function goo(){return true}}else foo()}",
         "function f(){if(e1){function goo(){return true}}else foo()}");
 
@@ -1933,11 +1948,25 @@ public final class CodePrinterTest extends CodePrinterTestBase {
 
   public void testPreserveTypeAnnotations() {
     preserveTypeAnnotations = true;
-    assertPrintSame("/**@type {foo} */var bar");
-    assertPrintSame("function/** void */f(/** string */s,/** number */n){}");
+    assertPrintSame("/** @type {foo} */ var bar");
+    assertPrintSame("function/** void */ f(/** string */ s,/** number */ n){}");
 
     preserveTypeAnnotations = false;
-    assertPrint("/** @type {foo} */var bar;", "var bar");
+    assertPrint("/** @type {foo} */ var bar;", "var bar");
+  }
+
+  public void testPreserveTypeAnnotations2() {
+    preserveTypeAnnotations = true;
+
+    assertPrintSame("/** @const */ var ns={}");
+
+    assertPrintSame(
+        LINE_JOINER.join(
+            "/**",
+            " @const",
+            " @suppress {const,duplicate}",
+            " */",
+            "var ns={}"));
   }
 
   public void testDefaultParameters() {
@@ -2012,6 +2041,12 @@ public final class CodePrinterTest extends CodePrinterTestBase {
     assertPrintSame("class C extends D{member(){super.foo()}}");
   }
 
+  public void testNewTarget() {
+    languageMode = LanguageMode.ECMASCRIPT6;
+    assertPrintSame("function f(){new.target}");
+    assertPrint("function f() {\nnew\n.\ntarget;\n}", "function f(){new.target}");
+  }
+
   public void testGeneratorYield() {
     languageMode = LanguageMode.ECMASCRIPT6;
     assertPrintSame("function*f(){yield 1}");
@@ -2063,6 +2098,75 @@ public final class CodePrinterTest extends CodePrinterTestBase {
     assertPrint("()=>(a=b)", "()=>a=b");
     assertPrintSame("[1,2].forEach((x)=>y)");
   }
+
+  public void testAsyncFunction() {
+    languageMode = LanguageMode.ECMASCRIPT8;
+    assertPrintSame("async function f(){}");
+    assertPrintSame("let f=async function f(){}");
+    assertPrintSame("let f=async function(){}");
+    // implicit semicolon prevents async being treated as a keyword
+    assertPrint("async\nfunction f(){}", "async;function f(){}");
+    assertPrint("let f=async\nfunction f(){}", "let f=async;function f(){}");
+  }
+
+  public void testAsyncArrowFunction() {
+    languageMode = LanguageMode.ECMASCRIPT8;
+    assertPrintSame("async()=>1");
+    // implicit semicolon prevents async being treated as a keyword
+    assertPrint("f=async\n()=>1", "f=async;()=>1");
+  }
+
+  public void testAsyncMethod() {
+    languageMode = LanguageMode.ECMASCRIPT8;
+    assertPrintSame("o={async m(){}}");
+    assertPrintSame("o={async[a+b](){}}");
+    assertPrintSame("class C{async m(){}}");
+    assertPrintSame("class C{async[a+b](){}}");
+    assertPrintSame("class C{static async m(){}}");
+    assertPrintSame("class C{static async[a+b](){}}");
+  }
+
+  public void testAwaitExpression() {
+    languageMode = LanguageMode.ECMASCRIPT8;
+    assertPrintSame("async function f(promise){return await promise}");
+    assertPrintSame("pwait=async function(promise){return await promise}");
+    assertPrintSame("class C{async pwait(promise){await promise}}");
+    assertPrintSame("o={async pwait(promise){await promise}}");
+    assertPrintSame("pwait=async(promise)=>await promise");
+  }
+
+  /**
+   * Regression test for b/28633247 - necessary parens dropped around arrow functions.
+   */
+  public void testParensAroundArrow() {
+    languageMode = LanguageMode.ECMASCRIPT6;
+
+    // Parens required for non-assignment binary operator
+    assertPrintSame("x||((_)=>true)");
+    // Parens required for unary operator
+    assertPrintSame("void((e)=>e*5)");
+    // Parens not required for comma operator
+    assertPrint("((_) => true), ((_) => false)", "(_)=>true,(_)=>false");
+    // Parens not required for right side of assignment operator
+    // NOTE: An arrow function on the left side would be a parse error.
+    assertPrint("x = ((_) => _ + 1)", "x=(_)=>_+1");
+    // Parens required for template tag
+    assertPrintSame("((_)=>\"\")`template`");
+    // Parens required to reference a property
+    assertPrintSame("((a,b,c)=>a+b+c).length");
+    assertPrintSame("((a,b,c)=>a+b+c)[\"length\"]");
+    // Parens not required when evaluating property name.
+    // (It doesn't make much sense to do it, though.)
+    assertPrint("x[((_)=>0)]", "x[(_)=>0]");
+    // Parens required to call the arrow function immediately
+    assertPrintSame("((x)=>x*5)(10)");
+    // Parens not required for function call arguments
+    assertPrint("x(((_) => true), ((_) => false))", "x((_)=>true,(_)=>false)");
+    // Parens required for first operand to a conditional, but not the rest.
+    assertPrintSame("((x)=>1)?a:b");
+    assertPrint("x?((x)=>0):((x)=>1)", "x?(x)=>0:(x)=>1");
+  }
+
 
   public void testPrettyArrowFunction() {
     languageMode = LanguageMode.ECMASCRIPT6;
@@ -2145,8 +2249,8 @@ public final class CodePrinterTest extends CodePrinterTestBase {
   public void testTemplateLiteral() {
     languageMode = LanguageMode.ECMASCRIPT6;
     assertPrintSame("`hello`");
-    assertPrint("`hel\rlo`", "`hel\nlo`");
-    assertPrint("`hel\r\nlo`", "`hel\nlo`");
+    assertPrint("`hel\rlo`", "`hel\\nlo`");
+    assertPrint("`hel\r\nlo`", "`hel\\nlo`");
     assertPrint("`hello`\n'world'", "`hello`;\"world\"");
     assertPrint("`hello`\n`world`", "`hello``world`");
     assertPrint("var x=`TestA`\n`TemplateB`", "var x=`TestA``TemplateB`");
@@ -2159,5 +2263,52 @@ public final class CodePrinterTest extends CodePrinterTestBase {
     assertPrintSame("(function(){})()`${(function(){})()}`");
     assertPrintSame("url`hello`");
     assertPrintSame("url(`hello`)");
+    assertPrint("`\\u{2026}`", "`\\u2026`");
+    assertPrint("`start\\u{2026}end`", "`start\\u2026end`");
+    assertPrint("`\\u{1f42a}`", "`\\ud83d\\udc2a`");
+    assertPrint("`start\\u{1f42a}end`", "`start\\ud83d\\udc2aend`");
+    assertPrintSame("`\\u2026`");
+    assertPrintSame("`start\\u2026end`");
+  }
+
+  public void testEs6GoogModule() {
+    String code = ""
+        + "goog.module('foo.bar');\n"
+        + "const STR = '3';\n"
+        + "function fn() {\n"
+        + "  alert(STR);\n"
+        + "}\n"
+        + "exports.fn = fn;\n";
+    String expectedCode = ""
+        + "var module$exports$foo$bar = {};\n"
+        + "const STR = '3';\n"
+        + "function fn() {\n"
+        + "  alert(STR);\n"
+        + "}\n"
+        + "exports.fn = fn;\n";
+
+    CompilerOptions compilerOptions = new CompilerOptions();
+    compilerOptions.setCheckSymbols(true);
+    compilerOptions.setCheckTypes(true);
+    compilerOptions.setClosurePass(true);
+    compilerOptions.setIdeMode(true);
+    compilerOptions.setPreserveGoogRequires(true);
+    Compiler compiler = new Compiler();
+    compiler.disableThreads();
+    compiler.compile(
+        ImmutableList.<SourceFile>of(), // Externs
+        ImmutableList.of(SourceFile.fromCode("test", code)),
+        compilerOptions);
+    Node node = compiler.getRoot().getLastChild().getFirstChild();
+
+    CompilerOptions codePrinterOptions = new CompilerOptions();
+    codePrinterOptions.setPreferSingleQuotes(true);
+    codePrinterOptions.setLineLengthThreshold(80);
+    codePrinterOptions.setUseOriginalNamesInOutput(true);
+    assertEquals(expectedCode, new CodePrinter.Builder(node)
+        .setCompilerOptions(codePrinterOptions)
+        .setPrettyPrint(true)
+        .setLineBreak(true)
+        .build());
   }
 }

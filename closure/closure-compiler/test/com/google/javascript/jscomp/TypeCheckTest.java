@@ -17,6 +17,7 @@
 package com.google.javascript.jscomp;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.javascript.jscomp.TypeCheck.INSTANTIATE_ABSTRACT_CLASS;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -55,7 +56,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
       + " make sure to give it a type.)";
 
   @Override
-  public void setUp() {
+  public void setUp() throws Exception {
     super.setUp();
   }
 
@@ -297,6 +298,22 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
         "found   : boolean\n" +
         "required: Enum<string>",
         false);
+  }
+
+  public void testDontCrashOnRecursiveTemplateReference() {
+    testTypesWithExtraExterns(
+        LINE_JOINER.join(
+          "/**",
+          " * @constructor @struct",
+          " * @implements {Iterable<!Array<KEY|VAL>>}",
+          " * @template KEY, VAL",
+          " */",
+          "function Map(opt_iterable) {}"),
+        LINE_JOINER.join(
+          "/** @constructor @implements {Iterable<VALUE>} @template VALUE */",
+          "function Foo() {",
+          "  /** @type {!Map<VALUE, VALUE>} */ this.map = new Map;",
+          "}"));
   }
 
   public void testTemplatizedArray1() {
@@ -7884,6 +7901,12 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
               "/** @constructor */ goog.G = goog.F;");
   }
 
+  public void testNew19() {
+    testTypes(
+        "/** @constructor @abstract */ var Foo = function() {}; var foo = new Foo();",
+        INSTANTIATE_ABSTRACT_CLASS);
+  }
+
   public void testName1() {
     assertTypeEquals(VOID_TYPE, testNameNode("undefined"));
   }
@@ -8392,6 +8415,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
     // Some code assumes that an object literal must have a object type,
     // while because of the cast, it could have any type (including
     // a union).
+    compiler.getOptions().setLanguageIn(CompilerOptions.LanguageMode.ECMASCRIPT6);
     testTypes(
         "for (var i = 0; i < 10; i++) {" +
           "var x = /** @type {Object|number} */ ({foo: 3});" +
@@ -8618,129 +8642,6 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
         "var y = /** @type {Object} */(x);");
   }
 
-  public void testUnnecessaryCastToSuperType() {
-    compiler.getOptions().setWarningLevel(DiagnosticGroups.UNNECESSARY_CASTS, CheckLevel.WARNING);
-    testTypes(
-        "/** @constructor */\n" +
-        "function Base() {}\n" +
-        "/**\n" +
-        " * @constructor\n" +
-        " * @extends {Base}\n" +
-        " */\n" +
-        "function Derived() {}\n" +
-        "var d = new Derived();\n" +
-        "var b = /** @type {!Base} */ (d);",
-        "unnecessary cast\n" +
-        "from: Derived\n" +
-        "to  : Base"
-    );
-  }
-
-  public void testUnnecessaryCastToSameType() {
-    compiler.getOptions().setWarningLevel(DiagnosticGroups.UNNECESSARY_CASTS, CheckLevel.WARNING);
-    testTypes(
-        "/** @constructor */\n" +
-        "function Base() {}\n" +
-        "var b = new Base();\n" +
-        "var c = /** @type {!Base} */ (b);",
-        "unnecessary cast\n" +
-        "from: Base\n" +
-        "to  : Base"
-    );
-  }
-
-  /**
-   * Checks that casts to unknown ({?}) are not marked as unnecessary.
-   */
-  public void testUnnecessaryCastToUnknown() {
-    compiler.getOptions().setWarningLevel(DiagnosticGroups.UNNECESSARY_CASTS, CheckLevel.WARNING);
-    testTypes(
-        "/** @constructor */\n" +
-        "function Base() {}\n" +
-        "var b = new Base();\n" +
-        "var c = /** @type {?} */ (b);");
-  }
-
-  /**
-   * Checks that casts from unknown ({?}) are not marked as unnecessary.
-   */
-  public void testUnnecessaryCastFromUnknown() {
-    compiler.getOptions().setWarningLevel(DiagnosticGroups.UNNECESSARY_CASTS, CheckLevel.WARNING);
-    testTypes(
-        "/** @constructor */\n" +
-        "function Base() {}\n" +
-        "/** @type {?} */ var x;\n" +
-        "var y = /** @type {Base} */ (x);");
-  }
-
-  public void testUnnecessaryCastToAndFromUnknown() {
-    compiler.getOptions().setWarningLevel(DiagnosticGroups.UNNECESSARY_CASTS, CheckLevel.WARNING);
-    testTypes(
-        "/** @constructor */ function A() {}\n" +
-        "/** @constructor */ function B() {}\n" +
-        "/** @type {!Array<!A>} */ var x = " +
-        "/** @type {!Array<?>} */( /** @type {!Array<!B>} */([]) );");
-  }
-
-  /**
-   * Checks that a cast from {?Base} to {!Base} is not considered unnecessary.
-   */
-  public void testUnnecessaryCastToNonNullType() {
-    compiler.getOptions().setWarningLevel(DiagnosticGroups.UNNECESSARY_CASTS, CheckLevel.WARNING);
-    testTypes(
-        "/** @constructor */\n" +
-        "function Base() {}\n" +
-        "var c = /** @type {!Base} */ (random ? new Base() : null);"
-    );
-  }
-
-  public void testUnnecessaryCastToStar() {
-    compiler.getOptions().setWarningLevel(DiagnosticGroups.UNNECESSARY_CASTS, CheckLevel.WARNING);
-    testTypes(
-        "/** @constructor */\n" +
-        "function Base() {}\n" +
-        "var c = /** @type {*} */ (new Base());",
-        "unnecessary cast\n" +
-        "from: Base\n" +
-        "to  : *"
-    );
-  }
-
-  public void testNoUnnecessaryCastNoResolvedType() {
-    compiler.getOptions().setWarningLevel(DiagnosticGroups.UNNECESSARY_CASTS, CheckLevel.WARNING);
-    testClosureTypes(
-        "var goog = {};\n" +
-        "goog.addDependency = function(a,b,c){};\n" +
-        // A is NoResolvedType.
-        "goog.addDependency('a.js', ['A'], []);\n" +
-
-        // B is a normal type.
-        "/** @constructor @struct */ function B() {}\n" +
-
-        "/**\n" +
-        " * @constructor\n" +
-        " * @template T\n" +
-        " */\n" +
-        "function C() { this.t; }\n" +
-
-        "/**\n" +
-        " * @param {!C<T>} c\n" +
-        " * @return {T}\n" +
-        " * @template T\n" +
-        " */\n" +
-        "function getT(c) { return c.t; }\n" +
-
-        "/** @type {!C<!A>} */\n" +
-        "var c = new C();\n" +
-
-        // Casting from NoResolvedType.
-        "var b = /** @type {!B} */ (getT(c));\n" +
-
-        // Casting to NoResolvedType.
-        "var a = /** @type {!A} */ (new B());\n",
-        null);  // No warning expected.
-  }
-
   public void testNestedCasts() {
     testTypes("/** @constructor */var T = function() {};\n" +
         "/** @constructor */var V = function() {};\n" +
@@ -8836,6 +8737,7 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
   }
 
   public void testConstDecl2() {
+    compiler.getOptions().setLanguageIn(CompilerOptions.LanguageMode.ECMASCRIPT6);
     testTypes(
         "/** @param {?number} x */" +
         "function f(x) { " +
@@ -16742,6 +16644,32 @@ public final class TypeCheckTest extends CompilerTypeTestCase {
             "/** @type {{value: string}} */ ns.x;"),
         "variable ns.x redefined with type {value: string}, "
         + "original definition at [testcode]:5 with type (null|rec<string>)");
+  }
+
+  public void testModuloNullUndefThatWorkedWithoutSpecialSubtypingRules() {
+    testTypes(LINE_JOINER.join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "function f(/** function(?Foo, !Foo) */ x) {",
+        "  return /** @type {function(!Foo, ?Foo)} */ (x);",
+        "}"));
+
+    testTypes(LINE_JOINER.join(
+        "/** @constructor */",
+        "function Foo() {}",
+        "function f(/** !Array<!Foo> */ to, /** !Array<?Foo> */ from) {",
+        "  to = from;",
+        "}"));
+
+    testTypes(LINE_JOINER.join(
+        "function f(/** ?Object */ x) {",
+        "  return {} instanceof x;",
+        "}"));
+
+    testTypes(LINE_JOINER.join(
+        "function f(/** ?Function */ x) {",
+        "  return x();",
+        "}"));
   }
 
   private void testTypes(String js) {

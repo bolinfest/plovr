@@ -460,6 +460,23 @@ public final class JSDocInfoBuilder {
 
   /**
    * Records that the {@link JSDocInfo} being built should have its {@link
+   * JSDocInfo#isXidGenerator()} flag set to {@code true}.
+   *
+   * @return {@code true} if the isXidGenerator flag was recorded and {@code false} if it was
+   *     already recorded.
+   */
+  public boolean recordXidGenerator() {
+    if (!currentInfo.isXidGenerator()) {
+      currentInfo.setXidGenerator(true);
+      populated = true;
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  /**
+   * Records that the {@link JSDocInfo} being built should have its {@link
    * JSDocInfo#isStableIdGenerator()} flag set to {@code true}.
    *
    * @return {@code true} if the stableIdGenerator flag was recorded and {@code false} if it was
@@ -848,7 +865,8 @@ public final class JSDocInfoBuilder {
    *     flags
    */
   public boolean recordConstructor() {
-    if (!hasAnySingletonTypeTags() && !currentInfo.isConstructorOrInterface()) {
+    if (!hasAnySingletonTypeTags()
+        && !currentInfo.isConstructorOrInterface()) {
       currentInfo.setConstructor(true);
       populated = true;
       return true;
@@ -894,9 +912,11 @@ public final class JSDocInfoBuilder {
    * if it was already defined or it was incompatible with the existing flags
    */
   public boolean recordUnrestricted() {
-    if (hasAnySingletonTypeTags() || currentInfo.isInterface() ||
-        currentInfo.makesDicts() || currentInfo.makesStructs() ||
-        currentInfo.makesUnrestricted()) {
+    if (hasAnySingletonTypeTags()
+        || currentInfo.isInterface()
+        || currentInfo.makesDicts()
+        || currentInfo.makesStructs()
+        || currentInfo.makesUnrestricted()) {
       return false;
     }
     currentInfo.setUnrestricted();
@@ -906,6 +926,25 @@ public final class JSDocInfoBuilder {
 
   public boolean isUnrestrictedRecorded() {
     return currentInfo.makesUnrestricted();
+  }
+
+  /**
+   * Records that the {@link JSDocInfo} being built should have its
+   * {@link JSDocInfo#isAbstract()} flag set to {@code true}.
+   *
+   * @return {@code true} if the flag was recorded and {@code false}
+   * if it was already defined or it was incompatible with the existing flags
+   */
+  public boolean recordAbstract() {
+    if (!hasAnySingletonTypeTags()
+        && !currentInfo.isInterface()
+        && !currentInfo.isAbstract()
+        && currentInfo.getVisibility() != Visibility.PRIVATE) {
+      currentInfo.setAbstract();
+      populated = true;
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -1017,7 +1056,9 @@ public final class JSDocInfoBuilder {
    */
   public boolean recordInterface() {
     if (hasAnySingletonTypeTags() ||
-        currentInfo.isConstructor() || currentInfo.isInterface()) {
+        currentInfo.isConstructor() ||
+        currentInfo.isInterface() ||
+        currentInfo.isAbstract()) {
       return false;
     }
     currentInfo.setInterface(true);
@@ -1317,15 +1358,16 @@ public final class JSDocInfoBuilder {
    * {@code @param} or {@code @return} or {@code @type} or etc.
    */
   private boolean hasAnyTypeRelatedTags() {
-    return currentInfo.isConstructor() ||
-        currentInfo.isInterface() ||
-        currentInfo.getParameterCount() > 0 ||
-        currentInfo.hasReturnType() ||
-        currentInfo.hasBaseType() ||
-        currentInfo.getExtendedInterfacesCount() > 0 ||
-        currentInfo.getLendsName() != null ||
-        currentInfo.hasThisType() ||
-        hasAnySingletonTypeTags();
+    return currentInfo.isConstructor()
+        || currentInfo.isInterface()
+        || currentInfo.isAbstract()
+        || currentInfo.getParameterCount() > 0
+        || currentInfo.hasReturnType()
+        || currentInfo.hasBaseType()
+        || currentInfo.getExtendedInterfacesCount() > 0
+        || currentInfo.getLendsName() != null
+        || currentInfo.hasThisType()
+        || hasAnySingletonTypeTags();
   }
 
   /**

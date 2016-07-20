@@ -15,6 +15,8 @@
  */
 package com.google.javascript.jscomp;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableSet;
@@ -50,18 +52,11 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
           "JSC_LHS_OF_GOOG_REQUIRE_MUST_BE_CONST",
           "The left side of a goog.require() must use ''const'' (not ''let'' or ''var'')");
 
-  static final DiagnosticType USELESS_USE_STRICT_DIRECTIVE =
-      DiagnosticType.warning(
-          "JSC_USELESS_USE_STRICT_DIRECTIVE",
-          "'use strict' is unnecessary in ES6 modules.");
-
   static final DiagnosticType NAMESPACE_IMPORT_CANNOT_USE_STAR =
       DiagnosticType.error(
           "JSC_NAMESPACE_IMPORT_CANNOT_USE_STAR",
           "Namespace imports ('goog:some.Namespace') cannot use import * as. "
-              + "Did you mean to import {0} from '{1}';?");
-
-  private static final ImmutableSet<String> USE_STRICT_ONLY = ImmutableSet.of("use strict");
+              + "Did you mean to import {0} from ''{1}'';?");
 
   private final ES6ModuleLoader loader;
 
@@ -88,8 +83,11 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
   private Set<String> alreadyRequired = new HashSet<>();
 
   private boolean isEs6Module;
+  private boolean forceRewrite;
 
   private boolean reportDependencies;
+
+  private Node googRequireInsertSpot;
 
   /**
    * Creates a new ProcessEs6Modules instance which can be used to rewrite
@@ -110,13 +108,18 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
     this.reportDependencies = reportDependencies;
   }
 
-  public void processFile(Node root) {
+  /**
+   * If a file contains an ES6 "import" or "export" statement, or the forceRewrite
+   * option is true, rewrite the source as a module.
+   */
+  public void processFile(Node root, boolean forceRewrite) {
     FindGoogProvideOrGoogModule finder = new FindGoogProvideOrGoogModule();
     NodeTraversal.traverseEs6(compiler, root, finder);
     if (finder.isFound()) {
       return;
     }
-    isEs6Module = false;
+    this.forceRewrite = forceRewrite;
+    isEs6Module = forceRewrite;
     NodeTraversal.traverseEs6(compiler, root, this);
   }
 
@@ -144,11 +147,7 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
       // These are rewritten to plain namespace object accesses.
       moduleName = importName.substring("goog:".length());
     } else {
-      URI loadAddress = loader.locateEs6Module(importName, t.getInput());
-      if (loadAddress == null) {
-        compiler.report(t.makeError(importDecl, ES6ModuleLoader.LOAD_ERROR, importName));
-        return;
-      }
+      URI loadAddress = checkNotNull(loader.locateEs6Module(importName, t.getInput()));
       moduleName = ES6ModuleLoader.toModuleName(loadAddress);
     }
 
@@ -193,7 +192,9 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
       Node require = IR.exprResult(
           IR.call(NodeUtil.newQName(compiler, "goog.require"), IR.string(moduleName)));
       require.copyInformationFromForTree(importDecl);
-      script.addChildToFront(require);
+      script.addChildAfter(require, googRequireInsertSpot);
+      googRequireInsertSpot = require;
+
       if (reportDependencies) {
         t.getInput().addRequire(moduleName);
       }
@@ -253,13 +254,8 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
       parent.addChildBefore(importNode, export);
       visit(t, importNode, parent);
 
-      URI loadAddress = loader.locateEs6Module(moduleIdentifier.getString(), t.getInput());
-      if (loadAddress == null) {
-        compiler.report(
-            t.makeError(
-                moduleIdentifier, ES6ModuleLoader.LOAD_ERROR, moduleIdentifier.getString()));
-        return;
-      }
+      URI loadAddress = checkNotNull(
+          loader.locateEs6Module(moduleIdentifier.getString(), t.getInput()));
       String moduleName = ES6ModuleLoader.toModuleName(loadAddress);
 
       for (Node exportSpec : export.getFirstChild().children()) {
@@ -323,7 +319,7 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
       return;
     }
 
-    checkStrictModeDirective(t, script);
+    ClosureRewriteModule.checkAndSetStrictModeDirective(t, script);
 
     Preconditions.checkArgument(scriptNodeCount == 1,
         "ProcessEs6Modules supports only one invocation per "
@@ -376,7 +372,7 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
     // Rename vars to not conflict in global scope.
     NodeTraversal.traverseEs6(compiler, script, new RenameGlobalVars(moduleName));
 
-    if (!exportMap.isEmpty()) {
+    if (!exportMap.isEmpty() || forceRewrite) {
       // Add goog.provide call.
       Node googProvide = IR.exprResult(
           IR.call(NodeUtil.newQName(compiler, "goog.provide"),
@@ -399,22 +395,6 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
 
     exportMap.clear();
     compiler.reportCodeChange();
-  }
-
-  private static void checkStrictModeDirective(NodeTraversal t, Node n) {
-    Preconditions.checkState(n.isScript(), n);
-    Set<String> directives = n.getDirectives();
-    if (directives != null && directives.contains("use strict")) {
-      t.report(n, USELESS_USE_STRICT_DIRECTIVE);
-    } else {
-      if (directives == null) {
-        n.setDirectives(USE_STRICT_ONLY);
-      } else {
-        ImmutableSet.Builder<String> builder = new ImmutableSet.Builder<String>().add("use strict");
-        builder.addAll(directives);
-        n.setDirectives(builder.build());
-      }
-    }
   }
 
   private void rewriteRequires(Node script) {
@@ -537,7 +517,8 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
     private void fixTypeNode(NodeTraversal t, Node typeNode) {
       if (typeNode.isString()) {
         String name = typeNode.getString();
-        if (ES6ModuleLoader.isRelativeIdentifier(name)) {
+        if (ES6ModuleLoader.isRelativeIdentifier(name)
+            || ES6ModuleLoader.isAbsoluteIdentifier(name)) {
           int lastSlash = name.lastIndexOf('/');
           int endIndex = name.indexOf('.', lastSlash);
           String localTypeName = null;
@@ -548,13 +529,7 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
           }
 
           String moduleName = name.substring(0, endIndex);
-          URI loadAddress = loader.locateEs6Module(moduleName, t.getInput());
-          if (loadAddress == null) {
-            compiler.report(t.makeError(
-                typeNode, ES6ModuleLoader.LOAD_ERROR, moduleName));
-            return;
-          }
-
+          URI loadAddress = checkNotNull(loader.locateEs6Module(moduleName, t.getInput()));
           String globalModuleName = ES6ModuleLoader.toModuleName(loadAddress);
           typeNode.setString(
               localTypeName == null ? globalModuleName : globalModuleName + localTypeName);

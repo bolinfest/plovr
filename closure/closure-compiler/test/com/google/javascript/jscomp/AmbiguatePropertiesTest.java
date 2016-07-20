@@ -31,10 +31,12 @@ public final class AmbiguatePropertiesTest extends CompilerTestCase {
   private AmbiguateProperties lastPass;
 
   private static final String EXTERNS =
-      "Function.prototype.call=function(){};" +
-      "Function.prototype.inherits=function(){};" +
-      "prop.toString;" +
-      "var google = { gears: { factory: {}, workerPool: {} } };";
+      "Function.prototype.call=function(){};"
+          + "Function.prototype.inherits=function(){};"
+          + "/** @const */ var Object = {};"
+          + "Object.defineProperties = function(typeRef, definitions) {};"
+          + "prop.toString;"
+          + "var google = { gears: { factory: {}, workerPool: {} } };";
 
   public AmbiguatePropertiesTest() {
     super(EXTERNS);
@@ -245,10 +247,10 @@ public final class AmbiguatePropertiesTest extends CompilerTestCase {
 
     int vars = 10;
     for (int i = 0; i < vars; i++) {
-      js.append("Foo.prototype.var" + i + " = 0;");
-      js.append("Bar.prototype.var" + (i + 10000) + " = 0;");
-      output.append("Foo.prototype." + (char) ('a' + i) + "=0;");
-      output.append("Bar.prototype." + (char) ('a' + i) + "=0;");
+      js.append("Foo.prototype.var").append(i).append(" = 0;");
+      js.append("Bar.prototype.var").append(i + 10000).append(" = 0;");
+      output.append("Foo.prototype.").append((char) ('a' + i)).append("=0;");
+      output.append("Bar.prototype.").append((char) ('a' + i)).append("=0;");
     }
     test(js.toString(), output.toString());
   }
@@ -258,8 +260,8 @@ public final class AmbiguatePropertiesTest extends CompilerTestCase {
     int classes = 10;
     for (int i = 0; i < classes; i++) {
       String c = "Foo" + i;
-      b.append("/** @constructor */ var " + c + " = function(){};\n");
-      b.append(c + ".prototype.varness" + i + " = 0;");
+      b.append("/** @constructor */ var ").append(c).append(" = function(){};\n");
+      b.append(c).append(".prototype.varness").append(i).append(" = 0;");
     }
     String js = b.toString();
     test(js, js.replaceAll("varness\\d+", "a"));
@@ -299,6 +301,82 @@ public final class AmbiguatePropertiesTest extends CompilerTestCase {
              "Bar.prototype['getA'] = function(){};" +
              "var bar = new Bar();" +
              "bar['getA']();");
+  }
+
+  public void testObjectDefineProperties() {
+    String js =
+        LINE_JOINER.join(
+            "/** @constructor */ var Bar = function(){};",
+            "Bar.prototype.bar = 0;",
+            "/** @struct @constructor */ var Foo = function() {",
+            "  this.bar_ = 'bar';",
+            "};",
+            "/** @type {?} */ Foo.prototype.bar;",
+            "Object.defineProperties(Foo.prototype, {",
+            "  bar: {",
+            "    configurable: true,",
+            "    enumerable: true,",
+            "    /** @this {Foo} */ get: function() { return this.bar_;},",
+            "    /** @this {Foo} */ set: function(value) { this.bar_ = value; }",
+            "  }",
+            "});");
+
+    String result =
+        LINE_JOINER.join(
+            "/** @constructor */ var Bar = function(){};",
+            "Bar.prototype.a = 0;",
+            "/** @struct @constructor */ var Foo = function() {",
+            "  this.b = 'bar';",
+            "};",
+            "/** @type {?} */ Foo.prototype.a;",
+            "Object.defineProperties(Foo.prototype, {",
+            "  a: {",
+            "    configurable: true,",
+            "    enumerable: true,",
+            "    /** @this {Foo} */ get: function() { return this.b;},",
+            "    /** @this {Foo} */ set: function(value) { this.b = value; }",
+            "  }",
+            "});");
+
+    test(js, result);
+  }
+
+  public void testObjectDefinePropertiesQuoted() {
+    String js =
+        LINE_JOINER.join(
+            "/** @constructor */ var Bar = function(){};",
+            "Bar.prototype.bar = 0;",
+            "/** @struct @constructor */ var Foo = function() {",
+            "  this.bar_ = 'bar';",
+            "};",
+            "/** @type {?} */ Foo.prototype['bar'];",
+            "Object.defineProperties(Foo.prototype, {",
+            "  'a': {",
+            "    configurable: true,",
+            "    enumerable: true,",
+            "    /** @this {Foo} */ get: function() { return this.bar_;},",
+            "    /** @this {Foo} */ set: function(value) { this.bar_ = value; }",
+            "  }",
+            "});");
+
+    String result =
+        LINE_JOINER.join(
+            "/** @constructor */ var Bar = function(){};",
+            "Bar.prototype.b = 0;",
+            "/** @struct @constructor */ var Foo = function() {",
+            "  this.b = 'bar';",
+            "};",
+            "/** @type {?} */ Foo.prototype['bar'];",
+            "Object.defineProperties(Foo.prototype, {",
+            "  'a': {",
+            "    configurable: true,",
+            "    enumerable: true,",
+            "    /** @this {Foo} */ get: function() { return this.b;},",
+            "    /** @this {Foo} */ set: function(value) { this.b = value; }",
+            "  }",
+            "});");
+
+    test(js, result);
   }
 
   public void testOverlappingOriginalAndGeneratedNames() {

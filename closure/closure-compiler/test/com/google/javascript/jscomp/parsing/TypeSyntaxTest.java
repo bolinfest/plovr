@@ -184,7 +184,7 @@ public final class TypeSyntaxTest extends TestCase {
 
   public void testFunctionReturn_typeInJsdocOnly() {
     parse("function /** string */ foo() { return 'hello'; }",
-        "function/** string */foo() {\n  return 'hello';\n}");
+        "function/** string */ foo() {\n  return 'hello';\n}");
   }
 
   public void testCompositeType() {
@@ -401,8 +401,8 @@ public final class TypeSyntaxTest extends TestCase {
   }
 
   public void testFunctionType_notEs6Typed() {
-    testNotEs6Typed("var n: (p1:string) => boolean;", "type annotation");
-    testNotEs6Typed("var n: (p1?) => boolean;", "type annotation", "optional parameter");
+    testNotEs6TypedFullError("var n: (p1:string) => boolean;", "Parse error. ')' expected");
+    testNotEs6TypedFullError("var n: (p1?) => boolean;", "Parse error. ')' expected");
   }
 
   public void testInterface() {
@@ -476,8 +476,8 @@ public final class TypeSyntaxTest extends TestCase {
   }
 
   public void testMemberVariable_notEs6Typed() {
-    testNotEs6Typed("class Foo {\n  foo;\n}", "member variable in class");
-    testNotEs6Typed("class Foo {\n  ['foo'];\n}", "member variable in class", "computed property");
+    testNotEs6TypedFullError("class Foo {\n  foo;\n}", "Parse error. '(' expected");
+    testNotEs6TypedFullError("class Foo {\n  ['foo'];\n}", "Parse error. '(' expected");
   }
 
   public void testMethodType() {
@@ -533,7 +533,7 @@ public final class TypeSyntaxTest extends TestCase {
     parse("class Foo implements Bar, Baz {\n}");
     parse("class Foo extends Bar implements Baz {\n}");
 
-    testNotEs6Typed("class Foo implements Bar {\n}", "implements");
+    testNotEs6TypedFullError("class Foo implements Bar {\n}", "Parse error. '{' expected");
   }
 
   public void testTypeAlias() {
@@ -613,24 +613,25 @@ public final class TypeSyntaxTest extends TestCase {
     parse("class Foo { static private constructor() {}}");
 
 
+    String accessModifierInterpretedAsPropertyNameErrorMessage = "Parse error. '(' expected";
     testNotEs6TypedFullError(
         "class Foo { private constructor() {} }",
-        "Parse error. Accessibility modifier is only supported in ES6 typed mode");
+        accessModifierInterpretedAsPropertyNameErrorMessage);
     testNotEs6TypedFullError(
         "class Foo { protected bar; }",
-        "Parse error. Accessibility modifier is only supported in ES6 typed mode");
+        accessModifierInterpretedAsPropertyNameErrorMessage);
     testNotEs6TypedFullError(
         "class Foo { protected bar() {} }",
-        "Parse error. Accessibility modifier is only supported in ES6 typed mode");
+        accessModifierInterpretedAsPropertyNameErrorMessage);
     testNotEs6TypedFullError(
         "class Foo { private get() {} }",
-        "Parse error. Accessibility modifier is only supported in ES6 typed mode");
+        accessModifierInterpretedAsPropertyNameErrorMessage);
     testNotEs6TypedFullError(
         "class Foo { private set() {} }",
-        "Parse error. Accessibility modifier is only supported in ES6 typed mode");
+        accessModifierInterpretedAsPropertyNameErrorMessage);
     testNotEs6TypedFullError(
         "class Foo { private [Symbol.iterator]() {} }",
-        "Parse error. Accessibility modifier is only supported in ES6 typed mode");
+        accessModifierInterpretedAsPropertyNameErrorMessage);
   }
 
   public void testOptionalProperty() {
@@ -679,8 +680,7 @@ public final class TypeSyntaxTest extends TestCase {
     expectErrors("Parse error. Index signature parameter type must be 'string' or 'number'");
     parse("interface I {\n  [foo: any]: number;\n}");
 
-    testNotEs6Typed("class C {\n  [foo: number]: number;\n}",
-        "index signature", "type annotation", "type annotation");
+    testNotEs6TypedFullError("class C {\n  [foo: number]: number;\n}", "Parse error. ']' expected");
   }
 
   public void testCallSignature() {
@@ -742,6 +742,9 @@ public final class TypeSyntaxTest extends TestCase {
 
     parse("declare namespace foo {\n  interface I {\n  }\n}");
     parse("declare namespace foo {\n  class I {\n    bar();\n  }\n}");
+    parse("declare namespace foo {\n  class I {\n    static bar();\n  }\n}");
+    parse("declare namespace foo {\n  class I {\n    async bar();\n  }\n}");
+    parse("declare namespace foo {\n  class I {\n    static async bar();\n  }\n}");
     parse("declare namespace foo {\n  enum E {\n  }\n}");
     parse("declare namespace foo {\n  function f();\n}");
     parse("declare namespace foo {\n  var foo\n}");

@@ -80,20 +80,20 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
   private static final long serialVersionUID = 1L;
 
   /**
-   * The template variable corresponding to the KEY type in IObject<KEY, VALUE>
+   * The template variable corresponding to the KEY type in {@code IObject<KEY, VALUE>}
    * (plus the builtin Javascript Object).
    */
   private TemplateType iObjectIndexTemplateKey;
 
   /**
-   * The template variable corresponding to the VALUE type in IObject<KEY, VALUE>
+   * The template variable corresponding to the VALUE type in {@code IObject<KEY, VALUE>}
    * (plus the builtin Javascript Object).
    */
   private TemplateType iObjectElementTemplateKey;
   private static final String I_OBJECT_ELEMENT_TEMPLATE = "IObject#VALUE";
 
   /**
-   * The template variable in Array<T>
+   * The template variable in {@code Array<T>}
    */
   private TemplateType arrayElementTemplateKey;
 
@@ -955,6 +955,15 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
   }
 
   /**
+   * Removes a type by name.
+   *
+   * @param jsTypeName The name string.
+   */
+  public void removeType(String jsTypeName) {
+    namesToTypes.remove(jsTypeName);
+  }
+
+  /**
    * Looks up a type by name.
    *
    * @param jsTypeName The name string.
@@ -1496,13 +1505,17 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
     nonNullableTypeNames.add(name);
   }
 
+  @Override
+  public JSType createTypeFromCommentNode(Node n) {
+    return createTypeFromCommentNode(n, "[internal]", null);
+  }
+
   /**
    * Creates a JSType from the nodes representing a type.
    * @param n The node with type info.
    * @param sourceName The source file name.
    * @param scope A scope for doing type name lookups.
    */
-  @Override
   public JSType createTypeFromCommentNode(
       Node n, String sourceName, StaticTypedScope<? extends TypeI> scope) {
     return createFromTypeNodesInternal(n, sourceName, (StaticTypedScope<JSType>) scope);
@@ -1511,16 +1524,16 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
   private JSType createFromTypeNodesInternal(Node n, String sourceName,
       StaticTypedScope<JSType> scope) {
     switch (n.getType()) {
-      case Token.LC: // Record type.
+      case LC: // Record type.
         return createRecordTypeFromNodes(
             n.getFirstChild(), sourceName, scope);
 
-      case Token.BANG: // Not nullable
+      case BANG: // Not nullable
         return createFromTypeNodesInternal(
             n.getFirstChild(), sourceName, scope)
             .restrictByNotNullOrUndefined();
 
-      case Token.QMARK: // Nullable or unknown
+      case QMARK: // Nullable or unknown
         Node firstChild = n.getFirstChild();
         if (firstChild == null) {
           return getNativeType(UNKNOWN_TYPE);
@@ -1529,20 +1542,20 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
             createFromTypeNodesInternal(
                 firstChild, sourceName, scope));
 
-      case Token.EQUALS: // Optional
+      case EQUALS: // Optional
         return createOptionalType(
             createFromTypeNodesInternal(
                 n.getFirstChild(), sourceName, scope));
 
-      case Token.ELLIPSIS: // Var args
+      case ELLIPSIS: // Var args
         return createOptionalType(
             createFromTypeNodesInternal(
                 n.getFirstChild(), sourceName, scope));
 
-      case Token.STAR: // The AllType
+      case STAR: // The AllType
         return getNativeType(ALL_TYPE);
 
-      case Token.PIPE: // Union type
+      case PIPE: // Union type
         UnionTypeBuilder builder = new UnionTypeBuilder(this);
         for (Node child = n.getFirstChild(); child != null;
              child = child.getNext()) {
@@ -1551,16 +1564,16 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
         }
         return builder.build();
 
-      case Token.EMPTY: // When the return value of a function is not specified
+      case EMPTY: // When the return value of a function is not specified
         return getNativeType(UNKNOWN_TYPE);
 
-      case Token.VOID: // Only allowed in the return value of a function.
+      case VOID: // Only allowed in the return value of a function.
         return getNativeType(VOID_TYPE);
 
-      case Token.STRING:
+      case STRING:
       // TODO(martinprobst): The new type syntax resolution should be separate.
       // Remove the NAME case then.
-      case Token.NAME:
+      case NAME:
         JSType namedType = getType(scope, n.getString(), sourceName,
             n.getLineno(), n.getCharno());
         if ((namedType instanceof ObjectType) &&
@@ -1609,7 +1622,7 @@ public class JSTypeRegistry implements TypeIRegistry, Serializable {
           return namedType;
         }
 
-      case Token.FUNCTION:
+      case FUNCTION:
         JSType thisType = null;
         boolean isConstructor = false;
         Node current = n.getFirstChild();

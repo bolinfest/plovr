@@ -59,7 +59,6 @@ import java.util.Set;
  *
  * @author johnlenz@google.com (johnlenz)
  */
-// public for ReplaceDebugStringsTest
 class Normalize implements CompilerPass {
 
   private final AbstractCompiler compiler;
@@ -374,7 +373,7 @@ class Normalize implements CompilerPass {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       switch (n.getType()) {
-        case Token.WHILE:
+        case WHILE:
           if (CONVERT_WHILE_TO_FOR) {
             Node expr = n.getFirstChild();
             n.setType(Token.FOR);
@@ -386,23 +385,23 @@ class Normalize implements CompilerPass {
           }
           break;
 
-        case Token.FUNCTION:
+        case FUNCTION:
           if (maybeNormalizeFunctionDeclaration(n)) {
             reportCodeChange("Function declaration");
           }
           break;
 
-        case Token.NAME:
-        case Token.STRING:
-        case Token.STRING_KEY:
-        case Token.GETTER_DEF:
-        case Token.SETTER_DEF:
+        case NAME:
+        case STRING:
+        case STRING_KEY:
+        case GETTER_DEF:
+        case SETTER_DEF:
           if (!compiler.getLifeCycleStage().isNormalizedObfuscated()) {
             annotateConstantsByConvention(n, parent);
           }
           break;
 
-        case Token.CAST:
+        case CAST:
           parent.replaceChild(n, n.removeFirstChild());
           break;
       }
@@ -527,6 +526,10 @@ class Normalize implements CompilerPass {
       if (n.isFunction()) {
         moveNamedFunctions(n.getLastChild());
       }
+
+      if (NodeUtil.isCompoundAssignementOp(n)) {
+        normalizeAssignShorthand(n);
+      }
     }
 
     // TODO(johnlenz): Move this to NodeTypeNormalizer once the unit tests are
@@ -542,11 +545,11 @@ class Normalize implements CompilerPass {
       Node last = n.getLastChild();
       // TODO(moz): Avoid adding blocks for cases like "label: let x;"
       switch (last.getType()) {
-        case Token.LABEL:
-        case Token.BLOCK:
-        case Token.FOR:
-        case Token.WHILE:
-        case Token.DO:
+        case LABEL:
+        case BLOCK:
+        case FOR:
+        case WHILE:
+        case DO:
           return;
         default:
           Node block = IR.block();
@@ -577,10 +580,10 @@ class Normalize implements CompilerPass {
         Node insertBefore = (before == null) ? c : before;
         Node insertBeforeParent = (before == null) ? n : beforeParent;
         switch (c.getType()) {
-          case Token.LABEL:
+          case LABEL:
             extractForInitializer(c, insertBefore, insertBeforeParent);
             break;
-          case Token.FOR:
+          case FOR:
             if (NodeUtil.isForIn(c)) {
               Node first = c.getFirstChild();
               if (first.isVar()) {
@@ -652,34 +655,45 @@ class Normalize implements CompilerPass {
     private void moveNamedFunctions(Node functionBody) {
       Preconditions.checkState(
           functionBody.getParent().isFunction());
-      Node previous = null;
+      Node insertAfter = null;
       Node current = functionBody.getFirstChild();
       // Skip any declarations at the beginning of the function body, they
       // are already in the right place.
       while (current != null && NodeUtil.isFunctionDeclaration(current)) {
-        previous = current;
+        insertAfter = current;
         current = current.getNext();
       }
 
       // Find any remaining declarations and move them.
-      Node insertAfter = previous;
       while (current != null) {
         // Save off the next node as the current node maybe removed.
         Node next = current.getNext();
         if (NodeUtil.isFunctionDeclaration(current)) {
           // Remove the declaration from the body.
-          Preconditions.checkNotNull(previous);
-          functionBody.removeChildAfter(previous);
+          functionBody.removeChild(current);
 
           // Read the function at the top of the function body (after any
           // previous declarations).
           insertAfter = addToFront(functionBody, current, insertAfter);
           reportCodeChange("Move function declaration not at top of function");
-        } else {
-          // Update the previous only if the current node hasn't been moved.
-          previous = current;
         }
         current = next;
+      }
+    }
+
+    private void normalizeAssignShorthand(Node shorthand) {
+      if (shorthand.getFirstChild().isName()) {
+        Node name = shorthand.getFirstChild();
+        shorthand.setType(NodeUtil.getOpFromAssignmentOp(shorthand));
+        Node parent = shorthand.getParent();
+        Node insertPoint = IR.empty();
+        parent.replaceChild(shorthand, insertPoint);
+        Node assign = IR.assign(name.cloneNode().useSourceInfoFrom(name), shorthand)
+            .useSourceInfoFrom(shorthand);
+        assign.setJSDocInfo(shorthand.getJSDocInfo());
+        shorthand.setJSDocInfo(null);
+        parent.replaceChild(insertPoint, assign);
+        compiler.reportCodeChange();
       }
     }
 

@@ -27,8 +27,12 @@ public final class NamespaceLit extends Namespace {
   // For when window is used as a namespace
   private NominalType window = null;
 
-  public NamespaceLit(String name) {
-    this.name = name;
+  public NamespaceLit(JSTypes commonTypes, String name) {
+    super(commonTypes, name);
+  }
+
+  NominalType getWindowType() {
+    return this.window;
   }
 
   public void maybeSetWindowInstance(JSType obj) {
@@ -38,14 +42,9 @@ public final class NamespaceLit extends Namespace {
   }
 
   @Override
-  protected JSType computeJSType(JSTypes commonTypes) {
+  protected JSType computeJSType() {
     Preconditions.checkState(this.namespaceType == null);
     return JSType.fromObjectType(ObjectType.makeObjectType(
         this.window, null, null, this, false, ObjectKind.UNRESTRICTED));
-  }
-
-  @Override
-  public String toString() {
-    return this.name;
   }
 }

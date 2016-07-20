@@ -44,7 +44,7 @@ public final class NodeUtilTest extends TestCase {
     compiler.initCompilerOptionsIfTesting();
     compiler.getOptions().setLanguageIn(LanguageMode.ECMASCRIPT6);
     Node n = compiler.parseTestCode(js);
-    assertEquals(0, compiler.getErrorCount());
+    assertThat(compiler.getErrors()).isEmpty();
     return n;
   }
 
@@ -218,6 +218,11 @@ public final class NodeUtilTest extends TestCase {
     assertEquals("true", NodeUtil.getStringValue(getNode("true")));
     assertEquals("10", NodeUtil.getStringValue(getNode("10")));
     assertEquals("1", NodeUtil.getStringValue(getNode("1.0")));
+
+    /* See https://github.com/google/closure-compiler/issues/1262 */
+    assertEquals(
+        "1.2323919403474454e+21", NodeUtil.getStringValue(getNode("1.2323919403474454e+21")));
+
     assertEquals("0", NodeUtil.getStringValue(getNode("'0'")));
     assertEquals(null, NodeUtil.getStringValue(getNode("/a/")));
     assertEquals("[object Object]", NodeUtil.getStringValue(getNode("{}")));
@@ -400,6 +405,8 @@ public final class NodeUtilTest extends TestCase {
     assertSideEffect(false, "[function a(){}]");
     assertSideEffect(false, "(class { })");
     assertSideEffect(false, "(class { method() { i++ } })");
+    assertSideEffect(true, "(class { [computedName()]() {} })");
+    assertSideEffect(false, "(class { [computedName]() {} })");
     assertSideEffect(false, "(class Foo extends Bar { })");
     assertSideEffect(true, "(class extends foo() { })");
 
@@ -1301,8 +1308,10 @@ public final class NodeUtilTest extends TestCase {
     assertTrue(testValidDefineValue("1 & 8"));
     assertTrue(testValidDefineValue("1 + 8"));
     assertTrue(testValidDefineValue("'a' + 'b'"));
+    assertTrue(testValidDefineValue("true ? 'a' : 'b'"));
 
     assertFalse(testValidDefineValue("1 & foo"));
+    assertFalse(testValidDefineValue("foo ? 'a' : 'b'"));
   }
 
   private boolean testValidDefineValue(String js) {
@@ -1770,6 +1779,19 @@ public final class NodeUtilTest extends TestCase {
     assertEquals("x", getFunctionLValue("var x = (y, function() {});"));
   }
 
+  public void testGetRValueOfLValue() {
+    assertTrue(functionIsRValueOfAssign("x = function() {};"));
+    assertTrue(functionIsRValueOfAssign("x += function() {};"));
+    assertTrue(functionIsRValueOfAssign("x -= function() {};"));
+    assertTrue(functionIsRValueOfAssign("x *= function() {};"));
+    assertTrue(functionIsRValueOfAssign("x /= function() {};"));
+    assertTrue(functionIsRValueOfAssign("x <<= function() {};"));
+    assertTrue(functionIsRValueOfAssign("x >>= function() {};"));
+    assertTrue(functionIsRValueOfAssign("x >>= function() {};"));
+    assertTrue(functionIsRValueOfAssign("x >>>= function() {};"));
+    assertFalse(functionIsRValueOfAssign("x = y ? x : function() {};"));
+  }
+
   public void testIsNaN() {
     assertTrue(NodeUtil.isNaN(getNode("NaN")));
     assertFalse(NodeUtil.isNaN(getNode("Infinity")));
@@ -1847,7 +1869,7 @@ public final class NodeUtilTest extends TestCase {
     assertLValueNamedX(parse("var x;").getFirstFirstChild());
     assertLValueNamedX(parse("var w, x;").getFirstChild().getLastChild());
     assertLValueNamedX(
-        parse("var [...x] = y;").getFirstFirstChild().getFirstFirstChild());
+        parse("var [...x] = y;").getFirstFirstChild().getFirstFirstChild().getFirstChild());
     assertLValueNamedX(parse("var x = y;").getFirstFirstChild());
     assertLValueNamedX(parse("x++;").getFirstFirstChild().getFirstChild());
     assertLValueNamedX(
@@ -1890,14 +1912,17 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring1() {
     Node root = parse("var [a, b] = obj;");
-    Node destructPat = root.getFirstFirstChild();
+    Node destructLhs = root.getFirstFirstChild();
+    Preconditions.checkArgument(destructLhs.isDestructuringLhs());
+    Node destructPat = destructLhs.getFirstChild();
     Preconditions.checkArgument(destructPat.isArrayPattern());
 
     Node nameNodeA = destructPat.getFirstChild();
     Node nameNodeB = nameNodeA.getNext();
-    Node nameNodeObj = nameNodeB.getNext();
     Preconditions.checkState(nameNodeA.getString().equals("a"), nameNodeA);
     Preconditions.checkState(nameNodeB.getString().equals("b"), nameNodeB);
+
+    Node nameNodeObj = destructPat.getNext();
     Preconditions.checkState(nameNodeObj.getString().equals("obj"), nameNodeObj);
 
     assertLhsByDestructuring(nameNodeA);
@@ -1907,18 +1932,21 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring1b() {
     Node root = parse("var {a: c, b: d} = obj;");
-    Node destructPat = root.getFirstFirstChild();
+    Node destructLhs = root.getFirstFirstChild();
+    Preconditions.checkArgument(destructLhs.isDestructuringLhs());
+    Node destructPat = destructLhs.getFirstChild();
     Preconditions.checkArgument(destructPat.isObjectPattern());
 
     Node strKeyNodeA = destructPat.getFirstChild();
     Node strKeyNodeB = strKeyNodeA.getNext();
     Node nameNodeC = strKeyNodeA.getFirstChild();
     Node nameNodeD = strKeyNodeB.getFirstChild();
-    Node nameNodeObj = strKeyNodeB.getNext();
     Preconditions.checkState(strKeyNodeA.getString().equals("a"), strKeyNodeA);
     Preconditions.checkState(strKeyNodeB.getString().equals("b"), strKeyNodeB);
     Preconditions.checkState(nameNodeC.getString().equals("c"), nameNodeC);
     Preconditions.checkState(nameNodeD.getString().equals("d"), nameNodeD);
+
+    Node nameNodeObj = destructPat.getNext();
     Preconditions.checkState(nameNodeObj.getString().equals("obj"), nameNodeObj);
 
     assertNotLhsByDestructuring(strKeyNodeA);
@@ -1930,14 +1958,17 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring1c() {
     Node root = parse("var {a, b} = obj;");
-    Node destructPat = root.getFirstFirstChild();
+    Node destructLhs = root.getFirstFirstChild();
+    Preconditions.checkArgument(destructLhs.isDestructuringLhs());
+    Node destructPat = destructLhs.getFirstChild();
     Preconditions.checkArgument(destructPat.isObjectPattern());
 
     Node strKeyNodeA = destructPat.getFirstChild();
     Node strKeyNodeB = strKeyNodeA.getNext();
-    Node nameNodeObj = strKeyNodeB.getNext();
     Preconditions.checkState(strKeyNodeA.getString().equals("a"), strKeyNodeA);
     Preconditions.checkState(strKeyNodeB.getString().equals("b"), strKeyNodeB);
+
+    Node nameNodeObj = destructPat.getNext();
     Preconditions.checkState(nameNodeObj.getString().equals("obj"), nameNodeObj);
 
     assertLhsByDestructuring(strKeyNodeA);
@@ -1947,16 +1978,19 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring2() {
     Node root = parse("var [a, [b, c]] = obj;");
-    Node destructPat = root.getFirstFirstChild();
+    Node destructLhs = root.getFirstFirstChild();
+    Preconditions.checkArgument(destructLhs.isDestructuringLhs());
+    Node destructPat = destructLhs.getFirstChild();
     Preconditions.checkArgument(destructPat.isArrayPattern());
 
     Node nameNodeA = destructPat.getFirstChild();
     Node nameNodeB = nameNodeA.getNext().getFirstChild();
     Node nameNodeC = nameNodeB.getNext();
-    Node nameNodeObj = nameNodeA.getNext().getNext();
     Preconditions.checkState(nameNodeA.getString().equals("a"), nameNodeA);
     Preconditions.checkState(nameNodeB.getString().equals("b"), nameNodeB);
     Preconditions.checkState(nameNodeC.getString().equals("c"), nameNodeC);
+
+    Node nameNodeObj = destructPat.getNext();
     Preconditions.checkState(nameNodeObj.getString().equals("obj"), nameNodeObj);
 
     assertLhsByDestructuring(nameNodeA);
@@ -1967,7 +2001,9 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring2b() {
     Node root = parse("var {a: e, b: {c: f, d: g}} = obj;");
-    Node destructPat = root.getFirstFirstChild();
+    Node destructLhs = root.getFirstFirstChild();
+    Preconditions.checkArgument(destructLhs.isDestructuringLhs());
+    Node destructPat = destructLhs.getFirstChild();
     Preconditions.checkArgument(destructPat.isObjectPattern());
 
     Node strKeyNodeA = destructPat.getFirstChild();
@@ -1977,7 +2013,6 @@ public final class NodeUtilTest extends TestCase {
     Node nameNodeE = strKeyNodeA.getFirstChild();
     Node nameNodeF = strKeyNodeC.getFirstChild();
     Node nameNodeG = strKeyNodeD.getFirstChild();
-    Node nameNodeObj = strKeyNodeB.getNext();
     Preconditions.checkState(strKeyNodeA.getString().equals("a"), strKeyNodeA);
     Preconditions.checkState(strKeyNodeB.getString().equals("b"), strKeyNodeB);
     Preconditions.checkState(strKeyNodeC.getString().equals("c"), strKeyNodeC);
@@ -1985,6 +2020,8 @@ public final class NodeUtilTest extends TestCase {
     Preconditions.checkState(nameNodeE.getString().equals("e"), nameNodeE);
     Preconditions.checkState(nameNodeF.getString().equals("f"), nameNodeF);
     Preconditions.checkState(nameNodeG.getString().equals("g"), nameNodeG);
+
+    Node nameNodeObj = destructPat.getNext();
     Preconditions.checkState(nameNodeObj.getString().equals("obj"), nameNodeObj);
 
     assertNotLhsByDestructuring(strKeyNodeA);
@@ -1999,15 +2036,18 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring3() {
     Node root = parse("var [a, b] = [c, d];");
-    Node destructPat = root.getFirstFirstChild();
+    Node destructLhs = root.getFirstFirstChild();
+    Preconditions.checkArgument(destructLhs.isDestructuringLhs());
+    Node destructPat = destructLhs.getFirstChild();
     Preconditions.checkArgument(destructPat.isArrayPattern());
 
     Node nameNodeA = destructPat.getFirstChild();
     Node nameNodeB = nameNodeA.getNext();
-    Node nameNodeC = destructPat.getLastChild().getFirstChild();
-    Node nameNodeD = nameNodeC.getNext();
     Preconditions.checkState(nameNodeA.getString().equals("a"), nameNodeA);
     Preconditions.checkState(nameNodeB.getString().equals("b"), nameNodeB);
+
+    Node nameNodeC = destructLhs.getLastChild().getFirstChild();
+    Node nameNodeD = nameNodeC.getNext();
     Preconditions.checkState(nameNodeC.getString().equals("c"), nameNodeC);
     Preconditions.checkState(nameNodeD.getString().equals("d"), nameNodeD);
 
@@ -2019,7 +2059,9 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring3b() {
     Node root = parse("var {a: c, b: d} = {a: 1, b: 2};");
-    Node destructPat = root.getFirstFirstChild();
+    Node destructLhs = root.getFirstFirstChild();
+    Preconditions.checkArgument(destructLhs.isDestructuringLhs());
+    Node destructPat = destructLhs.getFirstChild();
     Preconditions.checkArgument(destructPat.isObjectPattern());
 
     Node strKeyNodeA = destructPat.getFirstChild();
@@ -2110,8 +2152,9 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring6c() {
     Node root = parse("for (var [{a: b}] = [{a: 1}];;) {}");
-    Node destructPat = root.getFirstFirstChild()
-        .getFirstFirstChild();
+    Node destructArr = root.getFirstFirstChild().getFirstFirstChild();
+    Preconditions.checkArgument(destructArr.isArrayPattern());
+    Node destructPat = destructArr.getFirstChild();
     Preconditions.checkArgument(destructPat.isObjectPattern()
         && destructPat.getParent().isArrayPattern());
 
@@ -2154,7 +2197,9 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring7c() {
     Node root = parse("for (var [a] = [1];;) {}");
-    Node destructPat = root.getFirstFirstChild().getFirstChild();
+    Node destructLhs = root.getFirstFirstChild().getFirstChild();
+    Preconditions.checkArgument(destructLhs.isDestructuringLhs());
+    Node destructPat = destructLhs.getFirstChild();
     Preconditions.checkArgument(destructPat.isArrayPattern());
 
     Node nameNodeA = destructPat.getFirstChild();
@@ -2165,7 +2210,9 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring7d() {
     Node root = parse("for (let [a] = [1];;) {}");
-    Node destructPat = root.getFirstFirstChild().getFirstChild();
+    Node destructLhs = root.getFirstFirstChild().getFirstChild();
+    Preconditions.checkArgument(destructLhs.isDestructuringLhs());
+    Node destructPat = destructLhs.getFirstChild();
     Preconditions.checkArgument(destructPat.isArrayPattern());
 
     Node nameNodeA = destructPat.getFirstChild();
@@ -2176,7 +2223,9 @@ public final class NodeUtilTest extends TestCase {
 
   public void testLhsByDestructuring7e() {
     Node root = parse("for (const [a] = [1];;) {}");
-    Node destructPat = root.getFirstFirstChild().getFirstChild();
+    Node destructLhs = root.getFirstFirstChild().getFirstChild();
+    Preconditions.checkArgument(destructLhs.isDestructuringLhs());
+    Node destructPat = destructLhs.getFirstChild();
     Preconditions.checkArgument(destructPat.isArrayPattern());
 
     Node nameNodeA = destructPat.getFirstChild();
@@ -2223,6 +2272,9 @@ public final class NodeUtilTest extends TestCase {
 
     classNode = getClassNode("/** @export */ var Foo = class {}");
     assertTrue(NodeUtil.getBestJSDocInfo(classNode).isExport());
+
+    classNode = getClassNode("/** @export */ var Foo = class Bar {}");
+    assertTrue(NodeUtil.getBestJSDocInfo(classNode).isExport());
   }
 
   public void testGetBestJsDocInfoExport() {
@@ -2239,6 +2291,83 @@ public final class NodeUtilTest extends TestCase {
     assertTrue(NodeUtil.getBestJSDocInfo(function).isConstructor());
   }
 
+  public void testGetLhsNodesOfDeclaration() {
+    assertThat(getLhsNodesOfDeclaration("var x;")).hasSize(1);
+    assertThat(getLhsNodesOfDeclaration("var x, y;")).hasSize(2);
+    assertThat(getLhsNodesOfDeclaration("var f = function(x, y, z) {};")).hasSize(1);
+    assertThat(getLhsNodesOfDeclaration("var [x=a => a, y = b=>b+1] = arr;")).hasSize(2);
+    assertThat(getLhsNodesOfDeclaration("var [x=a => a, y = b=>b+1, ...z] = arr;")).hasSize(3);
+    assertThat(getLhsNodesOfDeclaration("var [ , , , y = b=>b+1, ...z] = arr;")).hasSize(2);
+    assertThat(getLhsNodesOfDeclaration("var {x = a=>a, y = b=>b+1} = obj;")).hasSize(2);
+    assertThat(getLhsNodesOfDeclaration("var {p1: x = a=>a, p2: y = b=>b+1} = obj;")).hasSize(2);
+    assertThat(getLhsNodesOfDeclaration("var {[pname]: x = a=>a, [p2name]: y} = obj;")).hasSize(2);
+    assertThat(getLhsNodesOfDeclaration("var {lhs1 = a, p2: [lhs2, lhs3 = b] = [notlhs]} = obj;"))
+        .hasSize(3);
+  }
+
+  public void testIsConstructor() {
+    assertTrue(NodeUtil.isConstructor(getFunctionNode("/** @constructor */ function Foo() {}")));
+    assertTrue(NodeUtil.isConstructor(getFunctionNode(
+        "/** @constructor */ var Foo = function() {}")));
+    assertTrue(NodeUtil.isConstructor(getFunctionNode(
+        "var x = {}; /** @constructor */ x.Foo = function() {}")));
+    assertTrue(NodeUtil.isConstructor(getFunctionNode("class Foo { constructor() {} }")));
+
+    assertFalse(NodeUtil.isConstructor(getFunctionNode("function Foo() {}")));
+    assertFalse(NodeUtil.isConstructor(getFunctionNode("var Foo = function() {}")));
+    assertFalse(NodeUtil.isConstructor(getFunctionNode("var x = {}; x.Foo = function() {};")));
+    assertFalse(NodeUtil.isConstructor(getFunctionNode("function constructor() {}")));
+    assertFalse(NodeUtil.isConstructor(getFunctionNode("class Foo { bar() {} }")));
+  }
+
+  public void testIsGetterOrSetter() {
+    Node fnNode = getFunctionNode("Object.defineProperty(this, 'bar', {get: function() {}});");
+    assertTrue(NodeUtil.isGetterOrSetter(fnNode.getParent()));
+
+    fnNode = getFunctionNode("Object.defineProperty(this, 'bar', {set: function() {}});");
+    assertTrue(NodeUtil.isGetterOrSetter(fnNode.getParent()));
+
+    fnNode = getFunctionNode("Object.defineProperties(this, {bar: {get: function() {}}});");
+    assertTrue(NodeUtil.isGetterOrSetter(fnNode.getParent()));
+
+    fnNode = getFunctionNode("Object.defineProperties(this, {bar: {set: function() {}}});");
+    assertTrue(NodeUtil.isGetterOrSetter(fnNode.getParent()));
+
+    fnNode = getFunctionNode("var x = {get bar() {}};");
+    assertTrue(NodeUtil.isGetterOrSetter(fnNode.getParent()));
+
+    fnNode = getFunctionNode("var x = {set bar(z) {}};");
+    assertTrue(NodeUtil.isGetterOrSetter(fnNode.getParent()));
+  }
+
+  public void testIsObjectDefinePropertiesDefinition() {
+    assertTrue(NodeUtil.isObjectDefinePropertiesDefinition(
+        getCallNode("Object.defineProperties(this, {});")));
+    assertTrue(NodeUtil.isObjectDefinePropertiesDefinition(
+        getCallNode("Object.defineProperties(this, foo);")));
+
+    assertFalse(NodeUtil.isObjectDefinePropertiesDefinition(
+        getCallNode("Object.defineProperties(this, {}, foo);")));
+    assertFalse(NodeUtil.isObjectDefinePropertiesDefinition(
+        getCallNode("Object.defineProperties(this);")));
+    assertFalse(NodeUtil.isObjectDefinePropertiesDefinition(
+        getCallNode("Object.defineProperties();")));
+  }
+
+  public void testIsObjectDefinePropertyDefinition() {
+    assertTrue(NodeUtil.isObjectDefinePropertyDefinition(
+        getCallNode("Object.defineProperty(this, 'foo', {});")));
+    assertTrue(NodeUtil.isObjectDefinePropertyDefinition(
+        getCallNode("Object.defineProperty(this, 'foo', foo);")));
+
+    assertFalse(NodeUtil.isObjectDefinePropertyDefinition(
+        getCallNode("Object.defineProperty(this, {});")));
+    assertFalse(NodeUtil.isObjectDefinePropertyDefinition(
+        getCallNode("Object.defineProperty(this);")));
+    assertFalse(NodeUtil.isObjectDefinePropertyDefinition(
+        getCallNode("Object.defineProperty();")));
+  }
+
   private boolean executedOnceTestCase(String code) {
     Node ast = parse(code);
     Node nameNode = getNameNode(ast, "x");
@@ -2248,6 +2377,14 @@ public final class NodeUtilTest extends TestCase {
   private String getFunctionLValue(String js) {
     Node lVal = NodeUtil.getBestLValue(getFunctionNode(js));
     return lVal == null ? null : lVal.getString();
+  }
+
+  private boolean functionIsRValueOfAssign(String js) {
+    Node ast = parse(js);
+    Node nameNode = getNameNode(ast, "x");
+    Node funcNode = getFunctionNode(ast);
+    assertNotNull("No function node to test", funcNode);
+    return funcNode == NodeUtil.getRValueOfLValue(nameNode);
   }
 
   private void assertNodeTreesEqual(
@@ -2263,8 +2400,13 @@ public final class NodeUtilTest extends TestCase {
   }
 
   static Node getClassNode(String js) {
-   Node root = parse(js);
+    Node root = parse(js);
     return getClassNode(root);
+  }
+
+  static Iterable<Node> getLhsNodesOfDeclaration(String js) {
+    Node root = parse(js);
+    return NodeUtil.getLhsNodesOfDeclaration(root.getFirstChild());
   }
 
   static Node getClassNode(Node n) {
@@ -2273,6 +2415,24 @@ public final class NodeUtilTest extends TestCase {
     }
     for (Node c : n.children()) {
       Node result = getClassNode(c);
+      if (result != null) {
+        return result;
+      }
+    }
+    return null;
+  }
+
+  static Node getCallNode(String js) {
+    Node root = parse(js);
+    return getCallNode(root);
+  }
+
+  static Node getCallNode(Node n) {
+    if (n.isCall()) {
+      return n;
+    }
+    for (Node c : n.children()) {
+      Node result = getCallNode(c);
       if (result != null) {
         return result;
       }

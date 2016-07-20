@@ -104,7 +104,7 @@ public class DescriptorPass implements CompilerPass {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       switch (n.getType()) {
-      case Token.CALL:
+      case CALL:
         // When encountering a function call, see if it is a call to
         // goog.provide().
         Node left = n.getFirstChild();
@@ -121,7 +121,7 @@ public class DescriptorPass implements CompilerPass {
           }
         }
         break;
-      case Token.ASSIGN:
+      case ASSIGN:
         if (n.getFirstChild().getType() == Token.GETPROP) {
           processAssign(n);
         }

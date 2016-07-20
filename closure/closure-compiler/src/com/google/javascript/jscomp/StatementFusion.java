@@ -126,15 +126,15 @@ class StatementFusion extends AbstractPeepholeOptimization {
 
   private boolean isFusableControlStatement(Node n) {
     switch(n.getType()) {
-      case Token.IF:
-      case Token.THROW:
-      case Token.SWITCH:
-      case Token.EXPR_RESULT:
+      case IF:
+      case THROW:
+      case SWITCH:
+      case EXPR_RESULT:
         return true;
-      case Token.RETURN:
+      case RETURN:
         // We don't want to add a new return value.
         return n.hasChildren();
-      case Token.FOR:
+      case FOR:
         if (NodeUtil.isForIn(n)) {
           // Avoid cases where we have for(var x = foo() in a) { ....
           return !mayHaveSideEffects(n.getFirstChild());
@@ -142,9 +142,9 @@ class StatementFusion extends AbstractPeepholeOptimization {
           // Avoid cases where we have for(var x;_;_) { ....
           return !n.getFirstChild().isVar();
         }
-      case Token.LABEL:
+      case LABEL:
         return isFusableControlStatement(n.getLastChild());
-      case Token.BLOCK:
+      case BLOCK:
         return !n.isSyntheticBlock() &&
             isFusableControlStatement(n.getFirstChild());
     }
@@ -191,26 +191,26 @@ class StatementFusion extends AbstractPeepholeOptimization {
     // n - 1 statements (which can be used in an expression) and the last
     // statement. We perform specific fusion based on the last statement's type.
     switch(control.getType()) {
-      case Token.IF:
-      case Token.RETURN:
-      case Token.THROW:
-      case Token.SWITCH:
-      case Token.EXPR_RESULT:
+      case IF:
+      case RETURN:
+      case THROW:
+      case SWITCH:
+      case EXPR_RESULT:
         before.getParent().removeChild(before);
-        fuseExpresssonIntoFirstChild(before.removeFirstChild(), control);
+        fuseExpressionIntoFirstChild(before.removeFirstChild(), control);
         return;
-      case Token.FOR:
+      case FOR:
         before.getParent().removeChild(before);
         if (NodeUtil.isForIn(control)) {
-          fuseExpresssonIntoSecondChild(before.removeFirstChild(), control);
+          fuseExpressionIntoSecondChild(before.removeFirstChild(), control);
         } else {
-          fuseExpresssonIntoFirstChild(before.removeFirstChild(), control);
+          fuseExpressionIntoFirstChild(before.removeFirstChild(), control);
         }
         return;
-      case Token.LABEL:
+      case LABEL:
         fuseExpressionIntoControlFlowStatement(before, control.getLastChild());
         return;
-      case Token.BLOCK:
+      case BLOCK:
         fuseExpressionIntoControlFlowStatement(before, control.getFirstChild());
         return;
       default:
@@ -219,7 +219,7 @@ class StatementFusion extends AbstractPeepholeOptimization {
   }
 
   // exp1, exp1
-  protected static Node fuseExpressionIntoExpression(Node exp1, Node exp2) {
+  static Node fuseExpressionIntoExpression(Node exp1, Node exp2) {
     if (exp2.isEmpty()) {
       return exp1;
     }
@@ -244,13 +244,13 @@ class StatementFusion extends AbstractPeepholeOptimization {
     }
   }
 
-  protected static void fuseExpresssonIntoFirstChild(Node exp, Node stmt) {
+  protected static void fuseExpressionIntoFirstChild(Node exp, Node stmt) {
     Node val = stmt.removeFirstChild();
     Node comma = fuseExpressionIntoExpression(exp, val);
     stmt.addChildToFront(comma);
   }
 
-  protected static void fuseExpresssonIntoSecondChild(Node exp, Node stmt) {
+  protected static void fuseExpressionIntoSecondChild(Node exp, Node stmt) {
     Node val = stmt.removeChildAfter(stmt.getFirstChild());
     Node comma = fuseExpressionIntoExpression(exp, val);
     stmt.addChildAfter(comma, stmt.getFirstChild());

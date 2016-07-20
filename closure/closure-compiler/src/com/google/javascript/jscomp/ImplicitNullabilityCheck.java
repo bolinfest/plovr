@@ -25,8 +25,8 @@ import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
+import com.google.javascript.rhino.TypeI;
 import com.google.javascript.rhino.TypeIRegistry;
-import com.google.javascript.rhino.jstype.JSType;
 
 import java.util.List;
 
@@ -40,9 +40,8 @@ public final class ImplicitNullabilityCheck extends AbstractPostOrderCallback
   public static final DiagnosticType IMPLICITLY_NULLABLE_JSDOC =
     DiagnosticType.warning(
         "JSC_IMPLICITLY_NULLABLE_JSDOC",
-        "Name {0} in JSDoc is implicitly nullable.\n"
-        + "Please add a '!' to make it non-nullable,"
-        + " or a '?' to make it explicitly nullable.");
+        "Name {0} in JSDoc is implicitly nullable, and is discouraged by the style guide.\n"
+        + "Please add a '!' to make it non-nullable, or a '?' to make it explicitly nullable.");
 
   private final AbstractCompiler compiler;
 
@@ -71,6 +70,7 @@ public final class ImplicitNullabilityCheck extends AbstractPostOrderCallback
         transform(
             info.getThrownTypes(),
             new Function<JSTypeExpression, Node>() {
+              @Override
               public Node apply(JSTypeExpression expr) {
                 return expr.getRoot();
               }
@@ -78,6 +78,7 @@ public final class ImplicitNullabilityCheck extends AbstractPostOrderCallback
 
     for (Node typeRoot : info.getTypeNodes()) {
       NodeUtil.visitPreOrder(typeRoot, new NodeUtil.Visitor() {
+        @Override
         public void visit(Node node) {
           if (!node.isString()) {
             return;
@@ -88,12 +89,12 @@ public final class ImplicitNullabilityCheck extends AbstractPostOrderCallback
           Node parent = node.getParent();
           if (parent != null) {
             switch (parent.getType()) {
-              case Token.BANG:
-              case Token.QMARK:
-              case Token.THIS:  // The names inside function(this:Foo) and
-              case Token.NEW:   // function(new:Bar) are already non-null.
+              case BANG:
+              case QMARK:
+              case THIS:  // The names inside function(this:Foo) and
+              case NEW:   // function(new:Bar) are already non-null.
                 return;
-              case Token.PIPE: { // Inside a union
+              case PIPE: { // Inside a union
                 Node gp = parent.getParent();
                 if (gp != null && gp.getType() == Token.QMARK) {
                   return; // Inside an explicitly nullable union
@@ -106,13 +107,15 @@ public final class ImplicitNullabilityCheck extends AbstractPostOrderCallback
                 }
                 break;
               }
+              default:
+                break;
             }
           }
           String typeName = node.getString();
           if (typeName.equals("null") || registry.getType(typeName) == null) {
             return;
           }
-          JSType type = (JSType) registry.createTypeFromCommentNode(node, "[internal]", null);
+          TypeI type = registry.createTypeFromCommentNode(node);
           if (type.isNullable()) {
             reportWarning(t, node, typeName);
           }

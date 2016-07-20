@@ -804,6 +804,7 @@ public final class NameAnalyzerTest extends CompilerTestCase {
 
   public void testComplexAssigns() {
     // Complex assigns are not removed by the current pass.
+    disableNormalize();
     testSame("var x = 0; x += 3; x *= 5;");
   }
 
@@ -818,6 +819,7 @@ public final class NameAnalyzerTest extends CompilerTestCase {
 
   public void testComplexNestedAssigns1() {
     // TODO(nicksantos): Make NameAnalyzer smarter, so that we can eliminate y.
+    disableNormalize();
     testSame("var x = 0; var y = 2; y += x = 3; window.alert(x);");
   }
 
@@ -827,6 +829,7 @@ public final class NameAnalyzerTest extends CompilerTestCase {
   }
 
   public void testComplexNestedAssigns3() {
+    disableNormalize();
     test("var x = 0; var y = x += 3; window.alert(x);",
          "var x = 0; x += 3; window.alert(x);");
   }
@@ -2072,8 +2075,7 @@ public final class NameAnalyzerTest extends CompilerTestCase {
     return new MarkNoSideEffectCallsAndNameAnalyzerRunner(compiler);
   }
 
-  private class MarkNoSideEffectCallsAndNameAnalyzerRunner
-      implements CompilerPass {
+  private static class MarkNoSideEffectCallsAndNameAnalyzerRunner implements CompilerPass {
     MarkNoSideEffectCalls markNoSideEffectCalls;
     NameAnalyzer analyzer;
     MarkNoSideEffectCallsAndNameAnalyzerRunner(Compiler compiler) {

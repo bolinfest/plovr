@@ -146,8 +146,15 @@ final class ClosureCodeRemoval implements CompilerPass {
         if (nameNode.isQualifiedName() &&
             valueNode.isQualifiedName() &&
             valueNode.matchesQualifiedName(ABSTRACT_METHOD_NAME)) {
-          abstractMethodAssignmentNodes.add(new RemovableAssignment(
-              n.getFirstChild(), n, t));
+          // Foo.prototype.bar = goog.abstractMethod
+          abstractMethodAssignmentNodes.add(
+              new RemovableAssignment(n.getFirstChild(), n, t));
+        } else if (n.getJSDocInfo() != null
+            && n.getJSDocInfo().isAbstract()
+            && !n.getJSDocInfo().isConstructor()) {
+          // @abstract
+          abstractMethodAssignmentNodes.add(
+              new RemovableAssignment(n.getFirstChild(), n, t));
         }
       }
     }
@@ -223,7 +230,9 @@ final class ClosureCodeRemoval implements CompilerPass {
         if (firstArg == null) {
           parent.replaceChild(call, NodeUtil.newUndefinedNode(call));
         } else {
-          parent.replaceChild(call, firstArg.detachFromParent());
+          Node replacement = firstArg.detachFromParent();
+          replacement.setJSType(call.getJSType());
+          parent.replaceChild(call, replacement);
         }
       }
       compiler.reportCodeChange();

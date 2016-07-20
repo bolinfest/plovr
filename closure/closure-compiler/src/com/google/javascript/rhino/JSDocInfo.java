@@ -45,6 +45,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -54,7 +55,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 
@@ -91,7 +92,7 @@ public class JSDocInfo implements Serializable {
   }
 
   // Bitfield property indicies.
-  class Property {
+  static class Property {
     static final int
       NG_INJECT = 0,
       WIZ_ACTION = 1,
@@ -110,13 +111,13 @@ public class JSDocInfo implements Serializable {
 
     // Function information
     private JSTypeExpression baseType;
-    private List<JSTypeExpression> extendedInterfaces;
-    private List<JSTypeExpression> implementedInterfaces;
-    private Map<String, JSTypeExpression> parameters;
-    private List<JSTypeExpression> thrownTypes;
-    private List<String> templateTypeNames;
+    private ArrayList<JSTypeExpression> extendedInterfaces;
+    private ArrayList<JSTypeExpression> implementedInterfaces;
+    private LinkedHashMap<String, JSTypeExpression> parameters;
+    private ArrayList<JSTypeExpression> thrownTypes;
+    private ArrayList<String> templateTypeNames;
     private Set<String> disposedParameters;
-    private Map<String, Node> typeTransformations;
+    private LinkedHashMap<String, Node> typeTransformations;
 
     // Other information
     private String description;
@@ -154,14 +155,16 @@ public class JSDocInfo implements Serializable {
     }
 
     protected LazilyInitializedInfo clone() {
+      return clone(false);
+    }
+
+    protected LazilyInitializedInfo clone(boolean cloneTypeNodes) {
       LazilyInitializedInfo other = new LazilyInitializedInfo();
-      other.baseType = baseType;
-      other.extendedInterfaces = extendedInterfaces == null ? null
-          : new ArrayList<>(extendedInterfaces);
-      other.implementedInterfaces = implementedInterfaces == null ? null
-          : new ArrayList<>(implementedInterfaces);
-      other.parameters = parameters == null ? null : new LinkedHashMap<>(parameters);
-      other.thrownTypes = thrownTypes == null ? null : new ArrayList<>(thrownTypes);
+      other.baseType = cloneType(baseType, cloneTypeNodes);
+      other.extendedInterfaces = cloneTypeList(extendedInterfaces, cloneTypeNodes);
+      other.implementedInterfaces = cloneTypeList(implementedInterfaces, cloneTypeNodes);
+      other.parameters = cloneTypeMap(parameters, cloneTypeNodes);
+      other.thrownTypes = cloneTypeList(thrownTypes, cloneTypeNodes);
       other.templateTypeNames = templateTypeNames == null ? null
           : new ArrayList<>(templateTypeNames);
       other.disposedParameters = disposedParameters == null ? null
@@ -179,6 +182,31 @@ public class JSDocInfo implements Serializable {
 
       other.propertyBitField = propertyBitField;
       return other;
+    }
+
+    protected ArrayList<JSTypeExpression> cloneTypeList(
+        ArrayList<JSTypeExpression> list, boolean cloneTypeExpressionNodes) {
+      ArrayList<JSTypeExpression> newlist = null;
+      if (list != null) {
+        newlist = new ArrayList<>(list.size());
+        for (JSTypeExpression expr : list) {
+          newlist.add(cloneType(expr, cloneTypeExpressionNodes));
+        }
+      }
+      return newlist;
+    }
+
+    protected LinkedHashMap<String, JSTypeExpression> cloneTypeMap(
+        LinkedHashMap<String, JSTypeExpression> map, boolean cloneTypeExpressionNodes) {
+      LinkedHashMap<String, JSTypeExpression> newmap = null;
+      if (map != null) {
+        newmap = new LinkedHashMap<>();
+        for (Entry<String, JSTypeExpression> entry : map.entrySet()) {
+          JSTypeExpression value = entry.getValue();
+          newmap.put(entry.getKey(), cloneType(value, cloneTypeExpressionNodes));
+        }
+      }
+      return newmap;
     }
 
     // TODO(nnaze): Consider putting bit-fiddling logic in a reusable
@@ -200,16 +228,16 @@ public class JSDocInfo implements Serializable {
     private int getMaskForBitIndex(int bitIndex) {
         Preconditions.checkArgument(bitIndex >= 0,
             "Bit index should be non-negative integer");
-      return 1 << bitIndex;
+        return 1 << bitIndex;
     }
   }
 
   private static final class LazilyInitializedDocumentation {
     private String sourceComment;
-    private List<Marker> markers;
+    private ArrayList<Marker> markers;
 
     private LinkedHashMap<String, String> parameters;
-    private Map<JSTypeExpression, String> throwsDescriptions;
+    private LinkedHashMap<JSTypeExpression, String> throwsDescriptions;
     private String blockDescription;
     private String fileOverview;
     private String returnDescription;
@@ -487,23 +515,26 @@ public class JSDocInfo implements Serializable {
   private static final int MASK_DEPRECATED    = 0x00000100; // @deprecated
   private static final int MASK_INTERFACE     = 0x00000200; // @interface
   private static final int MASK_EXPORT        = 0x00000400; // @export
+  @SuppressWarnings("unused")
+  private static final int MASK_UNUSED_2      = 0x00000800; //
   private static final int MASK_FILEOVERVIEW  = 0x00001000; // @fileoverview
   private static final int MASK_IMPLICITCAST  = 0x00002000; // @implicitCast
   private static final int MASK_NOSIDEEFFECTS = 0x00004000; // @nosideeffects
   private static final int MASK_EXTERNS       = 0x00008000; // @externs
-  @SuppressWarnings("unused")
-  private static final int MASK_UNUSED_2      = 0x00010000; //
+  private static final int MASK_XIDGEN        = 0x00010000; // @idGenerator {xid}
   private static final int MASK_NOCOMPILE     = 0x00020000; // @nocompile
-  private static final int MASK_CONSISTIDGEN  = 0x00040000; // @consistentIdGenerator
-  private static final int MASK_IDGEN         = 0x00080000; // @idGenerator
+  private static final int MASK_CONSISTIDGEN  = 0x00040000; // @idGenerator {consistent}
+  private static final int MASK_IDGEN         = 0x00080000; // @idGenerator {unique}
   private static final int MASK_EXPOSE        = 0x00100000; // @expose
   private static final int MASK_UNRESTRICTED  = 0x00200000; // @unrestricted
   private static final int MASK_STRUCT        = 0x00400000; // @struct
   private static final int MASK_DICT          = 0x00800000; // @dict
-  private static final int MASK_STALBEIDGEN   = 0x01000000; // @stableIdGenerator
+  private static final int MASK_STABLEIDGEN   = 0x01000000; // @idGenerator {stable}
   private static final int MASK_MAPPEDIDGEN   = 0x02000000; // @idGenerator {mapped}
   private static final int MASK_NOCOLLAPSE    = 0x04000000; // @nocollapse
   private static final int MASK_RECORD        = 0x08000000; // @record
+  private static final int MASK_ABSTRACT      = 0x10000000; // @abstract
+  // No more masks available
 
   // 3 bit type field stored in the top 3 bits of the most significant
   // nibble.
@@ -525,16 +556,27 @@ public class JSDocInfo implements Serializable {
   JSDocInfo() {}
 
   public JSDocInfo clone() {
+    return clone(false);
+  }
+
+  public JSDocInfo clone(boolean cloneTypeNodes) {
     JSDocInfo other = new JSDocInfo();
-    other.info = this.info == null ? null : this.info.clone();
+    other.info = this.info == null ? null : this.info.clone(cloneTypeNodes);
     other.documentation = this.documentation;
     other.visibility = this.visibility;
     other.bitset = this.bitset;
-    other.type = this.type;
-    other.thisType = this.thisType;
+    other.type = cloneType(this.type, cloneTypeNodes);
+    other.thisType = cloneType(this.thisType, cloneTypeNodes);
     other.includeDocumentation = this.includeDocumentation;
     other.originalCommentPosition = this.originalCommentPosition;
     return other;
+  }
+
+  private static JSTypeExpression cloneType(JSTypeExpression expr, boolean cloneTypeNodes) {
+    if (expr != null) {
+      return cloneTypeNodes ? expr.clone() : expr;
+    }
+    return null;
   }
 
   @VisibleForTesting
@@ -602,7 +644,11 @@ public class JSDocInfo implements Serializable {
   }
 
   void setStableIdGenerator(boolean value) {
-    setFlag(value, MASK_STALBEIDGEN);
+    setFlag(value, MASK_STABLEIDGEN);
+  }
+
+  void setXidGenerator(boolean value) {
+    setFlag(value, MASK_XIDGEN);
   }
 
   void setMappedIdGenerator(boolean value) {
@@ -615,6 +661,10 @@ public class JSDocInfo implements Serializable {
 
   void setConstructor(boolean value) {
     setFlag(value, MASK_CONSTRUCTOR);
+  }
+
+  void setAbstract() {
+    setFlag(true, MASK_ABSTRACT);
   }
 
   void setUnrestricted() {
@@ -713,11 +763,18 @@ public class JSDocInfo implements Serializable {
    * @return whether the {@code @stableIdGenerator} is present on this {@link JSDocInfo}.
    */
   public boolean isStableIdGenerator() {
-    return getFlag(MASK_STALBEIDGEN);
+    return getFlag(MASK_STABLEIDGEN);
   }
 
   /**
-   * @return whether the {@code @stableIdGenerator} is present on this {@link JSDocInfo}.
+   * @return whether the {@code @idGenerator {xid}} is present on this {@link JSDocInfo}.
+   */
+  public boolean isXidGenerator() {
+    return getFlag(MASK_XIDGEN);
+  }
+
+  /**
+   * @return whether the {@code @idGenerator {mapped}} is present on this {@link JSDocInfo}.
    */
   public boolean isMappedIdGenerator() {
     return getFlag(MASK_MAPPEDIDGEN);
@@ -741,6 +798,14 @@ public class JSDocInfo implements Serializable {
    */
   public boolean isConstructor() {
     return getFlag(MASK_CONSTRUCTOR);
+  }
+
+  /**
+   * Returns whether the {@code @abstract} annotation is present on this
+   * {@link JSDocInfo}.
+   */
+  public boolean isAbstract() {
+    return getFlag(MASK_ABSTRACT);
   }
 
   /**
@@ -936,6 +1001,13 @@ public class JSDocInfo implements Serializable {
         || getParameterCount() > 0
         || getFlag(MASK_CONSTRUCTOR)
         || (getFlag(MASK_NOSIDEEFFECTS) && !hasType());
+  }
+
+  // For jsdocs that create new types. Not to be confused with jsdocs that
+  // declare the type of a variable or property.
+  public boolean containsTypeDefinition() {
+    return isConstructor() || isInterface()
+        || hasEnumParameterType() || hasTypedefType();
   }
 
   private boolean getFlag(int mask) {
@@ -1361,7 +1433,7 @@ public class JSDocInfo implements Serializable {
     if (info == null || info.parameters == null) {
       return null;
     }
-    return ImmutableList.copyOf(info.parameters.keySet()).get(index);
+    return Iterables.get(info.parameters.keySet(), index);
   }
 
   /**

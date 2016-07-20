@@ -29,8 +29,11 @@ import com.google.javascript.rhino.Token;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+
+import javax.annotation.Nullable;
 
 /**
  * Converts ES6 code to valid ES5 code. This class does most of the transpilation, and
@@ -43,6 +46,7 @@ import java.util.Set;
  *
  * @author tbreisacher@google.com (Tyler Breisacher)
  */
+// TODO(tbreisacher): This class does too many things. Break it into smaller passes.
 public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapCompilerPass {
   private final AbstractCompiler compiler;
 
@@ -86,7 +90,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
 
   private static final String ITER_RESULT = "$jscomp$key$";
 
-  // These functions are defined in js/es6_runtime.js
+  // This function is defined in js/es6/util/inherits.js
   static final String INHERITS = "$jscomp.inherits";
 
   public Es6ToEs3Converter(AbstractCompiler compiler) {
@@ -112,15 +116,25 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
   @Override
   public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
     switch (n.getType()) {
-      case Token.REST:
+      case REST:
         visitRestParam(n, parent);
         break;
-      case Token.GETTER_DEF:
-      case Token.SETTER_DEF:
+      case GETTER_DEF:
+      case SETTER_DEF:
         if (compiler.getOptions().getLanguageOut() == LanguageMode.ECMASCRIPT3) {
           cannotConvert(n, "ES5 getters/setters (consider using --language_out=ES5)");
           return false;
         }
+        break;
+      case NEW_TARGET:
+        cannotConvertYet(n, "new.target");
+        break;
+      case FUNCTION:
+        if (n.isAsyncFunction()) {
+          cannotConvertYet(n, "async function");
+        }
+        break;
+      default:
         break;
     }
     return true;
@@ -129,47 +143,47 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
     switch (n.getType()) {
-      case Token.NAME:
+      case NAME:
         if (!n.isFromExterns() && isGlobalSymbol(t, n)) {
           initSymbolBefore(n);
         }
         break;
-      case Token.GETPROP:
+      case GETPROP:
         if (!n.isFromExterns()) {
           visitGetprop(t, n);
         }
         break;
-      case Token.OBJECTLIT:
+      case OBJECTLIT:
         visitObject(n);
         break;
-      case Token.MEMBER_FUNCTION_DEF:
+      case MEMBER_FUNCTION_DEF:
         if (parent.isObjectLit()) {
           visitMemberFunctionDefInObjectLit(n, parent);
         }
         break;
-      case Token.FOR_OF:
-        visitForOf(t, n, parent);
+      case FOR_OF:
+        visitForOf(n, parent);
         break;
-      case Token.STRING_KEY:
+      case STRING_KEY:
         visitStringKey(n);
         break;
-      case Token.CLASS:
+      case CLASS:
         visitClass(n, parent);
         break;
-      case Token.ARRAYLIT:
-      case Token.NEW:
-      case Token.CALL:
+      case ARRAYLIT:
+      case NEW:
+      case CALL:
         for (Node child : n.children()) {
           if (child.isSpread()) {
-            visitArrayLitOrCallWithSpread(t, n, parent);
+            visitArrayLitOrCallWithSpread(n, parent);
             break;
           }
         }
         break;
-      case Token.TAGGED_TEMPLATELIT:
+      case TAGGED_TEMPLATELIT:
         Es6TemplateLiterals.visitTaggedTemplateLiteral(t, n);
         break;
-      case Token.TEMPLATELIT:
+      case TEMPLATELIT:
         if (!parent.isTaggedTemplateLit()) {
           Es6TemplateLiterals.visitTemplateLiteral(t, n);
         }
@@ -192,7 +206,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
    * Inserts a call to $jscomp.initSymbol() before {@code n}.
    */
   private void initSymbolBefore(Node n) {
-    compiler.needsEs6Runtime = true;
+    compiler.ensureLibraryInjected("es6/symbol", false);
     Node statement = NodeUtil.getEnclosingStatement(n);
     Node initSymbol = IR.exprResult(IR.call(NodeUtil.newQName(compiler, "$jscomp.initSymbol")));
     statement.getParent().addChildBefore(initSymbol.useSourceInfoFromForTree(statement), statement);
@@ -205,7 +219,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
       return;
     }
     if (isGlobalSymbol(t, n.getFirstChild())) {
-      compiler.needsEs6Runtime = true;
+      compiler.ensureLibraryInjected("es6/symbol", false);
       Node statement = NodeUtil.getEnclosingStatement(n);
       Node init = IR.exprResult(IR.call(NodeUtil.newQName(compiler, "$jscomp.initSymbolIterator")));
       statement.getParent().addChildBefore(init.useSourceInfoFromForTree(statement), statement);
@@ -237,7 +251,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
     }
   }
 
-  private void visitForOf(NodeTraversal t, Node node, Node parent) {
+  private void visitForOf(Node node, Node parent) {
     Node variable = node.removeFirstChild();
     Node iterable = node.removeFirstChild();
     Node body = node.removeFirstChild();
@@ -246,7 +260,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
     iterName.makeNonIndexable();
     Node getNext = IR.call(IR.getprop(iterName.cloneTree(), IR.string("next")));
     String variableName;
-    int declType;
+    Token declType;
     if (variable.isName()) {
       declType = Token.NAME;
       variableName = variable.getQualifiedName();
@@ -384,7 +398,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
    * new F(...args) =>
    *     new Function.prototype.bind.apply(F, [].concat($jscomp.arrayFromIterable(args)))
    */
-  private void visitArrayLitOrCallWithSpread(NodeTraversal t, Node node, Node parent) {
+  private void visitArrayLitOrCallWithSpread(Node node, Node parent) {
     Preconditions.checkArgument(node.isCall() || node.isArrayLit() || node.isNew());
     List<Node> groups = new ArrayList<>();
     Node currGroup = null;
@@ -396,7 +410,6 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
           groups.add(currGroup);
           currGroup = null;
         }
-        compiler.needsEs6Runtime = true;
         groups.add(arrayFromIterable(compiler, currElement.removeFirstChild()));
       } else {
         if (currGroup == null) {
@@ -499,7 +512,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
         }
         Node val = propdef.removeFirstChild();
         propdef.setType(Token.STRING);
-        int type = propdef.isQuotedString() ? Token.GETELEM : Token.GETPROP;
+        Token type = propdef.isQuotedString() ? Token.GETELEM : Token.GETPROP;
         Node access = new Node(type, IR.name(objName), propdef);
         result = IR.comma(IR.assign(access, val), result);
       }
@@ -533,9 +546,9 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
     ClassDeclarationMetadata metadata = ClassDeclarationMetadata.create(classNode, parent);
 
     if (metadata == null || metadata.fullClassName == null) {
-      cannotConvert(parent, "Can only convert classes that are declarations or the right hand"
-          + " side of a simple assignment.");
-      return;
+      throw new IllegalStateException(
+          "Can only convert classes that are declarations or the right hand"
+          + " side of a simple assignment: " + classNode);
     }
     if (metadata.hasSuperClass() && !metadata.superClassNameNode.isQualifiedName()) {
       compiler.report(JSError.make(metadata.superClassNameNode, DYNAMIC_EXTENDS_TYPE));
@@ -623,7 +636,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
               NodeUtil.newQName(compiler, metadata.fullClassName),
               NodeUtil.newQName(compiler, superClassString));
           Node inheritsCall = IR.exprResult(inherits);
-          compiler.needsEs6Runtime = true;
+          compiler.ensureLibraryInjected("es6/util/inherits", false);
 
           inheritsCall.useSourceInfoIfMissingFromForTree(classNode);
           enclosingStatement.getParent().addChildAfter(inheritsCall, enclosingStatement);
@@ -636,47 +649,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
 
     addTypeDeclarations(metadata, enclosingStatement);
 
-    // Classes are @struct by default.
-    if (!newInfo.isUnrestrictedRecorded() && !newInfo.isDictRecorded()
-        && !newInfo.isStructRecorded()) {
-      newInfo.recordStruct();
-    }
-
-    if (ctorJSDocInfo != null) {
-      if (!ctorJSDocInfo.getSuppressions().isEmpty()) {
-        newInfo.recordSuppressions(ctorJSDocInfo.getSuppressions());
-      }
-
-      for (String param : ctorJSDocInfo.getParameterNames()) {
-        newInfo.recordParameter(param, ctorJSDocInfo.getParameterType(param));
-        newInfo.recordParameterDescription(param, ctorJSDocInfo.getDescriptionForParameter(param));
-      }
-
-      for (JSTypeExpression thrown : ctorJSDocInfo.getThrownTypes()) {
-        newInfo.recordThrowType(thrown);
-        newInfo.recordThrowDescription(thrown, ctorJSDocInfo.getThrowsDescriptionForType(thrown));
-      }
-
-      JSDocInfo.Visibility visibility = ctorJSDocInfo.getVisibility();
-      if (visibility != null && visibility != JSDocInfo.Visibility.INHERITED) {
-        newInfo.recordVisibility(visibility);
-      }
-
-      if (ctorJSDocInfo.isDeprecated()) {
-        newInfo.recordDeprecated();
-      }
-
-      if (ctorJSDocInfo.getDeprecationReason() != null
-          && !newInfo.isDeprecationReasonRecorded()) {
-        newInfo.recordDeprecationReason(ctorJSDocInfo.getDeprecationReason());
-      }
-
-      newInfo.mergePropertyBitfieldFrom(ctorJSDocInfo);
-
-      for (String templateType : ctorJSDocInfo.getTemplateTypeNames()) {
-        newInfo.recordTemplateTypeName(templateType);
-      }
-    }
+    updateClassJsDoc(ctorJSDocInfo, newInfo);
 
     if (NodeUtil.isStatement(classNode)) {
       constructor.getFirstChild().setString("");
@@ -707,6 +680,54 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
     }
 
     compiler.reportCodeChange();
+  }
+
+  /**
+   * @param ctorInfo the JSDocInfo from the constructor method of the ES6 class.
+   * @param newInfo the JSDocInfo that will be added to the constructor function in the ES3 output
+   */
+  private void updateClassJsDoc(@Nullable JSDocInfo ctorInfo, JSDocInfoBuilder newInfo) {
+    // Classes are @struct by default.
+    if (!newInfo.isUnrestrictedRecorded() && !newInfo.isDictRecorded()
+        && !newInfo.isStructRecorded()) {
+      newInfo.recordStruct();
+    }
+
+    if (ctorInfo != null) {
+      if (!ctorInfo.getSuppressions().isEmpty()) {
+        newInfo.recordSuppressions(ctorInfo.getSuppressions());
+      }
+
+      for (String param : ctorInfo.getParameterNames()) {
+        newInfo.recordParameter(param, ctorInfo.getParameterType(param));
+        newInfo.recordParameterDescription(param, ctorInfo.getDescriptionForParameter(param));
+      }
+
+      for (JSTypeExpression thrown : ctorInfo.getThrownTypes()) {
+        newInfo.recordThrowType(thrown);
+        newInfo.recordThrowDescription(thrown, ctorInfo.getThrowsDescriptionForType(thrown));
+      }
+
+      JSDocInfo.Visibility visibility = ctorInfo.getVisibility();
+      if (visibility != null && visibility != JSDocInfo.Visibility.INHERITED) {
+        newInfo.recordVisibility(visibility);
+      }
+
+      if (ctorInfo.isDeprecated()) {
+        newInfo.recordDeprecated();
+      }
+
+      if (ctorInfo.getDeprecationReason() != null
+          && !newInfo.isDeprecationReasonRecorded()) {
+        newInfo.recordDeprecationReason(ctorInfo.getDeprecationReason());
+      }
+
+      newInfo.mergePropertyBitfieldFrom(ctorInfo);
+
+      for (String templateType : ctorInfo.getTemplateTypeNames()) {
+        newInfo.recordTemplateTypeName(templateType);
+      }
+    }
   }
 
   /**
@@ -952,7 +973,7 @@ public final class Es6ToEs3Converter implements NodeTraversal.Callback, HotSwapC
 
   private static Node callEs6RuntimeFunction(
       AbstractCompiler compiler, Node iterable, String function) {
-    compiler.needsEs6Runtime = true;
+    compiler.ensureLibraryInjected("es6/util/" + function.toLowerCase(Locale.US), false);
     return IR.call(
         NodeUtil.newQName(compiler, "$jscomp." + function),
         iterable);

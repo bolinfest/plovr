@@ -16,6 +16,7 @@
 
 package com.google.javascript.jscomp.parsing.parser.trees;
 
+import com.google.javascript.jscomp.parsing.parser.util.SourcePosition;
 import com.google.javascript.jscomp.parsing.parser.util.SourceRange;
 
 /**
@@ -41,6 +42,15 @@ public class ParseTree {
     this.type = type;
     this.location = location;
   }
+
+  public SourcePosition getStart() {
+    return location.start;
+  }
+
+  public SourcePosition getEnd() {
+    return location.end;
+  }
+
   public ArrayLiteralExpressionTree asArrayLiteralExpression() {
     return (ArrayLiteralExpressionTree) this; }
   public ArrayPatternTree asArrayPattern() { return (ArrayPatternTree) this; }
@@ -98,7 +108,6 @@ public class ParseTree {
   public MemberVariableTree asMemberVariable() { return (MemberVariableTree) this; }
   public MissingPrimaryExpressionTree asMissingPrimaryExpression() {
     return (MissingPrimaryExpressionTree) this; }
-  public ModuleImportTree asModuleImport() { return (ModuleImportTree) this; }
   public NewExpressionTree asNewExpression() { return (NewExpressionTree) this; }
   public NullTree asNull() { return (NullTree) this; }
   public ObjectLiteralExpressionTree asObjectLiteralExpression() {
@@ -143,6 +152,9 @@ public class ParseTree {
   public WhileStatementTree asWhileStatement() { return (WhileStatementTree) this; }
   public WithStatementTree asWithStatement() { return (WithStatementTree) this; }
   public YieldExpressionTree asYieldStatement() { return (YieldExpressionTree) this; }
+  public AwaitExpressionTree asAwaitExpression() {
+    return (AwaitExpressionTree) this;
+  }
   public InterfaceDeclarationTree asInterfaceDeclaration() {
     return (InterfaceDeclarationTree) this;
   }
@@ -155,6 +167,9 @@ public class ParseTree {
   public IndexSignatureTree asIndexSignature() { return (IndexSignatureTree) this; }
   public CallSignatureTree asCallSignature() { return (CallSignatureTree) this; }
 
+  public NewTargetExpressionTree asNewTargetExpression() {
+    return (NewTargetExpressionTree) this;
+  }
   public boolean isPattern() {
     ParseTree parseTree = this;
     while (parseTree.type == ParseTreeType.PAREN_EXPRESSION) {
@@ -193,7 +208,12 @@ public class ParseTree {
     return this.type == ParseTreeType.ASSIGNMENT_REST_ELEMENT;
   }
 
-  @Override public String toString() {
+  public boolean isRestParameter() {
+    return this.type == ParseTreeType.REST_PARAMETER;
+  }
+
+  @Override
+  public String toString() {
     return type + "@" + location;
   }
 }

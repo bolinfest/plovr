@@ -157,7 +157,6 @@ public enum CompilationLevel {
     options.setInlineConstantVars(true);
     options.setInlineFunctions(Reach.ALL);
     options.setAssumeClosuresOnlyCaptureReferences(false);
-    options.setInlineGetters(true);
     options.setInlineVariables(Reach.ALL);
     options.setFlowSensitiveInlineVariables(true);
     options.setComputeFunctionSideEffects(true);
@@ -177,21 +176,20 @@ public enum CompilationLevel {
   }
 
   /**
-   * Enable additional optimizations that use type information.
+   * Enable additional optimizations that use type information. Only has
+   * an effect for ADVANCED_OPTIMIZATIONS; this is a no-op for other modes.
    * @param options The CompilerOptions object to set the options on.
    */
   public void setTypeBasedOptimizationOptions(CompilerOptions options) {
     switch (this) {
       case ADVANCED_OPTIMIZATIONS:
         options.inferTypes = true;
-        options.disambiguateProperties = true;
-        options.ambiguateProperties = true;
-        options.inlineProperties = true;
-        options.useTypesForOptimization = true;
+        options.setDisambiguateProperties(true);
+        options.setAmbiguateProperties(true);
+        options.setInlineProperties(true);
+        options.setUseTypesForOptimization(true);
         break;
       case SIMPLE_OPTIMIZATIONS:
-        options.useTypesForOptimization = true;
-        break;
       case WHITESPACE_ONLY:
         break;
     }

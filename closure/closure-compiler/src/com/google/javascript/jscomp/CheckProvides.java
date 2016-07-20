@@ -19,7 +19,6 @@ import com.google.javascript.jscomp.NodeTraversal.AbstractShallowCallback;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -57,6 +56,7 @@ class CheckProvides implements HotSwapCompilerPass {
     private final Map<String, Node> provides = new HashMap<>();
     private final Map<String, Node> ctors = new HashMap<>();
     private final CodingConvention convention;
+    private boolean containsRequires = false;
 
     CheckProvidesCallback(CodingConvention convention){
       this.convention = convention;
@@ -65,23 +65,26 @@ class CheckProvides implements HotSwapCompilerPass {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       switch (n.getType()) {
-        case Token.CALL:
+        case CALL:
           String providedClassName =
             codingConvention.extractClassNameIfProvide(n, parent);
           if (providedClassName != null) {
             provides.put(providedClassName, n);
           }
+          if (!containsRequires && codingConvention.extractClassNameIfRequire(n, parent) != null) {
+            containsRequires = true;
+          }
           break;
-        case Token.FUNCTION:
+        case FUNCTION:
           // Arrow function can't be constructors
           if (!n.isArrowFunction()) {
             visitFunctionNode(n, parent);
           }
           break;
-        case Token.CLASS:
+        case CLASS:
           visitClassNode(n);
           break;
-        case Token.SCRIPT:
+        case SCRIPT:
           visitScriptNode();
       }
     }
@@ -127,24 +130,26 @@ class CheckProvides implements HotSwapCompilerPass {
 
     private void visitScriptNode() {
       for (Map.Entry<String, Node> ctorEntry : ctors.entrySet()) {
-        String ctor = ctorEntry.getKey();
+        String ctorName = ctorEntry.getKey();
         int index = -1;
         boolean found = false;
 
-        if (ctor.startsWith("$jscomp.")) {
+        if (ctorName.startsWith("$jscomp.")
+            || ClosureRewriteModule.isModuleContent(ctorName)
+            || ClosureRewriteModule.isModuleExport(ctorName)) {
           continue;
         }
 
         do {
-          index = ctor.indexOf('.', index + 1);
-          String provideKey = index == -1 ? ctor : ctor.substring(0, index);
+          index = ctorName.indexOf('.', index + 1);
+          String provideKey = index == -1 ? ctorName : ctorName.substring(0, index);
           if (provides.containsKey(provideKey)) {
             found = true;
             break;
           }
         } while (index != -1);
 
-        if (!found) {
+        if (!found && (containsRequires || !provides.isEmpty())) {
           Node n = ctorEntry.getValue();
           compiler.report(
               JSError.make(n, MISSING_PROVIDE_WARNING, ctorEntry.getKey()));
@@ -152,6 +157,7 @@ class CheckProvides implements HotSwapCompilerPass {
       }
       provides.clear();
       ctors.clear();
+      containsRequires = false;
     }
   }
 }

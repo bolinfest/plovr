@@ -92,6 +92,22 @@ public final class NormalizeTest extends CompilerTestCase {
          "if (true)a:{ var a; var b; }");
   }
 
+  public void testAssignShorthand() {
+    test("x |= 1;", "x = x | 1;");
+    test("x ^= 1;", "x = x ^ 1;");
+    test("x &= 1;", "x = x & 1;");
+    test("x <<= 1;", "x = x << 1;");
+    test("x >>= 1;", "x = x >> 1;");
+    test("x >>>= 1;", "x = x >>> 1;");
+    test("x += 1;", "x = x + 1;");
+    test("x -= 1;", "x = x - 1;");
+    test("x *= 1;", "x = x * 1;");
+    test("x /= 1;", "x = x / 1;");
+    test("x %= 1;", "x = x % 1;");
+
+    test("/** @suppress {const} */ x += 1;", "/** @suppress {const} */ x = x + 1;");
+  }
+
   public void testDuplicateVarInExterns() {
     test("var extern;",
          "/** @suppress {duplicate} */ var extern = 3;",
@@ -181,6 +197,7 @@ public final class NormalizeTest extends CompilerTestCase {
     testSame("function f() { function foo() {} }");
     test("function f() { f(); a:function bar() {} }",
          "function f() { f(); a:{ var bar = function () {} }}");
+    setAcceptedLanguage(CompilerOptions.LanguageMode.ECMASCRIPT6);
     test("function f() { f(); {function bar() {}}}",
          "function f() { f(); {var bar = function () {}}}");
     test("function f() { f(); if (true) {function bar() {}}}",
@@ -200,6 +217,7 @@ public final class NormalizeTest extends CompilerTestCase {
   }
 
   public void testNormalizeFunctionDeclarations() throws Exception {
+    setAcceptedLanguage(CompilerOptions.LanguageMode.ECMASCRIPT6);
     testSame("function f() {}");
     testSame("var f = function () {}");
     test("var f = function f() {}",
@@ -299,6 +317,7 @@ public final class NormalizeTest extends CompilerTestCase {
   }
 
   public void testRemoveDuplicateVarDeclarations3() {
+    setAcceptedLanguage(CompilerOptions.LanguageMode.ECMASCRIPT6);
     test("var f = 1; function f(){}",
          "f = 1; function f(){}");
     test("var f; function f(){}",
@@ -492,7 +511,7 @@ public final class NormalizeTest extends CompilerTestCase {
     new WithCollapse().testConstantProperties();
   }
 
-  private class WithCollapse extends CompilerTestCase {
+  private static class WithCollapse extends CompilerTestCase {
     WithCollapse() {
       enableNormalize();
     }

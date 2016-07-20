@@ -27,7 +27,6 @@ import com.google.javascript.jscomp.NodeTraversal.Callback;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TypeI;
 import com.google.javascript.rhino.TypeIRegistry;
 
@@ -116,10 +115,7 @@ class ProcessDefines implements CompilerPass {
 
   @Override
   public void process(Node externs, Node root) {
-    if (namespace == null) {
-      namespace = new GlobalNamespace(compiler, root);
-    }
-    overrideDefines(collectDefines(root, namespace));
+    overrideDefines(collectDefines(root));
   }
 
   private void overrideDefines(Map<String, DefineInfo> allDefines) {
@@ -171,8 +167,11 @@ class ProcessDefines implements CompilerPass {
    * each one.
    * @return A map of {@link DefineInfo} structures, keyed by name.
    */
-  private Map<String, DefineInfo> collectDefines(Node root,
-      GlobalNamespace namespace) {
+  Map<String, DefineInfo> collectDefines(Node root) {
+    if (namespace == null) {
+      namespace = new GlobalNamespace(compiler, root);
+    }
+
     // Find all the global names with a @define annotation
     List<Name> allDefines = new ArrayList<>();
     for (Name name : namespace.getNameIndex().values()) {
@@ -380,13 +379,13 @@ class ProcessDefines implements CompilerPass {
      */
     private void updateAssignAllowedStack(Node n, boolean entering) {
       switch (n.getType()) {
-        case Token.CASE:
-        case Token.FOR:
-        case Token.FUNCTION:
-        case Token.HOOK:
-        case Token.IF:
-        case Token.SWITCH:
-        case Token.WHILE:
+        case CASE:
+        case FOR:
+        case FUNCTION:
+        case HOOK:
+        case IF:
+        case SWITCH:
+        case WHILE:
           if (entering) {
             assignAllowed.push(0);
           } else {

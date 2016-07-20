@@ -15,103 +15,12 @@
  */
 
 /**
- * @fileoverview Definitions for ECMAScript 6.
- * @see http://wiki.ecmascript.org/doku.php?id=harmony:specification_drafts
+ * @fileoverview Definitions for ECMAScript 6 and later.
+ * @see https://tc39.github.io/ecma262/
  * @see https://www.khronos.org/registry/typedarray/specs/latest/
  * @externs
  */
 
-// TODO(johnlenz): symbol should be a primitive type.
-/** @typedef {?} */
-var symbol;
-
-/**
- * @param {string} description
- * @return {symbol}
- */
-function Symbol(description) {}
-
-
-/**
- * @param {string} sym
- * @return {symbol|undefined}
- * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol/for
- */
-Symbol.for;
-
-
-/**
- * @param {symbol} sym
- * @return {string|undefined}
- * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol/keyFor
- */
-Symbol.keyFor;
-
-
-// Well known symbols
-
-/** @const {symbol} */
-Symbol.iterator;
-
-/** @const {symbol} */
-Symbol.toStringTag;
-
-/** @const {symbol} */
-Symbol.unscopables;
-
-
-/**
- * @record
- * @template VALUE
- */
-function IIterableResult() {};
-
-/** @type {boolean} */
-IIterableResult.prototype.done;
-
-/** @type {VALUE} */
-IIterableResult.prototype.value;
-
-
-
-/**
- * @interface
- * @template VALUE
- */
-function Iterable() {}
-
-// TODO(johnlenz): remove this when the compiler understands "symbol" natively
-/**
- * @return {Iterator<VALUE>}
- * @suppress {externsValidation}
- */
-Iterable.prototype[Symbol.iterator] = function() {};
-
-
-
-// TODO(johnlenz): Iterator should be a templated record type.
-/**
- * @interface
- * @template VALUE
- * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/The_Iterator_protocol
- */
-function Iterator() {}
-
-/**
- * @param {VALUE=} value
- * @return {!IIterableResult<VALUE>}
- */
-Iterator.prototype.next;
-
-
-/**
- * Use this to indicate a type is both an Iterator and an Iterable.
- * @interface
- * @extends {Iterator<T>}
- * @extends {Iterable<T>}
- * @template T
- */
-function IteratorIterable() {}
 
 
 /**
@@ -255,6 +164,14 @@ Math.hypot = function(value1, var_args) {};
  */
 Math.imul = function(value1, value2) {};
 
+/**
+ * @param {number} value
+ * @return {number}
+ * @nosideeffects
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/clz32
+ */
+Math.clz32 = function(value) {};
+
 
 /**
  * @param {*} a
@@ -291,8 +208,20 @@ Number.prototype.toLocaleString = function(opt_locales, opt_options) {};
 String.prototype.repeat = function(count) {};
 
 /**
- * @param {string} template
- * @param {...*} var_args
+ * @constructor
+ * @extends {Array<string>}
+ * @see http://www.ecma-international.org/ecma-262/6.0/#sec-gettemplateobject
+ */
+var ITemplateArray = function() {};
+
+/**
+ * @type {!Array<string>}
+ */
+ITemplateArray.prototype.raw;
+
+/**
+ * @param {!ITemplateArray} template
+ * @param {...*} var_args Substitution values.
  * @return {string}
  * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/raw
  */
@@ -301,9 +230,10 @@ String.raw = function(template, var_args) {};
 
 /**
  * @param {number} codePoint
+ * @param {...number} var_args Additional codepoints
  * @return {string}
  */
-String.fromCodePoint = function(codePoint) {};
+String.fromCodePoint = function(codePoint, var_args) {};
 
 
 /**
@@ -361,7 +291,6 @@ function Transferable() {}
  * @constructor
  * @noalias
  * @throws {Error}
- * @nosideeffects
  * @implements {Transferable}
  */
 function ArrayBuffer(length) {}
@@ -1131,7 +1060,6 @@ Float64Array.prototype.copyWithin = function(target, start, opt_end) {};
  * @extends {ArrayBufferView}
  * @noalias
  * @throws {Error}
- * @nosideeffects
  * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Typed_arrays/DataView
  */
 function DataView(buffer, opt_byteOffset, opt_byteLength) {}
@@ -1140,7 +1068,6 @@ function DataView(buffer, opt_byteOffset, opt_byteLength) {}
  * @param {number} byteOffset
  * @return {number}
  * @throws {Error}
- * @nosideeffects
  */
 DataView.prototype.getInt8 = function(byteOffset) {};
 
@@ -1148,7 +1075,6 @@ DataView.prototype.getInt8 = function(byteOffset) {};
  * @param {number} byteOffset
  * @return {number}
  * @throws {Error}
- * @nosideeffects
  */
 DataView.prototype.getUint8 = function(byteOffset) {};
 
@@ -1157,7 +1083,6 @@ DataView.prototype.getUint8 = function(byteOffset) {};
  * @param {boolean=} opt_littleEndian
  * @return {number}
  * @throws {Error}
- * @nosideeffects
  */
 DataView.prototype.getInt16 = function(byteOffset, opt_littleEndian) {};
 
@@ -1166,7 +1091,6 @@ DataView.prototype.getInt16 = function(byteOffset, opt_littleEndian) {};
  * @param {boolean=} opt_littleEndian
  * @return {number}
  * @throws {Error}
- * @nosideeffects
  */
 DataView.prototype.getUint16 = function(byteOffset, opt_littleEndian) {};
 
@@ -1175,7 +1099,6 @@ DataView.prototype.getUint16 = function(byteOffset, opt_littleEndian) {};
  * @param {boolean=} opt_littleEndian
  * @return {number}
  * @throws {Error}
- * @nosideeffects
  */
 DataView.prototype.getInt32 = function(byteOffset, opt_littleEndian) {};
 
@@ -1184,7 +1107,6 @@ DataView.prototype.getInt32 = function(byteOffset, opt_littleEndian) {};
  * @param {boolean=} opt_littleEndian
  * @return {number}
  * @throws {Error}
- * @nosideeffects
  */
 DataView.prototype.getUint32 = function(byteOffset, opt_littleEndian) {};
 
@@ -1193,7 +1115,6 @@ DataView.prototype.getUint32 = function(byteOffset, opt_littleEndian) {};
  * @param {boolean=} opt_littleEndian
  * @return {number}
  * @throws {Error}
- * @nosideeffects
  */
 DataView.prototype.getFloat32 = function(byteOffset, opt_littleEndian) {};
 
@@ -1202,7 +1123,6 @@ DataView.prototype.getFloat32 = function(byteOffset, opt_littleEndian) {};
  * @param {boolean=} opt_littleEndian
  * @return {number}
  * @throws {Error}
- * @nosideeffects
  */
 DataView.prototype.getFloat64 = function(byteOffset, opt_littleEndian) {};
 
@@ -1350,7 +1270,7 @@ Promise.reject = function(opt_error) {};
 /**
  * @template T
  * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise
- * @param {!Array<T|!Promise<T>>} iterable
+ * @param {!Array<T|!Promise<T>>|!Iterable<T|!Promise<T>>} iterable
  * @return {!Promise<!Array<T>>}
  */
 Promise.all = function(iterable) {};
@@ -1359,7 +1279,7 @@ Promise.all = function(iterable) {};
 /**
  * @template T
  * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise
- * @param {!Array<T>} iterable
+ * @param {!Array<T>|!Iterable<T>} iterable
  * @return {!Promise<T>}
  */
 Promise.race = function(iterable) {};
@@ -1408,8 +1328,7 @@ Array.of = function(var_args) {};
 /**
  * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/from
  * @param {string|!IArrayLike<T>|!Iterable<T>} arrayLike
- * @param {function(this:S, (string|T), number,
- *     (string|!IArrayLike<T>|!Iterable<T>)): R=} opt_mapFn
+ * @param {function(this:S, (string|T), number): R=} opt_mapFn
  * @param {S=} opt_this
  * @return {!Array<R>}
  * @template T,S,R
@@ -1417,12 +1336,12 @@ Array.of = function(var_args) {};
 Array.from = function(arrayLike, opt_mapFn, opt_this) {};
 
 
-/** @return {!Array<number>} */
+/** @return {!IteratorIterable<number>} */
 Array.prototype.keys;
 
 
 /**
- * @return {!Array<!Array>} An array of [key, value] pairs.
+ * @return {!IteratorIterable<!Array<number|T>>} Iterator of [key, value] pairs.
  */
 Array.prototype.entries;
 
@@ -1450,6 +1369,38 @@ Array.prototype.findIndex = function(predicate, opt_this) {};
 
 
 /**
+ * @param {T} value
+ * @param {number=} opt_begin
+ * @param {number=} opt_end
+ * @return {!IArrayLike<T>}
+ * @this {!IArrayLike<T>|string}
+ * @template T
+ * @see http://www.ecma-international.org/ecma-262/6.0/#sec-array.prototype.fill
+ */
+Array.prototype.fill = function(value, opt_begin, opt_end) {};
+
+
+/**
+ * @param {number} target
+ * @param {number} start
+ * @param {number=} opt_end
+ * @see http://www.ecma-international.org/ecma-262/6.0/#sec-array.prototype.copywithin
+ */
+Array.prototype.copyWithin = function(target, start, opt_end) {};
+
+
+/**
+ * @param {T} searchElement
+ * @param {number=} opt_fromIndex
+ * @return {boolean}
+ * @this {!IArrayLike<T>|string}
+ * @template T
+ * @see https://tc39.github.io/ecma262/#sec-array.prototype.includes
+ */
+Array.prototype.includes = function(searchElement, opt_fromIndex) {};
+
+
+/**
  * @param {!Object} obj
  * @return {!Array<symbol>}
  * @see http://www.ecma-international.org/ecma-262/6.0/#sec-object.getownpropertysymbols
@@ -1459,10 +1410,11 @@ Object.getOwnPropertySymbols = function(obj) {};
 
 /**
  * @param {!Object} obj
+ * @param {?} proto
  * @return {!Object}
  * @see http://www.ecma-international.org/ecma-262/6.0/#sec-object.setprototypeof
  */
-Object.setPrototypeOf = function(obj) {};
+Object.setPrototypeOf = function(obj, proto) {};
 
 
 /**
@@ -1547,3 +1499,135 @@ Number.isSafeInteger = function(value) {};
  * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/assign
  */
 Object.assign = function(target, var_args) {};
+
+/**
+ * TODO(dbeam): find a better place for ES2017 externs like this one.
+ * @param {!Object<T>} obj
+ * @return {!Array<T>} values
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/values
+ * @throws {Error}
+ * @template T
+ */
+Object.values = function(obj) {};
+
+
+
+/**
+ * @const
+ * @see http://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect
+ */
+var Reflect = {};
+
+/**
+ * @param {function(this: THIS, ...?): RESULT} target
+ * @param {THIS} thisArg
+ * @param {!Array} argList
+ * @return {RESULT}
+ * @template THIS, RESULT
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect/apply
+ */
+Reflect.apply = function(target, thisArg, argList) {};
+
+/**
+ * @param {function(new: ?, ...?)} target
+ * @param {!Array} argList
+ * @param {function(new: TARGET, ...?)=} opt_newTarget
+ * @return {TARGET}
+ * @template TARGET
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect/construct
+ */
+Reflect.construct = function(target, argList, opt_newTarget) {};
+
+/**
+ * @param {!Object} target
+ * @param {string} propertyKey
+ * @param {!Object} attributes
+ * @return {boolean}
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect/defineProperty
+ */
+Reflect.defineProperty = function(target, propertyKey, attributes) {};
+
+/**
+ * @param {!Object} target
+ * @param {string} propertyKey
+ * @return {boolean}
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect/deleteProperty
+ */
+Reflect.deleteProperty = function(target, propertyKey) {};
+
+/**
+ * @param {!Object} target
+ * @param {string} propertyKey
+ * @param {!Object=} opt_receiver
+ * @return {*}
+ * @nosideeffects
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect/get
+ */
+Reflect.get = function(target, propertyKey, opt_receiver) {};
+
+/**
+ * @param {!Object} target
+ * @param {string} propertyKey
+ * @return {?ObjectPropertyDescriptor}
+ * @nosideeffects
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect/getOwnPropertyDescriptor
+ */
+Reflect.getOwnPropertyDescriptor = function(target, propertyKey) {};
+
+/**
+ * @param {!Object} target
+ * @return {?Object}
+ * @nosideeffects
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect/getPrototypeOf
+ */
+Reflect.getPrototypeOf = function(target) {};
+
+/**
+ * @param {!Object} target
+ * @param {string} propertyKey
+ * @return {boolean}
+ * @nosideeffects
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect/has
+ */
+Reflect.has = function(target, propertyKey) {};
+
+/**
+ * @param {!Object} target
+ * @return {boolean}
+ * @nosideeffects
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect/isExtensible
+ */
+Reflect.isExtensible = function(target) {};
+
+/**
+ * @param {!Object} target
+ * @return {!Array<(string|symbol)>}
+ * @nosideeffects
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect/ownKeys
+ */
+Reflect.ownKeys = function(target) {};
+
+/**
+ * @param {!Object} target
+ * @return {boolean}
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect/preventExtensions
+ */
+Reflect.preventExtensions = function(target) {};
+
+/**
+ * @param {!Object} target
+ * @param {string} propertyKey
+ * @param {*} value
+ * @param {!Object=} opt_receiver
+ * @return {boolean}
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect/set
+ */
+Reflect.set = function(target, propertyKey, value, opt_receiver) {};
+
+/**
+ * @param {!Object} target
+ * @param {?Object} proto
+ * @return {boolean}
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect/setPrototypeOf
+ */
+Reflect.setPrototypeOf = function(target, proto) {};

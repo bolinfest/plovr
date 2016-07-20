@@ -17,6 +17,7 @@
 package com.google.javascript.jscomp;
 
 import com.google.javascript.jscomp.AstValidator.ViolationHandler;
+import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
@@ -105,6 +106,11 @@ public final class AstValidatorTest extends CompilerTestCase {
     expectInvalid(n, Check.SCRIPT);
   }
 
+  public void testNewTargetIsValidExpression() {
+    Node n = new Node(Token.NEW_TARGET);
+    expectValid(n, Check.EXPRESSION);
+  }
+
   public void testInvalidEmptyStatement() {
     Node n = new Node(Token.EMPTY, new Node(Token.TRUE));
     expectInvalid(n, Check.STATEMENT);
@@ -117,6 +123,39 @@ public final class AstValidatorTest extends CompilerTestCase {
     expectInvalid(n, Check.STATEMENT);
     n = IR.exprResult(n);
     expectValid(n, Check.STATEMENT);
+  }
+
+  public void testValidRestParameter() {
+    setLanguage(LanguageMode.ECMASCRIPT6, LanguageMode.ECMASCRIPT5);
+    valid("function f(a,...rest){}");
+    valid("function f(a,...[re,...st]){}");
+  }
+
+  public void testAwaitExpression() {
+    setLanguage(LanguageMode.ECMASCRIPT8, LanguageMode.ECMASCRIPT5);
+    Node awaitNode = new Node(Token.AWAIT);
+    awaitNode.addChildToBack(IR.number(1));
+    Node parentFunction =
+        IR.function(IR.name("foo"), IR.paramList(), IR.block(IR.returnNode(awaitNode)));
+    parentFunction.setIsAsyncFunction(true);
+    expectValid(awaitNode, Check.EXPRESSION);
+  }
+
+  public void testAwaitExpressionNonAsyncFunction() {
+    setLanguage(LanguageMode.ECMASCRIPT8, LanguageMode.ECMASCRIPT5);
+    Node awaitNode = new Node(Token.AWAIT);
+    awaitNode.addChildToBack(IR.number(1));
+    Node parentFunction =
+        IR.function(IR.name("foo"), IR.paramList(), IR.block(IR.returnNode(awaitNode)));
+    parentFunction.setIsAsyncFunction(false);
+    expectInvalid(awaitNode, Check.EXPRESSION);
+  }
+
+  public void testAwaitExpressionNoFunction() {
+    setLanguage(LanguageMode.ECMASCRIPT8, LanguageMode.ECMASCRIPT5);
+    Node n = new Node(Token.AWAIT);
+    n.addChildToBack(IR.number(1));
+    expectInvalid(n, Check.EXPRESSION);
   }
 
   private void valid(String code) {

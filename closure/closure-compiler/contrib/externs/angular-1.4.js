@@ -19,7 +19,6 @@
  *
  * TODO: Remaining Services:
  *     $cookieStore
- *     $document
  *     $httpBackend
  *     $locale
  *     $rootElement
@@ -776,7 +775,7 @@ angular.Module.prototype.requires;
 /** @constructor */
 angular.Scope = function() {};
 
-/** @type {string} */
+/** @type {?string} */
 angular.Scope.prototype.$$phase;
 
 /**
@@ -823,9 +822,10 @@ angular.Scope.prototype.$id;
 
 /**
  * @param {boolean=} opt_isolate
+ * @param {angular.Scope=} opt_parent
  * @return {!angular.Scope}
  */
-angular.Scope.prototype.$new = function(opt_isolate) {};
+angular.Scope.prototype.$new = function(opt_isolate, opt_parent) {};
 
 /**
  * @param {string} name
@@ -926,7 +926,7 @@ angular.version.codeName = '';
  *****************************************************************************/
 
 /**
- * @typedef {function()}
+ * @typedef {function(string=)}
  */
 angular.$anchorScroll;
 
@@ -2383,3 +2383,10 @@ angular.$timeout_.cancel = function(promise) {};
 
 /** @typedef {!Window} */
 angular.$window;
+
+/******************************************************************************
+ * $document Service
+ *****************************************************************************/
+
+/** @typedef {!angular.JQLite} */
+angular.$document;

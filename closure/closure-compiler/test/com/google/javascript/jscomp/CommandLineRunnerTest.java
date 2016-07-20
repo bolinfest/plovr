@@ -29,6 +29,7 @@ import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.io.Files;
 import com.google.javascript.jscomp.AbstractCommandLineRunner.FlagEntry;
 import com.google.javascript.jscomp.AbstractCommandLineRunner.FlagUsageException;
@@ -306,6 +307,7 @@ public final class CommandLineRunnerTest extends TestCase {
 
   public void testTypedAdvanced() {
     args.add("--compilation_level=ADVANCED_OPTIMIZATIONS");
+    args.add("--jscomp_warning=checkTypes");
     test(
         "/** @constructor */\n" +
         "function Foo() {}\n" +
@@ -504,7 +506,6 @@ public final class CommandLineRunnerTest extends TestCase {
          "    c = 'a-menu'," +
          "    d = 'css-menu';");
   }
-
 
   public void testIssue70a() {
     args.add("--language_in=ECMASCRIPT5");
@@ -761,7 +762,7 @@ public final class CommandLineRunnerTest extends TestCase {
           "goog.provide('tonic'); goog.require('gin'); var tonic = {};",
           "goog.require('gin'); goog.require('tonic');"
          },
-         JSModule.CIRCULAR_DEPENDENCY_ERROR);
+         ProcessClosurePrimitives.LATE_PROVIDE_ERROR);
   }
 
   public void testSourceSortingCircularDeps2() {
@@ -774,7 +775,7 @@ public final class CommandLineRunnerTest extends TestCase {
           "goog.require('gin'); goog.require('tonic');",
           "goog.provide('gimlet'); goog.require('gin'); goog.require('roses.lime.juice');"
          },
-         JSModule.CIRCULAR_DEPENDENCY_ERROR);
+         ProcessClosurePrimitives.LATE_PROVIDE_ERROR);
   }
 
   public void testSourcePruningOn1() {
@@ -1077,7 +1078,7 @@ public final class CommandLineRunnerTest extends TestCase {
         .contains("Bad value for --source_map_location_mapping");
   }
 
-  public void testInputOneZip() throws IOException, FlagUsageException {
+  public void testInputOneZip() throws IOException {
     LinkedHashMap<String, String> zip1Contents = new LinkedHashMap<>();
     zip1Contents.put("run.js", "console.log(\"Hello World\");");
     FlagEntry<JsSourceType> zipFile1 = createZipFile(zip1Contents);
@@ -1085,7 +1086,7 @@ public final class CommandLineRunnerTest extends TestCase {
     compileFiles("console.log(\"Hello World\");", zipFile1);
   }
 
-  public void testInputMultipleZips() throws IOException, FlagUsageException {
+  public void testInputMultipleZips() throws IOException {
     LinkedHashMap<String, String> zip1Contents = new LinkedHashMap<>();
     zip1Contents.put("run.js", "console.log(\"Hello World\");");
     FlagEntry<JsSourceType> zipFile1 = createZipFile(zip1Contents);
@@ -1098,7 +1099,7 @@ public final class CommandLineRunnerTest extends TestCase {
         "console.log(\"Hello World\");window.alert(\"Hi Browser\");", zipFile1, zipFile2);
   }
 
-  public void testInputMultipleDuplicateZips() throws IOException, FlagUsageException {
+  public void testInputMultipleDuplicateZips() throws IOException {
     args.add("--jscomp_error=duplicateZipContents");
     FlagEntry<JsSourceType> zipFile1 =
         createZipFile(ImmutableMap.of("run.js", "console.log(\"Hello World\");"));
@@ -1110,7 +1111,7 @@ public final class CommandLineRunnerTest extends TestCase {
         SourceFile.DUPLICATE_ZIP_CONTENTS, zipFile1, zipFile2);
   }
 
-  public void testInputMultipleConflictingZips() throws IOException, FlagUsageException {
+  public void testInputMultipleConflictingZips() throws IOException {
     FlagEntry<JsSourceType> zipFile1 =
         createZipFile(ImmutableMap.of("run.js", "console.log(\"Hello World\");"));
 
@@ -1121,7 +1122,7 @@ public final class CommandLineRunnerTest extends TestCase {
         AbstractCommandLineRunner.CONFLICTING_DUPLICATE_ZIP_CONTENTS, zipFile1, zipFile2);
   }
 
-  public void testInputMultipleContents() throws IOException, FlagUsageException {
+  public void testInputMultipleContents() throws IOException {
     LinkedHashMap<String, String> zip1Contents = new LinkedHashMap<>();
     zip1Contents.put("a.js", "console.log(\"File A\");");
     zip1Contents.put("b.js", "console.log(\"File B\");");
@@ -1132,7 +1133,7 @@ public final class CommandLineRunnerTest extends TestCase {
         "console.log(\"File A\");console.log(\"File B\");console.log(\"File C\");", zipFile1);
   }
 
-  public void testInputMultipleFiles() throws IOException, FlagUsageException {
+  public void testInputMultipleFiles() throws IOException {
     LinkedHashMap<String, String> zip1Contents = new LinkedHashMap<>();
     zip1Contents.put("run.js", "console.log(\"Hello World\");");
     FlagEntry<JsSourceType> zipFile1 = createZipFile(zip1Contents);
@@ -1148,7 +1149,7 @@ public final class CommandLineRunnerTest extends TestCase {
         zipFile1, jsFile1, zipFile2);
   }
 
-  public void testInputMultipleJsFilesWithOneJsFlag() throws IOException, FlagUsageException {
+  public void testInputMultipleJsFilesWithOneJsFlag() throws IOException {
     // Test that file order is preserved with --js test3.js test2.js test1.js
     FlagEntry<JsSourceType> jsFile1 = createJsFile("test1", "var a;");
     FlagEntry<JsSourceType> jsFile2 = createJsFile("test2", "var b;");
@@ -1156,72 +1157,123 @@ public final class CommandLineRunnerTest extends TestCase {
     compileJsFiles("var c;var b;var a;", jsFile3, jsFile2, jsFile1);
   }
 
-  public void testGlobJs1() throws IOException, FlagUsageException {
+  public void testGlobJs1() throws IOException {
     FlagEntry<JsSourceType> jsFile1 = createJsFile("test1", "var a;");
     FlagEntry<JsSourceType> jsFile2 = createJsFile("test2", "var b;");
     // Move test2 to the same directory as test1, also make the filename of test2
     // lexicographically larger than test1
-    new File(jsFile2.value).renameTo(new File(
-        new File(jsFile1.value).getParentFile() + File.separator + "utest2.js"));
-    String glob = new File(jsFile1.value).getParent() + File.separator + "**.js";
+    assertTrue(new File(jsFile2.getValue()).renameTo(new File(
+        new File(jsFile1.getValue()).getParentFile() + File.separator + "utest2.js")));
+    String glob = new File(jsFile1.getValue()).getParent() + File.separator + "**.js";
     compileFiles(
         "var a;var b;", new FlagEntry<>(JsSourceType.JS, glob));
   }
 
-  public void testGlobJs2() throws IOException, FlagUsageException {
+  public void testGlobJs2() throws IOException {
     FlagEntry<JsSourceType> jsFile1 = createJsFile("test1", "var a;");
     FlagEntry<JsSourceType> jsFile2 = createJsFile("test2", "var b;");
-    new File(jsFile2.value).renameTo(new File(
-        new File(jsFile1.value).getParentFile() + File.separator + "utest2.js"));
-    String glob = new File(jsFile1.value).getParent() + File.separator + "*test*.js";
+    assertTrue(new File(jsFile2.getValue()).renameTo(new File(
+        new File(jsFile1.getValue()).getParentFile() + File.separator + "utest2.js")));
+    String glob = new File(jsFile1.getValue()).getParent() + File.separator + "*test*.js";
     compileFiles(
         "var a;var b;", new FlagEntry<>(JsSourceType.JS, glob));
   }
 
-  public void testGlobJs3() throws IOException, FlagUsageException {
+  public void testGlobJs3() throws IOException {
     FlagEntry<JsSourceType> jsFile1 = createJsFile("test1", "var a;");
     FlagEntry<JsSourceType> jsFile2 = createJsFile("test2", "var b;");
-    new File(jsFile2.value).renameTo(new File(
-        new File(jsFile1.value).getParentFile() + File.separator + "test2.js"));
+    assertTrue(new File(jsFile2.getValue()).renameTo(new File(
+        new File(jsFile1.getValue()).getParentFile() + File.separator + "test2.js")));
     // Make sure test2.js is excluded from the inputs when the exclusion
     // comes after the inclusion
-    String glob1 = new File(jsFile1.value).getParent() + File.separator + "**.js";
-    String glob2 = "!" + new File(jsFile1.value).getParent() + File.separator + "**test2.js";
+    String glob1 = new File(jsFile1.getValue()).getParent() + File.separator + "**.js";
+    String glob2 = "!" + new File(jsFile1.getValue()).getParent() + File.separator + "**test2.js";
     compileFiles(
         "var a;", new FlagEntry<>(JsSourceType.JS, glob1),
         new FlagEntry<>(JsSourceType.JS, glob2));
   }
 
-  public void testGlobJs4() throws IOException, FlagUsageException {
+  public void testGlobJs4() throws IOException {
     FlagEntry<JsSourceType> jsFile1 = createJsFile("test1", "var a;");
     FlagEntry<JsSourceType> jsFile2 = createJsFile("test2", "var b;");
-    new File(jsFile2.value).renameTo(new File(
-        new File(jsFile1.value).getParentFile() + File.separator + "test2.js"));
+    assertTrue(new File(jsFile2.getValue()).renameTo(new File(
+        new File(jsFile1.getValue()).getParentFile() + File.separator + "test2.js")));
     // Make sure test2.js is excluded from the inputs when the exclusion
     // comes before the inclusion
-    String glob1 = "!" + new File(jsFile1.value).getParent() + File.separator + "**test2.js";
-    String glob2 = new File(jsFile1.value).getParent() + File.separator + "**.js";
+    String glob1 = "!" + new File(jsFile1.getValue()).getParent() + File.separator + "**test2.js";
+    String glob2 = new File(jsFile1.getValue()).getParent() + File.separator + "**.js";
     compileFiles(
         "var a;", new FlagEntry<>(JsSourceType.JS, glob1),
         new FlagEntry<>(JsSourceType.JS, glob2));
   }
 
-  public void testGlobJs5() throws IOException, FlagUsageException {
+  public void testGlobJs5() throws IOException {
     FlagEntry<JsSourceType> jsFile1 = createJsFile("test1", "var a;");
     FlagEntry<JsSourceType> jsFile2 = createJsFile("test2", "var b;");
     File temp1 = Files.createTempDir();
     File temp2 = Files.createTempDir();
-    File jscompTempDir = new File(jsFile1.value).getParentFile();
+    File jscompTempDir = new File(jsFile1.getValue()).getParentFile();
     File newTemp1 = new File(jscompTempDir + File.separator + "temp1");
     File newTemp2 = new File(jscompTempDir + File.separator + "temp2");
-    temp1.renameTo(newTemp1);
-    temp2.renameTo(newTemp2);
-    new File(jsFile1.value).renameTo(new File(newTemp1 + File.separator + "test1.js"));
-    new File(jsFile2.value).renameTo(new File(newTemp2 + File.separator + "test2.js"));
+    assertTrue(temp1.renameTo(newTemp1));
+    assertTrue(temp2.renameTo(newTemp2));
+    new File(jsFile1.getValue()).renameTo(new File(newTemp1 + File.separator + "test1.js"));
+    new File(jsFile2.getValue()).renameTo(new File(newTemp2 + File.separator + "test2.js"));
     // Test multiple segments with glob patterns, like /foo/bar/**/*.js
     String glob = jscompTempDir + File.separator + "**" + File.separator + "*.js";
     compileFiles(
         "var a;var b;", new FlagEntry<>(JsSourceType.JS, glob));
+  }
+
+  // TODO(tbreisacher): Re-enable this test when we drop Ant.
+  public void disabled_testGlobJs6() throws IOException {
+    FlagEntry<JsSourceType> jsFile1 = createJsFile("test1", "var a;");
+    FlagEntry<JsSourceType> jsFile2 = createJsFile("test2", "var b;");
+    File ignoredJs = new File("." + File.separator + "ignored.js");
+    if (ignoredJs.isDirectory()) {
+      for (File f : ignoredJs.listFiles()) {
+        f.delete();
+      }
+    }
+    ignoredJs.delete();
+    assertTrue(new File(jsFile2.getValue()).renameTo(ignoredJs));
+    // Make sure patterns like "!**\./ignored**.js" work
+    String glob1 = "!**\\." + File.separator + "ignored**.js";
+    String glob2 = new File(jsFile1.getValue()).getParent() + File.separator + "**.js";
+    compileFiles(
+        "var a;", new FlagEntry<>(JsSourceType.JS, glob1),
+        new FlagEntry<>(JsSourceType.JS, glob2));
+    ignoredJs.delete();
+  }
+
+  // TODO(tbreisacher): Re-enable this test when we drop Ant.
+  public void disabled_testGlobJs7() throws IOException {
+    FlagEntry<JsSourceType> jsFile1 = createJsFile("test1", "var a;");
+    FlagEntry<JsSourceType> jsFile2 = createJsFile("test2", "var b;");
+    File takenJs = new File("." + File.separator + "globTestTaken.js");
+    File ignoredJs = new File("." + File.separator + "globTestIgnored.js");
+    if (takenJs.isDirectory()) {
+      for (File f : takenJs.listFiles()) {
+        f.delete();
+      }
+    }
+    takenJs.delete();
+    if (ignoredJs.isDirectory()) {
+      for (File f : ignoredJs.listFiles()) {
+        f.delete();
+      }
+    }
+    ignoredJs.delete();
+    assertTrue(new File(jsFile1.getValue()).renameTo(takenJs));
+    assertTrue(new File(jsFile2.getValue()).renameTo(ignoredJs));
+    // Make sure that relative paths like "!**ignored.js" work with absolute paths.
+    String glob1 = takenJs.getParentFile().getAbsolutePath() + File.separator + "**Taken.js";
+    String glob2 = "!**Ignored.js";
+    compileFiles(
+        "var a;", new FlagEntry<>(JsSourceType.JS, glob1),
+        new FlagEntry<>(JsSourceType.JS, glob2));
+    takenJs.delete();
+    ignoredJs.delete();
   }
 
   public void testSourceMapInputs() throws Exception {
@@ -1273,16 +1325,16 @@ public final class CommandLineRunnerTest extends TestCase {
     assertThat(builder.toString())
         .isEqualTo(Joiner.on('\n').join(
             "{m0}",
-            "i0",
+            "i0.js",
             "",
             "{m1:m0}",
-            "i1",
+            "i1.js",
             "",
             "{m2:m1}",
-            "i2",
+            "i2.js",
             "",
             "{m3:m2}",
-            "i3",
+            "i3.js",
             ""));
   }
 
@@ -1297,16 +1349,16 @@ public final class CommandLineRunnerTest extends TestCase {
     assertThat(builder.toString())
         .isEqualTo(Joiner.on('\n').join(
             "{m0}",
-            "i0",
+            "i0.js",
             "",
             "{m1:m0}",
-            "i1",
+            "i1.js",
             "",
             "{m2:m0}",
-            "i2",
+            "i2.js",
             "",
             "{m3:m0}",
-            "i3",
+            "i3.js",
             ""));
   }
 
@@ -1443,7 +1495,7 @@ public final class CommandLineRunnerTest extends TestCase {
   }
 
   public void testES6TranspiledByDefault() {
-    test("var x = class X {};", "var x = function() {};");
+    test("var x = class {};", "var x = function() {};");
   }
 
   public void testES5ChecksByDefault() {
@@ -1714,6 +1766,45 @@ public final class CommandLineRunnerTest extends TestCase {
         });
   }
 
+  public void testES6ImportOfFileWithoutImportsOrExports() {
+    args.add("--dependency_mode=NONE");
+    args.add("--language_in=ECMASCRIPT6");
+    setFilename(0, "foo.js");
+    setFilename(1, "app.js");
+    test(
+        new String[] {
+          CompilerTestCase.LINE_JOINER.join("function foo() { alert('foo'); }", "foo();"),
+          "import './foo';"
+        },
+        new String[] {
+          CompilerTestCase.LINE_JOINER.join(
+              "/** @const */ var module$foo={};",
+              "function foo$$module$foo(){ alert('foo'); }",
+              "foo$$module$foo();"),
+          "'use strict';"
+        });
+  }
+
+  public void testCommonJSRequireOfFileWithoutExports() {
+    args.add("--process_common_js_modules");
+    args.add("--dependency_mode=NONE");
+    args.add("--language_in=ECMASCRIPT6");
+    setFilename(0, "foo.js");
+    setFilename(1, "app.js");
+    test(
+        new String[] {
+          CompilerTestCase.LINE_JOINER.join("function foo() { alert('foo'); }", "foo();"),
+          "require('./foo');"
+        },
+        new String[] {
+          CompilerTestCase.LINE_JOINER.join(
+              "/** @const */ var module$foo={};",
+              "function foo$$module$foo(){ alert('foo'); }",
+              "foo$$module$foo();"),
+          CompilerTestCase.LINE_JOINER.join("'use strict';", "")
+        });
+  }
+
   public void testFormattingSingleQuote() {
     testSame("var x = '';");
     assertThat(lastCompiler.toSource()).isEqualTo("var x=\"\";");
@@ -1954,7 +2045,7 @@ public final class CommandLineRunnerTest extends TestCase {
         1, compiler.getErrors().length + compiler.getWarnings().length);
 
     assertThat(exitCodes).isNotEmpty();
-    int lastExitCode = exitCodes.get(exitCodes.size() - 1);
+    int lastExitCode = Iterables.getLast(exitCodes);
 
     if (compiler.getErrors().length > 0) {
       assertThat(compiler.getErrors()).hasLength(1);
@@ -2038,7 +2129,7 @@ public final class CommandLineRunnerTest extends TestCase {
   @SafeVarargs
   private final void setupFlags(FlagEntry<JsSourceType>... entries) {
     for (FlagEntry<JsSourceType> entry : entries) {
-      args.add("--" + entry.flag.flagName + "=" + entry.value);
+      args.add("--" + entry.getFlag().flagName + "=" + entry.getValue());
     }
   }
 
@@ -2052,7 +2143,7 @@ public final class CommandLineRunnerTest extends TestCase {
       throws FlagUsageException {
     args.add("--js");
     for (FlagEntry<JsSourceType> entry : entries) {
-      args.add(entry.value);
+      args.add(entry.getValue());
     }
     compileArgs(expectedOutput, null);
   }

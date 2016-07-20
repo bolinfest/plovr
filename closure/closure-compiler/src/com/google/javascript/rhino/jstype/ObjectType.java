@@ -48,6 +48,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.javascript.rhino.JSDocInfo;
+import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.ObjectTypeI;
 
@@ -276,6 +277,11 @@ public abstract class ObjectType
    */
   public abstract ObjectType getImplicitPrototype();
 
+  @Override
+  public ObjectType getPrototypeObject() {
+    return getImplicitPrototype();
+  }
+
   /**
    * Defines a property whose type is explicitly declared by the programmer.
    * @param propertyName the property's name
@@ -382,14 +388,26 @@ public abstract class ObjectType
     return p == null ? null : p.getNode();
   }
 
+  @Override
+  public Node getPropertyDefsite(String propertyName) {
+    return getPropertyNode(propertyName);
+  }
+
   /**
    * Gets the docInfo on the specified property on this type.  This should not
    * be implemented recursively, as you generally need to know exactly on
    * which type in the prototype chain the JSDocInfo exists.
    */
+  @Override
   public JSDocInfo getOwnPropertyJSDocInfo(String propertyName) {
     Property p = getOwnSlot(propertyName);
     return p == null ? null : p.getJSDocInfo();
+  }
+
+  @Override
+  public Node getOwnPropertyDefsite(String propertyName) {
+    Property p = getOwnSlot(propertyName);
+    return p == null ? null : p.getNode();
   }
 
   /**
@@ -510,7 +528,7 @@ public abstract class ObjectType
       ObjectType otherObject, EquivalenceMethod eqMethod, EqCache eqCache) {
     if (this.isTemplatizedType() && this.toMaybeTemplatizedType().wrapsSameRawType(otherObject)) {
       return this.getTemplateTypeMap().checkEquivalenceHelper(
-          otherObject.getTemplateTypeMap(), eqMethod, eqCache);
+          otherObject.getTemplateTypeMap(), eqMethod, eqCache, SubtypingMode.NORMAL);
     }
 
     MatchStatus result = eqCache.checkCache(this, otherObject);
@@ -535,7 +553,8 @@ public abstract class ObjectType
   }
 
   private static boolean isStructuralSubtypeHelper(
-      ObjectType typeA, ObjectType typeB, ImplCache implicitImplCache) {
+      ObjectType typeA, ObjectType typeB,
+      ImplCache implicitImplCache, SubtypingMode subtypingMode) {
 
     // typeA is a subtype of record type typeB iff:
     // 1) typeA has all the non-optional properties declared in typeB.
@@ -551,7 +570,7 @@ public abstract class ObjectType
         return false;
       }
       JSType propA = typeA.getPropertyType(property);
-      if (!propA.isSubtype(propB, implicitImplCache)) {
+      if (!propA.isSubtype(propB, implicitImplCache, subtypingMode)) {
         return false;
       }
     }
@@ -561,7 +580,8 @@ public abstract class ObjectType
   /**
    * Determine if {@code this} is a an implicit subtype of {@code superType}.
    */
-  boolean isStructuralSubtype(ObjectType superType, ImplCache implicitImplCache) {
+  boolean isStructuralSubtype(ObjectType superType,
+      ImplCache implicitImplCache, SubtypingMode subtypingMode) {
     // Union types should be handled by isSubtype already
     Preconditions.checkArgument(!this.isUnionType());
     Preconditions.checkArgument(!superType.isUnionType());
@@ -573,7 +593,8 @@ public abstract class ObjectType
       return cachedResult.subtypeValue();
     }
 
-    boolean result = isStructuralSubtypeHelper(this, superType, implicitImplCache);
+    boolean result = isStructuralSubtypeHelper(
+        this, superType, implicitImplCache, subtypingMode);
     implicitImplCache.updateCache(
         this, superType, result ? MatchStatus.MATCH : MatchStatus.NOT_MATCH);
     return result;
@@ -732,5 +753,18 @@ public abstract class ObjectType
       propTypeMap.put(name, this.getPropertyType(name));
     }
     return propTypeMap.build();
+  }
+
+  @Override
+  public ObjectType getLowestSupertypeWithProperty(String propertyName, boolean isOverride) {
+    // Find the lowest property defined on a class with visibility information.
+    ObjectType objectType = isOverride ? this.getImplicitPrototype() : this;
+    for (; objectType != null; objectType = objectType.getImplicitPrototype()) {
+      JSDocInfo docInfo = objectType.getOwnPropertyJSDocInfo(propertyName);
+      if (docInfo != null && docInfo.getVisibility() != Visibility.INHERITED) {
+        return objectType;
+      }
+    }
+    return null;
   }
 }

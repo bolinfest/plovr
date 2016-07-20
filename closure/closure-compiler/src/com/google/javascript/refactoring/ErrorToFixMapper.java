@@ -17,6 +17,7 @@ package com.google.javascript.refactoring;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import com.google.javascript.jscomp.AbstractCompiler;
 import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.NodeTraversal;
@@ -41,9 +42,11 @@ public final class ErrorToFixMapper {
 
   private static final Pattern DID_YOU_MEAN = Pattern.compile(".*Did you mean (.*)\\?");
   private static final Pattern MISSING_REQUIRE =
-      Pattern.compile("'([^']+)' used but not required");
+      Pattern.compile("missing require: '([^']+)'");
   private static final Pattern EXTRA_REQUIRE =
-      Pattern.compile("'([^']+)' required but not used");
+      Pattern.compile("extra require: '([^']+)'");
+  private static final Pattern DUPLICATE_REQUIRE =
+      Pattern.compile("'([^']+)' required more than once\\.");
 
   public static List<SuggestedFix> getFixesForJsError(JSError error, AbstractCompiler compiler) {
     SuggestedFix fix = getFixForJsError(error, compiler);
@@ -64,6 +67,8 @@ public final class ErrorToFixMapper {
    */
   public static SuggestedFix getFixForJsError(JSError error, AbstractCompiler compiler) {
     switch (error.getType().key) {
+      case "JSC_MISSING_SEMICOLON":
+        return getFixForMissingSemicolon(error);
       case "JSC_REQUIRES_NOT_SORTED":
         return getFixForUnsortedRequiresOrProvides("goog.require", error, compiler);
       case "JSC_PROVIDES_NOT_SORTED":
@@ -73,13 +78,17 @@ public final class ErrorToFixMapper {
         return removeNode(error);
       case "JSC_INEXISTENT_PROPERTY":
         return getFixForInexistentProperty(error);
+      case "JSC_MISSING_CALL_TO_SUPER":
+        return getFixForMissingSuper(error);
+      case "JSC_INVALID_SUPER_CALL_WITH_SUGGESTION":
+        return getFixForInvalidSuper(error, compiler);
       case "JSC_MISSING_REQUIRE_WARNING":
+      case "JSC_MISSING_REQUIRE_CALL_WARNING":
         return getFixForMissingRequire(error, compiler);
       case "JSC_DUPLICATE_REQUIRE_WARNING":
+        return getFixForExtraRequire(error, compiler, DUPLICATE_REQUIRE);
       case "JSC_EXTRA_REQUIRE_WARNING":
-        return getFixForExtraRequire(error, compiler);
-      case "JSC_UNNECESSARY_CAST":
-        return getFixForUnnecessaryCast(error, compiler);
+        return getFixForExtraRequire(error, compiler, EXTRA_REQUIRE);
       default:
         return null;
     }
@@ -96,13 +105,39 @@ public final class ErrorToFixMapper {
         .insertBefore(error.node, "!")
         .setDescription("Make type non-nullable")
         .build();
-    return ImmutableList.of(qmark, bang);
+    return ImmutableList.of(bang, qmark);
   }
 
   private static SuggestedFix removeNode(JSError error) {
     return new SuggestedFix.Builder()
         .setOriginalMatchedNode(error.node)
         .delete(error.node).build();
+  }
+
+  private static SuggestedFix getFixForMissingSemicolon(JSError error) {
+    return new SuggestedFix.Builder()
+        .setOriginalMatchedNode(error.node)
+        .insertAfter(error.node, ";")
+        .build();
+  }
+
+  private static SuggestedFix getFixForMissingSuper(JSError error) {
+    Node body = NodeUtil.getFunctionBody(error.node);
+    return new SuggestedFix.Builder()
+        .setOriginalMatchedNode(error.node)
+        .addChildToFront(body, "super();")
+        .build();
+  }
+
+  private static SuggestedFix getFixForInvalidSuper(JSError error, AbstractCompiler compiler) {
+    Matcher m = DID_YOU_MEAN.matcher(error.description);
+    if (m.matches()) {
+      return new SuggestedFix.Builder()
+          .setOriginalMatchedNode(error.node)
+          .replace(error.node, NodeUtil.newQName(compiler, m.group(1)), compiler)
+          .build();
+    }
+    return null;
   }
 
   private static SuggestedFix getFixForInexistentProperty(JSError error) {
@@ -129,8 +164,9 @@ public final class ErrorToFixMapper {
         .build();
   }
 
-  private static SuggestedFix getFixForExtraRequire(JSError error, AbstractCompiler compiler) {
-    Matcher regexMatcher = EXTRA_REQUIRE.matcher(error.description);
+  private static SuggestedFix getFixForExtraRequire(
+      JSError error, AbstractCompiler compiler, Pattern pattern) {
+    Matcher regexMatcher = pattern.matcher(error.description);
     Preconditions.checkState(regexMatcher.matches(),
         "Unexpected error description: %s", error.description);
     String namespace = regexMatcher.group(1);
@@ -142,12 +178,6 @@ public final class ErrorToFixMapper {
         .build();
   }
 
-  private static SuggestedFix getFixForUnnecessaryCast(JSError error, AbstractCompiler compiler) {
-    return new SuggestedFix.Builder()
-        .setOriginalMatchedNode(error.node)
-        .removeCast(error.node, compiler).build();
-  }
-
   private static SuggestedFix getFixForUnsortedRequiresOrProvides(
       String closureFunction, JSError error, AbstractCompiler compiler) {
     SuggestedFix.Builder fix = new SuggestedFix.Builder();
@@ -156,7 +186,7 @@ public final class ErrorToFixMapper {
     RequireProvideSorter cb = new RequireProvideSorter(closureFunction);
     NodeTraversal.traverseEs6(compiler, script, cb);
     Node first = cb.calls.get(0);
-    Node last = cb.calls.get(cb.calls.size() - 1);
+    Node last = Iterables.getLast(cb.calls);
 
     cb.sortCallsAlphabetically();
     StringBuilder sb = new StringBuilder();

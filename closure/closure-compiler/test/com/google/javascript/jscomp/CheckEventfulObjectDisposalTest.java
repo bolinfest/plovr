@@ -16,7 +16,11 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.javascript.jscomp.CompilerOptions.DisposalCheckingPolicy;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Tests for {@code CheckEventfulObjectDisposal.java}.
@@ -25,8 +29,7 @@ import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 
 public final class CheckEventfulObjectDisposalTest extends CompilerTestCase {
 
-  private CheckEventfulObjectDisposal.DisposalCheckingPolicy policy =
-      CheckEventfulObjectDisposal.DisposalCheckingPolicy.ON;
+  private DisposalCheckingPolicy policy = DisposalCheckingPolicy.ON;
 
   static final String CLOSURE_DEFS = "var goog = {};"
       + "goog.inherits = function(x, y) {};"
@@ -87,6 +90,32 @@ public final class CheckEventfulObjectDisposalTest extends CompilerTestCase {
     testError(js, CheckEventfulObjectDisposal.EVENTFUL_OBJECT_NOT_DISPOSED);
   }
 
+  public void testAlmostTooManyVariables() {
+    policy = DisposalCheckingPolicy.AGGRESSIVE;
+    List<String> parts = new ArrayList<>();
+    parts.add(CLOSURE_DEFS);
+    parts.add("var test = function() {");
+    parts.add("  var eh = new goog.events.EventHandler();");
+    for (int i = 0; i < LiveVariablesAnalysis.MAX_VARIABLES_TO_ANALYZE - 1; i++) {
+      parts.add("  var v" + i + " = null;");
+    }
+    parts.add("}");
+    testError(LINE_JOINER.join(parts), CheckEventfulObjectDisposal.EVENTFUL_OBJECT_PURELY_LOCAL);
+  }
+
+  public void testTooManyVariables() {
+    policy = DisposalCheckingPolicy.AGGRESSIVE;
+    List<String> parts = new ArrayList<>();
+    parts.add(CLOSURE_DEFS);
+    parts.add("var test = function() {");
+    parts.add("  var eh = new goog.events.EventHandler();");
+    for (int i = 0; i < LiveVariablesAnalysis.MAX_VARIABLES_TO_ANALYZE; i++) {
+      parts.add("  var v" + i + " = null;");
+    }
+    parts.add("}");
+    testSame(LINE_JOINER.join(parts));
+  }
+
   public void testLocal() {
     String js = CLOSURE_DEFS
         + "/** @extends {goog.Disposable}\n * @constructor */"
@@ -98,7 +127,7 @@ public final class CheckEventfulObjectDisposalTest extends CompilerTestCase {
   }
 
   public void testLocalAggressive() {
-    policy = CheckEventfulObjectDisposal.DisposalCheckingPolicy.AGGRESSIVE;
+    policy = DisposalCheckingPolicy.AGGRESSIVE;
     String js =
         CLOSURE_DEFS
             + "/** @extends {goog.Disposable}\n * @constructor */"
@@ -110,7 +139,7 @@ public final class CheckEventfulObjectDisposalTest extends CompilerTestCase {
   }
 
   public void testFreedLocal1() {
-    policy = CheckEventfulObjectDisposal.DisposalCheckingPolicy.AGGRESSIVE;
+    policy = DisposalCheckingPolicy.AGGRESSIVE;
     String js = CLOSURE_DEFS
         + "/** @extends {goog.Disposable}\n * @constructor */"
         + "var test = function() { var eh = new goog.events.EventHandler();"
@@ -121,7 +150,7 @@ public final class CheckEventfulObjectDisposalTest extends CompilerTestCase {
   }
 
   public void testEventhandlerRemoveAll1() {
-    policy = CheckEventfulObjectDisposal.DisposalCheckingPolicy.AGGRESSIVE;
+    policy = DisposalCheckingPolicy.AGGRESSIVE;
     String js = CLOSURE_DEFS
         + "/** @extends {goog.Disposable}\n * @constructor */"
         + "var test = function() { this.eh = new goog.events.EventHandler(); };"
@@ -132,7 +161,7 @@ public final class CheckEventfulObjectDisposalTest extends CompilerTestCase {
   }
 
   public void testEventhandlerRemoveAll2() {
-    policy = CheckEventfulObjectDisposal.DisposalCheckingPolicy.AGGRESSIVE;
+    policy = DisposalCheckingPolicy.AGGRESSIVE;
     String js = CLOSURE_DEFS
         + "/** @extends {goog.Disposable}\n * @constructor */"
         + "var test = function() { var eh = new goog.events.EventHandler();"
@@ -153,7 +182,7 @@ public final class CheckEventfulObjectDisposalTest extends CompilerTestCase {
   }
 
   public void testFreedLocal2Aggressive() {
-    policy = CheckEventfulObjectDisposal.DisposalCheckingPolicy.AGGRESSIVE;
+    policy = DisposalCheckingPolicy.AGGRESSIVE;
     String js =
         CLOSURE_DEFS
             + "/** @extends {goog.Disposable}\n * @constructor */"
@@ -165,7 +194,7 @@ public final class CheckEventfulObjectDisposalTest extends CompilerTestCase {
   }
 
   public void testLocalLive1() {
-    policy = CheckEventfulObjectDisposal.DisposalCheckingPolicy.AGGRESSIVE;
+    policy = DisposalCheckingPolicy.AGGRESSIVE;
     String js = CLOSURE_DEFS
         + "/** @extends {goog.Disposable}\n * @constructor */"
         + "var test = function() { var eh = new goog.events.EventHandler();"
@@ -177,7 +206,7 @@ public final class CheckEventfulObjectDisposalTest extends CompilerTestCase {
   }
 
   public void testLocalLive2() {
-    policy = CheckEventfulObjectDisposal.DisposalCheckingPolicy.AGGRESSIVE;
+    policy = DisposalCheckingPolicy.AGGRESSIVE;
     String js = CLOSURE_DEFS
         + "/** @extends {goog.Disposable}\n * @constructor */"
         + "var test = function() { var eh = new goog.events.EventHandler();"
@@ -193,7 +222,7 @@ public final class CheckEventfulObjectDisposalTest extends CompilerTestCase {
    * this is left to the dynamic analyzer to discover it.
    */
   public void testLocalLive3() {
-    policy = CheckEventfulObjectDisposal.DisposalCheckingPolicy.AGGRESSIVE;
+    policy = DisposalCheckingPolicy.AGGRESSIVE;
     String js = CLOSURE_DEFS
         + "/** @extends {goog.Disposable}\n * @constructor */"
         + "var test = function() { var eh = new goog.events.EventHandler();"
@@ -288,7 +317,7 @@ public final class CheckEventfulObjectDisposalTest extends CompilerTestCase {
   }
 
   public void testCustomDispose1() {
-    policy = CheckEventfulObjectDisposal.DisposalCheckingPolicy.AGGRESSIVE;
+    policy = DisposalCheckingPolicy.AGGRESSIVE;
     String js = CLOSURE_DEFS
         + "/** @param todispose\n @param ctx\n @disposes todispose\n */"
         + "customDispose = function(todispose, ctx) {"
@@ -301,7 +330,7 @@ public final class CheckEventfulObjectDisposalTest extends CompilerTestCase {
   }
 
   public void testCustomDispose2() {
-    policy = CheckEventfulObjectDisposal.DisposalCheckingPolicy.AGGRESSIVE;
+    policy = DisposalCheckingPolicy.AGGRESSIVE;
     String js = CLOSURE_DEFS
         + "/** @param todispose\n @param ctx\n @disposes *\n */"
         + "customDispose = function(todispose, ctx) {"
@@ -315,7 +344,7 @@ public final class CheckEventfulObjectDisposalTest extends CompilerTestCase {
   }
 
   public void testCustomDispose3() {
-    policy = CheckEventfulObjectDisposal.DisposalCheckingPolicy.AGGRESSIVE;
+    policy = DisposalCheckingPolicy.AGGRESSIVE;
     String js =
         CLOSURE_DEFS
             + "/** @param todispose\n @param ctx\n @disposes todispose\n */"

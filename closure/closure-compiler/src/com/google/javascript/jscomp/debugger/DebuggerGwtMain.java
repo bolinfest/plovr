@@ -36,7 +36,6 @@ import com.google.javascript.jscomp.CompilerOptions;
 import com.google.javascript.jscomp.JSError;
 import com.google.javascript.jscomp.Result;
 import com.google.javascript.jscomp.SourceFile;
-
 import java.util.Arrays;
 import java.util.List;
 
@@ -56,7 +55,6 @@ public class DebuggerGwtMain implements EntryPoint {
     SourceFile externFile = SourceFile.fromCode("externs", externs.getValue());
     SourceFile srcFile = SourceFile.fromCode("input0", input0.getValue());
     Compiler compiler = new Compiler();
-    options.getDependencyOptions().setEs6ModuleOrder(false); // This is currently not GWT compatible
     try {
       Result result = compiler.compile(externFile, srcFile, options);
       updateUi(compiler, result);
@@ -89,7 +87,9 @@ public class DebuggerGwtMain implements EntryPoint {
   public void onModuleLoad() {
     externs.setCharacterWidth(80);
     externs.setVisibleLines(5);
+    externs.setText("function Symbol() {}\n");
     externs.addKeyUpHandler(new KeyUpHandler() {
+      @Override
       public void onKeyUp(KeyUpEvent event) {
         doCompile();
       }
@@ -98,6 +98,7 @@ public class DebuggerGwtMain implements EntryPoint {
     input0.setCharacterWidth(80);
     input0.setVisibleLines(25);
     input0.addKeyUpHandler(new KeyUpHandler() {
+      @Override
       public void onKeyUp(KeyUpEvent event) {
         doCompile();
       }
@@ -119,6 +120,9 @@ public class DebuggerGwtMain implements EntryPoint {
   private void createCheckboxes(CellPanel checkboxPanel) {
     for (final CompilationParam param : CompilationParam.getSortedValues()) {
       CheckBox cb = new CheckBox(param.toString());
+      if (param.getJavaInfo() != null) {
+        cb.setTitle("Java API equivalent: " + param.getJavaInfo());
+      }
       cb.setValue(param.getDefaultValue());
       param.apply(options, param.getDefaultValue());
       cb.addClickHandler(new ClickHandler() {

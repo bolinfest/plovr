@@ -18,9 +18,6 @@ package com.google.javascript.jscomp;
 
 import com.google.common.annotations.GwtIncompatible;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableSet;
-import com.google.javascript.rhino.IR;
-import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
 
 import java.util.LinkedHashMap;
@@ -37,27 +34,36 @@ class CoverageInstrumentationPass implements CompilerPass {
 
   final AbstractCompiler compiler;
   private Map<String, FileInstrumentationData> instrumentationData;
-  private CoverageReach reach;
+  private final CoverageReach reach;
+  private final InstrumentOption instrumentOption;
 
-  private static final String JS_INSTRUMENTATION_EXTERNS_CODE = ""
-      + "var JSCompiler_lcov_executedLines;\n"
-      + "var JSCompiler_lcov_instrumentedLines;\n"
-      + "var JSCompiler_lcov_fileNames;\n";
+  public enum InstrumentOption {
+    ALL,   // Instrument to collect both line coverage and branch coverage.
+    LINE_ONLY,  // Collect coverage for every executable statement.
+    BRANCH_ONLY  // Collect coverage for control-flow branches.
+  }
+
+  public static final String JS_INSTRUMENTATION_OBJECT_NAME = "__jscov";
 
   public enum CoverageReach {
-    ALL,
-    CONDITIONAL
+    ALL,         // Instrument all statements.
+    CONDITIONAL  // Do not instrument global statements.
   }
 
   /**
    *
    * @param compiler the compiler which generates the AST.
    */
-  public CoverageInstrumentationPass(AbstractCompiler compiler,
-      CoverageReach reach) {
+  public CoverageInstrumentationPass(
+      AbstractCompiler compiler, CoverageReach reach, InstrumentOption instrumentOption) {
     this.compiler = compiler;
     this.reach = reach;
+    this.instrumentOption = instrumentOption;
     instrumentationData = new LinkedHashMap<>();
+  }
+
+  public CoverageInstrumentationPass(AbstractCompiler compiler, CoverageReach reach) {
+    this(compiler, reach, InstrumentOption.LINE_ONLY);
   }
 
   /**
@@ -65,30 +71,15 @@ class CoverageInstrumentationPass implements CompilerPass {
    * initializes the variables required for collection of coverage data.
    */
   private void addHeaderCode(Node script) {
-    script.addChildToFront(
-        createConditionalVarDecl("JSCompiler_lcov_executedLines", script));
-    script.addChildToFront(
-        createConditionalVarDecl("JSCompiler_lcov_instrumentedLines", script));
-    script.addChildToFront(
-        createConditionalVarDecl("JSCompiler_lcov_fileNames", script));
-  }
-
-  /**
-   * Creates a node of externs code required for the arrays used for
-   * instrumentation.
-   */
-  private Node getInstrumentationExternsNode() {
-    Node externsNode = compiler.parseSyntheticCode(
-        "ExternsCodeForCoverageInstrumentation",
-        JS_INSTRUMENTATION_EXTERNS_CODE);
-
-    return externsNode;
+    script.addChildToFront(createConditionalObjectDecl(JS_INSTRUMENTATION_OBJECT_NAME, script));
   }
 
   @Override
   public void process(Node externsNode, Node rootNode) {
     if (rootNode.hasChildren()) {
-      NodeTraversal.traverseEs6(compiler, rootNode,
+      NodeTraversal.traverseEs6(
+          compiler,
+          rootNode,
           new CoverageInstrumentationCallback(
               compiler, instrumentationData, reach));
 
@@ -96,20 +87,23 @@ class CoverageInstrumentationPass implements CompilerPass {
       Preconditions.checkState(firstScript.isScript());
       addHeaderCode(firstScript);
     }
-
-    externsNode.addChildToBack(getInstrumentationExternsNode());
   }
 
-  private static Node createConditionalVarDecl(String name, Node srcref) {
-    Node var = IR.var(
-        IR.name(name),
-        IR.or(
-            IR.name(name),
-            IR.arraylit()));
+  private Node createConditionalObjectDecl(String name, Node srcref) {
+    String jscovData;
+    if (instrumentOption != InstrumentOption.LINE_ONLY) {
+      jscovData =
+          "{fileNames:[], instrumentedLines: [], executedLines: [],"
+              + "branchPrsent:[], branchesInLine: []}";
+    } else {
+      jscovData = "{fileNames:[], instrumentedLines: [], executedLines: []}";
+    }
 
-    JSDocInfoBuilder builder = new JSDocInfoBuilder(false);
-    builder.recordSuppressions(ImmutableSet.of("duplicate"));
-    var.setJSDocInfo(builder.build());
+    String jscovDecl =
+        " var " + name + " = window.top.__jscov || " + "(window.top.__jscov = " + jscovData + ");";
+
+    Node script = compiler.parseSyntheticCode(jscovDecl);
+    Node var = script.removeFirstChild();
     return var.useSourceInfoIfMissingFromForTree(srcref);
   }
 }

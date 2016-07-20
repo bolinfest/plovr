@@ -31,9 +31,11 @@ import static com.google.javascript.rhino.TypeDeclarationsIR.voidType;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.UnmodifiableIterator;
 import com.google.javascript.jscomp.parsing.Config.LanguageMode;
+import com.google.javascript.jscomp.parsing.Config.StrictMode;
 import com.google.javascript.jscomp.parsing.parser.FeatureSet;
 import com.google.javascript.jscomp.parsing.parser.FeatureSet.Feature;
 import com.google.javascript.jscomp.parsing.parser.IdentifierToken;
@@ -44,6 +46,7 @@ import com.google.javascript.jscomp.parsing.parser.trees.ArrayLiteralExpressionT
 import com.google.javascript.jscomp.parsing.parser.trees.ArrayPatternTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ArrayTypeTree;
 import com.google.javascript.jscomp.parsing.parser.trees.AssignmentRestElementTree;
+import com.google.javascript.jscomp.parsing.parser.trees.AwaitExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.BinaryOperatorTree;
 import com.google.javascript.jscomp.parsing.parser.trees.BlockTree;
 import com.google.javascript.jscomp.parsing.parser.trees.BreakStatementTree;
@@ -94,10 +97,10 @@ import com.google.javascript.jscomp.parsing.parser.trees.MemberExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.MemberLookupExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.MemberVariableTree;
 import com.google.javascript.jscomp.parsing.parser.trees.MissingPrimaryExpressionTree;
-import com.google.javascript.jscomp.parsing.parser.trees.ModuleImportTree;
 import com.google.javascript.jscomp.parsing.parser.trees.NamespaceDeclarationTree;
 import com.google.javascript.jscomp.parsing.parser.trees.NamespaceNameTree;
 import com.google.javascript.jscomp.parsing.parser.trees.NewExpressionTree;
+import com.google.javascript.jscomp.parsing.parser.trees.NewTargetExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.NullTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ObjectLiteralExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ObjectPatternTree;
@@ -147,7 +150,9 @@ import com.google.javascript.rhino.Node.TypeDeclarationNode;
 import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TokenStream;
+import com.google.javascript.rhino.dtoa.DToA;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -193,7 +198,7 @@ class IRFactory {
 
   static final String STRING_CONTINUATION_WARNING =
       "String continuations are not recommended. See"
-      + " https://google-styleguide.googlecode.com/svn/trunk/javascriptguide.xml#Multiline_string_literals";
+      + " https://google.github.io/styleguide/javascriptguide.xml?showone=Multiline_string_literals#Multiline_string_literals";
 
   static final String BINARY_NUMBER_LITERAL_WARNING =
       "Binary integer literals are not supported in this language mode.";
@@ -275,11 +280,11 @@ class IRFactory {
                     ImmutableList<Comment> comments) {
     this.sourceString = sourceString;
     this.nextCommentIter = comments.iterator();
-    this.currentComment = nextCommentIter.hasNext() ? nextCommentIter.next() : null;
+    this.currentComment = skipNonJsDoc(nextCommentIter);
     this.newlines = new ArrayList<>();
     this.sourceFile = sourceFile;
-    this.fileLevelJsDocBuilder = new JSDocInfoBuilder(
-        config.parseJsDocDocumentation);
+    this.fileLevelJsDocBuilder =
+        new JSDocInfoBuilder(config.parseJsDocDocumentation.shouldParseDescriptions());
 
     // Pre-generate all the newlines in the file.
     for (int charNo = 0; true; charNo++) {
@@ -310,11 +315,23 @@ class IRFactory {
       case ECMASCRIPT5_STRICT:
       case ECMASCRIPT6_STRICT:
       case ECMASCRIPT6_TYPED:
+      case ECMASCRIPT7:
+      case ECMASCRIPT8:
         reservedKeywords = ES5_STRICT_RESERVED_KEYWORDS;
         break;
       default:
         throw new IllegalStateException("unknown language mode: " + config.languageMode);
     }
+  }
+
+  private static Comment skipNonJsDoc(UnmodifiableIterator<Comment> comments) {
+    while (comments.hasNext()) {
+      Comment comment = comments.next();
+      if (comment.type == Comment.Type.JSDOC) {
+        return comment;
+      }
+    }
+    return null;
   }
 
   // Create a template node to use as a source of common attributes, this allows
@@ -336,13 +353,13 @@ class IRFactory {
         config, errorReporter, tree.sourceComments);
 
     // don't call transform as we don't want standard jsdoc handling.
-    Node n = irFactory.justTransform(tree);
+    Node n = irFactory.transformDispatcher.process(tree);
     irFactory.setSourceInfo(n, tree);
 
     if (tree.sourceComments != null) {
       for (Comment comment : tree.sourceComments) {
-        if (comment.type == Comment.Type.JSDOC &&
-            !irFactory.parsedComments.contains(comment)) {
+        if (comment.type == Comment.Type.JSDOC
+            && !irFactory.parsedComments.contains(comment)) {
           irFactory.handlePossibleFileOverviewJsDoc(comment);
         } else if (comment.type == Comment.Type.BLOCK) {
           irFactory.handleBlockComment(comment);
@@ -362,7 +379,7 @@ class IRFactory {
       ProgramTree tree, StaticSourceFile sourceFile, String sourceString) {
     IRFactory irFactory =
         new IRFactory(sourceString, sourceFile, NULL_CONFIG, NULL_REPORTER, tree.sourceComments);
-    Node n = irFactory.justTransform(tree);
+    Node n = irFactory.transformDispatcher.process(tree);
     irFactory.validateAll(n);
 
     return irFactory.features;
@@ -371,7 +388,6 @@ class IRFactory {
   static final Config NULL_CONFIG = new Config(
       ImmutableSet.<String>of(),
       ImmutableSet.<String>of(),
-      false, // isIdeMode, parseJsDocDocumentation, preserveJsDocWhitespace
       LanguageMode.ECMASCRIPT6_TYPED);
 
   static final ErrorReporter NULL_REPORTER = new ErrorReporter() {
@@ -390,10 +406,26 @@ class IRFactory {
   }
 
   private void validateAll(Node n) {
-    validate(n);
-    for (Node c = n.getFirstChild(); c != null; c = c.getNext()) {
-      validateAll(c);
+    ArrayDeque<Node> work = new ArrayDeque<>();
+    while (n != null) {
+      validate(n);
+      Node nextSibling = n.getNext();
+      Node firstChild = n.getFirstChild();
+      if (firstChild != null) {
+        if (nextSibling != null) {
+          // handle the siblings later
+          work.push(nextSibling);
+        }
+        n = firstChild;
+      } else if (nextSibling != null) {
+        // no children, handle the next sibling
+        n = nextSibling;
+      } else {
+        // no siblings, continue with work we have saved on the work queue
+        n = work.poll();
+      }
     }
+    Preconditions.checkState(work.isEmpty());
   }
 
   private void validate(Node n) {
@@ -401,6 +433,19 @@ class IRFactory {
     validateBreakContinue(n);
     validateReturn(n);
     validateLabel(n);
+  }
+
+  private void validateReturn(Node n) {
+    if (n.isReturn()) {
+      Node parent = n;
+      while ((parent = parent.getParent()) != null) {
+        if (parent.isFunction()) {
+          return;
+        }
+      }
+      errorReporter.error(UNEXPECTED_RETURN,
+          sourceName, n.getLineno(), n.getCharno());
+    }
   }
 
   private void validateBreakContinue(Node n) {
@@ -460,45 +505,50 @@ class IRFactory {
     }
   }
 
-  private void validateReturn(Node n) {
-    if (n.isReturn()) {
-      Node parent = n;
-      while ((parent = parent.getParent()) != null) {
-        if (parent.isFunction()) {
-          return;
-        }
-      }
-      errorReporter.error(UNEXPECTED_RETURN,
-          sourceName, n.getLineno(), n.getCharno());
-    }
-  }
-
   private static boolean isBreakTarget(Node n) {
     switch (n.getType()) {
-      case Token.FOR:
-      case Token.FOR_OF:
-      case Token.WHILE:
-      case Token.DO:
-      case Token.SWITCH:
+      case FOR:
+      case FOR_OF:
+      case WHILE:
+      case DO:
+      case SWITCH:
         return true;
+      default:
+        return false;
     }
-    return false;
   }
 
   private static boolean isContinueTarget(Node n) {
     switch (n.getType()) {
-      case Token.FOR:
-      case Token.FOR_OF:
-      case Token.WHILE:
-      case Token.DO:
+      case FOR:
+      case FOR_OF:
+      case WHILE:
+      case DO:
         return true;
+      default:
+        return false;
     }
-    return false;
   }
 
 
   private static boolean labelsMatch(Node label, Node labelName) {
     return label.getFirstChild().getString().equals(labelName.getString());
+  }
+
+  private void validateLabel(Node n) {
+    if (n.isLabel()) {
+      Node labelName = n.getFirstChild();
+      for (Node parent = n.getParent();
+           parent != null && !parent.isFunction(); parent = parent.getParent()) {
+        if (parent.isLabel() && labelsMatch(parent, labelName)) {
+          errorReporter.error(
+              SimpleFormat.format(DUPLICATE_LABEL, labelName.getString()),
+              sourceName,
+              n.getLineno(), n.getCharno());
+          break;
+        }
+      }
+    }
   }
 
   private void validateParameters(Node n) {
@@ -521,7 +571,7 @@ class IRFactory {
     }
   }
 
-  private JSDocInfo recordJsDoc(SourceRange location, JSDocInfo info) {
+  JSDocInfo recordJsDoc(SourceRange location, JSDocInfo info) {
     if (info != null && info.hasTypeInformation()) {
       hasJsDocTypeAnnotations = true;
       if (features.isTypeScript()) {
@@ -532,26 +582,10 @@ class IRFactory {
     return info;
   }
 
-  private void recordTypeSyntax(SourceRange location) {
+  void recordTypeSyntax(SourceRange location) {
     if (hasJsDocTypeAnnotations) {
       errorReporter.error("Can only have JSDoc or inline type annotations, not both",
           sourceName, lineno(location.start), charno(location.start));
-    }
-  }
-
-  private void validateLabel(Node n) {
-    if (n.isLabel()) {
-      Node labelName = n.getFirstChild();
-      for (Node parent = n.getParent();
-           parent != null && !parent.isFunction(); parent = parent.getParent()) {
-        if (parent.isLabel() && labelsMatch(parent, labelName)) {
-          errorReporter.error(
-              SimpleFormat.format(DUPLICATE_LABEL, labelName.getString()),
-              sourceName,
-              n.getLineno(), n.getCharno());
-          break;
-        }
-      }
     }
   }
 
@@ -575,7 +609,7 @@ class IRFactory {
     }
   }
 
-  private Node transformBlock(ParseTree node) {
+  Node transformBlock(ParseTree node) {
     Node irNode = transform(node);
     if (!irNode.isBlock()) {
       if (irNode.isEmpty()) {
@@ -627,16 +661,9 @@ class IRFactory {
 
   private Comment getJsDoc(SourceRange location) {
     Comment closestPreviousComment = null;
-    while (currentComment != null &&
-        currentComment.location.end.offset <= location.start.offset) {
-      if (currentComment.type == Comment.Type.JSDOC) {
-        closestPreviousComment = currentComment;
-      }
-      if (this.nextCommentIter.hasNext()) {
-        currentComment = this.nextCommentIter.next();
-      } else {
-        currentComment = null;
-      }
+    while (hasPendingCommentBefore(location)) {
+      closestPreviousComment = currentComment;
+      currentComment = skipNonJsDoc(nextCommentIter);
     }
 
     return closestPreviousComment;
@@ -649,6 +676,15 @@ class IRFactory {
   private Comment getJsDoc(
       com.google.javascript.jscomp.parsing.parser.Token token) {
     return getJsDoc(token.location);
+  }
+
+  private boolean hasPendingCommentBefore(SourceRange location) {
+    return currentComment != null
+        && currentComment.location.end.offset <= location.start.offset;
+  }
+
+  private boolean hasPendingCommentBefore(ParseTree tree) {
+    return hasPendingCommentBefore(tree.location);
   }
 
   private JSDocInfo handleJsDoc(Comment comment) {
@@ -722,16 +758,13 @@ class IRFactory {
     }
   }
 
-  private JSDocInfo handleJsDoc(
-      com.google.javascript.jscomp.parsing.parser.Token token) {
+  JSDocInfo handleJsDoc(com.google.javascript.jscomp.parsing.parser.Token token) {
     return handleJsDoc(getJsDoc(token));
   }
 
-
-
-  private Node transform(ParseTree tree) {
+  Node transform(ParseTree tree) {
     JSDocInfo info = handleJsDoc(tree);
-    Node node = justTransform(tree);
+    Node node = transformDispatcher.process(tree);
     if (info != null) {
       node = maybeInjectCastNode(tree, info, node);
       node.setJSDocInfo(info);
@@ -741,8 +774,7 @@ class IRFactory {
   }
 
   private Node maybeInjectCastNode(ParseTree node, JSDocInfo info, Node irNode) {
-    if (node.type == ParseTreeType.PAREN_EXPRESSION
-        && info.hasType()) {
+    if (node.type == ParseTreeType.PAREN_EXPRESSION && info.hasType()) {
       irNode = newNode(Token.CAST, irNode);
     }
     return irNode;
@@ -757,9 +789,9 @@ class IRFactory {
    * @see <a href="http://code.google.com/p/jsdoc-toolkit/wiki/InlineDocs">
    *   Using Inline Doc Comments</a>
    */
-  private Node transformNodeWithInlineJsDoc(ParseTree node) {
+  Node transformNodeWithInlineJsDoc(ParseTree node) {
     JSDocInfo info = handleInlineJsDoc(node);
-    Node irNode = justTransform(node);
+    Node irNode = transformDispatcher.process(node);
     if (info != null) {
       irNode.setJSDocInfo(info);
     }
@@ -767,16 +799,16 @@ class IRFactory {
     return irNode;
   }
 
-  private JSDocInfo handleInlineJsDoc(ParseTree node) {
+  JSDocInfo handleInlineJsDoc(ParseTree node) {
     return handleInlineJsDoc(node.location);
   }
 
-  private JSDocInfo handleInlineJsDoc(
+  JSDocInfo handleInlineJsDoc(
       com.google.javascript.jscomp.parsing.parser.Token token) {
     return handleInlineJsDoc(token.location);
   }
 
-  private JSDocInfo handleInlineJsDoc(SourceRange location) {
+  JSDocInfo handleInlineJsDoc(SourceRange location) {
     Comment comment = getJsDoc(location);
     if (comment != null && !comment.value.contains("@")) {
       return recordJsDoc(location, parseInlineTypeDoc(comment));
@@ -785,9 +817,9 @@ class IRFactory {
     }
   }
 
-  private Node transformNumberAsString(LiteralToken token) {
+  Node transformNumberAsString(LiteralToken token) {
     double value = normalizeNumber(token);
-    Node irNode = newStringNode(getStringValue(value));
+    Node irNode = newStringNode(DToA.numberToString(value));
     JSDocInfo jsDocInfo = handleJsDoc(token);
     if (jsDocInfo != null) {
       irNode.setJSDocInfo(jsDocInfo);
@@ -796,53 +828,42 @@ class IRFactory {
     return irNode;
   }
 
-  private static String getStringValue(double value) {
-    long longValue = (long) value;
-
-    // Return "1" instead of "1.0"
-    if (longValue == value) {
-      return Long.toString(longValue);
-    } else {
-      return Double.toString(value);
-    }
-  }
-
-  private static int lineno(ParseTree node) {
+  static int lineno(ParseTree node) {
     // location lines start at zero, our AST starts at 1.
     return lineno(node.location.start);
   }
 
-  private static int charno(ParseTree node) {
+  static int charno(ParseTree node) {
     return charno(node.location.start);
   }
 
-  private static int lineno(SourcePosition location) {
+  static int lineno(SourcePosition location) {
     // location lines start at zero, our AST starts at 1.
     return location.line + 1;
   }
 
-  private static int charno(SourcePosition location) {
+  static int charno(SourcePosition location) {
     return location.column;
   }
 
-  private void setSourceInfo(Node node, Node ref) {
+  void setSourceInfo(Node node, Node ref) {
     node.setLineno(ref.getLineno());
     node.setCharno(ref.getCharno());
     maybeSetLengthFrom(node, ref);
   }
 
-  private void setSourceInfo(Node irNode, ParseTree node) {
+  void setSourceInfo(Node irNode, ParseTree node) {
     if (irNode.getLineno() == -1) {
       setSourceInfo(irNode, node.location.start, node.location.end);
     }
   }
 
-  private void setSourceInfo(
+  void setSourceInfo(
       Node irNode, com.google.javascript.jscomp.parsing.parser.Token token) {
     setSourceInfo(irNode, token.location.start, token.location.end);
   }
 
-  private void setSourceInfo(
+  void setSourceInfo(
       Node node, SourcePosition start, SourcePosition end) {
     if (node.getLineno() == -1) {
       // If we didn't already set the line, then set it now. This avoids
@@ -914,21 +935,17 @@ class IRFactory {
   }
 
   // Set the length on the node if we're in IDE mode.
-  private void maybeSetLength(
+  void maybeSetLength(
       Node node, SourcePosition start, SourcePosition end) {
-    if (config.isIdeMode) {
+    if (config.preserveDetailedSourceInfo == Config.SourceLocationInformation.PRESERVE) {
       node.setLength(end.offset - start.offset);
     }
   }
 
-  private void maybeSetLengthFrom(Node node, Node ref) {
-    if (config.isIdeMode) {
+  void maybeSetLengthFrom(Node node, Node ref) {
+    if (config.preserveDetailedSourceInfo == Config.SourceLocationInformation.PRESERVE) {
       node.setLength(ref.getLength());
     }
-  }
-
-  private Node justTransform(ParseTree node) {
-    return transformDispatcher.process(node);
   }
 
   private class TransformDispatcher {
@@ -982,7 +999,7 @@ class IRFactory {
     }
 
     Node processArrayPattern(ArrayPatternTree tree) {
-      maybeWarnEs6Feature(tree, Feature.DESTRUCTURING);
+      maybeWarnForFeature(tree, Feature.DESTRUCTURING);
 
       Node node = newNode(Token.ARRAY_PATTERN);
       for (ParseTree child : tree.elements) {
@@ -992,7 +1009,7 @@ class IRFactory {
     }
 
     Node processObjectPattern(ObjectPatternTree tree) {
-      maybeWarnEs6Feature(tree, Feature.DESTRUCTURING);
+      maybeWarnForFeature(tree, Feature.DESTRUCTURING);
 
       Node node = newNode(Token.OBJECT_PATTERN);
       for (ParseTree child : tree.fields) {
@@ -1002,18 +1019,38 @@ class IRFactory {
     }
 
     Node processAssignmentRestElement(AssignmentRestElementTree tree) {
-      Node name = newStringNode(Token.NAME, tree.identifier.value);
-      setSourceInfo(name, tree.identifier);
-      return newNode(Token.REST, name);
+      return newNode(Token.REST, transformNodeWithInlineJsDoc(tree.assignmentTarget));
     }
 
     Node processAstRoot(ProgramTree rootNode) {
-      Node node = newNode(Token.SCRIPT);
+      Node scriptNode = newNode(Token.SCRIPT);
       for (ParseTree child : rootNode.sourceElements) {
-        node.addChildToBack(transform(child));
+        scriptNode.addChildToBack(transform(child));
       }
-      parseDirectives(node);
-      return node;
+      parseDirectives(scriptNode);
+      if (isGoogModuleFile(scriptNode)) {
+        Node moduleNode = new Node(Token.MODULE_BODY);
+        setSourceInfo(moduleNode, rootNode);
+        moduleNode.addChildrenToBack(scriptNode.removeChildren());
+        scriptNode.addChildToBack(moduleNode);
+      }
+      return scriptNode;
+    }
+
+    private boolean isGoogModuleFile(Node scriptNode) {
+      Preconditions.checkArgument(scriptNode.isScript());
+      if (!scriptNode.hasChildren()) {
+        return false;
+      }
+      Node exprResult = scriptNode.getFirstChild();
+      if (!exprResult.isExprResult()) {
+        return false;
+      }
+      Node call = exprResult.getFirstChild();
+      if (!call.isCall()) {
+        return false;
+      }
+      return call.getFirstChild().matchesQualifiedName("goog.module");
     }
 
     /**
@@ -1050,7 +1087,7 @@ class IRFactory {
       if (n == null) {
         return false;
       }
-      int nType = n.getType();
+      Token nType = n.getType();
       return nType == Token.EXPR_RESULT &&
           n.getFirstChild().isString() &&
           ALLOWED_DIRECTIVES.contains(n.getFirstChild().getString());
@@ -1110,6 +1147,9 @@ class IRFactory {
           transform(getNode.memberExpression));
     }
 
+    /**
+     * @param exprNode unused
+     */
     Node processEmptyStatement(EmptyStatementTree exprNode) {
       return newNode(Token.EMPTY);
     }
@@ -1122,7 +1162,7 @@ class IRFactory {
 
     Node processForInLoop(ForInStatementTree loopNode) {
       Node initializer = transform(loopNode.initializer);
-      ImmutableSet<Integer> invalidInitializers =
+      ImmutableSet<Token> invalidInitializers =
           ImmutableSet.of(Token.ARRAYLIT, Token.OBJECTLIT);
       if (invalidInitializers.contains(initializer.getType())) {
         errorReporter.error("Invalid LHS for a for-in loop", sourceName,
@@ -1136,9 +1176,9 @@ class IRFactory {
     }
 
     Node processForOf(ForOfStatementTree loopNode) {
-      maybeWarnEs6Feature(loopNode, Feature.FOR_OF);
+      maybeWarnForFeature(loopNode, Feature.FOR_OF);
       Node initializer = transform(loopNode.initializer);
-      ImmutableSet<Integer> invalidInitializers =
+      ImmutableSet<Token> invalidInitializers =
           ImmutableSet.of(Token.ARRAYLIT, Token.OBJECTLIT);
       if (invalidInitializers.contains(initializer.getType())) {
         errorReporter.error("Invalid LHS for a for-of loop", sourceName,
@@ -1192,19 +1232,24 @@ class IRFactory {
       boolean isDeclaration = (functionTree.kind == FunctionDeclarationTree.Kind.DECLARATION);
       boolean isMember = (functionTree.kind == FunctionDeclarationTree.Kind.MEMBER);
       boolean isArrow = (functionTree.kind == FunctionDeclarationTree.Kind.ARROW);
+      boolean isAsync = functionTree.isAsync;
       boolean isGenerator = functionTree.isGenerator;
       boolean isSignature = (functionTree.functionBody.type == ParseTreeType.EMPTY_STATEMENT);
 
       if (isGenerator) {
-        maybeWarnEs6Feature(functionTree, Feature.GENERATORS);
+        maybeWarnForFeature(functionTree, Feature.GENERATORS);
       }
 
       if (isMember) {
-        maybeWarnEs6Feature(functionTree, Feature.MEMBER_DECLARATIONS);
+        maybeWarnForFeature(functionTree, Feature.MEMBER_DECLARATIONS);
       }
 
       if (isArrow) {
-        maybeWarnEs6Feature(functionTree, Feature.ARROW_FUNCTIONS);
+        maybeWarnForFeature(functionTree, Feature.ARROW_FUNCTIONS);
+      }
+
+      if (isAsync) {
+        maybeWarnForFeature(functionTree, Feature.ASYNC_FUNCTIONS);
       }
 
       IdentifierToken name = functionTree.name;
@@ -1241,9 +1286,9 @@ class IRFactory {
 
       Node bodyNode = transform(functionTree.functionBody);
       if (!isArrow && !isSignature && !bodyNode.isBlock()) {
-        // When in ideMode the parser tries to parse some constructs the
+        // When in "keep going" mode the parser tries to parse some constructs the
         // compiler doesn't support, repair it here.
-        Preconditions.checkState(config.isIdeMode);
+        Preconditions.checkState(config.keepGoing == Config.RunMode.KEEP_GOING);
         bodyNode = IR.block();
       }
       parseDirectives(bodyNode);
@@ -1251,6 +1296,7 @@ class IRFactory {
 
       node.setIsGeneratorFunction(isGenerator);
       node.setIsArrowFunction(isArrow);
+      node.setIsAsyncFunction(isAsync);
       node.putBooleanProp(Node.OPT_ES6_TYPED, functionTree.isOptional);
 
       Node result;
@@ -1260,7 +1306,7 @@ class IRFactory {
         Node member = newStringNode(Token.MEMBER_FUNCTION_DEF, name.value);
         member.addChildToBack(node);
         member.setStaticMember(functionTree.isStatic);
-        maybeProcessAccessibilityModifier(member, functionTree, functionTree.access);
+        maybeProcessAccessibilityModifier(member, functionTree.access);
         node.setDeclaredTypeExpression(node.getDeclaredTypeExpression());
         result = member;
       } else {
@@ -1287,21 +1333,23 @@ class IRFactory {
     }
 
     Node processDefaultParameter(DefaultParameterTree tree) {
-      maybeWarnEs6Feature(tree, Feature.DEFAULT_PARAMETERS);
+      maybeWarnForFeature(tree, Feature.DEFAULT_PARAMETERS);
       return newNode(Token.DEFAULT_VALUE,
           transform(tree.lhs), transform(tree.defaultValue));
     }
 
     Node processRestParameter(RestParameterTree tree) {
-      maybeWarnEs6Feature(tree, Feature.REST_PARAMETERS);
+      maybeWarnForFeature(tree, Feature.REST_PARAMETERS);
 
-      Node name = newStringNode(Token.NAME, tree.identifier.value);
-      setSourceInfo(name, tree.identifier);
-      return newNode(Token.REST, name);
+      Node assignmentTarget = transformNodeWithInlineJsDoc(tree.assignmentTarget);
+      if (assignmentTarget.isDestructuringPattern()) {
+        maybeWarnForFeature(tree.assignmentTarget, Feature.DESTRUCTURING);
+      }
+      return newNode(Token.REST, assignmentTarget);
     }
 
     Node processSpreadExpression(SpreadExpressionTree tree) {
-      maybeWarnEs6Feature(tree, Feature.SPREAD_EXPRESSIONS);
+      maybeWarnForFeature(tree, Feature.SPREAD_EXPRESSIONS);
 
       return newNode(Token.SPREAD, transform(tree.expression));
     }
@@ -1317,16 +1365,69 @@ class IRFactory {
     }
 
     Node processBinaryExpression(BinaryOperatorTree exprNode) {
-      return newNode(
-          transformBinaryTokenType(exprNode.operator.type),
-          transform(exprNode.left),
-          transform(exprNode.right));
+      if (hasPendingCommentBefore(exprNode.right)) {
+        return newNode(
+            transformBinaryTokenType(exprNode.operator.type),
+            transform(exprNode.left),
+            transform(exprNode.right));
+      } else {
+        // No JSDoc, we can traverse out of order.
+        return processBinaryExpressionHelper(exprNode);
+      }
     }
 
+    // Deep binary ops (typical string concatentations) can cause stack overflows,
+    // avoid recursing in this case and loop instead.
+    private Node processBinaryExpressionHelper(BinaryOperatorTree exprTree) {
+      Node root = null;
+      Node current = null;
+      Node previous = null;
+      while (exprTree != null) {
+        previous = current;
+        // Skip the first child but recurse normally into the right operand as typically this isn't
+        // deep and because we have already checked that there isn't any JSDoc we can traverse
+        // out of order.
+        current = newNode(
+            transformBinaryTokenType(exprTree.operator.type),
+            transform(exprTree.right));
+        // We have inlined "transform" here. Normally, we would need to handle the JSDoc here but we
+        // know there is no JSDoc to attach, which simplifies things.
+        setSourceInfo(current, exprTree);
+
+        // As the iteration continues add the left operand.
+        if (previous != null) {
+          previous.addChildToFront(current);
+        }
+
+        if (exprTree.left instanceof BinaryOperatorTree) {
+          // continue with the left hand child
+          exprTree = (BinaryOperatorTree) exprTree.left;
+        } else {
+          // Finish things off, add the left operand to the current node.
+          Node leftNode = transform(exprTree.left);
+          current.addChildToFront(leftNode);
+          // Nothing left to do.
+          exprTree = null;
+        }
+
+        // Save the top binary op, this is the result to return.
+        if (root == null) {
+          root = current;
+        }
+      }
+      return root;
+    }
+
+    /**
+     * @param node unused.
+     */
     Node processDebuggerStatement(DebuggerStatementTree node) {
       return newNode(Token.DEBUGGER);
     }
 
+    /**
+     * @param node unused.
+     */
     Node processThisExpression(ThisExpressionTree node) {
       return newNode(Token.THIS);
     }
@@ -1471,20 +1572,20 @@ class IRFactory {
         node.addChildToBack(key);
       }
       if (maybeWarn) {
-        maybeWarnEs6Feature(objTree, Feature.EXTENDED_OBJECT_LITERALS);
+        maybeWarnForFeature(objTree, Feature.EXTENDED_OBJECT_LITERALS);
       }
       return node;
     }
 
     Node processComputedPropertyDefinition(ComputedPropertyDefinitionTree tree) {
-      maybeWarnEs6Feature(tree, Feature.COMPUTED_PROPERTIES);
+      maybeWarnForFeature(tree, Feature.COMPUTED_PROPERTIES);
 
       return newNode(Token.COMPUTED_PROP,
           transform(tree.property), transform(tree.value));
     }
 
     Node processComputedPropertyMemberVariable(ComputedPropertyMemberVariableTree tree) {
-      maybeWarnEs6Feature(tree, Feature.COMPUTED_PROPERTIES);
+      maybeWarnForFeature(tree, Feature.COMPUTED_PROPERTIES);
       maybeWarnTypeSyntax(tree, Feature.COMPUTED_PROPERTIES);
 
       Node n = newNode(Token.COMPUTED_PROP, transform(tree.property));
@@ -1492,12 +1593,12 @@ class IRFactory {
       n.putBooleanProp(Node.COMPUTED_PROP_VARIABLE, true);
       n.putProp(Node.ACCESS_MODIFIER, tree.access);
       n.setStaticMember(tree.isStatic);
-      maybeProcessAccessibilityModifier(n, tree, tree.access);
+      maybeProcessAccessibilityModifier(n, tree.access);
       return n;
     }
 
     Node processComputedPropertyMethod(ComputedPropertyMethodTree tree) {
-      maybeWarnEs6Feature(tree, Feature.COMPUTED_PROPERTIES);
+      maybeWarnForFeature(tree, Feature.COMPUTED_PROPERTIES);
 
       Node n = newNode(Token.COMPUTED_PROP,
           transform(tree.property), transform(tree.method));
@@ -1505,12 +1606,12 @@ class IRFactory {
       if (tree.method.asFunctionDeclaration().isStatic) {
         n.setStaticMember(true);
       }
-      maybeProcessAccessibilityModifier(n, tree, tree.access);
+      maybeProcessAccessibilityModifier(n, tree.access);
       return n;
     }
 
     Node processComputedPropertyGetter(ComputedPropertyGetterTree tree) {
-      maybeWarnEs6Feature(tree, Feature.COMPUTED_PROPERTIES);
+      maybeWarnForFeature(tree, Feature.COMPUTED_PROPERTIES);
 
       Node key = transform(tree.property);
       Node body = transform(tree.body);
@@ -1523,7 +1624,7 @@ class IRFactory {
     }
 
     Node processComputedPropertySetter(ComputedPropertySetterTree tree) {
-      maybeWarnEs6Feature(tree, Feature.COMPUTED_PROPERTIES);
+      maybeWarnForFeature(tree, Feature.COMPUTED_PROPERTIES);
 
       Node key = transform(tree.property);
       Node body = transform(tree.body);
@@ -1592,7 +1693,7 @@ class IRFactory {
     private void checkParenthesizedExpression(ParenExpressionTree exprNode) {
       if (exprNode.expression.type == ParseTreeType.COMMA_EXPRESSION) {
         List<ParseTree> commaNodes = exprNode.expression.asCommaExpression().expressions;
-        ParseTree lastChild = commaNodes.get(commaNodes.size() - 1);
+        ParseTree lastChild = Iterables.getLast(commaNodes);
         if (lastChild.type == ParseTreeType.REST_PARAMETER) {
           errorReporter.error(
               "A rest parameter must be in a parameter list.",
@@ -1649,7 +1750,7 @@ class IRFactory {
             break;
           case 'u': case 'y':
             Feature feature = flag == 'u' ? Feature.REGEXP_FLAG_U : Feature.REGEXP_FLAG_Y;
-            maybeWarnEs6Feature(tree, feature);
+            maybeWarnForFeature(tree, feature);
             break;
           default:
             errorReporter.error(
@@ -1698,7 +1799,7 @@ class IRFactory {
     }
 
     Node processTemplateLiteral(TemplateLiteralExpressionTree tree) {
-      maybeWarnEs6Feature(tree, Feature.TEMPLATE_LITERALS);
+      maybeWarnForFeature(tree, Feature.TEMPLATE_LITERALS);
       Node templateLitNode = newNode(Token.TEMPLATELIT);
       setSourceInfo(templateLitNode, tree);
       Node node = tree.operand == null
@@ -1804,7 +1905,7 @@ class IRFactory {
     }
 
     Node processUnaryExpression(UnaryExpressionTree exprNode) {
-      int type = transformUnaryTokenType(exprNode.operator.type);
+      Token type = transformUnaryTokenType(exprNode.operator.type);
       Node operand = transform(exprNode.operand);
       if (type == Token.NEG && operand.isNumber()) {
         operand.setDouble(-operand.getDouble());
@@ -1829,7 +1930,7 @@ class IRFactory {
     }
 
     Node processPostfixExpression(PostfixExpressionTree exprNode) {
-      int type = transformPostfixTokenType(exprNode.operator.type);
+      Token type = transformPostfixTokenType(exprNode.operator.type);
       Node operand = transform(exprNode.operand);
       if (type == Token.INC || type == Token.DEC) {
         return createIncrDecrNode(type, true, operand);
@@ -1838,7 +1939,7 @@ class IRFactory {
       return node;
     }
 
-    private Node createIncrDecrNode(int type, boolean postfix, Node operand) {
+    private Node createIncrDecrNode(Token type, boolean postfix, Node operand) {
       if (!operand.isValidAssignmentTarget()) {
         errorReporter.error(
             SimpleFormat.format("Invalid %s %s operand.",
@@ -1855,18 +1956,18 @@ class IRFactory {
 
     Node processVariableStatement(VariableStatementTree stmt) {
       // TODO(moz): Figure out why we still need the special handling
-      return justTransform(stmt.declarations);
+      return transformDispatcher.process(stmt.declarations);
     }
 
     Node processVariableDeclarationList(VariableDeclarationListTree decl) {
-      int declType;
+      Token declType;
       switch (decl.declarationType) {
         case CONST:
-          maybeWarnEs6Feature(decl, Feature.CONST_DECLARATIONS);
+          maybeWarnForFeature(decl, Feature.CONST_DECLARATIONS);
           declType = Token.CONST;
           break;
         case LET:
-          maybeWarnEs6Feature(decl, Feature.LET_DECLARATIONS);
+          maybeWarnForFeature(decl, Feature.LET_DECLARATIONS);
           declType = Token.LET;
           break;
         case VAR:
@@ -1885,13 +1986,14 @@ class IRFactory {
 
     Node processVariableDeclaration(VariableDeclarationTree decl) {
       Node node = transformNodeWithInlineJsDoc(decl.lvalue);
+      Node lhs = node.isDestructuringPattern() ? newNode(Token.DESTRUCTURING_LHS, node) : node;
       if (decl.initializer != null) {
         Node initializer = transform(decl.initializer);
-        node.addChildToBack(initializer);
-        maybeSetLength(node, decl.location.start, decl.location.end);
+        lhs.addChildToBack(initializer);
+        maybeSetLength(lhs, decl.location.start, decl.location.end);
       }
-      maybeProcessType(node, decl.declaredType);
-      return node;
+      maybeProcessType(lhs, decl.declaredType);
+      return lhs;
     }
 
     Node processWhileLoop(WhileStatementTree stmt) {
@@ -1908,6 +2010,9 @@ class IRFactory {
           transformBlock(stmt.body));
     }
 
+    /**
+     * @param tree unused
+     */
     Node processMissingExpression(MissingPrimaryExpressionTree tree) {
       // This will already have been reported as an error by the parser.
       // Try to create something valid that ide mode might be able to
@@ -1960,10 +2065,16 @@ class IRFactory {
           literal.literalToken.type));
     }
 
+    /**
+     * @param literal unused
+     */
     Node processNullLiteral(LiteralExpressionTree literal) {
       return newNode(Token.NULL);
     }
 
+    /**
+     * @param literal unused
+     */
     Node processNull(NullTree literal) {
       // NOTE: This is not a NULL literal but a placeholder node such as in
       // an array with "holes".
@@ -1989,7 +2100,7 @@ class IRFactory {
     }
 
     Node processClassDeclaration(ClassDeclarationTree tree) {
-      maybeWarnEs6Feature(tree, Feature.CLASSES);
+      maybeWarnForFeature(tree, Feature.CLASSES);
 
       Node name = transformOrEmpty(tree.name, tree);
       maybeProcessGenerics(name, tree.generics);
@@ -2046,8 +2157,13 @@ class IRFactory {
     }
 
     Node processSuper(SuperExpressionTree tree) {
-      maybeWarnEs6Feature(tree, Feature.SUPER);
+      maybeWarnForFeature(tree, Feature.SUPER);
       return newNode(Token.SUPER);
+    }
+
+    Node processNewTarget(NewTargetExpressionTree tree) {
+      maybeWarnForFeature(tree, Feature.NEW_TARGET);
+      return newNode(Token.NEW_TARGET);
     }
 
     Node processMemberVariable(MemberVariableTree tree) {
@@ -2055,7 +2171,7 @@ class IRFactory {
       maybeProcessType(member, tree.declaredType);
       member.setStaticMember(tree.isStatic);
       member.putBooleanProp(Node.OPT_ES6_TYPED, tree.isOptional);
-      maybeProcessAccessibilityModifier(member, tree, tree.access);
+      maybeProcessAccessibilityModifier(member, tree.access);
       return member;
     }
 
@@ -2068,8 +2184,15 @@ class IRFactory {
       return yield;
     }
 
+    Node processAwait(AwaitExpressionTree tree) {
+      maybeWarnForFeature(tree, Feature.ASYNC_FUNCTIONS);
+      Node await = newNode(Token.AWAIT);
+      await.addChildToBack(transform(tree.expression));
+      return await;
+    }
+
     Node processExportDecl(ExportDeclarationTree tree) {
-      maybeWarnEs6Feature(tree, Feature.MODULES);
+      maybeWarnForFeature(tree, Feature.MODULES);
       Node decls = null;
       if (tree.isExportAll) {
         Preconditions.checkState(
@@ -2109,7 +2232,7 @@ class IRFactory {
     }
 
     Node processImportDecl(ImportDeclarationTree tree) {
-      maybeWarnEs6Feature(tree, Feature.MODULES);
+      maybeWarnForFeature(tree, Feature.MODULES);
 
       Node firstChild = transformOrEmpty(tree.defaultBindingIdentifier, tree);
       Node secondChild = (tree.nameSpaceImportIdentifier != null)
@@ -2129,14 +2252,6 @@ class IRFactory {
         importSpec.addChildToBack(processName(tree.destinationName));
       }
       return importSpec;
-    }
-
-    Node processModuleImport(ModuleImportTree tree) {
-      maybeWarnEs6Feature(tree, Feature.MODULES);
-      Node module = newNode(Token.NAMESPACE,
-          processName(tree.name),
-          processString(tree.from));
-      return module;
     }
 
     Node processTypeName(TypeNameTree tree) {
@@ -2388,7 +2503,15 @@ class IRFactory {
                   type);
               break;
             case REST_PARAMETER:
-              restName = param.asRestParameter().identifier.toString();
+              // TypeScript doesn't allow destructuring parameters, so the assignment target must
+              // be an identifier.
+              restName =
+                  param
+                      .asRestParameter()
+                      .assignmentTarget
+                      .asIdentifierExpression()
+                      .identifierToken
+                      .toString();
               restType = type;
               break;
             default:
@@ -2424,7 +2547,7 @@ class IRFactory {
     }
 
     private Node transformList(
-        int type, ImmutableList<ParseTree> list) {
+        Token type, ImmutableList<ParseTree> list) {
       Node n = newNode(type);
       for (ParseTree tree : list) {
         n.addChildToBack(transform(tree));
@@ -2433,7 +2556,7 @@ class IRFactory {
     }
 
     private Node transformListOrEmpty(
-        int type, ImmutableList<ParseTree> list) {
+        Token type, ImmutableList<ParseTree> list) {
       if (list == null || list.isEmpty()) {
         return newNode(Token.EMPTY);
       } else {
@@ -2441,17 +2564,21 @@ class IRFactory {
       }
     }
 
-    void maybeWarnEs6Feature(ParseTree node, Feature feature) {
+    void maybeWarnForFeature(ParseTree node, Feature feature) {
       features = features.require(feature);
-      if (!isEs6Mode()) {
+      if (!isSupportedForInputLanguageMode(feature)) {
+
         errorReporter.warning(
-            "this language feature is only supported in es6 mode: " + feature,
+            "this language feature is only supported for "
+            + LanguageMode.minimumRequiredFor(feature)
+            + " mode or better: "
+            + feature,
             sourceName,
             lineno(node), charno(node));
       }
     }
 
-    void maybeProcessAccessibilityModifier(Node n, ParseTree tree, TokenType type) {
+    void maybeProcessAccessibilityModifier(Node n, TokenType type) {
       if (type != null) {
         Visibility access;
         switch (type) {
@@ -2631,8 +2758,12 @@ class IRFactory {
           return processClassDeclaration(node.asClassDeclaration());
         case SUPER_EXPRESSION:
           return processSuper(node.asSuperExpression());
+        case NEW_TARGET_EXPRESSION:
+          return processNewTarget(node.asNewTargetExpression());
         case YIELD_EXPRESSION:
           return processYield(node.asYieldStatement());
+        case AWAIT_EXPRESSION:
+          return processAwait(node.asAwaitExpression());
         case FOR_OF_STATEMENT:
           return processForOf(node.asForOfStatement());
 
@@ -2644,8 +2775,6 @@ class IRFactory {
           return processImportDecl(node.asImportDeclaration());
         case IMPORT_SPECIFIER:
           return processImportSpec(node.asImportSpecifier());
-        case MODULE_IMPORT:
-          return processModuleImport(node.asModuleImport());
 
         case ARRAY_PATTERN:
           return processArrayPattern(node.asArrayPattern());
@@ -2718,14 +2847,14 @@ class IRFactory {
     }
   }
 
-  private String normalizeRegex(LiteralToken token) {
+  String normalizeRegex(LiteralToken token) {
     String value = token.value;
     int lastSlash = value.lastIndexOf('/');
     return value.substring(1, lastSlash);
   }
 
 
-  private String normalizeString(LiteralToken token, boolean templateLiteral) {
+  String normalizeString(LiteralToken token, boolean templateLiteral) {
     String value = token.value;
     if (templateLiteral) {
       // <CR><LF> and <CR> are normalized as <LF> for raw string value
@@ -2850,22 +2979,18 @@ class IRFactory {
     return result.toString();
   }
 
-  boolean isEs6Mode() {
-    return config.languageMode == LanguageMode.ECMASCRIPT6
-        || config.languageMode == LanguageMode.ECMASCRIPT6_STRICT
-        || config.languageMode == LanguageMode.ECMASCRIPT6_TYPED;
+  boolean isSupportedForInputLanguageMode(Feature feature) {
+    return config.languageMode.featureSet.contains(feature);
   }
 
   boolean isEs5OrBetterMode() {
-    return config.languageMode != LanguageMode.ECMASCRIPT3;
+    return config.languageMode.featureSet.contains(FeatureSet.ES5);
   }
 
   private boolean inStrictContext() {
     // TODO(johnlenz): in ECMASCRIPT5/6 is a "mixed" mode and we should track the context
     // that we are in, if we want to support it.
-    return config.languageMode == LanguageMode.ECMASCRIPT5_STRICT
-        || config.languageMode == LanguageMode.ECMASCRIPT6_STRICT
-        || config.languageMode == LanguageMode.ECMASCRIPT6_TYPED;
+    return config.languageMode.strictMode == StrictMode.STRICT;
   }
 
   double normalizeNumber(LiteralToken token) {
@@ -2886,7 +3011,7 @@ class IRFactory {
         case 'b':
         case 'B': {
           features = features.require(Feature.BINARY_LITERALS);
-          if (!isEs6Mode()) {
+          if (!isSupportedForInputLanguageMode(Feature.BINARY_LITERALS)) {
             errorReporter.warning(BINARY_NUMBER_LITERAL_WARNING,
                 sourceName,
                 lineno(token.location.start), charno(token.location.start));
@@ -2901,7 +3026,7 @@ class IRFactory {
         case 'o':
         case 'O': {
           features = features.require(Feature.OCTAL_LITERALS);
-          if (!isEs6Mode()) {
+          if (!isSupportedForInputLanguageMode(Feature.OCTAL_LITERALS)) {
             errorReporter.warning(OCTAL_NUMBER_LITERAL_WARNING,
                 sourceName,
                 lineno(token.location.start), charno(token.location.start));
@@ -2999,7 +3124,7 @@ class IRFactory {
     throw new IllegalStateException("unexpected: " + c);
   }
 
-  private static int transformBooleanTokenType(TokenType token) {
+  static Token transformBooleanTokenType(TokenType token) {
     switch (token) {
       case TRUE:
         return Token.TRUE;
@@ -3011,7 +3136,7 @@ class IRFactory {
     }
   }
 
-  private static int transformPostfixTokenType(TokenType token) {
+  static Token transformPostfixTokenType(TokenType token) {
     switch (token) {
       case PLUS_PLUS:
         return Token.INC;
@@ -3023,7 +3148,7 @@ class IRFactory {
     }
   }
 
-  private static int transformUnaryTokenType(TokenType token) {
+  static Token transformUnaryTokenType(TokenType token) {
     switch (token) {
       case BANG:
         return Token.NOT;
@@ -3051,7 +3176,7 @@ class IRFactory {
     }
   }
 
-  private static int transformBinaryTokenType(TokenType token) {
+  static Token transformBinaryTokenType(TokenType token) {
     switch (token) {
       case BAR:
         return Token.BITOR;
@@ -3136,31 +3261,31 @@ class IRFactory {
   }
 
   // Simple helper to create nodes and set the initial node properties.
-  private Node newNode(int type) {
+  Node newNode(Token type) {
     return new Node(type).clonePropsFrom(templateNode);
   }
 
-  private Node newNode(int type, Node child1) {
+  Node newNode(Token type, Node child1) {
     return new Node(type, child1).clonePropsFrom(templateNode);
   }
 
-  private Node newNode(int type, Node child1, Node child2) {
+  Node newNode(Token type, Node child1, Node child2) {
     return new Node(type, child1, child2).clonePropsFrom(templateNode);
   }
 
-  private Node newNode(int type, Node child1, Node child2, Node child3) {
+  Node newNode(Token type, Node child1, Node child2, Node child3) {
     return new Node(type, child1, child2, child3).clonePropsFrom(templateNode);
   }
 
-  private Node newStringNode(String value) {
+  Node newStringNode(String value) {
     return IR.string(value).clonePropsFrom(templateNode);
   }
 
-  private Node newStringNode(int type, String value) {
+  Node newStringNode(Token type, String value) {
     return Node.newString(type, value).clonePropsFrom(templateNode);
   }
 
-  private Node newNumberNode(Double value) {
+  Node newNumberNode(Double value) {
     return IR.number(value).clonePropsFrom(templateNode);
   }
 
@@ -3168,7 +3293,7 @@ class IRFactory {
    * Clone the properties from the template node recursively, skips nodes that
    * have properties already.
    */
-  private Node cloneProps(Node n) {
+  Node cloneProps(Node n) {
     if (!n.hasProps()) {
       n.clonePropsFrom(templateNode);
     }

@@ -20,15 +20,18 @@ import com.google.common.annotations.GwtIncompatible;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.javascript.jscomp.lint.CheckArrayWithGoogObject;
 import com.google.javascript.jscomp.lint.CheckDuplicateCase;
 import com.google.javascript.jscomp.lint.CheckEmptyStatements;
 import com.google.javascript.jscomp.lint.CheckEnums;
-import com.google.javascript.jscomp.lint.CheckForInOverArray;
 import com.google.javascript.jscomp.lint.CheckInterfaces;
 import com.google.javascript.jscomp.lint.CheckJSDocStyle;
+import com.google.javascript.jscomp.lint.CheckMissingSemicolon;
 import com.google.javascript.jscomp.lint.CheckNullableReturn;
+import com.google.javascript.jscomp.lint.CheckPrimitiveAsObject;
 import com.google.javascript.jscomp.lint.CheckPrototypeProperties;
 import com.google.javascript.jscomp.lint.CheckRequiresAndProvidesSorted;
+import com.google.javascript.jscomp.lint.CheckUnusedLabels;
 import com.google.javascript.jscomp.lint.CheckUselessBlocks;
 import com.google.javascript.jscomp.newtypes.JSTypeCreatorFromJSDoc;
 
@@ -44,8 +47,8 @@ public class DiagnosticGroups {
   static final DiagnosticType UNUSED =
       DiagnosticType.warning("JSC_UNUSED", "{0}");
 
-  public static final Set<String> wildcardExcludedGroups =
-      ImmutableSet.of("reportUnknownTypes");
+  public static final Set<String> wildcardExcludedGroups = ImmutableSet.of(
+      "reportUnknownTypes", "analyzerChecks", "oldReportUnknownTypes");
 
   public DiagnosticGroups() {}
 
@@ -103,7 +106,7 @@ public class DiagnosticGroups {
       + "missingProvide, missingRequire, missingReturn, msgDescriptions, "
       + "newCheckTypes, nonStandardJsDocs, reportUnknownTypes, "
       + "suspiciousCode, strictModuleDepCheck, typeInvalidation, "
-      + "undefinedNames, undefinedVars, unknownDefines, unnecessaryCasts, "
+      + "undefinedNames, undefinedVars, unknownDefines, "
       + "unusedLocalVariables, unusedPrivateMembers, uselessCode, "
       + "useOfGoogBase, underscore, visibility";
 
@@ -149,10 +152,6 @@ public class DiagnosticGroups {
   public static final DiagnosticGroup INVALID_CASTS =
       DiagnosticGroups.registerGroup("invalidCasts",
           TypeValidator.INVALID_CAST);
-
-  public static final DiagnosticGroup UNNECESSARY_CASTS =
-      DiagnosticGroups.registerGroup("unnecessaryCasts",
-          TypeValidator.UNNECESSARY_CAST);
 
   @Deprecated
   public static final DiagnosticGroup INFERRED_CONST_CHECKS =
@@ -322,9 +321,14 @@ public class DiagnosticGroups {
           CheckEventfulObjectDisposal.OVERWRITE_PRIVATE_EVENTFUL_OBJECT,
           CheckEventfulObjectDisposal.UNLISTEN_WITH_ANONBOUND);
 
+  public static final DiagnosticGroup OLD_REPORT_UNKNOWN_TYPES =
+      DiagnosticGroups.registerGroup("oldReportUnknownTypes", // undocumented
+          TypeCheck.UNKNOWN_EXPR_TYPE);
+
   public static final DiagnosticGroup REPORT_UNKNOWN_TYPES =
       DiagnosticGroups.registerGroup("reportUnknownTypes",
-          TypeCheck.UNKNOWN_EXPR_TYPE);
+          TypeCheck.UNKNOWN_EXPR_TYPE,
+          NewTypeInference.UNKNOWN_EXPR_TYPE);
 
   public static final DiagnosticGroup CHECK_VARIABLES =
       DiagnosticGroups.registerGroup("checkVars",
@@ -397,11 +401,24 @@ public class DiagnosticGroups {
 
   public static final DiagnosticGroup MISSING_PROVIDE =
       DiagnosticGroups.registerGroup("missingProvide",
-          CheckProvides.MISSING_PROVIDE_WARNING);
+          CheckProvides.MISSING_PROVIDE_WARNING,
+          ClosureRewriteModule.MISSING_MODULE,
+          ClosureRewriteModule.MISSING_MODULE_OR_PROVIDE);
 
   public static final DiagnosticGroup MISSING_REQUIRE =
       DiagnosticGroups.registerGroup("missingRequire",
           CheckRequiresForConstructors.MISSING_REQUIRE_WARNING);
+
+  public static final DiagnosticGroup STRICT_MISSING_REQUIRE =
+      DiagnosticGroups.registerGroup("strictMissingRequire",
+          CheckRequiresForConstructors.MISSING_REQUIRE_WARNING,
+          CheckRequiresForConstructors.MISSING_REQUIRE_FOR_GOOG_SCOPE,
+          CheckRequiresForConstructors.MISSING_REQUIRE_CALL_WARNING);
+
+  public static final DiagnosticGroup STRICT_REQUIRES =
+      DiagnosticGroups.registerGroup("legacyGoogScopeRequire",
+          CheckRequiresForConstructors.MISSING_REQUIRE_FOR_GOOG_SCOPE,
+          CheckRequiresForConstructors.EXTRA_REQUIRE_WARNING);
 
   public static final DiagnosticGroup EXTRA_REQUIRE =
       DiagnosticGroups.registerGroup("extraRequire",
@@ -473,44 +490,45 @@ public class DiagnosticGroups {
   public static final DiagnosticGroup LINT_CHECKS =
       DiagnosticGroups.registerGroup(
           "lintChecks", // undocumented
-          CheckEmptyStatements.USELESS_EMPTY_STATEMENT,
-          CheckEnums.COMPUTED_PROP_NAME_IN_ENUM,
-          CheckEnums.DUPLICATE_ENUM_VALUE,
-          CheckEnums.ENUM_PROP_NOT_CONSTANT,
-          CheckEnums.SHORTHAND_ASSIGNMENT_IN_ENUM,
-          // TODO(tbreisacher): Consider moving the CheckInterfaces warnings into the
-          // checkTypes DiagnosticGroup
-          CheckInterfaces.INTERFACE_FUNCTION_NOT_EMPTY,
-          CheckInterfaces.INTERFACE_SHOULD_NOT_TAKE_ARGS,
-          CheckJSDocStyle.MISSING_PARAMETER_JSDOC,
-          CheckJSDocStyle.MISSING_JSDOC,
-          CheckJSDocStyle.MISSING_RETURN_JSDOC,
-          CheckJSDocStyle.EXTERNS_FILES_SHOULD_BE_ANNOTATED,
-          CheckJSDocStyle.INCORRECT_PARAM_NAME,
-          CheckJSDocStyle.INVALID_SUPPRESS,
-          CheckJSDocStyle.MIXED_PARAM_JSDOC_STYLES,
-          CheckJSDocStyle.MUST_BE_PRIVATE,
-          CheckJSDocStyle.MUST_HAVE_TRAILING_UNDERSCORE,
-          CheckJSDocStyle.OPTIONAL_PARAM_NOT_MARKED_OPTIONAL,
-          CheckJSDocStyle.OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME,
-          CheckJSDocStyle.WRONG_NUMBER_OF_PARAMS,
-          CheckPrototypeProperties.ILLEGAL_PROTOTYPE_MEMBER,
-          CheckRequiresAndProvidesSorted.REQUIRES_NOT_SORTED,
-          CheckRequiresAndProvidesSorted.PROVIDES_NOT_SORTED,
-          CheckRequiresAndProvidesSorted.PROVIDES_AFTER_REQUIRES,
-          CheckUnusedPrivateProperties.UNUSED_PRIVATE_PROPERTY,
-          CheckUselessBlocks.USELESS_BLOCK,
-          RhinoErrorReporter.JSDOC_MISSING_BRACES_WARNING,
-          RhinoErrorReporter.JSDOC_MISSING_TYPE_WARNING,
-          RhinoErrorReporter.TOO_MANY_TEMPLATE_PARAMS,
-          VariableReferenceCheck.UNUSED_LOCAL_ASSIGNMENT);
+          CheckJSDocStyle.ALL_DIAGNOSTICS,
+          new DiagnosticGroup(
+              CheckEmptyStatements.USELESS_EMPTY_STATEMENT,
+              CheckEnums.COMPUTED_PROP_NAME_IN_ENUM,
+              CheckEnums.DUPLICATE_ENUM_VALUE,
+              CheckEnums.ENUM_PROP_NOT_CONSTANT,
+              CheckEnums.SHORTHAND_ASSIGNMENT_IN_ENUM,
+              // TODO(tbreisacher): Consider moving the CheckInterfaces warnings into the
+              // checkTypes DiagnosticGroup
+              CheckInterfaces.INTERFACE_FUNCTION_NOT_EMPTY,
+              CheckInterfaces.INTERFACE_SHOULD_NOT_TAKE_ARGS,
+
+              // TODO(tbreisacher): Make this an error once all Google projects are fixed.
+              ClosureCheckModule.AT_EXPORT_IN_NON_LEGACY_GOOG_MODULE,
+
+              CheckMissingSemicolon.MISSING_SEMICOLON,
+              CheckPrimitiveAsObject.NEW_PRIMITIVE_OBJECT,
+              CheckPrimitiveAsObject.PRIMITIVE_OBJECT_DECLARATION,
+              CheckPrototypeProperties.ILLEGAL_PROTOTYPE_MEMBER,
+              CheckRequiresAndProvidesSorted.REQUIRES_NOT_SORTED,
+              CheckRequiresAndProvidesSorted.PROVIDES_NOT_SORTED,
+              CheckRequiresAndProvidesSorted.PROVIDES_AFTER_REQUIRES,
+              CheckUnusedPrivateProperties.UNUSED_PRIVATE_PROPERTY,
+              CheckUnusedLabels.UNUSED_LABEL,
+              CheckUselessBlocks.USELESS_BLOCK,
+              ClosureCheckModule.LET_GOOG_REQUIRE,
+              ClosureCheckModule.REFERENCE_TO_SHORT_IMPORT_BY_LONG_NAME,
+              ClosureCheckModule.REFERENCE_TO_SHORT_IMPORT_BY_LONG_NAME_INCLUDING_SHORT_NAME,
+              ClosureRewriteModule.USELESS_USE_STRICT_DIRECTIVE,
+              RhinoErrorReporter.JSDOC_MISSING_BRACES_WARNING,
+              RhinoErrorReporter.JSDOC_MISSING_TYPE_WARNING,
+              RhinoErrorReporter.TOO_MANY_TEMPLATE_PARAMS,
+              VariableReferenceCheck.UNUSED_LOCAL_ASSIGNMENT));
 
   // Similar to the lintChecks group above, but includes things that cannot be done on a single
   // file at a time, for example because they require typechecking.
   public static final DiagnosticGroup ANALYZER_CHECKS =
       DiagnosticGroups.registerGroup("analyzerChecks", // undocumented
-          CheckForInOverArray.FOR_IN_OVER_ARRAY,
-          CheckForInOverArray.ARRAY_PASSED_TO_GOOG_OBJECT,
+          CheckArrayWithGoogObject.ARRAY_PASSED_TO_GOOG_OBJECT,
           CheckNullableReturn.NULLABLE_RETURN,
           CheckNullableReturn.NULLABLE_RETURN_WITH_NAME,
           ImplicitNullabilityCheck.IMPLICITLY_NULLABLE_JSDOC);
@@ -544,7 +562,8 @@ public class DiagnosticGroups {
   public static final DiagnosticGroup LATE_PROVIDE =
       DiagnosticGroups.registerGroup(
           "lateProvide", // undocumented
-          ProcessClosurePrimitives.LATE_PROVIDE_ERROR);
+          ProcessClosurePrimitives.LATE_PROVIDE_ERROR,
+          ClosureRewriteModule.LATE_PROVIDE_ERROR);
 
   // For internal use only, so there are no constants for these groups.
   static {
@@ -556,6 +575,8 @@ public class DiagnosticGroups {
 
     DiagnosticGroups.registerGroup("duplicateZipContents",
         SourceFile.DUPLICATE_ZIP_CONTENTS);
+
+    DiagnosticGroups.registerDeprecatedGroup("unnecessaryCasts");
   }
 
   /**

@@ -125,7 +125,7 @@ public final class ApplySuggestedFixes {
       lastIndex = replacement.getStartPosition() + replacement.getLength();
     }
     if (lastIndex <= code.length()) {
-      sb.append(code.substring(lastIndex));
+      sb.append(code, lastIndex, code.length());
     }
     return sb.toString();
   }
@@ -146,4 +146,6 @@ public final class ApplySuggestedFixes {
       start = Math.max(start, replacement.getStartPosition() + replacement.getLength());
     }
   }
+
+  private ApplySuggestedFixes() {}
 }

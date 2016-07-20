@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.javascript.jscomp.AbstractCompiler;
 import com.google.javascript.jscomp.CompilerPass;
+import com.google.javascript.jscomp.DiagnosticGroup;
 import com.google.javascript.jscomp.DiagnosticType;
 import com.google.javascript.jscomp.ExportTestFunctions;
 import com.google.javascript.jscomp.NodeTraversal;
@@ -31,7 +32,6 @@ import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 
 import java.util.List;
 import java.util.Set;
@@ -44,57 +44,72 @@ import javax.annotation.Nullable;
  */
 public final class CheckJSDocStyle extends AbstractPostOrderCallback implements CompilerPass {
   public static final DiagnosticType INVALID_SUPPRESS =
-      DiagnosticType.warning(
+      DiagnosticType.disabled(
           "JSC_INVALID_SUPPRESS",
           "@suppress annotation not allowed here. See"
               + " https://github.com/google/closure-compiler/wiki/@suppress-annotations");
 
   public static final DiagnosticType CONSTRUCTOR_DISALLOWED_JSDOC =
-      DiagnosticType.warning("JSC_CONSTRUCTOR_DISALLOWED_JSDOC",
+      DiagnosticType.disabled("JSC_CONSTRUCTOR_DISALLOWED_JSDOC",
           "Visibility annotations on constructors are not supported.\n"
           + "Please mark the visibility on the class instead.");
 
   public static final DiagnosticType MISSING_JSDOC =
-      DiagnosticType.warning("JSC_MISSING_JSDOC", "Function must have JSDoc.");
+      DiagnosticType.disabled("JSC_MISSING_JSDOC", "Function must have JSDoc.");
 
   public static final DiagnosticType MISSING_PARAMETER_JSDOC =
-      DiagnosticType.warning("JSC_MISSING_PARAMETER_JSDOC", "Parameter must have JSDoc.");
+      DiagnosticType.disabled("JSC_MISSING_PARAMETER_JSDOC", "Parameter must have JSDoc.");
 
   public static final DiagnosticType MIXED_PARAM_JSDOC_STYLES =
-      DiagnosticType.warning("JSC_MIXED_PARAM_JSDOC_STYLES",
+      DiagnosticType.disabled("JSC_MIXED_PARAM_JSDOC_STYLES",
       "Functions may not use both @param annotations and inline JSDoc");
 
   public static final DiagnosticType MISSING_RETURN_JSDOC =
-      DiagnosticType.warning(
+      DiagnosticType.disabled(
           "JSC_MISSING_RETURN_JSDOC",
           "Function with non-trivial return must have @return JSDoc or inline return JSDoc.");
 
   public static final DiagnosticType MUST_BE_PRIVATE =
-      DiagnosticType.warning("JSC_MUST_BE_PRIVATE", "Property {0} must be marked @private");
+      DiagnosticType.disabled("JSC_MUST_BE_PRIVATE", "Property {0} must be marked @private");
 
   public static final DiagnosticType MUST_HAVE_TRAILING_UNDERSCORE =
-      DiagnosticType.warning(
+      DiagnosticType.disabled(
           "JSC_MUST_HAVE_TRAILING_UNDERSCORE", "Private property {0} should end with ''_''");
 
   public static final DiagnosticType OPTIONAL_PARAM_NOT_MARKED_OPTIONAL =
-      DiagnosticType.warning("JSC_OPTIONAL_PARAM_NOT_MARKED_OPTIONAL",
+      DiagnosticType.disabled("JSC_OPTIONAL_PARAM_NOT_MARKED_OPTIONAL",
           "Parameter {0} is optional so its type must end with =");
 
   public static final DiagnosticType OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME =
-      DiagnosticType.warning("JSC_OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME",
+      DiagnosticType.disabled("JSC_OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME",
           "Optional parameter name {0} must be prefixed with opt_");
 
   public static final DiagnosticType WRONG_NUMBER_OF_PARAMS =
-      DiagnosticType.warning("JSC_WRONG_NUMBER_OF_PARAMS",
-          "Wrong number of @param annotations");
+      DiagnosticType.disabled("JSC_WRONG_NUMBER_OF_PARAMS", "Wrong number of @param annotations");
 
   public static final DiagnosticType INCORRECT_PARAM_NAME =
-      DiagnosticType.warning("JSC_INCORRECT_PARAM_NAME",
+      DiagnosticType.disabled("JSC_INCORRECT_PARAM_NAME",
           "Incorrect param name. Are your @param annotations in the wrong order?");
 
   public static final DiagnosticType EXTERNS_FILES_SHOULD_BE_ANNOTATED =
-      DiagnosticType.warning("JSC_EXTERNS_FILES_SHOULD_BE_ANNOTATED",
+      DiagnosticType.disabled("JSC_EXTERNS_FILES_SHOULD_BE_ANNOTATED",
           "Externs files should be annotated with @externs in the @fileoverview block.");
+
+  public static final DiagnosticGroup ALL_DIAGNOSTICS =
+      new DiagnosticGroup(
+          INVALID_SUPPRESS,
+          CONSTRUCTOR_DISALLOWED_JSDOC,
+          MISSING_JSDOC,
+          MISSING_PARAMETER_JSDOC,
+          MIXED_PARAM_JSDOC_STYLES,
+          MISSING_RETURN_JSDOC,
+          MUST_BE_PRIVATE,
+          MUST_HAVE_TRAILING_UNDERSCORE,
+          OPTIONAL_PARAM_NOT_MARKED_OPTIONAL,
+          OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME,
+          WRONG_NUMBER_OF_PARAMS,
+          INCORRECT_PARAM_NAME,
+          EXTERNS_FILES_SHOULD_BE_ANNOTATED);
 
   private final AbstractCompiler compiler;
 
@@ -111,19 +126,19 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
     switch (n.getType()) {
-      case Token.FUNCTION:
+      case FUNCTION:
         visitFunction(t, n, parent);
         break;
-      case Token.ASSIGN:
+      case ASSIGN:
         // If the right side is a function it will be handled when the function is visited.
         if (!n.getLastChild().isFunction()) {
           visitNonFunction(t, n);
         }
         checkStyleForPrivateProperties(t, n);
         break;
-      case Token.VAR:
-      case Token.LET:
-      case Token.CONST:
+      case VAR:
+      case LET:
+      case CONST:
         for (Node decl : n.children()) {
           // If the right side is a function it will be handled when the function is visited.
           if (decl.getFirstChild() == null || !decl.getFirstChild().isFunction()) {
@@ -131,18 +146,20 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
           }
         }
         break;
-      case Token.STRING_KEY:
+      case STRING_KEY:
         // If the value is a function it will be handled when the function is visited.
         if (n.getFirstChild() == null || !n.getFirstChild().isFunction()) {
           visitNonFunction(t, n);
         }
         break;
-      case Token.MEMBER_FUNCTION_DEF:
-      case Token.GETTER_DEF:
-      case Token.SETTER_DEF:
+      case MEMBER_FUNCTION_DEF:
+      case GETTER_DEF:
+      case SETTER_DEF:
         // Don't need to call visitFunction because this JSDoc will be visited when the function is
         // visited.
-        checkStyleForPrivateProperties(t, n);
+        if (NodeUtil.getEnclosingClass(n) != null) {
+          checkStyleForPrivateProperties(t, n);
+        }
         break;
       default:
         visitNonFunction(t, n);
@@ -181,7 +198,8 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
       if (compiler.getCodingConvention().isPrivate(name)
           && !jsDoc.getVisibility().equals(Visibility.PRIVATE)) {
         t.report(n, MUST_BE_PRIVATE, name);
-      } else if (!compiler.getCodingConvention().isPrivate(name)
+      } else if (compiler.getCodingConvention().hasPrivacyConvention()
+          && !compiler.getCodingConvention().isPrivate(name)
           && jsDoc.getVisibility().equals(Visibility.PRIVATE)) {
         t.report(n, MUST_HAVE_TRAILING_UNDERSCORE, name);
       }
@@ -246,13 +264,23 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
       return true;
     }
 
-    if (function.getParent().isMemberFunctionDef()
-        && function.getGrandparent().isClassMembers()) {
-      return !(function.getParent().matchesQualifiedName("constructor")
-          && !NodeUtil.getFunctionParameters(function).hasChildren());
+    if (function.getGrandparent().isClassMembers()) {
+      Node memberNode = function.getParent();
+      if (memberNode.isMemberFunctionDef()) {
+        // A constructor with no parameters doesn't need JSDoc,
+        // but all other member functions do.
+        return !isConstructorWithoutParameters(function);
+      } else if (memberNode.isGetterDef() || memberNode.isSetterDef()) {
+        return true;
+      }
     }
 
     return false;
+  }
+
+  private boolean isConstructorWithoutParameters(Node function) {
+    return function.getParent().matchesQualifiedName("constructor")
+        && !NodeUtil.getFunctionParameters(function).hasChildren();
   }
 
   private void checkParams(NodeTraversal t, Node function, JSDocInfo jsDoc) {
@@ -337,7 +365,8 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
     }
 
     if (name == null || !nodeToCheck.isName()) {
-      // Skip the name check.
+      // Skip the name check, but use "<unknown name>" for other errors that might be reported.
+      name = "<unknown name>";
     } else if (!nodeToCheck.matchesQualifiedName(name)) {
       t.report(nodeToCheck, INCORRECT_PARAM_NAME);
       return true;
@@ -345,10 +374,10 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
 
     boolean jsDocOptional = paramType != null && paramType.isOptionalArg();
     if (nameOptional && !jsDocOptional) {
-      t.report(nodeToCheck, OPTIONAL_PARAM_NOT_MARKED_OPTIONAL, nodeToCheck.getString());
+      t.report(nodeToCheck, OPTIONAL_PARAM_NOT_MARKED_OPTIONAL, name);
       return true;
     } else if (!nameOptional && jsDocOptional) {
-      t.report(nodeToCheck, OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME, nodeToCheck.getString());
+      t.report(nodeToCheck, OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME, name);
       return true;
     }
     return false;
@@ -371,8 +400,7 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
     if (jsDoc != null
         && (jsDoc.hasType()
             || jsDoc.hasReturnType()
-            || jsDoc.isOverride()
-            || jsDoc.isConstructor())) {
+            || jsDoc.isOverride())) {
       return;
     }
     if (function.getFirstChild().getJSDocInfo() != null) {

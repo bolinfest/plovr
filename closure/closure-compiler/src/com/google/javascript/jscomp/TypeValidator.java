@@ -61,12 +61,18 @@ import javax.annotation.Nullable;
  * @author nicksantos@google.com (Nick Santos)
  */
 class TypeValidator {
-
   private final AbstractCompiler compiler;
   private final JSTypeRegistry typeRegistry;
   private final JSType allValueTypes;
   private final JSType nullOrUndefined;
-  private final boolean reportUnnecessaryCasts;
+
+  static enum SubtypingMode {
+    NORMAL,
+    IGNORE_NULL_UNDEFINED
+  }
+  // In TypeCheck, when we are analyzing a file with .java.js suffix, we set
+  // this field to IGNORE_NULL_UNDEFINED
+  private SubtypingMode subtypingMode = SubtypingMode.NORMAL;
 
   // TODO(nicksantos): Provide accessors to better filter the list of type
   // mismatches. For example, if we pass (Cake|null) where only Cake is
@@ -159,8 +165,6 @@ class TypeValidator {
         STRING_TYPE, NUMBER_TYPE, BOOLEAN_TYPE, NULL_TYPE, VOID_TYPE);
     this.nullOrUndefined = typeRegistry.createUnionType(
         NULL_TYPE, VOID_TYPE);
-    this.reportUnnecessaryCasts = ((Compiler) compiler).getOptions().enables(
-        DiagnosticGroups.UNNECESSARY_CASTS);
   }
 
   /**
@@ -197,6 +201,10 @@ class TypeValidator {
    */
   Iterable<TypeMismatch> getMismatches() {
     return mismatches;
+  }
+
+  void setSubtypingMode(SubtypingMode mode) {
+    this.subtypingMode = mode;
   }
 
   /**
@@ -548,33 +556,6 @@ class TypeValidator {
   }
 
   /**
-   * Expect that casting type to castType is necessary. A cast is considered
-   * unnecessary if type is a subtype of castType, or identical to castType.
-   *
-   * @param t The node traversal.
-   * @param n The node where warnings should point.
-   * @param castType The type being cast to.
-   * @param type The type being cast from.
-   */
-  void expectCastIsNecessary(NodeTraversal t, Node n, JSType castType, JSType type) {
-    if (!reportUnnecessaryCasts) {
-      return;
-    }
-
-    // If either type is "no resolved type" don't report an error, because we can't
-    // know if the cast is necessary or not.
-    if (type.isNoResolvedType() || castType.isNoResolvedType()) {
-      return;
-    }
-
-    if (type.isEquivalentTo(castType) ||
-        (type.isSubtype(castType) && !castType.isSubtype(type))) {
-      report(t.makeError(n, UNNECESSARY_CAST,
-          type.toString(), castType.toString()));
-    }
-  }
-
-  /**
    * Expect that the given variable has not been declared with a type.
    *
    * @param sourceName The name of the source file we're in.
@@ -720,10 +701,15 @@ class TypeValidator {
         // Implemented, but not correctly typed
         FunctionType constructor =
             implementedInterface.toObjectType().getConstructor();
-        registerMismatch(found, required, report(t.makeError(propNode,
+        JSError err = t.makeError(propNode,
             HIDDEN_INTERFACE_PROPERTY_MISMATCH, prop,
             constructor.getTopMostDefiningType(prop).toString(),
-            required.toString(), found.toString())));
+            required.toString(), found.toString());
+        registerMismatch(found, required, err);
+        if (this.subtypingMode == SubtypingMode.NORMAL
+            || !found.isSubtypeModuloNullUndefined(required)) {
+          report(err);
+        }
       }
     }
   }
@@ -742,9 +728,13 @@ class TypeValidator {
   }
 
   private void mismatch(Node n, String msg, JSType found, JSType required) {
-    registerMismatch(found, required, report(
-        JSError.make(n, TYPE_MISMATCH_WARNING,
-                     formatFoundRequired(msg, found, required))));
+    JSError err = JSError.make(n, TYPE_MISMATCH_WARNING,
+        formatFoundRequired(msg, found, required));
+    registerMismatch(found, required, err);
+    if (this.subtypingMode == SubtypingMode.NORMAL
+        || !found.isSubtypeModuloNullUndefined(required)) {
+      report(err);
+    }
   }
 
   private void recordStructuralInterfaceUses(JSType found, JSType required) {

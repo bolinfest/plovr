@@ -21,7 +21,6 @@ import com.google.javascript.jscomp.DefinitionsRemover.Definition;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
-import com.google.javascript.rhino.Token;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -38,11 +37,6 @@ import java.util.Set;
  *
  */
 class MarkNoSideEffectCalls implements CompilerPass {
-  static final DiagnosticType INVALID_NO_SIDE_EFFECT_ANNOTATION =
-      DiagnosticType.error(
-          "JSC_INVALID_NO_SIDE_EFFECT_ANNOTATION",
-          "@nosideeffects may only appear in externs files.");
-
   private final AbstractCompiler compiler;
 
   // Left hand side expression associated with a function node that
@@ -81,16 +75,16 @@ class MarkNoSideEffectCalls implements CompilerPass {
     }
 
     switch (rhs.getType()) {
-      case Token.ASSIGN:
-      case Token.AND:
-      case Token.CALL:
-      case Token.GETPROP:
-      case Token.GETELEM:
-      case Token.FUNCTION:
-      case Token.HOOK:
-      case Token.NAME:
-      case Token.NEW:
-      case Token.OR:
+      case ASSIGN:
+      case AND:
+      case CALL:
+      case GETPROP:
+      case GETELEM:
+      case FUNCTION:
+      case HOOK:
+      case NAME:
+      case NEW:
+      case OR:
         return true;
       default:
         return false;
@@ -119,7 +113,7 @@ class MarkNoSideEffectCalls implements CompilerPass {
     @Override
     public void visit(NodeTraversal traversal, Node node, Node parent) {
       if (!inExterns && hasNoSideEffectsAnnotation(node)) {
-        traversal.report(node, INVALID_NO_SIDE_EFFECT_ANNOTATION);
+        traversal.report(node, PureFunctionIdentifier.INVALID_NO_SIDE_EFFECT_ANNOTATION);
       }
 
       if (node.isGetProp()) {

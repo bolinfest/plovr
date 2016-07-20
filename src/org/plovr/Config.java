@@ -713,8 +713,8 @@ public final class Config implements Comparable<Config> {
     options.stripNameSuffixes = stripNameSuffixes;
     options.stripTypePrefixes = stripTypePrefixes;
     options.setIdGenerators(idGenerators);
-    options.ambiguateProperties = ambiguateProperties;
-    options.disambiguateProperties = disambiguateProperties;
+    options.setAmbiguateProperties(ambiguateProperties);
+    options.setDisambiguateProperties(disambiguateProperties);
     if (languageIn != null) {
       options.setLanguageIn(languageIn);
     }

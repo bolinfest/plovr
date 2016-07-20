@@ -63,6 +63,24 @@ public final class ExternExportsPassTest extends TestCase {
                     "var foobar = function(d, e, f) {\n};\n");
   }
 
+  public void testInterface() {
+    compileAndCheck(
+        "/** @interface */ function Iface() {}; goog.exportSymbol('Iface', Iface)",
+        "/**\n" +
+        " * @interface\n" +
+        " */\n" +
+        "var Iface = function() {\n};\n");
+  }
+
+  public void testRecord() {
+    compileAndCheck(
+        "/** @record */ function Iface() {}; goog.exportSymbol('Iface', Iface)",
+        "/**\n" +
+        " * @record\n" +
+        " */\n" +
+        "var Iface = function() {\n};\n");
+  }
+
   public void testExportSymbolDefinedInVar() throws Exception {
     compileAndCheck("var a = function(d, e, f) {};" +
                     "goog.exportSymbol('foobar', a)",
@@ -647,10 +665,46 @@ public final class ExternExportsPassTest extends TestCase {
                     "var externalName = function(param1) {\n};\n");
   }
 
+  public void testNamespaceDefinitionInExterns() throws Exception {
+    compileAndCheck(
+        Joiner.on("\n").join(
+            "/** @const */",
+            "var ns = {};",
+            "/** @const */",
+            "ns.subns = {};",
+            "/** @constructor */",
+            "ns.subns.Foo = function() {};",
+            "goog.exportSymbol('ns.subns.Foo', ns.subns.Foo);"),
+        Joiner.on("\n").join(
+            "/**",
+            " @const",
+            " @suppress {const,duplicate}",
+            " */",
+            "var ns = {};",
+            "/**",
+            " @const",
+            " @suppress {const,duplicate}",
+            " */",
+            "ns.subns = {};",
+            "/**",
+            " * @constructor",
+            " */",
+            "ns.subns.Foo = function() {",
+            "};",
+            ""));
+  }
+
   private void compileAndCheck(String js, String expected) {
     Result result = compileAndExportExterns(js);
 
-    assertEquals(expected, result.externExport);
+    String fileoverview = Joiner.on("\n").join(
+        "/**",
+        " * @fileoverview Generated externs.",
+        " * @externs",
+        " */",
+        "");
+
+    assertEquals(fileoverview + expected, result.externExport);
   }
 
   public void testDontWarnOnExportFunctionWithUnknownParameterTypes() {

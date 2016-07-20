@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import javax.annotation.Nullable;
+
 /**
  * Provides compile-time locate semantics for ES6 and CommonJS modules.
  *
@@ -37,9 +39,11 @@ public final class ES6ModuleLoader {
   /** The default module root, the current directory. */
   public static final String DEFAULT_FILENAME_PREFIX = "." + MODULE_SLASH;
 
-  static final DiagnosticType LOAD_ERROR = DiagnosticType.error(
-      "JSC_ES6_MODULE_LOAD_ERROR",
+  static final DiagnosticType LOAD_WARNING = DiagnosticType.warning(
+      "JSC_ES6_MODULE_LOAD_WARNING",
       "Failed to load module \"{0}\"");
+
+  private final AbstractCompiler compiler;
 
   /** The root URIs that modules are resolved against. */
   private final List<URI> moduleRootUris;
@@ -52,7 +56,10 @@ public final class ES6ModuleLoader {
    * @param moduleRoots The root directories to locate modules in.
    * @param inputs All inputs to the compilation process.
    */
-  public ES6ModuleLoader(List<String> moduleRoots, Iterable<CompilerInput> inputs) {
+  public ES6ModuleLoader(AbstractCompiler compiler,
+      List<String> moduleRoots, Iterable<CompilerInput> inputs) {
+    this.compiler = compiler;
+
     this.moduleRootUris =
         Lists.transform(
             moduleRoots,
@@ -95,18 +102,35 @@ public final class ES6ModuleLoader {
    * @return The normalized module URI, or {@code null} if not found.
    */
   URI locateEs6Module(String moduleName, CompilerInput context) {
-    return locate(moduleName + ".js", context);
+    URI uri = locateNoCheck(moduleName + ".js", context);
+    if (!moduleUris.contains(uri)) {
+      compiler.report(JSError.make(LOAD_WARNING, moduleName));
+    }
+    return uri;
   }
 
-  private URI locate(String name, CompilerInput referrer) {
+  /**
+   * Locates the module with the given name, but returns successfully even if
+   * there is no JS file corresponding to the returned URI.
+   */
+  private URI locateNoCheck(String name, CompilerInput referrer) {
     URI uri = createUri(name);
     if (isRelativeIdentifier(name)) {
       URI referrerUri = normalizeInputAddress(referrer);
       uri = referrerUri.resolve(uri);
     }
-    URI normalized = normalizeAddress(uri);
-    if (moduleUris.contains(normalized)) {
-      return normalized;
+    return normalizeAddress(uri);
+  }
+
+  /**
+   * Locates the module with the given name, but returns null if there is no JS
+   * file in the expected location.
+   */
+  @Nullable
+  private URI locate(String name, CompilerInput referrer) {
+    URI uri = locateNoCheck(name, referrer);
+    if (moduleUris.contains(uri)) {
+      return uri;
     }
     return null;
   }
@@ -134,11 +158,17 @@ public final class ES6ModuleLoader {
     return uri;
   }
 
-  private static URI createUri(String input) {
-    // Colons might cause URI.create() to fail
-    String forwardSlashes =
-        input.replace(':', '-').replace("\\", MODULE_SLASH).replace(" ", "%20");
-    return URI.create(forwardSlashes).normalize();
+  static URI createUri(String input) {
+    // Handle special characters
+    String encodedInput = input.replace(':', '-')
+        .replace('\\', '/')
+        .replace(" ", "%20")
+        .replace("[", "%5B")
+        .replace("]", "%5D")
+        .replace("<", "%3C")
+        .replace(">", "%3E");
+
+    return URI.create(encodedInput).normalize();
   }
 
   private static String stripJsExtension(String fileName) {
@@ -153,21 +183,34 @@ public final class ES6ModuleLoader {
     return name.startsWith("." + MODULE_SLASH) || name.startsWith(".." + MODULE_SLASH);
   }
 
+  /** Whether this is absolute to the compilation. */
+  static boolean isAbsoluteIdentifier(String name) {
+    return name.startsWith(MODULE_SLASH);
+  }
+
+  /**
+   * Turns a filename into a JS identifier that can be used in rewritten code.
+   * Removes leading ./, replaces / with $, removes trailing .js
+   * and replaces - with _.
+   */
+  public static String toJSIdentifier(URI filename) {
+    return stripJsExtension(filename.toString())
+        .replaceAll("^\\." + Pattern.quote(MODULE_SLASH), "")
+        .replace(MODULE_SLASH, "$")
+        .replace('\\', '$')
+        .replace('@', '$')
+        .replace('-', '_')
+        .replace(':', '_')
+        .replace('.', '_')
+        .replace("%20", "_");
+  }
+
   /**
    * Turns a filename into a JS identifier that is used for moduleNames in
    * rewritten code. Removes leading ./, replaces / with $, removes trailing .js
    * and replaces - with _. All moduleNames get a "module$" prefix.
    */
   public static String toModuleName(URI filename) {
-    String moduleName =
-        stripJsExtension(filename.toString())
-            .replaceAll("^\\." + Pattern.quote(MODULE_SLASH), "")
-            .replace(MODULE_SLASH, "$")
-            .replace('\\', '$')
-            .replace('-', '_')
-            .replace(':', '_')
-            .replace('.', '_')
-            .replace("%20", "_");
-    return "module$" + moduleName;
+    return "module$" + toJSIdentifier(filename);
   }
 }
