@@ -114,7 +114,7 @@ goog.i18n.currency.getGlobalCurrencyPattern = function(currencyCode) {
 goog.i18n.currency.getGlobalCurrencySign = function(currencyCode) {
   var info = goog.i18n.currency.CurrencyInfo[currencyCode];
   return (currencyCode == info[1]) ? currencyCode :
-      currencyCode + ' ' + info[1];
+                                     currencyCode + ' ' + info[1];
 };
 
 
@@ -210,13 +210,13 @@ goog.i18n.currency.getCurrencyPattern_ = function(patternNum, sign) {
     }
   }
   if ((patternNum & goog.i18n.currency.POSITION_FLAG_) == 0) {
-    strParts.unshift((patternNum & goog.i18n.currency.SPACE_FLAG_) ?
-                     "' " : "'");
+    strParts.unshift(
+        (patternNum & goog.i18n.currency.SPACE_FLAG_) ? "' " : "'");
     strParts.unshift(sign);
     strParts.unshift("'");
   } else {
-    strParts.push((patternNum & goog.i18n.currency.SPACE_FLAG_) ? " '" : "'",
-                  sign, "'");
+    strParts.push(
+        (patternNum & goog.i18n.currency.SPACE_FLAG_) ? " '" : "'", sign, "'");
   }
   return strParts.join('');
 };
@@ -310,7 +310,7 @@ goog.i18n.currency.CurrencyInfo = {
   'NOK': [50, 'kr', 'NOkr'],
   'PAB': [2, 'B/.', 'B/.'],
   'PEN': [2, 'S/.', 'S/.'],
-  'PHP': [2, '\u20B1', 'Php'],
+  'PHP': [2, '\u20B1', 'PHP'],
   'PKR': [0, 'Rs', 'PKRs.'],
   'PLN': [50, 'z\u0142', 'z\u0142'],
   'RON': [2, 'RON', 'RON'],

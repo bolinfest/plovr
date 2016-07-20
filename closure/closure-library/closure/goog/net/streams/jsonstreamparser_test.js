@@ -68,15 +68,12 @@ function testEmptyStreamMore() {
   assertNull(result);
 
   parser = new goog.net.streams.JsonStreamParser();
-  assertThrows(function() {
-    parser.parse(' a [   ');
-  });
+  assertThrows(function() { parser.parse(' a [   '); });
+  assertThrows(function() { parser.parse(' [ ] '); });
 
   parser = new goog.net.streams.JsonStreamParser();
   parser.parse(' [   ');
-  assertThrows(function() {
-    parser.parse(' ]  a   ');
-  });
+  assertThrows(function() { parser.parse(' ]  a   '); });
 }
 
 function testSingleMessage() {
@@ -136,9 +133,7 @@ function testTwoMessagesInChunks() {
   assertEquals('d', result[0].c);
   result = parser.parse('] ');
   assertNull(result);
-  assertThrows(function() {
-    parser.parse('  a   ');
-  });
+  assertThrows(function() { parser.parse('  a   '); });
 }
 
 
@@ -171,12 +166,7 @@ function testSingleFuzzyMessages() {
  * as required.
  */
 function testChunkedFuzzyMessages() {
-  var options = {
-    jsonSize: 5,
-    numFields: 5,
-    arraySize: 4,
-    maxDepth: 3
-  };
+  var options = {jsonSize: 5, numFields: 5, arraySize: 4, maxDepth: 3};
   var fuzzing = new goog.labs.testing.JsonFuzzing(options);
 
   var data = fuzzing.newArray();
