@@ -169,6 +169,11 @@ public class InputFileHandler extends AbstractGetHandler {
       requestedInput = manifest.getJsInputByName(name);
     }
 
+    if (requestedInput == null) {
+      HttpUtil.writeNullResponse(exchange);
+      return;
+    }
+
     // Find the code for the requested input.
     String code = null;
 
@@ -179,7 +184,7 @@ public class InputFileHandler extends AbstractGetHandler {
     }
 
     try {
-      if (requestedInput != null && requestedInput.supportsEtags()) {
+      if (requestedInput.supportsEtags()) {
         // Set/check an ETag, if appropriate.
         CodeWithEtag codeWithEtag = requestedInput.getCodeWithEtag();
         String eTag = codeWithEtag.eTag;
