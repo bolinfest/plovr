@@ -6,6 +6,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Strings;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
@@ -21,6 +22,7 @@ import com.google.common.css.JobDescription;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+import com.google.inject.Injector;
 import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.ClosureCodingConvention;
 import com.google.javascript.jscomp.CompilationLevel;
@@ -34,6 +36,10 @@ import com.google.javascript.jscomp.StrictWarningsGuard;
 import com.google.javascript.jscomp.VariableMap;
 import com.google.javascript.jscomp.WarningLevel;
 import com.google.javascript.jscomp.XtbMessageBundle;
+import com.google.template.soy.msgs.SoyMsgBundle;
+import com.google.template.soy.msgs.SoyMsgBundleHandler;
+import com.google.template.soy.msgs.SoyMsgException;
+import com.google.template.soy.msgs.SoyMsgPlugin;
 import com.google.template.soy.xliffmsgplugin.XliffMsgPluginModule;
 
 import org.plovr.util.Pair;
@@ -100,6 +106,8 @@ public final class Config implements Comparable<Config> {
   private final Set<File> testExcludePaths;
 
   private final ImmutableList<String> soyFunctionPlugins;
+
+  private final String soyTranslationPlugin;
 
   private final boolean soyUseInjectedData;
 
@@ -210,6 +218,7 @@ public final class Config implements Comparable<Config> {
       File testTemplate,
       List<File> testExcludePaths,
       List<String> soyFunctionPlugins,
+      String soyTranslationPlugin,
       boolean soyUseInjectedData,
       CompilationMode compilationMode,
       WarningLevel warningLevel,
@@ -266,6 +275,7 @@ public final class Config implements Comparable<Config> {
     this.testTemplate = testTemplate;
     this.testExcludePaths = ImmutableSet.copyOf(testExcludePaths);
     this.soyFunctionPlugins = ImmutableList.copyOf(soyFunctionPlugins);
+    this.soyTranslationPlugin = soyTranslationPlugin;
     this.soyUseInjectedData = soyUseInjectedData;
     this.compilationMode = compilationMode;
     this.warningLevel = warningLevel;
@@ -814,27 +824,16 @@ public final class Config implements Comparable<Config> {
 
     options.setExternExports(true);
 
-    if (translationsDirectory != null && language != null) {
+    File translationsFile = getTranslationsFile(translationsDirectory, language);
+    if (translationsFile != null) {
       try {
-        File[] files = translationsDirectory.listFiles(new FilenameFilter() {
-          @Override public boolean accept(File dir, String name) {
-            return name.startsWith(language) && (
-                name.endsWith(".xtb") ||
-                name.endsWith(".xliff") ||
-                name.endsWith(".xlf"));
-          }
-          });
-          if (files.length == 0) {
-            logger.severe("Unable to find translations file for " + language);
-          } else {
-            if (files[0].getName().endsWith(".xtb")) {
-              options.setMessageBundle(
-                  new XtbMessageBundle(new FileInputStream(files[0]), null));
-            } else {
-              options.setMessageBundle(
-                  new XliffMessageBundle(new FileInputStream(files[0]), null));
-            }
-          }
+        if (translationsFile.getName().endsWith(".xtb")) {
+          options.setMessageBundle(
+              new XtbMessageBundle(new FileInputStream(translationsFile), null));
+        } else {
+          options.setMessageBundle(
+              new XliffMessageBundle(new FileInputStream(translationsFile), null));
+        }
       } catch (IOException e) {
         logger.severe("Unable to load translations file: " + e.getMessage());
       }
@@ -1071,6 +1070,8 @@ public final class Config implements Comparable<Config> {
 
     private ImmutableList.Builder<String> soyFunctionPlugins = null;
 
+    private String soyTranslationPlugin = "";
+
     private boolean soyUseInjectedData = false;
 
     private ListMultimap<CustomPassExecutionTime, CompilerPassFactory> customPasses = ImmutableListMultimap.of();
@@ -1209,6 +1210,7 @@ public final class Config implements Comparable<Config> {
       this.soyFunctionPlugins = config.hasSoyFunctionPlugins()
           ? new ImmutableList.Builder<String>().addAll(config.getSoyFunctionPlugins())
           : null;
+      this.soyTranslationPlugin = config.soyTranslationPlugin;
       this.soyUseInjectedData = config.soyUseInjectedData;
       this.customPasses = config.customPasses;
       this.customWarningsGuards = new ImmutableList.Builder<WarningsGuardFactory>()
@@ -1413,6 +1415,27 @@ public final class Config implements Comparable<Config> {
 
     public void resetSoyFunctionPlugins() {
       soyFunctionPlugins = null;
+    }
+
+    /**
+     * Sets a plugin for translation with templates.
+     *
+     * By default, we expect Closure Compiler to do translation.
+     *
+     * If a plugin is set, we'll use that to load the message bundle and
+     * translate the messages instead.
+     *
+     * Be sure that you're installing the plugin module with addSoyFunctionPlugin.
+     * The Xliff plugin module is installed by default.
+     *
+     * <pre>
+     *   setSoyTranslationPlugin("com.google.template.soy.xliffmsgplugin.XliffMsgPlugin")
+     * </pre>
+     *
+     * @param name the plugin class name
+     */
+    public void setSoyTranslationPlugin(String name) {
+      soyTranslationPlugin = name;
     }
 
     public void setDocumentationOutputDirectory(File documentationOutputDirectory) {
@@ -1692,6 +1715,30 @@ public final class Config implements Comparable<Config> {
       this.errorStream = Preconditions.checkNotNull(errorStream);
     }
 
+    private SoyMsgBundle getSoyMsgBundle() {
+      if (soyTranslationPlugin.isEmpty()) {
+        return null;
+      }
+
+      File file = getTranslationsFile(translationsDirectory, language);
+      if (file == null) {
+        return null;
+      }
+
+      try {
+        Class<?> msgPluginClass = Class.forName(soyTranslationPlugin);
+        Injector injector = SoyFile.createInjector(createSoyFunctionPluginNames());
+        Object msgPlugin = injector.getInstance(msgPluginClass);
+        return new SoyMsgBundleHandler((SoyMsgPlugin) msgPlugin).createFromFile(file);
+      } catch (ClassNotFoundException e) {
+        throw Throwables.propagate(e);
+      } catch (IOException e) {
+        throw Throwables.propagate(e);
+      } catch (SoyMsgException e) {
+        throw Throwables.propagate(e);
+      }
+    }
+
     public Config build() {
       File closureLibraryDirectory = pathToClosureLibrary != null
           ? new File(pathToClosureLibrary)
@@ -1718,8 +1765,12 @@ public final class Config implements Comparable<Config> {
           }
         }
 
-        SoyFileOptions soyFileOptions = new SoyFileOptions(soyFunctionNames,
-            !this.excludeClosureLibrary, this.soyUseInjectedData);
+        SoyFileOptions soyFileOptions = new SoyFileOptions.Builder()
+            .setPluginModuleNames(soyFunctionNames)
+            .setUseClosureLibrary(!this.excludeClosureLibrary)
+            .setIsUsingInjectedData(this.soyUseInjectedData)
+            .setMsgBundle(getSoyMsgBundle())
+            .build();
 
         manifest = new Manifest(
             excludeClosureLibrary,
@@ -1743,6 +1794,7 @@ public final class Config implements Comparable<Config> {
           testTemplate,
           testExcludePaths,
           soyFunctionNames,
+          soyTranslationPlugin,
           this.soyUseInjectedData,
           compilationMode,
           warningLevel,
@@ -1811,7 +1863,7 @@ public final class Config implements Comparable<Config> {
 
     private List<String> createSoyFunctionPluginNames() {
       if (this.soyFunctionPlugins == null) {
-        return ImmutableList.of();
+        return ImmutableList.of(XliffMsgPluginModule.class.getName());
       }
       // TODO: Do we need to add any other modules than what we've configured?
       return this.soyFunctionPlugins.build();
@@ -1832,6 +1884,27 @@ public final class Config implements Comparable<Config> {
   @Override
   public int compareTo(Config otherConfig) {
     return getId().compareTo(otherConfig.getId());
+  }
+
+  private static File getTranslationsFile(File translationsDirectory, final String language) {
+    if (translationsDirectory == null || language == null) {
+      return null;
+    }
+
+    File[] files = translationsDirectory.listFiles(new FilenameFilter() {
+        @Override public boolean accept(File dir, String name) {
+          return name.startsWith(language) && (
+              name.endsWith(".xtb") ||
+              name.endsWith(".xliff") ||
+              name.endsWith(".xlf"));
+        }
+    });
+    if (files.length == 0) {
+      logger.severe("Unable to find translations file for " + language);
+      return null;
+    } else {
+      return files[0];
+    }
   }
 
   private static class FileWithLastModified {
