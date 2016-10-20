@@ -634,6 +634,13 @@ public enum ConfigOption {
     }
   }),
 
+  SOY_TRANSLATION_PLUGIN("soy-translation-plugin", new ConfigUpdater() {
+    @Override
+    public void apply(String pluginName, Config.Builder builder) {
+      builder.setSoyTranslationPlugin(pluginName);
+    }
+  }),
+
   SOY_USE_INJECTED_DATA("soy-use-injected-data", new ConfigUpdater() {
     @Override
     public void apply(boolean soyUseInjectedData, Config.Builder builder) {
