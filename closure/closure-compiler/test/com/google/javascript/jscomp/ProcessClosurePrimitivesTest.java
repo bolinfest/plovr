@@ -451,6 +451,17 @@ public final class ProcessClosurePrimitivesTest extends Es6CompilerTestCase {
         MISSING_PROVIDE_ERROR);
   }
 
+  public void testProvideInExterns() {
+    allowExternsChanges(true);
+
+    test(
+        "/** @externs */ goog.provide('animals.Dog');"
+            + "/** @constructor */ animals.Dog = function() {}",
+        "goog.require('animals.Dog'); new animals.Dog()",
+        "new animals.Dog();",
+        null, null);
+  }
+
   public void testAddDependency() {
     test("goog.addDependency('x.js', ['A', 'B'], []);", "0");
 
@@ -1253,6 +1264,8 @@ public final class ProcessClosurePrimitivesTest extends Es6CompilerTestCase {
     testSame("var CLOSURE_DEFINES = {'FOO': 1};");
     testSame("var CLOSURE_DEFINES = {'FOO': 0xABCD};");
     testSame("var CLOSURE_DEFINES = {'FOO': -1};");
+    testSameEs6("let CLOSURE_DEFINES = {'FOO': 'string'};");
+    testSameEs6("const CLOSURE_DEFINES = {'FOO': 'string'};");
   }
 
   public void testDefineValuesErrors() {

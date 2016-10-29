@@ -16,6 +16,7 @@
 
 package com.google.javascript.jscomp.parsing;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.CharMatcher;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
@@ -33,7 +34,6 @@ import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TokenStream;
 import com.google.javascript.rhino.TokenUtil;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -48,6 +48,10 @@ import java.util.Set;
 // TODO(nicksantos): Unify all the JSDocInfo stuff into one package, instead of
 // spreading it across multiple packages.
 public final class JsDocInfoParser {
+  @VisibleForTesting
+  public static final String BAD_TYPE_WIKI_LINK =
+      " See https://github.com/google/closure-compiler/wiki/Bad-Type-Annotation for"
+            + " more information.";
 
   private final JsDocTokenStream stream;
   private final JSDocInfoBuilder jsdocBuilder;
@@ -83,7 +87,8 @@ public final class JsDocInfoParser {
 
   private void addTypeWarning(String messageId, String messageArg, int lineno, int charno) {
     errorReporter.warning(
-        "Bad type annotation. " + SimpleErrorReporter.getMessage1(messageId, messageArg),
+        "Bad type annotation. " + SimpleErrorReporter.getMessage1(messageId, messageArg)
+            + BAD_TYPE_WIKI_LINK,
         getSourceName(),
         lineno,
         charno);
@@ -95,7 +100,8 @@ public final class JsDocInfoParser {
 
   private void addTypeWarning(String messageId, int lineno, int charno) {
     errorReporter.warning(
-        "Bad type annotation. " + SimpleErrorReporter.getMessage0(messageId),
+        "Bad type annotation. " + SimpleErrorReporter.getMessage0(messageId)
+            + BAD_TYPE_WIKI_LINK,
         getSourceName(),
         lineno,
         charno);
@@ -226,10 +232,12 @@ public final class JsDocInfoParser {
   }
 
   private static JsDocInfoParser getParser(String toParse) {
-    Config config = new Config(
-        new HashSet<String>(),
-        new HashSet<String>(),
-        LanguageMode.ECMASCRIPT3);
+    Config config =
+        new Config(
+            new HashSet<String>(),
+            new HashSet<String>(),
+            LanguageMode.ECMASCRIPT3,
+            Config.StrictMode.SLOPPY);
     JsDocInfoParser parser = new JsDocInfoParser(
         new JsDocTokenStream(toParse),
         toParse,
@@ -272,6 +280,31 @@ public final class JsDocInfoParser {
     }
 
     return parseHelperLoop(token, new ArrayList<ExtendedTypeInfo>());
+  }
+
+  /**
+   * Important comments begin with /*! They are treated as license blocks, but no further JSDoc
+   * parsing is performed
+   */
+  void parseImportantComment() {
+    state = State.SEARCHING_ANNOTATION;
+    skipEOLs();
+
+    JsDocToken token = next();
+
+    ExtractionInfo info = extractMultilineComment(token, WhitespaceOption.PRESERVE, false, true);
+
+    // An extra space is added by the @license annotation
+    // so we need to add one here so they will be identical
+    String license = " " + info.string;
+
+    if (fileLevelJsDocBuilder != null) {
+      fileLevelJsDocBuilder.addLicense(license);
+    } else if (jsdocBuilder.shouldParseDocumentation()) {
+      jsdocBuilder.recordBlockDescription(license);
+    } else {
+      jsdocBuilder.recordBlockDescription("");
+    }
   }
 
   private boolean parseHelperLoop(JsDocToken token,
@@ -541,7 +574,7 @@ public final class JsDocInfoParser {
           type = null;
           if (token != JsDocToken.EOL && token != JsDocToken.EOC) {
             Node typeNode = parseAndRecordTypeNode(token);
-            if (typeNode != null && typeNode.getType() == Token.STRING) {
+            if (typeNode != null && typeNode.isString()) {
               String typeName = typeNode.getString();
               if (!typeName.equals("number") && !typeName.equals("string")
                   && !typeName.equals("boolean")) {
@@ -847,12 +880,6 @@ public final class JsDocInfoParser {
           }
           return token;
 
-        case PRESERVE_TRY:
-          if (!jsdocBuilder.recordPreserveTry()) {
-            addParserWarning("msg.jsdoc.preservertry");
-          }
-          return eatUntilEOLIfNotAnnotation();
-
         case NO_SIDE_EFFECTS:
           if (!jsdocBuilder.recordNoSideEffects()) {
             addParserWarning("msg.jsdoc.nosideeffects");
@@ -1037,6 +1064,7 @@ public final class JsDocInfoParser {
           return token;
 
         case CONSTANT:
+        case FINAL:
         case DEFINE:
         case EXPORT:
         case RETURN:
@@ -1058,6 +1086,7 @@ public final class JsDocInfoParser {
                   || annotation == Annotation.PROTECTED
                   || annotation == Annotation.PUBLIC
                   || annotation == Annotation.CONSTANT
+                  || annotation == Annotation.FINAL
                   || annotation == Annotation.EXPORT;
           boolean canSkipTypeAnnotation =
               isAlternateTypeAnnotation || annotation == Annotation.RETURN;
@@ -1100,6 +1129,12 @@ public final class JsDocInfoParser {
               case CONSTANT:
                 if (!jsdocBuilder.recordConstancy()) {
                   addParserWarning("msg.jsdoc.const");
+                }
+                break;
+
+              case FINAL:
+                if (!jsdocBuilder.recordFinality()) {
+                  addTypeWarning("msg.jsdoc.final");
                 }
                 break;
 
@@ -1204,6 +1239,8 @@ public final class JsDocInfoParser {
                 if (!jsdocBuilder.recordTypedef(type)) {
                   addTypeWarning("msg.jsdoc.incompat.type", lineno, charno);
                 }
+                break;
+              default:
                 break;
             }
           }
@@ -2364,7 +2401,7 @@ public final class JsDocInfoParser {
       }
       next();
     }
-    if (union.getChildCount() == 1) {
+    if (union.hasOneChild()) {
       Node firstChild = union.getFirstChild();
       union.removeChild(firstChild);
       return firstChild;

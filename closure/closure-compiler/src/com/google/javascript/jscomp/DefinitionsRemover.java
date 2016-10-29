@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-
 import java.util.Set;
 
 /**
@@ -31,14 +30,12 @@ import java.util.Set;
 class DefinitionsRemover {
 
   /**
-   * @return an {@link Definition} object if the node contains a definition or
-   *     {@code null} otherwise.
+   * This logic must match {@link isDefinitionNode}.
+   *
+   * @return an {@link Definition} object if the node contains a definition or {@code null}
+   *     otherwise.
    */
   static Definition getDefinition(Node n, boolean isExtern) {
-    // TODO(user): Since we have parent pointers handy. A lot of constructors
-    // can be simplified.
-
-    // This logic must match #isDefinitionNode
     Node parent = n.getParent();
     if (parent == null) {
       return null;
@@ -55,26 +52,27 @@ class DefinitionsRemover {
     } else if (parent.isAssign() && parent.getFirstChild() == n) {
       return new AssignmentDefinition(parent, isExtern);
     } else if (NodeUtil.isObjectLitKey(n)) {
-      return new ObjectLiteralPropertyDefinition(parent, n, n.getFirstChild(),
-          isExtern);
+      return new ObjectLiteralPropertyDefinition(parent, n, n.getFirstChild(), isExtern);
     } else if (parent.isParamList()) {
       Node function = parent.getParent();
       return new FunctionArgumentDefinition(function, n, isExtern);
-    } else if (parent.getType() == Token.COLON && parent.getFirstChild() == n
-        && isExtern) {
+    } else if (parent.getToken() == Token.COLON && parent.getFirstChild() == n && isExtern) {
       Node grandparent = parent.getParent();
-      Preconditions.checkState(grandparent.getType() == Token.LB);
-      Preconditions.checkState(grandparent.getParent().getType() == Token.LC);
+      Preconditions.checkState(grandparent.getToken() == Token.LB);
+      Preconditions.checkState(grandparent.getParent().getToken() == Token.LC);
       return new RecordTypePropertyDefinition(n);
+    } else if (isExtern && n.isGetProp() && parent.isExprResult() && n.isQualifiedName()) {
+      return new ExternalNameOnlyDefinition(n);
     }
     return null;
   }
 
   /**
+   * This logic must match {@link getDefinition}.
+   *
    * @return Whether a definition object can be created.
    */
   static boolean isDefinitionNode(Node n) {
-    // This logic must match #getDefinition
     Node parent = n.getParent();
     if (parent == null) {
       return false;
@@ -94,11 +92,14 @@ class DefinitionsRemover {
       return true;
     } else if (parent.isParamList()) {
       return true;
-    } else if (parent.getType() == Token.COLON && parent.getFirstChild() == n
+    } else if (parent.getToken() == Token.COLON
+        && parent.getFirstChild() == n
         && n.isFromExterns()) {
       Node grandparent = parent.getParent();
-      Preconditions.checkState(grandparent.getType() == Token.LB);
-      Preconditions.checkState(grandparent.getParent().getType() == Token.LC);
+      Preconditions.checkState(grandparent.getToken() == Token.LB);
+      Preconditions.checkState(grandparent.getParent().getToken() == Token.LC);
+      return true;
+    } else if (n.isFromExterns() && parent.isExprResult() && n.isGetProp() && n.isQualifiedName()) {
       return true;
     }
     return false;
@@ -156,6 +157,11 @@ class DefinitionsRemover {
     public boolean isExtern() {
       return isExtern;
     }
+
+    @Override
+    public String toString() {
+      return getLValue().getQualifiedName() + " = " + getRValue();
+    }
   }
 
   /**
@@ -171,7 +177,9 @@ class DefinitionsRemover {
       super(inExterns);
       Preconditions.checkNotNull(lValue);
       Preconditions.checkArgument(
-          ALLOWED_TYPES.contains(lValue.getType()), "Unexpected lValue type %s", lValue.getType());
+          ALLOWED_TYPES.contains(lValue.getToken()),
+          "Unexpected lValue type %s",
+          lValue.getToken());
       this.lValue = lValue;
     }
 
@@ -271,7 +279,7 @@ class DefinitionsRemover {
 
     @Override
     public void performRemove() {
-      function.detachFromParent();
+      function.detach();
     }
   }
 
@@ -375,7 +383,7 @@ class DefinitionsRemover {
       // getLValue sooner or later in order to provide this added
       // flexibility.
 
-      switch (name.getType()) {
+      switch (name.getToken()) {
         case SETTER_DEF:
         case GETTER_DEF:
         case STRING_KEY:

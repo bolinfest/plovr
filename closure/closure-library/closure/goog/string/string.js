@@ -91,9 +91,9 @@ goog.string.caseInsensitiveStartsWith = function(str, prefix) {
  *     case).
  */
 goog.string.caseInsensitiveEndsWith = function(str, suffix) {
-  return goog.string.caseInsensitiveCompare(
-             suffix, str.substr(str.length - suffix.length, suffix.length)) ==
-      0;
+  return (
+      goog.string.caseInsensitiveCompare(
+          suffix, str.substr(str.length - suffix.length, suffix.length)) == 0);
 };
 
 
@@ -1105,15 +1105,14 @@ goog.string.removeAt = function(s, index, stringLength) {
 
 
 /**
- *  Removes the first occurrence of a substring from a string.
- *  @param {string} s The base string from which to remove.
- *  @param {string} ss The string to remove.
- *  @return {string} A copy of {@code s} with {@code ss} removed or the full
- *      string if nothing is removed.
+ * Removes the first occurrence of a substring from a string.
+ * @param {string} str The base string from which to remove.
+ * @param {string} substr The string to remove.
+ * @return {string} A copy of {@code str} with {@code substr} removed or the
+ *     full string if nothing is removed.
  */
-goog.string.remove = function(s, ss) {
-  var re = new RegExp(goog.string.regExpEscape(ss), '');
-  return s.replace(re, '');
+goog.string.remove = function(str, substr) {
+  return str.replace(substr, '');
 };
 
 
@@ -1127,6 +1126,20 @@ goog.string.remove = function(s, ss) {
 goog.string.removeAll = function(s, ss) {
   var re = new RegExp(goog.string.regExpEscape(ss), 'g');
   return s.replace(re, '');
+};
+
+
+/**
+ *  Replaces all occurrences of a substring of a string with a new substring.
+ *  @param {string} s The base string from which to remove.
+ *  @param {string} ss The string to replace.
+ *  @param {string} replacement The replacement string.
+ *  @return {string} A copy of {@code s} with {@code ss} replaced by
+ *      {@code replacement} or the original string if nothing is replaced.
+ */
+goog.string.replaceAll = function(s, ss, replacement) {
+  var re = new RegExp(goog.string.regExpEscape(ss), 'g');
+  return s.replace(re, replacement.replace(/\$/g, '$$$$'));
 };
 
 
@@ -1251,14 +1264,12 @@ goog.string.compareVersions = function(version1, version2) {
     var v1Sub = v1Subs[subIdx] || '';
     var v2Sub = v2Subs[subIdx] || '';
 
-    // Split the subversions into pairs of numbers and qualifiers (like 'b').
-    // Two different RegExp objects are needed because they are both using
-    // the 'g' flag.
-    var v1CompParser = new RegExp('(\\d*)(\\D*)', 'g');
-    var v2CompParser = new RegExp('(\\d*)(\\D*)', 'g');
     do {
-      var v1Comp = v1CompParser.exec(v1Sub) || ['', '', ''];
-      var v2Comp = v2CompParser.exec(v2Sub) || ['', '', ''];
+      // Split the subversions into pairs of numbers and qualifiers (like 'b').
+      // Two different RegExp objects are use to make it clear the code
+      // is side-effect free
+      var v1Comp = /(\d*)(\D*)(.*)/.exec(v1Sub) || ['', '', '', ''];
+      var v2Comp = /(\d*)(\D*)(.*)/.exec(v2Sub) || ['', '', '', ''];
       // Break if there are no more matches.
       if (v1Comp[0].length == 0 && v2Comp[0].length == 0) {
         break;
@@ -1278,6 +1289,9 @@ goog.string.compareVersions = function(version1, version2) {
               v1Comp[2].length == 0, v2Comp[2].length == 0) ||
           goog.string.compareElements_(v1Comp[2], v2Comp[2]);
       // Stop as soon as an inequality is discovered.
+
+      v1Sub = v1Comp[3];
+      v2Sub = v2Comp[3];
     } while (order == 0);
   }
 

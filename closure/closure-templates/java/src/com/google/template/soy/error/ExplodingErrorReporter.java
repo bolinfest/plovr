@@ -20,8 +20,9 @@ import com.google.template.soy.base.SourceLocation;
 
 /**
  * {@link ErrorReporter} implementation that throws an {@link AssertionError} whenever an error
- * is reported to it. This is seldom desirable in production code, but often desirable in tests,
- * which should fail in the presence of any errors that are not specifically checked for.
+ * is reported to it. This should only be used when no errors are expected.  This is seldom
+ * desirable in production code, but often desirable in tests, which should fail in the presence
+ * of any errors that are not specifically checked for.
  *
  * <p>To write a test that does not have this exploding behavior (for example, a test that needs
  * to check the full list of errors encountered during compilation), pass a non-exploding
@@ -30,33 +31,24 @@ import com.google.template.soy.base.SourceLocation;
  *
  * @author brndn@google.com (Brendan Linn)
  */
-public final class ExplodingErrorReporter implements ErrorReporter {
+public final class ExplodingErrorReporter extends AbstractErrorReporter {
 
   private static final ErrorReporter INSTANCE = new ExplodingErrorReporter();
+  
+  public static ErrorReporter get() {
+    return INSTANCE;
+  }
 
   private ExplodingErrorReporter() {}
 
   @Override
-  public Checkpoint checkpoint() {
-    // It's okay to return null here, because the only possible user of the return value
-    // is errorsSince, which doesn't actually use it.
-    return null;
-  }
-
-  @Override
-  public boolean errorsSince(Checkpoint checkpoint) {
-    // If we are here, either no error has been reported, or a caller inappropriately swallowed
-    // the IllegalStateException that arose from an error (which is not this class' fault).
-    return false;
-  }
-
-  @Override
-  public void report(SourceLocation sourceLocation, SoyError error, Object... args) {
-    throw new IllegalStateException(
+  public void report(SourceLocation sourceLocation, SoyErrorKind error, Object... args) {
+    throw new AssertionError(
         String.format("Unexpected SoyError: %s at %s", error.format(args), sourceLocation));
   }
 
-  public static ErrorReporter get() {
-    return INSTANCE;
+  @Override
+  protected int getCurrentNumberOfErrors() {
+    return 0;
   }
 }

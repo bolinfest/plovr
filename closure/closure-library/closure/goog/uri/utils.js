@@ -199,9 +199,9 @@ goog.uri.utils.splitRe_ = new RegExp(
     '(?::([0-9]+))?' +   // port
     '(?=[/#?]|$)' +      // authority-terminating character
     ')?' +
-    '([^?#]+)?' +        // path
-    '(?:\\?([^#]*))?' +  // query
-    '(?:#(.*))?' +       // fragment
+    '([^?#]+)?' +          // path
+    '(?:\\?([^#]*))?' +    // query
+    '(?:#([\\s\\S]*))?' +  // fragment
     '$');
 
 
@@ -438,6 +438,20 @@ goog.uri.utils.getHost = function(uri) {
   return goog.uri.utils.buildFromEncodedParts(
       pieces[goog.uri.utils.ComponentIndex.SCHEME],
       pieces[goog.uri.utils.ComponentIndex.USER_INFO],
+      pieces[goog.uri.utils.ComponentIndex.DOMAIN],
+      pieces[goog.uri.utils.ComponentIndex.PORT]);
+};
+
+
+/**
+ * Returns the origin for a given URL.
+ * @param {string} uri The URI string.
+ * @return {string} Everything up to and including the port.
+ */
+goog.uri.utils.getOrigin = function(uri) {
+  var pieces = goog.uri.utils.split(uri);
+  return goog.uri.utils.buildFromEncodedParts(
+      pieces[goog.uri.utils.ComponentIndex.SCHEME], null /* opt_userInfo */,
       pieces[goog.uri.utils.ComponentIndex.DOMAIN],
       pieces[goog.uri.utils.ComponentIndex.PORT]);
 };

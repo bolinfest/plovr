@@ -251,6 +251,19 @@ public final class SimpleReplaceScriptTest extends BaseReplaceScriptTestCase {
     runRedefinedVarsTest(ImmutableList.of(src), 0, src, 0, errorLines);
   }
 
+  public void testParseErrorDoesntCrashCompilation() {
+    CompilerOptions options = getOptions();
+    Compiler compiler = new Compiler();
+    // Regression test for b/30957755.
+    List<SourceFile> inputs = ImmutableList.of(
+        SourceFile.fromCode("in", "bad!()"));
+    try {
+      Result result = compiler.compile(EXTERNS, inputs, options);
+    } catch (RuntimeException e) {
+      fail("replaceScript threw a RuntimeException on a parse error.");
+    }
+  }
+
   /**
    * Test that two previously common problems don't happen in inc-compile:
    * (i) require is not defined on goog
@@ -319,7 +332,6 @@ public final class SimpleReplaceScriptTest extends BaseReplaceScriptTestCase {
     assertErrorType(result.errors[0], CheckProvides.MISSING_PROVIDE_WARNING, 1);
   }
 
-
   /** Test related to DefaultPassConfig.inferTypes */
   public void testNewTypeAdded() {
     CompilerOptions options = getOptions(DiagnosticGroups.CHECK_TYPES);
@@ -338,6 +350,25 @@ public final class SimpleReplaceScriptTest extends BaseReplaceScriptTestCase {
 
     assertThat(result.warnings).isEmpty();
   }
+
+  public void testProvidedTypeDef() {
+    CompilerOptions options = getOptions();
+
+    String src1 = LINE_JOINER.join(
+        "goog.provide('foo.Cat');",
+        "goog.provide('foo.Bar');",
+        "/** @typedef {!Array<string>} */",
+        "foo.Bar;",
+        "foo.Cat={};");
+    String src2 = "goog.require('foo.Cat');\ngoog.require('foo.Bar');";
+
+    Compiler compiler =
+        runReplaceScript(options, ImmutableList.of(CLOSURE_BASE, src1, src2),
+            0, 0, src2, 2, false);
+
+    assertNoWarningsOrErrors(compiler.getResult());
+  }
+
 
   public void testDeclarationMoved() {
     CompilerOptions options = getOptions();

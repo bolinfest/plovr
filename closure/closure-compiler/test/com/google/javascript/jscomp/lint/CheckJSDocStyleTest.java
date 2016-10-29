@@ -26,7 +26,6 @@ import static com.google.javascript.jscomp.lint.CheckJSDocStyle.MIXED_PARAM_JSDO
 import static com.google.javascript.jscomp.lint.CheckJSDocStyle.MUST_BE_PRIVATE;
 import static com.google.javascript.jscomp.lint.CheckJSDocStyle.MUST_HAVE_TRAILING_UNDERSCORE;
 import static com.google.javascript.jscomp.lint.CheckJSDocStyle.OPTIONAL_PARAM_NOT_MARKED_OPTIONAL;
-import static com.google.javascript.jscomp.lint.CheckJSDocStyle.OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME;
 import static com.google.javascript.jscomp.lint.CheckJSDocStyle.WRONG_NUMBER_OF_PARAMS;
 
 import com.google.javascript.jscomp.CheckLevel;
@@ -53,7 +52,7 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
   public void setUp() throws Exception {
     super.setUp();
     codingConvention = new GoogleCodingConvention();
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
+    setAcceptedLanguage(LanguageMode.ECMASCRIPT8);
   }
 
   @Override
@@ -68,6 +67,7 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
     return options;
   }
 
+  @Override
   protected CodingConvention getCodingConvention() {
     return codingConvention;
   }
@@ -151,6 +151,8 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
     testWarning("class Foo { constructor(x) {} }", MISSING_JSDOC);
     testWarning("var Foo = class { bar() {} };", MISSING_JSDOC);
     testWarning("if (COMPILED) { var f = function() {}; }", MISSING_JSDOC);
+    testWarning("var f = async function() {};", MISSING_JSDOC);
+    testWarning("async function f() {};", MISSING_JSDOC);
 
     testSame("/** @return {string} */ function f() {}");
     testSame("/** @return {string} */ var f = function() {}");
@@ -161,6 +163,8 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
     testSame("class Foo { /** @return {string} */ bar() {} }");
     testSame("class Foo { constructor(/** string */ x) {} }");
     testSame("var Foo = class { /** @return {string} */ bar() {} };");
+    testSame("/** @param {string} s */ var f = async function(s) {};");
+    testSame("/** @param {string} s */ async function f(s) {};");
   }
 
   public void testMissingJsDoc_noWarningIfInlineJsDocIsPresent() {
@@ -554,8 +558,7 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
             "/**",
             " * @param {number=} n",
             " */",
-            "function f(n) {}"),
-        OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME);
+            "function f(n) {}"));
 
     testSame(
         LINE_JOINER.join(
@@ -720,7 +723,7 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
             "/** @fileoverview Some more.\n * @externs\n */ /** @const */ var example2;",
         },
         new String[] {},
-        null);
+        null, null);
   }
 
   public void testConstructorsDontHaveVisibility() {

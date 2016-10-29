@@ -28,6 +28,9 @@ import java.util.List;
  */
 public final class IncrementalDomCodeBuilder extends CodeBuilder<JsExpr> {
 
+  /** Used to track what kind of content is currently being processed. */
+  private ContentKind contentKind;
+  
   /**
    * Performs no action as there is no output variable to initialize.
    */
@@ -49,5 +52,27 @@ public final class IncrementalDomCodeBuilder extends CodeBuilder<JsExpr> {
     } else {
       appendLine(getOutputVarName(), " += ", JsExprUtils.concatJsExprs(jsExprs).getText(), ";");
     }
+  }
+
+  /**
+   * Emits a series of {@link JsExpr}s at the current location in the generated code.
+   * @param jsExprs A list of expressions that may correspond to function calls or parameters.
+   */
+  protected void addToOutput(List<? extends JsExpr> jsExprs) {
+     append(JsExprUtils.concatJsExprs(jsExprs).getText());
+  }
+
+  /**
+   * @param contentKind The current kind of content being processed.
+   */
+  public void setContentKind(ContentKind contentKind) {
+    this.contentKind = contentKind;
+  }
+
+  /**
+   * @return The current kind of content being processed.
+   */
+  public ContentKind getContentKind() {
+    return contentKind;
   }
 }

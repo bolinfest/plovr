@@ -16,21 +16,21 @@
 
 package com.google.template.soy;
 
-import com.google.common.base.Function;
-import com.google.inject.Injector;
-import com.google.template.soy.MainClassUtils.Main;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.io.Files;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.basetree.SyntaxVersion;
 import com.google.template.soy.pysrc.SoyPySrcOptions;
 
-import org.kohsuke.args4j.Argument;
-import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 
 
 /**
@@ -41,21 +41,17 @@ import java.util.List;
  * moment testing support is only guaranteed for v2.7.
  *
  */
-public final class SoyToPySrcCompiler {
+public final class SoyToPySrcCompiler extends AbstractSoyCompiler {
 
-  /** The string to prepend to the usage message. */
-  private static final String USAGE_PREFIX =
-      "Usage:\n"
-      + "java com.google.template.soy.SoyToPySrcCompiler  \\\n"
-      + "     [<flag1> <flag2> ...] --outputPathFormat <formatString>  \\\n"
-      + "     --runtimePath <runtimeModulePath>  \\\n"
-      + "     --srcs <soyFilePath>,... [--deps <soyFilePath>,...]\n";
-
-  @Option(name = "--srcs",
-          usage = "The list of source Soy files. Extra arguments are treated as srcs. Sources"
-              + " are required from either this flag or as extra arguments.",
-          handler = MainClassUtils.StringListOptionHandler.class)
-  private List<String> srcs = new ArrayList<String>();
+  @Option(name = "--outputPathFormat",
+      required = true,
+      usage = "[Required] A format string that specifies how to build the path to each"
+              + " output file. There will be one output Python file (UTF-8) for each input Soy"
+              + " file. The format string can include literal characters as well as the"
+              + " placeholders {INPUT_PREFIX}, {INPUT_DIRECTORY}, {INPUT_FILE_NAME}, and"
+              + " {INPUT_FILE_NAME_NO_EXT}. Additionally periods are not allowed in the"
+              + " outputted filename outside of the final py extension.")
+  private String outputPathFormat = "";
 
   @Option(name = "--runtimePath",
           required = true,
@@ -68,33 +64,6 @@ public final class SoyToPySrcCompiler {
               + " functionality is required for interacting with your runtime environment. This"
               + " module must implement all functions of the environment module if provided.")
   private String environmentModulePath = "";
-
-  @Option(name = "--inputPrefix",
-          usage = "If provided, this path prefix will be prepended to each input file path"
-              + " listed on the command line. This is a literal string prefix, so you'll need"
-              + " to include a trailing slash if necessary.")
-  private String inputPrefix = "";
-
-  @Option(name = "--deps",
-          usage = "The list of dependency Soy files (if applicable). The compiler needs deps for"
-              + " analysis/checking, but will not generate code for dep files.",
-          handler = MainClassUtils.StringListOptionHandler.class)
-  private List<String> deps = new ArrayList<String>();
-
-  @Option(name = "--indirectDeps",
-          usage = "Soy files required by deps, but which may not be used by srcs.",
-          handler = MainClassUtils.StringListOptionHandler.class)
-  private List<String> indirectDeps = new ArrayList<String>();
-
-  @Option(name = "--outputPathFormat",
-          required = true,
-          usage = "[Required] A format string that specifies how to build the path to each"
-                  + " output file. There will be one output Python file (UTF-8) for each input Soy"
-                  + " file. The format string can include literal characters as well as the"
-                  + " placeholders {INPUT_PREFIX}, {INPUT_DIRECTORY}, {INPUT_FILE_NAME}, and"
-                  + " {INPUT_FILE_NAME_NO_EXT}. Additionally periods are not allowed in the"
-                  + " outputted filename outside of the final py extension.")
-  private String outputPathFormat = "";
 
   @Option(name = "--translationClass",
           usage = "The full class name of the python runtime translation class."
@@ -114,26 +83,18 @@ public final class SoyToPySrcCompiler {
           usage = "User-declared syntax version for the Soy file bundle (e.g. 2.2, 2.3).")
   private String syntaxVersion = "";
 
-  @Option(name = "--compileTimeGlobalsFile",
-          usage = "The path to a file containing the mappings for global names to be substituted"
-                  + " at compile time. Each line of the file should have the format"
-                  + " \"<global_name> = <primitive_data>\" where primitive_data is a valid Soy"
-                  + " expression literal for a primitive type (null, boolean, integer, float, or"
-                  + " string). Empty lines and lines beginning with \"//\" are ignored. The file"
-                  + " should be encoded in UTF-8. If you need to generate a file in this format"
-                  + " from Java, consider using the utility"
-                  + " SoyUtils.generateCompileTimeGlobalsFile().")
-  private String compileTimeGlobalsFile = "";
+  @Option(name = "--namespaceManifestPath",
+          usage = "A list of paths to a manifest file which provides a map of soy namespaces to"
+                  + " their Python paths. If this is provided, direct imports will be used,"
+                  + " drastically improving runtime performance.",
+          handler = MainClassUtils.StringListOptionHandler.class)
+  private List<String> namespaceManifestPaths = new ArrayList<>();
 
-  @Option(name = "--pluginModules",
-          usage = "Specifies the full class names of Guice modules for function plugins and"
-                  + " print directive plugins (comma-delimited list).")
-  private String pluginModules = "";
-
-  /** The remaining arguments after parsing command-line flags. */
-  @Argument
-  private List<String> arguments = new ArrayList<String>();
-
+  @Option(name = "--outputNamespaceManifest",
+          usage = "Output a manifest file containing a map of all soy namespaces to their Python"
+                  + " paths.",
+          handler = MainClassUtils.BooleanOptionHandler.class)
+  private boolean outputNamespaceManifest = false;
 
   /**
    * Compiles a set of Soy files into corresponding Python source files.
@@ -143,48 +104,25 @@ public final class SoyToPySrcCompiler {
    * @throws SoySyntaxException If a syntax error is detected.
    */
   public static void main(final String[] args) throws IOException, SoySyntaxException {
-    MainClassUtils.run(new Main() {
-      @Override
-      public CompilationResult main() throws IOException {
-        return new SoyToPySrcCompiler().execMain(args);
-      }
-    });
+    new SoyToPySrcCompiler().runMain(args);
   }
 
-
-  private SoyToPySrcCompiler() {}
-
-  private CompilationResult execMain(String[] args) throws IOException {
-
-    final CmdLineParser cmdLineParser = MainClassUtils.parseFlags(this, args, USAGE_PREFIX);
-
-    final Function<String, Void> exitWithErrorFn = new Function<String, Void>() {
-      @Override public Void apply(String errorMsg) {
-        MainClassUtils.exitWithError(errorMsg, cmdLineParser, USAGE_PREFIX);
-        return null;
-      }
-    };
-
+  @Override
+  void validateFlags() {
     if (runtimePath.length() == 0) {
-      MainClassUtils.exitWithError(
-          "Must provide the Python runtime library path.", cmdLineParser, USAGE_PREFIX);
+      exitWithError("Must provide the Python runtime library path.");
     }
-
-    if (outputPathFormat.length() == 0) {
-      MainClassUtils.exitWithError(
-          "Must provide the output path format.", cmdLineParser, USAGE_PREFIX);
+    if (outputPathFormat.isEmpty()) {
+      exitWithError("Must provide the output path format.");
     }
+  }
 
-    Injector injector = MainClassUtils.createInjector(pluginModules);
-
-    // Create SoyFileSet.
-    SoyFileSet.Builder sfsBuilder = injector.getInstance(SoyFileSet.Builder.class);
-    MainClassUtils.addSoyFilesToBuilder(sfsBuilder, inputPrefix, srcs, arguments, deps,
-        indirectDeps, exitWithErrorFn);
+  @Override
+  void compile(SoyFileSet.Builder sfsBuilder) throws IOException {
     if (syntaxVersion.length() > 0) {
       SyntaxVersion parsedVersion = SyntaxVersion.forName(syntaxVersion);
       if (parsedVersion.num < SyntaxVersion.V2_0.num) {
-        exitWithErrorFn.apply("Declared syntax version must be 2.0 or greater.");
+        exitWithError("Declared syntax version must be 2.0 or greater.");
       }
       sfsBuilder.setDeclaredSyntaxVersionName(syntaxVersion);
     }
@@ -192,16 +130,43 @@ public final class SoyToPySrcCompiler {
     sfsBuilder.setAllowExternalCalls(false);
     // Require strict templates in Python.
     sfsBuilder.setStrictAutoescapingRequired(true);
-    if (compileTimeGlobalsFile.length() > 0) {
-      sfsBuilder.setCompileTimeGlobals(new File(compileTimeGlobalsFile));
-    }
     SoyFileSet sfs = sfsBuilder.build();
+    // Load the manifest if available.
+    ImmutableMap<String, String> manifest = loadNamespaceManifest(namespaceManifestPaths);
+    if (!manifest.isEmpty() && !outputNamespaceManifest) {
+      exitWithError("Namespace manifests provided without outputting a new manifest.");
+    }
 
     // Create SoyPySrcOptions.
     SoyPySrcOptions pySrcOptions = new SoyPySrcOptions(runtimePath, environmentModulePath,
-        bidiIsRtlFn, translationClass);
+        bidiIsRtlFn, translationClass, manifest, outputNamespaceManifest);
 
     // Compile.
-    return sfs.compileToPySrcFiles(outputPathFormat, inputPrefix, pySrcOptions);
+    sfs.compileToPySrcFiles(outputPathFormat, inputPrefix, pySrcOptions);
+  }
+
+  /**
+   * Load the manifest files provided at namespaceManifestPaths, deserialize (via gson), and combine
+   * into a map containing all soy namespaces to their Python paths.
+   */
+  private ImmutableMap<String, String> loadNamespaceManifest(List<String> namespaceManifestPaths) {
+    if (namespaceManifestPaths.isEmpty()) {
+      return ImmutableMap.of();
+    }
+
+    ImmutableMap.Builder<String, String> manifest = new ImmutableMap.Builder<>();
+    for (String manifestPath : namespaceManifestPaths) {
+      try (Reader manifestFile = Files.newReader(new File(manifestPath), StandardCharsets.UTF_8)) {
+        Properties prop = new Properties();
+        prop.load(manifestFile);
+        for (String namespace : prop.stringPropertyNames()) {
+          manifest.put(namespace, prop.getProperty(namespace));
+        }
+      } catch (IOException e) {
+        exitWithError("Unable to read the namespaceManifest file at " + manifestPath);
+      }
+    }
+
+    return manifest.build();
   }
 }

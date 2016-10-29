@@ -26,7 +26,6 @@ import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -98,19 +97,17 @@ public final class Es6RewriteGenerators
 
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverseEs6(compiler, root, new DecomposeYields(compiler));
-    NodeTraversal.traverseEs6(compiler, root, this);
+    TranspilationPasses.processTranspile(compiler, root, new DecomposeYields(compiler), this);
   }
 
   @Override
   public void hotSwapScript(Node scriptRoot, Node originalRoot) {
-    NodeTraversal.traverseEs6(compiler, scriptRoot, new DecomposeYields(compiler));
-    NodeTraversal.traverseEs6(compiler, scriptRoot, this);
+    TranspilationPasses.hotSwapTranspile(compiler, scriptRoot, new DecomposeYields(compiler), this);
   }
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case FUNCTION:
         if (n.isGeneratorFunction()) {
           generatorCaseCount = 0;
@@ -196,7 +193,7 @@ public final class Es6RewriteGenerators
     enclosingStatement.getParent().addChildBefore(entryDecl, enclosingStatement);
     enclosingStatement.getParent().addChildBefore(loop, enclosingStatement);
     if (parent.isExprResult()) {
-      parent.detachFromParent();
+      parent.detach();
     } else {
       parent.replaceChild(n, elemValue);
     }
@@ -224,32 +221,31 @@ public final class Es6RewriteGenerators
     compiler.ensureLibraryInjected("es6/symbol", false);
     hasTranslatedTry = false;
     Node genBlock = compiler.parseSyntheticCode(Joiner.on('\n').join(
-            "function generatorBody() {",
-            "  var " + GENERATOR_STATE + " = " + generatorCaseCount + ";",
-            "  function $jscomp$generator$impl(" + GENERATOR_NEXT_ARG + ", ",
-            "      " + GENERATOR_THROW_ARG + ") {",
-            "    while (1) switch (" + GENERATOR_STATE + ") {",
-            "      case " + generatorCaseCount + ":",
-            "      default:",
-            "        return {value: undefined, done: true};",
-            "    }",
-            "  }",
-            // TODO(tbreisacher): Remove this cast if we start returning an actual Generator object.
-            "  var iterator = /** @type {!Generator<?>} */ ({",
-            "    next: function(arg) { return $jscomp$generator$impl(arg, undefined); },",
-            "    throw: function(arg) { return $jscomp$generator$impl(undefined, arg); },",
-            // TODO(tbreisacher): Implement Generator.return:
-            // http://www.ecma-international.org/ecma-262/6.0/#sec-generator.prototype.return
-            "    return: function(arg) { throw Error('Not yet implemented'); },",
-            "  });",
-            "  $jscomp.initSymbolIterator();",
-            "  /** @this {!Generator<?>} */",
-            "  iterator[Symbol.iterator] = function() { return this; };",
-            "  return iterator;",
-            "}"))
-        .getFirstChild() // function
-        .getLastChild() // function body
-        .detachFromParent();
+        "function generatorBody() {",
+        "  var " + GENERATOR_STATE + " = " + generatorCaseCount + ";",
+        "  function $jscomp$generator$impl(" + GENERATOR_NEXT_ARG + ", ",
+        "      " + GENERATOR_THROW_ARG + ") {",
+        "    while (1) switch (" + GENERATOR_STATE + ") {",
+        "      case " + generatorCaseCount + ":",
+        "      default:",
+        "        return {value: undefined, done: true};",
+        "    }",
+        "  }",
+        // TODO(tbreisacher): Remove this cast if we start returning an actual Generator object.
+        "  var iterator = /** @type {!Generator<?>} */ ({",
+        "    next: function(arg) { return $jscomp$generator$impl(arg, undefined); },",
+        "    throw: function(arg) { return $jscomp$generator$impl(undefined, arg); },",
+        // TODO(tbreisacher): Implement Generator.return:
+        // http://www.ecma-international.org/ecma-262/6.0/#sec-generator.prototype.return
+        "    return: function(arg) { throw Error('Not yet implemented'); },",
+        "  });",
+        "  $jscomp.initSymbolIterator();",
+        "  /** @this {!Generator<?>} */",
+        "  iterator[Symbol.iterator] = function() { return this; };",
+        "  return iterator;",
+        "}"))
+    .getFirstChild() // function
+    .getLastChild().detach();
     generatorCaseCount++;
 
     originalGeneratorBody = n.getLastChild();
@@ -329,7 +325,7 @@ public final class Es6RewriteGenerators
       visitBlock();
       return false;
     } else if (controlCanExit(currentStatement)) {
-      switch (currentStatement.getType()) {
+      switch (currentStatement.getToken()) {
         case WHILE:
         case DO:
         case FOR:
@@ -379,7 +375,7 @@ public final class Es6RewriteGenerators
           // We never want to copy over an untranslated statement for which control exits.
           throw new RuntimeException(
               "Untranslatable control-exiting statement in generator function: "
-                  + currentStatement.getType());
+                  + currentStatement.getToken());
       }
     }
 
@@ -433,10 +429,10 @@ public final class Es6RewriteGenerators
           compiler, tryBody, new ControlExitsCheck(finallyName, finallyStartState));
       NodeTraversal.traverseEs6(
           compiler, catchBody, new ControlExitsCheck(finallyName, finallyStartState));
-      originalGeneratorBody.addChildToFront(tryBody.detachFromParent());
+      originalGeneratorBody.addChildToFront(tryBody.detach());
 
       originalGeneratorBody.addChildAfter(finallyStart, catchBody);
-      originalGeneratorBody.addChildAfter(finallyBody.detachFromParent(), finallyStart);
+      originalGeneratorBody.addChildAfter(finallyBody.detach(), finallyStart);
       originalGeneratorBody.addChildAfter(finallyEnd, finallyBody);
       originalGeneratorBody.addChildToFront(IR.var(finallyName.cloneTree()));
 
@@ -455,7 +451,7 @@ public final class Es6RewriteGenerators
       originalGeneratorBody.addChildAfter(catchEnd, catchBody);
       tryBody.addChildToBack(createStateUpdate(catchEndState));
       tryBody.addChildToBack(createSafeBreak());
-      originalGeneratorBody.addChildToFront(tryBody.detachFromParent());
+      originalGeneratorBody.addChildToFront(tryBody.detach());
     }
 
     catchBody.addChildToFront(IR.var(caughtError, IR.name(GENERATOR_ERROR)));
@@ -648,7 +644,7 @@ public final class Es6RewriteGenerators
    * Lifts all children to the body of the original generator to flatten the block.
    */
   private void visitBlock() {
-    if (currentStatement.getChildCount() == 0) {
+    if (!currentStatement.hasChildren()) {
       return;
     }
     Node insertionPoint = currentStatement.removeFirstChild();
@@ -928,7 +924,7 @@ public final class Es6RewriteGenerators
    * Adds all children of the {@code node} of the given type to given list.
    */
   private void insertAll(Node node, Token type, List<Node> matchingNodes) {
-    if (node.getType() == type) {
+    if (node.getToken() == type) {
       matchingNodes.add(node);
     }
     for (Node c = node.getFirstChild(); c != null; c = c.getNext()) {
@@ -976,7 +972,7 @@ public final class Es6RewriteGenerators
 
     @Override
     public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case YIELD:
           visitYieldExpression(n);
           break;
@@ -1023,7 +1019,7 @@ public final class Es6RewriteGenerators
       Node enclosingBlock = NodeUtil.getEnclosingBlock(n);
       Node guard = null;
       Node incr = null;
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case FOR:
           guard = n.getSecondChild();
           incr = guard.getNext();
@@ -1037,7 +1033,7 @@ public final class Es6RewriteGenerators
           if (!guard.isEmpty()) {
             Node firstEntry = IR.name(GENERATOR_DO_WHILE_INITIAL);
             enclosingBlock.addChildToFront(IR.var(firstEntry.cloneTree(), IR.trueNode()));
-            guard = IR.or(firstEntry, n.getLastChild().detachFromParent());
+            guard = IR.or(firstEntry, n.getLastChild().detach());
             n.addChildToBack(guard);
           }
           incr = IR.empty();
@@ -1057,7 +1053,7 @@ public final class Es6RewriteGenerators
         container.addChildToBack(guardName.cloneTree());
       }
       if (!incr.isEmpty()) {
-        n.addChildBefore(IR.block(IR.exprResult(incr.detachFromParent())), n.getLastChild());
+        n.addChildBefore(IR.block(IR.exprResult(incr.detach())), n.getLastChild());
       }
       enclosingBlock.addChildToFront(IR.var(guardName));
       compiler.reportCodeChange();
@@ -1093,7 +1089,7 @@ public final class Es6RewriteGenerators
 
     @Override
     public boolean shouldTraverse(NodeTraversal nodeTraversal, Node n, Node parent) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case FUNCTION:
           return false;
         case LABEL:
@@ -1161,7 +1157,7 @@ public final class Es6RewriteGenerators
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case LABEL:
           labels.remove(0);
           break;

@@ -17,7 +17,6 @@
 package com.google.javascript.jscomp.parsing;
 
 import com.google.common.collect.ImmutableMap;
-
 import java.util.Map;
 
 /**
@@ -43,6 +42,7 @@ enum Annotation {
   EXPORT,
   EXPOSE,
   FILE_OVERVIEW,
+  FINAL,
   HIDDEN,
   IDGENERATOR,
   IMPLEMENTS,
@@ -67,7 +67,6 @@ enum Annotation {
   PARAM,
   POLYMER_BEHAVIOR,
   PRESERVE, // same as license
-  PRESERVE_TRY,
   PRIVATE,
   PROTECTED,
   PUBLIC,
@@ -107,7 +106,7 @@ enum Annotation {
       put("extends", Annotation.EXTENDS).
       put("externs", Annotation.EXTERNS).
       put("fileoverview", Annotation.FILE_OVERVIEW).
-      put("final", Annotation.CONSTANT).
+      put("final", Annotation.FINAL).
       put("hidden", Annotation.HIDDEN).
       put("idGenerator", Annotation.IDGENERATOR).
       put("implements", Annotation.IMPLEMENTS).
@@ -133,7 +132,6 @@ enum Annotation {
       put("param", Annotation.PARAM).
       put("polymerBehavior", Annotation.POLYMER_BEHAVIOR).
       put("preserve", Annotation.PRESERVE).
-      put("preserveTry", Annotation.PRESERVE_TRY).
       put("private", Annotation.PRIVATE).
       put("protected", Annotation.PROTECTED).
       put("public", Annotation.PUBLIC).

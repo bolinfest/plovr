@@ -81,6 +81,14 @@ public class SourceCodeLocationBuilder {
     return this;
   }
 
+  public SourceCodeLocationBuilder setBeginLocation(SourceCodeLocation.SourceCodePoint begin) {
+    checkLocationIsNotAlreadyCreated();
+    Preconditions.checkNotNull(begin);
+    setBeginLocation(begin.getCharacterIndex(), begin.getLineNumber(),
+        begin.getIndexInLine());
+    return this;
+  }
+
   public boolean hasBeginLocation() {
     return this.beginCharacterIndex != -1;
   }
@@ -89,14 +97,22 @@ public class SourceCodeLocationBuilder {
       int lineNumber, int indexInLine) {
     checkLocationIsNotAlreadyCreated();
     Preconditions.checkArgument(characterIndex >= 0,
-        "The passed location is not valid.");
+        "The passed characterIndex is not valid.");
     Preconditions.checkArgument(lineNumber >= 1,
-        "The passed location is not valid.");
+        "The passed lineNumber is not valid.");
     Preconditions.checkArgument(indexInLine >= 1,
-        "The passed location is not valid.");
+        "The passed indexInLine is not valid.");
     this.endCharacterIndex = characterIndex;
     this.endLineNumber = lineNumber;
     this.endIndexInLine = indexInLine;
+    return this;
+  }
+
+  public SourceCodeLocationBuilder setEndLocation(SourceCodeLocation.SourceCodePoint end) {
+    checkLocationIsNotAlreadyCreated();
+    Preconditions.checkNotNull(end);
+    setEndLocation(end.getCharacterIndex(), end.getLineNumber(),
+        end.getIndexInLine());
     return this;
   }
 
@@ -120,9 +136,22 @@ public class SourceCodeLocationBuilder {
         "Both the start and the end locations must be set.");
     Preconditions.checkState(hasSourceCode() || !hasBeginLocation(),
         "Must specify the source code if you specify a location.");
-    sourceCodeLocation = new SourceCodeLocation(sourceCode,
-        beginCharacterIndex, beginLineNumber, beginIndexInLine,
-        endCharacterIndex, endLineNumber, endIndexInLine);
+    try {
+      sourceCodeLocation = new SourceCodeLocation(sourceCode,
+          beginCharacterIndex, beginLineNumber, beginIndexInLine,
+          endCharacterIndex, endLineNumber, endIndexInLine);
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException(
+          String.format(
+              "with sourceCode = %s, beginCharacterIndex = %d, "
+              + "beginLineNumber = %d, beginIndexInLine = %d, "
+              + "endCharacterIndex = %d, endLineNumber = %d, "
+              + "endIndexInLine = %d",
+              sourceCode.getFileContents(), beginCharacterIndex,
+              beginLineNumber, beginIndexInLine, endCharacterIndex,
+              endLineNumber, endIndexInLine),
+          e);
+    }
     return sourceCodeLocation;
   }
 }

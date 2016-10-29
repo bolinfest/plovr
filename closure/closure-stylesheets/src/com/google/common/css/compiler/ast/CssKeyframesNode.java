@@ -31,15 +31,22 @@ public class CssKeyframesNode extends CssAtRuleNode implements ChunkAware {
 
   public CssKeyframesNode(CssKeyframesNode node) {
     super(node);
+    setChunk(node.getChunk());
+  }
+
+  /**
+   * Used by CreateVendorPrefixedKeyframes to copy an existing keyframes node
+   * to create a browser specific duplicate having different name.
+   */
+  public CssKeyframesNode(CssLiteralNode name, CssKeyframesNode node) {
+    super(node);
+    setName(name);
+    setChunk(node.getChunk());
   }
 
   @Override
   public CssKeyframesNode deepCopy() {
     return new CssKeyframesNode(this);
-  }
-
-  public boolean isOkWithoutProcessing() {
-   return true;
   }
 
   /**

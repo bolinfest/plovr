@@ -153,6 +153,7 @@ public class ConfigParserTest {
             "/closure/goog/structs/set.js",
             "/closure/goog/labs/useragent/engine.js",
             "/closure/goog/labs/useragent/platform.js",
+            "/closure/goog/reflect/reflect.js",
             "/closure/goog/useragent/useragent.js",
             "/closure/goog/debug/debug.js",
             "/closure/goog/dom/browserfeature.js",

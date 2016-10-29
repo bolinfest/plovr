@@ -309,6 +309,7 @@ html/sanitizer/csssanitizer.js
 html/sanitizer/htmlsanitizer.js
 html/sanitizer/tagblacklist.js
 html/sanitizer/tagwhitelist.js
+html/sanitizer/unsafe.js
 html/silverlight.js
 html/testing.js
 html/trustedresourceurl.js
@@ -491,6 +492,8 @@ net/mockiframeio.js
 net/multiiframeloadmonitor.js
 net/networkstatusmonitor.js
 net/networktester.js
+net/streams/base64pbstreamparser.js
+net/streams/base64streamdecoder.js
 net/streams/jsonstreamparser.js
 net/streams/nodereadablestream.js
 net/streams/pbstreamparser.js

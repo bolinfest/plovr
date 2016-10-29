@@ -23,11 +23,10 @@ import com.google.common.collect.Lists;
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.internal.BaseUtils;
 import com.google.template.soy.basetree.CopyState;
-import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.ErrorReporter.Checkpoint;
-import com.google.template.soy.error.ExplodingErrorReporter;
-import com.google.template.soy.error.SoyError;
+import com.google.template.soy.error.SoyErrorKind;
 import com.google.template.soy.exprparse.ExpressionParser;
+import com.google.template.soy.exprparse.SoyParsingContext;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.exprtree.StringNode;
@@ -52,14 +51,16 @@ import javax.annotation.concurrent.Immutable;
  */
 public final class CallDelegateNode extends CallNode {
 
-  private static final SoyError MISSING_CALLEE_NAME
-      = SoyError.of("The ''delcall'' command text must contain the callee name "
-          + "(encountered command text \"{0}\").");
-  public static final SoyError INVALID_DELEGATE_NAME
-      = SoyError.of("Invalid delegate name \"{0}\" for ''delcall'' command.");
-  private static final SoyError INVALID_VARIANT_EXPRESSION
-      = SoyError.of("Invalid variant expression \"{0}\" in ''delcall''"
-          + " (variant expression must evaluate to an identifier).");
+  private static final SoyErrorKind MISSING_CALLEE_NAME =
+      SoyErrorKind.of(
+          "The ''delcall'' command text must contain the callee name "
+              + "(encountered command text \"{0}\").");
+  public static final SoyErrorKind INVALID_DELEGATE_NAME =
+      SoyErrorKind.of("Invalid delegate name \"{0}\" for ''delcall'' command.");
+  private static final SoyErrorKind INVALID_VARIANT_EXPRESSION =
+      SoyErrorKind.of(
+          "Invalid variant expression \"{0}\" in ''delcall''"
+              + " (variant expression must evaluate to an identifier).");
 
   /**
    * Private helper class used by constructors. Encapsulates all the info derived from the command
@@ -123,7 +124,7 @@ public final class CallDelegateNode extends CallNode {
     private static CallDelegateNode error() {
       return new Builder(-1, SourceLocation.UNKNOWN)
           .commandText("error.error")
-          .build(ExplodingErrorReporter.get()); // guaranteed to be valid
+          .build(SoyParsingContext.exploding()); // guaranteed to be valid
     }
 
     private final int id;
@@ -178,12 +179,12 @@ public final class CallDelegateNode extends CallNode {
       return this;
     }
 
-    public CallDelegateNode build(ErrorReporter errorReporter) {
-      Checkpoint checkpoint = errorReporter.checkpoint();
+    public CallDelegateNode build(SoyParsingContext context) {
+      Checkpoint checkpoint = context.errorReporter().checkpoint();
       CommandTextInfo commandTextInfo = commandText != null
-          ? parseCommandText(errorReporter)
+          ? parseCommandText(context)
           : buildCommandText();
-      if (errorReporter.errorsSince(checkpoint)) {
+      if (context.errorReporter().errorsSince(checkpoint)) {
         return error();
       }
       CallDelegateNode callDelegateNode
@@ -191,7 +192,7 @@ public final class CallDelegateNode extends CallNode {
       return callDelegateNode;
     }
 
-    private CommandTextInfo parseCommandText(ErrorReporter errorReporter) {
+    private CommandTextInfo parseCommandText(SoyParsingContext context) {
       String commandTextWithoutPhnameAttr = this.commandText;
 
       String commandText =
@@ -205,37 +206,37 @@ public final class CallDelegateNode extends CallNode {
       if (ncnMatcher.find()) {
         delCalleeName = ncnMatcher.group(1);
         if (!BaseUtils.isDottedIdentifier(delCalleeName)) {
-          errorReporter.report(sourceLocation, INVALID_DELEGATE_NAME, delCalleeName);
+          context.report(sourceLocation, INVALID_DELEGATE_NAME, delCalleeName);
         }
         commandTextWithoutPhnameAttr =
             commandTextWithoutPhnameAttr.substring(ncnMatcher.end()).trim();
       } else {
         delCalleeName = null;
-        errorReporter.report(sourceLocation, MISSING_CALLEE_NAME, commandText);
+        context.report(sourceLocation, MISSING_CALLEE_NAME, commandText);
       }
 
-      Map<String, String> attributes =
-          ATTRIBUTES_PARSER.parse(commandTextWithoutPhnameAttr, errorReporter, sourceLocation);
+      Map<String, String> attributes = ATTRIBUTES_PARSER.parse(
+          commandTextWithoutPhnameAttr, context, sourceLocation);
 
       String variantExprText = attributes.get("variant");
       ExprRootNode delCalleeVariantExpr;
       if (variantExprText == null) {
         delCalleeVariantExpr = null;
       } else {
-        ExprNode expr = new ExpressionParser(variantExprText, sourceLocation, errorReporter)
+        ExprNode expr = new ExpressionParser(variantExprText, sourceLocation, context)
             .parseExpression();
         // If the variant is a fixed string, do a sanity check.
         if (expr instanceof StringNode) {
           String fixedVariantStr = ((StringNode) expr).getValue();
           if (!BaseUtils.isIdentifier(fixedVariantStr)) {
-            errorReporter.report(sourceLocation, INVALID_VARIANT_EXPRESSION, variantExprText);
+            context.report(sourceLocation, INVALID_VARIANT_EXPRESSION, variantExprText);
           }
         }
         delCalleeVariantExpr = new ExprRootNode(expr);
       }
 
       DataAttribute dataAttrInfo =
-          parseDataAttributeHelper(attributes.get("data"), sourceLocation, errorReporter);
+          parseDataAttributeHelper(attributes.get("data"), sourceLocation, context);
 
       String allowemptydefaultAttr = attributes.get("allowemptydefault");
       Boolean allowsEmptyDefault =

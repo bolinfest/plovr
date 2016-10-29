@@ -23,8 +23,8 @@ import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-import com.google.javascript.rhino.jstype.JSType;
-
+import com.google.javascript.rhino.TypeI;
+import com.google.javascript.rhino.TypeIRegistry;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -42,7 +42,7 @@ public final class TemplateAstMatcher {
   private static final Token TEMPLATE_TYPE_PARAM = Token.PLACEHOLDER1;
   private static final Token TEMPLATE_LOCAL_NAME = Token.PLACEHOLDER2;
 
-  private final AbstractCompiler compiler;
+  private final TypeIRegistry typeRegistry;
 
   /**
    * The head of the Node list that should be used to start the matching
@@ -75,7 +75,7 @@ public final class TemplateAstMatcher {
   private boolean isLooseMatch = false;
 
   /**
-   * The strategy to use when matching the {@code JSType} of nodes.
+   * The strategy to use when matching the {@code TypeI} of nodes.
    */
   private final TypeMatchingStrategy typeMatchingStrategy;
 
@@ -85,16 +85,16 @@ public final class TemplateAstMatcher {
    * to match against.
    */
   public TemplateAstMatcher(
-      AbstractCompiler compiler,
+      TypeIRegistry typeRegistry,
       Node templateFunctionNode,
       TypeMatchingStrategy typeMatchingStrategy) {
-    Preconditions.checkNotNull(compiler);
+    Preconditions.checkNotNull(typeRegistry);
     Preconditions.checkState(
         templateFunctionNode.isFunction(),
         "Template node must be a function node. Received: %s",
         templateFunctionNode);
 
-    this.compiler = compiler;
+    this.typeRegistry = typeRegistry;
     this.templateStart = initTemplate(templateFunctionNode);
     this.typeMatchingStrategy = Preconditions.checkNotNull(typeMatchingStrategy);
   }
@@ -186,7 +186,7 @@ public final class TemplateAstMatcher {
   private void prepTemplatePlaceholders(Node fn) {
     final List<String> locals = templateLocals;
     final List<String> params = templateParams;
-    final Map<String, JSType> paramTypes = new HashMap<>();
+    final Map<String, TypeI> paramTypes = new HashMap<>();
 
     // drop the function name so it isn't include in the name maps
     String fnName = fn.getFirstChild().getString();
@@ -205,7 +205,7 @@ public final class TemplateAstMatcher {
       Preconditions.checkNotNull(expression,
           "Missing JSDoc for parameter %s of template function %s",
           name, fnName);
-      JSType type = expression.evaluate(null, compiler.getTypeIRegistry());
+      TypeI type = typeRegistry.evaluateTypeExpressionInGlobalScope(expression);
       Preconditions.checkNotNull(type);
       params.add(name);
       paramTypes.put(name, type);
@@ -223,7 +223,7 @@ public final class TemplateAstMatcher {
           }
 
           if (params.contains(name)) {
-            JSType type = paramTypes.get(name);
+            TypeI type = paramTypes.get(name);
             replaceNodeInPlace(n,
                 createTemplateParameterNode(params.indexOf(name), type));
           } else if (locals.contains(name)) {
@@ -266,26 +266,26 @@ public final class TemplateAstMatcher {
   }
 
   private boolean isTemplateParameterNode(Node n) {
-    return (n.getType() == TEMPLATE_TYPE_PARAM);
+    return (n.getToken() == TEMPLATE_TYPE_PARAM);
   }
 
-  private Node createTemplateParameterNode(int index, JSType type) {
+  private Node createTemplateParameterNode(int index, TypeI type) {
     Preconditions.checkState(index >= 0);
     Preconditions.checkNotNull(type);
     Node n = Node.newNumber(index);
-    n.setType(TEMPLATE_TYPE_PARAM);
-    n.setJSType(type);
+    n.setToken(TEMPLATE_TYPE_PARAM);
+    n.setTypeI(type);
     return n;
   }
 
   private boolean isTemplateLocalNameNode(Node n) {
-    return (n.getType() == TEMPLATE_LOCAL_NAME);
+    return (n.getToken() == TEMPLATE_LOCAL_NAME);
   }
 
   private Node createTemplateLocalNameNode(int index) {
     Preconditions.checkState(index >= 0);
     Node n = Node.newNumber(index);
-    n.setType(TEMPLATE_LOCAL_NAME);
+    n.setToken(TEMPLATE_LOCAL_NAME);
     return n;
   }
 
@@ -375,18 +375,18 @@ public final class TemplateAstMatcher {
 
       // Only the types need to match for the template parameters, which allows
       // the template function to express arbitrary expressions.
-      JSType templateType = template.getJSType();
+      TypeI templateType = template.getTypeI();
 
       Preconditions.checkNotNull(templateType, "null template parameter type.");
 
       // TODO(johnlenz): We shouldn't spend time checking template whose
       // types whose definitions aren't included (NoResolvedType). Alternately
       // we should treat them as "unknown" and perform loose matches.
-      if (templateType.isNoResolvedType()) {
+      if (isUnresolvedType(templateType)) {
         return false;
       }
 
-      MatchResult matchResult = typeMatchingStrategy.match(templateType, ast.getJSType());
+      MatchResult matchResult = typeMatchingStrategy.match(templateType, ast.getTypeI());
       isLooseMatch = matchResult.isLooseMatch();
       boolean isMatch = matchResult.isMatch();
       if (isMatch && previousMatch == null) {
@@ -434,5 +434,24 @@ public final class TemplateAstMatcher {
     }
 
     return true;
+  }
+
+  private boolean isUnresolvedType(TypeI type) {
+    // TODO(mknichel): When types are used in templates that do not appear in the
+    // compilation unit being processed, the template type will be a named type
+    // that resolves to unknown instead of being a no resolved type. This should
+    // be fixed in the compiler such that it resolves to a no resolved type, and
+    // then this code can be simplified to use that.
+    if (type.isUnresolvedOrResolvedUnknown()) {
+      return true;
+    }
+    if (type.isUnionType()) {
+      for (TypeI alternate : type.getUnionMembers()) {
+        if (isUnresolvedType(alternate)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 }

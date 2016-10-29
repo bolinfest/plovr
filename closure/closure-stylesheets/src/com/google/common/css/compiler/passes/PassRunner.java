@@ -64,11 +64,8 @@ public class PassRunner {
    * per input file.
    */
   public void runPasses(CssTree cssTree) {
-    if (job.processDependencies) {
-      new CheckDependencyNodes(cssTree.getMutatingVisitController(),
-          errorManager).runPass();
-    }
-
+    new CheckDependencyNodes(cssTree.getMutatingVisitController(),
+        errorManager, job.suppressDependencyCheck).runPass();
     new CreateStandardAtRuleNodes(cssTree.getMutatingVisitController(),
         errorManager).runPass();
     new CreateMixins(cssTree.getMutatingVisitController(),
@@ -79,8 +76,11 @@ public class PassRunner {
         .runPass();
     new CreateConditionalNodes(cssTree.getMutatingVisitController(),
         errorManager).runPass();
+    new CreateForLoopNodes(cssTree.getMutatingVisitController(),
+        errorManager).runPass();
     new CreateComponentNodes(cssTree.getMutatingVisitController(),
         errorManager).runPass();
+    new ValidatePropertyValues(cssTree.getVisitController(), errorManager).runPass();
 
     new HandleUnknownAtRuleNodes(cssTree.getMutatingVisitController(),
         errorManager, job.allowedAtRules,
@@ -88,8 +88,18 @@ public class PassRunner {
     new ProcessKeyframes(cssTree.getMutatingVisitController(),
         errorManager, job.allowKeyframes || job.allowWebkitKeyframes,
         job.simplifyCss).runPass();
+    new CreateVendorPrefixedKeyframes(cssTree.getMutatingVisitController(),
+        errorManager).runPass();
+    new EvaluateCompileConstants(cssTree.getMutatingVisitController(),
+        job.compileConstants).runPass();
+    new UnrollLoops(cssTree.getMutatingVisitController(), errorManager).runPass();
     new ProcessRefiners(cssTree.getMutatingVisitController(), errorManager,
         job.simplifyCss).runPass();
+
+    // Eliminate conditional nodes.
+    new EliminateConditionalNodes(
+        cssTree.getMutatingVisitController(),
+        ImmutableSet.copyOf(job.trueConditionNames)).runPass();
 
     // Collect mixin definitions and replace mixins
     CollectMixinDefinitions collectMixinDefinitions =
@@ -101,10 +111,6 @@ public class PassRunner {
 
     new ProcessComponents<Object>(cssTree.getMutatingVisitController(),
         errorManager).runPass();
-    // Eliminate conditional nodes.
-    new EliminateConditionalNodes(
-        cssTree.getMutatingVisitController(),
-        ImmutableSet.copyOf(job.trueConditionNames)).runPass();
     // Collect constant definitions.
     CollectConstantDefinitions collectConstantDefinitionsPass =
         new CollectConstantDefinitions(cssTree);
@@ -113,8 +119,7 @@ public class PassRunner {
     ReplaceConstantReferences replaceConstantReferences =
         new ReplaceConstantReferences(cssTree,
             collectConstantDefinitionsPass.getConstantDefinitions(),
-            true /* removeDefs */, errorManager,
-            false);
+            true /* removeDefs */, errorManager, job.allowUndefinedConstants);
     replaceConstantReferences.runPass();
 
     Map<String, GssFunction> gssFunctionMap = getGssFunctionMap();
@@ -181,7 +186,7 @@ public class PassRunner {
     }
   }
 
-  public @Nullable RecordingSubstitutionMap getRecordingSubstitutionMap() {
+  @Nullable public RecordingSubstitutionMap getRecordingSubstitutionMap() {
     return recordingSubstitutionMap;
   }
 

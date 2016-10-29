@@ -26,8 +26,9 @@ import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.data.restricted.PrimitiveData;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.ExplodingErrorReporter;
-import com.google.template.soy.error.SoyError;
+import com.google.template.soy.error.SoyErrorKind;
 import com.google.template.soy.exprparse.ExpressionParser;
+import com.google.template.soy.exprparse.SoyParsingContext;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprNode.PrimitiveNode;
 import com.google.template.soy.exprtree.FloatNode;
@@ -84,9 +85,9 @@ public final class SoyUtils {
    * Error types for bad lines in the compile-time globals file.
    */
   private static final class CompileTimeGlobalsFileErrors {
-    static final SoyError INVALID_FORMAT = SoyError.of("Invalid line format: {0}");
-    static final SoyError INVALID_VALUE = SoyError.of("Invalid value: {0}");
-    static final SoyError NON_PRIMITIVE_VALUE = SoyError.of("Non-primitive value: {0}");
+    static final SoyErrorKind INVALID_FORMAT = SoyErrorKind.of("Invalid line format: {0}");
+    static final SoyErrorKind INVALID_VALUE = SoyErrorKind.of("Invalid value: {0}");
+    static final SoyErrorKind NON_PRIMITIVE_VALUE = SoyErrorKind.of("Non-primitive value: {0}");
   }
 
 
@@ -130,8 +131,8 @@ public final class SoyUtils {
         String name = matcher.group(1);
         String valueText = matcher.group(2).trim();
 
-        ExprNode valueExpr = new ExpressionParser(valueText, sourceLocation, errorReporter)
-            .parseExpression();
+        ExprNode valueExpr = new ExpressionParser(valueText, sourceLocation,
+            SoyParsingContext.exploding()).parseExpression();
 
         // Handle negative numbers as a special case.
         // TODO: Consider changing parser to actually parse negative numbers as primitives.

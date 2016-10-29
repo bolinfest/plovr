@@ -14,12 +14,12 @@
 </ul>
 
 {call .listTemplate}
-  {param items: list('Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat') /}
+  {param items: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] /}
 {/call}
 {/template}
 
 // TODO: Figure out why the following does not work:
-// {foreach $item in list('Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat')}
+// {foreach $item in list('Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'}
 //   <li>{$item}
 // {/foreach}
 

@@ -35,7 +35,6 @@ import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -43,6 +42,7 @@ import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
@@ -67,8 +67,8 @@ import java.util.regex.Pattern;
  * <p> will become
  *
  * <pre>
- *   Foo.a$Foo;
- *   Bar.a$Bar;
+ *   Foo.Foo$a;
+ *   Bar.Bar$a;
  * </pre>
  *
  * NOTE(dimvar): For every property, this pass groups together the types that
@@ -119,7 +119,7 @@ class DisambiguateProperties implements CompilerPass {
    * for disambiguation. It has to be Object because of the generic nature of
    * this pass.
    */
-  private Multimap<Object, JSError> invalidationMap;
+  private final Multimap<Object, JSError> invalidationMap;
 
   /**
    * In practice any large code base will have thousands and thousands of
@@ -321,7 +321,7 @@ class DisambiguateProperties implements CompilerPass {
     }
   }
 
-  private Map<String, Property> properties = new HashMap<>();
+  private final Map<String, Property> properties = new HashMap<>();
 
   DisambiguateProperties(
       AbstractCompiler compiler, Map<String, CheckLevel> propertiesToErrorFor) {
@@ -549,7 +549,8 @@ class DisambiguateProperties implements CompilerPass {
 
     private void handlePropertyRenameFunctionCall(
         NodeTraversal t, Node call, String renameFunctionName) {
-      if (call.getChildCount() != 2 && call.getChildCount() != 3) {
+      int childCount = call.getChildCount();
+      if (childCount != 2 && childCount != 3) {
         compiler.report(
             JSError.make(
                 call,
@@ -688,8 +689,11 @@ class DisambiguateProperties implements CompilerPass {
 
   /** Renames all properties with references on more than one type. */
   void renameProperties() {
-    int propsRenamed = 0, propsSkipped = 0, instancesRenamed = 0,
-        instancesSkipped = 0, singleTypeProps = 0;
+    int propsRenamed = 0;
+    int propsSkipped = 0;
+    int instancesRenamed = 0;
+    int instancesSkipped = 0;
+    int singleTypeProps = 0;
 
     Set<String> reported = new HashSet<>();
     for (Property prop : properties.values()) {
@@ -714,9 +718,9 @@ class DisambiguateProperties implements CompilerPass {
             ++instancesSkipped;
 
             CheckLevel checkLevelForProp = propertiesToErrorFor.get(prop.name);
-            if (checkLevelForProp != null &&
-                checkLevelForProp != CheckLevel.OFF &&
-                !reported.contains(prop.name)) {
+            if (checkLevelForProp != null
+                && checkLevelForProp != CheckLevel.OFF
+                && !reported.contains(prop.name)) {
               reported.add(prop.name);
               compiler.report(JSError.make(
                   node,
@@ -806,8 +810,9 @@ class DisambiguateProperties implements CompilerPass {
    * references to any object.
    */
   private boolean isInvalidatingType(JSType type) {
-    if (type == null || invalidatingTypes.contains(type) ||
-        type.isUnknownType() /* unresolved types */) {
+    if (type == null
+        || invalidatingTypes.contains(type)
+        || type.isUnknownType() /* unresolved types */) {
       return true;
     }
     ObjectType objType = ObjectType.cast(type);
@@ -867,9 +872,9 @@ class DisambiguateProperties implements CompilerPass {
       return type.toMaybeUnionType().getAlternatesWithoutStructuralTyping();
     } else {
       ObjectType objType = type.toObjectType();
-      if (objType != null &&
-          objType.getConstructor() != null &&
-          objType.getConstructor().isInterface()) {
+      if (objType != null
+          && objType.getConstructor() != null
+          && objType.getConstructor().isInterface()) {
         List<JSType> list = new ArrayList<>();
         for (FunctionType impl
                  : registry.getDirectImplementors(objType)) {
@@ -934,7 +939,7 @@ class DisambiguateProperties implements CompilerPass {
         foundType = topInterface.getConstructor().getPrototype();
       }
     } else {
-      while (objType != null && objType.getImplicitPrototype() != objType) {
+      while (objType != null && !Objects.equals(objType.getImplicitPrototype(), objType)) {
         if (objType.hasOwnProperty(field)) {
           foundType = objType;
         }

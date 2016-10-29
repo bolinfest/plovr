@@ -21,7 +21,6 @@ import com.google.javascript.jscomp.DefinitionsRemover.Definition;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -50,18 +49,17 @@ class MarkNoSideEffectCalls implements CompilerPass {
 
   @Override
   public void process(Node externs, Node root) {
-    SimpleDefinitionFinder defFinder = new SimpleDefinitionFinder(compiler);
+    NameBasedDefinitionProvider defFinder = new NameBasedDefinitionProvider(compiler, false);
     defFinder.process(externs, root);
 
     // Gather the list of function nodes that have @nosideeffects annotations.
     // For use by SetNoSideEffectCallProperty.
     NodeTraversal.traverseEs6(
-        compiler, externs, new GatherNoSideEffectFunctions(true));
+        compiler, externs, new GatherNoSideEffectFunctions());
     NodeTraversal.traverseEs6(
-        compiler, root, new GatherNoSideEffectFunctions(false));
+        compiler, root, new GatherNoSideEffectFunctions());
 
-    NodeTraversal.traverseEs6(compiler, root,
-                           new SetNoSideEffectCallProperty(defFinder));
+    NodeTraversal.traverseEs6(compiler, root, new SetNoSideEffectCallProperty(defFinder));
   }
 
   /**
@@ -74,7 +72,7 @@ class MarkNoSideEffectCalls implements CompilerPass {
       return true;
     }
 
-    switch (rhs.getType()) {
+    switch (rhs.getToken()) {
       case ASSIGN:
       case AND:
       case CALL:
@@ -104,18 +102,8 @@ class MarkNoSideEffectCalls implements CompilerPass {
    * Gather function nodes that have @nosideeffects annotations.
    */
   private class GatherNoSideEffectFunctions extends AbstractPostOrderCallback {
-    private final boolean inExterns;
-
-    GatherNoSideEffectFunctions(boolean inExterns) {
-      this.inExterns = inExterns;
-    }
-
     @Override
     public void visit(NodeTraversal traversal, Node node, Node parent) {
-      if (!inExterns && hasNoSideEffectsAnnotation(node)) {
-        traversal.report(node, PureFunctionIdentifier.INVALID_NO_SIDE_EFFECT_ANNOTATION);
-      }
-
       if (node.isGetProp()) {
         if (parent.isExprResult() &&
             hasNoSideEffectsAnnotation(node)) {
@@ -158,20 +146,24 @@ class MarkNoSideEffectCalls implements CompilerPass {
    * refer to function names that are known to have no side effects.
    */
   private class SetNoSideEffectCallProperty extends AbstractPostOrderCallback {
-    private final SimpleDefinitionFinder defFinder;
+    private final NameBasedDefinitionProvider defFinder;
 
-    SetNoSideEffectCallProperty(SimpleDefinitionFinder defFinder) {
+    SetNoSideEffectCallProperty(NameBasedDefinitionProvider defFinder) {
       this.defFinder = defFinder;
     }
 
     @Override
     public void visit(NodeTraversal traversal, Node node, Node parent) {
-      if (!node.isCall() && !node.isNew()) {
+      if (!NodeUtil.isCallOrNew(node)) {
+        return;
+      }
+      Node nameNode = node.getFirstChild();
+      // This is the result of an anonymous function execution. function() {}();
+      if (!nameNode.isName() && !nameNode.isGetProp()) {
         return;
       }
 
-      Collection<Definition> definitions =
-          defFinder.getDefinitionsReferencedAt(node.getFirstChild());
+      Collection<Definition> definitions = defFinder.getDefinitionsReferencedAt(nameNode);
       if (definitions == null) {
         return;
       }

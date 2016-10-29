@@ -122,7 +122,7 @@ public final class SemanticReverseAbstractInterpreter
   public FlowScope getPreciserScopeKnowingConditionOutcome(Node condition,
       FlowScope blindScope, boolean outcome) {
     // Check for the typeof operator.
-    Token operatorToken = condition.getType();
+    Token operatorToken = condition.getToken();
     switch (operatorToken) {
       case EQ:
       case NE:
@@ -162,6 +162,8 @@ public final class SemanticReverseAbstractInterpreter
                 resultEqualsValue, blindScope);
           }
         }
+      default:
+        break;
     }
     switch (operatorToken) {
       case AND:
@@ -265,6 +267,8 @@ public final class SemanticReverseAbstractInterpreter
         }
         break;
       }
+      default:
+        break;
     }
 
     return nextPreciserScopeKnowingConditionOutcome(

@@ -16,10 +16,12 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableMap;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceCollection;
 import com.google.javascript.jscomp.TypeValidator.TypeMismatch;
+import com.google.javascript.jscomp.deps.ModuleLoader;
 import com.google.javascript.jscomp.parsing.Config;
 import com.google.javascript.jscomp.parsing.parser.trees.Comment;
 import com.google.javascript.jscomp.type.ReverseAbstractInterpreter;
@@ -28,11 +30,10 @@ import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.TypeIRegistry;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
-
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 import javax.annotation.Nullable;
 
 /**
@@ -47,9 +48,9 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
   static final DiagnosticType READ_ERROR = DiagnosticType.error(
       "JSC_READ_ERROR", "Cannot read: {0}");
 
-  /**
-   * Will be called before each pass runs.
-   */
+  private final Map<String, Object> annotationMap = new HashMap<>();
+
+  /** Will be called before each pass runs. */
   abstract void beforePass(String passName);
 
   /**
@@ -85,6 +86,17 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
    * Only for use by {@code AbstractCompilerRunner}.
    */
   abstract List<CompilerInput> getInputsInOrder();
+
+  static enum MostRecentTypechecker {
+    NONE,
+    OTI,
+    NTI
+  }
+
+  /**
+   * Sets the type-checking pass that ran most recently.
+   */
+  abstract void setMostRecentTypechecker(MostRecentTypechecker mostRecent);
 
   /**
    * Gets a central registry of type information from the compiled JS.
@@ -178,16 +190,14 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
    */
   abstract CompilerPass getSymbolTable();
 
-  abstract void setSymbolTable(CompilerPass symbolTable);
-
   /**
    * Used by three passes that run in sequence (optimize-returns,
    * optimize-parameters, remove-unused-variables), to avoid having them
    * recompute it independently.
    */
-  abstract SimpleDefinitionFinder getSimpleDefinitionFinder();
+  abstract DefinitionUseSiteFinder getDefinitionFinder();
 
-  abstract void setSimpleDefinitionFinder(SimpleDefinitionFinder defFinder);
+  abstract void setDefinitionFinder(DefinitionUseSiteFinder defFinder);
 
   /**
    * Parses code for injecting.
@@ -460,6 +470,12 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
    */
   abstract Set<String> getExternProperties();
 
+  /**
+   * Adds a {@link SourceMapInput} for the given {@code sourceFileName}, to be used for error
+   * reporting and source map combining.
+   */
+  public abstract void addInputSourceMap(String name, SourceMapInput sourceMap);
+
   abstract void addComments(String filename, List<Comment> comments);
 
   /**
@@ -478,4 +494,33 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
     * can be overriden by values specifically set in the CompilerOptions.
     */
    abstract ImmutableMap<String, Node> getDefaultDefineValues();
+
+  /**
+   * Gets the module loader.
+   */
+  abstract ModuleLoader getModuleLoader();
+
+  /**
+   * Sets an annotation for the given key.
+   *
+   * @param key the annotation key
+   * @param object the object to store as the annotation
+   */
+  void setAnnotation(String key, Object object) {
+    Preconditions.checkArgument(object != null, "The stored annotation value cannot be null.");
+    Preconditions.checkArgument(
+        !annotationMap.containsKey(key), "Cannot overwrite the existing annotation '%s'.", key);
+    annotationMap.put(key, object);
+  }
+
+  /**
+   * Gets the annotation for the given key.
+   *
+   * @param key the annotation key
+   * @return the annotation object for the given key if it has been set, or null
+   */
+  @Nullable
+  Object getAnnotation(String key) {
+    return annotationMap.get(key);
+  }
 }

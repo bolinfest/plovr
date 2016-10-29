@@ -58,6 +58,15 @@ HTMLCanvasElement.prototype.width;
 HTMLCanvasElement.prototype.height;
 
 /**
+ * @see https://www.w3.org/TR/html5/scripting-1.html#dom-canvas-toblob
+ * @param {function(!Blob)} callback
+ * @param {string=} opt_type
+ * @param {...*} var_args
+ * @throws {Error}
+ */
+HTMLCanvasElement.prototype.toBlob = function(callback, opt_type, var_args) {};
+
+/**
  * @param {string=} opt_type
  * @param {...*} var_args
  * @return {string}
@@ -72,8 +81,88 @@ HTMLCanvasElement.prototype.toDataURL = function(opt_type, var_args) {};
  */
 HTMLCanvasElement.prototype.getContext = function(contextId, opt_args) {};
 
+
+/**
+ * @interface
+ * @see https://www.w3.org/TR/2dcontext/#canvaspathmethods
+ */
+function CanvasPathMethods() {};
+
+/**
+ * @return {undefined}
+ */
+CanvasPathMethods.prototype.closePath = function() {};
+
+/**
+ * @param {number} x
+ * @param {number} y
+ * @return {undefined}
+ */
+CanvasPathMethods.prototype.moveTo = function(x, y) {};
+
+/**
+ * @param {number} x
+ * @param {number} y
+ * @return {undefined}
+ */
+CanvasPathMethods.prototype.lineTo = function(x, y) {};
+
+/**
+ * @param {number} cpx
+ * @param {number} cpy
+ * @param {number} x
+ * @param {number} y
+ * @return {undefined}
+ */
+CanvasPathMethods.prototype.quadraticCurveTo = function(cpx, cpy, x, y) {};
+
+/**
+ * @param {number} cp1x
+ * @param {number} cp1y
+ * @param {number} cp2x
+ * @param {number} cp2y
+ * @param {number} x
+ * @param {number} y
+ * @return {undefined}
+ */
+CanvasPathMethods.prototype.bezierCurveTo = function(
+    cp1x, cp1y, cp2x, cp2y, x, y) {};
+
+/**
+ * @param {number} x1
+ * @param {number} y1
+ * @param {number} x2
+ * @param {number} y2
+ * @param {number} radius
+ * @return {undefined}
+ */
+CanvasPathMethods.prototype.arcTo = function(x1, y1, x2, y2, radius) {};
+
+/**
+ * @param {number} x
+ * @param {number} y
+ * @param {number} w
+ * @param {number} h
+ * @return {undefined}
+ */
+CanvasPathMethods.prototype.rect = function(x, y, w, h) {};
+
+/**
+ * @param {number} x
+ * @param {number} y
+ * @param {number} radius
+ * @param {number} startAngle
+ * @param {number} endAngle
+ * @param {boolean=} opt_anticlockwise
+ * @return {undefined}
+ */
+CanvasPathMethods.prototype.arc = function(
+    x, y, radius, startAngle, endAngle, opt_anticlockwise) {};
+
+
 /**
  * @constructor
+ * @implements {CanvasPathMethods}
  * @see http://www.w3.org/TR/2dcontext/#canvasrenderingcontext2d
  */
 function CanvasRenderingContext2D() {}
@@ -202,6 +291,7 @@ CanvasRenderingContext2D.prototype.beginPath = function() {};
 
 /**
  * @return {undefined}
+ * @override
  */
 CanvasRenderingContext2D.prototype.closePath = function() {};
 
@@ -209,6 +299,7 @@ CanvasRenderingContext2D.prototype.closePath = function() {};
  * @param {number} x
  * @param {number} y
  * @return {undefined}
+ * @override
  */
 CanvasRenderingContext2D.prototype.moveTo = function(x, y) {};
 
@@ -216,6 +307,7 @@ CanvasRenderingContext2D.prototype.moveTo = function(x, y) {};
  * @param {number} x
  * @param {number} y
  * @return {undefined}
+ * @override
  */
 CanvasRenderingContext2D.prototype.lineTo = function(x, y) {};
 
@@ -225,6 +317,7 @@ CanvasRenderingContext2D.prototype.lineTo = function(x, y) {};
  * @param {number} x
  * @param {number} y
  * @return {undefined}
+ * @override
  */
 CanvasRenderingContext2D.prototype.quadraticCurveTo = function(
     cpx, cpy, x, y) {};
@@ -237,6 +330,7 @@ CanvasRenderingContext2D.prototype.quadraticCurveTo = function(
  * @param {number} x
  * @param {number} y
  * @return {undefined}
+ * @override
  */
 CanvasRenderingContext2D.prototype.bezierCurveTo = function(
     cp1x, cp1y, cp2x, cp2y, x, y) {};
@@ -248,6 +342,7 @@ CanvasRenderingContext2D.prototype.bezierCurveTo = function(
  * @param {number} y2
  * @param {number} radius
  * @return {undefined}
+ * @override
  */
 CanvasRenderingContext2D.prototype.arcTo = function(x1, y1, x2, y2, radius) {};
 
@@ -257,6 +352,7 @@ CanvasRenderingContext2D.prototype.arcTo = function(x1, y1, x2, y2, radius) {};
  * @param {number} w
  * @param {number} h
  * @return {undefined}
+ * @override
  */
 CanvasRenderingContext2D.prototype.rect = function(x, y, w, h) {};
 
@@ -268,6 +364,7 @@ CanvasRenderingContext2D.prototype.rect = function(x, y, w, h) {};
  * @param {number} endAngle
  * @param {boolean=} opt_anticlockwise
  * @return {undefined}
+ * @override
  */
 CanvasRenderingContext2D.prototype.arc = function(
     x, y, radius, startAngle, endAngle, opt_anticlockwise) {};
@@ -441,7 +538,8 @@ CanvasRenderingContext2D.prototype.setLineDash;
 CanvasRenderingContext2D.prototype.fillColor;
 
 /**
- * @type {string}
+ * @type {string|!CanvasGradient|!CanvasPattern}
+ * @see https://html.spec.whatwg.org/multipage/scripting.html#fill-and-stroke-styles:dom-context-2d-fillstyle
  * @implicitCast
  */
 CanvasRenderingContext2D.prototype.fillStyle;
@@ -480,7 +578,8 @@ CanvasRenderingContext2D.prototype.shadowOffsetX;
 CanvasRenderingContext2D.prototype.shadowOffsetY;
 
 /**
- * @type {string}
+ * @type {string|!CanvasGradient|!CanvasPattern}
+ * @see https://html.spec.whatwg.org/multipage/scripting.html#fill-and-stroke-styles:dom-context-2d-strokestyle
  * @implicitCast
  */
 CanvasRenderingContext2D.prototype.strokeStyle;
@@ -584,6 +683,7 @@ Database.prototype.version;
  * @param {function(!SQLTransaction) : void} callback
  * @param {(function(!SQLError) : void)=} opt_errorCallback
  * @param {Function=} opt_Callback
+ * @return {undefined}
  */
 Database.prototype.transaction = function(
     callback, opt_errorCallback, opt_Callback) {};
@@ -592,6 +692,7 @@ Database.prototype.transaction = function(
  * @param {function(!SQLTransaction) : void} callback
  * @param {(function(!SQLError) : void)=} opt_errorCallback
  * @param {Function=} opt_Callback
+ * @return {undefined}
  */
 Database.prototype.readTransaction = function(
     callback, opt_errorCallback, opt_Callback) {};
@@ -602,6 +703,7 @@ Database.prototype.readTransaction = function(
  * @param {function(!SQLTransaction) : void} callback
  * @param {function(!SQLError) : void} errorCallback
  * @param {Function} successCallback
+ * @return {undefined}
  */
 Database.prototype.changeVersion = function(
     oldVersion, newVersion, callback, errorCallback, successCallback) {};
@@ -643,6 +745,7 @@ function SQLTransaction() {}
  * @param {SQLStatementCallback=} opt_callback
  * @param {(function(!SQLTransaction, !SQLError) : (boolean|void))=}
  *     opt_errorCallback
+ * @return {undefined}
  */
 SQLTransaction.prototype.executeSql = function(
     sqlStatement, opt_queryArgs, opt_callback, opt_errorCallback) {};
@@ -714,8 +817,21 @@ Window.prototype.openDatabase =
 
 /**
  * @type {boolean}
+ * @see https://www.w3.org/TR/html5/embedded-content-0.html#dom-img-complete
  */
 HTMLImageElement.prototype.complete;
+
+/**
+ * @type {number}
+ * @see https://www.w3.org/TR/html5/embedded-content-0.html#dom-img-naturalwidth
+ */
+HTMLImageElement.prototype.naturalWidth;
+
+/**
+ * @type {number}
+ * @see https://www.w3.org/TR/html5/embedded-content-0.html#dom-img-naturalheight
+ */
+HTMLImageElement.prototype.naturalHeight;
 
 /**
  * @type {string}
@@ -757,6 +873,7 @@ function DOMApplicationCache() {}
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 DOMApplicationCache.prototype.addEventListener = function(
     type, listener, opt_useCapture) {};
@@ -764,11 +881,15 @@ DOMApplicationCache.prototype.addEventListener = function(
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 DOMApplicationCache.prototype.removeEventListener = function(
     type, listener, opt_useCapture) {};
 
-/** @override */
+/**
+ * @override
+ * @return {boolean}
+ */
 DOMApplicationCache.prototype.dispatchEvent = function(evt) {};
 
 /**
@@ -864,12 +985,14 @@ DOMApplicationCache.prototype.onupdateready;
 /**
  * Replaces the active cache with the latest version.
  * @throws {DOMException}
+ * @return {undefined}
  */
 DOMApplicationCache.prototype.swapCache = function() {};
 
 /**
  * Manually triggers the update process.
  * @throws {DOMException}
+ * @return {undefined}
  */
 DOMApplicationCache.prototype.update = function() {};
 
@@ -882,12 +1005,14 @@ Window.prototype.applicationCache;
 /**
  * @see https://developer.mozilla.org/En/DOM/Worker/Functions_available_to_workers
  * @param {...string} var_args
+ * @return {undefined}
  */
 Window.prototype.importScripts = function(var_args) {};
 
 /**
  * @see https://developer.mozilla.org/En/DOM/Worker/Functions_available_to_workers
  * @param {...string} var_args
+ * @return {undefined}
  */
 function importScripts(var_args) {}
 
@@ -901,6 +1026,7 @@ function WebWorker() {}
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 WebWorker.prototype.addEventListener = function(
     type, listener, opt_useCapture) {};
@@ -908,21 +1034,27 @@ WebWorker.prototype.addEventListener = function(
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 WebWorker.prototype.removeEventListener = function(
     type, listener, opt_useCapture) {};
 
-/** @override */
+/**
+ * @override
+ * @return {boolean}
+ */
 WebWorker.prototype.dispatchEvent = function(evt) {};
 
 /**
  * Stops the worker process
+ * @return {undefined}
  */
 WebWorker.prototype.terminate = function() {};
 
 /**
  * Posts a message to the worker thread.
  * @param {string} message
+ * @return {undefined}
  */
 WebWorker.prototype.postMessage = function(message) {};
 
@@ -949,6 +1081,7 @@ function Worker(opt_arg0) {}
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 Worker.prototype.addEventListener = function(
     type, listener, opt_useCapture) {};
@@ -956,15 +1089,20 @@ Worker.prototype.addEventListener = function(
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 Worker.prototype.removeEventListener = function(
     type, listener, opt_useCapture) {};
 
-/** @override */
+/**
+ * @override
+ * @return {boolean}
+ */
 Worker.prototype.dispatchEvent = function(evt) {};
 
 /**
  * Stops the worker process
+ * @return {undefined}
  */
 Worker.prototype.terminate = function() {};
 
@@ -972,6 +1110,7 @@ Worker.prototype.terminate = function() {};
  * Posts a message to the worker thread.
  * @param {*} message
  * @param {Array<!Transferable>=} opt_transfer
+ * @return {undefined}
  */
 Worker.prototype.postMessage = function(message, opt_transfer) {};
 
@@ -979,6 +1118,7 @@ Worker.prototype.postMessage = function(message, opt_transfer) {};
  * Posts a message to the worker thread.
  * @param {*} message
  * @param {Array<!Transferable>=} opt_transfer
+ * @return {undefined}
  */
 Worker.prototype.webkitPostMessage = function(message, opt_transfer) {};
 
@@ -1008,6 +1148,7 @@ function SharedWorker(scriptURL, opt_name) {}
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 SharedWorker.prototype.addEventListener = function(
     type, listener, opt_useCapture) {};
@@ -1015,11 +1156,15 @@ SharedWorker.prototype.addEventListener = function(
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 SharedWorker.prototype.removeEventListener = function(
     type, listener, opt_useCapture) {};
 
-/** @override */
+/**
+ * @override
+ * @return {boolean}
+ */
 SharedWorker.prototype.dispatchEvent = function(evt) {};
 
 /**
@@ -1083,6 +1228,7 @@ WorkerGlobalScope.prototype.location;
 
 /**
  * Closes the worker represented by this WorkerGlobalScope.
+ * @return {undefined}
  */
 WorkerGlobalScope.prototype.close = function() {};
 
@@ -1115,6 +1261,7 @@ function DedicatedWorkerGlobalScope() {}
  * Posts a message to creator of this worker.
  * @param {*} message
  * @param {Array<!Transferable>=} opt_transfer
+ * @return {undefined}
  */
 DedicatedWorkerGlobalScope.prototype.postMessage =
     function(message, opt_transfer) {};
@@ -1123,6 +1270,7 @@ DedicatedWorkerGlobalScope.prototype.postMessage =
  * Posts a message to creator of this worker.
  * @param {*} message
  * @param {Array<!Transferable>=} opt_transfer
+ * @return {undefined}
  */
 DedicatedWorkerGlobalScope.prototype.webkitPostMessage =
     function(message, opt_transfer) {};
@@ -1179,6 +1327,21 @@ HTMLElement.prototype.hidden;
 
 /** @type {boolean} */
 HTMLElement.prototype.spellcheck;
+
+/**
+ * @see https://dom.spec.whatwg.org/#dictdef-getrootnodeoptions
+ * @typedef {{
+ *   composed: boolean
+ * }}
+ */
+var GetRootNodeOptions;
+
+/**
+ * @see https://dom.spec.whatwg.org/#dom-node-getrootnode
+ * @param {GetRootNodeOptions=} opt_options
+ * @return {?Node}
+ */
+Node.prototype.getRootNode = function(opt_options) {};
 
 /**
  * @see http://www.w3.org/TR/components-intro/
@@ -1295,10 +1458,10 @@ HTMLInputElement.prototype.indeterminate;
 /** @type {string} */
 HTMLInputElement.prototype.list;
 
-/** @type {string} */
+/** @implicitCast @type {string} */
 HTMLInputElement.prototype.max;
 
-/** @type {string} */
+/** @implicitCast @type {string} */
 HTMLInputElement.prototype.min;
 
 /** @type {string} */
@@ -1313,7 +1476,7 @@ HTMLInputElement.prototype.placeholder;
 /** @type {boolean} */
 HTMLInputElement.prototype.required;
 
-/** @type {string} */
+/** @implicitCast @type {string} */
 HTMLInputElement.prototype.step;
 
 /** @type {Date} */
@@ -1326,6 +1489,7 @@ HTMLInputElement.prototype.valueAsNumber;
  * Changes the form control's value by the value given in the step attribute
  * multiplied by opt_n.
  * @param {number=} opt_n step multiplier.  Defaults to 1.
+ * @return {undefined}
  */
 HTMLInputElement.prototype.stepDown = function(opt_n) {};
 
@@ -1333,6 +1497,7 @@ HTMLInputElement.prototype.stepDown = function(opt_n) {};
  * Changes the form control's value by the value given in the step attribute
  * multiplied by opt_n.
  * @param {number=} opt_n step multiplier.  Defaults to 1.
+ * @return {undefined}
  */
 HTMLInputElement.prototype.stepUp = function(opt_n) {};
 
@@ -1395,6 +1560,7 @@ HTMLMediaElement.prototype.buffered;
 
 /**
  * Loads the media element.
+ * @return {undefined}
  */
 HTMLMediaElement.prototype.load = function() {};
 
@@ -1529,11 +1695,13 @@ HTMLMediaElement.prototype.loop;
 
 /**
  * Starts playing the media.
+ * @return {undefined}
  */
 HTMLMediaElement.prototype.play = function() {};
 
 /**
  * Pauses the media.
+ * @return {undefined}
  */
 HTMLMediaElement.prototype.pause = function() {};
 
@@ -1596,11 +1764,13 @@ function TextTrack() {}
 
 /**
  * @param {TextTrackCue} cue
+ * @return {undefined}
  */
 TextTrack.prototype.addCue = function(cue) {};
 
 /**
  * @param {TextTrackCue} cue
+ * @return {undefined}
  */
 TextTrack.prototype.removeCue = function(cue) {};
 
@@ -1614,13 +1784,27 @@ TextTrack.prototype.activeCues;
  */
 TextTrack.prototype.cues;
 
-/** @override */
+/**
+ * @type {string}
+ */
+TextTrack.prototype.mode;
+
+/**
+ * @override
+ * @return {undefined}
+ */
 TextTrack.prototype.addEventListener = function(type, listener, useCapture) {};
 
-/** @override */
+/**
+ * @override
+ * @return {boolean}
+ */
 TextTrack.prototype.dispatchEvent = function(evt) {};
 
-/** @override */
+/**
+ * @override
+ * @return {undefined}
+ */
 TextTrack.prototype.removeEventListener = function(type, listener, useCapture)
     {};
 
@@ -1690,21 +1874,25 @@ function HTMLVideoElement() {}
 
 /**
  * Starts displaying the video in full screen mode.
+ * @return {undefined}
  */
 HTMLVideoElement.prototype.webkitEnterFullscreen = function() {};
 
 /**
  * Starts displaying the video in full screen mode.
+ * @return {undefined}
  */
 HTMLVideoElement.prototype.webkitEnterFullScreen = function() {};
 
 /**
  * Stops displaying the video in full screen mode.
+ * @return {undefined}
  */
 HTMLVideoElement.prototype.webkitExitFullscreen = function() {};
 
 /**
  * Stops displaying the video in full screen mode.
+ * @return {undefined}
  */
 HTMLVideoElement.prototype.webkitExitFullScreen = function() {};
 
@@ -1792,6 +1980,7 @@ function MessagePort() {}
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 MessagePort.prototype.addEventListener = function(
     type, listener, opt_useCapture) {};
@@ -1799,11 +1988,15 @@ MessagePort.prototype.addEventListener = function(
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 MessagePort.prototype.removeEventListener = function(
     type, listener, opt_useCapture) {};
 
-/** @override */
+/**
+ * @override
+ * @return {boolean}
+ */
 MessagePort.prototype.dispatchEvent = function(evt) {};
 
 
@@ -1812,17 +2005,20 @@ MessagePort.prototype.dispatchEvent = function(evt) {};
  * Array of Transferables.
  * @param {*} message
  * @param {Array<!Transferable>=} opt_transfer
+ * @return {undefined}
  */
 MessagePort.prototype.postMessage = function(message, opt_transfer) {
 };
 
 /**
  * Begins dispatching messages received on the port.
+ * @return {undefined}
  */
 MessagePort.prototype.start = function() {};
 
 /**
  * Disconnects the port, so that it is no longer active.
+ * @return {undefined}
  */
 MessagePort.prototype.close = function() {};
 
@@ -1884,6 +2080,7 @@ MessageEvent.prototype.ports;
  * @param {string} lastEventIdArg
  * @param {Window} sourceArg
  * @param {Array<MessagePort>} portsArg
+ * @return {undefined}
  */
 MessageEvent.prototype.initMessageEvent = function(typeArg, canBubbleArg,
     cancelableArg, dataArg, originArg, lastEventIdArg, sourceArg, portsArg) {};
@@ -1900,10 +2097,59 @@ MessageEvent.prototype.initMessageEvent = function(typeArg, canBubbleArg,
  * @param {string} lastEventIdArg
  * @param {Window} sourceArg
  * @param {Array<MessagePort>} portsArg
+ * @return {undefined}
  */
 MessageEvent.prototype.initMessageEventNS = function(namespaceURI, typeArg,
     canBubbleArg, cancelableArg, dataArg, originArg, lastEventIdArg, sourceArg,
     portsArg) {};
+
+/**
+ * HTML5 BroadcastChannel class.
+ * @param {string} channelName
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/BroadcastChannel
+ * @see https://html.spec.whatwg.org/multipage/comms.html#dom-broadcastchannel
+ * @implements {EventTarget}
+ * @constructor
+ */
+function BroadcastChannel(channelName) {}
+
+/**
+ * Sends the message, of any type of object, to each BroadcastChannel object
+ * listening to the same channel.
+ * @param {*} message
+ */
+BroadcastChannel.prototype.postMessage;
+
+/**
+ * Closes the channel object, indicating it won't get any new messages, and
+ * allowing it to be, eventually, garbage collected.
+ * @return {void}
+ */
+BroadcastChannel.prototype.close;
+
+/** @override */
+BroadcastChannel.prototype.addEventListener = function(
+    type, listener, useCapture) {};
+
+/** @override */
+BroadcastChannel.prototype.dispatchEvent = function(evt) {};
+
+/** @override */
+BroadcastChannel.prototype.removeEventListener = function(
+    type, listener, useCapture) {};
+
+/**
+ * An EventHandler property that specifies the function to execute when a
+ * message event is fired on this object.
+ * @type {?function(!MessageEvent<*>)}
+ */
+BroadcastChannel.prototype.onmessage;
+
+/**
+ * The name of the channel.
+ * @type {string}
+ */
+BroadcastChannel.prototype.name;
 
 /**
  * HTML5 DataTransfer class.
@@ -1935,6 +2181,7 @@ DataTransfer.prototype.files;
 /**
  * @param {string=} opt_format Format for which to remove data.
  * @override
+ * @return {undefined}
  */
 DataTransfer.prototype.clearData = function(opt_format) {};
 
@@ -1942,6 +2189,7 @@ DataTransfer.prototype.clearData = function(opt_format) {};
  * @param {string} format Format for which to set data.
  * @param {string} data Data to add.
  * @override
+ * @return {boolean}
  */
 DataTransfer.prototype.setData = function(format, data) {};
 
@@ -1956,11 +2204,13 @@ DataTransfer.prototype.getData = function(format) { return ''; };
  * @param {HTMLElement} img The image to use when dragging.
  * @param {number} x Horizontal position of the cursor.
  * @param {number} y Vertical position of the cursor.
+ * @return {undefined}
  */
 DataTransfer.prototype.setDragImage = function(img, x, y) {};
 
 /**
  * @param {HTMLElement} elem Element to receive drag result events.
+ * @return {undefined}
  */
 DataTransfer.prototype.addElement = function(elem) {};
 
@@ -2044,6 +2294,7 @@ DataTransferItem.prototype.type;
 
 /**
  * @param {function(string)} callback
+ * @return {undefined}
  */
 DataTransferItem.prototype.getAsString = function(callback) {};
 
@@ -2089,17 +2340,20 @@ DataTransferItemList.prototype.item = function(i) { return null; };
  * @param {string|!File} data Data for the item being added.
  * @param {string=} opt_type Mime type of the item being added. MUST be present
  *     if the {@code data} parameter is a string.
+ * @return {DataTransferItem}
  */
 DataTransferItemList.prototype.add = function(data, opt_type) {};
 
 /**
  * Removes an item from the list.
  * @param {number} i File to remove from the list.
+ * @return {undefined}
  */
 DataTransferItemList.prototype.remove = function(i) {};
 
 /**
  * Removes all items from the list.
+ * @return {undefined}
  */
 DataTransferItemList.prototype.clear = function() {};
 
@@ -2230,6 +2484,7 @@ WebSocket.CLOSED = 3;
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 WebSocket.prototype.addEventListener = function(
     type, listener, opt_useCapture) {};
@@ -2237,11 +2492,15 @@ WebSocket.prototype.addEventListener = function(
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 WebSocket.prototype.removeEventListener = function(
     type, listener, opt_useCapture) {};
 
-/** @override */
+/**
+ * @override
+ * @return {boolean}
+ */
 WebSocket.prototype.dispatchEvent = function(evt) {};
 
 /**
@@ -2292,6 +2551,7 @@ WebSocket.prototype.send = function(data) {};
  * Closes the Web Socket connection or connection attempt, if any.
  * @param {number=} opt_code
  * @param {string=} opt_reason
+ * @return {undefined}
  */
 WebSocket.prototype.close = function(opt_code, opt_reason) {};
 
@@ -2312,6 +2572,7 @@ function History() {};
  * @param {*} data New state.
  * @param {string} title The title for a new session history entry.
  * @param {string=} opt_url The URL for a new session history entry.
+ * @return {undefined}
  */
 History.prototype.pushState = function(data, title, opt_url) {};
 
@@ -2321,6 +2582,7 @@ History.prototype.pushState = function(data, title, opt_url) {};
  * @param {*} data New state.
  * @param {string} title The title for a session history entry.
  * @param {string=} opt_url The URL for a new session history entry.
+ * @return {undefined}
  */
 History.prototype.replaceState = function(data, title, opt_url) {};
 
@@ -2364,6 +2626,7 @@ PopStateEvent.prototype.state;
  * @param {boolean} canBubbleArg
  * @param {boolean} cancelableArg
  * @param {*} stateArg
+ * @return {undefined}
  */
 PopStateEvent.prototype.initPopStateEvent = function(typeArg, canBubbleArg,
     cancelableArg, stateArg) {};
@@ -2391,6 +2654,7 @@ HashChangeEvent.prototype.newURL;
  * @param {boolean} cancelableArg
  * @param {string} oldURLArg
  * @param {string} newURLArg
+ * @return {undefined}
  */
 HashChangeEvent.prototype.initHashChangeEvent = function(typeArg, canBubbleArg,
     cancelableArg, oldURLArg, newURLArg) {};
@@ -2414,6 +2678,7 @@ PageTransitionEvent.prototype.persisted;
  * @param {boolean} canBubbleArg
  * @param {boolean} cancelableArg
  * @param {*} persistedArg
+ * @return {undefined}
  */
 PageTransitionEvent.prototype.initPageTransitionEvent = function(typeArg,
     canBubbleArg, cancelableArg, persistedArg) {};
@@ -2442,9 +2707,39 @@ XMLHttpRequest.prototype.withCredentials;
 
 /**
  * @type {?function(!ProgressEvent): void}
+ * @see https://xhr.spec.whatwg.org/#handler-xhr-onloadstart
+ */
+XMLHttpRequest.prototype.onloadstart;
+
+/**
+ * @type {?function(!ProgressEvent): void}
  * @see https://dvcs.w3.org/hg/xhr/raw-file/tip/Overview.html#handler-xhr-onprogress
  */
 XMLHttpRequest.prototype.onprogress;
+
+/**
+ * @type {?function(!ProgressEvent): void}
+ * @see https://xhr.spec.whatwg.org/#handler-xhr-onabort
+ */
+XMLHttpRequest.prototype.onabort;
+
+/**
+ * @type {?function(!ProgressEvent): void}
+ * @see https://xhr.spec.whatwg.org/#handler-xhr-onload
+ */
+XMLHttpRequest.prototype.onload;
+
+/**
+ * @type {?function(!ProgressEvent): void}
+ * @see https://xhr.spec.whatwg.org/#handler-xhr-ontimeout
+ */
+XMLHttpRequest.prototype.ontimeout;
+
+/**
+ * @type {?function(!ProgressEvent): void}
+ * @see https://xhr.spec.whatwg.org/#handler-xhr-onloadend
+ */
+XMLHttpRequest.prototype.onloadend;
 
 /**
  * @type {XMLHttpRequestUpload}
@@ -2454,6 +2749,7 @@ XMLHttpRequest.prototype.upload;
 
 /**
  * @param {string} mimeType The mime type to override with.
+ * @return {undefined}
  */
 XMLHttpRequest.prototype.overrideMimeType = function(mimeType) {};
 
@@ -2494,6 +2790,7 @@ function XMLHttpRequestEventTarget() {}
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 XMLHttpRequestEventTarget.prototype.addEventListener = function(
     type, listener, opt_useCapture) {};
@@ -2501,11 +2798,15 @@ XMLHttpRequestEventTarget.prototype.addEventListener = function(
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 XMLHttpRequestEventTarget.prototype.removeEventListener = function(
     type, listener, opt_useCapture) {};
 
-/** @override */
+/**
+ * @override
+ * @return {boolean}
+ */
 XMLHttpRequestEventTarget.prototype.dispatchEvent = function(evt) {};
 
 /**
@@ -2570,11 +2871,13 @@ DOMTokenList.prototype.contains = function(token) {};
 
 /**
  * @param {...string} var_args The CSS class(es) to add to this element.
+ * @return {undefined}
  */
 DOMTokenList.prototype.add = function(var_args) {};
 
 /**
  * @param {...string} var_args The CSS class(es) to remove from this element.
+ * @return {undefined}
  */
 DOMTokenList.prototype.remove = function(var_args) {};
 
@@ -2682,7 +2985,10 @@ HTMLButtonElement.prototype.checkValidity = function() {};
 /** @return {boolean} */
 HTMLButtonElement.prototype.reportValidity = function() {};
 
-/** @param {string} message */
+/**
+ * @param {string} message
+ * @return {undefined}
+ */
 HTMLButtonElement.prototype.setCustomValidity = function(message) {};
 
 /**
@@ -2763,7 +3069,10 @@ HTMLInputElement.prototype.checkValidity = function() {};
 /** @return {boolean} */
 HTMLInputElement.prototype.reportValidity = function() {};
 
-/** @param {string} message */
+/**
+ * @param {string} message
+ * @return {undefined}
+ */
 HTMLInputElement.prototype.setCustomValidity = function(message) {};
 
 /** @type {Element} */
@@ -2799,7 +3108,10 @@ HTMLSelectElement.prototype.checkValidity = function() {};
 /** @return {boolean} */
 HTMLSelectElement.prototype.reportValidity = function() {};
 
-/** @param {string} message */
+/**
+ * @param {string} message
+ * @return {undefined}
+ */
 HTMLSelectElement.prototype.setCustomValidity = function(message) {};
 
 /** @type {boolean} */
@@ -2829,7 +3141,10 @@ HTMLTextAreaElement.prototype.checkValidity = function() {};
 /** @return {boolean} */
 HTMLTextAreaElement.prototype.reportValidity = function() {};
 
-/** @param {string} message */
+/**
+ * @param {string} message
+ * @return {undefined}
+ */
 HTMLTextAreaElement.prototype.setCustomValidity = function(message) {};
 
 /**
@@ -2867,6 +3182,7 @@ HTMLEmbedElement.prototype.type;
 
 /**
  * @see http://www.w3.org/TR/2012/WD-fullscreen-20120703/#dom-element-requestfullscreen
+ * @return {undefined}
  */
 Element.prototype.requestFullscreen = function() {};
 
@@ -2884,6 +3200,7 @@ Document.prototype.fullscreenElement;
 
 /**
  * @see http://www.w3.org/TR/2012/WD-fullscreen-20120703/#dom-document-exitfullscreen
+ * @return {undefined}
  */
 Document.prototype.exitFullscreen = function() {};
 
@@ -2910,6 +3227,7 @@ Document.prototype.mozFullScreenEnabled;
  * Valid only for Webkit browsers.
  * @param {number=} opt_allowKeyboardInput Whether keyboard input is desired.
  *     Should use ALLOW_KEYBOARD_INPUT constant.
+ * @return {undefined}
  */
 Element.prototype.webkitRequestFullScreen = function(opt_allowKeyboardInput) {};
 
@@ -2918,6 +3236,7 @@ Element.prototype.webkitRequestFullScreen = function(opt_allowKeyboardInput) {};
  * Valid only for Webkit browsers.
  * @param {number=} opt_allowKeyboardInput Whether keyboard input is desired.
  *     Should use ALLOW_KEYBOARD_INPUT constant.
+ * @return {undefined}
  */
 Element.prototype.webkitRequestFullscreen = function(opt_allowKeyboardInput) {};
 
@@ -3011,10 +3330,16 @@ function MutationObserver(callback) {}
 /**
  * @param {Node} target
  * @param {MutationObserverInit=} options
+ * @return {undefined}
  */
 MutationObserver.prototype.observe = function(target, options) {};
 
 MutationObserver.prototype.disconnect = function() {};
+
+/**
+ * @return {!Array<!MutationRecord>}
+ */
+MutationObserver.prototype.takeRecords = function() {};
 
 /**
  * @type {function(new:MutationObserver, function(Array<MutationRecord>))}
@@ -3451,18 +3776,21 @@ HTMLDialogElement.prototype.returnValue;
 /**
  * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-dialog-show
  * @param {(MouseEvent|Element)=} opt_anchor
+ * @return {undefined}
  */
 HTMLDialogElement.prototype.show = function(opt_anchor) {};
 
 /**
  * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-dialog-showmodal
  * @param {(MouseEvent|Element)=} opt_anchor
+ * @return {undefined}
  */
 HTMLDialogElement.prototype.showModal = function(opt_anchor) {};
 
 /**
  * @see http://www.w3.org/html/wg/drafts/html/master/interactive-elements.html#dom-dialog-close
  * @param {string=} opt_returnValue
+ * @return {undefined}
  */
 HTMLDialogElement.prototype.close = function(opt_returnValue) {};
 
@@ -3510,6 +3838,7 @@ HTMLFieldSetElement.prototype.name;
 /**
  * @param {string} message
  * @see https://www.w3.org/TR/html5/forms.html#dom-fieldset-elements
+ * @return {undefined}
  */
 HTMLFieldSetElement.prototype.setCustomValidity = function(message) {};
 
@@ -3567,7 +3896,60 @@ HTMLDataListElement.prototype.options;
  */
 function HTMLOutputElement() {}
 
-// TODO(jakubvrana): Add HTMLOutputElement properties.
+/**
+ * @const {!DOMTokenList}
+ */
+HTMLOutputElement.prototype.htmlFor;
+
+/**
+ * @type {HTMLFormElement}
+ */
+HTMLOutputElement.prototype.form;
+
+/**
+ * @type {string}
+ */
+HTMLOutputElement.prototype.name;
+
+/**
+ * @const {string}
+ */
+HTMLOutputElement.prototype.type;
+
+/**
+ * @type {string}
+ */
+HTMLOutputElement.prototype.defaultValue;
+
+/**
+ * @type {string}
+ */
+HTMLOutputElement.prototype.value;
+
+/**
+ * @const {NodeList<!HTMLLabelElement>}
+ */
+HTMLOutputElement.prototype.labels;
+
+/** @type {string} */
+HTMLOutputElement.prototype.validationMessage;
+
+/**
+ * @const {ValidityState}
+ */
+HTMLOutputElement.prototype.validity;
+
+/** @type {boolean} */
+HTMLOutputElement.prototype.willValidate;
+
+/** @return {boolean} */
+HTMLOutputElement.prototype.checkValidity = function() {};
+
+/** @return {boolean} */
+HTMLOutputElement.prototype.reportValidity = function() {};
+
+/** @param {string} message */
+HTMLOutputElement.prototype.setCustomValidity = function(message) {};
 
 
 
@@ -3738,6 +4120,7 @@ Navigator.prototype.cookieEnabled;
  * @param {string} scheme
  * @param {string} url
  * @param {string} title
+ * @return {undefined}
  */
 Navigator.prototype.registerProtocolHandler = function(scheme, url, title) {}
 
@@ -3745,18 +4128,21 @@ Navigator.prototype.registerProtocolHandler = function(scheme, url, title) {}
  * @param {string} mimeType
  * @param {string} url
  * @param {string} title
+ * @return {undefined}
  */
 Navigator.prototype.registerContentHandler = function(mimeType, url, title) {}
 
 /**
  * @param {string} scheme
  * @param {string} url
+ * @return {undefined}
  */
 Navigator.prototype.unregisterProtocolHandler = function(scheme, url) {}
 
 /**
  * @param {string} mimeType
  * @param {string} url
+ * @return {undefined}
  */
 Navigator.prototype.unregisterContentHandler = function(mimeType, url) {}
 
@@ -3802,7 +4188,10 @@ PluginArray.prototype.item = function(index) {};
  */
 PluginArray.prototype.namedItem = function(name) {};
 
-/** @param {boolean=} reloadDocuments */
+/**
+ * @param {boolean=} reloadDocuments
+ * @return {undefined}
+ */
 PluginArray.prototype.refresh = function(reloadDocuments) {};
 
 /**
@@ -3866,4 +4255,3 @@ Plugin.prototype.length;
 
 /** @type {string} */
 Plugin.prototype.name;
-

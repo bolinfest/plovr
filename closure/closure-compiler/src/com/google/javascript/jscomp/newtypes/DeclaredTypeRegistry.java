@@ -38,5 +38,9 @@ public interface DeclaredTypeRegistry {
    */
   JSType getDeclaredTypeOf(String name);
 
+  /**
+   * Returns an object that defines the built-in types, and contains other state
+   * used throughout type checking.
+   */
   JSTypes getCommonTypes();
 }

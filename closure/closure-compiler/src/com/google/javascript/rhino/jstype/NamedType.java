@@ -194,8 +194,7 @@ public class NamedType extends ProxyObjectType {
     if (resolved) {
       super.resolveInternal(t, enclosing);
       finishPropertyContinuations();
-      return registry.isLastGeneration() ?
-          getReferencedType() : this;
+      return getReferencedType();
     }
 
     resolveViaProperties(t, enclosing);
@@ -207,8 +206,7 @@ public class NamedType extends ProxyObjectType {
     if (isResolved()) {
       finishPropertyContinuations();
     }
-    return registry.isLastGeneration() ?
-        getReferencedType() : this;
+    return getReferencedType();
   }
 
   /**
@@ -239,8 +237,8 @@ public class NamedType extends ProxyObjectType {
       setReferencedAndResolvedType(functionType.getInstanceType(), reporter);
     } else if (value != null && value.isNoObjectType()) {
       setReferencedAndResolvedType(
-          registry.getNativeFunctionType(
-              JSTypeNative.NO_OBJECT_TYPE).getInstanceType(), reporter);
+          registry.getNativeObjectType(
+              JSTypeNative.NO_OBJECT_TYPE), reporter);
     } else if (value instanceof EnumType) {
       setReferencedAndResolvedType(
           ((EnumType) value).getElementsType(), reporter);
@@ -334,26 +332,21 @@ public class NamedType extends ProxyObjectType {
   // type name.
   private void handleUnresolvedType(
       ErrorReporter t, boolean ignoreForwardReferencedTypes) {
-    if (registry.isLastGeneration()) {
-      boolean isForwardDeclared =
-          ignoreForwardReferencedTypes &&
-          registry.isForwardDeclaredType(reference);
-      if (!isForwardDeclared && registry.isLastGeneration()) {
-        warning(t, "Bad type annotation. Unknown type " + reference);
-      } else {
-        setReferencedType(
-            registry.getNativeObjectType(
-                JSTypeNative.NO_RESOLVED_TYPE));
-
-        if (registry.isLastGeneration() && validator != null) {
-          validator.apply(getReferencedType());
-        }
-      }
-
-      setResolvedTypeInternal(getReferencedType());
+    boolean isForwardDeclared =
+        ignoreForwardReferencedTypes && registry.isForwardDeclaredType(reference);
+    if (!isForwardDeclared) {
+      warning(t, "Bad type annotation. Unknown type " + reference);
     } else {
-      setResolvedTypeInternal(this);
+      setReferencedType(
+          registry.getNativeObjectType(
+              JSTypeNative.NO_RESOLVED_TYPE));
+
+      if (validator != null) {
+        validator.apply(getReferencedType());
+      }
     }
+
+    setResolvedTypeInternal(getReferencedType());
   }
 
   private JSType getTypedefType(ErrorReporter t, StaticTypedSlot<JSType> slot) {
@@ -404,6 +397,14 @@ public class NamedType extends ProxyObjectType {
       target.defineProperty(
           propertyName, type, inferred, propertyNode);
     }
+  }
+
+  @Override
+  public boolean isObject() {
+    if (isEnumElementType()) {
+      return toMaybeEnumElementType().isObject();
+    }
+    return super.isObject();
   }
 
   @Override

@@ -18,7 +18,6 @@ package com.google.javascript.jscomp;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.CheckConformance.InvalidRequirementSpec;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
@@ -27,24 +26,23 @@ import com.google.javascript.jscomp.ConformanceRules.ConformanceResult;
 import com.google.javascript.jscomp.testing.BlackHoleErrorManager;
 import com.google.javascript.rhino.Node;
 import com.google.protobuf.TextFormat;
-
+import com.google.protobuf.TextFormat.ParseException;
 import java.util.List;
 
 /**
  * Tests for {@link CheckConformance}.
  *
  */
-public final class CheckConformanceTest extends CompilerTestCase {
+public final class CheckConformanceTest extends TypeICompilerTestCase {
   private String configuration;
 
   private static final String EXTERNS =
       LINE_JOINER.join(
-          "/** @constructor */ var Window;",
+          DEFAULT_EXTERNS,
+          "/** @constructor */ function Window() {};",
           "/** @type {Window} */ var window;",
-          "var Object;",
-          "/** @constructor */ var Arguments;",
-          "Arguments.prototype.callee;",
-          "Arguments.prototype.caller;",
+          "/** @type {Function} */ Arguments.prototype.callee;",
+          "/** @type {Function} */ Arguments.prototype.caller;",
           "/** @type {Arguments} */ var arguments;",
           "/** @constructor ",
           " * @param {*=} opt_message",
@@ -52,10 +50,9 @@ public final class CheckConformanceTest extends CompilerTestCase {
           " * @param {*=} opt_line",
           " * @return {!Error}",
           "*/",
-          "var Error;",
-          "var alert;",
-          "var unknown;",
-          "/** @constructor */ var ObjectWithNoProps;",
+          "function Error(opt_message, opt_file, opt_line) {};",
+          "function alert(y) {};",
+          "/** @constructor */ function ObjectWithNoProps() {};",
           "function eval() {}");
 
   private static final String DEFAULT_CONFORMANCE =
@@ -104,8 +101,8 @@ public final class CheckConformanceTest extends CompilerTestCase {
     ConformanceConfig.Builder builder = ConformanceConfig.newBuilder();
     try {
       TextFormat.merge(configuration, builder);
-    } catch (Exception e) {
-      Throwables.propagate(e);
+    } catch (ParseException e) {
+      throw new RuntimeException(e);
     }
     return new CheckConformance(compiler, ImmutableList.of(builder.build()));
   }
@@ -129,7 +126,9 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "eval()",
         CheckConformance.CONFORMANCE_VIOLATION);
 
-    testSame("eval.name.length", CheckConformance.CONFORMANCE_VIOLATION);
+    testSame(
+        "Function.prototype.name; eval.name.length",
+        CheckConformance.CONFORMANCE_VIOLATION);
   }
 
   public void testViolation2() {
@@ -183,8 +182,9 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "function f() { new Object().callee }",
         CheckConformance.CONFORMANCE_POSSIBLE_VIOLATION);
 
+    // NTI warns since "callee" doesn't exist on *
     testSame(
-        "function f() { /** @type {*} */ var x; x.callee }",
+        "/** @suppress {newCheckTypes} */ function f() { /** @type {*} */ var x; x.callee }",
         CheckConformance.CONFORMANCE_POSSIBLE_VIOLATION);
 
     testSame("function f() {/** @const */ var x = {}; x.callee = 1; x.callee}");
@@ -200,17 +200,15 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "  whitelist_regexp: '('\n" +
         "}";
 
-    testSame(
-        EXTERNS,
+    testError(
         "anything;",
         CheckConformance.INVALID_REQUIREMENT_SPEC,
-        "Invalid requirement. Reason: invalid regex pattern\n" +
-        "Requirement spec:\n" +
-        "error_message: \"placeholder\"\n" +
-        "whitelist_regexp: \"(\"\n" +
-        "type: BANNED_NAME\n" +
-        "value: \"eval\"\n",
-        true /* error */);
+        "Invalid requirement. Reason: invalid regex pattern\n"
+            + "Requirement spec:\n"
+            + "error_message: \"placeholder\"\n"
+            + "whitelist_regexp: \"(\"\n"
+            + "type: BANNED_NAME\n"
+            + "value: \"eval\"\n");
   }
 
   public void testViolationWhitelisted1() {
@@ -300,9 +298,11 @@ public final class CheckConformanceTest extends CompilerTestCase {
 
     testSame("/** @const */ var x = 0;");
 
+    // We @suppress {newCheckTypes} to suppress NTI uninferred const and global this warnings.
+
     testConformance(
         LINE_JOINER.join(
-            "/** @constructor */",
+            "/** @constructor @suppress {newCheckTypes} */",
             "function f() {",
             "  /** @const */ this.foo = unknown;",
             "}",
@@ -313,7 +313,7 @@ public final class CheckConformanceTest extends CompilerTestCase {
         LINE_JOINER.join(
             "/** @constructor */",
             "function f() {}",
-            "/** @this {f} */",
+            "/** @this {f} @suppress {newCheckTypes} */",
             "var init_f = function() {",
             "  /** @const */ this.foo = unknown;",
             "};",
@@ -324,6 +324,7 @@ public final class CheckConformanceTest extends CompilerTestCase {
         LINE_JOINER.join(
             "/** @constructor */",
             "function f() {}",
+            "/** @suppress {newCheckTypes} */",
             "var init_f = function() {",
             "  /** @const */ this.FOO = unknown;",
             "};",
@@ -334,6 +335,7 @@ public final class CheckConformanceTest extends CompilerTestCase {
         LINE_JOINER.join(
             "/** @constructor */",
             "function f() {}",
+            "/** @suppress {newCheckTypes} */",
             "f.prototype.init_f = function() {",
             "  /** @const */ this.FOO = unknown;",
             "};",
@@ -366,31 +368,33 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "  error_message: 'blink is annoying'\n" +
         "}";
 
+    String externs = EXTERNS + "String.prototype.blink;";
+
     testSame(
         "/** @constructor */ function Foo() { this.blink = 1; }\n" +
         "var foo = new Foo();\n" +
         "foo.blink();");
 
     testSame(
-        EXTERNS,
+        externs,
         "'foo'.blink;",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: blink is annoying");
 
     testSame(
-        EXTERNS,
+        externs,
         "'foo'.blink();",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: blink is annoying");
 
     testSame(
-        EXTERNS,
+        externs,
         "String('foo').blink();",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: blink is annoying");
 
     testSame(
-        EXTERNS,
+        externs,
         "foo.blink();",
         CheckConformance.CONFORMANCE_POSSIBLE_VIOLATION,
         "Possible violation: blink is annoying\n"
@@ -405,11 +409,49 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "  error_message: 'testcode is not allowed'\n" +
         "}";
 
+    testWarning(
+        "anything;", CheckConformance.CONFORMANCE_VIOLATION, "Violation: testcode is not allowed");
+  }
+
+  public void testReportLooseTypeViolations() {
+    configuration =
+        LINE_JOINER.join(
+            "requirement: {",
+            "  type: BANNED_PROPERTY_WRITE",
+            "  value: 'HTMLScriptElement.prototype.textContent'",
+            "  error_message: 'Setting content of <script> is dangerous.'",
+            "  report_loose_type_violations: false",
+            "}");
+
+    String externs =
+        LINE_JOINER.join(
+            DEFAULT_EXTERNS,
+            "/** @constructor */ function Element() {}",
+            "/** @type {string} @implicitCast */",
+            "Element.prototype.textContent;",
+            "/** @constructor @extends {Element} */ function HTMLScriptElement() {}\n");
+
     testSame(
-        EXTERNS,
-        "anything;",
+        externs,
+        "(new HTMLScriptElement).textContent = 'alert(1);'",
         CheckConformance.CONFORMANCE_VIOLATION,
-        "Violation: testcode is not allowed");
+        "Violation: Setting content of <script> is dangerous.");
+
+    testSame(
+        externs,
+        "HTMLScriptElement.prototype.textContent = 'alert(1);'",
+        CheckConformance.CONFORMANCE_VIOLATION,
+        "Violation: Setting content of <script> is dangerous.");
+
+    // NOTE(aravindpg): we define a random extra property on HTMLScriptElement.prototype so
+    // as to differentiate from any old (new Element), otherwise NTI is unable to distinguish them
+    // and treats this case exactly like the case right above.
+    // This limitation is arguably never a problem in practice since we always define/redefine
+    // properties on a subclass.
+    testSame(
+        externs,
+        "HTMLScriptElement.prototype.randomProp; (new Element).textContent = 'safe'",
+        null);
   }
 
   private void testConformance(String src, DiagnosticType warning) {
@@ -512,7 +554,7 @@ public final class CheckConformanceTest extends CompilerTestCase {
         CheckConformance.CONFORMANCE_VIOLATION);
   }
 
-  public void testBanndedProperty3() {
+  public void testBannedProperty3() {
     configuration = LINE_JOINER.join(
         "requirement: {",
         "  type: BANNED_PROPERTY",
@@ -529,7 +571,7 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "C.prototype.p;");
     String ddecl = LINE_JOINER.join(
         "/** @constructor @template T */ function D() {}",
-        "/** @param {T} a */",
+        "/** @suppress {newCheckTypes} @param {T} a */",
         "D.prototype.method = function(a) {",
         "  use(a.p);",
         "};");
@@ -538,7 +580,7 @@ public final class CheckConformanceTest extends CompilerTestCase {
         CheckConformance.CONFORMANCE_POSSIBLE_VIOLATION);
   }
 
-  public void testBanndedProperty4() {
+  public void testBannedProperty4() {
     configuration = LINE_JOINER.join(
         "requirement: {",
         "  type: BANNED_PROPERTY",
@@ -555,7 +597,7 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "C.prototype.p;",
         "",
         "/**",
-        " * @param {!K} key",
+        " * @param {K} key",
         " * @param {V=} opt_value",
         " * @constructor",
         " * @struct",
@@ -565,7 +607,7 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "var Entry_ = function(key, opt_value) {",
         "  /** @const {K} */",
         "  this.key = key;",
-        "  /** @type {V} */",
+        "  /** @type {V|undefined} */",
         "  this.value = opt_value;",
         "};");
 
@@ -624,7 +666,8 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "}";
 
     String externs =
-        "/** @constructor */ function Element() {}\n" +
+        DEFAULT_EXTERNS
+        + "/** @constructor */ function Element() {}\n" +
         "/** @type {string} @implicitCast */\n" +
         "Element.prototype.innerHTML;\n";
 
@@ -635,12 +678,33 @@ public final class CheckConformanceTest extends CompilerTestCase {
 
     testSame(
         externs,
-        "var e = new Element(); e.innerHTML = {'foo': 'bar'};",
+        "var e = new Element(); e.innerHTML = 'foo';",
         CheckConformance.CONFORMANCE_VIOLATION);
 
     testSame(
         externs,
         "var e = new Element(); e['innerHTML'] = 'foo';",
+        CheckConformance.CONFORMANCE_VIOLATION);
+  }
+
+  public void testBannedPropertyNonConstantWrite() {
+    configuration =
+        "requirement: {\n" +
+        "  type: BANNED_PROPERTY_NON_CONSTANT_WRITE\n" +
+        "  value: 'C.prototype.p'\n" +
+        "  error_message: 'Assignment of a non-constant value to C.p is not allowed'\n" +
+        "}";
+
+    String declarations =
+        "/** @constructor */ function C() {}\n" +
+        "/** @type {string} */\n" +
+        "C.prototype.p;\n";
+
+    testSame(declarations + "var c = new C(); c.p = 'boo';");
+    testSame(declarations + "var c = new C(); c.p = 'foo' + 'bar';");
+
+    testSame(
+        declarations + "var boo = 'boo'; var c = new C(); c.p = boo;",
         CheckConformance.CONFORMANCE_VIOLATION);
   }
 
@@ -708,10 +772,10 @@ public final class CheckConformanceTest extends CompilerTestCase {
         CheckConformance.CONFORMANCE_VIOLATION);
 
     testSame(
-        code + "new C().m.call(this, 1);");
+        code + "new C().m.call(new C(), 1);");
 
     testSame(
-        code + "new C().m.call(this, 'str');",
+        code + "new C().m.call(new C(), 'str');",
         CheckConformance.CONFORMANCE_VIOLATION);
   }
 
@@ -782,7 +846,9 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "/** @constructor @param {...*} a */ function C(a) {}\n";
 
     testSame(
-        code + "goog.inherits(A, C);");
+        EXTERNS + "goog.inherits;",
+        code + "goog.inherits(A, C);",
+        null);
   }
 
   public void testRestrictedMethodCallThisType() {
@@ -795,7 +861,7 @@ public final class CheckConformanceTest extends CompilerTestCase {
 
     String code =
         "/** @constructor */\n"
-        + "function Base() {}\n"
+        + "function Base() {}; Base.prototype.m;\n"
         + "/** @constructor @extends {Base} */\n"
         + "function Sub() {}\n"
         + "var b = new Base();\n"
@@ -819,7 +885,7 @@ public final class CheckConformanceTest extends CompilerTestCase {
 
     String code =
         "/** @constructor */\n"
-        + "function Base() {}\n"
+        + "function Base() {}; Base.prototype.m;\n"
         + "/** @constructor @extends {Base} */\n"
         + "function Sub() {}\n"
         + "var b = new Base();\n"
@@ -841,15 +907,13 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "  error_message: 'placeholder'\n" +
         "}";
 
-    testSame(
-        EXTERNS,
+    testError(
         "anything;",
         CheckConformance.INVALID_REQUIREMENT_SPEC,
-        "Invalid requirement. Reason: missing java_class\n" +
-        "Requirement spec:\n" +
-        "error_message: \"placeholder\"\n" +
-        "type: CUSTOM\n",
-        true /* error */);
+        "Invalid requirement. Reason: missing java_class\n"
+            + "Requirement spec:\n"
+            + "error_message: \"placeholder\"\n"
+            + "type: CUSTOM\n");
   }
 
   public void testCustom2() {
@@ -861,16 +925,14 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "  error_message: 'placeholder'\n" +
         "}";
 
-    testSame(
-        EXTERNS,
+    testError(
         "anything;",
         CheckConformance.INVALID_REQUIREMENT_SPEC,
-        "Invalid requirement. Reason: JavaClass not found.\n" +
-        "Requirement spec:\n" +
-        "error_message: \"placeholder\"\n" +
-        "type: CUSTOM\n" +
-        "java_class: \"MissingClass\"\n",
-        true /* error */);
+        "Invalid requirement. Reason: JavaClass not found.\n"
+            + "Requirement spec:\n"
+            + "error_message: \"placeholder\"\n"
+            + "type: CUSTOM\n"
+            + "java_class: \"MissingClass\"\n");
   }
 
   public void testCustom3() {
@@ -882,17 +944,14 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "  error_message: 'placeholder'\n" +
         "}";
 
-    testSame(
-        EXTERNS,
+    testError(
         "anything;",
         CheckConformance.INVALID_REQUIREMENT_SPEC,
-        "Invalid requirement. Reason: JavaClass is not a rule.\n" +
-        "Requirement spec:\n" +
-        "error_message: \"placeholder\"\n" +
-        "type: CUSTOM\n" +
-        "java_class: \"com.google.javascript.jscomp.CheckConformanceTest\"\n" +
-        "",
-        true /* error */);
+        "Invalid requirement. Reason: JavaClass is not a rule.\n"
+            + "Requirement spec:\n"
+            + "error_message: \"placeholder\"\n"
+            + "type: CUSTOM\n"
+            + "java_class: \"com.google.javascript.jscomp.CheckConformanceTest\"\n");
   }
 
   // A custom rule missing a callable constructor.
@@ -959,18 +1018,15 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "  error_message: 'placeholder'\n" +
         "}";
 
-    testSame(
-        EXTERNS,
+    testError(
         "anything;",
         CheckConformance.INVALID_REQUIREMENT_SPEC,
-        "Invalid requirement. Reason: No valid class constructors found.\n" +
-        "Requirement spec:\n" +
-        "error_message: \"placeholder\"\n" +
-        "type: CUSTOM\n" +
-        "java_class: \"com.google.javascript.jscomp.CheckConformanceTest$" +
-        "CustomRuleMissingPublicConstructor\"\n" +
-        "",
-        true /* error */);
+        "Invalid requirement. Reason: No valid class constructors found.\n"
+            + "Requirement spec:\n"
+            + "error_message: \"placeholder\"\n"
+            + "type: CUSTOM\n"
+            + "java_class: \"com.google.javascript.jscomp.CheckConformanceTest$"
+            + "CustomRuleMissingPublicConstructor\"\n");
   }
 
 
@@ -983,17 +1039,14 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "  error_message: 'placeholder'\n" +
         "}";
 
-    testSame(
-        EXTERNS,
+    testError(
         "anything;",
         CheckConformance.INVALID_REQUIREMENT_SPEC,
-        "Invalid requirement. Reason: missing value\n" +
-        "Requirement spec:\n" +
-        "error_message: \"placeholder\"\n" +
-        "type: CUSTOM\n" +
-        "java_class: \"com.google.javascript.jscomp.CheckConformanceTest$CustomRule\"\n" +
-        "",
-        true /* error */);
+        "Invalid requirement. Reason: missing value\n"
+            + "Requirement spec:\n"
+            + "error_message: \"placeholder\"\n"
+            + "type: CUSTOM\n"
+            + "java_class: \"com.google.javascript.jscomp.CheckConformanceTest$CustomRule\"\n");
   }
 
   public void testCustom6() {
@@ -1020,11 +1073,8 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "  error_message: 'CustomRule Message'\n" +
         "}";
 
-    testSame(
-        EXTERNS,
-        "anything;",
-        CheckConformance.CONFORMANCE_VIOLATION,
-        "Violation: CustomRule Message");
+    testWarning(
+        "anything;", CheckConformance.CONFORMANCE_VIOLATION, "Violation: CustomRule Message");
   }
 
   public void testCustomBanExpose() {
@@ -1035,8 +1085,7 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "  error_message: 'BanExpose Message'\n" +
         "}";
 
-    testSame(
-        EXTERNS,
+    testWarning(
         "/** @expose */ var x;",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: BanExpose Message");
@@ -1050,8 +1099,7 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "  error_message: 'BanThrowOfNonErrorTypes Message'\n" +
         "}";
 
-    testSame(
-        EXTERNS,
+    testWarning(
         "throw 'blah';",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: BanThrowOfNonErrorTypes Message");
@@ -1076,8 +1124,7 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "  error_message: 'BanUnknownThis Message'\n" +
         "}";
 
-    testSame(
-        EXTERNS,
+    testWarning(
         "function f() {alert(this);}",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: BanUnknownThis Message");
@@ -1143,10 +1190,9 @@ public final class CheckConformanceTest extends CompilerTestCase {
   public void testCustomBanUnknownThisProp1() {
     configuration = config(rule("BanUnknownDirectThisPropsReferences"), "My rule message");
 
-    testSame(
-        EXTERNS,
-        "/** @constructor */ function f() {};"
-        + "f.prototype.method = function() { alert(this.prop); }",
+    testWarning(
+        "/** @constructor */ function f() {}; f.prototype.prop;"
+            + "f.prototype.method = function() { alert(this.prop); }",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: My rule message");
   }
@@ -1155,19 +1201,16 @@ public final class CheckConformanceTest extends CompilerTestCase {
     configuration = config(rule("BanUnknownDirectThisPropsReferences"), "My rule message");
 
     testSame(
-        EXTERNS,
-        "/** @constructor */ function f() {}"
-        + "f.prototype.method = function() { this.prop = foo; };",
-        null);
+        "/** @constructor */ function f() {}; f.prototype.prop;"
+            + "f.prototype.method = function() { this.prop = foo; };");
   }
 
   public void testCustomBanUnknownProp1() {
     configuration =
         config(rule("BanUnknownTypedClassPropsReferences"), "My rule message", value("String"));
 
-    testSame(
-        EXTERNS,
-        "/** @constructor */ function f() {};"
+    testWarning(
+        "/** @constructor */ function f() {}; f.prototype.prop;"
             + "f.prototype.method = function() { alert(this.prop); }",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: My rule message\nThe property \"prop\" on type \"f\"");
@@ -1177,12 +1220,24 @@ public final class CheckConformanceTest extends CompilerTestCase {
     configuration =
         config(rule("BanUnknownTypedClassPropsReferences"), "My rule message", value("String"));
 
-    testSame(
-        EXTERNS,
-        LINE_JOINER.join(
-            "/** @param {ObjectWithNoProps} a */", "function f(a) { alert(a.foobar); };"),
+    String js = LINE_JOINER.join(
+        "Object.prototype.foobar;",
+        " /** @param {ObjectWithNoProps} a */",
+        "function f(a) { alert(a.foobar); };");
+
+    this.mode = TypeInferenceMode.OTI_ONLY;
+    testWarning(
+        js,
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: My rule message\nThe property \"foobar\" on type \"(ObjectWithNoProps|null)\"");
+
+    // TODO(aravindpg): Only difference is we don't add parens at the ends of our union type
+    // string reprs in NTI. Fix them to be the same if possible.
+    this.mode = TypeInferenceMode.NTI_ONLY;
+    testWarning(
+        js,
+        CheckConformance.CONFORMANCE_VIOLATION,
+        "Violation: My rule message\nThe property \"foobar\" on type \"ObjectWithNoProps|null\"");
   }
 
   public void testCustomBanUnknownProp3() {
@@ -1190,10 +1245,8 @@ public final class CheckConformanceTest extends CompilerTestCase {
         config(rule("BanUnknownTypedClassPropsReferences"), "My rule message", value("String"));
 
     testSame(
-        EXTERNS,
         "/** @constructor */ function f() {}"
-            + "f.prototype.method = function() { this.prop = foo; };",
-        null);
+            + "f.prototype.method = function() { this.prop = foo; };");
   }
 
   public void testCustomBanUnknownProp4() {
@@ -1201,19 +1254,16 @@ public final class CheckConformanceTest extends CompilerTestCase {
         config(rule("BanUnknownTypedClassPropsReferences"), "My rule message", value("String"));
 
     testSame(
-        EXTERNS,
         LINE_JOINER.join(
             "/** @constructor */ function f() { /** @type {?} */ this.prop = null; };",
-            "f.prototype.method = function() { alert(this.prop); }"),
-        null);
+            "f.prototype.method = function() { alert(this.prop); }"));
   }
 
   public void testCustomBanUnknownProp5() {
     configuration =
         config(rule("BanUnknownTypedClassPropsReferences"), "My rule message", value("String"));
 
-    testSame(
-        EXTERNS,
+    testWarning(
         LINE_JOINER.join(
             "/** @typedef {?} */ var Unk;",
             "/** @constructor */ function f() { /** @type {?Unk} */ this.prop = null; };",
@@ -1222,20 +1272,45 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "Violation: My rule message\nThe property \"prop\" on type \"f\"");
   }
 
+  public void testCustomBanUnknownProp6() {
+    configuration =
+        config(rule("BanUnknownTypedClassPropsReferences"), "My rule message", value("String"));
+
+    testWarning(
+        LINE_JOINER.join(
+            "goog.module('example');",
+            "/** @constructor */ function f() { this.prop; };",
+            "f.prototype.method = function() { alert(this.prop); }"),
+        CheckConformance.CONFORMANCE_VIOLATION,
+        // TODO(tbreisacher): Can we display a more user-friendly name here?
+        "Violation: My rule message\nThe property \"prop\" on type \"module$contents$example_f\"");
+  }
+
   public void testCustomBanUnknownInterfaceProp1() {
     configuration =
         config(rule("BanUnknownTypedClassPropsReferences"), "My rule message", value("String"));
 
-    testSame(
-        EXTERNS,
+    String js =
         LINE_JOINER.join(
             "/** @interface */ function I() {}",
             "I.prototype.method = function() {};",
-            "/** @param {!I} a */ function f(a) {",
+            "I.prototype.gak;",
+            "/** @param {!I} a */",
+            "function f(a) {",
             "  a.gak();",
-            "}"),
+            "}");
+
+    this.mode = TypeInferenceMode.OTI_ONLY;
+    testWarning(
+        js,
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: My rule message\nThe property \"gak\" on type \"I\"");
+
+    this.mode = TypeInferenceMode.NTI_ONLY;
+    testWarning(
+        js,
+        CheckConformance.CONFORMANCE_VIOLATION,
+        "Violation: My rule message\nThe property \"gak\" on type \"I{gak:TOP_FUNCTION}\"");
   }
 
   public void testCustomBanUnknownInterfaceProp2() {
@@ -1243,14 +1318,12 @@ public final class CheckConformanceTest extends CompilerTestCase {
         config(rule("BanUnknownTypedClassPropsReferences"), "My rule message", value("String"));
 
     testSame(
-        EXTERNS,
         LINE_JOINER.join(
             "/** @interface */ function I() {}",
             "I.prototype.method = function() {};",
             "/** @param {I} a */ function f(a) {",
             "  a.method();",
-            "}"),
-        null);
+            "}"));
   }
 
   public void testCustomBanGlobalVars1() {
@@ -1290,14 +1363,12 @@ public final class CheckConformanceTest extends CompilerTestCase {
             + "}";
 
     testSame(
-        EXTERNS,
         "goog.scope(function() {\n"
             + "  var x = {y: 'y'}\n"
             + "  var z = {\n"
             + "     [x.y]: 2\n"
             + "  }\n"
-            + "});",
-        null);
+            + "});");
   }
 
   public void testRequireFileoverviewVisibility() {
@@ -1309,27 +1380,18 @@ public final class CheckConformanceTest extends CompilerTestCase {
         "  error_message: 'RequireFileoverviewVisibility Message'\n" +
         "}";
 
-    testSame(
-        EXTERNS,
+    testWarning(
         "var foo = function() {};",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: RequireFileoverviewVisibility Message");
 
-    testSame(
-        EXTERNS,
-        "/**\n" +
-        "  * @fileoverview\n" +
-        "  */\n" +
-        "var foo = function() {};",
+    testWarning(
+        "/**\n" + "  * @fileoverview\n" + "  */\n" + "var foo = function() {};",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: RequireFileoverviewVisibility Message");
 
-    testSame(
-        EXTERNS,
-        "/**\n" +
-        "  * @package\n" +
-        "  */\n" +
-        "var foo = function() {};",
+    testWarning(
+        "/**\n" + "  * @package\n" + "  */\n" + "var foo = function() {};",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: RequireFileoverviewVisibility Message");
 
@@ -1431,12 +1493,24 @@ public final class CheckConformanceTest extends CompilerTestCase {
         + "  error_message: 'BanUnresolvedType Message'\n"
         + "}";
 
-    testSame(
-        EXTERNS,
-        "goog.forwardDeclare('Foo');"
-        + "/** @param {Foo} a */ function f(a) {a.foo()};",
+    // NOTE(aravindpg): In NTI we annotate the node `a` with its inferred type instead of Unknown,
+    // and so this test doesn't recognize `a` as unresolved. Fixing this is undesirable.
+    // However, we do intend to add warnings for unfulfilled forward declares, which essentially
+    // addresses this use case.
+    this.mode = TypeInferenceMode.OTI_ONLY;
+    testWarning(
+        "goog.forwardDeclare('Foo');" + "/** @param {Foo} a */ function f(a) {a.foo()};",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: BanUnresolvedType Message");
+
+    this.mode = TypeInferenceMode.BOTH;
+    testSame(LINE_JOINER.join(
+        "/** @suppress {newCheckTypes}",
+        " *  @param {!Object<string, ?>} data",
+        " */",
+        "function foo(data) {",
+        "  data['bar'].baz();",
+        "}"));
   }
 
   public void testMergeRequirements() {
@@ -1465,48 +1539,51 @@ public final class CheckConformanceTest extends CompilerTestCase {
   public void testCustomBanNullDeref1() {
     configuration = config(rule("BanNullDeref"), "My rule message");
 
+    String externs = EXTERNS + "String.prototype.prop;";
+
     testSame(
-        EXTERNS,
+        externs,
         "/** @param {string|null} n */ function f(n) { alert(n.prop); }",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: My rule message");
 
     testSame(
-        EXTERNS,
+        externs,
         "/** @param {string|null} n */ function f(n) { alert(n['prop']); }",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: My rule message");
 
     testSame(
-        EXTERNS,
-        "/** @param {string|null} n */ function f(n) { alert('prop' in n); }",
+        externs,
+        "/** @param {string|null} n  @suppress {newCheckTypes} */"
+        + "function f(n) { alert('prop' in n); }",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: My rule message");
 
     testSame(
-        EXTERNS,
+        externs,
         "/** @param {string|undefined} n */ function f(n) { alert(n.prop); }",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: My rule message");
 
     testSame(
-        EXTERNS,
+        externs,
         "/** @param {?Function} fnOrNull */ function f(fnOrNull) { fnOrNull(); }",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: My rule message");
 
     testSame(
-        EXTERNS,
+        externs,
         "/** @param {?Function} fnOrNull */ function f(fnOrNull) { new fnOrNull(); }",
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: My rule message");
 
     testSame(
-        EXTERNS,
+        externs,
         "/** @param {string} n */ function f(n) { alert(n.prop); }", null);
 
     testSame(
-        EXTERNS,
+        externs,
         "/** @param {?} n */ function f(n) { alert(n.prop); }", null);
   }
 
@@ -1514,10 +1591,12 @@ public final class CheckConformanceTest extends CompilerTestCase {
     configuration =
         config(rule("BanNullDeref"), "My rule message");
 
+    String externs = EXTERNS + "String.prototype.prop;";
+
     final String code = "/** @param {?String} n */ function f(n) { alert(n.prop); }";
 
     testSame(
-        EXTERNS,
+        externs,
         code,
         CheckConformance.CONFORMANCE_VIOLATION,
         "Violation: My rule message");
@@ -1525,69 +1604,72 @@ public final class CheckConformanceTest extends CompilerTestCase {
     configuration =
         config(rule("BanNullDeref"), "My rule message", value("String"));
 
-    testSame(EXTERNS, code, null);
+    testSame(externs, code, null);
   }
 
   public void testCustomBanNullDeref3() {
     configuration =
         config(rule("BanNullDeref"), "My rule message");
 
-
+    // Test doesn't run without warnings in NTI because of the way it handles typedefs.
     final String typedefExterns = LINE_JOINER.join(
         EXTERNS,
+        "/** @fileoverview @suppress {newCheckTypes} */",
         "/** @const */ var ns = {};",
         "/** @enum {number} */ ns.Type.State = {OPEN: 0};",
         "/** @typedef {{a:string}} */ ns.Type;",
         "");
 
-    final String code = "/** @return {void} n */ function f() { alert(ns.Type.State.OPEN); }";
+    final String code = LINE_JOINER.join(
+        "/** @suppress {newCheckTypes} @return {void} n */",
+        "function f() { alert(ns.Type.State.OPEN); }");
     testSame(typedefExterns, code, null);
+  }
+
+  public void testCustomBanNullDeref4() {
+    configuration =
+        config(rule("BanNullDeref"), "My rule message");
+
+    testSame(
+        LINE_JOINER.join(
+            "/** @suppress {newCheckTypes} @param {*} x */",
+            "function f(x) {",
+            "  return x.toString();",
+            "}"));
   }
 
   public void testRequireUseStrict0() {
     configuration = config(rule("RequireUseStrict"), "My rule message");
 
-    testSame(
-        EXTERNS,
-        "anything;",
-        CheckConformance.CONFORMANCE_VIOLATION,
-        "Violation: My rule message");
+    testWarning("anything;", CheckConformance.CONFORMANCE_VIOLATION, "Violation: My rule message");
   }
 
   public void testRequireUseStrict1() {
     configuration = config(rule("RequireUseStrict"), "My rule message");
 
-    testSame(
-        EXTERNS,
-        "'use strict';",
-        null);
+    testSame("'use strict';");
   }
 
   public void testRequireUseStrict2() {
     configuration = config(rule("RequireUseStrict"), "My rule message");
 
-    test(
-        EXTERNS,
-        "goog.module('foo');",
-        "'use strict'; /** @const */ var module$exports$foo={};",
-        null, null);
+    test("goog.module('foo');", "'use strict'; /** @const */ var module$exports$foo={};");
   }
 
   public void testRequireUseStrict3() {
     configuration = config(rule("RequireUseStrict"), "My rule message");
 
     test(
-        EXTERNS,
         "export var x = 2;",
         LINE_JOINER.join(
-          "/**",
-          " * @fileoverview",
-          " * @suppress {missingProvide,missingRequire}",
-          " */",
-          "",
-          "'use strict';",
-          "/** @const */ var module$testcode = {};",
-          "var x$$module$testcode=2;module$testcode.x = x$$module$testcode;"),
-        null, null);
+            "/**",
+            " * @fileoverview",
+            " * @suppress {missingProvide,missingRequire}",
+            " */",
+            "",
+            "'use strict';",
+            "/** @const */ var module$testcode = {};",
+            "var x$$module$testcode=2;",
+            "module$testcode.x = x$$module$testcode;"));
   }
 }

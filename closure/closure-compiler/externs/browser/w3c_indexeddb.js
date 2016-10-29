@@ -238,6 +238,7 @@ function IDBRequest() {}
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 IDBRequest.prototype.addEventListener =
     function(type, listener, opt_useCapture) {};
@@ -245,11 +246,15 @@ IDBRequest.prototype.addEventListener =
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 IDBRequest.prototype.removeEventListener =
     function(type, listener, opt_useCapture) {};
 
-/** @override */
+/**
+ * @override
+ * @return {boolean}
+ */
 IDBRequest.prototype.dispatchEvent = function(evt) {};
 
 /**
@@ -283,13 +288,19 @@ IDBRequest.DONE;
  */
 webkitIDBRequest.DONE;
 
-/** @type {number} */
+/**
+ * @type {number}
+ */
 IDBRequest.prototype.readyState; // readonly
 
-/** @type {function(!Event)} */
+/**
+ * @type {function(!Event)}
+ */
 IDBRequest.prototype.onsuccess = function(e) {};
 
-/** @type {function(!Event)} */
+/**
+ * @type {function(!Event)}
+ */
 IDBRequest.prototype.onerror = function(e) {};
 
 /** @type {*} */
@@ -370,6 +381,7 @@ IDBDatabase.prototype.createObjectStore =
 
 /**
  * @param {string} name The name of the object store to remove.
+ * @return {undefined}
  */
 IDBDatabase.prototype.deleteObjectStore = function(name) {};
 
@@ -380,7 +392,8 @@ IDBDatabase.prototype.deleteObjectStore = function(name) {};
 IDBDatabase.prototype.setVersion = function(version) {};
 
 /**
- * @param {Array<string>} storeNames The stores to open in this transaction.
+ * @param {string|Array<string>} storeNames The stores to open in this
+ *     transaction.
  * @param {(number|string)=} mode The mode for opening the object stores.
  * @return {!IDBTransaction} The IDBRequest object.
  */
@@ -388,6 +401,7 @@ IDBDatabase.prototype.transaction = function(storeNames, mode) {};
 
 /**
  * Closes the database connection.
+ * @return {undefined}
  */
 IDBDatabase.prototype.close = function() {};
 
@@ -409,6 +423,7 @@ IDBDatabase.prototype.onversionchange = function() {};
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 IDBDatabase.prototype.addEventListener =
     function(type, listener, opt_useCapture) {};
@@ -416,11 +431,15 @@ IDBDatabase.prototype.addEventListener =
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 IDBDatabase.prototype.removeEventListener =
     function(type, listener, opt_useCapture) {};
 
-/** @override */
+/**
+ * @override
+ * @return {boolean}
+ */
 IDBDatabase.prototype.dispatchEvent = function(evt) {};
 
 /**
@@ -514,6 +533,7 @@ IDBObjectStore.prototype.index = function(name) {};
 
 /**
  * @param {string} indexName The name of the index to remove.
+ * @return {undefined}
  */
 IDBObjectStore.prototype.deleteIndex = function(indexName) {};
 
@@ -675,11 +695,13 @@ IDBCursor.prototype.update = function(value) {};
  * Note: Must be quoted to avoid parse error.
  * @param {IDBKeyType=} key Continue enumerating the cursor from the specified
  *     key (or next).
+ * @return {undefined}
  */
 IDBCursor.prototype.continue = function(key) {};
 
 /**
  * @param {number} count Number of times to iterate the cursor.
+ * @return {undefined}
  */
 IDBCursor.prototype.advance = function(count) {};
 
@@ -768,6 +790,7 @@ IDBTransaction.prototype.objectStore = function(name) {};
 
 /**
  * Aborts the transaction.
+ * @return {undefined}
  */
 IDBTransaction.prototype.abort = function() {};
 

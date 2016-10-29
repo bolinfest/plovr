@@ -18,11 +18,9 @@ package com.google.javascript.jscomp;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-
-import junit.framework.TestCase;
-
 import java.util.Arrays;
 import java.util.List;
+import junit.framework.TestCase;
 
 /**
  * Tests for error message filtering.
@@ -99,6 +97,19 @@ public final class RhinoErrorReporterTest extends TestCase {
 
     assertEquals(1, error.getLineNumber());
     assertEquals(4, error.getCharno());
+  }
+
+  public void testMissingCurlyBraceWarning() {
+    reportLintWarnings = false;
+    assertNoWarningOrError("/** @type string */ var x;");
+
+    reportLintWarnings = true;
+    assertWarning(
+        "/** @type string */ var x;",
+        RhinoErrorReporter.JSDOC_MISSING_BRACES_WARNING,
+        "Bad type annotation. Type annotations should have curly braces. See"
+            + " https://github.com/google/closure-compiler/wiki/Bad-Type-Annotation"
+            + " for more information.");
   }
 
   /**

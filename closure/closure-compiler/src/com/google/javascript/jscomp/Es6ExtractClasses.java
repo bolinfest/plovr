@@ -20,12 +20,12 @@ import static com.google.javascript.jscomp.Es6ToEs3Converter.CANNOT_CONVERT;
 
 import com.google.common.base.Preconditions;
 import com.google.javascript.jscomp.ExpressionDecomposer.DecompositionType;
+import com.google.javascript.jscomp.deps.ModuleNames;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -67,14 +67,12 @@ public final class Es6ExtractClasses
 
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverseRootsEs6(compiler, this, externs, root);
-    NodeTraversal.traverseRootsEs6(compiler, new SelfReferenceRewriter(), externs, root);
+    TranspilationPasses.processTranspile(compiler, root, this, new SelfReferenceRewriter());
   }
 
   @Override
   public void hotSwapScript(Node scriptRoot, Node originalRoot) {
-    NodeTraversal.traverseEs6(compiler, scriptRoot, this);
-    NodeTraversal.traverseEs6(compiler, scriptRoot, new SelfReferenceRewriter());
+    TranspilationPasses.hotSwapTranspile(compiler, scriptRoot, this, new SelfReferenceRewriter());
   }
 
   @Override
@@ -112,7 +110,7 @@ public final class Es6ExtractClasses
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case CLASS:
           if (needsInnerNameRewriting(n, parent)) {
             classStack.removeFirst();
@@ -166,8 +164,7 @@ public final class Es6ExtractClasses
   }
 
   private void extractClass(Node classNode, Node parent) {
-    String name = ES6ModuleLoader.toJSIdentifier(
-        ES6ModuleLoader.createUri(classNode.getStaticSourceFile().getName()))
+    String name = ModuleNames.fileToJsIdentifier(classNode.getStaticSourceFile().getName())
         + CLASS_DECL_VAR
         + (classDeclVarCounter++);
     JSDocInfo info = NodeUtil.getBestJSDocInfo(classNode);

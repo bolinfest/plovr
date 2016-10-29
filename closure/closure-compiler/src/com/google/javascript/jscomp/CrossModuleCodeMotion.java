@@ -133,7 +133,7 @@ class CrossModuleCodeMotion implements CompilerPass {
                 "AST not normalized.");
 
             // Remove it
-            declParent.detachFromParent();
+            declParent.detach();
 
             // Add it to the new spot
             destParent.addChildToFront(declParent);
@@ -224,7 +224,7 @@ class CrossModuleCodeMotion implements CompilerPass {
    */
   private static boolean hasConditionalAncestor(Node n) {
     for (Node ancestor : n.getAncestors()) {
-      switch (ancestor.getType()) {
+      switch (ancestor.getToken()) {
         case DO:
         case FOR:
         case HOOK:
@@ -233,6 +233,8 @@ class CrossModuleCodeMotion implements CompilerPass {
         case WHILE:
         case FUNCTION:
           return true;
+        default:
+          break;
       }
     }
     return false;
@@ -370,7 +372,7 @@ class CrossModuleCodeMotion implements CompilerPass {
     Node name = ref.getNode();
     Node parent = name.getParent();
     Node grandparent = parent.getParent();
-    switch (parent.getType()) {
+    switch (parent.getToken()) {
       case VAR:
         if (canMoveValue(collector, ref.getScope(), name.getFirstChild())) {
           return info.addDeclaration(

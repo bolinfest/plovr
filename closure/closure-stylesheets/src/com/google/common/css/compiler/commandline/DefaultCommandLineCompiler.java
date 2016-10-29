@@ -16,19 +16,26 @@
 
 package com.google.common.css.compiler.commandline;
 
-import com.google.common.base.Charsets;
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.css.AbstractCommandLineCompiler;
 import com.google.common.css.ExitCodeHandler;
 import com.google.common.css.JobDescription;
 import com.google.common.css.JobDescription.OutputFormat;
 import com.google.common.css.RecordingSubstitutionMap;
+import com.google.common.css.SourceCode;
 import com.google.common.css.compiler.ast.BasicErrorManager;
 import com.google.common.css.compiler.ast.CssTree;
 import com.google.common.css.compiler.ast.ErrorManager;
+import com.google.common.css.compiler.ast.GssError;
 import com.google.common.css.compiler.ast.GssParser;
 import com.google.common.css.compiler.ast.GssParserException;
 import com.google.common.css.compiler.passes.CompactPrinter;
+import com.google.common.css.compiler.passes.DefaultGssSourceMapGenerator;
+import com.google.common.css.compiler.passes.GssSourceMapGenerator;
+import com.google.common.css.compiler.passes.NullGssSourceMapGenerator;
 import com.google.common.css.compiler.passes.PassRunner;
 import com.google.common.css.compiler.passes.PrettyPrinter;
 import com.google.common.io.Files;
@@ -43,8 +50,9 @@ import javax.annotation.Nullable;
 /**
  * {@link DefaultCommandLineCompiler} provides the CSS parser from command line interface to users.
  *
+ * @author oana@google.com (Oana Florescu)
  */
-public class DefaultCommandLineCompiler extends AbstractCommandLineCompiler {
+public class DefaultCommandLineCompiler extends AbstractCommandLineCompiler<JobDescription> {
 
   /**
    * The compiler will limit the number of error messages it outputs to this
@@ -55,18 +63,27 @@ public class DefaultCommandLineCompiler extends AbstractCommandLineCompiler {
   private CssTree cssTree;
   private final ErrorManager errorManager;
   private final PassRunner passRunner;
+  private final GssSourceMapGenerator gssSourceMapGenerator;
 
   /**
-   * Constructs a {@code NewCommandLineCompiler}.
+   * Constructs a {@code DefaultCommandLineCompiler}.
    *
-   * @param job the inputs the compiler should process and the options to use
-   * @param errorManager the error manager to use for error reporting
+   * @param job The inputs the compiler should process and the options to use.
+   * @param errorManager The error manager to use for error reporting.
    */
   protected DefaultCommandLineCompiler(JobDescription job,
       ExitCodeHandler exitCodeHandler, ErrorManager errorManager) {
     super(job, exitCodeHandler);
     this.errorManager = errorManager;
     this.passRunner = new PassRunner(job, errorManager);
+    this.gssSourceMapGenerator = createSourceMapGenerator(job);
+  }
+
+  private GssSourceMapGenerator createSourceMapGenerator(JobDescription job) {
+    if (!job.createSourceMap) {
+      return new NullGssSourceMapGenerator();
+    }
+    return new DefaultGssSourceMapGenerator(job.sourceMapLevel);
   }
 
   /**
@@ -90,14 +107,21 @@ public class DefaultCommandLineCompiler extends AbstractCommandLineCompiler {
       result.append(job.copyrightNotice);
     }
 
+    if (job.allowDefPropagation) {
       GssParser parser = new GssParser(job.inputs);
       parseAndPrint(result, parser);
+    } else {
+      for (SourceCode source : job.inputs) {
+        GssParser parser = new GssParser(source);
+        parseAndPrint(result, parser);
+      }
+    }
 
     return result.toString();
   }
 
   /**
-   * Helper method for parsing and outputing the result.
+   * Helper method for parsing and outputting the result.
    */
   private void parseAndPrint(StringBuilder result, GssParser parser)
       throws GssParserException {
@@ -107,13 +131,17 @@ public class DefaultCommandLineCompiler extends AbstractCommandLineCompiler {
     }
 
     if (job.outputFormat == OutputFormat.COMPRESSED) {
-      CompactPrinter compactPrinterPass = new CompactPrinter(cssTree);
+      CompactPrinter compactPrinterPass = new CompactPrinter(cssTree, gssSourceMapGenerator);
       compactPrinterPass.runPass();
       result.append(compactPrinterPass.getCompactPrintedString());
     } else {
       PrettyPrinter prettyPrinterPass = new PrettyPrinter(cssTree
-          .getVisitController());
-      prettyPrinterPass.runPass();
+          .getVisitController(),
+          null /* use external buffer */,
+          gssSourceMapGenerator);
+      prettyPrinterPass
+          .setPreserveComments(job.preserveComments)
+          .runPass();
       result.append(prettyPrinterPass.getPrettyPrintedString());
     }
   }
@@ -124,7 +152,7 @@ public class DefaultCommandLineCompiler extends AbstractCommandLineCompiler {
    * {@link RecordingSubstitutionMap}, then the renaming file will be written,
    * as well.
    */
-  protected String execute(@Nullable File renameFile) {
+  protected String execute(@Nullable File renameFile, @Nullable File sourcemapFile) {
     try {
       String compilerOutput = compile();
 
@@ -143,11 +171,19 @@ public class DefaultCommandLineCompiler extends AbstractCommandLineCompiler {
           .getRecordingSubstitutionMap();
       if (recordingSubstitutionMap != null && renameFile != null) {
         PrintWriter renamingMapWriter = new PrintWriter(
-            Files.newWriter(renameFile, Charsets.UTF_8));
+            Files.newWriter(renameFile, UTF_8));
         Map<String, String> renamingMap = recordingSubstitutionMap
             .getMappings();
         writeRenamingMap(renamingMap, renamingMapWriter);
         renamingMapWriter.close();
+      }
+
+      if (job.createSourceMap
+          && sourcemapFile != null && !Strings.isNullOrEmpty(sourcemapFile.getName())) {
+        PrintWriter sourceMapWriter = new PrintWriter(
+            Files.newWriter(sourcemapFile, UTF_8));
+        gssSourceMapGenerator.appendOutputTo(sourceMapWriter, sourcemapFile.getName());
+        sourceMapWriter.close();
       }
 
       return compilerOutput;
@@ -176,7 +212,7 @@ public class DefaultCommandLineCompiler extends AbstractCommandLineCompiler {
    * <pre>
    * key:value
    * </pre>
-   * Subclasses may override this method to provide alternate output formats.
+   * <p>Subclasses may override this method to provide alternate output formats.
    * Subclasses <em>must not</em> close the writer.
    */
   protected void writeRenamingMap(Map<String, String> renamingMap,
@@ -188,10 +224,25 @@ public class DefaultCommandLineCompiler extends AbstractCommandLineCompiler {
   /**
    * An error message handler.
    */
-  protected static class CompilerErrorManager extends BasicErrorManager {
+  protected static final class CompilerErrorManager extends BasicErrorManager {
+    private boolean warningsAsErrors = false;
+
     @Override
     public void print(String msg) {
       System.err.println(msg);
+    }
+
+    @Override
+    public void reportWarning(GssError warning) {
+      if (warningsAsErrors) {
+        report(warning);
+      } else {
+        super.reportWarning(warning);
+      }
+    }
+
+    public void setWarningsAsErrors(boolean state) {
+      warningsAsErrors = state;
     }
   }
 }

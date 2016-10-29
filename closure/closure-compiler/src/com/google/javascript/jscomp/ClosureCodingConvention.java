@@ -23,12 +23,12 @@ import com.google.javascript.jscomp.newtypes.DeclaredTypeRegistry;
 import com.google.javascript.jscomp.newtypes.JSType;
 import com.google.javascript.jscomp.newtypes.QualifiedName;
 import com.google.javascript.jscomp.newtypes.RawNominalType;
+import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -402,13 +402,10 @@ public final class ClosureCodingConvention extends CodingConventions.Proxy {
   @Override
   public Collection<AssertionFunctionSpec> getAssertionFunctions() {
     return ImmutableList.of(
-        new AssertionFunctionSpec("goog.asserts.assert", JSType.TRUTHY),
-        new AssertionFunctionSpec("goog.asserts.assertNumber",
-            JSType.NUMBER, JSTypeNative.NUMBER_TYPE),
-        new AssertionFunctionSpec("goog.asserts.assertString",
-            JSType.STRING, JSTypeNative.STRING_TYPE),
-        new AssertionFunctionSpec("goog.asserts.assertObject",
-            JSType.TOP_OBJECT, JSTypeNative.OBJECT_TYPE),
+        new AssertionFunctionSpec("goog.asserts.assert", JSTypeNative.TRUTHY),
+        new AssertionFunctionSpec("goog.asserts.assertNumber", JSTypeNative.NUMBER_TYPE),
+        new AssertionFunctionSpec("goog.asserts.assertString", JSTypeNative.STRING_TYPE),
+        new AssertionFunctionSpec("goog.asserts.assertObject", JSTypeNative.OBJECT_TYPE),
         new AssertFunctionByTypeName("goog.asserts.assertFunction", "Function"),
         new AssertFunctionByTypeName("goog.asserts.assertArray", "Array"),
         new AssertFunctionByTypeName("goog.asserts.assertElement", "Element"),
@@ -458,9 +455,7 @@ public final class ClosureCodingConvention extends CodingConventions.Proxy {
     }
 
     Node callTarget = node.getFirstChild();
-    if (callTarget.isQualifiedName()
-        && (callTarget.matchesQualifiedName("goog.reflect.cache")
-            || callTarget.matchesQualifiedName("goog$reflect$cache"))) {
+    if (matchesCacheMethodName(callTarget)) {
       int paramCount = node.getChildCount() - 1;
       if (3 <= paramCount && paramCount <= 4) {
         Node cacheObj = callTarget.getNext();
@@ -473,6 +468,18 @@ public final class ClosureCodingConvention extends CodingConventions.Proxy {
     }
 
     return super.describeCachingCall(node);
+  }
+
+  static final Node googCacheReflect = IR.getprop(
+      IR.name("goog"), IR.string("reflect"), IR.string("cache"));
+
+  private boolean matchesCacheMethodName(Node target) {
+    if (target.isGetProp()) {
+      return target.matchesQualifiedName(googCacheReflect);
+    } else if (target.isName()) {
+      return target.getString().equals("goog$reflect$cache");
+    }
+    return false;
   }
 
   @Override
@@ -493,7 +500,7 @@ public final class ClosureCodingConvention extends CodingConventions.Proxy {
    */
   public static class AssertInstanceofSpec extends AssertionFunctionSpec {
     public AssertInstanceofSpec(String functionName) {
-      super(functionName, JSType.TOP_OBJECT, JSTypeNative.OBJECT_TYPE);
+      super(functionName, JSTypeNative.OBJECT_TYPE);
     }
 
     /**
@@ -538,7 +545,7 @@ public final class ClosureCodingConvention extends CodingConventions.Proxy {
           }
         }
       }
-      return JSType.UNKNOWN;
+      return scope.getCommonTypes().UNKNOWN;
     }
   }
 

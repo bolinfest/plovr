@@ -26,52 +26,52 @@ import com.google.gwt.regexp.shared.RegExp;
  */
 public class Matcher {
   private final RegExp regExp;
-  private final String input;
+  private String input;
   private MatchResult result;
   private boolean hasExecuted;
-  private int currIndex;
+  private int findFromIndex;
 
   Matcher(RegExp regExp, String input) {
     this.regExp = regExp;
     this.input = input;
     this.result = null;
-    this.currIndex = 0;
     this.hasExecuted = false;
-  }
-
-  private boolean maybeExec() {
-    if (!hasExecuted) {
-      result = regExp.exec(input);
-      currIndex = 0;
-      hasExecuted = true;
-    }
-    return result != null;
+    this.findFromIndex = 0;
   }
 
   public boolean matches() {
-    if (maybeExec()) {
+    result = regExp.exec(input);
+    hasExecuted = true;
+    findFromIndex = 0;
+
+    if (result != null) {
       String match = result.getGroup(0);
-      return match != null && match.equals(input);
-    } else {
-      return false;
+      if (match.equals(input)) {
+        return true;
+      }
+      result = null;  // matches() needs to match whole string, pretend we didn't match
     }
+    return false;
   }
 
   public boolean find() {
-    if (maybeExec()) {
-      String match = result.getGroup(currIndex);
-      currIndex++;
-      return match != null && !match.isEmpty();
-    } else {
-      return false;
+    result = regExp.exec(input.substring(findFromIndex));
+    hasExecuted = true;
+
+    if (result != null) {
+      findFromIndex += result.getGroup(0).length();
+      return true;
     }
+    return false;
   }
 
   public String group(int index) {
-    if (maybeExec()) {
-      return result.getGroup(index);
+    if (!hasExecuted) {
+      throw new IllegalStateException("regex not executed yet");
+    } else if (result == null) {
+      throw new IllegalStateException("regex did not match");
     } else {
-      return null;
+      return result.getGroup(index);
     }
   }
 
@@ -85,8 +85,13 @@ public class Matcher {
 
   public Matcher reset() {
     result = null;
-    currIndex = 0;
     hasExecuted = false;
+    findFromIndex = 0;
     return this;
+  }
+
+  public Matcher reset(String input) {
+    this.input = input;
+    return reset();
   }
 }

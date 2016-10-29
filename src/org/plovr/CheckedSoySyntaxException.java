@@ -3,7 +3,7 @@ package org.plovr;
 import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.DiagnosticType;
 import com.google.javascript.jscomp.JSError;
-import com.google.template.soy.base.SoySyntaxException;
+import com.google.template.soy.base.internal.LegacyInternalSyntaxException;
 
 public final class CheckedSoySyntaxException extends CompilationException.Single {
 
@@ -12,10 +12,10 @@ public final class CheckedSoySyntaxException extends CompilationException.Single
   private static final DiagnosticType SOY_SYNTAX_EXCEPTION =
     DiagnosticType.error("PLOVR_SOY_SYNTAX_EXCEPTION", "{0}");
 
-  private final SoySyntaxException soySyntaxException;
+  private final LegacyInternalSyntaxException soySyntaxException;
   private final PlovrSoySyntaxException plovrSoySyntaxException;
 
-  public CheckedSoySyntaxException(SoySyntaxException e) {
+  public CheckedSoySyntaxException(LegacyInternalSyntaxException e) {
     super(e);
     this.soySyntaxException = e;
     this.plovrSoySyntaxException = null;

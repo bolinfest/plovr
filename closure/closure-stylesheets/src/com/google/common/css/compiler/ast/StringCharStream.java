@@ -28,7 +28,9 @@ import java.util.List;
  *
  * @author dgajda@google.com (Damian Gajda)
  */
-class StringCharStream implements CharStream {
+public class StringCharStream implements CharStream {
+
+  private static final IOException END_OF_STREAM = new IOException();
 
   /** The input string. */
   private final String input;
@@ -42,18 +44,20 @@ class StringCharStream implements CharStream {
   private int beginLine;
   private int beginColumn;
 
+  private int tabSize = 1;
+  private boolean trackLineColumn;
+
   /**
    * This array (working as a map: lineNumber -> characterIndex) helps to
    * compute token locations efficiently. First element is not used as line
    * numbers are 1 based.
    */
   private int[] lineToCharIndex;
-  
 
   /**
    * Creates a character stream for a given string.
-   * 
-   * @param inputString input string for this stream 
+   *
+   * @param inputString input string for this stream
    */
   public StringCharStream(String inputString) {
     input = inputString;
@@ -97,8 +101,7 @@ class StringCharStream implements CharStream {
   /**
    * @return index of last read character
    */
-  @VisibleForTesting
-  int getCharIndex() {
+  public int getCharIndex() {
     return charPos;
   }
 
@@ -114,14 +117,18 @@ class StringCharStream implements CharStream {
   @Override
   public char readChar() throws IOException {
     if (charPos + 1 == length) {
-      throw new IOException();
+      throw END_OF_STREAM;
     }
 
     if (lastChar == '\n') {
       line++;
       column = 0;
     }
-    column++;
+    if (lastChar == '\t') {
+      column += (tabSize - (column % tabSize));
+    } else {
+      column++;
+    }
     lastChar = input.charAt(++charPos);
     return lastChar;
   }
@@ -205,5 +212,25 @@ class StringCharStream implements CharStream {
   @Override
   public void Done() {
     // Does nothing since no resources need to be freed.
+  }
+
+  @Override
+  public void setTabSize(int tabSize) {
+    throw new UnsupportedOperationException("setTabSize() is not supported.");
+  }
+
+  @Override
+  public int getTabSize() {
+    return tabSize;
+  }
+
+  @Override
+  public boolean getTrackLineColumn() {
+    return trackLineColumn;
+  }
+
+  @Override
+  public void setTrackLineColumn(boolean trackLineColumn) {
+    this.trackLineColumn = trackLineColumn;
   }
 }

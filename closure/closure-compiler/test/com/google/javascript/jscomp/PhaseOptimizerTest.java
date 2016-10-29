@@ -23,12 +23,10 @@ import com.google.javascript.jscomp.CompilerOptions.TracerMode;
 import com.google.javascript.jscomp.PhaseOptimizer.Loop;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-
-import junit.framework.TestCase;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import junit.framework.TestCase;
 
 /**
  * Tests for {@link PhaseOptimizer}.
@@ -36,6 +34,7 @@ import java.util.Random;
  */
 public final class PhaseOptimizerTest extends TestCase {
   private final List<String> passesRun = new ArrayList<>();
+  private Node dummyExternsRoot;
   private Node dummyRoot;
   private PhaseOptimizer optimizer;
   private Compiler compiler;
@@ -44,12 +43,13 @@ public final class PhaseOptimizerTest extends TestCase {
   @Override
   public void setUp() {
     passesRun.clear();
+    dummyExternsRoot = new Node(Token.BLOCK);
     dummyRoot = new Node(Token.BLOCK);
     // Needed if we are validating the AST using AstValidator.
     dummyRoot.setIsSyntheticBlock(true);
     compiler = new Compiler();
     compiler.initCompilerOptionsIfTesting();
-    tracker = new PerformanceTracker(dummyRoot, TracerMode.TIMING_ONLY, null);
+    tracker = new PerformanceTracker(dummyExternsRoot, dummyRoot, TracerMode.TIMING_ONLY, null);
     optimizer = new PhaseOptimizer(compiler, tracker, null);
   }
 
@@ -74,8 +74,8 @@ public final class PhaseOptimizerTest extends TestCase {
     Loop loop = optimizer.addFixedPointLoop();
     addLoopedPass(loop, "x", 3);
     addLoopedPass(loop, "y", 1);
-    // The pass iterations can be grouped as: [x y] [x y] [x] [x] [y]
-    assertPasses("x", "y", "x", "y", "x", "x", "y");
+    // The pass iterations can be grouped as: [x y] [x y] [x] [x]
+    assertPasses("x", "y", "x", "y", "x", "x");
   }
 
   public void testNotInfiniteLoop() {
@@ -103,7 +103,7 @@ public final class PhaseOptimizerTest extends TestCase {
     addLoopedPass(loop, "x", 3);
     addLoopedPass(loop, "y", 1);
     addOneTimePass("z");
-    assertPasses("a", "x", "y", "x", "y", "x", "x", "y", "z");
+    assertPasses("a", "x", "y", "x", "y", "x", "x", "z");
   }
 
   public void testSchedulingOfAnyKindOfPasses2() {
@@ -117,7 +117,7 @@ public final class PhaseOptimizerTest extends TestCase {
             createPassFactory("f", 0, true)));
     // The pass iterations can be grouped as:
     // [a] [b c d] [b c d] [c] [b d] [e] [f]
-    assertPasses("a", "b", "c", "d", "b", "c", "d", "c", "b", "d", "e", "f");
+    assertPasses("a", "b", "c", "d", "b", "c", "d", "c", "e", "f");
   }
 
   public void testSchedulingOfAnyKindOfPasses3() {

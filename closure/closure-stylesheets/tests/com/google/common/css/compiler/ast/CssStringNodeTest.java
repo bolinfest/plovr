@@ -16,7 +16,8 @@
 
 package com.google.common.css.compiler.ast;
 
-import com.google.common.base.Charsets;
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import com.google.common.base.Functions;
 
 import junit.framework.TestCase;
@@ -81,59 +82,82 @@ public class CssStringNodeTest extends TestCase {
     for (String[] io : new String[][] {
         {"", ""},
         {"a", "a"},
-        // Under ant, we can't have supplementary characters in String literals
-        // {"¤", "\\a4"},
-        {"\u00a4", "\\a4"},
-        // {"ξ", "\\3be"},
-        {"\u03be", "\\3be"},
-        // {"ξe", "\\3be e"},
-        {"\u03bee", "\\3be e"},
-        // {"ξx", "\\3bex"},
-        {"\u03bex", "\\3bex"},
-        // {"唐", "\\5510"},
-        {"\u5510", "\\5510"},
-        //{"𠍱", "\\20371"}
+        {"¤", "\\a4"},
+        {"ξ", "\\3be"},
+        {"ξe", "\\3be e"},
+        {"ξx", "\\3bex"},
+        {"唐", "\\5510"},
+        {"𠍱", "\\20371"},
         {new String(
             new byte[] {(byte) 0xf0, (byte) 0xa0, (byte) 0x8d, (byte) 0xb1},
-            Charsets.UTF_8),
+            UTF_8),
          "\\20371"}}) {
       assertEquals(io[1], CssStringNode.SHORT_ESCAPER.apply(io[0]));
     }
     // Six-hexadecimal-digit codepoints aren't allowed
-    // leading-zeros-padding and must not generate a trailing whitespace
-    // delimiter. This is also an interesting case because Java chars and
-    // Strings are defined in terms of UTF-16, which represents codepoints
-    // in this range as surrogate pairs.
-    // Let's use UTF-8 to specify the input because it's simpler:
+    // leading-zeros-padding. This is also an interesting case because
+    // Java chars and Strings are defined in terms of UTF-16, which
+    // represents codepoints in this range as surrogate pairs.  Let's
+    // use UTF-8 to specify the input because it's simpler:
     byte[] puabUtf8 = {(byte) 0xf4, (byte) 0x80, (byte) 0x80, (byte) 0x80};
     assertEquals("\\100000",
                  CssStringNode.SHORT_ESCAPER.apply(
-                     new String(puabUtf8, Charsets.UTF_8)));
+                     new String(puabUtf8, UTF_8)));
     assertEquals("\\100000a",
                  CssStringNode.SHORT_ESCAPER.apply(
                      String.format("%sa",
-                                   new String(puabUtf8, Charsets.UTF_8))));
+                                   new String(puabUtf8, UTF_8))));
+  }
+
+  public void testInsertsIgnoredWhitespaceAfterEscape() throws Exception {
+    // When parsing, we always discard zero or one whitespace after an
+    // escape sequence.
+    // See http://www.w3.org/TR/CSS2/syndata.html#characters
+    // and http://www.w3.org/TR/css3-syntax/#consume-an-escaped-code-point
+    String stringTemplate = "%s following (%s)";
+    String cssTemplate = "%s  following (%s)";
+
+    for (CssStringNode.Type type : CssStringNode.Type.values()) {
+      // We produce escape sequences in three cases:
+      // (1) newline
+      assertEquals(
+          String.format(cssTemplate, "\\00000a", type.getClass().getName()),
+          CssStringNode.escape(
+              type,
+              CssStringNode.HTML_ESCAPER,
+              String.format(stringTemplate, "\n", type.getClass().getName())));
+
+      // (2) no CSS literal representation exists
+      assertEquals(
+          String.format(cssTemplate, "\\a4", type.getClass().getName()),
+          CssStringNode.escape(
+              type,
+              CssStringNode.SHORT_ESCAPER,
+              String.format(stringTemplate, "¤", type.getClass().getName())));
+
+      // (3) HTML/SGML special character when using the HTML_ESCAPER
+      assertEquals(
+          String.format(cssTemplate, "\\00003c", type.getClass().getName()),
+          CssStringNode.escape(
+              type,
+              CssStringNode.HTML_ESCAPER,
+              String.format(stringTemplate, "<", type.getClass().getName())));
+    }
   }
 
   public void testHtmlEscaper() throws Exception {
     for (String[] io : new String[][] {
         {"", ""},
         {"a", "a"},
-        // Under ant, we can't have supplementary characters in String literals
-        // {"¤", "\\0000a4"},
-        {"\u00a4", "\\0000a4"},
-        // {"ξ", "\\0003be"},
-        {"\u03be", "\\0003be"},
-        // {"ξe", "\\0003bee"},
-        {"\u03bee", "\\0003bee"},
-        // {"ξx", "\\0003bex"},
-        {"\u03bex", "\\0003bex"},
-        // {"唐", "\\005510"},
-        {"\u5510", "\\005510"},
-        //{"𠍱", "\\020371"}
+        {"¤", "\\0000a4"},
+        {"ξ", "\\0003be"},
+        {"ξe", "\\0003bee"},
+        {"ξx", "\\0003bex"},
+        {"唐", "\\005510"},
+        {"𠍱", "\\020371"},
         {new String(
             new byte[] {(byte) 0xf0, (byte) 0xa0, (byte) 0x8d, (byte) 0xb1},
-            Charsets.UTF_8),
+            UTF_8),
          "\\020371"}}) {
       assertEquals(io[1], CssStringNode.HTML_ESCAPER.apply(io[0]));
     }
@@ -172,32 +196,35 @@ public class CssStringNodeTest extends TestCase {
         {"\\\\", "\\"},
         {"\\\"", "\""},
         {"\\41", "A"},
+        {"\\41 ", "A"},
+        {"\\41  ", "A "},
+        // The spec requires us to discard a whitespace following an
+        // escape sequence, even when the escape sequence is as long
+        // as possible and hence there is no ambiguity about where it
+        // ends.
+        {"abc\\000041 ", "abcA"},
+        {"abc\\000041  ", "abcA "},
         {"\\41x", "Ax"},
-        // {"\\0000a4", "¤"},
-        {"\\0000a4", "\u00a4"},
-        // {"\\0003be", "ξ"},
-        {"\\0003be", "\u03be"},
-        // {"\\0003bee", "ξe"},
-        {"\\0003bee", "\u03bee"},
-        // {"\\3be e", "ξe"},
-        {"\\3be e", "\u03bee"},
-        // {"\\0003be", "ξ"},
-        {"\\0003be", "\u03be"},
-        // {"\\005510", "唐"},
-        {"\\005510", "\u5510"},
-        // {"\\020371", "𠍱"}
+        {"\\0000a4", "¤"},
+        {"\\0003be", "ξ"},
+        {"\\0003bee", "ξe"},
+        {"\\3be e", "ξe"},
+        {"\\0003be", "ξ"},
+        {"\\3be z", "ξz"},
+        {"\\005510", "唐"},
+        {"\\020371", "𠍱"},
         {"\\020371", new String(
             new byte[] {(byte) 0xf0, (byte) 0xa0, (byte) 0x8d, (byte) 0xb1},
-            Charsets.UTF_8)}}) {
+            UTF_8)}}) {
       assertEquals(io[1], CssStringNode.unescape(io[0]));
     }
 
     // Now let's look at a character that requires a max-length escape
     // code in CSS and use of surrogate pairs in the JVM
     byte[] puabUtf8 = {(byte) 0xf4, (byte) 0x80, (byte) 0x80, (byte) 0x80};
-    assertEquals(new String(puabUtf8, Charsets.UTF_8),
+    assertEquals(new String(puabUtf8, UTF_8),
                  CssStringNode.unescape("\\100000"));
-    assertEquals(new String(puabUtf8, Charsets.UTF_8) + "a",
+    assertEquals(new String(puabUtf8, UTF_8) + "a",
                  CssStringNode.unescape("\\100000a"));
 
     // Here's an escape sequence denoting a code point beyond the Java
@@ -233,8 +260,14 @@ public class CssStringNodeTest extends TestCase {
         + " generated concrete value.",
         a.getConcreteValue().contains("\n"));
     assertFalse(
-        "If we ask for CSS markup, we should esceape newlines per the"
+        "If we ask for CSS markup, we should escape newlines per the"
         + " CSS spec.",
         a.toString(CssStringNode.HTML_ESCAPER).contains("\n"));
+    assertTrue(
+        "Escaping a new line shouldn't affect the left hand side",
+        a.toString(CssStringNode.HTML_ESCAPER).startsWith("'line1"));
+    assertTrue(
+        "Escaping a new line shouldn't affect the right-hand side",
+        a.toString(CssStringNode.HTML_ESCAPER).endsWith("line2'"));
   }
 }

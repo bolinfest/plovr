@@ -57,14 +57,6 @@ public final class TypedScopeCreatorTest extends CompilerTestCase {
     return 1;
   }
 
-  @Override
-  protected CompilerOptions getOptions(CompilerOptions options) {
-    super.getOptions(options);
-    options.setWarningLevel(
-        DiagnosticGroups.INFERRED_CONST_CHECKS, CheckLevel.WARNING);
-    return options;
-  }
-
   private final Callback callback = new AbstractPostOrderCallback() {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
@@ -2101,11 +2093,14 @@ public final class TypedScopeCreatorTest extends CompilerTestCase {
   }
 
   private JSType findTokenType(final Token type, TypedScope scope) {
-    return findTypeOnMatchedNode(new Predicate<Node>() {
-      @Override public boolean apply(Node n) {
-        return type == n.getType();
-      }
-    }, scope);
+    return findTypeOnMatchedNode(
+        new Predicate<Node>() {
+          @Override
+          public boolean apply(Node n) {
+            return type == n.getToken();
+          }
+        },
+        scope);
   }
 
   private JSType findTypeOnMatchedNode(Predicate<Node> matcher, TypedScope scope) {

@@ -16,8 +16,11 @@
 
 package com.google.common.css.compiler.commandline;
 
-import com.google.common.base.Charsets;
+import static java.nio.charset.StandardCharsets.UTF_8;
+
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
+import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.css.AbstractCommandLineCompiler;
 import com.google.common.css.DefaultExitCodeHandler;
@@ -26,12 +29,12 @@ import com.google.common.css.GssFunctionMapProvider;
 import com.google.common.css.JobDescription;
 import com.google.common.css.JobDescription.InputOrientation;
 import com.google.common.css.JobDescription.OutputOrientation;
+import com.google.common.css.JobDescription.SourceMapDetailLevel;
 import com.google.common.css.JobDescriptionBuilder;
 import com.google.common.css.OutputRenamingMapFormat;
 import com.google.common.css.SourceCode;
 import com.google.common.css.Vendor;
 import com.google.common.css.compiler.ast.ErrorManager;
-import com.google.common.css.compiler.gssfunctions.DefaultGssFunctionMapProvider;
 import com.google.common.io.Files;
 
 import org.kohsuke.args4j.Argument;
@@ -44,7 +47,9 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.annotation.Nullable;
 
@@ -61,7 +66,8 @@ public class ClosureCommandLineCompiler extends DefaultCommandLineCompiler {
     super(job, exitCodeHandler, errorManager);
   }
 
-  private static class Flags {
+  @VisibleForTesting
+  static class Flags {
     private static final String USAGE_PREAMBLE =
         Joiner.on("\n").join(new String[] {
         "Closure Stylesheets",
@@ -114,9 +120,21 @@ public class ClosureCommandLineCompiler extends DefaultCommandLineCompiler {
     private String renameFile = null;
 
     @Option(name = "--output-renaming-map-format", usage = "How to format the"
-        + " output from the the CSS class renaming.")
+        + " output from the CSS class renaming.")
     private OutputRenamingMapFormat outputRenamingMapFormat =
         OutputRenamingMapFormat.JSON;
+
+
+    @Option(name = "--output-source-map", usage = "The source map output."
+        + " Provides a mapping from the generated output to their original"
+        + " source code location.")
+    private String sourceMapFile = "";
+
+    @Option(name = "--source_map_output_level", usage = "The level to generate "
+        + "source maps. You could choose between DEFAULT, which will generate "
+        + "source map only for selectors, blocks, rules, variables and symbol "
+        + "mappings, and ALL, which outputs mappings for all elements.")
+    private SourceMapDetailLevel sourceMapLevel = SourceMapDetailLevel.DEFAULT;
 
     @Option(name = "--copyright-notice",
         usage = "Copyright notice to prepend to the output")
@@ -126,6 +144,10 @@ public class ClosureCommandLineCompiler extends DefaultCommandLineCompiler {
         + " The condition name can be used in @if boolean expressions."
         + " The conditions are ignored if GSS extensions are not enabled.")
     private List<String> trueConditions = Lists.newArrayList();
+
+    @Option(name = "--allow-def-propagation", usage = "Allows @defs and @mixins"
+        + " from one file to propagate to other files.")
+    private boolean allowDefPropagation = true;
 
     @Option(name = "--allow-unrecognized-functions", usage =
         "Allow unrecognized functions.")
@@ -171,6 +193,15 @@ public class ClosureCommandLineCompiler extends DefaultCommandLineCompiler {
         usage = "Add a prefix to all renamed css class names.")
     private String cssRenamingPrefix = "";
 
+    @Option(name = "--preserve-comments", usage =
+        "Preserve comments from sources into pretty printed output css.")
+    private boolean preserveComments = false;
+
+    @Option(name = "--const",
+        usage = "Specify integer constants to be used in for loops. Invoke for each const, e.g.: "
+        + "--const=VAR1=VALUE1 --const=VAR2=VALUE2")
+    private Map<String, String> compileConstants = new HashMap<>();
+
     /**
      * All remaining arguments are considered input CSS files.
      */
@@ -180,7 +211,8 @@ public class ClosureCommandLineCompiler extends DefaultCommandLineCompiler {
     /**
      * @return a new {@link JobDescription} using this class's flag values
      */
-    private JobDescription createJobDescription() {
+    @VisibleForTesting
+    JobDescription createJobDescription() {
       JobDescriptionBuilder builder = new JobDescriptionBuilder();
       builder.setInputOrientation(inputOrientation);
       builder.setOutputOrientation(outputOrientation);
@@ -189,6 +221,7 @@ public class ClosureCommandLineCompiler extends DefaultCommandLineCompiler {
           : JobDescription.OutputFormat.COMPRESSED);
       builder.setCopyrightNotice(copyrightNotice);
       builder.setTrueConditionNames(trueConditions);
+      builder.setAllowDefPropagation(allowDefPropagation);
       builder.setAllowUnrecognizedFunctions(allowUnrecognizedFunctions);
       builder.setAllowedNonStandardFunctions(allowedNonStandardFunctions);
       builder.setAllowedUnrecognizedProperties(allowedUnrecognizedProperties);
@@ -203,11 +236,15 @@ public class ClosureCommandLineCompiler extends DefaultCommandLineCompiler {
       builder.setCssSubstitutionMapProvider(renamingType
           .getCssSubstitutionMapProvider());
       builder.setCssRenamingPrefix(cssRenamingPrefix);
+      builder.setPreserveComments(preserveComments);
       builder.setOutputRenamingMapFormat(outputRenamingMapFormat);
+      builder.setCompileConstants(parseCompileConstants(compileConstants));
 
       GssFunctionMapProvider gssFunctionMapProvider =
           getGssFunctionMapProviderForName(gssFunctionMapProviderClassName);
       builder.setGssFunctionMapProvider(gssFunctionMapProvider);
+      builder.setSourceMapLevel(sourceMapLevel);
+      builder.setCreateSourceMap(!Strings.isNullOrEmpty(sourceMapFile));
 
       for (String fileName : arguments) {
         File file = new File(fileName);
@@ -218,7 +255,7 @@ public class ClosureCommandLineCompiler extends DefaultCommandLineCompiler {
 
         String fileContents;
         try {
-          fileContents = Files.toString(file, Charsets.UTF_8);
+          fileContents = Files.toString(file, UTF_8);
         } catch (IOException e) {
           throw new RuntimeException(e);
         }
@@ -230,7 +267,20 @@ public class ClosureCommandLineCompiler extends DefaultCommandLineCompiler {
     private OutputInfo createOutputInfo() {
       return new OutputInfo(
           (outputFile == null) ? null : new File(outputFile),
-          (renameFile == null) ? null : new File(renameFile));
+          (renameFile == null) ? null : new File(renameFile),
+          (sourceMapFile == null) ? null : new File(sourceMapFile));
+    }
+
+    /**
+     * Parses the values in the compile constants to integers.
+     */
+    private Map<String, Integer> parseCompileConstants(
+        Map<String, String> compileConstants) {
+      Map<String, Integer> parsedConstants = new HashMap<>(compileConstants.size());
+      for (Map.Entry<String, String> entry : compileConstants.entrySet()) {
+        parsedConstants.put(entry.getKey(), Integer.parseInt(entry.getValue()));
+      }
+      return parsedConstants;
     }
   }
 
@@ -239,8 +289,8 @@ public class ClosureCommandLineCompiler extends DefaultCommandLineCompiler {
    *     "com.google.common.css.compiler.gssfunctions.DefaultGssFunctionMapProvider"
    * @return a new instance of the {@link GssFunctionMapProvider} that
    *     corresponds to the specified class name, or a new instance of
-   *     {@link DefaultGssFunctionMapProvider} if the class name is
-   *     {@code null}.
+   *     {@link com.google.common.css.compiler.gssfunctions.DefaultGssFunctionMapProvider}
+   *     if the class name is {@code null}.
    */
   private static GssFunctionMapProvider getGssFunctionMapProviderForName(
       String gssFunctionMapProviderClassName) {
@@ -271,32 +321,33 @@ public class ClosureCommandLineCompiler extends DefaultCommandLineCompiler {
   }
 
   private static class OutputInfo {
-    public final @Nullable File outputFile;
-    public final @Nullable File renameFile;
+    @Nullable public final File outputFile;
+    @Nullable public final File renameFile;
+    @Nullable public final File sourceMapFile;
 
-    private OutputInfo(File outputFile, File renameFile) {
+    private OutputInfo(File outputFile, File renameFile, File sourceMapFile) {
       this.outputFile = outputFile;
       this.renameFile = renameFile;
+      this.sourceMapFile = sourceMapFile;
     }
   }
 
-  private static void executeJob(JobDescription job,
-      ExitCodeHandler exitCodeHandler, OutputInfo outputInfo) {
+  private static void executeJob(JobDescription job, ExitCodeHandler exitCodeHandler,
+      OutputInfo outputInfo) {
     CompilerErrorManager errorManager = new CompilerErrorManager();
 
-    ClosureCommandLineCompiler compiler = new ClosureCommandLineCompiler(
-        job, exitCodeHandler, errorManager);
+    ClosureCommandLineCompiler compiler =
+        new ClosureCommandLineCompiler(job, exitCodeHandler, errorManager);
 
-    String compilerOutput = compiler.execute(outputInfo.renameFile);
+    String compilerOutput = compiler.execute(outputInfo.renameFile, outputInfo.sourceMapFile);
 
     if (outputInfo.outputFile == null) {
       System.out.print(compilerOutput);
     } else {
       try {
-        Files.write(compilerOutput, outputInfo.outputFile, Charsets.UTF_8);
+        Files.write(compilerOutput, outputInfo.outputFile, UTF_8);
       } catch (IOException e) {
-        AbstractCommandLineCompiler.exitOnUnhandledException(e,
-            exitCodeHandler);
+        AbstractCommandLineCompiler.exitOnUnhandledException(e, exitCodeHandler);
       }
     }
   }
@@ -307,7 +358,8 @@ public class ClosureCommandLineCompiler extends DefaultCommandLineCompiler {
    * message, invokes
    * {@link ExitCodeHandler#processExitCode(int)}, and returns null.
    */
-  private static @Nullable Flags parseArgs(String[] args,
+  @VisibleForTesting
+  static @Nullable Flags parseArgs(String[] args,
       ExitCodeHandler exitCodeHandler) {
     Flags flags = new Flags();
     CmdLineParser argsParser = new CmdLineParser(flags) {

@@ -26,7 +26,6 @@ import com.google.javascript.jscomp.graph.DiGraph;
 import com.google.javascript.jscomp.graph.LinkedDirectedGraph;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -139,7 +138,7 @@ public final class CallGraph implements CompilerPass {
   public void process(Node externsRoot, Node jsRoot) {
     Preconditions.checkState(!alreadyRun);
 
-    SimpleDefinitionFinder definitionProvider = new SimpleDefinitionFinder(compiler);
+    DefinitionUseSiteFinder definitionProvider = new DefinitionUseSiteFinder(compiler);
     definitionProvider.process(externsRoot, jsRoot);
 
     createFunctionsAndCallsites(jsRoot, definitionProvider);
@@ -214,7 +213,7 @@ public final class CallGraph implements CompilerPass {
    * Returns a collection of all callsites in the call graph.
    */
   public Collection<Callsite> getAllCallsites() {
-   return callsitesByNode.values();
+    return callsitesByNode.values();
   }
 
   /**
@@ -226,38 +225,39 @@ public final class CallGraph implements CompilerPass {
     // Create fake function representing global execution
     mainFunction = createFunction(jsRoot);
 
-    NodeTraversal.traverseEs6(compiler, jsRoot, new AbstractPostOrderCallback() {
-      @Override
-      public void visit(NodeTraversal t, Node n, Node parent) {
-        Token nodeType = n.getType();
+    NodeTraversal.traverseEs6(
+        compiler,
+        jsRoot,
+        new AbstractPostOrderCallback() {
+          @Override
+          public void visit(NodeTraversal t, Node n, Node parent) {
+            Token nodeType = n.getToken();
 
-        if (nodeType == Token.CALL || nodeType == Token.NEW) {
-          Callsite callsite = createCallsite(n);
+            if (nodeType == Token.CALL || nodeType == Token.NEW) {
+              Callsite callsite = createCallsite(n);
 
-          Node containingFunctionNode = NodeUtil.getEnclosingFunction(t.getScopeRoot());
-          if (containingFunctionNode == null) {
-            containingFunctionNode = t.getClosestHoistScope().getRootNode();
+              Node containingFunctionNode = NodeUtil.getEnclosingFunction(t.getScopeRoot());
+              if (containingFunctionNode == null) {
+                containingFunctionNode = t.getClosestHoistScope().getRootNode();
+              }
+
+              Function containingFunction = functionsByNode.get(containingFunctionNode);
+
+              if (containingFunction == null) {
+                containingFunction = createFunction(containingFunctionNode);
+              }
+              callsite.containingFunction = containingFunction;
+              containingFunction.addCallsiteInFunction(callsite);
+
+              connectCallsiteToTargets(callsite, provider);
+
+            } else if (n.isFunction()) {
+              if (!functionsByNode.containsKey(n)) {
+                createFunction(n);
+              }
+            }
           }
-
-
-          Function containingFunction =
-              functionsByNode.get(containingFunctionNode);
-
-          if (containingFunction == null) {
-            containingFunction = createFunction(containingFunctionNode);
-          }
-          callsite.containingFunction = containingFunction;
-          containingFunction.addCallsiteInFunction(callsite);
-
-          connectCallsiteToTargets(callsite, provider);
-
-        } else if (n.isFunction()) {
-          if (!functionsByNode.containsKey(n)) {
-            createFunction(n);
-          }
-        }
-      }
-    });
+        });
   }
 
   /**
@@ -298,8 +298,8 @@ public final class CallGraph implements CompilerPass {
   private void connectCallsiteToTargets(Callsite callsite,
       DefinitionProvider definitionProvider) {
     Collection<Definition> definitions =
-      lookupDefinitionsForTargetsOfCall(callsite.getAstNode(),
-          definitionProvider);
+        lookupDefinitionsForTargetsOfCall(callsite.getAstNode(),
+            definitionProvider);
 
     if (definitions == null) {
       callsite.hasUnknownTarget = true;
@@ -333,17 +333,13 @@ public final class CallGraph implements CompilerPass {
   }
 
   /**
-   * Fills in function information (such as whether the function is ever
-   * aliased or whether it is exposed to .call or .apply) using the
-   * definition provider.
+   * Fills in function information (such as whether the function is ever aliased or whether it is
+   * exposed to .call or .apply) using the definition provider.
    *
-   * We do this here, rather than when connecting the callgraph, to make sure
-   * that we have correct information for all functions, rather than just
-   * functions that are actually called.
+   * <p>We do this here, rather than when connecting the callgraph, to make sure that we have
+   * correct information for all functions, rather than just functions that are actually called.
    */
-  private void fillInFunctionInformation(DefinitionProvider provider) {
-    SimpleDefinitionFinder finder = (SimpleDefinitionFinder) provider;
-
+  private void fillInFunctionInformation(DefinitionUseSiteFinder finder) {
     for (DefinitionSite definitionSite : finder.getDefinitionSites()) {
       Definition definition = definitionSite.definition;
 
@@ -366,7 +362,7 @@ public final class CallGraph implements CompilerPass {
    */
   private void updateFunctionForUse(Function function, Node useNode) {
     Node useParent = useNode.getParent();
-    Token parentType = useParent.getType();
+    Token parentType = useParent.getToken();
 
     if ((parentType == Token.CALL || parentType == Token.NEW)
         && useParent.getFirstChild() == useNode) {
@@ -500,10 +496,14 @@ public final class CallGraph implements CompilerPass {
    */
   private Collection<Definition> lookupDefinitionsForTargetsOfCall(
       Node callsite, DefinitionProvider definitionProvider) {
-    Preconditions.checkArgument(callsite.isCall()
-        || callsite.isNew());
+    Preconditions.checkArgument(
+        NodeUtil.isCallOrNew(callsite), "Expected CALL or NEW. Got:", callsite);
 
     Node targetExpression = callsite.getFirstChild();
+
+    if (!targetExpression.isName() && !targetExpression.isGetProp()) {
+      return null;
+    }
 
     Collection<Definition> definitions =
         definitionProvider.getDefinitionsReferencedAt(targetExpression);

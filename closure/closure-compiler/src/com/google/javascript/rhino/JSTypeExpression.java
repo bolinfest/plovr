@@ -42,7 +42,6 @@ package com.google.javascript.rhino;
 import com.google.javascript.rhino.jstype.JSType;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.StaticTypedScope;
-
 import java.io.Serializable;
 
 /**
@@ -82,14 +81,14 @@ public final class JSTypeExpression implements Serializable {
    * @return Whether this expression denotes an optional {@code @param}.
    */
   public boolean isOptionalArg() {
-    return root.getType() == Token.EQUALS;
+    return root.getToken() == Token.EQUALS;
   }
 
   /**
    * @return Whether this expression denotes a rest args {@code @param}.
    */
   public boolean isVarArgs() {
-    return root.getType() == Token.ELLIPSIS;
+    return root.getToken() == Token.ELLIPSIS;
   }
 
   /**
@@ -102,10 +101,6 @@ public final class JSTypeExpression implements Serializable {
       return type;
     }
     return null;
-  }
-
-  public TypeI evaluateInEmptyScope(TypeIRegistry registry) {
-    return evaluate(null, registry);
   }
 
   @Override

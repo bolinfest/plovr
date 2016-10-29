@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-
 import java.util.Collections;
 import java.util.Comparator;
 
@@ -79,7 +78,7 @@ class MinimizedCondition {
    * minimization.
    */
   static MinimizedCondition fromConditionNode(Node n) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case NOT:
       case AND:
       case OR:
@@ -165,10 +164,10 @@ class MinimizedCondition {
    */
   private static MinimizedCondition computeMinimizedCondition(Node n) {
     Preconditions.checkArgument(n.getParent() == null);
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case NOT: {
         MinimizedCondition subtree =
-            computeMinimizedCondition(n.getFirstChild().detachFromParent());
+            computeMinimizedCondition(n.getFirstChild().detach());
         ImmutableList<MeasuredNode> positiveAsts = ImmutableList.of(
             subtree.positive.cloneTree().addNot(),
             subtree.negative.cloneTree());
@@ -181,12 +180,12 @@ class MinimizedCondition {
       }
       case AND:
       case OR: {
-        Token opType = n.getType();
+          Token opType = n.getToken();
         Token complementType = opType == Token.AND ? Token.OR : Token.AND;
         MinimizedCondition leftSubtree =
-            computeMinimizedCondition(n.getFirstChild().detachFromParent());
+            computeMinimizedCondition(n.getFirstChild().detach());
         MinimizedCondition rightSubtree =
-            computeMinimizedCondition(n.getLastChild().detachFromParent());
+            computeMinimizedCondition(n.getLastChild().detach());
         ImmutableList<MeasuredNode> positiveAsts = ImmutableList.of(
             MeasuredNode.addNode(new Node(opType).srcref(n),
                 leftSubtree.positive.cloneTree(),
@@ -210,9 +209,9 @@ class MinimizedCondition {
         Node thenNode = cond.getNext();
         Node elseNode = thenNode.getNext();
         MinimizedCondition thenSubtree =
-            computeMinimizedCondition(thenNode.detachFromParent());
+            computeMinimizedCondition(thenNode.detach());
         MinimizedCondition elseSubtree =
-            computeMinimizedCondition(elseNode.detachFromParent());
+            computeMinimizedCondition(elseNode.detach());
         MeasuredNode posTree = MeasuredNode.addNode(
             new Node(Token.HOOK, cond.cloneTree()).srcref(n),
             thenSubtree.positive,
@@ -226,7 +225,7 @@ class MinimizedCondition {
       case COMMA: {
         Node lhs = n.getFirstChild();
         MinimizedCondition rhsSubtree =
-            computeMinimizedCondition(lhs.getNext().detachFromParent());
+            computeMinimizedCondition(lhs.getNext().detach());
         MeasuredNode posTree = MeasuredNode.addNode(
             new Node(Token.COMMA, lhs.cloneTree()).srcref(n),
             rhsSubtree.positive);
@@ -273,18 +272,18 @@ class MinimizedCondition {
 
     private MeasuredNode negate() {
       this.change();
-      switch (node.getType()) {
+      switch (node.getToken()) {
         case EQ:
-          node.setType(Token.NE);
+          node.setToken(Token.NE);
           return this;
         case NE:
-          node.setType(Token.EQ);
+          node.setToken(Token.EQ);
           return this;
         case SHEQ:
-          node.setType(Token.SHNE);
+          node.setToken(Token.SHNE);
           return this;
         case SHNE:
-          node.setType(Token.SHEQ);
+          node.setToken(Token.SHEQ);
           return this;
         default:
           return this.addNot();
@@ -318,7 +317,7 @@ class MinimizedCondition {
       if (n.isNot()) {
         cost++;  // A negation is needed.
       }
-      int parentPrecedence = NodeUtil.precedence(n.getType());
+      int parentPrecedence = NodeUtil.precedence(n.getToken());
       for (Node child = n.getFirstChild();
           child != null; child = child.getNext()) {
         if (PeepholeMinimizeConditions.isLowerPrecedence(child, parentPrecedence)) {
@@ -336,7 +335,7 @@ class MinimizedCondition {
       int cost = 0;
       boolean changed = false;
       for (MeasuredNode child : children) {
-        parent.addChildrenToBack(child.node);
+        parent.addChildToBack(child.node);
         cost += child.length;
         changed = changed || child.changed;
       }

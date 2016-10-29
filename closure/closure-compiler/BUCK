@@ -17,6 +17,7 @@ java_library(
         'src/com/google/javascript/refactoring/testing/**/*.java',
         'src/com/google/javascript/jscomp/webservice/**/*.java',
         'src/com/google/javascript/rhino/testing/**/*.java',
+        'src/com/google/debugging/sourcemap/super/**/*.java',
       ]),
   deps = [
     ':args4j',
@@ -24,6 +25,7 @@ java_library(
     ':guava',
     ':jsr305',
     ':protobuf',
+    ':jsinterop_annotations',
     ':externs_srcs',
     ':externs_zip',
     ':support_srcs',
@@ -108,6 +110,14 @@ prebuilt_jar(
 prebuilt_jar(
   name = 'protobuf',
   binary_jar = 'lib/protobuf-java.jar',
+  visibility = [
+    'PUBLIC',
+  ],
+)
+
+prebuilt_jar(
+  name = 'jsinterop_annotations',
+  binary_jar = 'lib/jsinterop-annotations-1.0.0.jar',
   visibility = [
     'PUBLIC',
   ],

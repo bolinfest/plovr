@@ -17,6 +17,7 @@
 package com.google.javascript.jscomp.newtypes;
 
 import com.google.common.base.Preconditions;
+import com.google.javascript.rhino.Node;
 
 /**
  *
@@ -26,8 +27,8 @@ public final class FunctionNamespace extends Namespace {
   private DeclaredTypeRegistry scope;
 
   public FunctionNamespace(
-      JSTypes commonTypes, String name, DeclaredTypeRegistry scope) {
-    super(commonTypes, name);
+      JSTypes commonTypes, String name, DeclaredTypeRegistry scope, Node defSite) {
+    super(commonTypes, name, defSite);
     Preconditions.checkNotNull(name);
     Preconditions.checkNotNull(scope);
     this.scope = scope;
@@ -37,6 +38,7 @@ public final class FunctionNamespace extends Namespace {
   protected JSType computeJSType() {
     Preconditions.checkState(this.namespaceType == null);
     return JSType.fromObjectType(ObjectType.makeObjectType(
+        this.commonTypes,
         this.commonTypes.getFunctionType(),
         null,
         this.scope.getDeclaredFunctionType().toFunctionType(),

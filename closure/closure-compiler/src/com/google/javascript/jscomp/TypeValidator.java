@@ -34,6 +34,7 @@ import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSType;
+import com.google.javascript.rhino.jstype.JSType.SubtypingMode;
 import com.google.javascript.rhino.jstype.JSTypeNative;
 import com.google.javascript.rhino.jstype.JSTypeRegistry;
 import com.google.javascript.rhino.jstype.ObjectType;
@@ -41,13 +42,13 @@ import com.google.javascript.rhino.jstype.StaticTypedSlot;
 import com.google.javascript.rhino.jstype.TemplateTypeMap;
 import com.google.javascript.rhino.jstype.TemplateTypeMapReplacer;
 import com.google.javascript.rhino.jstype.UnknownType;
-
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
-
 import javax.annotation.Nullable;
 
 /**
@@ -66,10 +67,6 @@ class TypeValidator {
   private final JSType allValueTypes;
   private final JSType nullOrUndefined;
 
-  static enum SubtypingMode {
-    NORMAL,
-    IGNORE_NULL_UNDEFINED
-  }
   // In TypeCheck, when we are analyzing a file with .java.js suffix, we set
   // this field to IGNORE_NULL_UNDEFINED
   private SubtypingMode subtypingMode = SubtypingMode.NORMAL;
@@ -119,13 +116,6 @@ class TypeValidator {
           "variable {0} redefined with type {1}, " +
           "original definition at {2}:{3} with type {4}");
 
-  static final DiagnosticType HIDDEN_PROPERTY_MISMATCH =
-      DiagnosticType.warning("JSC_HIDDEN_PROPERTY_MISMATCH",
-          "mismatch of the {0} property type and the type " +
-          "of the property it overrides from superclass {1}\n" +
-          "original: {2}\n" +
-          "override: {3}");
-
   static final DiagnosticType INTERFACE_METHOD_NOT_IMPLEMENTED =
       DiagnosticType.warning(
           "JSC_INTERFACE_METHOD_NOT_IMPLEMENTED",
@@ -139,6 +129,11 @@ class TypeValidator {
         "original: {2}\n" +
         "override: {3}");
 
+  static final DiagnosticType ABSTRACT_METHOD_NOT_IMPLEMENTED =
+      DiagnosticType.warning(
+          "JSC_ABSTRACT_METHOD_NOT_IMPLEMENTED",
+          "property {0} on abstract class {1} is not implemented by type {2}");
+
   static final DiagnosticType UNKNOWN_TYPEOF_VALUE =
       DiagnosticType.warning("JSC_UNKNOWN_TYPEOF_VALUE", "unknown type: {0}");
 
@@ -147,12 +142,12 @@ class TypeValidator {
                              "Cannot do {0} access on a {1}");
 
   static final DiagnosticGroup ALL_DIAGNOSTICS = new DiagnosticGroup(
+      ABSTRACT_METHOD_NOT_IMPLEMENTED,
       INVALID_CAST,
       TYPE_MISMATCH_WARNING,
       MISSING_EXTENDS_TAG_WARNING,
       DUP_VAR_DECLARATION,
       DUP_VAR_DECLARATION_TYPE_MISMATCH,
-      HIDDEN_PROPERTY_MISMATCH,
       INTERFACE_METHOD_NOT_IMPLEMENTED,
       HIDDEN_INTERFACE_PROPERTY_MISMATCH,
       UNKNOWN_TYPEOF_VALUE,
@@ -573,8 +568,7 @@ class TypeValidator {
       Node n, Node parent, TypedVar var, String variableName, JSType newType) {
     TypedVar newVar = var;
     boolean allowDupe = false;
-    if (n.isGetProp() ||
-        NodeUtil.isObjectLitKey(n)) {
+    if (n.isGetProp() || NodeUtil.isObjectLitKey(n) || NodeUtil.isNameDeclaration(n.getParent())) {
       JSDocInfo info = n.getJSDocInfo();
       if (info == null) {
         info = parent.getJSDocInfo();
@@ -697,7 +691,7 @@ class TypeValidator {
       }
       required = required.restrictByNotNullOrUndefined();
 
-      if (!found.isSubtype(required)) {
+      if (!found.isSubtype(required, this.subtypingMode)) {
         // Implemented, but not correctly typed
         FunctionType constructor =
             implementedInterface.toObjectType().getConstructor();
@@ -706,19 +700,62 @@ class TypeValidator {
             constructor.getTopMostDefiningType(prop).toString(),
             required.toString(), found.toString());
         registerMismatch(found, required, err);
-        if (this.subtypingMode == SubtypingMode.NORMAL
-            || !found.isSubtypeModuloNullUndefined(required)) {
-          report(err);
-        }
+        report(err);
       }
     }
   }
 
   /**
-   * Report a type mismatch
+   * For a concrete class, expect that all abstract methods that haven't been implemented by any of
+   * the super classes on the inheritance chain are implemented.
    */
-  private void mismatch(NodeTraversal t, Node n,
-                        String msg, JSType found, JSType required) {
+  void expectAbstractMethodsImplemented(Node n, FunctionType ctorType) {
+    Preconditions.checkArgument(ctorType.isConstructor());
+
+    Map<String, ObjectType> abstractMethodSuperTypeMap = new LinkedHashMap<>();
+    FunctionType currSuperCtor = ctorType.getSuperClassConstructor();
+    if (currSuperCtor == null || !currSuperCtor.isAbstract()) {
+      return;
+    }
+
+    while (currSuperCtor != null && currSuperCtor.isAbstract()) {
+      ObjectType superType = currSuperCtor.getInstanceType();
+      for (String prop :
+          currSuperCtor.getInstanceType().getImplicitPrototype().getOwnPropertyNames()) {
+        FunctionType maybeAbstractMethod = superType.findPropertyType(prop).toMaybeFunctionType();
+        if (maybeAbstractMethod != null
+            && maybeAbstractMethod.isAbstract()
+            && !abstractMethodSuperTypeMap.containsKey(prop)) {
+          abstractMethodSuperTypeMap.put(prop, superType);
+        }
+      }
+      currSuperCtor = currSuperCtor.getSuperClassConstructor();
+    }
+
+    ObjectType instance = ctorType.getInstanceType();
+    for (Map.Entry<String, ObjectType> entry : abstractMethodSuperTypeMap.entrySet()) {
+      String method = entry.getKey();
+      ObjectType superType = entry.getValue();
+      FunctionType abstractMethod = instance.findPropertyType(method).toMaybeFunctionType();
+      if (abstractMethod == null || abstractMethod.isAbstract()) {
+        String sourceName = n.getSourceFileName();
+        sourceName = nullToEmpty(sourceName);
+        registerMismatch(
+            instance,
+            superType,
+            report(
+                JSError.make(
+                    n,
+                    ABSTRACT_METHOD_NOT_IMPLEMENTED,
+                    method,
+                    superType.toString(),
+                    instance.toString())));
+      }
+    }
+  }
+
+  /** Report a type mismatch */
+  private void mismatch(NodeTraversal t, Node n, String msg, JSType found, JSType required) {
     mismatch(n, msg, found, required);
   }
 
@@ -728,11 +765,10 @@ class TypeValidator {
   }
 
   private void mismatch(Node n, String msg, JSType found, JSType required) {
-    JSError err = JSError.make(n, TYPE_MISMATCH_WARNING,
-        formatFoundRequired(msg, found, required));
-    registerMismatch(found, required, err);
-    if (this.subtypingMode == SubtypingMode.NORMAL
-        || !found.isSubtypeModuloNullUndefined(required)) {
+    if (!found.isSubtype(required, this.subtypingMode)) {
+      JSError err = JSError.make(
+          n, TYPE_MISMATCH_WARNING, formatFoundRequired(msg, found, required));
+      registerMismatch(found, required, err);
       report(err);
     }
   }

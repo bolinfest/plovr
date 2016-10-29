@@ -46,7 +46,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -453,7 +452,7 @@ public class JSDocInfo implements Serializable {
 
   /**
    * The {@link #isConstant()}, {@link #isConstructor()}, {@link #isInterface},
-   * {@link #isHidden()} and {@link #shouldPreserveTry()} flags as well as
+   * {@link #isHidden()} and other flags as well as
    * whether the {@link #type} field stores a value for {@link #getType()},
    * {@link #getReturnType()} or {@link #getEnumParameterType()}.
    *
@@ -507,9 +506,9 @@ public class JSDocInfo implements Serializable {
   private static final int MASK_CONSTRUCTOR   = 0x00000002; // @constructor
   private static final int MASK_DEFINE        = 0x00000004; // @define
   private static final int MASK_HIDDEN        = 0x00000008; // @hidden
-  private static final int MASK_PRESERVETRY   = 0x00000010; // @preserveTry
   @SuppressWarnings("unused")
-  private static final int MASK_UNUSED_1      = 0x00000020; //
+  private static final int MASK_UNUSED_1      = 0x00000010; //
+  private static final int MASK_FINAL         = 0x00000020; // @final
   private static final int MASK_OVERRIDE      = 0x00000040; // @override
   private static final int MASK_NOALIAS       = 0x00000080; // @noalias
   private static final int MASK_DEPRECATED    = 0x00000100; // @deprecated
@@ -659,6 +658,10 @@ public class JSDocInfo implements Serializable {
     setFlag(value, MASK_CONSTANT);
   }
 
+  void setFinal(boolean value) {
+    setFlag(value, MASK_FINAL);
+  }
+
   void setConstructor(boolean value) {
     setFlag(value, MASK_CONSTRUCTOR);
   }
@@ -685,10 +688,6 @@ public class JSDocInfo implements Serializable {
 
   void setHidden(boolean value) {
     setFlag(value, MASK_HIDDEN);
-  }
-
-  void setShouldPreserveTry(boolean value) {
-    setFlag(value, MASK_PRESERVETRY);
   }
 
   void setOverride(boolean value) {
@@ -780,16 +779,22 @@ public class JSDocInfo implements Serializable {
     return getFlag(MASK_MAPPEDIDGEN);
   }
 
-  /**
-   * Returns whether the {@code @const} annotation is present on this
-   * {@link JSDocInfo}.
-   */
   public boolean isConstant() {
-    return getFlag(MASK_CONSTANT) || isDefine();
+    return getFlag(MASK_CONSTANT | MASK_DEFINE | MASK_FINAL);
   }
 
+  /**
+   * Returns whether the {@code @const} annotation is present on this {@link JSDocInfo}.
+   */
   public boolean hasConstAnnotation() {
     return getFlag(MASK_CONSTANT);
+  }
+
+  /**
+   * Returns whether the {@code @final} annotation is present on this {@link JSDocInfo}.
+   */
+  public boolean isFinal() {
+    return getFlag(MASK_FINAL);
   }
 
   /**
@@ -855,14 +860,6 @@ public class JSDocInfo implements Serializable {
    */
   public boolean isHidden() {
     return getFlag(MASK_HIDDEN);
-  }
-
-  /**
-   * Returns whether the {@code @preserveTry} annotation is present on this
-   * {@link JSDocInfo}.
-   */
-  public boolean shouldPreserveTry() {
-    return getFlag(MASK_PRESERVETRY);
   }
 
   /**
@@ -2111,5 +2108,18 @@ public class JSDocInfo implements Serializable {
 
   void setOriginalCommentPosition(int position) {
     originalCommentPosition = position;
+  }
+
+  /** Get the value of the @modifies{this} annotation stored in the doc info. */
+  public boolean modifiesThis() {
+    return (this.getModifies().contains("this"));
+  }
+
+  /** @return Whether the @modifies annotation includes "arguments" or any named parameters. */
+  public boolean hasSideEffectsArgumentsAnnotation() {
+    Set<String> modifies = this.getModifies();
+    // TODO(johnlenz): if we start tracking parameters individually
+    // this should simply be a check for "arguments".
+    return (modifies.size() > 1 || (modifies.size() == 1 && !modifies.contains("this")));
   }
 }

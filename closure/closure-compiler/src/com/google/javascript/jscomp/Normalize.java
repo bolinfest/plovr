@@ -24,7 +24,6 @@ import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -372,11 +371,11 @@ class Normalize implements CompilerPass {
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case WHILE:
           if (CONVERT_WHILE_TO_FOR) {
             Node expr = n.getFirstChild();
-            n.setType(Token.FOR);
+            n.setToken(Token.FOR);
             Node empty = IR.empty();
             empty.useSourceInfoIfMissingFrom(n);
             n.addChildBefore(empty, expr);
@@ -403,6 +402,8 @@ class Normalize implements CompilerPass {
 
         case CAST:
           parent.replaceChild(n, n.removeFirstChild());
+          break;
+        default:
           break;
       }
     }
@@ -544,7 +545,7 @@ class Normalize implements CompilerPass {
 
       Node last = n.getLastChild();
       // TODO(moz): Avoid adding blocks for cases like "label: let x;"
-      switch (last.getType()) {
+      switch (last.getToken()) {
         case LABEL:
         case BLOCK:
         case FOR:
@@ -579,7 +580,7 @@ class Normalize implements CompilerPass {
         next = c.getNext();
         Node insertBefore = (before == null) ? c : before;
         Node insertBeforeParent = (before == null) ? n : beforeParent;
-        switch (c.getType()) {
+        switch (c.getToken()) {
           case LABEL:
             extractForInitializer(c, insertBefore, insertBeforeParent);
             break;
@@ -616,6 +617,8 @@ class Normalize implements CompilerPass {
               insertBeforeParent.addChildBefore(newStatement, insertBefore);
               reportCodeChange("FOR initializer");
             }
+            break;
+          default:
             break;
         }
       }
@@ -684,7 +687,7 @@ class Normalize implements CompilerPass {
     private void normalizeAssignShorthand(Node shorthand) {
       if (shorthand.getFirstChild().isName()) {
         Node name = shorthand.getFirstChild();
-        shorthand.setType(NodeUtil.getOpFromAssignmentOp(shorthand));
+        shorthand.setToken(NodeUtil.getOpFromAssignmentOp(shorthand));
         Node parent = shorthand.getParent();
         Node insertPoint = IR.empty();
         parent.replaceChild(shorthand, insertPoint);

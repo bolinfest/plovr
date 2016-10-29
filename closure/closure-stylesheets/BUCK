@@ -1,7 +1,15 @@
 java_library(
   name = 'closure-stylesheets',
   srcs = glob(includes=['src/**/*.java']) + [':javacc'],
+  resources_root = '.',
+  annotation_processors = [
+    'com.google.auto.value.processor.AutoAnnotationProcessor',
+    'com.google.auto.value.processor.AutoValueProcessor',
+  ],
+  annotation_processor_deps = ['//closure/closure-templates:auto-value'],
   deps = [
+    '//closure/closure-compiler:closure-compiler',
+    '//closure/closure-templates:auto-value',
     '//closure/closure-compiler:args4j',
     '//closure/closure-compiler:gson',
     '//closure/closure-compiler:guava',
@@ -22,24 +30,4 @@ genrule(
   ],
   cmd = '$SRCS $OUT $TMP',
   out = 'parser.src.zip',
-)
-
-prebuilt_jar(
-  name = 'args4j',
-  binary_jar = 'lib/args4j-2.0.17.jar',
-)
-
-prebuilt_jar(
-  name = 'gson',
-  binary_jar = 'lib/gson-1.7.1.jar',
-)
-
-prebuilt_jar(
-  name = 'guava',
-  binary_jar = 'lib/guava-12.0.jar',
-)
-
-prebuilt_jar(
-  name = 'jsr305',
-  binary_jar = 'lib/jsr305.jar',
 )

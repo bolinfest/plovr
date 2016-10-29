@@ -21,7 +21,6 @@ import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-
 import javax.annotation.Nullable;
 
 /**
@@ -55,6 +54,15 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
   static final DiagnosticType DEFAULT_PARAM_MUST_BE_MARKED_OPTIONAL = DiagnosticType.error(
       "JSC_DEFAULT_PARAM_MUST_BE_MARKED_OPTIONAL",
       "Inline JSDoc on default parameters must be marked as optional");
+
+  public static final DiagnosticType INVALID_NO_SIDE_EFFECT_ANNOTATION =
+      DiagnosticType.error(
+          "JSC_INVALID_NO_SIDE_EFFECT_ANNOTATION",
+          "@nosideeffects may only appear in externs files.");
+
+  public static final DiagnosticType INVALID_MODIFIES_ANNOTATION =
+      DiagnosticType.error(
+          "JSC_INVALID_MODIFIES_ANNOTATION", "@modifies may only appear in externs files.");
 
   private final AbstractCompiler compiler;
 
@@ -177,11 +185,15 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
 
     if (functionNode == null) {
       // @abstract annotation on a non-function
-      report(n, MISPLACED_ANNOTATION, "@abstract", "only functions or methods can be abstract");
+      report(
+          n,
+          MISPLACED_ANNOTATION,
+          "@abstract",
+          "only functions or non-static methods can be abstract");
       return;
     }
 
-    if (NodeUtil.getFunctionBody(functionNode).hasChildren()) {
+    if (!info.isConstructor() && NodeUtil.getFunctionBody(functionNode).hasChildren()) {
       // @abstract annotation on a function with a non-empty body
       report(n, MISPLACED_ANNOTATION, "@abstract",
           "function with a non-empty body cannot be abstract");
@@ -198,7 +210,11 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
         && !n.isMemberFunctionDef()
         && !NodeUtil.isPrototypeMethod(functionNode)) {
       // @abstract annotation on a non-method (or static method) in ES5
-      report(n, MISPLACED_ANNOTATION, "@abstract", "only functions or methods can be abstract");
+      report(
+          n,
+          MISPLACED_ANNOTATION,
+          "@abstract",
+          "only functions or non-static methods can be abstract");
       return;
     }
 
@@ -259,7 +275,7 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
     if (info.containsFunctionDeclaration() && !info.hasType()) {
       // This JSDoc should be attached to a FUNCTION node, or an assignment
       // with a function as the RHS, etc.
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case FUNCTION:
         case VAR:
         case LET:
@@ -283,6 +299,8 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
           // a call to goog.abstractMethod, goog.functions.constant, etc.
           return;
         }
+        default:
+          break;
       }
       reportMisplaced(n,
           "function", "This JSDoc is not attached to a function node. "
@@ -306,7 +324,7 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
 
     if (info.getDescription() != null || info.isHidden() || info.getMeaning() != null) {
       boolean descOkay = false;
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case ASSIGN: {
           Node lhs = n.getFirstChild();
           if (lhs.isName()) {
@@ -324,6 +342,8 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
         case STRING_KEY:
           descOkay = n.getString().startsWith("MSG_");
           break;
+        default:
+          break;
       }
       if (!descOkay) {
         report(n, MISPLACED_MSG_ANNOTATION);
@@ -337,7 +357,7 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
   private void validateTypeAnnotations(Node n, JSDocInfo info) {
     if (info != null && info.hasType()) {
       boolean valid = false;
-      switch (n.getType()) {
+      switch (n.getToken()) {
         // Function declarations are valid
         case FUNCTION:
           valid = NodeUtil.isFunctionDeclaration(n);
@@ -349,7 +369,7 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
         case ARRAY_PATTERN:
         case OBJECT_PATTERN:
           Node parent = n.getParent();
-          switch (parent.getType()) {
+          switch (parent.getToken()) {
             case GETTER_DEF:
             case SETTER_DEF:
             case CATCH:
@@ -359,6 +379,8 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
             case CONST:
             case PARAM_LIST:
               valid = true;
+              break;
+            default:
               break;
           }
           break;
@@ -430,7 +452,7 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
         return;
       }
       Node typeNode = typeExpr.getRoot();
-      if (typeNode.getType() != Token.EQUALS) {
+      if (typeNode.getToken() != Token.EQUALS) {
         report(typeNode, DEFAULT_PARAM_MUST_BE_MARKED_OPTIONAL);
       }
     }
@@ -440,8 +462,20 @@ final class CheckJSDoc extends AbstractPostOrderCallback implements HotSwapCompi
    * Check that @nosideeeffects annotations are only present in externs.
    */
   private void validateNoSideEffects(Node n, JSDocInfo info) {
-    if (info != null && info.isNoSideEffects() && !n.isFromExterns()) {
-      reportMisplaced(n, "nosideeffects", "@nosideeffects is only supported in externs.");
+    // Cannot have @modifies or @nosideeffects in regular (non externs) js. Report errors.
+    if (info == null) {
+      return;
+    }
+
+    if (n.isFromExterns()) {
+      return;
+    }
+
+    if (info.hasSideEffectsArgumentsAnnotation() || info.modifiesThis()) {
+      report(n, INVALID_MODIFIES_ANNOTATION);
+    }
+    if (info.isNoSideEffects()) {
+      report(n, INVALID_NO_SIDE_EFFECT_ANNOTATION);
     }
   }
 }

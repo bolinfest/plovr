@@ -48,7 +48,7 @@ import javax.annotation.Nullable;
  */
 public final class SuggestedFix {
 
-  private final Node originalMatchedNode;
+  private final MatchedNodeInfo matchedNodeInfo;
   // Multimap of filename to a modification to that file.
   private final SetMultimap<String, CodeReplacement> replacements;
 
@@ -57,20 +57,20 @@ public final class SuggestedFix {
   @Nullable private final String description;
 
   private SuggestedFix(
-      Node originalMatchedNode,
+      MatchedNodeInfo matchedNodeInfo,
       SetMultimap<String, CodeReplacement> replacements,
       @Nullable String description) {
-    this.originalMatchedNode = originalMatchedNode;
+    this.matchedNodeInfo = matchedNodeInfo;
     this.replacements = replacements;
     this.description = description;
   }
 
   /**
-   * Returns the JS Compiler Node for the original node that caused this SuggestedFix to
-   * be constructed.
+   * Returns information about the original JS Compiler Node that caused this SuggestedFix to be
+   * constructed.
    */
-  public Node getOriginalMatchedNode() {
-    return originalMatchedNode;
+  public MatchedNodeInfo getMatchedNodeInfo() {
+    return matchedNodeInfo;
   }
 
   /**
@@ -86,6 +86,9 @@ public final class SuggestedFix {
   }
 
   @Override public String toString() {
+    if (replacements.isEmpty()) {
+      return "<no-op SuggestedFix>";
+    }
     StringBuilder sb = new StringBuilder();
     for (Map.Entry<String, Collection<CodeReplacement>> entry : replacements.asMap().entrySet()) {
       sb.append("Replacements for file: ").append(entry.getKey()).append("\n");
@@ -99,17 +102,22 @@ public final class SuggestedFix {
    * manipulate JS nodes.
    */
   public static final class Builder {
-    private Node originalMatchedNode = null;
+    private MatchedNodeInfo matchedNodeInfo = null;
     private final ImmutableSetMultimap.Builder<String, CodeReplacement> replacements =
         ImmutableSetMultimap.builder();
     private String description = null;
 
     /**
-     * Sets the node on this SuggestedFix that caused this SuggestedFix to be built
-     * in the first place.
+     * Sets the node on this SuggestedFix that caused this SuggestedFix to be built in the first
+     * place.
      */
-    public Builder setOriginalMatchedNode(Node node) {
-      originalMatchedNode = node;
+    public Builder attachMatchedNodeInfo(Node node, AbstractCompiler compiler) {
+      matchedNodeInfo =
+          new MatchedNodeInfo(
+              NodeUtil.getSourceName(node),
+              node.getLineno(),
+              node.getCharno(),
+              isInClosurizedFile(node, new NodeMetadata(compiler)));
       return this;
     }
 
@@ -144,7 +152,7 @@ public final class SuggestedFix {
       return insertBefore(nodeToInsertBefore, n, compiler, "");
     }
 
-    private Builder insertBefore(
+    Builder insertBefore(
         Node nodeToInsertBefore, Node n, AbstractCompiler compiler, String sortKey) {
       return insertBefore(nodeToInsertBefore, generateCode(compiler, n), sortKey);
     }
@@ -548,27 +556,41 @@ public final class SuggestedFix {
       if (existingNode != null) {
         return this;
       }
-      Node googRequireNode = IR.exprResult(IR.call(
-          IR.getprop(IR.name("goog"), IR.string("require")),
-          IR.string(namespace)));
 
       // Find the right goog.require node to insert this after.
       Node script = NodeUtil.getEnclosingScript(node);
       if (script == null) {
         return this;
       }
-      Node lastGoogProvideNode = null;
+      if (script.getFirstChild().isModuleBody()) {
+        script = script.getFirstChild();
+      }
+
+      Node googRequireNode = IR.call(
+          IR.getprop(IR.name("goog"), IR.string("require")),
+          IR.string(namespace));
+
+      // The name that will be used on the LHS, if the require is added using the shorthand form.
+      String shortName = namespace.substring(namespace.lastIndexOf('.') + 1);
+
+      if (script.isModuleBody()) {
+        googRequireNode = IR.constNode(IR.name(shortName), googRequireNode);
+      } else {
+        googRequireNode = IR.exprResult(googRequireNode);
+      }
+
+      Node lastModuleOrProvideNode = null;
       Node lastGoogRequireNode = null;
       Node nodeToInsertBefore = null;
       Node child = script.getFirstChild();
       while (child != null) {
-        if (child.isExprResult() && child.getFirstChild().isCall()) {
+        if (NodeUtil.isExprCall(child)) {
           // TODO(mknichel): Replace this logic with a function argument
           // Matcher when it exists.
           Node grandchild = child.getFirstChild();
-          if (Matchers.functionCall("goog.provide").matches(grandchild, metadata)) {
-            lastGoogProvideNode = grandchild;
-          } else if (Matchers.functionCall("goog.require").matches(grandchild, metadata)) {
+          if (Matchers.googModuleOrProvide().matches(grandchild, metadata)) {
+            lastModuleOrProvideNode = grandchild;
+          } else if (Matchers.googRequire().matches(grandchild, metadata)) {
             lastGoogRequireNode = grandchild;
             if (grandchild.getLastChild().isString()
                 && namespace.compareTo(grandchild.getLastChild().getString()) < 0) {
@@ -576,15 +598,21 @@ public final class SuggestedFix {
               break;
             }
           }
+        } else if (NodeUtil.isNameDeclaration(child)
+            && Matchers.googRequire().matches(child.getFirstFirstChild(), metadata)) {
+          if (shortName.compareTo(child.getFirstChild().getString()) < 0) {
+            nodeToInsertBefore = child;
+            break;
+          }
         }
         child = child.getNext();
       }
       if (nodeToInsertBefore == null) {
         // The file has goog.provide or goog.require nodes but they come before
         // the new goog.require node alphabetically.
-        if (lastGoogProvideNode != null || lastGoogRequireNode != null) {
+        if (lastModuleOrProvideNode != null || lastGoogRequireNode != null) {
           Node nodeToInsertAfter =
-              lastGoogRequireNode != null ? lastGoogRequireNode : lastGoogProvideNode;
+              lastGoogRequireNode != null ? lastGoogRequireNode : lastModuleOrProvideNode;
           int startPosition =
               nodeToInsertAfter.getSourceOffset() + nodeToInsertAfter.getLength() + 2;
           replacements.put(nodeToInsertAfter.getSourceFileName(), new CodeReplacement(
@@ -622,19 +650,19 @@ public final class SuggestedFix {
 
     private Node findGoogRequireNode(Node n, NodeMetadata metadata, String namespace) {
       Node script = NodeUtil.getEnclosingScript(n);
+      if (script.getFirstChild().isModuleBody()) {
+        script = script.getFirstChild();
+      }
 
       if (script != null) {
         Node child = script.getFirstChild();
         while (child != null) {
-          if (child.isExprResult() && child.getFirstChild().isCall()) {
-            // TODO(mknichel): Replace this logic with a function argument
-            // Matcher when it exists.
-            Node grandchild = child.getFirstChild();
-            if (Matchers.functionCall("goog.require").matches(child.getFirstChild(), metadata)
-                && grandchild.getLastChild().isString()
-                && namespace.equals(grandchild.getLastChild().getString())) {
-              return child;
-            }
+          if ((NodeUtil.isExprCall(child)
+                  && Matchers.googRequire(namespace).matches(child.getFirstChild(), metadata))
+              || (NodeUtil.isNameDeclaration(child)
+                  && child.getFirstFirstChild() != null && Matchers.googRequire(namespace)
+                      .matches(child.getFirstFirstChild(), metadata))) {
+            return child;
           }
           child = child.getNext();
         }
@@ -666,7 +694,68 @@ public final class SuggestedFix {
     }
 
     public SuggestedFix build() {
-      return new SuggestedFix(originalMatchedNode, replacements.build(), description);
+      return new SuggestedFix(matchedNodeInfo, replacements.build(), description);
+    }
+
+    /** Looks for a goog.require(), goog.provide() or goog.module() call in the fix's file. */
+    private static boolean isInClosurizedFile(Node node, NodeMetadata metadata) {
+      Node script = NodeUtil.getEnclosingScript(node);
+
+      if (script == null) {
+        return false;
+      }
+
+      Node child = script.getFirstChild();
+      while (child != null) {
+        if (NodeUtil.isExprCall(child)) {
+          if (Matchers.googRequire().matches(child.getFirstChild(), metadata)) {
+            return true;
+          }
+          // goog.require or goog.module.
+        } else if (child.isVar() && child.getBooleanProp(Node.IS_NAMESPACE)) {
+          return true;
+        }
+        child = child.getNext();
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Information about the node that was matched for the suggested fix. This information can be
+   * used later on when processing the SuggestedFix.
+   *
+   * <p>NOTE: Since this class can be retained for a long time when running refactorings over large
+   * blobs of code, it's important that it does not contain any memory intensive objects in order to
+   * keep memory to a reasonable amount.
+   */
+  public static class MatchedNodeInfo {
+    private final String sourceFilename;
+    private final int lineno;
+    private final int charno;
+    private final boolean isInClosurizedFile;
+
+    MatchedNodeInfo(String sourceFilename, int lineno, int charno, boolean isInClosurizedFile) {
+      this.sourceFilename = sourceFilename;
+      this.lineno = lineno;
+      this.charno = charno;
+      this.isInClosurizedFile = isInClosurizedFile;
+    }
+
+    public String getSourceFilename() {
+      return sourceFilename;
+    }
+
+    public int getLineno() {
+      return lineno;
+    }
+
+    public int getCharno() {
+      return charno;
+    }
+
+    public boolean isInClosurizedFile() {
+      return isInClosurizedFile;
     }
   }
 }

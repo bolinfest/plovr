@@ -73,13 +73,11 @@ import com.google.javascript.rhino.jstype.Property;
 import com.google.javascript.rhino.jstype.TemplateType;
 import com.google.javascript.rhino.jstype.TemplateTypeMap;
 import com.google.javascript.rhino.jstype.TemplateTypeMapReplacer;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
 import javax.annotation.Nullable;
 
 /**
@@ -379,7 +377,7 @@ final class TypedScopeCreator implements ScopeCreator {
 
     @Override
     public void visit(NodeTraversal t, Node node, Node parent) {
-      switch (node.getType()) {
+      switch (node.getToken()) {
         case VAR:
           for (Node child = node.getFirstChild();
                child != null; child = child.getNext()) {
@@ -396,6 +394,8 @@ final class TypedScopeCreator implements ScopeCreator {
             identifyNameNode(
                 firstChild, firstChild.getJSDocInfo());
           }
+          break;
+        default:
           break;
       }
     }
@@ -524,7 +524,7 @@ final class TypedScopeCreator implements ScopeCreator {
       inputId = t.getInputId();
       attachLiteralTypes(n);
 
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case CALL:
           checkForClassDefiningCalls(n);
           checkForCallingConventionDefiningCalls(n, delegateCallingConventions);
@@ -566,6 +566,8 @@ final class TypedScopeCreator implements ScopeCreator {
             maybeDeclareQualifiedName(t, n.getJSDocInfo(), n, parent, null);
           }
           break;
+        default:
+          break;
       }
 
       // Analyze any @lends object literals in this statement.
@@ -579,7 +581,7 @@ final class TypedScopeCreator implements ScopeCreator {
     }
 
     private void attachLiteralTypes(Node n) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case NULL:
           n.setJSType(getNativeType(NULL_TYPE));
           break;
@@ -623,6 +625,8 @@ final class TypedScopeCreator implements ScopeCreator {
         // above.
         case ARRAYLIT:
           n.setJSType(getNativeType(ARRAY_TYPE));
+          break;
+        default:
           break;
       }
     }
@@ -760,7 +764,7 @@ final class TypedScopeCreator implements ScopeCreator {
      */
     void assertDefinitionNode(Node n, Token type) {
       Preconditions.checkState(sourceName != null);
-      Preconditions.checkState(n.getType() == type, n);
+      Preconditions.checkState(n.getToken() == type, n);
     }
 
     /**
@@ -1571,9 +1575,14 @@ final class TypedScopeCreator implements ScopeCreator {
               typeRegistry.createDefaultObjectUnion(delegateBaseObject),
               functionParamBuilder.build());
 
-          FunctionType delegateProxy = typeRegistry.createConstructorType(
-              delegateBaseObject.getReferenceName() + DELEGATE_PROXY_SUFFIX,
-              null, null, null, null);
+          FunctionType delegateProxy =
+              typeRegistry.createConstructorType(
+                  delegateBaseObject.getReferenceName() + DELEGATE_PROXY_SUFFIX,
+                  null,
+                  null,
+                  null,
+                  null,
+                  false);
           delegateProxy.setPrototypeBasedOn(delegateBaseObject);
 
           codingConvention.applyDelegateRelationship(
@@ -1874,13 +1883,15 @@ final class TypedScopeCreator implements ScopeCreator {
     @Override public void visit(NodeTraversal t, Node n, Node parent) {
       super.visit(t, n, parent);
 
-      switch (n.getType()) {
+      switch (n.getToken()) {
 
         case VAR:
           // Handle typedefs.
           if (n.hasOneChild()) {
             checkForTypedef(n.getFirstChild(), n.getJSDocInfo());
           }
+          break;
+        default:
           break;
       }
     }

@@ -59,28 +59,45 @@ public class CssFunctionNode extends CssValueNode implements ChunkAware {
           "alpha",
 
           // CSS 3
-          "calc",
           "cubic-bezier",
           "format", // used with @font-face
           "from",
           "hsl",
           "hsla",
           "local", // used with @font-face
+          "perspective",
           "rgba",
           "rotate",
           "rotateX",
           "rotateY",
           "rotateZ",
+          "rotate3d",
           "scale",
           "scaleX",
           "scaleY",
           "scaleZ",
+          "scale3d",
+          "steps",
           "to",
           "translate",
           "translateX",
           "translateY",
           "translateZ",
           "translate3d",
+
+          // Filter
+          // w3.org/TR/filter-effects-1/#FilterProperty
+          // "url" already in list
+          "blur",
+          "brightness",
+          "contrast",
+          "drop-shadow",
+          "grayscale",
+          "hue-rotate",
+          "invert",
+          "opacity",
+          "saturate",
+          "sepia",
 
           // Image-Set
           "image-set",
@@ -98,7 +115,36 @@ public class CssFunctionNode extends CssValueNode implements ChunkAware {
           "-moz-linear-gradient",
           "-ms-linear-gradient",
           "-o-linear-gradient",
-          "-webkit-linear-gradient");
+          "-webkit-linear-gradient",
+          "repeating-linear-gradient",
+          "-moz-repeating-linear-gradient",
+          "-ms-repeating-linear-gradient",
+          "-o-repeating-linear-gradient",
+          "-webkit-repeating-linear-gradient",
+
+          // Radial gradients
+          "radial-gradient",
+          "-moz-radial-gradient",
+          "-ms-radial-gradient",
+          "-o-radial-gradient",
+          "-webkit-radial-gradient",
+          "repeating-radial-gradient",
+          "-moz-repeating-radial-gradient",
+          "-ms-repeating-radial-gradient",
+          "-o-repeating-radial-gradient",
+          "-webkit-repeating-radial-gradient",
+
+          // Calc
+          "calc",
+          "-webkit-calc",
+          "-moz-calc",
+
+          // CSS Shapes
+          "inset",
+          "circle",
+          "ellipse",
+          "polygon"
+      );
       ImmutableMap.Builder<String, Function> builder = ImmutableMap.builder();
       for (String functionName : recognizedCssFunctions) {
         builder.put(

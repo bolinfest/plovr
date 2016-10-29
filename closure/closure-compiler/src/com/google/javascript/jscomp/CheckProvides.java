@@ -64,7 +64,7 @@ class CheckProvides implements HotSwapCompilerPass {
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case CALL:
           String providedClassName =
             codingConvention.extractClassNameIfProvide(n, parent);
@@ -86,6 +86,9 @@ class CheckProvides implements HotSwapCompilerPass {
           break;
         case SCRIPT:
           visitScriptNode();
+          break;
+        default:
+          break;
       }
     }
 

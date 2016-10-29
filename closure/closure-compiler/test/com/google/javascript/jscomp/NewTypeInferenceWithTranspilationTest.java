@@ -62,7 +62,9 @@ public final class NewTypeInferenceWithTranspilationTest extends NewTypeInferenc
   }
 
   public void testTaggedTemplateLitGlobalThisRef() {
-    typeCheck("taggedTemp`${this.a}TaggedTemp`", NewTypeInference.GLOBAL_THIS);
+    typeCheck(
+        "taggedTemp`${this.toString}TaggedTemp`",
+        NewTypeInference.GLOBAL_THIS);
   }
 
   public void testTaggedTemplate() {
@@ -226,5 +228,75 @@ public final class NewTypeInferenceWithTranspilationTest extends NewTypeInferenc
     //     "  }",
     //     "}"),
     //     VarCheck.UNDEFINED_VAR_ERROR);
+  }
+
+  public void testSuper() {
+    compilerOptions.setLanguageIn(LanguageMode.ECMASCRIPT6);
+    typeCheck(LINE_JOINER.join(
+        "class A {",
+        "  constructor(/** string */ x) {}",
+        "}",
+        "class B extends A {",
+        "  constructor() {",
+        "    super(123);",
+        "  }",
+        "}"),
+        NewTypeInference.INVALID_ARGUMENT_TYPE);
+
+    typeCheck(LINE_JOINER.join(
+        "class A {",
+        "  foo(/** string */ x) {}",
+        "}",
+        "class B extends A {",
+        "  foo(/** string */ y) {",
+        "    super.foo(123);",
+        "  }",
+        "}"),
+        NewTypeInference.INVALID_ARGUMENT_TYPE);
+
+    typeCheck(
+        LINE_JOINER.join(
+            "class A {",
+            "  /**",
+            "   * @template T",
+            "   * @param {T} x",
+            "   */",
+            "  constructor(x) {}",
+            "}",
+            "/** @extends {A<string>} */",
+            "class B extends A {",
+            "  /**",
+            "   * @param {string} x",
+            "   */",
+            "  constructor(x) {",
+            "    super(123);",
+            "  }",
+            "}"),
+        NewTypeInference.INVALID_ARGUMENT_TYPE);
+
+    typeCheck(LINE_JOINER.join(
+        "class A {",
+        "  static foo(/** string */ x) {}",
+        "}",
+        "class B extends A {",
+        "  static foo(/** string */ y) {",
+        "    super.foo(123);",
+        "  }",
+        "}"),
+        NewTypeInference.INVALID_ARGUMENT_TYPE);
+
+    // Test that when the superclass has a qualified name, using super works.
+    typeCheck(LINE_JOINER.join(
+        "/** @const */",
+        "var ns = {};",
+        "ns.A = class {",
+        "  static foo(/** string */ x) {}",
+        "};",
+        "class B extends ns.A {",
+        "  static foo(/** string */ y) {",
+        "    super.foo(123);",
+        "  }",
+        "}"),
+        NewTypeInference.INVALID_ARGUMENT_TYPE);
   }
 }

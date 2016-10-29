@@ -20,7 +20,6 @@
  * TODO: Remaining Services:
  *     $cookieStore
  *     $httpBackend
- *     $locale
  *     $rootElement
  *     $rootScope
  *     $rootScopeProvider
@@ -453,7 +452,7 @@ angular.JQLite.prototype.append = function(element) {};
 
 /**
  * @param {string} name
- * @param {(string|boolean)=} opt_value
+ * @param {(string|boolean|null)=} opt_value
  * @return {!angular.JQLite|string|boolean}
  */
 angular.JQLite.prototype.attr = function(name, opt_value) {};
@@ -1575,6 +1574,20 @@ angular.$interval_;
  * @type {function(!angular.$q.Promise):boolean}
  */
 angular.$interval_.cancel = function(promise) {};
+
+/******************************************************************************
+ * $locale Service
+ *****************************************************************************/
+
+/**
+ * @interface
+ */
+angular.$locale = function() {};
+
+/**
+ * @type {string}
+ */
+angular.$locale.prototype.id;
 
 /******************************************************************************
  * $location Service

@@ -23,23 +23,25 @@ import com.google.common.collect.Lists;
 import com.google.common.css.compiler.ast.CssAtRuleNode;
 import com.google.common.css.compiler.ast.CssAtRuleNode.Type;
 import com.google.common.css.compiler.ast.CssBlockNode;
+import com.google.common.css.compiler.ast.CssBooleanExpressionNode;
 import com.google.common.css.compiler.ast.CssCompilerPass;
 import com.google.common.css.compiler.ast.CssCompositeValueNode;
 import com.google.common.css.compiler.ast.CssConditionalBlockNode;
 import com.google.common.css.compiler.ast.CssDeclarationBlockNode;
 import com.google.common.css.compiler.ast.CssFontFaceNode;
 import com.google.common.css.compiler.ast.CssFunctionNode;
+import com.google.common.css.compiler.ast.CssImportBlockNode;
 import com.google.common.css.compiler.ast.CssImportRuleNode;
 import com.google.common.css.compiler.ast.CssLiteralNode;
 import com.google.common.css.compiler.ast.CssMediaRuleNode;
 import com.google.common.css.compiler.ast.CssNode;
 import com.google.common.css.compiler.ast.CssPageRuleNode;
 import com.google.common.css.compiler.ast.CssPageSelectorNode;
+import com.google.common.css.compiler.ast.CssRootNode;
 import com.google.common.css.compiler.ast.CssRulesetNode;
 import com.google.common.css.compiler.ast.CssStringNode;
 import com.google.common.css.compiler.ast.CssUnknownAtRuleNode;
 import com.google.common.css.compiler.ast.CssValueNode;
-import com.google.common.css.compiler.ast.DefaultTreeVisitor;
 import com.google.common.css.compiler.ast.ErrorManager;
 import com.google.common.css.compiler.ast.GssError;
 import com.google.common.css.compiler.ast.MutatingVisitController;
@@ -52,7 +54,7 @@ import java.util.Set;
  * to more specific at-rule nodes, or deletes them.
  *
  */
-public class CreateStandardAtRuleNodes extends DefaultTreeVisitor implements CssCompilerPass {
+public class CreateStandardAtRuleNodes extends UniformVisitor implements CssCompilerPass {
   @VisibleForTesting
   static final String NO_BLOCK_ERROR_MESSAGE =
     "This @-rule has to have a block";
@@ -81,6 +83,15 @@ public class CreateStandardAtRuleNodes extends DefaultTreeVisitor implements Css
   static final String FONT_FACE_PARAMETERS_ERROR_MESSAGE =
     "@font-face is not allowed to have parameters";
 
+  @VisibleForTesting
+  static final String IGNORED_IMPORT_WARNING_MESSAGE =
+      "@import rules should occur outside blocks and can only be preceded "
+      + "by @charset and other @import rules.";
+
+  @VisibleForTesting
+  static final String IGNORE_IMPORT_WARNING_MESSAGE =
+      "A node after which all @import rule nodes are ignored is here.";
+
   private static final List<Type> PAGE_SELECTORS =
     ImmutableList.of(Type.TOP_LEFT_CORNER,
         Type.TOP_LEFT, Type.TOP_CENTER, Type.TOP_RIGHT, Type.TOP_RIGHT_CORNER,
@@ -95,15 +106,41 @@ public class CreateStandardAtRuleNodes extends DefaultTreeVisitor implements Css
   // can be misleading; @def rules are processed by the compiler but @media
   // rules are handled by the browser.
   private static final Set<String> ALLOWED_AT_RULES_IN_MEDIA = ImmutableSet.of(
-      "page", "if", "elseif", "else");
+      "page", "if", "elseif", "else", "for");
 
   private final MutatingVisitController visitController;
   private final ErrorManager errorManager;
+  private final List<CssImportRuleNode> nonIgnoredImportRules =
+      Lists.newArrayList();
+  private CssRootNode root;
+
+  /**
+   * The first node after which import rules will be ignored, or null if
+   * no such nodes have been discovered.
+   */
+  private CssNode noMoreImportRules;
 
   public CreateStandardAtRuleNodes(MutatingVisitController visitController,
                                    ErrorManager errorManager) {
     this.visitController = visitController;
     this.errorManager = errorManager;
+  }
+
+  @Override
+  public boolean enterTree(CssRootNode root) {
+    this.root = root;
+    noMoreImportRules = null;
+    return true;
+  }
+
+  @Override
+  public void leave(CssNode node) {
+    if (node instanceof CssImportRuleNode
+        || node instanceof CssImportBlockNode
+        || node == root.getCharsetRule()) {
+      return;
+    }
+    noMoreImportRules = node;
   }
 
   @Override
@@ -149,7 +186,16 @@ public class CreateStandardAtRuleNodes extends DefaultTreeVisitor implements Css
       CssImportRuleNode importRule = new CssImportRuleNode(node.getComments());
       importRule.setParameters(paramlist);
       importRule.setSourceCodeLocation(node.getSourceCodeLocation());
-      visitController.replaceCurrentBlockChildWith(Lists.newArrayList((CssNode) importRule), false);
+      if (noMoreImportRules != null) {
+        visitController.replaceCurrentBlockChildWith(
+            Lists.newArrayList((CssNode) importRule),
+            false /* visitTheReplacementNodes */);
+        reportWarning(IGNORED_IMPORT_WARNING_MESSAGE, node);
+        reportWarning(IGNORE_IMPORT_WARNING_MESSAGE, noMoreImportRules);
+      } else {
+        visitController.removeCurrentNode();
+        nonIgnoredImportRules.add(importRule);
+      }
       return false;
 
     } else if (node.getName().getValue().equals(mediaName)) {
@@ -167,6 +213,13 @@ public class CreateStandardAtRuleNodes extends DefaultTreeVisitor implements Css
       }
     }
     return true;
+  }
+
+  @Override
+  public void leaveTree(CssRootNode root) {
+    for (CssImportRuleNode importRule : nonIgnoredImportRules) {
+       root.getImportRules().addChildToBack(importRule);
+    }
   }
 
   /**
@@ -222,8 +275,17 @@ public class CreateStandardAtRuleNodes extends DefaultTreeVisitor implements Css
   private boolean checkMediaParameter(List<CssValueNode> params) {
     if (params.get(0) instanceof CssCompositeValueNode) {
       return checkMediaCompositeExpression(params, 0);
+    } else if (params.get(0) instanceof CssBooleanExpressionNode) {
+      // shorthand syntax: implicit "all and..."
+      return checkMediaExpression(params, 0);
     } else if (!(params.get(0) instanceof CssLiteralNode)) {
       // nodes like the function node are invalid
+      CssValueNode node = params.get(0);
+      reportWarning(
+          String.format(
+              "Expected CssLiteralNode but found %s",
+              node.getClass().getName()),
+          node);
       return false;
     }
     int numberOfStartingLiterals = 1;
@@ -233,10 +295,13 @@ public class CreateStandardAtRuleNodes extends DefaultTreeVisitor implements Css
     }
     if (params.size() < numberOfStartingLiterals) {
       // only 'only' or 'not'
+      reportWarning(
+          "Expected CssLiteralNode after 'only' or 'not'.",
+          params.get(params.size() - 1));
       return false;
     }
     if (params.size() - numberOfStartingLiterals > 0) {
-      return checkMediaExpression(params, numberOfStartingLiterals);
+      return checkAndMediaExpression(params, numberOfStartingLiterals);
     }
     return true;
   }
@@ -244,7 +309,8 @@ public class CreateStandardAtRuleNodes extends DefaultTreeVisitor implements Css
   /**
    * Checks for [ AND S* expression ]* where expression is some value.
    */
-  private boolean checkMediaExpression(List<CssValueNode> params, int start) {
+  private boolean checkAndMediaExpression(
+      List<CssValueNode> params, int start) {
     if (params.size() - start < 2) {
       // at least two more: 'and X'
       return false;
@@ -253,10 +319,23 @@ public class CreateStandardAtRuleNodes extends DefaultTreeVisitor implements Css
       // expected 'and'
       return false;
     }
-    if (params.get(start + 1) instanceof CssCompositeValueNode) {
-      return checkMediaCompositeExpression(params, start + 1);
-    } else if (params.size() > start + 2) {
-      return checkMediaExpression(params, start + 2);
+    return checkMediaExpression(params, start + 1);
+  }
+
+  /**
+   * Checks for S* expression | S* expression [ AND S* expression ]*
+   * where expression is some value.
+   */
+  private boolean checkMediaExpression(
+      List<CssValueNode> params, int start) {
+    if (params.size() - start < 1) {
+      // at least one
+      return false;
+    }
+    if (params.get(start) instanceof CssCompositeValueNode) {
+      return checkMediaCompositeExpression(params, start);
+    } else if (params.size() > start + 1) {
+      return checkAndMediaExpression(params, start + 1);
     }
     return true;
   }
@@ -332,10 +411,12 @@ public class CreateStandardAtRuleNodes extends DefaultTreeVisitor implements Css
           && !PSEUDO_PAGES.contains(params.get(1).getValue())) {
       reportError(INVALID_PARAMETERS_ERROR_MESSAGE, node);
       return;
-    } else if (numParams == 1
-        && !PSEUDO_PAGES.contains(params.get(0).getValue())) {
-      reportError(INVALID_PARAMETERS_ERROR_MESSAGE, node);
-      return;
+    } else if (numParams == 1) {
+      if (params.get(0).getValue().startsWith(":")
+          && !PSEUDO_PAGES.contains(params.get(0).getValue())) {
+        reportError(INVALID_PARAMETERS_ERROR_MESSAGE, node);
+        return;
+      }
     }
     CssDeclarationBlockNode block = (CssDeclarationBlockNode) node.getBlock();
     CssPageRuleNode pageRule = new CssPageRuleNode(node.getComments(),
@@ -411,6 +492,11 @@ public class CreateStandardAtRuleNodes extends DefaultTreeVisitor implements Css
   private void reportError(String message, CssNode node) {
     errorManager.report(new GssError(message, node.getSourceCodeLocation()));
     visitController.removeCurrentNode();
+  }
+
+  private void reportWarning(String message, CssNode node) {
+    errorManager.reportWarning(
+        new GssError(message, node.getSourceCodeLocation()));
   }
 
   @Override

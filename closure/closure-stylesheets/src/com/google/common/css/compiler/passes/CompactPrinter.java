@@ -53,10 +53,10 @@ import com.google.common.css.compiler.ast.CssStringNode;
 import com.google.common.css.compiler.ast.CssTree;
 import com.google.common.css.compiler.ast.CssUnknownAtRuleNode;
 import com.google.common.css.compiler.ast.CssValueNode;
-import com.google.common.css.compiler.ast.DefaultTreeVisitor;
-import com.google.common.css.compiler.ast.VisitController;
 
 import java.util.logging.Logger;
+
+import javax.annotation.Nullable;
 
 /**
  * A compact-printer for {@link CssTree} instances.
@@ -66,31 +66,42 @@ import java.util.logging.Logger;
  * @author oana@google.com (Oana Florescu)
  * @author fbenz@google.com (Florian Benz)
  */
-public class CompactPrinter extends DefaultTreeVisitor
-    implements CssCompilerPass {
+public class CompactPrinter extends CodePrinter implements CssCompilerPass {
 
   private String compactedPrintedString = null;
-  private VisitController visitController;
-  private CssNode subtree;
   private static final Logger logger = Logger.getLogger(
       CompactPrinter.class.getName());
 
-  /**
-   * The string builder used to keep the printout in progress while the
-   * tree is visited.
-   *
-   * <p>Subclasses can use this builder to add delimiters when
-   * appropriate before and after a node.
-   */
-  protected StringBuilder sb = null;
+  public CompactPrinter(CssNode subtree,
+      @Nullable CodeBuffer buffer,
+      @Nullable GssSourceMapGenerator generator) {
+    super(subtree, buffer, generator);
+  }
+
+  public CompactPrinter(CssNode subtree, @Nullable CodeBuffer buffer) {
+    this(subtree, buffer, null /* generator */);
+  }
 
   public CompactPrinter(CssNode subtree) {
-    this.subtree = subtree;
-    this.visitController = this.subtree.getVisitController();
+    this(subtree, null /* buffer */);
+  }
+
+  public CompactPrinter(CssTree tree,
+      @Nullable CodeBuffer buffer,
+      @Nullable GssSourceMapGenerator generator) {
+    super(tree, buffer, generator);
+  }
+
+  public CompactPrinter(CssTree tree, CodeBuffer buffer) {
+    this(tree, buffer, null /* generator */);
+  }
+
+  public CompactPrinter(CssTree tree, GssSourceMapGenerator generator) {
+    this(tree, null /* buffer */, generator);
   }
 
   public CompactPrinter(CssTree tree) {
-    this(tree.getRoot());
+    this(tree, null /* buffer */, null /* generator */);
   }
 
   @Override
@@ -100,16 +111,16 @@ public class CompactPrinter extends DefaultTreeVisitor
 
   @Override
   public boolean enterImportRule(CssImportRuleNode node) {
-    sb.append(node.getType().toString());
+    buffer.append(node.getType().toString());
     for (CssValueNode param : node.getParameters()) {
-      sb.append(' ');
+      buffer.append(' ');
       // TODO(user): teach visit controllers to explore
       // CssImportRuleNode parameters rather than leaving it to each
       // pass to figure things out.
       if (param instanceof CssStringNode) {
-        sb.append(param.toString());
+        buffer.append(param.toString());
       } else {
-        sb.append(param.getValue());
+        buffer.append(param.getValue());
       }
     }
     return true;
@@ -117,14 +128,14 @@ public class CompactPrinter extends DefaultTreeVisitor
 
   @Override
   public void leaveImportRule(CssImportRuleNode node) {
-    sb.append(';');
+    buffer.append(';');
   }
 
   @Override
   public boolean enterMediaRule(CssMediaRuleNode node) {
-    sb.append(node.getType().toString());
+    buffer.append(node.getType().toString());
     if (node.getParameters().size() > 0) {
-      sb.append(" ");
+      buffer.append(' ');
     }
     return true;
   }
@@ -136,43 +147,43 @@ public class CompactPrinter extends DefaultTreeVisitor
    */
   private void appendMediaParameterWithParentheses(CssValueNode node) {
     // TODO(fbenz): Try to avoid the special handling of this case.
-    sb.append("(");
-    sb.append(node.getValue());
-    sb.append(")");
+    buffer.append('(');
+    buffer.append(node.getValue());
+    buffer.append(')');
   }
 
   @Override
   public void leaveMediaRule(CssMediaRuleNode node) {
-    sb.append('}');
+    buffer.append('}');
   }
 
   @Override
   public boolean enterPageRule(CssPageRuleNode node) {
-    sb.append(node.getType().toString());
-    sb.append(' ');
+    buffer.append(node.getType().toString());
+    buffer.append(' ');
     // TODO(fbenz): There are only two parameters possible ('bla:left') that
     // come with no whitespace in between. So it would be better to have a
     // single node (maybe a selector).
     for (CssValueNode param : node.getParameters()) {
-      sb.append(param.getValue());
+      buffer.append(param.getValue());
     }
-    deleteLastCharIfCharIs(' ');
+    buffer.deleteLastCharIfCharIs(' ');
     return true;
   }
 
   @Override
   public boolean enterPageSelector(CssPageSelectorNode node) {
-    sb.append(node.getType().toString());
+    buffer.append(node.getType().toString());
     for (CssValueNode param : node.getParameters()) {
-      sb.append(' ');
-      sb.append(param.getValue());
+      buffer.append(' ');
+      buffer.append(param.getValue());
     }
     return true;
   }
 
   @Override
   public boolean enterFontFace(CssFontFaceNode node) {
-    sb.append(node.getType().toString());
+    buffer.append(node.getType().toString());
     return true;
   }
 
@@ -180,14 +191,14 @@ public class CompactPrinter extends DefaultTreeVisitor
   public boolean enterSelector(CssSelectorNode selector) {
     String name = selector.getSelectorName();
     if (name != null) {
-      sb.append(name);
+      buffer.append(name);
     }
     return true;
   }
 
   @Override
   public void leaveSelector(CssSelectorNode selector) {
-    sb.append(',');
+    buffer.append(',');
   }
 
   @Override
@@ -204,16 +215,16 @@ public class CompactPrinter extends DefaultTreeVisitor
 
   @Override
   public boolean enterPseudoClass(CssPseudoClassNode node) {
-    sb.append(node.getPrefix());
-    sb.append(node.getRefinerName());
+    buffer.append(node.getPrefix());
+    buffer.append(node.getRefinerName());
     switch (node.getFunctionType()) {
       case NTH:
-        sb.append(node.getArgument().replace(" ", ""));
-        sb.append(")");
+        buffer.append(node.getArgument().replace(" ", ""));
+        buffer.append(')');
         break;
       case LANG:
-        sb.append(node.getArgument());
-        sb.append(")");
+        buffer.append(node.getArgument());
+        buffer.append(')');
         break;
     }
     return true;
@@ -222,8 +233,8 @@ public class CompactPrinter extends DefaultTreeVisitor
   @Override
   public void leavePseudoClass(CssPseudoClassNode node) {
     if (node.getFunctionType() == FunctionType.NOT) {
-      deleteLastCharIfCharIs(',');
-      sb.append(")");
+      buffer.deleteLastCharIfCharIs(',');
+      buffer.append(')');
     }
   }
 
@@ -235,11 +246,11 @@ public class CompactPrinter extends DefaultTreeVisitor
 
   @Override
   public boolean enterAttributeSelector(CssAttributeSelectorNode node) {
-    sb.append(node.getPrefix());
-    sb.append(node.getAttributeName());
-    sb.append(node.getMatchSymbol());
-    sb.append(node.getValue());
-    sb.append(node.getSuffix());
+    buffer.append(node.getPrefix());
+    buffer.append(node.getAttributeName());
+    buffer.append(node.getMatchSymbol());
+    buffer.append(node.getValue());
+    buffer.append(node.getSuffix());
     return true;
   }
 
@@ -248,45 +259,45 @@ public class CompactPrinter extends DefaultTreeVisitor
    * or a pseudo-element.
    */
   private void appendRefiner(CssRefinerNode node) {
-    sb.append(node.getPrefix());
-    sb.append(node.getRefinerName());
+    buffer.append(node.getPrefix());
+    buffer.append(node.getRefinerName());
   }
 
   @Override
   public boolean enterCombinator(CssCombinatorNode combinator) {
     if (combinator != null) {
-      sb.append(combinator.getCombinatorType().getCanonicalName());
+      buffer.append(combinator.getCombinatorType().getCanonicalName());
     }
     return true;
   }
 
   @Override
   public void leaveCombinator(CssCombinatorNode combinator) {
-    deleteLastCharIfCharIs(',');
+    buffer.deleteLastCharIfCharIs(',');
   }
 
   @Override
   public void leaveSelectorBlock(CssSelectorListNode node) {
-    deleteLastCharIfCharIs(',');
+    buffer.deleteLastCharIfCharIs(',');
   }
 
   @Override
   public boolean enterDeclarationBlock(CssDeclarationBlockNode block) {
-    sb.append('{');
+    buffer.append('{');
     return true;
   }
 
   @Override
   public void leaveDeclarationBlock(CssDeclarationBlockNode block) {
-    deleteLastCharIfCharIs(';');
-    sb.append('}');
+    buffer.deleteLastCharIfCharIs(';');
+    buffer.append('}');
   }
 
   @Override
   public boolean enterBlock(CssBlockNode block) {
     if (block.getParent() instanceof CssUnknownAtRuleNode
         || block.getParent() instanceof CssMediaRuleNode) {
-      sb.append("{");
+      buffer.append('{');
     }
     return true;
   }
@@ -294,31 +305,31 @@ public class CompactPrinter extends DefaultTreeVisitor
   @Override
   public boolean enterDeclaration(CssDeclarationNode declaration) {
     if (declaration.hasStarHack()) {
-      sb.append('*');
+      buffer.append('*');
     }
-    sb.append(declaration.getPropertyName().getValue());
-    sb.append(':');
+    buffer.append(declaration.getPropertyName().getValue());
+    buffer.append(':');
     return true;
   }
 
   @Override
   public void leaveDeclaration(CssDeclarationNode declaration) {
-    deleteLastCharIfCharIs(' ');
-    sb.append(';');
+    buffer.deleteLastCharIfCharIs(' ');
+    buffer.append(';');
   }
 
   @Override
   public void leaveCompositeValueNode(CssCompositeValueNode node) {
-    deleteLastCharIfCharIs(' ');
+    buffer.deleteLastCharIfCharIs(' ');
     if (node.getParent() instanceof CssPropertyValueNode) {
-      sb.append(' ');
+      buffer.append(' ');
     }
   }
 
   @Override
   public boolean enterValueNode(CssValueNode node) {
     if (node instanceof CssPriorityNode) {
-      deleteLastCharIfCharIs(' ');
+      buffer.deleteLastCharIfCharIs(' ');
     }
     appendValueNode(node);
     return true;
@@ -327,28 +338,28 @@ public class CompactPrinter extends DefaultTreeVisitor
   @Override
   public void leaveValueNode(CssValueNode node) {
     if (node.getParent() instanceof CssPropertyValueNode) {
-      sb.append(' ');
+      buffer.append(' ');
     }
   }
 
   @Override
   public boolean enterCompositeValueNodeOperator(CssCompositeValueNode parent) {
-    deleteLastCharIfCharIs(' ');
-    sb.append(parent.getOperator().getOperatorName());
+    buffer.deleteLastCharIfCharIs(' ');
+    buffer.append(parent.getOperator().getOperatorName());
     return true;
   }
 
   @Override
   public boolean enterFunctionNode(CssFunctionNode node) {
-    sb.append(node.getFunctionName());
-    sb.append('(');
+    buffer.append(node.getFunctionName());
+    buffer.append('(');
     return true;
   }
 
   @Override
   public void leaveFunctionNode(CssFunctionNode node) {
-    deleteLastCharIfCharIs(' ');
-    sb.append(") ");
+    buffer.deleteLastCharIfCharIs(' ');
+    buffer.append(") ");
   }
 
   // We need to handle both standard function calls separated by
@@ -364,7 +375,7 @@ public class CompactPrinter extends DefaultTreeVisitor
     if (ARGUMENT_SEPARATORS.contains(node.toString())) {
       // If the previous argument was a function node, then it has a
       // trailing space that needs to be removed.
-      deleteLastCharIfCharIs(' ');
+      buffer.deleteLastCharIfCharIs(' ');
     }
     appendValueNode(node);
     return true;
@@ -383,9 +394,9 @@ public class CompactPrinter extends DefaultTreeVisitor
 
   @Override
   public boolean enterUnknownAtRule(CssUnknownAtRuleNode node) {
-    sb.append("@").append(node.getName().toString());
+    buffer.append('@').append(node.getName().toString());
     if (node.getParameters().size() > 0) {
-      sb.append(" ");
+      buffer.append(' ');
     }
     return true;
   }
@@ -393,7 +404,7 @@ public class CompactPrinter extends DefaultTreeVisitor
   @Override
   public boolean enterMediaTypeListDelimiter(
       CssNodesListNode<? extends CssNode> node) {
-    sb.append(' ');
+    buffer.append(' ');
     return true;
   }
 
@@ -401,22 +412,22 @@ public class CompactPrinter extends DefaultTreeVisitor
   public void leaveUnknownAtRule(CssUnknownAtRuleNode node) {
     if (node.getType().hasBlock()) {
       if (!(node.getBlock() instanceof CssDeclarationBlockNode)) {
-        sb.append('}');
+        buffer.append('}');
       }
     } else {
-      sb.append(';');
+      buffer.append(';');
     }
   }
 
   @Override
   public boolean enterKeyframesRule(CssKeyframesNode node) {
-    sb.append('@').append(node.getName().toString());
+    buffer.append('@').append(node.getName().toString());
     for (CssValueNode param : node.getParameters()) {
-      sb.append(' ');
-      sb.append(param.getValue());
+      buffer.append(' ');
+      buffer.append(param.getValue());
     }
     if (node.getType().hasBlock()) {
-      sb.append('{');
+      buffer.append('{');
     }
     return true;
   }
@@ -424,9 +435,9 @@ public class CompactPrinter extends DefaultTreeVisitor
   @Override
   public void leaveKeyframesRule(CssKeyframesNode node) {
     if (node.getType().hasBlock()) {
-      sb.append('}');
+      buffer.append('}');
     } else {
-      sb.append(';');
+      buffer.append(';');
     }
   }
 
@@ -434,37 +445,19 @@ public class CompactPrinter extends DefaultTreeVisitor
   public boolean enterKey(CssKeyNode node) {
     String value = node.getKeyValue();
     if (value != null) {
-      sb.append(value);
+      buffer.append(value);
     }
     return true;
   }
 
   @Override
   public void leaveKey(CssKeyNode key) {
-    sb.append(',');
+    buffer.append(',');
   }
 
   @Override
   public void leaveKeyBlock(CssKeyListNode block) {
-    deleteLastCharIfCharIs(',');
-  }
-
-  /**
-   * Deletes the last character from the string builder if the
-   * character is as given.
-   *
-   * <p>Subclasses can modify this method in order to delete more in
-   * cases where they've added extra delimiters.
-   *
-   * @param ch the character to delete
-   */
-  protected void deleteLastCharIfCharIs(char ch) {
-    if (sb.length() == 0) {
-      return;
-    }
-    if (sb.charAt(sb.length() - 1) == ch) {
-      sb.deleteCharAt(sb.length() - 1);
-    }
+    buffer.deleteLastCharIfCharIs(',');
   }
 
   /**
@@ -476,9 +469,9 @@ public class CompactPrinter extends DefaultTreeVisitor
 
   @Override
   public void runPass() {
-    sb = new StringBuilder();
+    resetBuffer();
     visitController.startVisit(this);
-    compactedPrintedString = sb.toString();
+    compactedPrintedString = getOutputBuffer();
   }
 
   /**
@@ -500,7 +493,7 @@ public class CompactPrinter extends DefaultTreeVisitor
     }
     if (node instanceof CssStringNode) {
       CssStringNode s = (CssStringNode) node;
-      sb.append(s.toString(CssStringNode.HTML_ESCAPER));
+      buffer.append(s.toString(CssStringNode.HTML_ESCAPER));
       return;
     }
     if (node instanceof CssNumericNode) {
@@ -509,10 +502,20 @@ public class CompactPrinter extends DefaultTreeVisitor
       // or
       //   CharSequence CssNode.asCharSequence
       CssNumericNode n = (CssNumericNode) node;
-      sb.append(n.getNumericPart());
-      sb.append(n.getUnit());
+      buffer.append(n.getNumericPart());
+      buffer.append(n.getUnit());
       return;
     }
-    sb.append(node.toString());
+    buffer.append(node.toString());
+  }
+
+  public static String printCompactly(CssNode n) {
+    CompactPrinter p = new CompactPrinter(n);
+    p.runPass();
+    return p.getCompactPrintedString().trim();
+  }
+
+  public static String printCompactly(CssTree t) {
+    return printCompactly(t.getRoot());
   }
 }

@@ -447,7 +447,7 @@ class AmbiguateProperties implements CompilerPass {
   private class ProcessProperties extends AbstractPostOrderCallback {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case GETPROP: {
           Node propNode = n.getSecondChild();
           JSType jstype = getJSType(n.getFirstChild());
@@ -463,8 +463,8 @@ class AmbiguateProperties implements CompilerPass {
             String renameFunctionName = target.getOriginalQualifiedName();
             if (renameFunctionName != null
                 && compiler.getCodingConvention().isPropertyRenameFunction(renameFunctionName)) {
-
-              if (n.getChildCount() != 2 && n.getChildCount() != 3) {
+              int childCount = n.getChildCount();
+              if (childCount != 2 && childCount != 3) {
                 compiler.report(
                     JSError.make(
                         n,
@@ -547,6 +547,8 @@ class AmbiguateProperties implements CompilerPass {
           if (child.isString()) {
             quotedNames.add(child.getString());
           }
+          break;
+        default:
           break;
       }
     }

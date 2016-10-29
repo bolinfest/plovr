@@ -135,7 +135,8 @@ class AngularPass extends AbstractPostOrderCallback
               dependenciesArray
           )
       );
-      NodeUtil.setDebugInformation(statement, entry.getNode(), name);
+      statement.useSourceInfoFromForTree(entry.getNode());
+      statement.setOriginalName(name);
       // Set the visibility of the newly created property.
       JSDocInfoBuilder newPropertyDoc = new JSDocInfoBuilder(false);
       newPropertyDoc.recordVisibility(Visibility.PUBLIC);
@@ -219,7 +220,7 @@ class AngularPass extends AbstractPostOrderCallback
     Node fn = null;
     String name = null;
 
-    switch (n.getType()) {
+    switch (n.getToken()) {
       // handles assignment cases like:
       // a = function() {}
       // a = b = c = function() {}
@@ -285,6 +286,8 @@ class AngularPass extends AbstractPostOrderCallback
             target = classNode;
           }
         }
+        break;
+      default:
         break;
     }
 

@@ -16,8 +16,10 @@
 
 package com.google.common.css.compiler.ast;
 
+import com.google.common.base.CharMatcher;
 import com.google.common.base.Function;
 import com.google.common.css.SourceCodeLocation;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -66,6 +68,9 @@ public class CssStringNode extends CssValueNode {
   private static final String LINE_BREAK_PATTERN_STRING =
     "(?:\\n|\\r\\n|\\r|\\f)";
 
+  private static final CharMatcher CONSUMABLE_WHITESPACE =
+      CharMatcher.anyOf("\n\t ");
+
   private static final Pattern ESCAPE_CHAR_STRING_CONTINUATION_PATTERN =
     Pattern.compile("\\\\" + LINE_BREAK_PATTERN_STRING);
   private static final Pattern ESCAPE_CHAR_NOT_SPECIAL =
@@ -85,9 +90,6 @@ public class CssStringNode extends CssValueNode {
 
   private static final Pattern WIDE_NONASCII_PATTERN =
       Pattern.compile("\\P{ASCII}");
-
-  private static final Pattern NEWLINE_PATTERN =
-      Pattern.compile("\\n");
 
   private final Type type;
 
@@ -236,26 +238,6 @@ public class CssStringNode extends CssValueNode {
     Matcher unicode = ESCAPE_CHAR_HARD_TO_TYPE.matcher(result);
     StringBuffer sb = new StringBuffer();
     while (unicode.find()) {
-      // ESCAPE_CHAR_HARD_TO_TYPE recognizes trailing whitespace, which is only
-      // sometimes part of the escape sequence.
-      String trailer = "";
-      if (unicode.group(2) != null && unicode.group(2).length() > 0) {
-        // Divide the string into three parts: prefix whitespace suffix.
-        // A trailing space is part of the escape sequence when the
-        // prefix has fewer than 6 characters and the first character of the
-        // suffix matches [0-9a-fA-F].
-        if (unicode.group(1).length() < 6
-            && result.length() >= unicode.end()
-            && HEX_PATTERN.matcher(result.substring(unicode.end(),
-                                                    unicode.end() + 1))
-                .matches()) {
-          // let the whitespace be replaced as part of the escape sequence
-        } else {
-          // use the whitespace in the replacement following the escape
-          // sequence interpretation.
-          trailer = unicode.group(2);
-        }
-      }
       // CSS allows us to substitute characters above 0x110000. Java
       // requires us to stay at or below MAX_CODE_POINT. If we are
       // allowed to substitute, and Java requires us to substitute,
@@ -276,18 +258,42 @@ public class CssStringNode extends CssValueNode {
       }
       String replacement =
           codepoint == 0 ? "" : new String(Character.toChars(codepoint));
-      unicode.appendReplacement(
-          sb, replacement + trailer);
+      unicode.appendReplacement(sb, replacement);
     }
     unicode.appendTail(sb);
     result = sb.toString();
     return result;
   }
 
+  private static String escapeLineBreaks(String input) {
+    Matcher linebreak = LINE_BREAK_PATTERN.matcher(input);
+    StringBuilder sb = new StringBuilder(input.length());
+    int left = 0;
+    while (linebreak.find()) {
+      if (linebreak.start() > left) {
+        sb.append(input.subSequence(left, linebreak.start()));
+      }
+      sb.append("\\00000a");
+      int right = linebreak.end();
+      if (right < input.length()) {
+        char c = input.charAt(right);
+        if (CONSUMABLE_WHITESPACE.matches(c)) {
+          // add sacrificial whitespace to preserve the original
+          sb.append(" ");
+        }
+      }
+      left = right;
+    }
+    if (left < input.length()) {
+      sb.append(input.subSequence(left, input.length()));
+    }
+    return sb.toString();
+  }
+
   /**
    * Encodes a CSS term denoting {@code raw}. In general, there are multiple
    * representations in CSS of the same value; we allow clients to influence
-   * this choice through @{code discretionaryEscaper}.
+   * this choice through {@code discretionaryEscaper}.
    *
    * @see #HTML_ESCAPER
    * @see #SHORT_ESCAPER
@@ -301,7 +307,7 @@ public class CssStringNode extends CssValueNode {
         // the Java String encoding of a regex replacement encoding of a
         // CSS-escaped slash
         "\\\\\\\\");
-    result = LINE_BREAK_PATTERN.matcher(result).replaceAll("\\\\00000a");
+    result = escapeLineBreaks(result);
     result = discretionaryEscaper.apply(result);
     result = type.escapeForDelimiters(result);
     return result;
@@ -349,6 +355,13 @@ public class CssStringNode extends CssValueNode {
       markup.appendReplacement(
           sb,
           String.format("\\\\%06x", markup.group(0).codePointAt(0)));
+      if (markup.end() < context.length()
+          && CONSUMABLE_WHITESPACE.matches(context.charAt(markup.end()))) {
+        // a whitespace after an escaped character requires the
+        // insertion of an additional whitespace between the
+        // escape sequence and the original whitespace.
+        sb.append(" ");
+      }
     }
     markup.appendTail(sb);
     return sb.toString();
@@ -374,18 +387,38 @@ public class CssStringNode extends CssValueNode {
             // which is one codepoint but potentially multiple UTF-16
             // Java Characters.
             && match.length() == match.offsetByCodePoints(0, 1));
-        // Escape codes can have up to 6 digits. We are allowed to pad with
-        // 0s on the left. If we have fewer than 6 digits and the escape code
-        // appears immediately to a hexadecimal digit, then we must add a
-        // whitespace character after our digits.
-        // Adding the space never results in longer CSS than adding zero
-        // padding, and sometimes it shortens our output, so we never pad
-        // with zeroes.
+        /* Escape codes can have up to 6 digits. We are allowed to pad
+         * with 0s on the left.
+         * When the escaped character ends the string, we simply
+         * substitute the escape code for the escaped character.
+         * Otherwise, there are two cases in which we must insert a
+         * whitespace after our escape sequence:
+         *   (1) We have fewer than 6 digits and the escaped character
+         *   appears immediately before a hexadecimal digit in the
+         *   input.
+         *   (2) The escaped character appears immediately before a
+         *   whitespace in the input Adding the space never results in
+         *   longer CSS than adding zero padding, and sometimes it
+         *   shortens our output, so we never pad with zeroes.
+         */
         String hexDigits = String.format("%x", match.codePointAt(0));
-        String trailer =
-            (input.length() <= m.end() || hexDigits.length() == 6
-             || !HEX_PATTERN.matcher(
-                 input.subSequence(m.end(), m.end() + 1)).matches()) ? "" : " ";
+        String trailer;
+        if (input.length() <= m.end()) {
+          // simple: the end of the escape sequence is the end of the string.
+          trailer = "";
+        } else if (hexDigits.length() < 6 && HEX_PATTERN.matcher(
+            input.subSequence(m.end(), m.end() + 1)).matches()) {
+          // a hex digit after a short escape sequence requires
+          // separation by an inserted whitespace.
+          trailer = " ";
+        } else if (CONSUMABLE_WHITESPACE.matches(input.charAt(m.end()))) {
+          // a whitespace after an escaped character requires the
+          // insertion of an additional whitespace between the
+          // escape sequence and the original whitespace.
+          trailer = " ";
+        } else {
+          trailer = "";
+        }
         m.appendReplacement(
             sb, String.format("\\\\%s%s", hexDigits, trailer));
       }

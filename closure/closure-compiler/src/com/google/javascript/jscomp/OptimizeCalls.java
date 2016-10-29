@@ -23,7 +23,7 @@ import java.util.List;
 
 /**
  * A root pass that container for other passes that should run on
- * with a single call graph (currently a SimpleDefinitionFinder).
+ * with a single call graph (currently a DefinitionUseSiteFinder).
  * Expected passes include:
  *   - optimize parameters
  *   - optimize returns
@@ -45,15 +45,15 @@ class OptimizeCalls implements CompilerPass {
   }
 
   interface CallGraphCompilerPass {
-    void process(Node externs, Node root, SimpleDefinitionFinder definitions);
+    void process(Node externs, Node root, DefinitionUseSiteFinder definitions);
   }
 
   @Override
   public void process(Node externs, Node root) {
     if (!passes.isEmpty()) {
-      SimpleDefinitionFinder defFinder = new SimpleDefinitionFinder(compiler);
-      compiler.setSimpleDefinitionFinder(defFinder);
+      DefinitionUseSiteFinder defFinder = new DefinitionUseSiteFinder(compiler);
       defFinder.process(externs, root);
+      compiler.setDefinitionFinder(defFinder);
       for (CallGraphCompilerPass pass : passes) {
         pass.process(externs, root, defFinder);
       }

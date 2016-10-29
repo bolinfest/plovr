@@ -37,9 +37,6 @@ import com.google.javascript.jscomp.AbstractCommandLineRunner.JsSourceType;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.jscomp.SourceMap.LocationMapping;
 import com.google.javascript.rhino.Node;
-
-import junit.framework.TestCase;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -54,6 +51,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import junit.framework.TestCase;
 
 /**
  * Tests for {@link CommandLineRunner}.
@@ -1499,7 +1497,7 @@ public final class CommandLineRunnerTest extends TestCase {
   }
 
   public void testES5ChecksByDefault() {
-    testSame("var x = 3; delete x;");
+    test("var x = 3; delete x;", StrictModeCheck.DELETE_VARIABLE);
   }
 
   public void testES5ChecksInVerbose() {
@@ -1548,15 +1546,14 @@ public final class CommandLineRunnerTest extends TestCase {
     args.add("--env=CUSTOM");
     args.add("--output_manifest=test.MF");
     CommandLineRunner runner = createCommandLineRunner(new String[0]);
-    String expectedMessage = "";
     try {
       runner.doRun();
+      fail("Expected flag usage exception");
     } catch (FlagUsageException e) {
-      expectedMessage = e.getMessage();
+      assertThat(e)
+          .hasMessage(
+              "Bad --js flag. Manifest files cannot be generated when the input is from stdin.");
     }
-    assertThat("Bad --js flag. "
-        + "Manifest files cannot be generated when the input is from stdin.")
-        .isEqualTo(expectedMessage);
   }
 
   public void testTransformAMD() {
@@ -1631,15 +1628,14 @@ public final class CommandLineRunnerTest extends TestCase {
               "goog.provide=function(a){};goog.require=function(a){};"),
           "goog.array={};",
           LINE_JOINER.join(
-              "function Baz$$module$Baz(){}",
-              "Baz$$module$Baz.prototype={",
+              "var module$Baz = function (){};",
+              "module$Baz.prototype={",
               "  baz:function(){return goog.array.last(['asdf','asd','baz'])},",
               "  bar:function(){return 8}",
-              "};",
-              "var module$Baz=Baz$$module$Baz;"),
+              "};"),
           LINE_JOINER.join(
-              "var Baz = Baz$$module$Baz,",
-              "    baz = new Baz();",
+              "var Baz = module$Baz,",
+              "    baz = new module$Baz();",
               "console.log(baz.baz());",
               "console.log(baz.bar());")
         });
@@ -1688,19 +1684,18 @@ public final class CommandLineRunnerTest extends TestCase {
         },
         new String[] {
           LINE_JOINER.join(
-          "var goog=goog||{},COMPILED=!1;",
+              "var goog=goog||{},COMPILED=!1;",
               "goog.provide=function(a){};goog.require=function(a){};"),
           "goog.array={};",
           LINE_JOINER.join(
-              "function Baz$$module$Baz(){}",
-              "Baz$$module$Baz.prototype={",
-              "baz:function(){return goog.array.last([\"asdf\",\"asd\",\"baz\"])},",
-              "bar:function(){return 8}",
-              "};",
-              "var module$Baz=Baz$$module$Baz;"),
+              "var module$Baz = function (){};",
+              "module$Baz.prototype={",
+              "  baz:function(){return goog.array.last([\"asdf\",\"asd\",\"baz\"])},",
+              "  bar:function(){return 8}",
+              "};"),
           LINE_JOINER.join(
-              "var Baz = Baz$$module$Baz,",
-              "    baz = new Baz();",
+              "var Baz = module$Baz,",
+              "    baz = new module$Baz();",
               "console.log(baz.baz());",
               "console.log(baz.bar());")
         });
@@ -1715,14 +1710,11 @@ public final class CommandLineRunnerTest extends TestCase {
     setFilename(1, "app.js");
     test(
         new String[] {
+          LINE_JOINER.join("export default class Foo {", "  bar() { console.log('bar'); }", "}"),
           LINE_JOINER.join(
-              "export default class Foo {",
-              "  bar() { console.log('bar'); }",
-              "}"),
-          LINE_JOINER.join(
-             "var FooBar = require('./foo');",
-             "var baz = new FooBar.default();",
-             "console.log(baz.bar());")
+              "var FooBar = require('./foo');",
+              "var baz = new FooBar.default();",
+              "console.log(baz.bar());")
         },
         new String[] {
           LINE_JOINER.join(
@@ -1732,7 +1724,7 @@ public final class CommandLineRunnerTest extends TestCase {
               "module$foo.default=Foo$$module$foo;"),
           LINE_JOINER.join(
               "var FooBar = module$foo,",
-              "    baz = new FooBar.default();",
+              "    baz = new module$foo.default();",
               "console.log(baz.bar());")
         });
   }
@@ -1757,12 +1749,10 @@ public final class CommandLineRunnerTest extends TestCase {
         },
         new String[] {
           LINE_JOINER.join(
-              "function Foo$$module$foo(){}",
-              "Foo$$module$foo.prototype.bar=function(){console.log(\"bar\")};",
-              "var module$foo=Foo$$module$foo;"),
+              "/** @constructor */ var module$foo = function(){};",
+              "module$foo.prototype.bar=function(){console.log(\"bar\")};"),
           LINE_JOINER.join(
-              "var baz$$module$app = new Foo$$module$foo();",
-              "console.log(baz$$module$app.bar());")
+              "var baz$$module$app = new module$foo();", "console.log(baz$$module$app.bar());")
         });
   }
 
@@ -1853,11 +1843,12 @@ public final class CommandLineRunnerTest extends TestCase {
     String inputString = "[{\"src\": \"alert('foo');\", \"path\":\"foo.js\"}]";
     args.add("--json_streams=IN");
 
-    CommandLineRunner runner = new CommandLineRunner(
-        args.toArray(new String[]{}),
-        new ByteArrayInputStream(inputString.getBytes()),
-        new PrintStream(outReader),
-        new PrintStream(errReader));
+    CommandLineRunner runner =
+        new CommandLineRunner(
+            args.toArray(new String[] {}),
+            new ByteArrayInputStream(inputString.getBytes(UTF_8)),
+            new PrintStream(outReader),
+            new PrintStream(errReader));
 
     lastCompiler = runner.getCompiler();
     try {
@@ -1874,11 +1865,12 @@ public final class CommandLineRunnerTest extends TestCase {
     String inputString = "alert('foo');";
     args.add("--json_streams=OUT");
 
-    CommandLineRunner runner = new CommandLineRunner(
-        args.toArray(new String[]{}),
-        new ByteArrayInputStream(inputString.getBytes()),
-        new PrintStream(outReader),
-        new PrintStream(errReader));
+    CommandLineRunner runner =
+        new CommandLineRunner(
+            args.toArray(new String[] {}),
+            new ByteArrayInputStream(inputString.getBytes(UTF_8)),
+            new PrintStream(outReader),
+            new PrintStream(errReader));
 
     lastCompiler = runner.getCompiler();
     try {
@@ -1901,11 +1893,12 @@ public final class CommandLineRunnerTest extends TestCase {
     args.add("--json_streams=BOTH");
     args.add("--js_output_file=bar.js");
 
-    CommandLineRunner runner = new CommandLineRunner(
-        args.toArray(new String[]{}),
-        new ByteArrayInputStream(inputString.getBytes()),
-        new PrintStream(outReader),
-        new PrintStream(errReader));
+    CommandLineRunner runner =
+        new CommandLineRunner(
+            args.toArray(new String[] {}),
+            new ByteArrayInputStream(inputString.getBytes(UTF_8)),
+            new PrintStream(outReader),
+            new PrintStream(errReader));
 
     lastCompiler = runner.getCompiler();
     try {
@@ -1923,16 +1916,67 @@ public final class CommandLineRunnerTest extends TestCase {
         + "\\n\\\"names\\\":[\\\"alert\\\"]\\n}\\n\"}]");
   }
 
+  public void testJsonStreamSourceMap() {
+    String inputSourceMap =
+        "{\n"
+            + "\"version\":3,\n"
+            + "\"file\":\"one.out.js\",\n"
+            + "\"lineCount\":1,\n"
+            + "\"mappings\":\"AAAAA,QAASA,IAAG,CAACC,CAAD,CAAI,CACdC,"
+            + "OAAAF,IAAA,CAAYC,CAAZ,CADc,CAGhBD,GAAA,CAAI,QAAJ;\",\n"
+            + "\"sources\":[\"one.js\"],\n"
+            + "\"names\":[\"log\",\"a\",\"console\"]\n"
+            + "}";
+    inputSourceMap = inputSourceMap.replace("\"", "\\\"");
+    String inputString =
+        "[{"
+            + "\"src\": \"function log(a){console.log(a)}log(\\\"one.js\\\");\", "
+            + "\"path\":\"one.out.js\", "
+            + "\"sourceMap\": \""
+            + inputSourceMap
+            + "\" }]";
+    args.add("--json_streams=BOTH");
+    args.add("--js_output_file=bar.js");
+    args.add("--apply_input_source_maps");
+
+    CommandLineRunner runner =
+        new CommandLineRunner(
+            args.toArray(new String[] {}),
+            new ByteArrayInputStream(inputString.getBytes(UTF_8)),
+            new PrintStream(outReader),
+            new PrintStream(errReader));
+
+    lastCompiler = runner.getCompiler();
+    try {
+      runner.doRun();
+    } catch (IOException e) {
+      e.printStackTrace();
+      fail("Unexpected exception " + e);
+    }
+    String output = new String(outReader.toByteArray(), UTF_8);
+    assertThat(output)
+        .isEqualTo(
+            "[{"
+                + "\"src\":\"function log(a){console.log(a)}log(\\\"one.js\\\");\\n\","
+                + "\"path\":\"bar.js\","
+                + "\"source_map\":\"{\\n\\\"version\\\":3,\\n\\\"file\\\":\\\"bar.js\\\",\\n"
+                + "\\\"lineCount\\\":1,\\n\\\"mappings\\\":\\\"AAAAA,QAASA,IAAG,CAACC,CAAD,CAAI,CACdC,"
+                + "OAAAF,IAAA,CAAYC,CAAZ,CADc,CAGhBD,GAAA,CAAI,QAAJ;\\\",\\n"
+                + "\\\"sources\\\":[\\\"one.js\\\"],\\n\\\"names\\\":[\\\"log\\\",\\\"a\\\","
+                + "\\\"console\\\"]\\n}\\n\"}]");
+  }
+
   public void testOutputModuleNaming() {
     String inputString = "[{\"src\": \"alert('foo');\", \"path\":\"foo.js\"}]";
     args.add("--json_streams=BOTH");
     args.add("--module=foo--bar.baz:1");
 
-    CommandLineRunner runner = new CommandLineRunner(
-        args.toArray(new String[]{}),
-        new ByteArrayInputStream(inputString.getBytes()),
-        new PrintStream(outReader),
-        new PrintStream(errReader));
+    CommandLineRunner runner =
+        new CommandLineRunner(
+            args.toArray(new String[] {}),
+            new ByteArrayInputStream(inputString.getBytes(UTF_8)),
+            new PrintStream(outReader),
+            new PrintStream(errReader));
 
     lastCompiler = runner.getCompiler();
     try {
@@ -2135,12 +2179,12 @@ public final class CommandLineRunnerTest extends TestCase {
 
   /**
    * Helper for compiling js files and checking output string, using a single --js flag.
+   *
    * @param expectedOutput string representation of expected output.
    * @param entries entries of flags for js files containing source to compile.
    */
   @SafeVarargs
-  private final void compileJsFiles(String expectedOutput, FlagEntry<JsSourceType>... entries)
-      throws FlagUsageException {
+  private final void compileJsFiles(String expectedOutput, FlagEntry<JsSourceType>... entries) {
     args.add("--js");
     for (FlagEntry<JsSourceType> entry : entries) {
       args.add(entry.getValue());
@@ -2148,8 +2192,7 @@ public final class CommandLineRunnerTest extends TestCase {
     compileArgs(expectedOutput, null);
   }
 
-  private void compileArgs(String expectedOutput, DiagnosticType expectedError)
-      throws FlagUsageException {
+  private void compileArgs(String expectedOutput, DiagnosticType expectedError) {
     String[] argStrings = args.toArray(new String[] {});
 
     CommandLineRunner runner =
@@ -2204,10 +2247,11 @@ public final class CommandLineRunnerTest extends TestCase {
         Suppliers.ofInstance(externs),
         inputsSupplier,
         modulesSupplier,
-        new Function<Integer, Boolean>() {
+        new Function<Integer, Void>() {
           @Override
-          public Boolean apply(Integer code) {
-            return exitCodes.add(code);
+          public Void apply(Integer code) {
+            exitCodes.add(code);
+            return null;
           }
         });
     runner.run();

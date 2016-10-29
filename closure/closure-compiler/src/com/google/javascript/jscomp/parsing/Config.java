@@ -16,10 +16,11 @@
 
 package com.google.javascript.jscomp.parsing;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.parsing.parser.FeatureSet;
-
 import java.util.Set;
 
 /**
@@ -42,23 +43,18 @@ public final class Config {
 
     // Note that minimumRequiredFor() relies on these being defined in order from fewest features to
     // most features, and _STRICT versions should be supplied after unspecified strictness.
-    ECMASCRIPT3(FeatureSet.ES3, StrictMode.SLOPPY),
-    ECMASCRIPT5(FeatureSet.ES5, StrictMode.SLOPPY),
-    ECMASCRIPT5_STRICT(FeatureSet.ES5, StrictMode.STRICT),
-    ECMASCRIPT6(FeatureSet.ES6_MODULES, StrictMode.SLOPPY),
-    ECMASCRIPT6_STRICT(FeatureSet.ES6_MODULES, StrictMode.STRICT),
-    ECMASCRIPT7(FeatureSet.ES7_MODULES, StrictMode.STRICT),
-    ECMASCRIPT8(FeatureSet.ES8_MODULES, StrictMode.STRICT),
-    // TODO(bradfordcsmith): This should be renamed so it doesn't seem tied to es6
-    ECMASCRIPT6_TYPED(FeatureSet.TYPESCRIPT, StrictMode.STRICT),
+    ECMASCRIPT3(FeatureSet.ES3),
+    ECMASCRIPT5(FeatureSet.ES5),
+    ECMASCRIPT6(FeatureSet.ES6_MODULES),
+    ECMASCRIPT7(FeatureSet.ES7_MODULES),
+    ECMASCRIPT8(FeatureSet.ES8_MODULES),
+    TYPESCRIPT(FeatureSet.TYPESCRIPT),
     ;
 
     public final FeatureSet featureSet;
-    public final StrictMode strictMode;
 
-    LanguageMode(FeatureSet featureSet, StrictMode strictMode) {
+    LanguageMode(FeatureSet featureSet) {
       this.featureSet = featureSet;
-      this.strictMode = strictMode;
     }
 
     /**
@@ -90,15 +86,6 @@ public final class Config {
   final JsDocParsing parseJsDocDocumentation;
 
   /**
-   * Whether to keep detailed source location information such as the exact length of every node.
-   */
-  public enum SourceLocationInformation {
-    DISCARD,
-    PRESERVE,
-  }
-  final SourceLocationInformation preserveDetailedSourceInfo;
-
-  /**
    * Whether to keep going after encountering a parse error.
    */
   public enum RunMode {
@@ -123,29 +110,44 @@ public final class Config {
    */
   final LanguageMode languageMode;
 
-  Config(Set<String> annotationWhitelist, Set<String> suppressionNames, LanguageMode languageMode) {
+  final StrictMode strictMode;
+
+  /**
+   * Parse inline source maps (//# sourceMappingURL=data:...).
+   */
+  final boolean parseInlineSourceMaps;
+
+  Config(
+      Set<String> annotationWhitelist,
+      Set<String> suppressionNames,
+      LanguageMode languageMode,
+      StrictMode strictMode) {
     this(
         annotationWhitelist,
         JsDocParsing.TYPES_ONLY,
-        SourceLocationInformation.DISCARD,
         RunMode.STOP_AFTER_ERROR,
         suppressionNames,
-        languageMode);
+        languageMode,
+        false,
+        strictMode);
   }
 
   Config(
       Set<String> annotationWhitelist,
       JsDocParsing parseJsDocDocumentation,
-      SourceLocationInformation preserveDetailedSourceInfo,
       RunMode keepGoing,
       Set<String> suppressionNames,
-      LanguageMode languageMode) {
+      LanguageMode languageMode,
+      boolean parseInlineSourceMaps,
+      StrictMode strictMode) {
+    checkArgument(!(languageMode == LanguageMode.ECMASCRIPT3 && strictMode == StrictMode.STRICT));
+    this.parseInlineSourceMaps = parseInlineSourceMaps;
     this.annotationNames = buildAnnotationNames(annotationWhitelist);
     this.parseJsDocDocumentation = parseJsDocDocumentation;
-    this.preserveDetailedSourceInfo = preserveDetailedSourceInfo;
     this.keepGoing = keepGoing;
     this.suppressionNames = ImmutableSet.copyOf(suppressionNames);
     this.languageMode = languageMode;
+    this.strictMode = strictMode;
   }
 
   /**

@@ -16,18 +16,36 @@
 
 package com.google.template.soy.jbcsrc;
 
-import com.google.auto.value.AutoValue;
 import com.google.common.base.Optional;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.io.ByteSink;
+import com.google.common.io.CharStreams;
+import com.google.template.soy.base.internal.SoyFileKind;
+import com.google.template.soy.base.internal.SoyFileSupplier;
 import com.google.template.soy.error.ErrorReporter;
-import com.google.template.soy.error.SoyError;
+import com.google.template.soy.error.SoyErrorKind;
 import com.google.template.soy.jbcsrc.shared.CompiledTemplates;
+import com.google.template.soy.jbcsrc.shared.Names;
+import com.google.template.soy.soytree.SoyFileNode;
 import com.google.template.soy.soytree.TemplateNode;
 import com.google.template.soy.soytree.TemplateRegistry;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.jar.Attributes;
+import java.util.jar.JarOutputStream;
+import java.util.jar.Manifest;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.zip.ZipEntry;
 
 /**
  * The entry point to the {@code jbcsrc} compiler.
@@ -45,8 +63,8 @@ public final class BytecodeCompiler {
    *     have been reported to the error reporter.
    */
   public static Optional<CompiledTemplates> compile(
-      TemplateRegistry registry, boolean developmentMode, ErrorReporter reporter) {
-    Stopwatch stopwatch = Stopwatch.createStarted();
+      final TemplateRegistry registry, boolean developmentMode, ErrorReporter reporter) {
+    final Stopwatch stopwatch = Stopwatch.createStarted();
     ErrorReporter.Checkpoint checkpoint = reporter.checkpoint();
     checkForUnsupportedFeatures(registry, reporter);
     if (reporter.errorsSince(checkpoint)) {
@@ -54,47 +72,179 @@ public final class BytecodeCompiler {
     }
     CompiledTemplateRegistry compilerRegistry = new CompiledTemplateRegistry(registry);
     if (developmentMode) {
-      CompiledTemplates templates = new CompiledTemplates(
-          compilerRegistry.getTemplateNames(), 
-          new CompilingClassLoader(compilerRegistry));
+      CompiledTemplates templates =
+          new CompiledTemplates(
+              compilerRegistry.getDelegateTemplateNames(),
+              new CompilingClassLoader(compilerRegistry));
       // TODO(lukes): consider spawning a thread to load all the generated classes in the background
       return Optional.of(templates);
     }
+    // TODO(lukes): once most internal users have moved to precompilation eliminate this and just
+    // use the 'developmentMode' path above.  This hybrid only makes sense for production services
+    // that are doing runtime compilation.  Hopefully, this will become an anomaly.
+    List<ClassData> classes =
+        compileTemplates(
+            compilerRegistry,
+            reporter,
+            new CompilerListener<List<ClassData>>() {
+              final List<ClassData> compiledClasses = new ArrayList<>();
+              int numBytes = 0;
+              int numFields = 0;
+              int numDetachStates = 0;
 
-    // TODO(lukes): currently we compile all the classes, but you could easily imagine being
-    // configured in such a way that we load the classes from the system class loader.  Then we
-    // could add a build phase that writes the compiled templates out to a jar.  Then in the non
-    // development mode case we could skip even parsing templates!
-    CompilationResult results = compileTemplates(registry, compilerRegistry, reporter);
+              @Override
+              public void onCompile(ClassData clazz) {
+                numBytes += clazz.data().length;
+                numFields += clazz.numberOfFields();
+                numDetachStates += clazz.numberOfDetachStates();
+                compiledClasses.add(clazz);
+              }
+
+              @Override
+              public List<ClassData> getResult() {
+                logger.log(
+                    Level.INFO,
+                    "Compilation took {0}\n"
+                        + "     templates: {1}\n"
+                        + "       classes: {2}\n"
+                        + "         bytes: {3}\n"
+                        + "        fields: {4}\n"
+                        + "  detachStates: {5}",
+                        new Object[] {
+                            stopwatch.toString(),
+                            registry.getAllTemplates().size(),
+                            compiledClasses.size(),
+                            numBytes,
+                            numFields,
+                            numDetachStates
+                    });
+                return compiledClasses;
+              }
+            });
     if (reporter.errorsSince(checkpoint)) {
       return Optional.absent();
     }
-    CompiledTemplates templates = 
+    CompiledTemplates templates =
         new CompiledTemplates(
-            compilerRegistry.getTemplateNames(),
-            results.loader());
-    logger.log(
-        Level.INFO,
-        "Compilation took {0}\n"
-            + "     templates: {1}\n"
-            + "       classes: {2}\n"
-            + "         bytes: {3}\n"
-            + "        fields: {4}\n"
-            + "  detachStates: {5}",
-        new Object[] {
-          stopwatch.toString(),
-          results.numTemplates(),
-          results.numClasses(),
-          results.numBytes(),
-          results.numFields(),
-          results.numDetachStates()
-        });
+            compilerRegistry.getDelegateTemplateNames(), new MemoryClassLoader(classes));
     stopwatch.reset().start();
-    for (String template : compilerRegistry.getTemplateNames()) {
-      templates.getTemplateFactory(template);  // triggers classloading
-    }
+    templates.loadAll(compilerRegistry.getTemplateNames());
     logger.log(Level.INFO, "Loaded all classes in {0}", stopwatch);
     return Optional.of(templates);
+  }
+
+  /**
+   * Compiles all the templates in the given registry to a jar file written to the given output
+   * stream.
+   *
+   * <p>If errors are encountered, the error reporter will be updated and we will return.  The
+   * contents of any data written to the sink at that point are undefined.
+   *
+   * @param registry All the templates to compile
+   * @param reporter The error reporter
+   * @param sink The output sink to write the JAR to.
+   */
+  public static void compileToJar(TemplateRegistry registry, ErrorReporter reporter, ByteSink sink)
+      throws IOException {
+    ErrorReporter.Checkpoint checkpoint = reporter.checkpoint();
+    checkForUnsupportedFeatures(registry, reporter);
+    if (reporter.errorsSince(checkpoint)) {
+      return;
+    }
+    CompiledTemplateRegistry compilerRegistry = new CompiledTemplateRegistry(registry);
+    if (reporter.errorsSince(checkpoint)) {
+      return;
+    }
+    try (OutputStream stream = sink.openStream();
+        JarOutputStream jarOutput = new DeterministicJarOutputStream(stream, getJarManifest())) {
+      compileTemplates(
+          compilerRegistry,
+          reporter,
+          new CompilerListener<Void>() {
+            @Override
+            void onCompile(ClassData clazz) throws IOException {
+              jarOutput.putNextEntry(new ZipEntry(clazz.type().internalName() + ".class"));
+              jarOutput.write(clazz.data());
+              jarOutput.closeEntry();
+            }
+          });
+    }
+  }
+
+  /**
+   * Writes the source files out to a {@code -src.jar}.  This places the soy files at the same
+   * classpath relative location as their generated classes.  Ultimately this can be used by
+   * debuggers for source level debugging.
+   *
+   * <p>It is a little weird that the relative locations of the generated classes are not identical
+   * to the input source files.  This is due to the disconnect between java packages and soy
+   * namespaces.  We should consider using the soy namespace directly as a java package in the
+   * future.
+   *
+   * @param registry  All the templates in the current compilation unit
+   * @param files The source files by file path
+   * @param sink The source to write the jar file
+   */
+  public static void writeSrcJar(
+      TemplateRegistry registry,
+      ImmutableMap<String, SoyFileSupplier> files,
+      ByteSink sink) throws IOException {
+    Set<SoyFileNode> seenFiles = new HashSet<>();
+    try (OutputStream stream = sink.openStream();
+        JarOutputStream jarOutput = new DeterministicJarOutputStream(stream, getJarManifest())) {
+      for (TemplateNode template : registry.getAllTemplates()) {
+        SoyFileNode file = template.getParent();
+        if (file.getSoyFileKind() == SoyFileKind.SRC && seenFiles.add(file)) {
+          String namespace = file.getNamespace();
+          String fileName = file.getFileName();
+          jarOutput.putNextEntry(new ZipEntry(Names.javaFileName(namespace, fileName)));
+          copyFileToOutput(files.get(file.getFilePath()), jarOutput);
+          jarOutput.closeEntry();
+        }
+      }
+    }
+  }
+
+  private static final class DeterministicJarOutputStream extends JarOutputStream {
+    DeterministicJarOutputStream(OutputStream outputStream, Manifest manifest) throws IOException {
+      super(outputStream, manifest);
+    }
+
+    @Override
+    public void putNextEntry(ZipEntry ze) throws IOException {
+      ze.setTime(0); // set an explicit timestamp to zero so we generate deterministic outputs
+      super.putNextEntry(ze);
+    }
+  }
+
+  /** Copies the file to the output stream */
+  private static void copyFileToOutput(SoyFileSupplier from, OutputStream to)
+      throws IOException {
+    // 'from' contains a Reader which allows streaming reads of characters and 'to' is an 
+    // OutputStream which allows for streaming writes of bytes.  This disconnect means we need to do
+    // some character encoding.  The classic way to do this is to use OutputStreamWriter to wrap the
+    // outputStream and apply an encoder.  This introduces some wierdness because OutputStreamWriter
+    // can hold on to a few bytes to deal with unmatched surrogate pairs.  So we would need to
+    // close/flush it inorder to not corrupt the files.  This is undesirable since the output is
+    // actually a JarOutputStream and we are writing multiple files (we would over flush).  So 
+    // instead we do the naive thing and read the whole file as a string, convert the whole string
+    // to a byte array and then write the whole byte array.
+    //
+    // The real fix is to avoid the Reader and add methods to SoyFileSupplier to give us a 
+    // ByteSource then we can avoid the error prone decode/encode dance.
+    String file;
+    try (Reader contents = from.open()) {
+      file = CharStreams.toString(contents);
+    }
+    to.write(file.getBytes(StandardCharsets.UTF_8));
+  }
+
+  /** Returns a simple jar manifest. */
+  private static Manifest getJarManifest() {
+    Manifest mf = new Manifest();
+    mf.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+    mf.getMainAttributes().put(new Attributes.Name("Created-By"), "soy");
+    return mf;
   }
 
   private static void checkForUnsupportedFeatures(TemplateRegistry registry,
@@ -105,81 +255,51 @@ public final class BytecodeCompiler {
     }
   }
 
-  @AutoValue
-  abstract static class CompilationResult {
-    abstract MemoryClassLoader loader();
+  private abstract static class CompilerListener<T> {
+    abstract void onCompile(ClassData newClass) throws Exception;
 
-    abstract int numTemplates();
-
-    abstract int numClasses();
-
-    abstract int numBytes();
-
-    abstract int numFields();
-
-    abstract int numDetachStates();
+    T getResult() {
+      return null;
+    }
   }
 
-  /**
-   * Run the compiler for all templates and return the generated class in a
-   * {@link MemoryClassLoader}
-   */
-  private static CompilationResult compileTemplates(
-      TemplateRegistry registry,
-      CompiledTemplateRegistry compilerRegistry,
-      ErrorReporter errorReporter) {
-    int numTemplates = 0;
-    int numClasses = 0;
-    int numBytes = 0;
-    int numFields = 0;
-    int numDetachStates = 0;
-    MemoryClassLoader.Builder builder = new MemoryClassLoader.Builder();
-    // We generate all the classes and then start loading them.  This 2 phase process ensures that
-    // we don't have to worry about ordering (where a class we have generated references a class we
-    // haven't generated yet), because none of the classes are loadable until they all are.
-    for (TemplateNode template : registry.getAllTemplates()) {
-      numTemplates++;
-      String name = template.getTemplateName();
-      logger.log(Level.FINE, "Compiling template: {0}", name);
+  private static <T> T compileTemplates(
+      CompiledTemplateRegistry registry,
+      ErrorReporter errorReporter,
+      CompilerListener<T> listener) {
+    for (String name : registry.getTemplateNames()) {
+      CompiledTemplateMetadata classInfo = registry.getTemplateInfoByTemplateName(name);
+      if (classInfo.node().getParent().getSoyFileKind() != SoyFileKind.SRC) {
+        continue; // only generate classes for sources
+      }
       try {
-        CompiledTemplateMetadata classInfo = compilerRegistry.getTemplateInfoByTemplateName(name);
-        TemplateCompiler templateCompiler = new TemplateCompiler(compilerRegistry, classInfo);
+        TemplateCompiler templateCompiler = new TemplateCompiler(registry, classInfo);
         for (ClassData clazz : templateCompiler.compile()) {
-          // This loop is relatively hot, so this actually makes a detectable difference :(
-          if (logger.isLoggable(Level.FINE)) {
-            logger.log(
-                Level.FINE,
-                "Generated class {0}.  size: {1}, fields: {2}, detachStates: {3}",
-                new Object[] {clazz.type().className(), clazz.data().length,
-                    clazz.numberOfFields(), clazz.numberOfDetachStates()});
-          }
-          numClasses++;
-          numBytes += clazz.data().length;
-          numFields += clazz.numberOfFields();
-          numDetachStates += clazz.numberOfDetachStates();
           if (Flags.DEBUG) {
             clazz.checkClass();
           }
-          builder.add(clazz);
+          listener.onCompile(clazz);
         }
       // Report unexpected errors and keep going to try to collect more.
       } catch (UnexpectedCompilerFailureException e) {
-        errorReporter.report(e.getOriginalLocation(), 
-            SoyError.of("Unexpected error while compiling template: ''{0}''\nSoy Stack:\n{1}"
-                + "\nCompiler Stack:{2}"), 
+        errorReporter.report(
+            e.getOriginalLocation(),
+            SoyErrorKind.of(
+                "Unexpected error while compiling template: ''{0}''\nSoy Stack:\n{1}"
+                    + "\nCompiler Stack:{2}"),
             name,
             e.printSoyStack(),
             Throwables.getStackTraceAsString(e));
-        
+
       } catch (Throwable t) {
-        errorReporter.report(template.getSourceLocation(), 
-            SoyError.of("Unexpected error while compiling template: ''{0}''\n{1}"), 
-            name, 
+        errorReporter.report(
+            classInfo.node().getSourceLocation(),
+            SoyErrorKind.of("Unexpected error while compiling template: ''{0}''\n{1}"),
+            name,
             Throwables.getStackTraceAsString(t));
       }
     }
-    return new AutoValue_BytecodeCompiler_CompilationResult(
-        builder.build(), numTemplates, numClasses, numBytes, numFields, numDetachStates);
+    return listener.getResult();
   }
 
   private BytecodeCompiler() {}

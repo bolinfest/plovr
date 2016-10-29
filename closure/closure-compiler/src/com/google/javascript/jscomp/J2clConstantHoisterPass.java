@@ -22,7 +22,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.Node;
-
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
@@ -41,6 +40,10 @@ public class J2clConstantHoisterPass implements CompilerPass {
 
   @Override
   public void process(Node externs, Node root) {
+    if (!J2clSourceFileChecker.shouldRunJ2clPasses(compiler)) {
+      return;
+    }
+
     final Multimap<String, Node> fieldAssignments = ArrayListMultimap.create();
     final Set<Node> hoistableFunctions = new HashSet<>();
     NodeTraversal.traverseEs6(compiler, root, new AbstractPostOrderCallback() {
@@ -119,7 +122,7 @@ public class J2clConstantHoisterPass implements CompilerPass {
     NodeUtil.removeChild(clinitAssignment.getParent(), clinitAssignment);
 
     // Replace the assignment in declaration with the value from clinit
-    clinitAssignedValue.detachFromParent();
+    clinitAssignedValue.detach();
     declarationInClass.replaceChild(declarationAssignedValue, clinitAssignedValue);
     declarationInClass.putBooleanProp(Node.IS_CONSTANT_VAR, true);
 

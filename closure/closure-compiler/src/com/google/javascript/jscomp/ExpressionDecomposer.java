@@ -22,7 +22,6 @@ import com.google.javascript.jscomp.MakeDeclaredNamesUnique.ContextualRenamer;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-
 import java.util.Set;
 
 /**
@@ -165,7 +164,7 @@ class ExpressionDecomposer {
          grandchild = child,
              child = parent,
              parent = child.getParent()) {
-      Token parentType = parent.getType();
+      Token parentType = parent.getToken();
       Preconditions.checkState(
           !isConditionalOp(parent) || child == parent.getFirstChild());
       if (parentType == Token.ASSIGN) {
@@ -183,7 +182,7 @@ class ExpressionDecomposer {
           } else {
             // Alias "next()" in "next().foo"
             Node left = parent.getFirstChild();
-            Token type = left.getType();
+          Token type = left.getToken();
             if (left != child) {
               Preconditions.checkState(NodeUtil.isGet(left));
               if (type == Token.GETELEM) {
@@ -348,7 +347,7 @@ class ExpressionDecomposer {
     Node cond = null;
     Node trueExpr = IR.block().srcref(expr);
     Node falseExpr = IR.block().srcref(expr);
-    switch (expr.getType()) {
+    switch (expr.getToken()) {
       case HOOK:
         // a = x?y:z --> if (x) {a=y} else {a=z}
         cond = first;
@@ -477,7 +476,7 @@ class ExpressionDecomposer {
 
       Node rightOperand = parent.getLastChild();
 
-      parent.setType(Token.ASSIGN);
+      parent.setToken(Token.ASSIGN);
       parent.replaceChild(rightOperand, opNode);
       opNode.addChildToFront(replacementValueNode);
       opNode.addChildToBack(rightOperand);
@@ -637,7 +636,7 @@ class ExpressionDecomposer {
    * @return Whether the node is a conditional op.
    */
   private static boolean isConditionalOp(Node n) {
-    switch(n.getType()) {
+    switch (n.getToken()) {
       case HOOK:
       case AND:
       case OR:
@@ -655,7 +654,7 @@ class ExpressionDecomposer {
   static Node findExpressionRoot(Node subExpression) {
     Node child = subExpression;
     for (Node parent : child.getAncestors()) {
-      Token parentType = parent.getType();
+      Token parentType = parent.getToken();
       switch (parentType) {
         // Supported expression roots:
         // SWITCH and IF can have multiple children, but the CASE, DEFAULT,
@@ -682,6 +681,8 @@ class ExpressionDecomposer {
         case CASE:
         case DEFAULT_CASE:
           return null;
+        default:
+          break;
       }
       child = parent;
     }
@@ -858,7 +859,7 @@ class ExpressionDecomposer {
   private boolean isSafeAssign(Node n, boolean seenSideEffects) {
     if (n.isAssign()) {
       Node lhs = n.getFirstChild();
-      switch (lhs.getType()) {
+      switch (lhs.getToken()) {
         case NAME:
           return true;
         case GETPROP:
@@ -866,6 +867,8 @@ class ExpressionDecomposer {
         case GETELEM:
           return !isExpressionTreeUnsafe(lhs.getFirstChild(), seenSideEffects)
               && !isExpressionTreeUnsafe(lhs.getLastChild(), seenSideEffects);
+        default:
+          break;
       }
     }
     return false;

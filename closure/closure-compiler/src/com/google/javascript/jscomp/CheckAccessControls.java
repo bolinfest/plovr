@@ -16,11 +16,11 @@
 
 package com.google.javascript.jscomp;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
 import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
+import com.google.javascript.rhino.FunctionTypeI;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.Node;
@@ -28,12 +28,8 @@ import com.google.javascript.rhino.ObjectTypeI;
 import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.TypeI;
 import com.google.javascript.rhino.TypeIRegistry;
-import com.google.javascript.rhino.jstype.FunctionType;
 import com.google.javascript.rhino.jstype.JSTypeNative;
-import com.google.javascript.rhino.jstype.ObjectType;
-
 import java.util.ArrayDeque;
-
 import javax.annotation.Nullable;
 
 /**
@@ -214,13 +210,14 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
       if (NodeUtil.isGet(lValue)) {
         // We have an assignment of the form "a.b = ...".
         TypeI lValueType = lValue.getTypeI();
-        if (lValueType != null && lValueType.isOriginalConstructor()) {
+        if (lValueType != null && (lValueType.isConstructor() || lValueType.isInterface())) {
           // If a.b is a constructor, then everything in this function
           // belongs to the "a.b" type.
           return (lValueType.toMaybeFunctionType()).getInstanceType();
+        } else if (NodeUtil.isPrototypeProperty(lValue)) {
+          return normalizeClassType(
+              NodeUtil.getPrototypeClassName(lValue).getTypeI());
         } else {
-          // If a.b is not a constructor, then treat this as a method
-          // of whatever type is on "a".
           return normalizeClassType(lValue.getFirstChild().getTypeI());
         }
       } else {
@@ -253,14 +250,12 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
   private static TypeI normalizeClassType(TypeI type) {
     if (type == null || type.isUnknownType()) {
       return type;
-    } else if (type.isOriginalConstructor()) {
-      return (type.toMaybeFunctionType()).getInstanceType();
-    } else if (type.isPrototypeObject()) {
-      // newtypes.JSType should never enter this codepath
-      Preconditions.checkState(type instanceof ObjectType);
-      FunctionType owner = ((ObjectType) type).getOwnerFunction();
-      if (owner.isConstructor()) {
-        return owner.getInstanceType();
+    } else if (type.isConstructor() || type.isInterface()) {
+      return type.toMaybeFunctionType().getInstanceType();
+    } else {
+      ObjectTypeI obj = type.toMaybeObjectType();
+      if (obj != null) {
+        return obj.normalizeObjectForCheckAccessControls();
       }
     }
     return type;
@@ -273,7 +268,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case NAME:
         checkNameDeprecation(t, n, parent);
         checkNameVisibility(t, n, parent);
@@ -543,7 +538,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
   private void checkFinalClassOverrides(NodeTraversal t, Node fn, Node parent) {
     TypeI type = fn.getTypeI().toMaybeFunctionType();
     if (type != null && type.isConstructor()) {
-      TypeI finalParentClass = getFinalParentClass(getClassOfMethod(fn, parent));
+      TypeI finalParentClass = getSuperClassInstanceIfFinal(getClassOfMethod(fn, parent));
       if (finalParentClass != null) {
         compiler.report(
             t.makeError(fn, EXTEND_FINAL_CLASS,
@@ -677,7 +672,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
     }
 
     if (objectType != null) {
-      Node node = objectType.getOwnPropertyDefsite(propertyName);
+      Node node = objectType.getOwnPropertyDefSite(propertyName);
       if (node == null) {
         // Assume the property is public.
         return;
@@ -958,10 +953,7 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
    */
   private static boolean isDeprecatedFunction(Node n) {
     if (n.isFunction()) {
-      TypeI type = n.getTypeI();
-      if (type != null) {
-        return getTypeDeprecationInfo(type) != null;
-      }
+      return getDeprecationReason(NodeUtil.getBestJSDocInfo(n)) != null;
     }
 
     return false;
@@ -977,19 +969,27 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
       return null;
     }
 
-    JSDocInfo info = type.getJSDocInfo();
-    if (info != null && info.isDeprecated()) {
-      if (info.getDeprecationReason() != null) {
-        return info.getDeprecationReason();
-      }
-      return "";
+    String depReason = getDeprecationReason(type.getJSDocInfo());
+    if (depReason != null) {
+      return depReason;
     }
+
     ObjectTypeI objType = castToObject(type);
     if (objType != null) {
       ObjectTypeI implicitProto = objType.getPrototypeObject();
       if (implicitProto != null) {
         return getTypeDeprecationInfo(implicitProto);
       }
+    }
+    return null;
+  }
+
+  private static String getDeprecationReason(JSDocInfo info) {
+    if (info != null && info.isDeprecated()) {
+      if (info.getDeprecationReason() != null) {
+        return info.getDeprecationReason();
+      }
+      return "";
     }
     return null;
   }
@@ -1021,14 +1021,11 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
    */
   private static String getPropertyDeprecationInfo(ObjectTypeI type,
                                                    String prop) {
-    JSDocInfo info = type.getOwnPropertyJSDocInfo(prop);
-    if (info != null && info.isDeprecated()) {
-      if (info.getDeprecationReason() != null) {
-        return info.getDeprecationReason();
-      }
-
-      return "";
+    String depReason = getDeprecationReason(type.getOwnPropertyJSDocInfo(prop));
+    if (depReason != null) {
+      return depReason;
     }
+
     ObjectTypeI implicitProto = type.getPrototypeObject();
     if (implicitProto != null) {
       return getPropertyDeprecationInfo(implicitProto, prop);
@@ -1044,20 +1041,14 @@ class CheckAccessControls implements ScopedCallback, HotSwapCompilerPass {
   }
 
   /**
-   * Returns the super class of the given type that has a constructor.
+   * If the superclass is final, this method returns an instance of the superclass.
    */
-  private static ObjectTypeI getFinalParentClass(TypeI type) {
+  private static ObjectTypeI getSuperClassInstanceIfFinal(TypeI type) {
     if (type != null) {
-      ObjectTypeI iproto = castToObject(type).getPrototypeObject();
-      while (iproto != null && iproto.getConstructor() == null) {
-        iproto = iproto.getPrototypeObject();
-      }
-      if (iproto != null) {
-        Node source = iproto.getConstructor().getSource();
-        JSDocInfo jsDoc = source != null ? NodeUtil.getBestJSDocInfo(source) : null;
-        if (jsDoc != null && jsDoc.isConstant()) {
-          return iproto;
-        }
+      FunctionTypeI ctor = castToObject(type).getSuperClassConstructor();
+      JSDocInfo doc = ctor == null ? null : ctor.getJSDocInfo();
+      if (doc != null && doc.isFinal()) {
+        return ctor.getInstanceType();
       }
     }
     return null;

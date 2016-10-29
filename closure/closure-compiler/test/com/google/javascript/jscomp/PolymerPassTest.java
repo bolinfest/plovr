@@ -15,8 +15,10 @@
  */
 package com.google.javascript.jscomp;
 
+import static com.google.common.truth.Truth.assertThat;
 import static com.google.javascript.jscomp.PolymerPassErrors.POLYMER_DESCRIPTOR_NOT_VALID;
 import static com.google.javascript.jscomp.PolymerPassErrors.POLYMER_INVALID_DECLARATION;
+import static com.google.javascript.jscomp.PolymerPassErrors.POLYMER_INVALID_EXTENDS;
 import static com.google.javascript.jscomp.PolymerPassErrors.POLYMER_INVALID_PROPERTY;
 import static com.google.javascript.jscomp.PolymerPassErrors.POLYMER_MISSING_IS;
 import static com.google.javascript.jscomp.PolymerPassErrors.POLYMER_SHORTHAND_NOT_SUPPORTED;
@@ -24,6 +26,10 @@ import static com.google.javascript.jscomp.PolymerPassErrors.POLYMER_UNANNOTATED
 import static com.google.javascript.jscomp.PolymerPassErrors.POLYMER_UNEXPECTED_PARAMS;
 import static com.google.javascript.jscomp.PolymerPassErrors.POLYMER_UNQUALIFIED_BEHAVIOR;
 import static com.google.javascript.jscomp.TypeValidator.TYPE_MISMATCH_WARNING;
+import static com.google.javascript.jscomp.testing.NodeSubject.assertNode;
+
+import com.google.javascript.jscomp.NodeUtil.Visitor;
+import com.google.javascript.rhino.Node;
 
 /**
  * Unit tests for PolymerPass
@@ -155,6 +161,7 @@ public class PolymerPassTest extends Es6CompilerTestCase {
     super.setUp();
     allowExternsChanges(true);
     enableTypeCheck();
+    enableCheckAccessControls(false);
     runTypeCheckAfterProcessing = true;
     parseTypeInfo = true;
   }
@@ -465,7 +472,11 @@ public class PolymerPassTest extends Es6CompilerTestCase {
   }
 
   public void testNativeElementExtension() {
-    String js = LINE_JOINER.join("Polymer({", "  is: 'x-input',", "  extends: 'input',", "});");
+    String js = LINE_JOINER.join(
+        "Polymer({",
+        "  is: 'x-input',",
+        "  extends: 'input',",
+        "});");
 
     test(
         js,
@@ -483,6 +494,16 @@ public class PolymerPassTest extends Es6CompilerTestCase {
     testExternChanges(EXTERNS, js, INPUT_EXTERNS);
   }
 
+  public void testExtendNonExistentElement() {
+    String js = LINE_JOINER.join(
+        "Polymer({",
+        "  is: 'x-input',",
+        "  extends: 'nonexist',",
+        "});");
+
+    testError(js, POLYMER_INVALID_EXTENDS);
+  }
+
   public void testNativeElementExtensionExternsNotDuplicated() {
     String js =
         LINE_JOINER.join(
@@ -494,11 +515,11 @@ public class PolymerPassTest extends Es6CompilerTestCase {
             "  is: 'y-input',",
             "  extends: 'input',",
             "});");
-    String newExterns =
-        INPUT_EXTERNS
-            + "\n"
-            + LINE_JOINER.join(
-                "/** @interface */", "var PolymerYInputElementInterface = function() {};");
+    String newExterns = LINE_JOINER.join(
+        INPUT_EXTERNS,
+        "",
+        "/** @interface */",
+        "var PolymerYInputElementInterface = function() {};");
 
     testExternChanges(EXTERNS, js, newExterns);
   }
@@ -549,6 +570,19 @@ public class PolymerPassTest extends Es6CompilerTestCase {
             "    thingToDo: Function,",
             "  },",
             "});"));
+  }
+
+  public void testPropertiesObjLitShorthand() {
+    disableTypeCheck();
+    testErrorEs6(
+        LINE_JOINER.join(
+            "var XElem = Polymer({",
+            "  is: 'x-element',",
+            "  properties: {",
+            "    name,",
+            "  },",
+            "});"),
+        POLYMER_SHORTHAND_NOT_SUPPORTED);
   }
 
   public void testPropertiesDefaultValueFunctions() {
@@ -1107,6 +1141,99 @@ public class PolymerPassTest extends Es6CompilerTestCase {
             "  },",
             "  behaviors: [ FunBehavior ],",
             "});"));
+
+    // The original doSomethingFun definition in FunBehavior is on line 21, so make sure that
+    // line number is preserved when it's copied into the Polymer() call.
+    Node root = getLastCompiler().getRoot();
+    DoSomethingFunFinder visitor = new DoSomethingFunFinder();
+    NodeUtil.visitPreOrder(root, visitor);
+    assertThat(visitor.found).isTrue();
+  }
+
+  private static class DoSomethingFunFinder implements Visitor {
+    boolean found = false;
+
+    @Override
+    public void visit(Node n) {
+      if (n.matchesQualifiedName("A.prototype.doSomethingFun")) {
+        assertNode(n).hasLineno(21);
+        found = true;
+      }
+    }
+  }
+
+  /** If a behavior method is {@code @protected} there is no visibility warning. */
+  public void testBehaviorWithProtectedMethod() {
+    enableCheckAccessControls(true);
+    test(
+        new String[] {
+          LINE_JOINER.join(
+              "/** @polymerBehavior */",
+              "var FunBehavior = {",
+              "  /** @protected */",
+              "  doSomethingFun: function() {},",
+              "};"),
+          LINE_JOINER.join(
+              "var A = Polymer({",
+              "  is: 'x-element',",
+              "  callBehaviorMethod: function() {",
+              "    this.doSomethingFun();",
+              "  },",
+              "  behaviors: [ FunBehavior ],",
+              "});"),
+        },
+        new String[] {
+          LINE_JOINER.join(
+              "/** @polymerBehavior @nocollapse */",
+              "var FunBehavior = {",
+              "  /**",
+              "   * @suppress {checkTypes|globalThis}",
+              "   */",
+              "  doSomethingFun: function() {},",
+              "};"),
+          LINE_JOINER.join(
+              "/**",
+              " * @constructor",
+              " * @extends {PolymerElement}",
+              " * @implements {PolymerAInterface}",
+              " */",
+              "var A = function() {};",
+              "",
+              "/**",
+              " * @public",
+              " */",
+              "A.prototype.doSomethingFun = function(){};",
+              "",
+              "A = Polymer(/** @lends {A.prototype} */ {",
+              "  is: 'x-element',",
+              "  /** @this {A} */",
+              "  callBehaviorMethod: function(){ this.doSomethingFun(); },",
+              "  behaviors: [FunBehavior],",
+              "})"),
+        });
+  }
+
+  /** If a behavior method is {@code @private} there is a visibility warning. */
+  public void testBehaviorWithPrivateMethod() {
+    enableCheckAccessControls(true);
+    testWarning(
+        new String[] {
+          LINE_JOINER.join(
+              "/** @polymerBehavior */",
+              "var FunBehavior = {",
+              "  /** @private */",
+              "  doSomethingFun: function() {},",
+              "};"),
+          LINE_JOINER.join(
+              "var A = Polymer({",
+              "  is: 'x-element',",
+              "  callBehaviorMethod: function() {",
+              "    this.doSomethingFun();",
+              "  },",
+              "  behaviors: [ FunBehavior ],",
+              "});"),
+        },
+        CheckAccessControls.BAD_PRIVATE_PROPERTY_ACCESS);
   }
 
   /**
@@ -2055,7 +2182,12 @@ public class PolymerPassTest extends Es6CompilerTestCase {
 
     testError(
         LINE_JOINER.join(
-            "Polymer({", "  is: 'x-element',", "  behaviors: [", "    DoesNotExist", "  ],", "});"),
+            "Polymer({",
+            "  is: 'x-element',",
+            "  behaviors: [",
+            "    DoesNotExist",
+            "  ],",
+            "});"),
         POLYMER_UNQUALIFIED_BEHAVIOR);
   }
 

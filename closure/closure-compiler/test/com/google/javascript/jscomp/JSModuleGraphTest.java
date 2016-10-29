@@ -23,13 +23,10 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParseException;
-
-import junit.framework.TestCase;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import junit.framework.TestCase;
 
 /**
  * Tests for {@link JSModuleGraph}
@@ -207,7 +204,7 @@ public final class JSModuleGraphTest extends TestCase {
     assertInputs(C, "a1", "c1", "c2");
     assertInputs(E);
 
-    assertEquals(ImmutableList.of("a1", "c1", "c2"), sourceNames(results));
+    assertThat(sourceNames(results)).containsExactly("a1", "c1", "c2").inOrder();
   }
 
   public void testManageDependencies4() throws Exception {
@@ -273,7 +270,7 @@ public final class JSModuleGraphTest extends TestCase {
     assertThat(results).isEmpty();
   }
 
-  public void testToJson() throws JsonParseException {
+  public void testToJson() {
     JsonArray modules = graph.toJson();
     assertEquals(6, modules.size());
     for (int i = 0; i < modules.size(); i++) {

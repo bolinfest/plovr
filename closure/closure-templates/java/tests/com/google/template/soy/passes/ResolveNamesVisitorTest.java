@@ -95,7 +95,7 @@ public final class ResolveNamesVisitorTest extends TestCase {
     assertThat(((LetValueNode) n.getChild(0)).getVar().localVariableIndex()).isEqualTo(0);
   }
 
-  public void testMultiplLocalsAndScopesNumbering() {
+  public void testMultipleLocalsAndScopesNumbering() {
     SoyFileSetNode soyTree =
         SoyFileSetParserBuilder.forFileContents(
                 constructTemplateSource(
@@ -119,9 +119,9 @@ public final class ResolveNamesVisitorTest extends TestCase {
     assertThat(((LetValueNode) n.getChild(0)).getVar().localVariableIndex()).isEqualTo(2);
     ForeachNonemptyNode foreachNonEmptyNode =
         (ForeachNonemptyNode) ((ForeachNode) n.getChild(1)).getChild(0);
-    assertThat(foreachNonEmptyNode.getVar().currentLoopIndexIndex()).isEqualTo(3);
-    assertThat(foreachNonEmptyNode.getVar().isLastIteratorIndex()).isEqualTo(4);
-    assertThat(foreachNonEmptyNode.getVar().localVariableIndex()).isEqualTo(5);
+    assertThat(foreachNonEmptyNode.getVar().localVariableIndex()).isEqualTo(3);
+    assertThat(foreachNonEmptyNode.getVar().currentLoopIndexIndex()).isEqualTo(4);
+    assertThat(foreachNonEmptyNode.getVar().isLastIteratorIndex()).isEqualTo(5);
     // The loop variables are out of scope so we can reuse the 3rd slot
     assertThat(((LetValueNode) n.getChild(2)).getVar().localVariableIndex()).isEqualTo(3);
   }
@@ -166,6 +166,13 @@ public final class ResolveNamesVisitorTest extends TestCase {
             "{foreach $item in ['a', 'b']}",
             "  {let $la: $la /}",
             "{/foreach}"));
+    assertResolveNamesFails(
+        "variable '$group' already defined",
+        constructTemplateSource(
+            "{@param group: string}",
+            "{foreach $group in ['a', 'b']}",
+            "  {$group}",
+            "{/foreach}"));
     // valid, $item and $la are defined in non-overlapping scopes
     SoyFileSetParserBuilder.forFileContents(
             constructTemplateSource(
@@ -177,6 +184,24 @@ public final class ResolveNamesVisitorTest extends TestCase {
                 "{/foreach}"))
         .parse()
         .fileSet();
+  }
+
+  public void testAccidentalGlobalReference() {
+    assertResolveNamesFails(
+        "Found global reference aliasing a local variable 'group', did you mean '$group'?",
+        constructTemplateSource(
+            "{@param group: string}",
+            "{if group}{$group}{/if}"));
+    assertResolveNamesFails(
+        "Found global reference aliasing a local variable 'group', did you mean '$group'?",
+        constructTemplateSource(
+            "{let $group: 'foo' /}",
+            "{if group}{$group}{/if}"));
+    assertResolveNamesFails(
+        "Unbound global 'global'.",
+        constructTemplateSource(
+            "{let $local: 'foo' /}",
+            "{if global}{$local}{/if}"));
   }
 
   public void testLetContentSlotLifetime() {
@@ -210,6 +235,7 @@ public final class ResolveNamesVisitorTest extends TestCase {
     // 1. removing this dead feature
     // 2. moving this functionality from CheckTemplateParamsVisitor to ResolveNamesVisitor where it
     //    belongs
+    // http://b/21877289 covers various issues with syntax version
     assertResolveNamesFails("Undefined variable", constructTemplateSource("{$pa}"));
   }
 

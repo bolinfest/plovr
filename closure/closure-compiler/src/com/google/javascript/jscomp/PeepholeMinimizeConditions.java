@@ -59,7 +59,7 @@ class PeepholeMinimizeConditions
   @Override
   @SuppressWarnings("fallthrough")
   public Node optimizeSubtree(Node node) {
-    switch(node.getType()) {
+    switch (node.getToken()) {
       case THROW:
       case RETURN: {
         Node result = tryRemoveRedundantExit(node);
@@ -133,7 +133,7 @@ class PeepholeMinimizeConditions
         // Preserve the IF ELSE expression is there is one.
         if (maybeIf.getChildCount() == 3) {
           block.replaceChild(maybeIf,
-              maybeIf.getLastChild().detachFromParent());
+              maybeIf.getLastChild().detach());
         } else {
           NodeUtil.redeclareVarsInsideBranch(thenBlock);
           block.removeFirstChild();
@@ -164,8 +164,10 @@ class PeepholeMinimizeConditions
    */
   private Node tryReplaceIf(Node n) {
 
+    Node next = null;
     for (Node child = n.getFirstChild();
-         child != null; child = child.getNext()){
+         child != null; child = next){
+      next = child.getNext();
       if (child.isIf()){
         Node cond = child.getFirstChild();
         Node thenBranch = cond.getNext();
@@ -183,7 +185,7 @@ class PeepholeMinimizeConditions
             //   if (x) return 1; if (y) return 1;
             // to
             //   if (x||y) return 1;
-            child.detachFromParent();
+            child.detach();
             child.detachChildren();
             Node newCond = new Node(Token.OR, cond);
             nextNode.replaceChild(nextCond, newCond);
@@ -195,7 +197,7 @@ class PeepholeMinimizeConditions
             //   if (x) return 1; if (y) foo() else return 1;
             // to
             //   if (!x&&y) foo() else return 1;
-            child.detachFromParent();
+            child.detach();
             child.detachChildren();
             Node newCond = new Node(Token.AND,
                 IR.not(cond).srcref(cond));
@@ -209,15 +211,15 @@ class PeepholeMinimizeConditions
           // if(x)return; return 1 -> return x?void 0:1
           if (isReturnExpressBlock(thenBranch)) {
             thenExpr = getBlockReturnExpression(thenBranch);
-            thenExpr.detachFromParent();
+            thenExpr.detach();
           } else {
             thenExpr = NodeUtil.newUndefinedNode(child);
           }
 
           Node elseExpr = nextNode.getFirstChild();
 
-          cond.detachFromParent();
-          elseExpr.detachFromParent();
+          cond.detach();
+          elseExpr.detach();
 
           Node returnNode = IR.returnNode(
                                 IR.hook(cond, thenExpr, elseExpr)
@@ -225,6 +227,8 @@ class PeepholeMinimizeConditions
           n.replaceChild(child, returnNode);
           n.removeChild(nextNode);
           reportCodeChange();
+          // everything else in the block is dead code.
+          break;
         } else if (elseBranch != null && statementMustExitParent(thenBranch)) {
           child.removeChild(elseBranch);
           n.addChildAfter(elseBranch, child);
@@ -236,7 +240,7 @@ class PeepholeMinimizeConditions
   }
 
   private static boolean statementMustExitParent(Node n) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case THROW:
       case RETURN:
         return true;
@@ -352,7 +356,7 @@ class PeepholeMinimizeConditions
     // When follow is null, this mean the follow of a break target is the
     // end of a function. This means a break is same as return.
     if (follow == null || areMatchingExits(n, follow)) {
-      n.detachFromParent();
+      n.detach();
       reportCodeChange();
       return null;
     }
@@ -416,7 +420,7 @@ class PeepholeMinimizeConditions
     Node notChild = n.getFirstChild();
     // negative operator of the current one : == -> != for instance.
     Token complementOperator;
-    switch (notChild.getType()) {
+    switch (notChild.getToken()) {
       case EQ:
         complementOperator = Token.NE;
         break;
@@ -434,7 +438,7 @@ class PeepholeMinimizeConditions
         return n;
     }
     Node newOperator = n.removeFirstChild();
-    newOperator.setType(complementOperator);
+    newOperator.setToken(complementOperator);
     parent.replaceChild(n, newOperator);
     reportCodeChange();
     return newOperator;
@@ -589,9 +593,9 @@ class PeepholeMinimizeConditions
               n.addChildToBack(
                   IR.and(
                       unnegatedCond.getNode(),
-                      innerCond.detachFromParent())
+                      innerCond.detach())
                       .srcref(placeholder));
-              n.addChildrenToBack(innerThenBranch.detachFromParent());
+              n.addChildToBack(innerThenBranch.detach());
               reportCodeChange();
               // Not worth trying to fold the current IF-ELSE into && because
               // the inner IF-ELSE wasn't able to be folded into && anyways.
@@ -624,8 +628,8 @@ class PeepholeMinimizeConditions
       Node thenExpr = getBlockReturnExpression(thenBranch);
       Node elseExpr = getBlockReturnExpression(elseBranch);
       n.removeChild(placeholder);
-      thenExpr.detachFromParent();
-      elseExpr.detachFromParent();
+      thenExpr.detach();
+      elseExpr.detach();
 
       // note - we ignore any cases with "return;", technically this
       // can be converted to "return undefined;" or some variant, but
@@ -644,7 +648,7 @@ class PeepholeMinimizeConditions
     if (thenBranchIsExpressionBlock && elseBranchIsExpressionBlock) {
       Node thenOp = getBlockExpression(thenBranch).getFirstChild();
       Node elseOp = getBlockExpression(elseBranch).getFirstChild();
-      if (thenOp.getType() == elseOp.getType()) {
+      if (thenOp.getToken() == elseOp.getToken()) {
         // if(x)a=1;else a=2; -> a=x?1:2;
         if (NodeUtil.isAssignmentOp(thenOp)) {
           Node lhs = thenOp.getFirstChild();
@@ -665,8 +669,7 @@ class PeepholeMinimizeConditions
 
             Node hookNode = IR.hook(shortCond.getNode(), thenExpr, elseExpr)
                 .srcref(n);
-            Node assign = new Node(thenOp.getType(), assignName, hookNode)
-                              .srcref(thenOp);
+            Node assign = new Node(thenOp.getToken(), assignName, hookNode).srcref(thenOp);
             Node expr = NodeUtil.newExpr(assign);
             parent.replaceChild(n, expr);
             reportCodeChange();
@@ -677,8 +680,8 @@ class PeepholeMinimizeConditions
       }
       // if(x)foo();else bar(); -> x?foo():bar()
       n.removeChild(placeholder);
-      thenOp.detachFromParent();
-      elseOp.detachFromParent();
+      thenOp.detach();
+      elseOp.detach();
       Node expr = IR.exprResult(
           IR.hook(shortCond.getNode(), thenOp, elseOp).srcref(n));
       parent.replaceChild(n, expr);
@@ -702,13 +705,14 @@ class PeepholeMinimizeConditions
       if (name1.hasChildren()
           && maybeName2.isName()
           && name1.getString().equals(maybeName2.getString())) {
-        Node thenExpr = name1.removeChildren();
-        Node elseExpr = elseAssign.getLastChild().detachFromParent();
-        placeholder.detachFromParent();
+        Preconditions.checkState(name1.hasOneChild());
+        Node thenExpr = name1.removeFirstChild();
+        Node elseExpr = elseAssign.getLastChild().detach();
+        placeholder.detach();
         Node hookNode = IR.hook(shortCond.getNode(), thenExpr, elseExpr)
                             .srcref(n);
-        var.detachFromParent();
-        name1.addChildrenToBack(hookNode);
+        var.detach();
+        name1.addChildToBack(hookNode);
         parent.replaceChild(n, var);
         reportCodeChange();
         return var;
@@ -727,13 +731,14 @@ class PeepholeMinimizeConditions
       if (name2.hasChildren()
           && maybeName1.isName()
           && maybeName1.getString().equals(name2.getString())) {
-        Node thenExpr = thenAssign.getLastChild().detachFromParent();
-        Node elseExpr = name2.removeChildren();
-        placeholder.detachFromParent();
+        Node thenExpr = thenAssign.getLastChild().detach();
+        Preconditions.checkState(name2.hasOneChild());
+        Node elseExpr = name2.removeFirstChild();
+        placeholder.detach();
         Node hookNode = IR.hook(shortCond.getNode(), thenExpr, elseExpr)
                             .srcref(n);
-        var.detachFromParent();
-        name2.addChildrenToBack(hookNode);
+        var.detach();
+        name2.addChildToBack(hookNode);
         parent.replaceChild(n, var);
         reportCodeChange();
 
@@ -790,8 +795,8 @@ class PeepholeMinimizeConditions
           || !areNodesEqualForInlining(lastTrue, lastFalse)) {
         break;
       }
-      lastTrue.detachFromParent();
-      lastFalse.detachFromParent();
+      lastTrue.detach();
+      lastFalse.detach();
       parent.addChildAfter(lastTrue, n);
       reportCodeChange();
     }
@@ -924,7 +929,7 @@ class PeepholeMinimizeConditions
    */
   private static boolean consumesDanglingElse(Node n) {
     while (true) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case IF:
           if (n.getChildCount() < 3) {
             return true;
@@ -954,7 +959,7 @@ class PeepholeMinimizeConditions
    * Whether the node type has lower precedence than "precedence"
    */
   static boolean isLowerPrecedence(Node n, final int precedence) {
-    return NodeUtil.precedence(n.getType()) < precedence;
+    return NodeUtil.precedence(n.getToken()) < precedence;
   }
 
   /**
@@ -1001,7 +1006,7 @@ class PeepholeMinimizeConditions
       return n;
     }
 
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case OR:
       case AND:
         performCoercionSubstitutions(n.getFirstChild());
@@ -1013,6 +1018,8 @@ class PeepholeMinimizeConditions
       case SHEQ:
       case SHNE:
         return tryReplaceComparisonWithCoercion(n, false /* booleanResult */);
+      default:
+        break;
     }
     return n;
   }
@@ -1029,20 +1036,19 @@ class PeepholeMinimizeConditions
       return n;
     }
 
+    Token op = n.getToken();
     Preconditions.checkArgument(
-        n.getType() == Token.EQ
-            || n.getType() == Token.NE
-            || n.getType() == Token.SHEQ
-            || n.getType() == Token.SHNE);
+        op == Token.EQ || op == Token.NE || op == Token.SHEQ || op == Token.SHNE);
 
     Node left = n.getFirstChild();
     Node right = n.getLastChild();
-    BooleanCoercability booleanCoercability = canConvertComparisonToBooleanCoercion(left, right);
+    BooleanCoercability booleanCoercability =
+        canConvertComparisonToBooleanCoercion(left, right, op);
     if (booleanCoercability != BooleanCoercability.NONE) {
       n.detachChildren();
       Node objExpression = booleanCoercability == BooleanCoercability.LEFT ? left : right;
       Node replacement;
-      if (n.getType() == Token.EQ || n.getType() == Token.SHEQ) {
+      if (n.getToken() == Token.EQ || n.getToken() == Token.SHEQ) {
         replacement = IR.not(objExpression);
       } else {
         replacement = booleanResult ? IR.not(IR.not(objExpression)) : objExpression;
@@ -1066,22 +1072,38 @@ class PeepholeMinimizeConditions
     RIGHT
   }
 
-  private static BooleanCoercability canConvertComparisonToBooleanCoercion(Node left, Node right) {
-    // Convert null check of an object to coercion.
-    boolean leftIsNull = NodeUtil.isNullOrUndefined(left);
-    boolean rightIsNull = NodeUtil.isNullOrUndefined(right);
+  private static BooleanCoercability canConvertComparisonToBooleanCoercion(
+      Node left, Node right, Token op) {
+    // Convert null or undefined check of an object to coercion.
+    boolean leftIsNull = left.isNull();
+    boolean rightIsNull = right.isNull();
+    boolean leftIsUndefined = NodeUtil.isUndefined(left);
+    boolean rightIsUndefined = NodeUtil.isUndefined(right);
+    boolean leftIsNullOrUndefined = leftIsNull || leftIsUndefined;
+    boolean rightIsNullOrUndefined = rightIsNull || rightIsUndefined;
+
     boolean leftIsObjectType = isObjectType(left);
     boolean rightIsObjectType = isObjectType(right);
-    if (leftIsObjectType && rightIsNull || rightIsObjectType && leftIsNull) {
-      return leftIsNull ? BooleanCoercability.RIGHT : BooleanCoercability.LEFT;
+    if (op == Token.SHEQ || op == Token.SHNE) {
+      if ((leftIsObjectType && !left.getJSType().isVoidable() && rightIsNull)
+          || (leftIsObjectType && !left.getJSType().isNullable() && rightIsUndefined)
+          || (rightIsObjectType && !right.getJSType().isVoidable() && leftIsNull)
+          || (rightIsObjectType && !right.getJSType().isNullable() && leftIsUndefined)) {
+        return leftIsNullOrUndefined ? BooleanCoercability.RIGHT : BooleanCoercability.LEFT;
+      }
+    } else {
+      if ((leftIsObjectType && rightIsNullOrUndefined)
+          || (rightIsObjectType && leftIsNullOrUndefined)) {
+        return leftIsNullOrUndefined ? BooleanCoercability.RIGHT : BooleanCoercability.LEFT;
+      }
     }
 
     // Convert comparing a number to zero with coercion.
-    boolean leftIsZero = left.isNumber() && left.getDouble() == 0;
-    boolean rightIsZero = right.isNumber() && right.getDouble() == 0;
+    boolean leftIsZero = (left.isNumber() && left.getDouble() == 0);
+    boolean rightIsZero = (right.isNumber() && right.getDouble() == 0);
     boolean leftIsNumberType = isNumberType(left);
     boolean rightIsNumberType = isNumberType(right);
-    if (leftIsNumberType && rightIsZero || rightIsNumberType && leftIsZero) {
+    if ((leftIsNumberType && rightIsZero) || (rightIsNumberType && leftIsZero)) {
       return leftIsZero ? BooleanCoercability.RIGHT : BooleanCoercability.LEFT;
     }
 
@@ -1135,7 +1157,7 @@ class PeepholeMinimizeConditions
   private Node performConditionSubstitutions(Node n) {
     Node parent = n.getParent();
 
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case OR:
       case AND: {
         Node left = n.getFirstChild();
@@ -1165,14 +1187,13 @@ class PeepholeMinimizeConditions
         // the new AST is easier for other passes to handle.
         TernaryValue rightVal = NodeUtil.getPureBooleanValue(right);
         if (NodeUtil.getPureBooleanValue(right) != TernaryValue.UNKNOWN) {
-          Token type = n.getType();
+            Token type = n.getToken();
           Node replacement = null;
           boolean rval = rightVal.toBoolean(true);
 
           // (x || FALSE) => x
           // (x && TRUE) => x
-          if (type == Token.OR && !rval ||
-              type == Token.AND && rval) {
+          if ((type == Token.OR && !rval) || (type == Token.AND && rval)) {
             replacement = left;
           } else if (!mayHaveSideEffects(left)) {
             replacement = right;
@@ -1215,12 +1236,12 @@ class PeepholeMinimizeConditions
         if (trueNodeVal == TernaryValue.TRUE
             && falseNodeVal == TernaryValue.FALSE) {
           // Remove useless conditionals, keep the condition
-          condition.detachFromParent();
+          condition.detach();
           replacement = condition;
         } else if (trueNodeVal == TernaryValue.FALSE
             && falseNodeVal == TernaryValue.TRUE) {
           // Remove useless conditionals, keep the condition
-          condition.detachFromParent();
+          condition.detach();
           replacement = IR.not(condition);
         } else if (trueNodeVal == TernaryValue.TRUE) {
           // Remove useless true case.

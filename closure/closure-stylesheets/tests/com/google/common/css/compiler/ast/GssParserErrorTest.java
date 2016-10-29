@@ -16,21 +16,22 @@
 
 package com.google.common.css.compiler.ast;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.common.css.SourceCode;
 
 import junit.framework.TestCase;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Unit tests for error handling of {@link GssParser}.
  *
+ * @author fbenz@google.com (Florian Benz)
  */
 
 public class GssParserErrorTest extends TestCase {
-
-  private CssTree parse(String gss) throws GssParserException {
-    GssParser parser = new GssParser(new SourceCode("test", gss));
-    return parser.parse();
-  }
 
   private void testError(String gss, int lineNumber, int indexInLine,
                          String line, String caret) {
@@ -168,8 +169,8 @@ public class GssParserErrorTest extends TestCase {
   }
 
   public void testBadMixinDefinition() {
-    testError("@defmixin name($var) {}", 1, 16,
-        "@defmixin name($var) {}",
+    testError("@defmixin name($#%$var) {}", 1, 16,
+        "@defmixin name($#%$var) {}",
         "               ^");
   }
 
@@ -179,9 +180,192 @@ public class GssParserErrorTest extends TestCase {
         + "blue 90%);"
         + "}",
         1, 72,
-        "div {d:-invalid-gradient(bottom left, red 20px, yellow, green,"
-        +"blue 90%);}",
-        "                                                                "
-        + "       ^");
+        "div {d:-invalid-gradient(bottom left, red 20px, yellow, green,blue 90%);}",
+        "                                                                       ^");
+  }
+
+  public void testInvalidSpaceInArgumentList() {
+    // The parser marks the error at the semicolon because this is the token immediately following
+    // the last successfully-consumed production. This is not ideal because the error occurs within
+    // the argument list, but we validate the argument list after it is successfully parsed by the
+    // grammar.
+    testError("div { transform:rotate(180 deg); }",
+        1, 32,
+        "div { transform:rotate(180 deg); }",
+        "                               ^");
+    testError("div { background: rgba(255,0,0 1); }",
+        1, 34,
+        "div { background: rgba(255,0,0 1); }",
+        "                                 ^");
+  }
+
+  /**
+   * Tests for error handling below
+   */
+
+  private void testErrorHandling(String input, String expected, String... errors)
+      throws GssParserException {
+    List<GssParserException> handledErrors = new ArrayList<>();
+    CssTree tree = parse(input, true, handledErrors);
+    List<String> errorMessages = new ArrayList<>();
+    for (GssParserException e : handledErrors) {
+      errorMessages.add(e.getMessage());
+    }
+    assertNotNull(tree);
+    CssRootNode root = tree.getRoot();
+    assertNotNull(root);
+    assertThat(errorMessages).containsExactly((Object[]) errors).inOrder();
+    assertEquals(expected, root.toString());
+  }
+
+  public void testDeclarationErrorHandling() throws GssParserException {
+    testErrorHandling("a { b: c,,; d: e }", "[[a]{[d:[e]]}]",
+        "Parse error in test at line 1 column 10:\n"
+        + "a { b: c,,; d: e }\n"
+        + "         ^\n");
+    testErrorHandling("a { b: c: d; e: f }", "[[a]{[e:[f]]}]",
+        "Parse error in test at line 1 column 10:\n"
+        + "a { b: c: d; e: f }\n"
+        + "         ^\n");
+    testErrorHandling("a { b: c; @at d: e; f: g }", "[[a]{[b:[c], f:[g]]}]",
+        "Parse error in test at line 1 column 17:\n"
+        + "a { b: c; @at d: e; f: g }\n"
+        + "                ^\n");
+  }
+
+  public void testSelectorErrorHandling() throws GssParserException {
+    testErrorHandling("a>>b { b: c } d { e: f }", "[[d]{[e:[f]]}]",
+        "Parse error in test at line 1 column 2:\n"
+        + "a>>b { b: c } d { e: f }\n"
+        + " ^\n");
+    testErrorHandling("a @ b { c: d } e {}", "[[e]{[]}]",
+        "Parse error in test at line 1 column 3:\n"
+        + "a @ b { c: d } e {}\n"
+        + "  ^\n");
+    // No error; braces within quoted string are correctly parsed
+    testErrorHandling("a{b:\"{,}\"}", "[[a]{[b:[\"{,}\"]]}]");
+  }
+
+  public void testAtRuleErrorHandling() throws GssParserException {
+    testErrorHandling("@a b (,,); c { d: e }", "[[c]{[d:[e]]}]",
+        "Parse error in test at line 1 column 7:\n"
+        + "@a b (,,); c { d: e }\n"
+        + "      ^\n");
+    testErrorHandling("@a { b,,{} c { d:: e; f: g } } h { i: j }",
+        "[@a[]{[[c]{[f:[g]]}]}, [h]{[i:[j]]}]",
+        "Parse error in test at line 1 column 8:\n"
+        + "@a { b,,{} c { d:: e; f: g } } h { i: j }\n"
+        + "       ^\n",
+        "Parse error in test at line 1 column 18:\n"
+        + "@a { b,,{} c { d:: e; f: g } } h { i: j }\n"
+        + "                 ^\n");
+    testErrorHandling("@a (b;) { c {} } d {}", "[[d]{[]}]",
+        "Parse error in test at line 1 column 6:\n"
+        + "@a (b;) { c {} } d {}\n"
+        + "     ^\n");
+    testErrorHandling("@a (b:c[]) { d[;}] {} e {} } f {}", "[[f]{[]}]",
+        "Parse error in test at line 1 column 8:\n"
+        + "@a (b:c[]) { d[;}] {} e {} } f {}\n"
+        + "       ^\n");
+    testErrorHandling("a { @b { c, {} d {} } e: f }", "[[a]{[@b[]{[]}, e:[f]]}]",
+        "Parse error in test at line 1 column 11:\n"
+        + "a { @b { c, {} d {} } e: f }\n"
+        + "          ^\n");
+    testErrorHandling("a[b=] { c {} } d {}", "[[d]{[]}]",
+        "Parse error in test at line 1 column 5:\n"
+        + "a[b=] { c {} } d {}\n"
+        + "    ^\n");
+  }
+
+  public void testMatchingBraces() throws GssParserException {
+    // Inner closed block ignored
+    testErrorHandling("a{ b{} } c{}", "[[a]{[]}, [c]{[]}]",
+        "Parse error in test at line 1 column 5:\n"
+        + "a{ b{} } c{}\n"
+        + "    ^\n");
+    // Inner nested blocks ignored as well
+    testErrorHandling("a{([b])} c{}", "[[c]{[]}]",
+        "Parse error in test at line 1 column 3:\n"
+        + "a{([b])} c{}\n"
+        + "  ^\n");
+    // Unmatched left brace consume until EOF
+    testErrorHandling("a{([b)]} c{}", "[]",
+        "Parse error in test at line 1 column 3:\n"
+        + "a{([b)]} c{}\n"
+        + "  ^\n");
+    // Unmatched right brace ignored
+    testErrorHandling("a{ (}) } b{}", "[[b]{[]}]",
+        "Parse error in test at line 1 column 4:\n"
+        + "a{ (}) } b{}\n"
+        + "   ^\n");
+  }
+
+  public void testErrorRecoveryWithInvalidArgumentList() throws GssParserException {
+    testErrorHandling("div { transform:rotate(180 deg); }", "[[div]{[]}]",
+        "Parse error in test at line 1 column 32:\n"
+        + "div { transform:rotate(180 deg); }\n"
+        + "                               ^\n");
+  }
+
+  public void testUnterminatedBlockCommentsWithoutErrorRecovery() throws GssParserException {
+    testError("div {}/*comment**p {}", 1, 7,
+              "div {}/*comment**p {}",
+              "      ^");
+    testError("div {}/*/p {}", 1, 7,
+              "div {}/*/p {}",
+              "      ^");
+    testError("div {}/*", 1, 7,
+              "div {}/*",
+              "      ^");
+    testError("div {}/* *\ndiv { color: red; }", 1, 7,
+              "div {}/* *",
+              "      ^");
+    testError("div {} /* comment */ div {} /* unterminated comment", 1, 29,
+              "div {} /* comment */ div {} /* unterminated comment",
+              "                            ^");
+    testError("div {} /* comment */ /* unterminated comment", 1, 22,
+              "div {} /* comment */ /* unterminated comment",
+              "                     ^");
+  }
+
+  public void testUnterminatedBlockCommentsWithErrorRecovery() throws GssParserException {
+    testErrorHandling("div {}/*comment**p {}", "[[div]{[]}]",
+        "Parse error in test at line 1 column 7:\n"
+        + "div {}/*comment**p {}\n"
+        + "      ^\n");
+    testErrorHandling("div {}/*/p {}", "[[div]{[]}]",
+        "Parse error in test at line 1 column 7:\n"
+        + "div {}/*/p {}\n"
+        + "      ^\n");
+    testErrorHandling("div {}/*", "[[div]{[]}]",
+        "Parse error in test at line 1 column 7:\n"
+        + "div {}/*\n"
+        + "      ^\n");
+    testErrorHandling("div {}/* *\ndiv { color: red; }", "[[div]{[]}]",
+        "Parse error in test at line 1 column 7:\n"
+        + "div {}/* *\n"
+        + "      ^\n");
+    testErrorHandling(
+        "div {} /* comment */ div {} /* unterminated comment", "[[div]{[]}, [div]{[]}]",
+        "Parse error in test at line 1 column 29:\n"
+        + "div {} /* comment */ div {} /* unterminated comment\n"
+        + "                            ^\n");
+    testErrorHandling("div {} /* comment */ /* unterminated comment", "[[div]{[]}]",
+        "Parse error in test at line 1 column 22:\n"
+        + "div {} /* comment */ /* unterminated comment\n"
+        + "                     ^\n");
+  }
+
+  private CssTree parse(String gss, boolean shouldHandleError,
+      List<GssParserException> handledErrors)
+      throws GssParserException {
+    GssParser parser = new GssParser(new SourceCode("test", gss));
+    CssTree tree = parser.parse(shouldHandleError);
+    handledErrors.addAll(parser.getHandledErrors());
+    return tree;
+  }
+
+  private CssTree parse(String gss) throws GssParserException {
+    return parse(gss, false, new ArrayList<GssParserException>());
   }
 }

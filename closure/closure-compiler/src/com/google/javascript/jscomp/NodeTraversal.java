@@ -22,7 +22,6 @@ import com.google.common.base.Preconditions;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Iterator;
@@ -77,6 +76,7 @@ public class NodeTraversal {
 
   /** The current input */
   private InputId inputId;
+  private CompilerInput compilerInput;
 
   /** The scope creator */
   private final ScopeCreator scopeCreator;
@@ -147,7 +147,7 @@ public class NodeTraversal {
   /** Abstract callback to visit all nodes in preorder. */
   public abstract static class AbstractPreOrderCallback implements Callback {
     @Override
-    public void visit(NodeTraversal t, Node n, Node parent) {}
+    public final void visit(NodeTraversal t, Node n, Node parent) {}
   }
 
   /** Abstract scoped callback to visit all nodes in postorder. */
@@ -258,7 +258,7 @@ public class NodeTraversal {
     @Override
     public boolean shouldTraverse(NodeTraversal nodeTraversal, Node n,
         Node parent) {
-      return include == nodeTypes.contains(n.getType());
+      return include == nodeTypes.contains(n.getToken());
     }
   }
 
@@ -282,8 +282,7 @@ public class NodeTraversal {
       this.scopeCallback = (ScopedCallback) cb;
     }
     this.compiler = compiler;
-    this.inputId = null;
-    this.sourceName = "";
+    setInputId(null, "");
     this.scopeCreator = scopeCreator;
     this.useBlockScope = scopeCreator.hasBlockScope();
   }
@@ -320,8 +319,7 @@ public class NodeTraversal {
    */
   public void traverse(Node root) {
     try {
-      inputId = NodeUtil.getInputId(root);
-      sourceName = "";
+      setInputId(NodeUtil.getInputId(root), "");
       curNode = root;
       pushScope(root);
       // null parent ensures that the shallow callbacks will traverse root
@@ -337,8 +335,7 @@ public class NodeTraversal {
       Node scopeRoot = externs.getParent();
       Preconditions.checkNotNull(scopeRoot);
 
-      inputId = NodeUtil.getInputId(scopeRoot);
-      sourceName = "";
+      setInputId(NodeUtil.getInputId(scopeRoot), "");
       curNode = scopeRoot;
       pushScope(scopeRoot);
 
@@ -378,8 +375,7 @@ public class NodeTraversal {
   void traverseWithScope(Node root, Scope s) {
     Preconditions.checkState(s.isGlobal());
     try {
-      inputId = null;
-      sourceName = "";
+      setInputId(null, "");
       curNode = root;
       pushScope(s);
       traverseBranch(root, null);
@@ -399,9 +395,8 @@ public class NodeTraversal {
       // We need to do some extra magic to make sure that the scope doesn't
       // get re-created when we dive into the function.
       if (inputId == null) {
-        inputId = NodeUtil.getInputId(n);
+        setInputId(NodeUtil.getInputId(n), getSourceName(n));
       }
-      sourceName = getSourceName(n);
       curNode = n;
       pushScope(s);
 
@@ -413,9 +408,8 @@ public class NodeTraversal {
       popScope();
     } else if (n.isBlock()) {
       if (inputId == null) {
-        inputId = NodeUtil.getInputId(n);
+        setInputId(NodeUtil.getInputId(n), getSourceName(n));
       }
-      sourceName = getSourceName(n);
       curNode = n;
       pushScope(s);
 
@@ -441,7 +435,7 @@ public class NodeTraversal {
     Preconditions.checkState(node.isFunction());
     Preconditions.checkState(scope.getRootNode() != null);
     if (inputId == null) {
-      inputId = NodeUtil.getInputId(node);
+      setInputId(NodeUtil.getInputId(node), getSourceName(node));
     }
     curNode = node.getParent();
     pushScope(scope, true /* quietly */);
@@ -462,7 +456,7 @@ public class NodeTraversal {
   void traverseInnerNode(Node node, Node parent, Scope refinedScope) {
     Preconditions.checkNotNull(parent);
     if (inputId == null) {
-      inputId = NodeUtil.getInputId(node);
+      setInputId(NodeUtil.getInputId(node), getSourceName(node));
     }
     if (refinedScope != null && getScope() != refinedScope) {
       curNode = node;
@@ -523,7 +517,10 @@ public class NodeTraversal {
    * Gets the current input source.
    */
   public CompilerInput getInput() {
-    return compiler.getInput(inputId);
+    if (compilerInput == null) {
+      compilerInput = compiler.getInput(inputId);
+    }
+    return compilerInput;
   }
 
   /**
@@ -564,7 +561,7 @@ public class NodeTraversal {
         new AbstractPreOrderCallback() {
           @Override
           public final boolean shouldTraverse(NodeTraversal t, Node n, Node p) {
-            if ((n == jsRoot || n.isFunction()) && comp.hasScopeChanged(n)) {
+            if ((n.isScript() || n.isFunction()) && comp.hasScopeChanged(n)) {
               cb.enterFunction(comp, n);
             }
             return true;
@@ -619,10 +616,9 @@ public class NodeTraversal {
    * Traverses a branch.
    */
   private void traverseBranch(Node n, Node parent) {
-    Token type = n.getType();
+    Token type = n.getToken();
     if (type == Token.SCRIPT) {
-      inputId = n.getInputId();
-      sourceName = getSourceName(n);
+      setInputId(n.getInputId(), getSourceName(n));
     }
 
     curNode = n;
@@ -698,7 +694,7 @@ public class NodeTraversal {
       traverseBranch(className, n);
     }
 
-    final Node extendsClause = className.getNext();
+    final Node extendsClause = n.getSecondChild();
     final Node body = extendsClause.getNext();
 
     // Extends
@@ -871,6 +867,14 @@ public class NodeTraversal {
     return getScopeDepth() == 0;
   }
 
+  /** Determines whether the traversal is currently in the scope of the block of a function. */
+  public boolean inFunctionBlockScope() {
+    Node scopeRoot = getScopeRoot();
+    return scopeRoot.isBlock()
+        && scopeRoot.getParent() != null
+        && scopeRoot.getParent().isFunction();
+  }
+
   /**
    * Determines whether the hoist scope of the current traversal is global.
    */
@@ -925,6 +929,12 @@ public class NodeTraversal {
   private static String getSourceName(Node n) {
     String name = n.getSourceFileName();
     return nullToEmpty(name);
+  }
+
+  private void setInputId(InputId id, String sourceName) {
+    inputId = id;
+    this.sourceName = sourceName;
+    compilerInput = null;
   }
 
   InputId getInputId() {

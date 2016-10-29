@@ -23,7 +23,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.common.io.Files;
-import com.google.inject.Key;
 import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.internal.i18n.BidiGlobalDir;
@@ -31,16 +30,15 @@ import com.google.template.soy.internal.i18n.SoyBidiUtils;
 import com.google.template.soy.jssrc.SoyJsSrcOptions;
 import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.msgs.internal.InsertMsgsVisitor;
-import com.google.template.soy.passes.IjDataQueries;
 import com.google.template.soy.shared.internal.ApiCallScopeUtils;
 import com.google.template.soy.shared.internal.GuiceSimpleScope;
 import com.google.template.soy.shared.internal.GuiceSimpleScope.WithScope;
 import com.google.template.soy.shared.internal.MainEntryPointUtils;
 import com.google.template.soy.shared.restricted.ApiCallScopeBindingAnnotations.ApiCall;
-import com.google.template.soy.shared.restricted.ApiCallScopeBindingAnnotations.IsUsingIjData;
 import com.google.template.soy.sharedpasses.opti.SimplifyVisitor;
 import com.google.template.soy.soytree.SoyFileNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
+import com.google.template.soy.soytree.TemplateRegistry;
 
 import java.io.File;
 import java.io.IOException;
@@ -72,9 +70,6 @@ public class JsSrcMain {
   /** Provider for getting an instance of GenJsCodeVisitor. */
   private final Provider<GenJsCodeVisitor> genJsCodeVisitorProvider;
 
-  /** For reporting errors during code generation. */
-  private final ErrorReporter errorReporter;
-
 
   /**
    * @param apiCallScope The scope object that manages the API call scope.
@@ -88,13 +83,11 @@ public class JsSrcMain {
       @ApiCall GuiceSimpleScope apiCallScope,
       SimplifyVisitor simplifyVisitor,
       Provider<OptimizeBidiCodeGenVisitor> optimizeBidiCodeGenVisitorProvider,
-      Provider<GenJsCodeVisitor> genJsCodeVisitorProvider,
-      ErrorReporter errorReporter) {
+      Provider<GenJsCodeVisitor> genJsCodeVisitorProvider) {
     this.apiCallScope = apiCallScope;
     this.simplifyVisitor = simplifyVisitor;
     this.optimizeBidiCodeGenVisitorProvider = optimizeBidiCodeGenVisitorProvider;
     this.genJsCodeVisitorProvider = genJsCodeVisitorProvider;
-    this.errorReporter = errorReporter;
   }
 
 
@@ -110,12 +103,11 @@ public class JsSrcMain {
    *     JS file. The generated JS files correspond one-to-one to the original Soy source files.
    */
   public List<String> genJsSrc(
-      SoyFileSetNode soyTree, SoyJsSrcOptions jsSrcOptions, @Nullable SoyMsgBundle msgBundle) {
-
-    // Generate code with the opt_ijData param if either (a) the user specified the compiler flag
-    // --isUsingIjData or (b) any of the Soy code in the file set references injected data.
-    boolean isUsingIjData = jsSrcOptions.isUsingIjData()
-        || IjDataQueries.isUsingIj(soyTree);
+      SoyFileSetNode soyTree,
+      TemplateRegistry templateRegistry,
+      SoyJsSrcOptions jsSrcOptions,
+      @Nullable SoyMsgBundle msgBundle,
+      ErrorReporter errorReporter) {
 
     // Make sure that we don't try to use goog.i18n.bidi when we aren't supposed to use Closure.
     Preconditions.checkState(
@@ -128,7 +120,6 @@ public class JsSrcMain {
     try (WithScope withScope = apiCallScope.enter()) {
       // Seed the scoped parameters.
       apiCallScope.seed(SoyJsSrcOptions.class, jsSrcOptions);
-      apiCallScope.seed(Key.get(Boolean.class, IsUsingIjData.class), isUsingIjData);
       BidiGlobalDir bidiGlobalDir = SoyBidiUtils.decodeBidiGlobalDirFromJsOptions(
           jsSrcOptions.getBidiGlobalDir(),
           jsSrcOptions.getUseGoogIsRtlForBidiGlobalDir());
@@ -136,8 +127,7 @@ public class JsSrcMain {
 
       // Replace MsgNodes.
       if (jsSrcOptions.shouldGenerateGoogMsgDefs()) {
-        new ReplaceMsgsWithGoogMsgsVisitor().exec(soyTree);
-        new MoveGoogMsgDefNodesEarlierVisitor().exec(soyTree);
+        new ExtractMsgVariablesVisitor().exec(soyTree);
         Preconditions.checkState(
             bidiGlobalDir != null,
             "If enabling shouldGenerateGoogMsgDefs, must also set bidi global directionality.");
@@ -150,8 +140,8 @@ public class JsSrcMain {
 
       // Do the code generation.
       optimizeBidiCodeGenVisitorProvider.get().exec(soyTree);
-      simplifyVisitor.exec(soyTree);
-      return genJsCodeVisitorProvider.get().exec(soyTree);
+      simplifyVisitor.simplify(soyTree, templateRegistry);
+      return genJsCodeVisitorProvider.get().gen(soyTree, templateRegistry, errorReporter);
     }
   }
 
@@ -172,14 +162,17 @@ public class JsSrcMain {
    */
   public void genJsFiles(
       SoyFileSetNode soyTree,
+      TemplateRegistry templateRegistry,
       SoyJsSrcOptions jsSrcOptions,
       @Nullable String locale,
       @Nullable SoyMsgBundle msgBundle,
       String outputPathFormat,
-      String inputPathsPrefix)
+      String inputPathsPrefix,
+      ErrorReporter errorReporter)
       throws SoySyntaxException, IOException {
 
-    List<String> jsFileContents = genJsSrc(soyTree, jsSrcOptions, msgBundle);
+    List<String> jsFileContents =
+        genJsSrc(soyTree, templateRegistry, jsSrcOptions, msgBundle, errorReporter);
 
     ImmutableList<SoyFileNode> srcsToCompile = ImmutableList.copyOf(Iterables.filter(
         soyTree.getChildren(), SoyFileNode.MATCH_SRC_FILENODE));

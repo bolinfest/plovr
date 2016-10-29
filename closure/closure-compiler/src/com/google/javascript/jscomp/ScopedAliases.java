@@ -175,9 +175,9 @@ class ScopedAliases implements HotSwapCompilerPass {
       for (Node aliasDefinition : traversal.getAliasDefinitionsInOrder()) {
         if (NodeUtil.isNameDeclaration(aliasDefinition.getParent())
             && aliasDefinition.getParent().hasOneChild()) {
-          aliasDefinition.getParent().detachFromParent();
+          aliasDefinition.getParent().detach();
         } else {
-          aliasDefinition.detachFromParent();
+          aliasDefinition.detach();
         }
       }
 
@@ -185,7 +185,7 @@ class ScopedAliases implements HotSwapCompilerPass {
       for (Node scopeCall : traversal.getScopeCalls()) {
         Node expressionWithScopeCall = scopeCall.getParent();
         Node scopeClosureBlock = scopeCall.getLastChild().getLastChild();
-        scopeClosureBlock.detachFromParent();
+        scopeClosureBlock.detach();
         expressionWithScopeCall.getParent().replaceChild(
             expressionWithScopeCall,
             scopeClosureBlock);
@@ -229,7 +229,7 @@ class ScopedAliases implements HotSwapCompilerPass {
       Node aliasDefinition = aliasVar.getInitialValue();
       Node replacement = aliasDefinition.cloneTree();
       replacement.useSourceInfoFromForTree(aliasReference);
-      if (aliasReference.getType() == Token.STRING_KEY) {
+      if (aliasReference.isStringKey()) {
         Preconditions.checkState(!aliasReference.hasChildren());
         aliasReference.addChildToFront(replacement);
       } else {
@@ -438,7 +438,7 @@ class ScopedAliases implements HotSwapCompilerPass {
         } else if (v.isBleedingFunction()) {
           // Bleeding functions already get a BAD_PARAMETERS error, so just
           // do nothing.
-        } else if (parent.getType() == Token.PARAM_LIST) {
+        } else if (parent.isParamList()) {
           // Parameters of the scope function also get a BAD_PARAMETERS
           // error.
         } else if (isVar || isFunctionDecl || NodeUtil.isClassDeclaration(parent)) {
@@ -497,7 +497,7 @@ class ScopedAliases implements HotSwapCompilerPass {
             if (value != null) {
               // If this is a VAR, we can just detach the expression and
               // the tree will still be valid.
-              value.detachFromParent();
+              value.detach();
             }
             varNode = parent;
           }
@@ -511,8 +511,8 @@ class ScopedAliases implements HotSwapCompilerPass {
                 value,
                 varDocInfo)
                 .useSourceInfoIfMissingFromForTree(n);
-            NodeUtil.setDebugInformation(
-                newDecl.getFirstFirstChild(), n, name);
+            newDecl.getFirstFirstChild().useSourceInfoFrom(n);
+            newDecl.getFirstFirstChild().setOriginalName(name);
 
             if (isHoisted) {
               grandparent.addChildToFront(newDecl);
@@ -624,7 +624,7 @@ class ScopedAliases implements HotSwapCompilerPass {
         return;
       }
 
-      Token type = n.getType();
+      Token type = n.getToken();
       boolean isObjLitShorthand = type == Token.STRING_KEY && !n.hasChildren();
       Var aliasVar = null;
       if (type == Token.NAME || isObjLitShorthand) {
@@ -632,6 +632,11 @@ class ScopedAliases implements HotSwapCompilerPass {
         Var lexicalVar = t.getScope().getVar(name);
         if (lexicalVar != null && lexicalVar == aliases.get(name)) {
           aliasVar = lexicalVar;
+          // For nodes that are referencing the aliased type, set the original name so it
+          // can be accessed later in tools such as the CodePrinter or refactoring tools.
+          if (compiler.getOptions().preservesDetailedSourceInfo() && n.isName()) {
+            n.setOriginalName(name);
+          }
         }
       }
 
@@ -693,8 +698,12 @@ class ScopedAliases implements HotSwapCompilerPass {
         if (aliasVar != null) {
           aliasUsages.add(new AliasedTypeNode(aliasVar, typeNode));
         }
+        // For nodes that are referencing the aliased type, set the original name so it
+        // can be accessed later in tools such as the CodePrinter or refactoring tools.
+        if (compiler.getOptions().preservesDetailedSourceInfo()) {
+          typeNode.setOriginalName(name);
+        }
       }
-
       for (Node child = typeNode.getFirstChild(); child != null;
            child = child.getNext()) {
         fixTypeNode(child);

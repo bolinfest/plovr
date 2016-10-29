@@ -754,7 +754,9 @@ public final class PeepholeMinimizeConditionsTest extends CompilerTestCase {
     test("var x = {}; var y = x != null;", "var x = {}; var y = !!x;");
     test("var x = {}; var y = x == null;", "var x = {}; var y = !x;");
     test("var x = {}; var y = x !== null;", "var x = {}; var y = !!x;");
+    testSame("var x = undefined; var y = x !== null;");
     test("var x = {}; var y = x === null;", "var x = {}; var y = !x;");
+    testSame("var x = undefined; var y = x === null;");
 
     test("var x = 1; var y = x != 0;", "var x = 1; var y = !!x;");
     test("var x = 1; var y = x == 0;", "var x = 1; var y = !x;");
@@ -816,9 +818,54 @@ public final class PeepholeMinimizeConditionsTest extends CompilerTestCase {
     test(
         "var x = /** @type {?Object} */ ({}); if (x != null) throw 'a';",
         "var x = /** @type {?Object} */ ({}); if (x) throw 'a';");
+    test(
+        "var x = /** @type {?Object} */ ({}); if (x !== null) throw 'a';",
+        "var x = /** @type {?Object} */ ({}); if (x) throw 'a';");
+    test(
+        "var x = /** @type {?Object} */ ({}); if (x != undefined) throw 'a';",
+        "var x = /** @type {?Object} */ ({}); if (x) throw 'a';");
+    testSame("var x = /** @type {?Object} */ ({}); if (x !== undefined) throw 'a';");
+    test(
+        "var x = /** @type {!Object|undefined} */ ({}); if (x !== undefined) throw 'a';",
+        "var x = /** @type {!Object|undefined} */ ({}); if (x) throw 'a';");
+    testSame("var x = /** @type {!Object|undefined} */ ({}); if (x !== null) throw 'a';");
     testSame("var x = /** @type {?number} */ (1); if (x != 0) throw 'a';");
     testSame("var x = /** @type {?string} */ (''); if (x != null) throw 'a';");
     testSame("var x = /** @type {?boolean} */ (true); if (x != null) throw 'a';");
+    testSame(LINE_JOINER.join(
+        "/** @enum {string} */",
+        "var E = { F: '1' };",
+        "/** @param {?E} x */",
+        "function f(x) {",
+        "  if (x != null) throw 'a';",
+        "}"));
+    testSame(LINE_JOINER.join(
+        "/** @enum {number} */",
+        "var E1 = { F: 1 };",
+        "/** @enum {number} */",
+        "var E2 = { F: 1 };",
+        "/** @param {?E1|?E2} x */",
+        "function f(x) {",
+        "  if (x != null) throw 'a';",
+        "}"));
+    test(LINE_JOINER.join(
+        "/** @enum {Object} */",
+        "var E = { F: {} };",
+        "/** @param {?E} x */",
+        "function f(x) {",
+        "  if (x != null) throw 'a';",
+        "}"),
+        LINE_JOINER.join(
+        "/** @enum {Object} */",
+        "var E = { F: {} };",
+        "/** @param {?E} x */",
+        "function f(x) {",
+        "  if (x) throw 'a';",
+        "}"));
+    test(
+        "if (/** @type {Array|undefined} */ (window['c']) == null) {}",
+        "if (!/** @type {Array|undefined} */ (window['c'])) {}");
+    testSame("if (/** @type {Array|undefined} */ (window['c']) === null) {}");
   }
 
   public void testCoercionSubstitution_unknownType() {

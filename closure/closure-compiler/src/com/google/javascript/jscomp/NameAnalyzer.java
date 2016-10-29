@@ -310,7 +310,7 @@ final class NameAnalyzer implements CompilerPass {
       // Setters have VAR, FUNCTION, or ASSIGN parent nodes. CALL parent
       // nodes are global refs, and are handled later in this function.
       Node containingNode = parent.getParent();
-      switch (parent.getType()) {
+      switch (parent.getToken()) {
         case VAR:
           Preconditions.checkState(parent.hasOneChild());
           replaceWithRhs(containingNode, parent);
@@ -336,7 +336,7 @@ final class NameAnalyzer implements CompilerPass {
           break;
         default:
           throw new IllegalArgumentException(
-              "Unsupported parent node type in JsNameRefNode.remove: " + parent.getType());
+              "Unsupported parent node type in JsNameRefNode.remove: " + parent.getToken());
       }
     }
   }
@@ -366,7 +366,7 @@ final class NameAnalyzer implements CompilerPass {
       } else {
         // ... name.prototype.foo = function() { ... } ...
         changeProxy.replaceWith(grandparent, parent,
-                                parent.getLastChild().detachFromParent());
+                                parent.getLastChild().detach());
       }
     }
   }
@@ -533,7 +533,7 @@ final class NameAnalyzer implements CompilerPass {
 
     private void recordConsumers(NodeTraversal t, Node n, Node recordNode) {
       Node parent = n.getParent();
-      switch (parent.getType()) {
+      switch (parent.getToken()) {
         case ASSIGN:
           if (n == parent.getLastChild()) {
             recordAssignment(t, parent, recordNode);
@@ -555,6 +555,8 @@ final class NameAnalyzer implements CompilerPass {
           if (n != parent.getFirstChild()) {
             recordConsumers(t, parent, recordNode);
           }
+          break;
+        default:
           break;
       }
     }
@@ -1547,7 +1549,7 @@ final class NameAnalyzer implements CompilerPass {
       }
     }
 
-    switch (rootNameNode.getType()) {
+    switch (rootNameNode.getToken()) {
       case NAME:
         // Check whether this is an assignment to a prototype property
         // of an object defined in the global scope.
@@ -1809,7 +1811,7 @@ final class NameAnalyzer implements CompilerPass {
         newReplacements.addAll(getSideEffectNodes(replacements.get(i)));
       }
       Node valueExpr = Iterables.getLast(replacements);
-      valueExpr.detachFromParent();
+      valueExpr.detach();
       newReplacements.add(valueExpr);
       changeProxy.replaceWith(
           parent, n, collapseReplacements(newReplacements));
@@ -1820,7 +1822,7 @@ final class NameAnalyzer implements CompilerPass {
       // TODO(user) make the pass smarter about these cases and/or run
       // this pass and RemoveConstantExpressions together in a loop.
       Node replacement = n.getLastChild();
-      replacement.detachFromParent();
+      replacement.detach();
       changeProxy.replaceWith(parent, n, replacement);
     } else {
       replaceTopLevelExpressionWithRhs(parent, n);
@@ -1833,7 +1835,7 @@ final class NameAnalyzer implements CompilerPass {
    */
   private void replaceTopLevelExpressionWithRhs(Node parent, Node n) {
     // validate inputs
-    switch (parent.getType()) {
+    switch (parent.getToken()) {
       case BLOCK:
       case SCRIPT:
       case FOR:
@@ -1841,10 +1843,10 @@ final class NameAnalyzer implements CompilerPass {
         break;
       default:
         throw new IllegalArgumentException(
-            "Unsupported parent node type in replaceWithRhs " + parent.getType());
+            "Unsupported parent node type in replaceWithRhs " + parent.getToken());
     }
 
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case EXPR_RESULT:
       case FUNCTION:
       case VAR:
@@ -1853,11 +1855,11 @@ final class NameAnalyzer implements CompilerPass {
         Preconditions.checkArgument(
             parent.isFor(),
             "Unsupported assignment in replaceWithRhs. parent: %s",
-            parent.getType());
+            parent.getToken());
         break;
       default:
         throw new IllegalArgumentException(
-            "Unsupported node type in replaceWithRhs " + n.getType());
+            "Unsupported node type in replaceWithRhs " + n.getToken());
     }
 
     // gather replacements
@@ -1900,7 +1902,7 @@ final class NameAnalyzer implements CompilerPass {
       return parent.getLastChild() == n;
     }
 
-    switch (parent.getType()) {
+    switch (parent.getToken()) {
       case NAME:
       case RETURN:
         return true;
@@ -1932,7 +1934,7 @@ final class NameAnalyzer implements CompilerPass {
     for (Node rep : replacements) {
       if (rep.isExprResult()) {
         rep = rep.getFirstChild();
-        rep.detachFromParent();
+        rep.detach();
       }
 
       if (expr == null) {
@@ -1949,7 +1951,7 @@ final class NameAnalyzer implements CompilerPass {
    * Extract a list of subexpressions that act as right hand sides.
    */
   private static List<Node> getRhsSubexpressions(Node n) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case EXPR_RESULT:
         // process body
         return getRhsSubexpressions(n.getFirstChild());

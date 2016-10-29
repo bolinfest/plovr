@@ -84,7 +84,7 @@ class ExpandJqueryAliases extends AbstractPostOrderCallback
     // These passes should make the code easier to analyze.
     // Passes, such as StatementFusion, are omitted for this reason.
     final boolean late = false;
-    boolean useTypesForOptimization = compiler.getOptions().useTypesForOptimization;
+    boolean useTypesForOptimization = compiler.getOptions().useTypesForLocalOptimization;
     this.peepholePasses = new PeepholeOptimizationsPass(compiler,
         new PeepholeMinimizeConditions(late, useTypesForOptimization),
         new PeepholeSubstituteAlternateSyntax(late),
@@ -211,14 +211,14 @@ class ExpandJqueryAliases extends AbstractPostOrderCallback
       Node assignVal = IR.or(objectToExtend.cloneTree(),
           IR.objectlit().srcref(n)).srcref(n);
       Node assign = IR.assign(objectToExtend.cloneTree(), assignVal).srcref(n);
-      fncBlock.addChildrenToFront(IR.exprResult(assign).srcref(n));
+      fncBlock.addChildToFront(IR.exprResult(assign).srcref(n));
     }
 
     while (extendArg.hasChildren()) {
       Node currentProp = extendArg.removeFirstChild();
       Node propValue;
       if (currentProp.hasChildren()) {
-        propValue = currentProp.getLastChild().detachFromParent();
+        propValue = currentProp.getLastChild().detach();
       } else {
         propValue = IR.name(currentProp.getString()).srcref(currentProp);
       }
@@ -232,7 +232,7 @@ class ExpandJqueryAliases extends AbstractPostOrderCallback
         newProp = IR.getelem(objectToExtend.cloneTree(),
             childOfcompProp).srcref(currentProp);
       } else {
-        currentProp.setType(Token.STRING);
+        currentProp.setToken(Token.STRING);
         newProp = IR.getprop(objectToExtend.cloneTree(),
             currentProp).srcref(currentProp);
       }
@@ -254,7 +254,7 @@ class ExpandJqueryAliases extends AbstractPostOrderCallback
         // This is not commonly used.
         targetVal = objectToExtend.removeFirstChild();
       } else {
-        targetVal = objectToExtend.detachFromParent();
+        targetVal = objectToExtend.detach();
       }
       fncBlock.addChildToBack(IR.returnNode(targetVal).srcref(targetVal));
 
@@ -413,8 +413,8 @@ class ExpandJqueryAliases extends AbstractPostOrderCallback
           if (prop.isString() &&
             NodeUtil.isValidPropertyName(LanguageMode.ECMASCRIPT3, prop.getString())) {
             Node target = ancestorClone.getFirstChild();
-            Node newGetProp = IR.getprop(target.detachFromParent(),
-                prop.detachFromParent());
+            Node newGetProp = IR.getprop(target.detach(),
+                prop.detach());
             newGetProps.add(newGetProp);
             origGetElems.add(ancestor);
             ancestor.getParent().replaceChild(ancestor, newGetProp);
@@ -478,7 +478,7 @@ class ExpandJqueryAliases extends AbstractPostOrderCallback
       Node grandparent = parent.getParent();
       Node insertAfter = parent;
       while (expandedBlock.hasChildren()) {
-        Node child = expandedBlock.getFirstChild().detachFromParent();
+        Node child = expandedBlock.getFirstChild().detach();
         grandparent.addChildAfter(child, insertAfter);
         insertAfter = child;
       }
@@ -488,7 +488,7 @@ class ExpandJqueryAliases extends AbstractPostOrderCallback
       Node callTarget = n.getFirstChild();
       Node objectToLoopOver = callTarget.getNext();
 
-      objectToLoopOver.detachFromParent();
+      objectToLoopOver.detach();
       Node ret = IR.returnNode(objectToLoopOver).srcref(callTarget);
       expandedBlock.addChildToBack(ret);
 

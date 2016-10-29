@@ -17,22 +17,23 @@
 package com.google.javascript.jscomp;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.javascript.jscomp.testing.NodeSubject.assertNode;
 
+import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.IR;
+import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.TernaryValue;
-
-import junit.framework.TestCase;
-
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
+import junit.framework.TestCase;
 
 /**
  * Tests for NodeUtil
@@ -53,6 +54,45 @@ public final class NodeUtilTest extends TestCase {
     Node expr = root.getFirstChild();
     Node var = expr.getFirstChild();
     return var.getFirstChild();
+  }
+
+  public void testGetNodeByLineCol_1() {
+    Node root = parse("var x = 1;");
+    assertNull(NodeUtil.getNodeByLineCol(root, 1, 0));
+    assertNode(NodeUtil.getNodeByLineCol(root, 1, 1)).hasType(Token.VAR);
+    assertNode(NodeUtil.getNodeByLineCol(root, 1, 2)).hasType(Token.VAR);
+    assertNode(NodeUtil.getNodeByLineCol(root, 1, 5)).hasType(Token.NAME);
+    assertNode(NodeUtil.getNodeByLineCol(root, 1, 9)).hasType(Token.NUMBER);
+    assertNode(NodeUtil.getNodeByLineCol(root, 1, 11)).hasType(Token.VAR);
+  }
+
+  public void testGetNodeByLineCol_2() {
+    Node root = parse(Joiner.on("\n").join(
+        "var x = {};",
+        "x.prop = 123;"));
+    assertNode(NodeUtil.getNodeByLineCol(root, 2, 1)).hasType(Token.NAME);
+    assertNode(NodeUtil.getNodeByLineCol(root, 2, 2)).hasType(Token.NAME);
+    assertNode(NodeUtil.getNodeByLineCol(root, 2, 3)).hasType(Token.STRING);
+    assertNode(NodeUtil.getNodeByLineCol(root, 2, 8)).hasType(Token.ASSIGN);
+    assertNode(NodeUtil.getNodeByLineCol(root, 2, 11)).hasType(Token.NUMBER);
+    assertNode(NodeUtil.getNodeByLineCol(root, 2, 13)).hasType(Token.NUMBER);
+    assertNode(NodeUtil.getNodeByLineCol(root, 2, 14)).hasType(Token.EXPR_RESULT);
+  }
+
+  public void testGetNodeByLineCol_preferLiterals() {
+    Node root;
+
+    root = parse("x-5;");
+    assertNode(NodeUtil.getNodeByLineCol(root, 1, 2)).hasType(Token.NAME);
+    assertNode(NodeUtil.getNodeByLineCol(root, 1, 3)).hasType(Token.NUMBER);
+
+    root = parse(Joiner.on("\n").join(
+        "function f(x) {",
+        "  return x||null;",
+        "}"));
+    assertNode(NodeUtil.getNodeByLineCol(root, 2, 11)).hasType(Token.NAME);
+    assertNode(NodeUtil.getNodeByLineCol(root, 2, 12)).hasType(Token.OR);
+    assertNode(NodeUtil.getNodeByLineCol(root, 2, 13)).hasType(Token.NULL);
   }
 
   public void testIsLiteralOrConstValue() {
@@ -274,11 +314,7 @@ public final class NodeUtilTest extends TestCase {
   }
 
   private Node parseExpr(String js) {
-    Compiler compiler = new Compiler();
-    CompilerOptions options = new CompilerOptions();
-    options.setLanguageIn(LanguageMode.ECMASCRIPT5);
-    compiler.initOptions(options);
-    Node root = compiler.parseTestCode(js);
+    Node root = parse(js);
     return root.getFirstFirstChild();
   }
 
@@ -287,68 +323,55 @@ public final class NodeUtilTest extends TestCase {
   }
 
   public void testGetFunctionName1() throws Exception {
-    Compiler compiler = new Compiler();
-    Node parent = compiler.parseTestCode("function name(){}");
-
+    Node parent = parse("function name(){}");
     testGetFunctionName(parent.getFirstChild(), "name");
   }
 
   public void testGetFunctionName2() throws Exception {
-    Compiler compiler = new Compiler();
-    Node parent = compiler.parseTestCode("var name = function(){}")
+    Node parent = parse("var name = function(){}")
         .getFirstFirstChild();
 
     testGetFunctionName(parent.getFirstChild(), "name");
   }
 
   public void testGetFunctionName3() throws Exception {
-    Compiler compiler = new Compiler();
-    Node parent = compiler.parseTestCode("qualified.name = function(){}")
+    Node parent = parse("qualified.name = function(){}")
         .getFirstFirstChild();
 
     testGetFunctionName(parent.getLastChild(), "qualified.name");
   }
 
   public void testGetFunctionName4() throws Exception {
-    Compiler compiler = new Compiler();
-    Node parent = compiler.parseTestCode("var name2 = function name1(){}")
+    Node parent = parse("var name2 = function name1(){}")
         .getFirstFirstChild();
 
     testGetFunctionName(parent.getFirstChild(), "name2");
   }
 
   public void testGetFunctionName5() throws Exception {
-    Compiler compiler = new Compiler();
-    Node n = compiler.parseTestCode("qualified.name2 = function name1(){}");
+    Node n = parse("qualified.name2 = function name1(){}");
     Node parent = n.getFirstFirstChild();
 
     testGetFunctionName(parent.getLastChild(), "qualified.name2");
   }
 
   public void testGetBestFunctionName1() throws Exception {
-    Compiler compiler = new Compiler();
-    Node parent = compiler.parseTestCode("function func(){}");
+    Node parent = parse("function func(){}");
 
     assertEquals("func",
         NodeUtil.getNearestFunctionName(parent.getFirstChild()));
   }
 
   public void testGetBestFunctionName2() throws Exception {
-    Compiler compiler = new Compiler();
-    CompilerOptions options = new CompilerOptions();
-    options.setLanguageIn(LanguageMode.ECMASCRIPT6);
-    compiler.initOptions(options);
-
-    Node parent = compiler.parseTestCode("var obj = {memFunc(){}}")
+    Node parent = parse("var obj = {memFunc(){}}")
         .getFirstFirstChild().getFirstFirstChild();
 
     assertEquals("memFunc",
         NodeUtil.getNearestFunctionName(parent.getLastChild()));
   }
 
-
   private void testGetFunctionName(Node function, String name) {
-    assertEquals(Token.FUNCTION, function.getType());
+    assertEquals(Token.FUNCTION, function.getToken());
     assertEquals(name, NodeUtil.getName(function));
   }
 
@@ -372,6 +395,7 @@ public final class NodeUtilTest extends TestCase {
   private void assertSideEffect(boolean se, String js, boolean globalRegExp) {
     Node n = parse(js);
     Compiler compiler = new Compiler();
+    compiler.initCompilerOptionsIfTesting();
     compiler.setHasRegExpGlobalReferences(globalRegExp);
     assertEquals(se, NodeUtil.mayHaveSideEffects(n.getFirstChild(), compiler));
   }
@@ -677,7 +701,7 @@ public final class NodeUtilTest extends TestCase {
         parse("function foo(){this}")));
     // But starting with a function properly check for 'this'
     Node n = parse("function foo(){this}").getFirstChild();
-    assertEquals(n.getType(), Token.FUNCTION);
+    assertEquals(n.getToken(), Token.FUNCTION);
     assertTrue(NodeUtil.referencesThis(n));
     assertTrue(NodeUtil.referencesThis(
         parse("b?this:null")));
@@ -685,7 +709,7 @@ public final class NodeUtilTest extends TestCase {
     assertFalse(NodeUtil.referencesThis(
         parse("a")));
     n = parse("function foo(){}").getFirstChild();
-    assertEquals(n.getType(), Token.FUNCTION);
+    assertEquals(n.getToken(), Token.FUNCTION);
     assertFalse(NodeUtil.referencesThis(n));
     assertFalse(NodeUtil.referencesThis(
         parse("(b?foo():null)")));
@@ -1034,6 +1058,27 @@ public final class NodeUtilTest extends TestCase {
     expected = "for(a in ack);";
     difference = parse(expected).checkTreeEquals(actual);
     assertNull("Nodes do not match:\n" + difference, difference);
+  }
+
+  private static void replaceDeclChild(String js, int declarationChild, String expected) {
+    Node actual = parse(js);
+    Node declarationNode = actual.getFirstChild();
+    Node nameNode = declarationNode.getChildAtIndex(declarationChild);
+
+    NodeUtil.replaceDeclarationChild(nameNode, IR.block());
+    String difference = parse(expected).checkTreeEquals(actual);
+    assertNull("Nodes do not match:\n" + difference, difference);
+  }
+
+  public void testReplaceDeclarationName() {
+    replaceDeclChild("var x;", 0, "{}");
+    replaceDeclChild("var x, y;", 0, "{} var y;");
+    replaceDeclChild("var x, y;", 1, "var x; {}");
+    replaceDeclChild("let x, y, z;", 0, "{} let y, z;");
+    replaceDeclChild("let x, y, z;", 1, "let x; {} let z;");
+    replaceDeclChild("let x, y, z;", 2, "let x, y; {}");
+    replaceDeclChild("const x = 1, y = 2, z = 3;", 1, "const x = 1; {} const z = 3;");
+    replaceDeclChild("const x =1, y = 2, z = 3, w = 4;", 1, "const x = 1; {} const z = 3, w = 4;");
   }
 
   public void testMergeBlock1() {
@@ -2289,6 +2334,36 @@ public final class NodeUtilTest extends TestCase {
 
     function = getFunctionNode("/** @constructor */ export let Foo = function() {}");
     assertTrue(NodeUtil.getBestJSDocInfo(function).isConstructor());
+  }
+
+  public void testGetDeclaredTypeExpression1() {
+    Node ast = parse("function f(/** string */ x) {}");
+    Node x = getNameNode(ast, "x");
+    JSTypeExpression typeExpr = NodeUtil.getDeclaredTypeExpression(x);
+    assertThat(typeExpr.getRoot().getString()).isEqualTo("string");
+  }
+
+  public void testGetDeclaredTypeExpression2() {
+    Node ast = parse("/** @param {string} x */ function f(x) {}");
+    Node x = getNameNode(ast, "x");
+    JSTypeExpression typeExpr = NodeUtil.getDeclaredTypeExpression(x);
+    assertThat(typeExpr.getRoot().getString()).isEqualTo("string");
+  }
+
+  public void testGetDeclaredTypeExpression3() {
+    Node ast = parse("/** @param {...number} x */ function f(...x) {}");
+    Node x = getNameNode(ast, "x");
+    JSTypeExpression typeExpr = NodeUtil.getDeclaredTypeExpression(x);
+    assertNode(typeExpr.getRoot()).hasType(Token.ELLIPSIS);
+    assertThat(typeExpr.getRoot().getFirstChild().getString()).isEqualTo("number");
+  }
+
+  public void testGetDeclaredTypeExpression4() {
+    Node ast = parse("/** @param {number=} x */ function f(x = -1) {}");
+    Node x = getNameNode(ast, "x");
+    JSTypeExpression typeExpr = NodeUtil.getDeclaredTypeExpression(x);
+    assertNode(typeExpr.getRoot()).hasType(Token.EQUALS);
+    assertThat(typeExpr.getRoot().getFirstChild().getString()).isEqualTo("number");
   }
 
   public void testGetLhsNodesOfDeclaration() {

@@ -129,6 +129,11 @@ public  final class Requirement extends
             extends_ = input.readBytes();
             break;
           }
+          case 88: {
+            bitField0_ |= 0x00000020;
+            reportLooseTypeViolations_ = input.readBool();
+            break;
+          }
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -295,6 +300,16 @@ public  final class Requirement extends
      * </pre>
      */
     BANNED_PROPERTY_CALL(9, 10),
+    /**
+     * <code>BANNED_PROPERTY_NON_CONSTANT_WRITE = 11;</code>
+     *
+     * <pre>
+     * A banned write of a non-constant value to an instance property.
+     * Unlike BANNED_PROPERTY_WRITE, this only bans assignments of a
+     * non-constant value.
+     * </pre>
+     */
+    BANNED_PROPERTY_NON_CONSTANT_WRITE(10, 11),
     ;
 
     /**
@@ -400,6 +415,16 @@ public  final class Requirement extends
      * </pre>
      */
     public static final int BANNED_PROPERTY_CALL_VALUE = 10;
+    /**
+     * <code>BANNED_PROPERTY_NON_CONSTANT_WRITE = 11;</code>
+     *
+     * <pre>
+     * A banned write of a non-constant value to an instance property.
+     * Unlike BANNED_PROPERTY_WRITE, this only bans assignments of a
+     * non-constant value.
+     * </pre>
+     */
+    public static final int BANNED_PROPERTY_NON_CONSTANT_WRITE_VALUE = 11;
 
 
     public final int getNumber() { return value; }
@@ -416,6 +441,7 @@ public  final class Requirement extends
         case 8: return RESTRICTED_METHOD_CALL;
         case 9: return BANNED_CODE_PATTERN;
         case 10: return BANNED_PROPERTY_CALL;
+        case 11: return BANNED_PROPERTY_NON_CONSTANT_WRITE;
         default: return null;
       }
     }
@@ -633,8 +659,7 @@ public  final class Requirement extends
    *
    * <pre>
    * Optional: A list of source paths that will be checked for the requirement
-   * (the opposite of whitelist). It is an error to specify both
-   * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
+   * (the opposite of whitelist).
    * </pre>
    */
   public java.util.List<java.lang.String>
@@ -646,8 +671,7 @@ public  final class Requirement extends
    *
    * <pre>
    * Optional: A list of source paths that will be checked for the requirement
-   * (the opposite of whitelist). It is an error to specify both
-   * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
+   * (the opposite of whitelist).
    * </pre>
    */
   public int getOnlyApplyToCount() {
@@ -658,8 +682,7 @@ public  final class Requirement extends
    *
    * <pre>
    * Optional: A list of source paths that will be checked for the requirement
-   * (the opposite of whitelist). It is an error to specify both
-   * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
+   * (the opposite of whitelist).
    * </pre>
    */
   public java.lang.String getOnlyApplyTo(int index) {
@@ -670,8 +693,7 @@ public  final class Requirement extends
    *
    * <pre>
    * Optional: A list of source paths that will be checked for the requirement
-   * (the opposite of whitelist). It is an error to specify both
-   * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
+   * (the opposite of whitelist).
    * </pre>
    */
   public com.google.protobuf.ByteString
@@ -688,8 +710,6 @@ public  final class Requirement extends
    * <pre>
    * Optional: A list of source path regexps that will be checked for
    * the requirement (the opposite of whitelist_regexp).
-   * It is an error to specify both
-   * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
    * </pre>
    */
   public java.util.List<java.lang.String>
@@ -702,8 +722,6 @@ public  final class Requirement extends
    * <pre>
    * Optional: A list of source path regexps that will be checked for
    * the requirement (the opposite of whitelist_regexp).
-   * It is an error to specify both
-   * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
    * </pre>
    */
   public int getOnlyApplyToRegexpCount() {
@@ -715,8 +733,6 @@ public  final class Requirement extends
    * <pre>
    * Optional: A list of source path regexps that will be checked for
    * the requirement (the opposite of whitelist_regexp).
-   * It is an error to specify both
-   * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
    * </pre>
    */
   public java.lang.String getOnlyApplyToRegexp(int index) {
@@ -728,8 +744,6 @@ public  final class Requirement extends
    * <pre>
    * Optional: A list of source path regexps that will be checked for
    * the requirement (the opposite of whitelist_regexp).
-   * It is an error to specify both
-   * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
    * </pre>
    */
   public com.google.protobuf.ByteString
@@ -984,6 +998,46 @@ public  final class Requirement extends
     }
   }
 
+  // optional bool report_loose_type_violations = 11 [default = true];
+  public static final int REPORT_LOOSE_TYPE_VIOLATIONS_FIELD_NUMBER = 11;
+  private boolean reportLooseTypeViolations_;
+  /**
+   * <code>optional bool report_loose_type_violations = 11 [default = true];</code>
+   *
+   * <pre>
+   * Whether to report possible violations when type information is not exact.
+   * Normally, violations on parent types are reported as possible violations.
+   * This field allows to ignore them and report only violations on exact types.
+   * This changes the balance between the false positives and the false
+   * negatives. With the default value, there might be lots of false positives
+   * (possible violations) but there shouldn't be any false negatives. Without
+   * reporting the loose type violations, there will be less false positives but
+   * there can also be false negatives (an actual violation that is not
+   * reported).
+   * </pre>
+   */
+  public boolean hasReportLooseTypeViolations() {
+    return ((bitField0_ & 0x00000020) == 0x00000020);
+  }
+  /**
+   * <code>optional bool report_loose_type_violations = 11 [default = true];</code>
+   *
+   * <pre>
+   * Whether to report possible violations when type information is not exact.
+   * Normally, violations on parent types are reported as possible violations.
+   * This field allows to ignore them and report only violations on exact types.
+   * This changes the balance between the false positives and the false
+   * negatives. With the default value, there might be lots of false positives
+   * (possible violations) but there shouldn't be any false negatives. Without
+   * reporting the loose type violations, there will be less false positives but
+   * there can also be false negatives (an actual violation that is not
+   * reported).
+   * </pre>
+   */
+  public boolean getReportLooseTypeViolations() {
+    return reportLooseTypeViolations_;
+  }
+
   private void initFields() {
     errorMessage_ = "";
     whitelist_ = com.google.protobuf.LazyStringArrayList.EMPTY;
@@ -995,6 +1049,7 @@ public  final class Requirement extends
     javaClass_ = "";
     ruleId_ = "";
     extends_ = "";
+    reportLooseTypeViolations_ = true;
   }
   private byte memoizedIsInitialized = -1;
   public final boolean isInitialized() {
@@ -1044,6 +1099,9 @@ public  final class Requirement extends
     }
     if (((bitField0_ & 0x00000010) == 0x00000010)) {
       output.writeBytes(10, getExtendsBytes());
+    }
+    if (((bitField0_ & 0x00000020) == 0x00000020)) {
+      output.writeBool(11, reportLooseTypeViolations_);
     }
     extensionWriter.writeUntil(536870912, output);
     getUnknownFields().writeTo(output);
@@ -1119,6 +1177,10 @@ public  final class Requirement extends
     if (((bitField0_ & 0x00000010) == 0x00000010)) {
       size += com.google.protobuf.CodedOutputStream
         .computeBytesSize(10, getExtendsBytes());
+    }
+    if (((bitField0_ & 0x00000020) == 0x00000020)) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBoolSize(11, reportLooseTypeViolations_);
     }
     size += extensionsSerializedSize();
     size += getUnknownFields().getSerializedSize();
@@ -1261,6 +1323,8 @@ public  final class Requirement extends
       bitField0_ = (bitField0_ & ~0x00000100);
       extends_ = "";
       bitField0_ = (bitField0_ & ~0x00000200);
+      reportLooseTypeViolations_ = true;
+      bitField0_ = (bitField0_ & ~0x00000400);
       return this;
     }
 
@@ -1339,6 +1403,10 @@ public  final class Requirement extends
         to_bitField0_ |= 0x00000010;
       }
       result.extends_ = extends_;
+      if (((from_bitField0_ & 0x00000400) == 0x00000400)) {
+        to_bitField0_ |= 0x00000020;
+      }
+      result.reportLooseTypeViolations_ = reportLooseTypeViolations_;
       result.bitField0_ = to_bitField0_;
       onBuilt();
       return result;
@@ -1427,6 +1495,9 @@ public  final class Requirement extends
         bitField0_ |= 0x00000200;
         extends_ = other.extends_;
         onChanged();
+      }
+      if (other.hasReportLooseTypeViolations()) {
+        setReportLooseTypeViolations(other.getReportLooseTypeViolations());
       }
       this.mergeExtensionFields(other);
       this.mergeUnknownFields(other.getUnknownFields());
@@ -1850,8 +1921,7 @@ public  final class Requirement extends
      *
      * <pre>
      * Optional: A list of source paths that will be checked for the requirement
-     * (the opposite of whitelist). It is an error to specify both
-     * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
+     * (the opposite of whitelist).
      * </pre>
      */
     public java.util.List<java.lang.String>
@@ -1863,8 +1933,7 @@ public  final class Requirement extends
      *
      * <pre>
      * Optional: A list of source paths that will be checked for the requirement
-     * (the opposite of whitelist). It is an error to specify both
-     * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
+     * (the opposite of whitelist).
      * </pre>
      */
     public int getOnlyApplyToCount() {
@@ -1875,8 +1944,7 @@ public  final class Requirement extends
      *
      * <pre>
      * Optional: A list of source paths that will be checked for the requirement
-     * (the opposite of whitelist). It is an error to specify both
-     * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
+     * (the opposite of whitelist).
      * </pre>
      */
     public java.lang.String getOnlyApplyTo(int index) {
@@ -1887,8 +1955,7 @@ public  final class Requirement extends
      *
      * <pre>
      * Optional: A list of source paths that will be checked for the requirement
-     * (the opposite of whitelist). It is an error to specify both
-     * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
+     * (the opposite of whitelist).
      * </pre>
      */
     public com.google.protobuf.ByteString
@@ -1900,8 +1967,7 @@ public  final class Requirement extends
      *
      * <pre>
      * Optional: A list of source paths that will be checked for the requirement
-     * (the opposite of whitelist). It is an error to specify both
-     * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
+     * (the opposite of whitelist).
      * </pre>
      */
     public Builder setOnlyApplyTo(
@@ -1919,8 +1985,7 @@ public  final class Requirement extends
      *
      * <pre>
      * Optional: A list of source paths that will be checked for the requirement
-     * (the opposite of whitelist). It is an error to specify both
-     * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
+     * (the opposite of whitelist).
      * </pre>
      */
     public Builder addOnlyApplyTo(
@@ -1938,8 +2003,7 @@ public  final class Requirement extends
      *
      * <pre>
      * Optional: A list of source paths that will be checked for the requirement
-     * (the opposite of whitelist). It is an error to specify both
-     * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
+     * (the opposite of whitelist).
      * </pre>
      */
     public Builder addAllOnlyApplyTo(
@@ -1954,8 +2018,7 @@ public  final class Requirement extends
      *
      * <pre>
      * Optional: A list of source paths that will be checked for the requirement
-     * (the opposite of whitelist). It is an error to specify both
-     * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
+     * (the opposite of whitelist).
      * </pre>
      */
     public Builder clearOnlyApplyTo() {
@@ -1969,8 +2032,7 @@ public  final class Requirement extends
      *
      * <pre>
      * Optional: A list of source paths that will be checked for the requirement
-     * (the opposite of whitelist). It is an error to specify both
-     * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
+     * (the opposite of whitelist).
      * </pre>
      */
     public Builder addOnlyApplyToBytes(
@@ -1998,8 +2060,6 @@ public  final class Requirement extends
      * <pre>
      * Optional: A list of source path regexps that will be checked for
      * the requirement (the opposite of whitelist_regexp).
-     * It is an error to specify both
-     * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
      * </pre>
      */
     public java.util.List<java.lang.String>
@@ -2012,8 +2072,6 @@ public  final class Requirement extends
      * <pre>
      * Optional: A list of source path regexps that will be checked for
      * the requirement (the opposite of whitelist_regexp).
-     * It is an error to specify both
-     * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
      * </pre>
      */
     public int getOnlyApplyToRegexpCount() {
@@ -2025,8 +2083,6 @@ public  final class Requirement extends
      * <pre>
      * Optional: A list of source path regexps that will be checked for
      * the requirement (the opposite of whitelist_regexp).
-     * It is an error to specify both
-     * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
      * </pre>
      */
     public java.lang.String getOnlyApplyToRegexp(int index) {
@@ -2038,8 +2094,6 @@ public  final class Requirement extends
      * <pre>
      * Optional: A list of source path regexps that will be checked for
      * the requirement (the opposite of whitelist_regexp).
-     * It is an error to specify both
-     * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
      * </pre>
      */
     public com.google.protobuf.ByteString
@@ -2052,8 +2106,6 @@ public  final class Requirement extends
      * <pre>
      * Optional: A list of source path regexps that will be checked for
      * the requirement (the opposite of whitelist_regexp).
-     * It is an error to specify both
-     * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
      * </pre>
      */
     public Builder setOnlyApplyToRegexp(
@@ -2072,8 +2124,6 @@ public  final class Requirement extends
      * <pre>
      * Optional: A list of source path regexps that will be checked for
      * the requirement (the opposite of whitelist_regexp).
-     * It is an error to specify both
-     * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
      * </pre>
      */
     public Builder addOnlyApplyToRegexp(
@@ -2092,8 +2142,6 @@ public  final class Requirement extends
      * <pre>
      * Optional: A list of source path regexps that will be checked for
      * the requirement (the opposite of whitelist_regexp).
-     * It is an error to specify both
-     * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
      * </pre>
      */
     public Builder addAllOnlyApplyToRegexp(
@@ -2109,8 +2157,6 @@ public  final class Requirement extends
      * <pre>
      * Optional: A list of source path regexps that will be checked for
      * the requirement (the opposite of whitelist_regexp).
-     * It is an error to specify both
-     * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
      * </pre>
      */
     public Builder clearOnlyApplyToRegexp() {
@@ -2125,8 +2171,6 @@ public  final class Requirement extends
      * <pre>
      * Optional: A list of source path regexps that will be checked for
      * the requirement (the opposite of whitelist_regexp).
-     * It is an error to specify both
-     * (whitelist/whitelist_regexp) and (only_apply_to/only_apply_to_regexp).
      * </pre>
      */
     public Builder addOnlyApplyToRegexpBytes(
@@ -2635,6 +2679,87 @@ public  final class Requirement extends
   }
   bitField0_ |= 0x00000200;
       extends_ = value;
+      onChanged();
+      return this;
+    }
+
+    // optional bool report_loose_type_violations = 11 [default = true];
+    private boolean reportLooseTypeViolations_ = true;
+    /**
+     * <code>optional bool report_loose_type_violations = 11 [default = true];</code>
+     *
+     * <pre>
+     * Whether to report possible violations when type information is not exact.
+     * Normally, violations on parent types are reported as possible violations.
+     * This field allows to ignore them and report only violations on exact types.
+     * This changes the balance between the false positives and the false
+     * negatives. With the default value, there might be lots of false positives
+     * (possible violations) but there shouldn't be any false negatives. Without
+     * reporting the loose type violations, there will be less false positives but
+     * there can also be false negatives (an actual violation that is not
+     * reported).
+     * </pre>
+     */
+    public boolean hasReportLooseTypeViolations() {
+      return ((bitField0_ & 0x00000400) == 0x00000400);
+    }
+    /**
+     * <code>optional bool report_loose_type_violations = 11 [default = true];</code>
+     *
+     * <pre>
+     * Whether to report possible violations when type information is not exact.
+     * Normally, violations on parent types are reported as possible violations.
+     * This field allows to ignore them and report only violations on exact types.
+     * This changes the balance between the false positives and the false
+     * negatives. With the default value, there might be lots of false positives
+     * (possible violations) but there shouldn't be any false negatives. Without
+     * reporting the loose type violations, there will be less false positives but
+     * there can also be false negatives (an actual violation that is not
+     * reported).
+     * </pre>
+     */
+    public boolean getReportLooseTypeViolations() {
+      return reportLooseTypeViolations_;
+    }
+    /**
+     * <code>optional bool report_loose_type_violations = 11 [default = true];</code>
+     *
+     * <pre>
+     * Whether to report possible violations when type information is not exact.
+     * Normally, violations on parent types are reported as possible violations.
+     * This field allows to ignore them and report only violations on exact types.
+     * This changes the balance between the false positives and the false
+     * negatives. With the default value, there might be lots of false positives
+     * (possible violations) but there shouldn't be any false negatives. Without
+     * reporting the loose type violations, there will be less false positives but
+     * there can also be false negatives (an actual violation that is not
+     * reported).
+     * </pre>
+     */
+    public Builder setReportLooseTypeViolations(boolean value) {
+      bitField0_ |= 0x00000400;
+      reportLooseTypeViolations_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>optional bool report_loose_type_violations = 11 [default = true];</code>
+     *
+     * <pre>
+     * Whether to report possible violations when type information is not exact.
+     * Normally, violations on parent types are reported as possible violations.
+     * This field allows to ignore them and report only violations on exact types.
+     * This changes the balance between the false positives and the false
+     * negatives. With the default value, there might be lots of false positives
+     * (possible violations) but there shouldn't be any false negatives. Without
+     * reporting the loose type violations, there will be less false positives but
+     * there can also be false negatives (an actual violation that is not
+     * reported).
+     * </pre>
+     */
+    public Builder clearReportLooseTypeViolations() {
+      bitField0_ = (bitField0_ & ~0x00000400);
+      reportLooseTypeViolations_ = true;
       onChanged();
       return this;
     }

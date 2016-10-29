@@ -20,11 +20,12 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.error.ErrorReporter;
-import com.google.template.soy.error.SoyError;
+import com.google.template.soy.error.SoyErrorKind;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.passes.FindIndirectParamsVisitor.IndirectParamsInfo;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
@@ -39,7 +40,6 @@ import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 import com.google.template.soy.soytree.TemplateDelegateNode;
 import com.google.template.soy.soytree.TemplateNode;
 import com.google.template.soy.soytree.TemplateRegistry;
-import com.google.template.soy.soytree.TemplateRegistry.DelegateTemplateDivision;
 import com.google.template.soy.soytree.defn.HeaderParam;
 import com.google.template.soy.soytree.defn.TemplateParam;
 import com.google.template.soy.soytree.defn.TemplateParam.DeclLoc;
@@ -57,10 +57,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Visitor for checking that calling arguments match the declared parameter types
- * of the called template. Throws a SoySyntaxException if any problems are found.
- * Note that we don't check for missing parameters, that check is done by
- * CheckCallsVisitor.
+ * Checks that calling arguments match the declared parameter types of the called template.
+ * Doesn't check for missing parameters; that is done by {@link CheckCallsVisitor}.
  *
  * <p>In addition to checking that static types match and flagging errors, this
  * visitor also stores a set of TemplateParam object in each CallNode for all the
@@ -72,10 +70,10 @@ import java.util.Set;
  */
 final class CheckCallingParamTypesVisitor extends AbstractSoyNodeVisitor<Void> {
 
-  private static final SoyError ARGUMENT_TYPE_MISMATCH =
-      SoyError.of("Type mismatch on param {0}: expected: {1}, actual: {2}.");
-  private static final SoyError PASSING_PROTOBUF_FROM_STRICT_TO_NON_STRICT =
-      SoyError.of("Passing protobuf {0} of type {1} to non-strict template not allowed.");
+  private static final SoyErrorKind ARGUMENT_TYPE_MISMATCH =
+      SoyErrorKind.of("Type mismatch on param {0}: expected: {1}, actual: {2}.");
+  private static final SoyErrorKind PASSING_PROTOBUF_FROM_STRICT_TO_NON_STRICT =
+      SoyErrorKind.of("Passing protobuf {0} of type {1} to non-strict template not allowed.");
 
   /** Registry of all templates in the Soy tree. */
   private final TemplateRegistry templateRegistry;
@@ -104,12 +102,11 @@ final class CheckCallingParamTypesVisitor extends AbstractSoyNodeVisitor<Void> {
   @Override protected void visitCallDelegateNode(CallDelegateNode node) {
     ImmutableMap.Builder<TemplateDelegateNode, ImmutableList<TemplateParam>>
         paramsToCheckByTemplate = ImmutableMap.builder();
-    for (DelegateTemplateDivision division : templateRegistry.getDelTemplateDivisionsForAllVariants(
-        node.getDelCalleeName())) {
-      for (TemplateDelegateNode delTemplate : division.delPackageNameToDelTemplateMap.values()) {
-        Set<TemplateParam> params = checkCallParamTypes(node, delTemplate);
-        paramsToCheckByTemplate.put(delTemplate, ImmutableList.copyOf(params));
-      }
+    ImmutableMultimap<String, TemplateDelegateNode> delTemplateNameToValues =
+        templateRegistry.getDelTemplateSelector().delTemplateNameToValues();
+    for (TemplateDelegateNode delTemplate : delTemplateNameToValues.get(node.getDelCalleeName())) {
+      Set<TemplateParam> params = checkCallParamTypes(node, delTemplate);
+      paramsToCheckByTemplate.put(delTemplate, ImmutableList.copyOf(params));
     }
     node.setParamsToRuntimeCheck(paramsToCheckByTemplate.build());
 

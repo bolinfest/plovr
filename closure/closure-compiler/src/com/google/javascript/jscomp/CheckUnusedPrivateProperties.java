@@ -74,11 +74,13 @@ class CheckUnusedPrivateProperties
   }
 
   private String getPropName(Node n) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case GETPROP:
         return n.getLastChild().getString();
       case MEMBER_FUNCTION_DEF:
         return n.getString();
+      default:
+        break;
     }
     throw new RuntimeException("Unexpected node type: " + n);
   }
@@ -94,7 +96,7 @@ class CheckUnusedPrivateProperties
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
-     switch (n.getType()) {
+    switch (n.getToken()) {
        case SCRIPT: {
          // exiting the script, report any privates not used in the file.
          reportUnused(t);
@@ -146,7 +148,9 @@ class CheckUnusedPrivateProperties
            }
          }
          break;
-     }
+      default:
+        break;
+    }
   }
 
   private boolean isPrivatePropDecl(Node n) {

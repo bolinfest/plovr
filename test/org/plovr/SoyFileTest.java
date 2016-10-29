@@ -19,6 +19,7 @@ public class SoyFileTest {
   public void testBasicCodegen() {
     File file = new File("testdata/example/templates.soy");
     SoyFileOptions options = new SoyFileOptions.Builder()
+        .setPluginModuleNames(ImmutableList.of("org.plovr.soy.function.PlovrModule"))
         .build();
     SoyFile soyFile = new SoyFile("templates.soy", file, options);
     String code = soyFile.generateCode();
@@ -49,6 +50,7 @@ public class SoyFileTest {
         }
     };
     SoyFileOptions options = new SoyFileOptions.Builder()
+        .setPluginModuleNames(ImmutableList.of("org.plovr.soy.function.PlovrModule"))
         .setMsgBundle(bundle)
         .build();
     SoyFile soyFile = new SoyFile("templates.soy", file, options);

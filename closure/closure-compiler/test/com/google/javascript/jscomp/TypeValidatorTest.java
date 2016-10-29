@@ -355,6 +355,133 @@ public final class TypeValidatorTest extends CompilerTestCase {
         TypeValidator.TYPE_MISMATCH_WARNING);
   }
 
+  public void testModuloNullUndef13() {
+    testSame(ImmutableList.of(
+        SourceFile.fromCode(
+            "foo.java.js",
+            "var /** @type {{ a:number }} */ x = null;")));
+  }
+
+  public void testInheritanceModuloNullUndef1() {
+    testSame(ImmutableList.of(
+        SourceFile.fromCode(
+            "foo.java.js",
+            LINE_JOINER.join(
+                "/** @constructor */",
+                "function Foo() {}",
+                "/** @return {string} */",
+                "Foo.prototype.toString = function() { return ''; };",
+                "/** @constructor @extends {Foo} */",
+                "function Bar() {}",
+                "/**",
+                " * @override",
+                " * @return {?string}",
+                " */",
+                "Bar.prototype.toString = function() { return null; };"))));
+  }
+
+  public void testInheritanceModuloNullUndef2() {
+    testSame(ImmutableList.of(
+        SourceFile.fromCode(
+            "foo.java.js",
+            LINE_JOINER.join(
+                "/** @interface */",
+                "function Foo() {}",
+                "/** @return {string} */",
+                "Foo.prototype.toString = function() {};",
+                "/** @constructor @implements {Foo} */",
+                "function Bar() {}",
+                "/**",
+                " * @override",
+                " * @return {?string}",
+                " */",
+                "Bar.prototype.toString = function() {};"))));
+  }
+
+  public void testInheritanceModuloNullUndef3() {
+    testSame(ImmutableList.of(
+        SourceFile.fromCode(
+            "foo.java.js",
+            LINE_JOINER.join(
+                "/** @interface */",
+                "function High1() {}",
+                "/** @type {number} */",
+                "High1.prototype.prop;",
+                "/** @interface */",
+                "function High2() {}",
+                "/** @type {?number} */",
+                "High2.prototype.prop;",
+                "/**",
+                " * @interface",
+                " * @extends {High1}",
+                " * @extends {High2}",
+                " */",
+                "function Low() {}"))));
+  }
+
+  public void testDuplicateSuppression() {
+    testSame(LINE_JOINER.join(
+        "/** @const */",
+        "var ns0 = {};",
+        "/** @type {number} */",
+        "ns0.x;",
+        "/** @type {number} */",
+        "ns0.x;"));
+
+    testSame(LINE_JOINER.join(
+        "/** @const */",
+        "var ns1 = {};",
+        "/** @type {number} */",
+        "ns1.x = 3;",
+        "/** @type {number} @suppress {duplicate} */",
+        "ns1.x = 3;"));
+
+    testSame(LINE_JOINER.join(
+        "/** @const */",
+        "var ns2 = {};",
+        "/** @type {number} */",
+        "ns2.x = 3;",
+        "/** @type {number} */",
+        "ns2.x = 3;"),
+        TypeValidator.DUP_VAR_DECLARATION);
+
+    testSame(LINE_JOINER.join(
+        "/** @const */",
+        "var ns3 = {};",
+        "/** @type {number} */",
+        "ns3.x;",
+        "/** @type {string} @suppress {duplicate} */",
+        "ns3.x;"),
+        TypeValidator.DUP_VAR_DECLARATION_TYPE_MISMATCH);
+
+    testSame(LINE_JOINER.join(
+        "/** @type {number} */",
+        "var w;",
+        "/** @type {number} */",
+        "var w;"),
+        TypeValidator.DUP_VAR_DECLARATION);
+
+    testSame(LINE_JOINER.join(
+        "/** @type {number} */",
+        "var x;",
+        "/** @type {number} @suppress {duplicate} */",
+        "var x;"));
+
+    testSame(LINE_JOINER.join(
+        "/** @type {number} */",
+        "var y = 3;",
+        "/** @type {number} */",
+        "var y = 3;"),
+        TypeValidator.DUP_VAR_DECLARATION);
+
+    testSame(LINE_JOINER.join(
+        "/** @type {number} */",
+        "var z;",
+        "/** @type {string} @suppress {duplicate} */",
+        "var z;"),
+        TypeValidator.DUP_VAR_DECLARATION_TYPE_MISMATCH);
+  }
+
   private TypeMismatch fromNatives(JSTypeNative a, JSTypeNative b) {
     JSTypeRegistry registry = compiler.getTypeRegistry();
     return new TypeMismatch(

@@ -270,6 +270,18 @@ function testMutatedNestedLoopCapturedLet() {
   f();
 }
 
+function testLoopClosureWithNestInnerFunctions() {
+  let x = [];
+  for (let i = 0; i < 3; i++) {
+    x.push(() => () => i);
+  }
+  let res = [];
+  for (let i = 0; i < x.length; i++) {
+    res.push(x[i]()());
+  }
+  assertArrayEquals([0, 1, 2], res);
+}
+
 function testCommaInForInitializerAndIncrement() {
   const arr = [];
   for (let i = 0, j = 0; i < 10; i++, j++) {
@@ -289,4 +301,14 @@ function testForInCapturedLet() {
   }
   assertEquals(2, arr[4]());  // i = 2
   assertEquals(3, arr[5]());  // i = 2 + 1
+}
+
+function testLabeledLoop() {
+  const arr = [];
+  label:
+  for (let i = 0; i < 3; i++) {
+    arr.push(() => i);
+    continue label;
+  }
+  assertArrayEquals([0, 1, 2], [arr[0](), arr[1](), arr[2]()]);
 }

@@ -17,7 +17,7 @@
 package com.google.javascript.jscomp;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assert_;
+import static com.google.common.truth.Truth.assertWithMessage;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -29,9 +29,6 @@ import com.google.javascript.jscomp.type.ReverseAbstractInterpreter;
 import com.google.javascript.jscomp.type.SemanticReverseAbstractInterpreter;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.testing.BaseJSTypeTestCase;
-
-import junit.framework.TestCase;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -40,6 +37,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import junit.framework.TestCase;
 
 /**
  * <p>Base class for testing JS compiler classes that change
@@ -114,6 +112,9 @@ public abstract class CompilerTestCase extends TestCase {
   /** Whether we run InferConsts before checking. */
   private boolean enableInferConsts = false;
 
+  /** Whether we run CheckAccessControls after the pass being tested. */
+  private boolean checkAccessControls = false;
+
   /** Whether to check that all line number information is preserved. */
   private boolean checkLineNumbers = true;
 
@@ -159,13 +160,14 @@ public abstract class CompilerTestCase extends TestCase {
   private String filename = "testcode";
 
   static final String ACTIVE_X_OBJECT_DEF =
-  "/**\n" +
-  " * @param {string} progId\n" +
-  " * @param {string=} opt_location\n" +
-  " * @constructor\n" +
-  " * @see http://msdn.microsoft.com/en-us/library/7sw4ddf8.aspx\n" +
-  " */\n" +
-  "function ActiveXObject(progId, opt_location) {}\n";
+      LINE_JOINER.join(
+          "/**",
+          " * @param {string} progId",
+          " * @param {string=} opt_location",
+          " * @constructor",
+          " * @see http://msdn.microsoft.com/en-us/library/7sw4ddf8.aspx",
+          " */",
+          "function ActiveXObject(progId, opt_location) {}");
 
   /** A default set of externs for testing. */
   public static final String DEFAULT_EXTERNS =
@@ -196,6 +198,7 @@ public abstract class CompilerTestCase extends TestCase {
           " * @return {!Object}",
           " */",
           "function Object(opt_value) {}",
+          "/** @type {?Function} */ Object.prototype.constructor;",
           "Object.defineProperties = function(obj, descriptors) {};",
           "/** @constructor",
           " * @param {*} var_args */ ",
@@ -238,6 +241,26 @@ public abstract class CompilerTestCase extends TestCase {
           "function Arguments() {}",
           "/** @type {number} */",
           "Arguments.prototype.length;",
+          "/**",
+          " * @constructor",
+          " */",
+          // TODO(bradfordcsmith): Copy fields for this from es5.js this when we have test cases
+          //     that depend on them.
+          "function ObjectPropertyDescriptor() {}",
+          "/**",
+          " * @param {!Object} obj",
+          " * @param {string} prop",
+          " * @return {!ObjectPropertyDescriptor|undefined}",
+          " * @nosideeffects",
+          " */",
+          "Object.getOwnPropertyDescriptor = function(obj, prop) {};",
+          "/**",
+          " * @param {!Object} obj",
+          " * @param {string} prop",
+          " * @param {!Object} descriptor",
+          " * @return {!Object}",
+          " */",
+          "Object.defineProperty = function(obj, prop, descriptor) {};",
           "/** @type {?} */ var unknown;", // For producing unknowns in tests.
           ACTIVE_X_OBJECT_DEF);
 
@@ -376,6 +399,13 @@ public abstract class CompilerTestCase extends TestCase {
    */
   protected void enableInferConsts(boolean enable) {
     this.enableInferConsts = enable;
+  }
+
+  /**
+   * Whether to run CheckAccessControls after the pass being tested (and checking types).
+   */
+  protected void enableCheckAccessControls(boolean enable) {
+    this.checkAccessControls = enable;
   }
 
   /**
@@ -595,6 +625,14 @@ public abstract class CompilerTestCase extends TestCase {
   }
 
   /**
+   * Verifies that the compiler generates the given warning for the given input.
+   */
+  public void testWarning(String[] js, DiagnosticType warning) {
+    assertNotNull(warning);
+    test(js, null, null, warning);
+  }
+
+  /**
    * Verifies that the compiler generates the given warning and description for the given input.
    *
    * @param js Input
@@ -784,14 +822,14 @@ public abstract class CompilerTestCase extends TestCase {
   }
 
   /**
-   * Verifies that the compiler pass's JS output matches the expected output,
-   * or that an expected error is encountered.
+   * Verifies that the compiler pass's JS output matches the expected output, or that an expected
+   * error is encountered.
    *
    * @param js Inputs
    * @param expected Expected JS output
    * @param error Expected error, or null if no error is expected
    */
-  public void test(String[] js, String[] expected, DiagnosticType error) {
+  private void test(String[] js, String[] expected, DiagnosticType error) {
     test(js, expected, error, null);
   }
 
@@ -992,20 +1030,6 @@ public abstract class CompilerTestCase extends TestCase {
    * Verifies that the compiler pass's JS output is the same as its input
    * and (optionally) that an expected warning is issued.
    *
-   * @param js Input and output
-   * @param warning Expected warning, or null if no warning is expected
-   * @param description The description of the expected warning,
-   *      or null if no warning is expected or if the warning's description
-   *      should not be examined
-   */
-  public void testSameNoExterns(String js, DiagnosticType warning, String description) {
-    testSame("", js, warning, description, false);
-  }
-
-  /**
-   * Verifies that the compiler pass's JS output is the same as its input
-   * and (optionally) that an expected warning is issued.
-   *
    * @param externs Externs input
    * @param js Input and output
    * @param diag Expected error or warning, or null if none is expected
@@ -1047,7 +1071,7 @@ public abstract class CompilerTestCase extends TestCase {
    * @param error Whether the "type" parameter represents an error.
    *   (false indicated the type is a warning). Ignored if type is null.
    */
-  public void testSame(
+  private void testSame(
       String externs, String js, DiagnosticType type, String description, boolean error) {
     List<SourceFile> externsInputs = ImmutableList.of(SourceFile.fromCode("externs", externs));
     if (error) {
@@ -1190,11 +1214,11 @@ public abstract class CompilerTestCase extends TestCase {
     String errorMsg = LINE_JOINER.join(compiler.getErrors());
     if (root == null && expected == null && error != null) {
       // Might be an expected parse error.
-      assert_().withFailureMessage("Expected one parse error, but got " + errorMsg)
+      assertWithMessage("Expected one parse error, but got " + errorMsg)
           .that(compiler.getErrorCount())
           .isEqualTo(1);
       JSError actualError = compiler.getErrors()[0];
-      assert_().withFailureMessage("Unexpected parse error(s): " + errorMsg)
+      assertWithMessage("Unexpected parse error(s): " + errorMsg)
           .that(actualError.getType())
           .isEqualTo(error);
       if (description != null) {
@@ -1202,7 +1226,7 @@ public abstract class CompilerTestCase extends TestCase {
       }
       return;
     }
-    assert_().withFailureMessage("Unexpected parse error(s): " + errorMsg).that(root).isNotNull();
+    assertWithMessage("Unexpected parse error(s): " + errorMsg).that(root).isNotNull();
     if (!expectParseWarningsThisTest) {
       assertEquals(
           "Unexpected parse warning(s): " + LINE_JOINER.join(compiler.getWarnings()),
@@ -1247,7 +1271,7 @@ public abstract class CompilerTestCase extends TestCase {
         if (closurePassEnabled && i == 0) {
           recentChange.reset();
           new ProcessClosurePrimitives(compiler, null, CheckLevel.ERROR, false)
-              .process(null, mainRoot);
+              .process(externsRoot, mainRoot);
           hasCodeChanged = hasCodeChanged || recentChange.hasCodeChanged();
         }
 
@@ -1281,7 +1305,7 @@ public abstract class CompilerTestCase extends TestCase {
 
         if (computeSideEffects && i == 0) {
           PureFunctionIdentifier.Driver mark =
-              new PureFunctionIdentifier.Driver(compiler, null, false);
+              new PureFunctionIdentifier.Driver(compiler, null);
           mark.process(externsRoot, mainRoot);
         }
 
@@ -1313,6 +1337,10 @@ public abstract class CompilerTestCase extends TestCase {
           runNewTypeInference(compiler, externsRoot, mainRoot);
         }
 
+        if (checkAccessControls) {
+          (new CheckAccessControls(compiler, false)).process(externsRoot, mainRoot);
+        }
+
         hasCodeChanged = hasCodeChanged || recentChange.hasCodeChanged();
         aggregateWarningCount += errorManagers[i].getWarningCount();
         Collections.addAll(aggregateWarnings, compiler.getWarnings());
@@ -1337,7 +1365,7 @@ public abstract class CompilerTestCase extends TestCase {
       Node expectedRoot = null;
       if (expected != null) {
         expectedRoot = parseExpectedJs(expected);
-        expectedRoot.detachFromParent();
+        expectedRoot.detach();
       }
 
       JSError[] stErrors = symbolTableErrorManager.getErrors();
@@ -1494,8 +1522,7 @@ public abstract class CompilerTestCase extends TestCase {
       if (description != null) {
         assertThat(actualError.description).isEqualTo(description);
       }
-      assert_()
-          .withFailureMessage("Some placeholders in the error message were not replaced")
+      assertWithMessage("Some placeholders in the error message were not replaced")
           .that(actualError.description)
           .doesNotContainMatch("\\{\\d\\}");
 
@@ -1503,8 +1530,7 @@ public abstract class CompilerTestCase extends TestCase {
         String warnings = "";
         for (JSError actualWarning : compiler.getWarnings()) {
           warnings += actualWarning.description + "\n";
-          assert_()
-              .withFailureMessage("Some placeholders in the warning message were not replaced")
+          assertWithMessage("Some placeholders in the warning message were not replaced")
               .that(actualWarning.description)
               .doesNotContainMatch("\\{\\d\\}");
         }
@@ -1518,6 +1544,7 @@ public abstract class CompilerTestCase extends TestCase {
     List<PassFactory> factories = new ArrayList<>();
     TranspilationPasses.addEs6EarlyPasses(factories);
     TranspilationPasses.addEs6LatePasses(factories);
+    TranspilationPasses.addRewritePolyfillPass(factories);
     for (PassFactory factory : factories) {
       factory.create(compiler).process(externsRoot, codeRoot);
     }
@@ -1568,7 +1595,8 @@ public abstract class CompilerTestCase extends TestCase {
     }
 
     if (closurePassEnabled && closurePassEnabledForExpected && !compiler.hasErrors()) {
-      new ProcessClosurePrimitives(compiler, null, CheckLevel.ERROR, false).process(null, mainRoot);
+      new ProcessClosurePrimitives(compiler, null, CheckLevel.ERROR, false)
+          .process(externsRoot, mainRoot);
     }
 
     if (rewriteClosureCode) {
@@ -1624,7 +1652,7 @@ public abstract class CompilerTestCase extends TestCase {
       if (externs.hasMoreThanOneChild()) {
         for (Node c : externs.children()) {
           if (!c.hasChildren()) {
-            c.detachFromParent();
+            c.detach();
           }
         }
       }
@@ -1670,7 +1698,12 @@ public abstract class CompilerTestCase extends TestCase {
    * depends on the module before it.
    */
   static JSModule[] createModuleChain(String... inputs) {
-    JSModule[] modules = createModules(inputs);
+    return createModuleChain(Arrays.asList(inputs), "i", ".js");
+  }
+
+  static JSModule[] createModuleChain(
+      List<String> inputs, String fileNamePrefix, String fileNameSuffix) {
+    JSModule[] modules = createModules(inputs, fileNamePrefix, fileNameSuffix);
     for (int i = 1; i < modules.length; i++) {
       modules[i].addDependency(modules[i - 1]);
     }
@@ -1721,10 +1754,15 @@ public abstract class CompilerTestCase extends TestCase {
    * dependencies between the modules.
    */
   static JSModule[] createModules(String... inputs) {
-    JSModule[] modules = new JSModule[inputs.length];
-    for (int i = 0; i < inputs.length; i++) {
+    return createModules(Arrays.asList(inputs), "i", ".js");
+  }
+
+  static JSModule[] createModules(
+      List<String> inputs, String fileNamePrefix, String fileNameSuffix) {
+    JSModule[] modules = new JSModule[inputs.size()];
+    for (int i = 0; i < inputs.size(); i++) {
       JSModule module = modules[i] = new JSModule("m" + i);
-      module.add(SourceFile.fromCode("i" + i + ".js", inputs[i]));
+      module.add(SourceFile.fromCode(fileNamePrefix + i + fileNameSuffix, inputs.get(i)));
     }
     return modules;
   }

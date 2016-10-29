@@ -22,7 +22,6 @@ import com.google.javascript.jscomp.FunctionInjector.Reference;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -53,6 +52,10 @@ public class J2clPropertyInlinerPass implements CompilerPass {
 
   @Override
   public void process(Node externs, Node root) {
+    if (!J2clSourceFileChecker.shouldRunJ2clPasses(compiler)) {
+      return;
+    }
+
     new StaticFieldGetterSetterInliner(root).run();
   }
 
@@ -83,11 +86,11 @@ public class J2clPropertyInlinerPass implements CompilerPass {
       void remove() {
         Node objectLit = getKey.getParent().getParent().getParent();
         Preconditions.checkArgument(objectLit.isObjectLit());
-        getKey.getParent().getParent().detachFromParent();
+        getKey.getParent().getParent().detach();
         compiler.reportCodeChange();
-        if (objectLit.getChildCount() == 0) {
+        if (!objectLit.hasChildren()) {
           // Remove the whole Object.defineProperties call if there are no properties left.
-          objectLit.getParent().getParent().detachFromParent();
+          objectLit.getParent().getParent().detach();
         }
       }
     }
@@ -108,7 +111,7 @@ public class J2clPropertyInlinerPass implements CompilerPass {
       }
       Node getBlock = getFunction.getLastChild();
       if (!getBlock.hasChildren()
-          || getBlock.getChildCount() != 1
+          || !getBlock.hasOneChild()
           || !getBlock.getFirstChild().isReturn()) {
         return false;
       }
@@ -121,7 +124,7 @@ public class J2clPropertyInlinerPass implements CompilerPass {
           || !multiExpression.getSecondChild().isGetProp()) {
         return false;
       }
-      Node clinitFunction = multiExpression.getFirstChild().getFirstChild();
+      Node clinitFunction = multiExpression.getFirstFirstChild();
       Node internalProp = multiExpression.getSecondChild();
       if (!clinitFunction.matchesQualifiedName(className + ".$clinit")) {
         return false;
@@ -148,21 +151,21 @@ public class J2clPropertyInlinerPass implements CompilerPass {
           || !setFunction.getSecondChild().isParamList()) {
         return false;
       }
-      if (setFunction.getSecondChild().getChildCount() != 1) {
+      if (!setFunction.getSecondChild().hasOneChild()) {
         // There is a single parameter "value".
         return false;
       }
       Node setBlock = setFunction.getLastChild();
       if (!setBlock.hasChildren()
           || !setBlock.getFirstChild().isExprResult()
-          || !setBlock.getFirstChild().getFirstChild().isComma()) {
+          || !setBlock.getFirstFirstChild().isComma()) {
         return false;
       }
-      Node multiExpression = setBlock.getFirstChild().getFirstChild();
+      Node multiExpression = setBlock.getFirstFirstChild();
       if (multiExpression.getChildCount() != 2 || !multiExpression.getSecondChild().isAssign()) {
         return false;
       }
-      Node clinitFunction = multiExpression.getFirstChild().getFirstChild();
+      Node clinitFunction = multiExpression.getFirstFirstChild();
       if (!clinitFunction.matchesQualifiedName(className + ".$clinit")) {
         return false;
       }
@@ -299,7 +302,7 @@ public class J2clPropertyInlinerPass implements CompilerPass {
               FunctionInjector injector =
                   new FunctionInjector(
                       compiler, compiler.getUniqueNameIdSupplier(), true, true, true);
-              assignmentValue.detachFromParent();
+              assignmentValue.detach();
               Node functionCall = IR.call(IR.empty(), assignmentValue);
               parent.replaceChild(n, functionCall);
               Reference reference =

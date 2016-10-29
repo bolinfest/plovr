@@ -125,13 +125,15 @@ class ClosureRewriteClass extends AbstractPostOrderCallback
     //   namespace.ClassName = googDefineClass
     //   and within an objectlit, used by the goog.defineClass.
     Node parent = n.getParent();
-    switch (parent.getType()) {
+    switch (parent.getToken()) {
       case NAME:
         return true;
       case ASSIGN:
         return n == parent.getLastChild() && parent.getParent().isExprResult();
       case STRING_KEY:
         return isContainedInGoogDefineClass(parent);
+      default:
+        break;
     }
     return false;
   }
@@ -171,8 +173,8 @@ class ClosureRewriteClass extends AbstractPostOrderCallback
       }
       ClassDefinition def = extractClassDefinition(target, value);
       if (def != null) {
-        value.detachFromParent();
-        target.detachFromParent();
+        value.detach();
+        target.detach();
         rewriteGoogDefineClass(n, def);
       }
     }
@@ -320,7 +322,7 @@ class ClosureRewriteClass extends AbstractPostOrderCallback
 
   private static Node maybeDetach(Node node) {
     if (node != null && node.getParent() != null) {
-      node.detachFromParent();
+      node.detach();
     }
     return node;
   }
@@ -415,8 +417,9 @@ class ClosureRewriteClass extends AbstractPostOrderCallback
     cls.constructor.value.setJSDocInfo(null);
     if (NodeUtil.isNameDeclaration(exprRoot)) {
       // example: var ctr = function(){}
-      Node decl = IR.declaration(cls.name.cloneTree(), cls.constructor.value, exprRoot.getType())
-          .srcref(exprRoot);
+      Node decl =
+          IR.declaration(cls.name.cloneTree(), cls.constructor.value, exprRoot.getToken())
+              .srcref(exprRoot);
       JSDocInfo mergedClassInfo = mergeJsDocFor(cls, decl);
       decl.setJSDocInfo(mergedClassInfo);
       block.addChildToBack(decl);
@@ -474,7 +477,7 @@ class ClosureRewriteClass extends AbstractPostOrderCallback
                       def.value)
                   .setJSDocInfo(def.info));
       exprResult.useSourceInfoIfMissingFromForTree(def.name);
-      
+
       // The length needs to be set explicitly to include the string key node and the function node.
       // If we just used the length of def.name or def.value alone, then refactorings which try to
       // delete the method would not work correctly.
@@ -597,6 +600,10 @@ class ClosureRewriteClass extends AbstractPostOrderCallback
     Visibility visibility = classInfo.getVisibility();
     if (visibility != null && visibility != JSDocInfo.Visibility.INHERITED) {
       mergedInfo.recordVisibility(classInfo.getVisibility());
+    }
+
+    if (classInfo.isAbstract()) {
+      mergedInfo.recordAbstract();
     }
 
     if (classInfo.isConstant()) {

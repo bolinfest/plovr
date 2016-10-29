@@ -64,7 +64,7 @@ public final class CheckUnusedLabels implements Callback, HotSwapCompilerPass {
 
   @Override
   public final boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case BREAK:
       case CONTINUE:
         if (n.hasChildren()) {
@@ -80,6 +80,9 @@ public final class CheckUnusedLabels implements Callback, HotSwapCompilerPass {
         return false;
       case LABEL:
         currentContext = new LabelContext(n.getFirstChild().getString(), currentContext);
+        break;
+      default:
+        break;
     }
     return true;
   }

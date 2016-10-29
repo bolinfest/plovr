@@ -35,7 +35,6 @@ import com.google.javascript.jscomp.newtypes.RawNominalType;
 import com.google.javascript.jscomp.newtypes.Typedef;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -56,7 +55,7 @@ final class NTIScope implements DeclaredTypeRegistry {
   // Becomes true after finalizeScope is run; so it's true during NTI.
   private boolean isFinalized = false;
 
-  // A local w/out declared type is mapped to null, not to JSType.UNKNOWN.
+  // A local w/out declared type is mapped to null, not to this.commonTypes.UNKNOWN.
   private final Map<String, JSType> locals = new LinkedHashMap<>();
   private final Map<String, JSType> externs;
   private final Set<String> constVars = new LinkedHashSet<>();
@@ -79,12 +78,13 @@ final class NTIScope implements DeclaredTypeRegistry {
   // The set localEnums is used for enum resolution, and then discarded.
   private Set<EnumType> localEnums = new LinkedHashSet<>();
 
-  // declaredType is null for top level, but never null for functions,
-  // even those without jsdoc.
+  // For top level, the DeclaredFunctionType just includes a type for THIS.
+  // For functions, the DeclaredFunctionType is never null, even those without jsdoc.
   // Any inferred parameters or return will be set to null individually.
   private DeclaredFunctionType declaredType;
 
   NTIScope(Node root, NTIScope parent, List<String> formals, JSTypes commonTypes) {
+    Preconditions.checkNotNull(commonTypes);
     if (parent == null) {
       this.name = null;
       this.externs = new LinkedHashMap<>();
@@ -122,13 +122,18 @@ final class NTIScope implements DeclaredTypeRegistry {
     return name;
   }
 
+  @Override
+  public JSTypes getCommonTypes() {
+    return this.commonTypes;
+  }
+
   void setDeclaredType(DeclaredFunctionType declaredType) {
     Preconditions.checkNotNull(declaredType);
     this.declaredType = declaredType;
     // In NTI, we set the type of a function node after we create the summary.
     // NTI doesn't analyze externs, so we set the type for extern functions here.
     if (this.root.isFromExterns()) {
-      this.root.setTypeI(getCommonTypes().fromFunctionType(declaredType.toFunctionType()));
+      this.root.setTypeI(this.commonTypes.fromFunctionType(declaredType.toFunctionType()));
     }
   }
 
@@ -208,7 +213,7 @@ final class NTIScope implements DeclaredTypeRegistry {
     }
     if (includeTypes) {
       return unknownTypeNames.contains(name)
-          || declaredType != null && declaredType.isTypeVariableDefinedLocally(name);
+          || (declaredType != null && declaredType.isTypeVariableDefinedLocally(name));
     }
     return false;
   }
@@ -257,8 +262,7 @@ final class NTIScope implements DeclaredTypeRegistry {
       return false;
     }
     JSType simpleType = decl.getTypeOfSimpleDecl();
-    return decl.getNamespace() != null
-        || simpleType != null && simpleType.isNamespace();
+    return decl.getNamespace() != null || (simpleType != null && simpleType.isNamespace());
   }
 
   boolean isVisibleInScope(String name) {
@@ -321,20 +325,9 @@ final class NTIScope implements DeclaredTypeRegistry {
   }
 
   boolean hasThis() {
-    if (!isFunction()) {
-      return false;
-    }
-    DeclaredFunctionType dft = getDeclaredFunctionType();
-    // dft is null for function scopes early during GlobalTypeInfo
+    DeclaredFunctionType dft = this.declaredType;
+    // dft is null early during GlobalTypeInfo
     return dft != null && dft.getThisType() != null;
-  }
-
-  @Override
-  public JSTypes getCommonTypes() {
-    if (isTopLevel()) {
-      return commonTypes;
-    }
-    return parent.getCommonTypes();
   }
 
   @Override
@@ -355,7 +348,10 @@ final class NTIScope implements DeclaredTypeRegistry {
       }
       NTIScope funScope = (NTIScope) decl.getFunctionScope();
       if (funScope != null) {
-        return getCommonTypes().fromFunctionType(
+        Preconditions.checkNotNull(
+            funScope.getDeclaredFunctionType(),
+            "decl=%s, funScope=%s", decl, funScope);
+        return this.commonTypes.fromFunctionType(
             funScope.getDeclaredFunctionType().toFunctionType());
       }
       Preconditions.checkState(decl.getNamespace() == null);
@@ -363,7 +359,7 @@ final class NTIScope implements DeclaredTypeRegistry {
     }
     // When a function is a namespace, the parent scope has a better type.
     if (name.equals(this.name) && !parent.isFunctionNamespace(name)) {
-      return getCommonTypes()
+      return this.commonTypes
           .fromFunctionType(getDeclaredFunctionType().toFunctionType());
     }
     if (parent != null) {
@@ -484,20 +480,20 @@ final class NTIScope implements DeclaredTypeRegistry {
       Preconditions.checkState(!this.localNamespaces.containsKey(varName));
       NTIScope s = Preconditions.checkNotNull(this.localFunDefs.get(varName));
       this.localNamespaces.put(varName,
-          new FunctionNamespace(getCommonTypes(), varName, s));
+          new FunctionNamespace(this.commonTypes, varName, s, qnameNode));
     } else {
       Preconditions.checkArgument(!isNamespace(qnameNode));
       QualifiedName qname = QualifiedName.fromNode(qnameNode);
       Namespace ns = getNamespace(qname.getLeftmostName());
       NTIScope s = (NTIScope) ns.getDeclaration(qname).getFunctionScope();
       ns.addNamespace(qname.getAllButLeftmost(),
-          new FunctionNamespace(getCommonTypes(), qname.toString(), s));
+          new FunctionNamespace(this.commonTypes, qname.toString(), s, qnameNode));
     }
   }
 
   void addNamespaceLit(Node qnameNode) {
     addNamespace(qnameNode,
-        new NamespaceLit(getCommonTypes(), qnameNode.getQualifiedName()));
+        new NamespaceLit(this.commonTypes, qnameNode.getQualifiedName(), qnameNode));
   }
 
   void updateType(String name, JSType newDeclType) {
@@ -585,12 +581,19 @@ final class NTIScope implements DeclaredTypeRegistry {
       // Any further declarations are shadowed
     } else if (declaredType != null && declaredType.isTypeVariableDefinedLocally(name)) {
       isTypeVar = true;
-      type = JSType.fromTypeVar(declaredType.getTypeVariableDefinedLocally(name));
+      type = JSType.fromTypeVar(this.commonTypes, declaredType.getTypeVariableDefinedLocally(name));
     } else if (externs.containsKey(name)) {
       type = externs.get(name);
     }
+    Namespace ns = null;
+    if (localNamespaces.containsKey(name)) {
+      ns = localNamespaces.get(name);
+    } else if (preservedNamespaces != null) {
+      ns = preservedNamespaces.get(name);
+    }
+
     return new Declaration(type, localTypedefs.get(name),
-        localNamespaces.get(name), localFunDefs.get(name), isTypeVar,
+        ns, localFunDefs.get(name), isTypeVar,
         constVars.contains(name));
   }
 
@@ -599,8 +602,6 @@ final class NTIScope implements DeclaredTypeRegistry {
     if (qname.isIdentifier()) {
       return getDeclaration(qname.getLeftmostName(), includeTypes);
     }
-    Preconditions.checkState(!this.isFinalized,
-        "Namespaces are removed from scopes after finalization");
     Namespace ns = getNamespace(qname.getLeftmostName());
     if (ns == null) {
       return maybeGetForwardDeclaration(qname.toString());
@@ -615,7 +616,7 @@ final class NTIScope implements DeclaredTypeRegistry {
       globalScope = globalScope.parent;
     }
     if (globalScope.unknownTypeNames.contains(qname)) {
-      return new Declaration(JSType.UNKNOWN, null, null, null, false, false);
+      return new Declaration(this.commonTypes.UNKNOWN, null, null, null, false, false);
     }
     return null;
   }
@@ -632,8 +633,11 @@ final class NTIScope implements DeclaredTypeRegistry {
   public JSType getType(String typeName) {
     Preconditions.checkNotNull(
         preservedNamespaces, "Failed to preserve namespaces post-finalization");
-    RawNominalType nominalType = (RawNominalType) preservedNamespaces.get(typeName);
-    return nominalType == null ? null : nominalType.getInstanceAsJSType();
+    Namespace ns = preservedNamespaces.get(typeName);
+    if (ns instanceof RawNominalType) {
+      return ((RawNominalType) ns).getInstanceAsJSType();
+    }
+    return null;
   }
 
   void resolveTypedefs(JSTypeCreatorFromJSDoc typeParser) {
@@ -654,8 +658,8 @@ final class NTIScope implements DeclaredTypeRegistry {
   }
 
   void finalizeScope() {
-    Preconditions.checkState(isTopLevel() || this.declaredType != null,
-        "No declared type for function-scope: %s", this.root);
+    Preconditions.checkNotNull(
+        this.declaredType, "No declared type for scope: %s", this.root);
     unknownTypeNames = ImmutableSet.of();
     // For now, we put types of namespaces directly into the locals.
     // Alternatively, we could move this into NewTypeInference.initEdgeEnvs
@@ -681,7 +685,7 @@ final class NTIScope implements DeclaredTypeRegistry {
       }
     }
     for (String typedefName : localTypedefs.keySet()) {
-      locals.put(typedefName, JSType.UNDEFINED);
+      locals.put(typedefName, this.commonTypes.UNDEFINED);
     }
     copyOuterVarsTransitively(this);
     preservedNamespaces = localNamespaces;

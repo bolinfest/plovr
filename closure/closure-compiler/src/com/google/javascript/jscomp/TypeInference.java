@@ -53,7 +53,6 @@ import com.google.javascript.rhino.jstype.TemplateType;
 import com.google.javascript.rhino.jstype.TemplateTypeMap;
 import com.google.javascript.rhino.jstype.TemplateTypeMapReplacer;
 import com.google.javascript.rhino.jstype.UnionType;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -283,7 +282,7 @@ class TypeInference
                   reverseInterpreter.getPreciserScopeKnowingConditionOutcome(
                       condition,
                       conditionOutcomes.getOutcomeFlowScope(
-                          condition.getType(), branch == Branch.ON_TRUE),
+                          condition.getToken(), branch == Branch.ON_TRUE),
                       branch == Branch.ON_TRUE);
             } else {
               // conditionFlowScope is cached from previous iterations
@@ -298,6 +297,8 @@ class TypeInference
             }
           }
           break;
+        default:
+          break;
       }
 
       result.add(newScope.optimize());
@@ -306,7 +307,7 @@ class TypeInference
   }
 
   private FlowScope traverse(Node n, FlowScope scope) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case ASSIGN:
         scope = traverseAssign(n, scope);
         break;
@@ -457,9 +458,40 @@ class TypeInference
           n.setJSType(info.getType().evaluate(syntacticScope, registry));
         }
         break;
+
+      case SUPER:
+        traverseSuper(n);
+        break;
+
+      default:
+        break;
     }
 
     return scope;
+  }
+
+  private void traverseSuper(Node superNode) {
+    // We only need to handle cases of super() constructor calls for now.
+    // All super.method() uses are transpiled away before this pass.
+    JSType jsType = functionScope.getRootNode().getJSType();
+    FunctionType constructorType = (jsType == null) ? null : jsType.toMaybeFunctionType();
+    FunctionType superConstructorType =
+        (constructorType == null) ? null : constructorType.getSuperClassConstructor();
+    if (superConstructorType != null) {
+      // Treat super() like a function with the same signature as the
+      // superclass constructor, but don't require 'new' or 'this'.
+      superNode.setJSType(
+          new FunctionBuilder(registry)
+              .copyFromOtherFunction(superConstructorType)
+              // Invocations of super() don't use new
+              .setIsConstructor(false)
+              // Even if the super class is abstract, we still need to call its constructor.
+              .withIsAbstract(false) //
+              .withTypeOfThis(null)
+              .build());
+    } else {
+      superNode.setJSType(unknownType);
+    }
   }
 
   /**
@@ -522,7 +554,7 @@ class TypeInference
   private void updateScopeForTypeChange(
       FlowScope scope, Node left, JSType leftType, JSType resultType) {
     Preconditions.checkNotNull(resultType);
-    switch (left.getType()) {
+    switch (left.getToken()) {
       case NAME:
         String varName = left.getString();
         TypedVar var = syntacticScope.getVar(varName);
@@ -608,6 +640,8 @@ class TypeInference
 
         left.setJSType(resultType);
         ensurePropertyDefined(left, resultType);
+        break;
+      default:
         break;
     }
   }
@@ -1067,15 +1101,19 @@ class TypeInference
   private void updateTypeOfParameters(Node n, FunctionType fnType) {
     int i = 0;
     int childCount = n.getChildCount();
+    Node iArgument = n.getFirstChild();
     for (Node iParameter : fnType.getParameters()) {
       if (i + 1 >= childCount) {
         // TypeCheck#visitParametersList will warn so we bail.
         return;
       }
 
-      JSType iParameterType = getJSType(iParameter);
-      Node iArgument = n.getChildAtIndex(i + 1);
+      // NOTE: the first child of the call node is the call target, which we want to skip, so
+      // it is correct to call getNext on the first iteration.
+      iArgument = iArgument.getNext();
       JSType iArgumentType = getJSType(iArgument);
+
+      JSType iParameterType = getJSType(iParameter);
       inferPropertyTypesToMatchConstraint(iArgumentType, iParameterType);
 
       // If the parameter to the call is a function expression, propagate the
@@ -1152,7 +1190,7 @@ class TypeInference
       Node obj = callTarget.getFirstChild();
       maybeResolveTemplatedType(
           fnType.getTypeOfThis(),
-          getJSType(obj),
+          getJSType(obj).restrictByNotNullOrUndefined(),
           resolvedTypes,
           seenTypes);
     }
@@ -1592,10 +1630,9 @@ class TypeInference
 
     // reverse abstract interpret the left node to produce the correct
     // scope in which to verify the right node
-    FlowScope rightScope = reverseInterpreter.
-        getPreciserScopeKnowingConditionOutcome(left,
-            leftOutcome.getOutcomeFlowScope(left.getType(), nIsAnd),
-            nIsAnd);
+    FlowScope rightScope =
+        reverseInterpreter.getPreciserScopeKnowingConditionOutcome(
+            left, leftOutcome.getOutcomeFlowScope(left.getToken(), nIsAnd), nIsAnd);
 
     // type the right node
     BooleanOutcomePair rightOutcome = traverseWithinShortCircuitingBinOp(
@@ -1646,7 +1683,7 @@ class TypeInference
 
   private BooleanOutcomePair traverseWithinShortCircuitingBinOp(
       Node n, FlowScope scope) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case AND:
         return traverseAnd(n, scope);
 

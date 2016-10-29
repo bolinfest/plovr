@@ -32,11 +32,14 @@ public final class TypeTransformationTest extends CompilerTypeTestCase {
   private ImmutableMap<String, String> nameVars;
   private static JSType recordTypeTest, nestedRecordTypeTest, asynchRecord;
 
-  static final String EXTRA_TYPE_DEFS =
-      "/** @constructor */\n"
-          + "function Bar() {}"
-          + "/** @type {number} */"
-          + "var n = 10;";
+  static final String EXTRA_TYPE_DEFS = LINE_JOINER.join(
+      "/** @typedef {!Array<?>} */ var ArrayAlias;",
+      "",
+      "/** @constructor */",
+      "function Bar() {}",
+      "",
+      "/** @type {number} */",
+      "var n = 10;");
 
   @Override
   public void setUp() throws Exception {
@@ -322,6 +325,11 @@ public final class TypeTransformationTest extends CompilerTypeTestCase {
   public void testTransformationWithTemplatizedTypeInvalidBaseType2() {
     testTTL(UNKNOWN_TYPE, "type(S, 'number')",
         "The type string cannot be templatized");
+  }
+
+  public void testTransformationWithTemplatizedTypeInvalidBaseType3() {
+    testTTL(UNKNOWN_TYPE, "type('ArrayAlias', number)",
+        "The type Array<?> cannot be templatized");
   }
 
   public void testTransformationWithRawTypeOf() {

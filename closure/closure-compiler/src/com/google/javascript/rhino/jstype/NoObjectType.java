@@ -64,9 +64,8 @@ public class NoObjectType extends FunctionType {
   private static final long serialVersionUID = 1L;
 
   NoObjectType(JSTypeRegistry registry) {
-    super(registry, null, null,
-          registry.createArrowType(null, null),
-          null, null, true, true);
+    super(
+        registry, null, null, registry.createArrowType(null, null), null, null, true, true, false);
     getInternalArrowType().returnType = this;
     this.setInstanceType(this);
   }
@@ -94,6 +93,11 @@ public class NoObjectType extends FunctionType {
   @Override
   public boolean isNoObjectType() {
     return true;
+  }
+
+  @Override
+  public boolean isConstructor() {
+    return false;
   }
 
   @Override

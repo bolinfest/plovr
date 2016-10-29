@@ -112,7 +112,7 @@ class MakeDeclaredNamesUnique
 
   @Override
   public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case FUNCTION: {
         // Add recursive function name, if needed.
         // NOTE: "enterScope" is called after we need to pick up this name.
@@ -154,6 +154,8 @@ class MakeDeclaredNamesUnique
         nameStack.push(renamer);
         break;
       }
+      default:
+        break;
     }
 
     return true;
@@ -161,7 +163,7 @@ class MakeDeclaredNamesUnique
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case NAME:
         String newName = getReplacementName(n.getString());
         if (newName != null) {
@@ -191,6 +193,8 @@ class MakeDeclaredNamesUnique
       case CATCH:
         // Remove catch except name from the stack of names.
         nameStack.pop();
+        break;
+      default:
         break;
     }
   }
@@ -439,7 +443,7 @@ class MakeDeclaredNamesUnique
 
     private final Renamer hoistRenamer;
 
-    static final String UNIQUE_ID_SEPARATOR = "$$";
+    static final String UNIQUE_ID_SEPARATOR = "$jscomp$";
 
     ContextualRenamer() {
       global = true;

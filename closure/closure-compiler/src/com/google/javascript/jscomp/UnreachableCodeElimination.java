@@ -24,7 +24,6 @@ import com.google.javascript.jscomp.graph.DiGraph.DiGraphEdge;
 import com.google.javascript.jscomp.graph.DiGraph.DiGraphNode;
 import com.google.javascript.jscomp.graph.GraphReachability;
 import com.google.javascript.rhino.Node;
-
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -144,7 +143,7 @@ class UnreachableCodeElimination implements CompilerPass {
         return;
       }
 
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case RETURN:
           if (n.hasChildren()) {
             break;
@@ -167,6 +166,9 @@ class UnreachableCodeElimination implements CompilerPass {
               removeNode(n);
             }
           }
+          break;
+        default:
+          break;
       }
     }
 
@@ -205,7 +207,7 @@ class UnreachableCodeElimination implements CompilerPass {
         return;
       }
 
-      switch (n.getType()) {
+      switch (n.getToken()) {
         // In the CFG, the only incoming edges the the DO node are from
         // breaks/continues and the condition. The edge from the previous
         // statement connects directly to the body of the DO.
@@ -228,6 +230,8 @@ class UnreachableCodeElimination implements CompilerPass {
         case CATCH:
           Node tryNode = parent.getParent();
           NodeUtil.maybeAddFinally(tryNode);
+          break;
+        default:
           break;
       }
 

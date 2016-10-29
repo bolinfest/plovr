@@ -27,25 +27,50 @@ import java.util.List;
 public abstract class TypeICompilerTestCase extends CompilerTestCase {
 
   protected static enum TypeInferenceMode {
-    OtiOnly,
-    NtiOnly,
-    Both
+    NEITHER,
+    OTI_ONLY,
+    NTI_ONLY,
+    BOTH;
+
+    boolean runsOTI() {
+      return this == OTI_ONLY || this == BOTH;
+    }
+
+    boolean runsNTI() {
+      return this == NTI_ONLY || this == BOTH;
+    }
+
+    boolean runsNeither() {
+      return this == NEITHER;
+    }
   }
 
-  protected TypeInferenceMode mode = TypeInferenceMode.Both;
+  protected TypeInferenceMode mode = TypeInferenceMode.BOTH;
+
+  public TypeICompilerTestCase() {
+    super();
+  }
+
+  public TypeICompilerTestCase(String defaultExterns) {
+    super(defaultExterns);
+  }
+
+  public TypeICompilerTestCase(String defaultExterns, boolean compareAsTree) {
+    super(defaultExterns, compareAsTree);
+  }
 
   @Override
   protected void setUp() throws Exception {
     super.setUp();
-    this.mode = TypeInferenceMode.Both;
+    this.mode = TypeInferenceMode.BOTH;
   }
 
-  @Override
-  protected CompilerOptions getOptions(CompilerOptions options) {
-    options = super.getOptions(options);
-    options.setRunOTIAfterNTI(false);
-    return options;
-  }
+  // NOTE(aravindpg): the idea with these selective overrides is that every `test` call
+  // in a subclass must go through one and exactly one of the overrides here, which are
+  // the ones that actually run the test twice (once under OTI and once under NTI).
+  // The `test` methods in CompilerTestCase overload each other in complicated ways,
+  // and this is the minimal set of overrides (of visible methods) that essentially
+  // "post-dominates" any `test` call.
 
   @Override
   public void test(
@@ -55,15 +80,80 @@ public abstract class TypeICompilerTestCase extends CompilerTestCase {
       DiagnosticType error,
       DiagnosticType warning,
       String description) {
-    if (this.mode == TypeInferenceMode.Both || this.mode == TypeInferenceMode.OtiOnly) {
+    if (this.mode.runsOTI()) {
       enableTypeCheck();
       super.test(externs, js, expected, error, warning, description);
       disableTypeCheck();
     }
-    if (this.mode == TypeInferenceMode.Both || this.mode == TypeInferenceMode.NtiOnly) {
+    if (this.mode.runsNTI()) {
       enableNewTypeInference();
       super.test(externs, js, expected, error, warning, description);
       disableNewTypeInference();
+    }
+    if (this.mode.runsNeither()) {
+      super.test(externs, js, expected, error, warning, description);
+    }
+  }
+
+  @Override
+  public void test(
+      List<SourceFile> inputs,
+      String[] expected,
+      DiagnosticType error,
+      DiagnosticType warning,
+      String description) {
+    if (this.mode.runsOTI()) {
+      enableTypeCheck();
+      super.test(inputs, expected, error, warning, description);
+      disableTypeCheck();
+    }
+    if (this.mode.runsNTI()) {
+      enableNewTypeInference();
+      super.test(inputs, expected, error, warning, description);
+      disableNewTypeInference();
+    }
+    if (this.mode.runsNeither()) {
+      super.test(inputs, expected, error, warning, description);
+    }
+  }
+
+  @Override
+  public void test(
+      List<SourceFile> js,
+      List<SourceFile> expected,
+      DiagnosticType error,
+      DiagnosticType warning,
+      String description) {
+    if (this.mode.runsOTI()) {
+      enableTypeCheck();
+      super.test(js, expected, error, warning, description);
+      disableTypeCheck();
+    }
+    if (this.mode.runsNTI()) {
+      enableNewTypeInference();
+      super.test(js, expected, error, warning, description);
+      disableNewTypeInference();
+    }
+    if (this.mode.runsNeither()) {
+      super.test(js, expected, error, warning, description);
+    }
+  }
+
+  @Override
+  protected void test(
+      Compiler compiler, String[] expected, DiagnosticType error, DiagnosticType warning) {
+    if (this.mode.runsOTI()) {
+      enableTypeCheck();
+      super.test(compiler, expected, error, warning);
+      disableTypeCheck();
+    }
+    if (this.mode.runsNTI()) {
+      enableNewTypeInference();
+      super.test(compiler, expected, error, warning);
+      disableNewTypeInference();
+    }
+    if (this.mode.runsNeither()) {
+      super.test(compiler, expected, error, warning);
     }
   }
 }

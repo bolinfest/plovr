@@ -22,7 +22,6 @@ import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TokenStream;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -46,8 +45,8 @@ public class CodeGenerator {
   private final boolean preserveTypeAnnotations;
   private final boolean trustedStrings;
   private final boolean quoteKeywordProperties;
-  private final boolean outputAsExterns;
   private final boolean useOriginalName;
+  private final JSDocInfoPrinter jsDocInfoPrinter;
 
   private CodeGenerator(CodeConsumer consumer) {
     cc = consumer;
@@ -56,8 +55,8 @@ public class CodeGenerator {
     trustedStrings = true;
     preserveTypeAnnotations = false;
     quoteKeywordProperties = false;
-    outputAsExterns = false;
     useOriginalName = false;
+    this.jsDocInfoPrinter = new JSDocInfoPrinter(false);
   }
 
   static CodeGenerator forCostEstimation(CodeConsumer consumer) {
@@ -74,14 +73,15 @@ public class CodeGenerator {
     this.trustedStrings = options.trustedStrings;
     this.preserveTypeAnnotations = options.preserveTypeAnnotations;
     this.quoteKeywordProperties = options.quoteKeywordProperties;
-    this.outputAsExterns = options.shouldGenerateTypedExterns();
     this.useOriginalName = options.getUseOriginalNamesInOutput();
+    this.jsDocInfoPrinter = new JSDocInfoPrinter(useOriginalName);
   }
 
-  public void maybeTagAsExterns() {
-    if (this.outputAsExterns) {
-      add("/** @externs */\n");
-    }
+  /**
+   * Insert a top-level @externs comment.
+   */
+  public void tagAsExterns() {
+    add("/** @externs */\n");
   }
 
   /**
@@ -109,14 +109,14 @@ public class CodeGenerator {
     }
 
     if (preserveTypeAnnotations && n.getJSDocInfo() != null) {
-      String jsdocAsString = JSDocInfoPrinter.print(n.getJSDocInfo());
+      String jsdocAsString = jsDocInfoPrinter.print(n.getJSDocInfo());
       // Don't print an empty jsdoc
       if (!jsdocAsString.equals("/** */ ")) {
         add(jsdocAsString);
       }
     }
 
-    Token type = n.getType();
+    Token type = n.getToken();
     String opstr = NodeUtil.opToStr(type);
     int childCount = n.getChildCount();
     Node first = n.getFirstChild();
@@ -139,9 +139,9 @@ public class CodeGenerator {
         add("(");
       }
 
-      if (NodeUtil.isAssignmentOp(n) && NodeUtil.isAssignmentOp(last)) {
-        // Assignments are the only right-associative binary operators
-        addExpr(first, p, context);
+      if (NodeUtil.isAssignmentOp(n) || type == Token.EXPONENT) {
+        // Assignment operators and '**' are the only right-associative binary operators
+        addExpr(first, p + 1, context);
         cc.addOp(opstr, true);
         addExpr(last, p, rhsContext);
       } else {
@@ -215,20 +215,27 @@ public class CodeGenerator {
         break;
 
       case VAR:
-        if (first != null) {
-          add("var ");
-          addList(first, false, getContextForNoInOperator(context), ",");
+        add("var ");
+        addList(first, false, getContextForNoInOperator(context), ",");
+        if (n.getParent() == null || NodeUtil.isStatement(n)) {
+          cc.endStatement();
         }
         break;
 
       case CONST:
         add("const ");
         addList(first, false, getContextForNoInOperator(context), ",");
+        if (n.getParent() == null || NodeUtil.isStatement(n)) {
+          cc.endStatement();
+        }
         break;
 
       case LET:
         add("let ");
         addList(first, false, getContextForNoInOperator(context), ",");
+        if (n.getParent() == null || NodeUtil.isStatement(n)) {
+          cc.endStatement();
+        }
         break;
 
       case LABEL_NAME:
@@ -560,6 +567,8 @@ public class CodeGenerator {
             case MEMBER_VARIABLE_DEF:
               // nothing to do.
               break;
+            default:
+              break;
           }
 
           // The name is on the GET or SET node.
@@ -625,11 +634,6 @@ public class CodeGenerator {
                       && n.getParent().isScript());
           for (Node c = first; c != null; c = c.getNext()) {
             add(c, Context.STATEMENT);
-
-            // VAR doesn't include ';' since it gets used in expressions
-            if (NodeUtil.isNameDeclaration(c)) {
-              cc.endStatement();
-            }
 
             if (c.isFunction() || c.isClass()) {
               cc.maybeLineBreak();
@@ -718,6 +722,19 @@ public class CodeGenerator {
 
       case GETPROP:
         {
+          // This attempts to convert rewritten aliased code back to the original code,
+          // such as when using goog.scope(). See ScopedAliases.java for the original code.
+          if (useOriginalName && n.getOriginalName() != null) {
+            // The ScopedAliases pass will convert variable assignments and function declarations
+            // to assignments to GETPROP nodes, like $jscomp.scope.SOME_VAR = 3;. This attempts to
+            // rewrite it back to the original code.
+            if (n.getFirstChild().matchesQualifiedName("$jscomp.scope")
+                && n.getParent().isAssign()) {
+              add("var ");
+            }
+            addIdentifier(n.getOriginalName());
+            break;
+          }
           Preconditions.checkState(
               childCount == 2, "Bad GETPROP: expected 2 children, but got %s", childCount);
           Preconditions.checkState(last.isString(), "Bad GETPROP: RHS should be STRING");
@@ -784,7 +801,7 @@ public class CodeGenerator {
         // then the call must not a FREE_CALL annotation. If it does, then
         // that means it was originally an call without an explicit this and
         // that must be preserved.
-        if (isIndirectEval(first) || n.getBooleanProp(Node.FREE_CALL) && NodeUtil.isGet(first)) {
+        if (isIndirectEval(first) || (n.getBooleanProp(Node.FREE_CALL) && NodeUtil.isGet(first))) {
           add("(0,");
           addExpr(first, NodeUtil.precedence(Token.COMMA), Context.OTHER);
           add(")");
@@ -923,7 +940,7 @@ public class CodeGenerator {
         // to force parentheses. Otherwise, when parsed, NEW will bind to the
         // first viable parentheses (don't traverse into functions).
         if (NodeUtil.containsType(first, Token.CALL, NodeUtil.MATCH_NOT_FUNCTION)) {
-          precedence = NodeUtil.precedence(first.getType()) + 1;
+          precedence = NodeUtil.precedence(first.getToken()) + 1;
         }
         addExpr(first, precedence, Context.OTHER);
 
@@ -1011,7 +1028,7 @@ public class CodeGenerator {
           add(body, Context.PRESERVE_BLOCK);
         } else {
           // This is a field or object literal property.
-          boolean isInClass = n.getParent().getType() == Token.CLASS_MEMBERS;
+          boolean isInClass = n.getParent().getToken() == Token.CLASS_MEMBERS;
           Node initializer = first.getNext();
           if (initializer != null) {
             // Object literal value.
@@ -1082,7 +1099,7 @@ public class CodeGenerator {
         add("`");
         for (Node c = first; c != null; c = c.getNext()) {
           if (c.isString()) {
-            add(strEscape(c.getString(), "'", "\"", "\\", false, false));
+            add(strEscape(c.getString(), "\"", "'", "\\`", "\\", false, false));
           } else {
             // Can't use add() since isWordChar('$') == true and cc would add
             // an extra space.
@@ -1257,6 +1274,7 @@ public class CodeGenerator {
       return false;
     } else if (NodeUtil.isBinaryOperator(parent)
         || NodeUtil.isUnaryOperator(parent)
+        || NodeUtil.isUpdateOperator(parent)
         || parent.isTaggedTemplateLit()
         || parent.isGetProp()) {
       // LeftHandSideExpression OP LeftHandSideExpression
@@ -1379,7 +1397,7 @@ public class CodeGenerator {
       Node n, Token op, String opStr, Context context,
       Context rhsContext, int leftPrecedence, int rightPrecedence) {
     Node firstNonOperator = n.getFirstChild();
-    while (firstNonOperator.getType() == op) {
+    while (firstNonOperator.getToken() == op) {
       firstNonOperator = firstNonOperator.getFirstChild();
     }
 
@@ -1485,12 +1503,6 @@ public class CodeGenerator {
       cc.endStatement(true);
     } else {
       add(nodeToProcess, context);
-
-      // VAR doesn't include ';' since it gets used in expressions - so any
-      // VAR in a statement context needs a call to endStatement() here.
-      if (nodeToProcess.isVar()) {
-        cc.endStatement();
-      }
     }
   }
 
@@ -1516,7 +1528,7 @@ public class CodeGenerator {
         }
       }
     } else {
-      switch (n.getType()){
+      switch (n.getToken()) {
         case LET:
         case CONST:
         case FUNCTION:
@@ -1530,14 +1542,36 @@ public class CodeGenerator {
   }
 
   private void addExpr(Node n, int minPrecedence, Context context) {
-    if ((NodeUtil.precedence(n.getType()) < minPrecedence) ||
-        ((context == Context.IN_FOR_INIT_CLAUSE) && n.isIn())){
+    if (opRequiresParentheses(n, minPrecedence, context)) {
       add("(");
       add(n, Context.OTHER);
       add(")");
     } else {
       add(n, context);
     }
+  }
+
+  private boolean opRequiresParentheses(Node n, int minPrecedence, Context context) {
+    if (context == Context.IN_FOR_INIT_CLAUSE && n.isIn()) {
+      // make sure this operator 'in' isn't confused with the for-loop 'in'
+      return true;
+    } else if (NodeUtil.isUnaryOperator(n) && isFirstOperandOfExponentiationExpression(n)) {
+      // Unary operators are higher precedence than '**', but
+      // ExponentiationExpression cannot expand to
+      //     UnaryExpression ** ExponentiationExpression
+      return true;
+    } else if (n.isObjectLit() && n.getParent().isArrowFunction()) {
+      // If the body of an arrow function is an object literal, the braces are treated as a
+      // statement block with higher precedence, which we avoid with parentheses.
+      return true;
+    } else {
+      return NodeUtil.precedence(n.getToken()) < minPrecedence;
+    }
+  }
+
+  private boolean isFirstOperandOfExponentiationExpression(Node n) {
+    Node parent = n.getParent();
+    return parent != null && parent.getToken() == Token.EXPONENT && parent.getFirstChild() == n;
   }
 
   void addList(Node firstInList) {
@@ -1592,7 +1626,7 @@ public class CodeGenerator {
     add("{");
     for (Node child = n.getFirstChild(); child != null; child = child.getNext()) {
       if (child != n.getFirstChild()) {
-        add(",");
+        cc.listSeparator();
       }
 
       add(child);
@@ -1652,7 +1686,8 @@ public class CodeGenerator {
   }
 
   private String jsString(String s, boolean useSlashV) {
-    int singleq = 0, doubleq = 0;
+    int singleq = 0;
+    int doubleq = 0;
 
     // could count the quotes and pick the optimal quote character
     for (int i = 0; i < s.length(); i++) {
@@ -1662,7 +1697,8 @@ public class CodeGenerator {
       }
     }
 
-    String doublequote, singlequote;
+    String doublequote;
+    String singlequote;
     char quote;
     if (preferSingleQuotes ?
         (singleq <= doubleq) : (singleq < doubleq)) {
@@ -1677,12 +1713,12 @@ public class CodeGenerator {
       singlequote = "\'";
     }
 
-    return quote + strEscape(s, doublequote, singlequote, "\\\\", useSlashV, false) + quote;
+    return quote + strEscape(s, doublequote, singlequote, "`", "\\\\", useSlashV, false) + quote;
   }
 
   /** Escapes regular expression */
   String regexpEscape(String s) {
-    return '/' + strEscape(s, "\"", "'", "\\", false, true) + '/';
+    return '/' + strEscape(s, "\"", "'", "`", "\\", false, true) + '/';
   }
 
   /** Helper to escape JavaScript string as well as regular expression */
@@ -1690,6 +1726,7 @@ public class CodeGenerator {
       String s,
       String doublequoteEscape,
       String singlequoteEscape,
+      String backtickEscape,
       String backslashEscape,
       boolean useSlashV,
       boolean isRegexp) {
@@ -1714,6 +1751,7 @@ public class CodeGenerator {
         case '\\': sb.append(backslashEscape); break;
         case '\"': sb.append(doublequoteEscape); break;
         case '\'': sb.append(singlequoteEscape); break;
+        case '`': sb.append(backtickEscape); break;
 
         // From LineTerminators (ES5 Section 7.3, Table 3)
         case '\u2028': sb.append("\\u2028"); break;
@@ -1780,8 +1818,8 @@ public class CodeGenerator {
           }
           break;
         default:
-          if (outputCharsetEncoder != null && outputCharsetEncoder.canEncode(c)
-              || c > 0x1f && c < 0x7f) {
+          if ((outputCharsetEncoder != null && outputCharsetEncoder.canEncode(c))
+              || (c > 0x1f && c < 0x7f)) {
             // If we're given an outputCharsetEncoder, then check if the character can be
             // represented in this character set. If no charsetEncoder provided - pass straight
             // Latin characters through, and escape the rest. Doing the explicit character check is
@@ -1884,7 +1922,7 @@ public class CodeGenerator {
   }
 
   private void processEnd(Node n, Context context) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case CLASS:
       case INTERFACE:
       case ENUM:
@@ -1899,13 +1937,13 @@ public class CodeGenerator {
         }
         break;
       case DECLARE:
-        if (n.getParent().getType() != Token.NAMESPACE_ELEMENTS) {
+        if (n.getParent().getToken() != Token.NAMESPACE_ELEMENTS) {
           processEnd(n.getFirstChild(), context);
         }
         break;
       case EXPORT:
-        if (n.getParent().getType() != Token.NAMESPACE_ELEMENTS
-            && n.getFirstChild().getType() != Token.DECLARE) {
+        if (n.getParent().getToken() != Token.NAMESPACE_ELEMENTS
+            && n.getFirstChild().getToken() != Token.DECLARE) {
           processEnd(n.getFirstChild(), context);
         }
         break;
