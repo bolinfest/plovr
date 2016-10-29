@@ -17,36 +17,31 @@ final class SoyFileOptions {
 
   final List<String> pluginModuleNames;
   final boolean useClosureLibrary;
-  final boolean isUsingInjectedData;
   final SoyMsgBundle msgBundle;
 
   public SoyFileOptions() {
     this(ImmutableList.<String>of(), /* pluginModuleNames */
-        true, /* useClosureLibrary */
-        false); /* isUsingInjectedData */
+        true); /* useClosureLibrary */
   }
 
   public SoyFileOptions(List<String> pluginModuleNames,
-      boolean useClosureLibrary,
-      boolean isUsingInjectedData) {
-    this(pluginModuleNames, useClosureLibrary, isUsingInjectedData, null);
+      boolean useClosureLibrary) {
+    this(pluginModuleNames, useClosureLibrary, null);
   }
 
   private SoyFileOptions(List<String> pluginModuleNames,
       boolean useClosureLibrary,
-      boolean isUsingInjectedData,
       SoyMsgBundle msgBundle) {
     Preconditions.checkNotNull(pluginModuleNames);
     this.pluginModuleNames = ImmutableList.copyOf(pluginModuleNames);
     this.useClosureLibrary = useClosureLibrary;
-    this.isUsingInjectedData = isUsingInjectedData;
     this.msgBundle = msgBundle;
   }
 
   @Override
   public int hashCode() {
     return Objects.hashCode(
-        pluginModuleNames, useClosureLibrary, isUsingInjectedData, msgBundle);
+        pluginModuleNames, useClosureLibrary, msgBundle);
   }
 
   @Override
@@ -60,14 +55,12 @@ final class SoyFileOptions {
     SoyFileOptions that = (SoyFileOptions)obj;
     return Objects.equal(this.pluginModuleNames, that.pluginModuleNames) &&
         Objects.equal(this.useClosureLibrary, that.useClosureLibrary) &&
-        Objects.equal(this.isUsingInjectedData, that.isUsingInjectedData) &&
         Objects.equal(this.msgBundle, that.msgBundle);
   }
 
   public static class Builder {
     List<String> pluginModuleNames = ImmutableList.<String>of();
     boolean useClosureLibrary = false;
-    boolean isUsingInjectedData = false;
     SoyMsgBundle msgBundle = null;
 
     public Builder setPluginModuleNames(List<String> values) {
@@ -80,11 +73,6 @@ final class SoyFileOptions {
       return this;
     }
 
-    public Builder setIsUsingInjectedData(boolean value) {
-      isUsingInjectedData = value;
-      return this;
-    }
-
     public Builder setMsgBundle(SoyMsgBundle value) {
       msgBundle = value;
       return this;
@@ -94,7 +82,6 @@ final class SoyFileOptions {
       return new SoyFileOptions(
           pluginModuleNames,
           useClosureLibrary,
-          isUsingInjectedData,
           msgBundle);
     }
   }

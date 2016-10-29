@@ -109,8 +109,6 @@ public final class Config implements Comparable<Config> {
 
   private final String soyTranslationPlugin;
 
-  private final boolean soyUseInjectedData;
-
   private final CompilationMode compilationMode;
 
   private final WarningLevel warningLevel;
@@ -154,6 +152,8 @@ public final class Config implements Comparable<Config> {
   private final boolean ambiguateProperties;
 
   private final boolean disambiguateProperties;
+
+  private final boolean strictModeInput;
 
   private final LanguageMode languageIn;
 
@@ -219,7 +219,6 @@ public final class Config implements Comparable<Config> {
       List<File> testExcludePaths,
       List<String> soyFunctionPlugins,
       String soyTranslationPlugin,
-      boolean soyUseInjectedData,
       CompilationMode compilationMode,
       WarningLevel warningLevel,
       boolean debug,
@@ -242,6 +241,7 @@ public final class Config implements Comparable<Config> {
       Set<String> idGenerators,
       boolean ambiguateProperties,
       boolean disambiguateProperties,
+      boolean strictModeInput,
       LanguageMode languageIn,
       LanguageMode languageOut,
       boolean newTypeInference,
@@ -276,7 +276,6 @@ public final class Config implements Comparable<Config> {
     this.testExcludePaths = ImmutableSet.copyOf(testExcludePaths);
     this.soyFunctionPlugins = ImmutableList.copyOf(soyFunctionPlugins);
     this.soyTranslationPlugin = soyTranslationPlugin;
-    this.soyUseInjectedData = soyUseInjectedData;
     this.compilationMode = compilationMode;
     this.warningLevel = warningLevel;
     this.debug = debug;
@@ -299,6 +298,7 @@ public final class Config implements Comparable<Config> {
     this.idGenerators = ImmutableSet.copyOf(idGenerators);
     this.ambiguateProperties = ambiguateProperties;
     this.disambiguateProperties = disambiguateProperties;
+    this.strictModeInput = strictModeInput;
     this.languageIn = languageIn;
     this.languageOut = languageOut;
     this.newTypeInference = newTypeInference;
@@ -373,10 +373,6 @@ public final class Config implements Comparable<Config> {
     return !soyFunctionPlugins.isEmpty();
   }
 
-  public boolean getSoyUseInjectedData() {
-    return soyUseInjectedData;
-  }
-
   public CompilationMode getCompilationMode() {
     return compilationMode;
   }
@@ -403,7 +399,6 @@ public final class Config implements Comparable<Config> {
         .put("debug", debug)
         .put("pretty-print", prettyPrint)
         .put("print-input-delimeter", printInputDelimiter)
-        .put("soy-use-injected-data", getSoyUseInjectedData())
         .put("css-output-format", getCssOutputFormat())
         .put("language", Strings.nullToEmpty(getLanguage()))
         .build();
@@ -673,6 +668,10 @@ public final class Config implements Comparable<Config> {
     return null;
   }
 
+  boolean isStrictModeInput() {
+    return strictModeInput;
+  }
+
   LanguageMode getLanguageIn() {
     return languageIn;
   }
@@ -725,6 +724,7 @@ public final class Config implements Comparable<Config> {
     options.setIdGenerators(idGenerators);
     options.setAmbiguateProperties(ambiguateProperties);
     options.setDisambiguateProperties(disambiguateProperties);
+    options.setStrictModeInput(strictModeInput);
     if (languageIn != null) {
       options.setLanguageIn(languageIn);
     }
@@ -1072,8 +1072,6 @@ public final class Config implements Comparable<Config> {
 
     private String soyTranslationPlugin = "";
 
-    private boolean soyUseInjectedData = false;
-
     private ListMultimap<CustomPassExecutionTime, CompilerPassFactory> customPasses = ImmutableListMultimap.of();
 
     private ImmutableList.Builder<WarningsGuardFactory> customWarningsGuards = ImmutableList.builder();
@@ -1119,6 +1117,8 @@ public final class Config implements Comparable<Config> {
     private boolean ambiguateProperties;
 
     private boolean disambiguateProperties;
+
+    private boolean strictModeInput;
 
     private LanguageMode languageIn;
 
@@ -1211,7 +1211,6 @@ public final class Config implements Comparable<Config> {
           ? new ImmutableList.Builder<String>().addAll(config.getSoyFunctionPlugins())
           : null;
       this.soyTranslationPlugin = config.soyTranslationPlugin;
-      this.soyUseInjectedData = config.soyUseInjectedData;
       this.customPasses = config.customPasses;
       this.customWarningsGuards = new ImmutableList.Builder<WarningsGuardFactory>()
         .addAll(config.customWarningsGuards);
@@ -1234,6 +1233,7 @@ public final class Config implements Comparable<Config> {
       this.idGenerators = config.idGenerators;
       this.ambiguateProperties = config.ambiguateProperties;
       this.disambiguateProperties = config.disambiguateProperties;
+      this.strictModeInput = config.strictModeInput;
       this.languageIn = config.languageIn;
       this.languageOut = config.languageOut;
       this.newTypeInference = config.newTypeInference;
@@ -1443,10 +1443,6 @@ public final class Config implements Comparable<Config> {
       this.documentationOutputDirectory = documentationOutputDirectory;
     }
 
-    public void setSoyUseInjectedData(boolean soyUseInjectedData) {
-      this.soyUseInjectedData = soyUseInjectedData;
-    }
-
     public void setCustomPasses(
         ListMultimap<CustomPassExecutionTime, CompilerPassFactory> customPasses) {
       this.customPasses = ImmutableListMultimap.copyOf(customPasses);
@@ -1598,6 +1594,10 @@ public final class Config implements Comparable<Config> {
 
     public void setDisambiguateProperties(boolean disambiguateProperties) {
       this.disambiguateProperties = disambiguateProperties;
+    }
+
+    public void setStrictModeInput(boolean newVal) {
+      this.strictModeInput = newVal;
     }
 
     public void setLanguageIn(LanguageMode newVal) {
@@ -1768,7 +1768,6 @@ public final class Config implements Comparable<Config> {
         SoyFileOptions soyFileOptions = new SoyFileOptions.Builder()
             .setPluginModuleNames(soyFunctionNames)
             .setUseClosureLibrary(!this.excludeClosureLibrary)
-            .setIsUsingInjectedData(this.soyUseInjectedData)
             .setMsgBundle(getSoyMsgBundle())
             .build();
 
@@ -1795,7 +1794,6 @@ public final class Config implements Comparable<Config> {
           testExcludePaths,
           soyFunctionNames,
           soyTranslationPlugin,
-          this.soyUseInjectedData,
           compilationMode,
           warningLevel,
           debug,
@@ -1818,6 +1816,7 @@ public final class Config implements Comparable<Config> {
           idGenerators,
           ambiguateProperties,
           disambiguateProperties,
+          strictModeInput,
           languageIn,
           languageOut,
           newTypeInference,

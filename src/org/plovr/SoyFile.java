@@ -15,7 +15,7 @@ import com.google.inject.Injector;
 import com.google.inject.Module;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.SoyModule;
-import com.google.template.soy.base.SoySyntaxException;
+import com.google.template.soy.base.internal.LegacyInternalSyntaxException;
 import com.google.template.soy.jssrc.SoyJsSrcOptions;
 import com.google.template.soy.msgs.SoyMsgBundle;
 
@@ -50,7 +50,6 @@ public class SoyFile extends LocalFileJsInput {
       value.setShouldGenerateJsdoc(true);
       value.setShouldProvideRequireSoyNamespaces(options.useClosureLibrary);
       value.setShouldDeclareTopLevelNamespaces(options.useClosureLibrary);
-      value.setIsUsingIjData(options.isUsingInjectedData);
       value.setShouldGenerateGoogMsgDefs(options.useClosureLibrary && options.msgBundle == null);
       value.setUseGoogIsRtlForBidiGlobalDir(options.useClosureLibrary && options.msgBundle == null);
 
@@ -69,7 +68,7 @@ public class SoyFile extends LocalFileJsInput {
       String code = fileSet.compileToJsSrc(jsSrcOptions, msgBundle).get(0);
       logger.fine(code);
       return code;
-    } catch (SoySyntaxException e) {
+    } catch (LegacyInternalSyntaxException e) {
       throw new PlovrSoySyntaxException(e, this);
     }
   }
