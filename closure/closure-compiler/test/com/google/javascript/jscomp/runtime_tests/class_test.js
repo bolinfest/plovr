@@ -155,3 +155,75 @@ function testImplicitSuperConstructorCall() {
   assertEquals(1234, B.create().x);
 }
 
+/**
+ * Does the current environment set `stack` on Error objects either when
+ * they are created or when they are thrown?
+ * @returns {boolean}
+ */
+function thrownErrorHasStack() {
+  const e = new Error();
+  try {
+    throw e;
+  } finally {
+    return 'stack' in e;
+  }
+}
+
+function testExtendsError() {
+  class MyError extends Error {
+    constructor() {
+      super('my message');
+    }
+  }
+  try {
+    throw new MyError();
+  } catch (e) {
+    // IE11 and earlier don't set the stack field until the error is actually
+    // thrown. IE8 doesn't set it at all.
+    assertTrue(e instanceof MyError);
+    assertEquals('my message', e.message);
+    if (thrownErrorHasStack()) {
+      assertNonEmptyString(e.stack);
+    }
+  }
+}
+
+function testSupportsErrorExtensionHack() {
+  class MyError extends Error {
+    constructor() {
+      const superResult = super('my message');
+      this.superResult = superResult;
+    }
+  }
+  const e = new MyError();
+  if (MyError.toString().startsWith('class')) {
+    // Browser should have correct behavior for uncompiled code.
+    assertEquals(e, e.superResult);
+  } else {
+    // TODO(bradfordcsmith): The spec says super() should return `this`,
+    //  but Angular2 errors.ts currently depends on incorrect compiler behavior
+    //  that causes it to return a newly created Error object.
+    //  https://github.com/angular/angular/issues/12575
+    assertNotEquals(e, e.superResult);
+  }
+}
+
+function testExtendsObject() {
+  // When super() returns an object, it is supposed to replace `this`,
+  // but Object() always returns a new object, so it must be handled specially.
+  // Make sure that the compiler does NOT do that replacement.
+  class NoConstructor extends Object {}
+  assertTrue(new NoConstructor('junk') instanceof NoConstructor);
+
+  // super() should have `this` as its return value, not a new object created
+  // by calling Object().
+  class WithConstructor extends Object {
+    constructor(message) {
+      const superResult = super();
+      this.superResult = superResult;
+      this.message = message;
+    }
+  }
+  const withConstructor = new WithConstructor('message');
+  assertEquals(withConstructor, withConstructor.superResult);
+}

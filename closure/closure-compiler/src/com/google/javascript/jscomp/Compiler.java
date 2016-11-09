@@ -42,6 +42,7 @@ import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.JSDocInfo;
+import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TypeIRegistry;
@@ -242,7 +243,7 @@ public class Compiler extends AbstractCompiler implements ErrorHandler, SourceFi
    * setting configuration for this logger affects all loggers
    * in other classes within the compiler.
    */
-  private static final Logger logger =
+  public static final Logger logger =
       Logger.getLogger("com.google.javascript.jscomp");
 
   private final PrintStream outStream;
@@ -1481,6 +1482,10 @@ public class Compiler extends AbstractCompiler implements ErrorHandler, SourceFi
 
         this.moduleLoader = new ModuleLoader(this, options.moduleRoots, inputs);
 
+        if (options.processCommonJSModules) {
+          this.moduleLoader.setPackageJsonMainEntries(processJsonInputs(inputs));
+        }
+
         if (options.lowerFromEs6()) {
           processEs6Modules();
         }
@@ -1587,8 +1592,7 @@ public class Compiler extends AbstractCompiler implements ErrorHandler, SourceFi
   }
 
   void orderInputs() {
-    hoistExterns();
-
+    hoistUnorderedExterns();
     // Check if the sources need to be re-ordered.
     boolean staleInputs = false;
     if (options.dependencyOptions.needsManagement()) {
@@ -1601,9 +1605,7 @@ public class Compiler extends AbstractCompiler implements ErrorHandler, SourceFi
       }
 
       try {
-        inputs =
-            (moduleGraph == null ? new JSModuleGraph(modules) : moduleGraph)
-            .manageDependencies(options.dependencyOptions, inputs);
+        inputs = getDegenerateModuleGraph().manageDependencies(options.dependencyOptions, inputs);
         staleInputs = true;
       } catch (MissingProvideException e) {
         report(JSError.make(
@@ -1614,7 +1616,35 @@ public class Compiler extends AbstractCompiler implements ErrorHandler, SourceFi
       }
     }
 
+    if (options.dependencyOptions.needsManagement() && options.allowGoogProvideInExterns()) {
+      hoistAllExterns();
+    }
+
     hoistNoCompileFiles();
+
+    if (staleInputs) {
+      repartitionInputs();
+    }
+  }
+
+  /**
+   * Hoists inputs with the @externs annotation and no provides or requires into the externs list.
+   */
+  void hoistUnorderedExterns() {
+    boolean staleInputs = false;
+    for (CompilerInput input : inputs) {
+      if (options.dependencyOptions.needsManagement()) {
+        // If we're doing scanning dependency info anyway, use that
+        // information to skip sources that obviously aren't externs.
+        if (!input.getProvides().isEmpty() || !input.getRequires().isEmpty()) {
+          continue;
+        }
+      }
+
+      if (hoistIfExtern(input)) {
+        staleInputs = true;
+      }
+    }
 
     if (staleInputs) {
       repartitionInputs();
@@ -1624,42 +1654,44 @@ public class Compiler extends AbstractCompiler implements ErrorHandler, SourceFi
   /**
    * Hoists inputs with the @externs annotation into the externs list.
    */
-  void hoistExterns() {
+  void hoistAllExterns() {
     boolean staleInputs = false;
     for (CompilerInput input : inputs) {
-      if (!options.allowGoogProvideInExterns() && options.dependencyOptions.needsManagement()) {
-        // If we're doing scanning dependency info anyway, use that
-        // information to skip sources that obviously aren't externs.
-        if (!input.getProvides().isEmpty() || !input.getRequires().isEmpty()) {
-          continue;
-        }
-      }
-
-      Node n = input.getAstRoot(this);
-
-      // Inputs can have a null AST on a parse error.
-      if (n == null) {
-        continue;
-      }
-
-      JSDocInfo info = n.getJSDocInfo();
-      if (info != null && info.isExterns()) {
-        // If the input file is explicitly marked as an externs file, then
-        // assume the programmer made a mistake and throw it into
-        // the externs pile anyways.
-        externsRoot.addChildToBack(n);
-        input.setIsExtern(true);
-
-        input.getModule().remove(input);
-
-        externs.add(input);
+      if (hoistIfExtern(input)) {
         staleInputs = true;
       }
     }
-
     if (staleInputs) {
       repartitionInputs();
     }
+  }
+
+  /**
+   * Hoists a compiler input to externs if it contains the @externs annotation.
+   * Return whether or not the given input was hoisted.
+   */
+  private boolean hoistIfExtern(CompilerInput input) {
+    Node n = input.getAstRoot(this);
+
+    // Inputs can have a null AST on a parse error.
+    if (n == null) {
+      return false;
+    }
+
+    JSDocInfo info = n.getJSDocInfo();
+    if (info != null && info.isExterns()) {
+      // If the input file is explicitly marked as an externs file, then
+      // assume the programmer made a mistake and throw it into
+      // the externs pile anyways.
+      externsRoot.addChildToBack(n);
+      input.setIsExtern(true);
+
+      input.getModule().remove(input);
+
+      externs.add(input);
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -1690,6 +1722,34 @@ public class Compiler extends AbstractCompiler implements ErrorHandler, SourceFi
   private void repartitionInputs() {
     fillEmptyModules(modules);
     rebuildInputsFromModules();
+  }
+
+  /**
+   * Transforms JSON files to a module export that closure compiler can process and keeps track of
+   * any "main" entries in package.json files.
+   */
+  Map<String, String> processJsonInputs(List<CompilerInput> inputsToProcess) {
+    RewriteJsonToModule rewriteJson = new RewriteJsonToModule(this);
+    for (CompilerInput input : inputsToProcess) {
+      if (!input.getSourceFile().getOriginalPath().endsWith(".json")) {
+        continue;
+      }
+
+      input.setCompiler(this);
+      try {
+        // JSON objects need wrapped in parens to parse properly
+        input.getSourceFile().setCode("(" + input.getSourceFile().getCode() + ")");
+      } catch (IOException e) {
+        continue;
+      }
+
+      Node root = input.getAstRoot(this);
+      if (root == null) {
+        continue;
+      }
+      rewriteJson.process(null, root);
+    }
+    return rewriteJson.getPackageJsonMainEntries();
   }
 
   void processEs6Modules() {
@@ -2772,9 +2832,14 @@ public class Compiler extends AbstractCompiler implements ErrorHandler, SourceFi
           // Note that we could simply add the entire externs library, but that leads to
           // potentially-surprising behavior when the externs that are present depend on
           // whether or not a polyfill is used.
+          Node var = IR.var(IR.name(words.get(1)));
+          JSDocInfoBuilder jsdoc = new JSDocInfoBuilder(false);
+          // Suppress duplicate-var warning in case this name is already defined in the externs.
+          jsdoc.addSuppression("duplicate");
+          var.setJSDocInfo(jsdoc.build());
           getSynthesizedExternsInputAtEnd()
               .getAstRoot(this)
-              .addChildToBack(IR.var(IR.name(words.get(1))));
+              .addChildToBack(var);
           break;
         default:
           throw new RuntimeException("Bad directive: " + directive);

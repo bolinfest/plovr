@@ -319,6 +319,7 @@ public class DiagnosticGroups {
           GlobalTypeInfo.CONST_WITHOUT_INITIALIZER,
 //           GlobalTypeInfo.COULD_NOT_INFER_CONST_TYPE,
           GlobalTypeInfo.CTOR_IN_DIFFERENT_SCOPE,
+          GlobalTypeInfo.DICT_WITHOUT_CTOR,
           GlobalTypeInfo.DUPLICATE_JSDOC,
           GlobalTypeInfo.DUPLICATE_PROP_IN_ENUM,
           GlobalTypeInfo.EXPECTED_CONSTRUCTOR,
@@ -331,7 +332,7 @@ public class DiagnosticGroups {
           GlobalTypeInfo.MISPLACED_CONST_ANNOTATION,
           GlobalTypeInfo.ONE_TYPE_FOR_MANY_VARS,
 //           GlobalTypeInfo.REDECLARED_PROPERTY,
-          GlobalTypeInfo.STRUCTDICT_WITHOUT_CTOR,
+          GlobalTypeInfo.STRUCT_WITHOUT_CTOR_OR_INTERF,
           GlobalTypeInfo.SUPER_INTERFACES_HAVE_INCOMPATIBLE_PROPERTIES,
           GlobalTypeInfo.UNKNOWN_OVERRIDE,
           GlobalTypeInfo.UNRECOGNIZED_TYPE_NAME,
@@ -585,6 +586,8 @@ public class DiagnosticGroups {
               CheckUnusedLabels.UNUSED_LABEL,
               CheckUselessBlocks.USELESS_BLOCK,
               ClosureCheckModule.LET_GOOG_REQUIRE,
+              ClosureCheckModule.JSDOC_REFERENCE_TO_FULLY_QUALIFIED_IMPORT_NAME,
+              ClosureCheckModule.JSDOC_REFERENCE_TO_SHORT_IMPORT_BY_LONG_NAME_INCLUDING_SHORT_NAME,
               ClosureCheckModule.REFERENCE_TO_FULLY_QUALIFIED_IMPORT_NAME,
               ClosureCheckModule.REFERENCE_TO_SHORT_IMPORT_BY_LONG_NAME_INCLUDING_SHORT_NAME,
               ClosureRewriteModule.USELESS_USE_STRICT_DIRECTIVE,
@@ -626,7 +629,6 @@ public class DiagnosticGroups {
     DiagnosticGroups.registerGroup("transitionalSuspiciousCodeWarnings",
         PeepholeFoldConstants.INDEX_OUT_OF_BOUNDS_ERROR,
         PeepholeFoldConstants.NEGATING_A_NON_NUMBER_ERROR,
-        PeepholeFoldConstants.SHIFT_AMOUNT_OUT_OF_BOUNDS,
         PeepholeFoldConstants.FRACTIONAL_BITWISE_OPERAND);
   }
 

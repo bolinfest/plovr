@@ -222,7 +222,7 @@ public final class DefaultPassConfig extends PassConfig {
     }
 
     assertAllOneTimePasses(passes);
-    assertValidOrder(passes);
+    assertValidOrderForChecks(passes);
     return passes;
   }
 
@@ -422,7 +422,7 @@ public final class DefaultPassConfig extends PassConfig {
     checks.add(createEmptyPass("afterStandardChecks"));
 
     assertAllOneTimePasses(checks);
-    assertValidOrder(checks);
+    assertValidOrderForChecks(checks);
 
     return checks;
   }
@@ -702,6 +702,12 @@ public final class DefaultPassConfig extends PassConfig {
       passes.add(crossModuleCodeMotion);
     }
 
+    // Must run after ProcessClosurePrimitives, Es6ConvertSuper, and assertion removals, but
+    // before OptimizeCalls (specifically, OptimizeParameters) and DevirtualizePrototypeMethods.
+    if (options.removeSuperMethods) {
+      passes.add(removeSuperMethodsPass);
+    }
+
     // Method devirtualization benefits from property disambiguation so
     // it should run after that pass but before passes that do
     // optimizations based on global names (like cross module code motion
@@ -727,11 +733,6 @@ public final class DefaultPassConfig extends PassConfig {
 
     passes.addAll(getMainOptimizationLoop());
     passes.add(createEmptyPass("afterMainOptimizations"));
-
-    // Must run after ProcessClosurePrimitives, Es6ConvertSuper, and assertion removals.
-    if (options.removeSuperMethods) {
-      passes.add(removeSuperMethodsPass);
-    }
 
     passes.add(createEmptyPass("beforeModuleMotion"));
 
@@ -906,6 +907,7 @@ public final class DefaultPassConfig extends PassConfig {
       passes.add(rewriteBindThis);
     }
 
+    assertValidOrderForOptimizations(passes);
     return passes;
   }
 
@@ -1080,7 +1082,7 @@ public final class DefaultPassConfig extends PassConfig {
    * This enforces those constraints.
    * @param checks The list of check passes
    */
-  private void assertValidOrder(List<PassFactory> checks) {
+  private void assertValidOrderForChecks(List<PassFactory> checks) {
     assertPassOrder(
         checks,
         closureRewriteModule,
@@ -1139,6 +1141,20 @@ public final class DefaultPassConfig extends PassConfig {
         removeSuperMethodsPass,
         "Super-call method removal must run after closure code removal, because "
             + "removing assertions may make more super calls eligible to be stripped.");
+  }
+
+  /**
+   * Certain optimizations need to run in a particular order. For example, OptimizeCalls must run
+   * before RemoveSuperMethodsPass, because the former can invalidate assumptions in the latter.
+   * This enforces those constraints.
+   * @param optimizations The list of optimization passes
+   */
+  private void assertValidOrderForOptimizations(List<PassFactory> optimizations) {
+    assertPassOrder(optimizations, removeSuperMethodsPass, optimizeCalls,
+        "RemoveSuperMethodsPass must run before OptimizeCalls.");
+
+    assertPassOrder(optimizations, removeSuperMethodsPass, devirtualizePrototypeMethods,
+        "RemoveSuperMethodsPass must run before DevirtualizePrototypeMethods.");
   }
 
   /** Checks that all constructed classes are goog.require()d. */
@@ -1525,12 +1541,12 @@ public final class DefaultPassConfig extends PassConfig {
   /** Various peephole optimizations. */
   private static CompilerPass createPeepholeOptimizationsPass(AbstractCompiler compiler) {
     final boolean late = false;
-    final boolean useTypesForOptimization =  compiler.getOptions().useTypesForLocalOptimization;
+    final boolean useTypesForOptimization = compiler.getOptions().useTypesForLocalOptimization;
     return new PeepholeOptimizationsPass(compiler,
           new MinimizeExitPoints(compiler),
           new PeepholeMinimizeConditions(late, useTypesForOptimization),
           new PeepholeSubstituteAlternateSyntax(late),
-          new PeepholeReplaceKnownMethods(late),
+          new PeepholeReplaceKnownMethods(late, useTypesForOptimization),
           new PeepholeRemoveDeadCode(),
           new PeepholeFoldConstants(late, useTypesForOptimization),
           new PeepholeCollectPropertyAssignments());
@@ -1560,13 +1576,14 @@ public final class DefaultPassConfig extends PassConfig {
     @Override
     protected CompilerPass create(AbstractCompiler compiler) {
       final boolean late = true;
+      final boolean useTypesForOptimization = options.useTypesForLocalOptimization;
       return new PeepholeOptimizationsPass(compiler,
             new StatementFusion(options.aggressiveFusion),
             new PeepholeRemoveDeadCode(),
-            new PeepholeMinimizeConditions(late, options.useTypesForLocalOptimization),
+            new PeepholeMinimizeConditions(late, useTypesForOptimization),
             new PeepholeSubstituteAlternateSyntax(late),
-            new PeepholeReplaceKnownMethods(late),
-            new PeepholeFoldConstants(late, options.useTypesForLocalOptimization),
+            new PeepholeReplaceKnownMethods(late, useTypesForOptimization),
+            new PeepholeFoldConstants(late, useTypesForOptimization),
             new ReorderConstantExpression());
     }
   };

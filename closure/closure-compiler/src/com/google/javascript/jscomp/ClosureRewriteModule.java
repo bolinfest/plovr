@@ -238,7 +238,12 @@ final class ClosureRewriteModule implements HotSwapCompilerPass {
         return false;
       }
       Node initialValue = nameDecl.getInitialValue();
-      return initialValue == null || !NodeUtil.isCallTo(initialValue, "goog.require");
+      if (initialValue == null) {
+        return true;
+      }
+      return !NodeUtil.isCallTo(initialValue, "goog.require")
+          && !NodeUtil.isCallTo(initialValue, "goog.forwardDeclare")
+          && !NodeUtil.isCallTo(initialValue, "goog.getMsg");
     }
 
     String getLocalName() {
@@ -595,11 +600,20 @@ final class ClosureRewriteModule implements HotSwapCompilerPass {
   @Override
   public void process(Node externs, Node root) {
     Deque<ScriptDescription> scriptDescriptions = new LinkedList<>();
+    processAllFiles(scriptDescriptions, externs);
+    processAllFiles(scriptDescriptions, root);
+  }
+
+  private void processAllFiles(Deque<ScriptDescription> scriptDescriptions, Node scriptParent) {
+    if (scriptParent == null) {
+      return;
+    }
 
     // Record all the scripts first so that the googModuleNamespaces global state can be complete
     // before doing any updating also queue up scriptDescriptions for later use in ScriptUpdater
     // runs.
-    for (Node c = root.getFirstChild(); c != null; c = c.getNext()) {
+    for (Node c = scriptParent.getFirstChild(); c != null; c = c.getNext()) {
+      Preconditions.checkState(c.isScript());
       pushScript(new ScriptDescription());
       currentScript.rootNode = c;
       scriptDescriptions.addLast(currentScript);
@@ -614,7 +628,7 @@ final class ClosureRewriteModule implements HotSwapCompilerPass {
 
     // Update scripts using the now complete googModuleNamespaces global state and unspool the
     // scriptDescriptions that were queued up by all the recording.
-    for (Node c = root.getFirstChild(); c != null; c = c.getNext()) {
+    for (Node c = scriptParent.getFirstChild(); c != null; c = c.getNext()) {
       pushScript(scriptDescriptions.removeFirst());
       NodeTraversal.traverseEs6(compiler, c, new ScriptUpdater());
       popScript();
@@ -841,11 +855,11 @@ final class ClosureRewriteModule implements HotSwapCompilerPass {
   }
 
   private static boolean isNamedExportsLiteral(Node objLit) {
-    if (!objLit.isObjectLit()) {
+    if (!objLit.isObjectLit() || !objLit.hasChildren()) {
       return false;
     }
     for (Node key = objLit.getFirstChild(); key != null; key = key.getNext()) {
-      if (!key.isStringKey()) {
+      if (!key.isStringKey() || key.isQuotedString()) {
         return false;
       }
       if (key.hasChildren() && !key.getFirstChild().isName()) {
@@ -1051,8 +1065,12 @@ final class ClosureRewriteModule implements HotSwapCompilerPass {
     Node exportsNameNode = getpropNode.getFirstChild();
     Preconditions.checkState(exportsNameNode.getString().equals("exports"));
 
-    String exportName = getpropNode.getLastChild().getString();
-    currentScript.namedExports.add(exportName);
+    // Would be t.inModuleScope() if this ran before the inlineModuleIntoGlobal() call
+    // that happens at the beginning of module rewriting.
+    if (t.inGlobalScope()) {
+      String exportName = getpropNode.getLastChild().getString();
+      currentScript.namedExports.add(exportName);
+    }
   }
 
   private void updateExportsPropertyAssignment(Node getpropNode) {
@@ -1208,7 +1226,8 @@ final class ClosureRewriteModule implements HotSwapCompilerPass {
     }
 
     Node assignNode = n.getParent();
-    if (currentScript.defaultExportLocalName != null) {
+    if (!currentScript.declareLegacyNamespace
+        && currentScript.defaultExportLocalName != null) {
       assignNode.getParent().detach();
       return;
     }
@@ -1389,20 +1408,10 @@ final class ClosureRewriteModule implements HotSwapCompilerPass {
     statementNode.getParent().addChildBefore(IR.var(nameNode, rhsNode), statementNode);
   }
 
-  /**
-   * Will skip const if the target is a class definition as that has a different meaning.
-   */
   private void markConstAndCopyJsDoc(Node from, Node target, Node value) {
     JSDocInfo info = from.getJSDocInfo();
     JSDocInfoBuilder builder = JSDocInfoBuilder.maybeCopyFrom(info);
-
-    // Don't add @const on class declarations because in that context it means "not subclassable".
-    if (!NodeUtil.isCallTo(value, "goog.defineClass")
-        && !(info != null && info.isConstructorOrInterface())) {
-      builder.recordConstancy();
-      compiler.reportCodeChange();
-    }
-
+    builder.recordConstancy();
     target.setJSDocInfo(builder.build());
   }
 
@@ -1468,6 +1477,7 @@ final class ClosureRewriteModule implements HotSwapCompilerPass {
       // When replacing with a dotted fully qualified name it's already better than an original
       // name.
       Node nameParent = nameNode.getParent();
+      JSDocInfo jsdoc = nameParent.getJSDocInfo();
       switch (nameParent.getToken()) {
         case FUNCTION:
         case CLASS:
@@ -1475,9 +1485,12 @@ final class ClosureRewriteModule implements HotSwapCompilerPass {
             Node statementParent = nameParent.getParent();
             Node placeholder = IR.empty();
             statementParent.replaceChild(nameParent, placeholder);
-            Node newStatement = NodeUtil.newQNameDeclaration(compiler, newString, nameParent, null);
+            Node newStatement =
+                NodeUtil.newQNameDeclaration(compiler, newString, nameParent, jsdoc);
+            nameParent.setJSDocInfo(null);
             newStatement.useSourceInfoIfMissingFromForTree(nameParent);
             statementParent.replaceChild(placeholder, newStatement);
+            NodeUtil.removeName(nameParent);
             return;
           }
           break;
@@ -1485,7 +1498,6 @@ final class ClosureRewriteModule implements HotSwapCompilerPass {
         case LET:
         case CONST:
           {
-            JSDocInfo jsdoc = nameParent.getJSDocInfo();
             Node rhs = nameNode.hasChildren() ? nameNode.getLastChild().detach() : null;
             Node newStatement = NodeUtil.newQNameDeclaration(compiler, newString, rhs, jsdoc);
             newStatement.useSourceInfoIfMissingFromForTree(nameParent);

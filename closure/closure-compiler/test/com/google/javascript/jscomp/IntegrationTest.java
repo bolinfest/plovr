@@ -315,6 +315,36 @@ public final class IntegrationTest extends IntegrationTestCase {
          TypeValidator.TYPE_MISMATCH_WARNING);
   }
 
+  // http://b/31448683
+  public void testBug31448683() {
+    CompilerOptions options = createCompilerOptions();
+    WarningLevel.QUIET.setOptionsForWarningLevel(options);
+    options.setInlineFunctions(true);
+    test(
+        options,
+        LINE_JOINER.join(
+            "function f() {",
+            "  x = x || 1",
+            "  var x;",
+            "  console.log(x);",
+            "}",
+            "for (var _ in [1]) {",
+            "  f();",
+            "}"),
+        LINE_JOINER.join(
+            "for(var _ in[1]) {",
+            "  {",
+            "     var x$jscomp$inline_0 = void 0;",
+            "     x$jscomp$inline_0 = x$jscomp$inline_0 || 1;",
+            "     console.log(x$jscomp$inline_0);",
+            "  }",
+            "}"));
+  }
+
+  public void testBug32660578() {
+    testSame(createCompilerOptions(), "function f() { alert(x); for (var x in []) {} }");
+  }
+
   public void testWindowIsTypedEs6() {
     CompilerOptions options = createCompilerOptions();
     CompilationLevel.ADVANCED_OPTIMIZATIONS.setOptionsForCompilationLevel(options);
@@ -3732,6 +3762,43 @@ public final class IntegrationTest extends IntegrationTestCase {
             "  window['d'] = 12;",
             "}"),
             "null===window['c']&&(window['d']=12)");
+  }
+
+  // GitHub issue #2122: https://github.com/google/closure-compiler/issues/2122
+  public void testNoRemoveSuperCallWithWrongArgumentCount() {
+    CompilerOptions options = createCompilerOptions();
+    options.setCheckTypes(true);
+    CompilationLevel.ADVANCED_OPTIMIZATIONS.setOptionsForCompilationLevel(options);
+    test(options,
+        LINE_JOINER.join(
+            "var goog = {}",
+            "goog.inherits = function(childCtor, parentCtor) {",
+            "  childCtor.superClass_ = parentCtor.prototype;",
+            "};",
+            "/** @constructor */",
+            "var Foo = function() {}",
+            "/**",
+            " * @param {number=} width",
+            " * @param {number=} height",
+            " */",
+            "Foo.prototype.resize = function(width, height) {",
+            "  window.size = width * height;",
+            "}",
+            "/**",
+            " * @constructor",
+            " * @extends {Foo}",
+            " */",
+            "var Bar = function() {}",
+            "goog.inherits(Bar, Foo);",
+            "/** @override */",
+            "Bar.prototype.resize = function(width, height) {",
+            "  goog.base(this, 'resize', width);",
+            "};",
+            "(new Bar).resize(100, 200);"),
+        LINE_JOINER.join(
+            "function a(){}a.prototype.a=function(b,e){window.c=b*e};",
+            "function d(){}d.b=a.prototype;d.prototype.a=function(b){d.b.a.call(this,b)};",
+            "(new d).a(100, 200);"));
   }
 
   /** Creates a CompilerOptions object with google coding conventions. */

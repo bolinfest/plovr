@@ -149,15 +149,13 @@ public class CompilerOptions {
     incrementalCheckMode = value;
     switch (value) {
       case OFF:
-        allowGoogProvideInExterns = false;
         break;
       case GENERATE_IJS:
-        allowGoogProvideInExterns = true;
         setPreserveTypeAnnotations(true);
         setOutputJs(OutputJs.NORMAL);
         break;
       case CHECK_IJS:
-        allowGoogProvideInExterns = true;
+        setChecksOnly(true);
         setOutputJs(OutputJs.SENTINEL);
         break;
     }
@@ -165,6 +163,10 @@ public class CompilerOptions {
 
   public boolean shouldGenerateTypedExterns() {
     return incrementalCheckMode == IncrementalCheckMode.GENERATE_IJS;
+  }
+
+  public boolean allowIjsInputs() {
+    return incrementalCheckMode != IncrementalCheckMode.OFF;
   }
 
   private Config.JsDocParsing parseJsDocDocumentation = Config.JsDocParsing.TYPES_ONLY;
@@ -211,10 +213,8 @@ public class CompilerOptions {
 
   // TODO(tbreisacher): When this is false, report an error if there's a goog.provide
   // in an externs file.
-  private boolean allowGoogProvideInExterns = false;
-
   boolean allowGoogProvideInExterns() {
-    return allowGoogProvideInExterns;
+    return allowIjsInputs();
   }
 
   /** Returns localized replacement for MSG_* variables */
@@ -720,10 +720,10 @@ public class CompilerOptions {
   /** Processes the output of J2CL */
   J2clPassMode j2clPassMode;
 
-  /** Remove methods that only make a super call without changing the arguments. */
+  /** Remove goog.abstractMethod assignments and @abstract methods. */
   boolean removeAbstractMethods;
 
-  /** Remove goog.abstractMethod assignments. */
+  /** Remove methods that only make a super call without changing the arguments. */
   boolean removeSuperMethods;
 
   /** Remove goog.asserts calls. */

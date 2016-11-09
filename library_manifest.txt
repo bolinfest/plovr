@@ -671,7 +671,6 @@ testing/mockrandom.js
 testing/mockrange.js
 testing/mockstorage.js
 testing/mockuseragent.js
-testing/mockutil.js
 testing/multitestrunner.js
 testing/net/xhrio.js
 testing/net/xhriopool.js

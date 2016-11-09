@@ -39,6 +39,7 @@ import com.google.javascript.jscomp.newtypes.JSTypeCreatorFromJSDoc.FunctionAndS
 import com.google.javascript.jscomp.newtypes.JSTypes;
 import com.google.javascript.jscomp.newtypes.Namespace;
 import com.google.javascript.jscomp.newtypes.NominalType;
+import com.google.javascript.jscomp.newtypes.ObjectKind;
 import com.google.javascript.jscomp.newtypes.QualifiedName;
 import com.google.javascript.jscomp.newtypes.RawNominalType;
 import com.google.javascript.jscomp.newtypes.Typedef;
@@ -96,9 +97,13 @@ class GlobalTypeInfo implements CompilerPass, TypeIRegistry {
       "JSC_NTI_UNRECOGNIZED_TYPE_NAME",
       "Type annotation references non-existent type {0}.");
 
-  static final DiagnosticType STRUCTDICT_WITHOUT_CTOR = DiagnosticType.warning(
-      "JSC_NTI_STRUCTDICT_WITHOUT_CTOR",
-      "{0} used without @constructor.");
+  static final DiagnosticType STRUCT_WITHOUT_CTOR_OR_INTERF = DiagnosticType.warning(
+      "JSC_NTI_STRUCT_WITHOUT_CTOR_OR_INTERF",
+      "@struct used without @constructor, @interface, or @record.");
+
+  static final DiagnosticType DICT_WITHOUT_CTOR = DiagnosticType.warning(
+      "JSC_NTI_DICT_WITHOUT_CTOR",
+      "@dict used without @constructor.");
 
   static final DiagnosticType EXPECTED_CONSTRUCTOR = DiagnosticType.warning(
       "JSC_NTI_EXPECTED_CONSTRUCTOR",
@@ -221,6 +226,7 @@ class GlobalTypeInfo implements CompilerPass, TypeIRegistry {
 
   static final DiagnosticGroup COMPATIBLE_DIAGNOSTICS = new DiagnosticGroup(
       CANNOT_OVERRIDE_FINAL_METHOD,
+      DICT_WITHOUT_CTOR,
       DUPLICATE_PROP_IN_ENUM,
       EXPECTED_CONSTRUCTOR,
       EXPECTED_INTERFACE,
@@ -233,7 +239,7 @@ class GlobalTypeInfo implements CompilerPass, TypeIRegistry {
       LENDS_ON_BAD_TYPE,
       ONE_TYPE_FOR_MANY_VARS,
       REDECLARED_PROPERTY,
-      STRUCTDICT_WITHOUT_CTOR,
+      STRUCT_WITHOUT_CTOR_OR_INTERF,
       SUPER_INTERFACES_HAVE_INCOMPATIBLE_PROPERTIES,
       UNKNOWN_OVERRIDE,
       UNRECOGNIZED_TYPE_NAME,
@@ -437,6 +443,9 @@ class GlobalTypeInfo implements CompilerPass, TypeIRegistry {
         continue;
       }
       checkAndFinalizeNominalType(rawType);
+      if (rawType.isBuiltinObject()) {
+        this.commonTypes.getLiteralObjNominalType().getRawNominalType().finalize();
+      }
     }
     JSType globalThisType;
     if (win != null) {
@@ -1115,21 +1124,18 @@ class GlobalTypeInfo implements CompilerPass, TypeIRegistry {
         }
         ImmutableList<String> typeParameters = builder.build();
         RawNominalType rawType;
-        if (fnDoc.usesImplicitMatch()) {
+        ObjectKind objKind = fnDoc.makesStructs()
+            ? ObjectKind.STRUCT : (fnDoc.makesDicts() ? ObjectKind.DICT : ObjectKind.UNRESTRICTED);
+        if (fnDoc.isConstructor()) {
+          rawType = RawNominalType.makeClass(
+              commonTypes, defSite, qname, typeParameters, objKind);
+        } else if (fnDoc.usesImplicitMatch()) {
           rawType = RawNominalType.makeStructuralInterface(
-              commonTypes, defSite, qname, typeParameters);
-        } else if (fnDoc.isInterface()) {
-          rawType = RawNominalType.makeNominalInterface(
-              commonTypes, defSite, qname, typeParameters);
-        } else if (fnDoc.makesStructs()) {
-          rawType = RawNominalType.makeStructClass(
-              commonTypes, defSite, qname, typeParameters);
-        } else if (fnDoc.makesDicts()) {
-          rawType = RawNominalType.makeDictClass(
-              commonTypes, defSite, qname, typeParameters);
+              commonTypes, defSite, qname, typeParameters, objKind);
         } else {
-          rawType = RawNominalType.makeUnrestrictedClass(
-              commonTypes, defSite, qname, typeParameters);
+          Preconditions.checkState(fnDoc.isInterface());
+          rawType = RawNominalType.makeNominalInterface(
+              commonTypes, defSite, qname, typeParameters, objKind);
         }
         nominaltypesByNode.put(defSite, rawType);
         if (isRedeclaration) {
@@ -1148,9 +1154,10 @@ class GlobalTypeInfo implements CompilerPass, TypeIRegistry {
           currentScope.addNamespace(nameNode, rawType);
         }
       } else if (fnDoc.makesStructs()) {
-        warnings.add(JSError.make(defSite, STRUCTDICT_WITHOUT_CTOR, "@struct"));
-      } else if (fnDoc.makesDicts()) {
-        warnings.add(JSError.make(defSite, STRUCTDICT_WITHOUT_CTOR, "@dict"));
+        warnings.add(JSError.make(defSite, STRUCT_WITHOUT_CTOR_OR_INTERF));
+      }
+      if (fnDoc.makesDicts() && !fnDoc.isConstructor()) {
+        warnings.add(JSError.make(defSite, DICT_WITHOUT_CTOR));
       }
     }
 
@@ -1163,9 +1170,16 @@ class GlobalTypeInfo implements CompilerPass, TypeIRegistry {
         case "Function":
           commonTypes.setFunctionType(rawType);
           break;
-        case "Object":
+        case "Object": {
           commonTypes.setObjectType(rawType);
+          // Create a separate raw type for object literals
+          RawNominalType objLitRawType = RawNominalType.makeClass(
+              commonTypes, rawType.getDefSite(), JSTypes.OBJLIT_CLASS_NAME,
+              ImmutableList.<String>of(), ObjectKind.UNRESTRICTED);
+          objLitRawType.addSuperClass(rawType.getAsNominalType());
+          commonTypes.setLiteralObjNominalType(objLitRawType);
           break;
+        }
         case "Number":
           commonTypes.setNumberInstance(rawType.getInstanceAsJSType());
           break;
@@ -1372,6 +1386,10 @@ class GlobalTypeInfo implements CompilerPass, TypeIRegistry {
             // on them. So, we warn even if x has foo. Then, to avoid spurious warnings,
             // we consider property tests as definition sites, otherwise we would warn
             // for code like this: function f(x) { if (x.foo) { return x.foo + 1; } }
+            recordPropertyName(n.getLastChild().getString(), n);
+          }
+          if (n.getFirstChild().isName()
+              && n.getFirstChild().getString().startsWith("$jscomp$destructuring$")) {
             recordPropertyName(n.getLastChild().getString(), n);
           }
           if (parent.isExprResult() && n.isQualifiedName()) {
@@ -1934,6 +1952,13 @@ class GlobalTypeInfo implements CompilerPass, TypeIRegistry {
           if (funType != null) {
             return funType.toFunctionType();
           }
+        } else if (decl.getNamespace() != null) {
+          Namespace ns = decl.getNamespace();
+          if (ns instanceof FunctionNamespace) {
+            DeclaredFunctionType funType =
+                ((FunctionNamespace) ns).getScope().getDeclaredFunctionType();
+            return Preconditions.checkNotNull(funType).toFunctionType();
+          }
         } else if (decl.getTypeOfSimpleDecl() != null) {
           return decl.getTypeOfSimpleDecl().getFunTypeIfSingletonObj();
         }
@@ -2240,7 +2265,11 @@ class GlobalTypeInfo implements CompilerPass, TypeIRegistry {
             result.slotType, false, qnameNode.isFromExterns());
       }
       if (ctorType != null) {
-        ctorType.setCtorFunction(result.functionType.toFunctionType());
+        FunctionType ft = result.functionType.toFunctionType();
+        ctorType.setCtorFunction(ft);
+        if (ctorType.isBuiltinObject()) {
+          commonTypes.getLiteralObjNominalType().getRawNominalType().setCtorFunction(ft);
+        }
       }
       if (declNode.isFunction()) {
         maybeWarnFunctionDeclaration(declNode, result.functionType);
