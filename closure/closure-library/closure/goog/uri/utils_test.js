@@ -63,6 +63,22 @@ function testSplit() {
 }
 
 
+function testSplitWithNewline() {
+  var uri = 'http://www.google.com:80/path%20path+path?q=query#frag\nment';
+  assertEquals('http', utils.getScheme(uri));
+  assertNull(utils.getUserInfoEncoded(uri));
+  assertNull(utils.getUserInfo(uri));
+  assertEquals('www.google.com', utils.getDomainEncoded(uri));
+  assertEquals('www.google.com', utils.getDomain(uri));
+  assertEquals(80, utils.getPort(uri));
+  assertEquals('/path%20path+path', utils.getPathEncoded(uri));
+  assertEquals('/path path+path', utils.getPath(uri));
+  assertEquals('q=query', utils.getQueryData(uri));
+  assertEquals('frag\nment', utils.getFragmentEncoded(uri));
+  assertEquals('frag\nment', utils.getFragment(uri));
+}
+
+
 function testMailtoUri() {
   var uri = 'mailto:joe+random@hominid.com';
   assertNull(utils.getDomain(uri));
@@ -112,6 +128,13 @@ function testSplitIntoHostAndPath() {
   assertEquals(
       'should handle missing fields', '/calendar',
       goog.uri.utils.getPathAndAfter(uri2));
+}
+
+
+function testGetOrigin() {
+  var uri =
+      'http://foo:pw@www.google.com:80/path%20path+path?q=query&hl=en#fragment';
+  assertEquals('http://www.google.com:80', goog.uri.utils.getOrigin(uri));
 }
 
 

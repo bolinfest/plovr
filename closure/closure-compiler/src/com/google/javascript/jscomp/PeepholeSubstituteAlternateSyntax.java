@@ -23,7 +23,6 @@ import com.google.javascript.jscomp.CodingConvention.Bind;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-
 import java.util.regex.Pattern;
 
 /**
@@ -65,7 +64,7 @@ class PeepholeSubstituteAlternateSyntax
   @Override
   @SuppressWarnings("fallthrough")
   public Node optimizeSubtree(Node node) {
-    switch(node.getType()) {
+    switch (node.getToken()) {
       case ASSIGN_SUB:
         return reduceSubstractionAssignment(node);
 
@@ -163,30 +162,27 @@ class PeepholeSubstituteAlternateSyntax
       return n;
     }
     // All commutative operators are also associative
-    Preconditions.checkArgument(NodeUtil.isAssociative(n.getType()));
+    Preconditions.checkArgument(NodeUtil.isAssociative(n.getToken()));
     Node rhs = n.getLastChild();
-    if (n.getType() == rhs.getType()) {
+    if (n.getToken() == rhs.getToken()) {
       // Transform a * (b * c) to a * b * c
-      Node first = n.getFirstChild().detachFromParent();
-      Node second = rhs.getFirstChild().detachFromParent();
-      Node third = rhs.getLastChild().detachFromParent();
-      Node newLhs = new Node(n.getType(), first, second)
-          .useSourceInfoIfMissingFrom(n);
-      Node newRoot = new Node(rhs.getType(), newLhs, third)
-          .useSourceInfoIfMissingFrom(rhs);
+      Node first = n.getFirstChild().detach();
+      Node second = rhs.getFirstChild().detach();
+      Node third = rhs.getLastChild().detach();
+      Node newLhs = new Node(n.getToken(), first, second).useSourceInfoIfMissingFrom(n);
+      Node newRoot = new Node(rhs.getToken(), newLhs, third).useSourceInfoIfMissingFrom(rhs);
       n.getParent().replaceChild(n, newRoot);
       reportCodeChange();
       return newRoot;
-    } else if (NodeUtil.isCommutative(n.getType()) &&
-               !NodeUtil.mayHaveSideEffects(n)) {
+    } else if (NodeUtil.isCommutative(n.getToken()) && !NodeUtil.mayHaveSideEffects(n)) {
       // Transform a * (b / c) to b / c * a
       Node lhs = n.getFirstChild();
-      while (lhs.getType() == n.getType()) {
+      while (lhs.getToken() == n.getToken()) {
         lhs = lhs.getFirstChild();
       }
-      int precedence = NodeUtil.precedence(n.getType());
-      int lhsPrecedence = NodeUtil.precedence(lhs.getType());
-      int rhsPrecedence = NodeUtil.precedence(rhs.getType());
+      int precedence = NodeUtil.precedence(n.getToken());
+      int lhsPrecedence = NodeUtil.precedence(lhs.getToken());
+      int rhsPrecedence = NodeUtil.precedence(rhs.getToken());
       if (rhsPrecedence == precedence && lhsPrecedence != precedence) {
         n.removeChild(rhs);
         lhs.getParent().replaceChild(lhs, rhs);
@@ -214,7 +210,7 @@ class PeepholeSubstituteAlternateSyntax
         int paramCount = n.getChildCount() - 1;
         // only handle the single known parameter case
         if (paramCount == 1) {
-          Node value = n.getLastChild().detachFromParent();
+          Node value = n.getLastChild().detach();
           Node replacement;
           if (NodeUtil.isBooleanResult(value)) {
             // If it is already a boolean do nothing.
@@ -235,13 +231,13 @@ class PeepholeSubstituteAlternateSyntax
         //
         // We can't do this in the general case, because String(a) has
         // slightly different semantics than '' + (a). See
-        // http://code.google.com/p/closure-compiler/issues/detail?id=759
+        // https://blickly.github.io/closure-compiler-issues/#759
         Node value = callTarget.getNext();
         if (value != null && value.getNext() == null &&
             NodeUtil.isImmutableValue(value)) {
           Node addition = IR.add(
               IR.string("").srcref(callTarget),
-              value.detachFromParent());
+              value.detach());
           n.getParent().replaceChild(n, addition);
           reportCodeChange();
           return addition;
@@ -264,7 +260,7 @@ class PeepholeSubstituteAlternateSyntax
         .describeFunctionBind(callTarget, false, false);
     if (bind != null) {
       // replace the call target
-      bind.target.detachFromParent();
+      bind.target.detach();
       n.replaceChild(callTarget, bind.target);
       callTarget = bind.target;
 
@@ -349,7 +345,7 @@ class PeepholeSubstituteAlternateSyntax
     Node result = n.getFirstChild();
 
     if (result != null) {
-      switch (result.getType()) {
+      switch (result.getToken()) {
         case VOID:
           Node operand = result.getFirstChild();
           if (!mayHaveSideEffects(operand)) {
@@ -363,6 +359,8 @@ class PeepholeSubstituteAlternateSyntax
             n.removeFirstChild();
             reportCodeChange();
           }
+          break;
+        default:
           break;
       }
     }
@@ -387,7 +385,7 @@ class PeepholeSubstituteAlternateSyntax
     Preconditions.checkState(n.isNew());
 
     if (canFoldStandardConstructors(n)) {
-      n.setType(Token.CALL);
+      n.setToken(Token.CALL);
       n.putBooleanProp(Node.FREE_CALL, true);
       reportCodeChange();
     }
@@ -435,7 +433,7 @@ class PeepholeSubstituteAlternateSyntax
     // Object() really refers to the built-in Object constructor
     // and not a user-defined constructor with the same name.
 
-    if (isASTNormalized() && Token.NAME == constructorNameNode.getType()) {
+    if (isASTNormalized() && Token.NAME == constructorNameNode.getToken()) {
 
       String className = constructorNameNode.getString();
 
@@ -456,9 +454,10 @@ class PeepholeSubstituteAlternateSyntax
           if (action == FoldArrayAction.SAFE_TO_FOLD_WITH_ARGS ||
               action == FoldArrayAction.SAFE_TO_FOLD_WITHOUT_ARGS) {
             newLiteralNode = IR.arraylit();
-            n.removeChildren();
+            n.removeFirstChild(); // discard the function name
+            Node elements = n.removeChildren();
             if (action == FoldArrayAction.SAFE_TO_FOLD_WITH_ARGS) {
-              newLiteralNode.addChildrenToFront(arg0);
+              newLiteralNode.addChildrenToFront(elements);
             }
           }
         }
@@ -490,7 +489,7 @@ class PeepholeSubstituteAlternateSyntax
     } else if (arg.getNext() != null) {
       action = FoldArrayAction.SAFE_TO_FOLD_WITH_ARGS;
     } else {
-      switch (arg.getType()) {
+      switch (arg.getToken()) {
         case STRING:
           // "Array('a')" --> "['a']"
           action = FoldArrayAction.SAFE_TO_FOLD_WITH_ARGS;
@@ -584,7 +583,7 @@ class PeepholeSubstituteAlternateSyntax
 
   private Node reduceTrueFalse(Node n) {
     if (late) {
-      switch (n.getParent().getType()) {
+      switch (n.getParent().getToken()) {
         case EQ:
         case GT:
         case GE:
@@ -595,6 +594,8 @@ class PeepholeSubstituteAlternateSyntax
           n.getParent().replaceChild(n, number);
           reportCodeChange();
           return number;
+        default:
+          break;
       }
 
       Node not = IR.not(IR.number(n.isTrue() ? 0 : 1));
@@ -729,7 +730,8 @@ class PeepholeSubstituteAlternateSyntax
     // sb contains everything in s[0:pos]
     StringBuilder sb = null;
     int pos = 0;
-    boolean isEscaped = false, inCharset = false;
+    boolean isEscaped = false;
+    boolean inCharset = false;
     for (int i = 0; i < s.length(); ++i) {
       char ch = s.charAt(i);
       switch (ch) {

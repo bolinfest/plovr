@@ -29,7 +29,6 @@ import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.TypeI;
 import com.google.javascript.rhino.TypeIRegistry;
-
 import java.text.MessageFormat;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -130,9 +129,10 @@ class ProcessDefines implements CompilerPass {
         info.initialValueParent.replaceChild(
             info.initialValue, finalValue.cloneTree());
         compiler.addToDebugLog("Overriding @define variable " + defineName);
-        changed = changed ||
-            finalValue.getType() != info.initialValue.getType() ||
-            !finalValue.isEquivalentTo(info.initialValue);
+        changed =
+            changed
+                || finalValue.getToken() != info.initialValue.getToken()
+                || !finalValue.isEquivalentTo(info.initialValue);
       }
     }
 
@@ -157,7 +157,7 @@ class ProcessDefines implements CompilerPass {
    */
   private boolean isValidDefineType(JSTypeExpression expression) {
     TypeIRegistry registry = compiler.getTypeIRegistry();
-    TypeI type = expression.evaluateInEmptyScope(registry);
+    TypeI type = registry.evaluateTypeExpressionInGlobalScope(expression);
     return !type.isUnknownType()
         && type.isSubtypeOf(registry.getNativeType(NUMBER_STRING_BOOLEAN));
   }
@@ -378,7 +378,7 @@ class ProcessDefines implements CompilerPass {
      * @param entering True if we're entering the subtree, false otherwise.
      */
     private void updateAssignAllowedStack(Node n, boolean entering) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case CASE:
         case FOR:
         case FUNCTION:
@@ -391,6 +391,8 @@ class ProcessDefines implements CompilerPass {
           } else {
             assignAllowed.remove();
           }
+          break;
+        default:
           break;
       }
     }

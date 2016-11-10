@@ -41,16 +41,13 @@ import com.google.javascript.jscomp.parsing.parser.trees.Comment;
 import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
-
-import jsinterop.annotations.JsFunction;
-import jsinterop.annotations.JsMethod;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
-
 import javax.annotation.Nullable;
+import jsinterop.annotations.JsFunction;
+import jsinterop.annotations.JsMethod;
 
 /**
  * GWT module to parse files for dependency and
@@ -213,12 +210,13 @@ public class JsfileParser implements EntryPoint {
 
     Config config =
         ParserRunner.createConfig(
-            // TODO(sdh): ES6_STRICT, with a non-strict fallback - then give warnings.
+            // TODO(sdh): ES6 STRICT, with a non-strict fallback - then give warnings.
             Config.LanguageMode.ECMASCRIPT6,
             Config.JsDocParsing.INCLUDE_DESCRIPTIONS_NO_WHITESPACE,
-            Config.SourceLocationInformation.PRESERVE,
             Config.RunMode.KEEP_GOING,
-            /* extraAnnotationNames */ ImmutableSet.<String>of());
+            /* extraAnnotationNames */ ImmutableSet.<String>of(),
+            /* parseInlineSourceMaps */ true,
+            Config.StrictMode.SLOPPY);
 
     SourceFile source = SourceFile.fromCode(filename, code);
     FileInfo info = new FileInfo(errorReporter);

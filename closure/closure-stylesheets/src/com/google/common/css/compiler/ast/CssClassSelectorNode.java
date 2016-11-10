@@ -26,14 +26,36 @@ import com.google.common.css.compiler.ast.CssSelectorNode.Specificity;
  * @author fbenz@google.com (Florian Benz)
  */
 public class CssClassSelectorNode extends CssRefinerNode {
-  public CssClassSelectorNode(String refinerName,
+  /** Specifies the kind or absence of a component scoping prefix. */
+  public static enum ComponentScoping {
+    /** The classname has no prefix. */
+    DEFAULT,
+    /** The classname has a % prefix, to force scoping. */
+    FORCE_SCOPED,
+    /** The classname has a ^ prefix, to prevent scoping. */
+    FORCE_UNSCOPED
+  }
+
+  private final ComponentScoping scoping;
+
+  public CssClassSelectorNode(String refinerName, ComponentScoping scoping,
       SourceCodeLocation sourceCodeLocation) {
     super(Refiner.CLASS, refinerName, sourceCodeLocation);
+    this.scoping = scoping;
+  }
+
+  public CssClassSelectorNode(String refinerName, SourceCodeLocation sourceCodeLocation) {
+    this(refinerName, ComponentScoping.DEFAULT, sourceCodeLocation);
   }
 
   protected CssClassSelectorNode(CssClassSelectorNode node) {
-    this(node.refinerName, node.getSourceCodeLocation());
+    this(node.refinerName, node.scoping, node.getSourceCodeLocation());
     this.setComments(node.getComments());
+  }
+
+  /** Returns the kind or absence of a component scoping prefix. */
+  public ComponentScoping getScoping() {
+    return scoping;
   }
 
   @Override

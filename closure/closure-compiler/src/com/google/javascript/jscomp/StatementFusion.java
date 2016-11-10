@@ -125,7 +125,7 @@ class StatementFusion extends AbstractPeepholeOptimization {
   }
 
   private boolean isFusableControlStatement(Node n) {
-    switch(n.getType()) {
+    switch (n.getToken()) {
       case IF:
       case THROW:
       case SWITCH:
@@ -147,6 +147,8 @@ class StatementFusion extends AbstractPeepholeOptimization {
       case BLOCK:
         return !n.isSyntheticBlock() &&
             isFusableControlStatement(n.getFirstChild());
+      default:
+        break;
     }
     return false;
   }
@@ -190,7 +192,7 @@ class StatementFusion extends AbstractPeepholeOptimization {
     // Now we are just left with two statements. The comma tree of the first
     // n - 1 statements (which can be used in an expression) and the last
     // statement. We perform specific fusion based on the last statement's type.
-    switch(control.getType()) {
+    switch (control.getToken()) {
       case IF:
       case RETURN:
       case THROW:
@@ -235,7 +237,7 @@ class StatementFusion extends AbstractPeepholeOptimization {
         leftMostChild = leftMostChild.getFirstChild();
       }
       Node parent = leftMostChild.getParent();
-      comma.addChildToBack(leftMostChild.detachFromParent());
+      comma.addChildToBack(leftMostChild.detach());
       parent.addChildToFront(comma);
       return exp2;
     } else {
@@ -251,7 +253,7 @@ class StatementFusion extends AbstractPeepholeOptimization {
   }
 
   protected static void fuseExpressionIntoSecondChild(Node exp, Node stmt) {
-    Node val = stmt.removeChildAfter(stmt.getFirstChild());
+    Node val = stmt.getSecondChild().detach();
     Node comma = fuseExpressionIntoExpression(exp, val);
     stmt.addChildAfter(comma, stmt.getFirstChild());
   }

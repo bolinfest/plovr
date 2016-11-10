@@ -35,6 +35,7 @@ goog.require('goog.Promise');
 goog.require('goog.Thenable');
 goog.require('goog.array');
 goog.require('goog.asserts');
+goog.require('goog.dom');
 goog.require('goog.dom.TagName');
 goog.require('goog.object');
 goog.require('goog.testing.JsUnitException');
@@ -891,7 +892,7 @@ goog.testing.TestCase.prototype.invokeTestFunction_ = function(
  * Logs all of the exceptions generated from failing assertions, and returns a
  * generic exception informing the user that one or more exceptions were not
  * propagated, causing the test to erroneously pass.
- * @param {!string} testName The test function's name.
+ * @param {string} testName The test function's name.
  * @return {!goog.testing.JsUnitException}
  * @private
  */
@@ -1181,7 +1182,9 @@ goog.testing.TestCase.prototype.setTestObj = function(obj) {
       this.tests_.length == 0, 'Test methods have already been configured.');
 
   var regex = new RegExp('^' + this.getAutoDiscoveryPrefix());
-  for (var name in obj) {
+  var properties = goog.object.getAllPropertyNames(obj);
+  for (var i = 0; i < properties.length; i++) {
+    var name = properties[i];
     if (regex.test(name)) {
       var testMethod = obj[name];
       if (goog.isFunction(testMethod)) {
@@ -1291,7 +1294,7 @@ goog.testing.TestCase.prototype.cycleTests = function() {
  * @private
  */
 goog.testing.TestCase.prototype.countNumFilesLoaded_ = function() {
-  var scripts = document.getElementsByTagName(goog.dom.TagName.SCRIPT);
+  var scripts = goog.dom.getElementsByTagName(goog.dom.TagName.SCRIPT);
   var count = 0;
   for (var i = 0, n = scripts.length; i < n; i++) {
     if (scripts[i].src) {

@@ -120,7 +120,6 @@ class RemoveUnusedVars
       ArrayListMultimap.create();
 
   private boolean modifyCallSites;
-  private boolean mustResetModifyCallSites;
 
   private CallSiteOptimizer callSiteOptimizer;
 
@@ -134,7 +133,6 @@ class RemoveUnusedVars
     this.removeGlobals = removeGlobals;
     this.preserveFunctionExpressionNames = preserveFunctionExpressionNames;
     this.modifyCallSites = modifyCallSites;
-    this.mustResetModifyCallSites = false;
   }
 
   /**
@@ -144,7 +142,7 @@ class RemoveUnusedVars
   @Override
   public void process(Node externs, Node root) {
     Preconditions.checkState(compiler.getLifeCycleStage().isNormalized());
-    SimpleDefinitionFinder defFinder = compiler.getSimpleDefinitionFinder();
+    boolean shouldResetModifyCallSites = false;
     if (this.modifyCallSites) {
       // When RemoveUnusedVars is run after OptimizeCalls, this.modifyCallSites
       // is true. But if OptimizeCalls stops making changes, PhaseOptimizer
@@ -152,26 +150,23 @@ class RemoveUnusedVars
       // null. In this case, we temporarily set this.modifyCallSites to false
       // for this run, and then reset it back to true at the end, for
       // subsequent runs.
-      if (defFinder == null) {
+      if (compiler.getDefinitionFinder() == null) {
         this.modifyCallSites = false;
-        this.mustResetModifyCallSites = true;
-      } else {
-        defFinder.process(externs, root);
+        shouldResetModifyCallSites = true;
       }
     }
-    process(externs, root, defFinder);
+    process(externs, root, compiler.getDefinitionFinder());
     // When doing OptimizeCalls, RemoveUnusedVars is the last pass in the
     // sequence, so the def finder must not be used by any subsequent passes.
-    compiler.setSimpleDefinitionFinder(null);
-    if (this.mustResetModifyCallSites) {
+    compiler.setDefinitionFinder(null);
+    if (shouldResetModifyCallSites) {
       this.modifyCallSites = true;
-      this.mustResetModifyCallSites = false;
     }
   }
 
   @Override
   public void process(
-      Node externs, Node root, SimpleDefinitionFinder defFinder) {
+      Node externs, Node root, DefinitionUseSiteFinder defFinder) {
     if (modifyCallSites) {
       Preconditions.checkNotNull(defFinder);
       callSiteOptimizer = new CallSiteOptimizer(compiler, defFinder);
@@ -210,7 +205,7 @@ class RemoveUnusedVars
    * and traverse them lazily.
    */
   private void traverseNode(Node n, Node parent, Scope scope) {
-    Token type = n.getType();
+    Token type = n.getToken();
     Var var = null;
     switch (type) {
       case FUNCTION:
@@ -316,6 +311,8 @@ class RemoveUnusedVars
             }
           }
         }
+        break;
+      default:
         break;
     }
 
@@ -431,13 +428,13 @@ class RemoveUnusedVars
 
   private static class CallSiteOptimizer {
     private final AbstractCompiler compiler;
-    private final SimpleDefinitionFinder defFinder;
+    private final DefinitionUseSiteFinder defFinder;
     private final List<Node> toRemove = new ArrayList<>();
     private final List<Node> toReplaceWithZero = new ArrayList<>();
 
     CallSiteOptimizer(
         AbstractCompiler compiler,
-        SimpleDefinitionFinder defFinder) {
+        DefinitionUseSiteFinder defFinder) {
       this.compiler = compiler;
       this.defFinder = defFinder;
     }
@@ -628,7 +625,7 @@ class RemoveUnusedVars
 
       // Be conservative, don't try to optimize any declaration that isn't as
       // simple function declaration or assignment.
-      if (!SimpleDefinitionFinder.isSimpleFunctionDeclaration(function)) {
+      if (!NodeUtil.isSimpleFunctionDeclaration(function)) {
         return false;
       }
 
@@ -640,7 +637,7 @@ class RemoveUnusedVars
      * @return Whether the call site is suitable for modification
      */
     private static boolean isModifiableCallSite(UseSite site) {
-      return SimpleDefinitionFinder.isCallOrNewSite(site)
+      return DefinitionUseSiteFinder.isCallOrNewSite(site)
           && !NodeUtil.isFunctionObjectApply(site.node.getParent());
     }
 
@@ -673,7 +670,7 @@ class RemoveUnusedVars
         }
 
         // Accessing the property directly prevents rewrite.
-        if (!SimpleDefinitionFinder.isCallOrNewSite(site)) {
+        if (!DefinitionUseSiteFinder.isCallOrNewSite(site)) {
           if (!(parent.isGetProp() &&
               NodeUtil.isFunctionObjectCall(parent.getParent()))) {
             return false;
@@ -859,13 +856,12 @@ class RemoveUnusedVars
         // If this is a single var declaration, we can at least remove the
         // declaration itself and just leave the value, e.g.,
         // var a = foo(); => foo();
-        if (toRemove.getChildCount() == 1) {
+        if (toRemove.hasOneChild()) {
           compiler.reportChangeToEnclosingScope(toRemove);
           parent.replaceChild(toRemove,
               IR.exprResult(nameNode.removeFirstChild()));
         }
-      } else if (toRemove.isVar() &&
-          toRemove.getChildCount() > 1) {
+      } else if (toRemove.isVar() && toRemove.hasMoreThanOneChild()) {
         // For var declarations with multiple names (i.e. var a, b, c),
         // only remove the unreferenced name
         compiler.reportChangeToEnclosingScope(toRemove);
@@ -978,7 +974,7 @@ class RemoveUnusedVars
     void remove() {
       Node parent = assignNode.getParent();
       if (mayHaveSecondarySideEffects) {
-        Node replacement = assignNode.getLastChild().detachFromParent();
+        Node replacement = assignNode.getLastChild().detach();
 
         // Aggregate any expressions in GETELEMs.
         for (Node current = assignNode.getFirstChild();
@@ -986,7 +982,7 @@ class RemoveUnusedVars
              current = current.getFirstChild()) {
           if (current.isGetElem()) {
             replacement = IR.comma(
-                current.getLastChild().detachFromParent(), replacement);
+                current.getLastChild().detach(), replacement);
             replacement.useSourceInfoIfMissingFrom(current);
           }
         }
@@ -998,7 +994,7 @@ class RemoveUnusedVars
           grandparent.removeChild(parent);
         } else {
           parent.replaceChild(assignNode,
-              assignNode.getLastChild().detachFromParent());
+              assignNode.getLastChild().detach());
         }
       }
     }

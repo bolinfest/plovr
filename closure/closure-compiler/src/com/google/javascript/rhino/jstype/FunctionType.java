@@ -50,10 +50,10 @@ import com.google.javascript.rhino.FunctionTypeI;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TypeI;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -124,6 +124,12 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
   private boolean isStructuralInterface;
 
   /**
+   * If true, the function type represents an abstract method or the constructor of an abstract
+   * class
+   */
+  private final boolean isAbstract;
+
+  /**
    * The interfaces directly implemented by this function (for constructors)
    * It is only relevant for constructors. May not be {@code null}.
    */
@@ -142,17 +148,22 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
   private List<FunctionType> subTypes;
 
   /** Creates an instance for a function that might be a constructor. */
-  FunctionType(JSTypeRegistry registry, String name, Node source,
-               ArrowType arrowType, JSType typeOfThis,
-               TemplateTypeMap templateTypeMap,
-               boolean isConstructor, boolean nativeType) {
+  FunctionType(
+      JSTypeRegistry registry,
+      String name,
+      Node source,
+      ArrowType arrowType,
+      JSType typeOfThis,
+      TemplateTypeMap templateTypeMap,
+      boolean isConstructor,
+      boolean nativeType,
+      boolean isAbstract) {
     super(registry, name,
         registry.getNativeObjectType(JSTypeNative.FUNCTION_INSTANCE_TYPE),
         nativeType, templateTypeMap);
     setPrettyPrint(true);
 
-    Preconditions.checkArgument(source == null ||
-        Token.FUNCTION == source.getType());
+    Preconditions.checkArgument(source == null || Token.FUNCTION == source.getToken());
     Preconditions.checkNotNull(arrowType);
     this.source = source;
     if (isConstructor) {
@@ -168,6 +179,7 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
     }
     this.call = arrowType;
     this.isStructuralInterface = false;
+    this.isAbstract = isAbstract;
   }
 
   /** Creates an instance for a function that is an interface. */
@@ -178,14 +190,14 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
         false, typeParameters);
     setPrettyPrint(true);
 
-    Preconditions.checkArgument(source == null ||
-        Token.FUNCTION == source.getType());
+    Preconditions.checkArgument(source == null || Token.FUNCTION == source.getToken());
     Preconditions.checkArgument(name != null);
     this.source = source;
     this.call = new ArrowType(registry, new Node(Token.PARAM_LIST), null);
     this.kind = Kind.INTERFACE;
     this.typeOfThis = new InstanceObjectType(registry, this);
     this.isStructuralInterface = false;
+    this.isAbstract = false;
   }
 
   /** Creates an instance for a function that is an interface. */
@@ -872,16 +884,22 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
         call.returnTypeInferred || other.call.returnTypeInferred;
 
     return new FunctionType(
-        registry, null, null,
-        new ArrowType(
-            registry, newParamsNode, newReturnType, newReturnTypeInferred),
-        newTypeOfThis, null, false, false);
+        registry,
+        null,
+        null,
+        new ArrowType(registry, newParamsNode, newReturnType, newReturnTypeInferred),
+        newTypeOfThis,
+        null,
+        false,
+        false,
+        false);
   }
 
   /**
    * Given a constructor or an interface type, get its superclass constructor
    * or {@code null} if none exists.
    */
+  @Override
   public FunctionType getSuperClassConstructor() {
     Preconditions.checkArgument(isConstructor() || isInterface());
     ObjectType maybeSuperInstanceType = getPrototype().getImplicitPrototype();
@@ -1011,7 +1029,7 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
       }
     }
     b.append("): ");
-    b.append(call.returnType.toStringHelper(forAnnotations));
+    b.append(call.returnType.toNonNullString(forAnnotations));
 
     setPrettyPrint(true);
     return b.toString();
@@ -1024,7 +1042,7 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
     } else if (p.isOptionalArg()) {
       appendOptionalArgString(b, p.getJSType(), forAnnotations);
     } else {
-      b.append(p.getJSType().toStringHelper(forAnnotations));
+      b.append(p.getJSType().toNonNullString(forAnnotations));
     }
   }
 
@@ -1037,7 +1055,7 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
           registry.getNativeType(JSTypeNative.VOID_TYPE));
     }
     builder.append("...").append(
-        paramType.toStringHelper(forAnnotations));
+        paramType.toNonNullString(forAnnotations));
   }
 
   /** Gets the string representation of an optional param. */
@@ -1048,7 +1066,7 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
       paramType = paramType.toMaybeUnionType().getRestrictedUnion(
           registry.getNativeType(JSTypeNative.VOID_TYPE));
     }
-    builder.append(paramType.toStringHelper(forAnnotations)).append("=");
+    builder.append(paramType.toNonNullString(forAnnotations)).append("=");
   }
 
   /**
@@ -1127,7 +1145,7 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
    */
   @Override
   public ObjectType getInstanceType() {
-    Preconditions.checkState(hasInstanceType());
+    Preconditions.checkState(hasInstanceType(), "Expected a constructor; got %s", this);
     return typeOfThis.toObjectType();
   }
 
@@ -1142,6 +1160,7 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
   /**
    * Returns whether this function type has an instance type.
    */
+  @Override
   public boolean hasInstanceType() {
     return isConstructor() || isInterface();
   }
@@ -1343,10 +1362,17 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
 
   /** Create a new constructor with the parameters and return type stripped. */
   public FunctionType forgetParameterAndReturnTypes() {
-    FunctionType result = new FunctionType(
-        registry, getReferenceName(), source,
-        registry.createArrowType(null, null), getInstanceType(),
-        null, true, false);
+    FunctionType result =
+        new FunctionType(
+            registry,
+            getReferenceName(),
+            source,
+            registry.createArrowType(null, null),
+            getInstanceType(),
+            null,
+            true,
+            false,
+            false);
     result.setPrototypeBasedOn(getInstanceType());
     return result;
   }
@@ -1393,6 +1419,10 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
   @Override
   public boolean isStructuralInterface() {
     return isInterface() && isStructuralInterface;
+  }
+
+  public boolean isAbstract() {
+    return isAbstract;
   }
 
   /**
@@ -1476,5 +1506,31 @@ public class FunctionType extends PrototypeObjectType implements FunctionTypeI {
       }
     }
     return null;
+  }
+
+  @Override
+  public boolean acceptsArguments(List<? extends TypeI> argumentTypes) {
+    // NOTE(aravindpg): This code is essentially lifted from TypeCheck::visitParameterList,
+    // but what small differences there are make it very painful to refactor out the shared code.
+    Iterator<? extends TypeI> arguments = argumentTypes.iterator();
+    Iterator<Node> parameters = this.getParameters().iterator();
+    Node parameter = null;
+    TypeI argument = null;
+    while (arguments.hasNext()
+        && (parameters.hasNext() || parameter != null && parameter.isVarArgs())) {
+      // If there are no parameters left in the list, then the while loop
+      // above implies that this must be a var_args function.
+      if (parameters.hasNext()) {
+        parameter = parameters.next();
+      }
+      argument = arguments.next();
+
+      if (!argument.isSubtypeOf(parameter.getTypeI())) {
+        return false;
+      }
+    }
+
+    int numArgs = argumentTypes.size();
+    return this.getMinArguments() <= numArgs && numArgs <= this.getMaxArguments();
   }
 }

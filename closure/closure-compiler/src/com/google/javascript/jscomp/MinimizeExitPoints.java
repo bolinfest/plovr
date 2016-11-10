@@ -16,14 +16,12 @@
 
 package com.google.javascript.jscomp;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.javascript.jscomp.NodeTraversal.AbstractShallowCallback;
-import com.google.javascript.jscomp.NodeTraversal.FunctionCallback;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.TernaryValue;
-
 import javax.annotation.Nullable;
 
 /**
@@ -32,29 +30,21 @@ import javax.annotation.Nullable;
  *
  * @author johnlenz@google.com (John Lenz)
  */
-class MinimizeExitPoints extends AbstractShallowCallback implements CompilerPass {
+class MinimizeExitPoints extends AbstractPeepholeOptimization {
   AbstractCompiler compiler;
 
   MinimizeExitPoints(AbstractCompiler compiler) {
     this.compiler = compiler;
   }
 
-  @Override
-  public void process(Node externs, Node root) {
-    NodeTraversal.traverseChangedFunctions(compiler, new FunctionCallback() {
-        @Override
-        public void enterFunction(AbstractCompiler compiler, Node root) {
-          if (root.isFunction()) {
-            root = root.getLastChild();
-          }
-          NodeTraversal.traverseEs6(compiler, root, MinimizeExitPoints.this);
-        }
-    });
+  @VisibleForTesting
+  final CompilerPass asCompilerPass() {
+    return new PeepholeOptimizationsPass(compiler, this);
   }
 
   @Override
-  public void visit(NodeTraversal t, Node n, Node parent) {
-    switch (n.getType()) {
+  Node optimizeSubtree(Node n) {
+    switch (n.getToken()) {
       case LABEL:
         tryMinimizeExits(
             n.getLastChild(), Token.BREAK, n.getFirstChild().getString());
@@ -78,8 +68,6 @@ class MinimizeExitPoints extends AbstractShallowCallback implements CompilerPass
         break;
 
       case BLOCK:
-        // The traversal starts at the function block so `parent` will be null, so we use
-        // getParent here.
         if (n.getParent() != null && n.getParent().isFunction()) {
           tryMinimizeExits(n, Token.RETURN, null);
         }
@@ -89,9 +77,12 @@ class MinimizeExitPoints extends AbstractShallowCallback implements CompilerPass
         tryMinimizeSwitchExits(n, Token.BREAK, null);
         break;
 
-      // TODO(johnlenz): Minimize any block that ends in a optimizable statements:
-      //   break, continue, return
+        // TODO(johnlenz): Minimize any block that ends in a optimizable statements:
+        //   break, continue, return
+      default:
+        break;
     }
+    return n;
   }
 
   /**
@@ -332,7 +323,7 @@ class MinimizeExitPoints extends AbstractShallowCallback implements CompilerPass
    * @return Whether the node matches the specified block-exit type.
    */
   private static boolean matchingExitNode(Node n, Token type, @Nullable String labelName) {
-    if (n.getType() == type) {
+    if (n.getToken() == type) {
       if (type == Token.RETURN) {
         // only returns without expressions.
         return !n.hasChildren();

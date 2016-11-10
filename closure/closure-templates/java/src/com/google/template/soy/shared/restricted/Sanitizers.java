@@ -282,7 +282,7 @@ public final class Sanitizers {
     } else if (isSanitizedContentOfKind(value, SanitizedContent.ContentKind.JS)) {
       String jsCode = value.coerceToString();
       // This value may not be embeddable if it contains the substring "</script".
-      // TODO(user): Fixup.  We need to be careful because mucking with '<' can
+      // TODO(msamuel): Fixup.  We need to be careful because mucking with '<' can
       // break code like
       //    while (i</foo/.exec(str).length)
       // and mucking with / can break
@@ -342,7 +342,7 @@ public final class Sanitizers {
     if (isSanitizedContentOfKind(value, SanitizedContent.ContentKind.CSS)) {
       // We don't need to do this when the CSS is embedded in a
       // style attribute since then the HTML escaper kicks in.
-      // TODO(user): Maybe change the autoescaper to generate
+      // TODO(msamuel): Maybe change the autoescaper to generate
       //   |filterCssValue:attrib
       // for style attributes and thread the parameter here so that
       // we can skip this check when its unnecessary.
@@ -404,7 +404,8 @@ public final class Sanitizers {
    * {@link #normalizeUri normalizes} it.
    */
   public static String filterNormalizeUri(SoyValue value) {
-    if (isSanitizedContentOfKind(value, SanitizedContent.ContentKind.URI)) {
+    if (isSanitizedContentOfKind(value, SanitizedContent.ContentKind.URI)
+        || isSanitizedContentOfKind(value, SanitizedContent.ContentKind.TRUSTED_RESOURCE_URI)) {
       return normalizeUri(value);
     }
     return filterNormalizeUri(value.coerceToString());
@@ -430,7 +431,8 @@ public final class Sanitizers {
    * <p>Does not return SanitizedContent as there isn't an appropriate type for this.
    */
   public static String filterNormalizeMediaUri(SoyValue value) {
-    if (isSanitizedContentOfKind(value, SanitizedContent.ContentKind.URI)) {
+    if (isSanitizedContentOfKind(value, SanitizedContent.ContentKind.URI)
+        || isSanitizedContentOfKind(value, SanitizedContent.ContentKind.TRUSTED_RESOURCE_URI)) {
       return normalizeUri(value);
     }
     return filterNormalizeMediaUri(value.coerceToString());
@@ -452,21 +454,40 @@ public final class Sanitizers {
 
 
   /**
-   * This is supposed to make sure the the given input is an instance of either trustedResourceUrl
-   * or trustedString. But for now only calls filterNormalizeUri.
+   * Makes sure the given input is an instance of either trustedResourceUrl or trustedString.
    */
   public static String filterTrustedResourceUri(SoyValue value) {
-    // TODO(shwetakarwa): This needs to be changed once all the legacy URLs are taken care of.
-    return value.coerceToString();
+    if (isSanitizedContentOfKind(value, SanitizedContent.ContentKind.TRUSTED_RESOURCE_URI)) {
+      return value.coerceToString();
+    }
+    LOGGER.log(Level.WARNING, "|filterTrustedResourceUri received bad value {0}", value);
+    return "about:invalid#" + EscapingConventions.INNOCUOUS_OUTPUT;
   }
 
 
   /**
-   * Makes sure that the given input doesn't specify a dangerous protocol and also
-   * {@link #normalizeUri normalizes} it.
+   * For string inputs this function just returns the input string itself.
    */
   public static String filterTrustedResourceUri(String value) {
     return value;
+  }
+
+  /**
+   * For any resource string/variable which has
+   * |blessStringAsTrustedResuorceUrlForLegacy directive return the input value as is.
+   */
+  public static SoyValue blessStringAsTrustedResourceUrlForLegacy(SoyValue value) {
+    return value;
+  }
+
+
+  /**
+   * For any resource string/variable which has
+   * |blessStringAsTrustedResuorceUrlForLegacy directive return the input value as is after
+   * converting it into SoyValue.
+   */
+  public static SoyValue blessStringAsTrustedResourceUrlForLegacy(String value) {
+    return StringData.forValue(value);
   }
 
 

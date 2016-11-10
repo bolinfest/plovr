@@ -25,8 +25,11 @@ import com.google.common.css.JobDescription.InputOrientation;
 import com.google.common.css.JobDescription.OptimizeStrategy;
 import com.google.common.css.JobDescription.OutputFormat;
 import com.google.common.css.JobDescription.OutputOrientation;
+import com.google.common.css.JobDescription.SourceMapDetailLevel;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -35,33 +38,41 @@ import java.util.Set;
  *
  */
 public class JobDescriptionBuilder {
-  private List<SourceCode> inputs;
-  private String copyrightNotice;
-  private OutputFormat outputFormat;
-  private InputOrientation inputOrientation;
-  private OutputOrientation outputOrientation;
-  private OptimizeStrategy optimize;
-  private List<String> trueConditionNames;
-  private boolean useInternalBidiFlipper;
-  private boolean swapLtrRtlInUrl;
-  private boolean swapLeftRightInUrl;
-  private boolean simplifyCss;
-  private boolean eliminateDeadStyles;
-  private boolean allowUnrecognizedFunctions;
-  private Set<String> allowedNonStandardFunctions;
-  private boolean allowUnrecognizedProperties;
-  private Set<String> allowedUnrecognizedProperties;
-  private Vendor vendor;
-  private boolean allowKeyframes;
-  private boolean allowWebkitKeyframes;
-  private boolean processDependencies;
-  private String cssRenamingPrefix;
-  private List<String> excludedClassesFromRenaming;
-  private GssFunctionMapProvider gssFunctionMapProvider;
-  private SubstitutionMapProvider cssSubstitutionMapProvider;
-  private OutputRenamingMapFormat outputRenamingMapFormat;
+  List<SourceCode> inputs;
+  String copyrightNotice;
+  OutputFormat outputFormat;
+  InputOrientation inputOrientation;
+  OutputOrientation outputOrientation;
+  OptimizeStrategy optimize;
+  List<String> trueConditionNames;
+  boolean useInternalBidiFlipper;
+  boolean swapLtrRtlInUrl;
+  boolean swapLeftRightInUrl;
+  boolean simplifyCss;
+  boolean eliminateDeadStyles;
+  boolean allowDefPropagation;
+  boolean allowUnrecognizedFunctions;
+  Set<String> allowedNonStandardFunctions;
+  boolean allowUnrecognizedProperties;
+  Set<String> allowedUnrecognizedProperties;
+  boolean allowUndefinedConstants;
+  boolean allowMozDocument;
+  Vendor vendor;
+  boolean allowKeyframes;
+  boolean allowWebkitKeyframes;
+  boolean processDependencies;
+  String cssRenamingPrefix;
+  List<String> excludedClassesFromRenaming;
+  GssFunctionMapProvider gssFunctionMapProvider;
+  SubstitutionMapProvider cssSubstitutionMapProvider;
+  OutputRenamingMapFormat outputRenamingMapFormat;
+  boolean preserveComments;
+  boolean suppressDependencyCheck;
+  Map<String, Integer> compileConstants;
 
-  private JobDescription job = null;
+  JobDescription job = null;
+  boolean createSourceMap;
+  SourceMapDetailLevel sourceMapLevel;
 
   public JobDescriptionBuilder() {
     this.inputs = Lists.newArrayList();
@@ -76,10 +87,13 @@ public class JobDescriptionBuilder {
     this.swapLeftRightInUrl = false;
     this.simplifyCss = false;
     this.eliminateDeadStyles = false;
+    this.allowDefPropagation = false;
     this.allowUnrecognizedFunctions = false;
     this.allowedNonStandardFunctions = Sets.newHashSet();
     this.allowUnrecognizedProperties = false;
     this.allowedUnrecognizedProperties = Sets.newHashSet();
+    this.allowUndefinedConstants = false;
+    this.allowMozDocument = false;
     this.vendor = null;
     this.allowKeyframes = true;
     this.allowWebkitKeyframes = true;
@@ -89,6 +103,11 @@ public class JobDescriptionBuilder {
     this.gssFunctionMapProvider = null;
     this.cssSubstitutionMapProvider = null;
     this.outputRenamingMapFormat = OutputRenamingMapFormat.JSCOMP_VARIABLE_MAP;
+    this.preserveComments = false;
+    this.suppressDependencyCheck = false;
+    this.compileConstants = new HashMap<>();
+    this.createSourceMap = false;
+    this.sourceMapLevel = SourceMapDetailLevel.DEFAULT;
   }
 
   public JobDescriptionBuilder copyFrom(JobDescription jobToCopy) {
@@ -98,18 +117,21 @@ public class JobDescriptionBuilder {
     setInputOrientation(jobToCopy.inputOrientation);
     setOutputOrientation(jobToCopy.outputOrientation);
     this.optimize = jobToCopy.optimize;
-    setTrueConditionNames(Lists.newArrayList(jobToCopy.trueConditionNames));
+    setTrueConditionNames(jobToCopy.trueConditionNames);
     this.useInternalBidiFlipper = jobToCopy.useInternalBidiFlipper;
     this.swapLtrRtlInUrl = jobToCopy.swapLtrRtlInUrl;
     this.swapLeftRightInUrl = jobToCopy.swapLeftRightInUrl;
     this.simplifyCss = jobToCopy.simplifyCss;
     this.eliminateDeadStyles = jobToCopy.eliminateDeadStyles;
+    this.allowDefPropagation = jobToCopy.allowDefPropagation;
     this.allowUnrecognizedFunctions = jobToCopy.allowUnrecognizedFunctions;
     this.allowedNonStandardFunctions =
         ImmutableSet.copyOf(jobToCopy.allowedNonStandardFunctions);
     this.allowUnrecognizedProperties = jobToCopy.allowUnrecognizedProperties;
     this.allowedUnrecognizedProperties =
         ImmutableSet.copyOf(jobToCopy.allowedUnrecognizedProperties);
+    this.allowUndefinedConstants = jobToCopy.allowUndefinedConstants;
+    this.allowMozDocument = jobToCopy.allowMozDocument;
     this.vendor = jobToCopy.vendor;
     this.allowKeyframes = jobToCopy.allowKeyframes;
     this.allowWebkitKeyframes = jobToCopy.allowWebkitKeyframes;
@@ -119,10 +141,15 @@ public class JobDescriptionBuilder {
     this.gssFunctionMapProvider = jobToCopy.gssFunctionMapProvider;
     this.cssSubstitutionMapProvider = jobToCopy.cssSubstitutionMapProvider;
     this.outputRenamingMapFormat = jobToCopy.outputRenamingMapFormat;
+    this.preserveComments = jobToCopy.preserveComments;
+    this.suppressDependencyCheck = jobToCopy.suppressDependencyCheck;
+    setCompileConstants(jobToCopy.compileConstants);
+    this.createSourceMap = jobToCopy.createSourceMap;
+    this.sourceMapLevel = jobToCopy.sourceMapLevel;
     return this;
   }
 
-  private void checkJobIsNotAlreadyCreated() {
+  void checkJobIsNotAlreadyCreated() {
     Preconditions.checkState(job == null, "You cannot set job properties " +
         "after the message was created.");
   }
@@ -364,6 +391,56 @@ public class JobDescriptionBuilder {
     return this;
   }
 
+  public JobDescriptionBuilder setAllowMozDocument(boolean allow) {
+    checkJobIsNotAlreadyCreated();
+    this.allowMozDocument = allow;
+    return this;
+  }
+
+  public JobDescriptionBuilder allowMozDocument() {
+    return setAllowMozDocument(true);
+  }
+
+  public JobDescriptionBuilder setAllowDefPropagation(boolean allow) {
+    checkJobIsNotAlreadyCreated();
+    this.allowDefPropagation = allow;
+    return this;
+  }
+
+  public JobDescriptionBuilder allowDefPropagation() {
+    return setAllowDefPropagation(true);
+  }
+
+  public JobDescriptionBuilder setAllowUndefinedConstants(boolean allow) {
+    checkJobIsNotAlreadyCreated();
+    this.allowUndefinedConstants = allow;
+    return this;
+  }
+
+  public JobDescriptionBuilder setSuppressDependencyCheck(boolean suppress) {
+    checkJobIsNotAlreadyCreated();
+    this.suppressDependencyCheck = suppress;
+    return this;
+  }
+
+  public JobDescriptionBuilder setPreserveComments(boolean preserve) {
+    checkJobIsNotAlreadyCreated();
+    this.preserveComments = preserve;
+    return this;
+  }
+
+  public JobDescriptionBuilder preserveComments() {
+    return setPreserveComments(true);
+  }
+
+  public JobDescriptionBuilder setCompileConstants(
+      Map<String, Integer> newCompileConstants) {
+    checkJobIsNotAlreadyCreated();
+    Preconditions.checkState(this.compileConstants.isEmpty());
+    Preconditions.checkArgument(!newCompileConstants.containsKey(null));
+    this.compileConstants = new HashMap<>(newCompileConstants);
+    return this;
+  }
 
   public JobDescription getJobDescription() {
     if (job != null) {
@@ -371,17 +448,41 @@ public class JobDescriptionBuilder {
     }
 
     Set<String> allowedAtRules = Sets.newHashSet();
+    if (allowKeyframes || allowWebkitKeyframes) {
+      allowedAtRules.add("keyframes");
+      allowedAtRules.add("-moz-keyframes");
+      allowedAtRules.add("-ms-keyframes");
+      allowedAtRules.add("-o-keyframes");
+      allowedAtRules.add("-webkit-keyframes");
+    }
+    if (allowMozDocument) {
+      allowedAtRules.add("-moz-document");
+    }
+
 
     job = new JobDescription(inputs,
         copyrightNotice, outputFormat, inputOrientation, outputOrientation,
         optimize, trueConditionNames, useInternalBidiFlipper, swapLtrRtlInUrl,
         swapLeftRightInUrl, simplifyCss, eliminateDeadStyles,
-        allowUnrecognizedFunctions, allowedNonStandardFunctions,
-        allowUnrecognizedProperties, allowedUnrecognizedProperties, vendor,
+        allowDefPropagation, allowUnrecognizedFunctions, allowedNonStandardFunctions,
+        allowUnrecognizedProperties, allowedUnrecognizedProperties, allowUndefinedConstants,
+        allowMozDocument, vendor,
         allowKeyframes, allowWebkitKeyframes, processDependencies,
         allowedAtRules, cssRenamingPrefix, excludedClassesFromRenaming,
         gssFunctionMapProvider, cssSubstitutionMapProvider,
-        outputRenamingMapFormat);
+        outputRenamingMapFormat, preserveComments, suppressDependencyCheck, compileConstants,
+        createSourceMap, sourceMapLevel);
     return job;
   }
+
+  public JobDescriptionBuilder setSourceMapLevel(SourceMapDetailLevel sourceMapLevel) {
+    this.sourceMapLevel = sourceMapLevel;
+    return this;
+  }
+
+  public JobDescriptionBuilder setCreateSourceMap(boolean createSourceMap) {
+    this.createSourceMap = createSourceMap;
+    return this;
+  }
+
 }

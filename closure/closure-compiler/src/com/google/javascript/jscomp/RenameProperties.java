@@ -320,7 +320,7 @@ class RenameProperties implements CompilerPass {
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case GETPROP:
           Node propNode = n.getSecondChild();
           if (propNode.isString()) {
@@ -374,7 +374,7 @@ class RenameProperties implements CompilerPass {
             String name = n.getFirstChild().getString();
               if (NodeUtil.JSC_PROPERTY_NAME_FN.equals(name)) {
                 if (parent.isExprResult()) {
-                  parent.detachFromParent();
+                  parent.detach();
                 } else {
                   parent.removeChild(n);
                 }
@@ -386,7 +386,7 @@ class RenameProperties implements CompilerPass {
               if (varNode.isVar()) {
                 varNode.removeChild(parent);
                 if (!varNode.hasChildren()) {
-                  varNode.detachFromParent();
+                  varNode.detach();
                 }
                 compiler.reportCodeChange();
               }
@@ -400,12 +400,14 @@ class RenameProperties implements CompilerPass {
               if (exprResult.isExprResult()
                   && NodeUtil.isStatementBlock(exprResult.getParent())
                   && exprResult.getFirstChild().isAssign()) {
-                exprResult.detachFromParent();
+                exprResult.detach();
                 compiler.reportCodeChange();
               }
           }
           break;
         }
+        default:
+          break;
       }
     }
 

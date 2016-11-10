@@ -32,22 +32,34 @@ import com.google.javascript.rhino.jstype.TemplateType;
 import com.google.javascript.rhino.jstype.TemplatizedType;
 import com.google.javascript.rhino.jstype.UnionType;
 import com.google.javascript.rhino.jstype.Visitor;
-
 import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
  * Gathers property names defined in externs.
+ *
+ * The collection of these property names could easily happen during
+ * type checking. However, when exporting local property definitions,
+ * the externs may be modified after type checking, and we want to
+ * collect the new names as well.
+ *
+ * NOTE(dimvar): with NTI, we collect the relevant property names
+ * during type checking, and we run this pass just to collect new
+ * names that come from local exports. The type-visitor part is not
+ * executed because getJSType returns null.
  */
 class GatherExternProperties extends AbstractPostOrderCallback
     implements CompilerPass {
-  private final Set<String> externProperties = new LinkedHashSet<>();
+  private final Set<String> externProperties;
   private final AbstractCompiler compiler;
   private final ExtractRecordTypePropertyNames typeVisitor =
       new ExtractRecordTypePropertyNames();
 
   public GatherExternProperties(AbstractCompiler compiler) {
     this.compiler = compiler;
+    this.externProperties = compiler.getExternProperties() == null
+        ? new LinkedHashSet<String>()
+        : new LinkedHashSet<String>(compiler.getExternProperties());
   }
 
   @Override
@@ -58,7 +70,7 @@ class GatherExternProperties extends AbstractPostOrderCallback
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case GETPROP:
         // Gathers "name" from (someObject.name).
         Node dest = n.getSecondChild();
@@ -73,6 +85,8 @@ class GatherExternProperties extends AbstractPostOrderCallback
              child = child.getNext()) {
           externProperties.add(child.getString());
         }
+        break;
+      default:
         break;
     }
 

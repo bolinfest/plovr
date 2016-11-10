@@ -21,7 +21,6 @@ import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.Node;
-
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -30,9 +29,14 @@ import java.util.Set;
 /**
  * Inline aliases created by exports of modules before type checking.
  *
- * The old type inference doesn't deal as well with aliased types as with unaliased ones,
- * such as in extends clauses (@extends {alias}) and templated types (alias<T>).
- * This pass inlines these aliases to make type checking's job easier.
+ * <p>The old type inference doesn't deal as well with aliased types as with unaliased ones, such as
+ * in extends clauses (@extends {alias}) and templated types (alias<T>). This pass inlines these
+ * aliases to make type checking's job easier.
+ *
+ * <p>This alias inliner is not very aggressive. It will only inline explicitly const aliases but
+ * not effectively const ones (for example ones that are only ever assigned a value once). This is
+ * done to be conservative since it's not a good idea to be making dramatic AST changes before type
+ * checking. There is a more aggressive alias inliner that runs at the start of optimization.
  *
  * @author blickly@gmail.com (Ben Lickly)
  */
@@ -59,9 +63,9 @@ final class InlineAliases implements CompilerPass {
   private class AliasesCollector extends AbstractPostOrderCallback {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case VAR:
-          if (n.getChildCount() == 1 && t.inGlobalScope()) {
+          if (n.hasOneChild() && t.inGlobalScope()) {
             visitAliasDefinition(n.getFirstChild(), NodeUtil.getBestJSDocInfo(n.getFirstChild()));
           }
           break;
@@ -69,6 +73,8 @@ final class InlineAliases implements CompilerPass {
           if (parent != null && parent.isExprResult() && t.inGlobalScope()) {
             visitAliasDefinition(n.getFirstChild(), n.getJSDocInfo());
           }
+          break;
+        default:
           break;
       }
     }
@@ -109,7 +115,7 @@ final class InlineAliases implements CompilerPass {
   private class AliasesInliner extends AbstractPostOrderCallback {
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case NAME:
         case GETPROP:
           if (n.isQualifiedName() && aliases.containsKey(n.getQualifiedName())) {
@@ -125,11 +131,12 @@ final class InlineAliases implements CompilerPass {
             }
 
             Node newNode = NodeUtil.newQName(compiler, resolveAlias(n.getQualifiedName(), n))
-                .copyInformationFromForTree(n);
-            newNode.setLength(n.getLength());
+                .useSourceInfoFromForTree(n);
             parent.replaceChild(n, newNode);
             compiler.reportCodeChange();
           }
+          break;
+        default:
           break;
       }
       maybeRewriteJsdoc(n.getJSDocInfo());

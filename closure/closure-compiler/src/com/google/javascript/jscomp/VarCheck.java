@@ -24,6 +24,7 @@ import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.Node;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -102,6 +103,8 @@ class VarCheck extends AbstractPostOrderCallback implements
   // Whether extern checks emit error.
   private final boolean strictExternCheck;
 
+  private RedeclarationCheckHandler dupHandler;
+
   VarCheck(AbstractCompiler compiler) {
     this(compiler, false);
   }
@@ -122,7 +125,8 @@ class VarCheck extends AbstractPostOrderCallback implements
     if (sanityCheck) {
       return new Es6SyntacticScopeCreator(compiler);
     } else {
-      return new Es6SyntacticScopeCreator(compiler, new RedeclarationCheckHandler());
+      dupHandler = new RedeclarationCheckHandler();
+      return new Es6SyntacticScopeCreator(compiler, dupHandler);
     }
   }
 
@@ -142,6 +146,10 @@ class VarCheck extends AbstractPostOrderCallback implements
     t.traverseRoots(externs, root);
     for (String varName : varsToDeclareInExterns) {
       createSynthesizedExternVar(varName);
+    }
+
+    if (dupHandler != null) {
+      dupHandler.removeDuplicates();
     }
   }
 
@@ -246,7 +254,7 @@ class VarCheck extends AbstractPostOrderCallback implements
    * Create a new variable in a synthetic script. This will prevent
    * subsequent compiler passes from crashing.
    */
-  private void createSynthesizedExternVar(String varName) {
+  static void createSynthesizedExternVar(AbstractCompiler compiler, String varName) {
     Node nameNode = IR.name(varName);
 
     // Mark the variable as constant if it matches the coding convention
@@ -259,10 +267,17 @@ class VarCheck extends AbstractPostOrderCallback implements
       nameNode.putBooleanProp(Node.IS_CONSTANT_NAME, true);
     }
 
-    getSynthesizedExternsRoot().addChildToBack(
-        IR.var(nameNode));
-    varsToDeclareInExterns.remove(varName);
+    getSynthesizedExternsRoot(compiler).addChildToBack(IR.var(nameNode));
     compiler.reportCodeChange();
+  }
+
+  /**
+   * Create a new variable in a synthetic script. This will prevent
+   * subsequent compiler passes from crashing.
+   */
+  private void createSynthesizedExternVar(String varName) {
+    createSynthesizedExternVar(compiler, varName);
+    varsToDeclareInExterns.remove(varName);
   }
 
   /**
@@ -273,7 +288,7 @@ class VarCheck extends AbstractPostOrderCallback implements
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
       if (n.isName()) {
-        switch (parent.getType()) {
+        switch (parent.getToken()) {
           case VAR:
           case LET:
           case CONST:
@@ -353,6 +368,8 @@ class VarCheck extends AbstractPostOrderCallback implements
    * The handler for duplicate declarations.
    */
   private class RedeclarationCheckHandler implements RedeclarationHandler {
+    private ArrayList<Node> dupDeclNodes = new ArrayList<>();
+
     @Override
     public void onRedeclaration(
         Scope s, String name, Node n, CompilerInput input) {
@@ -378,8 +395,7 @@ class VarCheck extends AbstractPostOrderCallback implements
 
         boolean allowDupe = hasDuplicateDeclarationSuppression(n, origVar);
         if (isExternNamespace(n)) {
-          parent.getParent().removeChild(parent);
-          compiler.reportCodeChange();
+          this.dupDeclNodes.add(parent);
           return;
         }
         if (!allowDupe) {
@@ -398,10 +414,19 @@ class VarCheck extends AbstractPostOrderCallback implements
             JSError.make(n, VAR_ARGUMENTS_SHADOWED_ERROR));
       }
     }
+
+    public void removeDuplicates() {
+      for (Node n : dupDeclNodes) {
+        if (n.getParent() != null) {
+          n.detach();
+          compiler.reportCodeChange();
+        }
+      }
+    }
   }
 
   /** Lazily create a "new" externs root for undeclared variables. */
-  private Node getSynthesizedExternsRoot() {
+  private static Node getSynthesizedExternsRoot(AbstractCompiler compiler) {
     return  compiler.getSynthesizedExternsInput().getAstRoot(compiler);
   }
 }

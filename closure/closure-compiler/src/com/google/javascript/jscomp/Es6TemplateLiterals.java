@@ -56,7 +56,7 @@ class Es6TemplateLiterals {
             } else if (i == 2 && first.getString().isEmpty()) {
               // So that `${hello} world` gets translated into (hello + " world")
               // instead of ("" + hello + " world").
-              add = add.getSecondChild().detachFromParent();
+              add = add.getSecondChild().detach();
             }
           }
           add = IR.add(add, child.isString() ? child : child.removeFirstChild());
@@ -98,7 +98,7 @@ class Es6TemplateLiterals {
         TEMPLATELIT_VAR + t.getCompiler().getUniqueNameIdSupplier().get());
     Node var = IR.var(callsiteId, siteObject).useSourceInfoIfMissingFromForTree(n);
     Node script = NodeUtil.getEnclosingScript(n);
-    script.addChildrenToFront(var);
+    script.addChildToFront(var);
 
     // Define the "raw" property on the introduced variable.
     Node defineRaw = IR.exprResult(IR.assign(IR.getprop(

@@ -54,6 +54,8 @@ public interface FunctionTypeI extends TypeI {
    */
   TypeI convertMethodToFunction();
 
+  boolean hasInstanceType();
+
   ObjectTypeI getInstanceType();
 
   TypeI getReturnType();
@@ -76,4 +78,7 @@ public interface FunctionTypeI extends TypeI {
   boolean hasProperties();
 
   void setSource(Node n);
+
+  /** Checks if a call to this function with the given list of arguments is valid. */
+  boolean acceptsArguments(List<? extends TypeI> argumentTypes);
 }

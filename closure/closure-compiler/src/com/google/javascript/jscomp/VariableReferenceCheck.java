@@ -23,9 +23,7 @@ import com.google.javascript.jscomp.ReferenceCollectingCallback.Reference;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceCollection;
 import com.google.javascript.jscomp.ReferenceCollectingCallback.ReferenceMap;
 import com.google.javascript.rhino.Node;
-
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -71,26 +69,53 @@ class VariableReferenceCheck implements HotSwapCompilerPass {
 
   private final AbstractCompiler compiler;
 
+  // If true, the pass will only check code that is at least ES6. Certain errors in block-scoped
+  // variable declarations will prevent correct transpilation, so this pass must be run.
+  private final boolean forTranspileOnly;
+
   // NOTE(nicksantos): It's a lot faster to use a shared Set that
   // we clear after each method call, because the Set never gets too big.
   private final Set<BasicBlock> blocksWithDeclarations = new HashSet<>();
 
   public VariableReferenceCheck(AbstractCompiler compiler) {
+    this(compiler, false);
+  }
+
+  VariableReferenceCheck(AbstractCompiler compiler, boolean forTranspileOnly) {
     this.compiler = compiler;
+    this.forTranspileOnly = forTranspileOnly;
+  }
+
+  private boolean shouldProcess(Node root) {
+    if (!forTranspileOnly) {
+      return true;
+    }
+    if (compiler.getOptions().getLanguageIn().isEs6OrHigher()) {
+      for (Node singleRoot : root.children()) {
+        if (TranspilationPasses.isScriptEs6ImplOrHigher(singleRoot)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   @Override
   public void process(Node externs, Node root) {
-    ReferenceCollectingCallback callback =
-        new ReferenceCollectingCallback(compiler, new ReferenceCheckingBehavior());
-    callback.process(externs, root);
+    if (shouldProcess(root)) {
+      new ReferenceCollectingCallback(compiler, new ReferenceCheckingBehavior())
+          .process(externs, root);
+    }
   }
 
   @Override
   public void hotSwapScript(Node scriptRoot, Node originalRoot) {
-    ReferenceCollectingCallback callback =
-        new ReferenceCollectingCallback(compiler, new ReferenceCheckingBehavior());
-    callback.hotSwapScript(scriptRoot, originalRoot);
+    if (!forTranspileOnly
+        || (compiler.getOptions().getLanguageIn().isEs6OrHigher()
+            && TranspilationPasses.isScriptEs6ImplOrHigher(scriptRoot))) {
+      new ReferenceCollectingCallback(compiler, new ReferenceCheckingBehavior())
+          .hotSwapScript(scriptRoot, originalRoot);
+    }
   }
 
   /**
@@ -134,34 +159,30 @@ class VariableReferenceCheck implements HotSwapCompilerPass {
       }
     }
 
-    /**
-     * Do a shallow check since cases like:
-     *   function f(y = () => x, x = 5) { return y(); }
-     * is legal. We are going to miss cases like:
-     *   function f(y = (() => x)(), x = 5) { return y(); }
-     * but this should be rare.
-     */
-    private class ShallowReferenceCollector extends AbstractShallowCallback {
-      private final Set<Node> currParamReferences = new LinkedHashSet<>();
-
-      @Override
-      public void visit(NodeTraversal t, Node n, Node parent) {
-        if (!NodeUtil.isReferenceName(n)) {
-          return;
-        }
-        currParamReferences.add(n);
-      }
-    }
-
-    private void checkDefaultParam(Var param, Scope scope, Set<String> varsInFunctionBody) {
-      ShallowReferenceCollector check = new ShallowReferenceCollector();
-      NodeTraversal.traverseEs6(compiler, param.getParentNode().getSecondChild(), check);
-      for (Node ref : check.currParamReferences) {
-        String refName = ref.getString();
-        if (varsInFunctionBody.contains(refName) && !scope.isDeclared(refName, true)) {
-          compiler.report(JSError.make(ref, EARLY_REFERENCE_ERROR, refName));
-        }
-      }
+    private void checkDefaultParam(
+        Var param, final Scope scope, final Set<String> varsInFunctionBody) {
+      NodeTraversal.traverseEs6(
+          compiler,
+          param.getParentNode().getSecondChild(),
+          /**
+           * Do a shallow check since cases like:
+           *   function f(y = () => x, x = 5) { return y(); }
+           * is legal. We are going to miss cases like:
+           *   function f(y = (() => x)(), x = 5) { return y(); }
+           * but this should be rare.
+           */
+          new AbstractShallowCallback() {
+            @Override
+            public void visit(NodeTraversal t, Node n, Node parent) {
+              if (!NodeUtil.isReferenceName(n)) {
+                return;
+              }
+              String refName = n.getString();
+              if (varsInFunctionBody.contains(refName) && !scope.isDeclared(refName, true)) {
+                compiler.report(JSError.make(n, EARLY_REFERENCE_ERROR, refName));
+              }
+            }
+          });
     }
 
     private void checkShadowParam(Var v, Scope functionScope, List<Reference> references) {
@@ -169,7 +190,7 @@ class VariableReferenceCheck implements HotSwapCompilerPass {
       if (maybeParam != null && maybeParam.isParam() && maybeParam.getScope() == functionScope) {
         for (Reference r : references) {
           if ((r.isVarDeclaration() || r.isHoistedFunction())
-              && !r.getNode().equals(v.getNameNode())) {
+              && r.getNode() != v.getNameNode()) {
             compiler.report(JSError.make(r.getNode(), REDECLARED_VARIABLE, v.name));
           }
         }
@@ -319,9 +340,14 @@ class VariableReferenceCheck implements HotSwapCompilerPass {
           if (!referenceNode.isFromExterns()) {
             // Special case to deal with var goog = goog || {}. Note that
             // let x = x || {} is illegal, just like var y = x || {}; let x = y;
-            Node grandparent = reference.getGrandparent();
-            if ((v.isVar() && grandparent.isName() && grandparent.getString().equals(v.name))) {
-              continue;
+            if (v.isVar()) {
+              Node curr = reference.getParent();
+              while (curr.isOr() && curr.getParent().getFirstChild() == curr) {
+                curr = curr.getParent();
+              }
+              if (curr.isName() && curr.getString().equals(v.name)) {
+                continue;
+              }
             }
 
             // Only generate warnings if the scopes do not match in order

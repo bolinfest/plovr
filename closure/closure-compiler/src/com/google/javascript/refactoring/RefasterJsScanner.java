@@ -31,6 +31,7 @@ import com.google.javascript.jscomp.SourceFile;
 import com.google.javascript.jscomp.TypeMatchingStrategy;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.TypeIRegistry;
 
 import java.io.File;
 import java.io.IOException;
@@ -100,6 +101,16 @@ public final class RefasterJsScanner extends Scanner {
     this.templateJs = refasterJsTemplate;
   }
 
+  /**
+   * Clears the RefasterJs templates used for comparison. This function should be called if this
+   * class is going to be used with multiple Compiler objects since type comparison is dependent
+   * on the compiler used to generate the types.
+   */
+  public void clearTemplates() {
+    templates = null;
+    matchedTemplate = null;
+  }
+
   @Override public boolean matches(Node node, NodeMetadata metadata) {
     if (templates == null) {
       try {
@@ -124,12 +135,13 @@ public final class RefasterJsScanner extends Scanner {
         matchedTemplate.afterTemplate.getLastChild(),
         matchedTemplate.matcher.getTemplateNodeToMatchMap());
     Node nodeToReplace = match.getNode();
-    fix.setOriginalMatchedNode(nodeToReplace);
+    fix.attachMatchedNodeInfo(nodeToReplace, match.getMetadata().getCompiler());
     fix.replace(nodeToReplace, newNode, match.getMetadata().getCompiler());
     // If the template is a multiline template, make sure to delete the same number of sibling nodes
     // as the template has.
     Node n = match.getNode().getNext();
-    for (int i = 1; i < matchedTemplate.beforeTemplate.getLastChild().getChildCount(); i++) {
+    int count = matchedTemplate.beforeTemplate.getLastChild().getChildCount();
+    for (int i = 1; i < count; i++) {
       Preconditions.checkNotNull(
           n, "Found mismatched sibling count between before template and matched node.\n"
           + "Template: %s\nMatch: %s",
@@ -235,7 +247,7 @@ public final class RefasterJsScanner extends Scanner {
           + "after_%s function defined.", templateName);
       builder.add(
           new RefasterJsTemplate(
-              compiler,
+              compiler.getTypeIRegistry(),
               typeMatchingStrategy,
               beforeTemplates.get(templateName),
               afterTemplates.get(templateName)));
@@ -255,11 +267,11 @@ public final class RefasterJsScanner extends Scanner {
     final Node afterTemplate;
 
     RefasterJsTemplate(
-        AbstractCompiler compiler,
+        TypeIRegistry typeRegistry,
         TypeMatchingStrategy typeMatchingStrategy,
         Node beforeTemplate,
         Node afterTemplate) {
-      this.matcher = new JsSourceMatcher(compiler, beforeTemplate, typeMatchingStrategy);
+      this.matcher = new JsSourceMatcher(typeRegistry, beforeTemplate, typeMatchingStrategy);
       this.beforeTemplate = beforeTemplate;
       this.afterTemplate = afterTemplate;
     }

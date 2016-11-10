@@ -18,6 +18,7 @@ package com.google.template.soy.tofu.internal;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.AbstractModule;
@@ -26,15 +27,11 @@ import com.google.inject.Injector;
 import com.google.inject.multibindings.Multibinder;
 import com.google.template.soy.SoyFileSetParser.ParseResult;
 import com.google.template.soy.SoyFileSetParserBuilder;
-import com.google.template.soy.basicdirectives.BasicDirectivesModule;
-import com.google.template.soy.basicfunctions.BasicFunctionsModule;
+import com.google.template.soy.SoyModule;
 import com.google.template.soy.data.SoyValue;
 import com.google.template.soy.data.SoyValueHelper;
 import com.google.template.soy.data.restricted.StringData;
-import com.google.template.soy.passes.SharedPassesModule;
-import com.google.template.soy.shared.internal.ErrorReporterModule;
 import com.google.template.soy.shared.internal.FunctionAdapters;
-import com.google.template.soy.shared.internal.SharedModule;
 import com.google.template.soy.shared.restricted.SoyFunction;
 import com.google.template.soy.shared.restricted.SoyJavaFunction;
 import com.google.template.soy.shared.restricted.SoyJavaPrintDirective;
@@ -45,7 +42,6 @@ import com.google.template.soy.soytree.TemplateRegistry;
 
 import junit.framework.TestCase;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -101,23 +97,20 @@ public class TofuRenderVisitorTest extends TestCase {
   }
 
 
-  private static final Injector INJECTOR = Guice.createInjector(
-      new ErrorReporterModule(),
-      new SharedModule(),
-      new SharedPassesModule(),
-      new BasicDirectivesModule(),
-      new BasicFunctionsModule(),
-      new AbstractModule() {
-        @Override
-        protected void configure() {
-          Multibinder<SoyFunction> functionMultibinder =
-              Multibinder.newSetBinder(binder(), SoyFunction.class);
-          functionMultibinder.addBinding().to(Reverse.class);
-          Multibinder<SoyPrintDirective> directiveMultibinder =
-              Multibinder.newSetBinder(binder(), SoyPrintDirective.class);
-          directiveMultibinder.addBinding().to(Caps.class);
-        }
-      });
+  private static final Injector INJECTOR =
+      Guice.createInjector(
+          new SoyModule(),
+          new AbstractModule() {
+            @Override
+            protected void configure() {
+              Multibinder<SoyFunction> functionMultibinder =
+                  Multibinder.newSetBinder(binder(), SoyFunction.class);
+              functionMultibinder.addBinding().to(Reverse.class);
+              Multibinder<SoyPrintDirective> directiveMultibinder =
+                  Multibinder.newSetBinder(binder(), SoyPrintDirective.class);
+              directiveMultibinder.addBinding().to(Caps.class);
+            }
+          });
 
   // TODO: Does this belong in RenderVisitorTest instead?
   public void testLetWithinParam() throws Exception {
@@ -150,15 +143,18 @@ public class TofuRenderVisitorTest extends TestCase {
     // will add its var to the enclosing template's env frame.
 
     StringBuilder outputSb = new StringBuilder();
-    RenderVisitor rv = INJECTOR.getInstance(RenderVisitorFactory.class).create(
-        outputSb,
-        templateRegistry,
-        SoyValueHelper.EMPTY_DICT,
-        null /* ijData */,
-        Collections.<String>emptySet() /* activeDelPackageNames */,
-        null /* msgBundle */,
-        null /* xidRenamingMap */,
-        null /* cssRenamingMap */);
+    RenderVisitor rv =
+        INJECTOR
+            .getInstance(RenderVisitorFactory.class)
+            .create(
+                outputSb,
+                templateRegistry,
+                SoyValueHelper.EMPTY_DICT,
+                null /* ijData */,
+                Predicates.<String>alwaysFalse() /* activeDelPackageSelector */,
+                null /* msgBundle */,
+                null /* xidRenamingMap */,
+                null /* cssRenamingMap */);
     rv.exec(templateRegistry.getBasicTemplate("ns.callerTemplate"));
 
     assertThat(outputSb.toString()).isEqualTo("blah");
@@ -212,7 +208,7 @@ public class TofuRenderVisitorTest extends TestCase {
         registry,
         printDirectives,
         SoyValueHelper.EMPTY_DICT,
-        null /* ijData */,
+        SoyValueHelper.EMPTY_DICT /* ijData */,
         null /* activeDelPackageNames */,
         null /* msgBundle */,
         null /* xidRenamingMap */,

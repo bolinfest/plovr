@@ -25,9 +25,10 @@ import java.util.List;
  * A wrapper around the JavaCC generated GSS parser.
  *
  */
-public class GssParser {
+public class GssParser extends AbstractGssParser {
 
   private final List<SourceCode> sources;
+  private ImmutableList<GssParserException> handledErrors = ImmutableList.of();
 
   public GssParser(List<SourceCode> sources) {
     this.sources = sources;
@@ -38,13 +39,24 @@ public class GssParser {
   }
 
   public CssTree parse() throws GssParserException {
-    SourceCode globalSourceCode = new SourceCode("global", null);
-    CssBlockNode globalBlock =
-        new CssBlockNode(false /* isEnclosedWithBraces */);
-    CssTree tree = new CssTree(globalSourceCode, new CssRootNode(globalBlock));
-    for (SourceCode source : sources) {
-      new GssParserCC(globalBlock, source).parse();
-    }
-    return tree;
+    return parse(false);
+  }
+
+  public CssTree parse(boolean errorHandling) throws GssParserException {
+    ParseResult result = parseInternal(sources, errorHandling);
+    this.handledErrors = result.getHandledErrors();
+    return result.getCssTree();
+  }
+
+  /**
+   * Returns errors from previous call to parse().
+   */
+  public List<GssParserException> getHandledErrors() {
+    return handledErrors;
+  }
+
+  @Override
+  protected GssParserCC getParser() {
+    return new GssParserCC(EMPTY_CHAR_STREAM);
   }
 }

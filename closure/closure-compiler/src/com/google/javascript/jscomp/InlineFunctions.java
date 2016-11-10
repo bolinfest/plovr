@@ -149,8 +149,8 @@ class InlineFunctions implements CompilerPass {
     Preconditions.checkArgument(fn.isFunction());
     Node body = NodeUtil.getFunctionBody(fn);
     int numOfStmsInBody = body.getChildCount();
-    return numOfStmsInBody == 0
-        || numOfStmsInBody == 1 && body.getFirstChild().isReturn();
+    return (!body.hasChildren())
+        || (body.hasOneChild() && body.getFirstChild().isReturn());
   }
 
   private boolean targetSizeAfterInlineExceedsLimit(
@@ -202,7 +202,7 @@ class InlineFunctions implements CompilerPass {
         return;
       }
 
-      switch (n.getType()) {
+      switch (n.getToken()) {
           // Functions expressions in the form of:
           //   var fooFn = function(x) { return ... }
         case VAR:
@@ -225,6 +225,8 @@ class InlineFunctions implements CompilerPass {
             maybeAddFunction(fn, t.getModule());
           }
           break;
+        default:
+          break;
       }
     }
 
@@ -235,7 +237,7 @@ class InlineFunctions implements CompilerPass {
      *   (function(a,b,...){...}).call(this,a,b, ...)
      */
     public void findFunctionExpressions(NodeTraversal t, Node n) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
         // Functions expressions in the form of:
         //   (function(){})();
         case CALL:
@@ -255,6 +257,8 @@ class InlineFunctions implements CompilerPass {
             maybeAddFunction(fn, t.getModule());
             anonFns.put(fnNode, fn.getName());
           }
+          break;
+        default:
           break;
       }
     }
@@ -403,7 +407,7 @@ class InlineFunctions implements CompilerPass {
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
         // Function calls
         case CALL:
           Node child = n.getFirstChild();
@@ -432,6 +436,8 @@ class InlineFunctions implements CompilerPass {
               callback.visitCallSite(t, n, fs);
             }
           }
+          break;
+        default:
           break;
       }
     }
@@ -584,7 +590,7 @@ class InlineFunctions implements CompilerPass {
       if (parent.isNew()) {
         Node target = parent.getFirstChild();
         if (target.isName() && target.getString().equals(
-            SimpleDefinitionFinder.EXTERN_OBJECT_PROPERTY_STRING)) {
+            NodeUtil.EXTERN_OBJECT_PROPERTY_STRING)) {
           // This method is going to be replaced so don't inline it anywhere.
           fs.setInline(false);
         }

@@ -18,14 +18,10 @@ package com.google.template.soy.soytree;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.template.soy.ErrorReporterImpl;
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.internal.BaseUtils;
 import com.google.template.soy.basetree.CopyState;
-import com.google.template.soy.error.ErrorReporter;
-import com.google.template.soy.error.ErrorReporter.Checkpoint;
-import com.google.template.soy.exprparse.ExpressionParser;
-import com.google.template.soy.exprtree.ExprNode;
+import com.google.template.soy.exprparse.SoyParsingContext;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.soytree.SoyNode.ExprHolderNode;
 import com.google.template.soy.soytree.SoyNode.MsgPlaceholderInitialNode;
@@ -61,6 +57,8 @@ public final class PrintNode extends AbstractParentCommandNode<PrintDirectiveNod
   /** The user-supplied placeholder name, or null if not supplied or not applicable. */
   @Nullable private final String userSuppliedPlaceholderName;
 
+  @Nullable private HtmlContext htmlContext;
+
   private PrintNode(
       int id,
       boolean isImplicit,
@@ -83,6 +81,21 @@ public final class PrintNode extends AbstractParentCommandNode<PrintDirectiveNod
     this.isImplicit = orig.isImplicit;
     this.exprUnion = (orig.exprUnion != null) ? orig.exprUnion.copy(copyState) : null;
     this.userSuppliedPlaceholderName = orig.userSuppliedPlaceholderName;
+    this.htmlContext = orig.htmlContext;
+  }
+
+  /**
+   * Gets the HTML source context (typically tag, attribute value, HTML PCDATA, or plain text) which
+   * this node emits in. This affects how the node is escaped (for traditional backends) or how it's
+   * passed to incremental DOM APIs.
+   */
+  public HtmlContext getHtmlContext() {
+    return Preconditions.checkNotNull(htmlContext,
+        "Cannot access HtmlContext before HtmlTransformVisitor");
+  }
+
+  public void setHtmlContext(HtmlContext value) {
+    this.htmlContext = value;
   }
 
 
@@ -235,31 +248,18 @@ public final class PrintNode extends AbstractParentCommandNode<PrintDirectiveNod
      * Returns a new {@link PrintNode} built from this builder's state.
      * @throws java.lang.IllegalStateException if neither {@link #exprText} nor {@link #exprUnion}
      * have been set.
-     * TODO(user): Most node builders report syntax errors to the {@link ErrorReporter}
-     * argument. This builder ignores the error reporter argument because print nodes have
-     * {@linkplain PrintNode#FALLBACK_BASE_PLACEHOLDER_NAME special fallback logic} for when
-     * parsing of the user-supplied placeholder name fails. Such parsing failures should thus not
-     * currently be reported as "errors". It seems possible and desirable to change Soy to consider
-     * these to be errors, but it's not trivial, because it could break templates that currently
-     * compile.
      */
-    public PrintNode build(ErrorReporter unusedForNow) {
-      ExprUnion exprUnion = getOrParseExprUnion();
+    public PrintNode build(SoyParsingContext context) {
+      ExprUnion exprUnion = getOrParseExprUnion(context);
       return new PrintNode(id, isImplicit, exprUnion, sourceLocation, userSuppliedPlaceholderName);
     }
 
-    private ExprUnion getOrParseExprUnion() {
+    private ExprUnion getOrParseExprUnion(SoyParsingContext context) {
       if (exprUnion != null) {
         return exprUnion;
       }
       Preconditions.checkNotNull(exprText);
-      ErrorReporter internal = new ErrorReporterImpl();
-      Checkpoint checkpoint = internal.checkpoint();
-      ExprNode expr = new ExpressionParser(exprText, sourceLocation, internal)
-          .parseExpression();
-      return internal.errorsSince(checkpoint)
-          ? new ExprUnion(exprText)
-          : new ExprUnion(expr);
+      return ExprUnion.parseWithV1Fallback(exprText, sourceLocation, context);
     }
   }
 

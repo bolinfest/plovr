@@ -305,6 +305,7 @@ function NodeIterator() {}
 /**
  * Detach and invalidate the NodeIterator.
  * @see http://www.w3.org/TR/DOM-Level-2-Traversal-Range/traversal.html#Traversal-NodeIterator-detach
+ * @return {undefined}
  */
 NodeIterator.prototype.detach = function() {};
 
@@ -797,6 +798,7 @@ HTMLSelectElement.prototype.selectedIndex;
 
 /**
  * @type {string}
+ * @implicitCast
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-59351919
  */
 HTMLSelectElement.prototype.value;
@@ -943,6 +945,7 @@ HTMLOptionElement.prototype.text;
 
 /**
  * @type {string}
+ * @implicitCast
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-6185554
  */
 HTMLOptionElement.prototype.value;
@@ -1058,6 +1061,7 @@ HTMLInputElement.prototype.useMap;
 
 /**
  * @type {string}
+ * @implicitCast
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-49531485
  */
 HTMLInputElement.prototype.value;
@@ -1158,6 +1162,7 @@ HTMLTextAreaElement.prototype.type;
 
 /**
  * @type {string}
+ * @implicitCast
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-70715579
  */
 HTMLTextAreaElement.prototype.value;
@@ -1558,6 +1563,7 @@ HTMLHRElement.prototype.size;
 
 /**
  * @type {string}
+ * @implicitCast
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-87744198
  */
 HTMLHRElement.prototype.width;
@@ -1829,6 +1835,7 @@ HTMLObjectElement.prototype.form;
 
 /**
  * @type {string}
+ * @implicitCast
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-88925838
  */
 HTMLObjectElement.prototype.height;
@@ -1877,6 +1884,7 @@ HTMLObjectElement.prototype.vspace;
 
 /**
  * @type {string}
+ * @implicitCast
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-38538620
  */
 HTMLObjectElement.prototype.width;
@@ -1951,6 +1959,7 @@ HTMLAppletElement.prototype.codeBase;
 
 /**
  * @type {string}
+ * @implicitCast
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-90184867
  */
 HTMLAppletElement.prototype.height;
@@ -1981,6 +1990,7 @@ HTMLAppletElement.prototype.vspace;
 
 /**
  * @type {string}
+ * @implicitCast
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-16526327
  */
 HTMLAppletElement.prototype.width;
@@ -2195,6 +2205,7 @@ HTMLTableElement.prototype.tHead;
 
 /**
  * @type {string}
+ * @implicitCast
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-77447361
  */
 HTMLTableElement.prototype.width;
@@ -2243,11 +2254,11 @@ HTMLTableElement.prototype.deleteTFoot = function() {};
 HTMLTableElement.prototype.deleteTHead = function() {};
 
 /**
- * @param {number} index
+ * @param {number=} opt_index
  * @return {HTMLElement}
- * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-39872903
+ * @see https://www.w3.org/TR/html5/tabular-data.html#htmltableelement
  */
-HTMLTableElement.prototype.insertRow = function(index) {};
+HTMLTableElement.prototype.insertRow = function(opt_index) {};
 
 /**
  * @constructor
@@ -2301,6 +2312,7 @@ HTMLTableColElement.prototype.vAlign;
 
 /**
  * @type {string}
+ * @implicitCast
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-25196799
  */
 HTMLTableColElement.prototype.width;
@@ -2350,11 +2362,11 @@ HTMLTableSectionElement.prototype.vAlign;
 HTMLTableSectionElement.prototype.deleteRow = function(index) {};
 
 /**
- * @param {number} index
+ * @param {number=} opt_index
  * @return {HTMLElement}
- * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-93995626
+ * @see https://www.w3.org/TR/html5/tabular-data.html#htmltablesectionelement
  */
-HTMLTableSectionElement.prototype.insertRow = function(index) {};
+HTMLTableSectionElement.prototype.insertRow = function(opt_index) {};
 
 /**
  * @constructor
@@ -2488,6 +2500,7 @@ HTMLTableCellElement.prototype.headers;
 
 /**
  * @type {string}
+ * @implicitCast
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-83679212
  */
 HTMLTableCellElement.prototype.height;
@@ -2518,6 +2531,7 @@ HTMLTableCellElement.prototype.vAlign;
 
 /**
  * @type {string}
+ * @implicitCast
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-27480795
  */
 HTMLTableCellElement.prototype.width;
@@ -2629,6 +2643,7 @@ HTMLIFrameElement.prototype.frameBorder;
 
 /**
  * @type {string}
+ * @implicitCast
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-1678118
  */
 HTMLIFrameElement.prototype.height;
@@ -2671,6 +2686,7 @@ HTMLIFrameElement.prototype.src;
 
 /**
  * @type {string}
+ * @implicitCast
  * @see http://www.w3.org/TR/2000/CR-DOM-Level-2-20000510/html.html#ID-67133005
  */
 HTMLIFrameElement.prototype.width;

@@ -20,7 +20,6 @@
  * TODO: Remaining Services:
  *     $cookieStore
  *     $httpBackend
- *     $locale
  *     $rootElement
  *     $rootScope
  *
@@ -184,8 +183,6 @@ angular.lowercase = function(s) {};
  */
 angular.merge = function(dest, srcs) {};
 
-angular.mock = {};
-
 /**
  * @param {string} name
  * @param {Array.<string>=} opt_requires
@@ -197,7 +194,7 @@ angular.module = function(name, opt_requires, opt_configFn) {};
 angular.noop = function() {};
 
 /**
- * @param {Object|Array|Date|string|number} obj
+ * @param {Object|Array|Date|string|number|boolean} obj
  * @param {boolean=} opt_pretty
  * @return {string}
  */
@@ -430,16 +427,12 @@ angular.LinkingFunctions.post = function(scope, iElement, iAttrs, controller) {
  *   name: (string|undefined),
  *   priority: (number|undefined),
  *   replace: (boolean|undefined),
- *   require: (string|Array.<string>|undefined),
+ *   require: (string|Array.<string>|!Object<string, string>|undefined),
  *   restrict: (string|undefined),
  *   scope: (boolean|Object.<string, string>|undefined),
- *   template: (string|
- *       function(!angular.JQLite=,!angular.Attributes=): string|
- *       undefined),
+ *   template: (string|!angular.Injectable|undefined),
  *   templateNamespace: (string|undefined),
- *   templateUrl: (string|
- *       function(!angular.JQLite=,!angular.Attributes=)|
- *       undefined),
+ *   templateUrl: (string|!angular.Injectable|undefined),
  *   terminal: (boolean|undefined),
  *   transclude: (boolean|string|!Object.<string, string>|undefined)
  *   }}
@@ -471,6 +464,8 @@ angular.ComponentController.prototype.$postLink = function() {};
 /** @param {!Object<!angular.Change>} changesObj */
 angular.ComponentController.prototype.$onChanges = function(changesObj) {};
 
+angular.ComponentController.prototype.$doCheck = function() {};
+
 angular.ComponentController.prototype.$onDestroy = function() {};
 
 
@@ -490,16 +485,12 @@ angular.Component.prototype.controller;
 angular.Component.prototype.controllerAs;
 
 /**
- * @type {string|
- *        function(!angular.JQLite=,!angular.Attributes=)|
- *        undefined}
+ * @type {string|!angular.Injectable|undefined}
  */
 angular.Component.prototype.template;
 
 /**
- * @type {string|
- *        function(!angular.JQLite=,!angular.Attributes=)|
- *        undefined}
+ * @type {string|!angular.Injectable|undefined}
  */
 angular.Component.prototype.templateUrl;
 
@@ -541,7 +532,7 @@ angular.JQLite.prototype.append = function(element) {};
 
 /**
  * @param {string} name
- * @param {(string|boolean)=} opt_value
+ * @param {(string|boolean|null)=} opt_value
  * @return {!angular.JQLite|string|boolean}
  */
 angular.JQLite.prototype.attr = function(name, opt_value) {};
@@ -1306,6 +1297,12 @@ angular.$compileProvider.prototype.aHrefSanitizationWhitelist = function(
 angular.$compileProvider.prototype.imgSrcSanitizationWhitelist = function(
     opt_expression) {};
 
+/**
+ * @param {string} name
+ * @param {!angular.Component} options
+ */
+angular.$compileProvider.prototype.component = function(name, options) {};
+
 /******************************************************************************
  * $cacheFactory Service
  *****************************************************************************/
@@ -1783,6 +1780,20 @@ angular.$interval_;
  * @type {function(!angular.$q.Promise):boolean}
  */
 angular.$interval_.cancel = function(promise) {};
+
+/******************************************************************************
+ * $locale Service
+ *****************************************************************************/
+
+/**
+ * @interface
+ */
+angular.$locale = function() {};
+
+/**
+ * @type {string}
+ */
+angular.$locale.prototype.id;
 
 /******************************************************************************
  * $location Service
@@ -2271,7 +2282,7 @@ angular.$routeProvider.prototype.when = function(path, route) {};
  *   controller: (angular.Injectable|string|undefined),
  *   controllerAs: (string|undefined),
  *   template: (string|undefined),
- *   templateUrl: (string|function(!Object.<string,string>=)|undefined),
+ *   templateUrl: (string|!Object|function(!Object.<string,string>=)|undefined),
  *   resolve: (Object.<string, (
  *       string|angular.Injectable|!angular.$q.Promise
  *       )>|undefined),
@@ -2291,7 +2302,7 @@ angular.$routeProvider.Params.controllerAs;
 /** @type {string} */
 angular.$routeProvider.Params.template;
 
-/** @type {string|function(!Object.<string,string>=)} */
+/** @type {string|!Object|function(!Object.<string,string>=)} */
 angular.$routeProvider.Params.templateUrl;
 
 /** @type {Object.<string, (string|angular.Injectable|!angular.$q.Promise)>} */

@@ -28,21 +28,22 @@ import java.util.List;
  * Default implementation of the MutatingVisitController. The controller is
  * mutating or not depending on a flag passed as a parameter to the constructor.
  *
+ * @author oana@google.com (Oana Florescu)
  */
 class DefaultVisitController implements MutatingVisitController {
 
   /** The (sub)tree to be visited. */
-  private CssNode subtree;
+  private final CssNode subtree;
 
   /** Whether mutations of the tree are allowed or not. */
-  private boolean allowMutating;
+  private final boolean allowMutating;
 
   /** The visitor of the tree. */
   @VisibleForTesting
   CssTreeVisitor visitor;
 
   /** The stack of states for the controller. */
-  private StateStack stateStack = new StateStack();
+  private final StateStack stateStack = new StateStack();
 
   /** Whether the visit was required to stop. */
   @SuppressWarnings("unused")
@@ -211,7 +212,7 @@ class DefaultVisitController implements MutatingVisitController {
 
   /**
    * Base class for VisitStates which control visits of {@link CssNodesListNode}
-   * children and can replace currently visited node with replacement nodes.
+   * children and can replace currently visited node with replacement nodes.
    *
    * @param <T> type of the children CSS nodes that can be used as a replacement
    *     for currently visited block node
@@ -371,6 +372,8 @@ class DefaultVisitController implements MutatingVisitController {
 
     private boolean visitedChildren = false;
 
+    private boolean shouldVisitChildren = true;
+
     RootVisitImportBlockState(CssRootNode root, CssImportBlockNode block) {
       this.root = root;
       this.block = block;
@@ -379,7 +382,7 @@ class DefaultVisitController implements MutatingVisitController {
     @Override
     public void doVisit() {
       if (!visitedChildren) {
-        visitor.enterImportBlock(block);
+        shouldVisitChildren = visitor.enterImportBlock(block);
       } else {
         visitor.leaveImportBlock(block);
       }
@@ -387,9 +390,8 @@ class DefaultVisitController implements MutatingVisitController {
 
     @Override
     public void transitionToNextState() {
-      if (!visitedChildren) {
-        stateStack.push(
-            new VisitImportBlockChildrenState(block));
+      if (!visitedChildren && shouldVisitChildren) {
+        stateStack.push(new VisitImportBlockChildrenState(block));
         visitedChildren = true;
       } else {
         stateStack.transitionTo(
@@ -424,8 +426,52 @@ class DefaultVisitController implements MutatingVisitController {
 
     @Override
     public void doVisit() {
-      visitor.enterImportRule(node);
-      visitor.leaveImportRule(node);
+      if (visitor.enterImportRule(node)) {
+        visitor.leaveImportRule(node);
+      }
+    }
+
+    @Override
+    public void transitionToNextState() {
+      stateStack.pop();
+    }
+  }
+
+
+  @VisibleForTesting
+  class VisitProvideState extends BaseVisitState<CssNode> {
+
+    private final CssProvideNode node;
+
+    VisitProvideState(CssProvideNode node) {
+      this.node = node;
+    }
+
+    @Override
+    public void doVisit() {
+      visitor.enterProvideNode(node);
+      visitor.leaveProvideNode(node);
+    }
+
+    @Override
+    public void transitionToNextState() {
+      stateStack.pop();
+    }
+  }
+
+  @VisibleForTesting
+  class VisitRequireState extends BaseVisitState<CssNode> {
+
+    private final CssRequireNode node;
+
+    VisitRequireState(CssRequireNode node) {
+      this.node = node;
+    }
+
+    @Override
+    public void doVisit() {
+      visitor.enterRequireNode(node);
+      visitor.leaveRequireNode(node);
     }
 
     @Override
@@ -607,7 +653,7 @@ class DefaultVisitController implements MutatingVisitController {
   private class VisitMediaTypeListDelimiterState
       extends BaseVisitState<CssNode> {
 
-    private CssNodesListNode<? extends CssNode> node;
+    private final CssNodesListNode<? extends CssNode> node;
 
     public VisitMediaTypeListDelimiterState(
         CssNodesListNode<? extends CssNode> node) {
@@ -805,7 +851,7 @@ class DefaultVisitController implements MutatingVisitController {
   @VisibleForTesting
   class VisitConditionalRuleChildrenState extends VisitReplaceChildrenState<CssNode> {
 
-    VisitConditionalRuleChildrenState(CssBlockNode block) {
+    VisitConditionalRuleChildrenState(CssAbstractBlockNode block) {
       super(block);
     }
   }
@@ -1246,6 +1292,12 @@ class DefaultVisitController implements MutatingVisitController {
         stateStack.pop();
       }
     }
+
+    @Override
+    public void removeCurrentChild() {
+      stateStack.pop();
+      stateStack.getTop().removeCurrentChild();
+    }
   }
 
   @VisibleForTesting
@@ -1394,7 +1446,7 @@ class DefaultVisitController implements MutatingVisitController {
   class VisitCompositeValueState extends BaseVisitState<CssValueNode> {
 
     private final CssCompositeValueNode node;
-    private List<CssValueNode> children;
+    private final List<CssValueNode> children;
     private int currentIndex = -1;
     private boolean doNotIncreaseIndex = false;
     private boolean visitChildren = true;
@@ -1431,6 +1483,16 @@ class DefaultVisitController implements MutatingVisitController {
       stateStack.push(createVisitState(children.get(currentIndex), this));
       intervalueStateIsNext = true;
       return;
+    }
+
+    @Override
+    public void removeCurrentChild() {
+      children.remove(currentIndex);
+      intervalueStateIsNext = false;
+      doNotIncreaseIndex = true;
+      if (currentIndex == children.size()) {
+        stateStack.pop();
+      }
     }
 
     @Override
@@ -1526,19 +1588,73 @@ class DefaultVisitController implements MutatingVisitController {
     }
 
     @Override
+    public void removeCurrentChild() {
+      node.setArguments(new CssFunctionArgumentsNode());
+    }
+
+    @Override
     @SuppressWarnings("unchecked")
     public void removeCurrentNodeCalled() {
       // If the function is a singleton, remove the nearest declaration that
       // contains it.
-      CssNodesListNode<CssValueNode> parent =
-          (CssNodesListNode<CssValueNode>) node.getParent();
-      if (parent.numChildren() == 1) {
-        while (!(stateStack.getTop() instanceof VisitDeclarationState)) {
-          stateStack.pop();
-        }
-      }
-      stateStack.pop();
+      popToNonDegenerateState();
       stateStack.getTop().removeCurrentChild();
+    }
+
+    /**
+     * Exit states until we reach the nearest ancestor that will not
+     * be made degenerate by the removal of its current child.
+     *
+     * <p>E.g., if this node's parent's role is to represent a collection of
+     * children, and this node has no siblings, then we want to remove
+     * the parent, and the transitive closure. So for example if we have
+     *   div {
+     *     background: url('http://google.com/logo')
+     *   }
+     * and we remove the url function node, then we should not leave
+     *   div {
+     *     background:
+     *   }
+     * but rather should remove background as well.
+     */
+    private void popToNonDegenerateState() {
+      for (CssNode child = node; true; child = child.getParent()) {
+        // will removing the child leave the tree in a bad state?
+        boolean otherSiblingsExist;
+        if (child instanceof CssDeclarationNode) {
+          // it's just too hard, so stop removing ancestors if we
+          // get this high.
+          otherSiblingsExist = true;
+        } else if (child instanceof CssNodesListNode) {
+          otherSiblingsExist = ((CssNodesListNode) child).numChildren() > 1;
+        } else if (child instanceof CssCompositeValueNode) {
+          otherSiblingsExist =
+              ((CssCompositeValueNode) child).getValues().size() > 1;
+        } else if (child instanceof CssDeclarationNode) {
+          // there's always just one CssPropertyValueNode
+          otherSiblingsExist = false;
+        } else if (child instanceof CssDeclarationNode) {
+          otherSiblingsExist = false;
+        } else if (child instanceof CssFunctionNode) {
+          otherSiblingsExist = false;
+        } else {
+          break;
+        }
+        if (otherSiblingsExist) {
+          break;
+        }
+        // TODO(user): refactor the preceding giant conditional branch to
+        // use dynamic dispatch. Maybe each node state should just have a
+        // locally-sane predicate to verify that its own properties are in
+        // good shape. Then we could just remove and pop our way up to
+        // sanity.
+        // TODO(user): verify that the stateStack.getTop() corresponds to
+        // node. I think the only VisitState implementation whose ctor does
+        // not demand a corresponding CssNode is the IntervalueState, so we
+        // can add a method to get the node and then bail on this loop if
+        // the result is either null or inconsistent with the current child.
+        stateStack.pop();
+      }
     }
   }
 
@@ -1635,6 +1751,39 @@ class DefaultVisitController implements MutatingVisitController {
 
     VisitComponentChildrenState(CssBlockNode block) {
       super(block);
+    }
+  }
+
+  @VisibleForTesting
+  class VisitForLoopRuleState extends BaseVisitState<CssNode> {
+
+    private final CssForLoopRuleNode node;
+
+    private boolean visitedChildren = false;
+
+    private boolean shouldVisitChildren = true;
+
+    VisitForLoopRuleState(CssForLoopRuleNode node) {
+      this.node = node;
+    }
+
+    @Override
+    public void doVisit() {
+      if (!visitedChildren) {
+        shouldVisitChildren = visitor.enterForLoop(node);
+      } else {
+        visitor.leaveForLoop(node);
+      }
+    }
+
+    @Override
+    public void transitionToNextState() {
+      if (!visitedChildren && shouldVisitChildren) {
+        stateStack.push(new VisitBlockChildrenState(node.getBlock()));
+        visitedChildren = true;
+      } else {
+        stateStack.pop();
+      }
     }
   }
 
@@ -1912,6 +2061,16 @@ class DefaultVisitController implements MutatingVisitController {
   }
 
   private VisitState<? extends CssNode> createVisitStateInternal(CssNode child) {
+    // VisitProvideState
+    if (child instanceof CssProvideNode) {
+      return new VisitProvideState((CssProvideNode) child);
+    }
+
+    // VisitRequireState
+    if (child instanceof CssRequireNode) {
+      return new VisitRequireState((CssRequireNode) child);
+    }
+
     // VisitUnknownAtRuleBlockState
     if (child instanceof CssMediaRuleNode) {
       return new VisitMediaRuleState((CssMediaRuleNode) child);
@@ -1954,6 +2113,10 @@ class DefaultVisitController implements MutatingVisitController {
     // VisitDeclarationBlockState
     if (child instanceof CssMixinNode) {
       return new VisitMixinState((CssMixinNode) child);
+    }
+
+    if (child instanceof CssForLoopRuleNode) {
+      return new VisitForLoopRuleState((CssForLoopRuleNode) child);
     }
 
     // VisitBlockChildrenState

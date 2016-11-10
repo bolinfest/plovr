@@ -105,6 +105,11 @@ final class CodeBuilder extends MethodVisitor {
     adapter.push(value);
   }
 
+  /** See {@link GeneratorAdapter#push(Type)} */
+  public void pushNull() {
+    adapter.visitInsn(Opcodes.ACONST_NULL);
+  }
+
   /** See {@link GeneratorAdapter#loadThis()} */
   public void loadThis() {
     adapter.loadThis();
@@ -253,6 +258,11 @@ final class CodeBuilder extends MethodVisitor {
   /** See {@link GeneratorAdapter#putField(Type, String, Type)} */
   public void putField(Type owner, String name, Type type) {
     adapter.putField(owner, name, type);
+  }
+
+  /** See {@link GeneratorAdapter#putStatic(Type, String, Type)} */
+  public void putStatic(Type owner, String name, Type type) {
+    adapter.putStatic(owner, name, type);
   }
 
   /** See {@link GeneratorAdapter#invokeVirtual(Type, Method)} */

@@ -21,7 +21,6 @@ import com.google.common.collect.Iterables;
 import com.google.javascript.jscomp.graph.GraphvizGraph;
 import com.google.javascript.jscomp.graph.LinkedDirectedGraph;
 import com.google.javascript.rhino.Node;
-
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
@@ -35,8 +34,8 @@ import java.util.Set;
  */
 public abstract class PassConfig {
 
-  // Used by subclasses in this package.
-  final CompilerOptions options;
+  // Used by the subclasses.
+  protected final CompilerOptions options;
 
   /**
    * A memoized version of scopeCreator. It must be memoized so that
@@ -107,6 +106,11 @@ public abstract class PassConfig {
    * not to have any processing - specifically introduced to support goog.module() usage.
    */
   protected List<PassFactory> getWhitespaceOnlyPasses() {
+    return Collections.emptyList();
+  }
+
+  /** Gets the transpilation passes */
+  protected List<PassFactory> getTranspileOnlyPasses() {
     return Collections.emptyList();
   }
 
@@ -181,14 +185,13 @@ public abstract class PassConfig {
    */
   final TypeCheck makeTypeCheck(AbstractCompiler compiler) {
     return new TypeCheck(
-        compiler,
-        compiler.getReverseAbstractInterpreter(),
-        compiler.getTypeRegistry(),
-        topScope,
-        typedScopeCreator,
-        options.reportMissingOverride)
-        .reportMissingProperties(options.enables(
-            DiagnosticGroup.forType(TypeCheck.INEXISTENT_PROPERTY)));
+            compiler,
+            compiler.getReverseAbstractInterpreter(),
+            compiler.getTypeRegistry(),
+            topScope,
+            typedScopeCreator)
+        .reportMissingProperties(
+            !options.disables(DiagnosticGroup.forType(TypeCheck.INEXISTENT_PROPERTY)));
   }
 
   /**

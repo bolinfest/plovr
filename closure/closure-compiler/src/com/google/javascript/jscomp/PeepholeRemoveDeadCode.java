@@ -23,7 +23,6 @@ import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.jstype.TernaryValue;
-
 import javax.annotation.Nullable;
 
 /**
@@ -40,7 +39,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
 
   @Override
   Node optimizeSubtree(Node subtree) {
-    switch(subtree.getType()) {
+    switch (subtree.getToken()) {
       case ASSIGN:
         return tryFoldAssignment(subtree);
       case COMMA:
@@ -129,7 +128,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
     if (left.isName()
         && right.isName()
         && left.getString().equals(right.getString())) {
-      subtree.getParent().replaceChild(subtree, right.detachFromParent());
+      subtree.getParent().replaceChild(subtree, right.detach());
       reportCodeChange();
       return right;
     }
@@ -150,7 +149,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
         parent.replaceChild(subtree, replacement);
         subtree = replacement;
       } else {
-        subtree.detachFromParent();
+        subtree.detach();
         subtree = null;
       }
     }
@@ -177,7 +176,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
     Node result = n;
 
     // Simplify the results of conditional expressions
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case HOOK:
         Node trueNode = trySimplifyUnusedResult(n.getSecondChild());
         Node falseNode = trySimplifyUnusedResult(n.getLastChild());
@@ -188,10 +187,10 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
         //    x() ? 1 : 1 --> x()
         //    x ? 1 : 1 --> null
         if (trueNode == null && falseNode != null) {
-          n.setType(Token.OR);
+          n.setToken(Token.OR);
           Preconditions.checkState(n.getChildCount() == 2, n);
         } else if (trueNode != null && falseNode == null) {
-          n.setType(Token.AND);
+          n.setToken(Token.AND);
           Preconditions.checkState(n.getChildCount() == 2, n);
         } else if (trueNode == null && falseNode == null) {
           result = trySimplifyUnusedResult(n.getFirstChild());
@@ -246,7 +245,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
             next = c.getNext();
             c = trySimplifyUnusedResult(c);
             if (c != null) {
-              c.detachFromParent();
+              c.detach();
               if (resultList == null)  {
                 // The first side-effect can be used stand-alone.
                 resultList = c;
@@ -274,7 +273,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
       } else {
         // A new COMMA expression may not have an existing parent.
         if (result.getParent() != null) {
-          result.detachFromParent();
+          result.detach();
         }
         n.getParent().replaceChild(n, result);
       }
@@ -298,7 +297,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
 
   private void removeIfUnnamedBreak(Node maybeBreak) {
     if (maybeBreak != null && maybeBreak.isBreak() && !maybeBreak.hasChildren()) {
-      maybeBreak.detachFromParent();
+      maybeBreak.detach();
       reportCodeChange();
     }
   }
@@ -316,7 +315,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
       caseBlock.addChildToFront(IR.exprResult(n.removeFirstChild()).srcref(n));
     }
     caseBlock.setIsSyntheticBlock(false);
-    n.getParent().replaceChild(n, caseBlock.detachFromParent());
+    n.getParent().replaceChild(n, caseBlock.detach());
     reportCodeChange();
     return caseBlock;
   }
@@ -491,7 +490,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
       if (block.hasChildren()) {
         for (Node blockChild : block.children()) {
           // If this is a block with a labelless break, it is useless.
-          switch (blockChild.getType()) {
+          switch (blockChild.getToken()) {
             case BREAK:
               // A case with a single labelless break is useless if it is the default case or if
               // there is no default case. A break to a different control structure isn't useless.
@@ -519,7 +518,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
    * @return Whether the node is an obvious control flow exit.
    */
   private static boolean isExit(Node n) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case BREAK:
       case CONTINUE:
       case RETURN:
@@ -687,11 +686,13 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
    */
   private static boolean isExprConditional(Node n) {
     if (n.isExprResult()) {
-      switch (n.getFirstChild().getType()) {
+      switch (n.getFirstChild().getToken()) {
         case HOOK:
         case AND:
         case OR:
           return true;
+        default:
+          break;
       }
     }
     return false;
@@ -717,7 +718,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
     Preconditions.checkState(n.isIf(), n);
     Node parent = n.getParent();
     Preconditions.checkNotNull(parent);
-    Token type = n.getType();
+    Token type = n.getToken();
     Node cond = n.getFirstChild();
     Node thenBody = cond.getNext();
     Node elseBody = thenBody.getNext();
@@ -906,7 +907,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
     if (!mayHaveSideEffects(cond)) {
       NodeUtil.removeChild(parent, n);
     } else {
-      Node statement = IR.exprResult(cond.detachFromParent())
+      Node statement = IR.exprResult(cond.detach())
           .useSourceInfoIfMissingFrom(cond);
       if (parent.isLabel()) {
         Node block = IR.block();
@@ -946,7 +947,7 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
     Node parent =  n.getParent();
     parent.replaceChild(n, block);
     if (mayHaveSideEffects(cond)) {
-      Node condStatement = IR.exprResult(cond.detachFromParent())
+      Node condStatement = IR.exprResult(cond.detach())
           .srcref(cond);
       parent.addChildAfter(condStatement, block);
     }
@@ -967,9 +968,9 @@ class PeepholeRemoveDeadCode extends AbstractPeepholeOptimization {
       Node cond = NodeUtil.getConditionExpression(n);
       Node whileNode =
           IR.forNode(IR.empty().srcref(n),
-                     cond.detachFromParent(),
+                     cond.detach(),
                      IR.empty().srcref(n),
-                     body.detachFromParent())
+                     body.detach())
           .srcref(n);
       n.getParent().replaceChild(n, whileNode);
       reportCodeChange();

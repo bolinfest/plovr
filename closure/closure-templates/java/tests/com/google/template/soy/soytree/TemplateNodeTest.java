@@ -26,6 +26,7 @@ import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.error.FormattingErrorReporter;
+import com.google.template.soy.exprparse.SoyParsingContext;
 import com.google.template.soy.exprtree.BooleanNode;
 import com.google.template.soy.exprtree.GlobalNode;
 import com.google.template.soy.exprtree.IntegerNode;
@@ -113,25 +114,25 @@ public class TemplateNodeTest extends TestCase {
             new DeclInfo(
                 Type.PARAM,
                 OptionalStatus.REQUIRED,
-                "goo   :   list<int>",
+                "goo", "list<int>",
                 null /* soyDoc */,
                 SourceLocation.UNKNOWN),
             new DeclInfo(
                 Type.PARAM,
                 OptionalStatus.REQUIRED,
-                "moo: string",
+                "moo", "string",
                 "Something milky.",
                 SourceLocation.UNKNOWN),
             new DeclInfo(
                 Type.PARAM,
                 OptionalStatus.OPTIONAL,
-                "boo: string",
+                "boo", "string",
                 "Something scary.",
                 SourceLocation.UNKNOWN),
             new DeclInfo(
                 Type.INJECTED_PARAM,
                 OptionalStatus.REQUIRED,
-                "zoo: string",
+                "zoo", "string",
                 "Something else.",
                 SourceLocation.UNKNOWN))
         .build();
@@ -182,34 +183,6 @@ public class TemplateNodeTest extends TestCase {
 
   public void testInvalidParamNames() {
     FormattingErrorReporter errorReporter = new FormattingErrorReporter();
-    templateBasicNode(errorReporter)
-        .setId(0)
-        .setCmdText(".boo")
-        .setHeaderDecls(
-            new DeclInfo(
-                Type.PARAM,
-                OptionalStatus.REQUIRED,
-                "33: int",
-                null /* soyDoc */,
-                SourceLocation.UNKNOWN))
-        .build();
-    assertThat(errorReporter.getErrorMessages()).hasSize(1);
-    assertThat(errorReporter.getErrorMessages().get(0)).contains("Invalid @param name '33'");
-
-    errorReporter = new FormattingErrorReporter();
-    templateBasicNode(errorReporter)
-        .setId(0)
-        .setCmdText(".boo")
-        .setHeaderDecls(
-            new DeclInfo(
-                Type.PARAM,
-                OptionalStatus.REQUIRED,
-                "f-oo: int",
-                null /* soyDoc */,
-                SourceLocation.UNKNOWN))
-        .build();
-    assertThat(errorReporter.getErrorMessages()).hasSize(1);
-    assertThat(errorReporter.getErrorMessages().get(0)).contains("Invalid @param name 'f-oo'");
 
     errorReporter = new FormattingErrorReporter();
     templateBasicNode(errorReporter)
@@ -228,7 +201,7 @@ public class TemplateNodeTest extends TestCase {
             new DeclInfo(
                 Type.PARAM,
                 OptionalStatus.REQUIRED,
-                "ij: int",
+                "ij", "int",
                 null /* soyDoc */,
                 SourceLocation.UNKNOWN))
         .build();
@@ -237,67 +210,6 @@ public class TemplateNodeTest extends TestCase {
         "Invalid param name 'ij' ('ij' is for injected data).");
   }
 
-  public void testInvalidParamTexts() {
-    FormattingErrorReporter errorReporter = new FormattingErrorReporter();
-    templateBasicNode(errorReporter)
-        .setId(0)
-        .setCmdText(".boo")
-        .setHeaderDecls(
-            new DeclInfo(
-                Type.PARAM,
-                OptionalStatus.REQUIRED,
-                "foo",
-                null /* soyDoc */,
-                SourceLocation.UNKNOWN))
-        .build();
-    assertThat(errorReporter.getErrorMessages()).hasSize(1);
-    assertThat(errorReporter.getErrorMessages().get(0)).contains("Invalid @param text 'foo'");
-
-    errorReporter = new FormattingErrorReporter();
-    templateBasicNode(errorReporter)
-        .setId(0)
-        .setCmdText(".boo")
-        .setHeaderDecls(
-            new DeclInfo(
-                Type.PARAM,
-                OptionalStatus.REQUIRED,
-                "foo:",
-                null /* soyDoc */,
-                SourceLocation.UNKNOWN))
-        .build();
-    assertThat(errorReporter.getErrorMessages()).hasSize(1);
-    assertThat(errorReporter.getErrorMessages().get(0)).contains("Invalid @param text 'foo:'");
-
-    errorReporter = new FormattingErrorReporter();
-    templateBasicNode(errorReporter)
-        .setId(0)
-        .setCmdText(".boo")
-        .setHeaderDecls(
-            new DeclInfo(
-                Type.PARAM,
-                OptionalStatus.REQUIRED,
-                ": int",
-                null /* soyDoc */,
-                SourceLocation.UNKNOWN))
-        .build();
-    assertThat(errorReporter.getErrorMessages()).hasSize(1);
-    assertThat(errorReporter.getErrorMessages().get(0)).contains("Invalid @param text ': int'");
-
-    errorReporter = new FormattingErrorReporter();
-    templateBasicNode(errorReporter)
-        .setId(0)
-        .setCmdText(".boo")
-        .setHeaderDecls(
-            new DeclInfo(
-                Type.PARAM,
-                OptionalStatus.REQUIRED,
-                "foo int",
-                null /* soyDoc */,
-                SourceLocation.UNKNOWN))
-        .build();
-    assertThat(errorReporter.getErrorMessages()).hasSize(1);
-    assertThat(errorReporter.getErrorMessages().get(0)).contains("Invalid @param text 'foo int'");
-  }
 
   public void testParamsAlreadyDeclared() {
     FormattingErrorReporter errorReporter = new FormattingErrorReporter();
@@ -317,19 +229,19 @@ public class TemplateNodeTest extends TestCase {
             new DeclInfo(
                 Type.PARAM,
                 OptionalStatus.REQUIRED,
-                "goo: null",
+                "goo", "null",
                 "Something slimy.",
                 SourceLocation.UNKNOWN),
             new DeclInfo(
                 Type.PARAM,
                 OptionalStatus.REQUIRED,
-                "foo: string",
+                "foo", "string",
                 "Something random.",
                 SourceLocation.UNKNOWN),
             new DeclInfo(
                 Type.PARAM,
                 OptionalStatus.REQUIRED,
-                "foo: int",
+                "foo", "int",
                 null /* soyDoc */,
                 SourceLocation.UNKNOWN))
         .build();
@@ -345,7 +257,7 @@ public class TemplateNodeTest extends TestCase {
             new DeclInfo(
                 Type.PARAM,
                 OptionalStatus.REQUIRED,
-                "foo: string",
+                "foo", "string",
                 "Something else.",
                 SourceLocation.UNKNOWN))
         .build();
@@ -355,38 +267,41 @@ public class TemplateNodeTest extends TestCase {
 
   public void testCommandTextErrors() {
     FormattingErrorReporter errorReporter = new FormattingErrorReporter();
-    try {
-      new TemplateBasicNodeBuilder(
-          SIMPLE_FILE_HEADER_INFO, SourceLocation.UNKNOWN, errorReporter, TYPE_REGISTRY)
-          .setId(0)
-          .setCmdText("autoescape=\"deprecated-noncontextual\"")
-          .setSoyDoc("/***/")
-          .build();
-      fail();
-    } catch (IllegalStateException e) {
-      assertThat(errorReporter.getErrorMessages()).hasSize(1);
-      assertThat(errorReporter.getErrorMessages().get(0)).contains("Missing template name");
-    }
+    new TemplateBasicNodeBuilder(
+            SIMPLE_FILE_HEADER_INFO, SourceLocation.UNKNOWN, errorReporter, TYPE_REGISTRY)
+        .setId(0)
+        .setCmdText("autoescape=\"deprecated-noncontextual\"")
+        .setSoyDoc("/***/")
+        .build();
+    assertThat(errorReporter.getErrorMessages()).containsExactly("Missing template name.");
 
-    try {
-      templateBasicNode()
-          .setId(0).setCmdText(".foo autoescape=\"strict").setSoyDoc("/***/").build();
-      fail();
-    } catch (IllegalStateException e) {
-      assertThat(e.getMessage()).contains(
-          "Malformed attributes in 'template' command text (autoescape=\"strict).");
-    }
-    try {
-      templateBasicNode()
-          .setId(0).setCmdText(".foo autoescape=\"false\"").setSoyDoc("/***/").build();
-      fail();
-    } catch (IllegalStateException e) {
-      assertThat(e.getMessage()).contains(
-          "Invalid value for attribute 'autoescape' in 'template' command text "
-              + "(autoescape=\"false\"). Valid values are "
-              + "[deprecated-noautoescape, deprecated-noncontextual, deprecated-contextual, "
-              + "strict].");
-    }
+    errorReporter = new FormattingErrorReporter();
+    templateBasicNode(errorReporter)
+        .setId(0)
+        .setCmdText(".foo autoescape=\"strict")
+        .setSoyDoc("/***/")
+        .build();
+    assertThat(errorReporter.getErrorMessages())
+        .containsExactly("Malformed attributes in 'template' command text (autoescape=\"strict).");
+
+    errorReporter = new FormattingErrorReporter();
+    templateBasicNode(errorReporter)
+        .setId(0)
+        .setCmdText(".foo autoescape=\"false\"")
+        .setSoyDoc("/***/")
+        .build();
+    assertThat(errorReporter.getErrorMessages())
+        .containsExactly(
+            "Invalid value for attribute 'autoescape' in 'template' command text "
+                + "(autoescape=\"false\"). Valid values are "
+                + "[deprecated-noncontextual, deprecated-contextual, strict].");
+
+    // assertion inside no-arg templateBasicNode() is that there is no exception.
+    templateBasicNode()
+        .setId(0)
+        .setCmdText(".foo autoescape =\n\t\r \"strict\"")
+        .setSoyDoc("/***/")
+        .build();
   }
 
   public void testValidStrictTemplates() {
@@ -468,7 +383,6 @@ public class TemplateNodeTest extends TestCase {
     assertEquals("namespace.boo", node.getDelTemplateName());
     assertEquals("abc", node.getDelTemplateVariant());
     assertEquals("abc", node.getDelTemplateKey().variant());
-    assertNull(node.getDelTemplateKey().variantExpr());
 
     // Variant is a global, that was not yet resolved.
     node = templateDelegateNode()
@@ -477,8 +391,8 @@ public class TemplateNodeTest extends TestCase {
         .setSoyDoc("/** Boo. */")
         .build();
     assertEquals("namespace.boo", node.getDelTemplateName());
-    assertNull(node.getDelTemplateVariant());
-    assertEquals("test.GLOBAL_CONSTANT", node.getDelTemplateKey().variantExpr());
+    assertEquals("test.GLOBAL_CONSTANT", node.getDelTemplateVariant());
+    assertEquals("test.GLOBAL_CONSTANT", node.getDelTemplateKey().variant());
     // Verify the global expression.
     List<ExprUnion> exprUnions = node.getAllExprUnions();
     assertEquals(1, exprUnions.size());
@@ -615,7 +529,7 @@ public class TemplateNodeTest extends TestCase {
   }
 
   public void testToSourceString() {
-    ErrorReporter boom = ExplodingErrorReporter.get();
+    SoyParsingContext boom = SoyParsingContext.exploding();
     TemplateNode tn = templateBasicNode()
         .setId(0)
         .setCmdText(".boo")
@@ -631,13 +545,13 @@ public class TemplateNodeTest extends TestCase {
             new DeclInfo(
                 Type.PARAM,
                 OptionalStatus.REQUIRED,
-                "moo: bool",
+                "moo", "bool",
                 "Something milky.",
                 SourceLocation.UNKNOWN),
             new DeclInfo(
                 Type.PARAM,
                 OptionalStatus.REQUIRED,
-                "too   :   string|null",
+                "too", "string|null",
                 null /* soyDoc */,
                 SourceLocation.UNKNOWN))
         .build();

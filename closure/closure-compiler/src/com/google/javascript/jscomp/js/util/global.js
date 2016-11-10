@@ -18,7 +18,8 @@
  * @fileoverview Runtime code to store the global object.
  */
 'require base';
-'declare global window';
+'declare global';
+'declare window';
 
 
 /**
@@ -29,7 +30,7 @@
 $jscomp.getGlobal = function(maybeGlobal) {
   return (typeof window != 'undefined' && window === maybeGlobal) ?
       maybeGlobal :
-      (typeof global != 'undefined') ? global : maybeGlobal;
+      (typeof global != 'undefined' && global != null) ? global : maybeGlobal;
 };
 
 

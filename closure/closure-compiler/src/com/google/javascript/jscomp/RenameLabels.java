@@ -177,7 +177,7 @@ final class RenameLabels implements CompilerPass {
      */
     @Override
     public void visit(NodeTraversal nodeTraversal, Node node, Node parent) {
-      switch (node.getType()) {
+      switch (node.getToken()) {
         case LABEL:
           visitLabel(node, parent);
           break;
@@ -185,6 +185,8 @@ final class RenameLabels implements CompilerPass {
         case BREAK:
         case CONTINUE:
           visitBreakOrContinue(node);
+          break;
+        default:
           break;
       }
     }

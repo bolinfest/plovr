@@ -19,11 +19,12 @@ package com.google.javascript.jscomp.debugger;
 import com.google.javascript.jscomp.AnonymousFunctionNamingPolicy;
 import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.CompilerOptions;
+import com.google.javascript.jscomp.CompilerOptions.J2clPassMode;
+import com.google.javascript.jscomp.CompilerOptions.Reach;
 import com.google.javascript.jscomp.DiagnosticGroup;
 import com.google.javascript.jscomp.DiagnosticGroups;
 import com.google.javascript.jscomp.PropertyRenamingPolicy;
 import com.google.javascript.jscomp.VariableRenamingPolicy;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -56,22 +57,6 @@ enum CompilationParam {
     @Override
     void apply(CompilerOptions options, boolean value) {
       options.setIdeMode(value);
-    }
-  },
-
-  /**
-   * If true, the input language is ES6. If false, it's ES5.
-   */
-  LANG_IN_IS_ES6(true) {
-    @Override
-    void apply(CompilerOptions options, boolean value) {
-      options.setLanguageIn(value ?
-          CompilerOptions.LanguageMode.ECMASCRIPT6 :
-          CompilerOptions.LanguageMode.ECMASCRIPT5);
-    }
-    @Override
-    String getJavaInfo() {
-      return "options.setLanguageIn(LanguageMode.ECMASCRIPT6)";
     }
   },
 
@@ -189,8 +174,8 @@ enum CompilationParam {
   CHECK_REPORT_MISSING_OVERRIDE {
     @Override
     void apply(CompilerOptions options, boolean value) {
-      options.setReportMissingOverride(value ?
-          CheckLevel.WARNING : CheckLevel.OFF);
+      options.setWarningLevel(
+          DiagnosticGroups.MISSING_OVERRIDE, value ? CheckLevel.WARNING : CheckLevel.OFF);
     }
     @Override
     String getJavaInfo() {
@@ -464,7 +449,11 @@ enum CompilationParam {
   REMOVE_UNUSED_VARIABLES {
     @Override
     void apply(CompilerOptions options, boolean value) {
-      options.setRemoveUnusedVars(value);
+      if (value) {
+        options.setRemoveUnusedVariables(Reach.ALL);
+      } else {
+        options.setRemoveUnusedVariables(Reach.NONE);
+      }
     }
   },
 
@@ -500,7 +489,7 @@ enum CompilationParam {
   },
 
   /** Converts quoted property accesses to dot syntax (a['b'] -> a.b) */
-  COVERT_TO_DOTTED_PROPERTIES {
+  CONVERT_TO_DOTTED_PROPERTIES {
     @Override
     void apply(CompilerOptions options, boolean value) {
       options.setConvertToDottedProperties(value);
@@ -733,6 +722,13 @@ enum CompilationParam {
     @Override
     void apply(CompilerOptions options, boolean value) {
       options.setPolymerPass(value);
+    }
+  },
+
+  J2CL_PASS {
+    @Override
+    void apply(CompilerOptions options, boolean value) {
+      options.setJ2clPass(value ? J2clPassMode.ON : J2clPassMode.OFF);
     }
   },
 

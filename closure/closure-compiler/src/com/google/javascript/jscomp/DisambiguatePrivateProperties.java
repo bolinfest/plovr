@@ -67,7 +67,7 @@ class DisambiguatePrivateProperties
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case GETPROP:
         maybeRename(n.getLastChild());
         break;
@@ -76,6 +76,8 @@ class DisambiguatePrivateProperties
       case SETTER_DEF:
       case MEMBER_FUNCTION_DEF:
         maybeRename(n);
+        break;
+      default:
         break;
     }
   }

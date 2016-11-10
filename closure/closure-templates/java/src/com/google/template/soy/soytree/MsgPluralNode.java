@@ -19,11 +19,10 @@ package com.google.template.soy.soytree;
 import com.google.common.collect.ImmutableList;
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.basetree.CopyState;
-import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.ErrorReporter.Checkpoint;
-import com.google.template.soy.error.ExplodingErrorReporter;
-import com.google.template.soy.error.SoyError;
+import com.google.template.soy.error.SoyErrorKind;
 import com.google.template.soy.exprparse.ExpressionParser;
+import com.google.template.soy.exprparse.SoyParsingContext;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.soytree.CommandTextAttributesParser.Attribute;
@@ -45,12 +44,12 @@ import java.util.regex.Pattern;
 public final class MsgPluralNode extends AbstractParentCommandNode<CaseOrDefaultNode>
     implements MsgSubstUnitNode, SplitLevelTopNode<CaseOrDefaultNode>, ExprHolderNode {
 
-  private static final SoyError INVALID_PLURAL_COMMAND_TEXT
-      = SoyError.of("Invalid ''plural'' command text \"{0}\".");
-  private static final SoyError PLURAL_OFFSET_OUT_OF_BOUNDS
-      = SoyError.of("The ''offset'' for plural must be a nonnegative integer.");
-  private static final SoyError MALFORMED_PLURAL_OFFSET
-      = SoyError.of("Invalid offset in ''plural'' command text \"{0}\".");
+  private static final SoyErrorKind INVALID_PLURAL_COMMAND_TEXT =
+      SoyErrorKind.of("Invalid ''plural'' command text \"{0}\".");
+  private static final SoyErrorKind PLURAL_OFFSET_OUT_OF_BOUNDS =
+      SoyErrorKind.of("The ''offset'' for plural must be a nonnegative integer.");
+  private static final SoyErrorKind MALFORMED_PLURAL_OFFSET =
+      SoyErrorKind.of("Invalid offset in ''plural'' command text \"{0}\".");
 
   /** An expression, and optional "offset" attribute. */
   private static final Pattern COMMAND_TEXT_PATTERN =
@@ -155,7 +154,7 @@ public final class MsgPluralNode extends AbstractParentCommandNode<CaseOrDefault
 
     private static MsgPluralNode error() {
       return new Builder(-1, "plural", SourceLocation.UNKNOWN)
-          .build(ExplodingErrorReporter.get()); // guaranteed to be valid
+          .build(SoyParsingContext.exploding()); // guaranteed to be valid
     }
 
     private final int id;
@@ -178,15 +177,15 @@ public final class MsgPluralNode extends AbstractParentCommandNode<CaseOrDefault
      * is invalid, errors are reported to {@code errorReporter} and {@link Builder#error}
      * is returned.
      */
-    public MsgPluralNode build(ErrorReporter errorReporter) {
-      Checkpoint checkpoint = errorReporter.checkpoint();
+    public MsgPluralNode build(SoyParsingContext context) {
+      Checkpoint checkpoint = context.errorReporter().checkpoint();
 
       Matcher matcher = COMMAND_TEXT_PATTERN.matcher(commandText);
       if (!matcher.matches()) {
-        errorReporter.report(sourceLocation, INVALID_PLURAL_COMMAND_TEXT, commandText);
+        context.report(sourceLocation, INVALID_PLURAL_COMMAND_TEXT, commandText);
       }
 
-      ExprNode pluralExpr = new ExpressionParser(matcher.group(1), sourceLocation, errorReporter)
+      ExprNode pluralExpr = new ExpressionParser(matcher.group(1), sourceLocation, context)
           .parseExpression();
 
       int offset = 0;
@@ -195,21 +194,21 @@ public final class MsgPluralNode extends AbstractParentCommandNode<CaseOrDefault
       if (matcher.group(2) != null) {
         try {
           Map<String, String> attributes
-              = ATTRIBUTES_PARSER.parse(matcher.group(2).trim(), errorReporter, sourceLocation);
+              = ATTRIBUTES_PARSER.parse(matcher.group(2).trim(), context, sourceLocation);
           String offsetAttribute = attributes.get("offset");
           offset = Integer.parseInt(offsetAttribute);
           if (offset < 0) {
-            errorReporter.report(sourceLocation, PLURAL_OFFSET_OUT_OF_BOUNDS);
+            context.report(sourceLocation, PLURAL_OFFSET_OUT_OF_BOUNDS);
           }
         } catch (NumberFormatException nfe) {
-          errorReporter.report(sourceLocation, MALFORMED_PLURAL_OFFSET, commandText);
+          context.report(sourceLocation, MALFORMED_PLURAL_OFFSET, commandText);
         }
       }
 
       String basePluralVarName = MsgSubstUnitBaseVarNameUtils.genNaiveBaseNameForExpr(
           pluralExpr, FALLBACK_BASE_PLURAL_VAR_NAME);
 
-      if (errorReporter.errorsSince(checkpoint)) {
+      if (context.errorReporter().errorsSince(checkpoint)) {
         return error();
       }
 

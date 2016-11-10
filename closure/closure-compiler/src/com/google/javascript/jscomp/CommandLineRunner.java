@@ -29,22 +29,9 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
 import com.google.common.io.Files;
 import com.google.javascript.jscomp.SourceMap.LocationMapping;
+import com.google.javascript.jscomp.deps.ModuleLoader;
 import com.google.javascript.rhino.TokenStream;
 import com.google.protobuf.TextFormat;
-
-import org.kohsuke.args4j.Argument;
-import org.kohsuke.args4j.CmdLineException;
-import org.kohsuke.args4j.CmdLineParser;
-import org.kohsuke.args4j.NamedOptionDef;
-import org.kohsuke.args4j.Option;
-import org.kohsuke.args4j.OptionDef;
-import org.kohsuke.args4j.OptionHandlerFilter;
-import org.kohsuke.args4j.spi.FieldSetter;
-import org.kohsuke.args4j.spi.OptionHandler;
-import org.kohsuke.args4j.spi.Parameters;
-import org.kohsuke.args4j.spi.Setter;
-import org.kohsuke.args4j.spi.StringOptionHandler;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -73,6 +60,18 @@ import java.util.TreeMap;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.kohsuke.args4j.Argument;
+import org.kohsuke.args4j.CmdLineException;
+import org.kohsuke.args4j.CmdLineParser;
+import org.kohsuke.args4j.NamedOptionDef;
+import org.kohsuke.args4j.Option;
+import org.kohsuke.args4j.OptionDef;
+import org.kohsuke.args4j.OptionHandlerFilter;
+import org.kohsuke.args4j.spi.FieldSetter;
+import org.kohsuke.args4j.spi.OptionHandler;
+import org.kohsuke.args4j.spi.Parameters;
+import org.kohsuke.args4j.spi.Setter;
+import org.kohsuke.args4j.spi.StringOptionHandler;
 
 /**
  * CommandLineRunner translates flags into Java API calls on the Compiler.
@@ -163,6 +162,20 @@ public class CommandLineRunner extends
         + " and exits")
     private boolean printPassGraph = false;
 
+    @Option(
+      name = "--emit_use_strict",
+      handler = BooleanOptionHandler.class,
+      usage = "Start output with \"'use strict';\"."
+    )
+    private boolean emitUseStrict = true;
+
+    @Option(
+        name = "--strict_mode_input",
+        handler = BooleanOptionHandler.class,
+        usage = "Assume input sources are to run in strict mode."
+            + " Ignored for language modes earlier than ECMASCRIPT7.")
+    private boolean strictModeInput = true;
+
     // Turn on (very slow) extra sanity checks for use when modifying the
     // compiler.
     @Option(
@@ -187,11 +200,11 @@ public class CommandLineRunner extends
 
     @Option(name = "--js",
         handler = JsOptionHandler.class,
-        usage = "The JavaScript filename. You may specify multiple. " +
-            "The flag name is optional, because args are interpreted as files by default. " +
-            "You may also use minimatch-style glob patterns. For example, use " +
-            "--js='**.js' --js='!**_test.js' to recursively include all " +
-            "js files that do not end in _test.js")
+        usage = "The JavaScript filename. You may specify multiple. "
+        + "The flag name is optional, because args are interpreted as files by default. "
+        + "You may also use minimatch-style glob patterns. For example, use "
+        + "--js='**.js' --js='!**_test.js' to recursively include all "
+        + "js files that do not end in _test.js")
     private List<String> js = new ArrayList<>();
 
     @Option(name = "--jszip",
@@ -201,8 +214,8 @@ public class CommandLineRunner extends
     private List<String> jszip = new ArrayList<>();
 
     @Option(name = "--js_output_file",
-        usage = "Primary output filename. If not specified, output is " +
-        "written to stdout")
+        usage = "Primary output filename. If not specified, output is "
+        + "written to stdout")
     private String jsOutputFile = "";
 
     @Option(name = "--module",
@@ -280,29 +293,42 @@ public class CommandLineRunner extends
     private String moduleOutputPathPrefix = "./";
 
     @Option(name = "--create_source_map",
-        usage = "If specified, a source map file mapping the generated " +
-        "source files back to the original source file will be " +
-        "output to the specified path. The %outname% placeholder will " +
-        "expand to the name of the output file that the source map " +
-        "corresponds to.")
+        usage = "If specified, a source map file mapping the generated "
+        + "source files back to the original source file will be "
+        + "output to the specified path. The %outname% placeholder will "
+        + "expand to the name of the output file that the source map "
+        + "corresponds to.")
     private String createSourceMap = "";
 
     @Option(name = "--source_map_format",
         hidden = true,
-        usage = "The source map format to produce. " +
-        "Options are V3 and DEFAULT, which are equivalent.")
+        usage = "The source map format to produce. "
+        + "Options are V3 and DEFAULT, which are equivalent.")
     private SourceMap.Format sourceMapFormat = SourceMap.Format.DEFAULT;
 
     @Option(name = "--source_map_location_mapping",
-        usage = "Source map location mapping separated by a '|' " +
-        "(i.e. filesystem-path|webserver-path)")
+        usage = "Source map location mapping separated by a '|' "
+        + "(i.e. filesystem-path|webserver-path)")
     private List<String> sourceMapLocationMapping = new ArrayList<>();
 
     @Option(name = "--source_map_input",
         hidden = true,
-        usage = "Source map locations for input files, separated by a '|', " +
-        "(i.e. input-file-path|input-source-map)")
+        usage = "Source map locations for input files, separated by a '|', "
+        + "(i.e. input-file-path|input-source-map)")
     private List<String> sourceMapInputs = new ArrayList<>();
+
+    @Option(name = "--parse_inline_source_maps",
+        handler = BooleanOptionHandler.class,
+        hidden = true,
+        usage = "Parse inline source maps (//# sourceMappingURL=data:...)")
+    private Boolean parseInlineSourceMaps = true;
+
+    @Option(name = "--apply_input_source_maps",
+        handler = BooleanOptionHandler.class,
+        hidden = true,
+        usage = "Whether to apply input source maps to the output source map, "
+        + "i.e. have the result map back to original inputs")
+    private boolean applyInputSourceMaps = true;
 
     // Used to define the flag, values are stored by the handler.
     @SuppressWarnings("unused")
@@ -339,24 +365,24 @@ public class CommandLineRunner extends
 
     @Option(name = "--define",
         aliases = {"--D", "-D"},
-        usage = "Override the value of a variable annotated @define. " +
-        "The format is <name>[=<val>], where <name> is the name of a @define " +
-        "variable and <val> is a boolean, number, or a single-quoted string " +
-        "that contains no single quotes. If [=<val>] is omitted, " +
-        "the variable is marked true")
+        usage = "Override the value of a variable annotated @define. "
+        + "The format is <name>[=<val>], where <name> is the name of a @define "
+        + "variable and <val> is a boolean, number, or a single-quoted string "
+        + "that contains no single quotes. If [=<val>] is omitted, "
+        + "the variable is marked true")
     private List<String> define = new ArrayList<>();
 
     @Option(name = "--charset",
-        usage = "Input and output charset for all files. By default, we " +
-                "accept UTF-8 as input and output US_ASCII")
+        usage = "Input and output charset for all files. By default, we "
+                + "accept UTF-8 as input and output US_ASCII")
     private String charset = "";
 
     @Option(name = "--compilation_level",
         aliases = {"-O"},
-        usage = "Specifies the compilation level to use. Options: " +
-            "WHITESPACE_ONLY, " +
-            "SIMPLE, " +
-            "ADVANCED")
+        usage = "Specifies the compilation level to use. Options: "
+            + "WHITESPACE_ONLY, "
+            + "SIMPLE, "
+            + "ADVANCED")
     private String compilationLevel = "SIMPLE";
     private CompilationLevel compilationLevelParsed = null;
 
@@ -368,9 +394,9 @@ public class CommandLineRunner extends
 
     @Option(name = "--use_types_for_optimization",
         handler = BooleanOptionHandler.class,
-        usage = "Enable or disable the optimizations " +
-        "based on available type information. Inaccurate type annotations " +
-        "may result in incorrect results.")
+        usage = "Enable or disable the optimizations "
+        + "based on available type information. Inaccurate type annotations "
+        + "may result in incorrect results.")
     private boolean useTypesForOptimization = true;
 
     @Option(name = "--assume_function_wrapper",
@@ -383,8 +409,8 @@ public class CommandLineRunner extends
 
     @Option(name = "--warning_level",
         aliases = {"-W"},
-        usage = "Specifies the warning level to use. Options: " +
-        "QUIET, DEFAULT, VERBOSE")
+        usage = "Specifies the warning level to use. Options: "
+        + "QUIET, DEFAULT, VERBOSE")
     private WarningLevel warningLevel = WarningLevel.DEFAULT;
 
     @Option(name = "--debug",
@@ -491,11 +517,14 @@ public class CommandLineRunner extends
         usage = "Rewrite Dart Dev Compiler output to be compiler-friendly.")
     private boolean dartPass = false;
 
-    @Option(name = "--j2cl_pass",
-        hidden = true,
-        handler = BooleanOptionHandler.class,
-        usage = "Rewrite J2CL output to be compiler-friendly.")
-    private boolean j2clPass = false;
+    @Option(
+      name = "--j2cl_pass",
+      hidden = true,
+      usage =
+          "Rewrite J2CL output to be compiler-friendly if enabled (ON or AUTO). "
+              + "Options:OFF, ON, AUTO(default)"
+    )
+    private String j2clPassMode = "AUTO";
 
     @Option(
       name = "--output_manifest",
@@ -540,9 +569,9 @@ public class CommandLineRunner extends
 
     @Option(name = "--translations_project",
         hidden = true,
-        usage = "Scopes all translations to the specified project." +
-        "When specified, we will use different message ids so that messages " +
-        "in different projects can have different translations.")
+        usage = "Scopes all translations to the specified project."
+        + "When specified, we will use different message ids so that messages "
+        + "in different projects can have different translations.")
     private String translationsProject = null;
 
     @Option(name = "--flagfile",
@@ -551,9 +580,9 @@ public class CommandLineRunner extends
     private String flagFile = "";
 
     @Option(name = "--warnings_whitelist_file",
-        usage = "A file containing warnings to suppress. Each line should be " +
-            "of the form\n" +
-            "<file-name>:<line-number>?  <warning-description>")
+        usage = "A file containing warnings to suppress. Each line should be "
+            + "of the form\n"
+            + "<file-name>:<line-number>?  <warning-description>")
     private String warningsWhitelistFile = "";
 
     @Option(name = "--hide_warnings_for",
@@ -567,8 +596,9 @@ public class CommandLineRunner extends
 
     @Option(name = "--tracer_mode",
         hidden = true,
-        usage = "Shows the duration of each compiler pass and the impact to " +
-        "the compiled output size. Options: ALL, RAW_SIZE, TIMING_ONLY, OFF")
+        usage = "Shows the duration of each compiler pass and the impact to "
+        + "the compiled output size. "
+        + "Options: ALL, AST_SIZE, RAW_SIZE, TIMING_ONLY, OFF")
     private CompilerOptions.TracerMode tracerMode =
         CompilerOptions.TracerMode.OFF;
 
@@ -1149,7 +1179,7 @@ public class CommandLineRunner extends
     // Args4j has a different format that the old command-line parser.
     // So we use some voodoo to get the args into the format that args4j
     // expects.
-    Pattern argPattern = Pattern.compile("(--?[a-zA-Z_]+)=(.*)");
+    Pattern argPattern = Pattern.compile("(--?[a-zA-Z_]+)=(.*)", Pattern.DOTALL);
     Pattern quotesPattern = Pattern.compile("^['\"](.*)['\"]$");
     List<String> processedArgs = new ArrayList<>();
 
@@ -1271,6 +1301,8 @@ public class CommandLineRunner extends
     List<FlagEntry<JsSourceType>> mixedSources = null;
     List<LocationMapping> mappings = null;
     ImmutableMap<String, String> sourceMapInputs = null;
+    boolean parseInlineSourceMaps = false;
+    boolean applyInputSourceMaps = false;
     try {
       flags.parse(processedArgs);
 
@@ -1283,6 +1315,8 @@ public class CommandLineRunner extends
       mixedSources = flags.getMixedJsSources();
       mappings = flags.getSourceMapLocationMappings();
       sourceMapInputs = flags.getSourceMapInputs();
+      parseInlineSourceMaps = flags.parseInlineSourceMaps;
+      applyInputSourceMaps = flags.applyInputSourceMaps;
     } catch (CmdLineException e) {
       reportError(e.getMessage());
     } catch (IOException ioErr) {
@@ -1351,7 +1385,7 @@ public class CommandLineRunner extends
       } else if (flags.commonJsPathPrefix != null) {
         moduleRoots.addAll(flags.commonJsPathPrefix);
       } else {
-        moduleRoots.add(ES6ModuleLoader.DEFAULT_FILENAME_PREFIX);
+        moduleRoots.add(ModuleLoader.DEFAULT_FILENAME_PREFIX);
       }
 
       for (String entryPoint : flags.entryPoints) {
@@ -1417,6 +1451,8 @@ public class CommandLineRunner extends
           .setSourceMapFormat(flags.sourceMapFormat)
           .setSourceMapLocationMappings(mappings)
           .setSourceMapInputFiles(sourceMapInputs)
+          .setParseInlineSourceMaps(parseInlineSourceMaps)
+          .setApplyInputSourceMaps(applyInputSourceMaps)
           .setWarningGuards(Flags.guardLevels)
           .setDefine(flags.define)
           .setCharset(flags.charset)
@@ -1533,7 +1569,16 @@ public class CommandLineRunner extends
 
     options.setDartPass(flags.dartPass);
 
-    options.setJ2clPass(flags.j2clPass);
+    if (!flags.j2clPassMode.isEmpty()) {
+      try {
+        CompilerOptions.J2clPassMode j2clPassMode =
+            CompilerOptions.J2clPassMode.valueOf(flags.j2clPassMode.toUpperCase());
+        options.setJ2clPass(j2clPassMode);
+      } catch (IllegalArgumentException ex) {
+        throw new FlagUsageException(
+            "Unknown J2clPassMode `" + flags.j2clPassMode + "' specified.");
+      }
+    }
 
     options.renamePrefixNamespace = flags.renamePrefixNamespace;
 
@@ -1541,7 +1586,7 @@ public class CommandLineRunner extends
 
     options.setPreventLibraryInjection(!flags.injectLibraries);
 
-    options.rewritePolyfills = flags.rewritePolyfills;
+    options.rewritePolyfills = flags.rewritePolyfills && options.getLanguageIn().isEs6OrHigher();
 
     if (!flags.translationsFile.isEmpty()) {
       try {
@@ -1591,6 +1636,8 @@ public class CommandLineRunner extends
     }
 
     options.setPrintSourceAfterEachPass(flags.printSourceAfterEachPass);
+    options.setStrictModeInput(flags.strictModeInput);
+    options.setEmitUseStrict(flags.emitUseStrict);
 
     return options;
   }

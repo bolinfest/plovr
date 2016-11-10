@@ -5,10 +5,12 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.net.URI;
-import java.util.Map;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import com.google.common.collect.Iterators;
+import com.google.template.soy.error.SoyCompilationException;
 import org.plovr.HttpUtil;
 import org.plovr.QueryData;
 import org.plovr.util.SoyDataUtil;
@@ -130,7 +132,11 @@ public class SoyRequestHandler implements HttpHandler {
         errorReporter);
     SoyFileNode node = parser.parseSoyFile();
 
-    errorReporter.throwIfErrorsPresent();
+    Iterable errorIterable = errorReporter.getErrors();
+    List errors = Collections.list(Iterators.asEnumeration(errorIterable.iterator()));
+    if (!errors.isEmpty()) {
+      throw new SoyCompilationException(errorIterable);
+    }
 
     String namespace = node.getNamespace();
     String templateName = namespace + "." + templateToRender;

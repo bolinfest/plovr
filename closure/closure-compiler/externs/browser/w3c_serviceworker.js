@@ -156,7 +156,7 @@ ServiceWorkerRegistration.prototype.unregister = function() {};
 /** @type {?function(!Event)} */
 ServiceWorkerRegistration.prototype.onupdatefound;
 
-/** @type {function()} */
+/** @return {!Promise<void>} */
 ServiceWorkerRegistration.prototype.update = function() {};
 
 /**
@@ -312,6 +312,7 @@ ServiceWorkerClient.prototype.frameType;
 /**
  * @param {*} message
  * @param {(!Array<!Transferable>|undefined)=} opt_transfer
+ * @return {undefined}
  */
 ServiceWorkerClient.prototype.postMessage = function(message, opt_transfer) {};
 
@@ -467,7 +468,10 @@ CacheStorage.prototype.keys = function() {};
  */
 function ExtendableEvent(type, opt_eventInitDict) {}
 
-/** @param {IThenable} f */
+/**
+ * @param {IThenable} f
+ * @return {undefined}
+ */
 ExtendableEvent.prototype.waitUntil = function(f) {};
 
 /**
@@ -519,6 +523,7 @@ FetchEvent.prototype.isReload;
 
 /**
  * @param {(Response|Promise<Response>)} r
+ * @return {undefined}
  */
 FetchEvent.prototype.respondWith = function(r) {};
 

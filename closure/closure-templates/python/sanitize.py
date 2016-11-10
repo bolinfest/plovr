@@ -202,6 +202,7 @@ def filter_html_attributes(value):
     return _AMBIGUOUS_ATTR_END_RE.sub(r'\1 ', value.content)
 
   # TODO(gboyer): Replace this with a runtime exception along with other
+  # backends. http://b/19795203.
   return generated_sanitize.filter_html_attributes_helper(value)
 
 
@@ -230,22 +231,30 @@ def filter_no_auto_escape(value):
 
 
 def filter_normalize_uri(value):
-  if is_content_kind(value, CONTENT_KIND.URI):
+  if (is_content_kind(value, CONTENT_KIND.URI)
+      or is_content_kind(value, CONTENT_KIND.TRUSTED_RESOURCE_URI)):
     return normalize_uri(value)
 
   return generated_sanitize.filter_normalize_uri_helper(value)
 
 
 def filter_normalize_media_uri(value):
-  if is_content_kind(value, CONTENT_KIND.URI):
+  if (is_content_kind(value, CONTENT_KIND.URI)
+      or is_content_kind(value, CONTENT_KIND.TRUSTED_RESOURCE_URI)):
     return normalize_uri(value)
 
   return generated_sanitize.filter_normalize_media_uri_helper(value)
 
 
 def filter_trusted_resource_uri(value):
-  # TODO(shwetakarwa): This needs to be changed once all the legacy URLs are
-  # taken care of.
+  if is_content_kind(value, CONTENT_KIND.TRUSTED_RESOURCE_URI):
+    return value.content
+  if isinstance(value, str):
+    return value
+  return 'about:invalid#' + _INNOCUOUS_OUTPUT
+
+
+def bless_string_as_trusted_resource_url_for_legacy(value):
   return value
 
 

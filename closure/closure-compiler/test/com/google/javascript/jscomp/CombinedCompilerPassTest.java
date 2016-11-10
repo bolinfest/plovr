@@ -67,9 +67,9 @@ public final class CombinedCompilerPassTest extends TestCase  {
     d.addChildToBack(b);
     d.addChildToBack(c);
 
-    h.addChildrenToBack(e);
-    h.addChildrenToBack(f);
-    h.addChildrenToBack(g);
+    h.addChildToBack(e);
+    h.addChildToBack(f);
+    h.addChildToBack(g);
 
     l.addChildToBack(i);
     l.addChildToBack(j);
@@ -105,13 +105,13 @@ public final class CombinedCompilerPassTest extends TestCase  {
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      assertEquals(Token.STRING, n.getType());
+      assertEquals(Token.STRING, n.getToken());
       visited.append(n.getString());
     }
 
     @Override
     public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
-      assertEquals(Token.STRING, n.getType());
+      assertEquals(Token.STRING, n.getToken());
       shouldTraversed.append(n.getString());
       return !ignoring.contains(n.getString());
     }

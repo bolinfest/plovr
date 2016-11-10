@@ -7,6 +7,7 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.util.List;
 
+import com.google.template.soy.base.SourceLocation;
 import org.plovr.CompilationException;
 import org.plovr.Config;
 import org.plovr.ConfigParser;
@@ -158,7 +159,7 @@ public class ExtractCommand extends AbstractCommandRunner<ExtractCommandOptions>
               msg.getDesc(),
               msg.isHidden(),
               null /* contentType */,
-              msg.getSourceName(),
+              new SourceLocation(msg.getSourceName()),
               parts));
     }
 

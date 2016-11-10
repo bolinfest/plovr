@@ -16,7 +16,10 @@
 
 package com.google.javascript.jscomp.parsing.parser;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 import com.google.common.collect.ImmutableList;
+import com.google.common.io.BaseEncoding;
 import com.google.javascript.jscomp.parsing.parser.FeatureSet.Feature;
 import com.google.javascript.jscomp.parsing.parser.trees.AmbientDeclarationTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ArgumentListTree;
@@ -87,7 +90,6 @@ import com.google.javascript.jscomp.parsing.parser.trees.ParameterizedTypeTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ParenExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ParseTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ParseTreeType;
-import com.google.javascript.jscomp.parsing.parser.trees.PostfixExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.ProgramTree;
 import com.google.javascript.jscomp.parsing.parser.trees.PropertyNameAssignmentTree;
 import com.google.javascript.jscomp.parsing.parser.trees.RecordTypeTree;
@@ -109,6 +111,7 @@ import com.google.javascript.jscomp.parsing.parser.trees.TypeQueryTree;
 import com.google.javascript.jscomp.parsing.parser.trees.TypedParameterTree;
 import com.google.javascript.jscomp.parsing.parser.trees.UnaryExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.UnionTypeTree;
+import com.google.javascript.jscomp.parsing.parser.trees.UpdateExpressionTree;
 import com.google.javascript.jscomp.parsing.parser.trees.VariableDeclarationListTree;
 import com.google.javascript.jscomp.parsing.parser.trees.VariableDeclarationTree;
 import com.google.javascript.jscomp.parsing.parser.trees.VariableStatementTree;
@@ -121,11 +124,14 @@ import com.google.javascript.jscomp.parsing.parser.util.LookaheadErrorReporter.P
 import com.google.javascript.jscomp.parsing.parser.util.SourcePosition;
 import com.google.javascript.jscomp.parsing.parser.util.SourceRange;
 import com.google.javascript.jscomp.parsing.parser.util.Timer;
-
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import javax.annotation.Nullable;
 
 /**
  * Parses a javascript file.
@@ -170,16 +176,19 @@ public class Parser {
   private final Scanner scanner;
   private final ErrorReporter errorReporter;
   private final Config config;
+  private final boolean parseInlineSourceMaps;
   private final CommentRecorder commentRecorder = new CommentRecorder();
   private final ArrayDeque<Boolean> inGeneratorContext = new ArrayDeque<>();
   private FeatureSet features = FeatureSet.ES3;
   private SourcePosition lastSourcePosition;
+  @Nullable
+  private String inlineSourceMap;
 
-  public Parser(
-      Config config, ErrorReporter errorReporter,
-      SourceFile source, int offset, boolean initialGeneratorContext) {
+  public Parser(Config config, ErrorReporter errorReporter, SourceFile source, int offset,
+      boolean initialGeneratorContext, boolean parseInlineSourceMaps) {
     this.config = config;
     this.errorReporter = errorReporter;
+    this.parseInlineSourceMaps = parseInlineSourceMaps;
     this.scanner = new Scanner(errorReporter, commentRecorder, source, offset);
     this.inGeneratorContext.add(initialGeneratorContext);
     lastSourcePosition = scanner.getPosition();
@@ -188,7 +197,7 @@ public class Parser {
   public Parser(
       Config config, ErrorReporter errorReporter,
       SourceFile source, int offset) {
-    this(config, errorReporter, source, offset, false);
+    this(config, errorReporter, source, offset, false, true);
   }
 
   public Parser(Config config, ErrorReporter errorReporter, SourceFile source) {
@@ -199,12 +208,8 @@ public class Parser {
     public static enum Mode {
       ES3,
       ES5,
-      ES5_STRICT,
-      ES6,
-      ES6_STRICT,
-      ES6_TYPED,
-      ES7,
-      ES8
+      ES6_OR_GREATER,
+      TYPESCRIPT,
     }
 
     /**
@@ -214,38 +219,42 @@ public class Parser {
     //     this is false.
     private final boolean parseTypeSyntax;
     private final boolean atLeast6;
-    private final boolean atLeast5;
     private final boolean isStrictMode;
     private final boolean warnTrailingCommas;
 
-    public Config(Mode mode) {
-      parseTypeSyntax = mode == Mode.ES6_TYPED;
-      atLeast6 =
-          mode == Mode.ES8
-          || mode == Mode.ES7
-          || mode == Mode.ES6
-          || mode == Mode.ES6_STRICT
-          || mode == Mode.ES6_TYPED;
-      atLeast5 = atLeast6 || mode == Mode.ES5 || mode == Mode.ES5_STRICT;
-      this.isStrictMode =
-          mode == Mode.ES5_STRICT
-          || mode == Mode.ES6_STRICT
-          || mode == Mode.ES6_TYPED
-          || mode == Mode.ES7
-          || mode == Mode.ES8;
+    public Config(Mode mode, boolean isStrictMode) {
+      checkArgument(!(mode == Mode.ES3 && isStrictMode));
+      parseTypeSyntax = mode == Mode.TYPESCRIPT;
+      atLeast6 = !(mode == Mode.ES3 || mode == Mode.ES5);
+      this.isStrictMode = isStrictMode;
 
       // Generally, we allow everything that is valid in any mode
       // we only warn about things that are not represented in the AST.
-      this.warnTrailingCommas = !atLeast5;
+      this.warnTrailingCommas = mode == Mode.ES3;
     }
   }
 
-  private static class CommentRecorder implements Scanner.CommentRecorder{
+  private static final Pattern SOURCE_MAPPING_URL_PATTERN =
+      Pattern.compile("^//#\\s*sourceMappingURL=");
+  private static final String BASE64_URL_PREFIX = "data:application/json;base64,";
+
+  private class CommentRecorder implements Scanner.CommentRecorder {
     private ImmutableList.Builder<Comment> comments =
         ImmutableList.builder();
     @Override
     public void recordComment(
         Comment.Type type, SourceRange range, String value) {
+      if (parseInlineSourceMaps) {
+        Matcher matcher = SOURCE_MAPPING_URL_PATTERN.matcher(value);
+        if (matcher.find()) {
+          String url = value.substring(matcher.group(0).length());
+          if (url.startsWith(BASE64_URL_PREFIX)) {
+            byte[] data = BaseEncoding.base64().decode(url.substring(BASE64_URL_PREFIX.length()));
+            String source = new String(data, StandardCharsets.UTF_8);
+            inlineSourceMap = source;
+          }
+        }
+      }
       comments.add(new Comment(value, range, type));
     }
 
@@ -260,6 +269,15 @@ public class Parser {
 
   public FeatureSet getFeatures() {
     return features;
+  }
+
+  /**
+   * Returns the decoded JSON source of an inline source map comment if any was found, or
+   * {@code null} otherwise.
+   */
+  @Nullable
+  public String getInlineSourceMap() {
+    return inlineSourceMap;
   }
 
   // 14 Program
@@ -543,10 +561,9 @@ public class Parser {
     }
 
     LiteralToken moduleSpecifier = null;
-    if (isExportAll ||
-        (isExportSpecifier && peekPredefinedString(PredefinedName.FROM))) {
+    if (isExportAll || (isExportSpecifier && peekPredefinedString(PredefinedName.FROM))) {
       eatPredefinedString(PredefinedName.FROM);
-      moduleSpecifier = eat(TokenType.STRING).asLiteral();
+      moduleSpecifier = (LiteralToken) eat(TokenType.STRING);
     } else if (isExportSpecifier) {
       for (ParseTree tree : exportSpecifierList) {
         IdentifierToken importedName = tree.asExportSpecifier().importedName;
@@ -938,7 +955,7 @@ public class Parser {
   }
 
   private ParseTree parseAsyncMethod(PartialClassElement partial) {
-    features.require(Feature.ASYNC_FUNCTIONS);
+    features = features.require(Feature.ASYNC_FUNCTIONS);
     eatPredefinedString(ASYNC);
     if (peekIdOrKeyword()) {
       IdentifierToken name = eatIdOrKeywordAsId();
@@ -1166,7 +1183,7 @@ public class Parser {
   }
 
   private boolean peekFunctionTypeExpression() {
-    if (config.parseTypeSyntax && peek(TokenType.OPEN_PAREN) || peek(TokenType.OPEN_ANGLE)) {
+    if ((config.parseTypeSyntax && peek(TokenType.OPEN_PAREN)) || peek(TokenType.OPEN_ANGLE)) {
       // TODO(blickly): determine if we can parse this without the
       // overhead of forking the parser.
       Parser p = createLookaheadParser();
@@ -1211,7 +1228,7 @@ public class Parser {
 
   private ParseTree parseAsyncFunctionDeclaration() {
     SourcePosition start = getTreeStartLocation();
-    features.require(Feature.ASYNC_FUNCTIONS);
+    features = features.require(Feature.ASYNC_FUNCTIONS);
     eatAsyncFunctionStart();
 
     if (peek(TokenType.STAR)) {
@@ -1231,7 +1248,7 @@ public class Parser {
 
   private ParseTree parseAsyncFunctionExpression() {
     SourcePosition start = getTreeStartLocation();
-    features.require(Feature.ASYNC_FUNCTIONS);
+    features = features.require(Feature.ASYNC_FUNCTIONS);
     eatAsyncFunctionStart();
 
     if (peek(TokenType.STAR)) {
@@ -2633,14 +2650,24 @@ public class Parser {
     // Case ( )
     if (peek(TokenType.CLOSE_PAREN)) {
       eat(TokenType.CLOSE_PAREN);
-      return new FormalParameterListTree(getTreeLocation(start), ImmutableList.<ParseTree>of());
+      if (peek(TokenType.ARROW)) {
+        return new FormalParameterListTree(getTreeLocation(start), ImmutableList.<ParseTree>of());
+      } else {
+        reportError("invalid parenthesized expression");
+        return new MissingPrimaryExpressionTree(getTreeLocation(start));
+      }
     }
     // Case ( ... BindingIdentifier )
     if (peek(TokenType.SPREAD)) {
-      ParseTree result = new FormalParameterListTree(
-          getTreeLocation(start), ImmutableList.of(parseParameter(ParamContext.IMPLEMENTATION)));
+      ImmutableList<ParseTree> params = ImmutableList.of(
+          parseParameter(ParamContext.IMPLEMENTATION));
       eat(TokenType.CLOSE_PAREN);
-      return result;
+      if (peek(TokenType.ARROW)) {
+        return new FormalParameterListTree(getTreeLocation(start), params);
+      } else {
+        reportError("invalid parenthesized expression");
+        return new MissingPrimaryExpressionTree(getTreeLocation(start));
+      }
     }
     // For either of the two remaining cases:
     //     ( Expression )
@@ -2796,9 +2823,6 @@ public class Parser {
     if (peek(TokenType.ARROW)) {
       return completeAssignmentExpressionParseAtArrow(left, expressionIn);
     }
-    if (left.type == ParseTreeType.FORMAL_PARAMETER_LIST) {
-      reportError("invalid paren expression");
-    }
 
     if (peekAssignmentOperator()) {
       left = transformLeftHandSideExpression(left);
@@ -2806,6 +2830,9 @@ public class Parser {
         reportError("invalid assignment target");
       }
       Token operator = nextToken();
+      if (TokenType.STAR_STAR_EQUAL.equals(operator.type)) {
+        features = features.require(Feature.EXPONENT_OP);
+      }
       ParseTree right = parseAssignment(expressionIn);
       return new BinaryOperatorTree(getTreeLocation(start), left, operator, right);
     }
@@ -2981,6 +3008,7 @@ public class Parser {
     switch (peekType()) {
     case EQUAL:
     case STAR_EQUAL:
+      case STAR_STAR_EQUAL:
     case SLASH_EQUAL:
     case PERCENT_EQUAL:
     case PLUS_EQUAL:
@@ -3193,7 +3221,7 @@ public class Parser {
   // 11.5 Multiplicative Expression
   private ParseTree parseMultiplicativeExpression() {
     SourcePosition start = getTreeStartLocation();
-    ParseTree left = parseUnaryExpression();
+    ParseTree left = parseExponentiationExpression();
     while (peekMultiplicativeOperator()) {
       Token operator = nextToken();
       ParseTree right = parseUnaryExpression();
@@ -3213,6 +3241,29 @@ public class Parser {
     }
   }
 
+  private ParseTree parseExponentiationExpression() {
+    SourcePosition start = getTreeStartLocation();
+    ParseTree left = parseUnaryExpression();
+    if (peek(TokenType.STAR_STAR)) {
+      // ExponentiationExpression does not allow a UnaryExpression before '**'.
+      // Parentheses are required to disambiguate:
+      //   (-x)**y is valid
+      //   -(x**y) is valid
+      //   -x**y is a syntax error
+      if (left.type == ParseTreeType.UNARY_EXPRESSION) {
+        reportError(
+            "Unary operator '%s' requires parentheses before '**'",
+            left.asUnaryExpression().operator);
+      }
+      features = features.require(Feature.EXPONENT_OP);
+      Token operator = nextToken();
+      ParseTree right = parseExponentiationExpression();
+      return new BinaryOperatorTree(getTreeLocation(start), left, operator, right);
+    } else {
+      return left;
+    }
+  }
+
   // 11.4 Unary Operator
   private ParseTree parseUnaryExpression() {
     SourcePosition start = getTreeStartLocation();
@@ -3223,7 +3274,7 @@ public class Parser {
     } else if (peekAwaitExpression()) {
       return parseAwaitExpression();
     } else {
-      return parsePostfixExpression();
+      return parseUpdateExpression();
     }
   }
 
@@ -3232,8 +3283,6 @@ public class Parser {
     case DELETE:
     case VOID:
     case TYPEOF:
-    case PLUS_PLUS:
-    case MINUS_MINUS:
     case PLUS:
     case MINUS:
     case TILDE:
@@ -3259,27 +3308,31 @@ public class Parser {
     return new AwaitExpressionTree(getTreeLocation(start), expression);
   }
 
-  // 11.3 Postfix Expression
-  private ParseTree parsePostfixExpression() {
+  private ParseTree parseUpdateExpression() {
     SourcePosition start = getTreeStartLocation();
-    ParseTree operand = parseLeftHandSideExpression();
-    while (peekPostfixOperator()) {
+    if (peekUpdateOperator()) {
       Token operator = nextToken();
-      operand = new PostfixExpressionTree(getTreeLocation(start), operand, operator);
+      ParseTree operand = parseUnaryExpression();
+      return UpdateExpressionTree.prefix(getTreeLocation(start), operator, operand);
+    } else {
+      ParseTree lhs = parseLeftHandSideExpression();
+      if (peekUpdateOperator() && !peekImplicitSemiColon()) {
+        // newline not allowed before an update operator.
+        Token operator = nextToken();
+        return UpdateExpressionTree.postfix(getTreeLocation(start), operator, lhs);
+      } else {
+        return lhs;
+      }
     }
-    return operand;
   }
 
-  private boolean peekPostfixOperator() {
-    if (peekImplicitSemiColon()) {
-      return false;
-    }
+  private boolean peekUpdateOperator() {
     switch (peekType()) {
-    case PLUS_PLUS:
-    case MINUS_MINUS:
-      return true;
-    default:
-      return false;
+      case PLUS_PLUS:
+      case MINUS_MINUS:
+        return true;
+      default:
+        return false;
     }
   }
 
@@ -3992,7 +4045,8 @@ public class Parser {
         new LookaheadErrorReporter(),
         this.scanner.getFile(),
         this.scanner.getOffset(),
-        inGeneratorContext());
+        inGeneratorContext(),
+        true);
   }
 
   /**

@@ -287,6 +287,17 @@ public enum ConfigOption {
     }
   }),
 
+  STRICT_MODE_INPUT("strict-mode-input", new ConfigUpdater() {
+    @Override
+    public void apply(boolean isStrictModeInput, Config.Builder builder) {
+      try {
+        builder.setStrictModeInput(isStrictModeInput);
+      } catch (IllegalArgumentException e) {
+        throw Throwables.propagate(e);
+      }
+    }
+  }),
+
   LANGUAGE_IN("language-in", new ConfigUpdater() {
     @Override
     public void apply(String mode, Config.Builder builder) {
@@ -638,20 +649,6 @@ public enum ConfigOption {
     @Override
     public void apply(String pluginName, Config.Builder builder) {
       builder.setSoyTranslationPlugin(pluginName);
-    }
-  }),
-
-  SOY_USE_INJECTED_DATA("soy-use-injected-data", new ConfigUpdater() {
-    @Override
-    public void apply(boolean soyUseInjectedData, Config.Builder builder) {
-      builder.setSoyUseInjectedData(soyUseInjectedData);
-    }
-
-    @Override
-    public boolean update(String soyUseInjectedDataParam, Config.Builder builder) {
-      boolean soyUseInjectedData = Boolean.valueOf(soyUseInjectedDataParam);
-      builder.setSoyUseInjectedData(soyUseInjectedData);
-      return true;
     }
   }),
 

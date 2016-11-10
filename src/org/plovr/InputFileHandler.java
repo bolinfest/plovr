@@ -179,7 +179,7 @@ public class InputFileHandler extends AbstractGetHandler {
 
     // Add 'use strict' headers if we're in strict mode.
     String prefix = "";
-    if (config.getLanguageIn() != null && config.getLanguageIn().isStrict()) {
+    if (config.getLanguageIn() != null && config.isStrictModeInput()) {
       prefix = "'use strict';";
     }
 

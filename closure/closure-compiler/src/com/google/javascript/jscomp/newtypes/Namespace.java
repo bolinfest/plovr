@@ -19,7 +19,6 @@ package com.google.javascript.jscomp.newtypes;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.javascript.rhino.Node;
-
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -49,16 +48,23 @@ public abstract class Namespace {
   protected JSType namespaceType;
   // Used to detect recursion when computing the type of circular namespaces.
   private boolean duringComputeJSType = false;
+  // The node that defines this namespace.
+  protected final Node defSite;
 
-  protected Namespace(JSTypes commonTypes, String name) {
+  protected Namespace(JSTypes commonTypes, String name, Node defSite) {
     this.name = name;
     this.commonTypes = commonTypes;
+    this.defSite = Preconditions.checkNotNull(defSite);
   }
 
   protected abstract JSType computeJSType();
 
   public final String getName() {
     return name;
+  }
+
+  public Node getDefSite() {
+    return this.defSite;
   }
 
   private boolean isDefined(String name) {
@@ -170,7 +176,7 @@ public abstract class Namespace {
       String pname, Node defSite, JSType type, boolean isConstant) {
     Preconditions.checkState(this.namespaceType == null);
     if (type == null && isConstant) {
-      type = JSType.UNKNOWN;
+      type = this.commonTypes.UNKNOWN;
     }
     otherProps = otherProps.with(pname, isConstant
         ? Property.makeConstant(defSite, type, type)
@@ -199,7 +205,7 @@ public abstract class Namespace {
     if (this.namespaces.containsKey(pname)) {
       Namespace subns = this.namespaces.get(pname);
       Preconditions.checkState(subns.namespaceType != null);
-      return Property.make(subns.namespaceType, subns.namespaceType);
+      return Property.makeWithDefsite(subns.getDefSite(), subns.namespaceType, subns.namespaceType);
     }
     if (this.otherProps.containsKey(pname)) {
       return this.otherProps.get(pname);

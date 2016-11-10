@@ -20,17 +20,21 @@ import static com.google.common.css.compiler.gssfunctions.ColorUtil.formatColor;
 import static com.google.common.css.compiler.gssfunctions.ColorUtil.hsbToColor;
 import static com.google.common.css.compiler.gssfunctions.ColorUtil.testContrast;
 import static com.google.common.css.compiler.gssfunctions.ColorUtil.toHsb;
+import static com.google.common.css.compiler.gssfunctions.ColorUtil.toHsl;
+import static com.google.common.css.compiler.gssfunctions.ColorUtil.hslToColor;
 
 import com.google.common.base.CharMatcher;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.css.SourceCodeLocation;
+import com.google.common.css.compiler.ast.CssCompositeValueNode;
 import com.google.common.css.compiler.ast.CssFunctionArgumentsNode;
 import com.google.common.css.compiler.ast.CssFunctionNode;
 import com.google.common.css.compiler.ast.CssHexColorNode;
 import com.google.common.css.compiler.ast.CssLiteralNode;
 import com.google.common.css.compiler.ast.CssNumericNode;
+import com.google.common.css.compiler.ast.CssStringNode;
 import com.google.common.css.compiler.ast.CssValueNode;
 import com.google.common.css.compiler.ast.ErrorManager;
 import com.google.common.css.compiler.ast.GssError;
@@ -39,13 +43,19 @@ import com.google.common.css.compiler.ast.GssFunctionException;
 
 import java.awt.Color;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+
+import javax.annotation.Nullable;
 
 /**
  * Container for common GSS functions.
  *
+ * @author oana@google.com (Oana Florescu)
+ * @author dgajda@google.com (Damian Gajda)
  */
 public class GssFunctions {
 
@@ -72,9 +82,19 @@ public class GssFunctions {
         .put("addHsbToCssColor", new AddHsbToCssColor())
         .put("makeContrastingColor", new MakeContrastingColor())
         .put("adjustBrightness", new AdjustBrightness())
+        .put("makeTranslucent", new MakeTranslucent())
+        .put("saturateColor", new SaturateColor())
+        .put("desaturateColor", new DesaturateColor())
+        .put("greyscale", new Greyscale())
+        .put("lighten", new Lighten())
+        .put("darken", new Darken())
+        .put("spin", new Spin())
 
         // Logic functions.
         .put("selectFrom", new SelectFrom())
+
+        // String functions.
+        .put("concat", new Concat())
 
         .build();
   }
@@ -85,8 +105,11 @@ public class GssFunctions {
    */
   private static final String DECIMAL_FORMAT = "#.########";
 
-  /** All four corners corner parameter value. */
-  private static final String ALL_FOUR = "af";
+  /**
+   * US decimal format symbols.
+   */
+  private static final DecimalFormatSymbols US_SYMBOLS =
+      DecimalFormatSymbols.getInstance(Locale.US);
 
   /**
    * This class encapsulates results of background definition calculation and
@@ -138,218 +161,6 @@ public class GssFunctions {
           new CssNumericNode(positionV, positionVUnit, location));
     }
   }
-
-  /**
-   * Implementation of the roundedCornerImage GSS function. The function
-   * generates the image for a rounded corner corresponding to the following
-   * arguments:
-   * <ol>
-   *   <li><b>corner color</b>: the color of the rounded part of the image,
-   *     probably the same color as the border of the container.
-   *   <li><b>corner radius</b>: the radius of the rounded part of the
-   *     image. The image will actually have this as its height and width
-   *     as well.
-   *   <li><b>corner position</b>: where this image is going to appear.
-   *     Valid values are:
-   *     <ul>
-   *       <li> tl - top left
-   *       <li> tr - top right
-   *       <li> bl - bottom left
-   *       <li> br - bottom right
-   *     </ul>
-   *   <li><b>isIE6</b>: 1 if the browser is IE6, 0 otherwise.
-   */
-  public abstract static class RoundedCornerImage
-      implements GssFunction {
-
-    /**
-     * Returns the number of expected arguments of this GSS function, which is
-     * 4 as documented in {@link RoundedCornerImage}.
-     *
-     * @return 4
-     */
-    @Override
-    public Integer getNumExpectedArguments() {
-      return 4;
-    }
-
-    /**
-     * Returns the rounded corner image corresponding to the arguments
-     * documented in {@link RoundedCornerImage}.
-     *
-     * @param args The list of arguments
-     * @return The image of the rounded corner
-     */
-    @Override
-    public List<CssValueNode> getCallResultNodes(List<CssValueNode> args,
-        ErrorManager errorManager) throws GssFunctionException {
-
-      CssValueNode arg1 = args.get(0);
-      CssValueNode arg2 = args.get(1);
-      CssValueNode arg3 = args.get(2);
-      CssValueNode arg4 = args.get(3);
-
-      String imgColor = getColorFromNode(arg1, errorManager);
-      CssNumericNode sizeNode = getSizeNode(arg2, errorManager);
-      CssLiteralNode cornerNameNode = getCornerNode(arg3, errorManager);
-      CssNumericNode browserInfoNode = getBrowserInfo(arg4, errorManager);
-
-      // We don't need the 'px' part of the size of the image
-      String imgSize = sizeNode.getNumericPart();
-      String units = sizeNode.getUnit();
-
-      String cornerId = cornerNameNode.getValue();
-      String browserInfo = browserInfoNode.getNumericPart();
-
-      ImageBackground results = roundedCornerBackground(
-          imgColor, imgSize, units, cornerId, browserInfo);
-      return results.toNodes(arg1.getSourceCodeLocation());
-    }
-
-    @Override
-    public String getCallResultString(List<String> args)
-        throws GssFunctionException {
-
-      String imgColor = getColor(args.get(0));
-      String imgSizeWithUnits = args.get(1);
-      String cornerId = args.get(2);
-      String browserInfo = args.get(3);
-
-      return roundedCornerBackground(
-          imgColor, imgSizeWithUnits, cornerId, browserInfo);
-    }
-
-    protected String roundedCornerBackground(
-        String imgColor, String imgSizeWithUnits, String cornerId,
-        String browserInfo)
-        throws GssFunctionException {
-      Size sizeWithUnits = parseSize(imgSizeWithUnits,
-          /* isUnitOptional */ false);
-      return roundedCornerBackground(imgColor, sizeWithUnits.size,
-          sizeWithUnits.units, cornerId, browserInfo).toString();
-    }
-
-    private ImageBackground roundedCornerBackground(
-        String imgColor, String imgSize, String units, String cornerId,
-        String browserInfo) {
-
-      boolean isIE6 = parseBoolean(browserInfo);
-      String urlArg = makeRoundedCornersUrl(imgColor, imgSize, isIE6);
-      return new ImageBackground(urlArg, cornerId, imgSize, units);
-    }
-
-    protected abstract String makeRoundedCornersUrl(
-        String imgColor, String imgSize, boolean isIE6);
-
-  }
-
-  /**
-   * Implementation of the roundedCornerImage GSS function. The function
-   * generates the image for a rounded corner corresponding to the following
-   * arguments:
-   * <ol>
-   *   <li><b>corner color</b>: the color of the rounded part of the image,
-   *     probably the same color as the border of the container.
-   *   <li><b>corner radius</b>: the radius of the rounded part of the
-   *     image. The image will actually have this as its height and width
-   *     as well.
-   *   <li><b>corner position</b>: where this image is going to appear.
-   *     Valid values are:
-   *     <ul>
-   *       <li> tl - top left
-   *       <li> tr - top right
-   *       <li> bl - bottom left
-   *       <li> br - bottom right
-   *     </ul>
-   *   <li><b>alpha</b>: the alpha channel for this rounded corner.
-   *
-   * <p>
-   * No IE6 argument is required since IE6 does not support > 1-bit alpha.
-   */
-  public abstract static class
-      SemiTransparentRoundedCornerImage implements GssFunction {
-
-    /**
-     * Returns the number of expected arguments of this GSS function, which is
-     * 4 as documented in {@link SemiTransparentRoundedCornerImage}.
-     *
-     * @return 4
-     */
-    @Override
-    public Integer getNumExpectedArguments() {
-      return 4;
-    }
-
-    /**
-     * Returns the rounded corner image corresponding to the arguments
-     * documented in {@link SemiTransparentRoundedCornerImage}.
-     *
-     * @param args The list of arguments
-     * @return The image of the rounded corner
-     */
-    @Override
-    public List<CssValueNode> getCallResultNodes(List<CssValueNode> args,
-        ErrorManager errorManager) throws GssFunctionException {
-
-      CssValueNode arg1 = args.get(0);
-      CssValueNode arg2 = args.get(1);
-      CssValueNode arg3 = args.get(2);
-      CssValueNode arg4 = args.get(3);
-
-      String imgColor = getColorFromNode(arg1, errorManager);
-      CssNumericNode sizeNode = getSizeNode(arg2, errorManager);
-      CssLiteralNode cornerNameNode = getCornerNode(arg3, errorManager);
-      String alphaChannel = arg4.toString();
-
-      // We don't need the 'px' part of the size of the image
-      String imgSize = sizeNode.getNumericPart();
-      String units = sizeNode.getUnit();
-
-      String cornerId = cornerNameNode.getValue();
-
-      return semiTransparentRoundedCornerImage(
-          imgColor, imgSize, units, cornerId, alphaChannel)
-              .toNodes(arg1.getSourceCodeLocation());
-    }
-
-    @Override
-    public String getCallResultString(List<String> args)
-        throws GssFunctionException {
-
-      String imgColor = getColor(args.get(0));
-      String imgSizeWithUnits = args.get(1);
-      String cornerId = args.get(2);
-      String alphaChannel = args.get(3);
-
-      return semiTransparentRoundedCornerImage(
-          imgColor, imgSizeWithUnits, cornerId, alphaChannel);
-    }
-
-    protected String semiTransparentRoundedCornerImage(
-        String imgColor, String imgSizeWithUnits, String cornerId,
-        String alphaChannel) throws GssFunctionException {
-      Size sizeWithUnits = parseSize(imgSizeWithUnits,
-          /* isUnitOptional */ false);
-      return semiTransparentRoundedCornerImage(imgColor, sizeWithUnits.size,
-          sizeWithUnits.units, cornerId, alphaChannel).toString();
-    }
-
-    private ImageBackground semiTransparentRoundedCornerImage(
-        String imgColor, String imgSize, String units, String cornerId,
-        String alphaChannel) {
-
-      String fullImageColor = imgColor + alphaChannel;
-      String urlArg = makeRoundedCornersUrl(
-          fullImageColor, imgSize, false /* isIE6 */);
-
-      return new ImageBackground(urlArg, cornerId, imgSize, units);
-    }
-
-    protected abstract String makeRoundedCornersUrl(
-        String imgColor, String imgSize, boolean isIE6);
-
-  }
-
 
   /**
    * Base implementation of the color blending GSS function. Returns a color
@@ -521,7 +332,6 @@ public class GssFunctions {
       CssValueNode arg3 = args.get(2);
       CssValueNode arg4 = args.get(3);
 
-      CssHexColorNode hexColor = null;
       if (!(arg1 instanceof CssHexColorNode
           || arg1 instanceof CssLiteralNode)) {
         String message =
@@ -577,14 +387,9 @@ public class GssFunctions {
             Integer.parseInt(hueToAdd),
             Integer.parseInt(saturationToAdd),
             Integer.parseInt(brightnessToAdd));
-      } catch (NumberFormatException e) {
-        String message = String.format("Could not parse the integer arguments"
-            + " for the function 'addHsbToCssColor'. The list of arguments was:"
-            + " %s, %s, %s, %s. ",
-            baseColorString, hueToAdd, saturationToAdd, brightnessToAdd);
-        throw new GssFunctionException(message);
       } catch (IllegalArgumentException e) {
-        String message = String.format("Could not parse the color argument"
+        String message = String.format("Could not parse the "
+            + (e instanceof NumberFormatException ? "integer arguments" : "color argument")
             + " for the function 'addHsbToCssColor'. The list of arguments was:"
             + " %s, %s, %s, %s. ",
             baseColorString, hueToAdd, saturationToAdd, brightnessToAdd);
@@ -657,51 +462,441 @@ public class GssFunctions {
   }
 
   /**
-   * Implementation of the semiTransparentBackgroundColor function. Takes
-   * two arguments: the color and the alpha value, both in hexadecimal format.
-   * This is implemented with two arguments so that the alpha value can be
-   * reused for rounded corners.
+   * Abstract base class providing HSL color space manipulation functions.
    */
-  public abstract static class SemiTransparentBackgroundColor
-      implements GssFunction {
+  public abstract static class BaseHslColorManipulation {
 
+    protected String addHslToCssColor(
+      String baseColorString, String hueToAdd, String saturationToAdd,
+      String lightnessToAdd) throws GssFunctionException {
+      try {
+        return addHslToCssColor(
+          baseColorString,
+          Integer.parseInt(hueToAdd),
+          Integer.parseInt(saturationToAdd),
+          Integer.parseInt(lightnessToAdd));
+      } catch (IllegalArgumentException e) {
+        String message = String.format("Could not parse the "
+            + (e instanceof NumberFormatException ? "integer arguments" : "color argument")
+            + " for the function 'addHslToCssColor'. The list of arguments was:"
+            + " %s, %s, %s, %s. ",
+            baseColorString, hueToAdd, saturationToAdd, lightnessToAdd);
+        throw new GssFunctionException(message);
+      }
+    }
+
+    /**
+     * Takes a CSS color string, and adds the specified amount of hue,
+     * saturation and lightness to it in HSL color space
+     *
+     * @param baseColorString The string representing the color to change
+     * @param hueToAdd The amount of hue to add (can be negative)
+     * @param saturationToAdd The amount of saturation to add (can be negative)
+     * @param lightnessToAdd The amount of lightness to add (can be negative)
+     * @return A CSS String representing the new color
+     */
+    protected String addHslToCssColor(String baseColorString,
+                                   int hueToAdd,
+                                   int saturationToAdd,
+                                   int lightnessToAdd) {
+
+      // Skip transformation for the transparent color.
+      if ("transparent".equals(baseColorString)) {
+        return baseColorString;
+      }
+
+      Color baseColor = ColorParser.parseAny(baseColorString);
+      Color newColor = addValuesToHslComponents(baseColor,
+                                                hueToAdd,
+                                                saturationToAdd,
+                                                lightnessToAdd);
+
+      return formatColor(newColor);
+    }
+
+    /**
+     * Adds the specified amount to the specified HSL (Hue, Saturation,
+     * Lightness) parameter of the given color. The amount can be negative.
+     *
+     * @param baseColor The color to modify
+     * @param hueToAdd The amount of hue to add
+     * @param saturationToAdd The amount of saturation to add
+     * @param lightnessToAdd The amount of lightness to add
+     * @return The modified color
+     */
+    private Color addValuesToHslComponents(Color baseColor,
+                                          int hueToAdd,
+                                          int saturationToAdd,
+                                          int lightnessToAdd) {
+
+      float[] hslValues = toHsl(baseColor);
+
+      // In HSL color space, Hue goes from 0 to 360, Saturation and Lightness
+      // from 0 to 100. However, in Java all three parameters vary from 0.0 to
+      // 1.0, so we need some basic conversion.
+      hslValues[0] = (float) (hslValues[0] + hueToAdd / 360.0);
+      // The hue needs to wrap around, so just keep hue - floor(hue).
+      hslValues[0] -= (float) Math.floor(hslValues[0]);
+
+      // For saturation and lightness, no wrapping around, we just make sure
+      // we don't go over 1.0 or under 0.0
+      hslValues[1] = (float) Math.min(1.0, Math.max(0,
+          hslValues[1] + saturationToAdd / 100.0));
+      hslValues[2] = (float) Math.min(1.0, Math.max(0,
+          hslValues[2] + lightnessToAdd / 100.0));
+
+      return hslToColor(hslValues);
+    }
+  }
+
+  /**
+   * Increase the saturation of the specified color. First argument is the
+   * color, second is the absolute amount of saturation in HSL color space
+   * to add (from 0 to 100).
+   */
+  public static class SaturateColor extends BaseHslColorManipulation implements GssFunction {
     @Override
     public Integer getNumExpectedArguments() {
       return 2;
     }
 
-    /**
-     * Returns the semi-transparent image corresponding to the arguments
-     * documented in {@link SemiTransparentBackgroundColor}.
-     *
-     * @param args The list of arguments
-     * @return The image of the rounded corner
-     */
     @Override
     public List<CssValueNode> getCallResultNodes(List<CssValueNode> args,
         ErrorManager errorManager) throws GssFunctionException {
       CssValueNode arg1 = args.get(0);
       CssValueNode arg2 = args.get(1);
 
-      String color = getColorFromNode(arg1, errorManager);
-      String alphaChannel = arg2.toString();
+      if (!(arg1 instanceof CssHexColorNode
+          || arg1 instanceof CssLiteralNode)) {
+        String message =
+          "The first argument must be a CssHexColorNode or a CssLiteralNode.";
+        errorManager.report(
+          new GssError(message, arg1.getSourceCodeLocation()));
+        throw new GssFunctionException(message);
+      }
+      CssNumericNode numeric2;
+      if (arg2 instanceof CssNumericNode) {
+        numeric2 = (CssNumericNode) arg2;
+      } else {
+        String message = "The second argument must be a CssNumericNode";
+        errorManager.report(
+          new GssError(message, arg2.getSourceCodeLocation()));
+        throw new GssFunctionException(message);
+      }
 
-      String urlArg = semiTransparentBackgroundUrl(color, alphaChannel);
-      SourceCodeLocation location = arg1.getSourceCodeLocation();
+      try {
+        String resultString =
+          addHslToCssColor(arg1.getValue(),
+            "0",
+            numeric2.getNumericPart(),
+            "0");
 
-      return ImmutableList.of((CssValueNode)createUrlNode(urlArg, location));
+        CssHexColorNode result = new CssHexColorNode(resultString,
+          arg1.getSourceCodeLocation());
+        return ImmutableList.of((CssValueNode) result);
+      } catch (GssFunctionException e) {
+        errorManager.report(
+          new GssError(e.getMessage(), arg2.getSourceCodeLocation()));
+        throw e;
+      }
     }
 
     @Override
-    public String getCallResultString(List<String> args) {
-      return createUrl(semiTransparentBackgroundUrl(
-          getColor(args.get(0)), args.get(1)));
+    public String getCallResultString(List<String> args)
+        throws GssFunctionException {
+      String baseColorString = args.get(0);
+      return addHslToCssColor(
+        baseColorString, "0", args.get(1), "0");
     }
-
-    protected abstract String semiTransparentBackgroundUrl(
-        String color, String alphaChannel);
   }
 
+  /**
+   * Decrease the saturation of the specified color. First argument is the
+   * color, second is the absolute amount of saturation in HSL color space
+   * to substract (from 0 to 100).
+   */
+  public static class DesaturateColor extends BaseHslColorManipulation implements GssFunction {
+
+    @Override
+    public Integer getNumExpectedArguments() {
+      return 2;
+    }
+
+    @Override
+    public List<CssValueNode> getCallResultNodes(List<CssValueNode> args,
+        ErrorManager errorManager) throws GssFunctionException {
+      CssValueNode arg1 = args.get(0);
+      CssValueNode arg2 = args.get(1);
+
+      if (!(arg1 instanceof CssHexColorNode || arg1 instanceof CssLiteralNode)) {
+        String message = "The first argument must be a CssHexColorNode or a CssLiteralNode.";
+        errorManager.report(new GssError(message, arg1
+          .getSourceCodeLocation()));
+        throw new GssFunctionException(message);
+      }
+      CssNumericNode numeric2;
+      if (arg2 instanceof CssNumericNode) {
+        numeric2 = (CssNumericNode) arg2;
+      } else {
+        String message = "The second argument must be a CssNumericNode";
+        errorManager.report(new GssError(message, arg2
+          .getSourceCodeLocation()));
+        throw new GssFunctionException(message);
+      }
+
+      try {
+        String resultString = addHslToCssColor(arg1.getValue(), "0",
+          "-" + numeric2.getNumericPart(), "0");
+
+        CssHexColorNode result = new CssHexColorNode(resultString,
+          arg1.getSourceCodeLocation());
+        return ImmutableList.of((CssValueNode) result);
+      } catch (GssFunctionException e) {
+        errorManager.report(new GssError(e.getMessage(), arg2
+          .getSourceCodeLocation()));
+        throw e;
+      }
+    }
+
+    @Override
+    public String getCallResultString(List<String> args)
+        throws GssFunctionException {
+      String baseColorString = args.get(0);
+      return addHslToCssColor(baseColorString, "0", "-"
+        + args.get(1), "0");
+    }
+  }
+
+  /**
+   * Convert the color to a grayscale (desaturation with amount of 100).
+   */
+  public static class Greyscale extends BaseHslColorManipulation implements GssFunction {
+    @Override
+    public Integer getNumExpectedArguments() {
+      return 1;
+    }
+
+    @Override
+    public List<CssValueNode> getCallResultNodes(List<CssValueNode> args,
+        ErrorManager errorManager) throws GssFunctionException {
+      CssValueNode arg1 = args.get(0);
+
+      if (!(arg1 instanceof CssHexColorNode
+          || arg1 instanceof CssLiteralNode)) {
+        String message =
+          "The argument must be a CssHexColorNode or a CssLiteralNode.";
+        errorManager.report(
+          new GssError(message, arg1.getSourceCodeLocation()));
+        throw new GssFunctionException(message);
+      }
+
+      try {
+        String resultString =
+          addHslToCssColor(arg1.getValue(),
+            "0",
+            "-100",
+            "0");
+
+        CssHexColorNode result = new CssHexColorNode(resultString,
+          arg1.getSourceCodeLocation());
+        return ImmutableList.of((CssValueNode) result);
+      } catch (GssFunctionException e) {
+        errorManager.report(
+          new GssError(e.getMessage(), arg1.getSourceCodeLocation()));
+        throw e;
+      }
+    }
+
+    @Override
+    public String getCallResultString(List<String> args)
+        throws GssFunctionException {
+      String baseColorString = args.get(0);
+      return addHslToCssColor(
+        baseColorString, "0", "-100", "0");
+    }
+  }
+
+  /**
+   * Increase the lightness of a color. First argument is the color, second
+   * is the lighten to add, between 0 and 100.
+   */
+  public static class Lighten extends BaseHslColorManipulation implements GssFunction {
+
+    @Override
+    public Integer getNumExpectedArguments() {
+      return 2;
+    }
+
+    @Override
+    public List<CssValueNode> getCallResultNodes(List<CssValueNode> args,
+        ErrorManager errorManager) throws GssFunctionException {
+      CssValueNode arg1 = args.get(0);
+      CssValueNode arg2 = args.get(1);
+
+      if (!(arg1 instanceof CssHexColorNode
+          || arg1 instanceof CssLiteralNode)) {
+        String message =
+          "The first argument must be a CssHexColorNode or a CssLiteralNode.";
+        errorManager.report(
+          new GssError(message, arg1.getSourceCodeLocation()));
+        throw new GssFunctionException(message);
+      }
+      CssNumericNode numeric2;
+      if (arg2 instanceof CssNumericNode) {
+        numeric2 = (CssNumericNode) arg2;
+      } else {
+        String message = "The second argument must be a CssNumericNode";
+        errorManager.report(
+          new GssError(message, arg2.getSourceCodeLocation()));
+        throw new GssFunctionException(message);
+      }
+
+      try {
+        String resultString =
+          addHslToCssColor(arg1.getValue(),
+            "0",
+            "0",
+            numeric2.getNumericPart());
+
+        CssHexColorNode result = new CssHexColorNode(resultString,
+          arg1.getSourceCodeLocation());
+        return ImmutableList.of((CssValueNode) result);
+      } catch (GssFunctionException e) {
+        errorManager.report(
+          new GssError(e.getMessage(), arg2.getSourceCodeLocation()));
+        throw e;
+      }
+    }
+
+    @Override
+    public String getCallResultString(List<String> args)
+        throws GssFunctionException {
+      String baseColorString = args.get(0);
+      return addHslToCssColor(
+        baseColorString, "0", "0", args.get(1));
+    }
+  }
+
+  /**
+   * Decrease the lightness of a color. First argument is the color, second
+   * is the lighten to remove, between 0 and 100.
+   */
+  public static class Darken extends BaseHslColorManipulation implements GssFunction {
+    @Override
+    public Integer getNumExpectedArguments() {
+      return 2;
+    }
+
+    @Override
+    public List<CssValueNode> getCallResultNodes(List<CssValueNode> args,
+        ErrorManager errorManager) throws GssFunctionException {
+      CssValueNode arg1 = args.get(0);
+      CssValueNode arg2 = args.get(1);
+
+      if (!(arg1 instanceof CssHexColorNode
+          || arg1 instanceof CssLiteralNode)) {
+        String message =
+          "The first argument must be a CssHexColorNode or a CssLiteralNode.";
+        errorManager.report(
+          new GssError(message, arg1.getSourceCodeLocation()));
+        throw new GssFunctionException(message);
+      }
+      CssNumericNode numeric2;
+      if (arg2 instanceof CssNumericNode) {
+        numeric2 = (CssNumericNode) arg2;
+      } else {
+        String message = "The second argument must be a CssNumericNode";
+        errorManager.report(
+          new GssError(message, arg2.getSourceCodeLocation()));
+        throw new GssFunctionException(message);
+      }
+
+      try {
+        String resultString =
+          addHslToCssColor(arg1.getValue(),
+            "0",
+            "0",
+            "-" + numeric2.getNumericPart());
+
+        CssHexColorNode result = new CssHexColorNode(resultString,
+          arg1.getSourceCodeLocation());
+        return ImmutableList.of((CssValueNode) result);
+      } catch (GssFunctionException e) {
+        errorManager.report(
+          new GssError(e.getMessage(), arg2.getSourceCodeLocation()));
+        throw e;
+      }
+    }
+
+    @Override
+    public String getCallResultString(List<String> args)
+        throws GssFunctionException {
+      String baseColorString = args.get(0);
+      return addHslToCssColor(
+        baseColorString, "0", "0", "-" + args.get(1));
+    }
+  }
+
+  /**
+   * Increase or decrease the hue of a color. First argument is the color, second
+   * is the hue to add or remove, between 0 and 360.
+   * It's like rotating the color on a color wheel and hue is the angle to apply.
+   */
+  public static class Spin extends BaseHslColorManipulation implements GssFunction {
+    @Override
+    public Integer getNumExpectedArguments() {
+      return 2;
+    }
+
+    @Override
+    public List<CssValueNode> getCallResultNodes(List<CssValueNode> args,
+        ErrorManager errorManager) throws GssFunctionException {
+      CssValueNode arg1 = args.get(0);
+      CssValueNode arg2 = args.get(1);
+
+      if (!(arg1 instanceof CssHexColorNode
+          || arg1 instanceof CssLiteralNode)) {
+        String message =
+          "The first argument must be a CssHexColorNode or a CssLiteralNode.";
+        errorManager.report(
+          new GssError(message, arg1.getSourceCodeLocation()));
+        throw new GssFunctionException(message);
+      }
+      CssNumericNode numeric2;
+      if (arg2 instanceof CssNumericNode) {
+        numeric2 = (CssNumericNode) arg2;
+      } else {
+        String message = "The second argument must be a CssNumericNode";
+        errorManager.report(
+          new GssError(message, arg2.getSourceCodeLocation()));
+        throw new GssFunctionException(message);
+      }
+
+      try {
+        String resultString =
+          addHslToCssColor(arg1.getValue(),
+            numeric2.getNumericPart(),
+            "0",
+            "0");
+
+        CssHexColorNode result = new CssHexColorNode(resultString,
+          arg1.getSourceCodeLocation());
+        return ImmutableList.of((CssValueNode) result);
+      } catch (GssFunctionException e) {
+        errorManager.report(
+          new GssError(e.getMessage(), arg2.getSourceCodeLocation()));
+        throw e;
+      }
+    }
+
+    @Override
+    public String getCallResultString(List<String> args)
+        throws GssFunctionException {
+      String baseColorString = args.get(0);
+      return addHslToCssColor(
+        baseColorString, args.get(1), "0", "0");
+    }
+  }
 
   /**
    * Implementation of the makeMutedColor GSS function. This is intended to
@@ -712,8 +907,8 @@ public class GssFunctions {
    */
   public static class MakeMutedColor implements GssFunction {
 
-    private float LOSS_OF_SATURATION_FOR_MUTED_TONE = 0.2f;
-    private String ARGUMENT_COUNT_ERROR_MESSAGE = "makeMutedColor " +
+    private final float LOSS_OF_SATURATION_FOR_MUTED_TONE = 0.2f;
+    private final String ARGUMENT_COUNT_ERROR_MESSAGE = "makeMutedColor " +
         "expected arguments: backgroundColorStr, foregroundColorStr and an " +
         "optional loss of saturation value (0 <= loss <= 1).";
 
@@ -822,6 +1017,44 @@ public class GssFunctions {
     }
   }
 
+  /**
+   * Implementation of the concat(…) GssFunction. It concatenates a variable number of strings.
+   * e.g. concat('a', 'b') yields 'ab'. Mainly useful for use with constants.
+   */
+  public static class Concat implements GssFunction {
+
+    @Override
+    public Integer getNumExpectedArguments() {
+      return null;  // Variable list of arguments
+    }
+
+    @Override
+    public List<CssValueNode> getCallResultNodes(List<CssValueNode> args, ErrorManager errorManager)
+        throws GssFunctionException {
+      StringBuilder result = new StringBuilder();
+      for (CssValueNode arg : args) {
+        result.append(arg.getValue());
+      }
+      return ImmutableList.of((CssValueNode) new CssStringNode(
+          CssStringNode.Type.SINGLE_QUOTED_STRING, result.toString()));
+    }
+
+    @Override
+    public String getCallResultString(List<String> args) throws GssFunctionException {
+      StringBuilder result = new StringBuilder();
+      for (String arg : args) {
+        if (arg.length() > 1 && ((arg.startsWith("'") && arg.endsWith("'"))
+                                    || (arg.startsWith("\"") && arg.endsWith("\"")))) {
+          result.append(CssStringNode.unescape(arg.substring(1, arg.length() - 1)));
+        } else {
+          result.append(arg);
+        }
+      }
+      return new CssStringNode(CssStringNode.Type.SINGLE_QUOTED_STRING, result.toString())
+          .toString();
+    }
+  }
+
 
   /**
    * Abstract class implementing the shared logic for the arithmetic functions.
@@ -862,7 +1095,8 @@ public class GssFunctions {
         throws GssFunctionException {
       List<CssNumericNode> numericList = Lists.newArrayList();
       for (String arg : args) {
-        Size sizeWithUnits = parseSize(arg);
+        // Note, the unit may be 'NO_UNITS'
+        Size sizeWithUnits = parseSize(arg, true /* isUnitOptional */);
         numericList.add(
             new CssNumericNode(sizeWithUnits.size, sizeWithUnits.units));
       }
@@ -901,7 +1135,7 @@ public class GssFunctions {
         }
         total = performOperation(total, value);
       }
-      String resultString = new DecimalFormat(DECIMAL_FORMAT).format(total);
+      String resultString = new DecimalFormat(DECIMAL_FORMAT, US_SYMBOLS).format(total);
 
       return new CssNumericNode(resultString,
           overallUnit != null ? overallUnit : CssNumericNode.NO_UNITS,
@@ -918,11 +1152,6 @@ public class GssFunctions {
      */
     protected boolean isIdentityValue(double value) {
       return false;
-    }
-
-    protected Size parseSize(String sizeWithUnits)
-        throws GssFunctionException {
-      return GssFunctions.parseSize(sizeWithUnits, /* isUnitOptional */ false);
     }
   }
 
@@ -1011,29 +1240,11 @@ public class GssFunctions {
         double value = Double.valueOf(node.getNumericPart());
         total = performOperation(total, value);
       }
-      String resultString = new DecimalFormat(DECIMAL_FORMAT).format(total);
+      String resultString = new DecimalFormat(DECIMAL_FORMAT, US_SYMBOLS).format(total);
 
       return new CssNumericNode(resultString,
           overallUnit != null ? overallUnit : CssNumericNode.NO_UNITS,
           args.get(0).getSourceCodeLocation());
-    }
-
-    @Override
-    public String getCallResultString(List<String> args)
-        throws GssFunctionException {
-      List<CssNumericNode> numericList = Lists.newArrayList();
-      for (String arg : args) {
-        Size sizeWithUnits = parseSize(arg);
-        numericList.add(
-            new CssNumericNode(sizeWithUnits.size, sizeWithUnits.units));
-      }
-      CssNumericNode result = calculate(numericList, null);
-      return result.getNumericPart() + result.getUnit();
-    }
-
-    @Override
-    protected Size parseSize(String size) throws GssFunctionException {
-      return GssFunctions.parseSize(size, /* isUnitOptional */ true);
     }
   }
 
@@ -1145,7 +1356,7 @@ public class GssFunctions {
         return originalColorStr;
       }
       Color originalColor = ColorParser.parseAny(originalColorStr);
-      float brightnessFloat = Float.parseFloat(brightnessStr) / (float)100.0;
+      float brightnessFloat = Float.parseFloat(brightnessStr) / (float) 100.0;
 
       float[] originalColorHsb = toHsb(originalColor);
       float requestedBrightness = originalColorHsb[2] + brightnessFloat;
@@ -1310,6 +1521,67 @@ public class GssFunctions {
   }
 
   /**
+   * Takes an input color and sets its alpha component without affecting
+   * the RGB components.
+   * Usage: makeTranslucent(existingColor, alphaValue);
+   */
+  public static class MakeTranslucent implements GssFunction {
+    @Override
+    public Integer getNumExpectedArguments() {
+      return 2;
+    }
+
+    @Override
+    public List<CssValueNode> getCallResultNodes(
+        List<CssValueNode> args, ErrorManager errorManager) {
+      CssValueNode arg1 = args.get(0);
+      CssValueNode arg2 = args.get(1);
+
+      String color = arg1.getValue();
+      String alpha = arg2.toString();
+
+      return ImmutableList.of(makeTranslucent(
+          color, alpha, arg1.getSourceCodeLocation()));
+    }
+
+    @Override
+    public String getCallResultString(List<String> args) {
+      return makeTranslucent(args.get(0), args.get(1), null).getValue();
+    }
+
+    protected CssValueNode makeTranslucent(
+        String inputColorStr, String alphaStr,
+        @Nullable SourceCodeLocation sourceCodeLocation) {
+      Color inputColor = ColorParser.parseAny(inputColorStr);
+      double alpha = Math.min(1.0, Math.max(0, Float.parseFloat(alphaStr)));
+
+      float[] rgb = inputColor.getRGBColorComponents(null);
+      Color outputColor = new Color(rgb[0], rgb[1], rgb[2], (float) alpha);
+
+      List<CssValueNode> argList = ImmutableList.<CssValueNode>of(
+          new CssLiteralNode(
+              Integer.toString(outputColor.getRed()), sourceCodeLocation),
+          new CssLiteralNode(
+              Integer.toString(outputColor.getGreen()), sourceCodeLocation),
+          new CssLiteralNode(
+              Integer.toString(outputColor.getBlue()), sourceCodeLocation),
+          new CssLiteralNode(
+              new DecimalFormat("#.###", US_SYMBOLS).format(outputColor.getAlpha() / 255f),
+              sourceCodeLocation));
+      CssValueNode argsValue = new CssCompositeValueNode(
+          argList, CssCompositeValueNode.Operator.COMMA,
+          sourceCodeLocation);
+      CssFunctionNode result = new CssFunctionNode(
+          CssFunctionNode.Function.byName("rgba"),
+          sourceCodeLocation);
+      result.setArguments(new CssFunctionArgumentsNode(
+          ImmutableList.of(argsValue)));
+      return result;
+    }
+  }
+
+
+  /**
    * Allows the equivalent of the ternary operator in GSS, using three
    * {@code @def} statements as inputs. This GSS:
    * <p>
@@ -1361,11 +1633,6 @@ public class GssFunctions {
   }
 
   private static CssNumericNode getSizeNode(CssValueNode valueNode,
-      ErrorManager errorManager) throws GssFunctionException {
-    return getSizeNode(valueNode, errorManager, false /* isUnitOptional */);
-  }
-
-  private static CssNumericNode getSizeNode(CssValueNode valueNode,
       ErrorManager errorManager, boolean isUnitOptional)
       throws GssFunctionException {
     SourceCodeLocation location = valueNode.getSourceCodeLocation();
@@ -1393,50 +1660,6 @@ public class GssFunctions {
     }
   }
 
-  private static CssLiteralNode getCornerNode(CssValueNode valueNode,
-      ErrorManager errorManager) throws GssFunctionException {
-    if (valueNode instanceof CssLiteralNode) {
-      return (CssLiteralNode)valueNode;
-    }
-    String message = "Corner name must be an identifier; was: "
-            + valueNode.toString();
-    throw error(valueNode, message, errorManager);
-  }
-
-  private static String getColorFromNode(CssValueNode arg,
-      ErrorManager errorManager) throws GssFunctionException {
-    // Note: we can expect CssHexColorNode or a CssLiteralNode (for
-    // example "white"), but not functions (like "rgb(x,y,z)").
-    if (arg instanceof CssHexColorNode) {
-      return arg.getValue().substring(1); // cut the "#"
-    } else if (arg instanceof CssLiteralNode) {
-      return arg.getValue();
-    }
-    String message = "First argument must be a CssHexColorNode or "
-        + "LiteralNode containing a color name";
-    throw error(arg, message, errorManager);
-  }
-
-  private static String getColor(String color) {
-    if (color.charAt(0) == '#') {
-      return color.substring(1);
-    }
-    return color;
-  }
-
-  private static CssNumericNode getBrowserInfo(CssValueNode arg,
-      ErrorManager errorManager) throws GssFunctionException {
-    if (arg instanceof CssNumericNode) {
-      CssNumericNode node = (CssNumericNode)arg;
-      if (node.getUnit().equals(CssNumericNode.NO_UNITS)) {
-        return node;
-      }
-    }
-    String message = "Browser info must be a numeric value; was: "
-        + arg.toString();
-    throw error(arg, message, errorManager);
-  }
-
   /**
    * Helper method for implementors of GssFunction to allow the creation of
    * a url string in the GSS.
@@ -1458,9 +1681,23 @@ public class GssFunctions {
     }
   }
 
+  /**
+   * Helper class for checking if a size string contains units. This class is equivalent to
+   * {@link CharMatcher#javaLetter} except that it also accepts {@code %}.
+   */
+  private static final CharMatcher UNIT_MATCHER = new CharMatcher() {
+    @Override public boolean matches(char c) {
+      return Character.isLetter(c) || c == '%';
+    }
+
+    @Override public String toString() {
+      return "GssFunctions.UNIT_MATCHER";
+    }
+  };
+
   private static Size parseSize(String sizeWithUnits, boolean isUnitOptional)
       throws GssFunctionException {
-    int unitIndex = CharMatcher.JAVA_LETTER.indexIn(sizeWithUnits);
+    int unitIndex = UNIT_MATCHER.indexIn(sizeWithUnits);
     String size = unitIndex > 0 ?
         sizeWithUnits.substring(0, unitIndex) : sizeWithUnits;
     String units = unitIndex > 0 ?

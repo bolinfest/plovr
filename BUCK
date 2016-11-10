@@ -30,6 +30,7 @@ java_library(
     '//closure/closure-templates:guice-assistedinject',
     '//closure/closure-templates:guice-multibindings',
     ':selenium',
+    ':webdriver',
   ],
 )
 
@@ -57,5 +58,10 @@ prebuilt_jar(
 
 prebuilt_jar(
   name = 'selenium',
-  binary_jar = 'lib/selenium-java-2.21.0.jar',
+  binary_jar = 'lib/selenium-java-2.53.0.jar',
+)
+
+prebuilt_jar(
+  name = 'webdriver',
+  binary_jar = 'lib/webdriver-2.6.jar',
 )

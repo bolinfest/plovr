@@ -6,6 +6,7 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.regex.Matcher;
 
+import com.google.template.soy.base.internal.LegacyInternalSyntaxException;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
@@ -56,7 +57,7 @@ public class PlovrSoySyntaxExceptionTest {
     String errorMessage = "Left brace '{' not allowed within a Soy tag " +
         "delimited by single braces (consider using double braces to delimit " +
         "the Soy tag) [line 13, column 1].";
-    SoySyntaxException soySyntaxException = SoySyntaxException.createWithMetaInfo(
+    LegacyInternalSyntaxException soySyntaxException = LegacyInternalSyntaxException.createWithMetaInfo(
         errorMessage,
         new SourceLocation("src/org/plovr/plovr.soy", /* lineNumber */ 13, 1, 13, 2),
         /* filePath */ null, // Must not be specified when SourceLocation is set.
@@ -83,7 +84,7 @@ public class PlovrSoySyntaxExceptionTest {
     String errorMessage = "Found references to data keys that are not" +
         " declared in SoyDoc: [weekdays]";
     PlovrSoySyntaxException exception = new PlovrSoySyntaxException(
-        new SoySyntaxException(errorMessage),
+        new LegacyInternalSyntaxException(errorMessage) {},
         input);
     assertEquals(
         "Without line information, no special formatting is required.",

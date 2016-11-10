@@ -20,7 +20,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.rhino.Node;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -93,15 +92,19 @@ class PhaseOptimizer implements CompilerPass {
   // future, we should write new code to do it.
   @VisibleForTesting
   static final List<String> OPTIMAL_ORDER = ImmutableList.of(
-     "deadAssignmentsElimination",
      "inlineFunctions",
-     "removeUnusedPrototypeProperties",
-     "removeUnreachableCode",
-     "removeUnusedVars",
-     "minimizeExitPoints",
      "inlineVariables",
+     "deadAssignmentsElimination",
      "collapseObjectLiterals",
-     "peepholeOptimizations");
+     "removeUnusedVars",
+     "removeUnusedPrototypeProperties",
+     "removeUnusedClassProperties",
+     "peepholeOptimizations",
+     "minimizeExitPoints",
+     "removeUnreachableCode");
+
+  static final List<String> CODE_MOTION_PASSES = ImmutableList.of(
+      Compiler.CROSS_MODULE_CODE_MOTION_NAME, Compiler.CROSS_MODULE_METHOD_MOTION_NAME);
 
   static final int MAX_LOOPS = 100;
   static final String OPTIMIZE_LOOP_ERROR =
@@ -213,6 +216,14 @@ class PhaseOptimizer implements CompilerPass {
           / passes.size();
       progress = progressRange.initialValue;
     }
+
+    // When looking at this code, one can mistakenly think that the instance of
+    // PhaseOptimizer keeps all compiler passes live. This would be undesirable. A pass can
+    // create large data structures that are only useful to the pass, and we shouldn't
+    // retain them until the end of the compilation. But if you look at
+    // NamedPass#process, the actual pass is created and immediately executed, and no
+    // reference to it is retained in PhaseOptimizer:
+    //   factory.create(compiler).process(externs, root);
     for (CompilerPass pass : passes) {
       pass.process(externs, root);
       if (hasHaltingErrors()) {
@@ -335,9 +346,9 @@ class PhaseOptimizer implements CompilerPass {
   }
 
   private Node getEnclosingScope(Node n) {
-    while (n != jsRoot && n.getParent() != null) {
+    while (n.getParent() != null) {
       n = n.getParent();
-      if (n.isFunction()) {
+      if (n.isFunction() || n.isScript()) {
         return n;
       }
     }
@@ -423,6 +434,7 @@ class PhaseOptimizer implements CompilerPass {
       Preconditions.checkState(!inLoop, "Nested loops are forbidden");
       inLoop = true;
       optimizePasses();
+      boolean isCodeMotionLoop = isCodeMotionLoop();
 
       // Set up function-change tracking
       scopeHandler = new ScopedChangeHandler();
@@ -441,6 +453,18 @@ class PhaseOptimizer implements CompilerPass {
       State state = State.RUN_PASSES_NOT_RUN_IN_PREV_ITER;
       boolean lastIterMadeChanges;
       int count = 0;
+      int astSize = NodeUtil.countAstSize(root);
+      int previousAstSize = astSize;
+
+      // The loop starts at state RUN_PASSES_NOT_RUN_IN_PREV_ITER and runs all passes.
+      // After that, it goes to state RUN_PASSES_THAT_CHANGED_STH_IN_PREV_ITER, and
+      // runs several iterations in that state, until there are no longer any changes
+      // to the AST, and then it goes back to RUN_PASSES_NOT_RUN_IN_PREV_ITER.
+      // We call one sequence of RUN_PASSES_NOT_RUN_IN_PREV_ITER followed by
+      // RUN_PASSES_THAT_CHANGED_STH_IN_PREV_ITER a batch.
+      // At the end of every loop batch, if the batch made so few changes that the
+      // changed percentage of the AST is below some threshold, we stop the loop
+      // without waiting to reach a fixpoint.
 
       try {
         while (true) {
@@ -479,6 +503,20 @@ class PhaseOptimizer implements CompilerPass {
             }
           } else { // state == State.RUN_PASSES_THAT_CHANGED_STH_IN_PREV_ITER
             if (!lastIterMadeChanges) {
+              previousAstSize = astSize;
+              astSize = NodeUtil.countAstSize(root);
+              float percentChange = Math.abs(astSize - previousAstSize) / (float) previousAstSize;
+              // If this loop batch made the code less than 0.1% smaller than the previous loop
+              // batch, stop before the fixpoint.
+              // Use this criterion only for loops that remove code; the code-motion loop may
+              // move code around but not remove code, so this criterion is not correct for
+              // stopping early.
+              // This threshold is based on the following heuristic: 1% size difference matters
+              // to our users. 0.1% size difference is borderline relevant. 0.1% difference
+              // between loop batches is smaller than 0.1% total difference, so it's unimportant.
+              if (!isCodeMotionLoop && percentChange < 0.001) {
+                return;
+              }
               state = State.RUN_PASSES_NOT_RUN_IN_PREV_ITER;
             }
           }
@@ -509,6 +547,15 @@ class PhaseOptimizer implements CompilerPass {
 
       myPasses.removeAll(optimalPasses);
       myPasses.addAll(optimalPasses);
+    }
+
+    private boolean isCodeMotionLoop() {
+      for (NamedPass pass : this.myPasses) {
+        if (CODE_MOTION_PASSES.contains(pass.name)) {
+          return true;
+        }
+      }
+      return false;
     }
   }
 

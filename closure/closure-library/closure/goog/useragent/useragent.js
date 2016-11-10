@@ -27,6 +27,7 @@ goog.require('goog.labs.userAgent.browser');
 goog.require('goog.labs.userAgent.engine');
 goog.require('goog.labs.userAgent.platform');
 goog.require('goog.labs.userAgent.util');
+goog.require('goog.reflect');
 goog.require('goog.string');
 
 
@@ -385,6 +386,15 @@ goog.userAgent.IPOD = goog.userAgent.PLATFORM_KNOWN_ ?
 
 
 /**
+ * Whether the user agent is running on iOS.
+ * @type {boolean}
+ */
+goog.userAgent.IOS = goog.userAgent.PLATFORM_KNOWN_ ?
+    (goog.userAgent.ASSUME_IPHONE || goog.userAgent.ASSUME_IPAD ||
+     goog.userAgent.ASSUME_IPOD) :
+    goog.labs.userAgent.platform.isIos();
+
+/**
  * @return {string} The string that describes the version number of the user
  *     agent.
  * @private
@@ -508,9 +518,11 @@ goog.userAgent.isVersionOrHigherCache_ = {};
  */
 goog.userAgent.isVersionOrHigher = function(version) {
   return goog.userAgent.ASSUME_ANY_VERSION ||
-      goog.userAgent.isVersionOrHigherCache_[version] ||
-      (goog.userAgent.isVersionOrHigherCache_[version] =
-           goog.string.compareVersions(goog.userAgent.VERSION, version) >= 0);
+      goog.reflect.cache(
+          goog.userAgent.isVersionOrHigherCache_, version, function() {
+            return goog.string.compareVersions(
+                       goog.userAgent.VERSION, version) >= 0;
+          });
 };
 
 

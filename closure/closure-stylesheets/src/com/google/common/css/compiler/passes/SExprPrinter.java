@@ -16,91 +16,118 @@
 
 package com.google.common.css.compiler.passes;
 
+import com.google.common.css.SourceCodeLocation;
 import com.google.common.css.compiler.ast.CssCompositeValueNode;
-import com.google.common.css.compiler.ast.CssTree;
 import com.google.common.css.compiler.ast.CssNode;
 import com.google.common.css.compiler.ast.CssNodesListNode;
+import com.google.common.css.compiler.ast.CssTree;
 import com.google.common.css.compiler.ast.CssValueNode;
 
 /**
- * Build up an s-expression corresponding to the AST for
- * debugging purposes.
+ * Build up an s-expression corresponding to the AST for debugging purposes.
  */
-public class SExprPrinter extends UniformVisitor {
+public class SExprPrinter extends CodePrinter {
+  private boolean includeHashCodes = false;
+  private boolean withLocationAnnotation = false;
 
-  public StringBuilder sb;
-
-  public SExprPrinter(StringBuilder sb) {
-    this.sb = sb;
+  /**
+   * A S-Expr printer for {@link CssNode} instances.
+   */
+  public SExprPrinter(CssNode subtree) {
+    super(subtree);
   }
 
-  public SExprPrinter() {
-    this(new StringBuilder());
+  /**
+   * A S-Expr printer for {@link CssTree} instances.
+   */
+  public SExprPrinter(CssTree tree) {
+    super(tree);
+  }
+
+  /**
+   * A S-Expr printer for {@link CssNode} instances.
+   * @param includeHashCodes boolean switch to include hash code for node or not.
+   * @param withLocationAnnotation boolean switch to include source code location or not.
+   */
+  public SExprPrinter(CssNode subtree, boolean includeHashCodes, boolean withLocationAnnotation) {
+    super(subtree);
+    this.includeHashCodes = includeHashCodes;
+    this.withLocationAnnotation = withLocationAnnotation;
+  }
+
+  /**
+   * A S-Expr printer for {@link CssTree} instances.
+   * @param includeHashCodes boolean switch to include hash code for node or not.
+   * @param withLocationAnnotation boolean switch to include source code location or not.
+   */
+  public SExprPrinter(CssTree tree, boolean includeHashCodes, boolean withLocationAnnotation) {
+    super(tree);
+    this.includeHashCodes = includeHashCodes;
+    this.withLocationAnnotation = withLocationAnnotation;
   }
 
   @Override
   public void enter(CssNode node) {
-    sb.append(
-        String.format("(%s@%d ", node.getClass().getName(), node.hashCode()));
-  }
-
-  private void trim(StringBuilder sb, String waste) {
-    if (sb.length() == 0) {
-      return;
+    if (includeHashCodes) {
+      buffer.append(String.format("(%s@%d ", node.getClass().getName(), node.hashCode()));
+    } else {
+      buffer.append(String.format("(%s ", node.getClass().getName()));
     }
-    int expectedPosition = sb.length() - waste.length();
-    if (sb.indexOf(waste, expectedPosition) != -1) {
-      sb.delete(expectedPosition, sb.length());
+
+    if (withLocationAnnotation) {
+      SourceCodeLocation loc = node.getSourceCodeLocation();
+      if (loc == null) {
+        loc = SourceCodeLocation.getUnknownLocation();
+      }
+      buffer.append(String.format(
+        ":scl-unknown %s ", loc.isUnknown()));
     }
   }
 
   @Override
   public void leave(CssNode node) {
-    trim(sb, " ");
-    sb.append(")");
+    buffer.deleteLastCharIfCharIs(' ');
+    buffer.append(')');
   }
 
   /** Called between adjacent nodes in a media type list */
   @Override
-  public boolean enterMediaTypeListDelimiter(
-      CssNodesListNode<? extends CssNode> node) {
+  public boolean enterMediaTypeListDelimiter(CssNodesListNode<? extends CssNode> node) {
     super.enterMediaTypeListDelimiter(node);
     // this very special state does not represent a node
-    sb.append("(MediaTypeListDelimiter");
+    buffer.append("(MediaTypeListDelimiter");
     return true;
   }
 
   /** Called between adjacent nodes in a media type list */
   @Override
-  public void leaveMediaTypeListDelimiter(
-      CssNodesListNode<? extends CssNode> node) {
+  public void leaveMediaTypeListDelimiter(CssNodesListNode<? extends CssNode> node) {
     // this very special state does not represent a node
-    sb.append(")");
+    buffer.append(')');
     super.leaveMediaTypeListDelimiter(node);
   }
 
   /** Called between values in a {@code CssCompositeValueNode} */
   @Override
-  public boolean enterCompositeValueNodeOperator(
-      CssCompositeValueNode parent) {
+  public boolean enterCompositeValueNodeOperator(CssCompositeValueNode parent) {
     super.enterCompositeValueNodeOperator(parent);
     // this very special state does not represent a node
-    sb.append("(CompositeValueNodeOperator ");
-    sb.append(parent.getOperator().name());
+    buffer.append("(CompositeValueNodeOperator ");
+    buffer.append(parent.getOperator().name());
     return true;
   }
 
   /** Called between values in a {@code CssCompositeValueNode} */
   @Override
   public void leaveCompositeValueNodeOperator(CssCompositeValueNode parent) {
-    sb.append(")");
+    buffer.append(')');
     super.leaveCompositeValueNodeOperator(parent);
   }
 
   @Override
   public boolean enterValueNode(CssValueNode n) {
     super.enterValueNode(n);
-    sb.append(n.toString() + " ");
+    buffer.append(n + " ");
     return true;
   }
 
@@ -110,8 +137,26 @@ public class SExprPrinter extends UniformVisitor {
   }
 
   public static String print(CssTree t) {
-    StringBuilder sb = new StringBuilder();
-    t.getVisitController().startVisit(new SExprPrinter(sb));
-    return sb.toString();
+    SExprPrinter printer = new SExprPrinter(t);
+    t.getVisitController().startVisit(printer);
+    return printer.getOutputBuffer();
+  }
+
+  public static String print(boolean includeHashCodes, boolean withLocationAnnotation, CssTree t) {
+    SExprPrinter printer = new SExprPrinter(t, includeHashCodes, withLocationAnnotation);
+    t.getVisitController().startVisit(printer);
+    return printer.getOutputBuffer();
+  }
+
+  public static String print(CssNode n) {
+    SExprPrinter printer = new SExprPrinter(n);
+    n.getVisitController().startVisit(printer);
+    return printer.getOutputBuffer();
+  }
+
+  public static String print(boolean includeHashCodes, boolean withLocationAnnotation, CssNode n) {
+    SExprPrinter printer = new SExprPrinter(n, includeHashCodes, withLocationAnnotation);
+    n.getVisitController().startVisit(printer);
+    return printer.getOutputBuffer();
   }
 }

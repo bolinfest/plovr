@@ -718,6 +718,35 @@ md.$mdMenu = function() {};
 md.$mdMenu.prototype.hide = function(opt_reason, opt_options) {};
 
 /******************************************************************************
+ * $mdSelect Service
+ *****************************************************************************/
+
+/** @interface */
+md.$select = function() {};
+
+/**
+ * @param {*} options
+ * @return {!angular.$q.Promise}
+ */
+md.$select.prototype.show = function(options) {};
+
+/**
+ * @param {VALUE=} opt_reason Data to resolve the promise with.
+ * @param {*=} opt_options
+ * @return {!angular.$q.Promise<VALUE>}
+ * @template VALUE
+ */
+md.$select.prototype.hide = function(opt_reason, opt_options) {};
+
+/**
+ * @param {VALUE=} opt_reason Data to reject the promise with.
+ * @param {*=} opt_options
+ * @return {!angular.$q.Promise<VALUE>}
+ * @template VALUE
+ */
+md.$select.prototype.cancel = function(opt_reason, opt_options) {};
+
+/******************************************************************************
  * $mdDateLocaleProvider
  *****************************************************************************/
 
@@ -914,6 +943,12 @@ md.$panel.prototype.animation = {
  * @constructor
  */
 md.$panel.MdPanelRef = function(config, $injector) {};
+
+/** @type {string} */
+md.$panel.MdPanelRef.prototype.id;
+
+/** @type {boolean} */
+md.$panel.MdPanelRef.prototype.isAttached;
 
 /** @return {!angular.$q.Promise<!md.$panel.MdPanelRef>} */
 md.$panel.MdPanelRef.prototype.open = function() {};

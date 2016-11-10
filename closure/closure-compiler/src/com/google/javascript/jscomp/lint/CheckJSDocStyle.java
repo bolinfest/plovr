@@ -54,6 +54,10 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
           "Visibility annotations on constructors are not supported.\n"
           + "Please mark the visibility on the class instead.");
 
+  public static final DiagnosticType CLASS_DISALLOWED_JSDOC =
+      DiagnosticType.disabled("JSC_CLASS_DISALLOWED_JSDOC",
+          "@constructor annotations are redundant on classes.");
+
   public static final DiagnosticType MISSING_JSDOC =
       DiagnosticType.disabled("JSC_MISSING_JSDOC", "Function must have JSDoc.");
 
@@ -80,10 +84,6 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
       DiagnosticType.disabled("JSC_OPTIONAL_PARAM_NOT_MARKED_OPTIONAL",
           "Parameter {0} is optional so its type must end with =");
 
-  public static final DiagnosticType OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME =
-      DiagnosticType.disabled("JSC_OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME",
-          "Optional parameter name {0} must be prefixed with opt_");
-
   public static final DiagnosticType WRONG_NUMBER_OF_PARAMS =
       DiagnosticType.disabled("JSC_WRONG_NUMBER_OF_PARAMS", "Wrong number of @param annotations");
 
@@ -98,6 +98,7 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
   public static final DiagnosticGroup ALL_DIAGNOSTICS =
       new DiagnosticGroup(
           INVALID_SUPPRESS,
+          CLASS_DISALLOWED_JSDOC,
           CONSTRUCTOR_DISALLOWED_JSDOC,
           MISSING_JSDOC,
           MISSING_PARAMETER_JSDOC,
@@ -106,7 +107,6 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
           MUST_BE_PRIVATE,
           MUST_HAVE_TRAILING_UNDERSCORE,
           OPTIONAL_PARAM_NOT_MARKED_OPTIONAL,
-          OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME,
           WRONG_NUMBER_OF_PARAMS,
           INCORRECT_PARAM_NAME,
           EXTERNS_FILES_SHOULD_BE_ANNOTATED);
@@ -125,9 +125,12 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case FUNCTION:
         visitFunction(t, n, parent);
+        break;
+      case CLASS:
+        visitClass(t, n);
         break;
       case ASSIGN:
         // If the right side is a function it will be handled when the function is visited.
@@ -236,6 +239,17 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
         && jsDoc != null
         && !jsDoc.getVisibility().equals(Visibility.INHERITED)) {
       t.report(function, CONSTRUCTOR_DISALLOWED_JSDOC);
+    }
+  }
+
+  private void visitClass(NodeTraversal t, Node cls) {
+    JSDocInfo jsDoc = NodeUtil.getBestJSDocInfo(cls);
+
+    if (jsDoc == null) {
+      return;
+    }
+    if (jsDoc.isConstructor()) {
+      t.report(cls, CLASS_DISALLOWED_JSDOC);
     }
   }
 
@@ -375,9 +389,6 @@ public final class CheckJSDocStyle extends AbstractPostOrderCallback implements 
     boolean jsDocOptional = paramType != null && paramType.isOptionalArg();
     if (nameOptional && !jsDocOptional) {
       t.report(nodeToCheck, OPTIONAL_PARAM_NOT_MARKED_OPTIONAL, name);
-      return true;
-    } else if (!nameOptional && jsDocOptional) {
-      t.report(nodeToCheck, OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME, name);
       return true;
     }
     return false;

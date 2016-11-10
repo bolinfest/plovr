@@ -38,11 +38,11 @@ import com.google.javascript.jscomp.CompilerOptions.JsonStreamMode;
 import com.google.javascript.jscomp.CompilerOptions.OutputJs;
 import com.google.javascript.jscomp.CompilerOptions.TweakProcessing;
 import com.google.javascript.jscomp.deps.ClosureBundler;
+import com.google.javascript.jscomp.deps.ModuleLoader;
 import com.google.javascript.jscomp.deps.SourceCodeEscapers;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.TokenStream;
 import com.google.protobuf.CodedOutputStream;
-
 import java.io.BufferedInputStream;
 import java.io.BufferedWriter;
 import java.io.Closeable;
@@ -70,7 +70,6 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
-
 import javax.annotation.Nullable;
 
 /**
@@ -135,38 +134,6 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
   static final String WAITING_FOR_INPUT_WARNING =
       "The compiler is waiting for input via stdin.";
 
-  // The core language externs expected in externs.zip, in sorted order.
-  private static final List<String> BUILTIN_LANG_EXTERNS = ImmutableList.of(
-      "es3.js",
-      "es5.js",
-      "es6.js",
-      "es6_collections.js");
-
-  // Externs expected in externs.zip, in sorted order.
-  // Externs not included in this list will be added last
-  private static final List<String> BUILTIN_EXTERN_DEP_ORDER = ImmutableList.of(
-    //-- browser externs --
-    "browser/intl.js",
-    "browser/w3c_event.js",
-    "browser/w3c_event3.js",
-    "browser/gecko_event.js",
-    "browser/ie_event.js",
-    "browser/webkit_event.js",
-    "browser/w3c_device_sensor_event.js",
-    "browser/w3c_dom1.js",
-    "browser/w3c_dom2.js",
-    "browser/w3c_dom3.js",
-    "browser/w3c_dom4.js",
-    "browser/gecko_dom.js",
-    "browser/ie_dom.js",
-    "browser/webkit_dom.js",
-    "browser/w3c_css.js",
-    "browser/gecko_css.js",
-    "browser/ie_css.js",
-    "browser/webkit_css.js",
-    "browser/w3c_touch_event.js"
-  );
-
   private final CommandLineConfig config;
 
   private final InputStream in;
@@ -190,7 +157,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
   private Supplier<List<SourceFile>> externsSupplierForTesting = null;
   private Supplier<List<SourceFile>> inputsSupplierForTesting = null;
   private Supplier<List<JSModule>> modulesSupplierForTesting = null;
-  private Function<Integer, Boolean> exitCodeReceiverForTesting = null;
+  private Function<Integer, Void> exitCodeReceiver = SystemExitCodeReceiver.INSTANCE;
   private Map<String, String> rootRelativePathsMap = null;
 
   private Map<String, String> parsedModuleWrappers = null;
@@ -233,14 +200,22 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
       Supplier<List<SourceFile>> externsSupplier,
       Supplier<List<SourceFile>> inputsSupplier,
       Supplier<List<JSModule>> modulesSupplier,
-      Function<Integer, Boolean> exitCodeReceiver) {
+      Function<Integer, Void> exitCodeReceiver) {
     Preconditions.checkArgument(
         inputsSupplier == null ^ modulesSupplier == null);
     testMode = true;
     this.externsSupplierForTesting = externsSupplier;
     this.inputsSupplierForTesting = inputsSupplier;
     this.modulesSupplierForTesting = modulesSupplier;
-    this.exitCodeReceiverForTesting = exitCodeReceiver;
+    this.exitCodeReceiver = exitCodeReceiver;
+  }
+
+  /**
+   * @param newExitCodeReceiver receives a non-zero integer to indicate a
+   *    problem during execution or 0i to indicate success.
+   */
+  public void setExitCodeReceiver(Function<Integer, Void> newExitCodeReceiver) {
+    this.exitCodeReceiver = Preconditions.checkNotNull(newExitCodeReceiver);
   }
 
   /**
@@ -405,6 +380,8 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     options.sourceMapDetailLevel = config.sourceMapDetailLevel;
     options.sourceMapFormat = config.sourceMapFormat;
     options.sourceMapLocationMappings = config.sourceMapLocationMappings;
+    options.parseInlineSourceMaps = config.parseInlineSourceMaps;
+    options.applyInputSourceMaps = config.applyInputSourceMaps;
 
     ImmutableMap.Builder<String, SourceMapInput> inputSourceMaps
         = new ImmutableMap.Builder<>();
@@ -475,57 +452,33 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
 
     ZipInputStream zip = new ZipInputStream(input);
     String envPrefix = env.toString().toLowerCase() + "/";
-    String browserEnv = CompilerOptions.Environment.BROWSER.toString().toLowerCase();
-    boolean flatExternStructure = true;
     Map<String, SourceFile> mapFromExternsZip = new HashMap<>();
     for (ZipEntry entry = null; (entry = zip.getNextEntry()) != null; ) {
       String filename = entry.getName();
-      if (filename.contains(browserEnv)) {
-        flatExternStructure = false;
-      }
+
       // Always load externs in the root folder.
       // If the non-core-JS externs are organized in subfolders, only load
-      // the ones in a subfolder matching the specified environment.
-      if (!filename.contains("/")
-          || (filename.indexOf(envPrefix) == 0
-              && filename.length() > envPrefix.length())) {
-        BufferedInputStream entryStream = new BufferedInputStream(
-            ByteStreams.limit(zip, entry.getSize()));
-        mapFromExternsZip.put(filename,
-            SourceFile.fromInputStream(
-                // Give the files an odd prefix, so that they do not conflict
-                // with the user's files.
-                "externs.zip//" + filename,
-                entryStream,
-                UTF_8));
+      // the ones in a subfolder matching the specified environment. Strip the subfolder.
+      if (filename.contains("/")) {
+        if (!filename.startsWith(envPrefix)) {
+          continue;
+        }
+        filename = filename.substring(envPrefix.length());  // remove envPrefix, including '/'
       }
+
+      BufferedInputStream entryStream = new BufferedInputStream(
+          ByteStreams.limit(zip, entry.getSize()));
+      mapFromExternsZip.put(filename,
+          SourceFile.fromInputStream(
+              // Give the files an odd prefix, so that they do not conflict
+              // with the user's files.
+              "externs.zip//" + filename,
+              entryStream,
+              UTF_8));
     }
 
-    List<SourceFile> externs = new ArrayList<>();
-    // The externs for core JS objects are loaded in all environments.
-    for (String key : BUILTIN_LANG_EXTERNS) {
-      Preconditions.checkState(
-          mapFromExternsZip.containsKey(key),
-          "Externs zip must contain %s.", key);
-      externs.add(mapFromExternsZip.remove(key));
-    }
-    // Order matters, so extern resources which have dependencies must be added
-    // to the result list in the expected order.
-    for (String key : BUILTIN_EXTERN_DEP_ORDER) {
-      if (!flatExternStructure && !key.contains(envPrefix)) {
-        continue;
-      }
-      if (flatExternStructure) {
-        key = key.substring(key.indexOf('/') + 1);
-      }
-      Preconditions.checkState(
-          mapFromExternsZip.containsKey(key),
-          "Externs zip must contain %s when environment is %s.", key, env);
-      externs.add(mapFromExternsZip.remove(key));
-    }
-    externs.addAll(mapFromExternsZip.values());
-    return externs;
-  }
+    return DefaultExterns.prepareExterns(env, mapFromExternsZip);
+ }
 
   /**
    * Runs the Compiler and calls System.exit() with the exit status of the
@@ -539,25 +492,21 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
         result = doRun();
       }
     } catch (AbstractCommandLineRunner.FlagUsageException e) {
-      System.err.println(e.getMessage());
+      err.println(e.getMessage());
       result = -1;
     } catch (Throwable t) {
-      t.printStackTrace();
+      t.printStackTrace(err);
       result = -2;
     }
 
-    if (testMode) {
-      exitCodeReceiverForTesting.apply(result);
-    } else {
-      System.exit(result);
-    }
+    exitCodeReceiver.apply(result);
   }
 
   /**
    * Returns the PrintStream for writing errors associated with this
    * AbstractCommandLineRunner.
    */
-  protected PrintStream getErrorPrintStream() {
+  protected final PrintStream getErrorPrintStream() {
     return err;
   }
 
@@ -816,7 +765,8 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     List<String> moduleNames = new ArrayList<>(specs.size());
     Map<String, JSModule> modulesByName = new LinkedHashMap<>();
     Map<String, Integer> modulesFileCountMap = new LinkedHashMap<>();
-    int numJsFilesExpected = 0, minJsFilesRequired = 0;
+    int numJsFilesExpected = 0;
+    int minJsFilesRequired = 0;
     for (JsModuleSpec spec : specs) {
       checkModuleName(spec.name);
       if (modulesByName.containsKey(spec.name)) {
@@ -870,7 +820,8 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
       }
     }
 
-    int numJsFilesLeft = totalNumJsFiles, moduleIndex = 0;
+    int numJsFilesLeft = totalNumJsFiles;
+    int moduleIndex = 0;
     for (String moduleName : moduleNames) {
       // Parse module inputs.
       int numJsFiles = modulesFileCountMap.get(moduleName);
@@ -1095,7 +1046,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
           String sourceMapPath = jsonFile.getPath() + ".map";
           SourceFile sourceMap = SourceFile.fromCode(sourceMapPath,
               jsonFile.getSourceMap());
-          inputSourceMaps.put(sourceMapPath, new SourceMapInput(sourceMap));
+          inputSourceMaps.put(jsonFile.getPath(), new SourceMapInput(sourceMap));
           foundJsonInputSourceMap = true;
         }
       }
@@ -1316,7 +1267,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
   }
 
   private DiagnosticType outputModuleBinaryAndSourceMaps(List<JSModule> modules, B options)
-      throws FlagUsageException, IOException {
+      throws IOException {
     parsedModuleWrappers = parseModuleWrappers(
         config.moduleWrapper, modules);
     maybeCreateDirsForPath(config.moduleOutputPathPrefix);
@@ -1368,12 +1319,8 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     return null;
   }
 
-  /**
-   * Given an output module, convert it to a JSONFileSpec with associated
-   * sourcemap
-   */
-  private JsonFileSpec createJsonFileFromModule(JSModule module) throws
-      FlagUsageException, IOException{
+  /** Given an output module, convert it to a JSONFileSpec with associated sourcemap */
+  private JsonFileSpec createJsonFileFromModule(JSModule module) throws IOException {
     compiler.getSourceMap().reset();
 
     StringBuilder output = new StringBuilder();
@@ -1532,7 +1479,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     if (fileName == null) {
       return null;
     }
-    if (testMode) {
+    if (isInTestMode()) {
       return new StringWriter();
     }
 
@@ -1547,7 +1494,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
     if (fileName == null) {
       return null;
     }
-    if (testMode) {
+    if (isInTestMode()) {
       return new StringWriter();
     }
 
@@ -1599,7 +1546,8 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
    */
   private void outputSourceMap(B options, String associatedName)
       throws IOException {
-    if (Strings.isNullOrEmpty(options.sourceMapOutputPath)) {
+    if (Strings.isNullOrEmpty(options.sourceMapOutputPath)
+        || options.sourceMapOutputPath.equals("/dev/null")) {
       return;
     }
 
@@ -2117,6 +2065,14 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
       return this;
     }
 
+    private boolean parseInlineSourceMaps = false;
+
+    public CommandLineConfig setParseInlineSourceMaps(
+        boolean parseInlineSourceMaps) {
+      this.parseInlineSourceMaps = parseInlineSourceMaps;
+      return this;
+    }
+
     private String variableMapInputFile = "";
 
     /**
@@ -2292,6 +2248,17 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
         List<SourceMap.LocationMapping> locationMappings) {
 
       this.sourceMapLocationMappings = ImmutableList.copyOf(locationMappings);
+      return this;
+    }
+
+    private boolean applyInputSourceMaps = false;
+
+    /**
+     * Whether to apply input source maps to the output, i.e. map back to original inputs from
+     * input files that have source maps applied to them.
+     */
+    public CommandLineConfig setApplyInputSourceMaps(boolean applyInputSourceMaps) {
+      this.applyInputSourceMaps = applyInputSourceMaps;
       return this;
     }
 
@@ -2489,7 +2456,7 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
       return this;
     }
 
-    private List<String> moduleRoots = ImmutableList.of(ES6ModuleLoader.DEFAULT_FILENAME_PREFIX);
+    private List<String> moduleRoots = ImmutableList.of(ModuleLoader.DEFAULT_FILENAME_PREFIX);
 
     /**
      * Sets the module roots.
@@ -2730,6 +2697,28 @@ public abstract class AbstractCommandLineRunner<A extends Compiler,
 
     public int getNumJsFiles() {
       return numJsFiles;
+    }
+  }
+
+
+  static final class SystemExitCodeReceiver implements Function<Integer, Void> {
+    static final SystemExitCodeReceiver INSTANCE = new SystemExitCodeReceiver();
+
+    private SystemExitCodeReceiver() {
+      // singleton
+    }
+
+    @Override
+    public Void apply(Integer exitCode) {
+      int exitCodeValue = Preconditions.checkNotNull(exitCode);
+      // Don't spuriously report success.
+      // Posix conventions only guarantee that 8b are significant.
+      byte exitCodeByte = (byte) exitCodeValue;
+      if (exitCodeByte == 0 && exitCodeValue != 0) {
+        exitCodeByte = (byte) -1;
+      }
+      System.exit(exitCodeByte);
+      return null;
     }
   }
 }

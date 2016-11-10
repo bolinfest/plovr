@@ -27,6 +27,9 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.base.SourceLocation;
+import com.google.template.soy.data.SanitizedContent;
+import com.google.template.soy.data.SanitizedContent.ContentKind;
+import com.google.template.soy.data.SanitizedContents;
 import com.google.template.soy.data.SoyDataException;
 import com.google.template.soy.data.SoyDict;
 import com.google.template.soy.data.SoyList;
@@ -38,8 +41,8 @@ import com.google.template.soy.data.restricted.BooleanData;
 import com.google.template.soy.data.restricted.FloatData;
 import com.google.template.soy.data.restricted.IntegerData;
 import com.google.template.soy.data.restricted.StringData;
-import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.exprparse.ExpressionParser;
+import com.google.template.soy.exprparse.SoyParsingContext;
 import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
@@ -47,6 +50,8 @@ import com.google.template.soy.exprtree.FunctionNode;
 import com.google.template.soy.exprtree.VarRefNode;
 import com.google.template.soy.jbcsrc.ExpressionTester.ExpressionSubject;
 import com.google.template.soy.jbcsrc.TemplateTester.CompiledTemplateSubject;
+import com.google.template.soy.jbcsrc.api.AdvisingAppendable;
+import com.google.template.soy.jbcsrc.shared.CompiledTemplate;
 import com.google.template.soy.jbcsrc.shared.RenderContext;
 import com.google.template.soy.shared.restricted.SoyFunction;
 import com.google.template.soy.soytree.PrintNode;
@@ -58,6 +63,7 @@ import com.google.template.soy.types.aggregate.ListType;
 import com.google.template.soy.types.aggregate.MapType;
 import com.google.template.soy.types.aggregate.RecordType;
 import com.google.template.soy.types.primitive.IntType;
+import com.google.template.soy.types.primitive.SanitizedType;
 import com.google.template.soy.types.primitive.StringType;
 import com.google.template.soy.types.primitive.UnknownType;
 
@@ -65,6 +71,7 @@ import junit.framework.TestCase;
 
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Type;
+import org.objectweb.asm.commons.Method;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -79,48 +86,70 @@ public class ExpressionCompilerTest extends TestCase {
   public static RenderContext currentRenderContext;
 
   private final Map<String, SoyExpression> variables = new HashMap<>();
-  private ExpressionCompiler testExpressionCompiler = ExpressionCompiler.create(
-      new ExpressionDetacher.Factory() {
-        @Override public ExpressionDetacher createExpressionDetacher(Label label) {
-          return new ExpressionDetacher() {
-            @Override public Expression resolveSoyValueProvider(Expression soyValueProvider) {
-              if (variables.containsValue(soyValueProvider)) {
-                // This is hacky, but our variables are not SVPs, just SoyValues.  This is
-                // inconsistent with reality but makes the tests easier to write.
-                // A better solution may be to have the variables map just hold expressions for
-                // SoyValueProviders, but that is annoying.
-                return soyValueProvider;
-              }
-              return MethodRef.SOY_VALUE_PROVIDER_RESOLVE.invoke(soyValueProvider);
+  private ExpressionCompiler testExpressionCompiler =
+      ExpressionCompiler.create(
+          new ExpressionDetacher.Factory() {
+            @Override
+            public ExpressionDetacher createExpressionDetacher(Label label) {
+              return new ExpressionDetacher() {
+                @Override
+                public Expression resolveSoyValueProvider(Expression soyValueProvider) {
+                  if (variables.containsValue(soyValueProvider)) {
+                    // This is hacky, but our variables are not SVPs, just SoyValues.  This is
+                    // inconsistent with reality but makes the tests easier to write.
+                    // A better solution may be to have the variables map just hold expressions for
+                    // SoyValueProviders, but that is annoying.
+                    return soyValueProvider;
+                  }
+                  return MethodRef.SOY_VALUE_PROVIDER_RESOLVE.invoke(soyValueProvider);
+                }
+              };
             }
-          };
-        }
-      },
-      new VariableLookup() {
-        @Override public Expression getParam(TemplateParam paramName) {
-          return variables.get(paramName.name());
-        }
+          },
+          new TemplateParameterLookup() {
+            @Override
+            public Expression getParam(TemplateParam paramName) {
+              return variables.get(paramName.name());
+            }
 
-        @Override public Expression getLocal(SyntheticVarName varName) {
-          throw new UnsupportedOperationException();
-        }
+            @Override
+            public Expression getLocal(SyntheticVarName varName) {
+              throw new UnsupportedOperationException();
+            }
 
-        @Override public Expression getLocal(LocalVar localName) {
-          throw new UnsupportedOperationException();
-        }
+            @Override
+            public Expression getLocal(LocalVar localName) {
+              throw new UnsupportedOperationException();
+            }
 
-        @Override public Expression getRenderContext() {
-          return staticFieldReference(ExpressionCompiler.class, "currentRenderContext").accessor();
-        }
+            @Override
+            public Expression getRenderContext() {
+              return staticFieldReference(ExpressionCompiler.class, "currentRenderContext")
+                  .accessor();
+            }
 
-        @Override public Expression getParamsRecord() {
-          throw new UnsupportedOperationException();
-        }
+            @Override
+            public Expression getParamsRecord() {
+              throw new UnsupportedOperationException();
+            }
 
-        @Override public Expression getIjRecord() {
-          throw new UnsupportedOperationException();
-        }
-      });
+            @Override
+            public Expression getIjRecord() {
+              throw new UnsupportedOperationException();
+            }
+          },
+          new TemplateVariableManager(
+              UniqueNameGenerator.forFieldNames(), null, null, getRenderMethod()));
+
+  private Method getRenderMethod() {
+    try {
+      return Method.getMethod(
+          CompiledTemplate.class
+              .getMethod("render", AdvisingAppendable.class, RenderContext.class));
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
 
   public void testConstants() {
     assertExpression("1").evaluatesTo(1L);
@@ -392,6 +421,20 @@ public class ExpressionCompilerTest extends TestCase {
         "p1", untypedBoxedSoyExpression(SoyExpression.forString(constantNull(STRING_TYPE))));
     variables.put("p2", SoyExpression.forString(constant("a")).box());
     assertExpression("$p1 ?: $p2").evaluatesTo("a");
+
+    SoyType htmlType = SanitizedType.getTypeForContentKind(ContentKind.HTML);
+    variables.put(
+        "p1",
+        SoyExpression.forSoyValue(
+            htmlType,
+            MethodRef.ORDAIN_AS_SAFE.invoke(constant("<b>hello</b>"), constant(ContentKind.HTML))));
+    variables.put("p2", SoyExpression.forString(constant("")).box());
+    assertExpression("$p1 ?: $p2").evaluatesTo(SanitizedContents.constantHtml("<b>hello</b>"));
+    variables.put(
+        "p1",
+        SoyExpression.forSoyValue(htmlType, constantNull(Type.getType(SanitizedContent.class)))
+            .asNullable());
+    assertExpression("$p1 ?: $p2").evaluatesTo("");
   }
 
   // null coalescing op expression have had a number of bugs due to the advanced unboxing
@@ -464,7 +507,10 @@ public class ExpressionCompilerTest extends TestCase {
         SoyExpression.forSoyValue(
             ListType.of(StringType.getInstance()),
             BytecodeUtils.constantNull(Type.getType(SoyList.class))));
-    assertExpression("$nullList[1]").throwsException(NullPointerException.class);
+    assertExpression("$nullList[1]")
+        .doesNotContainCode("IFNULL")
+        .doesNotContainCode("IFNNONULL")  // no null checks
+        .throwsException(NullPointerException.class);
     assertExpression("$nullList?[1]").evaluatesTo(null);
   }
 
@@ -545,7 +591,7 @@ public class ExpressionCompilerTest extends TestCase {
     // TODO(lukes): this logic would be useful in a lot of tests and potentially unblock efforts to
     // eliminate UNDECLARED vars
     ExprNode expr =
-        new ExpressionParser(soyExpr, SourceLocation.UNKNOWN, ExplodingErrorReporter.get())
+        new ExpressionParser(soyExpr, SourceLocation.UNKNOWN, SoyParsingContext.exploding())
             .parseExpression();
     final StringBuilder templateBody = new StringBuilder();
     new AbstractExprNodeVisitor<Void>() {

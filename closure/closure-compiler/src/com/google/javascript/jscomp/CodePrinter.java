@@ -215,9 +215,7 @@ public final class CodePrinter {
     }
   }
 
-  static class PrettyCodePrinter
-      extends MappedCodePrinter {
-    // The number of characters after which we insert a line break in the code
+  static class PrettyCodePrinter extends MappedCodePrinter {
     static final String INDENT = "  ";
 
     private int indent = 0;
@@ -332,7 +330,6 @@ public final class CodePrinter {
     void endCaseBody() {
       super.endCaseBody();
       indent--;
-      endStatement();
     }
 
     @Override
@@ -361,7 +358,7 @@ public final class CodePrinter {
 
     @Override
     void maybeInsertSpace() {
-      if (getLastChar() != ' ') {
+      if (getLastChar() != ' ' && getLastChar() != '\n') {
         add(" ");
       }
     }
@@ -382,7 +379,7 @@ public final class CodePrinter {
       Preconditions.checkState(n.isBlock(), n);
       Node parent = n.getParent();
       if (parent != null) {
-        Token type = parent.getType();
+        Token type = parent.getToken();
         switch (type) {
           case DO:
             // Don't break before 'while' in DO-WHILE statements.
@@ -399,9 +396,18 @@ public final class CodePrinter {
           case IF:
             // Don't break before else
             return n == parent.getLastChild();
+          default:
+            break;
         }
       }
       return true;
+    }
+
+    @Override
+    void endStatement(boolean needsSemicolon) {
+      append(";");
+      endLine();
+      statementNeedsEnded = false;
     }
 
     @Override
@@ -567,6 +573,7 @@ public final class CodePrinter {
     private boolean prettyPrint;
     private boolean outputTypes = false;
     private SourceMap sourceMap = null;
+    private boolean tagAsExterns;
     private boolean tagAsStrict;
     private TypeIRegistry registry;
     private CodeGeneratorFactory codeGeneratorFactory = new CodeGeneratorFactory() {
@@ -640,6 +647,14 @@ public final class CodePrinter {
     }
 
     /**
+     * Set whether the output should be tagged as @externs code.
+     */
+    public Builder setTagAsExterns(boolean tagAsExterns) {
+      this.tagAsExterns = tagAsExterns;
+      return this;
+    }
+
+    /**
      * Set whether the output should be tags as ECMASCRIPT 5 Strict.
      */
     public Builder setTagAsStrict(boolean tagAsStrict) {
@@ -669,7 +684,7 @@ public final class CodePrinter {
       }
 
       return toSource(root, Format.fromOptions(options, outputTypes, prettyPrint), options,
-          sourceMap, tagAsStrict, lineBreak, codeGeneratorFactory);
+          sourceMap, tagAsExterns, tagAsStrict, lineBreak, codeGeneratorFactory);
     }
   }
 
@@ -695,8 +710,8 @@ public final class CodePrinter {
   /**
    * Converts a tree to JS code
    */
-  private static String toSource(Node root, Format outputFormat,
-      CompilerOptions options, SourceMap sourceMap, boolean tagAsStrict, boolean lineBreak,
+  private static String toSource(Node root, Format outputFormat, CompilerOptions options,
+      SourceMap sourceMap, boolean tagAsExterns, boolean tagAsStrict, boolean lineBreak,
       CodeGeneratorFactory codeGeneratorFactory) {
     Preconditions.checkState(options.sourceMapDetailLevel != null);
 
@@ -715,7 +730,9 @@ public final class CodePrinter {
             options.sourceMapDetailLevel);
     CodeGenerator cg = codeGeneratorFactory.getCodeGenerator(outputFormat, mcp);
 
-    cg.maybeTagAsExterns();
+    if (tagAsExterns) {
+      cg.tagAsExterns();
+    }
     if (tagAsStrict) {
       cg.tagAsStrict();
     }

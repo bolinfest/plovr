@@ -96,7 +96,7 @@ public final class CheckUselessBlocks implements Callback, HotSwapCompilerPass {
 
   @Override
   public final boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case BLOCK:
         if (isLoneBlock(n)) {
           loneBlocks.push(n);
@@ -115,6 +115,8 @@ public final class CheckUselessBlocks implements Callback, HotSwapCompilerPass {
         if (NodeUtil.isFunctionDeclaration(n)) {
           allowLoneBlock(parent);
         }
+        break;
+      default:
         break;
     }
     return true;

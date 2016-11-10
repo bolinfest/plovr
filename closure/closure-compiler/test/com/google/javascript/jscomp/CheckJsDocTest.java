@@ -20,6 +20,8 @@ import static com.google.javascript.jscomp.CheckJSDoc.ANNOTATION_DEPRECATED;
 import static com.google.javascript.jscomp.CheckJSDoc.ARROW_FUNCTION_AS_CONSTRUCTOR;
 import static com.google.javascript.jscomp.CheckJSDoc.DEFAULT_PARAM_MUST_BE_MARKED_OPTIONAL;
 import static com.google.javascript.jscomp.CheckJSDoc.DISALLOWED_MEMBER_JSDOC;
+import static com.google.javascript.jscomp.CheckJSDoc.INVALID_MODIFIES_ANNOTATION;
+import static com.google.javascript.jscomp.CheckJSDoc.INVALID_NO_SIDE_EFFECT_ANNOTATION;
 import static com.google.javascript.jscomp.CheckJSDoc.MISPLACED_ANNOTATION;
 import static com.google.javascript.jscomp.CheckJSDoc.MISPLACED_MSG_ANNOTATION;
 
@@ -119,6 +121,7 @@ public final class CheckJsDocTest extends Es6CompilerTestCase {
   public void testAbstract_class() {
     testSameEs6("/** @abstract */class Foo { constructor() {}}");
     testSame("/** @abstract @constructor */ var Foo = function() {};");
+    testSame("/** @abstract @constructor */ var Foo = function() { var x = 1; };");
   }
 
   public void testAbstract_constructor() {
@@ -126,6 +129,10 @@ public final class CheckJsDocTest extends Es6CompilerTestCase {
         "class Foo { /** @abstract */ constructor() {}}",
         MISPLACED_ANNOTATION);
     // ES5 constructors are treated as class definitions and tested above.
+
+    // This is valid if foo() returns an abstract class constructor
+    testSame(
+        "/** @constructor */ var C = foo(); /** @abstract */ C.prototype.method = function() {};");
   }
 
   public void testAbstract_field() {
@@ -313,20 +320,20 @@ public final class CheckJsDocTest extends Es6CompilerTestCase {
   }
 
   public void testArrowFuncAsConstructor() {
-    testErrorEs6("/** @constructor */ var a = ()=>{}; var b = a();",
+    testWarningEs6("/** @constructor */ var a = ()=>{}; var b = a();",
         ARROW_FUNCTION_AS_CONSTRUCTOR);
-    testErrorEs6("var a = /** @constructor */ ()=>{}; var b = a();",
+    testWarningEs6("var a = /** @constructor */ ()=>{}; var b = a();",
         ARROW_FUNCTION_AS_CONSTRUCTOR);
-    testErrorEs6("/** @constructor */ let a = ()=>{}; var b = a();",
+    testWarningEs6("/** @constructor */ let a = ()=>{}; var b = a();",
         ARROW_FUNCTION_AS_CONSTRUCTOR);
-    testErrorEs6("/** @constructor */ const a = ()=>{}; var b = a();",
+    testWarningEs6("/** @constructor */ const a = ()=>{}; var b = a();",
         ARROW_FUNCTION_AS_CONSTRUCTOR);
-    testErrorEs6("var a; /** @constructor */ a = ()=>{}; var b = a();",
+    testWarningEs6("var a; /** @constructor */ a = ()=>{}; var b = a();",
         ARROW_FUNCTION_AS_CONSTRUCTOR);
   }
 
   public void testDefaultParam() {
-    testErrorEs6("function f(/** number */ x=0) {}", DEFAULT_PARAM_MUST_BE_MARKED_OPTIONAL);
+    testWarningEs6("function f(/** number */ x=0) {}", DEFAULT_PARAM_MUST_BE_MARKED_OPTIONAL);
     testSameEs6("function f(/** number= */ x=0) {}");
   }
 
@@ -387,9 +394,31 @@ public final class CheckJsDocTest extends Es6CompilerTestCase {
         MISPLACED_ANNOTATION);
   }
 
-  public void testNoSideEffectsInSrc() {
-    testSame("/** @nosideeffects */ function foo() {}; foo();", MISPLACED_ANNOTATION);
+  public void testInvalidAnnotation1() throws Exception {
+    testWarning("/** @nosideeffects */ function foo() {}", INVALID_NO_SIDE_EFFECT_ANNOTATION);
+  }
 
-    testSame("/** @nosideeffects */ function foo() {};", "foo();", null);
+  public void testInvalidAnnotation2() throws Exception {
+    testWarning("var f = /** @nosideeffects */ function() {}", INVALID_NO_SIDE_EFFECT_ANNOTATION);
+  }
+
+  public void testInvalidAnnotation3() throws Exception {
+    testWarning("/** @nosideeffects */ var f = function() {}", INVALID_NO_SIDE_EFFECT_ANNOTATION);
+  }
+
+  public void testInvalidAnnotation4() throws Exception {
+    testWarning(
+        "var f = function() {};" + "/** @nosideeffects */ f.x = function() {}",
+        INVALID_NO_SIDE_EFFECT_ANNOTATION);
+  }
+
+  public void testInvalidAnnotation5() throws Exception {
+    testWarning(
+        "var f = function() {};" + "f.x = /** @nosideeffects */ function() {}",
+        INVALID_NO_SIDE_EFFECT_ANNOTATION);
+  }
+
+  public void testInvalidModifiesAnnotation() throws Exception {
+    testWarning("/** @modifies {this} */ var f = function() {};", INVALID_MODIFIES_ANNOTATION);
   }
 }

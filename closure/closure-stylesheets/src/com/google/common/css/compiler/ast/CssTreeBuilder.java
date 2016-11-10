@@ -30,6 +30,7 @@ import java.util.List;
 /**
  * Use this to build one {@link CssTree} object.
  *
+ * @author oana@google.com (Oana Florescu)
  */
 public class CssTreeBuilder implements
     CssParserEventHandler,
@@ -60,7 +61,7 @@ public class CssTreeBuilder implements
   private boolean treeIsConstructed = false;
 
   // TODO(user): Use Collections.asLifoQueue(new ArrayDeque()) for openBlocks
-  private List<CssBlockNode> openBlocks = null;
+  private List<CssAbstractBlockNode> openBlocks = null;
   private List<CssConditionalBlockNode> openConditionalBlocks = null;
   private CssDeclarationBlockNode declarationBlock = null;
   private CssDeclarationNode declaration = null;
@@ -113,11 +114,11 @@ public class CssTreeBuilder implements
     }
   }
 
-  private CssBlockNode getEnclosingBlock() {
+  private CssAbstractBlockNode getEnclosingBlock() {
     return openBlocks.get(openBlocks.size() - 1);
   }
 
-  private void pushEnclosingBlock(CssBlockNode block) {
+  private void pushEnclosingBlock(CssAbstractBlockNode block) {
     openBlocks.add(block);
   }
 
@@ -444,8 +445,7 @@ public class CssTreeBuilder implements
     Preconditions.checkArgument(expressionToken.getToken().length() == 1);
 
     // We are going to change the state unless it's a space operator
-    if (expressionToken.getToken() != " ") {
-
+    if (!" ".equals(expressionToken.getToken())) {
       // We may need to construct the corresponding composite node if the last
       // one in the list is not a composite node or if it is not based on the
       // same operator
@@ -459,8 +459,8 @@ public class CssTreeBuilder implements
       }
 
       if (!(lastChild instanceof CssCompositeValueNode)
-          || ((CssCompositeValueNode) lastChild).getOperator().toString()
-              == expressionToken.getToken()) {
+          || ((CssCompositeValueNode) lastChild).getOperator().toString().equals(
+              expressionToken.getToken())) {
         CssCompositeValueNode node = new CssCompositeValueNode(
             Lists.newArrayList(lastChild),
             Operator.valueOf(expressionToken.getToken().charAt(0)),

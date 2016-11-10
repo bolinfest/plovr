@@ -22,13 +22,13 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Module;
 import com.google.template.soy.SoyFileSet.Builder;
 import com.google.template.soy.base.internal.SoyFileKind;
+import com.google.template.soy.error.SoyCompilationException;
 
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -39,11 +39,10 @@ import org.kohsuke.args4j.spi.Setter;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
-
-import javax.annotation.Nullable;
 
 /**
  * Utilities for classes with a {@code main()} method.
@@ -56,12 +55,13 @@ final class MainClassUtils {
    * Used by {@link #run} to catch unexpected exceptions and print errors.
    */
   interface Main {
-    CompilationResult main() throws IOException;
+    void main() throws IOException, SoyCompilationException;
   }
 
   private MainClassUtils() {}
 
-
+  // NOTE: all the OptionHandler types need to be public with public constructors so args4j can use
+  // them.
 
   /**
    * OptionHandler for args4j that handles a boolean.
@@ -85,10 +85,10 @@ final class MainClassUtils {
       boolean hasParam;
       try {
         String nextArg = params.getParameter(0);
-        if (nextArg.equals("true") || nextArg.equals("1")) {
+        if (nextArg.equalsIgnoreCase("true") || nextArg.equals("1")) {
           value = true;
           hasParam = true;
-        } else if (nextArg.equals("false") || nextArg.equals("0")) {
+        } else if (nextArg.equalsIgnoreCase("false") || nextArg.equals("0")) {
           value = false;
           hasParam = true;
         } else {
@@ -130,8 +130,12 @@ final class MainClassUtils {
     abstract T parseItem(String item);
 
     @Override public int parseArguments(Parameters params) throws CmdLineException {
-      for (String item : params.getParameter(0).split(",")) {
-        setter.addValue(parseItem(item));
+      String parameter = params.getParameter(0);
+      // An empty string should be an empty list, not a list containing the empty item
+      if (!parameter.isEmpty()) {
+        for (String item : parameter.split(",")) {
+          setter.addValue(parseItem(item));
+        }
       }
       return 1;
     }
@@ -158,6 +162,59 @@ final class MainClassUtils {
     }
   }
 
+  /** OptionHandler for args4j that handles a comma-delimited list of guice modules. */
+  public static final class ModuleListOptionHandler extends ListOptionHandler<Module> {
+
+    /** {@link ListOptionHandler#ListOptionHandler(CmdLineParser,OptionDef,Setter)} */
+    public ModuleListOptionHandler(
+        CmdLineParser parser, OptionDef option, Setter<? super Module> setter) {
+      super(parser, option, setter);
+    }
+
+    @Override
+    Module parseItem(String item) {
+      return instantiatePluginModule(item);
+    }
+  }
+  /** OptionHandler for args4j that handles a comma-delimited list of files. */
+  public static final class FileListOptionHandler extends ListOptionHandler<File> {
+
+    /** {@link ListOptionHandler#ListOptionHandler(CmdLineParser,OptionDef,Setter)} */
+    public FileListOptionHandler(
+        CmdLineParser parser, OptionDef option, Setter<? super File> setter) {
+      super(parser, option, setter);
+    }
+
+    @Override
+    File parseItem(String item) {
+      return new File(item);
+    }
+  }
+  /** OptionHandler for args4j that handles a comma-delimited list of strings. */
+  public static final class ModuleOptionHandler extends OptionHandler<Module> {
+    /** {@link ListOptionHandler#ListOptionHandler(CmdLineParser,OptionDef,Setter)} */
+    public ModuleOptionHandler(
+        CmdLineParser parser, OptionDef option, Setter<? super Module> setter) {
+      super(parser, option, setter);
+    }
+
+    @Override
+    public int parseArguments(Parameters params) throws CmdLineException {
+      String parameter = params.getParameter(0);
+      // An empty string should be null
+      if (parameter.isEmpty()) {
+        setter.addValue(null);
+      } else {
+        setter.addValue(instantiatePluginModule(parameter));
+      }
+      return 1;
+    }
+
+    @Override
+    public String getDefaultMetaVariable() {
+      return "com.foo.bar.BazModule";
+    }
+  }
 
   /**
    * Parses command line flags written with args4j.
@@ -169,6 +226,10 @@ final class MainClassUtils {
    *     usage text for flags when reporting errors).
    */
   static CmdLineParser parseFlags(Object objWithFlags, String[] args, String usagePrefix) {
+    CmdLineParser.registerHandler(Module.class, ModuleOptionHandler.class);
+    // overwrite the built in boolean handler
+    CmdLineParser.registerHandler(Boolean.class, BooleanOptionHandler.class);
+    CmdLineParser.registerHandler(boolean.class, BooleanOptionHandler.class);
 
     CmdLineParser cmdLineParser = new CmdLineParser(objWithFlags);
     cmdLineParser.setUsageWidth(100);
@@ -176,7 +237,7 @@ final class MainClassUtils {
     try {
       cmdLineParser.parseArgument(args);
 
-    } catch(CmdLineException cle) {
+    } catch (CmdLineException cle) {
       exitWithError(cle.getMessage(), cmdLineParser, usagePrefix);
     }
 
@@ -190,9 +251,12 @@ final class MainClassUtils {
 
   @VisibleForTesting
   static int runInternal(Main method) {
-    CompilationResult result;
     try {
-      result = method.main();
+      method.main();
+      return 0;
+    } catch (SoyCompilationException compilationException) {
+      System.err.println(compilationException.getMessage());
+      return 1;
     } catch (Exception e) {
       System.err.println("INTERNAL SOY ERROR.\n"
           + "Please open an issue at "
@@ -202,12 +266,6 @@ final class MainClassUtils {
       e.printStackTrace(System.err);
       return 1;
     }
-
-    if (!result.isSuccess()) {
-      result.printErrors(System.err);
-    }
-
-    return result.isSuccess() ? 0 : 1;
   }
 
 
@@ -218,7 +276,7 @@ final class MainClassUtils {
    * @param cmdLineParser The CmdLineParser used to print usage text for flags.
    * @param usagePrefix The string to prepend to the usage message (when reporting an error).
    */
-  static void exitWithError(
+  static RuntimeException exitWithError(
       String errorMsg, CmdLineParser cmdLineParser, String usagePrefix) {
 
     System.err.println("\nError: " + errorMsg + "\n\n");
@@ -226,10 +284,11 @@ final class MainClassUtils {
     cmdLineParser.printUsage(System.err);
 
     System.exit(1);
+    throw new AssertionError(); // dead code
   }
 
   /**
-   * Creates a Guice injector that includes the SoyModule, a message plugin module, and maybe
+   * Returns a Guice injector that includes the SoyModule, a message plugin module, and maybe
    * additional plugin modules, and maybe additional modules.
    *
    * @param msgPluginModuleName The full class name of the message plugin module. Required.
@@ -238,43 +297,54 @@ final class MainClassUtils {
    * @return A Guice injector that includes the SoyModule, the given message plugin module, and the
    *     given additional plugin modules (if any).
    */
-  static Injector createInjector(String msgPluginModuleName, @Nullable String pluginModuleNames) {
-
-    List<Module> guiceModules = Lists.newArrayListWithCapacity(2);
-
-    guiceModules.add(new SoyModule());
-
-    checkArgument(msgPluginModuleName != null && msgPluginModuleName.length() > 0);
-    guiceModules.add(instantiatePluginModule(msgPluginModuleName));
-
-    if (pluginModuleNames != null && !pluginModuleNames.isEmpty()) {
-      for (String pluginModuleName : Splitter.on(',').split(pluginModuleNames)) {
-        guiceModules.add(instantiatePluginModule(pluginModuleName));
-      }
-    }
-
-    return Guice.createInjector(guiceModules);
+  static Injector createInjector(String msgPluginModuleName, String pluginModuleNames) {
+    checkArgument(!msgPluginModuleName.isEmpty());
+    return doCreateInjector(msgPluginModuleName, pluginModuleNames);
   }
 
   /**
-   * Creates a Guice injector that includes the SoyModule, a message plugin module, and maybe
-   * additional plugin modules, and maybe additional modules.
+   * Returns a Guice injector that includes the SoyModule, and maybe additional plugin modules.
    *
    * @param pluginModuleNames Comma-delimited list of full class names of additional plugin modules
    *     to include. Optional.
    * @return A Guice injector that includes the SoyModule, the given message plugin module, and the
    *     given additional plugin modules (if any).
    */
-  static Injector createInjector(@Nullable String pluginModuleNames) {
+  static Injector createInjectorForPlugins(String pluginModuleNames) {
+    return doCreateInjector("", pluginModuleNames);
+  }
 
-    List<Module> guiceModules = Lists.newArrayListWithCapacity(2);
+  /**
+   * Returns a Guice injector that includes the SoyModule, and maybe additional plugin modules.
+   *
+   * @param msgPluginModuleName The full class name of the message plugin module. Required.
+   */
+  static Injector createInjectorForMsgPlugin(String msgPluginModuleName) {
+    return doCreateInjector(msgPluginModuleName, "");
+  }
 
+  /** Returns a Guice injector that includes the SoyModule, and the given modules. */
+  static Injector createInjector(List<Module> modules) {
+    modules = new ArrayList<>(modules); // make a copy that we know is mutable
+    modules.add(new SoyModule());
+    return Guice.createInjector(modules); // TODO(lukes): Stage.PRODUCTION?
+  }
+
+  /**
+   * Returns an injector configured with the given plugins
+   * @param msgPluginModuleName The name of a guice module binding a msgplugin, may be empty
+   * @param pluginModuleNames A comma delimited list of plugin modules name, may be empty
+   */
+  private static Injector doCreateInjector(String msgPluginModuleName, String pluginModuleNames) {
+    List<Module> guiceModules = new ArrayList<>();
     guiceModules.add(new SoyModule());
 
-    if (pluginModuleNames != null && !pluginModuleNames.isEmpty()) {
-      for (String pluginModuleName : Splitter.on(',').split(pluginModuleNames)) {
-        guiceModules.add(instantiatePluginModule(pluginModuleName));
-      }
+    if (!msgPluginModuleName.isEmpty()) {
+      guiceModules.add(instantiatePluginModule(msgPluginModuleName));
+    }
+
+    for (String pluginModuleName : Splitter.on(',').omitEmptyStrings().split(pluginModuleNames)) {
+      guiceModules.add(instantiatePluginModule(pluginModuleName));
     }
 
     return Guice.createInjector(guiceModules);
@@ -291,11 +361,7 @@ final class MainClassUtils {
     try {
       return (Module) Class.forName(moduleName).newInstance();
 
-    } catch (ClassNotFoundException e) {
-      throw new RuntimeException("Cannot find plugin module \"" + moduleName + "\".", e);
-    } catch (IllegalAccessException e) {
-      throw new RuntimeException("Cannot access plugin module \"" + moduleName + "\".", e);
-    } catch (InstantiationException e) {
+    } catch (ClassNotFoundException | IllegalAccessException | InstantiationException e) {
       throw new RuntimeException("Cannot instantiate plugin module \"" + moduleName + "\".", e);
     }
   }

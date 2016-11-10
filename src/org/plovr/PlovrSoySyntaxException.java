@@ -6,10 +6,10 @@ import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.template.soy.base.SoySyntaxException;
+import com.google.template.soy.base.internal.LegacyInternalSyntaxException;
 
 /**
- * {@link PlovrSoySyntaxException} wraps a {@link SoySyntaxException} so that it
+ * {@link PlovrSoySyntaxException} wraps a {@link LegacyInternalSyntaxException} so that it
  * can display a plovr-specific error message.
  *
  * @author bolinfest@gmail.com (Michael Bolin)
@@ -22,12 +22,12 @@ public final class PlovrSoySyntaxException extends UncheckedCompilationException
   static final Pattern LINE_AND_CHAR_NO =
       Pattern.compile("\\[?line (\\d+), column (\\d+)\\]?");
 
-  private final SoySyntaxException soySyntaxException;
+  private final LegacyInternalSyntaxException soySyntaxException;
   private final JsInput input;
   private final int lineno;
   private final int charno;
 
-  public PlovrSoySyntaxException(SoySyntaxException e, JsInput input) {
+  public PlovrSoySyntaxException(LegacyInternalSyntaxException e, JsInput input) {
     super(e);
     this.soySyntaxException = e;
     this.input = input;
@@ -82,15 +82,18 @@ public final class PlovrSoySyntaxException extends UncheckedCompilationException
   }
 
   @Nullable
-  public String getTemplateName() {
-    return soySyntaxException.getTemplateName();
+    public String getTemplateName() {
+    String msg = soySyntaxException.getMessage();
+    Pattern pattern = Pattern.compile("template (([^:]+)):");
+    Matcher m = pattern.matcher(msg);
+    return m.find() ? m.group(1) : null;
   }
 
   public JsInput getInput() {
     return input;
   }
 
-  @Override public CompilationException toCheckedException() {
+  public CompilationException toCheckedException() {
     return new CheckedSoySyntaxException(this);
   }
 }

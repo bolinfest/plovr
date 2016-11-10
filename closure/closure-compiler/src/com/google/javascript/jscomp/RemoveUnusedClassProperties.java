@@ -78,6 +78,12 @@ class RemoveUnusedClassProperties
 
           Node parent = n.getParent();
           Node replacement;
+          /**
+           * Whether the parent of the GETPROP is replaced or GETPROP itself.
+           * In some cases the parent of GETPROP is an EXPRRESULT, while the replacement is always
+           * just a plain expression.
+           */
+          Boolean replaceParent = true;
           if (NodeUtil.isAssignmentOp(parent)) {
             Node assign = parent;
             Preconditions.checkState(assign != null
@@ -85,10 +91,13 @@ class RemoveUnusedClassProperties
                 && assign.getFirstChild() == n);
             compiler.reportChangeToEnclosingScope(assign);
             // 'this.x = y' to 'y'
-            replacement = assign.getLastChild().detachFromParent();
+            replacement = assign.getLastChild().detach();
           } else if (parent.isInc() || parent.isDec()) {
             compiler.reportChangeToEnclosingScope(parent);
             replacement = IR.number(0).srcref(parent);
+          } else if (parent.isExprResult()) {
+            replacement = IR.number(0).srcref(n);
+            replaceParent = false;
           } else {
             throw new IllegalStateException("unexpected: " + parent);
           }
@@ -101,13 +110,17 @@ class RemoveUnusedClassProperties
               preserved = preserved.getFirstChild();
             }
             replacement = IR.comma(
-                preserved.detachFromParent(),
+                preserved.detach(),
                 replacement)
                 .srcref(parent);
           }
 
           compiler.reportChangeToEnclosingScope(parent);
-          parent.getParent().replaceChild(parent, replacement);
+          if (replaceParent) {
+            parent.getParent().replaceChild(parent, replacement);
+          } else {
+            parent.replaceChild(n, replacement);
+          }
         }
       }
     }
@@ -120,7 +133,7 @@ class RemoveUnusedClassProperties
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
-     switch (n.getType()) {
+    switch (n.getToken()) {
        case GETPROP: {
          String propName = n.getLastChild().getString();
          if (compiler.getCodingConvention().isExported(propName)
@@ -170,7 +183,9 @@ class RemoveUnusedClassProperties
            }
          }
          break;
-     }
+      default:
+        break;
+    }
   }
 
   private boolean isRemovablePropertyDefinition(Node n) {
@@ -194,13 +209,14 @@ class RemoveUnusedClassProperties
     // Rather than looking for cases that are uses, we assume all references are
     // pinning uses unless they are:
     //  - a simple assignment (x.a = 1)
+    //  - an expression statement (x.a;)
     //  - a compound assignment or increment (x++, x += 1) whose result is
     //    otherwise unused
 
     Node parent = n.getParent();
     if (n == parent.getFirstChild()) {
-      if (parent.isAssign()) {
-        // A simple assignment doesn't pin the property.
+      if (parent.isAssign() || parent.isExprResult()) {
+        // A simple assignment or expression statement doesn't pin the property.
         return false;
       } else if (NodeUtil.isAssignmentOp(parent)
             || parent.isInc() || parent.isDec()) {

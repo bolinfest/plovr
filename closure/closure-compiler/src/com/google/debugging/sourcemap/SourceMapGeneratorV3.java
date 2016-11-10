@@ -16,20 +16,17 @@
 
 package com.google.debugging.sourcemap;
 
-import com.google.common.annotations.GwtIncompatible;
-import com.google.common.base.Preconditions;
 import com.google.debugging.sourcemap.SourceMapConsumerV3.EntryVisitor;
-import com.google.gson.Gson;
-
+import com.google.common.base.Preconditions;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-
 import javax.annotation.Nullable;
 
 /**
@@ -41,7 +38,6 @@ import javax.annotation.Nullable;
  *
  * @author johnlenz@google.com (John Lenz)
  */
-@GwtIncompatible("com.google.gson")
 public final class SourceMapGeneratorV3 implements SourceMapGenerator {
 
   /**
@@ -70,18 +66,24 @@ public final class SourceMapGeneratorV3 implements SourceMapGenerator {
   /**
    * A pre-order traversal ordered list of mappings stored in this map.
    */
-  private List<Mapping> mappings = new ArrayList<>();
+  private final List<Mapping> mappings = new ArrayList<>();
 
   /**
    * A map of source names to source name index
    */
-  private LinkedHashMap<String, Integer> sourceFileMap =
+  private final LinkedHashMap<String, Integer> sourceFileMap =
+       new LinkedHashMap<>();
+
+  /**
+   * A map of source names to source file contents
+   */
+  private final LinkedHashMap<String, String> sourceFileContentMap =
        new LinkedHashMap<>();
 
   /**
    * A map of source names to source name index
    */
-  private LinkedHashMap<String, Integer> originalNameMap =
+  private final LinkedHashMap<String, Integer> originalNameMap =
        new LinkedHashMap<>();
 
   /**
@@ -117,7 +119,7 @@ public final class SourceMapGeneratorV3 implements SourceMapGenerator {
    * to permit single values, like strings or numbers, and JsonObject or
    * JsonArray objects.
    */
-  private LinkedHashMap<String, Object> extensions = new LinkedHashMap<>();
+  private final LinkedHashMap<String, Object> extensions = new LinkedHashMap<>();
 
   /**
    * The source root path for relocating source fails or avoid duplicate values
@@ -133,6 +135,7 @@ public final class SourceMapGeneratorV3 implements SourceMapGenerator {
     mappings.clear();
     lastMapping = null;
     sourceFileMap.clear();
+    sourceFileContentMap.clear();
     originalNameMap.clear();
     lastSourceFile = null;
     lastSourceFileIndex = -1;
@@ -262,6 +265,10 @@ public final class SourceMapGeneratorV3 implements SourceMapGenerator {
     mappings.add(mapping);
   }
 
+  @Override public void addSourcesContent(String source, String content) {
+    sourceFileContentMap.put(source, content);
+  }
+
   class ConsumerEntryVisitor implements EntryVisitor {
 
     @Override
@@ -381,7 +388,10 @@ public final class SourceMapGeneratorV3 implements SourceMapGenerator {
     out.append("]");
     appendFieldEnd(out);
 
-    // Files names
+    // Sources contents
+    addSourcesContentMap(out);
+
+    // Identifier names
     appendFieldStart(out, "names");
     out.append("[");
     addSymbolNameMap(out);
@@ -391,9 +401,11 @@ public final class SourceMapGeneratorV3 implements SourceMapGenerator {
     // Extensions, only if there is any
     for (String key : this.extensions.keySet()) {
       Object objValue = this.extensions.get(key);
-      String value = objValue.toString();
-      if (objValue instanceof String){
-        value = new Gson().toJson(value);
+      String value;
+      if (objValue instanceof String) {
+        value = escapeString((String) objValue);  // escapes native String
+      } else {
+        value = objValue.toString();
       }
       appendField(out, key, value);
     }
@@ -469,6 +481,32 @@ public final class SourceMapGeneratorV3 implements SourceMapGenerator {
    */
   private void addSourceNameMap(Appendable out) throws IOException {
     addNameMap(out, sourceFileMap);
+  }
+
+  private void addSourcesContentMap(Appendable out) throws IOException {
+    boolean found = false;
+    List<String> contents = new ArrayList<>();
+    contents.addAll(Collections.nCopies(sourceFileMap.size(), ""));
+    for (Map.Entry<String, String> entry : sourceFileContentMap.entrySet()) {
+      Integer index = sourceFileMap.get(entry.getKey());
+      if (index != null && index < contents.size()) {
+        contents.set(index, entry.getValue());
+        found = true;
+      }
+    }
+    if (!found) {
+      return;
+    }
+    appendFieldStart(out, "sourcesContent");
+    out.append("[");
+    for (int i = 0; i < contents.size(); i++) {
+      if (i != 0) {
+        out.append(",");
+      }
+      out.append(escapeString(contents.get(i)));
+    }
+    out.append("]");
+    appendFieldEnd(out);
   }
 
   /**

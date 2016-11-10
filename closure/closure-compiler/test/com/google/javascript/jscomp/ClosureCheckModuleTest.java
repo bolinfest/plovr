@@ -18,14 +18,16 @@ package com.google.javascript.jscomp;
 import static com.google.javascript.jscomp.ClosureCheckModule.EXPORT_NOT_A_MODULE_LEVEL_STATEMENT;
 import static com.google.javascript.jscomp.ClosureCheckModule.EXPORT_REPEATED_ERROR;
 import static com.google.javascript.jscomp.ClosureCheckModule.GOOG_MODULE_REFERENCES_THIS;
+import static com.google.javascript.jscomp.ClosureCheckModule.GOOG_MODULE_USES_GOOG_MODULE_GET;
 import static com.google.javascript.jscomp.ClosureCheckModule.GOOG_MODULE_USES_THROW;
 import static com.google.javascript.jscomp.ClosureCheckModule.INVALID_DESTRUCTURING_REQUIRE;
+import static com.google.javascript.jscomp.ClosureCheckModule.JSDOC_REFERENCE_TO_SHORT_IMPORT_BY_LONG_NAME_INCLUDING_SHORT_NAME;
 import static com.google.javascript.jscomp.ClosureCheckModule.LET_GOOG_REQUIRE;
 import static com.google.javascript.jscomp.ClosureCheckModule.MODULE_AND_PROVIDES;
 import static com.google.javascript.jscomp.ClosureCheckModule.MULTIPLE_MODULES_IN_FILE;
 import static com.google.javascript.jscomp.ClosureCheckModule.ONE_REQUIRE_PER_DECLARATION;
+import static com.google.javascript.jscomp.ClosureCheckModule.REFERENCE_TO_FULLY_QUALIFIED_IMPORT_NAME;
 import static com.google.javascript.jscomp.ClosureCheckModule.REFERENCE_TO_MODULE_GLOBAL_NAME;
-import static com.google.javascript.jscomp.ClosureCheckModule.REFERENCE_TO_SHORT_IMPORT_BY_LONG_NAME;
 import static com.google.javascript.jscomp.ClosureCheckModule.REFERENCE_TO_SHORT_IMPORT_BY_LONG_NAME_INCLUDING_SHORT_NAME;
 import static com.google.javascript.jscomp.ClosureCheckModule.REQUIRE_NOT_AT_TOP_LEVEL;
 
@@ -82,6 +84,31 @@ public final class ClosureCheckModuleTest extends Es6CompilerTestCase {
             "  throw 5;",
             "}"),
         GOOG_MODULE_USES_THROW);
+  }
+
+  public void testGoogModuleGetAtTopLevel() {
+    testError("goog.module('xyz');\ngoog.module.get('abc');", GOOG_MODULE_USES_GOOG_MODULE_GET);
+
+    testError(
+        LINE_JOINER.join(
+            "goog.module('xyz');",
+            "",
+            "var x = goog.require('other.x');",
+            "",
+            "if (x) {",
+            "  var y = goog.module.get('abc');",
+            "}"),
+        GOOG_MODULE_USES_GOOG_MODULE_GET);
+
+    testSame(
+        LINE_JOINER.join(
+            "goog.module('xyz');",
+            "",
+            "var x = goog.require('other.x');",
+            "",
+            "function f() {",
+            "  var y = goog.module.get('abc');",
+            "}"));
   }
 
   public void testGoogModuleAndProvide() {
@@ -157,6 +184,15 @@ public final class ClosureCheckModuleTest extends Es6CompilerTestCase {
             "goog.module('foo.example.ClassName');",
             "",
             "/** @constructor @export */ function ClassName() {}",
+            "",
+            "exports = ClassName;"),
+        ClosureCheckModule.AT_EXPORT_IN_GOOG_MODULE);
+
+    testErrorEs6(
+        LINE_JOINER.join(
+            "goog.module('foo.example.ClassName');",
+            "",
+            "/** @export */ class ClassName {}",
             "",
             "exports = ClassName;"),
         ClosureCheckModule.AT_EXPORT_IN_GOOG_MODULE);
@@ -350,6 +386,60 @@ public final class ClosureCheckModuleTest extends Es6CompilerTestCase {
         REFERENCE_TO_SHORT_IMPORT_BY_LONG_NAME_INCLUDING_SHORT_NAME);
   }
 
+  public void testIllegalShortImportReferencedByLongName_extends() {
+    testError(
+        LINE_JOINER.join(
+            "goog.module('x.y.z');",
+            "",
+            "var A = goog.require('foo.A');",
+            "",
+            "/** @constructor @implements {foo.A} */ function B() {}"),
+        JSDOC_REFERENCE_TO_SHORT_IMPORT_BY_LONG_NAME_INCLUDING_SHORT_NAME);
+
+    testError(
+        LINE_JOINER.join(
+            "goog.module('x.y.z');",
+            "",
+            "var A = goog.require('foo.A');",
+            "",
+            "/** @type {foo.A} */ var a;"),
+        JSDOC_REFERENCE_TO_SHORT_IMPORT_BY_LONG_NAME_INCLUDING_SHORT_NAME);
+
+    testSame(
+        LINE_JOINER.join(
+            "goog.module('x.y.z');",
+            "",
+            "var A = goog.require('foo.A');",
+            "",
+            "/** @type {A} */ var a;"));
+
+    testSame(
+        LINE_JOINER.join(
+            "goog.module('x.y.z');",
+            "",
+            "var Foo = goog.require('Foo');",
+            "",
+            "/** @type {Foo} */ var a;"));
+
+    testError(
+        LINE_JOINER.join(
+            "goog.module('x.y.z');",
+            "",
+            "var ns = goog.require('some.namespace');",
+            "",
+            "/** @type {some.namespace.Foo} */ var foo;"),
+        JSDOC_REFERENCE_TO_SHORT_IMPORT_BY_LONG_NAME_INCLUDING_SHORT_NAME);
+
+    testError(
+        LINE_JOINER.join(
+            "goog.module('x.y.z');",
+            "",
+            "var ns = goog.require('some.namespace');",
+            "",
+            "/** @type {Array<some.namespace.Foo>} */ var foos;"),
+        JSDOC_REFERENCE_TO_SHORT_IMPORT_BY_LONG_NAME_INCLUDING_SHORT_NAME);
+  }
+
   public void testIllegalShortImportDestructuring() {
     testErrorEs6(
         LINE_JOINER.join(
@@ -358,7 +448,62 @@ public final class ClosureCheckModuleTest extends Es6CompilerTestCase {
             "var {doThing} = goog.require('foo.utils');",
             "",
             "exports = function() { return foo.utils.doThing(''); };"),
-        REFERENCE_TO_SHORT_IMPORT_BY_LONG_NAME);
+        REFERENCE_TO_FULLY_QUALIFIED_IMPORT_NAME);
+  }
+
+  public void testIllegalImportNoAlias() {
+    testErrorEs6(
+        LINE_JOINER.join(
+            "goog.module('x.y.z');",
+            "",
+            "goog.require('foo.utils');",
+            "",
+            "exports = function() { return foo.utils.doThing(''); };"),
+        REFERENCE_TO_FULLY_QUALIFIED_IMPORT_NAME);
+  }
+
+  // TODO(johnlenz): Re-enable these tests (they are a bit tricky).
+  public void disable_testSingleNameImportNoAlias1() {
+    testErrorEs6(
+        LINE_JOINER.join(
+            "goog.module('x.y.z');",
+            "",
+            "goog.require('foo');",
+            "",
+            "exports = function() { return foo.doThing(''); };"),
+        REFERENCE_TO_FULLY_QUALIFIED_IMPORT_NAME);
+  }
+
+  public void disable_testSingleNameImportWithAlias() {
+    testErrorEs6(
+        LINE_JOINER.join(
+            "goog.module('x.y.z');",
+            "",
+            "var bar = goog.require('foo');",
+            "",
+            "exports = function() { return foo.doThing(''); };"),
+        REFERENCE_TO_FULLY_QUALIFIED_IMPORT_NAME);
+  }
+
+  public void testSingleNameImportCrossAlias() {
+    testSame(
+        LINE_JOINER.join(
+            "goog.module('x.y.z');",
+            "",
+            "var bar = goog.require('foo');",
+            "var foo = goog.require('bar');",
+            "",
+            "exports = function() { return foo.doThing(''); };"));
+  }
+
+  public void testLegalSingleNameImport() {
+    testSame(
+        LINE_JOINER.join(
+            "goog.module('x.y.z');",
+            "",
+            "var foo = goog.require('foo');",
+            "",
+            "exports = function() { return foo.doThing(''); };"));
   }
 
   public void testIllegalLetShortRequire() {

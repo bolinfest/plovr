@@ -16,7 +16,6 @@
 package com.google.javascript.jscomp;
 
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
-
 import junit.framework.TestCase;
 
 /**
@@ -28,6 +27,15 @@ public final class CoverageInstrumentationPassTest extends TestCase {
   private CompilerOptions options(LanguageMode inMode) {
     CompilerOptions options = GoldenFileComparer.options();
     options.setInstrumentForCoverage(true);
+    options.setLanguageIn(inMode);
+    options.setLanguageOut(LanguageMode.ECMASCRIPT5);
+    return options;
+  }
+
+  private CompilerOptions branchOptions(LanguageMode inMode) {
+    CompilerOptions options = GoldenFileComparer.options();
+    options.setInstrumentForCoverage(true);
+    options.setInstrumentBranchCoverage(true);
     options.setLanguageIn(inMode);
     options.setLanguageOut(LanguageMode.ECMASCRIPT5);
     return options;
@@ -61,4 +69,77 @@ public final class CoverageInstrumentationPassTest extends TestCase {
     compareArrowOneMode(
         LanguageMode.ECMASCRIPT6, "CoverageInstrumentationPassTest/ArrowExpression");
   }
+
+  private void compareIfBranch(LanguageMode mode) throws Exception {
+    GoldenFileComparer.compileAndCompare(
+        "CoverageInstrumentationPassTest/IfBranchGolden.jsdata",
+        branchOptions(mode),
+        "CoverageInstrumentationPassTest/IfBranch.jsdata");
+  }
+
+  public void testIfBranch() throws Exception {
+    compareIfBranch(LanguageMode.ECMASCRIPT5);
+    compareIfBranch(LanguageMode.ECMASCRIPT6);
+  }
+
+  private void compareIfElseBranch(LanguageMode mode) throws Exception {
+    GoldenFileComparer.compileAndCompare(
+        "CoverageInstrumentationPassTest/IfElseBranchGolden.jsdata",
+        branchOptions(mode),
+        "CoverageInstrumentationPassTest/IfElseBranch.jsdata");
+  }
+
+  public void testIfElseBranch() throws Exception {
+    compareIfElseBranch(LanguageMode.ECMASCRIPT5);
+    compareIfElseBranch(LanguageMode.ECMASCRIPT6);
+  }
+
+  private void compareForLoopBranch(LanguageMode mode) throws Exception {
+    GoldenFileComparer.compileAndCompare(
+        "CoverageInstrumentationPassTest/ForLoopBranchGolden.jsdata",
+        branchOptions(mode),
+        "CoverageInstrumentationPassTest/ForLoopBranch.jsdata");
+  }
+
+  public void testForLoopBranch() throws Exception {
+    compareForLoopBranch(LanguageMode.ECMASCRIPT5);
+    compareForLoopBranch(LanguageMode.ECMASCRIPT6);
+  }
+
+  private void compareDoWhileLoopBranch(LanguageMode mode) throws Exception {
+    GoldenFileComparer.compileAndCompare(
+        "CoverageInstrumentationPassTest/DoWhileLoopBranchGolden.jsdata",
+        branchOptions(mode),
+        "CoverageInstrumentationPassTest/DoWhileLoopBranch.jsdata");
+  }
+
+  public void testDoWhileLoopBranch() throws Exception {
+    compareDoWhileLoopBranch(LanguageMode.ECMASCRIPT5);
+    compareDoWhileLoopBranch(LanguageMode.ECMASCRIPT6);
+  }
+
+  private void compareDoWhileLoopMultiLineBranch(LanguageMode mode) throws Exception {
+    GoldenFileComparer.compileAndCompare(
+        "CoverageInstrumentationPassTest/DoWhileLoopMultiLineBranchGolden.jsdata",
+        branchOptions(mode),
+        "CoverageInstrumentationPassTest/DoWhileLoopMultiLineBranch.jsdata");
+  }
+
+  public void testDoWhileLoopMultiLineBranch() throws Exception {
+    compareDoWhileLoopMultiLineBranch(LanguageMode.ECMASCRIPT5);
+    compareDoWhileLoopMultiLineBranch(LanguageMode.ECMASCRIPT6);
+  }
+
+  private void compareWhileLoopBranch(LanguageMode mode) throws Exception {
+    GoldenFileComparer.compileAndCompare(
+        "CoverageInstrumentationPassTest/WhileLoopBranchGolden.jsdata",
+        branchOptions(mode),
+        "CoverageInstrumentationPassTest/WhileLoopBranch.jsdata");
+  }
+
+  public void testWhileLoopBranch() throws Exception {
+    compareWhileLoopBranch(LanguageMode.ECMASCRIPT5);
+    compareWhileLoopBranch(LanguageMode.ECMASCRIPT6);
+  }
+
 }

@@ -194,7 +194,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
 
   @Override
   public void process(Node externs, Node root) {
-    NodeTraversal.traverseEs6(compiler, root, this);
+    NodeTraversal.traverseRootsEs6(compiler, this, externs, root);
 
     for (Node n : defineCalls) {
       replaceGoogDefines(n);
@@ -221,7 +221,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
     }
 
     for (Node closureRequire : requiresToBeRemoved) {
-      closureRequire.detachFromParent();
+      closureRequire.detach();
       compiler.reportCodeChange();
     }
   }
@@ -233,7 +233,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
     Node parent = n.getParent();
     Preconditions.checkState(parent.isExprResult());
     String name = n.getSecondChild().getString();
-    Node value = n.getChildAtIndex(2).detachFromParent();
+    Node value = n.getChildAtIndex(2).detach();
 
     Node replacement = NodeUtil.newQNameDeclaration(
         compiler, name, value, n.getJSDocInfo());
@@ -251,7 +251,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case CALL:
         Node left = n.getFirstChild();
         if (left.isGetProp()) {
@@ -352,6 +352,8 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
           reportBadGoogBaseUse(t, n, "May only be called directly.");
         }
         break;
+      default:
+        break;
     }
   }
 
@@ -365,7 +367,9 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
 
   private void handleClosureDefinesValues(NodeTraversal t, Node n) {
     // var CLOSURE_DEFINES = {};
-    if (n.getParent().isVar() && n.hasOneChild() && n.getFirstChild().isObjectLit()) {
+    if (NodeUtil.isNameDeclaration(n.getParent())
+        && n.hasOneChild()
+        && n.getFirstChild().isObjectLit()) {
       HashMap<String, Node> builder = new HashMap<>();
       builder.putAll(compiler.getDefaultDefineValues());
       for (Node c : n.getFirstChild().children()) {
@@ -382,7 +386,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
   }
 
   static boolean isValidDefineValue(Node val) {
-    switch (val.getType()) {
+    switch (val.getToken()) {
       case STRING:
       case NUMBER:
       case TRUE:
@@ -409,17 +413,18 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
       } else {
         JSModule providedModule = provided.explicitModule;
 
-        // This must be non-null, because there was an explicit provide.
-        Preconditions.checkNotNull(providedModule);
+        if (!provided.isFromExterns()) {
+          Preconditions.checkNotNull(providedModule, n);
 
-        JSModule module = t.getModule();
-        if (moduleGraph != null
-            && module != providedModule
-            && !moduleGraph.dependsOn(module, providedModule)) {
-          compiler.report(
-              t.makeError(n, XMODULE_REQUIRE_ERROR, ns,
-                  providedModule.getName(),
-                  module.getName()));
+          JSModule module = t.getModule();
+          if (moduleGraph != null
+              && module != providedModule
+              && !moduleGraph.dependsOn(module, providedModule)) {
+            compiler.report(
+                t.makeError(n, XMODULE_REQUIRE_ERROR, ns,
+                    providedModule.getName(),
+                    module.getName()));
+          }
         }
       }
 
@@ -494,7 +499,13 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
       if (name != null) {
         ProvidedName pn = providedNames.get(name);
         if (pn != null) {
+          n.putBooleanProp(Node.WAS_PREVIOUSLY_PROVIDED, true);
           pn.addDefinition(n, t.getModule());
+        } else if (n.getBooleanProp(Node.WAS_PREVIOUSLY_PROVIDED)) {
+          // We didn't find it in the providedNames, but it was previously marked as provided.
+          // This implies we're in hotswap pass and the current typedef is a provided namespace.
+          ProvidedName provided = new ProvidedName(name, n, t.getModule(), true);
+          providedNames.put(name, provided);
         }
       }
     }
@@ -1098,7 +1109,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
     if (typeDeclaration != null) {
       compiler.forwardDeclareType(typeDeclaration);
       // Forward declaration was recorded and we can remove the call.
-      parent.detachFromParent();
+      parent.detach();
       compiler.reportCodeChange();
     }
   }
@@ -1134,7 +1145,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
    */
   private boolean verifyOfType(NodeTraversal t, Node methodName,
       Node arg, Token desiredType) {
-    if (arg.getType() != desiredType) {
+    if (arg.getToken() != desiredType) {
       compiler.report(
           t.makeError(methodName,
               INVALID_ARGUMENT_ERROR, methodName.getQualifiedName()));
@@ -1265,6 +1276,10 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
       return explicitNode != null;
     }
 
+    boolean isFromExterns() {
+      return explicitNode.isFromExterns();
+    }
+
     /**
      * Record function declaration, variable declaration or assignment that
      * refers to the same name as the provide statement.  Give preference to
@@ -1326,11 +1341,11 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
           JSTypeExpression expr = info.getType();
           if (expr != null) {
             Node n = expr.getRoot();
-            if (n.getType() == Token.BANG) {
+            if (n.getToken() == Token.BANG) {
               n = n.getFirstChild();
             }
-            if (n.getType() == Token.STRING
-                && !n.hasChildren()  // templated object types are ok.
+            if (n.getToken() == Token.STRING
+                && !n.hasChildren() // templated object types are ok.
                 && n.getString().equals("Object")) {
               compiler.report(
                   JSError.make(candidateDefinition, WEAK_NAMESPACE_TYPE));
@@ -1352,7 +1367,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
             assignNode.removeChild(valueNode);
             nameNode.addChildToFront(valueNode);
             Node varNode = IR.var(nameNode);
-            varNode.copyInformationFrom(candidateDefinition);
+            varNode.useSourceInfoFrom(candidateDefinition);
             candidateDefinition.getParent().replaceChild(
                 candidateDefinition, varNode);
             varNode.setJSDocInfo(assignNode.getJSDocInfo());
@@ -1389,7 +1404,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
         if (preserveGoogProvidesAndRequires && explicitNode.hasChildren()) {
           return;
         }
-        explicitNode.detachFromParent();
+        explicitNode.detach();
         compiler.reportCodeChange();
       }
     }
@@ -1467,9 +1482,8 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
      */
     private void setSourceInfo(Node newNode) {
       Node provideStringNode = getProvideStringNode();
-      int offset = getSourceInfoOffset(provideStringNode);
-      Node sourceInfoNode = provideStringNode == null
-          ? firstNode : provideStringNode;
+      int offset = provideStringNode == null ? 0 : getSourceInfoOffset();
+      Node sourceInfoNode = provideStringNode == null ? firstNode : provideStringNode;
       newNode.copyInformationFromForTree(sourceInfoNode);
       if (offset != 0) {
         newNode.setSourceEncodedPositionForTree(
@@ -1480,11 +1494,7 @@ class ProcessClosurePrimitives extends AbstractPostOrderCallback
     /**
      * Get the offset into the provide node where the symbol appears.
      */
-    private int getSourceInfoOffset(Node provideStringNode) {
-      if (provideStringNode == null) {
-        return 0;
-      }
-
+    private int getSourceInfoOffset() {
       int indexOfLastDot = namespace.lastIndexOf('.');
 
       // +1 for the opening quote

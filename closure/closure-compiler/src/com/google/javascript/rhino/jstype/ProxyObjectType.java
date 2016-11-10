@@ -260,6 +260,13 @@ public class ProxyObjectType extends ObjectType {
   }
 
   @Override
+  public Iterable<ObjectType> getCtorExtendedInterfaces() {
+    return this.referencedObjType == null
+        ? Collections.<ObjectType>emptyList()
+        : this.referencedObjType.getCtorExtendedInterfaces();
+  }
+
+  @Override
   public int hashCode() {
     return referencedType.hashCode();
   }

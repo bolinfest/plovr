@@ -19,7 +19,7 @@ package com.google.template.soy.soytree;
 import com.google.common.collect.ImmutableMap;
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.error.ErrorReporter;
-import com.google.template.soy.error.SoyError;
+import com.google.template.soy.error.SoyErrorKind;
 
 import java.util.Set;
 
@@ -29,9 +29,6 @@ import java.util.Set;
  *
  */
 public enum AutoescapeMode {
-
-  /** Auto-escaping is off for the template. */
-  NOAUTOESCAPE("deprecated-noautoescape"),
   /** Auto-escaping is on for the template so directiveless prints will be HTML escaped. */
   NONCONTEXTUAL("deprecated-noncontextual"),
   /**
@@ -46,8 +43,8 @@ public enum AutoescapeMode {
   STRICT("strict"),
   ;
 
-  private static final SoyError INVALID_AUTOESCAPE_ERROR =
-      SoyError.of("invalid ''autoescape'' value ''{0}'', expected one of {1}");
+  private static final SoyErrorKind INVALID_AUTOESCAPE_ERROR =
+      SoyErrorKind.of("invalid ''autoescape'' value ''{0}'', expected one of {1}");
   private static final ImmutableMap<String, AutoescapeMode> valueToModeMap;
 
   static {
@@ -87,17 +84,25 @@ public enum AutoescapeMode {
     return valueToModeMap.keySet();
   }
 
+  static AutoescapeMode parseAutoEscapeMode(String autoescapeModeStr) {
+    AutoescapeMode parsed = valueToModeMap.get(autoescapeModeStr);
+    if (parsed == null) {
+      // failed to parse!
+      return AutoescapeMode.STRICT; // default for unparsed
+    }
+    return parsed;
+  }
 
   /**
    * Returns the parsed value.
    */
-  public static AutoescapeMode parseAutoEscapeMode(String autoescapeModeStr, SourceLocation loc,
+  static AutoescapeMode parseAutoEscapeMode(String autoescapeModeStr, SourceLocation loc,
       ErrorReporter reporter) {
     AutoescapeMode parsed = valueToModeMap.get(autoescapeModeStr);
     if (parsed == null) {
       // failed to parse!
       reporter.report(loc, INVALID_AUTOESCAPE_ERROR, autoescapeModeStr,  valueToModeMap.keySet());
-      return AutoescapeMode.NOAUTOESCAPE;  // default for unparsed
+      return AutoescapeMode.STRICT;  // default for unparsed
     } else {
       return parsed;
     }

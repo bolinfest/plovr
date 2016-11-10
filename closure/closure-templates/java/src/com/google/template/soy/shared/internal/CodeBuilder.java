@@ -17,7 +17,7 @@
 package com.google.template.soy.shared.internal;
 
 import com.google.common.base.Preconditions;
-import com.google.template.soy.data.SanitizedContent.ContentKind;
+import com.google.common.base.Strings;
 import com.google.template.soy.internal.base.Pair;
 import com.google.template.soy.internal.targetexpr.TargetExpr;
 
@@ -34,12 +34,8 @@ import java.util.List;
  */
 public abstract class CodeBuilder<E extends TargetExpr> {
 
-  /** Used by {@code increaseIndent()} and {@code decreaseIndent()}. */
-  private static final String SPACES = "                    ";  // 20 spaces
-
   /** The size of a single indent level. */
   private static final int INDENT_SIZE = 2;
-
 
   /** A buffer to accumulate the generated code. */
   private final StringBuilder code;
@@ -56,8 +52,6 @@ public abstract class CodeBuilder<E extends TargetExpr> {
   /** Whether the current output variable is initialized. */
   private boolean currOutputVarIsInited;
 
-  /** Used to track what kind of content is currently being processed. */
-  private ContentKind contentKind;
 
 
   /**
@@ -106,8 +100,8 @@ public abstract class CodeBuilder<E extends TargetExpr> {
    */
   private void changeIndentHelper(int chg) {
     int newIndentDepth = indent.length() + chg * INDENT_SIZE;
-    Preconditions.checkState(newIndentDepth >= 0 && newIndentDepth <= SPACES.length());
-    indent = SPACES.substring(0, newIndentDepth);
+    Preconditions.checkState(newIndentDepth >= 0);
+    indent = Strings.repeat(" ", newIndentDepth);
   }
 
   /**
@@ -234,19 +228,5 @@ public abstract class CodeBuilder<E extends TargetExpr> {
    */
   protected boolean getOutputVarIsInited() {
     return currOutputVarIsInited;
-  }
-
-  /**
-   * @param contentKind The current kind of content being processed.
-   */
-  public void setContentKind(ContentKind contentKind) {
-    this.contentKind = contentKind;
-  }
-
-  /**
-   * @return The current kind of content being processed.
-   */
-  public ContentKind getContentKind() {
-    return contentKind;
   }
 }

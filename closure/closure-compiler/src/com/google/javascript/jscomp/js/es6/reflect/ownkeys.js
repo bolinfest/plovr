@@ -14,11 +14,17 @@
  * limitations under the License.
  */
 
-'require util/polyfill es6/object/getownpropertysymbols';
+'require util/polyfill';
+'require es6/object/getownpropertysymbols';
 
 
 $jscomp.polyfill('Reflect.ownKeys', function(orig) {
   if (orig) return orig;
+
+  var symbolPrefix = 'jscomp_symbol_';
+  function isSymbol(key) {
+    return key.substring(0, symbolPrefix.length) == symbolPrefix;
+  }
 
   /**
    * Polyfill for Reflect.ownKeys() method:
@@ -30,9 +36,13 @@ $jscomp.polyfill('Reflect.ownKeys', function(orig) {
    * @return {!Array<(string|symbol)>}
    */
   var polyfill = function(target) {
-    var keys = Object.getOwnPropertyNames(target);
-    keys.push.apply(keys, Object.getOwnPropertySymbols(target));
-    return keys;
+    var keys = [];
+    var names = Object.getOwnPropertyNames(target);
+    var symbols = Object.getOwnPropertySymbols(target);
+    for (var i = 0; i < names.length; i++) {
+      (isSymbol(names[i]) ? symbols : keys).push(names[i]);
+    }
+    return keys.concat(symbols);
   };
   return polyfill;
 }, 'es6', 'es5'); // ES5: Requires Object.getOwnPropertyNames

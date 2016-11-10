@@ -50,9 +50,17 @@ public interface TypeI {
 
   boolean isBottom();
 
-  boolean isConstructor();
+  boolean isTop();
 
-  boolean isOriginalConstructor();
+  boolean isTypeVariable();
+
+  boolean isUnresolved();
+
+  // Hacky method to abstract away corner case handling of the way OTI
+  // represents unresolved types.
+  boolean isUnresolvedOrResolvedUnknown();
+
+  boolean isConstructor();
 
   boolean isEquivalentTo(TypeI type);
 
@@ -66,7 +74,17 @@ public interface TypeI {
 
   boolean isUnknownType();
 
+  boolean isSomeUnknownType();
+
+  boolean isUnionType();
+
   boolean isNullable();
+
+  boolean isVoidable();
+
+  boolean isNullType();
+
+  boolean isVoidType();
 
   boolean isPrototypeObject();
 
@@ -93,6 +111,12 @@ public interface TypeI {
    * If it is a non-object or a union of objects, return null.
    */
   ObjectTypeI toMaybeObjectType();
+
+  /**
+   * If this type is a union type, returns a list of its members. Otherwise
+   * returns null.
+   */
+  Iterable<? extends TypeI> getUnionMembers();
 
   String getDisplayName();
 }

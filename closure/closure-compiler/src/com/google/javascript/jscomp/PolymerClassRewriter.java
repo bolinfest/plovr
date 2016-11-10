@@ -19,12 +19,13 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.PolymerBehaviorExtractor.BehaviorDefinition;
 import com.google.javascript.jscomp.PolymerPass.MemberDefinition;
+import com.google.javascript.jscomp.parsing.parser.FeatureSet;
 import com.google.javascript.rhino.IR;
+import com.google.javascript.rhino.JSDocInfo.Visibility;
 import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.JSTypeExpression;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -100,10 +101,12 @@ final class PolymerClassRewriter {
           cls.constructor.value.cloneTree());
       assign.setJSDocInfo(constructorDoc.build());
       Node exprResult = IR.exprResult(assign);
+      exprResult.useSourceInfoIfMissingFromForTree(cls.target);
       block.addChildToBack(exprResult);
     } else {
       // var foo = Polymer({...}); OR Polymer({...});
       Node var = IR.var(cls.target.cloneTree(), cls.constructor.value.cloneTree());
+      var.useSourceInfoIfMissingFromForTree(exprRoot);
       var.setJSDocInfo(constructorDoc.build());
       block.addChildToBack(var);
     }
@@ -114,7 +117,6 @@ final class PolymerClassRewriter {
     addInterfaceExterns(cls, readOnlyProps);
     removePropertyDocs(objLit);
 
-    block.useSourceInfoIfMissingFromForTree(exprRoot);
     Node statements = block.removeChildren();
     Node parent = exprRoot.getParent();
 
@@ -126,7 +128,7 @@ final class PolymerClassRewriter {
     // types declared inside IIFEs or any non-global scope. We should revisit this decision after
     // moving to the new type inference system which should be able to infer these types better.
     if (!isInGlobalScope && !cls.target.isGetProp()) {
-      Node scriptNode = NodeUtil.getEnclosingScript(exprRoot);
+      Node scriptNode = NodeUtil.getEnclosingScript(parent);
       scriptNode.addChildrenToFront(statements);
     } else {
       Node beforeRoot = exprRoot.getPrevious();
@@ -135,6 +137,15 @@ final class PolymerClassRewriter {
       } else {
         parent.addChildrenAfter(statements, beforeRoot);
       }
+    }
+
+    // Since behavior files might contain more language features than the class file, we need to
+    // update the feature sets.
+    FeatureSet newFeatures = cls.features;
+    if (newFeatures != null) {
+      Node scriptNode = NodeUtil.getEnclosingScript(parent);
+      FeatureSet oldFeatures = (FeatureSet) scriptNode.getProp(Node.FEATURE_SET);
+      scriptNode.putProp(Node.FEATURE_SET, oldFeatures.union(newFeatures));
     }
 
     if (NodeUtil.isNameDeclaration(exprRoot)) {
@@ -161,7 +172,7 @@ final class PolymerClassRewriter {
     }
 
     // Add @this and @return to default property values.
-    for (MemberDefinition property : PolymerPassStaticUtils.extractProperties(objLit)) {
+    for (MemberDefinition property : PolymerPassStaticUtils.extractProperties(objLit, compiler)) {
       if (!property.value.isObjectLit()) {
         continue;
       }
@@ -198,7 +209,9 @@ final class PolymerClassRewriter {
       if (prop.value.isObjectLit()) {
         Node readOnlyValue = NodeUtil.getFirstPropMatchingKey(prop.value, "readOnly");
         if (readOnlyValue != null && readOnlyValue.isTrue()) {
-          block.addChildToBack(makeReadOnlySetter(prop.name.getString(), qualifiedPath));
+          Node setter = makeReadOnlySetter(prop.name.getString(), qualifiedPath);
+          setter.useSourceInfoIfMissingFromForTree(prop.name);
+          block.addChildToBack(setter);
           readOnlyProps.add(prop);
         }
       }
@@ -235,6 +248,7 @@ final class PolymerClassRewriter {
     for (MemberDefinition prop : cls.props) {
       Node propertyNode = IR.exprResult(
           NodeUtil.newQName(compiler, basePath + prop.name.getString()));
+      propertyNode.useSourceInfoIfMissingFromForTree(prop.name);
       JSDocInfoBuilder info = JSDocInfoBuilder.maybeCopyFrom(prop.info);
 
       JSTypeExpression propType = PolymerPassStaticUtils.getTypeFromProperty(prop, compiler);
@@ -252,7 +266,7 @@ final class PolymerClassRewriter {
    * Remove all JSDocs from properties of a class definition
    */
   private void removePropertyDocs(final Node objLit) {
-    for (MemberDefinition prop : PolymerPassStaticUtils.extractProperties(objLit)) {
+    for (MemberDefinition prop : PolymerPassStaticUtils.extractProperties(objLit, compiler)) {
       prop.name.removeProp(Node.JSDOC_INFO_PROP);
     }
   }
@@ -279,7 +293,19 @@ final class PolymerClassRewriter {
         Node fnValue = behaviorFunction.value.cloneTree();
         Node exprResult = IR.exprResult(
             IR.assign(NodeUtil.newQName(compiler, qualifiedPath + fnName), fnValue));
+        exprResult.useSourceInfoIfMissingFromForTree(behaviorFunction.name);
         JSDocInfoBuilder info = JSDocInfoBuilder.maybeCopyFrom(behaviorFunction.info);
+        // Uses of private members that come from behaviors are not recognized correctly,
+        // so just suppress that warning.
+        info.addSuppression("unusedPrivateMembers");
+
+        // If the function in the behavior is @protected, switch it to @public so that
+        // we don't get a visibility warning. This is a bit of a hack but easier than
+        // making the type system understand that methods are "inherited" from behaviors.
+        if (behaviorFunction.info != null
+            && behaviorFunction.info.getVisibility() == Visibility.PROTECTED) {
+          info.overwriteVisibility(Visibility.PUBLIC);
+        }
 
         // Behaviors whose declarations are not in the global scope may contain references to
         // symbols which do not exist in the element's scope. Only copy a function stub.
@@ -300,6 +326,7 @@ final class PolymerClassRewriter {
         }
 
         Node exprResult = IR.exprResult(NodeUtil.newQName(compiler, qualifiedPath + propName));
+        exprResult.useSourceInfoFromForTree(behaviorProp.name);
         JSDocInfoBuilder info = JSDocInfoBuilder.maybeCopyFrom(behaviorProp.info);
 
         if (behaviorProp.name.isGetterDef()) {
@@ -402,6 +429,6 @@ final class PolymerClassRewriter {
     Node assign = IR.assign(
         var.getFirstChild().cloneNode(),
         var.getFirstChild().removeFirstChild());
-    return IR.exprResult(assign).useSourceInfoFromForTree(var);
+    return IR.exprResult(assign).useSourceInfoIfMissingFromForTree(var);
   }
 }

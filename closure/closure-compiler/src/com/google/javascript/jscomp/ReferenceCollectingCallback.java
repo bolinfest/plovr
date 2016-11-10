@@ -28,7 +28,6 @@ import com.google.javascript.rhino.StaticRef;
 import com.google.javascript.rhino.StaticSourceFile;
 import com.google.javascript.rhino.StaticSymbolTable;
 import com.google.javascript.rhino.Token;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -113,6 +112,10 @@ class ReferenceCollectingCallback implements ScopedCallback,
   @Override
   public void process(Node externs, Node root) {
     NodeTraversal.traverseRoots(compiler, this, externs, root);
+  }
+
+  public void process(Node root) {
+    NodeTraversal.traverse(compiler, root, this);
   }
 
   /**
@@ -293,7 +296,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
    */
   private static boolean isBlockBoundary(Node n, Node parent) {
     if (parent != null) {
-      switch (parent.getType()) {
+      switch (parent.getToken()) {
         case DO:
         case FOR:
         case FOR_OF:
@@ -320,6 +323,8 @@ class ReferenceCollectingCallback implements ScopedCallback,
           // but all the rest of the children are.
           return n != parent.getFirstChild();
 
+        default:
+          break;
       }
     }
 
@@ -568,6 +573,11 @@ class ReferenceCollectingCallback implements ScopedCallback,
       int size = references.size();
       return size > 0 && references.get(0).isInitializingDeclaration();
     }
+
+    @Override
+    public String toString() {
+      return "<ReferenceCollection for " + getInitializingReference() + ">";
+    }
   }
 
   /**
@@ -583,7 +593,6 @@ class ReferenceCollectingCallback implements ScopedCallback,
     private final BasicBlock basicBlock;
     private final Scope scope;
     private final InputId inputId;
-    private final StaticSourceFile sourceFile;
 
     Reference(Node nameNode, NodeTraversal t,
         BasicBlock basicBlock) {
@@ -612,7 +621,6 @@ class ReferenceCollectingCallback implements ScopedCallback,
       this.basicBlock = basicBlock;
       this.scope = scope;
       this.inputId = inputId;
-      this.sourceFile = nameNode.getStaticSourceFile();
     }
 
     /**
@@ -638,7 +646,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
 
     @Override
     public StaticSourceFile getSourceFile() {
-      return sourceFile;
+      return nameNode.getStaticSourceFile();
     }
 
     boolean isDeclaration() {
@@ -678,7 +686,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
         return node == parent.getFirstChild();
       }
 
-      return DECLARATION_PARENTS.contains(parent.getType());
+      return DECLARATION_PARENTS.contains(parent.getToken());
     }
 
     boolean isVarDeclaration() {
@@ -749,7 +757,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
      */
     boolean isLvalue() {
       Node parent = getParent();
-      Token parentType = parent.getType();
+      Token parentType = parent.getToken();
       return (parentType == Token.VAR && nameNode.getFirstChild() != null)
           || (parentType == Token.LET && nameNode.getFirstChild() != null)
           || (parentType == Token.CONST && nameNode.getFirstChild() != null)
@@ -799,7 +807,7 @@ class ReferenceCollectingCallback implements ScopedCallback,
       this.isFunction = root.isFunction();
 
       if (root.getParent() != null) {
-        Token pType = root.getParent().getType();
+        Token pType = root.getParent().getToken();
         this.isLoop = pType == Token.DO ||
             pType == Token.WHILE ||
             pType == Token.FOR;

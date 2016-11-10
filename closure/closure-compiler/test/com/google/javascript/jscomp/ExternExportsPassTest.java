@@ -21,10 +21,8 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.testing.BlackHoleErrorManager;
-
-import junit.framework.TestCase;
-
 import java.util.List;
+import junit.framework.TestCase;
 
 /**
  * Tests for {@link ExternExportsPass}.
@@ -694,6 +692,44 @@ public final class ExternExportsPassTest extends TestCase {
             ""));
   }
 
+  public void testNullabilityInFunctionTypes() throws Exception {
+    compileAndCheck(
+        Joiner.on("\n").join(
+            "/**",
+            " * @param {function(Object)} takesNullable",
+            " * @param {function(!Object)} takesNonNullable",
+            " */",
+            "function x(takesNullable, takesNonNullable) {}",
+            "goog.exportSymbol('x', x);"),
+        Joiner.on("\n").join(
+            "/**",
+            " * @param {function ((Object|null)): ?} takesNullable",
+            " * @param {function (!Object): ?} takesNonNullable",
+            " * @return {undefined}",
+            " */",
+            "var x = function(takesNullable, takesNonNullable) {",
+            "};",
+            ""));
+  }
+
+  public void testNullabilityInRecordTypes() throws Exception {
+    compileAndCheck(
+        Joiner.on("\n").join(
+            "/** @typedef {{ nonNullable: !Object, nullable: Object }} */",
+            "var foo;",
+            "/** @param {foo} record */",
+            "function x(record) {}",
+            "goog.exportSymbol('x', x);"),
+        Joiner.on("\n").join(
+            "/**",
+            " * @param {{nonNullable: !Object, nullable: (Object|null)}} record",
+            " * @return {undefined}",
+            " */",
+            "var x = function(record) {",
+            "};",
+            ""));
+  }
+
   private void compileAndCheck(String js, String expected) {
     Result result = compileAndExportExterns(js);
 
@@ -743,9 +779,6 @@ public final class ExternExportsPassTest extends TestCase {
     CompilerOptions options = new CompilerOptions();
     options.externExportsPath = "externs.js";
     options.declaredGlobalExternsOnWindow = false;
-
-    // Turn off IDE mode.
-    options.setIdeMode(false);
 
     /* Check types so we can make sure our exported externs have
      * type information.

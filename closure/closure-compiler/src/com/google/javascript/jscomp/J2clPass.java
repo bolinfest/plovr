@@ -23,7 +23,6 @@ import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.NodeTraversal.Callback;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -55,7 +54,7 @@ public class J2clPass implements CompilerPass {
       Node secondExpr = callNode.getLastChild();
 
       if (secondExpr != firstExpr) {
-        secondExpr.detachFromParent();
+        secondExpr.detach();
       } else {
         // There is no secondExpr; default to null.
         secondExpr = IR.nullNode();
@@ -82,7 +81,8 @@ public class J2clPass implements CompilerPass {
     }
 
     private boolean isUtilGetDefineMethodName(String fnName) {
-      return fnName != null && fnName.endsWith("Util.$getDefine");
+      // TODO: Switch this to the filename + property name heuristic which is less brittle.
+      return fnName != null && fnName.endsWith(".$getDefine") && fnName.contains("Util");
     }
   }
 
@@ -227,6 +227,10 @@ public class J2clPass implements CompilerPass {
 
   @Override
   public void process(Node externs, Node root) {
+    if (!J2clSourceFileChecker.shouldRunJ2clPasses(compiler)) {
+      return;
+    }
+
     /*
      * Re-writes Util.getDefine to make it work for compiled mode.
      */
@@ -240,14 +244,11 @@ public class J2clPass implements CompilerPass {
      */
     inlineFunctionsInFile(
         root,
-        "vmbootstrap/Arrays.impl.js",
+        "vmbootstrap/Arrays.impl.java.js",
         ImmutableSet.of("$create", "$init", "$instanceIsOfType", "$castTo"),
         InliningMode.DIRECT);
     inlineFunctionsInFile(
-        root,
-        "vmbootstrap/Casts.impl.js",
-        ImmutableSet.of("to"),
-        InliningMode.DIRECT);
+        root, "vmbootstrap/Casts.impl.java.js", ImmutableSet.of("to"), InliningMode.DIRECT);
 
     /*
      * Inlines all Interface.$markImplementor(FooClass) metaclass calls so that FooClass and others
@@ -262,7 +263,7 @@ public class J2clPass implements CompilerPass {
      */
     inlineFunctionsInFile(
         root,
-        "nativebootstrap/Util.impl.js",
+        "nativebootstrap/Util.impl.java.js",
         ImmutableSet.of(
             "$setClassMetadata",
             "$setClassMetadataForInterface",

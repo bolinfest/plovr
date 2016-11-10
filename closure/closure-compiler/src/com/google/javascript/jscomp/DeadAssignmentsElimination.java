@@ -17,45 +17,37 @@
 package com.google.javascript.jscomp;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Predicate;
-import com.google.common.base.Predicates;
 import com.google.javascript.jscomp.ControlFlowGraph.Branch;
 import com.google.javascript.jscomp.DataFlowAnalysis.FlowState;
 import com.google.javascript.jscomp.LiveVariablesAnalysis.LiveVariableLattice;
-import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
-import com.google.javascript.jscomp.NodeTraversal.ScopedCallback;
+import com.google.javascript.jscomp.NodeTraversal.AbstractScopedCallback;
 import com.google.javascript.jscomp.graph.DiGraph.DiGraphNode;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
+import java.util.ArrayDeque;
+import java.util.Deque;
 
 /**
- * Removes local variable assignments that are useless based on information from
- * {@link LiveVariablesAnalysis}. If there is an assignment to variable
- * {@code x} and {@code x} is dead after this assignment, we know that the
- * current content of {@code x} will not be read and this assignment is useless.
+ * Removes local variable assignments that are useless based on information from {@link
+ * LiveVariablesAnalysis}. If there is an assignment to variable {@code x} and {@code x} is dead
+ * after this assignment, we know that the current content of {@code x} will not be read and this
+ * assignment is useless.
  *
  */
-class DeadAssignmentsElimination extends AbstractPostOrderCallback implements
-    CompilerPass, ScopedCallback {
+class DeadAssignmentsElimination extends AbstractScopedCallback implements CompilerPass {
 
   private final AbstractCompiler compiler;
   private LiveVariablesAnalysis liveness;
+  private final Deque<BailoutInformation> functionStack;
 
-  // Matches all assignment operators and increment/decrement operators.
-  // Does *not* match VAR initialization, since RemoveUnusedVariables
-  // will already remove variables that are initialized but unused.
-  private static final Predicate<Node> matchRemovableAssigns =
-      new Predicate<Node>() {
-    @Override
-    public boolean apply(Node n) {
-      return (NodeUtil.isAssignmentOp(n) &&
-              n.getFirstChild().isName()) ||
-          n.isInc() || n.isDec();
-    }
-  };
+  private static final class BailoutInformation {
+    boolean containsFunction;
+    boolean containsRemovableAssign;
+  }
 
   public DeadAssignmentsElimination(AbstractCompiler compiler) {
     this.compiler = compiler;
+    this.functionStack = new ArrayDeque<>();
   }
 
   @Override
@@ -66,57 +58,83 @@ class DeadAssignmentsElimination extends AbstractPostOrderCallback implements
   }
 
   @Override
+  public void visit(NodeTraversal t, Node n, Node parent) {
+    if (functionStack.isEmpty()) {
+      return;
+    }
+    if (n.isFunction()) {
+      functionStack.peekFirst().containsFunction = true;
+    } else if (isRemovableAssign(n)) {
+      functionStack.peekFirst().containsRemovableAssign = true;
+    }
+  }
+
+  @Override
   public void enterScope(NodeTraversal t) {
+    if (t.inFunctionBlockScope()) {
+      functionStack.addFirst(new BailoutInformation());
+    }
   }
 
   @Override
   public void exitScope(NodeTraversal t) {
-    // Do nothing on global scope / global blocks
-    if (t.inGlobalHoistScope()) {
-      return;
-    }
-
-    Scope scope = t.getScope();
-    // Elevate all variable declarations up till the enclosing function scope
-    // so the liveness analysis has all variables for the process.
-    if (!scope.isFunctionScope()) {
-      for (Var var : scope.getVarIterable()) {
-        Preconditions.checkArgument(
-            !var.isClass() && !var.isLet() && !var.isConst());
-        scope.getParent().declare(
-            var.getName(), var.getNameNode(), var.getInput());
-      }
-    } else {
-      if (LiveVariablesAnalysis.MAX_VARIABLES_TO_ANALYZE <
-          scope.getVarCount()) {
-        return;
-      }
-
-      // We are not going to do any dead assignment elimination in when there is
-      // at least one inner function because in most browsers, when there is a
-      // closure, ALL the variables are saved (escaped).
-      Node fnBlock = t.getScopeRoot().getLastChild();
-      if (NodeUtil.containsFunction(fnBlock)) {
-        return;
-      }
-
-      // We don't do any dead assignment elimination if there are no assigns
-      // to eliminate. :)
-      if (!NodeUtil.has(fnBlock, matchRemovableAssigns,
-              Predicates.<Node>alwaysTrue())) {
-        return;
-      }
-
-      // Computes liveness information first.
-      ControlFlowGraph<Node> cfg = t.getControlFlowGraph();
-      liveness = new LiveVariablesAnalysis(cfg, scope, compiler);
-      liveness.analyze();
-      tryRemoveDeadAssignments(t, cfg);
+    if (t.inFunctionBlockScope()) {
+      eliminateDeadAssignments(t);
+      functionStack.removeFirst();
     }
   }
 
-  @Override
-  public void visit(NodeTraversal t, Node n, Node parent) {
+  private void eliminateDeadAssignments(NodeTraversal t) {
+    Preconditions.checkArgument(t.inFunctionBlockScope());
+    Preconditions.checkState(!functionStack.isEmpty());
+
+    // Skip unchanged functions (note that the scope root is the function block, not the function).
+    if (!compiler.hasScopeChanged(t.getScopeRoot().getParent())) {
+      return;
+    }
+
+    BailoutInformation currentFunction = functionStack.peekFirst();
+    // We are not going to do any dead assignment elimination in when there is
+    // at least one inner function because in most browsers, when there is a
+    // closure, ALL the variables are saved (escaped).
+    if (currentFunction.containsFunction) {
+      return;
+    }
+
+    // We don't do any dead assignment elimination if there are no assigns
+    // to eliminate. :)
+    if (!currentFunction.containsRemovableAssign) {
+      return;
+    }
+
+    Scope blockScope = t.getScope();
+    Scope functionScope = blockScope.getParent();
+    if (LiveVariablesAnalysis.MAX_VARIABLES_TO_ANALYZE
+        < blockScope.getVarCount() + functionScope.getVarCount()) {
+      return;
+    }
+
+    // Elevate all variable declarations up till the function scope
+    // so the liveness analysis has all variables for the process.
+    for (Var var : blockScope.getVarIterable()) {
+      Preconditions.checkArgument(!var.isClass() && !var.isLet() && !var.isConst());
+      functionScope.declare(var.getName(), var.getNameNode(), var.getInput());
+    }
+
+    // Computes liveness information first.
+    ControlFlowGraph<Node> cfg = t.getControlFlowGraph();
+    liveness = new LiveVariablesAnalysis(cfg, functionScope, compiler);
+    liveness.analyze();
+    tryRemoveDeadAssignments(t, cfg);
+  }
+
+
+
+  // Matches all assignment operators and increment/decrement operators.
+  // Does *not* match VAR initialization, since RemoveUnusedVariables
+  // will already remove variables that are initialized but unused.
+  boolean isRemovableAssign(Node n) {
+    return (NodeUtil.isAssignmentOp(n) && n.getFirstChild().isName()) || n.isInc() || n.isDec();
   }
 
   /**
@@ -138,7 +156,7 @@ class DeadAssignmentsElimination extends AbstractPostOrderCallback implements
       if (n == null) {
         continue;
       }
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case IF:
         case WHILE:
         case DO:
@@ -157,7 +175,9 @@ class DeadAssignmentsElimination extends AbstractPostOrderCallback implements
             tryRemoveAssignment(t, n.getFirstChild(), state);
           }
           continue;
-        // TODO(user): case VAR: Remove var a=1;a=2;.....
+          // TODO(user): case VAR: Remove var a=1;a=2;.....
+        default:
+          break;
       }
 
       tryRemoveAssignment(t, n, state);
@@ -210,15 +230,16 @@ class DeadAssignmentsElimination extends AbstractPostOrderCallback implements
         return;
       }
 
-      Scope scope = t.getScope();
       if (!lhs.isName()) {
         return; // Not a local variable assignment.
       }
       String name = lhs.getString();
-      if (!scope.isDeclared(name, false)) {
+      Preconditions.checkState(t.getScope().isFunctionBlockScope());
+      Scope functionScope = t.getScope().getParent();
+      if (!functionScope.isDeclared(name, false)) {
         return;
       }
-      Var var = scope.getVar(name);
+      Var var = functionScope.getVar(name);
 
       if (liveness.getEscapedLocals().contains(var)) {
         return; // Local variable that might be escaped due to closures.
@@ -320,7 +341,7 @@ class DeadAssignmentsElimination extends AbstractPostOrderCallback implements
       Node n, Node exprRoot, String variable) {
     while (n != exprRoot) {
       VariableLiveness state = VariableLiveness.MAYBE_LIVE;
-      switch (n.getParent().getType()) {
+      switch (n.getParent().getToken()) {
         case OR:
         case AND:
           // If the currently node is the first child of
@@ -401,7 +422,7 @@ class DeadAssignmentsElimination extends AbstractPostOrderCallback implements
       }
     }
 
-    switch (n.getType()) {
+    switch (n.getToken()) {
       // Conditionals
       case OR:
       case AND:

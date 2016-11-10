@@ -62,7 +62,7 @@ import java.util.Stack;
  *
  *
  */
- // TODO(tbreisacher): Find out if anyone is still using this pass. Delete if not.
+ // TODO(tbreisacher): Find out if this pass is still actually useful. Delete it if not.
  // TODO(user): Pass needs to be updated for listenable interfaces.
 public final class CheckEventfulObjectDisposal implements CompilerPass {
 
@@ -169,7 +169,8 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
    */
   private void addDisposeCall(String functionOrMethodName,
       List<Integer> argumentsThatAreDisposed) {
-    String potentiallyTypeName, propertyName;
+    String potentiallyTypeName;
+    String propertyName;
     JSType objectType = null;
 
     int lastPeriod = functionOrMethodName.lastIndexOf('.');
@@ -470,7 +471,9 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
     /*
      * Perform topological sort
      */
-    int white = 0, gray = 1, black = 2;
+    int white = 0;
+    int gray = 1;
+    int black = 2;
     int last = eventizes.keySet().size() - 1;
     Map<String, Integer> color = new HashMap<>();
     Stack<String> dfsStack = new Stack<>();
@@ -806,7 +809,7 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case CALL:
           visitCall(t, n);
           break;
@@ -1260,7 +1263,7 @@ public final class CheckEventfulObjectDisposal implements CompilerPass {
 
     @Override
     public void visit(NodeTraversal t, Node n, Node parent) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case ASSIGN:
           visitAssign(t, n);
           break;

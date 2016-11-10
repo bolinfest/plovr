@@ -46,16 +46,6 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
           "JSC_NEGATING_A_NON_NUMBER_ERROR",
           "Can''t negate non-numeric value: {0}");
 
-  static final DiagnosticType BITWISE_OPERAND_OUT_OF_RANGE =
-      DiagnosticType.warning(
-          "JSC_BITWISE_OPERAND_OUT_OF_RANGE",
-          "Operand out of range, bitwise operation will lose information: {0}");
-
-  static final DiagnosticType SHIFT_AMOUNT_OUT_OF_BOUNDS =
-      DiagnosticType.warning(
-          "JSC_SHIFT_AMOUNT_OUT_OF_BOUNDS",
-          "Shift amount out of bounds (see right operand): {0}");
-
   static final DiagnosticType FRACTIONAL_BITWISE_OPERAND =
       DiagnosticType.warning(
           "JSC_FRACTIONAL_BITWISE_OPERAND",
@@ -80,7 +70,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
 
   @Override
   Node optimizeSubtree(Node subtree) {
-    switch(subtree.getType()) {
+    switch (subtree.getToken()) {
       case CALL:
         return tryFoldCall(subtree);
       case NEW:
@@ -119,7 +109,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
     }
 
     // If we've reached here, node is truly a binary operator.
-    switch(subtree.getType()) {
+    switch (subtree.getToken()) {
       case GETPROP:
         return tryFoldGetProp(subtree, left, right);
 
@@ -197,7 +187,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
   }
 
   private void tryReduceOperandsForOp(Node n) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case ADD:
         Node left = n.getFirstChild();
         Node right = n.getLastChild();
@@ -234,6 +224,8 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
       case NEG:
         tryConvertOperandsToNumber(n);
         break;
+      default:
+        break;
     }
   }
 
@@ -246,7 +238,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
   }
 
   private void tryConvertToNumber(Node n) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case NUMBER:
         // Nothing to do
         return;
@@ -263,6 +255,8 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
         if (!NodeUtil.isUndefined(n)) {
           return;
         }
+        break;
+      default:
         break;
     }
 
@@ -297,7 +291,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
 
     String typeNameString = null;
 
-    switch (argumentNode.getType()) {
+    switch (argumentNode.getToken()) {
       case FUNCTION:
         typeNameString = "function";
         break;
@@ -325,6 +319,8 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
         if ("undefined".equals(argumentNode.getString())) {
           typeNameString = "undefined";
         }
+        break;
+      default:
         break;
     }
 
@@ -354,7 +350,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
       return n;
     }
 
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case NOT:
         // Don't fold !0 and !1 back to false.
         if (late && left.isNumber()) {
@@ -370,7 +366,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
       case POS:
         if (NodeUtil.isNumericResult(left)) {
           // POS does nothing to numeric values.
-          parent.replaceChild(n, left.detachFromParent());
+          parent.replaceChild(n, left.detach());
           reportCodeChange();
           return left;
         }
@@ -405,19 +401,14 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
       case BITNOT:
         try {
           double val = left.getDouble();
-          if (val >= Integer.MIN_VALUE && val <= Integer.MAX_VALUE) {
-            int intVal = (int) val;
-            if (intVal == val) {
-              Node notIntValNode = IR.number(~intVal);
-              parent.replaceChild(n, notIntValNode);
-              reportCodeChange();
-              return notIntValNode;
-            } else {
-              report(FRACTIONAL_BITWISE_OPERAND, left);
-              return n;
-            }
+          if (Math.floor(val) == val) {
+            int intVal = jsConvertDoubleToBits(val);
+            Node notIntValNode = IR.number(~intVal);
+            parent.replaceChild(n, notIntValNode);
+            reportCodeChange();
+            return notIntValNode;
           } else {
-            report(BITWISE_OPERAND_OUT_OF_RANGE, left);
+            report(FRACTIONAL_BITWISE_OPERAND, left);
             return n;
           }
         } catch (UnsupportedOperationException ex) {
@@ -429,6 +420,14 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
         default:
           return n;
     }
+  }
+
+  /**
+   * Uses a method for treating a double as 32bits that is equivalent to
+   * how JavaScript would convert a number before applying a bit operation.
+   */
+  private int jsConvertDoubleToBits(double d) {
+    return (int) (((long) Math.floor(d)) & 0xffffffff);
   }
 
   /**
@@ -484,15 +483,15 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
     Node newRight;
     if (areNodesEqualForInlining(left, right.getFirstChild())) {
       newRight = right.getLastChild();
-    } else if (NodeUtil.isCommutative(right.getType()) &&
-          areNodesEqualForInlining(left, right.getLastChild())) {
+    } else if (NodeUtil.isCommutative(right.getToken())
+        && areNodesEqualForInlining(left, right.getLastChild())) {
       newRight = right.getFirstChild();
     } else {
       return n;
     }
 
     Token newType = null;
-    switch (right.getType()) {
+    switch (right.getToken()) {
       case ADD:
         newType = Token.ASSIGN_ADD;
         break;
@@ -531,7 +530,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
     }
 
     Node newNode = new Node(newType,
-        left.detachFromParent(), newRight.detachFromParent());
+        left.detach(), newRight.detach());
     n.getParent().replaceChild(n, newNode);
 
     reportCodeChange();
@@ -555,8 +554,8 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
 
     // Tries to convert x += y -> x = x + y;
     Token op = NodeUtil.getOpFromAssignmentOp(n);
-    Node replacement = IR.assign(left.detachFromParent(),
-        new Node(op, left.cloneTree(), right.detachFromParent())
+    Node replacement = IR.assign(left.detach(),
+        new Node(op, left.cloneTree(), right.detach())
             .srcref(n));
     n.getParent().replaceChild(n, replacement);
     reportCodeChange();
@@ -572,7 +571,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
 
     Node result = null;
 
-    Token type = n.getType();
+    Token type = n.getToken();
 
     TernaryValue leftVal = NodeUtil.getImpureBooleanValue(left);
 
@@ -699,7 +698,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
    * Try to fold arithmetic binary operators
    */
   private Node tryFoldArithmeticOp(Node n, Node left, Node right) {
-    Node result = performArithmeticOp(n.getType(), left, right);
+    Node result = performArithmeticOp(n.getToken(), left, right);
     if (result != null) {
       result.useSourceInfoIfMissingFromForTree(n);
       n.getParent().replaceChild(n, result);
@@ -799,7 +798,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
    *  - The left child's right child is a NUMBER constant.
    */
   private Node tryFoldLeftChildOp(Node n, Node left, Node right) {
-    Token opType = n.getType();
+    Token opType = n.getToken();
     Preconditions.checkState(
         (NodeUtil.isAssociative(opType) && NodeUtil.isCommutative(opType))
         || n.isAdd());
@@ -809,7 +808,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
     // Use getNumberValue to handle constants like "NaN" and "Infinity"
     // other values are converted to numbers elsewhere.
     Double rightValObj = NodeUtil.getNumberValue(right, shouldUseTypes);
-    if (rightValObj != null && left.getType() == opType) {
+    if (rightValObj != null && left.getToken() == opType) {
       Preconditions.checkState(left.getChildCount() == 2);
 
       Node ll = left.getFirstChild();
@@ -870,16 +869,9 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
       double lval = left.getDouble();
       double rval = right.getDouble();
 
-      // check ranges.  We do not do anything that would clip the double to
-      // a 32-bit range, since the user likely does not intend that.
-      if (lval < Integer.MIN_VALUE) {
-        report(BITWISE_OPERAND_OUT_OF_RANGE, left);
-        return n;
-      }
       // only the lower 5 bits are used when shifting, so don't do anything
       // if the shift amount is outside [0,32)
       if (!(rval >= 0 && rval < 32)) {
-        report(SHIFT_AMOUNT_OUT_OF_BOUNDS, n);
         return n;
       }
 
@@ -889,43 +881,27 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
         return n;
       }
 
-      switch (n.getType()) {
+      if (Math.floor(lval) != lval) {
+        report(FRACTIONAL_BITWISE_OPERAND, left);
+        return n;
+      }
+
+      int bits = jsConvertDoubleToBits(lval);
+
+      switch (n.getToken()) {
         case LSH:
+          result = bits << rvalInt;
+          break;
         case RSH:
-          // Convert the numbers to ints
-          if (lval > Integer.MAX_VALUE) {
-            report(BITWISE_OPERAND_OUT_OF_RANGE, left);
-            return n;
-          }
-          int lvalInt = (int) lval;
-          if (lvalInt != lval) {
-            report(FRACTIONAL_BITWISE_OPERAND, left);
-            return n;
-          }
-          if (n.getType() == Token.LSH) {
-            result = lvalInt << rvalInt;
-          } else {
-            result = lvalInt >> rvalInt;
-          }
+          result = bits >> rvalInt;
           break;
         case URSH:
-          // JavaScript handles zero shifts on signed numbers differently than
-          // Java as an Java int can not represent the unsigned 32-bit number
-          // where JavaScript can so use a long here.
-          long maxUint32 = 0xffffffffL;
-          if (lval > maxUint32) {
-            report(BITWISE_OPERAND_OUT_OF_RANGE, left);
-            return n;
-          }
-          long lvalLong = (long) lval;
-          if (lvalLong != lval) {
-            report(FRACTIONAL_BITWISE_OPERAND, left);
-            return n;
-          }
-          result = (lvalLong & maxUint32) >>> rvalInt;
+          // JavaScript always treats the result of >>> as unsigned.
+          // We must force Java to do the same here.
+          result = 0xffffffffL & (bits >>> rvalInt);
           break;
         default:
-          throw new AssertionError("Unknown shift operator: " + n.getType());
+          throw new AssertionError("Unknown shift operator: " + n.getToken());
       }
 
       Node newNumber = IR.number(result);
@@ -942,7 +918,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
    * Try to fold comparison nodes, e.g ==
    */
   private Node tryFoldComparison(Node n, Node left, Node right) {
-    TernaryValue result = evaluateComparison(n.getType(), left, right, shouldUseTypes);
+    TernaryValue result = evaluateComparison(n.getToken(), left, right, shouldUseTypes);
     if (result == TernaryValue.UNKNOWN) {
       return n;
     }
@@ -1132,6 +1108,8 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
         return tryAbstractRelationalComparison(right, left, useTypes, true).not();
       case GE:
         return tryAbstractRelationalComparison(left, right, useTypes, true).not();
+      default:
+        break;
     }
     throw new IllegalStateException("Unexpected operator for comparison");
   }
@@ -1161,7 +1139,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
       Node srcObj = n.getLastChild();
       if (srcObj.isObjectLit() && !srcObj.hasChildren()) {
         Node parent = n.getParent();
-        Node destObj = n.getSecondChild().detachFromParent();
+        Node destObj = n.getSecondChild().detach();
         parent.replaceChild(n, destObj);
         reportCodeChange();
       }
@@ -1251,7 +1229,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
     if (right.isString() &&
         right.getString().equals("length")) {
       int knownLength = -1;
-      switch (left.getType()) {
+      switch (left.getToken()) {
         case ARRAYLIT:
           if (mayHaveSideEffects(left)) {
             // Nope, can't fold this, without handling the side-effects.
@@ -1405,7 +1383,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
     Node value = null;
     for (Node c = left.getFirstChild(); c != null; c = c.getNext()) {
       if (c.getString().equals(right.getString())) {
-        switch (c.getType()) {
+        switch (c.getToken()) {
           case SETTER_DEF:
             continue;
           case GETTER_DEF:
@@ -1438,7 +1416,7 @@ class PeepholeFoldConstants extends AbstractPeepholeOptimization {
       return n;
     }
 
-    Node replacement = value.detachFromParent();
+    Node replacement = value.detach();
     if (key.isGetterDef()){
       replacement = IR.call(replacement);
       replacement.putBooleanProp(Node.FREE_CALL, true);

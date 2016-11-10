@@ -24,7 +24,6 @@ import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.InputId;
 import com.google.javascript.rhino.Node;
-
 import java.io.IOException;
 import java.util.ArrayList;
 
@@ -153,6 +152,12 @@ public class JsAst implements SourceAst {
       if (compiler.getOptions().preservesDetailedSourceInfo()) {
         compiler.addComments(sourceFile.getName(), result.comments);
       }
+      if (result.sourceMap != null) {
+        String sourceMapName = sourceFile.getName() + ".inline.map";
+        SourceMapInput sourceMapInput =
+            new SourceMapInput(SourceFile.fromCode(sourceMapName, result.sourceMap));
+        compiler.addInputSourceMap(sourceFile.getName(), sourceMapInput);
+      }
     } catch (IOException e) {
       compiler.report(
           JSError.make(AbstractCompiler.READ_ERROR, sourceFile.getName()));
@@ -175,7 +180,7 @@ public class JsAst implements SourceAst {
       compiler.prepareAst(root);
     }
 
-    if (reporter.errors.size() > 0 || reporter.warnings.size() > 0) {
+    if (!reporter.errors.isEmpty() || !reporter.warnings.isEmpty()) {
       ParseResult result = new ParseResult(
           ImmutableList.copyOf(reporter.errors),
           ImmutableList.copyOf(reporter.warnings));

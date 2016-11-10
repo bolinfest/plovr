@@ -16,24 +16,31 @@
 
 package com.google.javascript.jscomp;
 
+import static com.google.javascript.rhino.dtoa.DToA.numberToString;
+
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Compiler pass that converts primitive calls:
  *
- * Converts:
- *   goog.object.create(key1, val1, key2, val2, ...) where all of the keys
- *   are literals into object literals.
+ * <p>Converts goog.object.create(key1, val1, key2, val2, ...) where all of the keys are literals
+ * into object literals.
  *
- *   goog.reflect.objectProperty(propName, object) to
- *   JSCompiler_renameProperty
+ * <p>Converts goog.object.createSet(key1, key2, ...) into an object literal with the given keys,
+ * where all the values are {@code true}.
+ *
+ * <p>Converts goog.reflect.objectProperty(propName, object) to JSCompiler_renameProperty
  *
  * @author agrieve@google.com (Andrew Grieve)
  */
 final class ClosureOptimizePrimitives implements CompilerPass {
+  static final DiagnosticType DUPLICATE_SET_MEMBER =
+      DiagnosticType.warning("JSC_DUPLICATE_SET_MEMBER", "Found duplicate value ''{0}'' in set");
 
   /** Reference to the JS compiler */
   private final AbstractCompiler compiler;
@@ -96,7 +103,7 @@ final class ClosureOptimizePrimitives implements CompilerPass {
           keyNode = IR.string(NodeUtil.getStringValue(keyNode))
               .srcref(keyNode);
         }
-        keyNode.setType(Token.STRING_KEY);
+        keyNode.setToken(Token.STRING_KEY);
         keyNode.setQuotedString();
         objNode.addChildToBack(IR.propdef(keyNode, valueNode));
       }
@@ -115,7 +122,7 @@ final class ClosureOptimizePrimitives implements CompilerPass {
       return;
     }
 
-    Node newTarget = IR.name(NodeUtil.JSC_PROPERTY_NAME_FN).copyInformationFrom(nameNode);
+    Node newTarget = IR.name(NodeUtil.JSC_PROPERTY_NAME_FN).useSourceInfoFrom(nameNode);
     newTarget.setOriginalName(nameNode.getOriginalQualifiedName());
 
     callNode.replaceChild(nameNode, newTarget);
@@ -164,7 +171,7 @@ final class ClosureOptimizePrimitives implements CompilerPass {
           keyNode = IR.string(NodeUtil.getStringValue(keyNode))
               .srcref(keyNode);
         }
-        keyNode.setType(Token.STRING_KEY);
+        keyNode.setToken(Token.STRING_KEY);
         keyNode.setQuotedString();
         objNode.addChildToBack(IR.propdef(keyNode, valueNode));
       }
@@ -174,14 +181,20 @@ final class ClosureOptimizePrimitives implements CompilerPass {
   }
 
   /**
-   * Returns whether the given call to goog.object.create can be converted to an
-   * object literal.
+   * Returns whether the given call to goog.object.createSet can be converted to an object literal.
    */
-  private static boolean canOptimizeObjectCreateSet(Node firstParam) {
+  private boolean canOptimizeObjectCreateSet(Node firstParam) {
     Node curParam = firstParam;
+    Set<String> keys = new HashSet<>();
     while (curParam != null) {
-      // All keys must be strings or numbers.
+      // All keys must be strings or numbers, otherwise we can't optimize the call.
       if (!curParam.isString() && !curParam.isNumber()) {
+        return false;
+      }
+      String key =
+          curParam.isString() ? curParam.getString() : numberToString(curParam.getDouble());
+      if (!keys.add(key)) {
+        compiler.report(JSError.make(firstParam.getPrevious(), DUPLICATE_SET_MEMBER, key));
         return false;
       }
       curParam = curParam.getNext();
@@ -193,24 +206,21 @@ final class ClosureOptimizePrimitives implements CompilerPass {
    * Converts the given node to string if it is safe to do so.
    */
   private void maybeProcessDomTagName(Node n) {
-    String qualifiedName = n.getQualifiedName();
-    if (qualifiedName == null) {
-      return;
-    }
     if (NodeUtil.isLValue(n)) {
       return;
     }
-    String prefix = "goog.dom.TagName.";
-    String altPrefix = "goog$dom$TagName$";
+    String prefix = "goog$dom$TagName$";
     String tagName;
-    if (qualifiedName.startsWith(prefix)) {
-      tagName = qualifiedName.substring(prefix.length());
-    } else if (qualifiedName.startsWith(altPrefix)) {
-      tagName = qualifiedName.substring(altPrefix.length());
+    if (n.isName() && n.getString().startsWith(prefix)) {
+      tagName = n.getString().substring(prefix.length());
+    } else if (n.isGetProp() && !n.getParent().isGetProp()
+        && n.getFirstChild().matchesQualifiedName("goog.dom.TagName")) {
+      tagName = n.getSecondChild().getString()
+          .replaceFirst(".*\\$", ""); // Added by DisambiguateProperties.
     } else {
       return;
     }
-    Node stringNode = Node.newString(tagName).srcref(n);
+    Node stringNode = IR.string(tagName).srcref(n);
     n.getParent().replaceChild(n, stringNode);
     compiler.reportCodeChange();
   }

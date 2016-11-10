@@ -19,6 +19,7 @@ package com.google.template.soy.pysrc.internal;
 import static com.google.template.soy.pysrc.internal.SoyCodeForPySubject.assertThatSoyCode;
 import static com.google.template.soy.pysrc.internal.SoyCodeForPySubject.assertThatSoyFile;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.template.soy.base.SoySyntaxException;
 
 import junit.framework.TestCase;
@@ -53,6 +54,8 @@ public final class GenPyCodeVisitorTest extends TestCase {
       + "from example.runtime import runtime\n"
       + "from example.runtime import sanitize\n"
       + "\n"
+      + "NAMESPACE_MANIFEST = {\n"
+      + "}\n"
       + "\n"
       + "try:\n"
       + "  str = unicode\n"
@@ -79,6 +82,36 @@ public final class GenPyCodeVisitorTest extends TestCase {
     String expectedImport = "namespaced_import('baz', namespace='foo.bar')";
 
     assertThatSoyFile(soyFile).compilesToSourceContaining(expectedImport);
+  }
+
+  public void testAbsoluteImport() {
+    String soyFile = SOY_NAMESPACE
+        + "{template .helloWorld}\n"
+        + "  {call foo.bar.baz.quz /}\n"
+        + "{/template}\n";
+    String expectedImport = "import google.foo.bar.baz as baz";
+
+    ImmutableMap.Builder<String, String> namespaceManifest = new ImmutableMap.Builder<>();
+    namespaceManifest.put("foo.bar.baz", "google.foo.bar.baz");
+
+    assertThatSoyFile(soyFile).withNamespaceManifest(namespaceManifest.build())
+        .compilesToSourceContaining(expectedImport);
+  }
+
+  public void testNamespaceManifest() {
+    String soyFile = SOY_NAMESPACE
+        + "{template .helloWorld}\n"
+        + "  {call foo.bar.baz.quz /}\n"
+        + "{/template}\n";
+    String expectedManifest = "NAMESPACE_MANIFEST = {\n"
+        + "    'foo.bar.baz': 'google.foo.bar.baz',\n"
+        + "}\n";
+
+    ImmutableMap.Builder<String, String> namespaceManifest = new ImmutableMap.Builder<>();
+    namespaceManifest.put("foo.bar.baz", "google.foo.bar.baz");
+
+    assertThatSoyFile(soyFile).withNamespaceManifest(namespaceManifest.build())
+        .compilesToSourceContaining(expectedManifest);
   }
 
   public void testEnvironmentConfiguration() {

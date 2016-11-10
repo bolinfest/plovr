@@ -27,7 +27,6 @@ import com.google.template.soy.SoyFileSetParser.ParseResult;
 import com.google.template.soy.base.internal.SoyFileKind;
 import com.google.template.soy.base.internal.SoyFileSupplier;
 import com.google.template.soy.basetree.SyntaxVersion;
-import com.google.template.soy.basicfunctions.BasicFunctionsModule;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.passes.PassManager;
@@ -51,7 +50,7 @@ import javax.annotation.Nullable;
  */
 public final class SoyFileSetParserBuilder {
 
-  private final ImmutableList<SoyFileSupplier> soyFileSuppliers;
+  private final ImmutableMap<String, SoyFileSupplier> soyFileSuppliers;
   private boolean doRunInitialParsingPasses = true; // Non-standard default
   private SoyTypeRegistry typeRegistry = new SoyTypeRegistry();
   private SyntaxVersion declaredSyntaxVersion = SyntaxVersion.V2_0;
@@ -59,7 +58,7 @@ public final class SoyFileSetParserBuilder {
   private ErrorReporter errorReporter = ExplodingErrorReporter.get(); // See #parse for discussion.
   private boolean allowUnboundGlobals;
   private ImmutableMap<String, ? extends SoyFunction> soyFunctionMap =
-      Guice.createInjector(new SharedModule(), new BasicFunctionsModule())
+      Guice.createInjector(new SharedModule())
           .getInstance(new Key<ImmutableMap<String, ? extends SoyFunction>>() {});
   private SoyGeneralOptions options = new SoyGeneralOptions();
 
@@ -101,11 +100,15 @@ public final class SoyFileSetParserBuilder {
   }
 
   private SoyFileSetParserBuilder(String... soyCode) {
-    this.soyFileSuppliers = ImmutableList.copyOf(buildTestSoyFileSuppliers(soyCode));
+    this(ImmutableList.copyOf(buildTestSoyFileSuppliers(soyCode)));
   }
 
   private SoyFileSetParserBuilder(ImmutableList<SoyFileSupplier> suppliers) {
-    this.soyFileSuppliers = suppliers;
+    ImmutableMap.Builder<String, SoyFileSupplier> builder = ImmutableMap.builder();
+    for (SoyFileSupplier supplier : suppliers) {
+      builder.put(supplier.getFilePath(), supplier);
+    }
+    this.soyFileSuppliers = builder.build();
   }
 
   /**

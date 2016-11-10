@@ -22,7 +22,7 @@ import com.google.javascript.jscomp.AbstractCompiler;
 import com.google.javascript.jscomp.BasicErrorManager;
 import com.google.javascript.jscomp.CheckLevel;
 import com.google.javascript.jscomp.JSError;
-
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -49,8 +49,16 @@ public class FixingErrorManager extends BasicErrorManager {
     return fixes.get(error);
   }
 
+  /** Returns fixes for errors first, then fixes for warnings. */
   public Collection<SuggestedFix> getAllFixes() {
-    return fixes.values();
+    Collection<SuggestedFix> fixes = new ArrayList<>();
+    for (JSError error : getErrors()) {
+      fixes.addAll(getFixesForJsError(error));
+    }
+    for (JSError warning : getWarnings()) {
+      fixes.addAll(getFixesForJsError(warning));
+    }
+    return fixes;
   }
 
   @Override

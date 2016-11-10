@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
-'require es6/symbol es6/util/makeiterator util/defineproperty';
-'require util/owns util/patch util/polyfill';
+'require es6/symbol';
+'require es6/util/makeiterator';
+'require util/defineproperty';
+'require util/owns';
+'require util/polyfill';
 
 $jscomp.polyfill('WeakMap', function(NativeWeakMap) {
   /**
@@ -24,19 +27,22 @@ $jscomp.polyfill('WeakMap', function(NativeWeakMap) {
    */
   function isConformant() {
     if (!NativeWeakMap || !Object.seal) return false;
-    var x = Object.seal({});
-    var y = Object.seal({});
-    var map = new /** @type {function(new: WeakMap, !Array)} */ (NativeWeakMap)(
-        [[x, 2], [y, 3]]);
-    if (map.get(x) != 2 || map.get(y) != 3) return false;
-    map.delete(x);
-    map.set(y, 4);
-    return !map.has(x) && map.get(y) == 4;
+    try {
+      var x = Object.seal({});
+      var y = Object.seal({});
+      var map = new /** @type {function(new: WeakMap, !Array)} */ (
+          NativeWeakMap)([[x, 2], [y, 3]]);
+      if (map.get(x) != 2 || map.get(y) != 3) return false;
+      map.delete(x);
+      map.set(y, 4);
+      return !map.has(x) && map.get(y) == 4;
+    } catch (err) { // This should hopefully never happen, but let's be safe.
+      return false;
+    }
   }
   if (isConformant()) return NativeWeakMap;
 
   var prop = '$jscomp_hidden_' + Math.random().toString().substring(2);
-  var hidden = {}; // tag used to indicate a hidden object.
 
   /**
    * Inserts the hidden property into the target.
@@ -50,53 +56,27 @@ $jscomp.polyfill('WeakMap', function(NativeWeakMap) {
       // method (like toLocaleString) onto the object itself and encoding the
       // property on the copy instead.  This codepath must be easily removable
       // if IE8 support is not needed.
-      obj[prop] = hidden;
       $jscomp.defineProperty(target, prop, {value: obj});
     }
   }
 
   /**
-   * Monkey-patches the key-enumeration methods to ensure that the hidden
-   * property is not returned.
-   * @param {function(!Object): !Array<string>} prev
-   * @return {function(!Object): !Array<string>}
-   */
-  function fixList(prev) {
-    return function(target) {
-      var result = prev(target);
-      if ($jscomp.owns(target, prop) &&
-          $jscomp.owns(target[prop], prop) &&
-          target[prop][prop] === hidden) {
-        for (var i = 0; i < result.length; i++) {
-          if (result[i] == prop) {
-            result.splice(i, 1);
-            break;
-          }
-        }
-      }
-      return result;
-    };
-  }
-  $jscomp.patch('Object.getOwnPropertyNames', fixList);
-  $jscomp.patch('Object.keys', fixList);
-  $jscomp.patch('Reflect.enumerate', fixList);
-  $jscomp.patch('Reflect.ownKeys', fixList);
-
-  /**
    * Monkey-patches the freezing methods to ensure that the hidden
    * property is added before any freezing happens.
-   * @param {function(!Object): !Object} prev
-   * @return {function(!Object): !Object}
+   * @param {string} name
    */
-  function preInsert(prev) {
-    return function(target) {
-      insert(target);
-      return prev(target);
-    };
+  function patch(name) {
+    var prev = Object[name];
+    if (prev) {
+      Object[name] = function(target) {
+        insert(target);
+        return prev(target);
+      };
+    }
   }
-  $jscomp.patch('Object.freeze', preInsert);
-  $jscomp.patch('Object.preventExtensions', preInsert);
-  $jscomp.patch('Object.seal', preInsert);
+  patch('freeze');
+  patch('preventExtensions');
+  patch('seal');
   // Note: no need to patch Reflect.preventExtensions since the polyfill
   // just calls Object.preventExtensions anyway (and if it's not polyfilled
   // then neither is WeakMap).
@@ -115,6 +95,7 @@ $jscomp.polyfill('WeakMap', function(NativeWeakMap) {
    * it's not completely secure (particularly in IE8).
    *
    * @constructor
+   * @extends {WeakMap<KEY, VALUE>}
    * @template KEY, VALUE
    * @param {!Iterator<!Array<KEY|VALUE>>|!Array<!Array<KEY|VALUE>>|null=}
    *     opt_iterable Optional initial data.
@@ -135,11 +116,7 @@ $jscomp.polyfill('WeakMap', function(NativeWeakMap) {
     }
   };
 
-  /**
-   * @param {KEY} key
-   * @param {VALUE} value
-   * @return {!PolyfillWeakMap}
-   */
+  /** @override */
   PolyfillWeakMap.prototype.set = function(key, value) {
     insert(key);
     if (!$jscomp.owns(key, prop)) {
@@ -156,26 +133,17 @@ $jscomp.polyfill('WeakMap', function(NativeWeakMap) {
     return this;
   };
 
-  /**
-   * @param {KEY} key
-   * @return {VALUE}
-   */
+  /** @override */
   PolyfillWeakMap.prototype.get = function(key) {
     return $jscomp.owns(key, prop) ? key[prop][this.id_] : undefined;
   };
 
-  /**
-   * @param {KEY} key
-   * @return {boolean}
-   */
+  /** @override */
   PolyfillWeakMap.prototype.has = function(key) {
     return $jscomp.owns(key, prop) && $jscomp.owns(key[prop], this.id_);
   };
 
-  /**
-   * @param {KEY} key
-   * @return {boolean}
-   */
+  /** @override */
   PolyfillWeakMap.prototype.delete = function(key) {
     if (!$jscomp.owns(key, prop) ||
         !$jscomp.owns(key[prop], this.id_)) {

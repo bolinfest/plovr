@@ -20,7 +20,6 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.data.internalutils.NodeContentKinds;
 import com.google.template.soy.error.ErrorReporter;
@@ -32,10 +31,12 @@ import com.google.template.soy.soytree.CallDelegateNode;
 import com.google.template.soy.soytree.CallNode;
 import com.google.template.soy.soytree.CallParamContentNode;
 import com.google.template.soy.soytree.CssNode;
+import com.google.template.soy.soytree.EscapingMode;
 import com.google.template.soy.soytree.ForNode;
 import com.google.template.soy.soytree.ForeachIfemptyNode;
 import com.google.template.soy.soytree.ForeachNode;
 import com.google.template.soy.soytree.ForeachNonemptyNode;
+import com.google.template.soy.soytree.HtmlContext;
 import com.google.template.soy.soytree.IfElseNode;
 import com.google.template.soy.soytree.IfNode;
 import com.google.template.soy.soytree.LetContentNode;
@@ -57,8 +58,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
-import javax.annotation.Nullable;
-
 /**
  * Chooses appropriate escaping modes for <code>{print}</code> commands and derives templates as
  * necessary.
@@ -66,7 +65,7 @@ import javax.annotation.Nullable;
  * For each template with {@code autoescape="contextual"}, assume that the template is used
  * to produce an HTML fragment.
  * Start walking the body with the {@link Context context} provided by the caller (typically
- * {@link Context.State#HTML_PCDATA}).
+ * {@link HtmlContext#HTML_PCDATA}).
  * <ul>
  *   <li>For RawTextNodes, update the context based on the fragment, so seeing "&lt;script&gt;" will
  *   move us into a JavaScript context while "&lt;!--" would move us into an HTML comment context.
@@ -170,7 +169,7 @@ final class InferenceEngine {
   private final Inferences inferences;
 
   /** The escaping mode to assume when none is specified. */
-  @Nullable private final EscapingMode defaultEscapingMode;
+  private final EscapingMode defaultEscapingMode;
 
   /**
    * Soy directives that cancel autoescaping (see
@@ -196,8 +195,7 @@ final class InferenceEngine {
     this.inferences = inferences;
     this.autoescapeCancellingDirectives = autoescapeCancellingDirectives;
     this.slicedRawTextNodesBuilder = slicedRawTextNodesBuilder;
-    this.defaultEscapingMode = (autoescapeMode != AutoescapeMode.NOAUTOESCAPE) ?
-        EscapingMode.ESCAPE_HTML : null;
+    this.defaultEscapingMode = EscapingMode.ESCAPE_HTML;
     this.errorReporter = errorReporter;
   }
 
@@ -511,7 +509,7 @@ final class InferenceEngine {
       try {
         // It is an error to use autoescape-canceling print directives in strict mode unless in a
         // block of kind text.
-        if (autoescapeMode == AutoescapeMode.STRICT && context.state != Context.State.TEXT) {
+        if (autoescapeMode == AutoescapeMode.STRICT && context.state != HtmlContext.TEXT) {
           for (PrintDirectiveNode printDirective : printNode.getChildren()) {
             if (printDirective.getName().equals("|noAutoescape")) {
               // Treat noAutoescape specially:
@@ -553,10 +551,8 @@ final class InferenceEngine {
             case STRICT:
             case CONTEXTUAL:
               // Infer one.
-              escapingModes = escapingModesToSet = context.getEscapingModes();
-              break;
-            case NOAUTOESCAPE:
-              // Nothing to do. Just assume that the end context is the same as the start context.
+              escapingModes = escapingModesToSet =
+                  context.getEscapingModes(printNode.getChildren());
               break;
             case NONCONTEXTUAL:
               escapingModes = ImmutableList.of(defaultEscapingMode);
@@ -574,7 +570,7 @@ final class InferenceEngine {
         if (!escapingModes.isEmpty() || autoescapeMode == AutoescapeMode.CONTEXTUAL ||
             autoescapeMode == AutoescapeMode.STRICT) {
           // If we know the escaping mode or we're supposed to choose one, then use that.
-          context = getContextAfterEscaping(printNode, context, escapingModes);
+          context = getContextAfterEscaping(printNode, context);
         } else {
           // If we are not in an autoescaping template, assume that the author knows what they're
           // doing and simulate an innocuous value.
@@ -657,9 +653,10 @@ final class InferenceEngine {
           // indicates that there's no valid escaper for this context. My plan is to actually have
           // getEscapingModes() itself throw the exception, but this requires some weeding out of
           // bad existing templates.
-          inferences.setEscapingDirectives(callNode, callContext, callContext.getEscapingModes());
+          inferences.setEscapingDirectives(callNode, callContext,
+              callContext.getEscapingModes(ImmutableList.<PrintDirectiveNode>of()));
           return Pair.of(templateName, getContextAfterDynamicValue(callNode, startContext));
-        } else if (startContext.state == Context.State.TEXT) {
+        } else if (startContext.state == HtmlContext.TEXT) {
           // Contextualize the callee in TEXT mode. It's okay to call any template from TEXT mode
           // since TEXT doesn't make any safety guarantees.
           return contextualizeCallee(callNode, startContext, templateName, inferences);
@@ -917,8 +914,7 @@ final class InferenceEngine {
     // we assume that the dynamic value is also an expression, but JsFollowingSlash.UNKNOWN would
     // account for things that end in semicolons (since the next slash could be either a regex OR a
     // division op).
-    return getContextAfterEscaping(node, startContext,
-        startContext.getContextBeforeDynamicValue().getEscapingModes());
+    return getContextAfterEscaping(node, startContext);
   }
 
 
@@ -929,15 +925,9 @@ final class InferenceEngine {
    * @param startContext The start context -- must be a "context before dynamic value".
    * @param escapingModes The escaping sequence being used.
    */
-  private static Context getContextAfterEscaping(
-       SoyNode node, Context startContext, List<EscapingMode> escapingModes) {
-    // NOTE: This uses the first escaping mode, so that, for example, it will pass in the
-    // escapeHtmlAttribute if it's inside of an href, instead of the relevant URI escaper.
-    // However, with the prevalence of strict, it's probably better at some point to stop passing
-    // in an escaping mode and infer the next context unconditionally.
-    Preconditions.checkArgument(!escapingModes.isEmpty());
+  private static Context getContextAfterEscaping(SoyNode node, Context startContext) {
     try {
-      return startContext.getContextAfterEscaping(Iterables.getFirst(escapingModes, null));
+      return startContext.getContextAfterDynamicValue();
     } catch (SoyAutoescapeException e) {
       throw e.maybeAssociateNode(node);
     }

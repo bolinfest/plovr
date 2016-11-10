@@ -61,7 +61,7 @@ public final class RewritePolyfillsTest extends CompilerTestCase {
   @Override
   protected CompilerOptions getOptions() {
     CompilerOptions options = super.getOptions();
-    options.rewritePolyfills = true;
+    options.setWarningLevel(DiagnosticGroups.MISSING_POLYFILL, CheckLevel.WARNING);
     return options;
   }
 
@@ -72,8 +72,8 @@ public final class RewritePolyfillsTest extends CompilerTestCase {
       @Override Node ensureLibraryInjected(String library, boolean force) {
         Node parent = getNodeForCodeInsertion(null);
         Node ast = parseSyntheticCode(injectableLibraries.get(library));
+        Node lastChild = ast.getLastChild();
         Node firstChild = ast.removeChildren();
-        Node lastChild = firstChild.getLastSibling();
         if (lastInjected == null) {
           parent.addChildrenToFront(firstChild);
         } else {

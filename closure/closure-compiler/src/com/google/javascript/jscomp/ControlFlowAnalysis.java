@@ -24,7 +24,6 @@ import com.google.javascript.jscomp.NodeTraversal.Callback;
 import com.google.javascript.jscomp.graph.DiGraph.DiGraphNode;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-
 import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.Deque;
@@ -216,7 +215,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
       NodeTraversal nodeTraversal, Node n, Node parent) {
     astPosition.put(n, astPositionCounter++);
 
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case CLASS:
         return shouldTraverseFunctionsAndClasses;
       case FUNCTION:
@@ -228,6 +227,8 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
       case TRY:
         exceptionHandler.push(n);
         return true;
+      default:
+        break;
     }
 
     /*
@@ -247,7 +248,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
      * change the control flow and need not to be considered.
      */
     if (parent != null) {
-      switch (parent.getType()) {
+      switch (parent.getToken()) {
         case FOR:
         case FOR_OF:
           // Only traverse the body of the for loop.
@@ -288,6 +289,9 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
             Preconditions.checkState(exceptionHandler.peek() == parent);
             exceptionHandler.pop();
           }
+          break;
+        default:
+          break;
       }
     }
     return true;
@@ -295,7 +299,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case IF:
         handleIf(n);
         return;
@@ -517,7 +521,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
 
     // Synthetic blocks
     if (parent != null) {
-      switch (parent.getType()) {
+      switch (parent.getToken()) {
         case DEFAULT_CASE:
         case CASE:
         case TRY:
@@ -634,8 +638,9 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
       previous = cur;
     }
     Node iter = cur;
-    if (cur.getChildCount() == 4) {
-      iter = cur.getSecondChild().getNext();
+    if (NodeUtil.isVanillaFor(cur)) {
+      // the increment expression happens after the continue
+      iter = cur.getChildAtIndex(2);
     }
 
     if (lastJump == node) {
@@ -724,7 +729,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
     }
 
     // If we are just before a IF/WHILE/DO/FOR:
-    switch (parent.getType()) {
+    switch (parent.getToken()) {
       // The follow() of any of the path from IF would be what follows IF.
       case IF:
         return computeFollowNode(fromNode, parent, cfa);
@@ -743,9 +748,10 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
         } else {
           return computeFollowNode(fromNode, parent, cfa);
         }
-      case FOR:
       case FOR_OF:
-        if (parent.isForOf() || NodeUtil.isForIn(parent)) {
+        return parent;
+      case FOR:
+        if (NodeUtil.isForIn(parent)) {
           return parent;
         } else {
           return parent.getSecondChild().getNext();
@@ -777,6 +783,8 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
           }
           return computeFollowNode(fromNode, parent, cfa);
         }
+      default:
+        break;
     }
 
     // Now that we are done with the special cases follow should be its
@@ -802,7 +810,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
    * DOs and FORs.
    */
   static Node computeFallThrough(Node n) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case DO:
         return computeFallThrough(n.getFirstChild());
       case FOR:
@@ -882,7 +890,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
   private static Node getNextSiblingOfType(Node first, Token ... types) {
     for (Node c = first; c != null; c = c.getNext()) {
       for (Token type : types) {
-        if (c.getType() == type) {
+        if (c.getToken() == type) {
           return c;
         }
       }
@@ -929,7 +937,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
    * Determines if the subtree might throw an exception.
    */
   public static boolean mayThrowException(Node n) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case CALL:
       case TAGGED_TEMPLATELIT:
       case GETPROP:
@@ -944,6 +952,8 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
         return true;
       case FUNCTION:
         return false;
+      default:
+        break;
     }
     for (Node c = n.getFirstChild(); c != null; c = c.getNext()) {
       if (!ControlFlowGraph.isEnteringNewCfgNode(c) && mayThrowException(c)) {
@@ -957,7 +967,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
    * Determines whether the given node can be terminated with a BREAK node.
    */
   static boolean isBreakStructure(Node n, boolean labeled) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case FOR:
       case FOR_OF:
       case DO:
@@ -977,7 +987,7 @@ final class ControlFlowAnalysis implements Callback, CompilerPass {
    * Determines whether the given node can be advanced with a CONTINUE node.
    */
   static boolean isContinueStructure(Node n) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case FOR:
       case FOR_OF:
       case DO:

@@ -39,7 +39,6 @@
 package com.google.javascript.rhino;
 
 import com.google.common.base.Preconditions;
-
 import java.util.List;
 
 /**
@@ -196,6 +195,11 @@ public class IR {
 
   public static Node yield() {
     return new Node(Token.YIELD);
+  }
+
+  public static Node await(Node expr) {
+    Preconditions.checkState(mayBeExpression(expr));
+    return new Node(Token.AWAIT, expr);
   }
 
   public static Node yield(Node expr) {
@@ -357,7 +361,7 @@ public class IR {
 
   public static Node name(String name) {
     Preconditions.checkState(name.indexOf('.') == -1,
-        "Invalid name. Did you mean to use NodeUtil.newQName?");
+        "Invalid name '%s'. Did you mean to use NodeUtil.newQName?", name);
     return Node.newString(Token.NAME, name);
   }
 
@@ -633,7 +637,7 @@ public class IR {
    * so make a best guess.
    */
   private static boolean mayBeStatementNoReturn(Node n) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case EMPTY:
       case FUNCTION:
         // EMPTY and FUNCTION are used both in expression and statement
@@ -679,7 +683,7 @@ public class IR {
    * so make a best guess.
    */
   private static boolean mayBeExpression(Node n) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case FUNCTION:
       case CLASS:
         // FUNCTION and CLASS are used both in expression and statement
@@ -699,6 +703,7 @@ public class IR {
       case ASSIGN_ADD:
       case ASSIGN_SUB:
       case ASSIGN_MUL:
+      case ASSIGN_EXPONENT:
       case ASSIGN_DIV:
       case ASSIGN_MOD:
       case AWAIT:

@@ -21,6 +21,7 @@ import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 
 import com.google.common.collect.Lists;
+import com.google.common.css.SourceCode;
 import com.google.common.css.compiler.ast.CssAttributeSelectorNode.MatchType;
 import com.google.common.css.compiler.ast.DefaultVisitController.RootVisitAfterChildrenState;
 import com.google.common.css.compiler.ast.DefaultVisitController.RootVisitBeforeChildrenState;
@@ -42,16 +43,16 @@ import java.util.List;
 
 /**
  * Unit tests for {@link DefaultVisitController}.
- * 
+ *
  * TODO(oana): Add more unit tests.
- * 
+ *
  * @author oana@google.com (Oana Florescu)
  */
 public class DefaultVisitControllerTest extends TestCase {
 
   public void testConstructor() {
     DefaultVisitController visitController = new DefaultVisitController(
-        new CssTree(null), false);
+        new CssTree((SourceCode) null), false);
 
     assertTrue(visitController.getStateStack().isEmpty());
   }
@@ -70,11 +71,11 @@ public class DefaultVisitControllerTest extends TestCase {
 
     // Enter Tree gets the root - there is no enterRoot.
     expect(testVisitor.enterTree(eq(root))).andReturn(true);
-   
+
     // There are blocks that get created even if you don't add them.
     expect(testVisitor.enterImportBlock((CssImportBlockNode)anyObject())).andReturn(true);
     testVisitor.leaveImportBlock((CssImportBlockNode)anyObject());
-   
+
     // Then we enter the block.
     expect(testVisitor.enterBlock(eq(block))).andReturn(true);
 
@@ -95,7 +96,7 @@ public class DefaultVisitControllerTest extends TestCase {
   }
 
   public void testVisitProperties() {
-    
+
     CssValueNode first = new CssLiteralNode("one", null);
     CssValueNode second = new CssLiteralNode("two", null);
     CssValueNode third = new CssLiteralNode("three", null);
@@ -127,11 +128,11 @@ public class DefaultVisitControllerTest extends TestCase {
     selector.getRefiners().addChildToBack(attrSelector);
 
     CssRulesetNode ruleset = new CssRulesetNode(dBlock);
-    ruleset.addSelector(selector); 
- 
+    ruleset.addSelector(selector);
+
     CssBlockNode block = new CssBlockNode(false);
     block.addChildToBack(ruleset);
-    
+
     CssRootNode root = new CssRootNode(block);
     CssTree tree = new CssTree(null, root);
 
@@ -185,7 +186,7 @@ public class DefaultVisitControllerTest extends TestCase {
   }
 
   public void testStateStack() {
-    CssTree tree = new CssTree(null);
+    CssTree tree = new CssTree((SourceCode) null);
     DefaultVisitController visitController = new DefaultVisitController(
         tree, false);
 
@@ -194,21 +195,21 @@ public class DefaultVisitControllerTest extends TestCase {
     visitController.getStateStack().push(state);
     assertEquals(state, visitController.getStateStack().getTop());
     assertEquals(1, visitController.getStateStack().size());
-    
+
     visitController.getStateStack().pop();
     assertTrue(visitController.getStateStack().isEmpty());
   }
 
   public void testRootVisitBeforeChildrenState() {
-    CssTree tree = new CssTree(null);
+    CssTree tree = new CssTree((SourceCode) null);
     DefaultVisitController visitController = new DefaultVisitController(
         tree, false);
     RootVisitBeforeChildrenState state
         = visitController.new RootVisitBeforeChildrenState(tree.getRoot());
-    
+
     visitController.getStateStack().push(state);
     assertEquals(state, visitController.getStateStack().getTop());
-    
+
     state.transitionToNextState();
     assertEquals(1, visitController.getStateStack().size());
     assertTrue(visitController.getStateStack()
@@ -216,19 +217,19 @@ public class DefaultVisitControllerTest extends TestCase {
   }
 
   public void testRootVisitCharsetState() {
-    CssTree tree = new CssTree(null);
+    CssTree tree = new CssTree((SourceCode) null);
     DefaultVisitController visitController = new DefaultVisitController(
         tree, true);
     RootVisitCharsetState state
         = visitController.new RootVisitCharsetState(tree.getRoot(),
             tree.getRoot().getCharsetRule());
-    
+
     visitController.getStateStack().push(state);
     assertEquals(state, visitController.getStateStack().getTop());
-    
+
     visitController.removeCurrentNode();
     assertNull(tree.getRoot().getCharsetRule());
-    
+
     state.transitionToNextState();
     assertEquals(1, visitController.getStateStack().size());
     assertTrue(visitController.getStateStack()
@@ -236,21 +237,21 @@ public class DefaultVisitControllerTest extends TestCase {
   }
 
   public void testRootVisitImportBlockState() {
-    CssTree tree = new CssTree(null);
+    CssTree tree = new CssTree((SourceCode) null);
     DefaultVisitController visitController = new DefaultVisitController(
         tree, true);
     RootVisitImportBlockState state
         = visitController.new RootVisitImportBlockState(tree.getRoot(),
             tree.getRoot().getImportRules());
-    
+
     visitController.getStateStack().push(state);
     assertEquals(state, visitController.getStateStack().getTop());
-    
+
     state.transitionToNextState();
     assertEquals(2, visitController.getStateStack().size());
     assertTrue(visitController.getStateStack()
         .getTop() instanceof VisitImportBlockChildrenState);
-    
+
     state.transitionToNextState();
     assertEquals(2, visitController.getStateStack().size());
     assertTrue(visitController.getStateStack()
@@ -258,7 +259,7 @@ public class DefaultVisitControllerTest extends TestCase {
   }
 
   public void testVisitImportBlockChildrenState() {
-    CssTree tree = new CssTree(null);
+    CssTree tree = new CssTree((SourceCode) null);
     DefaultVisitController visitController = new DefaultVisitController(
         tree, true);
     visitController.visitor = new DefaultTreeVisitor();
@@ -266,61 +267,61 @@ public class DefaultVisitControllerTest extends TestCase {
     cssImportBlockNode.setChildren(Lists.newArrayList(new CssImportRuleNode()));
     VisitImportBlockChildrenState state
         = visitController.new VisitImportBlockChildrenState(cssImportBlockNode);
-    
+
     visitController.getStateStack().push(state);
     assertEquals(state, visitController.getStateStack().getTop());
-    
+
     state.transitionToNextState();
     assertEquals(2, visitController.getStateStack().size());
     assertTrue(visitController.getStateStack()
         .getTop() instanceof VisitImportRuleState);
-    
+
     visitController.getStateStack().getTop().transitionToNextState();
     assertEquals(1, visitController.getStateStack().size());
     assertTrue(visitController.getStateStack()
         .getTop() instanceof VisitImportBlockChildrenState);
-    
+
     state.transitionToNextState();
     assertTrue(visitController.getStateStack().isEmpty());
   }
 
   public void testVisitImportRuleState() {
-    CssTree tree = new CssTree(null);
+    CssTree tree = new CssTree((SourceCode) null);
     DefaultVisitController visitController = new DefaultVisitController(
         tree, true);
     visitController.visitor = new DefaultTreeVisitor();
     VisitImportRuleState state
         = visitController.new VisitImportRuleState(new CssImportRuleNode());
-    
+
     visitController.getStateStack().push(state);
     assertEquals(state, visitController.getStateStack().getTop());
-    
+
     state.transitionToNextState();
     assertTrue(visitController.getStateStack().isEmpty());
   }
 
   public void testRootVisitBodyState() {
-    CssTree tree = new CssTree(null);
+    CssTree tree = new CssTree((SourceCode) null);
     DefaultVisitController visitController = new DefaultVisitController(
         tree, true);
     visitController.visitor = new DefaultTreeVisitor();
     RootVisitBodyState state
         = visitController.new RootVisitBodyState(tree.getRoot(),
             tree.getRoot().getBody());
-    
+
     visitController.getStateStack().push(state);
     assertEquals(state, visitController.getStateStack().getTop());
-    
+
     state.transitionToNextState();
     assertEquals(2, visitController.getStateStack().size());
     assertTrue(visitController.getStateStack()
         .getTop() instanceof VisitBlockChildrenState);
-    
+
     visitController.getStateStack().getTop().transitionToNextState();
     assertEquals(1, visitController.getStateStack().size());
     assertTrue(visitController.getStateStack()
         .getTop() instanceof RootVisitBodyState);
-    
+
     state.transitionToNextState();
     assertEquals(1, visitController.getStateStack().size());
     assertTrue(visitController.getStateStack()
@@ -331,7 +332,7 @@ public class DefaultVisitControllerTest extends TestCase {
     CssDefinitionNode def = new CssDefinitionNode(new CssLiteralNode(""));
     CssBlockNode block = new CssBlockNode(false);
     block.addChildToBack(def);
-    
+
     CssRootNode root = new CssRootNode(block);
     CssTree tree = new CssTree(null, root);
     DefaultVisitController visitController = new DefaultVisitController(
@@ -339,20 +340,20 @@ public class DefaultVisitControllerTest extends TestCase {
     visitController.visitor = new DefaultTreeVisitor();
     VisitReplaceChildrenState<CssNode> state
         = visitController.new VisitBlockChildrenState(tree.getRoot().getBody());
-    
+
     visitController.getStateStack().push(state);
     assertEquals(state, visitController.getStateStack().getTop());
     assertEquals(-1, state.currentIndex);
-    
+
     state.transitionToNextState();
     assertEquals(2, visitController.getStateStack().size());
     assertTrue(visitController.getStateStack()
         .getTop() instanceof VisitDefinitionState);
     assertEquals(0, state.currentIndex);
-    
+
     visitController.getStateStack().getTop().transitionToNextState();
     assertEquals(3, visitController.getStateStack().size());
-    
+
     state.transitionToNextState();
     state.transitionToNextState();
     state.transitionToNextState();
@@ -365,7 +366,7 @@ public class DefaultVisitControllerTest extends TestCase {
     block.addChildToBack(def);
     def = new CssDefinitionNode(new CssLiteralNode(""));
     block.addChildToBack(def);
-    
+
     CssRootNode root = new CssRootNode(block);
     CssTree tree = new CssTree(null, root);
     DefaultVisitController visitController = new DefaultVisitController(
@@ -373,20 +374,20 @@ public class DefaultVisitControllerTest extends TestCase {
     visitController.visitor = new DefaultTreeVisitor();
     VisitReplaceChildrenState<CssNode> state
         = visitController.new VisitBlockChildrenState(tree.getRoot().getBody());
-    
+
     visitController.getStateStack().push(state);
     assertEquals(state, visitController.getStateStack().getTop());
     assertEquals(-1, state.currentIndex);
-    
+
     state.transitionToNextState();
     assertEquals(2, visitController.getStateStack().size());
     assertTrue(visitController.getStateStack()
         .getTop() instanceof VisitDefinitionState);
     assertEquals(0, state.currentIndex);
-    
+
     state.removeCurrentChild();
     assertEquals(0, state.currentIndex);
-    
+
     state.removeCurrentChild();
     assertEquals(0, state.currentIndex);
 
@@ -406,7 +407,7 @@ public class DefaultVisitControllerTest extends TestCase {
     block.addChildToBack(def);
     def = new CssDefinitionNode(new CssLiteralNode(""));
     block.addChildToBack(def);
-    
+
     CssRootNode root = new CssRootNode(block);
     CssTree tree = new CssTree(null, root);
     DefaultVisitController visitController = new DefaultVisitController(
@@ -414,24 +415,24 @@ public class DefaultVisitControllerTest extends TestCase {
     visitController.visitor = new DefaultTreeVisitor();
     VisitReplaceChildrenState<CssNode> state
         = visitController.new VisitBlockChildrenState(tree.getRoot().getBody());
-    
+
     visitController.getStateStack().push(state);
     assertEquals(state, visitController.getStateStack().getTop());
     assertEquals(-1, state.currentIndex);
-    
+
     state.transitionToNextState();
     assertEquals(2, visitController.getStateStack().size());
     assertTrue(visitController.getStateStack()
         .getTop() instanceof VisitDefinitionState);
     assertEquals(0, state.currentIndex);
-    
+
     state.replaceCurrentBlockChildWith(
         Lists.<CssNode>newArrayList(
             new CssDefinitionNode(new CssLiteralNode("")),
             new CssDefinitionNode(new CssLiteralNode(""))),
         true);
     assertEquals(0, state.currentIndex);
-    
+
     state.removeCurrentChild();
     assertEquals(0, state.currentIndex);
 
@@ -588,7 +589,8 @@ public class DefaultVisitControllerTest extends TestCase {
     compBlock.addChildToBack(def);
 
     CssLiteralNode compLit = new CssLiteralNode("CSS_BAR");
-    CssComponentNode comp = new CssComponentNode(compLit, null, false, compBlock);
+    CssComponentNode comp = new CssComponentNode(compLit, null, false,
+        CssComponentNode.PrefixStyle.LITERAL, compBlock);
 
     CssBlockNode block = new CssBlockNode(false);
     block.addChildToBack(comp);
@@ -722,5 +724,143 @@ public class DefaultVisitControllerTest extends TestCase {
     assertEquals(2, functionNodes.size());
     assertEquals(1, compositeNode.size());
     assertTrue(compositeNode.contains(parent));
+  }
+
+  private static class ValueDetector extends DefaultTreeVisitor {
+    private final String quarry;
+    private final boolean[] foundValue = {false};
+    @Override public boolean enterValueNode(CssValueNode node) {
+      if (quarry.equals(node.getValue())) {
+        foundValue[0] = true;
+      }
+      return true;
+    }
+    private ValueDetector(String quarry) { this.quarry = quarry; }
+    public static boolean detect(CssTree t, String quarry) {
+      ValueDetector detector = new ValueDetector(quarry);
+      new DefaultVisitController(
+          t, false /* allowMutating */).startVisit(detector);
+      return detector.foundValue[0];
+    }
+  }
+
+  private static class FunctionDetector extends DefaultTreeVisitor {
+    private final boolean[] foundValue = {false};
+    @Override public boolean enterFunctionNode(CssFunctionNode node) {
+      foundValue[0] = true;
+      return true;
+    }
+    public static boolean detect(CssTree t) {
+      FunctionDetector detector = new FunctionDetector();
+      new DefaultVisitController(
+          t, false /* allowMutating */).startVisit(detector);
+      return detector.foundValue[0];
+    }
+  }
+
+  public void verifyRemoveablePropertyValueElement(String backgroundValue) {
+    try {
+      CssTree t = new GssParser(
+          new com.google.common.css.SourceCode(null,
+              String.format("p { background: %s; }", backgroundValue)))
+          .parse();
+      assertTrue(
+          "This test assumes we start with a stylesheet containing detectable "
+          + "function nodes.",
+          FunctionDetector.detect(t));
+      final DefaultVisitController vc =
+          new DefaultVisitController(t, true /* allowMutating */);
+      CssTreeVisitor functionRemover = new DefaultTreeVisitor() {
+          @Override public boolean enterFunctionNode(CssFunctionNode node) {
+            System.err.println(node.getParent().getClass().getName());
+            vc.removeCurrentNode();
+            return true;
+          }
+        };
+      vc.startVisit(functionRemover);
+      assertFalse(
+          "We should be able to remove function nodes that occur as property "
+          + "values.",
+          FunctionDetector.detect(t));
+      assertTrue(
+          "Removing one composite element within a property value should not "
+          + "affect its siblings.",
+          ValueDetector.detect(t, "red"));
+      assertTrue(
+          "Removing one composite element within a property value should not "
+          + "affect its siblings.",
+          ValueDetector.detect(t, "fixed"));
+    } catch (GssParserException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  public void testRemoveCompositePropertyValueElement() {
+    verifyRemoveablePropertyValueElement(
+        "url(http://www.google.com/logo), red fixed");
+  }
+
+  public void testRemoveCompositePropertyValueElementMiddle() {
+    verifyRemoveablePropertyValueElement(
+        "red, url(http://www.google.com/logo), fixed");
+  }
+
+  public void testRemoveCompositePropertyValueElementEnd() {
+    verifyRemoveablePropertyValueElement(
+        "red fixed, url(http://www.google.com/logo)");
+  }
+
+  public void testVisitForLoop() {
+    CssLiteralNode x = new CssLiteralNode("FOO");
+    CssDefinitionNode def = new CssDefinitionNode(x);
+
+    CssBlockNode loopBlock = new CssBlockNode(true);
+    loopBlock.addChildToBack(def);
+
+    CssValueNode from = new CssNumericNode("1", CssNumericNode.NO_UNITS);
+    CssValueNode to = new CssNumericNode("5", CssNumericNode.NO_UNITS);
+    CssValueNode step = new CssNumericNode("2", CssNumericNode.NO_UNITS);
+
+    CssLiteralNode variableNode = new CssLiteralNode("for");
+    CssForLoopRuleNode loop = new CssForLoopRuleNode(
+        variableNode, loopBlock, null, from, to, step, "i", 0, null);
+
+    CssBlockNode block = new CssBlockNode(false);
+    block.addChildToBack(loop);
+    CssRootNode root = new CssRootNode(block);
+    CssTree tree = new CssTree(null, root);
+
+    IMocksControl mockControl = EasyMock.createStrictControl();
+    DefaultTreeVisitor testVisitor =
+        mockControl.createMock(DefaultTreeVisitor.class);
+
+    // Enter Tree gets the root - there is no enterRoot.
+    expect(testVisitor.enterTree(eq(root))).andReturn(true);
+
+    // There are blocks that get created even if you don't add them.
+    expect(testVisitor.enterImportBlock((CssImportBlockNode) anyObject())).andReturn(true);
+    testVisitor.leaveImportBlock((CssImportBlockNode) anyObject());
+
+    // Then we enter the block.
+    expect(testVisitor.enterBlock(eq(block))).andReturn(true);
+
+    // Then we enter the for loop node.
+    expect(testVisitor.enterForLoop(eq(loop))).andReturn(true);
+
+    // Then we enter the definition within the for loop.
+    expect(testVisitor.enterDefinition(eq(def))).andReturn(true);
+
+    // Exit the nodes.
+    testVisitor.leaveDefinition(eq(def));
+    testVisitor.leaveForLoop(eq(loop));
+    testVisitor.leaveBlock(eq(block));
+    testVisitor.leaveTree(eq(root));
+
+    mockControl.replay();
+
+    DefaultVisitController controller = new DefaultVisitController(tree, true);
+    controller.startVisit(testVisitor);
+
+    mockControl.verify();
   }
 }

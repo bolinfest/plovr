@@ -22,7 +22,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.parsing.Config.JsDocParsing;
 import com.google.javascript.jscomp.parsing.Config.LanguageMode;
 import com.google.javascript.jscomp.parsing.Config.RunMode;
-import com.google.javascript.jscomp.parsing.Config.SourceLocationInformation;
+import com.google.javascript.jscomp.parsing.Config.StrictMode;
 import com.google.javascript.jscomp.parsing.parser.FeatureSet;
 import com.google.javascript.jscomp.parsing.parser.Parser;
 import com.google.javascript.jscomp.parsing.parser.Parser.Config.Mode;
@@ -34,11 +34,11 @@ import com.google.javascript.rhino.ErrorReporter;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.SimpleSourceFile;
 import com.google.javascript.rhino.StaticSourceFile;
-
 import java.util.HashSet;
 import java.util.List;
 import java.util.ResourceBundle;
 import java.util.Set;
+import javax.annotation.Nullable;
 
 /** parser runner */
 public final class ParserRunner {
@@ -54,22 +54,24 @@ public final class ParserRunner {
   // Should never need to instantiate class of static methods.
   private ParserRunner() {}
 
-  public static Config createConfig(LanguageMode languageMode,
-                                    Set<String> extraAnnotationNames) {
+  public static Config createConfig(
+      LanguageMode languageMode, Set<String> extraAnnotationNames, StrictMode strictMode) {
     return createConfig(
         languageMode,
         JsDocParsing.TYPES_ONLY,
-        SourceLocationInformation.DISCARD,
         RunMode.STOP_AFTER_ERROR,
-        extraAnnotationNames);
+        extraAnnotationNames,
+        true,
+        strictMode);
   }
 
   public static Config createConfig(
       LanguageMode languageMode,
       JsDocParsing jsdocParsingMode,
-      SourceLocationInformation sourceLocationInfo,
       RunMode runMode,
-      Set<String> extraAnnotationNames) {
+      Set<String> extraAnnotationNames,
+      boolean parseInlineSourceMaps,
+      StrictMode strictMode) {
 
     initResourceConfig();
     Set<String> effectiveAnnotationNames;
@@ -82,10 +84,11 @@ public final class ParserRunner {
     return new Config(
         effectiveAnnotationNames,
         jsdocParsingMode,
-        sourceLocationInfo,
         runMode,
         suppressionNames,
-        languageMode);
+        languageMode,
+        parseInlineSourceMaps,
+        strictMode);
   }
 
   public static Set<String> getReservedVars() {
@@ -117,9 +120,7 @@ public final class ParserRunner {
     SourceFile file = new SourceFile(sourceFile.getName(), sourceString);
     boolean keepGoing = config.keepGoing == Config.RunMode.KEEP_GOING;
     Es6ErrorReporter es6ErrorReporter = new Es6ErrorReporter(errorReporter, keepGoing);
-    com.google.javascript.jscomp.parsing.parser.Parser.Config es6config =
-        new com.google.javascript.jscomp.parsing.parser.Parser.Config(mode(
-            config.languageMode));
+    com.google.javascript.jscomp.parsing.parser.Parser.Config es6config = newParserConfig(config);
     Parser p = new Parser(es6config, es6ErrorReporter, file);
     ProgramTree tree = p.parseProgram();
     Node root = null;
@@ -133,11 +134,42 @@ public final class ParserRunner {
       root.setIsSyntheticBlock(true);
       root.putProp(Node.FEATURE_SET, features);
 
-      if (config.preserveDetailedSourceInfo == Config.SourceLocationInformation.PRESERVE) {
+      if (config.parseJsDocDocumentation.shouldParseDescriptions()) {
         comments = p.getComments();
       }
     }
-    return new ParseResult(root, comments, features);
+    return new ParseResult(root, comments, features, p.getInlineSourceMap());
+  }
+
+  private static com.google.javascript.jscomp.parsing.parser.Parser.Config newParserConfig(
+      Config config) {
+    LanguageMode languageMode = config.languageMode;
+    boolean isStrictMode = config.strictMode == StrictMode.STRICT;
+    Mode parserConfigLanguageMode;
+    switch (languageMode) {
+      case TYPESCRIPT:
+        parserConfigLanguageMode = Mode.TYPESCRIPT;
+        break;
+
+      case ECMASCRIPT3:
+        parserConfigLanguageMode = Mode.ES3;
+        break;
+
+      case ECMASCRIPT5:
+        parserConfigLanguageMode = Mode.ES5;
+        break;
+
+      case ECMASCRIPT6:
+      case ECMASCRIPT7:
+      case ECMASCRIPT8:
+        parserConfigLanguageMode = Mode.ES6_OR_GREATER;
+        break;
+
+      default:
+        throw new IllegalStateException("unexpected language mode: " + languageMode);
+    }
+    return new com.google.javascript.jscomp.parsing.parser.Parser.Config(
+        parserConfigLanguageMode, isStrictMode);
   }
 
   // TODO(sdh): this is less useful if we end up needing the node for library version detection
@@ -145,8 +177,7 @@ public final class ParserRunner {
     SourceFile file = new SourceFile(sourcePath, sourceString);
     ErrorReporter reporter = IRFactory.NULL_REPORTER;
     com.google.javascript.jscomp.parsing.parser.Parser.Config config =
-        new com.google.javascript.jscomp.parsing.parser.Parser.Config(mode(
-            IRFactory.NULL_CONFIG.languageMode));
+        newParserConfig(IRFactory.NULL_CONFIG);
     Parser p = new Parser(config, new Es6ErrorReporter(reporter, false), file);
     ProgramTree tree = p.parseProgram();
     StaticSourceFile simpleSourceFile = new SimpleSourceFile(sourcePath, false);
@@ -186,29 +217,6 @@ public final class ParserRunner {
     }
   }
 
-  private static Mode mode(LanguageMode mode) {
-    switch (mode) {
-      case ECMASCRIPT3:
-        return Mode.ES3;
-      case ECMASCRIPT5:
-        return Mode.ES5;
-      case ECMASCRIPT5_STRICT:
-        return Mode.ES5_STRICT;
-      case ECMASCRIPT6:
-        return Mode.ES6;
-      case ECMASCRIPT6_STRICT:
-        return Mode.ES6_STRICT;
-      case ECMASCRIPT6_TYPED:
-        return Mode.ES6_TYPED;
-      case ECMASCRIPT7:
-        return Mode.ES7;
-      case ECMASCRIPT8:
-        return Mode.ES8;
-      default:
-        throw new IllegalStateException("unexpected language mode: " + mode);
-    }
-  }
-
   /**
    * Holds results of parsing.
    */
@@ -216,11 +224,14 @@ public final class ParserRunner {
     public final Node ast;
     public final List<Comment> comments;
     public final FeatureSet features;
+    @Nullable
+    public final String sourceMap;
 
-    public ParseResult(Node ast, List<Comment> comments, FeatureSet features) {
+    public ParseResult(Node ast, List<Comment> comments, FeatureSet features, String sourceMap) {
       this.ast = ast;
       this.comments = comments;
       this.features = features;
+      this.sourceMap = sourceMap;
     }
   }
 }

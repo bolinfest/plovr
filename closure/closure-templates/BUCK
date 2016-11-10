@@ -5,7 +5,10 @@ java_library(
     'javascript/soyutils_usegoog.js',
   ],
   resources_root = '.',
-  annotation_processors = ['com.google.auto.value.processor.AutoValueProcessor'],
+  annotation_processors = [
+    'com.google.auto.value.processor.AutoAnnotationProcessor',
+    'com.google.auto.value.processor.AutoValueProcessor',
+  ],
   annotation_processor_deps = [':auto-value'],
   deps = [
     ':aopalliance',
@@ -28,6 +31,11 @@ java_library(
     ':jsr330',
     ':objenesis',
     '//closure/closure-compiler:ant',
+    '//closure/closure-compiler:protobuf',
+    '//closure/closure-compiler:gson',
+    ':json',
+    ':types',
+    ':error-prone',
   ],
   visibility = [ 'PUBLIC' ],
 )
@@ -39,7 +47,6 @@ genrule(
     'buildtools/javacc/javacc.jar',
     'java/src/com/google/template/soy/exprparse/ExpressionParser.jj',
     'java/src/com/google/template/soy/soyparse/SoyFileParser.jj',
-    'java/src/com/google/template/soy/soyparse/TemplateParser.jj',
     'java/src/com/google/template/soy/types/parse/TypeParser.jj',
   ],
   cmd = '$SRCS $OUT $TMP',
@@ -89,6 +96,9 @@ prebuilt_jar(
 prebuilt_jar(
   name = 'auto-value',
   binary_jar = 'java/lib/auto-value-1.0.jar',
+  visibility = [
+    'PUBLIC',
+  ],
 )
 
 prebuilt_jar(
@@ -106,7 +116,7 @@ prebuilt_jar(
 
 prebuilt_jar(
   name = 'guice',
-  binary_jar = 'java/lib/guice-3.0.jar',
+  binary_jar = 'java/lib/guice-4.1.0.jar',
   visibility = [
     'PUBLIC',
   ],
@@ -114,7 +124,7 @@ prebuilt_jar(
 
 prebuilt_jar(
   name = 'guice-assistedinject',
-  binary_jar = 'java/lib/guice-assistedinject-3.0.jar',
+  binary_jar = 'java/lib/guice-assistedinject-4.1.0.jar',
   visibility = [
     'PUBLIC',
   ],
@@ -122,7 +132,7 @@ prebuilt_jar(
 
 prebuilt_jar(
   name = 'guice-multibindings',
-  binary_jar = 'java/lib/guice-multibindings-3.0.jar',
+  binary_jar = 'java/lib/guice-multibindings-4.1.0.jar',
   visibility = [
     'PUBLIC',
   ],
@@ -146,4 +156,19 @@ prebuilt_jar(
 prebuilt_jar(
   name = 'objenesis',
   binary_jar = 'java/lib/objenesis-1_2.jar',
+)
+
+prebuilt_jar(
+  name = 'types',
+  binary_jar = 'java/lib/types-1.0.4.jar',
+)
+
+prebuilt_jar(
+  name = 'error-prone',
+  binary_jar = 'java/lib/error_prone_annotations-2.0.2.jar',
+)
+
+prebuilt_jar(
+  name = 'json',
+  binary_jar = 'java/lib/json-20160212.jar',
 )

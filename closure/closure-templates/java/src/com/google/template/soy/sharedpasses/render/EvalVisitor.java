@@ -282,19 +282,15 @@ public class EvalVisitor extends AbstractReturningExprNodeVisitor<SoyValue> {
 
   private SoyValue visitNullSafeVarRefNode(VarRefNode varRef) {
     SoyValue result = null;
-    if (varRef.isInjected()) {
+    if (varRef.isDollarSignIjParameter()) {
       // TODO(lukes): it would be nice to move this logic into Environment or even eliminate the
       // ijData == null case.  It seems like this case is mostly for prerendering, though im not
       // sure.
       if (ijData != null) {
         result = ijData.getField(varRef.getName());
       } else {
-        if (varRef.isNullSafeInjected()) {
-          return NullSafetySentinel.INSTANCE;
-        } else {
-          throw RenderException.create(
-              "Injected data not provided, yet referenced (" + varRef.toSourceString() + ").");
-        }
+        throw RenderException.create(
+            "Injected data not provided, yet referenced (" + varRef.toSourceString() + ").");
       }
     } else {
       return env.getVar(varRef.getDefnDecl());

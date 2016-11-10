@@ -17,6 +17,8 @@
 package com.google.template.soy.tofu.internal;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.inject.assistedinject.Assisted;
@@ -44,9 +46,7 @@ import com.google.template.soy.soytree.Visibility;
 import com.google.template.soy.tofu.SoyTofu;
 import com.google.template.soy.tofu.SoyTofuException;
 
-import java.util.Collections;
 import java.util.Map;
-import java.util.Set;
 
 import javax.annotation.Nullable;
 
@@ -165,7 +165,6 @@ public class BaseTofu implements SoyTofu {
   // -----------------------------------------------------------------------------------------------
   // Private methods.
 
-
   /**
    * @param outputBuf The Appendable to write the output to.
    * @param templateName The full name of the template to render.
@@ -178,13 +177,17 @@ public class BaseTofu implements SoyTofu {
    * @return The template that was rendered.
    */
   private TemplateNode renderMain(
-      Appendable outputBuf, String templateName, @Nullable SoyRecord data,
-      @Nullable SoyRecord ijData, @Nullable Set<String> activeDelPackageNames,
-      @Nullable SoyMsgBundle msgBundle, @Nullable SoyIdRenamingMap idRenamingMap,
+      Appendable outputBuf,
+      String templateName,
+      @Nullable SoyRecord data,
+      @Nullable SoyRecord ijData,
+      @Nullable Predicate<String> activeDelPackageNames,
+      @Nullable SoyMsgBundle msgBundle,
+      @Nullable SoyIdRenamingMap idRenamingMap,
       @Nullable SoyCssRenamingMap cssRenamingMap) {
 
     if (activeDelPackageNames == null) {
-      activeDelPackageNames = Collections.emptySet();
+      activeDelPackageNames = Predicates.alwaysFalse();
     }
 
     try (WithScope withScope = apiCallScope.enter()) {
@@ -221,9 +224,14 @@ public class BaseTofu implements SoyTofu {
    * @return The template that was rendered.
    */
   private TemplateNode renderMainHelper(
-      TemplateRegistry templateRegistry, Appendable outputBuf, String templateName,
-      @Nullable SoyRecord data, @Nullable SoyRecord ijData, Set<String> activeDelPackageNames,
-      @Nullable SoyMsgBundle msgBundle, @Nullable SoyIdRenamingMap idRenamingMap,
+      TemplateRegistry templateRegistry,
+      Appendable outputBuf,
+      String templateName,
+      @Nullable SoyRecord data,
+      @Nullable SoyRecord ijData,
+      Predicate<String> activeDelPackageNames,
+      @Nullable SoyMsgBundle msgBundle,
+      @Nullable SoyIdRenamingMap idRenamingMap,
       @Nullable SoyCssRenamingMap cssRenamingMap) {
 
     TemplateNode template = templateRegistry.getBasicTemplate(templateName);
@@ -235,6 +243,9 @@ public class BaseTofu implements SoyTofu {
 
     if (data == null) {
       data = SoyValueHelper.EMPTY_DICT;
+    }
+    if (ijData == null) {
+      ijData = SoyValueHelper.EMPTY_DICT;
     }
 
     try {
@@ -274,7 +285,7 @@ public class BaseTofu implements SoyTofu {
     private SoyMsgBundle msgBundle;
     private SoyIdRenamingMap idRenamingMap;
     private SoyCssRenamingMap cssRenamingMap;
-    private Set<String> activeDelPackageNames;
+    private Predicate<String> activeDelPackageNames;
     private SanitizedContent.ContentKind expectedContentKind;
     private boolean contentKindExplicitlySet;
 
@@ -317,8 +328,8 @@ public class BaseTofu implements SoyTofu {
       return this;
     }
 
-    @Override public Renderer setActiveDelegatePackageNames(
-        Set<String> activeDelegatePackageNames) {
+    @Override
+    public Renderer setActiveDelegatePackageSelector(Predicate<String> activeDelegatePackageNames) {
       this.activeDelPackageNames = activeDelegatePackageNames;
       return this;
     }

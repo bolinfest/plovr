@@ -69,12 +69,14 @@ function XPathEvaluator() {}
  * @see http://www.w3.org/TR/DOM-Level-3-XPath/xpath.html#XPathEvaluator-createExpression
  * @throws XPathException
  * @throws DOMException
+ * @return {undefined}
  */
 XPathEvaluator.prototype.createExpression = function(expr, opt_resolver) {};
 
 /**
  * @param {Node} nodeResolver
  * @see http://www.w3.org/TR/DOM-Level-3-XPath/xpath.html#XPathEvaluator-createNSResolver
+ * @return {undefined}
  */
 XPathEvaluator.prototype.createNSResolver = function(nodeResolver) {};
 
@@ -297,6 +299,7 @@ function XMLHttpRequest() {}
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 XMLHttpRequest.prototype.addEventListener =
     function(type, listener, opt_useCapture) {};
@@ -304,11 +307,15 @@ XMLHttpRequest.prototype.addEventListener =
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 XMLHttpRequest.prototype.removeEventListener =
     function(type, listener, opt_useCapture) {};
 
-/** @override */
+/**
+ * @override
+ * @return {boolean}
+ */
 XMLHttpRequest.prototype.dispatchEvent = function(evt) {};
 
 /**
@@ -364,6 +371,13 @@ XMLHttpRequest.prototype.getResponseHeader = function(header) {};
 XMLHttpRequest.prototype.responseText;
 
 /**
+ * This is not supported in any IE browser (as of August 2016).
+ * @type {string}
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/responseURL
+ */
+XMLHttpRequest.prototype.responseURL;
+
+/**
  * @type {Document}
  * @see http://www.w3.org/TR/XMLHttpRequest/#the-responsexml-attribute
  */
@@ -400,6 +414,36 @@ XMLHttpRequest.prototype.onreadystatechange;
 XMLHttpRequest.prototype.onerror;
 
 /**
+ * @type {number}
+ * @see https://www.w3.org/TR/XMLHttpRequest/#states
+ */
+XMLHttpRequest.UNSENT;
+
+/**
+ * @type {number}
+ * @see https://www.w3.org/TR/XMLHttpRequest/#states
+ */
+XMLHttpRequest.OPENED;
+
+/**
+ * @type {number}
+ * @see https://www.w3.org/TR/XMLHttpRequest/#states
+ */
+XMLHttpRequest.HEADERS_RECEIVED;
+
+/**
+ * @type {number}
+ * @see https://www.w3.org/TR/XMLHttpRequest/#states
+ */
+XMLHttpRequest.LOADING;
+
+/**
+ * @type {number}
+ * @see https://www.w3.org/TR/XMLHttpRequest/#states
+ */
+XMLHttpRequest.DONE;
+
+/**
  * The FormData object represents an ordered collection of entries. Each entry
  * has a name and value.
  *
@@ -414,5 +458,6 @@ function FormData(opt_form) {}
  * @param {string} name
  * @param {Blob|string} value
  * @param {string=} opt_filename
+ * @return {undefined}
  */
 FormData.prototype.append = function(name, value, opt_filename) {};

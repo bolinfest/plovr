@@ -27,7 +27,6 @@ import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Node.TypeDeclarationNode;
 import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.TypeDeclarationsIR;
-
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
@@ -123,9 +122,9 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
 
   @Override
   public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case NAMESPACE:
-        if (currNamespace == null && parent.getType() != Token.DECLARE) {
+        if (currNamespace == null && parent.getToken() != Token.DECLARE) {
           compiler.report(JSError.make(n, NON_AMBIENT_NAMESPACE_NOT_SUPPORTED));
           return false;
         }
@@ -144,7 +143,7 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
 
   @Override
   public void visit(NodeTraversal t, Node n, Node parent) {
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case CLASS:
         visitClass(n, parent);
         popOverloads();
@@ -305,7 +304,7 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
         if (function.isOptionalEs6Typed()) {
           member = convertMemberFunctionToMemberVariable(member);
         } else {
-          function.getLastChild().setType(Token.BLOCK);
+          function.getLastChild().setToken(Token.BLOCK);
         }
       }
 
@@ -318,10 +317,10 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
     n.setJSDocInfo(doc.build());
 
     // Convert interface to class
-    n.setType(Token.CLASS);
+    n.setToken(Token.CLASS);
     Node empty = new Node(Token.EMPTY).useSourceInfoIfMissingFrom(n);
     n.replaceChild(superTypes, empty);
-    members.setType(Token.CLASS_MEMBERS);
+    members.setToken(Token.CLASS_MEMBERS);
 
     maybeCreateQualifiedDeclaration(n, parent);
     compiler.reportCodeChange();
@@ -333,16 +332,16 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
     Node declaredType = convertWithLocation(indexSignature.getDeclaredTypeExpression());
     Node block = new Node(Token.BLOCK, indexType, declaredType);
     Node iObject = IR.string("IObject");
-    iObject.addChildrenToFront(block);
+    iObject.addChildToFront(block);
     JSTypeExpression bang = new JSTypeExpression(new Node(Token.BANG, iObject)
         .useSourceInfoIfMissingFromForTree(indexSignature), indexSignature.getSourceFileName());
-    indexSignature.detachFromParent();
+    indexSignature.detach();
     compiler.reportCodeChange();
     return bang;
   }
 
   private Node createPropertyDefinition(Node member, String className) {
-    member.detachFromParent();
+    member.detach();
     className = maybePrependCurrNamespace(className);
     Node nameAccess = NodeUtil.newQName(compiler, className);
     Node prototypeAccess = NodeUtil.newPropertyAccess(compiler, nameAccess, "prototype");
@@ -380,8 +379,8 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
     Node members = n.getLastChild();
     double nextValue = 0;
     Node[] stringKeys = new Node[members.getChildCount()];
-    for (int i = 0; i < members.getChildCount(); i++) {
-      Node child = members.getChildAtIndex(i);
+    int i = 0;
+    for (Node child = members.getFirstChild(); child != null; child = child.getNext(), i++) {
       if (child.hasChildren()) {
         nextValue = child.getFirstChild().getDouble() + 1;
       } else {
@@ -389,9 +388,7 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
       }
       stringKeys[i] = child;
     }
-    for (Node child : stringKeys) {
-      child.detachFromParent();
-    }
+    members.detachChildren();
 
     String oldName = name.getString();
     String qName = maybePrependCurrNamespace(oldName);
@@ -419,9 +416,9 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
     if (!name.isEmpty() && overloadStack.peek().containsKey(name)) {
       compiler.report(JSError.make(n, OVERLOAD_NOT_SUPPORTED));
       if (isMemberFunctionDef) {
-        parent.detachFromParent();
+        parent.detach();
       } else {
-        n.detachFromParent();
+        n.detach();
       }
       if (!processedOverloads.contains(overloadStack)) {
         Node original = overloadStack.peek().get(name);
@@ -487,7 +484,7 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
 
     JSDocInfoBuilder builder = JSDocInfoBuilder.maybeCopyFrom(jsDocNode.getJSDocInfo());
     JSTypeExpression typeExpression = new JSTypeExpression(type, n.getSourceFileName());
-    switch (n.getType()) {
+    switch (n.getToken()) {
       case FUNCTION:
         builder.recordReturnType(typeExpression);
         break;
@@ -535,28 +532,28 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
 
     Node insertionPoint = n;
     Node topLevel = parent;
-    boolean insideExport = parent.getType() == Token.EXPORT;
+    boolean insideExport = parent.getToken() == Token.EXPORT;
     if (insideExport) {
       insertionPoint = parent;
       topLevel = parent.getParent();
     }
     // The node can have multiple children if transformed from an ambient namespace declaration.
     for (Node c : n.children()) {
-      if (c.getType() == Token.CONST) {
+      if (c.getToken() == Token.CONST) {
         JSDocInfoBuilder builder = JSDocInfoBuilder.maybeCopyFrom(c.getJSDocInfo());
         builder.recordConstancy();
-        c.setType(Token.VAR);
+        c.setToken(Token.VAR);
         c.setJSDocInfo(builder.build());
       }
 
-      Node toAdd = c.detachFromParent();
+      Node toAdd = c.detach();
       if (insideExport && !toAdd.isExprResult()) {
         // We want to keep the "export" declaration in externs
         toAdd = new Node(Token.EXPORT, toAdd).srcref(parent);
       }
       topLevel.addChildBefore(toAdd, insertionPoint);
     }
-    insertionPoint.detachFromParent();
+    insertionPoint.detach();
     compiler.reportCodeChange();
   }
 
@@ -569,9 +566,9 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
         Node toAdd;
         if (!c.isExprResult()) {
           toAdd = n.cloneNode();
-          toAdd.addChildToFront(c.detachFromParent());
+          toAdd.addChildToFront(c.detach());
         } else {
-          toAdd = c.detachFromParent();
+          toAdd = c.detach();
         }
         parent.addChildAfter(toAdd, insertPoint);
         insertPoint = toAdd;
@@ -583,11 +580,11 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
   private void replaceWithNodes(Node n, Iterable<Node> replacements) {
     Node insertPoint = n;
     for (Node c : replacements) {
-      Node detached = c.detachFromParent();
+      Node detached = c.detach();
       n.getParent().addChildAfter(detached, insertPoint);
       insertPoint = detached;
     }
-    n.detachFromParent();
+    n.detach();
     compiler.reportCodeChange();
   }
 
@@ -612,7 +609,7 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
         insertPoint = newDec;
       }
 
-      n.detachFromParent();
+      n.detach();
       compiler.reportCodeChange();
     }
   }
@@ -651,7 +648,7 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
 
   private Node convertDeclaredTypeToJSDoc(Node type) {
     Preconditions.checkArgument(type instanceof TypeDeclarationNode);
-    switch (type.getType()) {
+    switch (type.getToken()) {
       // "Primitive" types.
       case STRING_TYPE:
         return IR.string("string");
@@ -678,8 +675,8 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
       case PARAMETERIZED_TYPE: {
         Node namedType = type.getFirstChild();
         Node result = convertWithLocation(namedType);
-        Node typeParameterTarget =
-            result.getType() == Token.BANG ? result.getFirstChild() : result;
+          Node typeParameterTarget =
+              result.getToken() == Token.BANG ? result.getFirstChild() : result;
         Node parameters = IR.block().useSourceInfoIfMissingFrom(type);
         typeParameterTarget.addChildToFront(parameters);
         for (Node param = namedType.getNext(); param != null; param = param.getNext()) {
@@ -730,13 +727,13 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
             continue;
           }
           Node colon = new Node(Token.COLON);
-          member.setType(Token.STRING_KEY);
+            member.setToken(Token.STRING_KEY);
           Node memberType =
               maybeProcessOptionalProperty(member, member.getDeclaredTypeExpression());
           member.setDeclaredTypeExpression(null);
-          colon.addChildToBack(member.detachFromParent());
+          colon.addChildToBack(member.detach());
           colon.addChildToBack(memberType);
-          lb.addChildrenToBack(colon);
+          lb.addChildToBack(colon);
         }
         return new Node(Token.LC, lb);
       }
@@ -752,7 +749,7 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
         break;
     }
     throw new IllegalArgumentException(
-        "Unexpected node type for type conversion: " + type.getType());
+        "Unexpected node type for type conversion: " + type.getToken());
   }
 
   private Node convertNamedType(Node type) {
@@ -857,13 +854,13 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
   }
 
   private void popNamespace(Node n, Node parent) {
-    if (n.getType() == Token.NAMESPACE) {
+    if (n.getToken() == Token.NAMESPACE) {
       Node parentModuleRoot;
       Node grandParent = parent.getParent();
-      switch (parent.getType()) {
+      switch (parent.getToken()) {
         case DECLARE:
         case EXPORT:
-          if (parent.getParent().getType() == Token.EXPORT) {
+          if (parent.getParent().getToken() == Token.EXPORT) {
             parentModuleRoot = grandParent.getGrandparent();
           } else {
             parentModuleRoot = grandParent.getParent();
@@ -881,16 +878,16 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
 
     @Override
     public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
-      switch (n.getType()) {
+      switch (n.getToken()) {
         case SCRIPT:
         case NAMESPACE_ELEMENTS:
           return true;
         case BLOCK:
           return n.getFirstChild() != null && n.getFirstChild().isScript();
         case DECLARE:
-          return n.getFirstChild().getType() == Token.NAMESPACE;
+          return n.getFirstChild().getToken() == Token.NAMESPACE;
         case EXPORT:
-          switch (n.getFirstChild().getType()) {
+          switch (n.getFirstChild().getToken()) {
             case CLASS:
             case INTERFACE:
             case ENUM:
@@ -898,6 +895,8 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
             case NAMESPACE:
             case DECLARE:
               return true;
+            default:
+              break;
           }
           return false;
         case NAMESPACE:
@@ -924,6 +923,8 @@ public final class Es6TypedToEs6Converter implements NodeTraversal.Callback, Hot
             currNamespace.typeNames.add(n.getString());
           }
           return true;
+        default:
+          break;
       }
       return false;
     }

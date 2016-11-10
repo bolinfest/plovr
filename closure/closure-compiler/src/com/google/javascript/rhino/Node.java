@@ -44,7 +44,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.javascript.rhino.jstype.JSType;
-
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
@@ -52,7 +51,6 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Set;
-
 import javax.annotation.Nullable;
 
 /**
@@ -89,8 +87,6 @@ public class Node implements Serializable {
       FREE_CALL          = 50,    // A CALL without an explicit "this" value.
       STATIC_SOURCE_FILE = 51,    // A StaticSourceFile indicating the file
                                   // where this node lives.
-      LENGTH             = 52,    // The length of the code represented by
-                                  // this node.
       INPUT_ID           = 53,    // The id of the input associated with this
                                   // node.
       SLASH_V            = 54,    // Whether a STRING node contains a \v
@@ -148,8 +144,12 @@ public class Node implements Serializable {
                                   // after the goog.module is desugared.
       GOOG_MODULE_REQUIRE = 88,   // Node is a goog.require() as desugared by goog.module()
       FEATURE_SET = 89,           // Attaches a FeatureSet to SCRIPT nodes.
-      IS_MODULE_NAME = 90;        // Indicates that a STRING node represents a namespace from
+      IS_MODULE_NAME = 90,        // Indicates that a STRING node represents a namespace from
                                   // goog.module() or goog.require() call.
+      WAS_PREVIOUSLY_PROVIDED = 91, // Indicates a namespace that was provided at some point in the
+                                  // past.
+      IS_ES6_CLASS = 92,          // Indicates that a FUNCTION node is converted from an ES6 class
+      TRANSPILED = 93;            // Indicates that a SCRIPT represents a transpiled file
 
   private static final String propToString(int propType) {
       switch (propType) {
@@ -172,7 +172,6 @@ public class Node implements Serializable {
         case FREE_CALL:          return "free_call";
         case STATIC_SOURCE_FILE: return "source_file";
         case INPUT_ID:           return "input_id";
-        case LENGTH:             return "length";
         case SLASH_V:            return "slash_v";
         case INFERRED_FUNCTION:  return "inferred";
         case CHANGE_TIME:        return "change_time";
@@ -207,6 +206,9 @@ public class Node implements Serializable {
         case GOOG_MODULE_REQUIRE: return "goog_module_require";
         case FEATURE_SET:        return "feature_set";
         case IS_MODULE_NAME:     return "is_module_name";
+        case WAS_PREVIOUSLY_PROVIDED: return "was_previously_provided";
+        case IS_ES6_CLASS: return "is_es6_class";
+        case TRANSPILED:   return "transpiled";
         default:
           throw new IllegalStateException("unexpected prop id " + propType);
       }
@@ -494,9 +496,9 @@ public class Node implements Serializable {
 
     token = nodeType;
     parent = null;
-    first = last = child;
+    first = child;
     child.next = null;
-    child.previous = null;
+    child.previous = first;
     child.parent = this;
     sourcePosition = -1;
   }
@@ -517,9 +519,8 @@ public class Node implements Serializable {
     token = nodeType;
     parent = null;
     first = left;
-    last = right;
     left.next = right;
-    left.previous = null;
+    left.previous = right;
     left.parent = this;
     right.next = null;
     right.previous = left;
@@ -540,9 +541,8 @@ public class Node implements Serializable {
     token = nodeType;
     parent = null;
     first = left;
-    last = right;
     left.next = mid;
-    left.previous = null;
+    left.previous = right;
     left.parent = this;
     mid.next = right;
     mid.previous = left;
@@ -569,9 +569,8 @@ public class Node implements Serializable {
     token = nodeType;
     parent = null;
     first = left;
-    last = right;
     left.next = mid;
-    left.previous = null;
+    left.previous = right;
     left.parent = this;
     mid.next = mid2;
     mid.previous = left;
@@ -620,20 +619,12 @@ public class Node implements Serializable {
     return new StringNode(token, str, lineno, charno);
   }
 
-  public Token getToken() {
+  public final Token getToken() {
     return token;
-  }
-
-  public Token getType() {
-    return getToken();
   }
 
   public void setToken(Token token) {
     this.token = token;
-  }
-
-  public void setType(Token token) {
-    setToken(token);
   }
 
   public boolean hasChildren() {
@@ -644,8 +635,13 @@ public class Node implements Serializable {
     return first;
   }
 
+  /**
+   * Get the first child of the first child. This method assumes that the first child exists.
+   *
+   * @return The first child of the first child.
+   */
   public Node getFirstFirstChild() {
-    return first == null ? null : first.first;
+    return first.first;
   }
 
   public Node getSecondChild() {
@@ -653,21 +649,31 @@ public class Node implements Serializable {
   }
 
   public Node getLastChild() {
-    return last;
+    return first != null ? first.previous : null;
   }
 
-  public Node getNext() {
+  public final Node getNext() {
     return next;
   }
 
-  public Node getPrevious() {
-    return previous;
+  public final Node getPrevious() {
+    return this == parent.first ? null : previous;
+  }
+
+  private Node getPrevious(Node firstSibling) {
+    return this == firstSibling ? null : previous;
   }
 
   public Node getChildBefore(Node child) {
-    return child.previous;
+    return child.getPrevious(first);
   }
 
+  /**
+   * Gets the ith child, note that this is O(N) where N is the number of children.
+   *
+   * @param i The index
+   * @return The ith child
+   */
   public Node getChildAtIndex(int i) {
     Node n = first;
     while (i > 0) {
@@ -677,6 +683,12 @@ public class Node implements Serializable {
     return n;
   }
 
+  /**
+   * Gets the index of a child, note that this is O(N) where N is the number of children.
+   *
+   * @param child The child
+   * @return The index of the child
+   */
   public int getIndexOfChild(Node child) {
     Node n = first;
     int i = 0;
@@ -691,59 +703,63 @@ public class Node implements Serializable {
     return -1;
   }
 
-  public Node getLastSibling() {
-    Node n = this;
-    while (n.next != null) {
-      n = n.next;
-    }
-    return n;
-  }
-
   public void addChildToFront(Node child) {
     Preconditions.checkArgument(child.parent == null);
     Preconditions.checkArgument(child.next == null);
     Preconditions.checkArgument(child.previous == null);
     child.parent = this;
     child.next = first;
-    if (first != null) {
+    if (first == null) {
+      // NOTE: child.next remains null
+      child.previous = child;
+    } else {
+      Node last = first.previous;
+      // NOTE: last.next remains null
+      child.previous = last;
+      child.next = first;
       first.previous = child;
     }
     first = child;
-    if (last == null) {
-      last = child;
-    }
   }
 
   public void addChildToBack(Node child) {
     Preconditions.checkArgument(child.parent == null);
     Preconditions.checkArgument(child.next == null);
     Preconditions.checkArgument(child.previous == null);
-    child.parent = this;
-    child.next = null;
-    child.previous = last;
-    if (last == null) {
-      first = last = child;
-      return;
+
+    if (first == null) {
+      // NOTE: child.next remains null
+      child.previous = child;
+      first = child;
+    } else {
+      Node last = first.previous;
+      last.next = child;
+      // NOTE: child.next remains null
+      child.previous = last;
+      first.previous = child;
     }
-    last.next = child;
-    last = child;
+
+    child.parent = this;
   }
 
   public void addChildrenToFront(Node children) {
+    if (children == null) {
+      return; // removeChildren() returns null when there are none
+    }
     for (Node child = children; child != null; child = child.next) {
       Preconditions.checkArgument(child.parent == null);
       child.parent = this;
     }
-    Node lastSib = children.getLastSibling();
-    Preconditions.checkState(lastSib.next == null);
-    lastSib.next = first;
+
+    Node lastSib = children.previous;
     if (first != null) {
+      Node last = first.previous;
+      // NOTE: last.next remains null
+      children.previous = last;
+      lastSib.next = first;
       first.previous = lastSib;
     }
     first = children;
-    if (last == null) {
-      last = lastSib;
-    }
   }
 
   public void addChildrenToBack(Node children) {
@@ -763,13 +779,16 @@ public class Node implements Serializable {
     Preconditions.checkArgument(newChild.parent == null,
         "The new child node already has a parent.");
     if (first == node) {
+      Node last = first.previous;
+      // NOTE: last.next remains null
       newChild.parent = this;
       newChild.next = first;
+      newChild.previous = last;
       first.previous = newChild;
       first = newChild;
-      return;
+    } else {
+      addChildAfter(newChild, node.previous);
     }
-    addChildAfter(newChild, node.previous);
   }
 
   /**
@@ -780,6 +799,8 @@ public class Node implements Serializable {
         "The new child node has next siblings.");
     Preconditions.checkArgument(newChild.previous == null,
         "The new child node has previous siblings.");
+    // NOTE: newChild.next remains null
+    newChild.previous = newChild;
     addChildrenAfter(newChild, node);
   }
 
@@ -787,53 +808,57 @@ public class Node implements Serializable {
    * Add all children after 'node'.
    */
   public void addChildrenAfter(Node children, Node node) {
+    if (children == null) {
+      return; // removeChildren() returns null when there are none
+    }
     Preconditions.checkArgument(node == null || node.parent == this);
+    Preconditions.checkState(children.previous != null);
+    if (node == null) {
+      addChildrenToFront(children);
+      return;
+    }
+
     for (Node child = children; child != null; child = child.next) {
       Preconditions.checkArgument(child.parent == null);
       child.parent = this;
     }
 
-    Node lastSibling = children.getLastSibling();
-    if (node != null) {
-      Node oldNext = node.next;
-      node.next = children;
-      children.previous = node;
-      lastSibling.next = oldNext;
-      if (oldNext != null) {
-        oldNext.previous = lastSibling;
-      }
-      if (node == last) {
-        last = lastSibling;
-      }
+    Node lastSibling = children.previous;
+    Node nodeAfter = node.next;
+    lastSibling.next = nodeAfter;
+    if (nodeAfter == null) {
+      first.previous = lastSibling;
     } else {
-      // Append to the beginning.
-      if (first != null) {
-        lastSibling.next = first;
-        first.previous = lastSibling;
-      } else {
-        last = lastSibling;
-      }
-      first = children;
+      nodeAfter.previous = lastSibling;
     }
+    node.next = children;
+    children.previous = node;
   }
 
   /**
    * Detach a child from its parent and siblings.
    */
   public void removeChild(Node child) {
-    Node prev = child.previous;
+    Preconditions.checkState(child.parent == this);
+    Preconditions.checkState(child.previous != null);
+
+    Node last = first.previous;
+    Node prevSibling = child.previous;
+    Node nextSibling = child.next;
     if (first == child) {
-      first = child.next;
+      first = nextSibling;
+      if (nextSibling != null) {
+        nextSibling.previous = last;
+      }
+      // last.next remains null
+    } else if (child == last) {
+      first.previous = prevSibling;
+      prevSibling.next = null;
+    } else {
+      prevSibling.next = nextSibling;
+      nextSibling.previous = prevSibling;
     }
-    if (prev != null) {
-      prev.next = child.next;
-    }
-    if (last == child) {
-      last = prev;
-    }
-    if (child.next != null) {
-      child.next.previous = prev;
-    }
+
     child.next = null;
     child.previous = null;
     child.parent = null;
@@ -849,23 +874,38 @@ public class Node implements Serializable {
         "The new child node has previous siblings.");
     Preconditions.checkArgument(newChild.parent == null,
         "The new child node already has a parent.");
+    Preconditions.checkState(child.parent == this);
 
     // Copy over important information.
     newChild.copyInformationFrom(child);
-
-    newChild.next = child.next;
-    newChild.previous = child.previous;
     newChild.parent = this;
-    if (child == first) {
+
+    Node nextSibling = child.next;
+    Node prevSibling = child.previous;
+
+    Node last = first.previous;
+
+    if (child == prevSibling) {  // first and only child
       first = newChild;
+      first.previous = newChild;
     } else {
-      child.previous.next = newChild;
+      if (child == first) {
+        first = newChild;
+        // prevSibling == last, and last.next remains null
+      } else {
+        prevSibling.next = newChild;
+      }
+
+      if (child == last) {
+        first.previous = newChild;
+      } else {
+        nextSibling.previous = newChild;
+      }
+
+      newChild.previous = prevSibling;
     }
-    if (child == last) {
-      last = newChild;
-    } else {
-      child.next.previous = newChild;
-    }
+    newChild.next = nextSibling;  // maybe null
+
     child.next = null;
     child.previous = null;
     child.parent = null;
@@ -879,7 +919,9 @@ public class Node implements Serializable {
 
   /** Detaches the child after the given child, or the first child if prev is null. */
   public void replaceFirstOrChildAfter(@Nullable Node prev, Node newChild) {
-    replaceChild(prev == null ? first : prev.next, newChild);
+    Node target = prev == null ? first : prev.next;
+    Preconditions.checkArgument(target != null, "prev doesn't have a sibling to replace.");
+    replaceChild(target, newChild);
   }
 
   @VisibleForTesting
@@ -1016,7 +1058,11 @@ public class Node implements Serializable {
    * child of a CAST node after type checking.
    */
   public JSType getJSTypeBeforeCast() {
-    return (JSType) getProp(TYPE_BEFORE_CAST);
+    return (JSType) getTypeIBeforeCast();
+  }
+
+  public TypeI getTypeIBeforeCast() {
+    return (TypeI) getProp(TYPE_BEFORE_CAST);
   }
 
   // Gets all the property types, in sorted order.
@@ -1125,6 +1171,11 @@ public class Node implements Serializable {
         sb.append(' ');
         sb.append(lineno);
       }
+      if (length != 0) {
+        sb.append(" [length: ");
+        sb.append(length);
+        sb.append(']');
+      }
     }
 
     if (printAnnotations) {
@@ -1175,18 +1226,16 @@ public class Node implements Serializable {
     }
     sb.append(n.toString());
     sb.append('\n');
-    for (Node cursor = n.getFirstChild();
-         cursor != null;
-         cursor = cursor.getNext()) {
+    for (Node cursor = n.first; cursor != null; cursor = cursor.next) {
       toStringTreeHelper(cursor, level + 1, sb);
     }
   }
 
   Token token;           // Type of the token of the node; NAME for example
-  Node next;             // next sibling
-  Node previous;         // previous sibling
-  private Node first;    // first element of a linked list of children
-  private Node last;     // last element of a linked list of children
+  Node next;             // next sibling, a linked list
+  Node previous;         // previous sibling, a circular linked list
+  Node first;            // first element of a linked list of children
+  // We get the last child as first.previous. But last.next is null, not first.
 
   /**
    * Linked list of properties. Since vast majority of nodes would have
@@ -1227,6 +1276,9 @@ public class Node implements Serializable {
    * size if we want.
    */
   private int sourcePosition;
+
+  /** The length of the code represented by the node. */
+  private int length;
 
   private TypeI typei;
 
@@ -1294,17 +1346,18 @@ public class Node implements Serializable {
   }
 
   public int getLength() {
-    return getIntProp(LENGTH);
+    return this.length;
   }
 
   public void setLength(int length) {
-    putIntProp(LENGTH, length);
+    this.length = length;
   }
 
   public int getLineno() {
     return extractLineno(sourcePosition);
   }
 
+  // Returns the 0-based column number
   public int getCharno() {
     return extractCharno(sourcePosition);
   }
@@ -1344,8 +1397,7 @@ public class Node implements Serializable {
   public void setSourceEncodedPositionForTree(int sourcePosition) {
     this.sourcePosition = sourcePosition;
 
-    for (Node child = getFirstChild();
-         child != null; child = child.getNext()) {
+    for (Node child = first; child != null; child = child.next) {
       child.setSourceEncodedPositionForTree(sourcePosition);
     }
   }
@@ -1563,7 +1615,26 @@ public class Node implements Serializable {
    * @return Whether the node has exactly one child.
    */
   public boolean hasOneChild() {
-    return first != null && first == last;
+    return first != null && first.next == null;
+  }
+
+  /**
+   * Check for two children more efficiently than {@code getChildCount() == 2}
+   *
+   * @return Whether the node has exactly two children.
+   */
+  public boolean hasTwoChildren() {
+    return first != null && first.next != null && first.next == getLastChild();
+  }
+
+  /**
+   * Check for zero or one child more efficiently than by iterating over all the
+   * children as is done with Node.getChildCount().
+   *
+   * @return Whether the node has no children or exactly one child.
+   */
+  public boolean hasZeroOrOneChild() {
+    return first == getLastChild();
   }
 
   /**
@@ -1573,7 +1644,20 @@ public class Node implements Serializable {
    * @return Whether the node more than one child.
    */
   public boolean hasMoreThanOneChild() {
-    return first != null && first != last;
+    return first != null && first.next != null;
+  }
+
+  /**
+   * Check for has exactly the number of specified children.
+   *
+   * @return Whether the node has exactly the number of children specified.
+   */
+  public boolean hasXChildren(int x) {
+    int c = 0;
+    for (Node n = first; n != null && c <= x; n = n.next) {
+      c++;
+    }
+    return c == x;
   }
 
   public int getChildCount() {
@@ -1586,7 +1670,7 @@ public class Node implements Serializable {
 
   // Intended for testing and verification only.
   public boolean hasChild(Node child) {
-    for (Node n = first; n != null; n = n.getNext()) {
+    for (Node n = first; n != null; n = n.next) {
       if (child == n) {
         return true;
       }
@@ -1786,21 +1870,22 @@ public class Node implements Serializable {
    *         of the name and properties.
    */
   public String getQualifiedName() {
-    if (token == Token.NAME || getBooleanProp(IS_MODULE_NAME)) {
-      String name = getString();
-      return name.isEmpty() ? null : name;
-    } else if (token == Token.GETPROP) {
-      String left = getFirstChild().getQualifiedName();
-      if (left == null) {
+    switch (token) {
+      case NAME:
+        String name = getString();
+        return name.isEmpty() ? null : name;
+      case GETPROP:
+        String left = getFirstChild().getQualifiedName();
+        if (left == null) {
+          return null;
+        }
+        return left + "." + getLastChild().getString();
+      case THIS:
+        return "this";
+      case SUPER:
+        return "super";
+      default:
         return null;
-      }
-      return left + "." + getLastChild().getString();
-    } else if (token == Token.THIS) {
-      return "this";
-    } else if (token == Token.SUPER) {
-      return "super";
-    } else {
-      return null;
     }
   }
 
@@ -1847,7 +1932,7 @@ public class Node implements Serializable {
    * <code>x</code> or <code>a.b.c</code> or <code>this.a</code>.
    */
   public boolean isQualifiedName() {
-    switch (getType()) {
+    switch (this.getToken()) {
       case NAME:
         return !getString().isEmpty();
       case THIS:
@@ -1874,7 +1959,7 @@ public class Node implements Serializable {
   private boolean matchesQualifiedName(String qname, int endIndex) {
     int start = qname.lastIndexOf('.', endIndex - 1) + 1;
 
-    switch (getType()) {
+    switch (this.getToken()) {
       case NAME:
       case MEMBER_FUNCTION_DEF:
         String name = getString();
@@ -1923,7 +2008,7 @@ public class Node implements Serializable {
    * .
    */
   public boolean isUnscopedQualifiedName() {
-    switch (getType()) {
+    switch (this.getToken()) {
       case NAME:
         return !getString().isEmpty();
       case GETPROP:
@@ -1934,7 +2019,7 @@ public class Node implements Serializable {
   }
 
   public boolean isValidAssignmentTarget() {
-    switch (getType()) {
+    switch (this.getToken()) {
       // TODO(tbreisacher): Remove CAST from this list, and disallow
       // the cryptic case from cl/41958159.
       case CAST:
@@ -1958,6 +2043,14 @@ public class Node implements Serializable {
    * node.getParent().removeChild();
    */
   public Node detachFromParent() {
+    return detach();
+  }
+
+  /**
+   * Removes this node from its parent. Equivalent to:
+   * node.getParent().removeChild();
+   */
+  public Node detach() {
     Preconditions.checkState(parent != null);
     parent.removeChild(this);
     return this;
@@ -1982,11 +2075,10 @@ public class Node implements Serializable {
    */
   public Node removeChildren() {
     Node children = first;
-    for (Node child = first; child != null; child = child.getNext()) {
+    for (Node child = first; child != null; child = child.next) {
       child.parent = null;
     }
     first = null;
-    last = null;
     return children;
   }
 
@@ -1996,30 +2088,30 @@ public class Node implements Serializable {
    */
   public void detachChildren() {
     for (Node child = first; child != null;) {
-      Node nextChild = child.getNext();
+      Node nextChild = child.next;
       child.parent = null;
       child.next = null;
       child.previous = null;
       child = nextChild;
     }
     first = null;
-    last = null;
   }
 
   public Node removeChildAfter(Node prev) {
-    Node next = prev.next;
-    Preconditions.checkArgument(next != null, "no next sibling.");
-    removeChild(next);
-    return next;
+    Node target = prev.next;
+    Preconditions.checkArgument(target != null, "no next sibling.");
+    removeChild(target);
+    return target;
   }
 
   /** Remove the child after the given child, or the first child if given null. */
   public Node removeFirstOrChildAfter(@Nullable Node prev) {
-    if (prev == null) {
-      return removeFirstChild();
-    } else {
-      return removeChildAfter(prev);
-    }
+    Preconditions.checkArgument(prev == null || prev.parent == this, "invalid node.");
+    Node target = prev == null ? first : prev.next;
+
+    Preconditions.checkArgument(target != null, "no next sibling.");
+    removeChild(target);
+    return target;
   }
 
   /**
@@ -2038,6 +2130,7 @@ public class Node implements Serializable {
 
   <T extends Node> T copyNodeFields(T dst, boolean cloneTypeExprs) {
     dst.setSourceEncodedPosition(this.sourcePosition);
+    dst.setLength(this.getLength());
     dst.setTypeI(this.typei);
     dst.setPropListHead(this.propListHead);
 
@@ -2060,17 +2153,24 @@ public class Node implements Serializable {
 
   public Node cloneTree(boolean cloneTypeExprs) {
     Node result = cloneNode(cloneTypeExprs);
-    for (Node n2 = getFirstChild(); n2 != null; n2 = n2.getNext()) {
-      Node n2clone = n2.cloneTree(cloneTypeExprs);
-      n2clone.parent = result;
-      if (result.last != null) {
-        result.last.next = n2clone;
-        n2clone.previous = result.last;
+    Node firstChild = null;
+    Node lastChild = null;
+    if (this.hasChildren()) {
+      for (Node n2 = getFirstChild(); n2 != null; n2 = n2.next) {
+        Node n2clone = n2.cloneTree(cloneTypeExprs);
+        n2clone.parent = result;
+        if (firstChild == null) {
+          firstChild = n2clone;
+          lastChild = firstChild;
+        } else {
+          lastChild.next = n2clone;
+          n2clone.previous = lastChild;
+          lastChild = n2clone;
+        }
       }
-      if (result.first == null) {
-        result.first = n2clone;
-      }
-      result.last = n2clone;
+      firstChild.previous = lastChild;
+      lastChild.next = null;
+      result.first = firstChild;
     }
     return result;
   }
@@ -2082,6 +2182,7 @@ public class Node implements Serializable {
    * @return this
    */
   // TODO(nicksantos): The semantics of this method are ill-defined. Delete it.
+  @Deprecated
   public Node copyInformationFrom(Node other) {
     if (getProp(ORIGINALNAME_PROP) == null) {
       putProp(ORIGINALNAME_PROP, other.getProp(ORIGINALNAME_PROP));
@@ -2101,10 +2202,10 @@ public class Node implements Serializable {
    * @return this
    */
   // TODO(nicksantos): The semantics of this method are ill-defined. Delete it.
+  @Deprecated
   public Node copyInformationFromForTree(Node other) {
     copyInformationFrom(other);
-    for (Node child = getFirstChild();
-         child != null; child = child.getNext()) {
+    for (Node child = first; child != null; child = child.next) {
       child.copyInformationFromForTree(other);
     }
 
@@ -2119,7 +2220,7 @@ public class Node implements Serializable {
     putProp(ORIGINALNAME_PROP, other.getProp(ORIGINALNAME_PROP));
     setStaticSourceFile(other.getStaticSourceFile());
     sourcePosition = other.sourcePosition;
-    setLength(other.getLength());
+    length = other.length;
     return this;
   }
 
@@ -2133,8 +2234,7 @@ public class Node implements Serializable {
    */
   public Node useSourceInfoFromForTree(Node other) {
     useSourceInfoFrom(other);
-    for (Node child = getFirstChild();
-         child != null; child = child.getNext()) {
+    for (Node child = first; child != null; child = child.next) {
       child.useSourceInfoFromForTree(other);
     }
 
@@ -2157,7 +2257,7 @@ public class Node implements Serializable {
     if (getStaticSourceFile() == null) {
       setStaticSourceFile(other.getStaticSourceFile());
       sourcePosition = other.sourcePosition;
-      setLength(other.getLength());
+      length = other.length;
     }
 
     return this;
@@ -2169,8 +2269,7 @@ public class Node implements Serializable {
    */
   public Node useSourceInfoIfMissingFromForTree(Node other) {
     useSourceInfoIfMissingFrom(other);
-    for (Node child = getFirstChild();
-         child != null; child = child.getNext()) {
+    for (Node child = first; child != null; child = child.next) {
       child.useSourceInfoIfMissingFromForTree(other);
     }
 
@@ -2478,9 +2577,9 @@ public class Node implements Serializable {
    */
   public void setSideEffectFlags(int flags) {
     Preconditions.checkArgument(
-        getType() == Token.CALL || getType() == Token.NEW,
+        this.getToken() == Token.CALL || this.getToken() == Token.NEW,
         "setIsNoSideEffectsCall only supports CALL and NEW nodes, got %s",
-        getType());
+        this.getToken());
 
     putIntProp(SIDE_EFFECT_FLAGS, flags);
   }
@@ -2526,10 +2625,6 @@ public class Node implements Serializable {
       return this;
     }
 
-    public boolean areAllFlagsSet() {
-      return value == Node.SIDE_EFFECTS_ALL;
-    }
-
     /**
      * Preserve the return result flag, but clear the others:
      *   no global state change, no throws, no this change, no arguments change
@@ -2568,6 +2663,31 @@ public class Node implements Serializable {
 
     private void removeFlag(int flag) {
       value &= ~flag;
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder builder = new StringBuilder("Side effects: ");
+      if ((value & Node.FLAG_THIS_UNMODIFIED) == 0) {
+        builder.append("this ");
+      }
+
+      if ((value & Node.FLAG_GLOBAL_STATE_UNMODIFIED) == 0) {
+        builder.append("global ");
+      }
+
+      if ((value & Node.FLAG_NO_THROWS) == 0) {
+        builder.append("throw ");
+      }
+
+      if ((value & Node.FLAG_ARGUMENTS_UNMODIFIED) == 0) {
+        builder.append("args ");
+      }
+
+      if ((value & Node.FLAG_LOCAL_RESULTS) == 0) {
+        builder.append("return ");
+      }
+      return builder.toString();
     }
   }
 

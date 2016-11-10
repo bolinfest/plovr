@@ -26,6 +26,7 @@ import com.google.common.css.compiler.ast.CssLiteralNode;
 import com.google.common.css.compiler.ast.CssNode;
 import com.google.common.css.compiler.ast.CssProvideNode;
 import com.google.common.css.compiler.ast.CssRequireNode;
+import com.google.common.css.compiler.ast.CssStringNode;
 import com.google.common.css.compiler.ast.CssUnknownAtRuleNode;
 import com.google.common.css.compiler.ast.CssValueNode;
 import com.google.common.css.compiler.ast.DefaultTreeVisitor;
@@ -51,6 +52,7 @@ public class CheckDependencyNodes extends DefaultTreeVisitor
       .getCanonicalName();
   private final MutatingVisitController visitController;
   private final ErrorManager errorManager;
+  private final boolean suppressDependencyCheck;
 
   /**
    * A linked collection is used so the dependencies can be iterated in the
@@ -60,8 +62,14 @@ public class CheckDependencyNodes extends DefaultTreeVisitor
 
   public CheckDependencyNodes(MutatingVisitController visitController,
       ErrorManager errorManager) {
+    this(visitController, errorManager, true /* suppressDependencyCheck */);
+  }
+
+  public CheckDependencyNodes(MutatingVisitController visitController,
+      ErrorManager errorManager, boolean suppressDependencyCheck) {
     this.visitController = visitController;
     this.errorManager = errorManager;
+    this.suppressDependencyCheck = suppressDependencyCheck;
   }
 
   @Override
@@ -104,15 +112,18 @@ public class CheckDependencyNodes extends DefaultTreeVisitor
       return null;
     }
     CssNode nameNode = params.get(0);
-    if (!(nameNode instanceof CssLiteralNode)) {
-      reportError("@" + atRuleName + " without a valid literal as name", node);
+    if (!(nameNode instanceof CssStringNode)) {
+      reportError("@" + atRuleName + " without a quoted string as name", node);
       return null;
     }
-    return (CssLiteralNode)nameNode;
+    CssStringNode nameStringNode = (CssStringNode) nameNode;
+    return new CssLiteralNode(nameStringNode.getValue());
   }
 
   private CssProvideNode createProvideNode(CssUnknownAtRuleNode node,
       CssLiteralNode provideArgument) {
+    //TODO(user): Make CssProvideNode & CssRequireNode consistent with other at-rule nodes.
+    // Pass the @name as CssLiteralNode and the namespace as CssValueNode.
     CssProvideNode provideNode = new CssProvideNode(
         provideArgument,
         node.getComments(),
@@ -139,8 +150,10 @@ public class CheckDependencyNodes extends DefaultTreeVisitor
   }
 
   private void reportError(String message, CssNode node) {
-    errorManager.report(new GssError(message, node.getSourceCodeLocation()));
-    visitController.removeCurrentNode();
+    if (!suppressDependencyCheck) {
+      errorManager.report(new GssError(message, node.getSourceCodeLocation()));
+      visitController.removeCurrentNode();
+    }
   }
 
   @Override

@@ -3,6 +3,7 @@
 /**
  * GssParserCC.jj : parses gss files, produces the new AST.
  *
+ * @author fbenz@google.com (Florian Benz)
  */
 
 options {
@@ -22,11 +23,12 @@ package com.google.common.css.compiler.ast;
 
 import com.google.common.base.CharMatcher;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
 import com.google.common.css.*;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -60,7 +62,8 @@ public class GssParserCC {
   private static final Pattern FUNCTIONS_WITH_SPACE_SEP_OK = Pattern.compile(
         "(?:-(?:O|MOZ|WEBKIT|MS)-)?(?:REPEATING-)?(?:LINEAR|RADIAL)-GRADIENT"
         + "|(?:-(?:O|MOZ|WEBKIT|MS)-)?IMAGE-SET"
-        + "|RECT|-KHTML-GRADIENT|-WEBKIT-GRADIENT",
+        + "|RECT|INSET|CIRCLE|ELLIPSE|POLYGON|-KHTML-GRADIENT|-WEBKIT-GRADIENT"
+        + "|(?:-WEBKIT-)?DROP-SHADOW|(?:-WEBKIT-)?CUSTOM|LOCAL",
         Pattern.CASE_INSENSITIVE);
 
   private static final Set<String> URL_FUNCTIONS = ImmutableSet.of(
@@ -69,22 +72,55 @@ public class GssParserCC {
   private static final CharMatcher CSS_WHITESPACE =
       CharMatcher.anyOf(" \t\r\n\f");
 
+  private static final Pattern VALID_BLOCK_COMMENT_PATTERN =
+      Pattern.compile(".*/\\*.*\\*/.*", Pattern.DOTALL);
+
   private CssBlockNode globalBlock;
   private SourceCode sourceCode;
-  private CssNodeBuilder nodeBuilder = new CssNodeBuilder();
+  private final CssNodeBuilder nodeBuilder = new CssNodeBuilder();
   private StringCharStream charStream;
 
-  public GssParserCC(CssBlockNode globalBlock, SourceCode sourceCode) {
-    this(new StringCharStream(sourceCode.getFileContents()),
-        globalBlock, sourceCode);
+  /**
+   * CSS Error Handling (http://www.w3.org/TR/css-syntax-3/#error-handling) is implemented by the
+   * demand from Play Book. It still may abort throwing GssParserException due to unhandled errors.
+   */
+  private boolean enableErrorRecovery;
+
+
+  /**
+   * List of handled errors if error handling enabled.
+   */
+  private final List<GssParserException> handledErrors = Lists.newArrayList();
+
+  public ImmutableList<GssParserException> getHandledErrors() {
+    return ImmutableList.copyOf(handledErrors);
   }
 
-  public GssParserCC(StringCharStream charStream,
-      CssBlockNode globalBlock, SourceCode sourceCode) {
+  public GssParserCC(CssBlockNode globalBlock, SourceCode sourceCode) {
+    this(new StringCharStream(sourceCode.getFileContents()), globalBlock, sourceCode, false);
+  }
+
+  public GssParserCC(StringCharStream charStream, CssBlockNode globalBlock, SourceCode sourceCode) {
+    this(charStream, globalBlock, sourceCode, false);
+  }
+
+  /**
+   * @enableErrorRecovery If true, it recovers as many errors as possible and continue parsing
+   *                      instead of throwing ParseException and handled errors are available as
+   *                      getHandledErrors().
+   */
+  public GssParserCC(CssBlockNode globalBlock, SourceCode sourceCode, boolean enableErrorRecovery) {
+    this(new StringCharStream(sourceCode.getFileContents()), globalBlock, sourceCode,
+        enableErrorRecovery);
+  }
+
+  public GssParserCC(StringCharStream charStream, CssBlockNode globalBlock, SourceCode sourceCode,
+      boolean enableErrorRecovery) {
     this((CharStream) charStream);
     this.charStream = charStream;
     this.sourceCode = sourceCode;
     this.globalBlock = globalBlock;
+    this.enableErrorRecovery = enableErrorRecovery;
   }
 
   private SourceCodeLocation getLocation() {
@@ -117,6 +153,18 @@ public class GssParserCC {
                                   endLocation.getEndCharacterIndex(),
                                   endLocation.getEndLineNumber(),
                                   endLocation.getEndIndexInLine());
+  }
+
+  private SourceCodeLocation mergeLocations(
+      Iterable<? extends CssNode> locations) {
+    Iterator<? extends CssNode> i = locations.iterator();
+    SourceCodeLocation loc = i.next().getSourceCodeLocation();
+    while (i.hasNext()) {
+      SourceCodeLocation iLoc = i.next().getSourceCodeLocation();
+      if (iLoc == null) continue;
+      loc = mergeLocations(loc, iLoc);
+    }
+    return loc;
   }
 
   private CssFunctionNode createUrlFunction(Token t) {
@@ -192,7 +240,33 @@ public class GssParserCC {
     try {
       start();
     } catch (ParseException e) {
-      throw new GssParserException(this.getLocation(token.next), e);
+      // token.next can be null if there is an error after EOF, such as an unterminated block
+      // comment.
+      Token tokenWithError = token.next == null ? token : token.next;
+      throw new GssParserException(this.getLocation(tokenWithError), e);
+    }
+  }
+
+  /**
+   * Wrapper around {@code parse()} that (re-)initializes the parser and
+   * clears its state afterwards.
+
+   * @param globalBlock the place to store parsing result
+   * @param sourceCode the source code to parse
+   * @param errorHandling whether error handling is enabled
+   * @param parsingErrors the place to store errors occured during parsing
+   */
+  public void parse(CssBlockNode globalBlock,
+      SourceCode sourceCode,
+      boolean errorHandling,
+      ImmutableList.Builder<GssParserException> parsingErrors)
+      throws GssParserException {
+    try {
+      initialize(globalBlock, sourceCode, errorHandling);
+      parse();
+    } finally {
+      parsingErrors.addAll(handledErrors);
+      clearState();
     }
   }
 
@@ -271,8 +345,9 @@ public class GssParserCC {
     }
 
     public CssClassSelectorNode buildClassSelectorNode(String name,
-        SourceCodeLocation location, List<Token> tokens) {
-      CssClassSelectorNode node = new CssClassSelectorNode(name, location);
+        SourceCodeLocation location, CssClassSelectorNode.ComponentScoping scoping,
+        List<Token> tokens) {
+      CssClassSelectorNode node = new CssClassSelectorNode(name, scoping, location);
       attachComments(tokens, node);
       return node;
     }
@@ -349,6 +424,9 @@ public class GssParserCC {
     public CssDeclarationNode buildDeclarationNode(CssPropertyNode property,
         CssPropertyValueNode value, List<Token> tokens) {
       CssDeclarationNode node = new CssDeclarationNode(property, value);
+      node.setSourceCodeLocation(
+        mergeLocations(
+          property.getSourceCodeLocation(), value.getSourceCodeLocation()));
       attachComments(tokens, node);
       return node;
     }
@@ -376,9 +454,23 @@ public class GssParserCC {
       return node;
     }
 
+    public CssUnicodeRangeNode buildUnicodeRangeNode(String value, SourceCodeLocation location,
+        List<Token> tokens) {
+      CssUnicodeRangeNode node = new CssUnicodeRangeNode(value, location);
+      attachComments(tokens, node);
+      return node;
+    }
+
     public CssNumericNode buildNumericNode(String num, String unit, SourceCodeLocation location,
         List<Token> tokens) {
       CssNumericNode node = new CssNumericNode(num, unit, location);
+      attachComments(tokens, node);
+      return node;
+    }
+
+    public CssLiteralNode buildLoopVariableNode(String value, SourceCodeLocation location,
+        List<Token> tokens) {
+      CssLoopVariableNode node = new CssLoopVariableNode(value, location);
       attachComments(tokens, node);
       return node;
     }
@@ -428,28 +520,45 @@ public class GssParserCC {
       return at;
     }
   }
+
+  private void initialize(CssBlockNode globalBlock, SourceCode sourceCode,
+      boolean errorHandling) {
+    this.enableErrorRecovery = errorHandling;
+    this.sourceCode = sourceCode;
+    this.globalBlock = globalBlock;
+    this.handledErrors.clear();
+    StringCharStream charStream =
+        new StringCharStream(sourceCode.getFileContents());
+    this.charStream = charStream;
+    this.ReInit(charStream);
+  }
+
+  private void clearState() {
+    this.sourceCode = null;
+    this.globalBlock = null;
+    this.handledErrors.clear();
+    this.charStream = null;
+  }
 }
 
 
 PARSER_END(GssParserCC)
 
-<DEFAULT> MORE :
+// Pass comments to the parser as special token
+<DEFAULT> SPECIAL_TOKEN :
 {
-  // switch to comment lexical state
-  < "/*" > : COMMENT
-}
-
-// pass comments to the parser as special token
-<COMMENT> SPECIAL_TOKEN :
-{
-  //return to default state - consume whitespace chars after itself !
-  < "*/" ("\r\n"| "\n" | "\r" | "\f" |" " |"\t")* > : DEFAULT
-}
-
-<COMMENT> MORE :
-{
-  // collect text from the comment (match any characters)
-  < ~[] > : COMMENT
+  // Consume the comment until the first "*/" or end of file (whichever is first), and then any
+  // whitespace that may follow.
+  // We do this by consuming the following:
+  // 1. Start of comment.
+  // 2. Longest string not containing "*/". If there is no terminating "*/", this will consume until
+  //    EOF. This ensures the contents of the comment are never consumed as a CSS token.
+  // 3. Optionally the closing "*/".
+  // 4. Any remaining whitespace.
+  < "/" "*"
+    ((("*")* ~["*", "/"]) | "/")* ("*")*
+    ("*/")?
+    ("\r\n"| "\n" | "\r" | "\f" |" " |"\t")* > : DEFAULT
 }
 
 
@@ -487,7 +596,7 @@ PARSER_END(GssParserCC)
   | < #HASH: "#" >
   | < #UNDERSCORE: "_" >
   | < #AMPERSAND: "&" >
-  | < #CARET: "^" >
+  | < CARET: "^" >
   | < #DOLLAR: "$" >
   | < #PIPE: "|" >
   | < AND: <AMPERSAND> <AMPERSAND> >
@@ -497,6 +606,8 @@ PARSER_END(GssParserCC)
   | < DOLLAR_EQUALS: <DOLLAR> <EQUALS> >
   | < ASTERISK_EQUALS: <ASTERISK> <EQUALS> >
   | < PIPE_EQUALS: <PIPE> <EQUALS> >
+  | < CDO: "<!--" >
+  | < CDC: "-->" >
 
   // CSS2 grammar allows up to 6-digit hex strings for unicode
   // hex        [0-9a-f]
@@ -521,9 +632,12 @@ PARSER_END(GssParserCC)
 
   | < #NL: "\r\n" | <NL1> >
 
+  | < WMINUSW: (<S>)+ <MINUS> (<S>)+>
+
   | < WPLUS: <W> <PLUS> >
   | < WGREATER: <W> <GREATER> >
   | < WTILDE: <W> <TILDE> >
+  | < WDEEP: <W> <SLASH> "deep" <SLASH> >
 
   | < #ALPHA: ["a"-"z","A"-"Z"] >
 
@@ -577,16 +691,19 @@ PARSER_END(GssParserCC)
   // "url("{w}{url}{w}")" {return URI;}
   | < URI: ("url" | "url-prefix" | "domain") "(" <W> (<URL>)* <W> ")" >
 
-  // url      ([!#$%&*-~]|{nonascii}|{escape})*
+  // Unquoted URLs don't accept escape sequences unlike the spec so far.
+  // url      ([!#$%&*-~]|{nonascii})*
   | < #URL: <EXCL_MARK> | <HASH> | <PERCENT> | <DOLLAR> | <AMPERSAND> |
       <ASTERISK> | <PLUS> | <COMMA> | <MINUS> | <DOT> | "/" | <DIGIT> |
       <COLON> | <SEMICOLON> | "<" | <EQUALS> | <GREATER> | "?" | <AT> |
       <ALPHA> | <LEFTSQUARE> | <RIGHTSQUARE> | <CARET> | <UNDERSCORE> | "`" |
       <LEFTBRACE> | <PIPE> | <RIGHTBRACE> | <TILDE> | <NONASCII> >
 
+  | < FOR_VARIABLE: <DOLLAR> <NAMESTART> (<NAMECHAR>)* >
+
   // ident        -?{nmstart}{nmchar}*
   // {ident}         {return IDENT;}
-  | < IDENTIFIER: (<MINUS>)? <NAMESTART> (<NAMECHAR>)* >
+  | < IDENTIFIER: (<MINUS>)? <NAMESTART> (<NAMECHAR> | <MINUS> <FOR_VARIABLE> )* >
 
   // "not("
   // Special handling needed because ':not' takes simple selectors as
@@ -594,8 +711,22 @@ PARSER_END(GssParserCC)
   | < NOTFUNCTION: "not" <LEFTROUND> >
   | < LANGFUNCTION: "lang" <LEFTROUND> >
 
+  // "calc("
+  // Special handling because the content between the parentheses is a
+  // mathematical expression tree, not an argument list, so it uses a different
+  // parse tree.
+  | < CALC: ("calc"|"-webkit-calc"|"-moz-calc") <LEFTROUND> >
+
+  | < #UNICODE_RANGE_TEXT: ( ["0"-"9","a"-"f", "A"-"F"] ){1,6} >
+
+  // Unicode range options: U+26, U+0015-00FF, U+4??
+  | < UNICODE_RANGE: "U+" <UNICODE_RANGE_TEXT>
+      ( ( ( <MINUS> <UNICODE_RANGE_TEXT> )? ) | ( ("?"){1,6} ) ) >
+
   // {ident}"(        {return FUNCTION;}
   | < FUNCTION: <IDENTIFIER> <LEFTROUND> >
+
+  | < ATLIST: <AT> "list" >
 
   // "@-webkit-keyframes"
   // Special handling needed because of the keys instead of the selectors
@@ -653,14 +784,26 @@ CssRulesetNode ruleSet() :
   List<Token> tokens = Lists.newArrayList();
 }
 {
-  selectors = selectorList()
-  t = <LEFTBRACE> { tokens.add(t); }
-  declarations = styleDeclaration()
-  t = <RIGHTBRACE> { tokens.add(t); }
-  {
-    CssRulesetNode ruleSet = nodeBuilder.buildRulesetNode(declarations,
-        selectors, this.getLocation(), tokens);
-    return ruleSet;
+  try {
+    try {
+      selectors = selectorList()
+      t = <LEFTBRACE> { tokens.add(t); }
+    } catch (ParseException e) {
+      if (!enableErrorRecovery || e.currentToken == null) throw e;
+      skipComponentValuesToAfter(LEFTBRACE);
+      throw e;
+    }
+    declarations = styleDeclaration()
+    t = <RIGHTBRACE> { tokens.add(t); }
+    {
+      CssRulesetNode ruleSet = nodeBuilder.buildRulesetNode(declarations,
+          selectors, this.getLocation(), tokens);
+      return ruleSet;
+    }
+  } catch (ParseException e) {
+    if (!enableErrorRecovery || e.currentToken == null) throw e;
+    skipComponentValuesToAfter(RIGHTBRACE);
+    throw e;
   }
 }
 
@@ -721,14 +864,18 @@ CssClassSelectorNode className() :
 {
   Token t;
   List<Token> tokens = Lists.newArrayList();
+  CssClassSelectorNode.ComponentScoping scoping = CssClassSelectorNode.ComponentScoping.DEFAULT;
 }
 {
   t = <DOT> { tokens.add(t); }
+  (
+    ( <PERCENT> { scoping = CssClassSelectorNode.ComponentScoping.FORCE_SCOPED; } ) |
+    ( <CARET> { scoping = CssClassSelectorNode.ComponentScoping.FORCE_UNSCOPED; } )
+  )?
   t = <IDENTIFIER>
   {
     tokens.add(t);
-    return nodeBuilder.buildClassSelectorNode(t.image, this.getLocation(),
-        tokens);
+    return nodeBuilder.buildClassSelectorNode(t.image, this.getLocation(), scoping, tokens);
   }
 }
 
@@ -819,7 +966,7 @@ CssRefinerNode pseudo() :
 }
 
 // nth
-//   : [ [ [ S* '+' ] | '-' | NUMBER | IDENTIFIER ] S* ]+
+//   : [ [ [ S* '+' ] | '-' | NUMBER | IDENTIFIER | FOR_VARIABLE ] S* ]+
 //   ;
 String nth() :
 {
@@ -833,9 +980,13 @@ String nth() :
       |
       t = <MINUS> { argument.append(t.image); }
       |
+      t = <WMINUSW> { argument.append(trim(t.image)); }
+      |
       t = <NUMBER> { argument.append(t.image); }
       |
       t = <IDENTIFIER> { argument.append(t.image); }
+      |
+      t = <FOR_VARIABLE> { argument.append(t.image); }
     )
     ( <S> )*
   )+
@@ -863,11 +1014,12 @@ CssAttributeSelectorNode attribute() :
 }
 {
   t = <LEFTSQUARE> { beginLocation = this.getLocation(); tokens.add(t); }
-  ( <S> )*
-  t = <IDENTIFIER> { attribute = t.image; tokens.add(t); }
-  ( <S> )*
-  (
-    (   t = <EQUALS>    { tokens.add(t);
+  try {
+    ( <S> )*
+    t = <IDENTIFIER> { attribute = t.image; tokens.add(t); }
+    ( <S> )*
+    (
+      ( t = <EQUALS>    { tokens.add(t);
             matchType = CssAttributeSelectorNode.MatchType.EXACT; }
       | t = <TILDE_EQUALS>  { tokens.add(t);
             matchType = CssAttributeSelectorNode.MatchType.ONE_WORD; }
@@ -879,16 +1031,22 @@ CssAttributeSelectorNode attribute() :
             matchType = CssAttributeSelectorNode.MatchType.CONTAINS; }
       | t = <PIPE_EQUALS> { tokens.add(t);
             matchType = CssAttributeSelectorNode.MatchType.EXACT_OR_DASH; }
-    )
-    ( <S> )*
-    (
-        t = <IDENTIFIER> { idNode = new CssLiteralNode(t.image, this.getLocation());
-            tokens.add(t); }
+      )
+      ( <S> )*
+      ( t = <IDENTIFIER> {
+          idNode = new CssLiteralNode(t.image, this.getLocation());
+          tokens.add(t);
+        }
       | stringNode = string()
-    )
-    ( <S> )*
-  )?
-  t = <RIGHTSQUARE> { tokens.add(t); }
+      )
+      ( <S> )*
+    )?
+    t = <RIGHTSQUARE> { tokens.add(t); }
+  } catch (ParseException e) {
+    if (!enableErrorRecovery || e.currentToken == null) throw e;
+    skipComponentValuesToAfter(RIGHTSQUARE);
+    throw e;
+  }
 
   {
     SourceCodeLocation endLocation = this.getLocation();
@@ -933,7 +1091,7 @@ CssSelectorNode simpleSelector() :
     ( ( n = id()
       | n = className()
       | n = attribute()
-      | n = pseudo() )   { refiners.addChildToBack(n); }
+      | n = pseudo()) { refiners.addChildToBack(n); }
     )+
   )
   {
@@ -959,19 +1117,17 @@ Token elementName() :
 }
 
 // combinator
-//   : [ '+' S* ] | [ '>' S* ] | [ '~' S* ] | S+
+//   : [ '+' S* ] | [ '>' S* ] | [ '~' S* ] | [ WDEEP S*] | S+
 //   ;
 CssCombinatorNode combinator() :
 {
   Token t;
-  SourceCodeLocation location = null;
   List<Token> tokens = Lists.newArrayList();
 }
 {
   // it doesn't work if the "( <S> )*"are after the { ... } part
   ( t = <WPLUS> ( <S> )*
     {
-      location = getLocation(t);
       tokens.add(t);
       return nodeBuilder.buildCombinatorNode(
           CssCombinatorNode.Combinator.ADJACENT_SIBLING, this.getLocation(),
@@ -981,7 +1137,6 @@ CssCombinatorNode combinator() :
   |
   ( t = <WGREATER> ( <S> )*
     {
-      location = getLocation(t);
       tokens.add(t);
       return nodeBuilder.buildCombinatorNode(
           CssCombinatorNode.Combinator.CHILD, this.getLocation(), tokens);
@@ -990,11 +1145,18 @@ CssCombinatorNode combinator() :
   |
   ( t = <WTILDE> ( <S> )*
     {
-      location = getLocation(t);
       tokens.add(t);
       return nodeBuilder.buildCombinatorNode(
           CssCombinatorNode.Combinator.GENERAL_SIBLING, this.getLocation(),
           tokens);
+    }
+  )
+  |
+  ( t = <WDEEP> ( <S> )*
+    {
+      tokens.add(t);
+      return nodeBuilder.buildCombinatorNode(
+          CssCombinatorNode.Combinator.DEEP, this.getLocation(), tokens);
     }
   )
   |
@@ -1024,21 +1186,53 @@ CssDeclarationBlockNode styleDeclaration() :
   CssNode decl;
 }
 {
-  ( <S> )*
-  ( decl = standardDeclaration() { block.addChildToBack(decl); } )?
-  ( <S> )*
+  try {
+    ( <S> )*
+    ( decl = standardDeclaration()
+      {
+        block.addChildToBack(decl);
+      }
+    )?
+    ( <S> )*
+  } catch (ParseException e) {
+    if (!enableErrorRecovery || e.currentToken == null) throw e;
+    handledErrors.add(new GssParserException(getLocation(e.currentToken.next), e));
+  }
   (
-     ( decl = innerAtRule() { block.addChildToBack(decl); }
-       ( <S> )*
-       ( decl = standardDeclaration() { block.addChildToBack(decl); } )?
-     )
-    |
-     ( <SEMICOLON>
-       ( <S> )*
-       // The last declaration within a block not necessarily has a semicolon
-       // at the end.
-       (  decl = standardDeclaration() { block.addChildToBack(decl); } )?
-     )
+    try {
+      (
+        try {
+          decl = innerAtRule() {
+            block.addChildToBack(decl);
+          }
+        } catch (ParseException e) {
+          if (!enableErrorRecovery || e.currentToken == null) throw e;
+          handledErrors.add(new GssParserException(getLocation(e.currentToken.next), e));
+        }
+        ( <S> )*
+        (
+          decl = standardDeclaration()
+          {
+            block.addChildToBack(decl);
+          }
+        )?
+      )
+      |
+      ( <SEMICOLON>
+        ( <S> )*
+        // The last declaration within a block not necessarily has a semicolon
+        // at the end.
+        (
+          decl = standardDeclaration()
+          {
+            block.addChildToBack(decl);
+          }
+        )?
+      )
+    } catch (ParseException e) {
+      if (!enableErrorRecovery || e.currentToken == null) throw e;
+      handledErrors.add(new GssParserException(getLocation(e.currentToken.next), e));
+    }
   )*
   { return block; }
 }
@@ -1056,25 +1250,31 @@ CssDeclarationNode standardDeclaration() :
   String propertyName = "";
 }
 {
-  ( t = <ASTERISK>  { tokens.add(t); propertyName = "*"; } )? // allows "star hack"
-  t = <IDENTIFIER>
-  {
-    propertyName = propertyName + t.image;
-    property = new CssPropertyNode(propertyName, this.getLocation());
-    tokens.add(t);
-  }
-  ( <S> )*
-   t = <COLON> { tokens.add(t); }
-  ( <S> )*
-  valueNode = expr()
-  ( <S> )*
-  ( priority = important() )?
-  {
-    if (priority != null) {
-      valueNode.addChildToBack(priority);
+  try {
+    ( t = <ASTERISK>  { tokens.add(t); propertyName = "*"; } )? // allows "star hack"
+    t = <IDENTIFIER>
+    {
+      propertyName = propertyName + t.image;
+      property = new CssPropertyNode(propertyName, this.getLocation());
+      tokens.add(t);
     }
-    CssDeclarationNode node = nodeBuilder.buildDeclarationNode(property, valueNode, tokens);
-    return node;
+    ( <S> )*
+    t = <COLON> { tokens.add(t); }
+    ( <S> )*
+    valueNode = expr()
+    ( <S> )*
+    ( priority = important() )?
+    {
+      if (priority != null) {
+        valueNode.addChildToBack(priority);
+      }
+      CssDeclarationNode node = nodeBuilder.buildDeclarationNode(property, valueNode, tokens);
+      return node;
+    }
+  } catch (ParseException e) {
+    if (!enableErrorRecovery || e.currentToken == null) throw e;
+    skipComponentValuesToBefore(RIGHTBRACE, SEMICOLON);
+    throw e;
   }
 }
 
@@ -1089,7 +1289,11 @@ CssPropertyValueNode expr() :
 {
     value = composite_term() { lst.add(value); }
   ( value = composite_term() { lst.add(value); } )*
-  { return new CssPropertyValueNode(lst); }
+  {
+    CssPropertyValueNode result = new CssPropertyValueNode(lst);
+    result.setSourceCodeLocation(mergeLocations(lst));
+    return result;
+  }
 }
 
 // (non-standard GSS extension)
@@ -1171,8 +1375,9 @@ CssValueNode slash_term() :
 
 // term
 //   : unary_operator?
-//     [ [ NUMBER [ PERCENT | IDENTIFIER ] ] | STRING | IDENT
-//       | '(' S? IDENT ':' S* NUMBER IDENT? ')' | URI | hexcolor | function
+//     [ [ NUMBER [ PERCENT | IDENTIFIER ] ] | STRING | IDENT | FOR_VARIABLE
+//       | '(' S? IDENT ':' S* NUMBER [ S* '/' S* NUMBER | IDENT ]? ')'
+//       | URI | hexcolor | function | math
 //     ] S*
 //   ;
 CssValueNode term() :
@@ -1185,19 +1390,24 @@ CssValueNode term() :
   CssStringNode stringNode = null;
   List<Token> tokens = Lists.newArrayList();
   boolean hexcolor = false;
+  boolean loopVariable = false;
+  boolean unicodeRange = false;
 }
 {
   (
     ( t = unary_operator() { unop = trim(t.image);   tokens.add(t); } )?
     (  // Number with optional arbitrary dimension or percent.
-      t = <NUMBER>     { unit = CssNumericNode.NO_UNITS; tokens.add(t); }
+      t = <NUMBER> { unit = CssNumericNode.NO_UNITS; tokens.add(t); }
           ( (dim = <PERCENT> | dim = <IDENTIFIER>)
               { unit = dim.image.toLowerCase(); tokens.add(dim);} )?
     )
+    | t = <UNICODE_RANGE> { unicodeRange = true; tokens.add(t); }
     | stringNode = string()
     | // This lookahead is to support function names with . and :.
       ( LOOKAHEAD({getToken(2).kind != DOT && getToken(2).kind != COLON})
       t = <IDENTIFIER> { tokens.add(t); } )
+    | // For variables will be evaluated to a number eventually.
+      t = <FOR_VARIABLE> { loopVariable = true; tokens.add(t); }
     | // Support for syntax like '(max-height: 300px)' that is needed for
       // the @media rule.
       // Without the look ahead the parser can't distinguish between
@@ -1207,25 +1417,45 @@ CssValueNode term() :
       ( LOOKAHEAD({getToken(1).kind == LEFTROUND
             && (getToken(3).kind == COLON || getToken(4).kind == COLON)})
         t = <LEFTROUND>  { tokens.add(t); }
-        ( <S> )?
-        t = <IDENTIFIER> { tokens.add(t); }
-        t = <COLON>      { tokens.add(t); }
-        ( <S> )*
-        (  ( t = <NUMBER> { tokens.add(t); }
-             ( (dim = <IDENTIFIER> ) { tokens.add(dim); } )?
-           )
-          |
-           ( t = <IDENTIFIER> { tokens.add(t); } )
-        )
-        ( <S> )*
-        t = <RIGHTROUND> { tokens.add(t); } )
+        try {
+          ( <S> )?
+          t = <IDENTIFIER> { tokens.add(t); }
+          t = <COLON>      { tokens.add(t); }
+          ( <S> )*
+          (  ( t = <NUMBER> { tokens.add(t); }
+               (
+                 ( <S> )*
+                 (t = <SLASH> ) { tokens.add(t); }
+                 ( <S> )*
+                 (t = <NUMBER> ) {tokens.add(t); }
+               )?
+               ( (dim = <IDENTIFIER> ) { tokens.add(dim); } )?
+             )
+            |
+             ( t = <IDENTIFIER> { tokens.add(t); } )
+          )
+          ( <S> )*
+          t = <RIGHTROUND> { tokens.add(t); }
+        } catch (ParseException e) {
+          if (!enableErrorRecovery || e.currentToken == null) throw e;
+          skipComponentValuesToAfter(RIGHTROUND);
+          throw e;
+        }
+      )
     | LOOKAHEAD({getToken(1).kind == URI}) function = uri()
     | t = hexcolor()   { tokens.add(t); hexcolor = true; }
+    | function = calc()
     | function = function()
   ) ( <S> )*
   {
     if (unit != null) {
-      return nodeBuilder.buildNumericNode(unop + t.image, unit, this.getLocation(t), tokens);
+      SourceCodeLocation location;
+      if (dim != null) {
+        location = this.mergeLocations(this.getLocation(t), this.getLocation(dim));
+      } else {
+        location = this.getLocation(t);
+      }
+      return nodeBuilder.buildNumericNode(unop + t.image, unit, location, tokens);
     } else if (function != null) {
       return function;
     } else if (hexcolor) {
@@ -1237,7 +1467,13 @@ CssValueNode term() :
       for (Token token : tokens) {
         sb.append(token.image);
       }
-      return nodeBuilder.buildLiteralNode(sb.toString(), this.getLocation(t), tokens);
+      if (loopVariable) {
+        return nodeBuilder.buildLoopVariableNode(sb.toString(), this.getLocation(t), tokens);
+      } else if (unicodeRange) {
+        return nodeBuilder.buildUnicodeRangeNode(sb.toString(), this.getLocation(t), tokens);
+      } else {
+        return nodeBuilder.buildLiteralNode(sb.toString(), this.getLocation(t), tokens);
+      }
     }
   }
 }
@@ -1389,10 +1625,16 @@ CssBooleanExpressionNode parenthesized_term() :
 }
 {
   t = <LEFTROUND> { tokens.add(t); }
-  ( <S> )*
-  node = extended_term()
-  t = <RIGHTROUND> { tokens.add(t); }
-  ( <S> )*
+  try {
+    ( <S> )*
+    node = extended_term()
+    t = <RIGHTROUND> { tokens.add(t); }
+    ( <S> )*
+  } catch (ParseException e) {
+    if (!enableErrorRecovery || e.currentToken == null) throw e;
+    skipComponentValuesToAfter(RIGHTROUND);
+    throw e;
+  }
   {
     nodeBuilder.attachComments(tokens, node);
     return node;
@@ -1482,12 +1724,134 @@ CssFunctionNode function() :
     } else if (FUNCTIONS_WITH_SPACE_SEP_OK.matcher(functionName).matches()) {
       addArgumentsWithSeparator(args, expr.childIterable(), expr.numChildren(), " ");
     } else {
-      throw new ParseException("invalid argument list");
+      throw generateParseException();
     }
     CssFunctionNode functionNode = nodeBuilder.buildFunctionNode(
         functionName.toString(),
         this.mergeLocations(beginLocation, endLocation), args, tokens);
     return functionNode;
+  }
+}
+
+// calc
+//  : "calc(" S* sum S* ")"
+//  ;
+CssFunctionNode calc() :
+{
+  Token t;
+  SourceCodeLocation beginLocation;
+  StringBuilder functionName = new StringBuilder();
+  String sum = "";
+  List<Token> tokens = Lists.newArrayList();
+}
+{
+  { beginLocation = this.getLocation(token.next); }
+  t = <CALC> {
+    functionName.append(t.image);
+    functionName.setLength(functionName.length() - 1);
+    tokens.add(t);
+  }
+  (<S>)* sum = sum() (<S>)* t = <RIGHTROUND> { tokens.add(t); }
+  {
+    SourceCodeLocation endLocation = this.getLocation(t);
+    CssFunctionArgumentsNode args = new CssFunctionArgumentsNode();
+    CssMathNode arg = new CssMathNode(sum);
+    addArgumentsWithSeparator(args, ImmutableList.<CssValueNode>of(arg), 1, "");
+    return nodeBuilder.buildFunctionNode(
+        functionName.toString(),
+        this.mergeLocations(beginLocation, endLocation), args, tokens);
+  }
+}
+
+// sum
+//  : product [ S+ [ "+" | "-" ] S+ product ]*
+//  ;
+String sum() :
+{
+  Token t;
+  StringBuilder content = new StringBuilder();
+  String p = "";
+}
+{
+  (
+    p = product() {content.append(p);}
+    (
+      (((<WPLUS>(<S>)+) {content.append(" + ");}) | (<WMINUSW> {content.append(" - ");}))
+      p = product() {content.append(p);}
+    )*
+  )
+  {
+    return content.toString();
+  }
+}
+
+// product
+//  : unit [ S* [ "*" S* unit | "/" S* NUMBER ] ]*
+//  ;
+String product() :
+{
+  Token t;
+  StringBuilder content = new StringBuilder();
+  String u = "";
+}
+{
+  (
+    u = unit() {content.append(u);}
+    (
+      (<S>)*
+      (
+         (
+           <ASTERISK> {content.append("*");}
+           (<S>)*
+           u = unit() {content.append(u);}
+         )
+         | (
+           <SLASH> {content.append("/");}
+           (<S>)*
+           t = <NUMBER> {content.append(t.image);}
+         )
+       )
+    )*
+  )
+  {
+    return content.toString();
+  }
+}
+
+// unit
+//  : [ NUMBER | DIMENSION | PERCENTAGE | "(" S* sum S* ")" ];
+//  ;
+String unit() :
+{
+  Token t;
+  Token dim;
+  StringBuilder content = new StringBuilder();
+  String sum = "";
+  CssFunctionNode math = null;
+}
+{
+  (
+    (
+      (t = unary_operator() {content.append(t.image);})?
+      t = <NUMBER> {content.append(t.image);}
+      (
+        (dim = <PERCENT> | dim = <IDENTIFIER>) {content.append(dim.image.toLowerCase());}
+      )?
+    )
+    | (
+        <LEFTROUND> { content.append("("); }
+        try {
+          (<S>)* sum = sum() {content.append(sum);} (<S>)*
+          <RIGHTROUND> { content.append(")"); }
+        } catch (ParseException e) {
+          if (!enableErrorRecovery || e.currentToken == null) throw e;
+          skipComponentValuesToAfter(RIGHTROUND);
+          throw e;
+        }
+      )
+  )
+  {
+    return content.toString();
   }
 }
 
@@ -1568,20 +1932,46 @@ CssAtRuleNode at_rule() :
   List<Token> tokens = Lists.newArrayList();
 }
 {
-  t = <ATKEYWORD>
-  {
-    beginLocation = this.getLocation(t);
-    name = new CssLiteralNode(t.image.substring(1), beginLocation);
-    tokens.add(t);
+  try {
+    t = <ATKEYWORD>
+    {
+      beginLocation = this.getLocation(t);
+      name = new CssLiteralNode(t.image.substring(1), beginLocation);
+      tokens.add(t);
+    }
+    ( <S> )*
+    ( ( v = composite_term() | v = extended_term() ) { parameters.add(v); } ( <S> )* )*
+  } catch (ParseException e) {
+    if (!enableErrorRecovery || e.currentToken == null) throw e;
+    if (skipComponentValuesToAfter(SEMICOLON, LEFTBRACE) == LEFTBRACE) {
+      skipComponentValuesToAfter(RIGHTBRACE);
+    }
+    throw e;
   }
-  ( <S> )*
-  ( ( v = composite_term() | v = extended_term() ) { parameters.add(v); } ( <S> )* )*
-  ( ( t = <LEFTBRACE>  { tokens.add(t); }
-      ( <S> )* block = block(true)
-      t = <RIGHTBRACE> { tokens.add(t);}
+  ( ( t = <LEFTBRACE> { tokens.add(t); }
+      try {
+        ( <S> )*
+        block = block(true)
+        t = <RIGHTBRACE> { tokens.add(t); }
+      } catch (ParseException e) {
+        if (!enableErrorRecovery || e.currentToken == null) throw e;
+        skipComponentValuesToAfter(RIGHTBRACE);
+        throw e;
+      }
     )
     |
-    t = <SEMICOLON> { tokens.add(t);} )
+    t = <SEMICOLON> { tokens.add(t); }
+    |
+    {
+      ParseException e = generateParseException();
+      if (enableErrorRecovery && e.currentToken != null) {
+        if (skipComponentValuesToAfter(SEMICOLON, LEFTBRACE) == LEFTBRACE) {
+          skipComponentValuesToAfter(RIGHTBRACE);
+        }
+      }
+      throw e;
+    }
+  )
   {
     SourceCodeLocation endLocation = getLocation(t);
     CssAtRuleNode at = nodeBuilder.buildUnknownAtRuleNode(name, block,
@@ -1614,47 +2004,70 @@ CssAtRuleNode atRuleWithDeclBlock() :
   List<Token> pseudoPageTokens = Lists.newArrayList();
 }
 {
-  t = <ATRULESWITHDECLBLOCK>
-  {
-    beginLocation = this.getLocation(t);
-    name = new CssLiteralNode(t.image.substring(1), beginLocation);
-    tokens.add(t);
-  }
-  ( <S> )*
-  (
-    v = atFunction() { parameters.add(v); }
-  |
+  try {
+    t = <ATRULESWITHDECLBLOCK>
+    {
+      beginLocation = this.getLocation(t);
+      name = new CssLiteralNode(t.image.substring(1), beginLocation);
+      tokens.add(t);
+    }
+    ( <S> )*
     (
-      // This is needed for @page (e.g. @page :left {} and @page bla:first {}).
-      LOOKAHEAD({getToken(1).kind == COLON || getToken(2).kind == COLON})
-      ( t = <IDENTIFIER> {
+      v = atFunction() { parameters.add(v); }
+    |
+      (
+        // This is needed for @page (e.g. @page :left {} and @page bla:first {}).
+        LOOKAHEAD({getToken(1).kind == COLON || getToken(2).kind == COLON})
+        ( t = <IDENTIFIER> {
+            pseudoPageTokens.add(t);
+            v = nodeBuilder.buildLiteralNode(t.image, getLocation(t), pseudoPageTokens);
+            parameters.add(v);
+            pseudoPageTokens.clear();
+          }
+        )?
+        t = <COLON> { pseudoPageTokens.add(t); }
+        t = <IDENTIFIER> {
           pseudoPageTokens.add(t);
-          v =  nodeBuilder.buildLiteralNode(t.image, getLocation(t),
-              pseudoPageTokens);
+          v = nodeBuilder.buildLiteralNode(":" + t.image, getLocation(t), pseudoPageTokens);
           parameters.add(v);
-          pseudoPageTokens.clear();
         }
-      )?
-      t = <COLON>  { pseudoPageTokens.add(t); }
-      t = <IDENTIFIER> {
-        pseudoPageTokens.add(t);
-        v =  nodeBuilder.buildLiteralNode(":" + t.image, getLocation(t),
-            pseudoPageTokens);
-        parameters.add(v);
-      }
-      ( <S> )*
+        ( <S> )*
+      )
+    |
+      ( ( v = composite_term() | v = extended_term() ) { parameters.add(v); }
+        ( <S> )*
+      )*
     )
-  |
-    ( ( v = composite_term() | v = extended_term() ) { parameters.add(v); }
-      ( <S> )*
-    )*
-  )
+  } catch (ParseException e) {
+    if (!enableErrorRecovery || e.currentToken == null) throw e;
+    if (skipComponentValuesToAfter(SEMICOLON, LEFTBRACE) == LEFTBRACE) {
+      skipComponentValuesToAfter(RIGHTBRACE);
+    }
+    throw e;
+  }
   ( ( t = <LEFTBRACE>  { tokens.add(t); }
-      ( <S> )* block = styleDeclaration()
-      t = <RIGHTBRACE> { tokens.add(t);}
+      try {
+        ( <S> )* block = styleDeclaration()
+        t = <RIGHTBRACE> { tokens.add(t); }
+      } catch (ParseException e) {
+        if (!enableErrorRecovery || e.currentToken == null) throw e;
+        skipComponentValuesToAfter(RIGHTBRACE);
+        throw e;
+      }
     )
     |
-    t = <SEMICOLON> { tokens.add(t);} )
+    t = <SEMICOLON> { tokens.add(t); }
+    |
+    {
+      ParseException e = generateParseException();
+      if (enableErrorRecovery && e.currentToken != null) {
+        if (skipComponentValuesToAfter(SEMICOLON, LEFTBRACE) == LEFTBRACE) {
+          skipComponentValuesToAfter(RIGHTBRACE);
+        }
+      }
+      throw e;
+    }
+  )
   {
     SourceCodeLocation endLocation = getLocation(t);
     CssAtRuleNode at = nodeBuilder.buildUnknownAtRuleNode(name, block,
@@ -1684,47 +2097,70 @@ CssAtRuleNode innerAtRule() :
   List<Token> pseudoPageTokens = Lists.newArrayList();
 }
 {
-  t = <ATKEYWORD>
-  {
-    beginLocation = this.getLocation(t);
-    name = new CssLiteralNode(t.image.substring(1), beginLocation);
-    tokens.add(t);
-  }
-  ( <S> )*
-  (
-    v = atFunction() { parameters.add(v); }
-  |
+  try {
+    t = <ATKEYWORD>
+    {
+      beginLocation = this.getLocation(t);
+      name = new CssLiteralNode(t.image.substring(1), beginLocation);
+      tokens.add(t);
+    }
+    ( <S> )*
     (
-      // This is needed for @page (e.g. @page :left {} and @page bla:first {}).
-      LOOKAHEAD({getToken(1).kind == COLON || getToken(2).kind == COLON})
-      ( t = <IDENTIFIER> {
+      v = atFunction() { parameters.add(v); }
+    |
+      (
+        // This is needed for @page (e.g. @page :left {} and @page bla:first {}).
+        LOOKAHEAD({getToken(1).kind == COLON || getToken(2).kind == COLON})
+        ( t = <IDENTIFIER> {
           pseudoPageTokens.add(t);
-          v =  nodeBuilder.buildLiteralNode(t.image, getLocation(t),
-              pseudoPageTokens);
+          v = nodeBuilder.buildLiteralNode(t.image, getLocation(t), pseudoPageTokens);
           parameters.add(v);
           pseudoPageTokens.clear();
+        } )?
+        t = <COLON> { pseudoPageTokens.add(t); }
+        t = <IDENTIFIER> {
+          pseudoPageTokens.add(t);
+          v = nodeBuilder.buildLiteralNode(":" + t.image, getLocation(t), pseudoPageTokens);
+          parameters.add(v);
         }
-      )?
-      t = <COLON>  { pseudoPageTokens.add(t); }
-      t = <IDENTIFIER> {
-        pseudoPageTokens.add(t);
-        v =  nodeBuilder.buildLiteralNode(":" + t.image, getLocation(t),
-            pseudoPageTokens);
-        parameters.add(v);
+        ( <S> )*
+      )
+    |
+      ( ( v = composite_term() | v = extended_term() ) { parameters.add(v); }
+        ( <S> )*
+      )*
+    )
+  } catch (ParseException e) {
+    if (!enableErrorRecovery || e.currentToken == null) throw e;
+    if (skipComponentValuesToAfter(SEMICOLON, LEFTBRACE) == LEFTBRACE) {
+      skipComponentValuesToAfter(RIGHTBRACE);
+    }
+    throw e;
+  }
+  (
+    ( t = <LEFTBRACE>  { tokens.add(t); }
+      try {
+        ( <S> )* block = styleDeclaration()
+        t = <RIGHTBRACE> { tokens.add(t); }
+      } catch (ParseException e) {
+        if (!enableErrorRecovery || e.currentToken == null) throw e;
+        skipComponentValuesToAfter(RIGHTBRACE);
+        throw e;
       }
-      ( <S> )*
     )
   |
-    ( ( v = composite_term() | v = extended_term() ) { parameters.add(v); }
-      ( <S> )*
-    )*
+    t = <SEMICOLON> { tokens.add(t); }
+  |
+    {
+      ParseException e = generateParseException();
+      if (enableErrorRecovery && e.currentToken != null) {
+        if (skipComponentValuesToAfter(SEMICOLON, LEFTBRACE) == LEFTBRACE) {
+          skipComponentValuesToAfter(RIGHTBRACE);
+        }
+      }
+      throw e;
+    }
   )
-  ( ( t = <LEFTBRACE>  { tokens.add(t); }
-      ( <S> )* block = styleDeclaration()
-      t = <RIGHTBRACE> { tokens.add(t);}
-    )
-    |
-    t = <SEMICOLON> { tokens.add(t);} )
   {
     SourceCodeLocation endLocation = getLocation(t);
     CssAtRuleNode at = nodeBuilder.buildUnknownAtRuleNode(name, block,
@@ -1749,25 +2185,39 @@ CssAtRuleNode webkit_keyframes_rule() :
   List<Token> tokens = Lists.newArrayList();
 }
 {
-  t = <WEBKITKEYFRAMES>
-  {
-    beginLocation = this.getLocation(t);
-    name = new CssLiteralNode(t.image.substring(1), beginLocation);
-    tokens.add(t);
+  try {
+    t = <WEBKITKEYFRAMES>
+    {
+      beginLocation = this.getLocation(t);
+      name = new CssLiteralNode(t.image.substring(1), beginLocation);
+      tokens.add(t);
+    }
+    ( <S> )*
+    t = <IDENTIFIER>
+    {
+      List<Token> identifierTokens = Lists.newArrayList();
+      identifierTokens.add(t);
+      CssLiteralNode l =
+        nodeBuilder.buildLiteralNode(t.image, getLocation(t), identifierTokens);
+      parameters.add(l);
+    }
+    ( <S> )*
+  } catch (ParseException e) {
+    if (!enableErrorRecovery || e.currentToken == null) throw e;
+    if (skipComponentValuesToAfter(SEMICOLON, LEFTBRACE) == LEFTBRACE) {
+      skipComponentValuesToAfter(RIGHTBRACE);
+    }
+    throw e;
   }
-  ( <S> )*
-  t = <IDENTIFIER>
-  {
-    List<Token> identifierTokens = Lists.newArrayList();
-    identifierTokens.add(t);
-    CssLiteralNode l =
-      nodeBuilder.buildLiteralNode(t.image, getLocation(t), identifierTokens);
-    parameters.add(l);
-  }
-  ( <S> )*
   ( t = <LEFTBRACE>  { tokens.add(t); }
+    try {
       ( <S> )* block = webkit_keyframes_block()
       t = <RIGHTBRACE> { tokens.add(t);}
+    } catch (ParseException e) {
+      if (!enableErrorRecovery || e.currentToken == null) throw e;
+      skipComponentValuesToAfter(RIGHTBRACE);
+      throw e;
+    }
   )
   {
     SourceCodeLocation endLocation = getLocation(t);
@@ -1807,12 +2257,27 @@ CssKeyframeRulesetNode webkit_keyframe_ruleSet() :
   List<Token> tokens = Lists.newArrayList();
 }
 {
-  keys = keyList()
-  t = <LEFTBRACE> { tokens.add(t); }
-  declarations = styleDeclaration()
-  t = <RIGHTBRACE> { tokens.add(t); }
+  try {
+    keys = keyList()
+    t = <LEFTBRACE> { tokens.add(t); }
+  } catch (ParseException e) {
+    if (!enableErrorRecovery || e.currentToken == null) throw e;
+    if (skipComponentValuesToAfter(SEMICOLON, LEFTBRACE) == LEFTBRACE) {
+      skipComponentValuesToAfter(RIGHTBRACE);
+    }
+    throw e;
+  }
+  try {
+    declarations = styleDeclaration()
+    t = <RIGHTBRACE> { tokens.add(t); }
+  } catch (ParseException e) {
+    if (!enableErrorRecovery || e.currentToken == null) throw e;
+    skipComponentValuesToAfter(RIGHTBRACE);
+    throw e;
+  }
   {
-    CssKeyframeRulesetNode ruleSet = nodeBuilder.buildKeyframeRulesetNode(declarations, keys, tokens);
+    CssKeyframeRulesetNode ruleSet =
+        nodeBuilder.buildKeyframeRulesetNode(declarations, keys, tokens);
     return ruleSet;
   }
 }
@@ -1884,12 +2349,21 @@ CssBlockNode block(boolean isEnclosedWithBraces) :
       block = globalBlock;
     }
   }
-  ((  n = ruleSet()
-    | n = at_rule()
-    | n = webkit_keyframes_rule()
-    | n = atRuleWithDeclBlock()
-   ) { block.addChildToBack(n); }
-   ( <S> )*)*
+  ( try {
+      ( n = ruleSet()
+      | LOOKAHEAD( <ATLIST> ) n = atRuleWithCrazySyntax()
+      | n = at_rule()
+      | n = webkit_keyframes_rule()
+      | n = atRuleWithDeclBlock()
+      ) {
+        block.addChildToBack(n);
+      }
+    } catch (ParseException e) {
+      if (!enableErrorRecovery || e.currentToken == null) throw e;
+      handledErrors.add(new GssParserException(getLocation(e.currentToken.next), e));
+    }
+    ( <S> | <CDO> | <CDC> )*
+  )*
   { return block; }
 }
 
@@ -1897,7 +2371,238 @@ CssBlockNode block(boolean isEnclosedWithBraces) :
 void start() :
 {}
 {
-  ( <S> )*
+  ( <S> | <CDO> | <CDC> )*
   block(false)
   <EOF>
+  {
+    try {
+      validateFinalBlockCommentIfPresent();
+    } catch (ParseException e) {
+      if (!enableErrorRecovery) throw e;
+      handledErrors.add(new GssParserException(getLocation(), e));
+    }
+  }
+}
+
+
+// CSS3 has very few syntactic constraints on at-rules. We shouldn't let
+// our inability to understand the details of future or non-standard at-rules
+// prevent us from parsing the rest of the stylesheet.
+// at_rule_with_crazy_syntax
+//   : ATKEYWORD S* [^;{] LOOKAHEAD( ( ';' | <?LEFTBRACE> ) ) ';'?
+CssAtRuleNode atRuleWithCrazySyntax() :
+{
+  Token t;
+  String s;
+  SourceCodeLocation beginLocation = null;
+  CssLiteralNode name;
+  CssLiteralNode nonBlockContent;
+  CssLiteralNode blockishContent = null;
+  List<Token> tokens = Lists.newArrayList();
+  SourceCodeLocation endLocation = null;
+}
+{
+  // Don't add more special cases like this one and the webkit keyframes
+  // one. If you want to support a new block type that follows the CSS 2.1
+  // and 3 grammars and doesn't quite fit into the traditional GssParser
+  // expectations, just change ATLIST below to ATKEYWORD, move the
+  // use site in the block() to the bottom of its disjunction, and use
+  // syntactic LOOKAHEAD(foo()) as needed for each foo() in the other choices
+  // at that disjunction to ensure that the parser eventually falls back to
+  // this rule. It will cost about 1.5% cpu time, but it will keep us from
+  // adding any more code complexity here.
+  t = <ATLIST>
+  {
+    beginLocation = this.getLocation(t);
+    name = new CssLiteralNode(t.image.substring(1), beginLocation);
+    tokens.add(t);
+  }
+  ( <S> ) *
+  s = scanCrazyContent(";{")
+  {
+    nonBlockContent = new CssLiteralNode(s);
+    tokens.add(t);
+  }
+  ( [blockishContent = crazyBlockBrace()
+    ]
+    [t = <SEMICOLON>
+     {
+       tokens.add(t);
+     }
+    ]
+  )
+  {
+    endLocation = this.getLocation(tokens.get(tokens.size() - 1));
+    List<CssValueNode> parameters = Lists.newArrayList();
+    if (nonBlockContent == null) {
+      throw new AssertionError("nonBlockContent should not be null");
+    }
+    parameters.add(nonBlockContent);
+    if (blockishContent != null) {
+      parameters.add(blockishContent);
+    }
+    return nodeBuilder.buildUnknownAtRuleNode(
+        name, null, this.mergeLocations(beginLocation, endLocation),
+        parameters,
+        tokens);
+  }
+}
+// A last-resort, minimally-restrictive brace-delimited production.
+CssLiteralNode crazyBlockBrace() :
+{
+  Token t;
+  String s;
+  SourceCodeLocation beginLocation;
+  SourceCodeLocation endLocation;
+  CssLiteralNode childContent = null;
+  CssLiteralNode childCrazy = null;
+  StringBuilder result = new StringBuilder();
+}
+{
+  t = <LEFTBRACE>
+  ( <S> )*
+  s = scanCrazyContent("{[()]}")
+  {
+    childContent = new CssLiteralNode(s);
+  }
+  (
+    (
+      (childCrazy = crazyBlockBrace()
+       | childCrazy = crazyBlockBracket()
+       | childCrazy = crazyBlockParen()))?
+    t = <RIGHTBRACE> { endLocation = this.getLocation(t); }
+  )
+  {
+    result.append("{");
+    if (childContent != null) result.append(childContent.getValue());
+    if (childContent != null && childCrazy != null) result.append(" ");
+    if (childCrazy != null) result.append(childCrazy.getValue());
+    result.append("}");
+    return new CssLiteralNode(result.toString());
+  }
+}
+// Inside blocks, brackets, parens, and braces must be balanced.
+CssLiteralNode crazyBlockBracket() :
+{
+  Token t;
+  String s;
+  SourceCodeLocation beginLocation;
+  SourceCodeLocation endLocation;
+  CssLiteralNode childContent = null;
+  CssLiteralNode childCrazy = null;
+  StringBuilder result = new StringBuilder();
+}
+{
+  t = <LEFTSQUARE>
+  ( <S> )*
+  s = scanCrazyContent("{[()]}")
+  {
+    childContent = new CssLiteralNode(s);
+  }
+  (
+    (
+      (childCrazy = crazyBlockBrace()
+       | childCrazy = crazyBlockBracket()
+       | childCrazy = crazyBlockParen()))?
+    t = <RIGHTSQUARE> { endLocation = this.getLocation(t); }
+  )
+  {
+    result.append("[");
+    if (childContent != null) result.append(childContent.getValue());
+    if (childContent != null && childCrazy != null) result.append(" ");
+    if (childCrazy != null) result.append(childCrazy.getValue());
+    result.append("]");
+    return new CssLiteralNode(result.toString());
+  }
+}
+// Inside blocks, brackets, parens, and braces must be balanced.
+CssLiteralNode crazyBlockParen() :
+{
+  Token t;
+  String s;
+  SourceCodeLocation beginLocation;
+  SourceCodeLocation endLocation;
+  CssLiteralNode childContent = null;
+  CssLiteralNode childCrazy = null;
+  StringBuilder result = new StringBuilder();
+}
+{
+  t = <LEFTROUND>
+  ( <S> )*
+  s = scanCrazyContent("{[()]}")
+  {
+    childContent = new CssLiteralNode(s);
+  }
+  (
+    (
+      (childCrazy = crazyBlockBrace()
+       | childCrazy = crazyBlockBracket()
+       | childCrazy = crazyBlockParen()))?
+    t = <RIGHTROUND> { endLocation = this.getLocation(t); }
+  )
+  {
+    result.append("(");
+    if (childContent != null) result.append(childContent.getValue());
+    if (childContent != null && childCrazy != null) result.append(" ");
+    if (childCrazy != null) result.append(childCrazy.getValue());
+    result.append(")");
+    return new CssLiteralNode(result.toString());
+  }
+}
+JAVACODE
+String scanCrazyContent(String endChars) {
+  StringBuilder sb = new StringBuilder();
+  Token t;
+  while (true) {
+    t = getToken(1);
+    if (t.kind == EOF) {
+      break;
+    }
+    if (t.image.length() == 1
+        && endChars.indexOf(t.image) != -1) {
+        break;
+    }
+    sb.append(t.image);
+    t = getNextToken();
+  }
+  if (sb.length() < 1) {
+    throw generateParseException();
+  }
+  return sb.toString();
+}
+// Consumes tokens until just before specified kinds of token or EOF, matching braces {[()]}.
+// It doesn't match tokens inside blocks surrounded by braces performing leftmost derivation.
+JAVACODE
+int skipComponentValuesToBefore(Integer... kinds) {
+  Set<Integer> kindset = ImmutableSet.<Integer>builder().add(EOF).add(kinds).build();
+  Token t;
+  do {
+    t = getToken(1);
+    if (kindset.contains(t.kind)) {
+      return t.kind;
+    }
+    getNextToken();
+  } while ((t.kind != LEFTBRACE || skipComponentValuesToAfter(RIGHTBRACE) != EOF)
+      && (t.kind != LEFTROUND || skipComponentValuesToAfter(RIGHTROUND) != EOF)
+      && (t.kind != LEFTSQUARE || skipComponentValuesToAfter(RIGHTSQUARE) != EOF));
+  return EOF;
+}
+// Consumes tokens until just after specified kinds of token or EOF, matching braces {[()]}.
+JAVACODE
+int skipComponentValuesToAfter(Integer... kinds) {
+  int kind = skipComponentValuesToBefore(kinds);
+  if (kind != EOF) {
+    getNextToken();
+  }
+  return kind;
+}
+
+JAVACODE
+void validateFinalBlockCommentIfPresent() throws ParseException {
+  if (token.specialToken != null
+      && !VALID_BLOCK_COMMENT_PATTERN.matcher(token.specialToken.image).matches()) {
+    // Manually construct a ParseException since this syntax error occurs after the last token,
+    // and we don't want the ParseException to reference a non-existent token.
+    throw new ParseException("unterminated block comment at EOF");
+  }
 }

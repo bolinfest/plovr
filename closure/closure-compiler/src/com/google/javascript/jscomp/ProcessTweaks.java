@@ -22,7 +22,6 @@ import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -294,7 +293,7 @@ class ProcessTweaks implements CompilerPass {
       } else {
         TweakFunction registerFunc = tweakInfo.registerCall.tweakFunc;
         Node value = entry.getValue();
-        if (!registerFunc.isValidNodeType(value.getType())) {
+        if (!registerFunc.isValidNodeType(value.getToken())) {
           compiler.report(JSError.make(INVALID_TWEAK_DEFAULT_VALUE_WARNING,
               tweakId, registerFunc.getName(),
               registerFunc.getExpectedTypeName()));
@@ -422,6 +421,9 @@ class ProcessTweaks implements CompilerPass {
         case GET_NUMBER:
         case GET_STRING:
           tweakInfo.addGetterCall(t.getSourceName(), tweakFunc, n);
+          break;
+        default:
+          break;
       }
     }
   }
@@ -488,7 +490,7 @@ class ProcessTweaks implements CompilerPass {
         if (valueNode != null) {
           // For register* and overrideDefaultValue calls, ensure the default
           // value is a literal of the correct type.
-          if (!registerFunc.isValidNodeType(valueNode.getType())) {
+          if (!registerFunc.isValidNodeType(valueNode.getToken())) {
             compiler.report(JSError.make(
                 valueNode, INVALID_TWEAK_DEFAULT_VALUE_WARNING,
                 tweakId, registerFunc.getName(),

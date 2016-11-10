@@ -20,13 +20,12 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.PolymerBehaviorExtractor.BehaviorDefinition;
 import com.google.javascript.jscomp.PolymerPass.MemberDefinition;
+import com.google.javascript.jscomp.parsing.parser.FeatureSet;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
-
 import java.util.LinkedList;
 import java.util.List;
-
 import javax.annotation.Nullable;
 
 /**
@@ -53,6 +52,9 @@ final class PolymerClassDefinition {
   /** Flattened list of behavior definitions used by this element. */
   final ImmutableList<BehaviorDefinition> behaviors;
 
+  /** Language features that should be carried over to the extraction destination. */
+  final FeatureSet features;
+
   PolymerClassDefinition(
       Node target,
       Node descriptor,
@@ -60,7 +62,8 @@ final class PolymerClassDefinition {
       MemberDefinition constructor,
       String nativeBaseElement,
       List<MemberDefinition> props,
-      ImmutableList<BehaviorDefinition> behaviors) {
+      ImmutableList<BehaviorDefinition> behaviors,
+      FeatureSet features) {
     this.target = target;
     Preconditions.checkState(descriptor.isObjectLit());
     this.descriptor = descriptor;
@@ -68,6 +71,7 @@ final class PolymerClassDefinition {
     this.nativeBaseElement = nativeBaseElement;
     this.props = props;
     this.behaviors = behaviors;
+    this.features = features;
   }
 
   /**
@@ -107,7 +111,6 @@ final class PolymerClassDefinition {
       target = IR.name(elNameString);
     }
 
-    target.useSourceInfoIfMissingFrom(callNode);
     JSDocInfo classInfo = NodeUtil.getBestJSDocInfo(target);
 
     JSDocInfo ctorInfo = null;
@@ -130,7 +133,16 @@ final class PolymerClassDefinition {
     for (BehaviorDefinition behavior : behaviors) {
       overwriteMembersIfPresent(allProperties, behavior.props);
     }
-    overwriteMembersIfPresent(allProperties, PolymerPassStaticUtils.extractProperties(descriptor));
+    overwriteMembersIfPresent(
+        allProperties, PolymerPassStaticUtils.extractProperties(descriptor, compiler));
+
+    FeatureSet newFeatures = null;
+    if (!behaviors.isEmpty()) {
+      newFeatures = behaviors.get(0).features;
+      for (int i = 1; i < behaviors.size(); i++) {
+        newFeatures = newFeatures.union(behaviors.get(i).features);
+      }
+    }
 
     return new PolymerClassDefinition(
         target,
@@ -139,7 +151,8 @@ final class PolymerClassDefinition {
         new MemberDefinition(ctorInfo, null, constructor),
         nativeBaseElement,
         allProperties,
-        behaviors);
+        behaviors,
+        newFeatures);
   }
 
   /**

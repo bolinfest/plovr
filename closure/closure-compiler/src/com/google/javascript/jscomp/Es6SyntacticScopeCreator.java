@@ -24,7 +24,7 @@ import com.google.javascript.rhino.Node;
 
 /**
  * <p>The syntactic scope creator scans the parse tree to create a Scope object
- * containing all the variable declarations in that scope. This class adds supported
+ * containing all the variable declarations in that scope. This class adds support
  * for block-level scopes introduced in ECMAScript 6.</p>
  *
  * <p>This implementation is not thread-safe.</p>
@@ -110,11 +110,13 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
       if (scope.getParent() != null) {
         inputId = NodeUtil.getInputId(n);
       }
-      scanVars(n);
+      boolean scanInnerBlocks =
+          n.isSyntheticBlock() || NodeUtil.isFunctionBlock(n) || n.isModuleBody();
+      scanVars(n, scanInnerBlocks, true);
     } else {
       // n is the global SCRIPT node
       Preconditions.checkState(scope.getParent() == null);
-      scanVars(n);
+      scanVars(n, true, true);
     }
   }
 
@@ -125,10 +127,14 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
   }
 
   /**
-    * Scans and gather variables declarations under a Node
-    */
-  private void scanVars(Node n) {
-    switch (n.getType()) {
+   * Scans and gather variables declarations under a Node
+   *
+   * @param n The node
+   * @param scanInnerBlockScopes Whether the inner block scopes should be scanned for "var"s
+   * @param firstScan Whether it is the first time a scan is performed from the current scope
+   */
+  private void scanVars(Node n, boolean scanInnerBlockScopes, boolean firstScan) {
+    switch (n.getToken()) {
       case VAR:
         declareLHS(scope.getClosestHoistScope(), n);
         return;
@@ -177,13 +183,19 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
         // A new scope is not created for this BLOCK because there is a scope
         // created for the BLOCK above the CATCH
         final Node block = n.getSecondChild();
-        scanVars(block);
+        scanVars(block, scanInnerBlockScopes, false);
         return;  // only one child to scan
 
       case SCRIPT:
         inputId = n.getInputId();
         Preconditions.checkNotNull(inputId);
         break;
+      default:
+        break;
+    }
+
+    if (!scanInnerBlockScopes && !firstScan && NodeUtil.createsBlockScope(n)) {
+      return;
     }
 
     // Variables can only occur in statement-level nodes, so
@@ -192,7 +204,7 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
       for (Node child = n.getFirstChild();
            child != null;) {
         Node next = child.getNext();
-        scanVars(child);
+        scanVars(child, scanInnerBlockScopes, false);
         child = next;
       }
     }
@@ -215,16 +227,29 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
     String name = n.getString();
     // Because of how we scan the variables, it is possible to encounter
     // the same var declared name node twice. Bail out in this case.
-    if (s.getVar(name) != null && s.getVar(name).getNode() == n) {
+    // TODO(johnlenz): hash lookups are not free and
+    // building scopes are already expensive
+    // restructure the scope building to avoid this check.
+    Var v = s.getOwnSlot(name);
+    if (v != null && v.getNode() == n) {
       return;
     }
 
     CompilerInput input = compiler.getInput(inputId);
-    if (s.isDeclared(name, false) || (s.isLocal() && name.equals(ARGUMENTS))) {
+    if (v != null || isShadowingDisallowed(s, name) || (s.isLocal() && name.equals(ARGUMENTS))) {
       redeclarationHandler.onRedeclaration(s, name, n, input);
     } else {
       s.declare(name, n, input);
     }
+  }
+
+  // Function body declarations are not allowed to shadow
+  // function parameters.
+  private static boolean isShadowingDisallowed(Scope s, String name) {
+    if (s.isFunctionBlockScope()) {
+      return s.getParent().getOwnSlot(name) != null;
+    }
+    return false;
   }
 
   /**

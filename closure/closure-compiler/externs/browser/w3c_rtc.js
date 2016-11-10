@@ -18,6 +18,7 @@
  * @fileoverview Definitions for components of the WebRTC browser API.
  * @see http://dev.w3.org/2011/webrtc/editor/webrtc.html
  * @see http://tools.ietf.org/html/draft-ietf-rtcweb-jsep-01
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API
  * @see http://www.w3.org/TR/mediacapture-streams/
  *
  * @externs
@@ -60,6 +61,7 @@ function MediaStreamTrack() {}
 
 /**
  * @param {!function(!Array<!SourceInfo>)} callback
+ * @return {undefined}
  */
 MediaStreamTrack.getSources = function(callback) {};
 
@@ -155,6 +157,7 @@ function MediaStream(streamOrTracks) {}
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 MediaStream.prototype.addEventListener = function(type, listener,
     opt_useCapture) {};
@@ -162,11 +165,15 @@ MediaStream.prototype.addEventListener = function(type, listener,
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 MediaStream.prototype.removeEventListener = function(type, listener,
     opt_useCapture) {};
 
-/** @override */
+/**
+ * @override
+ * @return {boolean}
+ */
 MediaStream.prototype.dispatchEvent = function(evt) {};
 
 /**
@@ -206,11 +213,13 @@ MediaStream.prototype.getTrackById = function(trackId) {};
 
 /**
  * @param {!MediaStreamTrack} track
+ * @return {undefined}
  */
 MediaStream.prototype.addTrack = function(track) {};
 
 /**
  * @param {!MediaStreamTrack} track
+ * @return {undefined}
  */
 MediaStream.prototype.removeTrack = function(track) {};
 
@@ -260,6 +269,7 @@ MediaStream.prototype.onremovetrack;
  * @deprecated
  * TODO(bemasc): Remove this method once browsers have updated to
  * MediaStreamTrack.stop().
+ * @return {undefined}
  */
 MediaStream.prototype.stop = function() {};
 
@@ -301,6 +311,11 @@ function MediaTrackConstraintSetInterface_() {}
 MediaTrackConstraintSetInterface_.prototype.chromeMediaSource;
 
 /**
+ * @type {?boolean}
+ */
+MediaTrackConstraintSetInterface_.prototype.echoCancellation;
+
+/**
  * @type {?number}
  */
 MediaTrackConstraintSetInterface_.prototype.minWidth;
@@ -340,6 +355,11 @@ MediaTrackConstraintSetInterface_.prototype.minFrameRate;
  * @type {?number}
  */
 MediaTrackConstraintSetInterface_.prototype.maxFrameRate;
+
+/**
+ * @type {?string}
+ */
+MediaTrackConstraintSetInterface_.prototype.sourceId;
 
 /**
  * This type and two more below are defined as unions with Object because they
@@ -438,6 +458,7 @@ NavigatorUserMediaError.prototype.constraintName;
  *     NavigatorUserMediaErrorCallback function.
  * @see http://dev.w3.org/2011/webrtc/editor/getusermedia.html
  * @see http://www.w3.org/TR/mediacapture-streams/
+ * @return {undefined}
  */
 Navigator.prototype.webkitGetUserMedia =
   function(constraints, successCallback, errorCallback) {};
@@ -492,6 +513,13 @@ function MediaDevices() {}
  * @return {!Promise<!Array<!MediaDeviceInfo>>}
  */
 MediaDevices.prototype.enumerateDevices = function() {};
+
+/**
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
+ * @param {!MediaStreamConstraints} constraints
+ * @return {!Promise<!MediaStream>}
+ */
+MediaDevices.prototype.getUserMedia = function(constraints) {}
 
 /** @const {!MediaDevices} */
 Navigator.prototype.mediaDevices;
@@ -867,6 +895,7 @@ RTCDataChannel.prototype.binaryType;
 
 /**
  * @param {string|!Blob|!ArrayBuffer|!ArrayBufferView} data
+ * @return {undefined}
  */
 RTCDataChannel.prototype.send = function(data) {};
 
@@ -915,6 +944,7 @@ function RTCPeerConnection(configuration, constraints) {}
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 RTCPeerConnection.prototype.addEventListener = function(
     type, listener, opt_useCapture) {};
@@ -922,33 +952,49 @@ RTCPeerConnection.prototype.addEventListener = function(
 /**
  * @param {boolean=} opt_useCapture
  * @override
+ * @return {undefined}
  */
 RTCPeerConnection.prototype.removeEventListener = function(
     type, listener, opt_useCapture) {};
 
-/** @override */
+/**
+ * @override
+ * @return {boolean}
+ */
 RTCPeerConnection.prototype.dispatchEvent = function(evt) {};
 
+
+// NB: Until closure annotations support overloading, many of the following
+// functions take odd unions of parameter types.  This is to support the various
+// api differences between browsers.  Generally, returning a promise means you
+// don't take callback function parameters and draw any further parameters
+// forward, and vice versa.
+
 /**
- * @param {!RTCSessionDescriptionCallback} successCallback
+ * @param {(!RTCSessionDescriptionCallback|!MediaConstraints)=}
+ *    successCallbackOrConstraints
  * @param {!RTCPeerConnectionErrorCallback=} failureCallback
  * @param {!MediaConstraints=} constraints
+ * @return {!Promise<!RTCSessionDescription>|undefined}
  */
-RTCPeerConnection.prototype.createOffer = function(successCallback,
+RTCPeerConnection.prototype.createOffer = function(successCallbackOrConstraints,
     failureCallback, constraints) {};
 
 /**
- * @param {RTCSessionDescriptionCallback} successCallback
- * @param {?RTCPeerConnectionErrorCallback=} failureCallback
+ * @param {(!RTCSessionDescriptionCallback|!MediaConstraints)=}
+ *    successCallbackOrConstraints
+ * @param {!RTCPeerConnectionErrorCallback=} failureCallback
  * @param {!MediaConstraints=} constraints
+ * @return {!Promise<!RTCSessionDescription>|undefined}
  */
-RTCPeerConnection.prototype.createAnswer = function(successCallback,
-    failureCallback, constraints) {};
+RTCPeerConnection.prototype.createAnswer =
+    function(successCallbackOrConstraints, failureCallback, constraints) {};
 
 /**
  * @param {!RTCSessionDescription} description
  * @param {!RTCVoidCallback=} successCallback
  * @param {!RTCPeerConnectionErrorCallback=} failureCallback
+ * @return {!Promise<!RTCSessionDescription>|undefined}
  */
 RTCPeerConnection.prototype.setLocalDescription = function(description,
     successCallback, failureCallback) {};
@@ -957,6 +1003,7 @@ RTCPeerConnection.prototype.setLocalDescription = function(description,
  * @param {!RTCSessionDescription} description
  * @param {!RTCVoidCallback=} successCallback
  * @param {!RTCPeerConnectionErrorCallback=} failureCallback
+ * @return {!Promise<!RTCSessionDescription>|undefined}
  */
 RTCPeerConnection.prototype.setRemoteDescription = function(description,
     successCallback, failureCallback) {};
@@ -982,13 +1029,18 @@ RTCPeerConnection.prototype.signalingState;
 /**
  * @param {?RTCConfiguration=} configuration
  * @param {?MediaConstraints=} constraints
+ * @return {undefined}
  */
 RTCPeerConnection.prototype.updateIce = function(configuration, constraints) {};
 
 /**
+ * Void in Chrome for now, a promise that you can then/catch in Firefox.
  * @param {!RTCIceCandidate} candidate
+ * @param {!RTCVoidCallback=} successCallback
+ * @param {!function(DOMException)=} failureCallback
+ * @return {!Promise|undefined}
  */
-RTCPeerConnection.prototype.addIceCandidate = function(candidate) {};
+RTCPeerConnection.prototype.addIceCandidate = function(candidate, successCallback, failureCallback) {};
 
 /**
  * @type {!RTCIceGatheringState}
@@ -1028,19 +1080,24 @@ RTCPeerConnection.prototype.createDataChannel =
 /**
  * @param {!MediaStream} stream
  * @param {!MediaConstraints=} constraints
+ * @return {undefined}
  */
 RTCPeerConnection.prototype.addStream = function(stream, constraints) {};
 
 /**
  * @param {!MediaStream} stream
+ * @return {undefined}
  */
 RTCPeerConnection.prototype.removeStream = function(stream) {};
 
 // TODO(bemasc): Add identity provider stuff once implementations exist
 
 /**
- * @param {!RTCStatsCallback} successCallback
+ * Firefox' getstats is synchronous and returns a much simpler
+ * {!Object<string, !Object>} dictionary.
+ * @param {!RTCStatsCallback=} successCallback
  * @param {MediaStreamTrack=} selector
+ * @return {undefined|!Object<string, !Object>}
  */
 RTCPeerConnection.prototype.getStats = function(successCallback, selector) {};
 
@@ -1082,7 +1139,6 @@ RTCPeerConnection.prototype.oniceconnectionstatechange;
 RTCPeerConnection.prototype.ondatachannel;
 
 /**
- * @type {function(new: RTCPeerConnection, RTCConfiguration,
- *     !MediaConstraints=)}
+ * @const
  */
-var webkitRTCPeerConnection;
+var webkitRTCPeerConnection = RTCPeerConnection;

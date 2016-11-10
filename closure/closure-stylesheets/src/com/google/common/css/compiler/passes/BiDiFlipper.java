@@ -19,6 +19,7 @@ package com.google.common.css.compiler.passes;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.css.compiler.ast.CssCompilerPass;
 import com.google.common.css.compiler.ast.CssCompositeValueNode;
@@ -30,14 +31,18 @@ import com.google.common.css.compiler.ast.CssHexColorNode;
 import com.google.common.css.compiler.ast.CssLiteralNode;
 import com.google.common.css.compiler.ast.CssNode;
 import com.google.common.css.compiler.ast.CssNumericNode;
+import com.google.common.css.compiler.ast.CssPriorityNode;
 import com.google.common.css.compiler.ast.CssPropertyNode;
 import com.google.common.css.compiler.ast.CssPropertyValueNode;
 import com.google.common.css.compiler.ast.CssValueNode;
 import com.google.common.css.compiler.ast.DefaultTreeVisitor;
 import com.google.common.css.compiler.ast.MutatingVisitController;
 
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -47,10 +52,12 @@ import java.util.regex.Pattern;
  * Compiler pass that BiDi flips all the flippable nodes.
  * TODO(user): Need to add a function to return tree before flipping.
  *
+ * @author roozbeh@google.com (Roozbeh Pournader)
  */
-public class BiDiFlipper extends DefaultTreeVisitor
-    implements CssCompilerPass {
+public class BiDiFlipper extends DefaultTreeVisitor implements CssCompilerPass {
 
+  private final DecimalFormat percentFormatter =
+      new DecimalFormat("#.########", DecimalFormatSymbols.getInstance(Locale.US));
   private final MutatingVisitController visitController;
 
   boolean shouldSwapLeftRightInUrl;
@@ -340,8 +347,9 @@ public class BiDiFlipper extends DefaultTreeVisitor
 
     CssNumericNode numericNode = (CssNumericNode) valueNode;
     String oldPercentageValue = numericNode.getNumericPart();
+    double newPercentValue = 100 - Double.parseDouble(oldPercentageValue);
     CssValueNode newNumericNode = new CssNumericNode(
-        String.valueOf(100 - Integer.parseInt(oldPercentageValue)), "%");
+        percentFormatter.format(newPercentValue), "%");
 
     return newNumericNode;
   }
@@ -466,8 +474,8 @@ public class BiDiFlipper extends DefaultTreeVisitor
 
     if (BORDER_RADIUS_PROPERTIES.contains(propertyName)) {
       return flipBorderRadius(valueNodes);
-    } else if (valueNodes.size() != 4 ||
-        !FOUR_PART_PROPERTIES_THAT_SHOULD_FLIP.contains(propertyName)) {
+    } else if (valueNodes.size() != 4
+        || !FOUR_PART_PROPERTIES_THAT_SHOULD_FLIP.contains(propertyName)) {
       return valueNodes;
     }
 
@@ -671,8 +679,19 @@ public class BiDiFlipper extends DefaultTreeVisitor
       valueIndex++;
     }
     if (valueNodes.size() != 0) {
-      newDeclarationNode.setPropertyValue(new CssPropertyValueNode(
-          flipNumericValues(valueNodes, propertyNode.getPropertyName())));
+      CssValueNode priority = null;
+      // Remove possible !important priority node.
+      if (!valueNodes.isEmpty() && Iterables.getLast(valueNodes) instanceof CssPriorityNode) {
+        priority = Iterables.getLast(valueNodes);
+        valueNodes = valueNodes.subList(0, valueNodes.size() - 1);
+      }
+      List<CssValueNode> newValueList =
+          flipNumericValues(valueNodes, propertyNode.getPropertyName());
+      // Re-add priority node if we removed it earlier.
+      if (priority != null) {
+        newValueList.add(priority);
+      }
+      newDeclarationNode.setPropertyValue(new CssPropertyValueNode(newValueList));
     } else {
       newDeclarationNode.setPropertyValue(propertyValueNode.deepCopy());
     }

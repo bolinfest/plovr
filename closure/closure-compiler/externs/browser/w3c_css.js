@@ -174,6 +174,7 @@ CSSStyleSheet.prototype.insertRule = function(rule, index) {};
 /**
  * @param {number} index
  * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSStyleSheet-deleteRule
+ * @return {undefined}
  */
 CSSStyleSheet.prototype.deleteRule = function(index) {};
 
@@ -331,6 +332,7 @@ CSSMediaRule.prototype.insertRule = function(rule, index) {};
 /**
  * @param {number} index
  * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSMediaRule-deleteRule
+ * @return {undefined}
  */
 CSSMediaRule.prototype.deleteRule = function(index) {};
 
@@ -414,6 +416,8 @@ function CSSUnknownRule() {}
 /**
  * @constructor
  * @extends {CSSProperties}
+ * @implements {IObject<(string|number), string>}
+ * @implements {IArrayLike<string>}
  * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSStyleDeclaration
  */
 function CSSStyleDeclaration() {}
@@ -518,6 +522,7 @@ CSSStyleDeclaration.prototype.removeExpression = function(name) {};
  * @param {*} value
  * @param {number=} opt_flags
  * @see http://msdn.microsoft.com/en-us/library/ms536739(VS.85).aspx
+ * @return {undefined}
  */
 CSSStyleDeclaration.prototype.setAttribute = function(name, value, opt_flags) {};
 
@@ -1966,6 +1971,15 @@ CSSProperties.prototype.justifyContent;
  */
 CSSProperties.prototype.order;
 
+// Externs for CSS Will Change Module Level 1
+// http://www.w3.org/TR/css-will-change/
+
+/**
+ * @type {string}
+ * @see http://www.w3.org/TR/css-will-change-1/#will-change
+ */
+CSSProperties.prototype.willChange;
+
 
 /**
  * TODO(dbeam): Put this in separate file named w3c_cssom.js.
@@ -2022,6 +2036,7 @@ Window.prototype.pageYOffset;
  * @param {number} x
  * @param {number} y
  * @see http://www.w3.org/TR/cssom-view/#dom-window-scroll
+ * @return {undefined}
  */
 Window.prototype.scroll = function(x, y) {};
 
@@ -2029,6 +2044,7 @@ Window.prototype.scroll = function(x, y) {};
  * @param {number} x
  * @param {number} y
  * @see http://www.w3.org/TR/cssom-view/#dom-window-scrollto
+ * @return {undefined}
  */
 Window.prototype.scrollTo = function(x, y) {};
 
@@ -2036,6 +2052,7 @@ Window.prototype.scrollTo = function(x, y) {};
  * @param {number} x
  * @param {number} y
  * @see http://www.w3.org/TR/cssom-view/#dom-window-scrollby
+ * @return {undefined}
  */
 Window.prototype.scrollBy = function(x, y) {};
 
@@ -2084,12 +2101,14 @@ MediaQueryList.prototype.matches;
 /**
  * @param {MediaQueryListListener} listener
  * @see http://www.w3.org/TR/cssom-view/#dom-mediaquerylist-addlistener
+ * @return {undefined}
  */
 MediaQueryList.prototype.addListener = function(listener) {};
 
 /**
  * @param {MediaQueryListListener} listener
  * @see http://www.w3.org/TR/cssom-view/#dom-mediaquerylist-removelistener
+ * @return {undefined}
  */
 MediaQueryList.prototype.removeListener = function(listener) {};
 
@@ -2202,6 +2221,7 @@ Element.prototype.getBoundingClientRect = function() {};
 /**
  * @param {(boolean|{behavior: string, block: string})=} opt_top
  * @see http://www.w3.org/TR/cssom-view/#dom-element-scrollintoview
+ * @return {undefined}
  */
 Element.prototype.scrollIntoView = function(opt_top) {};
 
@@ -2495,10 +2515,10 @@ var FontFaceDescriptors;
  * @constructor
  * @param {string} fontFamily
  * @param {(string|ArrayBuffer|ArrayBufferView)} source
- * @param {!FontFaceDescriptors} descriptors
+ * @param {!FontFaceDescriptors=} opt_descriptors
  * @see http://dev.w3.org/csswg/css-font-loading/#font-face-constructor
  */
-function FontFace(fontFamily, source, descriptors) {}
+function FontFace(fontFamily, source, opt_descriptors) {}
 
 /**
  * @type {string}
@@ -2565,6 +2585,7 @@ var FontFaceSetLoadStatus = {
 
 /**
  * @interface
+ * @extends {EventTarget}
  * @see http://dev.w3.org/csswg/css-font-loading/#FontFaceSet-interface
  */
 function FontFaceSet() {}
@@ -2579,17 +2600,20 @@ function FontFaceSet() {}
 /**
  * @param {!FontFace} value
  * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontfaceset-add
+ * @return {undefined}
  */
 FontFaceSet.prototype.add = function(value) {};
 
 /**
  * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontfaceset-clear
+ * @return {undefined}
  */
 FontFaceSet.prototype.clear = function() {};
 
 /**
  * @param {!FontFace} value
  * @see http://dev.w3.org/csswg/css-font-loading/#dom-fontfaceset-delete
+ * @return {undefined}
  */
 FontFaceSet.prototype.delete = function(value) {};
 
@@ -2604,6 +2628,7 @@ FontFaceSet.prototype.has = function(font) {};
  * @param {function(!FontFace, number, !FontFaceSet)} cb
  * @param {Object|undefined=} opt_selfObj
  * see http://dev.w3.org/csswg/css-font-loading/#dom-fontfaceset-foreach
+ * @return {undefined}
  */
 FontFaceSet.prototype.forEach = function(cb, opt_selfObj) {};
 

@@ -22,15 +22,15 @@ import com.google.common.collect.ImmutableMap;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Key;
+import com.google.template.soy.SoyModule;
 import com.google.template.soy.base.SourceLocation;
-import com.google.template.soy.basicfunctions.BasicFunctionsModule;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.exprtree.FunctionNode;
 import com.google.template.soy.exprtree.IntegerNode;
 import com.google.template.soy.exprtree.NullNode;
 import com.google.template.soy.exprtree.OperatorNodes.TimesOpNode;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.passes.ResolveFunctionsVisitor;
-import com.google.template.soy.shared.internal.ErrorReporterModule;
 import com.google.template.soy.shared.restricted.SoyFunction;
 
 import junit.framework.TestCase;
@@ -44,9 +44,8 @@ import java.util.Map;
  *
  */
 public final class JsExprTranslatorTest extends TestCase {
+  private static final Injector INJECTOR = Guice.createInjector(new SoyModule());
 
-  private static final Injector INJECTOR = Guice.createInjector(
-      new ErrorReporterModule(), new JsSrcModule(), new BasicFunctionsModule());
   private static final ImmutableMap<String, ? extends SoyFunction> SOY_FUNCTIONS =
       INJECTOR.getInstance(new Key<ImmutableMap<String, ? extends SoyFunction>>() {});
 
@@ -71,14 +70,22 @@ public final class JsExprTranslatorTest extends TestCase {
     expr.replaceChild(1, userFnNode);
     new ResolveFunctionsVisitor(SOY_FUNCTIONS).exec(expr);
     String exprText = "3   *   userFn(5)";
-    assertThat(jsExprTranslator.translateToJsExpr(expr, exprText, localVarTranslations).getText())
+    assertThat(
+            jsExprTranslator
+                .translateToJsExpr(
+                    expr, exprText, localVarTranslations, ExplodingErrorReporter.get())
+                .getText())
         .isEqualTo("3 * userFn(5)");
 
     // Test supported function.
     expr.replaceChild(1, randomIntFnNode);
     new ResolveFunctionsVisitor(SOY_FUNCTIONS).exec(expr);
     exprText = "3   *   randomInt(4)";
-    assertThat(jsExprTranslator.translateToJsExpr(expr, exprText, localVarTranslations).getText())
+    assertThat(
+            jsExprTranslator
+                .translateToJsExpr(
+                    expr, exprText, localVarTranslations, ExplodingErrorReporter.get())
+                .getText())
         .isEqualTo("3 * Math.floor(Math.random() * 4)");
   }
 }

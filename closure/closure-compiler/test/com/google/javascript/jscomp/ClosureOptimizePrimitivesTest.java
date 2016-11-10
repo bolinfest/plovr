@@ -16,6 +16,8 @@
 
 package com.google.javascript.jscomp;
 
+import static com.google.javascript.jscomp.ClosureOptimizePrimitives.DUPLICATE_SET_MEMBER;
+
 /**
  * Tests for {@link ClosureOptimizePrimitives}.
  *
@@ -78,11 +80,18 @@ public final class ClosureOptimizePrimitivesTest extends CompilerTestCase {
     test("goog.object.createSet('a').toString()", "({'a':true}).toString()");
   }
 
-  
+  public void testObjectCreateSet_duplicate() {
+    testWarning("goog.object.createSet('a', 'a')", DUPLICATE_SET_MEMBER);
+    testWarning("goog.object.createSet(4, 4)", DUPLICATE_SET_MEMBER);
+    testWarning("goog.object.createSet(4, '4')", DUPLICATE_SET_MEMBER);
+  }
+
   public void testDomTagName() {
     testSame("goog.dom.TagName.A = 'A';");
+    testSame("goog.dom.TagName.prototype.toString = function() { return 'a'; };");
     test("goog.dom.createDom(goog.dom.TagName.A)", "goog.dom.createDom('A')");
     test("goog$dom$createDom(goog$dom$TagName$A)", "goog$dom$createDom('A')");
     test("goog.dom.createDom(goog.dom.TagName.A + 'REA')", "goog.dom.createDom('A' + 'REA')");
+    test("goog.dom.TagName.function__new_goog_dom_TagName__string___undefined$DIV", "'DIV'");
   }
 }

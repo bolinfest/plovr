@@ -15,6 +15,7 @@
  */
 package com.google.javascript.jscomp.lint;
 
+import static com.google.javascript.jscomp.lint.CheckJSDocStyle.CLASS_DISALLOWED_JSDOC;
 import static com.google.javascript.jscomp.lint.CheckJSDocStyle.CONSTRUCTOR_DISALLOWED_JSDOC;
 import static com.google.javascript.jscomp.lint.CheckJSDocStyle.EXTERNS_FILES_SHOULD_BE_ANNOTATED;
 import static com.google.javascript.jscomp.lint.CheckJSDocStyle.INCORRECT_PARAM_NAME;
@@ -26,7 +27,6 @@ import static com.google.javascript.jscomp.lint.CheckJSDocStyle.MIXED_PARAM_JSDO
 import static com.google.javascript.jscomp.lint.CheckJSDocStyle.MUST_BE_PRIVATE;
 import static com.google.javascript.jscomp.lint.CheckJSDocStyle.MUST_HAVE_TRAILING_UNDERSCORE;
 import static com.google.javascript.jscomp.lint.CheckJSDocStyle.OPTIONAL_PARAM_NOT_MARKED_OPTIONAL;
-import static com.google.javascript.jscomp.lint.CheckJSDocStyle.OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME;
 import static com.google.javascript.jscomp.lint.CheckJSDocStyle.WRONG_NUMBER_OF_PARAMS;
 
 import com.google.javascript.jscomp.CheckLevel;
@@ -53,7 +53,7 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
   public void setUp() throws Exception {
     super.setUp();
     codingConvention = new GoogleCodingConvention();
-    setAcceptedLanguage(LanguageMode.ECMASCRIPT6);
+    setAcceptedLanguage(LanguageMode.ECMASCRIPT_NEXT);
   }
 
   @Override
@@ -68,6 +68,7 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
     return options;
   }
 
+  @Override
   protected CodingConvention getCodingConvention() {
     return codingConvention;
   }
@@ -122,6 +123,64 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
     testSame("/** @suppress {const} */ var google = {};");
   }
 
+  public void testExtraneousClassAnnotations() {
+    testWarning(
+        LINE_JOINER.join(
+            "/**",
+            " * @constructor",
+            " */",
+            "var X = class {};"),
+        CLASS_DISALLOWED_JSDOC);
+
+    testWarning(
+        LINE_JOINER.join(
+            "/**",
+            " * @constructor",
+            " */",
+            "class X {};"),
+        CLASS_DISALLOWED_JSDOC);
+
+    // TODO(tbreisacher): Warn for @extends too. We need to distinguish between cases like this
+    // which are totally redundant...
+    testSame(
+        LINE_JOINER.join(
+            "/**",
+            " * @extends {Y}",
+            " */",
+            "class X extends Y {};"));
+
+    // ... and ones like this which are not.
+    testSame(
+        LINE_JOINER.join(
+            "/**",
+            " * @extends {Y<number>}",
+            " */",
+            "class X extends Y {};"));
+
+    testSame(
+        LINE_JOINER.join(
+            "/**",
+            " * @implements {Z}",
+            " */",
+            "class X extends Y {};"));
+
+    testSame(
+        LINE_JOINER.join(
+            "/**",
+            " * @interface",
+            " * @extends {Y}",
+            " */",
+            "class X extends Y {};"));
+
+    testSame(
+        LINE_JOINER.join(
+            "/**",
+            " * @record",
+            " * @extends {Y}",
+            " */",
+            "class X extends Y {};"));
+  }
+
   public void testNestedArrowFunctions() {
     testSame(
         LINE_JOINER.join(
@@ -151,6 +210,8 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
     testWarning("class Foo { constructor(x) {} }", MISSING_JSDOC);
     testWarning("var Foo = class { bar() {} };", MISSING_JSDOC);
     testWarning("if (COMPILED) { var f = function() {}; }", MISSING_JSDOC);
+    testWarning("var f = async function() {};", MISSING_JSDOC);
+    testWarning("async function f() {};", MISSING_JSDOC);
 
     testSame("/** @return {string} */ function f() {}");
     testSame("/** @return {string} */ var f = function() {}");
@@ -161,6 +222,8 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
     testSame("class Foo { /** @return {string} */ bar() {} }");
     testSame("class Foo { constructor(/** string */ x) {} }");
     testSame("var Foo = class { /** @return {string} */ bar() {} };");
+    testSame("/** @param {string} s */ var f = async function(s) {};");
+    testSame("/** @param {string} s */ async function f(s) {};");
   }
 
   public void testMissingJsDoc_noWarningIfInlineJsDocIsPresent() {
@@ -554,8 +617,7 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
             "/**",
             " * @param {number=} n",
             " */",
-            "function f(n) {}"),
-        OPTIONAL_TYPE_NOT_USING_OPTIONAL_NAME);
+            "function f(n) {}"));
 
     testSame(
         LINE_JOINER.join(
@@ -720,7 +782,7 @@ public final class CheckJSDocStyleTest extends CompilerTestCase {
             "/** @fileoverview Some more.\n * @externs\n */ /** @const */ var example2;",
         },
         new String[] {},
-        null);
+        null, null);
   }
 
   public void testConstructorsDontHaveVisibility() {

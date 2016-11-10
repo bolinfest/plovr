@@ -21,6 +21,7 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 import com.google.common.css.SourceCode;
+import com.google.common.css.compiler.ast.AccessibleErrorManager;
 import com.google.common.css.compiler.ast.CssCompositeValueNode;
 import com.google.common.css.compiler.ast.CssDeclarationNode;
 import com.google.common.css.compiler.ast.CssPropertyValueNode;
@@ -39,7 +40,7 @@ import junit.framework.TestCase;
  *
  */
 public class FixupFontDeclarationsTest extends TestCase {
-  private DummyErrorManager errorManager;
+  private AccessibleErrorManager errorManager;
 
   public void testIdSequenceFontFamilies() throws Exception {
     CssTree t =
@@ -274,7 +275,7 @@ public class FixupFontDeclarationsTest extends TestCase {
     CssTree result =
         new CssTree(input.getSourceCode(), input.getRoot().deepCopy());
     System.err.println(SExprPrinter.print(result));
-    errorManager = new DummyErrorManager();
+    errorManager = new AccessibleErrorManager();
     new FixupFontDeclarations(mode, errorManager, result).runPass();
     // this will be helpful for debugging tests
     System.err.println(SExprPrinter.print(result));

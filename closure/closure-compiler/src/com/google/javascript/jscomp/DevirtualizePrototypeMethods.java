@@ -22,7 +22,6 @@ import com.google.javascript.rhino.FunctionTypeI;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.TypeI;
-
 import java.util.Collection;
 
 /**
@@ -68,14 +67,14 @@ class DevirtualizePrototypeMethods
 
   @Override
   public void process(Node externs, Node root) {
-    SimpleDefinitionFinder defFinder = new SimpleDefinitionFinder(compiler);
+    DefinitionUseSiteFinder defFinder = new DefinitionUseSiteFinder(compiler);
     defFinder.process(externs, root);
     process(externs, root, defFinder);
   }
 
   @Override
   public void process(
-      Node externs, Node root, SimpleDefinitionFinder definitions) {
+      Node externs, Node root, DefinitionUseSiteFinder definitions) {
     for (DefinitionSite defSite : definitions.getDefinitionSites()) {
       rewriteDefinitionIfEligible(defSite, definitions);
     }
@@ -87,6 +86,9 @@ class DevirtualizePrototypeMethods
   private static boolean isCall(UseSite site) {
     Node node = site.node;
     Node parent = node.getParent();
+    if (parent == null) {
+      return false;
+    }
     return (parent.getFirstChild() == node) && parent.isCall();
   }
 
@@ -171,14 +173,14 @@ class DevirtualizePrototypeMethods
    * defined in the global scope exactly once.
    *
    * Definition and use site information is provided by the
-   * {@link SimpleDefinitionFinder} passed in as an argument.
+   * {@link DefinitionUseSiteFinder} passed in as an argument.
    *
    * @param defSite definition site to process.
    * @param defFinder structure that hold Node -> Definition and
    * Definition -> [UseSite] maps.
    */
   private void rewriteDefinitionIfEligible(DefinitionSite defSite,
-                                           SimpleDefinitionFinder defFinder) {
+                                           DefinitionUseSiteFinder defFinder) {
     if (defSite.inExterns ||
         !defSite.inGlobalScope ||
         !isEligibleDefinition(defFinder, defSite)) {
@@ -220,7 +222,7 @@ class DevirtualizePrototypeMethods
    *   choice at each call site.
    * - Definition must happen in a module loaded before the first use.
    */
-  private boolean isEligibleDefinition(SimpleDefinitionFinder defFinder,
+  private boolean isEligibleDefinition(DefinitionUseSiteFinder defFinder,
                                        DefinitionSite definitionSite) {
 
     Definition definition = definitionSite.definition;
@@ -275,7 +277,7 @@ class DevirtualizePrototypeMethods
       // Multiple definitions prevent rewrite.
       Collection<Definition> singleSiteDefinitions =
           defFinder.getDefinitionsReferencedAt(nameNode);
-      if (singleSiteDefinitions.size() > 1) {
+      if (!allDefinitionsEquivalent(singleSiteDefinitions)) {
         return false;
       }
       Preconditions.checkState(!singleSiteDefinitions.isEmpty());
@@ -295,6 +297,30 @@ class DevirtualizePrototypeMethods
     return true;
   }
 
+  /** Given a set of method definitions, verify they are the same. */
+  boolean allDefinitionsEquivalent(Collection<Definition> definitions) {
+    if (definitions.size() <= 1) {
+      return true;
+    }
+
+    Definition first = null;
+    for (Definition definition : definitions) {
+      if (definition.getRValue() == null) {
+        return false; // We can't tell if they're all the same.
+      }
+
+      if (first == null) {
+        first = definition;
+        continue;
+      }
+
+      if (!compiler.areNodesEqualForInlining(first.getRValue(), definition.getRValue())) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /**
    * Rewrites object method call sites as calls to global functions
    * that take "this" as their first argument.
@@ -305,7 +331,7 @@ class DevirtualizePrototypeMethods
    * After:
    *   foo(o, a, b, c)
    */
-  private void rewriteCallSites(SimpleDefinitionFinder defFinder,
+  private void rewriteCallSites(DefinitionUseSiteFinder defFinder,
                                 Definition definition,
                                 String newMethodName) {
     Collection<UseSite> useSites = defFinder.getUseSites(definition);

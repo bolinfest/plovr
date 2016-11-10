@@ -17,6 +17,7 @@
 package com.google.common.css.compiler.gssfunctions;
 
 import java.awt.Color;
+import java.lang.Math;
 
 /**
  * Utility functions to deal with colors.
@@ -25,22 +26,93 @@ import java.awt.Color;
  */
 class ColorUtil {
 
-  public static final int H = 0;
-  public static final int S = 1;
-  public static final int B = 2;
+  /** Index of Hue in HSB and HSL array. */
+  static final int H = 0;
+  /** Index of Saturation in HSB and HSL array. */
+  static final int S = 1;
+  /** Index of Brightness in HSB array. */
+  static final int B = 2;
+  /** Index of Lightness in HSL array. */
+  static final int L = 2;
 
-  public static float[] toHsb(Color color) {
+  static float[] toHsb(Color color) {
     return Color.RGBtoHSB(
         color.getRed(), color.getGreen(), color.getBlue(), null);
   }
 
-  public static String formatColor(Color color) {
+  static String formatColor(Color color) {
     return String.format("#%02X%02X%02X",
         color.getRed(), color.getGreen(), color.getBlue());
   }
 
-  public static Color hsbToColor(float[] inputHsb) {
+  static Color hsbToColor(float[] inputHsb) {
     return Color.getHSBColor(inputHsb[H], inputHsb[S], inputHsb[B]);
+  }
+
+  /**
+   * Convert a color in HSB color space to one in HSL color space.
+   *
+   * @param inputHsb HSB color in a array of three floats, 0 is Hue, 1 is
+   *     Saturation and 2 is Brightness
+   * @return HSL color in array of three floats, 0 is Hue, 1 is
+   *     Saturation and 2 is Lightness
+   */
+  static float[] hsbToHsl(float[] inputHsb) {
+    float hHsb = inputHsb[H];
+    float sHsb = inputHsb[S];
+    float bHsb = inputHsb[B];
+
+    float hHsl = hHsb;
+    float lHsl = bHsb * (2 - sHsb) / 2;
+    float sHsl = bHsb * sHsb / (1 - Math.abs(2 * lHsl - 1));
+
+    float[] hsl = {hHsl, sHsl, lHsl};
+
+    return hsl;
+  }
+
+  /**
+   * Get the HSL values of a color.
+   *
+   * @param color Color to get the HSL values
+   * @return array of floats representing the color in HSL color space
+   */
+  static float[] toHsl(Color color) {
+    return hsbToHsl(toHsb(color));
+  }
+
+  /**
+   * Convert a color in HSL color space to one in HSB color space.
+   *
+   * @param inputHsl HSL color in a array of three floats, 0 is Hue, 1 is
+   *     Saturation and 2 is Lightness
+   * @return HSB color in array of three floats, 0 is Hue, 1 is
+   *     Saturation and 2 is Brightness
+   */
+  static float[] hslToHsb(float[] inputHsl) {
+    float hHsl = inputHsl[H];
+    float sHsl = inputHsl[S];
+    float lHsl = inputHsl[L];
+
+    float hHsb = hHsl;
+    float bHsb = (2 * lHsl + sHsl * (1 - Math.abs(2 * lHsl - 1))) / 2;
+    float sHsb = 2 * (bHsb - lHsl) / bHsb;
+
+    float[] hsb = {hHsb, sHsb, bHsb};
+
+    return hsb;
+  }
+
+  /**
+   * Get the color from the HSL floats
+   *
+   * @param inputHsl HSL color
+   * @return Java color
+   */
+  static Color hslToColor(float[] inputHsl) {
+    float[] hsb = hslToHsb(inputHsl);
+
+    return Color.getHSBColor(hsb[H], hsb[S], hsb[B]);
   }
 
   /**
@@ -61,7 +133,7 @@ class ColorUtil {
    * @return whether the given colors are considered contrasting, taking the
    *     leniency margin into account
    */
-  public static boolean testContrast(Color color1, Color color2, float margin) {
+  static boolean testContrast(Color color1, Color color2, float margin) {
     float differenceFraction = 1f - margin;
     return luminanceDiff(color1, color2) > 125 * differenceFraction
         && colorDiff(color1, color2) > 500 * differenceFraction;
@@ -76,7 +148,7 @@ class ColorUtil {
    * @param color2 the second of the two checked colors
    * @return whether the given colors are considered contrasting
    */
-  public static boolean testContrast(Color color1, Color color2) {
+  static boolean testContrast(Color color1, Color color2) {
     return luminanceDiff(color1, color2) > 125
         && colorDiff(color1, color2) > 500;
   }
@@ -86,7 +158,7 @@ class ColorUtil {
    * It is the luminance value equal to the Y component of the YIQ or the YUV
    * color space models.
    */
-  public static int luminanceDiff(Color c1, Color c2) {
+  static int luminanceDiff(Color c1, Color c2) {
     return Math.abs(luminance(c1) - luminance(c2));
   }
 
@@ -95,7 +167,7 @@ class ColorUtil {
    * It is the luminance value equal to the Y component of the YIQ or the YUV
    * color space models.
    */
-  public static int luminance(Color color) {
+  static int luminance(Color color) {
     return luminance(color.getRed(), color.getGreen(), color.getBlue());
   }
 
@@ -104,7 +176,7 @@ class ColorUtil {
    * It is the luminance value equal to the Y component of the YIQ or the YUV
    * color space models.
    */
-  public static int luminance(int red, int green, int blue) {
+  static int luminance(int red, int green, int blue) {
     return (red * 299 + green * 587 + blue * 114) / 1000;
   }
 
@@ -112,7 +184,7 @@ class ColorUtil {
    * Calculates the Manhattan distance of two colors in the RGB color space
    * (a value in range 0-(255*3)).
    */
-  public static int colorDiff(Color color1, Color color2) {
+  static int colorDiff(Color color1, Color color2) {
     return colorDiff(
         color1.getRed(), color1.getGreen(), color1.getBlue(),
         color2.getRed(), color2.getGreen(), color2.getBlue());
@@ -122,7 +194,7 @@ class ColorUtil {
    * Calculates the Manhattan distance of two colors in the RGB color space
    * (a value in range 0-(255*3)).
    */
-  public static int colorDiff(int r1, int g1, int b1, int r2, int g2, int b2) {
+  static int colorDiff(int r1, int g1, int b1, int r2, int g2, int b2) {
     return Math.abs(r1 - r2) + Math.abs(g1 - g2) + Math.abs(b1 - b2);
   }
 
