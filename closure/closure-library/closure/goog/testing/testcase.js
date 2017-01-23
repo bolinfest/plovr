@@ -35,6 +35,7 @@ goog.require('goog.Promise');
 goog.require('goog.Thenable');
 goog.require('goog.array');
 goog.require('goog.asserts');
+goog.require('goog.dom');
 goog.require('goog.dom.TagName');
 goog.require('goog.object');
 goog.require('goog.testing.JsUnitException');
@@ -852,13 +853,15 @@ goog.testing.TestCase.prototype.invokeTestFunction_ = function(
     var retval = fn.call(this);
     if (goog.Thenable.isImplementedBy(retval) ||
         goog.isFunction(retval && retval['then'])) {
+      // Resolve Thenable into a proper Promise to avoid hard to debug problems.
+      var promise = goog.Promise.resolve(retval);
       var self = this;
-      retval = this.rejectIfPromiseTimesOut_(
-          retval, self.promiseTimeout,
+      promise = this.rejectIfPromiseTimesOut_(
+          promise, self.promiseTimeout,
           'Timed out while waiting for a promise returned from ' + fnName +
               ' to resolve. Set goog.testing.TestCase.getActiveTestCase()' +
               '.promiseTimeout to adjust the timeout.');
-      retval.then(
+      promise.then(
           function() {
             self.resetBatchTimeAfterPromise_();
             if (testCase.thrownAssertionExceptions_.length == 0) {
@@ -891,7 +894,7 @@ goog.testing.TestCase.prototype.invokeTestFunction_ = function(
  * Logs all of the exceptions generated from failing assertions, and returns a
  * generic exception informing the user that one or more exceptions were not
  * propagated, causing the test to erroneously pass.
- * @param {!string} testName The test function's name.
+ * @param {string} testName The test function's name.
  * @return {!goog.testing.JsUnitException}
  * @private
  */
@@ -1181,7 +1184,9 @@ goog.testing.TestCase.prototype.setTestObj = function(obj) {
       this.tests_.length == 0, 'Test methods have already been configured.');
 
   var regex = new RegExp('^' + this.getAutoDiscoveryPrefix());
-  for (var name in obj) {
+  var properties = goog.object.getAllPropertyNames(obj);
+  for (var i = 0; i < properties.length; i++) {
+    var name = properties[i];
     if (regex.test(name)) {
       var testMethod = obj[name];
       if (goog.isFunction(testMethod)) {
@@ -1291,7 +1296,7 @@ goog.testing.TestCase.prototype.cycleTests = function() {
  * @private
  */
 goog.testing.TestCase.prototype.countNumFilesLoaded_ = function() {
-  var scripts = document.getElementsByTagName(goog.dom.TagName.SCRIPT);
+  var scripts = goog.dom.getElementsByTagName(goog.dom.TagName.SCRIPT);
   var count = 0;
   for (var i = 0, n = scripts.length; i < n; i++) {
     if (scripts[i].src) {
@@ -1722,7 +1727,7 @@ goog.testing.TestCase.parseRunTests_ = function(search) {
 /**
  * Wraps provided promise and returns a new promise which will be rejected
  * if the original promise does not settle within the given timeout.
- * @param {!IThenable<T>} promise
+ * @param {!goog.Promise<T>} promise
  * @param {number} timeoutInMs Number of milliseconds to wait for the promise to
  *     settle before failing it with a timeout error.
  * @param {string} errorMsg Error message to use if the promise times out.

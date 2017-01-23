@@ -64,7 +64,7 @@ var requestStats = goog.labs.net.webChannel.requestStats;
  *
  * @param {!goog.net.WebChannel.Options=} opt_options Configuration for the
  *        WebChannel instance.
- * @param {string=} opt_clientVersion An application-specific version number
+ * @param {number=} opt_clientVersion An application-specific version number
  *        that is sent to the server when connected.
  * @param {!ConnectionState=} opt_conn Previously determined connection
  *        conditions.
@@ -75,10 +75,17 @@ var requestStats = goog.labs.net.webChannel.requestStats;
 goog.labs.net.webChannel.WebChannelBase = function(
     opt_options, opt_clientVersion, opt_conn) {
   /**
-   * The application specific version that is passed to the server.
-   * @private {?string}
+   * The client library version (capabilities).
+   * @private {number}
    */
-  this.clientVersion_ = opt_clientVersion || null;
+  this.clientVersion_ = opt_clientVersion || 0;
+
+  /**
+   * The server library version (capabilities).
+   * @private {number}
+   */
+  this.serverVersion_ = 0;
+
 
   /**
    * An array of queued maps that need to be sent to the server.
@@ -117,6 +124,19 @@ goog.labs.net.webChannel.WebChannelBase = function(
    * @private {Object}
    */
   this.extraParams_ = null;
+
+  /**
+   * Parameter name for the http session id.
+   * @private {?string}
+   */
+  this.httpSessionIdParam_ = null;
+
+  /**
+   * The http session id, to be sent with httpSessionIdParam_ with each
+   * request after the initial handshake.
+   * @private {?string}
+   */
+  this.httpSessionId_ = null;
 
   /**
    * The ChannelRequest object for the backchannel.
@@ -312,7 +332,8 @@ goog.labs.net.webChannel.WebChannelBase = function(
    * See {@link goog.net.XhrIo#setWithCredentials}.
    * @private {boolean}
    */
-  this.supportsCrossDomainXhrs_ = false;
+  this.supportsCrossDomainXhrs_ =
+      (opt_options && opt_options.supportsCrossDomainXhr) || false;
 
   /**
    * The current session id.
@@ -650,6 +671,38 @@ WebChannelBase.prototype.getExtraHeaders = function() {
  */
 WebChannelBase.prototype.setExtraHeaders = function(extraHeaders) {
   this.extraHeaders_ = extraHeaders;
+};
+
+
+/**
+ * @override
+ */
+WebChannelBase.prototype.setHttpSessionIdParam = function(httpSessionIdParam) {
+  this.httpSessionIdParam_ = httpSessionIdParam;
+};
+
+
+/**
+ * @override
+ */
+WebChannelBase.prototype.getHttpSessionIdParam = function() {
+  return this.httpSessionIdParam_;
+};
+
+
+/**
+ * @override
+ */
+WebChannelBase.prototype.setHttpSessionId = function(httpSessionId) {
+  this.httpSessionId_ = httpSessionId;
+};
+
+
+/**
+ * @override
+ */
+WebChannelBase.prototype.getHttpSessionId = function() {
+  return this.httpSessionId_;
 };
 
 
@@ -1036,9 +1089,12 @@ WebChannelBase.prototype.open_ = function() {
   var requestText = this.dequeueOutgoingMaps_();
   var uri = this.forwardChannelUri_.clone();
   uri.setParameterValue('RID', rid);
-  if (this.clientVersion_) {
-    uri.setParameterValue('CVER', this.clientVersion_);
-  }
+
+  // TODO(user): use CVER parameter after server compatibility is fixed
+
+  // if (this.clientVersion_ > 0) {
+  //   uri.setParameterValue('CVER', this.clientVersion_);
+  // }
 
   // Add the reconnect parameters.
   this.addAdditionalParams_(uri);
@@ -1597,10 +1653,19 @@ WebChannelBase.prototype.onInput_ = function(respArray) {
       if (nextArray[0] == 'c') {
         this.sid_ = nextArray[1];
         this.hostPrefix_ = this.correctHostPrefix(nextArray[2]);
+
         var negotiatedVersion = nextArray[3];
         if (goog.isDefAndNotNull(negotiatedVersion)) {
           this.channelVersion_ = negotiatedVersion;
+          this.channelDebug_.info('VER=' + this.channelVersion_);
         }
+
+        var negotiatedServerVersion = nextArray[4];
+        if (goog.isDefAndNotNull(negotiatedServerVersion)) {
+          this.serverVersion_ = negotiatedServerVersion;
+          this.channelDebug_.info('SVER=' + this.serverVersion_);
+        }
+
         this.state_ = WebChannelBase.State.OPENED;
         if (this.handler_) {
           this.handler_.channelOpened(this);
@@ -1609,16 +1674,21 @@ WebChannelBase.prototype.onInput_ = function(respArray) {
             this.hostPrefix_, /** @type {string} */ (this.path_));
         // Open connection to receive data
         this.ensureBackChannel_();
-      } else if (nextArray[0] == 'stop') {
+      } else if (nextArray[0] == 'stop' || nextArray[0] == 'close') {
+        // treat close also as an abort
         this.signalError_(WebChannelBase.Error.STOP);
       }
     } else if (this.state_ == WebChannelBase.State.OPENED) {
-      if (nextArray[0] == 'stop') {
+      if (nextArray[0] == 'stop' || nextArray[0] == 'close') {
         if (batch && !goog.array.isEmpty(batch)) {
           this.handler_.channelHandleMultipleArrays(this, batch);
           batch.length = 0;
         }
-        this.signalError_(WebChannelBase.Error.STOP);
+        if (nextArray[0] == 'stop') {
+          this.signalError_(WebChannelBase.Error.STOP);
+        } else {
+          this.disconnect();
+        }
       } else if (nextArray[0] == 'noop') {
         // ignore - noop to keep connection happy
       } else {
@@ -1815,6 +1885,12 @@ WebChannelBase.prototype.createDataUri = function(
     goog.object.forEach(this.extraParams_, function(value, key) {
       uri.setParameterValue(key, value);
     });
+  }
+
+  var param = this.getHttpSessionIdParam();
+  var value = this.getHttpSessionId();
+  if (param && value) {
+    uri.setParameterValue(param, value);
   }
 
   // Add the protocol version to the URI.

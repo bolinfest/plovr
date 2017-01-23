@@ -557,7 +557,7 @@ function testFailOnUnreportedAsserts_EnabledByDefault() {
  *     test function fails.
  * </ol>
  * @param {boolean} shouldPassWithFlagEnabled
- * @param {!function(): !goog.Promise} testFunction
+ * @param {function(): !goog.Promise} testFunction
  * @return {!goog.Promise}
  */
 function verifyTestOutcomeForFailOnUnreportedAssertsFlag(
@@ -749,4 +749,70 @@ function testFailOnUnreportedAsserts_ReportUnpropagatedAssertionExceptions() {
 
   mockRecordError.$verify();
   mockRecordError.$tearDown();
+}
+
+
+function testSetObj() {
+  var testCase = new goog.testing.TestCase();
+  assertEquals(0, testCase.getCount());
+  testCase.setTestObj({testOk: ok, somethingElse: fail});
+  assertEquals(1, testCase.getCount());
+}
+
+
+function testSetObj_es6Class() {
+  var FooTest;
+  try {
+    eval(
+        'FooTest = class { testOk() {assertTrue(true); } somethingElse() {} }');
+  } catch (ex) {
+    // IE cannot parse ES6.
+    return;
+  }
+  var testCase = new goog.testing.TestCase();
+  assertEquals(0, testCase.getCount());
+  testCase.setTestObj(new FooTest());
+  assertEquals(1, testCase.getCount());
+}
+
+
+function testCurrentTestName() {
+  var currentTestName = goog.testing.TestCase.currentTestName;
+  assertEquals('testCurrentTestName', currentTestName);
+}
+
+
+function testCurrentTestNamePromise() {
+  var getAssertSameTest = function() {
+    var expectedTestCase = goog.testing.TestCase.getActiveTestCase();
+    var expectedTestName = (expectedTestCase ? expectedTestCase.getName() :
+                                               '<no active TestCase>') +
+        '.' +
+        (goog.testing.TestCase.currentTestName || '<no active test name>');
+    var assertSameTest = function() {
+      var currentTestCase = goog.testing.TestCase.getActiveTestCase();
+      var currentTestName = (currentTestCase ? currentTestCase.getName() :
+                                               '<no active TestCase>') +
+              '.' + goog.testing.TestCase.currentTestName ||
+          '<no active test name>';
+      assertEquals(expectedTestName, currentTestName);
+      assertEquals(expectedTestCase, currentTestCase);
+    };
+    return assertSameTest;
+  };
+  var assertSameTest = getAssertSameTest();
+  // do something asynchronously...
+  return new goog.Promise(function(resolve, reject) {
+    // ... ensure the earlier half runs during the same test ...
+    assertSameTest();
+    setTimeout(function() {
+      // ... and also ensure the later half runs during the same test:
+      try {
+        assertSameTest();
+        resolve();
+      } catch (assertionFailureOrResolveException) {
+        reject(assertionFailureOrResolveException);
+      }
+    });
+  });
 }

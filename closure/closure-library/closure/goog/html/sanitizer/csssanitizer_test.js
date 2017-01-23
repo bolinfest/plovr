@@ -57,8 +57,8 @@ function getStyleFromCssText(cssText) {
 
 /**
  * Asserts that the expected CSS text is equal to the actual CSS text.
- * @param {!string} expectedCssText Expected CSS text.
- * @param {!string} actualCssText Actual CSS text.
+ * @param {string} expectedCssText Expected CSS text.
+ * @param {string} actualCssText Actual CSS text.
  */
 function assertCSSTextEquals(expectedCssText, actualCssText) {
   if (isIE8()) {
@@ -81,7 +81,7 @@ function assertCSSTextEquals(expectedCssText, actualCssText) {
 }
 
 /**
- * Get sanitized inline style.
+ * Gets sanitized inline style.
  * @param {string} sourceCss CSS to be sanitized.
  * @param {function (string, string):?string=} opt_urlRewrite URL rewriter that
  *     only returns an unwrapped goog.html.SafeUrl.
@@ -106,7 +106,7 @@ function getSanitizedInlineStyle(sourceCss, opt_urlRewrite) {
 
 
 /**
- * Function that mimics sanitization done by the Html sanitizer.
+ * Mimics sanitization done by the Html sanitizer.
  * @param {string} url Original url
  * @return {?string} Sanitized url
  * @private
@@ -273,4 +273,99 @@ function testMultipleInlineStyles() {
   var actualCSS = 'margin: 1px ; padding: 0';
   var expectedCSS = 'margin: 1px; padding: 0px;';
   assertCSSTextEquals(expectedCSS, getSanitizedInlineStyle(actualCSS));
+}
+
+
+function testSanitizeInlineStyleString() {
+  var tests = [
+    {
+      // empty string
+      inputCss: '',
+      sanitizedCss: ''
+    },
+    {
+      // one rule
+      inputCss: 'color: red',
+      sanitizedCss: 'color: red;'
+    },
+    {
+      // two rules
+      inputCss: 'color: green; padding: 10px',
+      sanitizedCss: 'color: green; padding: 10px;'
+    },
+    {
+      // malicious rule
+      inputCss: 'color: expression("pwned")',
+      sanitizedCss: ''
+    },
+    {
+      // disallowed URL
+      inputCss: 'background-image: url("http://example.com")',
+      sanitizedCss: ''
+    },
+    {
+      // disallowed URL
+      inputCss: 'background-image: url("http://example.com")',
+      sanitizedCss: '',
+      uriRewriter: function(uri) { return null; }
+    },
+    {
+      // allowed URL
+      inputCss: 'background-image: url("http://example.com")',
+      sanitizedCss: 'background-image: url("http://example.com");',
+      uriRewriter: function(uri) { return uri; }
+    }
+  ];
+
+  for (var i = 0; i < tests.length; i++) {
+    var test = tests[i];
+
+    var expectedOutput = test.sanitizedCss;
+    if (goog.userAgent.IE && document.documentMode < 10) {
+      expectedOutput = '';
+    }
+
+    var safeStyle = goog.html.sanitizer.CssSanitizer.sanitizeInlineStyleString(
+        test.inputCss, test.uriRewriter);
+    var output = goog.html.SafeStyle.unwrap(safeStyle);
+    assertCSSTextEquals(expectedOutput, output);
+  }
+}
+
+
+/**
+ * @suppress {accessControls}
+ */
+function testInertDocument() {
+  if (!document.implementation.createHTMLDocument) {
+    return;  // skip test
+  }
+
+  window.xssFiredInertDocument = false;
+  var doc = goog.html.sanitizer.CssSanitizer.createInertDocument_();
+  try {
+    doc.write('<script> window.xssFiredInertDocument = true; </script>');
+  } catch (e) {
+    // ignore
+  }
+  assertFalse(window.xssFiredInertDocument);
+}
+
+
+/**
+ * @suppress {accessControls}
+ */
+function testInertCustomElements() {
+  if (typeof HTMLTemplateElement != 'function' || !document.registerElement) {
+    return;  // skip test
+  }
+
+  var inertDoc = goog.html.sanitizer.CssSanitizer.createInertDocument_();
+  var xFooConstructor = document.registerElement('x-foo');
+  var xFooElem =
+      document.implementation.createHTMLDocument('').createElement('x-foo');
+  assertTrue(xFooElem instanceof xFooConstructor);  // sanity check
+
+  var inertXFooElem = inertDoc.createElement('x-foo');
+  assertFalse(inertXFooElem instanceof xFooConstructor);
 }

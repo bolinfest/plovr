@@ -55,8 +55,8 @@ goog.window.DEFAULT_POPUP_TARGET = 'google_popup';
  *
  * @param {goog.html.SafeUrl|string|Object} linkRef If an Object with an 'href'
  *     attribute (such as HTMLAnchorElement) is passed then the value of 'href'
- *     is used, otherwise  otherwise its toString method is called. Note that
- *     if a string|Object is used, it will be sanitized with SafeUrl.sanitize().
+ *     is used, otherwise its toString method is called. Note that if a
+ *     string|Object is used, it will be sanitized with SafeUrl.sanitize().
  *
  * @param {Object=} opt_options supports the following options:
  *  'target': (string) target (window name). If null, linkRef.target will
@@ -136,7 +136,7 @@ goog.window.open = function(linkRef, opt_options, opt_parentWin) {
     // Notice that the "A" tag does NOT have to be added to the DOM.
 
     var a = /** @type {!HTMLAnchorElement} */
-        (parentWin.document.createElement(goog.dom.TagName.A));
+        (parentWin.document.createElement(String(goog.dom.TagName.A)));
     goog.dom.safe.setAnchorHref(a, safeLinkRef);
 
     a.setAttribute('target', target);

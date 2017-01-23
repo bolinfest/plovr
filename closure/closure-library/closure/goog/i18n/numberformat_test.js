@@ -96,6 +96,12 @@ function testVeryBigNumber() {
   assertEquals('\u221e', str);
   str = fmt.format(-Infinity);
   assertEquals('-\u221e', str);
+
+  fmt = new goog.i18n.NumberFormat(goog.i18n.NumberFormat.Format.COMPACT_SHORT);
+  str = fmt.format(Infinity);
+  assertEquals('\u221eT', str);
+  str = fmt.format(-Infinity);
+  assertEquals('-\u221eT', str);
 }
 
 function testStandardFormat() {
@@ -1240,4 +1246,10 @@ function testPolish() {
 
   assertEquals('100.00\u00A0z\u0142', fmPl.format(100));  // 100.00 zł
   assertEquals('100.00\u00A0RON', fmRo.format(100));
+}
+
+function testVerySmallNumberScientific() {  // See b/30990076.
+  var f = new goog.i18n.NumberFormat(goog.i18n.NumberFormat.Format.SCIENTIFIC);
+  var result = f.format(5e-324);
+  assertEquals('5E-324', result);
 }
