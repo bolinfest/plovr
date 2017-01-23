@@ -39,7 +39,6 @@ genrule(
     'buildtools/javacc/javacc.jar',
     'java/src/com/google/template/soy/exprparse/ExpressionParser.jj',
     'java/src/com/google/template/soy/soyparse/SoyFileParser.jj',
-    'java/src/com/google/template/soy/soyparse/TemplateParser.jj',
     'java/src/com/google/template/soy/types/parse/TypeParser.jj',
   ],
   cmd = '$SRCS $OUT $TMP',
