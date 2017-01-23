@@ -16,12 +16,11 @@
 
 package com.google.template.soy.passes;
 
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.template.soy.error.ErrorReporter;
-import com.google.template.soy.error.SoyError;
+import com.google.template.soy.error.SoyErrorKind;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.CallBasicNode;
 import com.google.template.soy.soytree.CallDelegateNode;
@@ -29,9 +28,9 @@ import com.google.template.soy.soytree.CallNode;
 import com.google.template.soy.soytree.CallParamNode;
 import com.google.template.soy.soytree.SoyNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
+import com.google.template.soy.soytree.TemplateDelegateNode;
 import com.google.template.soy.soytree.TemplateNode;
 import com.google.template.soy.soytree.TemplateRegistry;
-import com.google.template.soy.soytree.TemplateRegistry.DelegateTemplateDivision;
 import com.google.template.soy.soytree.defn.TemplateParam;
 
 import java.util.List;
@@ -45,7 +44,10 @@ import java.util.Set;
  */
 final class CheckCallsVisitor extends AbstractSoyNodeVisitor<List<String>> {
 
-  private static final SoyError MISSING_PARAM = SoyError.of("Call missing required {0}.");
+  private static final SoyErrorKind MISSING_PARAM =
+      SoyErrorKind.of("Call missing required {0}.");
+  private static final SoyErrorKind DUPLICATE_PARAM =
+      SoyErrorKind.of("Duplicate param ''{0}''.");
 
   /** A template registry built from the Soy tree. */
   private final TemplateRegistry templateRegistry;
@@ -69,7 +71,7 @@ final class CheckCallsVisitor extends AbstractSoyNodeVisitor<List<String>> {
 
     // If all the data keys being passed are listed using 'param' commands, then check that all
     // required params of the callee are included.
-    if (! node.dataAttribute().isPassingData()) {
+    if (!node.dataAttribute().isPassingData()) {
 
       // Get the callee node (basic or delegate).
       TemplateNode callee = null;
@@ -77,11 +79,13 @@ final class CheckCallsVisitor extends AbstractSoyNodeVisitor<List<String>> {
         callee = templateRegistry.getBasicTemplate(((CallBasicNode) node).getCalleeName());
       } else {
         String delTemplateName = ((CallDelegateNode) node).getDelCalleeName();
-        ImmutableSet<DelegateTemplateDivision> divisions
-            = templateRegistry.getDelTemplateDivisionsForAllVariants(delTemplateName);
-        if (!divisions.isEmpty()) {
-          callee = Iterables.get(
-              Iterables.getFirst(divisions, null).delPackageNameToDelTemplateMap.values(), 0);
+        ImmutableList<TemplateDelegateNode> potentialCallees =
+            templateRegistry
+                .getDelTemplateSelector()
+                .delTemplateNameToValues()
+                .get(delTemplateName);
+        if (!potentialCallees.isEmpty()) {
+          callee = potentialCallees.get(0);
         }
       }
 
@@ -90,7 +94,12 @@ final class CheckCallsVisitor extends AbstractSoyNodeVisitor<List<String>> {
         // Get param keys passed by caller.
         Set<String> callerParamKeys = Sets.newHashSet();
         for (CallParamNode callerParam : node.getChildren()) {
-          callerParamKeys.add(callerParam.getKey());
+          boolean isUnique = callerParamKeys.add(callerParam.getKey());
+          if (!isUnique) {
+            // Found a duplicate param.
+            errorReporter.report(
+                callerParam.getSourceLocation(), DUPLICATE_PARAM, callerParam.getKey());
+          }
         }
         // Check param keys required by callee.
         List<String> missingParamKeys = Lists.newArrayListWithCapacity(2);

@@ -21,7 +21,8 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.error.ErrorReporter;
-import com.google.template.soy.error.SoyError;
+import com.google.template.soy.error.SoyErrorKind;
+import com.google.template.soy.exprparse.SoyParsingContext;
 
 import java.util.Collection;
 import java.util.Map;
@@ -35,23 +36,32 @@ import java.util.regex.Pattern;
  */
 public final class CommandTextAttributesParser {
 
-  public static final SoyError MALFORMED_ATTRIBUTES
-      = SoyError.of("Malformed attributes in ''{0}'' command text ({1}).");
-  public static final SoyError UNSUPPORTED_ATTRIBUTE
-      = SoyError.of("Unsupported attribute ''{0}'' in ''{1}'' command text ({2}).");
-  private static final SoyError DUPLICATE_ATTRIBUTE
-      = SoyError.of("Duplicate attribute ''{0}'' in ''{1}'' command text ({2}).");
-  private static final SoyError INVALID_ATTRIBUTE_VALUE = SoyError.of(
-      "Invalid value for attribute ''{0}'' in ''{1}'' command text ({2}). "
-      + "Valid values are {3}.");
-  private static final SoyError MISSING_REQUIRED_ATTRIBUTE
-      = SoyError.of("Missing required attribute ''{0}'' in ''{1}'' command text ({2}).");
+  public static final SoyErrorKind MALFORMED_ATTRIBUTES =
+      SoyErrorKind.of("Malformed attributes in ''{0}'' command text ({1}).");
+  public static final SoyErrorKind UNSUPPORTED_ATTRIBUTE =
+      SoyErrorKind.of("Unsupported attribute ''{0}'' in ''{1}'' command text ({2}).");
+  private static final SoyErrorKind DUPLICATE_ATTRIBUTE =
+      SoyErrorKind.of("Duplicate attribute ''{0}'' in ''{1}'' command text ({2}).");
+  private static final SoyErrorKind INVALID_ATTRIBUTE_VALUE =
+      SoyErrorKind.of(
+          "Invalid value for attribute ''{0}'' in ''{1}'' command text ({2}). "
+              + "Valid values are {3}.");
+  private static final SoyErrorKind MISSING_REQUIRED_ATTRIBUTE =
+      SoyErrorKind.of("Missing required attribute ''{0}'' in ''{1}'' command text ({2}).");
 
   /** Regex pattern for an attribute in command text.
    *  Note group(1) is attribute name, group(2) is attribute value.
    *  E.g. data="$boo" parses into group(1)="data" and group(2)="$boo". */
   private static final Pattern ATTRIBUTE_TEXT =
-      Pattern.compile("([a-zA-Z][a-zA-Z0-9-]*) = \" ([^\"]*) \" \\s*", Pattern.COMMENTS);
+      Pattern.compile("([a-zA-Z][a-zA-Z0-9-]*) \\s* = \\s* \" ( (?:[^\"\\\\]+ | \\\\.)*+ ) \" \\s*",
+          Pattern.COMMENTS | Pattern.DOTALL);
+
+  /**
+   * Regexp pattern to unescape attribute values. group(1) holds the escaped character.
+   * The backslash used for escaping is removed only if it is followed by a backslash or a quote.
+   * This is to support templates created before introduction of escaping. a\b\c becomes a\b\c.
+   */
+  private static final Pattern ATTRIBUTE_VALUE_ESCAPE = Pattern.compile("\\\\([\"\\\\])");
 
   /** The name of the Soy command handled by this parser. Only used in error messages. */
   private final String commandName;
@@ -93,6 +103,21 @@ public final class CommandTextAttributesParser {
    * assumed to be for the Soy command that this parser handles.
    *
    * @param commandText The command text to parse.
+   * @param context For reporting syntax errors.
+   * @param sourceLocation A source location near the command text,
+   *     for producing useful error reports.
+   * @return A map from attribute names to values.
+   */
+  Map<String, String> parse(
+      String commandText, SoyParsingContext context, SourceLocation sourceLocation) {
+    return parse(commandText, context.errorReporter(), sourceLocation);
+  }
+
+  /**
+   * Parses a command text string into a map of attributes names to values. The command text is
+   * assumed to be for the Soy command that this parser handles.
+   *
+   * @param commandText The command text to parse.
    * @param errorReporter For reporting syntax errors.
    * @param sourceLocation A source location near the command text,
    *     for producing useful error reports.
@@ -107,7 +132,6 @@ public final class CommandTextAttributesParser {
     int i = 0;  // index in commandText that we've processed up to
     Matcher matcher = ATTRIBUTE_TEXT.matcher(commandText);
     while (matcher.find(i)) {
-
       if (matcher.start() != i) {
         errorReporter.report(sourceLocation, MALFORMED_ATTRIBUTES, commandName, commandText);
       }
@@ -115,6 +139,7 @@ public final class CommandTextAttributesParser {
 
       String name = matcher.group(1);
       String value = matcher.group(2);
+      value = ATTRIBUTE_VALUE_ESCAPE.matcher(value).replaceAll("$1");
 
       if (!supportedAttributeNames.contains(name)) {
         errorReporter.report(

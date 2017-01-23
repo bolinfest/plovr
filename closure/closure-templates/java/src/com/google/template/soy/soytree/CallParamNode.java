@@ -17,16 +17,13 @@
 package com.google.template.soy.soytree;
 
 import com.google.common.base.Preconditions;
-import com.google.template.soy.ErrorReporterImpl;
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.basetree.CopyState;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.data.internalutils.NodeContentKinds;
-import com.google.template.soy.error.ErrorReporter;
-import com.google.template.soy.error.ErrorReporter.Checkpoint;
-import com.google.template.soy.error.SoyError;
+import com.google.template.soy.error.SoyErrorKind;
 import com.google.template.soy.exprparse.ExpressionParser;
-import com.google.template.soy.exprtree.ExprNode;
+import com.google.template.soy.exprparse.SoyParsingContext;
 import com.google.template.soy.soytree.CommandTextAttributesParser.Attribute;
 
 import java.util.Map;
@@ -43,8 +40,8 @@ import javax.annotation.Nullable;
  */
 public abstract class CallParamNode extends AbstractCommandNode {
 
-  private static final SoyError INVALID_COMMAND_TEXT
-      = SoyError.of("Invalid param command text \"{0}\"");
+  private static final SoyErrorKind INVALID_COMMAND_TEXT =
+      SoyErrorKind.of("Invalid param command text \"{0}\"");
 
   /**
    * Return value for {@code parseCommandTextHelper()}.
@@ -130,7 +127,7 @@ public abstract class CallParamNode extends AbstractCommandNode {
      * Helper used by subclass builders to parse the command text.
      * @return An info object containing the parse results.
      */
-    protected CommandTextParseResult parseCommandTextHelper(ErrorReporter errorReporter) {
+    protected CommandTextParseResult parseCommandTextHelper(SoyParsingContext context) {
       String commandText = this.commandText;
 
       // Parse the command text into key and optional valueExprText or extra attributes
@@ -138,7 +135,7 @@ public abstract class CallParamNode extends AbstractCommandNode {
       // the actual content.
       Matcher nctMatcher = NONATTRIBUTE_COMMAND_TEXT.matcher(commandText);
       if (!nctMatcher.matches()) {
-        errorReporter.report(sourceLocation, INVALID_COMMAND_TEXT, commandText);
+        context.report(sourceLocation, INVALID_COMMAND_TEXT, commandText);
         return new CommandTextParseResult(
             "bad_key", null /* valueExprUnion */, null /* contentKind */);
       }
@@ -147,13 +144,13 @@ public abstract class CallParamNode extends AbstractCommandNode {
 
       // Check the validity of the key name, this will report appropriate errors to the
       // reporter if it fails.
-      new ExpressionParser("$" + key, sourceLocation, errorReporter).parseVariable();
+      new ExpressionParser("$" + key, sourceLocation, context).parseVariable();
 
       ContentKind contentKind;
       if (nctMatcher.group(3) != null) {
         Preconditions.checkState(nctMatcher.group(2) == null);
         Map<String, String> attributes
-            = ATTRIBUTES_PARSER.parse(nctMatcher.group(3), errorReporter, sourceLocation);
+            = ATTRIBUTES_PARSER.parse(nctMatcher.group(3), context, sourceLocation);
         contentKind = NodeContentKinds.forAttributeValue(attributes.get("kind"));
       } else {
         contentKind = null;
@@ -163,22 +160,8 @@ public abstract class CallParamNode extends AbstractCommandNode {
       if (valueExprText == null) {
         return new CommandTextParseResult(key, null /* valueExprUnion */, contentKind);
       }
-      // If valueExprText exists, try to parse it.
-      // TODO(user): Remove throwaway ErrorReporter.
-      // Explanation: In certain cases, Soy considers param nodes with clearly malformed command
-      // texts not to be an error. (See TemplateParserTest#testRecognizeCommands, around line 359.)
-      // To preserve that behavior, we create a throwaway error reporter here in order not to
-      // report it back to the main error reporter.
-      //
-      // Use the real error manager once any currently broken templates are migrated.
-      ErrorReporter throwaway = new ErrorReporterImpl();
-      Checkpoint checkpoint = throwaway.checkpoint();
-      ExprNode valueExpr
-          = new ExpressionParser(valueExprText, sourceLocation, throwaway).parseExpression();
-      ExprUnion valueExprUnion = throwaway.errorsSince(checkpoint)
-          ? new ExprUnion(valueExprText)
-          : new ExprUnion(valueExpr);
-      return new CommandTextParseResult(key, valueExprUnion, contentKind);
+      return new CommandTextParseResult(
+          key, ExprUnion.parseWithV1Fallback(valueExprText, sourceLocation, context), contentKind);
     }
   }
 }

@@ -20,6 +20,7 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableMap;
+import com.google.template.soy.SoyFileSetParser.ParseResult;
 import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.ExplodingErrorReporter;
@@ -38,7 +39,7 @@ import java.util.List;
  */
 public final class ContentSecurityPolicyPassTest extends TestCase {
 
-  private static final String NONCE = "{if $ij?.csp_nonce} nonce=\"{$ij?.csp_nonce}\"{/if}";
+  private static final String NONCE = "{if $ij.csp_nonce} nonce=\"{$ij.csp_nonce}\"{/if}";
 
   public void testTrivialTemplate() {
     assertInjected(
@@ -126,7 +127,7 @@ public final class ContentSecurityPolicyPassTest extends TestCase {
             "{template .foo}\n",
             "  {@param appScriptUrl: ?}\n",
             "<script src=",
-            "'{$appScriptUrl |filterTrustedResourceUri |filterNormalizeUri |escapeHtmlAttribute}'",
+            "'{$appScriptUrl |filterTrustedResourceUri |escapeHtmlAttribute}'",
             NONCE + ">",
             "alert('Hello, World!')</script>\n",
             "{/template}"),
@@ -170,13 +171,13 @@ public final class ContentSecurityPolicyPassTest extends TestCase {
             "{template .foo}\n",
             "  {@param height: int}\n",
             "<a href='#' style='",
-            "{if $ij?.csp_nonce}",
-              "/*{$ij?.csp_nonce}*/",
+            "{if $ij.csp_nonce}",
+              "/*{$ij.csp_nonce}*/",
             "{/if}",
             "height:{$height |filterCssValue |escapeHtmlAttribute}px;'",
             " onclick='",
-            "{if $ij?.csp_nonce}",
-              "/*{$ij?.csp_nonce}*/",
+            "{if $ij.csp_nonce}",
+              "/*{$ij.csp_nonce}*/",
             "{/if}",
             "foo() &amp;& bar(\"baz\")'",
             ">",
@@ -189,19 +190,19 @@ public final class ContentSecurityPolicyPassTest extends TestCase {
             " style=color:red>",
 
             "<input checked ONCHANGE = \"",
-            "{if $ij?.csp_nonce}",
-              "/*{$ij?.csp_nonce}*/",
+            "{if $ij.csp_nonce}",
+              "/*{$ij.csp_nonce}*/",
             "{/if}",
             "Panic()\"",
             ">",
 
             "<script onerror= '",
-            "{if $ij?.csp_nonce}",
-              "/*{$ij?.csp_nonce}*/",
+            "{if $ij.csp_nonce}",
+              "/*{$ij.csp_nonce}*/",
             "{/if}",
             "scriptError()'",
-            "{if $ij?.csp_nonce}",
-              " nonce=\"{$ij?.csp_nonce}\"",
+            "{if $ij.csp_nonce}",
+              " nonce=\"{$ij.csp_nonce}\"",
             "{/if}",
             ">baz()</script>\n",
 
@@ -224,22 +225,20 @@ public final class ContentSecurityPolicyPassTest extends TestCase {
   private SoyFileSetNode parseAndApplyCspPass(String input) {
     String namespace = "{namespace ns autoescape=\"deprecated-contextual\"}\n\n";
     ErrorReporter boom = ExplodingErrorReporter.get();
-    SoyFileSetNode soyTree =
-        SoyFileSetParserBuilder.forFileContents(namespace + input)
-            .errorReporter(boom)
-            .parse()
-            .fileSet();
+    ParseResult parseResult =
+        SoyFileSetParserBuilder.forFileContents(namespace + input).errorReporter(boom).parse();
 
-    ContextualAutoescaper contextualAutoescaper
-        = new ContextualAutoescaper(ImmutableMap.<String, SoyPrintDirective>of(), boom);
-    List<TemplateNode> extras = contextualAutoescaper.rewrite(soyTree);
+    ContextualAutoescaper contextualAutoescaper =
+        new ContextualAutoescaper(ImmutableMap.<String, SoyPrintDirective>of());
+    List<TemplateNode> extras =
+        contextualAutoescaper.rewrite(parseResult.fileSet(), parseResult.registry(), boom);
 
-    SoyFileNode file = soyTree.getChild(soyTree.numChildren() - 1);
+    SoyFileNode file = parseResult.fileSet().getChild(parseResult.fileSet().numChildren() - 1);
     file.addChildren(file.numChildren(), extras);
 
     ContentSecurityPolicyPass.blessAuthorSpecifiedScripts(
         contextualAutoescaper.getSlicedRawTextNodes());
-    return soyTree;
+    return parseResult.fileSet();
   }
 
   /**

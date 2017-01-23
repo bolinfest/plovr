@@ -24,9 +24,10 @@ import com.google.common.collect.ImmutableList;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.template.soy.SoyFileSetParserBuilder;
+import com.google.template.soy.SoyModule;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.jssrc.restricted.JsExpr;
 import com.google.template.soy.shared.SharedTestUtils;
-import com.google.template.soy.shared.internal.ErrorReporterModule;
 import com.google.template.soy.soytree.CallNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
 
@@ -41,10 +42,7 @@ import java.util.Map;
  *
  */
 public class GenCallCodeUtilsTest extends TestCase {
-
-
-  private static final Injector INJECTOR =
-      Guice.createInjector(new ErrorReporterModule(), new JsSrcModule());
+  private static final Injector INJECTOR = Guice.createInjector(new SoyModule());
 
   private static final Deque<Map<String, JsExpr>> LOCAL_VAR_TRANSLATIONS =
       new ArrayDeque<Map<String, JsExpr>>();
@@ -52,15 +50,15 @@ public class GenCallCodeUtilsTest extends TestCase {
 
   public void testGenCallExprForBasicCalls() {
     assertThat(getCallExprTextHelper("{call some.func data=\"all\" /}"))
-        .isEqualTo("some.func(opt_data)");
+        .isEqualTo("some.func(opt_data, null, opt_ijData)");
 
     assertThat(getCallExprTextHelper("{@param boo : ?}", "{call some.func data=\"$boo.foo\" /}"))
-        .isEqualTo("some.func(opt_data.boo.foo)");
+        .isEqualTo("some.func(opt_data.boo.foo, null, opt_ijData)");
 
     assertThat(
             getCallExprTextHelper(
                 "{@param moo : ?}", "{call some.func}", "  {param goo: $moo /}", "{/call}"))
-        .isEqualTo("some.func({goo: opt_data.moo})");
+        .isEqualTo("some.func({goo: opt_data.moo}, null, opt_ijData)");
 
     assertThat(
             getCallExprTextHelper(
@@ -68,7 +66,8 @@ public class GenCallCodeUtilsTest extends TestCase {
                 "{call some.func data=\"$boo\"}",
                 "  {param goo}Blah{/param}",
                 "{/call}"))
-        .isEqualTo("some.func(soy.$$augmentMap(opt_data.boo, {goo: 'Blah'}))");
+        .isEqualTo(
+            "some.func(soy.$$assignDefaults({goo: 'Blah'}, opt_data.boo), null, opt_ijData)");
 
     String callExprText =
         getCallExprTextHelper(
@@ -77,7 +76,7 @@ public class GenCallCodeUtilsTest extends TestCase {
             "    {for $i in range(3)}{$i}{/for}\n" +
             "  {/param}\n" +
             "{/call}\n");
-    assertThat(callExprText).matches("some[.]func[(][{]goo: param[0-9]+[}][)]");
+    assertThat(callExprText).matches("some[.]func[(][{]goo: param[0-9]+[}], null, opt_ijData[)]");
   }
 
 
@@ -89,8 +88,9 @@ public class GenCallCodeUtilsTest extends TestCase {
                 "  {param goo kind=\"html\"}Blah{/param}",
                 "{/call}"))
         .isEqualTo(
-            "some.func(soy.$$augmentMap(opt_data.boo, "
-                + "{goo: soydata.VERY_UNSAFE.$$ordainSanitizedHtmlForInternalBlocks('Blah')}))");
+            "some.func(soy.$$assignDefaults("
+                + "{goo: soydata.VERY_UNSAFE.$$ordainSanitizedHtmlForInternalBlocks('Blah')}, "
+                + "opt_data.boo), null, opt_ijData)");
 
     final String callExprText =
         getCallExprTextHelper(
@@ -103,19 +103,19 @@ public class GenCallCodeUtilsTest extends TestCase {
     assertWithMessage("Actual result: " + callExprText)
         .that(callExprText.matches(
             "some[.]func[(][{]goo: soydata.VERY_UNSAFE.[$][$]ordainSanitizedHtmlForInternalBlocks"
-            + "[(]param[0-9]+[)][}][)]"))
+            + "[(]param[0-9]+[)][}], null, opt_ijData[)]"))
         .isTrue();
   }
 
 
   public void testGenCallExprForDelegateCalls() {
     assertThat(getCallExprTextHelper("{delcall myDelegate data=\"all\" /}"))
-        .isEqualTo("soy.$$getDelegateFn(soy.$$getDelTemplateId('myDelegate'), '', false)(opt_data)");
+        .isEqualTo("soy.$$getDelegateFn(soy.$$getDelTemplateId('myDelegate'), '', false)(opt_data, null, opt_ijData)");
 
     assertThat(
         getCallExprTextHelper("{delcall myDelegate data=\"all\" allowemptydefault=\"true\" /}"))
         .isEqualTo(
-            "soy.$$getDelegateFn(soy.$$getDelTemplateId('myDelegate'), '', true)(opt_data)");
+            "soy.$$getDelegateFn(soy.$$getDelTemplateId('myDelegate'), '', true)(opt_data, null, opt_ijData)");
 
     assertThat(
             getCallExprTextHelper(
@@ -125,14 +125,16 @@ public class GenCallCodeUtilsTest extends TestCase {
                 "{/delcall}"))
         .isEqualTo(
             "soy.$$getDelegateFn("
-                + "soy.$$getDelTemplateId('my.other.delegate'), '', false)({goo: opt_data.moo})");
+                + "soy.$$getDelTemplateId('my.other.delegate'), '', false)({goo: opt_data.moo}, "
+                + "null, opt_ijData)");
   }
 
 
   public void testGenCallExprForDelegateVariantCalls() {
     assertThat(getCallExprTextHelper("{delcall myDelegate variant=\"'voo'\" data=\"all\" /}"))
         .isEqualTo(
-            "soy.$$getDelegateFn(soy.$$getDelTemplateId('myDelegate'), 'voo', false)(opt_data)");
+            "soy.$$getDelegateFn(soy.$$getDelTemplateId('myDelegate'), 'voo', false)"
+                + "(opt_data, null, opt_ijData)");
 
     assertThat(
             getCallExprTextHelper(
@@ -140,7 +142,7 @@ public class GenCallCodeUtilsTest extends TestCase {
                 "{delcall myDelegate variant=\"$voo\" data=\"all\" allowemptydefault=\"true\" /}"))
         .isEqualTo(
             "soy.$$getDelegateFn(soy.$$getDelTemplateId('myDelegate'), opt_data.voo, true)"
-                + "(opt_data)");
+                + "(opt_data, null, opt_ijData)");
 
     assertThat(
             getCallExprTextHelper(
@@ -151,7 +153,7 @@ public class GenCallCodeUtilsTest extends TestCase {
         .isEqualTo(
             "soy.$$getDelegateFn("
                 + "soy.$$getDelTemplateId('my.other.delegate'), 'voo' + opt_ijData.voo, false)"
-                + "({goo: opt_data.moo})");
+                + "({goo: opt_data.moo}, null, opt_ijData)");
   }
 
 
@@ -163,7 +165,8 @@ public class GenCallCodeUtilsTest extends TestCase {
                 "{/delcall}"))
         .isEqualTo(
             "soy.$$getDelegateFn(soy.$$getDelTemplateId('my.other.delegate'), '', false)("
-                + "{goo: soydata.VERY_UNSAFE.$$ordainSanitizedHtmlForInternalBlocks('Blah')})");
+                + "{goo: soydata.VERY_UNSAFE.$$ordainSanitizedHtmlForInternalBlocks('Blah')}, "
+                + "null, opt_ijData)");
 
     {
       final String callExprText =
@@ -179,7 +182,7 @@ public class GenCallCodeUtilsTest extends TestCase {
                   "soy.\\$\\$getDelegateFn\\("
                       + "soy.\\$\\$getDelTemplateId\\('my.other.delegate'\\), '', false\\)"
                       + "[(][{]goo: soydata.VERY_UNSAFE.[$][$]ordainSanitizedHtmlForInternalBlocks"
-                      + "[(]param[0-9]+[)][}][)]"))
+                      + "[(]param[0-9]+[)][}], null, opt_ijData[)]"))
           .isTrue();
     }
   }
@@ -187,7 +190,7 @@ public class GenCallCodeUtilsTest extends TestCase {
 
   public void testGenCallExprForStrictCall() {
     assertThat(getCallExprTextHelper("{call some.func /}\n", ImmutableList.of("|escapeHtml")))
-        .isEqualTo("soy.$$escapeHtml(some.func(null))");
+        .isEqualTo("soy.$$escapeHtml(some.func(null, null, opt_ijData))");
   }
 
 
@@ -208,7 +211,11 @@ public class GenCallCodeUtilsTest extends TestCase {
     JsSrcTestUtils.simulateNewApiCall(INJECTOR);
     GenCallCodeUtils genCallCodeUtils = INJECTOR.getInstance(GenCallCodeUtils.class);
     JsExpr callExpr =
-        genCallCodeUtils.genCallExpr(callNode, LOCAL_VAR_TRANSLATIONS, AliasUtils.IDENTITY_ALIASES);
+        genCallCodeUtils.genCallExpr(
+            callNode,
+            LOCAL_VAR_TRANSLATIONS,
+            AliasUtils.IDENTITY_ALIASES,
+            ExplodingErrorReporter.get());
     return callExpr.getText();
   }
 

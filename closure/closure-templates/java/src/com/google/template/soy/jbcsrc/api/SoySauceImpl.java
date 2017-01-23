@@ -21,10 +21,10 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.template.soy.jbcsrc.shared.Names.rewriteStackTrace;
 
 import com.google.common.base.Optional;
+import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
 import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.template.soy.data.SanitizedContent;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
@@ -34,25 +34,21 @@ import com.google.template.soy.data.internalutils.NodeContentKinds;
 import com.google.template.soy.internal.i18n.BidiGlobalDir;
 import com.google.template.soy.jbcsrc.shared.CompiledTemplate;
 import com.google.template.soy.jbcsrc.shared.CompiledTemplates;
-import com.google.template.soy.jbcsrc.shared.DelTemplateSelectorImpl;
 import com.google.template.soy.jbcsrc.shared.RenderContext;
 import com.google.template.soy.msgs.SoyMsgBundle;
-import com.google.template.soy.msgs.restricted.MsgPartUtils;
-import com.google.template.soy.msgs.restricted.SoyMsg;
-import com.google.template.soy.msgs.restricted.SoyMsgBundleImpl;
 import com.google.template.soy.shared.SoyCssRenamingMap;
 import com.google.template.soy.shared.SoyIdRenamingMap;
 import com.google.template.soy.shared.internal.ApiCallScopeUtils;
 import com.google.template.soy.shared.internal.GuiceSimpleScope;
 import com.google.template.soy.shared.internal.GuiceSimpleScope.WithScope;
 import com.google.template.soy.shared.restricted.ApiCallScopeBindingAnnotations.ApiCall;
+import com.google.template.soy.shared.restricted.SoyFunction;
 import com.google.template.soy.shared.restricted.SoyJavaFunction;
 import com.google.template.soy.shared.restricted.SoyJavaPrintDirective;
-import com.google.template.soy.soytree.TemplateRegistry;
+import com.google.template.soy.shared.restricted.SoyPrintDirective;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.Set;
 
 import javax.inject.Inject;
 import javax.inject.Provider;
@@ -75,78 +71,60 @@ public final class SoySauceImpl implements SoySauce {
 
     public SoySauceImpl create(
         CompiledTemplates templates,
-        TemplateRegistry registry,
-        SoyMsgBundle defaultMsgBundle,
-        ImmutableMap<String, ? extends SoyJavaFunction> functions,
-        ImmutableMap<String, ? extends SoyJavaPrintDirective> printDirectives,
-        ImmutableMap<String, ImmutableSortedSet<String>> templateToTransitiveUsedIjParams) {
+        ImmutableMap<String, ? extends SoyFunction> soyFunctionMap,
+        ImmutableMap<String, ? extends SoyPrintDirective> printDirectives) {
+      // SoySauce has no need for SoyFunctions that are not SoyJavaFunctions
+      // (it generates Java source code implementing BuiltinFunctions).
+      // Filter them out.
+      ImmutableMap.Builder<String, SoyJavaFunction> soyJavaFunctions = ImmutableMap.builder();
+      for (Map.Entry<String, ? extends SoyFunction> entry : soyFunctionMap.entrySet()) {
+        SoyFunction function = entry.getValue();
+        if (function instanceof SoyJavaFunction) {
+          soyJavaFunctions.put(entry.getKey(), (SoyJavaFunction) function);
+        }
+      }
+
+      // SoySauce has no need for SoyPrintDirectives that are not SoyJavaPrintDirectives.
+      // Filter them out.
+      ImmutableMap.Builder<String, SoyJavaPrintDirective> soyJavaPrintDirectives =
+          ImmutableMap.builder();
+      for (Map.Entry<String, ? extends SoyPrintDirective> entry : printDirectives.entrySet()) {
+        SoyPrintDirective printDirective = entry.getValue();
+        if (printDirective instanceof SoyJavaPrintDirective) {
+          soyJavaPrintDirectives.put(entry.getKey(), (SoyJavaPrintDirective) printDirective);
+        }
+      }
       return new SoySauceImpl(
           templates,
-          registry,
-          defaultMsgBundle,
-          templateToTransitiveUsedIjParams,
           apiCallScopeProvider,
           converterProvider.get(),
-          functions,
-          printDirectives);
+          soyJavaFunctions.build(),
+          soyJavaPrintDirectives.build());
     }
   }
   
   private final CompiledTemplates templates;
-  private final SoyMsgBundle defaultMsgBundle;
   private final GuiceSimpleScope apiCallScope;
-  private final DelTemplateSelectorImpl.Factory factory;
   private final SoyValueHelper converter;
   private final ImmutableMap<String, SoyJavaFunction> functions;
   private final ImmutableMap<String, SoyJavaPrintDirective> printDirectives;
-  private final ImmutableMap<String, ImmutableSortedSet<String>> templateToTransitiveUsedIjParams;
 
   private SoySauceImpl(
       CompiledTemplates templates,
-      TemplateRegistry registry,
-      SoyMsgBundle defaultMsgBundle,
-      ImmutableMap<String, ImmutableSortedSet<String>> templateToTransitiveUsedIjParams,
       GuiceSimpleScope apiCallScope,
       SoyValueHelper converter,
       ImmutableMap<String, ? extends SoyJavaFunction> functions,
       ImmutableMap<String, ? extends SoyJavaPrintDirective> printDirectives) {
     this.templates = checkNotNull(templates);
-    this.defaultMsgBundle = replaceLocale(defaultMsgBundle);
-    this.templateToTransitiveUsedIjParams = templateToTransitiveUsedIjParams;
     this.apiCallScope = checkNotNull(apiCallScope);
     this.converter = checkNotNull(converter);
     this.functions = ImmutableMap.copyOf(functions);
     this.printDirectives = ImmutableMap.copyOf(printDirectives);
-    
-    this.factory = new DelTemplateSelectorImpl.Factory(registry, templates);
-  }
-
-  // Currently the defaultBundle is coming straight from extractMsgs which means the SoyMsgs are
-  // not associated with a locale, however a locale is needed for plurals support.  To compensate
-  // we just apply 'en' here.
-  // TODO(lukes): technically we don't know that the template author is writing in english (or even
-  // an LTR language).  Normally, this is provided as a flag to the msg extractor.  consider adding
-  // an explicit flag to the runtime, or allowing the user to pass an explicit default bundle (with
-  // an associated locale).  Note, Tofu avoids this problem by having 2 implementations of msg 
-  // rendering. 1 that uses the bundle and one that walks the AST directly.  To compensate for a
-  // lack of locale the AST implementation doesn't use complex plural rules.  Consider just changing
-  // the msg renderer for jbcsrc to deal with missing locale information 'gracefully'.
-  private SoyMsgBundle replaceLocale(SoyMsgBundle input) {
-    ImmutableList.Builder<SoyMsg> builder = ImmutableList.builder();
-    for (SoyMsg msg : input) {
-      builder.add(new SoyMsg(msg.getId(), "en", 
-          MsgPartUtils.hasPlrselPart(msg.getParts()), msg.getParts()));
-    }
-    return new SoyMsgBundleImpl("en", builder.build());
   }
 
   @Override
   public ImmutableSortedSet<String> getTransitiveIjParamsForTemplate(String templateName) {
-    ImmutableSortedSet<String> ijParams = templateToTransitiveUsedIjParams.get(templateName);
-    if (ijParams == null) {
-      throw new IllegalArgumentException("Template '" + templateName + "' not found.");
-    }
-    return ijParams;
+    return templates.getTransitiveIjParamsForTemplate(templateName);
   }
 
   @Override public RendererImpl renderTemplate(String template) {
@@ -158,14 +136,16 @@ public final class SoySauceImpl implements SoySauce {
     private final String templateName;
     private final CompiledTemplate.Factory templateFactory;
     private final Optional<ContentKind> contentKind;
-    private ImmutableSet<String> activeDelegatePackages = ImmutableSet.of();
+    private Predicate<String> activeDelegatePackages = Predicates.alwaysFalse();
     private SoyMsgBundle msgs = SoyMsgBundle.EMPTY;
-    private final RenderContext.Builder contextBuilder = new RenderContext.Builder()
-        .withSoyFunctions(functions)
-        .withSoyPrintDirectives(printDirectives)
-        .withConverter(converter);
+    private final RenderContext.Builder contextBuilder =
+        new RenderContext.Builder()
+            .withCompiledTemplates(templates)
+            .withSoyFunctions(functions)
+            .withSoyPrintDirectives(printDirectives)
+            .withConverter(converter);
+
     private SoyRecord data = SoyValueHelper.EMPTY_DICT;
-    // Unlike Tofu we default to empty, not null.
     private SoyRecord ij = SoyValueHelper.EMPTY_DICT;
     private ContentKind expectedContentKind = ContentKind.HTML;
     private boolean contentKindExplicitlySet;
@@ -188,9 +168,9 @@ public final class SoySauceImpl implements SoySauce {
       return this;
     }
 
-    @Override public RendererImpl setActiveDelegatePackageNames(
-        Set<String> activeDelegatePackages) {
-      this.activeDelegatePackages = ImmutableSet.copyOf(activeDelegatePackages);
+    @Override
+    public RendererImpl setActiveDelegatePackageSelector(Predicate<String> active) {
+      this.activeDelegatePackages = checkNotNull(active);
       return this;
     }
 
@@ -236,9 +216,6 @@ public final class SoySauceImpl implements SoySauce {
     }
 
     @Override public Continuation<SanitizedContent> renderStrict() {
-      if (!contentKind.isPresent()) {
-        throw new IllegalStateException("Cannot render non strict templates to SanitizedContent");
-      }
       enforceContentKind();
       AdvisingStringBuilder buf = new AdvisingStringBuilder();
       try {
@@ -249,10 +226,11 @@ public final class SoySauceImpl implements SoySauce {
     }
 
     private <T> WriteContinuation startRender(AdvisingAppendable out) throws IOException {
-      RenderContext context = contextBuilder
-          .withMessageBundles(msgs, defaultMsgBundle)
-          .withTemplateSelector(factory.create(activeDelegatePackages))
-          .build();
+      RenderContext context =
+          contextBuilder
+              .withMessageBundle(msgs)
+              .withActiveDelPackageSelector(activeDelegatePackages)
+              .build();
       BidiGlobalDir dir = BidiGlobalDir.forStaticLocale(msgs.getLocaleString());
       Scoper scoper = new Scoper(apiCallScope, dir, msgs.getLocaleString());
       CompiledTemplate template = templateFactory.create(data, ij);

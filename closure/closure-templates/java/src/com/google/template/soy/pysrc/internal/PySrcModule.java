@@ -18,24 +18,17 @@ package com.google.template.soy.pysrc.internal;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.AbstractModule;
+import com.google.inject.Key;
 import com.google.inject.Provides;
 import com.google.inject.assistedinject.FactoryModuleBuilder;
-import com.google.template.soy.passes.SharedPassesModule;
 import com.google.template.soy.pysrc.SoyPySrcOptions;
 import com.google.template.soy.pysrc.internal.GenPyExprsVisitor.GenPyExprsVisitorFactory;
 import com.google.template.soy.pysrc.internal.MsgFuncGenerator.MsgFuncGeneratorFactory;
-import com.google.template.soy.pysrc.internal.PyApiCallScopeBindingAnnotations.PyBidiIsRtlFn;
-import com.google.template.soy.pysrc.internal.PyApiCallScopeBindingAnnotations.PyEnvironmentModulePath;
-import com.google.template.soy.pysrc.internal.PyApiCallScopeBindingAnnotations.PyRuntimePath;
-import com.google.template.soy.pysrc.internal.PyApiCallScopeBindingAnnotations.PyTranslationClass;
-import com.google.template.soy.pysrc.internal.TranslateToPyExprVisitor.TranslateToPyExprVisitorFactory;
-import com.google.template.soy.pysrc.restricted.SoyPySrcFunction;
+import com.google.template.soy.pysrc.internal.PyApiCallScopeBindingAnnotations.PyCurrentManifest;
 import com.google.template.soy.pysrc.restricted.SoyPySrcPrintDirective;
 import com.google.template.soy.shared.internal.ApiCallScope;
 import com.google.template.soy.shared.internal.FunctionAdapters;
 import com.google.template.soy.shared.internal.GuiceSimpleScope;
-import com.google.template.soy.shared.internal.SharedModule;
-import com.google.template.soy.shared.restricted.SoyFunction;
 import com.google.template.soy.shared.restricted.SoyPrintDirective;
 
 import java.util.Set;
@@ -52,10 +45,6 @@ import javax.inject.Singleton;
 public final class PySrcModule extends AbstractModule {
 
   @Override protected void configure() {
-    // Install requisite modules.
-    install(new SharedModule());
-    install(new SharedPassesModule());
-
     // Bindings for when explicit dependencies are required.
     bind(PySrcMain.class);
     bind(GenPyCodeVisitor.class);
@@ -65,38 +54,17 @@ public final class PySrcModule extends AbstractModule {
 
     // Bind providers of factories (created via assisted inject).
     install(new FactoryModuleBuilder().build(GenPyExprsVisitorFactory.class));
-    install(new FactoryModuleBuilder().build(TranslateToPyExprVisitorFactory.class));
     install(new FactoryModuleBuilder().build(MsgFuncGeneratorFactory.class));
 
     // Bind unscoped providers for parameters in ApiCallScope (these throw exceptions).
     bind(SoyPySrcOptions.class)
         .toProvider(GuiceSimpleScope.<SoyPySrcOptions>getUnscopedProvider())
         .in(ApiCallScope.class);
-    bind(String.class).annotatedWith(PyRuntimePath.class)
-        .toProvider(GuiceSimpleScope.<String>getUnscopedProvider())
-        .in(ApiCallScope.class);
-    bind(String.class).annotatedWith(PyEnvironmentModulePath.class)
-      .toProvider(GuiceSimpleScope.<String>getUnscopedProvider())
-      .in(ApiCallScope.class);
-    bind(String.class).annotatedWith(PyBidiIsRtlFn.class)
-        .toProvider(GuiceSimpleScope.<String>getUnscopedProvider())
-        .in(ApiCallScope.class);
-    bind(String.class).annotatedWith(PyTranslationClass.class)
-        .toProvider(GuiceSimpleScope.<String>getUnscopedProvider())
+    bind(new Key<ImmutableMap<String, String>>(PyCurrentManifest.class){})
+        .toProvider(GuiceSimpleScope.<ImmutableMap<String, String>>getUnscopedProvider())
         .in(ApiCallScope.class);
   }
 
-  /**
-   * Builds and provides the map of SoyPySrcFunctions (name to function).
-   * @param soyFunctionsSet The installed set of SoyFunctions (from Guice Multibinder). Each
-   *     SoyFunction may or may not implement SoyPySrcFunction.
-   */
-  @Provides
-  @Singleton
-  ImmutableMap<String, SoyPySrcFunction> provideSoyPySrcFunctionsMap(
-      Set<SoyFunction> soyFunctionsSet) {
-    return FunctionAdapters.buildSpecificSoyFunctionsMap(soyFunctionsSet, SoyPySrcFunction.class);
-  }
 
   /**
    * Builds and provides the map of SoyPySrcDirectives (name to directive).

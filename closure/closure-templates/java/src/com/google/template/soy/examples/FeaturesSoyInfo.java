@@ -762,7 +762,8 @@ public final class FeaturesSoyInfo extends SoyFileInfo {
               .put("year", ParamRequisiteness.REQUIRED)
               .put("keywords", ParamRequisiteness.REQUIRED)
               .build(),
-          ImmutableSortedSet.<String>of());
+          ImmutableSortedSet.<String>of(
+              "csp_nonce"));
     }
 
     private static final DemoBidiSupportSoyTemplateInfo __INSTANCE__ =
@@ -872,7 +873,8 @@ public final class FeaturesSoyInfo extends SoyFileInfo {
             DEMO_BIDI_SUPPORT,
             BIDI_GLOBAL_DIR,
             EXAMPLE_HEADER),
-        ImmutableMap.<String, CssTagsPrefixPresence>of());
+        ImmutableMap.<String, CssTagsPrefixPresence>of(),
+        ImmutableList.<String>of());
   }
 
 

@@ -23,6 +23,7 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.template.soy.SoyFileSetParser.ParseResult;
 import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.base.internal.SoyFileKind;
 import com.google.template.soy.base.internal.SoyFileSupplier;
@@ -37,6 +38,7 @@ import com.google.template.soy.soytree.CallNode;
 import com.google.template.soy.soytree.SoyFileSetNode;
 import com.google.template.soy.soytree.SoytreeUtils;
 import com.google.template.soy.soytree.TemplateNode;
+import com.google.template.soy.soytree.TemplateRegistry;
 
 import junit.framework.ComparisonFailure;
 import junit.framework.TestCase;
@@ -184,14 +186,14 @@ public final class ContextualAutoescaperTest extends TestCase {
             "<video src='{$x |filterNormalizeUri |escapeHtmlAttribute}'></video>",
             "<source src='{$x |filterNormalizeUri |escapeHtmlAttribute}'>",
             "<audio src='{$x |filterNormalizeUri |escapeHtmlAttribute}'></audio>",
-            "<script src='{$x |filterTrustedResourceUri |filterNormalizeUri |escapeHtmlAttribute}'",
+            "<script src='{$x |filterTrustedResourceUri |escapeHtmlAttribute}'",
             "></script>\n",
             "{/template}"),
         join(
             "{namespace ns}\n\n",
             "{template .foo autoescape=\"deprecated-contextual\"}\n",
             "  {@param x: ?}\n",
-            // TODO(user): Re-enable content since it is often (but often not) used to convey
+            // TODO(msamuel): Re-enable content since it is often (but often not) used to convey
             // URLs in place of <link rel> once we can figure out a good way to distinguish the
             // URL use-cases from others.
             //"<meta http-equiv=refresh content='{$x}'>\n",
@@ -1042,7 +1044,7 @@ public final class ContextualAutoescaperTest extends TestCase {
             "  {@param path: ?}\n",
             "  {@param query: ?}\n",
             "  {@param fragment: ?}\n",
-            "<script src='{$start |filterTrustedResourceUri |filterNormalizeUri ",
+            "<script src='{$start |filterTrustedResourceUri ",
             "|escapeHtmlAttribute}/{$path |filterTrustedResourceUri |escapeHtmlAttribute}?",
             "q={$query |filterTrustedResourceUri |escapeUri}#{$fragment |filterTrustedResourceUri ",
             "|escapeHtmlAttribute}'></script>\n",
@@ -1055,6 +1057,39 @@ public final class ContextualAutoescaperTest extends TestCase {
             "  {@param query: ?}\n",
             "  {@param fragment: ?}\n",
             "<script src='{$start}/{$path}?q={$query}#{$fragment}'></script>",
+            "{/template}\n"));
+  }
+
+  public void testBlessStringAsTrustedResourceUrlForLegacy() throws Exception {
+    assertContextualRewriting(
+        join(
+            "{namespace ns}\n\n",
+            "{template .foo autoescape=\"deprecated-contextual\"}\n",
+            "  {@param start: ?}\n",
+            "  {@param path: ?}\n",
+            "  {@param query: ?}\n",
+            "  {@param fragment: ?}\n",
+            "<script src='",
+            "{$start |blessStringAsTrustedResourceUrlForLegacy ",
+            "|filterNormalizeUri |escapeHtmlAttribute}",
+            "/{$path |blessStringAsTrustedResourceUrlForLegacy ",
+            "|escapeHtmlAttribute}",
+            "?q={$query |blessStringAsTrustedResourceUrlForLegacy ",
+            "|escapeUri}",
+            "#{$fragment |blessStringAsTrustedResourceUrlForLegacy ",
+            "|escapeHtmlAttribute}'></script>\n",
+            "{/template}"),
+        join(
+            "{namespace ns}\n\n",
+            "{template .foo autoescape=\"deprecated-contextual\"}\n",
+            "  {@param start: ?}\n",
+            "  {@param path: ?}\n",
+            "  {@param query: ?}\n",
+            "  {@param fragment: ?}\n",
+            "<script src='{$start |blessStringAsTrustedResourceUrlForLegacy}",
+            "/{$path |blessStringAsTrustedResourceUrlForLegacy}",
+            "?q={$query |blessStringAsTrustedResourceUrlForLegacy}",
+            "#{$fragment |blessStringAsTrustedResourceUrlForLegacy}'></script>",
             "{/template}\n"));
   }
 
@@ -1190,28 +1225,6 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{$x}\n",
             "{/template}\n\n",
             "{template .bar autoescape=\"deprecated-noncontextual\"}\n",
-            "  {@param y: ?}\n",
-            "<b>{call .foo /}</b> {$y}\n",
-            "{/template}"));
-
-    assertContextualRewriting(
-        join(
-            "{namespace ns}\n\n",
-            "{template .foo autoescape=\"deprecated-contextual\" private=\"true\"}\n",
-            "  {@param? x: ?}\n",
-            "{$x |escapeHtml}\n",
-            "{/template}\n\n",
-            "{template .bar autoescape=\"deprecated-noautoescape\"}\n",
-            "  {@param y: ?}\n",
-            "<b>{call .foo /}</b> {$y}\n",
-            "{/template}"),
-        join(
-            "{namespace ns}\n\n",
-            "{template .foo autoescape=\"deprecated-contextual\" private=\"true\"}\n",
-            "  {@param? x: ?}\n",
-            "{$x}\n",
-            "{/template}\n\n",
-            "{template .bar autoescape=\"deprecated-noautoescape\"}\n",
             "  {@param y: ?}\n",
             "<b>{call .foo /}</b> {$y}\n",
             "{/template}"));
@@ -1381,6 +1394,26 @@ public final class ContextualAutoescaperTest extends TestCase {
             "{$title}",
             "{/if}\"",
             ">\n",
+            "{/template}"));
+  }
+
+  public void testSvgImage() throws Exception {
+    assertContextualRewriting(
+        join(
+            "{namespace ns}\n\n",
+            "{template .image autoescape=\"deprecated-contextual\"}\n",
+            "  {@param iconPath: ?}\n",
+            "<svg>",
+            "<image xlink:href=\"{$iconPath |filterNormalizeMediaUri |escapeHtmlAttribute}\">",
+            "</svg>\n",
+            "{/template}"),
+        join(
+            "{namespace ns}\n\n",
+            "{template .image autoescape=\"deprecated-contextual\"}\n",
+            "  {@param iconPath: ?}\n",
+            "<svg>",
+            "<image xlink:href=\"{$iconPath}\">",
+            "</svg>\n",
             "{/template}"));
   }
 
@@ -2395,64 +2428,6 @@ public final class ContextualAutoescaperTest extends TestCase {
                 "{/template}"));
   }
 
-
-  public void testTextDirectiveBanned() {
-    assertRewriteFails(
-        "In file no-path:5:1, template ns.main: " +
-        "Print directive |text is only for internal use by the Soy compiler.",
-        join(
-            "{namespace ns}\n\n",
-            "{template .main autoescape=\"deprecated-contextual\"}\n",
-            "  {@param foo: ?}\n",
-              "{$foo |text}\n",
-            "{/template}"));
-  }
-
-
-  public void testStrictModeDoesNotYetHaveDefaultParamKind() {
-    assertRewriteFails(
-        "In file no-path:4:1, template ns.main: " +
-        "In strict templates, {let}...{/let} blocks require an explicit kind=\"<type>\". " +
-        "This restriction will be lifted soon once a reasonable default is chosen. " +
-        "(Note that {let $x: $y /} is NOT subject to this restriction). " +
-        "Cause: {let $x}",
-        join(
-            "{namespace ns}\n\n",
-            "{template .main autoescape=\"strict\"}\n",
-              "{let $x}No Kind{/let}\n",
-            "{/template}"));
-    assertRewriteFails(
-        "In file no-path:4:12, template ns.main: " +
-        "In strict templates, {param}...{/param} blocks require an explicit kind=\"<type>\". " +
-        "This restriction will be lifted soon once a reasonable default is chosen. " +
-        "(Note that {param x: $y /} is NOT subject to this restriction). " +
-        "Cause: {param x}",
-        join(
-            "{namespace ns}\n\n",
-            "{template .main autoescape=\"strict\"}\n",
-              "{call .foo}{param x}No Kind{/param}{/call}\n",
-            "{/template}"));
-    // Test with a non-strict template ns.but in a strict block.
-    assertRewriteFails(
-        "In file no-path:4:21, template ns.main: " +
-        "In strict templates, {let}...{/let} blocks require an explicit kind=\"<type>\". " +
-        "This restriction will be lifted soon once a reasonable default is chosen. " +
-        "(Note that {let $x: $y /} is NOT subject to this restriction). " +
-        "Cause: {let $x}",
-        join(
-            "{namespace ns}\n\n",
-            // Non-strict template.
-            "{template .main autoescape=\"deprecated-contextual\"}\n",
-              // Strict block in the non-strict template.
-              "{let $y kind=\"html\"}",
-                // Missing kind attribute in a let in a strict block.
-                "{let $x}No Kind{/let}",
-                "{$x}",
-              "{/let}",
-            "\n{/template}"));
-  }
-
-
   public void testStrictModeRequiresStartAndEndToBeCompatible() {
     assertRewriteFails(
         "In file no-path:3:1, template ns.main: " +
@@ -2552,65 +2527,6 @@ public final class ContextualAutoescaperTest extends TestCase {
             "\n{/template}"));
   }
 
-
-  // Tests that non-contextual templates don't call strict templates with kind=text attribute.
-  public void testTypedTextStrictCallsNotAllowedInNonContextualTemplate() {
-    assertRewriteFails(
-        "In file no-path:4:6, template ns.caller: " +
-        "Calls to strict templates with 'kind=\"text\"' attribute is not permitted in " +
-        "non-contextually autoescaped templates: {call .callee /}",
-        join(
-            "{namespace ns}\n\n",
-            "{template .caller autoescape=\"deprecated-noncontextual\"}\n",
-              "<div>",
-                "{call .callee/}",
-              "</div>\n",
-            "{/template}\n\n",
-            "{template .callee autoescape=\"strict\" private=\"true\" kind=\"text\"}\n",
-            "  {@param? x: ?}\n",
-              "title={$x}\n",
-            "{/template}"));
-  }
-
-
-  // Tests that noautoescape templates don't have let nodes with kind attribute.
-  public void testTypedLetBlockNotAllowedInNoAutoescapeTemplate() {
-    assertRewriteFails(
-        "In file no-path:5:1, template ns.t: " +
-        "{let} node with 'kind' attribute is not permitted in non-autoescaped " +
-        "templates: {let $l kind=\"html\"}<b>{$y}</b>{/let}",
-        join(
-            "{namespace ns}\n\n",
-            "{template .t autoescape=\"deprecated-noautoescape\"}\n",
-            "  {@param y: ?}\n",
-            "{let $l kind=\"html\"}",
-              "<b>{$y}</b>",
-            "{/let}\n",
-            "{/template}"));
-  }
-
-
-  // Tests that noautoescape templates don't have param nodes with kind attribute.
-  public void testTypedParamBlockNotAllowedInNoAutoescapeTemplate() {
-    assertRewriteFails(
-        "In file no-path:5:20, template ns.caller: " +
-        "{param} node with 'kind' attribute is not permitted in non-autoescaped " +
-        "templates: {param x kind=\"html\"}<b>{$y}</b>;{/param}",
-        join(
-            "{namespace ns}\n\n",
-            "{template .caller autoescape=\"deprecated-noautoescape\"}\n",
-            "  {@param y: ?}\n",
-              "<div>",
-                "{call .callee}{param x kind=\"html\"}<b>{$y}</b>;{/param}{/call}",
-              "</div>\n",
-            "{/template}\n\n",
-            "{template .callee autoescape=\"deprecated-contextual\" private=\"true\"}\n",
-            "  {@param x: ?}\n",
-              "<b>{$x}</b>\n",
-            "{/template}"));
-  }
-
-
   public void testStrictAttributesMustNotEndInUnquotedAttributeValue() {
     // Ensure that any final attribute-value pair is quoted -- otherwise, if the use site of the
     // value forgets to add spaces, the next attribute will be swallowed.
@@ -2701,9 +2617,10 @@ public final class ContextualAutoescaperTest extends TestCase {
         "\n{/template}";
 
     ErrorReporter boom = ExplodingErrorReporter.get();
-    SoyFileSetNode soyTree =
-        SoyFileSetParserBuilder.forFileContents(source).errorReporter(boom).parse().fileSet();
-    new ContextualAutoescaper(SOY_PRINT_DIRECTIVES, boom).rewrite(soyTree);
+    ParseResult parseResult =
+        SoyFileSetParserBuilder.forFileContents(source).errorReporter(boom).parse();
+    SoyFileSetNode soyTree = parseResult.fileSet();
+    new ContextualAutoescaper(SOY_PRINT_DIRECTIVES).rewrite(soyTree, parseResult.registry(), boom);
     TemplateNode mainTemplate = soyTree.getChild(0).getChild(0);
     assertWithMessage("Sanity check").that(mainTemplate.getTemplateName()).isEqualTo("ns.main");
     final List<CallNode> callNodes = SoytreeUtils.getAllNodesOfType(
@@ -2741,9 +2658,11 @@ public final class ContextualAutoescaperTest extends TestCase {
         "\n{/deltemplate}";
 
     ErrorReporter boom = ExplodingErrorReporter.get();
-    SoyFileSetNode soyTree =
-        SoyFileSetParserBuilder.forFileContents(source).errorReporter(boom).parse().fileSet();
-    new ContextualAutoescaper(SOY_PRINT_DIRECTIVES, boom).rewrite(soyTree);
+
+    ParseResult parseResult =
+        SoyFileSetParserBuilder.forFileContents(source).errorReporter(boom).parse();
+    SoyFileSetNode soyTree = parseResult.fileSet();
+    new ContextualAutoescaper(SOY_PRINT_DIRECTIVES).rewrite(soyTree, parseResult.registry(), boom);
     TemplateNode mainTemplate = soyTree.getChild(0).getChild(0);
     assertWithMessage("Sanity check").that(mainTemplate.getTemplateName()).isEqualTo("ns.main");
     final List<CallNode> callNodes = SoytreeUtils.getAllNodesOfType(
@@ -2883,9 +2802,9 @@ public final class ContextualAutoescaperTest extends TestCase {
       throws SoyAutoescapeException {
 
     FormattingErrorReporter reporter = new FormattingErrorReporter();
-    List<TemplateNode> tmpls
-        = new ContextualAutoescaper(SOY_PRINT_DIRECTIVES, reporter)
-        .rewrite(soyTree);
+    List<TemplateNode> tmpls =
+        new ContextualAutoescaper(SOY_PRINT_DIRECTIVES)
+            .rewrite(soyTree, new TemplateRegistry(soyTree, reporter), reporter);
 
     if (!reporter.getErrorMessages().isEmpty()) {
       String message = reporter.getErrorMessages().get(0);

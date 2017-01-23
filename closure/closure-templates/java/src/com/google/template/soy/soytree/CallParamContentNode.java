@@ -20,10 +20,9 @@ import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.basetree.CopyState;
 import com.google.template.soy.basetree.MixinParentNode;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
-import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.ErrorReporter.Checkpoint;
-import com.google.template.soy.error.ExplodingErrorReporter;
-import com.google.template.soy.error.SoyError;
+import com.google.template.soy.error.SoyErrorKind;
+import com.google.template.soy.exprparse.SoyParsingContext;
 import com.google.template.soy.soytree.SoyNode.RenderUnitNode;
 
 import java.util.List;
@@ -38,9 +37,10 @@ import javax.annotation.Nullable;
  */
 public final class CallParamContentNode extends CallParamNode implements RenderUnitNode {
 
-  private static final SoyError PARAM_HAS_VALUE_BUT_IS_NOT_SELF_CLOSING
-      = SoyError.of("A ''param'' tag should contain a value if and only if it is also self-ending "
-          + "(with a trailing ''/'') (invalid tag is '{'param {0}'}').");
+  private static final SoyErrorKind PARAM_HAS_VALUE_BUT_IS_NOT_SELF_CLOSING =
+      SoyErrorKind.of(
+          "A ''param'' tag should contain a value if and only if it is also self-ending "
+              + "(with a trailing ''/'') (invalid tag is '{'param {0}'}').");
 
   /** The mixin object that implements the ParentNode functionality. */
   private final MixinParentNode<StandaloneNode> parentMixin;
@@ -169,14 +169,6 @@ public final class CallParamContentNode extends CallParamNode implements RenderU
     parentMixin.appendSourceStringForChildren(sb);
   }
 
-  @Override public void appendTreeStringForChildren(StringBuilder sb, int indent) {
-    parentMixin.appendTreeStringForChildren(sb, indent);
-  }
-
-  @Override public String toTreeString(int indent) {
-    return parentMixin.toTreeString(indent);
-  }
-
   @Override public CallParamContentNode copy(CopyState copyState) {
     return new CallParamContentNode(this, copyState);
   }
@@ -185,21 +177,21 @@ public final class CallParamContentNode extends CallParamNode implements RenderU
 
     private static CallParamContentNode error() {
       return new Builder(-1, "error", SourceLocation.UNKNOWN)
-          .build(ExplodingErrorReporter.get()); // guaranteed to build
+          .build(SoyParsingContext.exploding()); // guaranteed to build
     }
 
     public Builder(int id, String commandText, SourceLocation sourceLocation) {
       super(id, commandText, sourceLocation);
     }
 
-    public CallParamContentNode build(ErrorReporter errorReporter) {
-      Checkpoint checkpoint = errorReporter.checkpoint();
-      CommandTextParseResult parseResult = parseCommandTextHelper(errorReporter);
+    public CallParamContentNode build(SoyParsingContext context) {
+      Checkpoint checkpoint = context.errorReporter().checkpoint();
+      CommandTextParseResult parseResult = parseCommandTextHelper(context);
       if (parseResult.valueExprUnion != null) {
-        errorReporter.report(sourceLocation, PARAM_HAS_VALUE_BUT_IS_NOT_SELF_CLOSING, commandText);
+        context.report(sourceLocation, PARAM_HAS_VALUE_BUT_IS_NOT_SELF_CLOSING, commandText);
       }
 
-      if (errorReporter.errorsSince(checkpoint)) {
+      if (context.errorReporter().errorsSince(checkpoint)) {
         return error();
       }
 

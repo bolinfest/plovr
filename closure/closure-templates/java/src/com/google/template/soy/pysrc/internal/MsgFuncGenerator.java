@@ -21,6 +21,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.msgs.internal.IcuSyntaxUtils;
 import com.google.template.soy.msgs.internal.MsgUtils;
 import com.google.template.soy.msgs.internal.MsgUtils.MsgPartsAndIds;
@@ -31,7 +32,6 @@ import com.google.template.soy.msgs.restricted.SoyMsgPluralCaseSpec;
 import com.google.template.soy.msgs.restricted.SoyMsgPluralPart;
 import com.google.template.soy.msgs.restricted.SoyMsgRawTextPart;
 import com.google.template.soy.pysrc.internal.GenPyExprsVisitor.GenPyExprsVisitorFactory;
-import com.google.template.soy.pysrc.internal.TranslateToPyExprVisitor.TranslateToPyExprVisitorFactory;
 import com.google.template.soy.pysrc.restricted.PyExpr;
 import com.google.template.soy.pysrc.restricted.PyExprUtils;
 import com.google.template.soy.pysrc.restricted.PyFunctionExprBuilder;
@@ -44,6 +44,8 @@ import com.google.template.soy.soytree.MsgPlaceholderNode;
 import com.google.template.soy.soytree.MsgPluralNode;
 import com.google.template.soy.soytree.MsgSelectNode;
 import com.google.template.soy.soytree.PrintNode;
+import com.google.template.soy.soytree.RawTextNode;
+import com.google.template.soy.soytree.SoyNode;
 import com.google.template.soy.soytree.SoyNode.MsgPlaceholderInitialNode;
 import com.google.template.soy.soytree.SoyNode.MsgSubstUnitNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
@@ -59,7 +61,8 @@ public final class MsgFuncGenerator {
 
   /** Factory for assisted injection **/
   public static interface MsgFuncGeneratorFactory {
-    MsgFuncGenerator create(MsgNode node, LocalVariableStack localVarExprs);
+    MsgFuncGenerator create(
+        MsgNode node, LocalVariableStack localVarExprs, ErrorReporter errorReporter);
   }
 
   /** The msg node to generate the function calls from. */
@@ -82,13 +85,14 @@ public final class MsgFuncGenerator {
 
 
   @AssistedInject
-  MsgFuncGenerator(GenPyExprsVisitorFactory genPyExprsVisitorFactory,
-      TranslateToPyExprVisitorFactory translateToPyExprVisitorFactory,
+  MsgFuncGenerator(
+      GenPyExprsVisitorFactory genPyExprsVisitorFactory,
       @Assisted MsgNode msgNode,
-      @Assisted LocalVariableStack localVarExprs) {
+      @Assisted LocalVariableStack localVarExprs,
+      @Assisted ErrorReporter errorReporter) {
     this.msgNode = msgNode;
-    this.genPyExprsVisitor = genPyExprsVisitorFactory.create(localVarExprs);
-    this.translateToPyExprVisitor = translateToPyExprVisitorFactory.create(localVarExprs);
+    this.genPyExprsVisitor = genPyExprsVisitorFactory.create(localVarExprs, errorReporter);
+    this.translateToPyExprVisitor = new TranslateToPyExprVisitor(localVarExprs, errorReporter);
     String translator = PyExprUtils.TRANSLATOR_NAME;
 
     if (this.msgNode.isPlrselMsg()) {
@@ -207,10 +211,11 @@ public final class MsgFuncGenerator {
       PyExpr substPyExpr = null;
 
       if (substUnitNode instanceof MsgPlaceholderNode) {
-        MsgPlaceholderInitialNode phInitialNode =
-            (MsgPlaceholderInitialNode) ((AbstractParentSoyNode<?>) substUnitNode).getChild(0);
+        SoyNode phInitialNode = ((AbstractParentSoyNode<?>) substUnitNode).getChild(0);
 
-        if (phInitialNode instanceof PrintNode || phInitialNode instanceof CallNode) {
+        if (phInitialNode instanceof PrintNode
+            || phInitialNode instanceof CallNode
+            || phInitialNode instanceof RawTextNode) {
           substPyExpr = PyExprUtils.concatPyExprs(genPyExprsVisitor.exec(phInitialNode))
               .toPyString();
         }

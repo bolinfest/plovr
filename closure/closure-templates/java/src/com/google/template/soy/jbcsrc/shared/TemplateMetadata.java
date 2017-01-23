@@ -28,8 +28,6 @@ import java.lang.annotation.Retention;
  * <p>For now this just records the strict content kind of a template (if any), in the future 
  * consider adding:
  * <ul>
- *     <li>Names of called templates
- *     <li>Is this a deltemplate? if so what delpackage? variant?
  *     <li>Metadata about params and their requisiteness settings.
  * </ul>
  */
@@ -40,4 +38,40 @@ public @interface TemplateMetadata {
    * or {@code ""} which means that this isn't a strict template.
    */
   String contentKind();
+
+  /**
+   * Returns the list of injected params, both {@code $ij.foo} variables and {@code @inject} params
+   */ 
+  String[] injectedParams();
+
+  /** 
+   * Returns the fully qualified names of all the basic templates called by this template.
+   */
+  String[] callees();
+
+  /** 
+   * Returns the fully qualified names of all the delegate templates called by this template.
+   */
+  String[] delCallees();
+
+  /**
+   * Returns metadata for deltemplates.  If this is not a deltemplate it will have an empty
+   * {@link DelTemplateMetadata#name}.
+   */
+  DelTemplateMetadata deltemplateMetadata() default @DelTemplateMetadata;
+
+  @Retention(RUNTIME)
+  @interface DelTemplateMetadata {
+    /**
+     * The name of the delpackage this is in.  If this is a default deltemplate the package will be
+     * {@code ""}.
+     */
+    String delPackage() default "";
+
+    /** The name of the deltemplate this template is implementing. */
+    String name() default "";
+
+    /** The variant of the deltemplate */
+    String variant() default "";
+  }
 }

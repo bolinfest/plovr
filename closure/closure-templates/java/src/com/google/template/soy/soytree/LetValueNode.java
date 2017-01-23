@@ -19,10 +19,9 @@ package com.google.template.soy.soytree;
 import com.google.common.collect.ImmutableList;
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.basetree.CopyState;
-import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.ErrorReporter.Checkpoint;
-import com.google.template.soy.error.ExplodingErrorReporter;
-import com.google.template.soy.error.SoyError;
+import com.google.template.soy.error.SoyErrorKind;
+import com.google.template.soy.exprparse.SoyParsingContext;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.soytree.SoyNode.ExprHolderNode;
 
@@ -36,12 +35,14 @@ import java.util.List;
  */
 public final class LetValueNode extends LetNode implements ExprHolderNode {
 
-  public static final SoyError SELF_ENDING_WITHOUT_VALUE
-      = SoyError.of("A ''let'' tag should be self-ending (with a trailing ''/'') if and only if "
-          + "it also contains a value (invalid tag is '{'let {0} /'}').");
-  private static final SoyError KIND_ATTRIBUTE_NOT_ALLOWED_WITH_VALUE
-      = SoyError.of("The ''kind'' attribute is not allowed on self-ending ''let'' tags that "
-          + "contain a value (invalid tag is '{'let {0} /'}').");
+  public static final SoyErrorKind SELF_ENDING_WITHOUT_VALUE =
+      SoyErrorKind.of(
+          "A ''let'' tag should be self-ending (with a trailing ''/'') if and only if "
+              + "it also contains a value (invalid tag is '{'let {0} /'}').");
+  private static final SoyErrorKind KIND_ATTRIBUTE_NOT_ALLOWED_WITH_VALUE =
+      SoyErrorKind.of(
+          "The ''kind'' attribute is not allowed on self-ending ''let'' tags that "
+              + "contain a value (invalid tag is '{'let {0} /'}').");
 
 
   /** The value expression that the variable is set to. */
@@ -99,13 +100,19 @@ public final class LetValueNode extends LetNode implements ExprHolderNode {
     return new LetValueNode(this, copyState);
   }
 
+  @Override
+  public String getTagString() {
+    return this.buildTagStringHelper(true);
+  }
+
+
   /**
    * Builder for {@link LetValueNode}.
    */
   public static final class Builder {
     private static LetValueNode error() {
       return new Builder(-1, "$error: 1", SourceLocation.UNKNOWN)
-          .build(ExplodingErrorReporter.get()); // guaranteed to be valid
+          .build(SoyParsingContext.exploding()); // guaranteed to be valid
     }
 
     private final int id;
@@ -127,20 +134,20 @@ public final class LetValueNode extends LetNode implements ExprHolderNode {
      * Returns a new {@link LetValueNode} built from the builder's state. If the builder's state
      * is invalid, errors are reported to the {@code errorManager} and {Builder#error} is returned.
      */
-    public LetValueNode build(ErrorReporter errorReporter) {
-      Checkpoint checkpoint = errorReporter.checkpoint();
+    public LetValueNode build(SoyParsingContext context) {
+      Checkpoint checkpoint = context.errorReporter().checkpoint();
       CommandTextParseResult parseResult
-          = parseCommandTextHelper(commandText, errorReporter, sourceLocation);
+          = parseCommandTextHelper(commandText, context, sourceLocation);
 
       if (parseResult.valueExpr == null) {
-        errorReporter.report(sourceLocation, SELF_ENDING_WITHOUT_VALUE, commandText);
+        context.report(sourceLocation, SELF_ENDING_WITHOUT_VALUE, commandText);
       }
 
       if (parseResult.contentKind != null) {
-        errorReporter.report(sourceLocation, KIND_ATTRIBUTE_NOT_ALLOWED_WITH_VALUE, commandText);
+        context.report(sourceLocation, KIND_ATTRIBUTE_NOT_ALLOWED_WITH_VALUE, commandText);
       }
 
-      if (errorReporter.errorsSince(checkpoint)) {
+      if (context.errorReporter().errorsSince(checkpoint)) {
         return error();
       }
 

@@ -25,12 +25,10 @@ import com.google.template.soy.data.restricted.BooleanData;
 import com.google.template.soy.jbcsrc.Expression.Feature;
 import com.google.template.soy.jbcsrc.Expression.Features;
 import com.google.template.soy.jbcsrc.runtime.Runtime;
-
+import java.lang.reflect.Modifier;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
-
-import java.lang.reflect.Modifier;
 
 /**
  * Representation of a field in a java class.
@@ -44,6 +42,7 @@ import java.lang.reflect.Modifier;
   static FieldRef createFinalField(TypeInfo owner, String name, Class<?> type) {
     return createFinalField(owner, name, Type.getType(type));
   }
+
   static FieldRef createFinalField(TypeInfo owner, String name, Type type) {
     return new AutoValue_FieldRef(
         owner,
@@ -92,6 +91,15 @@ import java.lang.reflect.Modifier;
 
   static <T extends Enum<T>> FieldRef enumReference(T enumInstance) {
     return staticFieldReference(enumInstance.getDeclaringClass(), enumInstance.name());
+  }
+
+  static FieldRef createPublicStaticField(TypeInfo owner, String name, Type type) {
+    return new AutoValue_FieldRef(
+        owner,
+        name,
+        type,
+        Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_FINAL,
+        !BytecodeUtils.isPrimitive(type));
   }
 
   static FieldRef createField(TypeInfo owner, String name, Class<?> type) {
@@ -192,7 +200,24 @@ import java.lang.reflect.Modifier;
 
     };
   }
-  
+  /**
+   * Returns a {@link Statement} that stores the {@code value} in this field on the given
+   * {@code instance}.
+   *
+   * @throws IllegalStateException if this is a static field
+   */
+  Statement putStaticField(final Expression value) {
+    checkState(isStatic(), "This field is not static!");
+    value.checkAssignableTo(type());
+    return new Statement() {
+      @Override
+      void doGen(CodeBuilder adapter) {
+        value.gen(adapter);
+        adapter.putStatic(owner().type(), name(), type());
+      }
+    };
+  }
+
   /**
    * Adds code to place the top item of the stack into this field.
    * 

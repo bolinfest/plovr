@@ -28,36 +28,45 @@ import static com.google.template.soy.jbcsrc.LocalVariable.createThisVar;
 import static com.google.template.soy.jbcsrc.StandardNames.IJ_FIELD;
 import static com.google.template.soy.jbcsrc.StandardNames.PARAMS_FIELD;
 import static com.google.template.soy.jbcsrc.StandardNames.STATE_FIELD;
+import static com.google.template.soy.soytree.SoytreeUtils.getAllNodesOfType;
 
+import com.google.auto.value.AutoAnnotation;
 import com.google.common.collect.ImmutableMap;
+import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.data.SoyRecord;
 import com.google.template.soy.data.SoyValueProvider;
+import com.google.template.soy.exprtree.VarRefNode;
 import com.google.template.soy.jbcsrc.SoyNodeCompiler.CompiledMethodBody;
 import com.google.template.soy.jbcsrc.shared.CompiledTemplate;
 import com.google.template.soy.jbcsrc.shared.TemplateMetadata;
+import com.google.template.soy.soytree.CallBasicNode;
+import com.google.template.soy.soytree.CallDelegateNode;
 import com.google.template.soy.soytree.CallParamContentNode;
 import com.google.template.soy.soytree.CallParamValueNode;
 import com.google.template.soy.soytree.LetContentNode;
 import com.google.template.soy.soytree.LetValueNode;
+import com.google.template.soy.soytree.SoyNode;
+import com.google.template.soy.soytree.TemplateDelegateNode;
 import com.google.template.soy.soytree.TemplateNode;
 import com.google.template.soy.soytree.defn.LocalVar;
 import com.google.template.soy.soytree.defn.TemplateParam;
 
-import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Compiles the top level {@link CompiledTemplate} class for a single template and all related
  * classes.
  */
 final class TemplateCompiler {
-  private static final String TEMPLATE_METADATA_DESCRIPTOR =
-      Type.getDescriptor(TemplateMetadata.class);
+  private static final AnnotationRef<TemplateMetadata> TEMPLATE_METADATA_REF =
+      AnnotationRef.forType(TemplateMetadata.class);
   private static final TypeInfo TEMPLATE_TYPE = TypeInfo.create(CompiledTemplate.class);
 
   private final CompiledTemplateRegistry registry;
@@ -125,7 +134,7 @@ final class TemplateCompiler {
             .sourceFileName(template.node().getSourceLocation().getFileName())
             .build();
     generateTemplateMetadata();
-    
+    generateKindMethod();
     stateField.defineField(writer);
     paramsField.defineField(writer);
     ijField.defineField(writer);
@@ -145,16 +154,75 @@ final class TemplateCompiler {
     writer = null;
     return classes;
   }
+  
+  private void generateKindMethod() {
+    Statement.returnExpression(BytecodeUtils.constant(template.node().getContentKind()))
+        .writeMethod(
+            Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, template.kindMethod().method(), writer);
+  }
 
   /** Writes a {@link TemplateMetadata} to the generated class. */
   private void generateTemplateMetadata() {
-    AnnotationVisitor annotationWriter =
-        writer.visitAnnotation(TEMPLATE_METADATA_DESCRIPTOR, true /* visible at runtime */);
-    String kind = template.node().getContentKind() == null 
-        ? ""
-        : template.node().getContentKind().name(); 
-    annotationWriter.visit("contentKind", kind);
-    annotationWriter.visitEnd();
+    ContentKind contentKind = template.node().getContentKind();
+    String kind = contentKind == null  ? "" : contentKind.name(); 
+
+    // using linked hash sets below for determinism
+    Set<String> uniqueIjs = new LinkedHashSet<>();
+    for (VarRefNode var : getAllNodesOfType(template.node(), VarRefNode.class)) {
+      if (var.isInjected()) {
+        uniqueIjs.add(var.getName());
+      }
+    }
+
+    Set<String> callees = new LinkedHashSet<>();
+    for (CallBasicNode call : getAllNodesOfType(template.node(), CallBasicNode.class)) {
+      callees.add(call.getCalleeName());
+    }
+
+    Set<String> delCallees = new LinkedHashSet<>();
+    for (CallDelegateNode call : getAllNodesOfType(template.node(), CallDelegateNode.class)) {
+      delCallees.add(call.getDelCalleeName());
+    }
+
+    TemplateMetadata.DelTemplateMetadata deltemplateMetadata;
+    if (template.node().getKind() == SoyNode.Kind.TEMPLATE_DELEGATE_NODE) {
+      TemplateDelegateNode delegateNode = (TemplateDelegateNode) template.node();
+      deltemplateMetadata = createDelTemplateMetadata(
+          delegateNode.getDelPackageName() == null ? "" : delegateNode.getDelPackageName(), 
+          delegateNode.getDelTemplateName(), 
+          delegateNode.getDelTemplateVariant());
+    } else {
+      deltemplateMetadata = createDefaultDelTemplateMetadata();
+    }
+    TemplateMetadata metadata = createTemplateMetadata(
+        kind,
+        uniqueIjs,
+        callees,
+        delCallees,
+        deltemplateMetadata);
+    TEMPLATE_METADATA_REF.write(metadata, writer);
+  }
+
+  @AutoAnnotation
+  static TemplateMetadata createTemplateMetadata(
+      String contentKind,
+      Set<String> injectedParams,
+      Set<String> callees,
+      Set<String> delCallees, 
+      TemplateMetadata.DelTemplateMetadata deltemplateMetadata) {
+    return new AutoAnnotation_TemplateCompiler_createTemplateMetadata(
+        contentKind, injectedParams, callees, delCallees, deltemplateMetadata);
+  }
+
+  @AutoAnnotation
+  static TemplateMetadata.DelTemplateMetadata createDefaultDelTemplateMetadata() {
+    return new AutoAnnotation_TemplateCompiler_createDefaultDelTemplateMetadata();
+  }
+
+  @AutoAnnotation
+  static TemplateMetadata.DelTemplateMetadata createDelTemplateMetadata(
+      String delPackage, String name, String variant) {
+    return new AutoAnnotation_TemplateCompiler_createDelTemplateMetadata(delPackage, name, variant);
   }
 
   private Statement generateRenderMethod() {
@@ -165,8 +233,9 @@ final class TemplateCompiler {
         createLocal("appendable", 1, ADVISING_APPENDABLE_TYPE, start, end).asNonNullable();
     final LocalVariable contextVar =
         createLocal("context", 2, RENDER_CONTEXT_TYPE, start, end).asNonNullable();
-    final VariableSet variableSet = 
-        new VariableSet(fieldNames, template.typeInfo(), thisVar, template.renderMethod().method());
+    final TemplateVariableManager variableSet =
+        new TemplateVariableManager(
+            fieldNames, template.typeInfo(), thisVar, template.renderMethod().method());
     TemplateNode node = template.node();
     TemplateVariables variables = 
         new TemplateVariables(variableSet, thisVar, contextVar);
@@ -195,6 +264,7 @@ final class TemplateCompiler {
       }
     }.writeIOExceptionMethod(Opcodes.ACC_PUBLIC, template.renderMethod().method(), writer);
     writer.setNumDetachStates(methodBody.numberOfDetachStates());
+    variableSet.defineStaticFields(writer);
     return variableSet.defineFields(writer);
   }
 
@@ -255,12 +325,13 @@ final class TemplateCompiler {
     return MethodRef.RUNTIME_GET_FIELD_PROVIDER.invoke(record, fieldName);
   }
 
-  private final class TemplateVariables implements VariableLookup {
-    private final VariableSet variableSet;
+  private final class TemplateVariables implements TemplateParameterLookup {
+    private final TemplateVariableManager variableSet;
     private final Expression thisRef;
     private final Expression renderContext;
 
-    TemplateVariables(VariableSet variableSet, Expression thisRef, Expression renderContext) {
+    TemplateVariables(
+        TemplateVariableManager variableSet, Expression thisRef, Expression renderContext) {
       this.variableSet = variableSet;
       this.thisRef = thisRef;
       this.renderContext = renderContext;

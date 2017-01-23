@@ -21,8 +21,6 @@ import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.basetree.CopyState;
 import com.google.template.soy.types.SoyType;
 
-import java.util.Objects;
-
 import javax.annotation.Nullable;
 
 /**
@@ -32,16 +30,13 @@ import javax.annotation.Nullable;
 public final class VarRefNode extends AbstractExprNode {
 
   public static final VarRefNode ERROR
-      = new VarRefNode("error", SourceLocation.UNKNOWN, false, false, null);
+      = new VarRefNode("error", SourceLocation.UNKNOWN, false, null);
 
   /** The name of the variable. */
   private final String name;
 
   /** Whether this is an injected parameter reference. */
-  private final boolean isInjected;
-
-  /** Whether this a null-safe access to an injected parameter. */
-  private final boolean isNullSafeInjected;
+  private final boolean isDollarSignIjParameter;
 
   /** Reference to the variable declaration. */
   private VarDefn defn;
@@ -55,29 +50,25 @@ public final class VarRefNode extends AbstractExprNode {
   /**
    * @param name The name of the variable.
    * @param sourceLocation The node's source location.
-   * @param injected Whether this is an injected variable.
-   * @param nullSafeInjected Whether this a null-safe access to an injected parameter.
+   * @param isDollarSignIjParameter Whether this is an {@code $ij} variable.
    * @param defn (optional) The variable declaration for this variable.
    */
   public VarRefNode(
       String name,
       SourceLocation sourceLocation,
-      boolean injected,
-      boolean nullSafeInjected,
+      boolean isDollarSignIjParameter,
       @Nullable VarDefn defn) {
     super(sourceLocation);
     Preconditions.checkArgument(name != null);
     this.name = name;
-    this.isInjected = injected;
-    this.isNullSafeInjected = nullSafeInjected;
+    this.isDollarSignIjParameter = isDollarSignIjParameter;
     this.defn = defn;
   }
 
   private VarRefNode(VarRefNode orig, CopyState copyState) {
     super(orig, copyState);
     this.name = orig.name;
-    this.isInjected = orig.isInjected;
-    this.isNullSafeInjected = orig.isNullSafeInjected;
+    this.isDollarSignIjParameter = orig.isDollarSignIjParameter;
     this.subtituteType = orig.subtituteType;
     // N.B. don't clone here.  If the tree is getting cloned then our defn will also need to be
     // reset.  However, defns are problematic because they create non-tree edges in the AST.
@@ -104,14 +95,18 @@ public final class VarRefNode extends AbstractExprNode {
     return name;
   }
 
-  /** Returns Whether this is an injected parameter reference. */
-  public boolean isInjected() {
-    return isInjected;
+  /**
+   * Returns Whether this is an {@code $ij} parameter reference.
+   *
+   * <p>You almost certainly don't want to use this method and instead want {@link #isInjected()}.
+   */
+  public boolean isDollarSignIjParameter() {
+    return isDollarSignIjParameter;
   }
 
-  /** Returns whether this a null-safe access to an injected parameter. */
-  public boolean isNullSafeInjected() {
-    return isNullSafeInjected;
+  /** Returns Whether this is an injected parameter reference. */
+  public boolean isInjected() {
+    return defn.isInjected();
   }
 
   /**
@@ -129,8 +124,8 @@ public final class VarRefNode extends AbstractExprNode {
   }
 
   /** Returns whether this is a local variable reference. */
-  public Boolean isLocalVar() {
-    return defn == null ? null : defn.kind() == VarDefn.Kind.LOCAL_VAR;
+  public boolean isLocalVar() {
+    return defn.kind() == VarDefn.Kind.LOCAL_VAR;
   }
 
   /**
@@ -138,9 +133,7 @@ public final class VarRefNode extends AbstractExprNode {
    * is unknown, then it returns true.
    */
   public Boolean isPossibleParam() {
-    // TODO: Get rid of the null check - needs to revise EvalVisitorTest to run
-    // the resolve names pass in order for this to be true.
-    return defn == null || defn.kind() == VarDefn.Kind.PARAM ||
+    return defn.kind() == VarDefn.Kind.PARAM ||
         defn.kind() == VarDefn.Kind.UNDECLARED;
   }
 
@@ -154,22 +147,10 @@ public final class VarRefNode extends AbstractExprNode {
   }
 
   @Override public String toSourceString() {
-    return "$" + (isInjected ? (isNullSafeInjected ? "ij?." : "ij.") : "") + name;
+    return "$" + (isDollarSignIjParameter ? "ij." : "") + name;
   }
 
   @Override public VarRefNode copy(CopyState copyState) {
     return new VarRefNode(this, copyState);
-  }
-
-  @Override public boolean equals(Object other) {
-    if (other == null || other.getClass() != this.getClass()) { return false; }
-    VarRefNode otherVar = (VarRefNode) other;
-    return name.equals(otherVar.name) &&
-        isInjected == otherVar.isInjected &&
-        isNullSafeInjected == otherVar.isNullSafeInjected;
-  }
-
-  @Override public int hashCode() {
-    return Objects.hash(this.getClass(), name, isInjected, isNullSafeInjected);
   }
 }

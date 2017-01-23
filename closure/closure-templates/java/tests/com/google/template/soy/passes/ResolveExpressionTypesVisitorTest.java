@@ -24,7 +24,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.template.soy.SoyFileSetParserBuilder;
-import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.basetree.SyntaxVersion;
 import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.error.FormattingErrorReporter;
@@ -54,7 +53,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Unit tests for ResolveNamesVisitor.
+ * Unit tests for {@link ResolveExpressionTypesVisitor}.
  *
  */
 public final class ResolveExpressionTypesVisitorTest extends TestCase {
@@ -176,16 +175,14 @@ public final class ResolveExpressionTypesVisitorTest extends TestCase {
   }
 
   public void testDataRefTypesError() {
-    // Should fail because pa key type should be string, not int
     assertResolveExpressionTypesFails(
-        "Invalid key type",
+        "bad key type int for map<string,float>",
         constructTemplateSource(
             "{@param pa: map<string, float>}",
             "{$pa[0]}"));
 
-    // Should fail because pa key type should be int, not bool
     assertResolveExpressionTypesFails(
-        "Invalid key type",
+        "bad key type bool for map<int,float>",
         constructTemplateSource(
             "{@param pa: map<int, float>}",
             "{@param pb: bool}",
@@ -193,9 +190,8 @@ public final class ResolveExpressionTypesVisitorTest extends TestCase {
   }
 
   public void testRecordTypesError() {
-    // Should fail because key 'c' does not exist.
     assertResolveExpressionTypesFails(
-        "Undefined field",
+        "undefined field 'c' for record type [a: int, b: float]",
         constructTemplateSource(
             "{@param pa: [a:int, b:float]}",
             "{$pa.c}"));
@@ -581,10 +577,15 @@ public final class ResolveExpressionTypesVisitorTest extends TestCase {
                     "{else}",
                     "  {captureType($pa)}", // #15 must be null
                     "{/if}",
-                    "{if $pb or $pa == null}",
-                    "  {captureType($pa)}", // #16 don't know
+                    "{if isNull($pa)}", // isNull function
+                    "  {captureType($pa)}", // #16 must be null
                     "{else}",
-                    "  {captureType($pa)}", // #17 must be null
+                    "  {captureType($pa)}", // #17 must be non-null
+                    "{/if}",
+                    "{if $pb or $pa == null}",
+                    "  {captureType($pa)}", // #18 don't know
+                    "{else}",
+                    "  {captureType($pa)}", // #19 must be null
                     "{/if}",
                     // TODO(lukes): uncomment this and fix the error
                     // "{if null == null or null != null}{/if}",
@@ -609,10 +610,12 @@ public final class ResolveExpressionTypesVisitorTest extends TestCase {
     assertThat(types.get(13)).isEqualTo(BoolType.getInstance());
     assertThat(types.get(14)).isEqualTo(BoolType.getInstance());
     assertThat(types.get(15)).isEqualTo(NullType.getInstance());
-
-    assertThat(types.get(16))
-        .isEqualTo(makeNullable(BoolType.getInstance()));
+    assertThat(types.get(16)).isEqualTo(NullType.getInstance());
     assertThat(types.get(17)).isEqualTo(BoolType.getInstance());
+
+    assertThat(types.get(18))
+        .isEqualTo(makeNullable(BoolType.getInstance()));
+    assertThat(types.get(19)).isEqualTo(BoolType.getInstance());
   }
 
   public void testDataFlowTypeNarrowing_complexExpressions() {
@@ -686,20 +689,20 @@ public final class ResolveExpressionTypesVisitorTest extends TestCase {
     SoyType boolOrNullType = makeNullable(BoolType.getInstance());
     SoyFileSetNode soyTree =
         SoyFileSetParserBuilder.forFileContents(
-                constructTemplateSource(
-                    "{@param pa: bool|null}",
-                    "{@param pb: bool}",
-                    "{if ($pa != null) != ($pb != null)}",
-                    "  {captureType($pa)}", // #0 don't know
-                    "{else}",
-                    "  {captureType($pa)}", // #1 don't know
-                    "{/if}",
-                    "{if $pa ?: $pb}",
-                    "  {captureType($pa)}", // #2 don't know
-                    "{/if}",
-                    "{if $pb ? $pa : false}",
-                    "  {captureType($pa)}", // #3 don't know
-                    "{/if}"))
+            constructTemplateSource(
+                "{@param pa: bool|null}",
+                "{@param pb: bool}",
+                "{if ($pa != null) != ($pb != null)}",
+                "  {captureType($pa)}", // #0 don't know
+                "{else}",
+                "  {captureType($pa)}", // #1 don't know
+                "{/if}",
+                "{if $pa ?: $pb}",
+                "  {captureType($pa)}", // #2 don't know
+                "{/if}",
+                "{if $pb ? $pa : false}",
+                "  {captureType($pa)}", // #3 don't know
+                "{/if}"))
             .addSoyFunction(CAPTURE_TYPE_FUNCTION)
             .parse()
             .fileSet();
@@ -756,6 +759,24 @@ public final class ResolveExpressionTypesVisitorTest extends TestCase {
     assertThat(types.get(4)).isEqualTo(IntType.getInstance());
   }
 
+  public void testBadForEach() {
+    assertResolveExpressionTypesFails(
+        "cannot iterate over $p of type int",
+        constructTemplateSource(
+            "{@param p: int}",
+            "{foreach $item in $p}{/foreach}"));
+    assertResolveExpressionTypesFails(
+        "cannot iterate over $p of type int|string",
+        constructTemplateSource(
+            "{@param p: int|string}",
+            "{foreach $item in $p}{/foreach}"));
+    assertResolveExpressionTypesFails(
+        "cannot iterate over $p of type list<string>|string|uri",
+        constructTemplateSource(
+            "{@param p: list<string>|string|uri}",
+            "{foreach $item in $p}{/foreach}"));
+  }
+
   public void testInjectedParamTypes() {
     SoyFileSetNode soyTree =
         SoyFileSetParserBuilder.forFileContents(
@@ -770,6 +791,20 @@ public final class ResolveExpressionTypesVisitorTest extends TestCase {
     List<SoyType> types = getCapturedTypes(soyTree);
     assertThat(types.get(0)).isEqualTo(BoolType.getInstance());
     assertThat(types.get(1)).isEqualTo(makeNullable(ListType.of(IntType.getInstance())));
+  }
+
+  public void testErrorMessagesInUnionTypes() {
+    assertResolveExpressionTypesFails(
+        "type float does not support bracket access",
+        constructTemplateSource(
+            "{@param p: float|int}",
+            "{$p[1]}"));
+
+    assertResolveExpressionTypesFails(
+        "type float does not support dot access",
+        constructTemplateSource(
+            "{@param p: float|int}",
+            "{$p.a}"));
   }
 
   /**
@@ -795,20 +830,14 @@ public final class ResolveExpressionTypesVisitorTest extends TestCase {
    * @param expectedError The expected failure message (a substring).
    */
   private void assertResolveExpressionTypesFails(String expectedError, String fileContent) {
-
-    try {
-      SoyFileSetParserBuilder.forFileContents(fileContent)
-          .declaredSyntaxVersion(SyntaxVersion.V2_0)
-          .typeRegistry(typeRegistry)
-          .parse();
-      fail("Expected SoySyntaxException");
-    } catch (SoySyntaxException e) {
-      assertThat(e.getMessage()).contains(expectedError);
-    } catch (IllegalStateException e) {
-      // from the exploding error reporter
-      assertThat(e.getMessage()).startsWith("Unexpected SoyError:");
-      assertThat(e.getMessage()).contains(expectedError);
-    }
+    FormattingErrorReporter errorReporter = new FormattingErrorReporter();
+    SoyFileSetParserBuilder.forFileContents(fileContent)
+        .declaredSyntaxVersion(SyntaxVersion.V2_0)
+        .errorReporter(errorReporter)
+        .typeRegistry(typeRegistry)
+        .parse();
+    assertThat(errorReporter.getErrorMessages()).hasSize(1);
+    assertThat(errorReporter.getErrorMessages().get(0)).isEqualTo(expectedError);
   }
 
   /**

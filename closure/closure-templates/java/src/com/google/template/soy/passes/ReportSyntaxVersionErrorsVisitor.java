@@ -20,7 +20,7 @@ import com.google.common.base.Preconditions;
 import com.google.template.soy.basetree.SyntaxVersion;
 import com.google.template.soy.basetree.SyntaxVersionUpperBound;
 import com.google.template.soy.error.ErrorReporter;
-import com.google.template.soy.error.SoyError;
+import com.google.template.soy.error.SoyErrorKind;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.ExprUnion;
 import com.google.template.soy.soytree.SoyNode;
@@ -40,16 +40,7 @@ import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
  */
 final class ReportSyntaxVersionErrorsVisitor extends AbstractSoyNodeVisitor<Void> {
 
-  private static final SoyError DOUBLE_AMPERSAND_DOUBLE_PIPE_OR_BANG_IN_EXPR =
-      SoyError.of("{0}: bad expression: ''{1}'', possibly due to using &&/||/! "
-          + "instead of and/or/not operators.");
-  private static final SoyError DOUBLE_QUOTED_STRING =
-      SoyError.of("{0}: bad expression: ''{1}'', possibly due to using double quotes "
-          + "instead of single quotes for string literal.");
-  private static final SoyError GENERIC_NOT_PARSABLE_AS_V2_EXPR =
-      SoyError.of("{0}: bad expression: ''{1}''.");
-  private static final SoyError SYNTAX_VERSION_OUT_OF_BOUNDS =
-      SoyError.of("{0}: {1}");
+  private static final SoyErrorKind SYNTAX_VERSION_OUT_OF_BOUNDS = SoyErrorKind.of("{0}: {1}");
 
   private final SyntaxVersion requiredSyntaxVersion;
   private final ErrorReporter errorReporter;
@@ -91,30 +82,10 @@ final class ReportSyntaxVersionErrorsVisitor extends AbstractSoyNodeVisitor<Void
     // ------ Record errors for expressions held by this Soy node. ------
     if (node instanceof ExprHolderNode) {
       for (ExprUnion exprUnion : ((ExprHolderNode) node).getAllExprUnions()) {
-        // The required syntax version is at least V2, but the expression is not parsable as V2.
-        // That's an error. Consider a couple of specific errors based on the expression text,
-        // then fall back to a generic error message.
+        // Log parse errors if the required syntax version is at least V2, but the expression was
+        // not parsable as V2.
         if (exprUnion.getExpr() == null && requiredSyntaxVersion.num >= SyntaxVersion.V2_0.num) {
-          String exprText = exprUnion.getExprText();
-          if (possiblyContainsDoubleQuotedString(exprText)) {
-            errorReporter.report(
-                node.getSourceLocation(),
-                DOUBLE_QUOTED_STRING,
-                errorPreamble,
-                exprText);
-          } else if (exprText.contains("&&") || exprText.contains("||") || exprText.contains("!")) {
-            errorReporter.report(
-                node.getSourceLocation(),
-                DOUBLE_AMPERSAND_DOUBLE_PIPE_OR_BANG_IN_EXPR,
-                errorPreamble,
-                exprText);
-          } else {
-            errorReporter.report(
-                node.getSourceLocation(),
-                GENERIC_NOT_PARSABLE_AS_V2_EXPR,
-                errorPreamble,
-                exprText);
-          }
+          exprUnion.reportV2ParseErrors(errorReporter);
         }
       }
     }
@@ -123,25 +94,5 @@ final class ReportSyntaxVersionErrorsVisitor extends AbstractSoyNodeVisitor<Void
     if (node instanceof ParentSoyNode<?>) {
       visitChildren((ParentSoyNode<?>) node);
     }
-  }
-
-  /**
-   * A heuristic is used instead of a simple regex, because Soy V2 allows quoting
-   * double-quotes with single-quotes.
-   */
-  private static boolean possiblyContainsDoubleQuotedString(String exprText) {
-    int numSingleQuotes = 0;
-    int numDoubleQuotes = 0;
-    for (int i = 0; i < exprText.length(); i++) {
-      switch (exprText.charAt(i)) {
-        case '\'':
-          numSingleQuotes++;
-          break;
-        case '"':
-          numDoubleQuotes++;
-          break;
-      }
-    }
-    return numDoubleQuotes >= 2 && numSingleQuotes <= 1;
   }
 }

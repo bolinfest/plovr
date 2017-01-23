@@ -18,7 +18,8 @@ package com.google.template.soy.passes;
 
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.error.ErrorReporter;
-import com.google.template.soy.error.SoyError;
+import com.google.template.soy.error.SoyErrorKind;
+import com.google.template.soy.exprparse.SoyParsingContext;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.exprtree.FunctionNode;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
@@ -38,16 +39,16 @@ import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
  */
 public final class RewriteRemaindersVisitor extends AbstractSoyNodeVisitor<Void> {
 
-  private static final SoyError REMAINDER_ARITY_MISMATCH =
-      SoyError.of("''remainder'' called with {0} arguments, expected 1.");
-  private static final SoyError REMAINDER_OUTSIDE_PLURAL =
-      SoyError.of("Special function ''remainder'' is for use in plural messages only.");
-  private static final SoyError REMAINDER_PLURAL_EXPR_MISMATCH =
-      SoyError.of("Argument to ''remainder'' must be the same as the ''plural'' variable");
-  private static final SoyError REMAINDER_UNNECESSARY_AT_OFFSET_0 =
-      SoyError.of("''remainder'' is unnecessary since offset=0.");
-  private static final SoyError REMAINDER_WITH_PHNAME =
-      SoyError.of("Special function ''remainder'' cannot be used with ''phname''.");
+  private static final SoyErrorKind REMAINDER_ARITY_MISMATCH =
+      SoyErrorKind.of("''remainder'' called with {0} arguments, expected 1.");
+  private static final SoyErrorKind REMAINDER_OUTSIDE_PLURAL =
+      SoyErrorKind.of("Special function ''remainder'' is for use in plural messages only.");
+  private static final SoyErrorKind REMAINDER_PLURAL_EXPR_MISMATCH =
+      SoyErrorKind.of("Argument to ''remainder'' must be the same as the ''plural'' variable");
+  private static final SoyErrorKind REMAINDER_UNNECESSARY_AT_OFFSET_0 =
+      SoyErrorKind.of("''remainder'' is unnecessary since offset=0.");
+  private static final SoyErrorKind REMAINDER_WITH_PHNAME =
+      SoyErrorKind.of("Special function ''remainder'' cannot be used with ''phname''.");
 
   /** The MsgPluralNode most recently visited. */
   private MsgPluralNode currPluralNode;
@@ -63,6 +64,9 @@ public final class RewriteRemaindersVisitor extends AbstractSoyNodeVisitor<Void>
 
 
   @Override protected void visitPrintNode(PrintNode node) {
+    // We cannot easily access the original context.  However, because everything has already been
+    // parsed, that should be fine.  I don't think this can fail at all, but whatever.
+    SoyParsingContext context = SoyParsingContext.empty(errorReporter, "fake.namespace");
 
     ExprRootNode exprRootNode = node.getExprUnion().getExpr();
     if (exprRootNode == null) {
@@ -110,7 +114,7 @@ public final class RewriteRemaindersVisitor extends AbstractSoyNodeVisitor<Void>
         PrintNode newPrintNode
             = new PrintNode.Builder(node.getId(), node.isImplicit(), SourceLocation.UNKNOWN)
                 .exprText(newExprText)
-                .build(errorReporter);
+                .build(context);
         newPrintNode.addChildren(node.getChildren());
         node.getParent().replaceChild(node, newPrintNode);
       }

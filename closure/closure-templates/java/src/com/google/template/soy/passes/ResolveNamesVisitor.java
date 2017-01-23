@@ -22,11 +22,12 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.error.ErrorReporter;
-import com.google.template.soy.error.SoyError;
+import com.google.template.soy.error.SoyErrorKind;
 import com.google.template.soy.exprtree.AbstractExprNodeVisitor;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprNode.ParentExprNode;
 import com.google.template.soy.exprtree.ExprRootNode;
+import com.google.template.soy.exprtree.GlobalNode;
 import com.google.template.soy.exprtree.VarDefn;
 import com.google.template.soy.exprtree.VarRefNode;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
@@ -60,9 +61,12 @@ import java.util.Map;
  *
  */
 final class ResolveNamesVisitor extends AbstractSoyNodeVisitor<Void> {
+  private static final SoyErrorKind GLOBAL_MATCHES_VARIABLE =
+      SoyErrorKind.of("Found global reference aliasing a local variable ''{0}'', did you mean "
+          + "''${0}''?");
 
-  private static final SoyError VARIABLE_ALREADY_DEFINED =
-      SoyError.of("variable ''${0}'' already defined{1}");
+  private static final SoyErrorKind VARIABLE_ALREADY_DEFINED =
+      SoyErrorKind.of("variable ''${0}'' already defined{1}");
 
   /**
    * A data structure that assigns a unique (small) integer to all local variable definitions that
@@ -158,13 +162,17 @@ final class ResolveNamesVisitor extends AbstractSoyNodeVisitor<Void> {
      * extra implicit local variables for tracking the current index and whether or not we are at
      * the last index.
      */
-    void define(LoopVar defn, SoyNode definingNode) {
+    boolean define(LoopVar defn, SoyNode definingNode) {
+      if (!define((VarDefn) defn, definingNode)) {
+        return false;
+      }
+      // only allocate the extra slots if definition succeeded
       defn.setExtraLoopIndices(claimSlot(), claimSlot());
-      define((VarDefn) defn, definingNode);
+      return true;
     }
 
     /** Defines a variable. */
-    void define(VarDefn defn, SoyNode definingNode) {
+    boolean define(VarDefn defn, SoyNode definingNode) {
       // Search for the name to see if it is being redefined.
       VarDefn preexisting = lookup(defn.name());
       if (preexisting != null) {
@@ -174,10 +182,11 @@ final class ResolveNamesVisitor extends AbstractSoyNodeVisitor<Void> {
             : "";
         errorReporter.report(
             definingNode.getSourceLocation(), VARIABLE_ALREADY_DEFINED, defn.name(), location);
-        return;
+        return false;
       }
       currentScope.peek().put(defn.name(), defn);
       defn.setLocalVariableIndex(claimSlot());
+      return true;
     }
 
 
@@ -345,8 +354,26 @@ final class ResolveNamesVisitor extends AbstractSoyNodeVisitor<Void> {
       }
     }
 
+    @Override protected void visitGlobalNode(GlobalNode node) {
+      // Check for a typo involving a global reference.  If the author forgets the leading '$' on a
+      // variable reference then it will get parsed as a global.  In some compiler configurations
+      // unknown globals are not an error.  To ensure that typos are caught we check for this case
+      // here.  Making 'unknown globals' an error consistently would be a better solution, though
+      // even then we would probably want some typo checking like this.
+      // Note.  This also makes it impossible for a global to share the same name as a local.  This
+      // should be fine since global names are typically qualified strings.
+      String globalName = node.getName();
+      VarDefn varDefn = localVariables.lookup(globalName);
+      if (varDefn != null) {
+        node.suppressUnknownGlobalErrors();
+        // This means that this global has the same name as an in-scope local or param.  It is
+        // likely that they just forgot the leading '$'
+        errorReporter.report(node.getSourceLocation(), GLOBAL_MATCHES_VARIABLE, globalName);
+      }
+    }
+
     @Override protected void visitVarRefNode(VarRefNode varRef) {
-      if (varRef.isInjected()) {
+      if (varRef.isDollarSignIjParameter()) {
         InjectedParam ijParam = ijParams.get(varRef.getName());
         if (ijParam == null) {
           ijParam = new InjectedParam(varRef.getName());

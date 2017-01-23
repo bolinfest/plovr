@@ -22,7 +22,8 @@ import com.google.common.collect.Lists;
 import com.google.template.soy.base.internal.IdGenerator;
 import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.error.ErrorReporter.Checkpoint;
-import com.google.template.soy.error.SoyError;
+import com.google.template.soy.error.SoyErrorKind;
+import com.google.template.soy.exprparse.SoyParsingContext;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.MsgNode;
@@ -47,11 +48,13 @@ import javax.annotation.Nullable;
  */
 final class RewriteGenderMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
 
-  private static final SoyError GENDER_AND_SELECT_NOT_ALLOWED = SoyError.of(
-      "Cannot mix ''genders'' attribute with ''select'' command in the same message.");
-  private static final SoyError MORE_THAN_TWO_GENDER_EXPRS = SoyError.of(
-      "In a msg with ''plural'', the ''genders'' attribute can contain at most 2 expressions "
-      + "(otherwise, combinatorial explosion would cause a gigantic generated message).");
+  private static final SoyErrorKind GENDER_AND_SELECT_NOT_ALLOWED =
+      SoyErrorKind.of(
+          "Cannot mix ''genders'' attribute with ''select'' command in the same message.");
+  private static final SoyErrorKind MORE_THAN_TWO_GENDER_EXPRS =
+      SoyErrorKind.of(
+          "In a msg with ''plural'', the ''genders'' attribute can contain at most 2 expressions "
+              + "(otherwise, combinatorial explosion would cause a gigantic generated message).");
 
   /** Fallback base select var name. */
   public static final String FALLBACK_BASE_SELECT_VAR_NAME = "GENDER";
@@ -142,13 +145,17 @@ final class RewriteGenderMsgsVisitor extends AbstractSoyNodeVisitor<Void> {
     List<StandaloneNode> origChildren = ImmutableList.copyOf(msg.getChildren());
     msg.clearChildren();
 
+    // We cannot easily access the original context.  However, because everything has already been
+    // parsed, that should be fine.  I don't think this can fail at all, but whatever.
+    SoyParsingContext context = SoyParsingContext.empty(errorReporter, "fake.namespace");
+
     MsgSelectCaseNode femaleCase
         = new MsgSelectCaseNode.Builder(nodeIdGen.genId(), "'female'", msg.getSourceLocation())
-            .build(errorReporter);
+            .build(context);
     femaleCase.addChildren(SoytreeUtils.cloneListWithNewIds(origChildren, nodeIdGen));
     MsgSelectCaseNode maleCase
         = new MsgSelectCaseNode.Builder(nodeIdGen.genId(), "'male'", msg.getSourceLocation())
-            .build(errorReporter);
+            .build(context);
     maleCase.addChildren(SoytreeUtils.cloneListWithNewIds(origChildren, nodeIdGen));
     MsgSelectDefaultNode defaultCase
         = new MsgSelectDefaultNode(nodeIdGen.genId(), msg.getSourceLocation());
