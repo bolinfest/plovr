@@ -29,6 +29,7 @@ import com.google.javascript.jscomp.GoogleJsMessageIdGenerator;
 import com.google.javascript.jscomp.JsMessage;
 import com.google.javascript.jscomp.JsMessageExtractor;
 import com.google.javascript.jscomp.SourceFile;
+import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.msgs.SoyMsgBundle;
 import com.google.template.soy.msgs.SoyMsgBundleHandler.OutputFileOptions;
 import com.google.template.soy.msgs.restricted.SoyMsg;
@@ -150,6 +151,7 @@ public class ExtractCommand extends AbstractCommandRunner<ExtractCommandOptions>
           parts.add(SoyMsgRawTextPart.of((String)part));
         }
       }
+
       soyMsgs.add(
           new SoyMsg(
               Long.valueOf(msg.getId()),
@@ -158,7 +160,7 @@ public class ExtractCommand extends AbstractCommandRunner<ExtractCommandOptions>
               msg.getDesc(),
               msg.isHidden(),
               null /* contentType */,
-              msg.getSourceName(),
+              new SourceLocation(msg.getSourceName()),
               parts));
     }
 

@@ -26,13 +26,10 @@ goog.require('goog.testing.jsunit');
 var timer;
 
 function shouldRunTests() {
-  // Something about this test crashes Firefox 41, but not 42. (b/25813662)
-  if (goog.labs.userAgent.browser.isFirefox() &&
-      goog.labs.userAgent.browser.isVersionOrHigher(41) &&
-      !goog.labs.userAgent.browser.isVersionOrHigher(42)) {
-    return false;
-  }
-  return true;
+  // TODO(b/31221500): This test fails when run in a suite immediately after
+  // portchannel_test. The workers take dozens of seconds to start up for some
+  // reason.
+  return !goog.labs.userAgent.browser.isEdge();
 }
 
 function setUpPage() {
@@ -60,9 +57,10 @@ function testRouteMessageThroughWorkers() {
   master.addPort(
       'worker2', new goog.messaging.PortChannel(
                      new Worker('testdata/portnetwork_worker2.js')));
+  var peerOrigin = window.location.protocol + '//' + window.location.host;
   master.addPort(
       'frame', goog.messaging.PortChannel.forEmbeddedWindow(
-                   window.frames['inner'], '*', timer));
+                   window.frames['inner'], peerOrigin, timer));
 
   var promise = new goog.Promise(function(resolve, reject) {
     master.dial('worker1').registerService('result', resolve, true);

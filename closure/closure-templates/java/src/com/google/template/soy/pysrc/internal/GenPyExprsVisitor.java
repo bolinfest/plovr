@@ -22,11 +22,12 @@ import com.google.common.collect.ImmutableMap;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import com.google.template.soy.base.internal.BaseUtils;
+import com.google.template.soy.base.internal.LegacyInternalSyntaxException;
+import com.google.template.soy.error.ErrorReporter;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.exprtree.Operator;
 import com.google.template.soy.msgs.internal.MsgUtils;
 import com.google.template.soy.pysrc.internal.MsgFuncGenerator.MsgFuncGeneratorFactory;
-import com.google.template.soy.pysrc.internal.TranslateToPyExprVisitor.TranslateToPyExprVisitorFactory;
 import com.google.template.soy.pysrc.restricted.PyExpr;
 import com.google.template.soy.pysrc.restricted.PyExprUtils;
 import com.google.template.soy.pysrc.restricted.PyStringExpr;
@@ -44,7 +45,6 @@ import com.google.template.soy.soytree.PrintNode;
 import com.google.template.soy.soytree.RawTextNode;
 import com.google.template.soy.soytree.SoyNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
-import com.google.template.soy.soytree.SoySyntaxExceptionUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -63,18 +63,16 @@ public class GenPyExprsVisitor extends AbstractSoyNodeVisitor<List<PyExpr>> {
    * Injectable factory for creating an instance of this class.
    */
   public static interface GenPyExprsVisitorFactory {
-    public GenPyExprsVisitor create(LocalVariableStack localVarExprs);
+    public GenPyExprsVisitor create(LocalVariableStack localVarExprs, ErrorReporter errorReporter);
   }
 
 
   /** Map of all SoyPySrcPrintDirectives (name to directive). */
-  Map<String, SoyPySrcPrintDirective> soyPySrcDirectivesMap;
+  private Map<String, SoyPySrcPrintDirective> soyPySrcDirectivesMap;
 
   private final IsComputableAsPyExprVisitor isComputableAsPyExprVisitor;
 
   private final GenPyExprsVisitorFactory genPyExprsVisitorFactory;
-
-  private final TranslateToPyExprVisitorFactory translateToPyExprVisitorFactory;
 
   private final GenPyCallExprVisitor genPyCallExprVisitor;
 
@@ -85,7 +83,7 @@ public class GenPyExprsVisitor extends AbstractSoyNodeVisitor<List<PyExpr>> {
   /** List to collect the results. */
   private List<PyExpr> pyExprs;
 
-
+  private final ErrorReporter errorReporter;
 
   /**
    * @param soyPySrcDirectivesMap Map of all SoyPySrcPrintDirectives (name to directive).
@@ -96,16 +94,16 @@ public class GenPyExprsVisitor extends AbstractSoyNodeVisitor<List<PyExpr>> {
       IsComputableAsPyExprVisitor isComputableAsPyExprVisitor,
       GenPyExprsVisitorFactory genPyExprsVisitorFactory,
       MsgFuncGeneratorFactory msgFuncGeneratorFactory,
-      TranslateToPyExprVisitorFactory translateToPyExprVisitorFactory,
       GenPyCallExprVisitor genPyCallExprVisitor,
-      @Assisted LocalVariableStack localVarExprs) {
+      @Assisted LocalVariableStack localVarExprs,
+      @Assisted ErrorReporter errorReporter) {
     this.soyPySrcDirectivesMap = soyPySrcDirectivesMap;
     this.isComputableAsPyExprVisitor = isComputableAsPyExprVisitor;
     this.genPyExprsVisitorFactory = genPyExprsVisitorFactory;
-    this.translateToPyExprVisitorFactory = translateToPyExprVisitorFactory;
     this.genPyCallExprVisitor = genPyCallExprVisitor;
     this.msgFuncGeneratorFactory = msgFuncGeneratorFactory;
     this.localVarExprs = localVarExprs;
+    this.errorReporter = errorReporter;
   }
 
 
@@ -166,7 +164,8 @@ public class GenPyExprsVisitor extends AbstractSoyNodeVisitor<List<PyExpr>> {
    * </pre>
    */
   @Override protected void visitPrintNode(PrintNode node) {
-    TranslateToPyExprVisitor translator = translateToPyExprVisitorFactory.create(localVarExprs);
+    TranslateToPyExprVisitor translator =
+        new TranslateToPyExprVisitor(localVarExprs, errorReporter);
 
     PyExpr pyExpr = translator.exec(node.getExprUnion().getExpr());
 
@@ -176,19 +175,27 @@ public class GenPyExprsVisitor extends AbstractSoyNodeVisitor<List<PyExpr>> {
       // Get directive.
       SoyPySrcPrintDirective directive = soyPySrcDirectivesMap.get(directiveNode.getName());
       if (directive == null) {
-        throw SoySyntaxExceptionUtils.createWithNode(
-            "Failed to find SoyPySrcPrintDirective with name '" + directiveNode.getName() + "'"
-                + " (tag " + node.toSourceString() + ")",
-            directiveNode);
+        throw LegacyInternalSyntaxException.createWithMetaInfo(
+            "Failed to find SoyPySrcPrintDirective with name '"
+                + directiveNode.getName()
+                + "'"
+                + " (tag "
+                + node.toSourceString()
+                + ")",
+            directiveNode.getSourceLocation());
       }
 
       // Get directive args.
       List<ExprRootNode> args = directiveNode.getArgs();
       if (!directive.getValidArgsSizes().contains(args.size())) {
-        throw SoySyntaxExceptionUtils.createWithNode(
-            "Print directive '" + directiveNode.getName() + "' used with the wrong number of"
-                + " arguments (tag " + node.toSourceString() + ").",
-            directiveNode);
+        throw LegacyInternalSyntaxException.createWithMetaInfo(
+            "Print directive '"
+                + directiveNode.getName()
+                + "' used with the wrong number of"
+                + " arguments (tag "
+                + node.toSourceString()
+                + ").",
+            directiveNode.getSourceLocation());
       }
 
       // Translate directive args.
@@ -205,13 +212,16 @@ public class GenPyExprsVisitor extends AbstractSoyNodeVisitor<List<PyExpr>> {
   }
 
   @Override protected void visitMsgFallbackGroupNode(MsgFallbackGroupNode node) {
-    PyExpr msg = msgFuncGeneratorFactory.create(node.getMsg(), localVarExprs).getPyExpr();
+    PyExpr msg =
+        msgFuncGeneratorFactory.create(node.getMsg(), localVarExprs, errorReporter).getPyExpr();
 
     // MsgFallbackGroupNode could only have one child or two children. See MsgFallbackGroupNode.
     if (node.hasFallbackMsg()) {
       StringBuilder pyExprTextSb = new StringBuilder();
-      PyExpr fallbackMsg = msgFuncGeneratorFactory.create(
-          node.getFallbackMsg(), localVarExprs).getPyExpr();
+      PyExpr fallbackMsg =
+          msgFuncGeneratorFactory
+              .create(node.getFallbackMsg(), localVarExprs, errorReporter)
+              .getPyExpr();
 
       // Build Python ternary expression: a if cond else c
       pyExprTextSb.append(msg.getText()).append(" if ");
@@ -244,7 +254,8 @@ public class GenPyExprsVisitor extends AbstractSoyNodeVisitor<List<PyExpr>> {
 
     ExprRootNode componentNameExpr = node.getComponentNameExpr();
     if (componentNameExpr != null) {
-      TranslateToPyExprVisitor translator = translateToPyExprVisitorFactory.create(localVarExprs);
+      TranslateToPyExprVisitor translator =
+          new TranslateToPyExprVisitor(localVarExprs, errorReporter);
       PyExpr basePyExpr = translator.exec(componentNameExpr);
       sb.append(basePyExpr.getText()).append(", ");
     }
@@ -259,8 +270,10 @@ public class GenPyExprsVisitor extends AbstractSoyNodeVisitor<List<PyExpr>> {
    */
   @Override protected void visitIfNode(IfNode node) {
     // Create another instance of this visitor for generating Python expressions from children.
-    GenPyExprsVisitor genPyExprsVisitor = genPyExprsVisitorFactory.create(localVarExprs);
-    TranslateToPyExprVisitor translator = translateToPyExprVisitorFactory.create(localVarExprs);
+    GenPyExprsVisitor genPyExprsVisitor =
+        genPyExprsVisitorFactory.create(localVarExprs, errorReporter);
+    TranslateToPyExprVisitor translator =
+        new TranslateToPyExprVisitor(localVarExprs, errorReporter);
 
     StringBuilder pyExprTextSb = new StringBuilder();
 
@@ -312,7 +325,7 @@ public class GenPyExprsVisitor extends AbstractSoyNodeVisitor<List<PyExpr>> {
   }
 
   @Override protected void visitCallNode(CallNode node) {
-    pyExprs.add(genPyCallExprVisitor.exec(node, localVarExprs));
+    pyExprs.add(genPyCallExprVisitor.exec(node, localVarExprs, errorReporter));
   }
 
   @Override protected void visitCallParamContentNode(CallParamContentNode node) {

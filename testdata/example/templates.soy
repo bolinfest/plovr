@@ -9,12 +9,12 @@
 
 <ul>
 {foreach $weekday in $weekdays}
-  <li>{substring($weekday, 0, 3)}
+  <li>{strSub($weekday, 0, 3)}
 {/foreach}
 </ul>
 
 {call .listTemplate}
-  {param items: list('Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat') /}
+  {param items: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] /}
 {/call}
 {/template}
 

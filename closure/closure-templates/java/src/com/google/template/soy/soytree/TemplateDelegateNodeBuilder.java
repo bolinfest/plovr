@@ -21,11 +21,13 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.base.internal.BaseUtils;
+import com.google.template.soy.base.internal.LegacyInternalSyntaxException;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.data.internalutils.NodeContentKinds;
 import com.google.template.soy.error.ErrorReporter;
-import com.google.template.soy.error.SoyError;
+import com.google.template.soy.error.SoyErrorKind;
 import com.google.template.soy.exprparse.ExpressionParser;
+import com.google.template.soy.exprparse.SoyParsingContext;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.exprtree.ExprRootNode;
 import com.google.template.soy.exprtree.GlobalNode;
@@ -49,18 +51,19 @@ import java.util.regex.Pattern;
  */
 public class TemplateDelegateNodeBuilder extends TemplateNodeBuilder {
 
-  private static final SoyError INVALID_DELTEMPLATE_COMMAND_TEXT = SoyError.of(
-      "Invalid delegate template command text.");
-  private static final SoyError INVALID_DELTEMPLATE_NAME = SoyError.of(
-      "Invalid delegate template name");
-  private static final SoyError INVALID_VARIANT_EXPR = SoyError.of("Invalid variant expression "
-          + "(must be a string literal containing an identifier or global expression).");
-  private static final SoyError NO_SOY_DOC = SoyError.of("Delegate templates require SoyDoc.");
+  private static final SoyErrorKind INVALID_DELTEMPLATE_COMMAND_TEXT =
+      SoyErrorKind.of("Invalid deltemplate command text.");
+  private static final SoyErrorKind INVALID_DELTEMPLATE_NAME =
+      SoyErrorKind.of("Invalid name.  deltemplate names should be fully qualified.");
+  private static final SoyErrorKind INVALID_VARIANT_EXPR =
+      SoyErrorKind.of(
+          "Invalid variant expression "
+              + "(must be a string literal containing an identifier or global expression).");
 
   /** Pattern for the command text. */
   // 2 capturing groups: del template name, attributes.
   private static final Pattern COMMAND_TEXT_PATTERN =
-      Pattern.compile("([.\\w]+) ( \\s .* | $ )", Pattern.COMMENTS | Pattern.DOTALL);
+      Pattern.compile("^\\s*([.\\w]+)(\\s.*|$)", Pattern.DOTALL);
 
   /** Parser for the attributes in command text. */
   private static final CommandTextAttributesParser ATTRIBUTES_PARSER =
@@ -117,7 +120,13 @@ public class TemplateDelegateNodeBuilder extends TemplateNodeBuilder {
   @Override public TemplateDelegateNodeBuilder setCmdText(String cmdText) {
     Preconditions.checkState(this.cmdText == null);
     this.cmdText = cmdText;
-
+    if (soyFileHeaderInfo.namespace == null) {
+      // Abort template parsing if there is no namespace.
+      // TODO(lukes): if we had a more strongly typed way of representing template names we could
+      // use some kind of standard ERROR namespace and continue.
+      throw LegacyInternalSyntaxException.createWithMetaInfo(
+          "Cannot declare deltemplates in files with no namespace declaration.", sourceLocation);
+    }
     Matcher matcher = COMMAND_TEXT_PATTERN.matcher(cmdText);
     if (!matcher.matches()) {
       errorReporter.report(sourceLocation, INVALID_DELTEMPLATE_COMMAND_TEXT);
@@ -136,13 +145,15 @@ public class TemplateDelegateNodeBuilder extends TemplateNodeBuilder {
     if (variantExprText == null) {
       this.delTemplateVariant = "";
     } else {
-      ExprNode variantExpr = new ExpressionParser(variantExprText, sourceLocation, errorReporter)
+      ExprNode variantExpr = new ExpressionParser(variantExprText, sourceLocation,
+          SoyParsingContext.create(errorReporter, soyFileHeaderInfo.namespace,
+              soyFileHeaderInfo.aliasToNamespaceMap))
           .parseExpression();
       if (variantExpr instanceof StringNode) {
         // A string literal is being used as template variant, so the expression value can
         // immediately be evaluated.
         this.delTemplateVariant = ((StringNode) variantExpr).getValue();
-        TemplateDelegateNode.verifyVariantName(delTemplateVariant);
+        TemplateDelegateNode.verifyVariantName(delTemplateVariant, sourceLocation);
       } else if (variantExpr instanceof GlobalNode) {
         // A global expression was used as template variant. The expression will be stored and later
         // resolved into a value when the global expressions are resolved.
@@ -248,9 +259,6 @@ public class TemplateDelegateNodeBuilder extends TemplateNodeBuilder {
   }
 
   @Override public TemplateDelegateNodeBuilder setSoyDoc(String soyDoc) {
-    if (soyDoc == null) {
-      errorReporter.report(sourceLocation, NO_SOY_DOC);
-    }
     return (TemplateDelegateNodeBuilder) super.setSoyDoc(soyDoc);
   }
 

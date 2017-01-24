@@ -47,6 +47,18 @@ function fire(keycode, opt_extraProperties, opt_element) {
       opt_element || targetDiv, keycode, opt_extraProperties);
 }
 
+/**
+ * Simulates a complete keystroke (keydown, keypress, and keyup) when typing
+ * a non-ASCII character.
+ *
+ * @param {number} keycode The keycode of the keydown and keyup events.
+ * @param {number} keyPressKeyCode The keycode of the keypress event.
+ * @param {Object=} opt_extraProperties Event properties to be mixed into the
+ *     BrowserEvent.
+ * @param {EventTarget=} opt_element Optional target for the event.
+ * @return {boolean} The returnValue of the sequence: false if preventDefault()
+ *     was called on any of the events, true otherwise.
+ */
 function fireAltGraphKey(
     keycode, keyPressKeyCode, opt_extraProperties, opt_element) {
   return goog.testing.events.fireNonAsciiKeySequence(
@@ -575,7 +587,7 @@ function testAltGraphKeyOnUSLayout() {
   listener.shortcutFired('letterThree');
   listener.shortcutFired('letterFour');
   listener.shortcutFired('letterFive');
-  if (goog.userAgent.WINDOWS && !goog.userAgent.GECKO) {
+  if (goog.userAgent.WINDOWS) {
     listener.$replay();
 
     handler.registerShortcut('letterOne', 'ctrl+alt+1');
@@ -600,7 +612,7 @@ function testAltGraphKeyOnFrenchLayout() {
   // French layout. This test verifies we fire shortcut events only when
   // we type ctrl+alt+1 keys on the French layout.
   listener.shortcutFired('letterOne');
-  if (goog.userAgent.WINDOWS && !goog.userAgent.GECKO) {
+  if (goog.userAgent.WINDOWS) {
     listener.$replay();
 
     handler.registerShortcut('letterOne', 'ctrl+alt+1');
@@ -624,7 +636,7 @@ function testAltGraphKeyOnSpanishLayout() {
   // Windows assigns printable characters to ctrl+alt+[1-5] keys of the
   // Spanish layout. This test verifies we do not fire shortcut events at
   // all when typing ctrl+alt+[1-5] keys on the Spanish layout.
-  if (goog.userAgent.WINDOWS && !goog.userAgent.GECKO) {
+  if (goog.userAgent.WINDOWS) {
     listener.$replay();
 
     handler.registerShortcut('letterOne', 'ctrl+alt+1');
@@ -648,7 +660,7 @@ function testAltGraphKeyOnPolishLayout_withShift() {
   // Windows assigns printable characters to ctrl+alt+shift+A key in polish
   // layout. This test verifies that we do not fire shortcut events for A, but
   // does fire for Q which does not have a printable character.
-  if (goog.userAgent.WINDOWS && !goog.userAgent.GECKO) {
+  if (goog.userAgent.WINDOWS) {
     listener.shortcutFired('letterQ');
     listener.$replay();
 
@@ -656,10 +668,10 @@ function testAltGraphKeyOnPolishLayout_withShift() {
     handler.registerShortcut('letterQ', 'ctrl+alt+shift+Q');
 
     // Send key events on the Polish (Programmer) layout.
-    fireAltGraphKey(
-        KeyCodes.A, 0x0104, {ctrlKey: true, altKey: true, shiftKey: true});
-    fireAltGraphKey(
-        KeyCodes.Q, 0, {ctrlKey: true, altKey: true, shiftKey: true});
+    assertTrue(fireAltGraphKey(
+        KeyCodes.A, 0x0104, {ctrlKey: true, altKey: true, shiftKey: true}));
+    assertFalse(fireAltGraphKey(
+        KeyCodes.Q, 0, {ctrlKey: true, altKey: true, shiftKey: true}));
 
     listener.$verify();
   }
@@ -709,6 +721,33 @@ function testGeckoShortcuts() {
   }
 
   listener.$verify();
+}
+
+function testWindows_multiKeyShortcuts() {
+  if (goog.userAgent.WINDOWS) {
+    listener.shortcutFired('1');
+    listener.$replay();
+
+    handler.registerShortcut('1', 'ctrl+alt+n c');
+    fire(KeyCodes.N, {ctrlKey: true, altKey: true});
+    fire(KeyCodes.C);
+
+    listener.$verify();
+  }
+}
+
+function testWindows_multikeyShortcuts_polishKey() {
+  if (goog.userAgent.WINDOWS) {
+    listener.$replay();
+
+    handler.registerShortcut('announceCursorLocation', 'ctrl+alt+a l');
+
+    // If a Polish key is a subsection of a keyboard shortcut, then
+    // the key should still be written.
+    assertTrue(fireAltGraphKey(
+        KeyCodes.A, 0x0104, {ctrlKey: true, altKey: true}));
+    listener.$verify();
+  }
 }
 
 function testRegisterShortcut_modifierOnly() {

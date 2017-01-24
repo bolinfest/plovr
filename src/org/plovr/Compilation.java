@@ -38,7 +38,6 @@ import com.google.javascript.jscomp.Result;
 import com.google.javascript.jscomp.SourceExcerptProvider;
 import com.google.javascript.jscomp.SourceFile;
 import com.google.javascript.jscomp.SourceMap;
-import com.google.template.soy.base.SoySyntaxException;
 
 /**
  * {@link Compilation} represents a compilation performed by the Closure
@@ -125,9 +124,7 @@ public final class Compilation {
   }
 
   private static CompilationException toCheckedException(Throwable e) {
-    if (e instanceof SoySyntaxException) {
-      return new CheckedSoySyntaxException((SoySyntaxException) e);
-    } else if (e instanceof PlovrSoySyntaxException) {
+    if (e instanceof PlovrSoySyntaxException) {
       return new CheckedSoySyntaxException((PlovrSoySyntaxException) e);
     } else if (e instanceof PlovrCoffeeScriptCompilerException) {
       return new CheckedCoffeeScriptCompilerException((PlovrCoffeeScriptCompilerException) e);

@@ -49,6 +49,14 @@ goog.editor.plugins.RemoveFormatting = function() {
    * @private
    */
   this.optRemoveFormattingFunc_ = null;
+
+  /**
+   * The key that this plugin triggers on when pressed with the platform
+   * modifier key. Can be set by calling {@link #setKeyboardShortcutKey}.
+   * @type {string}
+   * @private
+   */
+  this.keyboardShortcutKey_ = ' ';
 };
 goog.inherits(goog.editor.plugins.RemoveFormatting, goog.editor.Plugin);
 
@@ -129,13 +137,29 @@ goog.editor.plugins.RemoveFormatting.prototype.handleKeyboardShortcut =
     return false;
   }
 
-  if (key == ' ') {
+  // Disregard the shortcut if more than one modifier key is pressed
+  // because the user may have intended a different shortcut (for example OSX
+  // uses ctrlKey + metaKey + space to open the emoji picker).
+  if (e.metaKey && e.ctrlKey) {
+    return false;
+  }
+
+  if (key == this.keyboardShortcutKey_) {
     this.getFieldObject().execCommand(
         goog.editor.plugins.RemoveFormatting.REMOVE_FORMATTING_COMMAND);
     return true;
   }
 
   return false;
+};
+
+
+/**
+ * @param {string} key
+ */
+goog.editor.plugins.RemoveFormatting.prototype.setKeyboardShortcutKey =
+    function(key) {
+  this.keyboardShortcutKey_ = key;
 };
 
 

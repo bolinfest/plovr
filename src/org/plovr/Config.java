@@ -109,7 +109,7 @@ public final class Config implements Comparable<Config> {
 
   private final String soyTranslationPlugin;
 
-  private final boolean soyUseInjectedData;
+  private final String soyProtoFileDescriptors;
 
   private final CompilationMode compilationMode;
 
@@ -219,7 +219,7 @@ public final class Config implements Comparable<Config> {
       List<File> testExcludePaths,
       List<String> soyFunctionPlugins,
       String soyTranslationPlugin,
-      boolean soyUseInjectedData,
+      String soyProtoFileDescriptors,
       CompilationMode compilationMode,
       WarningLevel warningLevel,
       boolean debug,
@@ -276,7 +276,7 @@ public final class Config implements Comparable<Config> {
     this.testExcludePaths = ImmutableSet.copyOf(testExcludePaths);
     this.soyFunctionPlugins = ImmutableList.copyOf(soyFunctionPlugins);
     this.soyTranslationPlugin = soyTranslationPlugin;
-    this.soyUseInjectedData = soyUseInjectedData;
+    this.soyProtoFileDescriptors = soyProtoFileDescriptors;
     this.compilationMode = compilationMode;
     this.warningLevel = warningLevel;
     this.debug = debug;
@@ -373,8 +373,8 @@ public final class Config implements Comparable<Config> {
     return !soyFunctionPlugins.isEmpty();
   }
 
-  public boolean getSoyUseInjectedData() {
-    return soyUseInjectedData;
+  public String getSoyProtoFileDescriptors() {
+    return soyProtoFileDescriptors;
   }
 
   public CompilationMode getCompilationMode() {
@@ -403,7 +403,7 @@ public final class Config implements Comparable<Config> {
         .put("debug", debug)
         .put("pretty-print", prettyPrint)
         .put("print-input-delimeter", printInputDelimiter)
-        .put("soy-use-injected-data", getSoyUseInjectedData())
+        .put("soy-proto-file-descriptors", getSoyProtoFileDescriptors())
         .put("css-output-format", getCssOutputFormat())
         .put("language", Strings.nullToEmpty(getLanguage()))
         .build();
@@ -1072,7 +1072,7 @@ public final class Config implements Comparable<Config> {
 
     private String soyTranslationPlugin = "";
 
-    private boolean soyUseInjectedData = false;
+    private String soyProtoFileDescriptors = "";
 
     private ListMultimap<CustomPassExecutionTime, CompilerPassFactory> customPasses = ImmutableListMultimap.of();
 
@@ -1211,7 +1211,7 @@ public final class Config implements Comparable<Config> {
           ? new ImmutableList.Builder<String>().addAll(config.getSoyFunctionPlugins())
           : null;
       this.soyTranslationPlugin = config.soyTranslationPlugin;
-      this.soyUseInjectedData = config.soyUseInjectedData;
+      this.soyProtoFileDescriptors = config.soyProtoFileDescriptors;
       this.customPasses = config.customPasses;
       this.customWarningsGuards = new ImmutableList.Builder<WarningsGuardFactory>()
         .addAll(config.customWarningsGuards);
@@ -1443,8 +1443,8 @@ public final class Config implements Comparable<Config> {
       this.documentationOutputDirectory = documentationOutputDirectory;
     }
 
-    public void setSoyUseInjectedData(boolean soyUseInjectedData) {
-      this.soyUseInjectedData = soyUseInjectedData;
+    public void setSoyProtoFileDescriptors(String soyProtoFileDescriptors) {
+      this.soyProtoFileDescriptors = soyProtoFileDescriptors;
     }
 
     public void setCustomPasses(
@@ -1768,7 +1768,7 @@ public final class Config implements Comparable<Config> {
         SoyFileOptions soyFileOptions = new SoyFileOptions.Builder()
             .setPluginModuleNames(soyFunctionNames)
             .setUseClosureLibrary(!this.excludeClosureLibrary)
-            .setIsUsingInjectedData(this.soyUseInjectedData)
+            .setProtoFileDescriptors(this.soyProtoFileDescriptors)
             .setMsgBundle(getSoyMsgBundle())
             .build();
 
@@ -1795,7 +1795,7 @@ public final class Config implements Comparable<Config> {
           testExcludePaths,
           soyFunctionNames,
           soyTranslationPlugin,
-          this.soyUseInjectedData,
+          this.soyProtoFileDescriptors,
           compilationMode,
           warningLevel,
           debug,

@@ -30,6 +30,7 @@ import com.google.template.soy.base.SoySyntaxException;
 import com.google.template.soy.data.SoyData;
 import com.google.template.soy.data.restricted.StringData;
 import com.google.template.soy.error.ErrorReporter;
+import com.google.template.soy.error.SoyCompilationException;
 import com.google.template.soy.soyparse.ParseException;
 import com.google.template.soy.soyparse.SoyFileParser;
 import com.google.template.soy.soytree.SoyFileNode;
@@ -130,7 +131,9 @@ public class SoyRequestHandler implements HttpHandler {
         errorReporter);
     SoyFileNode node = parser.parseSoyFile();
 
-    errorReporter.throwIfErrorsPresent();
+    if (errorReporter.hasErrors()) {
+      throw new com.google.template.soy.error.SoyCompilationException(errorReporter.getErrors());
+    }
 
     String namespace = node.getNamespace();
     String templateName = namespace + "." + templateToRender;

@@ -29,10 +29,9 @@ import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.template.soy.SoyFileSetParserBuilder;
 import com.google.template.soy.SoyModule;
-import com.google.template.soy.data.restricted.PrimitiveData;
+import com.google.template.soy.error.ExplodingErrorReporter;
 import com.google.template.soy.exprtree.ExprNode;
 import com.google.template.soy.pysrc.internal.GenPyExprsVisitor.GenPyExprsVisitorFactory;
-import com.google.template.soy.pysrc.internal.TranslateToPyExprVisitor.TranslateToPyExprVisitorFactory;
 import com.google.template.soy.pysrc.restricted.PyExpr;
 import com.google.template.soy.shared.SharedTestUtils;
 import com.google.template.soy.shared.SoyGeneralOptions;
@@ -79,8 +78,9 @@ public final class SoyExprForPySubject extends Subject<SoyExprForPySubject, Stri
   }
 
   /**
-   * Sets a map of key to {@link PrimitiveData} values as the current globally available data. Any
-   * compilation step will use these globals to replace unrecognized variables.
+   * Sets a map of key to {@link com.google.template.soy.data.restricted.PrimitiveData} values as
+   * the current globally available data. Any compilation step will use these globals to replace
+   * unrecognized variables.
    *
    * @param globals a map of keys to PrimitiveData values
    * @return the current subject for chaining
@@ -114,8 +114,10 @@ public final class SoyExprForPySubject extends Subject<SoyExprForPySubject, Stri
     SoyNode node = SharedTestUtils.getNode(soyTree, 0);
 
     SharedTestUtils.simulateNewApiCall(injector);
-    GenPyExprsVisitor genPyExprsVisitor = injector.getInstance(
-        GenPyExprsVisitorFactory.class).create(localVarExprs);
+    GenPyExprsVisitor genPyExprsVisitor =
+        injector
+            .getInstance(GenPyExprsVisitorFactory.class)
+            .create(localVarExprs, ExplodingErrorReporter.get());
     List<PyExpr> actualPyExprs = genPyExprsVisitor.exec(node);
 
     assertThat(actualPyExprs).hasSize(expectedPyExprs.size());
@@ -154,9 +156,8 @@ public final class SoyExprForPySubject extends Subject<SoyExprForPySubject, Stri
     PrintNode node = (PrintNode) SharedTestUtils.getNode(soyTree, 0);
     ExprNode exprNode = node.getExprUnion().getExpr();
 
-    PyExpr actualPyExpr = injector.getInstance(TranslateToPyExprVisitorFactory.class)
-        .create(localVarExprs)
-        .exec(exprNode);
+    PyExpr actualPyExpr =
+        new TranslateToPyExprVisitor(localVarExprs, ExplodingErrorReporter.get()).exec(exprNode);
     assertThat(actualPyExpr.getText()).isEqualTo(expectedPyExpr.getText());
     assertThat(actualPyExpr.getPrecedence()).isEqualTo(expectedPyExpr.getPrecedence());
 

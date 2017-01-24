@@ -230,10 +230,6 @@ goog.i18n.DateTimeParse.prototype.applyPattern_ = function(pattern) {
     this.patternParts_.push({text: buf, count: 0, abutStart: false});
   }
 
-  if (inQuote) {
-    throw new Error('Malformed pattern: closing \' mark missing');
-  }
-
   this.markAbutStart_();
 };
 
@@ -285,7 +281,7 @@ goog.i18n.DateTimeParse.prototype.parse = function(text, date, opt_start) {
 
 /**
  * Parse the given string and fill info into date object. This version will
- * validate the input and make sure it is a validate date/time.
+ * validate the input and make sure it is a valid date/time.
  * @param {string} text The string being parsed.
  * @param {goog.date.DateLike} date The Date object to hold the parsed date.
  * @param {number=} opt_start The position from where parse should begin.

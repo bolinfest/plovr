@@ -16,6 +16,7 @@
 
 package com.google.template.soy.jbcsrc.api;
 
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableSet;
 import com.google.template.soy.data.SanitizedContent;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
@@ -25,16 +26,12 @@ import com.google.template.soy.shared.SoyIdRenamingMap;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.Set;
 
 import javax.annotation.CheckReturnValue;
 
 /**
  * Main entry point for rendering Soy templates on the server.
- * 
- * <p>This interface is the entry point to a new experimental Soy implementation. This 
- * implementation is extremely experimental and risky with no guarantees about correctness or
- * performance.  Use with caution (or preferably not at all).
+ *
  */
 public interface SoySauce {
   /** Returns a new {@link Renderer} for configuring and rendering the given template.*/
@@ -57,8 +54,10 @@ public interface SoySauce {
     /** Configures the {@code {xid ..}} renaming map. */
     Renderer setXidRenamingMap(SoyIdRenamingMap xidRenamingMap);
 
-    /** Configures the current active {@code delpackages}. */
-    Renderer setActiveDelegatePackageNames(Set<String> activeDelegatePackages);
+    /**
+     * Sets the predicate to use for testing whether or not a given {@code delpackage} is active.
+     */
+    Renderer setActiveDelegatePackageSelector(Predicate<String> active);
 
     /** Configures the bundle of translated messages to use. */
     Renderer setMsgBundle(SoyMsgBundle msgs);
@@ -71,18 +70,13 @@ public interface SoySauce {
     */
     Renderer setExpectedContentKind(ContentKind kind);
 
-    // TODO(lukes): should we add apis here to render to a string, or maybe just a helper
-    // library (static methods?) that can do that.  One of the details is rendering to a
-    // SanitizedContent object which will require data from the template registry, though we should 
-    // just add contentKind to the parseinfo
-
     /**
      * Renders the configured template to the appendable returning a continuation.
      *
      * <p> All rendering operations performed via this API will return a continuation indicating how
      * and when to {@link WriteContinuation#continueRender() continue rendering}.  There are 4
      * possibilities for every rendering operation.
-     * 
+     *
      * <p>Checks the content kind of the template. Non-strict and {@code kind="html"} templates are
      * allowed, unless {@link #setExpectedContentKind} was called. The goal is to prevent accidental
      * rendering of unescaped {@code kind="text"} in contexts where that could lead to XSS.
@@ -111,17 +105,17 @@ public interface SoySauce {
      * continuation.
      */
     @CheckReturnValue WriteContinuation render(AdvisingAppendable out) throws IOException;
-    
+
     /**
      * Renders the template to a string.
-     * 
+     *
      * <p>The rendering semantics are the same as for {@link #render()} with the following 2 caveats
      * <ul>
-     *     <li>The returned continuation will never have a result of 
+     *     <li>The returned continuation will never have a result of
      *         {@code RenderResult.Type#LIMITED}
      *     <li>This api doesn't throw {@link IOException}
      * </ul>
-     * 
+     *
      * <p>Checks the content kind of the template. Non-strict and {@code kind="html"} templates are
      * allowed, unless {@link #setExpectedContentKind} was called. The goal is to prevent accidental
      * rendering of unescaped {@code kind="text"} in contexts where that could lead to XSS.
@@ -137,11 +131,11 @@ public interface SoySauce {
      *
      * <p>The rendering semantics are the same as for {@link #render()} with the following 2 caveats
      * <ul>
-     *     <li>The returned continuation will never have a result of 
+     *     <li>The returned continuation will never have a result of
      *         {@code RenderResult.Type#LIMITED}
      *     <li>This api doesn't throw {@link IOException}
      * </ul>
-     * 
+     *
      * <p>Checks the content kind of the template. Non-strict and {@code kind="html"} templates are
      * allowed, unless {@link #setExpectedContentKind} was called. The goal is to prevent accidental
      * rendering of unescaped {@code kind="text"} in contexts where that could lead to XSS.
@@ -155,9 +149,9 @@ public interface SoySauce {
 
   /**
    * A write continuation is the result of rendering to an output stream.
-   * 
-   * <p>See {@link SoySauce.Renderer#render()}, {@link SoySauce.Renderer#renderStrict()}, and 
-   * {@link Continuation} for similar APIs designed for rendering to strings. 
+   *
+   * <p>See {@link SoySauce.Renderer#render()}, {@link SoySauce.Renderer#renderStrict()}, and
+   * {@link Continuation} for similar APIs designed for rendering to strings.
    */
   interface WriteContinuation {
     /** The result of the prior rendering operation. */
@@ -177,7 +171,7 @@ public interface SoySauce {
 
   /**
    * A render continuation that has a final result.
-   * 
+   *
    * <p>See {@link SoySauce.Renderer#render(AdvisingAppendable)}, and {@link WriteContinuation} for
    * similar APIs designed for rendering to output streams.
    *
@@ -187,10 +181,10 @@ public interface SoySauce {
     /** The result of the prior rendering operation. */
     RenderResult result();
 
-    /** 
+    /**
      * The final value of the rendering operation.
      *
-     * @throws IllegalStateException 
+     * @throws IllegalStateException
      */
     T get();
 

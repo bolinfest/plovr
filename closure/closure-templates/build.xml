@@ -69,9 +69,6 @@ Author: Neil Sanchala
     <javacc target = "${java.src.dir}/com/google/template/soy/soyparse/SoyFileParser.jj"
             outputdirectory = "${build.genfiles.dir}/com/google/template/soy/soyparse"
             javacchome = "buildtools/javacc" />
-    <javacc target = "${java.src.dir}/com/google/template/soy/soyparse/TemplateParser.jj"
-            outputdirectory = "${build.genfiles.dir}/com/google/template/soy/soyparse"
-            javacchome = "buildtools/javacc" />
     <javacc target = "${java.src.dir}/com/google/template/soy/types/parse/TypeParser.jj"
             outputdirectory = "${build.genfiles.dir}/com/google/template/soy/types/parse"
             javacchome = "buildtools/javacc" />

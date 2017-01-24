@@ -17,36 +17,36 @@ final class SoyFileOptions {
 
   final List<String> pluginModuleNames;
   final boolean useClosureLibrary;
-  final boolean isUsingInjectedData;
+  final String protoFileDescriptors;
   final SoyMsgBundle msgBundle;
 
   public SoyFileOptions() {
     this(ImmutableList.<String>of(), /* pluginModuleNames */
         true, /* useClosureLibrary */
-        false); /* isUsingInjectedData */
+        ""); /* protoFileDescriptors */
   }
 
   public SoyFileOptions(List<String> pluginModuleNames,
       boolean useClosureLibrary,
-      boolean isUsingInjectedData) {
-    this(pluginModuleNames, useClosureLibrary, isUsingInjectedData, null);
+      String protoFileDescriptors) {
+    this(pluginModuleNames, useClosureLibrary, protoFileDescriptors, null);
   }
 
   private SoyFileOptions(List<String> pluginModuleNames,
       boolean useClosureLibrary,
-      boolean isUsingInjectedData,
+      String protoFileDescriptors,
       SoyMsgBundle msgBundle) {
     Preconditions.checkNotNull(pluginModuleNames);
     this.pluginModuleNames = ImmutableList.copyOf(pluginModuleNames);
     this.useClosureLibrary = useClosureLibrary;
-    this.isUsingInjectedData = isUsingInjectedData;
+    this.protoFileDescriptors = protoFileDescriptors;;
     this.msgBundle = msgBundle;
   }
 
   @Override
   public int hashCode() {
     return Objects.hashCode(
-        pluginModuleNames, useClosureLibrary, isUsingInjectedData, msgBundle);
+        pluginModuleNames, useClosureLibrary, protoFileDescriptors, msgBundle);
   }
 
   @Override
@@ -60,14 +60,14 @@ final class SoyFileOptions {
     SoyFileOptions that = (SoyFileOptions)obj;
     return Objects.equal(this.pluginModuleNames, that.pluginModuleNames) &&
         Objects.equal(this.useClosureLibrary, that.useClosureLibrary) &&
-        Objects.equal(this.isUsingInjectedData, that.isUsingInjectedData) &&
+        Objects.equal(this.protoFileDescriptors, that.protoFileDescriptors) &&
         Objects.equal(this.msgBundle, that.msgBundle);
   }
 
   public static class Builder {
     List<String> pluginModuleNames = ImmutableList.<String>of();
     boolean useClosureLibrary = false;
-    boolean isUsingInjectedData = false;
+    String protoFileDescriptors = "";
     SoyMsgBundle msgBundle = null;
 
     public Builder setPluginModuleNames(List<String> values) {
@@ -80,8 +80,8 @@ final class SoyFileOptions {
       return this;
     }
 
-    public Builder setIsUsingInjectedData(boolean value) {
-      isUsingInjectedData = value;
+    public Builder setProtoFileDescriptors(String value) {
+      protoFileDescriptors = value;
       return this;
     }
 
@@ -94,7 +94,7 @@ final class SoyFileOptions {
       return new SoyFileOptions(
           pluginModuleNames,
           useClosureLibrary,
-          isUsingInjectedData,
+          protoFileDescriptors,
           msgBundle);
     }
   }

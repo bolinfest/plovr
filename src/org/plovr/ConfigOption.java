@@ -641,16 +641,16 @@ public enum ConfigOption {
     }
   }),
 
-  SOY_USE_INJECTED_DATA("soy-use-injected-data", new ConfigUpdater() {
+  SOY_PROTO_FILE_DESCRIPTORS("soy-proto-file-descriptors", new ConfigUpdater() {
     @Override
-    public void apply(boolean soyUseInjectedData, Config.Builder builder) {
-      builder.setSoyUseInjectedData(soyUseInjectedData);
+    public void apply(String protoFileDescriptors, Config.Builder builder) {
+      builder.setSoyProtoFileDescriptors(protoFileDescriptors);
     }
 
     @Override
-    public boolean update(String soyUseInjectedDataParam, Config.Builder builder) {
-      boolean soyUseInjectedData = Boolean.valueOf(soyUseInjectedDataParam);
-      builder.setSoyUseInjectedData(soyUseInjectedData);
+    public boolean update(String protoFileDescriptorsParam, Config.Builder builder) {
+      String soyProtoFileDescriptors = String.valueOf(protoFileDescriptorsParam);
+      builder.setSoyProtoFileDescriptors(soyProtoFileDescriptors);
       return true;
     }
   }),

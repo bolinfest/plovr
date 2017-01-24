@@ -46,19 +46,7 @@ public final class PlovrSoySyntaxException extends UncheckedCompilationException
 
   @Override
   public String getMessage() {
-    String templateName = getTemplateName();
     String soyErrorMsg = soySyntaxException.getMessage();
-    if (soyErrorMsg.startsWith("In file ")) {
-      // New-style soy errors already have the line data.
-      return soyErrorMsg.substring("In file ".length());
-    }
-
-    String message;
-    if (templateName == null) {
-      message = soyErrorMsg;
-    } else {
-      message = String.format("template %s: %s", templateName, soyErrorMsg);
-    }
 
     // If the line number is available, format the message as Compiler errors
     // are formatted so it will get hyperlinked appropriately by
@@ -67,9 +55,9 @@ public final class PlovrSoySyntaxException extends UncheckedCompilationException
       return String.format("%s:%d: ERROR - %s",
           input.getName(),
           lineno,
-          message);
+          soyErrorMsg);
     } else {
-      return message;
+      return soyErrorMsg;
     }
   }
 
@@ -79,11 +67,6 @@ public final class PlovrSoySyntaxException extends UncheckedCompilationException
 
   public int getCharNumber() {
     return charno;
-  }
-
-  @Nullable
-  public String getTemplateName() {
-    return soySyntaxException.getTemplateName();
   }
 
   public JsInput getInput() {

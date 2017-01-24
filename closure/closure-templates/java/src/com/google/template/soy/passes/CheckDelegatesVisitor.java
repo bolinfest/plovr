@@ -16,13 +16,12 @@
 
 package com.google.template.soy.passes;
 
+import com.google.common.base.Equivalence;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableListMultimap;
-import com.google.common.collect.ImmutableSetMultimap;
-import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.data.SanitizedContent.ContentKind;
 import com.google.template.soy.error.ErrorReporter;
-import com.google.template.soy.error.SoyError;
+import com.google.template.soy.error.SoyErrorKind;
+import com.google.template.soy.shared.internal.DelTemplateSelector;
 import com.google.template.soy.soytree.AbstractSoyNodeVisitor;
 import com.google.template.soy.soytree.CallBasicNode;
 import com.google.template.soy.soytree.CallDelegateNode;
@@ -31,14 +30,13 @@ import com.google.template.soy.soytree.SoyNode;
 import com.google.template.soy.soytree.SoyNode.ParentSoyNode;
 import com.google.template.soy.soytree.TemplateBasicNode;
 import com.google.template.soy.soytree.TemplateDelegateNode;
-import com.google.template.soy.soytree.TemplateDelegateNode.DelTemplateKey;
 import com.google.template.soy.soytree.TemplateNode;
 import com.google.template.soy.soytree.TemplateRegistry;
-import com.google.template.soy.soytree.TemplateRegistry.DelegateTemplateDivision;
 import com.google.template.soy.soytree.defn.TemplateParam;
 
+import java.util.Collection;
 import java.util.HashSet;
-import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -53,20 +51,22 @@ import java.util.Set;
  */
 final class CheckDelegatesVisitor extends AbstractSoyNodeVisitor<Void> {
 
-  private static final SoyError BASIC_AND_DELTEMPLATE_WITH_SAME_NAME = SoyError.of(
-      "Found template name {0} being reused for both basic and delegate templates.");
-  private static final SoyError CALL_TO_DELTEMPLATE = SoyError.of(
-      "''call'' to delegate template ''{0}'' (expected ''delcall'').");
-  private static final SoyError CROSS_PACKAGE_DELCALL = SoyError.of(
-      "Found illegal call from ''{0}'' to ''{1}'', which is in a different delegate package.");
-  private static final SoyError DELCALL_TO_BASIC_TEMPLATE = SoyError.of(
-      "''delcall'' to basic template ''{0}'' (expected ''call'').");
-  private static final SoyError DELTEMPLATES_WITH_DIFFERENT_PARAM_DECLARATIONS = SoyError.of(
-      "Found delegate template with same name ''{0}'' but different param declarations "
-          + "compared to the definition at {1}.");
-  private static final SoyError STRICT_DELTEMPLATES_WITH_DIFFERENT_CONTENT_KIND = SoyError.of(
-      "If one deltemplate has strict autoescaping, all its peers must also be strictly autoescaped "
-          + "with the same content kind: {0} != {1}. Conflicting definition at {2}.");
+  private static final SoyErrorKind CALL_TO_DELTEMPLATE =
+      SoyErrorKind.of("''call'' to delegate template ''{0}'' (expected ''delcall'').");
+  private static final SoyErrorKind CROSS_PACKAGE_DELCALL =
+      SoyErrorKind.of(
+          "Found illegal call from ''{0}'' to ''{1}'', which is in a different delegate package.");
+  private static final SoyErrorKind DELCALL_TO_BASIC_TEMPLATE =
+      SoyErrorKind.of("''delcall'' to basic template ''{0}'' (expected ''call'').");
+  private static final SoyErrorKind DELTEMPLATES_WITH_DIFFERENT_PARAM_DECLARATIONS =
+      SoyErrorKind.of(
+          "Found delegate template with same name ''{0}'' but different param declarations "
+              + "compared to the definition at {1}.");
+  private static final SoyErrorKind STRICT_DELTEMPLATES_WITH_DIFFERENT_CONTENT_KIND =
+      SoyErrorKind.of(
+          "If one deltemplate has strict autoescaping, all its peers must also be strictly"
+              + " autoescaped with the same content kind: {0} != {1}. Conflicting definition at"
+              + " {2}.");
 
   /** A template registry built from the Soy tree. */
   private final TemplateRegistry templateRegistry;
@@ -101,81 +101,79 @@ final class CheckDelegatesVisitor extends AbstractSoyNodeVisitor<Void> {
    */
   private void checkTemplates() {
 
-    Map<String, TemplateBasicNode> basicTemplatesMap = templateRegistry.getBasicTemplatesMap();
-    ImmutableListMultimap<DelTemplateKey, DelegateTemplateDivision> delTemplatesMap =
-        templateRegistry.getDelTemplatesMap();
-    ImmutableSetMultimap<String, DelTemplateKey> delTemplateNameToKeysMap =
-        templateRegistry.getDelTemplateNameToKeysMap();
-
-    // Check that no name is reused for both basic and delegate templates.
-    for (DelTemplateKey delTemplateKey : delTemplatesMap.keySet()) {
-      String name = delTemplateKey.name();
-      if (basicTemplatesMap.containsKey(name)) {
-        SourceLocation sourceLocation = basicTemplatesMap.get(name).getSourceLocation();
-        errorReporter.report(
-            sourceLocation, BASIC_AND_DELTEMPLATE_WITH_SAME_NAME, name);
-      }
-    }
+    DelTemplateSelector<TemplateDelegateNode> selector = templateRegistry.getDelTemplateSelector();
 
     // Check that all delegate templates with the same name have the same declared params and
     // content kind.
-    for (Iterable<DelTemplateKey> delTemplateKeys : delTemplateNameToKeysMap.asMap().values()) {
-
+    for (Collection<TemplateDelegateNode> delTemplateGroup :
+        selector.delTemplateNameToValues().asMap().values()) {
       TemplateDelegateNode firstDelTemplate = null;
-      Set<TemplateParam> firstRequiredParamSet = null;
+      Set<Equivalence.Wrapper<TemplateParam>> firstRequiredParamSet = null;
       ContentKind firstContentKind = null;
 
-      // Then, loop over keys that share the same name (effectively, over variants):
-      for (DelTemplateKey delTemplateKey : delTemplateKeys) {
-        // Then, loop over divisions with the same key (effectively, over priorities):
-        for (DelegateTemplateDivision division : delTemplatesMap.get(delTemplateKey)) {
-          // Now, over templates in the division (effectively, delpackages):
-          for (TemplateDelegateNode delTemplate :
-              division.delPackageNameToDelTemplateMap.values()) {
-            if (firstDelTemplate == null) {
-              // First template encountered.
-              firstDelTemplate = delTemplate;
-              firstRequiredParamSet = getRequiredParamSet(delTemplate);
-              firstContentKind = delTemplate.getContentKind();
-            } else {
-              // Not first template encountered.
-              Set<TemplateParam> currRequiredParamSet = getRequiredParamSet(delTemplate);
-              if (!currRequiredParamSet.equals(firstRequiredParamSet)) {
-                errorReporter.report(
-                    delTemplate.getSourceLocation(),
-                    DELTEMPLATES_WITH_DIFFERENT_PARAM_DECLARATIONS,
-                    firstDelTemplate.getDelTemplateName(),
-                    firstDelTemplate.getSourceLocation().toString());
-              }
-              if (delTemplate.getContentKind() != firstContentKind) {
-                // TODO: This is only *truly* a requirement if the strict mode deltemplates are
-                // being called by contextual templates. For a strict-to-strict call, everything
-                // is escaped at runtime at the call sites. You could imagine delegating between
-                // either a plain-text or rich-html template. However, most developers will write
-                // their deltemplates in a parallel manner, and will want to know when the
-                // templates differ. Plus, requiring them all to be the same early-on will allow
-                // future optimizations to avoid the run-time checks, so it's better to start out
-                // as strict as possible and only open up if needed.
-                errorReporter.report(
-                    delTemplate.getSourceLocation(),
-                    STRICT_DELTEMPLATES_WITH_DIFFERENT_CONTENT_KIND,
-                    String.valueOf(firstContentKind),
-                    String.valueOf(delTemplate.getContentKind()),
-                    firstDelTemplate.getSourceLocation().toString());
-              }
-            }
+      // loop over all members of the deltemplate group.
+      for (TemplateDelegateNode delTemplate : delTemplateGroup) {
+        if (firstDelTemplate == null) {
+          // First template encountered.
+          firstDelTemplate = delTemplate;
+          firstRequiredParamSet = getRequiredParamSet(delTemplate);
+          firstContentKind = delTemplate.getContentKind();
+        } else {
+          // Not first template encountered.
+          Set<Equivalence.Wrapper<TemplateParam>> currRequiredParamSet =
+              getRequiredParamSet(delTemplate);
+          if (!currRequiredParamSet.equals(firstRequiredParamSet)) {
+            errorReporter.report(
+                delTemplate.getSourceLocation(),
+                DELTEMPLATES_WITH_DIFFERENT_PARAM_DECLARATIONS,
+                firstDelTemplate.getDelTemplateName(),
+                firstDelTemplate.getSourceLocation().toString());
+          }
+          if (delTemplate.getContentKind() != firstContentKind) {
+            // TODO: This is only *truly* a requirement if the strict mode deltemplates are
+            // being called by contextual templates. For a strict-to-strict call, everything
+            // is escaped at runtime at the call sites. You could imagine delegating between
+            // either a plain-text or rich-html template. However, most developers will write
+            // their deltemplates in a parallel manner, and will want to know when the
+            // templates differ. Plus, requiring them all to be the same early-on will allow
+            // future optimizations to avoid the run-time checks, so it's better to start out
+            // as strict as possible and only open up if needed.
+            errorReporter.report(
+                delTemplate.getSourceLocation(),
+                STRICT_DELTEMPLATES_WITH_DIFFERENT_CONTENT_KIND,
+                String.valueOf(firstContentKind),
+                String.valueOf(delTemplate.getContentKind()),
+                firstDelTemplate.getSourceLocation().toString());
           }
         }
       }
     }
   }
 
+  // A specific equivalence relation for seeing if the params of 2 difference templates are
+  // effectively the same.
+  private static final class ParamEquivalence extends Equivalence<TemplateParam> {
+    static final ParamEquivalence INSTANCE = new ParamEquivalence();
+    @Override
+    protected boolean doEquivalent(TemplateParam a, TemplateParam b) {
+      return a.name().equals(b.name())
+          && a.isRequired() == b.isRequired()
+          && a.isInjected() == b.isInjected()
+          && a.type().equals(b.type());
+    }
 
-  private static Set<TemplateParam> getRequiredParamSet(TemplateDelegateNode delTemplate) {
-    Set<TemplateParam> paramSet = new HashSet<>();
+    @Override
+    protected int doHash(TemplateParam t) {
+      return Objects.hash(t.name(), t.isInjected(), t.isRequired(), t.type());
+    }
+  }
+
+  private static Set<Equivalence.Wrapper<TemplateParam>>
+      getRequiredParamSet(TemplateDelegateNode delTemplate) {
+    Set<Equivalence.Wrapper<TemplateParam>> paramSet = new HashSet<>();
     for (TemplateParam param : delTemplate.getParams()) {
       if (param.isRequired()) {
-        paramSet.add(param);
+        paramSet.add(ParamEquivalence.INSTANCE.wrap(param));
       }
     }
     return paramSet;
@@ -198,7 +196,7 @@ final class CheckDelegatesVisitor extends AbstractSoyNodeVisitor<Void> {
     String calleeName = node.getCalleeName();
 
     // Check that the callee name is not a delegate template name.
-    if (templateRegistry.hasDelTemplateNamed(calleeName)) {
+    if (templateRegistry.getDelTemplateSelector().hasDelTemplateNamed(calleeName)) {
       errorReporter.report(node.getSourceLocation(), CALL_TO_DELTEMPLATE, calleeName);
     }
 
