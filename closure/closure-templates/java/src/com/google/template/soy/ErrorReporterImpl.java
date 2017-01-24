@@ -57,7 +57,7 @@ public final class ErrorReporterImpl extends AbstractErrorReporter {
   /**
    * Returns true if any errors have been reported.
    */
-  boolean hasErrors() {
+  public boolean hasErrors() {
     return !errors.isEmpty();
   }
 

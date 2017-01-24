@@ -1443,7 +1443,7 @@ public final class Config implements Comparable<Config> {
       this.documentationOutputDirectory = documentationOutputDirectory;
     }
 
-    public void setSoyProtoFileDescriptors(boolean soyProtoFileDescriptors) {
+    public void setSoyProtoFileDescriptors(String soyProtoFileDescriptors) {
       this.soyProtoFileDescriptors = soyProtoFileDescriptors;
     }
 
