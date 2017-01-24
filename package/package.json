@@ -1,14 +1,14 @@
 {
     "name": "plovr",
-    "version": "5.2.0",
+    "version": "6.0.0",
     "keywords":
         ["javascript", "compiler", "closure", "build"],
     "description":
         "Build tool that uses the Closure JavaScript compiler",
-    "homepage": "https://github.com/Medium/plovr",
+    "homepage": "https://github.com/bolinfest/plovr",
     "repository": {
         "type": "git",
-        "url": "https://github.com/Medium/plovr.git"
+        "url": "https://github.com/bolinfest/plovr.git"
     },
     "licenses": [ {
         "type": "Apache 2.0",
