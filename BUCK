@@ -39,11 +39,11 @@ java_test(
   resources = glob(['test/**/*.js']),
   deps = [
     '//closure/closure-compiler:closure-compiler',
+    '//closure/closure-compiler:guava',
     '//closure/closure-compiler:jsr305',
     '//closure/closure-compiler:junit',
     '//closure/closure-stylesheets:closure-stylesheets',
     '//closure/closure-templates:closure-templates',
-    '//closure/closure-templates:guava',
     ':mockito',
     ':plovr-lib',
     '//closure/closure-compiler:gson',

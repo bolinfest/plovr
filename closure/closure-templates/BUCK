@@ -1,15 +1,15 @@
 java_library(
   name = 'closure-templates',
-  srcs = glob(includes=['java/src/**/*.java']) + [ ':javacc' ],
+  srcs = [],
   resources = [
+    # TODO(nicks): Download this file from maven when the official buck release fixes this issue:
+    # https://github.com/facebook/buck/issues/1014
     'javascript/soyutils_usegoog.js',
   ],
   resources_root = '.',
-  annotation_processors = [
-    'com.google.auto.value.processor.AutoValueProcessor',
-    'com.google.auto.value.processor.AutoAnnotationProcessor',
+  exported_deps = [
+    ':closure-templates-prebuilt',
   ],
-  annotation_processor_deps = [':auto-value'],
   deps = [
     ':aopalliance',
     '//closure/closure-compiler:args4j',
@@ -39,6 +39,17 @@ java_library(
   ],
   visibility = [ 'PUBLIC' ],
 )
+
+remote_file(
+  name = 'closure-templates-jar',
+  sha1 = '8638940b207779fe3b75e55b6e65abbefb6af678',
+  url = 'mvn:com.google.template:soy:jar:2017-02-01',
+  out = 'closure-templates.jar')
+
+prebuilt_jar(
+  name = 'closure-templates-prebuilt',
+  binary_jar = ':closure-templates-jar',
+  visibility = [ 'PUBLIC' ])
 
 genrule(
   name = 'javacc',
@@ -101,14 +112,6 @@ prebuilt_jar(
 prebuilt_jar(
   name = 'cglib',
   binary_jar = 'java/lib/cglib-nodep-2.2.2.jar',
-)
-
-prebuilt_jar(
-  name = 'guava',
-  binary_jar = 'java/lib/guava.jar',
-  visibility = [
-    'PUBLIC',
-  ],
 )
 
 prebuilt_jar(

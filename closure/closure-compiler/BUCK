@@ -81,9 +81,15 @@ prebuilt_jar(
   ],
 )
 
+remote_file(
+  name = 'guava-jar',
+  sha1 = '89507701249388e1ed5ddcf8c41f4ce1be7831ef',
+  url = 'mvn:com.google.guava:guava:jar:20.0',
+  out = 'guava.jar')
+
 prebuilt_jar(
   name = 'guava',
-  binary_jar = 'lib/guava.jar',
+  binary_jar = ':guava-jar',
   visibility = [
     'PUBLIC',
   ],
