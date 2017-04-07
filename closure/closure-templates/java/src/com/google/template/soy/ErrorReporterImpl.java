@@ -54,10 +54,8 @@ public final class ErrorReporterImpl extends AbstractErrorReporter {
     return ImmutableList.copyOf(errors);
   }
 
-  /**
-   * Returns true if any errors have been reported.
-   */
-  public boolean hasErrors() {
+  /** Returns true if any errors have been reported. */
+  boolean hasErrors() {
     return !errors.isEmpty();
   }
 

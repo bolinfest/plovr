@@ -122,6 +122,7 @@ public class SoyRequestHandler implements HttpHandler {
     }
 
     ErrorReporterImpl errorReporter = new ErrorReporterImpl();
+    ErrorReporter.Checkpoint checkpoint = errorReporter.checkpoint();
     SoyFileParser parser = new SoyFileParser(
         new SoyTypeRegistry(),
         new IncrementingIdGenerator(),
@@ -131,7 +132,7 @@ public class SoyRequestHandler implements HttpHandler {
         errorReporter);
     SoyFileNode node = parser.parseSoyFile();
 
-    if (errorReporter.hasErrors()) {
+    if (errorReporter.errorsSince(checkpoint)) {
       throw new com.google.template.soy.error.SoyCompilationException(errorReporter.getErrors());
     }
 
