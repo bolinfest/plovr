@@ -21,7 +21,6 @@ import com.google.template.soy.base.SourceLocation;
 import com.google.template.soy.error.AbstractErrorReporter;
 import com.google.template.soy.error.SoyError;
 import com.google.template.soy.error.SoyErrorKind;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -48,16 +47,13 @@ public final class ErrorReporterImpl extends AbstractErrorReporter {
     errors.add(errorFactory.create(sourceLocation, error, args));
   }
 
-
   /** Returns the full list of errors reported to this error reporter. */
   public Iterable<SoyError> getErrors() {
     return ImmutableList.copyOf(errors);
   }
 
-  /**
-   * Returns true if any errors have been reported.
-   */
-  public boolean hasErrors() {
+  /** Returns true if any errors have been reported. */
+  boolean hasErrors() {
     return !errors.isEmpty();
   }
 
